@@ -28,6 +28,20 @@ export const ticketsKeys = {
   recentActivity: () => [...ticketsKeys.all, "recentActivity"] as const,
   myQueues: () => [...ticketsKeys.all, "myQueues"] as const,
   dashboardInfo: () => [...ticketsKeys.all, "dashboardInfo"] as const,
+
+  // Read-state families for the list's unread pills. readStates() is the
+  // invalidation root for the batched loaded-window lookups; the sweep is
+  // the single global-unread completeness pass. Both are invalidated
+  // together by the detail view's cursor flush and by follow-up SSE.
+  readStates: () => [...ticketsKeys.all, "readState"] as const,
+  readState: (ticketIds: readonly string[]) =>
+    [...ticketsKeys.readStates(), ticketIds] as const,
+  readStateSweep: () => [...ticketsKeys.all, "readStateSweep"] as const,
+  // Unread-but-unloaded tickets fetched by id (tickets.get) so the sort
+  // can pin them above the loaded window and the unread filter can show
+  // them. Lives under the list namespace: it is list presentation data.
+  unreadPinned: (ticketIds: readonly string[]) =>
+    [...ticketsKeys.all, "unreadPinned", ticketIds] as const,
 };
 
 export const ticketKeys = {
@@ -157,4 +171,14 @@ export const brandingKeys = {
 
 export const notificationKeys = {
   all: ["notifications"] as const,
+};
+
+// Reaction summaries for internal notes, fetched by follow-up id set.
+// The set spans tickets on the list surface and is scoped to one ticket
+// on the detail surfaces, so the family lives outside both namespaces.
+// byIds callers pass a SORTED id list so key identity is order-free.
+export const reactionKeys = {
+  all: ["reactions"] as const,
+  byIds: (followUpIds: readonly string[]) =>
+    [...reactionKeys.all, followUpIds] as const,
 };

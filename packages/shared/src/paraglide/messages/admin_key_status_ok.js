@@ -6,17 +6,17 @@ import { getLocale, experimentalStaticLocale } from '../runtime.js';
 /** @typedef {{}} Admin_Key_Status_OkInputs */
 
 const en_admin_key_status_ok = /** @type {(inputs: Admin_Key_Status_OkInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Keys loaded`)
+	return /** @type {LocalizedString} */ (`Ready`)
 };
 
 const es_admin_key_status_ok = /** @type {(inputs: Admin_Key_Status_OkInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Claves cargadas`)
+	return /** @type {LocalizedString} */ (`Listas`)
 };
 
 /**
 * | output |
 * | --- |
-* | "Keys loaded" |
+* | "Ready" |
 *
 * @param {Admin_Key_Status_OkInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

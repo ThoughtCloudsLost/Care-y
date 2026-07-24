@@ -1,5 +1,7 @@
 <script lang="ts">
-  import { Card, Chip, Checkbox } from "konsta/svelte";
+  import { Chip, Checkbox } from "konsta/svelte";
+  import { CHECKBOX_BRAND_COLORS } from "$lib/components/shared/konsta-classes.js";
+  import { longPress } from "$lib/utils/long-press.js";
   import { ThumbsUp, ThumbsDown } from "@lucide/svelte";
   import * as m from "$lib/paraglide/messages.js";
   import { formatRelativeTime } from "$lib/utils/format-time.js";
@@ -21,11 +23,12 @@
     voteUpCount: number;
     voteTotalCount: number;
     updatedAt: Date;
-    viewMode: "list" | "grid";
+    viewMode: "list" | "cards" | "grid";
     selected?: boolean;
     multiSelectActive?: boolean;
     loading?: boolean;
     ontap: (articleId: string) => void;
+    onfullopen?: (articleId: string) => void;
     onselect?: (articleId: string) => void;
     onlongpress?: (articleId: string) => void;
     searchTerm?: string | null;
@@ -47,12 +50,15 @@
     multiSelectActive = false,
     loading = false,
     ontap,
+    onfullopen,
     onselect,
     onlongpress,
     searchTerm = null,
   }: ArticleCardProps = $props();
 
-  const isList = $derived(viewMode === "list");
+  const isCompactList = $derived(viewMode === "list");
+  const isCards = $derived(viewMode === "cards");
+  const showExcerpt = $derived(isCards);
   const relativeTime = $derived(formatRelativeTime(updatedAt));
 
   const voteLabel = $derived(
@@ -64,22 +70,10 @@
       : null,
   );
 
-  // Long press detection for entering multi-select.
-  let longPressTimer: ReturnType<typeof setTimeout> | undefined;
-
-  function handlePointerDown(): void {
+  // Long press enters multi-select; the shared attachment owns the timer.
+  function handleLongPress(): void {
     if (loading || !onlongpress) return;
-    longPressTimer = setTimeout(() => {
-      onlongpress(articleId);
-      longPressTimer = undefined;
-    }, 500);
-  }
-
-  function handlePointerUp(): void {
-    if (longPressTimer !== undefined) {
-      clearTimeout(longPressTimer);
-      longPressTimer = undefined;
-    }
+    onlongpress(articleId);
   }
 
   function handleCardClick(): void {
@@ -90,15 +84,25 @@
       ontap(articleId);
     }
   }
+
+  function handleCardDblClick(): void {
+    if (!loading && !multiSelectActive) {
+      onfullopen?.(articleId);
+    }
+  }
 </script>
 
+<!-- Pinned-anatomy exemption (see inkwell-design-language.md, "Pinned-anatomy
+     exemptions"): ruled-row anatomy is pinned by the spec; Konsta ListItem
+     fights the grid layout and token wiring. -->
 {#if loading}
   <div class="article-card-wrap skeleton-pulse">
-    <Card raised contentWrap={false} class="article-card">
+    <div class="article-card card-elevated">
       <div
         class="card-inner"
-        class:card-inner--list={isList}
-        class:card-inner--grid={!isList}
+        class:card-inner--list={isCompactList}
+        class:card-inner--cards={isCards}
+        class:card-inner--grid={!isCompactList && !isCards}
         aria-hidden="true"
       >
         <div class="row-category">
@@ -109,7 +113,7 @@
         <div class="row-title">
           <DecryptPlaceholder length={20} />
         </div>
-        {#if isList}
+        {#if showExcerpt}
           <div class="row-excerpt">
             <DecryptPlaceholder length={40} />
           </div>
@@ -122,22 +126,22 @@
           </span>
         </div>
       </div>
-    </Card>
+    </div>
   </div>
 {:else}
   <div class="article-card-wrap">
-    <Card raised contentWrap={false} class="article-card">
+    <div class="article-card card-elevated" class:card--selected={selected}>
       <div
         class="card-inner"
-        class:card-inner--list={isList}
-        class:card-inner--grid={!isList}
+        class:card-inner--list={isCompactList}
+        class:card-inner--cards={isCards}
+        class:card-inner--grid={!isCompactList && !isCards}
         role="button"
         tabindex="0"
         onclick={handleCardClick}
+        ondblclick={handleCardDblClick}
         onkeydown={onKeyActivate(handleCardClick)}
-        onpointerdown={handlePointerDown}
-        onpointerup={handlePointerUp}
-        onpointercancel={handlePointerUp}
+        {@attach longPress(handleLongPress)}
       >
         <div class="row-category">
           {#if multiSelectActive}
@@ -151,12 +155,7 @@
                 checked={selected}
                 onchange={() => onselect?.(articleId)}
                 class="select-checkbox"
-                colors={{
-                  bgCheckedIos: "bg-[var(--brand-accent)]",
-                  borderCheckedIos: "border-[var(--brand-accent)]",
-                  bgCheckedMaterial: "bg-[var(--brand-accent)]",
-                  borderCheckedMaterial: "border-[var(--brand-accent)]",
-                }}
+                colors={CHECKBOX_BRAND_COLORS}
               />
             </div>
           {/if}
@@ -176,7 +175,7 @@
           />
         </div>
 
-        {#if isList}
+        {#if showExcerpt}
           <div class="row-excerpt">
             <DecryptPlaceholder
               result={excerptResult}
@@ -210,7 +209,7 @@
           </span>
         </div>
       </div>
-    </Card>
+    </div>
   </div>
 {/if}
 
@@ -224,11 +223,17 @@
     border-radius: var(--card-radius, 0.75rem);
   }
 
-  .article-card-wrap :global(.k-card) {
-    margin: 0 !important;
+  /* The card anatomy lives on .card-elevated (shared.css). */
+  .article-card {
+    margin: 0;
     height: 100%;
     display: flex;
     flex-direction: column;
+  }
+
+  /* Selection is an identity slot: brand-soft, never full fill. */
+  .card--selected {
+    background: var(--brand-soft, var(--brand-primary-20));
   }
 
   .card-inner {
@@ -265,6 +270,9 @@
     padding-left: var(--space-md) !important;
     padding-right: var(--space-md) !important;
     flex-shrink: 0;
+    /* Quiet bordered chip: a category is a filing fact, not a signal. */
+    color: var(--ink-2) !important;
+    border-color: var(--hair-2) !important;
   }
 
   /* ── Title ── */
@@ -299,6 +307,7 @@
     font-size: var(--text-xs);
     color: var(--muted);
     margin-top: auto;
+    font-variant-numeric: tabular-nums;
   }
 
   .meta-left {
@@ -360,12 +369,29 @@
     -webkit-box-orient: vertical;
   }
 
-  /* ═══ LIST MODE ═══ */
-  .card-inner--list {
+  /* ═══ CARDS MODE (full-width card with excerpt) ═══ */
+  .card-inner--cards {
     gap: var(--space-xs);
   }
 
-  .card-inner--list .row-excerpt {
+  .card-inner--cards .row-excerpt {
     margin-bottom: var(--space-xs);
+  }
+
+  /* ═══ LIST MODE (compact ruled row, no card chrome) ═══ */
+  .card-inner--list {
+    gap: var(--space-xs);
+    padding: var(--space-sm) var(--card-pad-x);
+  }
+
+  :global(.article-compact-list) .article-card {
+    background: none;
+    border: none;
+    border-radius: 0;
+    border-bottom: 1px solid var(--hair);
+  }
+
+  .card-inner--list .row-title {
+    font-size: var(--text-base);
   }
 </style>

@@ -1,0 +1,132 @@
+// @vitest-environment jsdom
+import { describe, it, expect, vi, afterEach } from "vitest";
+import { render, cleanup, fireEvent, waitFor } from "@testing-library/svelte";
+import { Ticket } from "@lucide/svelte";
+import SearchResults from "./SearchResults.svelte";
+import FakeResultItem from "./test-helpers/FakeResultItem.svelte";
+import { registerSearchProvider } from "$lib/search/registry.svelte.js";
+import { searchRecents } from "$lib/search/recents.svelte.js";
+import type { SearchProvider } from "$lib/search/types.js";
+
+interface FakeResultData {
+  id: string;
+  label: string;
+}
+
+const cleanups: (() => void)[] = [];
+
+afterEach(() => {
+  for (const c of cleanups.splice(0)) c();
+  cleanup();
+  window.localStorage.clear();
+});
+
+function fakeProvider(
+  id: string,
+  labels: string[],
+  emptyText?: string,
+): SearchProvider<FakeResultData> {
+  const provider: SearchProvider<FakeResultData> = {
+    id,
+    label: () => id.toUpperCase(),
+    icon: Ticket,
+    renderMode: "list",
+    showAllHref: () => `/${id}`,
+    getResultHref: (rid: string) => `/${id}/${rid}`,
+    search: () => ({
+      results: labels.map((label, i) => ({
+        id: `${id}-${String(i)}`,
+        data: { id: `${id}-${String(i)}`, label },
+      })),
+      loading: false,
+      totalCached: labels.length,
+    }),
+    ResultItem: FakeResultItem,
+  };
+  if (emptyText !== undefined) {
+    provider.emptyText = () => emptyText;
+  }
+  return provider;
+}
+
+function baseProps() {
+  return {
+    query: "housing",
+    ondismiss: vi.fn(),
+    onnavigate: vi.fn(),
+    onselectrecent: vi.fn(),
+  };
+}
+
+describe("SearchResults", () => {
+  it("stamps the empty room when nothing matches anywhere", () => {
+    cleanups.push(
+      registerSearchProvider(fakeProvider("aa", [], "No aa match.")),
+    );
+    const { container, getByText } = render(SearchResults, {
+      props: baseProps(),
+    });
+    expect(getByText("No matches")).toBeDefined();
+    expect(
+      getByText('Nothing unlocked on this device matches "housing".'),
+    ).toBeDefined();
+    // The stamp stands alone: no heading doubles it.
+    expect(container.querySelector(".empty-title")).toBeNull();
+    // The room replaces the section list entirely.
+    expect(container.querySelector("h3.secline-eb")).toBeNull();
+    expect(container.querySelector(".nores")).toBeNull();
+  });
+
+  it("resets full-search state when the query changes", async () => {
+    const reset = vi.fn();
+    const provider = fakeProvider("aa", ["Alpha"]);
+    provider.reset = reset;
+    cleanups.push(registerSearchProvider(provider));
+    const { rerender } = render(SearchResults, { props: baseProps() });
+    await rerender({ query: "shelter" });
+    await waitFor(() => {
+      expect(reset).toHaveBeenCalled();
+    });
+  });
+
+  it("renders per-section empty lines beside sections with results", () => {
+    cleanups.push(
+      registerSearchProvider(fakeProvider("aa", ["Alpha result"])),
+      registerSearchProvider(fakeProvider("bb", [], "No bb match.")),
+    );
+    const { container, getByText } = render(SearchResults, {
+      props: baseProps(),
+    });
+    expect(container.querySelectorAll("h3.secline-eb")).toHaveLength(2);
+    expect(getByText("Alpha result")).toBeDefined();
+    expect(getByText("No bb match.")).toBeDefined();
+    expect(container.querySelector(".section-divider")).toBeNull();
+  });
+
+  it("navigates via the provider href when a result is tapped", async () => {
+    cleanups.push(registerSearchProvider(fakeProvider("aa", ["Alpha"])));
+    const props = baseProps();
+    const { getByTestId } = render(SearchResults, { props });
+    await fireEvent.click(getByTestId("fake-result"));
+    expect(props.onnavigate).toHaveBeenCalledWith("/aa/aa-0");
+  });
+
+  it("shows recents instead of sections under two characters", () => {
+    cleanups.push(registerSearchProvider(fakeProvider("aa", ["Alpha"])));
+    const { container } = render(SearchResults, {
+      props: { ...baseProps(), query: "h" },
+    });
+    expect(container.querySelector("h3.secline-eb")).toBeNull();
+  });
+
+  it("shows the quiet hint when there are no recents of any kind", () => {
+    // Earlier tests record recent queries through result taps; the hint
+    // only renders when both recents stores are empty.
+    searchRecents.clear();
+    const { container, getByText } = render(SearchResults, {
+      props: { ...baseProps(), query: "" },
+    });
+    expect(container.querySelector(".search-hint")).not.toBeNull();
+    expect(getByText(/unlocked on this device/)).toBeDefined();
+  });
+});

@@ -1,6 +1,7 @@
 <script lang="ts">
   import { PASSWORD_MIN_LENGTH } from "@care-y/shared";
   import * as m from "$lib/paraglide/messages.js";
+  import Register from "$lib/components/Register.svelte";
   import {
     assessPassphraseStrength,
     looksLikeCommonPattern,
@@ -40,51 +41,54 @@
       case "too-short":
         return {
           label: m.password_strength_too_short({ min: minLength }),
-          color: "var(--color-red-500)",
+          color: "var(--danger)",
           width: "25%",
         };
       case "acceptable":
         return {
           label: m.password_strength_acceptable(),
-          color: "var(--color-amber-500)",
+          color: "var(--care)",
           width: "50%",
         };
       case "good":
         return {
           label: m.password_strength_good(),
-          color: "var(--color-green-500)",
+          color: "var(--meter-strong)",
           width: "75%",
         };
       case "strong":
         return {
           label: m.password_strength_strong(),
-          color: "var(--color-green-500)",
+          color: "var(--meter-strong)",
           width: "100%",
         };
     }
   }
 
   const display = $derived(getStrengthDisplay(strength));
+  const resting = $derived(password.length === 0);
 </script>
 
-{#if password.length > 0}
-  <div class="strength-meter">
-    <div class="strength-track">
-      <div
-        class="strength-fill"
-        style="width: {display.width}; background: {display.color}"
-      ></div>
-    </div>
-    <span class="strength-label" style="color: {display.color}">
-      {display.label}
-    </span>
+<!-- The meter always renders (empty track while the password is empty)
+     so it never pops into the form and shifts the fields around it. -->
+<div class="strength-meter">
+  <div class="strength-track">
+    <div
+      class="strength-fill"
+      style="width: {resting
+        ? '0%'
+        : display.width}; background: {display.color}"
+    ></div>
   </div>
+  <span class="strength-label" style="color: {display.color}">
+    {resting ? "" : display.label}
+  </span>
+</div>
 
-  {#if isCommon}
-    <p class="common-warning" role="alert">
-      {m.password_common_pattern()}
-    </p>
-  {/if}
+{#if isCommon}
+  <Register kind="careful" role="alert">
+    {m.password_common_pattern()}
+  </Register>
 {/if}
 
 <style>
@@ -117,14 +121,8 @@
   .strength-label {
     font-size: var(--text-xs);
     font-weight: 500;
-  }
-
-  .common-warning {
-    font-size: 0.8125rem;
-    color: var(--color-amber-500);
-    background: color-mix(in srgb, var(--color-amber-500) 10%, transparent);
-    padding: var(--space-sm) var(--space-md);
-    border-radius: 8px;
-    margin: 0;
+    /* Reserve the line while resting so typing never changes height. */
+    line-height: 1.4;
+    min-height: 1.4em;
   }
 </style>

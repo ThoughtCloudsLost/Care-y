@@ -9,12 +9,36 @@
   --theme-font-ui: system-ui, -apple-system, sans-serif;
 
   --ink: #1a1a1a;
+  --ink-2: #48484a;
   --muted: #8e8e93;
+  --hair: rgba(0, 0, 0, 0.12);
+  --hair-2: rgba(0, 0, 0, 0.18);
+
+  /* Semantic hues (iOS system colors) */
+  --urgent: #ff3b30;
+  --care: #ff9500;
+  --danger: #ff3b30;
+  --unread: #007aff;
+  --meter-strong: #16a34a;
+  --urgent-soft: color-mix(in srgb, var(--urgent) 8%, transparent);
+  --care-soft: color-mix(in srgb, var(--care) 8%, transparent);
+  --brand-soft: color-mix(
+    in srgb,
+    var(--brand-fill, var(--brand-primary)) 10%,
+    transparent
+  );
+  --brand-text: var(--brand-primary);
+  --brand-fill: var(--brand-primary);
 
   /* Semantic aliases (resolve through Konsta vars below) */
   --paper: var(--color-ios-light-surface);
+  --raised: var(--color-ios-light-surface-1);
+  --paper-deep: var(--color-ios-light-surface-1-shade);
   --surface-1: var(--color-ios-light-surface-1);
   --surface-2: var(--color-ios-light-surface-2);
+
+  --k-hairline-color: var(--hair);
+  --k-page-bg: var(--paper);
 
   /* Card tokens */
   --card-bg: #ffffff;
@@ -71,8 +95,26 @@
 /* --- Dark mode: true black, warm translucent cards --- */
 .theme-cupertino.dark {
   --ink: #f5f5f7;
+  --ink-2: #c7c7cc;
   --muted: #98989d;
+  --hair: rgba(255, 255, 255, 0.12);
+  --hair-2: rgba(255, 255, 255, 0.18);
+  --urgent: #ff453a;
+  --care: #ff9f0a;
+  --danger: #ff453a;
+  --unread: #0a84ff;
+  --meter-strong: #4ade80;
+  --urgent-soft: color-mix(in srgb, var(--urgent) 12%, transparent);
+  --care-soft: color-mix(in srgb, var(--care) 12%, transparent);
+  --brand-soft: color-mix(
+    in srgb,
+    var(--brand-fill, var(--brand-primary)) 12%,
+    transparent
+  );
+  --brand-text: var(--brand-primary);
   --paper: var(--color-ios-dark-surface);
+  --raised: var(--color-ios-dark-surface-1);
+  --paper-deep: var(--color-ios-dark-surface-1-shade);
   --surface-1: var(--color-ios-dark-surface-1);
   --surface-2: var(--color-ios-dark-surface-2);
 

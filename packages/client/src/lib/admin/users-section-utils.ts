@@ -1,6 +1,7 @@
 import { RoleId } from "@care-y/shared";
 import type { KeyStatus } from "$lib/stores/user-filters.svelte.js";
 import { normalizeForSearch } from "$lib/search/normalize.js";
+import { getCollator } from "$lib/utils/collator.js";
 
 export interface UserRecord {
   readonly id: string;
@@ -109,20 +110,23 @@ export function sortUsers(
   const dir = sort.direction === "asc" ? 1 : -1;
   const sorted = [...users];
 
-  const nameCache = new Map<string, string>();
+  const nameCache = new Map<string, string | null>();
   if (sort.field === "name") {
     for (const u of sorted) {
-      nameCache.set(u.id, decryptName(u.id, u.encryptedDisplayName) ?? "￿");
+      nameCache.set(u.id, decryptName(u.id, u.encryptedDisplayName));
     }
   }
 
   sorted.sort((a, b) => {
     switch (sort.field) {
-      case "name":
-        return (
-          dir *
-          (nameCache.get(a.id) ?? "￿").localeCompare(nameCache.get(b.id) ?? "￿")
-        );
+      case "name": {
+        const aName = nameCache.get(a.id) ?? null;
+        const bName = nameCache.get(b.id) ?? null;
+        if (aName === null && bName === null) return 0;
+        if (aName === null) return 1;
+        if (bName === null) return -1;
+        return dir * getCollator().compare(aName, bName);
+      }
       case "role":
         return (
           dir *

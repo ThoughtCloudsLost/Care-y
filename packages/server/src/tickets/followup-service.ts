@@ -44,6 +44,7 @@ export interface FollowUpRecord {
   readonly callDurationSeconds: number | null;
   readonly keyGeneration: string | null;
   readonly keyWrap: FollowUpKeyWrap | null;
+  readonly eventParams: Record<string, unknown> | null;
   readonly fullPosition?: number;
   readonly totalCount?: number;
 }
@@ -81,6 +82,7 @@ export interface FollowUpSummaryRecord {
   readonly callStatus: string | null;
   readonly callDurationSeconds: number | null;
   readonly keyGeneration: string | null;
+  readonly eventParams: Record<string, unknown> | null;
   readonly fullPosition?: number;
   readonly totalCount?: number;
 }
@@ -203,6 +205,7 @@ function toRecord(
     call_sid?: string | null;
     call_status?: string | null;
     call_duration_seconds?: number | null;
+    event_params?: Record<string, unknown> | null;
     has_recording?: boolean | number;
     has_image?: boolean | number;
     has_file?: boolean | number;
@@ -230,6 +233,7 @@ function toRecord(
     callDurationSeconds: row.call_duration_seconds ?? null,
     keyGeneration: row.key_generation ?? null,
     keyWrap: keyWrap ?? null,
+    eventParams: row.event_params ?? null,
     fullPosition:
       row.full_position !== undefined ? Number(row.full_position) : undefined,
     totalCount:
@@ -487,6 +491,7 @@ export function createFollowUpService(
           "followups.call_status",
           "followups.call_duration_seconds",
           "followups.key_generation",
+          "followups.event_params",
         ])
         .where("followups.ticket_id", "=", ticketId)
         .where("followups.deleted_at", "is", null);
@@ -648,6 +653,7 @@ export function createFollowUpService(
           callStatus: row.call_status ?? null,
           callDurationSeconds: row.call_duration_seconds ?? null,
           keyGeneration: row.key_generation ?? null,
+          eventParams: row.event_params ?? null,
           fullPosition: fullPos !== undefined ? Number(fullPos) : undefined,
           totalCount: totCnt !== undefined ? Number(totCnt) : undefined,
         };

@@ -316,11 +316,13 @@
 
   .remove-prompt {
     font-size: 0.8rem;
-    color: var(--k-color-red, #ef4444);
+    color: var(--danger, var(--k-color-red, #ef4444));
   }
 
   .remove-yes {
-    background: var(--k-color-red, #ef4444);
+    background: var(--danger, var(--k-color-red, #ef4444));
+    /* No --danger-on token exists yet; white holds AA on the light-mode
+       danger red and stays the pre-Inkwell behavior in dark mode. */
     color: white;
     border: none;
     border-radius: 0.25rem;
@@ -346,7 +348,7 @@
   .remove-btn {
     background: none;
     border: none;
-    color: var(--k-color-red, #ef4444);
+    color: var(--danger, var(--k-color-red, #ef4444));
     cursor: pointer;
     padding: var(--space-xs);
     min-height: 44px;
@@ -369,7 +371,8 @@
     padding: var(--space-md) var(--space-lg) 0;
   }
 
+  /* Icons are tools on the desk: the accent slot, not brand text. */
   :global(.method-add-icon) {
-    color: var(--brand-primary, var(--k-color-primary, #007aff));
+    color: var(--brand-accent, var(--brand-primary, #007aff));
   }
 </style>

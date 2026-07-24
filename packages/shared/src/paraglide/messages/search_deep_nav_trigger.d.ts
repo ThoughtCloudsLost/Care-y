@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "Search encrypted" |
+* | "Search everything not yet unlocked" |
 *
 * @param {Search_Deep_Nav_TriggerInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

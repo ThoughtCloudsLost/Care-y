@@ -309,7 +309,7 @@
 
   /* Material: solid tonal surface. */
   :global(.k-material) .ed-toolbar-group {
-    background: var(--surface-1);
+    background: var(--raised, var(--surface-1));
   }
 
   :global(.ed-toolbar-btn) {

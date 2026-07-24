@@ -6,17 +6,17 @@ import { getLocale, experimentalStaticLocale } from '../runtime.js';
 /** @typedef {{ count: NonNullable<unknown> }} Onboarding_Twofa_EnrolledInputs */
 
 const en_onboarding_twofa_enrolled = /** @type {(inputs: Onboarding_Twofa_EnrolledInputs) => LocalizedString} */ (i) => {
-	return /** @type {LocalizedString} */ (`${i?.count} method(s) enrolled`)
+	return /** @type {LocalizedString} */ (`${i?.count} methods enrolled`)
 };
 
 const es_onboarding_twofa_enrolled = /** @type {(inputs: Onboarding_Twofa_EnrolledInputs) => LocalizedString} */ (i) => {
-	return /** @type {LocalizedString} */ (`${i?.count} metodo(s) registrado(s)`)
+	return /** @type {LocalizedString} */ (`${i?.count} métodos registrados`)
 };
 
 /**
 * | output |
 * | --- |
-* | "{count} method(s) enrolled" |
+* | "{count} methods enrolled" |
 *
 * @param {Onboarding_Twofa_EnrolledInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

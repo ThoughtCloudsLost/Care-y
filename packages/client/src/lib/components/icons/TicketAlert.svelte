@@ -6,6 +6,7 @@
     class?: string;
     "aria-hidden"?: "true" | "false";
     "aria-label"?: string;
+    [key: `data-${string}`]: string | undefined;
   }
 
   let {
@@ -36,11 +37,9 @@
   aria-hidden={ariaHidden}
   aria-label={ariaLabel}
 >
-  <!-- Ticket body, no perforation dashes to keep interior clean for the symbol -->
   <path
-    d="M2 9a3 3 0 0 1 0 6v2a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-2a3 3 0 0 1 0-6V7a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2Z"
+    d="M2 21.286V15a3 3 0 0 0 0-6V7a2 2 0 0 1 2-2H20a2 2 0 0 1 2 2V9a3 3 0 0 0 0 6V17a2 2 0 0 1-2 2H6.828a2 2 0 0 0-1.414.586l-2.202 2.202A.71.71 0 0 1 2 21.286Z"
   />
-  <!-- Exclamation mark centered in ticket body -->
   <path d="M12 9v4" />
   <path d="M12 15h.01" />
 </svg>

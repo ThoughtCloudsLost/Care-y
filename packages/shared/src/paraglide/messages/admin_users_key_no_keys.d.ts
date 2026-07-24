@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "No keys" |
+* | "Hasn't signed in yet" |
 *
 * @param {Admin_Users_Key_No_KeysInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

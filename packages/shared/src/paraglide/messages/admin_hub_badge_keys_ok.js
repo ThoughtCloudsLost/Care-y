@@ -6,17 +6,17 @@ import { getLocale, experimentalStaticLocale } from '../runtime.js';
 /** @typedef {{}} Admin_Hub_Badge_Keys_OkInputs */
 
 const en_admin_hub_badge_keys_ok = /** @type {(inputs: Admin_Hub_Badge_Keys_OkInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`OK`)
+	return /** @type {LocalizedString} */ (`Ready`)
 };
 
 const es_admin_hub_badge_keys_ok = /** @type {(inputs: Admin_Hub_Badge_Keys_OkInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`OK`)
+	return /** @type {LocalizedString} */ (`Listas`)
 };
 
 /**
 * | output |
 * | --- |
-* | "OK" |
+* | "Ready" |
 *
 * @param {Admin_Hub_Badge_Keys_OkInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

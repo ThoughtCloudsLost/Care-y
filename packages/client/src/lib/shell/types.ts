@@ -10,24 +10,57 @@
 
 import type { Component, Snippet } from "svelte";
 import type { SavedFilterRecord } from "@care-y/shared";
-import type { PillDefinition } from "$lib/components/filters/filter-types.js";
+import type { ViewMode } from "$lib/stores/view-mode.svelte.js";
+import type {
+  PillDefinition,
+  FilterToggleConfig,
+} from "$lib/components/filters/filter-types.js";
 
 // ── Tab identifiers ──────────────────────────────────────────────────
 
 export const TAB_IDS = ["home", "tickets", "library"] as const;
 export type TabId = (typeof TAB_IDS)[number];
 
+// ── Area identifiers ─────────────────────────────────────────────────
+
+export const AREA_IDS = [
+  "admin",
+  "admin-people",
+  "admin-communications",
+  "admin-organization",
+  "admin-manager",
+  "admin-volunteer",
+  "settings",
+  "schedule",
+] as const;
+export type AreaId = (typeof AREA_IDS)[number];
+
 // ── Shell wrapper props ──────────────────────────────────────────────
 
 export interface AppShellProps {
-  /** Currently active tab ID. */
-  activeTab: TabId;
+  /** Currently active tab ID, or null when the path is outside all tabs. */
+  activeTab: TabId | null;
+  /** Non-tab area the current path belongs to, or null on tab pages. */
+  activeArea: AreaId | null;
   /** Org name shown in the navbar. */
   orgName?: string;
   /** Callback when a tab is tapped or arrow-keyed to. */
   ontabchange: (tabId: TabId) => void;
+  /** Callback when the area indicator pill is tapped. */
+  onareatap: (areaId: AreaId) => void;
   /** Page content rendered inside the shell. */
   children: Snippet;
+}
+
+export interface TabbarNavProps {
+  /** Currently active tab ID, or null when the path is outside all tabs. */
+  activeTab: TabId | null;
+  /** Non-tab area the current path belongs to, or null on tab pages. */
+  activeArea: AreaId | null;
+  /** Callback when a tab is tapped. */
+  ontabchange: (tabId: TabId) => void;
+  /** Callback when the area indicator pill is tapped. */
+  onareatap: (areaId: AreaId) => void;
 }
 
 export interface ShellNavbarProps {
@@ -165,7 +198,7 @@ export interface ShellNotificationProps {
 
 // ── Compose mode ────────────────────────────────────────────────────
 
-export type ComposeMode = "reply" | "note";
+export type ComposeMode = "reply" | "note" | "sms";
 
 export interface ShellMessagebarProps {
   /** Compose text (two-way bindable). Defaults to empty string. */
@@ -185,6 +218,15 @@ export interface ShellMessagebarProps {
    *  skips the ResizeObserver that publishes --messagebar-height. Used inside
    *  sheets where the messagebar sits within the sheet's flow, not viewport-pinned. */
   inline?: boolean;
+  /** When true, hides the Messagebar and renders only the + button. The
+   *  anchor div remains for ResizeObserver height publication. */
+  collapsed?: boolean;
+  /** Snippet rendered above the Messagebar inside the anchor div. Used by
+   *  consumers for mode indicators, warnings, etc. */
+  header?: Snippet;
+  /** Snippet rendered below the Messagebar inside the anchor div. Used by
+   *  consumers for character counters, hints, etc. */
+  footer?: Snippet;
 }
 
 // ── Navbar override ─────────────────────────────────────────────────
@@ -242,14 +284,9 @@ export interface SortOption {
 }
 
 export interface ViewToggleConfig {
-  readonly mode: "list" | "grid";
-  readonly onchange: (mode: "list" | "grid") => void;
-  readonly listLabel: string;
-  readonly gridLabel: string;
-  /** Override list-mode icon (defaults to lucide List). */
-  readonly listIcon?: Component<{ size?: number }>;
-  /** Override grid-mode icon (defaults to lucide LayoutGrid). */
-  readonly gridIcon?: Component<{ size?: number }>;
+  readonly mode: ViewMode;
+  readonly onchange: (mode: ViewMode) => void;
+  readonly label?: string;
 }
 
 export interface SortConfig {
@@ -258,6 +295,10 @@ export interface SortConfig {
   readonly currentField: string;
   readonly currentDirection: "asc" | "desc";
   readonly onchange: (field: string, direction: "asc" | "desc") => void;
+  /** Optional on/off item rendered under the field options. Field options
+   *  are server sort params with direction semantics; this is a client-side
+   *  presentation sort that composes with whichever field is active. */
+  readonly toggle?: FilterToggleConfig;
 }
 
 export interface SavedFiltersConfig {
@@ -327,7 +368,8 @@ export interface SidebarSection {
 }
 
 export interface DesktopSidebarProps {
-  readonly activeTab: TabId;
+  readonly activeTab: TabId | null;
+  readonly activeArea: AreaId | null;
   readonly ontabchange: (tabId: TabId) => void;
   readonly expanded: boolean;
   readonly subItems: readonly SidebarSection[];
@@ -337,4 +379,8 @@ export interface DesktopSidebarProps {
   readonly onAdmin: () => void;
   readonly onSettings: () => void;
   readonly onLogout: () => void;
+  /** Current user's role ID. Drives the footer role badge stamp. */
+  readonly roleId: string;
+  /** Called with the role's admin hub path when the role badge is activated. */
+  readonly onNavigate: (path: `/${string}`) => void;
 }

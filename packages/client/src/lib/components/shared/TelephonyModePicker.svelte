@@ -1,6 +1,7 @@
 <script lang="ts">
   import { List, ListItem, ListInput, Radio } from "konsta/svelte";
   import * as m from "$lib/paraglide/messages.js";
+  import PasswordInput from "$lib/components/inputs/PasswordInput.svelte";
 
   type TelephonyMode = "byot" | "managed" | "skip";
 
@@ -85,9 +86,8 @@
 </List>
 
 {#if isByot}
-  <List strong inset>
+  <List nested>
     <ListInput
-      outline
       label={m.onboarding_telephony_sid_label()}
       type="text"
       placeholder={m.onboarding_telephony_sid_placeholder()}
@@ -98,16 +98,10 @@
       {disabled}
     />
 
-    <ListInput
-      outline
+    <PasswordInput
       label={m.onboarding_telephony_token_label()}
-      type="password"
       placeholder={m.onboarding_telephony_token_placeholder()}
-      value={authToken}
-      onInput={(e: Event) => {
-        if (e.target instanceof HTMLInputElement)
-          ontokenchange?.(e.target.value);
-      }}
+      bind:value={() => authToken, (v: string) => ontokenchange?.(v)}
       {disabled}
     />
   </List>

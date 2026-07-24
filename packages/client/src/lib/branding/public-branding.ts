@@ -40,7 +40,7 @@ async function fetchPublicBranding(): Promise<PublicBranding | null> {
   const orgPubKey = base64ToUint8Array(data.orgPublicKey);
   const blob = base64ToUint8Array(data.clientEncryptedBranding);
 
-  /* eslint-disable @typescript-eslint/no-unsafe-type-assertion -- Ciphertext is a branded Uint8Array; blob bytes come from the server's crypto_secretbox output */
+  /* eslint-disable @typescript-eslint/no-unsafe-type-assertion -- Ciphertext is a branded Uint8Array; blob bytes are client-produced XChaCha20-Poly1305 AEAD ciphertext (ADR-053) */
   const plaintext = decryptClientBranding(blob as Ciphertext, orgPubKey);
   /* eslint-enable @typescript-eslint/no-unsafe-type-assertion */
 
@@ -53,7 +53,7 @@ async function fetchPublicBranding(): Promise<PublicBranding | null> {
     : null;
 
   return {
-    orgName: sanitizeOrgName(payload.name ?? "CARE-Y"),
+    orgName: sanitizeOrgName(payload.name ?? ""),
     primaryColor: payload.primaryColor ?? "#636366",
     accentColor: payload.accentColor ?? null,
     iconUrl,

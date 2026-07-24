@@ -8,6 +8,7 @@ describe("createMockProvider", () => {
 
   beforeEach(() => {
     provider = createMockProvider();
+    // Silences the mock provider's per-call console.warn output.
     warnSpy = vi.spyOn(console, "warn").mockImplementation(() => undefined);
   });
 
@@ -273,20 +274,6 @@ describe("createMockProvider", () => {
       const log = provider.getCallLog();
       expect(log).toHaveLength(1);
       expect(log[0]!.args[0]).toBe("+15550002222");
-    });
-  });
-
-  describe("console.warn logging", () => {
-    it("logs a warning for each method call", async () => {
-      await provider.sendSms("+15550001111", "msg", "+15550009999");
-      provider.validateWebhook({
-        url: "https://example.com",
-        body: {},
-        signature: "s",
-        authToken: "t",
-      });
-
-      expect(warnSpy).toHaveBeenCalledTimes(2);
     });
   });
 

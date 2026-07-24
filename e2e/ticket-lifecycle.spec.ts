@@ -76,7 +76,14 @@ test.describe.serial("ticket lifecycle (production UI)", () => {
       .catch(() => {});
 
     // Return to ticket list for the hold flow tests.
-    await page.getByRole("button", { name: /back/i }).click();
+    // In split-view, the Back button is in the inert navbar context.
+    // Use Escape to close the detail pane (clears pushState).
+    const backBtn = page.getByRole("button", { name: /back/i });
+    if (await backBtn.isVisible({ timeout: 2_000 }).catch(() => false)) {
+      await backBtn.click();
+    } else {
+      await page.keyboard.press("Escape");
+    }
     await expect(page).toHaveURL("/tickets");
   });
 

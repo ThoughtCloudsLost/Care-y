@@ -4,6 +4,7 @@ import type { AsyncDecryptCache } from "$lib/crypto/async-decrypt-cache.js";
 import { CryptoWorkerError } from "$lib/workers/crypto-bridge-errors.js";
 import { followupSlot } from "@care-y/crypto";
 import { ticketKeys } from "$lib/query/keys.js";
+import { invalidateReadState } from "$lib/query/invalidate-read-state.js";
 import { toastStore } from "$lib/stores/toast.svelte.js";
 import { extractMentions } from "$lib/utils/mentions.js";
 import * as m from "$lib/paraglide/messages.js";
@@ -105,6 +106,7 @@ export function createSendMessage<TFollowUp extends { id: string }>(
       await queryClient.invalidateQueries({
         queryKey: ticketKeys.followUps(ticketId),
       });
+      invalidateReadState(queryClient);
     } catch (err: unknown) {
       followUpCache.deleteByPrefix(pendingId);
       queryClient.setQueryData<TFollowUp[]>(followUpsKey, (old) =>

@@ -27,6 +27,7 @@
   import { CircleCheck, Circle } from "@lucide/svelte";
   import * as m from "$lib/paraglide/messages.js";
   import { withTerms } from "$lib/terminology/with-terms.js";
+  import { orgInitial as deriveOrgInitial } from "$lib/utils/initials.js";
   import { trpc } from "$lib/trpc/index.js";
   import { onboardingKeys } from "$lib/query/keys.js";
   import { announceToLiveRegion } from "$lib/utils/announce.js";
@@ -34,6 +35,7 @@
   import { haptic } from "$lib/utils/haptic.js";
   import { requireRouter } from "$lib/errors.js";
   import { CHECKLIST_ITEMS } from "$lib/onboarding/checklist-items.js";
+  import { getBrandingTitle } from "$lib/branding/title.svelte.js";
   import WizardReauth from "$lib/components/onboarding/WizardReauth.svelte";
   import SetupAccount from "$lib/components/onboarding/SetupAccount.svelte";
   import SecurityBriefing from "$lib/components/onboarding/SecurityBriefing.svelte";
@@ -296,6 +298,15 @@
 
   const nextSteps = CHECKLIST_ITEMS;
 
+  // Org initial for the completion seal (the spec keeps the seal scarce:
+  // empty rooms, the trust surface, and this arrival). Guarded: if the
+  // branding store has no org name yet, no seal renders.
+  const orgInitial = $derived.by(() => {
+    const name = getBrandingTitle();
+    if (name.trim() === "CARE-Y") return undefined;
+    return deriveOrgInitial(name);
+  });
+
   function isStepComplete(id: string): boolean {
     return (
       checklistQuery.data?.items.find((i) => i.id === id)?.complete ?? false
@@ -313,7 +324,10 @@
     announceToLiveRegion(
       "polite",
       m.onboarding_stepper_progress({
-        current: String(step + 1),
+        // step is 0-based; advancing past the last step lands on the
+        // completion screen, which used to announce one past the total
+        // ("Step 9 of 8").
+        current: String(Math.min(step + 1, STEP_LABELS.length)),
         total: String(STEP_LABELS.length),
       }),
     );
@@ -406,6 +420,12 @@
   {:else if step === 7}
     <SetupEscrow oncomplete={handleEscrowComplete} {goBack} />
   {:else if step === 8}
+    {#if orgInitial}
+      <!-- The org presses its own seal on the finished setup. -->
+      <div class="complete-seal-row">
+        <span class="identity-seal" aria-hidden="true">{orgInitial}</span>
+      </div>
+    {/if}
     <BlockTitle medium>{m.onboarding_wizard_complete_heading()}</BlockTitle>
     <Block>
       <div class="complete-screen">
@@ -419,10 +439,7 @@
         <ListItem title={meta.label()} subtitle={meta.desc()}>
           {#snippet media()}
             {#if complete}
-              <CircleCheck
-                size={22}
-                style="color: var(--brand-primary, #22c55e)"
-              />
+              <CircleCheck size={22} style="color: var(--brand-accent)" />
             {:else}
               <Circle size={22} style="color: var(--muted, #999)" />
             {/if}
@@ -445,6 +462,12 @@
 {/if}
 
 <style>
+  .complete-seal-row {
+    display: flex;
+    justify-content: center;
+    padding-top: var(--space-2xl);
+  }
+
   .home-link {
     display: flex;
     justify-content: center;

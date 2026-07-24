@@ -139,7 +139,7 @@
     height: auto;
     object-fit: cover;
     border-radius: 0.5rem;
-    background: var(--surface-2);
+    background: var(--paper-deep, var(--surface-2));
   }
 
   .mms-placeholder {
@@ -155,7 +155,7 @@
     align-items: center;
     justify-content: center;
     border-radius: 0.5rem;
-    background: var(--surface-2);
+    background: var(--paper-deep, var(--surface-2));
   }
 
   .mms-error-text {

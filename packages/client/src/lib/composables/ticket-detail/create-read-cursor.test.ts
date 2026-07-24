@@ -67,6 +67,39 @@ describe("createReadCursor", () => {
 
       // The 3s timer restarts on the second call
     });
+
+    it("ignores progress at or before the persisted cursor (no redundant write)", async () => {
+      const config = makeConfig();
+      const rc = createReadCursor(config);
+
+      // Persist a cursor at T so readUpTo is a real Date.
+      rc.handleProgress("2026-01-01T12:00:00Z");
+      await rc.flush();
+      expect(config.mutate).toHaveBeenCalledTimes(1);
+      expect(rc.readUpTo?.toISOString()).toBe("2026-01-01T12:00:00.000Z");
+
+      // Opening an already-read thread re-reports T (and older): the
+      // guard must schedule nothing.
+      rc.handleProgress("2026-01-01T12:00:00Z");
+      rc.handleProgress("2026-01-01T11:59:00Z");
+      vi.advanceTimersByTime(3000);
+      await rc.flush();
+      expect(config.mutate).toHaveBeenCalledTimes(1);
+    });
+
+    it("still advances past the persisted cursor for genuinely newer progress", async () => {
+      const config = makeConfig();
+      const rc = createReadCursor(config);
+
+      rc.handleProgress("2026-01-01T12:00:00Z");
+      await rc.flush();
+      expect(config.mutate).toHaveBeenCalledTimes(1);
+
+      rc.handleProgress("2026-01-01T12:00:01Z");
+      await rc.flush();
+      expect(config.mutate).toHaveBeenCalledTimes(2);
+      expect(rc.readUpTo?.toISOString()).toBe("2026-01-01T12:00:01.000Z");
+    });
   });
 
   describe("flush", () => {

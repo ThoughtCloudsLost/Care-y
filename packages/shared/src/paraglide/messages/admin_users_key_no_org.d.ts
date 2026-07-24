@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "No org key" |
+* | "Needs a key share" |
 *
 * @param {Admin_Users_Key_No_OrgInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

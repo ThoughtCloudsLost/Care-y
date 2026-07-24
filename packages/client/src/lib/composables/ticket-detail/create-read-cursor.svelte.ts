@@ -84,7 +84,15 @@ export function createReadCursor(config: ReadCursorConfig): ReadCursorState {
         // AEAD failure (random dummy bytes): all messages are unread.
         readUpTo = null;
       });
+  });
 
+  // Teardown-only timer cleanup, deliberately its own effect: cleanups
+  // run before every re-run, so hanging this on the decrypt effect let
+  // a cursor or key wrap refetch inside the flush window silently
+  // cancel an armed write, and a conversation that fits the pane never
+  // fires a second report to re-arm it. An effect that reads no
+  // reactive state runs once, so this cleanup fires only on unmount.
+  $effect(() => {
     return () => {
       if (cursorUpdateTimer) {
         clearTimeout(cursorUpdateTimer);
@@ -94,6 +102,16 @@ export function createReadCursor(config: ReadCursorConfig): ReadCursorState {
   });
 
   function handleProgress(latestVisibleTimestamp: string): void {
+    // Never re-persist a cursor the server already holds. The initial
+    // visibility report fires on every open of an already-read thread,
+    // and scrolling a fully-read thread reports too. Fewer cursor
+    // writes also means less row-update metadata on the server.
+    if (
+      readUpTo instanceof Date &&
+      Date.parse(latestVisibleTimestamp) <= readUpTo.getTime()
+    ) {
+      return;
+    }
     if (
       pendingReadTimestamp !== null &&
       latestVisibleTimestamp <= pendingReadTimestamp

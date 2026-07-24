@@ -6,17 +6,17 @@ import { getLocale, experimentalStaticLocale } from '../runtime.js';
 /** @typedef {{}} Decrypt_Placeholder_LoadingInputs */
 
 const en_decrypt_placeholder_loading = /** @type {(inputs: Decrypt_Placeholder_LoadingInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Decrypting`)
+	return /** @type {LocalizedString} */ (`Unlocking`)
 };
 
 const es_decrypt_placeholder_loading = /** @type {(inputs: Decrypt_Placeholder_LoadingInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Descifrando`)
+	return /** @type {LocalizedString} */ (`Desbloqueando`)
 };
 
 /**
 * | output |
 * | --- |
-* | "Decrypting" |
+* | "Unlocking" |
 *
 * @param {Decrypt_Placeholder_LoadingInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

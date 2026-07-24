@@ -6,6 +6,7 @@
  * Business logic is delegated to TelephonyConfigService and BlocklistRepository.
  */
 
+import { getEnv } from "../env.js";
 import { router, adminProcedure, withErrorWrapping } from "../trpc/trpc.js";
 import type { TelephonyConfigService } from "../telephony/config-service.js";
 import type { BlindIndexer } from "../crypto/field-encryptor.js";
@@ -117,7 +118,7 @@ export function createTelephonyAdminRouter(deps: TelephonyAdminRouterDeps) {
       }),
     ),
 
-    ...(process.env.NODE_ENV === "development"
+    ...(getEnv().NODE_ENV === "development"
       ? {
           devSeedTelephony: adminProcedure.mutation(
             withErrorWrapping(async ({ ctx }) => {

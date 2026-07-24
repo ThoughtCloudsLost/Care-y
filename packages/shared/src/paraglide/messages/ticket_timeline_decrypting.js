@@ -6,17 +6,17 @@ import { getLocale, experimentalStaticLocale } from '../runtime.js';
 /** @typedef {{}} Ticket_Timeline_DecryptingInputs */
 
 const en_ticket_timeline_decrypting = /** @type {(inputs: Ticket_Timeline_DecryptingInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Decrypting message`)
+	return /** @type {LocalizedString} */ (`Unlocking message`)
 };
 
 const es_ticket_timeline_decrypting = /** @type {(inputs: Ticket_Timeline_DecryptingInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Descifrando mensaje`)
+	return /** @type {LocalizedString} */ (`Desbloqueando mensaje`)
 };
 
 /**
 * | output |
 * | --- |
-* | "Decrypting message" |
+* | "Unlocking message" |
 *
 * @param {Ticket_Timeline_DecryptingInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

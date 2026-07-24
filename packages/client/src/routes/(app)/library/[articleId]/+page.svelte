@@ -6,8 +6,10 @@
   full-page (mobile) and split-view (desktop).
 
   Deep link at desktop: if the URL is /library/[articleId] and the
-  viewport is desktop width, navigate to /library then set
-  page.state.articleId so the layout's split view renders both panes.
+  viewport is desktop width (without ?full=1), navigate to /library
+  then set page.state.articleId so the layout's split view renders
+  both panes. The ?full=1 param skips the redirect for intentional
+  full-page viewing (e.g., expanding from the split pane).
 -->
 <script lang="ts">
   import { page } from "$app/state";
@@ -18,9 +20,10 @@
   import ArticleDetailView from "$lib/components/library/ArticleDetailView.svelte";
 
   const articleId = $derived(page.params.articleId ?? "");
+  const fullView = $derived(page.url.searchParams.get("full") === "1");
 
   $effect(() => {
-    if (layoutMode.isDesktop && articleId) {
+    if (layoutMode.isDesktop && articleId && !fullView) {
       void goto(resolve("/library"), { replaceState: true }).then(() => {
         pushState("", { articleId });
       });
@@ -36,6 +39,6 @@
   }
 </script>
 
-{#if !layoutMode.isDesktop && articleId}
+{#if !layoutMode.isDesktop || fullView}
   <ArticleDetailView {articleId} onback={goBack} onedit={goEdit} />
 {/if}

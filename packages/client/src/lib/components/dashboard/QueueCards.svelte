@@ -1,3 +1,4 @@
+<!-- care-y-ignore no-hardcoded-user-strings -- every user string is an m.*() call; the validator's line scanner misreads prettier's compact inline-span formatting of the urgent segment as template text (the AST validator confirms clean) -->
 <script lang="ts">
   import { Layers } from "@lucide/svelte";
   import * as m from "$lib/paraglide/messages.js";
@@ -5,11 +6,15 @@
   import CollapsibleSection from "./CollapsibleSection.svelte";
   import DecryptPlaceholder from "$lib/components/DecryptPlaceholder.svelte";
   import InlineSkeleton from "$lib/components/InlineSkeleton.svelte";
+  import QueueGlyph from "$lib/components/shared/QueueGlyph.svelte";
+  import type { QueueAppearance } from "$lib/utils/queue-appearance.js";
 
   interface QueueInfo {
     id: string;
     name: string | null;
     openCount: number;
+    urgentCount: number;
+    appearance?: QueueAppearance;
   }
 
   interface QueueCardsProps {
@@ -27,6 +32,22 @@
     ontoggle,
     ontap,
   }: QueueCardsProps = $props();
+
+  function urgentLabel(count: number): string {
+    return count === 1
+      ? m.dashboard_queue_urgent_one({ count })
+      : m.dashboard_queue_urgent_other({ count });
+  }
+
+  // The aria string spells the counts out in words (never color alone), so
+  // the urgent signal never rests on hue for assistive tech.
+  function tileAriaLabel(queue: QueueInfo): string {
+    const name = queue.name ?? "...";
+    const open = m.dashboard_queues_open_count({ count: queue.openCount });
+    return queue.urgentCount > 0
+      ? `${name}, ${open}, ${urgentLabel(queue.urgentCount)}`
+      : `${name}, ${open}`;
+  }
 </script>
 
 <CollapsibleSection
@@ -58,15 +79,20 @@
         <button
           type="button"
           class="queue-tile"
-          aria-label="{queue.name ?? '...'}, {m.dashboard_queues_open_count({
-            count: queue.openCount,
-          })}"
+          aria-label={tileAriaLabel(queue)}
           onclick={() => ontap(queue.id)}
         >
+          {#if queue.appearance}
+            <QueueGlyph appearance={queue.appearance} size={18} />
+          {/if}
           <span class="queue-name">{queue.name ?? "..."}</span>
-          <span class="queue-count"
-            >{m.dashboard_queues_open_count({ count: queue.openCount })}</span
-          >
+          <span class="queue-meta num">
+            {m.dashboard_queues_open_count({
+              count: queue.openCount,
+            })}{#if queue.urgentCount > 0}<span class="queue-urgent"
+                >{urgentLabel(queue.urgentCount)}</span
+              >{/if}
+          </span>
         </button>
       {/each}
     </div>
@@ -82,6 +108,7 @@
     padding: 0.25rem var(--page-pad-x) var(--space-lg);
   }
 
+  /* Inkwell tile: hairline-bordered card, no shadow. */
   .queue-tile {
     display: flex;
     flex-direction: column;
@@ -90,10 +117,10 @@
     gap: var(--space-xs);
     padding: 0.875rem 0.25rem;
     text-align: center;
-    background: var(--card-bg, var(--surface-1));
-    border-radius: var(--card-radius);
-    border: 1px solid var(--card-border, transparent);
-    box-shadow: var(--card-shadow, none);
+    background: var(--raised);
+    border: 1px solid var(--hair-2);
+    border-radius: 12px;
+    box-shadow: none;
     cursor: pointer;
     font-family: inherit;
     -webkit-tap-highlight-color: transparent;
@@ -113,8 +140,25 @@
     max-width: 100%;
   }
 
-  .queue-count {
+  .queue-meta {
     font-size: var(--text-xs);
+    color: var(--muted);
+  }
+
+  .num {
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* Urgency carries the word plus the reserved urgent hue, never hue alone.
+     The dot separator is decorative (the aria-label spells out the count),
+     so it lives in CSS rather than as template text. */
+  .queue-urgent {
+    color: var(--urgent);
+  }
+
+  .queue-urgent::before {
+    content: "·";
+    margin: 0 0.35em;
     color: var(--muted);
   }
 

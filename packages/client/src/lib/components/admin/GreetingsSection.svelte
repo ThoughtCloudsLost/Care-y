@@ -7,6 +7,7 @@
     Segmented,
     SegmentedButton,
   } from "konsta/svelte";
+  import { DIALOG_DESTRUCTIVE_CLASS } from "$lib/components/shared/konsta-classes.js";
   import {
     createQuery,
     createMutation,
@@ -428,7 +429,7 @@
 <div class="greetings-section">
   {#if phonesQuery.isLoading || greetingsQuery.isLoading}
     <div class="gr-content skeleton-pulse">
-      <div class="gr-surface">
+      <div class="gr-surface card-elevated">
         {#each { length: 3 } as _, i (i)}
           <div class="gr-row-skeleton">
             <span class="gr-badge"><InlineSkeleton width="6ch" /></span>
@@ -543,9 +544,8 @@
     </SoftButton>
   {/snippet}
   <div class="sheet-content">
-    <List strongIos outlineIos nested>
+    <List nested>
       <ListInput
-        outline
         type="select"
         dropdown
         label={m.admin_greetings_phone_number_label()}
@@ -562,7 +562,6 @@
       </ListInput>
 
       <ListInput
-        outline
         type="select"
         dropdown
         label={m.admin_greetings_type_label()}
@@ -582,7 +581,6 @@
       </ListInput>
 
       <ListInput
-        outline
         type="select"
         dropdown
         label={m.admin_greetings_locale_label()}
@@ -624,9 +622,8 @@
     </div>
 
     {#if formMode === "text"}
-      <List strongIos outlineIos nested>
+      <List nested>
         <ListInput
-          outline
           type="textarea"
           label={m.admin_greetings_text_label()}
           inputId="gr-text"
@@ -646,7 +643,7 @@
     {:else}
       <div class="audio-upload-area">
         {#if isEditing && editingGreeting?.isAudio === true && editingGreeting.audioBlobKey !== null}
-          <div class="audio-preview">
+          <div class="audio-preview card-elevated">
             <AudioPlayer src="/api/greetings/{editingGreeting.audioBlobKey}" />
           </div>
         {/if}
@@ -737,7 +734,7 @@
     </DialogButton>
     <DialogButton
       strong
-      class="text-[--color-red-500] font-semibold"
+      class={DIALOG_DESTRUCTIVE_CLASS}
       onclick={confirmDelete}
     >
       {m.admin_greetings_delete()}
@@ -781,7 +778,7 @@
   }
 
   .section-divider {
-    border-top: 1px solid var(--divider);
+    border-top: 1px solid var(--hair, var(--divider));
     margin: var(--space-sm) 0;
   }
 
@@ -800,10 +797,6 @@
   .gr-surface {
     display: flex;
     flex-direction: column;
-    background: var(--card-bg, var(--surface-1));
-    border: 1px solid var(--card-border, transparent);
-    box-shadow: var(--card-shadow, none);
-    border-radius: var(--card-radius);
     overflow: hidden;
   }
 
@@ -825,7 +818,8 @@
     font-size: var(--text-base);
     color: var(--ink);
     padding: var(--space-sm) 0;
-    border-bottom: 1px solid color-mix(in srgb, var(--divider) 50%, transparent);
+    border-bottom: 1px solid
+      color-mix(in srgb, var(--hair, var(--divider)) 50%, transparent);
   }
 
   .gr-row:last-child {
@@ -837,7 +831,7 @@
     align-items: center;
     gap: var(--space-sm);
     padding: var(--space-lg) var(--page-pad-x);
-    border-bottom: 1px solid var(--divider);
+    border-bottom: 1px solid var(--hair, var(--divider));
   }
 
   .gr-row-skeleton:last-child {
@@ -896,18 +890,8 @@
     flex: 1;
   }
 
-  .field-help {
-    font-size: var(--text-xs);
-    color: var(--muted);
-    margin: calc(-1 * var(--space-sm)) 0 0;
-    line-height: 1.4;
-  }
-
-  .field-error {
-    font-size: var(--text-xs);
-    color: var(--color-red-500);
-    margin: calc(-1 * var(--space-sm)) 0 0;
-  }
+  /* .field-help and .field-error come from the shared form primitives
+     (shared.css) */
 
   .sheet-actions {
     display: flex;
@@ -928,10 +912,6 @@
   }
 
   .audio-preview {
-    background: var(--card-bg, var(--surface-1));
-    border: 1px solid var(--card-border, transparent);
-    box-shadow: var(--card-shadow, none);
-    border-radius: var(--card-radius);
     padding: var(--space-sm);
   }
 
@@ -968,7 +948,7 @@
     padding: 0.625rem;
     border: none;
     background: transparent;
-    color: var(--color-red-500);
+    color: var(--danger, var(--color-red-500));
     font-size: var(--text-sm);
     font-weight: 500;
     font-family: inherit;

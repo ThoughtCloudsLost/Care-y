@@ -6,17 +6,17 @@ import { getLocale, experimentalStaticLocale } from '../runtime.js';
 /** @typedef {{}} Panel_Analytics_OverviewInputs */
 
 const en_panel_analytics_overview = /** @type {(inputs: Panel_Analytics_OverviewInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Overview`)
+	return /** @type {LocalizedString} */ (`Impact`)
 };
 
 const es_panel_analytics_overview = /** @type {(inputs: Panel_Analytics_OverviewInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Resumen`)
+	return /** @type {LocalizedString} */ (`Impacto`)
 };
 
 /**
 * | output |
 * | --- |
-* | "Overview" |
+* | "Impact" |
 *
 * @param {Panel_Analytics_OverviewInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

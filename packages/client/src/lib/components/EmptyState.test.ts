@@ -40,6 +40,16 @@ describe("EmptyState", () => {
     expect(screen.getByText("Try different filters")).toBeTruthy();
   });
 
+  it("lets a stamp stand alone when no title is given", () => {
+    const { container } = render(EmptyState, {
+      props: { stamp: "No matches", subtitle: "Nothing here matches." },
+    });
+    expect(screen.getByText("No matches")).toBeTruthy();
+    expect(screen.getByText("Nothing here matches.")).toBeTruthy();
+    expect(container.querySelector(".empty-title")).toBeNull();
+    expect(screen.getByRole("status", { name: "No matches" })).toBeTruthy();
+  });
+
   it("does not render subtitle when not provided", () => {
     const { container } = render(EmptyState, { props: { title: "Empty" } });
     expect(container.querySelector(".empty-subtitle")).toBeNull();
@@ -72,5 +82,51 @@ describe("EmptyState", () => {
     render(EmptyState, { props: { title: "Custom label" } });
     const el = screen.getByLabelText("Custom label");
     expect(el).toBeTruthy();
+  });
+
+  describe("seal variant", () => {
+    it("renders the org initial as a decorative seal", () => {
+      const { container } = render(EmptyState, {
+        props: { seal: "H", title: "Nothing here yet" },
+      });
+      const seal = container.querySelector(".empty-seal");
+      expect(seal).toBeTruthy();
+      expect(seal?.textContent).toBe("H");
+      expect(seal?.getAttribute("aria-hidden")).toBe("true");
+    });
+
+    it("applies the display anatomy to the container", () => {
+      const { container } = render(EmptyState, {
+        props: { seal: "H", title: "Nothing here yet" },
+      });
+      expect(container.querySelector(".empty-state--display")).toBeTruthy();
+    });
+
+    it("keeps the plain anatomy when no seal or stamp is given", () => {
+      const { container } = render(EmptyState, { props: { title: "Empty" } });
+      expect(container.querySelector(".empty-state--display")).toBeNull();
+      expect(container.querySelector(".empty-seal")).toBeNull();
+      expect(container.querySelector(".empty-stamp")).toBeNull();
+    });
+  });
+
+  describe("stamp variant", () => {
+    it("renders the stamped word", () => {
+      const { container } = render(EmptyState, {
+        props: { stamp: "All caught up", title: "You've read everything" },
+      });
+      const stamp = container.querySelector(".empty-stamp");
+      expect(stamp).toBeTruthy();
+      expect(stamp?.textContent).toBe("All caught up");
+      expect(container.querySelector(".empty-state--display")).toBeTruthy();
+    });
+
+    it("wins over seal and icon when several are passed", () => {
+      const { container } = render(EmptyState, {
+        props: { stamp: "Done", seal: "H", title: "Caught up" },
+      });
+      expect(container.querySelector(".empty-stamp")).toBeTruthy();
+      expect(container.querySelector(".empty-seal")).toBeNull();
+    });
   });
 });

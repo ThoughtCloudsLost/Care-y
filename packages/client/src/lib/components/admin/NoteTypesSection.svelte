@@ -5,7 +5,6 @@
     ListItem,
     ListInput,
     Toggle,
-    Button,
     Segmented,
     SegmentedButton,
   } from "konsta/svelte";
@@ -43,6 +42,7 @@
   import DecryptPlaceholder from "$lib/components/DecryptPlaceholder.svelte";
   import ShellSheet from "$lib/shell/ShellSheet.svelte";
   import SoftButton from "$lib/components/inputs/SoftButton.svelte";
+  import IconPicker from "$lib/components/inputs/IconPicker.svelte";
   import {
     RoleId,
     ROLE_ID_VALUES,
@@ -458,7 +458,6 @@
   <div class="edit-sheet-body">
     <List nested class="edit-sheet-list">
       <ListInput
-        outline
         label={m.admin_note_types_name_label()}
         type="text"
         value={editName}
@@ -471,7 +470,6 @@
         disabled={sheetSaving}
       />
       <ListInput
-        outline
         label={m.admin_note_types_description_label()}
         type="textarea"
         placeholder={m.admin_note_types_description_placeholder()}
@@ -491,25 +489,12 @@
 
     <div class="edit-sheet-section">
       <span class="edit-sheet-label">{m.admin_note_types_icon_label()}</span>
-      <div class="icon-picker-grid">
-        {#each ICON_PICKER_ENTRIES as entry (entry.slug)}
-          {@const IconComp = entry.component}
-          <Button
-            clear
-            small
-            class="icon-picker-btn {editIcon === entry.slug
-              ? 'icon-picker-active'
-              : ''}"
-            onclick={() => {
-              editIcon = entry.slug;
-            }}
-            aria-label={entry.slug}
-            aria-pressed={editIcon === entry.slug}
-          >
-            <IconComp size={20} />
-          </Button>
-        {/each}
-      </div>
+      <IconPicker
+        options={ICON_PICKER_ENTRIES}
+        bind:value={editIcon}
+        label={m.admin_note_types_icon_label()}
+        disabled={sheetSaving}
+      />
     </div>
 
     <div class="edit-sheet-section">
@@ -652,7 +637,7 @@
 
   .section-divider {
     height: 1px;
-    background: var(--surface-2);
+    background: var(--paper-deep, var(--surface-2));
     margin: var(--space-md) 0 var(--space-sm);
   }
 
@@ -695,9 +680,10 @@
     gap: var(--space-sm);
   }
 
+  /* A deactivated type is a records fact, not an alarm. */
   .inactive-badge {
     font-size: var(--text-xs);
-    color: var(--color-red-500);
+    color: var(--muted);
     font-weight: 600;
     flex-shrink: 0;
   }
@@ -776,23 +762,6 @@
     color: var(--muted);
   }
 
-  .icon-picker-grid {
-    display: grid;
-    grid-template-columns: repeat(4, 1fr);
-    gap: 0.25rem;
-  }
-
-  :global(.icon-picker-btn) {
-    aspect-ratio: 1;
-    border-radius: 0.5rem;
-    color: var(--ink);
-  }
-
-  :global(.icon-picker-active) {
-    background: var(--brand-primary) !important;
-    color: var(--paper) !important;
-  }
-
   :global(.desc-textarea) {
     min-height: calc(2lh) !important;
     resize: none;
@@ -828,7 +797,7 @@
     padding: 0.625rem;
     font-size: var(--text-sm);
     font-weight: 500;
-    color: var(--color-red-500);
+    color: var(--danger, var(--color-red-500));
     background: none;
     border: none;
     cursor: pointer;

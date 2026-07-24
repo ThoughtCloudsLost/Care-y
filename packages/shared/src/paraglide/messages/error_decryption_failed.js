@@ -6,17 +6,17 @@ import { getLocale, experimentalStaticLocale } from '../runtime.js';
 /** @typedef {{}} Error_Decryption_FailedInputs */
 
 const en_error_decryption_failed = /** @type {(inputs: Error_Decryption_FailedInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`This content could not be decrypted.`)
+	return /** @type {LocalizedString} */ (`Could not unlock this content.`)
 };
 
 const es_error_decryption_failed = /** @type {(inputs: Error_Decryption_FailedInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`No se pudo descifrar este contenido.`)
+	return /** @type {LocalizedString} */ (`No se pudo desbloquear este contenido.`)
 };
 
 /**
 * | output |
 * | --- |
-* | "This content could not be decrypted." |
+* | "Could not unlock this content." |
 *
 * @param {Error_Decryption_FailedInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

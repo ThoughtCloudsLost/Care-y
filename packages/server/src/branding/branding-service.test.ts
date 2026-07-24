@@ -74,7 +74,7 @@ function createMockBlobStore(): BlobStore {
   };
 }
 
-describe("createBrandingService", () => {
+describe.skipIf(!process.env.DATABASE_URL)("createBrandingService", () => {
   let testDb: TestDb;
   let db: Kysely<TenantDatabase>;
 

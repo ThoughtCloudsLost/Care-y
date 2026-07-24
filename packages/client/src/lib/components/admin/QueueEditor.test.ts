@@ -13,6 +13,10 @@ const { mockCreateQueue, mockUpdateQueue, mockToastShow, mockOrgCacheDelete } =
 let mockOrgKeyLoaded = true;
 
 vi.mock("$lib/paraglide/messages.js", () => ({
+  register_note: () => "Note",
+  register_careful: () => "Careful",
+  register_warning: () => "Warning",
+  register_protected: () => "Protected",
   admin_queue_editor_create_title: () => "Create Queue",
   admin_queue_editor_edit_title: () => "Edit Queue",
   admin_queue_editor_name_label: () => "Queue name",
@@ -24,6 +28,8 @@ vi.mock("$lib/paraglide/messages.js", () => ({
     `Escalation days must be between ${min} and 365.`,
   admin_queue_editor_no_org_key: () => "Organization key not loaded.",
   admin_queue_editor_pii_warning: () => "Queue names are encrypted.",
+  admin_queue_editor_color_label: () => "Color",
+  admin_queue_editor_icon_label: () => "Icon",
   admin_queue_editor_save_create: () => "Save queue",
   admin_queue_editor_save_edit: () => "Save changes",
   admin_queue_editor_delete: () => "Delete Queue",
@@ -139,6 +145,8 @@ function renderEditor(
   overrides: Partial<{
     queueId: string | null;
     queueEncryptedName: Uint8Array | null;
+    queueEncryptedColor: Uint8Array | null;
+    queueEncryptedIcon: Uint8Array | null;
     queueEscalateDays: number;
     ondeletequeue: ((id: string) => void) | undefined;
   }> = {},
@@ -149,6 +157,8 @@ function renderEditor(
       ondismiss: vi.fn(),
       queueId: overrides.queueId ?? null,
       queueEncryptedName: overrides.queueEncryptedName ?? null,
+      queueEncryptedColor: overrides.queueEncryptedColor ?? null,
+      queueEncryptedIcon: overrides.queueEncryptedIcon ?? null,
       queueEscalateDays: overrides.queueEscalateDays ?? 0,
       ondeletequeue: overrides.ondeletequeue,
     },
@@ -205,6 +215,8 @@ describe("QueueEditor", () => {
     await vi.waitFor(() => {
       expect(mockCreateQueue).toHaveBeenCalledWith({
         encryptedName: "encrypted-text",
+        encryptedColor: "encrypted-text",
+        encryptedIcon: "encrypted-text",
         escalateDays: 7,
       });
     });
@@ -312,6 +324,8 @@ describe("QueueEditor", () => {
         ondismiss,
         queueId: "q-1",
         queueEncryptedName: new Uint8Array([1, 2]),
+        queueEncryptedColor: null,
+        queueEncryptedIcon: null,
         queueEscalateDays: 0,
         ondeletequeue,
       },

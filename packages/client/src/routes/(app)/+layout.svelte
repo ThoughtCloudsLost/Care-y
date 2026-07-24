@@ -9,6 +9,7 @@
   import { getCryptoBridge } from "$lib/crypto/context.js";
   import { cacheRegistry } from "$lib/crypto/cache-registry.js";
   import { isCryptoKeyed } from "$lib/crypto/crypto-keyed.svelte.js";
+  import { isCryptoSettled } from "$lib/crypto/crypto-settled.svelte.js";
   import { isAdminOrgKeyPolling } from "$lib/crypto/admin-org-key-poll.svelte.js";
   import { IdleTimer } from "$lib/auth/idle-timer.js";
   import { toastStore } from "$lib/stores/toast.svelte.js";
@@ -20,7 +21,8 @@
   import AppShell from "$lib/shell/AppShell.svelte";
   import ToastRenderer from "$lib/shell/ToastRenderer.svelte";
   import { getBrandingTitle } from "$lib/branding/title.svelte.js";
-  import type { TabId } from "$lib/shell/types";
+  import { resolveNavContext, areaRoute } from "$lib/shell/nav-context.js";
+  import type { TabId, AreaId } from "$lib/shell/types";
   import type { StateChangeEvent } from "$lib/workers/crypto-protocol.js";
 
   let { children } = $props();
@@ -59,10 +61,11 @@
 
   const appReady = $derived(isAuthenticated && cryptoInitialized);
 
-  // Timeout: if authenticated but crypto isn't ready within 5s, redirect
-  // to reauth. Covers Worker crash, SharedWorker disconnect, bfcache
-  // restore without Worker. Normal login flow never hits this because
-  // the signal is set synchronously before goto("/").
+  // Timeout: if authenticated but crypto isn't ready within the deadline,
+  // redirect to reauth. Covers Worker crash, SharedWorker disconnect,
+  // bfcache restore without Worker. Normal login flow never hits this
+  // because the signal is set synchronously before goto("/").
+  const isE2E = import.meta.env.VITE_E2E_FAST_KDF === "1";
   let cryptoTimedOut = $state(false);
 
   $effect(() => {
@@ -70,11 +73,26 @@
       cryptoTimedOut = false;
       return;
     }
+    // E2E: skip redirect entirely. Dedicated Workers under Playwright can
+    // GC-stall briefly; the test's own assertion timeout handles real failures.
+    if (isE2E) return;
+
+    // Fast path: bridge finished its init handshake and the SharedWorker
+    // isn't keyed. Fire immediately (delay 0) instead of waiting 5s.
+    // Covers PWA cold starts where the worker always has zeroed keys.
+    // If the bridge hasn't settled yet (Worker crash, bfcache restore),
+    // fall back to 5s. When isCryptoSettled() flips true mid-wait, the
+    // effect re-runs and the old timer is cleaned up.
+    const delay = isCryptoSettled() && !isCryptoKeyed() ? 0 : 5_000;
+
     const timer = setTimeout(() => {
       cryptoTimedOut = true;
       cacheRegistry.reset();
-      void goto(resolve("/login?reauth=1"));
-    }, 5_000);
+      const next = encodeURIComponent(
+        window.location.pathname + window.location.search,
+      );
+      void goto(resolve(`/login?reauth=1&next=${next}`));
+    }, delay);
     return () => clearTimeout(timer);
   });
 
@@ -116,31 +134,36 @@
     });
   }
 
-  // ── Tab routing ────────────────────────────────────────────────────
-  type TabRoute = "/" | "/tickets" | "/library";
+  // ── Navigation context ──────────────────────────────────────────────
+  const navCtx = $derived(resolveNavContext(page.url.pathname));
+  const activeTab = $derived(navCtx.tab);
+  const activeArea = $derived(navCtx.area);
 
-  const TAB_ROUTES = new Map<TabId, TabRoute>([
-    ["home", "/"],
-    ["tickets", "/tickets"],
-    ["library", "/library"],
-  ]);
-
-  const TAB_PREFIXES: [string, TabId][] = [
-    ["/tickets", "tickets"],
-    ["/library", "library"],
-  ];
-
-  const activeTab: TabId = $derived.by(() => {
-    const path = page.url.pathname;
-    for (const [prefix, tab] of TAB_PREFIXES) {
-      if (path === prefix || path.startsWith(prefix + "/")) return tab;
+  function tabRoute(tabId: TabId): `/${string}` {
+    switch (tabId) {
+      case "home":
+        return "/";
+      case "tickets":
+        return "/tickets";
+      case "library":
+        return "/library";
     }
-    return "home";
-  });
+  }
+
+  function getAreaRoute(areaId: AreaId): `/${string}` {
+    return areaRoute(areaId);
+  }
 
   function handleTabChange(tabId: TabId): void {
-    const route = TAB_ROUTES.get(tabId);
-    if (route !== undefined && page.url.pathname !== route) {
+    const route = tabRoute(tabId);
+    if (page.url.pathname !== route) {
+      void goto(resolve(route));
+    }
+  }
+
+  function handleAreaTap(areaId: AreaId): void {
+    const route = getAreaRoute(areaId);
+    if (page.url.pathname !== route) {
       void goto(resolve(route));
     }
   }
@@ -168,8 +191,10 @@
         <BrandingProvider>
           <AppShell
             {activeTab}
+            {activeArea}
             orgName={getBrandingTitle()}
             ontabchange={handleTabChange}
+            onareatap={handleAreaTap}
           >
             {@render children()}
           </AppShell>

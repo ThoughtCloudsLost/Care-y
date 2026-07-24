@@ -162,12 +162,12 @@
   }
 
   .line-path {
-    stroke: var(--brand-accent, var(--color-amber-500));
+    stroke: var(--brand-accent, var(--brand-fill));
     stroke-width: 2;
     stroke-linejoin: round;
   }
 
   .line-dot {
-    fill: var(--brand-accent, var(--color-amber-500));
+    fill: var(--brand-accent, var(--brand-fill));
   }
 </style>

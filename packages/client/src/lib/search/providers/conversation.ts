@@ -9,7 +9,8 @@ import { DECRYPT_ERROR_SENTINEL } from "$lib/crypto/async-decrypt-cache.js";
 export interface ConversationSearchData {
   readonly followUpId: string;
   readonly source: string;
-  readonly kind: "message" | "system" | "note";
+  readonly type: string;
+  readonly kind: "message" | "system" | "note" | "article";
   readonly plaintext: string;
   readonly searchTerm: string;
   readonly authorName: string | undefined;
@@ -50,6 +51,11 @@ export function createConversationSearchProvider(
     renderMode: "list",
     showAllHref: () => `/tickets/${deps.getTicketId()}`,
     getResultHref: (id: string) => `/tickets/${deps.getTicketId()}#fu-${id}`,
+    emptyText: () => m.search_conversation_no_matches(),
+    coverage: (c) =>
+      c.total != null
+        ? m.search_conversation_scope({ searched: c.searched, total: c.total })
+        : undefined,
 
     search(query: string) {
       const followUps = deps.getFollowUps();
@@ -89,6 +95,7 @@ export function createConversationSearchProvider(
             data: {
               followUpId: entry.fu.id,
               source: entry.fu.source,
+              type: entry.fu.type,
               kind: followUpKind(entry.fu),
               plaintext: entry.plaintext,
               searchTerm: query,

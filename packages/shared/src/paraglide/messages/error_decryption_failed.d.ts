@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "This content could not be decrypted." |
+* | "Could not unlock this content." |
 *
 * @param {Error_Decryption_FailedInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

@@ -1,14 +1,20 @@
 // @vitest-environment jsdom
 import { describe, it, expect, beforeEach, vi } from "vitest";
 
-// The view-mode store is a module-level singleton that reads localStorage
-// on import. We need to set up mocks before importing it.
+// The view-mode stores are module-level singletons that read localStorage
+// on import. We need to set up mocks before importing them.
 
-function setupMocks(options?: { storedMode?: string | null }): void {
-  const { storedMode = null } = options ?? {};
+function setupMocks(options?: {
+  storedMode?: string | null;
+  storedDashboardMode?: string | null;
+}): void {
+  const { storedMode = null, storedDashboardMode = null } = options ?? {};
 
   const storage = new Map<string, string>();
   if (storedMode !== null) storage.set("care-y-view-mode", storedMode);
+  if (storedDashboardMode !== null) {
+    storage.set("care-y-dashboard-view-mode", storedDashboardMode);
+  }
 
   vi.stubGlobal("localStorage", {
     getItem: (key: string) => storage.get(key) ?? null,
@@ -40,10 +46,27 @@ describe("viewModeStore", () => {
     expect(viewModeStore.mode).toBe("list");
   });
 
-  it("defaults to list for unknown stored values", async () => {
+  it("hydrates the cards mode added by the three-way union", async () => {
+    setupMocks({ storedMode: "cards" });
+    const { viewModeStore } = await import("./view-mode.svelte.ts");
+    expect(viewModeStore.mode).toBe("cards");
+  });
+
+  it("keeps preferences persisted before the union widened", async () => {
+    // "list" and "grid" were the only valid values before "cards" existed;
+    // both must load unchanged after the widening.
+    for (const legacy of ["list", "grid"] as const) {
+      vi.resetModules();
+      setupMocks({ storedMode: legacy });
+      const { viewModeStore } = await import("./view-mode.svelte.ts");
+      expect(viewModeStore.mode).toBe(legacy);
+    }
+  });
+
+  it("accepts kanban as a valid stored value", async () => {
     setupMocks({ storedMode: "kanban" });
     const { viewModeStore } = await import("./view-mode.svelte.ts");
-    expect(viewModeStore.mode).toBe("list");
+    expect(viewModeStore.mode).toBe("kanban");
   });
 
   it("defaults to list for garbage stored values", async () => {
@@ -56,9 +79,9 @@ describe("viewModeStore", () => {
     setupMocks();
     const { viewModeStore } = await import("./view-mode.svelte.ts");
 
-    viewModeStore.set("grid");
-    expect(viewModeStore.mode).toBe("grid");
-    expect(localStorage.getItem("care-y-view-mode")).toBe("grid");
+    viewModeStore.set("cards");
+    expect(viewModeStore.mode).toBe("cards");
+    expect(localStorage.getItem("care-y-view-mode")).toBe("cards");
   });
 
   it("set() back to list persists correctly", async () => {
@@ -73,7 +96,8 @@ describe("viewModeStore", () => {
   it("handles localStorage throwing on getItem", async () => {
     vi.stubGlobal("localStorage", {
       getItem: () => {
-        throw new Error("storage restricted");
+        // Browsers raise DOMException from restricted storage contexts.
+        throw new DOMException("storage restricted", "SecurityError");
       },
       setItem: vi.fn(),
       removeItem: vi.fn(),
@@ -88,7 +112,8 @@ describe("viewModeStore", () => {
     vi.stubGlobal("localStorage", {
       getItem: (key: string) => storage.get(key) ?? null,
       setItem: () => {
-        throw new Error("quota exceeded");
+        // Browsers raise DOMException when the storage quota is exhausted.
+        throw new DOMException("quota exceeded", "QuotaExceededError");
       },
       removeItem: vi.fn(),
     });
@@ -97,5 +122,43 @@ describe("viewModeStore", () => {
     // Should not throw
     viewModeStore.set("grid");
     expect(viewModeStore.mode).toBe("grid");
+  });
+});
+
+describe("dashboardViewModeStore", () => {
+  beforeEach(() => {
+    vi.resetModules();
+  });
+
+  it("defaults to cards when no stored value (the work-mode primitive)", async () => {
+    setupMocks();
+    const { dashboardViewModeStore } = await import("./view-mode.svelte.ts");
+    expect(dashboardViewModeStore.mode).toBe("cards");
+  });
+
+  it("hydrates a stored preference over the cards fallback", async () => {
+    setupMocks({ storedDashboardMode: "list" });
+    const { dashboardViewModeStore } = await import("./view-mode.svelte.ts");
+    expect(dashboardViewModeStore.mode).toBe("list");
+  });
+
+  it("persists under its own key without touching the tickets key", async () => {
+    setupMocks({ storedMode: "grid" });
+    const { viewModeStore, dashboardViewModeStore } =
+      await import("./view-mode.svelte.ts");
+
+    dashboardViewModeStore.set("cards");
+    expect(localStorage.getItem("care-y-dashboard-view-mode")).toBe("cards");
+    expect(localStorage.getItem("care-y-view-mode")).toBe("grid");
+    expect(viewModeStore.mode).toBe("grid");
+  });
+
+  it("stays independent of the tickets store in memory", async () => {
+    setupMocks();
+    const { viewModeStore, dashboardViewModeStore } =
+      await import("./view-mode.svelte.ts");
+
+    viewModeStore.set("grid");
+    expect(dashboardViewModeStore.mode).toBe("cards");
   });
 });

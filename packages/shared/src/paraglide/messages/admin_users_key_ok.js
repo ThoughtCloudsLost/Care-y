@@ -6,17 +6,17 @@ import { getLocale, experimentalStaticLocale } from '../runtime.js';
 /** @typedef {{}} Admin_Users_Key_OkInputs */
 
 const en_admin_users_key_ok = /** @type {(inputs: Admin_Users_Key_OkInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Keys OK`)
+	return /** @type {LocalizedString} */ (`Ready`)
 };
 
 const es_admin_users_key_ok = /** @type {(inputs: Admin_Users_Key_OkInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Claves OK`)
+	return /** @type {LocalizedString} */ (`Listas`)
 };
 
 /**
 * | output |
 * | --- |
-* | "Keys OK" |
+* | "Ready" |
 *
 * @param {Admin_Users_Key_OkInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

@@ -12,8 +12,16 @@
 import { createHmac, randomBytes, timingSafeEqual } from "node:crypto";
 
 const TOTP_DIGITS = 6;
-const TOTP_PERIOD = 30;
+/** Time step length in seconds (RFC 6238 default). */
+export const TOTP_PERIOD = 30;
 const TOTP_ALGORITHM = "sha1";
+
+/**
+ * Time steps checked in each direction for clock drift, the default for
+ * verifyTotpCode(). The replay cache TTL is derived from this: keep the
+ * two in sync by changing only this constant.
+ */
+export const TOTP_VERIFY_WINDOW = 1;
 
 /**
  * Generates a 20-byte random TOTP secret.
@@ -117,13 +125,13 @@ export function generateTotpCode(secret: Buffer, timestamp: number): string {
  *
  * @param secret   Raw TOTP secret bytes (20 bytes)
  * @param code     6-digit code string from the user
- * @param window   Number of time steps to check in each direction (default 1)
+ * @param window   Number of time steps to check in each direction (default TOTP_VERIFY_WINDOW)
  * @param now      Current timestamp in ms (default Date.now(), injectable for tests)
  */
 export function verifyTotpCode(
   secret: Buffer,
   code: string,
-  window = 1,
+  window: number = TOTP_VERIFY_WINDOW,
   now: number = Date.now(),
 ): boolean {
   if (code.length !== TOTP_DIGITS) return false;

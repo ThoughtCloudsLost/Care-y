@@ -1,5 +1,7 @@
 <script lang="ts">
   import { List, ListInput } from "konsta/svelte";
+  import Register from "$lib/components/Register.svelte";
+  import FieldError from "$lib/components/FieldError.svelte";
   import { Save } from "@lucide/svelte";
   import { createMutation, useQueryClient } from "@tanstack/svelte-query";
   import { identifierSchema } from "@care-y/shared";
@@ -106,7 +108,6 @@
   <div class="sheet-content">
     <List nested>
       <ListInput
-        outline
         label={m.settings_username_new()}
         type="text"
         placeholder={m.settings_username_new()}
@@ -118,10 +119,13 @@
         disabled={isPending}
       />
     </List>
-    <p class="pii-warning">{m.user_field_login_username_pii_warning()}</p>
+    <div class="pii-register">
+      <Register kind="careful">
+        {m.user_field_login_username_pii_warning()}
+      </Register>
+    </div>
     <List nested>
       <PasswordInput
-        outline
         label={m.settings_username_password()}
         placeholder={m.settings_username_password_hint()}
         bind:value={currentPassword}
@@ -129,7 +133,9 @@
       />
     </List>
     {#if errorMessage}
-      <p class="error-text" role="alert">{errorMessage}</p>
+      <div class="error-slot">
+        <FieldError message={errorMessage} />
+      </div>
     {/if}
   </div>
 </ShellSheet>
@@ -142,14 +148,11 @@
     flex: 1;
   }
 
-  .pii-warning {
+  .pii-register {
     margin: 0 var(--space-lg);
   }
 
-  .error-text {
-    color: var(--k-color-red);
-    font-size: 0.85rem;
+  .error-slot {
     padding: 0 var(--space-lg);
-    margin: 0;
   }
 </style>

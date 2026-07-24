@@ -6,12 +6,11 @@
   $effect blocks write to these containers harmlessly.
 
   Registers the inert navbar with the splitNavbar store so AppShell
-  can render the subnavbar overlay for the right segment. The detail
-  header (close, title, actions) is rendered locally in this pane,
-  not in the shared navbar.
+  can render the subnavbar overlay for the right segment. Close and
+  expand actions live in the CaseHeader's headerActions slot, not in
+  a separate pane header.
 -->
 <script lang="ts">
-  import SplitPaneHeader from "$lib/shell/SplitPaneHeader.svelte";
   import {
     setNavbarOverrideCtx,
     setTabbarOverrideCtx,
@@ -52,15 +51,10 @@
       splitNavbar.set(undefined);
     };
   });
-
-  const splitTitle = $derived(inertNavbar.current?.title);
-  const splitRight = $derived(inertNavbar.current?.right);
 </script>
 
-<SplitPaneHeader title={splitTitle} right={splitRight} {onclose} {onexpand} />
-
 <div class="split-pane-content">
-  <TicketDetailOrchestrator {ticketId} onback={onclose} />
+  <TicketDetailOrchestrator {ticketId} onback={onclose} {onexpand} />
 </div>
 
 <style>
@@ -75,9 +69,20 @@
     padding-top: var(--subnavbar-h, 0px);
   }
 
+  /* In-flow here, so ShellMessagebar's visual-viewport top/transform
+     positioning must be reset along with position itself. */
   .split-pane-content :global(.shell-messagebar-anchor) {
     position: relative;
+    top: auto;
+    transform: none;
     z-index: auto;
     flex-shrink: 0;
+  }
+
+  /* The chat thread's margin-bottom reserves space for the fixed-position
+     compose bar on mobile. In split-pane the bar is in-flow (relative),
+     so the margin is dead space that pushes the bar below the viewport. */
+  .split-pane-content :global(.thread) {
+    margin-bottom: 0;
   }
 </style>

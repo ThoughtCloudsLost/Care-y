@@ -17,9 +17,23 @@
 import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
 import { render, screen, cleanup, fireEvent } from "@testing-library/svelte";
 
-// IntersectionObserver stub for DecryptPlaceholder
+// IntersectionObserver stub for DecryptPlaceholder; ResizeObserver stub for
+// TicketPreview's fit-mode clipping (both absent in jsdom).
 vi.stubGlobal(
   "IntersectionObserver",
+  vi.fn(function (this: {
+    observe: () => void;
+    disconnect: () => void;
+    unobserve: () => void;
+  }) {
+    this.observe = vi.fn();
+    this.disconnect = vi.fn();
+    this.unobserve = vi.fn();
+  }),
+);
+
+vi.stubGlobal(
+  "ResizeObserver",
   vi.fn(function (this: {
     observe: () => void;
     disconnect: () => void;
@@ -56,6 +70,9 @@ vi.mock("$app/paths", () => ({
   assets: "",
 }));
 
+// The ticket list is a single-page infinite query; every other query on the
+// page is a createQuery, resolved positionally in script order.
+let infiniteTicketsState: Record<string, unknown> = {};
 let queryStates: Array<Record<string, unknown>> = [];
 let queryCallIndex = 0;
 
@@ -74,12 +91,30 @@ const emptyDataQuery = {
 };
 
 vi.mock("@tanstack/svelte-query", () => ({
+  useQueryClient: () => ({
+    getQueryData: vi.fn(),
+    setQueryData: vi.fn(),
+    invalidateQueries: vi.fn(),
+    getQueriesData: vi.fn().mockReturnValue([]),
+  }),
+  createInfiniteQuery: (optsFn: () => Record<string, unknown>) => {
+    optsFn();
+    return infiniteTicketsState;
+  },
   createQuery: (optsFn: () => Record<string, unknown>) => {
     optsFn();
     const state = queryStates[queryCallIndex] ?? defaultQueryState;
     queryCallIndex++;
     return state;
   },
+  createMutation: () => ({
+    mutate: vi.fn(),
+    mutateAsync: vi.fn(),
+    isPending: false,
+    isError: false,
+    error: null,
+    reset: vi.fn(),
+  }),
 }));
 
 vi.mock("$lib/trpc/index.js", () => ({
@@ -87,15 +122,46 @@ vi.mock("$lib/trpc/index.js", () => ({
     auth: { me: { query: vi.fn() } },
     tickets: {
       list: { query: vi.fn() },
+      get: { query: vi.fn() },
       recentActivity: { query: vi.fn() },
       myQueues: { query: vi.fn() },
       dashboardInfo: { query: vi.fn() },
+      counts: { query: vi.fn() },
+      listReadState: { query: vi.fn().mockResolvedValue({}) },
+      readStateSweep: {
+        query: vi.fn().mockResolvedValue({ items: [], nextCursor: null }),
+      },
+      recentFollowUps: { query: vi.fn().mockResolvedValue({}) },
+      listVolunteers: { query: vi.fn().mockResolvedValue([]) },
+      update: { mutate: vi.fn().mockResolvedValue({}) },
+      take: { mutate: vi.fn().mockResolvedValue({}) },
+      assignTo: { mutate: vi.fn().mockResolvedValue({}) },
+      getReactions: { query: vi.fn().mockResolvedValue({}) },
+      noteTypes: {
+        listActive: {
+          query: vi
+            .fn()
+            .mockResolvedValue({ types: [], defaultNoteTypeId: null }),
+        },
+        list: {
+          query: vi
+            .fn()
+            .mockResolvedValue({ types: [], defaultNoteTypeId: null }),
+        },
+      },
     },
     kb: {
       recentItems: { query: vi.fn() },
     },
   },
 }));
+
+const mockPreviewLoader = {
+  rawPreviews: new Map(),
+  observe: vi.fn(),
+  eagerLoad: vi.fn().mockResolvedValue(undefined),
+  get: vi.fn().mockReturnValue(undefined),
+};
 
 vi.mock("$lib/crypto/context.js", () => ({
   getTicketDecryptCache: () => ({
@@ -112,11 +178,32 @@ vi.mock("$lib/crypto/context.js", () => ({
     clear: vi.fn(),
     size: 0,
   }),
+  // The reply/call/assign overlays mount unconditionally (closed), so their
+  // scripts resolve the bridge/key manager at setup even without opening.
+  getCryptoBridge: () => ({
+    encrypt: vi.fn().mockResolvedValue("base64-ciphertext"),
+    encryptText: vi.fn().mockResolvedValue("encrypted-text"),
+    decrypt: vi.fn().mockResolvedValue("plaintext"),
+  }),
+  getOrgKeyManager: () => ({
+    unwrapOrgKey: vi.fn(),
+    isReady: () => false,
+  }),
+  getPreviewLoader: () => mockPreviewLoader,
+  getFollowUpDecryptCache: () => ({
+    decrypt: vi.fn().mockReturnValue(undefined),
+    decryptContent: vi.fn().mockReturnValue(undefined),
+    has: vi.fn().mockReturnValue(false),
+    get: vi.fn().mockReturnValue(undefined),
+    clear: vi.fn(),
+    size: 0,
+  }),
   getCurrentUserId: () => () => "user-001",
   getCurrentPermissions: () => () => mockPermissions,
 }));
 
 vi.mock("$lib/shell/context.js", () => ({
+  getScrollContainer: () => () => undefined,
   getNavbarOverrideCtx: () => ({ current: undefined }),
   getTabbarOverrideCtx: () => ({ current: undefined }),
 }));
@@ -153,18 +240,36 @@ function makeTicket(overrides: Record<string, unknown> = {}) {
   };
 }
 
-function buildQueryStates(
-  ticketsQuery: Record<string, unknown>,
-  overrides?: {
-    activity?: Record<string, unknown>;
-    queues?: Record<string, unknown>;
-    shift?: Record<string, unknown>;
-    kb?: Record<string, unknown>;
-    counts?: Record<string, unknown>;
-  },
-): Array<Record<string, unknown>> {
+// Wrap a flat ticket list in the single-page infinite-query cache shape the
+// dashboard reads (`data.pages.flat()`); undefined data stays undefined.
+function ticketsInfinite(state: {
+  isLoading: boolean;
+  isError: boolean;
+  error: unknown;
+  data: Array<Record<string, unknown>> | undefined;
+}): Record<string, unknown> {
+  return {
+    isLoading: state.isLoading,
+    isError: state.isError,
+    error: state.error,
+    data:
+      state.data === undefined
+        ? undefined
+        : { pages: [state.data], pageParams: [undefined] },
+  };
+}
+
+// The createQuery calls, in the page's script order: activity, queues, shift,
+// kb, counts. The read-state and checklist queries follow and fall through to
+// defaultQueryState (undefined data), which is what these tests want.
+function buildQueryStates(overrides?: {
+  activity?: Record<string, unknown>;
+  queues?: Record<string, unknown>;
+  shift?: Record<string, unknown>;
+  kb?: Record<string, unknown>;
+  counts?: Record<string, unknown>;
+}): Array<Record<string, unknown>> {
   return [
-    ticketsQuery,
     overrides?.activity ?? emptyDataQuery,
     overrides?.queues ?? emptyDataQuery,
     overrides?.shift ?? { ...defaultQueryState, data: { shift: null } },
@@ -195,6 +300,12 @@ const DEFAULT_PERMISSIONS = new Set([
 beforeEach(() => {
   queryCallIndex = 0;
   queryStates = [];
+  infiniteTicketsState = ticketsInfinite({
+    isLoading: false,
+    isError: false,
+    error: null,
+    data: [],
+  });
   mockGoto.mockClear();
   mockPermissions = new Set(DEFAULT_PERMISSIONS);
 });
@@ -211,24 +322,26 @@ describe("Dashboard page", () => {
       makeTicket({ assignedTo: USER_ID }),
       makeTicket({ assignedTo: null }),
     ];
-    queryStates = buildQueryStates({
+    infiniteTicketsState = ticketsInfinite({
       isLoading: false,
       isError: false,
       error: null,
       data: tickets,
     });
+    queryStates = buildQueryStates();
 
     const { container } = render(PageModule.default);
     expect(container.querySelector(".dashboard")).toBeTruthy();
   });
 
   it("renders skeleton during loading", () => {
-    queryStates = buildQueryStates({
+    infiniteTicketsState = ticketsInfinite({
       isLoading: true,
       isError: false,
       error: null,
       data: undefined,
     });
+    queryStates = buildQueryStates();
 
     const { container } = render(PageModule.default);
     // DecryptPlaceholder container (.dp) renders immediately; the scramble
@@ -237,12 +350,13 @@ describe("Dashboard page", () => {
   });
 
   it("renders section headers even on query failure (progressive loading)", () => {
-    queryStates = buildQueryStates({
+    infiniteTicketsState = ticketsInfinite({
       isLoading: false,
       isError: true,
       error: new Error("UNKNOWN"),
       data: undefined,
     });
+    queryStates = buildQueryStates();
 
     const { container } = render(PageModule.default);
     // Sections render unconditionally with progressive loading
@@ -250,12 +364,13 @@ describe("Dashboard page", () => {
   });
 
   it("renders all section headers when data is present", () => {
-    queryStates = buildQueryStates({
+    infiniteTicketsState = ticketsInfinite({
       isLoading: false,
       isError: false,
       error: null,
       data: [makeTicket({ assignedTo: USER_ID })],
     });
+    queryStates = buildQueryStates();
 
     render(PageModule.default);
 
@@ -263,9 +378,64 @@ describe("Dashboard page", () => {
     expect(screen.getByRole("button", { name: /My Tickets/ })).toBeTruthy();
     expect(screen.getByRole("button", { name: /Unassigned/ })).toBeTruthy();
     expect(screen.getByRole("button", { name: /Activity/ })).toBeTruthy();
-    expect(
-      screen.getByRole("button", { name: /Knowledge base/i }),
-    ).toBeTruthy();
+    // The {knowledgeBase} terminology default is "library".
+    expect(screen.getByRole("button", { name: /Library/i })).toBeTruthy();
+  });
+
+  it("renders sections in the work-first order (tickets lead, meta follows)", () => {
+    // The urgent unassigned ticket fills the needs-attention bucket without
+    // any read-state involvement, so the section renders deterministically.
+    infiniteTicketsState = ticketsInfinite({
+      isLoading: false,
+      isError: false,
+      error: null,
+      data: [
+        makeTicket({ assignedTo: USER_ID }),
+        makeTicket({ assignedTo: null, priority: "urgent" }),
+      ],
+    });
+    queryStates = buildQueryStates();
+
+    const { container } = render(PageModule.default);
+
+    const ids = Array.from(container.querySelectorAll(".scroll-target")).map(
+      (el) => el.id,
+    );
+    expect(ids).toEqual([
+      "section-shift",
+      "section-queues",
+      "section-activity",
+      "section-kb",
+      "section-needs-attention",
+      "section-my-tickets",
+      "section-unassigned",
+    ]);
+  });
+
+  it("links needs-attention overflow to the tickets needs-attention filter", async () => {
+    // Six urgent unassigned tickets exceed the five-item preview cap, so
+    // needs-attention renders its "See all" action. The two normal
+    // tickets push the unassigned section to a different total, keeping
+    // the needs-attention link's label unique on the page.
+    infiniteTicketsState = ticketsInfinite({
+      isLoading: false,
+      isError: false,
+      error: null,
+      data: [
+        ...Array.from({ length: 6 }, () =>
+          makeTicket({ assignedTo: null, priority: "urgent" }),
+        ),
+        ...Array.from({ length: 2 }, () => makeTicket({ assignedTo: null })),
+      ],
+    });
+    queryStates = buildQueryStates();
+
+    render(PageModule.default);
+
+    const seeAll = screen.getByText("See all (6)");
+    await fireEvent.click(seeAll);
+
+    expect(mockGoto).toHaveBeenCalledWith("/tickets?filter=needs-attention");
   });
 });
 
@@ -277,7 +447,13 @@ describe("Dashboard create popover", () => {
       "manage_users",
       "manage_knowledge_base_categories",
     ]);
-    queryStates = buildQueryStates(emptyDataQuery);
+    infiniteTicketsState = ticketsInfinite({
+      isLoading: false,
+      isError: false,
+      error: null,
+      data: [],
+    });
+    queryStates = buildQueryStates();
     render(PageModule.default);
   }
 
@@ -304,14 +480,14 @@ describe("Dashboard create popover", () => {
   });
 
   it("does not show queue option without manage_queues permission", () => {
-    queryStates = buildQueryStates(emptyDataQuery);
+    queryStates = buildQueryStates();
     render(PageModule.default);
 
     expect(screen.queryByText("New Queue")).toBeNull();
   });
 
   it("does not show user option without manage_users permission", () => {
-    queryStates = buildQueryStates(emptyDataQuery);
+    queryStates = buildQueryStates();
     render(PageModule.default);
 
     expect(screen.queryByText("Invite User")).toBeNull();

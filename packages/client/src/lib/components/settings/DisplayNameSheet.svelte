@@ -88,7 +88,6 @@
   <div class="sheet-content">
     <List nested>
       <ListInput
-        outline
         label={m.settings_display_name_new()}
         type="text"
         placeholder={m.settings_display_name_new()}

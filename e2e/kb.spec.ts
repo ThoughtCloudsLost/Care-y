@@ -1,8 +1,7 @@
 import { test, expect } from "./coverage-fixture";
 import { startCoverage, stopAndWriteCoverage } from "./coverage-fixture";
 import type { Page } from "@playwright/test";
-import AxeBuilder from "@axe-core/playwright";
-import { CRYPTO_TIMEOUT, login } from "./helpers";
+import { auditA11y, CRYPTO_TIMEOUT, login } from "./helpers";
 
 test.describe.serial("Knowledge Base (Library Tab)", () => {
   let page: Page;
@@ -14,7 +13,7 @@ test.describe.serial("Knowledge Base (Library Tab)", () => {
     await login(page);
     // Navigate to Library tab (the test suite covers this tab, not the
     // dashboard KB section which only shows the 2 most recent articles).
-    await page.getByRole("tab", { name: /knowledge base/i }).click();
+    await page.getByRole("tab", { name: /library/i }).click();
     await expect(page).toHaveURL("/library");
     await expect(page.getByText("Safety planning template")).toBeVisible({
       timeout: CRYPTO_TIMEOUT,
@@ -29,7 +28,7 @@ test.describe.serial("Knowledge Base (Library Tab)", () => {
   // ── 1. Tab visibility ─────────────────────────────────────────
 
   test("Library tab visible in tabbar", async () => {
-    const libraryTab = page.getByRole("tab", { name: /knowledge base/i });
+    const libraryTab = page.getByRole("tab", { name: /library/i });
     await expect(libraryTab).toBeVisible();
   });
 
@@ -41,7 +40,7 @@ test.describe.serial("Knowledge Base (Library Tab)", () => {
   // ── 2. Library page shows articles ────────────────────────────
 
   test("navigating to Library tab shows article list", async () => {
-    await page.getByRole("tab", { name: /knowledge base/i }).click();
+    await page.getByRole("tab", { name: /library/i }).click();
     await expect(page).toHaveURL("/library");
 
     // Wait for any decrypted article title. These are org-key encrypted
@@ -79,14 +78,14 @@ test.describe.serial("Knowledge Base (Library Tab)", () => {
 
   test("view toggle switches between list and grid layout", async () => {
     // Default is list mode. Switch to grid.
-    const gridBtn = page.getByRole("button", { name: "Grid view" });
+    const gridBtn = page.getByRole("button", { name: "Grid" });
     await gridBtn.click();
     await expect(gridBtn).toHaveAttribute("aria-pressed", "true");
 
-    // Switch back to list.
-    const listBtn = page.getByRole("button", { name: "List view" });
-    await listBtn.click();
-    await expect(listBtn).toHaveAttribute("aria-pressed", "true");
+    // Switch back to compact rows.
+    const rowsBtn = page.getByRole("button", { name: "Compact rows" });
+    await rowsBtn.click();
+    await expect(rowsBtn).toHaveAttribute("aria-pressed", "true");
   });
 
   // ── 4. Sort popover ───────────────────────────────────────────
@@ -122,9 +121,8 @@ test.describe.serial("Knowledge Base (Library Tab)", () => {
     // Tap the first article in the list.
     await page.getByText("Intake call checklist").click();
 
-    // Should navigate to the article detail page.
-    await expect(page).toHaveURL(/\/library\/.+/);
-
+    // On desktop, the library uses split view with pushState (no URL change).
+    // The article detail renders in the right pane.
     // The article title should be visible as an h1.
     await expect(
       page.locator("h1").getByText("Intake call checklist"),
@@ -192,11 +190,20 @@ test.describe.serial("Knowledge Base (Library Tab)", () => {
   // ── 9. Navigate back to library ───────────────────────────────
 
   test("back button returns to library list", async () => {
-    // The back button is in the navbar override (ChevronLeft icon).
+    // On desktop split view, the detail pane has a close button (Escape).
+    // On mobile, the back button navigates to /library.
     const backBtn = page.getByRole("button", {
-      name: /back to knowledge base/i,
+      name: /back to library|close/i,
     });
-    await backBtn.click();
+    const hasBackBtn = await backBtn
+      .isVisible({ timeout: 2_000 })
+      .catch(() => false);
+
+    if (hasBackBtn) {
+      await backBtn.click();
+    } else {
+      await page.keyboard.press("Escape");
+    }
 
     await expect(page).toHaveURL("/library");
     await expect(page.getByText("Intake call checklist")).toBeVisible();
@@ -238,17 +245,23 @@ test.describe.serial("Knowledge Base (Library Tab)", () => {
     // Tap the result.
     await sheet.getByText("Escalation protocol").click();
 
-    // Should navigate to the article detail.
-    await expect(page).toHaveURL(/\/library\/.+/);
+    // Article detail opens (split view on desktop, full-page on mobile).
     await expect(
       page.locator("h1").getByText("Escalation protocol"),
     ).toBeVisible({ timeout: CRYPTO_TIMEOUT });
 
     // Navigate back to library for subsequent tests.
-    const backBtn = page.getByRole("button", {
-      name: /back to knowledge base/i,
+    const backBtn2 = page.getByRole("button", {
+      name: /back to library|close/i,
     });
-    await backBtn.click();
+    const hasBack2 = await backBtn2
+      .isVisible({ timeout: 2_000 })
+      .catch(() => false);
+    if (hasBack2) {
+      await backBtn2.click();
+    } else {
+      await page.keyboard.press("Escape");
+    }
     await expect(page).toHaveURL("/library");
   });
 
@@ -256,13 +269,13 @@ test.describe.serial("Knowledge Base (Library Tab)", () => {
 
   test("dashboard KBSection links navigate to article detail", async () => {
     // Navigate to dashboard.
-    await page.getByRole("tab", { name: "Home" }).click();
+    await page.getByRole("tab", { name: "Overview" }).click();
     await expect(page).toHaveURL("/");
 
     // The KB section may be collapsed from earlier tests. Expand it first.
     const kbSection = page.locator("#section-kb");
     const sectionHeader = kbSection.getByRole("button", {
-      name: /knowledge base/i,
+      name: /library/i,
     });
     const isExpanded = await sectionHeader.getAttribute("aria-expanded");
     if (isExpanded !== "true") {
@@ -276,34 +289,27 @@ test.describe.serial("Knowledge Base (Library Tab)", () => {
     await expect(kbItem).toBeVisible({ timeout: CRYPTO_TIMEOUT });
     await kbItem.click();
 
-    // Should navigate to the article detail page.
-    await expect(page).toHaveURL(/\/library\/.+/, { timeout: 5_000 });
+    // Article detail opens (split view on desktop, full-page on mobile).
     await expect(page.locator("h1.article-title")).toBeVisible({
       timeout: CRYPTO_TIMEOUT,
     });
 
     // Return to dashboard for cleanup.
-    await page.getByRole("tab", { name: "Home" }).click();
+    await page.getByRole("tab", { name: "Overview" }).click();
     await expect(page).toHaveURL("/");
   });
 
   // ── 12. Accessibility ─────────────────────────────────────────
 
   test("a11y: library page passes axe-core audit", async () => {
-    await page.getByRole("tab", { name: /knowledge base/i }).click();
+    await page.getByRole("tab", { name: /library/i }).click();
     await expect(page.getByText("Intake call checklist")).toBeVisible({
       timeout: CRYPTO_TIMEOUT,
     });
 
-    // Exclude Konsta UI internal a11y violations:
-    // - tablist contains role=link (More tab), aria-required-children
-    // These are tracked separately from KB-specific tests.
-    const results = await new AxeBuilder({ page })
-      .setLegacyMode(true)
-      .withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa"])
-      .exclude("[role='tablist']")
-      .analyze();
-    expect(results.violations).toEqual([]);
+    // Konsta Tabbar internals are excluded (tablist contains role=link
+    // for the More tab, H-011); the shell tab bar is audited elsewhere.
+    await auditA11y(page, { exclude: ["[role='tablist']"] });
   });
 
   test("a11y: article detail passes axe-core audit", async () => {
@@ -318,11 +324,6 @@ test.describe.serial("Knowledge Base (Library Tab)", () => {
       timeout: 10_000,
     });
 
-    const results = await new AxeBuilder({ page })
-      .setLegacyMode(true)
-      .exclude("[role='tablist']")
-      .disableRules(["color-contrast"])
-      .analyze();
-    expect(results.violations).toEqual([]);
+    await auditA11y(page, { exclude: ["[role='tablist']"] });
   });
 });

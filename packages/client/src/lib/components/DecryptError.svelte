@@ -7,10 +7,11 @@
 </div>
 
 <style>
+  /* Recessed tinted block; the thick left border is a banned accent. */
   .decrypt-error {
     padding: 0.75rem 1rem;
-    background: var(--surface-2);
-    border-left: 3px solid var(--muted);
+    background: var(--paper-deep, var(--surface-2));
+    border-radius: 10px;
     color: var(--muted);
     font-style: italic;
   }

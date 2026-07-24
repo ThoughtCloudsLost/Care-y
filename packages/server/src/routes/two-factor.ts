@@ -23,6 +23,7 @@ import {
   withErrorWrapping,
 } from "../trpc/trpc.js";
 import { TRPCError } from "@trpc/server";
+import { getEnv } from "../env.js";
 import type { FieldEncryptor } from "../crypto/field-encryptor.js";
 import type { BlindIndexer } from "../crypto/field-encryptor.js";
 import type { SessionTokenizer } from "../crypto/session-tokenizer.js";
@@ -37,6 +38,7 @@ import {
   createTwoFactorService,
   type TwoFactorService,
 } from "../auth/two-factor-service.js";
+import type { TotpReplayCache } from "../auth/totp-replay-cache.js";
 import {
   createEmailCodeService,
   type EmailCodeService,
@@ -98,6 +100,8 @@ export interface TwoFactorRouterDeps {
   readonly resolveCallerId: CallerIdResolver;
   readonly pushSender: PushNotificationSender | null;
   readonly pushHmacKey: Buffer | null;
+  /** Process-wide accepted-code cache; one instance shared by every router. */
+  readonly totpReplayCache: TotpReplayCache;
 }
 
 interface ScopedServices {
@@ -169,6 +173,7 @@ export async function createScopedTwoFactorServices(
     emailCodes,
     deps.encryptor,
     TOTP_ISSUER,
+    { cache: deps.totpReplayCache, orgId: org.orgId },
     smsDeps,
     pushServiceDeps,
   );
@@ -182,7 +187,7 @@ export async function createScopedTwoFactorServices(
  */
 function deriveRpId(): string {
   if (
-    process.env.NODE_ENV === "development" &&
+    getEnv().NODE_ENV === "development" &&
     process.env.CORS_ORIGIN != null &&
     process.env.CORS_ORIGIN !== ""
   ) {
@@ -201,7 +206,7 @@ function deriveRpId(): string {
  * In dev: CORS_ORIGIN (e.g. https://host.ts.net:5173, http://localhost:5173)
  */
 function deriveOrigin(org: OrgContext): string {
-  if (process.env.NODE_ENV === "development") {
+  if (getEnv().NODE_ENV === "development") {
     return process.env.CORS_ORIGIN ?? "http://localhost:5173";
   }
   return `https://${org.orgSlug}.${WEBAUTHN_RP_ID}`;

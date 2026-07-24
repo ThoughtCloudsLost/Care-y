@@ -6,17 +6,17 @@ import { getLocale, experimentalStaticLocale } from '../runtime.js';
 /** @typedef {{}} Mgr_Role_ReportsInputs */
 
 const en_mgr_role_reports = /** @type {(inputs: Mgr_Role_ReportsInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`View reports and team metrics`)
+	return /** @type {LocalizedString} */ (`View reports and org metrics`)
 };
 
 const es_mgr_role_reports = /** @type {(inputs: Mgr_Role_ReportsInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Ver reportes y metricas del equipo`)
+	return /** @type {LocalizedString} */ (`Ver reportes y metricas de la organizacion`)
 };
 
 /**
 * | output |
 * | --- |
-* | "View reports and team metrics" |
+* | "View reports and org metrics" |
 *
 * @param {Mgr_Role_ReportsInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

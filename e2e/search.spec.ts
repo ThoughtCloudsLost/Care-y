@@ -1,8 +1,7 @@
 import { test, expect } from "./coverage-fixture";
 import { startCoverage, stopAndWriteCoverage } from "./coverage-fixture";
 import type { Page } from "@playwright/test";
-import AxeBuilder from "@axe-core/playwright";
-import { CRYPTO_TIMEOUT, login } from "./helpers";
+import { auditA11y, CRYPTO_TIMEOUT, login } from "./helpers";
 
 test.describe.serial("Universal Search", () => {
   let page: Page;
@@ -37,13 +36,17 @@ test.describe.serial("Universal Search", () => {
   // ── 2. Typing shows results ────────────────────────────────────
 
   test("typing shows ticket results in horizontal strip", async () => {
-    // Type a known seeded ticket title substring.
-    const searchbar = page.locator("input[type='text']").last();
+    // Type a known seeded ticket title substring into the search overlay input.
+    // The Konsta Searchbar is inside the .search-overlay container.
+    const searchbar = page.locator(".search-overlay input[type='text']");
+    await searchbar.waitFor({ state: "visible", timeout: 5_000 });
     await searchbar.fill("housing");
 
-    // Ticket cards should appear in the results sheet.
+    // Ticket cards should appear in the results.
     const sheet = page.locator("[role='search']");
-    await expect(sheet.getByText("Tickets", { exact: true })).toBeVisible();
+    await expect(sheet.getByText("Tickets", { exact: true })).toBeVisible({
+      timeout: CRYPTO_TIMEOUT,
+    });
     await expect(sheet.getByText("Help with housing")).toBeVisible({
       timeout: 5_000,
     });
@@ -56,17 +59,22 @@ test.describe.serial("Universal Search", () => {
     const sheet = page.locator("[role='search']");
     // Click the card's accessible overlay button (not the text, which sits
     // below the overlay in z-order and may not trigger the tap handler).
-    const cardBtn = sheet.getByRole("button", {
-      name: /open ticket/i,
-    });
+    const cardBtn = sheet
+      .getByRole("button", {
+        name: /open ticket/i,
+      })
+      .first();
     await expect(cardBtn).toBeVisible({ timeout: 5_000 });
     await cardBtn.click();
 
-    // Should navigate to the ticket detail page.
-    await expect(page).toHaveURL(/\/tickets\/.+/, { timeout: 10_000 });
+    // On desktop, ticket detail opens in split view (URL may stay at /tickets).
+    // Wait for the chat log to appear as confirmation of navigation.
+    await expect(page.locator('[role="log"]')).toBeVisible({
+      timeout: CRYPTO_TIMEOUT,
+    });
 
-    // Sheet should be dismissed (allow time for closing animation).
-    await expect(sheet).not.toBeVisible({ timeout: 5_000 });
+    // Search overlay should be dismissed.
+    await expect(sheet).not.toBeVisible({ timeout: 10_000 });
   });
 
   // ── 4. Recent searches ─────────────────────────────────────────
@@ -78,7 +86,7 @@ test.describe.serial("Universal Search", () => {
       await backBtn.click();
     }
     // Navigate to Home tab (SPA) to preserve crypto Worker state.
-    await page.getByRole("tab", { name: "Home" }).click();
+    await page.getByRole("tab", { name: "Overview" }).click();
     await expect(page).toHaveURL("/");
 
     // Open search again.
@@ -88,14 +96,14 @@ test.describe.serial("Universal Search", () => {
     await expect(sheet).toBeVisible();
 
     // "housing" should appear in recents (was added when we tapped the result).
-    await expect(sheet.getByText("housing")).toBeVisible();
+    await expect(sheet.getByText("housing").first()).toBeVisible();
   });
 
   test("tapping a recent search fills the searchbar and shows results", async () => {
     const sheet = page.locator("[role='search']");
 
     // Tap the "housing" recent.
-    await sheet.getByText("housing").click();
+    await sheet.getByText("housing").first().click();
 
     // Results should appear again.
     await expect(sheet.getByText("Help with housing")).toBeVisible({
@@ -105,11 +113,13 @@ test.describe.serial("Universal Search", () => {
 
   // ── 5. Dismissal ───────────────────────────────────────────────
 
-  test("escape dismisses sheet and searchbar", async () => {
+  test("dismiss closes sheet and searchbar", async () => {
+    // Escape closes the search overlay on both desktop (dropdown) and
+    // mobile (ShellSheet).
     await page.keyboard.press("Escape");
 
     const sheet = page.locator("[role='search']");
-    await expect(sheet).not.toBeVisible();
+    await expect(sheet).not.toBeVisible({ timeout: 5_000 });
   });
 
   // ── 6. No results ──────────────────────────────────────────────
@@ -117,11 +127,12 @@ test.describe.serial("Universal Search", () => {
   test("no results state shows empty message", async () => {
     // Open search and type something that matches nothing.
     await page.getByRole("button", { name: "Search" }).click();
-    const searchbar = page.locator("input[type='text']").last();
+    const searchbar = page.locator(".search-overlay input[type='text']");
+    await searchbar.waitFor({ state: "visible", timeout: 5_000 });
     await searchbar.fill("xyznonexistent123");
 
     const sheet = page.locator("[role='search']");
-    await expect(sheet.getByText(/No results for/)).toBeVisible();
+    await expect(sheet.getByText(/no matches/i)).toBeVisible();
 
     // Close search for cleanup.
     await page.keyboard.press("Escape");
@@ -131,7 +142,7 @@ test.describe.serial("Universal Search", () => {
 
   test("accessibility: sheet has role=search, results have role=list", async () => {
     await page.getByRole("button", { name: "Search" }).click();
-    const searchbar = page.locator("input[type='text']").last();
+    const searchbar = page.locator(".search-overlay input[type='text']");
     await searchbar.fill("housing");
 
     // Wait for results to appear.
@@ -141,14 +152,7 @@ test.describe.serial("Universal Search", () => {
     });
 
     // Run axe-core on the search overlay.
-    const results = await new AxeBuilder({ page })
-      .setLegacyMode(true)
-      .include("[role='search']")
-      .withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa"])
-      .disableRules(["color-contrast"])
-      .analyze();
-
-    expect(results.violations).toEqual([]);
+    await auditA11y(page, { include: "[role='search']" });
 
     // Verify ARIA landmarks present.
     await expect(sheet.locator("[role='list']").first()).toBeVisible();

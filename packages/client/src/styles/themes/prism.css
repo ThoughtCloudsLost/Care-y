@@ -11,12 +11,36 @@
   --theme-font-ui: system-ui, -apple-system, sans-serif;
 
   --ink: #1a1a1a;
+  --ink-2: #48484a;
   --muted: #8e8e93;
+  --hair: rgba(0, 0, 0, 0.12);
+  --hair-2: rgba(0, 0, 0, 0.18);
+
+  /* Semantic hues (neutral, readable on colored light) */
+  --urgent: #ff3b30;
+  --care: #ff9500;
+  --danger: #ff3b30;
+  --unread: #6366f1;
+  --meter-strong: #16a34a;
+  --urgent-soft: color-mix(in srgb, var(--urgent) 8%, transparent);
+  --care-soft: color-mix(in srgb, var(--care) 8%, transparent);
+  --brand-soft: color-mix(
+    in srgb,
+    var(--brand-fill, var(--brand-primary)) 10%,
+    transparent
+  );
+  --brand-text: var(--brand-primary);
+  --brand-fill: var(--brand-primary);
 
   /* Semantic aliases */
   --paper: var(--color-ios-light-surface);
+  --raised: var(--color-ios-light-surface-1);
+  --paper-deep: var(--color-ios-light-surface-1-shade);
   --surface-1: var(--color-ios-light-surface-1);
   --surface-2: var(--color-ios-light-surface-2);
+
+  --k-hairline-color: var(--hair);
+  --k-page-bg: var(--paper);
 
   /* Semi-transparent card background: lets the gradient bleed through */
   --card-bg: rgba(255, 255, 255, 0.45);
@@ -85,8 +109,26 @@
 /* --- Dark mode: stronger brand tint, deeper shadows --- */
 .theme-prism.dark {
   --ink: #f5f5f7;
+  --ink-2: #c7c7cc;
   --muted: #98989d;
+  --hair: rgba(255, 255, 255, 0.12);
+  --hair-2: rgba(255, 255, 255, 0.18);
+  --urgent: #ff453a;
+  --care: #ff9f0a;
+  --danger: #ff453a;
+  --unread: #818cf8;
+  --meter-strong: #4ade80;
+  --urgent-soft: color-mix(in srgb, var(--urgent) 12%, transparent);
+  --care-soft: color-mix(in srgb, var(--care) 12%, transparent);
+  --brand-soft: color-mix(
+    in srgb,
+    var(--brand-fill, var(--brand-primary)) 12%,
+    transparent
+  );
+  --brand-text: var(--brand-primary);
   --paper: var(--color-ios-dark-surface);
+  --raised: var(--color-ios-dark-surface-1);
+  --paper-deep: var(--color-ios-dark-surface-1-shade);
   --surface-1: var(--color-ios-dark-surface-1);
   --surface-2: var(--color-ios-dark-surface-2);
 
@@ -181,48 +223,43 @@ html.glass-light.dark.theme-prism .preview-window {
 }
 
 /* ==========================================================
-   ETCHED GLASS: Group title headers and preview windows
+   ETCHED GLASS: Group title headers
    Frosted region with noise texture, like sandblasted glass.
-   Reused across list group titles and ticket preview windows.
+   Ticket preview windows get this same recipe from the shared
+   .preview-window base in shared.css; this section keeps the
+   Prism-only application to list group titles.
    ========================================================== */
 
-.theme-prism .k-list li[class*="surface-variant"],
-.theme-prism .preview-window {
+.theme-prism .k-list li[class*="surface-variant"] {
   position: relative;
   -webkit-backdrop-filter: blur(20px) saturate(0.5);
   backdrop-filter: blur(20px) saturate(0.5);
 }
 
-.theme-prism .k-list li[class*="surface-variant"]::after,
-.theme-prism .preview-window::after {
+.theme-prism .k-list li[class*="surface-variant"]::after {
   content: "";
   position: absolute;
   inset: 0;
   border-radius: inherit;
   pointer-events: none;
-  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.7' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E")
-    repeat;
+  background: var(--texture-noise) repeat;
 }
 
-html.light.theme-prism .k-list li[class*="surface-variant"]::after,
-html.light.theme-prism .preview-window::after {
+html.light.theme-prism .k-list li[class*="surface-variant"]::after {
   opacity: 0.08;
   filter: invert(1);
 }
 
-html.dark.theme-prism .k-list li[class*="surface-variant"]::after,
-html.dark.theme-prism .preview-window::after {
+html.dark.theme-prism .k-list li[class*="surface-variant"]::after {
   opacity: 0.06;
 }
 
-html.glass-dark.light.theme-prism .k-list li[class*="surface-variant"]::after,
-html.glass-dark.light.theme-prism .preview-window::after {
+html.glass-dark.light.theme-prism .k-list li[class*="surface-variant"]::after {
   opacity: 0.06;
   filter: none;
 }
 
-html.glass-light.dark.theme-prism .k-list li[class*="surface-variant"]::after,
-html.glass-light.dark.theme-prism .preview-window::after {
+html.glass-light.dark.theme-prism .k-list li[class*="surface-variant"]::after {
   opacity: 0.08;
   filter: invert(1);
 }
@@ -335,8 +372,7 @@ html.glass-light.dark.theme-prism {
   inset: 0;
   border-radius: inherit;
   pointer-events: none;
-  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.7' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E")
-    repeat;
+  background: var(--texture-noise) repeat;
 }
 
 html.light.theme-prism .soft-btn::after {
@@ -411,16 +447,9 @@ html.dark.theme-prism .soft-btn::after {
   padding: 0 var(--page-pad-x, 0.75rem);
 }
 
-/* Preview window: background + no border (blur/noise from etched glass section) */
-.theme-prism .preview-window {
-  background: rgba(255, 255, 255, 0.15) !important;
-  box-shadow: none;
-  border: none !important;
-}
-
-.theme-prism.dark .preview-window {
-  background: rgba(255, 255, 255, 0.03) !important;
-}
+/* Preview window: fully covered by the shared .preview-window base in
+   shared.css (background, blur, noise). Only the glass-mode ink
+   overrides above remain Prism-specific. */
 
 /* ==========================================================
    FAB: Brand-tinted elevated circle

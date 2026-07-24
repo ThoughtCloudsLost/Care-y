@@ -11,6 +11,12 @@ import {
   WebauthnError,
   CryptoWorkerTestError,
   WorkerNotReadyError,
+  TelephonyError,
+  RouterNotAvailableError,
+  RelayError,
+  RateLimitError,
+  BrandingError,
+  requireRouter,
 } from "./errors.js";
 import { OrgKeyNotLoadedError } from "./crypto/org-key.js";
 
@@ -45,6 +51,46 @@ const cases = [
     expectedName: "WorkerNotReadyError",
     expectedMessage: "",
     assertMessage: false, // dev-console only, not rendered in UI
+    isClientError: true,
+  },
+  {
+    name: "TelephonyError",
+    create: () => new TelephonyError("device not registered"),
+    expectedName: "TelephonyError",
+    expectedMessage: "device not registered",
+    assertMessage: true,
+    isClientError: true,
+  },
+  {
+    name: "RouterNotAvailableError",
+    create: () => new RouterNotAvailableError("tickets"),
+    expectedName: "RouterNotAvailableError",
+    expectedMessage: "tickets router unavailable",
+    assertMessage: true,
+    isClientError: true,
+  },
+  {
+    name: "RelayError",
+    create: () => new RelayError("TIMEOUT", 504),
+    expectedName: "RelayError",
+    expectedMessage: "Relay error: TIMEOUT (504)",
+    assertMessage: true,
+    isClientError: true,
+  },
+  {
+    name: "RateLimitError",
+    create: () => new RateLimitError(30),
+    expectedName: "RateLimitError",
+    expectedMessage: "Rate limited. Retry after 30s",
+    assertMessage: true,
+    isClientError: true,
+  },
+  {
+    name: "BrandingError",
+    create: () => new BrandingError("image too large"),
+    expectedName: "BrandingError",
+    expectedMessage: "image too large",
+    assertMessage: true,
     isClientError: true,
   },
   {
@@ -92,4 +138,50 @@ describe("Client error hierarchy", () => {
       }
     });
   }
+
+  describe("RelayError extra fields", () => {
+    it("exposes code and status", () => {
+      const err = new RelayError("GATEWAY_ERROR", 502);
+      expect(err.code).toBe("GATEWAY_ERROR");
+      expect(err.status).toBe(502);
+    });
+  });
+
+  describe("RateLimitError extra fields", () => {
+    it("exposes retryAfterSeconds", () => {
+      const err = new RateLimitError(60);
+      expect(err.retryAfterSeconds).toBe(60);
+    });
+
+    it("formats message with the retry delay", () => {
+      const err = new RateLimitError(0);
+      expect(err.message).toBe("Rate limited. Retry after 0s");
+    });
+  });
+
+  describe("requireRouter", () => {
+    it("throws RouterNotAvailableError for null", () => {
+      expect(() => requireRouter(null, "auth")).toThrow(
+        RouterNotAvailableError,
+      );
+    });
+
+    it("throws RouterNotAvailableError for undefined", () => {
+      expect(() => requireRouter(undefined, "auth")).toThrow(
+        RouterNotAvailableError,
+      );
+    });
+
+    it("returns the router when it is a valid object", () => {
+      const router = { query: () => "result" };
+      const result = requireRouter(router, "tickets");
+      expect(result).toBe(router);
+    });
+
+    it("includes the router name in the error message", () => {
+      expect(() => requireRouter(null, "telephony")).toThrow(
+        "telephony router unavailable",
+      );
+    });
+  });
 });

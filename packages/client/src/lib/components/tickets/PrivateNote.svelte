@@ -1,25 +1,28 @@
 <!--
   Private/internal note in the chat timeline.
 
-  Uses a Konsta Card (outline) to stay visually consistent with the
-  component library. A badge shows the note type icon and name. Own notes
-  show a pencil icon that opens the edit sheet (managed by parent).
+  Renders as a full-width recessed paper block (paper-deep on a hairline
+  border), distinct from the conversation bubbles: notes are about the
+  case, not part of the exchange. The eyebrow names the note type in
+  quiet ink. Own notes show a pencil icon that opens the edit sheet
+  (managed by parent).
 
-  Reaction UX follows iOS Messages / Signal: long-press the card to open
-  the picker, pills cluster at the bottom-right corner of the card.
+  Reaction UX follows iOS Messages / Signal: long-press the block to open
+  the picker, pills cluster at the bottom-right corner.
 -->
 <script lang="ts">
-  import { Card, Popover } from "konsta/svelte";
   import { StickyNote, Pencil } from "@lucide/svelte";
   import { formatRelativeTime } from "$lib/utils/format-time.js";
   import { resolveNoteTypeIcon } from "$lib/utils/note-type-icons.js";
   import { REACTION_ENTRIES } from "$lib/utils/reaction-icons.js";
   import { haptic } from "$lib/utils/haptic.js";
+  import { longPress } from "$lib/utils/long-press.js";
   import * as m from "$lib/paraglide/messages.js";
   import type { DecryptResult } from "$lib/crypto/decrypt-result.js";
   import type { ReactionSummary, ReactionType } from "@care-y/shared";
   import DecryptPlaceholder from "$lib/components/DecryptPlaceholder.svelte";
   import ReactionTray from "./ReactionTray.svelte";
+  import ShellPopover from "$lib/shell/ShellPopover.svelte";
 
   interface Props {
     result: DecryptResult;
@@ -63,6 +66,11 @@
   const displayAuthor = $derived(
     authorName ?? m.ticket_private_note_author_fallback(),
   );
+  const eyebrowLabel = $derived(
+    noteTypeName !== undefined
+      ? m.preview_note_internal({ name: noteTypeName })
+      : m.ticket_note_team_only(),
+  );
   const hasReactions = $derived(reactions.length > 0);
 
   function userReacted(reaction: ReactionSummary): boolean {
@@ -74,7 +82,6 @@
 
   let pickerOpen = $state(false);
   let cardEl = $state<HTMLElement | undefined>(undefined);
-  let longPressTimer: ReturnType<typeof setTimeout> | null = null;
 
   function openPicker(): void {
     if (!ontogglereaction || !cardEl) return;
@@ -87,33 +94,21 @@
     pickerOpen = false;
   }
 
-  // ── Long-press handling ──
-
-  function handlePointerDown(e: PointerEvent): void {
-    if (!ontogglereaction && !onlongpress) return;
-    const target = e.target;
-    if (
-      target instanceof HTMLButtonElement ||
-      target instanceof HTMLAnchorElement
-    )
-      return;
-    longPressTimer = setTimeout(() => {
-      longPressTimer = null;
-      if (onlongpress) {
-        onlongpress();
-      } else {
-        openPicker();
-      }
-      haptic();
-    }, 500);
-  }
-
-  function cancelLongPress(): void {
-    if (longPressTimer !== null) {
-      clearTimeout(longPressTimer);
-      longPressTimer = null;
-    }
-  }
+  const pressAction = $derived(
+    ontogglereaction || onlongpress
+      ? longPress(
+          () => {
+            if (onlongpress) {
+              onlongpress();
+            } else {
+              openPicker();
+            }
+            haptic();
+          },
+          { ignoreInteractiveTargets: true },
+        )
+      : null,
+  );
 </script>
 
 <div
@@ -124,35 +119,28 @@
   <div
     class="note-card-wrap"
     bind:this={cardEl}
-    onpointerdown={handlePointerDown}
-    onpointerup={cancelLongPress}
-    onpointercancel={cancelLongPress}
-    onpointermove={cancelLongPress}
+    {@attach pressAction}
     oncontextmenu={(e) => {
       if (ontogglereaction) e.preventDefault();
     }}
     role="presentation"
   >
-    <Card
-      outline
-      contentWrapPadding="py-2.5 px-3"
-      class="private-note-card"
+    <div
+      class="note-block recessed-note"
       role="article"
       aria-label={m.ticket_private_note_by({ author: displayAuthor })}
     >
       <span class="note-badge" data-testid="note-badge">
-        {#if NoteTypeIconComponent && noteTypeName}
+        {#if NoteTypeIconComponent}
           <NoteTypeIconComponent
             size={11}
             class="note-icon"
             aria-hidden="true"
           />
-          <span class="note-type-name">{noteTypeName}</span>
-          <span class="note-badge-sep" aria-hidden="true">&middot;</span>
         {:else}
           <StickyNote size={11} class="note-icon" aria-hidden="true" />
         {/if}
-        {m.ticket_note_team_only()}
+        {eyebrowLabel}
         {#if isOwn && onopenedit}
           <button
             type="button"
@@ -176,10 +164,11 @@
       <div class="note-meta">
         {#if authorName}
           <span class="note-author">{authorName}</span>
+          <span class="note-meta-sep" aria-hidden="true">·</span>
         {/if}
         <time class="note-time" datetime={timestamp}>{timeLabel}</time>
       </div>
-    </Card>
+    </div>
 
     {#if ontogglereaction}
       <ReactionTray
@@ -192,12 +181,13 @@
   </div>
 </div>
 
-<Popover
+<ShellPopover
   opened={pickerOpen}
   target={cardEl}
-  onBackdropClick={() => {
+  ondismiss={() => {
     pickerOpen = false;
   }}
+  ariaLabel={m.reaction_summary()}
 >
   <div class="reaction-picker-strip">
     {#each REACTION_ENTRIES as entry (entry.type)}
@@ -216,14 +206,15 @@
       </button>
     {/each}
   </div>
-</Popover>
+</ShellPopover>
 
 <style>
+  /* No margin of its own: the thread gap spaces it like every row. */
   .private-note-wrapper {
-    margin: 0.25rem 0;
     touch-action: pan-y;
   }
 
+  /* Reaction pills overhang the bottom edge; keep them off the next row. */
   .private-note-wrapper.has-reactions {
     margin-bottom: 0.75rem;
   }
@@ -236,35 +227,34 @@
     --k-safe-area-top: var(--navbar-h, 44px);
   }
 
+  /* Recessed paper block (shared .recessed-note): one step below the
+     page, bubbles sit one above. */
+  .note-block {
+    border-radius: 12px;
+    padding: 11px 14px;
+  }
+
   .note-badge {
     display: inline-flex;
     align-items: center;
     gap: 0.25rem;
-    font-size: 0.625rem;
-    font-weight: 600;
+    font-size: 0.65625rem;
+    font-weight: 700;
     text-transform: uppercase;
-    letter-spacing: 0.04em;
-    color: var(--brand-accent, var(--brand-primary));
-    margin-bottom: 0.375rem;
+    letter-spacing: 0.12em;
+    color: var(--muted);
+    margin-bottom: 0.25rem;
   }
 
   :global(.note-icon) {
-    color: var(--brand-accent, var(--brand-primary));
+    color: var(--muted);
     flex-shrink: 0;
-  }
-
-  .note-type-name {
-    font-weight: 600;
-  }
-
-  .note-badge-sep {
-    opacity: 0.5;
   }
 
   .note-body {
     font-size: 0.875rem;
     line-height: 1.5;
-    color: var(--ink);
+    color: var(--ink-2);
     word-break: break-word;
     white-space: pre-line;
   }
@@ -272,9 +262,9 @@
   .note-meta {
     display: flex;
     align-items: center;
-    gap: 0.5rem;
-    margin-top: 0.375rem;
-    font-size: 0.625rem;
+    gap: 0.25rem;
+    margin-top: 0.3125rem;
+    font-size: 0.6875rem;
     color: var(--muted);
   }
 
@@ -282,9 +272,11 @@
     font-weight: 500;
   }
 
+  .note-meta-sep {
+    opacity: 0.5;
+  }
+
   .note-time {
-    font-size: 0.625rem;
-    color: var(--muted);
     white-space: nowrap;
   }
 
@@ -333,7 +325,7 @@
   }
 
   .reaction-picker-opt:active {
-    background: var(--surface-1);
+    background: var(--raised);
   }
 
   .reaction-picker-active {

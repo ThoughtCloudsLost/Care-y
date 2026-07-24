@@ -102,12 +102,12 @@ describe("DecryptPlaceholder", () => {
   it("provides screen reader text after delay", async () => {
     render(DecryptPlaceholder, { props: {} });
     await advancePastDelay();
-    expect(screen.getByText("Decrypting")).toBeDefined();
+    expect(screen.getByText("Unlocking")).toBeDefined();
   });
 
   it("does not show screen reader text before delay", () => {
     render(DecryptPlaceholder, { props: {} });
-    expect(screen.queryByText("Decrypting")).toBeNull();
+    expect(screen.queryByText("Unlocking")).toBeNull();
   });
 
   it("renders decrypted content as plain text", () => {
@@ -121,9 +121,7 @@ describe("DecryptPlaceholder", () => {
     render(DecryptPlaceholder, {
       props: { content: "\0DECRYPT_FAILED" },
     });
-    expect(
-      screen.getByText("This content could not be decrypted."),
-    ).toBeDefined();
+    expect(screen.getByText("Could not unlock this content.")).toBeDefined();
   });
 
   it("sets up IntersectionObserver on mount", () => {
@@ -171,7 +169,7 @@ describe("DecryptPlaceholder", () => {
       await advancePastDelay();
       const status = screen.getByRole("status");
       expect(status.getAttribute("aria-busy")).toBe("true");
-      expect(screen.getByText("Decrypting")).toBeDefined();
+      expect(screen.getByText("Unlocking")).toBeDefined();
     });
 
     it("shows ready content for result with value", () => {
@@ -188,9 +186,25 @@ describe("DecryptPlaceholder", () => {
 
     it("shows error message for result=ERROR", () => {
       render(DecryptPlaceholder, { props: { result: ERROR } });
-      expect(
-        screen.getByText("This content could not be decrypted."),
-      ).toBeDefined();
+      expect(screen.getByText("Could not unlock this content.")).toBeDefined();
+    });
+
+    it("errorLabel overrides the error message", () => {
+      render(DecryptPlaceholder, {
+        props: { result: ERROR, errorLabel: "Could not unlock this preview" },
+      });
+      expect(screen.getByText("Could not unlock this preview")).toBeDefined();
+      expect(screen.queryByText("Could not unlock this content.")).toBeNull();
+    });
+
+    it("errorLabel does not override the denied message", () => {
+      render(DecryptPlaceholder, {
+        props: { result: DENIED, errorLabel: "Could not unlock this preview" },
+      });
+      // Denied means missing key material, not a failed attempt; the
+      // distinction must survive any surface-specific error copy.
+      expect(screen.getByText("No access to this content")).toBeDefined();
+      expect(screen.queryByText("Could not unlock this preview")).toBeNull();
     });
 
     it("result takes precedence over content when both provided", () => {
@@ -200,6 +214,31 @@ describe("DecryptPlaceholder", () => {
       });
       expect(screen.getByText("From result")).toBeDefined();
       expect(screen.queryByText("From content")).toBeNull();
+    });
+  });
+
+  describe("searchTerm highlighting", () => {
+    it("wraps matches in <mark> when searchTerm is set", () => {
+      const result: DecryptResult = {
+        status: "ready",
+        value: "Emergency housing referral",
+      };
+      const { container } = render(DecryptPlaceholder, {
+        props: { result, searchTerm: "housing" },
+      });
+      const marks = container.querySelectorAll("mark");
+      expect(marks).toHaveLength(1);
+      expect(marks[0]!.textContent).toBe("housing");
+      expect(container.textContent).toContain("Emergency housing referral");
+    });
+
+    it("renders plain text for a searchTerm under 2 characters", () => {
+      const result: DecryptResult = { status: "ready", value: "abc" };
+      const { container } = render(DecryptPlaceholder, {
+        props: { result, searchTerm: "a" },
+      });
+      expect(container.querySelectorAll("mark")).toHaveLength(0);
+      expect(screen.getByText("abc")).toBeDefined();
     });
   });
 });

@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "View reports and team metrics" |
+* | "View reports and org metrics" |
 *
 * @param {Mgr_Role_ReportsInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

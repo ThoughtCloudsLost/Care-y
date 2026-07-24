@@ -1,6 +1,7 @@
 <script lang="ts">
   import { tick } from "svelte";
   import { Card, Toggle, DialogButton } from "konsta/svelte";
+  import { DIALOG_DESTRUCTIVE_CLASS } from "$lib/components/shared/konsta-classes.js";
   import {
     createQuery,
     createMutation,
@@ -162,7 +163,7 @@
         </p>
 
         <div class="input-row">
-          <label class="days-label" for="retention-days">
+          <label class="field-label" for="retention-days">
             {m.admin_retention_days_label()}
           </label>
           <input
@@ -181,9 +182,9 @@
                 daysInput = target.value;
               }
             }}
-            class="days-input"
+            class="form-input"
           />
-          <span class="range-hint">{m.admin_retention_range_hint()}</span>
+          <span class="field-help">{m.admin_retention_range_hint()}</span>
         </div>
 
         {#if hasChanges && !externalSave}
@@ -224,11 +225,7 @@
     <DialogButton onclick={() => (setDialogOpened = false)}>
       {m.common_cancel()}
     </DialogButton>
-    <DialogButton
-      strong
-      class="text-[--color-red-500] font-semibold"
-      onclick={confirmSet}
-    >
+    <DialogButton strong class={DIALOG_DESTRUCTIVE_CLASS} onclick={confirmSet}>
       {m.admin_retention_confirm()}
     </DialogButton>
   {/snippet}
@@ -297,42 +294,13 @@
     gap: var(--space-xs);
   }
 
-  .days-label {
-    font-size: var(--text-sm);
-    font-weight: 500;
-  }
-
-  .days-input {
-    width: 100%;
-    padding: 0.625rem 0.75rem;
-    border-radius: 0.5rem;
-    border: 1px solid color-mix(in srgb, var(--ink) 15%, transparent);
-    background: transparent;
-    color: var(--ink);
-    font-size: 16px;
-    font-family: inherit;
-  }
-
-  .days-input:disabled {
-    opacity: 0.4;
-    cursor: not-allowed;
-  }
-
-  .days-input:focus {
-    outline: 2px solid var(--brand-text);
-    outline-offset: -1px;
-    border-color: transparent;
-  }
-
-  .range-hint {
-    font-size: var(--text-xs);
-    color: var(--muted);
-  }
+  /* .field-label, .form-input, and .field-help come from the shared
+     form primitives (shared.css) */
 
   .unsaved-hint {
     font-size: var(--text-xs);
     font-weight: 600;
-    color: var(--color-amber-500);
+    color: var(--care);
   }
 
   .retention-actions {

@@ -88,6 +88,8 @@ export class CryptoBridge {
   private workerEventHandler: WorkerEventHandler | null = null;
   private stateChangeHandler: StateChangeHandler | null = null;
   private stateCallback: ((state: BridgeState) => void) | null = null;
+  private settledCallback: (() => void) | null = null;
+  private settled = false;
   private readonly mode: BridgeMode;
   private reconnected = false;
   private reconnectVolPublic: string | undefined;
@@ -185,17 +187,23 @@ export class CryptoBridge {
         "connect",
       );
       if (resp.state === "KEYED") {
-        this.setState("KEYED");
         this.reconnected = true;
         this.reconnectVolPublic = resp.volPublic;
         this.reconnectOrgPublicKey = resp.orgPublicKey;
+        this.setState("KEYED");
       }
     }
+
+    this.settled = true;
+    this.settledCallback?.();
   }
 
-  private rejectAllPending(message: string): void {
+  private rejectAllPending(
+    message: string,
+    code: "WORKER_ERROR" | "BRIDGE_DESTROYED" = "WORKER_ERROR",
+  ): void {
     for (const [, entry] of this.pending) {
-      entry.reject(new CryptoWorkerError(message, "WORKER_ERROR"));
+      entry.reject(new CryptoWorkerError(message, code));
     }
     this.pending.clear();
   }
@@ -245,7 +253,7 @@ export class CryptoBridge {
         }
       }
       this.setState("DESTROYED");
-      this.rejectAllPending("Bridge disconnected");
+      this.rejectAllPending("Bridge disconnected", "BRIDGE_DESTROYED");
     } else {
       this.destroy();
     }
@@ -263,6 +271,16 @@ export class CryptoBridge {
    */
   onBridgeStateChange(handler: (state: BridgeState) => void): void {
     this.stateCallback = handler;
+  }
+
+  /**
+   * Register a handler that fires once when the init handshake completes.
+   * After this point, the bridge's state reflects the SharedWorker's actual
+   * key state: KEYED if reconnected, READY if keys were zeroed.
+   */
+  onSettled(handler: () => void): void {
+    this.settledCallback = handler;
+    if (this.settled) handler();
   }
 
   // ── Public API: crypto operations ─────────────────────────────────
@@ -532,6 +550,50 @@ export class CryptoBridge {
   }
 
   /**
+   * Seal a payload (base64) to the Worker's own volPublic with the
+   * self-blob domain tag inside. Used for server-stored per-user data
+   * (recently-viewed history).
+   */
+  async sealSelfBlob(data: string): Promise<{
+    ephemeralPoint: string;
+    nonce: string;
+    wrappedPayload: string;
+  }> {
+    const resp = expectResponse(
+      await this.sendRequest({ type: "sealSelfBlob", data }),
+      "sealSelfBlob",
+    );
+    return {
+      ephemeralPoint: resp.ephemeralPoint,
+      nonce: resp.nonce,
+      wrappedPayload: resp.wrappedPayload,
+    };
+  }
+
+  /**
+   * Open a self-blob envelope with the Worker's volPrivate. Rejects
+   * envelopes whose plaintext lacks the self-blob domain tag (the Worker
+   * refuses to act as a generic vol_private decrypt oracle). Returns the
+   * payload base64.
+   */
+  async openSelfBlob(envelope: {
+    ephemeralPoint: string;
+    nonce: string;
+    wrappedPayload: string;
+  }): Promise<string> {
+    const resp = expectResponse(
+      await this.sendRequest({
+        type: "openSelfBlob",
+        ephemeralPoint: envelope.ephemeralPoint,
+        nonce: envelope.nonce,
+        wrappedPayload: envelope.wrappedPayload,
+      }),
+      "openSelfBlob",
+    );
+    return resp.data;
+  }
+
+  /**
    * Re-encrypt a cached tk for a new recipient's volPublic.
    * Returns the ECIES wrapping output (ephemeralPoint, nonce, wrappedKey).
    */
@@ -653,7 +715,7 @@ export class CryptoBridge {
     }
 
     this.setState("DESTROYED");
-    this.rejectAllPending("Worker destroyed");
+    this.rejectAllPending("Worker destroyed", "BRIDGE_DESTROYED");
   }
 
   /** Register a handler for Worker-initiated events (re-wrap notifications). */
@@ -694,7 +756,7 @@ export class CryptoBridge {
     transfer?: Transferable[],
   ): Promise<WorkerSuccessResponse> {
     if (this.state === "DESTROYED") {
-      throw new CryptoWorkerError("Bridge is destroyed", "WORKER_ERROR");
+      throw new CryptoWorkerError("Bridge is destroyed", "BRIDGE_DESTROYED");
     }
 
     const id = this.nextId++;

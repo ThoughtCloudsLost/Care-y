@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "Deriving encryption keys..." |
+* | "Preparing your keys..." |
 *
 * @param {Auth_Phase_Argon2idInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

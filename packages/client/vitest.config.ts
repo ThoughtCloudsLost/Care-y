@@ -1,5 +1,10 @@
+import { readFileSync } from "node:fs";
 import { defineConfig } from "vitest/config";
 import { svelte } from "@sveltejs/vite-plugin-svelte";
+
+const thresholds = JSON.parse(
+  readFileSync("coverage-thresholds.json", "utf-8"),
+);
 
 export default defineConfig({
   plugins: [svelte({ hot: false })],
@@ -71,12 +76,7 @@ export default defineConfig({
         "src/lib/components/search/TicketSearchResult.svelte",
         "src/lib/components/search/VolunteerResultItem.svelte",
       ],
-      thresholds: {
-        statements: 85,
-        branches: 85,
-        functions: 85,
-        lines: 85,
-      },
+      thresholds: thresholds.client,
     },
   },
 });

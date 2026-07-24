@@ -5,10 +5,12 @@
   import SoftButton from "$lib/components/inputs/SoftButton.svelte";
   import * as m from "$lib/paraglide/messages.js";
   import { getOrgKeyManager } from "$lib/crypto/context.js";
+  import ColorPicker from "$lib/components/inputs/ColorPicker.svelte";
+  import IconPicker from "$lib/components/inputs/IconPicker.svelte";
   import {
-    SAVED_FILTER_COLORS,
-    SAVED_FILTER_ICONS,
-  } from "./saved-filter-constants.js";
+    PICKER_COLORS,
+    PICKER_ICONS,
+  } from "$lib/components/inputs/picker-options.js";
   import type { SavedFilterColor } from "@care-y/shared";
 
   interface Props {
@@ -65,7 +67,6 @@
   <div class="sheet-content">
     <List nested>
       <ListInput
-        outline
         label={m.saved_filter_name_label()}
         type="text"
         placeholder={m.saved_filter_name_placeholder()}
@@ -80,55 +81,20 @@
 
     <div class="section">
       <div class="section-label">{m.saved_filter_color_label()}</div>
-      <div
-        class="color-picker"
-        role="radiogroup"
-        aria-label={m.saved_filter_color_label()}
-      >
-        {#each SAVED_FILTER_COLORS as color (color.id)}
-          <button
-            type="button"
-            class="color-swatch"
-            class:color-swatch--selected={selectedColor === color.id}
-            style="--swatch-color: {color.hex}"
-            role="radio"
-            aria-checked={selectedColor === color.id}
-            aria-label={color.id}
-            onclick={() => {
-              selectedColor = color.id;
-            }}
-          >
-            {#if selectedColor === color.id}
-              <span class="swatch-check" aria-hidden="true">&#10003;</span>
-            {/if}
-          </button>
-        {/each}
-      </div>
+      <ColorPicker
+        options={PICKER_COLORS}
+        bind:value={selectedColor}
+        label={m.saved_filter_color_label()}
+      />
     </div>
 
     <div class="section">
       <div class="section-label">{m.saved_filter_icon_label()}</div>
-      <div
-        class="icon-picker"
-        role="radiogroup"
-        aria-label={m.saved_filter_icon_label()}
-      >
-        {#each SAVED_FILTER_ICONS as icon (icon.id)}
-          <button
-            type="button"
-            class="icon-option"
-            class:icon-option--selected={selectedIcon === icon.id}
-            role="radio"
-            aria-checked={selectedIcon === icon.id}
-            aria-label={icon.id}
-            onclick={() => {
-              selectedIcon = icon.id;
-            }}
-          >
-            <icon.component size={20} aria-hidden="true" />
-          </button>
-        {/each}
-      </div>
+      <IconPicker
+        options={PICKER_ICONS}
+        bind:value={selectedIcon}
+        label={m.saved_filter_icon_label()}
+      />
     </div>
   </div>
 </ShellSheet>
@@ -154,65 +120,5 @@
     font-size: 0.875rem;
     color: var(--ink);
     margin: 0;
-  }
-
-  .color-picker {
-    display: flex;
-    gap: 0.75rem;
-    flex-wrap: wrap;
-  }
-
-  .color-swatch {
-    width: 32px;
-    height: 32px;
-    border-radius: 50%;
-    border: 2px solid transparent;
-    background-color: var(--swatch-color);
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    padding: 0;
-    transition: border-color 150ms linear;
-  }
-
-  .color-swatch--selected {
-    border-color: var(--ink);
-  }
-
-  .swatch-check {
-    color: white;
-    font-size: 0.75rem;
-    font-weight: 700;
-    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
-  }
-
-  .icon-picker {
-    display: grid;
-    grid-template-columns: repeat(5, 1fr);
-    gap: 0.5rem;
-  }
-
-  .icon-option {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 44px;
-    height: 44px;
-    border-radius: 8px;
-    border: 1px solid var(--surface-1, rgba(0, 0, 0, 0.1));
-    background: transparent;
-    color: var(--muted);
-    cursor: pointer;
-    transition:
-      background-color 150ms linear,
-      color 150ms linear,
-      border-color 150ms linear;
-  }
-
-  .icon-option--selected {
-    background-color: var(--ink);
-    color: var(--paper);
-    border-color: var(--ink);
   }
 </style>

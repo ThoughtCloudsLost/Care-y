@@ -21,7 +21,10 @@
 
 <style>
   :global(.call-pulse) {
-    color: #22c55e;
+    /* Active-call signal green (meaning slot, travels with the phone
+       glyph). Themed via --call-active; the fallback keeps the current
+       hue on themes that do not define it. */
+    color: var(--call-active);
     animation: pulse-call 1.5s ease-in-out infinite;
   }
 

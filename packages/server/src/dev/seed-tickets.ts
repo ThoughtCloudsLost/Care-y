@@ -81,6 +81,7 @@ export async function seedTestTickets(
     isPrivate?: boolean; // default: false
     agoMinutes: number;
     media?: MediaDef[];
+    eventParams?: Record<string, unknown>;
   }
 
   interface MediaDef {
@@ -187,7 +188,8 @@ export async function seedTestTickets(
         {
           content: "Assigned to Dev Admin",
           source: "system",
-          type: "assignment_change",
+          type: "volunteer_assigned",
+          eventParams: { userId: me },
           agoMinutes: 4310,
         },
         {
@@ -216,19 +218,20 @@ export async function seedTestTickets(
         {
           content: "Priority changed to high",
           source: "system",
-          type: "priority_change",
+          type: "priority_changed",
+          eventParams: { to: "high" },
           agoMinutes: 1430,
         },
         {
           content: "Status changed to closed",
           source: "system",
-          type: "status_change",
+          type: "status_closed",
           agoMinutes: 720,
         },
         {
           content: "Status changed to open",
           source: "system",
-          type: "status_change",
+          type: "status_opened",
           agoMinutes: 360,
         },
       ],
@@ -306,7 +309,8 @@ export async function seedTestTickets(
         {
           content: "Assigned to Dev Admin",
           source: "system",
-          type: "assignment_change",
+          type: "volunteer_assigned",
+          eventParams: { userId: me },
           agoMinutes: 175,
         },
         {
@@ -382,7 +386,8 @@ export async function seedTestTickets(
         {
           content: "Assigned to Dev Admin",
           source: "system",
-          type: "assignment_change",
+          type: "volunteer_assigned",
+          eventParams: { userId: me },
           agoMinutes: 7100,
         },
         {
@@ -393,7 +398,7 @@ export async function seedTestTickets(
         {
           content: "Put on hold",
           source: "system",
-          type: "hold_change",
+          type: "hold_placed",
           agoMinutes: 5750,
         },
         {
@@ -424,7 +429,8 @@ export async function seedTestTickets(
         {
           content: "Assigned to Dev Admin",
           source: "system",
-          type: "assignment_change",
+          type: "volunteer_assigned",
+          eventParams: { userId: me },
           agoMinutes: 14350,
         },
         {
@@ -452,7 +458,7 @@ export async function seedTestTickets(
         {
           content: "Put on hold",
           source: "system",
-          type: "hold_change",
+          type: "hold_placed",
           agoMinutes: 8640,
         },
         {
@@ -673,42 +679,45 @@ export async function seedTestTickets(
           followUps.push({
             content: "Assigned to Alice",
             source: "system",
-            type: "assignment_change",
+            type: "volunteer_assigned",
+            eventParams: { userId: me },
             agoMinutes: fuAge,
           });
         } else if (f === 10) {
           followUps.push({
             content: "Priority changed to high",
             source: "system",
-            type: "priority_change",
+            type: "priority_changed",
+            eventParams: { to: "high", from: "normal" },
             agoMinutes: fuAge,
           });
         } else if (f === 20) {
           followUps.push({
             content: "Put on hold",
             source: "system",
-            type: "hold_change",
+            type: "hold_placed",
             agoMinutes: fuAge,
           });
         } else if (f === 30) {
           followUps.push({
             content: "Status changed to closed",
             source: "system",
-            type: "status_change",
+            type: "status_closed",
             agoMinutes: fuAge,
           });
         } else if (f === 31) {
           followUps.push({
             content: "Status changed to open",
             source: "system",
-            type: "status_change",
+            type: "status_opened",
             agoMinutes: fuAge,
           });
         } else if (f === 40) {
           followUps.push({
             content: "Assigned to Bob",
             source: "system",
-            type: "assignment_change",
+            type: "volunteer_assigned",
+            eventParams: { userId: me },
             agoMinutes: fuAge,
           });
         } else if (f === 5 || f === 55 || f === 120) {
@@ -957,6 +966,7 @@ export async function seedTestTickets(
           type: fu.type ?? "message",
           is_private: fu.isPrivate ?? false,
           encrypted_content: Buffer.from(encryptedContent),
+          event_params: fu.eventParams ?? null,
           created_at: minutesAgo(fu.agoMinutes),
           ...(fu.source === "volunteer" ? { created_by: userId } : {}),
         })

@@ -1,10 +1,34 @@
 import { describe, it, expect, vi } from "vitest";
 import type { RawCachedTicket } from "./tickets.js";
 import { createTicketSearchProvider } from "./tickets.js";
-import type { FullSearchState } from "../types.js";
+import type { CoverageState, FullSearchState } from "../types.js";
 
 vi.mock("$lib/paraglide/messages.js", () => ({
+  dashboard_assigned_you: () => "You",
   search_section_tickets: () => "Tickets",
+  search_coverage_searching: (p: { searched: number; total: number }) =>
+    `Searching ${String(p.searched)} of ${String(p.total)}...`,
+  search_coverage_tickets: (p: {
+    searched: number;
+    total: number;
+    tickets: string;
+  }) =>
+    `Searched ${String(p.searched)} of ${String(p.total)} ${p.tickets} already unlocked on this device.`,
+  search_coverage_tickets_all: (p: { total: number; tickets: string }) =>
+    `Searched all ${String(p.total)} ${p.tickets} unlocked on this device.`,
+  search_fetch_more_tickets: (p: { count: number; tickets: string }) =>
+    `Search the other ${String(p.count)} ${p.tickets}`,
+}));
+
+// vi.mock required: withTerms resolves org terminology through a Svelte
+// context getter (createContext), which only exists during component
+// initialization; these tests call provider.coverage() outside any
+// component, where the real getter throws.
+vi.mock("$lib/terminology/with-terms.js", () => ({
+  withTerms: (extra?: Record<string, unknown>) => ({
+    tickets: "tickets",
+    ...extra,
+  }),
 }));
 
 vi.mock("$lib/components/search/TicketSearchResult.svelte", () => ({
@@ -58,10 +82,10 @@ describe("createTicketSearchProvider", () => {
     return createTicketSearchProvider({
       getAllCachedTickets: () => rawTickets,
       decryptTitle: (id: string) => decryptedTitles[id],
-      decryptQueueName: () => "General",
-      resolveAssignedName: () => null,
+      orgDecrypt: (cacheKey: string) =>
+        cacheKey.startsWith("queue:") ? "General" : null,
+      currentUserId: () => "viewer-1",
       getPreviewFollowUps: () => undefined,
-      deriveDisplayStatus: () => "open" as never,
     });
   }
 
@@ -83,6 +107,141 @@ describe("createTicketSearchProvider", () => {
     const { results } = provider.search("Maria");
     expect(results).toHaveLength(1);
     expect(results[0]!.id).toBe("t1");
+  });
+
+  it("carries the query as searchTerm in result data", () => {
+    const provider = createProvider();
+    const { results } = provider.search("housing");
+    expect(results[0]!.data.searchTerm).toBe("housing");
+  });
+
+  describe("coverage and escalation copy", () => {
+    const provider = createProvider();
+
+    function cov(state: Partial<CoverageState>): string | undefined {
+      return provider.coverage?.({
+        searched: 0,
+        total: undefined,
+        fullSearch: undefined,
+        fsSearched: 0,
+        fsTotal: 0,
+        ...state,
+      });
+    }
+
+    it("reports of-total coverage while the device holds a subset", () => {
+      expect(cov({ searched: 100, total: 120 })).toBe(
+        "Searched 100 of 120 tickets already unlocked on this device.",
+      );
+    });
+
+    it("reports the all variant once everything known is searched", () => {
+      expect(cov({ searched: 120, total: 120 })).toBe(
+        "Searched all 120 tickets unlocked on this device.",
+      );
+      expect(cov({ searched: 80 })).toBe(
+        "Searched all 80 tickets unlocked on this device.",
+      );
+    });
+
+    it("reports live progress while a full search runs", () => {
+      expect(
+        cov({
+          searched: 100,
+          total: 120,
+          fullSearch: "searching",
+          fsSearched: 40,
+          fsTotal: 120,
+        }),
+      ).toBe("Searching 40 of 120...");
+    });
+
+    it("stays silent before anything is cached", () => {
+      expect(cov({})).toBeUndefined();
+    });
+
+    it("offers exactly the remainder in the fetch-more label", () => {
+      expect(provider.fullSearchLabel?.(100, 120)).toBe(
+        "Search the other 20 tickets",
+      );
+      expect(provider.fullSearchLabel?.(120, 120)).toBeUndefined();
+      expect(provider.fullSearchLabel?.(100, undefined)).toBeUndefined();
+    });
+  });
+
+  describe("queue and assignee matching", () => {
+    const queueNames: Record<string, string> = {
+      q1: "Housing",
+      q2: "Intake",
+    };
+
+    function createFieldProvider(): ReturnType<
+      typeof createTicketSearchProvider
+    > {
+      return createTicketSearchProvider({
+        getAllCachedTickets: () => [
+          makeRawTicket({ id: "t1", queueId: "q1", clientAlias: "Maria" }),
+          makeRawTicket({
+            id: "t2",
+            queueId: "q2",
+            clientAlias: "Carlos",
+            assignedTo: "u1",
+          }),
+        ],
+        decryptTitle: (id: string) =>
+          id === "t1" ? "Shelter referral" : "Transit question",
+        orgDecrypt: (cacheKey: string) => {
+          if (cacheKey.startsWith("queue:")) {
+            return queueNames[cacheKey.slice("queue:".length)] ?? null;
+          }
+          return cacheKey === "assignee:u1" ? "Jordan Rivera" : null;
+        },
+        currentUserId: () => "viewer-1",
+        getPreviewFollowUps: () => undefined,
+      });
+    }
+
+    it("matches on the decrypted queue name", () => {
+      const provider = createFieldProvider();
+      const { results } = provider.search("housing");
+      expect(results).toHaveLength(1);
+      expect(results[0]!.id).toBe("t1");
+    });
+
+    it("matches on the resolved assignee name", () => {
+      const provider = createFieldProvider();
+      const { results } = provider.search("jordan");
+      expect(results).toHaveLength(1);
+      expect(results[0]!.id).toBe("t2");
+    });
+
+    it("resolves self-assigned tickets through the shared core's You label", () => {
+      const provider = createTicketSearchProvider({
+        getAllCachedTickets: () => [
+          makeRawTicket({ id: "t1", assignedTo: "viewer-1" }),
+        ],
+        decryptTitle: () => "Shelter referral",
+        orgDecrypt: () => null,
+        currentUserId: () => "viewer-1",
+        getPreviewFollowUps: () => undefined,
+      });
+      const { results } = provider.search("shelter");
+      expect(results).toHaveLength(1);
+      expect(results[0]!.data.assignedIsSelf).toBe(true);
+      expect(results[0]!.data.assignedName).toBe("You");
+    });
+
+    it("treats unresolved queue and assignee as non-matching without throwing", () => {
+      const provider = createTicketSearchProvider({
+        getAllCachedTickets: () => [makeRawTicket({ id: "t1" })],
+        decryptTitle: () => "Shelter referral",
+        orgDecrypt: () => null,
+        currentUserId: () => "viewer-1",
+        getPreviewFollowUps: () => undefined,
+      });
+      expect(provider.search("shelter").results).toHaveLength(1);
+      expect(provider.search("housing").results).toHaveLength(0);
+    });
   });
 
   it("excludes tickets with undecrypted titles", () => {
@@ -119,7 +278,7 @@ describe("createTicketSearchProvider", () => {
     expect(provider.getResultHref("t1")).toBe("/tickets/t1");
   });
 
-  it("maps display fields from decrypt functions", () => {
+  it("composes result data from the shared display-field core", () => {
     const provider = createProvider();
     const { results } = provider.search("housing");
     const data = results[0]!.data;
@@ -130,6 +289,10 @@ describe("createTicketSearchProvider", () => {
       status: "ready",
       value: "Housing assistance request",
     });
+    expect(data.displayStatus).toBe("new");
+    expect(data.assignedIsSelf).toBe(false);
+    expect(data.searchTerm).toBe("housing");
+    expect(data.unreadCount).toBe(0);
   });
 });
 
@@ -159,10 +322,10 @@ describe("ticket fullSearch (two-phase)", () => {
       getAllCachedTickets: () => pages.flat(),
       decryptTitle:
         overrides.decryptTitle ?? ((id: string) => decryptedTitles[id]),
-      decryptQueueName: () => "General",
-      resolveAssignedName: () => null,
+      orgDecrypt: (cacheKey: string) =>
+        cacheKey.startsWith("queue:") ? "General" : null,
+      currentUserId: () => "viewer-1",
       getPreviewFollowUps: () => undefined,
-      deriveDisplayStatus: () => "open" as never,
       listAll: vi.fn(async () => {
         const page = pages[pageIndex] ?? [];
         pageIndex++;
@@ -277,10 +440,10 @@ describe("ticket fullSearch (two-phase)", () => {
       getAllCachedTickets: () => tickets,
       decryptTitle: (id: string) =>
         id === "t1" ? "Housing request" : "Other topic",
-      decryptQueueName: () => "General",
-      resolveAssignedName: () => null,
+      orgDecrypt: (cacheKey: string) =>
+        cacheKey.startsWith("queue:") ? "General" : null,
+      currentUserId: () => "viewer-1",
       getPreviewFollowUps: () => undefined,
-      deriveDisplayStatus: () => "open" as never,
       listAll: vi.fn(async () => tickets),
       ingestTickets: vi.fn(),
       whenDecryptsSettled: vi.fn(async () => undefined),
@@ -301,10 +464,9 @@ describe("ticket fullSearch (two-phase)", () => {
     const withDeps = createTicketSearchProvider({
       getAllCachedTickets: () => [],
       decryptTitle: () => undefined,
-      decryptQueueName: () => null,
-      resolveAssignedName: () => null,
+      orgDecrypt: () => null,
+      currentUserId: () => "viewer-1",
       getPreviewFollowUps: () => undefined,
-      deriveDisplayStatus: () => "open" as never,
       listAll: vi.fn(),
       ingestTickets: vi.fn(),
       whenDecryptsSettled: vi.fn(),
@@ -316,10 +478,9 @@ describe("ticket fullSearch (two-phase)", () => {
     const withoutDeps = createTicketSearchProvider({
       getAllCachedTickets: () => [],
       decryptTitle: () => undefined,
-      decryptQueueName: () => null,
-      resolveAssignedName: () => null,
+      orgDecrypt: () => null,
+      currentUserId: () => "viewer-1",
       getPreviewFollowUps: () => undefined,
-      deriveDisplayStatus: () => "open" as never,
     });
     expect(withoutDeps.fullSearch).toBeUndefined();
   });
@@ -332,10 +493,10 @@ describe("ticket fullSearch (two-phase)", () => {
     const provider = createTicketSearchProvider({
       getAllCachedTickets: () => tickets,
       decryptTitle: () => "Housing help",
-      decryptQueueName: () => "General",
-      resolveAssignedName: () => null,
+      orgDecrypt: (cacheKey: string) =>
+        cacheKey.startsWith("queue:") ? "General" : null,
+      currentUserId: () => "viewer-1",
       getPreviewFollowUps: () => undefined,
-      deriveDisplayStatus: () => "open" as never,
       listAll: vi.fn(async () => tickets),
       ingestTickets: vi.fn(),
       whenDecryptsSettled: vi.fn(async () => undefined),
@@ -348,5 +509,40 @@ describe("ticket fullSearch (two-phase)", () => {
 
     expect(state.matchCount).toBe(1);
     expect(contentSearch).not.toHaveBeenCalled();
+  });
+});
+
+describe("ticket resolveById", () => {
+  const rawTickets: RawCachedTicket[] = [
+    makeRawTicket({ id: "t1", clientAlias: "Maria" }),
+    makeRawTicket({ id: "t3", clientAlias: "Ana" }),
+  ];
+  const decryptedTitles: Record<string, string> = {
+    t1: "Housing assistance request",
+  };
+
+  function createProvider(): ReturnType<typeof createTicketSearchProvider> {
+    return createTicketSearchProvider({
+      getAllCachedTickets: () => rawTickets,
+      decryptTitle: (id: string) => decryptedTitles[id],
+      orgDecrypt: () => null,
+      currentUserId: () => "viewer-1",
+      getPreviewFollowUps: () => undefined,
+    });
+  }
+
+  it("resolves a cached ticket into display data with an empty search term", () => {
+    const result = createProvider().resolveById?.("t1");
+    expect(result?.id).toBe("t1");
+    expect(result?.data.searchTerm).toBe("");
+    expect(result?.data.encryptedTitle).toBe("encrypted-blob");
+  });
+
+  it("returns undefined while the title is still decrypting", () => {
+    expect(createProvider().resolveById?.("t3")).toBeUndefined();
+  });
+
+  it("returns undefined for an id not in the cache", () => {
+    expect(createProvider().resolveById?.("missing")).toBeUndefined();
   });
 });

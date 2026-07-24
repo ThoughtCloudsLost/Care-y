@@ -23,6 +23,7 @@ describe("LocalBlobStore", () => {
       const blob = Buffer.from("encrypted-content");
       const key = await store.put("org_abc-123", "attachment", blob);
 
+      // Contract: key format is persisted in DB (blob_key column) and used for blob retrieval.
       expect(key).toMatch(
         /^org_abc-123\/attachment\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/,
       );

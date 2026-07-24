@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "Decrypting" |
+* | "Unlocking" |
 *
 * @param {Decrypt_Placeholder_LoadingInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

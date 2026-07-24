@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, afterEach } from "vitest";
-import { render, cleanup } from "@testing-library/svelte";
+import { render, cleanup, fireEvent } from "@testing-library/svelte";
 import TicketPreview from "./TicketPreview.svelte";
 
 // IntersectionObserver stub for DecryptPlaceholder
@@ -16,15 +16,38 @@ vi.stubGlobal(
     this.unobserve = vi.fn();
   }),
 );
+
+// ResizeObserver stub for the fit-mode clipping effect. The callback is
+// captured so tests can re-run the measurement pass after stubbing
+// element rects, the way a real resize or decrypt settle would.
+let roCallback: (() => void) | undefined;
+vi.stubGlobal(
+  "ResizeObserver",
+  vi.fn(function (
+    this: {
+      observe: () => void;
+      disconnect: () => void;
+      unobserve: () => void;
+    },
+    cb: () => void,
+  ) {
+    roCallback = cb;
+    this.observe = vi.fn();
+    this.disconnect = vi.fn();
+    this.unobserve = vi.fn();
+  }),
+);
 import type { RawFollowUpPreview } from "$lib/tickets/preview-loader.svelte.js";
 
 // --- Mocks ---
 
 const mockDecryptContent = vi.fn();
+const mockDeleteByPrefix = vi.fn();
 
 vi.mock("$lib/crypto/context.js", () => ({
   getFollowUpDecryptCache: () => ({
     decryptContent: mockDecryptContent,
+    deleteByPrefix: mockDeleteByPrefix,
   }),
   getOrgDecryptCache: () => ({
     decrypt: () => null,
@@ -38,6 +61,8 @@ vi.mock("$lib/trpc/index.js", () => ({
 afterEach(() => {
   cleanup();
   mockDecryptContent.mockReset();
+  mockDeleteByPrefix.mockReset();
+  roCallback = undefined;
 });
 
 function makeFollowUp(
@@ -58,6 +83,7 @@ function makeFollowUp(
     hasImage: false,
     hasFile: false,
     noteTypeId: null,
+    eventParams: null,
     ...overrides,
   };
 }
@@ -122,15 +148,17 @@ describe("TicketPreview (mini-bubbles)", () => {
     expect(row).not.toBeNull();
   });
 
-  it("renders system events as centered text without bubble", () => {
-    mockDecryptContent.mockReturnValue("Status changed to closed");
-    const fu = makeFollowUp({ source: "system", type: "status_change" });
+  it("renders system events from the type label without decrypting", () => {
+    const fu = makeFollowUp({ source: "system", type: "status_closed" });
     const { container } = render(TicketPreview, {
       props: { ticketId: "ticket-preview-1", followUps: [fu] },
     });
     const sysEl = container.querySelector("[data-type='system']");
     expect(sysEl).not.toBeNull();
-    expect(sysEl?.textContent).toContain("Status changed to closed");
+    // The label derives from the follow-up type; system events carry no
+    // encrypted payload, so the decrypt path must never be touched.
+    expect(sysEl?.textContent).toContain("Closed");
+    expect(mockDecryptContent).not.toHaveBeenCalled();
     // Should not be in a directional bubble row
     expect(container.querySelector("[data-direction]")).toBeNull();
   });
@@ -146,15 +174,94 @@ describe("TicketPreview (mini-bubbles)", () => {
     expect(container.textContent).toContain("This is a very long message");
   });
 
-  it("renders error text when decryption fails (sentinel value)", () => {
+  it("renders the quiet unlock-failure label when decryption fails", () => {
     mockDecryptContent.mockReturnValue("\0DECRYPT_FAILED");
     const fu = makeFollowUp();
     const { container } = render(TicketPreview, {
       props: { ticketId: "ticket-preview-1", followUps: [fu] },
     });
-    expect(container.textContent).toContain(
-      "This content could not be decrypted.",
+    // De-jargon voice: never a raw crypto error as content.
+    expect(container.textContent).toContain("Could not unlock this preview");
+    expect(container.textContent).not.toContain("decrypted");
+  });
+
+  it("retry clears the follow-up's cache entry so the decrypt re-fires", async () => {
+    mockDecryptContent.mockReturnValue("\0DECRYPT_FAILED");
+    const fu = makeFollowUp({ id: "fu-retry" });
+    const { getByRole } = render(TicketPreview, {
+      props: { ticketId: "ticket-preview-1", followUps: [fu] },
+    });
+
+    const retry = getByRole("button", { name: "Retry" });
+    await fireEvent.click(retry);
+
+    expect(mockDeleteByPrefix).toHaveBeenCalledWith("fu-retry");
+  });
+
+  it("shows no retry for denied decrypts (missing key wrap)", () => {
+    mockDecryptContent.mockReturnValue(undefined);
+    const fu = makeFollowUp({ keyWrap: null });
+    const { container, queryByRole } = render(TicketPreview, {
+      props: { ticketId: "ticket-preview-1", followUps: [fu] },
+    });
+    // Denied keeps its own message; a retry cannot mint key material.
+    expect(queryByRole("button", { name: "Retry" })).toBeNull();
+    expect(container.textContent).not.toContain(
+      "Could not unlock this preview",
     );
+  });
+
+  it("shows the client alias eyebrow on caller bubbles only", () => {
+    mockDecryptContent
+      .mockReturnValueOnce("Client msg")
+      .mockReturnValueOnce("Volunteer reply");
+    const fus = [
+      makeFollowUp({ id: "fu-c", source: "client" }),
+      makeFollowUp({ id: "fu-v", source: "volunteer" }),
+    ];
+    const { container } = render(TicketPreview, {
+      props: {
+        ticketId: "ticket-preview-1",
+        followUps: fus,
+        clientAlias: "plain-dew-13",
+      },
+    });
+
+    const received = container.querySelector(
+      "[data-direction='received'] .mini-who",
+    );
+    expect(received?.textContent).toBe("plain-dew-13");
+    // Previews carry no author identity for the org side; labeling
+    // another volunteer's reply would lie, so no eyebrow at all.
+    expect(
+      container.querySelector("[data-direction='sent'] .mini-who"),
+    ).toBeNull();
+  });
+
+  it("renders no eyebrow when clientAlias is not provided", () => {
+    mockDecryptContent.mockReturnValue("Client msg");
+    const fu = makeFollowUp({ source: "client" });
+    const { container } = render(TicketPreview, {
+      props: { ticketId: "ticket-preview-1", followUps: [fu] },
+    });
+    expect(container.querySelector(".mini-who")).toBeNull();
+  });
+
+  it("renders internal notes full-width with an icon-only eyebrow when the name cannot resolve", () => {
+    mockDecryptContent.mockReturnValue("Watch for repeat calls");
+    const fu = makeFollowUp({ type: "internal_note", source: "volunteer" });
+    const { container } = render(TicketPreview, {
+      props: { ticketId: "ticket-preview-1", followUps: [fu] },
+    });
+
+    const note = container.querySelector(".mini-note");
+    expect(note).not.toBeNull();
+    expect(note?.textContent).toContain("Watch for repeat calls");
+    // noteTypes query is unavailable in this harness, so the eyebrow
+    // stays icon-only: no "Internal" text.
+    expect(note?.textContent).not.toContain("Internal");
+    // Notes are blocks, not directional bubbles.
+    expect(container.querySelector("[data-direction]")).toBeNull();
   });
 
   it("renders multiple follow-ups with correct alignment", () => {
@@ -182,5 +289,111 @@ describe("TicketPreview (mini-bubbles)", () => {
     });
     // Text should appear as escaped, not interpreted as HTML
     expect(container.innerHTML).toContain("&lt;script&gt;");
+  });
+});
+
+describe("TicketPreview fit mode (whole-bubble window)", () => {
+  /** Stub layout geometry: jsdom computes no layout, so rects are faked. */
+  function stubRect(el: Element, top: number): void {
+    el.getBoundingClientRect = () =>
+      ({
+        top,
+        bottom: top + 24,
+        left: 0,
+        right: 100,
+        width: 100,
+        height: 24,
+        x: 0,
+        y: top,
+        toJSON: () => ({}),
+      }) as DOMRect;
+  }
+
+  function renderFit(): { root: Element; entries: Element[] } {
+    mockDecryptContent.mockReturnValue("msg");
+    const fus = [
+      makeFollowUp({ id: "fu-old" }),
+      makeFollowUp({ id: "fu-mid" }),
+      makeFollowUp({ id: "fu-new" }),
+    ];
+    const { container } = render(TicketPreview, {
+      props: { ticketId: "ticket-preview-1", followUps: fus, fit: true },
+    });
+    const root = container.querySelector(".mini-chat.fit");
+    expect(root).not.toBeNull();
+    const entries = Array.from(root!.children);
+    expect(entries).toHaveLength(3);
+    return { root: root!, entries };
+  }
+
+  it("hides an entry that pokes above the window and keeps whole ones", () => {
+    const { root, entries } = renderFit();
+    stubRect(root, 0);
+    stubRect(entries[0]!, -20); // oldest, sliced by the top edge
+    stubRect(entries[1]!, 10);
+    stubRect(entries[2]!, 40); // newest, fully inside
+    roCallback?.();
+
+    expect(entries[0]!.hasAttribute("data-clipped")).toBe(true);
+    expect(entries[1]!.hasAttribute("data-clipped")).toBe(false);
+    expect(entries[2]!.hasAttribute("data-clipped")).toBe(false);
+  });
+
+  it("unhides an entry once a re-measure says it fits again", () => {
+    const { root, entries } = renderFit();
+    stubRect(root, 0);
+    stubRect(entries[0]!, -20);
+    stubRect(entries[1]!, 10);
+    stubRect(entries[2]!, 40);
+    roCallback?.();
+    expect(entries[0]!.hasAttribute("data-clipped")).toBe(true);
+
+    stubRect(entries[0]!, 2); // content shrank; everything fits now
+    roCallback?.();
+    expect(entries[0]!.hasAttribute("data-clipped")).toBe(false);
+  });
+
+  it("clips nothing when every entry fits the window", () => {
+    // Default jsdom rects are all zeros: nothing sits above the root.
+    const { root } = renderFit();
+    expect(root.querySelector("[data-clipped]")).toBeNull();
+  });
+
+  it("never measures or clips outside fit mode", () => {
+    mockDecryptContent.mockReturnValue("msg");
+    const { container } = render(TicketPreview, {
+      props: {
+        ticketId: "ticket-preview-1",
+        followUps: [makeFollowUp()],
+      },
+    });
+    expect(roCallback).toBeUndefined();
+    expect(container.querySelector("[data-clipped]")).toBeNull();
+  });
+
+  it("marks searchTerm matches in decrypted bubble text", () => {
+    mockDecryptContent.mockReturnValue("Need housing help");
+    const { container } = render(TicketPreview, {
+      props: {
+        ticketId: "ticket-preview-1",
+        followUps: [makeFollowUp({ source: "client" })],
+        searchTerm: "housing",
+      },
+    });
+    const marks = container.querySelectorAll(".mini-text mark");
+    expect(marks).toHaveLength(1);
+    expect(marks[0]!.textContent).toBe("housing");
+  });
+
+  it("renders plain bubble text without a searchTerm", () => {
+    mockDecryptContent.mockReturnValue("Need housing help");
+    const { container } = render(TicketPreview, {
+      props: {
+        ticketId: "ticket-preview-1",
+        followUps: [makeFollowUp({ source: "client" })],
+      },
+    });
+    expect(container.querySelectorAll("mark")).toHaveLength(0);
+    expect(container.textContent).toContain("Need housing help");
   });
 });

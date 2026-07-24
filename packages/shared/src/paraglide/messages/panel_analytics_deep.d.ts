@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "Deep Analytics" |
+* | "Research" |
 *
 * @param {Panel_Analytics_DeepInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

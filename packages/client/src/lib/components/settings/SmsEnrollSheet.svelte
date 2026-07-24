@@ -1,6 +1,7 @@
 <script lang="ts">
   import { List, ListInput, Preloader, Button } from "konsta/svelte";
   import { Save } from "@lucide/svelte";
+  import FieldError from "$lib/components/FieldError.svelte";
   import * as m from "$lib/paraglide/messages.js";
   import { trpc } from "$lib/trpc/index.js";
   import { haptic } from "$lib/utils/haptic.js";
@@ -206,7 +207,9 @@
     {/if}
 
     {#if error !== ""}
-      <p class="error-text" role="alert">{error}</p>
+      <div class="error-slot">
+        <FieldError message={error} />
+      </div>
     {/if}
   </div>
 </ShellSheet>
@@ -242,7 +245,7 @@
   .resend-btn {
     background: none;
     border: none;
-    color: var(--brand-primary, var(--k-color-primary, #007aff));
+    color: var(--brand-text, var(--brand-primary, #007aff));
     font-size: 0.85rem;
     cursor: pointer;
     padding: var(--space-xs);
@@ -254,9 +257,7 @@
     cursor: default;
   }
 
-  .error-text {
-    color: var(--k-color-red, #ef4444);
-    font-size: 0.85rem;
+  .error-slot {
     text-align: center;
     margin-top: var(--space-sm);
   }

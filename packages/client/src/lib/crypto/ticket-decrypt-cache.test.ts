@@ -44,6 +44,7 @@ function createMockBridge(): {
 
   const bridge = {
     decrypt: mockDecrypt,
+    getState: () => "KEYED",
   } as unknown as CryptoBridge;
 
   return { bridge, mockDecrypt };
@@ -58,6 +59,178 @@ describe("TicketDecryptCache", () => {
     const { bridge, mockDecrypt: md } = createMockBridge();
     mockDecrypt = md;
     cache = new TicketDecryptCache(bridge);
+  });
+
+  describe("decryptDescription", () => {
+    it("returns undefined and triggers async decrypt at the description slot", () => {
+      const result = cache.decryptDescription(
+        TICKET_ID,
+        KEY_WRAP,
+        ENCRYPTED_TITLE,
+      );
+      expect(result).toBeUndefined();
+      expect(mockDecrypt).toHaveBeenCalledOnce();
+      expect(mockDecrypt).toHaveBeenCalledWith(
+        TICKET_ID,
+        "description",
+        `desc:${TICKET_ID}`,
+        KEY_WRAP.ephemeralPoint,
+        KEY_WRAP.nonce,
+        KEY_WRAP.wrappedKey,
+        expect.any(String),
+      );
+    });
+
+    it("returns cached value after async decrypt resolves", async () => {
+      cache.decryptDescription(TICKET_ID, KEY_WRAP, ENCRYPTED_TITLE);
+      await vi.waitFor(() => {
+        expect(cache.has(`desc:${TICKET_ID}`)).toBe(true);
+      });
+      const result = cache.decryptDescription(
+        TICKET_ID,
+        KEY_WRAP,
+        ENCRYPTED_TITLE,
+      );
+      expect(result).toBe("Decrypted Title");
+      expect(mockDecrypt).toHaveBeenCalledOnce();
+    });
+
+    it("returns error sentinel for null keyWrap without calling bridge", () => {
+      const result = cache.decryptDescription(TICKET_ID, null, ENCRYPTED_TITLE);
+      expect(result).toBe(DECRYPT_ERROR_SENTINEL);
+      expect(isDecryptError(result)).toBe(true);
+      expect(mockDecrypt).not.toHaveBeenCalled();
+    });
+
+    it("caches independently of the title entry for the same ticket", async () => {
+      cache.decryptTitle(TICKET_ID, KEY_WRAP, ENCRYPTED_TITLE);
+      cache.decryptDescription(TICKET_ID, KEY_WRAP, ENCRYPTED_TITLE);
+      await vi.waitFor(() => {
+        expect(cache.has(TICKET_ID)).toBe(true);
+        expect(cache.has(`desc:${TICKET_ID}`)).toBe(true);
+      });
+      expect(mockDecrypt).toHaveBeenCalledTimes(2);
+    });
+  });
+
+  describe("decryptReadCursor", () => {
+    const USER_ID = "user-1";
+    const CIPHERTEXT = "cursor-ct-version-one-padding";
+    const CACHE_KEY = `cursor:${TICKET_ID}:${CIPHERTEXT.slice(0, 24)}`;
+
+    it("mirrors the detail call: per-user slot, ticket id as key-cache id", () => {
+      const result = cache.decryptReadCursor(
+        TICKET_ID,
+        USER_ID,
+        KEY_WRAP,
+        CIPHERTEXT,
+      );
+      expect(result).toBeUndefined();
+      expect(mockDecrypt).toHaveBeenCalledOnce();
+      expect(mockDecrypt).toHaveBeenCalledWith(
+        TICKET_ID,
+        `cursor:${USER_ID}`,
+        TICKET_ID,
+        KEY_WRAP.ephemeralPoint,
+        KEY_WRAP.nonce,
+        KEY_WRAP.wrappedKey,
+        CIPHERTEXT,
+      );
+    });
+
+    it("caches under a ciphertext-prefixed key", async () => {
+      cache.decryptReadCursor(TICKET_ID, USER_ID, KEY_WRAP, CIPHERTEXT);
+      await vi.waitFor(() => {
+        expect(cache.has(CACHE_KEY)).toBe(true);
+      });
+      const result = cache.decryptReadCursor(
+        TICKET_ID,
+        USER_ID,
+        KEY_WRAP,
+        CIPHERTEXT,
+      );
+      expect(result).toBe("Decrypted Title");
+      expect(mockDecrypt).toHaveBeenCalledOnce();
+    });
+
+    it("re-decrypts when the cursor ciphertext changes", async () => {
+      cache.decryptReadCursor(TICKET_ID, USER_ID, KEY_WRAP, CIPHERTEXT);
+      await vi.waitFor(() => {
+        expect(cache.has(CACHE_KEY)).toBe(true);
+      });
+
+      cache.decryptReadCursor(
+        TICKET_ID,
+        USER_ID,
+        KEY_WRAP,
+        "cursor-ct-version-two-padding",
+      );
+      expect(mockDecrypt).toHaveBeenCalledTimes(2);
+    });
+
+    it("returns error sentinel for null keyWrap without calling bridge", () => {
+      const result = cache.decryptReadCursor(
+        TICKET_ID,
+        USER_ID,
+        null,
+        CIPHERTEXT,
+      );
+      expect(result).toBe(DECRYPT_ERROR_SENTINEL);
+      expect(isDecryptError(result)).toBe(true);
+      expect(mockDecrypt).not.toHaveBeenCalled();
+    });
+
+    it("stores error sentinel when the blob fails AEAD (dummy row)", async () => {
+      mockDecrypt.mockRejectedValueOnce(new Error("AEAD failure"));
+
+      cache.decryptReadCursor(TICKET_ID, USER_ID, KEY_WRAP, CIPHERTEXT);
+      await vi.waitFor(() => {
+        expect(cache.has(CACHE_KEY)).toBe(true);
+      });
+      expect(isDecryptError(cache.get(CACHE_KEY))).toBe(true);
+    });
+
+    it("stays out of the follow-up prefix namespace", async () => {
+      cache.decryptReadCursor(TICKET_ID, USER_ID, KEY_WRAP, CIPHERTEXT);
+      await vi.waitFor(() => {
+        expect(cache.has(CACHE_KEY)).toBe(true);
+      });
+      cache.clearFollowUps();
+      expect(cache.has(CACHE_KEY)).toBe(true);
+    });
+
+    it("misses and decrypts anew after the ticket's cursor prefix is evicted", async () => {
+      const otherTicketId = "ticket-002";
+      const secondCiphertext = "cursor-ct-version-two-padding";
+      const v2Key = `cursor:${TICKET_ID}:${secondCiphertext.slice(0, 24)}`;
+      const otherKey = `cursor:${otherTicketId}:${CIPHERTEXT.slice(0, 24)}`;
+
+      cache.decryptReadCursor(TICKET_ID, USER_ID, KEY_WRAP, CIPHERTEXT);
+      cache.decryptReadCursor(TICKET_ID, USER_ID, KEY_WRAP, secondCiphertext);
+      cache.decryptReadCursor(otherTicketId, USER_ID, KEY_WRAP, CIPHERTEXT);
+      await vi.waitFor(() => {
+        expect(cache.has(CACHE_KEY)).toBe(true);
+        expect(cache.has(v2Key)).toBe(true);
+        expect(cache.has(otherKey)).toBe(true);
+      });
+
+      // The flush success path evicts every version for the one ticket.
+      cache.deleteByPrefix(`cursor:${TICKET_ID}:`);
+
+      expect(cache.has(CACHE_KEY)).toBe(false);
+      expect(cache.has(v2Key)).toBe(false);
+      expect(cache.has(otherKey)).toBe(true);
+
+      mockDecrypt.mockClear();
+      const result = cache.decryptReadCursor(
+        TICKET_ID,
+        USER_ID,
+        KEY_WRAP,
+        CIPHERTEXT,
+      );
+      expect(result).toBeUndefined();
+      expect(mockDecrypt).toHaveBeenCalledOnce();
+    });
   });
 
   describe("decryptTitle", () => {

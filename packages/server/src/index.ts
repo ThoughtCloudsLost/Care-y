@@ -32,6 +32,10 @@ import {
   type RateLimiter,
 } from "./ratelimit/rate-limiter.js";
 import {
+  createTotpReplayCache,
+  assertSingleInstanceTotpReplayCache,
+} from "./auth/totp-replay-cache.js";
+import {
   deriveKeys,
   createFieldEncryptor,
   createBlindIndexer,
@@ -242,7 +246,7 @@ const RATE_PASSWORD_CHANGE_MAX = 5;
 const RATE_UPLOAD_MAX = 3;
 const RATE_KB_UPLOAD_MAX = 5;
 const RATE_BRANDING_UPLOAD_MAX = 3;
-const RATE_BOOTSTRAP_MAX = process.env.NODE_ENV === "production" ? 2 : 20;
+const RATE_BOOTSTRAP_MAX = getEnv().NODE_ENV === "production" ? 2 : 20;
 
 // --- Rate limiters ---
 
@@ -258,7 +262,7 @@ interface RateLimiters {
 }
 
 function createAuthRateLimiters(): RateLimiters {
-  if (process.env.NODE_ENV === "development") {
+  if (getEnv().NODE_ENV === "development") {
     return { loginLimiter: noopLimiter, saltLimiter: noopLimiter };
   }
   return {
@@ -289,14 +293,14 @@ function createOprfInfrastructure(env: EnvVars): OprfEvaluateService {
   });
 
   const userRateLimiter =
-    process.env.NODE_ENV === "development"
+    getEnv().NODE_ENV === "development"
       ? noopLimiter
       : createInMemoryRateLimiter({
           windowMs: RATE_WINDOW_15M,
           maxRequests: RATE_OPRF_USER_MAX,
         });
   const ipRateLimiter =
-    process.env.NODE_ENV === "development"
+    getEnv().NODE_ENV === "development"
       ? noopLimiter
       : createInMemoryRateLimiter({
           windowMs: RATE_WINDOW_15M,
@@ -321,9 +325,11 @@ await probeDatabase();
 
 const env: EnvVars = getEnv();
 
-// Fail fast when a multi-instance deployment is declared but only the
-// process-local in-memory rate limiter is available.
+// Fail fast when a multi-instance deployment is declared but only
+// process-local in-memory stores (rate limiter, TOTP replay cache) are
+// available.
 assertSingleInstanceRateLimiting(env.APP_MULTI_INSTANCE);
+assertSingleInstanceTotpReplayCache(env.APP_MULTI_INSTANCE);
 
 const { encryptor, indexer, fakeSaltKey, tokenizer, pushChallengeHmacKey } =
   await deriveCryptoServices(env.OPS_SECRETS_KEY);
@@ -421,6 +427,10 @@ const phoneResolver = createPhoneResolver({
 
 const pendingClients = new Map<string, PendingClient>();
 
+// One instance shared by the auth and two-factor routers so a TOTP code
+// accepted on either path is burned for both (RFC 6238 Section 5.2).
+const totpReplayCache = createTotpReplayCache();
+
 const appRouter = createAppRouter({
   authDeps: {
     hasher,
@@ -434,6 +444,7 @@ const appRouter = createAppRouter({
     emailSender,
     providerFactory,
     resolveCallerId: phoneResolver,
+    totpReplayCache,
   },
   profileDeps: {
     hasher,
@@ -454,6 +465,7 @@ const appRouter = createAppRouter({
     resolveCallerId: phoneResolver,
     pushSender,
     pushHmacKey: pushChallengeHmacKey,
+    totpReplayCache,
   },
   oprfDeps: { oprfService },
   orgService,
@@ -508,7 +520,7 @@ const appRouter = createAppRouter({
     }),
   },
   notificationDeps: {
-    createPushSubSvc: (tDb) => createPushSubscriptionService(tDb, pushSender),
+    createPushSubSvc: (tDb) => createPushSubscriptionService(tDb),
     vapidPublicKey: vapidKeys.publicKey,
   },
   brandingDeps: {

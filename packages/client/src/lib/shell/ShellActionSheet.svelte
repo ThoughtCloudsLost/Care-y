@@ -8,6 +8,7 @@
   import type { ShellActionSheetProps } from "./types";
   import { useFocusTrap } from "./use-focus-trap.svelte";
   import { portal } from "./portal";
+  import ShellBackdrop from "./ShellBackdrop.svelte";
 
   let { opened, ondismiss, ariaLabel, children }: ShellActionSheetProps =
     $props();
@@ -23,18 +24,17 @@
 </script>
 
 <div use:portal={".k-page"}>
-  <Actions
-    {opened}
-    onBackdropClick={trap.handleDismiss}
-    class="shell-action-sheet"
-  >
+  <ShellBackdrop {opened} ondismiss={trap.handleDismiss} />
+  <Actions {opened} backdrop={false} class="shell-action-sheet">
     <div
       data-testid="actions-sheet"
       bind:this={trap.dialogEl}
       role="dialog"
-      aria-modal="true"
+      aria-modal={opened ? "true" : undefined}
       aria-label={ariaLabel ?? undefined}
       tabindex="-1"
+      inert={!opened ? true : undefined}
+      class="shell-actions-content"
     >
       {@render children()}
     </div>
@@ -46,6 +46,25 @@
     :global(.shell-action-sheet) {
       max-width: 400px;
       margin-inline: auto;
+    }
+  }
+
+  /* Closed action sheets stay mounted; inert plus delayed visibility keeps
+     them out of the accessibility tree and axe evaluation while letting the
+     close transition finish (mirrors ShellSheet). */
+  .shell-actions-content:not([inert]) {
+    visibility: visible;
+    transition: none;
+  }
+
+  .shell-actions-content[inert] {
+    visibility: hidden;
+    transition: visibility 0s 400ms;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .shell-actions-content[inert] {
+      transition-delay: 0s;
     }
   }
 </style>

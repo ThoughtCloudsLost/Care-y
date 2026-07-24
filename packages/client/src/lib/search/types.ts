@@ -3,6 +3,19 @@ import type { Component } from "svelte";
 /** How the search UI lays out results for this provider. */
 export type SearchRenderMode = "card-strip" | "list";
 
+/** Inputs for a provider's coverage line, computed per searchAll evaluation. */
+export interface CoverageState {
+  /** Items this device has searched (the provider's totalCached). */
+  readonly searched: number;
+  /** Total items in the dataset, when known (the provider's totalItems). */
+  readonly total: number | undefined;
+  /** Per-provider full-search status, when one has run. */
+  readonly fullSearch: "idle" | "searching" | "done" | undefined;
+  /** Full-search progress counts (meaningful while fullSearch is "searching"). */
+  readonly fsSearched: number;
+  readonly fsTotal: number;
+}
+
 /** A single search result returned by a provider. */
 export interface SearchResult<T = unknown> {
   /** Unique ID within this provider (e.g., ticket ID, article ID). */
@@ -33,6 +46,12 @@ export interface SearchResultGroup<T = unknown> {
   readonly onviewall?: (query: string) => void;
   /** When present, result taps call this instead of navigating via getResultHref. */
   readonly onresulttap?: (id: string, query: string) => void;
+  /** Quiet line shown when this section has zero results ("No teammates match X."). */
+  readonly emptyText?: string;
+  /** Human coverage line rendered below the section's results. */
+  readonly coverageText?: string;
+  /** Label for the calm escalation button; absent hides the button. */
+  readonly fetchMoreLabel?: string;
 }
 
 /** Contract that every search provider must implement. */
@@ -69,6 +88,15 @@ export interface SearchProvider<T = unknown> {
    */
   readonly ResultItem: Component<{ result: T; ontap: (id: string) => void }>;
   /**
+   * Resolve a single entity into display-ready result data by ID, using
+   * the same caches and decrypt triggers as search(). Used by the
+   * recently-viewed sections. Called from $derived contexts, so reactive
+   * cache reads are tracked; return undefined while data is missing or
+   * still decrypting (the entry is simply not rendered yet). Providers
+   * without a recently-viewed surface omit it.
+   */
+  resolveById?(id: string): SearchResult<T> | undefined;
+  /**
    * Optional server-backed full search. Called when the user taps "Search all".
    * Providers that only have client-side data omit this.
    * Mutate `state` fields and call `onProgress()` to propagate changes to the UI.
@@ -102,6 +130,26 @@ export interface SearchProvider<T = unknown> {
    * cached decrypted follow-up content) to free memory.
    */
   reset?(): void;
+  /**
+   * Copy for the section's quiet empty line ("No teammates match X.").
+   * Omit to render nothing when the section is empty.
+   */
+  emptyText?(query: string): string;
+  /**
+   * Human coverage line below the section's results ("Searched 100 of 120
+   * tickets already unlocked on this device."). Return undefined to render
+   * no line; providers own the words the way they own label().
+   */
+  coverage?(state: CoverageState): string | undefined;
+  /**
+   * Label for the calm per-section escalation button ("Search the other
+   * 20 tickets"). Return undefined to hide it; the registry also hides it
+   * while a full search runs or after it completes.
+   */
+  fullSearchLabel?(
+    searched: number,
+    total: number | undefined,
+  ): string | undefined;
 }
 
 /** Per-provider progress state for opt-in full search. Managed by the registry. */

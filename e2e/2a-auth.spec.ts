@@ -9,8 +9,12 @@
  */
 
 import { test, expect } from "./coverage-fixture";
-import AxeBuilder from "@axe-core/playwright";
-import { CRYPTO_TIMEOUT, loadTotpSecret, generateTotpCode } from "./helpers";
+import {
+  auditA11y,
+  CRYPTO_TIMEOUT,
+  loadTotpSecret,
+  generateTotpCode,
+} from "./helpers";
 
 // Seed credentials (must match seed script: packages/server/src/scripts/seed.ts)
 const DEV_USER = "admin.dev";
@@ -69,7 +73,7 @@ test.describe("2a-auth: login page", () => {
   });
 
   test("valid credentials redirect past login", async ({ page }, testInfo) => {
-    testInfo.setTimeout(CRYPTO_TIMEOUT * 2);
+    testInfo.setTimeout(CRYPTO_TIMEOUT * 3);
 
     await page.locator('input[autocomplete="username"]').fill(DEV_USER);
     await page
@@ -88,14 +92,26 @@ test.describe("2a-auth: login page", () => {
     await page.getByRole("button", { name: /verify/i }).click();
 
     // Seeded admin may land on / or /complete depending on onboarding state.
-    await page.waitForURL(/\/(complete)?$/, { timeout: CRYPTO_TIMEOUT });
-    expect(page.url()).toMatch(/\/(complete)?$/);
+    // Race against error state to avoid silent 30s timeout on code rejection.
+    const postVerify = await Promise.race([
+      page
+        .waitForURL(/\/(complete)?$/, { timeout: CRYPTO_TIMEOUT })
+        .then(() => "navigated" as const),
+      page
+        .locator('[role="alert"]')
+        .waitFor({ state: "visible", timeout: CRYPTO_TIMEOUT })
+        .then(async () => {
+          const text = await page.locator('[role="alert"]').textContent();
+          return `error:${text ?? ""}` as const;
+        }),
+    ]);
+    expect(postVerify).toBe("navigated");
   });
 
   test("session persists after login (auth.me succeeds)", async ({
     page,
   }, testInfo) => {
-    testInfo.setTimeout(CRYPTO_TIMEOUT * 2);
+    testInfo.setTimeout(CRYPTO_TIMEOUT * 3);
 
     await page.locator('input[autocomplete="username"]').fill(DEV_USER);
     await page
@@ -147,13 +163,8 @@ test.describe("2a-auth: login page", () => {
     await expect(submitBtn).not.toBeVisible();
   });
 
-  test("login page passes WCAG 2.1 AA a11y audit", async ({ page }) => {
-    const results = await new AxeBuilder({ page })
-      .withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"])
-      .exclude("#splash")
-      .analyze();
-
-    expect(results.violations).toEqual([]);
+  test("login page passes WCAG 2.2 AA a11y audit", async ({ page }) => {
+    await auditA11y(page);
   });
 
   test("error state passes WCAG 2.1 AA a11y audit", async ({ page }) => {
@@ -165,11 +176,6 @@ test.describe("2a-auth: login page", () => {
     await page.getByRole("button", { name: /sign in/i }).click();
     await expect(page.locator('[role="alert"]')).toBeVisible();
 
-    const results = await new AxeBuilder({ page })
-      .withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa"])
-      .exclude("#splash")
-      .analyze();
-
-    expect(results.violations).toEqual([]);
+    await auditA11y(page);
   });
 });

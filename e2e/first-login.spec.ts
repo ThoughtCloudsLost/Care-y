@@ -8,10 +8,16 @@
  * Uses the same page.route() org-slug bypass as onboarding.spec.ts.
  */
 
-import { test, expect, type Page } from "@playwright/test";
+import { test, expect } from "./coverage-fixture";
+import { startCoverage, stopAndWriteCoverage } from "./coverage-fixture";
+import type { Page } from "@playwright/test";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { generateTotpCode } from "./helpers.js";
+import {
+  auditA11y,
+  dismissBackupCodesSheet,
+  generateTotpCode,
+} from "./helpers.js";
 
 const ONBOARD_SLUG = "e2e-onboard";
 const API_PORT = "3000";
@@ -61,10 +67,12 @@ test.describe.serial("Volunteer First Login", () => {
 
   test.beforeAll(async ({ browser }) => {
     page = await browser.newPage();
+    await startCoverage(page);
     await routeToOnboardOrg(page);
   });
 
   test.afterAll(async () => {
+    await stopAndWriteCoverage(page, "first-login");
     await page.unrouteAll({ behavior: "ignoreErrors" });
     await page.close();
   });
@@ -81,6 +89,10 @@ test.describe.serial("Volunteer First Login", () => {
     ).toBeVisible({
       timeout: CRYPTO_TIMEOUT,
     });
+  });
+
+  test("invite account step passes the axe accessibility audit", async () => {
+    await auditA11y(page);
   });
 
   test("fills volunteer account form and submits", async () => {
@@ -165,18 +177,8 @@ test.describe.serial("Volunteer First Login", () => {
     const verifyBtn = page.getByRole("button", { name: /verify/i });
     await verifyBtn.click();
 
-    // Dismiss backup codes sheet
-    const backupHeading = page.getByRole("heading", { name: /backup codes/i });
-    await backupHeading.waitFor({ state: "visible", timeout: 10_000 });
-
-    for (let i = 0; i < 10; i++) {
-      await page.keyboard.press("Escape");
-      const hidden = await backupHeading
-        .waitFor({ state: "hidden", timeout: 1_000 })
-        .then(() => true)
-        .catch(() => false);
-      if (hidden) break;
-    }
+    // Dismiss backup codes via the "Save your codes" confirm dialog
+    await dismissBackupCodesSheet(page);
   });
 
   test("completes 2FA and advances to dashboard", async () => {

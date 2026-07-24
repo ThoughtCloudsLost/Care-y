@@ -1,27 +1,27 @@
 <script lang="ts">
-  import { goto } from "$app/navigation";
-  import { resolve } from "$app/paths";
-  import { Progressbar } from "konsta/svelte";
-  import { ScanSearch } from "@lucide/svelte";
   import type { Component, Snippet } from "svelte";
   import * as m from "$lib/paraglide/messages.js";
-  import { getFullSearchStateForProvider } from "$lib/search/registry.svelte.js";
+  import DecryptPlaceholder from "$lib/components/DecryptPlaceholder.svelte";
 
   interface SearchSectionProps {
     label: string;
     icon: Component;
     count: number;
-    totalCached: number;
-    totalItems?: number;
     totalResults?: number;
     showAllHref: string;
     loading: boolean;
     ondismiss: () => void;
     onviewall?: (query: string) => void;
+    /** Show-all navigation, handled by the host (content never calls goto). */
+    onnavigate?: (href: string) => void;
     query?: string;
-    hasFullSearch?: boolean;
     onFullSearch?: () => void;
-    providerId?: string;
+    /** Quiet line rendered in place of results when the section is empty. */
+    emptyText?: string;
+    /** Human coverage line below the results (provider-owned copy). */
+    coverageText?: string;
+    /** Calm escalation button label; absent hides the button. */
+    fetchMoreLabel?: string;
     children: Snippet;
   }
 
@@ -29,227 +29,129 @@
     label,
     icon: Icon,
     count,
-    totalCached,
-    totalItems,
     totalResults,
     showAllHref,
     loading,
     ondismiss,
     onviewall,
+    onnavigate,
     query = "",
-    hasFullSearch = false,
     onFullSearch,
-    providerId,
+    emptyText,
+    coverageText,
+    fetchMoreLabel,
     children,
   }: SearchSectionProps = $props();
 
   const displayCount = $derived(totalResults ?? count);
 
-  const fsStatus = $derived(
-    providerId != null && providerId !== ""
-      ? getFullSearchStateForProvider(providerId)?.status
-      : undefined,
-  );
-  const fsSearched = $derived(
-    providerId != null && providerId !== ""
-      ? (getFullSearchStateForProvider(providerId)?.searched ?? 0)
-      : 0,
-  );
-  const fsTotal = $derived(
-    providerId != null && providerId !== ""
-      ? (getFullSearchStateForProvider(providerId)?.total ?? 0)
-      : 0,
-  );
+  function handleShowAll(): void {
+    if (onviewall) {
+      const q = query;
+      ondismiss();
+      onviewall(q);
+    } else {
+      onnavigate?.(showAllHref);
+    }
+  }
 </script>
 
 <div class="search-section">
-  <div class="section-header">
-    <div class="section-title-row">
-      <h3 class="section-label">
-        <Icon size={16} aria-hidden="true" class="section-icon" />
-        <span class="heading-text">{label}</span>
-        <span class="count-badge">{loading ? "..." : displayCount}</span>
-      </h3>
-      {#if displayCount > 0}
-        <button
-          type="button"
-          class="show-all-link"
-          onclick={() => {
-            if (onviewall) {
-              const q = query;
-              ondismiss();
-              onviewall(q);
-            } else {
-              ondismiss();
-              void goto(resolve(`/${showAllHref.replace(/^\//, "")}`));
-            }
-          }}
-        >
-          {m.search_show_all({ count: displayCount })}
-        </button>
+  <div class="secline">
+    <Icon size={14} aria-hidden="true" class="section-icon" />
+    <h3 class="secline-eb">{label}</h3>
+    <span class="secline-rule" aria-hidden="true"></span>
+    <span class="secline-cnt num" aria-live="polite">
+      {#if loading}
+        <DecryptPlaceholder length={3} />
+      {:else if displayCount === 1}
+        {m.search_found_count_one({ count: 1 })}
+      {:else}
+        {m.search_found_count_other({ count: displayCount })}
       {/if}
-    </div>
-    <div class="scope-row">
-      {#if hasFullSearch && onFullSearch}
-        <span class="section-deep-search" aria-live="polite">
-          {#if fsStatus === "searching"}
-            <span class="section-deep-progress">
-              <Progressbar progress={fsSearched / Math.max(fsTotal, 1)} />
-              <span class="section-deep-count">
-                {m.search_section_full_searching({
-                  searched: fsSearched,
-                  total: fsTotal,
-                })}
-              </span>
-            </span>
-          {:else if fsStatus === "done"}
-            <ScanSearch size={12} aria-hidden="true" class="deep-done-icon" />
-          {:else}
-            <button
-              type="button"
-              class="section-deep-trigger"
-              onclick={onFullSearch}
-            >
-              <ScanSearch size={12} aria-hidden="true" />
-              {m.search_section_full_trigger({ section: label })}
-            </button>
-          {/if}
-        </span>
-      {/if}
-      <p class="scope-hint" aria-live="polite">
-        {#if totalItems != null && totalItems > totalCached}
-          {#if loading}
-            {m.search_scope_hint_of({
-              searched: totalCached,
-              total: totalItems,
-            })}
-          {:else}
-            {m.search_scope_done_of({
-              searched: totalCached,
-              total: totalItems,
-            })}
-          {/if}
-        {:else if loading}
-          {m.search_scope_hint({ count: totalCached })}
-        {:else}
-          {m.search_scope_done({ count: totalCached })}
-        {/if}
-      </p>
-    </div>
+    </span>
+    {#if displayCount > 0}
+      <span class="secline-cnt" aria-hidden="true">·</span>
+      <button
+        type="button"
+        class="show-all num"
+        aria-label={m.search_show_all_label({ section: label })}
+        onclick={handleShowAll}
+      >
+        {m.search_show_all()}
+      </button>
+    {/if}
   </div>
-  {@render children()}
+  {#if !loading && count === 0 && emptyText != null}
+    <p class="nores">{emptyText}</p>
+  {:else}
+    {@render children()}
+  {/if}
+  {#if coverageText != null}
+    <p class="cover num" aria-live="polite">{coverageText}</p>
+  {/if}
+  {#if fetchMoreLabel != null && onFullSearch}
+    <button
+      type="button"
+      class="fetchmore calm-escalation num"
+      onclick={onFullSearch}
+    >
+      {fetchMoreLabel}
+    </button>
+  {/if}
 </div>
 
 <style>
   .search-section {
-    padding-top: var(--space-lg, 16px);
     padding-bottom: var(--space-md, 12px);
   }
 
-  .section-header {
-    padding: 0 var(--page-pad-x, 0.75rem);
-    margin-bottom: var(--space-md, 12px);
-  }
-
-  .section-title-row {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: var(--space-md, 12px);
-  }
-
-  :global(.section-icon) {
+  .search-section :global(.section-icon) {
     flex-shrink: 0;
+    align-self: center;
     color: var(--brand-accent);
   }
 
-  /* Match CollapsibleSection heading style from the dashboard */
-  .section-label {
-    font-size: 1.0625rem;
-    font-weight: 600;
-    color: var(--ink);
-    margin: 0;
-    display: flex;
-    align-items: center;
-    gap: var(--space-md, 12px);
+  .num {
+    font-variant-numeric: tabular-nums;
   }
 
-  /* Match dashboard count-badge: ink-tinted background, muted text */
-  .count-badge {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    min-width: 1.125rem;
-    height: 1.125rem;
-    padding: 0 0.25rem;
-    border-radius: 0.5rem;
-    background: color-mix(in srgb, var(--ink) 12%, transparent);
-    font-size: 0.625rem;
-    font-weight: 600;
-    line-height: 1;
-    color: var(--muted);
-    letter-spacing: 0.01em;
-  }
-
-  .show-all-link {
-    font-size: var(--text-sm, 0.875rem);
-    font-weight: 500;
-    color: var(--ink);
-    opacity: 0.6;
-    background: none;
-    border: none;
-    cursor: pointer;
-    padding: var(--space-xs, 4px) 0;
-    white-space: nowrap;
-    flex-shrink: 0;
-  }
-
-  .scope-row {
-    display: flex;
-    align-items: center;
-    gap: var(--space-sm, 8px);
-    margin: var(--space-xs, 4px) 0 0;
-  }
-
-  .scope-hint {
-    font-size: var(--text-xs, 0.75rem);
-    color: var(--muted);
-    margin: 0;
-  }
-
-  .section-deep-search {
-    flex-shrink: 0;
-  }
-
-  .section-deep-trigger {
-    display: inline-flex;
-    align-items: center;
-    gap: 4px;
-    font-size: var(--text-xs, 0.75rem);
-    font-weight: 500;
-    color: var(--brand-primary);
+  /* Show all is a text action, an identity slot: brand-text, not muted. */
+  .show-all {
     background: none;
     border: none;
     cursor: pointer;
     padding: 0;
+    font-size: 0.6875rem;
+    font-weight: 700;
+    color: var(--brand-text);
     white-space: nowrap;
   }
 
-  .section-deep-progress {
-    display: inline-flex;
-    align-items: center;
-    gap: var(--space-xs, 4px);
-    max-width: 140px;
-  }
-
-  .section-deep-count {
-    font-size: var(--text-xs, 0.75rem);
+  .nores {
+    padding: 8px var(--page-pad-x, 0.75rem) 2px;
+    font-size: 0.8125rem;
     color: var(--muted);
-    white-space: nowrap;
   }
 
-  :global(.deep-done-icon) {
-    color: var(--brand-primary);
-    opacity: 0.6;
+  /* Honest coverage in plain words, below what it describes. */
+  .cover {
+    padding: 6px var(--page-pad-x, 0.75rem) 0;
+    font-size: 0.75rem;
+    line-height: 1.5;
+    color: var(--muted);
+    margin: 0;
+  }
+
+  /* Full-width placement of the shared calm-escalation anatomy. */
+  .fetchmore {
+    display: block;
+    margin: 10px var(--page-pad-x, 0.75rem) 4px;
+    width: calc(100% - 2 * var(--page-pad-x, 0.75rem));
+    padding: 11px;
+    border-radius: 9px;
+    font-size: var(--text-base, 0.84375rem);
+    font-weight: 700;
+    text-align: center;
   }
 </style>

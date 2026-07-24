@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { Card, Chip, Preloader } from "konsta/svelte";
+  import { Card, Preloader } from "konsta/svelte";
   import { Link2, X, Copy } from "@lucide/svelte";
   import * as m from "$lib/paraglide/messages.js";
   import { onKeyActivate } from "$lib/utils/a11y.js";
@@ -100,7 +100,7 @@
       </div>
 
       <div class="action-area">
-        <Chip outline>{roleLabel}</Chip>
+        <span class="stamp-chip role-stamp">{roleLabel}</span>
         <div class="action-buttons">
           {#if inviteUrl !== null && oncopy}
             <button
@@ -205,7 +205,7 @@
   }
 
   .invite-url {
-    font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace;
+    font-family: var(--theme-font-mono);
     font-size: var(--text-xs);
     color: var(--muted);
     opacity: 0.6;
@@ -225,6 +225,11 @@
   .action-buttons {
     display: flex;
     gap: 2px;
+  }
+
+  /* The role is who the invitee will be: stamp anatomy in brand ink. */
+  .role-stamp {
+    color: var(--brand-text, var(--brand-primary));
   }
 
   .copy-btn {
@@ -271,7 +276,7 @@
     border: none;
     padding: 0;
     cursor: pointer;
-    color: var(--color-red-500);
+    color: var(--danger, var(--color-red-500));
     flex-shrink: 0;
     -webkit-tap-highlight-color: transparent;
     opacity: 0.7;
@@ -284,12 +289,20 @@
   }
 
   .revoke-btn:hover {
-    background: color-mix(in srgb, var(--color-red-500) 10%, transparent);
+    background: color-mix(
+      in srgb,
+      var(--danger, var(--color-red-500)) 10%,
+      transparent
+    );
     opacity: 1;
   }
 
   .revoke-btn:active {
-    background: color-mix(in srgb, var(--color-red-500) 18%, transparent);
+    background: color-mix(
+      in srgb,
+      var(--danger, var(--color-red-500)) 18%,
+      transparent
+    );
   }
 
   .revoke-btn:focus-visible {

@@ -55,4 +55,54 @@ describe("CallTracker", () => {
     expect(tracker.get("CA2")?.ticketId).toBe("t2");
     expect(tracker.size).toBe(2);
   });
+
+  describe("cleanup interval", () => {
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    it("removes stale calls past the TTL and keeps fresh ones", () => {
+      vi.useFakeTimers();
+
+      const tracker = createCallTracker();
+
+      // Track a call whose createdAt is "now" (fake-timer epoch)
+      const staleCall = makeTracked({
+        ticketId: "stale",
+        createdAt: Date.now(),
+      });
+      tracker.track("CA-STALE", staleCall);
+
+      // Advance past TTL (60 min) + one cleanup interval (1 min)
+      vi.advanceTimersByTime(3_600_000 + 60_000);
+
+      // Track a fresh call after the advance so it is not stale
+      const freshCall = makeTracked({
+        ticketId: "fresh",
+        createdAt: Date.now(),
+      });
+      tracker.track("CA-FRESH", freshCall);
+
+      // Advance one more cleanup interval to sweep
+      vi.advanceTimersByTime(60_000);
+
+      expect(tracker.get("CA-STALE")).toBeUndefined();
+      expect(tracker.get("CA-FRESH")).toBe(freshCall);
+      expect(tracker.size).toBe(1);
+    });
+
+    it("retains calls that have not exceeded the TTL", () => {
+      vi.useFakeTimers();
+
+      const tracker = createCallTracker();
+      const call = makeTracked({ createdAt: Date.now() });
+      tracker.track("CA-KEEP", call);
+
+      // Advance less than TTL plus one cleanup tick
+      vi.advanceTimersByTime(3_600_000 - 1_000 + 60_000);
+
+      expect(tracker.get("CA-KEEP")).toBe(call);
+      expect(tracker.size).toBe(1);
+    });
+  });
 });

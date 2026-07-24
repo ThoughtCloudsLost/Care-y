@@ -3,7 +3,6 @@
 
 import type { Kysely } from "kysely";
 import type { TenantDatabase } from "../db/types.js";
-import type { PushNotificationSender } from "./push.js";
 
 export interface PushSubscriptionRecord {
   readonly endpoint: string;
@@ -19,8 +18,8 @@ export interface PushSubscriptionService {
     keyAuth: string,
   ): Promise<void>;
 
-  /** Remove a push subscription by endpoint. */
-  unsubscribe(endpoint: string): Promise<void>;
+  /** Remove a push subscription by endpoint, scoped to the requesting user. */
+  unsubscribe(userId: string, endpoint: string): Promise<void>;
 
   /** List current user's push subscriptions (endpoints + timestamps). */
   listForUser(userId: string): Promise<readonly PushSubscriptionRecord[]>;
@@ -28,7 +27,6 @@ export interface PushSubscriptionService {
 
 export function createPushSubscriptionService(
   db: Kysely<TenantDatabase>,
-  pushSender: PushNotificationSender,
 ): PushSubscriptionService {
   return {
     async subscribe(userId, endpoint, keyP256dh, keyAuth): Promise<void> {
@@ -50,8 +48,12 @@ export function createPushSubscriptionService(
         .execute();
     },
 
-    async unsubscribe(endpoint): Promise<void> {
-      await pushSender.removeSubscription(db, endpoint);
+    async unsubscribe(userId, endpoint): Promise<void> {
+      await db
+        .deleteFrom("push_subscriptions")
+        .where("endpoint", "=", endpoint)
+        .where("user_id", "=", userId)
+        .execute();
     },
 
     async listForUser(userId): Promise<readonly PushSubscriptionRecord[]> {

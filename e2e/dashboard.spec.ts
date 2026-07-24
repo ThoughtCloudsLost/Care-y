@@ -1,10 +1,9 @@
 import { test, expect } from "./coverage-fixture";
 import { startCoverage, stopAndWriteCoverage } from "./coverage-fixture";
 import type { Page } from "@playwright/test";
-import AxeBuilder from "@axe-core/playwright";
-import { CRYPTO_TIMEOUT, login } from "./helpers";
+import { auditA11y, CRYPTO_TIMEOUT, login } from "./helpers";
 
-test.describe.serial("Dashboard (Home Tab)", () => {
+test.describe.serial("Dashboard (Overview Tab)", () => {
   let page: Page;
 
   test.beforeAll(async ({ browser }, testInfo) => {
@@ -53,8 +52,8 @@ test.describe.serial("Dashboard (Home Tab)", () => {
 
   test("ticket without key wrap shows encrypted placeholder", async () => {
     // Ticket with withKeyWrap: false has no key wrap. The title falls
-    // back to the i18n placeholder "Encrypted ticket" with a help icon.
-    await expect(page.getByText("Encrypted ticket")).toBeVisible();
+    // back to the i18n placeholder "Locked ticket" with a help icon.
+    await expect(page.getByText("Locked ticket")).toBeVisible();
   });
 
   // ── Section heading labels (i18n) ─────────────────────────────────
@@ -106,9 +105,9 @@ test.describe.serial("Dashboard (Home Tab)", () => {
     await expect(page).toHaveURL(/\/tickets$/, { timeout: 10_000 });
   });
 
-  // Navigate back to dashboard via Home tab (SPA navigation, like a real user)
-  test("Home tab navigates back from tickets filter", async () => {
-    await page.getByRole("tab", { name: "Home" }).click();
+  // Navigate back to dashboard via Overview tab (SPA navigation, like a real user)
+  test("Overview tab navigates back from tickets filter", async () => {
+    await page.getByRole("tab", { name: "Overview" }).click();
     await expect(page).toHaveURL("/");
   });
 
@@ -120,11 +119,13 @@ test.describe.serial("Dashboard (Home Tab)", () => {
   });
 
   test("tickets page shows content", async () => {
-    await expect(page.getByText("Tickets", { exact: true })).toBeVisible();
+    await expect(
+      page.getByRole("region").getByText("Tickets", { exact: true }),
+    ).toBeVisible();
   });
 
-  test("Home tab navigates back to /", async () => {
-    await page.getByRole("tab", { name: "Home" }).click();
+  test("Overview tab navigates back to /", async () => {
+    await page.getByRole("tab", { name: "Overview" }).click();
     await expect(page).toHaveURL("/");
   });
 
@@ -137,7 +138,7 @@ test.describe.serial("Dashboard (Home Tab)", () => {
     await expect(ticketsTab).toHaveAttribute("aria-selected", "true");
 
     // Navigate back for next test
-    await page.getByRole("tab", { name: "Home" }).click();
+    await page.getByRole("tab", { name: "Overview" }).click();
     await expect(page).toHaveURL("/");
   });
 
@@ -146,7 +147,7 @@ test.describe.serial("Dashboard (Home Tab)", () => {
   test("passes axe accessibility audit after decryption settles", async () => {
     // Ensure we're on the dashboard with decrypted content visible.
     // Use SPA navigation to preserve crypto Worker state.
-    await page.getByRole("tab", { name: "Home" }).click();
+    await page.getByRole("tab", { name: "Overview" }).click();
     await expect(page).toHaveURL("/");
     await expect(page.getByText("Help with housing")).toBeVisible({
       timeout: CRYPTO_TIMEOUT,
@@ -155,11 +156,6 @@ test.describe.serial("Dashboard (Home Tab)", () => {
     // Legacy mode avoids axe-core's cross-context injection which requires
     // pages created via browser.newContext(). The serial suite uses
     // browser.newPage() to inherit project-level config (viewport, baseURL).
-    // Exclude Konsta UI internal a11y issues (unlabeled searchbar button,
-    // toolbar outside landmark) tracked separately from dashboard tests.
-    const results = await new AxeBuilder({ page })
-      .setLegacyMode(true)
-      .analyze();
-    expect(results.violations).toEqual([]);
+    await auditA11y(page);
   });
 });

@@ -23,6 +23,8 @@ const mockResolutionTrends = vi.fn();
 const mockPriorityBreakdown = vi.fn();
 const mockActiveCount = vi.fn();
 
+// Constraint: must expose the same surface as createReportsService (ticket-service.ts).
+// If a new method is added to the real service, add it here or the mock silently diverges.
 vi.mock("../tickets/reports-service.js", () => ({
   createReportsService: () => ({
     queueStats: mockQueueStats,

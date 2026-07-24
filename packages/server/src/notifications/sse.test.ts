@@ -196,4 +196,164 @@ describe("SseService", () => {
 
     c2();
   });
+
+  // --- Uncovered branches ---
+
+  it("evicts oldest connection when MAX_CONNECTIONS_PER_USER is reached", () => {
+    const svc = createSseService();
+    const { res: res1 } = mockResponse();
+    const { res: res2 } = mockResponse();
+    const { res: res3 } = mockResponse();
+    const { res: res4, written: w4 } = mockResponse();
+
+    // Connect 3 times (the per-user limit)
+    svc.connect(res1 as never, "user-1", "org-1");
+    svc.connect(res2 as never, "user-1", "org-1");
+    svc.connect(res3 as never, "user-1", "org-1");
+    expect(svc.connectionCount()).toBe(3);
+
+    // 4th connection evicts the oldest (res1)
+    const c4 = svc.connect(res4 as never, "user-1", "org-1");
+    expect(res1.end).toHaveBeenCalled();
+    expect(svc.connectionCount()).toBe(3);
+
+    // The new connection works
+    svc.broadcast("org-1", ["user-1"], TEST_EVENT);
+    const dataLines = w4.filter((w) => w.startsWith("id: "));
+    expect(dataLines).toHaveLength(1);
+
+    c4();
+  });
+
+  it("evicts oldest when already-destroyed connection is in the slot", () => {
+    const svc = createSseService();
+    const { res: res1 } = mockResponse();
+    const { res: res2 } = mockResponse();
+    const { res: res3 } = mockResponse();
+    const { res: res4 } = mockResponse();
+
+    svc.connect(res1 as never, "user-1", "org-1");
+    svc.connect(res2 as never, "user-1", "org-1");
+    svc.connect(res3 as never, "user-1", "org-1");
+
+    // Mark res1 as already destroyed before eviction happens
+    res1.destroyed = true;
+
+    svc.connect(res4 as never, "user-1", "org-1");
+    // end() should NOT be called on an already-destroyed response
+    expect(res1.end).not.toHaveBeenCalled();
+    expect(svc.connectionCount()).toBe(3);
+  });
+
+  it("replay only sends events matching the user's org and userId", () => {
+    const svc = createSseService();
+
+    const { res: r1 } = mockResponse();
+    svc.connect(r1 as never, "user-1", "org-1");
+
+    // Broadcast events for different user/org combos
+    svc.broadcast("org-1", ["user-1"], TEST_EVENT);
+    svc.broadcast("org-1", ["user-2"], TEST_EVENT);
+    svc.broadcast("org-2", ["user-1"], TEST_EVENT);
+
+    // Disconnect
+    svc.closeAll();
+
+    // Reconnect with lastEventId=0 (missed all events)
+    const { res: r2, written: w2 } = mockResponse();
+    const c2 = svc.connect(r2 as never, "user-1", "org-1", 0);
+
+    // Only the first event (org-1 + user-1) should replay
+    const replayed = w2.filter((w) => w.startsWith("id: "));
+    expect(replayed).toHaveLength(1);
+
+    c2();
+  });
+
+  it("broadcast sends to multiple connected clients of the same user", () => {
+    const svc = createSseService();
+    const { res: res1, written: w1 } = mockResponse();
+    const { res: res2, written: w2 } = mockResponse();
+
+    const c1 = svc.connect(res1 as never, "user-1", "org-1");
+    const c2 = svc.connect(res2 as never, "user-1", "org-1");
+
+    svc.broadcast("org-1", ["user-1"], TEST_EVENT);
+
+    const data1 = w1.filter((w) => w.startsWith("id: "));
+    const data2 = w2.filter((w) => w.startsWith("id: "));
+    expect(data1).toHaveLength(1);
+    expect(data2).toHaveLength(1);
+
+    c1();
+    c2();
+  });
+
+  it("heartbeat stops when connection is destroyed", () => {
+    const svc = createSseService();
+    const { res, written } = mockResponse();
+    const cleanup = svc.connect(res as never, "user-1", "org-1");
+
+    // First heartbeat fires
+    vi.advanceTimersByTime(30_000);
+    const heartbeats1 = written.filter((w) => w === ": heartbeat\n\n").length;
+    expect(heartbeats1).toBe(1);
+
+    // Mark connection as destroyed
+    res.destroyed = true;
+
+    // Next heartbeat interval should detect destroyed and clear
+    vi.advanceTimersByTime(30_000);
+    const heartbeats2 = written.filter((w) => w === ": heartbeat\n\n").length;
+    // Should still be 1 (no new heartbeat written)
+    expect(heartbeats2).toBe(1);
+
+    cleanup();
+  });
+
+  it("sendEvent skips destroyed connections during broadcast", () => {
+    const svc = createSseService();
+    const { res, written } = mockResponse();
+    const cleanup = svc.connect(res as never, "user-1", "org-1");
+
+    // Destroy the connection before broadcast
+    res.destroyed = true;
+
+    svc.broadcast("org-1", ["user-1"], TEST_EVENT);
+
+    const dataLines = written.filter((w) => w.startsWith("id: "));
+    expect(dataLines).toHaveLength(0);
+
+    cleanup();
+  });
+
+  it("cleanup is idempotent when called twice", () => {
+    const svc = createSseService();
+    const { res } = mockResponse();
+    const cleanup = svc.connect(res as never, "user-1", "org-1");
+
+    cleanup();
+    expect(svc.connectionCount()).toBe(0);
+
+    // Second call should not throw
+    cleanup();
+    expect(svc.connectionCount()).toBe(0);
+  });
+
+  it("connect without lastEventId does not replay events", () => {
+    const svc = createSseService();
+    const { res: r1 } = mockResponse();
+    svc.connect(r1 as never, "user-1", "org-1");
+    svc.broadcast("org-1", ["user-1"], TEST_EVENT);
+    svc.closeAll();
+
+    // Reconnect without lastEventId
+    const { res: r2, written: w2 } = mockResponse();
+    const c2 = svc.connect(r2 as never, "user-1", "org-1");
+
+    const replayed = w2.filter((w) => w.startsWith("id: "));
+    expect(replayed).toHaveLength(0);
+
+    c2();
+  });
 });

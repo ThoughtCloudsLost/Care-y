@@ -10,29 +10,37 @@
   containers (split view), depending on the component tree ancestor.
 -->
 <script lang="ts">
-  import { getDraft, setDraft } from "$lib/tickets/draft-store.svelte.js";
-  import { Link } from "konsta/svelte";
+  import {
+    getDraftForMode,
+    setDraftForMode,
+    clearDraftForMode,
+  } from "$lib/tickets/draft-store.svelte.js";
+  import { Link, Button } from "konsta/svelte";
   import {
     ChevronLeft,
     MessageSquareText,
     Timeline,
     BookUser,
-    X,
+    Maximize2,
     Copy,
     SquareCheckBig,
+    X,
   } from "@lucide/svelte";
+  import BulkActionBar from "$lib/components/BulkActionBar.svelte";
   import * as m from "$lib/paraglide/messages.js";
   import { withTerms } from "$lib/terminology/with-terms.js";
   import {
     getTabbarHiddenCtx,
     getNavbarOverrideCtx,
-    getTabbarOverrideCtx,
   } from "$lib/shell/context.js";
   import { useScrollDirection } from "$lib/shell/use-scroll-direction.svelte.js";
-  import type { ViewToggleConfig } from "$lib/shell/types.js";
+  import { layoutMode } from "$lib/stores/layout-mode.svelte";
+  import SplitView from "$lib/shell/SplitView.svelte";
   import SubNavbarFilterLayout from "$lib/shell/SubNavbarFilterLayout.svelte";
+  import IconTabToggle from "$lib/components/shared/IconTabToggle.svelte";
   import TicketDetail from "$lib/components/tickets/TicketDetail.svelte";
-  import PriorityBadge from "$lib/components/PriorityBadge.svelte";
+  import CaseHeader from "$lib/components/tickets/CaseHeader.svelte";
+  import TicketPanelContent from "$lib/components/tickets/TicketPanelContent.svelte";
   import type { ContextMenuEvent } from "$lib/components/tickets/context-menu-actions.js";
   import { createLightbox } from "$lib/composables/ticket-detail/create-lightbox.svelte.js";
   import { createContextMenu } from "$lib/composables/ticket-detail/create-context-menu.svelte.js";
@@ -49,16 +57,17 @@
   } from "$lib/composables/ticket-detail/create-overlay-state.svelte.js";
   import { copyToClipboard } from "$lib/composables/ticket-detail/clipboard-copy.js";
   import {
-    insertMentionAtCursor,
     searchFollowUps,
     lookupCachedFollowUpCount,
   } from "$lib/tickets/ticket-detail-utils.js";
-  import ShellMessagebar from "$lib/shell/ShellMessagebar.svelte";
+  import TicketCompose from "$lib/components/tickets/TicketCompose.svelte";
+  import type { TicketComposeHandle } from "$lib/components/tickets/ticket-compose-types.js";
   import type { TicketAction } from "$lib/tickets/types.js";
   import type { CallAction } from "$lib/components/tickets/CallOptionsContent.svelte";
   import TicketDetailOverlays from "$lib/components/tickets/TicketDetailOverlays.svelte";
   import { createQuery, useQueryClient } from "@tanstack/svelte-query";
   import { ticketKeys, ticketsKeys, consultantKeys } from "$lib/query/keys";
+  import { invalidateReadState } from "$lib/query/invalidate-read-state.js";
   import { trpc } from "$lib/trpc/index.js";
   import {
     getCryptoBridge,
@@ -82,6 +91,7 @@
   import { createSmsSend } from "$lib/composables/ticket-detail/create-sms-send.svelte.js";
   import { createCallDispatch } from "$lib/composables/ticket-detail/create-call-dispatch.svelte.js";
   import { haptic } from "$lib/utils/haptic.js";
+  import { gestureMount } from "$lib/utils/gesture-focus.js";
   import {
     registerSearchProvider,
     setPromotedOverride,
@@ -91,13 +101,19 @@
   import { fuzzySearch } from "$lib/search/fuzzy.js";
   import { createSearchOverlay } from "$lib/search/search-overlay.svelte.js";
   import SearchNavigator from "$lib/components/search/SearchNavigator.svelte";
+  import { untrack } from "svelte";
+  import { recentViews } from "$lib/search/recent-views.js";
 
   let {
     ticketId,
     onback,
+    onexpand,
+    desktopFull = false,
   }: {
     ticketId: string;
     onback: () => void;
+    onexpand?: () => void;
+    desktopFull?: boolean;
   } = $props();
 
   // ── Composable initialization ──
@@ -112,37 +128,32 @@
 
   const tabbarHidden = getTabbarHiddenCtx();
   const navbarCtx = getNavbarOverrideCtx();
-  const tabbarOverride = getTabbarOverrideCtx();
 
-  // Draft compose state (shared with ShellMessagebar + TicketDetail).
-  // In-memory SvelteMap keyed by ticketId survives SPA navigations.
-  // No disk persistence (sessionStorage) to avoid plaintext PII on disk.
-  // Writable $derived: re-evaluates from store when ticketId changes,
-  // user writes from textarea bind override until next ticketId change.
-  let draftText = $derived(getDraft(ticketId));
-  let cursorPosition = $state(0);
+  // Shared compose bar. TicketCompose owns mode, drafts, and mentions;
+  // this host drives mode changes through its exported methods.
+  let compose = $state<TicketComposeHandle>();
 
-  // Sync edits back to the store.
+  // Auto-activate when only one client-reply method exists, so the
+  // volunteer can start typing immediately without tapping +.
+  // Runs once per ticket (tracks which ticketId was auto-activated).
+  let autoActivatedForTicket = $state("");
+
   $effect(() => {
-    setDraft(ticketId, draftText);
+    if (!ticket || !compose || autoActivatedForTicket === ticketId) return;
+    autoActivatedForTicket = ticketId;
+    if (!ticket.hasPhone) {
+      compose.activateReply();
+    }
   });
 
-  // Warn before page refresh/tab close when a draft exists.
+  // Recently-viewed history: a detail open counts as a view. Covers the
+  // full-page route and the desktop split pane (both mount this component).
+  // record() mutates + reads a SvelteMap internally (applyCaps -> sorted),
+  // so untrack prevents the effect from subscribing to the map and looping.
   $effect(() => {
-    if (!draftText.trim()) return;
-    function onBeforeUnload(e: BeforeUnloadEvent): void {
-      e.preventDefault();
-    }
-    window.addEventListener("beforeunload", onBeforeUnload);
-    return () => window.removeEventListener("beforeunload", onBeforeUnload);
+    const id = ticketId;
+    untrack(() => recentViews.record("ticket", id));
   });
-
-  function handleInput(e: Event): void {
-    const target = e.target;
-    if (target instanceof HTMLTextAreaElement) {
-      cursorPosition = target.selectionStart;
-    }
-  }
 
   // Ticket data for navbar display.
   const ticketQuery = createQuery(() => ({
@@ -188,7 +199,17 @@
     getTicketKeyWrap: () => ticket?.keyWrap ?? undefined,
     getCursorData: () => readCursorQuery.data ?? undefined,
     cryptoBridge,
-    mutate: async (args) => ticketRouter.updateReadCursor.mutate(args),
+    mutate: async (args) => {
+      const result = await ticketRouter.updateReadCursor.mutate(args);
+      // The flush stored a new cursor blob, so this ticket's older
+      // ciphertext versions in the decrypt cache are dead weight now.
+      // Evict them here, outside render reads, so the refetch below
+      // decrypts into a fresh entry with no mutation-during-derived
+      // hazard and cursor entries stop accumulating across reads.
+      ticketDecryptCache.deleteByPrefix(`cursor:${ticketId}:`);
+      invalidateReadState(queryClient);
+      return result;
+    },
   });
 
   // --- Action sheet data ---
@@ -214,37 +235,32 @@
     invert: true,
   });
 
-  // Tabbar: hidden normally, replaced with select toolbar when select mode is active.
+  // Tabbar: hidden (the compose bar occupies the bottom area).
   $effect(() => {
-    if (selectMode.active) {
-      tabbarHidden.current = false;
-      tabbarOverride.current = {
-        left: selectLeft,
-        middle: selectMiddle,
-        right: selectRight,
-        ariaLabel: m.ticket_select_mode(),
-      };
-    } else {
-      tabbarOverride.current = undefined;
-      tabbarHidden.current = true;
-    }
+    tabbarHidden.current = true;
     return () => {
-      tabbarOverride.current = undefined;
       tabbarHidden.current = false;
     };
   });
 
   // Override AppShell Navbar with ticket-specific content + subnavbar.
+  // In desktopFull mode, the subnavbar renders inline in the right pane
+  // and the panel content is inline on the left, so we skip both.
   $effect(() => {
-    navbarCtx.current = {
-      left: navLeft,
-      title: navTitle,
-      right: navRight,
-      subnavbar: ticketSubnavbar,
-      subnavbarHidden: () =>
-        // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- $state/$derived values read lazily inside callback
-        chatScrollReady && scrollDir.hidden && !overlay.active,
-    };
+    navbarCtx.current = desktopFull
+      ? {
+          left: navLeft,
+          title: navTitle,
+        }
+      : {
+          left: navLeft,
+          title: navTitle,
+          right: navRight,
+          subnavbar: ticketSubnavbar,
+          subnavbarHidden: () =>
+            // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- $state/$derived values read lazily inside callback
+            chatScrollReady && scrollDir.hidden && !overlay.active,
+        };
     return () => {
       navbarCtx.current = undefined;
     };
@@ -258,7 +274,6 @@
   let composeActionsOpen = $state(false);
   let composeActionsAnchor = $state<HTMLElement | undefined>();
   let timelineActive = $state(false);
-  let smsSheetOpen = $state(false);
 
   // --- Exposure hint (composable) ---
 
@@ -310,16 +325,12 @@
 
   // --- SubNavbar config objects ---
 
-  const detailViewConfig: ViewToggleConfig = $derived({
-    mode: timelineActive ? ("grid" as const) : ("list" as const),
-    onchange: (mode: "list" | "grid") => {
-      timelineActive = mode === "grid";
-    },
-    listLabel: m.ticket_action_messages(),
-    gridLabel: m.ticket_action_timeline(),
-    listIcon: MessageSquareText,
-    gridIcon: Timeline,
-  });
+  const detailViewTabs = [
+    { id: "chat", label: m.ticket_action_messages(), icon: MessageSquareText },
+    { id: "timeline", label: m.ticket_action_timeline(), icon: Timeline },
+  ] as const;
+
+  const detailViewActiveTab = $derived(timelineActive ? "timeline" : "chat");
 
   // --- Select mode (composable) ---
 
@@ -343,9 +354,9 @@
   const messenger = createSendMessage<FollowUpList[number]>({
     getTicketId: () => ticketId,
     getCurrentUserId: () => currentUserId ?? null,
-    getDraftText: () => draftText,
+    getDraftText: () => getDraftForMode(ticketId, "reply"),
     setDraftText: (v: string) => {
-      draftText = v;
+      setDraftForMode(ticketId, "reply", v);
     },
     cryptoBridge,
     followUpCache,
@@ -375,6 +386,7 @@
         callDurationSeconds: null,
         keyGeneration: null,
         keyWrap: null,
+        eventParams: null,
       }) satisfies FollowUpList[number],
     createFollowUpMutate: async (args) =>
       ticketRouter.createFollowUp.mutate(args),
@@ -389,10 +401,10 @@
     createFollowUpMutate: async (args) =>
       ticketRouter.createFollowUp.mutate(args),
     onSuccess: () => {
-      smsSheetOpen = false;
+      clearDraftForMode(ticketId, "sms");
+      compose?.reset();
     },
   });
-  const smsSending = $derived(sms.sending);
 
   // --- Call dispatch (composable) ---
 
@@ -450,11 +462,14 @@
 
   let hasMoreMessages = $state(false);
   let loadOlderPage = $state<(() => Promise<void>) | undefined>(undefined);
+  let loadedFollowUpCount = $state(0);
 
   const deepSearch = createDeepSearch({
     getOverlayTerm: () => overlay.term,
     getHasMoreMessages: () => hasMoreMessages,
     getLoadOlderPage: () => loadOlderPage,
+    getLoadedCount: () => loadedFollowUpCount,
+    getTotalCount: () => ticket?.followUpCount ?? 0,
   });
 
   $effect(() => {
@@ -519,10 +534,7 @@
     };
   });
 
-  // --- Compose handlers ---
-
-  const handleSend = messenger.handleSend;
-  const sending = $derived(messenger.sending);
+  // --- Compose actions popover ---
 
   function openComposeActions(anchor: HTMLElement): void {
     composeActionsAnchor = anchor;
@@ -530,17 +542,6 @@
   }
   function closeComposeActions(): void {
     composeActionsOpen = false;
-  }
-
-  function handleMentionSelect(_userId: string, displayName: string): void {
-    const result = insertMentionAtCursor(
-      draftText,
-      cursorPosition,
-      displayName,
-    );
-    if (result === null) return;
-    draftText = result.text;
-    cursorPosition = result.cursor;
   }
 
   // --- Action dispatchers ---
@@ -591,16 +592,6 @@
       void callDispatch.executeCall();
     });
   }
-
-  // --- SMS handlers ---
-
-  function handleOpenSmsCompose(): void {
-    exposureHint.show("sms", () => {
-      smsSheetOpen = true;
-    });
-  }
-
-  const handleSmsSend = sms.handleSmsSend;
 
   // --- Delete confirm + note edit (composables) ---
 
@@ -688,7 +679,7 @@
     role="button"
     aria-label={m.ticket_more_actions()}
   >
-    <BookUser size={22} aria-hidden="true" />
+    <BookUser size={24} aria-hidden="true" />
   </Link>
 {/snippet}
 
@@ -710,9 +701,6 @@
           )}
     </span>
   {/if}
-  {#if ticket?.priority}
-    <PriorityBadge priority={ticket.priority} />
-  {/if}
 {/snippet}
 
 {#snippet searchNavigatorRow()}
@@ -728,8 +716,19 @@
       ? () => void deepSearch.trigger()
       : undefined}
     deepSearchStatus={deepSearch.phase}
-    deepSearchSearched={displayFollowUpsForSearch?.length ?? 0}
-    deepSearchTotal={displayFollowUpsForSearch?.length ?? 0}
+    deepSearchSearched={deepSearch.searched}
+    deepSearchTotal={deepSearch.total}
+  />
+{/snippet}
+
+{#snippet detailViewToggle()}
+  <IconTabToggle
+    tabs={detailViewTabs}
+    active={detailViewActiveTab}
+    ariaLabel={m.ticket_action_messages()}
+    onchange={(id) => {
+      timelineActive = id === "timeline";
+    }}
   />
 {/snippet}
 
@@ -737,7 +736,8 @@
   <SubNavbarFilterLayout
     title={decryptedTitle}
     smallTitle
-    view={detailViewConfig}
+    hideTitle
+    headerRight={detailViewToggle}
     stats={detailStats}
     selectLabel={m.ticket_select_mode()}
     onselect={selectMode.active
@@ -745,18 +745,53 @@
       : () => selectMode.enter()}
     filterPills={detailFilters.pills}
     searchNavigator={overlay.active ? searchNavigatorRow : undefined}
-    onsearch={!overlay.active ? () => overlay.enter("") : undefined}
+    bulkActions={selectMode.active ? selectActionsRow : undefined}
+    onsearch={!overlay.active
+      ? () => gestureMount(() => overlay.enter(""))
+      : undefined}
     searchLabel={m.search_inline_trigger()}
+  />
+  <CaseHeader
+    {ticketId}
+    headerActions={layoutMode.isDesktop ? desktopCaseActions : undefined}
   />
 {/snippet}
 
-<div class="ticket-detail-page">
+{#snippet desktopCaseActions()}
+  <Link
+    iconOnly
+    onclick={openPanel}
+    role="button"
+    aria-label={m.ticket_more_actions()}
+  >
+    <BookUser size={24} aria-hidden="true" />
+  </Link>
+  {#if onexpand}
+    <Link
+      iconOnly
+      onclick={onexpand}
+      role="button"
+      aria-label={m.tickets_detail_expand()}
+    >
+      <Maximize2 size={24} aria-hidden="true" />
+    </Link>
+  {/if}
+  {#if !desktopFull}
+    <Link
+      iconOnly
+      onclick={onback}
+      role="button"
+      aria-label={m.tickets_detail_close()}
+    >
+      <X size={24} aria-hidden="true" />
+    </Link>
+  {/if}
+{/snippet}
+
+{#snippet ticketMessages()}
   <TicketDetail
     {ticketId}
     knownFollowUpCount={cachedFollowUpCount}
-    bind:draftText
-    {cursorPosition}
-    onmentionselect={handleMentionSelect}
     onlightbox={(url: string) => lightbox.show(url)}
     oncontextmenu={(e: ContextMenuEvent) => contextMenu.show(e)}
     onopenedit={(
@@ -785,66 +820,124 @@
     onsearchscrollcomplete={overlay.markScrollComplete}
     bind:hasMoreMessages
     bind:loadOlderPage
+    bind:loadedFollowUpCount
   />
-</div>
+{/snippet}
 
-{#if !selectMode.active}
-  <ShellMessagebar
-    bind:value={draftText}
-    onsend={handleSend}
-    onplus={openComposeActions}
-    oninput={handleInput}
-    sendDisabled={!draftText.trim() || sending}
+{#snippet ticketCompose()}
+  <div class="detail-compose">
+    <TicketCompose
+      bind:this={compose}
+      {ticketId}
+      inline={desktopFull || onexpand != null}
+      hidden={selectMode.active}
+      sending={messenger.sending || sms.sending}
+      onsendreply={() => void messenger.handleSend()}
+      onsendsms={(text: string) => void sms.handleSmsSend(text)}
+      onplus={openComposeActions}
+    />
+  </div>
+{/snippet}
+
+{#snippet inlineFilterBar()}
+  <SubNavbarFilterLayout
+    title={decryptedTitle}
+    smallTitle
+    hideTitle
+    headerRight={detailViewToggle}
+    stats={detailStats}
+    selectLabel={m.ticket_select_mode()}
+    onselect={selectMode.active
+      ? () => selectMode.exit()
+      : () => selectMode.enter()}
+    filterPills={detailFilters.pills}
+    searchNavigator={overlay.active ? searchNavigatorRow : undefined}
+    bulkActions={selectMode.active ? selectActionsRow : undefined}
+    onsearch={!overlay.active
+      ? () => gestureMount(() => overlay.enter(""))
+      : undefined}
+    searchLabel={m.search_inline_trigger()}
   />
+{/snippet}
+
+{#if desktopFull}
+  <SplitView>
+    {#snippet left()}
+      <aside class="full-desktop-sidebar">
+        <CaseHeader {ticketId} alwaysExpanded />
+        <TicketPanelContent
+          {ticketId}
+          compact
+          onaction={(action: TicketAction) => panelActions.dispatch(action)}
+          onnotetap={handleNoteTap}
+          onlightbox={handlePanelLightbox}
+        />
+      </aside>
+    {/snippet}
+    {#snippet right()}
+      <div class="full-desktop-main">
+        <div class="full-desktop-filter-bar">
+          {@render inlineFilterBar()}
+        </div>
+        {@render ticketMessages()}
+        {@render ticketCompose()}
+      </div>
+    {/snippet}
+  </SplitView>
+{:else}
+  <div class="ticket-detail-page">
+    {@render ticketMessages()}
+  </div>
+  {@render ticketCompose()}
 {/if}
 
-{#snippet selectLeft()}
-  <Link
-    iconOnly
-    onclick={() => {
-      if (filteredFollowUps) {
-        for (const fu of filteredFollowUps) {
-          selectMode.selectedIds.add(fu.id);
-        }
-      }
-    }}
-    aria-label={m.ticket_select_all()}
-  >
-    <SquareCheckBig size={24} aria-hidden="true" />
-  </Link>
-  <Link
-    iconOnly
-    onclick={() => {
-      if (selectMode.selectedIds.size > 0 && filteredFollowUps) {
-        void selectMode.copySelected(filteredFollowUps);
-      }
-    }}
-    aria-label={m.common_copy()}
-    class={selectMode.selectedIds.size === 0
-      ? "opacity-30 pointer-events-none"
-      : ""}
-    aria-disabled={selectMode.selectedIds.size === 0}
-  >
-    <Copy size={24} aria-hidden="true" />
-  </Link>
-{/snippet}
-
-{#snippet selectMiddle()}
-  <span class="font-semibold text-sm" role="status">
-    {selectMode.selectedIds.size <= 1
+{#snippet selectActionsRow()}
+  <BulkActionBar
+    countLabel={selectMode.selectedIds.size <= 1
       ? m.ticket_copy_one_message()
       : m.ticket_copy_messages({ count: String(selectMode.selectedIds.size) })}
-  </span>
-{/snippet}
-
-{#snippet selectRight()}
-  <Link
-    iconOnly
-    aria-label={m.ticket_select_cancel()}
-    onclick={() => selectMode.exit()}
+    exitLabel={m.ticket_select_cancel()}
+    onexit={() => selectMode.exit()}
+    ariaLabel={m.ticket_select_mode()}
   >
-    <X size={24} aria-hidden="true" />
-  </Link>
+    {#snippet actions()}
+      <Button
+        tonal
+        rounded
+        small
+        inline
+        class="bulk-action-btn"
+        onclick={() => {
+          if (filteredFollowUps) {
+            for (const fu of filteredFollowUps) {
+              selectMode.selectedIds.add(fu.id);
+            }
+          }
+        }}
+      >
+        <SquareCheckBig size={16} aria-hidden="true" />
+        {m.ticket_select_all()}
+      </Button>
+      <Button
+        tonal
+        rounded
+        small
+        inline
+        class="bulk-action-btn {selectMode.selectedIds.size === 0
+          ? 'opacity-30 pointer-events-none'
+          : ''}"
+        onclick={() => {
+          if (selectMode.selectedIds.size > 0 && filteredFollowUps) {
+            void selectMode.copySelected(filteredFollowUps);
+          }
+        }}
+        aria-disabled={selectMode.selectedIds.size === 0}
+      >
+        <Copy size={16} aria-hidden="true" />
+        {m.common_copy()}
+      </Button>
+    {/snippet}
+  </BulkActionBar>
 {/snippet}
 
 <TicketDetailOverlays
@@ -855,9 +948,7 @@
   {callSheetOpen}
   {composeActionsOpen}
   {composeActionsAnchor}
-  {smsSheetOpen}
   {hasVerifiedPhone}
-  {smsSending}
   currentAssigneeId={ticket?.assignedTo ?? null}
   {deleteConfirm}
   {noteEdit}
@@ -892,13 +983,13 @@
   oncallaction={handleCallAction}
   oncalldismiss={closeCallSheet}
   oncomposedismiss={closeComposeActions}
-  ontextclient={handleOpenSmsCompose}
-  onsmsdismiss={() => {
-    smsSheetOpen = false;
-  }}
-  onsmssend={handleSmsSend}
+  onreply={() => compose?.activateReply()}
+  ontextclient={ticket?.hasPhone === true
+    ? () => exposureHint.show("sms", () => compose?.activateSms())
+    : undefined}
   ondraftset={(body: string) => {
-    draftText = body;
+    setDraftForMode(ticketId, "reply", body);
+    compose?.activateReply();
   }}
 />
 
@@ -908,5 +999,40 @@
     flex-direction: column;
     flex: 1;
     min-height: 0;
+  }
+
+  .detail-compose {
+    display: contents;
+  }
+
+  .full-desktop-sidebar {
+    height: 100%;
+    overflow-y: auto;
+    overflow-x: hidden;
+  }
+
+  .full-desktop-main {
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+  }
+
+  .full-desktop-filter-bar {
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    backdrop-filter: saturate(180%) blur(20px);
+    -webkit-backdrop-filter: saturate(180%) blur(20px);
+    background: color-mix(in srgb, var(--paper) 80%, transparent);
+    border-bottom: 1px solid var(--hair, var(--divider));
+  }
+
+  @media (prefers-contrast: more) {
+    .full-desktop-filter-bar {
+      backdrop-filter: none !important;
+      -webkit-backdrop-filter: none !important;
+      background: Canvas !important;
+    }
   }
 </style>

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import type { ReactionSummary } from "@care-y/shared";
+import { ticketSortFieldSchema, type ReactionSummary } from "@care-y/shared";
 import {
   isFilterStatus,
   isSortField,
@@ -11,6 +11,10 @@ import {
   buildDateRangeLabel,
   buildFilterSummary,
   buildAssigneeOptions,
+  resolveEmptyKind,
+  showCaughtUpLine,
+  resolveGridColumns,
+  GRID_CARD_MIN_WIDTH,
   VALID_STATUSES,
   SORT_FIELDS,
 } from "./ticket-list-utils.js";
@@ -47,8 +51,9 @@ describe("isSortField", () => {
     },
   );
 
-  it("has 4 sort fields", () => {
-    expect(SORT_FIELDS).toHaveLength(4);
+  it("derives the sort field list from the shared schema", () => {
+    expect(SORT_FIELDS).toEqual(ticketSortFieldSchema.options);
+    expect(SORT_FIELDS.length).toBeGreaterThan(0);
   });
 });
 
@@ -160,6 +165,57 @@ describe("matchTitles", () => {
 
   it("returns empty array for empty entries", () => {
     expect(matchTitles([], "test", mockFuzzy)).toEqual([]);
+  });
+
+  it("matches against queueName", () => {
+    const fuzzy = (haystack: readonly string[], _q: string) =>
+      haystack
+        .map((h, i) => ({ index: i, score: i }))
+        .filter((_, i) => haystack[i]?.toLowerCase().includes("housing"));
+    const entries = [
+      {
+        id: "t1",
+        title: "Intake call",
+        clientAlias: "Alice",
+        queueName: "Housing Support",
+      },
+      { id: "t2", title: "Other ticket", clientAlias: "Bob", queueName: null },
+    ];
+    const result = matchTitles(entries, "housing", fuzzy);
+    expect(result).toEqual(["t1"]);
+  });
+
+  it("matches against assignedName", () => {
+    const fuzzy = (haystack: readonly string[], _q: string) =>
+      haystack
+        .map((h, i) => ({ index: i, score: i }))
+        .filter((_, i) => haystack[i]?.toLowerCase().includes("maria"));
+    const entries = [
+      {
+        id: "t1",
+        title: "Follow up",
+        clientAlias: "Bob",
+        assignedName: "Maria",
+      },
+      {
+        id: "t2",
+        title: "Other ticket",
+        clientAlias: "Carol",
+        assignedName: null,
+      },
+    ];
+    const result = matchTitles(entries, "maria", fuzzy);
+    expect(result).toEqual(["t1"]);
+  });
+
+  it("treats missing queueName and assignedName as empty strings", () => {
+    const fuzzy = (haystack: readonly string[], _q: string) =>
+      haystack
+        .map((h, i) => ({ index: i, score: i }))
+        .filter((_, i) => haystack[i]?.toLowerCase().includes("test"));
+    const entries = [{ id: "t1", title: "Test ticket", clientAlias: "Alice" }];
+    const result = matchTitles(entries, "test", fuzzy);
+    expect(result).toEqual(["t1"]);
   });
 });
 
@@ -278,9 +334,17 @@ describe("buildDateRangeLabel", () => {
 
 describe("buildFilterSummary", () => {
   it("returns 'No filters' when nothing active", () => {
-    expect(buildFilterSummary(new Set(), new Set(), 0, undefined, false)).toBe(
-      "No filters",
-    );
+    expect(
+      buildFilterSummary(
+        new Set(),
+        new Set(),
+        0,
+        undefined,
+        false,
+        false,
+        false,
+      ),
+    ).toBe("No filters");
   });
 
   it("includes statuses", () => {
@@ -291,47 +355,139 @@ describe("buildFilterSummary", () => {
         0,
         undefined,
         false,
+        false,
+        false,
       ),
     ).toBe("new, active");
   });
 
   it("includes priorities", () => {
     expect(
-      buildFilterSummary(new Set(), new Set(["high"]), 0, undefined, false),
+      buildFilterSummary(
+        new Set(),
+        new Set(["high"]),
+        0,
+        undefined,
+        false,
+        false,
+        false,
+      ),
     ).toBe("high");
   });
 
   it("includes queue count with pluralization", () => {
-    expect(buildFilterSummary(new Set(), new Set(), 1, undefined, false)).toBe(
-      "1 queue",
-    );
-    expect(buildFilterSummary(new Set(), new Set(), 3, undefined, false)).toBe(
-      "3 queues",
-    );
+    expect(
+      buildFilterSummary(
+        new Set(),
+        new Set(),
+        1,
+        undefined,
+        false,
+        false,
+        false,
+      ),
+    ).toBe("1 queue");
+    expect(
+      buildFilterSummary(
+        new Set(),
+        new Set(),
+        3,
+        undefined,
+        false,
+        false,
+        false,
+      ),
+    ).toBe("3 queues");
   });
 
   it("includes assignee", () => {
-    expect(buildFilterSummary(new Set(), new Set(), 0, "user-1", false)).toBe(
-      "assigned",
-    );
+    expect(
+      buildFilterSummary(
+        new Set(),
+        new Set(),
+        0,
+        "user-1",
+        false,
+        false,
+        false,
+      ),
+    ).toBe("assigned");
   });
 
   it("does not include assignee when null", () => {
-    expect(buildFilterSummary(new Set(), new Set(), 0, null, false)).toBe(
-      "No filters",
-    );
+    expect(
+      buildFilterSummary(new Set(), new Set(), 0, null, false, false, false),
+    ).toBe("No filters");
   });
 
   it("includes date range", () => {
-    expect(buildFilterSummary(new Set(), new Set(), 0, undefined, true)).toBe(
-      "date range",
-    );
+    expect(
+      buildFilterSummary(
+        new Set(),
+        new Set(),
+        0,
+        undefined,
+        true,
+        false,
+        false,
+      ),
+    ).toBe("date range");
   });
 
   it("joins multiple parts", () => {
     expect(
-      buildFilterSummary(new Set(["new"]), new Set(["high"]), 2, "u1", true),
+      buildFilterSummary(
+        new Set(["new"]),
+        new Set(["high"]),
+        2,
+        "u1",
+        true,
+        false,
+        false,
+      ),
     ).toBe("new, high, 2 queues, assigned, date range");
+  });
+
+  it("includes Unread when unreadOnly is true", () => {
+    expect(
+      buildFilterSummary(
+        new Set(),
+        new Set(),
+        0,
+        undefined,
+        false,
+        true,
+        false,
+      ),
+    ).toBe("Unread");
+  });
+
+  it("includes Needs attention when needsAttentionOnly is true", () => {
+    expect(
+      buildFilterSummary(
+        new Set(),
+        new Set(),
+        0,
+        undefined,
+        false,
+        false,
+        true,
+      ),
+    ).toBe("Needs attention");
+  });
+
+  it("joins toggle labels with other parts", () => {
+    expect(
+      buildFilterSummary(
+        new Set(["new"]),
+        new Set(),
+        0,
+        undefined,
+        false,
+        true,
+        true,
+      ),
+    ).toBe("new, Unread, Needs attention");
   });
 });
 
@@ -368,5 +524,122 @@ describe("buildAssigneeOptions", () => {
     const result = buildAssigneeOptions("user-1", undefined, labels);
     expect(result[0]?.label).toBe("Me (0)");
     expect(result[1]?.label).toBe("Unassigned (0)");
+  });
+});
+
+describe("resolveEmptyKind", () => {
+  const base = {
+    searchActive: false,
+    unreadFilterOn: false,
+    globalCaughtUp: false,
+    ticketCount: 0,
+    activeFilterCount: 0,
+  };
+
+  it("returns 'search' when the search overlay is active", () => {
+    expect(resolveEmptyKind({ ...base, searchActive: true })).toBe("search");
+  });
+
+  it("search wins over every other branch", () => {
+    expect(
+      resolveEmptyKind({
+        ...base,
+        searchActive: true,
+        unreadFilterOn: true,
+        globalCaughtUp: true,
+      }),
+    ).toBe("search");
+  });
+
+  it("returns 'caught-up' when the unread filter is on and global unread is zero", () => {
+    expect(
+      resolveEmptyKind({ ...base, unreadFilterOn: true, globalCaughtUp: true }),
+    ).toBe("caught-up");
+  });
+
+  it("returns 'filtered' when the unread filter is on but the sweep has not settled", () => {
+    expect(
+      resolveEmptyKind({
+        ...base,
+        unreadFilterOn: true,
+        globalCaughtUp: false,
+      }),
+    ).toBe("filtered");
+  });
+
+  it("returns 'truly-empty' with zero tickets and no active filters", () => {
+    expect(resolveEmptyKind(base)).toBe("truly-empty");
+  });
+
+  it("returns 'filtered' with zero rendered rows but active filters", () => {
+    expect(resolveEmptyKind({ ...base, activeFilterCount: 2 })).toBe(
+      "filtered",
+    );
+  });
+
+  it("returns 'filtered' when tickets exist but none render", () => {
+    expect(resolveEmptyKind({ ...base, ticketCount: 5 })).toBe("filtered");
+  });
+
+  it("returns 'filtered', never 'truly-empty', while the needs-attention filter is on", () => {
+    expect(resolveEmptyKind({ ...base, needsAttentionOn: true })).toBe(
+      "filtered",
+    );
+  });
+
+  it("never claims 'caught-up' from the needs-attention filter alone", () => {
+    expect(
+      resolveEmptyKind({
+        ...base,
+        needsAttentionOn: true,
+        globalCaughtUp: true,
+      }),
+    ).toBe("filtered");
+  });
+});
+
+describe("showCaughtUpLine", () => {
+  const base = {
+    sortOn: true,
+    globalCaughtUp: true,
+    searchActive: false,
+    listCount: 3,
+  };
+
+  it("shows above a non-empty list when sort is on and global unread is zero", () => {
+    expect(showCaughtUpLine(base)).toBe(true);
+  });
+
+  it("hides when the sort toggle is off", () => {
+    expect(showCaughtUpLine({ ...base, sortOn: false })).toBe(false);
+  });
+
+  it("hides until the sweep settles at zero", () => {
+    expect(showCaughtUpLine({ ...base, globalCaughtUp: false })).toBe(false);
+  });
+
+  it("hides while searching", () => {
+    expect(showCaughtUpLine({ ...base, searchActive: true })).toBe(false);
+  });
+
+  it("hides on an empty list (the full empty state owns that)", () => {
+    expect(showCaughtUpLine({ ...base, listCount: 0 })).toBe(false);
+  });
+});
+
+describe("resolveGridColumns", () => {
+  it("returns 2 before the container has been measured (width 0)", () => {
+    expect(resolveGridColumns(0)).toBe(2);
+  });
+
+  it("never collapses below 2 columns at phone widths", () => {
+    expect(resolveGridColumns(390)).toBe(2);
+    expect(resolveGridColumns(GRID_CARD_MIN_WIDTH * 2 - 1)).toBe(2);
+  });
+
+  it("grows by whole card widths past the 2 column floor", () => {
+    expect(resolveGridColumns(GRID_CARD_MIN_WIDTH * 2)).toBe(2);
+    expect(resolveGridColumns(GRID_CARD_MIN_WIDTH * 3)).toBe(3);
+    expect(resolveGridColumns(1280)).toBe(4);
   });
 });

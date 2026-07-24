@@ -70,17 +70,24 @@ export const test = base.extend({
 
 export { expect };
 
+// V8 JS coverage is Chromium-only. On firefox/webkit page.coverage is
+// an object whose methods throw at call time, so a null/typeof check
+// does not protect the call; gate on the engine name instead (the same
+// signal the extended fixture above uses).
+function isChromium(page: Page): boolean {
+  return page.context().browser()?.browserType().name() === "chromium";
+}
+
 export async function startCoverage(page: Page): Promise<void> {
-  if (typeof page.coverage.startJSCoverage === "function") {
-    await page.coverage.startJSCoverage({ resetOnNavigation: false });
-  }
+  if (!isChromium(page)) return;
+  await page.coverage.startJSCoverage({ resetOnNavigation: false });
 }
 
 export async function stopAndWriteCoverage(
   page: Page | undefined,
   label: string,
 ): Promise<void> {
-  if (!page || typeof page.coverage.stopJSCoverage !== "function") return;
+  if (page === undefined || !isChromium(page)) return;
   const coverage = await page.coverage.stopJSCoverage();
   await writeCoverage(coverage, label);
 }

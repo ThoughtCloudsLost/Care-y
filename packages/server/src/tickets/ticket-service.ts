@@ -15,8 +15,11 @@ import { createPhoneRepository } from "../telephony/models/phone-repo.js";
 import { createClientRepository } from "../telephony/models/client-repo.js";
 import type {
   RecentFollowUpsInput,
+  ListReadStateInput,
+  SweepReadStateInput,
   TicketStatus,
   TicketPriority,
+  TicketSortField,
 } from "@care-y/shared";
 import type { TicketAccessChecker } from "./access.js";
 import {
@@ -27,7 +30,10 @@ import {
   TicketError,
   MergeError,
 } from "../errors.js";
+import type { FieldEncryptor } from "../crypto/field-encryptor.js";
+import { sanitizeLike, maskPhone } from "../utils/sql.js";
 import { createDependencyService } from "./dependency-service.js";
+import { createReadCursorService } from "./read-cursor-service.js";
 import { ErrorCode } from "@care-y/shared";
 import { encode } from "@care-y/crypto";
 
@@ -48,6 +54,7 @@ export interface TicketRecord {
 /** Enriched ticket with joined metadata for list/detail views. */
 export interface TicketListRecord extends TicketRecord {
   readonly clientAlias: string;
+  readonly hasPhone: boolean;
   readonly encryptedQueueName: Buffer;
   readonly queueSortOrder: number;
   readonly lastActivityAt: Date | null;
@@ -78,6 +85,46 @@ export interface FollowUpPreview {
   readonly hasImage: boolean;
   readonly hasFile: boolean;
   readonly noteTypeId: string | null;
+  readonly eventParams: Record<string, unknown> | null;
+}
+
+/**
+ * Read state for one ticket in a list window: the user's opaque cursor
+ * ciphertext (null when the detail view never created a row) plus recent
+ * non-system follow-up timestamps. The client decrypts the cursor and
+ * counts newer timestamps; the server never learns read state.
+ */
+export interface TicketReadState {
+  readonly encryptedReadCursor: Buffer | null;
+  readonly followUpCreatedAt: Date[];
+}
+
+/**
+ * Newest non-system follow-up timestamps returned per ticket by
+ * listReadState. Bounds the payload for a 50-ticket window; client-side
+ * unread counts cap at this window size by design.
+ */
+const READ_STATE_TIMESTAMPS_PER_TICKET = 20;
+
+/**
+ * One cursor row in the global read-state sweep: the opaque cursor
+ * ciphertext (dummies included; the client AEAD-fails those to
+ * not-unread), the newest non-system activity time (null when only
+ * system events exist), and the user's key wrap at the ticket's current
+ * generation. The wrap rides along because swept tickets may not be in
+ * the loaded list window, and without it the client cannot decrypt the
+ * cursor at all.
+ */
+export interface SweepReadStateEntry {
+  readonly ticketId: string;
+  readonly encryptedReadCursor: Buffer;
+  readonly latestActivityAt: Date | null;
+  readonly keyWrap: TicketKeyWrap | null;
+}
+
+export interface SweepReadStateResult {
+  readonly items: SweepReadStateEntry[];
+  readonly nextCursor: string | null;
 }
 
 export interface CreateTicketKeyWrap {
@@ -107,7 +154,6 @@ export interface UpdateTicketInput {
   readonly onHold?: boolean;
 }
 
-export type TicketSortField = "date" | "priority" | "last_activity" | "queue";
 export type TicketSortDirection = "asc" | "desc";
 
 export interface TicketListOpts {
@@ -146,7 +192,22 @@ export interface TicketService {
     userId: string,
     input: RecentFollowUpsInput,
   ): Promise<Record<string, FollowUpPreview[]>>;
+  listReadState(
+    userId: string,
+    input: ListReadStateInput,
+  ): Promise<Record<string, TicketReadState>>;
+  sweepReadState(
+    userId: string,
+    input: SweepReadStateInput,
+  ): Promise<SweepReadStateResult>;
   counts(userId: string): Promise<TicketCounts>;
+  searchClients(query: string, limit: number): Promise<ClientSearchResult[]>;
+}
+
+export interface ClientSearchResult {
+  readonly id: string;
+  readonly alias: string;
+  readonly maskedPhone: string;
 }
 
 export interface TicketCounts {
@@ -181,6 +242,7 @@ interface BaseTicketRow {
 
 interface EnrichedTicketRow extends BaseTicketRow {
   client_alias: string;
+  has_phone: boolean | 0 | 1;
   encrypted_queue_name: Buffer;
   queue_sort_order: number;
   last_activity_at: Date | null;
@@ -208,6 +270,7 @@ function toListRecord(row: EnrichedTicketRow): TicketListRecord {
   return {
     ...toRecord(row),
     clientAlias: row.client_alias,
+    hasPhone: Boolean(row.has_phone),
     encryptedQueueName: row.encrypted_queue_name,
     queueSortOrder: row.queue_sort_order,
     lastActivityAt: row.last_activity_at,
@@ -251,6 +314,7 @@ export interface PendingClient {
 
 export interface TicketServiceDeps {
   readonly pendingClients?: Map<string, PendingClient>;
+  readonly fieldEncryptor?: FieldEncryptor;
 }
 
 export function createTicketService(
@@ -260,11 +324,13 @@ export function createTicketService(
   deps?: TicketServiceDeps,
 ): TicketService {
   const depService = createDependencyService(db);
+  const readCursors = createReadCursorService(db, access);
 
   async function createSystemFollowUp(
     trxOrDb: Kysely<TenantDatabase> | Transaction<TenantDatabase>,
     ticketId: string,
     type: string,
+    eventParams?: Record<string, unknown>,
   ): Promise<void> {
     await trxOrDb
       .insertInto("followups")
@@ -273,6 +339,7 @@ export function createTicketService(
         source: "system",
         type,
         encrypted_content: Buffer.alloc(0),
+        event_params: eventParams ?? null,
       })
       .execute();
   }
@@ -396,7 +463,7 @@ export function createTicketService(
             .returningAll()
             .executeTakeFirstOrThrow();
 
-          await createSystemFollowUp(trx, existing.id, "status_change");
+          await createSystemFollowUp(trx, existing.id, "status_opened");
           ticket = toRecord(reopened);
         } else {
           // No existing ticket: create new under the client-minted id
@@ -451,6 +518,7 @@ export function createTicketService(
         .selectAll("t")
         .select(["tkw.ephemeral_point", "tkw.nonce", "tkw.wrapped_key"])
         .select("c.alias as client_alias")
+        .select((eb) => eb("c.phone_id", "is not", null).as("has_phone"))
         .select("q.encrypted_name as encrypted_queue_name")
         .select("q.sort_order as queue_sort_order")
         .select("u.encrypted_display_name as assigned_display_name")
@@ -501,6 +569,7 @@ export function createTicketService(
         .selectAll("t")
         .select(["tkw.ephemeral_point", "tkw.nonce", "tkw.wrapped_key"])
         .select("c.alias as client_alias")
+        .select((eb) => eb("c.phone_id", "is not", null).as("has_phone"))
         .select("q.encrypted_name as encrypted_queue_name")
         .select("q.sort_order as queue_sort_order")
         .select("u.encrypted_display_name as assigned_display_name")
@@ -549,6 +618,11 @@ export function createTicketService(
       // microsecond precision (JS Date truncates to milliseconds).
 
       const gt = sortDirection === "asc" ? (">" as const) : ("<" as const);
+
+      // The id tie-break always compares with ">" regardless of direction:
+      // every ORDER BY below pins t.id ASC, so the cursor filter must walk
+      // ids ascending within equal-key groups. Flipping it with the sort
+      // direction makes descending pages skip and repeat rows on ties.
 
       if (opts.cursor !== undefined) {
         const cursorId = opts.cursor;
@@ -604,7 +678,7 @@ export function createTicketService(
               eb.and([
                 eb(rowKey, "=", cursorPriorityKey),
                 eb("t.created_at", "=", cursorCreatedAt),
-                eb("t.id", gt, cursorId),
+                eb("t.id", ">", cursorId),
               ]),
             ]);
           });
@@ -646,7 +720,7 @@ export function createTicketService(
                 eb.and([
                   eb(rowActivity, "=", cursorLastActivity),
                   eb("t.created_at", "=", cursorCreatedAt),
-                  eb("t.id", gt, cursorId),
+                  eb("t.id", ">", cursorId),
                 ]),
                 // (c) Row has NULL activity (NULLS LAST: after all non-NULL)
                 eb(rowActivity, "is", null),
@@ -661,7 +735,7 @@ export function createTicketService(
                 eb("t.created_at", gt, cursorCreatedAt),
                 eb.and([
                   eb("t.created_at", "=", cursorCreatedAt),
-                  eb("t.id", gt, cursorId),
+                  eb("t.id", ">", cursorId),
                 ]),
               ]),
             ]);
@@ -687,10 +761,56 @@ export function createTicketService(
               eb.and([
                 eb("q.sort_order", "=", cursorSortOrder),
                 eb("t.created_at", "=", cursorCreatedAt),
-                eb("t.id", gt, cursorId),
+                eb("t.id", ">", cursorId),
               ]),
             ]),
           );
+        } else if (sortBy === "client") {
+          const cursorAlias = db
+            .selectFrom("tickets")
+            .innerJoin("clients", "clients.id", "tickets.client_id")
+            .select("clients.alias")
+            .where("tickets.id", "=", cursorId);
+
+          query = query.where((eb) =>
+            eb.or([
+              eb("c.alias", gt, cursorAlias),
+              eb.and([
+                eb("c.alias", "=", cursorAlias),
+                eb("t.created_at", gt, cursorCreatedAt),
+              ]),
+              eb.and([
+                eb("c.alias", "=", cursorAlias),
+                eb("t.created_at", "=", cursorCreatedAt),
+                eb("t.id", ">", cursorId),
+              ]),
+            ]),
+          );
+        } else if (sortBy === "msgs") {
+          const cursorFollowupCount = db
+            .selectFrom("followups")
+            .select((sb) => sb.fn.count<number>("followups.id").as("cnt"))
+            .where("followups.ticket_id", "=", cursorId);
+
+          query = query.where((eb) => {
+            const rowCount = eb
+              .selectFrom("followups as f3")
+              .select((sb) => sb.fn.count<number>("f3.id").as("cnt"))
+              .whereRef("f3.ticket_id", "=", "t.id");
+
+            return eb.or([
+              eb(rowCount, gt, cursorFollowupCount),
+              eb.and([
+                eb(rowCount, "=", cursorFollowupCount),
+                eb("t.created_at", gt, cursorCreatedAt),
+              ]),
+              eb.and([
+                eb(rowCount, "=", cursorFollowupCount),
+                eb("t.created_at", "=", cursorCreatedAt),
+                eb("t.id", ">", cursorId),
+              ]),
+            ]);
+          });
         } else {
           // "date": two-column keyset (created_at, id)
           query = query.where((eb) =>
@@ -698,7 +818,7 @@ export function createTicketService(
               eb("t.created_at", gt, cursorCreatedAt),
               eb.and([
                 eb("t.created_at", "=", cursorCreatedAt),
-                eb("t.id", gt, cursorId),
+                eb("t.id", ">", cursorId),
               ]),
             ]),
           );
@@ -742,6 +862,20 @@ export function createTicketService(
       } else if (sortBy === "queue") {
         query = query
           .orderBy("q.sort_order", sortDirection)
+          .orderBy("t.created_at", sortDirection)
+          .orderBy("t.id", "asc");
+      } else if (sortBy === "client") {
+        query = query
+          .orderBy("c.alias", sortDirection)
+          .orderBy("t.created_at", sortDirection)
+          .orderBy("t.id", "asc");
+      } else if (sortBy === "msgs") {
+        // The count sort computes a correlated count per candidate row
+        // with no index help, fine at current org scale. If it measurably
+        // degrades, replace with a leftJoinLateral computing counts once
+        // per row, not a denormalized counter column (drift liability).
+        query = query
+          .orderBy("followup_count", sortDirection)
           .orderBy("t.created_at", sortDirection)
           .orderBy("t.id", "asc");
       } else {
@@ -992,13 +1126,23 @@ export function createTicketService(
 
       // Create system follow-ups for state changes
       if (input.onHold !== undefined) {
-        await createSystemFollowUp(db, input.ticketId, "hold_change");
+        await createSystemFollowUp(
+          db,
+          input.ticketId,
+          input.onHold ? "hold_placed" : "hold_removed",
+        );
       }
       if (input.priority !== undefined) {
-        await createSystemFollowUp(db, input.ticketId, "priority_change");
+        await createSystemFollowUp(db, input.ticketId, "priority_changed", {
+          to: input.priority,
+        });
       }
       if (input.status !== undefined) {
-        await createSystemFollowUp(db, input.ticketId, "status_change");
+        await createSystemFollowUp(
+          db,
+          input.ticketId,
+          input.status === "open" ? "status_opened" : "status_closed",
+        );
       }
 
       return toRecord(row);
@@ -1023,7 +1167,7 @@ export function createTicketService(
 
       if (!row) throw new NotFoundError(ErrorCode.TICKET_NOT_FOUND_OR_CLOSED);
 
-      await createSystemFollowUp(db, ticketId, "status_change");
+      await createSystemFollowUp(db, ticketId, "status_closed");
       return toRecord(row);
     },
 
@@ -1043,7 +1187,7 @@ export function createTicketService(
 
       if (!row) throw new NotFoundError(ErrorCode.TICKET_NOT_FOUND_OR_OPEN);
 
-      await createSystemFollowUp(db, ticketId, "status_change");
+      await createSystemFollowUp(db, ticketId, "status_opened");
       return toRecord(row);
     },
 
@@ -1068,6 +1212,7 @@ export function createTicketService(
           eb.ref("f.encrypted_content").as("encrypted_content"),
           eb.ref("f.created_at").as("created_at"),
           eb.ref("f.note_type_id").as("note_type_id"),
+          eb.ref("f.event_params").as("event_params"),
           eb.fn
             .agg<number>("row_number")
             .over((ob) =>
@@ -1141,6 +1286,7 @@ export function createTicketService(
           "ranked_f.has_image",
           "ranked_f.has_file",
           "ranked_f.note_type_id",
+          "ranked_f.event_params",
           "tkw.ephemeral_point",
           "tkw.nonce",
           "tkw.wrapped_key",
@@ -1169,6 +1315,7 @@ export function createTicketService(
           hasImage: Boolean(row.has_image),
           hasFile: Boolean(row.has_file),
           noteTypeId: row.note_type_id ?? null,
+          eventParams: row.event_params ?? null,
         };
         const list = result[row.ticket_id];
         if (list) {
@@ -1178,6 +1325,167 @@ export function createTicketService(
         }
       }
       return result;
+    },
+
+    async listReadState(
+      userId: string,
+      input: ListReadStateInput,
+    ): Promise<Record<string, TicketReadState>> {
+      const accessibleQueues = await getAccessibleQueueIds(userId);
+      if (accessibleQueues.length === 0) return {};
+
+      // Requested ids outside accessible queues are silently filtered,
+      // mirroring recentFollowUps.
+      const accessibleTickets = await db
+        .selectFrom("tickets")
+        .select("id")
+        .where("id", "in", input.ticketIds)
+        .where("queue_id", "in", [...accessibleQueues])
+        .execute();
+      const scopedIds = accessibleTickets.map((t) => t.id);
+      if (scopedIds.length === 0) return {};
+
+      // Read-only cursor fetch: never creates dummy rows. The list path
+      // must not change the "row exists = opened detail once" surface.
+      const cursors = await readCursors.getBatch(userId, scopedIds);
+
+      // Newest non-system, non-self follow-up timestamps per ticket.
+      // System events (status/hold/priority changes) are not replies, and
+      // the caller's own replies are not unread to the caller, so neither
+      // counts toward unread. IS DISTINCT FROM keeps client-authored rows,
+      // where created_by is null. Same ROW_NUMBER top-N-per-group pattern
+      // as recentFollowUps.
+      const ranked = db
+        .selectFrom("followups as f")
+        .select((eb) => [
+          eb.ref("f.ticket_id").as("ticket_id"),
+          eb.ref("f.created_at").as("created_at"),
+          eb.fn
+            .agg<number>("row_number")
+            .over((ob) =>
+              ob.partitionBy("f.ticket_id").orderBy("f.created_at", "desc"),
+            )
+            .as("rn"),
+        ])
+        .where("f.ticket_id", "in", scopedIds)
+        .where("f.source", "!=", "system")
+        .where("f.created_by", "is distinct from", userId)
+        .as("ranked_f");
+
+      const timestampRows = await db
+        .selectFrom(ranked)
+        .select(["ticket_id", "created_at"])
+        .where("rn", "<=", READ_STATE_TIMESTAMPS_PER_TICKET)
+        .orderBy("ticket_id")
+        .orderBy("created_at", "desc")
+        .execute();
+
+      const result: Record<string, TicketReadState> = Object.fromEntries(
+        scopedIds.map((id): [string, TicketReadState] => [
+          id,
+          {
+            encryptedReadCursor: cursors.get(id) ?? null,
+            followUpCreatedAt: [],
+          },
+        ]),
+      );
+      for (const row of timestampRows) {
+        result[row.ticket_id]?.followUpCreatedAt.push(row.created_at);
+      }
+      return result;
+    },
+
+    async sweepReadState(
+      userId: string,
+      input: SweepReadStateInput,
+    ): Promise<SweepReadStateResult> {
+      const accessibleQueues = await getAccessibleQueueIds(userId);
+      if (accessibleQueues.length === 0) return { items: [], nextCursor: null };
+
+      // Enumerates the user's own cursor rows for open tickets in
+      // accessible queues. Row existence is deliberate metadata ("opened
+      // the detail view once"), so the sweep reveals nothing the server
+      // does not already hold. Zero writes; out-of-scope rows are
+      // silently filtered, mirroring listReadState.
+      const afterId = input.cursor;
+      const rows = await db
+        .selectFrom("ticket_read_cursors as rc")
+        .innerJoin("tickets as t", "t.id", "rc.ticket_id")
+        .leftJoin("ticket_key_wraps as tkw", (join) =>
+          join
+            .onRef("tkw.ticket_id", "=", "t.id")
+            .on("tkw.volunteer_id", "=", userId)
+            .onRef("tkw.key_generation", "=", "t.key_generation"),
+        )
+        .select((eb) => [
+          "rc.ticket_id",
+          "rc.encrypted_read_cursor",
+          "tkw.ephemeral_point",
+          "tkw.nonce",
+          "tkw.wrapped_key",
+          // Newest non-system, non-self activity: system events are not
+          // replies and the caller's own replies are not unread to the
+          // caller (same rules as listReadState; IS DISTINCT FROM keeps
+          // null-authored client rows). A ticket with no such activity
+          // reads as null and the client treats it as not-unread.
+          eb
+            .selectFrom("followups as f")
+            .select((sb) => sb.fn.max("f.created_at").as("max_at"))
+            .whereRef("f.ticket_id", "=", "t.id")
+            .where("f.source", "!=", "system")
+            .where("f.created_by", "is distinct from", userId)
+            .as("latest_activity_at"),
+        ])
+        .where("rc.user_id", "=", userId)
+        .where("t.status", "=", "open")
+        .where("t.queue_id", "in", [...accessibleQueues])
+        .$if(afterId !== undefined, (qb) => {
+          if (afterId === undefined) return qb;
+          return qb.where("rc.ticket_id", ">", afterId);
+        })
+        .orderBy("rc.ticket_id")
+        .limit(input.limit)
+        .execute();
+
+      const items = rows.map((row): SweepReadStateEntry => ({
+        ticketId: row.ticket_id,
+        encryptedReadCursor: row.encrypted_read_cursor,
+        latestActivityAt: row.latest_activity_at,
+        keyWrap: buildKeyWrap(row.ephemeral_point, row.nonce, row.wrapped_key),
+      }));
+
+      const last = items.at(-1);
+      return {
+        items,
+        nextCursor: items.length === input.limit && last ? last.ticketId : null,
+      };
+    },
+
+    async searchClients(query, limit) {
+      const results = await db
+        .selectFrom("clients as c")
+        .innerJoin("phones as p", "p.id", "c.phone_id")
+        .select(["c.id", "c.alias", "p.encrypted_number"])
+        .where("c.merged_into", "is", null)
+        .where("c.alias", "ilike", `%${sanitizeLike(query)}%`)
+        .orderBy("c.alias", "asc")
+        .limit(limit)
+        .execute();
+
+      const encryptor = deps?.fieldEncryptor;
+      if (!encryptor) {
+        return results.map((r) => ({
+          id: r.id,
+          alias: r.alias,
+          maskedPhone: "***",
+        }));
+      }
+
+      return results.map((r) => ({
+        id: r.id,
+        alias: r.alias,
+        maskedPhone: maskPhone(encryptor.decryptToBuffer(r.encrypted_number)),
+      }));
     },
   };
 }

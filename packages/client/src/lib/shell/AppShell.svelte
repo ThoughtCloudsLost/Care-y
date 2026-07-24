@@ -24,19 +24,13 @@
   - Any child route can suppress PTR via usePTR().setEnabled(false) during init.
 -->
 <script lang="ts">
-  import {
-    Navbar,
-    Link,
-    Searchbar,
-    Toolbar,
-    TabbarLink,
-    ToolbarPane,
-  } from "konsta/svelte";
+  import { Navbar, Link, Searchbar, Toolbar, ToolbarPane } from "konsta/svelte";
   import PageShell from "./PageShell.svelte";
-  import { Ellipsis, Search, User } from "@lucide/svelte";
+  import { Search, User } from "@lucide/svelte";
   import { getOrgLogoUrl } from "$lib/branding/logo-url.svelte.js";
   import CallIndicator from "./CallIndicator.svelte";
-  import { tick, onMount } from "svelte";
+  import { onMount } from "svelte";
+  import { gestureMount } from "$lib/utils/gesture-focus.js";
   import { SvelteMap } from "svelte/reactivity";
   import { browser } from "$app/environment";
   import {
@@ -55,7 +49,7 @@
     SidebarSection,
     SidebarSubItem,
   } from "./types";
-  import { allTabs } from "./tabs";
+  import TabbarNav from "./TabbarNav.svelte";
   import { layoutMode } from "$lib/stores/layout-mode.svelte";
   import DesktopSidebar from "./DesktopSidebar.svelte";
   import { savedFilterStore } from "$lib/stores/saved-filters.svelte";
@@ -100,12 +94,13 @@
   import {
     getTicketDecryptCache,
     getOrgDecryptCache,
+    getCryptoBridge,
     getCurrentUserId,
     getCurrentUserRoleId,
     getCurrentPermissions,
     getPreviewLoader,
   } from "$lib/crypto/context.js";
-  import { deriveDisplayStatus } from "$lib/tickets/display-status.js";
+  import { initRecentViews } from "$lib/search/recent-views.js";
   import type { TicketKeyWrap } from "$lib/crypto/ticket-decrypt-cache.js";
   import {
     type SerializedBuffer,
@@ -113,9 +108,14 @@
   } from "$lib/utils/buffer-encoding.js";
   import LanguagePicker from "$lib/components/inputs/LanguagePicker.svelte";
   import { getLocale, setLocale, type Locale } from "$lib/paraglide/runtime.js";
+  import { chromeIntensity, flashOpaqueChrome } from "./chrome-glass.svelte.js";
 
   // Scroll container element, provided by PageShell via bindScrollEl.
   let mainEl = $state<HTMLElement | undefined>();
+
+  function navigateToPath(path: `/${string}`): void {
+    void goto(resolve(path));
+  }
 
   function handleScrollEl(el: HTMLElement | undefined): void {
     mainEl = el;
@@ -324,6 +324,7 @@
   // ResizeObserver tracks the inner content height so we can set
   // padding-top on <main> and position the subnavbar correctly.
   let subnavbarInnerEl = $state<HTMLElement | undefined>();
+  let splitSubnavbarRightEl = $state<HTMLElement | undefined>();
   let subnavbarHeight = $state(0);
   let navbarHeight = $state(0);
 
@@ -340,6 +341,27 @@
     return () => ro.disconnect();
   });
 
+  $effect(() => {
+    const el = splitSubnavbarRightEl;
+    if (el == null) {
+      splitNavbar.setRightHeight(0);
+      return;
+    }
+    const ro = new ResizeObserver((entries) => {
+      const entry = entries[0];
+      if (entry != null) {
+        splitNavbar.setRightHeight(
+          entry.borderBoxSize[0]?.blockSize ?? el.offsetHeight,
+        );
+      }
+    });
+    ro.observe(el, { box: "border-box" });
+    return () => {
+      ro.disconnect();
+      splitNavbar.setRightHeight(0);
+    };
+  });
+
   // Navbar DOM ref, resolved from the scroll container's parent Page.
   // PageShell measures the height via ResizeObserver; we just need the
   // element reference for the subnavbar chrome extension effect below.
@@ -351,46 +373,210 @@
 
   $effect(() => {
     const pageEl = mainEl?.closest(".k-page");
+    if (pageEl instanceof HTMLElement && navbarHeight > 0) {
+      pageEl.style.setProperty("--navbar-h", `${String(navbarHeight)}px`);
+    }
+  });
+
+  $effect(() => {
+    const pageEl = mainEl?.closest(".k-page");
     if (pageEl == null) return;
     const navbar = pageEl.querySelector<HTMLElement>(":scope > .k-navbar");
     navbarDomEl = navbar ?? undefined;
   });
 
   // Extend the Navbar's blur/bg layers to cover the subnavbar region.
-  // The patched NavbarClasses reads --k-navbar-chrome-h for iOS layer heights.
-  // When no subnavbar is present or it's hidden, the variable is unset
-  // and the default (navbar-only) height applies.
+  // --k-navbar-chrome-h controls the height of both iOS layers (bgBlur
+  // for backdrop-filter, bgLayer for the paper-tinted background). In
+  // split mode the right subnavbar can be taller than the left, so the
+  // mask is split into two side-by-side gradients that fade each half
+  // at its own subnavbar height. --split-right-w tracks the divider.
+  function setMaskProp(el: HTMLElement, prop: string, val: string): void {
+    el.style.setProperty(`-webkit-${prop}`, val);
+    el.style.setProperty(prop, val);
+  }
+
+  function removeMaskProp(el: HTMLElement, prop: string): void {
+    el.style.removeProperty(`-webkit-${prop}`);
+    el.style.removeProperty(prop);
+  }
+
+  function applyMask(
+    layers: HTMLElement[],
+    maskImage: string,
+    sized: { size: string; position: string; repeat: string } | null,
+  ): void {
+    for (const layer of layers) {
+      setMaskProp(layer, "mask-image", maskImage);
+      if (sized != null) {
+        setMaskProp(layer, "mask-size", sized.size);
+        setMaskProp(layer, "mask-position", sized.position);
+        setMaskProp(layer, "mask-repeat", sized.repeat);
+        layer.style.setProperty("-webkit-mask-composite", "source-over");
+        layer.style.setProperty("mask-composite", "add");
+      } else {
+        removeMaskProp(layer, "mask-size");
+        removeMaskProp(layer, "mask-position");
+        removeMaskProp(layer, "mask-repeat");
+        removeMaskProp(layer, "mask-composite");
+      }
+    }
+  }
+
+  function clearMask(layers: HTMLElement[]): void {
+    for (const layer of layers) {
+      for (const prop of [
+        "mask-image",
+        "mask-size",
+        "mask-position",
+        "mask-repeat",
+        "mask-composite",
+      ]) {
+        removeMaskProp(layer, prop);
+      }
+    }
+  }
+
   $effect(() => {
     const el = navbarDomEl;
     if (el == null) return;
-    const hasSubnavbar = navbarOverride?.subnavbar != null;
+
+    const hasRightSub = layoutMode.isDesktop && splitRight?.subnavbar != null;
+    const hasSubnavbar = navbarOverride?.subnavbar != null || hasRightSub;
     const isHidden =
       !layoutMode.isDesktop && navbarOverride?.subnavbarHidden?.() === true;
-    // The bgBlur layer is the first child of .k-navbar (iOS only).
-    // Its gradient mask fades blur too early over the extended area.
-    const firstChild = el.firstElementChild;
-    const bgBlur = firstChild instanceof HTMLElement ? firstChild : null;
-    if (hasSubnavbar && !isHidden && subnavbarHeight > 0 && navbarHeight > 0) {
-      const chromeH = navbarHeight + subnavbarHeight + 16;
-      el.style.setProperty("--k-navbar-chrome-h", `${String(chromeH)}px`);
+    const effectiveSubnavH = hasRightSub
+      ? Math.max(subnavbarHeight, splitNavbar.rightSubnavbarHeight)
+      : subnavbarHeight;
+
+    const layers = [el.firstElementChild, el.children[1]].filter(
+      (c): c is HTMLElement => c instanceof HTMLElement,
+    );
+
+    if (
+      !hasSubnavbar ||
+      isHidden ||
+      effectiveSubnavH <= 0 ||
+      navbarHeight <= 0
+    ) {
+      el.style.removeProperty("--k-navbar-chrome-h");
+      clearMask(layers);
+      return;
+    }
+
+    const chromeH = navbarHeight + effectiveSubnavH + 16;
+    el.style.setProperty("--k-navbar-chrome-h", `${String(chromeH)}px`);
+
+    const rightTaller =
+      hasRightSub && splitNavbar.rightSubnavbarHeight > subnavbarHeight;
+
+    if (rightTaller) {
+      const leftH = navbarHeight + subnavbarHeight + 16;
+      const splitW = "var(--split-right-w,var(--split-detail-width,480px))";
+      applyMask(
+        layers,
+        [
+          `linear-gradient(to bottom,black ${String(Math.round(leftH * 0.9))}px,transparent ${String(leftH)}px)`,
+          `linear-gradient(to bottom,black ${String(Math.round(chromeH * 0.9))}px,transparent ${String(chromeH)}px)`,
+        ].join(","),
+        {
+          size: `calc(100% - ${splitW}) 100%,${splitW} 100%`,
+          position: "left top,right top",
+          repeat: "no-repeat",
+        },
+      );
+    } else {
+      applyMask(
+        layers,
+        "linear-gradient(to bottom, black 90%, transparent)",
+        null,
+      );
+    }
+  });
+
+  // Animate the navbar glass layers to match chrome intensity (0-1).
+  // Interpolates saturate, blur, and background opacity continuously so
+  // the drag gesture can drive the glass state frame-by-frame.
+  let chromeTransitionReady = false;
+  $effect(() => {
+    const el = navbarDomEl;
+    if (el == null) return;
+    const t = chromeIntensity();
+    const bgBlur =
+      el.firstElementChild instanceof HTMLElement ? el.firstElementChild : null;
+    const bgLayer =
+      el.children[1] instanceof HTMLElement ? el.children[1] : null;
+
+    if (!chromeTransitionReady) {
+      chromeTransitionReady = true;
       if (bgBlur != null) {
-        const mask = "linear-gradient(to bottom, black 90%, transparent)";
-        bgBlur.style.setProperty("-webkit-mask-image", mask);
-        bgBlur.style.setProperty("mask-image", mask);
+        bgBlur.style.setProperty(
+          "transition",
+          "backdrop-filter 300ms ease, -webkit-backdrop-filter 300ms ease",
+        );
+        bgBlur.style.setProperty(
+          "-webkit-backdrop-filter",
+          "saturate(100%) blur(2px)",
+        );
+        bgBlur.style.setProperty("backdrop-filter", "saturate(100%) blur(2px)");
+      }
+      if (bgLayer != null) {
+        bgLayer.style.setProperty("transition", "background 300ms ease");
+      }
+    }
+
+    const saturate = Math.round(100 + t * 80);
+    const blur = Math.round(2 + t * 38);
+    const filterVal = `saturate(${String(saturate)}%) blur(${String(blur)}px)`;
+
+    if (bgBlur != null) {
+      bgBlur.style.setProperty("-webkit-backdrop-filter", filterVal);
+      bgBlur.style.setProperty("backdrop-filter", filterVal);
+    }
+
+    if (t > 0) {
+      const bgOpacity = Math.round(t * 85);
+      if (bgLayer != null) {
+        bgLayer.style.setProperty(
+          "background",
+          `linear-gradient(to bottom, color-mix(in srgb, var(--paper) ${String(bgOpacity)}%, transparent) 85%, transparent)`,
+        );
       }
     } else {
-      el.style.removeProperty("--k-navbar-chrome-h");
-      if (bgBlur != null) {
-        bgBlur.style.removeProperty("-webkit-mask-image");
-        bgBlur.style.removeProperty("mask-image");
+      if (bgLayer != null) {
+        bgLayer.style.removeProperty("background");
       }
     }
   });
 
+  // Flash enhanced glass on interactive subnavbar clicks (filter pills,
+  // tabs). Excludes: CaseHeader (manages own chrome), scrollbar clicks
+  // (land outside clientWidth/clientHeight), navbar action slots.
+  $effect(() => {
+    const el = subnavbarInnerEl;
+    if (el == null) return;
+
+    const handler = (e: MouseEvent): void => {
+      if (!(e.target instanceof Element)) return;
+      if (e.target.closest(".case-header, .section-scroll-nav") != null) return;
+      const interactive = e.target.closest(
+        "button, a, [role='button'], [role='tab']",
+      );
+      if (interactive == null) return;
+      flashOpaqueChrome();
+    };
+    el.addEventListener("click", handler);
+    return (): void => {
+      el.removeEventListener("click", handler);
+    };
+  });
+
   let {
     activeTab,
+    activeArea,
     orgName = "CARE-Y",
     ontabchange,
+    onareatap,
     children,
   }: AppShellProps = $props();
 
@@ -404,13 +590,17 @@
     void setLocale(newLocale);
   }
 
-  async function openSearch(): Promise<void> {
+  function openSearch(): void {
     resetFullSearch();
-    searchOpen = true;
-    await tick();
-    searchContainerEl
-      ?.querySelector<HTMLInputElement>("input[type='text']")
-      ?.focus();
+    gestureMount(
+      () => {
+        searchOpen = true;
+      },
+      () =>
+        searchContainerEl?.querySelector<HTMLInputElement>(
+          "input[type='text']",
+        ),
+    );
   }
 
   function closeSearch(): void {
@@ -496,9 +686,11 @@
     flatTicketList = rebuildFlatList();
 
     // Rebuild when ticket queries update (new data fetched, pagination, etc.).
+    // Both "updated" (existing key refreshed) and "added" (new key, e.g.
+    // recentViews prefetch on first hydration) must trigger a rebuild.
     const unsubscribeCache = queryClient.getQueryCache().subscribe((event) => {
       if (
-        event.type === "updated" &&
+        (event.type === "updated" || event.type === "added") &&
         Array.isArray(event.query.queryKey) &&
         event.query.queryKey[0] === "tickets" &&
         event.query.queryKey[1] === "list"
@@ -522,20 +714,12 @@
           }
           return undefined;
         },
-        decryptQueueName: (queueId, ciphertext) => {
+        orgDecrypt: (cacheKey, ciphertext) => {
           if (!isOrgCiphertext(ciphertext)) return null;
-          return orgCache.decrypt(`queue:${queueId}`, ciphertext) ?? null;
+          return orgCache.decrypt(cacheKey, ciphertext) ?? null;
         },
-        resolveAssignedName: (assignedTo, ciphertext) => {
-          if (assignedTo === null) return null;
-          if (assignedTo === currentUserIdGetter()) {
-            return m.dashboard_assigned_you();
-          }
-          if (!isOrgCiphertext(ciphertext)) return null;
-          return orgCache.decrypt(`assignee:${assignedTo}`, ciphertext) ?? null;
-        },
+        currentUserId: () => currentUserIdGetter(),
         getPreviewFollowUps: (ticketId) => previewLoader.get(ticketId),
-        deriveDisplayStatus,
         getTotalItemCount: () => {
           const counts = queryClient.getQueryData<{ total?: number }>(
             ticketsKeys.counts(),
@@ -652,6 +836,42 @@
           }),
         )
       : () => undefined;
+
+    // Recently-viewed history: session list mirrored to the per-user
+    // encrypted envelope (user_recent_views), sealed and opened by the
+    // crypto Worker. Missing ticket rows are fetched individually so
+    // recents resolve on a fresh session; inaccessible tickets fail the
+    // fetch and silently drop from display.
+    const bridge = getCryptoBridge();
+    initRecentViews({
+      fetchEnvelope: async () => (await trpc.recentViews.get.query()).envelope,
+      pushEnvelope: async (envelope) => {
+        await trpc.recentViews.put.mutate(envelope);
+      },
+      seal: async (dataB64) => bridge.sealSelfBlob(dataB64),
+      open: async (envelope) => bridge.openSelfBlob(envelope),
+      prefetchTickets: async (ids) => {
+        const missing = ids.filter(
+          (id) => !flatTicketList.some((t) => t.id === id),
+        );
+        if (missing.length === 0) return;
+        const fetched = await Promise.all(
+          missing.map(async (id) =>
+            ticketsRouter.get.query({ ticketId: id }).catch(() => null),
+          ),
+        );
+        const rows: RawCachedTicket[] = [];
+        for (const row of fetched) {
+          if (row !== null) rows.push(row);
+        }
+        if (rows.length > 0) {
+          queryClient.setQueryData(
+            ticketsKeys.list({ source: "recentViews" }),
+            rows,
+          );
+        }
+      },
+    });
 
     return () => {
       unsubscribeCache();
@@ -800,6 +1020,10 @@
     if (ptrPhase === "refreshing" || ptrPhase === "releasing") return;
     if (!mainEl) return;
 
+    // While the software keyboard is open the user is composing; a
+    // pull-down at the top of a scroller must never arm a refresh.
+    if (document.documentElement.classList.contains("keyboard-open")) return;
+
     // Ignore multi-touch (pinch-to-zoom)
     if (e.touches.length > 1) return;
 
@@ -887,7 +1111,7 @@
 
     if (mod && e.key === "k") {
       e.preventDefault();
-      void openSearch();
+      openSearch();
       return;
     }
 
@@ -904,6 +1128,10 @@
     }
 
     if (e.key === "Escape") {
+      if (searchOpen) {
+        closeSearch();
+        return;
+      }
       const state = page.state;
       if (
         typeof state.ticketId === "string" ||
@@ -955,15 +1183,18 @@
   {#if layoutMode.isDesktop}
     <DesktopSidebar
       {activeTab}
+      {activeArea}
       {ontabchange}
       expanded={false}
       subItems={sidebarSubItems}
       {orgName}
       userName={avatarDisplayName ?? ""}
       userInitials={userInitials ?? ""}
+      roleId={currentRoleId}
       onAdmin={() => void goto(resolve("/admin"))}
-      onSettings={() => void goto(resolve("/admin"))}
+      onSettings={() => void goto(resolve("/more/settings"))}
       onLogout={() => void goto(resolve("/logout"))}
+      onNavigate={(path: `/${string}`) => navigateToPath(path)}
     />
   {/if}
   <PageShell
@@ -1091,8 +1322,9 @@
           </div>
           {#if layoutMode.isDesktop && splitNavbarCfg && splitRight?.subnavbar}
             <div
+              bind:this={splitSubnavbarRightEl}
               class="split-subnavbar-right"
-              style:width={splitNavbarCfg.rightWidth}
+              style:width="var(--split-right-w, {splitNavbarCfg.rightWidth})"
             >
               {@render splitRight.subnavbar()}
             </div>
@@ -1213,49 +1445,7 @@
           </Toolbar>
         </div>
       {:else if !layoutMode.isDesktop}
-        <nav
-          aria-label={m.nav_main()}
-          class="tabbar-nav native-tabbar left-0 bottom-0 fixed"
-        >
-          <Toolbar
-            tabbar
-            tabbarIcons
-            class="tabbar-inner"
-            role="tablist"
-            aria-label={m.nav_main()}
-          >
-            <ToolbarPane>
-              {#each allTabs as tab (tab.id)}
-                <TabbarLink
-                  active={activeTab === tab.id}
-                  onclick={() => ontabchange(tab.id)}
-                  role="tab"
-                  aria-label={tab.label()}
-                  aria-selected={activeTab === tab.id}
-                  colors={{
-                    textIos: "text-[var(--glass-text)]",
-                    textMaterial: "text-[var(--glass-text)]",
-                    textActiveIos: "text-[var(--brand-text)]",
-                    textActiveMaterial: "text-[var(--brand-text)]",
-                  }}
-                >
-                  {#snippet icon()}{@const Icon = tab.icon}<Icon
-                      size={24}
-                      aria-hidden="true"
-                    />{/snippet}
-                </TabbarLink>
-              {/each}
-            </ToolbarPane>
-          </Toolbar>
-          <button
-            type="button"
-            class="more-btn"
-            aria-label={m.nav_more()}
-            onclick={() => (panelOpen = true)}
-          >
-            <Ellipsis size={24} aria-hidden="true" />
-          </button>
-        </nav>
+        <TabbarNav {activeTab} {activeArea} {ontabchange} {onareatap} />
       {/if}
 
       {#if layoutMode.isDesktop}
@@ -1300,18 +1490,20 @@
           ariaLabel={m.search_hint(withTerms())}
           class="search-sheet"
         >
-          <SearchResults
-            query={searchQuery}
-            {promotedProviderId}
-            ondismiss={closeSearch}
-            onnavigate={(href: string) => {
-              // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- dynamic href from search provider, always starts with /
-              void goto(resolve(href as `/${string}`)).then(closeSearch);
-            }}
-            onselectrecent={(q: string) => {
-              searchQuery = q;
-            }}
-          />
+          {#if searchOpen}
+            <SearchResults
+              query={searchQuery}
+              {promotedProviderId}
+              ondismiss={closeSearch}
+              onnavigate={(href: string) => {
+                // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- dynamic href from search provider, always starts with /
+                void goto(resolve(href as `/${string}`)).then(closeSearch);
+              }}
+              onselectrecent={(q: string) => {
+                searchQuery = q;
+              }}
+            />
+          {/if}
         </ShellSheet>
       {/if}
 
@@ -1343,9 +1535,18 @@
 
 <style>
   /* ── Desktop layout ── */
+  /* Fixed 100dvh, NOT var(--app-height): the layout viewport does not
+     shrink when the iOS software keyboard opens. iOS reveals a focused
+     fixed-bottom input by panning the visual viewport downward inside
+     the layout viewport (visualViewport.offsetTop > 0; no API exists to
+     pan it back). A shell sized to the visual viewport but anchored at
+     the layout viewport's top then exposes a blank band of shell
+     background above the keyboard. Keeping the shell full-height means
+     the pan can only ever show app content; keyboard-aware surfaces add
+     their own bottom inset from --keyboard-height instead. */
   .app-shell-layout {
     display: flex;
-    height: var(--app-height, 100dvh);
+    height: 100dvh;
   }
 
   .app-shell-layout > :global(:last-child) {
@@ -1353,51 +1554,15 @@
     min-width: 0;
   }
 
-  /* Default tabbar nav: flex container for Toolbar + More button.
-     Fixed positioning and safe-area padding live here, not on the Toolbar. */
-  .tabbar-nav {
-    display: flex;
-    align-items: stretch;
-    z-index: 20;
-    width: 100%;
-  }
-
-  .tabbar-nav :global(.k-toolbar) {
-    position: static !important;
-    flex: 1;
-    min-width: 0;
-  }
-
-  .more-btn {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 3rem;
-    flex-shrink: 0;
-    background: none;
-    border: none;
-    cursor: pointer;
-    color: var(--glass-text);
-    padding: 0;
-    padding-bottom: var(--k-safe-area-bottom);
-    -webkit-tap-highlight-color: transparent;
-  }
-
   /* iOS only: override Konsta's pb-safe-4 (safe-area + 16px) to match native
      iOS tab bar positioning. Native uses only the safe-area inset. */
   :global(.k-ios .native-tabbar.k-toolbar) {
-    padding-bottom: var(--k-safe-area-bottom) !important;
-  }
-  :global(.k-ios) .tabbar-nav :global(.k-toolbar) {
     padding-bottom: var(--k-safe-area-bottom) !important;
   }
 
   /* iOS only: the bg layer uses calc(safe-area + 16px + 48px + 16px) = safe-area + 80px.
      Native height is safe-area + 48px (icons-only tabbar). */
   :global(.k-ios .native-tabbar.k-toolbar > div:first-child) {
-    height: calc(var(--k-safe-area-bottom) + 48px) !important;
-  }
-  :global(.k-ios) .tabbar-nav :global(.k-toolbar > div:first-child) {
     height: calc(var(--k-safe-area-bottom) + 48px) !important;
   }
 
@@ -1488,7 +1653,9 @@
     height: 1.75rem;
     border-radius: 50%;
     background: var(--brand-fill, var(--brand-primary));
-    color: var(--brand-text, #fff);
+    /* Text sits ON the brand fill, so it needs the fill-safe on-color.
+       --brand-text is surface-safe and can vanish against its own fill. */
+    color: var(--brand-on);
     font-size: 0.625rem;
     font-weight: 600;
     letter-spacing: 0.02em;
@@ -1709,7 +1876,7 @@
 
   /* Search sheet: fill from bottom up to the Navbar */
   :global(.search-sheet) {
-    height: calc(100dvh - var(--navbar-h, 64px));
+    height: calc(100dvh - var(--navbar-h, 64px) - 8px);
   }
 
   :global(.search-dropdown-backdrop) {
@@ -1733,7 +1900,7 @@
     overflow-y: auto;
     -webkit-overflow-scrolling: touch;
     overscroll-behavior-y: contain;
-    border-bottom: 1px solid var(--divider);
+    border-bottom: 1px solid var(--hair, var(--divider));
     border-radius: 0 0 var(--card-radius, 0.75rem) var(--card-radius, 0.75rem);
     box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
     padding-bottom: var(--space-md, 0.75rem);
@@ -1742,16 +1909,18 @@
   /* ── Split subnavbar overlay (segmented desktop view) ── */
 
   .shell-subnavbar--split > .shell-subnavbar-inner {
-    padding-inline-end: var(--split-detail-width, 480px);
+    padding-inline-end: var(--split-right-w, var(--split-detail-width, 480px));
+  }
+
+  .shell-subnavbar-inner {
+    padding-inline-end: var(--split-right-w, 0px);
   }
 
   .split-subnavbar-right {
     position: absolute;
     top: 0;
     right: 0;
-    height: 100%;
     z-index: 1;
-    border-inline-start: 1px solid var(--divider);
-    overflow: hidden;
+    border-inline-start: 1px solid var(--hair, var(--divider));
   }
 </style>

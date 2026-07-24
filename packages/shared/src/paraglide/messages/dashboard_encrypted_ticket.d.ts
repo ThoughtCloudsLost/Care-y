@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "Encrypted {ticket}" |
+* | "Locked {ticket}" |
 *
 * @param {Dashboard_Encrypted_TicketInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

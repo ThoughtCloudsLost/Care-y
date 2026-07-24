@@ -35,7 +35,11 @@ export type WorkerErrorCode =
   | "TK_NOT_CACHED"
   | "REWRAP_FAILED"
   | "UNWRAP_FAILED"
-  | "WORKER_ERROR";
+  | "WORKER_ERROR"
+  // Main-thread-generated: the bridge was destroyed or disconnected while
+  // requests were pending or arriving. Expected during teardown; callers
+  // treat it as quiet cancellation, not a failure worth logging.
+  | "BRIDGE_DESTROYED";
 
 // ── Request types (main thread -> Worker) ────────────────────────────
 
@@ -246,6 +250,36 @@ export interface WrapWithVolPublicRequest {
   readonly data: string;
 }
 
+/**
+ * Seal a payload to the Worker's own volPublic for server-side storage
+ * (e.g. recently-viewed history). The Worker prefixes a self-blob domain
+ * tag before ECIES encryption so openSelfBlob can refuse envelopes from
+ * other vol_public-wrapped domains (ticket key wraps, org key wraps).
+ */
+export interface SealSelfBlobRequest {
+  readonly type: "sealSelfBlob";
+  readonly id: number;
+  /** Payload to seal, base64. */
+  readonly data: string;
+}
+
+/**
+ * Open a self-blob envelope with the Worker's volPrivate. Refuses any
+ * plaintext that does not carry the self-blob domain tag: without this
+ * check the operation would be a generic vol_private decrypt oracle able
+ * to extract raw ticket keys to the main thread.
+ */
+export interface OpenSelfBlobRequest {
+  readonly type: "openSelfBlob";
+  readonly id: number;
+  /** ECIES ephemeral point, base64. */
+  readonly ephemeralPoint: string;
+  /** ECIES nonce, base64. */
+  readonly nonce: string;
+  /** ECIES-wrapped self-blob payload, base64. */
+  readonly wrappedPayload: string;
+}
+
 export interface RewrapTkRequest {
   readonly type: "rewrapTk";
   readonly id: number;
@@ -306,6 +340,8 @@ export type WorkerRequest =
   | UnwrapOrgKeyRequest
   | UnwrapTkRequest
   | WrapWithVolPublicRequest
+  | SealSelfBlobRequest
+  | OpenSelfBlobRequest
   | RewrapTkRequest
   | CreateTicketKeyRequest
   | OrgDecryptRequest
@@ -414,6 +450,22 @@ export interface WrapWithVolPublicResponse extends SuccessBase {
   readonly wrappedKey: string;
 }
 
+export interface SealSelfBlobResponse extends SuccessBase {
+  readonly type: "sealSelfBlob";
+  /** ECIES ephemeral point, base64. */
+  readonly ephemeralPoint: string;
+  /** ECIES nonce, base64. */
+  readonly nonce: string;
+  /** ECIES-wrapped self-blob payload (domain tag inside), base64. */
+  readonly wrappedPayload: string;
+}
+
+export interface OpenSelfBlobResponse extends SuccessBase {
+  readonly type: "openSelfBlob";
+  /** Unsealed payload with the domain tag stripped, base64. */
+  readonly data: string;
+}
+
 export interface RewrapTkResponse extends SuccessBase {
   readonly type: "rewrapTk";
   /** ECIES ephemeral point for new wrapping, base64. */
@@ -510,6 +562,8 @@ export type WorkerSuccessResponse =
   | UnwrapOrgKeyResponse
   | UnwrapTkResponse
   | WrapWithVolPublicResponse
+  | SealSelfBlobResponse
+  | OpenSelfBlobResponse
   | RewrapTkResponse
   | EvictTkResponse
   | ZeroAllResponse

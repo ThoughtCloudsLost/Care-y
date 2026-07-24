@@ -26,16 +26,19 @@ export type FollowUpSource = z.infer<typeof followUpSourceSchema>;
 // Follow-up type: what the follow-up represents
 export const followUpTypeSchema = z.enum([
   "message",
-  "status_change",
-  "merge_note",
-  "hold_change",
-  "priority_change",
-  "assignment_change",
   "internal_note",
   "sms_outbound",
   "sms_inbound",
   "phone_call",
   "voicemail",
+  "hold_placed",
+  "hold_removed",
+  "volunteer_assigned",
+  "volunteer_unassigned",
+  "status_opened",
+  "status_closed",
+  "priority_changed",
+  "merge_note",
 ]);
 export type FollowUpType = z.infer<typeof followUpTypeSchema>;
 
@@ -117,6 +120,11 @@ export const MAX_ESCALATION_DAYS = 365;
 
 export const createQueueInputSchema = z.object({
   encryptedName: base64String("encryptedName"),
+  // Color and icon are org-key encrypted picker tokens, required on
+  // creation (the form always preselects defaults). The vocabulary is
+  // enforced client-side; the server stores opaque ciphertext.
+  encryptedColor: base64String("encryptedColor"),
+  encryptedIcon: base64String("encryptedIcon"),
   escalateDays: z.number().int().min(0).max(MAX_ESCALATION_DAYS).default(0),
 });
 export type CreateQueueInput = z.infer<typeof createQueueInputSchema>;
@@ -124,6 +132,8 @@ export type CreateQueueInput = z.infer<typeof createQueueInputSchema>;
 export const updateQueueInputSchema = z.object({
   queueId: z.uuid(),
   encryptedName: base64String("encryptedName").optional(),
+  encryptedColor: base64String("encryptedColor").optional(),
+  encryptedIcon: base64String("encryptedIcon").optional(),
   escalateDays: z.number().int().min(0).max(MAX_ESCALATION_DAYS).optional(),
 });
 export type UpdateQueueInput = z.infer<typeof updateQueueInputSchema>;
@@ -204,6 +214,8 @@ export const ticketSortFieldSchema = z.enum([
   "priority",
   "last_activity",
   "queue",
+  "client",
+  "msgs",
 ]);
 export type TicketSortField = z.infer<typeof ticketSortFieldSchema>;
 
@@ -231,6 +243,23 @@ export const recentFollowUpsInputSchema = z.object({
   types: z.array(followUpTypeSchema).optional(),
 });
 export type RecentFollowUpsInput = z.infer<typeof recentFollowUpsInputSchema>;
+
+/** Batched read-state lookup for the tickets list (cursor + reply times). */
+export const listReadStateInputSchema = z.object({
+  ticketIds: z.array(z.uuid()).min(1).max(50),
+});
+export type ListReadStateInput = z.infer<typeof listReadStateInputSchema>;
+
+/**
+ * Paginated sweep over all of the user's read-cursor rows (open tickets
+ * in accessible queues). The cursor is a ticket id, never a read-state
+ * derivative; the client pages this to build its global unread set.
+ */
+export const sweepReadStateInputSchema = z.object({
+  cursor: z.uuid().optional(),
+  limit: z.number().int().min(1).max(200).default(200),
+});
+export type SweepReadStateInput = z.infer<typeof sweepReadStateInputSchema>;
 
 export const followUpListDirectionSchema = z.enum(["newer", "older"]);
 
@@ -380,6 +409,8 @@ export const savedFilterStateSchema = z.object({
   dateTo: z.string().nullable(),
   sortField: ticketSortFieldSchema,
   sortDirection: sortDirectionSchema,
+  unreadOnly: z.boolean().default(false),
+  needsAttentionOnly: z.boolean().default(false),
 });
 export type SavedFilterState = z.infer<typeof savedFilterStateSchema>;
 

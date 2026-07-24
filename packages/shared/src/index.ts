@@ -235,6 +235,8 @@ export {
   uploadAttachmentInputSchema,
   ticketListInputSchema,
   recentFollowUpsInputSchema,
+  listReadStateInputSchema,
+  sweepReadStateInputSchema,
   followUpListInputSchema,
   followUpSummaryInputSchema,
   followUpsByIdsInputSchema,
@@ -273,6 +275,8 @@ export {
   type UploadAttachmentInput,
   type TicketListInput,
   type RecentFollowUpsInput,
+  type ListReadStateInput,
+  type SweepReadStateInput,
   type FollowUpListInput,
   type RecordingListInput,
   type AttachmentListInput,
@@ -313,6 +317,17 @@ export {
   searchClientsInputSchema,
   type SearchClientsInput,
 } from "./schemas/tickets.js";
+
+// --- Follow-up content-type registry ---
+export {
+  CONTENT_TYPE_REGISTRY,
+  assignmentEventParamsSchema,
+  priorityEventParamsSchema,
+  type ContentCategory,
+  type ContentTypeMeta,
+  type AssignmentEventParams,
+  type PriorityEventParams,
+} from "./schemas/follow-up-registry.js";
 
 // --- Knowledge Base schemas ---
 export {
@@ -391,6 +406,13 @@ export {
   type MonthlyResolution,
   type PriorityStat,
 } from "./schemas/reports.js";
+
+// --- Recently viewed history schemas ---
+export {
+  putRecentViewsSchema,
+  RECENT_VIEWS_MAX_PAYLOAD_BYTES,
+  type PutRecentViewsInput,
+} from "./schemas/recent-views.js";
 
 // --- Branding schemas ---
 export {

@@ -10,6 +10,8 @@
  * This module produces plaintext PNGs; caller handles encryption.
  */
 
+import { BrandingError } from "$lib/errors.js";
+
 export interface IconVariant {
   readonly size: number;
   readonly purpose: "any" | "maskable";
@@ -34,7 +36,9 @@ export async function generateIconVariants(
       const canvas = new OffscreenCanvas(size, size);
       const ctx = canvas.getContext("2d");
       if (ctx === null) {
-        throw new Error("Failed to get 2d context from OffscreenCanvas");
+        throw new BrandingError(
+          "Failed to get 2d context from OffscreenCanvas",
+        );
       }
 
       if (purpose === "maskable") {

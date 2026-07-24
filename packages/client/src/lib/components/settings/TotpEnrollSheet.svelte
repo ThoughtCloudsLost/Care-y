@@ -2,6 +2,7 @@
   import { tick } from "svelte";
   import { List, ListInput, Preloader } from "konsta/svelte";
   import { Save, Copy } from "@lucide/svelte";
+  import FieldError from "$lib/components/FieldError.svelte";
   import * as m from "$lib/paraglide/messages.js";
   import { trpc } from "$lib/trpc/index.js";
   import { haptic } from "$lib/utils/haptic.js";
@@ -136,14 +137,14 @@
 
       <p class="manual-label">{m.twofa_totp_manual_entry()}</p>
       <div class="secret-row">
-        <code class="secret-text">{secret}</code>
+        <code class="secret-text" data-testid="totp-secret">{secret}</code>
         <button
           type="button"
           class="copy-btn"
           onclick={() => {
             void handleCopySecret();
           }}
-          aria-label={m.twofa_backup_codes_copy()}
+          aria-label={m.twofa_totp_copy_secret()}
         >
           <Copy size={16} />
         </button>
@@ -174,7 +175,9 @@
       </form>
 
       {#if error !== ""}
-        <p class="error-text" role="alert">{error}</p>
+        <div class="error-slot">
+          <FieldError message={error} />
+        </div>
       {/if}
     {/if}
   </div>
@@ -227,7 +230,7 @@
 
   .secret-text {
     flex: 1;
-    font-family: "Space Mono", ui-monospace, monospace;
+    font-family: var(--theme-font-mono);
     font-size: 0.85rem;
     letter-spacing: 0.1em;
     word-break: break-all;
@@ -236,7 +239,7 @@
   .copy-btn {
     background: none;
     border: none;
-    color: var(--brand-primary, var(--k-color-primary, #007aff));
+    color: var(--brand-text);
     cursor: pointer;
     padding: var(--space-xs);
     min-height: 44px;
@@ -246,10 +249,7 @@
     justify-content: center;
   }
 
-  .error-text {
-    color: var(--k-color-red, #ef4444);
-    font-size: 0.85rem;
+  .error-slot {
     padding: 0 var(--space-lg);
-    margin: 0;
   }
 </style>

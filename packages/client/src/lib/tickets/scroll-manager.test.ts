@@ -100,6 +100,106 @@ describe("createScrollManager", () => {
     });
   });
 
+  describe("reportVisibleProgress", () => {
+    function stubRect(el: Element, top: number, bottom: number): void {
+      el.getBoundingClientRect = () =>
+        ({
+          top,
+          bottom,
+          left: 0,
+          right: 100,
+          width: 100,
+          height: bottom - top,
+          x: 0,
+          y: top,
+          toJSON: () => ({}),
+        }) as DOMRect;
+    }
+
+    function attachFollowUpEl(id: string, top: number): HTMLElement {
+      const el = document.createElement("div");
+      el.id = `fu-${id}`;
+      document.body.appendChild(el);
+      stubRect(el, top, top + 40);
+      return el;
+    }
+
+    afterEach(() => {
+      document.body.innerHTML = "";
+    });
+
+    it("reports the newest visible follow-up synchronously (no debounce)", () => {
+      const manager = createScrollManager();
+      const container = mockScrollContainer();
+      stubRect(container, 0, 500);
+      manager.scrollContainerEl = container;
+
+      attachFollowUpEl("fu-1", 100);
+      attachFollowUpEl("fu-2", 300);
+      const onreadprogress = vi.fn();
+
+      manager.reportVisibleProgress(
+        [
+          { id: "fu-1", createdAt: "2026-01-01T12:00:00Z" },
+          { id: "fu-2", createdAt: "2026-01-01T13:00:00Z" },
+        ],
+        onreadprogress,
+      );
+
+      expect(onreadprogress).toHaveBeenCalledExactlyOnceWith(
+        "2026-01-01T13:00:00Z",
+      );
+    });
+
+    it("reports the older visible follow-up when the newest is below the fold", () => {
+      const manager = createScrollManager();
+      const container = mockScrollContainer();
+      stubRect(container, 0, 500);
+      manager.scrollContainerEl = container;
+
+      attachFollowUpEl("fu-1", 100);
+      attachFollowUpEl("fu-2", 900); // below the container's bottom edge
+      const onreadprogress = vi.fn();
+
+      manager.reportVisibleProgress(
+        [
+          { id: "fu-1", createdAt: "2026-01-01T12:00:00Z" },
+          { id: "fu-2", createdAt: "2026-01-01T13:00:00Z" },
+        ],
+        onreadprogress,
+      );
+
+      expect(onreadprogress).toHaveBeenCalledExactlyOnceWith(
+        "2026-01-01T12:00:00Z",
+      );
+    });
+
+    it("reports nothing when no follow-up elements are in the document", () => {
+      const manager = createScrollManager();
+      manager.scrollContainerEl = mockScrollContainer();
+      const onreadprogress = vi.fn();
+
+      manager.reportVisibleProgress(
+        [{ id: "fu-1", createdAt: "2026-01-01T12:00:00Z" }],
+        onreadprogress,
+      );
+
+      expect(onreadprogress).not.toHaveBeenCalled();
+    });
+
+    it("does nothing when scrollContainerEl is undefined", () => {
+      const manager = createScrollManager();
+      const onreadprogress = vi.fn();
+
+      manager.reportVisibleProgress(
+        [{ id: "fu-1", createdAt: "2026-01-01T12:00:00Z" }],
+        onreadprogress,
+      );
+
+      expect(onreadprogress).not.toHaveBeenCalled();
+    });
+  });
+
   describe("markScrolledInitially", () => {
     it("enables auto-scroll behavior", () => {
       const manager = createScrollManager();

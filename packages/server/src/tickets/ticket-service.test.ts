@@ -485,7 +485,7 @@ describe.skipIf(!process.env.DATABASE_URL)("TicketService (DB)", () => {
       .selectAll()
       .where("ticket_id", "=", ticketId)
       .where("source", "=", "system")
-      .where("type", "=", "status_change")
+      .where("type", "=", "status_closed")
       .execute();
     expect(followups.length).toBeGreaterThanOrEqual(1);
   });
@@ -526,13 +526,13 @@ describe.skipIf(!process.env.DATABASE_URL)("TicketService (DB)", () => {
 
     expect(updated.onHold).toBe(true);
 
-    // Verify hold_change system follow-up
+    // Verify hold_placed system follow-up
     const followups = await testDb.db
       .selectFrom("followups")
       .selectAll()
       .where("ticket_id", "=", ticketId)
       .where("source", "=", "system")
-      .where("type", "=", "hold_change")
+      .where("type", "=", "hold_placed")
       .execute();
     expect(followups.length).toBeGreaterThanOrEqual(1);
   });
@@ -888,6 +888,374 @@ describe.skipIf(!process.env.DATABASE_URL)("TicketService (DB)", () => {
     expect(withWrap!.keyWrap!.ephemeralPoint).not.toMatch(/[+/=]/);
   });
 
+  // --- listReadState ---
+
+  async function insertFollowUp(
+    ticketId: string,
+    source: "client" | "volunteer" | "system",
+    createdAt?: Date,
+    createdBy?: string,
+  ): Promise<void> {
+    await testDb.db
+      .insertInto("followups")
+      .values({
+        ticket_id: ticketId,
+        source,
+        type: source === "system" ? "status_change" : "message",
+        encrypted_content: Buffer.alloc(0),
+        ...(createdAt ? { created_at: createdAt } : {}),
+        ...(createdBy !== undefined ? { created_by: createdBy } : {}),
+      })
+      .execute();
+  }
+
+  it("listReadState silently filters tickets outside user queues", async () => {
+    const fixMine = await createTicketFixture();
+    const fixOther = await createTicketFixture();
+
+    const result = await svc.listReadState(fixMine.userId, {
+      ticketIds: [fixMine.ticketId, fixOther.ticketId],
+    });
+
+    expect(result[fixMine.ticketId]).toBeDefined();
+    expect(result[fixOther.ticketId]).toBeUndefined();
+  });
+
+  it("listReadState returns empty for a user with no queue access", async () => {
+    const { ticketId } = await createTicketFixture();
+    const outsider = await createTestUser(testDb.db);
+
+    const result = await svc.listReadState(outsider.id, {
+      ticketIds: [ticketId],
+    });
+    expect(result).toEqual({});
+  });
+
+  it("listReadState returns a null cursor without creating a row", async () => {
+    const { userId, ticketId } = await createTicketFixture();
+
+    const result = await svc.listReadState(userId, { ticketIds: [ticketId] });
+
+    expect(result[ticketId]).toBeDefined();
+    expect(result[ticketId]!.encryptedReadCursor).toBeNull();
+
+    // The read path must not lazily populate dummy rows; the "row exists
+    // = opened the detail view once" surface belongs to the detail path.
+    const rows = await testDb.db
+      .selectFrom("ticket_read_cursors")
+      .selectAll()
+      .where("ticket_id", "=", ticketId)
+      .execute();
+    expect(rows).toHaveLength(0);
+  });
+
+  it("listReadState passes stored cursor ciphertext through verbatim", async () => {
+    const { userId, ticketId } = await createTicketFixture();
+
+    const blob = Buffer.from("opaque-cursor-bytes-for-list-read-state");
+    await testDb.db
+      .insertInto("ticket_read_cursors")
+      .values({
+        ticket_id: ticketId,
+        user_id: userId,
+        encrypted_read_cursor: blob,
+      })
+      .execute();
+
+    const result = await svc.listReadState(userId, { ticketIds: [ticketId] });
+
+    expect(result[ticketId]!.encryptedReadCursor).not.toBeNull();
+    expect(result[ticketId]!.encryptedReadCursor!.equals(blob)).toBe(true);
+  });
+
+  it("listReadState excludes system follow-ups from timestamps", async () => {
+    const { userId, ticketId } = await createTicketFixture();
+
+    await insertFollowUp(ticketId, "client");
+    await insertFollowUp(ticketId, "volunteer");
+    await insertFollowUp(ticketId, "system");
+
+    const result = await svc.listReadState(userId, { ticketIds: [ticketId] });
+
+    expect(result[ticketId]!.followUpCreatedAt).toHaveLength(2);
+  });
+
+  it("listReadState excludes the caller's own follow-ups from timestamps", async () => {
+    const { userId, ticketId } = await createTicketFixture();
+    const other = await createTestUser(testDb.db);
+
+    // Client-authored rows carry a null created_by and must survive the
+    // IS DISTINCT FROM filter; only the caller's own rows drop.
+    await insertFollowUp(ticketId, "client");
+    await insertFollowUp(ticketId, "volunteer", undefined, userId);
+    await insertFollowUp(ticketId, "volunteer", undefined, other.id);
+
+    const result = await svc.listReadState(userId, { ticketIds: [ticketId] });
+
+    expect(result[ticketId]!.followUpCreatedAt).toHaveLength(2);
+  });
+
+  it("listReadState keeps the same reply visible to a different caller", async () => {
+    const { userId, ticketId, queueId } = await createTicketFixture();
+    await insertFollowUp(ticketId, "volunteer", undefined, userId);
+
+    // The author sees no timestamps; a colleague on the same queue sees one.
+    const own = await svc.listReadState(userId, { ticketIds: [ticketId] });
+    expect(own[ticketId]!.followUpCreatedAt).toHaveLength(0);
+
+    const colleague = await createTestUser(testDb.db);
+    await testDb.db
+      .insertInto("queue_assignments")
+      .values({ queue_id: queueId, user_id: colleague.id })
+      .onConflict((oc) => oc.columns(["queue_id", "user_id"]).doNothing())
+      .execute();
+    const theirs = await svc.listReadState(colleague.id, {
+      ticketIds: [ticketId],
+    });
+    expect(theirs[ticketId]!.followUpCreatedAt).toHaveLength(1);
+  });
+
+  it("listReadState caps timestamps at 20 per ticket, newest first", async () => {
+    const { userId, ticketId } = await createTicketFixture();
+
+    const base = Date.now() - 25 * 60_000;
+    for (let i = 0; i < 25; i++) {
+      await insertFollowUp(ticketId, "client", new Date(base + i * 60_000));
+    }
+
+    const result = await svc.listReadState(userId, { ticketIds: [ticketId] });
+
+    const stamps = result[ticketId]!.followUpCreatedAt;
+    expect(stamps).toHaveLength(20);
+    for (let i = 0; i < stamps.length - 1; i++) {
+      expect(stamps[i]!.getTime()).toBeGreaterThanOrEqual(
+        stamps[i + 1]!.getTime(),
+      );
+    }
+    // The 20 kept are the newest of the 25 inserted (the oldest 5 dropped).
+    expect(stamps[stamps.length - 1]!.getTime()).toBe(base + 5 * 60_000);
+  });
+
+  // --- sweepReadState ---
+
+  async function insertCursorRow(
+    userId: string,
+    ticketId: string,
+    blob?: Buffer,
+  ): Promise<Buffer> {
+    const cursor = blob ?? crypto.randomBytes(85);
+    await testDb.db
+      .insertInto("ticket_read_cursors")
+      .values({
+        ticket_id: ticketId,
+        user_id: userId,
+        encrypted_read_cursor: cursor,
+      })
+      .execute();
+    return cursor;
+  }
+
+  async function insertKeyWrapRow(
+    ticketId: string,
+    volunteerId: string,
+    keyGeneration: string,
+  ): Promise<CreateTicketKeyWrap> {
+    const wrap: CreateTicketKeyWrap = {
+      ephemeralPoint: crypto.randomBytes(32),
+      nonce: crypto.randomBytes(24),
+      wrappedKey: crypto.randomBytes(48),
+    };
+    await testDb.db
+      .insertInto("ticket_key_wraps")
+      .values({
+        ticket_id: ticketId,
+        volunteer_id: volunteerId,
+        key_generation: keyGeneration,
+        ephemeral_point: wrap.ephemeralPoint,
+        nonce: wrap.nonce,
+        wrapped_key: wrap.wrappedKey,
+        algorithm: "ecies-ristretto255-v1",
+      })
+      .execute();
+    return wrap;
+  }
+
+  async function ticketKeyGeneration(ticketId: string): Promise<string> {
+    const row = await testDb.db
+      .selectFrom("tickets")
+      .select("key_generation")
+      .where("id", "=", ticketId)
+      .executeTakeFirstOrThrow();
+    return row.key_generation;
+  }
+
+  it("sweepReadState pages all cursor rows without gap or overlap", async () => {
+    const { userId, queueId, ticketId } = await createTicketFixture();
+    const ticketIds = [ticketId];
+    for (let i = 0; i < 4; i++) {
+      const extra = await createTestTicketFixture(testDb.db, { queueId });
+      ticketIds.push(extra.ticketId);
+    }
+    for (const id of ticketIds) {
+      await insertCursorRow(userId, id);
+    }
+
+    const pageOne = await svc.sweepReadState(userId, { limit: 3 });
+    expect(pageOne.items).toHaveLength(3);
+    expect(pageOne.nextCursor).toBe(pageOne.items[2]!.ticketId);
+
+    const pageTwo = await svc.sweepReadState(userId, {
+      cursor: pageOne.nextCursor!,
+      limit: 3,
+    });
+    expect(pageTwo.items).toHaveLength(2);
+    expect(pageTwo.nextCursor).toBeNull();
+
+    // Lowercase-hex uuid string order matches PostgreSQL's bytewise uuid
+    // order, so the walked pages must equal the sorted id set exactly.
+    const walked = [...pageOne.items, ...pageTwo.items].map((e) => e.ticketId);
+    expect(walked).toEqual([...ticketIds].sort());
+  });
+
+  it("sweepReadState silently filters tickets outside user queues", async () => {
+    const mine = await createTicketFixture();
+    const other = await createTicketFixture();
+
+    await insertCursorRow(mine.userId, mine.ticketId);
+    // Artificial out-of-scope row: the user opened this ticket while
+    // they still had queue access, then lost the queue.
+    await insertCursorRow(mine.userId, other.ticketId);
+
+    const result = await svc.sweepReadState(mine.userId, { limit: 200 });
+    const ids = result.items.map((e) => e.ticketId);
+    expect(ids).toContain(mine.ticketId);
+    expect(ids).not.toContain(other.ticketId);
+  });
+
+  it("sweepReadState excludes cursor rows on closed tickets", async () => {
+    const { userId, ticketId } = await createTicketFixture();
+
+    await testDb.db
+      .updateTable("tickets")
+      .set({ status: "closed" })
+      .where("id", "=", ticketId)
+      .execute();
+    // Close normally deletes cursor rows; insert one artificially so the
+    // sweep's status filter is proven on its own.
+    await insertCursorRow(userId, ticketId);
+
+    const result = await svc.sweepReadState(userId, { limit: 200 });
+    expect(result.items).toHaveLength(0);
+    expect(result.nextCursor).toBeNull();
+  });
+
+  it("sweepReadState returns null latestActivityAt for system-only tickets", async () => {
+    const { userId, ticketId } = await createTicketFixture();
+    await insertCursorRow(userId, ticketId);
+    await insertFollowUp(ticketId, "system");
+
+    const result = await svc.sweepReadState(userId, { limit: 200 });
+    expect(result.items).toHaveLength(1);
+    expect(result.items[0]!.latestActivityAt).toBeNull();
+  });
+
+  it("sweepReadState reports the newest non-system activity time", async () => {
+    const { userId, ticketId } = await createTicketFixture();
+    await insertCursorRow(userId, ticketId);
+
+    const base = Date.now() - 10 * 60_000;
+    await insertFollowUp(ticketId, "client", new Date(base));
+    await insertFollowUp(ticketId, "volunteer", new Date(base + 60_000));
+    // Newest overall is a system event; it must not win the max.
+    await insertFollowUp(ticketId, "system", new Date(base + 120_000));
+
+    const result = await svc.sweepReadState(userId, { limit: 200 });
+    expect(result.items[0]!.latestActivityAt?.getTime()).toBe(base + 60_000);
+  });
+
+  it("sweepReadState ignores the caller's own replies for latest activity", async () => {
+    const { userId, ticketId } = await createTicketFixture();
+    await insertCursorRow(userId, ticketId);
+
+    const base = Date.now() - 10 * 60_000;
+    // A ticket whose only reply is the caller's own reads as no activity.
+    await insertFollowUp(
+      ticketId,
+      "volunteer",
+      new Date(base + 60_000),
+      userId,
+    );
+    const own = await svc.sweepReadState(userId, { limit: 200 });
+    expect(own.items).toHaveLength(1);
+    expect(own.items[0]!.latestActivityAt).toBeNull();
+
+    // An older reply by someone else still wins over the caller's newer one.
+    const other = await createTestUser(testDb.db);
+    await insertFollowUp(ticketId, "volunteer", new Date(base), other.id);
+    const withOther = await svc.sweepReadState(userId, { limit: 200 });
+    expect(withOther.items[0]!.latestActivityAt?.getTime()).toBe(base);
+  });
+
+  it("sweepReadState passes cursor ciphertext through verbatim", async () => {
+    const { userId, ticketId } = await createTicketFixture();
+    const blob = Buffer.from("opaque-cursor-bytes-for-the-sweep");
+    await insertCursorRow(userId, ticketId, blob);
+
+    const result = await svc.sweepReadState(userId, { limit: 200 });
+    expect(result.items[0]!.encryptedReadCursor.equals(blob)).toBe(true);
+  });
+
+  it("sweepReadState only returns tickets with cursor rows and creates none", async () => {
+    const { userId, ticketId } = await createTicketFixture();
+
+    const result = await svc.sweepReadState(userId, { limit: 200 });
+    expect(result.items).toHaveLength(0);
+
+    // The sweep is read-only: it must not materialize dummy rows the way
+    // the detail path's getOrCreate does.
+    const rows = await testDb.db
+      .selectFrom("ticket_read_cursors")
+      .selectAll()
+      .where("ticket_id", "=", ticketId)
+      .execute();
+    expect(rows).toHaveLength(0);
+  });
+
+  it("sweepReadState returns the key wrap at the ticket's current generation", async () => {
+    const { userId, ticketId } = await createTicketFixture();
+    await insertCursorRow(userId, ticketId);
+    const generation = await ticketKeyGeneration(ticketId);
+    const wrap = await insertKeyWrapRow(ticketId, userId, generation);
+
+    const result = await svc.sweepReadState(userId, { limit: 200 });
+    const entry = result.items[0]!;
+    expect(entry.keyWrap).not.toBeNull();
+    expect(entry.keyWrap!.ephemeralPoint).toBe(
+      encode(new Uint8Array(wrap.ephemeralPoint)),
+    );
+    expect(entry.keyWrap!.nonce).toBe(encode(new Uint8Array(wrap.nonce)));
+    expect(entry.keyWrap!.wrappedKey).toBe(
+      encode(new Uint8Array(wrap.wrappedKey)),
+    );
+  });
+
+  it("sweepReadState returns a null key wrap for an unwrapped user", async () => {
+    const { userId, queueId, ticketId } = await createTicketFixture();
+    await insertCursorRow(userId, ticketId);
+
+    // A wrap at a stale generation does not count: the join is matched
+    // to the ticket's current key_generation, so it resolves null too.
+    const stale = await createTestTicketFixture(testDb.db, { queueId });
+    await insertCursorRow(userId, stale.ticketId);
+    await insertKeyWrapRow(stale.ticketId, userId, crypto.randomUUID());
+
+    const result = await svc.sweepReadState(userId, { limit: 200 });
+    expect(result.items).toHaveLength(2);
+    for (const entry of result.items) {
+      expect(entry.keyWrap).toBeNull();
+    }
+  });
+
   it("list returns assignedDisplayName as Buffer when ticket is assigned", async () => {
     const { userId, clientId, queueId } = await createClientFixture();
 
@@ -1126,6 +1494,63 @@ describe.skipIf(!process.env.DATABASE_URL)("TicketService (DB)", () => {
     expect(ourReturned).toHaveLength(5);
   });
 
+  it("keyset pagination neither skips nor repeats rows when created_at ties", async () => {
+    const { userId, queueId } = await createClientFixture();
+
+    const ticketIds: string[] = [];
+    for (let i = 0; i < 4; i++) {
+      const c = await createTestClientFixture(testDb.db, { queueId });
+      const t = await svc.create(c.userId, {
+        id: crypto.randomUUID(),
+        clientId: c.clientId,
+        queueId,
+        encryptedTitle: Buffer.from(`tie-${i}`),
+        encryptedDescription: Buffer.from("desc"),
+        priority: "normal",
+        keyGeneration: crypto.randomUUID(),
+        keyWrap: fakeKeyWrap(),
+      });
+      ticketIds.push(t.id);
+    }
+
+    // Force an exact created_at tie so the id tie-break is the only
+    // discriminator across the page boundary. The shared fixture has no
+    // createdAt override; a direct update is fine here.
+    await testDb.db
+      .updateTable("tickets")
+      .set({ created_at: new Date("2026-01-15T12:00:00.000Z") })
+      .where("id", "in", ticketIds)
+      .execute();
+
+    // The date sort ties on created_at alone; the msgs sort additionally
+    // ties on the correlated follow-up count (zero for all four). On a
+    // descending sort the id tie-break must still walk ids ascending, or
+    // the second page repeats earlier rows and drops later ones.
+    for (const sortBy of ["date", "msgs"] as const) {
+      for (const sortDirection of ["desc", "asc"] as const) {
+        const page1 = await svc.list(userId, {
+          queueIds: [queueId],
+          sortBy,
+          sortDirection,
+          limit: 2,
+        });
+        const page2 = await svc.list(userId, {
+          queueIds: [queueId],
+          sortBy,
+          sortDirection,
+          limit: 2,
+          cursor: page1[1]!.id,
+        });
+
+        const returned = [...page1, ...page2]
+          .map((t) => t.id)
+          .filter((id) => ticketIds.includes(id));
+        expect(new Set(returned).size).toBe(4);
+        expect(returned).toHaveLength(4);
+      }
+    }
+  });
+
   it("sortBy last_activity pagination covers tickets with and without activity", async () => {
     const { userId, queueId } = await createClientFixture();
 
@@ -1229,5 +1654,450 @@ describe.skipIf(!process.env.DATABASE_URL)("TicketService (DB)", () => {
     expect(returnedIds[0]).toBe(ticketIds[2]);
     expect(returnedIds[1]).toBe(ticketIds[1]);
     expect(returnedIds[2]).toBe(ticketIds[0]);
+  });
+
+  // --- Sort mode keyset cursor: queue ---
+
+  it("sortBy queue pagination covers all tickets without duplicates", async () => {
+    const { userId } = await createClientFixture();
+
+    // Create 2 queues with different sort_order
+    const q1 = await createTestQueue(testDb.db, {
+      label: "Q-A-" + crypto.randomUUID().slice(0, 4),
+      sortOrder: 9010,
+    });
+    const q2 = await createTestQueue(testDb.db, {
+      label: "Q-B-" + crypto.randomUUID().slice(0, 4),
+      sortOrder: 9020,
+    });
+
+    // Assign user to both queues
+    for (const qId of [q1.id, q2.id]) {
+      await testDb.db
+        .insertInto("queue_assignments")
+        .values({ queue_id: qId, user_id: userId })
+        .onConflict((oc) => oc.columns(["queue_id", "user_id"]).doNothing())
+        .execute();
+    }
+
+    const ticketIds: string[] = [];
+    // 2 tickets in q1, 2 in q2
+    for (let i = 0; i < 2; i++) {
+      const c1 = await createTestClientFixture(testDb.db, { queueId: q1.id });
+      const t1 = await svc.create(c1.userId, {
+        id: crypto.randomUUID(),
+        clientId: c1.clientId,
+        queueId: q1.id,
+        encryptedTitle: Buffer.from(`q1-${i}`),
+        encryptedDescription: Buffer.from("d"),
+        priority: "normal",
+        keyGeneration: crypto.randomUUID(),
+        keyWrap: fakeKeyWrap(),
+      });
+      ticketIds.push(t1.id);
+
+      const c2 = await createTestClientFixture(testDb.db, { queueId: q2.id });
+      const t2 = await svc.create(c2.userId, {
+        id: crypto.randomUUID(),
+        clientId: c2.clientId,
+        queueId: q2.id,
+        encryptedTitle: Buffer.from(`q2-${i}`),
+        encryptedDescription: Buffer.from("d"),
+        priority: "normal",
+        keyGeneration: crypto.randomUUID(),
+        keyWrap: fakeKeyWrap(),
+      });
+      ticketIds.push(t2.id);
+    }
+
+    // Page through with limit 2
+    const page1 = await svc.list(userId, {
+      queueIds: [q1.id, q2.id],
+      sortBy: "queue",
+      sortDirection: "asc",
+      limit: 2,
+    });
+    const page2 = await svc.list(userId, {
+      queueIds: [q1.id, q2.id],
+      sortBy: "queue",
+      sortDirection: "asc",
+      limit: 2,
+      cursor: page1[1]!.id,
+    });
+
+    const allReturned = [...page1.map((t) => t.id), ...page2.map((t) => t.id)];
+    const ours = allReturned.filter((id) => ticketIds.includes(id));
+    expect(new Set(ours).size).toBe(4);
+  });
+
+  // --- Sort mode keyset cursor: client ---
+
+  it("sortBy client pagination covers all tickets without duplicates", async () => {
+    const { userId, queueId } = await createClientFixture();
+
+    const ticketIds: string[] = [];
+    for (let i = 0; i < 4; i++) {
+      const c = await createTestClientFixture(testDb.db, { queueId });
+      const t = await svc.create(c.userId, {
+        id: crypto.randomUUID(),
+        clientId: c.clientId,
+        queueId,
+        encryptedTitle: Buffer.from(`client-sort-${i}`),
+        encryptedDescription: Buffer.from("d"),
+        priority: "normal",
+        keyGeneration: crypto.randomUUID(),
+        keyWrap: fakeKeyWrap(),
+      });
+      ticketIds.push(t.id);
+    }
+
+    const page1 = await svc.list(userId, {
+      queueIds: [queueId],
+      sortBy: "client",
+      sortDirection: "asc",
+      limit: 2,
+    });
+    const page2 = await svc.list(userId, {
+      queueIds: [queueId],
+      sortBy: "client",
+      sortDirection: "asc",
+      limit: 2,
+      cursor: page1[1]!.id,
+    });
+
+    const allReturned = [...page1.map((t) => t.id), ...page2.map((t) => t.id)];
+    const ours = allReturned.filter((id) => ticketIds.includes(id));
+    expect(new Set(ours).size).toBe(4);
+  });
+
+  // --- Sort mode keyset cursor: msgs ---
+
+  it("sortBy msgs pagination covers all tickets without duplicates", async () => {
+    const { userId, queueId } = await createClientFixture();
+
+    const ticketIds: string[] = [];
+    for (let i = 0; i < 4; i++) {
+      const c = await createTestClientFixture(testDb.db, { queueId });
+      const t = await svc.create(c.userId, {
+        id: crypto.randomUUID(),
+        clientId: c.clientId,
+        queueId,
+        encryptedTitle: Buffer.from(`msgs-sort-${i}`),
+        encryptedDescription: Buffer.from("d"),
+        priority: "normal",
+        keyGeneration: crypto.randomUUID(),
+        keyWrap: fakeKeyWrap(),
+      });
+      ticketIds.push(t.id);
+
+      // Add different numbers of follow-ups to differentiate msg counts
+      for (let j = 0; j <= i; j++) {
+        await testDb.db
+          .insertInto("followups")
+          .values({
+            ticket_id: t.id,
+            source: "volunteer",
+            type: "message",
+            encrypted_content: Buffer.from(`fu-${i}-${j}`),
+          })
+          .execute();
+      }
+    }
+
+    const page1 = await svc.list(userId, {
+      queueIds: [queueId],
+      sortBy: "msgs",
+      sortDirection: "desc",
+      limit: 2,
+    });
+    const page2 = await svc.list(userId, {
+      queueIds: [queueId],
+      sortBy: "msgs",
+      sortDirection: "desc",
+      limit: 2,
+      cursor: page1[1]!.id,
+    });
+
+    const allReturned = [...page1.map((t) => t.id), ...page2.map((t) => t.id)];
+    const ours = allReturned.filter((id) => ticketIds.includes(id));
+    expect(new Set(ours).size).toBe(4);
+  });
+
+  // --- Create: clientToken path ---
+
+  it("create with clientToken resolves pending client", async () => {
+    const { userId, queueId } = await createClientFixture();
+    const pendingClients = new Map<
+      string,
+      {
+        phoneHash: string;
+        opsEncryptedPhone: Buffer;
+        orgSchema: string;
+        createdAt: number;
+      }
+    >();
+
+    const token = crypto.randomUUID();
+    const phoneHash = `ph-pending-${crypto.randomUUID().slice(0, 8)}`;
+    pendingClients.set(token, {
+      phoneHash,
+      opsEncryptedPhone: Buffer.from("encrypted-phone"),
+      orgSchema: "test_schema",
+      createdAt: Date.now(),
+    });
+
+    // Build a new service with the pendingClients map
+    const qps = createQueuePermissionsService(testDb.db);
+    const svcWithPending = createTicketService(
+      testDb.db,
+      access,
+      (uid) => qps.getUserQueues(uid),
+      { pendingClients },
+    );
+
+    const ticket = await svcWithPending.create(userId, {
+      id: crypto.randomUUID(),
+      clientToken: token,
+      queueId,
+      encryptedTitle: Buffer.from("pending-title"),
+      encryptedDescription: Buffer.from("pending-desc"),
+      priority: "normal",
+      keyGeneration: crypto.randomUUID(),
+      keyWrap: fakeKeyWrap(),
+    });
+
+    expect(ticket.status).toBe("open");
+    expect(ticket.clientId).toBeTruthy();
+    // Token should be consumed
+    expect(pendingClients.has(token)).toBe(false);
+  });
+
+  // --- Create: neither clientId nor clientToken ---
+
+  it("create without clientId or clientToken throws ValidationError", async () => {
+    const { userId, queueId } = await createClientFixture();
+
+    const { ValidationError } = await import("../errors.js");
+    await expect(
+      svc.create(userId, {
+        id: crypto.randomUUID(),
+        queueId,
+        encryptedTitle: Buffer.from("t"),
+        encryptedDescription: Buffer.from("d"),
+        priority: "normal",
+        keyGeneration: crypto.randomUUID(),
+        keyWrap: fakeKeyWrap(),
+      }),
+    ).rejects.toBeInstanceOf(ValidationError);
+  });
+
+  // --- Create: expired clientToken ---
+
+  it("create with expired clientToken throws NotFoundError", async () => {
+    const { userId, queueId } = await createClientFixture();
+    const pendingClients = new Map<
+      string,
+      {
+        phoneHash: string;
+        opsEncryptedPhone: Buffer;
+        orgSchema: string;
+        createdAt: number;
+      }
+    >();
+
+    const qps = createQueuePermissionsService(testDb.db);
+    const svcWithPending = createTicketService(
+      testDb.db,
+      access,
+      (uid) => qps.getUserQueues(uid),
+      { pendingClients },
+    );
+
+    // Token does not exist in the map
+    await expect(
+      svcWithPending.create(userId, {
+        id: crypto.randomUUID(),
+        clientToken: "nonexistent-token",
+        queueId,
+        encryptedTitle: Buffer.from("t"),
+        encryptedDescription: Buffer.from("d"),
+        priority: "normal",
+        keyGeneration: crypto.randomUUID(),
+        keyWrap: fakeKeyWrap(),
+      }),
+    ).rejects.toBeInstanceOf(NotFoundError);
+  });
+
+  // --- Create: clientToken without pendingClients map ---
+
+  it("create with clientToken but no pendingClients map throws InternalError", async () => {
+    const { userId, queueId } = await createClientFixture();
+
+    const { InternalError } = await import("../errors.js");
+    // The default svc has no pendingClients
+    await expect(
+      svc.create(userId, {
+        id: crypto.randomUUID(),
+        clientToken: "some-token",
+        queueId,
+        encryptedTitle: Buffer.from("t"),
+        encryptedDescription: Buffer.from("d"),
+        priority: "normal",
+        keyGeneration: crypto.randomUUID(),
+        keyWrap: fakeKeyWrap(),
+      }),
+    ).rejects.toBeInstanceOf(InternalError);
+  });
+
+  // --- searchClients without encryptor ---
+
+  it("searchClients returns masked *** when no fieldEncryptor is provided", async () => {
+    const { clientId } = await createClientFixture();
+
+    // Read the client's alias to search for it
+    const clientRow = await testDb.db
+      .selectFrom("clients")
+      .select("alias")
+      .where("id", "=", clientId)
+      .executeTakeFirstOrThrow();
+
+    const results = await svc.searchClients(clientRow.alias, 10);
+    const found = results.find((r) => r.id === clientId);
+    expect(found).toBeDefined();
+    expect(found!.maskedPhone).toBe("***");
+    expect(found!.alias).toBe(clientRow.alias);
+  });
+
+  // --- counts ---
+
+  it("counts returns zero when user has no queue access", async () => {
+    const outsider = await createTestUser(testDb.db);
+    const result = await svc.counts(outsider.id);
+    expect(result.total).toBe(0);
+    expect(result.new).toBe(0);
+    expect(result.active).toBe(0);
+    expect(result.closed).toBe(0);
+    expect(result.mine).toBe(0);
+  });
+
+  // --- update with empty changes returns existing ticket ---
+
+  it("update with no changes returns existing ticket", async () => {
+    const { userId, ticketId } = await createTicketFixture();
+
+    const result = await svc.update(userId, { ticketId });
+    expect(result.id).toBe(ticketId);
+    expect(result.status).toBe("open");
+  });
+
+  it("update with non-existent ticket and no changes throws NotFoundError", async () => {
+    const { userId } = await createTicketFixture();
+
+    await expect(
+      svc.update(userId, { ticketId: crypto.randomUUID() }),
+    ).rejects.toBeInstanceOf(ForbiddenError);
+  });
+
+  // --- reopen on already-open ticket throws NotFoundError ---
+
+  it("reopen on already-open ticket throws NotFoundError", async () => {
+    const { userId, ticketId } = await createTicketFixture();
+
+    await expect(
+      svc.reopen(userId, ticketId, crypto.randomUUID()),
+    ).rejects.toBeInstanceOf(NotFoundError);
+  });
+
+  // --- close on already-closed ticket throws NotFoundError ---
+
+  it("close on already-closed ticket throws NotFoundError", async () => {
+    const { userId, ticketId } = await createTicketFixture();
+
+    await svc.close(userId, ticketId);
+    await expect(svc.close(userId, ticketId)).rejects.toBeInstanceOf(
+      NotFoundError,
+    );
+  });
+
+  // --- list filters by date ranges ---
+
+  it("list filters by createdAfter and createdBefore", async () => {
+    const { userId, queueId } = await createClientFixture();
+    const c = await createTestClientFixture(testDb.db, { queueId });
+    const ticket = await svc.create(c.userId, {
+      id: crypto.randomUUID(),
+      clientId: c.clientId,
+      queueId,
+      encryptedTitle: Buffer.from("date-range-test"),
+      encryptedDescription: Buffer.from("d"),
+      priority: "normal",
+      keyGeneration: crypto.randomUUID(),
+      keyWrap: fakeKeyWrap(),
+    });
+
+    // Filter with future range should exclude it
+    const futureDate = new Date(Date.now() + 86_400_000).toISOString();
+    const farFuture = new Date(Date.now() + 172_800_000).toISOString();
+    const empty = await svc.list(userId, {
+      queueIds: [queueId],
+      createdAfter: futureDate,
+      createdBefore: farFuture,
+      limit: 100,
+    });
+    expect(empty.some((t) => t.id === ticket.id)).toBe(false);
+
+    // Filter with past to now should include it
+    const pastDate = new Date(Date.now() - 86_400_000).toISOString();
+    const nowIsh = new Date(Date.now() + 1000).toISOString();
+    const included = await svc.list(userId, {
+      queueIds: [queueId],
+      createdAfter: pastDate,
+      createdBefore: nowIsh,
+      limit: 100,
+    });
+    expect(included.some((t) => t.id === ticket.id)).toBe(true);
+  });
+
+  // --- list with assignedTo = null ---
+
+  it("list with assignedTo=null returns only unassigned tickets", async () => {
+    const { userId, queueId } = await createClientFixture();
+
+    const c1 = await createTestClientFixture(testDb.db, { queueId });
+    const unassigned = await svc.create(c1.userId, {
+      id: crypto.randomUUID(),
+      clientId: c1.clientId,
+      queueId,
+      encryptedTitle: Buffer.from("unassigned"),
+      encryptedDescription: Buffer.from("d"),
+      priority: "normal",
+      keyGeneration: crypto.randomUUID(),
+      keyWrap: fakeKeyWrap(),
+    });
+
+    const c2 = await createTestClientFixture(testDb.db, { queueId });
+    const assigned = await svc.create(c2.userId, {
+      id: crypto.randomUUID(),
+      clientId: c2.clientId,
+      queueId,
+      encryptedTitle: Buffer.from("assigned"),
+      encryptedDescription: Buffer.from("d"),
+      priority: "normal",
+      keyGeneration: crypto.randomUUID(),
+      keyWrap: fakeKeyWrap(),
+    });
+    await testDb.db
+      .updateTable("tickets")
+      .set({ assigned_to: userId })
+      .where("id", "=", assigned.id)
+      .execute();
+
+    const results = await svc.list(userId, {
+      queueIds: [queueId],
+      assignedTo: null,
+      limit: 100,
+    });
+    expect(results.some((t) => t.id === unassigned.id)).toBe(true);
+    expect(results.some((t) => t.id === assigned.id)).toBe(false);
   });
 });

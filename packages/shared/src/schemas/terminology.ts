@@ -31,11 +31,11 @@ export const TERMINOLOGY_DEFAULTS_EN: TerminologyLabels = {
   clients: "clients",
   ticket: "ticket",
   tickets: "tickets",
-  manager: "manager",
-  managers: "managers",
+  manager: "coordinator",
+  managers: "coordinators",
   queue: "queue",
   queues: "queues",
-  knowledgeBase: "knowledge base",
+  knowledgeBase: "library",
 };
 
 export const TERMINOLOGY_DEFAULTS: Readonly<Record<string, TerminologyLabels>> =
@@ -48,11 +48,11 @@ export const TERMINOLOGY_DEFAULTS: Readonly<Record<string, TerminologyLabels>> =
       clients: "clientes",
       ticket: "ticket",
       tickets: "tickets",
-      manager: "gerente",
-      managers: "gerentes",
+      manager: "coordinador",
+      managers: "coordinadores",
       queue: "cola",
       queues: "colas",
-      knowledgeBase: "base de conocimiento",
+      knowledgeBase: "biblioteca",
     },
   };
 
@@ -70,11 +70,11 @@ export const TERMINOLOGY_SUGGESTIONS: Readonly<
     "Intake",
     "Referral",
   ],
-  manager: ["Manager", "Supervisor", "Coordinator", "Team Lead", "Shift Lead"],
+  manager: ["Coordinator", "Manager", "Supervisor", "Team Lead", "Shift Lead"],
   queue: ["Queue", "Team", "Group", "Program"],
   knowledgeBase: [
-    "Knowledge Base",
     "Library",
+    "Knowledge Base",
     "Resources",
     "Handbook",
     "Guide",

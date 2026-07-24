@@ -9,6 +9,7 @@
   import { withTerms } from "$lib/terminology/with-terms.js";
   import { trpc } from "$lib/trpc/index.js";
   import { createVolunteersQuery } from "$lib/tickets/queries.js";
+  import { getCollator } from "$lib/utils/collator.js";
   import { getOrgDecryptCache, getCurrentUserId } from "$lib/crypto/context.js";
   import { requireRouter } from "$lib/errors.js";
   import ShellSheet from "$lib/shell/ShellSheet.svelte";
@@ -71,7 +72,7 @@
     results.sort((a, b) => {
       if (a.isCurrentUser && !b.isCurrentUser) return -1;
       if (!a.isCurrentUser && b.isCurrentUser) return 1;
-      return a.displayName.localeCompare(b.displayName);
+      return getCollator().compare(a.displayName, b.displayName);
     });
 
     return results;

@@ -36,6 +36,19 @@ export interface ReadCursorService {
    */
   getOrCreate(userId: string, ticketId: string): Promise<ReadCursorRecord>;
 
+  /**
+   * Batch-read cursors for a user across tickets, keyed by ticket id.
+   * SELECT-only: absent rows are NOT lazily populated, unlike getOrCreate.
+   * The list read path must not write, so the "cursor row exists = opened
+   * the detail view once" metadata surface stays exclusive to the detail
+   * path. Queue-access scoping is the caller's job (ticket-service filters
+   * requested ids to accessible queues before calling).
+   */
+  getBatch(
+    userId: string,
+    ticketIds: readonly string[],
+  ): Promise<Map<string, Buffer>>;
+
   /** Update the encrypted read cursor for a user on a ticket. */
   update(
     userId: string,
@@ -99,6 +112,19 @@ export function createReadCursorService(
         userId: row.user_id,
         encryptedReadCursor: row.encrypted_read_cursor,
       };
+    },
+
+    async getBatch(userId, ticketIds) {
+      if (ticketIds.length === 0) return new Map<string, Buffer>();
+
+      const rows = await db
+        .selectFrom("ticket_read_cursors")
+        .select(["ticket_id", "encrypted_read_cursor"])
+        .where("user_id", "=", userId)
+        .where("ticket_id", "in", [...ticketIds])
+        .execute();
+
+      return new Map(rows.map((r) => [r.ticket_id, r.encrypted_read_cursor]));
     },
 
     async update(userId, ticketId, encryptedReadCursor) {

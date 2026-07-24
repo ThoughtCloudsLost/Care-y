@@ -1,5 +1,6 @@
 <script lang="ts">
   import { Card, List, ListInput, DialogButton } from "konsta/svelte";
+  import { DIALOG_DESTRUCTIVE_CLASS } from "$lib/components/shared/konsta-classes.js";
   import {
     createQuery,
     createMutation,
@@ -232,7 +233,7 @@
 <div class="templates-section">
   {#if templatesQuery.isLoading}
     <div class="tpl-content skeleton-pulse">
-      <div class="tpl-surface">
+      <div class="tpl-surface card-elevated">
         {#each { length: 3 } as _, i (i)}
           <div class="tpl-row-skeleton">
             <span class="tpl-badge"><InlineSkeleton width="6ch" /></span>
@@ -330,9 +331,8 @@
     </SoftButton>
   {/snippet}
   <div class="sheet-content">
-    <List strongIos outlineIos nested>
+    <List nested>
       <ListInput
-        outline
         type="select"
         dropdown
         label={m.admin_templates_type_label()}
@@ -352,7 +352,6 @@
       </ListInput>
 
       <ListInput
-        outline
         type="select"
         dropdown
         label={m.admin_templates_locale_label()}
@@ -369,7 +368,6 @@
       </ListInput>
 
       <ListInput
-        outline
         type="textarea"
         label={m.admin_templates_text_label()}
         inputId="tpl-text"
@@ -452,7 +450,7 @@
     </DialogButton>
     <DialogButton
       strong
-      class="text-[--color-red-500] font-semibold"
+      class={DIALOG_DESTRUCTIVE_CLASS}
       onclick={confirmDelete}
     >
       {m.admin_templates_delete()}
@@ -487,7 +485,7 @@
   }
 
   .section-divider {
-    border-top: 1px solid var(--divider);
+    border-top: 1px solid var(--hair, var(--divider));
     margin: var(--space-sm) 0;
   }
 
@@ -517,10 +515,6 @@
   .tpl-surface {
     display: flex;
     flex-direction: column;
-    background: var(--card-bg, var(--surface-1));
-    border: 1px solid var(--card-border, transparent);
-    box-shadow: var(--card-shadow, none);
-    border-radius: var(--card-radius);
     overflow: hidden;
   }
 
@@ -549,7 +543,8 @@
     font-size: var(--text-base);
     color: var(--ink);
     padding: var(--space-sm) 0;
-    border-bottom: 1px solid color-mix(in srgb, var(--divider) 50%, transparent);
+    border-bottom: 1px solid
+      color-mix(in srgb, var(--hair, var(--divider)) 50%, transparent);
   }
 
   .tpl-row:last-child {
@@ -561,7 +556,7 @@
     align-items: center;
     gap: var(--space-sm);
     padding: var(--space-lg) var(--page-pad-x);
-    border-bottom: 1px solid var(--divider);
+    border-bottom: 1px solid var(--hair, var(--divider));
   }
 
   .tpl-row-skeleton:last-child {
@@ -627,22 +622,12 @@
   }
 
   .char-count.over-limit {
-    color: var(--color-red-500);
+    color: var(--danger, var(--color-red-500));
     font-weight: 600;
   }
 
-  .field-help {
-    font-size: var(--text-xs);
-    color: var(--muted);
-    margin: calc(-1 * var(--space-sm)) 0 0;
-    line-height: 1.4;
-  }
-
-  .field-error {
-    font-size: var(--text-xs);
-    color: var(--color-red-500);
-    margin: calc(-1 * var(--space-sm)) 0 0;
-  }
+  /* .field-help and .field-error come from the shared form primitives
+     (shared.css) */
 
   .sheet-actions {
     display: flex;
@@ -660,7 +645,7 @@
     padding: 0.625rem;
     border: none;
     background: transparent;
-    color: var(--color-red-500);
+    color: var(--danger, var(--color-red-500));
     font-size: var(--text-sm);
     font-weight: 500;
     font-family: inherit;

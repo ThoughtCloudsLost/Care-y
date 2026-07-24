@@ -18,12 +18,25 @@
   --font-material: var(--theme-font-ui);
 }
 
-/* iOS Dynamic Type: swap body font to system font so text scales with the
-   user's preferred size in Settings > Accessibility > Display & Text Size.
-   Headings (--theme-font-display) keep the theme's custom font for branding. */
-@supports (-webkit-touch-callout: none) {
-  :root {
-    --theme-font-ui: -apple-system, system-ui, sans-serif;
+/* iOS Dynamic Type: the font shorthand with -apple-system-body carries the
+   user's preferred text size (Settings > Accessibility > Display & Text Size)
+   into the root font-size, so every rem-based token scales with it. The theme
+   font family survives because body { font-family: var(--theme-font-ui) }
+   re-applies it below the root; only the size hook lives here.
+
+   Both guard conditions matter: -webkit-touch-callout restricts the rule to
+   iOS (macOS Safari also parses font: -apple-system-body but resolves it
+   ~13px, which would shrink the whole desktop), and the font condition
+   asserts the Apple-only shorthand value actually parses. The shorthand
+   resets line-height, so the preflight value is re-asserted.
+
+   Known, accepted consequence: at the default iOS text size the root
+   resolves ~17px (~6% larger than Android/desktop). That is platform
+   correct; do not compensate. */
+@supports (-webkit-touch-callout: none) and (font: -apple-system-body) {
+  html {
+    font: -apple-system-body;
+    line-height: 1.5; /* shorthand resets it; re-assert preflight value */
   }
 }
 
@@ -71,11 +84,22 @@
   /* Divider color (6% ink) */
   --divider: color-mix(in srgb, var(--ink) 6%, transparent);
 
+  /* Row-hover wash for the data-table anatomy: one 6% step of ink over
+     --raised (mirrors the --divider step), so it stays visible against
+     both paper and raised surfaces and flips correctly in dark. */
+  --raised-hover: color-mix(in srgb, var(--raised) 94%, var(--ink) 6%);
+
   /* ── Typography scale ── */
   --text-xs: 0.6875rem; /* 11px - badges, chips, tiny labels */
   --text-sm: 0.75rem; /* 12px - meta, captions, timestamps */
   --text-base: 0.8125rem; /* 13px - body text, descriptions */
   --text-md: 0.9375rem; /* 15px - card titles, client aliases */
+  --text-lg: 1.0625rem; /* 17px - overlay titles (dialog, action sheet) */
+
+  /* Sandblasted-glass noise (SVG feTurbulence tile). Consumers layer it in
+     a ::after at low opacity; invert(1) flips it for light surfaces. Used
+     by .preview-window below and by prism.css (soft buttons, group titles). */
+  --texture-noise: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.7' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
 }
 
 /* ── Desktop responsive tokens ── */
@@ -108,11 +132,9 @@
     display: none;
   }
 
-  .ticket-card-selected {
-    outline: 2px solid var(--brand-primary);
-    outline-offset: -2px;
-    border-radius: var(--card-radius, 0.75rem);
-  }
+  /* Split-pane ticket selection is styled by TicketCard itself
+     (brand-soft background on the card anatomy); the page still
+     applies the .ticket-card-selected wrapper class as the hook. */
 }
 
 /* Color scheme set dynamically by the blocking script in app.html
@@ -360,12 +382,74 @@ html.glass-light.dark {
   font-weight: 700;
 }
 
-/* Elevated card: base surface. Each theme overrides with its visual treatment. */
+/* Elevated card: the Inkwell card anatomy. Hair-2 border on raised
+   paper, no shadow. Dev themes override with their own treatments. */
 .card-elevated {
-  background: var(--card-bg, var(--surface-1));
+  background: var(--raised);
+  border: 1px solid var(--hair-2);
   border-radius: var(--card-radius);
-  border: 1px solid var(--card-border, rgba(128, 128, 128, 0.12));
-  box-shadow: var(--card-shadow, none);
+}
+
+/* ── Ticket preview window: etched-glass pane ──────────────────────
+   Prism's frosted recipe (tint + blur/desaturate + noise grain),
+   promoted to the cross-theme identity for ticket card previews in
+   both grid and cards modes. Structural sizing (grid's fixed crop,
+   cards' content-height padding) lives in TicketCard.svelte; this
+   is the skin only. Prism keeps its glass-mode ink overrides for
+   this class in prism.css. Mode variants key off the html-level
+   light/dark/glass classes, which component-scoped styles cannot
+   reach. */
+.preview-window {
+  position: relative;
+  background: rgba(255, 255, 255, 0.15);
+  -webkit-backdrop-filter: blur(20px) saturate(0.5);
+  backdrop-filter: blur(20px) saturate(0.5);
+}
+
+html.dark .preview-window {
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.preview-window::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  background: var(--texture-noise) repeat;
+}
+
+html.light .preview-window::after {
+  opacity: 0.08;
+  filter: invert(1);
+}
+
+html.dark .preview-window::after {
+  opacity: 0.06;
+}
+
+html.glass-dark.light .preview-window::after {
+  opacity: 0.06;
+  filter: none;
+}
+
+html.glass-light.dark .preview-window::after {
+  opacity: 0.08;
+  filter: invert(1);
+}
+
+/* Increased contrast: opaque system surface, no glass effects. */
+@media (prefers-contrast: more) {
+  .preview-window {
+    background: Canvas !important;
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
+    border: 1px solid currentColor !important;
+  }
+
+  .preview-window::after {
+    display: none !important;
+  }
 }
 
 /* ── Keyboard-open global rules ─────────────────────────────────────
@@ -546,13 +630,331 @@ html.glass-dark.light
   display: none !important;
 }
 
-/* PII warning: amber notice for fields with weaker encryption.
-   Components with layout overrides (margin, flex) keep a scoped rule. */
-.pii-warning {
-  font-size: 0.8125rem;
-  color: var(--color-amber-500);
-  background: color-mix(in srgb, var(--color-amber-500) 10%, transparent);
-  padding: var(--space-sm) var(--space-md);
+/* ── Form primitives ──
+   One anatomy for fields that cannot be Konsta ListInput (Bits UI
+   comboboxes, number rows, color rows): eyebrow label, bordered box,
+   help below, error in the danger slot. Mirrors the theme-default
+   ListInput skin; all themes define the canonical tokens. The 16px
+   computed floor on the box prevents the
+   iOS Safari focus zoom. */
+.field-label {
+  display: block;
+  font-size: 0.6875rem; /* 11px */
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink-2);
+  margin-bottom: 6px;
+}
+
+.form-input {
+  box-sizing: border-box;
+  width: 100%;
+  padding: 12px 13px;
+  border: 1px solid
+    var(
+      --hair-2,
+      var(--divider, color-mix(in srgb, var(--ink) 20%, transparent))
+    );
   border-radius: 8px;
+  background: var(--raised);
+  color: var(--ink);
+  font-family: inherit;
+  font-size: max(0.9375rem, 16px);
+  line-height: 1.4;
+}
+
+.form-input::placeholder {
+  color: var(--muted);
+  opacity: 1;
+}
+
+.form-input:focus {
+  outline: none;
+  border-color: var(--brand-fill);
+  box-shadow: 0 0 0 1px var(--brand-fill);
+}
+
+.form-input:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.field-help {
+  font-size: var(--text-sm);
+  line-height: 1.45;
+  color: var(--muted);
+  margin: 5px 0 0;
+}
+
+.field-error {
+  font-size: var(--text-sm);
+  line-height: 1.45;
+  color: var(--danger);
+  margin: 5px 0 0;
+}
+
+/* ── Identity marks ──
+   The stamp and seal anatomies from the Inkwell Identity section,
+   shared so their consumers (the CLOSED case stamp, role stamps,
+   avatar seals) cannot drift apart. A stamp says a person decided
+   something or is someone: the word always renders, and the consumer
+   sets the hue (quiet ink for records facts, brand for identity).
+   A seal marks who someone is: brand-bordered circle, display face,
+   hand tilt. Consumers override size with their own class; all themes
+   define the canonical tokens these classes read. */
+.stamp-chip {
+  display: inline-block;
+  font-size: 0.625rem; /* 10px */
+  font-weight: 700;
+  letter-spacing: 0.13em;
+  text-transform: uppercase;
+  padding: 2.5px 7px;
+  border: 1px solid currentColor;
+  border-radius: 3px;
+  transform: rotate(-0.5deg);
+  white-space: nowrap;
+  color: var(--ink, inherit);
+}
+
+.identity-seal {
+  display: inline-grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  border: 2px solid color-mix(in srgb, var(--brand-fill) 55%, transparent);
+  outline: 1px solid color-mix(in srgb, var(--brand-fill) 30%, transparent);
+  outline-offset: 2px;
+  color: var(--brand-text, var(--brand-primary));
+  font-family: var(--theme-font-display, inherit);
+  font-optical-sizing: auto;
+  font-weight: 800;
+  font-size: 0.9375rem;
+  letter-spacing: 0.03em;
+  text-shadow: 0 0 0.5px currentColor;
+  transform: rotate(-6deg);
+  opacity: 0.85;
+}
+
+/* ── Section line anatomy ──
+   The secline: the section-head line shared by the Now page sections,
+   search sections, and search recents. The eyebrow names the section,
+   the hairline rule does the layout work, and the count sits quiet at
+   the end of the line. Consumers with their own container geometry
+   (recents) adopt the child classes only. */
+.secline {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 18px var(--page-pad-x) 8px;
+}
+
+.secline-eb {
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--ink-2);
+  white-space: nowrap;
   margin: 0;
+}
+
+.secline-rule {
+  flex: 1;
+  height: 1px;
+  background: var(--hair);
+  align-self: center;
+}
+
+.secline-cnt {
+  font-size: 11px;
+  color: var(--muted);
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── Calm escalation ──
+   The quiet "do more" button: raised paper, hairline border, quiet ink,
+   never a red or brand-filled action. Consumers own their geometry
+   (size, padding, radius, type). */
+.calm-escalation {
+  background: var(--raised);
+  border: 1px solid var(--hair-2);
+  color: var(--ink-2);
+  cursor: pointer;
+}
+
+/* ── Recessed note block ──
+   One step below the page surface: paper-deep on a hairline border.
+   Consumers own radius, padding, and typography. */
+.recessed-note {
+  background: var(--paper-deep);
+  border: 1px solid var(--hair);
+}
+
+/* ── Prose quotes ──
+   Quotes inside rendered article prose read as recessed tinted blocks,
+   never the banned thick brand left border. Consumers mark the prose
+   container with .prose-quotes (reader body, editor area). */
+.prose-quotes blockquote {
+  background: var(--paper-deep);
+  border-radius: 10px;
+  padding: 10px 13px;
+  margin-bottom: 0.75em;
+  color: var(--muted);
+  font-style: italic;
+}
+
+/* ── Status icon ──
+   The admin status line mark: a 2.5rem circle beside the status words.
+   The normal state is quiet ink with no tint; only the attention state
+   carries color (care tint), and its word rides along. */
+.status-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.5rem;
+  height: 2.5rem;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.status-icon.ok {
+  color: var(--ink-2);
+}
+
+.status-icon.status-attention {
+  background: var(--care-soft);
+  color: var(--care);
+}
+
+/* ── Data table anatomy ──
+   Shared mechanics for the domain data tables (TicketTable, ArticleTable):
+   wrap, header cells, row states, sort buttons, load-more sentinel, and
+   responsive column hiding. Domain tables keep their own columns and cell
+   markup (one component per data type); a future table reuses these classes,
+   never another table's component. Sortable headers render through
+   SortHeader.svelte, which owns aria-sort. */
+.data-table-wrap {
+  width: 100%;
+  overflow-x: auto;
+}
+
+.data-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--text-sm);
+}
+
+.data-table thead tr {
+  border-bottom: 2px solid var(--hair-2);
+}
+
+.data-table th {
+  text-align: left;
+  /* Vertical padding lives on .sort-header so the sortable buttons own a
+     real >=24px box (WCAG 2.5.8); the header row grows a few px for it. */
+  padding: 0 var(--space-sm);
+  font-size: var(--text-xs);
+  font-weight: 600;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+  position: sticky;
+  top: 0;
+  background: var(--paper);
+  z-index: 1;
+}
+
+.data-table td {
+  padding: var(--space-xs) var(--space-sm);
+  vertical-align: middle;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.data-table .col-checkbox {
+  width: 2.5rem;
+  text-align: center;
+  padding: 0 var(--space-xs);
+}
+
+.data-table .cell-muted {
+  color: var(--muted);
+  font-size: var(--text-xs);
+}
+
+.table-row {
+  border-bottom: 1px solid var(--hair);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .table-row {
+    transition: background 80ms ease;
+  }
+}
+
+.table-row:hover {
+  background: var(--raised-hover);
+}
+
+.table-row:focus-visible {
+  outline: 2px solid var(--brand-text);
+  outline-offset: -2px;
+}
+
+.table-row.row-current,
+.table-row.row-selected {
+  background: var(--brand-soft);
+}
+
+.sort-header {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  background: none;
+  border: none;
+  padding: var(--space-md) 0;
+  font: inherit;
+  font-size: var(--text-xs);
+  font-weight: 600;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  cursor: pointer;
+}
+
+.sort-header:hover {
+  color: var(--ink);
+}
+
+.sort-header.sort-active {
+  color: var(--brand-text);
+}
+
+/* Konsta checkbox inside the multi-select column, scaled to row height. */
+.data-table .table-checkbox {
+  transform: scale(0.8);
+  transform-origin: center;
+}
+
+.load-sentinel {
+  height: 1px;
+}
+
+@media (max-width: 768px) {
+  .data-table .hide-medium {
+    display: none;
+  }
+}
+
+@media (max-width: 640px) {
+  .data-table .hide-narrow {
+    display: none;
+  }
 }

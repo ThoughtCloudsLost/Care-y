@@ -1,6 +1,7 @@
 <script lang="ts">
   import { tick } from "svelte";
   import { ListInput, DialogButton } from "konsta/svelte";
+  import { DIALOG_DESTRUCTIVE_CLASS } from "$lib/components/shared/konsta-classes.js";
   import {
     createQuery,
     createMutation,
@@ -155,7 +156,7 @@
 <div class="blocklist-section">
   {#if blocklistQuery.isLoading}
     <div class="bl-content skeleton-pulse">
-      <div class="bl-surface">
+      <div class="bl-surface card-elevated">
         {#each { length: 3 } as _, i (i)}
           <div class="bl-row">
             <span class="bl-number">
@@ -204,7 +205,7 @@
         </SoftButton>
       </div>
 
-      <div class="bl-surface">
+      <div class="bl-surface card-elevated">
         {#each visibleEntries as entry (entry.id)}
           {@const number = decryptNumber(entry)}
           <div class="bl-row">
@@ -276,7 +277,7 @@
           bind:this={numberInputEl}
           id="bl-number"
           type="tel"
-          class="phone-input number-input"
+          class="form-input number-input"
           placeholder={m.admin_blocklist_number_placeholder()}
           value={numberInput}
           oninput={(e: Event) => {
@@ -292,7 +293,7 @@
         <input
           id="bl-country-code"
           type="tel"
-          class="phone-input country-code-input"
+          class="form-input country-code-input"
           value={countryCode}
           oninput={(e: Event) => {
             const target = e.target;
@@ -335,7 +336,7 @@
     </DialogButton>
     <DialogButton
       strong
-      class="text-[--color-red-500] font-semibold"
+      class={DIALOG_DESTRUCTIVE_CLASS}
       onclick={confirmRemove}
     >
       {m.admin_blocklist_remove_button()}
@@ -379,10 +380,6 @@
   .bl-surface {
     display: flex;
     flex-direction: column;
-    background: var(--card-bg, var(--surface-1));
-    border: 1px solid var(--card-border, transparent);
-    box-shadow: var(--card-shadow, none);
-    border-radius: var(--card-radius);
     overflow: hidden;
   }
 
@@ -393,7 +390,7 @@
     font-size: var(--text-base);
     color: var(--ink);
     padding: var(--space-lg) var(--page-pad-x);
-    border-bottom: 1px solid var(--divider);
+    border-bottom: 1px solid var(--hair, var(--divider));
   }
 
   .bl-row:last-child {
@@ -425,7 +422,7 @@
     margin-left: var(--space-sm);
     border: none;
     background: transparent;
-    color: var(--color-red-500);
+    color: var(--danger, var(--color-red-500));
     border-radius: 50%;
     cursor: pointer;
     -webkit-tap-highlight-color: transparent;
@@ -468,38 +465,10 @@
     flex: 1;
   }
 
-  .field-label {
-    display: block;
-    font-size: var(--text-sm);
-    font-weight: 500;
-    color: var(--ink);
-    margin-bottom: var(--space-xs);
-  }
-
-  .phone-input {
-    width: 100%;
-    padding: 0.625rem 0.75rem;
-    border-radius: 0.5rem;
-    border: 1px solid color-mix(in srgb, var(--ink) 15%, transparent);
-    background: transparent;
-    color: var(--ink);
-    font-size: 16px;
-    font-family: inherit;
-  }
-
-  .phone-input:focus {
-    outline: 2px solid var(--brand-text);
-    outline-offset: -1px;
-    border-color: transparent;
-  }
+  /* .field-label, .form-input, and .field-error come from the shared
+     form primitives (shared.css) */
 
   .country-code-input {
     text-align: center;
-  }
-
-  .field-error {
-    font-size: var(--text-xs);
-    color: var(--color-red-500);
-    margin: 0;
   }
 </style>

@@ -38,6 +38,7 @@
 
   let debounceTimer: ReturnType<typeof setTimeout> | undefined;
   let prevFocused: HTMLElement | null = null;
+  let inputEl: HTMLInputElement | undefined = $state();
 
   $effect(() => {
     prevFocused =
@@ -47,6 +48,15 @@
     return () => {
       prevFocused?.focus();
     };
+  });
+
+  // Focus the search input on mount. When the caller wraps its state
+  // change in flushSync (gestureMount), this effect runs synchronously
+  // inside the gesture, so iOS Safari opens the keyboard.
+  $effect(() => {
+    if (inputEl != null) {
+      inputEl.focus();
+    }
   });
 
   function handleInput(e: Event): void {
@@ -90,6 +100,7 @@
     <X size={16} aria-hidden="true" />
   </Button>
   <input
+    bind:this={inputEl}
     class="search-input"
     type="text"
     value={term}
@@ -126,7 +137,7 @@
       {:else}
         <button
           type="button"
-          class="deep-search-trigger"
+          class="deep-search-trigger calm-escalation"
           aria-label={m.search_deep_nav_trigger()}
           onclick={ondeepsearch}
         >
@@ -175,8 +186,7 @@
     align-items: center;
     padding: 0.25rem 0.25rem;
     gap: 0.25rem;
-    border-top: 1px solid
-      color-mix(in srgb, var(--brand-primary) 15%, transparent);
+    border-top: 1px solid var(--hair, var(--divider));
   }
 
   .sr-only {
@@ -191,21 +201,25 @@
     border: 0;
   }
 
+  /* The refine field wears the one-input-system anatomy at toolbar
+     scale; 16px stays as the iOS focus-zoom floor. */
   .search-input {
     font-size: 16px;
     font-weight: 600;
     color: var(--ink);
     min-width: 0;
     flex: 1;
-    background: color-mix(in srgb, var(--ink) 8%, transparent);
-    border: 1px solid color-mix(in srgb, var(--ink) 15%, transparent);
-    border-radius: 0.375rem;
+    background: var(--raised, color-mix(in srgb, var(--ink) 8%, transparent));
+    border: 1px solid
+      var(--hair-2, color-mix(in srgb, var(--ink) 15%, transparent));
+    border-radius: 0.5rem;
     padding: 0.125rem 0.375rem;
     outline: none;
   }
 
   .search-input:focus {
-    border-color: var(--brand-accent);
+    border-color: var(--brand-fill, var(--brand-accent));
+    box-shadow: 0 0 0 1px var(--brand-fill, var(--brand-accent));
   }
 
   .search-position {
@@ -243,56 +257,51 @@
     white-space: nowrap;
   }
 
+  /* Icon-sized placement of the shared calm-escalation anatomy;
+     searching the rest is an ordinary action. */
   .deep-search-trigger {
     display: inline-flex;
     align-items: center;
     justify-content: center;
     width: 1.75rem;
     height: 1.75rem;
-    color: var(--brand-primary);
-    background: color-mix(in srgb, var(--brand-primary) 15%, transparent);
-    border: none;
-    cursor: pointer;
     padding: 0;
-    border-radius: 50%;
+    border-radius: 0.5625rem;
     flex-shrink: 0;
   }
 
   .deep-search-trigger:active {
-    background: color-mix(in srgb, var(--brand-primary) 25%, transparent);
+    background: color-mix(in srgb, var(--ink) 8%, transparent);
   }
 
   :global(.deep-done-icon) {
-    color: var(--brand-primary);
+    color: var(--brand-accent, var(--brand-primary));
     opacity: 0.5;
     flex-shrink: 0;
   }
 
+  /* Toolbar buttons are tools on the desk: quiet bordered squares in
+     ink, never tinted and never red (closing a search is ordinary). */
   :global(.search-nav-btn),
   :global(.search-close-btn) {
     width: 1.75rem !important;
     padding-left: 0 !important;
     padding-right: 0 !important;
-    background: color-mix(
-      in srgb,
-      var(--brand-accent) 15%,
-      transparent
-    ) !important;
+    background: var(--raised, transparent) !important;
+    border: 1px solid var(--hair, currentColor) !important;
+    border-radius: 0.5625rem !important;
+    box-shadow: none !important;
   }
 
-  :global(.search-nav-btn svg) {
-    color: var(--ink) !important;
-  }
-
-  :global(.search-close-btn) {
-    background: color-mix(in srgb, #e53e3e 15%, transparent) !important;
-  }
-
+  :global(.search-nav-btn svg),
   :global(.search-close-btn svg) {
-    color: #e53e3e !important;
+    color: var(--ink-2, var(--ink)) !important;
   }
 
-  /* Search match highlight (global, active when this component is mounted) */
+  /* Search match highlight (global, active when this component is
+     mounted). Brand-soft tint on the wrapper, outline on inner card
+     elements. The wrapper tint shows through in list mode (no card
+     chrome); on cards/grid the outline is the primary indicator. */
 
   :global(.virtual-row:has(.match-active):not([data-grid])),
   :global(.match-active-row),
@@ -303,12 +312,21 @@
 
   :global(.match-active .k-message),
   :global(.match-active .k-card),
+  :global(.match-active .article-card),
+  :global(.match-active .user-card),
+  :global(.match-active .tc),
   :global(.match-active-row .k-message),
-  :global(.match-active-row .k-card) {
+  :global(.match-active-row .k-card),
+  :global(.match-active-row .article-card),
+  :global(.match-active-row .user-card),
+  :global(.match-active-row .tc) {
+    background: color-mix(
+      in srgb,
+      var(--brand-accent) 15%,
+      transparent
+    ) !important;
     outline: 2.5px solid var(--brand-accent) !important;
     outline-offset: -1px;
-    box-shadow: inset 0 0 12px 0
-      color-mix(in srgb, var(--brand-accent) 20%, transparent) !important;
     border-radius: var(--card-radius, 0.75rem);
   }
 </style>
