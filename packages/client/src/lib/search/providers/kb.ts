@@ -240,11 +240,19 @@ export function createKbSearchProvider(
       query: string,
       state: FullSearchState,
       onProgress: () => void,
+      signal: AbortSignal,
     ): Promise<void> => {
+      // Read through a call, not `signal.aborted` directly: TypeScript
+      // narrows the property to false after the first check and never
+      // widens it again, so the in-loop check below would look like dead
+      // code even though each await is exactly when it can flip.
+      const aborted = (): boolean => signal.aborted;
+
       contentMatchIds.clear();
       lastFullSearchQuery = query;
 
       await loadAll();
+      if (aborted()) return;
 
       deepSearchActive = true;
       const titleMatchIds = new Set(
@@ -271,6 +279,9 @@ export function createKbSearchProvider(
       }
 
       for (const body of bodies) {
+        // Every iteration awaits a decrypt, so a newer run can start at any
+        // point in this loop and find its cleared match set refilling.
+        if (aborted()) return;
         if (contentMatchIds.has(body.id)) continue;
         const plaintext = await deps.decryptOrg(
           `kb-search:${body.id}:body`,

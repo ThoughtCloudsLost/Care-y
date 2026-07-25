@@ -1,12 +1,52 @@
-// Minimal type declarations for sodium-native v4.
-// Covers only the functions used by field-encryptor.ts.
-// Verified against sodium-native@4.3.3 binding.c (2026-03-08).
+// Minimal type declarations for sodium-native.
+// Covers only the functions the server calls.
+// Secretbox, sealed box, generichash and memory bindings verified against
+// sodium-native@4.3.3 binding.c (2026-03-08). AEAD bindings verified against
+// the installed sodium-native@5.1.0 index.js (2026-07-24).
 
 declare module "sodium-native" {
   // --- Constants ---
   export const crypto_secretbox_KEYBYTES: 32;
   export const crypto_secretbox_NONCEBYTES: 24;
   export const crypto_secretbox_MACBYTES: 16;
+
+  // --- AEAD (XChaCha20-Poly1305, IETF) ---
+  export const crypto_aead_xchacha20poly1305_ietf_KEYBYTES: 32;
+  export const crypto_aead_xchacha20poly1305_ietf_NPUBBYTES: 24;
+  export const crypto_aead_xchacha20poly1305_ietf_ABYTES: 16;
+
+  /**
+   * Encrypts `message` into `ciphertext`, authenticating `additionalData`.
+   * `ciphertext` must be `message.length + crypto_aead_xchacha20poly1305_ietf_ABYTES`
+   * bytes (combined mode: the 16-byte tag is appended to the ciphertext).
+   * `nsec` is unused by this construction and must always be null.
+   * Returns the number of bytes written; throws if encryption fails.
+   */
+  export function crypto_aead_xchacha20poly1305_ietf_encrypt(
+    ciphertext: Buffer,
+    message: Buffer,
+    additionalData: Buffer | null,
+    nsec: null,
+    npub: Buffer,
+    key: Buffer,
+  ): number;
+
+  /**
+   * Decrypts `ciphertext` into `message`, verifying `additionalData`.
+   * `message` must be `ciphertext.length - crypto_aead_xchacha20poly1305_ietf_ABYTES`
+   * bytes. `nsec` is unused by this construction and must always be null.
+   * Returns the number of bytes written. Unlike crypto_secretbox_open_easy,
+   * this THROWS on authentication failure rather than returning false.
+   */
+  // care-y-ignore-next-line server-no-decrypt -- type declaration only; the sole server caller is branding decryption, whose key is derivable from the public org key (ADR-024) and carries no client PII
+  export function crypto_aead_xchacha20poly1305_ietf_decrypt(
+    message: Buffer,
+    nsec: null,
+    ciphertext: Buffer,
+    additionalData: Buffer | null,
+    npub: Buffer,
+    key: Buffer,
+  ): number;
 
   // --- Random ---
   /** Fills `buf` with cryptographically secure random bytes. */

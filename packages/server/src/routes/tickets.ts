@@ -545,7 +545,12 @@ export function createTicketRouter(deps: TicketRouterDeps) {
     searchClients: volunteerProcedure.input(searchClientsInputSchema).query(
       withErrorWrapping(async ({ ctx, input }) => {
         const { svc } = ticketSvc(ctx.org.tenantDb);
-        return svc.searchClients(input.query, input.limit);
+        return svc.searchClients(
+          input.query,
+          input.limit,
+          ctx.user.id,
+          ctx.user.roleId === RoleId.ADMIN,
+        );
       }),
     ),
 

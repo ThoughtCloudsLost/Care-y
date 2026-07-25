@@ -43,8 +43,13 @@ export interface DeepSearch {
   scheduleFromNavigation: () => void;
 }
 
+/** Poll interval while waiting out a page fetch the list view already started. */
+const FETCH_POLL_MS = 16;
+
 export function createDeepSearch(options: DeepSearchOptions): DeepSearch {
-  let phase = $state<"idle" | "fetching" | "content" | "done">("idle");
+  let phase = $state<"idle" | "fetching" | "content" | "done" | "error">(
+    "idle",
+  );
   let searchTerm = $state<string | null>(null);
   let pendingFromUrl = $state(false);
 
@@ -54,7 +59,10 @@ export function createDeepSearch(options: DeepSearchOptions): DeepSearch {
 
   const status = $derived.by((): "idle" | "searching" | "done" => {
     if (phase === "fetching" || phase === "content") return "searching";
-    if (phase === "done") return "done";
+    // "error" reports as done because it is terminal, not because it
+    // succeeded. Reporting idle instead would re-arm the zero-match
+    // auto-trigger below and retry the failing fetch in a loop.
+    if (phase === "done" || phase === "error") return "done";
     return "idle";
   });
 
@@ -73,6 +81,17 @@ export function createDeepSearch(options: DeepSearchOptions): DeepSearch {
 
   const canTrigger = $derived(hasCapability && phase === "idle");
 
+  /**
+   * Resolve once no page fetch is in flight. Also gives up if the run was
+   * abandoned mid-wait (term changed, overlay closed), so a stale trigger
+   * cannot keep polling after its phase was reset.
+   */
+  async function waitOutInFlightFetch(): Promise<void> {
+    while (options.isFetchingNextPage() && (phase as string) === "fetching") {
+      await new Promise<void>((resolve) => setTimeout(resolve, FETCH_POLL_MS));
+    }
+  }
+
   async function doTrigger(): Promise<void> {
     if (phase !== "idle") return;
     const term = options.overlay.term ?? "";
@@ -80,10 +99,28 @@ export function createDeepSearch(options: DeepSearchOptions): DeepSearch {
 
     searchTerm = term;
 
-    // Fetch all remaining pages into the list view
+    // Fetch all remaining pages into the list view.
+    //
+    // A fetch is often already in flight when we get here (the list view's
+    // own scroll handler, or the initial page). Waiting it out is the whole
+    // point: bailing on isFetchingNextPage left the remaining pages
+    // unfetched and ran the content phase over partial data, which reads to
+    // the user as "we searched everything and found nothing".
     phase = "fetching";
-    while (options.hasNextPage() && !options.isFetchingNextPage()) {
-      await options.fetchNextPage();
+    while (options.hasNextPage()) {
+      if (options.isFetchingNextPage()) {
+        await waitOutInFlightFetch();
+        if ((phase as string) !== "fetching") return;
+        continue;
+      }
+      try {
+        await options.fetchNextPage();
+      } catch {
+        // Stop here rather than matching over a partial page set. Terminal,
+        // so the run does not silently present itself as complete coverage.
+        phase = "error";
+        return;
+      }
       if ((phase as string) !== "fetching") return;
     }
 

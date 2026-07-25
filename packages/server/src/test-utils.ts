@@ -95,6 +95,7 @@ export const TEST_ORG_ID = "00000000-0000-0000-0000-000000000001";
 // ---------------------------------------------------------------------------
 
 import sodium from "sodium-native";
+import { BRANDING_AAD } from "./branding/branding-crypto.js";
 import {
   createSealedBoxEncryptor,
   type SealedBoxEncryptor,
@@ -146,15 +147,29 @@ export function testUnseal(ciphertext: Buffer | string): string {
 
 /**
  * Seals plaintext in the layout decryptBrandingBlob expects:
- * nonce (24 bytes) || crypto_secretbox_easy output (MAC + ciphertext).
+ * nonce (24 bytes) || XChaCha20-Poly1305 AEAD ciphertext (plaintext + tag),
+ * authenticated under the fixed branding AAD.
+ *
+ * This must stay byte-compatible with `encryptClientBranding` in
+ * @care-y/crypto. The interop test in branding-crypto.test.ts is what
+ * proves it; this helper alone cannot.
  */
 export function sealBrandingBlob(plaintext: Buffer, key: Buffer): Buffer {
-  const nonce = Buffer.alloc(sodium.crypto_secretbox_NONCEBYTES);
+  const nonce = Buffer.alloc(
+    sodium.crypto_aead_xchacha20poly1305_ietf_NPUBBYTES,
+  );
   sodium.randombytes_buf(nonce);
   const sealed = Buffer.alloc(
-    plaintext.length + sodium.crypto_secretbox_MACBYTES,
+    plaintext.length + sodium.crypto_aead_xchacha20poly1305_ietf_ABYTES,
   );
-  sodium.crypto_secretbox_easy(sealed, plaintext, nonce, key);
+  sodium.crypto_aead_xchacha20poly1305_ietf_encrypt(
+    sealed,
+    plaintext,
+    BRANDING_AAD,
+    null,
+    nonce,
+    key,
+  );
   return Buffer.concat([nonce, sealed]);
 }
 

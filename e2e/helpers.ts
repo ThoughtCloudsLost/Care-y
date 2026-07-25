@@ -19,6 +19,22 @@ export class E2eError extends Error {
   }
 }
 
+/**
+ * Whether the page is at the app's desktop breakpoint.
+ *
+ * Evaluates the same media query as layoutMode.isDesktop
+ * (packages/client/src/lib/stores/layout-mode.svelte.ts) so specs branch on
+ * the signal the app itself uses. Layout decides route shape, not just
+ * styling: at desktop widths the library and ticket lists open detail panes
+ * via shallow routing (the URL stays on the list), while below the
+ * breakpoint the same tap navigates to a full-page detail route. Deriving
+ * the layout from the current URL instead is unreliable, since the URL is
+ * exactly what a pending navigation is about to change.
+ */
+export async function isDesktopLayout(page: Page): Promise<boolean> {
+  return page.evaluate(() => window.matchMedia("(min-width: 1024px)").matches);
+}
+
 /** Bounding box of a visible element; throws if the element has none. */
 export async function boxOf(
   locator: Locator,
@@ -238,8 +254,25 @@ async function completeOnboarding(page: Page): Promise<void> {
 
   // Step 2: TOTP enrollment (if present)
   // Heading: "Set Up Two-Factor Authentication"
+  //
+  // Race the heading against the dashboard redirect that means onboarding
+  // finished without this step. Sampling isVisible() instead would return
+  // immediately (its timeout option is ignored), so a wizard step that has
+  // not painted yet reads as "already enrolled" and enrollment is skipped
+  // with no assertion to catch it. Every spec's login runs through here.
   const twofaHeading = page.getByText("Set Up Two-Factor Authentication");
-  if (await twofaHeading.isVisible({ timeout: 3_000 }).catch(() => false)) {
+  const enrollmentShown = await Promise.race([
+    twofaHeading
+      .waitFor({ state: "visible", timeout: CRYPTO_TIMEOUT })
+      .then(() => true)
+      .catch(() => false),
+    page
+      .waitForURL(/\/$/, { timeout: CRYPTO_TIMEOUT })
+      .then(() => false)
+      .catch(() => false),
+  ]);
+
+  if (enrollmentShown) {
     await enrollTotp(page);
 
     // After enrollment, "Next" in the wizard navbar finishes onboarding
