@@ -239,6 +239,7 @@
     const el = editorMountEl;
     if (el === null) return;
     let focusOutTimer = 0;
+    let subnavRevealTimer = 0;
     let vvCleanup: (() => void) | null = null;
 
     /** Scroll #main-content so the cursor clears the keyboard toolbar. */
@@ -274,8 +275,13 @@
       // animation, check whether the cursor is behind the subnavbar
       // and scroll the main content container to clear it.
       if (wasHidden && editor.view !== null) {
-        const view = editor.view;
-        setTimeout(() => {
+        subnavRevealTimer = window.setTimeout(() => {
+          // Re-read the view: useProseMirror nulls it on destroy, and a
+          // navigation (a save, for instance) can unmount the editor inside
+          // this delay. A captured reference would still point at the
+          // destroyed view, whose docView is null.
+          const view = editor.view;
+          if (view === null) return;
           const coords = view.coordsAtPos(view.state.selection.head);
           const subnavbar = document.querySelector<HTMLElement>(
             ".shell-subnavbar-inner",
@@ -349,6 +355,7 @@
     el.addEventListener("click", onEditorClick);
     return () => {
       clearTimeout(focusOutTimer);
+      clearTimeout(subnavRevealTimer);
       vvCleanup?.();
       el.removeEventListener("focusin", onFocusIn);
       el.removeEventListener("focusout", onFocusOut);
@@ -1254,7 +1261,16 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    animation: pulse 1.5s ease-in-out infinite;
+    opacity: 0.65;
+  }
+
+  /* The placeholder pulses only when motion is welcome. It stays visible
+     either way, so nothing is lost when the animation is suppressed. */
+  @media (prefers-reduced-motion: no-preference) {
+    :global(.pm-image-view__loading) {
+      opacity: 1;
+      animation: pulse 1.5s ease-in-out infinite;
+    }
   }
 
   :global(.pm-image-view__error) {

@@ -201,7 +201,18 @@ export interface TicketService {
     input: SweepReadStateInput,
   ): Promise<SweepReadStateResult>;
   counts(userId: string): Promise<TicketCounts>;
-  searchClients(query: string, limit: number): Promise<ClientSearchResult[]>;
+  /**
+   * Alias search over clients the caller can already reach.
+   *
+   * Scoped to the caller's accessible queues plus tickets they are assigned
+   * to or watching. Admins bypass the scoping and search org-wide.
+   */
+  searchClients(
+    query: string,
+    limit: number,
+    userId: string,
+    isAdmin: boolean,
+  ): Promise<ClientSearchResult[]>;
 }
 
 export interface ClientSearchResult {
@@ -1461,13 +1472,53 @@ export function createTicketService(
       };
     },
 
-    async searchClients(query, limit) {
-      const results = await db
+    async searchClients(query, limit, userId, isAdmin) {
+      // Queue scoping. Without this, any authenticated volunteer could
+      // enumerate every client in the org through alias search, including
+      // clients whose tickets live in queues they were never assigned to.
+      // Admins are org-wide by design; a future org-level "all volunteers see
+      // everything" flag can widen the bypass at this same branch.
+      const accessibleQueues = isAdmin
+        ? []
+        : await getAccessibleQueueIds(userId);
+
+      let search = db
         .selectFrom("clients as c")
         .innerJoin("phones as p", "p.id", "c.phone_id")
         .select(["c.id", "c.alias", "p.encrypted_number"])
         .where("c.merged_into", "is", null)
-        .where("c.alias", "ilike", `%${sanitizeLike(query)}%`)
+        .where("c.alias", "ilike", `%${sanitizeLike(query)}%`);
+
+      if (!isAdmin) {
+        search = search.where((eb) =>
+          eb.exists(
+            eb
+              .selectFrom("tickets as t")
+              .select("t.id")
+              .whereRef("t.client_id", "=", "c.id")
+              .where((inner) =>
+                inner.or([
+                  // Reachable through queue membership...
+                  ...(accessibleQueues.length > 0
+                    ? [inner("t.queue_id", "in", [...accessibleQueues])]
+                    : []),
+                  // ...or through direct assignment...
+                  inner("t.assigned_to", "=", userId),
+                  // ...or by being CC'd on the ticket.
+                  inner.exists(
+                    inner
+                      .selectFrom("ticket_watchers as tw")
+                      .select("tw.user_id")
+                      .whereRef("tw.ticket_id", "=", "t.id")
+                      .where("tw.user_id", "=", userId),
+                  ),
+                ]),
+              ),
+          ),
+        );
+      }
+
+      const results = await search
         .orderBy("c.alias", "asc")
         .limit(limit)
         .execute();

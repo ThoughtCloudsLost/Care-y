@@ -66,6 +66,11 @@ function makeState(): FullSearchState {
   return { status: "idle", searched: 0, total: 0, matchCount: 0 };
 }
 
+/** A signal that never aborts, for runs the test does not cancel. */
+function liveSignal(): AbortSignal {
+  return new AbortController().signal;
+}
+
 describe("createTicketSearchProvider", () => {
   const rawTickets: RawCachedTicket[] = [
     makeRawTicket({ id: "t1", clientAlias: "Maria" }),
@@ -312,6 +317,8 @@ describe("ticket fullSearch (two-phase)", () => {
     }>;
     decryptedFollowUps?: Record<string, string>;
     decryptTitle?: (id: string) => string | undefined;
+    /** Runs on every listAll call, before the page is returned. */
+    onListAll?: () => void;
   }): ReturnType<typeof createTicketSearchProvider> {
     const pages = overrides.listAllPages ?? [];
     let pageIndex = 0;
@@ -329,6 +336,7 @@ describe("ticket fullSearch (two-phase)", () => {
       listAll: vi.fn(async () => {
         const page = pages[pageIndex] ?? [];
         pageIndex++;
+        overrides.onListAll?.();
         return page;
       }),
       ingestTickets: vi.fn(),
@@ -355,11 +363,39 @@ describe("ticket fullSearch (two-phase)", () => {
 
     const state = makeState();
     const onProgress = vi.fn();
-    await provider.fullSearch!("Housing", state, onProgress);
+    await provider.fullSearch!("Housing", state, onProgress, liveSignal());
 
     expect(state.matchCount).toBeGreaterThanOrEqual(1);
     expect(state.total).toBe(101);
     expect(onProgress).toHaveBeenCalled();
+  });
+
+  it("stops paginating as soon as its run is aborted", async () => {
+    const controller = new AbortController();
+    const fullPage = (prefix: string): RawCachedTicket[] =>
+      Array.from({ length: 100 }, (_, i) =>
+        makeRawTicket({ id: `${prefix}-${i}`, keyWrap: KW }),
+      );
+    let listAllCalls = 0;
+
+    const provider = createFullSearchProvider({
+      listAllPages: [fullPage("p1"), fullPage("p2"), fullPage("p3")],
+      decryptTitle: () => "Unrelated topic",
+      onListAll: () => {
+        listAllCalls++;
+        // The user retyped while page one was in flight.
+        controller.abort();
+      },
+    });
+
+    const state = makeState();
+    await provider.fullSearch!("Housing", state, vi.fn(), controller.signal);
+
+    // Every page is full, so without the abort check this would walk all
+    // three and keep writing progress over the run that replaced it.
+    expect(listAllCalls).toBe(1);
+    // Returned before the post-loop total write.
+    expect(state.total).toBe(0);
   });
 
   it("Title search calls ingestTickets with accumulated tickets", async () => {
@@ -370,7 +406,7 @@ describe("ticket fullSearch (two-phase)", () => {
     });
 
     const state = makeState();
-    await provider.fullSearch!("Housing", state, vi.fn());
+    await provider.fullSearch!("Housing", state, vi.fn(), liveSignal());
 
     // The provider's deps.ingestTickets should have been called
     // (verified via the mock in createFullSearchProvider)
@@ -399,7 +435,7 @@ describe("ticket fullSearch (two-phase)", () => {
     });
 
     const state = makeState();
-    await provider.fullSearch!("housing", state, vi.fn());
+    await provider.fullSearch!("housing", state, vi.fn(), liveSignal());
 
     // t1 matches on title ("Housing assistance request")
     // t3 matches on follow-up content ("housing policy")
@@ -423,7 +459,7 @@ describe("ticket fullSearch (two-phase)", () => {
 
     const state = makeState();
     const onProgress = vi.fn();
-    await provider.fullSearch!("something", state, onProgress);
+    await provider.fullSearch!("something", state, onProgress, liveSignal());
 
     expect(state.total).toBe(2);
     expect(state.searched).toBeGreaterThan(0);
@@ -454,7 +490,7 @@ describe("ticket fullSearch (two-phase)", () => {
     });
 
     const state = makeState();
-    await provider.fullSearch!("Housing", state, vi.fn());
+    await provider.fullSearch!("Housing", state, vi.fn(), liveSignal());
 
     // Title search match on t1 preserved despite Content search network failure
     expect(state.matchCount).toBe(1);
@@ -505,7 +541,7 @@ describe("ticket fullSearch (two-phase)", () => {
     });
 
     const state = makeState();
-    await provider.fullSearch!("Housing", state, vi.fn());
+    await provider.fullSearch!("Housing", state, vi.fn(), liveSignal());
 
     expect(state.matchCount).toBe(1);
     expect(contentSearch).not.toHaveBeenCalled();

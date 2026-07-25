@@ -190,20 +190,18 @@ test.describe.serial("Knowledge Base (Library Tab)", () => {
   // ── 9. Navigate back to library ───────────────────────────────
 
   test("back button returns to library list", async () => {
-    // On desktop split view, the detail pane has a close button (Escape).
-    // On mobile, the back button navigates to /library.
+    // Both layouts expose a control here: the detail navbar's "Back to
+    // <library>" below the desktop breakpoint, the split pane header's
+    // "Close detail" above it. Wait for it instead of sampling isVisible(),
+    // whose timeout option is ignored, and drop the Escape fallback:
+    // AppShell binds its Escape handler only at desktop widths, so on mobile
+    // that branch silently did nothing and left the assertion below to fail
+    // for an unrelated-looking reason.
     const backBtn = page.getByRole("button", {
       name: /back to library|close/i,
     });
-    const hasBackBtn = await backBtn
-      .isVisible({ timeout: 2_000 })
-      .catch(() => false);
-
-    if (hasBackBtn) {
-      await backBtn.click();
-    } else {
-      await page.keyboard.press("Escape");
-    }
+    await expect(backBtn).toBeVisible({ timeout: 10_000 });
+    await backBtn.click();
 
     await expect(page).toHaveURL("/library");
     await expect(page.getByText("Intake call checklist")).toBeVisible();
@@ -250,18 +248,13 @@ test.describe.serial("Knowledge Base (Library Tab)", () => {
       page.locator("h1").getByText("Escalation protocol"),
     ).toBeVisible({ timeout: CRYPTO_TIMEOUT });
 
-    // Navigate back to library for subsequent tests.
+    // Navigate back to library for subsequent tests. Same control in both
+    // layouts as the earlier back-button test.
     const backBtn2 = page.getByRole("button", {
       name: /back to library|close/i,
     });
-    const hasBack2 = await backBtn2
-      .isVisible({ timeout: 2_000 })
-      .catch(() => false);
-    if (hasBack2) {
-      await backBtn2.click();
-    } else {
-      await page.keyboard.press("Escape");
-    }
+    await expect(backBtn2).toBeVisible({ timeout: 10_000 });
+    await backBtn2.click();
     await expect(page).toHaveURL("/library");
   });
 
@@ -307,8 +300,9 @@ test.describe.serial("Knowledge Base (Library Tab)", () => {
       timeout: CRYPTO_TIMEOUT,
     });
 
-    // Konsta Tabbar internals are excluded (tablist contains role=link
-    // for the More tab, H-011); the shell tab bar is audited elsewhere.
+    // Konsta Tabbar internals are excluded: its tablist holds a role=link
+    // child for the More tab, which axe flags under aria-required-children.
+    // The shell tab bar is audited elsewhere.
     await auditA11y(page, { exclude: ["[role='tablist']"] });
   });
 

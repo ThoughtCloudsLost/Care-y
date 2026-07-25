@@ -1,19 +1,43 @@
 /**
- * Unit tests for the branding icon serving handler.
+ * Tests for the branding icon serving handler.
  *
- * Tests URL parsing, 404 cases, and handler wiring.
- * Full crypto roundtrip tests require sodium-native and run in Docker.
+ * The first suite covers URL parsing, 404 cases, and handler wiring with no
+ * DB. The second covers the serving path, which needs a real schema: the
+ * handler reaches for tenantDb(org.schemaName) itself rather than taking a
+ * DB dependency, so its org_config reads cannot be mocked out.
  */
 
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import {
+  describe,
+  it,
+  expect,
+  vi,
+  beforeEach,
+  beforeAll,
+  afterAll,
+} from "vitest";
 import type { IncomingMessage, ServerResponse } from "node:http";
+import sodium from "sodium-native";
 import {
   createBrandingIconHandler,
   type BrandingIconHandlerDeps,
 } from "./branding-icons.js";
+import { deriveBrandingKey } from "../branding/branding-crypto.js";
+import type { BlobStore } from "../storage/store.js";
+import {
+  createTestDb,
+  seedOrgPublicKey,
+  sealBrandingBlob,
+  TEST_ORG_PUBLIC_KEY,
+  type TestDb,
+} from "../test-utils.js";
 
-function mockReq(method: string, url: string): IncomingMessage {
-  return { method, url } as IncomingMessage;
+function mockReq(
+  method: string,
+  url: string,
+  headers: Record<string, string> = {},
+): IncomingMessage {
+  return { method, url, headers } as unknown as IncomingMessage;
 }
 
 function mockRes(): ServerResponse & {
@@ -233,3 +257,131 @@ describe("createBrandingIconHandler", () => {
     expect(res.statusCode).toBe(404);
   });
 });
+
+describe.skipIf(!process.env.DATABASE_URL)(
+  "createBrandingIconHandler serving path (DB)",
+  () => {
+    let testDb: TestDb;
+    let handler: ReturnType<typeof createBrandingIconHandler>;
+    const blobs = new Map<string, Buffer>();
+
+    /** PNG magic bytes plus filler. No PII, matching production icon shape. */
+    const ICON = Buffer.concat([
+      Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
+      Buffer.from("icon-bytes"),
+    ]);
+    const BLOB_KEY = "branding/icon-192-test";
+    const ETAG = `"${BLOB_KEY}"`;
+
+    const memoryStore: BlobStore = {
+      put: async (_orgSchema, _kind, buf) => {
+        blobs.set(BLOB_KEY, buf);
+        return BLOB_KEY;
+      },
+      get: async (key) => blobs.get(key) ?? null,
+      delete: async (key) => {
+        blobs.delete(key);
+      },
+      exists: async (key) => blobs.has(key),
+    };
+
+    beforeAll(async () => {
+      testDb = await createTestDb();
+      await seedOrgPublicKey(testDb.db);
+      await testDb.db
+        .updateTable("org_config")
+        .set({ icon_192_blob_key: BLOB_KEY })
+        .execute();
+
+      handler = createBrandingIconHandler({
+        blobStore: memoryStore,
+        orgService: {
+          findBySlug: vi.fn(async () => ({
+            id: "org-id",
+            slug: "test",
+            schemaName: testDb.schemaName,
+            isActive: true,
+          })),
+          findById: vi.fn(async () => null),
+          createOrg: vi.fn(async () => ({
+            id: "org-id",
+            slug: "test",
+            schemaName: testDb.schemaName,
+            isActive: true,
+            setupToken: "test-token",
+          })),
+          validateSetupToken: vi.fn(async () => false),
+          consumeSetupToken: vi.fn(async () => undefined),
+        },
+        corsHeaders: { "Access-Control-Allow-Origin": "*" },
+      });
+    }, 30_000);
+
+    afterAll(async () => {
+      await testDb.cleanup();
+    });
+
+    beforeEach(() => {
+      blobs.clear();
+      const key = deriveBrandingKey(TEST_ORG_PUBLIC_KEY);
+      try {
+        blobs.set(BLOB_KEY, sealBrandingBlob(ICON, key));
+      } finally {
+        sodium.sodium_memzero(key);
+      }
+    });
+
+    it("serves the decrypted icon with PNG headers and an ETag", async () => {
+      const res = mockRes();
+      await handler(mockReq("GET", "/api/branding/test/icon-192.png"), res);
+
+      expect(res.statusCode).toBe(200);
+      expect(res.headers["Content-Type"]).toBe("image/png");
+      expect(res.headers["X-Content-Type-Options"]).toBe("nosniff");
+      expect(res.headers.ETag).toBe(ETAG);
+      expect(res.body).toEqual(ICON);
+    });
+
+    it("returns 304 without a body when the ETag matches", async () => {
+      const res = mockRes();
+      await handler(
+        mockReq("GET", "/api/branding/test/icon-192.png", {
+          "if-none-match": ETAG,
+        }),
+        res,
+      );
+
+      expect(res.statusCode).toBe(304);
+      expect(res.body).toBeNull();
+    });
+
+    it("returns 404 when the blob is missing from the store", async () => {
+      blobs.clear();
+      const res = mockRes();
+      await handler(mockReq("GET", "/api/branding/test/icon-192.png"), res);
+
+      expect(res.statusCode).toBe(404);
+    });
+
+    it("returns 500 without a body when the blob fails to decrypt", async () => {
+      // Corrupt ciphertext must fail closed. Serving undecryptable bytes as
+      // image/png would hand the caller raw stored data.
+      const corrupt = Buffer.alloc(64);
+      sodium.randombytes_buf(corrupt);
+      blobs.set(BLOB_KEY, corrupt);
+
+      const res = mockRes();
+      await handler(mockReq("GET", "/api/branding/test/icon-192.png"), res);
+
+      expect(res.statusCode).toBe(500);
+      expect(res.body).toBeNull();
+    });
+
+    it("returns 404 for a size whose blob key is not set", async () => {
+      const res = mockRes();
+      await handler(mockReq("GET", "/api/branding/test/icon-512.png"), res);
+
+      expect(res.statusCode).toBe(404);
+    });
+  },
+);

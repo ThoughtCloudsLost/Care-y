@@ -100,11 +100,18 @@ export interface SearchProvider<T = unknown> {
    * Optional server-backed full search. Called when the user taps "Search all".
    * Providers that only have client-side data omit this.
    * Mutate `state` fields and call `onProgress()` to propagate changes to the UI.
+   *
+   * `signal` aborts when the query changes, the search resets, or another run
+   * starts for this provider. Check `signal.aborted` at the top of every loop
+   * iteration and return early: the registry discards a stale run's writes,
+   * but only the provider can stop it from doing more work and from mutating
+   * its own content-match set behind the new run's back.
    */
   fullSearch?(
     query: string,
     state: FullSearchState,
     onProgress: () => void,
+    signal: AbortSignal,
   ): Promise<void>;
   /**
    * Optional callback for "View all" that bypasses navigation. When present,

@@ -1949,23 +1949,92 @@ describe.skipIf(!process.env.DATABASE_URL)("TicketService (DB)", () => {
     ).rejects.toBeInstanceOf(InternalError);
   });
 
-  // --- searchClients without encryptor ---
+  // --- searchClients ---
 
-  it("searchClients returns masked *** when no fieldEncryptor is provided", async () => {
-    const { clientId } = await createClientFixture();
+  describe("searchClients", () => {
+    async function aliasOf(clientId: string): Promise<string> {
+      const row = await testDb.db
+        .selectFrom("clients")
+        .select("alias")
+        .where("id", "=", clientId)
+        .executeTakeFirstOrThrow();
+      return row.alias;
+    }
 
-    // Read the client's alias to search for it
-    const clientRow = await testDb.db
-      .selectFrom("clients")
-      .select("alias")
-      .where("id", "=", clientId)
-      .executeTakeFirstOrThrow();
+    it("returns masked *** when no fieldEncryptor is provided", async () => {
+      const { userId, clientId } = await createTicketFixture();
+      const alias = await aliasOf(clientId);
 
-    const results = await svc.searchClients(clientRow.alias, 10);
-    const found = results.find((r) => r.id === clientId);
-    expect(found).toBeDefined();
-    expect(found!.maskedPhone).toBe("***");
-    expect(found!.alias).toBe(clientRow.alias);
+      const results = await svc.searchClients(alias, 10, userId, false);
+      const found = results.find((r) => r.id === clientId);
+      expect(found).toBeDefined();
+      expect(found!.maskedPhone).toBe("***");
+      expect(found!.alias).toBe(alias);
+    });
+
+    it("returns clients reachable through the volunteer's queue assignments", async () => {
+      const { userId, clientId } = await createTicketFixture();
+      const alias = await aliasOf(clientId);
+
+      const results = await svc.searchClients(alias, 10, userId, false);
+      expect(results.map((r) => r.id)).toContain(clientId);
+    });
+
+    it("hides clients whose tickets are all outside the volunteer's queues", async () => {
+      const fix = await createTestTicketFixture(testDb.db);
+      const outsider = await createTestUser(testDb.db);
+      const alias = await aliasOf(fix.clientId);
+
+      const results = await svc.searchClients(alias, 10, outsider.id, false);
+      expect(results).toHaveLength(0);
+    });
+
+    it("hides clients with no tickets at all", async () => {
+      const fix = await createTestClientFixture(testDb.db);
+      const alias = await aliasOf(fix.clientId);
+
+      const results = await svc.searchClients(alias, 10, fix.userId, false);
+      expect(results).toHaveLength(0);
+    });
+
+    it("returns a client from a ticket assigned to the volunteer outside their queues", async () => {
+      const fix = await createTestTicketFixture(testDb.db);
+      const outsider = await createTestUser(testDb.db);
+      await testDb.db
+        .updateTable("tickets")
+        .set({ assigned_to: outsider.id })
+        .where("id", "=", fix.ticketId)
+        .execute();
+      const alias = await aliasOf(fix.clientId);
+
+      const results = await svc.searchClients(alias, 10, outsider.id, false);
+      expect(results.map((r) => r.id)).toContain(fix.clientId);
+    });
+
+    it("returns a client from a ticket the volunteer is CC'd on outside their queues", async () => {
+      const fix = await createTestTicketFixture(testDb.db);
+      const watcher = await createTestUser(testDb.db);
+      await testDb.db
+        .insertInto("ticket_watchers")
+        .values({ ticket_id: fix.ticketId, user_id: watcher.id })
+        .execute();
+      const alias = await aliasOf(fix.clientId);
+
+      const results = await svc.searchClients(alias, 10, watcher.id, false);
+      expect(results.map((r) => r.id)).toContain(fix.clientId);
+    });
+
+    it("returns clients in every queue for admins", async () => {
+      const fix = await createTestTicketFixture(testDb.db);
+      const admin = await createTestUser(testDb.db);
+      const alias = await aliasOf(fix.clientId);
+
+      const scoped = await svc.searchClients(alias, 10, admin.id, false);
+      expect(scoped).toHaveLength(0);
+
+      const results = await svc.searchClients(alias, 10, admin.id, true);
+      expect(results.map((r) => r.id)).toContain(fix.clientId);
+    });
   });
 
   // --- counts ---
