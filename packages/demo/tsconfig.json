@@ -1,0 +1,40 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "target": "ES2022",
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "outDir": "dist",
+    "paths": {
+      "$lib/trpc": ["./src/stubs/trpc.ts"],
+      "$lib/trpc/index.js": ["./src/stubs/trpc.ts"],
+      "$lib/tickets/queries": ["./src/stubs/queries.ts"],
+      "$lib/tickets/queries.js": ["./src/stubs/queries.ts"],
+      "$lib/crypto/context": ["./src/stubs/crypto-context.ts"],
+      "$lib/crypto/context.js": ["./src/stubs/crypto-context.ts"],
+      "$lib/terminology/context": ["./src/stubs/terminology-context.svelte.ts"],
+      "$lib/terminology/context.js": [
+        "./src/stubs/terminology-context.svelte.ts"
+      ],
+      "@care-y/crypto": ["./src/stubs/care-y-crypto.ts"],
+      "$app/environment": ["./src/stubs/app-environment.ts"],
+      "$app/navigation": ["./src/stubs/app-navigation.ts"],
+      "$app/paths": ["./src/stubs/app-paths.ts"],
+      "$app/state": ["./src/stubs/app-state.ts"],
+      "$lib/*": ["../client/src/lib/*"],
+      "$lib": ["../client/src/lib"],
+      "$demo/*": ["./src/lib/*"],
+      "$demo": ["./src/lib"]
+    }
+  },
+  "include": [
+    "src/**/*.ts",
+    "src/**/*.svelte",
+    "vite.ts",
+    "vite.config.ts",
+    "vitest.config.ts",
+    "../client/src/lib/workers/shared-worker-types.d.ts"
+  ],
+  "references": [{ "path": "../shared" }]
+}
