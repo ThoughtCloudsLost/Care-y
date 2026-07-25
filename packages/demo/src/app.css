@@ -1,0 +1,16 @@
+@import "tailwindcss";
+
+/* Scan client components and demo components for Tailwind class names. */
+@source "../../client/src/lib";
+@source "./lib";
+
+@import "konsta/svelte/theme.css";
+@import "../../client/src/styles/shared.css";
+@import "../../client/src/styles/touch.css";
+@import "../../client/src/styles/animations.css";
+@import "../../client/src/styles/themes/default.css";
+
+/* Redeclared @font-face with relative URLs (last import wins the cascade).
+   The client's fonts.css uses absolute /fonts/* URLs which break when
+   the demo is served under a base path like /Care-y/. */
+@import "./styles/demo-fonts.css";

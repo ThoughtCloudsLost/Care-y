@@ -111,7 +111,11 @@ export default defineConfig({
       // Referenced as a directory so vitest sets cwd to packages/client/
       // before loading the config (sveltekit() needs cwd to find svelte.config.js).
       // Skipped inside Docker where SvelteKit deps are not installed.
-      ...(clientAvailable ? ["packages/client" as const] : []),
+      // The demo package shares the client's toolchain (svelte plugin,
+      // browser conditions), so it follows the same availability gate.
+      ...(clientAvailable
+        ? ["packages/client" as const, "packages/demo" as const]
+        : []),
     ],
   },
 });

@@ -222,6 +222,49 @@ importers:
         specifier: 0.8.4
         version: 0.8.4
 
+  packages/demo:
+    dependencies:
+      '@care-y/shared':
+        specifier: workspace:*
+        version: link:../shared
+      '@lucide/svelte':
+        specifier: 1.16.0
+        version: 1.16.0(svelte@5.56.7(@typescript-eslint/types@8.65.0))
+      konsta:
+        specifier: 5.0.9
+        version: 5.0.9(patch_hash=f04f43bff4707f2cf6388655e4e5dbc24686198f657e8c5a72ec206f745c6ff6)
+    devDependencies:
+      '@sveltejs/vite-plugin-svelte':
+        specifier: ^6.2.4
+        version: 6.2.4(svelte@5.56.7(@typescript-eslint/types@8.65.0))(vite@7.3.6(@types/node@26.1.0)(jiti@2.7.0)(lightningcss@1.32.0)(terser@5.49.0)(tsx@4.23.1))
+      '@tailwindcss/vite':
+        specifier: 4.3.3
+        version: 4.3.3(vite@7.3.6(@types/node@26.1.0)(jiti@2.7.0)(lightningcss@1.32.0)(terser@5.49.0)(tsx@4.23.1))
+      '@testing-library/jest-dom':
+        specifier: 7.0.0
+        version: 7.0.0(@testing-library/dom@10.4.1)
+      '@testing-library/svelte':
+        specifier: 5.4.2
+        version: 5.4.2(svelte@5.56.7(@typescript-eslint/types@8.65.0))(vite@7.3.6(@types/node@26.1.0)(jiti@2.7.0)(lightningcss@1.32.0)(terser@5.49.0)(tsx@4.23.1))(vitest@4.1.10)
+      jsdom:
+        specifier: 29.1.1
+        version: 29.1.1
+      svelte:
+        specifier: ^5.56.7
+        version: 5.56.7(@typescript-eslint/types@8.65.0)
+      svelte-check:
+        specifier: ^4.7.3
+        version: 4.7.3(picomatch@4.0.5)(svelte@5.56.7(@typescript-eslint/types@8.65.0))(typescript@5.9.3)
+      tailwindcss:
+        specifier: 4.3.3
+        version: 4.3.3
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
+      vite:
+        specifier: ^7.3.6
+        version: 7.3.6(@types/node@26.1.0)(jiti@2.7.0)(lightningcss@1.32.0)(terser@5.49.0)(tsx@4.23.1)
+
   packages/server:
     dependencies:
       '@care-y/crypto':
@@ -3005,10 +3048,6 @@ packages:
   loglevel@1.9.2:
     resolution: {integrity: sha512-HgMmCqIJSAKqo68l0rS2AanEWfkxaZ5wNiEFb5ggm08lDs9Xl2KxBlX3PTcaD2chBM1gXAYf491/M2Rv8Jwayg==}
     engines: {node: '>= 0.6.0'}
-
-  lru-cache@11.3.5:
-    resolution: {integrity: sha512-NxVFwLAnrd9i7KUBxC4DrUhmgjzOs+1Qm50D3oF1/oL+r1NpZ4gA7xvG0/zJ8evR7zIKn4vLf7qTNduWFtCrRw==}
-    engines: {node: 20 || >=22}
 
   lru-cache@11.5.2:
     resolution: {integrity: sha512-4pfM1Ff0x50o0tQwb5ucw/RzNyD0/YJME6IVcStalZuMWxdt3sR3huStTtxz4PUmvZfRguvDejasvQ2kifR11g==}
@@ -6736,7 +6775,7 @@ snapshots:
       decimal.js: 10.6.0
       html-encoding-sniffer: 6.0.0
       is-potential-custom-element-name: 1.0.1
-      lru-cache: 11.3.5
+      lru-cache: 11.5.2
       parse5: 8.0.1
       saxes: 6.0.0
       symbol-tree: 3.2.4
@@ -6910,8 +6949,6 @@ snapshots:
   lodash@4.18.1: {}
 
   loglevel@1.9.2: {}
-
-  lru-cache@11.3.5: {}
 
   lru-cache@11.5.2: {}
 
