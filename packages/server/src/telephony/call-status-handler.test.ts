@@ -33,8 +33,9 @@ function makeDeps(callTracker = createCallTracker()): CallStatusDeps & {
   return {
     callTracker,
     inserts,
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- test mock
-    getTenantDb: vi.fn().mockReturnValue(mockDb) as any,
+    getTenantDb: vi
+      .fn()
+      .mockReturnValue(mockDb) as unknown as CallStatusDeps["getTenantDb"],
     intakeQueueId: "queue-intake-1",
   };
 }
@@ -42,7 +43,11 @@ function makeDeps(callTracker = createCallTracker()): CallStatusDeps & {
 describe("handleCallStatus", () => {
   it("creates a phone_call follow-up for terminal outbound call", async () => {
     const tracker = createCallTracker();
-    tracker.track("CA123", makeTracked({ direction: "outbound" }));
+    await tracker.track(
+      "test_org",
+      "CA123",
+      makeTracked({ direction: "outbound" }),
+    );
     const deps = makeDeps(tracker);
 
     await handleCallStatus(
@@ -65,12 +70,16 @@ describe("handleCallStatus", () => {
       call_duration_seconds: 120,
     });
     // Tracker entry is NOT removed (recording callback needs it, TTL handles cleanup)
-    expect(tracker.get("CA123")).toBeDefined();
+    expect(await tracker.get("test_org", "CA123")).toBeDefined();
   });
 
   it("creates a phone_call follow-up for inbound call", async () => {
     const tracker = createCallTracker();
-    tracker.track("CA456", makeTracked({ direction: "inbound", userId: null }));
+    await tracker.track(
+      "test_org",
+      "CA456",
+      makeTracked({ direction: "inbound", userId: null }),
+    );
     const deps = makeDeps(tracker);
 
     await handleCallStatus(
@@ -92,7 +101,7 @@ describe("handleCallStatus", () => {
 
   it("ignores non-terminal statuses", async () => {
     const tracker = createCallTracker();
-    tracker.track("CA789", makeTracked());
+    await tracker.track("test_org", "CA789", makeTracked());
     const deps = makeDeps(tracker);
 
     await handleCallStatus(
@@ -105,7 +114,7 @@ describe("handleCallStatus", () => {
     );
 
     expect(deps.inserts).toHaveLength(0);
-    expect(tracker.get("CA789")).toBeDefined();
+    expect(await tracker.get("test_org", "CA789")).toBeDefined();
   });
 
   it("ignores unknown callSid", async () => {
@@ -131,7 +140,7 @@ describe("handleCallStatus", () => {
 
   it("normalizes Twilio hyphenated status to underscored", async () => {
     const tracker = createCallTracker();
-    tracker.track("CA111", makeTracked());
+    await tracker.track("test_org", "CA111", makeTracked());
     const deps = makeDeps(tracker);
 
     await handleCallStatus(
@@ -148,7 +157,7 @@ describe("handleCallStatus", () => {
 
   it("handles missing duration (non-completed call)", async () => {
     const tracker = createCallTracker();
-    tracker.track("CA222", makeTracked());
+    await tracker.track("test_org", "CA222", makeTracked());
     const deps = makeDeps(tracker);
 
     await handleCallStatus(
@@ -165,7 +174,8 @@ describe("handleCallStatus", () => {
 
   it("skips insert when outbound call has no ticketId", async () => {
     const tracker = createCallTracker();
-    tracker.track(
+    await tracker.track(
+      "test_org",
       "CA333",
       makeTracked({ ticketId: "", direction: "outbound" }),
     );
@@ -183,7 +193,7 @@ describe("handleCallStatus", () => {
 
     expect(deps.inserts).toHaveLength(0);
     // Tracker entry persists (TTL handles cleanup)
-    expect(tracker.get("CA333")).toBeDefined();
+    expect(await tracker.get("test_org", "CA333")).toBeDefined();
   });
 
   // Inbound resolution now uses resolveOrCreateTicket which requires a real
@@ -192,7 +202,8 @@ describe("handleCallStatus", () => {
 
   it("skips inbound resolution when no clientId", async () => {
     const tracker = createCallTracker();
-    tracker.track(
+    await tracker.track(
+      "test_org",
       "CA555",
       makeTracked({
         ticketId: "",

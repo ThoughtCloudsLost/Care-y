@@ -69,7 +69,7 @@ import { createBrandingIconHandler } from "./routes/branding-icons.js";
 import { createManifestHandler } from "./routes/manifest.js";
 import { createRelayHandler, type PendingCall } from "./routes/relay.js";
 import { authenticateRelay } from "./routes/relay-utils.js";
-import { createCallTracker } from "./telephony/call-tracker.js";
+import { createDbCallTracker } from "./telephony/call-tracker.js";
 import { extractOrgSlug } from "./org/slug-resolver.js";
 import { NotFoundError } from "./errors.js";
 import { createPhoneResolver } from "./telephony/phone-resolver.js";
@@ -544,6 +544,10 @@ const appRouter = createAppRouter({
     tenantDbFactory: tenantDb,
     secretsEncryptor,
   },
+  voicemailQuarantineDeps: {
+    blobStore,
+    pendingClients,
+  },
   includeDev: env.NODE_ENV !== "production",
 });
 
@@ -596,7 +600,7 @@ console.log("Job queue started");
 
 // --- Call tracker ---
 
-const callTracker = createCallTracker();
+const callTracker = createDbCallTracker(tenantDb, listActiveOrgSchemas);
 
 // --- Webhook dispatch callbacks ---
 
@@ -609,6 +613,7 @@ const webhookDispatch = createWebhookDispatch({
   jobQueue,
   webhookBaseUrl: env.WEBHOOK_BASE_URL,
   callTracker,
+  notificationService,
 });
 
 // --- Webhook handler ---
@@ -811,6 +816,7 @@ async function shutdown(signal: string): Promise<void> {
   console.log(`${signal} received, shutting down`);
   server.close();
   sseService.closeAll();
+  callTracker.stop();
   webhookDedupStore.stop();
   clearInterval(pendingCallCleanupInterval);
   zeroAllPendingCalls(pendingCalls);

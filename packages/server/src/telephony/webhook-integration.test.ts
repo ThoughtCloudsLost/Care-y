@@ -26,6 +26,7 @@ import {
   type WebhookDispatch,
 } from "../routes/webhooks.js";
 import { createWebhookDispatch } from "./webhook-dispatch.js";
+import type { NotificationService } from "../notifications/service.js";
 import { createTelephonyConfigService } from "./config-service.js";
 import type { ProviderFactory } from "./factory.js";
 import { createDedupStore } from "./dedup-store.js";
@@ -50,9 +51,11 @@ import {
   testBlindIndexer,
   type TestDb,
 } from "../test-utils.js";
+import { createCallTracker } from "./call-tracker.js";
 import type { BlobStore, BlobCategory } from "../storage/store.js";
 import type { JobQueue } from "../jobs/queue.js";
 import type { OrgService } from "../org/service.js";
+import { SYSTEM_ACTOR_ID, RoleId } from "@care-y/shared";
 
 // ---------------------------------------------------------------------------
 // Test constants
@@ -221,6 +224,39 @@ function buildSignedSmsRequest(options: {
   return { url: urlPath, body: params.toString(), signature, bodyRecord };
 }
 
+function buildSignedVoiceRecordingRequest(options: {
+  orgId: string;
+  callSid?: string;
+  recordingSid?: string;
+  recordingDuration?: string;
+}): {
+  url: string;
+  body: string;
+  signature: string;
+  bodyRecord: Record<string, string>;
+} {
+  const endpoint = "voice";
+  const tsSeconds = Math.floor(Date.now() / 1000);
+  const urlPath = `/webhooks/twilio/${options.orgId}/${endpoint}?ts=${String(tsSeconds)}`;
+  const fullUrl = WEBHOOK_BASE_URL + urlPath;
+
+  const bodyRecord: Record<string, string> = {
+    AccountSid: TEST_ACCOUNT_SID,
+    CallSid: options.callSid ?? "CA_INTEG_Q_001",
+    RecordingSid: options.recordingSid ?? "RE_INTEG_Q_001",
+    RecordingDuration: options.recordingDuration ?? "10",
+  };
+
+  const signature = twilioHmacValidator.computeSignature(
+    fullUrl,
+    bodyRecord,
+    TEST_AUTH_TOKEN,
+  );
+
+  const params = new URLSearchParams(bodyRecord);
+  return { url: urlPath, body: params.toString(), signature, bodyRecord };
+}
+
 // ---------------------------------------------------------------------------
 // Encrypted config builder (isolates plaintext from DB write scope)
 // ---------------------------------------------------------------------------
@@ -269,6 +305,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
       typeof vi.fn<(messageId: string) => Promise<void>>
     >;
     let dedupStore: ReturnType<typeof createDedupStore>;
+    let mockNotificationService: NotificationService;
 
     beforeAll(async () => {
       // Initialize sodium (required by @care-y/crypto before sync crypto ops)
@@ -307,6 +344,19 @@ describe.skipIf(!process.env.DATABASE_URL)(
           response_type: "new_client",
           locale: "en-US",
           text: "Thank you for reaching out. A volunteer will follow up.",
+        })
+        .execute();
+
+      // 3b. Seed a minimal admin user so the quarantine notification path fires
+      await tDb
+        .insertInto("users")
+        .values({
+          identifier_hash: "integ-admin-hash",
+          encrypted_identifier: Buffer.from("integ-admin"),
+          password_hash: "not-a-real-hash",
+          encrypted_display_name: Buffer.from("Admin"),
+          role_id: RoleId.ADMIN,
+          is_active: true,
         })
         .execute();
 
@@ -411,16 +461,19 @@ describe.skipIf(!process.env.DATABASE_URL)(
           throw new TestSetupError("Not expected in SMS flow");
         },
         generateVoiceResponse() {
-          throw new TestSetupError("Not expected in SMS flow");
+          return ""; // Recording-complete callbacks return null TwiML
         },
         async getRecording() {
-          throw new TestSetupError("Not expected in SMS flow");
+          return Buffer.from("fake-audio-for-quarantine");
+        },
+        async getCallDetails() {
+          return { from: "+15551112222", to: "+15553334444" };
         },
         async deleteRecording() {
-          throw new TestSetupError("Not expected in SMS flow");
+          // Best-effort deletion after quarantine
         },
         async deleteCallLog() {
-          throw new TestSetupError("Not expected in SMS flow");
+          // Best-effort deletion after quarantine
         },
         maskConfig() {
           return {
@@ -483,6 +536,11 @@ describe.skipIf(!process.env.DATABASE_URL)(
         ) as unknown as Kysely<TenantDatabase>;
       }
 
+      mockNotificationService = {
+        dispatch: vi.fn().mockResolvedValue(undefined),
+        dispatchTicketless: vi.fn().mockResolvedValue(undefined),
+      };
+
       const dispatch: WebhookDispatch = createWebhookDispatch({
         orgService,
         tenantDb: tenantDbFactory,
@@ -491,6 +549,8 @@ describe.skipIf(!process.env.DATABASE_URL)(
         blobStore,
         jobQueue: mockJobQueue,
         webhookBaseUrl: WEBHOOK_BASE_URL,
+        callTracker: createCallTracker(),
+        notificationService: mockNotificationService,
       });
 
       // 13. Real webhook handler (rate limiter, dedup, signature validation)
@@ -759,6 +819,79 @@ describe.skipIf(!process.env.DATABASE_URL)(
           maxRetries: 3,
           backoff: "exponential",
         }),
+      );
+    });
+
+    // -----------------------------------------------------------------
+    // D2: Tracker-miss recording quarantine
+    // -----------------------------------------------------------------
+
+    it("quarantines a recording on tracker miss with audit row and notification job", async () => {
+      const callSid = "CA_INTEG_Q_MISS";
+      const recordingSid = "RE_INTEG_Q_MISS";
+
+      const { url, body, signature } = buildSignedVoiceRecordingRequest({
+        orgId: WEBHOOK_INTEG_ORG_ID,
+        callSid,
+        recordingSid,
+        recordingDuration: "15",
+      });
+
+      const req = createMockReq({
+        url,
+        body,
+        headers: { "x-twilio-signature": signature },
+      });
+      const res = createMockRes();
+
+      await handler(req, res);
+
+      // Webhook handler returns 200 (quarantine succeeded, no TwiML needed)
+      expect(res.statusCode).toBe(200);
+
+      // Quarantine row exists with correct reason
+      const quarantineRows = await tDb
+        .selectFrom("voicemail_quarantine")
+        .selectAll()
+        .where("recording_sid", "=", recordingSid)
+        .execute();
+
+      expect(quarantineRows).toHaveLength(1);
+      expect(quarantineRows[0]!.reason).toBe("tracker_miss");
+      expect(quarantineRows[0]!.call_sid).toBe(callSid);
+      expect(quarantineRows[0]!.duration_seconds).toBe(15);
+      expect(quarantineRows[0]!.status).toBe("pending");
+      // Sealed blob was stored (blob_key is non-empty)
+      expect(quarantineRows[0]!.blob_key).toBeTruthy();
+      // Encrypted caller numbers are present (getCallDetails succeeded)
+      expect(quarantineRows[0]!.encrypted_caller_number).not.toBeNull();
+      expect(quarantineRows[0]!.encrypted_called_number).not.toBeNull();
+
+      // Audit row with SYSTEM_ACTOR_ID
+      const auditRows = await tDb
+        .selectFrom("audit_log")
+        .selectAll()
+        .where("event_type", "=", "voicemail_quarantined")
+        .where("actor_id", "=", SYSTEM_ACTOR_ID)
+        .execute();
+
+      const matchingAudit = auditRows.find(
+        (r) => (r.metadata as Record<string, unknown>).callSid === callSid,
+      );
+      expect(matchingAudit).toBeDefined();
+      expect((matchingAudit!.metadata as Record<string, unknown>).reason).toBe(
+        "tracker_miss",
+      );
+
+      // dispatchTicketless was called on the notification service mock.
+      // The mock does not actually enqueue jobs, but the call proves
+      // the quarantine path attempted admin notification.
+      expect(mockNotificationService.dispatchTicketless).toHaveBeenCalledWith(
+        expect.anything(), // tDb
+        expect.any(String), // orgSchema
+        expect.any(String), // orgSlug
+        "voicemail_quarantined",
+        expect.any(Array), // adminIds
       );
     });
   },

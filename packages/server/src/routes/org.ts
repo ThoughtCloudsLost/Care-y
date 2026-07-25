@@ -13,6 +13,7 @@
 import {
   createOrgInputSchema,
   updateOrgGeneralAdminInputSchema,
+  setIntakeQueueInputSchema,
 } from "@care-y/shared";
 import {
   router,
@@ -60,5 +61,21 @@ export function createOrgRouter(orgService: OrgService) {
           return { success: true as const };
         }),
       ),
+
+    getIntakeQueue: adminProcedure.query(
+      withErrorWrapping(async ({ ctx }) => {
+        const svc = createOrgConfigService(ctx.org.tenantDb);
+        const queueId = await svc.getIntakeQueue();
+        return { queueId };
+      }),
+    ),
+
+    setIntakeQueue: adminProcedure.input(setIntakeQueueInputSchema).mutation(
+      withErrorWrapping(async ({ ctx, input }) => {
+        const svc = createOrgConfigService(ctx.org.tenantDb);
+        await svc.setIntakeQueue(input.queueId);
+        return { success: true as const };
+      }),
+    ),
   });
 }

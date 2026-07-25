@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import {
   extractMediaFromWebhookBody,
   type TelephonyProvider,
+  type CallDetails,
   type SendSmsResult,
   type OutboundCallParams,
   type WebRtcCallParams,
@@ -113,6 +114,12 @@ export function createMockProvider(): MockTelephonyProvider {
     async getRecording(recordingId: string): Promise<Buffer> {
       record(callLog, "getRecording", [recordingId]);
       return Buffer.alloc(EMPTY_WAV_SIZE);
+    },
+
+    // eslint-disable-next-line @typescript-eslint/require-await -- mock: no real I/O to await
+    async getCallDetails(callId: string): Promise<CallDetails> {
+      record(callLog, "getCallDetails", [callId]);
+      return { from: "+10000000000", to: "+10000000001" };
     },
 
     // eslint-disable-next-line @typescript-eslint/require-await -- mock: no real I/O to await

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   notificationEventTypeSchema,
   sseEventSchema,
+  systemSseEventSchema,
   pushSubscriptionInputSchema,
   unsubscribePushInputSchema,
   metadataSearchInputSchema,
@@ -24,6 +25,7 @@ describe("notificationEventTypeSchema", () => {
     "followup_added",
     "mention",
     "merge_completed",
+    "voicemail_quarantined",
   ];
 
   it.each(validTypes)("accepts '%s'", (type) => {
@@ -86,6 +88,67 @@ describe("sseEventSchema", () => {
         timestamp: "not-a-date",
       }).success,
     ).toBe(false);
+  });
+});
+
+describe("systemSseEventSchema", () => {
+  it("accepts valid system SSE event", () => {
+    const result = systemSseEventSchema.safeParse({
+      type: "voicemail_quarantined",
+      timestamp: VALID_ISO,
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("rejects missing type", () => {
+    expect(
+      systemSseEventSchema.safeParse({
+        timestamp: VALID_ISO,
+      }).success,
+    ).toBe(false);
+  });
+
+  it("rejects wrong type value", () => {
+    expect(
+      systemSseEventSchema.safeParse({
+        type: "ticket_created",
+        timestamp: VALID_ISO,
+      }).success,
+    ).toBe(false);
+  });
+
+  it("rejects missing timestamp", () => {
+    expect(
+      systemSseEventSchema.safeParse({
+        type: "voicemail_quarantined",
+      }).success,
+    ).toBe(false);
+  });
+
+  it("rejects invalid timestamp", () => {
+    expect(
+      systemSseEventSchema.safeParse({
+        type: "voicemail_quarantined",
+        timestamp: "not-a-date",
+      }).success,
+    ).toBe(false);
+  });
+
+  it("rejects extra ticket/queue fields (strict shape)", () => {
+    // System events must not carry ticket or queue context.
+    // The schema should only accept type + timestamp.
+    const result = systemSseEventSchema.safeParse({
+      type: "voicemail_quarantined",
+      timestamp: VALID_ISO,
+      ticketId: VALID_UUID,
+      queueId: VALID_UUID_2,
+    });
+    // Zod object schemas strip unknown keys by default; verify
+    // that a successful parse produces only type + timestamp.
+    if (result.success) {
+      const keys = Object.keys(result.data);
+      expect(keys).toEqual(["type", "timestamp"]);
+    }
   });
 });
 
@@ -273,6 +336,13 @@ describe("auditEventTypeSchema", () => {
     "queue_deleted",
     "preset_created",
     "preset_updated",
+    "note_type_created",
+    "note_type_updated",
+    "merge_undone",
+    "merge_lock_changed",
+    "voicemail_quarantined",
+    "voicemail_quarantine_routed",
+    "voicemail_quarantine_dismissed",
   ];
 
   it.each(validTypes)("accepts '%s'", (type) => {

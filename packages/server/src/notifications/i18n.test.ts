@@ -48,7 +48,24 @@ describe("getStrings", () => {
     expect(strings.ticketEscalated(url)).toContain(url);
     expect(strings.followupAdded(url)).toContain(url);
     expect(strings.mentionNotification(url)).toContain(url);
+    expect(strings.voicemailQuarantined(url)).toContain(url);
     expect(strings.smsPing(url)).toContain(url);
+  });
+
+  it("returns Spanish voicemailQuarantined with login URL", () => {
+    const strings = getStrings("es");
+    const url = "https://org.care-y.app/login";
+    const msg = strings.voicemailQuarantined(url);
+    expect(msg).toContain("cuarentena");
+    expect(msg).toContain(url);
+  });
+
+  it("returns English voicemailQuarantined with login URL", () => {
+    const strings = getStrings("en");
+    const url = "https://org.care-y.app/login";
+    const msg = strings.voicemailQuarantined(url);
+    expect(msg).toContain("quarantined");
+    expect(msg).toContain(url);
   });
 });
 

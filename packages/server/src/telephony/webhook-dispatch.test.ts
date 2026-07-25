@@ -165,7 +165,11 @@ describe("webhook-dispatch (unit)", () => {
       blobStore: createMemoryBlobStore(),
       jobQueue: createMockJobQueue(),
       webhookBaseUrl: WEBHOOK_BASE_URL,
-      ...(callTracker ? { callTracker } : {}),
+      callTracker: callTracker ?? createCallTracker(),
+      notificationService: {
+        dispatch: vi.fn().mockResolvedValue(undefined),
+        dispatchTicketless: vi.fn().mockResolvedValue(undefined),
+      },
     };
   }
 
@@ -186,19 +190,10 @@ describe("webhook-dispatch (unit)", () => {
   });
 
   describe("dispatch shape", () => {
-    // routes/webhooks.ts checks `if (dispatch.onStatusCallback)` before
-    // dispatching status events, so presence/absence of the callback is
-    // part of this module's public contract.
-
-    it("omits onStatusCallback when no call tracker is provided", () => {
+    it("always provides onStatusCallback", () => {
       const dispatch = createWebhookDispatch(makeUnitDeps());
       expect(dispatch.onInboundSms).toBeDefined();
       expect(dispatch.onInboundVoice).toBeDefined();
-      expect(dispatch.onStatusCallback).toBeUndefined();
-    });
-
-    it("provides onStatusCallback when a call tracker is provided", () => {
-      const dispatch = createWebhookDispatch(makeUnitDeps(createCallTracker()));
       expect(dispatch.onStatusCallback).toBeDefined();
     });
   });
@@ -349,7 +344,11 @@ describe.skipIf(!process.env.DATABASE_URL)(
         blobStore: setup?.blobStore ?? createMemoryBlobStore(),
         jobQueue: setup?.jobQueue ?? createMockJobQueue(),
         webhookBaseUrl: WEBHOOK_BASE_URL,
-        ...(setup?.callTracker ? { callTracker: setup.callTracker } : {}),
+        callTracker: setup?.callTracker ?? createCallTracker(),
+        notificationService: {
+          dispatch: vi.fn().mockResolvedValue(undefined),
+          dispatchTicketless: vi.fn().mockResolvedValue(undefined),
+        },
       });
     }
 
@@ -503,7 +502,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
 
         // The call is tracked so later status/recording callbacks can find
         // their ticket context.
-        const tracked = tracker.get("CA_DTMF_1");
+        const tracked = await tracker.get(dbFull.schemaName, "CA_DTMF_1");
         expect(tracked).toBeDefined();
         expect(tracked!.clientId).toBe(clientRow.id);
         expect(tracked!.direction).toBe("inbound");
@@ -513,7 +512,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
       it("routes a recording-ready callback into the recording pipeline", async () => {
         const fixture = await createTestTicketFixture(dbFull.db);
         const tracker = createCallTracker();
-        tracker.track("CA_REC_DISPATCH", {
+        await tracker.track(dbFull.schemaName, "CA_REC_DISPATCH", {
           ticketId: fixture.ticketId,
           userId: null,
           direction: "inbound",
@@ -569,35 +568,27 @@ describe.skipIf(!process.env.DATABASE_URL)(
         expect(deleteCallLog).toHaveBeenCalledWith("CA_REC_DISPATCH");
       });
 
-      it("returns null for a recording-ready callback when no call tracker is configured", async () => {
-        // Dispatch built without a callTracker: the recording branch bails
-        // out. The fully strict provider proves the recording is neither
-        // fetched nor deleted. Note: the provider-side recording is left
-        // behind in this configuration (reported as a production smell).
-        const dispatch = makeDispatch({
-          provider: createMockTelephonyProvider(),
-        });
-        await expect(
-          dispatch.onInboundVoice!(ORG_FULL_ID, {
-            CallSid: "CA_REC_NO_TRACKER",
-            RecordingSid: "RE_NO_TRACKER",
-          }),
-        ).resolves.toBeNull();
-      });
-
-      it("cleans up provider artifacts when the recording's call is not tracked", async () => {
+      it("quarantines the recording when the call is not tracked", async () => {
         const deleteRecording = vi.fn().mockResolvedValue(undefined);
         const deleteCallLog = vi.fn().mockResolvedValue(undefined);
-        // getRecording stays strict: an untracked recording must not be
-        // fetched, only cleaned up.
+        const getRecording = vi
+          .fn()
+          .mockResolvedValue(Buffer.from("untracked-audio"));
+        const getCallDetails = vi
+          .fn()
+          .mockResolvedValue({ from: "+15551112222", to: "+15553334444" });
         const provider: TelephonyProvider = {
           ...createMockTelephonyProvider(),
           deleteRecording,
           deleteCallLog,
+          getRecording,
+          getCallDetails,
         };
+        const blobStore = createMemoryBlobStore();
         const dispatch = makeDispatch({
           provider,
           callTracker: createCallTracker(),
+          blobStore,
         });
 
         await expect(
@@ -607,8 +598,19 @@ describe.skipIf(!process.env.DATABASE_URL)(
           }),
         ).resolves.toBeNull();
 
+        // Quarantine path: audio is fetched, sealed, stored, then deleted
+        expect(getRecording).toHaveBeenCalledWith("RE_UNTRACKED");
         expect(deleteRecording).toHaveBeenCalledWith("RE_UNTRACKED");
         expect(deleteCallLog).toHaveBeenCalledWith("CA_REC_UNTRACKED");
+
+        // Verify quarantine row was inserted
+        const rows = await dbFull.db
+          .selectFrom("voicemail_quarantine")
+          .selectAll()
+          .where("recording_sid", "=", "RE_UNTRACKED")
+          .execute();
+        expect(rows).toHaveLength(1);
+        expect(rows[0]!.reason).toBe("tracker_miss");
       });
     });
 
@@ -621,7 +623,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
           createUser: true,
         });
         const tracker = createCallTracker();
-        tracker.track("CA_STATUS_DONE", {
+        await tracker.track(dbFull.schemaName, "CA_STATUS_DONE", {
           ticketId: fixture.ticketId,
           userId: fixture.userId,
           direction: "outbound",
@@ -668,7 +670,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
 
         for (const { raw, stored } of cases) {
           const callSid = `CA_STATUS_${raw}`;
-          tracker.track(callSid, {
+          await tracker.track(dbFull.schemaName, callSid, {
             ticketId: fixture.ticketId,
             userId: fixture.userId,
             direction: "outbound",
@@ -695,7 +697,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
       it("ignores non-terminal status updates", async () => {
         const fixture = await createTestTicketFixture(dbFull.db);
         const tracker = createCallTracker();
-        tracker.track("CA_STATUS_RINGING", {
+        await tracker.track(dbFull.schemaName, "CA_STATUS_RINGING", {
           ticketId: fixture.ticketId,
           userId: null,
           direction: "outbound",

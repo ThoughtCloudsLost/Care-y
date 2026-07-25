@@ -1,6 +1,6 @@
 import type { Kysely } from "kysely";
 import type { TenantDatabase } from "../db/types.js";
-import { NotFoundError } from "../errors.js";
+import { NotFoundError, ValidationError } from "../errors.js";
 
 export interface OrgGeneralResult {
   readonly encryptedName: string | null;
@@ -17,6 +17,8 @@ export interface UpdateOrgGeneralInput {
 export interface OrgConfigService {
   getOrgGeneral(): Promise<OrgGeneralResult>;
   updateOrgGeneral(input: UpdateOrgGeneralInput): Promise<void>;
+  getIntakeQueue(): Promise<string | null>;
+  setIntakeQueue(queueId: string | null): Promise<void>;
 }
 
 export function createOrgConfigService(
@@ -51,6 +53,43 @@ export function createOrgConfigService(
           default_language: input.defaultLanguage,
           default_country_code: input.countryCode,
         })
+        .executeTakeFirst();
+
+      if (result.numUpdatedRows === 0n) {
+        throw new NotFoundError("Org config not found");
+      }
+    },
+
+    async getIntakeQueue(): Promise<string | null> {
+      const config = await tenantDb
+        .selectFrom("org_config")
+        .select("intake_queue_id")
+        .executeTakeFirst();
+
+      if (!config) {
+        throw new NotFoundError("Org config not found");
+      }
+
+      return config.intake_queue_id;
+    },
+
+    async setIntakeQueue(queueId: string | null): Promise<void> {
+      if (queueId !== null) {
+        const queue = await tenantDb
+          .selectFrom("queues")
+          .select("id")
+          .where("id", "=", queueId)
+          .where("is_active", "=", true)
+          .executeTakeFirst();
+
+        if (!queue) {
+          throw new ValidationError("Queue not found or inactive");
+        }
+      }
+
+      const result = await tenantDb
+        .updateTable("org_config")
+        .set({ intake_queue_id: queueId })
         .executeTakeFirst();
 
       if (result.numUpdatedRows === 0n) {

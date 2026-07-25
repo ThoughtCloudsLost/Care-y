@@ -15,6 +15,7 @@ export interface NotificationStrings {
   readonly ticketEscalated: (loginUrl: string) => string;
   readonly followupAdded: (loginUrl: string) => string;
   readonly mentionNotification: (loginUrl: string) => string;
+  readonly voicemailQuarantined: (loginUrl: string) => string;
   readonly smsPing: (loginUrl: string) => string;
   readonly emailSubjectPrefix: string;
 }
@@ -29,6 +30,8 @@ const EN: NotificationStrings = {
     `A ticket you are following has a new update. Log in to view it: ${url}`,
   mentionNotification: (url) =>
     `You were mentioned in a ticket note. Log in to view it: ${url}`,
+  voicemailQuarantined: (url) =>
+    `A voicemail could not be routed automatically and was quarantined. Log in to review it: ${url}`,
   smsPing: (url) => `You have a new notification. Visit ${url}`,
   emailSubjectPrefix: "CARE-Y",
 };
@@ -44,6 +47,8 @@ const ES: NotificationStrings = {
     `Un caso que sigue tiene una nueva actualizacion. Inicie sesion para verlo: ${url}`,
   mentionNotification: (url) =>
     `Se le ha mencionado en una nota de un caso. Inicie sesion para verlo: ${url}`,
+  voicemailQuarantined: (url) =>
+    `Un correo de voz no pudo ser dirigido automaticamente y fue puesto en cuarentena. Inicie sesion para revisarlo: ${url}`,
   smsPing: (url) => `Tiene una nueva notificacion. Visite ${url}`,
   emailSubjectPrefix: "CARE-Y",
 };

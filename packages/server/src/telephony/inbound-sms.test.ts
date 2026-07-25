@@ -27,6 +27,7 @@ function createMockProvider(): TelephonyProvider {
     parseIncomingSms: vi.fn(),
     generateVoiceResponse: vi.fn(),
     getRecording: vi.fn(),
+    getCallDetails: vi.fn(),
     deleteRecording: vi.fn(),
     deleteCallLog: vi.fn(),
     maskConfig: vi.fn().mockReturnValue({
@@ -142,8 +143,7 @@ function makeDeps(overrides?: Partial<InboundSmsDeps>): InboundSmsDeps {
     clientRepo: createMockClientRepo(),
     smsResponseRepo: createMockSmsResponseRepo(),
     blocklistRepo: createMockBlocklistRepo(),
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- test mock; full DB tests in integration suite
-    tDb: {} as any,
+    tDb: {} as unknown as InboundSmsDeps["tDb"],
     intakeQueueId: "queue-intake-1",
     orgId: "org-1",
     orgSchema: "org_test",

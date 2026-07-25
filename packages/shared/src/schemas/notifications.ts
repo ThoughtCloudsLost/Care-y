@@ -23,6 +23,7 @@ export const notificationEventTypeSchema = z.enum([
   "followup_added",
   "mention",
   "merge_completed",
+  "voicemail_quarantined",
 ]);
 export type NotificationEventType = z.infer<typeof notificationEventTypeSchema>;
 
@@ -35,6 +36,17 @@ export const sseEventSchema = z.object({
   timestamp: z.iso.datetime(),
 });
 export type SseEvent = z.infer<typeof sseEventSchema>;
+
+// --- System SSE event (ticketless notifications, e.g., voicemail quarantine) ---
+
+export const systemSseEventSchema = z.object({
+  type: z.literal("voicemail_quarantined"),
+  timestamp: z.iso.datetime(),
+});
+export type SystemSseEvent = z.infer<typeof systemSseEventSchema>;
+
+/** Union of ticket-scoped and system (ticketless) SSE events. */
+export type AnySseEvent = SseEvent | SystemSseEvent;
 
 // --- Push subscription (from browser PushSubscription API) ---
 
@@ -98,6 +110,9 @@ export const auditEventTypeSchema = z.enum([
   "note_type_updated",
   "merge_undone",
   "merge_lock_changed",
+  "voicemail_quarantined",
+  "voicemail_quarantine_routed",
+  "voicemail_quarantine_dismissed",
 ]);
 export type AuditEventType = z.infer<typeof auditEventTypeSchema>;
 

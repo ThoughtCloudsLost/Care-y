@@ -246,6 +246,7 @@ export default tseslint.config(
             "createKbRouter",
             "createProfileRouter",
             "createOnboardingRouter",
+            "createVoicemailQuarantineRouter",
           ],
         },
       ],

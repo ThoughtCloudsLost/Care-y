@@ -78,7 +78,7 @@ export interface RelayHandlerDeps {
   readonly indexer: BlindIndexer;
   readonly fieldEncryptor: FieldEncryptor;
   readonly pendingClients: Map<string, PendingClient>;
-  readonly callTracker?: CallTracker;
+  readonly callTracker: CallTracker;
   readonly resolveClientPhone?: (
     ticketId: string,
     tenantDb: Kysely<TenantDatabase>,
@@ -387,8 +387,11 @@ async function handleCallRelay(
       createdAt: Date.now(),
     });
 
-    if (deps.callTracker) {
-      deps.callTracker.track(callSid, {
+    // A failed tracker write is non-fatal: the call is already placed, and a
+    // missing tracker entry causes the later recording webhook to quarantine
+    // the voicemail, which is the designed safety net.
+    try {
+      await deps.callTracker.track(session.orgSchema, callSid, {
         ticketId: callCtx.ticketId,
         userId: session.userId,
         direction: "outbound",
@@ -396,6 +399,11 @@ async function handleCallRelay(
         clientId: null,
         createdAt: Date.now(),
       });
+    } catch (trackErr: unknown) {
+      console.error(
+        "call-tracker write failed for outbound call",
+        trackErr instanceof Error ? trackErr.message : String(trackErr),
+      );
     }
 
     sendJsonResponse(res, 200, { callSid, method: "phone_callback" });

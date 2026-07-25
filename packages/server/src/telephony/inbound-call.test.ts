@@ -9,6 +9,7 @@ import type { PhoneRepository } from "./models/phone-repo.js";
 import type { ClientRepository } from "./models/client-repo.js";
 import type { GreetingRepository } from "./models/greeting-repo.js";
 import type { BlocklistRepository } from "./models/blocklist-repo.js";
+import { createCallTracker } from "./call-tracker.js";
 
 // ---------------------------------------------------------------------------
 // Mock factories
@@ -102,6 +103,7 @@ function makeDeps(overrides?: Partial<InboundCallDeps>): InboundCallDeps {
     orgSchema: "org_test",
     webhookBaseUrl: "https://example.com",
     defaultLocale: "en-US",
+    callTracker: createCallTracker(),
     ...overrides,
   };
 }

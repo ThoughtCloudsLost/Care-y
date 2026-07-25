@@ -567,6 +567,38 @@ export interface UserRecentViewsTable {
   wrapped_payload: Buffer;
 }
 
+// --- Voicemail quarantine ---
+
+export interface VoicemailQuarantineTable {
+  id: Generated<string>;
+  recording_sid: string;
+  call_sid: string;
+  blob_key: string;
+  size_bytes: number;
+  duration_seconds: number | null;
+  reason: string;
+  status: ColumnType<string, string | undefined, string>;
+  client_id: string | null;
+  encrypted_caller_number: Buffer | null;
+  encrypted_called_number: Buffer | null;
+  routed_ticket_id: string | null;
+  routed_followup_id: string | null;
+  resolved_by: string | null;
+  resolved_at: Date | null;
+  created_at: Generated<Date>;
+}
+
+// --- Tracked calls ---
+
+export interface TrackedCallsTable {
+  call_sid: string;
+  ticket_id: string | null;
+  user_id: string | null;
+  direction: string;
+  client_id: string | null;
+  created_at: Generated<Date>;
+}
+
 export interface TenantDatabase {
   users: UsersTable;
   sessions: SessionsTable;
@@ -618,6 +650,9 @@ export interface TenantDatabase {
   invite_tokens: InviteTokensTable;
   // Recently viewed history
   user_recent_views: UserRecentViewsTable;
+  // Voicemail quarantine
+  voicemail_quarantine: VoicemailQuarantineTable;
+  tracked_calls: TrackedCallsTable;
   // Shifts (shifts, shift_occurrences)
   // Client portal (portal_channels)
 }

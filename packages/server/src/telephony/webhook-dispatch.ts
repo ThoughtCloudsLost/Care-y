@@ -14,6 +14,7 @@ import type { BlindIndexer } from "../crypto/field-encryptor.js";
 import type { BlobStore } from "../storage/store.js";
 import type { JobQueue } from "../jobs/queue.js";
 import type { SealedBoxEncryptor } from "../crypto/sealed-box.js";
+import type { NotificationService } from "../notifications/service.js";
 import type { WebhookDispatch } from "../routes/webhooks.js";
 import { createSealedBoxEncryptor } from "../crypto/sealed-box.js";
 import { createPhoneRepository } from "./models/phone-repo.js";
@@ -34,6 +35,7 @@ import { handleCallStatus } from "./call-status-handler.js";
 export interface WebhookOrgContext {
   readonly orgId: string;
   readonly orgSchema: string;
+  readonly orgSlug: string;
   readonly tDb: Kysely<TenantDatabase>;
   readonly sealedBox: SealedBoxEncryptor;
   readonly intakeQueueId: string | null;
@@ -66,6 +68,7 @@ export async function resolveOrgForWebhook(
   return {
     orgId: org.id,
     orgSchema: org.schemaName,
+    orgSlug: org.slug,
     tDb,
     sealedBox,
     intakeQueueId: row.intake_queue_id ?? null,
@@ -84,7 +87,8 @@ export interface WebhookDispatchDeps {
   readonly blobStore: BlobStore;
   readonly jobQueue: JobQueue;
   readonly webhookBaseUrl: string;
-  readonly callTracker?: CallTracker;
+  readonly callTracker: CallTracker;
+  readonly notificationService: NotificationService;
 }
 
 /**
@@ -156,7 +160,6 @@ export function createWebhookDispatch(
       // eslint-disable-next-line @typescript-eslint/dot-notation
       const recordingSid = body["RecordingSid"];
       if (recordingSid !== undefined && recordingSid !== "") {
-        if (!deps.callTracker) return null;
         await handleRecordingComplete(body, {
           provider,
           blobStore,
@@ -166,6 +169,9 @@ export function createWebhookDispatch(
           intakeQueueId: org.intakeQueueId,
           orgSchema: org.orgSchema,
           orgId,
+          sealedBox: org.sealedBox,
+          orgSlug: org.orgSlug,
+          notificationService: deps.notificationService,
         });
         return null;
       }
@@ -194,22 +200,17 @@ export function createWebhookDispatch(
       return provider.generateVoiceResponse(instructions);
     },
 
-    ...(deps.callTracker
-      ? {
-          onStatusCallback: async (
-            orgId: string,
-            body: Record<string, string>,
-          ): Promise<void> => {
-            const org = await resolveOrgForWebhook(orgId, orgService, tenantDb);
-            if (!org) return;
-            if (!deps.callTracker) return;
-            await handleCallStatus(org.orgSchema, body, {
-              callTracker: deps.callTracker,
-              getTenantDb: tenantDb,
-              intakeQueueId: org.intakeQueueId,
-            });
-          },
-        }
-      : {}),
+    async onStatusCallback(
+      orgId: string,
+      body: Record<string, string>,
+    ): Promise<void> {
+      const org = await resolveOrgForWebhook(orgId, orgService, tenantDb);
+      if (!org) return;
+      await handleCallStatus(org.orgSchema, body, {
+        callTracker: deps.callTracker,
+        getTenantDb: tenantDb,
+        intakeQueueId: org.intakeQueueId,
+      });
+    },
   };
 }

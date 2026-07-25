@@ -130,6 +130,9 @@ function createMockProvider(validateResult: boolean): TelephonyProvider {
     async getRecording() {
       return Buffer.alloc(0);
     },
+    async getCallDetails() {
+      return { from: "+15550000001", to: "+15550000002" };
+    },
     async deleteRecording() {
       // no-op
     },

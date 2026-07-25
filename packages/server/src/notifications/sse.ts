@@ -3,7 +3,7 @@
 // Events carry metadata only (ticket IDs, queue names, timestamps). No PII.
 
 import type { ServerResponse } from "node:http";
-import type { SseEvent } from "@care-y/shared";
+import type { AnySseEvent } from "@care-y/shared";
 
 interface SseConnection {
   readonly res: ServerResponse;
@@ -25,7 +25,7 @@ export interface SseService {
   broadcast(
     orgId: string,
     recipientUserIds: readonly string[],
-    event: SseEvent,
+    event: AnySseEvent,
   ): void;
 
   /** Returns count of active connections (for health/monitoring). */
@@ -138,7 +138,11 @@ export function createSseService(): SseService {
       };
     },
 
-    broadcast(orgId, recipientUserIds, event) {
+    broadcast(
+      orgId: string,
+      recipientUserIds: readonly string[],
+      event: AnySseEvent,
+    ): void {
       const data = JSON.stringify(event);
       eventCounter += 1;
       const id = eventCounter;

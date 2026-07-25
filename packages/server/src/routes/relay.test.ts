@@ -15,6 +15,7 @@ import {
   type PendingCall,
 } from "./relay.js";
 import * as relayUtils from "./relay-utils.js";
+import { createCallTracker } from "../telephony/call-tracker.js";
 import { TestSetupError } from "../test-utils.js";
 
 // ---------------------------------------------------------------------------
@@ -72,6 +73,9 @@ function mockProvider(
     parseIncomingSms: vi.fn(),
     generateVoiceResponse: vi.fn().mockReturnValue("<Response/>"),
     getRecording: vi.fn().mockResolvedValue(Buffer.alloc(44)),
+    getCallDetails: vi
+      .fn()
+      .mockResolvedValue({ from: "+15550000001", to: "+15550000002" }),
     deleteRecording: vi.fn(),
     deleteCallLog: vi.fn(),
     deleteMessageLog: vi.fn(),
@@ -129,6 +133,7 @@ function makeDeps(overrides?: Partial<RelayHandlerDeps>): RelayHandlerDeps {
       decryptToBuffer: vi.fn().mockReturnValue(Buffer.from("decrypted")),
     },
     pendingClients: new Map(),
+    callTracker: createCallTracker(),
     webhookBaseUrl: "https://api.care-y.app",
     getAuthToken: vi.fn().mockResolvedValue("test_auth_token"),
     getAccountSid: vi.fn().mockResolvedValue("ACtest123"),

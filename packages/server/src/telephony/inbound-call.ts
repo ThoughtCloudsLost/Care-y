@@ -37,7 +37,7 @@ export interface InboundCallDeps {
   readonly orgSchema: string;
   readonly webhookBaseUrl: string;
   readonly defaultLocale: string;
-  readonly callTracker?: CallTracker;
+  readonly callTracker: CallTracker;
 }
 
 const FALLBACK_GREETING: GreetingRecord = {
@@ -110,16 +110,14 @@ export async function handleInboundCall(
       encryptedNumber,
     );
 
-    if (deps.callTracker) {
-      deps.callTracker.track(callData.callId, {
-        ticketId: "",
-        userId: null,
-        direction: "inbound",
-        orgSchema: deps.orgSchema,
-        clientId: client.id,
-        createdAt: Date.now(),
-      });
-    }
+    await deps.callTracker.track(deps.orgSchema, callData.callId, {
+      ticketId: "",
+      userId: null,
+      direction: "inbound",
+      orgSchema: deps.orgSchema,
+      clientId: client.id,
+      createdAt: Date.now(),
+    });
 
     // Update locale if the caller picked something different
     if (phone.locale !== locale) {
@@ -142,18 +140,16 @@ export async function handleInboundCall(
   // Path 2: Returning caller (phone hash already exists)
   const existingPhone = await phoneRepo.findByHash(phoneHash);
   if (existingPhone) {
-    if (deps.callTracker) {
-      const existingClient = await clientRepo.findByPhoneId(existingPhone.id);
-      if (existingClient) {
-        deps.callTracker.track(callData.callId, {
-          ticketId: "",
-          userId: null,
-          direction: "inbound",
-          orgSchema: deps.orgSchema,
-          clientId: existingClient.id,
-          createdAt: Date.now(),
-        });
-      }
+    const existingClient = await clientRepo.findByPhoneId(existingPhone.id);
+    if (existingClient) {
+      await deps.callTracker.track(deps.orgSchema, callData.callId, {
+        ticketId: "",
+        userId: null,
+        direction: "inbound",
+        orgSchema: deps.orgSchema,
+        clientId: existingClient.id,
+        createdAt: Date.now(),
+      });
     }
 
     const greeting = await greetingRepo.findByNumberAndLocaleAndType(
