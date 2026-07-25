@@ -295,6 +295,121 @@ describe("NotificationService.dispatch", () => {
 });
 
 // ---------------------------------------------------------------------------
+// dispatchTicketless
+// ---------------------------------------------------------------------------
+
+describe("NotificationService.dispatchTicketless", () => {
+  it("broadcasts a system SSE event with type and timestamp only", async () => {
+    const sse = mockSse();
+    const svc = createNotificationService({
+      sse,
+      emailSender: mockEmailSender(),
+      pushSender: mockPushSender(),
+      jobQueue: mockJobQueue(),
+    });
+
+    await svc.dispatchTicketless(
+      {} as Kysely<TenantDatabase>,
+      "org_test-1",
+      "myorg",
+      "voicemail_quarantined",
+      ["admin-1", "admin-2"],
+    );
+
+    expect(sse.broadcast).toHaveBeenCalledTimes(1);
+    const broadcastArgs = (sse.broadcast as ReturnType<typeof vi.fn>).mock
+      .calls[0] as unknown[];
+    expect(broadcastArgs[0]).toBe("org_test-1");
+    expect(broadcastArgs[1]).toEqual(["admin-1", "admin-2"]);
+
+    const event = broadcastArgs[2] as Record<string, unknown>;
+    expect(event.type).toBe("voicemail_quarantined");
+    expect(typeof event.timestamp).toBe("string");
+    // System SSE events carry no PII: only type and timestamp.
+    const keys = Object.keys(event);
+    expect(keys).toEqual(expect.arrayContaining(["type", "timestamp"]));
+    expect(keys).toHaveLength(2);
+  });
+
+  it("sends push notifications to the given userIds", async () => {
+    const pushSender = mockPushSender();
+    const svc = createNotificationService({
+      sse: mockSse(),
+      emailSender: mockEmailSender(),
+      pushSender,
+      jobQueue: mockJobQueue(),
+    });
+
+    const tDb = {} as Kysely<TenantDatabase>;
+    await svc.dispatchTicketless(
+      tDb,
+      "org_test-1",
+      "myorg",
+      "voicemail_quarantined",
+      ["admin-1"],
+    );
+
+    expect(pushSender.sendToUsers).toHaveBeenCalledTimes(1);
+    expect(pushSender.sendToUsers).toHaveBeenCalledWith(tDb, ["admin-1"]);
+  });
+
+  it("enqueues an email job with no PII in the payload", async () => {
+    const jobQueue = mockJobQueue();
+    const svc = createNotificationService({
+      sse: mockSse(),
+      emailSender: mockEmailSender(),
+      pushSender: mockPushSender(),
+      jobQueue,
+    });
+
+    await svc.dispatchTicketless(
+      {} as Kysely<TenantDatabase>,
+      "org_test-1",
+      "myorg",
+      "voicemail_quarantined",
+      ["admin-1", "admin-2"],
+    );
+
+    expect(jobQueue.enqueuedJobs).toHaveLength(1);
+    const job = jobQueue.enqueuedJobs[0] as {
+      queue: string;
+      payload: Record<string, unknown>;
+    };
+    expect(job.queue).toBe("notification-email");
+    expect(job.payload).toEqual({
+      orgSchema: "org_test-1",
+      orgSlug: "myorg",
+      recipientUserIds: ["admin-1", "admin-2"],
+      eventType: "voicemail_quarantined",
+    });
+  });
+
+  it("skips everything for empty userIds", async () => {
+    const sse = mockSse();
+    const jobQueue = mockJobQueue();
+    const pushSender = mockPushSender();
+    const svc = createNotificationService({
+      sse,
+      emailSender: mockEmailSender(),
+      pushSender,
+      jobQueue,
+    });
+
+    await svc.dispatchTicketless(
+      {} as Kysely<TenantDatabase>,
+      "org_test-1",
+      "myorg",
+      "voicemail_quarantined",
+      [],
+    );
+
+    expect(sse.broadcast).not.toHaveBeenCalled();
+    expect(pushSender.sendToUsers).not.toHaveBeenCalled();
+    expect(jobQueue.enqueuedJobs).toHaveLength(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
 // Job handler (DB integration)
 // ---------------------------------------------------------------------------
 

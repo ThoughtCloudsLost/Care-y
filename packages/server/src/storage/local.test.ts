@@ -121,6 +121,20 @@ describe("LocalBlobStore", () => {
     });
   });
 
+  describe("quarantine category", () => {
+    it("round-trips a blob through put and get", async () => {
+      const blob = Buffer.from("quarantine-audio-content");
+      const key = await store.put("org_abc-123", "quarantine", blob);
+
+      expect(key).toMatch(
+        /^org_abc-123\/quarantine\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/,
+      );
+
+      const result = await store.get(key);
+      expect(result).toEqual(blob);
+    });
+  });
+
   describe("path traversal defense", () => {
     it("rejects org schema with path separators", async () => {
       await expect(

@@ -14,7 +14,11 @@ import { loadOrgEmailBranding } from "./email.js";
 import type { PushNotificationSender } from "./push.js";
 import type { JobQueue } from "../jobs/queue.js";
 import type { FieldEncryptor } from "../crypto/field-encryptor.js";
-import type { NotificationEventType, SseEvent } from "@care-y/shared";
+import type {
+  NotificationEventType,
+  SseEvent,
+  SystemSseEvent,
+} from "@care-y/shared";
 import { notificationEventTypeSchema } from "@care-y/shared";
 import { z } from "zod";
 import { getStrings, buildLoginUrl } from "./i18n.js";
@@ -36,6 +40,19 @@ export interface NotificationService {
     ticketId: string,
     queueId: string,
     recipients: NotificationRecipientList,
+  ): Promise<void>;
+
+  /**
+   * Dispatch a ticketless notification (no ticket or queue context).
+   * Used for system events like voicemail quarantine that need to
+   * reach specific users without a ticket association.
+   */
+  dispatchTicketless(
+    tDb: Kysely<TenantDatabase>,
+    orgSchema: string,
+    orgSlug: string,
+    eventType: NotificationEventType,
+    userIds: readonly string[],
   ): Promise<void>;
 }
 
@@ -77,6 +94,33 @@ export function createNotificationService(
         orgSchema,
         orgSlug,
         recipientUserIds: userIds,
+        eventType,
+      });
+    },
+
+    async dispatchTicketless(tDb, orgSchema, orgSlug, eventType, userIds) {
+      if (userIds.length === 0) return;
+
+      const timestamp = new Date().toISOString();
+
+      // 1. SSE (system event, no ticket/queue context)
+      const sseEvent: SystemSseEvent = {
+        type: "voicemail_quarantined",
+        timestamp,
+      };
+      deps.sse.broadcast(orgSchema, userIds, sseEvent);
+
+      // 2. Web Push (immediate, fire-and-forget)
+      void deps.pushSender.sendToUsers(tDb, userIds).catch(() => {
+        // Push failures are non-critical. Expired subscriptions
+        // are cleaned up inside sendToUsers.
+      });
+
+      // 3. Email (via JobQueue for retry)
+      await deps.jobQueue.enqueue("notification-email", {
+        orgSchema,
+        orgSlug,
+        recipientUserIds: [...userIds],
         eventType,
       });
     },
@@ -168,6 +212,8 @@ function getNotificationBody(
     case "ticket_reopened":
     case "merge_completed":
       return strings.followupAdded(loginUrl);
+    case "voicemail_quarantined":
+      return strings.voicemailQuarantined(loginUrl);
   }
 }
 
@@ -189,5 +235,7 @@ function getSubjectLine(eventType: NotificationEventType): string {
       return "Ticket reopened";
     case "merge_completed":
       return "Client merge completed";
+    case "voicemail_quarantined":
+      return "Voicemail quarantined";
   }
 }

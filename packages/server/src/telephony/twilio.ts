@@ -2,6 +2,7 @@ import {
   extractMediaFromWebhookBody,
   type TelephonyProvider,
   type TelephonyProviderStatic,
+  type CallDetails,
   type SendSmsResult,
   type OutboundCallParams,
   type WebRtcCallParams,
@@ -40,6 +41,11 @@ interface TwilioSmsResponse {
 
 interface TwilioCallResponse {
   sid: string;
+}
+
+interface TwilioCallResource {
+  from?: string;
+  to?: string;
 }
 
 interface TwilioPhoneNumberResource {
@@ -169,6 +175,20 @@ export function createTwilioProvider(config: unknown): TelephonyProvider {
 
     async getRecording(recordingId: string): Promise<Buffer> {
       return http.getBuffer(`/Recordings/${recordingId}.wav`);
+    },
+
+    async getCallDetails(callId: string): Promise<CallDetails> {
+      const result = await http.get<TwilioCallResource>(
+        "/Calls/" + callId + ".json",
+      );
+      const { from, to } = result.data;
+      if (from === undefined || to === undefined) {
+        throw new TelephonyError(
+          `Missing from/to fields in call resource for ${callId}`,
+          502,
+        );
+      }
+      return { from, to };
     },
 
     async deleteRecording(recordingId: string): Promise<void> {

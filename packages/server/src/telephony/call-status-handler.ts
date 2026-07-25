@@ -35,7 +35,7 @@ export async function handleCallStatus(
   if (rawStatus === undefined || rawStatus === "") return;
   if (!TERMINAL_STATUSES.has(rawStatus)) return;
 
-  const tracked = deps.callTracker.get(callSid);
+  const tracked = await deps.callTracker.get(orgSchema, callSid);
   if (!tracked) return;
 
   // Do NOT remove the tracker entry here. The recording callback is a

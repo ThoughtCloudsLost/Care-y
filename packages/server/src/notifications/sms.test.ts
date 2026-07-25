@@ -46,6 +46,9 @@ function mockProvider(
     async getRecording() {
       return Buffer.alloc(0);
     },
+    async getCallDetails() {
+      return { from: "+15550000001", to: "+15550000002" };
+    },
     async deleteRecording() {
       // mock stub
     },

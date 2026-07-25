@@ -370,6 +370,7 @@ export {
 export {
   notificationEventTypeSchema,
   sseEventSchema,
+  systemSseEventSchema,
   pushSubscriptionInputSchema,
   unsubscribePushInputSchema,
   metadataSearchInputSchema,
@@ -378,6 +379,8 @@ export {
   auditLogQueryInputSchema,
   type NotificationEventType,
   type SseEvent,
+  type SystemSseEvent,
+  type AnySseEvent,
   type PushSubscriptionInput,
   type UnsubscribePushInput,
   type MetadataSearchInput,
@@ -445,6 +448,27 @@ export {
   type WrapOrgKeyForUserInput,
   type UnwrappedUser,
 } from "./schemas/onboarding.js";
+
+// --- Voicemail quarantine schemas ---
+export {
+  quarantineReasonSchema,
+  quarantineStatusSchema,
+  listQuarantineInputSchema,
+  downloadQuarantineInputSchema,
+  routeQuarantineInputSchema,
+  dismissQuarantineInputSchema,
+  setIntakeQueueInputSchema,
+  VOICEMAIL_QUARANTINE_MAX_BYTES,
+  VOICEMAIL_QUARANTINE_MAX_BASE64_LENGTH,
+  SYSTEM_ACTOR_ID,
+  type QuarantineReason,
+  type QuarantineStatus,
+  type ListQuarantineInput,
+  type DownloadQuarantineInput,
+  type RouteQuarantineInput,
+  type DismissQuarantineInput,
+  type SetIntakeQueueInput,
+} from "./schemas/voicemail-quarantine.js";
 
 // --- Terminology schemas ---
 export {

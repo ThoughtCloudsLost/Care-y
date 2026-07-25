@@ -1,11 +1,19 @@
 /**
- * Recording-complete webhook handler. Fetches raw audio from the telephony
- * provider, encrypts it with per-ticket ECIES via createEncryptedFollowUp,
- * stores the ciphertext in BlobStore, then requests deletion of the
- * provider-side recording and call log (GAP-16 mitigations M3 and M1).
+ * Recording-complete webhook handler.
  *
- * Raw audio Buffers are zeroed by the follow-up creation function.
- * No plaintext audio is logged or returned.
+ * Happy path: fetches raw audio from the telephony provider, encrypts it
+ * with per-ticket ECIES via createEncryptedFollowUp, stores the ciphertext
+ * in BlobStore, then requests deletion of the provider-side recording and
+ * call log.
+ *
+ * Failure paths (tracker miss, no intake queue, unresolved client): the
+ * audio is encrypted via sealed box and quarantined for manual admin
+ * resolution. Policy: never leave plaintext at the provider, never
+ * silently destroy a recording. Encrypt-then-quarantine satisfies both.
+ *
+ * Raw audio Buffers are zeroed by the follow-up creation function or by
+ * sealBufferAndZero in the quarantine path. No plaintext audio is logged
+ * or returned.
  */
 
 import type { Kysely } from "kysely";
@@ -14,10 +22,13 @@ import type { BlobStore } from "../storage/store.js";
 import type { JobQueue } from "../jobs/queue.js";
 import type { TenantDatabase } from "../db/types.js";
 import type { CallTracker } from "./call-tracker.js";
+import type { SealedBoxEncryptor } from "../crypto/sealed-box.js";
+import type { NotificationService } from "../notifications/service.js";
 import { TelephonyError } from "../errors.js";
 import { deleteOrEnqueue } from "./log-deletion-helpers.js";
 import { createEncryptedFollowUp } from "../tickets/server-followup-create.js";
 import { resolveInboundTicket } from "./resolve-inbound-ticket.js";
+import { quarantineRecording } from "./voicemail-quarantine.js";
 
 export interface RecordingHandlerDeps {
   readonly provider: TelephonyProvider;
@@ -28,6 +39,9 @@ export interface RecordingHandlerDeps {
   readonly intakeQueueId: string | null;
   readonly orgSchema: string;
   readonly orgId: string;
+  readonly sealedBox: SealedBoxEncryptor;
+  readonly orgSlug: string;
+  readonly notificationService: NotificationService;
 }
 
 export interface RecordingResult {
@@ -75,17 +89,39 @@ export async function handleRecordingComplete(
     intakeQueueId,
     orgSchema,
     orgId,
+    sealedBox,
+    orgSlug,
+    notificationService,
   } = deps;
   const { recordingSid, callSid, durationSeconds } =
     parseRecordingCallback(body);
 
   // Look up tracked call for ticket context
-  const tracked = callTracker.get(callSid);
+  const tracked = await callTracker.get(orgSchema, callSid);
 
   if (!tracked) {
-    // Server restarted mid-call, tracker entry expired. Schedule cleanup only.
-    await deleteOrEnqueue(provider, jobQueue, orgId, "recording", recordingSid);
-    await deleteOrEnqueue(provider, jobQueue, orgId, "call", callSid);
+    // Server restarted mid-call or tracker entry expired.
+    // Encrypt and quarantine so the recording is not lost.
+    const tDb = getTenantDb(orgSchema);
+    await quarantineRecording(
+      {
+        tDb,
+        provider,
+        blobStore,
+        jobQueue,
+        sealedBox,
+        orgId,
+        orgSchema,
+        orgSlug,
+        notificationService,
+      },
+      {
+        recordingSid,
+        callSid,
+        reason: "tracker_miss",
+        durationSeconds,
+      },
+    );
     return { ticketId: null, followUpId: null };
   }
 
@@ -96,14 +132,26 @@ export async function handleRecordingComplete(
 
   if (ticketId === "" && tracked.clientId !== null) {
     if (intakeQueueId === null) {
-      await deleteOrEnqueue(
-        provider,
-        jobQueue,
-        orgId,
-        "recording",
-        recordingSid,
+      await quarantineRecording(
+        {
+          tDb,
+          provider,
+          blobStore,
+          jobQueue,
+          sealedBox,
+          orgId,
+          orgSchema: tracked.orgSchema || orgSchema,
+          orgSlug,
+          notificationService,
+        },
+        {
+          recordingSid,
+          callSid,
+          reason: "no_intake_queue",
+          clientId: tracked.clientId,
+          durationSeconds,
+        },
       );
-      await deleteOrEnqueue(provider, jobQueue, orgId, "call", callSid);
       return { ticketId: null, followUpId: null };
     }
 
@@ -116,8 +164,25 @@ export async function handleRecordingComplete(
   }
 
   if (!ticketId) {
-    await deleteOrEnqueue(provider, jobQueue, orgId, "recording", recordingSid);
-    await deleteOrEnqueue(provider, jobQueue, orgId, "call", callSid);
+    await quarantineRecording(
+      {
+        tDb,
+        provider,
+        blobStore,
+        jobQueue,
+        sealedBox,
+        orgId,
+        orgSchema: tracked.orgSchema || orgSchema,
+        orgSlug,
+        notificationService,
+      },
+      {
+        recordingSid,
+        callSid,
+        reason: "unresolved_client",
+        durationSeconds,
+      },
+    );
     return { ticketId: null, followUpId: null };
   }
 

@@ -907,6 +907,9 @@ export function createMockProviderFactory(
       parseIncomingSms: vi.fn(),
       generateVoiceResponse: vi.fn(),
       getRecording: vi.fn(),
+      getCallDetails: vi
+        .fn()
+        .mockResolvedValue({ from: "+15550000000", to: "+15550000001" }),
       deleteRecording: vi.fn(),
       deleteCallLog: vi.fn(),
       deleteMessageLog: vi.fn(),
@@ -991,6 +994,11 @@ export function createMockTelephonyProvider(): MockTelephonyProvider {
     async getRecording() {
       throw new TestSetupError(
         "Mock provider: getRecording called unexpectedly",
+      );
+    },
+    async getCallDetails() {
+      throw new TestSetupError(
+        "Mock provider: getCallDetails called unexpectedly",
       );
     },
     async deleteRecording() {

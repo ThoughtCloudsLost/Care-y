@@ -20,6 +20,8 @@ import {
   type BlobStore,
 } from "../storage/store.js";
 import type { JobQueue } from "../jobs/queue.js";
+import type { SealedBoxEncryptor } from "../crypto/sealed-box.js";
+import type { NotificationService } from "../notifications/service.js";
 import { TelephonyError } from "../errors.js";
 import { createCallTracker, type CallTracker } from "./call-tracker.js";
 import {
@@ -49,6 +51,9 @@ function createMockProvider(): TelephonyProvider {
     deleteRecording: vi.fn().mockResolvedValue(undefined),
     deleteCallLog: vi.fn().mockResolvedValue(undefined),
     deleteMessageLog: vi.fn(),
+    getCallDetails: vi
+      .fn()
+      .mockResolvedValue({ from: "+15551234567", to: "+15559876543" }),
     maskConfig: vi.fn().mockReturnValue({
       provider: "twilio",
       mode: "byot",
@@ -56,6 +61,27 @@ function createMockProvider(): TelephonyProvider {
       maskedAuthToken: "********",
       phoneNumbers: [],
     }),
+  };
+}
+
+function createMockSealedBox(): SealedBoxEncryptor {
+  return {
+    seal(plaintext: string): Buffer {
+      return Buffer.from(`sealed:${plaintext}`);
+    },
+    sealBuffer(data: Buffer): Buffer {
+      const out = Buffer.alloc(data.length + 7);
+      out.write("sealed:", 0, "utf-8");
+      data.copy(out, 7);
+      return out;
+    },
+  };
+}
+
+function createMockNotificationService(): NotificationService {
+  return {
+    dispatch: vi.fn().mockResolvedValue(undefined),
+    dispatchTicketless: vi.fn().mockResolvedValue(undefined),
   };
 }
 
@@ -90,6 +116,63 @@ function makeBody(overrides?: Record<string, string>): Record<string, string> {
   };
 }
 
+/** Minimal stub tenant DB for quarantine path unit tests. The quarantine
+ *  function calls insertInto(...).values(...).onConflict(...).returning(...)
+ *  and also createAuditService(tDb).log(...). Both chains need to resolve. */
+function createStubTenantDb(): Kysely<TenantDatabase> {
+  let insertCounter = 0;
+  const chainable = {
+    values() {
+      return chainable;
+    },
+    onConflict() {
+      return {
+        column() {
+          return {
+            doNothing() {
+              return chainable;
+            },
+          };
+        },
+      };
+    },
+    returning() {
+      return chainable;
+    },
+    async executeTakeFirst() {
+      insertCounter++;
+      return { id: `quarantine-${String(insertCounter)}` };
+    },
+    async execute() {
+      return [];
+    },
+  };
+
+  return {
+    insertInto() {
+      return chainable;
+    },
+    selectFrom() {
+      return {
+        select() {
+          return {
+            where() {
+              return {
+                async execute() {
+                  return [];
+                },
+                async executeTakeFirst() {
+                  return undefined;
+                },
+              };
+            },
+          };
+        },
+      };
+    },
+  } as unknown as Kysely<TenantDatabase>;
+}
+
 function makeDeps(
   callTracker?: CallTracker,
   overrides?: Partial<RecordingHandlerDeps>,
@@ -99,14 +182,15 @@ function makeDeps(
     blobStore: createMockBlobStore(),
     jobQueue: createMockJobQueue(),
     callTracker: callTracker ?? createCallTracker(),
-    // Unit tests never execute queries; an empty object is enough for the
-    // paths that only resolve (or never touch) the tenant DB.
     getTenantDb: vi
       .fn<(schema: string) => Kysely<TenantDatabase>>()
-      .mockReturnValue({} as unknown as Kysely<TenantDatabase>),
+      .mockReturnValue(createStubTenantDb()),
     intakeQueueId: null,
     orgSchema: "org_test",
     orgId: "org-1",
+    sealedBox: createMockSealedBox(),
+    orgSlug: "test-org",
+    notificationService: createMockNotificationService(),
     ...overrides,
   };
 }
@@ -158,25 +242,28 @@ describe("handleRecordingComplete", () => {
     );
   });
 
-  // --- No tracked call ---
+  // --- No tracked call (quarantine with reason tracker_miss) ---
 
-  it("returns null ticketId/followUpId when CallSid is not tracked", async () => {
+  it("quarantines recording and returns null when CallSid is not tracked", async () => {
     const result = await handleRecordingComplete(body, deps);
 
     expect(result.ticketId).toBeNull();
     expect(result.followUpId).toBeNull();
-  });
-
-  it("still cleans up provider logs when CallSid is not tracked", async () => {
-    await handleRecordingComplete(body, deps);
-
+    // Quarantine fetches audio, seals it, stores blob, then deletes provider copies
+    expect(deps.provider.getRecording).toHaveBeenCalledWith("RE123");
     expect(deps.provider.deleteRecording).toHaveBeenCalledOnce();
     expect(deps.provider.deleteCallLog).toHaveBeenCalledOnce();
   });
 
-  // --- Deletion failure -> retry enqueue ---
+  it("fetches call details for tracker_miss quarantine", async () => {
+    await handleRecordingComplete(body, deps);
 
-  it("enqueues retry job when recording deletion fails", async () => {
+    expect(deps.provider.getCallDetails).toHaveBeenCalledWith("CA456");
+  });
+
+  // --- Deletion failure -> retry enqueue (quarantine path) ---
+
+  it("enqueues retry job when recording deletion fails in quarantine path", async () => {
     vi.mocked(deps.provider.deleteRecording).mockRejectedValueOnce(
       new Error("Twilio 500"),
     );
@@ -193,7 +280,7 @@ describe("handleRecordingComplete", () => {
     );
   });
 
-  it("enqueues retry job when call log deletion fails", async () => {
+  it("enqueues retry job when call log deletion fails in quarantine path", async () => {
     vi.mocked(deps.provider.deleteCallLog).mockRejectedValueOnce(
       new Error("Twilio 500"),
     );
@@ -210,11 +297,11 @@ describe("handleRecordingComplete", () => {
     );
   });
 
-  // --- Tracked call, unresolvable ticket ---
+  // --- Tracked call, unresolvable ticket (quarantine with reason unresolved_client) ---
 
-  it("returns null and cleans up when the tracked call has no ticket and no client", async () => {
+  it("quarantines when the tracked call has no ticket and no client", async () => {
     const tracker = createCallTracker();
-    tracker.track("CA456", {
+    await tracker.track("org_test", "CA456", {
       ticketId: "",
       userId: null,
       direction: "inbound",
@@ -228,13 +315,15 @@ describe("handleRecordingComplete", () => {
 
     expect(result.ticketId).toBeNull();
     expect(result.followUpId).toBeNull();
-    expect(deps.provider.deleteRecording).toHaveBeenCalledWith("RE123");
-    expect(deps.provider.deleteCallLog).toHaveBeenCalledWith("CA456");
+    // Audio is fetched, sealed, stored, then provider copies are deleted
+    expect(deps.provider.getRecording).toHaveBeenCalledWith("RE123");
+    expect(deps.provider.deleteRecording).toHaveBeenCalledOnce();
+    expect(deps.provider.deleteCallLog).toHaveBeenCalledOnce();
   });
 
-  it("returns null and cleans up when ticket resolution needs an intake queue but none is configured", async () => {
+  it("quarantines when ticket resolution needs an intake queue but none is configured", async () => {
     const tracker = createCallTracker();
-    tracker.track("CA456", {
+    await tracker.track("org_test", "CA456", {
       ticketId: "",
       userId: null,
       direction: "inbound",
@@ -249,26 +338,17 @@ describe("handleRecordingComplete", () => {
 
     expect(result.ticketId).toBeNull();
     expect(result.followUpId).toBeNull();
-    expect(deps.provider.deleteRecording).toHaveBeenCalledWith("RE123");
-    expect(deps.provider.deleteCallLog).toHaveBeenCalledWith("CA456");
+    expect(deps.provider.getRecording).toHaveBeenCalledWith("RE123");
+    expect(deps.provider.deleteRecording).toHaveBeenCalledOnce();
+    expect(deps.provider.deleteCallLog).toHaveBeenCalledOnce();
   });
 
-  // --- Provider fetch failure ---
+  // --- Provider fetch failure (quarantine path) ---
 
-  it("propagates provider fetch errors and leaves the provider-side recording intact", async () => {
-    const tracker = createCallTracker();
-    tracker.track("CA456", {
-      ticketId: "ticket-1",
-      userId: null,
-      direction: "inbound",
-      orgSchema: "org_test",
-      clientId: null,
-      createdAt: Date.now(),
-    });
-    deps = makeDeps(tracker);
-    // provider-http classifies HTTP 4xx/5xx responses into TelephonyError;
-    // the handler must let it surface so routes/webhooks.ts answers 500 and
-    // the provider retries the callback.
+  it("propagates provider getRecording error with no deletion (quarantine path)", async () => {
+    // No tracked call, so this hits the tracker_miss quarantine path.
+    // getRecording failure propagates so the webhook returns 500 and
+    // the provider retries.
     vi.mocked(deps.provider.getRecording).mockRejectedValueOnce(
       new TelephonyError("Resource not found: recording", 404),
     );
@@ -278,7 +358,32 @@ describe("handleRecordingComplete", () => {
     );
 
     // The provider copy is the only copy until ciphertext is stored.
-    // Deleting it on a failed fetch would destroy the recording forever.
+    expect(deps.provider.deleteRecording).not.toHaveBeenCalled();
+    expect(deps.provider.deleteCallLog).not.toHaveBeenCalled();
+    expect(deps.jobQueue.enqueue).not.toHaveBeenCalled();
+  });
+
+  // --- Provider fetch failure (happy path) ---
+
+  it("propagates provider fetch errors on the happy path and leaves provider recording intact", async () => {
+    const tracker = createCallTracker();
+    await tracker.track("org_test", "CA456", {
+      ticketId: "ticket-1",
+      userId: null,
+      direction: "inbound",
+      orgSchema: "org_test",
+      clientId: null,
+      createdAt: Date.now(),
+    });
+    deps = makeDeps(tracker);
+    vi.mocked(deps.provider.getRecording).mockRejectedValueOnce(
+      new TelephonyError("Resource not found: recording", 404),
+    );
+
+    await expect(handleRecordingComplete(body, deps)).rejects.toThrow(
+      TelephonyError,
+    );
+
     expect(deps.provider.deleteRecording).not.toHaveBeenCalled();
     expect(deps.provider.deleteCallLog).not.toHaveBeenCalled();
     expect(deps.jobQueue.enqueue).not.toHaveBeenCalled();
@@ -368,13 +473,16 @@ describe.skipIf(!process.env.DATABASE_URL)(
         intakeQueueId,
         orgSchema: testDb.schemaName,
         orgId: ORG_ID,
+        sealedBox: createMockSealedBox(),
+        orgSlug: "test-org",
+        notificationService: createMockNotificationService(),
       };
     }
 
     it("fetches, encrypts, and stores the recording for a tracked ticket", async () => {
       const fixture = await createTestTicketFixture(testDb.db);
       const tracker = createCallTracker();
-      tracker.track("CA_DB_HAPPY", {
+      await tracker.track(testDb.schemaName, "CA_DB_HAPPY", {
         ticketId: fixture.ticketId,
         userId: null,
         direction: "inbound",
@@ -451,7 +559,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
     it("creates a new intake ticket when the tracked call has a client but no ticket", async () => {
       const clientFixture = await createTestClientFixture(testDb.db);
       const tracker = createCallTracker();
-      tracker.track("CA_DB_RESOLVE", {
+      await tracker.track(testDb.schemaName, "CA_DB_RESOLVE", {
         ticketId: "",
         userId: null,
         direction: "inbound",
@@ -494,7 +602,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
     it("attaches the voicemail to the client's existing open ticket instead of creating a duplicate", async () => {
       const fixture = await createTestTicketFixture(testDb.db);
       const tracker = createCallTracker();
-      tracker.track("CA_DB_REUSE", {
+      await tracker.track(testDb.schemaName, "CA_DB_REUSE", {
         ticketId: "",
         userId: null,
         direction: "inbound",
@@ -522,7 +630,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
     it("falls back to the deps orgSchema when the tracked call carries none", async () => {
       const fixture = await createTestTicketFixture(testDb.db);
       const tracker = createCallTracker();
-      tracker.track("CA_DB_SCHEMA_FALLBACK", {
+      await tracker.track(testDb.schemaName, "CA_DB_SCHEMA_FALLBACK", {
         ticketId: fixture.ticketId,
         userId: null,
         direction: "inbound",
@@ -545,7 +653,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
     it("leaves the provider recording untouched when blob storage fails", async () => {
       const fixture = await createTestTicketFixture(testDb.db);
       const tracker = createCallTracker();
-      tracker.track("CA_DB_BLOB_FAIL", {
+      await tracker.track(testDb.schemaName, "CA_DB_BLOB_FAIL", {
         ticketId: fixture.ticketId,
         userId: null,
         direction: "inbound",

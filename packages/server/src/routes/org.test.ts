@@ -20,10 +20,12 @@ import {
   mockRes,
   expectTrpcError,
   createTestDb,
+  createTestQueue,
   testSealedBox,
   type TestDb,
 } from "../test-utils.js";
 import type { OrgService } from "../org/service.js";
+import * as crypto from "node:crypto";
 
 // --- Mock org service (only create is wired, tested in auth.test.ts) ---
 
@@ -189,6 +191,46 @@ describe("createOrgRouter", () => {
       );
     });
   });
+
+  describe("getIntakeQueue", () => {
+    it("rejects volunteer caller with FORBIDDEN", async () => {
+      const caller = buildCaller(createVolunteerContext());
+      await expectTrpcError(
+        caller.org.getIntakeQueue(),
+        "FORBIDDEN",
+        ErrorCode.INSUFFICIENT_PERMISSIONS,
+      );
+    });
+
+    it("rejects unauthenticated caller", async () => {
+      const caller = buildCaller(createUnauthenticatedContext());
+      await expectTrpcError(
+        caller.org.getIntakeQueue(),
+        "UNAUTHORIZED",
+        ErrorCode.NOT_AUTHENTICATED,
+      );
+    });
+  });
+
+  describe("setIntakeQueue", () => {
+    it("rejects volunteer caller with FORBIDDEN", async () => {
+      const caller = buildCaller(createVolunteerContext());
+      await expectTrpcError(
+        caller.org.setIntakeQueue({ queueId: crypto.randomUUID() }),
+        "FORBIDDEN",
+        ErrorCode.INSUFFICIENT_PERMISSIONS,
+      );
+    });
+
+    it("rejects unauthenticated caller", async () => {
+      const caller = buildCaller(createUnauthenticatedContext());
+      await expectTrpcError(
+        caller.org.setIntakeQueue({ queueId: crypto.randomUUID() }),
+        "UNAUTHORIZED",
+        ErrorCode.NOT_AUTHENTICATED,
+      );
+    });
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -288,6 +330,57 @@ describe.skipIf(!process.env.DATABASE_URL)(
       expect(fetched.encryptedName).toBe(fakeCiphertext);
       expect(fetched.defaultLanguage).toBe("es");
       expect(fetched.countryCode).toBe("+52");
+    }, 30_000);
+
+    it("getIntakeQueue returns null when no queue is set", async () => {
+      const caller = buildDbCaller();
+      const result = await caller.org.getIntakeQueue();
+      expect(result).toEqual({ queueId: null });
+    }, 30_000);
+
+    it("setIntakeQueue and getIntakeQueue round-trip", async () => {
+      const caller = buildDbCaller();
+
+      // Create a queue to set
+      const queue = await createTestQueue(testDb.db, {
+        label: "IntakeQ",
+      });
+
+      const setResult = await caller.org.setIntakeQueue({
+        queueId: queue.id,
+      });
+      expect(setResult).toEqual({ success: true });
+
+      const getResult = await caller.org.getIntakeQueue();
+      expect(getResult).toEqual({ queueId: queue.id });
+    }, 30_000);
+
+    it("setIntakeQueue rejects unknown queue", async () => {
+      const caller = buildDbCaller();
+      await expectTrpcError(
+        caller.org.setIntakeQueue({ queueId: crypto.randomUUID() }),
+        "BAD_REQUEST",
+        "Queue not found or inactive",
+      );
+    }, 30_000);
+
+    it("setIntakeQueue with null clears the intake queue", async () => {
+      const caller = buildDbCaller();
+
+      // First set a queue
+      const queue = await createTestQueue(testDb.db, {
+        label: "ClearMe",
+      });
+      await caller.org.setIntakeQueue({ queueId: queue.id });
+
+      // Now clear it
+      const clearResult = await caller.org.setIntakeQueue({
+        queueId: null,
+      });
+      expect(clearResult).toEqual({ success: true });
+
+      const getResult = await caller.org.getIntakeQueue();
+      expect(getResult).toEqual({ queueId: null });
     }, 30_000);
   },
 );

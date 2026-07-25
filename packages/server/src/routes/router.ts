@@ -40,6 +40,10 @@ import {
 import { createDashboardRouter } from "./dashboard.js";
 import { createRecentViewsRouter } from "./recent-views.js";
 import { createDevRouter } from "./dev.js";
+import {
+  createVoicemailQuarantineRouter,
+  type VoicemailQuarantineRouterDeps,
+} from "./voicemail-quarantine.js";
 import type { OrgService } from "../org/service.js";
 import type { ProviderFactory } from "../telephony/factory.js";
 
@@ -64,6 +68,7 @@ export interface RouterDeps {
   readonly notificationDeps?: NotificationRouterDeps;
   readonly brandingDeps?: BrandingRouterDeps;
   readonly onboardingDeps?: OnboardingRouterDeps;
+  readonly voicemailQuarantineDeps?: VoicemailQuarantineRouterDeps;
   readonly includeDev?: boolean;
 }
 
@@ -116,6 +121,13 @@ export function createAppRouter(deps: RouterDeps) {
       : {}),
     ...(deps.onboardingDeps
       ? { onboarding: createOnboardingRouter(deps.onboardingDeps) }
+      : {}),
+    ...(deps.voicemailQuarantineDeps
+      ? {
+          voicemailQuarantine: createVoicemailQuarantineRouter(
+            deps.voicemailQuarantineDeps,
+          ),
+        }
       : {}),
     ...(deps.includeDev === true ? { dev: createDevRouter() } : {}),
   });

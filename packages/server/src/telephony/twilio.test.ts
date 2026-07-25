@@ -342,6 +342,47 @@ describe("createTwilioProvider", () => {
     });
   });
 
+  describe("getCallDetails", () => {
+    it("sends GET to /Calls/{id}.json and returns from/to", async () => {
+      fetchSpy.mockResolvedValue(
+        new Response(
+          JSON.stringify({
+            sid: "CA789",
+            from: "+15551111111",
+            to: "+15552222222",
+            status: "completed",
+          }),
+          { status: 200 },
+        ),
+      );
+
+      const provider = createTwilioProvider(validConfig);
+      const details = await provider.getCallDetails("CA789");
+
+      expect(fetchSpy).toHaveBeenCalledOnce();
+      const [url, init] = fetchSpy.mock.calls[0] as [string, RequestInit];
+      expect(url).toBe(`${ACCOUNT_BASE}/Calls/CA789.json`);
+      expect(init.method).toBe("GET");
+
+      expect(details).toEqual({
+        from: "+15551111111",
+        to: "+15552222222",
+      });
+    });
+
+    it("throws TelephonyError on non-OK response", async () => {
+      fetchSpy.mockResolvedValue(new Response("Not Found", { status: 404 }));
+
+      const provider = createTwilioProvider(validConfig);
+      const err = await provider
+        .getCallDetails("CA_MISSING")
+        .catch((e: unknown) => e);
+
+      expect(err).toBeInstanceOf(TelephonyError);
+      expect((err as TelephonyError).message).toContain("CA_MISSING");
+    });
+  });
+
   describe("deleteCallLog", () => {
     it("sends DELETE to /Calls/{id}.json", async () => {
       fetchSpy.mockResolvedValue(new Response(null, { status: 204 }));

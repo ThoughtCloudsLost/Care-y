@@ -86,6 +86,12 @@ export interface WebhookValidationRequest {
   readonly authToken: string;
 }
 
+/** Caller and callee phone numbers for a completed or in-progress call. */
+export interface CallDetails {
+  readonly from: string;
+  readonly to: string;
+}
+
 /**
  * TelephonyProvider defines all operations a telephony provider must support.
  *
@@ -134,6 +140,13 @@ export interface TelephonyProvider {
   deleteRecording(recordingId: string): Promise<void>;
 
   // --- Log deletion (GAP-16) ---
+
+  /**
+   * Fetch caller and callee phone numbers for a given call.
+   * Used to route quarantined voicemails when the call tracker
+   * has no record of the call.
+   */
+  getCallDetails(callId: string): Promise<CallDetails>;
 
   /** Delete a call log record from the provider. */
   deleteCallLog(callId: string): Promise<void>;

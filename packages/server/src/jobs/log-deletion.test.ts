@@ -32,6 +32,9 @@ function createMockProvider(): TelephonyProvider {
     }),
     generateVoiceResponse: vi.fn().mockReturnValue("<Response/>"),
     getRecording: vi.fn().mockResolvedValue(Buffer.alloc(0)),
+    getCallDetails: vi
+      .fn()
+      .mockResolvedValue({ from: "+15550000001", to: "+15550000002" }),
     deleteRecording: vi.fn().mockResolvedValue(undefined),
     deleteCallLog: vi.fn().mockResolvedValue(undefined),
     deleteMessageLog: vi.fn().mockResolvedValue(undefined),

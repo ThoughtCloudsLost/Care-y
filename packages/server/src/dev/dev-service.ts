@@ -18,6 +18,8 @@ import type { TenantDatabase } from "../db/types.js";
  */
 const SEED_TABLES_DELETE_ORDER: readonly (keyof TenantDatabase)[] = [
   // leaf tables (no other seed table references these)
+  "voicemail_quarantine",
+  "tracked_calls",
   "followup_reactions",
   "ticket_read_cursors",
   "ticket_watchers",
