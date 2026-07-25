@@ -288,9 +288,16 @@ export function createTicketSearchProvider(
       query: string,
       state: FullSearchState,
       onProgress: () => void,
+      signal: AbortSignal,
     ): Promise<void> => {
       const PAGE_SIZE = 100;
       const CONTENT_PAGE_SIZE = 50;
+
+      // Read through a call, not `signal.aborted` directly: TypeScript
+      // narrows the property to false after the first check and never
+      // widens it again, so every later check would look like dead code
+      // even though each await is exactly when it can flip.
+      const aborted = (): boolean => signal.aborted;
 
       contentMatchIds.clear();
       lastFullSearchQuery = query;
@@ -304,6 +311,7 @@ export function createTicketSearchProvider(
 
       // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- loop breaks on short page
       while (true) {
+        if (aborted()) return;
         let page: readonly RawCachedTicket[];
         try {
           page = await listAll(cursor);
@@ -329,11 +337,14 @@ export function createTicketSearchProvider(
         cursor = lastTicket.id;
       }
 
+      if (aborted()) return;
+
       state.total = totalLoaded;
       onProgress();
 
       ingestTickets(allTickets);
       await whenDecryptsSettled();
+      if (aborted()) return;
 
       // Title matches come from the reactive search() pipeline.
       // No duplicated fuzzy logic here.
@@ -353,6 +364,7 @@ export function createTicketSearchProvider(
 
       // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- loop breaks on short page
       while (true) {
+        if (aborted()) return;
         let batch: Awaited<ReturnType<typeof contentSearch>>;
         try {
           batch = await contentSearch(
@@ -390,6 +402,9 @@ export function createTicketSearchProvider(
         }
 
         await whenDecryptsSettled();
+        // Checked again after the await: past this point the loop starts
+        // adding to contentMatchIds, which a newer run has already cleared.
+        if (aborted()) return;
 
         // Check decrypted content for matches
         for (const pf of pendingFollowUps) {

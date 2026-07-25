@@ -32,9 +32,21 @@ async function settle(): Promise<void> {
   flushSync();
 }
 
+/**
+ * Wait past the page loop's poll interval, then flush. Deep search polls
+ * isFetchingNextPage rather than subscribing to it, because its query
+ * getters are injected plain functions, not queries it can observe.
+ */
+async function settlePolling(): Promise<void> {
+  await new Promise((resolve) => setTimeout(resolve, 50));
+  flushSync();
+}
+
 /** A single in-flight fullSearch call, controllable from the test. */
 interface ProviderRun {
   readonly query: string;
+  /** The registry's cancellation channel for this run. */
+  readonly signal: AbortSignal;
   /** Mutate progress fields and notify the registry. */
   progress: (
     patch: Partial<Pick<FullSearchState, "searched" | "total" | "matchCount">>,
@@ -74,10 +86,12 @@ function registerFullSearchProvider(id = "tickets"): ProviderHandle {
       query: string,
       state: FullSearchState,
       onProgress: () => void,
+      signal: AbortSignal,
     ) =>
       new Promise<void>((resolve) => {
         runs.push({
           query,
+          signal,
           progress(patch) {
             Object.assign(state, patch);
             onProgress();
@@ -120,6 +134,10 @@ interface HarnessOptions {
   loaded?: number;
   /** Local (already decrypted) match count. Non-zero blocks auto-trigger. */
   localMatchCount?: number;
+  /** Starts true to simulate a page fetch the list view already began. */
+  fetchingNext?: boolean;
+  /** Makes fetchNextPage reject instead of resolving. */
+  failFetch?: boolean;
 }
 
 interface Harness {
@@ -131,6 +149,7 @@ interface Harness {
   setHasNext: (value: boolean) => void;
   setInitialLoading: (value: boolean) => void;
   setLoaded: (count: number) => void;
+  setFetchingNext: (value: boolean) => void;
   destroy: () => void;
 }
 
@@ -143,16 +162,19 @@ function createHarness(options: HarnessOptions = {}): Harness {
   let hasNext = $state(options.hasNext ?? false);
   let initialLoading = $state(options.initialLoading ?? false);
   let loaded = $state(options.loaded ?? 0);
+  let fetchingNext = $state(options.fetchingNext ?? false);
   // Never changes mid-test, so plain (non-reactive) is sufficient.
   const localMatchCount = options.localMatchCount ?? 5;
 
   const pendingFetches: Array<() => void> = [];
-  const fetchNextPage = vi.fn(
-    (): Promise<unknown> =>
-      new Promise<void>((resolve) => {
-        pendingFetches.push(resolve);
-      }),
-  );
+  const fetchNextPage = vi.fn((): Promise<unknown> => {
+    if (options.failFetch === true) {
+      return Promise.reject(new Error("page fetch failed"));
+    }
+    return new Promise<void>((resolve) => {
+      pendingFetches.push(resolve);
+    });
+  });
 
   let overlay!: SearchOverlay;
   let ds!: DeepSearch;
@@ -167,7 +189,7 @@ function createHarness(options: HarnessOptions = {}): Harness {
       overlay,
       providerId: options.providerId ?? "tickets",
       hasNextPage: () => hasNext,
-      isFetchingNextPage: () => false,
+      isFetchingNextPage: () => fetchingNext,
       fetchNextPage,
       isInitialLoading: () => initialLoading,
       loadedCount: () => loaded,
@@ -204,6 +226,9 @@ function createHarness(options: HarnessOptions = {}): Harness {
     },
     setLoaded(count) {
       loaded = count;
+    },
+    setFetchingNext(value) {
+      fetchingNext = value;
     },
     destroy,
   };
@@ -599,6 +624,140 @@ describe("createDeepSearch", () => {
 
       expect(p.runs).toHaveLength(0);
       expect(h.ds.status).toBe("idle");
+    });
+  });
+
+  describe("page fetching", () => {
+    it("waits out a fetch the list view already started instead of skipping the remaining pages", async () => {
+      const p = registerFullSearchProvider();
+      const h = createHarness({ hasNext: true, fetchingNext: true });
+
+      h.overlay.enter("harbor");
+      h.ds.trigger();
+      await settle();
+
+      // A fetch is in flight, so deep search must not start its own and must
+      // not fall through to the content phase.
+      expect(h.fetchNextPage).not.toHaveBeenCalled();
+      expect(p.runs).toHaveLength(0);
+      expect(h.ds.status).toBe("searching");
+
+      // The list view's fetch lands. Deep search picks the loop back up.
+      h.setFetchingNext(false);
+      await settlePolling();
+      expect(h.fetchNextPage).toHaveBeenCalledTimes(1);
+      expect(p.runs).toHaveLength(0);
+
+      // Last page resolves and clears hasNextPage: now the content phase runs.
+      h.resolveNextFetch(() => {
+        h.setHasNext(false);
+      });
+      await settle();
+      expect(p.runs).toHaveLength(1);
+      expect(p.runs[0]?.query).toBe("harbor");
+    });
+
+    it("holds the content phase until every page is fetched", async () => {
+      const p = registerFullSearchProvider();
+      const h = createHarness({ hasNext: true });
+
+      h.overlay.enter("harbor");
+      h.ds.trigger();
+      await settle();
+      expect(h.fetchNextPage).toHaveBeenCalledTimes(1);
+
+      // First page lands, another remains. Content matching must not start
+      // yet, or it runs over a partial set and reports a false "no results".
+      h.resolveNextFetch();
+      await settle();
+      expect(p.runs).toHaveLength(0);
+      expect(h.fetchNextPage).toHaveBeenCalledTimes(2);
+      expect(h.ds.status).toBe("searching");
+
+      h.resolveNextFetch(() => {
+        h.setHasNext(false);
+      });
+      await settle();
+      expect(p.runs).toHaveLength(1);
+    });
+
+    it("stops at a failed page fetch rather than matching over a partial set", async () => {
+      const p = registerFullSearchProvider();
+      const h = createHarness({ hasNext: true, failFetch: true });
+
+      h.overlay.enter("harbor");
+      h.ds.trigger();
+      await settle();
+
+      expect(h.fetchNextPage).toHaveBeenCalledTimes(1);
+      expect(p.runs).toHaveLength(0);
+      // Terminal, not "searching" forever and not a silent success.
+      expect(h.ds.status).toBe("done");
+    });
+
+    it("does not retrigger the failing fetch in a loop when there are no local matches", async () => {
+      // The zero-match auto-trigger fires whenever the phase is idle. A
+      // failed fetch that reset to idle would re-arm it immediately.
+      const p = registerFullSearchProvider();
+      const h = createHarness({
+        hasNext: true,
+        failFetch: true,
+        localMatchCount: 0,
+      });
+
+      h.overlay.enter("harbor");
+      await settle();
+      await settle();
+
+      expect(h.fetchNextPage).toHaveBeenCalledTimes(1);
+      expect(p.runs).toHaveLength(0);
+    });
+  });
+
+  describe("run cancellation", () => {
+    it("aborts the provider's run when the search term changes", async () => {
+      const p = registerFullSearchProvider();
+      const h = createHarness();
+
+      h.overlay.enter("harbor");
+      h.ds.trigger();
+      await settle();
+      const firstRun = p.runs[0];
+      expect(firstRun).toBeDefined();
+      expect(firstRun?.signal.aborted).toBe(false);
+
+      h.overlay.enter("lighthouse");
+      await settle();
+
+      expect(firstRun?.signal.aborted).toBe(true);
+    });
+
+    it("ignores a stale run's completion after the term changed", async () => {
+      const p = registerFullSearchProvider();
+      const h = createHarness();
+
+      h.overlay.enter("harbor");
+      h.ds.trigger();
+      await settle();
+      const stale = p.runs[0];
+      expect(stale).toBeDefined();
+
+      // User retypes. The abandoned run is still resolving somewhere.
+      h.overlay.enter("lighthouse");
+      await settle();
+      h.ds.trigger();
+      await settle();
+      expect(p.runs).toHaveLength(2);
+
+      // The stale run finishes last, carrying its own counts.
+      stale?.finish({ searched: 999, total: 999, matchCount: 999 });
+      await settle();
+
+      // The live run is still searching; the stale numbers must not appear.
+      const live = getFullSearchStateForProvider("tickets");
+      expect(live?.status).toBe("searching");
+      expect(live?.total).not.toBe(999);
+      expect(h.ds.status).toBe("searching");
     });
   });
 });
