@@ -58,5 +58,5 @@ export function readCachedTerminology(): TerminologyConfig | null {
   }
 }
 
-export { getTerminology } from "./context.js";
+export { getTerminology } from "$lib/terminology/context.js";
 export { withTerms } from "./with-terms.js";
