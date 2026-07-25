@@ -1,4 +1,4 @@
-import { getTerminology } from "./context.js";
+import { getTerminology } from "$lib/terminology/context.js";
 
 export function capitalize(s: string): string {
   return s.charAt(0).toUpperCase() + s.slice(1);
