@@ -11,6 +11,7 @@ import { startCoverage, stopAndWriteCoverage } from "./coverage-fixture";
 import type { Page } from "@playwright/test";
 import {
   CRYPTO_TIMEOUT,
+  isDesktopLayout,
   login,
   createTicket,
   assignTicketToSelf,
@@ -75,14 +76,20 @@ test.describe.serial("ticket lifecycle (production UI)", () => {
       // eslint-disable-next-line @typescript-eslint/no-empty-function -- intentional: banner may not exist
       .catch(() => {});
 
-    // Return to ticket list for the hold flow tests.
-    // In split-view, the Back button is in the inert navbar context.
-    // Use Escape to close the detail pane (clears pushState).
-    const backBtn = page.getByRole("button", { name: /back/i });
-    if (await backBtn.isVisible({ timeout: 2_000 }).catch(() => false)) {
-      await backBtn.click();
-    } else {
+    // Return to ticket list for the hold flow tests. Branch on the layout
+    // rather than sampling isVisible(), whose timeout option is ignored: it
+    // returns immediately, so on mobile a navbar that has not painted yet
+    // would fall through to an Escape that AppShell does not even bind
+    // below the desktop breakpoint.
+    if (await isDesktopLayout(page)) {
+      // Split-view puts the Back button in an inert navbar context. Escape
+      // clears the pushState so the list gets full width again; the URL
+      // never left /tickets.
       await page.keyboard.press("Escape");
+    } else {
+      const backBtn = page.getByRole("button", { name: /back/i });
+      await expect(backBtn).toBeVisible({ timeout: 10_000 });
+      await backBtn.click();
     }
     await expect(page).toHaveURL("/tickets");
   });

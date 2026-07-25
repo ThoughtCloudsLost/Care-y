@@ -4,6 +4,7 @@ import type { Page } from "@playwright/test";
 import {
   auditA11y,
   CRYPTO_TIMEOUT,
+  isDesktopLayout,
   login,
   openComposeActions,
   openTicketByTitle,
@@ -34,10 +35,16 @@ test.describe.serial("Ticket Detail (Chat View)", () => {
   test("opens Help with housing ticket from ticket list", async () => {
     await openTicketByTitle(page, "Help with housing");
 
-    // On desktop, ticket opens in split-view where the navbar alias button
-    // is not rendered (inert context). Expand to full view to access it.
-    const expandBtn = page.getByRole("button", { name: /open full view/i });
-    if (await expandBtn.isVisible({ timeout: 2_000 }).catch(() => false)) {
+    // At desktop widths the ticket opens in a split-view pane whose inert
+    // navbar context drops the alias button, so expand to the full-page
+    // route. Below the breakpoint the tap already navigated there.
+    // Branch on the layout rather than on whether the expand control is
+    // visible: isVisible() ignores its timeout and returns immediately, so
+    // sampling it can miss a pane header that has not painted yet and then
+    // fail in the alias lookup below for a reason that looks unrelated.
+    if (await isDesktopLayout(page)) {
+      const expandBtn = page.getByRole("button", { name: /open full view/i });
+      await expect(expandBtn).toBeVisible({ timeout: 10_000 });
       await expandBtn.click();
       await expect(page).toHaveURL(/\/tickets\/[0-9a-f-]{36}/, {
         timeout: 5_000,
@@ -298,19 +305,23 @@ test.describe.serial("Ticket Detail (Chat View)", () => {
   // ── 12. Action sheets (Checkpoints 9, 10, 11) ──────────────────
 
   test("more actions sheet shows ticket actions", async () => {
-    // Full-view shows the client panel inline (complementary region),
-    // with actions directly visible. Split-view uses a "More actions" popup.
-    const moreBtn = page.getByRole("button", { name: /more actions/i });
-    const isFullView = !(await moreBtn
-      .isVisible({ timeout: 1_000 })
-      .catch(() => false));
-
-    if (isFullView) {
-      // In full-view, actions are inline in the aside panel.
+    // The full-page ticket route renders the client panel inline in an
+    // <aside> only at desktop widths (desktopFull in
+    // TicketDetailOrchestrator, set from fullView && layoutMode.isDesktop).
+    // Below the breakpoint the same actions live behind the navbar's "More
+    // actions" popup. Branch on the layout, which cannot change mid-test,
+    // rather than on which control happens to be painted: isVisible()
+    // ignores its timeout, so an early sample silently selects the wrong
+    // branch and asserts nothing meaningful.
+    if (await isDesktopLayout(page)) {
       const aside = page.locator("aside");
-      await expect(aside.getByText("Release")).toBeVisible();
+      await expect(aside.getByText("Release")).toBeVisible({
+        timeout: 10_000,
+      });
       await expect(aside.getByText("Assign", { exact: true })).toBeVisible();
     } else {
+      const moreBtn = page.getByRole("button", { name: /more actions/i });
+      await expect(moreBtn).toBeVisible({ timeout: 10_000 });
       await moreBtn.dispatchEvent("click");
       const panel = page.locator(
         `[data-testid="popup-dialog"][aria-label="${clientAlias}"]`,
@@ -322,18 +333,18 @@ test.describe.serial("Ticket Detail (Chat View)", () => {
   });
 
   test("call sheet shows browser and phone options", async () => {
-    // Full-view shows Call inline in the aside panel; split-view uses
-    // the "More actions" popup. Detect layout and click the right Call.
-    const moreBtn = page.getByRole("button", { name: /more actions/i });
-    const isFullView = !(await moreBtn
-      .isVisible({ timeout: 1_000 })
-      .catch(() => false));
+    // Same layout split as the previous test: Call sits inline in the aside
+    // at desktop widths, behind the "More actions" popup below them.
+    const desktop = await isDesktopLayout(page);
 
-    if (isFullView) {
+    if (desktop) {
       const aside = page.locator("aside");
       const callBtn = aside.getByRole("button", { name: /call/i });
+      await expect(callBtn).toBeVisible({ timeout: 10_000 });
       await callBtn.dispatchEvent("click");
     } else {
+      const moreBtn = page.getByRole("button", { name: /more actions/i });
+      await expect(moreBtn).toBeVisible({ timeout: 10_000 });
       await moreBtn.dispatchEvent("click");
       const panel = page.locator(
         `[data-testid="popup-dialog"][aria-label="${clientAlias}"]`,
@@ -346,10 +357,10 @@ test.describe.serial("Ticket Detail (Chat View)", () => {
     const callSheet = page.getByRole("dialog", { name: /call options/i });
     await expect(callSheet.getByText(/call via browser/i)).toBeVisible();
 
-    // Dismiss call sheet (and panel if split-view opened it).
+    // Dismiss call sheet (and the popup, when that is what opened it).
     await page.keyboard.press("Escape");
     await page.waitForTimeout(300);
-    if (!isFullView) {
+    if (!desktop) {
       await page.keyboard.press("Escape");
       await page.waitForTimeout(300);
     }
