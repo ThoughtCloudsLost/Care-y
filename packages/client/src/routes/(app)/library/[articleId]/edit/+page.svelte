@@ -9,7 +9,6 @@
 <script lang="ts">
   import { createQuery, useQueryClient } from "@tanstack/svelte-query";
   import { page } from "$app/state";
-  import { goto } from "$app/navigation";
   import { resolve } from "$app/paths";
   import { Link, Preloader, DialogButton } from "konsta/svelte";
   import ShellDialog from "$lib/shell/ShellDialog.svelte";
@@ -162,10 +161,7 @@
     void queryClient.invalidateQueries({
       queryKey: kbKeys.item(articleId),
     });
-    // replaceState, not shellBack: the editor has done its job and should
-    // leave the history stack. Going "back" from the detail page belongs to
-    // the library list, not to the editor the reader just finished with.
-    void goto(resolve(`/library/${articleId}`), { replaceState: true });
+    shellBack(`/library/${articleId}`);
   }
 
   function handleCancel(): void {
