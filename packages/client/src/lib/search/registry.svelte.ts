@@ -139,6 +139,69 @@ export interface FullSearchProviderState {
 // $derived consumers in other modules re-evaluate.
 let fullSearchStates = $state<FullSearchProviderState[]>([]);
 
+// -- Run identity -------------------------------------------------------------
+//
+// A full search is a long chain of awaits. Without run identity, an
+// abandoned run (the user retyped, or the sheet closed and reopened) keeps
+// resolving and writes its progress and its "done" over the run the user is
+// actually waiting on, which then reports finished with the old counts.
+//
+// Every run takes a generation number. Writes check it first and drop
+// themselves if a newer run has started. The paired AbortSignal is the other
+// half: the generation stops stale writes, the signal stops the stale work
+// and the provider-side mutation that produced it.
+const runGenerations = new SvelteMap<string, number>();
+const runControllers = new SvelteMap<string, AbortController>();
+
+/** Claim run identity for a provider, aborting whatever it was doing. */
+function beginRun(providerId: string): {
+  generation: number;
+  signal: AbortSignal;
+} {
+  const generation = bumpGeneration(providerId);
+  const controller = new AbortController();
+  runControllers.set(providerId, controller);
+  return { generation, signal: controller.signal };
+}
+
+/** Abort the provider's current run and invalidate its pending writes. */
+function bumpGeneration(providerId: string): number {
+  runControllers.get(providerId)?.abort();
+  runControllers.delete(providerId);
+  const generation = (runGenerations.get(providerId) ?? 0) + 1;
+  runGenerations.set(providerId, generation);
+  return generation;
+}
+
+/** False once a newer run has claimed this provider. */
+function isCurrentRun(providerId: string, generation: number): boolean {
+  return runGenerations.get(providerId) === generation;
+}
+
+/**
+ * Wire a provider's run to the registry: progress and completion writes are
+ * gated on run identity, so an abandoned run cannot report over a live one.
+ */
+function startProviderRun(
+  provider: SearchProvider,
+  query: string,
+  state: FullSearchState,
+): void {
+  if (!provider.fullSearch) return;
+
+  const { generation, signal } = beginRun(provider.id);
+  const onProgress = (): void => {
+    if (!isCurrentRun(provider.id, generation)) return;
+    updateProviderState(provider.id, state);
+  };
+
+  void provider.fullSearch(query, state, onProgress, signal).then(() => {
+    if (!isCurrentRun(provider.id, generation)) return;
+    state.status = "done";
+    updateProviderState(provider.id, state);
+  });
+}
+
 function updateProviderState(providerId: string, state: FullSearchState): void {
   fullSearchStates = fullSearchStates.map((s) =>
     s.providerId === providerId
@@ -183,19 +246,11 @@ export function runFullSearch(query: string): void {
   }));
 
   for (const provider of providersWithFullSearch) {
-    if (!provider.fullSearch) continue;
-    const state: FullSearchState = {
+    startProviderRun(provider, query, {
       status: "searching",
       searched: 0,
       total: 0,
       matchCount: 0,
-    };
-    const onProgress = (): void => {
-      updateProviderState(provider.id, state);
-    };
-    void provider.fullSearch(query, state, onProgress).then(() => {
-      state.status = "done";
-      updateProviderState(provider.id, state);
     });
   }
 }
@@ -251,13 +306,7 @@ export function runFullSearchForProvider(
     updateProviderState(providerId, state);
   }
 
-  const onProgress = (): void => {
-    updateProviderState(providerId, state);
-  };
-  void provider.fullSearch(query, state, onProgress).then(() => {
-    state.status = "done";
-    updateProviderState(providerId, state);
-  });
+  startProviderRun(provider, query, state);
 }
 
 /**
@@ -267,6 +316,9 @@ export function runFullSearchForProvider(
 export function resetFullSearch(): void {
   fullSearchStates = [];
   for (const [, provider] of providers) {
+    // Bump before reset(): a run still in flight would otherwise repopulate
+    // the content-match set the reset just cleared.
+    bumpGeneration(provider.id);
     provider.reset?.();
   }
 }
@@ -276,5 +328,6 @@ export function resetFullSearchForProvider(providerId: string): void {
   fullSearchStates = fullSearchStates.filter(
     (s) => s.providerId !== providerId,
   );
+  bumpGeneration(providerId);
   providers.get(providerId)?.reset?.();
 }

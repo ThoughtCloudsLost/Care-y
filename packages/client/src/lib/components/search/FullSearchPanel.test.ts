@@ -76,6 +76,7 @@ describe("FullSearchPanel", () => {
       "housing",
       expect.anything(),
       expect.any(Function),
+      expect.any(AbortSignal),
     );
   });
 

@@ -306,7 +306,7 @@ describe("createKbSearchProvider", () => {
     });
   });
 
-  it("handles null encryptedExcerpt gracefully (BF-012 not landed)", async () => {
+  it("treats a null encryptedExcerpt as an empty excerpt rather than failing", async () => {
     const deps: KBSearchProviderDeps = {
       fetchPage: vi.fn(async () => ({
         items: [makeRawItem({ id: "a1", encryptedExcerpt: null })],
@@ -360,6 +360,11 @@ describe("KB fullSearch (body content)", () => {
     return { status: "idle", searched: 0, total: 0, matchCount: 0 };
   }
 
+  /** A signal that never aborts, for runs the test does not cancel. */
+  function liveSignal(): AbortSignal {
+    return new AbortController().signal;
+  }
+
   function createFullSearchDeps(
     items: readonly RawKBItem[] = testItems,
   ): KBSearchProviderDeps {
@@ -396,7 +401,7 @@ describe("KB fullSearch (body content)", () => {
     });
 
     const state = makeState();
-    await provider.fullSearch!("intake", state, vi.fn());
+    await provider.fullSearch!("intake", state, vi.fn(), liveSignal());
 
     // "intake" matches a1 on title/excerpt. a2 and a3 don't match.
     // fetchBodies should be called with a2 and a3 only.
@@ -419,7 +424,7 @@ describe("KB fullSearch (body content)", () => {
     });
 
     const state = makeState();
-    await provider.fullSearch!("danger", state, vi.fn());
+    await provider.fullSearch!("danger", state, vi.fn(), liveSignal());
 
     // "danger" doesn't match any title/excerpt, but matches a2's body content.
     // Content matches propagate through search() via contentMatchIds.
@@ -439,7 +444,7 @@ describe("KB fullSearch (body content)", () => {
     });
 
     const state = makeState();
-    await provider.fullSearch!("something", state, vi.fn());
+    await provider.fullSearch!("something", state, vi.fn(), liveSignal());
 
     expect(state.total).toBe(3);
     expect(state.searched).toBe(3);
@@ -463,7 +468,7 @@ describe("KB fullSearch (body content)", () => {
     });
 
     const state = makeState();
-    await provider.fullSearch!("intake", state, vi.fn());
+    await provider.fullSearch!("intake", state, vi.fn(), liveSignal());
 
     // a1 matched on title via search(), matchCount reflects title matches
     expect(state.matchCount).toBe(1);
@@ -512,7 +517,7 @@ describe("KB fullSearch (body content)", () => {
     });
 
     const state = makeState();
-    await allMatchProvider.fullSearch!("common", state, vi.fn());
+    await allMatchProvider.fullSearch!("common", state, vi.fn(), liveSignal());
 
     expect(state.matchCount).toBe(3);
     expect(allMatchDeps.fetchBodies).not.toHaveBeenCalled();
