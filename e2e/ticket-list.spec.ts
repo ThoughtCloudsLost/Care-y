@@ -1,7 +1,13 @@
 import { test, expect } from "./coverage-fixture";
 import { startCoverage, stopAndWriteCoverage } from "./coverage-fixture";
 import type { Page } from "@playwright/test";
-import { auditA11y, CRYPTO_TIMEOUT, login, longPress } from "./helpers";
+import {
+  auditA11y,
+  CRYPTO_TIMEOUT,
+  isDesktopLayout,
+  login,
+  longPress,
+} from "./helpers";
 
 test.describe.serial("Ticket List (Tickets Tab)", () => {
   let page: Page;
@@ -286,10 +292,18 @@ test.describe.serial("Ticket List (Tickets Tab)", () => {
       timeout: CRYPTO_TIMEOUT,
     });
 
-    // Navigate back. On desktop split-view, the back button closes the
-    // detail pane. On mobile, it goes back to /tickets.
-    const backBtn = page.getByRole("button", { name: /back/i });
-    if (await backBtn.isVisible({ timeout: 2_000 }).catch(() => false)) {
+    // Navigate back. Below the desktop breakpoint the detail is a full-page
+    // route with a "Back" control in its navbar. At desktop widths the
+    // detail is a shallow-routed pane, its navbar context is inert, and the
+    // pane's own control is labelled "Close detail" rather than "Back", so
+    // there is nothing here matching /back/i and the URL never left
+    // /tickets. Branch on the layout instead of sampling isVisible(), whose
+    // timeout option is ignored: it returns immediately, so on mobile a
+    // navbar that has not painted yet would skip the click and fail the URL
+    // assertion below for a reason that looks unrelated.
+    if (!(await isDesktopLayout(page))) {
+      const backBtn = page.getByRole("button", { name: /back/i });
+      await expect(backBtn).toBeVisible({ timeout: 10_000 });
       await backBtn.click();
     }
     await expect(page).toHaveURL("/tickets");

@@ -170,8 +170,8 @@ test.describe.serial("Ticket Actions (Call + SMS)", () => {
       timeout: 3000,
     });
 
-    // Konsta Tabbar internals are excluded (aria-selected on role=button
-    // links, H-011); the shell tab bar is audited by the sweep spec.
+    // Konsta Tabbar internals are excluded: it puts aria-selected on
+    // role=button links. The shell tab bar is audited by the sweep spec.
     await auditA11y(page, { exclude: ["[role='tablist']"] });
 
     // Cleanup: dismiss the SMS compose sheet (last test, page may be closing).

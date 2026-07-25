@@ -4,12 +4,41 @@ import type { Page } from "@playwright/test";
 import {
   auditA11y,
   CRYPTO_TIMEOUT,
+  E2eError,
+  isDesktopLayout,
   login,
   navigateToNewArticle,
 } from "./helpers";
 
 const SUFFIX = String(Date.now()).slice(-6);
 const TEST_ARTICLE_TITLE = `E2E Article ${SUFFIX}`;
+
+/**
+ * Where the editor lands when it closes, computed from the editor URL
+ * before the navigation starts.
+ *
+ * Save and Cancel both call shellBack("/library/<id>"), which pops the
+ * editor's history entry. Below the desktop breakpoint the entry underneath
+ * is the full-page detail route, so the URL becomes /library/<id>. At
+ * desktop widths the detail pane was opened by shallow routing, so the entry
+ * underneath is the list URL with the pane state restored, and the URL
+ * becomes /library.
+ *
+ * Throws when called anywhere but the editor, so a stale caller fails loudly
+ * instead of asserting against a URL nothing is navigating to.
+ */
+async function editorExitUrl(page: Page): Promise<string> {
+  const [, section, articleId, leaf] = new URL(page.url()).pathname.split("/");
+  if (
+    section !== "library" ||
+    articleId === undefined ||
+    articleId === "" ||
+    leaf !== "edit"
+  ) {
+    throw new E2eError(`Expected a /library/<id>/edit URL, got ${page.url()}`);
+  }
+  return (await isDesktopLayout(page)) ? "/library" : `/library/${articleId}`;
+}
 
 test.describe.serial("KB Editor (Create/Edit, Categories, ATAG)", () => {
   let page: Page;
@@ -202,46 +231,45 @@ test.describe.serial("KB Editor (Create/Edit, Categories, ATAG)", () => {
     // Click the title input to blur the editor while keeping the page.
     await page.getByPlaceholder("Article title").click();
 
+    // Resolve the destination before clicking, while the page is still
+    // settled on the editor URL.
+    const exitUrl = await editorExitUrl(page);
+
     // Save the article. On the edit page, the button label is "Save"
     // (not "Publish" like the create page).
     const saveBtn = page.getByRole("button", { name: "Save" });
     await expect(saveBtn).toBeVisible({ timeout: 5_000 });
     await saveBtn.click();
 
-    // Should navigate back (to article detail or library).
-    await expect(page).toHaveURL(/\/library/, { timeout: 15_000 });
+    // Assert the exact destination. A /\/library/ regex also matches
+    // /library/<id>/edit, so it resolves before the save navigates at all,
+    // leaving the next test to run against the editor and fail there.
+    await expect(page).toHaveURL(exitUrl, { timeout: 15_000 });
   });
 
   test("edit: saved changes are visible on article detail", async ({}, testInfo) => {
     testInfo.setTimeout(CRYPTO_TIMEOUT * 4);
 
-    // Navigate to the article detail to verify saved changes.
-    // On desktop split view, save returns to /library with the detail pane.
-    // On mobile, save navigates to /library/{id} (full-page detail).
-    if (page.url().endsWith("/library")) {
-      await page.getByText(TEST_ARTICLE_TITLE).click();
-    }
-
-    // Wait for the rendered article body (visible in split-view or full-page).
+    // The save already landed on the article detail: the full-page route
+    // below the desktop breakpoint, the restored split pane above it. Both
+    // render the article body, so the appended text must be present without
+    // any further navigation.
     await expect(page.getByText("Added during edit.")).toBeVisible({
       timeout: CRYPTO_TIMEOUT,
     });
 
-    // Navigate back to library for subsequent tests.
-    // On desktop split view, Escape closes the detail pane (pushState).
-    // On mobile, use the back button for full-page navigation.
+    // Navigate back to library for subsequent tests. Both layouts expose a
+    // control: the detail navbar's "Back to <library>" below the breakpoint,
+    // the split pane header's "Close detail" above it. Assert it rather than
+    // sampling isVisible(), whose timeout option is ignored ("does not wait
+    // for the element to become visible and returns immediately",
+    // playwright-core 1.61 types) so a sample taken mid-navigation reports
+    // false and silently skips the click.
     const backBtn = page.getByRole("button", {
       name: /back to|close/i,
     });
-    const hasBackBtn = await backBtn
-      .isVisible({ timeout: 2_000 })
-      .catch(() => false);
-
-    if (hasBackBtn) {
-      await backBtn.click();
-    } else {
-      await page.keyboard.press("Escape");
-    }
+    await expect(backBtn).toBeVisible({ timeout: 10_000 });
+    await backBtn.click();
 
     await expect(page).toHaveURL("/library", { timeout: 10_000 });
   });
@@ -332,23 +360,20 @@ test.describe.serial("KB Editor (Create/Edit, Categories, ATAG)", () => {
     // the navigation guard should not trigger.
     // Use .first() to target the navbar Cancel (there may be multiple
     // Cancel buttons in hidden overlay elements like Dialog).
+    const exitUrl = await editorExitUrl(page);
     const cancelBtn = page.getByRole("button", { name: "Cancel" }).first();
     await cancelBtn.click();
 
-    // Should navigate back to the article detail (or split view).
-    // On desktop split view, Escape closes the detail pane.
+    // Cancel returns to the article detail, same destinations as save.
+    await expect(page).toHaveURL(exitUrl, { timeout: 10_000 });
+
+    // Then back out to the list.
     const backBtn = page.getByRole("button", {
       name: /back to|close/i,
     });
-    const hasBackBtn = await backBtn
-      .isVisible({ timeout: 2_000 })
-      .catch(() => false);
-    if (hasBackBtn) {
-      await backBtn.click();
-    } else {
-      await page.keyboard.press("Escape");
-    }
-    await expect(page).toHaveURL("/library");
+    await expect(backBtn).toBeVisible({ timeout: 10_000 });
+    await backBtn.click();
+    await expect(page).toHaveURL("/library", { timeout: 10_000 });
   });
 
   // ── 4. Category management ─────────────────────────────────────
@@ -497,8 +522,16 @@ test.describe.serial("KB Editor (Create/Edit, Categories, ATAG)", () => {
       if (!page.isClosed()) {
         const cancelBtn = page.getByRole("button", { name: "Cancel" }).first();
         await cancelBtn.dispatchEvent("click");
+        // The guard renders the discard dialog asynchronously, so wait for
+        // it. isVisible() ignores its timeout and returns immediately, which
+        // sampled the dialog before it existed and left the editor open for
+        // the next test.
         const discardBtn = page.getByText("Discard", { exact: true });
-        if (await discardBtn.isVisible({ timeout: 2_000 }).catch(() => false)) {
+        const dialogOpened = await discardBtn
+          .waitFor({ state: "visible", timeout: 5_000 })
+          .then(() => true)
+          .catch(() => false);
+        if (dialogOpened) {
           await discardBtn.dispatchEvent("click");
         }
         await expect(page).toHaveURL("/library", { timeout: 5_000 });
