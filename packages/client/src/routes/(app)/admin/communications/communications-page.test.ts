@@ -39,6 +39,7 @@ vi.mock("$lib/paraglide/messages.js", () => ({
   admin_tab_blocklist: () => "Blocklist",
   admin_tab_greetings: () => "Greetings",
   admin_tab_sms_templates: () => "SMS Templates",
+  admin_tab_quarantine: () => "Quarantine",
   admin_comms_title: () => "Communications",
 }));
 
@@ -77,6 +78,13 @@ vi.mock("$lib/components/admin/GreetingsSection.svelte", async () => ({
 }));
 
 vi.mock("$lib/components/admin/SmsTemplatesSection.svelte", async () => ({
+  default: (
+    await import("$lib/components/tickets/test-helpers/PassthroughShell.svelte")
+  ).default,
+}));
+
+// care-y-ignore-next-line mock-factory-unguarded -- component stub: single default export, passthrough cannot satisfy the component prop types
+vi.mock("$lib/components/admin/QuarantineSection.svelte", async () => ({
   default: (
     await import("$lib/components/tickets/test-helpers/PassthroughShell.svelte")
   ).default,
@@ -133,13 +141,14 @@ describe("Communications page", () => {
   });
 
   describe("section rendering", () => {
-    it("renders all 4 section anchors with MANAGE_INFRASTRUCTURE", () => {
+    it("renders all 5 section anchors with MANAGE_INFRASTRUCTURE", () => {
       const { container } = renderPage();
 
       expect(container.querySelector("#section-telephony")).toBeTruthy();
       expect(container.querySelector("#section-blocklist")).toBeTruthy();
       expect(container.querySelector("#section-greetings")).toBeTruthy();
       expect(container.querySelector("#section-templates")).toBeTruthy();
+      expect(container.querySelector("#section-quarantine")).toBeTruthy();
     });
 
     it("renders no sections when user lacks MANAGE_INFRASTRUCTURE", () => {
@@ -150,6 +159,7 @@ describe("Communications page", () => {
       expect(container.querySelector("#section-blocklist")).toBeNull();
       expect(container.querySelector("#section-greetings")).toBeNull();
       expect(container.querySelector("#section-templates")).toBeNull();
+      expect(container.querySelector("#section-quarantine")).toBeNull();
     });
   });
 
@@ -174,11 +184,12 @@ describe("Communications page", () => {
       const { container } = renderPage();
 
       const divs = container.querySelectorAll(".csp-section");
-      expect(divs).toHaveLength(4);
+      expect(divs).toHaveLength(5);
       expect(divs[0]?.id).toBe("section-telephony");
       expect(divs[1]?.id).toBe("section-greetings");
       expect(divs[2]?.id).toBe("section-templates");
       expect(divs[3]?.id).toBe("section-blocklist");
+      expect(divs[4]?.id).toBe("section-quarantine");
     });
   });
 });

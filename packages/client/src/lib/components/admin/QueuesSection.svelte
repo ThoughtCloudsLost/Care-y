@@ -15,7 +15,7 @@
     useQueryClient,
   } from "@tanstack/svelte-query";
   import { SvelteSet, SvelteMap } from "svelte/reactivity";
-  import { ChevronUp, ChevronDown, Pencil, X } from "@lucide/svelte";
+  import { ChevronUp, ChevronDown, Pencil, X, Inbox } from "@lucide/svelte";
   import * as m from "$lib/paraglide/messages.js";
   import { withTerms } from "$lib/terminology/with-terms.js";
   import { trpc } from "$lib/trpc/index.js";
@@ -48,6 +48,7 @@
 
   const ticketRouter = requireRouter(trpc.tickets, "tickets");
   const authRouter = trpc.auth;
+  const orgRouter = trpc.org;
   const queryClient = useQueryClient();
   const orgCache = getOrgDecryptCache();
 
@@ -63,6 +64,14 @@
     queryKey: adminKeys.users(),
     queryFn: async () => authRouter.listUsers.query(),
   }));
+
+  // Intake queue designation (which queue receives new-caller voicemails)
+  const intakeQueueQuery = createQuery(() => ({
+    queryKey: adminKeys.intakeQueue(),
+    queryFn: async () => orgRouter.getIntakeQueue.query(),
+  }));
+
+  const intakeQueueId = $derived(intakeQueueQuery.data?.queueId ?? null);
 
   type QueueRecord = NonNullable<typeof queuesQuery.data>[number];
   type AdminUser = NonNullable<typeof usersQuery.data>[number];
@@ -187,6 +196,40 @@
       void queryClient.invalidateQueries({ queryKey: queueKeys.all });
     },
   }));
+
+  const setIntakeQueueMutation = createMutation(() => ({
+    mutationFn: async (input: { queueId: string | null }) =>
+      orgRouter.setIntakeQueue.mutate(input),
+    onSuccess: (_data: unknown, variables: { queueId: string | null }) => {
+      haptic();
+      const msg =
+        variables.queueId === null
+          ? m.admin_queue_intake_clear_success(withTerms())
+          : m.admin_queue_intake_set_success(withTerms());
+      toastStore.show(msg);
+      announceToLiveRegion("polite", msg);
+      void queryClient.invalidateQueries({
+        queryKey: adminKeys.intakeQueue(),
+      });
+    },
+    onError: (_err: unknown, variables: { queueId: string | null }) => {
+      const msg =
+        variables.queueId === null
+          ? m.admin_queue_intake_clear_error(withTerms())
+          : m.admin_queue_intake_set_error(withTerms());
+      toastStore.show(msg);
+    },
+  }));
+
+  function handleSetIntakeQueue(queueId: string): void {
+    if (setIntakeQueueMutation.isPending) return;
+    setIntakeQueueMutation.mutate({ queueId });
+  }
+
+  function handleClearIntakeQueue(): void {
+    if (setIntakeQueueMutation.isPending) return;
+    setIntakeQueueMutation.mutate({ queueId: null });
+  }
 
   // ── Reorder ──
 
@@ -420,6 +463,7 @@
         {@const isExpanded = expandedQueues.has(queue.id)}
         {@const members = memberData.members.get(queue.id) ?? []}
         {@const isLoading = memberData.loading.get(queue.id) ?? true}
+        {@const isIntakeQueue = intakeQueueId === queue.id}
 
         <Card raised contentWrap={false} class="queue-card">
           <div class="queue-card-inner">
@@ -444,6 +488,11 @@
                     length={16}
                     class="font-semibold"
                   />
+                  {#if isIntakeQueue}
+                    <Chip outline class="intake-chip" data-testid="intake-chip">
+                      {m.admin_queue_intake_chip()}
+                    </Chip>
+                  {/if}
                 </span>
                 <span class="queue-stats">
                   {m.admin_queue_stat_open({ count: Number(queue.openCount) })}
@@ -487,6 +536,32 @@
                     }}
                   >
                     <ChevronDown size={18} aria-hidden="true" />
+                  </button>
+                {/if}
+
+                {#if isIntakeQueue}
+                  <button
+                    class="icon-btn intake-active"
+                    aria-label={m.admin_queue_intake_clear()}
+                    disabled={setIntakeQueueMutation.isPending}
+                    onclick={(e) => {
+                      e.stopPropagation();
+                      handleClearIntakeQueue();
+                    }}
+                  >
+                    <Inbox size={16} aria-hidden="true" />
+                  </button>
+                {:else}
+                  <button
+                    class="icon-btn"
+                    aria-label={m.admin_queue_intake_set(withTerms())}
+                    disabled={setIntakeQueueMutation.isPending}
+                    onclick={(e) => {
+                      e.stopPropagation();
+                      handleSetIntakeQueue(queue.id);
+                    }}
+                  >
+                    <Inbox size={16} aria-hidden="true" />
                   </button>
                 {/if}
 
@@ -750,6 +825,17 @@
   .icon-btn:focus-visible {
     outline: 2px solid var(--brand-text);
     outline-offset: 2px;
+  }
+
+  /* ── Intake designation ── */
+  .icon-btn.intake-active {
+    color: var(--brand-accent, var(--brand-text));
+  }
+
+  :global(.intake-chip) {
+    font-size: var(--text-xs) !important;
+    height: 1.25rem !important;
+    padding: 0 0.375rem !important;
   }
 
   /* ── Member section ── */

@@ -15,6 +15,7 @@ import {
   ticketKeys,
   kbKeys,
   notificationKeys,
+  adminKeys,
 } from "$lib/query/keys";
 
 export interface SSEEvent {
@@ -69,6 +70,11 @@ export function handleEvent(event: SSEEvent, queryClient: QueryClient): void {
     case "notification":
       void queryClient.invalidateQueries({
         queryKey: notificationKeys.all,
+      });
+      break;
+    case "voicemail_quarantined":
+      void queryClient.invalidateQueries({
+        queryKey: adminKeys.quarantine(),
       });
       break;
   }

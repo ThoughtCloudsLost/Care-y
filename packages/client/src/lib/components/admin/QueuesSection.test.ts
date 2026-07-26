@@ -48,6 +48,7 @@ const {
   mockReorderQueues,
   mockDeleteQueue,
   mockRemoveMember,
+  mockSetIntakeQueue,
   mockToastShow,
   mockDecrypt,
   mockAnnounce,
@@ -55,6 +56,7 @@ const {
   mockReorderQueues: vi.fn().mockResolvedValue({}),
   mockDeleteQueue: vi.fn().mockResolvedValue({}),
   mockRemoveMember: vi.fn().mockResolvedValue({}),
+  mockSetIntakeQueue: vi.fn().mockResolvedValue({ success: true }),
   mockToastShow: vi.fn(),
   mockDecrypt: vi.fn().mockReturnValue("Decrypted Queue"),
   mockAnnounce: vi.fn(),
@@ -90,6 +92,9 @@ let mockMembersLoading = false;
 
 // User data for the admin user lookup map
 let mockUsersData: { id: string; encryptedDisplayName: string }[] = [];
+
+// Intake queue designation (queueId or null)
+let mockIntakeQueueData: { queueId: string | null } = { queueId: null };
 
 // vi.mock required: paraglide messages are compiled by the Vite plugin;
 // the .js barrel re-exports from ./messages/_index.js which depends on
@@ -143,6 +148,14 @@ vi.mock("$lib/paraglide/messages.js", async (importOriginal) => ({
   admin_queue_stat_closed: ({ count }: { count: number }) => `${count} closed`,
   admin_queue_stat_hold: ({ count }: { count: number }) => `${count} hold`,
   admin_queue_add_member_button: () => "Add member",
+  admin_queue_intake_chip: () => "Intake",
+  admin_queue_intake_set: () => "Use as intake queue",
+  admin_queue_intake_clear: () => "Remove intake designation",
+  admin_queue_intake_set_success: () => "Intake queue updated",
+  admin_queue_intake_set_error: () => "Could not update intake queue",
+  admin_queue_intake_clear_success: () => "Intake queue designation removed",
+  admin_queue_intake_clear_error: () =>
+    "Could not remove intake queue designation",
   common_cancel: () => "Cancel",
   common_loading: () => "Loading",
   error_generic: () => "Something went wrong",
@@ -169,6 +182,10 @@ vi.mock("$lib/trpc/index.js", async (importOriginal) => ({
     auth: {
       listUsers: { query: vi.fn().mockResolvedValue([]) },
     },
+    org: {
+      getIntakeQueue: { query: vi.fn().mockResolvedValue({ queueId: null }) },
+      setIntakeQueue: { mutate: mockSetIntakeQueue },
+    },
   },
 }));
 
@@ -178,8 +195,8 @@ vi.mock("@tanstack/svelte-query", async (importOriginal) => ({
   ...(await importOriginal<typeof TanstackQuery>()),
   createQuery: (optsFn: () => Record<string, unknown>) => {
     const opts = optsFn();
-    const key = (opts.queryKey as string[])[0];
-    if (key === "queues") {
+    const keys = opts.queryKey as string[];
+    if (keys[0] === "queues") {
       return {
         get isLoading() {
           return mockQueuesLoading;
@@ -196,8 +213,20 @@ vi.mock("@tanstack/svelte-query", async (importOriginal) => ({
         refetch: vi.fn(),
       };
     }
+    // admin intake queue query
+    if (keys[0] === "admin" && keys[1] === "intakeQueue") {
+      return {
+        isLoading: false,
+        isError: false,
+        error: null,
+        get data() {
+          return mockIntakeQueueData;
+        },
+        refetch: vi.fn(),
+      };
+    }
     // admin users query
-    if (key === "admin") {
+    if (keys[0] === "admin") {
       return {
         isLoading: false,
         isError: false,
@@ -232,7 +261,8 @@ vi.mock("@tanstack/svelte-query", async (importOriginal) => ({
     const mutationFn = opts.mutationFn as (input: unknown) => Promise<unknown>;
     const onSuccess = opts.onSuccess as
       ((data: unknown, vars: unknown) => void) | undefined;
-    const onError = opts.onError as ((err: unknown) => void) | undefined;
+    const onError = opts.onError as
+      ((err: unknown, vars: unknown) => void) | undefined;
     return {
       get isPending() {
         return false;
@@ -242,7 +272,7 @@ vi.mock("@tanstack/svelte-query", async (importOriginal) => ({
           (data) => onSuccess?.(data, input),
           (err: unknown) => {
             if (overrides?.onError) overrides.onError(err);
-            else onError?.(err);
+            else onError?.(err, input);
           },
         );
       },
@@ -402,6 +432,7 @@ describe("QueuesSection", () => {
     mockMembersByQueue = {};
     mockMembersLoading = false;
     mockUsersData = [];
+    mockIntakeQueueData = { queueId: null };
     mockDecrypt.mockReturnValue("Decrypted Queue");
     vi.clearAllMocks();
   });
@@ -892,6 +923,7 @@ describe("QueuesSection delete flow", () => {
     mockMembersByQueue = {};
     mockMembersLoading = false;
     mockUsersData = [];
+    mockIntakeQueueData = { queueId: null };
     mockDecrypt.mockReturnValue("Decrypted Queue");
     vi.clearAllMocks();
   });
@@ -1135,5 +1167,173 @@ describe("QueuesSection delete flow", () => {
       '[data-testid="editor-delete-trigger"]',
     );
     expect(deleteTrigger).toBeNull();
+  });
+});
+
+describe("QueuesSection intake queue", () => {
+  beforeEach(() => {
+    mockQueuesData = [makeQueue("q-1", 0), makeQueue("q-2", 1)];
+    mockQueuesLoading = false;
+    mockQueuesError = null;
+    mockMembersByQueue = {};
+    mockMembersLoading = false;
+    mockUsersData = [];
+    mockIntakeQueueData = { queueId: null };
+    mockDecrypt.mockReturnValue("Decrypted Queue");
+    vi.clearAllMocks();
+  });
+
+  afterEach(cleanup);
+
+  // ── Intake chip display ──
+
+  it("shows Intake chip on the designated intake queue", () => {
+    mockIntakeQueueData = { queueId: "q-1" };
+    const { container } = render(QueuesSection);
+    const chips = container.querySelectorAll('[data-testid="intake-chip"]');
+    expect(chips.length).toBe(1);
+  });
+
+  it("does not show Intake chip when no intake queue is designated", () => {
+    mockIntakeQueueData = { queueId: null };
+    const { container } = render(QueuesSection);
+    const chips = container.querySelectorAll('[data-testid="intake-chip"]');
+    expect(chips.length).toBe(0);
+  });
+
+  it("shows Intake chip only on the matching queue, not on others", () => {
+    mockIntakeQueueData = { queueId: "q-2" };
+    const { container } = render(QueuesSection);
+    const cards = container.querySelectorAll(".queue-card");
+    // First card (q-1) should not have the chip
+    expect(cards[0]?.querySelector('[data-testid="intake-chip"]')).toBeNull();
+    // Second card (q-2) should have the chip
+    expect(cards[1]?.querySelector('[data-testid="intake-chip"]')).toBeTruthy();
+  });
+
+  // ── Set intake queue action ──
+
+  it("renders 'Use as intake queue' button on non-intake queues", () => {
+    mockIntakeQueueData = { queueId: "q-1" };
+    render(QueuesSection);
+    // q-2 is not the intake queue, so it should have "Use as intake queue"
+    const setBtn = screen.getByLabelText("Use as intake queue");
+    expect(setBtn).toBeTruthy();
+  });
+
+  it("calls setIntakeQueue mutation when set button is clicked", async () => {
+    mockIntakeQueueData = { queueId: null };
+    render(QueuesSection);
+    await tick();
+
+    // Both queues should have "Use as intake queue" buttons
+    const setBtns = screen.getAllByLabelText("Use as intake queue");
+    await fireEvent.click(setBtns[0]!);
+
+    expect(mockSetIntakeQueue).toHaveBeenCalledWith({ queueId: "q-1" });
+  });
+
+  it("shows success toast after setting intake queue", async () => {
+    mockSetIntakeQueue.mockResolvedValue({ success: true });
+    mockIntakeQueueData = { queueId: null };
+    render(QueuesSection);
+    await tick();
+
+    const setBtns = screen.getAllByLabelText("Use as intake queue");
+    await fireEvent.click(setBtns[0]!);
+    await tick();
+
+    await waitFor(() => {
+      expect(mockToastShow).toHaveBeenCalledWith("Intake queue updated");
+    });
+  });
+
+  it("shows error toast when setting intake queue fails", async () => {
+    mockSetIntakeQueue.mockRejectedValue(new Error("fail"));
+    mockIntakeQueueData = { queueId: null };
+    render(QueuesSection);
+    await tick();
+
+    const setBtns = screen.getAllByLabelText("Use as intake queue");
+    await fireEvent.click(setBtns[0]!);
+    await tick();
+
+    await waitFor(() => {
+      expect(mockToastShow).toHaveBeenCalledWith(
+        "Could not update intake queue",
+      );
+    });
+  });
+
+  // ── Clear intake queue action ──
+
+  it("renders 'Remove intake designation' button on the intake queue", () => {
+    mockIntakeQueueData = { queueId: "q-1" };
+    render(QueuesSection);
+    const clearBtn = screen.getByLabelText("Remove intake designation");
+    expect(clearBtn).toBeTruthy();
+  });
+
+  it("calls setIntakeQueue with null when clear button is clicked", async () => {
+    mockIntakeQueueData = { queueId: "q-1" };
+    render(QueuesSection);
+    await tick();
+
+    const clearBtn = screen.getByLabelText("Remove intake designation");
+    await fireEvent.click(clearBtn);
+
+    expect(mockSetIntakeQueue).toHaveBeenCalledWith({ queueId: null });
+  });
+
+  it("shows success toast after clearing intake queue", async () => {
+    mockSetIntakeQueue.mockResolvedValue({ success: true });
+    mockIntakeQueueData = { queueId: "q-1" };
+    render(QueuesSection);
+    await tick();
+
+    const clearBtn = screen.getByLabelText("Remove intake designation");
+    await fireEvent.click(clearBtn);
+    await tick();
+
+    await waitFor(() => {
+      expect(mockToastShow).toHaveBeenCalledWith(
+        "Intake queue designation removed",
+      );
+    });
+  });
+
+  it("shows error toast when clearing intake queue fails", async () => {
+    mockSetIntakeQueue.mockRejectedValue(new Error("fail"));
+    mockIntakeQueueData = { queueId: "q-1" };
+    render(QueuesSection);
+    await tick();
+
+    const clearBtn = screen.getByLabelText("Remove intake designation");
+    await fireEvent.click(clearBtn);
+    await tick();
+
+    await waitFor(() => {
+      expect(mockToastShow).toHaveBeenCalledWith(
+        "Could not remove intake queue designation",
+      );
+    });
+  });
+
+  it("announces to live region after successful set", async () => {
+    mockSetIntakeQueue.mockResolvedValue({ success: true });
+    mockIntakeQueueData = { queueId: null };
+    render(QueuesSection);
+    await tick();
+
+    const setBtns = screen.getAllByLabelText("Use as intake queue");
+    await fireEvent.click(setBtns[0]!);
+    await tick();
+
+    await waitFor(() => {
+      expect(mockAnnounce).toHaveBeenCalledWith(
+        "polite",
+        "Intake queue updated",
+      );
+    });
   });
 });
