@@ -39,7 +39,7 @@ import {
 } from "./onboarding.js";
 import { createDashboardRouter } from "./dashboard.js";
 import { createRecentViewsRouter } from "./recent-views.js";
-import { createDevRouter } from "./dev.js";
+import { createDevRouter, type DevRouterDeps } from "./dev.js";
 import {
   createVoicemailQuarantineRouter,
   type VoicemailQuarantineRouterDeps,
@@ -69,7 +69,7 @@ export interface RouterDeps {
   readonly brandingDeps?: BrandingRouterDeps;
   readonly onboardingDeps?: OnboardingRouterDeps;
   readonly voicemailQuarantineDeps?: VoicemailQuarantineRouterDeps;
-  readonly includeDev?: boolean;
+  readonly devDeps?: DevRouterDeps;
 }
 
 // care-y-ignore-next-line missing-return-type -- tRPC router() returns a deeply generic type that cannot be written explicitly
@@ -129,6 +129,6 @@ export function createAppRouter(deps: RouterDeps) {
           ),
         }
       : {}),
-    ...(deps.includeDev === true ? { dev: createDevRouter() } : {}),
+    ...(deps.devDeps ? { dev: createDevRouter(deps.devDeps) } : {}),
   });
 }

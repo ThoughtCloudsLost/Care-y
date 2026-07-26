@@ -1773,4 +1773,5 @@ export * from "./admin_queue_intake_set_success.js";
 export * from "./admin_queue_intake_set_error.js";
 export * from "./admin_queue_intake_clear_success.js";
 export * from "./admin_queue_intake_clear_error.js";
+export * from "./admin_queue_intake_tooltip.js";
 export type LocalizedString = import("../runtime.js").LocalizedString;

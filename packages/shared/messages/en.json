@@ -1773,5 +1773,6 @@
   "admin_queue_intake_set_success": "Intake {queue} updated",
   "admin_queue_intake_set_error": "Could not update intake {queue}",
   "admin_queue_intake_clear_success": "Intake {queue} designation removed",
-  "admin_queue_intake_clear_error": "Could not remove intake {queue} designation"
+  "admin_queue_intake_clear_error": "Could not remove intake {queue} designation",
+  "admin_queue_intake_tooltip": "New caller voicemails are routed to the intake queue"
 }

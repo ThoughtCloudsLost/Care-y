@@ -1243,4 +1243,14 @@ export async function devAutoLogin(
   // 8. Seed test tickets (server creates tickets with real ECIES key wraps)
   await getDevSeedTickets().mutate();
   console.log("[dev] devSeedTickets: tickets seeded");
+
+  // 9. Seed quarantine entries (sealed-box encrypted voicemails)
+  // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- dev-only, runtime guard follows
+  const devRouterAL = trpc.dev as unknown as
+    Record<string, { mutate: () => Promise<{ count: number }> }> | undefined;
+  const seedQ = devRouterAL?.seedQuarantine;
+  if (seedQ) {
+    const result = await seedQ.mutate();
+    console.log(`[dev] quarantine: ${String(result.count)} entries seeded`);
+  }
 }
