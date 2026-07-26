@@ -148,15 +148,14 @@ function createMockNotificationService(): NotificationService {
 
 function createStubTenantDb(): Kysely<TenantDatabase> {
   const insertedRows: Record<string, unknown>[] = [];
-  let insertCounter = 0;
 
   const chainable = {
     values(vals: Record<string, unknown>) {
       insertedRows.push(vals);
       return chainable;
     },
-    onConflict() {
-      return {
+    onConflict(cb: (oc: unknown) => unknown) {
+      const oc = {
         column() {
           return {
             doNothing() {
@@ -165,13 +164,11 @@ function createStubTenantDb(): Kysely<TenantDatabase> {
           };
         },
       };
-    },
-    returning() {
+      cb(oc);
       return chainable;
     },
     async executeTakeFirst() {
-      insertCounter++;
-      return { id: `quarantine-${String(insertCounter)}` };
+      return { numInsertedOrUpdatedRows: 1n };
     },
   };
 
@@ -636,7 +633,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
         recordingSid,
         callSid: "CA_AUDIT_1",
         reason: "no_intake_queue",
-        clientId: "client-abc",
+        clientId: crypto.randomUUID(),
       });
 
       const auditRows = await testDb.db

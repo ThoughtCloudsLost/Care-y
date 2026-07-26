@@ -30,6 +30,7 @@ import type * as ShellSheetMod from "$lib/shell/ShellSheet.svelte";
 import type * as ShellActionSheetMod from "$lib/shell/ShellActionSheet.svelte";
 import type * as QueueMemberPickerMod from "./QueueMemberPicker.svelte";
 import type * as QueueEditorMod from "./QueueEditor.svelte";
+import type * as IntakeRadioMod from "./IntakeRadio.svelte";
 
 vi.stubGlobal(
   "IntersectionObserver",
@@ -48,6 +49,7 @@ const {
   mockReorderQueues,
   mockDeleteQueue,
   mockRemoveMember,
+  mockSetIntakeQueue,
   mockToastShow,
   mockDecrypt,
   mockAnnounce,
@@ -55,6 +57,7 @@ const {
   mockReorderQueues: vi.fn().mockResolvedValue({}),
   mockDeleteQueue: vi.fn().mockResolvedValue({}),
   mockRemoveMember: vi.fn().mockResolvedValue({}),
+  mockSetIntakeQueue: vi.fn().mockResolvedValue({ success: true }),
   mockToastShow: vi.fn(),
   mockDecrypt: vi.fn().mockReturnValue("Decrypted Queue"),
   mockAnnounce: vi.fn(),
@@ -90,6 +93,9 @@ let mockMembersLoading = false;
 
 // User data for the admin user lookup map
 let mockUsersData: { id: string; encryptedDisplayName: string }[] = [];
+
+// Intake queue designation (queueId or null)
+let mockIntakeQueueData: { queueId: string | null } = { queueId: null };
 
 // vi.mock required: paraglide messages are compiled by the Vite plugin;
 // the .js barrel re-exports from ./messages/_index.js which depends on
@@ -143,6 +149,16 @@ vi.mock("$lib/paraglide/messages.js", async (importOriginal) => ({
   admin_queue_stat_closed: ({ count }: { count: number }) => `${count} closed`,
   admin_queue_stat_hold: ({ count }: { count: number }) => `${count} hold`,
   admin_queue_add_member_button: () => "Add member",
+  admin_queue_intake_chip: () => "Intake",
+  admin_queue_intake_set: () => "Use as intake queue",
+  admin_queue_intake_clear: () => "Remove intake designation",
+  admin_queue_intake_set_success: () => "Intake queue updated",
+  admin_queue_intake_set_error: () => "Could not update intake queue",
+  admin_queue_intake_clear_success: () => "Intake queue designation removed",
+  admin_queue_intake_clear_error: () =>
+    "Could not remove intake queue designation",
+  admin_queue_intake_tooltip: () =>
+    "New caller voicemails are routed to the intake queue",
   common_cancel: () => "Cancel",
   common_loading: () => "Loading",
   error_generic: () => "Something went wrong",
@@ -169,6 +185,10 @@ vi.mock("$lib/trpc/index.js", async (importOriginal) => ({
     auth: {
       listUsers: { query: vi.fn().mockResolvedValue([]) },
     },
+    org: {
+      getIntakeQueue: { query: vi.fn().mockResolvedValue({ queueId: null }) },
+      setIntakeQueue: { mutate: mockSetIntakeQueue },
+    },
   },
 }));
 
@@ -178,8 +198,8 @@ vi.mock("@tanstack/svelte-query", async (importOriginal) => ({
   ...(await importOriginal<typeof TanstackQuery>()),
   createQuery: (optsFn: () => Record<string, unknown>) => {
     const opts = optsFn();
-    const key = (opts.queryKey as string[])[0];
-    if (key === "queues") {
+    const keys = opts.queryKey as string[];
+    if (keys[0] === "queues") {
       return {
         get isLoading() {
           return mockQueuesLoading;
@@ -196,8 +216,20 @@ vi.mock("@tanstack/svelte-query", async (importOriginal) => ({
         refetch: vi.fn(),
       };
     }
+    // admin intake queue query
+    if (keys[0] === "admin" && keys[1] === "intakeQueue") {
+      return {
+        isLoading: false,
+        isError: false,
+        error: null,
+        get data() {
+          return mockIntakeQueueData;
+        },
+        refetch: vi.fn(),
+      };
+    }
     // admin users query
-    if (key === "admin") {
+    if (keys[0] === "admin") {
       return {
         isLoading: false,
         isError: false,
@@ -232,7 +264,8 @@ vi.mock("@tanstack/svelte-query", async (importOriginal) => ({
     const mutationFn = opts.mutationFn as (input: unknown) => Promise<unknown>;
     const onSuccess = opts.onSuccess as
       ((data: unknown, vars: unknown) => void) | undefined;
-    const onError = opts.onError as ((err: unknown) => void) | undefined;
+    const onError = opts.onError as
+      ((err: unknown, vars: unknown) => void) | undefined;
     return {
       get isPending() {
         return false;
@@ -242,7 +275,7 @@ vi.mock("@tanstack/svelte-query", async (importOriginal) => ({
           (data) => onSuccess?.(data, input),
           (err: unknown) => {
             if (overrides?.onError) overrides.onError(err);
-            else onError?.(err);
+            else onError?.(err, input);
           },
         );
       },
@@ -362,6 +395,22 @@ vi.mock("./QueueEditor.svelte", async (importOriginal) => ({
   default: (await import("./test-helpers/StubQueueEditor.svelte")).default,
 }));
 
+// care-y-ignore-next-line mock-factory-unguarded -- full replacement required;
+// bits-ui Tooltip triggers jsdom "navigation to another Document" on import
+vi.mock("bits-ui", () => ({
+  Tooltip: {
+    Provider: {},
+    Root: {},
+    Trigger: {},
+    Content: {},
+  },
+}));
+
+vi.mock("./IntakeRadio.svelte", async (importOriginal) => ({
+  ...(await importOriginal<typeof IntakeRadioMod>()),
+  default: (await import("./test-helpers/StubIntakeRadio.svelte")).default,
+}));
+
 if (typeof Element.prototype.animate !== "function") {
   Element.prototype.animate = vi.fn().mockReturnValue({
     finished: Promise.resolve(),
@@ -402,6 +451,7 @@ describe("QueuesSection", () => {
     mockMembersByQueue = {};
     mockMembersLoading = false;
     mockUsersData = [];
+    mockIntakeQueueData = { queueId: null };
     mockDecrypt.mockReturnValue("Decrypted Queue");
     vi.clearAllMocks();
   });
@@ -892,6 +942,7 @@ describe("QueuesSection delete flow", () => {
     mockMembersByQueue = {};
     mockMembersLoading = false;
     mockUsersData = [];
+    mockIntakeQueueData = { queueId: null };
     mockDecrypt.mockReturnValue("Decrypted Queue");
     vi.clearAllMocks();
   });
@@ -1135,5 +1186,150 @@ describe("QueuesSection delete flow", () => {
       '[data-testid="editor-delete-trigger"]',
     );
     expect(deleteTrigger).toBeNull();
+  });
+});
+
+describe("QueuesSection intake queue", () => {
+  beforeEach(() => {
+    mockQueuesData = [makeQueue("q-1", 0), makeQueue("q-2", 1)];
+    mockQueuesLoading = false;
+    mockQueuesError = null;
+    mockMembersByQueue = {};
+    mockMembersLoading = false;
+    mockUsersData = [];
+    mockIntakeQueueData = { queueId: null };
+    mockDecrypt.mockReturnValue("Decrypted Queue");
+    vi.clearAllMocks();
+  });
+
+  afterEach(cleanup);
+
+  // ── Intake radio display ──
+
+  it("marks the designated intake queue radio as checked", () => {
+    mockIntakeQueueData = { queueId: "q-1" };
+    render(QueuesSection);
+    const radios = screen.getAllByRole("radio", { name: "Intake" });
+    expect(radios[0]?.getAttribute("aria-checked")).toBe("true");
+    expect(radios[1]?.getAttribute("aria-checked")).toBe("false");
+  });
+
+  it("shows all radios unchecked when no intake queue is designated", () => {
+    mockIntakeQueueData = { queueId: null };
+    render(QueuesSection);
+    const radios = screen.getAllByRole("radio", { name: "Intake" });
+    for (const radio of radios) {
+      expect(radio.getAttribute("aria-checked")).toBe("false");
+    }
+  });
+
+  // ── Set intake queue action ──
+
+  it("calls setIntakeQueue mutation when unchecked radio is clicked", async () => {
+    mockIntakeQueueData = { queueId: null };
+    render(QueuesSection);
+    await tick();
+
+    const radios = screen.getAllByRole("radio", { name: "Intake" });
+    await fireEvent.click(radios[0]!);
+
+    expect(mockSetIntakeQueue).toHaveBeenCalledWith({ queueId: "q-1" });
+  });
+
+  it("shows success toast after setting intake queue", async () => {
+    mockSetIntakeQueue.mockResolvedValue({ success: true });
+    mockIntakeQueueData = { queueId: null };
+    render(QueuesSection);
+    await tick();
+
+    const radios = screen.getAllByRole("radio", { name: "Intake" });
+    await fireEvent.click(radios[0]!);
+    await tick();
+
+    await waitFor(() => {
+      expect(mockToastShow).toHaveBeenCalledWith("Intake queue updated");
+    });
+  });
+
+  it("shows error toast when setting intake queue fails", async () => {
+    mockSetIntakeQueue.mockRejectedValue(new Error("fail"));
+    mockIntakeQueueData = { queueId: null };
+    render(QueuesSection);
+    await tick();
+
+    const radios = screen.getAllByRole("radio", { name: "Intake" });
+    await fireEvent.click(radios[0]!);
+    await tick();
+
+    await waitFor(() => {
+      expect(mockToastShow).toHaveBeenCalledWith(
+        "Could not update intake queue",
+      );
+    });
+  });
+
+  // ── Clear intake queue action ──
+
+  it("calls setIntakeQueue with null when checked radio is clicked", async () => {
+    mockIntakeQueueData = { queueId: "q-1" };
+    render(QueuesSection);
+    await tick();
+
+    const radios = screen.getAllByRole("radio", { name: "Intake" });
+    await fireEvent.click(radios[0]!);
+
+    expect(mockSetIntakeQueue).toHaveBeenCalledWith({ queueId: null });
+  });
+
+  it("shows success toast after clearing intake queue", async () => {
+    mockSetIntakeQueue.mockResolvedValue({ success: true });
+    mockIntakeQueueData = { queueId: "q-1" };
+    render(QueuesSection);
+    await tick();
+
+    const radios = screen.getAllByRole("radio", { name: "Intake" });
+    await fireEvent.click(radios[0]!);
+    await tick();
+
+    await waitFor(() => {
+      expect(mockToastShow).toHaveBeenCalledWith(
+        "Intake queue designation removed",
+      );
+    });
+  });
+
+  it("shows error toast when clearing intake queue fails", async () => {
+    mockSetIntakeQueue.mockRejectedValue(new Error("fail"));
+    mockIntakeQueueData = { queueId: "q-1" };
+    render(QueuesSection);
+    await tick();
+
+    const radios = screen.getAllByRole("radio", { name: "Intake" });
+    await fireEvent.click(radios[0]!);
+    await tick();
+
+    await waitFor(() => {
+      expect(mockToastShow).toHaveBeenCalledWith(
+        "Could not remove intake queue designation",
+      );
+    });
+  });
+
+  it("announces to live region after successful set", async () => {
+    mockSetIntakeQueue.mockResolvedValue({ success: true });
+    mockIntakeQueueData = { queueId: null };
+    render(QueuesSection);
+    await tick();
+
+    const radios = screen.getAllByRole("radio", { name: "Intake" });
+    await fireEvent.click(radios[0]!);
+    await tick();
+
+    await waitFor(() => {
+      expect(mockAnnounce).toHaveBeenCalledWith(
+        "polite",
+        "Intake queue updated",
+      );
+    });
   });
 });

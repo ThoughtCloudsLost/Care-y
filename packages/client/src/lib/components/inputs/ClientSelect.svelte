@@ -7,31 +7,21 @@
   Dropdown styled to match Konsta Popover (glass backdrop, rounded corners).
 -->
 <script lang="ts" module>
-  export type ClientSelection =
-    | { mode: "existing"; clientId: string; displayAlias: string }
-    | { mode: "new"; token: string }
-    | null;
+  // Canonical definitions live in client-select-types.ts (plain .ts so
+  // eslint can resolve them); re-exported here for existing importers.
+  import type {
+    ClientSelection,
+    CollisionInfo,
+    ClientSearchResult,
+    PhoneLookupResult,
+  } from "./client-select-types.js";
 
-  export interface CollisionInfo {
-    clientId: string;
-    alias: string;
-    openTicketId: string;
-  }
-
-  export interface ClientSearchResult {
-    id: string;
-    alias: string;
-    maskedPhone: string;
-  }
-
-  export type PhoneLookupResult =
-    | { found: false; token: string }
-    | {
-        found: true;
-        clientId: string;
-        alias: string;
-        openTicketId: string | null;
-      };
+  export type {
+    ClientSelection,
+    CollisionInfo,
+    ClientSearchResult,
+    PhoneLookupResult,
+  };
 </script>
 
 <script lang="ts">
