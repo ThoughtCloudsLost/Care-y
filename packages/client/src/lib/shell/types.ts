@@ -48,6 +48,8 @@ export interface AppShellProps {
   ontabchange: (tabId: TabId) => void;
   /** Callback when the area indicator pill is tapped. */
   onareatap: (areaId: AreaId) => void;
+  /** Optional callback fired when the search overlay opens or closes. */
+  onsearchtoggle?: (open: boolean) => void;
   /** Page content rendered inside the shell. */
   children: Snippet;
 }

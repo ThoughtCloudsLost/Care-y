@@ -5,6 +5,8 @@
     "moduleResolution": "bundler",
     "target": "ES2022",
     "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "allowJs": true,
+    "checkJs": true,
     "outDir": "dist",
     "paths": {
       "$lib/trpc": ["./src/stubs/trpc.ts"],
@@ -30,6 +32,7 @@
   },
   "include": [
     "src/**/*.ts",
+    "src/**/*.js",
     "src/**/*.svelte",
     "vite.ts",
     "vite.config.ts",

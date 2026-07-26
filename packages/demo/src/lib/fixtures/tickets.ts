@@ -7,7 +7,10 @@
  */
 
 import type { DemoTicket, DemoFollowUp } from "./types.js";
-import type { DataCardProps } from "$lib/tickets/ticket-card-props.js";
+import type {
+  DataCardProps,
+  TicketLikeRecord,
+} from "$lib/tickets/ticket-card-props.js";
 import type { RawFollowUpPreview } from "$lib/tickets/preview-loader.svelte.js";
 import type { DecryptResult } from "$lib/crypto/decrypt-result.js";
 import type { DisplayStatus } from "$lib/tickets/display-status.js";
@@ -570,22 +573,7 @@ export function mapToPreviewFollowUps(
  * Build a TicketLikeRecord from a DemoTicket, suitable for
  * mapTicketDisplayFields or any consumer expecting that shape.
  */
-export function mapToTicketLikeRecord(ticket: DemoTicket): {
-  readonly id: string;
-  readonly queueId: string;
-  readonly encryptedQueueName: unknown;
-  readonly status: "open" | "closed";
-  readonly onHold: boolean;
-  readonly priority: "low" | "normal" | "high" | "urgent";
-  readonly encryptedTitle: unknown;
-  readonly keyWrap: unknown;
-  readonly clientAlias: string;
-  readonly assignedTo: string | null;
-  readonly assignedDisplayName: unknown;
-  readonly createdAt: string;
-  readonly lastActivityAt: string | null;
-  readonly followUpCount: number;
-} {
+export function mapToTicketLikeRecord(ticket: DemoTicket): TicketLikeRecord {
   return {
     id: ticket.id,
     queueId: ticket.queueId,
@@ -612,12 +600,12 @@ export function buildSeedData(tickets: readonly DemoTicket[]): {
   titles: Record<string, string>;
   descriptions: Record<string, string>;
   followUps: Record<string, string>;
-  previews: Record<string, unknown[]>;
+  previews: Record<string, RawFollowUpPreview[]>;
 } {
   const titles: Record<string, string> = {};
   const descriptions: Record<string, string> = {};
   const followUps: Record<string, string> = {};
-  const previews: Record<string, unknown[]> = {};
+  const previews: Record<string, RawFollowUpPreview[]> = {};
 
   for (const ticket of tickets) {
     if (ticket.keyWrap !== null) {

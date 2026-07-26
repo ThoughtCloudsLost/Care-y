@@ -17,6 +17,7 @@
   "dependencies": {
     "@care-y/shared": "workspace:*",
     "@lucide/svelte": "1.16.0",
+    "@tanstack/svelte-query": "6.1.33",
     "konsta": "5.0.9"
   },
   "devDependencies": {

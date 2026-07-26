@@ -1,69 +1,74 @@
 <!--
-  Demo site shell: scene picker, light/dark toggle, caption bar with
-  step dots, and restart button. Single column on small viewports.
+  Demo site outer page: two-column layout with phone frame and
+  narrative panel on desktop, stacked on mobile. Hosts the router,
+  query client, feature list, and dark mode toggle.
 -->
 <script lang="ts">
   import * as m from "$lib/paraglide/messages.js";
-  import { Segmented, SegmentedButton, Button } from "konsta/svelte";
+  import { Button } from "konsta/svelte";
   import { RotateCcw, Sun, Moon } from "@lucide/svelte";
   import DemoSurface from "$demo/DemoSurface.svelte";
-  import TicketsFlowDemo from "$demo/flows/TicketsFlowDemo.svelte";
-  import SearchFlowDemo from "$demo/flows/SearchFlowDemo.svelte";
-  import type { DemoScript } from "$demo/engine/script.svelte.js";
+  import NarrativePanel from "$demo/NarrativePanel.svelte";
+  import FeatureList from "$demo/FeatureList.svelte";
+  import { createDemoRouter } from "$demo/router.svelte.js";
+  import { createDemoQueryClient } from "$demo/demo-query-client.js";
+  import { demoSeed, demoReset } from "$lib/crypto/context.js";
+  import { demoResetTrpc } from "$lib/trpc/index.js";
 
-  type Scene = "tickets" | "search";
-
-  let scene: Scene = $state("tickets");
   let dark = $state(false);
 
-  let scriptHandle: DemoScript | undefined = $state(undefined);
+  // Mirror the product's applyScheme/applyGlassMode (theme.svelte.ts):
+  // the glass styles are anchored to html-level classes
+  // (html.glass-dark and friends), so scheme classes must live on
+  // documentElement, not on the frame. Glass mode follows the scheme
+  // (the product's "auto" behavior).
+  $effect(() => {
+    const cl = document.documentElement.classList;
+    cl.toggle("dark", dark);
+    cl.toggle("light", !dark);
+    cl.toggle("glass-dark", dark);
+    cl.toggle("glass-light", !dark);
+    document.documentElement.style.colorScheme = dark ? "dark" : "light";
+  });
 
-  // $derived.by closures: at the top level TS narrows scriptHandle to its
-  // initializer (undefined) because the bind: assignment is invisible to
-  // control-flow analysis; inside a closure the declared type applies.
-  const caption = $derived.by(() => scriptHandle?.current.caption() ?? "");
-  const stepIndex = $derived.by(() => scriptHandle?.index ?? 0);
-  const stepTotal = $derived.by(() => scriptHandle?.steps.length ?? 0);
-  const stepLabel = $derived(
-    stepTotal > 0
-      ? m.demo_step_of({
-          step: String(stepIndex + 1),
-          total: String(stepTotal),
-        })
-      : "",
-  );
+  const router = createDemoRouter();
+  const queryClient = createDemoQueryClient();
+
+  let surfaceRef: DemoSurface | undefined = $state();
+
+  // Seed the org value cache with the demo user's display name so
+  // the navbar avatar initials resolve (AppShell reads orgDecryptCache
+  // under the key "me:display_name").
+  demoSeed({
+    orgValues: { "me:display_name": "Jordan Kim" },
+  });
 
   function handleRestart(): void {
-    scriptHandle?.restart();
+    demoReset();
+    demoResetTrpc();
+    router.reset();
+    // Re-seed after reset so the avatar stays resolved
+    demoSeed({
+      orgValues: { "me:display_name": "Jordan Kim" },
+    });
   }
 
-  function handleSceneChange(next: Scene): void {
-    if (next === scene) return;
-    scriptHandle = undefined;
-    scene = next;
+  function handleTriggerSearch(): void {
+    if (surfaceRef) {
+      surfaceRef.triggerSearch();
+    } else {
+      // Fallback: navigate via router if surface ref not available
+      router.navigate("search");
+    }
   }
 </script>
 
 <div class="demo-page">
   <header class="demo-header">
     <h1 class="demo-title">{m.demo_app_title()}</h1>
+    <p class="demo-subtitle">{m.demo_subtitle()}</p>
 
     <div class="demo-controls">
-      <Segmented strong>
-        <SegmentedButton
-          active={scene === "tickets"}
-          onclick={() => handleSceneChange("tickets")}
-        >
-          {m.demo_scene_tickets()}
-        </SegmentedButton>
-        <SegmentedButton
-          active={scene === "search"}
-          onclick={() => handleSceneChange("search")}
-        >
-          {m.demo_scene_search()}
-        </SegmentedButton>
-      </Segmented>
-
       <button
         class="theme-toggle"
         onclick={() => (dark = !dark)}
@@ -76,50 +81,35 @@
           <Moon size={20} />
         {/if}
       </button>
-    </div>
-  </header>
 
-  <div class="demo-stage">
-    <DemoSurface {dark} bind:script={scriptHandle}>
-      {#if scene === "tickets"}
-        <TicketsFlowDemo bind:script={scriptHandle} />
-      {:else}
-        <SearchFlowDemo bind:script={scriptHandle} />
-      {/if}
-    </DemoSurface>
-  </div>
-
-  <footer class="demo-caption-bar">
-    <div class="caption-text">
-      {#if caption}
-        <span class="caption-label">{caption}</span>
-      {:else}
-        <span class="caption-hint">{m.demo_tap_hint()}</span>
-      {/if}
-    </div>
-
-    <div class="caption-controls">
-      {#if stepTotal > 0}
-        <div class="step-dots" aria-label={stepLabel}>
-          {#each { length: stepTotal } as _, i (i)}
-            <span class="dot" class:active={i === stepIndex} aria-hidden="true"
-            ></span>
-          {/each}
-          <span class="sr-only">{stepLabel}</span>
-        </div>
-      {/if}
-
-      <Button
-        small
-        clear
-        onclick={handleRestart}
-        disabled={!scriptHandle}
-        aria-label={m.demo_restart()}
-      >
+      <Button small clear onclick={handleRestart} aria-label={m.demo_restart()}>
         <RotateCcw size={16} />
       </Button>
     </div>
-  </footer>
+  </header>
+
+  <div class="demo-layout">
+    <div class="demo-phone-column">
+      <div class="demo-stage">
+        <DemoSurface
+          {dark}
+          {router}
+          {queryClient}
+          orgName="CARE-Y"
+          bind:this={surfaceRef}
+        />
+      </div>
+    </div>
+
+    <div class="demo-side-column">
+      <FeatureList {router} ontriggersearch={handleTriggerSearch} />
+      <NarrativePanel
+        feature={router.feature}
+        detail={router.detail}
+        searchOpen={router.searchOpen}
+      />
+    </div>
+  </div>
 </div>
 
 <style>
@@ -142,26 +132,28 @@
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: 0.75rem;
+    gap: 0.25rem;
     width: 100%;
-    max-width: 500px;
+    max-width: 960px;
+    text-align: center;
   }
 
   .demo-title {
-    font-size: 1.25rem;
-    font-weight: 600;
+    font-size: 1.5rem;
+    font-weight: 700;
     margin: 0;
+  }
+
+  .demo-subtitle {
+    font-size: 0.9375rem;
+    color: #86868b;
+    margin: 0 0 0.5rem;
   }
 
   .demo-controls {
     display: flex;
     align-items: center;
-    gap: 0.75rem;
-    width: 100%;
-  }
-
-  .demo-controls :global(.k-segmented) {
-    flex: 1;
+    gap: 0.5rem;
   }
 
   .theme-toggle {
@@ -182,75 +174,75 @@
     background: #f0f0f0;
   }
 
+  .demo-layout {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 1.5rem;
+    width: 100%;
+    max-width: 960px;
+  }
+
+  .demo-phone-column {
+    width: 100%;
+    max-width: 420px;
+  }
+
   .demo-stage {
     width: 100%;
-    max-width: 500px;
-    /* Give the frame enough vertical space.
-       On small screens the ResizeObserver will scale down. */
     aspect-ratio: 414 / 868;
-    max-height: calc(100vh - 200px);
+    max-height: calc(100vh - 240px);
   }
 
-  .demo-caption-bar {
+  .demo-side-column {
     display: flex;
-    align-items: center;
-    justify-content: space-between;
+    flex-direction: column;
+    gap: 1rem;
     width: 100%;
-    max-width: 500px;
-    gap: 0.5rem;
-    padding: 0.5rem 0;
+    max-width: 420px;
   }
 
-  .caption-text {
-    flex: 1;
-    min-width: 0;
+  /* Outer page follows the html-level scheme classes the toggle sets */
+  :global(html.dark) .demo-page {
+    background: #161618;
+    color: #f5f5f7;
   }
 
-  .caption-label {
-    font-size: 0.875rem;
-    font-weight: 500;
-    color: #1d1d1f;
+  :global(html.dark) .demo-subtitle {
+    color: #98989d;
   }
 
-  .caption-hint {
-    font-size: 0.875rem;
-    color: #86868b;
+  :global(html.dark) .theme-toggle {
+    background: #2c2c2e;
+    border-color: #3a3a3c;
+    color: #f5f5f7;
   }
 
-  .caption-controls {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    flex-shrink: 0;
+  :global(html.dark) .theme-toggle:hover {
+    background: #3a3a3c;
   }
 
-  .step-dots {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-  }
+  /* Desktop: two-column side by side */
+  @media (min-width: 900px) {
+    .demo-layout {
+      flex-direction: row;
+      align-items: flex-start;
+      gap: 2rem;
+    }
 
-  .dot {
-    width: 6px;
-    height: 6px;
-    border-radius: 50%;
-    background: #d1d1d6;
-    transition: background 0.2s;
-  }
+    .demo-phone-column {
+      flex: 0 0 420px;
+    }
 
-  .dot.active {
-    background: #007aff;
-  }
+    .demo-side-column {
+      flex: 1;
+      min-width: 0;
+      max-width: none;
+      padding-top: 1rem;
+    }
 
-  .sr-only {
-    position: absolute;
-    width: 1px;
-    height: 1px;
-    padding: 0;
-    margin: -1px;
-    overflow: hidden;
-    clip: rect(0, 0, 0, 0);
-    white-space: nowrap;
-    border-width: 0;
+    .demo-stage {
+      max-height: calc(100vh - 200px);
+    }
   }
 </style>

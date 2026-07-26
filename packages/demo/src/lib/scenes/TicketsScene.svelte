@@ -1,16 +1,20 @@
 <!--
-  Tickets + conversation flow for the demo.
+  Tickets scene: renders inside AppShell as the page content for the
+  tickets tab. Shows the ticket list with skeleton-to-descramble reveal,
+  view switching, and card tap navigation. When router.detail is set,
+  shows the conversation detail view with bubble reveals, error/retry
+  beat, and scripted typing reply.
 
-  The script walks from skeleton rows through a descramble wave and
-  ViewSwitcher hops (list/cards/grid), then a card tap opens the
-  conversation, whose bubbles reveal with an ERROR/retry beat before
-  a scripted typing reply and a restart.
+  Seeds the TanStack query cache with fixture tickets under the
+  production query keys so the shell's search providers can read them.
 
-  Uses a LOCAL $state viewMode (never the persisted store).
-  Page orchestration is demo-reimplemented (no route imports).
+  Uses LOCAL $state viewMode (never the persisted store).
 -->
 <script lang="ts">
   import { untrack } from "svelte";
+  import { useQueryClient } from "@tanstack/svelte-query";
+  import { goto } from "$app/navigation";
+  import { resolve } from "$app/paths";
   import * as m from "$lib/paraglide/messages.js";
   import {
     createDemoScript,
@@ -27,6 +31,7 @@
     mapToCardProps,
     mapToPreviewFollowUps,
     buildSeedData,
+    mapToTicketLikeRecord,
   } from "$demo/fixtures/tickets.js";
   import { buildScriptedReply } from "$demo/fixtures/conversation.js";
   import type { DemoTicket, DemoFollowUp } from "$demo/fixtures/types.js";
@@ -36,23 +41,25 @@
     demoReset,
     getTicketDecryptCache,
   } from "$lib/crypto/context";
+  import {
+    resolveAsyncDecrypt,
+    type DecryptResult,
+  } from "$lib/crypto/decrypt-result.js";
+  import { resolveQueueAppearance } from "$lib/utils/queue-appearance.js";
+  import { followUpKind } from "$lib/tickets/follow-up-utils.js";
+  import { ticketsKeys } from "$lib/query/keys.js";
   import type { DataCardProps } from "$lib/tickets/ticket-card-props.js";
   import { makeSkeletonCardProps } from "$lib/tickets/skeleton-card-props.js";
+  import type { ViewMode } from "$lib/stores/view-mode.svelte.js";
   import TicketCard from "$lib/components/tickets/TicketCard.svelte";
   import ViewSwitcher from "$lib/components/ViewSwitcher.svelte";
-  import ConversationDemo from "./ConversationDemo.svelte";
-
-  type ViewMode = "list" | "cards" | "grid";
-
-  // -----------------------------------------------------------------------
-  // Props (bindable script handle for App's caption bar)
-  // -----------------------------------------------------------------------
-
-  interface Props {
-    script?: DemoScript | undefined;
-  }
-
-  let { script = $bindable(undefined) }: Props = $props();
+  import EncryptedTitle from "$lib/components/EncryptedTitle.svelte";
+  import StatusMark from "$lib/components/StatusMark.svelte";
+  import PriorityStamp from "$lib/components/PriorityStamp.svelte";
+  import QueueGlyph from "$lib/components/shared/QueueGlyph.svelte";
+  import ConversationBubble from "$lib/components/tickets/ConversationBubble.svelte";
+  import SystemEvent from "$lib/components/tickets/SystemEvent.svelte";
+  import DecryptPlaceholder from "$lib/components/DecryptPlaceholder.svelte";
 
   // -----------------------------------------------------------------------
   // Internal state
@@ -60,10 +67,43 @@
 
   let viewMode: ViewMode = $state("list");
   let showSkeleton = $state(true);
-  let activeTicket: DemoTicket | null = $state(null);
   let appendedFollowUps: DemoFollowUp[] = $state([]);
   let typingText = $state("");
   let showTypingDock = $state(false);
+
+  const queryClient = useQueryClient();
+  const ticketCache = getTicketDecryptCache();
+  const reveal = createRevealController();
+  let tickets: DemoTicket[] = $state(createDemoTickets());
+
+  // -----------------------------------------------------------------------
+  // Router access (read from DemoSurface's reactive props via $app/navigation)
+  //
+  // The scene does not import the router directly. Card taps call
+  // goto("/tickets/<id>"), intercepted by the demo navigation handler.
+  // The router sets `detail`, which DemoSurface passes down. For reading
+  // the detail state, we use a local reactive variable updated by an
+  // $effect that watches the "active ticket" derivation from the router.
+  //
+  // Instead of coupling to the router, we derive activeTicket from the
+  // query cache seeded tickets and the detail ID set by the parent.
+  // The parent (DemoSurface) passes the scene component with no props;
+  // the scene reads the detail from the URL interception pattern.
+  // -----------------------------------------------------------------------
+
+  // The scene needs to know which ticket is "open" for detail view.
+  // It tracks this by watching `goto` calls: when ontap fires, it calls
+  // goto("/tickets/<id>"), the router sets detail, and DemoSurface
+  // re-renders the scene. But the scene itself is a static component
+  // (no props from DemoSurface). We track detail internally by hooking
+  // into the ontap callback. The router handles outer narrative sync.
+  let activeTicketId: string | null = $state(null);
+
+  const activeTicket: DemoTicket | null = $derived(
+    activeTicketId !== null
+      ? (tickets.find((t) => t.id === activeTicketId) ?? null)
+      : null,
+  );
 
   /** Pending timers that must be cleared on destroy and restart. */
   const pendingTimers: ReturnType<typeof setTimeout>[] = [];
@@ -79,25 +119,40 @@
     pendingTimers.length = 0;
   }
 
-  const ticketCache = getTicketDecryptCache();
-  const reveal = createRevealController();
-  let tickets: DemoTicket[] = $state(createDemoTickets());
+  // -----------------------------------------------------------------------
+  // Query cache seeding for search
+  // -----------------------------------------------------------------------
+
+  function seedQueryCache(): void {
+    const records = tickets.map(mapToTicketLikeRecord);
+    queryClient.setQueryData(ticketsKeys.list({}), records);
+  }
+
+  // Seed on mount
+  seedQueryCache();
 
   // -----------------------------------------------------------------------
   // Card interaction
   // -----------------------------------------------------------------------
 
   function handleCardTap(ticketId: string): void {
-    // During the "tap card" step, any card tap advances the script
-    if (scriptHandle === undefined) return;
-    const step = scriptHandle.current;
-    if (step.id !== "tap-card") return;
-
-    const t = tickets.find((tk) => tk.id === ticketId);
-    if (t !== undefined) {
-      activeTicket = t;
+    // Set local detail state so the conversation view renders
+    activeTicketId = ticketId;
+    // Navigate via goto so the demo router picks it up for narrative sync
+    void goto(resolve(`/tickets/${ticketId}`));
+    // If we are on the tap-card step, advance the script
+    if (scriptHandle !== undefined) {
+      const step = scriptHandle.current;
+      if (step.id === "tap-card") {
+        scriptHandle.advance();
+      }
     }
-    scriptHandle.advance();
+  }
+
+  function handleBack(): void {
+    activeTicketId = null;
+    // Navigate back to the list so the router clears detail
+    void goto(resolve("/tickets"));
   }
 
   function cardPropsForTicket(ticket: DemoTicket): DataCardProps {
@@ -108,6 +163,31 @@
   const skeletonCards: DataCardProps[] = Array.from({ length: 5 }, () =>
     makeSkeletonCardProps(),
   );
+
+  // -----------------------------------------------------------------------
+  // Conversation detail helpers
+  // -----------------------------------------------------------------------
+
+  const queueAppearance = resolveQueueAppearance(null, null);
+
+  function deriveTitleResult(ticket: DemoTicket): DecryptResult {
+    return resolveAsyncDecrypt(
+      ticketCache.get(ticket.id),
+      ticket.keyWrap !== null,
+    );
+  }
+
+  function resolveFollowUpContent(
+    ticket: DemoTicket,
+    fu: DemoFollowUp,
+  ): DecryptResult {
+    if (fu.source === "system") {
+      return { status: "ready", value: fu.content };
+    }
+    const cacheKey = `fu:${fu.ticketId}:${fu.id}`;
+    const raw = ticketCache.get(cacheKey);
+    return resolveAsyncDecrypt(raw, ticket.keyWrap !== null);
+  }
 
   // -----------------------------------------------------------------------
   // Constants
@@ -131,9 +211,6 @@
 
   // -----------------------------------------------------------------------
   // Step definitions
-  //
-  // Closures read `tickets` and `activeTicket` through the module-scope
-  // variables so they always see the current value (post-restart too).
   // -----------------------------------------------------------------------
 
   const steps: DemoStep[] = [
@@ -145,7 +222,7 @@
       autoDelayMs: 1800,
       enter: () => {
         showSkeleton = true;
-        activeTicket = null;
+        activeTicketId = null;
         viewMode = "list";
         appendedFollowUps = [];
         typingText = "";
@@ -180,8 +257,7 @@
           }
         }
 
-        // Schedule preview follow-up content reveals into the followUp cache
-        // TicketPreview reads via followUpCache.decryptContent(fu.id, ...)
+        // Schedule preview follow-up content reveals
         for (const ticket of tickets) {
           if (ticket.keyWrap === null) continue;
           const previews = mapToPreviewFollowUps(ticket);
@@ -405,7 +481,7 @@
       autoDelayMs: 2000,
       enter: () => {
         clearAllTimers();
-        activeTicket = null;
+        activeTicketId = null;
         appendedFollowUps = [];
         showTypingDock = false;
         typingText = "";
@@ -413,18 +489,21 @@
         viewMode = "list";
         demoReset();
         tickets = createDemoTickets();
+        // Re-seed display name for navbar avatar
+        demoSeed({
+          orgValues: { "me:display_name": "Jordan Kim" },
+        });
+        // Re-seed query cache
+        seedQueryCache();
         scriptHandle?.restart();
       },
     },
   ];
 
   // -----------------------------------------------------------------------
-  // Script initialization (runs once, outside $effect)
+  // Script initialization
   // -----------------------------------------------------------------------
 
-  // Plain let, not $state: the handle is only read inside closures and its
-  // reactivity lives in the DemoScript getters themselves. $state here would
-  // trip state_referenced_locally on the bindable assignment below.
   let scriptHandle: DemoScript | undefined = undefined;
 
   const ctx: DemoScriptContext = {
@@ -434,10 +513,7 @@
     },
   };
 
-  // Initialize synchronously (not inside $effect, which would re-run
-  // on every state mutation the enter callbacks perform).
   scriptHandle = untrack(() => createDemoScript(steps, ctx));
-  script = scriptHandle;
 
   // Clean up all timers when the component is destroyed
   $effect(() => {
@@ -448,9 +524,101 @@
   });
 </script>
 
-<div class="tickets-flow">
+<div class="tickets-scene">
   {#if activeTicket !== null}
-    <ConversationDemo ticket={activeTicket} {appendedFollowUps} />
+    <!-- Conversation detail view -->
+    {@const ticket = activeTicket}
+    {@const titleResult = deriveTitleResult(ticket)}
+    {@const allFollowUps = [...ticket.followUps, ...appendedFollowUps]}
+
+    <button
+      type="button"
+      class="conv-back"
+      onclick={handleBack}
+      aria-label={m.common_back()}
+    >
+      <svg width="10" height="17" viewBox="0 0 10 17" aria-hidden="true">
+        <path
+          d="M9 1L1 8.5L9 16"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          fill="none"
+        />
+      </svg>
+    </button>
+
+    <header class="conv-header">
+      <StatusMark status={ticket.displayStatus} />
+      <div class="conv-header-main">
+        <span class="conv-title">
+          {#if titleResult.status === "denied" || titleResult.status === "error"}
+            <EncryptedTitle />
+          {:else}
+            <DecryptPlaceholder
+              result={titleResult}
+              ciphertext={ticket.encryptedTitle}
+              length={25}
+            />
+          {/if}
+        </span>
+        <span class="conv-meta">
+          <QueueGlyph appearance={queueAppearance} size={12} />
+          <span class="conv-queue">{ticket.queueName}</span>
+          <span class="conv-alias">{ticket.clientAlias}</span>
+          {#if ticket.priority !== "normal"}
+            <PriorityStamp priority={ticket.priority} />
+          {/if}
+        </span>
+      </div>
+    </header>
+
+    <div class="conv-thread">
+      {#each allFollowUps as fu (fu.id)}
+        {@const kind = followUpKind(fu)}
+        {@const result = resolveFollowUpContent(ticket, fu)}
+        {#if kind === "system"}
+          <SystemEvent
+            type={fu.type}
+            timestamp={fu.createdAt.toISOString()}
+            eventParams={fu.eventParams}
+          />
+        {:else if kind === "note"}
+          <ConversationBubble
+            direction="sent"
+            source="volunteer"
+            timestamp={fu.createdAt.toISOString()}
+          >
+            <span class="note-label">{m.demo_conversation_note_label()}</span>
+            <span class="bubble-text">
+              <DecryptPlaceholder
+                {result}
+                ciphertext={fu.encryptedContent}
+                length={30}
+                block
+              />
+            </span>
+          </ConversationBubble>
+        {:else}
+          <ConversationBubble
+            direction={fu.source === "client" ? "received" : "sent"}
+            speaker={fu.source === "client" ? ticket.clientAlias : undefined}
+            source={fu.source === "client" ? "client" : "volunteer"}
+            timestamp={fu.createdAt.toISOString()}
+          >
+            <span class="bubble-text">
+              <DecryptPlaceholder
+                {result}
+                ciphertext={fu.encryptedContent}
+                length={30}
+                block
+              />
+            </span>
+          </ConversationBubble>
+        {/if}
+      {/each}
+    </div>
 
     {#if showTypingDock}
       <div class="typing-dock">
@@ -469,14 +637,13 @@
       </div>
     {/if}
   {:else}
+    <!-- Ticket list view -->
     <div class="tickets-toolbar">
       <ViewSwitcher
         mode={viewMode}
         modes={["list", "cards", "grid"]}
-        onchange={(next: string) => {
-          if (next === "list" || next === "cards" || next === "grid") {
-            viewMode = next;
-          }
+        onchange={(next: ViewMode) => {
+          viewMode = next;
         }}
       />
     </div>
@@ -501,13 +668,14 @@
 </div>
 
 <style>
-  .tickets-flow {
+  .tickets-scene {
     display: flex;
     flex-direction: column;
     height: 100%;
     overflow: hidden;
   }
 
+  /* Ticket list styles */
   .tickets-toolbar {
     display: flex;
     justify-content: flex-end;
@@ -527,6 +695,92 @@
     grid-template-columns: repeat(2, 1fr);
     gap: 8px;
     padding: 8px;
+  }
+
+  /* Conversation detail styles */
+  .conv-back {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 8px 16px;
+    background: var(--raised);
+    border: none;
+    border-bottom: 1px solid var(--hair);
+    color: var(--brand-text, #007aff);
+    font-size: var(--text-sm);
+    cursor: pointer;
+    flex-shrink: 0;
+  }
+
+  .conv-header {
+    display: grid;
+    grid-template-columns: 22px 1fr;
+    column-gap: 10px;
+    align-items: start;
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--hair);
+    background: var(--raised);
+    flex-shrink: 0;
+  }
+
+  .conv-header-main {
+    min-width: 0;
+  }
+
+  .conv-title {
+    display: block;
+    font-size: var(--text-md);
+    font-weight: 600;
+    color: var(--ink);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .conv-meta {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: var(--text-sm);
+    color: var(--muted);
+    margin-top: 2px;
+  }
+
+  .conv-queue {
+    white-space: nowrap;
+  }
+
+  .conv-alias {
+    white-space: nowrap;
+  }
+
+  .conv-alias::before {
+    content: "\00B7";
+    margin-right: 6px;
+  }
+
+  .conv-thread {
+    flex: 1;
+    overflow-y: auto;
+    padding: 12px 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .bubble-text {
+    overflow-wrap: break-word;
+  }
+
+  .note-label {
+    display: block;
+    font-size: 0.65625rem;
+    font-weight: 400;
+    letter-spacing: 0.02em;
+    color: var(--muted);
+    margin-bottom: 2px;
+    font-style: italic;
   }
 
   /* Typing dock at the bottom of conversation */
