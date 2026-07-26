@@ -118,6 +118,8 @@ export const adminKeys = {
     [...adminKeys.reports(), "resolutionTrends"] as const,
   reportQueueStats: () => [...adminKeys.reports(), "queueStats"] as const,
   queueAssignments: () => [...adminKeys.all, "queue-assignments"] as const,
+  quarantine: () => [...adminKeys.all, "quarantine"] as const,
+  intakeQueue: () => [...adminKeys.all, "intakeQueue"] as const,
 };
 
 export const queueKeys = {
