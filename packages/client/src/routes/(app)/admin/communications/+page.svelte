@@ -1,6 +1,6 @@
 <script lang="ts">
   import { Permission } from "@care-y/shared";
-  import { Phone, Ban, Mic, MessageSquare, ShieldAlert } from "@lucide/svelte";
+  import { Phone, Ban, Mic, MessageSquare, PhoneMissed } from "@lucide/svelte";
   import * as m from "$lib/paraglide/messages.js";
   import CollapsibleSectionPage from "$lib/components/admin/CollapsibleSectionPage.svelte";
   import type { SectionDef } from "$lib/components/admin/collapsible-section-types.js";
@@ -42,7 +42,7 @@
     {
       id: "quarantine",
       label: m.admin_tab_quarantine,
-      icon: ShieldAlert,
+      icon: PhoneMissed,
       permission: Permission.MANAGE_INFRASTRUCTURE,
       component: QuarantineSection,
     },

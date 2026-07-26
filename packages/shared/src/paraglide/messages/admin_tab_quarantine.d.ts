@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "Quarantine" |
+* | "Unrouted" |
 *
 * @param {Admin_Tab_QuarantineInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

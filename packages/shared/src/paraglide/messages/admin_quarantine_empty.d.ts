@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "No quarantined voicemails." |
+* | "No unrouted voicemails." |
 *
 * @param {Admin_Quarantine_EmptyInputs} inputs
 * @param {{ locale?: "en" | "es" }} options
