@@ -34,8 +34,13 @@ const MAX_BACKOFF_MS = 30_000;
 
 export function handleEvent(event: SSEEvent, queryClient: QueryClient): void {
   switch (event.type) {
-    case "ticket:updated":
-    case "ticket:created":
+    case "ticket_created":
+    case "ticket_assigned":
+    case "ticket_closed":
+    case "ticket_reopened":
+    case "ticket_escalated":
+    case "mention":
+    case "merge_completed":
       void queryClient.invalidateQueries({ queryKey: ticketsKeys.all });
       if (event.ticketId !== undefined) {
         void queryClient.invalidateQueries({
@@ -43,7 +48,7 @@ export function handleEvent(event: SSEEvent, queryClient: QueryClient): void {
         });
       }
       break;
-    case "followup:created":
+    case "followup_added":
       if (event.ticketId !== undefined) {
         void queryClient.invalidateQueries({
           queryKey: ticketKeys.followUps(event.ticketId),
