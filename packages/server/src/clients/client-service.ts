@@ -20,6 +20,7 @@ import type {
 } from "../tickets/merge-service.js";
 import { NotFoundError, ConflictError } from "../errors.js";
 import { ErrorCode } from "@care-y/shared";
+import type { TicketStatus } from "@care-y/shared";
 import { sanitizeLike } from "../utils/sql.js";
 
 // ---------------------------------------------------------------------------
@@ -38,10 +39,13 @@ export interface ClientListRecord {
 export interface ClientTicketRecord {
   readonly id: string;
   readonly encryptedTitle: Buffer;
-  readonly status: string;
+  readonly status: TicketStatus;
   readonly priority: string;
   readonly createdAt: Date;
   readonly keyGeneration: string;
+  readonly onHold: boolean;
+  /** Follow-up count, needed to derive the display status shape. */
+  readonly followUpCount: number;
 }
 
 export interface ClientDetailRecord extends ClientListRecord {
@@ -72,6 +76,10 @@ export interface ClientService {
     sortDirection: string;
     limit: number;
     cursor?: string;
+    hasApplications?: boolean;
+    createdAfter?: string;
+    createdBefore?: string;
+    includeMerged?: boolean;
   }): Promise<ClientListRecord[]>;
 
   getById(clientId: string): Promise<ClientDetailRecord>;
@@ -146,13 +154,53 @@ export function createClientService(deps: ClientServiceDeps): ClientService {
             .select(eb.fn.countAll<number>().as("cnt"))
             .whereRef("t.client_id", "=", "c.id")
             .as("ticketCount"),
-        )
-        .where("c.merged_into", "is", null);
+        );
+      // Exclude merged clients by default; include them only when asked
+      if (input.includeMerged !== true) {
+        query = query.where("c.merged_into", "is", null);
+      }
 
       // Search filter (alias ILIKE)
       if (input.query.length > 0) {
         const escaped = sanitizeLike(input.query);
         query = query.where("c.alias", "ilike", `%${escaped}%`);
+      }
+
+      // Has-applications filter: reuses the tickets table that the count
+      // subquery already references. EXISTS/NOT EXISTS is the correct SQL
+      // form because ticketCount is a SELECT alias, not filterable in WHERE.
+      if (input.hasApplications === true) {
+        query = query.where((eb) =>
+          eb.exists(
+            eb
+              .selectFrom("tickets as tf")
+              .select(eb.lit(1).as("one"))
+              .whereRef("tf.client_id", "=", "c.id"),
+          ),
+        );
+      } else if (input.hasApplications === false) {
+        query = query.where((eb) =>
+          eb.not(
+            eb.exists(
+              eb
+                .selectFrom("tickets as tf")
+                .select(eb.lit(1).as("one"))
+                .whereRef("tf.client_id", "=", "c.id"),
+            ),
+          ),
+        );
+      }
+
+      // Created-date range filter
+      if (input.createdAfter !== undefined) {
+        query = query.where("c.created_at", ">=", new Date(input.createdAfter));
+      }
+      if (input.createdBefore !== undefined) {
+        query = query.where(
+          "c.created_at",
+          "<=",
+          new Date(input.createdBefore),
+        );
       }
 
       // Cursor pagination: keyset approach on (sortColumn, id)
@@ -246,17 +294,25 @@ export function createClientService(deps: ClientServiceDeps): ClientService {
 
       // Fetch tickets for this client
       const tickets = await db
-        .selectFrom("tickets")
+        .selectFrom("tickets as t")
         .select([
-          "id",
-          "encrypted_title",
-          "status",
-          "priority",
-          "created_at",
-          "key_generation",
+          "t.id",
+          "t.encrypted_title",
+          "t.status",
+          "t.priority",
+          "t.created_at",
+          "t.key_generation",
+          "t.on_hold",
         ])
-        .where("client_id", "=", clientId)
-        .orderBy("created_at", "desc")
+        .select((eb) =>
+          eb
+            .selectFrom("followups as f")
+            .select((sb) => sb.fn.countAll().as("cnt"))
+            .whereRef("f.ticket_id", "=", "t.id")
+            .as("followup_count"),
+        )
+        .where("t.client_id", "=", clientId)
+        .orderBy("t.created_at", "desc")
         .execute();
 
       // Fetch merge history
@@ -278,6 +334,8 @@ export function createClientService(deps: ClientServiceDeps): ClientService {
           priority: t.priority,
           createdAt: t.created_at,
           keyGeneration: t.key_generation,
+          onHold: t.on_hold,
+          followUpCount: Number(t.followup_count ?? 0),
         })),
         mergeHistory,
       };

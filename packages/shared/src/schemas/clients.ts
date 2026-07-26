@@ -17,6 +17,19 @@ export const clientListInputSchema = z.object({
   sortDirection: z.enum(["asc", "desc"]).default("asc"),
   limit: z.number().int().min(1).max(100).default(25),
   cursor: z.uuid().optional(),
+
+  // Filter: tri-state application ownership. true = has tickets, false = no
+  // tickets, undefined = no filtering. The list query already computes a
+  // ticket-count subquery so this reuses it without adding another.
+  hasApplications: z.boolean().optional(),
+
+  // Filter: created-date range. Each bound is independently optional.
+  createdAfter: z.iso.datetime().optional(),
+  createdBefore: z.iso.datetime().optional(),
+
+  // Filter: include clients that have been merged into another. Defaults to
+  // false, preserving the existing behavior of excluding merged clients.
+  includeMerged: z.boolean().default(false),
 });
 export type ClientListInput = z.infer<typeof clientListInputSchema>;
 

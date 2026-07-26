@@ -114,6 +114,7 @@ export function createClientRouter(deps: ClientRouterDeps) {
           ),
           ticketCount: r.ticketCount,
           createdAt: r.createdAt.toISOString(),
+          mergedInto: r.mergedInto,
         }));
       }),
     ),
@@ -145,8 +146,20 @@ export function createClientRouter(deps: ClientRouterDeps) {
             priority: t.priority,
             createdAt: t.createdAt.toISOString(),
             keyGeneration: t.keyGeneration,
+            onHold: t.onHold,
+            followUpCount: t.followUpCount,
           })),
-          mergeHistory: record.mergeHistory,
+          // The snapshot is org-key ciphertext the client produced at merge
+          // time. It travels back out as base64 so undoMerge can round-trip it.
+          mergeHistory: record.mergeHistory.map((e) => ({
+            id: e.id,
+            primaryClientId: e.primaryClientId,
+            secondaryClientId: e.secondaryClientId,
+            mergedAt: e.mergedAt.toISOString(),
+            snapshot: e.snapshot.toString("base64"),
+            undoLocked: e.undoLocked,
+            isUndone: e.isUndone,
+          })),
         };
       }),
     ),

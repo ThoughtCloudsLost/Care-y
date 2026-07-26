@@ -175,6 +175,25 @@ export const notificationKeys = {
   all: ["notifications"] as const,
 };
 
+/** Search, sort, and filter state that scopes a client list query. */
+export interface ClientListKeyParams {
+  readonly query: string;
+  readonly sortBy: string;
+  readonly sortDirection: string;
+  readonly hasApplications?: boolean;
+  readonly createdAfter?: string;
+  readonly createdBefore?: string;
+  readonly includeMerged?: boolean;
+}
+
+export const clientKeys = {
+  all: ["clients"] as const,
+  list: (params: ClientListKeyParams) =>
+    [...clientKeys.all, "list", params] as const,
+  detail: (clientId: string) =>
+    [...clientKeys.all, "detail", clientId] as const,
+};
+
 // Reaction summaries for internal notes, fetched by follow-up id set.
 // The set spans tickets on the list surface and is scoped to one ticket
 // on the detail surfaces, so the family lives outside both namespaces.

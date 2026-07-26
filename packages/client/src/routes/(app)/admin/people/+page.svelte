@@ -5,9 +5,16 @@
   import { goto, replaceState } from "$app/navigation";
   import { resolve } from "$app/paths";
   import { createQuery } from "@tanstack/svelte-query";
-  import { queueKeys, adminKeys } from "$lib/query/keys.js";
+  import { queueKeys, adminKeys, clientKeys } from "$lib/query/keys.js";
   import { Permission, RoleId } from "@care-y/shared";
-  import { Users, Layers, UserPlus, LayersPlus, Link2 } from "@lucide/svelte";
+  import {
+    Users,
+    Layers,
+    HeartHandshake,
+    UserPlus,
+    LayersPlus,
+    Link2,
+  } from "@lucide/svelte";
   import IconTabToggle from "$lib/components/shared/IconTabToggle.svelte";
   import * as m from "$lib/paraglide/messages.js";
   import { withTerms } from "$lib/terminology/with-terms.js";
@@ -33,12 +40,15 @@
   import type { PillDefinition } from "$lib/components/filters/filter-types.js";
   import { userFilterStore } from "$lib/stores/user-filters.svelte.js";
   import { queueFilterStore } from "$lib/stores/queue-filters.svelte.js";
+  import { clientFilterStore } from "$lib/stores/client-filters.svelte.js";
+  import { buildDateRangeLabel } from "$lib/tickets/ticket-list-utils.js";
   import {
     type PeopleTab,
     isPeopleTab,
     defaultTab,
     isSortField,
     isQueueSortField,
+    isClientSortField,
     isRoleId,
     isUserStatus,
     isKeyStatus,
@@ -50,14 +60,18 @@
   import ShellPopover from "$lib/shell/ShellPopover.svelte";
   import UsersSection from "$lib/components/admin/UsersSection.svelte";
   import QueuesSection from "$lib/components/admin/QueuesSection.svelte";
+  import ClientsSection from "$lib/components/admin/ClientsSection.svelte";
 
   const permissionsGetter = getCurrentPermissions();
   const permissions = $derived(permissionsGetter());
 
   const canManageUsers = $derived(permissions.has(Permission.MANAGE_USERS));
   const canManageQueues = $derived(permissions.has(Permission.MANAGE_QUEUES));
+  const canViewClients = $derived(permissions.has(Permission.VIEW_CLIENTS));
   const canInviteWithLink = $derived(permissions.has(Permission.MANAGE_ROLES));
-  const hasAccess = $derived(canManageUsers || canManageQueues);
+  const hasAccess = $derived(
+    canManageUsers || canManageQueues || canViewClients,
+  );
 
   $effect(() => {
     if (!hasAccess) void goto(resolve("/"));
@@ -132,6 +146,27 @@
   let usersSectionRef = $state<ReturnType<typeof UsersSection> | null>(null);
   let queuesSectionRef = $state<ReturnType<typeof QueuesSection> | null>(null);
 
+  // ── Clients query ──
+
+  // Capture filter state into a stable object for the query key so cached
+  // pages invalidate when any pill changes.
+  const clientFilterParams = $derived({
+    query: clientFilterStore.search,
+    sortBy: clientFilterStore.sort.field,
+    sortDirection: clientFilterStore.sort.direction,
+    hasApplications: clientFilterStore.hasApplications ?? undefined,
+    createdAfter: clientFilterStore.createdAfter?.toISOString(),
+    createdBefore: clientFilterStore.createdBefore?.toISOString(),
+    includeMerged: clientFilterStore.includeMerged || undefined,
+  });
+
+  const clientsQuery = createQuery(() => ({
+    queryKey: clientKeys.list(clientFilterParams),
+    queryFn: async () =>
+      requireRouter(trpc.clients, "clients").list.query(clientFilterParams),
+    enabled: activeTab === "clients" && canViewClients,
+  }));
+
   // ── Search overlay (SearchNavigator pattern) ──
 
   const searchMatches = $derived(
@@ -172,13 +207,17 @@
           ? navRightQueues
           : undefined;
 
+    const subnavbarSnippet =
+      activeTab === "users" && canManageUsers
+        ? usersSubnavbar
+        : activeTab === "clients" && canViewClients
+          ? clientsSubnavbar
+          : queuesSubnavbar;
+
     navbarCtx.current = {
       title: m.admin_people_title(),
       right: rightSnippet,
-      subnavbar:
-        activeTab === "users" && canManageUsers
-          ? usersSubnavbar
-          : queuesSubnavbar,
+      subnavbar: subnavbarSnippet,
       subnavbarHidden: () => scrollDir.hidden && !overlay.active,
     };
     return () => {
@@ -278,6 +317,157 @@
     ondatechange: noop,
     onclearall: noop,
   });
+
+  // ── Clients sort + search + filter config ──
+
+  const clientDispatch = createFilterDispatch({
+    fields: {
+      hasApplications: {
+        type: "single-select",
+        set: (v: string | null) => {
+          if (v === "true") clientFilterStore.setHasApplications(true);
+          else if (v === "false") clientFilterStore.setHasApplications(false);
+          else clientFilterStore.setHasApplications(null);
+        },
+      },
+      dateCreated: {
+        type: "date-range",
+        set: (from: Date | null, to: Date | null) => {
+          clientFilterStore.setDateRange(from, to);
+        },
+      },
+      includeMerged: {
+        type: "single-select",
+        set: (v: string | null) => {
+          clientFilterStore.setIncludeMerged(v === "yes");
+        },
+      },
+    },
+    sort: {
+      validate: isClientSortField,
+      set: (field: string, dir: "asc" | "desc") => {
+        if (isClientSortField(field)) clientFilterStore.setSort(field, dir);
+      },
+    },
+    clearAll: () => clientFilterStore.clearAll(),
+  });
+
+  const clientSortConfig: SortConfig = $derived({
+    label: m.clients_sort(withTerms()),
+    options: [
+      { field: "alias", label: m.clients_sort_alias() },
+      { field: "created_at", label: m.clients_sort_created() },
+      { field: "ticket_count", label: m.clients_sort_tickets() },
+    ],
+    currentField: clientFilterStore.sort.field,
+    currentDirection: clientFilterStore.sort.direction,
+    onchange: clientDispatch.handleSortChange,
+  });
+
+  const clientSavedFiltersConfig: SavedFiltersConfig = {
+    filters: [],
+    count: 0,
+    onapply: noop,
+    ondelete: noop,
+    ontoggleshare: noop,
+  };
+
+  // ── Client filter pill definitions ──
+
+  const hasTicketsOptions = $derived([
+    { value: "true", label: m.clients_filter_has_tickets_yes(withTerms()) },
+    { value: "false", label: m.clients_filter_has_tickets_no(withTerms()) },
+  ]);
+
+  const includeMergedOptions = $derived([
+    { value: "yes", label: m.clients_filter_include_merged_yes() },
+  ]);
+
+  const hasAppsSelected = $derived(
+    clientFilterStore.hasApplications === true
+      ? "true"
+      : clientFilterStore.hasApplications === false
+        ? "false"
+        : null,
+  );
+
+  const clientPills: PillDefinition[] = $derived([
+    {
+      id: "hasApplications",
+      label: m.clients_filter_has_tickets(withTerms()),
+      mode: "single",
+      options: hasTicketsOptions,
+      selected: hasAppsSelected,
+    },
+    {
+      id: "dateCreated",
+      label: m.clients_filter_date_created(),
+      mode: "date",
+      options: [],
+      selected: null,
+    },
+    {
+      id: "includeMerged",
+      label: m.clients_filter_include_merged(),
+      mode: "single",
+      options: includeMergedOptions,
+      selected: clientFilterStore.includeMerged ? "yes" : null,
+    },
+  ]);
+
+  const clientDateRangeActive = $derived(
+    clientFilterStore.createdAfter !== null ||
+      clientFilterStore.createdBefore !== null,
+  );
+
+  const clientDateFromStr = $derived(
+    clientFilterStore.createdAfter !== null
+      ? clientFilterStore.createdAfter.toISOString().slice(0, 10)
+      : "",
+  );
+
+  const clientDateToStr = $derived(
+    clientFilterStore.createdBefore !== null
+      ? clientFilterStore.createdBefore.toISOString().slice(0, 10)
+      : "",
+  );
+
+  const clientDateRangeLabel = $derived(
+    buildDateRangeLabel(
+      clientFilterStore.createdAfter,
+      clientFilterStore.createdBefore,
+      {
+        from: m.tickets_filter_date_from(),
+        to: m.tickets_filter_date_to(),
+        range: m.clients_filter_date_created(),
+      },
+    ),
+  );
+
+  const clientFilterPillsConfig: FilterPillsConfig = $derived({
+    pills: clientPills,
+    activeCount: clientFilterStore.activeCount,
+    dateFrom: clientDateFromStr,
+    dateTo: clientDateToStr,
+    dateActive: clientDateRangeActive,
+    dateLabel: clientDateRangeLabel,
+    ontoggle: clientDispatch.handlePillToggle,
+    onselect: clientDispatch.handlePillSelect,
+    ondatechange: clientDispatch.handlePillDateChange,
+    onclearall: clientDispatch.clearAll,
+  });
+
+  let clientSearchQuery = $state("");
+  let clientSearchActive = $state(false);
+  let clientSearchTimer: ReturnType<typeof setTimeout> | undefined;
+
+  function handleClientSearch(query: string): void {
+    clientSearchQuery = query;
+    clearTimeout(clientSearchTimer);
+    clientSearchTimer = setTimeout(() => {
+      clientFilterStore.setSearch(query);
+    }, 300);
+  }
 
   function handleToggleReorderMode(): void {
     queuesSectionRef?.toggleReorderMode();
@@ -385,6 +575,15 @@
             id: "queues",
             label: m.admin_tab_queues(withTerms()),
             icon: Layers,
+          },
+        ]
+      : []),
+    ...(canViewClients
+      ? [
+          {
+            id: "clients",
+            label: m.admin_clients_title(withTerms()),
+            icon: HeartHandshake,
           },
         ]
       : []),
@@ -499,6 +698,52 @@
   />
 {/snippet}
 
+{#snippet clientsSubnavbar()}
+  <SubNavbarFilterLayout
+    title={m.admin_clients_title(withTerms())}
+    headerRight={tabSegmented}
+    sort={clientSortConfig}
+    selectLabel=""
+    onselect={noop}
+    savedFilters={clientSavedFiltersConfig}
+    filterPills={clientFilterPillsConfig}
+    searchNavigator={clientSearchActive ? clientSearchRow : undefined}
+    onsearch={!clientSearchActive
+      ? () => {
+          clientSearchActive = true;
+        }
+      : undefined}
+    searchLabel={m.clients_search_placeholder()}
+  />
+{/snippet}
+
+{#snippet clientSearchRow()}
+  <div class="client-search-row">
+    <input
+      type="search"
+      class="client-search-input"
+      placeholder={m.clients_search_placeholder()}
+      value={clientSearchQuery}
+      oninput={(e: Event) => {
+        if (e.target instanceof HTMLInputElement) {
+          handleClientSearch(e.target.value);
+        }
+      }}
+    />
+    <button
+      type="button"
+      class="client-search-close"
+      onclick={() => {
+        clientSearchActive = false;
+        handleClientSearch("");
+      }}
+      aria-label={m.shell_close()}
+    >
+      <span aria-hidden="true">&#x2715;</span>
+    </button>
+  </div>
+{/snippet}
+
 {#if activeTab === "users" && canManageUsers}
   <div role="tabpanel" id="panel-users" aria-labelledby="tab-users">
     <UsersSection
@@ -512,6 +757,16 @@
 {:else if activeTab === "queues" && canManageQueues}
   <div role="tabpanel" id="panel-queues" aria-labelledby="tab-queues">
     <QueuesSection bind:this={queuesSectionRef} autoAction={urlAction} />
+  </div>
+{:else if activeTab === "clients" && canViewClients}
+  <div role="tabpanel" id="panel-clients" aria-labelledby="tab-clients">
+    <ClientsSection
+      clients={clientsQuery.data ?? []}
+      isLoading={clientsQuery.isLoading}
+      isError={clientsQuery.isError}
+      error={clientsQuery.error}
+      onretry={() => void clientsQuery.refetch()}
+    />
   </div>
 {/if}
 
@@ -547,5 +802,40 @@
     align-items: center;
     gap: 0.25rem;
     font-variant-numeric: tabular-nums;
+  }
+
+  .client-search-row {
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+    padding: 0 var(--space-md);
+  }
+
+  .client-search-input {
+    flex: 1;
+    padding: 0.5rem 0.75rem;
+    font-size: var(--text-sm);
+    border: 1px solid var(--hair);
+    border-radius: 0.5rem;
+    background: var(--paper);
+    color: var(--ink);
+    min-height: 44px;
+  }
+
+  .client-search-input::placeholder {
+    color: var(--muted);
+  }
+
+  .client-search-close {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 44px;
+    min-height: 44px;
+    background: none;
+    border: none;
+    color: var(--muted);
+    cursor: pointer;
+    font-size: 1.25rem;
   }
 </style>

@@ -85,6 +85,26 @@ describe.skipIf(!process.env.DATABASE_URL)("ClientService (DB)", () => {
     };
   }
 
+  /**
+   * Creates a client with a phone but no tickets. Returns the client ID.
+   *
+   * Uses createTestClientFixture (which creates a ticket) then deletes
+   * the ticket so the client has zero applications.
+   */
+  async function createClientWithoutTicket(alias: string): Promise<string> {
+    const fix = await createTestTicketFixture(testDb.db, { queueId });
+    await testDb.db
+      .updateTable("clients")
+      .set({ alias })
+      .where("id", "=", fix.clientId)
+      .execute();
+    await testDb.db
+      .deleteFrom("tickets")
+      .where("id", "=", fix.ticketId)
+      .execute();
+    return fix.clientId;
+  }
+
   // -----------------------------------------------------------------------
   // list
   // -----------------------------------------------------------------------
@@ -205,6 +225,223 @@ describe.skipIf(!process.env.DATABASE_URL)("ClientService (DB)", () => {
       const found = results.find((r) => r.id === c.clientId);
       expect(found).toBeDefined();
       expect(found!.ticketCount).toBe(2);
+    });
+
+    // ----- includeMerged filter -----
+
+    it("excludes merged clients by default (includeMerged omitted)", async () => {
+      const a = await createClientWithTicket();
+      const b = await createClientWithTicket();
+
+      await mergeSvc.merge({
+        primaryClientId: a.clientId,
+        secondaryClientId: b.clientId,
+        encryptedSnapshot: Buffer.from("snap"),
+      });
+
+      const results = await svc.list({
+        query: "",
+        sortBy: "alias",
+        sortDirection: "asc",
+        limit: 100,
+      });
+
+      const ids = results.map((r) => r.id);
+      expect(ids).toContain(a.clientId);
+      expect(ids).not.toContain(b.clientId);
+    });
+
+    it("excludes merged clients when includeMerged is false", async () => {
+      const a = await createClientWithTicket();
+      const b = await createClientWithTicket();
+
+      await mergeSvc.merge({
+        primaryClientId: a.clientId,
+        secondaryClientId: b.clientId,
+        encryptedSnapshot: Buffer.from("snap"),
+      });
+
+      const results = await svc.list({
+        query: "",
+        sortBy: "alias",
+        sortDirection: "asc",
+        limit: 100,
+        includeMerged: false,
+      });
+
+      const ids = results.map((r) => r.id);
+      expect(ids).toContain(a.clientId);
+      expect(ids).not.toContain(b.clientId);
+    });
+
+    it("includes merged clients when includeMerged is true", async () => {
+      const prefix = `mrg-${crypto.randomUUID().slice(0, 6)}`;
+      const a = await createClientWithTicket(`${prefix}-primary`);
+      const b = await createClientWithTicket(`${prefix}-secondary`);
+
+      await mergeSvc.merge({
+        primaryClientId: a.clientId,
+        secondaryClientId: b.clientId,
+        encryptedSnapshot: Buffer.from("snap"),
+      });
+
+      const results = await svc.list({
+        query: prefix,
+        sortBy: "alias",
+        sortDirection: "asc",
+        limit: 100,
+        includeMerged: true,
+      });
+
+      const ids = results.map((r) => r.id);
+      expect(ids).toContain(a.clientId);
+      expect(ids).toContain(b.clientId);
+    });
+
+    // ----- hasApplications filter -----
+
+    it("filters to clients with tickets when hasApplications is true", async () => {
+      const prefix = `ha-${crypto.randomUUID().slice(0, 6)}`;
+      const withTicket = await createClientWithTicket(`${prefix}-with`);
+      const noTicketId = await createClientWithoutTicket(`${prefix}-without`);
+
+      const results = await svc.list({
+        query: prefix,
+        sortBy: "alias",
+        sortDirection: "asc",
+        limit: 100,
+        hasApplications: true,
+      });
+
+      const ids = results.map((r) => r.id);
+      expect(ids).toContain(withTicket.clientId);
+      expect(ids).not.toContain(noTicketId);
+    });
+
+    it("filters to clients without tickets when hasApplications is false", async () => {
+      const prefix = `han-${crypto.randomUUID().slice(0, 6)}`;
+      await createClientWithTicket(`${prefix}-with`);
+      const noTicketId = await createClientWithoutTicket(`${prefix}-without`);
+
+      const results = await svc.list({
+        query: prefix,
+        sortBy: "alias",
+        sortDirection: "asc",
+        limit: 100,
+        hasApplications: false,
+      });
+
+      const ids = results.map((r) => r.id);
+      expect(ids).toContain(noTicketId);
+      expect(ids).not.toContain(
+        (await createClientWithTicket(`${prefix}-extra`)).clientId,
+      );
+    });
+
+    it("returns all clients when hasApplications is omitted", async () => {
+      const prefix = `hau-${crypto.randomUUID().slice(0, 6)}`;
+      const withTicket = await createClientWithTicket(`${prefix}-with`);
+      const noTicketId = await createClientWithoutTicket(`${prefix}-without`);
+
+      const results = await svc.list({
+        query: prefix,
+        sortBy: "alias",
+        sortDirection: "asc",
+        limit: 100,
+      });
+
+      const ids = results.map((r) => r.id);
+      expect(ids).toContain(withTicket.clientId);
+      expect(ids).toContain(noTicketId);
+    });
+
+    // ----- createdAfter / createdBefore filters -----
+
+    it("filters by createdAfter", async () => {
+      const prefix = `ca-${crypto.randomUUID().slice(0, 6)}`;
+
+      // Backdate a client to the past
+      const old = await createClientWithTicket(`${prefix}-old`);
+      const pastDate = new Date("2020-01-01T00:00:00.000Z");
+      await testDb.db
+        .updateTable("clients")
+        .set({ created_at: pastDate })
+        .where("id", "=", old.clientId)
+        .execute();
+
+      const recent = await createClientWithTicket(`${prefix}-recent`);
+
+      const results = await svc.list({
+        query: prefix,
+        sortBy: "alias",
+        sortDirection: "asc",
+        limit: 100,
+        createdAfter: "2024-01-01T00:00:00.000Z",
+      });
+
+      const ids = results.map((r) => r.id);
+      expect(ids).toContain(recent.clientId);
+      expect(ids).not.toContain(old.clientId);
+    });
+
+    it("filters by createdBefore", async () => {
+      const prefix = `cb-${crypto.randomUUID().slice(0, 6)}`;
+
+      const old = await createClientWithTicket(`${prefix}-old`);
+      const pastDate = new Date("2020-01-01T00:00:00.000Z");
+      await testDb.db
+        .updateTable("clients")
+        .set({ created_at: pastDate })
+        .where("id", "=", old.clientId)
+        .execute();
+
+      const recent = await createClientWithTicket(`${prefix}-recent`);
+
+      const results = await svc.list({
+        query: prefix,
+        sortBy: "alias",
+        sortDirection: "asc",
+        limit: 100,
+        createdBefore: "2021-01-01T00:00:00.000Z",
+      });
+
+      const ids = results.map((r) => r.id);
+      expect(ids).toContain(old.clientId);
+      expect(ids).not.toContain(recent.clientId);
+    });
+
+    it("filters by both createdAfter and createdBefore", async () => {
+      const prefix = `cab-${crypto.randomUUID().slice(0, 6)}`;
+
+      const tooOld = await createClientWithTicket(`${prefix}-old`);
+      await testDb.db
+        .updateTable("clients")
+        .set({ created_at: new Date("2019-01-01T00:00:00.000Z") })
+        .where("id", "=", tooOld.clientId)
+        .execute();
+
+      const inRange = await createClientWithTicket(`${prefix}-mid`);
+      await testDb.db
+        .updateTable("clients")
+        .set({ created_at: new Date("2022-06-15T00:00:00.000Z") })
+        .where("id", "=", inRange.clientId)
+        .execute();
+
+      const tooNew = await createClientWithTicket(`${prefix}-new`);
+
+      const results = await svc.list({
+        query: prefix,
+        sortBy: "alias",
+        sortDirection: "asc",
+        limit: 100,
+        createdAfter: "2020-01-01T00:00:00.000Z",
+        createdBefore: "2023-01-01T00:00:00.000Z",
+      });
+
+      const ids = results.map((r) => r.id);
+      expect(ids).toContain(inRange.clientId);
+      expect(ids).not.toContain(tooOld.clientId);
+      expect(ids).not.toContain(tooNew.clientId);
     });
   });
 
