@@ -30,21 +30,23 @@ import { setChromeIntensity } from "./chrome-glass.svelte.js";
 // Helpers
 // ---------------------------------------------------------------------------
 
-function fakeTouch(clientX: number, clientY: number): Touch {
-  return { clientX, clientY } as unknown as Touch;
-}
-
-function fireTouchEvent(
+/** Dispatch a synthetic PointerEvent on `target`. */
+function firePointerEvent(
   target: HTMLElement,
-  type: "touchstart" | "touchmove" | "touchend" | "touchcancel",
-  touches: Touch[] = [],
-): void {
-  const ev = new TouchEvent(type, {
-    touches,
-    cancelable: true,
+  type: "pointerdown" | "pointermove" | "pointerup" | "pointercancel",
+  init?: Partial<PointerEventInit>,
+): PointerEvent {
+  const ev = new PointerEvent(type, {
+    pointerId: 1,
+    isPrimary: true,
+    clientX: 0,
+    clientY: 0,
     bubbles: true,
+    cancelable: true,
+    ...init,
   });
   target.dispatchEvent(ev);
+  return ev;
 }
 
 /**
@@ -153,15 +155,15 @@ describe("useFoldDrag", () => {
   // Action setup
   // -----------------------------------------------------------------------
 
-  it("attaches four touch listeners on the handle", () => {
+  it("attaches four pointer listeners on the handle", () => {
     const addSpy = vi.spyOn(HTMLElement.prototype, "addEventListener");
     setup();
 
     const types = addSpy.mock.calls.map(([t]) => t);
-    expect(types).toContain("touchstart");
-    expect(types).toContain("touchmove");
-    expect(types).toContain("touchend");
-    expect(types).toContain("touchcancel");
+    expect(types).toContain("pointerdown");
+    expect(types).toContain("pointermove");
+    expect(types).toContain("pointerup");
+    expect(types).toContain("pointercancel");
     addSpy.mockRestore();
   });
 
@@ -175,10 +177,10 @@ describe("useFoldDrag", () => {
     destroy();
 
     const types = removeSpy.mock.calls.map(([t]) => t);
-    expect(types).toContain("touchstart");
-    expect(types).toContain("touchmove");
-    expect(types).toContain("touchend");
-    expect(types).toContain("touchcancel");
+    expect(types).toContain("pointerdown");
+    expect(types).toContain("pointermove");
+    expect(types).toContain("pointerup");
+    expect(types).toContain("pointercancel");
     removeSpy.mockRestore();
   });
 
@@ -189,16 +191,16 @@ describe("useFoldDrag", () => {
   it("snaps to folded when expanded and dragged up past 80px threshold", () => {
     const { config, handle } = setup({ folded: false });
 
-    fireTouchEvent(handle, "touchstart", [fakeTouch(0, 300)]);
+    firePointerEvent(handle, "pointerdown", { clientY: 300 });
     // Commit: drag up (negative delta). allowedSign=-1, so
     // rawDelta * -1 = (296-300)*-1 = 4 > 3.
     vi.advanceTimersByTime(10);
-    fireTouchEvent(handle, "touchmove", [fakeTouch(0, 296)]);
+    firePointerEvent(handle, "pointermove", { clientY: 296 });
     // Drag up well past 80px from commit point.
     vi.advanceTimersByTime(300);
-    fireTouchEvent(handle, "touchmove", [fakeTouch(0, 200)]);
-    fireTouchEvent(handle, "touchmove", [fakeTouch(0, 190)]);
-    fireTouchEvent(handle, "touchend");
+    firePointerEvent(handle, "pointermove", { clientY: 200 });
+    firePointerEvent(handle, "pointermove", { clientY: 190 });
+    firePointerEvent(handle, "pointerup");
 
     expect(config.onsnap).toHaveBeenCalledWith(true);
   });
@@ -210,14 +212,14 @@ describe("useFoldDrag", () => {
   it("does not snap when expanded and drag distance is below 80px", () => {
     const { config, handle } = setup({ folded: false });
 
-    fireTouchEvent(handle, "touchstart", [fakeTouch(0, 300)]);
+    firePointerEvent(handle, "pointerdown", { clientY: 300 });
     vi.advanceTimersByTime(10);
-    fireTouchEvent(handle, "touchmove", [fakeTouch(0, 296)]);
+    firePointerEvent(handle, "pointermove", { clientY: 296 });
     // Only 30px from commit point (below 80px threshold), slow speed.
     vi.advanceTimersByTime(500);
-    fireTouchEvent(handle, "touchmove", [fakeTouch(0, 270)]);
-    fireTouchEvent(handle, "touchmove", [fakeTouch(0, 266)]);
-    fireTouchEvent(handle, "touchend");
+    firePointerEvent(handle, "pointermove", { clientY: 270 });
+    firePointerEvent(handle, "pointermove", { clientY: 266 });
+    firePointerEvent(handle, "pointerup");
 
     expect(config.onsnap).not.toHaveBeenCalled();
   });
@@ -229,15 +231,15 @@ describe("useFoldDrag", () => {
   it("snaps to expanded when folded and dragged down past 80px threshold", () => {
     const { config, handle } = setup({ folded: true });
 
-    fireTouchEvent(handle, "touchstart", [fakeTouch(0, 100)]);
+    firePointerEvent(handle, "pointerdown", { clientY: 100 });
     // Commit: drag down. allowedSign=1, rawDelta*1 = 4 > 3.
     vi.advanceTimersByTime(10);
-    fireTouchEvent(handle, "touchmove", [fakeTouch(0, 104)]);
+    firePointerEvent(handle, "pointermove", { clientY: 104 });
     // Drag down past 80px from commit point.
     vi.advanceTimersByTime(300);
-    fireTouchEvent(handle, "touchmove", [fakeTouch(0, 190)]);
-    fireTouchEvent(handle, "touchmove", [fakeTouch(0, 200)]);
-    fireTouchEvent(handle, "touchend");
+    firePointerEvent(handle, "pointermove", { clientY: 190 });
+    firePointerEvent(handle, "pointermove", { clientY: 200 });
+    firePointerEvent(handle, "pointerup");
 
     expect(config.onsnap).toHaveBeenCalledWith(false);
   });
@@ -249,13 +251,13 @@ describe("useFoldDrag", () => {
   it("snaps on fast flick even when distance is below 80px", () => {
     const { config, handle } = setup({ folded: true });
 
-    fireTouchEvent(handle, "touchstart", [fakeTouch(0, 100)]);
+    firePointerEvent(handle, "pointerdown", { clientY: 100 });
     vi.advanceTimersByTime(1);
-    fireTouchEvent(handle, "touchmove", [fakeTouch(0, 104)]);
+    firePointerEvent(handle, "pointermove", { clientY: 104 });
     // Fast: 40px in ~5ms. velocity = 40/6 > 0.4.
     vi.advanceTimersByTime(5);
-    fireTouchEvent(handle, "touchmove", [fakeTouch(0, 144)]);
-    fireTouchEvent(handle, "touchend");
+    firePointerEvent(handle, "pointermove", { clientY: 144 });
+    firePointerEvent(handle, "pointerup");
 
     expect(config.onsnap).toHaveBeenCalledWith(false);
   });
@@ -267,15 +269,15 @@ describe("useFoldDrag", () => {
   it("does not snap when user reverses drag direction while folded", () => {
     const { config, handle } = setup({ folded: true });
 
-    fireTouchEvent(handle, "touchstart", [fakeTouch(0, 100)]);
+    firePointerEvent(handle, "pointerdown", { clientY: 100 });
     vi.advanceTimersByTime(10);
-    fireTouchEvent(handle, "touchmove", [fakeTouch(0, 104)]);
+    firePointerEvent(handle, "pointermove", { clientY: 104 });
     vi.advanceTimersByTime(300);
     // Drag down past threshold.
-    fireTouchEvent(handle, "touchmove", [fakeTouch(0, 250)]);
+    firePointerEvent(handle, "pointermove", { clientY: 250 });
     // Reverse: final pos is less than previous (swiping back).
-    fireTouchEvent(handle, "touchmove", [fakeTouch(0, 200)]);
-    fireTouchEvent(handle, "touchend");
+    firePointerEvent(handle, "pointermove", { clientY: 200 });
+    firePointerEvent(handle, "pointerup");
 
     expect(config.onsnap).not.toHaveBeenCalled();
   });
@@ -283,37 +285,84 @@ describe("useFoldDrag", () => {
   it("does not snap when user reverses drag direction while expanded", () => {
     const { config, handle } = setup({ folded: false });
 
-    fireTouchEvent(handle, "touchstart", [fakeTouch(0, 300)]);
+    firePointerEvent(handle, "pointerdown", { clientY: 300 });
     vi.advanceTimersByTime(10);
-    fireTouchEvent(handle, "touchmove", [fakeTouch(0, 296)]);
+    firePointerEvent(handle, "pointermove", { clientY: 296 });
     vi.advanceTimersByTime(300);
     // Drag up past threshold.
-    fireTouchEvent(handle, "touchmove", [fakeTouch(0, 190)]);
+    firePointerEvent(handle, "pointermove", { clientY: 190 });
     // Reverse: final pos is greater than previous (swiping back for expand).
-    fireTouchEvent(handle, "touchmove", [fakeTouch(0, 230)]);
-    fireTouchEvent(handle, "touchend");
+    firePointerEvent(handle, "pointermove", { clientY: 230 });
+    firePointerEvent(handle, "pointerup");
 
     expect(config.onsnap).not.toHaveBeenCalled();
   });
 
   // -----------------------------------------------------------------------
-  // Multi-touch ignored
+  // Non-primary pointer ignored
   // -----------------------------------------------------------------------
 
-  it("ignores multi-touch events in touchstart", () => {
+  it("ignores non-primary pointers", () => {
     const { config, handle } = setup();
 
-    fireTouchEvent(handle, "touchstart", [
-      fakeTouch(0, 100),
-      fakeTouch(50, 200),
-    ]);
-    fireTouchEvent(handle, "touchmove", [
-      fakeTouch(0, 200),
-      fakeTouch(50, 300),
-    ]);
-    fireTouchEvent(handle, "touchend");
+    firePointerEvent(handle, "pointerdown", {
+      clientY: 100,
+      isPrimary: false,
+      pointerId: 2,
+    });
+    firePointerEvent(handle, "pointermove", { clientY: 200, pointerId: 2 });
+    firePointerEvent(handle, "pointerup", { pointerId: 2 });
 
     expect(config.onsnap).not.toHaveBeenCalled();
+  });
+
+  // -----------------------------------------------------------------------
+  // Second pointer while first is active is ignored
+  // -----------------------------------------------------------------------
+
+  it("ignores a second pointerdown while a pointer is already active", () => {
+    const { config, handle } = setup();
+
+    // First pointer starts.
+    firePointerEvent(handle, "pointerdown", {
+      clientY: 100,
+      pointerId: 1,
+    });
+    // Second pointer arrives (different id), should be ignored.
+    firePointerEvent(handle, "pointerdown", {
+      clientY: 300,
+      pointerId: 2,
+    });
+
+    vi.advanceTimersByTime(10);
+    // Move with the second pointer id: should be ignored.
+    firePointerEvent(handle, "pointermove", { clientY: 500, pointerId: 2 });
+    firePointerEvent(handle, "pointerup", { pointerId: 2 });
+
+    // First pointer never moved past commit, so no snap.
+    firePointerEvent(handle, "pointerup", { pointerId: 1 });
+    expect(config.onsnap).not.toHaveBeenCalled();
+  });
+
+  // -----------------------------------------------------------------------
+  // pointerId filtering: moves with wrong id are ignored
+  // -----------------------------------------------------------------------
+
+  it("ignores pointermove events with a different pointerId", () => {
+    const { config, handle } = setup({ folded: true });
+
+    firePointerEvent(handle, "pointerdown", { clientY: 100, pointerId: 1 });
+    vi.advanceTimersByTime(10);
+    // Move with wrong id (should be ignored).
+    firePointerEvent(handle, "pointermove", { clientY: 200, pointerId: 3 });
+    // Move with correct id past commit.
+    firePointerEvent(handle, "pointermove", { clientY: 104, pointerId: 1 });
+    vi.advanceTimersByTime(300);
+    firePointerEvent(handle, "pointermove", { clientY: 210, pointerId: 1 });
+    firePointerEvent(handle, "pointermove", { clientY: 220, pointerId: 1 });
+    firePointerEvent(handle, "pointerup", { pointerId: 1 });
+
+    expect(config.onsnap).toHaveBeenCalledWith(false);
   });
 
   // -----------------------------------------------------------------------
@@ -323,11 +372,11 @@ describe("useFoldDrag", () => {
   it("does not commit when folded and dragging up (wrong direction)", () => {
     const { config, handle } = setup({ folded: true });
 
-    fireTouchEvent(handle, "touchstart", [fakeTouch(0, 300)]);
+    firePointerEvent(handle, "pointerdown", { clientY: 300 });
     // Drag up: rawDelta * allowedSign = (200-300)*1 = -100 < 3.
     vi.advanceTimersByTime(100);
-    fireTouchEvent(handle, "touchmove", [fakeTouch(0, 200)]);
-    fireTouchEvent(handle, "touchend");
+    firePointerEvent(handle, "pointermove", { clientY: 200 });
+    firePointerEvent(handle, "pointerup");
 
     expect(config.onsnap).not.toHaveBeenCalled();
   });
@@ -335,43 +384,43 @@ describe("useFoldDrag", () => {
   it("does not commit when expanded and dragging down (wrong direction)", () => {
     const { config, handle } = setup({ folded: false });
 
-    fireTouchEvent(handle, "touchstart", [fakeTouch(0, 100)]);
+    firePointerEvent(handle, "pointerdown", { clientY: 100 });
     // Drag down: rawDelta * allowedSign = (200-100)*-1 = -100 < 3.
     vi.advanceTimersByTime(100);
-    fireTouchEvent(handle, "touchmove", [fakeTouch(0, 200)]);
-    fireTouchEvent(handle, "touchend");
+    firePointerEvent(handle, "pointermove", { clientY: 200 });
+    firePointerEvent(handle, "pointerup");
 
     expect(config.onsnap).not.toHaveBeenCalled();
   });
 
   // -----------------------------------------------------------------------
-  // Non-committed touchend resets styles
+  // Non-committed pointerup resets styles
   // -----------------------------------------------------------------------
 
-  it("resets inline styles on touchend when drag was never committed", () => {
+  it("resets inline styles on pointerup when drag was never committed", () => {
     const { handle } = setup();
 
-    fireTouchEvent(handle, "touchstart", [fakeTouch(0, 100)]);
+    firePointerEvent(handle, "pointerdown", { clientY: 100 });
     // No move, so not committed.
-    fireTouchEvent(handle, "touchend");
+    firePointerEvent(handle, "pointerup");
 
     // setChromeIntensity(null) is called by resetInlineStyles.
     expect(setChromeIntensity).toHaveBeenCalledWith(null);
   });
 
   // -----------------------------------------------------------------------
-  // touchcancel triggers same path as touchend
+  // pointercancel triggers same path as pointerup
   // -----------------------------------------------------------------------
 
-  it("handles touchcancel the same as touchend", () => {
+  it("handles pointercancel the same as pointerup", () => {
     const { config, handle } = setup({ folded: true });
 
-    fireTouchEvent(handle, "touchstart", [fakeTouch(0, 100)]);
+    firePointerEvent(handle, "pointerdown", { clientY: 100 });
     vi.advanceTimersByTime(10);
-    fireTouchEvent(handle, "touchmove", [fakeTouch(0, 104)]);
+    firePointerEvent(handle, "pointermove", { clientY: 104 });
     vi.advanceTimersByTime(500);
-    fireTouchEvent(handle, "touchmove", [fakeTouch(0, 130)]);
-    fireTouchEvent(handle, "touchcancel");
+    firePointerEvent(handle, "pointermove", { clientY: 130 });
+    firePointerEvent(handle, "pointercancel");
 
     // Small drag, slow velocity, no snap.
     expect(config.onsnap).not.toHaveBeenCalled();
@@ -389,13 +438,13 @@ describe("useFoldDrag", () => {
   it("consumeClick returns true once after a committed snap, then false", () => {
     const { config, handle, consumeClick } = setup({ folded: true });
 
-    fireTouchEvent(handle, "touchstart", [fakeTouch(0, 100)]);
+    firePointerEvent(handle, "pointerdown", { clientY: 100 });
     vi.advanceTimersByTime(10);
-    fireTouchEvent(handle, "touchmove", [fakeTouch(0, 104)]);
+    firePointerEvent(handle, "pointermove", { clientY: 104 });
     vi.advanceTimersByTime(300);
-    fireTouchEvent(handle, "touchmove", [fakeTouch(0, 210)]);
-    fireTouchEvent(handle, "touchmove", [fakeTouch(0, 220)]);
-    fireTouchEvent(handle, "touchend");
+    firePointerEvent(handle, "pointermove", { clientY: 210 });
+    firePointerEvent(handle, "pointermove", { clientY: 220 });
+    firePointerEvent(handle, "pointerup");
 
     expect(config.onsnap).toHaveBeenCalled();
     expect(consumeClick()).toBe(true);
@@ -403,16 +452,16 @@ describe("useFoldDrag", () => {
   });
 
   // -----------------------------------------------------------------------
-  // wrapEl=undefined makes touchstart no-op
+  // wrapEl=undefined makes pointerdown no-op
   // -----------------------------------------------------------------------
 
   it("does nothing when wrapEl is undefined", () => {
     const { config, handle } = setup({ wrapEl: undefined });
 
-    fireTouchEvent(handle, "touchstart", [fakeTouch(0, 100)]);
+    firePointerEvent(handle, "pointerdown", { clientY: 100 });
     vi.advanceTimersByTime(100);
-    fireTouchEvent(handle, "touchmove", [fakeTouch(0, 300)]);
-    fireTouchEvent(handle, "touchend");
+    firePointerEvent(handle, "pointermove", { clientY: 300 });
+    firePointerEvent(handle, "pointerup");
 
     expect(config.onsnap).not.toHaveBeenCalled();
   });
@@ -426,10 +475,10 @@ describe("useFoldDrag", () => {
     document.body.appendChild(emptyWrap);
     const { config, handle } = setup({ wrapEl: emptyWrap });
 
-    fireTouchEvent(handle, "touchstart", [fakeTouch(0, 100)]);
+    firePointerEvent(handle, "pointerdown", { clientY: 100 });
     vi.advanceTimersByTime(100);
-    fireTouchEvent(handle, "touchmove", [fakeTouch(0, 300)]);
-    fireTouchEvent(handle, "touchend");
+    firePointerEvent(handle, "pointermove", { clientY: 300 });
+    firePointerEvent(handle, "pointerup");
 
     expect(config.onsnap).not.toHaveBeenCalled();
   });
@@ -444,10 +493,10 @@ describe("useFoldDrag", () => {
     document.body.appendChild(textWrap);
     const { config, handle } = setup({ wrapEl: textWrap });
 
-    fireTouchEvent(handle, "touchstart", [fakeTouch(0, 100)]);
+    firePointerEvent(handle, "pointerdown", { clientY: 100 });
     vi.advanceTimersByTime(100);
-    fireTouchEvent(handle, "touchmove", [fakeTouch(0, 300)]);
-    fireTouchEvent(handle, "touchend");
+    firePointerEvent(handle, "pointermove", { clientY: 300 });
+    firePointerEvent(handle, "pointerup");
 
     expect(config.onsnap).not.toHaveBeenCalled();
   });
@@ -465,14 +514,14 @@ describe("useFoldDrag", () => {
 
     const { config, handle } = setup({ folded: true, wrapEl });
 
-    fireTouchEvent(handle, "touchstart", [fakeTouch(0, 100)]);
+    firePointerEvent(handle, "pointerdown", { clientY: 100 });
     vi.advanceTimersByTime(10);
-    fireTouchEvent(handle, "touchmove", [fakeTouch(0, 104)]);
+    firePointerEvent(handle, "pointermove", { clientY: 104 });
     // Drag down 100px from commit, velocity is moderate.
     vi.advanceTimersByTime(200);
-    fireTouchEvent(handle, "touchmove", [fakeTouch(0, 210)]);
-    fireTouchEvent(handle, "touchmove", [fakeTouch(0, 220)]);
-    fireTouchEvent(handle, "touchend");
+    firePointerEvent(handle, "pointermove", { clientY: 210 });
+    firePointerEvent(handle, "pointermove", { clientY: 220 });
+    firePointerEvent(handle, "pointerup");
 
     // Should snap; naturalHeight defaulted to 200.
     expect(config.onsnap).toHaveBeenCalledWith(false);
@@ -482,14 +531,14 @@ describe("useFoldDrag", () => {
   // setChromeIntensity called during drag
   // -----------------------------------------------------------------------
 
-  it("calls setChromeIntensity with fraction during touchmove", () => {
+  it("calls setChromeIntensity with fraction during pointermove", () => {
     const { handle } = setup({ folded: true });
 
-    fireTouchEvent(handle, "touchstart", [fakeTouch(0, 100)]);
+    firePointerEvent(handle, "pointerdown", { clientY: 100 });
     vi.advanceTimersByTime(10);
-    fireTouchEvent(handle, "touchmove", [fakeTouch(0, 104)]);
+    firePointerEvent(handle, "pointermove", { clientY: 104 });
     vi.advanceTimersByTime(50);
-    fireTouchEvent(handle, "touchmove", [fakeTouch(0, 200)]);
+    firePointerEvent(handle, "pointermove", { clientY: 200 });
 
     // setChromeIntensity should have been called with a number between 0 and 1.
     const calls = vi.mocked(setChromeIntensity).mock.calls;
@@ -498,7 +547,7 @@ describe("useFoldDrag", () => {
     );
     expect(fractionCalls.length).toBeGreaterThan(0);
 
-    fireTouchEvent(handle, "touchend");
+    firePointerEvent(handle, "pointerup");
   });
 
   // -----------------------------------------------------------------------
@@ -514,18 +563,18 @@ describe("useFoldDrag", () => {
 
     const { handle } = setup({ folded: false, wrapEl });
 
-    fireTouchEvent(handle, "touchstart", [fakeTouch(0, 300)]);
+    firePointerEvent(handle, "pointerdown", { clientY: 300 });
     vi.advanceTimersByTime(10);
-    fireTouchEvent(handle, "touchmove", [fakeTouch(0, 296)]);
+    firePointerEvent(handle, "pointermove", { clientY: 296 });
     vi.advanceTimersByTime(100);
-    fireTouchEvent(handle, "touchmove", [fakeTouch(0, 200)]);
+    firePointerEvent(handle, "pointermove", { clientY: 200 });
 
     // Content maxHeight should be reduced: naturalHeight(300) + dragDelta(200-296=-96) = 204.
     const maxH = parseFloat(contentEl.style.maxHeight || "0");
     expect(maxH).toBeLessThan(300);
     expect(maxH).toBeGreaterThan(0);
 
-    fireTouchEvent(handle, "touchend");
+    firePointerEvent(handle, "pointerup");
   });
 
   // -----------------------------------------------------------------------
@@ -541,18 +590,18 @@ describe("useFoldDrag", () => {
 
     const { handle } = setup({ folded: true, wrapEl });
 
-    fireTouchEvent(handle, "touchstart", [fakeTouch(0, 100)]);
+    firePointerEvent(handle, "pointerdown", { clientY: 100 });
     vi.advanceTimersByTime(10);
-    fireTouchEvent(handle, "touchmove", [fakeTouch(0, 104)]);
+    firePointerEvent(handle, "pointermove", { clientY: 104 });
     vi.advanceTimersByTime(100);
-    fireTouchEvent(handle, "touchmove", [fakeTouch(0, 200)]);
+    firePointerEvent(handle, "pointermove", { clientY: 200 });
 
     // targetHeight = min(300, max(0, 200-104)) = 96.
     const maxH = parseFloat(contentEl.style.maxHeight || "0");
     expect(maxH).toBeGreaterThan(0);
     expect(maxH).toBeLessThanOrEqual(300);
 
-    fireTouchEvent(handle, "touchend");
+    firePointerEvent(handle, "pointerup");
   });
 
   // -----------------------------------------------------------------------
@@ -568,13 +617,13 @@ describe("useFoldDrag", () => {
 
     const { config, handle } = setup({ folded: true, wrapEl });
 
-    fireTouchEvent(handle, "touchstart", [fakeTouch(0, 100)]);
+    firePointerEvent(handle, "pointerdown", { clientY: 100 });
     vi.advanceTimersByTime(10);
-    fireTouchEvent(handle, "touchmove", [fakeTouch(0, 104)]);
+    firePointerEvent(handle, "pointermove", { clientY: 104 });
     vi.advanceTimersByTime(300);
-    fireTouchEvent(handle, "touchmove", [fakeTouch(0, 210)]);
-    fireTouchEvent(handle, "touchmove", [fakeTouch(0, 220)]);
-    fireTouchEvent(handle, "touchend");
+    firePointerEvent(handle, "pointermove", { clientY: 210 });
+    firePointerEvent(handle, "pointermove", { clientY: 220 });
+    firePointerEvent(handle, "pointerup");
 
     expect(config.onsnap).toHaveBeenCalled();
     // Content should have a transition style set.
@@ -586,45 +635,88 @@ describe("useFoldDrag", () => {
   });
 
   // -----------------------------------------------------------------------
-  // No-op on touchmove when wrapRef/contentRef not set
+  // No-op on pointermove when wrapRef/contentRef not set
   // -----------------------------------------------------------------------
 
-  it("ignores touchmove when wrapRef is null (touchstart failed)", () => {
+  it("ignores pointermove when wrapRef is null (pointerdown failed)", () => {
     const { config, handle } = setup({ wrapEl: undefined });
 
-    // touchstart with no wrapEl sets wrapRef to null.
-    fireTouchEvent(handle, "touchstart", [fakeTouch(0, 100)]);
-    // touchmove should bail at the wrapRef null check.
-    fireTouchEvent(handle, "touchmove", [fakeTouch(0, 200)]);
-    fireTouchEvent(handle, "touchend");
+    // pointerdown with no wrapEl sets wrapRef to null.
+    firePointerEvent(handle, "pointerdown", { clientY: 100 });
+    // pointermove should bail at the wrapRef null check.
+    firePointerEvent(handle, "pointermove", { clientY: 200 });
+    firePointerEvent(handle, "pointerup");
 
     expect(config.onsnap).not.toHaveBeenCalled();
   });
 
   // -----------------------------------------------------------------------
-  // preventDefault called on committed touchmove
+  // preventDefault called on pointerdown (suppresses compat mouse events)
   // -----------------------------------------------------------------------
 
-  it("calls preventDefault on committed touchmove", () => {
+  it("calls preventDefault on pointerdown when accepted", () => {
     const { handle } = setup({ folded: true });
 
-    fireTouchEvent(handle, "touchstart", [fakeTouch(0, 100)]);
+    const ev = firePointerEvent(handle, "pointerdown", { clientY: 100 });
+
+    expect(ev.defaultPrevented).toBe(true);
+  });
+
+  // -----------------------------------------------------------------------
+  // No preventDefault on pointermove (CSS handles scroll suppression)
+  // -----------------------------------------------------------------------
+
+  it("does not call preventDefault on pointermove", () => {
+    const { handle } = setup({ folded: true });
+
+    firePointerEvent(handle, "pointerdown", { clientY: 100 });
     vi.advanceTimersByTime(10);
-    fireTouchEvent(handle, "touchmove", [fakeTouch(0, 104)]);
+    firePointerEvent(handle, "pointermove", { clientY: 104 });
 
     vi.advanceTimersByTime(50);
-    const moveEvent = new TouchEvent("touchmove", {
-      touches: [fakeTouch(0, 150)],
+    const moveEvent = new PointerEvent("pointermove", {
+      pointerId: 1,
+      isPrimary: true,
+      clientY: 150,
       cancelable: true,
       bubbles: true,
     });
     const pdSpy = vi.spyOn(moveEvent, "preventDefault");
     handle.dispatchEvent(moveEvent);
 
-    expect(pdSpy).toHaveBeenCalledOnce();
+    expect(pdSpy).not.toHaveBeenCalled();
     pdSpy.mockRestore();
 
-    fireTouchEvent(handle, "touchend");
+    firePointerEvent(handle, "pointerup");
+  });
+
+  // -----------------------------------------------------------------------
+  // Pointer capture set on commit and released on end
+  // -----------------------------------------------------------------------
+
+  it("sets pointer capture on commit and releases on pointerup", () => {
+    const { handle } = setup({ folded: true });
+
+    const captureSpy = vi.fn();
+    const hasCaptureSpy = vi.fn(() => true);
+    const releaseSpy = vi.fn();
+    handle.setPointerCapture = captureSpy;
+    handle.hasPointerCapture = hasCaptureSpy;
+    handle.releasePointerCapture = releaseSpy;
+
+    firePointerEvent(handle, "pointerdown", { clientY: 100 });
+    vi.advanceTimersByTime(10);
+    // Commit move.
+    firePointerEvent(handle, "pointermove", { clientY: 104 });
+
+    expect(captureSpy).toHaveBeenCalledWith(1);
+
+    vi.advanceTimersByTime(300);
+    firePointerEvent(handle, "pointermove", { clientY: 210 });
+    firePointerEvent(handle, "pointermove", { clientY: 220 });
+    firePointerEvent(handle, "pointerup");
+
+    expect(releaseSpy).toHaveBeenCalledWith(1);
   });
 
   // -----------------------------------------------------------------------
@@ -640,21 +732,21 @@ describe("useFoldDrag", () => {
 
     const { handle } = setup({ folded: true, wrapEl });
 
-    fireTouchEvent(handle, "touchstart", [fakeTouch(0, 100)]);
+    firePointerEvent(handle, "pointerdown", { clientY: 100 });
     vi.advanceTimersByTime(10);
     // Commit and keep at 0 effectively (tiny delta).
-    fireTouchEvent(handle, "touchmove", [fakeTouch(0, 104)]);
+    firePointerEvent(handle, "pointermove", { clientY: 104 });
     vi.advanceTimersByTime(50);
     // Move backward to startY so targetHeight is 0.
-    fireTouchEvent(handle, "touchmove", [fakeTouch(0, 104)]);
+    firePointerEvent(handle, "pointermove", { clientY: 104 });
 
     expect(wrapEl.style.borderTopColor).toBe("transparent");
 
-    fireTouchEvent(handle, "touchend");
+    firePointerEvent(handle, "pointerup");
   });
 
   // -----------------------------------------------------------------------
-  // Snap to fold when expanded, then touchend animates to height 0
+  // Snap to fold when expanded, then pointerup animates to height 0
   // -----------------------------------------------------------------------
 
   it("animates wrapEl margin to 0 on fold snap", () => {
@@ -666,13 +758,13 @@ describe("useFoldDrag", () => {
 
     const { config, handle } = setup({ folded: false, wrapEl });
 
-    fireTouchEvent(handle, "touchstart", [fakeTouch(0, 300)]);
+    firePointerEvent(handle, "pointerdown", { clientY: 300 });
     vi.advanceTimersByTime(10);
-    fireTouchEvent(handle, "touchmove", [fakeTouch(0, 296)]);
+    firePointerEvent(handle, "pointermove", { clientY: 296 });
     vi.advanceTimersByTime(300);
-    fireTouchEvent(handle, "touchmove", [fakeTouch(0, 190)]);
-    fireTouchEvent(handle, "touchmove", [fakeTouch(0, 180)]);
-    fireTouchEvent(handle, "touchend");
+    firePointerEvent(handle, "pointermove", { clientY: 190 });
+    firePointerEvent(handle, "pointermove", { clientY: 180 });
+    firePointerEvent(handle, "pointerup");
 
     expect(config.onsnap).toHaveBeenCalledWith(true);
     // targetHeight is 0 (folding), so margin target is 0.
@@ -723,13 +815,13 @@ describe("useFoldDrag", () => {
       rootCleanup();
     });
 
-    fireTouchEvent(handle, "touchstart", [fakeTouch(0, 100)]);
+    firePointerEvent(handle, "pointerdown", { clientY: 100 });
     vi.advanceTimersByTime(10);
-    fireTouchEvent(handle, "touchmove", [fakeTouch(0, 104)]);
+    firePointerEvent(handle, "pointermove", { clientY: 104 });
     vi.advanceTimersByTime(300);
-    fireTouchEvent(handle, "touchmove", [fakeTouch(0, 210)]);
-    fireTouchEvent(handle, "touchmove", [fakeTouch(0, 220)]);
-    fireTouchEvent(handle, "touchend");
+    firePointerEvent(handle, "pointermove", { clientY: 210 });
+    firePointerEvent(handle, "pointermove", { clientY: 220 });
+    firePointerEvent(handle, "pointerup");
 
     expect(cfg.onsnap).toHaveBeenCalledWith(false);
     // In reducedMotion path, styles are reset immediately (no transition).
@@ -753,22 +845,54 @@ describe("useFoldDrag", () => {
 
     const { config, handle } = setup({ folded: false, wrapEl });
 
-    fireTouchEvent(handle, "touchstart", [fakeTouch(0, 300)]);
+    firePointerEvent(handle, "pointerdown", { clientY: 300 });
     vi.advanceTimersByTime(10);
-    fireTouchEvent(handle, "touchmove", [fakeTouch(0, 296)]);
+    firePointerEvent(handle, "pointermove", { clientY: 296 });
     // Small drag that doesn't snap (below threshold, slow).
     vi.advanceTimersByTime(500);
-    fireTouchEvent(handle, "touchmove", [fakeTouch(0, 290)]);
-    fireTouchEvent(handle, "touchmove", [fakeTouch(0, 291)]);
+    firePointerEvent(handle, "pointermove", { clientY: 290 });
+    firePointerEvent(handle, "pointermove", { clientY: 291 });
 
     // Manually set maxHeight to naturalHeight (the target for non-snap expanded).
     contentEl.style.maxHeight = "300px";
 
-    fireTouchEvent(handle, "touchend");
+    firePointerEvent(handle, "pointerup");
 
     expect(config.onsnap).not.toHaveBeenCalled();
     // Since currentMax (300) matches targetHeight (300), no transition fires.
     // resetInlineStyles clears everything.
     expect(setChromeIntensity).toHaveBeenCalledWith(null);
+  });
+
+  // -----------------------------------------------------------------------
+  // Mouse pointer commits and snaps (pointer events cover all input types)
+  // -----------------------------------------------------------------------
+
+  it("commits and snaps with a mouse-primary pointer", () => {
+    const { config, handle } = setup({ folded: true });
+
+    firePointerEvent(handle, "pointerdown", {
+      clientY: 100,
+      pointerType: "mouse",
+    });
+    vi.advanceTimersByTime(10);
+    firePointerEvent(handle, "pointermove", {
+      clientY: 104,
+      pointerType: "mouse",
+    });
+    vi.advanceTimersByTime(300);
+    firePointerEvent(handle, "pointermove", {
+      clientY: 210,
+      pointerType: "mouse",
+    });
+    firePointerEvent(handle, "pointermove", {
+      clientY: 220,
+      pointerType: "mouse",
+    });
+    firePointerEvent(handle, "pointerup", {
+      pointerType: "mouse",
+    });
+
+    expect(config.onsnap).toHaveBeenCalledWith(false);
   });
 });
