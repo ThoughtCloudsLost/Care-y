@@ -5,7 +5,9 @@ import {
   mapToPreviewFollowUps,
   mapToTicketLikeRecord,
   buildSeedData,
+  readCursorPayloadFor,
   resetFixtureIds,
+  DEMO_QUEUES,
 } from "./tickets.js";
 import type { DemoTicket } from "./types.js";
 
@@ -71,6 +73,20 @@ describe("createDemoTickets", () => {
     const allIds = tickets.flatMap((t) => t.followUps.map((fu) => fu.id));
     const unique = new Set(allIds);
     expect(unique.size).toBe(allIds.length);
+  });
+});
+
+describe("DEMO_QUEUES", () => {
+  it("contains three queues", () => {
+    expect(DEMO_QUEUES).toHaveLength(3);
+  });
+
+  it("has ids matching fixture ticket queueIds", () => {
+    const tickets = createDemoTickets();
+    const queueIds = new Set(DEMO_QUEUES.map((q) => q.id));
+    for (const ticket of tickets) {
+      expect(queueIds.has(ticket.queueId)).toBe(true);
+    }
   });
 });
 
@@ -191,6 +207,25 @@ describe("mapToTicketLikeRecord", () => {
     const record = mapToTicketLikeRecord(ticket);
     expect(record.lastActivityAt).toBeNull();
   });
+
+  it("includes hasPhone as true", () => {
+    const tickets = createDemoTickets();
+    const ticket = tickets[0];
+    if (ticket === undefined) throw new Error("missing fixture");
+    const record = mapToTicketLikeRecord(ticket);
+    expect(record.hasPhone).toBe(true);
+  });
+
+  it("includes encryptedDescription", () => {
+    const tickets = createDemoTickets();
+    const ticket = tickets[0];
+    if (ticket === undefined) throw new Error("missing fixture");
+    const record = mapToTicketLikeRecord(ticket);
+    expect(typeof record.encryptedDescription).toBe("string");
+    expect(record.encryptedDescription.length).toBe(
+      ticket.description.length + 40,
+    );
+  });
 });
 
 describe("buildSeedData", () => {
@@ -221,6 +256,54 @@ describe("buildSeedData", () => {
     for (const value of Object.values(seed.followUps)) {
       expect(value).not.toBe("");
     }
+  });
+
+  it("includes readCursors for accessible tickets", () => {
+    const tickets = createDemoTickets();
+    const seed = buildSeedData(tickets);
+    const firstTicket = tickets[0];
+    if (firstTicket === undefined) throw new Error("missing fixture");
+    const cursor = seed.readCursors[`cursor:${firstTicket.id}`];
+    expect(cursor).toBeDefined();
+    // The payload is JSON with an ISO readUpTo, matching what the real
+    // cursor decrypt produces
+    if (cursor !== undefined) {
+      const parsed: unknown = JSON.parse(cursor);
+      expect(parsed).toHaveProperty("readUpTo");
+      const readUpTo = (parsed as { readUpTo: string }).readUpTo;
+      expect(new Date(readUpTo).toISOString()).toBe(readUpTo);
+    }
+  });
+
+  it("places the cursor behind latest activity for unread tickets", () => {
+    const tickets = createDemoTickets();
+    const unread = tickets.filter((t) => t.unreadCount > 0);
+    expect(unread.length).toBeGreaterThan(0);
+    for (const t of unread) {
+      const parsed = JSON.parse(readCursorPayloadFor(t)) as {
+        readUpTo: string;
+      };
+      const latest = t.lastActivityAt ?? t.createdAt;
+      expect(new Date(parsed.readUpTo).getTime()).toBeLessThan(
+        latest.getTime(),
+      );
+    }
+  });
+
+  it("includes orgValues with queue display names", () => {
+    const tickets = createDemoTickets();
+    const seed = buildSeedData(tickets);
+    expect(seed.orgValues["queue:q-housing"]).toBe("Housing");
+    expect(seed.orgValues["queue:q-intake"]).toBe("Intake");
+    expect(seed.orgValues["queue:q-crisis"]).toBe("Crisis");
+  });
+
+  it("does not include readCursors for DENIED tickets", () => {
+    const tickets = createDemoTickets();
+    const seed = buildSeedData(tickets);
+    const deniedTicket = tickets[4];
+    if (deniedTicket === undefined) throw new Error("missing fixture");
+    expect(seed.readCursors[`cursor:${deniedTicket.id}`]).toBeUndefined();
   });
 });
 

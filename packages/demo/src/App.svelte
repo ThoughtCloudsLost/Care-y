@@ -11,16 +11,25 @@
   import NarrativePanel from "$demo/NarrativePanel.svelte";
   import FeatureList from "$demo/FeatureList.svelte";
   import { createDemoRouter } from "$demo/router.svelte.js";
-  import { createDemoQueryClient } from "$demo/demo-query-client.js";
+  import {
+    createDemoQueryClient,
+    reseedDemoQueryClient,
+  } from "$demo/demo-query-client.js";
   import { demoSeed, demoReset } from "$lib/crypto/context.js";
   import { demoResetTrpc } from "$lib/trpc/index.js";
+  import { setCryptoKeyed } from "$lib/crypto/crypto-keyed.svelte.js";
+  import {
+    createDemoTickets,
+    buildSeedData,
+    resetFixtureIds,
+  } from "$demo/fixtures/tickets.js";
 
   let dark = $state(false);
 
   // Mirror the product's applyScheme/applyGlassMode (theme.svelte.ts):
   // the glass styles are anchored to html-level classes
   // (html.glass-dark and friends), so scheme classes must live on
-  // documentElement, not on the frame. Glass mode follows the scheme
+  // documentElement, not the frame. Glass mode follows the scheme
   // (the product's "auto" behavior).
   $effect(() => {
     const cl = document.documentElement.classList;
@@ -36,21 +45,46 @@
 
   let surfaceRef: DemoSurface | undefined = $state();
 
-  // Seed the org value cache with the demo user's display name so
-  // the navbar avatar initials resolve (AppShell reads orgDecryptCache
-  // under the key "me:display_name").
-  demoSeed({
-    orgValues: { "me:display_name": "Jordan Kim" },
-  });
+  // Enable crypto-keyed gate so unread chips and pills render
+  setCryptoKeyed(true);
+
+  /**
+   * Seed the demo caches with fixture data. Seeds display name for
+   * navbar avatar initials, queue display names for the list queue
+   * column, titles/descriptions/follow-ups for the decrypt cache,
+   * read cursors for unread state, and preview data for ticket cards.
+   */
+  function runFullSeed(): void {
+    resetFixtureIds();
+    const tickets = createDemoTickets();
+    const seed = buildSeedData(tickets);
+
+    demoSeed({
+      titles: seed.titles,
+      descriptions: seed.descriptions,
+      followUps: seed.followUps,
+      followUpContent: seed.followUpContent,
+      previews: seed.previews,
+      readCursors: seed.readCursors,
+      orgValues: {
+        "me:display_name": "Jordan Kim",
+        ...seed.orgValues,
+      },
+    });
+  }
+
+  // Run initial seed
+  runFullSeed();
 
   function handleRestart(): void {
     demoReset();
     demoResetTrpc();
+    reseedDemoQueryClient(queryClient);
     router.reset();
-    // Re-seed after reset so the avatar stays resolved
-    demoSeed({
-      orgValues: { "me:display_name": "Jordan Kim" },
-    });
+
+    // Re-enable crypto gate and re-seed fixture data
+    setCryptoKeyed(true);
+    runFullSeed();
   }
 
   function handleTriggerSearch(): void {

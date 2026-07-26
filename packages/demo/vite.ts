@@ -22,7 +22,6 @@ function resolve(relative: string): string {
 // anchored so "$lib/crypto/context-init.js" stays on the real module.
 const stubMatchers: [RegExp, string][] = [
   [/^\$lib\/trpc(\/index\.js)?$/, "./src/stubs/trpc.ts"],
-  [/^\$lib\/tickets\/queries(\.js)?$/, "./src/stubs/queries.ts"],
   [/^\$lib\/crypto\/context(\.js)?$/, "./src/stubs/crypto-context.ts"],
   [
     /^\$lib\/terminology\/context(\.js)?$/,
@@ -33,6 +32,18 @@ const stubMatchers: [RegExp, string][] = [
     /^\$lib\/stores\/layout-mode\.svelte(\.js|\.ts)?$/,
     "./src/stubs/layout-mode.svelte.ts",
   ],
+  [
+    /^\$lib\/stores\/view-mode\.svelte(\.js|\.ts)?$/,
+    "./src/stubs/view-mode.svelte.ts",
+  ],
+  [
+    /^\$lib\/stores\/new-replies-first\.svelte(\.js|\.ts)?$/,
+    "./src/stubs/new-replies-first.svelte.ts",
+  ],
+  [
+    /^\$lib\/stores\/saved-filters\.svelte(\.js|\.ts)?$/,
+    "./src/stubs/saved-filters.svelte.ts",
+  ],
   [/^\$lib\/paraglide\/runtime(\.js)?$/, "./src/stubs/paraglide-runtime.ts"],
 ];
 
@@ -42,7 +53,7 @@ const exactPairs: [string, string][] = [
   ["$app/environment", "./src/stubs/app-environment.ts"],
   ["$app/navigation", "./src/stubs/app-navigation.ts"],
   ["$app/paths", "./src/stubs/app-paths.ts"],
-  ["$app/state", "./src/stubs/app-state.ts"],
+  ["$app/state", "./src/stubs/app-state.svelte.ts"],
 ];
 
 // Directory catch-alls. Order is load-bearing: these MUST come after the
@@ -50,6 +61,7 @@ const exactPairs: [string, string][] = [
 // not to ../client/src/lib/crypto/context.js.
 const dirPairs: [string, string][] = [
   ["$lib", "../client/src/lib"],
+  ["$routes", "../client/src/routes"],
   ["$demo", "./src/lib"],
 ];
 

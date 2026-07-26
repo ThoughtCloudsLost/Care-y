@@ -19,6 +19,7 @@
   import type { TabId, AreaId } from "$lib/shell/types.js";
   import AppShell from "$lib/shell/AppShell.svelte";
   import DemoFrame from "./DemoFrame.svelte";
+  import DemoSplash from "./DemoSplash.svelte";
   import { getSceneComponent } from "./scenes/index.js";
   import type { DemoRouter } from "./router.svelte.js";
 
@@ -83,6 +84,7 @@
           {/if}
         </AppShell>
       </App>
+      <DemoSplash dismissed={router.feature !== null || router.searchOpen} />
     </QueryClientProvider>
   </DemoFrame>
 </div>
@@ -125,5 +127,13 @@
      top edge at the navbar's bottom, matching production geometry. */
   .demo-surface :global(.search-sheet) {
     height: calc(100% - var(--navbar-h, 64px) - 8px);
+  }
+
+  /* ShellMessagebar anchors its top at --app-height (fallback 100dvh,
+     the browser viewport) and translates up by its own height. Inside
+     the frame the screen is the fixed containing block, so 100% puts
+     the anchor at the screen's bottom edge instead of below it. */
+  .demo-surface :global(.app-shell) {
+    --app-height: 100%;
   }
 </style>

@@ -20,6 +20,16 @@ import { SvelteMap } from "svelte/reactivity";
 import { Permission } from "@care-y/shared";
 import type { RawFollowUpPreview } from "$lib/tickets/preview-loader.svelte.js";
 
+// Type-only imports of the real classes so getters present the expected
+// types to consuming components. The runtime objects are structural stubs;
+// the `as unknown as X` casts bridge the gap.
+import type { CryptoBridge } from "$lib/workers/crypto-bridge.js";
+import type { OrgKeyManager } from "$lib/crypto/org-key.js";
+import type { OrgDecryptCache } from "$lib/crypto/org-decrypt-cache.js";
+import type { TicketDecryptCache } from "$lib/crypto/ticket-decrypt-cache.js";
+import type { FollowUpDecryptCache } from "$lib/crypto/follow-up-decrypt-cache.js";
+import type { PreviewLoader } from "$lib/tickets/preview-loader.svelte.js";
+
 // -----------------------------------------------------------------------
 // Ticket decrypt cache (mirrors TicketDecryptCache public methods)
 // -----------------------------------------------------------------------
@@ -239,6 +249,20 @@ const cryptoBridgeStub = {
     await Promise.resolve();
     return envelope.wrappedPayload;
   },
+  // Passthrough for direct bridge decrypts (read cursors): the demo's
+  // "ciphertext" already carries the plaintext payload.
+  async decrypt(
+    _ticketId: string,
+    _slot: string,
+    _keyCacheId: string,
+    _ephemeralPoint: string,
+    _nonce: string,
+    _wrappedKey: string,
+    ciphertext: string,
+  ): Promise<string> {
+    await Promise.resolve();
+    return ciphertext;
+  },
   onStateChange(_cb: unknown): void {
     // No-op: the demo bridge has no state transitions.
   },
@@ -278,36 +302,27 @@ let currentPermissions: ReadonlySet<Permission> = DEFAULT_PERMISSIONS;
 // Public getters (mirror the real module's export names exactly)
 // -----------------------------------------------------------------------
 
-class DemoStubError extends Error {
-  override readonly name = "DemoStubError";
-  constructor(fnName: string) {
-    super(
-      `${fnName} is stubbed out in the demo: no crypto Worker or key material exists`,
-    );
-  }
+export function getCryptoBridge(): CryptoBridge {
+  return cryptoBridgeStub as unknown as CryptoBridge;
 }
 
-export function getCryptoBridge(): typeof cryptoBridgeStub {
-  return cryptoBridgeStub;
+export function getOrgKeyManager(): OrgKeyManager {
+  return orgKeyManagerStub as unknown as OrgKeyManager;
 }
 
-export function getOrgKeyManager(): typeof orgKeyManagerStub {
-  return orgKeyManagerStub;
+export function getOrgDecryptCache(): OrgDecryptCache {
+  return orgDecryptCacheStub as unknown as OrgDecryptCache;
 }
 
-export function getOrgDecryptCache(): typeof orgDecryptCacheStub {
-  return orgDecryptCacheStub;
+export function getTicketDecryptCache(): TicketDecryptCache {
+  return ticketDecryptCacheStub as unknown as TicketDecryptCache;
 }
 
-export function getTicketDecryptCache(): typeof ticketDecryptCacheStub {
-  return ticketDecryptCacheStub;
+export function getFollowUpDecryptCache(): FollowUpDecryptCache {
+  return followUpDecryptCacheStub as unknown as FollowUpDecryptCache;
 }
 
-export function getFollowUpDecryptCache(): typeof followUpDecryptCacheStub {
-  return followUpDecryptCacheStub;
-}
-
-export function getPreviewLoader(): typeof previewLoaderStub {
+export function getPreviewLoader(): PreviewLoader {
   return previewLoaderStub;
 }
 

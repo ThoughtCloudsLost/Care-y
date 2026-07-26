@@ -14,6 +14,7 @@ import type {
 import type { RawFollowUpPreview } from "$lib/tickets/preview-loader.svelte.js";
 import type { DecryptResult } from "$lib/crypto/decrypt-result.js";
 import type { DisplayStatus } from "$lib/tickets/display-status.js";
+import type { TicketKeyWrap } from "$lib/crypto/ticket-decrypt-cache.js";
 
 // -----------------------------------------------------------------------
 // Helpers
@@ -70,8 +71,15 @@ function buildFollowUp(
     type: partial.type ?? "message",
     isPrivate: partial.isPrivate ?? false,
     content: partial.content,
+    // Media-only messages (voicemail, image) carry no text; the server
+    // sends encryptedContent null for those and the bubble renders the
+    // attachment instead of a decrypt placeholder.
     encryptedContent:
-      partial.source === "system" ? "" : fakeCipher(partial.content),
+      partial.source === "system"
+        ? ""
+        : partial.content === ""
+          ? null
+          : fakeCipher(partial.content),
     eventParams: partial.eventParams ?? null,
     createdAt: minutesAgo(partial.agoMinutes),
     hasRecording: partial.hasRecording ?? false,
@@ -96,6 +104,7 @@ function buildTicket(def: {
   createdAgo: number;
   lastActivityAgo: number | null;
   followUpDefs: Parameters<typeof buildFollowUp>[1][];
+  unreadCount?: number;
 }): DemoTicket {
   const id = nextId("tk");
   const followUps = def.followUpDefs.map((f) => buildFollowUp(id, f));
@@ -124,8 +133,64 @@ function buildTicket(def: {
       followUps.length,
     ),
     followUps,
+    unreadCount: def.unreadCount ?? 0,
   };
 }
+
+// -----------------------------------------------------------------------
+// Demo key wrap placeholder (opaque fake values, never decoded)
+// -----------------------------------------------------------------------
+
+export const DEMO_KEY_WRAP: TicketKeyWrap = {
+  ephemeralPoint: "demo-ephemeral-point",
+  nonce: "demo-nonce",
+  wrappedKey: "demo-wrapped-key",
+};
+
+// -----------------------------------------------------------------------
+// Queue definitions (shared between fixture data and trpc mock)
+// -----------------------------------------------------------------------
+
+export const DEMO_QUEUES: readonly { id: string; name: string }[] = [
+  { id: "q-housing", name: "Housing" },
+  { id: "q-intake", name: "Intake" },
+  { id: "q-crisis", name: "Crisis" },
+] as const;
+
+// -----------------------------------------------------------------------
+// Demo volunteers (shared between the auth mock and org-cache seeding)
+// -----------------------------------------------------------------------
+
+/**
+ * Display-name ciphertext must be valid base64: the volunteer search
+ * provider runs it through atob before the org cache resolves the
+ * seeded plaintext.
+ */
+export const DEMO_USERS: readonly {
+  id: string;
+  name: string;
+  encryptedDisplayName: string;
+  roleId: string;
+}[] = [
+  {
+    id: "demo-user-001",
+    name: "Jordan Kim",
+    encryptedDisplayName: "eHh4".repeat(16),
+    roleId: "demo-role-001",
+  },
+  {
+    id: "demo-user-002",
+    name: "Alex Rivera",
+    encryptedDisplayName: "eHh4".repeat(17),
+    roleId: "demo-role-002",
+  },
+  {
+    id: "demo-user-003",
+    name: "Sam Osei",
+    encryptedDisplayName: "eHh4".repeat(15),
+    roleId: "demo-role-002",
+  },
+] as const;
 
 // -----------------------------------------------------------------------
 // Fixture tickets
@@ -288,7 +353,10 @@ export function createDemoTickets(): DemoTicket[] {
         },
         {
           source: "client",
-          content: "",
+          type: "voicemail",
+          content:
+            "Hi, it is me again. Things have been hard this week and I " +
+            "wanted to talk before my appointment. Please call me back.",
           agoMinutes: 165,
           hasRecording: true,
         },
@@ -413,6 +481,7 @@ export function createDemoTickets(): DemoTicket[] {
       clientAlias: "River-4",
       createdAgo: 45,
       lastActivityAgo: 40,
+      unreadCount: 1,
       followUpDefs: [
         {
           source: "client",
@@ -453,6 +522,7 @@ export function createDemoTickets(): DemoTicket[] {
       keyWrap: "demo-keywrap",
       status: "open",
       clientAlias: "Sage-11",
+      unreadCount: 1,
       createdAgo: 360,
       lastActivityAgo: 350,
       followUpDefs: [
@@ -555,11 +625,10 @@ export function mapToPreviewFollowUps(
     id: fu.id,
     source: fu.source,
     type: fu.type,
-    encryptedContent: fu.encryptedContent,
-    keyWrap:
-      ticket.keyWrap !== null
-        ? { ephemeralPoint: "demo", nonce: "demo", wrappedKey: "demo" }
-        : null,
+    // RawFollowUpPreview is non-nullable; media-only previews render
+    // their chip from the hasRecording/hasImage flags, not the content.
+    encryptedContent: fu.encryptedContent ?? "",
+    keyWrap: ticket.keyWrap !== null ? DEMO_KEY_WRAP : null,
     createdAt: fu.createdAt.toISOString(),
     hasRecording: fu.hasRecording,
     hasImage: fu.hasImage,
@@ -573,7 +642,11 @@ export function mapToPreviewFollowUps(
  * Build a TicketLikeRecord from a DemoTicket, suitable for
  * mapTicketDisplayFields or any consumer expecting that shape.
  */
-export function mapToTicketLikeRecord(ticket: DemoTicket): TicketLikeRecord {
+export function mapToTicketLikeRecord(ticket: DemoTicket): TicketLikeRecord & {
+  readonly hasPhone: boolean;
+  readonly encryptedDescription: string;
+  readonly keyWrap: TicketKeyWrap | null;
+} {
   return {
     id: ticket.id,
     queueId: ticket.queueId,
@@ -582,7 +655,9 @@ export function mapToTicketLikeRecord(ticket: DemoTicket): TicketLikeRecord {
     onHold: ticket.onHold,
     priority: ticket.priority,
     encryptedTitle: ticket.encryptedTitle,
-    keyWrap: ticket.keyWrap,
+    encryptedDescription: ticket.encryptedDescription,
+    hasPhone: true,
+    keyWrap: ticket.keyWrap !== null ? DEMO_KEY_WRAP : null,
     clientAlias: ticket.clientAlias,
     assignedTo: ticket.assignedTo,
     assignedDisplayName: ticket.assignedDisplayName,
@@ -593,6 +668,19 @@ export function mapToTicketLikeRecord(ticket: DemoTicket): TicketLikeRecord {
 }
 
 /**
+ * Read-cursor payload for a ticket, shaped like the plaintext the real
+ * cursor decrypt produces. unreadCount trailing follow-ups sit after
+ * the cursor; 0 means read through the latest activity.
+ */
+export function readCursorPayloadFor(ticket: DemoTicket): string {
+  const lastReadIndex = ticket.followUps.length - 1 - ticket.unreadCount;
+  const lastRead =
+    lastReadIndex >= 0 ? ticket.followUps.at(lastReadIndex) : undefined;
+  const readUpTo = (lastRead?.createdAt ?? ticket.createdAt).toISOString();
+  return JSON.stringify({ readUpTo });
+}
+
+/**
  * Build the seed data object for demoSeed() from a set of tickets.
  * Seeds titles, descriptions, and preview data into the stub caches.
  */
@@ -600,26 +688,58 @@ export function buildSeedData(tickets: readonly DemoTicket[]): {
   titles: Record<string, string>;
   descriptions: Record<string, string>;
   followUps: Record<string, string>;
+  followUpContent: Record<string, string>;
   previews: Record<string, RawFollowUpPreview[]>;
+  readCursors: Record<string, string>;
+  orgValues: Record<string, string>;
 } {
   const titles: Record<string, string> = {};
   const descriptions: Record<string, string> = {};
   const followUps: Record<string, string> = {};
+  const followUpContent: Record<string, string> = {};
   const previews: Record<string, RawFollowUpPreview[]> = {};
+  const readCursors: Record<string, string> = {};
+  const orgValues: Record<string, string> = {};
+
+  // Seed queue display names for org cache decryption
+  for (const queue of DEMO_QUEUES) {
+    orgValues[`queue:${queue.id}`] = queue.name;
+  }
+
+  // Volunteer display names resolve through the org cache under
+  // user-prefixed keys (volunteer search, assignment rows)
+  for (const user of DEMO_USERS) {
+    orgValues[`user:${user.id}`] = user.name;
+  }
 
   for (const ticket of tickets) {
     if (ticket.keyWrap !== null) {
       titles[ticket.id] = ticket.title;
       descriptions[`desc:${ticket.id}`] = ticket.description;
 
+      // Read cursor payload: JSON the sweep and detail decrypt paths
+      // both parse; unreadCount trailing follow-ups stay unread.
+      readCursors[`cursor:${ticket.id}`] = readCursorPayloadFor(ticket);
+
       for (const fu of ticket.followUps) {
         if (fu.source !== "system" && fu.content !== "") {
           followUps[`fu:${ticket.id}:${fu.id}`] = fu.content;
+          // The detail thread decrypts through the follow-up cache keyed
+          // by the bare follow-up id (TicketDetail passes item.id).
+          followUpContent[fu.id] = fu.content;
         }
       }
     }
     previews[ticket.id] = mapToPreviewFollowUps(ticket);
   }
 
-  return { titles, descriptions, followUps, previews };
+  return {
+    titles,
+    descriptions,
+    followUps,
+    followUpContent,
+    previews,
+    readCursors,
+    orgValues,
+  };
 }

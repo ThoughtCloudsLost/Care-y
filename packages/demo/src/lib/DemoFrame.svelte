@@ -142,6 +142,19 @@
       0 20px 60px rgba(0, 0, 0, 0.4);
   }
 
+  /* The bezel ring repainted over everything: rounded-corner overflow
+     clipping can bleed on composited layers (sheets, the splash), and
+     the device border must always win visually. */
+  .device::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border: 12px solid #1a1a1a;
+    border-radius: 48px;
+    pointer-events: none;
+    z-index: 100001;
+  }
+
   .screen {
     border-radius: 38px;
     overflow: hidden;
@@ -172,7 +185,9 @@
     justify-content: space-between;
     padding: 0 28px 8px;
     pointer-events: none;
-    z-index: 9999;
+    /* Above the app's splash (z-index 99999): iOS draws system chrome
+       over an app's launch screen. */
+    z-index: 100000;
     color: #1d1d1f;
   }
 
@@ -216,7 +231,8 @@
     background: #1d1d1f;
     opacity: 0.9;
     pointer-events: none;
-    z-index: 9999;
+    /* Above the app's splash, same as the status bar. */
+    z-index: 100000;
   }
 
   .screen.dark .home-indicator {

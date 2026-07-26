@@ -14,6 +14,7 @@ export type FollowUpSource = "client" | "volunteer" | "system";
 export type FollowUpType =
   | "message"
   | "sms_inbound"
+  | "voicemail"
   | "internal_note"
   | "volunteer_assigned"
   | "volunteer_unassigned"
@@ -56,6 +57,11 @@ export interface DemoTicket {
   readonly followUpCount: number;
   readonly displayStatus: DisplayStatus;
   readonly followUps: readonly DemoFollowUp[];
+  /**
+   * How many of the trailing follow-ups the demo user has not read.
+   * Drives the read cursor payload: 0 = fully read.
+   */
+  readonly unreadCount: number;
 }
 
 /**
@@ -69,8 +75,10 @@ export interface DemoFollowUp {
   readonly isPrivate: boolean;
   /** Plaintext content. */
   readonly content: string;
-  /** Fake ciphertext: filler string of length content.length + 40. */
-  readonly encryptedContent: string;
+  /** Fake ciphertext: filler string of length content.length + 40.
+   *  Null for media-only messages (voicemail, image), matching the wire
+   *  shape the server sends for follow-ups without text. */
+  readonly encryptedContent: string | null;
   /** Present on system events (volunteer_assigned, priority_changed, etc.). */
   readonly eventParams: Record<string, unknown> | null;
   readonly createdAt: Date;
