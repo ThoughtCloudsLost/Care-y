@@ -230,6 +230,9 @@ importers:
       '@lucide/svelte':
         specifier: 1.16.0
         version: 1.16.0(svelte@5.56.7(@typescript-eslint/types@8.65.0))
+      '@tanstack/svelte-query':
+        specifier: 6.1.33
+        version: 6.1.33(svelte@5.56.7(@typescript-eslint/types@8.65.0))
       konsta:
         specifier: 5.0.9
         version: 5.0.9(patch_hash=f04f43bff4707f2cf6388655e4e5dbc24686198f657e8c5a72ec206f745c6ff6)

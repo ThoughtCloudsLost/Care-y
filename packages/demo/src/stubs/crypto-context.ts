@@ -10,13 +10,15 @@
  * This is the descramble hook: components read from these caches
  * exactly as they would in the real app, so reveals look authentic.
  *
- * getCryptoBridge() throws because no real Worker or key material
- * exists in the demo. Any component that reaches the bridge directly
- * is outside the demo's supported surface.
+ * getCryptoBridge() returns a passthrough stub that carries base64
+ * payloads through sealSelfBlob/openSelfBlob unchanged. This is
+ * enough for recent-views (the only AppShell call site). Operations
+ * not on that surface throw DemoStubError.
  */
 
 import { SvelteMap } from "svelte/reactivity";
-import type { Permission } from "@care-y/shared";
+import { Permission } from "@care-y/shared";
+import type { RawFollowUpPreview } from "$lib/tickets/preview-loader.svelte.js";
 
 // -----------------------------------------------------------------------
 // Ticket decrypt cache (mirrors TicketDecryptCache public methods)
@@ -82,7 +84,7 @@ const ticketDecryptCacheStub = {
     }
   },
   async whenSettled(): Promise<void> {
-    // Nothing is ever pending in the demo stub.
+    await Promise.resolve();
   },
   get size(): number {
     return ticketCache.size;
@@ -129,7 +131,7 @@ const followUpDecryptCacheStub = {
     }
   },
   async whenSettled(): Promise<void> {
-    // Nothing is ever pending in the demo stub.
+    await Promise.resolve();
   },
   get size(): number {
     return followUpCache.size;
@@ -150,7 +152,8 @@ const orgDecryptCacheStub = {
     return orgCache.get(id) ?? null;
   },
   async decryptAsync(id: string, _data: unknown): Promise<string | null> {
-    return Promise.resolve(orgCache.get(id) ?? null);
+    await Promise.resolve();
+    return orgCache.get(id) ?? null;
   },
   has(id: string): boolean {
     return orgCache.has(id);
@@ -165,7 +168,7 @@ const orgDecryptCacheStub = {
     orgCache.clear();
   },
   async whenSettled(): Promise<void> {
-    // Nothing is ever pending in the demo stub.
+    await Promise.resolve();
   },
   get size(): number {
     return orgCache.size;
@@ -178,7 +181,7 @@ const orgDecryptCacheStub = {
 
 const orgKeyManagerStub = {
   async unwrapOrgKey(): Promise<void> {
-    // No-op: the demo never unwraps real keys.
+    await Promise.resolve();
   },
   isReady(): boolean {
     return true;
@@ -192,7 +195,7 @@ const orgKeyManagerStub = {
 // Preview loader (mirrors PreviewLoader interface from preview-loader.svelte.ts)
 // -----------------------------------------------------------------------
 
-const rawPreviews = new SvelteMap<string, unknown[]>();
+const rawPreviews = new SvelteMap<string, RawFollowUpPreview[]>();
 
 const previewLoaderStub = {
   rawPreviews,
@@ -200,10 +203,47 @@ const previewLoaderStub = {
     // No-op: the demo pre-populates rawPreviews via demoSeed.
   },
   async eagerLoad(_ticketIds: string[]): Promise<void> {
+    await Promise.resolve();
     // No-op: the demo pre-populates rawPreviews via demoSeed.
   },
-  get(ticketId: string): unknown[] | undefined {
+  get(ticketId: string): RawFollowUpPreview[] | undefined {
     return rawPreviews.get(ticketId);
+  },
+};
+
+// -----------------------------------------------------------------------
+// Crypto bridge stub (passthrough seal/open for recent-views)
+// -----------------------------------------------------------------------
+
+/**
+ * Lightweight envelope: carries the base64 payload through unchanged.
+ * The demo has no real crypto, so sealSelfBlob wraps the payload in
+ * a fake envelope and openSelfBlob unwraps it back.
+ */
+interface DemoSelfBlobEnvelope {
+  readonly ephemeralPoint: string;
+  readonly nonce: string;
+  readonly wrappedPayload: string;
+}
+
+const cryptoBridgeStub = {
+  async sealSelfBlob(dataB64: string): Promise<DemoSelfBlobEnvelope> {
+    await Promise.resolve();
+    return {
+      ephemeralPoint: "demo-ephemeral",
+      nonce: "demo-nonce",
+      wrappedPayload: dataB64,
+    };
+  },
+  async openSelfBlob(envelope: DemoSelfBlobEnvelope): Promise<string> {
+    await Promise.resolve();
+    return envelope.wrappedPayload;
+  },
+  onStateChange(_cb: unknown): void {
+    // No-op: the demo bridge has no state transitions.
+  },
+  async zeroAll(): Promise<void> {
+    await Promise.resolve();
   },
 };
 
@@ -211,9 +251,28 @@ const previewLoaderStub = {
 // Auth state stubs
 // -----------------------------------------------------------------------
 
+/**
+ * Default permission set: a manager-level volunteer who can see the
+ * admin sidebar and use volunteer search. Scenes can override via
+ * demoSeed({ permissions: ... }).
+ */
+const DEFAULT_PERMISSIONS: ReadonlySet<Permission> = new Set<Permission>([
+  Permission.VIEW_TICKETS,
+  Permission.MANAGE_OWN_TICKETS,
+  Permission.VIEW_KNOWLEDGE_BASE,
+  Permission.EDIT_KNOWLEDGE_BASE,
+  Permission.VIEW_OWN_SHIFTS,
+  Permission.MODERATE_CONTENT,
+  Permission.MANAGE_USERS,
+  Permission.MANAGE_QUEUES,
+  Permission.MANAGE_PRESETS,
+  Permission.MANAGE_KNOWLEDGE_BASE_CATEGORIES,
+  Permission.VIEW_REPORTS,
+]);
+
 let currentUserId: string | undefined = "demo-user-001";
 let currentUserRoleId: string | undefined = "demo-role-001";
-const currentPermissions: ReadonlySet<Permission> = new Set<Permission>();
+let currentPermissions: ReadonlySet<Permission> = DEFAULT_PERMISSIONS;
 
 // -----------------------------------------------------------------------
 // Public getters (mirror the real module's export names exactly)
@@ -228,8 +287,8 @@ class DemoStubError extends Error {
   }
 }
 
-export function getCryptoBridge(): never {
-  throw new DemoStubError("getCryptoBridge");
+export function getCryptoBridge(): typeof cryptoBridgeStub {
+  return cryptoBridgeStub;
 }
 
 export function getOrgKeyManager(): typeof orgKeyManagerStub {
@@ -261,7 +320,9 @@ export function getCurrentUserRoleId(): () => string | undefined {
 }
 
 export function getCurrentPermissions(): () => ReadonlySet<Permission> {
-  return () => currentPermissions;
+  // Returned as a closure so re-seeding takes effect immediately:
+  // the getter always reads the current `currentPermissions` reference.
+  return (): ReadonlySet<Permission> => currentPermissions;
 }
 
 // The real module also exports setters (from context-init.ts).
@@ -311,12 +372,14 @@ export interface DemoSeedData {
   /** follow-up cache key -> plaintext */
   followUpContent?: Record<string, string>;
   /** preview loader: ticket id -> raw preview array */
-  previews?: Record<string, unknown[]>;
+  previews?: Record<string, RawFollowUpPreview[]>;
   /** read cursors: "cursor:<ticketId>" -> JSON payload */
   readCursors?: Record<string, string>;
   /** override the demo user/role IDs */
   userId?: string;
   userRoleId?: string;
+  /** override the demo permission set (defaults to manager-level) */
+  permissions?: ReadonlySet<Permission>;
 }
 
 /**
@@ -361,6 +424,7 @@ export function demoSeed(data: DemoSeedData): void {
   }
   if (data.userId !== undefined) currentUserId = data.userId;
   if (data.userRoleId !== undefined) currentUserRoleId = data.userRoleId;
+  if (data.permissions !== undefined) currentPermissions = data.permissions;
 }
 
 /** Clear all demo caches and reset auth state to defaults. */
@@ -371,4 +435,5 @@ export function demoReset(): void {
   rawPreviews.clear();
   currentUserId = "demo-user-001";
   currentUserRoleId = "demo-role-001";
+  currentPermissions = DEFAULT_PERMISSIONS;
 }

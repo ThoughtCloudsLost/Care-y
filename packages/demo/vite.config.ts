@@ -15,7 +15,10 @@ export default defineConfig({
   },
   server: {
     fs: {
-      allow: ["../client"],
+      // Setting allow replaces Vite's default list (which would have
+      // covered this package), so the demo root and the workspace root
+      // (pnpm store symlink targets) must be listed alongside client.
+      allow: [".", "../client", "../.."],
     },
   },
 });

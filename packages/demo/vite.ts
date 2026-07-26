@@ -28,6 +28,12 @@ const stubMatchers: [RegExp, string][] = [
     /^\$lib\/terminology\/context(\.js)?$/,
     "./src/stubs/terminology-context.svelte.ts",
   ],
+  [/^\$lib\/stores\/theme\.svelte(\.js|\.ts)?$/, "./src/stubs/theme.svelte.ts"],
+  [
+    /^\$lib\/stores\/layout-mode\.svelte(\.js|\.ts)?$/,
+    "./src/stubs/layout-mode.svelte.ts",
+  ],
+  [/^\$lib\/paraglide\/runtime(\.js)?$/, "./src/stubs/paraglide-runtime.ts"],
 ];
 
 // Exact-id aliases (no extensioned import forms exist for these).
