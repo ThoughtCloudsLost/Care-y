@@ -137,9 +137,9 @@
        off-canvas chrome (closed side panel) beyond the viewport;
        here the device must clip it. */
     overflow: hidden;
-    box-shadow:
-      0 0 0 2px #333,
-      0 20px 60px rgba(0, 0, 0, 0.4);
+    /* Ring only: a soft drop shadow gets clipped by the container's
+       overflow into a rectangular smudge, so the frame draws none. */
+    box-shadow: 0 0 0 2px #333;
   }
 
   /* The bezel ring repainted over everything: rounded-corner overflow
