@@ -1,30 +1,33 @@
 <!--
   Demo site outer page: two-column layout with phone frame and
-  narrative panel on desktop, stacked on mobile. Hosts the router,
-  query client, feature list, and dark mode toggle.
+  narrative panel on desktop, stacked on mobile. The phone app runs
+  inside a real-viewport iframe (owned by DemoFrame). This outer
+  page holds the bridge wiring, feature list, narrative, dark mode
+  toggle, and restart control. It does not import the router, query
+  client, or any seeded singleton to avoid creating a second module
+  instance outside the iframe's graph.
 -->
 <script lang="ts">
   import * as m from "$lib/paraglide/messages.js";
   import { Button } from "konsta/svelte";
   import { RotateCcw, Sun, Moon } from "@lucide/svelte";
-  import DemoSurface from "$demo/DemoSurface.svelte";
   import NarrativePanel from "$demo/NarrativePanel.svelte";
   import FeatureList from "$demo/FeatureList.svelte";
-  import { createDemoRouter } from "$demo/router.svelte.js";
-  import {
-    createDemoQueryClient,
-    reseedDemoQueryClient,
-  } from "$demo/demo-query-client.js";
-  import { demoSeed, demoReset } from "$lib/crypto/context.js";
-  import { demoResetTrpc } from "$lib/trpc/index.js";
-  import { setCryptoKeyed } from "$lib/crypto/crypto-keyed.svelte.js";
-  import {
-    createDemoTickets,
-    buildSeedData,
-    resetFixtureIds,
-  } from "$demo/fixtures/tickets.js";
+  import DemoFrame from "$demo/DemoFrame.svelte";
+  import type { DemoBridge, DemoBridgeState } from "$demo/bridge.js";
+  import type { DemoFeature } from "$demo/router.svelte.js";
 
   let dark = $state(false);
+
+  let bridge: DemoBridge | undefined = $state();
+  let phoneState: DemoBridgeState = $state({
+    feature: null,
+    detail: null,
+    searchOpen: false,
+  });
+  let unsubscribe: (() => void) | undefined;
+
+  let frameRef: DemoFrame | undefined = $state();
 
   // Mirror the product's applyScheme/applyGlassMode (theme.svelte.ts):
   // the glass styles are anchored to html-level classes
@@ -40,59 +43,33 @@
     document.documentElement.style.colorScheme = dark ? "dark" : "light";
   });
 
-  const router = createDemoRouter();
-  const queryClient = createDemoQueryClient();
+  // Forward dark changes to the phone iframe when the bridge is live
+  $effect(() => {
+    bridge?.setDark(dark);
+  });
 
-  let surfaceRef: DemoSurface | undefined = $state();
+  function handleBridgeReady(b: DemoBridge): void {
+    // Tear down any prior subscription (happens on iframe reload)
+    unsubscribe?.();
+    bridge = b;
 
-  // Enable crypto-keyed gate so unread chips and pills render
-  setCryptoKeyed(true);
+    // Sync the phone to the outer page's current dark state
+    b.setDark(dark);
 
-  /**
-   * Seed the demo caches with fixture data. Seeds display name for
-   * navbar avatar initials, queue display names for the list queue
-   * column, titles/descriptions/follow-ups for the decrypt cache,
-   * read cursors for unread state, and preview data for ticket cards.
-   */
-  function runFullSeed(): void {
-    resetFixtureIds();
-    const tickets = createDemoTickets();
-    const seed = buildSeedData(tickets);
-
-    demoSeed({
-      titles: seed.titles,
-      descriptions: seed.descriptions,
-      followUps: seed.followUps,
-      followUpContent: seed.followUpContent,
-      previews: seed.previews,
-      readCursors: seed.readCursors,
-      orgValues: {
-        "me:display_name": "Jordan Kim",
-        ...seed.orgValues,
-      },
+    unsubscribe = b.subscribe((state) => {
+      phoneState = state;
     });
   }
 
-  // Run initial seed
-  runFullSeed();
-
   function handleRestart(): void {
-    demoReset();
-    demoResetTrpc();
-    reseedDemoQueryClient(queryClient);
-    router.reset();
-
-    // Re-enable crypto gate and re-seed fixture data
-    setCryptoKeyed(true);
-    runFullSeed();
+    frameRef?.reload();
   }
 
-  function handleTriggerSearch(): void {
-    if (surfaceRef) {
-      surfaceRef.triggerSearch();
+  function handleFeatureSelect(id: DemoFeature): void {
+    if (id === "search") {
+      bridge?.openSearch();
     } else {
-      // Fallback: navigate via router if surface ref not available
-      router.navigate("search");
+      bridge?.navigate(id);
     }
   }
 </script>
@@ -125,22 +102,23 @@
   <div class="demo-layout">
     <div class="demo-phone-column">
       <div class="demo-stage">
-        <DemoSurface
+        <DemoFrame
           {dark}
-          {router}
-          {queryClient}
-          orgName="CARE-Y"
-          bind:this={surfaceRef}
+          onbridgeready={handleBridgeReady}
+          bind:this={frameRef}
         />
       </div>
     </div>
 
     <div class="demo-side-column">
-      <FeatureList {router} ontriggersearch={handleTriggerSearch} />
+      <FeatureList
+        feature={phoneState.feature}
+        onselect={handleFeatureSelect}
+      />
       <NarrativePanel
-        feature={router.feature}
-        detail={router.detail}
-        searchOpen={router.searchOpen}
+        feature={phoneState.feature}
+        detail={phoneState.detail}
+        searchOpen={phoneState.searchOpen}
       />
     </div>
   </div>

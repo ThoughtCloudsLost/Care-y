@@ -7,6 +7,7 @@
  * consumers (care-y.com) where Vite's alias array is prepended by
  * the SvelteKit plugin and cannot shadow $lib.
  */
+import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import type { Alias, Plugin } from "vite";
 
@@ -80,6 +81,48 @@ export function demoAliases(): Alias[] {
       replacement: resolve(relative),
     })),
   ];
+}
+
+/**
+ * Inject the production splash into phone.html at serve/build time.
+ *
+ * Production paints #splash from static markup in the client's app.html
+ * before any JS loads. The phone iframe must do the same: a component-
+ * rendered splash appears only after the whole dev module graph loads,
+ * leaving seconds of white. Extracting from app.html here (instead of
+ * hand-copying) keeps the demo from drifting when the splash changes.
+ * DemoSplash.svelte still owns dismissal via the body.hydrated class.
+ */
+export function demoSplashPlugin(): Plugin {
+  const appHtmlPath = resolve("../client/src/app.html");
+
+  return {
+    name: "care-y-demo-splash",
+    transformIndexHtml: {
+      order: "pre",
+      handler(html: string, ctx: { filename: string }): string {
+        if (!ctx.filename.endsWith("phone.html")) return html;
+
+        // eslint-disable-next-line security/detect-non-literal-fs-filename -- build-time constant derived from import.meta.url, no user input
+        const appHtml = readFileSync(appHtmlPath, "utf8");
+
+        // Every style block that targets #splash, with the SvelteKit
+        // nonce template attribute stripped (the demo has no CSP nonce).
+        const styles = [...appHtml.matchAll(/<style[^>]*>[\s\S]*?<\/style>/g)]
+          .map((match) => match[0])
+          .filter((block) => block.includes("#splash"))
+          .map((block) => block.replace(/<style[^>]*>/, "<style>"))
+          .join("\n");
+
+        // The splash div is flat (img + span), so a non-greedy match
+        // ends at the correct closing tag.
+        const markup = /<div id="splash"[\s\S]*?<\/div>/.exec(appHtml)?.[0];
+        if (markup === undefined) return html;
+
+        return html.replace("<body>", `<body>\n${styles}\n${markup}`);
+      },
+    },
+  };
 }
 
 export function demoResolvePlugin(): Plugin {

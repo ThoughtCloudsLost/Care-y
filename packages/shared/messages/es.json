@@ -1884,5 +1884,6 @@
   "demo_narrative_search_heading": "Busqueda en datos cifrados",
   "demo_narrative_search_body": "La busqueda funciona completamente en el navegador. Tu dispositivo descifra el contenido de los tickets localmente y compara tu consulta con el texto descifrado. Ningun termino de busqueda se envia al servidor.",
   "demo_narrative_search_body2": "Los resultados de busqueda son tan privados como los tickets mismos. El servidor no puede registrar lo que buscaste ni que resultados coincidieron.",
+  "demo_phone_frame_title": "Demo de la aplicación CARE-Y",
   "demo_status_bar_time": "9:41"
 }

@@ -1883,5 +1883,6 @@ export * from "./demo_narrative_conversation_body2.js";
 export * from "./demo_narrative_search_heading.js";
 export * from "./demo_narrative_search_body.js";
 export * from "./demo_narrative_search_body2.js";
+export * from "./demo_phone_frame_title.js";
 export * from "./demo_status_bar_time.js";
 export type LocalizedString = import("../runtime.js").LocalizedString;
