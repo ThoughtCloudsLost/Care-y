@@ -1,6 +1,7 @@
 /** UI actions available from the ticket panel. */
 export type TicketAction =
   | "call"
+  | "phone"
   | "take"
   | "release"
   | "assign"

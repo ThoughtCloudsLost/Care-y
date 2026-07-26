@@ -6,8 +6,9 @@ import type {
   KeyStatus,
 } from "$lib/stores/user-filters.svelte.js";
 import type { QueueSortField } from "$lib/stores/queue-filters.svelte.js";
+import type { ClientSortField } from "$lib/stores/client-filters.svelte.js";
 
-export type PeopleTab = "users" | "queues";
+export type PeopleTab = "users" | "queues" | "clients";
 
 export const SORT_FIELDS: readonly UserSortField[] = ["name", "role", "status"];
 
@@ -37,12 +38,24 @@ export const VALID_KEY_STATUSES: ReadonlySet<string> = new Set<KeyStatus>([
   "no_org_key",
 ]);
 
+export const CLIENT_SORT_FIELDS: readonly ClientSortField[] = [
+  "alias",
+  "created_at",
+  "ticket_count",
+];
+
 export function isPeopleTab(value: string): value is PeopleTab {
-  return value === "users" || value === "queues";
+  return value === "users" || value === "queues" || value === "clients";
+}
+
+export function isClientSortField(value: string): value is ClientSortField {
+  return (CLIENT_SORT_FIELDS as readonly string[]).includes(value);
 }
 
 export function defaultTab(permissions: ReadonlySet<string>): PeopleTab {
   if (permissions.has(Permission.MANAGE_USERS)) return "users";
+  if (permissions.has(Permission.MANAGE_QUEUES)) return "queues";
+  if (permissions.has(Permission.VIEW_CLIENTS)) return "clients";
   return "queues";
 }
 
