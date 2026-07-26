@@ -8,7 +8,7 @@
 
 import type { Component } from "svelte";
 import type { DemoFeature } from "../router.svelte.js";
-import TicketsScene from "./TicketsScene.svelte";
+import TicketsMount from "./TicketsMount.svelte";
 
 /**
  * Scene entry: a component to render as page content, or null
@@ -27,7 +27,7 @@ export type SceneRegistry = Record<DemoFeature, SceneEntry>;
 
 export const scenes: SceneRegistry = {
   tickets: {
-    component: TicketsScene,
+    component: TicketsMount,
     label: "Tickets",
   },
   search: {

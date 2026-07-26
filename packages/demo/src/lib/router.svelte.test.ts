@@ -1,11 +1,59 @@
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect, beforeEach, vi } from "vitest";
 import { DemoRouter } from "./router.svelte.js";
+
+// The router imports setDemoPage from "$app/state" (aliased to the stub).
+// In the test environment, we mock it to verify URL pushes.
+vi.mock("$app/state", () => {
+  let lastUrl: URL | undefined;
+  return {
+    setDemoPage(url: URL): void {
+      lastUrl = url;
+    },
+    _getLastUrl(): URL | undefined {
+      return lastUrl;
+    },
+    _resetLastUrl(): void {
+      lastUrl = undefined;
+    },
+    page: {
+      params: {} as Record<string, string>,
+      url: new URL("http://demo.local/tickets"),
+      route: { id: "" },
+      status: 200,
+      error: null as unknown,
+      data: {} as Record<string, unknown>,
+      form: null as unknown,
+      state: {} as Record<string, unknown>,
+    },
+    navigating: null,
+    updated: {
+      current: false,
+      check: async (): Promise<boolean> => Promise.resolve(false),
+    },
+  };
+});
+
+// Access mock internals for assertion
+async function getLastUrl(): Promise<URL | undefined> {
+  const mod = await vi.importMock<{
+    _getLastUrl: () => URL | undefined;
+  }>("$app/state");
+  return mod._getLastUrl();
+}
+
+async function resetLastUrl(): Promise<void> {
+  const mod = await vi.importMock<{
+    _resetLastUrl: () => void;
+  }>("$app/state");
+  mod._resetLastUrl();
+}
 
 describe("DemoRouter", () => {
   let router: DemoRouter;
 
-  beforeEach(() => {
+  beforeEach(async () => {
     router = new DemoRouter();
+    await resetLastUrl();
   });
 
   describe("initial state", () => {
@@ -18,17 +66,23 @@ describe("DemoRouter", () => {
   });
 
   describe("navigate()", () => {
-    it("sets feature to tickets", () => {
+    it("sets feature to tickets and pushes list URL", async () => {
       router.navigate("tickets");
       expect(router.feature).toBe("tickets");
       expect(router.activeTab).toBe("tickets");
       expect(router.searchOpen).toBe(false);
+
+      const url = await getLastUrl();
+      expect(url?.pathname).toBe("/tickets");
     });
 
-    it("sets feature to tickets with detail", () => {
+    it("sets feature to tickets with detail and pushes detail URL", async () => {
       router.navigate("tickets", "tk-0001");
       expect(router.feature).toBe("tickets");
       expect(router.detail).toBe("tk-0001");
+
+      const url = await getLastUrl();
+      expect(url?.pathname).toBe("/tickets/tk-0001");
     });
 
     it("sets feature to search and opens search", () => {
@@ -46,10 +100,13 @@ describe("DemoRouter", () => {
   });
 
   describe("handleTabChange()", () => {
-    it("navigates to tickets when tickets tab tapped", () => {
+    it("navigates to tickets when tickets tab tapped", async () => {
       router.handleTabChange("tickets");
       expect(router.feature).toBe("tickets");
       expect(router.activeTab).toBe("tickets");
+
+      const url = await getLastUrl();
+      expect(url?.pathname).toBe("/tickets");
     });
 
     it("does not navigate for inert tabs (home)", () => {
@@ -99,16 +156,22 @@ describe("DemoRouter", () => {
   });
 
   describe("handleGoto()", () => {
-    it("maps /tickets to tickets feature", () => {
+    it("maps /tickets to tickets feature and pushes list URL", async () => {
       router.handleGoto("/tickets");
       expect(router.feature).toBe("tickets");
       expect(router.detail).toBeNull();
+
+      const url = await getLastUrl();
+      expect(url?.pathname).toBe("/tickets");
     });
 
-    it("maps /tickets/tk-0001 to tickets with detail", () => {
+    it("maps /tickets/tk-0001 to tickets with detail", async () => {
       router.handleGoto("/tickets/tk-0001");
       expect(router.feature).toBe("tickets");
       expect(router.detail).toBe("tk-0001");
+
+      const url = await getLastUrl();
+      expect(url?.pathname).toBe("/tickets/tk-0001");
     });
 
     it("maps /tickets/tk-0001/conversation to tickets with conversation detail", () => {
@@ -135,20 +198,42 @@ describe("DemoRouter", () => {
       expect(router.feature).toBe("tickets");
     });
 
-    it("strips /Care-y base path prefix", () => {
+    it("strips /Care-y base path prefix", async () => {
       router.handleGoto("/Care-y/tickets");
       expect(router.feature).toBe("tickets");
+
+      const url = await getLastUrl();
+      expect(url?.pathname).toBe("/tickets");
+    });
+
+    it("restores list URL when navigating back from detail via shellBack fallback", async () => {
+      // Detail view calls shellBack("/tickets") which, with no history,
+      // calls goto(resolve("/tickets")). The demo's goto handler calls
+      // router.handleGoto with the resolved path.
+      router.navigate("tickets", "tk-0001");
+      expect(router.detail).toBe("tk-0001");
+
+      // Simulate shellBack's fallback: goto(resolve("/tickets"))
+      router.handleGoto("/tickets");
+      expect(router.detail).toBeNull();
+      expect(router.feature).toBe("tickets");
+
+      const url = await getLastUrl();
+      expect(url?.pathname).toBe("/tickets");
     });
   });
 
   describe("reset()", () => {
-    it("returns to initial state", () => {
+    it("returns to initial state and pushes list URL", async () => {
       router.navigate("search");
       router.reset();
       expect(router.feature).toBeNull();
       expect(router.detail).toBeNull();
       expect(router.searchOpen).toBe(false);
       expect(router.activeTab).toBe("tickets");
+
+      const url = await getLastUrl();
+      expect(url?.pathname).toBe("/tickets");
     });
   });
 

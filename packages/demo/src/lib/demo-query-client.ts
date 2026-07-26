@@ -83,3 +83,13 @@ export function createDemoQueryClient(): QueryClient {
 
   return client;
 }
+
+/**
+ * Clear all cached data and re-seed auth.me. Use this on demo restart
+ * so that list/detail queries refetch from the reset trpc mock while
+ * AppShell's meQuery still resolves immediately.
+ */
+export function reseedDemoQueryClient(client: QueryClient): void {
+  client.clear();
+  client.setQueryData(authKeys.me(), buildMeFixture());
+}

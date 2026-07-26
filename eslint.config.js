@@ -330,6 +330,17 @@ export default tseslint.config(
     },
   },
 
+  // Demo stub modules are module-level test doubles: they present the real
+  // client types at their export boundary (so the mounted production
+  // component graph type-checks unchanged) over partial implementations,
+  // which requires narrowing assertions the same way test mocks do.
+  {
+    files: ["packages/demo/src/stubs/**"],
+    rules: {
+      "@typescript-eslint/no-unsafe-type-assertion": "off",
+    },
+  },
+
   // Disable type-checked rules for config files not covered by any tsconfig
   // (root tsconfig.json has "files": [] so projectService rejects root-level
   // configs, and packages/client/svelte.config.js is outside its src/ include)

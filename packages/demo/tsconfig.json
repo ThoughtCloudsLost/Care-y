@@ -11,21 +11,52 @@
     "paths": {
       "$lib/trpc": ["./src/stubs/trpc.ts"],
       "$lib/trpc/index.js": ["./src/stubs/trpc.ts"],
-      "$lib/tickets/queries": ["./src/stubs/queries.ts"],
-      "$lib/tickets/queries.js": ["./src/stubs/queries.ts"],
       "$lib/crypto/context": ["./src/stubs/crypto-context.ts"],
       "$lib/crypto/context.js": ["./src/stubs/crypto-context.ts"],
       "$lib/terminology/context": ["./src/stubs/terminology-context.svelte.ts"],
       "$lib/terminology/context.js": [
         "./src/stubs/terminology-context.svelte.ts"
       ],
-      "@care-y/crypto": ["./src/stubs/care-y-crypto.ts"],
+      "@care-y/crypto": ["../crypto/src/index.ts"],
       "$app/environment": ["./src/stubs/app-environment.ts"],
       "$app/navigation": ["./src/stubs/app-navigation.ts"],
       "$app/paths": ["./src/stubs/app-paths.ts"],
-      "$app/state": ["./src/stubs/app-state.ts"],
+      "$app/state": ["./src/stubs/app-state.svelte.ts"],
+      "$lib/stores/theme.svelte": ["./src/stubs/theme.svelte.ts"],
+      "$lib/stores/theme.svelte.ts": ["./src/stubs/theme.svelte.ts"],
+      "$lib/stores/theme.svelte.js": ["./src/stubs/theme.svelte.ts"],
+      "$lib/stores/layout-mode.svelte": ["./src/stubs/layout-mode.svelte.ts"],
+      "$lib/stores/layout-mode.svelte.ts": [
+        "./src/stubs/layout-mode.svelte.ts"
+      ],
+      "$lib/stores/layout-mode.svelte.js": [
+        "./src/stubs/layout-mode.svelte.ts"
+      ],
+      "$lib/stores/view-mode.svelte": ["./src/stubs/view-mode.svelte.ts"],
+      "$lib/stores/view-mode.svelte.ts": ["./src/stubs/view-mode.svelte.ts"],
+      "$lib/stores/view-mode.svelte.js": ["./src/stubs/view-mode.svelte.ts"],
+      "$lib/stores/new-replies-first.svelte": [
+        "./src/stubs/new-replies-first.svelte.ts"
+      ],
+      "$lib/stores/new-replies-first.svelte.ts": [
+        "./src/stubs/new-replies-first.svelte.ts"
+      ],
+      "$lib/stores/new-replies-first.svelte.js": [
+        "./src/stubs/new-replies-first.svelte.ts"
+      ],
+      "$lib/stores/saved-filters.svelte": [
+        "./src/stubs/saved-filters.svelte.ts"
+      ],
+      "$lib/stores/saved-filters.svelte.ts": [
+        "./src/stubs/saved-filters.svelte.ts"
+      ],
+      "$lib/stores/saved-filters.svelte.js": [
+        "./src/stubs/saved-filters.svelte.ts"
+      ],
       "$lib/*": ["../client/src/lib/*"],
       "$lib": ["../client/src/lib"],
+      "$routes/*": ["../client/src/routes/*"],
+      "$routes": ["../client/src/routes"],
       "$demo/*": ["./src/lib/*"],
       "$demo": ["./src/lib"]
     }
@@ -37,7 +68,12 @@
     "vite.ts",
     "vite.config.ts",
     "vitest.config.ts",
-    "../client/src/lib/workers/shared-worker-types.d.ts"
+    "../client/src/lib/workers/shared-worker-types.d.ts",
+    "../server/src/types/sodium-native.d.ts"
   ],
-  "references": [{ "path": "../shared" }]
+  "references": [
+    { "path": "../shared" },
+    { "path": "../crypto" },
+    { "path": "../server" }
+  ]
 }
