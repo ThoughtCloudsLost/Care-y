@@ -28,6 +28,7 @@ import type { TicketAccessChecker } from "../tickets/access.js";
 import type {
   TicketService,
   TicketServiceDeps,
+  TicketWithKeyWrap,
   PendingClient,
 } from "../tickets/ticket-service.js";
 import type { FollowUpService } from "../tickets/followup-service.js";
@@ -58,6 +59,7 @@ import { createStubShiftProvider } from "../tickets/shift-provider.js";
 import { createUserService } from "../users/user-service.js";
 import { encode as cryptoEncode } from "@care-y/crypto";
 import { rewrapFollowUp } from "../tickets/rewrap-service.js";
+import { maskPhone, formatPhone } from "../utils/sql.js";
 import {
   createTicketInputSchema,
   resolveCreateTargetInputSchema,
@@ -455,6 +457,46 @@ export function createTicketRouter(deps: TicketRouterDeps) {
     })();
   }
 
+  /**
+   * Applies role-based phone formatting to a ticket record.
+   *
+   * Admin: full formatted number (server decrypts, formats, zeros buffer).
+   * Manager/volunteer: masked last-4 (server decrypts, masks, zeros buffer).
+   * Volunteer not assigned to the ticket: null (phone hidden entirely).
+   *
+   * Returns a new object with `clientPhone` (string | null) replacing the
+   * raw `clientPhoneEncrypted` buffer, which is stripped from the output.
+   */
+  // care-y-ignore-next-line missing-return-type -- return type is a computed Omit intersection, not expressible concisely
+  function applyPhoneFormatting(
+    ticket: TicketWithKeyWrap,
+    roleId: string,
+    userId: string,
+  ) {
+    const { clientPhoneEncrypted, ...rest } = ticket;
+    const encryptor = deps.fieldEncryptor;
+
+    // No phone on this client
+    if (clientPhoneEncrypted === null || !encryptor) {
+      return { ...rest, clientPhone: null as string | null };
+    }
+
+    // Volunteer not assigned to this ticket sees no phone
+    if (roleId === RoleId.VOLUNTEER && ticket.assignedTo !== userId) {
+      return { ...rest, clientPhone: null as string | null };
+    }
+
+    // Admin: full formatted number
+    if (roleId === RoleId.ADMIN) {
+      const buf = encryptor.decryptToBuffer(clientPhoneEncrypted);
+      return { ...rest, clientPhone: formatPhone(buf) };
+    }
+
+    // Manager or assigned volunteer: masked
+    const buf = encryptor.decryptToBuffer(clientPhoneEncrypted);
+    return { ...rest, clientPhone: maskPhone(buf) };
+  }
+
   return router({
     // --- Ticket CRUD ---
     create: volunteerProcedure.input(createTicketInputSchema).mutation(
@@ -503,14 +545,18 @@ export function createTicketRouter(deps: TicketRouterDeps) {
     get: volunteerProcedure.input(z.object({ ticketId: z.uuid() })).query(
       withErrorWrapping(async ({ ctx, input }) => {
         const { svc } = ticketSvc(ctx.org.tenantDb);
-        return svc.findById(input.ticketId, ctx.user.id);
+        const ticket = await svc.findById(input.ticketId, ctx.user.id);
+        return applyPhoneFormatting(ticket, ctx.user.roleId, ctx.user.id);
       }),
     ),
 
     list: volunteerProcedure.input(ticketListInputSchema).query(
       withErrorWrapping(async ({ ctx, input }) => {
         const { svc } = ticketSvc(ctx.org.tenantDb);
-        return svc.list(ctx.user.id, input);
+        const tickets = await svc.list(ctx.user.id, input);
+        return tickets.map((t) =>
+          applyPhoneFormatting(t, ctx.user.roleId, ctx.user.id),
+        );
       }),
     ),
 

@@ -2169,4 +2169,42 @@ describe.skipIf(!process.env.DATABASE_URL)("TicketService (DB)", () => {
     expect(results.some((t) => t.id === unassigned.id)).toBe(true);
     expect(results.some((t) => t.id === assigned.id)).toBe(false);
   });
+
+  // --- Phone data in ticket queries ---
+
+  it("findById returns clientPhoneEncrypted and clientPhoneId when phone exists", async () => {
+    const { userId, ticketId, phoneId } = await createTicketFixture();
+
+    const ticket = await svc.findById(ticketId, userId);
+
+    expect(ticket.clientPhoneId).toBe(phoneId);
+    expect(ticket.clientPhoneEncrypted).not.toBeNull();
+    expect(Buffer.isBuffer(ticket.clientPhoneEncrypted)).toBe(true);
+  });
+
+  it("list returns clientPhoneEncrypted and clientPhoneId for each ticket", async () => {
+    const queue = await createTestQueue(testDb.db, {
+      label: "PhoneList-Q-" + crypto.randomUUID().slice(0, 8),
+    });
+    const user = await createTestUser(testDb.db);
+    await testDb.db
+      .insertInto("queue_assignments")
+      .values({ queue_id: queue.id, user_id: user.id })
+      .onConflict((oc) => oc.columns(["queue_id", "user_id"]).doNothing())
+      .execute();
+
+    const fix = await createTestTicketFixture(testDb.db, {
+      queueId: queue.id,
+    });
+
+    const results = await svc.list(user.id, {
+      queueIds: [queue.id],
+      limit: 100,
+    });
+    const ticket = results.find((t) => t.id === fix.ticketId);
+    expect(ticket).toBeDefined();
+    expect(ticket!.clientPhoneId).toBe(fix.phoneId);
+    expect(ticket!.clientPhoneEncrypted).not.toBeNull();
+    expect(Buffer.isBuffer(ticket!.clientPhoneEncrypted)).toBe(true);
+  });
 });
