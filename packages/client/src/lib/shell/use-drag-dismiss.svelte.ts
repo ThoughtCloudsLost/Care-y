@@ -1,12 +1,19 @@
 /**
  * Axis-generic swipe-to-dismiss gesture for overlays.
  *
- * Returns a Svelte action that attaches touch handlers to an overlay's content
- * element. The action applies translate(X|Y) directly to a target ancestor so
+ * Returns a Svelte action that attaches pointer event handlers to an overlay's
+ * content element. Pointer Events are the single event model covering mouse,
+ * pen, and touch input (MDN Pointer_events), so one listener set handles all
+ * three. The action applies translate(X|Y) directly to a target ancestor so
  * the entire surface (glass background + content) moves during the drag.
  *
- * Only touches originating from the handle element start a drag.
- * Content area touches pass through to normal scrolling.
+ * Scroll suppression for touch interactions is controlled by the CSS property
+ * `touch-action: none` on the drag handle, not by calling preventDefault on
+ * pointermove. The handle must carry that declaration; without it, touch drags
+ * will scroll instead of dragging the overlay.
+ *
+ * Only pointers originating from the handle element start a drag.
+ * Content area interactions pass through to normal scrolling and selection.
  *
  * Consumers configure axis ("x" | "y") and direction (1 | -1):
  *   - Sheet (drag down to close):  axis="y", direction=1
@@ -43,8 +50,11 @@ export function useDragDismiss(config: DragDismissConfig): DragDismissReturn {
   let committed = false;
   let fromHandle = false;
   let currentOffset = 0;
-  let prevTouchPos = 0;
-  let currentTouchPos = 0;
+  let prevPointerPos = 0;
+  let currentPointerPos = 0;
+
+  /** pointerId of the active drag, or null when idle. */
+  let activePointerId: number | null = null;
 
   let baseRef: HTMLElement | null = null;
 
@@ -57,8 +67,8 @@ export function useDragDismiss(config: DragDismissConfig): DragDismissReturn {
     }
   });
 
-  function pos(touch: Touch): number {
-    return config.axis === "x" ? touch.clientX : touch.clientY;
+  function pos(e: PointerEvent): number {
+    return config.axis === "x" ? e.clientX : e.clientY;
   }
 
   function translate(px: number): string {
@@ -67,16 +77,27 @@ export function useDragDismiss(config: DragDismissConfig): DragDismissReturn {
       : `translateY(${String(px)}px)`;
   }
 
-  function onTouchStart(e: TouchEvent, base: HTMLElement): void {
-    const touch = e.touches[0];
-    if (!config.opened || e.touches.length !== 1 || touch == null) return;
+  function onPointerDown(e: PointerEvent, base: HTMLElement): void {
+    // Ignore secondary pointers (multi-touch, non-primary pen).
+    if (!e.isPrimary || activePointerId != null) return;
+    if (!config.opened) return;
 
     const target = e.target;
     fromHandle =
       target instanceof HTMLElement
         ? (config.handleEl?.contains(target) ?? false)
         : false;
-    startPos = pos(touch);
+
+    // Canceling pointerdown on the handle suppresses the compatibility mouse
+    // events that would otherwise start text selection on mouse/pen input.
+    // Non-handle pointerdowns are left alone so content scrolling and
+    // selection work normally.
+    if (fromHandle) {
+      e.preventDefault();
+    }
+
+    activePointerId = e.pointerId;
+    startPos = pos(e);
     startTime = Date.now();
     committed = false;
     currentOffset = 0;
@@ -84,11 +105,14 @@ export function useDragDismiss(config: DragDismissConfig): DragDismissReturn {
     base.style.transition = "none";
   }
 
-  function onTouchMove(e: TouchEvent, base: HTMLElement): void {
-    const touch = e.touches[0];
-    if (!config.opened || e.touches.length !== 1 || touch == null) return;
+  function onPointerMove(
+    e: PointerEvent,
+    node: HTMLElement,
+    base: HTMLElement,
+  ): void {
+    if (e.pointerId !== activePointerId || !config.opened) return;
 
-    const current = pos(touch);
+    const current = pos(e);
     const delta = (current - startPos) * config.direction;
 
     if (!committed) {
@@ -97,20 +121,45 @@ export function useDragDismiss(config: DragDismissConfig): DragDismissReturn {
       committed = true;
       startPos = current;
       startTime = Date.now();
+
+      // Capture the pointer so moves continue even if the cursor/finger
+      // leaves the node mid-drag. jsdom does not implement capture, so
+      // guard with a feature check.
+      if (typeof node.setPointerCapture === "function") {
+        node.setPointerCapture(e.pointerId);
+      }
     }
 
-    prevTouchPos = currentTouchPos;
-    currentTouchPos = current;
+    prevPointerPos = currentPointerPos;
+    currentPointerPos = current;
 
     const dragDelta = current - startPos;
     currentOffset =
       config.direction === 1 ? Math.max(0, dragDelta) : Math.min(0, dragDelta);
 
     base.style.transform = translate(currentOffset);
-    e.preventDefault();
+    // No preventDefault on pointermove: scroll suppression is handled by
+    // touch-action CSS on the handle, not by canceling the event.
   }
 
-  function onTouchEnd(base: HTMLElement): void {
+  function onPointerEnd(
+    e: PointerEvent,
+    node: HTMLElement,
+    base: HTMLElement,
+  ): void {
+    if (e.pointerId !== activePointerId) return;
+
+    activePointerId = null;
+
+    // Release pointer capture if held. hasPointerCapture guards against
+    // releasing an already-released capture (pointerup auto-releases).
+    if (
+      typeof node.hasPointerCapture === "function" &&
+      node.hasPointerCapture(e.pointerId)
+    ) {
+      node.releasePointerCapture(e.pointerId);
+    }
+
     if (!committed) {
       base.style.transition = "";
       return;
@@ -122,8 +171,8 @@ export function useDragDismiss(config: DragDismissConfig): DragDismissReturn {
 
     const swipingBack =
       config.direction === 1
-        ? currentTouchPos < prevTouchPos
-        : currentTouchPos > prevTouchPos;
+        ? currentPointerPos < prevPointerPos
+        : currentPointerPos > prevPointerPos;
 
     const shouldDismiss =
       !swipingBack &&
@@ -165,21 +214,21 @@ export function useDragDismiss(config: DragDismissConfig): DragDismissReturn {
 
     baseRef = base;
 
-    const boundStart = (e: TouchEvent): void => onTouchStart(e, base);
-    const boundMove = (e: TouchEvent): void => onTouchMove(e, base);
-    const boundEnd = (): void => onTouchEnd(base);
+    const boundDown = (e: PointerEvent): void => onPointerDown(e, base);
+    const boundMove = (e: PointerEvent): void => onPointerMove(e, node, base);
+    const boundEnd = (e: PointerEvent): void => onPointerEnd(e, node, base);
 
-    node.addEventListener("touchstart", boundStart, { passive: true });
-    node.addEventListener("touchmove", boundMove, { passive: false });
-    node.addEventListener("touchend", boundEnd);
-    node.addEventListener("touchcancel", boundEnd);
+    node.addEventListener("pointerdown", boundDown);
+    node.addEventListener("pointermove", boundMove);
+    node.addEventListener("pointerup", boundEnd);
+    node.addEventListener("pointercancel", boundEnd);
 
     return {
       destroy(): void {
-        node.removeEventListener("touchstart", boundStart);
-        node.removeEventListener("touchmove", boundMove);
-        node.removeEventListener("touchend", boundEnd);
-        node.removeEventListener("touchcancel", boundEnd);
+        node.removeEventListener("pointerdown", boundDown);
+        node.removeEventListener("pointermove", boundMove);
+        node.removeEventListener("pointerup", boundEnd);
+        node.removeEventListener("pointercancel", boundEnd);
         base.style.transition = "";
         base.style.transform = "";
         baseRef = null;
