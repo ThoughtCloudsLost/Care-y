@@ -1,21 +1,20 @@
 <!--
   FeatureList: clickable list of built demo features displayed
-  beside the phone frame. Clicking a feature navigates the phone
-  to that feature via the router (or triggers the search button
-  for the search feature).
+  beside the phone frame. Clicking a feature fires onselect,
+  and the outer page decides whether to navigate or trigger search.
 -->
 <script lang="ts">
   import { List, ListItem } from "konsta/svelte";
   import { Search, Ticket } from "@lucide/svelte";
   import * as m from "$lib/paraglide/messages.js";
-  import type { DemoFeature, DemoRouter } from "./router.svelte.js";
+  import type { DemoFeature } from "./router.svelte.js";
 
   interface Props {
-    router: DemoRouter;
-    ontriggersearch: () => void;
+    feature: DemoFeature | null;
+    onselect: (id: DemoFeature) => void;
   }
 
-  let { router, ontriggersearch }: Props = $props();
+  let { feature, onselect }: Props = $props();
 
   interface FeatureItem {
     readonly id: DemoFeature;
@@ -29,11 +28,7 @@
   ];
 
   function handleSelect(id: DemoFeature): void {
-    if (id === "search") {
-      ontriggersearch();
-      return;
-    }
-    router.navigate(id);
+    onselect(id);
   }
 </script>
 
@@ -46,7 +41,7 @@
         title={feat.label()}
         link
         onclick={() => handleSelect(feat.id)}
-        class={router.feature === feat.id ? "feature-active" : ""}
+        class={feature === feat.id ? "feature-active" : ""}
       >
         {#snippet media()}
           <Icon size={20} />

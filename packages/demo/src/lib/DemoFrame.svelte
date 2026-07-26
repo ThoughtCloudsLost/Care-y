@@ -1,23 +1,27 @@
 <!--
-  DemoFrame: presentational device chrome for the interactive demo.
+  DemoFrame: device chrome around a real-viewport iframe.
 
-  Renders a fixed 390x844 logical-point phone frame with rounded bezel
-  and a .screen inner element. A ResizeObserver measures the parent and
-  applies a CSS transform so the frame fits without horizontal overflow.
+  Renders a fixed 390x844 phone bezel with status bar, dynamic island,
+  and home indicator overlays. The iframe inside .screen loads phone.html,
+  giving the phone app its own browsing context where window.innerHeight,
+  dvh, getBoundingClientRect, and fixed positioning all resolve natively
+  to the 390x844 viewport. This eliminates the coordinate mismatches
+  that CSS-scaled content suffers with Konsta popovers and sheets.
 
-  No Konsta imports: device bezels have no Konsta equivalent.
+  A ResizeObserver measures the parent and applies a CSS scale transform
+  so the frame fits without horizontal overflow.
 -->
 <script lang="ts">
-  import type { Snippet } from "svelte";
   import type { Attachment } from "svelte/attachments";
   import * as m from "$lib/paraglide/messages.js";
+  import type { DemoBridge } from "./bridge.js";
 
   interface Props {
     dark?: boolean;
-    children: Snippet;
+    onbridgeready: (bridge: DemoBridge) => void;
   }
 
-  let { dark = false, children }: Props = $props();
+  let { dark = false, onbridgeready }: Props = $props();
 
   const FRAME_W = 390;
   const FRAME_H = 844;
@@ -27,6 +31,7 @@
   const OUTER_H = FRAME_H + BEZEL * 2;
 
   let scaleFactor = $state(1);
+  let iframeEl: HTMLIFrameElement | undefined = $state();
 
   // Attachment instead of bind:this + $effect: the node arrives typed and
   // non-null, and the observer lifecycle is tied to the element directly.
@@ -46,6 +51,44 @@
       observer.disconnect();
     };
   };
+
+  const phoneUrl = `${import.meta.env.BASE_URL}phone.html`;
+
+  /**
+   * Poll for the demoBridge on the iframe's contentWindow. The phone app
+   * assigns it synchronously during module execution (before the load
+   * event fires), so it is usually present immediately. A bounded
+   * requestAnimationFrame retry loop handles edge cases.
+   */
+  function acquireBridge(win: Window): void {
+    const MAX_ATTEMPTS = 30;
+    let attempt = 0;
+
+    function poll(): void {
+      const bridge = win.demoBridge;
+      if (bridge !== undefined) {
+        onbridgeready(bridge);
+        return;
+      }
+      attempt += 1;
+      if (attempt < MAX_ATTEMPTS) {
+        requestAnimationFrame(poll);
+      }
+    }
+
+    poll();
+  }
+
+  function handleLoad(): void {
+    const win = iframeEl?.contentWindow;
+    if (win === null || win === undefined) return;
+    acquireBridge(win);
+  }
+
+  /** Reload the phone iframe for a full app restart. */
+  export function reload(): void {
+    iframeEl?.contentWindow?.location.reload();
+  }
 </script>
 
 <div class="frame-container" {@attach observeScale}>
@@ -56,13 +99,21 @@
     style:transform="scale({scaleFactor})"
   >
     <div
-      class="screen theme-default"
+      class="screen"
       class:dark
       class:light={!dark}
       style:width="{FRAME_W}px"
       style:height="{FRAME_H}px"
     >
-      {@render children()}
+      <iframe
+        bind:this={iframeEl}
+        src={phoneUrl}
+        title={m.demo_phone_frame_title()}
+        width={FRAME_W}
+        height={FRAME_H}
+        onload={handleLoad}
+        class="phone-iframe"
+      ></iframe>
       <div class="status-bar" aria-hidden="true">
         <span class="status-time">{m.demo_status_bar_time()}</span>
         <span class="island"></span>
@@ -132,10 +183,6 @@
     border-radius: 48px;
     background: #1a1a1a;
     padding: 12px;
-    /* The device is the containing block for fixed-position shell
-       chrome (nearest transformed ancestor). Production hides
-       off-canvas chrome (closed side panel) beyond the viewport;
-       here the device must clip it. */
     overflow: hidden;
     /* Ring only: a soft drop shadow gets clipped by the container's
        overflow into a rectangular smudge, so the frame draws none. */
@@ -160,20 +207,22 @@
     overflow: hidden;
     position: relative;
     background: var(--surface-primary, #fff);
-    /* Identity transform makes the screen the containing block for
-       fixed-position shell chrome (sheet, panels, navbar overlays),
-       so they anchor to the 390x844 screen exactly as they anchor
-       to the viewport in production, instead of to the bezel box. */
-    transform: translateZ(0);
   }
 
   .screen.dark {
     background: var(--surface-primary, #1c1c1e);
   }
 
+  .phone-iframe {
+    width: 390px;
+    height: 844px;
+    border: 0;
+    display: block;
+  }
+
   /* Device chrome overlays. The app renders beneath the status bar
-     and above the home indicator via the safe-area insets that
-     DemoSurface sets on the Konsta root, matching a real device. */
+     and above the home indicator via the safe-area insets that the
+     phone app sets on the Konsta root, matching a real device. */
   .status-bar {
     position: absolute;
     top: 0;
@@ -185,7 +234,7 @@
     justify-content: space-between;
     padding: 0 28px 8px;
     pointer-events: none;
-    /* Above the app's splash (z-index 99999): iOS draws system chrome
+    /* Above the iframe's stacking context: iOS draws system chrome
        over an app's launch screen. */
     z-index: 100000;
     color: #1d1d1f;
@@ -231,7 +280,7 @@
     background: #1d1d1f;
     opacity: 0.9;
     pointer-events: none;
-    /* Above the app's splash, same as the status bar. */
+    /* Above the iframe's stacking context, same as the status bar. */
     z-index: 100000;
   }
 

@@ -7,7 +7,6 @@
  */
 
 export { default as DemoFrame } from "./DemoFrame.svelte";
-export { default as DemoSurface } from "./DemoSurface.svelte";
 export { default as NarrativePanel } from "./NarrativePanel.svelte";
 export { default as FeatureList } from "./FeatureList.svelte";
 export { createDemoRouter } from "./router.svelte.js";
@@ -24,3 +23,8 @@ export type {
   DemoRouter,
 } from "./router.svelte.js";
 export type { SceneEntry, SceneRegistry } from "./scenes/index.js";
+export type {
+  DemoBridge,
+  DemoBridgeState,
+  DemoBridgeListener,
+} from "./bridge.js";

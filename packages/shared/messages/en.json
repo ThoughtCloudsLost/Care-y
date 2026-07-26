@@ -1884,5 +1884,6 @@
   "demo_narrative_search_heading": "Searching encrypted data",
   "demo_narrative_search_body": "Search works entirely in the browser. Your device decrypts ticket content locally and matches your query against the plaintext. No search terms are ever sent to the server.",
   "demo_narrative_search_body2": "This means search results are as private as the tickets themselves. The server cannot log what you searched for or which results matched.",
+  "demo_phone_frame_title": "CARE-Y app demo",
   "demo_status_bar_time": "9:41"
 }
