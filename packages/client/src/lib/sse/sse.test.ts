@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { handleEvent, type SSEEvent } from "./index.svelte.js";
 import type { QueryClient } from "@tanstack/svelte-query";
+import { notificationEventTypeSchema } from "@care-y/shared";
 
 function createMockQueryClient(): QueryClient {
   return {
@@ -17,8 +18,8 @@ describe("handleEvent", () => {
 
   // queryKey must match the key used in createQuery() calls across ticket list components.
   // Changing this key without updating those queries causes silent invalidation failures.
-  it("invalidates tickets list on ticket:created", () => {
-    handleEvent({ type: "ticket:created" }, qc);
+  it("invalidates tickets list on ticket_created", () => {
+    handleEvent({ type: "ticket_created" }, qc);
 
     expect(qc.invalidateQueries).toHaveBeenCalledWith({
       queryKey: ["tickets"],
@@ -26,8 +27,8 @@ describe("handleEvent", () => {
   });
 
   // Same ["tickets"] contract as above, for the update event path.
-  it("invalidates tickets list on ticket:updated", () => {
-    handleEvent({ type: "ticket:updated" }, qc);
+  it("invalidates tickets list on ticket_assigned", () => {
+    handleEvent({ type: "ticket_assigned" }, qc);
 
     expect(qc.invalidateQueries).toHaveBeenCalledWith({
       queryKey: ["tickets"],
@@ -37,7 +38,7 @@ describe("handleEvent", () => {
   // ["ticket", id] must match the per-ticket detail query key used in TicketPanel/TicketDetail.
   // Both the list key and the detail key are invalidated so the UI stays consistent.
   it("invalidates specific ticket when ticketId is provided", () => {
-    handleEvent({ type: "ticket:updated", ticketId: "t-123" }, qc);
+    handleEvent({ type: "ticket_assigned", ticketId: "t-123" }, qc);
 
     expect(qc.invalidateQueries).toHaveBeenCalledWith({
       queryKey: ["tickets"],
@@ -48,7 +49,7 @@ describe("handleEvent", () => {
   });
 
   it("does not invalidate specific ticket when ticketId is absent", () => {
-    handleEvent({ type: "ticket:created" }, qc);
+    handleEvent({ type: "ticket_created" }, qc);
 
     expect(qc.invalidateQueries).toHaveBeenCalledTimes(1);
     expect(qc.invalidateQueries).toHaveBeenCalledWith({
@@ -75,16 +76,16 @@ describe("handleEvent", () => {
   });
 
   // ["ticket", id, "followUps"] must match the follow-up sub-query key in ticket detail views.
-  it("invalidates follow-ups for specific ticket on followup:created", () => {
-    handleEvent({ type: "followup:created", ticketId: "t-789" }, qc);
+  it("invalidates follow-ups for specific ticket on followup_added", () => {
+    handleEvent({ type: "followup_added", ticketId: "t-789" }, qc);
 
     expect(qc.invalidateQueries).toHaveBeenCalledWith({
       queryKey: ["ticket", "t-789", "followUps"],
     });
   });
 
-  it("does not invalidate when followup:created has no ticketId", () => {
-    handleEvent({ type: "followup:created" }, qc);
+  it("does not invalidate when followup_added has no ticketId", () => {
+    handleEvent({ type: "followup_added" }, qc);
 
     expect(qc.invalidateQueries).not.toHaveBeenCalled();
   });
@@ -116,8 +117,20 @@ describe("handleEvent", () => {
     expect(qc.invalidateQueries).not.toHaveBeenCalled();
   });
 
-  it("invalidates recordings and attachments on followup:created", () => {
-    handleEvent({ type: "followup:created", ticketId: "t-100" }, qc);
+  it("handles every notificationEventTypeSchema value", () => {
+    const schemaValues = notificationEventTypeSchema.options;
+    for (const eventType of schemaValues) {
+      const freshQc = createMockQueryClient();
+      handleEvent({ type: eventType, ticketId: "t-drift" }, freshQc);
+      expect(
+        freshQc.invalidateQueries,
+        `no cache invalidation for server event type "${eventType}"`,
+      ).toHaveBeenCalled();
+    }
+  });
+
+  it("invalidates recordings and attachments on followup_added", () => {
+    handleEvent({ type: "followup_added", ticketId: "t-100" }, qc);
 
     expect(qc.invalidateQueries).toHaveBeenCalledWith({
       queryKey: ["ticket", "t-100", "followUps"],
@@ -132,8 +145,8 @@ describe("handleEvent", () => {
 
   // Both list read-state families must refresh when a reply arrives, or
   // unread pills and the global count go stale until a manual reload.
-  it("invalidates both list read-state families on followup:created", () => {
-    handleEvent({ type: "followup:created", ticketId: "t-100" }, qc);
+  it("invalidates both list read-state families on followup_added", () => {
+    handleEvent({ type: "followup_added", ticketId: "t-100" }, qc);
 
     expect(qc.invalidateQueries).toHaveBeenCalledWith({
       queryKey: ["tickets", "readState"],
@@ -378,7 +391,7 @@ describe("createSSEListener", () => {
 
     // Empty ticketId string should fail isSSEEvent validation
     mockEventSource.onmessage?.({
-      data: JSON.stringify({ type: "ticket:updated", ticketId: "" }),
+      data: JSON.stringify({ type: "ticket_assigned", ticketId: "" }),
     });
 
     expect(qc.invalidateQueries).not.toHaveBeenCalled();
@@ -413,7 +426,7 @@ describe("createSSEListener", () => {
     listener.connect();
     mockEventSource.onopen?.();
 
-    const event: SSEEvent = { type: "ticket:created", ticketId: "t-456" };
+    const event: SSEEvent = { type: "ticket_created", ticketId: "t-456" };
     mockEventSource.onmessage?.({ data: JSON.stringify(event) });
 
     // queryKey shapes must match the ticket list and detail queries (see handleEvent tests above).
