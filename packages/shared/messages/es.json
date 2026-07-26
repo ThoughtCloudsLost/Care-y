@@ -1773,5 +1773,6 @@
   "admin_queue_intake_set_success": "{queue} de recepcion actualizada",
   "admin_queue_intake_set_error": "No se pudo actualizar la {queue} de recepcion",
   "admin_queue_intake_clear_success": "Designacion de {queue} de recepcion eliminada",
-  "admin_queue_intake_clear_error": "No se pudo eliminar la designacion de {queue} de recepcion"
+  "admin_queue_intake_clear_error": "No se pudo eliminar la designacion de {queue} de recepcion",
+  "admin_queue_intake_tooltip": "Los mensajes de voz de nuevos llamantes se envian a la cola de recepcion"
 }

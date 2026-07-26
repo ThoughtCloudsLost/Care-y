@@ -1471,6 +1471,16 @@ export async function devSeedData(
     );
   }
 
+  // ── Step 12: Quarantine Entries ──────────────────────────────────────
+  if (devRouter.seedQuarantine != null) {
+    const result = (await devRouter.seedQuarantine.mutate()) as {
+      count: number;
+    };
+    console.log(
+      `[dev-seed] Quarantine: ${String(result.count)} entries seeded`,
+    );
+  }
+
   progress("Done!");
   console.log("[dev-seed] All seed data created");
 }

@@ -30,6 +30,7 @@ import type * as ShellSheetMod from "$lib/shell/ShellSheet.svelte";
 import type * as ShellActionSheetMod from "$lib/shell/ShellActionSheet.svelte";
 import type * as QueueMemberPickerMod from "./QueueMemberPicker.svelte";
 import type * as QueueEditorMod from "./QueueEditor.svelte";
+import type * as IntakeRadioMod from "./IntakeRadio.svelte";
 
 vi.stubGlobal(
   "IntersectionObserver",
@@ -156,6 +157,8 @@ vi.mock("$lib/paraglide/messages.js", async (importOriginal) => ({
   admin_queue_intake_clear_success: () => "Intake queue designation removed",
   admin_queue_intake_clear_error: () =>
     "Could not remove intake queue designation",
+  admin_queue_intake_tooltip: () =>
+    "New caller voicemails are routed to the intake queue",
   common_cancel: () => "Cancel",
   common_loading: () => "Loading",
   error_generic: () => "Something went wrong",
@@ -390,6 +393,22 @@ vi.mock("./QueueMemberPicker.svelte", async (importOriginal) => ({
 vi.mock("./QueueEditor.svelte", async (importOriginal) => ({
   ...(await importOriginal<typeof QueueEditorMod>()),
   default: (await import("./test-helpers/StubQueueEditor.svelte")).default,
+}));
+
+// care-y-ignore-next-line mock-factory-unguarded -- full replacement required;
+// bits-ui Tooltip triggers jsdom "navigation to another Document" on import
+vi.mock("bits-ui", () => ({
+  Tooltip: {
+    Provider: {},
+    Root: {},
+    Trigger: {},
+    Content: {},
+  },
+}));
+
+vi.mock("./IntakeRadio.svelte", async (importOriginal) => ({
+  ...(await importOriginal<typeof IntakeRadioMod>()),
+  default: (await import("./test-helpers/StubIntakeRadio.svelte")).default,
 }));
 
 if (typeof Element.prototype.animate !== "function") {
@@ -1185,50 +1204,34 @@ describe("QueuesSection intake queue", () => {
 
   afterEach(cleanup);
 
-  // ── Intake chip display ──
+  // ── Intake radio display ──
 
-  it("shows Intake chip on the designated intake queue", () => {
+  it("marks the designated intake queue radio as checked", () => {
     mockIntakeQueueData = { queueId: "q-1" };
-    const { container } = render(QueuesSection);
-    const chips = container.querySelectorAll('[data-testid="intake-chip"]');
-    expect(chips.length).toBe(1);
+    render(QueuesSection);
+    const radios = screen.getAllByRole("radio", { name: "Intake" });
+    expect(radios[0]?.getAttribute("aria-checked")).toBe("true");
+    expect(radios[1]?.getAttribute("aria-checked")).toBe("false");
   });
 
-  it("does not show Intake chip when no intake queue is designated", () => {
+  it("shows all radios unchecked when no intake queue is designated", () => {
     mockIntakeQueueData = { queueId: null };
-    const { container } = render(QueuesSection);
-    const chips = container.querySelectorAll('[data-testid="intake-chip"]');
-    expect(chips.length).toBe(0);
-  });
-
-  it("shows Intake chip only on the matching queue, not on others", () => {
-    mockIntakeQueueData = { queueId: "q-2" };
-    const { container } = render(QueuesSection);
-    const cards = container.querySelectorAll(".queue-card");
-    // First card (q-1) should not have the chip
-    expect(cards[0]?.querySelector('[data-testid="intake-chip"]')).toBeNull();
-    // Second card (q-2) should have the chip
-    expect(cards[1]?.querySelector('[data-testid="intake-chip"]')).toBeTruthy();
+    render(QueuesSection);
+    const radios = screen.getAllByRole("radio", { name: "Intake" });
+    for (const radio of radios) {
+      expect(radio.getAttribute("aria-checked")).toBe("false");
+    }
   });
 
   // ── Set intake queue action ──
 
-  it("renders 'Use as intake queue' button on non-intake queues", () => {
-    mockIntakeQueueData = { queueId: "q-1" };
-    render(QueuesSection);
-    // q-2 is not the intake queue, so it should have "Use as intake queue"
-    const setBtn = screen.getByLabelText("Use as intake queue");
-    expect(setBtn).toBeTruthy();
-  });
-
-  it("calls setIntakeQueue mutation when set button is clicked", async () => {
+  it("calls setIntakeQueue mutation when unchecked radio is clicked", async () => {
     mockIntakeQueueData = { queueId: null };
     render(QueuesSection);
     await tick();
 
-    // Both queues should have "Use as intake queue" buttons
-    const setBtns = screen.getAllByLabelText("Use as intake queue");
-    await fireEvent.click(setBtns[0]!);
+    const radios = screen.getAllByRole("radio", { name: "Intake" });
+    await fireEvent.click(radios[0]!);
 
     expect(mockSetIntakeQueue).toHaveBeenCalledWith({ queueId: "q-1" });
   });
@@ -1239,8 +1242,8 @@ describe("QueuesSection intake queue", () => {
     render(QueuesSection);
     await tick();
 
-    const setBtns = screen.getAllByLabelText("Use as intake queue");
-    await fireEvent.click(setBtns[0]!);
+    const radios = screen.getAllByRole("radio", { name: "Intake" });
+    await fireEvent.click(radios[0]!);
     await tick();
 
     await waitFor(() => {
@@ -1254,8 +1257,8 @@ describe("QueuesSection intake queue", () => {
     render(QueuesSection);
     await tick();
 
-    const setBtns = screen.getAllByLabelText("Use as intake queue");
-    await fireEvent.click(setBtns[0]!);
+    const radios = screen.getAllByRole("radio", { name: "Intake" });
+    await fireEvent.click(radios[0]!);
     await tick();
 
     await waitFor(() => {
@@ -1267,20 +1270,13 @@ describe("QueuesSection intake queue", () => {
 
   // ── Clear intake queue action ──
 
-  it("renders 'Remove intake designation' button on the intake queue", () => {
-    mockIntakeQueueData = { queueId: "q-1" };
-    render(QueuesSection);
-    const clearBtn = screen.getByLabelText("Remove intake designation");
-    expect(clearBtn).toBeTruthy();
-  });
-
-  it("calls setIntakeQueue with null when clear button is clicked", async () => {
+  it("calls setIntakeQueue with null when checked radio is clicked", async () => {
     mockIntakeQueueData = { queueId: "q-1" };
     render(QueuesSection);
     await tick();
 
-    const clearBtn = screen.getByLabelText("Remove intake designation");
-    await fireEvent.click(clearBtn);
+    const radios = screen.getAllByRole("radio", { name: "Intake" });
+    await fireEvent.click(radios[0]!);
 
     expect(mockSetIntakeQueue).toHaveBeenCalledWith({ queueId: null });
   });
@@ -1291,8 +1287,8 @@ describe("QueuesSection intake queue", () => {
     render(QueuesSection);
     await tick();
 
-    const clearBtn = screen.getByLabelText("Remove intake designation");
-    await fireEvent.click(clearBtn);
+    const radios = screen.getAllByRole("radio", { name: "Intake" });
+    await fireEvent.click(radios[0]!);
     await tick();
 
     await waitFor(() => {
@@ -1308,8 +1304,8 @@ describe("QueuesSection intake queue", () => {
     render(QueuesSection);
     await tick();
 
-    const clearBtn = screen.getByLabelText("Remove intake designation");
-    await fireEvent.click(clearBtn);
+    const radios = screen.getAllByRole("radio", { name: "Intake" });
+    await fireEvent.click(radios[0]!);
     await tick();
 
     await waitFor(() => {
@@ -1325,8 +1321,8 @@ describe("QueuesSection intake queue", () => {
     render(QueuesSection);
     await tick();
 
-    const setBtns = screen.getAllByLabelText("Use as intake queue");
-    await fireEvent.click(setBtns[0]!);
+    const radios = screen.getAllByRole("radio", { name: "Intake" });
+    await fireEvent.click(radios[0]!);
     await tick();
 
     await waitFor(() => {
