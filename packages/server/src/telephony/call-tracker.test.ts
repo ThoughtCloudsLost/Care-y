@@ -141,6 +141,15 @@ describe("CallTracker (in-memory)", () => {
 // DB integration: requires Docker (DATABASE_URL)
 // ---------------------------------------------------------------------------
 
+// Valid UUIDs for DB-backed tests (uuid columns reject arbitrary strings)
+const UUID_TICKET_RT = "a0000000-0000-0000-0000-000000000001";
+const UUID_TICKET_V1 = "a0000000-0000-0000-0000-000000000002";
+const UUID_TICKET_V2 = "a0000000-0000-0000-0000-000000000003";
+const UUID_TICKET_RESTART = "a0000000-0000-0000-0000-000000000004";
+const UUID_USER_DEFAULT = "b0000000-0000-0000-0000-000000000000";
+const UUID_USER_UPDATED = "b0000000-0000-0000-0000-000000000001";
+const UUID_CLIENT_RESTART = "c0000000-0000-0000-0000-000000000001";
+
 describe.skipIf(!process.env.DATABASE_URL)("CallTracker (DB-backed)", () => {
   let testDb: TestDb;
   let tracker: CallTracker;
@@ -161,14 +170,15 @@ describe.skipIf(!process.env.DATABASE_URL)("CallTracker (DB-backed)", () => {
   it("round-trips a tracked call through the DB", async () => {
     const call = makeTracked({
       orgSchema: testDb.schemaName,
-      ticketId: "ticket-rt",
+      ticketId: UUID_TICKET_RT,
+      userId: UUID_USER_DEFAULT,
     });
     await tracker.track(testDb.schemaName, "CA_RT", call);
     const got = await tracker.get(testDb.schemaName, "CA_RT");
 
     expect(got).toBeDefined();
-    expect(got!.ticketId).toBe("ticket-rt");
-    expect(got!.userId).toBe("user-1");
+    expect(got!.ticketId).toBe(UUID_TICKET_RT);
+    expect(got!.userId).toBe(UUID_USER_DEFAULT);
     expect(got!.direction).toBe("outbound");
     expect(got!.clientId).toBeNull();
     expect(got!.orgSchema).toBe(testDb.schemaName);
@@ -178,6 +188,7 @@ describe.skipIf(!process.env.DATABASE_URL)("CallTracker (DB-backed)", () => {
     const call = makeTracked({
       orgSchema: testDb.schemaName,
       ticketId: "",
+      userId: UUID_USER_DEFAULT,
     });
     await tracker.track(testDb.schemaName, "CA_SENTINEL", call);
     const got = await tracker.get(testDb.schemaName, "CA_SENTINEL");
@@ -196,22 +207,22 @@ describe.skipIf(!process.env.DATABASE_URL)("CallTracker (DB-backed)", () => {
   it("upserts on re-track with same callSid", async () => {
     const call1 = makeTracked({
       orgSchema: testDb.schemaName,
-      ticketId: "ticket-v1",
+      ticketId: UUID_TICKET_V1,
       userId: null,
     });
     await tracker.track(testDb.schemaName, "CA_UPSERT", call1);
 
     const call2 = makeTracked({
       orgSchema: testDb.schemaName,
-      ticketId: "ticket-v2",
-      userId: "user-updated",
+      ticketId: UUID_TICKET_V2,
+      userId: UUID_USER_UPDATED,
     });
     await tracker.track(testDb.schemaName, "CA_UPSERT", call2);
 
     const got = await tracker.get(testDb.schemaName, "CA_UPSERT");
     expect(got).toBeDefined();
-    expect(got!.ticketId).toBe("ticket-v2");
-    expect(got!.userId).toBe("user-updated");
+    expect(got!.ticketId).toBe(UUID_TICKET_V2);
+    expect(got!.userId).toBe(UUID_USER_UPDATED);
 
     // Only one row for this callSid
     const rows = await testDb.db
@@ -229,7 +240,7 @@ describe.skipIf(!process.env.DATABASE_URL)("CallTracker (DB-backed)", () => {
       .insertInto("tracked_calls")
       .values({
         call_sid: "CA_OLD",
-        ticket_id: "ticket-old",
+        ticket_id: null,
         user_id: null,
         direction: "inbound",
         client_id: null,
@@ -296,7 +307,11 @@ describe.skipIf(!process.env.DATABASE_URL)("CallTracker (DB-backed)", () => {
     await tracker.track(
       testDb.schemaName,
       "CA_REMOVE_DB",
-      makeTracked({ orgSchema: testDb.schemaName }),
+      makeTracked({
+        orgSchema: testDb.schemaName,
+        ticketId: UUID_TICKET_RT,
+        userId: UUID_USER_DEFAULT,
+      }),
     );
     await tracker.remove(testDb.schemaName, "CA_REMOVE_DB");
 
@@ -319,9 +334,10 @@ describe.skipIf(!process.env.DATABASE_URL)("CallTracker (DB-backed)", () => {
       "CA_RESTART",
       makeTracked({
         orgSchema: testDb.schemaName,
-        ticketId: "ticket-restart",
+        ticketId: UUID_TICKET_RESTART,
+        userId: UUID_USER_DEFAULT,
         direction: "inbound",
-        clientId: "client-restart",
+        clientId: UUID_CLIENT_RESTART,
       }),
     );
     tracker1.stop();
@@ -335,9 +351,9 @@ describe.skipIf(!process.env.DATABASE_URL)("CallTracker (DB-backed)", () => {
     tracker2.stop();
 
     expect(got).toBeDefined();
-    expect(got!.ticketId).toBe("ticket-restart");
+    expect(got!.ticketId).toBe(UUID_TICKET_RESTART);
     expect(got!.direction).toBe("inbound");
-    expect(got!.clientId).toBe("client-restart");
+    expect(got!.clientId).toBe(UUID_CLIENT_RESTART);
   });
 
   it("sweep logs errors but never throws", async () => {
