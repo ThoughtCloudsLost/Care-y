@@ -318,6 +318,20 @@ export {
   type SearchClientsInput,
 } from "./schemas/tickets.js";
 
+// --- Client management ---
+export {
+  clientListInputSchema,
+  type ClientListInput,
+  clientGetInputSchema,
+  type ClientGetInput,
+  updateAliasInputSchema,
+  type UpdateAliasInput,
+  updatePhoneInputSchema,
+  type UpdatePhoneInput,
+  suggestDuplicatesInputSchema,
+  type SuggestDuplicatesInput,
+} from "./schemas/clients.js";
+
 // --- Follow-up content-type registry ---
 export {
   CONTENT_TYPE_REGISTRY,

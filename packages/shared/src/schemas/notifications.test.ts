@@ -343,6 +343,8 @@ describe("auditEventTypeSchema", () => {
     "voicemail_quarantined",
     "voicemail_quarantine_routed",
     "voicemail_quarantine_dismissed",
+    "client_alias_changed",
+    "client_phone_changed",
   ];
 
   it.each(validTypes)("accepts '%s'", (type) => {

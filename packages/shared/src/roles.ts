@@ -76,6 +76,7 @@ export enum Permission {
   MANAGE_KNOWLEDGE_BASE_CATEGORIES = "manage_knowledge_base_categories",
   VIEW_REPORTS = "view_reports",
   DELETE_CLIENTS = "delete_clients",
+  VIEW_CLIENTS = "view_clients",
 
   // Admin-level
   MANAGE_ROLES = "manage_roles",

@@ -44,6 +44,7 @@ import {
   createVoicemailQuarantineRouter,
   type VoicemailQuarantineRouterDeps,
 } from "./voicemail-quarantine.js";
+import { createClientRouter, type ClientRouterDeps } from "./clients.js";
 import type { OrgService } from "../org/service.js";
 import type { ProviderFactory } from "../telephony/factory.js";
 
@@ -69,6 +70,7 @@ export interface RouterDeps {
   readonly brandingDeps?: BrandingRouterDeps;
   readonly onboardingDeps?: OnboardingRouterDeps;
   readonly voicemailQuarantineDeps?: VoicemailQuarantineRouterDeps;
+  readonly clientDeps?: ClientRouterDeps;
   readonly devDeps?: DevRouterDeps;
 }
 
@@ -128,6 +130,9 @@ export function createAppRouter(deps: RouterDeps) {
             deps.voicemailQuarantineDeps,
           ),
         }
+      : {}),
+    ...(deps.clientDeps
+      ? { clients: createClientRouter(deps.clientDeps) }
       : {}),
     ...(deps.devDeps ? { dev: createDevRouter(deps.devDeps) } : {}),
   });
