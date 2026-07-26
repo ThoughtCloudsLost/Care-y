@@ -117,16 +117,15 @@ function makeBody(overrides?: Record<string, string>): Record<string, string> {
 }
 
 /** Minimal stub tenant DB for quarantine path unit tests. The quarantine
- *  function calls insertInto(...).values(...).onConflict(...).returning(...)
+ *  function calls insertInto(...).values(...).onConflict(...).executeTakeFirst()
  *  and also createAuditService(tDb).log(...). Both chains need to resolve. */
 function createStubTenantDb(): Kysely<TenantDatabase> {
-  let insertCounter = 0;
   const chainable = {
     values() {
       return chainable;
     },
-    onConflict() {
-      return {
+    onConflict(cb: (oc: unknown) => unknown) {
+      const oc = {
         column() {
           return {
             doNothing() {
@@ -135,13 +134,11 @@ function createStubTenantDb(): Kysely<TenantDatabase> {
           };
         },
       };
-    },
-    returning() {
+      cb(oc);
       return chainable;
     },
     async executeTakeFirst() {
-      insertCounter++;
-      return { id: `quarantine-${String(insertCounter)}` };
+      return { numInsertedOrUpdatedRows: 1n };
     },
     async execute() {
       return [];

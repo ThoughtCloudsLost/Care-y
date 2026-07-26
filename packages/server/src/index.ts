@@ -548,7 +548,7 @@ const appRouter = createAppRouter({
     blobStore,
     pendingClients,
   },
-  includeDev: env.NODE_ENV !== "production",
+  devDeps: env.NODE_ENV !== "production" ? { blobStore } : undefined,
 });
 
 export type AppRouter = typeof appRouter;

@@ -16,6 +16,7 @@
   } from "@tanstack/svelte-query";
   import { SvelteSet, SvelteMap } from "svelte/reactivity";
   import { ChevronUp, ChevronDown, Pencil, X } from "@lucide/svelte";
+  import IntakeRadio from "./IntakeRadio.svelte";
   import * as m from "$lib/paraglide/messages.js";
   import { withTerms } from "$lib/terminology/with-terms.js";
   import { trpc } from "$lib/trpc/index.js";
@@ -48,6 +49,7 @@
 
   const ticketRouter = requireRouter(trpc.tickets, "tickets");
   const authRouter = trpc.auth;
+  const orgRouter = trpc.org;
   const queryClient = useQueryClient();
   const orgCache = getOrgDecryptCache();
 
@@ -63,6 +65,14 @@
     queryKey: adminKeys.users(),
     queryFn: async () => authRouter.listUsers.query(),
   }));
+
+  // Intake queue designation (which queue receives new-caller voicemails)
+  const intakeQueueQuery = createQuery(() => ({
+    queryKey: adminKeys.intakeQueue(),
+    queryFn: async () => orgRouter.getIntakeQueue.query(),
+  }));
+
+  const intakeQueueId = $derived(intakeQueueQuery.data?.queueId ?? null);
 
   type QueueRecord = NonNullable<typeof queuesQuery.data>[number];
   type AdminUser = NonNullable<typeof usersQuery.data>[number];
@@ -187,6 +197,40 @@
       void queryClient.invalidateQueries({ queryKey: queueKeys.all });
     },
   }));
+
+  const setIntakeQueueMutation = createMutation(() => ({
+    mutationFn: async (input: { queueId: string | null }) =>
+      orgRouter.setIntakeQueue.mutate(input),
+    onSuccess: (_data: unknown, variables: { queueId: string | null }) => {
+      haptic();
+      const msg =
+        variables.queueId === null
+          ? m.admin_queue_intake_clear_success(withTerms())
+          : m.admin_queue_intake_set_success(withTerms());
+      toastStore.show(msg);
+      announceToLiveRegion("polite", msg);
+      void queryClient.invalidateQueries({
+        queryKey: adminKeys.intakeQueue(),
+      });
+    },
+    onError: (_err: unknown, variables: { queueId: string | null }) => {
+      const msg =
+        variables.queueId === null
+          ? m.admin_queue_intake_clear_error(withTerms())
+          : m.admin_queue_intake_set_error(withTerms());
+      toastStore.show(msg);
+    },
+  }));
+
+  function handleSetIntakeQueue(queueId: string): void {
+    if (setIntakeQueueMutation.isPending) return;
+    setIntakeQueueMutation.mutate({ queueId });
+  }
+
+  function handleClearIntakeQueue(): void {
+    if (setIntakeQueueMutation.isPending) return;
+    setIntakeQueueMutation.mutate({ queueId: null });
+  }
 
   // ── Reorder ──
 
@@ -420,6 +464,7 @@
         {@const isExpanded = expandedQueues.has(queue.id)}
         {@const members = memberData.members.get(queue.id) ?? []}
         {@const isLoading = memberData.loading.get(queue.id) ?? true}
+        {@const isIntakeQueue = intakeQueueId === queue.id}
 
         <Card raised contentWrap={false} class="queue-card">
           <div class="queue-card-inner">
@@ -489,6 +534,15 @@
                     <ChevronDown size={18} aria-hidden="true" />
                   </button>
                 {/if}
+
+                <IntakeRadio
+                  checked={isIntakeQueue}
+                  disabled={setIntakeQueueMutation.isPending}
+                  onchange={() =>
+                    isIntakeQueue
+                      ? handleClearIntakeQueue()
+                      : handleSetIntakeQueue(queue.id)}
+                />
 
                 <button
                   class="icon-btn"

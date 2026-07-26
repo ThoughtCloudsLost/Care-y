@@ -18,6 +18,7 @@ import {
   LayoutDashboard,
   ChartBar,
   Search,
+  PhoneMissed,
 } from "@lucide/svelte";
 
 export type AdminGroup =
@@ -95,6 +96,16 @@ export const ADMIN_DESTINATIONS: readonly AdminDestination[] = [
     label: m.panel_blocklist,
     subtitle: m.hub_blocklist_subtitle,
     path: "/admin/communications?tab=blocklist",
+    permission: Permission.MANAGE_INFRASTRUCTURE,
+    implemented: true,
+  },
+  {
+    id: "quarantine",
+    group: "communications",
+    icon: PhoneMissed,
+    label: m.panel_quarantine,
+    subtitle: m.hub_quarantine_subtitle,
+    path: "/admin/communications?tab=quarantine",
     permission: Permission.MANAGE_INFRASTRUCTURE,
     implemented: true,
   },

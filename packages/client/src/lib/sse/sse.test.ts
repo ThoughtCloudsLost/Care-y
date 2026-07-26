@@ -89,6 +89,27 @@ describe("handleEvent", () => {
     expect(qc.invalidateQueries).not.toHaveBeenCalled();
   });
 
+  // ["admin", "quarantine"] must match the quarantine query key used in the
+  // admin quarantine panel, so new quarantined voicemails appear without reload.
+  it("invalidates quarantine cache on voicemail_quarantined", () => {
+    handleEvent({ type: "voicemail_quarantined" }, qc);
+
+    expect(qc.invalidateQueries).toHaveBeenCalledWith({
+      queryKey: ["admin", "quarantine"],
+    });
+  });
+
+  it("does not invalidate ticket keys on voicemail_quarantined", () => {
+    handleEvent({ type: "voicemail_quarantined" }, qc);
+
+    expect(qc.invalidateQueries).toHaveBeenCalledTimes(1);
+    expect(qc.invalidateQueries).not.toHaveBeenCalledWith(
+      expect.objectContaining({
+        queryKey: expect.arrayContaining(["tickets"]),
+      }),
+    );
+  });
+
   it("does nothing for unknown event types", () => {
     handleEvent({ type: "unknown:event" }, qc);
 

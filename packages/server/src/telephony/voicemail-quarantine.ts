@@ -172,9 +172,11 @@ export async function quarantineRecording(
   const blobKey = await blobStore.put(orgSchema, "quarantine", sealed);
 
   // (d) Insert quarantine row. ON CONFLICT DO NOTHING handles webhook retries.
-  const inserted = await tDb
+  const quarantineId = crypto.randomUUID();
+  const result = await tDb
     .insertInto("voicemail_quarantine")
     .values({
+      id: quarantineId,
       recording_sid: recordingSid,
       call_sid: callSid,
       blob_key: blobKey,
@@ -186,10 +188,9 @@ export async function quarantineRecording(
       encrypted_called_number: encryptedCalled,
     })
     .onConflict((oc) => oc.column("recording_sid").doNothing())
-    .returning("id")
     .executeTakeFirst();
 
-  if (!inserted) {
+  if (result.numInsertedOrUpdatedRows === 0n) {
     // Duplicate recording_sid: a prior webhook delivery already stored this
     // recording. Delete the duplicate blob we just wrote and return.
     await blobStore.delete(blobKey);
@@ -202,7 +203,7 @@ export async function quarantineRecording(
     eventType: "voicemail_quarantined",
     actorId: SYSTEM_ACTOR_ID,
     metadata: {
-      quarantineId: inserted.id,
+      quarantineId,
       reason,
       callSid,
     },

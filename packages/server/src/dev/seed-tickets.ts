@@ -259,6 +259,7 @@ export async function seedTestTickets(
         {
           content: "",
           source: "client",
+          type: "voicemail",
           agoMinutes: 7200,
           media: [
             {
@@ -321,6 +322,7 @@ export async function seedTestTickets(
         {
           content: "",
           source: "client",
+          type: "voicemail",
           agoMinutes: 165,
           media: [
             {
@@ -739,6 +741,7 @@ export async function seedTestTickets(
           followUps.push({
             content: "",
             source: "client",
+            type: "voicemail",
             agoMinutes: fuAge,
             media: [{ kind: "recording", durationSeconds: 12 }],
           });
