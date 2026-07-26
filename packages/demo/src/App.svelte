@@ -8,13 +8,14 @@
   instance outside the iframe's graph.
 -->
 <script lang="ts">
+  import { SvelteSet } from "svelte/reactivity";
   import * as m from "$lib/paraglide/messages.js";
   import { Button } from "konsta/svelte";
   import { RotateCcw, Sun, Moon } from "@lucide/svelte";
   import NarrativePanel from "$demo/NarrativePanel.svelte";
   import FeatureList from "$demo/FeatureList.svelte";
   import DemoFrame from "$demo/DemoFrame.svelte";
-  import type { DemoBridge, DemoBridgeState } from "$demo/bridge.js";
+  import type { DemoBridge, DemoBridgeState, DemoTopic } from "$demo/bridge.js";
   import type { DemoFeature } from "$demo/router.svelte.js";
 
   let dark = $state(false);
@@ -24,10 +25,16 @@
     feature: null,
     detail: null,
     searchOpen: false,
+    topic: null,
   });
   let unsubscribe: (() => void) | undefined;
 
   let frameRef: DemoFrame | undefined = $state();
+
+  // Accumulated set of topics the user has triggered. SvelteSet so
+  // reads in the template react to additions; one instance for the
+  // page's lifetime, cleared (reactively) on restart.
+  const seenTopics = new SvelteSet<DemoTopic>();
 
   // Mirror the product's applyScheme/applyGlassMode (theme.svelte.ts):
   // the glass styles are anchored to html-level classes
@@ -53,11 +60,18 @@
     unsubscribe?.();
     bridge = b;
 
+    // Reset seen topics and current topic on restart/reload
+    seenTopics.clear();
+
     // Sync the phone to the outer page's current dark state
     b.setDark(dark);
 
     unsubscribe = b.subscribe((state) => {
       phoneState = state;
+      // Accumulate topics as the user explores
+      if (state.topic !== null) {
+        seenTopics.add(state.topic);
+      }
     });
   }
 
@@ -113,12 +127,15 @@
     <div class="demo-side-column">
       <FeatureList
         feature={phoneState.feature}
+        topic={phoneState.topic}
+        {seenTopics}
         onselect={handleFeatureSelect}
       />
       <NarrativePanel
         feature={phoneState.feature}
         detail={phoneState.detail}
         searchOpen={phoneState.searchOpen}
+        topic={phoneState.topic}
       />
     </div>
   </div>

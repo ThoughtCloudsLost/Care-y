@@ -186,7 +186,7 @@ describe("trpc mock", () => {
   });
 
   describe("tickets.noteTypes", () => {
-    it("noteTypes.listActive returns types array", async () => {
+    it("noteTypes.listActive returns types with full wire shape", async () => {
       const result = await demoTrpcMock.tickets.noteTypes.listActive.query();
       expect(result.types.length).toBeGreaterThan(0);
       expect(result.defaultNoteTypeId).toBeNull();
@@ -195,12 +195,37 @@ describe("trpc mock", () => {
         expect(first).toHaveProperty("id");
         expect(first).toHaveProperty("encryptedIcon");
         expect(first).toHaveProperty("encryptedName");
+        expect(first).toHaveProperty("canCreate");
+        expect(first).toHaveProperty("minViewRole");
+        expect(first).toHaveProperty("minCreateRole");
+        expect(first).toHaveProperty("requiresOnClose");
+        expect(first).toHaveProperty("notificationHints");
+        expect(first).toHaveProperty("isActive");
+        expect(first).toHaveProperty("createdAt");
       }
     });
 
-    it("noteTypes.list returns same shape", async () => {
-      const result = await demoTrpcMock.tickets.noteTypes.list.query();
-      expect(result.types.length).toBeGreaterThan(0);
+    it("noteTypes.listActive includes canCreate true for both types", async () => {
+      const result = await demoTrpcMock.tickets.noteTypes.listActive.query();
+      for (const nt of result.types) {
+        expect(nt.canCreate).toBe(true);
+      }
+    });
+
+    it("noteTypes.listActive includes notificationHints arrays", async () => {
+      const result = await demoTrpcMock.tickets.noteTypes.listActive.query();
+      for (const nt of result.types) {
+        expect(Array.isArray(nt.notificationHints)).toBe(true);
+        expect(nt.notificationHints.length).toBeGreaterThan(0);
+      }
+    });
+
+    it("noteTypes.list returns same shape as listActive", async () => {
+      const listResult = await demoTrpcMock.tickets.noteTypes.list.query();
+      const activeResult =
+        await demoTrpcMock.tickets.noteTypes.listActive.query();
+      expect(listResult.types.length).toBe(activeResult.types.length);
+      expect(listResult.types[0]?.id).toBe(activeResult.types[0]?.id);
     });
   });
 
@@ -317,24 +342,23 @@ describe("trpc mock", () => {
       expect(result).toEqual([]);
     });
 
-    it("readStateSweep returns empty items", async () => {
+    it("readStateSweep returns items for open accessible tickets", async () => {
       const result = await demoTrpcMock.tickets.readStateSweep.query({});
-      expect(result.items).toEqual([]);
+      expect(result.items.length).toBeGreaterThan(0);
       expect(result.nextCursor).toBeNull();
+      for (const item of result.items) {
+        expect(item).toHaveProperty("ticketId");
+        expect(item).toHaveProperty("encryptedReadCursor");
+        expect(item).toHaveProperty("latestActivityAt");
+        expect(item).toHaveProperty("keyWrap");
+      }
     });
 
-    it("listReadState returns empty object", async () => {
+    it("listReadState returns empty for empty ticketIds", async () => {
       const result = await demoTrpcMock.tickets.listReadState.query({
         ticketIds: [],
       });
       expect(result).toEqual({});
-    });
-
-    it("getReadCursor returns null cursor", async () => {
-      const result = await demoTrpcMock.tickets.getReadCursor.query({
-        ticketId: "any",
-      });
-      expect(result.encryptedReadCursor).toBeNull();
     });
   });
 
@@ -398,6 +422,111 @@ describe("trpc mock", () => {
       expect(isDevDelayEnabled()).toBe(true);
       setDevDelay(false);
       expect(isDevDelayEnabled()).toBe(false);
+    });
+  });
+
+  describe("tickets.listReadState", () => {
+    it("returns entries for exactly the requested ticket ids", async () => {
+      const allTickets = await demoTrpcMock.tickets.list.query();
+      const firstTwo = allTickets.slice(0, 2).map((t) => t.id);
+      const result = await demoTrpcMock.tickets.listReadState.query({
+        ticketIds: firstTwo,
+      });
+      const keys = Object.keys(result);
+      expect(keys).toHaveLength(2);
+      expect(keys.sort()).toEqual([...firstTwo].sort());
+    });
+
+    it("ignores ticket ids not in the fixture set", async () => {
+      const result = await demoTrpcMock.tickets.listReadState.query({
+        ticketIds: ["nonexistent-id-1", "nonexistent-id-2"],
+      });
+      expect(Object.keys(result)).toHaveLength(0);
+    });
+
+    it("excludes self-authored (volunteer) follow-ups from timestamps", async () => {
+      // Ticket 0 (Housing referral) has volunteer follow-ups by demo-user-001
+      const allTickets = await demoTrpcMock.tickets.list.query();
+      const firstId = allTickets[0]?.id;
+      if (firstId === undefined) throw new Error("missing fixture");
+      const result = await demoTrpcMock.tickets.listReadState.query({
+        ticketIds: [firstId],
+      });
+      const entry = result[firstId];
+      expect(entry).toBeDefined();
+      if (entry === undefined) return;
+      // Ticket 0 has 2 client messages, 2 volunteer (self), and 4 system events
+      // Only client messages count toward timestamps
+      expect(entry.followUpCreatedAt.length).toBe(2);
+    });
+
+    it("excludes system events from timestamps", async () => {
+      const allTickets = await demoTrpcMock.tickets.list.query();
+      const firstId = allTickets[0]?.id;
+      if (firstId === undefined) throw new Error("missing fixture");
+      const result = await demoTrpcMock.tickets.listReadState.query({
+        ticketIds: [firstId],
+      });
+      const entry = result[firstId];
+      expect(entry).toBeDefined();
+      // Ticket 0 has 4 system events; none should appear in timestamps.
+      // Only the 2 client follow-ups count.
+      if (entry !== undefined) {
+        expect(entry.followUpCreatedAt.length).toBe(2);
+      }
+    });
+
+    it("returns encryptedReadCursor matching sweep scheme for accessible tickets", async () => {
+      const allTickets = await demoTrpcMock.tickets.list.query();
+      const accessibleId = allTickets[0]?.id;
+      if (accessibleId === undefined) throw new Error("missing fixture");
+      const result = await demoTrpcMock.tickets.listReadState.query({
+        ticketIds: [accessibleId],
+      });
+      const entry = result[accessibleId];
+      expect(entry).toBeDefined();
+      if (entry !== undefined) {
+        expect(entry.encryptedReadCursor).toBe(`demo-cursor-${accessibleId}`);
+      }
+    });
+
+    it("returns null cursor for tickets without key wrap", async () => {
+      const allTickets = await demoTrpcMock.tickets.list.query();
+      // Ticket index 4 has null keyWrap (DENIED)
+      const deniedId = allTickets[4]?.id;
+      if (deniedId === undefined) throw new Error("missing fixture");
+      const result = await demoTrpcMock.tickets.listReadState.query({
+        ticketIds: [deniedId],
+      });
+      const entry = result[deniedId];
+      expect(entry).toBeDefined();
+      if (entry !== undefined) {
+        expect(entry.encryptedReadCursor).toBeNull();
+      }
+    });
+
+    it("unread tickets have client timestamps newer than readUpTo", async () => {
+      // River-4 (index 6) and Sage-11 (index 8) have unreadCount 1
+      const allTickets = await demoTrpcMock.tickets.list.query();
+      const river4Id = allTickets[6]?.id;
+      const sage11Id = allTickets[8]?.id;
+      if (river4Id === undefined || sage11Id === undefined) {
+        throw new Error("missing fixture");
+      }
+      const result = await demoTrpcMock.tickets.listReadState.query({
+        ticketIds: [river4Id, sage11Id],
+      });
+      // Both should have exactly 1 client timestamp
+      const river4Entry = result[river4Id];
+      const sage11Entry = result[sage11Id];
+      expect(river4Entry).toBeDefined();
+      expect(sage11Entry).toBeDefined();
+      if (river4Entry !== undefined) {
+        expect(river4Entry.followUpCreatedAt).toHaveLength(1);
+      }
+      if (sage11Entry !== undefined) {
+        expect(sage11Entry.followUpCreatedAt).toHaveLength(1);
+      }
     });
   });
 });

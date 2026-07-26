@@ -1,19 +1,21 @@
 <!--
   NarrativePanel: displays contextual explanation copy beside the phone
-  frame. Content swaps based on the current router feature, detail,
-  and searchOpen state.
+  frame. Content resolves by topic first, then feature, then welcome
+  fallback.
 -->
 <script lang="ts">
   import * as m from "$lib/paraglide/messages.js";
   import type { DemoFeature, DemoDetail } from "./router.svelte.js";
+  import type { DemoTopic } from "./bridge.js";
 
   interface Props {
     feature: DemoFeature | null;
     detail: DemoDetail;
     searchOpen: boolean;
+    topic: DemoTopic | null;
   }
 
-  let { feature, detail, searchOpen }: Props = $props();
+  let { feature, detail, searchOpen, topic }: Props = $props();
 
   interface NarrativeCopy {
     readonly heading: string;
@@ -21,7 +23,73 @@
     readonly body2?: string;
   }
 
+  /** Map topic to its narrative copy. Uses a switch for exhaustiveness. */
+  function topicNarrative(t: DemoTopic): NarrativeCopy {
+    switch (t) {
+      case "sort":
+        return {
+          heading: m.demo_narrative_topic_sort_heading(),
+          body: m.demo_narrative_topic_sort_body(),
+        };
+      case "filters":
+        return {
+          heading: m.demo_narrative_topic_filters_heading(),
+          body: m.demo_narrative_topic_filters_body(),
+        };
+      case "view-modes":
+        return {
+          heading: m.demo_narrative_topic_view_modes_heading(),
+          body: m.demo_narrative_topic_view_modes_body(),
+        };
+      case "select-mode":
+        return {
+          heading: m.demo_narrative_topic_select_mode_heading(),
+          body: m.demo_narrative_topic_select_mode_body(),
+        };
+      case "new-ticket":
+        return {
+          heading: m.demo_narrative_topic_new_ticket_heading(),
+          body: m.demo_narrative_topic_new_ticket_body(),
+        };
+      case "thread-filters":
+        return {
+          heading: m.demo_narrative_topic_thread_filters_heading(),
+          body: m.demo_narrative_topic_thread_filters_body(),
+        };
+      case "compose-actions":
+        return {
+          heading: m.demo_narrative_topic_compose_actions_heading(),
+          body: m.demo_narrative_topic_compose_actions_body(),
+        };
+      case "reply":
+        return {
+          heading: m.demo_narrative_topic_reply_heading(),
+          body: m.demo_narrative_topic_reply_body(),
+        };
+      case "notes":
+        return {
+          heading: m.demo_narrative_topic_notes_heading(),
+          body: m.demo_narrative_topic_notes_body(),
+        };
+      case "case-fold":
+        return {
+          heading: m.demo_narrative_topic_case_fold_heading(),
+          body: m.demo_narrative_topic_case_fold_body(),
+        };
+      case "language":
+        return {
+          heading: m.demo_narrative_topic_language_heading(),
+          body: m.demo_narrative_topic_language_body(),
+        };
+    }
+  }
+
   const copy: NarrativeCopy = $derived.by(() => {
+    // Topic takes priority when set
+    if (topic !== null) {
+      return topicNarrative(topic);
+    }
+
     if (searchOpen || feature === "search") {
       return {
         heading: m.demo_narrative_search_heading(),

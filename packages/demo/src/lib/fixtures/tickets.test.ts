@@ -6,8 +6,10 @@ import {
   mapToTicketLikeRecord,
   buildSeedData,
   readCursorPayloadFor,
+  deriveReadStateEntry,
   resetFixtureIds,
   DEMO_QUEUES,
+  DEMO_NOTE_TYPES,
 } from "./tickets.js";
 import type { DemoTicket } from "./types.js";
 
@@ -313,5 +315,148 @@ describe("resetFixtureIds", () => {
     resetFixtureIds();
     const second = createDemoTickets();
     expect(first[0]?.id).toBe(second[0]?.id);
+  });
+});
+
+describe("DEMO_NOTE_TYPES", () => {
+  it("contains at least two note types", () => {
+    expect(DEMO_NOTE_TYPES.length).toBeGreaterThanOrEqual(2);
+  });
+
+  it("has unique ids", () => {
+    const ids = DEMO_NOTE_TYPES.map((nt) => nt.id);
+    expect(new Set(ids).size).toBe(ids.length);
+  });
+
+  it("all have canCreate true for the demo", () => {
+    for (const nt of DEMO_NOTE_TYPES) {
+      expect(nt.canCreate).toBe(true);
+    }
+  });
+
+  it("all have non-empty name and icon", () => {
+    for (const nt of DEMO_NOTE_TYPES) {
+      expect(nt.name.length).toBeGreaterThan(0);
+      expect(nt.icon.length).toBeGreaterThan(0);
+    }
+  });
+});
+
+describe("buildSeedData note-type seeding", () => {
+  it("seeds note-type names into orgValues", () => {
+    const tickets = createDemoTickets();
+    const seed = buildSeedData(tickets);
+    for (const nt of DEMO_NOTE_TYPES) {
+      expect(seed.orgValues[`${nt.id}:name`]).toBe(nt.name);
+    }
+  });
+
+  it("seeds note-type icons into orgValues", () => {
+    const tickets = createDemoTickets();
+    const seed = buildSeedData(tickets);
+    for (const nt of DEMO_NOTE_TYPES) {
+      expect(seed.orgValues[`${nt.id}:icon`]).toBe(nt.icon);
+    }
+  });
+
+  it("seeds note-type descriptions into orgValues when present", () => {
+    const tickets = createDemoTickets();
+    const seed = buildSeedData(tickets);
+    for (const nt of DEMO_NOTE_TYPES) {
+      if (nt.description !== null) {
+        expect(seed.orgValues[`${nt.id}:desc`]).toBe(nt.description);
+      } else {
+        expect(seed.orgValues[`${nt.id}:desc`]).toBeUndefined();
+      }
+    }
+  });
+});
+
+describe("deriveReadStateEntry", () => {
+  let tickets: DemoTicket[];
+
+  beforeEach(() => {
+    tickets = createDemoTickets();
+  });
+
+  it("returns a cursor for accessible tickets (non-null keyWrap)", () => {
+    const ticket = tickets[0];
+    if (ticket === undefined) throw new Error("missing fixture");
+    const entry = deriveReadStateEntry(ticket);
+    expect(entry.encryptedReadCursor).toBe(`demo-cursor-${ticket.id}`);
+  });
+
+  it("returns null cursor for DENIED tickets (null keyWrap)", () => {
+    const ticket = tickets[4];
+    if (ticket === undefined) throw new Error("missing fixture");
+    const entry = deriveReadStateEntry(ticket);
+    expect(entry.encryptedReadCursor).toBeNull();
+  });
+
+  it("excludes system follow-ups from timestamps", () => {
+    // Ticket 0 has 4 system events, 2 volunteer (self), and 2 client messages
+    const ticket = tickets[0];
+    if (ticket === undefined) throw new Error("missing fixture");
+    const entry = deriveReadStateEntry(ticket);
+    // Only client messages count (volunteer is self, system is excluded)
+    expect(entry.followUpCreatedAt.length).toBe(2);
+  });
+
+  it("excludes self-authored (volunteer source) follow-ups", () => {
+    // Ticket 1 carries 2 volunteer follow-ups (all volunteer rows are
+    // the demo user's own) and 3 client follow-ups, one of them a
+    // media-only recording; only the 3 client rows count.
+    const ticket = tickets[1];
+    if (ticket === undefined) throw new Error("missing fixture");
+    const entry = deriveReadStateEntry(ticket);
+    expect(entry.followUpCreatedAt.length).toBe(3);
+  });
+
+  it("returns timestamps sorted newest first", () => {
+    const ticket = tickets[0];
+    if (ticket === undefined) throw new Error("missing fixture");
+    const entry = deriveReadStateEntry(ticket);
+    const timestamps = entry.followUpCreatedAt.map((ts) => Date.parse(ts));
+    for (let i = 0; i < timestamps.length - 1; i++) {
+      const current = timestamps[i];
+      const next = timestamps[i + 1];
+      if (current !== undefined && next !== undefined) {
+        expect(current).toBeGreaterThanOrEqual(next);
+      }
+    }
+  });
+
+  it("returns empty timestamps for tickets with no eligible follow-ups", () => {
+    // Ticket 4 (DENIED) has no follow-ups at all
+    const ticket = tickets[4];
+    if (ticket === undefined) throw new Error("missing fixture");
+    const entry = deriveReadStateEntry(ticket);
+    expect(entry.followUpCreatedAt).toEqual([]);
+  });
+
+  it("returns at most 20 timestamps", () => {
+    // All current fixtures have fewer than 20, but verify the cap
+    for (const ticket of tickets) {
+      const entry = deriveReadStateEntry(ticket);
+      expect(entry.followUpCreatedAt.length).toBeLessThanOrEqual(20);
+    }
+  });
+
+  it("agrees with readCursorPayloadFor for unread count semantics", () => {
+    // For unread tickets: timestamps newer than readUpTo = unreadCount
+    const unreadTickets = tickets.filter((t) => t.unreadCount > 0);
+    expect(unreadTickets.length).toBeGreaterThan(0);
+    for (const ticket of unreadTickets) {
+      const entry = deriveReadStateEntry(ticket);
+      const payload = JSON.parse(readCursorPayloadFor(ticket)) as {
+        readUpTo: string;
+      };
+      const readUpToMs = Date.parse(payload.readUpTo);
+      // Count timestamps newer than readUpTo
+      const unreadFromWindow = entry.followUpCreatedAt.filter(
+        (ts) => Date.parse(ts) > readUpToMs,
+      ).length;
+      expect(unreadFromWindow).toBe(ticket.unreadCount);
+    }
   });
 });

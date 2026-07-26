@@ -29,10 +29,12 @@
     buildSeedData,
     resetFixtureIds,
   } from "$demo/fixtures/tickets.js";
+  import { classifyDemoLabel } from "$demo/topic-classifier.js";
   import type {
     DemoBridge,
     DemoBridgeListener,
     DemoBridgeState,
+    DemoTopic,
   } from "$demo/bridge.js";
 
   // -----------------------------------------------------------------------
@@ -110,6 +112,39 @@
   const SceneComponent = $derived(getSceneComponent(router.feature));
 
   // -----------------------------------------------------------------------
+  // Topic classification
+  // -----------------------------------------------------------------------
+
+  let topic: DemoTopic | null = $state(null);
+
+  // Capture-phase click listener on the phone document. Walks the
+  // event target up to the nearest [aria-label] element and classifies
+  // the label string to a DemoTopic via the pure classifier.
+  $effect(() => {
+    function handleClick(event: MouseEvent): void {
+      const target = event.target;
+      if (!(target instanceof Element)) return;
+
+      const labeled = target.closest("[aria-label]");
+      if (labeled === null) return;
+
+      const ariaLabel = labeled.getAttribute("aria-label");
+      if (ariaLabel === null || ariaLabel === "") return;
+
+      const inDetail = router.detail !== null;
+      const classified = classifyDemoLabel(ariaLabel, { inDetail });
+      if (classified !== null) {
+        topic = classified;
+      }
+    }
+
+    document.addEventListener("click", handleClick, { capture: true });
+    return () => {
+      document.removeEventListener("click", handleClick, { capture: true });
+    };
+  });
+
+  // -----------------------------------------------------------------------
   // Goto interception
   // -----------------------------------------------------------------------
 
@@ -159,6 +194,7 @@
         feature: router.feature,
         detail: router.detail,
         searchOpen: router.searchOpen,
+        topic,
       };
       listener(snapshot);
 
@@ -172,12 +208,13 @@
   // iframe.contentWindow.demoBridge after the iframe loads.
   window.demoBridge = bridge;
 
-  // Notify listeners on router state changes
+  // Notify listeners on router state changes and topic changes
   $effect(() => {
     const snapshot: DemoBridgeState = {
       feature: router.feature,
       detail: router.detail,
       searchOpen: router.searchOpen,
+      topic,
     };
     for (const listener of listeners) {
       listener(snapshot);
