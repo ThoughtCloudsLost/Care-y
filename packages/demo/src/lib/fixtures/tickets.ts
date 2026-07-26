@@ -148,6 +148,47 @@ export const DEMO_KEY_WRAP: TicketKeyWrap = {
 };
 
 // -----------------------------------------------------------------------
+// Note type definitions (single source; trpc mock and seed both derive)
+// -----------------------------------------------------------------------
+
+export interface DemoNoteType {
+  readonly id: string;
+  readonly name: string;
+  readonly icon: string;
+  readonly description: string | null;
+  readonly canCreate: boolean;
+  readonly minViewRole: string;
+  readonly minCreateRole: string;
+  readonly requiresOnClose: boolean;
+  readonly notificationHints: readonly string[];
+}
+
+export const DEMO_NOTE_TYPES: readonly DemoNoteType[] = [
+  {
+    id: "nt-general",
+    name: "General Note",
+    icon: "pencil",
+    description: null,
+    canCreate: true,
+    minViewRole: "volunteer",
+    minCreateRole: "volunteer",
+    requiresOnClose: false,
+    notificationHints: ["ticket_access"],
+  },
+  {
+    id: "nt-follow-up",
+    name: "Follow-up Call",
+    icon: "phone",
+    description: "Record details of a follow-up phone call",
+    canCreate: true,
+    minViewRole: "volunteer",
+    minCreateRole: "volunteer",
+    requiresOnClose: false,
+    notificationHints: ["ticket_access", "role:manager"],
+  },
+] as const;
+
+// -----------------------------------------------------------------------
 // Queue definitions (shared between fixture data and trpc mock)
 // -----------------------------------------------------------------------
 
@@ -668,6 +709,47 @@ export function mapToTicketLikeRecord(ticket: DemoTicket): TicketLikeRecord & {
 }
 
 /**
+ * Derive the listReadState window entry for a single ticket.
+ *
+ * Mirrors the server's semantics: returns up to 20 newest non-system,
+ * non-self follow-up timestamps (excluding follow-ups authored by the
+ * current demo user). The encrypted cursor uses the same scheme as the
+ * sweep (`demo-cursor-${ticketId}`). Tickets without a key wrap get null
+ * cursor (never opened). Tickets with no cursor row at all (no key wrap)
+ * still get an entry because the server returns one for every accessible
+ * requested id.
+ */
+export function deriveReadStateEntry(ticket: DemoTicket): {
+  encryptedReadCursor: string | null;
+  followUpCreatedAt: string[];
+} {
+  // The server always returns a row for accessible tickets.
+  // encryptedReadCursor is null when no cursor row exists (never opened).
+  const encryptedReadCursor =
+    ticket.keyWrap !== null ? `demo-cursor-${ticket.id}` : null;
+
+  // Up to 20 newest non-system, non-self follow-up timestamps. Fixture
+  // follow-ups carry no author id: every "volunteer" follow-up is
+  // authored by the demo user, and the server excludes self-authored
+  // replies (your own reply is not unread to you), so volunteer rows
+  // are excluded wholesale.
+  const READ_STATE_TIMESTAMPS_LIMIT = 20;
+  const eligibleFollowUps = ticket.followUps.filter(
+    (fu) => fu.source !== "system" && fu.source !== "volunteer",
+  );
+
+  // Sort newest first, take up to the limit
+  const sorted = [...eligibleFollowUps].sort(
+    (a, b) => b.createdAt.getTime() - a.createdAt.getTime(),
+  );
+  const timestamps = sorted
+    .slice(0, READ_STATE_TIMESTAMPS_LIMIT)
+    .map((fu) => fu.createdAt.toISOString());
+
+  return { encryptedReadCursor, followUpCreatedAt: timestamps };
+}
+
+/**
  * Read-cursor payload for a ticket, shaped like the plaintext the real
  * cursor decrypt produces. unreadCount trailing follow-ups sit after
  * the cursor; 0 means read through the latest activity.
@@ -710,6 +792,16 @@ export function buildSeedData(tickets: readonly DemoTicket[]): {
   // user-prefixed keys (volunteer search, assignment rows)
   for (const user of DEMO_USERS) {
     orgValues[`user:${user.id}`] = user.name;
+  }
+
+  // Note-type names and icons decrypt via orgCache.decrypt(id + ":name", ...)
+  // and orgCache.decrypt(id + ":icon", ...)
+  for (const nt of DEMO_NOTE_TYPES) {
+    orgValues[`${nt.id}:name`] = nt.name;
+    orgValues[`${nt.id}:icon`] = nt.icon;
+    if (nt.description !== null) {
+      orgValues[`${nt.id}:desc`] = nt.description;
+    }
   }
 
   for (const ticket of tickets) {

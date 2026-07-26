@@ -38,8 +38,10 @@ import {
   createDemoTickets,
   mapToTicketLikeRecord,
   readCursorPayloadFor,
+  deriveReadStateEntry,
   DEMO_QUEUES,
   DEMO_KEY_WRAP,
+  DEMO_NOTE_TYPES,
   DEMO_USERS,
 } from "../lib/fixtures/tickets.js";
 import type { DemoTicket, DemoFollowUp } from "../lib/fixtures/types.js";
@@ -283,57 +285,59 @@ const authRouter = {
   },
 };
 
+/** Wire shape for a note type row from listActive (full NoteTypeRecord + canCreate). */
+interface NoteTypeWireRow {
+  readonly id: string;
+  readonly encryptedIcon: string;
+  readonly encryptedName: string;
+  readonly encryptedDescription: string | null;
+  readonly isActive: boolean;
+  readonly requiresOnClose: boolean;
+  readonly minViewRole: string;
+  readonly minCreateRole: string;
+  readonly createdAt: string;
+  readonly notificationHints: readonly string[];
+  readonly canCreate: boolean;
+}
+
+function buildNoteTypeWireRows(): NoteTypeWireRow[] {
+  return DEMO_NOTE_TYPES.map((nt) => ({
+    id: nt.id,
+    encryptedIcon: fakeCipher(nt.icon),
+    encryptedName: fakeCipher(nt.name),
+    encryptedDescription:
+      nt.description !== null ? fakeCipher(nt.description) : null,
+    isActive: true,
+    requiresOnClose: nt.requiresOnClose,
+    minViewRole: nt.minViewRole,
+    minCreateRole: nt.minCreateRole,
+    createdAt: new Date(2024, 0, 1).toISOString(),
+    notificationHints: nt.notificationHints,
+    canCreate: nt.canCreate,
+  }));
+}
+
 const noteTypesRouter = {
   listActive: {
     async query(): Promise<{
-      types: readonly {
-        id: string;
-        encryptedIcon: string;
-        encryptedName: string;
-      }[];
+      types: readonly NoteTypeWireRow[];
       defaultNoteTypeId: string | null;
     }> {
       await Promise.resolve();
       return {
-        types: [
-          {
-            id: "nt-general",
-            encryptedIcon: fakeCipher("pencil"),
-            encryptedName: fakeCipher("General Note"),
-          },
-          {
-            id: "nt-follow-up",
-            encryptedIcon: fakeCipher("phone"),
-            encryptedName: fakeCipher("Follow-up Call"),
-          },
-        ],
+        types: buildNoteTypeWireRows(),
         defaultNoteTypeId: null,
       };
     },
   },
   list: {
     async query(): Promise<{
-      types: readonly {
-        id: string;
-        encryptedIcon: string;
-        encryptedName: string;
-      }[];
+      types: readonly NoteTypeWireRow[];
       defaultNoteTypeId: string | null;
     }> {
       await Promise.resolve();
       return {
-        types: [
-          {
-            id: "nt-general",
-            encryptedIcon: fakeCipher("pencil"),
-            encryptedName: fakeCipher("General Note"),
-          },
-          {
-            id: "nt-follow-up",
-            encryptedIcon: fakeCipher("phone"),
-            encryptedName: fakeCipher("Follow-up Call"),
-          },
-        ],
+        types: buildNoteTypeWireRows(),
         defaultNoteTypeId: null,
       };
     },
@@ -668,7 +672,7 @@ const ticketsRouter = {
     },
   },
   listReadState: {
-    async query(_opts: { ticketIds: readonly string[] }): Promise<
+    async query(opts: { ticketIds: readonly string[] }): Promise<
       Record<
         string,
         {
@@ -678,7 +682,19 @@ const ticketsRouter = {
       >
     > {
       await Promise.resolve();
-      return {};
+      // Mirror the server: return an entry for every requested ticket that
+      // exists in the fixture set (all are "accessible" in the demo).
+      const requestedIds = new Set(opts.ticketIds);
+      const entries: [
+        string,
+        { encryptedReadCursor: string | null; followUpCreatedAt: string[] },
+      ][] = [];
+      for (const ticket of tickets) {
+        if (requestedIds.has(ticket.id)) {
+          entries.push([ticket.id, deriveReadStateEntry(ticket)]);
+        }
+      }
+      return Object.fromEntries(entries);
     },
   },
   isWatching: {
