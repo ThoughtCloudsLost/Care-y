@@ -6,17 +6,17 @@ import { getLocale, experimentalStaticLocale } from '../runtime.js';
 /** @typedef {{}} Admin_Tab_QuarantineInputs */
 
 const en_admin_tab_quarantine = /** @type {(inputs: Admin_Tab_QuarantineInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Quarantine`)
+	return /** @type {LocalizedString} */ (`Unrouted`)
 };
 
 const es_admin_tab_quarantine = /** @type {(inputs: Admin_Tab_QuarantineInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Cuarentena`)
+	return /** @type {LocalizedString} */ (`Sin ruta`)
 };
 
 /**
 * | output |
 * | --- |
-* | "Quarantine" |
+* | "Unrouted" |
 *
 * @param {Admin_Tab_QuarantineInputs} inputs
 * @param {{ locale?: "en" | "es" }} options
