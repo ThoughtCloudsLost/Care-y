@@ -6,7 +6,7 @@
  */
 
 import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
-import { render, cleanup, fireEvent } from "@testing-library/svelte";
+import { render, cleanup, fireEvent, waitFor } from "@testing-library/svelte";
 import PhoneEditSheet from "./PhoneEditSheet.svelte";
 import type * as Messages from "$lib/paraglide/messages.js";
 import type * as WithTermsModule from "$lib/terminology/with-terms.js";
@@ -73,6 +73,7 @@ vi.mock("$lib/terminology/with-terms.js", async (importOriginal) => {
 
 const mockMutate = vi.fn();
 const mockInvalidateQueries = vi.fn();
+const { mockToastShow } = vi.hoisted(() => ({ mockToastShow: vi.fn() }));
 
 let mutationCallbacks: {
   onSuccess?: (result: unknown) => void;
@@ -137,7 +138,7 @@ vi.mock("$lib/stores/toast.svelte.js", async (importOriginal) => {
   return {
     ...original,
     toastStore: {
-      show: vi.fn(),
+      show: mockToastShow,
       current: null,
       dismiss: vi.fn(),
     },
@@ -187,6 +188,66 @@ describe("PhoneEditSheet", () => {
     ondismiss: vi.fn(),
     onmerge: vi.fn(),
   };
+
+  /** Advances to the conflict step by replaying the server's conflict result. */
+  async function reachConflictStep(container: HTMLElement): Promise<void> {
+    mutationCallbacks.onSuccess?.({
+      success: true,
+      conflict: {
+        conflictingClientId: "client-456",
+        conflictingClientAlias: "gentle-moon-7",
+      },
+    });
+    await waitFor(() => {
+      expect(container.textContent).toContain("Phone conflict");
+    });
+  }
+
+  function findButton(
+    container: HTMLElement,
+    text: string,
+  ): HTMLButtonElement | undefined {
+    return Array.from(container.querySelectorAll("button")).find((b) =>
+      b.textContent.includes(text),
+    );
+  }
+
+  it("surfaces a generic toast when the phone write fails", () => {
+    render(PhoneEditSheet, { props: baseProps });
+
+    mutationCallbacks.onError?.(new Error("NETWORK_ERROR"));
+
+    expect(mockToastShow).toHaveBeenCalledWith("Something went wrong.", 3000);
+  });
+
+  it("hands the conflicting client to onmerge from the conflict step", async () => {
+    const onmerge = vi.fn();
+    const { container } = render(PhoneEditSheet, {
+      props: { ...baseProps, onmerge },
+    });
+
+    await reachConflictStep(container);
+
+    const mergeBtn = findButton(container, "Merge Clients");
+    expect(mergeBtn).toBeDefined();
+    await fireEvent.click(mergeBtn!);
+
+    expect(onmerge).toHaveBeenCalledWith("client-456", "gentle-moon-7");
+  });
+
+  it("returns to the input step from the conflict step", async () => {
+    const { container } = render(PhoneEditSheet, { props: baseProps });
+
+    await reachConflictStep(container);
+
+    const tryAgain = findButton(container, "Try Different Number");
+    expect(tryAgain).toBeDefined();
+    await fireEvent.click(tryAgain!);
+
+    await waitFor(() => {
+      expect(container.querySelector("input[type='tel']")).toBeTruthy();
+    });
+  });
 
   it("renders the input step with phone field and Save button", () => {
     const { container } = render(PhoneEditSheet, { props: baseProps });

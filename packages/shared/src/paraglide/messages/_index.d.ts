@@ -1791,6 +1791,7 @@ export * from "./client_alias_uniqueness_error.js";
 export * from "./client_phone_label.js";
 export * from "./client_phone_edit.js";
 export * from "./client_phone_placeholder.js";
+export * from "./client_phone_invalid_error.js";
 export * from "./client_tickets_heading.js";
 export * from "./client_merge_history_heading.js";
 export * from "./client_merge_undo.js";
