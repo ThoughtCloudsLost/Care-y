@@ -72,6 +72,7 @@ describe("getVisibleDestinations", () => {
       Permission.MANAGE_ORG_CONFIG,
       Permission.MANAGE_KEYS,
       Permission.VIEW_REPORTS,
+      Permission.VIEW_CLIENTS,
     ]);
     const visible = getVisibleDestinations(permissions);
 
@@ -89,11 +90,11 @@ describe("groupDestinations", () => {
   });
 
   // Render order within groups is user-facing (admin hub lists items top-to-bottom).
-  it("people group contains users and queues in render order", () => {
+  it("people group contains users, queues, and clients in render order", () => {
     const grouped = groupDestinations(ADMIN_DESTINATIONS);
     const people = grouped.get("people") ?? [];
 
-    expect(people.map((d) => d.id)).toEqual(["users", "queues"]);
+    expect(people.map((d) => d.id)).toEqual(["users", "queues", "clients"]);
   });
 
   it("returns empty map for empty input", () => {

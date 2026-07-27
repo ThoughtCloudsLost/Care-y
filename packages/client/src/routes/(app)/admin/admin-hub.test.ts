@@ -2,6 +2,7 @@
 
 import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
 import { render, screen, cleanup } from "@testing-library/svelte";
+import type * as ParaglideMessages from "$lib/paraglide/messages.js";
 
 // --- Controllable mock state ---
 
@@ -69,7 +70,10 @@ vi.mock("$lib/trpc/index.js", () => ({
   },
 }));
 
-vi.mock("$lib/paraglide/messages.js", () => ({
+// Spread the real module so a newly added panel key does not break this file;
+// only the strings asserted below are pinned.
+vi.mock("$lib/paraglide/messages.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof ParaglideMessages>()),
   panel_group_people: () => "People",
   panel_group_communications: () => "Communications",
   panel_group_organization: () => "Organization",
