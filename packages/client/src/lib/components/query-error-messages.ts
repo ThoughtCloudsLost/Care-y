@@ -101,6 +101,9 @@ export const errorCodeMap: Record<ErrorCodeType, () => string> = {
   [ErrorCode.MERGE_UNDO_LOCKED]: () => m.error_merge_undo_locked(),
   [ErrorCode.ALIAS_GENERATION_FAILED]: () =>
     m.error_alias_generation_failed(withTerms()),
+  [ErrorCode.CLIENT_ALIAS_CONFLICT]: () => m.error_client_alias_conflict(),
+  [ErrorCode.PHONE_HASH_CONFLICT]: () =>
+    m.error_phone_hash_conflict(withTerms()),
 
   // Admin: user management
   [ErrorCode.CANNOT_DEACTIVATE_SELF]: () => m.error_cannot_deactivate_self(),

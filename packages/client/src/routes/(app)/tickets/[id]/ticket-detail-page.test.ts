@@ -113,6 +113,23 @@ vi.mock("@tanstack/svelte-query", () => ({
     // ticket query
     return ticketQueryState;
   },
+  // Overlays in this tree own mutations (the phone edit sheet among them),
+  // so the mock has to answer createMutation or the page fails to render.
+  createMutation: (optsFn: () => Record<string, unknown>) => {
+    const opts = optsFn();
+    const mutationFn = opts.mutationFn as (input: unknown) => Promise<unknown>;
+    return {
+      get isPending() {
+        return false;
+      },
+      get variables() {
+        return {} as Record<string, unknown>;
+      },
+      mutate(input: unknown) {
+        void mutationFn(input);
+      },
+    };
+  },
   useQueryClient: () => ({
     fetchQuery: vi.fn().mockResolvedValue([]),
     invalidateQueries: vi.fn(),

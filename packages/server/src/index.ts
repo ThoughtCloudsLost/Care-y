@@ -123,6 +123,7 @@ import {
   createKBVoteService,
 } from "./kb/service.js";
 import { createKBMediaService } from "./kb/kb-media-service.js";
+import { createClientService } from "./clients/client-service.js";
 
 // --- DB startup probe ---
 
@@ -547,6 +548,27 @@ const appRouter = createAppRouter({
   voicemailQuarantineDeps: {
     blobStore,
     pendingClients,
+  },
+  clientDeps: {
+    createClientSvc: (tDb, orgId) =>
+      createClientService({
+        db: tDb,
+        audit: createAuditService(tDb),
+        encryptor,
+        indexer,
+        mergeService: createMergeService(tDb),
+        orgId,
+      }),
+    fieldEncryptor: encryptor,
+    async isAssignedToClientTicket(tDb, clientId, userId) {
+      const row = await tDb
+        .selectFrom("tickets")
+        .select(tDb.fn.countAll<number>().as("cnt"))
+        .where("client_id", "=", clientId)
+        .where("assigned_to", "=", userId)
+        .executeTakeFirst();
+      return (row?.cnt ?? 0) > 0;
+    },
   },
   devDeps: env.NODE_ENV !== "production" ? { blobStore } : undefined,
 });

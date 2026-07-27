@@ -163,6 +163,12 @@
 
   const ticket = $derived(ticketQuery.data);
   const clientAlias = $derived(ticket?.clientAlias ?? "...");
+  const clientPhone = $derived(ticket?.clientPhone ?? null);
+  // Copy is useful only when the server sent a full formatted number (starts
+  // with "+"). Masked values like "***1234" are not worth copying. The server
+  // sends the full number only to admin, so this is admin-only in effect
+  // without needing a client-side role check.
+  const canCopyPhone = $derived(clientPhone?.startsWith("+") ?? false);
   const ticketDecryptCache = getTicketDecryptCache();
 
   const decryptedTitle = $derived.by((): string => {
@@ -273,7 +279,38 @@
   let callSheetOpen = $state(false);
   let composeActionsOpen = $state(false);
   let composeActionsAnchor = $state<HTMLElement | undefined>();
+  let phonePopoverOpen = $state(false);
+  let phoneEditSheetOpen = $state(false);
+  let mergeSheetOpen = $state(false);
+  let mergeConflictClientId = $state<string | null>(null);
+  let mergeConflictAlias = $state<string | null>(null);
   let timelineActive = $state(false);
+
+  const mergeClientA = $derived.by((): { id: string; alias: string } | null => {
+    if (!ticket) return null;
+    return { id: ticket.clientId, alias: clientAlias };
+  });
+
+  const mergeClientB = $derived.by((): { id: string; alias: string } | null => {
+    if (mergeConflictClientId === null) return null;
+    return { id: mergeConflictClientId, alias: mergeConflictAlias ?? "" };
+  });
+
+  function openMergeFromConflict(
+    conflictingClientId: string,
+    conflictingAlias: string,
+  ): void {
+    phoneEditSheetOpen = false;
+    mergeConflictClientId = conflictingClientId;
+    mergeConflictAlias = conflictingAlias;
+    mergeSheetOpen = true;
+  }
+
+  function closeMerge(): void {
+    mergeSheetOpen = false;
+    mergeConflictClientId = null;
+    mergeConflictAlias = null;
+  }
 
   // --- Exposure hint (composable) ---
 
@@ -582,6 +619,9 @@
       closePanel();
       assignSheetOpen = true;
     },
+    onphone: () => {
+      phonePopoverOpen = true;
+    },
   });
 
   function handleCallAction(action: CallAction): void {
@@ -641,6 +681,19 @@
   function handlePanelLightbox(imageUrl: string): void {
     closePanel();
     lightbox.show(imageUrl);
+  }
+
+  function handleCopyPhone(): void {
+    phonePopoverOpen = false;
+    void copyToClipboard(clientPhone ?? undefined, toastStore, {
+      success: m.phone_copy_clipboard(),
+      failure: m.common_copy_failed(),
+    });
+  }
+
+  function handleOpenPhoneEdit(): void {
+    phonePopoverOpen = false;
+    phoneEditSheetOpen = true;
   }
 
   function openCallSheet(): void {
@@ -942,12 +995,37 @@
 
 <TicketDetailOverlays
   {ticketId}
+  clientId={ticket?.clientId ?? ""}
   {clientAlias}
   {panelOpen}
   {assignSheetOpen}
   {callSheetOpen}
   {composeActionsOpen}
   {composeActionsAnchor}
+  {phonePopoverOpen}
+  {phoneEditSheetOpen}
+  {canCopyPhone}
+  onphonepopoverdismiss={() => {
+    phonePopoverOpen = false;
+  }}
+  onphonecopy={handleCopyPhone}
+  onphoneedit={handleOpenPhoneEdit}
+  onphoneeditdismiss={() => {
+    phoneEditSheetOpen = false;
+  }}
+  onphonemerge={(conflictingClientId: string, conflictingAlias: string) => {
+    openMergeFromConflict(conflictingClientId, conflictingAlias);
+  }}
+  {mergeSheetOpen}
+  {mergeClientA}
+  {mergeClientB}
+  onmergedismiss={closeMerge}
+  onmerged={() => {
+    closeMerge();
+    void queryClient.invalidateQueries({
+      queryKey: ticketKeys.detail(ticketId),
+    });
+  }}
   {hasVerifiedPhone}
   currentAssigneeId={ticket?.assignedTo ?? null}
   {deleteConfirm}

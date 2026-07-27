@@ -5,6 +5,7 @@ import { withTerms } from "$lib/terminology/with-terms.js";
 import {
   Users,
   Layers,
+  HeartHandshake,
   Phone,
   Ban,
   Mic,
@@ -55,6 +56,17 @@ export const ADMIN_DESTINATIONS: readonly AdminDestination[] = [
     subtitle: () => m.hub_queues_subtitle(withTerms()),
     path: "/admin/people?tab=queues",
     permission: Permission.MANAGE_QUEUES,
+    implemented: true,
+  },
+
+  {
+    id: "clients",
+    group: "people",
+    icon: HeartHandshake,
+    label: () => m.admin_clients_title(withTerms()),
+    subtitle: () => m.admin_clients_subtitle(withTerms()),
+    path: "/admin/people?tab=clients",
+    permission: Permission.VIEW_CLIENTS,
     implemented: true,
   },
 

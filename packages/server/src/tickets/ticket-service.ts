@@ -55,6 +55,10 @@ export interface TicketRecord {
 export interface TicketListRecord extends TicketRecord {
   readonly clientAlias: string;
   readonly hasPhone: boolean;
+  /** OPS-encrypted phone number buffer, or null when the client has no phone. */
+  readonly clientPhoneEncrypted: Buffer | null;
+  /** Phone record id, or null when the client has no phone. */
+  readonly clientPhoneId: string | null;
   readonly encryptedQueueName: Buffer;
   readonly queueSortOrder: number;
   readonly lastActivityAt: Date | null;
@@ -254,6 +258,8 @@ interface BaseTicketRow {
 interface EnrichedTicketRow extends BaseTicketRow {
   client_alias: string;
   has_phone: boolean | 0 | 1;
+  client_phone_encrypted: Buffer | null;
+  client_phone_id: string | null;
   encrypted_queue_name: Buffer;
   queue_sort_order: number;
   last_activity_at: Date | null;
@@ -282,6 +288,8 @@ function toListRecord(row: EnrichedTicketRow): TicketListRecord {
     ...toRecord(row),
     clientAlias: row.client_alias,
     hasPhone: Boolean(row.has_phone),
+    clientPhoneEncrypted: row.client_phone_encrypted ?? null,
+    clientPhoneId: row.client_phone_id ?? null,
     encryptedQueueName: row.encrypted_queue_name,
     queueSortOrder: row.queue_sort_order,
     lastActivityAt: row.last_activity_at,
@@ -520,6 +528,7 @@ export function createTicketService(
             .onRef("tkw.key_generation", "=", "t.key_generation"),
         )
         .innerJoin("clients as c", "c.id", "t.client_id")
+        .leftJoin("phones as ph", "ph.id", "c.phone_id")
         .innerJoin("queues as q", "q.id", "t.queue_id")
         .leftJoin("users as u", (join) =>
           join.on((eb) =>
@@ -530,6 +539,8 @@ export function createTicketService(
         .select(["tkw.ephemeral_point", "tkw.nonce", "tkw.wrapped_key"])
         .select("c.alias as client_alias")
         .select((eb) => eb("c.phone_id", "is not", null).as("has_phone"))
+        .select("ph.encrypted_number as client_phone_encrypted")
+        .select("ph.id as client_phone_id")
         .select("q.encrypted_name as encrypted_queue_name")
         .select("q.sort_order as queue_sort_order")
         .select("u.encrypted_display_name as assigned_display_name")
@@ -571,6 +582,7 @@ export function createTicketService(
             .onRef("tkw.key_generation", "=", "t.key_generation"),
         )
         .innerJoin("clients as c", "c.id", "t.client_id")
+        .leftJoin("phones as ph", "ph.id", "c.phone_id")
         .innerJoin("queues as q", "q.id", "t.queue_id")
         .leftJoin("users as u", (join) =>
           join.on((eb) =>
@@ -581,6 +593,8 @@ export function createTicketService(
         .select(["tkw.ephemeral_point", "tkw.nonce", "tkw.wrapped_key"])
         .select("c.alias as client_alias")
         .select((eb) => eb("c.phone_id", "is not", null).as("has_phone"))
+        .select("ph.encrypted_number as client_phone_encrypted")
+        .select("ph.id as client_phone_id")
         .select("q.encrypted_name as encrypted_queue_name")
         .select("q.sort_order as queue_sort_order")
         .select("u.encrypted_display_name as assigned_display_name")

@@ -22,6 +22,7 @@ export interface PanelActionsDeps {
   readonly onclose: () => void;
   readonly oncall: () => void;
   readonly onassign: () => void;
+  readonly onphone: () => void;
 }
 
 export interface PanelActions {
@@ -40,6 +41,9 @@ export function createPanelActions(deps: PanelActionsDeps): PanelActions {
     switch (action) {
       case "call":
         deps.oncall();
+        break;
+      case "phone":
+        deps.onphone();
         break;
       case "take":
         mutateWithToast(deps.takeMutate(ticketId));

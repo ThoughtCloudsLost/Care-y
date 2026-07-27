@@ -37,6 +37,7 @@ const MANAGER_PERMISSIONS: ReadonlySet<Permission> = new Set([
   Permission.MANAGE_KNOWLEDGE_BASE_CATEGORIES,
   Permission.VIEW_REPORTS,
   Permission.DELETE_CLIENTS,
+  Permission.VIEW_CLIENTS,
 ]);
 
 const ADMIN_PERMISSIONS: ReadonlySet<Permission> = new Set([
