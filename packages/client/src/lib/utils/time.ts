@@ -36,6 +36,23 @@ export function formatDateSeparator(dateStr: string): string {
 }
 
 /**
+ * Formats an ISO timestamp as a short calendar date (e.g., Jan 15, 2026).
+ * Used for record metadata such as created dates on list rows.
+ *
+ * The formatter is constructed once at module scope. Intl.DateTimeFormat is
+ * expensive to build, and list surfaces call this once per rendered row.
+ */
+const shortDateFormatter = new Intl.DateTimeFormat(undefined, {
+  year: "numeric",
+  month: "short",
+  day: "numeric",
+});
+
+export function formatShortDate(iso: string): string {
+  return shortDateFormatter.format(new Date(iso));
+}
+
+/**
  * Formats a duration in seconds as M:SS (e.g., 0:47, 2:15).
  */
 export function formatDuration(seconds: number): string {

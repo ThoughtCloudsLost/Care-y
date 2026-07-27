@@ -1792,6 +1792,7 @@
   "client_phone_label": "Phone",
   "client_phone_edit": "Edit phone",
   "client_phone_placeholder": "+1 555 000 1234",
+  "client_phone_invalid_error": "Enter a number like +1 555 000 1234",
   "client_tickets_heading": "{Tickets}",
   "client_merge_history_heading": "Merge history",
   "client_merge_undo": "Undo merge",

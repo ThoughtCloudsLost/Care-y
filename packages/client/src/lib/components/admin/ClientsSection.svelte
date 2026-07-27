@@ -6,7 +6,6 @@
     useQueryClient,
   } from "@tanstack/svelte-query";
   import {
-    Pencil,
     Lock,
     LockOpen,
     RotateCcw,
@@ -22,7 +21,7 @@
   import { haptic } from "$lib/utils/haptic.js";
   import { toastStore } from "$lib/stores/toast.svelte.js";
   import { announceToLiveRegion } from "$lib/utils/announce.js";
-  import { onKeyActivate } from "$lib/utils/a11y.js";
+  import { formatShortDate } from "$lib/utils/time.js";
   import { requireRouter } from "$lib/errors.js";
   import QueryError from "$lib/components/QueryError.svelte";
   import EmptyState from "$lib/components/EmptyState.svelte";
@@ -32,7 +31,8 @@
   import StatusMark from "$lib/components/StatusMark.svelte";
   import SoftButton from "$lib/components/inputs/SoftButton.svelte";
   import ShellSheet from "$lib/shell/ShellSheet.svelte";
-  import PhoneEditSheet from "$lib/components/clients/PhoneEditSheet.svelte";
+  import ClientCard from "./ClientCard.svelte";
+  import PhoneChangeSteps from "$lib/components/clients/PhoneChangeSteps.svelte";
   import MergeSheet from "$lib/components/clients/MergeSheet.svelte";
   import { LOADING, type DecryptResult } from "$lib/crypto/decrypt-result.js";
   import { deriveDisplayStatus } from "$lib/tickets/display-status.js";
@@ -80,13 +80,12 @@
 
   let sheetClientId = $state<string | null>(null);
 
-  let phoneEditOpened = $state(false);
-  function handlePhoneEditOpen(): void {
-    phoneEditOpened = true;
-  }
-  function closePhoneEdit(): void {
-    phoneEditOpened = false;
-  }
+  // The sheet body swaps between editing and the two gated phone steps. A
+  // phone change rewrites the number across every ticket for the client, so
+  // it passes through a confirmation, and the server may answer that another
+  // client already holds the number.
+  type SheetStep = "edit" | "confirm" | "conflict";
+  let sheetStep = $state<SheetStep>("edit");
 
   let mergeSheetOpened = $state(false);
   let mergeConflictClientId = $state<string | null>(null);
@@ -139,6 +138,10 @@
     sheetClientId = null;
     editAlias = "";
     aliasError = null;
+    sheetStep = "edit";
+    editPhone = "";
+    phoneError = null;
+    phoneConflict = null;
   }
 
   // ---------------------------------------------------------------------------
@@ -183,12 +186,113 @@
     },
   }));
 
+  // ---------------------------------------------------------------------------
+  // Phone editing
+  // ---------------------------------------------------------------------------
+
+  // editPhone is deliberately never seeded from the loaded client. clients.get
+  // returns a display string, full for an admin and masked for a manager, so
+  // there is no round-trippable value to prefill. An empty field means "leave
+  // the number alone"; anything typed is a full replacement.
+  let editPhone = $state("");
+  let phoneError = $state<string | null>(null);
+  let phoneConflict = $state<{
+    conflictingClientId: string;
+    conflictingClientAlias: string;
+  } | null>(null);
+
+  const E164_PATTERN = /^\+[1-9]\d{1,14}$/;
+  const trimmedPhone = $derived(editPhone.trim());
+  const phoneEntered = $derived(trimmedPhone !== "");
+  const phoneValid = $derived(E164_PATTERN.test(trimmedPhone));
+
+  const updatePhoneMutation = createMutation(() => ({
+    mutationFn: async (input: { clientId: string; phoneNumber: string }) =>
+      clientsRouter.updatePhone.mutate(input),
+    onSuccess: (result: {
+      success: boolean;
+      conflict: {
+        conflictingClientId: string;
+        conflictingClientAlias: string;
+      } | null;
+    }) => {
+      if (result.conflict) {
+        phoneConflict = result.conflict;
+        sheetStep = "conflict";
+        return;
+      }
+      haptic();
+      void queryClient.invalidateQueries({ queryKey: clientKeys.all });
+      void queryClient.invalidateQueries({ queryKey: ticketsKeys.all });
+      const msg = m.client_phone_changed_toast();
+      toastStore.show(msg);
+      announceToLiveRegion("polite", msg);
+      closeSheet();
+    },
+    onError: () => {
+      toastStore.show(m.error_generic());
+      sheetStep = "edit";
+    },
+  }));
+
+  // ---------------------------------------------------------------------------
+  // Saving
+  // ---------------------------------------------------------------------------
+
+  const savePending = $derived(
+    updateAliasMutation.isPending || updatePhoneMutation.isPending,
+  );
+
+  const canSave = $derived(
+    (aliasChanged || phoneEntered) && (!phoneEntered || phoneValid),
+  );
+
+  function handleSave(): void {
+    if (sheetClientId === null || !canSave) return;
+    if (phoneEntered) {
+      // Gate the phone write behind the confirmation, alias included, so the
+      // warning is shown before anything is written.
+      phoneError = null;
+      sheetStep = "confirm";
+      return;
+    }
+    handleSaveAlias();
+  }
+
   function handleSaveAlias(): void {
     if (sheetClientId === null || !aliasChanged) return;
     updateAliasMutation.mutate({
       clientId: sheetClientId,
       alias: trimmedAlias,
     });
+  }
+
+  // Alias carries no gate of its own and is independently valid, so it is
+  // written first. A phone conflict then cannot silently discard an alias
+  // edit the user already made.
+  function handleConfirmPhone(): void {
+    if (sheetClientId === null) return;
+    if (aliasChanged) handleSaveAlias();
+    updatePhoneMutation.mutate({
+      clientId: sheetClientId,
+      phoneNumber: trimmedPhone,
+    });
+  }
+
+  function handleCancelPhone(): void {
+    sheetStep = "edit";
+  }
+
+  function handleTryAnotherPhone(): void {
+    phoneConflict = null;
+    editPhone = "";
+    sheetStep = "edit";
+  }
+
+  function handleMergeFromConflict(): void {
+    const conflict = phoneConflict;
+    if (conflict === null) return;
+    openMerge(conflict.conflictingClientId, conflict.conflictingClientAlias);
   }
 
   // ---------------------------------------------------------------------------
@@ -228,20 +332,6 @@
   }));
 
   // ---------------------------------------------------------------------------
-  // Date formatting
-  // ---------------------------------------------------------------------------
-
-  const dateFormatter = new Intl.DateTimeFormat(undefined, {
-    year: "numeric",
-    month: "short",
-    day: "numeric",
-  });
-
-  function formatDate(iso: string): string {
-    return dateFormatter.format(new Date(iso));
-  }
-
-  // ---------------------------------------------------------------------------
   // Ticket title decrypt results (loading placeholder for now)
   // ---------------------------------------------------------------------------
 
@@ -278,37 +368,20 @@
       subtitle={m.clients_empty_subtitle(withTerms())}
     />
   {:else}
-    <List>
+    <div class="client-list">
       {#each clients as client (client.id)}
-        <ListItem
-          title={client.alias}
-          after={client.phone}
-          onclick={() => openClientDetail(client.id)}
-          onkeydown={onKeyActivate(() => openClientDetail(client.id))}
-          role="button"
-          tabindex={0}
-          class="touch-feedback"
-        >
-          {#snippet subtitle()}
-            <span class="client-subtitle">
-              {client.ticketCount === 1
-                ? m.clients_ticket_count_one(
-                    withTerms({ count: client.ticketCount }),
-                  )
-                : m.clients_ticket_count_other(
-                    withTerms({ count: client.ticketCount }),
-                  )}
-              <span class="subtitle-dot" aria-hidden="true">·</span>
-              {formatDate(client.createdAt)}
-              {#if client.mergedInto !== null}
-                <span class="subtitle-dot" aria-hidden="true">·</span>
-                <span class="merged-badge">{m.clients_merged_label()}</span>
-              {/if}
-            </span>
-          {/snippet}
-        </ListItem>
+        <ClientCard
+          viewMode="list"
+          clientId={client.id}
+          alias={client.alias}
+          phone={client.phone}
+          ticketCount={client.ticketCount}
+          createdAt={client.createdAt}
+          mergedInto={client.mergedInto}
+          onedit={openClientDetail}
+        />
       {/each}
-    </List>
+    </div>
   {/if}
 </div>
 
@@ -320,21 +393,31 @@
   ariaLabel={m.client_detail_title(withTerms())}
 >
   {#snippet headerRight()}
-    <SoftButton
-      onclick={handleSaveAlias}
-      disabled={!aliasChanged || updateAliasMutation.isPending}
-    >
-      {#if updateAliasMutation.isPending}
-        <Preloader class="w-4 h-4" />
-      {:else}
-        <Save size={16} aria-hidden="true" />
-        {m.admin_user_save_changes()}
-      {/if}
-    </SoftButton>
+    {#if sheetStep === "edit"}
+      <SoftButton onclick={handleSave} disabled={!canSave || savePending}>
+        {#if savePending}
+          <Preloader class="w-4 h-4" />
+        {:else}
+          <Save size={16} aria-hidden="true" />
+          {m.admin_user_save_changes()}
+        {/if}
+      </SoftButton>
+    {/if}
   {/snippet}
 
   <div class="edit-client-content">
-    {#if clientDetailQuery.isLoading}
+    {#if sheetStep !== "edit"}
+      <PhoneChangeSteps
+        step={sheetStep === "conflict" ? "conflict" : "confirm"}
+        clientAlias={clientDetailQuery.data?.alias ?? ""}
+        conflictAlias={phoneConflict?.conflictingClientAlias ?? null}
+        pending={savePending}
+        onconfirm={handleConfirmPhone}
+        oncancel={handleCancelPhone}
+        onmerge={handleMergeFromConflict}
+        ontryanother={handleTryAnotherPhone}
+      />
+    {:else if clientDetailQuery.isLoading}
       <Block>
         <InlineSkeleton width="100%" />
         <InlineSkeleton width="80%" />
@@ -369,26 +452,35 @@
         <FieldError message={aliasError ?? undefined} />
       </div>
 
-      <!-- Phone section -->
+      <!-- Phone section. The current number is read-only because the server
+           returns a display string (masked for a manager), so the input below
+           takes a full replacement rather than an edit of what is shown. -->
       <div class="detail-section">
         <p class="section-label">{m.client_phone_label()}</p>
+        <p class="current-phone">
+          <Phone size={16} aria-hidden="true" />
+          {detail.phone}
+        </p>
         <List nested>
-          <ListItem
-            title={detail.phone}
-            onclick={handlePhoneEditOpen}
-            onkeydown={onKeyActivate(handlePhoneEditOpen)}
-            role="button"
-            tabindex={0}
-            class="touch-feedback"
-          >
-            {#snippet media()}
-              <Phone class="w-5 h-5 text-[var(--ink-2)]" />
-            {/snippet}
-            {#snippet after()}
-              <Pencil size={16} class="text-[var(--brand-text)]" />
-            {/snippet}
-          </ListItem>
+          <ListInput
+            label={m.client_phone_label()}
+            type="tel"
+            value={editPhone}
+            placeholder={m.client_phone_placeholder()}
+            oninput={(e: Event) => {
+              if (e.target instanceof HTMLInputElement) {
+                editPhone = e.target.value;
+                phoneError =
+                  e.target.value.trim() === "" ||
+                  E164_PATTERN.test(e.target.value.trim())
+                    ? null
+                    : m.client_phone_invalid_error();
+              }
+            }}
+            disabled={savePending}
+          />
         </List>
+        <FieldError message={phoneError ?? undefined} />
       </div>
 
       <!-- Tickets section -->
@@ -423,7 +515,7 @@
                 {/snippet}
                 {#snippet after()}
                   <span class="ticket-meta">
-                    {formatDate(ticket.createdAt)}
+                    {formatShortDate(ticket.createdAt)}
                   </span>
                 {/snippet}
               </ListItem>
@@ -451,7 +543,7 @@
                 {/snippet}
                 {#snippet subtitle()}
                   <span class="merge-event-date">
-                    {formatDate(event.mergedAt)}
+                    {formatShortDate(event.mergedAt)}
                   </span>
                 {/snippet}
                 {#snippet after()}
@@ -506,17 +598,6 @@
   </div>
 </ShellSheet>
 
-<PhoneEditSheet
-  opened={phoneEditOpened}
-  clientId={sheetClientId ?? ""}
-  clientAlias={clientDetailQuery.data?.alias ?? ""}
-  ondismiss={closePhoneEdit}
-  onmerge={(conflictingClientId: string, conflictingAlias: string) => {
-    closePhoneEdit();
-    openMerge(conflictingClientId, conflictingAlias);
-  }}
-/>
-
 <MergeSheet
   opened={mergeSheetOpened}
   clientA={mergeClientA}
@@ -536,20 +617,11 @@
     gap: var(--space-lg);
   }
 
-  .client-subtitle {
-    color: var(--muted);
-    font-size: var(--text-sm);
-  }
-
-  .subtitle-dot {
-    margin: 0 0.25rem;
-  }
-
-  .merged-badge {
-    font-size: var(--text-xs);
-    font-weight: 500;
-    color: var(--muted);
-    font-style: italic;
+  .client-list {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-md);
+    min-width: 0;
   }
 
   .edit-client-content {
@@ -564,6 +636,15 @@
     flex-direction: column;
     gap: var(--space-sm);
     margin-bottom: var(--space-lg);
+  }
+
+  .current-phone {
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+    color: var(--ink-2);
+    font-size: var(--text-sm);
+    margin: 0;
   }
 
   .section-label {

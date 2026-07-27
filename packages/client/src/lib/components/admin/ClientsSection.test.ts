@@ -20,12 +20,14 @@ import type * as ShellContext from "$lib/shell/context.js";
 
 const {
   mockUpdateAlias,
+  mockUpdatePhone,
   mockUndoMerge,
   mockLockMerge,
   mockToastShow,
   mockClientGet,
 } = vi.hoisted(() => ({
   mockUpdateAlias: vi.fn().mockResolvedValue(undefined),
+  mockUpdatePhone: vi.fn().mockResolvedValue({ success: true, conflict: null }),
   mockUndoMerge: vi.fn().mockResolvedValue({}),
   mockLockMerge: vi.fn().mockResolvedValue({}),
   mockToastShow: vi.fn(),
@@ -95,6 +97,18 @@ vi.mock("$lib/paraglide/messages.js", async (importOriginal) => ({
   client_alias_changed_toast: () => "Alias updated",
   client_phone_label: () => "Phone",
   client_phone_edit: () => "Edit phone",
+  client_phone_placeholder: () => "+1 555 000 1234",
+  client_phone_invalid_error: () => "Enter a number like +1 555 000 1234",
+  client_phone_changed_toast: () => "Phone number updated",
+  client_phone_confirm_title: () => "Confirm phone change",
+  client_phone_confirm_body: ({ alias }: { alias: string }) =>
+    `This changes the phone for ${alias} across all their tickets.`,
+  client_phone_conflict_title: () => "Phone conflict",
+  client_phone_conflict_body: ({ alias }: { alias: string }) =>
+    `This number belongs to ${alias}. Merge instead?`,
+  client_phone_conflict_merge: () => "Merge clients",
+  client_edit_title: () => "Edit client",
+  client_merge_sheet_title: () => "Merge records",
   client_tickets_heading: () => "Tickets",
   client_no_tickets: () => "No tickets for this client.",
   client_merge_history_heading: () => "Merge history",
@@ -126,6 +140,7 @@ vi.mock("$lib/trpc/index.js", () => ({
       list: { query: vi.fn().mockResolvedValue([]) },
       get: { query: mockClientGet },
       updateAlias: { mutate: mockUpdateAlias },
+      updatePhone: { mutate: mockUpdatePhone },
     },
     tickets: {
       undoMerge: { mutate: mockUndoMerge },
@@ -262,6 +277,22 @@ vi.mock("$lib/components/EmptyState.svelte", async () => ({
   ).default,
 }));
 
+// DecryptPlaceholder observes the viewport before it decrypts, and jsdom has
+// no IntersectionObserver. Without this stub every render that reaches the
+// detail sheet throws.
+vi.stubGlobal(
+  "IntersectionObserver",
+  vi.fn(function (this: {
+    observe: ReturnType<typeof vi.fn>;
+    disconnect: ReturnType<typeof vi.fn>;
+    unobserve: ReturnType<typeof vi.fn>;
+  }) {
+    this.observe = vi.fn();
+    this.disconnect = vi.fn();
+    this.unobserve = vi.fn();
+  }),
+);
+
 if (typeof Element.prototype.animate !== "function") {
   Element.prototype.animate = vi.fn().mockReturnValue({
     finished: Promise.resolve(),
@@ -352,8 +383,13 @@ describe("ClientsSection", () => {
       render(ClientsSection, {
         props: { isError: true, error: new Error("fail") },
       });
-      const shell = screen.getByTestId("passthrough-shell");
-      expect(shell).toBeTruthy();
+      // The detail sheet stub is always mounted, so pick the QueryError stub
+      // by the absence of a sheet title.
+      const shells = screen.getAllByTestId("passthrough-shell");
+      const queryError = shells.find(
+        (el) => el.getAttribute("data-title") === null,
+      );
+      expect(queryError).toBeTruthy();
     });
 
     it("shows empty state when client list is empty", () => {
@@ -403,8 +439,9 @@ describe("ClientsSection", () => {
       component.openClientDetail("c-1");
       const sheet = await findDetailSheet();
 
-      // The section label "Alias" should be visible
-      expect(within(sheet).getByText("Alias")).toBeTruthy();
+      // "Alias" appears twice, once as the section label and once as the
+      // Konsta input label.
+      expect(within(sheet).getAllByText("Alias").length).toBeGreaterThan(0);
     });
 
     it("renders phone number in the detail sheet", async () => {
@@ -415,7 +452,9 @@ describe("ClientsSection", () => {
       component.openClientDetail("c-1");
       const sheet = await findDetailSheet();
 
-      expect(within(sheet).getByText("Phone")).toBeTruthy();
+      // "Phone" appears twice, once as the section label and once as the
+      // Konsta input label.
+      expect(within(sheet).getAllByText("Phone").length).toBeGreaterThan(0);
     });
 
     it("renders tickets section heading", async () => {
@@ -587,6 +626,229 @@ describe("ClientsSection", () => {
     });
   });
 
+  describe("phone editing", () => {
+    async function openWithPhone(value: string): Promise<HTMLElement> {
+      mockDetailData = makeDetail("c-1");
+      const { component } = render(ClientsSection, {
+        props: { clients: [makeClient("c-1")] },
+      });
+      component.openClientDetail("c-1");
+      const sheet = await findDetailSheet();
+
+      const phoneInput = within(sheet).getByPlaceholderText("+1 555 000 1234");
+      await fireEvent.input(phoneInput, { target: { value } });
+      return sheet;
+    }
+
+    it("shows the current number as read-only alongside an empty input", async () => {
+      mockDetailData = makeDetail("c-1", { phone: "+1 (555) 000-1234" });
+      const { component } = render(ClientsSection, {
+        props: { clients: [makeClient("c-1")] },
+      });
+      component.openClientDetail("c-1");
+      const sheet = await findDetailSheet();
+
+      expect(within(sheet).getByText("+1 (555) 000-1234")).toBeTruthy();
+      const phoneInput = within(sheet).getByPlaceholderText("+1 555 000 1234");
+      expect((phoneInput as HTMLInputElement).value).toBe("");
+    });
+
+    it("reports an invalid number instead of silently disabling Save", async () => {
+      const sheet = await openWithPhone("555-1234");
+
+      await waitFor(() => {
+        expect(
+          within(sheet).getByText("Enter a number like +1 555 000 1234"),
+        ).toBeTruthy();
+      });
+    });
+
+    it("routes a valid number to the confirm step rather than writing", async () => {
+      const sheet = await openWithPhone("+15550001234");
+
+      await fireEvent.click(
+        within(sheet).getByRole("button", { name: "Save changes" }),
+      );
+
+      await waitFor(() => {
+        expect(
+          within(sheet).getByText(
+            "This changes the phone for client-c-1 across all their tickets.",
+          ),
+        ).toBeTruthy();
+      });
+      expect(mockUpdatePhone).not.toHaveBeenCalled();
+    });
+
+    it("writes the number only after the confirm step is accepted", async () => {
+      const sheet = await openWithPhone("+15550001234");
+
+      await fireEvent.click(
+        within(sheet).getByRole("button", { name: "Save changes" }),
+      );
+      const confirm = await waitFor(() =>
+        within(sheet).getByRole("button", { name: "Confirm phone change" }),
+      );
+      await fireEvent.click(confirm);
+
+      await waitFor(() => {
+        expect(mockUpdatePhone).toHaveBeenCalledWith({
+          clientId: "c-1",
+          phoneNumber: "+15550001234",
+        });
+      });
+    });
+
+    it("returns to editing when the confirm step is cancelled", async () => {
+      const sheet = await openWithPhone("+15550001234");
+
+      await fireEvent.click(
+        within(sheet).getByRole("button", { name: "Save changes" }),
+      );
+      const cancel = await waitFor(() =>
+        within(sheet).getByRole("button", { name: "Cancel" }),
+      );
+      await fireEvent.click(cancel);
+
+      await waitFor(() => {
+        expect(
+          within(sheet).getByPlaceholderText("+1 555 000 1234"),
+        ).toBeTruthy();
+      });
+      expect(mockUpdatePhone).not.toHaveBeenCalled();
+    });
+
+    it("advances to the conflict step when the number is already taken", async () => {
+      mockUpdatePhone.mockResolvedValueOnce({
+        success: true,
+        conflict: {
+          conflictingClientId: "c-2",
+          conflictingClientAlias: "seaward-lamp",
+        },
+      });
+      const sheet = await openWithPhone("+15550001234");
+
+      await fireEvent.click(
+        within(sheet).getByRole("button", { name: "Save changes" }),
+      );
+      const confirm = await waitFor(() =>
+        within(sheet).getByRole("button", { name: "Confirm phone change" }),
+      );
+      await fireEvent.click(confirm);
+
+      await waitFor(() => {
+        expect(
+          within(sheet).getByText(
+            "This number belongs to seaward-lamp. Merge instead?",
+          ),
+        ).toBeTruthy();
+      });
+    });
+
+    it("returns to editing and warns when the phone write fails", async () => {
+      mockUpdatePhone.mockRejectedValueOnce(new Error("NETWORK_ERROR"));
+      const sheet = await openWithPhone("+15550001234");
+
+      await fireEvent.click(
+        within(sheet).getByRole("button", { name: "Save changes" }),
+      );
+      const confirm = await waitFor(() =>
+        within(sheet).getByRole("button", { name: "Confirm phone change" }),
+      );
+      await fireEvent.click(confirm);
+
+      await waitFor(() => {
+        expect(mockToastShow).toHaveBeenCalledWith("Something went wrong");
+      });
+      // Falling back to the edit step keeps the typed number recoverable.
+      await waitFor(() => {
+        expect(
+          within(sheet).getByPlaceholderText("+1 555 000 1234"),
+        ).toBeTruthy();
+      });
+    });
+
+    it("clears the field and returns to editing from Try another", async () => {
+      mockUpdatePhone.mockResolvedValueOnce({
+        success: true,
+        conflict: {
+          conflictingClientId: "c-2",
+          conflictingClientAlias: "seaward-lamp",
+        },
+      });
+      const sheet = await openWithPhone("+15550001234");
+
+      await fireEvent.click(
+        within(sheet).getByRole("button", { name: "Save changes" }),
+      );
+      const confirm = await waitFor(() =>
+        within(sheet).getByRole("button", { name: "Confirm phone change" }),
+      );
+      await fireEvent.click(confirm);
+
+      const tryAnother = await waitFor(() =>
+        within(sheet).getByRole("button", { name: "Edit phone" }),
+      );
+      await fireEvent.click(tryAnother);
+
+      const phoneInput = await waitFor(() =>
+        within(sheet).getByPlaceholderText("+1 555 000 1234"),
+      );
+      expect((phoneInput as HTMLInputElement).value).toBe("");
+    });
+
+    it("hands both clients to the merge sheet from the conflict step", async () => {
+      mockUpdatePhone.mockResolvedValueOnce({
+        success: true,
+        conflict: {
+          conflictingClientId: "c-2",
+          conflictingClientAlias: "seaward-lamp",
+        },
+      });
+      const sheet = await openWithPhone("+15550001234");
+
+      await fireEvent.click(
+        within(sheet).getByRole("button", { name: "Save changes" }),
+      );
+      const confirm = await waitFor(() =>
+        within(sheet).getByRole("button", { name: "Confirm phone change" }),
+      );
+      await fireEvent.click(confirm);
+
+      const merge = await waitFor(() =>
+        within(sheet).getByRole("button", { name: "Merge clients" }),
+      );
+      await fireEvent.click(merge);
+
+      await waitFor(() => {
+        const mergeSheet = screen
+          .getAllByTestId("passthrough-shell")
+          .find((el) => el.getAttribute("data-title") === "Merge records");
+        expect(mergeSheet).toBeTruthy();
+        expect(mergeSheet!.getAttribute("data-opened")).toBe("true");
+      });
+    });
+
+    it("does not stack a second sheet for phone editing", async () => {
+      const sheet = await openWithPhone("+15550001234");
+
+      // Sheets stay mounted for their animation, so count them rather than
+      // look for absence. Advancing to confirm must not add one.
+      const before = screen.getAllByTestId("passthrough-shell").length;
+
+      await fireEvent.click(
+        within(sheet).getByRole("button", { name: "Save changes" }),
+      );
+      await waitFor(() => {
+        expect(
+          within(sheet).getByRole("button", { name: "Confirm phone change" }),
+        ).toBeTruthy();
+      });
+
+      expect(screen.getAllByTestId("passthrough-shell")).toHaveLength(before);
+    });
+  });
+
   describe("merge actions", () => {
     it("fires undoMerge mutation when undo button is clicked", async () => {
       mockDetailData = makeDetail("c-1", {
@@ -616,7 +878,70 @@ describe("ClientsSection", () => {
       await waitFor(() => {
         expect(mockUndoMerge).toHaveBeenCalledWith({
           mergeEventId: "me-1",
+          encryptedSnapshot: btoa("{}"),
         });
+      });
+    });
+
+    it("warns when undoMerge fails", async () => {
+      mockUndoMerge.mockRejectedValueOnce(new Error("NETWORK_ERROR"));
+      mockDetailData = makeDetail("c-1", {
+        mergeHistory: [
+          {
+            id: "me-1",
+            primaryClientId: "c-1",
+            secondaryClientId: "c-2",
+            mergedAt: "2026-03-10T00:00:00.000Z",
+            snapshot: btoa("{}"),
+            undoLocked: false,
+            isUndone: false,
+          },
+        ],
+      });
+      const { component } = render(ClientsSection, {
+        props: { clients: [makeClient("c-1")] },
+      });
+
+      component.openClientDetail("c-1");
+      const sheet = await findDetailSheet();
+
+      await fireEvent.click(
+        within(sheet).getByRole("button", { name: /Undo merge/ }),
+      );
+
+      await waitFor(() => {
+        expect(mockToastShow).toHaveBeenCalledWith("Something went wrong");
+      });
+    });
+
+    it("warns when lockMerge fails", async () => {
+      mockLockMerge.mockRejectedValueOnce(new Error("NETWORK_ERROR"));
+      mockDetailData = makeDetail("c-1", {
+        mergeHistory: [
+          {
+            id: "me-1",
+            primaryClientId: "c-1",
+            secondaryClientId: "c-2",
+            mergedAt: "2026-03-10T00:00:00.000Z",
+            snapshot: btoa("{}"),
+            undoLocked: false,
+            isUndone: false,
+          },
+        ],
+      });
+      const { component } = render(ClientsSection, {
+        props: { clients: [makeClient("c-1")] },
+      });
+
+      component.openClientDetail("c-1");
+      const sheet = await findDetailSheet();
+
+      await fireEvent.click(
+        within(sheet).getByRole("button", { name: /Lock merge/ }),
+      );
+
+      await waitFor(() => {
+        expect(mockToastShow).toHaveBeenCalledWith("Something went wrong");
       });
     });
 

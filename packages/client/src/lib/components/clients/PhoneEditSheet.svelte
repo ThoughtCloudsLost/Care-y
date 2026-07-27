@@ -10,13 +10,13 @@
   import { Block, Button, List, ListInput, Preloader } from "konsta/svelte";
   import { createMutation, useQueryClient } from "@tanstack/svelte-query";
   import * as m from "$lib/paraglide/messages.js";
-  import { withTerms } from "$lib/terminology/with-terms.js";
   import { trpc } from "$lib/trpc/index.js";
   import { clientKeys, ticketsKeys } from "$lib/query/keys.js";
   import { haptic } from "$lib/utils/haptic.js";
   import { toastStore } from "$lib/stores/toast.svelte.js";
   import { requireRouter } from "$lib/errors.js";
   import ShellSheet from "$lib/shell/ShellSheet.svelte";
+  import PhoneChangeSteps from "./PhoneChangeSteps.svelte";
 
   // ---------------------------------------------------------------------------
   // Props
@@ -56,6 +56,12 @@
 
   const E164_PATTERN = /^\+[1-9]\d{1,14}$/;
   const isValidPhone = $derived(E164_PATTERN.test(phoneNumber.trim()));
+
+  // $state reads compile to getters, so narrowing `step` in the template's
+  // else branch does not reach the child's prop type. Narrow it here instead.
+  const gatedStep = $derived<"confirm" | "conflict">(
+    step === "conflict" ? "conflict" : "confirm",
+  );
 
   // Reset state when the sheet opens or closes
   $effect(() => {
@@ -169,57 +175,17 @@
         </Button>
       </Block>
     </div>
-  {:else if step === "confirm"}
-    <div class="phone-edit-step">
-      <Block>
-        <p class="step-heading confirm-heading">
-          {m.client_phone_confirm_title()}
-        </p>
-        <p class="confirm-body">
-          {m.client_phone_confirm_body(withTerms({ alias: clientAlias }))}
-        </p>
-      </Block>
-      <Block>
-        <Button
-          large
-          class="confirm-btn"
-          onclick={handleConfirm}
-          disabled={updatePhoneMutation.isPending}
-        >
-          {#if updatePhoneMutation.isPending}
-            <Preloader class="w-5 h-5" />
-          {:else}
-            {m.client_phone_confirm_title()}
-          {/if}
-        </Button>
-        <div class="btn-spacer"></div>
-        <Button large outline onclick={handleCancel}>
-          {m.common_cancel()}
-        </Button>
-      </Block>
-    </div>
-  {:else if step === "conflict"}
-    <div class="phone-edit-step">
-      <Block>
-        <p class="step-heading conflict-heading">
-          {m.client_phone_conflict_title()}
-        </p>
-        <p class="conflict-body">
-          {m.client_phone_conflict_body({
-            alias: conflict?.conflictingClientAlias ?? "",
-          })}
-        </p>
-      </Block>
-      <Block>
-        <Button large onclick={handleMerge}>
-          {m.client_phone_conflict_merge(withTerms())}
-        </Button>
-        <div class="btn-spacer"></div>
-        <Button large outline onclick={handleTryDifferent}>
-          {m.client_phone_edit()}
-        </Button>
-      </Block>
-    </div>
+  {:else}
+    <PhoneChangeSteps
+      step={gatedStep}
+      {clientAlias}
+      conflictAlias={conflict?.conflictingClientAlias ?? null}
+      pending={updatePhoneMutation.isPending}
+      onconfirm={handleConfirm}
+      oncancel={handleCancel}
+      onmerge={handleMerge}
+      ontryanother={handleTryDifferent}
+    />
   {/if}
 </ShellSheet>
 
@@ -235,35 +201,5 @@
     font-weight: 600;
     color: var(--ink);
     margin: 0 0 var(--space-sm) 0;
-  }
-
-  .confirm-heading {
-    color: var(--urgent);
-  }
-
-  .confirm-body {
-    color: var(--urgent);
-    font-size: var(--text-base);
-    margin: 0;
-    line-height: 1.5;
-  }
-
-  :global(.confirm-btn) {
-    --k-color-primary: var(--danger);
-  }
-
-  .conflict-heading {
-    color: var(--urgent);
-  }
-
-  .conflict-body {
-    color: var(--ink);
-    font-size: var(--text-base);
-    margin: 0;
-    line-height: 1.5;
-  }
-
-  .btn-spacer {
-    height: var(--space-sm);
   }
 </style>
