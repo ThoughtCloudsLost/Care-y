@@ -1,9 +1,10 @@
 /**
  * Tests for the tickets mount scene and registry wiring.
  *
- * Validates: registry maps tickets to the mount component, search
- * stays null, getSceneComponent returns correct values, and fixture
- * seeding round-trips through the stub caches.
+ * Validates: registry maps each built feature to its mount component,
+ * getSceneComponent returns correct values, and fixture seeding
+ * round-trips through the stub caches. Search is an overlay flag, not
+ * a scene, so it has no registry entry.
  */
 
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
@@ -25,27 +26,19 @@ import { scenes, getSceneComponent } from "./index.js";
 // ---------------------------------------------------------------------------
 
 describe("scene registry", () => {
-  it("tickets entry has a non-null component", () => {
+  it("tickets entry has the tickets mount component", () => {
     expect(scenes.tickets.component).not.toBeNull();
     expect(scenes.tickets.label).toBe("Tickets");
   });
 
-  it("search entry has null component (shell overlay)", () => {
-    expect(scenes.search.component).toBeNull();
-    expect(scenes.search.label).toBe("Search");
+  it("login entry has the login mount component", () => {
+    expect(scenes.login.component).not.toBeNull();
+    expect(scenes.login.label).toBe("Login");
   });
 
-  it("getSceneComponent returns the tickets component", () => {
-    const comp = getSceneComponent("tickets");
-    expect(comp).toBe(scenes.tickets.component);
-  });
-
-  it("getSceneComponent returns null for search", () => {
-    expect(getSceneComponent("search")).toBeNull();
-  });
-
-  it("getSceneComponent returns null for null feature", () => {
-    expect(getSceneComponent(null)).toBeNull();
+  it("getSceneComponent returns the component for each feature", () => {
+    expect(getSceneComponent("tickets")).toBe(scenes.tickets.component);
+    expect(getSceneComponent("login")).toBe(scenes.login.component);
   });
 });
 

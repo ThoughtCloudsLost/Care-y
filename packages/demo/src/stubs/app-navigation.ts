@@ -8,6 +8,10 @@
  * T11's router registers a handler via registerDemoNavigationHandler()
  * so that goto() calls from real shell components (tab switches, sidebar
  * links) route through the demo's page switcher instead of being dropped.
+ *
+ * beforeNavigate/afterNavigate callbacks are stored in arrays and
+ * fired by the router on every navigate/handleGoto call so that
+ * AppShell's markNavigated + closeSearch logic runs correctly.
  */
 
 // -----------------------------------------------------------------------
@@ -79,6 +83,44 @@ export function unregisterDemoNavigationHandler(
 }
 
 // -----------------------------------------------------------------------
+// Lifecycle callback arrays
+// -----------------------------------------------------------------------
+
+type BeforeNavigateCb = (nav: BeforeNavigateArg) => void;
+type AfterNavigateCb = (nav: AfterNavigateArg) => void;
+
+let beforeCallbacks: BeforeNavigateCb[] = [];
+let afterCallbacks: AfterNavigateCb[] = [];
+
+/**
+ * Fire all registered beforeNavigate callbacks. Called by the router
+ * on every navigation event.
+ */
+export function fireBeforeNavigate(arg: BeforeNavigateArg): void {
+  for (const cb of beforeCallbacks) {
+    cb(arg);
+  }
+}
+
+/**
+ * Fire all registered afterNavigate callbacks. Called by the router
+ * on every navigation event.
+ */
+export function fireAfterNavigate(arg: AfterNavigateArg): void {
+  for (const cb of afterCallbacks) {
+    cb(arg);
+  }
+}
+
+/**
+ * Reset all lifecycle callback arrays. For testing.
+ */
+export function resetLifecycleCallbacks(): void {
+  beforeCallbacks = [];
+  afterCallbacks = [];
+}
+
+// -----------------------------------------------------------------------
 // $app/navigation API surface
 // -----------------------------------------------------------------------
 
@@ -101,12 +143,12 @@ export function onNavigate(
   // No-op
 }
 
-export function beforeNavigate(_cb: (nav: BeforeNavigateArg) => void): void {
-  // No-op
+export function beforeNavigate(cb: (nav: BeforeNavigateArg) => void): void {
+  beforeCallbacks.push(cb);
 }
 
-export function afterNavigate(_cb: (nav: AfterNavigateArg) => void): void {
-  // No-op
+export function afterNavigate(cb: (nav: AfterNavigateArg) => void): void {
+  afterCallbacks.push(cb);
 }
 
 export async function invalidateAll(): Promise<void> {

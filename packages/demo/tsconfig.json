@@ -53,6 +53,10 @@
       "$lib/stores/saved-filters.svelte.js": [
         "./src/stubs/saved-filters.svelte.ts"
       ],
+      "$lib/auth/login-crypto": ["./src/stubs/login-crypto.ts"],
+      "$lib/auth/login-crypto.js": ["./src/stubs/login-crypto.ts"],
+      "$lib/shell/navigation": ["./src/stubs/shell-navigation.ts"],
+      "$lib/shell/navigation.js": ["./src/stubs/shell-navigation.ts"],
       "$lib/*": ["../client/src/lib/*"],
       "$lib": ["../client/src/lib"],
       "$routes/*": ["../client/src/routes/*"],

@@ -17,25 +17,17 @@ import { SvelteURL } from "svelte/reactivity";
 import { setDemoPage } from "$app/state";
 import { resolveNavContext } from "$lib/shell/nav-context.js";
 import type { TabId, AreaId } from "$lib/shell/types";
+import type { DemoFeature, DemoDetail } from "./bridge.js";
+import { fireBeforeNavigate, fireAfterNavigate } from "$app/navigation";
 
-// -----------------------------------------------------------------------
-// Types
-// -----------------------------------------------------------------------
-
-/** Features that have a built demo scene. */
-export type DemoFeature = "tickets" | "search";
-
-/** Sub-state within a feature (e.g. ticket detail, conversation view). */
-export type DemoDetail = string | null;
+// Re-exported type aliases for external barrel consumers.
+export type { DemoFeature, DemoDetail } from "./bridge.js";
 
 export interface DemoRouterState {
-  readonly feature: DemoFeature | null;
+  readonly feature: DemoFeature;
   readonly detail: DemoDetail;
   readonly searchOpen: boolean;
 }
-
-/** Callback signature for goto-interception registration. */
-export type NavigationHandler = (href: string) => void;
 
 // -----------------------------------------------------------------------
 // URL helpers
@@ -51,6 +43,11 @@ function ticketsListUrl(): URL {
 /** Build a demo URL for a ticket detail page. */
 function ticketsDetailUrl(ticketId: string): URL {
   return new URL(`${DEMO_ORIGIN}/tickets/${ticketId}`);
+}
+
+/** Build a demo URL for the login page. */
+function loginUrl(): URL {
+  return new URL(`${DEMO_ORIGIN}/login`);
 }
 
 // -----------------------------------------------------------------------
@@ -72,6 +69,11 @@ function resolveFeature(pathname: string): {
   feature: DemoFeature | null;
   detail: DemoDetail;
 } {
+  // "/" maps to tickets (post-auth landing)
+  if (pathname === "/" || pathname === "") {
+    return { feature: "tickets", detail: null };
+  }
+
   const ctx = resolveNavContext(pathname);
 
   if (ctx.tab === "tickets") {
@@ -97,18 +99,38 @@ function resolveFeature(pathname: string): {
 }
 
 // -----------------------------------------------------------------------
+// Navigation lifecycle helpers
+// -----------------------------------------------------------------------
+
+function buildEndpoint(url: URL): {
+  url: URL;
+  params: Record<string, string>;
+  route: { id: string | null };
+} {
+  const match = /^\/tickets\/([^/]+)$/.exec(url.pathname);
+  return {
+    url,
+    params: match?.[1] !== undefined ? { id: match[1] } : {},
+    route: { id: url.pathname },
+  };
+}
+
+// -----------------------------------------------------------------------
 // Router class
 // -----------------------------------------------------------------------
 
 export class DemoRouter {
   // Reactive state
-  feature: DemoFeature | null = $state(null);
+  feature: DemoFeature = $state("login");
   detail: DemoDetail = $state(null);
   searchOpen: boolean = $state(false);
 
   // Shell prop mirrors (reactive for AppShell binding)
   activeTab: TabId | null = $state("tickets");
   activeArea: AreaId | null = $state(null);
+
+  // Track last URL for lifecycle callbacks
+  private lastUrl: URL = loginUrl();
 
   /** Push the current feature/detail state into the $app/state stub. */
   private syncPage(): void {
@@ -118,11 +140,49 @@ export class DemoRouter {
       } else {
         setDemoPage(ticketsListUrl());
       }
+    } else {
+      setDemoPage(loginUrl());
     }
+  }
+
+  /** Compute the current URL for lifecycle endpoint construction. */
+  private currentUrl(): URL {
+    if (this.feature === "tickets") {
+      return this.detail !== null
+        ? ticketsDetailUrl(this.detail)
+        : ticketsListUrl();
+    }
+    return loginUrl();
+  }
+
+  /** Fire the navigation lifecycle callbacks (before + after). */
+  private fireLifecycle(fromUrl: URL, toUrl: URL): void {
+    const from = buildEndpoint(fromUrl);
+    const to = buildEndpoint(toUrl);
+    const resolved = Promise.resolve();
+    fireBeforeNavigate({
+      from,
+      to,
+      willUnload: false,
+      type: "goto",
+      complete: resolved,
+      cancel: () => {
+        /* noop: demo navigation is non-cancellable */
+      },
+    });
+    fireAfterNavigate({
+      from,
+      to,
+      willUnload: false,
+      type: "goto",
+      complete: resolved,
+    });
+    this.lastUrl = toUrl;
   }
 
   /** Navigate to a built feature (outer page entry point). */
   navigate(feature: DemoFeature, detail?: DemoDetail): void {
+    const fromUrl = this.currentUrl();
     this.searchOpen = false;
     this.feature = feature;
     this.detail = detail ?? null;
@@ -131,12 +191,10 @@ export class DemoRouter {
     if (feature === "tickets") {
       this.activeTab = "tickets";
       this.activeArea = null;
-    } else {
-      // Search doesn't change the active tab; it opens the overlay
-      this.searchOpen = true;
     }
 
     this.syncPage();
+    this.fireLifecycle(fromUrl, this.currentUrl());
   }
 
   /** Handler wired to AppShell's ontabchange prop. */
@@ -146,14 +204,18 @@ export class DemoRouter {
       return;
     }
 
+    const fromUrl = this.currentUrl();
     const feature = TAB_TO_FEATURE.get(tabId) ?? null;
     this.activeTab = tabId;
     this.activeArea = null;
     this.searchOpen = false;
-    this.feature = feature;
+    if (feature !== null) {
+      this.feature = feature;
+    }
     this.detail = null;
 
     this.syncPage();
+    this.fireLifecycle(fromUrl, this.currentUrl());
   }
 
   /** Handler wired to AppShell's onareatap prop. No-op for all areas in demo. */
@@ -163,19 +225,9 @@ export class DemoRouter {
 
   /** Handler wired to AppShell's onsearchtoggle prop. */
   handleSearchToggle(open: boolean): void {
+    // searchOpen is now a pure overlay flag. The underlying
+    // feature keeps rendering. No feature assignment needed.
     this.searchOpen = open;
-    if (open) {
-      this.feature = "search";
-      this.detail = null;
-    } else if (this.feature === "search") {
-      // Closing search returns to previous tab's feature
-      const tabFeature =
-        this.activeTab !== null
-          ? (TAB_TO_FEATURE.get(this.activeTab) ?? null)
-          : null;
-      this.feature = tabFeature;
-      this.detail = null;
-    }
   }
 
   /**
@@ -195,6 +247,7 @@ export class DemoRouter {
       return;
     }
 
+    const fromUrl = this.currentUrl();
     this.feature = feature;
     this.detail = detail;
     this.searchOpen = false;
@@ -206,10 +259,15 @@ export class DemoRouter {
     }
 
     this.syncPage();
+    this.fireLifecycle(fromUrl, this.currentUrl());
   }
 
   /** Snapshot of the current state (for external reads). */
-  get state(): DemoRouterState {
+  get state(): {
+    readonly feature: DemoFeature;
+    readonly detail: DemoDetail;
+    readonly searchOpen: boolean;
+  } {
     return {
       feature: this.feature,
       detail: this.detail,
@@ -217,16 +275,15 @@ export class DemoRouter {
     };
   }
 
-  /** Reset to initial state. */
+  /** Reset to initial state (login). */
   reset(): void {
-    this.feature = null;
+    this.feature = "login";
     this.detail = null;
     this.searchOpen = false;
     this.activeTab = "tickets";
     this.activeArea = null;
 
-    // Reset the stub page state to the tickets list
-    setDemoPage(ticketsListUrl());
+    setDemoPage(loginUrl());
   }
 }
 

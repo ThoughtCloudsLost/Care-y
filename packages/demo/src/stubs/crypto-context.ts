@@ -193,6 +193,14 @@ const orgKeyManagerStub = {
   async unwrapOrgKey(): Promise<void> {
     await Promise.resolve();
   },
+  // login-crypto result passes orgPublicKey to load()
+  load(_orgPublicKey: string): void {
+    // No-op: the demo does not perform real key unwrapping.
+  },
+  // cleanup.ts calls zero() on beforeunload
+  zero(): void {
+    // No-op: no real key material in the demo.
+  },
   isReady(): boolean {
     return true;
   },
@@ -262,6 +270,18 @@ const cryptoBridgeStub = {
   ): Promise<string> {
     await Promise.resolve();
     return ciphertext;
+  },
+  // Passthrough for org-level decrypts (e.g. encryptedPreferredLocale).
+  // Returns the input unchanged; the demo's mock locale is null, but
+  // having a working stub surfaces bugs if the mock changes.
+  async orgDecrypt(ciphertext: string): Promise<string> {
+    await Promise.resolve();
+    return ciphertext;
+  },
+  // cleanup.ts installs a beforeunload handler that calls disconnect().
+  // Iframe reload fires beforeunload, so this must exist.
+  disconnect(): void {
+    // No-op: the demo bridge has no port management.
   },
   onStateChange(_cb: unknown): void {
     // No-op: the demo bridge has no state transitions.
