@@ -71,6 +71,7 @@
     "src/**/*.svelte",
     "vite.ts",
     "vite.config.ts",
+    "vite.health.config.ts",
     "vitest.config.ts",
     "../client/src/lib/workers/shared-worker-types.d.ts",
     "../server/src/types/sodium-native.d.ts"
