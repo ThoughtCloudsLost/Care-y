@@ -14,6 +14,10 @@
   import CloseResolutionSheet from "$lib/components/tickets/CloseResolutionSheet.svelte";
   import InternalNoteSheet from "$lib/components/tickets/InternalNoteSheet.svelte";
   import { resolveNoteTypeIcon } from "$lib/utils/note-type-icons.js";
+  import ShellPopover from "$lib/shell/ShellPopover.svelte";
+  import PhoneActionContent from "$lib/components/clients/PhoneActionContent.svelte";
+  import PhoneEditSheet from "$lib/components/clients/PhoneEditSheet.svelte";
+  import MergeSheet from "$lib/components/clients/MergeSheet.svelte";
   import ExposureHint from "$lib/components/tickets/ExposureHint.svelte";
   import type { TicketAction } from "$lib/tickets/types.js";
   import type {
@@ -27,12 +31,29 @@
 
   interface Props {
     ticketId: string;
+    clientId: string;
     clientAlias: string;
     panelOpen: boolean;
     assignSheetOpen: boolean;
     callSheetOpen: boolean;
     composeActionsOpen: boolean;
     composeActionsAnchor: HTMLElement | undefined;
+    phonePopoverOpen: boolean;
+    phoneEditSheetOpen: boolean;
+    canCopyPhone: boolean;
+    onphonepopoverdismiss: () => void;
+    onphonecopy: () => void;
+    onphoneedit: () => void;
+    onphoneeditdismiss: () => void;
+    onphonemerge: (
+      conflictingClientId: string,
+      conflictingAlias: string,
+    ) => void;
+    mergeSheetOpen: boolean;
+    mergeClientA: { id: string; alias: string } | null;
+    mergeClientB: { id: string; alias: string } | null;
+    onmergedismiss: () => void;
+    onmerged: () => void;
     hasVerifiedPhone: boolean;
     currentAssigneeId: string | null;
     deleteConfirm: DeleteConfirmState;
@@ -57,12 +78,26 @@
 
   let {
     ticketId,
+    clientId,
     clientAlias,
     panelOpen,
     assignSheetOpen,
     callSheetOpen,
     composeActionsOpen,
     composeActionsAnchor,
+    phonePopoverOpen,
+    phoneEditSheetOpen,
+    canCopyPhone,
+    onphonepopoverdismiss,
+    onphonecopy,
+    onphoneedit,
+    onphoneeditdismiss,
+    onphonemerge,
+    mergeSheetOpen,
+    mergeClientA,
+    mergeClientB,
+    onmergedismiss,
+    onmerged,
     hasVerifiedPhone,
     currentAssigneeId,
     deleteConfirm,
@@ -119,6 +154,34 @@
   onpresetselect={ondraftset}
   {onreply}
   {ontextclient}
+/>
+
+<ShellPopover
+  opened={phonePopoverOpen}
+  ondismiss={onphonepopoverdismiss}
+  ariaLabel={m.client_phone_label()}
+>
+  <PhoneActionContent
+    canCopy={canCopyPhone}
+    oncopy={onphonecopy}
+    onedit={onphoneedit}
+  />
+</ShellPopover>
+
+<PhoneEditSheet
+  opened={phoneEditSheetOpen}
+  {clientId}
+  {clientAlias}
+  ondismiss={onphoneeditdismiss}
+  onmerge={onphonemerge}
+/>
+
+<MergeSheet
+  opened={mergeSheetOpen}
+  clientA={mergeClientA}
+  clientB={mergeClientB}
+  ondismiss={onmergedismiss}
+  {onmerged}
 />
 
 {#if exposureHint.type}

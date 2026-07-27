@@ -66,6 +66,19 @@
     searchLabel,
   }: Props = $props();
 
+  // Compose a sort button label that includes the current direction so
+  // screen readers announce state changes (e.g. "Sort clients, ascending").
+  const sortButtonLabel = $derived.by((): string => {
+    if (!sort) return "";
+    return m.sort_button_label({
+      label: sort.label,
+      direction:
+        sort.currentDirection === "asc"
+          ? m.table_sort_ascending()
+          : m.table_sort_descending(),
+    });
+  });
+
   // Sort popover state (internal to this component).
   let sortOpen = $state(false);
   let sortAnchorEl = $state<HTMLElement | undefined>();
@@ -120,7 +133,7 @@
               small
               inline
               class="sort-btn"
-              aria-label={sort.label}
+              aria-label={sortButtonLabel}
               aria-haspopup="listbox"
               aria-expanded={sortOpen}
               onclick={toggleSort}

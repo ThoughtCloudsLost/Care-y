@@ -45,6 +45,7 @@
   import InlineSkeleton from "$lib/components/InlineSkeleton.svelte";
   import PanelNotesSection from "./PanelNotesSection.svelte";
   import PanelMediaSection from "./PanelMediaSection.svelte";
+  import { onKeyActivate } from "$lib/utils/a11y.js";
   import type { TicketAction } from "$lib/tickets/types.js";
 
   interface TicketPanelContentProps {
@@ -209,6 +210,23 @@
         {/if}
       {/snippet}
     </ListItem>
+    {#if ticket?.clientPhone}
+      <ListItem
+        title={m.client_phone_label()}
+        onclick={() => onaction("phone")}
+        onkeydown={onKeyActivate(() => onaction("phone"))}
+        role="button"
+        tabindex={0}
+        class="touch-feedback"
+      >
+        {#snippet media()}
+          <Phone class="w-5 h-5 text-[var(--ink-2)]" aria-hidden="true" />
+        {/snippet}
+        {#snippet after()}
+          <span class="phone-value">{ticket.clientPhone}</span>
+        {/snippet}
+      </ListItem>
+    {/if}
     {#if !compact}
       <ListItem title={m.ticket_panel_opened()}>
         {#snippet after()}
@@ -336,6 +354,11 @@
   .status-label {
     font-size: var(--text-sm);
     text-transform: capitalize;
+  }
+
+  .phone-value {
+    font-size: var(--text-sm);
+    color: var(--ink);
   }
 
   .destructive-text {

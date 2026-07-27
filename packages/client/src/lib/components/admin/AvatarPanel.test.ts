@@ -2,6 +2,7 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { render, cleanup, fireEvent, screen } from "@testing-library/svelte";
 import { Permission, RoleId } from "@care-y/shared";
+import type * as ParaglideMessages from "$lib/paraglide/messages.js";
 
 // --- IntersectionObserver stub (jsdom lacks it, DecryptPlaceholder needs it) ---
 vi.stubGlobal(
@@ -24,7 +25,10 @@ const { mockToastShow, mockOrgDecrypt } = vi.hoisted(() => ({
 }));
 
 // --- Mock i18n ---
-vi.mock("$lib/paraglide/messages.js", () => ({
+// Spread the real module so a newly added panel key does not break this file;
+// only the strings asserted below are pinned.
+vi.mock("$lib/paraglide/messages.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof ParaglideMessages>()),
   role_admin: () => "Admin",
   role_manager: () => "Manager",
   role_volunteer: () => "Volunteer",

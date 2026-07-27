@@ -181,11 +181,16 @@ test.describe.serial("Ticket Detail (Chat View)", () => {
     await page.waitForTimeout(200);
     await longPress(page, bubbleText);
 
-    // Context menu action sheet should appear with Copy.
-    await expect(page.getByText("Copy")).toBeVisible({ timeout: 5_000 });
+    // Context menu action sheet should appear with Copy. Scope to the sheet:
+    // the phone popover is always mounted and its "Copy phone number" and
+    // "Edit phone number" items would otherwise match these queries.
+    const actionsSheet = page.locator('[data-testid="actions-sheet"]');
+    await expect(actionsSheet.getByText("Copy")).toBeVisible({
+      timeout: 5_000,
+    });
 
     // Should NOT show Edit or Delete (this is a client message, not a note).
-    await expect(page.getByText("Edit")).not.toBeVisible();
+    await expect(actionsSheet.getByText("Edit")).not.toBeVisible();
 
     // Dismiss.
     await page.keyboard.press("Escape");
@@ -203,7 +208,7 @@ test.describe.serial("Ticket Detail (Chat View)", () => {
     // Scope to the actions sheet to avoid matching the inline pencil edit
     // button in the note badge.
     const actionsSheet = page.locator('[data-testid="actions-sheet"]');
-    await expect(page.getByText("Copy")).toBeVisible();
+    await expect(actionsSheet.getByText("Copy")).toBeVisible();
     await expect(actionsSheet.filter({ hasText: /edit note/i })).toBeVisible();
     await expect(
       actionsSheet.filter({ hasText: /delete note/i }),
@@ -416,7 +421,9 @@ test.describe.serial("Ticket Detail (Chat View)", () => {
     });
 
     // Context menu should appear.
-    await expect(page.getByText("Copy")).toBeVisible();
+    await expect(
+      page.locator('[data-testid="actions-sheet"]').getByText("Copy"),
+    ).toBeVisible();
 
     // Dismiss and wait for the backdrop animation to fully clear.
     await page.keyboard.press("Escape");

@@ -11,11 +11,11 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { render, cleanup, fireEvent } from "@testing-library/svelte";
 
-// vi.mock required: $lib/paraglide/messages.js is compiler-generated locale
-// output; the FilterPillBar rendered inside this layout calls these message
-// functions, and deterministic strings keep assertions locale-independent
-// (same constraint and key set as FilterPillBar.test.ts).
-vi.mock("$lib/paraglide/messages.js", () => ({
+// vi.mock required: $lib/paraglide/messages.js is a Paraglide-generated module
+// that may not resolve correctly in the vitest Vite alias chain. Spread
+// importOriginal so unstubbed message functions track the real module surface.
+vi.mock("$lib/paraglide/messages.js", async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
   tickets_filter: () => "Filter",
   tickets_filter_all: () => "All",
   tickets_clear_filters: () => "Clear all",
@@ -23,6 +23,10 @@ vi.mock("$lib/paraglide/messages.js", () => ({
   tickets_filter_date_from: () => "From",
   tickets_filter_date_to: () => "To",
   tickets_filter_date_clear: () => "Clear dates",
+  sort_button_label: (p: { label: string; direction: string }) =>
+    `${p.label}, ${p.direction}`,
+  table_sort_ascending: () => "ascending",
+  table_sort_descending: () => "descending",
 }));
 
 import SubNavbarFilterLayout from "./SubNavbarFilterLayout.svelte";
@@ -64,7 +68,10 @@ function renderLayout(sort: SortConfig) {
 }
 
 async function openSortPopover(container: HTMLElement): Promise<HTMLElement> {
-  const button = container.querySelector<HTMLElement>("[aria-label='Sort']");
+  // The sort button label now includes direction state (e.g. "Sort, descending").
+  const button = container.querySelector<HTMLElement>(
+    "[aria-label='Sort, descending']",
+  );
   expect(button).not.toBeNull();
   await fireEvent.click(button!);
   return button!;
