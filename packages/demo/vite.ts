@@ -46,6 +46,8 @@ const stubMatchers: [RegExp, string][] = [
     "./src/stubs/saved-filters.svelte.ts",
   ],
   [/^\$lib\/paraglide\/runtime(\.js)?$/, "./src/stubs/paraglide-runtime.ts"],
+  [/^\$lib\/auth\/login-crypto(\.js)?$/, "./src/stubs/login-crypto.ts"],
+  [/^\$lib\/shell\/navigation(\.js)?$/, "./src/stubs/shell-navigation.ts"],
 ];
 
 // Exact-id aliases (no extensioned import forms exist for these).
@@ -106,6 +108,20 @@ export function demoSplashPlugin(): Plugin {
         // eslint-disable-next-line security/detect-non-literal-fs-filename -- build-time constant derived from import.meta.url, no user input
         const appHtml = readFileSync(appHtmlPath, "utf8");
 
+        // Extract the blocking scheme script that reads localStorage
+        // "care-y-color-scheme" and applies theme classes before first
+        // paint. Strip the nonce attribute (the demo has no CSP).
+        const schemeScriptMatch =
+          /<script[^>]*>[\s\S]*?care-y-color-scheme[\s\S]*?<\/script>/.exec(
+            appHtml,
+          );
+        const schemeScript =
+          schemeScriptMatch !== null
+            ? schemeScriptMatch[0]
+                .replace(/ nonce="[^"]*"/, "")
+                .replace(/ nonce='[^']*'/, "")
+            : "";
+
         // Every style block that targets #splash, with the SvelteKit
         // nonce template attribute stripped (the demo has no CSP nonce).
         const styles = [...appHtml.matchAll(/<style[^>]*>[\s\S]*?<\/style>/g)]
@@ -119,7 +135,12 @@ export function demoSplashPlugin(): Plugin {
         const markup = /<div id="splash"[\s\S]*?<\/div>/.exec(appHtml)?.[0];
         if (markup === undefined) return html;
 
-        return html.replace("<body>", `<body>\n${styles}\n${markup}`);
+        // Inject scheme script before splash markup so first paint
+        // follows the stored scheme (set by outer page via localStorage).
+        return html.replace(
+          "<body>",
+          `<body>\n${schemeScript}\n${styles}\n${markup}`,
+        );
       },
     },
   };

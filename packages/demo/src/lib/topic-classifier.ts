@@ -1,5 +1,5 @@
 /**
- * Pure classifier: maps an aria-label string from a phone-document
+ * Pure classifier: maps a label string from a phone-document
  * element to a DemoTopic by matching against paraglide message
  * outputs across all available locales.
  *
@@ -18,8 +18,9 @@ export interface ClassifierContext {
 }
 
 /**
- * Classify an aria-label string to a DemoTopic. Returns null if the
- * label does not match any known topic.
+ * Classify a label string (aria-label, text content, or placeholder)
+ * to a DemoTopic. Returns null if the label does not match any known
+ * topic.
  *
  * Matches are tested against all configured locales so that a stale
  * DOM label (rendered before a locale switch) still classifies.
@@ -32,6 +33,58 @@ export function classifyDemoLabel(
   for (const locale of locales) {
     const opts = { locale };
     const terms = withTerms();
+
+    // --- credentials ---
+    if (
+      label === m.auth_sign_in({}, opts) ||
+      label === m.auth_username({}, opts) ||
+      label === m.auth_password({}, opts)
+    ) {
+      return "credentials";
+    }
+
+    // --- twofa (per-method labels first, shared controls generic) ---
+    if (label === m.twofa_totp_label({}, opts)) {
+      return "twofa-totp";
+    }
+    if (label === m.twofa_passkey_use({}, opts)) {
+      return "twofa-passkey";
+    }
+    if (
+      label === m.twofa_email_label({}, opts) ||
+      label === m.twofa_email_send_code({}, opts)
+    ) {
+      return "twofa-email";
+    }
+    if (
+      label === m.twofa_sms_label({}, opts) ||
+      label === m.twofa_sms_send_code({}, opts)
+    ) {
+      return "twofa-sms";
+    }
+    if (
+      label === m.twofa_push_label({}, opts) ||
+      label === m.twofa_push_send({}, opts)
+    ) {
+      return "twofa-push";
+    }
+    if (label === m.twofa_backup_codes_enter({}, opts)) {
+      return "twofa-backup";
+    }
+    if (label === m.twofa_verify_submit({}, opts)) {
+      return "twofa";
+    }
+
+    // --- key-derivation ---
+    if (
+      label === m.auth_phase_argon2id({}, opts) ||
+      label === m.auth_phase_oprf({}, opts) ||
+      label === m.auth_phase_derive({}, opts) ||
+      label === m.auth_phase_auth({}, opts) ||
+      label === m.auth_phase_done({}, opts)
+    ) {
+      return "key-derivation";
+    }
 
     // --- sort ---
     if (label === m.tickets_sort({}, opts)) {
@@ -119,6 +172,14 @@ export function classifyDemoLabel(
       label === m.ticket_fold_case_details(terms, opts)
     ) {
       return "case-fold";
+    }
+
+    // --- timeline ---
+    if (
+      label === m.ticket_action_timeline({}, opts) ||
+      label === m.ticket_action_messages({}, opts)
+    ) {
+      return "timeline";
     }
 
     // --- language ---

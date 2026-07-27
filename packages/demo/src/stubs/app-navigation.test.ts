@@ -3,6 +3,11 @@ import {
   goto,
   registerDemoNavigationHandler,
   unregisterDemoNavigationHandler,
+  beforeNavigate,
+  afterNavigate,
+  fireBeforeNavigate,
+  fireAfterNavigate,
+  resetLifecycleCallbacks,
   type DemoNavigationHandler,
 } from "./app-navigation.js";
 
@@ -14,6 +19,7 @@ describe("app-navigation stub", () => {
   beforeEach(() => {
     // Clear any handler left from a previous test
     unregisterDemoNavigationHandler(noopHandler);
+    resetLifecycleCallbacks();
   });
 
   it("goto resolves without error when no handler is registered", async () => {
@@ -70,5 +76,78 @@ describe("app-navigation stub", () => {
     expect(second).toHaveBeenCalledOnce();
 
     unregisterDemoNavigationHandler(second);
+  });
+
+  describe("navigation lifecycle callbacks", () => {
+    it("beforeNavigate stores and fires callbacks", () => {
+      const cb = vi.fn();
+      beforeNavigate(cb);
+
+      const arg = {
+        from: null,
+        to: null,
+        willUnload: false,
+        type: "goto",
+        complete: Promise.resolve(),
+        cancel: () => {
+          /* noop: test stub */
+        },
+      };
+      fireBeforeNavigate(arg);
+
+      expect(cb).toHaveBeenCalledOnce();
+      expect(cb).toHaveBeenCalledWith(arg);
+    });
+
+    it("afterNavigate stores and fires callbacks", () => {
+      const cb = vi.fn();
+      afterNavigate(cb);
+
+      const arg = {
+        from: null,
+        to: null,
+        willUnload: false,
+        type: "goto",
+        complete: Promise.resolve(),
+      };
+      fireAfterNavigate(arg);
+
+      expect(cb).toHaveBeenCalledOnce();
+      expect(cb).toHaveBeenCalledWith(arg);
+    });
+
+    it("fires multiple registered callbacks", () => {
+      const cb1 = vi.fn();
+      const cb2 = vi.fn();
+      afterNavigate(cb1);
+      afterNavigate(cb2);
+
+      fireAfterNavigate({
+        from: null,
+        to: null,
+        willUnload: false,
+        type: "goto",
+        complete: Promise.resolve(),
+      });
+
+      expect(cb1).toHaveBeenCalledOnce();
+      expect(cb2).toHaveBeenCalledOnce();
+    });
+
+    it("resetLifecycleCallbacks clears all callbacks", () => {
+      const cb = vi.fn();
+      afterNavigate(cb);
+      resetLifecycleCallbacks();
+
+      fireAfterNavigate({
+        from: null,
+        to: null,
+        willUnload: false,
+        type: "goto",
+        complete: Promise.resolve(),
+      });
+
+      expect(cb).not.toHaveBeenCalled();
+    });
   });
 });

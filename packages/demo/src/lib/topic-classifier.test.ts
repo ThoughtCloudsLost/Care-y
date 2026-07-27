@@ -153,6 +153,54 @@ describe("classifyDemoLabel", () => {
     expect(classifyDemoLabel("Idioma", listCtx)).toBe("language");
   });
 
+  // -- credentials --
+  it("classifies Sign in label as credentials", () => {
+    expect(classifyDemoLabel("Sign in", listCtx)).toBe("credentials");
+  });
+
+  it("classifies Username label as credentials", () => {
+    expect(classifyDemoLabel("Username", listCtx)).toBe("credentials");
+  });
+
+  it("classifies Password label as credentials", () => {
+    expect(classifyDemoLabel("Password", listCtx)).toBe("credentials");
+  });
+
+  // -- twofa (per-method labels, shared controls stay generic) --
+  it("classifies TOTP label as twofa-totp", () => {
+    expect(classifyDemoLabel("Authenticator app", listCtx)).toBe("twofa-totp");
+  });
+
+  it("classifies Passkey label as twofa-passkey", () => {
+    expect(classifyDemoLabel("Use Passkey", listCtx)).toBe("twofa-passkey");
+  });
+
+  it("classifies Backup codes label as twofa-backup", () => {
+    expect(classifyDemoLabel("Enter backup code", listCtx)).toBe(
+      "twofa-backup",
+    );
+  });
+
+  it("classifies Verify submit as generic twofa", () => {
+    expect(classifyDemoLabel("Verify", listCtx)).toBe("twofa");
+  });
+
+  // -- key-derivation --
+  it("classifies argon2id phase label as key-derivation", () => {
+    expect(classifyDemoLabel("Deriving keys...", listCtx)).toBe(
+      "key-derivation",
+    );
+  });
+
+  // -- timeline --
+  it("classifies timeline toggle as timeline", () => {
+    expect(classifyDemoLabel("Timeline", detailCtx)).toBe("timeline");
+  });
+
+  it("classifies messages toggle as timeline", () => {
+    expect(classifyDemoLabel("Messages", detailCtx)).toBe("timeline");
+  });
+
   // -- unrecognized --
   it("returns null for unknown labels", () => {
     expect(classifyDemoLabel("Something random", listCtx)).toBeNull();

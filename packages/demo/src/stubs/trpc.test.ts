@@ -5,6 +5,8 @@ import {
   demoResetTrpc,
   isDevDelayEnabled,
   setDevDelay,
+  isDemoAuthed,
+  armPushChallenge,
 } from "./trpc.js";
 
 describe("trpc mock", () => {
@@ -12,12 +14,38 @@ describe("trpc mock", () => {
     demoResetTrpc();
   });
 
+  describe("auth.login.mutate", () => {
+    it("returns login result with requiresTwoFactor true", async () => {
+      const result = await demoTrpcMock.auth.login.mutate({
+        identifier: "jdoe",
+        password: "test",
+      });
+      expect(result.requiresTwoFactor).toBe(true);
+      expect(result.hasKeys).toBe(true);
+      expect(result.needsEnrollment).toBe(false);
+      expect(result.enrolledMethods).toContain("totp");
+      expect(result.enrolledMethods).toContain("webauthn");
+      expect(result.user.id).toBe("demo-user-001");
+      expect(result.user.encryptedPreferredLocale).toBeNull();
+      expect(result.user.hasSeenBriefing).toBe(true);
+    });
+  });
+
   describe("auth.me.query", () => {
-    it("returns a user with expected shape", async () => {
+    it("throws when not authenticated", async () => {
+      expect(isDemoAuthed()).toBe(false);
+      await expect(demoTrpcMock.auth.me.query()).rejects.toThrow(
+        "Not authenticated",
+      );
+    });
+
+    it("returns user with twofaVerified after 2FA success", async () => {
+      await demoTrpcMock.twoFactor.verify.totp.mutate({ code: "123456" });
+      expect(isDemoAuthed()).toBe(true);
       const result = await demoTrpcMock.auth.me.query();
       expect(result.user.id).toBe("demo-user-001");
+      expect(result.twofaVerified).toBe(true);
       expect(result.user.encryptedDisplayName).toBeDefined();
-      expect(result.user.roleId).toBe("demo-role-001");
     });
   });
 
@@ -397,6 +425,83 @@ describe("trpc mock", () => {
       await expect(
         demoTrpcMock.recentViews.put.mutate({}),
       ).resolves.toBeUndefined();
+    });
+  });
+
+  describe("twoFactor.verify", () => {
+    it("totp marks authed on success", async () => {
+      expect(isDemoAuthed()).toBe(false);
+      const result = await demoTrpcMock.twoFactor.verify.totp.mutate({
+        code: "123456",
+      });
+      expect(result.success).toBe(true);
+      expect(isDemoAuthed()).toBe(true);
+    });
+
+    it("emailSend returns sent true", async () => {
+      const result = await demoTrpcMock.twoFactor.verify.emailSend.mutate();
+      expect(result.sent).toBe(true);
+    });
+
+    it("smsSend returns sent true", async () => {
+      const result = await demoTrpcMock.twoFactor.verify.smsSend.mutate();
+      expect(result.sent).toBe(true);
+    });
+
+    it("webauthnOptions returns valid base64url strings", async () => {
+      const result =
+        await demoTrpcMock.twoFactor.verify.webauthnOptions.mutate();
+      expect(result.rpId).toBe("demo.local");
+      expect(result.challenge).toBeTruthy();
+      expect(result.allowCredentials.length).toBeGreaterThan(0);
+    });
+
+    it("unarmed push challenges never approve (scroll-driven opens)", async () => {
+      await demoTrpcMock.twoFactor.verify.pushSend.mutate();
+      for (let i = 0; i < 8; i += 1) {
+        const poll = await demoTrpcMock.twoFactor.verify.pushPoll.query({
+          challengeId: "demo-push-challenge",
+        });
+        expect(poll.status).toBe("pending");
+      }
+      expect(isDemoAuthed()).toBe(false);
+    });
+
+    it("armed push stays pending for four polls then approves", async () => {
+      armPushChallenge();
+      await demoTrpcMock.twoFactor.verify.pushSend.mutate();
+      for (let i = 0; i < 4; i += 1) {
+        const pending = await demoTrpcMock.twoFactor.verify.pushPoll.query({
+          challengeId: "demo-push-challenge",
+        });
+        expect(pending.status).toBe("pending");
+      }
+      const resolved = await demoTrpcMock.twoFactor.verify.pushPoll.query({
+        challengeId: "demo-push-challenge",
+      });
+      expect(resolved.status).toBe("approved");
+      expect(isDemoAuthed()).toBe(true);
+    });
+  });
+
+  describe("onboarding.getStatus", () => {
+    it("returns needsSetup false", async () => {
+      const result = await demoTrpcMock.onboarding.getStatus.query();
+      expect(result.needsSetup).toBe(false);
+    });
+  });
+
+  describe("branding.getPublicBranding", () => {
+    it("returns branding with org name computed at runtime", async () => {
+      const result = await demoTrpcMock.branding.getPublicBranding.query();
+      expect(result.orgPublicKey).toBe("demo-org-public");
+      expect(result.hasIcons).toBe(false);
+      expect(result.iconVersion).toBeNull();
+      expect(result.orgSlug).toBe("demo");
+      // clientEncryptedBranding is base64 of JSON
+      const decoded = JSON.parse(atob(result.clientEncryptedBranding));
+      expect(decoded.name).toBe("CARE-Y");
+      expect(decoded.primaryColor).toBe("#636366");
     });
   });
 

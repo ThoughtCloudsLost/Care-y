@@ -33,6 +33,28 @@ vi.mock("$app/state", () => {
   };
 });
 
+// Mock $app/navigation to capture lifecycle firings
+const beforeCbs: Array<(arg: unknown) => void> = [];
+const afterCbs: Array<(arg: unknown) => void> = [];
+
+vi.mock("$app/navigation", () => ({
+  registerDemoNavigationHandler: vi.fn(),
+  unregisterDemoNavigationHandler: vi.fn(),
+  fireBeforeNavigate(arg: unknown): void {
+    for (const cb of beforeCbs) cb(arg);
+  },
+  fireAfterNavigate(arg: unknown): void {
+    for (const cb of afterCbs) cb(arg);
+  },
+  beforeNavigate(cb: (arg: unknown) => void): void {
+    beforeCbs.push(cb);
+  },
+  afterNavigate(cb: (arg: unknown) => void): void {
+    afterCbs.push(cb);
+  },
+  goto: vi.fn(),
+}));
+
 // Access mock internals for assertion
 async function getLastUrl(): Promise<URL | undefined> {
   const mod = await vi.importMock<{
@@ -53,12 +75,14 @@ describe("DemoRouter", () => {
 
   beforeEach(async () => {
     router = new DemoRouter();
+    beforeCbs.length = 0;
+    afterCbs.length = 0;
     await resetLastUrl();
   });
 
   describe("initial state", () => {
-    it("starts with null feature and search closed", () => {
-      expect(router.feature).toBeNull();
+    it("starts with login feature and search closed", () => {
+      expect(router.feature).toBe("login");
       expect(router.detail).toBeNull();
       expect(router.searchOpen).toBe(false);
       expect(router.activeTab).toBe("tickets");
@@ -85,22 +109,24 @@ describe("DemoRouter", () => {
       expect(url?.pathname).toBe("/tickets/tk-0001");
     });
 
-    it("sets feature to search and opens search", () => {
-      router.navigate("search");
-      expect(router.feature).toBe("search");
-      expect(router.searchOpen).toBe(true);
+    it("sets feature to login", () => {
+      router.navigate("tickets");
+      router.navigate("login");
+      expect(router.feature).toBe("login");
     });
 
-    it("closes search when navigating to a non-search feature", () => {
-      router.navigate("search");
+    it("closes search when navigating", () => {
+      router.navigate("tickets");
+      router.handleSearchToggle(true);
+      expect(router.searchOpen).toBe(true);
       router.navigate("tickets");
       expect(router.searchOpen).toBe(false);
-      expect(router.feature).toBe("tickets");
     });
   });
 
   describe("handleTabChange()", () => {
     it("navigates to tickets when tickets tab tapped", async () => {
+      router.navigate("tickets");
       router.handleTabChange("tickets");
       expect(router.feature).toBe("tickets");
       expect(router.activeTab).toBe("tickets");
@@ -132,32 +158,35 @@ describe("DemoRouter", () => {
   });
 
   describe("handleSearchToggle()", () => {
-    it("opens search and sets feature to search", () => {
-      router.handleSearchToggle(true);
-      expect(router.searchOpen).toBe(true);
-      expect(router.feature).toBe("search");
-    });
-
-    it("closing search returns to previous tab feature", () => {
+    it("opens search as an overlay without changing feature", () => {
       router.navigate("tickets");
       router.handleSearchToggle(true);
-      expect(router.feature).toBe("search");
-      router.handleSearchToggle(false);
-      expect(router.searchOpen).toBe(false);
+      expect(router.searchOpen).toBe(true);
+      // Feature stays as tickets (overlay, not feature switch)
       expect(router.feature).toBe("tickets");
     });
 
-    it("closing search on inert tab sets feature to null", () => {
-      router.activeTab = "home";
+    it("closing search does not change feature", () => {
+      router.navigate("tickets");
       router.handleSearchToggle(true);
       router.handleSearchToggle(false);
-      expect(router.feature).toBeNull();
+      expect(router.searchOpen).toBe(false);
+      expect(router.feature).toBe("tickets");
     });
   });
 
   describe("handleGoto()", () => {
     it("maps /tickets to tickets feature and pushes list URL", async () => {
       router.handleGoto("/tickets");
+      expect(router.feature).toBe("tickets");
+      expect(router.detail).toBeNull();
+
+      const url = await getLastUrl();
+      expect(url?.pathname).toBe("/tickets");
+    });
+
+    it("maps / to tickets feature (post-auth landing)", async () => {
+      router.handleGoto("/");
       expect(router.feature).toBe("tickets");
       expect(router.detail).toBeNull();
 
@@ -206,34 +235,53 @@ describe("DemoRouter", () => {
       expect(url?.pathname).toBe("/tickets");
     });
 
-    it("restores list URL when navigating back from detail via shellBack fallback", async () => {
-      // Detail view calls shellBack("/tickets") which, with no history,
-      // calls goto(resolve("/tickets")). The demo's goto handler calls
-      // router.handleGoto with the resolved path.
-      router.navigate("tickets", "tk-0001");
-      expect(router.detail).toBe("tk-0001");
-
-      // Simulate shellBack's fallback: goto(resolve("/tickets"))
+    it("closes search on goto", () => {
+      router.navigate("tickets");
+      router.handleSearchToggle(true);
+      expect(router.searchOpen).toBe(true);
       router.handleGoto("/tickets");
-      expect(router.detail).toBeNull();
-      expect(router.feature).toBe("tickets");
+      expect(router.searchOpen).toBe(false);
+    });
+  });
 
-      const url = await getLastUrl();
-      expect(url?.pathname).toBe("/tickets");
+  describe("navigation lifecycle", () => {
+    it("fires afterNavigate on navigate()", () => {
+      let afterFired = false;
+      afterCbs.push(() => {
+        afterFired = true;
+      });
+      router.navigate("tickets");
+      expect(afterFired).toBe(true);
+    });
+
+    it("fires afterNavigate even when target equals current state", () => {
+      router.navigate("tickets");
+      let afterCount = 0;
+      afterCbs.push(() => {
+        afterCount += 1;
+      });
+      router.navigate("tickets");
+      expect(afterCount).toBe(1);
+    });
+
+    it("fires afterNavigate on handleGoto", () => {
+      let afterFired = false;
+      afterCbs.push(() => {
+        afterFired = true;
+      });
+      router.handleGoto("/tickets");
+      expect(afterFired).toBe(true);
     });
   });
 
   describe("reset()", () => {
-    it("returns to initial state and pushes list URL", async () => {
-      router.navigate("search");
+    it("returns to login state", () => {
+      router.navigate("tickets");
       router.reset();
-      expect(router.feature).toBeNull();
+      expect(router.feature).toBe("login");
       expect(router.detail).toBeNull();
       expect(router.searchOpen).toBe(false);
       expect(router.activeTab).toBe("tickets");
-
-      const url = await getLastUrl();
-      expect(url?.pathname).toBe("/tickets");
     });
   });
 

@@ -46,6 +46,7 @@ import {
 } from "../lib/fixtures/tickets.js";
 import type { DemoTicket, DemoFollowUp } from "../lib/fixtures/types.js";
 import { createEscalationCorpus } from "../lib/fixtures/search.js";
+import { setLoginStage } from "../lib/login-stage.svelte.js";
 import type { TicketLikeRecord } from "$lib/tickets/ticket-card-props.js";
 
 // -----------------------------------------------------------------------
@@ -80,10 +81,47 @@ export function setDevDelay(enabled: boolean): void {
 let tickets = createDemoTickets();
 let escalationCorpus = createEscalationCorpus();
 
+// -----------------------------------------------------------------------
+// Auth state flag (reset by demoResetTrpc)
+// -----------------------------------------------------------------------
+
+let demoAuthed = false;
+let pushPollCount = 0;
+let pushArmedUntil = 0;
+let pushChallengeApproves = false;
+
 /** Reset fixture state. Call from demoReset() if needed. */
 export function demoResetTrpc(): void {
   tickets = createDemoTickets();
   escalationCorpus = createEscalationCorpus();
+  demoAuthed = false;
+  pushPollCount = 0;
+  pushArmedUntil = 0;
+  pushChallengeApproves = false;
+}
+
+/**
+ * Arm the next push challenge to approve. Called when a REAL visitor
+ * tap opens the push method; a scroll-driven (synthetic) open never
+ * arms, so merely showing the push screen cannot complete login.
+ */
+export function armPushChallenge(): void {
+  pushArmedUntil = Date.now() + 3000;
+}
+
+/** Mark the demo as authenticated (called internally by 2FA verify stubs). */
+function markAuthed(): void {
+  demoAuthed = true;
+}
+
+/** Check if the demo is in authenticated state. For tests. */
+export function isDemoAuthed(): boolean {
+  return demoAuthed;
+}
+
+/** Set the auth flag directly. For bridge fast-forward use. */
+export function setDemoAuthed(authed: boolean): void {
+  demoAuthed = authed;
 }
 
 // -----------------------------------------------------------------------
@@ -233,25 +271,88 @@ interface ListQueryOpts {
 // Mock tRPC tree
 // -----------------------------------------------------------------------
 
+class DemoAuthError extends Error {
+  override readonly name = "DemoAuthError";
+  constructor() {
+    super("Not authenticated");
+  }
+}
+
+/** Wire shape returned by auth.login (mirrors the real server). */
+interface LoginResult {
+  user: {
+    id: string;
+    encryptedIdentifier: string;
+    encryptedDisplayName: string;
+    encryptedPreferredLocale: string | null;
+    roleId: string;
+    hasSeenBriefing: boolean;
+  };
+  requiresTwoFactor: boolean;
+  enrolledMethods: string[];
+  needsEnrollment: boolean;
+  hasKeys: boolean;
+}
+
+/** Wire shape returned by auth.me (mirrors the real server). */
+interface MeResult {
+  user: {
+    id: string;
+    encryptedIdentifier: string;
+    encryptedDisplayName: string;
+    encryptedPreferredLocale: string | null;
+    roleId: string;
+    hasSeenBriefing: boolean;
+  };
+  permissions: string[];
+  twofaVerified: boolean;
+}
+
+const LOGIN_DELAY_MS = 400;
+
 const authRouter = {
-  me: {
-    async query(): Promise<{
-      user: {
-        id: string;
-        encryptedDisplayName: string;
-        roleId: string;
-      };
-    }> {
-      await Promise.resolve();
+  login: {
+    async mutate(_opts: {
+      identifier: string;
+      password: string;
+    }): Promise<LoginResult> {
+      await delay(LOGIN_DELAY_MS);
+      // Real code path signal: the login page shows the 2FA challenge
+      // right after this resolves with requiresTwoFactor.
+      setLoginStage("twofa-picker");
       return {
         user: {
           id: "demo-user-001",
-          // The org cache stub resolves "me:display_name" from whatever
-          // the scene seeds. This value is an opaque ciphertext placeholder
-          // consistent with the seeded org cache key.
+          encryptedIdentifier: DEMO_USERS[0]?.encryptedDisplayName ?? "",
           encryptedDisplayName: DEMO_USERS[0]?.encryptedDisplayName ?? "",
+          encryptedPreferredLocale: null,
           roleId: "demo-role-001",
+          hasSeenBriefing: true,
         },
+        requiresTwoFactor: true,
+        enrolledMethods: ["totp", "webauthn", "email", "sms", "push", "backup"],
+        needsEnrollment: false,
+        hasKeys: true,
+      };
+    },
+  },
+  me: {
+    async query(): Promise<MeResult> {
+      await Promise.resolve();
+      if (!demoAuthed) {
+        throw new DemoAuthError();
+      }
+      return {
+        user: {
+          id: "demo-user-001",
+          encryptedIdentifier: DEMO_USERS[0]?.encryptedDisplayName ?? "",
+          encryptedDisplayName: DEMO_USERS[0]?.encryptedDisplayName ?? "",
+          encryptedPreferredLocale: null,
+          roleId: "demo-role-001",
+          hasSeenBriefing: true,
+        },
+        permissions: [],
+        twofaVerified: true,
       };
     },
   },
@@ -592,7 +693,7 @@ const ticketsRouter = {
     },
   },
   listFollowUpSummary: {
-    async query(_opts: {
+    async query(opts: {
       ticketId: string;
       limit?: number;
       cursor?: string;
@@ -608,7 +709,18 @@ const ticketsRouter = {
       reactions: Record<string, ReactionSummary[]>;
     }> {
       await Promise.resolve();
-      return { summaries: [], reactions: {} };
+      const ticket = tickets.find((t) => t.id === opts.ticketId);
+      if (ticket === undefined) {
+        return { summaries: [], reactions: {} };
+      }
+      // The real endpoint returns the full chronological summary set for
+      // the timeline view; the fixture follow-up order is already ascending.
+      let summaries = ticket.followUps.map(mapFollowUpToWire);
+      if (opts.types !== undefined && opts.types.length > 0) {
+        const wanted = new Set(opts.types);
+        summaries = summaries.filter((fu) => wanted.has(fu.type));
+      }
+      return { summaries, reactions: {} };
     },
   },
   listFollowUpsByIds: {
@@ -886,6 +998,166 @@ const ticketsRouter = {
   },
 };
 
+// -----------------------------------------------------------------------
+// Two-factor verify router
+// -----------------------------------------------------------------------
+
+/** Tiny base64url encoder for plain ASCII strings (no baked literals). */
+function asciiToBase64url(plain: string): string {
+  return btoa(plain).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+}
+
+const twoFactorVerifyRouter = {
+  totp: {
+    async mutate(_opts: { code: string }): Promise<{ success: boolean }> {
+      await delay(200);
+      markAuthed();
+      return { success: true };
+    },
+  },
+  emailComplete: {
+    async mutate(_opts: { code: string }): Promise<{ success: boolean }> {
+      await delay(200);
+      markAuthed();
+      return { success: true };
+    },
+  },
+  smsComplete: {
+    async mutate(_opts: { code: string }): Promise<{ success: boolean }> {
+      await delay(200);
+      markAuthed();
+      return { success: true };
+    },
+  },
+  backupCode: {
+    async mutate(_opts: { code: string }): Promise<{ success: boolean }> {
+      await delay(200);
+      markAuthed();
+      return { success: true };
+    },
+  },
+  emailSend: {
+    async mutate(): Promise<{ sent: true }> {
+      await delay(200);
+      // Auto-start methods call their send endpoint the moment they open
+      setLoginStage("twofa-method");
+      return { sent: true };
+    },
+  },
+  smsSend: {
+    async mutate(): Promise<{ sent: true }> {
+      await delay(200);
+      setLoginStage("twofa-method");
+      return { sent: true };
+    },
+  },
+  webauthnOptions: {
+    async mutate(): Promise<{
+      challenge: string;
+      rpId: string;
+      allowCredentials: { id: string; transports: string[] }[];
+    }> {
+      await delay(200);
+      setLoginStage("twofa-method");
+      return {
+        challenge: asciiToBase64url("demo-challenge-payload"),
+        rpId: "demo.local",
+        allowCredentials: [
+          {
+            id: asciiToBase64url("demo-credential-id"),
+            transports: ["internal"],
+          },
+        ],
+      };
+    },
+  },
+  webauthnComplete: {
+    async mutate(_resp: unknown): Promise<{ success: true }> {
+      await delay(200);
+      markAuthed();
+      return { success: true };
+    },
+  },
+  pushSend: {
+    async mutate(): Promise<{ challengeId: string; sent: true }> {
+      await delay(200);
+      setLoginStage("twofa-method");
+      pushPollCount = 0;
+      pushChallengeApproves = Date.now() <= pushArmedUntil;
+      return { challengeId: "demo-push-challenge", sent: true };
+    },
+  },
+  pushPoll: {
+    async query(_opts: {
+      challengeId: string;
+    }): Promise<{ status: "pending" | "approved" | "denied" }> {
+      await delay(200);
+      pushPollCount += 1;
+      // Unarmed challenges (scroll-driven opens) wait forever: the
+      // visitor can view the waiting state and move on. An armed
+      // challenge stays "pending" long enough (~12s at the 3s poll
+      // interval) to read, then the approval resolves.
+      if (!pushChallengeApproves || pushPollCount <= 4) {
+        return { status: "pending" };
+      }
+      markAuthed();
+      return { status: "approved" };
+    },
+  },
+};
+
+const twoFactorRouter = {
+  verify: twoFactorVerifyRouter,
+};
+
+// -----------------------------------------------------------------------
+// Onboarding router
+// -----------------------------------------------------------------------
+
+const onboardingRouter = {
+  getStatus: {
+    async query(): Promise<{ needsSetup: boolean }> {
+      await Promise.resolve();
+      return { needsSetup: false };
+    },
+  },
+};
+
+// -----------------------------------------------------------------------
+// Branding router
+// -----------------------------------------------------------------------
+
+const brandingRouter = {
+  getPublicBranding: {
+    async query(): Promise<{
+      orgPublicKey: string;
+      clientEncryptedBranding: string;
+      hasIcons: boolean;
+      iconVersion: string | null;
+      orgSlug: string;
+    }> {
+      await Promise.resolve();
+      // Compute base64 at runtime from a plain JSON string (no baked literals).
+      const brandingJson = JSON.stringify({
+        name: "CARE-Y",
+        primaryColor: "#636366",
+      });
+      const clientEncryptedBranding = btoa(brandingJson);
+      return {
+        orgPublicKey: "demo-org-public",
+        clientEncryptedBranding,
+        hasIcons: false,
+        iconVersion: null,
+        orgSlug: "demo",
+      };
+    },
+  },
+};
+
+// -----------------------------------------------------------------------
+// Recent views router
+// -----------------------------------------------------------------------
+
 const recentViewsRouter = {
   get: {
     async query(): Promise<{
@@ -917,6 +1189,9 @@ const trpcBase = {
   auth: authRouter,
   tickets: ticketsRouter,
   recentViews: recentViewsRouter,
+  twoFactor: twoFactorRouter,
+  onboarding: onboardingRouter,
+  branding: brandingRouter,
   kb: undefined,
 };
 
