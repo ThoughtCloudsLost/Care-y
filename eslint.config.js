@@ -341,6 +341,19 @@ export default tseslint.config(
     },
   },
 
+  // The demo health check is an internal diagnostic tool: its server
+  // shims present real server types over browser implementations (the
+  // same narrowing class as the stub override above), and its UI is a
+  // deliberately English-only dev surface, not product copy, so the
+  // paraglide rule does not apply.
+  {
+    files: ["packages/demo/src/health/**"],
+    rules: {
+      "@typescript-eslint/no-unsafe-type-assertion": "off",
+      "care-y/no-hardcoded-strings": "off",
+    },
+  },
+
   // Disable type-checked rules for config files not covered by any tsconfig
   // (root tsconfig.json has "files": [] so projectService rejects root-level
   // configs, and packages/client/svelte.config.js is outside its src/ include)
