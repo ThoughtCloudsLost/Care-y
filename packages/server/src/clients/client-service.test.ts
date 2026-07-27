@@ -626,22 +626,17 @@ describe.skipIf(!process.env.DATABASE_URL)("ClientService (DB)", () => {
     it("detects hash collision and returns conflict", async () => {
       const c1 = await createClientWithTicket();
       const c2 = await createClientWithTicket();
+      const actorId = crypto.randomUUID();
+      const shared = `+1555777${crypto.randomUUID().replace(/-/g, "").slice(0, 10)}`;
 
-      // Read c1's phone number (via noop encryptor it's plaintext in the buffer)
-      const c1Phone = await testDb.db
-        .selectFrom("phones")
-        .select("encrypted_number")
-        .where("id", "=", c1.phoneId)
-        .executeTakeFirstOrThrow();
+      // The fixture seeds a placeholder phone_hash that does not correspond to
+      // the number it stores, so nothing would ever match it. Write c1's number
+      // through the service first to give it a real blind index, then collide.
+      const first = await svc.updatePhone(c1.clientId, shared, actorId);
+      expect(first.success).toBe(true);
 
-      const c1PhonePlaintext = c1Phone.encrypted_number.toString("utf-8");
-
-      // Try to set c2's phone to c1's number
-      const result = await svc.updatePhone(
-        c2.clientId,
-        c1PhonePlaintext,
-        crypto.randomUUID(),
-      );
+      // Try to set c2's phone to the same number
+      const result = await svc.updatePhone(c2.clientId, shared, actorId);
 
       expect(result.success).toBe(false);
       expect(result.conflict).not.toBeNull();
