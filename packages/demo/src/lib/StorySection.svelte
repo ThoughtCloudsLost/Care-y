@@ -148,6 +148,26 @@
       // Search
       demo_narrative_search_heading: () => m.demo_narrative_search_heading(),
       demo_narrative_search_body: () => m.demo_narrative_search_body(),
+      // Dashboard, admin, schedule, settings
+      demo_section_dashboard_title: () => m.demo_section_dashboard_title(),
+      demo_section_dashboard_desc: () => m.demo_section_dashboard_desc(),
+      demo_narrative_dashboard_heading: () =>
+        m.demo_narrative_dashboard_heading(),
+      demo_narrative_dashboard_body: () => m.demo_narrative_dashboard_body(),
+      demo_section_admin_title: () => m.demo_section_admin_title(),
+      demo_section_admin_desc: () => m.demo_section_admin_desc(),
+      demo_narrative_admin_heading: () => m.demo_narrative_admin_heading(),
+      demo_narrative_admin_body: () => m.demo_narrative_admin_body(),
+      demo_section_schedule_title: () => m.demo_section_schedule_title(),
+      demo_section_schedule_desc: () => m.demo_section_schedule_desc(),
+      demo_narrative_schedule_heading: () =>
+        m.demo_narrative_schedule_heading(),
+      demo_narrative_schedule_body: () => m.demo_narrative_schedule_body(),
+      demo_section_settings_title: () => m.demo_section_settings_title(),
+      demo_section_settings_desc: () => m.demo_section_settings_desc(),
+      demo_narrative_settings_heading: () =>
+        m.demo_narrative_settings_heading(),
+      demo_narrative_settings_body: () => m.demo_narrative_settings_body(),
     };
 
     // eslint-disable-next-line security/detect-object-injection -- key is a message key from section config, not user input

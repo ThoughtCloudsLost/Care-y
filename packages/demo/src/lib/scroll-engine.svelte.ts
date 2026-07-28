@@ -82,6 +82,16 @@ export function createScrollEngine(
   // while the store's echo is still in flight.
   let requestedSub: { section: SectionId; sub: string | null } | null = null;
 
+  // Suppress settle intents while a programmatic alignment is in
+  // flight. A section swap renders a new sub list under the old scroll
+  // position, so a settle there would put an arbitrary sub in the slot
+  // and could fire its tap-pulse in the phone; an interrupted smooth
+  // scroll settles mid-list and would cancel a scripted chain. Cleared
+  // when a settle lands on the aligned target, when alignAfterRender
+  // needs no scroll, or after the re-align retry cap.
+  let suppressSettle = false;
+  let alignRetries = 0;
+
   // -----------------------------------------------------------------------
   // Snap geometry
   // -----------------------------------------------------------------------
@@ -141,6 +151,25 @@ export function createScrollEngine(
     const occupant = slotOccupant(line);
     if (occupant === undefined) return;
 
+    if (suppressSettle) {
+      // Consume settles until the alignment scroll reaches its target;
+      // only then does the slot resume driving the location. A
+      // mismatched settle here is the browser fighting the alignment
+      // (mandatory snap re-snapping after a list swap, an interrupted
+      // smooth scroll): re-align instead of emitting an intent, with a
+      // cap so a real visitor scroll can always win.
+      if (occupant === activeSub) {
+        suppressSettle = false;
+        requestedSub = null;
+      } else if (alignRetries < 1 && mirror !== undefined) {
+        alignRetries += 1;
+        void alignAfterRender(mirror.location, "page-click");
+      } else {
+        suppressSettle = false;
+      }
+      return;
+    }
+
     if (occupant === activeSub) {
       requestedSub = null;
       return;
@@ -185,15 +214,17 @@ export function createScrollEngine(
     if (state.locationSeq === prev?.locationSeq) return;
     requestedSub = null;
 
-    if (state.origin === "init") {
-      // Boot/restart baseline: the page is already positioned.
+    if (state.origin === "init" && prev === undefined) {
+      // First-load baseline: the page is already positioned.
       return;
     }
 
-    const hash = buildHash(state.location.sectionId, state.location.subSlug);
-    // eslint-disable-next-line security/detect-possible-timing-attacks -- URL hash comparison, no secret data
-    if (window.location.hash !== hash) {
-      history.replaceState(null, "", hash);
+    if (state.origin !== "init") {
+      const hash = buildHash(state.location.sectionId, state.location.subSlug);
+      // eslint-disable-next-line security/detect-possible-timing-attacks -- URL hash comparison, no secret data
+      if (window.location.hash !== hash) {
+        history.replaceState(null, "", hash);
+      }
     }
 
     if (state.origin === "page-scroll") {
@@ -202,11 +233,38 @@ export function createScrollEngine(
       return;
     }
 
+    // Every programmatic transition arms settle suppression: the
+    // alignment scroll (and any snap correction the browser performs
+    // when the section list swaps) must not feed back into the slot
+    // as a page-scroll intent. An init-with-previous-mirror transition
+    // is a phone reboot (restart, sign-out): the section list swaps
+    // under the old scroll and mandatory snapping can re-snap to an
+    // arbitrary sub, so it gets the same treatment.
+    suppressSettle = true;
+    alignRetries = 0;
+
+    if (
+      prev !== undefined &&
+      prev.location.sectionId !== state.location.sectionId
+    ) {
+      // Section change: start the new section at the top instead of
+      // inheriting the old section's reading position. A sub-targeted
+      // transition (deep link, topic) still aligns to its sub in
+      // alignAfterRender below.
+      window.scrollTo({ top: 0, behavior: "auto" });
+    }
+
     // Click or deep link: jump the list so the selection lands in the
     // slot instantly. Phone interaction: scroll it into the slot so
     // the movement is visible (a section change still swaps the
-    // rendered list first through the derived activeSection).
-    void alignAfterRender(state.location, state.origin);
+    // rendered list first through the derived activeSection). Section
+    // swaps and reboots keep suppression armed through the aligned
+    // fast path; the browser's snap correction may scroll later.
+    const keepArmed =
+      state.origin === "init" ||
+      (prev !== undefined &&
+        prev.location.sectionId !== state.location.sectionId);
+    void alignAfterRender(state.location, state.origin, keepArmed);
   }
 
   // -----------------------------------------------------------------------
@@ -216,6 +274,7 @@ export function createScrollEngine(
   async function alignAfterRender(
     loc: ParsedHash,
     origin: DemoBridgeState["origin"],
+    keepArmed = false,
   ): Promise<void> {
     await tick();
     if (activeSection !== loc.sectionId || activeSub !== loc.subSlug) return;
@@ -227,17 +286,29 @@ export function createScrollEngine(
       origin === "phone" && !reduced ? "smooth" : "auto";
 
     const line = applySlotPadding();
-    if (loc.subSlug === null) {
-      // Tip state: the list's natural top puts the tip in the slot
-      window.scrollTo({ top: 0, behavior });
+    let target = 0;
+    if (loc.subSlug !== null) {
+      const el = document.getElementById(
+        subElementId(loc.sectionId, loc.subSlug),
+      );
+      if (el === null) {
+        suppressSettle = false;
+        return;
+      }
+      target = Math.max(
+        0,
+        el.getBoundingClientRect().top + window.scrollY - line,
+      );
+    }
+    if (Math.abs(window.scrollY - target) < 1) {
+      // Already there: no scroll event (and so no settle) will fire.
+      // Section swaps keep the suppression armed anyway, because the
+      // browser's mandatory-snap correction can still scroll after
+      // this check (the settle path re-aligns and then clears).
+      if (!keepArmed) suppressSettle = false;
       return;
     }
-    const el = document.getElementById(
-      subElementId(loc.sectionId, loc.subSlug),
-    );
-    if (el === null) return;
-    const top = el.getBoundingClientRect().top + window.scrollY - line;
-    window.scrollTo({ top: Math.max(0, top), behavior });
+    window.scrollTo({ top: target, behavior });
   }
 
   // -----------------------------------------------------------------------

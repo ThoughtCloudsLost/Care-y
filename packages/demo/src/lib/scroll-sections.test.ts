@@ -59,6 +59,41 @@ describe("parseHash", () => {
       subSlug: "sort",
     });
   });
+
+  it("parses dashboard section", () => {
+    expect(parseHash("#dashboard")).toEqual({
+      sectionId: "dashboard",
+      subSlug: null,
+    });
+  });
+
+  it("parses dashboard/intro sub", () => {
+    expect(parseHash("#dashboard/intro")).toEqual({
+      sectionId: "dashboard",
+      subSlug: "intro",
+    });
+  });
+
+  it("parses admin section", () => {
+    expect(parseHash("#admin")).toEqual({
+      sectionId: "admin",
+      subSlug: null,
+    });
+  });
+
+  it("parses schedule section", () => {
+    expect(parseHash("#schedule")).toEqual({
+      sectionId: "schedule",
+      subSlug: null,
+    });
+  });
+
+  it("parses settings section", () => {
+    expect(parseHash("#settings")).toEqual({
+      sectionId: "settings",
+      subSlug: null,
+    });
+  });
 });
 
 describe("buildHash", () => {
@@ -204,6 +239,32 @@ describe("resolvePhoneCommand", () => {
     const cmd = resolvePhoneCommand("tickets", null, TICKET_ID);
     expect(cmd.pulseTopic).toBeNull();
   });
+
+  it("resolves dashboard section to home feature", () => {
+    const cmd = resolvePhoneCommand("dashboard", "intro", TICKET_ID);
+    expect(cmd.feature).toBe("home");
+    expect(cmd.detail).toBeNull();
+    expect(cmd.pulseTopic).toBeNull();
+  });
+
+  it("resolves admin section to admin feature", () => {
+    const cmd = resolvePhoneCommand("admin", "intro", TICKET_ID);
+    expect(cmd.feature).toBe("admin");
+    expect(cmd.detail).toBeNull();
+    expect(cmd.pulseTopic).toBeNull();
+  });
+
+  it("resolves schedule section to schedule feature", () => {
+    const cmd = resolvePhoneCommand("schedule", "intro", TICKET_ID);
+    expect(cmd.feature).toBe("schedule");
+    expect(cmd.detail).toBeNull();
+  });
+
+  it("resolves settings section to settings feature", () => {
+    const cmd = resolvePhoneCommand("settings", "intro", TICKET_ID);
+    expect(cmd.feature).toBe("settings");
+    expect(cmd.detail).toBeNull();
+  });
 });
 
 describe("bridgeStateToLocation", () => {
@@ -296,6 +357,31 @@ describe("bridgeStateToLocation", () => {
     );
     expect(loc).toEqual({ sectionId: "login", subSlug: "key-derivation" });
   });
+
+  it("maps home feature to dashboard section", () => {
+    const loc = bridgeStateToLocation("home", null, false, null, null);
+    expect(loc).toEqual({ sectionId: "dashboard", subSlug: "intro" });
+  });
+
+  it("maps admin feature to admin section", () => {
+    const loc = bridgeStateToLocation("admin", null, false, null, null);
+    expect(loc).toEqual({ sectionId: "admin", subSlug: "intro" });
+  });
+
+  it("maps admin feature with detail to admin section", () => {
+    const loc = bridgeStateToLocation("admin", "volunteer", false, null, null);
+    expect(loc).toEqual({ sectionId: "admin", subSlug: "intro" });
+  });
+
+  it("maps schedule feature to schedule section", () => {
+    const loc = bridgeStateToLocation("schedule", null, false, null, null);
+    expect(loc).toEqual({ sectionId: "schedule", subSlug: "intro" });
+  });
+
+  it("maps settings feature to settings section", () => {
+    const loc = bridgeStateToLocation("settings", null, false, null, null);
+    expect(loc).toEqual({ sectionId: "settings", subSlug: "intro" });
+  });
 });
 
 describe("sectionMatchesPhone", () => {
@@ -327,6 +413,31 @@ describe("sectionMatchesPhone", () => {
   it("matches search section only while the overlay is open", () => {
     expect(sectionMatchesPhone("search", "tickets", null, true)).toBe(true);
     expect(sectionMatchesPhone("search", "tickets", null, false)).toBe(false);
+  });
+
+  it("matches dashboard section only while the home feature is shown", () => {
+    expect(sectionMatchesPhone("dashboard", "home", null, false)).toBe(true);
+    expect(sectionMatchesPhone("dashboard", "tickets", null, false)).toBe(
+      false,
+    );
+  });
+
+  it("matches admin section for any admin detail", () => {
+    expect(sectionMatchesPhone("admin", "admin", null, false)).toBe(true);
+    expect(sectionMatchesPhone("admin", "admin", "volunteer", false)).toBe(
+      true,
+    );
+    expect(sectionMatchesPhone("admin", "tickets", null, false)).toBe(false);
+  });
+
+  it("matches schedule section only for schedule feature", () => {
+    expect(sectionMatchesPhone("schedule", "schedule", null, false)).toBe(true);
+    expect(sectionMatchesPhone("schedule", "tickets", null, false)).toBe(false);
+  });
+
+  it("matches settings section only for settings feature", () => {
+    expect(sectionMatchesPhone("settings", "settings", null, false)).toBe(true);
+    expect(sectionMatchesPhone("settings", "tickets", null, false)).toBe(false);
   });
 });
 
@@ -381,22 +492,31 @@ describe("loginStageTopics", () => {
 });
 
 describe("SECTIONS taxonomy", () => {
-  it("has four sections", () => {
-    expect(SECTIONS).toHaveLength(4);
+  it("has eight sections", () => {
+    expect(SECTIONS).toHaveLength(8);
   });
 
-  it("section IDs are login, tickets, ticket-detail, search", () => {
+  it("section IDs are in visitor-journey order", () => {
     expect(SECTIONS.map((s) => s.id)).toEqual([
       "login",
+      "dashboard",
       "tickets",
       "ticket-detail",
       "search",
+      "admin",
+      "schedule",
+      "settings",
     ]);
   });
 
-  it("login has 4 subs", () => {
+  it("login has 10 subs", () => {
     const login = SECTIONS.find((s) => s.id === "login");
     expect(login?.subs).toHaveLength(10);
+  });
+
+  it("dashboard has 1 sub", () => {
+    const dashboard = SECTIONS.find((s) => s.id === "dashboard");
+    expect(dashboard?.subs).toHaveLength(1);
   });
 
   it("tickets has 5 subs", () => {
@@ -412,5 +532,20 @@ describe("SECTIONS taxonomy", () => {
   it("search has 1 sub", () => {
     const search = SECTIONS.find((s) => s.id === "search");
     expect(search?.subs).toHaveLength(1);
+  });
+
+  it("admin has 1 sub", () => {
+    const admin = SECTIONS.find((s) => s.id === "admin");
+    expect(admin?.subs).toHaveLength(1);
+  });
+
+  it("schedule has 1 sub", () => {
+    const schedule = SECTIONS.find((s) => s.id === "schedule");
+    expect(schedule?.subs).toHaveLength(1);
+  });
+
+  it("settings has 1 sub", () => {
+    const settings = SECTIONS.find((s) => s.id === "settings");
+    expect(settings?.subs).toHaveLength(1);
   });
 });

@@ -1956,5 +1956,21 @@
   "demo_topic_credentials": "Credentials",
   "demo_topic_twofa": "Two-factor auth",
   "demo_topic_key_derivation": "Key derivation",
-  "demo_topic_timeline": "Timeline"
+  "demo_topic_timeline": "Timeline",
+  "demo_section_dashboard_title": "Dashboard",
+  "demo_section_dashboard_desc": "The home screen shows recent activity and queue counts. The activity feed and statistics pull real data from the in-browser database. The shift summary card shows placeholder data (scheduling is not built yet).",
+  "demo_narrative_dashboard_heading": "Your home screen",
+  "demo_narrative_dashboard_body": "After login, volunteers land on the dashboard. It shows recent ticket activity, open counts per queue, and a shift summary. Activity and counts come from the encrypted database running in your browser. The shift card is a static preview of a feature still in development.",
+  "demo_section_admin_title": "Admin hub",
+  "demo_section_admin_desc": "The admin hub gives managers a bird's-eye view of the organization: active volunteers, queues, phone lines, and communication templates. Every count shown here is a live query against the in-browser database.",
+  "demo_narrative_admin_heading": "Organization overview",
+  "demo_narrative_admin_body": "The admin hub shows how many volunteers, queues, phone lines, greetings, and SMS templates the organization has. Administrators can navigate to volunteer management, queue configuration, and other settings from here. All counts are real queries against the demo database.",
+  "demo_section_schedule_title": "Schedule",
+  "demo_section_schedule_desc": "The schedule page is a placeholder for shift management. The scheduling feature is not built yet, so this page shows a coming-soon notice.",
+  "demo_narrative_schedule_heading": "Shift scheduling (coming soon)",
+  "demo_narrative_schedule_body": "This page will let managers create and assign shifts. The scheduling feature is still in development. For now, the page shows a placeholder notice.",
+  "demo_section_settings_title": "Settings",
+  "demo_section_settings_desc": "The settings page lets volunteers update their profile, change their password, and manage notification preferences.",
+  "demo_narrative_settings_heading": "Your preferences",
+  "demo_narrative_settings_body": "Settings lets you change your display name, password, locale, and notification options. Changes are encrypted before leaving your device. The server stores the update as ciphertext without reading it."
 }

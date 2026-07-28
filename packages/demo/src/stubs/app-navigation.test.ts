@@ -8,8 +8,40 @@ import {
   fireBeforeNavigate,
   fireAfterNavigate,
   resetLifecycleCallbacks,
+  pushState,
+  replaceState,
   type DemoNavigationHandler,
 } from "./app-navigation.js";
+
+// Mock the app-state module to track page updates
+let mockPageUrl = new URL("http://demo.local/tickets");
+let mockPageState: Record<string, unknown> = {};
+let shallowCalls: Array<{ url: URL; state: Record<string, unknown> }> = [];
+
+vi.mock("./app-state.svelte.js", () => ({
+  page: {
+    get url(): URL {
+      return mockPageUrl;
+    },
+    get state(): Record<string, unknown> {
+      return mockPageState;
+    },
+    params: {},
+    route: { id: "" },
+    status: 200,
+    error: null,
+    data: {},
+    form: null,
+  },
+  setDemoPage(): void {
+    // no-op in navigation tests
+  },
+  setDemoPageShallow(url: URL, state: Record<string, unknown>): void {
+    shallowCalls.push({ url, state });
+    mockPageUrl = url;
+    mockPageState = state;
+  },
+}));
 
 describe("app-navigation stub", () => {
   const noopHandler: DemoNavigationHandler = () => {
@@ -20,6 +52,9 @@ describe("app-navigation stub", () => {
     // Clear any handler left from a previous test
     unregisterDemoNavigationHandler(noopHandler);
     resetLifecycleCallbacks();
+    mockPageUrl = new URL("http://demo.local/tickets");
+    mockPageState = {};
+    shallowCalls = [];
   });
 
   it("goto resolves without error when no handler is registered", async () => {
@@ -148,6 +183,87 @@ describe("app-navigation stub", () => {
       });
 
       expect(cb).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("pushState", () => {
+    it("updates page URL and state", () => {
+      pushState("/admin/people?tab=queues", { detail: true });
+      expect(shallowCalls).toHaveLength(1);
+      expect(shallowCalls[0]?.url.pathname).toBe("/admin/people");
+      expect(shallowCalls[0]?.url.searchParams.get("tab")).toBe("queues");
+      expect(shallowCalls[0]?.state).toEqual({ detail: true });
+    });
+
+    it("resolves empty string to current page URL", () => {
+      pushState("", { ticketId: "tk-0001" });
+      expect(shallowCalls).toHaveLength(1);
+      expect(shallowCalls[0]?.url.pathname).toBe("/tickets");
+      expect(shallowCalls[0]?.state).toEqual({ ticketId: "tk-0001" });
+    });
+
+    it("resolves relative paths against current URL", () => {
+      mockPageUrl = new URL("http://demo.local/admin/people");
+      pushState("?tab=queues", {});
+      expect(shallowCalls).toHaveLength(1);
+      expect(shallowCalls[0]?.url.pathname).toBe("/admin/people");
+      expect(shallowCalls[0]?.url.searchParams.get("tab")).toBe("queues");
+    });
+
+    it("is idempotent when href and state are unchanged", () => {
+      pushState("/tickets", {});
+      expect(shallowCalls).toHaveLength(0);
+    });
+
+    it("is idempotent when state object has same shape and values", () => {
+      mockPageState = { ticketId: "tk-0001" };
+      pushState("/tickets", { ticketId: "tk-0001" });
+      expect(shallowCalls).toHaveLength(0);
+    });
+
+    it("fires when state differs even if URL is the same", () => {
+      mockPageState = {};
+      pushState("/tickets", { ticketId: "tk-0001" });
+      expect(shallowCalls).toHaveLength(1);
+    });
+
+    it("fires when URL differs even if state is the same", () => {
+      mockPageState = {};
+      pushState("/tickets?q=test", {});
+      expect(shallowCalls).toHaveLength(1);
+    });
+  });
+
+  describe("replaceState", () => {
+    it("updates page URL and state", () => {
+      replaceState("?tab=queues", {});
+      expect(shallowCalls).toHaveLength(1);
+      expect(shallowCalls[0]?.url.searchParams.get("tab")).toBe("queues");
+    });
+
+    it("is idempotent when href and state are unchanged", () => {
+      replaceState("/tickets", {});
+      expect(shallowCalls).toHaveLength(0);
+    });
+
+    it("handles the admin/people ?user= pattern", () => {
+      mockPageUrl = new URL("http://demo.local/admin/people?user=u123");
+      // Simulate the page's $effect: delete ?user, replaceState
+      const next = new URL(mockPageUrl);
+      next.searchParams.delete("user");
+      replaceState(next.pathname + next.search, {});
+      expect(shallowCalls).toHaveLength(1);
+      expect(shallowCalls[0]?.url.pathname).toBe("/admin/people");
+      expect(shallowCalls[0]?.url.searchParams.has("user")).toBe(false);
+    });
+
+    it("is idempotent on second call with same result", () => {
+      // First call updates
+      replaceState("/admin/people", {});
+      expect(shallowCalls).toHaveLength(1);
+      // Second call with same URL is idempotent
+      replaceState("/admin/people", {});
+      expect(shallowCalls).toHaveLength(1);
     });
   });
 });

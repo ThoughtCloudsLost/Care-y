@@ -19,7 +19,8 @@
 // -----------------------------------------------------------------------
 
 /** Features that have a built demo scene. */
-export type DemoFeature = "login" | "tickets";
+export type DemoFeature =
+  "login" | "home" | "tickets" | "admin" | "schedule" | "settings";
 
 /** Sub-state within a feature (e.g. ticket detail, conversation view). */
 export type DemoDetail = string | null;
@@ -49,7 +50,15 @@ export type LoginAdvanceTarget =
 // -----------------------------------------------------------------------
 
 /** Story sections of the outer page. The phone maps onto these. */
-export type SectionId = "login" | "tickets" | "ticket-detail" | "search";
+export type SectionId =
+  | "login"
+  | "dashboard"
+  | "tickets"
+  | "ticket-detail"
+  | "search"
+  | "admin"
+  | "schedule"
+  | "settings";
 
 /** The one place the demo "is": a section and optional sub-section. */
 export interface DemoLocation {
@@ -150,6 +159,13 @@ export interface DemoBridgeState {
    * happened" from "some other state field changed".
    */
   readonly locationSeq: number;
+  /**
+   * Increments when the phone asks the outer page to restart the demo
+   * (avatar-panel sign-out). The outer page runs its restart routine
+   * (hash clear, iframe reload, scroll to top) when it sees a bump, so
+   * a phone-initiated restart behaves exactly like the restart button.
+   */
+  readonly restartSeq: number;
 }
 
 export type DemoBridgeListener = (state: DemoBridgeState) => void;

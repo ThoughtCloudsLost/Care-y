@@ -163,13 +163,12 @@
   // Pathname for RouteMount (derived from router state)
   // -----------------------------------------------------------------------
 
-  const routeMountPathname = $derived.by(() => {
-    if (router.feature !== "tickets") return "/tickets";
-    if (router.detail !== null) {
-      return `/tickets/${router.detail}`;
-    }
-    return "/tickets";
-  });
+  // RouteMount pathname: the router's canonical pathname + search string.
+  // Login is excluded (RouteMount only mounts post-auth). The search
+  // string carries query params (?user= deep links) through to the page.
+  const routeMountPathname = $derived(
+    router.feature === "login" ? "/tickets" : router.pathname + router.search,
+  );
 
   // -----------------------------------------------------------------------
   // Login stage reactivity
@@ -317,8 +316,8 @@
 
   // Register goto interception so in-phone goto() calls route through
   // the demo router instead of attempting real navigation. The
-  // post-auth goto(resolve("/")) maps to tickets in the router
-  // (dashboard later, once built); the location store follows.
+  // post-auth goto(resolve("/")) maps to home in the router;
+  // the location store follows.
   $effect(() => {
     const handler = (href: string): void => router.handleGoto(href);
     registerDemoNavigationHandler(handler);
@@ -341,10 +340,10 @@
    * the boundary before passing to the router.
    */
   function internalNavigate(feature: DemoFeature, detail: DemoDetail): void {
-    if (feature === "tickets" && router.feature === "login") {
+    if (feature !== "login" && router.feature === "login") {
       setDemoAuthed(true);
       setLoginStage(null);
-      // Fast-forward crypto so deep links decrypt without playing login
+      // Fast-forward crypto so post-auth pages decrypt without playing login
       void ensureKeyed();
     }
     if (feature === "login" && router.feature !== "login") {
@@ -430,6 +429,7 @@
       location: store.location,
       origin: store.origin,
       locationSeq: store.locationSeq,
+      restartSeq: router.restartSeq,
     };
   }
 
@@ -663,7 +663,7 @@
 
     if (target === "done") {
       await waitForStage("deriving", token);
-      // The crypto stub takes ~4.2s; then goto("/") lands on tickets.
+      // The crypto stub takes ~4.2s; then goto("/") lands on home.
     }
   }
 
