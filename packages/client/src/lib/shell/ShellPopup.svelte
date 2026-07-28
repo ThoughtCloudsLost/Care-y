@@ -51,7 +51,7 @@
       data-testid="popup-dialog"
       class="popup-dialog"
     >
-      {#if (title != null && title !== "") || navLeft != null || navRight != null}
+      {#if mounted.current && ((title != null && title !== "") || navLeft != null || navRight != null)}
         <Navbar {title}>
           {#snippet left()}
             {#if navLeft}

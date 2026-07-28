@@ -425,8 +425,9 @@ describe("BrandingSection", () => {
     expect(screen.getByText("No welcome text set")).toBeTruthy();
   });
 
-  it("renders sheet heading and save button", () => {
+  it("renders sheet heading and save button", async () => {
     renderWithData();
+    await openEditSheet();
     expect(
       screen.getByRole("heading", { name: /edit branding/i }),
     ).toBeTruthy();

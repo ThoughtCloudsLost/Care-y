@@ -117,24 +117,26 @@
         <div class="sheet-drag-handle" bind:this={handleRef} aria-hidden="true">
           <div class="sheet-drag-indicator"></div>
         </div>
-        {#if hasHeader}
-          <div class="sheet-header">
-            {#if title}
-              <h3 class="sheet-header-title">{title}</h3>
-            {:else}
-              <span></span>
-            {/if}
-            {#if headerRight}
-              <div class="sheet-header-action">
-                {@render headerRight()}
-              </div>
-            {/if}
-          </div>
-          <div class="sheet-body">
-            {#if mounted.current}{@render children()}{/if}
-          </div>
-        {:else}
-          {#if mounted.current}{@render children()}{/if}
+        {#if mounted.current}
+          {#if hasHeader}
+            <div class="sheet-header">
+              {#if title}
+                <h3 class="sheet-header-title">{title}</h3>
+              {:else}
+                <span></span>
+              {/if}
+              {#if headerRight}
+                <div class="sheet-header-action">
+                  {@render headerRight()}
+                </div>
+              {/if}
+            </div>
+            <div class="sheet-body">
+              {@render children()}
+            </div>
+          {:else}
+            {@render children()}
+          {/if}
         {/if}
       </div>
     </Sheet>
