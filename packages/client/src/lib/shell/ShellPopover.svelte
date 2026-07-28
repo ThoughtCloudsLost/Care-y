@@ -7,6 +7,10 @@
   import { Popover } from "konsta/svelte";
   import type { ShellPopoverProps } from "./types";
   import { useFocusTrap } from "./use-focus-trap.svelte";
+  import {
+    useDeferredUnmount,
+    OVERLAY_OUTRO_MS,
+  } from "./use-deferred-unmount.svelte";
   import { portal } from "./portal";
   import ShellBackdrop from "./ShellBackdrop.svelte";
 
@@ -28,6 +32,13 @@
       return ondismiss;
     },
   });
+
+  const mounted = useDeferredUnmount({
+    get opened() {
+      return opened;
+    },
+    durationMs: OVERLAY_OUTRO_MS,
+  });
 </script>
 
 <div use:portal={".k-page"}>
@@ -42,7 +53,7 @@
       inert={!opened ? true : undefined}
       class="shell-popover-content"
     >
-      {@render children()}
+      {#if mounted.current}{@render children()}{/if}
     </div>
   </Popover>
 </div>
@@ -58,7 +69,7 @@
 
   .shell-popover-content[inert] {
     visibility: hidden;
-    transition: visibility 0s 400ms;
+    transition: visibility 0s var(--anim-overlay-outro, 400ms);
   }
 
   @media (prefers-reduced-motion: reduce) {

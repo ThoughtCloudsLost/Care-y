@@ -15,6 +15,10 @@
   import type { ShellSheetProps } from "./types";
   import { useFocusTrap } from "./use-focus-trap.svelte";
   import { useSheetDrag } from "./use-sheet-drag.svelte";
+  import {
+    useDeferredUnmount,
+    OVERLAY_OUTRO_MS,
+  } from "./use-deferred-unmount.svelte";
   import { portal } from "./portal";
   import { layoutMode } from "$lib/stores/layout-mode.svelte";
   import ShellPopup from "./ShellPopup.svelte";
@@ -80,6 +84,13 @@
   const sheetClass = $derived(
     ["glass", "shell-sheet", extraClass].filter(Boolean).join(" "),
   );
+
+  const mounted = useDeferredUnmount({
+    get opened() {
+      return opened;
+    },
+    durationMs: OVERLAY_OUTRO_MS,
+  });
 </script>
 
 {#if usePopup}
@@ -106,24 +117,26 @@
         <div class="sheet-drag-handle" bind:this={handleRef} aria-hidden="true">
           <div class="sheet-drag-indicator"></div>
         </div>
-        {#if hasHeader}
-          <div class="sheet-header">
-            {#if title}
-              <h3 class="sheet-header-title">{title}</h3>
-            {:else}
-              <span></span>
-            {/if}
-            {#if headerRight}
-              <div class="sheet-header-action">
-                {@render headerRight()}
-              </div>
-            {/if}
-          </div>
-          <div class="sheet-body">
+        {#if mounted.current}
+          {#if hasHeader}
+            <div class="sheet-header">
+              {#if title}
+                <h3 class="sheet-header-title">{title}</h3>
+              {:else}
+                <span></span>
+              {/if}
+              {#if headerRight}
+                <div class="sheet-header-action">
+                  {@render headerRight()}
+                </div>
+              {/if}
+            </div>
+            <div class="sheet-body">
+              {@render children()}
+            </div>
+          {:else}
             {@render children()}
-          </div>
-        {:else}
-          {@render children()}
+          {/if}
         {/if}
       </div>
     </Sheet>
@@ -148,7 +161,7 @@
 
   .shell-sheet-content[inert] {
     visibility: hidden;
-    transition: visibility 0s 400ms;
+    transition: visibility 0s var(--anim-overlay-outro, 400ms);
   }
 
   @media (prefers-reduced-motion: reduce) {
