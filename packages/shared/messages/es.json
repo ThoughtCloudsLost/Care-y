@@ -1846,6 +1846,7 @@
   "demo_step_of": "Paso {step} de {total}",
   "demo_tap_hint": "Toca para continuar",
   "demo_tickets_skeleton": "Cargando tickets cifrados",
+  "demo_route_loading": "Un momento, cargando esta pantalla. Esta breve espera ocurre solo en la demo del navegador, no en la aplicación instalada.",
   "demo_tickets_descramble": "Descifrando titulos de tickets",
   "demo_tickets_view_list": "Cambiando a vista de lista",
   "demo_tickets_view_cards": "Cambiando a vista de tarjetas",

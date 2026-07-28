@@ -27,6 +27,7 @@ import type { trpc as realTrpcClient } from "../../../client/src/lib/trpc/index.
 type RealTrpc = typeof realTrpcClient;
 
 import { setLoginStage } from "../lib/login-stage.svelte.js";
+import { registerTrpcForPreview } from "./crypto-context.js";
 
 // -----------------------------------------------------------------------
 // Error types (no bare Error throws)
@@ -478,3 +479,10 @@ export const trpc: RealTrpc = new Proxy(
  * the mock's behavior use this surface instead.
  */
 export const demoTrpcMock: typeof mockOverlay = mockOverlay;
+
+// Register the trpc proxy with crypto-context for the PreviewLoader's queryFn.
+// This runs at module init time, after the trpc Proxy is constructed above.
+// crypto-context.ts cannot import trpc.ts (circular), so trpc.ts pushes itself.
+registerTrpcForPreview(
+  trpc as unknown as Parameters<typeof registerTrpcForPreview>[0],
+);

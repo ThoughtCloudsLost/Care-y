@@ -1,7 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { createDemoScript } from "./script.svelte.js";
 import type { DemoStep, DemoScriptContext } from "./script.svelte.js";
-import { createRevealController } from "./reveal.svelte.js";
 
 function makeStep(overrides: Partial<DemoStep> & { id: string }): DemoStep {
   return {
@@ -12,14 +11,11 @@ function makeStep(overrides: Partial<DemoStep> & { id: string }): DemoStep {
 }
 
 describe("createDemoScript", () => {
-  let reveal: ReturnType<typeof createRevealController>;
   let ctx: DemoScriptContext;
 
   beforeEach(() => {
     vi.useFakeTimers();
-    reveal = createRevealController();
     ctx = {
-      reveal,
       advance: () => {
         /* placeholder; overwritten per test */
       },
@@ -27,7 +23,6 @@ describe("createDemoScript", () => {
   });
 
   afterEach(() => {
-    reveal.reset();
     vi.useRealTimers();
   });
 

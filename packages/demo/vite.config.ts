@@ -61,20 +61,15 @@ function buildAliases(): Alias[] {
     replacement: sa.replacement,
   }));
 
-  // Demo aliases minus @care-y/crypto stub (engine needs real WASM crypto)
-  const demoBase = demoAliases().filter((alias) => {
-    if (typeof alias.find === "string" && alias.find === "@care-y/crypto") {
-      return false;
-    }
-    return true;
-  });
+  // Demo aliases (real WASM crypto; no @care-y/crypto stub to filter)
+  const demoBase = demoAliases();
 
   return [
     // (1) Persisted-state shim (must intercept before $lib catch-all)
     persistedStateAlias,
     // (2) Server health aliases
     ...serverAliases,
-    // (3) Demo aliases (minus @care-y/crypto stub)
+    // (3) Demo aliases
     ...demoBase,
     // (4) Node buffer polyfill for server code that uses Buffer
     { find: "buffer", replacement: "buffer/" },

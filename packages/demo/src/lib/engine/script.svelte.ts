@@ -6,8 +6,6 @@
  * Svelte 5 runes ($state) for reactive state.
  */
 
-import type { RevealController } from "./reveal.svelte.js";
-
 // -----------------------------------------------------------------------
 // Types (cross-task contract, keep names exact)
 // -----------------------------------------------------------------------
@@ -22,7 +20,6 @@ export interface DemoStep {
 }
 
 export interface DemoScriptContext {
-  readonly reveal: RevealController;
   /** Advance to the next step from within an enter() callback. */
   advance(): void;
 }
@@ -38,7 +35,7 @@ export interface DemoScript {
   handleTap(): void;
   /** Advance unconditionally (used by event-driven steps). */
   advance(): void;
-  /** Reset to the initial state, clearing reveal caches and timers. */
+  /** Reset to the initial state and re-enter step 0. */
   restart(): void;
 }
 
@@ -117,7 +114,6 @@ export function createDemoScript(
 
   function restart(): void {
     clearAutoTimer();
-    ctx.reveal.reset();
     index = 0;
     enterStep(0);
   }

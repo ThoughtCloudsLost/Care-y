@@ -1,305 +1,225 @@
 /**
  * Stub for $lib/crypto/context.
  *
- * Mirrors every exported getter name from the real module. Instead
- * of Svelte's createContext (which requires a live component tree),
- * each getter returns a demo-controlled singleton backed by SvelteMap.
+ * Mirrors every exported getter name from the real module. Lazily
+ * constructs real CryptoBridge, OrgKeyManager, decrypt caches, and
+ * PreviewLoader singletons on first access. A pacing-bridge wrapper
+ * queues decrypt calls until the bridge reaches KEYED state and
+ * staggers first-resolution per cache key so the descramble
+ * animation clears the 150ms threshold (preserving the demo's
+ * reveal beat on top of sub-frame real decrypts).
  *
- * The reveal controller (written by a later task) calls demoSeed()
- * to inject plaintext values and demoReset() to clear all caches.
- * This is the descramble hook: components read from these caches
- * exactly as they would in the real app, so reveals look authentic.
- *
- * getCryptoBridge() returns a passthrough stub that carries base64
- * payloads through sealSelfBlob/openSelfBlob unchanged. This is
- * enough for recent-views (the only AppShell call site). Operations
- * not on that surface throw DemoStubError.
+ * ensureKeyed() runs the real loginCrypto pipeline with demo
+ * credentials, idempotent and in-flight-guarded.
  */
 
-import { SvelteMap } from "svelte/reactivity";
 import { Permission } from "@care-y/shared";
-import type { RawFollowUpPreview } from "$lib/tickets/preview-loader.svelte.js";
-
-// Type-only imports of the real classes so getters present the expected
-// types to consuming components. The runtime objects are structural stubs;
-// the `as unknown as X` casts bridge the gap.
-import type { CryptoBridge } from "$lib/workers/crypto-bridge.js";
-import type { OrgKeyManager } from "$lib/crypto/org-key.js";
-import type { OrgDecryptCache } from "$lib/crypto/org-decrypt-cache.js";
-import type { TicketDecryptCache } from "$lib/crypto/ticket-decrypt-cache.js";
-import type { FollowUpDecryptCache } from "$lib/crypto/follow-up-decrypt-cache.js";
-import type { PreviewLoader } from "$lib/tickets/preview-loader.svelte.js";
-
-// -----------------------------------------------------------------------
-// Ticket decrypt cache (mirrors TicketDecryptCache public methods)
-// -----------------------------------------------------------------------
-
-const ticketCache = new SvelteMap<string, string>();
-
-const ticketDecryptCacheStub = {
-  decryptTitle(
-    ticketId: string,
-    _keyWrap: unknown,
-    _encryptedTitle: unknown,
-  ): string | undefined {
-    return ticketCache.get(ticketId);
-  },
-  decryptDescription(
-    ticketId: string,
-    _keyWrap: unknown,
-    _encryptedDescription: unknown,
-  ): string | undefined {
-    return ticketCache.get(`desc:${ticketId}`);
-  },
-  decryptFollowUp(
-    ticketId: string,
-    followupId: string,
-    _keyWrap: unknown,
-    _ciphertext: string,
-  ): string | undefined {
-    return ticketCache.get(`fu:${ticketId}:${followupId}`);
-  },
-  decryptReadCursor(
-    ticketId: string,
-    _userId: string,
-    _keyWrap: unknown,
-    _encryptedReadCursor: unknown,
-  ): string | undefined {
-    return ticketCache.get(`cursor:${ticketId}`);
-  },
-  has(key: string): boolean {
-    return ticketCache.has(key);
-  },
-  get(key: string): string | undefined {
-    return ticketCache.get(key);
-  },
-  seed(key: string, plaintext: string): void {
-    ticketCache.set(key, plaintext);
-  },
-  clear(): void {
-    ticketCache.clear();
-  },
-  clearFollowUps(): void {
-    for (const key of [...ticketCache.keys()]) {
-      if (key.startsWith("fu:")) {
-        ticketCache.delete(key);
-      }
-    }
-  },
-  deleteByPrefix(prefix: string): void {
-    for (const key of [...ticketCache.keys()]) {
-      if (key.startsWith(prefix)) {
-        ticketCache.delete(key);
-      }
-    }
-  },
-  async whenSettled(): Promise<void> {
-    await Promise.resolve();
-  },
-  get size(): number {
-    return ticketCache.size;
-  },
-  entries(): IterableIterator<[string, string]> {
-    return ticketCache.entries();
-  },
-};
+import { RoleId } from "@care-y/shared";
+import { CryptoBridge } from "$lib/workers/crypto-bridge.js";
+import { OrgKeyManager } from "$lib/crypto/org-key.js";
+import { OrgDecryptCache } from "$lib/crypto/org-decrypt-cache.js";
+import { TicketDecryptCache } from "$lib/crypto/ticket-decrypt-cache.js";
+import { FollowUpDecryptCache } from "$lib/crypto/follow-up-decrypt-cache.js";
+import { createPreviewLoader } from "$lib/tickets/preview-loader.svelte.js";
+import { setCryptoKeyed } from "$lib/crypto/crypto-keyed.svelte.js";
+import { setCryptoSettled } from "$lib/crypto/crypto-settled.svelte.js";
+import { setOrgKeyReady } from "$lib/crypto/org-key-ready.svelte.js";
+import type { CryptoBridge as CryptoBridgeType } from "$lib/workers/crypto-bridge.js";
+import type { OrgKeyManager as OrgKeyManagerType } from "$lib/crypto/org-key.js";
+import type { OrgDecryptCache as OrgDecryptCacheType } from "$lib/crypto/org-decrypt-cache.js";
+import type { TicketDecryptCache as TicketDecryptCacheType } from "$lib/crypto/ticket-decrypt-cache.js";
+import type { FollowUpDecryptCache as FollowUpDecryptCacheType } from "$lib/crypto/follow-up-decrypt-cache.js";
+import type {
+  PreviewLoader,
+  RawFollowUpPreview,
+} from "$lib/tickets/preview-loader.svelte.js";
+import type { BridgeState } from "$lib/workers/crypto-bridge.js";
+import type { LoginCryptoResult } from "$lib/auth/login-crypto.js";
 
 // -----------------------------------------------------------------------
-// Follow-up decrypt cache (mirrors FollowUpDecryptCache public methods)
+// Error type
 // -----------------------------------------------------------------------
 
-const followUpCache = new SvelteMap<string, string>();
-
-const followUpDecryptCacheStub = {
-  decryptContent(
-    cacheKey: string,
-    _ticketId: string,
-    _slot: string,
-    _keyWrap: unknown,
-    _encryptedContent: unknown,
-    _rewrapContext?: unknown,
-  ): string | undefined {
-    return followUpCache.get(cacheKey);
-  },
-  has(key: string): boolean {
-    return followUpCache.has(key);
-  },
-  get(key: string): string | undefined {
-    return followUpCache.get(key);
-  },
-  seed(key: string, plaintext: string): void {
-    followUpCache.set(key, plaintext);
-  },
-  clear(): void {
-    followUpCache.clear();
-  },
-  deleteByPrefix(prefix: string): void {
-    for (const key of [...followUpCache.keys()]) {
-      if (key.startsWith(prefix)) {
-        followUpCache.delete(key);
-      }
-    }
-  },
-  async whenSettled(): Promise<void> {
-    await Promise.resolve();
-  },
-  get size(): number {
-    return followUpCache.size;
-  },
-  entries(): IterableIterator<[string, string]> {
-    return followUpCache.entries();
-  },
-};
-
-// -----------------------------------------------------------------------
-// Org decrypt cache (mirrors OrgDecryptCache public methods)
-// -----------------------------------------------------------------------
-
-const orgCache = new SvelteMap<string, string>();
-
-const orgDecryptCacheStub = {
-  decrypt(id: string, _data: unknown): string | null {
-    return orgCache.get(id) ?? null;
-  },
-  async decryptAsync(id: string, _data: unknown): Promise<string | null> {
-    await Promise.resolve();
-    return orgCache.get(id) ?? null;
-  },
-  has(id: string): boolean {
-    return orgCache.has(id);
-  },
-  get(id: string): string | undefined {
-    return orgCache.get(id);
-  },
-  delete(id: string): boolean {
-    return orgCache.delete(id);
-  },
-  clear(): void {
-    orgCache.clear();
-  },
-  async whenSettled(): Promise<void> {
-    await Promise.resolve();
-  },
-  get size(): number {
-    return orgCache.size;
-  },
-};
-
-// -----------------------------------------------------------------------
-// Org key manager stub
-// -----------------------------------------------------------------------
-
-const orgKeyManagerStub = {
-  async unwrapOrgKey(): Promise<void> {
-    await Promise.resolve();
-  },
-  // login-crypto result passes orgPublicKey to load()
-  load(_orgPublicKey: string): void {
-    // No-op: the demo does not perform real key unwrapping.
-  },
-  // cleanup.ts calls zero() on beforeunload
-  zero(): void {
-    // No-op: no real key material in the demo.
-  },
-  isReady(): boolean {
-    return true;
-  },
-  get isLoaded(): boolean {
-    return true;
-  },
-};
-
-// -----------------------------------------------------------------------
-// Preview loader (mirrors PreviewLoader interface from preview-loader.svelte.ts)
-// -----------------------------------------------------------------------
-
-const rawPreviews = new SvelteMap<string, RawFollowUpPreview[]>();
-
-const previewLoaderStub = {
-  rawPreviews,
-  observe(_ticketId: string): void {
-    // No-op: the demo pre-populates rawPreviews via demoSeed.
-  },
-  async eagerLoad(_ticketIds: string[]): Promise<void> {
-    await Promise.resolve();
-    // No-op: the demo pre-populates rawPreviews via demoSeed.
-  },
-  get(ticketId: string): RawFollowUpPreview[] | undefined {
-    return rawPreviews.get(ticketId);
-  },
-};
-
-// -----------------------------------------------------------------------
-// Crypto bridge stub (passthrough seal/open for recent-views)
-// -----------------------------------------------------------------------
-
-/**
- * Lightweight envelope: carries the base64 payload through unchanged.
- * The demo has no real crypto, so sealSelfBlob wraps the payload in
- * a fake envelope and openSelfBlob unwraps it back.
- */
-interface DemoSelfBlobEnvelope {
-  readonly ephemeralPoint: string;
-  readonly nonce: string;
-  readonly wrappedPayload: string;
+class DemoCryptoContextError extends Error {
+  override readonly name = "DemoCryptoContextError";
 }
 
-const cryptoBridgeStub = {
-  async sealSelfBlob(dataB64: string): Promise<DemoSelfBlobEnvelope> {
-    await Promise.resolve();
-    return {
-      ephemeralPoint: "demo-ephemeral",
-      nonce: "demo-nonce",
-      wrappedPayload: dataB64,
-    };
-  },
-  async openSelfBlob(envelope: DemoSelfBlobEnvelope): Promise<string> {
-    await Promise.resolve();
-    return envelope.wrappedPayload;
-  },
-  // Passthrough for direct bridge decrypts (read cursors): the demo's
-  // "ciphertext" already carries the plaintext payload.
-  async decrypt(
-    _ticketId: string,
-    _slot: string,
-    _keyCacheId: string,
-    _ephemeralPoint: string,
-    _nonce: string,
-    _wrappedKey: string,
-    ciphertext: string,
-  ): Promise<string> {
-    await Promise.resolve();
-    return ciphertext;
-  },
-  // Passthrough for org-level decrypts (e.g. encryptedPreferredLocale).
-  // Returns the input unchanged; the demo's mock locale is null, but
-  // having a working stub surfaces bugs if the mock changes.
-  async orgDecrypt(ciphertext: string): Promise<string> {
-    await Promise.resolve();
-    return ciphertext;
-  },
-  // cleanup.ts installs a beforeunload handler that calls disconnect().
-  // Iframe reload fires beforeunload, so this must exist.
-  disconnect(): void {
-    // No-op: the demo bridge has no port management.
-  },
-  onStateChange(_cb: unknown): void {
-    // No-op: the demo bridge has no state transitions.
-  },
-  async zeroAll(): Promise<void> {
-    await Promise.resolve();
-  },
-};
-
 // -----------------------------------------------------------------------
-// Auth state stubs
+// Pacing bridge wrapper
 // -----------------------------------------------------------------------
 
 /**
- * Default permission set: a manager-level volunteer who can see the
- * admin sidebar and use volunteer search. Scenes can override via
- * demoSeed({ permissions: ... }).
+ * Wraps the real CryptoBridge so that decrypt and decryptAndRewrap
+ * calls queue (returning a pending promise) until the bridge reaches
+ * KEYED state. This prevents permanent DECRYPT_ERROR_SENTINEL caching
+ * in the async-decrypt-cache when a component fires decrypt before
+ * the login pipeline finishes.
+ *
+ * Additionally, the first resolution for each distinct cache key is
+ * delayed by a random 400-1400ms stagger so the descramble animation
+ * clears the 150ms threshold. Subsequent lookups hit the SvelteMap
+ * and stay instant.
  */
+interface PacingBridgeWrapper {
+  /** The wrapper object, typed as CryptoBridge for consumers. */
+  readonly wrapped: CryptoBridgeType;
+  /** Resolve the internal keyed promise, unblocking queued decrypts. */
+  resolveKeyed(): void;
+  /** The underlying promise that resolves when keyed. */
+  readonly keyedPromise: Promise<void>;
+}
+
+function createPacingBridge(real: CryptoBridge): PacingBridgeWrapper {
+  let resolveKeyed: (() => void) | null = null;
+  const keyedPromise = new Promise<void>((resolve) => {
+    resolveKeyed = resolve;
+  });
+
+  // Track which cache keys have had their first paced resolution.
+  // Only the first decrypt per key gets the stagger delay.
+  const pacedKeys = new Set<string>();
+
+  /**
+   * Wait for keyed, then add a stagger delay on first access per key.
+   */
+  async function pacedWait(cacheKey: string): Promise<void> {
+    await keyedPromise;
+    if (!pacedKeys.has(cacheKey)) {
+      pacedKeys.add(cacheKey);
+      const stagger = 400 + Math.random() * 1000;
+      await new Promise<void>((r) => {
+        setTimeout(r, stagger);
+      });
+    }
+  }
+
+  // Build the wrapper as a Proxy. All property accesses pass through
+  // to the real bridge except decrypt and decryptAndRewrap, which
+  // queue behind the keyed promise with pacing.
+  const handler: ProxyHandler<CryptoBridge> = {
+    get(
+      target: CryptoBridge,
+      prop: string | symbol,
+      _receiver: unknown,
+    ): unknown {
+      if (prop === "decrypt") {
+        return async function pacedDecrypt(
+          ticketId: string,
+          slot: string,
+          keyCacheId: string,
+          ephemeralPoint: string,
+          nonce: string,
+          wrappedKey: string,
+          ciphertext: string,
+        ): Promise<string> {
+          await pacedWait(keyCacheId);
+          return target.decrypt(
+            ticketId,
+            slot,
+            keyCacheId,
+            ephemeralPoint,
+            nonce,
+            wrappedKey,
+            ciphertext,
+          );
+        };
+      }
+      if (prop === "decryptAndRewrap") {
+        return async function pacedDecryptAndRewrap(
+          followUpId: string,
+          ticketId: string,
+          ephemeralPoint: string,
+          nonce: string,
+          wrappedKey: string,
+          ciphertext: string,
+        ): Promise<string> {
+          await pacedWait(`rewrap:${followUpId}`);
+          return target.decryptAndRewrap(
+            followUpId,
+            ticketId,
+            ephemeralPoint,
+            nonce,
+            wrappedKey,
+            ciphertext,
+          );
+        };
+      }
+      // All other methods pass through to the real bridge.
+      // Use Reflect.get with the real target as receiver so private
+      // fields resolve correctly (Kysely Proxy lesson).
+      return Reflect.get(target, prop, target);
+    },
+  };
+
+  const wrapped = new Proxy(real, handler);
+
+  return {
+    wrapped,
+    resolveKeyed(): void {
+      resolveKeyed?.();
+      resolveKeyed = null;
+    },
+    keyedPromise,
+  };
+}
+
+// -----------------------------------------------------------------------
+// Lazy singletons
+// -----------------------------------------------------------------------
+
+let realBridge: CryptoBridge | null = null;
+let pacingBridge: PacingBridgeWrapper | null = null;
+let orgKeyManager: OrgKeyManager | null = null;
+let orgDecryptCache: OrgDecryptCache | null = null;
+let ticketDecryptCache: TicketDecryptCache | null = null;
+let followUpDecryptCache: FollowUpDecryptCache | null = null;
+let previewLoader: PreviewLoader | null = null;
+
+function initBridge(): CryptoBridge {
+  if (realBridge !== null) return realBridge;
+  const bridge = new CryptoBridge("dedicated");
+  realBridge = bridge;
+
+  // Wire state change signals (mirrors CryptoProvider.svelte:43-51)
+  bridge.onBridgeStateChange((state: BridgeState) => {
+    setCryptoKeyed(state === "KEYED");
+    if (state === "KEYED" && bridge.isReconnected()) {
+      const reconnect = bridge.getReconnectData();
+      if (reconnect.orgPublicKey != null) {
+        getOrgKeyManager().load(reconnect.orgPublicKey);
+      }
+    }
+  });
+
+  realBridge.onSettled(() => {
+    setCryptoSettled(true);
+  });
+
+  return realBridge;
+}
+
+function initPacingBridge(): PacingBridgeWrapper {
+  if (pacingBridge !== null) return pacingBridge;
+  pacingBridge = createPacingBridge(initBridge());
+  return pacingBridge;
+}
+
+function initOrgKeyManager(): OrgKeyManager {
+  if (orgKeyManager !== null) return orgKeyManager;
+  orgKeyManager = new OrgKeyManager(initBridge());
+
+  // Wire org key ready signal (mirrors CryptoProvider.svelte:57-59)
+  orgKeyManager.onLoadChange((loaded: boolean) => {
+    setOrgKeyReady(loaded);
+  });
+
+  return orgKeyManager;
+}
+
+// -----------------------------------------------------------------------
+// Auth state
+// -----------------------------------------------------------------------
+
 const DEFAULT_PERMISSIONS: ReadonlySet<Permission> = new Set<Permission>([
   Permission.VIEW_TICKETS,
   Permission.MANAGE_OWN_TICKETS,
@@ -314,39 +234,83 @@ const DEFAULT_PERMISSIONS: ReadonlySet<Permission> = new Set<Permission>([
   Permission.VIEW_REPORTS,
 ]);
 
-// Hardcoded defaults. The engine generates a random UUID at boot;
-// E2 (engine-crypto integration) will replace these with values from
-// the engine's seed result via demoSeed({ userId, userRoleId }).
 let currentUserId: string | undefined = "demo-user-001";
-let currentUserRoleId: string | undefined = "demo-role-001";
+let currentUserRoleId: string | undefined = RoleId.ADMIN;
 let currentPermissions: ReadonlySet<Permission> = DEFAULT_PERMISSIONS;
 
 // -----------------------------------------------------------------------
 // Public getters (mirror the real module's export names exactly)
 // -----------------------------------------------------------------------
 
-export function getCryptoBridge(): CryptoBridge {
-  return cryptoBridgeStub as unknown as CryptoBridge;
+export function getCryptoBridge(): CryptoBridgeType {
+  return initPacingBridge().wrapped;
 }
 
-export function getOrgKeyManager(): OrgKeyManager {
-  return orgKeyManagerStub as unknown as OrgKeyManager;
+export function getOrgKeyManager(): OrgKeyManagerType {
+  return initOrgKeyManager();
 }
 
-export function getOrgDecryptCache(): OrgDecryptCache {
-  return orgDecryptCacheStub as unknown as OrgDecryptCache;
+export function getOrgDecryptCache(): OrgDecryptCacheType {
+  if (orgDecryptCache !== null) return orgDecryptCache;
+  orgDecryptCache = new OrgDecryptCache(initOrgKeyManager(), initBridge());
+  return orgDecryptCache;
 }
 
-export function getTicketDecryptCache(): TicketDecryptCache {
-  return ticketDecryptCacheStub as unknown as TicketDecryptCache;
+export function getTicketDecryptCache(): TicketDecryptCacheType {
+  if (ticketDecryptCache !== null) return ticketDecryptCache;
+  // Ticket cache gets the PACING wrapper so pre-keyed calls queue
+  // as loading (scrambles) instead of caching permanent error sentinels.
+  ticketDecryptCache = new TicketDecryptCache(initPacingBridge().wrapped);
+  return ticketDecryptCache;
 }
 
-export function getFollowUpDecryptCache(): FollowUpDecryptCache {
-  return followUpDecryptCacheStub as unknown as FollowUpDecryptCache;
+export function getFollowUpDecryptCache(): FollowUpDecryptCacheType {
+  if (followUpDecryptCache !== null) return followUpDecryptCache;
+  // Follow-up cache also gets the pacing wrapper.
+  followUpDecryptCache = new FollowUpDecryptCache(initPacingBridge().wrapped);
+  return followUpDecryptCache;
+}
+
+/**
+ * Set by the trpc stub at init time to break the circular dependency.
+ * The trpc stub calls registerTrpcForPreview() during its own module
+ * init, which runs before any component calls getPreviewLoader().
+ */
+let trpcForPreview: {
+  tickets: {
+    recentFollowUps: {
+      query: (input: {
+        ticketIds: string[];
+        perTicket: number;
+      }) => Promise<Record<string, RawFollowUpPreview[]>>;
+    };
+  };
+} | null = null;
+
+/**
+ * Called by the trpc stub to register the engine-backed trpc proxy.
+ * This avoids a circular import between crypto-context and trpc.
+ */
+export function registerTrpcForPreview(t: typeof trpcForPreview): void {
+  trpcForPreview = t;
 }
 
 export function getPreviewLoader(): PreviewLoader {
-  return previewLoaderStub;
+  if (previewLoader !== null) return previewLoader;
+  if (trpcForPreview === null) {
+    throw new DemoCryptoContextError(
+      "trpc not registered for preview loader. Ensure trpc stub is imported before getPreviewLoader().",
+    );
+  }
+  const t = trpcForPreview;
+  previewLoader = createPreviewLoader({
+    queryFn: async (ids: string[]) =>
+      t.tickets.recentFollowUps.query({
+        ticketIds: ids,
+        perTicket: 3,
+      }),
+  });
+  return previewLoader;
 }
 
 export function getCurrentUserId(): () => string | undefined {
@@ -358,14 +322,12 @@ export function getCurrentUserRoleId(): () => string | undefined {
 }
 
 export function getCurrentPermissions(): () => ReadonlySet<Permission> {
-  // Returned as a closure so re-seeding takes effect immediately:
-  // the getter always reads the current `currentPermissions` reference.
   return (): ReadonlySet<Permission> => currentPermissions;
 }
 
 // The real module also exports setters (from context-init.ts).
-// These are no-ops here: the demo never calls them, but they must
-// exist for any transitive import that references the name.
+// These are no-ops here: the demo constructs objects directly instead
+// of delegating to CryptoProvider/AppCryptoProvider.
 export function setCryptoBridge(_v: unknown): void {
   /* no-op */
 }
@@ -395,83 +357,140 @@ export function setCurrentPermissions(_v: unknown): void {
 }
 
 // -----------------------------------------------------------------------
-// Demo engine API: populate and reset caches
+// ensureKeyed: idempotent real login crypto pipeline
+// -----------------------------------------------------------------------
+
+let ensureKeyedPromise: Promise<void> | null = null;
+let ensureKeyedResult: LoginCryptoResult | null = null;
+
+/**
+ * Run the real loginCrypto pipeline with demo credentials if the bridge
+ * is not already KEYED. Idempotent: concurrent calls share the same
+ * in-flight promise. On completion, the pacing bridge's keyed promise
+ * resolves, unblocking all queued decrypt calls.
+ *
+ * Returns void externally. The real LoginCryptoResult is cached
+ * internally for the login-crypto stub to retrieve.
+ */
+export async function ensureKeyed(): Promise<void> {
+  if (ensureKeyedPromise !== null) {
+    return ensureKeyedPromise;
+  }
+
+  const bridge = initBridge();
+  if (bridge.getState() === "KEYED") {
+    initPacingBridge().resolveKeyed();
+    return;
+  }
+
+  // Clear the cached promise on rejection so a later attempt can
+  // retry. Without this, one transient failure (engine still booting,
+  // a raced worker state) would leave login permanently rejected
+  // until the iframe reloads.
+  ensureKeyedPromise = runEnsureKeyed().catch((err: unknown) => {
+    ensureKeyedPromise = null;
+    throw err;
+  });
+  return ensureKeyedPromise;
+}
+
+/**
+ * Retrieve the cached LoginCryptoResult from the most recent
+ * ensureKeyed run. Returns null if ensureKeyed has not completed.
+ */
+export function getEnsureKeyedResult(): LoginCryptoResult | null {
+  return ensureKeyedResult;
+}
+
+async function runEnsureKeyed(): Promise<void> {
+  const bridge = initBridge();
+  const pacing = initPacingBridge();
+  const okm = initOrgKeyManager();
+
+  // Import the REAL loginCrypto by relative path. The $lib/auth/login-crypto
+  // alias resolves to THIS stub's sibling login-crypto.ts, which is the
+  // demo's choreography wrapper. We need the real pipeline.
+  const { loginCrypto: realLoginCrypto } =
+    await import("../../../client/src/lib/auth/login-crypto.js");
+
+  // Import demo credentials
+  const { DEMO_ADMIN_IDENTIFIER, DEMO_ADMIN_PASSWORD } =
+    await import("../lib/engine/server/seed-structure.js");
+
+  const noopCallbacks = {
+    onArgon2idStart(): void {
+      /* no-op */
+    },
+    onArgon2idDone(): void {
+      /* no-op */
+    },
+    onOprfStart(): void {
+      /* no-op */
+    },
+    onOprfDone(): void {
+      /* no-op */
+    },
+    onDeriveStart(): void {
+      /* no-op */
+    },
+    onDone(): void {
+      /* no-op */
+    },
+    async onPowRequired(): Promise<string> {
+      await Promise.resolve();
+      throw new DemoCryptoContextError(
+        "PoW challenge unexpected in demo login",
+      );
+    },
+  };
+
+  const result = await realLoginCrypto(
+    DEMO_ADMIN_IDENTIFIER,
+    DEMO_ADMIN_PASSWORD,
+    bridge,
+    noopCallbacks,
+  );
+
+  ensureKeyedResult = result;
+
+  // Load the org key so OrgDecryptCache can decrypt
+  if (result.orgPublicKey !== null) {
+    okm.load(result.orgPublicKey);
+  }
+
+  // Unblock all queued decrypt calls in the pacing wrapper
+  pacing.resolveKeyed();
+}
+
+// -----------------------------------------------------------------------
+// Demo engine API: seed and reset (slimmed for E2 scope)
 // -----------------------------------------------------------------------
 
 export interface DemoSeedData {
-  /** ticket id -> plaintext title */
-  titles?: Record<string, string>;
-  /** "desc:<ticketId>" -> plaintext description */
-  descriptions?: Record<string, string>;
-  /** "fu:<ticketId>:<followupId>" -> plaintext content */
-  followUps?: Record<string, string>;
-  /** org-cache id -> plaintext */
-  orgValues?: Record<string, string>;
-  /** follow-up cache key -> plaintext */
-  followUpContent?: Record<string, string>;
-  /** preview loader: ticket id -> raw preview array */
-  previews?: Record<string, RawFollowUpPreview[]>;
-  /** read cursors: "cursor:<ticketId>" -> JSON payload */
-  readCursors?: Record<string, string>;
-  /** override the demo user/role IDs */
+  /** Override the demo user ID */
   userId?: string;
+  /** Override the demo user role ID */
   userRoleId?: string;
-  /** override the demo permission set (defaults to manager-level) */
+  /** Override the demo permission set */
   permissions?: ReadonlySet<Permission>;
 }
 
 /**
- * Populate the demo caches with plaintext values. Called by the
- * reveal controller to stage content before the descramble animation.
+ * Populate identity/permissions state. Content seeding is removed
+ * post-E2 because real decrypt caches handle all content.
  */
 export function demoSeed(data: DemoSeedData): void {
-  if (data.titles) {
-    for (const [id, text] of Object.entries(data.titles)) {
-      ticketCache.set(id, text);
-    }
-  }
-  if (data.descriptions) {
-    for (const [key, text] of Object.entries(data.descriptions)) {
-      ticketCache.set(key, text);
-    }
-  }
-  if (data.followUps) {
-    for (const [key, text] of Object.entries(data.followUps)) {
-      ticketCache.set(key, text);
-    }
-  }
-  if (data.readCursors) {
-    for (const [key, text] of Object.entries(data.readCursors)) {
-      ticketCache.set(key, text);
-    }
-  }
-  if (data.orgValues) {
-    for (const [id, text] of Object.entries(data.orgValues)) {
-      orgCache.set(id, text);
-    }
-  }
-  if (data.followUpContent) {
-    for (const [key, text] of Object.entries(data.followUpContent)) {
-      followUpCache.set(key, text);
-    }
-  }
-  if (data.previews) {
-    for (const [id, arr] of Object.entries(data.previews)) {
-      rawPreviews.set(id, arr);
-    }
-  }
   if (data.userId !== undefined) currentUserId = data.userId;
   if (data.userRoleId !== undefined) currentUserRoleId = data.userRoleId;
   if (data.permissions !== undefined) currentPermissions = data.permissions;
 }
 
-/** Clear all demo caches and reset auth state to defaults. */
+/**
+ * Reset auth state to defaults. Does NOT destroy the bridge (restart
+ * is an iframe reload that gives a fresh module graph).
+ */
 export function demoReset(): void {
-  ticketCache.clear();
-  followUpCache.clear();
-  orgCache.clear();
-  rawPreviews.clear();
   currentUserId = "demo-user-001";
-  currentUserRoleId = "demo-role-001";
+  currentUserRoleId = RoleId.ADMIN;
   currentPermissions = DEFAULT_PERMISSIONS;
 }

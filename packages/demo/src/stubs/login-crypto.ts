@@ -2,11 +2,14 @@
  * Stub for $lib/auth/login-crypto.
  *
  * Reproduces the real module's exported surface. The loginCrypto
- * function plays callbacks on timers at narratable speed instead
- * of running real Argon2id/OPRF/derive in a Worker.
+ * function plays callbacks on timers at narratable speed (~4.2s total)
+ * while the real key derivation runs concurrently via ensureKeyed().
+ * Resolves when BOTH pacing and derivation are done, returning the
+ * REAL LoginCryptoResult.
  */
 
 import type { CryptoBridge } from "$lib/workers/crypto-bridge.js";
+import { ensureKeyed, getEnsureKeyedResult } from "./crypto-context.js";
 
 // -----------------------------------------------------------------------
 // Exported types (mirror the real module exactly)
@@ -33,6 +36,14 @@ export interface LoginCryptoCallbacks extends CryptoPhaseCallbacks {
 }
 
 // -----------------------------------------------------------------------
+// Error type
+// -----------------------------------------------------------------------
+
+class DemoLoginCryptoError extends Error {
+  override readonly name = "DemoLoginCryptoError";
+}
+
+// -----------------------------------------------------------------------
 // Demo implementation
 // -----------------------------------------------------------------------
 
@@ -55,7 +66,11 @@ export function setLoginCryptoStageListener(
 }
 
 /**
- * Demo loginCrypto: plays callbacks on timers at narratable speed.
+ * Demo loginCrypto: plays callbacks on timers at narratable speed
+ * (~4.2s total) while the real derivation runs concurrently.
+ * Resolves when BOTH the pacing sequence and the real derivation
+ * are complete. Returns the REAL LoginCryptoResult from ensureKeyed.
+ *
  * Never calls onPowRequired.
  */
 export async function loginCrypto(
@@ -64,6 +79,10 @@ export async function loginCrypto(
   _bridge: CryptoBridge,
   callbacks: LoginCryptoCallbacks,
 ): Promise<LoginCryptoResult> {
+  // Start the real derivation concurrently with the pacing sequence.
+  const realDerivation = ensureKeyed();
+
+  // Pacing sequence: fire callbacks at narratable speed
   // Argon2id phase (~1.5s)
   callbacks.onArgon2idStart();
   stageListener?.("argon2id");
@@ -81,12 +100,20 @@ export async function loginCrypto(
   stageListener?.("derive");
   await wait(1200);
 
+  // Wait for the real derivation to finish (it almost certainly
+  // completed before the 4.2s pacing, but if not, we wait).
+  await realDerivation;
+
   // Done
   callbacks.onDone();
   stageListener?.("done");
 
-  return {
-    volPublic: "demo-vol-public",
-    orgPublicKey: "demo-org-public",
-  };
+  // Return the REAL result from ensureKeyed
+  const result = getEnsureKeyedResult();
+  if (result === null) {
+    throw new DemoLoginCryptoError(
+      "ensureKeyed completed but no result was cached",
+    );
+  }
+  return result;
 }
