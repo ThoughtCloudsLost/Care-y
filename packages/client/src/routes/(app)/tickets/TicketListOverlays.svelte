@@ -23,7 +23,7 @@
 
     replySheetOpen: boolean;
     replyTargetTicketId: string;
-    replyClientAlias: string;
+    replyClientAlias: string | null;
     replyHasPhone: boolean;
     replyPreviewFollowUps: RawFollowUpPreview[] | undefined;
     replyFollowUpCount: number;

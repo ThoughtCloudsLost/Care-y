@@ -214,7 +214,6 @@ export const ticketSortFieldSchema = z.enum([
   "priority",
   "last_activity",
   "queue",
-  "client",
   "msgs",
 ]);
 export type TicketSortField = z.infer<typeof ticketSortFieldSchema>;

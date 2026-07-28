@@ -1489,7 +1489,8 @@ describe.skipIf(!process.env.DATABASE_URL)(
         const mine = rows.find((r) => r.ticketId === ticketId);
         expect(mine).toBeDefined();
         expect(mine!.eventType).toBe("ticket_created");
-        expect(typeof mine!.clientAlias).toBe("string");
+        expect(mine!.clientId).toBeDefined();
+        expect(mine!.encryptedClientAlias).toBeDefined();
 
         // The foreign queue's event must not leak into this user's feed
         expect(rows.some((r) => r.ticketId === foreign.ticketId)).toBe(false);
@@ -1750,23 +1751,17 @@ describe.skipIf(!process.env.DATABASE_URL)(
         ).toBe(false);
       });
 
-      it("metadataSearch filters by client alias within accessible queues", async () => {
-        const { user, ticketId, clientId } = await setupUserWithTicket();
-        const client = await tenantDb
-          .selectFrom("clients")
-          .select("alias")
-          .where("id", "=", clientId)
-          .executeTakeFirstOrThrow();
+      it("metadataSearch returns tickets with encrypted client alias", async () => {
+        const { user, ticketId } = await setupUserWithTicket();
 
         const caller = createAuthedCaller(user);
-        const result = await caller.tickets.metadataSearch!({
-          clientAlias: client.alias,
-        });
+        const result = await caller.tickets.metadataSearch!({});
 
-        expect(result.total).toBe(1);
-        expect(result.tickets).toHaveLength(1);
-        expect(result.tickets[0]!.id).toBe(ticketId);
-        expect(result.tickets[0]!.clientAlias).toBe(client.alias);
+        expect(result.total).toBeGreaterThanOrEqual(1);
+        const match = result.tickets.find((t) => t.id === ticketId);
+        expect(match).toBeDefined();
+        expect(match!.clientId).toBeDefined();
+        expect(match!.encryptedClientAlias).toBeDefined();
       });
     });
 
@@ -1777,49 +1772,50 @@ describe.skipIf(!process.env.DATABASE_URL)(
     describe("Client search", () => {
       it("returns a fixed placeholder mask when no field encryptor is configured", async () => {
         const { user, clientId } = await setupUserWithTicket();
-        const client = await tenantDb
-          .selectFrom("clients")
-          .select("alias")
+        // Set a known alias_hash so the exact-match query finds this client
+        const hash = `mask-hash-${randomUUID().slice(0, 8)}`;
+        await tenantDb
+          .updateTable("clients")
+          .set({ alias_hash: hash })
           .where("id", "=", clientId)
-          .executeTakeFirstOrThrow();
+          .execute();
 
         const caller = createAuthedCaller(user);
-        const results = await caller.tickets.searchClients({
-          query: client.alias,
-        });
+        const results = await caller.tickets.searchClients({ query: hash });
 
-        expect(results).toHaveLength(1);
-        expect(results[0]).toEqual({
-          id: clientId,
-          alias: client.alias,
-          maskedPhone: "***",
-        });
+        const match = results.find((r) => r.id === clientId);
+        expect(match).toBeDefined();
+        expect(match!.encryptedAlias).toBeDefined();
+        expect(match!.maskedPhone).toBe("***");
       });
 
       it("masks decrypted phone numbers to the last four digits", async () => {
         const { user, clientId, phoneId } = await setupUserWithTicket();
-        const client = await tenantDb
-          .selectFrom("clients")
-          .select("alias")
-          .where("id", "=", clientId)
-          .executeTakeFirstOrThrow();
+        const hash = `phone-hash-${randomUUID().slice(0, 8)}`;
         // Re-encrypt the fixture phone with the real OPS encryptor so the
         // route's decrypt-and-mask path runs against real ciphertext.
+        // care-y-ignore-next-line no-plaintext-db-write -- value passes through testFieldEncryptor.encrypt(), result is ciphertext
+        const encryptedPhone = testFieldEncryptor.encrypt("+15550007777");
+
+        await tenantDb
+          .updateTable("clients")
+          .set({ alias_hash: hash })
+          .where("id", "=", clientId)
+          .execute();
         await tenantDb
           .updateTable("phones")
-          .set({ encrypted_number: testFieldEncryptor.encrypt("+15550007777") })
+          .set({ encrypted_number: encryptedPhone })
           .where("id", "=", phoneId)
           .execute();
 
         const caller = createAuthedCaller(user, {
           deps: { fieldEncryptor: testFieldEncryptor },
         });
-        const results = await caller.tickets.searchClients({
-          query: client.alias,
-        });
+        const results = await caller.tickets.searchClients({ query: hash });
 
-        expect(results).toHaveLength(1);
-        expect(results[0]!.maskedPhone).toBe("***7777");
+        const match = results.find((r) => r.id === clientId);
+        expect(match).toBeDefined();
+        expect(match!.maskedPhone).toBe("***7777");
         // PII contract: the full number must never reach the response.
         expect(JSON.stringify(results)).not.toContain("15550007777");
       });
@@ -1831,41 +1827,43 @@ describe.skipIf(!process.env.DATABASE_URL)(
         // exclude the merged one.
         const merged = await createTestTicketFixture(tenantDb, { queueId });
         const survivor = await createTestTicketFixture(tenantDb, { queueId });
+        const mergedHash = `merged-hash-${randomUUID().slice(0, 8)}`;
+        const survivorHash = `survivor-hash-${randomUUID().slice(0, 8)}`;
         await tenantDb
           .updateTable("clients")
-          .set({ merged_into: survivor.clientId })
+          .set({ alias_hash: mergedHash, merged_into: survivor.clientId })
           .where("id", "=", merged.clientId)
           .execute();
-        const aliases = await tenantDb
-          .selectFrom("clients")
-          .select(["id", "alias"])
-          .where("id", "in", [merged.clientId, survivor.clientId])
+        await tenantDb
+          .updateTable("clients")
+          .set({ alias_hash: survivorHash })
+          .where("id", "=", survivor.clientId)
           .execute();
-        const mergedAlias = aliases.find((a) => a.id === merged.clientId)!;
-        const survivorAlias = aliases.find((a) => a.id === survivor.clientId)!;
 
         const caller = createAuthedCaller(user);
+        // Merged client is excluded by the merged_into IS NULL filter
         expect(
-          await caller.tickets.searchClients({ query: mergedAlias.alias }),
+          await caller.tickets.searchClients({ query: mergedHash }),
         ).toHaveLength(0);
-        // Control: the unmerged sibling is reachable through the same path.
+        // Control: the unmerged sibling is reachable
         expect(
-          await caller.tickets.searchClients({ query: survivorAlias.alias }),
+          await caller.tickets.searchClients({ query: survivorHash }),
         ).toHaveLength(1);
       });
 
       it("hides clients whose tickets live in queues the volunteer is not assigned to", async () => {
         const { user } = await setupUserWithTicket();
         const foreign = await createTestTicketFixture(tenantDb);
-        const foreignAlias = await tenantDb
-          .selectFrom("clients")
-          .select("alias")
+        const foreignHash = `foreign-hash-${randomUUID().slice(0, 8)}`;
+        await tenantDb
+          .updateTable("clients")
+          .set({ alias_hash: foreignHash })
           .where("id", "=", foreign.clientId)
-          .executeTakeFirstOrThrow();
+          .execute();
 
         const caller = createAuthedCaller(user);
         const results = await caller.tickets.searchClients({
-          query: foreignAlias.alias,
+          query: foreignHash,
         });
 
         expect(results).toHaveLength(0);
@@ -1874,15 +1872,16 @@ describe.skipIf(!process.env.DATABASE_URL)(
       it("returns clients from every queue for admins", async () => {
         const { user } = await setupUserWithTicket(RoleId.ADMIN);
         const foreign = await createTestTicketFixture(tenantDb);
-        const foreignAlias = await tenantDb
-          .selectFrom("clients")
-          .select("alias")
+        const foreignHash = `admin-hash-${randomUUID().slice(0, 8)}`;
+        await tenantDb
+          .updateTable("clients")
+          .set({ alias_hash: foreignHash })
           .where("id", "=", foreign.clientId)
-          .executeTakeFirstOrThrow();
+          .execute();
 
         const caller = createAuthedCaller(user);
         const results = await caller.tickets.searchClients({
-          query: foreignAlias.alias,
+          query: foreignHash,
         });
 
         expect(results).toHaveLength(1);

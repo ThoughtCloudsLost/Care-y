@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "lowercase-with-hyphens" |
+* | "Enter an alias" |
 *
 * @param {Client_Alias_PlaceholderInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

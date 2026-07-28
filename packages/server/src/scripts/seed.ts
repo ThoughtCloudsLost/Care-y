@@ -337,33 +337,23 @@ async function seed(): Promise<void> {
   } else {
     const toCreate = NUM_SEED_CLIENTS - currentCount;
     for (let i = 0; i < toCreate; i++) {
-      // generateAlias uses crypto.randomInt, so collisions are possible.
-      // Retry on unique constraint violation (same pattern as client-repo.ts).
-      let created = false;
-      for (let attempt = 0; attempt < 5 && !created; attempt++) {
-        const alias = generateAlias();
-        try {
-          const inserted = await tenantDatabase
-            .insertInto("clients")
-            .values({ alias, phone_id: phoneId })
-            .returning("id")
-            .executeTakeFirstOrThrow();
-          console.log(`Created client "${alias}" (${inserted.id})`);
-          created = true;
-        } catch (err: unknown) {
-          if (
-            err instanceof Error &&
-            err.message.includes("unique") // PG unique violation on alias
-          ) {
-            continue; // retry with a new alias
-          }
-          throw err;
-        }
-      }
-      if (!created) {
-        console.warn("Failed to generate unique alias after 5 attempts");
-      }
+      // Generated aliases draw their suffix from a per-org sequence, so they
+      // are unique by construction and need no collision retry. alias_hash is
+      // null because the blind index key lives in the browser; the first
+      // session to decrypt the row backfills it.
+      const alias = await generateAlias(tenantDatabase);
+      await tenantDatabase
+        .insertInto("clients")
+        .values({
+          encrypted_alias: sealName(alias),
+          alias_hash: null,
+          phone_id: phoneId,
+        })
+        .execute();
     }
+    // Summary rather than a line per row: the alias is sealed and the id is
+    // opaque, so a per-row log costs a hundred lines and says nothing useful.
+    console.log(`Seeded ${String(toCreate)} more.`);
   }
 
   // --- Seed KB categories (structural data, encrypted names) ---

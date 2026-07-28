@@ -22,7 +22,8 @@ function makeRecord(
     priority: "normal",
     encryptedTitle: "enc-title",
     keyWrap: { wrapped: true },
-    clientAlias: "Anonymous",
+    clientId: "c1",
+    encryptedClientAlias: "enc-alias",
     assignedTo: null,
     assignedDisplayName: null,
     createdAt: "2026-01-01T00:00:00Z",
@@ -36,8 +37,11 @@ function makeFieldDeps(
   overrides?: Partial<TicketDisplayFieldDeps>,
 ): TicketDisplayFieldDeps {
   return {
-    orgDecrypt: (cacheKey: string) =>
-      cacheKey.startsWith("queue:") ? "Housing" : "Sam Volunteer",
+    orgDecrypt: (cacheKey: string) => {
+      if (cacheKey.startsWith("queue:")) return "Housing";
+      if (cacheKey.startsWith("client-alias:")) return "Anonymous";
+      return "Sam Volunteer";
+    },
     decryptTitle: () => "Shelter referral",
     currentUserId: "viewer-1",
     ...overrides,
@@ -115,6 +119,26 @@ describe("mapTicketDisplayFields", () => {
     );
     expect(fields.assignedName).toBeNull();
     expect(fields.assignedIsSelf).toBe(false);
+  });
+
+  it("decrypts the client alias under the client-alias cache key", () => {
+    const orgDecrypt = vi.fn((key: string) =>
+      key === "client-alias:c1" ? "Jane" : null,
+    );
+    const fields = mapTicketDisplayFields(
+      makeRecord({ id: "t1", clientId: "c1", encryptedClientAlias: "enc-a" }),
+      makeFieldDeps({ orgDecrypt }),
+    );
+    expect(fields.clientAlias).toBe("Jane");
+    expect(orgDecrypt).toHaveBeenCalledWith("client-alias:c1", "enc-a");
+  });
+
+  it("returns null when the client alias has not been decrypted yet", () => {
+    const fields = mapTicketDisplayFields(
+      makeRecord({ id: "t1" }),
+      makeFieldDeps({ orgDecrypt: () => null }),
+    );
+    expect(fields.clientAlias).toBeNull();
   });
 
   it("derives display status from the raw status fields", () => {

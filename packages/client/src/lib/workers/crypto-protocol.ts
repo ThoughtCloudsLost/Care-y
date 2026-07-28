@@ -211,6 +211,13 @@ export interface GetOrgPublicKeyRequest {
   readonly id: number;
 }
 
+export interface AliasHashRequest {
+  readonly type: "aliasHash";
+  readonly id: number;
+  /** Raw alias string. The Worker normalizes internally before HMAC. */
+  readonly alias: string;
+}
+
 export interface DecryptBlobRequest {
   readonly type: "decryptBlob";
   readonly id: number;
@@ -349,6 +356,7 @@ export type WorkerRequest =
   | OrgDecryptBatchRequest
   | ExportOrgSecretKeyRequest
   | GetOrgPublicKeyRequest
+  | AliasHashRequest
   | ConnectRequest
   | DisconnectRequest;
 
@@ -531,6 +539,12 @@ export interface GetOrgPublicKeyResponse extends SuccessBase {
   readonly orgPublicKey: string;
 }
 
+export interface AliasHashResponse extends SuccessBase {
+  readonly type: "aliasHash";
+  /** Lowercase hex HMAC-SHA512 of the normalized alias. */
+  readonly hash: string;
+}
+
 // ── SharedWorker lifecycle responses ────────────────────────────────
 
 export type SharedWorkerState = "READY" | "KEYED";
@@ -573,6 +587,7 @@ export type WorkerSuccessResponse =
   | OrgDecryptBatchResponse
   | ExportOrgSecretKeyResponse
   | GetOrgPublicKeyResponse
+  | AliasHashResponse
   | ConnectResponse
   | DisconnectResponse;
 

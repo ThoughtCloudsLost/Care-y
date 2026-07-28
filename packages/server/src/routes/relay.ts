@@ -677,7 +677,7 @@ async function handlePhoneLookup(
     if (existingPhone) {
       const client = await tenantDb
         .selectFrom("clients")
-        .select(["id", "alias"])
+        .select(["id", "encrypted_alias"])
         .where("phone_id", "=", existingPhone.id)
         .where("merged_into", "is", null)
         .executeTakeFirst();
@@ -697,7 +697,7 @@ async function handlePhoneLookup(
         sendJsonResponse(res, 200, {
           found: true,
           clientId: client.id,
-          alias: client.alias,
+          encryptedAlias: client.encrypted_alias.toString("base64"),
           openTicketId: openTicket?.id ?? null,
         });
         return;

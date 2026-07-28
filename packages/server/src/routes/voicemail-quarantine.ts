@@ -60,6 +60,7 @@ export function createVoicemailQuarantineRouter(
           blobStore,
           orgSchema: ctx.org.orgSchema,
           pendingClients,
+          sealedBox: ctx.org.sealedBox,
         };
         return routeQuarantined(routeDeps, input, ctx.user.id);
       }),

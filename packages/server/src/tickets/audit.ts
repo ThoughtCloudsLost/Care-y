@@ -31,15 +31,16 @@ export interface AuditLogResult {
 /**
  * One row of the dashboard activity feed.
  *
- * `encryptedQueueName` stays ciphertext: queue names are encrypted per
- * ADR-030 and decrypted client side. This service never decrypts it.
- * `clientAlias` is a pseudonym, not PII.
+ * Both `encryptedQueueName` and `encryptedClientAlias` are org-key
+ * ciphertext. This service never decrypts either; the browser handles
+ * both via OrgDecryptCache.
  */
 export interface RecentActivityEntry {
   readonly id: string;
   readonly eventType: string;
   readonly ticketId: string | null;
-  readonly clientAlias: string;
+  readonly clientId: string;
+  readonly encryptedClientAlias: Buffer;
   readonly queueId: string;
   readonly encryptedQueueName: Buffer;
   readonly createdAt: Date;
@@ -163,7 +164,8 @@ export function createAuditService(db: Kysely<TenantDatabase>): AuditService {
           "al.id",
           "al.event_type as eventType",
           "al.ticket_id as ticketId",
-          "c.alias as clientAlias",
+          "c.id as clientId",
+          "c.encrypted_alias as encryptedClientAlias",
           "q.id as queueId",
           "q.encrypted_name as encryptedQueueName",
           "al.created_at as createdAt",

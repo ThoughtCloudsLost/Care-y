@@ -100,6 +100,7 @@ export interface RouteQuarantineDeps {
   readonly blobStore: BlobStore;
   readonly orgSchema: string;
   readonly pendingClients: Map<string, PendingClient>;
+  readonly sealedBox: SealedBoxEncryptor;
 }
 
 export interface RouteQuarantineResult {
@@ -402,7 +403,7 @@ export async function routeQuarantined(
       pendingClients.delete(input.target.clientToken);
 
       const phoneRepo = createPhoneRepository(tDb);
-      const clientRepo = createClientRepository(tDb, phoneRepo);
+      const clientRepo = createClientRepository(tDb, phoneRepo, deps.sealedBox);
       const result = await clientRepo.findOrCreateByPhoneHash(
         pending.phoneHash,
         pending.opsEncryptedPhone,

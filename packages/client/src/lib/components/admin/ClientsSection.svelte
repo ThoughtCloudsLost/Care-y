@@ -34,6 +34,8 @@
   import ClientCard from "./ClientCard.svelte";
   import PhoneChangeSteps from "$lib/components/clients/PhoneChangeSteps.svelte";
   import MergeSheet from "$lib/components/clients/MergeSheet.svelte";
+  import { SvelteSet } from "svelte/reactivity";
+  import { getOrgKeyManager, getOrgDecryptCache } from "$lib/crypto/context.js";
   import { LOADING, type DecryptResult } from "$lib/crypto/decrypt-result.js";
   import { deriveDisplayStatus } from "$lib/tickets/display-status.js";
 
@@ -43,7 +45,8 @@
 
   interface ClientListItem {
     readonly id: string;
-    readonly alias: string;
+    readonly encryptedAlias: string;
+    readonly aliasHash: string | null;
     readonly phone: string;
     readonly ticketCount: number;
     readonly createdAt: string;
@@ -55,6 +58,9 @@
     readonly isLoading?: boolean;
     readonly isError?: boolean;
     readonly error?: unknown;
+    readonly hasNextPage?: boolean;
+    readonly isFetchingNextPage?: boolean;
+    readonly onfetchnext?: () => void;
     readonly onretry?: () => void;
   }
 
@@ -63,6 +69,9 @@
     isLoading = false,
     isError = false,
     error = null,
+    hasNextPage = false,
+    isFetchingNextPage = false,
+    onfetchnext,
     onretry,
   }: ClientsSectionProps = $props();
 
@@ -73,6 +82,67 @@
   const clientsRouter = requireRouter(trpc.clients, "clients");
   const ticketsRouter = requireRouter(trpc.tickets, "tickets");
   const queryClient = useQueryClient();
+  const orgKeyManager = getOrgKeyManager();
+  const orgCache = getOrgDecryptCache();
+
+  // ---------------------------------------------------------------------------
+  // Alias decryption helper
+  // ---------------------------------------------------------------------------
+
+  function decryptAlias(client: ClientListItem): string | null {
+    return orgCache.decrypt(`client-alias:${client.id}`, client.encryptedAlias);
+  }
+
+  // ---------------------------------------------------------------------------
+  // Lazy hash backfill (ADR-064)
+  // ---------------------------------------------------------------------------
+
+  // Known smell: rendering triggers a write. An effect that reads the loaded
+  // roster issues a mutation, which is not what effects are for.
+  //
+  // It is here because the uniqueness hash is keyed with a browser-held key,
+  // and a client created by an inbound webhook has no browser present to
+  // compute it. Those rows are stored with a null hash and filled in by the
+  // first session that decrypts them, so coverage follows use.
+  //
+  // Kept deliberately, and cheap in practice: it fires once per client ever,
+  // only for webhook-created rows, and never again once the hash lands.
+  // Generated aliases are unique by construction, so the only case it guards
+  // is an operator typing a string identical to an existing generated alias.
+  // If it becomes awkward, deleting it costs exactly that case.
+  const backfilledIds = new SvelteSet<string>();
+
+  const backfillMutation = createMutation(() => ({
+    mutationFn: async (input: { clientId: string; aliasHash: string }) =>
+      clientsRouter.backfillAliasHash.mutate(input),
+    onError: (
+      err: Error,
+      variables: { clientId: string; aliasHash: string },
+    ) => {
+      if (err.message === ErrorCode.CLIENT_ALIAS_CONFLICT) {
+        const msg = m.client_alias_uniqueness_error();
+        toastStore.show(msg, 5000);
+      }
+      // Remove from backfilled set so it can be retried on next render
+      // only for non-conflict errors. Conflicts are surfaced, not retried.
+      if (err.message !== ErrorCode.CLIENT_ALIAS_CONFLICT) {
+        backfilledIds.delete(variables.clientId);
+      }
+    },
+  }));
+
+  $effect(() => {
+    for (const client of clients) {
+      if (client.aliasHash !== null) continue;
+      if (backfilledIds.has(client.id)) continue;
+      const plaintext = orgCache.get(`client-alias:${client.id}`);
+      if (plaintext === undefined) continue;
+      backfilledIds.add(client.id);
+      void orgKeyManager.aliasHash(plaintext).then((hash) => {
+        backfillMutation.mutate({ clientId: client.id, aliasHash: hash });
+      });
+    }
+  });
 
   // ---------------------------------------------------------------------------
   // Client detail sheet
@@ -109,10 +179,12 @@
   // clientB is the conflicting client (from phone conflict) or null (from list).
   const mergeClientA = $derived.by((): { id: string; alias: string } | null => {
     if (sheetClientId === null) return null;
-    return {
-      id: sheetClientId,
-      alias: clientDetailQuery.data?.alias ?? "",
-    };
+    const detail = clientDetailQuery.data;
+    const alias = detail
+      ? (orgCache.decrypt(`client-alias:${detail.id}`, detail.encryptedAlias) ??
+        "")
+      : "";
+    return { id: sheetClientId, alias };
   });
 
   const mergeClientB = $derived.by((): { id: string; alias: string } | null => {
@@ -151,27 +223,48 @@
   let editAlias = $state("");
   let aliasError = $state<string | null>(null);
 
-  // When detail data loads, seed the alias edit field
+  // Decrypt the detail alias for seeding the edit field.
+  const detailDecryptedAlias = $derived.by((): string | null => {
+    const detail = clientDetailQuery.data;
+    if (!detail) return null;
+    return orgCache.decrypt(`client-alias:${detail.id}`, detail.encryptedAlias);
+  });
+
+  // When detail data loads and alias decrypts, seed the edit field.
   $effect(() => {
-    if (clientDetailQuery.data) {
-      editAlias = clientDetailQuery.data.alias;
+    if (detailDecryptedAlias !== null) {
+      editAlias = detailDecryptedAlias;
       aliasError = null;
     }
   });
 
-  const trimmedAlias = $derived(editAlias.trim().toLowerCase());
+  const trimmedAlias = $derived(editAlias.trim());
   const aliasChanged = $derived(
-    clientDetailQuery.data !== undefined &&
+    detailDecryptedAlias !== null &&
       trimmedAlias !== "" &&
-      trimmedAlias !== clientDetailQuery.data.alias,
+      trimmedAlias !== detailDecryptedAlias,
   );
 
   const updateAliasMutation = createMutation(() => ({
-    mutationFn: async (input: { clientId: string; alias: string }) =>
-      clientsRouter.updateAlias.mutate(input),
-    onSuccess: () => {
+    mutationFn: async (input: { clientId: string; alias: string }) => {
+      const [encryptedAlias, aliasHash] = await Promise.all([
+        orgKeyManager.encryptText(input.alias),
+        orgKeyManager.aliasHash(input.alias),
+      ]);
+      return clientsRouter.updateAlias.mutate({
+        clientId: input.clientId,
+        encryptedAlias,
+        aliasHash,
+      });
+    },
+    onSuccess: (
+      _data: unknown,
+      variables: { clientId: string; alias: string },
+    ) => {
       haptic();
       aliasError = null;
+      // Clear the cached decrypt so fresh ciphertext is decoded.
+      orgCache.delete(`client-alias:${variables.clientId}`);
       void queryClient.invalidateQueries({ queryKey: clientKeys.all });
       const msg = m.client_alias_changed_toast();
       toastStore.show(msg);
@@ -198,8 +291,19 @@
   let phoneError = $state<string | null>(null);
   let phoneConflict = $state<{
     conflictingClientId: string;
-    conflictingClientAlias: string;
+    conflictingClientEncryptedAlias: string;
   } | null>(null);
+
+  // The conflicting client's alias arrives as ciphertext like any other, so
+  // it decrypts through the shared cache rather than being read directly.
+  const phoneConflictAlias = $derived(
+    phoneConflict === null
+      ? null
+      : orgCache.decrypt(
+          `client-alias:${phoneConflict.conflictingClientId}`,
+          phoneConflict.conflictingClientEncryptedAlias,
+        ),
+  );
 
   const E164_PATTERN = /^\+[1-9]\d{1,14}$/;
   const trimmedPhone = $derived(editPhone.trim());
@@ -213,7 +317,7 @@
       success: boolean;
       conflict: {
         conflictingClientId: string;
-        conflictingClientAlias: string;
+        conflictingClientEncryptedAlias: string;
       } | null;
     }) => {
       if (result.conflict) {
@@ -292,7 +396,7 @@
   function handleMergeFromConflict(): void {
     const conflict = phoneConflict;
     if (conflict === null) return;
-    openMerge(conflict.conflictingClientId, conflict.conflictingClientAlias);
+    openMerge(conflict.conflictingClientId, phoneConflictAlias ?? "");
   }
 
   // ---------------------------------------------------------------------------
@@ -373,7 +477,7 @@
         <ClientCard
           viewMode="list"
           clientId={client.id}
-          alias={client.alias}
+          alias={decryptAlias(client) ?? "..."}
           phone={client.phone}
           ticketCount={client.ticketCount}
           createdAt={client.createdAt}
@@ -381,6 +485,17 @@
           onedit={openClientDetail}
         />
       {/each}
+      {#if hasNextPage}
+        <div class="load-more">
+          <SoftButton onclick={onfetchnext} disabled={isFetchingNextPage}>
+            {#if isFetchingNextPage}
+              <Preloader class="w-4 h-4" />
+            {:else}
+              {m.common_load_more()}
+            {/if}
+          </SoftButton>
+        </div>
+      {/if}
     </div>
   {/if}
 </div>
@@ -389,7 +504,7 @@
 <ShellSheet
   opened={sheetClientId !== null}
   ondismiss={closeSheet}
-  title={clientDetailQuery.data?.alias ?? ""}
+  title={detailDecryptedAlias ?? ""}
   ariaLabel={m.client_detail_title(withTerms())}
 >
   {#snippet headerRight()}
@@ -409,8 +524,8 @@
     {#if sheetStep !== "edit"}
       <PhoneChangeSteps
         step={sheetStep === "conflict" ? "conflict" : "confirm"}
-        clientAlias={clientDetailQuery.data?.alias ?? ""}
-        conflictAlias={phoneConflict?.conflictingClientAlias ?? null}
+        clientAlias={detailDecryptedAlias ?? ""}
+        conflictAlias={phoneConflictAlias}
         pending={savePending}
         onconfirm={handleConfirmPhone}
         oncancel={handleCancelPhone}
@@ -622,6 +737,12 @@
     flex-direction: column;
     gap: var(--space-md);
     min-width: 0;
+  }
+
+  .load-more {
+    display: flex;
+    justify-content: center;
+    padding: var(--space-md) 0;
   }
 
   .edit-client-content {

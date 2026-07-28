@@ -122,7 +122,11 @@ export function createWebhookDispatch(
 
       const provider = await providerFactory.getProvider(orgId);
       const phoneRepo = createPhoneRepository(org.tDb);
-      const clientRepo = createClientRepository(org.tDb, phoneRepo);
+      const clientRepo = createClientRepository(
+        org.tDb,
+        phoneRepo,
+        org.sealedBox,
+      );
       const smsResponseRepo = createSmsResponseRepository(org.tDb);
       const blocklistRepo = createBlocklistRepository(org.tDb);
 
@@ -177,7 +181,11 @@ export function createWebhookDispatch(
       }
 
       const phoneRepo = createPhoneRepository(org.tDb);
-      const clientRepo = createClientRepository(org.tDb, phoneRepo);
+      const clientRepo = createClientRepository(
+        org.tDb,
+        phoneRepo,
+        org.sealedBox,
+      );
       const greetingRepo = createGreetingRepository(org.tDb);
       const blocklistRepo = createBlocklistRepository(org.tDb);
 

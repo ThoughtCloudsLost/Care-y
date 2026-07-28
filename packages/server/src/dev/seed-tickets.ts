@@ -59,7 +59,7 @@ export async function seedTestTickets(
 
   const clients = await tDb
     .selectFrom("clients")
-    .select(["id", "alias"])
+    .select(["id"])
     .orderBy("created_at", "asc")
     .execute();
 

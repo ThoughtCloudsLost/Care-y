@@ -4,7 +4,7 @@
   import { page } from "$app/state";
   import { goto, replaceState } from "$app/navigation";
   import { resolve } from "$app/paths";
-  import { createQuery } from "@tanstack/svelte-query";
+  import { createQuery, createInfiniteQuery } from "@tanstack/svelte-query";
   import { queueKeys, adminKeys, clientKeys } from "$lib/query/keys.js";
   import { Permission, RoleId } from "@care-y/shared";
   import {
@@ -26,6 +26,7 @@
   import {
     getCurrentPermissions,
     getOrgDecryptCache,
+    getOrgKeyManager,
   } from "$lib/crypto/context.js";
   import { setPromotedOverride } from "$lib/search/registry.svelte.js";
   import { trpc } from "$lib/trpc/index.js";
@@ -160,12 +161,41 @@
     includeMerged: clientFilterStore.includeMerged || undefined,
   });
 
-  const clientsQuery = createQuery(() => ({
-    queryKey: clientKeys.list(clientFilterParams),
-    queryFn: async () =>
-      requireRouter(trpc.clients, "clients").list.query(clientFilterParams),
+  // Compute an alias hash for exact server-side match when the search
+  // term is non-empty. Substring filtering happens page-local over
+  // loaded rows; only the exact-alias lookup reaches the full roster.
+  let clientAliasHash = $state<string | undefined>(undefined);
+  $effect(() => {
+    const q = clientFilterStore.search.trim();
+    if (q.length === 0) {
+      clientAliasHash = undefined;
+      return;
+    }
+    void orgKeyManager.aliasHash(q).then((hash) => {
+      clientAliasHash = hash;
+    });
+  });
+
+  const clientsRouter = requireRouter(trpc.clients, "clients");
+
+  const clientsQuery = createInfiniteQuery(() => ({
+    queryKey: clientKeys.list({
+      ...clientFilterParams,
+      aliasHash: clientAliasHash,
+    }),
+    queryFn: async ({ pageParam }) =>
+      clientsRouter.list.query({
+        ...clientFilterParams,
+        aliasHash: clientAliasHash,
+        cursor: pageParam,
+      }),
+    initialPageParam: undefined as string | undefined,
+    getNextPageParam: (lastPage) =>
+      lastPage.length >= 25 ? lastPage[lastPage.length - 1]?.id : undefined,
     enabled: activeTab === "clients" && canViewClients,
   }));
+
+  const allClients = $derived(clientsQuery.data?.pages.flat() ?? []);
 
   // ── Search overlay (SearchNavigator pattern) ──
 
@@ -355,7 +385,6 @@
   const clientSortConfig: SortConfig = $derived({
     label: m.clients_sort(withTerms()),
     options: [
-      { field: "alias", label: m.clients_sort_alias() },
       { field: "created_at", label: m.clients_sort_created() },
       { field: "ticket_count", label: m.clients_sort_tickets() },
     ],
@@ -456,6 +485,8 @@
     ondatechange: clientDispatch.handlePillDateChange,
     onclearall: clientDispatch.clearAll,
   });
+
+  const orgKeyManager = getOrgKeyManager();
 
   let clientSearchQuery = $state("");
   let clientSearchActive = $state(false);
@@ -713,7 +744,7 @@
           clientSearchActive = true;
         }
       : undefined}
-    searchLabel={m.clients_search_placeholder()}
+    searchLabel={m.clients_search_loaded_placeholder()}
   />
 {/snippet}
 
@@ -722,7 +753,7 @@
     <input
       type="search"
       class="client-search-input"
-      placeholder={m.clients_search_placeholder()}
+      placeholder={m.clients_search_loaded_placeholder()}
       value={clientSearchQuery}
       oninput={(e: Event) => {
         if (e.target instanceof HTMLInputElement) {
@@ -761,10 +792,13 @@
 {:else if activeTab === "clients" && canViewClients}
   <div role="tabpanel" id="panel-clients" aria-labelledby="tab-clients">
     <ClientsSection
-      clients={clientsQuery.data ?? []}
+      clients={allClients}
       isLoading={clientsQuery.isLoading}
       isError={clientsQuery.isError}
       error={clientsQuery.error}
+      hasNextPage={clientsQuery.hasNextPage}
+      isFetchingNextPage={clientsQuery.isFetchingNextPage}
+      onfetchnext={() => void clientsQuery.fetchNextPage()}
       onretry={() => void clientsQuery.refetch()}
     />
   </div>

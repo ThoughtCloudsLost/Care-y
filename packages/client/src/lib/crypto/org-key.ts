@@ -91,6 +91,19 @@ export class OrgKeyManager {
   }
 
   /**
+   * Compute the blind index hash of a raw alias string.
+   * Normalization (NFKC, case fold, trim, whitespace collapse) happens
+   * inside the Worker so the index key never crosses the boundary.
+   * Returns lowercase hex HMAC-SHA512.
+   */
+  async aliasHash(alias: string): Promise<string> {
+    if (!this.orgPublicKey) {
+      throw new OrgKeyNotLoadedError();
+    }
+    return this.bridge.aliasHash(alias);
+  }
+
+  /**
    * Export the org secret key from the Worker for escrow/password-change.
    * The caller MUST zero the returned buffer immediately after use.
    */

@@ -5,6 +5,7 @@ import {
   defaultTab,
   isSortField,
   isQueueSortField,
+  isClientSortField,
   isRoleId,
   isUserStatus,
   isKeyStatus,
@@ -56,6 +57,16 @@ describe("isQueueSortField", () => {
 
   it.each(["date", "role", "", "ORDER"])('rejects "%s"', (v) => {
     expect(isQueueSortField(v)).toBe(false);
+  });
+});
+
+describe("isClientSortField", () => {
+  it.each(["created_at", "ticket_count"])('accepts "%s"', (v) => {
+    expect(isClientSortField(v)).toBe(true);
+  });
+
+  it.each(["alias", "name", "", "CREATED_AT"])('rejects "%s"', (v) => {
+    expect(isClientSortField(v)).toBe(false);
   });
 });
 

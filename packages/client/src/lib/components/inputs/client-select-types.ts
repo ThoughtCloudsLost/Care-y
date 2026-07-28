@@ -21,6 +21,7 @@ export interface CollisionInfo {
 export interface ClientSearchResult {
   id: string;
   alias: string;
+  encryptedAlias: string;
   maskedPhone: string;
 }
 
@@ -30,6 +31,7 @@ export type PhoneLookupResult =
       found: true;
       clientId: string;
       alias: string;
+      encryptedAlias: string;
       openTicketId: string | null;
     };
 
@@ -46,8 +48,7 @@ export function isPhoneLookupResult(
     return (
       "clientId" in value &&
       typeof value.clientId === "string" &&
-      "alias" in value &&
-      typeof value.alias === "string" &&
+      "encryptedAlias" in value &&
       "openTicketId" in value &&
       (value.openTicketId === null || typeof value.openTicketId === "string")
     );

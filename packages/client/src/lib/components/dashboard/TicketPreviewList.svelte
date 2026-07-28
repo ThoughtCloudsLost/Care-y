@@ -117,7 +117,8 @@
       mapped.sort((a, b) => (rank[a.priority] - rank[b.priority]) * dir);
     } else if (tableSortField === "client") {
       mapped.sort(
-        (a, b) => getCollator().compare(a.clientAlias, b.clientAlias) * dir,
+        (a, b) =>
+          getCollator().compare(a.clientAlias ?? "", b.clientAlias ?? "") * dir,
       );
     } else if (tableSortField === "queue") {
       mapped.sort(

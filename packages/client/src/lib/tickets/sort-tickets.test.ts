@@ -98,51 +98,7 @@ describe("sortTickets", () => {
     expect(result.map((t) => t.id)).toEqual(["a", "z"]);
   });
 
-  it("client sort orders identically to localeCompare through the shared collator", () => {
-    const aliases = ["Zoe", "ana", "Álvaro", "ben", "Ana"];
-    const tickets = aliases.map((clientAlias, i) => ({
-      ...makeTicket(`t${String(i)}`, "normal", "2026-01-01T00:00:00Z"),
-      clientAlias,
-    }));
-    const result = sortTickets(tickets, {
-      field: "client",
-      direction: "asc",
-    });
-    const expected = [...aliases].sort((a, b) => a.localeCompare(b));
-    expect(result.map((t) => t.clientAlias)).toEqual(expected);
-  });
-
   describe("missing optional fields sort last", () => {
-    it("client sort: missing clientAlias sorts last regardless of direction", () => {
-      const withAlias = {
-        ...makeTicket("a", "normal", "2026-01-01T00:00:00Z"),
-        clientAlias: "Zara",
-      };
-      const noAlias = makeTicket("b", "normal", "2026-01-02T00:00:00Z");
-
-      const asc = sortTickets([noAlias, withAlias], {
-        field: "client",
-        direction: "asc",
-      });
-      expect(asc.map((t) => t.id)).toEqual(["a", "b"]);
-
-      const desc = sortTickets([noAlias, withAlias], {
-        field: "client",
-        direction: "desc",
-      });
-      expect(desc.map((t) => t.id)).toEqual(["a", "b"]);
-    });
-
-    it("client sort: all-missing tickets preserve id tiebreaker", () => {
-      const noA = makeTicket("c", "normal", "2026-01-01T00:00:00Z");
-      const noB = makeTicket("a", "normal", "2026-01-02T00:00:00Z");
-      const result = sortTickets([noA, noB], {
-        field: "client",
-        direction: "asc",
-      });
-      expect(result.map((t) => t.id)).toEqual(["a", "c"]);
-    });
-
     it("msgs sort: missing followUpCount sorts last regardless of direction", () => {
       const withCount = {
         ...makeTicket("a", "normal", "2026-01-01T00:00:00Z"),

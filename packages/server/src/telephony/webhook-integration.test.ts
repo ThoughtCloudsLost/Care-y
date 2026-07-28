@@ -657,7 +657,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
         .executeTakeFirst();
 
       expect(clientRow).toBeDefined();
-      expect(clientRow!.alias).toBeTruthy(); // auto-generated pseudonym
+      expect(clientRow!.encrypted_alias).toBeTruthy(); // auto-generated pseudonym (sealed)
 
       // --- Assert: ticket created for this client ---
       const tickets = await tDb

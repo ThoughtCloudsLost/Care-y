@@ -325,7 +325,14 @@
 
   const replyFlow = createReplyFlow({
     queryClient,
-    getTickets: () => allTickets,
+    getTickets: () =>
+      allTickets.map((t) => ({
+        ...t,
+        clientAlias: orgCache.decrypt(
+          `client-alias:${t.clientId}`,
+          t.encryptedClientAlias,
+        ),
+      })),
     getPreviewFollowUps: (id) => previewLoader.get(id),
     eagerLoadPreviews: async (ids) => previewLoader.eagerLoad(ids),
   });
@@ -421,6 +428,10 @@
   const activityProps = $derived(
     (activityQuery.data ?? []).map((a) => ({
       ...a,
+      clientAlias: orgCache.decrypt(
+        `client-alias:${a.clientId}`,
+        a.encryptedClientAlias,
+      ),
       queueName: orgCache.decrypt(`queue:${a.queueId}`, a.encryptedQueueName),
     })),
   );
@@ -461,9 +472,16 @@
   // the typed org-cache inputs from the loaded rows, keyed the same way the
   // mapper keys them, so the cache calls stay type-safe without a cast.
   const orgCipherByKey = $derived.by(() => {
-    const map = new SvelteMap<string, SerializedBuffer | Uint8Array | null>();
+    // Mixed shapes: converted routes send base64 strings, unconverted ones
+    // still send Buffers that superjson expands. The org decrypt cache takes
+    // either while the conversion is in progress.
+    const map = new SvelteMap<
+      string,
+      SerializedBuffer | Uint8Array | string | null
+    >();
     for (const t of allTickets) {
       map.set(`queue:${t.queueId}`, t.encryptedQueueName);
+      map.set(`client-alias:${t.clientId}`, t.encryptedClientAlias);
       if (t.assignedTo !== null) {
         map.set(`assignee:${t.assignedTo}`, t.assignedDisplayName);
       }
