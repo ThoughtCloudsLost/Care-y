@@ -314,4 +314,26 @@ describe("createNoopFieldEncryptor", () => {
     expect(Buffer.isBuffer(buf)).toBe(true);
     expect(buf.toString("utf-8")).toBe("hello");
   });
+
+  it("throws CryptoError when constructed under NODE_ENV=production", () => {
+    const prevEnv = process.env.NODE_ENV;
+    process.env.NODE_ENV = "production";
+
+    try {
+      expect(() => createNoopFieldEncryptor()).toThrow(CryptoError);
+    } finally {
+      process.env.NODE_ENV = prevEnv;
+    }
+  });
+
+  it("constructs under NODE_ENV=development", () => {
+    const prevEnv = process.env.NODE_ENV;
+    process.env.NODE_ENV = "development";
+
+    try {
+      expect(() => createNoopFieldEncryptor()).not.toThrow();
+    } finally {
+      process.env.NODE_ENV = prevEnv;
+    }
+  });
 });

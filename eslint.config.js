@@ -362,4 +362,40 @@ export default tseslint.config(
       "@typescript-eslint/explicit-module-boundary-types": "off",
     },
   },
+
+  // The noop field encryptor stores PII as plaintext. It throws at runtime
+  // under NODE_ENV=production, but that only fires once the process boots.
+  // Catching the import at lint time keeps it out of the tree in the first
+  // place. Test files and the shared test fixtures are exempted below.
+  {
+    files: ["packages/server/src/**/*.ts"],
+    rules: {
+      "no-restricted-syntax": [
+        "error",
+        {
+          selector: "ImportSpecifier[imported.name='createNoopFieldEncryptor']",
+          message:
+            "createNoopFieldEncryptor stores PII as plaintext. Import it only from test files or src/test-utils.ts.",
+        },
+        {
+          selector: "CallExpression[callee.name='createNoopFieldEncryptor']",
+          message:
+            "createNoopFieldEncryptor stores PII as plaintext. Call it only from test files or src/test-utils.ts.",
+        },
+      ],
+    },
+  },
+
+  // Test files and the shared server test fixtures are the intended consumers
+  // of the noop encryptor. Flat config is last-match-wins, so switching the
+  // rule off here fully clears the block above for these paths.
+  {
+    files: [
+      "packages/server/src/**/*.test.ts",
+      "packages/server/src/test-utils.ts",
+    ],
+    rules: {
+      "no-restricted-syntax": "off",
+    },
+  },
 );
