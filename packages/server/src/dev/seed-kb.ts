@@ -1,6 +1,8 @@
 import type { Kysely } from "kysely";
 import type { TenantDatabase } from "../db/types.js";
 import type { SealedBoxEncryptor } from "../crypto/sealed-box.js";
+import type { BlobStore } from "../storage/store.js";
+import { wilsonScore } from "../kb/service.js";
 
 interface PmNode {
   type: string;
@@ -34,35 +36,34 @@ function h(level: number, ...children: PmNode[]): PmNode {
 }
 
 function ul(...items: PmNode[]): PmNode {
-  return { type: "bulletList", content: items };
+  return { type: "bullet_list", content: items };
 }
 
 function ol(...items: PmNode[]): PmNode {
-  return { type: "orderedList", attrs: { start: 1 }, content: items };
+  return { type: "ordered_list", attrs: { order: 1 }, content: items };
 }
 
 function li(...content: PmNode[]): PmNode {
-  return { type: "listItem", content };
+  return { type: "list_item", content };
 }
 
 function codeBlock(text: string): PmNode {
   return {
-    type: "codeBlock",
-    attrs: { language: null },
+    type: "code_block",
     content: [{ type: "text", text }],
   };
 }
 
 function hr(): PmNode {
-  return { type: "horizontalRule" };
+  return { type: "horizontal_rule" };
 }
 
 function bq(...content: PmNode[]): PmNode {
   return { type: "blockquote", content };
 }
 
-const bold: PmMark = { type: "bold" };
-const italic: PmMark = { type: "italic" };
+const bold: PmMark = { type: "strong" };
+const italic: PmMark = { type: "em" };
 
 interface ArticleDef {
   category: string;
@@ -266,7 +267,7 @@ const ARTICLES: readonly ArticleDef[] = [
           marks: [
             {
               type: "link",
-              attrs: { href: "https://example.com", target: "_blank" },
+              attrs: { href: "https://example.com", title: null },
             },
           ],
         },
@@ -280,6 +281,8 @@ export async function seedKbArticles(
   tDb: Kysely<TenantDatabase>,
   sealedBox: SealedBoxEncryptor,
   userId: string,
+  blobStore?: BlobStore,
+  orgSchema?: string,
 ): Promise<{ articleIds: string[] }> {
   const existing = await tDb
     .selectFrom("kb_items")
@@ -330,6 +333,150 @@ export async function seedKbArticles(
       .executeTakeFirstOrThrow();
 
     articleIds.push(result.id);
+  }
+
+  // --- Seed votes ---
+  // Spread upvotes across articles so vote counts are non-zero and varied.
+  // Only the admin user exists, so each article gets at most one vote.
+  // Articles 0 (Intake checklist), 2 (Housing referral), 4 (Safety planning)
+  // get upvotes; article 1 (Escalation protocol) gets a downvote.
+  const voteSpec: { index: number; direction: string }[] = [
+    { index: 0, direction: "up" },
+    { index: 1, direction: "down" },
+    { index: 2, direction: "up" },
+    { index: 4, direction: "up" },
+  ];
+
+  for (const spec of voteSpec) {
+    const itemId = articleIds[spec.index];
+    if (itemId === undefined) continue;
+
+    await tDb
+      .insertInto("kb_votes")
+      .values({
+        kb_item_id: itemId,
+        voter_pseudonym: userId,
+        direction: spec.direction,
+      })
+      .execute();
+
+    const upCount = spec.direction === "up" ? 1 : 0;
+    const downCount = spec.direction === "down" ? 1 : 0;
+    await tDb
+      .updateTable("kb_items")
+      .set({
+        vote_up_count: upCount,
+        vote_down_count: downCount,
+        rating: wilsonScore(upCount, downCount),
+      })
+      .where("id", "=", itemId)
+      .execute();
+  }
+
+  // --- Seed attachments ---
+  // Only seed attachments when a blob store is provided. Without one the
+  // download path would fail (metadata rows with no backing bytes are
+  // worse than no attachment rows at all).
+  if (blobStore !== undefined && orgSchema !== undefined) {
+    // Plaintext file content, generated in code. The client upload path
+    // encrypts with crypto_box_seal (org public key) before storing;
+    // sealedBox.sealBuffer is the same primitive. The download path
+    // decrypts with crypto_box_seal_open in the client crypto Worker.
+    // size_bytes in the schema is ciphertext length (matches the client
+    // upload which sends encrypted.length as sizeBytes).
+
+    // Minimal valid PDF (header + empty body + xref + trailer).
+    const pdfPlain = Buffer.from(
+      [
+        "%PDF-1.0",
+        "1 0 obj<</Type/Catalog/Pages 2 0 R>>endobj",
+        "2 0 obj<</Type/Pages/Kids[3 0 R]/Count 1>>endobj",
+        "3 0 obj<</Type/Page/MediaBox[0 0 612 792]/Parent 2 0 R>>endobj",
+        "xref",
+        "0 4",
+        "0000000000 65535 f ",
+        "0000000009 00000 n ",
+        "0000000058 00000 n ",
+        "0000000115 00000 n ",
+        "trailer<</Size 4/Root 1 0 R>>",
+        "startxref",
+        "190",
+        "%%EOF",
+      ].join("\n"),
+    );
+
+    const txtPlain = Buffer.from(
+      [
+        "Safety Plan Worksheet",
+        "",
+        "1. Warning signs that a crisis may be developing:",
+        "   _______________________________________________",
+        "",
+        "2. Internal coping strategies I can use:",
+        "   _______________________________________________",
+        "",
+        "3. People and places that provide distraction:",
+        "   _______________________________________________",
+        "",
+        "4. People I can ask for help:",
+        "   Name: ________________  Phone: (555) 000-____",
+        "   Name: ________________  Phone: (555) 000-____",
+        "",
+        "5. Professionals or agencies I can contact:",
+        "   Crisis line: (555) 012-3456",
+        "   _______________________________________________",
+        "",
+        "6. Steps to make my environment safer:",
+        "   _______________________________________________",
+      ].join("\n"),
+    );
+
+    const attachmentDefs: {
+      articleIndex: number;
+      filename: string;
+      contentType: string;
+      plainBytes: Buffer;
+    }[] = [
+      {
+        articleIndex: 4,
+        filename: "safety-plan-worksheet.txt",
+        contentType: "text/plain",
+        plainBytes: txtPlain,
+      },
+      {
+        articleIndex: 1,
+        filename: "escalation-flowchart.pdf",
+        contentType: "application/pdf",
+        plainBytes: pdfPlain,
+      },
+    ];
+
+    for (const att of attachmentDefs) {
+      const itemId = articleIds[att.articleIndex];
+      if (itemId === undefined) continue;
+
+      // Encrypt blob content the same way the client does (sealed box).
+      const encryptedBlob = sealedBox.sealBuffer(att.plainBytes);
+      const blobKey = await blobStore.put(
+        orgSchema,
+        "kb-attachment",
+        encryptedBlob,
+      );
+
+      // Encrypt filename with sealed box (matches client upload path).
+      const encryptedFilename = sealedBox.seal(att.filename);
+
+      await tDb
+        .insertInto("kb_attachments")
+        .values({
+          item_id: itemId,
+          blob_key: blobKey,
+          size_bytes: encryptedBlob.length,
+          encrypted_filename: encryptedFilename,
+          content_type: att.contentType,
+        })
+        .execute();
+    }
   }
 
   return { articleIds };
