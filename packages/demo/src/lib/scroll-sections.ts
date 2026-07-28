@@ -225,6 +225,19 @@ export const SECTIONS: readonly Section[] = [
     ],
   },
   {
+    id: "library",
+    titleKey: "demo_section_library_title",
+    descKey: "demo_section_library_desc",
+    subs: [
+      {
+        slug: "intro",
+        topic: null,
+        headingKey: "demo_narrative_library_heading",
+        bodyKey: "demo_narrative_library_body",
+      },
+    ],
+  },
+  {
     id: "admin",
     titleKey: "demo_section_admin_title",
     descKey: "demo_section_admin_desc",
@@ -456,6 +469,14 @@ export function resolvePhoneCommand(
         openSearch: true,
         pulseTopic,
       };
+    case "library":
+      return {
+        feature: "library",
+        detail: null,
+        loginTarget: null,
+        openSearch: false,
+        pulseTopic,
+      };
     case "admin":
       return {
         feature: "admin",
@@ -512,6 +533,8 @@ export function sectionMatchesPhone(
       return feature === "tickets" && detail !== null && !searchOpen;
     case "search":
       return searchOpen;
+    case "library":
+      return feature === "library";
     case "admin":
       return feature === "admin";
     case "schedule":
@@ -568,6 +591,10 @@ export function bridgeStateToLocation(
 
   if (feature === "home") {
     return { sectionId: "dashboard", subSlug: "intro" };
+  }
+
+  if (feature === "library") {
+    return { sectionId: "library", subSlug: "intro" };
   }
 
   if (feature === "admin") {

@@ -103,6 +103,26 @@ vi.mock("$demo/engine/route-manifest.js", () => ({
     if (pathname === "/more/schedule") {
       return { params: {}, routeId: "/(app)/more/schedule" };
     }
+    if (pathname === "/library") {
+      return { params: {}, routeId: "/(app)/library" };
+    }
+    const libraryDetailMatch = /^\/library\/([^/]+)$/.exec(pathname);
+    if (libraryDetailMatch?.[1] !== undefined) {
+      return {
+        params: { articleId: libraryDetailMatch[1] },
+        routeId: "/(app)/library/[articleId]",
+      };
+    }
+    if (pathname === "/library/new") {
+      return { params: {}, routeId: "/(app)/library/new" };
+    }
+    const libraryEditMatch = /^\/library\/([^/]+)\/edit$/.exec(pathname);
+    if (libraryEditMatch?.[1] !== undefined) {
+      return {
+        params: { articleId: libraryEditMatch[1] },
+        routeId: "/(app)/library/[articleId]/edit",
+      };
+    }
     return null;
   },
   listRouteIds(): string[] {
@@ -148,6 +168,20 @@ describe("DemoRouter", () => {
       expect(router.feature).toBe("home");
       expect(router.activeTab).toBe("home");
       expect(router.pathname).toBe("/");
+    });
+
+    it("sets feature to library", () => {
+      router.navigate("library");
+      expect(router.feature).toBe("library");
+      expect(router.activeTab).toBe("library");
+      expect(router.pathname).toBe("/library");
+    });
+
+    it("sets feature to library with detail", () => {
+      router.navigate("library", "art-001");
+      expect(router.feature).toBe("library");
+      expect(router.detail).toBe("art-001");
+      expect(router.pathname).toBe("/library/art-001");
     });
 
     it("sets feature to admin", () => {
@@ -217,10 +251,12 @@ describe("DemoRouter", () => {
       expect(router.pathname).toBe("/");
     });
 
-    it("does not navigate for inert tabs (library)", () => {
+    it("navigates to library when library tab tapped", () => {
       router.navigate("tickets");
       router.handleTabChange("library");
-      expect(router.feature).toBe("tickets");
+      expect(router.feature).toBe("library");
+      expect(router.activeTab).toBe("library");
+      expect(router.pathname).toBe("/library");
     });
   });
 
@@ -357,10 +393,29 @@ describe("DemoRouter", () => {
       expect(router.restartSeq).toBe(2);
     });
 
-    it("ignores inert paths like /library", () => {
-      router.navigate("tickets");
+    it("maps /library to library feature", () => {
       router.handleGoto("/library");
-      expect(router.feature).toBe("tickets");
+      expect(router.feature).toBe("library");
+      expect(router.detail).toBeNull();
+      expect(router.activeTab).toBe("library");
+    });
+
+    it("maps /library/art-001 to library with detail", () => {
+      router.handleGoto("/library/art-001");
+      expect(router.feature).toBe("library");
+      expect(router.detail).toBe("art-001");
+    });
+
+    it("maps /library/new to library with 'new' detail", () => {
+      router.handleGoto("/library/new");
+      expect(router.feature).toBe("library");
+      expect(router.detail).toBe("new");
+    });
+
+    it("maps /library/art-001/edit to library with 'edit' detail", () => {
+      router.handleGoto("/library/art-001/edit");
+      expect(router.feature).toBe("library");
+      expect(router.detail).toBe("edit");
     });
 
     it("ignores unknown paths", () => {

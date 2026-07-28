@@ -276,6 +276,8 @@
         return m.demo_section_search_title();
       case "dashboard":
         return m.demo_section_dashboard_title();
+      case "library":
+        return m.demo_section_library_title();
       case "admin":
         return m.demo_section_admin_title();
       case "schedule":

@@ -339,12 +339,25 @@
    * Translates the outer-page sentinel to the real ticket ID at
    * the boundary before passing to the router.
    */
-  function internalNavigate(feature: DemoFeature, detail: DemoDetail): void {
+  async function internalNavigate(
+    feature: DemoFeature,
+    detail: DemoDetail,
+  ): Promise<void> {
     if (feature !== "login" && router.feature === "login") {
+      // Fast-forward crypto BEFORE mounting the target route. The org
+      // decrypt path guards on OrgKeyManager.isLoaded, which is not
+      // reactive (the product guarantees key load precedes page mounts),
+      // so a route mounted pre-keyed would stay scrambled forever.
+      // Awaiting here restores the product's ordering guarantee.
+      try {
+        await ensureKeyed();
+      } catch {
+        // Engine still booting or a raced worker state: navigate anyway.
+        // ensureKeyed clears its cached promise on rejection, so the
+        // next transition (or the scripted login) retries derivation.
+      }
       setDemoAuthed(true);
       setLoginStage(null);
-      // Fast-forward crypto so post-auth pages decrypt without playing login
-      void ensureKeyed();
     }
     if (feature === "login" && router.feature !== "login") {
       resetLoginFlow();
@@ -363,7 +376,7 @@
   async function ensureScreen(cmd: PhoneCommand, token: number): Promise<void> {
     if (cmd.openSearch) {
       if (router.feature !== "tickets" || router.detail !== null) {
-        internalNavigate("tickets", null);
+        await internalNavigate("tickets", null);
       }
       if (!router.searchOpen) {
         findSearchButton()?.click();
@@ -384,7 +397,7 @@
           targetDetail = null;
         }
       }
-      internalNavigate(cmd.feature, targetDetail);
+      await internalNavigate(cmd.feature, targetDetail);
       if (cmd.loginTarget !== null) {
         await runAdvance(cmd.loginTarget, token);
       }
@@ -758,7 +771,7 @@
     // Navigate if needed (normally a no-op: ensureScreen already
     // navigated before pulsing)
     if (router.feature !== feature || router.detail !== resolvedDetail) {
-      internalNavigate(feature, resolvedDetail);
+      await internalNavigate(feature, resolvedDetail);
       // Wait a frame for the scene to mount
       await new Promise<void>((r) => {
         requestAnimationFrame(() => r());

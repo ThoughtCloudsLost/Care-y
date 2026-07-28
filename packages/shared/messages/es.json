@@ -1972,5 +1972,9 @@
   "demo_section_settings_title": "Configuracion",
   "demo_section_settings_desc": "La pagina de configuracion permite a los voluntarios actualizar su perfil, cambiar su contrasena y gestionar preferencias de notificacion.",
   "demo_narrative_settings_heading": "Tus preferencias",
-  "demo_narrative_settings_body": "Configuracion te permite cambiar tu nombre visible, contrasena, idioma y opciones de notificacion. Los cambios se cifran antes de salir de tu dispositivo. El servidor almacena la actualizacion como texto cifrado sin leerla."
+  "demo_narrative_settings_body": "Configuracion te permite cambiar tu nombre visible, contrasena, idioma y opciones de notificacion. Los cambios se cifran antes de salir de tu dispositivo. El servidor almacena la actualizacion como texto cifrado sin leerla.",
+  "demo_section_library_title": "Biblioteca",
+  "demo_section_library_desc": "La biblioteca es una base de conocimiento compartida para la organizacion. Navega articulos, lee entradas detalladas con adjuntos y votos, y escribe nuevo contenido en el editor de texto enriquecido. Todo aqui se ejecuta contra el servidor real en el navegador con cifrado real.",
+  "demo_narrative_library_heading": "Base de conocimiento compartida",
+  "demo_narrative_library_body": "La biblioteca almacena articulos que los voluntarios pueden consultar durante las llamadas. El cuerpo de cada articulo se cifra con la clave de la organizacion antes de llegar a la base de datos. La lista, la vista detallada (con adjuntos y votos de la comunidad), y el editor de texto enriquecido operan contra puntos finales reales del servidor que se ejecutan dentro de tu navegador."
 }

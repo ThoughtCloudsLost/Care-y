@@ -343,7 +343,13 @@ export async function bootDemoEngine(): Promise<DemoEngineResult> {
 
   const { seedKbArticles } =
     await import("../../../../server/src/dev/seed-kb.js");
-  await seedKbArticles(tDb, sealedBox, seedResult.adminUserId);
+  await seedKbArticles(
+    tDb,
+    sealedBox,
+    seedResult.adminUserId,
+    blobStore,
+    DEMO_ORG_SCHEMA,
+  );
 
   // Seed audit_log rows so the dashboard activity feed has entries.
   // Spread across five event types with staggered timestamps.

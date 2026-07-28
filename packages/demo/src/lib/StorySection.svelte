@@ -154,6 +154,10 @@
       demo_narrative_dashboard_heading: () =>
         m.demo_narrative_dashboard_heading(),
       demo_narrative_dashboard_body: () => m.demo_narrative_dashboard_body(),
+      demo_section_library_title: () => m.demo_section_library_title(),
+      demo_section_library_desc: () => m.demo_section_library_desc(),
+      demo_narrative_library_heading: () => m.demo_narrative_library_heading(),
+      demo_narrative_library_body: () => m.demo_narrative_library_body(),
       demo_section_admin_title: () => m.demo_section_admin_title(),
       demo_section_admin_desc: () => m.demo_section_admin_desc(),
       demo_narrative_admin_heading: () => m.demo_narrative_admin_heading(),
