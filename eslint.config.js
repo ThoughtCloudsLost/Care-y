@@ -354,6 +354,20 @@ export default tseslint.config(
     },
   },
 
+  // The demo engine is the health check's server-on-PGlite core promoted
+  // to a shared location (the phone and the health page consume one
+  // implementation). Same rule class as the health override: the server
+  // shims and caller adapter present real server types over browser
+  // implementations, and RouteMount's match/load failure states are
+  // diagnostics that indicate a broken demo build, not product copy.
+  {
+    files: ["packages/demo/src/lib/engine/**"],
+    rules: {
+      "@typescript-eslint/no-unsafe-type-assertion": "off",
+      "care-y/no-hardcoded-strings": "off",
+    },
+  },
+
   // Disable type-checked rules for config files not covered by any tsconfig
   // (root tsconfig.json has "files": [] so projectService rejects root-level
   // configs, and packages/client/svelte.config.js is outside its src/ include)

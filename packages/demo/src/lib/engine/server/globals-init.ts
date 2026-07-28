@@ -33,7 +33,7 @@ const proc = globalThis.process as unknown as ProcessLike;
 // needs a syntactically valid value. Never a real secret. Exported so
 // demo code reads the constant directly; production builds statically
 // replace process.env reads, so runtime env access is unreliable there
-// (the vite.health.config.ts define covers the migration's bare read).
+// (the vite config define covers the migration's bare read).
 // Computed, not a literal: a 64-char hex string literal trips secret
 // scanners on entropy shape even when obviously fake.
 export const FAKE_OPS_KEY_HEX: string = "0f".repeat(32);

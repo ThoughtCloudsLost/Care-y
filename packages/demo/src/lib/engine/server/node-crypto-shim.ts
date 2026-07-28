@@ -8,20 +8,20 @@
  * Backed by globalThis.crypto.getRandomValues + libsodium-wrappers-sumo.
  *
  * IMPORTANT: sodium must be initialized (await sodium.ready) before any
- * call here. bootHealthEngine does this first. If called before readiness,
+ * call here. bootDemoEngine does this first. If called before readiness,
  * functions throw SodiumNotReadyError.
  *
  * Mirrors: node:crypto (partial surface)
  */
 
-import { HealthCheckError } from "../errors.js";
+import { DemoEngineError } from "../errors.js";
 import _sodium from "libsodium-wrappers-sumo";
 
 class SodiumNotReadyError extends Error {
   constructor() {
     super(
       "node:crypto shim called before sodium.ready was awaited. " +
-        "bootHealthEngine must call await sodium.ready first.",
+        "bootDemoEngine must call await sodium.ready first.",
     );
     this.name = "SodiumNotReadyError";
   }
@@ -61,7 +61,7 @@ export function randomInt(a: number, b?: number): number {
     globalThis.crypto.getRandomValues(arr);
     const val = arr.at(0);
     if (val === undefined) {
-      throw new HealthCheckError("getRandomValues returned empty Uint32Array");
+      throw new DemoEngineError("getRandomValues returned empty Uint32Array");
     }
     r = val;
   } while (r >= limit);
@@ -86,6 +86,35 @@ export function createHash(algorithm: string): HashLike {
   assertReady();
   const chunks: Uint8Array[] = [];
 
+  // Overloaded function declaration: an object-literal method cannot
+  // carry overload signatures, so digest is hoisted to satisfy the
+  // HashLike overload set.
+  function digest(): Buffer;
+  function digest(encoding: "hex"): string;
+  function digest(encoding?: "hex"): Buffer | string {
+    const totalLen = chunks.reduce((s, c) => s + c.length, 0);
+    const combined = new Uint8Array(totalLen);
+    let offset = 0;
+    for (const chunk of chunks) {
+      combined.set(chunk, offset);
+      offset += chunk.length;
+    }
+
+    let result: Uint8Array;
+    if (algorithm === "sha256") {
+      result = _sodium.crypto_hash_sha256(combined);
+    } else if (algorithm === "sha512") {
+      result = _sodium.crypto_hash_sha512(combined);
+    } else {
+      // BLAKE2b fallback for unexpected algorithms
+      result = _sodium.crypto_generichash(32, combined, null);
+    }
+
+    const buf = Buffer.from(result);
+    if (encoding === "hex") return buf.toString("hex");
+    return buf;
+  }
+
   const self: HashLike = {
     update(data: string | Buffer): HashLike {
       if (typeof data === "string") {
@@ -95,29 +124,7 @@ export function createHash(algorithm: string): HashLike {
       }
       return self;
     },
-    digest(encoding?: string): Buffer | string {
-      const totalLen = chunks.reduce((s, c) => s + c.length, 0);
-      const combined = new Uint8Array(totalLen);
-      let offset = 0;
-      for (const chunk of chunks) {
-        combined.set(chunk, offset);
-        offset += chunk.length;
-      }
-
-      let result: Uint8Array;
-      if (algorithm === "sha256") {
-        result = _sodium.crypto_hash_sha256(combined);
-      } else if (algorithm === "sha512") {
-        result = _sodium.crypto_hash_sha512(combined);
-      } else {
-        // BLAKE2b fallback for unexpected algorithms
-        result = _sodium.crypto_generichash(32, combined);
-      }
-
-      const buf = Buffer.from(result);
-      if (encoding === "hex") return buf.toString("hex");
-      return buf;
-    },
+    digest,
   };
   return self;
 }
@@ -128,24 +135,19 @@ export function createHmac(algorithm: string, key: Buffer | string): HashLike {
     typeof key === "string" ? Buffer.from(key, "utf-8") : Buffer.from(key);
   const chunks: Uint8Array[] = [];
 
-  const self: HashLike = {
-    update(data: string | Buffer): HashLike {
-      if (typeof data === "string") {
-        chunks.push(new TextEncoder().encode(data));
-      } else {
-        chunks.push(new Uint8Array(data));
-      }
-      return self;
-    },
-    digest(encoding?: string): Buffer | string {
-      const totalLen = chunks.reduce((s, c) => s + c.length, 0);
-      const combined = new Uint8Array(totalLen);
-      let offset = 0;
-      for (const chunk of chunks) {
-        combined.set(chunk, offset);
-        offset += chunk.length;
-      }
+  // Same hoisted-overload pattern as createHash's digest.
+  function digest(): Buffer;
+  function digest(encoding: "hex"): string;
+  function digest(encoding?: "hex"): Buffer | string {
+    const totalLen = chunks.reduce((s, c) => s + c.length, 0);
+    const combined = new Uint8Array(totalLen);
+    let offset = 0;
+    for (const chunk of chunks) {
+      combined.set(chunk, offset);
+      offset += chunk.length;
+    }
 
+    {
       let hashLen: number;
       if (algorithm === "sha256") {
         hashLen = 32;
@@ -210,7 +212,19 @@ export function createHmac(algorithm: string, key: Buffer | string): HashLike {
       const buf = Buffer.from(result);
       if (encoding === "hex") return buf.toString("hex");
       return buf;
+    }
+  }
+
+  const self: HashLike = {
+    update(data: string | Buffer): HashLike {
+      if (typeof data === "string") {
+        chunks.push(new TextEncoder().encode(data));
+      } else {
+        chunks.push(new Uint8Array(data));
+      }
+      return self;
     },
+    digest,
   };
   return self;
 }
@@ -252,7 +266,7 @@ export function hkdfSync(
   const hashLen = hash === "sha512" ? 64 : 32;
   const n = Math.ceil(keylen / hashLen);
   const okm = Buffer.alloc(n * hashLen);
-  let prev = Buffer.alloc(0);
+  let prev: Buffer = Buffer.alloc(0);
 
   for (let i = 1; i <= n; i++) {
     const hmac = createHmac(hash === "sha512" ? "sha512" : "sha256", prk);
@@ -345,13 +359,13 @@ export function promisify<TArgs extends unknown[], TResult>(
 // reachable in the demo (push sender is a no-op). Throw on actual use.
 
 export function createSign(): never {
-  throw new HealthCheckError(
+  throw new DemoEngineError(
     "createSign is not available in the browser demo (push-crypto is not reachable)",
   );
 }
 
 export function generateKeyPairSync(): never {
-  throw new HealthCheckError(
+  throw new DemoEngineError(
     "generateKeyPairSync is not available in the browser demo",
   );
 }

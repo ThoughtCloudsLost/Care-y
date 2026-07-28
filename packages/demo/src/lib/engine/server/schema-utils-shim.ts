@@ -14,7 +14,7 @@ import { Migrator } from "kysely/migration";
 import type {
   PlatformDatabase,
   TenantDatabase,
-} from "../../../../server/src/db/types.js";
+} from "../../../../../server/src/db/types.js";
 
 // ── Schema validation ────────────────────────────────────────────────
 
@@ -57,15 +57,15 @@ export async function listTenantSchemas(
 // ── Glob-based migration providers ──────────────────────────────────
 
 // import.meta.glob paths are relative from THIS file's location in
-// packages/demo/src/health/server/
+// packages/demo/src/lib/engine/server/
 const platformGlob: Record<string, () => Promise<Record<string, unknown>>> =
   import.meta.glob(
-    "../../../../server/src/db/migrations/platform/*.ts",
+    "../../../../../server/src/db/migrations/platform/*.ts",
   ) as Record<string, () => Promise<Record<string, unknown>>>;
 
 const tenantGlob: Record<string, () => Promise<Record<string, unknown>>> =
   import.meta.glob(
-    "../../../../server/src/db/migrations/tenant/*.ts",
+    "../../../../../server/src/db/migrations/tenant/*.ts",
   ) as Record<string, () => Promise<Record<string, unknown>>>;
 
 /**
@@ -91,7 +91,10 @@ function createGlobProvider(
       for (const [path, loader] of entries) {
         const name = extractMigrationName(path);
         const mod = await loader();
-        migrationMap.set(name, mod as Migration);
+        // Migration modules export { up, down }. The glob loader types
+        // them as Record<string, unknown>; cast through unknown because
+        // the shapes do not overlap at the type level.
+        migrationMap.set(name, mod as unknown as Migration);
       }
 
       return Object.fromEntries(migrationMap);

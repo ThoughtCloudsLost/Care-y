@@ -11,8 +11,7 @@
 // OPS_SECRETS_KEY: must be 64 hex chars (32 bytes). Literally fake,
 // never used for real data protection. Computed rather than a literal
 // so secret scanners do not flag the entropy shape; must stay equal to
-// FAKE_OPS_KEY_HEX in globals-init.ts and the vite.health.config.ts
-// define.
+// FAKE_OPS_KEY_HEX in globals-init.ts and the vite config define.
 const FAKE_OPS_KEY: string = "0f".repeat(32);
 
 export interface EnvVars {

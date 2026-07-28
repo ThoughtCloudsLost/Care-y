@@ -6,29 +6,29 @@
  * usage. Uses the shimmed sealed-box and secrets encryptors.
  *
  * The admin user gets a REAL scrypt password hash (produced by the shimmed
- * scrypt-hash.ts via the node-crypto-shim) for password "demo-password-2026"
+ * scrypt-hash.ts via the node-crypto-shim) for password "DemoPassword2026"
  * so that login verification exercises shim-vs-seed self-consistency.
+ * Credentials match the LoginMount prefill (jdoe / DemoPassword2026).
  */
 
-import { HealthCheckError } from "../errors.js";
+import { DemoEngineError } from "../errors.js";
 import _sodium from "libsodium-wrappers-sumo";
 import type { Kysely } from "kysely";
 import { RoleId } from "@care-y/shared";
 import type {
   TenantDatabase,
   PlatformDatabase,
-} from "../../../../server/src/db/types.js";
-import type { SealedBoxEncryptor } from "./sealed-box-shim.js";
+} from "../../../../../server/src/db/types.js";
 import type { FieldEncryptor, BlindIndexer } from "./field-encryptor-shim.js";
 import type { SecretsEncryptor } from "./secrets-shim.js";
-import type { SessionTokenizer } from "../../../../server/src/crypto/session-tokenizer.js";
+import type { SessionTokenizer } from "../../../../../server/src/crypto/session-tokenizer.js";
 import { createSealedBoxEncryptor } from "./sealed-box-shim.js";
-import { randomBytes, randomInt } from "./node-crypto-shim.js";
+import { randomInt } from "./node-crypto-shim.js";
 
 export const DEMO_ORG_SLUG = "demo-org";
 export const DEMO_ORG_SCHEMA = "demo_org";
-export const DEMO_ADMIN_IDENTIFIER = "admin.demo";
-export const DEMO_ADMIN_PASSWORD = "demo-password-2026";
+export const DEMO_ADMIN_IDENTIFIER = "jdoe";
+export const DEMO_ADMIN_PASSWORD = "DemoPassword2026";
 export const DEMO_ADMIN_DISPLAY_NAME = "Demo Admin";
 export const NUM_SEED_CLIENTS = 30; // Fewer than prod seed (120) for speed
 
@@ -92,12 +92,12 @@ function generateAlias(): string {
   const adjIdx = randomInt(ADJECTIVES.length);
   const adj = ADJECTIVES.at(adjIdx);
   if (adj === undefined) {
-    throw new HealthCheckError(`ADJECTIVES missing index ${String(adjIdx)}`);
+    throw new DemoEngineError(`ADJECTIVES missing index ${String(adjIdx)}`);
   }
   const nounIdx = randomInt(NOUNS.length);
   const noun = NOUNS.at(nounIdx);
   if (noun === undefined) {
-    throw new HealthCheckError(`NOUNS missing index ${String(nounIdx)}`);
+    throw new DemoEngineError(`NOUNS missing index ${String(nounIdx)}`);
   }
   const num = randomInt(1, 100);
   return `${adj}-${noun}-${String(num)}`;
@@ -126,10 +126,13 @@ export async function seedStructure(
   const orgPublicKey = Buffer.from(kp.publicKey);
   const orgSecretKey = Buffer.from(kp.privateKey);
 
-  // 3. Set org_public_key and mark setup complete
+  // 3. Insert org_config row with org_public_key and setup_completed.
+  // The migration creates the table but does not insert a row; in
+  // production the org service inserts a default. The demo skips the
+  // org service, so we insert directly.
   await tenantDb
-    .updateTable("org_config")
-    .set({
+    .insertInto("org_config")
+    .values({
       org_public_key: orgPublicKey,
       setup_completed: true,
     })
@@ -152,10 +155,37 @@ export async function seedStructure(
       role_id: RoleId.ADMIN,
       password_hash: passwordHash,
       is_active: true,
+      // Without this the real login flow routes to the /complete
+      // onboarding page after key derivation, which the demo router
+      // has no mapping for, stranding the phone on the login feature.
+      has_seen_briefing: true,
     })
     .execute();
 
-  // 5. Phone record
+  // 5. Enroll all 2FA method types for the admin user.
+  // This makes auth.login return requiresTwoFactor: true with
+  // enrolledMethods containing all five canonical types (webauthn,
+  // totp, email, sms, push). Backup codes are UI-only, not a
+  // method_type row.
+  const twoFactorMethodTypes = [
+    "webauthn",
+    "totp",
+    "email",
+    "sms",
+    "push",
+  ] as const;
+  for (const methodType of twoFactorMethodTypes) {
+    await tenantDb
+      .insertInto("two_factor_methods")
+      .values({
+        user_id: adminUserId,
+        method_type: methodType,
+        is_active: true,
+      })
+      .execute();
+  }
+
+  // 6. Phone record
   const phoneId = globalThis.crypto.randomUUID();
   await tenantDb
     .insertInto("phones")
@@ -167,7 +197,7 @@ export async function seedStructure(
     })
     .execute();
 
-  // 6. Queues
+  // 7. Queues
   const seedQueues = [
     { name: "Intake", color: "blue", icon: "phone" },
     { name: "Crisis", color: "red", icon: "triangle-alert" },
@@ -178,7 +208,7 @@ export async function seedStructure(
   for (let i = 0; i < seedQueues.length; i++) {
     const entry = seedQueues.at(i);
     if (entry === undefined) {
-      throw new HealthCheckError(`seedQueues missing index ${String(i)}`);
+      throw new DemoEngineError(`seedQueues missing index ${String(i)}`);
     }
     const { name, color, icon } = entry;
     const sortOrder = i + 1;
@@ -196,7 +226,7 @@ export async function seedStructure(
     queueIds.set(name, inserted.id);
   }
 
-  // 7. Queue assignments: admin -> all queues
+  // 8. Queue assignments: admin -> all queues
   for (const [, qId] of queueIds) {
     await tenantDb
       .insertInto("queue_assignments")
@@ -204,7 +234,7 @@ export async function seedStructure(
       .execute();
   }
 
-  // 8. Clients
+  // 9. Clients
   for (let i = 0; i < NUM_SEED_CLIENTS; i++) {
     let created = false;
     for (let attempt = 0; attempt < 5 && !created; attempt++) {
@@ -224,12 +254,12 @@ export async function seedStructure(
     }
   }
 
-  // 9. KB categories
+  // 10. KB categories
   const kbCategoryNames = ["Procedures", "Resources", "Safety"];
   for (let i = 0; i < kbCategoryNames.length; i++) {
     const name = kbCategoryNames.at(i);
     if (name === undefined) {
-      throw new HealthCheckError(`kbCategoryNames missing index ${String(i)}`);
+      throw new DemoEngineError(`kbCategoryNames missing index ${String(i)}`);
     }
     const sortOrder = i + 1;
     await tenantDb
@@ -238,9 +268,9 @@ export async function seedStructure(
       .execute();
   }
 
-  // 10. Default note types
+  // 11. Default note types
   const { seedDefaultNoteTypes } =
-    await import("../../../../server/src/tickets/note-type-service.js");
+    await import("../../../../../server/src/tickets/note-type-service.js");
   await seedDefaultNoteTypes(tenantDb, sealedBox, secretsEncryptor);
 
   return {

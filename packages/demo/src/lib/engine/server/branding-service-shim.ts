@@ -5,11 +5,6 @@
  * libsodium-wrappers-sumo (memzero). Everything else is identical
  * to the original, just re-exported from the shim.
  *
- * HEALTH-FINDING: branding-service.ts imports sodium-native at value
- * level solely for sodium_memzero (one call site in uploadIcons).
- * The rest of the file is pure Kysely + type imports. The shim
- * re-exports the same API with the memzero call replaced.
- *
  * Mirrors: packages/server/src/branding/branding-service.ts:1-220
  */
 
@@ -18,15 +13,15 @@ import type { Kysely } from "kysely";
 import type {
   OrgConfigTable,
   TenantDatabase,
-} from "../../../../server/src/db/types.js";
-import type { BlobStore } from "../../../../server/src/storage/store.js";
+} from "../../../../../server/src/db/types.js";
+import type { BlobStore } from "../../../../../server/src/storage/store.js";
 import type {
   BrandingData,
   SaveBrandingFieldInput,
   UploadIconsInput,
 } from "@care-y/shared";
-import { validateMagicBytes } from "../../../../server/src/telephony/attachment-validator.js";
-import { ValidationError } from "../../../../server/src/errors.js";
+import { validateMagicBytes } from "../../../../../server/src/telephony/attachment-validator.js";
+import { ValidationError } from "../../../../../server/src/errors.js";
 import {
   deriveBrandingKey,
   decryptBrandingBlob,

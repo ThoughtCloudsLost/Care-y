@@ -14,8 +14,7 @@
     "dev:mobile": "pnpm --filter @care-y/client run build:paraglide && node scripts/dev-network.js",
     "build": "pnpm --filter @care-y/client run build:paraglide && vite build",
     "check": "svelte-check --tsconfig ./tsconfig.json",
-    "health": "pnpm --filter @care-y/client run build:paraglide && vite --config vite.health.config.ts",
-    "health:build": "pnpm --filter @care-y/client run build:paraglide && vite build --config vite.health.config.ts"
+    "health": "pnpm --filter @care-y/client run build:paraglide && vite --open /health.html"
   },
   "dependencies": {
     "@care-y/crypto": "workspace:*",

@@ -2,8 +2,8 @@
  * Public barrel for @care-y/demo.
  *
  * External consumers (care-y.com embed) import from this entry point.
- * Scene components are exported from the scenes registry; flow
- * components have been superseded by the scene architecture.
+ * RouteMount renders real client routes via the glob-derived manifest;
+ * LoginMount is imported directly for the login feature.
  */
 
 export { default as DemoFrame } from "./DemoFrame.svelte";
@@ -14,8 +14,6 @@ export {
   createDemoQueryClient,
   reseedDemoQueryClient,
 } from "./demo-query-client.js";
-export { scenes, getSceneComponent } from "./scenes/index.js";
-export { default as TicketsMount } from "./scenes/TicketsMount.svelte";
 export { DEMO_TOPICS } from "./bridge.js";
 export { classifyDemoLabel } from "./topic-classifier.js";
 export {
@@ -38,7 +36,6 @@ export type {
   DemoRouterState,
   DemoRouter,
 } from "./router.svelte.js";
-export type { SceneEntry, SceneRegistry } from "./scenes/index.js";
 export type {
   DemoBridge,
   DemoBridgeState,

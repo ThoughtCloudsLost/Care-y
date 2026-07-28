@@ -9,7 +9,7 @@
 
 import _sodium from "libsodium-wrappers-sumo";
 
-export class CryptoError extends Error {
+class CryptoError extends Error {
   constructor(message: string) {
     super(message);
     this.name = "CryptoError";

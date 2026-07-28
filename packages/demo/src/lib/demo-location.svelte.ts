@@ -57,8 +57,14 @@ export interface LocationStoreDeps {
    * Implementations check isStale(token) at every async step.
    */
   readonly ensureScreen: (cmd: PhoneCommand, token: number) => Promise<void>;
-  /** Ticket the ticket-detail section resolves to. */
-  readonly ticketDetailId: string;
+  /**
+   * Resolve the ticket ID the ticket-detail section navigates to.
+   * Returns the real seeded ID when the engine is ready, or a
+   * fallback sentinel before boot completes. A getter (rather than
+   * a plain string) lets the store pick up the real ID once the
+   * engine promise resolves without requiring re-construction.
+   */
+  readonly getTicketDetailId: () => string;
 }
 
 export class DemoLocationStore {
@@ -115,7 +121,7 @@ export class DemoLocationStore {
     const cmd = resolvePhoneCommand(
       sectionId,
       subSlug,
-      this.deps.ticketDetailId,
+      this.deps.getTicketDetailId(),
     );
     void this.deps.ensureScreen(cmd, token).finally(() => {
       // eslint-disable-next-line security/detect-possible-timing-attacks -- monotonic staleness counter, not a secret

@@ -1,15 +1,18 @@
 /**
  * Rune-backed stub for $app/state.
  *
- * Provides a reactive page object that the demo router drives via
- * setDemoPage(). The real $app/state is read by ticket routes for
- * page.params.id, page.url.searchParams, and page.state.ticketId.
+ * Provides a reactive page object that RouteMount (post-login) and
+ * the router (login state) drive via setDemoPage(). The real $app/state
+ * is read by ticket routes for page.params.id, page.url.searchParams,
+ * and page.state.ticketId.
  *
- * pushState/replaceState are no-ops (desktop-only paths; the demo's
- * layoutMode.isDesktop is always false). beforeNavigate/afterNavigate
- * are no-ops because firing afterNavigate would cause AppShell's
- * markNavigated() to make shellBack() call history.back(), navigating
- * the outer demo page away.
+ * RouteMount owns page-state post-login: it has the manifest match
+ * with real params and routeId. The router only calls setDemoPage for
+ * the login URL (reset). pushState/replaceState are no-ops (desktop-only
+ * paths; the demo's layoutMode.isDesktop is always false).
+ * beforeNavigate/afterNavigate are no-ops because firing afterNavigate
+ * would cause AppShell's markNavigated() to make shellBack() call
+ * history.back(), navigating the outer demo page away.
  */
 
 import { SvelteURL } from "svelte/reactivity";
@@ -25,22 +28,27 @@ const DEMO_ORIGIN = "http://demo.local";
 // navigation mirrors how SvelteKit replaces page.url.
 let pageUrl = $state.raw(new SvelteURL("/tickets", DEMO_ORIGIN));
 let pageParams = $state<Record<string, string>>({});
+let pageRouteId = $state<string>("/(app)/tickets");
 
-function deriveParams(url: URL): Record<string, string> {
-  const match = /^\/tickets\/([^/]+)$/.exec(url.pathname);
-  if (match?.[1] !== undefined) {
-    return { id: match[1] };
-  }
-  return {};
+export interface DemoPageUpdate {
+  readonly url: URL;
+  readonly params: Record<string, string>;
+  readonly routeId: string;
 }
 
 /**
- * Set the current demo page. Called by the router when navigating.
- * Swaps page.url for a fresh URL and derives params from the pathname.
+ * Set the current demo page. Called by RouteMount when its manifest
+ * match changes (post-login), or by the router for login state.
+ * Swaps page.url for a fresh URL and applies the provided params
+ * and routeId from the manifest match.
  */
-export function setDemoPage(url: URL): void {
-  pageUrl = new SvelteURL(url.pathname + url.search + url.hash, DEMO_ORIGIN);
-  pageParams = deriveParams(url);
+export function setDemoPage(update: DemoPageUpdate): void {
+  pageUrl = new SvelteURL(
+    update.url.pathname + update.url.search + update.url.hash,
+    DEMO_ORIGIN,
+  );
+  pageParams = update.params;
+  pageRouteId = update.routeId;
 }
 
 // -----------------------------------------------------------------------
@@ -63,7 +71,9 @@ export const page: {
   get url(): URL {
     return pageUrl;
   },
-  route: { id: "/(app)/tickets" },
+  get route(): { readonly id: string } {
+    return { id: pageRouteId };
+  },
   status: 200,
   error: null,
   data: {},

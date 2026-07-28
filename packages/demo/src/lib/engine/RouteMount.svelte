@@ -8,35 +8,42 @@
   Layouts receive a children snippet and nest outermost-to-innermost
   around the page component, matching SvelteKit's rendering model.
 
+  The caller (health or phone) wraps this component in their own
+  provider shell (HealthProviders or PhoneProviders) to supply the
+  shell contexts AppShell would normally provide.
+
   Crypto context note: ticket titles and other encrypted fields will
   render as loading/scrambled placeholders because the crypto-context
   stub has no plaintext for real ciphertext. This is expected for the
-  health and does not indicate a bug.
+  demo and does not indicate a bug.
 -->
 <script lang="ts">
-  import type { Component } from "svelte";
+  import type { Component, Snippet } from "svelte";
   import { matchRoute } from "./route-manifest.js";
-  import { setDemoPage } from "../stubs/app-state.svelte.js";
-  import HealthProviders from "./HealthProviders.svelte";
+  import { setDemoPage } from "../../stubs/app-state.svelte.js";
 
   const DEMO_ORIGIN = "http://demo.local";
 
-  let { pathname }: { pathname: string } = $props();
+  let {
+    pathname,
+    wrapper,
+  }: {
+    pathname: string;
+    wrapper?: Snippet<[Snippet]>;
+  } = $props();
 
   // ── Route matching ──
 
   let matchResult = $derived(matchRoute(pathname));
 
   // ── Drive the $app stubs whenever pathname changes ──
-  // HEALTH-FINDING: setDemoPage only accepts a URL; it derives params
-  // internally via a hardcoded /tickets/[id] regex and sets route.id
-  // to a static string. The engine wave should extend setDemoPage to
-  // accept params + routeId so the mounted tree sees the real values.
-  // For this health, the stub's built-in derivation covers /tickets/[id]
-  // and leaves route.id as the hardcoded value.
   $effect(() => {
     if (matchResult !== null) {
-      setDemoPage(new URL(pathname, DEMO_ORIGIN));
+      setDemoPage({
+        url: new URL(pathname, DEMO_ORIGIN),
+        params: matchResult.params,
+        routeId: matchResult.routeId,
+      });
     }
   });
 
@@ -89,26 +96,25 @@
   });
 </script>
 
-{#if matchResult === null}
-  <div class="health-route-error">
-    No route matches: <code>{pathname}</code>
-  </div>
-{:else if loading}
-  <div class="health-route-loading">Loading route chunks...</div>
-{:else if loadError !== null}
-  <div class="health-route-error">
-    Load error: <code>{loadError}</code>
-  </div>
-{:else if loaded !== null}
-  <!--
-    Render the layout chain outermost-to-innermost, with the page
-    as the innermost content, inside the provider wrapper that
-    supplies the shell contexts AppShell would normally provide.
-    Svelte 5 does not support recursive snippet nesting dynamically,
-    so we unroll up to 3 layout levels (the client routes have at
-    most 1 nested layout beyond the excluded root).
-  -->
-  <HealthProviders>
+{#snippet renderContent()}
+  {#if matchResult === null}
+    <div class="route-error">
+      No route matches: <code>{pathname}</code>
+    </div>
+  {:else if loading}
+    <div class="route-loading">Loading route chunks...</div>
+  {:else if loadError !== null}
+    <div class="route-error">
+      Load error: <code>{loadError}</code>
+    </div>
+  {:else if loaded !== null}
+    <!--
+      Render the layout chain outermost-to-innermost, with the page
+      as the innermost content. Svelte 5 does not support recursive
+      snippet nesting dynamically, so we unroll up to 3 layout levels
+      (the client routes have at most 1 nested layout beyond the
+      excluded root).
+    -->
     {#if loaded.layouts.length === 0}
       <loaded.page />
     {:else if loaded.layouts.length === 1}
@@ -129,20 +135,26 @@
         </Layout0>
       {/if}
     {:else}
-      <!-- Fallback: skip layouts beyond depth 2 for this health -->
+      <!-- Fallback: skip layouts beyond depth 2 -->
       <loaded.page />
     {/if}
-  </HealthProviders>
+  {/if}
+{/snippet}
+
+{#if wrapper}
+  {@render wrapper(renderContent)}
+{:else}
+  {@render renderContent()}
 {/if}
 
 <style>
-  .health-route-loading {
+  .route-loading {
     padding: 1rem;
     font-family: monospace;
     color: #666;
   }
 
-  .health-route-error {
+  .route-error {
     padding: 1rem;
     font-family: monospace;
     color: #c00;
@@ -152,7 +164,7 @@
     margin: 0.5rem;
   }
 
-  .health-route-error code {
+  .route-error code {
     font-weight: bold;
   }
 </style>

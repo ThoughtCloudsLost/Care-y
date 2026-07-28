@@ -14,7 +14,7 @@
  * PGlite (PGlite does not recognize Node Buffer).
  */
 
-import { HealthCheckError } from "../errors.js";
+import { DemoEngineError } from "../errors.js";
 import type {
   DatabaseConnection,
   DatabaseIntrospector,
@@ -26,6 +26,7 @@ import type {
   TransactionSettings,
 } from "kysely";
 import {
+  CompiledQuery,
   PostgresAdapter,
   PostgresIntrospector,
   PostgresQueryCompiler,
@@ -100,8 +101,11 @@ class PGliteConnection implements DatabaseConnection {
   }
 
   // eslint-disable-next-line @typescript-eslint/require-await
-  async *streamQuery(): AsyncIterableIterator<QueryResult<unknown>> {
-    throw new HealthCheckError("Streaming is not supported by PGlite dialect");
+  async *streamQuery<R>(
+    _compiledQuery: CompiledQuery,
+    _chunkSize: number,
+  ): AsyncIterableIterator<QueryResult<R>> {
+    throw new DemoEngineError("Streaming is not supported by PGlite dialect");
   }
 }
 
@@ -149,15 +153,15 @@ class PGliteDriver implements Driver {
     connection: DatabaseConnection,
     _settings: TransactionSettings,
   ): Promise<void> {
-    await connection.executeQuery({ sql: "BEGIN", parameters: [] });
+    await connection.executeQuery(CompiledQuery.raw("BEGIN"));
   }
 
   async commitTransaction(connection: DatabaseConnection): Promise<void> {
-    await connection.executeQuery({ sql: "COMMIT", parameters: [] });
+    await connection.executeQuery(CompiledQuery.raw("COMMIT"));
   }
 
   async rollbackTransaction(connection: DatabaseConnection): Promise<void> {
-    await connection.executeQuery({ sql: "ROLLBACK", parameters: [] });
+    await connection.executeQuery(CompiledQuery.raw("ROLLBACK"));
   }
 
   async destroy(): Promise<void> {
@@ -188,7 +192,7 @@ export class PGliteDialect implements Dialect {
 
   createIntrospector(db: unknown): DatabaseIntrospector {
     return new PostgresIntrospector(
-      db as Parameters<typeof PostgresIntrospector.prototype.constructor>[0],
+      db as ConstructorParameters<typeof PostgresIntrospector>[0],
     );
   }
 }
