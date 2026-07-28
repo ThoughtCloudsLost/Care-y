@@ -8,6 +8,7 @@
   import { Panel } from "konsta/svelte";
   import type { ShellPanelProps } from "./types";
   import { useFocusTrap } from "./use-focus-trap.svelte";
+  import { useDeferredUnmount } from "./use-deferred-unmount.svelte";
   import { useDragDismiss } from "./use-drag-dismiss.svelte";
   import { portal } from "./portal";
   import ShellBackdrop from "./ShellBackdrop.svelte";
@@ -26,6 +27,12 @@
     },
     get ondismiss() {
       return ondismiss;
+    },
+  });
+
+  const mounted = useDeferredUnmount({
+    get opened() {
+      return opened;
     },
   });
 
@@ -64,7 +71,9 @@
     >
       <div class="panel-inner" class:handle-left={side === "right"}>
         <div class="panel-body">
-          {@render children()}
+          {#if mounted.current}
+            {@render children()}
+          {/if}
         </div>
         <div class="panel-drag-handle" bind:this={handleRef} aria-hidden="true">
           <div class="panel-drag-indicator"></div>
@@ -89,7 +98,7 @@
 
   .shell-panel-content[inert] {
     visibility: hidden;
-    transition: visibility 0s 400ms;
+    transition: visibility 0s var(--anim-overlay-outro, 400ms);
   }
 
   @media (prefers-reduced-motion: reduce) {

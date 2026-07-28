@@ -13,6 +13,7 @@ const mockGetSecretKey = vi.fn(
   () => new Uint8Array(32).fill(0xab) as Uint8Array | null,
 );
 
+// care-y-ignore-next-line mock-factory-unguarded -- paraglide output is compiled; test replaces all message fns with deterministic strings
 vi.mock("$lib/paraglide/messages.js", () => ({
   admin_escrow_title: () => "Export Escrow File",
   admin_escrow_step_education_heading: () => "What is an escrow file?",
@@ -72,10 +73,12 @@ vi.mock("$lib/paraglide/messages.js", () => ({
   onboarding_escrow_download_again_confirm: () => "Download",
 }));
 
+// care-y-ignore-next-line mock-factory-unguarded -- Svelte context accessor; calling outside component init throws
 vi.mock("$lib/terminology/with-terms.js", () => ({
   withTerms: () => ({}),
 }));
 
+// care-y-ignore-next-line mock-factory-unguarded -- Svelte context accessor; calling outside component init throws
 vi.mock("$lib/crypto/context.js", () => ({
   getOrgKeyManager: () => ({
     get isLoaded() {
@@ -85,24 +88,29 @@ vi.mock("$lib/crypto/context.js", () => ({
   }),
 }));
 
+// care-y-ignore-next-line mock-factory-unguarded -- .svelte.js rune store; importing triggers $state rune compilation outside Svelte context
 vi.mock("$lib/stores/toast.svelte.js", () => ({
   toastStore: { show: mockToastShow },
 }));
 
+// care-y-ignore-next-line mock-factory-unguarded -- full-replacement stub; single-export module with no additional surface to drift
 vi.mock("$lib/utils/haptic.js", () => ({
   haptic: mockHaptic,
 }));
 
+// care-y-ignore-next-line mock-factory-unguarded -- full-replacement stub; single-export module with no additional surface to drift
 vi.mock("$lib/utils/announce.js", () => ({
   announceToLiveRegion: mockAnnounce,
 }));
 
+// care-y-ignore-next-line mock-factory-unguarded -- component default-export stub swapped with PassthroughShell
 vi.mock("$lib/shell/ShellPopup.svelte", async () => ({
   default: (await import("../tickets/test-helpers/PassthroughShell.svelte"))
     .default,
 }));
 
 const mockMemzero = vi.fn();
+// care-y-ignore-next-line mock-factory-unguarded -- @care-y/crypto barrel triggers libsodium WASM init via getSodium()
 vi.mock("@care-y/crypto", () => ({
   encryptWithPassphrase: () => ({
     salt: new Uint8Array(16),
@@ -116,6 +124,7 @@ vi.mock("@care-y/crypto", () => ({
   requireSodium: () => ({ memzero: mockMemzero }),
 }));
 
+// care-y-ignore-next-line mock-factory-unguarded -- full-replacement stub; test needs deterministic base64 encoding without real impl
 vi.mock("$lib/utils/buffer-encoding.js", () => ({
   uint8ArrayToBase64: (bytes: Uint8Array) => {
     let binary = "";
@@ -126,6 +135,7 @@ vi.mock("$lib/utils/buffer-encoding.js", () => ({
   },
 }));
 
+// care-y-ignore-next-line mock-factory-unguarded -- full-replacement stub; test needs deterministic strength assessment
 vi.mock("$lib/utils/passphrase-strength.js", () => ({
   assessPassphraseStrength: (p: string) => {
     if (p.length < 20) return "too-short";
@@ -142,6 +152,25 @@ vi.mock("$lib/utils/passphrase-strength.js", () => ({
 
 import EscrowExport from "./EscrowExport.svelte";
 
+/**
+ * Render EscrowExport, call its exported open() method, and wait for the
+ * popup content to appear in the DOM. Returns the component instance for
+ * further interaction. Every test that asserts on popup content should use
+ * this instead of a bare render + synchronous open().
+ */
+type EscrowRenderResult = ReturnType<typeof render<typeof EscrowExport>>;
+
+async function renderAndOpen(): Promise<EscrowRenderResult> {
+  const result = render(EscrowExport);
+  result.component.open();
+  await vi.waitFor(() => {
+    // The education step's advance button is present as soon as the popup
+    // content mounts, so it doubles as the flush anchor.
+    expect(screen.getByText("Next")).toBeTruthy();
+  });
+  return result;
+}
+
 describe("EscrowExport", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -154,33 +183,36 @@ describe("EscrowExport", () => {
 
   afterEach(cleanup);
 
-  it("shows education step initially when opened", () => {
-    const { component } = render(EscrowExport);
-    component.open();
+  it("shows education step initially when opened", async () => {
+    await renderAndOpen();
     expect(
       screen.getByText("Your organization's data is encrypted."),
     ).toBeTruthy();
     expect(screen.getByText("Before you continue")).toBeTruthy();
   });
 
-  it("shows org key warning when key is not loaded", () => {
+  it("shows org key warning when key is not loaded", async () => {
     mockOrgKeyLoaded = false;
-    const { component } = render(EscrowExport);
-    component.open();
-    expect(screen.getByText("Organization key not loaded.")).toBeTruthy();
+    const result = render(EscrowExport);
+    result.component.open();
+    await vi.waitFor(() => {
+      expect(screen.getByText("Organization key not loaded.")).toBeTruthy();
+    });
   });
 
-  it("disables continue button when org key is not loaded", () => {
+  it("disables continue button when org key is not loaded", async () => {
     mockOrgKeyLoaded = false;
-    const { component } = render(EscrowExport);
-    component.open();
+    const result = render(EscrowExport);
+    result.component.open();
+    await vi.waitFor(() => {
+      expect(screen.getByText("Next")).toBeTruthy();
+    });
     const nextBtn = screen.getByText("Next");
     expect(nextBtn.closest("button")?.hasAttribute("disabled")).toBeTruthy();
   });
 
   it("advances to passphrase step on continue", async () => {
-    const { component } = render(EscrowExport);
-    component.open();
+    await renderAndOpen();
 
     await fireEvent.click(screen.getByText("Next"));
 
@@ -189,8 +221,7 @@ describe("EscrowExport", () => {
   });
 
   it("shows strength meter when typing passphrase", async () => {
-    const { component } = render(EscrowExport);
-    component.open();
+    await renderAndOpen();
     await fireEvent.click(screen.getByText("Next"));
 
     const inputs = screen.getAllByDisplayValue("");
@@ -203,8 +234,7 @@ describe("EscrowExport", () => {
   });
 
   it("shows acceptable strength for 20+ char passphrase", async () => {
-    const { component } = render(EscrowExport);
-    component.open();
+    await renderAndOpen();
     await fireEvent.click(screen.getByText("Next"));
 
     const inputs = screen.getAllByDisplayValue("");
@@ -217,8 +247,7 @@ describe("EscrowExport", () => {
   });
 
   it("shows mismatch warning when confirm differs", async () => {
-    const { component } = render(EscrowExport);
-    component.open();
+    await renderAndOpen();
     await fireEvent.click(screen.getByText("Next"));
 
     const inputs = screen.getAllByDisplayValue("");
@@ -237,8 +266,7 @@ describe("EscrowExport", () => {
       .spyOn(HTMLAnchorElement.prototype, "click")
       .mockImplementation(() => undefined);
 
-    const { component } = render(EscrowExport);
-    component.open();
+    await renderAndOpen();
     await fireEvent.click(screen.getByText("Next"));
 
     const inputs = screen.getAllByDisplayValue("");
@@ -263,8 +291,7 @@ describe("EscrowExport", () => {
       .spyOn(HTMLAnchorElement.prototype, "click")
       .mockImplementation(() => undefined);
 
-    const { component } = render(EscrowExport);
-    component.open();
+    await renderAndOpen();
     await fireEvent.click(screen.getByText("Next"));
 
     const inputs = screen.getAllByDisplayValue("");
@@ -290,8 +317,7 @@ describe("EscrowExport", () => {
       .spyOn(HTMLAnchorElement.prototype, "click")
       .mockImplementation(() => undefined);
 
-    const { component } = render(EscrowExport);
-    component.open();
+    await renderAndOpen();
     await fireEvent.click(screen.getByText("Next"));
 
     const inputs = screen.getAllByDisplayValue("");
@@ -308,8 +334,7 @@ describe("EscrowExport", () => {
   });
 
   it("shows common pattern warning for repeated characters", async () => {
-    const { component } = render(EscrowExport);
-    component.open();
+    await renderAndOpen();
     await fireEvent.click(screen.getByText("Next"));
 
     const inputs = screen.getAllByDisplayValue("");

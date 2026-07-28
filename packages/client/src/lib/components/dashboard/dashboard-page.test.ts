@@ -16,6 +16,16 @@
 
 import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
 import { render, screen, cleanup, fireEvent } from "@testing-library/svelte";
+import { tick } from "svelte";
+import type { NavbarOverride } from "$lib/shell/types.js";
+import type * as ShellContext from "$lib/shell/context.js";
+
+// care-y-ignore mock-factory-unguarded -- the five remaining factories mock
+// modules importOriginal cannot load here: $app/navigation and $app/paths are
+// SvelteKit virtual modules with no on-disk source, $lib/trpc/index.js opens a
+// live HTTP connection at import, @tanstack/svelte-query and
+// $lib/crypto/context.js are stubbed wholesale to control query state and
+// decrypt caches. See the module docblock above.
 
 // IntersectionObserver stub for DecryptPlaceholder; ResizeObserver stub for
 // TicketPreview's fit-mode clipping (both absent in jsdom).
@@ -178,8 +188,8 @@ vi.mock("$lib/crypto/context.js", () => ({
     clear: vi.fn(),
     size: 0,
   }),
-  // The reply/call/assign overlays mount unconditionally (closed), so their
-  // scripts resolve the bridge/key manager at setup even without opening.
+  // Kept for the reply/call/assign overlays: their scripts resolve the bridge
+  // and key manager at setup, which now happens the moment one is opened.
   getCryptoBridge: () => ({
     encrypt: vi.fn().mockResolvedValue("base64-ciphertext"),
     encryptText: vi.fn().mockResolvedValue("encrypted-text"),
@@ -202,9 +212,17 @@ vi.mock("$lib/crypto/context.js", () => ({
   getCurrentPermissions: () => () => mockPermissions,
 }));
 
-vi.mock("$lib/shell/context.js", () => ({
+// Stable container so tests can reach the navbar actions the page registers.
+// The create popover's only trigger lives in the navbar, which AppShell owns
+// and this test does not render.
+const navbarOverride: { current: NavbarOverride | undefined } = {
+  current: undefined,
+};
+
+vi.mock("$lib/shell/context.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof ShellContext>()),
   getScrollContainer: () => () => undefined,
-  getNavbarOverrideCtx: () => ({ current: undefined }),
+  getNavbarOverrideCtx: () => navbarOverride,
   getTabbarOverrideCtx: () => ({ current: undefined }),
 }));
 
@@ -457,8 +475,21 @@ describe("Dashboard create popover", () => {
     render(PageModule.default);
   }
 
-  it("navigates to admin/people?tab=queues&action=create for queue option", () => {
+  /**
+   * Open the create popover through its only trigger, the navbar "+" action
+   * the page registers. Closed overlays no longer render their children, so
+   * the options do not exist in the DOM until this runs.
+   */
+  async function openCreatePopover(): Promise<void> {
+    const action = navbarOverride.current?.actions?.[0];
+    expect(action).toBeDefined();
+    action?.onclick(new MouseEvent("click"));
+    await tick();
+  }
+
+  it("navigates to admin/people?tab=queues&action=create for queue option", async () => {
     renderWithAdminPermissions();
+    await openCreatePopover();
 
     const queueItem = screen.getByText("New Queue");
     void fireEvent.click(queueItem);
@@ -468,8 +499,9 @@ describe("Dashboard create popover", () => {
     );
   });
 
-  it("navigates to admin/people?tab=users&action=invite for user option", () => {
+  it("navigates to admin/people?tab=users&action=invite for user option", async () => {
     renderWithAdminPermissions();
+    await openCreatePopover();
 
     const userItem = screen.getByText("Invite User");
     void fireEvent.click(userItem);
@@ -479,16 +511,18 @@ describe("Dashboard create popover", () => {
     );
   });
 
-  it("does not show queue option without manage_queues permission", () => {
+  it("does not show queue option without manage_queues permission", async () => {
     queryStates = buildQueryStates();
     render(PageModule.default);
+    await openCreatePopover();
 
     expect(screen.queryByText("New Queue")).toBeNull();
   });
 
-  it("does not show user option without manage_users permission", () => {
+  it("does not show user option without manage_users permission", async () => {
     queryStates = buildQueryStates();
     render(PageModule.default);
+    await openCreatePopover();
 
     expect(screen.queryByText("Invite User")).toBeNull();
   });

@@ -8,6 +8,7 @@
   import * as m from "$lib/paraglide/messages.js";
   import type { ShellPopupProps } from "./types";
   import { useFocusTrap } from "./use-focus-trap.svelte";
+  import { useDeferredUnmount } from "./use-deferred-unmount.svelte";
   import { portal } from "./portal";
   import ShellBackdrop from "./ShellBackdrop.svelte";
 
@@ -27,6 +28,12 @@
     },
     get ondismiss() {
       return ondismiss;
+    },
+  });
+
+  const mounted = useDeferredUnmount({
+    get opened() {
+      return opened;
     },
   });
 </script>
@@ -63,7 +70,9 @@
         </Navbar>
       {/if}
       <div class="popup-scroll">
-        {@render children()}
+        {#if mounted.current}
+          {@render children()}
+        {/if}
       </div>
     </div>
   </Popup>
@@ -89,7 +98,7 @@
 
   .popup-dialog[inert] {
     visibility: hidden;
-    transition: visibility 0s 400ms;
+    transition: visibility 0s var(--anim-overlay-outro, 400ms);
   }
 
   @media (prefers-reduced-motion: reduce) {
