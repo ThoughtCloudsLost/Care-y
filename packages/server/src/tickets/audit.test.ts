@@ -1,6 +1,8 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import {
   createTestDb,
+  createTestQueue,
+  createTestTicketFixture,
   createTestUser,
   seedOrgPublicKey,
   type TestDb,
@@ -216,5 +218,109 @@ describe.skipIf(!process.env.DATABASE_URL)("AuditService (DB)", () => {
       pageSize: 50,
     });
     expect(outOfRange.entries).toHaveLength(0);
+  });
+
+  // -----------------------------------------------------------------------
+  // listRecentForQueues
+  // -----------------------------------------------------------------------
+
+  describe("listRecentForQueues", () => {
+    it("returns ticket-linked events for the requested queues only", async () => {
+      const user = await createTestUser(testDb.db);
+      const mine = await createTestTicketFixture(testDb.db);
+      const other = await createTestTicketFixture(testDb.db);
+
+      await svc.log({
+        eventType: "ticket_created",
+        actorId: user.id,
+        ticketId: mine.ticketId,
+      });
+      await svc.log({
+        eventType: "ticket_created",
+        actorId: user.id,
+        ticketId: other.ticketId,
+      });
+
+      const rows = await svc.listRecentForQueues([mine.queueId], 10);
+
+      expect(rows.some((r) => r.ticketId === mine.ticketId)).toBe(true);
+      expect(rows.some((r) => r.ticketId === other.ticketId)).toBe(false);
+    });
+
+    it("returns the client alias and the queue name as ciphertext", async () => {
+      const user = await createTestUser(testDb.db);
+      const fixture = await createTestTicketFixture(testDb.db);
+
+      await svc.log({
+        eventType: "ticket_created",
+        actorId: user.id,
+        ticketId: fixture.ticketId,
+      });
+
+      const rows = await svc.listRecentForQueues([fixture.queueId], 10);
+      const row = rows.find((r) => r.ticketId === fixture.ticketId);
+
+      expect(row).toBeDefined();
+      expect(row!.queueId).toBe(fixture.queueId);
+      expect(typeof row!.clientAlias).toBe("string");
+      // Queue names are encrypted at rest (ADR-030); this service hands the
+      // bytes through untouched for client-side decryption.
+      expect(Buffer.isBuffer(row!.encryptedQueueName)).toBe(true);
+      expect(row!.createdAt).toBeInstanceOf(Date);
+    });
+
+    it("excludes events with no ticket", async () => {
+      const user = await createTestUser(testDb.db);
+      const fixture = await createTestTicketFixture(testDb.db);
+
+      await svc.log({ eventType: "queue_created", actorId: user.id });
+
+      const rows = await svc.listRecentForQueues([fixture.queueId], 50);
+
+      expect(rows.every((r) => r.ticketId !== null)).toBe(true);
+    });
+
+    it("orders newest first and honours the limit", async () => {
+      const user = await createTestUser(testDb.db);
+      const queue = await createTestQueue(testDb.db);
+      const first = await createTestTicketFixture(testDb.db, {
+        queueId: queue.id,
+      });
+      const second = await createTestTicketFixture(testDb.db, {
+        queueId: queue.id,
+      });
+
+      await svc.log({
+        eventType: "ticket_created",
+        actorId: user.id,
+        ticketId: first.ticketId,
+      });
+      await svc.log({
+        eventType: "ticket_closed",
+        actorId: user.id,
+        ticketId: second.ticketId,
+      });
+
+      // Force a deterministic ordering (both inserts can land in the same tick).
+      await testDb.db
+        .updateTable("audit_log")
+        .set({ created_at: new Date("2025-01-01T00:00:00Z") })
+        .where("ticket_id", "=", first.ticketId)
+        .execute();
+      await testDb.db
+        .updateTable("audit_log")
+        .set({ created_at: new Date("2025-01-02T00:00:00Z") })
+        .where("ticket_id", "=", second.ticketId)
+        .execute();
+
+      const rows = await svc.listRecentForQueues([queue.id], 1);
+
+      expect(rows).toHaveLength(1);
+      expect(rows[0]!.ticketId).toBe(second.ticketId);
+    });
+
+    it("returns an empty array when given no queue IDs", async () => {
+      expect(await svc.listRecentForQueues([], 10)).toEqual([]);
+    });
   });
 });
