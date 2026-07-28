@@ -283,6 +283,7 @@ export async function seedKbArticles(
   userId: string,
   blobStore?: BlobStore,
   orgSchema?: string,
+  extraVoterIds?: readonly string[],
 ): Promise<{ articleIds: string[] }> {
   const existing = await tDb
     .selectFrom("kb_items")
@@ -337,15 +338,18 @@ export async function seedKbArticles(
 
   // --- Seed votes ---
   // Spread upvotes across articles so vote counts are non-zero and varied.
-  // Only the admin user exists, so each article gets at most one vote.
-  // Articles 0 (Intake checklist), 2 (Housing referral), 4 (Safety planning)
-  // get upvotes; article 1 (Escalation protocol) gets a downvote.
+  // The primary user always votes per the base spec. When extraVoterIds are
+  // provided, additional voters are spread across articles for richer counts.
   const voteSpec: { index: number; direction: string }[] = [
     { index: 0, direction: "up" },
     { index: 1, direction: "down" },
     { index: 2, direction: "up" },
     { index: 4, direction: "up" },
   ];
+
+  // Track cumulative counts per article for the final denormalized update
+  const upCounts = new Map<string, number>();
+  const downCounts = new Map<string, number>();
 
   for (const spec of voteSpec) {
     const itemId = articleIds[spec.index];
@@ -360,14 +364,72 @@ export async function seedKbArticles(
       })
       .execute();
 
-    const upCount = spec.direction === "up" ? 1 : 0;
-    const downCount = spec.direction === "down" ? 1 : 0;
+    if (spec.direction === "up") {
+      upCounts.set(itemId, (upCounts.get(itemId) ?? 0) + 1);
+    } else {
+      downCounts.set(itemId, (downCounts.get(itemId) ?? 0) + 1);
+    }
+  }
+
+  // Extra voter votes (when roster users are available)
+  if (extraVoterIds !== undefined && extraVoterIds.length > 0) {
+    // Each extra voter votes on a rotating subset of articles with
+    // varied directions to produce realistic, non-uniform counts.
+    const extraVoteSpec: {
+      voterIdx: number;
+      articleIdx: number;
+      direction: string;
+    }[] = [
+      { voterIdx: 0, articleIdx: 0, direction: "up" },
+      { voterIdx: 0, articleIdx: 2, direction: "up" },
+      { voterIdx: 0, articleIdx: 4, direction: "up" },
+      { voterIdx: 1, articleIdx: 0, direction: "up" },
+      { voterIdx: 1, articleIdx: 1, direction: "up" },
+      { voterIdx: 1, articleIdx: 3, direction: "up" },
+      { voterIdx: 2, articleIdx: 0, direction: "down" },
+      { voterIdx: 2, articleIdx: 4, direction: "up" },
+      { voterIdx: 3, articleIdx: 1, direction: "down" },
+      { voterIdx: 3, articleIdx: 2, direction: "up" },
+      { voterIdx: 3, articleIdx: 5, direction: "up" },
+      { voterIdx: 4, articleIdx: 0, direction: "up" },
+      { voterIdx: 4, articleIdx: 3, direction: "down" },
+      { voterIdx: 4, articleIdx: 4, direction: "up" },
+    ];
+
+    for (const ev of extraVoteSpec) {
+      const voterId = extraVoterIds[ev.voterIdx];
+      if (voterId === undefined) continue;
+      const itemId = articleIds[ev.articleIdx];
+      if (itemId === undefined) continue;
+
+      await tDb
+        .insertInto("kb_votes")
+        .values({
+          kb_item_id: itemId,
+          voter_pseudonym: voterId,
+          direction: ev.direction,
+        })
+        .execute();
+
+      if (ev.direction === "up") {
+        upCounts.set(itemId, (upCounts.get(itemId) ?? 0) + 1);
+      } else {
+        downCounts.set(itemId, (downCounts.get(itemId) ?? 0) + 1);
+      }
+    }
+  }
+
+  // Update denormalized counts for all articles that received votes
+  const votedItemIds = new Set([...upCounts.keys(), ...downCounts.keys()]);
+  for (const itemId of votedItemIds) {
+    const up = upCounts.get(itemId) ?? 0;
+    const down = downCounts.get(itemId) ?? 0;
     await tDb
       .updateTable("kb_items")
       .set({
-        vote_up_count: upCount,
-        vote_down_count: downCount,
-        rating: wilsonScore(upCount, downCount),
+        vote_up_count: up,
+        vote_down_count: down,
+        rating: wilsonScore(up, down),
       })
       .where("id", "=", itemId)
       .execute();
