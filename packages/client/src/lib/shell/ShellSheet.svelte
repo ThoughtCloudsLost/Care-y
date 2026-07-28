@@ -15,6 +15,10 @@
   import type { ShellSheetProps } from "./types";
   import { useFocusTrap } from "./use-focus-trap.svelte";
   import { useSheetDrag } from "./use-sheet-drag.svelte";
+  import {
+    useDeferredUnmount,
+    OVERLAY_OUTRO_MS,
+  } from "./use-deferred-unmount.svelte";
   import { portal } from "./portal";
   import { layoutMode } from "$lib/stores/layout-mode.svelte";
   import ShellPopup from "./ShellPopup.svelte";
@@ -80,6 +84,13 @@
   const sheetClass = $derived(
     ["glass", "shell-sheet", extraClass].filter(Boolean).join(" "),
   );
+
+  const mounted = useDeferredUnmount({
+    get opened() {
+      return opened;
+    },
+    durationMs: OVERLAY_OUTRO_MS,
+  });
 </script>
 
 {#if usePopup}
@@ -120,10 +131,10 @@
             {/if}
           </div>
           <div class="sheet-body">
-            {@render children()}
+            {#if mounted.current}{@render children()}{/if}
           </div>
         {:else}
-          {@render children()}
+          {#if mounted.current}{@render children()}{/if}
         {/if}
       </div>
     </Sheet>
@@ -148,7 +159,7 @@
 
   .shell-sheet-content[inert] {
     visibility: hidden;
-    transition: visibility 0s 400ms;
+    transition: visibility 0s var(--anim-overlay-outro, 400ms);
   }
 
   @media (prefers-reduced-motion: reduce) {

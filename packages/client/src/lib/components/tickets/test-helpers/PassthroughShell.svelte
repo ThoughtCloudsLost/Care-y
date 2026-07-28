@@ -1,6 +1,13 @@
 <!--
   Test-only passthrough component that renders its children snippet.
   Used to mock ShellPopup/ShellSheet/ShellActionSheet in component tests.
+
+  When `opened` is passed, children render only while it is true, mirroring
+  the real shells, which drop their subtree once the outro finishes. Title and
+  header content stay rendered while closed, which the real shells also do.
+
+  When `opened` is omitted the children always render, because this component
+  also stands in for non-overlay wrappers such as QueryError.
 -->
 <script lang="ts">
   import type { Snippet } from "svelte";
@@ -30,5 +37,7 @@
   {#if headerRight}
     {@render headerRight()}
   {/if}
-  {@render children?.()}
+  {#if opened ?? true}
+    {@render children?.()}
+  {/if}
 </div>

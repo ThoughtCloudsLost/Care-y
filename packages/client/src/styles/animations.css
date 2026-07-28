@@ -17,6 +17,12 @@
   /* Exposure icon bar fill */
   --anim-bar-fill-duration: 600ms;
   --anim-bar-fill-easing: linear;
+
+  /* Shell overlay outro (Konsta slide-out before children unmount).
+     Most overlays use duration-400. Actions uses duration-300 on iOS
+     and duration-400 on Material; the TS constants in
+     use-deferred-unmount.svelte.ts carry the JS-side values. */
+  --anim-overlay-outro: 400ms;
 }
 
 /* ── Keyframes ───────────────────────────────────────────────────── */

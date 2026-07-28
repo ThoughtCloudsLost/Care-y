@@ -7,6 +7,10 @@
   import { Actions } from "konsta/svelte";
   import type { ShellActionSheetProps } from "./types";
   import { useFocusTrap } from "./use-focus-trap.svelte";
+  import {
+    useDeferredUnmount,
+    ACTION_SHEET_OUTRO_MS,
+  } from "./use-deferred-unmount.svelte";
   import { portal } from "./portal";
   import ShellBackdrop from "./ShellBackdrop.svelte";
 
@@ -20,6 +24,18 @@
     get ondismiss() {
       return ondismiss;
     },
+  });
+
+  // ACTION_SHEET_OUTRO_MS is 400 (Material's duration-400). Konsta Actions
+  // uses duration-300 on iOS, but themeStore is not available at this layer
+  // without adding a new import dependency. 400 is the safe ceiling: on iOS
+  // it over-waits by 100ms (same as the pre-fix behavior), and on Material
+  // it matches exactly.
+  const mounted = useDeferredUnmount({
+    get opened() {
+      return opened;
+    },
+    durationMs: ACTION_SHEET_OUTRO_MS,
   });
 </script>
 
@@ -36,7 +52,7 @@
       inert={!opened ? true : undefined}
       class="shell-actions-content"
     >
-      {@render children()}
+      {#if mounted.current}{@render children()}{/if}
     </div>
   </Actions>
 </div>
@@ -59,7 +75,7 @@
 
   .shell-actions-content[inert] {
     visibility: hidden;
-    transition: visibility 0s 400ms;
+    transition: visibility 0s var(--anim-overlay-outro, 400ms);
   }
 
   @media (prefers-reduced-motion: reduce) {
