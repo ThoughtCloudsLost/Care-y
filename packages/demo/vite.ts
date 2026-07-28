@@ -218,7 +218,6 @@ const stubMatchers: [RegExp, string][] = [
 
 // Exact-id aliases (no extensioned import forms exist for these).
 const exactPairs: [string, string][] = [
-  ["@care-y/crypto", "./src/stubs/care-y-crypto.ts"],
   ["$app/environment", "./src/stubs/app-environment.ts"],
   ["$app/navigation", "./src/stubs/app-navigation.ts"],
   ["$app/paths", "./src/stubs/app-paths.ts"],

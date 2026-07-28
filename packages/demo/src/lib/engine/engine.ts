@@ -47,7 +47,16 @@ import {
   seedStructure,
   DEMO_ORG_SCHEMA,
   DEMO_ORG_SLUG,
+  DEMO_ADMIN_PASSWORD,
 } from "./server/seed-structure.js";
+import {
+  deriveDemoOprfScalar,
+  deriveDemoVolPublic,
+  wrapOrgKeyForVolunteer,
+  createDemoOprfService,
+} from "./server/demo-keys.js";
+import { eciesEncrypt } from "@care-y/crypto";
+import type { RistrettoPoint } from "@care-y/crypto";
 
 import type { TenantDatabase } from "../../../../server/src/db/types.js";
 import type {
@@ -59,7 +68,6 @@ import type { PushNotificationSender } from "../../../../server/src/notification
 import type { NotificationService } from "../../../../server/src/notifications/service.js";
 import type { OrgService } from "../../../../server/src/org/service.js";
 import type { ProviderFactory } from "../../../../server/src/telephony/factory.js";
-import type { OprfEvaluateService } from "../../../../server/src/crypto/oprf-evaluate-service.js";
 import type {
   Context,
   OrgContext,
@@ -95,6 +103,8 @@ export interface DemoEngineResult {
   readonly adminCtx: Context;
   readonly volunteerCtx: Context;
   readonly appRouter: unknown;
+  /** Ticket ID whose key wrap was replaced with a foreign key (decrypt-denied demo). */
+  readonly deniedTicketId: string;
 }
 
 // For backwards compat with the health page
@@ -253,18 +263,44 @@ export async function bootDemoEngine(): Promise<DemoEngineResult> {
   const orgPublicKey = seedResult.orgPublicKey;
   const sealedBox = createSealedBoxEncryptor(orgPublicKey);
 
-  // user_keys row needed by seed-tickets (vol_public must be a valid
-  // Ristretto255 point for eciesEncrypt). Generate a random scalar and
-  // derive the point via scalarmult_base.
-  const demoVolScalar = _sodium.crypto_core_ristretto255_scalar_random();
-  const demoVolPublic =
-    _sodium.crypto_scalarmult_ristretto255_base(demoVolScalar);
+  // Derive the demo OPRF scalar and volunteer keypair deterministically.
+  // Running the full client pipeline (Argon2id, OPRF blind/evaluate/finalize,
+  // master key derivation) at seed time produces a volPublic that the
+  // visitor's real client crypto worker will reproduce identically when
+  // it logs in with the same password and salt.
+  const tKeys = timeMs();
+  const demoVolScalar = deriveDemoOprfScalar();
+  const demoSalt = _sodium.randombytes_buf(16);
+  const { volPublic: demoVolPublic } = deriveDemoVolPublic(
+    DEMO_ADMIN_PASSWORD,
+    demoSalt,
+    demoVolScalar,
+  );
+  timings.push({ label: "demo-key-derivation", ms: timeMs() - tKeys });
+
   await tDb
     .insertInto("user_keys")
     .values({
       user_id: seedResult.adminUserId,
-      salt: Buffer.from(_sodium.randombytes_buf(16)),
+      salt: Buffer.from(demoSalt),
       vol_public: Buffer.from(demoVolPublic),
+    })
+    .execute();
+
+  // Wrap the org secret key to the volunteer's ristretto255 public key
+  // so the client can unwrap it via keys.getWrappedOrgKey after login.
+  const orgWrap = wrapOrgKeyForVolunteer(
+    seedResult.orgSecretKey,
+    demoVolPublic,
+  );
+  await tDb
+    .insertInto("wrapped_org_keys")
+    .values({
+      user_id: seedResult.adminUserId,
+      ephemeral_point: Buffer.from(orgWrap.ephemeralPoint),
+      wrapped_key: Buffer.from(orgWrap.ciphertext),
+      nonce: Buffer.from(orgWrap.nonce),
+      key_version: 1,
     })
     .execute();
 
@@ -277,6 +313,34 @@ export async function bootDemoEngine(): Promise<DemoEngineResult> {
     DEMO_ORG_SCHEMA,
   );
 
+  // Re-wrap one seeded ticket to a foreign key so the locked/decrypt-failed
+  // state still demos. Pick the LAST ticket (never ticketIds[0], which is the
+  // detail deep-link target).
+  const deniedTicketId =
+    ticketResult.ticketIds[ticketResult.ticketIds.length - 1];
+  if (deniedTicketId === undefined) {
+    throw new DemoEngineError("No seeded tickets to re-wrap for denied demo");
+  }
+  const foreignScalar = _sodium.crypto_core_ristretto255_scalar_random();
+  const foreignPublic =
+    _sodium.crypto_scalarmult_ristretto255_base(foreignScalar);
+  // Generate a random 32-byte "ticket key" stand-in (the actual content key
+  // is irrelevant since decrypt must FAIL for this ticket).
+  const foreignTk = _sodium.randombytes_buf(32);
+  const foreignWrap = eciesEncrypt(foreignTk, foreignPublic as RistrettoPoint);
+  await tDb
+    .updateTable("ticket_key_wraps")
+    .set({
+      ephemeral_point: Buffer.from(foreignWrap.ephemeralPoint),
+      nonce: Buffer.from(foreignWrap.nonce),
+      wrapped_key: Buffer.from(foreignWrap.ciphertext),
+    })
+    .where("ticket_id", "=", deniedTicketId)
+    .execute();
+  // Zero transient foreign key material
+  _sodium.memzero(foreignScalar);
+  _sodium.memzero(foreignTk);
+
   const { seedKbArticles } =
     await import("../../../../server/src/dev/seed-kb.js");
   await seedKbArticles(tDb, sealedBox, seedResult.adminUserId);
@@ -285,25 +349,8 @@ export async function bootDemoEngine(): Promise<DemoEngineResult> {
   // 7. Build router
   const t7 = timeMs();
 
-  // OPRF stub
-  const oprfServiceStub: OprfEvaluateService = {
-    async evaluate(): Promise<{ evaluated: string }> {
-      return Promise.reject(
-        new TRPCError({
-          code: "INTERNAL_SERVER_ERROR",
-          message: "OPRF not available in browser demo",
-        }),
-      );
-    },
-    async adminEvaluate(): Promise<{ evaluated: string }> {
-      return Promise.reject(
-        new TRPCError({
-          code: "INTERNAL_SERVER_ERROR",
-          message: "OPRF not available in browser demo",
-        }),
-      );
-    },
-  };
+  // Demo OPRF service: evaluates blinded elements using the fixed demo scalar
+  const oprfService = createDemoOprfService(demoVolScalar);
 
   // OrgService stub
   const orgServiceStub: OrgService = {
@@ -507,7 +554,7 @@ export async function bootDemoEngine(): Promise<DemoEngineResult> {
       pushHmacKey: pushChallengeHmacKey,
       totpReplayCache: totpReplayCacheStub,
     },
-    oprfDeps: { oprfService: oprfServiceStub },
+    oprfDeps: { oprfService },
     orgService: orgServiceStub,
     providerFactory: providerFactoryStub,
     includeReports: true,
@@ -650,6 +697,27 @@ export async function bootDemoEngine(): Promise<DemoEngineResult> {
     session: { ...adminSession, userId: volunteerUser.id },
   };
 
+  // Reshape a caller result to the JSON wire shape the client expects.
+  // tRPC over HTTP (no superjson) serializes Node Buffers as
+  // { type: "Buffer", data: number[] }; the in-process caller returns
+  // live Buffer/Uint8Array instances, which client helpers like
+  // serializedBufferToBase64 cannot read (buf.data is undefined), so
+  // ciphertext reached the crypto worker as empty bytes and every
+  // ticket decrypt failed. Dates and primitives pass through unchanged.
+  function reshapeWire(value: unknown): unknown {
+    if (value instanceof Uint8Array) {
+      return { type: "Buffer", data: Array.from(value) };
+    }
+    if (Array.isArray(value)) return value.map(reshapeWire);
+    if (value !== null && typeof value === "object") {
+      if (value instanceof Date) return value;
+      return Object.fromEntries(
+        Object.entries(value).map(([key, entry]) => [key, reshapeWire(entry)]),
+      );
+    }
+    return value;
+  }
+
   // Proxy adapter: trpc.<router>.<proc>.query(input) / .mutate(input)
   function createAdapter(caller: ReturnType<typeof callerFactory>): unknown {
     // The tRPC caller is a recursive proxy: property access resolves
@@ -684,8 +752,8 @@ export async function bootDemoEngine(): Promise<DemoEngineResult> {
                         message: `Procedure "${procName}" not found on router "${routerName}"`,
                       });
                     }
-                    return await (proc as (i: unknown) => Promise<unknown>)(
-                      input,
+                    return reshapeWire(
+                      await (proc as (i: unknown) => Promise<unknown>)(input),
                     );
                   } catch (err: unknown) {
                     if (err instanceof TRPCError) {
@@ -722,6 +790,7 @@ export async function bootDemoEngine(): Promise<DemoEngineResult> {
     adminCtx,
     volunteerCtx,
     appRouter,
+    deniedTicketId,
   };
 }
 
@@ -1071,6 +1140,7 @@ export async function runHealthProofs(
       "platform-migrate",
       "tenant-migrate",
       "seed-structure",
+      "demo-key-derivation",
       "seed-content",
       "router-build",
     ];

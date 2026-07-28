@@ -14,7 +14,7 @@
 
   The PGlite engine boots in phone-main.ts before this component
   mounts. The engine promise is passed as a prop; when it resolves,
-  PhoneApp seeds the crypto-context identity (userId, display name)
+  PhoneApp seeds the crypto-context identity (userId, userRoleId)
   and resolves the real detail ticket ID for the outer-page sentinel.
 -->
 <script lang="ts">
@@ -35,8 +35,8 @@
   import { createDemoQueryClient } from "$demo/demo-query-client.js";
   import { createDemoLocationStore } from "$demo/demo-location.svelte.js";
   import type { PhoneCommand } from "$demo/scroll-sections.js";
-  import { demoSeed } from "$lib/crypto/context.js";
-  import { setCryptoKeyed } from "$lib/crypto/crypto-keyed.svelte.js";
+  import { demoSeed, ensureKeyed } from "$lib/crypto/context.js";
+  import { RoleId } from "@care-y/shared";
   import { classifyDemoLabel } from "$demo/topic-classifier.js";
   import {
     getLoginStage,
@@ -83,8 +83,8 @@
   const router = createDemoRouter();
   const queryClient = createDemoQueryClient();
 
-  // Enable crypto-keyed gate so unread chips and pills render
-  setCryptoKeyed(true);
+  // crypto-keyed signal is now wired via initBridge().onBridgeStateChange
+  // in crypto-context.ts; no hardcode needed.
 
   // -----------------------------------------------------------------------
   // Engine resolution: crypto seed + real ticket ID
@@ -119,9 +119,7 @@
     .then((e) => {
       demoSeed({
         userId: e.seedResult.adminUserId,
-        orgValues: {
-          "me:display_name": "Jordan Kim",
-        },
+        userRoleId: RoleId.ADMIN,
       });
       if (e.ticketIds.length > 0) {
         resolvedDetailId = e.ticketIds[0] ?? null;
@@ -346,6 +344,8 @@
     if (feature === "tickets" && router.feature === "login") {
       setDemoAuthed(true);
       setLoginStage(null);
+      // Fast-forward crypto so deep links decrypt without playing login
+      void ensureKeyed();
     }
     if (feature === "login" && router.feature !== "login") {
       resetLoginFlow();

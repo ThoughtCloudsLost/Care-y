@@ -19,6 +19,7 @@
 -->
 <script lang="ts">
   import type { Component, Snippet } from "svelte";
+  import * as m from "$lib/paraglide/messages.js";
   import { matchRoute } from "./route-manifest.js";
   import { setDemoPage } from "../../stubs/app-state.svelte.js";
 
@@ -57,42 +58,63 @@
   let loaded = $state<LoadedRoute | null>(null);
   let loadError = $state<string | null>(null);
   let loading = $state(true);
+  // The loading notice only appears when a FIRST mount (no previous
+  // screen to keep showing) takes longer than the flash threshold.
+  // Between navigations the previous route stays mounted until the
+  // next one's chunks are ready, so no intermediate state paints,
+  // matching SvelteKit's keep-old-page-until-ready behavior.
+  let showSlowNotice = $state(false);
+
+  // Monotonic token: a navigation may supersede an in-flight load,
+  // whose late resolution must not clobber the newer route.
+  let loadSeq = 0;
 
   // Load page + layouts whenever the match changes
   $effect(() => {
     const match = matchResult;
+    const seq = ++loadSeq;
     if (match === null) {
       loaded = null;
       loadError = null;
       loading = false;
+      showSlowNotice = false;
       return;
     }
 
     loading = true;
     loadError = null;
 
+    const noticeTimer = setTimeout(() => {
+      showSlowNotice = true;
+    }, 300);
+
     const loaders = [match.page(), ...match.layouts.map(async (l) => l())];
 
     void Promise.all(loaders)
       .then((modules) => {
+        if (seq !== loadSeq) return;
         const [pageModule, ...layoutModules] = modules;
         if (pageModule === undefined) {
           loadError = "Page module failed to load";
-          loading = false;
-          return;
+        } else {
+          loaded = {
+            page: pageModule.default,
+            layouts: layoutModules.map((mod) => mod.default),
+          };
         }
-        loaded = {
-          page: pageModule.default,
-          layouts: layoutModules.map((m) => m.default),
-        };
         loading = false;
+        showSlowNotice = false;
       })
       .catch((err: unknown) => {
+        if (seq !== loadSeq) return;
         const message =
           err instanceof Error ? err.message : "Unknown load error";
         loadError = message;
         loading = false;
+        showSlowNotice = false;
       });
+
+    return () => clearTimeout(noticeTimer);
   });
 </script>
 
@@ -101,8 +123,10 @@
     <div class="route-error">
       No route matches: <code>{pathname}</code>
     </div>
-  {:else if loading}
-    <div class="route-loading">Loading route chunks...</div>
+  {:else if loading && loaded === null}
+    {#if showSlowNotice}
+      <div class="route-loading">{m.demo_route_loading()}</div>
+    {/if}
   {:else if loadError !== null}
     <div class="route-error">
       Load error: <code>{loadError}</code>

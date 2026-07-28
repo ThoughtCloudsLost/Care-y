@@ -1846,6 +1846,7 @@
   "demo_step_of": "Step {step} of {total}",
   "demo_tap_hint": "Tap to continue",
   "demo_tickets_skeleton": "Loading encrypted tickets",
+  "demo_route_loading": "One moment, loading this screen. This short wait happens only in the browser demo, not in the installed app.",
   "demo_tickets_descramble": "Decrypting ticket titles",
   "demo_tickets_view_list": "Switching to list view",
   "demo_tickets_view_cards": "Switching to card view",
