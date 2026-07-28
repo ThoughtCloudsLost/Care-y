@@ -44,7 +44,7 @@
   class="shell-dialog-root"
 >
   <ShellBackdrop {opened} ondismiss={trap.handleDismiss} />
-  <Dialog {opened} {title} backdrop={false}>
+  <Dialog {opened} title={mounted.current ? title : undefined} backdrop={false}>
     {#if mounted.current}
       {@render contentSnippet()}
     {/if}
