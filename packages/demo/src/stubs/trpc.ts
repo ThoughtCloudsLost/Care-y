@@ -353,15 +353,56 @@ const mockOverlay: Record<string, Record<string, unknown>> = {
 };
 
 // -----------------------------------------------------------------------
-// Two-level proxy: router -> procedure
+// Recursive proxy: router[.subRouter...].procedure
 //
-// For routers with SOME mocked procedures, the first-level proxy
-// returns a sub-proxy that checks whether the procedure name is in
-// the mock overlay. If not, it falls through to the engine adapter.
+// The mock overlay is consulted for the first two path levels (its
+// entries are router -> procedure-or-subrouter). Everything else falls
+// through to the engine adapter, accumulating the full path so nested
+// routers (twoFactor.enroll.totpSetup, twoFactor.methods.remove) reach
+// the caller. A flat two-level fall-through silently breaks exactly
+// those: property access on a plain { query, mutate } object returns
+// undefined and the client throws at .mutate.
 //
 // Every delegation path awaits the engine promise, so calls made
 // while the engine is still booting will wait transparently.
 // -----------------------------------------------------------------------
+
+/**
+ * Build a proxy node that delegates to the engine adapter at `path`.
+ * "query"/"mutate" terminate into a dispatch; other property gets
+ * extend the path.
+ */
+function makeEngineNode(path: readonly string[]): unknown {
+  async function dispatch(kind: "query" | "mutate", input?: unknown) {
+    const eng = await getEngine();
+    let node: unknown = eng;
+    for (const segment of path) {
+      if (node === undefined || node === null) break;
+      node = Reflect.get(node as Record<string | symbol, unknown>, segment);
+    }
+    const fn = Reflect.get(node as Record<string | symbol, unknown>, kind) as (
+      i?: unknown,
+    ) => Promise<unknown>;
+    return fn(input);
+  }
+  return new Proxy(
+    {},
+    {
+      get(_target, prop: string | symbol): unknown {
+        if (typeof prop === "symbol") return undefined;
+        if (prop === "query") {
+          return async (input?: unknown): Promise<unknown> =>
+            dispatch("query", input);
+        }
+        if (prop === "mutate") {
+          return async (input?: unknown): Promise<unknown> =>
+            dispatch("mutate", input);
+        }
+        return makeEngineNode([...path, prop]);
+      },
+    },
+  );
+}
 
 export const trpc: RealTrpc = new Proxy(
   {},
@@ -374,50 +415,7 @@ export const trpc: RealTrpc = new Proxy(
       // no prototype-pollution surface.
       const mockRouter = new Map(Object.entries(mockOverlay)).get(routerName);
       if (mockRouter === undefined) {
-        // No mock for this router: return a proxy that awaits
-        // the engine and delegates.
-        return new Proxy(
-          {},
-          {
-            get(_t2, procName: string | symbol): unknown {
-              if (typeof procName === "symbol") return undefined;
-              return {
-                async query(input?: unknown): Promise<unknown> {
-                  const eng = await getEngine();
-                  const router = Reflect.get(
-                    eng as Record<string | symbol, unknown>,
-                    routerName,
-                  );
-                  const proc = Reflect.get(
-                    router as Record<string | symbol, unknown>,
-                    procName,
-                  );
-                  const fn = Reflect.get(
-                    proc as Record<string | symbol, unknown>,
-                    "query",
-                  ) as (i?: unknown) => Promise<unknown>;
-                  return fn(input);
-                },
-                async mutate(input?: unknown): Promise<unknown> {
-                  const eng = await getEngine();
-                  const router = Reflect.get(
-                    eng as Record<string | symbol, unknown>,
-                    routerName,
-                  );
-                  const proc = Reflect.get(
-                    router as Record<string | symbol, unknown>,
-                    procName,
-                  );
-                  const fn = Reflect.get(
-                    proc as Record<string | symbol, unknown>,
-                    "mutate",
-                  ) as (i?: unknown) => Promise<unknown>;
-                  return fn(input);
-                },
-              };
-            },
-          },
-        );
+        return makeEngineNode([routerName]);
       }
 
       // Has some mocked procedures: return a proxy that checks procedure names
@@ -428,43 +426,8 @@ export const trpc: RealTrpc = new Proxy(
             if (typeof procName === "symbol") return undefined;
             const mockProc = new Map(Object.entries(mockRouter)).get(procName);
             if (mockProc !== undefined) return mockProc;
-            // Fall through to engine for non-mocked procedures on this router
-            return {
-              async query(input?: unknown): Promise<unknown> {
-                const eng = await getEngine();
-                const router = Reflect.get(
-                  eng as Record<string | symbol, unknown>,
-                  routerName,
-                );
-                if (router === undefined) return undefined;
-                const proc = Reflect.get(
-                  router as Record<string | symbol, unknown>,
-                  procName,
-                );
-                const fn = Reflect.get(
-                  proc as Record<string | symbol, unknown>,
-                  "query",
-                ) as (i?: unknown) => Promise<unknown>;
-                return fn(input);
-              },
-              async mutate(input?: unknown): Promise<unknown> {
-                const eng = await getEngine();
-                const router = Reflect.get(
-                  eng as Record<string | symbol, unknown>,
-                  routerName,
-                );
-                if (router === undefined) return undefined;
-                const proc = Reflect.get(
-                  router as Record<string | symbol, unknown>,
-                  procName,
-                );
-                const fn = Reflect.get(
-                  proc as Record<string | symbol, unknown>,
-                  "mutate",
-                ) as (i?: unknown) => Promise<unknown>;
-                return fn(input);
-              },
-            };
+            // Fall through to engine for non-mocked members on this router
+            return makeEngineNode([routerName, procName]);
           },
         },
       );

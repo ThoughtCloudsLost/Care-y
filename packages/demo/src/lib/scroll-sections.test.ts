@@ -108,6 +108,34 @@ describe("parseHash", () => {
       subSlug: null,
     });
   });
+
+  it("parses settings/profile-identity sub", () => {
+    expect(parseHash("#settings/profile-identity")).toEqual({
+      sectionId: "settings",
+      subSlug: "profile-identity",
+    });
+  });
+
+  it("parses settings/password-keys sub", () => {
+    expect(parseHash("#settings/password-keys")).toEqual({
+      sectionId: "settings",
+      subSlug: "password-keys",
+    });
+  });
+
+  it("parses settings/two-factor-methods sub", () => {
+    expect(parseHash("#settings/two-factor-methods")).toEqual({
+      sectionId: "settings",
+      subSlug: "two-factor-methods",
+    });
+  });
+
+  it("parses admin/people-queues sub", () => {
+    expect(parseHash("#admin/people-queues")).toEqual({
+      sectionId: "admin",
+      subSlug: "people-queues",
+    });
+  });
 });
 
 describe("buildHash", () => {
@@ -285,6 +313,26 @@ describe("resolvePhoneCommand", () => {
     const cmd = resolvePhoneCommand("settings", "intro", TICKET_ID);
     expect(cmd.feature).toBe("settings");
     expect(cmd.detail).toBeNull();
+  });
+
+  it("resolves settings sub-sections to settings feature", () => {
+    for (const sub of [
+      "profile-identity",
+      "password-keys",
+      "two-factor-methods",
+    ]) {
+      const cmd = resolvePhoneCommand("settings", sub, TICKET_ID);
+      expect(cmd.feature).toBe("settings");
+      expect(cmd.detail).toBeNull();
+      expect(cmd.pulseTopic).toBeNull();
+    }
+  });
+
+  it("resolves admin/people-queues to admin feature", () => {
+    const cmd = resolvePhoneCommand("admin", "people-queues", TICKET_ID);
+    expect(cmd.feature).toBe("admin");
+    expect(cmd.detail).toBeNull();
+    expect(cmd.pulseTopic).toBeNull();
   });
 });
 
@@ -579,9 +627,9 @@ describe("SECTIONS taxonomy", () => {
     expect(library?.subs).toHaveLength(1);
   });
 
-  it("admin has 1 sub", () => {
+  it("admin has 2 subs", () => {
     const admin = SECTIONS.find((s) => s.id === "admin");
-    expect(admin?.subs).toHaveLength(1);
+    expect(admin?.subs).toHaveLength(2);
   });
 
   it("schedule has 1 sub", () => {
@@ -589,8 +637,8 @@ describe("SECTIONS taxonomy", () => {
     expect(schedule?.subs).toHaveLength(1);
   });
 
-  it("settings has 1 sub", () => {
+  it("settings has 4 subs", () => {
     const settings = SECTIONS.find((s) => s.id === "settings");
-    expect(settings?.subs).toHaveLength(1);
+    expect(settings?.subs).toHaveLength(4);
   });
 });

@@ -12,6 +12,7 @@
   import AuthLayout from "$routes/(auth)/+layout.svelte";
   import LoginPage from "$routes/(auth)/login/+page.svelte";
   import { setLoginStage } from "$demo/login-stage.svelte.js";
+  import { maskPasswordControls } from "$demo/password-mask.js";
   import { setLoginCryptoStageListener } from "../../stubs/login-crypto.js";
 
   // Prefill credentials after the form mounts. Uses input events so
@@ -45,16 +46,19 @@
   // credentials form and stamped a 2FA stage at load).
   let containerEl: HTMLElement | undefined = $state();
 
-  /** Mark the mounted form as autocomplete-off. Best effort against
-   *  autofill; the save-password prompt itself is handled by the
-   *  capture-phase submit listener below. Demo-document attributes
-   *  only; product source untouched. */
+  /** Mark the mounted form as autocomplete-off and convert the
+   *  password control to a masked text control. Chrome provisionally
+   *  saves credentials while they are typed, so the submit-capture
+   *  clearing below is not sufficient on its own; the mask keeps a
+   *  type="password" field out of the document entirely.
+   *  Demo-document attributes only; product source untouched. */
   function suppressAutofill(container: Element): void {
     const form = container.querySelector("form");
     form?.setAttribute("autocomplete", "off");
     container
       .querySelector<HTMLInputElement>('input[autocomplete="current-password"]')
       ?.setAttribute("autocomplete", "off");
+    maskPasswordControls(container);
   }
 
   $effect(() => {

@@ -1,71 +1,25 @@
 /**
- * Factory for a network-safe TanStack QueryClient pre-seeded with
- * fixture data that AppShell reads on mount.
+ * Factory for the demo's TanStack QueryClient.
  *
- * Retries, refetching, and gc are all disabled so the demo never
- * attempts real network requests or evicts seeded data.
+ * Every query resolves in-process against the embedded server engine,
+ * so no fixture pre-seeding happens here (a pre-engine auth.me fixture
+ * with placeholder ciphertexts once lived in this file and silently
+ * shadowed the real endpoint via staleTime: Infinity). Refetch-on-*
+ * triggers stay off because data only changes through mutations, which
+ * invalidate their own query keys.
  */
 
 import { QueryClient } from "@tanstack/svelte-query";
-import { authKeys } from "$lib/query/keys.js";
-
-// -----------------------------------------------------------------------
-// Fixture constants (sourced from stubs/crypto-context.ts defaults)
-// -----------------------------------------------------------------------
-
-const DEMO_USER_ID = "demo-user-001";
-const DEMO_ROLE_ID = "demo-role-001";
-/** Fake ciphertext standing in for the encrypted display name. */
-const DEMO_ENCRYPTED_DISPLAY_NAME = "x".repeat(60);
 
 /**
- * Minimal auth.me response shape that satisfies AppShell's reads:
- *   - meQuery.data.user.id
- *   - meQuery.data.user.roleId
- *   - meQuery.data.user.encryptedDisplayName
- *   - meQuery.data.user.encryptedIdentifier
- *   - meQuery.data.permissions
- */
-interface DemoMeResponse {
-  readonly user: {
-    readonly id: string;
-    readonly encryptedIdentifier: string;
-    readonly encryptedDisplayName: string;
-    readonly encryptedPreferredLocale: string | null;
-    readonly roleId: string;
-    readonly hasSeenBriefing: boolean;
-  };
-  readonly permissions: readonly string[];
-  readonly twofaVerified: boolean;
-}
-
-function buildMeFixture(): DemoMeResponse {
-  return {
-    user: {
-      id: DEMO_USER_ID,
-      encryptedIdentifier: "x".repeat(50),
-      encryptedDisplayName: DEMO_ENCRYPTED_DISPLAY_NAME,
-      encryptedPreferredLocale: null,
-      roleId: DEMO_ROLE_ID,
-      hasSeenBriefing: true,
-    },
-    permissions: [
-      "tickets:read",
-      "tickets:write",
-      "tickets:assign",
-      "kb:read",
-      "kb:write",
-    ],
-    twofaVerified: true,
-  };
-}
-
-/**
- * Create a QueryClient configured for the demo: no network, no retries,
- * infinite staleTime, and pre-seeded with the data AppShell queries on mount.
+ * Create a QueryClient configured for the demo: no retries, no
+ * focus/reconnect refetching, infinite staleTime and gc. Errored
+ * queries still refetch when a new observer mounts (retryOnMount
+ * default), which is how the login page's pre-auth 401 on auth.me
+ * recovers once the app shell mounts after login.
  */
 export function createDemoQueryClient(): QueryClient {
-  const client = new QueryClient({
+  return new QueryClient({
     defaultOptions: {
       queries: {
         retry: false,
@@ -77,19 +31,12 @@ export function createDemoQueryClient(): QueryClient {
       },
     },
   });
-
-  // Seed auth.me so AppShell's meQuery resolves immediately
-  client.setQueryData(authKeys.me(), buildMeFixture());
-
-  return client;
 }
 
 /**
- * Clear all cached data and re-seed auth.me. Use this on demo restart
- * so that list/detail queries refetch from the reset trpc mock while
- * AppShell's meQuery still resolves immediately.
+ * Clear all cached data. Restart is an iframe reload in the current
+ * demo, so this exists for tests and any future soft-reset path.
  */
 export function reseedDemoQueryClient(client: QueryClient): void {
   client.clear();
-  client.setQueryData(authKeys.me(), buildMeFixture());
 }

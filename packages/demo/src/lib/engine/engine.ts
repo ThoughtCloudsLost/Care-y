@@ -24,6 +24,7 @@ import { TRPCClientError } from "@trpc/client";
 import { RoleId } from "@care-y/shared";
 
 import { NotFoundError } from "../../../../server/src/errors.js";
+import type { TelephonyProvider } from "../../../../server/src/telephony/provider.js";
 import { initDb, db, tenantDb } from "./server/db-shim.js";
 import { markSodiumReady } from "./server/node-crypto-shim.js";
 import {
@@ -55,8 +56,6 @@ import {
   wrapOrgKeyForVolunteer,
   createDemoOprfService,
 } from "./server/demo-keys.js";
-import { eciesEncrypt } from "@care-y/crypto";
-import type { RistrettoPoint } from "@care-y/crypto";
 
 import type { TenantDatabase } from "../../../../server/src/db/types.js";
 import type {
@@ -103,7 +102,7 @@ export interface DemoEngineResult {
   readonly adminCtx: Context;
   readonly volunteerCtx: Context;
   readonly appRouter: unknown;
-  /** Ticket ID whose key wrap was replaced with a foreign key (decrypt-denied demo). */
+  /** Ticket ID whose key wrap was deleted (decrypt-denied demo). */
   readonly deniedTicketId: string;
 }
 
@@ -155,13 +154,37 @@ function createMapBlobStore(): BlobStore {
 }
 
 // Email/SMS outbox for inspection
-interface OutboxEntry {
+export interface OutboxEntry {
   readonly type: "email" | "sms";
   readonly to: string;
   readonly subject?: string;
   readonly body?: string;
 }
 const outbox: OutboxEntry[] = [];
+const outboxListeners: ((entry: OutboxEntry) => void)[] = [];
+
+function appendToOutbox(entry: OutboxEntry): void {
+  outbox.push(entry);
+  for (const cb of outboxListeners) {
+    cb(entry);
+  }
+}
+
+/** Returns a snapshot of all outbox entries (emails and SMS messages). */
+export function getOutbox(): readonly OutboxEntry[] {
+  return outbox;
+}
+
+/** Registers a callback fired each time a new entry is appended to the outbox. Returns an unsubscribe function. */
+export function onOutboxAppend(cb: (entry: OutboxEntry) => void): () => void {
+  outboxListeners.push(cb);
+  return () => {
+    const idx = outboxListeners.indexOf(cb);
+    if (idx >= 0) {
+      outboxListeners.splice(idx, 1);
+    }
+  };
+}
 
 // Set-Cookie capture
 const capturedCookies: string[] = [];
@@ -313,33 +336,23 @@ export async function bootDemoEngine(): Promise<DemoEngineResult> {
     DEMO_ORG_SCHEMA,
   );
 
-  // Re-wrap one seeded ticket to a foreign key so the locked/decrypt-failed
-  // state still demos. Pick the LAST ticket (never ticketIds[0], which is the
-  // detail deep-link target).
+  // Delete one seeded ticket's key wrap so the locked/denied state still
+  // demos. Pick the LAST ticket (never ticketIds[0], which is the detail
+  // deep-link target). A missing wrap is the shape production actually
+  // produces for no-access (keyWrap null -> DENIED); the earlier variant
+  // (re-wrapping to a foreign key while keeping user_id) created a row
+  // no production flow can create, and it broke the real password-change
+  // pipeline, whose myTicketKeyWraps unwrap loop rightly expects every
+  // own wrap to open.
   const deniedTicketId =
     ticketResult.ticketIds[ticketResult.ticketIds.length - 1];
   if (deniedTicketId === undefined) {
-    throw new DemoEngineError("No seeded tickets to re-wrap for denied demo");
+    throw new DemoEngineError("No seeded tickets for the denied demo");
   }
-  const foreignScalar = _sodium.crypto_core_ristretto255_scalar_random();
-  const foreignPublic =
-    _sodium.crypto_scalarmult_ristretto255_base(foreignScalar);
-  // Generate a random 32-byte "ticket key" stand-in (the actual content key
-  // is irrelevant since decrypt must FAIL for this ticket).
-  const foreignTk = _sodium.randombytes_buf(32);
-  const foreignWrap = eciesEncrypt(foreignTk, foreignPublic as RistrettoPoint);
   await tDb
-    .updateTable("ticket_key_wraps")
-    .set({
-      ephemeral_point: Buffer.from(foreignWrap.ephemeralPoint),
-      nonce: Buffer.from(foreignWrap.nonce),
-      wrapped_key: Buffer.from(foreignWrap.ciphertext),
-    })
+    .deleteFrom("ticket_key_wraps")
     .where("ticket_id", "=", deniedTicketId)
     .execute();
-  // Zero transient foreign key material
-  _sodium.memzero(foreignScalar);
-  _sodium.memzero(foreignTk);
 
   const { seedKbArticles } =
     await import("../../../../server/src/dev/seed-kb.js");
@@ -349,6 +362,7 @@ export async function bootDemoEngine(): Promise<DemoEngineResult> {
     seedResult.adminUserId,
     blobStore,
     DEMO_ORG_SCHEMA,
+    seedResult.rosterUserIds,
   );
 
   // Seed audit_log rows so the dashboard activity feed has entries.
@@ -434,16 +448,61 @@ export async function bootDemoEngine(): Promise<DemoEngineResult> {
     },
   };
 
-  // Provider factory stub. Rejects with the server's own NotFoundError
-  // (the "telephony not configured for this org" case) so callers that
-  // gracefully degrade on unconfigured telephony, like the scoped 2FA
-  // services inside auth.login, take their designed fallback path
-  // instead of treating the rejection as an unexpected failure.
-  const providerFactoryStub: ProviderFactory = {
+  // Provider factory: two variants.
+  // - rejectingProviderFactory: rejects with NotFoundError so callers degrade
+  //   gracefully (used by auth login where SMS is irrelevant).
+  // - smsCapableProviderFactory: returns a minimal TelephonyProvider that routes
+  //   sendSms to the outbox (used by twoFactorDeps for SMS enrollment).
+  const rejectingProviderFactory: ProviderFactory = {
     async getProvider(): Promise<never> {
       return Promise.reject(
         new NotFoundError("Telephony not configured in browser demo"),
       );
+    },
+    invalidate(): void {
+      // no-op
+    },
+    invalidateAll(): void {
+      // no-op
+    },
+  };
+
+  // Minimal TelephonyProvider satisfying createSmsCodeService's usage
+  // (only sendSms is called). All other members throw via the Proxy trap.
+  const smsProviderImpl = {
+    providerId: "demo-sms" as const,
+    async sendSms(
+      to: string,
+      body: string,
+      _callerId: string,
+    ): Promise<{ messageId: string }> {
+      appendToOutbox({ type: "sms", to, body });
+      return Promise.resolve({ messageId: globalThis.crypto.randomUUID() });
+    },
+  };
+
+  // The assertion is safe because every member the impl lacks fails
+  // loud through the trap (sodium-native-shim pattern) instead of
+  // silently returning undefined.
+  const smsProvider = new Proxy(smsProviderImpl, {
+    get(target, prop, receiver): unknown {
+      if (prop in target || typeof prop === "symbol") {
+        return Reflect.get(target, prop, receiver) as unknown;
+      }
+      // Promise resolution probes "then" on any value it adopts;
+      // answering undefined marks the provider as a plain value.
+      if (prop === "then" || prop === "catch" || prop === "finally") {
+        return undefined;
+      }
+      throw new DemoEngineError(
+        `Demo SMS provider: "${prop}" is not implemented`,
+      );
+    },
+  }) as unknown as TelephonyProvider;
+
+  const smsCapableProviderFactory: ProviderFactory = {
+    async getProvider(): Promise<TelephonyProvider> {
+      return Promise.resolve(smsProvider);
     },
     invalidate(): void {
       // no-op
@@ -492,7 +551,7 @@ export async function bootDemoEngine(): Promise<DemoEngineResult> {
       subject: string;
       text: string;
     }): Promise<void> {
-      outbox.push({
+      appendToOutbox({
         type: "email",
         to: message.to,
         subject: message.subject,
@@ -502,9 +561,9 @@ export async function bootDemoEngine(): Promise<DemoEngineResult> {
     },
   };
 
-  // Phone resolver stub
+  // Phone resolver stub (returns a demo caller ID for SMS delivery)
   const phoneResolverStub = async (): Promise<string | null> =>
-    Promise.resolve(null);
+    Promise.resolve("+15550001234");
 
   // TOTP replay cache stub
   const totpReplayCacheStub = {
@@ -577,7 +636,7 @@ export async function bootDemoEngine(): Promise<DemoEngineResult> {
       tokenizer,
       isSecureCookie: false,
       emailSender: emailSenderStub,
-      providerFactory: providerFactoryStub,
+      providerFactory: rejectingProviderFactory,
       resolveCallerId: phoneResolverStub,
       totpReplayCache: totpReplayCacheStub,
     },
@@ -593,7 +652,7 @@ export async function bootDemoEngine(): Promise<DemoEngineResult> {
       encryptor,
       indexer,
       tokenizer,
-      providerFactory: providerFactoryStub,
+      providerFactory: smsCapableProviderFactory,
       resolveCallerId: phoneResolverStub,
       pushSender: pushSenderStub,
       pushHmacKey: pushChallengeHmacKey,
@@ -601,7 +660,7 @@ export async function bootDemoEngine(): Promise<DemoEngineResult> {
     },
     oprfDeps: { oprfService },
     orgService: orgServiceStub,
-    providerFactory: providerFactoryStub,
+    providerFactory: rejectingProviderFactory,
     includeReports: true,
     includeConsultant: true,
     includeTelephonyContent: false,
@@ -692,15 +751,41 @@ export async function bootDemoEngine(): Promise<DemoEngineResult> {
     webauthnChallenge: null,
   };
 
-  const adminUser: UserRecord = {
-    id: seedResult.adminUserId,
-    encryptedIdentifier: "",
-    encryptedDisplayName: "",
-    encryptedPreferredLocale: null,
-    roleId: RoleId.ADMIN,
-    isActive: true,
-    hasSeenBriefing: true,
-  };
+  // The fabricated context mirrors what the production session middleware
+  // does per request: load the user record fresh from the users table.
+  // auth.me serves ctx.user directly, so the sealed ciphertexts must be
+  // the row's real bytes (or every me:* org-tier decrypt fails), and a
+  // profile mutation must be visible on the next read (or settings
+  // writes appear to have no effect). The adapter refreshes this before
+  // each dispatch; ctx.user is a live getter over the latest load.
+  async function loadAdminUser(): Promise<UserRecord> {
+    const row = await tDb
+      .selectFrom("users")
+      .select([
+        "encrypted_identifier",
+        "encrypted_display_name",
+        "role_id",
+        "is_active",
+        "has_seen_briefing",
+      ])
+      .where("id", "=", seedResult.adminUserId)
+      .executeTakeFirstOrThrow();
+    return {
+      id: seedResult.adminUserId,
+      encryptedIdentifier: row.encrypted_identifier.toString("base64"),
+      encryptedDisplayName: row.encrypted_display_name.toString("base64"),
+      encryptedPreferredLocale: null,
+      roleId: row.role_id,
+      isActive: row.is_active,
+      hasSeenBriefing: row.has_seen_briefing,
+    };
+  }
+
+  let currentAdminUser: UserRecord = await loadAdminUser();
+
+  async function refreshAdminUser(): Promise<void> {
+    currentAdminUser = await loadAdminUser();
+  }
 
   const adminCtx: Context = {
     // auth.login reads req.socket.remoteAddress (request-utils getClientIp)
@@ -719,7 +804,9 @@ export async function bootDemoEngine(): Promise<DemoEngineResult> {
     } as unknown as Context["res"],
     org: orgCtx,
     session: adminSession,
-    user: adminUser,
+    get user(): UserRecord {
+      return currentAdminUser;
+    },
   };
 
   const callerFactory = createCallerFactory(appRouter);
@@ -763,57 +850,65 @@ export async function bootDemoEngine(): Promise<DemoEngineResult> {
     return value;
   }
 
-  // Proxy adapter: trpc.<router>.<proc>.query(input) / .mutate(input)
+  // Proxy adapter: trpc.<router>[.<subRouter>...].<proc>.query/mutate(input).
+  // Router nesting is arbitrary depth (twoFactor.enroll.totpSetup,
+  // twoFactor.methods.remove), so each node recurses: "query"/"mutate"
+  // terminate into a dispatch over the accumulated path, any other
+  // property extends the path.
   function createAdapter(caller: ReturnType<typeof callerFactory>): unknown {
     // The tRPC caller is a recursive proxy: property access resolves
     // procedures, but it exposes no enumerable own keys, so key
     // enumeration (Object.entries) sees nothing. Always use Reflect.get.
     const callerObj = caller as unknown as Record<string, unknown>;
 
-    return new Proxy(
-      {},
-      {
-        get(_target, routerName: string) {
-          return new Proxy(
-            {},
-            {
-              get(_t2, procName: string) {
-                async function dispatch(input?: unknown): Promise<unknown> {
-                  try {
-                    const routerObj = Reflect.get(callerObj, routerName);
-                    if (routerObj === undefined || routerObj === null) {
-                      throw new TRPCError({
-                        code: "NOT_FOUND",
-                        message: `Router "${routerName}" not found`,
-                      });
-                    }
-                    const proc = Reflect.get(
-                      routerObj as Record<string, unknown>,
-                      procName,
-                    );
-                    if (typeof proc !== "function") {
-                      throw new TRPCError({
-                        code: "NOT_FOUND",
-                        message: `Procedure "${procName}" not found on router "${routerName}"`,
-                      });
-                    }
-                    return reshapeWire(
-                      await (proc as (i: unknown) => Promise<unknown>)(input),
-                    );
-                  } catch (err: unknown) {
-                    if (err instanceof TRPCError) {
-                      throw TRPCClientError.from(err);
-                    }
-                    throw err;
-                  }
-                }
-                return { query: dispatch, mutate: dispatch };
-              },
-            },
-          );
+    async function dispatchPath(
+      path: readonly string[],
+      input?: unknown,
+    ): Promise<unknown> {
+      try {
+        // Per-request user reload, mirroring the production session
+        // middleware: profile mutations must be visible to the very
+        // next ctx.user read.
+        await refreshAdminUser();
+        let node: unknown = callerObj;
+        for (const segment of path) {
+          if (node === undefined || node === null) break;
+          node = Reflect.get(node as Record<string, unknown>, segment);
+        }
+        if (typeof node !== "function") {
+          throw new TRPCError({
+            code: "NOT_FOUND",
+            message: `Procedure "${path.join(".")}" not found`,
+          });
+        }
+        return reshapeWire(
+          await (node as (i: unknown) => Promise<unknown>)(input),
+        );
+      } catch (err: unknown) {
+        if (err instanceof TRPCError) {
+          throw TRPCClientError.from(err);
+        }
+        throw err;
+      }
+    }
+
+    function makeNode(path: readonly string[]): unknown {
+      return new Proxy(
+        {},
+        {
+          get(_target, prop: string | symbol): unknown {
+            if (typeof prop === "symbol") return undefined;
+            if (prop === "query" || prop === "mutate") {
+              return async (input?: unknown): Promise<unknown> =>
+                dispatchPath(path, input);
+            }
+            return makeNode([...path, prop]);
+          },
         },
-      },
-    );
+      );
+    }
+
+    return makeNode([]);
   }
 
   const trpcAdapter = createAdapter(adminCaller);
@@ -1200,6 +1295,77 @@ export async function runHealthProofs(
   } catch (err: unknown) {
     report({
       name: "P7 timings surface",
+      pass: false,
+      detail: err instanceof Error ? err.message : String(err),
+    });
+  }
+
+  // P8: TOTP enrollment round-trip via the caller adapter
+  try {
+    const { generateTotpCode, base32Decode } =
+      await import("../../../../server/src/auth/totp.js");
+
+    // Step 1: Begin TOTP enrollment (generates secret + otpauth URI)
+    const setupResult = await dispatch(
+      adminCaller,
+      "twoFactor",
+      "status",
+      undefined,
+    );
+
+    // Remove any existing totp method first (the admin was seeded with all
+    // method types enrolled). Removing it lets us re-enroll cleanly.
+    const statusBefore = setupResult as {
+      methods: { type: string }[];
+    };
+    const existingTotp = statusBefore.methods.find((m) => m.type === "totp");
+    if (existingTotp) {
+      await dispatchNested(adminCaller, "twoFactor", "methods", "remove", {
+        method: "totp",
+      });
+    }
+
+    // Step 2: Setup TOTP (get secret + URI)
+    const totpSetup = (await dispatchNested(
+      adminCaller,
+      "twoFactor",
+      "enroll",
+      "totpSetup",
+      undefined,
+    )) as { secret: string; uri: string };
+
+    // Step 3: Compute a valid TOTP code from the returned base32 secret
+    const secretBytes = base32Decode(totpSetup.secret);
+    const totpCode = generateTotpCode(secretBytes, Date.now());
+
+    // Step 4: Verify the code to complete enrollment
+    const verifyResult = (await dispatchNested(
+      adminCaller,
+      "twoFactor",
+      "enroll",
+      "totpVerify",
+      { code: totpCode },
+    )) as { success: boolean };
+
+    // Step 5: Confirm TOTP is now enrolled
+    const statusAfter = (await dispatch(
+      adminCaller,
+      "twoFactor",
+      "status",
+      undefined,
+    )) as { methods: { type: string }[] };
+    const totpEnrolled = statusAfter.methods.some((m) => m.type === "totp");
+
+    report({
+      name: "P8 totp enrollment round-trip",
+      pass: verifyResult.success && totpEnrolled,
+      detail:
+        `verify success: ${String(verifyResult.success)}, ` +
+        `totp enrolled after: ${String(totpEnrolled)}`,
+    });
+  } catch (err: unknown) {
+    report({
+      name: "P8 totp enrollment round-trip",
       pass: false,
       detail: err instanceof Error ? err.message : String(err),
     });

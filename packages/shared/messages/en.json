@@ -1976,5 +1976,13 @@
   "demo_section_library_title": "Library",
   "demo_section_library_desc": "The library is a shared knowledge base for the organization. Browse articles, read detailed entries with attachments and votes, and write new content in the rich-text editor. Everything here runs against the real in-browser server with real encryption.",
   "demo_narrative_library_heading": "Shared knowledge base",
-  "demo_narrative_library_body": "The library stores articles that volunteers can reference during calls. Each article body is encrypted with the organization key before it reaches the database. The list, detail view (with file attachments and community votes), and rich-text editor all operate against real server endpoints running inside your browser."
+  "demo_narrative_library_body": "The library stores articles that volunteers can reference during calls. Each article body is encrypted with the organization key before it reaches the database. The list, detail view (with file attachments and community votes), and rich-text editor all operate against real server endpoints running inside your browser.",
+  "demo_narrative_settings_profile_identity_heading": "Display name and username",
+  "demo_narrative_settings_profile_identity_body": "You can change your display name and username here. Both are real writes to the database running in your browser and reset when the demo restarts.",
+  "demo_narrative_settings_password_keys_heading": "Password and key re-wrap",
+  "demo_narrative_settings_password_keys_body": "Changing your password runs the full Argon2id stretch, OPRF exchange, and cryptographic key re-wrap pipeline. Your private key is re-encrypted under the new password without the server ever seeing the plaintext. In this demo the pipeline runs against the in-browser database and resets on restart.",
+  "demo_narrative_settings_two_factor_methods_heading": "Two-factor enrollment",
+  "demo_narrative_settings_two_factor_methods_body": "You can enroll TOTP, email, or SMS as a second factor from this page. The demo stands in for your authenticator app and inbox by auto-filling the verification code after a short delay. The server-side verification is real. Enrolled methods persist in the demo database until you restart.",
+  "demo_narrative_admin_people_queues_heading": "People and queues",
+  "demo_narrative_admin_people_queues_body": "The roster shows every volunteer in the organization with their role and assigned queues. Administrators can add or remove volunteers and reconfigure queue assignments. All counts and list data are live queries against the demo database."
 }

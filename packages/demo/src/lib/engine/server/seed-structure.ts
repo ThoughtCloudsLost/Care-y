@@ -38,6 +38,8 @@ export interface SeedStructureResult {
   readonly orgPublicKey: Buffer;
   readonly orgSecretKey: Buffer;
   readonly queueIds: Map<string, string>;
+  /** User IDs for seeded roster volunteers (excludes admin). */
+  readonly rosterUserIds: readonly string[];
 }
 
 export interface SeedStructureDeps {
@@ -185,6 +187,25 @@ export async function seedStructure(
       .execute();
   }
 
+  // 5b. WebAuthn credential row. twoFactor.status derives its webauthn
+  // entries from webauthn_credentials, not from the method_type row, so
+  // without this the enrolled-methods list shows 4 of the 5 seeded
+  // methods. Fake credential bytes, computed (never pasted) per the
+  // no-baked-literals rule.
+  await tenantDb
+    .insertInto("webauthn_credentials")
+    .values({
+      user_id: adminUserId,
+      credential_id: Buffer.from("demo-webauthn-credential").toString("base64"),
+      public_key: Buffer.from("demo-webauthn-public-key").toString("base64"),
+      transports: ["internal"],
+      device_type: "platform",
+      backed_up: true,
+      aaguid: null,
+      ordinal: 1,
+    })
+    .execute();
+
   // 6. Phone record
   const phoneId = globalThis.crypto.randomUUID();
   await tenantDb
@@ -232,6 +253,107 @@ export async function seedStructure(
       .insertInto("queue_assignments")
       .values({ queue_id: qId, user_id: adminUserId })
       .execute();
+  }
+
+  // 8b. Roster users (directory entries only, no keys/2FA/phone)
+  const rosterDefs = [
+    {
+      identifier: "mgarcia",
+      displayName: "Maria Garcia",
+      role: RoleId.MANAGER,
+      active: true,
+    },
+    {
+      identifier: "tchen",
+      displayName: "Tao Chen",
+      role: RoleId.VOLUNTEER,
+      active: true,
+    },
+    {
+      identifier: "abrown",
+      displayName: "Aisha Brown",
+      role: RoleId.VOLUNTEER,
+      active: true,
+    },
+    {
+      identifier: "jmiller",
+      displayName: "Jordan Miller",
+      role: RoleId.VOLUNTEER,
+      active: false,
+    },
+    {
+      identifier: "rkhan",
+      displayName: "Ravi Khan",
+      role: RoleId.VOLUNTEER,
+      active: true,
+    },
+  ] as const;
+
+  const rosterUserIds: string[] = [];
+
+  for (let i = 0; i < rosterDefs.length; i++) {
+    const def = rosterDefs.at(i);
+    if (def === undefined) {
+      throw new DemoEngineError(`rosterDefs missing index ${String(i)}`);
+    }
+    const userId = globalThis.crypto.randomUUID();
+
+    // UsersTable exposes no created_at column (the DB default applies),
+    // so roster rows cannot carry varied creation dates.
+    await tenantDb
+      .insertInto("users")
+      .values({
+        id: userId,
+        identifier_hash: indexer.hash(def.identifier, orgId),
+        encrypted_identifier: sealedBox.seal(def.identifier),
+        encrypted_display_name: sealedBox.seal(def.displayName),
+        role_id: def.role,
+        password_hash: passwordHash,
+        is_active: def.active,
+        has_seen_briefing: true,
+      })
+      .execute();
+
+    rosterUserIds.push(userId);
+  }
+
+  // 8c. Queue assignments for roster users (varied, some in multiple queues)
+  const queueIdList = [...queueIds.values()];
+  // roster user 0 (manager): all queues
+  // roster user 1: Intake + Crisis
+  // roster user 2: Housing only
+  // roster user 3 (inactive): Intake only
+  // roster user 4: Crisis + Housing
+  const rosterQueueMap: readonly number[][] = [
+    [0, 1, 2],
+    [0, 1],
+    [2],
+    [0],
+    [1, 2],
+  ];
+  for (let i = 0; i < rosterQueueMap.length; i++) {
+    const queueIndices = rosterQueueMap.at(i);
+    if (queueIndices === undefined) {
+      throw new DemoEngineError(`rosterQueueMap missing index ${String(i)}`);
+    }
+    const userId = rosterUserIds.at(i);
+    if (userId === undefined) {
+      throw new DemoEngineError(`rosterUserIds missing index ${String(i)}`);
+    }
+    for (let j = 0; j < queueIndices.length; j++) {
+      const qIdx = queueIndices.at(j);
+      if (qIdx === undefined) {
+        throw new DemoEngineError(`queueIndices missing index ${String(j)}`);
+      }
+      const qId = queueIdList.at(qIdx);
+      if (qId === undefined) {
+        throw new DemoEngineError(`queueIdList missing index ${String(qIdx)}`);
+      }
+      await tenantDb
+        .insertInto("queue_assignments")
+        .values({ queue_id: qId, user_id: userId })
+        .execute();
+    }
   }
 
   // 9. Clients
@@ -341,5 +463,6 @@ export async function seedStructure(
     orgPublicKey,
     orgSecretKey,
     queueIds,
+    rosterUserIds,
   };
 }
