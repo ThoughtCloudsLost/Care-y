@@ -16,7 +16,7 @@
     id: string;
     eventType: string;
     ticketId: string | null;
-    clientAlias: string;
+    clientAlias: string | null;
     queueName: string | null;
     createdAt: Date | string;
   }
@@ -119,7 +119,7 @@
               <EventIcon size={13} />
             </span>
             <span class="activity-event">{eventLabel(item.eventType)}</span>
-            <span class="activity-alias">{item.clientAlias}</span>
+            <span class="activity-alias">{item.clientAlias ?? "..."}</span>
             <span class="activity-queue"
               >{m.dashboard_activity_in_queue(
                 withTerms({

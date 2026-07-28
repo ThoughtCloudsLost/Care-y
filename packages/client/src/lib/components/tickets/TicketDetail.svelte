@@ -297,7 +297,15 @@
 
   // Ticket data shortcuts.
   const ticket = $derived(ticketQuery.data);
-  const clientAlias = $derived(ticket?.clientAlias ?? "...");
+  const clientAlias = $derived.by((): string => {
+    if (!ticket) return "...";
+    return (
+      orgCache.decrypt(
+        `client-alias:${ticket.clientId}`,
+        ticket.encryptedClientAlias,
+      ) ?? "..."
+    );
+  });
 
   // Reactive userId -> decrypted display name lookup for note authors.
   const volunteerMap = $derived(buildVolunteerMap(volunteersQuery.data));

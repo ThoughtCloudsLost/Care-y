@@ -7,7 +7,7 @@ export interface ReplyFlowDeps {
   readonly queryClient: QueryClient;
   readonly getTickets: () => readonly {
     id: string;
-    clientAlias: string;
+    clientAlias: string | null;
     hasPhone: boolean;
     followUpCount: number;
   }[];
@@ -20,7 +20,7 @@ export interface ReplyFlowDeps {
 export interface ReplyFlowState {
   readonly sheetOpen: boolean;
   readonly targetTicketId: string;
-  readonly clientAlias: string;
+  readonly clientAlias: string | null;
   readonly hasPhone: boolean;
   readonly previewFollowUps: RawFollowUpPreview[] | undefined;
   readonly followUpCount: number;
@@ -32,7 +32,7 @@ export interface ReplyFlowState {
 export function createReplyFlow(deps: ReplyFlowDeps): ReplyFlowState {
   let sheetOpen = $state(false);
   let targetTicketId = $state("");
-  let clientAlias = $state("");
+  let clientAlias = $state<string | null>("");
   let hasPhone = $state(false);
   let previewFollowUps = $state<RawFollowUpPreview[] | undefined>(undefined);
   let followUpCount = $state(0);
@@ -73,7 +73,7 @@ export function createReplyFlow(deps: ReplyFlowDeps): ReplyFlowState {
     get targetTicketId(): string {
       return targetTicketId;
     },
-    get clientAlias(): string {
+    get clientAlias(): string | null {
       return clientAlias;
     },
     get hasPhone(): boolean {

@@ -62,7 +62,7 @@
     /** Client alias for the caller-bubble speaker eyebrow. Volunteer
      *  bubbles carry no eyebrow here: previews have no author identity,
      *  and alignment plus the brand tint already mark the org side. */
-    clientAlias?: string;
+    clientAlias?: string | null;
     /** Whole-bubble fitting for a fixed-height window (grid cells):
      *  bottom-anchor the stack and hide entries that don't fully fit,
      *  so the window's crop never slices a bubble mid-line. */
@@ -290,7 +290,7 @@
                 class:mini-bubble-received={fu.source === "client"}
                 class:mini-bubble-sent={fu.source !== "client"}
               >
-                {#if fu.source === "client" && clientAlias !== undefined}
+                {#if fu.source === "client" && clientAlias != null}
                   <span class="mini-who">{clientAlias}</span>
                 {/if}
                 {#if fu.hasRecording || fu.hasImage || fu.hasFile}

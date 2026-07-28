@@ -11,7 +11,8 @@ import { toCount } from "../db/query-utils.js";
 export interface MetadataSearchResult {
   readonly tickets: readonly {
     readonly id: string;
-    readonly clientAlias: string;
+    readonly clientId: string;
+    readonly encryptedClientAlias: Buffer;
     readonly status: string;
     readonly priority: string;
     readonly queueId: string;
@@ -72,7 +73,8 @@ export function createSearchService(
         .where("tickets.queue_id", "in", [...accessibleQueues])
         .select([
           "tickets.id",
-          "clients.alias as clientAlias",
+          "clients.id as clientId",
+          "clients.encrypted_alias as encryptedClientAlias",
           "tickets.status",
           "tickets.priority",
           "tickets.queue_id as queueId",
@@ -89,11 +91,6 @@ export function createSearchService(
       }
       if (input.assignedTo !== undefined) {
         query = query.where("tickets.assigned_to", "=", input.assignedTo);
-      }
-      if (input.clientAlias !== undefined) {
-        // Escape SQL LIKE wildcards in user input
-        const escaped = input.clientAlias.replace(/[%_\\]/g, "\\$&");
-        query = query.where("clients.alias", "ilike", `%${escaped}%`);
       }
       if (input.dateFrom !== undefined) {
         query = query.where(
@@ -119,10 +116,6 @@ export function createSearchService(
             q = q.where("tickets.queue_id", "=", input.queueId);
           if (input.assignedTo !== undefined)
             q = q.where("tickets.assigned_to", "=", input.assignedTo);
-          if (input.clientAlias !== undefined) {
-            const escaped = input.clientAlias.replace(/[%_\\]/g, "\\$&");
-            q = q.where("clients.alias", "ilike", `%${escaped}%`);
-          }
           if (input.dateFrom !== undefined)
             q = q.where("tickets.created_at", ">=", new Date(input.dateFrom));
           if (input.dateTo !== undefined)

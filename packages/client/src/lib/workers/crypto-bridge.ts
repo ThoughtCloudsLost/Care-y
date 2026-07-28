@@ -683,6 +683,18 @@ export class CryptoBridge {
     return resp.orgSecretKey;
   }
 
+  /**
+   * Compute the blind index hash of an alias inside the Worker.
+   * The index key never leaves the Worker (ADR-042). Returns lowercase hex.
+   */
+  async aliasHash(alias: string): Promise<string> {
+    const resp = expectResponse(
+      await this.sendRequest({ type: "aliasHash", alias }),
+      "aliasHash",
+    );
+    return resp.hash;
+  }
+
   /** Get the org public key (base64) from the Worker. */
   async getOrgPublicKey(): Promise<string> {
     const resp = expectResponse(

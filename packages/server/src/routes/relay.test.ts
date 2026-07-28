@@ -1643,7 +1643,7 @@ describe("createRelayHandler", () => {
           location_region: null,
           is_active: true,
         },
-        { id: "client-1", alias: "C-001" },
+        { id: "client-1", encrypted_alias: Buffer.from("C-001") },
         { id: "ticket-1" },
       ]);
 
@@ -1668,12 +1668,14 @@ describe("createRelayHandler", () => {
       const parsed = JSON.parse(res.body) as {
         found: boolean;
         clientId: string;
-        alias: string;
+        encryptedAlias: string;
         openTicketId: string;
       };
       expect(parsed.found).toBe(true);
       expect(parsed.clientId).toBe("client-1");
-      expect(parsed.alias).toBe("C-001");
+      expect(parsed.encryptedAlias).toBe(
+        Buffer.from("C-001").toString("base64"),
+      );
       expect(parsed.openTicketId).toBe("ticket-1");
 
       // Security contract: raw body buffer zeroed in finally
@@ -1695,7 +1697,7 @@ describe("createRelayHandler", () => {
           location_region: null,
           is_active: true,
         },
-        { id: "client-2", alias: "C-002" },
+        { id: "client-2", encrypted_alias: Buffer.from("C-002") },
         undefined, // no open ticket
       ]);
 
@@ -1910,7 +1912,7 @@ describe("createRelayHandler", () => {
           location_region: null,
           is_active: true,
         },
-        { id: "client-3", alias: "C-003" },
+        { id: "client-3", encrypted_alias: Buffer.from("C-003") },
         { id: "ticket-3" },
       ]);
 

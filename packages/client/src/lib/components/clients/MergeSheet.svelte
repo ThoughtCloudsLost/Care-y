@@ -20,7 +20,7 @@
     Radio,
   } from "konsta/svelte";
   import {
-    createQuery,
+    createInfiniteQuery,
     createMutation,
     useQueryClient,
   } from "@tanstack/svelte-query";
@@ -34,7 +34,7 @@
   import { announceToLiveRegion } from "$lib/utils/announce.js";
   import { onKeyActivate } from "$lib/utils/a11y.js";
   import { requireRouter } from "$lib/errors.js";
-  import { getOrgKeyManager } from "$lib/crypto/context.js";
+  import { getOrgKeyManager, getOrgDecryptCache } from "$lib/crypto/context.js";
   import { uint8ArrayToBase64 } from "$lib/utils/buffer-encoding.js";
   import ShellSheet from "$lib/shell/ShellSheet.svelte";
 
@@ -136,32 +136,38 @@
   const ticketsRouter = requireRouter(trpc.tickets, "tickets");
   const queryClient = useQueryClient();
   const orgKeyManager = getOrgKeyManager();
+  const orgCache = getOrgDecryptCache();
 
   const needsSearch = $derived(slotA !== null && slotB === null);
 
-  const searchResultsQuery = createQuery(() => ({
+  const searchResultsQuery = createInfiniteQuery(() => ({
     queryKey: clientKeys.list({
       query: searchDebounced,
-      sortBy: "alias",
-      sortDirection: "asc",
+      sortBy: "created_at",
+      sortDirection: "desc",
     }),
-    queryFn: async () =>
+    queryFn: async ({ pageParam }) =>
       clientsRouter.list.query({
         query: searchDebounced,
-        sortBy: "alias",
-        sortDirection: "asc",
+        sortBy: "created_at",
+        sortDirection: "desc",
+        cursor: pageParam,
       }),
+    initialPageParam: undefined as string | undefined,
+    getNextPageParam: (lastPage) =>
+      lastPage.length >= 25 ? lastPage[lastPage.length - 1]?.id : undefined,
     enabled: needsSearch && searchDebounced.length > 0,
   }));
 
-  // Filter out the already-selected client from search results
+  const allSearchResults = $derived(
+    searchResultsQuery.data?.pages.flat() ?? [],
+  );
+
+  // Filter out the already-selected client from search results and decrypt aliases
   const filteredResults = $derived.by(() => {
-    const results = searchResultsQuery.data ?? [];
-    // Capture into a local: $state reads are getters, so narrowing does not
-    // survive into the filter callback.
     const selected = slotA;
-    if (selected === null) return results;
-    return results.filter((r) => r.id !== selected.id);
+    if (selected === null) return allSearchResults;
+    return allSearchResults.filter((r) => r.id !== selected.id);
   });
 
   function handleSearchInput(e: Event): void {
@@ -173,8 +179,14 @@
     }, 300);
   }
 
-  function selectSearchResult(client: { id: string; alias: string }): void {
-    slotB = { id: client.id, alias: client.alias };
+  function selectSearchResult(client: {
+    id: string;
+    encryptedAlias: string;
+  }): void {
+    const alias =
+      orgCache.decrypt(`client-alias:${client.id}`, client.encryptedAlias) ??
+      "...";
+    slotB = { id: client.id, alias };
     searchQuery = "";
     searchDebounced = "";
   }
@@ -289,8 +301,13 @@
           {:else}
             <List nested>
               {#each filteredResults as result (result.id)}
+                {@const resultAlias =
+                  orgCache.decrypt(
+                    `client-alias:${result.id}`,
+                    result.encryptedAlias,
+                  ) ?? "..."}
                 <ListItem
-                  title={result.alias}
+                  title={resultAlias}
                   after={result.ticketCount === 1
                     ? m.clients_ticket_count_one(
                         withTerms({ count: result.ticketCount }),

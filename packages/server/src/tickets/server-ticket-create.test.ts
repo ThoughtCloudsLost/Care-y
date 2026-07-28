@@ -21,6 +21,7 @@ import {
   createTestQueue,
   seedOrgPublicKey,
   noopEncryptor,
+  testSealedBox,
   type TestDb,
 } from "../test-utils.js";
 import type { Kysely } from "kysely";
@@ -240,9 +241,14 @@ describe.skipIf(!process.env.DATABASE_URL)(
         })
         .returning("id")
         .executeTakeFirstOrThrow();
+      // care-y-ignore-next-line no-plaintext-db-write -- test fixture: encrypted_alias is a dummy sealed blob, not real PII
       const client = await db
         .insertInto("clients")
-        .values({ alias: `cl-${uid}`, phone_id: phone.id })
+        .values({
+          encrypted_alias: testSealedBox.seal(`cl-${uid}`),
+          alias_hash: null,
+          phone_id: phone.id,
+        })
         .returning("id")
         .executeTakeFirstOrThrow();
       return client.id;

@@ -188,7 +188,7 @@ export function createTicketSearchProvider(
       const haystack = searchable.map((s) =>
         [
           s.title,
-          s.raw.clientAlias,
+          s.fields.clientAlias ?? "",
           s.fields.queueName ?? "",
           s.fields.assignedName ?? "",
         ]

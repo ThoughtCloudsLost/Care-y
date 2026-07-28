@@ -20,7 +20,17 @@ import type { OrgKeyManager } from "./org-key.js";
 import type { CryptoBridge } from "$lib/workers/crypto-bridge.js";
 import type { SerializedBuffer } from "$lib/utils/buffer-encoding.js";
 
-function toBase64(data: Uint8Array | SerializedBuffer): string {
+function toBase64(data: Uint8Array | SerializedBuffer | string): string {
+  // base64 is the format for ciphertext on the wire. It is ~2.8x smaller
+  // than a Buffer, which superjson expands into {type,data}.
+  //
+  // The Buffer branches below are transitional. Older routes still return
+  // Buffers, and accepting them keeps those surfaces working while they are
+  // converted. Once every read path sends base64, this parameter narrows to
+  // `string | null` and the branches go away, so the compiler enforces the
+  // format instead of this function tolerating both. Write new routes as
+  // base64 rather than matching nearby Buffer code.
+  if (typeof data === "string") return data;
   const bytes = data instanceof Uint8Array ? data : new Uint8Array(data.data);
   return encode(bytes);
 }
@@ -55,7 +65,7 @@ export class OrgDecryptCache {
    */
   decrypt(
     id: string,
-    data: SerializedBuffer | Uint8Array | null,
+    data: SerializedBuffer | Uint8Array | string | null,
   ): string | null {
     if (data === null) return null;
 

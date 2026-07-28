@@ -66,7 +66,7 @@ export function reactionsForTicket(
 export interface TitleEntry {
   readonly id: string;
   readonly title: string | null;
-  readonly clientAlias: string;
+  readonly clientAlias: string | null;
   readonly queueName?: string | null;
   readonly assignedName?: string | null;
 }
@@ -87,7 +87,7 @@ export function matchTitles(
     haystack.push(
       [
         entry.title,
-        entry.clientAlias,
+        entry.clientAlias ?? "",
         entry.queueName ?? "",
         entry.assignedName ?? "",
       ]

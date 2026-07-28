@@ -113,6 +113,15 @@ vi.mock("@tanstack/svelte-query", async (importOriginal) => {
       isError: false,
       error: null,
     }),
+    createInfiniteQuery: () => ({
+      data: { pages: [] },
+      hasNextPage: false,
+      isFetchingNextPage: false,
+      fetchNextPage: vi.fn(),
+      isLoading: false,
+      isError: false,
+      error: null,
+    }),
     useQueryClient: () => ({
       invalidateQueries: mockInvalidateQueries,
     }),
@@ -198,6 +207,12 @@ vi.mock("$lib/crypto/context.js", async (importOriginal) => {
     getOrgKeyManager: () => ({
       encrypt: mockEncrypt,
       isLoaded: true,
+    }),
+    getOrgDecryptCache: () => ({
+      decrypt: vi.fn().mockReturnValue(null),
+      get: vi.fn().mockReturnValue(undefined),
+      has: vi.fn().mockReturnValue(false),
+      delete: vi.fn().mockReturnValue(true),
     }),
   };
 });

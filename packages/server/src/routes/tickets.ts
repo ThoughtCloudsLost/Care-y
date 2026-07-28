@@ -44,6 +44,7 @@ import type { SearchService } from "../tickets/search.js";
 import type { AuditService } from "../tickets/audit.js";
 import type { ReadCursorService } from "../tickets/read-cursor-service.js";
 import type { NotificationService } from "../notifications/service.js";
+import type { SealedBoxEncryptor } from "../crypto/sealed-box.js";
 import type { AuditEntry } from "../tickets/audit.js";
 import type { NoteTypeService } from "../tickets/note-type-service.js";
 import type { FieldEncryptor } from "../crypto/field-encryptor.js";
@@ -279,7 +280,10 @@ function buildAuditRoutes(
 export function createTicketRouter(deps: TicketRouterDeps) {
   // Per-request ticket service factory. Wires access checker + queue scoping
   // so every handler gets a correctly-scoped service without repeating the setup.
-  function ticketSvc(tDb: OrgContext["tenantDb"]): {
+  function ticketSvc(
+    tDb: OrgContext["tenantDb"],
+    sealedBox?: SealedBoxEncryptor,
+  ): {
     access: TicketAccessChecker;
     svc: TicketService;
   } {
@@ -292,6 +296,7 @@ export function createTicketRouter(deps: TicketRouterDeps) {
       {
         pendingClients: deps.pendingClients,
         fieldEncryptor: deps.fieldEncryptor,
+        sealedBox,
       },
     );
     return { access, svc };
@@ -460,35 +465,42 @@ export function createTicketRouter(deps: TicketRouterDeps) {
     roleId: string,
     userId: string,
   ) {
-    const { clientPhoneEncrypted, ...rest } = ticket;
+    const { clientPhoneEncrypted, encryptedClientAlias, ...rest } = ticket;
     const encryptor = deps.fieldEncryptor;
+    // base64 rather than a passed-through Buffer: superjson expands a Buffer
+    // into {type,data}, which is ~2.8x the bytes. The org decrypt cache takes
+    // either form.
+    const base = {
+      ...rest,
+      encryptedClientAlias: encryptedClientAlias.toString("base64"),
+    };
 
     // No phone on this client
     if (clientPhoneEncrypted === null || !encryptor) {
-      return { ...rest, clientPhone: null as string | null };
+      return { ...base, clientPhone: null as string | null };
     }
 
     // Volunteer not assigned to this ticket sees no phone
     if (roleId === RoleId.VOLUNTEER && ticket.assignedTo !== userId) {
-      return { ...rest, clientPhone: null as string | null };
+      return { ...base, clientPhone: null as string | null };
     }
 
     // Admin: full formatted number
     if (roleId === RoleId.ADMIN) {
       const buf = encryptor.decryptToBuffer(clientPhoneEncrypted);
-      return { ...rest, clientPhone: formatPhone(buf) };
+      return { ...base, clientPhone: formatPhone(buf) };
     }
 
     // Manager or assigned volunteer: masked
     const buf = encryptor.decryptToBuffer(clientPhoneEncrypted);
-    return { ...rest, clientPhone: maskPhone(buf) };
+    return { ...base, clientPhone: maskPhone(buf) };
   }
 
   return router({
     // --- Ticket CRUD ---
     create: volunteerProcedure.input(createTicketInputSchema).mutation(
       withErrorWrapping(async ({ ctx, input }) => {
-        const { svc } = ticketSvc(ctx.org.tenantDb);
+        const { svc } = ticketSvc(ctx.org.tenantDb, ctx.org.sealedBox);
         const ticket = await svc.create(ctx.user.id, {
           id: input.id,
           clientId: input.clientId,
@@ -578,12 +590,16 @@ export function createTicketRouter(deps: TicketRouterDeps) {
     searchClients: volunteerProcedure.input(searchClientsInputSchema).query(
       withErrorWrapping(async ({ ctx, input }) => {
         const { svc } = ticketSvc(ctx.org.tenantDb);
-        return svc.searchClients(
+        const results = await svc.searchClients(
           input.query,
           input.limit,
           ctx.user.id,
           ctx.user.roleId === RoleId.ADMIN,
         );
+        return results.map((r) => ({
+          ...r,
+          encryptedAlias: r.encryptedAlias.toString("base64"),
+        }));
       }),
     ),
 

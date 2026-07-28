@@ -4,11 +4,14 @@
  * Wraps ClientRepository and PhoneRepository with business logic for
  * listing, alias editing, phone replacement, and duplicate detection.
  * All phone operations use FieldEncryptor/BlindIndexer from OPS_SECRETS_KEY.
+ * Aliases are org-key encrypted: the server stores ciphertext and a
+ * browser-supplied blind index hash but never reads the alias value.
  * Audit entries log { clientId, actorId } only, never phone numbers.
  */
 
 import type { Kysely } from "kysely";
 import type { TenantDatabase } from "../db/types.js";
+import { keysetAfter } from "../db/keyset.js";
 import type { AuditService } from "../tickets/audit.js";
 import type {
   FieldEncryptor,
@@ -21,7 +24,6 @@ import type {
 import { NotFoundError, ConflictError } from "../errors.js";
 import { ErrorCode } from "@care-y/shared";
 import type { TicketStatus } from "@care-y/shared";
-import { sanitizeLike } from "../utils/sql.js";
 
 // ---------------------------------------------------------------------------
 // Result types
@@ -29,7 +31,8 @@ import { sanitizeLike } from "../utils/sql.js";
 
 export interface ClientListRecord {
   readonly id: string;
-  readonly alias: string;
+  readonly encryptedAlias: Buffer;
+  readonly aliasHash: string | null;
   readonly encryptedNumber: Buffer;
   readonly ticketCount: number;
   readonly createdAt: Date;
@@ -57,7 +60,7 @@ export interface ClientDetailRecord extends ClientListRecord {
 
 export interface PhoneConflict {
   readonly conflictingClientId: string;
-  readonly conflictingClientAlias: string;
+  readonly conflictingClientEncryptedAlias: Buffer;
 }
 
 export interface UpdatePhoneResult {
@@ -80,11 +83,19 @@ export interface ClientService {
     createdAfter?: string;
     createdBefore?: string;
     includeMerged?: boolean;
+    aliasHash?: string;
   }): Promise<ClientListRecord[]>;
 
   getById(clientId: string): Promise<ClientDetailRecord>;
 
-  updateAlias(clientId: string, alias: string, actorId: string): Promise<void>;
+  updateAlias(
+    clientId: string,
+    encryptedAlias: string,
+    aliasHash: string,
+    actorId: string,
+  ): Promise<void>;
+
+  backfillAliasHash(clientId: string, aliasHash: string): Promise<void>;
 
   updatePhone(
     clientId: string,
@@ -125,16 +136,10 @@ export interface ClientServiceDeps {
 }
 
 export function createClientService(deps: ClientServiceDeps): ClientService {
-  const { db, audit, encryptor, indexer, mergeService, orgId } = deps;
+  const { db, audit, encryptor, indexer, mergeService } = deps;
 
   return {
     async list(input): Promise<ClientListRecord[]> {
-      const sortColumn =
-        input.sortBy === "alias"
-          ? ("c.alias" as const)
-          : input.sortBy === "created_at"
-            ? ("c.created_at" as const)
-            : null;
       const direction =
         input.sortDirection === "desc" ? ("desc" as const) : ("asc" as const);
 
@@ -143,7 +148,8 @@ export function createClientService(deps: ClientServiceDeps): ClientService {
         .innerJoin("phones as p", "p.id", "c.phone_id")
         .select([
           "c.id",
-          "c.alias",
+          "c.encrypted_alias",
+          "c.alias_hash",
           "c.created_at",
           "c.merged_into",
           "p.encrypted_number",
@@ -160,10 +166,9 @@ export function createClientService(deps: ClientServiceDeps): ClientService {
         query = query.where("c.merged_into", "is", null);
       }
 
-      // Search filter (alias ILIKE)
-      if (input.query.length > 0) {
-        const escaped = sanitizeLike(input.query);
-        query = query.where("c.alias", "ilike", `%${escaped}%`);
+      // Exact-alias lookup via blind index hash
+      if (input.aliasHash !== undefined && input.aliasHash.length > 0) {
+        query = query.where("c.alias_hash", "=", input.aliasHash);
       }
 
       // Has-applications filter: reuses the tickets table that the count
@@ -203,60 +208,47 @@ export function createClientService(deps: ClientServiceDeps): ClientService {
         );
       }
 
-      // Cursor pagination: keyset approach on (sortColumn, id)
+      // Cursor pagination: keyset on (created_at, id).
       if (input.cursor !== undefined) {
-        const cursorRow = await db
-          .selectFrom("clients")
-          .select(["id", "alias", "created_at"])
-          .where("id", "=", input.cursor)
-          .executeTakeFirst();
-
-        if (cursorRow) {
-          if (sortColumn === "c.alias") {
-            query = query.where((eb) =>
-              eb.or([
-                eb("c.alias", direction === "asc" ? ">" : "<", cursorRow.alias),
-                eb.and([
-                  eb("c.alias", "=", cursorRow.alias),
-                  eb("c.id", ">", cursorRow.id),
-                ]),
-              ]),
-            );
-          } else if (sortColumn === "c.created_at") {
-            query = query.where((eb) =>
-              eb.or([
-                eb(
+        const cursorId = input.cursor;
+        if (input.sortBy === "created_at") {
+          query = query.where((eb) =>
+            keysetAfter(
+              eb,
+              direction === "asc" ? ">" : "<",
+              [
+                [
                   "c.created_at",
-                  direction === "asc" ? ">" : "<",
-                  cursorRow.created_at,
-                ),
-                eb.and([
-                  eb("c.created_at", "=", cursorRow.created_at),
-                  eb("c.id", ">", cursorRow.id),
-                ]),
-              ]),
-            );
-          } else {
-            // ticket_count sort: fall through to offset-based (subquery sort
-            // columns cannot be keyset-paged), just filter by id > cursor
-            query = query.where("c.id", ">", cursorRow.id);
-          }
+                  eb
+                    .selectFrom("clients as cur")
+                    .select("cur.created_at")
+                    .where("cur.id", "=", cursorId),
+                ],
+              ],
+              { column: "c.id", cursorId },
+            ),
+          );
+        } else {
+          // ticket_count sort: the sort column is a subquery and cannot be
+          // keyset-paged, so this degrades to an id-ordered walk.
+          query = query.where("c.id", ">", cursorId);
         }
       }
 
-      // Sort
-      if (sortColumn) {
-        query = query.orderBy(sortColumn, direction).orderBy("c.id", "asc");
-      } else {
-        // ticket_count sort: order by the subquery alias
+      // Sort: default is created_at, also supports ticket_count
+      if (input.sortBy === "ticket_count") {
         query = query.orderBy("ticketCount", direction).orderBy("c.id", "asc");
+      } else {
+        // "created_at" (default)
+        query = query.orderBy("c.created_at", direction).orderBy("c.id", "asc");
       }
 
       const rows = await query.limit(input.limit).execute();
 
       return rows.map((r) => ({
         id: r.id,
-        alias: r.alias,
+        encryptedAlias: r.encrypted_alias,
+        aliasHash: r.alias_hash,
         encryptedNumber: r.encrypted_number,
         ticketCount: r.ticketCount ?? 0,
         createdAt: r.created_at,
@@ -270,7 +262,8 @@ export function createClientService(deps: ClientServiceDeps): ClientService {
         .innerJoin("phones as p", "p.id", "c.phone_id")
         .select([
           "c.id",
-          "c.alias",
+          "c.encrypted_alias",
+          "c.alias_hash",
           "c.created_at",
           "c.merged_into",
           "c.phone_id",
@@ -320,7 +313,8 @@ export function createClientService(deps: ClientServiceDeps): ClientService {
 
       return {
         id: row.id,
-        alias: row.alias,
+        encryptedAlias: row.encrypted_alias,
+        aliasHash: row.alias_hash,
         encryptedNumber: row.encrypted_number,
         ticketCount: row.ticketCount ?? 0,
         createdAt: row.created_at,
@@ -341,11 +335,16 @@ export function createClientService(deps: ClientServiceDeps): ClientService {
       };
     },
 
-    async updateAlias(clientId, alias, actorId): Promise<void> {
+    async updateAlias(
+      clientId,
+      encryptedAlias,
+      aliasHash,
+      actorId,
+    ): Promise<void> {
       // Verify client exists and is not merged
       const existing = await db
         .selectFrom("clients")
-        .select(["id", "alias", "merged_into"])
+        .select(["id", "merged_into"])
         .where("id", "=", clientId)
         .executeTakeFirst();
 
@@ -353,12 +352,15 @@ export function createClientService(deps: ClientServiceDeps): ClientService {
         throw new NotFoundError(ErrorCode.CLIENT_NOT_FOUND);
       }
 
-      const previousAlias = existing.alias;
-
       try {
         await db
           .updateTable("clients")
-          .set({ alias, updated_at: new Date() })
+          // care-y-ignore-next-line no-plaintext-db-write -- encrypted_alias is sealed ciphertext decoded from base64; alias_hash is a browser-computed HMAC. The server cannot read either.
+          .set({
+            encrypted_alias: Buffer.from(encryptedAlias, "base64"),
+            alias_hash: aliasHash,
+            updated_at: new Date(),
+          })
           .where("id", "=", clientId)
           .execute();
       } catch (err: unknown) {
@@ -368,11 +370,36 @@ export function createClientService(deps: ClientServiceDeps): ClientService {
         throw err;
       }
 
+      // Metadata carries the client id only. Aliases are operator-supplied free
+      // text, so both the old and new value may name a real person, and the
+      // audit log is never encrypted. Recording the previous value would
+      // preserve it past the correction that was meant to remove it. Matches
+      // client_phone_changed, which logs the id alone for the same reason.
       await audit.log({
         eventType: "client_alias_changed",
         actorId,
-        metadata: { clientId, previousAlias },
+        metadata: { clientId },
       });
+    },
+
+    async backfillAliasHash(clientId, aliasHash): Promise<void> {
+      // Write only when the row's hash is currently NULL (idempotent:
+      // deterministic hash means concurrent backfills agree).
+      try {
+        await db
+          .updateTable("clients")
+          // care-y-ignore-next-line no-plaintext-db-write -- alias_hash is a browser-computed HMAC of the normalized alias, not the alias itself.
+          .set({ alias_hash: aliasHash })
+          .where("id", "=", clientId)
+          .where("alias_hash", "is", null)
+          .execute();
+      } catch (err: unknown) {
+        if (isUniqueViolation(err)) {
+          // Two clients share a label. Surface it rather than swallowing.
+          throw new ConflictError(ErrorCode.CLIENT_ALIAS_CONFLICT);
+        }
+        throw err;
+      }
     },
 
     async updatePhone(
@@ -385,9 +412,9 @@ export function createClientService(deps: ClientServiceDeps): ClientService {
       // its own finally block; the blind indexer HMACs the string without
       // buffering. Zeroing a Buffer here would only clear a third copy nobody
       // reads, so it is left out rather than implying a guarantee that the
-      // string plaintext is scrubbed. It stays live until GC.
+      // string is scrubbed. It stays live until GC.
       const encryptedNumber = encryptor.encrypt(phoneNumber);
-      const phoneHash = indexer.hash(phoneNumber, orgId);
+      const phoneHash = indexer.hash(phoneNumber, deps.orgId);
 
       // Check for hash collision before starting the transaction
       const conflict = await this.suggestDuplicates(phoneHash, clientId);
@@ -448,7 +475,10 @@ export function createClientService(deps: ClientServiceDeps): ClientService {
       let query = db
         .selectFrom("phones as p")
         .innerJoin("clients as c", "c.phone_id", "p.id")
-        .select(["c.id as clientId", "c.alias as clientAlias"])
+        .select([
+          "c.id as clientId",
+          "c.encrypted_alias as clientEncryptedAlias",
+        ])
         .where("p.phone_hash", "=", phoneHash)
         .where("c.merged_into", "is", null);
 
@@ -464,7 +494,7 @@ export function createClientService(deps: ClientServiceDeps): ClientService {
 
       return {
         conflictingClientId: row.clientId,
-        conflictingClientAlias: row.clientAlias,
+        conflictingClientEncryptedAlias: row.clientEncryptedAlias,
       };
     },
   };

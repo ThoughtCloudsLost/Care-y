@@ -708,6 +708,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
           blobStore: store,
           orgSchema: testDb.schemaName,
           pendingClients: new Map(),
+          sealedBox: createMockSealedBox(),
         };
         const input: RouteQuarantineInput = {
           quarantineId: crypto.randomUUID(),
@@ -736,6 +737,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
           blobStore: store,
           orgSchema: testDb.schemaName,
           pendingClients: new Map(),
+          sealedBox: createMockSealedBox(),
         };
         const input: RouteQuarantineInput = {
           quarantineId,
@@ -767,6 +769,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
           blobStore: store,
           orgSchema: testDb.schemaName,
           pendingClients: new Map(),
+          sealedBox: createMockSealedBox(),
         };
         const input: RouteQuarantineInput = {
           quarantineId,
@@ -788,6 +791,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
           blobStore: store,
           orgSchema: testDb.schemaName,
           pendingClients: new Map(),
+          sealedBox: createMockSealedBox(),
         };
         const input: RouteQuarantineInput = {
           quarantineId,

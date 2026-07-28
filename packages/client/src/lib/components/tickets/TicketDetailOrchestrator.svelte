@@ -162,7 +162,15 @@
   }));
 
   const ticket = $derived(ticketQuery.data);
-  const clientAlias = $derived(ticket?.clientAlias ?? "...");
+  const clientAlias = $derived.by((): string => {
+    if (!ticket) return "...";
+    return (
+      orgCache.decrypt(
+        `client-alias:${ticket.clientId}`,
+        ticket.encryptedClientAlias,
+      ) ?? "..."
+    );
+  });
   const clientPhone = $derived(ticket?.clientPhone ?? null);
   // Copy is useful only when the server sent a full formatted number (starts
   // with "+"). Masked values like "***1234" are not worth copying. The server

@@ -3,15 +3,15 @@ import { clientFilterStore } from "./client-filters.svelte.js";
 
 describe("clientFilterStore", () => {
   beforeEach(() => {
-    clientFilterStore.setSort("alias", "asc");
+    clientFilterStore.setSort("created_at", "desc");
     clientFilterStore.setSearch("");
     clientFilterStore.clearAll();
   });
 
   describe("sort", () => {
-    it("defaults to alias ascending", () => {
-      expect(clientFilterStore.sort.field).toBe("alias");
-      expect(clientFilterStore.sort.direction).toBe("asc");
+    it("defaults to created_at descending", () => {
+      expect(clientFilterStore.sort.field).toBe("created_at");
+      expect(clientFilterStore.sort.direction).toBe("desc");
     });
 
     it("updates sort field and direction", () => {

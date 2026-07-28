@@ -13,7 +13,7 @@ export function makeSkeletonCardProps(): DataCardProps {
     displayStatus: "active",
     priority: "normal",
     titleResult: { status: "loading" },
-    clientAlias: "",
+    clientAlias: null,
     assignedName: null,
     createdAt: new Date(),
     lastActivityAt: null,

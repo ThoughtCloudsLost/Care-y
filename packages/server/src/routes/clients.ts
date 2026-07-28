@@ -3,13 +3,16 @@
  *
  * Role requirements per procedure.
  * The list, get, and suggestDuplicates queries run on viewClientsProcedure
- * (VIEW_CLIENTS, manager and above). updateAlias runs on adminProcedure.
- * updatePhone runs on volunteerProcedure with a custom access check.
+ * (VIEW_CLIENTS, manager and above). updateAlias and backfillAliasHash run
+ * on adminProcedure. updatePhone runs on volunteerProcedure with a custom
+ * access check.
  *
- * Phone values returned to the client are always server-formatted strings,
- * never Buffers. OPS_SECRETS_KEY is server-only. Admin gets the full formatted
- * number, manager gets the masked form (***1234). The server decrypts, formats,
- * and zeros the plaintext Buffer immediately.
+ * Client aliases are org-key encrypted. The server stores ciphertext and a
+ * browser-supplied blind index hash. Phone values returned to the client
+ * are always server-formatted strings, never Buffers. OPS_SECRETS_KEY is
+ * server-only. Admin gets the full formatted number, manager gets the
+ * masked form (***1234). The server decrypts, formats, and zeros the
+ * Buffer immediately.
  */
 
 import {
@@ -27,6 +30,7 @@ import {
   clientListInputSchema,
   clientGetInputSchema,
   updateAliasInputSchema,
+  backfillAliasHashInputSchema,
   updatePhoneInputSchema,
   suggestDuplicatesInputSchema,
 } from "@care-y/shared";
@@ -97,7 +101,8 @@ export function createClientRouter(deps: ClientRouterDeps) {
   return router({
     /**
      * Paginated client list with search and sort.
-     * Phone numbers are role-masked strings.
+     * Phone numbers are role-masked strings. Aliases are base64 sealed
+     * ciphertext, decrypted by the browser through the org decrypt cache.
      */
     list: viewClientsProcedure.input(clientListInputSchema).query(
       withErrorWrapping(async ({ ctx, input }) => {
@@ -106,7 +111,8 @@ export function createClientRouter(deps: ClientRouterDeps) {
 
         return records.map((r) => ({
           id: r.id,
-          alias: r.alias,
+          encryptedAlias: r.encryptedAlias.toString("base64"),
+          aliasHash: r.aliasHash,
           phone: phoneForRole(
             r.encryptedNumber,
             ctx.user.roleId,
@@ -121,7 +127,7 @@ export function createClientRouter(deps: ClientRouterDeps) {
 
     /**
      * Single client detail with tickets and merge history.
-     * Phone number is role-masked.
+     * Phone number is role-masked. Alias is base64 sealed ciphertext.
      */
     get: viewClientsProcedure.input(clientGetInputSchema).query(
       withErrorWrapping(async ({ ctx, input }) => {
@@ -130,7 +136,8 @@ export function createClientRouter(deps: ClientRouterDeps) {
 
         return {
           id: record.id,
-          alias: record.alias,
+          encryptedAlias: record.encryptedAlias.toString("base64"),
+          aliasHash: record.aliasHash,
           phone: phoneForRole(
             record.encryptedNumber,
             ctx.user.roleId,
@@ -166,14 +173,34 @@ export function createClientRouter(deps: ClientRouterDeps) {
 
     /**
      * Admin-only alias editing.
+     * Takes base64 ciphertext + blind index hash from the browser.
      * Throws CONFLICT on uniqueness violation.
      */
     updateAlias: adminProcedure.input(updateAliasInputSchema).mutation(
       withErrorWrapping(async ({ ctx, input }) => {
         const svc = deps.createClientSvc(ctx.org.tenantDb, ctx.org.orgId);
-        await svc.updateAlias(input.clientId, input.alias, ctx.user.id);
+        await svc.updateAlias(
+          input.clientId,
+          input.encryptedAlias,
+          input.aliasHash,
+          ctx.user.id,
+        );
       }),
     ),
+
+    /**
+     * Lazy backfill of alias_hash for webhook-created rows.
+     * Idempotent: writes only when the row's hash is currently NULL.
+     * Surfaces conflict rather than swallowing it.
+     */
+    backfillAliasHash: volunteerProcedure
+      .input(backfillAliasHashInputSchema)
+      .mutation(
+        withErrorWrapping(async ({ ctx, input }) => {
+          const svc = deps.createClientSvc(ctx.org.tenantDb, ctx.org.orgId);
+          await svc.backfillAliasHash(input.clientId, input.aliasHash);
+        }),
+      ),
 
     /**
      * Phone number update.
@@ -199,7 +226,26 @@ export function createClientRouter(deps: ClientRouterDeps) {
         }
 
         const svc = deps.createClientSvc(ctx.org.tenantDb, ctx.org.orgId);
-        return svc.updatePhone(input.clientId, input.phoneNumber, ctx.user.id);
+        const result = await svc.updatePhone(
+          input.clientId,
+          input.phoneNumber,
+          ctx.user.id,
+        );
+        // The conflicting client's alias is ciphertext and leaves as base64,
+        // matching suggestDuplicates. Returning the service result directly
+        // would emit a Buffer here and a string there for the same field.
+        return {
+          success: result.success,
+          conflict: result.conflict
+            ? {
+                conflictingClientId: result.conflict.conflictingClientId,
+                conflictingClientEncryptedAlias:
+                  result.conflict.conflictingClientEncryptedAlias.toString(
+                    "base64",
+                  ),
+              }
+            : null,
+        };
       }),
     ),
 
@@ -212,7 +258,16 @@ export function createClientRouter(deps: ClientRouterDeps) {
       .query(
         withErrorWrapping(async ({ ctx, input }) => {
           const svc = deps.createClientSvc(ctx.org.tenantDb, ctx.org.orgId);
-          return svc.suggestDuplicates(input.phoneHash, input.excludeClientId);
+          const result = await svc.suggestDuplicates(
+            input.phoneHash,
+            input.excludeClientId,
+          );
+          if (!result) return null;
+          return {
+            conflictingClientId: result.conflictingClientId,
+            conflictingClientEncryptedAlias:
+              result.conflictingClientEncryptedAlias.toString("base64"),
+          };
         }),
       ),
   });

@@ -51,7 +51,7 @@
   interface ReplySheetProps {
     opened: boolean;
     ticketId: string;
-    clientAlias: string;
+    clientAlias: string | null;
     hasPhone: boolean;
     previewFollowUps: RawFollowUpPreview[] | undefined;
     followUpCount: number;
@@ -283,7 +283,7 @@
 <ShellSheet
   {opened}
   {ondismiss}
-  title={m.ticket_reply_sheet_title({ alias: clientAlias })}
+  title={m.ticket_reply_sheet_title({ alias: clientAlias ?? "..." })}
   class="reply-shell-sheet"
 >
   <div class="reply-sheet-messages">

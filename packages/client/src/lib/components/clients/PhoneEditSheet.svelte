@@ -15,6 +15,7 @@
   import { haptic } from "$lib/utils/haptic.js";
   import { toastStore } from "$lib/stores/toast.svelte.js";
   import { requireRouter } from "$lib/errors.js";
+  import { getOrgDecryptCache } from "$lib/crypto/context.js";
   import ShellSheet from "$lib/shell/ShellSheet.svelte";
   import PhoneChangeSteps from "./PhoneChangeSteps.svelte";
 
@@ -47,12 +48,27 @@
 
   type Step = "input" | "confirm" | "conflict";
 
+  const clientsRouter = requireRouter(trpc.clients, "clients");
+  const orgCache = getOrgDecryptCache();
+  const queryClient = useQueryClient();
+
   let step = $state<Step>("input");
   let phoneNumber = $state("");
   let conflict = $state<{
     conflictingClientId: string;
-    conflictingClientAlias: string;
+    conflictingClientEncryptedAlias: string;
   } | null>(null);
+
+  // The conflicting client's alias is ciphertext like any other alias, so it
+  // decrypts through the shared cache rather than being read directly.
+  const conflictAlias = $derived(
+    conflict === null
+      ? null
+      : orgCache.decrypt(
+          `client-alias:${conflict.conflictingClientId}`,
+          conflict.conflictingClientEncryptedAlias,
+        ),
+  );
 
   const E164_PATTERN = /^\+[1-9]\d{1,14}$/;
   const isValidPhone = $derived(E164_PATTERN.test(phoneNumber.trim()));
@@ -76,9 +92,6 @@
   // Mutation
   // ---------------------------------------------------------------------------
 
-  const clientsRouter = requireRouter(trpc.clients, "clients");
-  const queryClient = useQueryClient();
-
   const updatePhoneMutation = createMutation(() => ({
     mutationFn: async (input: { clientId: string; phoneNumber: string }) =>
       clientsRouter.updatePhone.mutate(input),
@@ -86,7 +99,7 @@
       success: boolean;
       conflict: {
         conflictingClientId: string;
-        conflictingClientAlias: string;
+        conflictingClientEncryptedAlias: string;
       } | null;
     }) => {
       if (result.conflict) {
@@ -133,7 +146,7 @@
 
   function handleMerge(): void {
     if (conflict === null) return;
-    onmerge(conflict.conflictingClientId, conflict.conflictingClientAlias);
+    onmerge(conflict.conflictingClientId, conflictAlias ?? "");
   }
 </script>
 
@@ -179,7 +192,7 @@
     <PhoneChangeSteps
       step={gatedStep}
       {clientAlias}
-      conflictAlias={conflict?.conflictingClientAlias ?? null}
+      {conflictAlias}
       pending={updatePhoneMutation.isPending}
       onconfirm={handleConfirm}
       oncancel={handleCancel}
