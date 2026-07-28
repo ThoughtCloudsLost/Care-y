@@ -380,65 +380,65 @@ export function createClientService(deps: ClientServiceDeps): ClientService {
       phoneNumber,
       actorId,
     ): Promise<UpdatePhoneResult> {
-      // Convert plaintext to Buffer, encrypt, compute hash, then zero the Buffer.
-      const plaintextBuf = Buffer.from(phoneNumber, "utf-8");
-      try {
-        const encryptedNumber = encryptor.encrypt(phoneNumber);
-        const phoneHash = indexer.hash(phoneNumber, orgId);
+      // phoneNumber arrives as a JS string from the tRPC input layer and cannot
+      // be zeroed. The encryptor copies it into a Buffer and zeroes that copy in
+      // its own finally block; the blind indexer HMACs the string without
+      // buffering. Zeroing a Buffer here would only clear a third copy nobody
+      // reads, so it is left out rather than implying a guarantee that the
+      // string plaintext is scrubbed. It stays live until GC.
+      const encryptedNumber = encryptor.encrypt(phoneNumber);
+      const phoneHash = indexer.hash(phoneNumber, orgId);
 
-        // Check for hash collision before starting the transaction
-        const conflict = await this.suggestDuplicates(phoneHash, clientId);
-        if (conflict) {
-          return { success: false, conflict };
+      // Check for hash collision before starting the transaction
+      const conflict = await this.suggestDuplicates(phoneHash, clientId);
+      if (conflict) {
+        return { success: false, conflict };
+      }
+
+      await db.transaction().execute(async (trx) => {
+        // Verify client exists and is not merged
+        const client = await trx
+          .selectFrom("clients")
+          .select(["id", "phone_id", "merged_into"])
+          .where("id", "=", clientId)
+          .executeTakeFirst();
+
+        if (client?.merged_into !== null) {
+          throw new NotFoundError(ErrorCode.CLIENT_NOT_FOUND);
         }
 
-        await db.transaction().execute(async (trx) => {
-          // Verify client exists and is not merged
-          const client = await trx
-            .selectFrom("clients")
-            .select(["id", "phone_id", "merged_into"])
-            .where("id", "=", clientId)
-            .executeTakeFirst();
+        const oldPhoneId = client.phone_id;
 
-          if (client?.merged_into !== null) {
-            throw new NotFoundError(ErrorCode.CLIENT_NOT_FOUND);
-          }
+        // 1. Insert new phone row (so phone_id FK is valid before re-pointing)
+        const newPhone = await trx
+          .insertInto("phones")
+          .values({
+            phone_hash: phoneHash,
+            encrypted_number: encryptedNumber,
+            locale: "en-US",
+          })
+          .returning("id")
+          .executeTakeFirstOrThrow();
 
-          const oldPhoneId = client.phone_id;
+        // 2. Re-point client to new phone
+        await trx
+          .updateTable("clients")
+          .set({ phone_id: newPhone.id, updated_at: new Date() })
+          .where("id", "=", clientId)
+          .execute();
 
-          // 1. Insert new phone row (so phone_id FK is valid before re-pointing)
-          const newPhone = await trx
-            .insertInto("phones")
-            .values({
-              phone_hash: phoneHash,
-              encrypted_number: encryptedNumber,
-              locale: "en-US",
-            })
-            .returning("id")
-            .executeTakeFirstOrThrow();
+        // 3. Delete old phone row (never soft-delete; lingering phone_hash
+        //    would produce false duplicate matches)
+        await trx.deleteFrom("phones").where("id", "=", oldPhoneId).execute();
+      });
 
-          // 2. Re-point client to new phone
-          await trx
-            .updateTable("clients")
-            .set({ phone_id: newPhone.id, updated_at: new Date() })
-            .where("id", "=", clientId)
-            .execute();
+      await audit.log({
+        eventType: "client_phone_changed",
+        actorId,
+        metadata: { clientId },
+      });
 
-          // 3. Delete old phone row (never soft-delete; lingering phone_hash
-          //    would produce false duplicate matches)
-          await trx.deleteFrom("phones").where("id", "=", oldPhoneId).execute();
-        });
-
-        await audit.log({
-          eventType: "client_phone_changed",
-          actorId,
-          metadata: { clientId },
-        });
-
-        return { success: true, conflict: null };
-      } finally {
-        plaintextBuf.fill(0);
-      }
+      return { success: true, conflict: null };
     },
 
     async suggestDuplicates(
