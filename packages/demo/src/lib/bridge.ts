@@ -20,7 +20,7 @@
 
 /** Features that have a built demo scene. */
 export type DemoFeature =
-  "login" | "home" | "tickets" | "admin" | "schedule" | "settings";
+  "login" | "home" | "tickets" | "library" | "admin" | "schedule" | "settings";
 
 /** Sub-state within a feature (e.g. ticket detail, conversation view). */
 export type DemoDetail = string | null;
@@ -56,6 +56,7 @@ export type SectionId =
   | "tickets"
   | "ticket-detail"
   | "search"
+  | "library"
   | "admin"
   | "schedule"
   | "settings";

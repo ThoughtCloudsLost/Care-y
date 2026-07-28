@@ -1972,4 +1972,8 @@ export * from "./demo_section_settings_title.js";
 export * from "./demo_section_settings_desc.js";
 export * from "./demo_narrative_settings_heading.js";
 export * from "./demo_narrative_settings_body.js";
+export * from "./demo_section_library_title.js";
+export * from "./demo_section_library_desc.js";
+export * from "./demo_narrative_library_heading.js";
+export * from "./demo_narrative_library_body.js";
 export type LocalizedString = import("../runtime.js").LocalizedString;

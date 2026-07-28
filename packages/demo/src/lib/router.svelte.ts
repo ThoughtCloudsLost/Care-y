@@ -59,10 +59,11 @@ function loginUrl(): URL {
 const TAB_TO_FEATURE: ReadonlyMap<TabId, DemoFeature> = new Map([
   ["home", "home"],
   ["tickets", "tickets"],
+  ["library", "library"],
 ]);
 
 /** Inert tabs: visible in the shell but taps do nothing. */
-const INERT_TABS: ReadonlySet<TabId> = new Set(["library"]);
+const INERT_TABS: ReadonlySet<TabId> = new Set([]);
 
 /**
  * Map a DemoFeature and optional detail back to a pathname.
@@ -77,6 +78,8 @@ function featureToPathname(feature: DemoFeature, detail: DemoDetail): string {
       return "/";
     case "tickets":
       return detail !== null ? `/tickets/${detail}` : "/tickets";
+    case "library":
+      return detail !== null ? `/library/${detail}` : "/library";
     case "admin":
       if (detail === "volunteer") return "/admin/volunteer";
       if (detail === "manager") return "/admin/manager";
@@ -142,9 +145,18 @@ function resolveFeature(pathname: string): {
     return { feature: "settings", detail: null };
   }
 
-  // Library tab is inert
   if (ctx.tab === "library") {
-    return { feature: null, detail: null };
+    // "/library" -> list, "/library/<articleId>" -> detail
+    // Sub-pages: "/library/new", "/library/<articleId>/edit"
+    const segments = pathname.replace(/^\/library\/?/, "").split("/");
+    const rawId = segments[0];
+    const articleId = rawId !== undefined && rawId !== "" ? rawId : null;
+    if (articleId !== null) {
+      const rawSub = segments[1];
+      const sub = rawSub !== undefined && rawSub !== "" ? rawSub : null;
+      return { feature: "library", detail: sub ?? articleId };
+    }
+    return { feature: "library", detail: null };
   }
 
   return { feature: null, detail: null };

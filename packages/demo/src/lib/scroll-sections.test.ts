@@ -74,6 +74,20 @@ describe("parseHash", () => {
     });
   });
 
+  it("parses library section", () => {
+    expect(parseHash("#library")).toEqual({
+      sectionId: "library",
+      subSlug: null,
+    });
+  });
+
+  it("parses library/intro sub", () => {
+    expect(parseHash("#library/intro")).toEqual({
+      sectionId: "library",
+      subSlug: "intro",
+    });
+  });
+
   it("parses admin section", () => {
     expect(parseHash("#admin")).toEqual({
       sectionId: "admin",
@@ -247,6 +261,13 @@ describe("resolvePhoneCommand", () => {
     expect(cmd.pulseTopic).toBeNull();
   });
 
+  it("resolves library section to library feature", () => {
+    const cmd = resolvePhoneCommand("library", "intro", TICKET_ID);
+    expect(cmd.feature).toBe("library");
+    expect(cmd.detail).toBeNull();
+    expect(cmd.pulseTopic).toBeNull();
+  });
+
   it("resolves admin section to admin feature", () => {
     const cmd = resolvePhoneCommand("admin", "intro", TICKET_ID);
     expect(cmd.feature).toBe("admin");
@@ -363,6 +384,16 @@ describe("bridgeStateToLocation", () => {
     expect(loc).toEqual({ sectionId: "dashboard", subSlug: "intro" });
   });
 
+  it("maps library feature to library section", () => {
+    const loc = bridgeStateToLocation("library", null, false, null, null);
+    expect(loc).toEqual({ sectionId: "library", subSlug: "intro" });
+  });
+
+  it("maps library feature with detail to library section", () => {
+    const loc = bridgeStateToLocation("library", "art-001", false, null, null);
+    expect(loc).toEqual({ sectionId: "library", subSlug: "intro" });
+  });
+
   it("maps admin feature to admin section", () => {
     const loc = bridgeStateToLocation("admin", null, false, null, null);
     expect(loc).toEqual({ sectionId: "admin", subSlug: "intro" });
@@ -420,6 +451,14 @@ describe("sectionMatchesPhone", () => {
     expect(sectionMatchesPhone("dashboard", "tickets", null, false)).toBe(
       false,
     );
+  });
+
+  it("matches library section only for library feature", () => {
+    expect(sectionMatchesPhone("library", "library", null, false)).toBe(true);
+    expect(sectionMatchesPhone("library", "library", "art-001", false)).toBe(
+      true,
+    );
+    expect(sectionMatchesPhone("library", "tickets", null, false)).toBe(false);
   });
 
   it("matches admin section for any admin detail", () => {
@@ -492,8 +531,8 @@ describe("loginStageTopics", () => {
 });
 
 describe("SECTIONS taxonomy", () => {
-  it("has eight sections", () => {
-    expect(SECTIONS).toHaveLength(8);
+  it("has nine sections", () => {
+    expect(SECTIONS).toHaveLength(9);
   });
 
   it("section IDs are in visitor-journey order", () => {
@@ -503,6 +542,7 @@ describe("SECTIONS taxonomy", () => {
       "tickets",
       "ticket-detail",
       "search",
+      "library",
       "admin",
       "schedule",
       "settings",
@@ -532,6 +572,11 @@ describe("SECTIONS taxonomy", () => {
   it("search has 1 sub", () => {
     const search = SECTIONS.find((s) => s.id === "search");
     expect(search?.subs).toHaveLength(1);
+  });
+
+  it("library has 1 sub", () => {
+    const library = SECTIONS.find((s) => s.id === "library");
+    expect(library?.subs).toHaveLength(1);
   });
 
   it("admin has 1 sub", () => {
