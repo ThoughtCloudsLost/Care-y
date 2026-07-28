@@ -179,9 +179,21 @@ export function createBlindIndexer(key: Buffer): BlindIndexer {
 /**
  * Noop encryptor for tests that don't need to verify encryption.
  * Stores plaintext as-is in a Buffer and roundtrips without crypto.
- * MUST NOT be used in production code.
+ *
+ * Refuses to construct under NODE_ENV=production. Call sites that encrypt PII
+ * do not defensively zero their own copies, so a noop reaching production
+ * would write plaintext PII to the database with nothing downstream to catch
+ * it. Failing at construction turns that from a silent data leak into a
+ * startup crash. `env.ts` rejects an unset NODE_ENV, so this check cannot be
+ * bypassed by leaving the variable undefined in a deployed process.
  */
 export function createNoopFieldEncryptor(): FieldEncryptor {
+  if (process.env.NODE_ENV === "production") {
+    throw new CryptoError(
+      "createNoopFieldEncryptor is a test helper and must never be constructed in production",
+    );
+  }
+
   return {
     encrypt(plaintext: string): Buffer {
       return Buffer.from(plaintext, "utf-8");
