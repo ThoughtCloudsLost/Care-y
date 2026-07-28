@@ -1,6 +1,8 @@
 import { mount } from "svelte";
 import * as m from "$lib/paraglide/messages.js";
 import { locales } from "$lib/paraglide/runtime.js";
+import { bootDemoEngine } from "./lib/engine/engine.js";
+import { setEngineTrpc } from "./stubs/trpc.js";
 import PhoneApp from "./PhoneApp.svelte";
 import "./app.css";
 
@@ -110,10 +112,33 @@ try {
 }
 
 // -----------------------------------------------------------------------
+// Engine boot (starts immediately, before mount)
+// -----------------------------------------------------------------------
+
+// Fire engine boot in the background. Wire the trpc adapter promise
+// into the stub immediately so tRPC calls made by mounted components
+// await the engine transparently.
+const engineReady = bootDemoEngine();
+
+// setEngineTrpc accepts a Promise: calls to trpc.* before boot
+// completes will await it. A rejected boot surfaces through the
+// first tRPC call that reads the rejected promise.
+setEngineTrpc(engineReady.then((e) => e.trpc));
+
+// Surface boot failures loudly rather than letting them become
+// silent unhandled rejections.
+engineReady.catch((err: unknown) => {
+  console.error(
+    "[demo] Engine boot failed:",
+    err instanceof Error ? err.message : String(err),
+  );
+});
+
+// -----------------------------------------------------------------------
 // Mount
 // -----------------------------------------------------------------------
 
 const target = document.getElementById("app");
 if (!target) throw new DemoMountError("Missing #app mount target");
 
-mount(PhoneApp, { target });
+mount(PhoneApp, { target, props: { engineReady } });

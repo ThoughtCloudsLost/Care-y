@@ -12,16 +12,16 @@
  * booleans for open-variants; libsodium-wrappers returns new arrays. The
  * adapters below bridge that difference.
  *
- * Callers must not run before sodium is ready; bootHealthEngine awaits
+ * Callers must not run before sodium is ready; bootDemoEngine awaits
  * readiness before anything else executes.
  */
 
-import { HealthCheckError } from "../errors.js";
+import { DemoEngineError } from "../errors.js";
 import _sodium from "libsodium-wrappers-sumo";
 
 function ready(): typeof _sodium {
   if (typeof _sodium.crypto_secretbox_open_easy !== "function") {
-    throw new HealthCheckError(
+    throw new DemoEngineError(
       "sodium-native shim used before sodium.ready resolved",
     );
   }
@@ -140,7 +140,7 @@ const shim: SodiumNativeShim = new Proxy(impl, {
     if (prop in target || typeof prop === "symbol") {
       return Reflect.get(target, prop, receiver) as unknown;
     }
-    throw new HealthCheckError(
+    throw new DemoEngineError(
       `sodium-native shim: "${prop}" is not implemented for the browser demo`,
     );
   },

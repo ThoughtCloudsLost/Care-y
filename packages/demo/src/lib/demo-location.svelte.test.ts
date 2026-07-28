@@ -43,7 +43,7 @@ function createHarness(initial?: Partial<FakePhone>) {
       loginStage: phone.loginStage,
     }),
     ensureScreen,
-    ticketDetailId: "tk-0001",
+    getTicketDetailId: () => "tk-0001",
   });
 
   /** Resolve every pending chain and flush the .finally continuations. */

@@ -19,8 +19,9 @@
     HealthEngine,
   } from "./engine.js";
   import { bootHealthEngine } from "./engine.js";
-  import { setHealthTrpc } from "./client-shims/trpc.js";
-  import RouteMount from "./RouteMount.svelte";
+  import { setEngineTrpc } from "../stubs/trpc.js";
+  import RouteMount from "$demo/engine/RouteMount.svelte";
+  import HealthProviders from "./HealthProviders.svelte";
   import TimingRow from "./ui/TimingRow.svelte";
   import ProofRow from "./ui/ProofRow.svelte";
 
@@ -90,7 +91,7 @@
       timings = [...engine.timings];
 
       // Wire the engine's tRPC into the client shim
-      setHealthTrpc(engine.trpc);
+      setEngineTrpc(engine.trpc);
 
       // Fetch the first ticket ID for the nav link
       try {
@@ -234,7 +235,13 @@
       {#if activeRoute !== null}
         <div class="health-route-container">
           {#key activeRoute}
-            <RouteMount pathname={activeRoute} />
+            <RouteMount pathname={activeRoute}>
+              {#snippet wrapper(content)}
+                <HealthProviders>
+                  {@render content()}
+                </HealthProviders>
+              {/snippet}
+            </RouteMount>
           {/key}
         </div>
       {/if}

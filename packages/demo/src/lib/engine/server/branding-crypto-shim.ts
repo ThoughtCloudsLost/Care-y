@@ -27,8 +27,8 @@ export function deriveBrandingKey(orgPublicKey: Buffer): Buffer {
   const input = new Uint8Array(labelBytes.length + orgPublicKey.length);
   input.set(labelBytes);
   input.set(orgPublicKey, labelBytes.length);
-  // crypto_generichash defaults to BLAKE2b-256 (32 bytes)
-  const key = _sodium.crypto_generichash(32, input);
+  // crypto_generichash defaults to BLAKE2b-256 (32 bytes), unkeyed
+  const key = _sodium.crypto_generichash(32, input, null);
   return Buffer.from(key);
 }
 

@@ -314,6 +314,9 @@ const DEFAULT_PERMISSIONS: ReadonlySet<Permission> = new Set<Permission>([
   Permission.VIEW_REPORTS,
 ]);
 
+// Hardcoded defaults. The engine generates a random UUID at boot;
+// E2 (engine-crypto integration) will replace these with values from
+// the engine's seed result via demoSeed({ userId, userRoleId }).
 let currentUserId: string | undefined = "demo-user-001";
 let currentUserRoleId: string | undefined = "demo-role-001";
 let currentPermissions: ReadonlySet<Permission> = DEFAULT_PERMISSIONS;

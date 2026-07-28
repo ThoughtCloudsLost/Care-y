@@ -2,9 +2,8 @@
  * Unit tests for route-manifest.ts.
  *
  * These verify the URL pattern matching, param extraction, and
- * layout chain derivation work correctly for the three health routes
- * plus an unknown path. Written but never run as part of this health;
- * the orchestrator's CI handles verification.
+ * layout chain derivation work correctly for the three core routes
+ * plus an unknown path.
  */
 
 import { describe, it, expect } from "vitest";
@@ -14,7 +13,7 @@ describe("route-manifest", () => {
   it("lists known route IDs from the glob", () => {
     const ids = listRouteIds();
     expect(ids.length).toBeGreaterThan(0);
-    // The three health routes must be present
+    // The three core routes must be present
     expect(ids).toContain("/(app)/tickets");
     expect(ids).toContain("/(app)/tickets/[id]");
     expect(ids).toContain("/(app)/library");

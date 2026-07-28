@@ -1,5 +1,5 @@
 /**
- * Glob-derived route manifest for the health.
+ * Glob-derived route manifest for the demo engine.
  *
  * Uses import.meta.glob to discover all +page.svelte and +layout.svelte
  * files under the client's (app) routes. Derives URL patterns, layout
@@ -46,11 +46,11 @@ export interface RouteMatch {
 // The (app) group directory's parentheses are extglob syntax to the
 // glob matcher and must be escaped to match literally.
 const pageModules = import.meta.glob<{ default: Component }>(
-  "../../../client/src/routes/\\(app\\)/**/+page.svelte",
+  "../../../../client/src/routes/\\(app\\)/**/+page.svelte",
 );
 
 const layoutModules = import.meta.glob<{ default: Component }>(
-  "../../../client/src/routes/\\(app\\)/**/+layout.svelte",
+  "../../../../client/src/routes/\\(app\\)/**/+layout.svelte",
 );
 
 // -----------------------------------------------------------------------
@@ -58,7 +58,7 @@ const layoutModules = import.meta.glob<{ default: Component }>(
 // -----------------------------------------------------------------------
 
 /** Prefix to strip from glob keys to get the (app)-relative path. */
-const ROUTES_PREFIX = "../../../client/src/routes";
+const ROUTES_PREFIX = "../../../../client/src/routes";
 
 /**
  * Strip the routes prefix from a glob key, yielding a path like

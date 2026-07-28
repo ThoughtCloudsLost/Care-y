@@ -32,18 +32,6 @@
       "$lib/stores/layout-mode.svelte.js": [
         "./src/stubs/layout-mode.svelte.ts"
       ],
-      "$lib/stores/view-mode.svelte": ["./src/stubs/view-mode.svelte.ts"],
-      "$lib/stores/view-mode.svelte.ts": ["./src/stubs/view-mode.svelte.ts"],
-      "$lib/stores/view-mode.svelte.js": ["./src/stubs/view-mode.svelte.ts"],
-      "$lib/stores/new-replies-first.svelte": [
-        "./src/stubs/new-replies-first.svelte.ts"
-      ],
-      "$lib/stores/new-replies-first.svelte.ts": [
-        "./src/stubs/new-replies-first.svelte.ts"
-      ],
-      "$lib/stores/new-replies-first.svelte.js": [
-        "./src/stubs/new-replies-first.svelte.ts"
-      ],
       "$lib/stores/saved-filters.svelte": [
         "./src/stubs/saved-filters.svelte.ts"
       ],
@@ -71,7 +59,6 @@
     "src/**/*.svelte",
     "vite.ts",
     "vite.config.ts",
-    "vite.health.config.ts",
     "vitest.config.ts",
     "../client/src/lib/workers/shared-worker-types.d.ts",
     "../server/src/types/sodium-native.d.ts"

@@ -3,7 +3,13 @@ import { fileURLToPath } from "node:url";
 import { svelte } from "@sveltejs/vite-plugin-svelte";
 import tailwindcss from "@tailwindcss/vite";
 import { defineConfig } from "vite";
-import { demoAliases, demoSplashPlugin } from "./vite";
+import type { Alias } from "vite";
+import {
+  demoAliases,
+  demoSplashPlugin,
+  serverHealthAliases,
+  serverRedirectPlugin,
+} from "./vite";
 
 function resolve(relative: string): string {
   return fileURLToPath(new URL(relative, import.meta.url));
@@ -30,31 +36,94 @@ function httpsConfig(): { cert: Buffer; key: Buffer } | undefined {
 
 const https = isMobile ? httpsConfig() : undefined;
 
+// -----------------------------------------------------------------------
+// Alias assembly
+// -----------------------------------------------------------------------
+
+/**
+ * Persisted-state in-memory shim: intercepts the
+ * $lib/stores/persisted-state.svelte specifier (with .js and .ts extension
+ * variants) before the $lib directory catch-all can resolve it to the real
+ * localStorage-backed implementation. This single alias collapses every
+ * per-store stub into a working in-memory primitive.
+ */
+const persistedStateAlias: Alias = {
+  find: /^\$lib\/stores\/persisted-state\.svelte(\.js|\.ts)?$/,
+  replacement: resolve(
+    "./src/lib/engine/client-shims/persisted-state.svelte.ts",
+  ),
+};
+
+function buildAliases(): Alias[] {
+  // Server health aliases (PGlite db, env, node:crypto, etc.)
+  const serverAliases: Alias[] = serverHealthAliases.map((sa) => ({
+    find: sa.find,
+    replacement: sa.replacement,
+  }));
+
+  // Demo aliases minus @care-y/crypto stub (engine needs real WASM crypto)
+  const demoBase = demoAliases().filter((alias) => {
+    if (typeof alias.find === "string" && alias.find === "@care-y/crypto") {
+      return false;
+    }
+    return true;
+  });
+
+  return [
+    // (1) Persisted-state shim (must intercept before $lib catch-all)
+    persistedStateAlias,
+    // (2) Server health aliases
+    ...serverAliases,
+    // (3) Demo aliases (minus @care-y/crypto stub)
+    ...demoBase,
+    // (4) Node buffer polyfill for server code that uses Buffer
+    { find: "buffer", replacement: "buffer/" },
+  ];
+}
+
 export default defineConfig({
-  plugins: [tailwindcss(), svelte(), demoSplashPlugin()],
+  plugins: [
+    serverRedirectPlugin(),
+    tailwindcss(),
+    svelte(),
+    demoSplashPlugin(),
+  ],
   base: process.env.BASE_PATH ?? "/",
+  define: {
+    // Production builds statically replace process.env with {}, so the
+    // globals-init runtime polyfill cannot reach migration 014's key
+    // read. Inline the OBVIOUSLY FAKE constant at build time.
+    "process.env.OPS_SECRETS_KEY": JSON.stringify("0f".repeat(32)),
+  },
   resolve: {
-    // No conditions override here: Vite's default client conditions already
-    // include "browser", and specifying the option replaces the defaults
-    // (dropping "module" and "development|production"). The vitest config
-    // does set conditions because the Node runner resolves differently.
-    alias: demoAliases(),
+    alias: buildAliases(),
+    // Explicit browser conditions so server-side modules resolve
+    // their browser-compatible exports.
+    conditions: ["browser"],
   },
   build: {
     rollupOptions: {
       input: {
         main: resolve("index.html"),
         phone: resolve("phone.html"),
+        health: resolve("health.html"),
       },
     },
   },
   server: {
     ...(https !== undefined ? { https } : {}),
     fs: {
-      // Setting allow replaces Vite's default list (which would have
-      // covered this package), so the demo root and the workspace root
-      // (pnpm store symlink targets) must be listed alongside client.
-      allow: [".", "../client", "../.."],
+      // Must include the demo root, client package (for route globs
+      // and $lib resolution), server/crypto/shared (for engine imports),
+      // and workspace root (pnpm store symlinks).
+      allow: [".", "../client", "../server", "../crypto", "../shared", "../.."],
     },
+  },
+  optimizeDeps: {
+    // PGlite bundles its own WASM; Vite's dep optimizer cannot handle it.
+    exclude: ["@electric-sql/pglite"],
+  },
+  worker: {
+    format: "es",
   },
 });

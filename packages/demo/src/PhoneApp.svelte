@@ -1,7 +1,7 @@
 <!--
   PhoneApp: root component for the phone iframe document.
 
-  Mounts LoginMount (pre-auth) or AppShell + tickets scene (post-auth)
+  Mounts LoginMount (pre-auth) or AppShell + RouteMount (post-auth)
   inside a Konsta App root wrapped in a TanStack QueryClientProvider.
   Exposes a DemoBridge on window.demoBridge so the outer page can move
   the shared location, toggle the scheme, and subscribe to state.
@@ -9,8 +9,13 @@
   This is the iframe's entire module graph entry. Router, location
   store, query client, crypto seeding, and goto interception all live
   here. The DemoLocationStore owns the canonical location state for
-  the demo is; this component supplies its two DOM-facing drivers
+  the demo; this component supplies its two DOM-facing drivers
   (reading the phone screen state, driving the phone to a screen).
+
+  The PGlite engine boots in phone-main.ts before this component
+  mounts. The engine promise is passed as a prop; when it resolves,
+  PhoneApp seeds the crypto-context identity (userId, display name)
+  and resolves the real detail ticket ID for the outer-page sentinel.
 -->
 <script lang="ts">
   import { App } from "konsta/svelte";
@@ -24,18 +29,14 @@
   import type { TabId, AreaId } from "$lib/shell/types.js";
   import AppShell from "$lib/shell/AppShell.svelte";
   import DemoSplash from "$demo/DemoSplash.svelte";
-  import { getSceneComponent } from "$demo/scenes/index.js";
+  import LoginMount from "$demo/scenes/LoginMount.svelte";
+  import RouteMount from "$demo/engine/RouteMount.svelte";
   import { createDemoRouter } from "$demo/router.svelte.js";
   import { createDemoQueryClient } from "$demo/demo-query-client.js";
   import { createDemoLocationStore } from "$demo/demo-location.svelte.js";
   import type { PhoneCommand } from "$demo/scroll-sections.js";
   import { demoSeed } from "$lib/crypto/context.js";
   import { setCryptoKeyed } from "$lib/crypto/crypto-keyed.svelte.js";
-  import {
-    createDemoTickets,
-    buildSeedData,
-    resetFixtureIds,
-  } from "$demo/fixtures/tickets.js";
   import { classifyDemoLabel } from "$demo/topic-classifier.js";
   import {
     getLoginStage,
@@ -55,6 +56,7 @@
     TAP_TOPICS,
   } from "$demo/tap-pulse.js";
   import { DEMO_DETAIL_TICKET_ID } from "$demo/bridge.js";
+  import type { DemoEngineResult } from "$demo/engine/engine.js";
   import type {
     DemoBridge,
     DemoBridgeListener,
@@ -69,6 +71,12 @@
   } from "$demo/bridge.js";
 
   // -----------------------------------------------------------------------
+  // Props
+  // -----------------------------------------------------------------------
+
+  let { engineReady }: { engineReady: Promise<DemoEngineResult> } = $props();
+
+  // -----------------------------------------------------------------------
   // Router + query client
   // -----------------------------------------------------------------------
 
@@ -79,36 +87,49 @@
   setCryptoKeyed(true);
 
   // -----------------------------------------------------------------------
-  // Fixture seeding
+  // Engine resolution: crypto seed + real ticket ID
   // -----------------------------------------------------------------------
 
-  /**
-   * Seed the demo caches with fixture data. Seeds display name for
-   * navbar avatar initials, queue display names for the list queue
-   * column, titles/descriptions/follow-ups for the decrypt cache,
-   * read cursors for unread state, and preview data for ticket cards.
-   */
-  function runFullSeed(): void {
-    resetFixtureIds();
-    const tickets = createDemoTickets();
-    const seed = buildSeedData(tickets);
+  // The real detail ticket ID, resolved once the engine boots.
+  // Until then, stays null; detail navigations before boot fall
+  // back to the tickets list.
+  let resolvedDetailId: string | null = $state(null);
 
-    demoSeed({
-      titles: seed.titles,
-      descriptions: seed.descriptions,
-      followUps: seed.followUps,
-      followUpContent: seed.followUpContent,
-      previews: seed.previews,
-      readCursors: seed.readCursors,
-      orgValues: {
-        "me:display_name": "Jordan Kim",
-        ...seed.orgValues,
-      },
-    });
+  /**
+   * Map the outer-page sentinel to the real ticket ID. Returns
+   * the real ID when the sentinel is passed and the engine has
+   * resolved, or null if the engine is not ready yet.
+   */
+  function sentinelToReal(detail: DemoDetail): DemoDetail {
+    if (detail === DEMO_DETAIL_TICKET_ID && resolvedDetailId !== null) {
+      return resolvedDetailId;
+    }
+    return detail;
   }
 
-  // Run initial seed
-  runFullSeed();
+  // Seed crypto-context and resolve the detail ticket ID once
+  // the engine finishes booting. Failures are already logged by
+  // phone-main.ts; we catch here to avoid an unhandled rejection
+  // inside the component.
+  //
+  // engineReady is a Promise prop set once at mount; capturing the
+  // initial value is intentional (the prop never changes).
+  // svelte-ignore state_referenced_locally
+  void engineReady
+    .then((e) => {
+      demoSeed({
+        userId: e.seedResult.adminUserId,
+        orgValues: {
+          "me:display_name": "Jordan Kim",
+        },
+      });
+      if (e.ticketIds.length > 0) {
+        resolvedDetailId = e.ticketIds[0] ?? null;
+      }
+    })
+    .catch(() => {
+      // Boot failure already surfaced by phone-main.ts console.error
+    });
 
   // -----------------------------------------------------------------------
   // Dark scheme
@@ -141,10 +162,16 @@
   });
 
   // -----------------------------------------------------------------------
-  // Scene component
+  // Pathname for RouteMount (derived from router state)
   // -----------------------------------------------------------------------
 
-  const SceneComponent = $derived(getSceneComponent(router.feature));
+  const routeMountPathname = $derived.by(() => {
+    if (router.feature !== "tickets") return "/tickets";
+    if (router.detail !== null) {
+      return `/tickets/${router.detail}`;
+    }
+    return "/tickets";
+  });
 
   // -----------------------------------------------------------------------
   // Login stage reactivity
@@ -173,7 +200,7 @@
       loginStage,
     }),
     ensureScreen,
-    ticketDetailId: DEMO_DETAIL_TICKET_ID,
+    getTicketDetailId: () => resolvedDetailId ?? DEMO_DETAIL_TICKET_ID,
   });
 
   // Every phone screen change lands in the store in the same reactive
@@ -311,6 +338,9 @@
    * flow. A login-to-login navigate does NOT reset (rewinds within
    * the flow go through runAdvance so forward scrolling never replays
    * stages already reached).
+   *
+   * Translates the outer-page sentinel to the real ticket ID at
+   * the boundary before passing to the router.
    */
   function internalNavigate(feature: DemoFeature, detail: DemoDetail): void {
     if (feature === "tickets" && router.feature === "login") {
@@ -320,7 +350,7 @@
     if (feature === "login" && router.feature !== "login") {
       resetLoginFlow();
     }
-    router.navigate(feature, detail);
+    router.navigate(feature, sentinelToReal(detail));
   }
 
   /**
@@ -343,7 +373,19 @@
         await waitFor(() => router.searchOpen, token, 1500);
       }
     } else {
-      internalNavigate(cmd.feature, cmd.detail ?? null);
+      // Translate the sentinel at the phone boundary: if the engine
+      // is not ready yet when a detail navigation arrives, fall back
+      // to the tickets list rather than navigating to a dead ID.
+      let targetDetail = cmd.detail;
+      if (targetDetail === DEMO_DETAIL_TICKET_ID) {
+        if (resolvedDetailId !== null) {
+          targetDetail = resolvedDetailId;
+        } else {
+          // Engine not ready yet; fall back to list
+          targetDetail = null;
+        }
+      }
+      internalNavigate(cmd.feature, targetDetail);
       if (cmd.loginTarget !== null) {
         await runAdvance(cmd.loginTarget, token);
       }
@@ -710,11 +752,13 @@
 
   async function handlePulse(pulseTopic: DemoTopic): Promise<void> {
     const { feature, detail } = topicFeatureTarget(pulseTopic);
+    // Translate the sentinel at the boundary
+    const resolvedDetail = sentinelToReal(detail);
 
     // Navigate if needed (normally a no-op: ensureScreen already
     // navigated before pulsing)
-    if (router.feature !== feature || router.detail !== detail) {
-      internalNavigate(feature, detail);
+    if (router.feature !== feature || router.detail !== resolvedDetail) {
+      internalNavigate(feature, resolvedDetail);
       // Wait a frame for the scene to mount
       await new Promise<void>((r) => {
         requestAnimationFrame(() => r());
@@ -783,7 +827,7 @@
     <App theme="ios" {dark} class="app-shell">
       {#if router.feature === "login"}
         {#key loginEpoch}
-          <SceneComponent />
+          <LoginMount />
         {/key}
       {:else}
         <AppShell
@@ -794,7 +838,7 @@
           onareatap={(areaId: AreaId) => router.handleAreaTap(areaId)}
           onsearchtoggle={(open: boolean) => router.handleSearchToggle(open)}
         >
-          <SceneComponent />
+          <RouteMount pathname={routeMountPathname} />
         </AppShell>
       {/if}
     </App>

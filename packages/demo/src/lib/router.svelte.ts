@@ -5,9 +5,11 @@
  * (a) in-phone shell interactions (tab taps, goto interception, search toggle),
  * (b) outer page controls (FeatureList clicks, programmatic navigation).
  *
- * The router is the URL owner: it computes /tickets and /tickets/<id>
- * URLs and pushes them into the $app/state stub via setDemoPage() so
- * the real route components see correct page.params and page.url values.
+ * The router tracks feature/detail for the demo's high-level view state.
+ * RouteMount owns page-state (page.url, page.params, page.route.id) via
+ * setDemoPage() because it has the manifest match with real params and
+ * routeId. The router only calls setDemoPage for the login URL (reset)
+ * since RouteMount is not mounted during login.
  *
  * Uses Svelte 5 runes for reactivity. The singleton instance is created
  * once and shared across the demo surface and outer page.
@@ -16,6 +18,7 @@
 import { SvelteURL } from "svelte/reactivity";
 import { setDemoPage } from "$app/state";
 import { resolveNavContext } from "$lib/shell/nav-context.js";
+import { matchRoute } from "$demo/engine/route-manifest.js";
 import type { TabId, AreaId } from "$lib/shell/types";
 import type { DemoFeature, DemoDetail } from "./bridge.js";
 import { fireBeforeNavigate, fireAfterNavigate } from "$app/navigation";
@@ -107,11 +110,11 @@ function buildEndpoint(url: URL): {
   params: Record<string, string>;
   route: { id: string | null };
 } {
-  const match = /^\/tickets\/([^/]+)$/.exec(url.pathname);
+  const match = matchRoute(url.pathname);
   return {
     url,
-    params: match?.[1] !== undefined ? { id: match[1] } : {},
-    route: { id: url.pathname },
+    params: match !== null ? match.params : {},
+    route: { id: match !== null ? match.routeId : url.pathname },
   };
 }
 
@@ -131,19 +134,6 @@ export class DemoRouter {
 
   // Track last URL for lifecycle callbacks
   private lastUrl: URL = loginUrl();
-
-  /** Push the current feature/detail state into the $app/state stub. */
-  private syncPage(): void {
-    if (this.feature === "tickets") {
-      if (this.detail !== null) {
-        setDemoPage(ticketsDetailUrl(this.detail));
-      } else {
-        setDemoPage(ticketsListUrl());
-      }
-    } else {
-      setDemoPage(loginUrl());
-    }
-  }
 
   /** Compute the current URL for lifecycle endpoint construction. */
   private currentUrl(): URL {
@@ -193,7 +183,6 @@ export class DemoRouter {
       this.activeArea = null;
     }
 
-    this.syncPage();
     this.fireLifecycle(fromUrl, this.currentUrl());
   }
 
@@ -214,7 +203,6 @@ export class DemoRouter {
     }
     this.detail = null;
 
-    this.syncPage();
     this.fireLifecycle(fromUrl, this.currentUrl());
   }
 
@@ -258,7 +246,6 @@ export class DemoRouter {
       this.activeArea = null;
     }
 
-    this.syncPage();
     this.fireLifecycle(fromUrl, this.currentUrl());
   }
 
@@ -283,7 +270,12 @@ export class DemoRouter {
     this.activeTab = "tickets";
     this.activeArea = null;
 
-    setDemoPage(loginUrl());
+    // Login is outside RouteMount, so the router drives page state here.
+    setDemoPage({
+      url: loginUrl(),
+      params: {},
+      routeId: "/login",
+    });
   }
 }
 

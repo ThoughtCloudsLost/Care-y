@@ -76,7 +76,7 @@
           prefillField('input[autocomplete="username"]', "jdoe", container);
           prefillField(
             'input[autocomplete="current-password"]',
-            "DemoPassword1",
+            "DemoPassword2026",
             container,
           );
         }

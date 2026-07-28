@@ -1,19 +1,193 @@
 /**
  * Shared alias and plugin exports for the demo package.
  *
- * demoAliases() returns a Vite resolve.alias array used directly by
- * the demo's own vite.config.ts. demoResolvePlugin() wraps the same
+ * demoAliases() returns a Vite resolve.alias array used by the
+ * demo's own vite.config.ts. demoResolvePlugin() wraps the same
  * mapping as an enforce-pre resolveId plugin for future SvelteKit
  * consumers (care-y.com) where Vite's alias array is prepended by
  * the SvelteKit plugin and cannot shadow $lib.
+ *
+ * serverHealthAliases and serverRedirectPlugin() map server module
+ * specifiers to browser-compatible shims under src/lib/engine/server/.
+ * The vite.config.ts consumes them to wire resolve.alias entries.
  */
 import { readFileSync } from "node:fs";
+import path from "node:path";
 import { fileURLToPath } from "node:url";
 import type { Alias, Plugin } from "vite";
 
 function resolve(relative: string): string {
   return fileURLToPath(new URL(relative, import.meta.url));
 }
+
+// -----------------------------------------------------------------------
+// Server health aliases
+// -----------------------------------------------------------------------
+
+export interface HealthAlias {
+  readonly find: string;
+  readonly replacement: string;
+}
+
+/**
+ * Server path prefix. Aliases target modules inside packages/server/src/
+ * by matching the resolved absolute path prefix so Vite intercepts them
+ * regardless of import style (relative, aliased, etc.).
+ */
+const serverSrc = resolve("../server/src");
+
+/** Shim directory. All server shims live under src/lib/engine/server/. */
+const shimDir = "./src/lib/engine/server";
+
+export const serverHealthAliases: readonly HealthAlias[] = [
+  // M1: db/db.ts - PGlite-backed Kysely (db, tenantDb exports)
+  // WHY: server db.ts creates a pg.Pool at module scope; browsers have no pg
+  {
+    find: `${serverSrc}/db/db`,
+    replacement: resolve(`${shimDir}/db-shim.ts`),
+  },
+
+  // M2: env.ts - hardcoded fake constants, NODE_ENV=production
+  // WHY: getEnv() reads process.env and validates with zod; demo has no env
+  {
+    find: `${serverSrc}/env`,
+    replacement: resolve(`${shimDir}/env-shim.ts`),
+  },
+
+  // M3: crypto/sealed-box.ts - libsodium-wrappers-sumo port
+  // WHY: original imports sodium-native (native addon, unbundleable)
+  {
+    find: `${serverSrc}/crypto/sealed-box`,
+    replacement: resolve(`${shimDir}/sealed-box-shim.ts`),
+  },
+
+  // M4: crypto/field-encryptor.ts - libsodium-wrappers-sumo port
+  // WHY: original imports sodium-native + node:crypto hkdfSync/createHmac
+  {
+    find: `${serverSrc}/crypto/field-encryptor`,
+    replacement: resolve(`${shimDir}/field-encryptor-shim.ts`),
+  },
+
+  // M5: config/secrets.ts - libsodium-wrappers-sumo port
+  // WHY: original imports sodium-native + node:crypto hkdfSync
+  {
+    find: `${serverSrc}/config/secrets`,
+    replacement: resolve(`${shimDir}/secrets-shim.ts`),
+  },
+
+  // M6a: branding/branding-crypto.ts - libsodium-wrappers-sumo port
+  // WHY: original imports sodium-native for BLAKE2b and XChaCha20
+  {
+    find: `${serverSrc}/branding/branding-crypto`,
+    replacement: resolve(`${shimDir}/branding-crypto-shim.ts`),
+  },
+
+  // M6b: branding/branding-service.ts - replaces sodium_memzero
+  // WHY: original does `import sodium from "sodium-native"` for memzero
+  {
+    find: `${serverSrc}/branding/branding-service`,
+    replacement: resolve(`${shimDir}/branding-service-shim.ts`),
+  },
+
+  // sodium-native (the package itself) - libsodium-wrappers-sumo bridge
+  // WHY: migration 014 (and other reachable files) import sodium-native
+  // directly; a package-level shim covers every importer at once.
+  {
+    find: "sodium-native",
+    replacement: resolve(`${shimDir}/sodium-native-shim.ts`),
+  },
+
+  // M7: node:crypto - WebCrypto + libsodium-wrappers-sumo shim
+  // WHY: 18 server files use randomBytes/createHash/hkdfSync/scrypt/etc.
+  {
+    find: "node:crypto",
+    replacement: resolve(`${shimDir}/node-crypto-shim.ts`),
+  },
+
+  // M8: utils/intervals.ts - omits .unref() which throws in browsers
+  // WHY: setInterval(...).unref() is Node-only; browser throws
+  {
+    find: `${serverSrc}/utils/intervals`,
+    replacement: resolve(`${shimDir}/intervals-shim.ts`),
+  },
+
+  // M9: db/schema-utils.ts - glob-based MigrationProvider
+  // WHY: original uses FileMigrationProvider (fs-based, Node-only)
+  {
+    find: `${serverSrc}/db/schema-utils`,
+    replacement: resolve(`${shimDir}/schema-utils-shim.ts`),
+  },
+
+  // node:util - promisify is used by scrypt-hash.ts and salt-defense.ts
+  // WHY: node:util is not available in browsers
+  {
+    find: "node:util",
+    replacement: resolve(`${shimDir}/node-util-shim.ts`),
+  },
+
+  // node:net - used by oprf-ipc.ts (IPC sockets)
+  // WHY: not available in browsers; oprf evaluator is injected as a stub
+  {
+    find: "node:net",
+    replacement: resolve(`${shimDir}/node-net-shim.ts`),
+  },
+
+  // node:path - used by schema-utils.ts (but our shim replaces it)
+  // and potentially by attachment-validator.ts
+  // WHY: not available in browsers
+  {
+    find: "node:path",
+    replacement: resolve(`${shimDir}/node-path-shim.ts`),
+  },
+
+  // node:fs/promises - used by schema-utils.ts (replaced by glob shim)
+  // and by blob store local (which we replace with Map)
+  // WHY: not available in browsers
+  {
+    find: "node:fs/promises",
+    replacement: resolve(`${shimDir}/node-fs-shim.ts`),
+  },
+
+  // node:fs - used indirectly by some imports
+  {
+    find: "node:fs",
+    replacement: resolve(`${shimDir}/node-fs-shim.ts`),
+  },
+] as const;
+
+// -----------------------------------------------------------------------
+// Server-module redirect plugin
+// -----------------------------------------------------------------------
+
+/**
+ * Vite string aliases match import SPECIFIERS, not resolved paths, so an
+ * absolute-path `find` never intercepts a server-internal relative import
+ * like "../db/db.js". This plugin resolves relative imports to absolute
+ * paths first, then redirects any path that matches the serverHealthAliases
+ * table (extension-insensitive) to its shim. Bare-specifier entries
+ * (node:crypto, sodium-native) stay in the alias list, which does handle
+ * those correctly.
+ */
+export function serverRedirectPlugin(): Plugin {
+  const table = serverHealthAliases.filter((sa) => path.isAbsolute(sa.find));
+  return {
+    name: "care-y-server-redirect",
+    enforce: "pre",
+    resolveId(source, importer): string | null {
+      if (importer === undefined || !source.startsWith(".")) return null;
+      const resolved = path.resolve(path.dirname(importer), source);
+      const noExt = resolved.replace(/\.(?:js|ts)$/, "");
+      for (const entry of table) {
+        if (noExt === entry.find) return entry.replacement;
+      }
+      return null;
+    },
+  };
+}
+
+// -----------------------------------------------------------------------
+// Demo aliases
+// -----------------------------------------------------------------------
 
 // Client code imports these modules with explicit extensions
 // ("$lib/trpc/index.js", "$lib/crypto/context.js"), which a plain string
@@ -32,14 +206,6 @@ const stubMatchers: [RegExp, string][] = [
   [
     /^\$lib\/stores\/layout-mode\.svelte(\.js|\.ts)?$/,
     "./src/stubs/layout-mode.svelte.ts",
-  ],
-  [
-    /^\$lib\/stores\/view-mode\.svelte(\.js|\.ts)?$/,
-    "./src/stubs/view-mode.svelte.ts",
-  ],
-  [
-    /^\$lib\/stores\/new-replies-first\.svelte(\.js|\.ts)?$/,
-    "./src/stubs/new-replies-first.svelte.ts",
   ],
   [
     /^\$lib\/stores\/saved-filters\.svelte(\.js|\.ts)?$/,
