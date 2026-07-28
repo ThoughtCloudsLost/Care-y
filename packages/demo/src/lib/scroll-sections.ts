@@ -248,6 +248,12 @@ export const SECTIONS: readonly Section[] = [
         headingKey: "demo_narrative_admin_heading",
         bodyKey: "demo_narrative_admin_body",
       },
+      {
+        slug: "people-queues",
+        topic: null,
+        headingKey: "demo_narrative_admin_people_queues_heading",
+        bodyKey: "demo_narrative_admin_people_queues_body",
+      },
     ],
   },
   {
@@ -273,6 +279,24 @@ export const SECTIONS: readonly Section[] = [
         topic: null,
         headingKey: "demo_narrative_settings_heading",
         bodyKey: "demo_narrative_settings_body",
+      },
+      {
+        slug: "profile-identity",
+        topic: null,
+        headingKey: "demo_narrative_settings_profile_identity_heading",
+        bodyKey: "demo_narrative_settings_profile_identity_body",
+      },
+      {
+        slug: "password-keys",
+        topic: null,
+        headingKey: "demo_narrative_settings_password_keys_heading",
+        bodyKey: "demo_narrative_settings_password_keys_body",
+      },
+      {
+        slug: "two-factor-methods",
+        topic: null,
+        headingKey: "demo_narrative_settings_two_factor_methods_heading",
+        bodyKey: "demo_narrative_settings_two_factor_methods_body",
       },
     ],
   },

@@ -56,7 +56,12 @@
     TAP_TOPICS,
   } from "$demo/tap-pulse.js";
   import { DEMO_DETAIL_TICKET_ID } from "$demo/bridge.js";
+  import {
+    activateSettingsDriver,
+    deactivateSettingsDriver,
+  } from "$demo/settings-driver.js";
   import type { DemoEngineResult } from "$demo/engine/engine.js";
+  import { onOutboxAppend } from "$demo/engine/engine.js";
   import type {
     DemoBridge,
     DemoBridgeListener,
@@ -182,6 +187,19 @@
   $effect(() => {
     if (router.feature !== "login") {
       setLoginStage(null);
+    }
+  });
+
+  // -----------------------------------------------------------------------
+  // Settings enrollment driver (TOTP + email/SMS auto-fill)
+  // -----------------------------------------------------------------------
+
+  $effect(() => {
+    if (router.feature === "settings") {
+      activateSettingsDriver(document, onOutboxAppend);
+      return () => {
+        deactivateSettingsDriver();
+      };
     }
   });
 

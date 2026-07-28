@@ -172,6 +172,24 @@
       demo_narrative_settings_heading: () =>
         m.demo_narrative_settings_heading(),
       demo_narrative_settings_body: () => m.demo_narrative_settings_body(),
+      // Settings sub-sections
+      demo_narrative_settings_profile_identity_heading: () =>
+        m.demo_narrative_settings_profile_identity_heading(),
+      demo_narrative_settings_profile_identity_body: () =>
+        m.demo_narrative_settings_profile_identity_body(),
+      demo_narrative_settings_password_keys_heading: () =>
+        m.demo_narrative_settings_password_keys_heading(),
+      demo_narrative_settings_password_keys_body: () =>
+        m.demo_narrative_settings_password_keys_body(),
+      demo_narrative_settings_two_factor_methods_heading: () =>
+        m.demo_narrative_settings_two_factor_methods_heading(),
+      demo_narrative_settings_two_factor_methods_body: () =>
+        m.demo_narrative_settings_two_factor_methods_body(),
+      // Admin sub-sections
+      demo_narrative_admin_people_queues_heading: () =>
+        m.demo_narrative_admin_people_queues_heading(),
+      demo_narrative_admin_people_queues_body: () =>
+        m.demo_narrative_admin_people_queues_body(),
     };
 
     // eslint-disable-next-line security/detect-object-injection -- key is a message key from section config, not user input

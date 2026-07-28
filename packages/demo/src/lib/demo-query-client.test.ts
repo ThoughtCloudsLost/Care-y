@@ -6,22 +6,9 @@ import {
 import { authKeys } from "$lib/query/keys.js";
 
 describe("createDemoQueryClient", () => {
-  it("returns a QueryClient with auth.me pre-seeded", () => {
+  it("does not pre-seed auth.me (the real engine endpoint serves it)", () => {
     const client = createDemoQueryClient();
-    const data = client.getQueryData(authKeys.me());
-    expect(data).toBeDefined();
-  });
-
-  it("auth.me data has the expected user shape", () => {
-    const client = createDemoQueryClient();
-    const data = client.getQueryData<{
-      user: { id: string; roleId: string; encryptedDisplayName: string };
-      permissions: readonly string[];
-    }>(authKeys.me());
-    expect(data?.user.id).toBe("demo-user-001");
-    expect(data?.user.roleId).toBe("demo-role-001");
-    expect(data?.user.encryptedDisplayName).toBeDefined();
-    expect(data?.permissions).toContain("tickets:read");
+    expect(client.getQueryData(authKeys.me())).toBeUndefined();
   });
 
   it("has retry disabled by default", () => {
@@ -35,33 +22,23 @@ describe("createDemoQueryClient", () => {
     const defaults = client.getDefaultOptions();
     expect(defaults.queries?.staleTime).toBe(Infinity);
   });
+
+  it("keeps refetch triggers off", () => {
+    const defaults = createDemoQueryClient().getDefaultOptions();
+    expect(defaults.queries?.refetchOnMount).toBe(false);
+    expect(defaults.queries?.refetchOnWindowFocus).toBe(false);
+    expect(defaults.queries?.refetchOnReconnect).toBe(false);
+  });
 });
 
 describe("reseedDemoQueryClient", () => {
-  it("clears all query data and re-seeds auth.me", () => {
+  it("clears all query data", () => {
     const client = createDemoQueryClient();
-    // Add some extra data that should be cleared
     client.setQueryData(["test-key"], { value: 42 });
     expect(client.getQueryData(["test-key"])).toBeDefined();
 
     reseedDemoQueryClient(client);
 
-    // Extra data should be gone
     expect(client.getQueryData(["test-key"])).toBeUndefined();
-    // auth.me should still be present
-    const me = client.getQueryData(authKeys.me());
-    expect(me).toBeDefined();
-  });
-
-  it("preserves auth.me shape after reseed", () => {
-    const client = createDemoQueryClient();
-    reseedDemoQueryClient(client);
-
-    const data = client.getQueryData<{
-      user: { id: string };
-      permissions: readonly string[];
-    }>(authKeys.me());
-    expect(data?.user.id).toBe("demo-user-001");
-    expect(data?.permissions).toContain("tickets:read");
   });
 });
