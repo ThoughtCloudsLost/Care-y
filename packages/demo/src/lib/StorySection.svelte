@@ -190,6 +190,14 @@
         m.demo_narrative_admin_people_queues_heading(),
       demo_narrative_admin_people_queues_body: () =>
         m.demo_narrative_admin_people_queues_body(),
+      demo_narrative_admin_org_config_keys_heading: () =>
+        m.demo_narrative_admin_org_config_keys_heading(),
+      demo_narrative_admin_org_config_keys_body: () =>
+        m.demo_narrative_admin_org_config_keys_body(),
+      demo_narrative_admin_communications_heading: () =>
+        m.demo_narrative_admin_communications_heading(),
+      demo_narrative_admin_communications_body: () =>
+        m.demo_narrative_admin_communications_body(),
     };
 
     // eslint-disable-next-line security/detect-object-injection -- key is a message key from section config, not user input
