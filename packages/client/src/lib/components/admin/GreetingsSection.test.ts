@@ -127,6 +127,11 @@ vi.mock("$lib/trpc/index.js", () => ({
       deleteGreeting: { mutate: mockDeleteGreeting },
       uploadGreetingAudio: { mutate: vi.fn().mockResolvedValue({}) },
       createAudioGreeting: { mutate: vi.fn().mockResolvedValue({}) },
+      getGreetingAudio: {
+        query: vi
+          .fn()
+          .mockResolvedValue({ audioBase64: "", contentType: "audio/wav" }),
+      },
     },
     telephonyAdmin: {
       getProvisionedPhones: { query: vi.fn() },

@@ -26,6 +26,7 @@ export interface GreetingRecord {
 }
 
 export interface GreetingRepository {
+  findById(id: string): Promise<GreetingRecord | null>;
   findByNumberAndLocaleAndType(
     phoneNumber: string,
     locale: string,
@@ -74,6 +75,17 @@ export function createGreetingRepository(
   db: Kysely<TenantDatabase>,
 ): GreetingRepository {
   return {
+    async findById(id: string): Promise<GreetingRecord | null> {
+      const row = await db
+        .selectFrom("phone_greetings")
+        .selectAll()
+        .where("id", "=", id)
+        .executeTakeFirst();
+
+      if (!row) return null;
+      return toGreetingRecord(row);
+    },
+
     async findByNumberAndLocaleAndType(
       phoneNumber: string,
       locale: string,
