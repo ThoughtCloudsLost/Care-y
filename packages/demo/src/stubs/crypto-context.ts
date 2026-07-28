@@ -232,6 +232,10 @@ const DEFAULT_PERMISSIONS: ReadonlySet<Permission> = new Set<Permission>([
   Permission.MANAGE_PRESETS,
   Permission.MANAGE_KNOWLEDGE_BASE_CATEGORIES,
   Permission.VIEW_REPORTS,
+  Permission.MANAGE_ORG_CONFIG,
+  Permission.MANAGE_KEYS,
+  Permission.MANAGE_INFRASTRUCTURE,
+  Permission.MANAGE_ROLES,
 ]);
 
 let currentUserId: string | undefined = "demo-user-001";

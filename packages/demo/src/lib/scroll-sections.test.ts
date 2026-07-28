@@ -136,6 +136,20 @@ describe("parseHash", () => {
       subSlug: "people-queues",
     });
   });
+
+  it("parses admin/org-config-keys sub", () => {
+    expect(parseHash("#admin/org-config-keys")).toEqual({
+      sectionId: "admin",
+      subSlug: "org-config-keys",
+    });
+  });
+
+  it("parses admin/communications sub", () => {
+    expect(parseHash("#admin/communications")).toEqual({
+      sectionId: "admin",
+      subSlug: "communications",
+    });
+  });
 });
 
 describe("buildHash", () => {
@@ -330,6 +344,20 @@ describe("resolvePhoneCommand", () => {
 
   it("resolves admin/people-queues to admin feature", () => {
     const cmd = resolvePhoneCommand("admin", "people-queues", TICKET_ID);
+    expect(cmd.feature).toBe("admin");
+    expect(cmd.detail).toBeNull();
+    expect(cmd.pulseTopic).toBeNull();
+  });
+
+  it("resolves admin/org-config-keys to admin feature", () => {
+    const cmd = resolvePhoneCommand("admin", "org-config-keys", TICKET_ID);
+    expect(cmd.feature).toBe("admin");
+    expect(cmd.detail).toBeNull();
+    expect(cmd.pulseTopic).toBeNull();
+  });
+
+  it("resolves admin/communications to admin feature", () => {
+    const cmd = resolvePhoneCommand("admin", "communications", TICKET_ID);
     expect(cmd.feature).toBe("admin");
     expect(cmd.detail).toBeNull();
     expect(cmd.pulseTopic).toBeNull();
@@ -627,9 +655,9 @@ describe("SECTIONS taxonomy", () => {
     expect(library?.subs).toHaveLength(1);
   });
 
-  it("admin has 2 subs", () => {
+  it("admin has 4 subs", () => {
     const admin = SECTIONS.find((s) => s.id === "admin");
-    expect(admin?.subs).toHaveLength(2);
+    expect(admin?.subs).toHaveLength(4);
   });
 
   it("schedule has 1 sub", () => {

@@ -104,6 +104,8 @@ export interface DemoEngineResult {
   readonly appRouter: unknown;
   /** Ticket ID whose key wrap was deleted (decrypt-denied demo). */
   readonly deniedTicketId: string;
+  /** Map-backed blob store (greeting audio, attachments). */
+  readonly blobStore: BlobStore;
 }
 
 // For backwards compat with the health page
@@ -269,6 +271,7 @@ export async function bootDemoEngine(): Promise<DemoEngineResult> {
 
   // 5. Structural seed
   const t5 = timeMs();
+  const blobStore = createMapBlobStore();
   const seedResult = await seedStructure({
     platformDb: db,
     tenantDb: tDb,
@@ -277,12 +280,12 @@ export async function bootDemoEngine(): Promise<DemoEngineResult> {
     secretsEncryptor,
     hasher,
     tokenizer,
+    blobStore,
   });
   timings.push({ label: "seed-structure", ms: timeMs() - t5 });
 
   // 6. Content seed (real seed modules)
   const t6 = timeMs();
-  const blobStore = createMapBlobStore();
   const orgPublicKey = seedResult.orgPublicKey;
   const sealedBox = createSealedBoxEncryptor(orgPublicKey);
 
@@ -624,6 +627,32 @@ export async function bootDemoEngine(): Promise<DemoEngineResult> {
     await import("../../../../server/src/kb/kb-media-service.js");
   const { createPushSubscriptionService } =
     await import("../../../../server/src/notifications/push-subscriptions.js");
+  const { createTelephonyContentService } =
+    await import("../../../../server/src/telephony/telephony-content-service.js");
+  const { createTelephonyConfigService } =
+    await import("../../../../server/src/telephony/config-service.js");
+  const { twilioProviderStatic, createTwilioProvider } =
+    await import("../../../../server/src/telephony/twilio.js");
+  const { createProviderFactory } =
+    await import("../../../../server/src/telephony/factory.js");
+
+  // Telephony config service: uses a REAL provider factory (production
+  // wiring) so getMaskedConfig reads the seeded telephony_config row and
+  // the admin config page renders configured. The rejecting factory stays
+  // on authDeps (login 2FA degradation) and the sms-capable one on
+  // twoFactorDeps; this third instance mirrors index.ts, where the same
+  // DB-backed factory serves the config service.
+  const configProviderFactory = createProviderFactory({
+    db,
+    secretsEncryptor,
+    providerConstructors: new Map([["twilio", createTwilioProvider]]),
+  });
+  const telephonyConfigService = createTelephonyConfigService({
+    db,
+    secretsEncryptor,
+    providerFactory: configProviderFactory,
+    providerStatics: new Map([["twilio", twilioProviderStatic]]),
+  });
 
   const appRouter = createAppRouter({
     authDeps: {
@@ -663,7 +692,17 @@ export async function bootDemoEngine(): Promise<DemoEngineResult> {
     providerFactory: rejectingProviderFactory,
     includeReports: true,
     includeConsultant: true,
-    includeTelephonyContent: false,
+    includeTelephonyContent: true,
+    telephonyContentDeps: {
+      createService: createTelephonyContentService,
+      blobStore,
+      uploadLimiter: noopLimiter,
+    },
+    telephonyAdminDeps: {
+      configService: telephonyConfigService,
+      webhookBaseUrl: "https://demo.invalid",
+      indexer,
+    },
     ticketDeps: {
       blobStore,
       createTicketAccess: createTicketAccessChecker,
@@ -931,6 +970,7 @@ export async function bootDemoEngine(): Promise<DemoEngineResult> {
     volunteerCtx,
     appRouter,
     deniedTicketId,
+    blobStore,
   };
 }
 
@@ -1366,6 +1406,83 @@ export async function runHealthProofs(
   } catch (err: unknown) {
     report({
       name: "P8 totp enrollment round-trip",
+      pass: false,
+      detail: err instanceof Error ? err.message : String(err),
+    });
+  }
+
+  // P11: telephonyAdmin round-trip (getConfig decrypts the seeded BYOT config)
+  try {
+    const config = (await dispatch(
+      adminCaller,
+      "telephonyAdmin",
+      "getConfig",
+      undefined,
+    )) as { provider?: string; phoneNumbers?: readonly unknown[] } | null;
+
+    // The config service uses a real DB-backed provider factory, so the
+    // seeded telephony_config row round-trips through secretsEncryptor
+    // decryption and provider masking.
+    const pass =
+      config !== null &&
+      config.provider === "twilio" &&
+      Array.isArray(config.phoneNumbers) &&
+      config.phoneNumbers.length === 2;
+
+    report({
+      name: "P11 telephonyAdmin round-trip",
+      pass,
+      detail: pass
+        ? "seeded twilio config masked with 2 phone numbers"
+        : `unexpected config: ${JSON.stringify(config).slice(0, 120)}`,
+    });
+  } catch (err: unknown) {
+    report({
+      name: "P11 telephonyAdmin round-trip",
+      pass: false,
+      detail: err instanceof Error ? err.message : String(err),
+    });
+  }
+
+  // P12: telephonyContent round-trip (create greeting, then list)
+  try {
+    // Create a text greeting via the real router
+    const created = (await dispatch(
+      adminCaller,
+      "telephonyContent",
+      "createGreeting",
+      {
+        phoneNumber: "+15550009999",
+        locale: "en",
+        greetingType: "answer",
+        text: "Health check greeting",
+      },
+    )) as { id: string; text: string };
+
+    const hasId = typeof created.id === "string" && created.id.length > 0;
+    const textMatches = created.text === "Health check greeting";
+
+    // List greetings and verify the created one appears
+    const greetings = (await dispatch(
+      adminCaller,
+      "telephonyContent",
+      "listGreetings",
+      {},
+    )) as readonly { id: string }[];
+
+    const found = greetings.some((g) => g.id === created.id);
+
+    report({
+      name: "P12 telephonyContent round-trip",
+      pass: hasId && textMatches && found,
+      detail:
+        `created id: ${String(hasId)}, ` +
+        `text matches: ${String(textMatches)}, ` +
+        `found in list: ${String(found)}`,
+    });
+  } catch (err: unknown) {
+    report({
+      name: "P12 telephonyContent round-trip",
       pass: false,
       detail: err instanceof Error ? err.message : String(err),
     });

@@ -22,6 +22,7 @@ import type {
 import type { FieldEncryptor, BlindIndexer } from "./field-encryptor-shim.js";
 import type { SecretsEncryptor } from "./secrets-shim.js";
 import type { SessionTokenizer } from "../../../../../server/src/crypto/session-tokenizer.js";
+import type { BlobStore } from "../../../../../server/src/storage/store.js";
 import { createSealedBoxEncryptor } from "./sealed-box-shim.js";
 import { randomInt } from "./node-crypto-shim.js";
 
@@ -50,6 +51,8 @@ export interface SeedStructureDeps {
   readonly secretsEncryptor: SecretsEncryptor;
   readonly hasher: { hash(password: string): Promise<string> };
   readonly tokenizer: SessionTokenizer;
+  /** Optional blob store. When absent, blob-backed rows (audio greetings, quarantine) are skipped. */
+  readonly blobStore?: BlobStore;
 }
 
 // Word lists for alias generation (subset of server alias-generator)
@@ -137,10 +140,29 @@ export async function seedStructure(
     .values({
       org_public_key: orgPublicKey,
       setup_completed: true,
+      getting_started_dismissed_at: new Date(),
     })
     .execute();
 
   const sealedBox = createSealedBoxEncryptor(orgPublicKey);
+
+  // 3b. Update org_config with branding/general config fields.
+  // OrgGeneralSection reads encrypted_name, default_language, default_country_code.
+  // BrandingSection reads encrypted_primary_color, encrypted_accent_color,
+  // encrypted_client_text, encrypted_terminology.
+  await tenantDb
+    .updateTable("org_config")
+    .set({
+      encrypted_name: sealedBox.seal("Harbor Support"),
+      default_language: "en",
+      default_country_code: "US",
+      encrypted_primary_color: sealedBox.seal("#4A6FA5"),
+      encrypted_accent_color: sealedBox.seal("#E07A5F"),
+      encrypted_client_text: sealedBox.seal(
+        "If you or someone you know needs help, please call our support line. All calls are confidential.",
+      ),
+    })
+    .execute();
 
   // 4. Create admin user
   const passwordHash = await hasher.hash(DEMO_ADMIN_PASSWORD);
@@ -395,21 +417,171 @@ export async function seedStructure(
     await import("../../../../../server/src/tickets/note-type-service.js");
   await seedDefaultNoteTypes(tenantDb, sealedBox, secretsEncryptor);
 
-  // 12. Phone greetings (admin hub counts these; zero triggers warning badge)
-  const greetings = [
+  // 12. Telephony config. TelephonyConfigSection reads telephonyAdmin.getConfig
+  // which calls configService.getMaskedConfig, which calls providerFactory.getProvider.
+  // The provider decrypts telephony_config.config via the secretsEncryptor.
+  // Production shape: mode "byot", accountSid, authToken, phoneNumbers array.
+  const DEMO_PHONES = [
+    {
+      number: "+15550001234",
+      sid: "PN" + "demo0001234".padEnd(32, "0"),
+      label: "Main Line",
+      friendlyName: "Main Line (+1 555-000-1234)",
+    },
+    {
+      number: "+15550005678",
+      sid: "PN" + "demo0005678".padEnd(32, "0"),
+      label: "Crisis Line",
+      friendlyName: "Crisis Line (+1 555-000-5678)",
+    },
+  ] as const;
+
+  const telephonyConfigObj = {
+    mode: "byot" as const,
+    accountSid: "AC" + "demo555".padEnd(32, "0"),
+    authToken: "demo_auth_token_" + "0".repeat(16),
+    phoneNumbers: DEMO_PHONES.map((p) => ({
+      number: p.number,
+      sid: p.sid,
+      label: p.label,
+      friendlyName: p.friendlyName,
+    })),
+  };
+  const telephonyConfigPlain = Buffer.from(
+    JSON.stringify(telephonyConfigObj),
+    "utf-8",
+  );
+  const telephonyConfigSealed = secretsEncryptor.encrypt(telephonyConfigPlain);
+  telephonyConfigPlain.fill(0);
+
+  await platformDb
+    .insertInto("telephony_config")
+    .values({
+      org_id: orgId,
+      provider: "twilio",
+      config: telephonyConfigSealed,
+    })
+    .execute();
+
+  // Set phone purpose SIDs in org_config (outbound and system)
+  await tenantDb
+    .updateTable("org_config")
+    .set({
+      phone_outbound_sid: DEMO_PHONES[0].sid,
+      phone_system_sid: DEMO_PHONES[1].sid,
+    })
+    .execute();
+
+  // 13. Phone greetings (GreetingsSection lists per phone, grouped by type).
+  // Columns rendered: phone_number, greeting_type, locale, text, is_audio,
+  // audio_blob_key, audio_content_type.
+  const greetings: {
+    phone_number: string;
+    greeting_type: string;
+    locale: string;
+    text: string;
+    is_audio: boolean;
+    audio_blob_key: string | null;
+    audio_content_type: string | null;
+  }[] = [
+    // Main line greetings
     {
       phone_number: "+15550001234",
-      greeting_type: "voicemail",
+      greeting_type: "answer",
       locale: "en",
-      text: "You have reached the support line. Please leave a message after the tone.",
+      text: "Thank you for calling Harbor Support. Your call is important to us.",
+      is_audio: false,
+      audio_blob_key: null,
+      audio_content_type: null,
     },
     {
       phone_number: "+15550001234",
-      greeting_type: "hold",
+      greeting_type: "answer",
+      locale: "es",
+      text: "Gracias por llamar a Harbor Support. Su llamada es importante para nosotros.",
+      is_audio: false,
+      audio_blob_key: null,
+      audio_content_type: null,
+    },
+    {
+      phone_number: "+15550001234",
+      greeting_type: "language_prompt",
       locale: "en",
-      text: "Thank you for holding. A volunteer will be with you shortly.",
+      text: "For English, press 1. Para espanol, oprima el 2.",
+      is_audio: false,
+      audio_blob_key: null,
+      audio_content_type: null,
+    },
+    {
+      phone_number: "+15550001234",
+      greeting_type: "new_client",
+      locale: "en",
+      text: "Welcome. A volunteer will be with you shortly. All calls are confidential.",
+      is_audio: false,
+      audio_blob_key: null,
+      audio_content_type: null,
+    },
+    {
+      phone_number: "+15550001234",
+      greeting_type: "existing_client",
+      locale: "en",
+      text: "Welcome back. We are connecting you now.",
+      is_audio: false,
+      audio_blob_key: null,
+      audio_content_type: null,
+    },
+    {
+      phone_number: "+15550001234",
+      greeting_type: "staff_menu",
+      locale: "en",
+      text: "Staff menu. Press 1 to check messages. Press 2 for the volunteer directory.",
+      is_audio: false,
+      audio_blob_key: null,
+      audio_content_type: null,
+    },
+    // Crisis line greetings
+    {
+      phone_number: "+15550005678",
+      greeting_type: "answer",
+      locale: "en",
+      text: "You have reached the Harbor crisis line. A trained volunteer is available to help.",
+      is_audio: false,
+      audio_blob_key: null,
+      audio_content_type: null,
+    },
+    {
+      phone_number: "+15550005678",
+      greeting_type: "new_client",
+      locale: "en",
+      text: "Please stay on the line. You will be connected to a volunteer shortly.",
+      is_audio: false,
+      audio_blob_key: null,
+      audio_content_type: null,
     },
   ];
+
+  // Generate an audio greeting if a blob store is available.
+  // E4 precedent: compute binary content in code, never commit blobs.
+  // Greeting audio is NOT encrypted (stored as raw audio in the blob store,
+  // served via a public HTTP handler at /api/greetings/<blobKey>).
+  if (deps.blobStore !== undefined) {
+    const audioWav = generateMinimalWav();
+    const audioBlobKey = await deps.blobStore.put(
+      DEMO_ORG_SCHEMA,
+      "greeting",
+      Buffer.from(audioWav),
+    );
+    greetings.push({
+      phone_number: "+15550005678",
+      greeting_type: "answer",
+      locale: "es",
+      text: "",
+      is_audio: true,
+      audio_blob_key: audioBlobKey,
+      audio_content_type: "audio/wav",
+    });
+  }
+
   for (const g of greetings) {
     await tenantDb
       .insertInto("phone_greetings")
@@ -418,12 +590,15 @@ export async function seedStructure(
         greeting_type: g.greeting_type,
         locale: g.locale,
         text: g.text,
-        is_audio: false,
+        is_audio: g.is_audio,
+        audio_blob_key: g.audio_blob_key,
+        audio_content_type: g.audio_content_type,
       })
       .execute();
   }
 
-  // 13. SMS response templates (admin hub counts these; zero triggers warning badge)
+  // 14. SMS response templates (SmsTemplatesSection lists per type and
+  // renders the response_type, locale, and text columns).
   const smsTemplates = [
     {
       response_type: "auto_reply",
@@ -431,9 +606,29 @@ export async function seedStructure(
       text: "We received your message. A volunteer will follow up soon.",
     },
     {
+      response_type: "auto_reply",
+      locale: "es",
+      text: "Recibimos su mensaje. Un voluntario le contactara pronto.",
+    },
+    {
       response_type: "after_hours",
       locale: "en",
       text: "Our support line is currently closed. We will respond during the next available shift.",
+    },
+    {
+      response_type: "after_hours",
+      locale: "es",
+      text: "Nuestra linea de apoyo esta cerrada en este momento. Responderemos durante el proximo turno disponible.",
+    },
+    {
+      response_type: "new_client",
+      locale: "en",
+      text: "Welcome to Harbor Support. Reply HELP for a list of commands, or a volunteer will reach out shortly.",
+    },
+    {
+      response_type: "error",
+      locale: "en",
+      text: "We could not process your message. Please try again or call +1 (555) 000-1234.",
     },
   ];
   for (const t of smsTemplates) {
@@ -447,7 +642,7 @@ export async function seedStructure(
       .execute();
   }
 
-  // 14. Phone blocklist (one entry so hubStatus.blocklistCount is non-zero)
+  // 15. Phone blocklist (one entry so hubStatus.blocklistCount is non-zero)
   await tenantDb
     .insertInto("phone_blocklist")
     .values({
@@ -457,6 +652,83 @@ export async function seedStructure(
     })
     .execute();
 
+  // 16. Voicemail quarantine rows. QuarantineSection reads
+  // voicemailQuarantine.list (status, reason, createdAt, durationSeconds,
+  // encryptedCallerNumber, encryptedCalledNumber) and
+  // voicemailQuarantine.download (sealedBase64 from blob store).
+  // Production writes sealed audio via sealBufferAndZero (crypto_box_seal)
+  // and caller/called via sealString (crypto_box_seal on UTF-8 Buffer).
+  // Skip if no blob store (E4 precedent: metadata without bytes is worse
+  // than nothing).
+  if (deps.blobStore !== undefined) {
+    const quarantineRows = [
+      {
+        recordingSid: "RE" + "demo_quarantine_1".padEnd(32, "0"),
+        callSid: "CA" + "demo_qcall_1".padEnd(32, "0"),
+        reason: "tracker_miss",
+        callerNumber: "+15550009876",
+        calledNumber: "+15550001234",
+        durationSeconds: 47,
+        minutesAgo: 180,
+      },
+      {
+        recordingSid: "RE" + "demo_quarantine_2".padEnd(32, "0"),
+        callSid: "CA" + "demo_qcall_2".padEnd(32, "0"),
+        reason: "no_intake_queue",
+        callerNumber: "+15550004321",
+        calledNumber: "+15550005678",
+        durationSeconds: 12,
+        minutesAgo: 90,
+      },
+      {
+        recordingSid: "RE" + "demo_quarantine_3".padEnd(32, "0"),
+        callSid: "CA" + "demo_qcall_3".padEnd(32, "0"),
+        reason: "unresolved_client",
+        callerNumber: "+15550007777",
+        calledNumber: "+15550001234",
+        durationSeconds: 63,
+        minutesAgo: 30,
+      },
+    ] as const;
+
+    const quarantineNow = Date.now();
+    for (const qr of quarantineRows) {
+      // Generate a minimal valid WAV and seal it exactly as the product does:
+      // crypto_box_seal on the raw audio bytes. QuarantinePlayer decrypts
+      // via orgKeyManager.decrypt (crypto_box_seal_open).
+      const rawAudio = Buffer.from(generateMinimalWav());
+      const sealedAudio = sealedBox.sealBuffer(rawAudio);
+      rawAudio.fill(0);
+
+      const blobKey = await deps.blobStore.put(
+        DEMO_ORG_SCHEMA,
+        "quarantine",
+        sealedAudio,
+      );
+
+      await tenantDb
+        .insertInto("voicemail_quarantine")
+        .values({
+          recording_sid: qr.recordingSid,
+          call_sid: qr.callSid,
+          blob_key: blobKey,
+          size_bytes: sealedAudio.length,
+          duration_seconds: qr.durationSeconds,
+          reason: qr.reason,
+          status: "pending",
+          client_id: null,
+          encrypted_caller_number: sealedBox.seal(qr.callerNumber),
+          encrypted_called_number: sealedBox.seal(qr.calledNumber),
+          routed_ticket_id: null,
+          routed_followup_id: null,
+          resolved_by: null,
+          resolved_at: null,
+          created_at: new Date(quarantineNow - qr.minutesAgo * 60 * 1000),
+        })
+        .execute();
+    }
+  }
+
   return {
     orgId,
     adminUserId,
@@ -465,4 +737,58 @@ export async function seedStructure(
     queueIds,
     rosterUserIds,
   };
+}
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+/**
+ * Generate a minimal valid WAV file (44 bytes header + 800 bytes of silence).
+ * Produces a decodable audio file that AudioContext.decodeAudioData can parse.
+ * 8000 Hz, 16-bit mono, 50ms of silence (400 samples = 800 bytes).
+ *
+ * Layout: RIFF header (12 bytes) + fmt chunk (24 bytes) + data chunk header
+ * (8 bytes) + PCM samples.
+ */
+function generateMinimalWav(): Uint8Array {
+  const sampleRate = 8000;
+  const numSamples = 400; // 50ms at 8kHz
+  const bitsPerSample = 16;
+  const numChannels = 1;
+  const bytesPerSample = bitsPerSample / 8;
+  const dataSize = numSamples * numChannels * bytesPerSample;
+  const fileSize = 44 + dataSize;
+
+  const buffer = new ArrayBuffer(fileSize);
+  const view = new DataView(buffer);
+
+  // RIFF header
+  writeString(view, 0, "RIFF");
+  view.setUint32(4, fileSize - 8, true); // file size minus RIFF header
+  writeString(view, 8, "WAVE");
+
+  // fmt sub-chunk
+  writeString(view, 12, "fmt ");
+  view.setUint32(16, 16, true); // sub-chunk size (PCM = 16)
+  view.setUint16(20, 1, true); // audio format (PCM = 1)
+  view.setUint16(22, numChannels, true);
+  view.setUint32(24, sampleRate, true);
+  view.setUint32(28, sampleRate * numChannels * bytesPerSample, true); // byte rate
+  view.setUint16(32, numChannels * bytesPerSample, true); // block align
+  view.setUint16(34, bitsPerSample, true);
+
+  // data sub-chunk
+  writeString(view, 36, "data");
+  view.setUint32(40, dataSize, true);
+
+  // PCM samples: all zeros = silence (already zeroed by ArrayBuffer)
+
+  return new Uint8Array(buffer);
+}
+
+function writeString(view: DataView, offset: number, text: string): void {
+  for (let i = 0; i < text.length; i++) {
+    view.setUint8(offset + i, text.charCodeAt(i));
+  }
 }

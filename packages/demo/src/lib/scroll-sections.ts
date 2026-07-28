@@ -254,6 +254,18 @@ export const SECTIONS: readonly Section[] = [
         headingKey: "demo_narrative_admin_people_queues_heading",
         bodyKey: "demo_narrative_admin_people_queues_body",
       },
+      {
+        slug: "org-config-keys",
+        topic: null,
+        headingKey: "demo_narrative_admin_org_config_keys_heading",
+        bodyKey: "demo_narrative_admin_org_config_keys_body",
+      },
+      {
+        slug: "communications",
+        topic: null,
+        headingKey: "demo_narrative_admin_communications_heading",
+        bodyKey: "demo_narrative_admin_communications_body",
+      },
     ],
   },
   {
