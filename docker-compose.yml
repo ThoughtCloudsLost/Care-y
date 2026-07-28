@@ -21,7 +21,9 @@ services:
     tmpfs:
       - /tmp
     ports:
-      - "3000:3000"
+      # Bound to loopback by default. Set BIND_ADDR to expose on another
+      # interface (e.g. a VPN address) when testing from another device.
+      - "${BIND_ADDR:-127.0.0.1}:3000:3000"
     networks: [internal]
     volumes:
       - oprf_sockets:/run/oprf
@@ -81,8 +83,10 @@ services:
   mailpit:
     image: axllent/mailpit:latest
     ports:
-      - "1025:1025"
-      - "8025:8025"
+      # Mailpit has no authentication and its UI exposes every captured
+      # message, so it stays on loopback. See BIND_ADDR note on app.
+      - "${BIND_ADDR:-127.0.0.1}:1025:1025"
+      - "${BIND_ADDR:-127.0.0.1}:8025:8025"
     networks: [internal]
     restart: unless-stopped
 
