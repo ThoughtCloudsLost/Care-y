@@ -28,12 +28,40 @@ export interface AuditLogResult {
   readonly pageSize: number;
 }
 
+/**
+ * One row of the dashboard activity feed.
+ *
+ * `encryptedQueueName` stays ciphertext: queue names are encrypted per
+ * ADR-030 and decrypted client side. This service never decrypts it.
+ * `clientAlias` is a pseudonym, not PII.
+ */
+export interface RecentActivityEntry {
+  readonly id: string;
+  readonly eventType: string;
+  readonly ticketId: string | null;
+  readonly clientAlias: string;
+  readonly queueId: string;
+  readonly encryptedQueueName: Buffer;
+  readonly createdAt: Date;
+}
+
 export interface AuditService {
   /** Appends an audit log entry. Never throws (best-effort logging). */
   log(entry: AuditEntry): Promise<void>;
 
   /** Queries audit log entries with filtering and pagination. */
   query(input: AuditLogQueryInput): Promise<AuditLogResult>;
+
+  /**
+   * Ticket-linked audit events for the given queues, newest first.
+   *
+   * Backs the dashboard activity feed. Callers scope `queueIds` to what the
+   * requesting user may see; this method applies no access control of its own.
+   */
+  listRecentForQueues(
+    queueIds: readonly string[],
+    limit: number,
+  ): Promise<readonly RecentActivityEntry[]>;
 }
 
 export function createAuditService(db: Kysely<TenantDatabase>): AuditService {
@@ -116,6 +144,35 @@ export function createAuditService(db: Kysely<TenantDatabase>): AuditService {
         page: input.page,
         pageSize: input.pageSize,
       };
+    },
+
+    async listRecentForQueues(
+      queueIds,
+      limit,
+    ): Promise<readonly RecentActivityEntry[]> {
+      // An empty `in ()` list is not valid SQL, so short-circuit here rather
+      // than trusting the caller to have checked.
+      if (queueIds.length === 0) return [];
+
+      return db
+        .selectFrom("audit_log as al")
+        .innerJoin("tickets as t", "t.id", "al.ticket_id")
+        .innerJoin("clients as c", "c.id", "t.client_id")
+        .innerJoin("queues as q", "q.id", "t.queue_id")
+        .select([
+          "al.id",
+          "al.event_type as eventType",
+          "al.ticket_id as ticketId",
+          "c.alias as clientAlias",
+          "q.id as queueId",
+          "q.encrypted_name as encryptedQueueName",
+          "al.created_at as createdAt",
+        ])
+        .where("t.queue_id", "in", [...queueIds])
+        .where("al.ticket_id", "is not", null)
+        .orderBy("al.created_at", "desc")
+        .limit(limit)
+        .execute();
     },
   };
 }

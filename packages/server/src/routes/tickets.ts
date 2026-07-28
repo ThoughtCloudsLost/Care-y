@@ -343,17 +343,9 @@ export function createTicketRouter(deps: TicketRouterDeps) {
         // eslint-disable-next-line @typescript-eslint/require-await -- stub for future permission-based targeting
         getUsersByPermission: async () => [],
         getQueueMembers: async (queueId) => qp.getQueueMembers(queueId),
-        getTicketKeyWrapHolders: async (tid) => {
-          const rows = await tDb
-            .selectFrom("ticket_key_wraps as tkw")
-            .innerJoin("users as u", "u.id", "tkw.volunteer_id")
-            .select("tkw.volunteer_id")
-            .where("tkw.ticket_id", "=", tid)
-            .where("u.is_active", "=", true)
-            .groupBy("tkw.volunteer_id")
-            .execute();
-          return rows.map((r) => r.volunteer_id);
-        },
+        getTicketKeyWrapHolders: async (tid) => [
+          ...(await userSvc.listActiveKeyWrapHolderIds(tid)),
+        ],
       },
       ticketId,
     );
@@ -362,17 +354,12 @@ export function createTicketRouter(deps: TicketRouterDeps) {
 
     if (ctx.minViewRole === RoleId.VOLUNTEER) return userIds;
 
-    const userRows = await tDb
-      .selectFrom("users")
-      .select(["id", "role_id"])
-      .where("id", "in", userIds)
-      .execute();
+    const filtered = await userSvc.filterByRoleThreshold(
+      userIds,
+      ctx.minViewRole,
+    );
 
-    const filtered = userRows
-      .filter((u) => meetsRoleThreshold(u.role_id, ctx.minViewRole))
-      .map((u) => u.id);
-
-    return filtered.length > 0 ? filtered : undefined;
+    return filtered.length > 0 ? [...filtered] : undefined;
   }
 
   // Audit helper: best-effort, never blocks. No-op when audit service not injected.
@@ -1339,32 +1326,18 @@ export function createTicketRouter(deps: TicketRouterDeps) {
       .query(
         withErrorWrapping(async ({ ctx, input }) => {
           const tDb = ctx.org.tenantDb;
+          // Without the audit service no audit rows are ever written, so an
+          // empty feed is the accurate answer rather than a failure. Matches
+          // the no-op behaviour of the audit() helper above.
+          if (!deps.createAuditSvc) return [];
+
           const qps = deps.createQueuePermissionsSvc(tDb);
           const queueIds = await qps.getUserQueues(ctx.user.id);
 
           if (queueIds.length === 0) return [];
 
-          const rows = await tDb
-            .selectFrom("audit_log as al")
-            .innerJoin("tickets as t", "t.id", "al.ticket_id")
-            .innerJoin("clients as c", "c.id", "t.client_id")
-            .innerJoin("queues as q", "q.id", "t.queue_id")
-            .select([
-              "al.id",
-              "al.event_type as eventType",
-              "al.ticket_id as ticketId",
-              "c.alias as clientAlias",
-              "q.id as queueId",
-              "q.encrypted_name as encryptedQueueName",
-              "al.created_at as createdAt",
-            ])
-            .where("t.queue_id", "in", queueIds)
-            .where("al.ticket_id", "is not", null)
-            .orderBy("al.created_at", "desc")
-            .limit(input.limit)
-            .execute();
-
-          return rows;
+          const auditSvc = deps.createAuditSvc(tDb);
+          return auditSvc.listRecentForQueues(queueIds, input.limit);
         }),
       ),
 
