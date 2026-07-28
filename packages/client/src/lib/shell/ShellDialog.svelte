@@ -7,6 +7,7 @@
   import { Dialog } from "konsta/svelte";
   import type { ShellDialogProps } from "./types";
   import { useFocusTrap } from "./use-focus-trap.svelte";
+  import { useDeferredUnmount } from "./use-deferred-unmount.svelte";
   import { portal } from "./portal";
   import ShellBackdrop from "./ShellBackdrop.svelte";
 
@@ -26,6 +27,12 @@
       return ondismiss;
     },
   });
+
+  const mounted = useDeferredUnmount({
+    get opened() {
+      return opened;
+    },
+  });
 </script>
 
 <div
@@ -37,10 +44,14 @@
   class="shell-dialog-root"
 >
   <ShellBackdrop {opened} ondismiss={trap.handleDismiss} />
-  <Dialog {opened} {title} backdrop={false}>
-    {@render contentSnippet()}
+  <Dialog {opened} title={mounted.current ? title : undefined} backdrop={false}>
+    {#if mounted.current}
+      {@render contentSnippet()}
+    {/if}
     {#snippet buttons()}
-      {@render buttonsSnippet()}
+      {#if mounted.current}
+        {@render buttonsSnippet()}
+      {/if}
     {/snippet}
   </Dialog>
 </div>
@@ -56,7 +67,7 @@
 
   .shell-dialog-root[inert] {
     visibility: hidden;
-    transition: visibility 0s 400ms;
+    transition: visibility 0s var(--anim-overlay-outro, 400ms);
   }
 
   @media (prefers-reduced-motion: reduce) {

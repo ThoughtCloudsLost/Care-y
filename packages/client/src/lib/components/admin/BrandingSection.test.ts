@@ -378,6 +378,12 @@ function renderWithError(): void {
   render(BrandingSection);
 }
 
+/** Click the "Edit branding" button to open the sheet. Call after renderWithData. */
+async function openEditSheet(): Promise<void> {
+  const editBtn = screen.getByRole("button", { name: /edit branding/i });
+  await fireEvent.click(editBtn);
+}
+
 describe("BrandingSection", () => {
   beforeEach(() => {
     mockBrandingData = undefined;
@@ -419,16 +425,18 @@ describe("BrandingSection", () => {
     expect(screen.getByText("No welcome text set")).toBeTruthy();
   });
 
-  it("renders sheet heading and save button", () => {
+  it("renders sheet heading and save button", async () => {
     renderWithData();
+    await openEditSheet();
     expect(
       screen.getByRole("heading", { name: /edit branding/i }),
     ).toBeTruthy();
     expect(screen.getByRole("button", { name: /save changes/i })).toBeTruthy();
   });
 
-  it("renders color picker with accessible label", () => {
+  it("renders color picker with accessible label", async () => {
     renderWithData();
+    await openEditSheet();
     const picker = document.querySelector(
       'input[type="color"]',
     ) as HTMLInputElement;
@@ -438,6 +446,7 @@ describe("BrandingSection", () => {
 
   it("offers a nudged shade when the primary color nears the urgent red", async () => {
     renderWithData();
+    await openEditSheet();
     const picker = document.querySelector(
       'input[type="color"]',
     ) as HTMLInputElement;
@@ -455,6 +464,7 @@ describe("BrandingSection", () => {
 
   it("applies the nudged shade and the notice clears", async () => {
     renderWithData();
+    await openEditSheet();
     const picker = document.querySelector(
       'input[type="color"]',
     ) as HTMLInputElement;
@@ -478,6 +488,7 @@ describe("BrandingSection", () => {
   it("rejects logo when processed image still exceeds 512KB", async () => {
     canvasOutputBytes = 600 * 1024;
     renderWithData();
+    await openEditSheet();
     const fileInput = document.querySelector(
       'input[type="file"]',
     ) as HTMLInputElement;
@@ -500,6 +511,7 @@ describe("BrandingSection", () => {
   it("accepts logo after canvas processing shrinks it under limit", async () => {
     canvasOutputBytes = 1024;
     renderWithData();
+    await openEditSheet();
     const fileInput = document.querySelector(
       'input[type="file"]',
     ) as HTMLInputElement;
@@ -519,6 +531,7 @@ describe("BrandingSection", () => {
 
   it("rejects non-image file types", async () => {
     renderWithData();
+    await openEditSheet();
     const fileInput = document.querySelector(
       'input[type="file"]',
     ) as HTMLInputElement;
@@ -568,8 +581,9 @@ describe("BrandingSection", () => {
     expect(mockHaptic).toHaveBeenCalled();
   });
 
-  it("renders helper text for all sheet fields", () => {
+  it("renders helper text for all sheet fields", async () => {
     renderWithData();
+    await openEditSheet();
     expect(
       screen.getByText("Appears in the app and on client-facing pages."),
     ).toBeTruthy();
@@ -641,6 +655,7 @@ describe("BrandingSection", () => {
   it("saves logo and triggers PWA icon upload on success", async () => {
     canvasOutputBytes = 1024;
     renderWithData();
+    await openEditSheet();
 
     const fileInput = document.querySelector(
       'input[type="file"]',
@@ -764,6 +779,7 @@ describe("BrandingSection", () => {
   it("handles SVG logo upload through rasterization path", async () => {
     canvasOutputBytes = 1024;
     renderWithData();
+    await openEditSheet();
 
     const fileInput = document.querySelector(
       'input[type="file"]',
@@ -782,10 +798,10 @@ describe("BrandingSection", () => {
     expect(document.querySelector('[role="alert"]')).toBeNull();
   });
 
-  it("shows empty logo placeholder when no logo in sheet edit view", () => {
+  it("shows empty logo placeholder when no logo in sheet edit view", async () => {
     renderWithData({ encryptedLogo: null });
-    // The sheet is always rendered (PassthroughShell). The edit view
-    // shows an empty placeholder when no existing or new logo exists.
+    await openEditSheet();
+    // The edit view shows an empty placeholder when no existing or new logo exists.
     const emptyPlaceholder = document.querySelector(".logo-empty-sheet");
     expect(emptyPlaceholder).toBeTruthy();
   });
