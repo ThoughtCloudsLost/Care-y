@@ -1,5 +1,12 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
-import { createTestDb, createTestUser, type TestDb } from "../test-utils.js";
+import * as crypto from "node:crypto";
+import { RoleId } from "@care-y/shared";
+import {
+  createTestDb,
+  createTestTicketFixture,
+  createTestUser,
+  type TestDb,
+} from "../test-utils.js";
 import { createUserService } from "./user-service.js";
 
 describe.skipIf(!process.env.DATABASE_URL)("UserService (DB)", () => {
@@ -94,6 +101,134 @@ describe.skipIf(!process.env.DATABASE_URL)("UserService (DB)", () => {
       for (const user of result) {
         expect(user.hasOrgKeyWrap).toBe(false);
       }
+    });
+  });
+
+  describe("listActiveKeyWrapHolderIds", () => {
+    /** Inserts a key wrap row with opaque test bytes for the crypto columns. */
+    async function insertKeyWrap(
+      ticketId: string,
+      volunteerId: string,
+    ): Promise<void> {
+      await testDb.db
+        .insertInto("ticket_key_wraps")
+        .values({
+          ticket_id: ticketId,
+          volunteer_id: volunteerId,
+          key_generation: crypto.randomUUID(),
+          ephemeral_point: Buffer.alloc(32, 1),
+          nonce: Buffer.alloc(24, 2),
+          wrapped_key: Buffer.alloc(48, 3),
+          algorithm: "ecies-ristretto255-v1",
+        })
+        .execute();
+    }
+
+    it("returns active wrap holders and omits deactivated ones", async () => {
+      const { ticketId } = await createTestTicketFixture(testDb.db);
+      const active = await createTestUser(testDb.db);
+      const inactive = await createTestUser(testDb.db, {
+        overrides: { is_active: false },
+      });
+
+      await insertKeyWrap(ticketId, active.id);
+      await insertKeyWrap(ticketId, inactive.id);
+
+      const svc = createUserService(testDb.db);
+      const holders = await svc.listActiveKeyWrapHolderIds(ticketId);
+
+      expect(holders).toContain(active.id);
+      expect(holders).not.toContain(inactive.id);
+    });
+
+    it("returns one entry per holder when a ticket has several key generations", async () => {
+      const { ticketId } = await createTestTicketFixture(testDb.db);
+      const user = await createTestUser(testDb.db);
+
+      // Two wraps for the same volunteer, as a reopen/rewrap cycle produces.
+      await insertKeyWrap(ticketId, user.id);
+      await insertKeyWrap(ticketId, user.id);
+
+      const svc = createUserService(testDb.db);
+      const holders = await svc.listActiveKeyWrapHolderIds(ticketId);
+
+      expect(holders.filter((id) => id === user.id)).toHaveLength(1);
+    });
+
+    it("returns an empty array for a ticket with no key wraps", async () => {
+      const { ticketId } = await createTestTicketFixture(testDb.db);
+
+      const svc = createUserService(testDb.db);
+      const holders = await svc.listActiveKeyWrapHolderIds(ticketId);
+
+      expect(holders).toEqual([]);
+    });
+  });
+
+  describe("filterByRoleThreshold", () => {
+    it("keeps users at or above the threshold and drops the rest", async () => {
+      const admin = await createTestUser(testDb.db, {
+        overrides: { role_id: RoleId.ADMIN },
+      });
+      const manager = await createTestUser(testDb.db, {
+        overrides: { role_id: RoleId.MANAGER },
+      });
+      const volunteer = await createTestUser(testDb.db, {
+        overrides: { role_id: RoleId.VOLUNTEER },
+      });
+
+      const svc = createUserService(testDb.db);
+      const kept = await svc.filterByRoleThreshold(
+        [admin.id, manager.id, volunteer.id],
+        RoleId.MANAGER,
+      );
+
+      expect([...kept].sort()).toEqual([admin.id, manager.id].sort());
+    });
+
+    it("keeps every role when the threshold is volunteer", async () => {
+      const volunteer = await createTestUser(testDb.db, {
+        overrides: { role_id: RoleId.VOLUNTEER },
+      });
+
+      const svc = createUserService(testDb.db);
+      const kept = await svc.filterByRoleThreshold(
+        [volunteer.id],
+        RoleId.VOLUNTEER,
+      );
+
+      expect(kept).toEqual([volunteer.id]);
+    });
+
+    it("returns an empty array without querying when given no user IDs", async () => {
+      const svc = createUserService(testDb.db);
+      expect(await svc.filterByRoleThreshold([], RoleId.ADMIN)).toEqual([]);
+    });
+
+    it("drops IDs that match no user row", async () => {
+      const svc = createUserService(testDb.db);
+      const kept = await svc.filterByRoleThreshold(
+        [crypto.randomUUID()],
+        RoleId.VOLUNTEER,
+      );
+
+      expect(kept).toEqual([]);
+    });
+
+    it("filters on role regardless of active state", async () => {
+      // Escalation targets are resolved to active users upstream; this method
+      // only narrows by role, so an inactive admin still passes the threshold.
+      const inactiveAdmin = await createTestUser(testDb.db, {
+        overrides: { role_id: RoleId.ADMIN, is_active: false },
+      });
+
+      const svc = createUserService(testDb.db);
+      const kept = await svc.filterByRoleThreshold(
+        [inactiveAdmin.id],
+        RoleId.ADMIN,
+      );
+
+      expect(kept).toEqual([inactiveAdmin.id]);
     });
   });
 });
