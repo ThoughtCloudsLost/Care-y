@@ -12,7 +12,14 @@
  * beforeNavigate/afterNavigate callbacks are stored in arrays and
  * fired by the router on every navigate/handleGoto call so that
  * AppShell's markNavigated + closeSearch logic runs correctly.
+ *
+ * pushState/replaceState update the demo page state via setDemoPageShallow
+ * so that SvelteKit's shallow routing pattern works (page.state.ticketId,
+ * ?user= deep links in the admin/people page).
  */
+
+import { SvelteURL } from "svelte/reactivity";
+import { page, setDemoPageShallow } from "./app-state.svelte.js";
 
 // -----------------------------------------------------------------------
 // Structural types matching SvelteKit's BeforeNavigate/AfterNavigate
@@ -121,6 +128,24 @@ export function resetLifecycleCallbacks(): void {
 }
 
 // -----------------------------------------------------------------------
+// URL resolution helper
+// -----------------------------------------------------------------------
+
+/**
+ * Resolve a URL argument (string) against the current page URL.
+ * SvelteKit allows empty strings and relative paths in pushState/
+ * replaceState; this helper normalizes them to absolute URLs.
+ */
+function resolveUrl(url: string): URL {
+  if (url === "") {
+    // Empty string means "current URL" in SvelteKit
+    return new URL(page.url.href);
+  }
+  // Relative paths resolve against the current page URL
+  return new SvelteURL(url, page.url.href);
+}
+
+// -----------------------------------------------------------------------
 // $app/navigation API surface
 // -----------------------------------------------------------------------
 
@@ -159,15 +184,27 @@ export function disableScrollHandling(): void {
   // No-op
 }
 
-export function pushState(_url: string, _state: Record<string, unknown>): void {
-  // No-op
+export function pushState(url: string, state: Record<string, unknown>): void {
+  const resolved = resolveUrl(url);
+  // Idempotency guard: if href and state are unchanged, skip the update.
+  // This prevents the known ?user= effect loop where replaceState
+  // re-triggers the deriving effect.
+  if (resolved.href === page.url.href && shallowEqual(state, page.state)) {
+    return;
+  }
+  setDemoPageShallow(resolved, state);
 }
 
 export function replaceState(
-  _url: string,
-  _state: Record<string, unknown>,
+  url: string,
+  state: Record<string, unknown>,
 ): void {
-  // No-op
+  const resolved = resolveUrl(url);
+  // Same idempotency guard as pushState
+  if (resolved.href === page.url.href && shallowEqual(state, page.state)) {
+    return;
+  }
+  setDemoPageShallow(resolved, state);
 }
 
 export function preloadData(_url: string): void {
@@ -176,4 +213,27 @@ export function preloadData(_url: string): void {
 
 export function preloadCode(_url: string): void {
   // No-op
+}
+
+// -----------------------------------------------------------------------
+// Internal helpers
+// -----------------------------------------------------------------------
+
+/**
+ * Shallow equality check for state objects. Compares own enumerable
+ * keys and values with strict equality. Sufficient for the page.state
+ * objects SvelteKit uses (flat key-value maps).
+ */
+function shallowEqual(
+  a: Record<string, unknown>,
+  b: Record<string, unknown>,
+): boolean {
+  const keysA = Object.keys(a);
+  const keysB = Object.keys(b);
+  if (keysA.length !== keysB.length) return false;
+  for (const key of keysA) {
+    // eslint-disable-next-line security/detect-object-injection -- iterating own keys
+    if (a[key] !== b[key]) return false;
+  }
+  return true;
 }

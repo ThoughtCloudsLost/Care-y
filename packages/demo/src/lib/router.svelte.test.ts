@@ -15,6 +15,9 @@ vi.mock("$app/state", () => {
     }): void {
       lastUpdate = update;
     },
+    setDemoPageShallow(_url: URL, _state: Record<string, unknown>): void {
+      // no-op in router tests
+    },
     _getLastUpdate():
       | { url: URL; params: Record<string, string>; routeId: string }
       | undefined {
@@ -79,6 +82,27 @@ vi.mock("$demo/engine/route-manifest.js", () => ({
     if (pathname === "/tickets") {
       return { params: {}, routeId: "/(app)/tickets" };
     }
+    if (pathname === "/") {
+      return { params: {}, routeId: "/(app)" };
+    }
+    if (pathname === "/admin") {
+      return { params: {}, routeId: "/(app)/admin" };
+    }
+    if (pathname === "/admin/people") {
+      return { params: {}, routeId: "/(app)/admin/people" };
+    }
+    if (pathname === "/admin/volunteer") {
+      return { params: {}, routeId: "/(app)/admin/volunteer" };
+    }
+    if (pathname === "/admin/manager") {
+      return { params: {}, routeId: "/(app)/admin/manager" };
+    }
+    if (pathname === "/more/settings") {
+      return { params: {}, routeId: "/(app)/more/settings" };
+    }
+    if (pathname === "/more/schedule") {
+      return { params: {}, routeId: "/(app)/more/schedule" };
+    }
     return null;
   },
   listRouteIds(): string[] {
@@ -101,6 +125,7 @@ describe("DemoRouter", () => {
       expect(router.detail).toBeNull();
       expect(router.searchOpen).toBe(false);
       expect(router.activeTab).toBe("tickets");
+      expect(router.restartSeq).toBe(0);
     });
   });
 
@@ -116,6 +141,49 @@ describe("DemoRouter", () => {
       router.navigate("tickets", "tk-0001");
       expect(router.feature).toBe("tickets");
       expect(router.detail).toBe("tk-0001");
+    });
+
+    it("sets feature to home", () => {
+      router.navigate("home");
+      expect(router.feature).toBe("home");
+      expect(router.activeTab).toBe("home");
+      expect(router.pathname).toBe("/");
+    });
+
+    it("sets feature to admin", () => {
+      router.navigate("admin");
+      expect(router.feature).toBe("admin");
+      expect(router.detail).toBeNull();
+      expect(router.activeArea).toBe("admin");
+      expect(router.activeTab).toBeNull();
+    });
+
+    it("sets feature to admin with volunteer detail", () => {
+      router.navigate("admin", "volunteer");
+      expect(router.feature).toBe("admin");
+      expect(router.detail).toBe("volunteer");
+      expect(router.activeArea).toBe("admin-volunteer");
+    });
+
+    it("sets feature to admin with people detail", () => {
+      router.navigate("admin", "people");
+      expect(router.feature).toBe("admin");
+      expect(router.detail).toBe("people");
+      expect(router.activeArea).toBe("admin-people");
+    });
+
+    it("sets feature to schedule", () => {
+      router.navigate("schedule");
+      expect(router.feature).toBe("schedule");
+      expect(router.activeArea).toBe("schedule");
+      expect(router.activeTab).toBeNull();
+    });
+
+    it("sets feature to settings", () => {
+      router.navigate("settings");
+      expect(router.feature).toBe("settings");
+      expect(router.activeArea).toBe("settings");
+      expect(router.activeTab).toBeNull();
     });
 
     it("sets feature to login", () => {
@@ -141,11 +209,12 @@ describe("DemoRouter", () => {
       expect(router.activeTab).toBe("tickets");
     });
 
-    it("does not navigate for inert tabs (home)", () => {
+    it("navigates to home when home tab tapped", () => {
       router.navigate("tickets");
       router.handleTabChange("home");
-      // Feature stays as tickets since home is inert
-      expect(router.feature).toBe("tickets");
+      expect(router.feature).toBe("home");
+      expect(router.activeTab).toBe("home");
+      expect(router.pathname).toBe("/");
     });
 
     it("does not navigate for inert tabs (library)", () => {
@@ -156,10 +225,33 @@ describe("DemoRouter", () => {
   });
 
   describe("handleAreaTap()", () => {
-    it("is a no-op for all areas", () => {
+    it("navigates to admin hub on admin area tap", () => {
       router.navigate("tickets");
       router.handleAreaTap("admin");
-      expect(router.feature).toBe("tickets");
+      expect(router.feature).toBe("admin");
+      expect(router.detail).toBeNull();
+      expect(router.activeArea).toBe("admin");
+    });
+
+    it("navigates to admin-people on admin-people area tap", () => {
+      router.navigate("tickets");
+      router.handleAreaTap("admin-people");
+      expect(router.feature).toBe("admin");
+      expect(router.detail).toBe("people");
+    });
+
+    it("navigates to settings on settings area tap", () => {
+      router.navigate("tickets");
+      router.handleAreaTap("settings");
+      expect(router.feature).toBe("settings");
+      expect(router.activeArea).toBe("settings");
+    });
+
+    it("navigates to schedule on schedule area tap", () => {
+      router.navigate("tickets");
+      router.handleAreaTap("schedule");
+      expect(router.feature).toBe("schedule");
+      expect(router.activeArea).toBe("schedule");
     });
   });
 
@@ -188,9 +280,9 @@ describe("DemoRouter", () => {
       expect(router.detail).toBeNull();
     });
 
-    it("maps / to tickets feature (post-auth landing)", () => {
+    it("maps / to home feature (post-auth landing)", () => {
       router.handleGoto("/");
-      expect(router.feature).toBe("tickets");
+      expect(router.feature).toBe("home");
       expect(router.detail).toBeNull();
     });
 
@@ -206,6 +298,65 @@ describe("DemoRouter", () => {
       expect(router.detail).toBe("conversation");
     });
 
+    it("maps /admin to admin feature", () => {
+      router.handleGoto("/admin");
+      expect(router.feature).toBe("admin");
+      expect(router.detail).toBeNull();
+      expect(router.activeArea).toBe("admin");
+    });
+
+    it("maps /admin/volunteer to admin with volunteer detail", () => {
+      router.handleGoto("/admin/volunteer");
+      expect(router.feature).toBe("admin");
+      expect(router.detail).toBe("volunteer");
+      expect(router.activeArea).toBe("admin-volunteer");
+    });
+
+    it("maps /admin/manager to admin with manager detail", () => {
+      router.handleGoto("/admin/manager");
+      expect(router.feature).toBe("admin");
+      expect(router.detail).toBe("manager");
+    });
+
+    it("maps /admin/people to admin with people detail", () => {
+      router.handleGoto("/admin/people");
+      expect(router.feature).toBe("admin");
+      expect(router.detail).toBe("people");
+    });
+
+    it("maps /more/settings to settings feature", () => {
+      router.handleGoto("/more/settings");
+      expect(router.feature).toBe("settings");
+      expect(router.activeArea).toBe("settings");
+    });
+
+    it("maps /more/schedule to schedule feature", () => {
+      router.handleGoto("/more/schedule");
+      expect(router.feature).toBe("schedule");
+      expect(router.activeArea).toBe("schedule");
+    });
+
+    it("handles query strings (/admin/people?user=abc)", () => {
+      router.handleGoto("/admin/people?user=abc");
+      expect(router.feature).toBe("admin");
+      expect(router.detail).toBe("people");
+      expect(router.search).toBe("?user=abc");
+    });
+
+    it("handles /logout by bumping restartSeq without navigating", () => {
+      router.navigate("tickets");
+      const featureBefore = router.feature;
+      router.handleGoto("/logout");
+      expect(router.restartSeq).toBe(1);
+      expect(router.feature).toBe(featureBefore);
+    });
+
+    it("bumps restartSeq incrementally on repeated /logout", () => {
+      router.handleGoto("/logout");
+      router.handleGoto("/logout");
+      expect(router.restartSeq).toBe(2);
+    });
+
     it("ignores inert paths like /library", () => {
       router.navigate("tickets");
       router.handleGoto("/library");
@@ -215,12 +366,6 @@ describe("DemoRouter", () => {
     it("ignores unknown paths", () => {
       router.navigate("tickets");
       router.handleGoto("/some/random/path");
-      expect(router.feature).toBe("tickets");
-    });
-
-    it("ignores admin area paths", () => {
-      router.navigate("tickets");
-      router.handleGoto("/admin/people");
       expect(router.feature).toBe("tickets");
     });
 
@@ -266,6 +411,24 @@ describe("DemoRouter", () => {
       router.handleGoto("/tickets");
       expect(afterFired).toBe(true);
     });
+
+    it("fires afterNavigate on handleAreaTap", () => {
+      let afterFired = false;
+      afterCbs.push(() => {
+        afterFired = true;
+      });
+      router.handleAreaTap("admin");
+      expect(afterFired).toBe(true);
+    });
+
+    it("does not fire afterNavigate on /logout", () => {
+      let afterFired = false;
+      afterCbs.push(() => {
+        afterFired = true;
+      });
+      router.handleGoto("/logout");
+      expect(afterFired).toBe(false);
+    });
   });
 
   describe("reset()", () => {
@@ -276,6 +439,7 @@ describe("DemoRouter", () => {
       expect(router.detail).toBeNull();
       expect(router.searchOpen).toBe(false);
       expect(router.activeTab).toBe("tickets");
+      expect(router.restartSeq).toBe(0);
 
       // reset() calls setDemoPage for login since RouteMount is not mounted
       const mod = await vi.importMock<{

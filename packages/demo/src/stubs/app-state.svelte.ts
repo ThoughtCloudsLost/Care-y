@@ -4,15 +4,17 @@
  * Provides a reactive page object that RouteMount (post-login) and
  * the router (login state) drive via setDemoPage(). The real $app/state
  * is read by ticket routes for page.params.id, page.url.searchParams,
- * and page.state.ticketId.
+ * and page.state.ticketId. The admin/people page reads page.url
+ * searchParams for ?user= deep links and uses replaceState to update
+ * the URL shallowly.
  *
  * RouteMount owns page-state post-login: it has the manifest match
  * with real params and routeId. The router only calls setDemoPage for
- * the login URL (reset). pushState/replaceState are no-ops (desktop-only
- * paths; the demo's layoutMode.isDesktop is always false).
- * beforeNavigate/afterNavigate are no-ops because firing afterNavigate
- * would cause AppShell's markNavigated() to make shellBack() call
- * history.back(), navigating the outer demo page away.
+ * the login URL (reset).
+ *
+ * page.state is reactive: pushState/replaceState in app-navigation.ts
+ * update it through setDemoPageState, and SvelteKit's shallow routing
+ * pattern (page.state.ticketId, ?user= deep links) works correctly.
  */
 
 import { SvelteURL } from "svelte/reactivity";
@@ -29,6 +31,7 @@ const DEMO_ORIGIN = "http://demo.local";
 let pageUrl = $state.raw(new SvelteURL("/tickets", DEMO_ORIGIN));
 let pageParams = $state<Record<string, string>>({});
 let pageRouteId = $state<string>("/(app)/tickets");
+let pageState = $state<Record<string, unknown>>({});
 
 export interface DemoPageUpdate {
   readonly url: URL;
@@ -49,6 +52,22 @@ export function setDemoPage(update: DemoPageUpdate): void {
   );
   pageParams = update.params;
   pageRouteId = update.routeId;
+  // SvelteKit clears page.state on full navigations (only pushState/
+  // replaceState set it); setDemoPage is a full navigation equivalent.
+  pageState = {};
+}
+
+/**
+ * Update page.url and page.state for shallow routing (pushState/
+ * replaceState). Keeps the current routeId and params (SvelteKit's
+ * shallow routing preserves the route; only URL and state change).
+ */
+export function setDemoPageShallow(
+  url: URL,
+  state: Record<string, unknown>,
+): void {
+  pageUrl = new SvelteURL(url.pathname + url.search + url.hash, DEMO_ORIGIN);
+  pageState = state;
 }
 
 // -----------------------------------------------------------------------
@@ -79,7 +98,7 @@ export const page: {
   data: {},
   form: null,
   get state(): Record<string, unknown> {
-    return {};
+    return pageState;
   },
 };
 

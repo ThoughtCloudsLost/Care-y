@@ -71,9 +71,15 @@
   // Scroll engine (renders the shared location, sends page intents)
   const scrollEngine = createScrollEngine(() => bridge);
 
+  // Track the last-seen restartSeq per bridge instance. A fresh bridge
+  // starts at 0; an increment means the phone requested a restart
+  // (avatar-panel sign-out via /logout).
+  let lastRestartSeq = 0;
+
   function handleBridgeReady(b: DemoBridge): void {
     unsubscribe?.();
     bridge = b;
+    lastRestartSeq = 0;
 
     // Reset progress on restart/reload
     progress.reset();
@@ -87,6 +93,12 @@
     unsubscribe = b.subscribe((state: DemoBridgeState) => {
       progress.markFromState(state);
       scrollEngine.handleBridgeState(state);
+
+      // Phone-initiated restart (avatar sign-out -> /logout)
+      if (state.restartSeq > lastRestartSeq) {
+        lastRestartSeq = state.restartSeq;
+        handleRestart();
+      }
     });
   }
 
@@ -262,6 +274,14 @@
         return m.demo_section_ticket_detail_title();
       case "search":
         return m.demo_section_search_title();
+      case "dashboard":
+        return m.demo_section_dashboard_title();
+      case "admin":
+        return m.demo_section_admin_title();
+      case "schedule":
+        return m.demo_section_schedule_title();
+      case "settings":
+        return m.demo_section_settings_title();
     }
   }
 

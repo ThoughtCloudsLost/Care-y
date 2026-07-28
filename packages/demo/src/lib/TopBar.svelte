@@ -37,6 +37,10 @@
       demo_section_ticket_detail_title: () =>
         m.demo_section_ticket_detail_title(),
       demo_section_search_title: () => m.demo_section_search_title(),
+      demo_section_dashboard_title: () => m.demo_section_dashboard_title(),
+      demo_section_admin_title: () => m.demo_section_admin_title(),
+      demo_section_schedule_title: () => m.demo_section_schedule_title(),
+      demo_section_settings_title: () => m.demo_section_settings_title(),
     };
     // eslint-disable-next-line security/detect-object-injection -- key is a section titleKey from config, not user input
     const fn = lookup[titleKey];

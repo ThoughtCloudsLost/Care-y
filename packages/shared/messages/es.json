@@ -1956,5 +1956,21 @@
   "demo_topic_credentials": "Credenciales",
   "demo_topic_twofa": "Autenticacion de dos factores",
   "demo_topic_key_derivation": "Derivacion de claves",
-  "demo_topic_timeline": "Linea de tiempo"
+  "demo_topic_timeline": "Linea de tiempo",
+  "demo_section_dashboard_title": "Panel principal",
+  "demo_section_dashboard_desc": "La pantalla de inicio muestra la actividad reciente y los conteos por cola. El feed de actividad y las estadisticas obtienen datos reales de la base de datos del navegador. La tarjeta de turno muestra datos de ejemplo (la programacion aun no esta construida).",
+  "demo_narrative_dashboard_heading": "Tu pantalla de inicio",
+  "demo_narrative_dashboard_body": "Despues de iniciar sesion, los voluntarios llegan al panel principal. Muestra la actividad reciente de tickets, conteos abiertos por cola y un resumen de turno. La actividad y los conteos provienen de la base de datos cifrada que corre en tu navegador. La tarjeta de turno es una vista previa de una funcion aun en desarrollo.",
+  "demo_section_admin_title": "Centro de administracion",
+  "demo_section_admin_desc": "El centro de administracion ofrece a los gerentes una vista general de la organizacion: voluntarios activos, colas, lineas telefonicas y plantillas de comunicacion. Cada conteo mostrado es una consulta en vivo contra la base de datos del navegador.",
+  "demo_narrative_admin_heading": "Vista general de la organizacion",
+  "demo_narrative_admin_body": "El centro de administracion muestra cuantos voluntarios, colas, lineas telefonicas, saludos y plantillas SMS tiene la organizacion. Los administradores pueden navegar a la gestion de voluntarios, configuracion de colas y otros ajustes desde aqui. Todos los conteos son consultas reales contra la base de datos del demo.",
+  "demo_section_schedule_title": "Horario",
+  "demo_section_schedule_desc": "La pagina de horario es un marcador para la gestion de turnos. La funcion de programacion aun no esta construida, por lo que esta pagina muestra un aviso de proximamente.",
+  "demo_narrative_schedule_heading": "Programacion de turnos (proximamente)",
+  "demo_narrative_schedule_body": "Esta pagina permitira a los gerentes crear y asignar turnos. La funcion de programacion aun esta en desarrollo. Por ahora, la pagina muestra un aviso de marcador.",
+  "demo_section_settings_title": "Configuracion",
+  "demo_section_settings_desc": "La pagina de configuracion permite a los voluntarios actualizar su perfil, cambiar su contrasena y gestionar preferencias de notificacion.",
+  "demo_narrative_settings_heading": "Tus preferencias",
+  "demo_narrative_settings_body": "Configuracion te permite cambiar tu nombre visible, contrasena, idioma y opciones de notificacion. Los cambios se cifran antes de salir de tu dispositivo. El servidor almacena la actualizacion como texto cifrado sin leerla."
 }

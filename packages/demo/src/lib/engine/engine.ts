@@ -344,6 +344,45 @@ export async function bootDemoEngine(): Promise<DemoEngineResult> {
   const { seedKbArticles } =
     await import("../../../../server/src/dev/seed-kb.js");
   await seedKbArticles(tDb, sealedBox, seedResult.adminUserId);
+
+  // Seed audit_log rows so the dashboard activity feed has entries.
+  // Spread across five event types with staggered timestamps.
+  const auditEventTypes = [
+    "ticket_created",
+    "ticket_closed",
+    "ticket_reopened",
+    "followup_added",
+    "mention",
+    "ticket_created",
+    "followup_added",
+    "ticket_closed",
+  ] as const;
+  const now = Date.now();
+  for (const [i, eventType] of auditEventTypes.entries()) {
+    // Pick a ticket from the seeded set (cycle through them)
+    const ticketId = ticketResult.ticketIds.at(
+      i % ticketResult.ticketIds.length,
+    );
+    if (ticketId === undefined) {
+      throw new DemoEngineError(
+        `ticketIds missing index ${String(i % ticketResult.ticketIds.length)}`,
+      );
+    }
+    // Stagger from 2 hours ago to 5 days ago
+    const hoursBack = 2 + i * 14;
+    const createdAt = new Date(now - hoursBack * 60 * 60 * 1000);
+    await tDb
+      .insertInto("audit_log")
+      .values({
+        event_type: eventType,
+        actor_id: seedResult.adminUserId,
+        ticket_id: ticketId,
+        metadata: {},
+        created_at: createdAt,
+      })
+      .execute();
+  }
+
   timings.push({ label: "seed-content", ms: timeMs() - t6 });
 
   // 7. Build router

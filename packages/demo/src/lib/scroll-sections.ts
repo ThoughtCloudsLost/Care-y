@@ -119,6 +119,19 @@ export const SECTIONS: readonly Section[] = [
     ],
   },
   {
+    id: "dashboard",
+    titleKey: "demo_section_dashboard_title",
+    descKey: "demo_section_dashboard_desc",
+    subs: [
+      {
+        slug: "intro",
+        topic: null,
+        headingKey: "demo_narrative_dashboard_heading",
+        bodyKey: "demo_narrative_dashboard_body",
+      },
+    ],
+  },
+  {
     id: "tickets",
     titleKey: "demo_section_tickets_title",
     descKey: "demo_section_tickets_desc",
@@ -208,6 +221,45 @@ export const SECTIONS: readonly Section[] = [
         topic: null,
         headingKey: "demo_narrative_search_heading",
         bodyKey: "demo_narrative_search_body",
+      },
+    ],
+  },
+  {
+    id: "admin",
+    titleKey: "demo_section_admin_title",
+    descKey: "demo_section_admin_desc",
+    subs: [
+      {
+        slug: "intro",
+        topic: null,
+        headingKey: "demo_narrative_admin_heading",
+        bodyKey: "demo_narrative_admin_body",
+      },
+    ],
+  },
+  {
+    id: "schedule",
+    titleKey: "demo_section_schedule_title",
+    descKey: "demo_section_schedule_desc",
+    subs: [
+      {
+        slug: "intro",
+        topic: null,
+        headingKey: "demo_narrative_schedule_heading",
+        bodyKey: "demo_narrative_schedule_body",
+      },
+    ],
+  },
+  {
+    id: "settings",
+    titleKey: "demo_section_settings_title",
+    descKey: "demo_section_settings_desc",
+    subs: [
+      {
+        slug: "intro",
+        topic: null,
+        headingKey: "demo_narrative_settings_heading",
+        bodyKey: "demo_narrative_settings_body",
       },
     ],
   },
@@ -372,6 +424,14 @@ export function resolvePhoneCommand(
         pulseTopic,
       };
     }
+    case "dashboard":
+      return {
+        feature: "home",
+        detail: null,
+        loginTarget: null,
+        openSearch: false,
+        pulseTopic,
+      };
     case "tickets":
       return {
         feature: "tickets",
@@ -394,6 +454,30 @@ export function resolvePhoneCommand(
         detail: null,
         loginTarget: null,
         openSearch: true,
+        pulseTopic,
+      };
+    case "admin":
+      return {
+        feature: "admin",
+        detail: null,
+        loginTarget: null,
+        openSearch: false,
+        pulseTopic,
+      };
+    case "schedule":
+      return {
+        feature: "schedule",
+        detail: null,
+        loginTarget: null,
+        openSearch: false,
+        pulseTopic,
+      };
+    case "settings":
+      return {
+        feature: "settings",
+        detail: null,
+        loginTarget: null,
+        openSearch: false,
         pulseTopic,
       };
   }
@@ -420,12 +504,20 @@ export function sectionMatchesPhone(
   switch (sectionId) {
     case "login":
       return feature === "login";
+    case "dashboard":
+      return feature === "home";
     case "tickets":
       return feature === "tickets" && detail === null && !searchOpen;
     case "ticket-detail":
       return feature === "tickets" && detail !== null && !searchOpen;
     case "search":
       return searchOpen;
+    case "admin":
+      return feature === "admin";
+    case "schedule":
+      return feature === "schedule";
+    case "settings":
+      return feature === "settings";
   }
 }
 
@@ -472,6 +564,22 @@ export function bridgeStateToLocation(
     // shows its helper tip until the visitor picks something or taps
     // the phone (a form tap classifies "credentials" and selects it).
     return { sectionId: "login", subSlug: null };
+  }
+
+  if (feature === "home") {
+    return { sectionId: "dashboard", subSlug: "intro" };
+  }
+
+  if (feature === "admin") {
+    return { sectionId: "admin", subSlug: "intro" };
+  }
+
+  if (feature === "schedule") {
+    return { sectionId: "schedule", subSlug: "intro" };
+  }
+
+  if (feature === "settings") {
+    return { sectionId: "settings", subSlug: "intro" };
   }
 
   if (detail !== null) {

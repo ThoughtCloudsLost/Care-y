@@ -35,7 +35,13 @@
 
   // ── Route matching ──
 
-  let matchResult = $derived(matchRoute(pathname));
+  // The pathname prop may carry a query string (?user=, ?tab=). URL
+  // patterns match the path portion only; a "?" in the matched string
+  // would silently fall through to the [...path] catch-all route. The
+  // full string still feeds page.url below so searchParams survive.
+  const matchPath = $derived(pathname.split("?")[0] ?? pathname);
+
+  let matchResult = $derived(matchRoute(matchPath));
 
   // ── Drive the $app stubs whenever pathname changes ──
   $effect(() => {

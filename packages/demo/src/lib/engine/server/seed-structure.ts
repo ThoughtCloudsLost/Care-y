@@ -273,6 +273,68 @@ export async function seedStructure(
     await import("../../../../../server/src/tickets/note-type-service.js");
   await seedDefaultNoteTypes(tenantDb, sealedBox, secretsEncryptor);
 
+  // 12. Phone greetings (admin hub counts these; zero triggers warning badge)
+  const greetings = [
+    {
+      phone_number: "+15550001234",
+      greeting_type: "voicemail",
+      locale: "en",
+      text: "You have reached the support line. Please leave a message after the tone.",
+    },
+    {
+      phone_number: "+15550001234",
+      greeting_type: "hold",
+      locale: "en",
+      text: "Thank you for holding. A volunteer will be with you shortly.",
+    },
+  ];
+  for (const g of greetings) {
+    await tenantDb
+      .insertInto("phone_greetings")
+      .values({
+        phone_number: g.phone_number,
+        greeting_type: g.greeting_type,
+        locale: g.locale,
+        text: g.text,
+        is_audio: false,
+      })
+      .execute();
+  }
+
+  // 13. SMS response templates (admin hub counts these; zero triggers warning badge)
+  const smsTemplates = [
+    {
+      response_type: "auto_reply",
+      locale: "en",
+      text: "We received your message. A volunteer will follow up soon.",
+    },
+    {
+      response_type: "after_hours",
+      locale: "en",
+      text: "Our support line is currently closed. We will respond during the next available shift.",
+    },
+  ];
+  for (const t of smsTemplates) {
+    await tenantDb
+      .insertInto("sms_responses")
+      .values({
+        response_type: t.response_type,
+        locale: t.locale,
+        text: t.text,
+      })
+      .execute();
+  }
+
+  // 14. Phone blocklist (one entry so hubStatus.blocklistCount is non-zero)
+  await tenantDb
+    .insertInto("phone_blocklist")
+    .values({
+      phone_hash: indexer.hash("+15559990000", orgId),
+      encrypted_number: encryptor.encrypt("+15559990000"),
+      added_by: adminUserId,
+    })
+    .execute();
+
   return {
     orgId,
     adminUserId,
