@@ -305,4 +305,79 @@ describe.skipIf(!process.env.DATABASE_URL)("TelephonyContentService", () => {
       ),
     ).rejects.toThrow(/magic bytes/);
   });
+
+  // --- getGreetingAudio ---
+
+  it("getGreetingAudio returns audio bytes for an audio greeting", async () => {
+    const greeting = await service.createGreeting({
+      phoneNumber: PHONE_NUMBER,
+      greetingType: "answer",
+      locale: "ja",
+      text: "audio placeholder",
+    });
+
+    // WAV magic bytes (RIFF header)
+    const wavData = Buffer.from([
+      0x52, 0x49, 0x46, 0x46, 0x00, 0x00, 0x00, 0x00, 0x57, 0x41, 0x56, 0x45,
+    ]);
+    const audioBase64 = wavData.toString("base64");
+
+    const mockBlobStore = {
+      put: vi.fn().mockResolvedValue("blob-key-get-audio"),
+      get: vi.fn().mockResolvedValue(wavData),
+      delete: vi.fn(),
+      exists: vi.fn(),
+    };
+
+    // Upload audio to the greeting first
+    await service.uploadGreetingAudio(
+      mockBlobStore,
+      "org_test",
+      greeting.id,
+      audioBase64,
+      "audio/wav",
+    );
+
+    // Now fetch it back
+    const result = await service.getGreetingAudio(mockBlobStore, greeting.id);
+
+    expect(result.audioBase64).toBe(wavData.toString("base64"));
+    expect(result.contentType).toBe("audio/wav");
+  });
+
+  it("getGreetingAudio throws NotFoundError for missing greeting", async () => {
+    const mockBlobStore = {
+      put: vi.fn(),
+      get: vi.fn(),
+      delete: vi.fn(),
+      exists: vi.fn(),
+    };
+
+    await expect(
+      service.getGreetingAudio(
+        mockBlobStore,
+        "00000000-0000-4000-8000-000000000099",
+      ),
+    ).rejects.toThrow(/not found/i);
+  });
+
+  it("getGreetingAudio throws ValidationError for non-audio greeting", async () => {
+    const textGreeting = await service.createGreeting({
+      phoneNumber: PHONE_NUMBER,
+      greetingType: "answer",
+      locale: "ko",
+      text: "Text-only greeting",
+    });
+
+    const mockBlobStore = {
+      put: vi.fn(),
+      get: vi.fn(),
+      delete: vi.fn(),
+      exists: vi.fn(),
+    };
+
+    await expect(
+      service.getGreetingAudio(mockBlobStore, textGreeting.id),
+    ).rejects.toThrow(/audio content/);
+  });
 });

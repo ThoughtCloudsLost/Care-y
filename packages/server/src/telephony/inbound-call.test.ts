@@ -74,6 +74,7 @@ function createMockBlocklistRepo(): BlocklistRepository {
 function createMockGreetingRepo(): GreetingRepository {
   return {
     findByNumberAndLocaleAndType: vi.fn().mockResolvedValue(null),
+    findById: vi.fn().mockResolvedValue(null),
     listByNumber: vi.fn().mockResolvedValue([]),
     listAll: vi.fn().mockResolvedValue([]),
     create: vi.fn(),

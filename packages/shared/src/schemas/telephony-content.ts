@@ -79,6 +79,11 @@ export type CreateAudioGreetingInput = z.infer<
   typeof createAudioGreetingInputSchema
 >;
 
+export const getGreetingAudioInputSchema = z.object({
+  greetingId: z.uuid(),
+});
+export type GetGreetingAudioInput = z.infer<typeof getGreetingAudioInputSchema>;
+
 // --- SMSResponse ---
 
 export const smsResponseTypeSchema = z.enum(["new_client", "error"]);
