@@ -1,7 +1,7 @@
 import { mount } from "svelte";
 import * as m from "$lib/paraglide/messages.js";
 import { locales } from "$lib/paraglide/runtime.js";
-import { bootDemoEngine } from "./lib/engine/engine.js";
+import type { DemoEngineResult } from "./lib/engine/engine.js";
 import { setEngineTrpc } from "./stubs/trpc.js";
 import PhoneApp from "./PhoneApp.svelte";
 import "./app.css";
@@ -115,15 +115,27 @@ try {
 // Engine boot (starts immediately, before mount)
 // -----------------------------------------------------------------------
 
-// Fire engine boot in the background. Wire the trpc adapter promise
-// into the stub immediately so tRPC calls made by mounted components
-// await the engine transparently.
-const engineReady = bootDemoEngine();
+// Dynamic import moves the engine (PGlite, migrations, seeds, router)
+// off the initial chunk. Boot starts immediately at module evaluation;
+// only the bytes are deferred, not the work.
+const engineReady: Promise<DemoEngineResult> =
+  import("./lib/engine/engine.js").then(async (mod) => mod.bootDemoEngine());
 
 // setEngineTrpc accepts a Promise: calls to trpc.* before boot
 // completes will await it. A rejected boot surfaces through the
 // first tRPC call that reads the rejected promise.
 setEngineTrpc(engineReady.then((e) => e.trpc));
+
+// Measurement hook: marks when the engine (DB, migrations, seeds,
+// router) is ready. Read via performance.getEntriesByName in devtools.
+engineReady.then(
+  () => {
+    performance.mark("demo-engine-ready");
+  },
+  () => {
+    // Boot failure is reported by the catch below; nothing to mark.
+  },
+);
 
 // Surface boot failures loudly rather than letting them become
 // silent unhandled rejections.

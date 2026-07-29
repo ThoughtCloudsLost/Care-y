@@ -66,7 +66,7 @@
     deactivateSettingsDriver,
   } from "$demo/settings-driver.js";
   import type { DemoEngineResult } from "$demo/engine/engine.js";
-  import { onOutboxAppend } from "$demo/engine/engine.js";
+  import { onOutboxAppend } from "$demo/engine/outbox.js";
   import type {
     DemoBridge,
     DemoBridgeListener,

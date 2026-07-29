@@ -60,6 +60,7 @@
     "vite.ts",
     "vite.config.ts",
     "vitest.config.ts",
+    "vitest.smoke.config.ts",
     "../client/src/lib/workers/shared-worker-types.d.ts",
     "../server/src/types/sodium-native.d.ts"
   ],

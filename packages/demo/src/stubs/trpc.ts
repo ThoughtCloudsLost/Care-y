@@ -350,6 +350,18 @@ const mockOverlay: Record<string, Record<string, unknown>> = {
   twoFactor: {
     verify: twoFactorVerifyRouter,
   },
+  onboarding: {
+    getStatus: {
+      // The login page gates its entire form render on this query, so
+      // delegating to the engine would hold login hostage to engine
+      // boot and defeat the lazy load. The seeded org is always fully
+      // set up (seed-structure completes before any request can be
+      // served), so this constant equals what the engine would return.
+      async query(): Promise<{ needsSetup: boolean }> {
+        return Promise.resolve({ needsSetup: false });
+      },
+    },
+  },
 };
 
 // -----------------------------------------------------------------------
