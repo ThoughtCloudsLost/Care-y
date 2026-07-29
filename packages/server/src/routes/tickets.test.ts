@@ -84,19 +84,19 @@ function createTestBlobStore(): BlobStore {
 // ---------------------------------------------------------------------------
 
 function testEncryptedContent(fill = 0xaa): string {
-  return Buffer.alloc(64, fill).toString("base64");
+  return Buffer.alloc(64, fill).toString("base64url");
 }
 
 function testEphemeralPoint(fill = 0xcc): string {
-  return Buffer.alloc(32, fill).toString("base64");
+  return Buffer.alloc(32, fill).toString("base64url");
 }
 
 function testNonce(fill = 0xdd): string {
-  return Buffer.alloc(24, fill).toString("base64");
+  return Buffer.alloc(24, fill).toString("base64url");
 }
 
 function testWrappedKey(fill = 0xee): string {
-  return Buffer.alloc(48, fill).toString("base64");
+  return Buffer.alloc(48, fill).toString("base64url");
 }
 
 // ---------------------------------------------------------------------------

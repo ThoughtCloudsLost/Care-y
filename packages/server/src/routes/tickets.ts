@@ -29,6 +29,7 @@ import type {
   TicketService,
   TicketServiceDeps,
   TicketWithKeyWrap,
+  TicketKeyWrap,
   FollowUpPreview,
   PendingClient,
 } from "../tickets/ticket-service.js";
@@ -49,7 +50,12 @@ import type { SealedBoxEncryptor } from "../crypto/sealed-box.js";
 import type { AuditEntry } from "../tickets/audit.js";
 import type { NoteTypeService } from "../tickets/note-type-service.js";
 import type { FieldEncryptor } from "../crypto/field-encryptor.js";
-import type { NotificationEventType, ReactionSummary } from "@care-y/shared";
+import type {
+  NotificationEventType,
+  ReactionSummary,
+  TicketStatus,
+  TicketPriority,
+} from "@care-y/shared";
 import { ErrorCode, meetsRoleThreshold } from "@care-y/shared";
 import { ForbiddenError } from "../errors.js";
 import {
@@ -106,6 +112,36 @@ import {
 } from "@care-y/shared";
 
 import { b64, b64n, b64KeyWrap } from "../utils/ciphertext-wire.js";
+
+/**
+ * Ticket record shape after Buffer ciphertext is converted to base64url
+ * strings and the raw phone buffer is replaced with a formatted/masked
+ * clientPhone string. This is the shape that crosses the tRPC wire for
+ * ticket.get and ticket.list.
+ */
+export interface TicketWireRecord {
+  readonly id: string;
+  readonly clientId: string;
+  readonly queueId: string;
+  readonly status: TicketStatus;
+  readonly priority: TicketPriority;
+  readonly onHold: boolean;
+  readonly assignedTo: string | null;
+  readonly encryptedTitle: string;
+  readonly encryptedDescription: string;
+  readonly keyGeneration: string;
+  readonly createdAt: Date;
+  readonly encryptedClientAlias: string;
+  readonly hasPhone: boolean;
+  readonly clientPhoneId: string | null;
+  readonly encryptedQueueName: string;
+  readonly queueSortOrder: number;
+  readonly lastActivityAt: Date | null;
+  readonly followUpCount: number;
+  readonly assignedDisplayName: string | null;
+  readonly keyWrap: TicketKeyWrap | null;
+  readonly clientPhone: string | null;
+}
 
 /** Follow-up preview as it crosses the wire, ciphertext base64 encoded. */
 export interface WirePreview extends Omit<FollowUpPreview, "encryptedContent"> {
@@ -504,12 +540,11 @@ export function createTicketRouter(deps: TicketRouterDeps) {
    * Returns a new object with `clientPhone` (string | null) replacing the
    * raw `clientPhoneEncrypted` buffer, which is stripped from the output.
    */
-  // care-y-ignore-next-line missing-return-type -- return type is a computed Omit intersection, not expressible concisely
   function applyPhoneFormatting(
     ticket: TicketWithKeyWrap,
     roleId: string,
     userId: string,
-  ) {
+  ): TicketWireRecord {
     const { clientPhoneEncrypted, encryptedClientAlias, ...rest } = ticket;
     const encryptor = deps.fieldEncryptor;
     // Convert all Buffer ciphertext to base64 for the wire. superjson expands

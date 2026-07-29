@@ -34,6 +34,7 @@ export interface TicketLikeRecord {
   readonly createdAt: string;
   readonly lastActivityAt: string | null;
   readonly followUpCount: number;
+  readonly queueSortOrder: number;
 }
 
 export interface CardPropsMapperDeps {

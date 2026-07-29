@@ -72,6 +72,7 @@ function makeRawTicket(
     createdAt: "2026-01-01T00:00:00Z",
     lastActivityAt: null,
     followUpCount: 0,
+    queueSortOrder: 1,
     ...overrides,
   };
 }

@@ -7,6 +7,9 @@ import type {
   DataCardProps,
   TicketLikeRecord,
 } from "$lib/tickets/ticket-card-props.js";
+import type * as CryptoContextModule from "$lib/crypto/context.js";
+import type * as SvelteQueryModule from "@tanstack/svelte-query";
+import type * as ShellContextModule from "$lib/shell/context.js";
 
 // TicketCard (and its TicketPreview child) observe the viewport and their
 // container; jsdom has neither observer.
@@ -39,7 +42,8 @@ vi.stubGlobal(
 // TicketCard resolves these from (app) context. The global test-setup stub
 // returns a preview loader without `observe`, so provide the fuller surface
 // TicketCard/TicketPreview actually call here (mirrors TicketCard.test.ts).
-vi.mock("$lib/crypto/context.js", () => ({
+vi.mock("$lib/crypto/context.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof CryptoContextModule>()),
   getPreviewLoader: () => ({
     observe: vi.fn(),
     eagerLoad: vi.fn(),
@@ -63,7 +67,8 @@ vi.mock("$lib/crypto/context.js", () => ({
   }),
 }));
 
-vi.mock("@tanstack/svelte-query", () => ({
+vi.mock("@tanstack/svelte-query", async (importOriginal) => ({
+  ...(await importOriginal<typeof SvelteQueryModule>()),
   useQueryClient: () => ({
     invalidateQueries: vi.fn(),
     getQueryData: vi.fn(),
@@ -77,7 +82,8 @@ vi.mock("@tanstack/svelte-query", () => ({
   }),
 }));
 
-vi.mock("$lib/shell/context.js", () => ({
+vi.mock("$lib/shell/context.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof ShellContextModule>()),
   getScrollContainer: () => () => undefined,
   getTabbarOverrideCtx: () => ({ current: undefined }),
   getNavbarOverrideCtx: () => ({ current: undefined }),
@@ -110,6 +116,7 @@ function makeRecord(id: string): TicketLikeRecord {
     createdAt: "2026-03-31T11:30:00Z",
     lastActivityAt: null,
     followUpCount: 1,
+    queueSortOrder: 1,
   };
 }
 

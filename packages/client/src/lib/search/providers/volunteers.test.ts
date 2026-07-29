@@ -4,14 +4,21 @@ import {
   type RawAdminUser,
   type VolunteerSearchProviderDeps,
 } from "./volunteers.js";
+import type * as MessagesModule from "$lib/paraglide/messages.js";
+import type * as VolunteerResultItemModule from "$lib/components/search/VolunteerResultItem.svelte";
 
-vi.mock("$lib/paraglide/messages.js", () => ({
+vi.mock("$lib/paraglide/messages.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof MessagesModule>()),
   search_section_volunteers: () => "Volunteers",
 }));
 
-vi.mock("$lib/components/search/VolunteerResultItem.svelte", () => ({
-  default: {} as never,
-}));
+vi.mock(
+  "$lib/components/search/VolunteerResultItem.svelte",
+  async (importOriginal) => ({
+    ...(await importOriginal<typeof VolunteerResultItemModule>()),
+    default: {} as never,
+  }),
+);
 
 function makeUser(
   overrides: Partial<RawAdminUser> & { id: string },

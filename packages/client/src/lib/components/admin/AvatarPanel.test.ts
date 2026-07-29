@@ -240,10 +240,7 @@ describe("AvatarPanel", () => {
 
   it("renders DecryptPlaceholder for display name", () => {
     renderPanel();
-    expect(mockOrgDecrypt).toHaveBeenCalledWith(
-      "me:display_name",
-      expect.any(Uint8Array),
-    );
+    expect(mockOrgDecrypt).toHaveBeenCalledWith("me:display_name", "AQID");
   });
 
   it("shows initials derived from decrypted name", () => {

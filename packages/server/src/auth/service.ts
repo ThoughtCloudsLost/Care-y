@@ -124,7 +124,6 @@ export interface AuthService {
     queueCount: number;
     keyStatus: "ok" | "missing";
     retentionDays: number | null;
-    phoneCount: number;
     blocklistCount: number;
     greetingCount: number;
     templateCount: number;
@@ -615,7 +614,6 @@ export function createAuthService(
       queueCount: number;
       keyStatus: "ok" | "missing";
       retentionDays: number | null;
-      phoneCount: number;
       blocklistCount: number;
       greetingCount: number;
       templateCount: number;
@@ -625,7 +623,6 @@ export function createAuthService(
         queueCount,
         keyStatus,
         retentionConfig,
-        phoneCount,
         blocklistCount,
         greetingCount,
         templateCount,
@@ -645,10 +642,6 @@ export function createAuthService(
           .select("pii_retention_days")
           .executeTakeFirst(),
         db
-          .selectFrom("phones")
-          .select(db.fn.countAll<string>().as("c"))
-          .executeTakeFirstOrThrow(),
-        db
           .selectFrom("phone_blocklist")
           .select(db.fn.countAll<string>().as("c"))
           .executeTakeFirstOrThrow(),
@@ -666,7 +659,6 @@ export function createAuthService(
         queueCount: Number(queueCount.c),
         keyStatus: keyStatus?.org_public_key ? "ok" : "missing",
         retentionDays: retentionConfig?.pii_retention_days ?? null,
-        phoneCount: Number(phoneCount.c),
         blocklistCount: Number(blocklistCount.c),
         greetingCount: Number(greetingCount.c),
         templateCount: Number(templateCount.c),
