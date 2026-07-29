@@ -703,9 +703,10 @@
     return (categoriesQuery.data ?? []).map((c: CategoryRecord) => ({
       id: c.id,
       name: categoryNameMap.get(c.id) ?? null,
-      description: c.encryptedDescription
-        ? orgCache.decrypt(`kb-cat-desc:${c.id}`, c.encryptedDescription)
-        : null,
+      description:
+        c.encryptedDescription !== null && c.encryptedDescription !== ""
+          ? orgCache.decrypt(`kb-cat-desc:${c.id}`, c.encryptedDescription)
+          : null,
       articleCount: countMap.get(c.id) ?? 0,
     }));
   });
@@ -737,6 +738,7 @@
       titleResult: resolveOrgDecrypt(
         orgCache.decrypt(`kb-item:${article.id}`, article.encryptedTitle),
         isOrgKeyLoaded,
+        orgCache.isFailed(`kb-item:${article.id}`),
       ),
       encryptedTitle: article.encryptedTitle,
       categoryName: categoryNameMap.get(article.categoryId) ?? null,
@@ -949,6 +951,7 @@
                   article.encryptedTitle,
                 ),
                 isOrgKeyLoaded,
+                orgCache.isFailed(`kb-item:${article.id}`),
               )}
               excerptResult={resolveOrgDecrypt(
                 orgCache.decrypt(
@@ -956,6 +959,7 @@
                   article.encryptedExcerpt,
                 ),
                 isOrgKeyLoaded,
+                orgCache.isFailed(`kb-excerpt:${article.id}`),
               )}
               encryptedTitle={article.encryptedTitle}
               encryptedExcerpt={article.encryptedExcerpt}

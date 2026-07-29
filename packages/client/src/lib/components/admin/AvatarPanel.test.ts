@@ -82,6 +82,7 @@ vi.mock("$lib/crypto/context.js", () => ({
     decrypt: mockOrgDecrypt,
     get: vi.fn().mockReturnValue(undefined),
     has: vi.fn().mockReturnValue(false),
+    isFailed: vi.fn().mockReturnValue(false),
   }),
   getOrgKeyManager: () => ({ isLoaded: true }),
 }));

@@ -118,7 +118,11 @@ export function createTicketDecryptScope(
 
     volunteerName(userId: string, encryptedName: string | null): DecryptResult {
       const raw = orgCache.decrypt(userId, encryptedName);
-      return resolveOrgDecrypt(raw, orgKeyManager.isLoaded);
+      return resolveOrgDecrypt(
+        raw,
+        orgKeyManager.isLoaded,
+        orgCache.isFailed(userId),
+      );
     },
 
     hasAccess,

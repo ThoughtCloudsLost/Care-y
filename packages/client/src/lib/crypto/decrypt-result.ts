@@ -65,9 +65,10 @@ export function resolveAsyncDecrypt(
 export function resolveOrgDecrypt(
   raw: string | null,
   isKeyLoaded: boolean,
+  failed = false,
 ): DecryptResult {
   if (raw === null) {
-    return isKeyLoaded ? ERROR : LOADING;
+    return failed ? ERROR : LOADING;
   }
   return ready(raw);
 }
