@@ -10,6 +10,7 @@ interface FakePhone {
   detail: DemoDetail;
   searchOpen: boolean;
   loginStage: LoginStage | null;
+  routeId: string | null;
 }
 
 /**
@@ -22,6 +23,7 @@ function createHarness(initial?: Partial<FakePhone>) {
     detail: null,
     searchOpen: false,
     loginStage: "form",
+    routeId: null,
     ...initial,
   };
 
@@ -41,6 +43,7 @@ function createHarness(initial?: Partial<FakePhone>) {
       detail: phone.detail,
       searchOpen: phone.searchOpen,
       loginStage: phone.loginStage,
+      routeId: phone.routeId,
     }),
     ensureScreen,
     getTicketDetailId: () => "tk-0001",
@@ -332,6 +335,31 @@ describe("DemoLocationStore", () => {
       phone.loginStage = null;
       store.notePhoneChange();
       expect(store.location).toEqual({ sectionId: "tickets", subSlug: null });
+    });
+  });
+
+  describe("coming-soon (phone routeId flows through)", () => {
+    it("adopts coming-soon when the phone shows an unmapped route", () => {
+      const { store } = createHarness({
+        feature: "other",
+        loginStage: null,
+        routeId: "/(app)/[...path]",
+      });
+      store.notePhoneChange();
+
+      expect(store.location.sectionId).toBe("coming-soon");
+      expect(store.location.subSlug).toBe("path");
+    });
+
+    it("does not adopt coming-soon for a mapped route", () => {
+      const { store } = createHarness({
+        feature: "tickets",
+        loginStage: null,
+        routeId: "/(app)/tickets",
+      });
+      store.notePhoneChange();
+
+      expect(store.location.sectionId).toBe("tickets");
     });
   });
 });

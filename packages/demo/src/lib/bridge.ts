@@ -20,7 +20,14 @@
 
 /** Features that have a built demo scene. */
 export type DemoFeature =
-  "login" | "home" | "tickets" | "library" | "admin" | "schedule" | "settings";
+  | "login"
+  | "home"
+  | "tickets"
+  | "library"
+  | "admin"
+  | "schedule"
+  | "settings"
+  | "other";
 
 /** Sub-state within a feature (e.g. ticket detail, conversation view). */
 export type DemoDetail = string | null;
@@ -59,7 +66,8 @@ export type SectionId =
   | "library"
   | "admin"
   | "schedule"
-  | "settings";
+  | "settings"
+  | "coming-soon";
 
 /** The one place the demo "is": a section and optional sub-section. */
 export interface DemoLocation {
@@ -175,6 +183,11 @@ export interface DemoBridgeState {
   readonly topic: DemoTopic | null;
   /** Non-null when feature is "login"; tracks login flow progression. */
   readonly loginStage: LoginStage | null;
+  /**
+   * The route-manifest route ID the phone currently shows. Null during
+   * login (no manifest route) and when the pathname has no match.
+   */
+  readonly routeId: string | null;
   /** The canonical location both surfaces render. */
   readonly location: DemoLocation;
   /** Origin of the last location transition. */

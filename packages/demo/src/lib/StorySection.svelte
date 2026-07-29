@@ -229,6 +229,11 @@
         m.demo_narrative_topic_admin_quarantine_heading(),
       demo_narrative_topic_admin_quarantine_body: () =>
         m.demo_narrative_topic_admin_quarantine_body(),
+      // Coming-soon placeholder section
+      demo_coming_soon_title: () => m.demo_coming_soon_title(),
+      demo_coming_soon_desc: () => m.demo_coming_soon_desc(),
+      demo_coming_soon_heading: () => m.demo_coming_soon_heading(),
+      demo_coming_soon_body: () => m.demo_coming_soon_body(),
     };
 
     // eslint-disable-next-line security/detect-object-injection -- key is a message key from section config, not user input

@@ -476,6 +476,47 @@ export function sectionForRoute(
   return routeIndex.get(routeId) ?? null;
 }
 
+/**
+ * Produce a stable slug from a manifest route ID. Strips the leading
+ * "/(app)" group prefix, drops brackets and dots from param segments,
+ * removes remaining group segments, and joins what is left with "-".
+ *
+ * Examples:
+ *   "/(app)/reports"                 -> "reports"
+ *   "/(app)/a/[x]"                   -> "a-x"
+ *   "/(app)/more/settings"           -> "more-settings"
+ *   "/(app)/tickets/[id]"            -> "tickets-id"
+ *   "/(app)/library/[articleId]/edit" -> "library-articleId-edit"
+ */
+export function slugForRoute(routeId: string): string {
+  const parts = routeId
+    .split("/")
+    .filter((s) => s.length > 0)
+    // Drop group segments (parenthesised, e.g. "(app)")
+    .filter((s) => !(s.startsWith("(") && s.endsWith(")")))
+    // Clean param brackets and rest-param dots
+    .map((s) => s.replace(/[[\]\.]/g, ""));
+
+  return parts.join("-");
+}
+
+/**
+ * Reverse lookup: find the first route ID whose slugForRoute matches
+ * the given slug AND whose sectionForRoute is null (unmapped). Returns
+ * null when no candidate qualifies.
+ */
+export function routeForSlug(
+  slug: string,
+  routeIds: readonly string[],
+): string | null {
+  for (const rid of routeIds) {
+    if (slugForRoute(rid) === slug && sectionForRoute(rid) === null) {
+      return rid;
+    }
+  }
+  return null;
+}
+
 // -----------------------------------------------------------------------
 // Slug / hash parsing
 // -----------------------------------------------------------------------
@@ -491,6 +532,15 @@ export function parseHash(hash: string): ParsedHash | null {
   const slashIdx = raw.indexOf("/");
   const sectionPart = slashIdx === -1 ? raw : raw.slice(0, slashIdx);
   const subPart = slashIdx === -1 ? null : raw.slice(slashIdx + 1);
+
+  // "coming-soon" is a synthesized section with no entry in sectionById.
+  // A bare "#coming-soon" with no route slug is meaningless (there is no
+  // generic coming-soon section), so it returns null. With a slug it
+  // produces a valid location the outer page can render.
+  if (sectionPart === "coming-soon") {
+    if (subPart === null || subPart === "") return null;
+    return { sectionId: "coming-soon", subSlug: subPart };
+  }
 
   const section = sectionById.get(sectionPart);
   if (section === undefined) return null;
@@ -534,6 +584,12 @@ export interface PhoneCommand {
   readonly loginTarget: LoginAdvanceTarget | null;
   readonly openSearch: boolean;
   readonly pulseTopic: DemoTopic | null;
+  /**
+   * For "coming-soon" sections: the route slug that identifies which
+   * unmapped route the phone should navigate to. Null for all narrated
+   * sections.
+   */
+  readonly routeSlug: string | null;
 }
 
 /**
@@ -585,6 +641,7 @@ export function resolvePhoneCommand(
         loginTarget,
         openSearch: false,
         pulseTopic,
+        routeSlug: null,
       };
     }
     case "dashboard":
@@ -594,6 +651,7 @@ export function resolvePhoneCommand(
         loginTarget: null,
         openSearch: false,
         pulseTopic,
+        routeSlug: null,
       };
     case "tickets":
       return {
@@ -602,6 +660,7 @@ export function resolvePhoneCommand(
         loginTarget: null,
         openSearch: false,
         pulseTopic,
+        routeSlug: null,
       };
     case "ticket-detail":
       return {
@@ -610,6 +669,7 @@ export function resolvePhoneCommand(
         loginTarget: null,
         openSearch: false,
         pulseTopic,
+        routeSlug: null,
       };
     case "search":
       return {
@@ -618,6 +678,7 @@ export function resolvePhoneCommand(
         loginTarget: null,
         openSearch: true,
         pulseTopic,
+        routeSlug: null,
       };
     case "library": {
       let libraryDetail: string | null = null;
@@ -632,6 +693,7 @@ export function resolvePhoneCommand(
         loginTarget: null,
         openSearch: false,
         pulseTopic,
+        routeSlug: null,
       };
     }
     case "admin": {
@@ -653,6 +715,7 @@ export function resolvePhoneCommand(
         loginTarget: null,
         openSearch: false,
         pulseTopic,
+        routeSlug: null,
       };
     }
     case "schedule":
@@ -662,6 +725,7 @@ export function resolvePhoneCommand(
         loginTarget: null,
         openSearch: false,
         pulseTopic,
+        routeSlug: null,
       };
     case "settings":
       return {
@@ -670,6 +734,16 @@ export function resolvePhoneCommand(
         loginTarget: null,
         openSearch: false,
         pulseTopic,
+        routeSlug: null,
+      };
+    case "coming-soon":
+      return {
+        feature: "other",
+        detail: null,
+        loginTarget: null,
+        openSearch: false,
+        pulseTopic: null,
+        routeSlug: subSlug,
       };
   }
 }
@@ -685,12 +759,20 @@ export function resolvePhoneCommand(
  * Sub-section granularity finer than the phone screen (several subs
  * narrate one screen) is owned by topics and page selection within a
  * matching section.
+ *
+ * The routeId and subSlug parameters are needed for "coming-soon"
+ * convergence: the phone shows an unmapped route, and the section
+ * matches only when the route slug derived from that route ID equals
+ * the sub-slug the coming-soon section was opened with. Both default
+ * to null so all existing call sites remain type-correct.
  */
 export function sectionMatchesPhone(
   sectionId: SectionId,
   feature: DemoFeature,
   detail: string | null,
   searchOpen: boolean,
+  routeId: string | null = null,
+  subSlug: string | null = null,
 ): boolean {
   switch (sectionId) {
     case "login":
@@ -711,6 +793,13 @@ export function sectionMatchesPhone(
       return feature === "schedule";
     case "settings":
       return feature === "settings";
+    case "coming-soon":
+      return (
+        routeId !== null &&
+        sectionForRoute(routeId) === null &&
+        subSlug !== null &&
+        slugForRoute(routeId) === subSlug
+      );
   }
 }
 
@@ -718,6 +807,11 @@ export function sectionMatchesPhone(
  * Map the phone's state to the section/sub-section that narrates it.
  * The location store adopts this whenever a phone-originated change
  * lands, so the page always renders what the phone shows.
+ *
+ * The routeId parameter enables the "coming-soon" fallback: when the
+ * phone is on a manifest route that no story section narrates, the
+ * location falls through to coming-soon with a slug derived from the
+ * route ID. Defaults to null for backwards compatibility.
  */
 export function bridgeStateToLocation(
   feature: DemoFeature,
@@ -725,6 +819,7 @@ export function bridgeStateToLocation(
   searchOpen: boolean,
   topic: DemoTopic | null,
   loginStage: LoginStage | null,
+  routeId: string | null = null,
 ): ParsedHash {
   // The deriving screen is unmistakable and replaces the whole login
   // UI, so it outranks the last-clicked topic (the confirm tap that
@@ -789,6 +884,17 @@ export function bridgeStateToLocation(
 
   if (feature === "settings") {
     return { sectionId: "settings", subSlug: "intro" };
+  }
+
+  // Feature "other" means the phone is on a route the manifest knows
+  // but no story section narrates. Fall through to coming-soon when the
+  // route ID confirms the unmapped status.
+  if (
+    feature === "other" &&
+    routeId !== null &&
+    sectionForRoute(routeId) === null
+  ) {
+    return { sectionId: "coming-soon", subSlug: slugForRoute(routeId) };
   }
 
   if (detail !== null) {

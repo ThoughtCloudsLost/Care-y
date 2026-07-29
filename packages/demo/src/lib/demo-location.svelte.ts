@@ -46,6 +46,8 @@ export interface PhoneScreenState {
   readonly detail: DemoDetail;
   readonly searchOpen: boolean;
   readonly loginStage: LoginStage | null;
+  /** The manifest route ID the phone currently shows; null during login. */
+  readonly routeId: string | null;
 }
 
 export interface LocationStoreDeps {
@@ -144,6 +146,8 @@ export class DemoLocationStore {
           phone.feature,
           phone.detail,
           phone.searchOpen,
+          phone.routeId,
+          subSlug,
         )
       ) {
         this.adoptPhone();
@@ -211,6 +215,7 @@ export class DemoLocationStore {
       phone.searchOpen,
       this.topic,
       phone.loginStage,
+      phone.routeId,
     );
     if (
       candidate.sectionId === this.location.sectionId &&

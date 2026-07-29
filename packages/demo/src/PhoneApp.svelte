@@ -35,6 +35,8 @@
   import { createDemoQueryClient } from "$demo/demo-query-client.js";
   import { createDemoLocationStore } from "$demo/demo-location.svelte.js";
   import type { PhoneCommand } from "$demo/scroll-sections.js";
+  import { routeForSlug } from "$demo/scroll-sections.js";
+  import { listRouteIds } from "$demo/engine/route-manifest.js";
   import { demoSeed, ensureKeyed } from "$lib/crypto/context.js";
   import { RoleId } from "@care-y/shared";
   import { classifyDemoLabel } from "$demo/topic-classifier.js";
@@ -225,6 +227,7 @@
       detail: router.detail,
       searchOpen: router.searchOpen,
       loginStage,
+      routeId: router.routeId,
     }),
     ensureScreen,
     getTicketDetailId: () => resolvedDetailId ?? DEMO_DETAIL_TICKET_ID,
@@ -405,6 +408,32 @@
    * cancels the chain cleanly.
    */
   async function ensureScreen(cmd: PhoneCommand, token: number): Promise<void> {
+    // Coming-soon route slug: resolve it phone-side and navigate via
+    // handleGoto so the router picks up the real pathname and routeId.
+    // Parameterized routes (containing "[") are skipped because the
+    // slug carries no param values; the convergence check snaps the
+    // location back to the phone, which is the designed failure mode.
+    if (cmd.routeSlug !== null) {
+      const resolvedRouteId = routeForSlug(cmd.routeSlug, listRouteIds());
+      if (resolvedRouteId !== null && !resolvedRouteId.includes("[")) {
+        // Strip group segments to build a navigable pathname.
+        const pathname =
+          resolvedRouteId
+            .split("/")
+            .filter((s) => !(s.startsWith("(") && s.endsWith(")")))
+            .join("/") || "/";
+
+        // The post-login fast-forward: if the phone is still on login,
+        // run the same auth transition that internalNavigate provides
+        // before issuing the goto.
+        if (router.feature === "login") {
+          await internalNavigate("home", null);
+        }
+        router.handleGoto(pathname);
+      }
+      return;
+    }
+
     if (cmd.openSearch) {
       if (router.feature !== "tickets" || router.detail !== null) {
         await internalNavigate("tickets", null);
@@ -475,6 +504,7 @@
       searchOpen: router.searchOpen,
       topic: store.topic,
       loginStage,
+      routeId: router.routeId,
       location: store.location,
       origin: store.origin,
       locationSeq: store.locationSeq,

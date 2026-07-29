@@ -17,7 +17,10 @@ import type { SectionId } from "./bridge.js";
  * derives from the filesystem (group segments included, filename
  * stripped).
  */
-export const SECTION_ROUTES: Record<SectionId, readonly string[]> = {
+export const SECTION_ROUTES: Record<
+  Exclude<SectionId, "coming-soon">,
+  readonly string[]
+> = {
   login: [],
   dashboard: ["/(app)"],
   tickets: ["/(app)/tickets"],
