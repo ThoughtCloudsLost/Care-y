@@ -1,15 +1,10 @@
 import { cursorSlot } from "@care-y/crypto";
 import type { TicketKeyWrap } from "$lib/crypto/ticket-decrypt-cache.js";
 import type { CryptoBridge } from "$lib/workers/crypto-bridge.js";
-import {
-  serializedBufferToBase64,
-  type SerializedBuffer,
-} from "$lib/utils/buffer-encoding.js";
-
 // ── Config ──
 
 interface ReadCursorData {
-  readonly encryptedReadCursor: SerializedBuffer | string;
+  readonly encryptedReadCursor: string;
 }
 
 export interface ReadCursorConfig {
@@ -49,7 +44,6 @@ export function createReadCursor(config: ReadCursorConfig): ReadCursorState {
     if (!cursor || !kw || userId === "") return;
 
     const ticketId = config.getTicketId();
-    const ciphertext = serializedBufferToBase64(cursor.encryptedReadCursor);
 
     config.cryptoBridge
       .decrypt(
@@ -59,7 +53,7 @@ export function createReadCursor(config: ReadCursorConfig): ReadCursorState {
         kw.ephemeralPoint,
         kw.nonce,
         kw.wrappedKey,
-        ciphertext,
+        cursor.encryptedReadCursor,
       )
       .then((plaintext) => {
         try {

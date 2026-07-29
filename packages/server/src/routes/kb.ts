@@ -58,6 +58,8 @@ import {
   ErrorCode,
 } from "@care-y/shared";
 
+import { b64, b64n } from "../utils/ciphertext-wire.js";
+
 export interface KBRouterDeps {
   readonly createCategorySvc: (
     tDb: OrgContext["tenantDb"],
@@ -78,20 +80,30 @@ export function createKbRouter(deps: KBRouterDeps) {
       .mutation(
         withErrorWrapping(async ({ ctx, input }) => {
           const svc = deps.createCategorySvc(ctx.org.tenantDb);
-          return svc.create({
+          const cat = await svc.create({
             encryptedName: Buffer.from(input.encryptedName, "base64"),
             encryptedDescription:
               input.encryptedDescription !== undefined
                 ? Buffer.from(input.encryptedDescription, "base64")
                 : undefined,
           });
+          return {
+            ...cat,
+            encryptedName: b64(cat.encryptedName),
+            encryptedDescription: b64n(cat.encryptedDescription),
+          };
         }),
       ),
 
     listCategories: volunteerProcedure.query(
       withErrorWrapping(async ({ ctx }) => {
         const svc = deps.createCategorySvc(ctx.org.tenantDb);
-        return svc.list();
+        const cats = await svc.list();
+        return cats.map((c) => ({
+          ...c,
+          encryptedName: b64(c.encryptedName),
+          encryptedDescription: b64n(c.encryptedDescription),
+        }));
       }),
     ),
 
@@ -101,7 +113,7 @@ export function createKbRouter(deps: KBRouterDeps) {
         withErrorWrapping(async ({ ctx, input }) => {
           const svc = deps.createCategorySvc(ctx.org.tenantDb);
           // care-y-ignore-next-line route-delegates-to-service -- delegates to svc.update; Buffer.from is wire-format (base64 to Buffer) conversion, not business logic
-          return svc.update(input.categoryId, {
+          const updated = await svc.update(input.categoryId, {
             encryptedName:
               input.encryptedName !== undefined
                 ? Buffer.from(input.encryptedName, "base64")
@@ -111,6 +123,11 @@ export function createKbRouter(deps: KBRouterDeps) {
                 ? Buffer.from(input.encryptedDescription, "base64")
                 : undefined,
           });
+          return {
+            ...updated,
+            encryptedName: b64(updated.encryptedName),
+            encryptedDescription: b64n(updated.encryptedDescription),
+          };
         }),
       ),
 
@@ -128,7 +145,7 @@ export function createKbRouter(deps: KBRouterDeps) {
     createItem: volunteerProcedure.input(createKbItemInputSchema).mutation(
       withErrorWrapping(async ({ ctx, input }) => {
         const svc = deps.createItemSvc(ctx.org.tenantDb);
-        return svc.create(ctx.user.id, {
+        const item = await svc.create(ctx.user.id, {
           categoryId: input.categoryId,
           encryptedTitle: Buffer.from(input.encryptedTitle, "base64"),
           encryptedBody: Buffer.from(input.encryptedBody, "base64"),
@@ -137,20 +154,32 @@ export function createKbRouter(deps: KBRouterDeps) {
               ? Buffer.from(input.encryptedExcerpt, "base64")
               : undefined,
         });
+        return {
+          ...item,
+          encryptedTitle: b64(item.encryptedTitle),
+          encryptedBody: b64(item.encryptedBody),
+          encryptedExcerpt: b64n(item.encryptedExcerpt),
+        };
       }),
     ),
 
     getItem: volunteerProcedure.input(z.object({ itemId: z.uuid() })).query(
       withErrorWrapping(async ({ ctx, input }) => {
         const svc = deps.createItemSvc(ctx.org.tenantDb);
-        return svc.findById(input.itemId);
+        const item = await svc.findById(input.itemId);
+        return {
+          ...item,
+          encryptedTitle: b64(item.encryptedTitle),
+          encryptedBody: b64(item.encryptedBody),
+          encryptedExcerpt: b64n(item.encryptedExcerpt),
+        };
       }),
     ),
 
     listItems: volunteerProcedure.input(kbItemListInputSchema).query(
       withErrorWrapping(async ({ ctx, input }) => {
         const svc = deps.createItemSvc(ctx.org.tenantDb);
-        return svc.list({
+        const page = await svc.list({
           categoryId: input.categoryId,
           sortBy: input.sortBy,
           sortDirection: input.sortDirection,
@@ -161,6 +190,14 @@ export function createKbRouter(deps: KBRouterDeps) {
           limit: input.limit,
           cursor: input.cursor,
         });
+        return {
+          ...page,
+          items: page.items.map((i) => ({
+            ...i,
+            encryptedTitle: b64(i.encryptedTitle),
+            encryptedExcerpt: b64n(i.encryptedExcerpt),
+          })),
+        };
       }),
     ),
 
@@ -168,7 +205,7 @@ export function createKbRouter(deps: KBRouterDeps) {
       withErrorWrapping(async ({ ctx, input }) => {
         const svc = deps.createItemSvc(ctx.org.tenantDb);
         // care-y-ignore-next-line route-delegates-to-service -- delegates to svc.update; Buffer.from is wire-format (base64 to Buffer) conversion, not business logic
-        return svc.update(input.itemId, {
+        const item = await svc.update(input.itemId, {
           categoryId: input.categoryId,
           encryptedTitle:
             input.encryptedTitle !== undefined
@@ -183,6 +220,12 @@ export function createKbRouter(deps: KBRouterDeps) {
               ? Buffer.from(input.encryptedExcerpt, "base64")
               : undefined,
         });
+        return {
+          ...item,
+          encryptedTitle: b64(item.encryptedTitle),
+          encryptedBody: b64(item.encryptedBody),
+          encryptedExcerpt: b64n(item.encryptedExcerpt),
+        };
       }),
     ),
 
@@ -205,7 +248,11 @@ export function createKbRouter(deps: KBRouterDeps) {
     listAuthors: volunteerProcedure.query(
       withErrorWrapping(async ({ ctx }) => {
         const svc = deps.createItemSvc(ctx.org.tenantDb);
-        return svc.listAuthors();
+        const authors = await svc.listAuthors();
+        return authors.map((a) => ({
+          ...a,
+          encryptedDisplayName: b64(a.encryptedDisplayName),
+        }));
       }),
     ),
 
@@ -215,7 +262,12 @@ export function createKbRouter(deps: KBRouterDeps) {
       .query(
         withErrorWrapping(async ({ ctx, input }) => {
           const svc = deps.createItemSvc(ctx.org.tenantDb);
-          return svc.listRecentlyUpdated(input.limit);
+          const items = await svc.listRecentlyUpdated(input.limit);
+          return items.map((i) => ({
+            ...i,
+            encryptedTitle: b64(i.encryptedTitle),
+            encryptedExcerpt: b64n(i.encryptedExcerpt),
+          }));
         }),
       ),
 
@@ -223,7 +275,11 @@ export function createKbRouter(deps: KBRouterDeps) {
     listBodies: volunteerProcedure.input(listKbBodiesInputSchema).query(
       withErrorWrapping(async ({ ctx, input }) => {
         const svc = deps.createItemSvc(ctx.org.tenantDb);
-        return svc.listBodies(input.itemIds);
+        const bodies = await svc.listBodies(input.itemIds);
+        return bodies.map((b) => ({
+          ...b,
+          encryptedBody: b64(b.encryptedBody),
+        }));
       }),
     ),
 
@@ -310,7 +366,7 @@ export function createKbRouter(deps: KBRouterDeps) {
           );
 
           try {
-            return await mediaSvc.createAttachment({
+            const att = await mediaSvc.createAttachment({
               itemId: input.itemId,
               blobKey,
               sizeBytes: blobBuffer.byteLength,
@@ -320,6 +376,7 @@ export function createKbRouter(deps: KBRouterDeps) {
                   : undefined,
               contentType: input.contentType,
             });
+            return { ...att, encryptedFilename: b64n(att.encryptedFilename) };
           } catch (err: unknown) {
             // Best-effort cleanup: remove the orphaned blob if the DB insert fails.
             // Failure here is harmless (orphaned blob on disk, no DB reference).
@@ -350,7 +407,11 @@ export function createKbRouter(deps: KBRouterDeps) {
       .query(
         withErrorWrapping(async ({ ctx, input }) => {
           const mediaSvc = deps.createMediaSvc(ctx.org.tenantDb);
-          return mediaSvc.listAttachments(input.itemId);
+          const atts = await mediaSvc.listAttachments(input.itemId);
+          return atts.map((a) => ({
+            ...a,
+            encryptedFilename: b64n(a.encryptedFilename),
+          }));
         }),
       ),
 

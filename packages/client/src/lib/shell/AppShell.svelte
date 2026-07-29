@@ -102,10 +102,6 @@
   } from "$lib/crypto/context.js";
   import { initRecentViews } from "$lib/search/recent-views.js";
   import type { TicketKeyWrap } from "$lib/crypto/ticket-decrypt-cache.js";
-  import {
-    type SerializedBuffer,
-    base64ToUint8Array,
-  } from "$lib/utils/buffer-encoding.js";
   import LanguagePicker from "$lib/components/inputs/LanguagePicker.svelte";
   import { getLocale, setLocale, type Locale } from "$lib/paraglide/runtime.js";
   import { chromeIntensity, flashOpaqueChrome } from "./chrome-glass.svelte.js";
@@ -207,8 +203,7 @@
     if (avatarOrgCache == null) return null;
     const enc = meQuery.data?.user.encryptedDisplayName;
     if (enc == null) return null;
-    const ciphertext = typeof enc === "string" ? base64ToUint8Array(enc) : null;
-    return avatarOrgCache.decrypt("me:display_name", ciphertext);
+    return avatarOrgCache.decrypt("me:display_name", enc);
   });
 
   const userInitials = $derived.by(() => {
@@ -254,8 +249,10 @@
     }
 
     for (const f of savedFilterStore.filters.slice(0, MAX_SIDEBAR_FILTERS)) {
-      const nameBytes = base64ToUint8Array(f.encryptedName);
-      const name = avatarOrgCache?.decrypt(`saved-filter:${f.id}`, nameBytes);
+      const name = avatarOrgCache?.decrypt(
+        `saved-filter:${f.id}`,
+        f.encryptedName,
+      );
       ticketItems.push({
         id: `filter:${f.id}`,
         label: name ?? "...",
@@ -274,10 +271,9 @@
     // Library tab: saved filters
     const kbItems: SidebarSubItem[] = [];
     for (const f of kbSavedFilterStore.filters.slice(0, MAX_SIDEBAR_FILTERS)) {
-      const nameBytes = base64ToUint8Array(f.encryptedName);
       const name = avatarOrgCache?.decrypt(
         `kb-saved-filter:${f.id}`,
-        nameBytes,
+        f.encryptedName,
       );
       kbItems.push({
         id: `kb-filter:${f.id}`,
@@ -637,14 +633,6 @@
     );
   }
 
-  function isSerializedBuffer(val: unknown): val is SerializedBuffer {
-    return typeof val === "object" && val !== null && "type" in val;
-  }
-
-  function isOrgCiphertext(val: unknown): val is SerializedBuffer | Uint8Array {
-    return val instanceof Uint8Array || isSerializedBuffer(val);
-  }
-
   $effect(() => {
     const ticketCache = getTicketDecryptCache();
     const orgCache = getOrgDecryptCache();
@@ -706,16 +694,9 @@
         getAllCachedTickets: () => flatTicketList,
         decryptTitle: (id, keyWrap, encryptedTitle) => {
           const kw = isKeyWrap(keyWrap) ? keyWrap : null;
-          if (typeof encryptedTitle === "string") {
-            return ticketCache.decryptTitle(id, kw, encryptedTitle);
-          }
-          if (isSerializedBuffer(encryptedTitle)) {
-            return ticketCache.decryptTitle(id, kw, encryptedTitle);
-          }
-          return undefined;
+          return ticketCache.decryptTitle(id, kw, encryptedTitle);
         },
         orgDecrypt: (cacheKey, ciphertext) => {
-          if (!isOrgCiphertext(ciphertext)) return null;
           return orgCache.decrypt(cacheKey, ciphertext) ?? null;
         },
         currentUserId: () => currentUserIdGetter(),
@@ -768,7 +749,6 @@
             fetchPage: async (cursor) =>
               kbRouter.listItems.query({ limit: 100, cursor }),
             decryptOrg: async (cacheKey, ciphertext) => {
-              if (!isOrgCiphertext(ciphertext)) return null;
               return orgCache.decryptAsync(cacheKey, ciphertext);
             },
             ensureCategoriesLoaded: async () => {
@@ -780,11 +760,10 @@
             resolveCategoryName: (categoryId) => {
               // Read from TanStack Query cache populated by the library page.
               const cats = queryClient.getQueryData<
-                readonly { id: string; encryptedName: unknown }[]
+                readonly { id: string; encryptedName: string }[]
               >(kbKeys.categories());
               const cat = cats?.find((c) => c.id === categoryId);
               if (!cat) return null;
-              if (!isOrgCiphertext(cat.encryptedName)) return null;
               return orgCache.decrypt(
                 `kb-cat:${categoryId}`,
                 cat.encryptedName,
@@ -797,12 +776,11 @@
               const volunteers = queryClient.getQueryData<
                 readonly {
                   id: string;
-                  encryptedDisplayName: unknown;
+                  encryptedDisplayName: string;
                 }[]
               >(volunteerKeys.all);
               const vol = volunteers?.find((v) => v.id === userId);
               if (!vol) return null;
-              if (!isOrgCiphertext(vol.encryptedDisplayName)) return null;
               return orgCache.decrypt(
                 `volunteer:${vol.id}`,
                 vol.encryptedDisplayName,
@@ -826,11 +804,7 @@
                 queryFn: async () => trpc.auth.listUsers.query(),
               }),
             decryptDisplayName: (userId, ciphertext) => {
-              if (typeof ciphertext !== "string") return null;
-              return orgCache.decrypt(
-                `user:${userId}`,
-                base64ToUint8Array(ciphertext),
-              );
+              return orgCache.decrypt(`user:${userId}`, ciphertext);
             },
             currentUserId: () => currentUserIdGetter(),
           }),
@@ -1514,7 +1488,8 @@
           ariaLabel={m.nav_account()}
         >
           <AvatarPanel
-            encryptedDisplayName={meQuery.data?.user.encryptedDisplayName}
+            encryptedDisplayName={meQuery.data?.user.encryptedDisplayName ??
+              null}
             roleId={currentRoleId}
             permissions={currentPermissions}
             onnavigate={(path: string) => {

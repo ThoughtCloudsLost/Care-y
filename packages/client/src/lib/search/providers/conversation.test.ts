@@ -19,7 +19,7 @@ interface MockFollowUp {
   readonly id: string;
   readonly source: string;
   readonly type: string;
-  readonly encryptedContent: unknown;
+  readonly encryptedContent: string;
   readonly createdBy: string | null;
   readonly createdAt: string;
 }
@@ -30,7 +30,7 @@ function makeFollowUp(
   return {
     source: "client",
     type: "reply",
-    encryptedContent: new Uint8Array([1, 2, 3]),
+    encryptedContent: "AQID",
     createdBy: "user-1",
     createdAt: "2026-03-15T12:00:00Z",
     ...overrides,

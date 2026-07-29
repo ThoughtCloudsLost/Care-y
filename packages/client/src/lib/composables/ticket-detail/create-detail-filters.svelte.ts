@@ -2,18 +2,16 @@ import { SvelteSet } from "svelte/reactivity";
 import type { OrgDecryptCache } from "$lib/crypto/org-decrypt-cache.js";
 import type { PillDefinition } from "$lib/components/filters/filter-types.js";
 import type { FilterPillsConfig } from "$lib/shell/types.js";
-import type { SerializedBuffer } from "$lib/utils/buffer-encoding.js";
-
 // ── Shared shapes ──
 
 export interface ParticipantRecord {
   readonly volunteerId: string;
-  readonly encryptedDisplayName: SerializedBuffer | Uint8Array | null;
+  readonly encryptedDisplayName: string | null;
 }
 
 export interface NoteTypeRecord {
   readonly id: string;
-  readonly encryptedName: SerializedBuffer | Uint8Array | null;
+  readonly encryptedName: string | null;
 }
 
 // ── Config ──

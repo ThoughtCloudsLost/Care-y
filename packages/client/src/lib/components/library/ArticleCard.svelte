@@ -14,10 +14,10 @@
     articleId: string;
     titleResult: DecryptResult;
     excerptResult: DecryptResult;
-    /** Encrypted title bytes for length estimation in placeholder */
-    encryptedTitle?: unknown;
-    /** Encrypted excerpt bytes for length estimation in placeholder */
-    encryptedExcerpt?: unknown;
+    /** Encrypted title ciphertext for length estimation in placeholder */
+    encryptedTitle?: string | null;
+    /** Encrypted excerpt ciphertext for length estimation in placeholder */
+    encryptedExcerpt?: string | null;
     categoryName: string | null;
     authorName: string | null;
     voteUpCount: number;

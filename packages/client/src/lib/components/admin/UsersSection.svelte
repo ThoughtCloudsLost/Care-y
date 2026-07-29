@@ -30,10 +30,7 @@
     getCurrentUserId,
   } from "$lib/crypto/context.js";
   import { ErrorCode, identifierSchema } from "@care-y/shared";
-  import {
-    base64ToUint8Array,
-    uint8ArrayToBase64,
-  } from "$lib/utils/buffer-encoding.js";
+  import { uint8ArrayToBase64 } from "$lib/utils/buffer-encoding.js";
   import { haptic } from "$lib/utils/haptic.js";
   import { toastStore } from "$lib/stores/toast.svelte.js";
   import { announceToLiveRegion } from "$lib/utils/announce.js";
@@ -188,8 +185,7 @@
     userId: string,
     encryptedBase64: string,
   ): string | null {
-    const bytes = base64ToUint8Array(encryptedBase64);
-    return orgCache.decrypt(`user:${userId}`, bytes);
+    return orgCache.decrypt(`user:${userId}`, encryptedBase64);
   }
 
   // Identifiers are org-key sealed like display names (ADR-052). Decrypted
@@ -198,8 +194,7 @@
     userId: string,
     encryptedBase64: string,
   ): Promise<string | null> {
-    const bytes = base64ToUint8Array(encryptedBase64);
-    return orgCache.decryptAsync(`user-ident:${userId}`, bytes);
+    return orgCache.decryptAsync(`user-ident:${userId}`, encryptedBase64);
   }
 
   // ── Client-side filtering + sorting ──

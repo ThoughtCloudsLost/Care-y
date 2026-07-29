@@ -944,15 +944,9 @@ describe.skipIf(!process.env.DATABASE_URL)(
         });
 
         expect(updated.escalateDays).toBe(7);
-        expect(
-          updated.encryptedName.equals(Buffer.from(newName, "base64")),
-        ).toBe(true);
+        expect(updated.encryptedName).toBe(newName);
         // Untouched fields survive a partial update
-        expect(
-          updated.encryptedColor?.equals(
-            Buffer.from(testEncryptedContent(0x12), "base64"),
-          ),
-        ).toBe(true);
+        expect(updated.encryptedColor).toBe(testEncryptedContent(0x12));
       });
 
       it("reassigns every ticket to the target queue before deleting a queue", async () => {
@@ -1104,15 +1098,9 @@ describe.skipIf(!process.env.DATABASE_URL)(
           encryptedBody: newBody,
         });
         expect(updated.id).toBe(preset.id);
-        expect(
-          updated.encryptedBody.equals(Buffer.from(newBody, "base64")),
-        ).toBe(true);
+        expect(updated.encryptedBody).toBe(newBody);
         // Title untouched by the partial update
-        expect(
-          updated.encryptedTitle.equals(
-            Buffer.from(testEncryptedContent(0xb3), "base64"),
-          ),
-        ).toBe(true);
+        expect(updated.encryptedTitle).toBe(testEncryptedContent(0xb3));
 
         await caller.tickets.deletePreset({ presetId: preset.id });
         const presets = await caller.tickets.listPresets({});

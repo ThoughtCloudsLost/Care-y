@@ -49,8 +49,6 @@
     type EscalationTarget,
     type RoleIdValue,
   } from "@care-y/shared";
-  import type { SerializedBuffer } from "$lib/utils/buffer-encoding.js";
-
   const ticketRouter = requireRouter(trpc.tickets, "tickets");
   const noteTypesRouter = requireRouter(ticketRouter.noteTypes, "noteTypes");
 
@@ -242,17 +240,18 @@
     isActive: boolean;
     minViewRole: string;
     minCreateRole: string;
-    encryptedName: SerializedBuffer;
-    encryptedIcon: SerializedBuffer;
-    encryptedDescription: SerializedBuffer | null;
+    encryptedName: string;
+    encryptedIcon: string;
+    encryptedDescription: string | null;
   }): void {
     editingType = { id: nt.id, escalationTargets: nt.escalationTargets };
     editName = orgCache.decrypt(nt.id + ":name", nt.encryptedName) ?? "";
     editIcon =
       orgCache.decrypt(nt.id + ":icon", nt.encryptedIcon) ?? "sticky-note";
-    editDescription = nt.encryptedDescription
-      ? (orgCache.decrypt(nt.id + ":desc", nt.encryptedDescription) ?? "")
-      : "";
+    editDescription =
+      nt.encryptedDescription === null
+        ? ""
+        : (orgCache.decrypt(nt.id + ":desc", nt.encryptedDescription) ?? "");
     editEscalateAdmin = nt.escalationTargets.some(
       (t) => t.type === "role" && t.value === "admin",
     );

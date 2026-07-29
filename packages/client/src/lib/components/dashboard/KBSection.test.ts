@@ -41,7 +41,7 @@ function makeKBItem(overrides: KBOverrides = {}) {
   seq += 1;
   return {
     id: `kb-${String(seq)}`,
-    encryptedTitle: { type: "Buffer", data: [1, 2, 3] },
+    encryptedTitle: "AQID",
     updatedAt: new Date().toISOString(),
     rating: 0,
     decryptedTitle: "Escalation protocol",

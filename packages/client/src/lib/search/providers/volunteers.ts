@@ -19,7 +19,7 @@ import VolunteerResultItem from "$lib/components/search/VolunteerResultItem.svel
 /** Raw admin user record from the TanStack Query cache (listUsers response). */
 export interface RawAdminUser {
   readonly id: string;
-  readonly encryptedDisplayName: unknown;
+  readonly encryptedDisplayName: string;
   readonly roleId: string;
   readonly isActive: boolean;
   readonly hasKeys: boolean;
@@ -46,7 +46,7 @@ export interface VolunteerSearchProviderDeps {
   /** Decrypt a display name via OrgDecryptCache. Returns plaintext or null. */
   readonly decryptDisplayName: (
     userId: string,
-    ciphertext: unknown,
+    ciphertext: string,
   ) => string | null;
   /** Current user ID, so the card can show "you" indicator. */
   readonly currentUserId: () => string | undefined;

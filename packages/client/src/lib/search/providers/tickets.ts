@@ -32,7 +32,7 @@ export type RawCachedTicket = TicketLikeRecord;
  * display-field core plus the provider's search-specific extras.
  */
 export interface TicketSearchData extends TicketDisplayFields {
-  readonly encryptedTitle: unknown;
+  readonly encryptedTitle: string;
   readonly unreadCount: number;
   readonly previewFollowUps: RawFollowUpPreview[] | undefined;
   /** The query that produced this result; renders the <mark> highlights. */
@@ -59,11 +59,14 @@ export interface TicketSearchProviderDeps {
   readonly decryptTitle: (
     ticketId: string,
     keyWrap: unknown,
-    encryptedTitle: unknown,
+    encryptedTitle: string,
   ) => string | undefined;
   /** Org-tier decrypt keyed the same way the card mapper keys it
    * (`queue:{queueId}`, `assignee:{userId}`). */
-  readonly orgDecrypt: (cacheKey: string, ciphertext: unknown) => string | null;
+  readonly orgDecrypt: (
+    cacheKey: string,
+    ciphertext: string | null,
+  ) => string | null;
   /** Viewer id for the shared core's self-assignment ("You") check. */
   readonly currentUserId: () => string | undefined;
   readonly getPreviewFollowUps: (

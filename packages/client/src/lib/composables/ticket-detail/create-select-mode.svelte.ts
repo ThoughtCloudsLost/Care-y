@@ -3,7 +3,6 @@ import { SvelteSet } from "svelte/reactivity";
 import type { TicketKeyWrap } from "$lib/crypto/ticket-decrypt-cache.js";
 import type { FollowUpDecryptCache } from "$lib/crypto/follow-up-decrypt-cache.js";
 import type { OrgDecryptCache } from "$lib/crypto/org-decrypt-cache.js";
-import type { SerializedBuffer } from "$lib/utils/buffer-encoding.js";
 import {
   resolveAsyncDecrypt,
   matchDecryptResult,
@@ -25,7 +24,7 @@ export interface SelectableFollowUp {
   readonly type: string;
   readonly createdBy: string | null;
   readonly createdAt: string;
-  readonly encryptedContent: SerializedBuffer | string;
+  readonly encryptedContent: string;
 }
 
 // ── Config ──

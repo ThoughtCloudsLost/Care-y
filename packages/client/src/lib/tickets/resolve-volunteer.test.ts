@@ -7,7 +7,7 @@ import {
 
 const vol1: VolunteerRecord = {
   id: "v1",
-  encryptedDisplayName: new Uint8Array([1, 2, 3]),
+  encryptedDisplayName: "AQID",
 };
 const vol2: VolunteerRecord = { id: "v2", encryptedDisplayName: null };
 

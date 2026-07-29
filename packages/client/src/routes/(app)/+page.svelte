@@ -52,7 +52,6 @@
   } from "$lib/crypto/context.js";
   import { Permission } from "@care-y/shared";
   import type { ReactionSummary } from "@care-y/shared";
-  import type { SerializedBuffer } from "$lib/utils/buffer-encoding.js";
   import {
     decryptQueueAppearance,
     type QueueAppearance,
@@ -472,13 +471,7 @@
   // the typed org-cache inputs from the loaded rows, keyed the same way the
   // mapper keys them, so the cache calls stay type-safe without a cast.
   const orgCipherByKey = $derived.by(() => {
-    // Mixed shapes: converted routes send base64 strings, unconverted ones
-    // still send Buffers that superjson expands. The org decrypt cache takes
-    // either while the conversion is in progress.
-    const map = new SvelteMap<
-      string,
-      SerializedBuffer | Uint8Array | string | null
-    >();
+    const map = new SvelteMap<string, string | null>();
     for (const t of allTickets) {
       map.set(`queue:${t.queueId}`, t.encryptedQueueName);
       map.set(`client-alias:${t.clientId}`, t.encryptedClientAlias);

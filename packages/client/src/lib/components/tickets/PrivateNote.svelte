@@ -26,7 +26,7 @@
 
   interface Props {
     result: DecryptResult;
-    encryptedContent?: unknown;
+    encryptedContent?: string | null;
     authorName: string | undefined;
     timestamp: string;
     isOwn: boolean;

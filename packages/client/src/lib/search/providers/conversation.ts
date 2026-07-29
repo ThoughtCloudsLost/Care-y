@@ -24,7 +24,7 @@ export interface ConversationSearchProviderDeps {
     readonly id: string;
     readonly source: string;
     readonly type: string;
-    readonly encryptedContent: unknown;
+    readonly encryptedContent: string;
     readonly createdBy: string | null;
     readonly createdAt: string;
   }[];

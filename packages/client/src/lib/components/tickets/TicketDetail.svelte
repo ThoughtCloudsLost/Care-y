@@ -58,10 +58,6 @@
     writeReactionToCache,
   } from "$lib/tickets/create-reactions-query.svelte.js";
   import { requireRouter } from "$lib/errors.js";
-  import {
-    serializedBufferToBase64,
-    type SerializedBuffer,
-  } from "$lib/utils/buffer-encoding.js";
   import { onKeyActivate } from "$lib/utils/a11y.js";
   import { formatRelativeTime } from "$lib/utils/format-time.js";
   import { formatDateSeparator, needsDateSeparator } from "$lib/utils/time.js";
@@ -151,7 +147,7 @@
       type: string;
       createdBy: string | null;
       createdAt: string;
-      encryptedContent: unknown;
+      encryptedContent: string | null;
     }[];
     /** Two-way bindable: exposes the chat scroll container for scroll-direction tracking. */
     scrollContainerEl?: HTMLElement | undefined;
@@ -607,7 +603,7 @@
     readonly type: string;
     readonly createdBy: string | null;
     readonly createdAt: string;
-    readonly encryptedContent: unknown;
+    readonly encryptedContent: string | null;
     readonly hasRecording: boolean;
     readonly hasImage: boolean;
     readonly hasFile: boolean;
@@ -678,16 +674,7 @@
   function resolveExpandedDecrypt(rec: ClusterRecord): DecryptResult {
     if (decrypt == null) return resolveAsyncDecrypt(undefined, false);
     if (rec.encryptedContent !== null) {
-      const fuKeyWrap = rec.keyWrap
-        ? {
-            ephemeralPoint: serializedBufferToBase64(
-              rec.keyWrap.ephemeralPoint,
-            ),
-            nonce: serializedBufferToBase64(rec.keyWrap.nonce),
-            wrappedKey: serializedBufferToBase64(rec.keyWrap.wrappedKey),
-          }
-        : null;
-      return decrypt.followUp(rec.id, rec.encryptedContent, fuKeyWrap);
+      return decrypt.followUp(rec.id, rec.encryptedContent, rec.keyWrap);
     }
     return resolveAsyncDecrypt(followUpCache.get(rec.id), true);
   }
@@ -710,13 +697,7 @@
     noteTypeId?: string | null;
     eventParams?: Record<string, unknown> | null;
     keyGeneration?: string | null;
-    keyWrap?:
-      | ClusterRecord["keyWrap"]
-      | {
-          readonly ephemeralPoint: { type: "Buffer"; data: number[] };
-          readonly nonce: { type: "Buffer"; data: number[] };
-          readonly wrappedKey: { type: "Buffer"; data: number[] };
-        };
+    keyWrap?: ClusterRecord["keyWrap"];
   }): ClusterRecord {
     return {
       id: fu.id,
@@ -836,7 +817,7 @@
     type: string;
     source: string;
     createdBy: string | null;
-    encryptedContent: SerializedBuffer | string | null;
+    encryptedContent: string | null;
     noteTypeId: string | null;
   }
 
@@ -1055,7 +1036,10 @@
     const startIdx = Math.max(0, followUps.length - VISIBLE_BATCH);
     for (let i = startIdx; i < followUps.length; i++) {
       const fu = followUps[i]; // eslint-disable-line security/detect-object-injection -- i is a loop counter bounded by followUps.length
-      if (!fu?.encryptedContent) continue;
+      // An empty string is the optimistic placeholder for a message that has
+      // not been encrypted yet, so it is nothing to wait on.
+      if (fu === undefined) continue;
+      if (fu.encryptedContent === "") continue;
       if (fu.source === "system") continue;
       if (decrypt == null) return false;
       const result = decrypt.followUp(fu.id, fu.encryptedContent);

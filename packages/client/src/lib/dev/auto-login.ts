@@ -1039,11 +1039,7 @@ async function seedKBArticles(
   const categoryMap = new Map<string, string>();
   for (const c of categories) {
     try {
-      const ciphertext =
-        c.encryptedName instanceof Uint8Array
-          ? c.encryptedName
-          : new Uint8Array((c.encryptedName as { data: number[] }).data);
-      const plainBytes = await orgKeyManager.decrypt(ciphertext);
+      const plainBytes = await orgKeyManager.decrypt(decode(c.encryptedName));
       categoryMap.set(decoder.decode(plainBytes), c.id);
     } catch (err: unknown) {
       console.debug("[dev] skipping category decrypt:", err);

@@ -18,13 +18,11 @@ import { SvelteSet } from "svelte/reactivity";
 import type { SvelteMap } from "svelte/reactivity";
 import { cacheRegistry } from "$lib/crypto/cache-registry.js";
 import type { TicketKeyWrap } from "$lib/crypto/ticket-decrypt-cache.js";
-import type { SerializedBuffer } from "$lib/utils/buffer-encoding.js";
-
 export interface RawFollowUpPreview {
   readonly id: string;
   readonly source: string;
   readonly type: string;
-  readonly encryptedContent: SerializedBuffer | string;
+  readonly encryptedContent: string;
   readonly keyWrap: TicketKeyWrap | null;
   readonly createdAt: string;
   readonly hasRecording: boolean;

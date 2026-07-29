@@ -8,7 +8,7 @@ export interface TimelineItem {
   createdBy: string | null;
   createdAt: string;
   /** Present for system events and internal notes. Null for plain messages. */
-  encryptedContent: unknown;
+  encryptedContent: string | null;
   hasRecording: boolean;
   recordingDurationSeconds: number | null;
   hasImage: boolean;
@@ -29,7 +29,7 @@ export interface ClusterRecord {
   source: string;
   type: string;
   /** Null while the fetch is in flight (placeholder shimmer). */
-  encryptedContent: { type: "Buffer"; data: number[] } | string | null;
+  encryptedContent: string | null;
   createdBy: string | null;
   createdAt: string;
   isPrivate: boolean;
@@ -42,8 +42,8 @@ export interface ClusterRecord {
   keyGeneration: string | null;
   /** ECIES key wrap for tk_temp decryption. Present only when keyGeneration is non-null. */
   keyWrap: {
-    ephemeralPoint: { type: "Buffer"; data: number[] } | string;
-    nonce: { type: "Buffer"; data: number[] } | string;
-    wrappedKey: { type: "Buffer"; data: number[] } | string;
+    ephemeralPoint: string;
+    nonce: string;
+    wrappedKey: string;
   } | null;
 }

@@ -61,7 +61,7 @@ describe("decryptQueueAppearance", () => {
     );
     const cache = { decrypt } as unknown as OrgDecryptCache;
 
-    const ct = new Uint8Array([1, 2, 3]);
+    const ct = "AQID";
     const a = decryptQueueAppearance(cache, {
       id: "q1",
       encryptedColor: ct,

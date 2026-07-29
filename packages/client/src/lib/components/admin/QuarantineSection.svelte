@@ -65,8 +65,7 @@
     encryptedBase64: string | null,
   ): string | null {
     if (encryptedBase64 === null) return null;
-    const bytes = base64ToUint8Array(encryptedBase64);
-    return orgCache.decrypt(`vq:${prefix}:${id}`, bytes);
+    return orgCache.decrypt(`vq:${prefix}:${id}`, encryptedBase64);
   }
 
   // ── Player state ──

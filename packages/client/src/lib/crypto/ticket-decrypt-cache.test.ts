@@ -21,10 +21,7 @@ const KEY_WRAP = {
   nonce: "nonce-base64",
   wrappedKey: "wk-base64",
 };
-const ENCRYPTED_TITLE = {
-  type: "Buffer" as const,
-  data: [72, 101, 108, 108, 111],
-};
+const ENCRYPTED_TITLE = "SGVsbG8";
 
 function createMockBridge(): {
   bridge: CryptoBridge;

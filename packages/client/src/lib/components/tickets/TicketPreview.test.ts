@@ -72,7 +72,7 @@ function makeFollowUp(
     id: `fu-${Math.random().toString(36).slice(2, 8)}`,
     source: "volunteer",
     type: "message",
-    encryptedContent: { type: "Buffer", data: [72, 101, 108, 108, 111] },
+    encryptedContent: "SGVsbG8",
     keyWrap: {
       ephemeralPoint: "AAAA",
       nonce: "BBBB",

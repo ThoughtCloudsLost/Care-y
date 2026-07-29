@@ -14,6 +14,7 @@
     createMutation,
     useQueryClient,
   } from "@tanstack/svelte-query";
+  import { decode } from "@care-y/crypto";
   import { Link } from "konsta/svelte";
   import { ChevronLeft, Pencil } from "@lucide/svelte";
   import * as m from "$lib/paraglide/messages.js";
@@ -32,7 +33,6 @@
   import { haptic } from "$lib/utils/haptic.js";
   import { toastStore } from "$lib/stores/toast.svelte.js";
   import { announceToLiveRegion } from "$lib/utils/announce.js";
-  import type { SerializedBuffer } from "$lib/utils/buffer-encoding.js";
   import {
     resolveKbImages,
     type KbImageResolverDeps,
@@ -73,7 +73,7 @@
 
   interface CachedSummary {
     categoryId: string;
-    encryptedTitle: SerializedBuffer;
+    encryptedTitle: string;
     createdBy: string;
     voteUpCount: number;
     voteDownCount: number;
@@ -184,9 +184,7 @@
       return;
     }
 
-    const raw = article.encryptedBody;
-    const ciphertext =
-      raw instanceof Uint8Array ? raw : new Uint8Array(raw.data);
+    const ciphertext = decode(article.encryptedBody);
     const title =
       titleResult.status === "ready" ? titleResult.value : undefined;
     const version = ++bodyDecryptVersion;
@@ -263,11 +261,9 @@
         let filename = "attachment";
         if (att.encryptedFilename != null) {
           try {
-            const ct =
-              att.encryptedFilename instanceof Uint8Array
-                ? att.encryptedFilename
-                : new Uint8Array(att.encryptedFilename.data);
-            const plain = await orgKeyManager.decrypt(ct);
+            const plain = await orgKeyManager.decrypt(
+              decode(att.encryptedFilename),
+            );
             filename = new TextDecoder().decode(plain);
           } catch {
             // Decryption failed; fall back to generic name
