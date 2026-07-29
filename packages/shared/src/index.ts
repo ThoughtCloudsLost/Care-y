@@ -41,6 +41,7 @@ export {
   ROLE_ID_VALUES_TUPLE,
   ROLE_LEVEL,
   meetsRoleThreshold,
+  isRoleRestricted,
   getAllowedRoleIds,
   Permission,
 } from "./roles.js";

@@ -16,6 +16,7 @@
   import { getNavbarOverrideCtx } from "$lib/shell/context.js";
   import { getCurrentPermissions } from "$lib/crypto/context.js";
   import { trpc } from "$lib/trpc/index.js";
+  import { requireRouter } from "$lib/errors.js";
   import { toastStore } from "$lib/stores/toast.svelte.js";
   import {
     createSectionScroll,
@@ -44,6 +45,7 @@
   }
 
   const authRouter = trpc.auth;
+  const telephonyAdmin = requireRouter(trpc.telephonyAdmin, "telephonyAdmin");
 
   const permissionsGetter = getCurrentPermissions();
   const permissions = $derived(permissionsGetter());
@@ -79,6 +81,12 @@
     staleTime: 60_000,
   }));
 
+  const provisionedPhonesQuery = createQuery(() => ({
+    queryKey: adminKeys.telephonyPhones(),
+    queryFn: async () => telephonyAdmin.getProvisionedPhones.query(),
+    staleTime: 60_000,
+  }));
+
   function getBadge(destId: string): string | null {
     const data = hubStatusQuery.data;
     if (!data) return null;
@@ -101,10 +109,12 @@
               count: String(data.retentionDays),
             })
           : m.admin_hub_badge_retention_disabled();
-      case "telephony":
-        return data.phoneCount > 0
-          ? m.admin_hub_badge_phones({ count: String(data.phoneCount) })
+      case "telephony": {
+        const lineCount = provisionedPhonesQuery.data?.length ?? 0;
+        return lineCount > 0
+          ? m.admin_hub_badge_phones({ count: String(lineCount) })
           : m.admin_hub_badge_no_phones();
+      }
       case "blocklist":
         return m.admin_hub_badge_blocked({
           count: String(data.blocklistCount),
@@ -128,8 +138,10 @@
     switch (destId) {
       case "keys":
         return data.keyStatus === "ok" ? "ok" : "warning";
-      case "telephony":
-        return data.phoneCount > 0 ? "ok" : "warning";
+      case "telephony": {
+        const lineCount = provisionedPhonesQuery.data?.length ?? 0;
+        return lineCount > 0 ? "ok" : "warning";
+      }
       case "greetings":
         return data.greetingCount > 0 ? "default" : "warning";
       case "sms-templates":

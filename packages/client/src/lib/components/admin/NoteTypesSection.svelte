@@ -46,6 +46,7 @@
   import {
     RoleId,
     ROLE_ID_VALUES,
+    isRoleRestricted,
     type EscalationTarget,
     type RoleIdValue,
   } from "@care-y/shared";
@@ -135,8 +136,8 @@
     minViewRole: string,
     minCreateRole: string,
   ): string | null {
-    const isViewRestricted = minViewRole !== RoleId.VOLUNTEER;
-    const isCreateRestricted = minCreateRole !== RoleId.VOLUNTEER;
+    const isViewRestricted = isRoleRestricted(minViewRole);
+    const isCreateRestricted = isRoleRestricted(minCreateRole);
     if (!isViewRestricted && !isCreateRestricted) return null;
     const parts: string[] = [];
     if (isViewRestricted) {
@@ -176,8 +177,11 @@
   let sheetSaving = $state(false);
 
   const ROLE_OPTIONS: readonly { id: RoleIdValue; label: () => string }[] = [
+    // care-y-ignore-next-line no-client-role-hardcode -- option ID for admin role-gating picker, not an access check
     { id: RoleId.VOLUNTEER, label: () => m.admin_role_volunteer(withTerms()) },
+    // care-y-ignore-next-line no-client-role-hardcode -- option ID for admin role-gating picker, not an access check
     { id: RoleId.MANAGER, label: () => m.admin_role_manager(withTerms()) },
+    // care-y-ignore-next-line no-client-role-hardcode -- option ID for admin role-gating picker, not an access check
     { id: RoleId.ADMIN, label: m.admin_role_admin },
   ];
 

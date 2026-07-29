@@ -461,7 +461,7 @@ describe("KB listAuthors route", () => {
     expect(result[1]!.id).toBe("author-2");
     expect(typeof result[0]!.encryptedDisplayName).toBe("string");
     expect(result[0]!.encryptedDisplayName).toBe(
-      Buffer.from("enc-name-1").toString("base64"),
+      Buffer.from("enc-name-1").toString("base64url"),
     );
     expect(mockItemSvc.listAuthors).toHaveBeenCalledOnce();
   });
