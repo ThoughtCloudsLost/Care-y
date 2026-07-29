@@ -43,6 +43,7 @@ import {
   createSecretsEncryptor,
 } from "./server/secrets-shim.js";
 import { createSealedBoxEncryptor } from "./server/sealed-box-shim.js";
+import { appendToOutbox } from "./outbox.js";
 import { hkdfSync, createHmac } from "./server/node-crypto-shim.js";
 import {
   seedStructure,
@@ -157,38 +158,11 @@ function createMapBlobStore(): BlobStore {
   };
 }
 
-// Email/SMS outbox for inspection
-export interface OutboxEntry {
-  readonly type: "email" | "sms";
-  readonly to: string;
-  readonly subject?: string;
-  readonly body?: string;
-}
-const outbox: OutboxEntry[] = [];
-const outboxListeners: ((entry: OutboxEntry) => void)[] = [];
-
-function appendToOutbox(entry: OutboxEntry): void {
-  outbox.push(entry);
-  for (const cb of outboxListeners) {
-    cb(entry);
-  }
-}
-
-/** Returns a snapshot of all outbox entries (emails and SMS messages). */
-export function getOutbox(): readonly OutboxEntry[] {
-  return outbox;
-}
-
-/** Registers a callback fired each time a new entry is appended to the outbox. Returns an unsubscribe function. */
-export function onOutboxAppend(cb: (entry: OutboxEntry) => void): () => void {
-  outboxListeners.push(cb);
-  return () => {
-    const idx = outboxListeners.indexOf(cb);
-    if (idx >= 0) {
-      outboxListeners.splice(idx, 1);
-    }
-  };
-}
+// Email/SMS outbox for inspection. The implementation lives in outbox.ts
+// so phone-side subscribers do not create a static edge to this module.
+// Re-exported here for the health page and any engine-side consumers.
+export { appendToOutbox, getOutbox, onOutboxAppend } from "./outbox.js";
+export type { OutboxEntry } from "./outbox.js";
 
 // Set-Cookie capture
 const capturedCookies: string[] = [];

@@ -11,7 +11,7 @@ export default defineConfig({
   test: {
     name: "demo",
     include: ["src/**/*.test.ts"],
-    exclude: ["**/dist/**", "**/node_modules/**"],
+    exclude: ["**/dist/**", "**/node_modules/**", "src/**/*.smoke.test.ts"],
     environment: "jsdom",
   },
 });

@@ -11,7 +11,7 @@
  * activateSettingsDriver / deactivateSettingsDriver.
  */
 
-import type { OutboxEntry } from "./engine/engine.js";
+import type { OutboxEntry } from "./engine/outbox.js";
 import { maskPasswordControls } from "./password-mask.js";
 
 // Import the REAL server TOTP helpers via relative path. The demo
