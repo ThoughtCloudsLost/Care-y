@@ -111,7 +111,7 @@ export function createClientRouter(deps: ClientRouterDeps) {
 
         return records.map((r) => ({
           id: r.id,
-          encryptedAlias: r.encryptedAlias.toString("base64"),
+          encryptedAlias: r.encryptedAlias.toString("base64url"),
           aliasHash: r.aliasHash,
           phone: phoneForRole(
             r.encryptedNumber,
@@ -136,7 +136,7 @@ export function createClientRouter(deps: ClientRouterDeps) {
 
         return {
           id: record.id,
-          encryptedAlias: record.encryptedAlias.toString("base64"),
+          encryptedAlias: record.encryptedAlias.toString("base64url"),
           aliasHash: record.aliasHash,
           phone: phoneForRole(
             record.encryptedNumber,
@@ -148,7 +148,7 @@ export function createClientRouter(deps: ClientRouterDeps) {
           createdAt: record.createdAt.toISOString(),
           tickets: record.tickets.map((t) => ({
             id: t.id,
-            encryptedTitle: t.encryptedTitle.toString("base64"),
+            encryptedTitle: t.encryptedTitle.toString("base64url"),
             status: t.status,
             priority: t.priority,
             createdAt: t.createdAt.toISOString(),
@@ -163,7 +163,7 @@ export function createClientRouter(deps: ClientRouterDeps) {
             primaryClientId: e.primaryClientId,
             secondaryClientId: e.secondaryClientId,
             mergedAt: e.mergedAt.toISOString(),
-            snapshot: e.snapshot.toString("base64"),
+            snapshot: e.snapshot.toString("base64url"),
             undoLocked: e.undoLocked,
             isUndone: e.isUndone,
           })),
@@ -266,7 +266,7 @@ export function createClientRouter(deps: ClientRouterDeps) {
           return {
             conflictingClientId: result.conflictingClientId,
             conflictingClientEncryptedAlias:
-              result.conflictingClientEncryptedAlias.toString("base64"),
+              result.conflictingClientEncryptedAlias.toString("base64url"),
           };
         }),
       ),

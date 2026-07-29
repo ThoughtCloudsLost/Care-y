@@ -1,25 +1,10 @@
 /**
- * Base64 and base64url encoding utilities for browser-side crypto flows.
+ * Browser-side ArrayBuffer utilities for crypto flows.
  *
- * Consolidates base64 handling that was previously duplicated across
- * webauthn.ts, login-crypto.ts, and register-crypto.ts. Browser-only
- * (uses atob/btoa, no Node Buffer).
+ * Wire-value encoding/decoding uses encode/decode from @care-y/crypto.
+ * This module provides only the toArrayBuffer helper for Transferable
+ * hand-off to the crypto Worker.
  */
-
-/**
- * Decode a standard base64 string (with +, /, =) to Uint8Array.
- *
- * The OPRF evaluate endpoint returns standard base64. The @care-y/crypto
- * decode() expects url-safe no-padding base64. This bridges the gap until
- * all server responses are standardized to url-safe encoding.
- *
- * The `evaluated` value is a public ristretto255 point (not key material),
- * so the temporary JS string from atob is acceptable here.
- */
-export function decodeStandardBase64(encoded: string): Uint8Array {
-  const binary = atob(encoded);
-  return Uint8Array.from(binary, (c) => c.charCodeAt(0));
-}
 
 /**
  * Copy a Uint8Array's contents into a standalone ArrayBuffer

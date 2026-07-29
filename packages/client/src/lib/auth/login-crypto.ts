@@ -16,7 +16,7 @@
 
 import { decode } from "@care-y/crypto";
 import { trpc } from "$lib/trpc/index.js";
-import { decodeStandardBase64, toArrayBuffer } from "$lib/base64.js";
+import { toArrayBuffer } from "$lib/base64.js";
 import type { CryptoBridge } from "$lib/workers/crypto-bridge.js";
 import {
   evaluateWithPowRetry,
@@ -90,7 +90,7 @@ export async function loginCrypto(
 
   // 5. OPRF finalize + key derivation in Worker.
   callbacks.onDeriveStart();
-  const evaluatedBytes = decodeStandardBase64(evaluatedB64);
+  const evaluatedBytes = decode(evaluatedB64);
   const { volPublic } = await bridge.deriveKeys(toArrayBuffer(evaluatedBytes));
 
   // 6. Unwrap org key in Worker (retains secret, returns public key).

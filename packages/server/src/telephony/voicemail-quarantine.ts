@@ -281,10 +281,10 @@ export async function listQuarantined(
     createdAt: row.created_at,
     durationSeconds: row.duration_seconds,
     encryptedCallerNumber: row.encrypted_caller_number
-      ? row.encrypted_caller_number.toString("base64")
+      ? row.encrypted_caller_number.toString("base64url")
       : null,
     encryptedCalledNumber: row.encrypted_called_number
-      ? row.encrypted_called_number.toString("base64")
+      ? row.encrypted_called_number.toString("base64url")
       : null,
     clientId: row.client_id,
     routedTicketId: row.routed_ticket_id,
@@ -327,7 +327,7 @@ export async function getQuarantineBlob(
   }
 
   return {
-    sealedBase64: sealedBlob.toString("base64"),
+    sealedBase64: sealedBlob.toString("base64url"),
     durationSeconds: row.duration_seconds,
   };
 }

@@ -30,7 +30,7 @@
     getCurrentUserId,
   } from "$lib/crypto/context.js";
   import { ErrorCode, identifierSchema } from "@care-y/shared";
-  import { uint8ArrayToBase64 } from "$lib/utils/buffer-encoding.js";
+  import { encode } from "@care-y/crypto";
   import { haptic } from "$lib/utils/haptic.js";
   import { toastStore } from "$lib/stores/toast.svelte.js";
   import { announceToLiveRegion } from "$lib/utils/announce.js";
@@ -415,7 +415,7 @@
     if (displayNameChanged) {
       const plainBytes = textEncoder.encode(trimmedDisplayName);
       const cipherBytes = await orgKeyManager.encrypt(plainBytes);
-      const encryptedDisplayName = uint8ArrayToBase64(cipherBytes);
+      const encryptedDisplayName = encode(cipherBytes);
       adminDisplayNameMutation.mutate({ userId, encryptedDisplayName });
     }
 

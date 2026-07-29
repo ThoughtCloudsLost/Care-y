@@ -38,7 +38,7 @@ export function createOrgConfigService(
       return {
         encryptedName:
           config.encrypted_name !== null
-            ? config.encrypted_name.toString("base64")
+            ? config.encrypted_name.toString("base64url")
             : null,
         defaultLanguage: config.default_language,
         countryCode: config.default_country_code,

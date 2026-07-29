@@ -68,7 +68,7 @@ export function createConsultantService(
         id: record.id,
         isVerified: record.isVerified,
         preferredCallMethod: record.preferredCallMethod,
-        encryptedPhone: record.encryptedPhone.toString("base64"),
+        encryptedPhone: record.encryptedPhone.toString("base64url"),
       };
     },
 

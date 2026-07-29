@@ -516,7 +516,7 @@ export function createTicketRouter(deps: TicketRouterDeps) {
     // a Buffer into {type,data}, which is ~2.8x the bytes of base64.
     const base = {
       ...rest,
-      encryptedClientAlias: encryptedClientAlias.toString("base64"),
+      encryptedClientAlias: encryptedClientAlias.toString("base64url"),
       encryptedTitle: b64(rest.encryptedTitle),
       encryptedDescription: b64(rest.encryptedDescription),
       encryptedQueueName: b64(rest.encryptedQueueName),
@@ -679,7 +679,7 @@ export function createTicketRouter(deps: TicketRouterDeps) {
         );
         return results.map((r) => ({
           ...r,
-          encryptedAlias: r.encryptedAlias.toString("base64"),
+          encryptedAlias: r.encryptedAlias.toString("base64url"),
         }));
       }),
     ),

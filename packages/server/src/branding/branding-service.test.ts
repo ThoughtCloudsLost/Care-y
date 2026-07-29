@@ -100,14 +100,14 @@ describe.skipIf(!process.env.DATABASE_URL)("createBrandingService", () => {
       const result = await svc.getBranding();
 
       expect(result).toEqual({
-        encryptedName: SEED.encryptedName.toString("base64"),
-        encryptedLogo: SEED.encryptedLogo.toString("base64"),
-        encryptedPrimaryColor: SEED.encryptedPrimaryColor.toString("base64"),
-        encryptedAccentColor: SEED.encryptedAccentColor.toString("base64"),
-        encryptedClientText: SEED.encryptedClientText.toString("base64"),
+        encryptedName: SEED.encryptedName.toString("base64url"),
+        encryptedLogo: SEED.encryptedLogo.toString("base64url"),
+        encryptedPrimaryColor: SEED.encryptedPrimaryColor.toString("base64url"),
+        encryptedAccentColor: SEED.encryptedAccentColor.toString("base64url"),
+        encryptedClientText: SEED.encryptedClientText.toString("base64url"),
         clientEncryptedBranding:
-          SEED.clientEncryptedBranding.toString("base64"),
-        encryptedTerminology: SEED.encryptedTerminology.toString("base64"),
+          SEED.clientEncryptedBranding.toString("base64url"),
+        encryptedTerminology: SEED.encryptedTerminology.toString("base64url"),
         hasIcons: false,
         iconVersion: null,
       });
@@ -149,9 +149,11 @@ describe.skipIf(!process.env.DATABASE_URL)("createBrandingService", () => {
       const svc = createBrandingService(db);
       const result = await svc.getPublicBranding();
 
-      expect(result.orgPublicKey).toBe(TEST_ORG_PUBLIC_KEY.toString("base64"));
+      expect(result.orgPublicKey).toBe(
+        TEST_ORG_PUBLIC_KEY.toString("base64url"),
+      );
       expect(result.clientEncryptedBranding).toBe(
-        SEED.clientEncryptedBranding.toString("base64"),
+        SEED.clientEncryptedBranding.toString("base64url"),
       );
       expect(result.hasIcons).toBe(false);
       expect(result.iconVersion).toBeNull();

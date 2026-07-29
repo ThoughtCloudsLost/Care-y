@@ -137,10 +137,10 @@ export const SESSION_MAX_AGE_MS = 24 * 60 * 60 * 1000; // 24 hours
 function toUserRecord(row: Selectable<UsersTable>): UserRecord {
   return {
     id: row.id,
-    encryptedIdentifier: row.encrypted_identifier.toString("base64"),
-    encryptedDisplayName: row.encrypted_display_name.toString("base64"),
+    encryptedIdentifier: row.encrypted_identifier.toString("base64url"),
+    encryptedDisplayName: row.encrypted_display_name.toString("base64url"),
     encryptedPreferredLocale:
-      row.encrypted_preferred_locale?.toString("base64") ?? null,
+      row.encrypted_preferred_locale?.toString("base64url") ?? null,
     roleId: row.role_id,
     isActive: row.is_active,
     hasSeenBriefing: row.has_seen_briefing,
@@ -328,7 +328,7 @@ export function createAuthService(
     // ADR-052: identifier is org-key tier (sealed box, server-blind).
     // Login never reads it back; lookup goes through identifier_hash.
     const encryptedIdentifier = sealedBox.seal(input.identifier);
-    // ADR-016: display_name is Tier 1 (sealed box with org public key)
+    // display_name is org-key tier (sealed box with org public key)
     const encryptedDisplayName = sealedBox.seal(input.displayName);
     const encryptedNotificationAddr =
       input.notificationEmail !== undefined && input.notificationEmail !== ""

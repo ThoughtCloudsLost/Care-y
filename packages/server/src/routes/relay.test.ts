@@ -1674,7 +1674,7 @@ describe("createRelayHandler", () => {
       expect(parsed.found).toBe(true);
       expect(parsed.clientId).toBe("client-1");
       expect(parsed.encryptedAlias).toBe(
-        Buffer.from("C-001").toString("base64"),
+        Buffer.from("C-001").toString("base64url"),
       );
       expect(parsed.openTicketId).toBe("ticket-1");
 

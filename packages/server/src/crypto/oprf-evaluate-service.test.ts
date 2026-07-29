@@ -111,7 +111,9 @@ describe("createOprfEvaluateService under production", () => {
 
   it("applies the strict threshold resolved at construction: proof-of-work is required from the fifth attempt", async () => {
     const service = createOprfEvaluateService(makeDeps());
-    const blinded = Buffer.alloc(32, 0xab).toString("base64");
+    const blindedInput = Buffer.alloc(32, 0xab);
+    const blinded = blindedInput.toString("base64");
+    const blindedExpected = blindedInput.toString("base64url");
     const request: OprfEvaluateRequest = {
       userId: "a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d",
       blindedElement: blinded,
@@ -123,7 +125,7 @@ describe("createOprfEvaluateService under production", () => {
 
     for (let i = 0; i < 4; i++) {
       await expect(service.evaluate(request)).resolves.toEqual({
-        evaluated: blinded,
+        evaluated: blindedExpected,
       });
     }
 

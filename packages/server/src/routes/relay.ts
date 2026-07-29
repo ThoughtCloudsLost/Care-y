@@ -697,7 +697,7 @@ async function handlePhoneLookup(
         sendJsonResponse(res, 200, {
           found: true,
           clientId: client.id,
-          encryptedAlias: client.encrypted_alias.toString("base64"),
+          encryptedAlias: client.encrypted_alias.toString("base64url"),
           openTicketId: openTicket?.id ?? null,
         });
         return;

@@ -26,6 +26,7 @@ import {
   deriveMasterKey,
   deriveVolunteerPrivateKey,
   deriveVolunteerPublicKey,
+  decode,
   encode,
   getSodium,
   zeroAll,
@@ -33,7 +34,6 @@ import {
 } from "@care-y/crypto";
 import type { BlindResult, Salt, Scalar, SymmetricKey } from "@care-y/crypto";
 import { trpc } from "$lib/trpc/index.js";
-import { decodeStandardBase64 } from "$lib/base64.js";
 import type { CryptoPhaseCallbacks } from "./login-crypto.js";
 
 export interface RegisterCryptoResult {
@@ -91,7 +91,7 @@ export async function registerCrypto(
       userId,
       blindedElement: encode(blind.blindedElement),
     });
-    const evaluatedBytes = decodeStandardBase64(evaluatedB64);
+    const evaluatedBytes = decode(evaluatedB64);
 
     // 5. OPRF Finalize: unblind the server's response to produce oprf_output.
     oprfOutput = oprfFinalize(

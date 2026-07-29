@@ -13,7 +13,7 @@
   } from "@tanstack/svelte-query";
   import { Play, Route, Trash2 } from "@lucide/svelte";
   import { formatRelativeTime } from "$lib/utils/format-time.js";
-  import { base64ToUint8Array } from "$lib/utils/buffer-encoding.js";
+  import { decode } from "@care-y/crypto";
   import * as m from "$lib/paraglide/messages.js";
   import { trpc } from "$lib/trpc/index.js";
   import { adminKeys } from "$lib/query/keys.js";
@@ -97,7 +97,7 @@
       // Pre-unseal for route reuse
       if (!unsealedAudioCache.has(row.id)) {
         try {
-          const sealed = base64ToUint8Array(result.sealedBase64);
+          const sealed = decode(result.sealedBase64);
           const unsealed = await orgKeyManager.decrypt(sealed);
           unsealedAudioCache.set(row.id, unsealed);
         } catch {
@@ -133,7 +133,7 @@
       const result = await vqRouter.download.query({
         quarantineId: row.id,
       });
-      const sealed = base64ToUint8Array(result.sealedBase64);
+      const sealed = decode(result.sealedBase64);
       const unsealed = await orgKeyManager.decrypt(sealed);
       unsealedAudioCache.set(row.id, unsealed);
       routeTarget = row;

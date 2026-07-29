@@ -12,8 +12,8 @@
   import * as m from "$lib/paraglide/messages.js";
   import DecryptPlaceholder from "$lib/components/DecryptPlaceholder.svelte";
   import AudioPlayer from "$lib/components/AudioPlayer.svelte";
+  import { decode } from "@care-y/crypto";
   import { getOrgKeyManager } from "$lib/crypto/context.js";
-  import { base64ToUint8Array } from "$lib/utils/buffer-encoding.js";
 
   interface Props {
     sealedBase64: string;
@@ -52,7 +52,7 @@
 
     void (async () => {
       try {
-        const ciphertext = base64ToUint8Array(sealedBase64);
+        const ciphertext = decode(sealedBase64);
         if (aborted()) return;
 
         const plaintext = await orgKeyManager.decrypt(ciphertext);

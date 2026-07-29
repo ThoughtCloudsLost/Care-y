@@ -34,8 +34,8 @@
   import { announceToLiveRegion } from "$lib/utils/announce.js";
   import { onKeyActivate } from "$lib/utils/a11y.js";
   import { requireRouter } from "$lib/errors.js";
+  import { encode } from "@care-y/crypto";
   import { getOrgKeyManager, getOrgDecryptCache } from "$lib/crypto/context.js";
-  import { uint8ArrayToBase64 } from "$lib/utils/buffer-encoding.js";
   import ShellSheet from "$lib/shell/ShellSheet.svelte";
 
   // ---------------------------------------------------------------------------
@@ -221,7 +221,7 @@
       });
       const textBytes = new TextEncoder().encode(snapshot);
       const cipherBytes = await orgKeyManager.encrypt(textBytes);
-      const encryptedSnapshot = uint8ArrayToBase64(cipherBytes);
+      const encryptedSnapshot = encode(cipherBytes);
 
       return ticketsRouter.mergeClients.mutate({
         primaryClientId: input.primaryClientId,
