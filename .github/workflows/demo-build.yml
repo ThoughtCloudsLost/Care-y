@@ -1,22 +1,20 @@
-name: Deploy demo site
+name: Demo build
 
 on:
-  push:
+  pull_request:
     branches: [main]
     paths:
       - packages/demo/**
-      - packages/client/src/lib/**
-      - packages/client/src/styles/**
-      - packages/client/src/routes/**
-      - packages/client/static/fonts/**
-      - packages/shared/messages/**
-      - packages/shared/src/**
-      - packages/server/src/**
+      - packages/client/src/**
+      - packages/client/static/**
+      - packages/shared/**
       - packages/crypto/src/**
-  workflow_dispatch:
+      - packages/server/src/**
+      - pnpm-lock.yaml
+      - .github/workflows/demo-build.yml
 
 concurrency:
-  group: pages
+  group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -49,26 +47,6 @@ jobs:
 
       - name: Build demo
         run: pnpm --filter @care-y/demo run build
-        env:
-          BASE_PATH: /Care-y/
 
-      - name: Upload pages artifact
-        uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
-        with:
-          path: packages/demo/dist
-
-  deploy:
-    runs-on: ubuntu-24.04
-    timeout-minutes: 5
-    needs: build
-    permissions:
-      pages: write
-      id-token: write
-    environment:
-      name: github-pages
-      url: ${{ steps.deploy.outputs.page_url }}
-
-    steps:
-      - name: Deploy to GitHub Pages
-        id: deploy
-        uses: actions/deploy-pages@cd2ce8fcbc39b97be8ca5fce6e763baed58fa128 # v5.0.0
+      - name: Verify built demo assets
+        run: node packages/demo/scripts/verify-dist.mjs
