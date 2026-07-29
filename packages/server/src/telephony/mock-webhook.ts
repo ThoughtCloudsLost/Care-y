@@ -38,6 +38,7 @@ function computeTwilioSignature(
     // eslint-disable-next-line security/detect-object-injection -- key from Object.keys, not user input
     payload += key + (body[key] ?? "");
   }
+  // Standard base64 to match Twilio's signature format. Not base64url.
   return createHmac("sha1", authToken).update(payload).digest("base64");
 }
 
