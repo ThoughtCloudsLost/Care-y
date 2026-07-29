@@ -51,7 +51,7 @@ import type { NoteTypeService } from "../tickets/note-type-service.js";
 import type { FieldEncryptor } from "../crypto/field-encryptor.js";
 import type { NotificationEventType, ReactionSummary } from "@care-y/shared";
 import { ErrorCode, meetsRoleThreshold } from "@care-y/shared";
-import { ForbiddenError, NotFoundError } from "../errors.js";
+import { ForbiddenError } from "../errors.js";
 import {
   buildRecipientList,
   resolveEscalationTargets,
@@ -59,7 +59,6 @@ import {
 import type { ShiftProvider } from "../tickets/shift-provider.js";
 import { createStubShiftProvider } from "../tickets/shift-provider.js";
 import { createUserService } from "../users/user-service.js";
-import { encode as cryptoEncode } from "@care-y/crypto";
 import { rewrapFollowUp } from "../tickets/rewrap-service.js";
 import { maskPhone, formatPhone } from "../utils/sql.js";
 import {
@@ -1183,37 +1182,6 @@ export function createTicketRouter(deps: TicketRouterDeps) {
           const svc = mediaSvc(ctx.org.tenantDb);
           const att = await svc.getAttachment(ctx.user.id, input.attachmentId);
           return { ...att, encryptedFilename: b64n(att.encryptedFilename) };
-        }),
-      ),
-
-    downloadRecordingBlob: volunteerProcedure
-      .input(z.object({ recordingId: z.uuid() }))
-      .query(
-        withErrorWrapping(async ({ ctx, input }) => {
-          const svc = mediaSvc(ctx.org.tenantDb);
-          const record = await svc.getRecording(ctx.user.id, input.recordingId);
-          const blob = await deps.blobStore.get(record.blobKey);
-          if (!blob) {
-            throw new NotFoundError(ErrorCode.RECORDING_NOT_FOUND);
-          }
-          return { data: cryptoEncode(new Uint8Array(blob)) };
-        }),
-      ),
-
-    downloadAttachmentBlob: volunteerProcedure
-      .input(z.object({ attachmentId: z.uuid() }))
-      .query(
-        withErrorWrapping(async ({ ctx, input }) => {
-          const svc = mediaSvc(ctx.org.tenantDb);
-          const record = await svc.getAttachment(
-            ctx.user.id,
-            input.attachmentId,
-          );
-          const blob = await deps.blobStore.get(record.blobKey);
-          if (!blob) {
-            throw new NotFoundError(ErrorCode.ATTACHMENT_NOT_FOUND);
-          }
-          return { data: cryptoEncode(new Uint8Array(blob)) };
         }),
       ),
 

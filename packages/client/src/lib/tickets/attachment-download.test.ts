@@ -108,17 +108,24 @@ describe("fileTypeLabel", () => {
   });
 });
 
+import * as FetchBlobMod from "$lib/utils/fetch-blob.js";
+
+vi.mock("$lib/utils/fetch-blob.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof FetchBlobMod>()),
+  fetchBlob: vi.fn(),
+}));
+
+const mockFetchBlob = FetchBlobMod.fetchBlob as ReturnType<typeof vi.fn>;
+
 describe("downloadDecryptedAttachment", () => {
   let deps: DownloadDeps;
   let mockClick: ReturnType<typeof vi.fn>;
+  const ciphertextBuf = new ArrayBuffer(16);
 
   beforeEach(() => {
+    mockFetchBlob.mockResolvedValue(ciphertextBuf);
+
     deps = {
-      ticketRouter: {
-        downloadAttachmentBlob: {
-          query: vi.fn().mockResolvedValue({ data: "ZW5jcnlwdGVkLWRhdGE=" }),
-        },
-      } as unknown as DownloadDeps["ticketRouter"],
       bridge: {
         decryptBlob: vi.fn().mockResolvedValue(new Uint8Array([100, 101, 99])),
       } as unknown as DownloadDeps["bridge"],
@@ -145,19 +152,17 @@ describe("downloadDecryptedAttachment", () => {
     vi.spyOn(URL, "revokeObjectURL").mockImplementation(() => undefined);
   });
 
-  it("fetches, decrypts, and triggers a browser download", async () => {
+  it("fetches via fetchBlob, decrypts, and triggers a browser download", async () => {
     await downloadDecryptedAttachment("att-1", "photo.jpg", deps);
 
-    expect(deps.ticketRouter.downloadAttachmentBlob.query).toHaveBeenCalledWith(
-      { attachmentId: "att-1" },
-    );
+    expect(mockFetchBlob).toHaveBeenCalledWith("/api/blobs/attachments/att-1");
     expect(deps.bridge.decryptBlob).toHaveBeenCalledWith(
       "t-1",
       "blob:att-1",
       "ep",
       "nc",
       "wk",
-      "ZW5jcnlwdGVkLWRhdGE=",
+      ciphertextBuf,
     );
     expect(mockClick).toHaveBeenCalled();
     expect(URL.revokeObjectURL).toHaveBeenCalledWith("blob:mock-url");

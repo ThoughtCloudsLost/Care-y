@@ -27,11 +27,7 @@ import type {
 import type { KBMediaService } from "../kb/kb-media-service.js";
 import type { BlobStore } from "../storage/store.js";
 import type { RateLimiter } from "../ratelimit/rate-limiter.js";
-import {
-  NotFoundError,
-  ValidationError,
-  AttachmentValidationError,
-} from "../errors.js";
+import { ValidationError, AttachmentValidationError } from "../errors.js";
 import { TRPCError } from "@trpc/server";
 import { validateMagicBytes } from "../telephony/attachment-validator.js";
 
@@ -51,11 +47,9 @@ import {
   castVoteInputSchema,
   removeVoteInputSchema,
   uploadKbAttachmentInputSchema,
-  downloadKbAttachmentInputSchema,
   listKbAttachmentsInputSchema,
   listKbBodiesInputSchema,
   KB_ATTACHMENT_MAX_BYTES,
-  ErrorCode,
 } from "@care-y/shared";
 
 import { b64, b64n } from "../utils/ciphertext-wire.js";
@@ -385,20 +379,6 @@ export function createKbRouter(deps: KBRouterDeps) {
             });
             throw err;
           }
-        }),
-      ),
-
-    downloadAttachmentBlob: volunteerProcedure
-      .input(downloadKbAttachmentInputSchema)
-      .query(
-        withErrorWrapping(async ({ ctx, input }) => {
-          const mediaSvc = deps.createMediaSvc(ctx.org.tenantDb);
-          const record = await mediaSvc.getAttachment(input.attachmentId);
-          const blob = await deps.blobStore.get(record.blobKey);
-          if (!blob) {
-            throw new NotFoundError(ErrorCode.KB_ATTACHMENT_NOT_FOUND);
-          }
-          return { data: blob.toString("base64") };
         }),
       ),
 

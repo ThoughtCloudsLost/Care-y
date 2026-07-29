@@ -118,7 +118,6 @@
 
     try {
       await downloadDecryptedAttachment(attachmentId, filename, {
-        ticketRouter,
         bridge,
         ticketId,
         keyWrap,

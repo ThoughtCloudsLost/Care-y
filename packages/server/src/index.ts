@@ -66,6 +66,7 @@ import { createWebhookHandler } from "./routes/webhooks.js";
 import { createTelephonyContentService } from "./telephony/telephony-content-service.js";
 import { createGreetingAudioHandler } from "./routes/greeting-audio.js";
 import { createBrandingIconHandler } from "./routes/branding-icons.js";
+import { createBlobDownloadHandler } from "./routes/blob-download.js";
 import { createManifestHandler } from "./routes/manifest.js";
 import { createRelayHandler, type PendingCall } from "./routes/relay.js";
 import { authenticateRelay } from "./routes/relay-utils.js";
@@ -818,6 +819,27 @@ const brandingIconHandler = createBrandingIconHandler({
   corsHeaders: cors.base,
 });
 
+const blobDownloadHandler = createBlobDownloadHandler({
+  blobStore,
+  orgResolver: relayOrgResolver,
+  createSessionRepo: createRelaySessionRepo,
+  corsHeaders: cors.base,
+  createMediaSvc: (orgSchema) => {
+    const tDb = tenantDb(orgSchema);
+    return createMediaService(tDb, blobStore, createTicketAccessChecker(tDb));
+  },
+  createKBMediaSvc: (orgSchema) => createKBMediaService(tenantDb(orgSchema)),
+  getUserRole: async (orgSchema, userId) => {
+    const row = await tenantDb(orgSchema)
+      .selectFrom("users")
+      .select("role_id")
+      .where("id", "=", userId)
+      .where("is_active", "=", true)
+      .executeTakeFirst();
+    return row?.role_id ?? null;
+  },
+});
+
 const manifestHandler = createManifestHandler({ orgService });
 
 const server = createHttpServer(trpcHandler, cors.preflight, [
@@ -825,6 +847,7 @@ const server = createHttpServer(trpcHandler, cors.preflight, [
   { prefix: "/relay/", handler: relayHandler },
   { prefix: "/notifications/stream", handler: handleSse },
   { prefix: "/api/greetings/", handler: greetingAudioHandler },
+  { prefix: "/api/blobs/", handler: blobDownloadHandler },
   { prefix: "/api/branding/", handler: brandingIconHandler },
   { prefix: "/manifest.webmanifest", handler: manifestHandler },
 ]);

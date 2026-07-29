@@ -390,7 +390,7 @@ export class CryptoBridge {
   async rewrapBlob(
     followUpId: string,
     ticketId: string,
-    ciphertext: string,
+    ciphertext: ArrayBuffer,
     blobKey: string,
     blobId: string,
     category: "attachment" | "recording",
@@ -400,15 +400,18 @@ export class CryptoBridge {
     category: "attachment" | "recording";
   }> {
     const resp = expectResponse(
-      await this.sendRequest({
-        type: "rewrapBlob",
-        followUpId,
-        ticketId,
-        ciphertext,
-        blobKey,
-        blobId,
-        category,
-      }),
+      await this.sendRequest(
+        {
+          type: "rewrapBlob",
+          followUpId,
+          ticketId,
+          ciphertext,
+          blobKey,
+          blobId,
+          category,
+        },
+        [ciphertext],
+      ),
       "rewrapBlob",
     );
     return {
@@ -450,19 +453,22 @@ export class CryptoBridge {
     ephemeralPoint: string,
     nonce: string,
     wrappedKey: string,
-    ciphertext: string,
+    ciphertext: ArrayBuffer,
   ): Promise<ArrayBuffer> {
     const resp = expectResponse(
-      await this.sendRequest({
-        type: "decryptBlob",
-        ticketId,
-        keyCacheId: ticketId,
-        slot,
-        ephemeralPoint,
-        nonce,
-        wrappedKey,
-        ciphertext,
-      }),
+      await this.sendRequest(
+        {
+          type: "decryptBlob",
+          ticketId,
+          keyCacheId: ticketId,
+          slot,
+          ephemeralPoint,
+          nonce,
+          wrappedKey,
+          ciphertext,
+        },
+        [ciphertext],
+      ),
       "decryptBlob",
     );
     return resp.data;

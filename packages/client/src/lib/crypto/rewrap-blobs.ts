@@ -20,6 +20,7 @@ import type { AppRouter } from "@care-y/server";
 import type { CryptoBridge } from "$lib/workers/crypto-bridge.js";
 import type { QueryClient } from "@tanstack/svelte-query";
 import { ticketKeys } from "$lib/query/keys.js";
+import { fetchBlob } from "$lib/utils/fetch-blob.js";
 
 type TicketRouter = NonNullable<TRPCClient<AppRouter>["tickets"]>;
 
@@ -91,11 +92,11 @@ export async function rewrapBlobsForFollowUp(
 
   async function rewrapItems(
     items: readonly { id: string; blobKey: string }[],
-    download: (id: string) => Promise<{ data: string }>,
+    download: (id: string) => Promise<ArrayBuffer>,
     category: "recording" | "attachment",
   ): Promise<void> {
     for (const item of items) {
-      const { data: ciphertext } = await download(item.id);
+      const ciphertext = await download(item.id);
       const result = await bridge.rewrapBlob(
         followUpId,
         ticketId,
@@ -114,13 +115,12 @@ export async function rewrapBlobsForFollowUp(
 
   await rewrapItems(
     recordings,
-    async (id) => ticketRouter.downloadRecordingBlob.query({ recordingId: id }),
+    async (id) => fetchBlob(`/api/blobs/recordings/${id}`),
     "recording",
   );
   await rewrapItems(
     attachments,
-    async (id) =>
-      ticketRouter.downloadAttachmentBlob.query({ attachmentId: id }),
+    async (id) => fetchBlob(`/api/blobs/attachments/${id}`),
     "attachment",
   );
 

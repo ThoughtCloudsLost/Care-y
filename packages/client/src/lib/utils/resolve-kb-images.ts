@@ -15,12 +15,10 @@
  * ```
  */
 
-import { base64ToUint8Array } from "./buffer-encoding.js";
-
 const KB_PREFIX = "kb-attachment://";
 
 export interface KbImageResolverDeps {
-  downloadBlob: (attachmentId: string) => Promise<{ data: string }>;
+  downloadBlob: (attachmentId: string) => Promise<ArrayBuffer>;
   decrypt: (ciphertext: Uint8Array) => Promise<Uint8Array>;
   /** Change this value to trigger a re-scan (e.g. pass renderedBody). */
   contentKey?: string | null;
@@ -60,8 +58,8 @@ export function resolveKbImages(
 
       void (async (): Promise<void> => {
         try {
-          const result = await d.downloadBlob(attachmentId);
-          const raw = base64ToUint8Array(result.data);
+          const buf = await d.downloadBlob(attachmentId);
+          const raw = new Uint8Array(buf);
           const decrypted = await d.decrypt(raw);
           const blob = new Blob([new Uint8Array(decrypted)]);
           const url = URL.createObjectURL(blob);

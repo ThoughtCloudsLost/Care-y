@@ -14,10 +14,9 @@
 <script lang="ts">
   import { blobSlot } from "@care-y/crypto";
   import * as m from "$lib/paraglide/messages.js";
-  import { trpc } from "$lib/trpc/index.js";
   import DecryptPlaceholder from "$lib/components/DecryptPlaceholder.svelte";
   import { getCryptoBridge } from "$lib/crypto/context.js";
-  import { requireRouter } from "$lib/errors.js";
+  import { fetchBlob } from "$lib/utils/fetch-blob.js";
   import type { TicketKeyWrap } from "$lib/crypto/ticket-decrypt-cache.js";
 
   interface Props {
@@ -35,7 +34,6 @@
 
   let { attachmentId, ticketId, keyWrap, alt, onopen }: Props = $props();
 
-  const ticketRouter = requireRouter(trpc.tickets, "tickets");
   const bridge = getCryptoBridge();
 
   let thumbnailUrl: string | null = $state(null);
@@ -54,8 +52,10 @@
 
     void (async () => {
       try {
-        const { data: encryptedBase64 } =
-          await ticketRouter.downloadAttachmentBlob.query({ attachmentId });
+        const ciphertext = await fetchBlob(
+          `/api/blobs/attachments/${attachmentId}`,
+          ac.signal,
+        );
         if (aborted()) return;
 
         const decryptedBuf = await bridge.decryptBlob(
@@ -64,7 +64,7 @@
           keyWrap.ephemeralPoint,
           keyWrap.nonce,
           keyWrap.wrappedKey,
-          encryptedBase64,
+          ciphertext,
         );
         if (aborted()) return;
 
