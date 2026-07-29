@@ -37,6 +37,7 @@
     resolveKbImages,
     type KbImageResolverDeps,
   } from "$lib/utils/resolve-kb-images.js";
+  import { fetchBlob } from "$lib/utils/fetch-blob.js";
   import ArticleVote from "$lib/components/library/ArticleVote.svelte";
   import { untrack } from "svelte";
   import { recentViews } from "$lib/search/recent-views.js";
@@ -226,7 +227,7 @@
 
   const imageResolverDeps: KbImageResolverDeps = $derived({
     downloadBlob: async (attachmentId: string) =>
-      kbRouter.downloadAttachmentBlob.query({ attachmentId }),
+      fetchBlob(`/api/blobs/kb-attachments/${attachmentId}`),
     decrypt: async (ciphertext: Uint8Array) =>
       orgKeyManager.decrypt(ciphertext),
     contentKey: renderedBody,

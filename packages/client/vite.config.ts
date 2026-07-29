@@ -123,6 +123,11 @@ export default defineConfig({
         target: "http://localhost:3000",
         changeOrigin: true,
       },
+      "/api/blobs": {
+        target: "http://localhost:3000",
+        changeOrigin: true,
+        headers: { "x-org-slug": orgSlug },
+      },
       "/api/branding": {
         target: "http://localhost:3000",
         changeOrigin: true,

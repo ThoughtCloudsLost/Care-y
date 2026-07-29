@@ -45,6 +45,7 @@
     createImageNodeView,
     type ImageViewDeps,
   } from "$lib/editor/node-views/image-view.js";
+  import { fetchBlob } from "$lib/utils/fetch-blob.js";
   import { extractExcerpt } from "$lib/utils/render-article.js";
   import type { EditorBridge } from "$lib/editor/editor-bridge.svelte.js";
   import ShellSheet from "$lib/shell/ShellSheet.svelte";
@@ -171,7 +172,7 @@
   // Image NodeView dependencies
   const imageViewDeps: ImageViewDeps = {
     downloadBlob: async (attachmentId) =>
-      kbRouter.downloadAttachmentBlob.query({ attachmentId }),
+      fetchBlob(`/api/blobs/kb-attachments/${attachmentId}`),
     orgKeyManager,
   };
 

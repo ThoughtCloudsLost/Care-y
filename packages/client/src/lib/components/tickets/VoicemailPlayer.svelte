@@ -13,9 +13,8 @@
   import * as m from "$lib/paraglide/messages.js";
   import DecryptPlaceholder from "$lib/components/DecryptPlaceholder.svelte";
   import AudioPlayer from "$lib/components/AudioPlayer.svelte";
-  import { trpc } from "$lib/trpc/index.js";
   import { getCryptoBridge } from "$lib/crypto/context.js";
-  import { requireRouter } from "$lib/errors.js";
+  import { fetchBlob } from "$lib/utils/fetch-blob.js";
   import type { TicketKeyWrap } from "$lib/crypto/ticket-decrypt-cache.js";
 
   interface Props {
@@ -27,7 +26,6 @@
 
   let { recordingId, ticketId, keyWrap, durationSeconds }: Props = $props();
 
-  const ticketRouter = requireRouter(trpc.tickets, "tickets");
   const bridge = getCryptoBridge();
 
   const getAudioContext = (() => {
@@ -53,8 +51,10 @@
 
     void (async () => {
       try {
-        const { data: encryptedBase64 } =
-          await ticketRouter.downloadRecordingBlob.query({ recordingId });
+        const ciphertext = await fetchBlob(
+          `/api/blobs/recordings/${recordingId}`,
+          ac.signal,
+        );
         if (aborted()) return;
 
         const decryptedBuf = await bridge.decryptBlob(
@@ -63,7 +63,7 @@
           keyWrap.ephemeralPoint,
           keyWrap.nonce,
           keyWrap.wrappedKey,
-          encryptedBase64,
+          ciphertext,
         );
         if (aborted()) return;
 

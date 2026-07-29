@@ -129,8 +129,8 @@ export interface RewrapBlobRequest {
   readonly id: number;
   readonly followUpId: string;
   readonly ticketId: string;
-  /** Encrypted blob data (nonce || ciphertext), base64. */
-  readonly ciphertext: string;
+  /** Encrypted blob data (nonce || ciphertext), raw bytes. */
+  readonly ciphertext: ArrayBuffer;
   readonly blobKey: string;
   /**
    * Attachments/recordings row id: the stable AAD component (ADR-053).
@@ -230,8 +230,8 @@ export interface DecryptBlobRequest {
   readonly nonce: string;
   /** ECIES-wrapped ticket key, base64. */
   readonly wrappedKey: string;
-  /** Encrypted binary blob (nonce || ciphertext), base64. */
-  readonly ciphertext: string;
+  /** Encrypted binary blob (nonce || ciphertext), raw bytes. */
+  readonly ciphertext: ArrayBuffer;
   /** Content slot, normally "blob:<rowId>" (ADR-053). */
   readonly slot: string;
 }

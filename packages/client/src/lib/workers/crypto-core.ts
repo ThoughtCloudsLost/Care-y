@@ -572,7 +572,7 @@ function handleRewrapBlob(req: RewrapBlobRequest, sink: Sink): void {
     return;
   }
 
-  const ciphertextBuf = decode(req.ciphertext);
+  const ciphertextBuf = new Uint8Array(req.ciphertext);
   // Bound to the attachments/recordings row id, which is stable across
   // the rewrap; the storage blobKey changes when the server re-stores.
   const aad = buildContentAad(req.ticketId, blobSlot(req.blobId));
@@ -629,7 +629,7 @@ function handleDecryptBlob(req: DecryptBlobRequest, sink: Sink): void {
   if (!tk) return;
 
   try {
-    const ciphertextBuf = decode(req.ciphertext);
+    const ciphertextBuf = new Uint8Array(req.ciphertext);
     const plainBytes = decryptContent(
       ciphertextBuf as Ciphertext,
       tk as SymmetricKey,

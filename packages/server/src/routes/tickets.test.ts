@@ -31,7 +31,6 @@ import {
   type TestDb,
 } from "../test-utils.js";
 import { RoleId, ErrorCode, type RoleIdValue } from "@care-y/shared";
-import { decode as decodeBlob } from "@care-y/crypto";
 import { createTicketRouter, type TicketRouterDeps } from "./tickets.js";
 import { router, createCallerFactory } from "../trpc/trpc.js";
 import type { Context, OrgContext } from "../trpc/context.js";
@@ -1278,41 +1277,6 @@ describe.skipIf(!process.env.DATABASE_URL)(
         });
         expect(record.ticketId).toBe(ticketId);
         expect(record.blobKey).toBe(blobKey);
-
-        const download = await caller.tickets.downloadAttachmentBlob({
-          attachmentId: inserted.id,
-        });
-        // Wire contract: blob bytes travel as URL-safe base64 (crypto encode).
-        expect(Buffer.from(decodeBlob(download.data)).equals(ciphertext)).toBe(
-          true,
-        );
-      });
-
-      it("returns NOT_FOUND when a recording's blob is missing from the store", async () => {
-        const { user, ticketId } = await setupUserWithTicket();
-        const caller = createAuthedCaller(user);
-
-        const inserted = await tenantDb
-          .insertInto("recordings")
-          .values({
-            ticket_id: ticketId,
-            blob_key: `missing-blob-${randomUUID().slice(0, 8)}`,
-            size_bytes: 128,
-          })
-          .returning("id")
-          .executeTakeFirstOrThrow();
-
-        // The metadata record itself resolves fine
-        const record = await caller.tickets.getRecording({
-          recordingId: inserted.id,
-        });
-        expect(record.ticketId).toBe(ticketId);
-
-        // but the blob download fails loudly instead of returning garbage
-        await expectTrpcError(
-          caller.tickets.downloadRecordingBlob({ recordingId: inserted.id }),
-          "NOT_FOUND",
-        );
       });
     });
 
@@ -2287,15 +2251,6 @@ describe.skipIf(!process.env.DATABASE_URL)(
           attachmentId: inserted.id,
         });
         expect(record.ticketId).toBe(ticketId);
-
-        // But the blob download fails with NOT_FOUND instead of
-        // returning garbage or an empty response.
-        await expectTrpcError(
-          caller.tickets.downloadAttachmentBlob({
-            attachmentId: inserted.id,
-          }),
-          "NOT_FOUND",
-        );
       });
     });
 

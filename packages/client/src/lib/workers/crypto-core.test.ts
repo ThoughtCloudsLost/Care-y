@@ -1082,7 +1082,7 @@ describe("crypto-core error paths", () => {
       id: 712,
       ticketId: "t-no-temp",
       followUpId: "fu-miss",
-      ciphertext: encode(new Uint8Array(64)),
+      ciphertext: new ArrayBuffer(64),
       blobKey: "blob-key",
       category: "image",
     });
@@ -1462,6 +1462,9 @@ describe("crypto-core decryptBlob success", () => {
     const slot = blobSlot("blob-id-1");
     const ct = encryptContent(blobData, tk, buildContentAad("t-blob", slot));
 
+    const ctBuf = new ArrayBuffer(ct.byteLength);
+    new Uint8Array(ctBuf).set(ct);
+
     const resp = (await dispatchAndWait({
       type: "decryptBlob",
       id: 1101,
@@ -1471,7 +1474,7 @@ describe("crypto-core decryptBlob success", () => {
       ephemeralPoint: encode(wrap.ephemeralPoint),
       nonce: encode(wrap.nonce),
       wrappedKey: encode(wrap.ciphertext),
-      ciphertext: encode(ct),
+      ciphertext: ctBuf,
     })) as DecryptBlobResponse;
 
     expect(resp.ok).toBe(true);
@@ -1508,7 +1511,7 @@ describe("crypto-core decryptBlob success", () => {
       ephemeralPoint: encode(wrap.ephemeralPoint),
       nonce: encode(wrap.nonce),
       wrappedKey: encode(wrap.ciphertext),
-      ciphertext: encode(new Uint8Array(64)),
+      ciphertext: new ArrayBuffer(64),
     });
 
     expect(resp.ok).toBe(false);
@@ -1583,12 +1586,15 @@ describe("crypto-core rewrapBlob success", () => {
     );
 
     sinkMessages = [];
+    const blobCtBuf = new ArrayBuffer(blobCt.byteLength);
+    new Uint8Array(blobCtBuf).set(blobCt);
+
     const resp = (await dispatchAndWait({
       type: "rewrapBlob",
       id: 1202,
       ticketId: "t-reblob",
       followUpId,
-      ciphertext: encode(blobCt),
+      ciphertext: blobCtBuf,
       blobKey: "blob-key-1",
       blobId: "attachment-1",
       category: "attachment",
@@ -1666,7 +1672,7 @@ describe("crypto-core rewrapBlob success", () => {
       id: 1212,
       ticketId: "t-no-such-ticket",
       followUpId,
-      ciphertext: encode(new Uint8Array(64)),
+      ciphertext: new ArrayBuffer(64),
       blobKey: "bk",
       blobId: "b1",
       category: "recording",
@@ -1803,7 +1809,7 @@ describe("crypto-core handleRewrapResult cleanup", () => {
       id: 1502,
       ticketId: "t-cleanup",
       followUpId,
-      ciphertext: encode(new Uint8Array(64)),
+      ciphertext: new ArrayBuffer(64),
       blobKey: "bk",
       blobId: "b1",
       category: "attachment",

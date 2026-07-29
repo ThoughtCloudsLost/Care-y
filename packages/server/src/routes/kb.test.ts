@@ -625,28 +625,6 @@ describe("KB Attachment routes", () => {
     expect(mockBlobStore.put).not.toHaveBeenCalled();
   });
 
-  it("volunteer can download an attachment blob", async () => {
-    const caller = buildVolunteerCaller();
-
-    const result = await caller.downloadAttachmentBlob({
-      attachmentId: VALID_UUID,
-    });
-
-    expect(result.data).toBeDefined();
-    expect(typeof result.data).toBe("string");
-    expect(mockMediaSvc.getAttachment).toHaveBeenCalledWith(VALID_UUID);
-    expect(mockBlobStore.get).toHaveBeenCalledWith("blob-key-1");
-  });
-
-  it("download throws when blob is missing from store", async () => {
-    mockBlobStore.get.mockResolvedValueOnce(null);
-    const caller = buildVolunteerCaller();
-
-    await expect(
-      caller.downloadAttachmentBlob({ attachmentId: VALID_UUID }),
-    ).rejects.toThrow(TRPCError);
-  });
-
   it("volunteer can list attachments for an item", async () => {
     mockMediaSvc.listAttachments.mockResolvedValueOnce([
       {
