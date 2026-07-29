@@ -2006,5 +2006,9 @@
   "demo_coming_soon_title": "Coming soon",
   "demo_coming_soon_desc": "This screen is part of the real product build, but its guided story has not been written yet.",
   "demo_coming_soon_heading": "Explore freely",
-  "demo_coming_soon_body": "You can interact with this screen in the phone. It runs against the same in-browser database as the rest of the demo. A guided walkthrough for this area will be added in a future update."
+  "demo_coming_soon_body": "You can interact with this screen in the phone. It runs against the same in-browser database as the rest of the demo. A guided walkthrough for this area will be added in a future update.",
+  "demo_toolbar_phone_preset": "Phone size",
+  "demo_toolbar_phone_tooltip": "Switch to phone layout (390 x 844)",
+  "demo_toolbar_desktop_preset": "Desktop size",
+  "demo_toolbar_desktop_tooltip": "Switch to desktop layout (760 x 475)"
 }

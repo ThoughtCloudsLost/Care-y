@@ -10,7 +10,12 @@
     locales,
     isLocale,
   } from "$lib/paraglide/runtime.js";
-  import { ArrowRight } from "@lucide/svelte";
+  import {
+    ArrowRight,
+    GripVertical,
+    Smartphone,
+    Monitor,
+  } from "@lucide/svelte";
   import TopBar from "$demo/TopBar.svelte";
   import StorySection from "$demo/StorySection.svelte";
   import DemoFrame from "$demo/DemoFrame.svelte";
@@ -25,6 +30,11 @@
   } from "$demo/scroll-sections.js";
   import type { DemoBridge, DemoBridgeState, DemoTopic } from "$demo/bridge.js";
   import { DEMO_TOPICS } from "$demo/bridge.js";
+  import {
+    createFrameGeometry,
+    PHONE_PRESET,
+    DESKTOP_PRESET,
+  } from "$demo/frame-geometry.svelte.js";
 
   // -----------------------------------------------------------------------
   // Dark mode with localStorage persistence
@@ -59,6 +69,173 @@
   $effect(() => {
     bridge?.setDark(dark);
   });
+
+  // -----------------------------------------------------------------------
+  // Frame geometry (floating window state)
+  // -----------------------------------------------------------------------
+
+  const geo = createFrameGeometry();
+
+  // Clamp position on window resize so the frame stays reachable
+  $effect(() => {
+    function onResize(): void {
+      geo.clampToViewport();
+    }
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  });
+
+  // -----------------------------------------------------------------------
+  // Drag + resize gesture state
+  // -----------------------------------------------------------------------
+
+  let gestureActive = $state(false);
+
+  interface GestureOrigin {
+    pointerId: number;
+    startX: number;
+    startY: number;
+    startTop: number;
+    startLeft: number;
+    startW: number;
+    startH: number;
+    mode: "drag" | "resize";
+    /** Which edges are being resized (bitmask: 1=top, 2=right, 4=bottom, 8=left) */
+    edges: number;
+  }
+
+  let gesture: GestureOrigin | null = null;
+
+  function startDrag(e: PointerEvent): void {
+    if (e.button !== 0) return;
+    if (!(e.currentTarget instanceof HTMLElement)) return;
+    e.currentTarget.setPointerCapture(e.pointerId);
+    gesture = {
+      pointerId: e.pointerId,
+      startX: e.clientX,
+      startY: e.clientY,
+      startTop: geo.top,
+      startLeft: geo.left,
+      startW: geo.footprintW,
+      startH: geo.footprintH,
+      mode: "drag",
+      edges: 0,
+    };
+    gestureActive = true;
+  }
+
+  function startResize(e: PointerEvent, edges: number): void {
+    if (e.button !== 0) return;
+    if (!(e.currentTarget instanceof HTMLElement)) return;
+    e.currentTarget.setPointerCapture(e.pointerId);
+    gesture = {
+      pointerId: e.pointerId,
+      startX: e.clientX,
+      startY: e.clientY,
+      startTop: geo.top,
+      startLeft: geo.left,
+      startW: geo.footprintW,
+      startH: geo.footprintH,
+      mode: "resize",
+      edges,
+    };
+    gestureActive = true;
+  }
+
+  function onPointerMove(e: PointerEvent): void {
+    if (gesture?.pointerId !== e.pointerId) return;
+    const dx = e.clientX - gesture.startX;
+    const dy = e.clientY - gesture.startY;
+
+    if (gesture.mode === "drag") {
+      geo.setPosition(gesture.startTop + dy, gesture.startLeft + dx);
+      return;
+    }
+
+    // Resize: apply deltas per edge
+    let newW = gesture.startW;
+    let newH = gesture.startH;
+    let newTop = gesture.startTop;
+    let newLeft = gesture.startLeft;
+
+    if ((gesture.edges & 2) !== 0) newW = gesture.startW + dx; // right
+    if ((gesture.edges & 8) !== 0) {
+      newW = gesture.startW - dx;
+      newLeft = gesture.startLeft + dx;
+    }
+    if ((gesture.edges & 4) !== 0) newH = gesture.startH + dy; // bottom
+    if ((gesture.edges & 1) !== 0) {
+      newH = gesture.startH - dy;
+      newTop = gesture.startTop + dy;
+    }
+
+    geo.setFootprint(newW, newH);
+    geo.setPosition(newTop, newLeft);
+  }
+
+  function onPointerUp(e: PointerEvent): void {
+    if (gesture?.pointerId !== e.pointerId) return;
+    gesture = null;
+    gestureActive = false;
+  }
+
+  // -----------------------------------------------------------------------
+  // Preset animation
+  // -----------------------------------------------------------------------
+
+  const fpW = new Spring(geo.footprintW, { stiffness: 0.12, damping: 0.6 });
+  const fpH = new Spring(geo.footprintH, { stiffness: 0.12, damping: 0.6 });
+  let animating = $state(false);
+
+  // Blur cover fallback (approved but default off; flip the return to enable
+  // if live reflow stutters during preset animation)
+  function blurCoverEnabled(): boolean {
+    return false;
+  }
+  let showBlurCover = $state(false);
+
+  function animateToPreset(targetW: number, targetH: number): void {
+    if (prefersReducedMotion.current) {
+      geo.setFootprint(targetW, targetH);
+      return;
+    }
+
+    animating = true;
+    if (blurCoverEnabled()) showBlurCover = true;
+
+    // Sync springs to current values before retargeting
+    void fpW.set(geo.footprintW, { instant: true });
+    void fpH.set(geo.footprintH, { instant: true });
+
+    void fpW.set(targetW);
+    void fpH.set(targetH);
+  }
+
+  // Drive the geometry from the springs while animating.
+  // When the springs settle (both at target), stop.
+  $effect(() => {
+    if (!animating) return;
+    const w = fpW.current;
+    const h = fpH.current;
+    geo.setFootprint(w, h);
+
+    const wDone = Math.abs(w - fpW.target) < 0.5;
+    const hDone = Math.abs(h - fpH.target) < 0.5;
+    if (wDone && hDone) {
+      animating = false;
+      showBlurCover = false;
+      // Snap to exact target
+      geo.setFootprint(fpW.target, fpH.target);
+    }
+  });
+
+  function handlePhonePreset(): void {
+    animateToPreset(PHONE_PRESET.w, PHONE_PRESET.h);
+  }
+
+  function handleDesktopPreset(): void {
+    animateToPreset(DESKTOP_PRESET.w, DESKTOP_PRESET.h);
+  }
 
   // -----------------------------------------------------------------------
   // Bridge + phone state
@@ -119,6 +296,8 @@
       "",
       window.location.pathname + window.location.search,
     );
+    // Reset frame geometry alongside the iframe reload (decision 6)
+    geo.reset();
     frameRef?.reload();
     window.scrollTo({ top: 0, behavior: "auto" });
   }
@@ -354,6 +533,165 @@
   />
 {/key}
 
+<!-- Floating frame layer: fixed, between story content (z:1) and TopBar (z:100) -->
+<div
+  class="floating-frame"
+  style:top="{geo.top}px"
+  style:left="{geo.left}px"
+  style:width="{geo.outerW}px"
+  style:height="{geo.outerH}px"
+>
+  <!-- Toolbar: attached above the frame, travels with it -->
+  <div class="frame-toolbar">
+    <div
+      class="toolbar-grip"
+      onpointerdown={startDrag}
+      onpointermove={onPointerMove}
+      onpointerup={onPointerUp}
+      onpointercancel={onPointerUp}
+      aria-hidden="true"
+    >
+      <GripVertical size={16} />
+    </div>
+    <button
+      class="toolbar-btn"
+      class:toolbar-btn-active={geo.footprintW === PHONE_PRESET.w &&
+        geo.footprintH === PHONE_PRESET.h}
+      type="button"
+      onclick={handlePhonePreset}
+      aria-label={m.demo_toolbar_phone_preset()}
+      title={m.demo_toolbar_phone_tooltip()}
+    >
+      <Smartphone size={16} />
+    </button>
+    <button
+      class="toolbar-btn"
+      class:toolbar-btn-active={geo.footprintW === DESKTOP_PRESET.w &&
+        geo.footprintH === DESKTOP_PRESET.h}
+      type="button"
+      onclick={handleDesktopPreset}
+      aria-label={m.demo_toolbar_desktop_preset()}
+      title={m.demo_toolbar_desktop_tooltip()}
+    >
+      <Monitor size={16} />
+    </button>
+  </div>
+
+  <!-- Resize handles: 4 edges + 4 corners -->
+  <!-- svelte-ignore a11y_no_static_element_interactions -->
+  <div
+    class="resize-handle resize-n"
+    onpointerdown={(e) => startResize(e, 1)}
+    onpointermove={onPointerMove}
+    onpointerup={onPointerUp}
+    onpointercancel={onPointerUp}
+  ></div>
+  <!-- svelte-ignore a11y_no_static_element_interactions -->
+  <div
+    class="resize-handle resize-e"
+    onpointerdown={(e) => startResize(e, 2)}
+    onpointermove={onPointerMove}
+    onpointerup={onPointerUp}
+    onpointercancel={onPointerUp}
+  ></div>
+  <!-- svelte-ignore a11y_no_static_element_interactions -->
+  <div
+    class="resize-handle resize-s"
+    onpointerdown={(e) => startResize(e, 4)}
+    onpointermove={onPointerMove}
+    onpointerup={onPointerUp}
+    onpointercancel={onPointerUp}
+  ></div>
+  <!-- svelte-ignore a11y_no_static_element_interactions -->
+  <div
+    class="resize-handle resize-w"
+    onpointerdown={(e) => startResize(e, 8)}
+    onpointermove={onPointerMove}
+    onpointerup={onPointerUp}
+    onpointercancel={onPointerUp}
+  ></div>
+  <!-- svelte-ignore a11y_no_static_element_interactions -->
+  <div
+    class="resize-handle resize-ne"
+    onpointerdown={(e) => startResize(e, 3)}
+    onpointermove={onPointerMove}
+    onpointerup={onPointerUp}
+    onpointercancel={onPointerUp}
+  ></div>
+  <!-- svelte-ignore a11y_no_static_element_interactions -->
+  <div
+    class="resize-handle resize-se"
+    onpointerdown={(e) => startResize(e, 6)}
+    onpointermove={onPointerMove}
+    onpointerup={onPointerUp}
+    onpointercancel={onPointerUp}
+  ></div>
+  <!-- svelte-ignore a11y_no_static_element_interactions -->
+  <div
+    class="resize-handle resize-sw"
+    onpointerdown={(e) => startResize(e, 12)}
+    onpointermove={onPointerMove}
+    onpointerup={onPointerUp}
+    onpointercancel={onPointerUp}
+  ></div>
+  <!-- svelte-ignore a11y_no_static_element_interactions -->
+  <div
+    class="resize-handle resize-nw"
+    onpointerdown={(e) => startResize(e, 9)}
+    onpointermove={onPointerMove}
+    onpointerup={onPointerUp}
+    onpointercancel={onPointerUp}
+  ></div>
+
+  <!-- Bezel drag strips: four edges around the screen so the 12px bezel
+       ring acts as a drag surface without blocking the iframe. -->
+  <!-- svelte-ignore a11y_no_static_element_interactions -->
+  <div
+    class="bezel-strip bezel-strip-top"
+    onpointerdown={startDrag}
+    onpointermove={onPointerMove}
+    onpointerup={onPointerUp}
+    onpointercancel={onPointerUp}
+  ></div>
+  <!-- svelte-ignore a11y_no_static_element_interactions -->
+  <div
+    class="bezel-strip bezel-strip-bottom"
+    onpointerdown={startDrag}
+    onpointermove={onPointerMove}
+    onpointerup={onPointerUp}
+    onpointercancel={onPointerUp}
+  ></div>
+  <!-- svelte-ignore a11y_no_static_element_interactions -->
+  <div
+    class="bezel-strip bezel-strip-left"
+    onpointerdown={startDrag}
+    onpointermove={onPointerMove}
+    onpointerup={onPointerUp}
+    onpointercancel={onPointerUp}
+  ></div>
+  <!-- svelte-ignore a11y_no_static_element_interactions -->
+  <div
+    class="bezel-strip bezel-strip-right"
+    onpointerdown={startDrag}
+    onpointermove={onPointerMove}
+    onpointerup={onPointerUp}
+    onpointercancel={onPointerUp}
+  ></div>
+
+  <DemoFrame
+    {dark}
+    {geo}
+    onbridgeready={handleBridgeReady}
+    {gestureActive}
+    bind:this={frameRef}
+  />
+
+  <!-- Blur cover for preset animation (behind flag, default off) -->
+  {#if showBlurCover}
+    <div class="blur-cover" aria-hidden="true"></div>
+  {/if}
+</div>
+
 <div class="scroll-story">
   <!-- The fixed selection slot: never moves, only resizes to fit the
        item that snapped into it. Content scrolls over it (it paints
@@ -370,17 +708,6 @@
   ></div>
 
   <div class="story-layout">
-    <!-- Phone column: sticky so it stays visible while content scrolls -->
-    <div class="phone-column">
-      <div class="phone-sticky">
-        <DemoFrame
-          {dark}
-          onbridgeready={handleBridgeReady}
-          bind:this={frameRef}
-        />
-      </div>
-    </div>
-
     <!-- Story column: one section list at a time; the next-section
          button and the top bar swap which list is rendered -->
     <div class="story-column" bind:this={storyColumnEl}>
@@ -489,24 +816,6 @@
     }
   }
 
-  /* Sticky lives on the flex item itself: a content-height wrapper
-     gives an inner sticky child no travel room, so the column is the
-     element that pins while the story column provides the height. */
-  .phone-column {
-    width: 100%;
-    position: sticky;
-    top: 64px;
-    z-index: 10;
-    align-self: flex-start;
-  }
-
-  .phone-sticky {
-    width: 100%;
-    /* Small screens: shrink phone to 40vh */
-    height: 40vh;
-    min-height: 240px;
-  }
-
   .story-column {
     flex: 1;
     min-width: 0;
@@ -573,26 +882,13 @@
     background: rgba(0, 122, 255, 0.28);
   }
 
-  /* Desktop: two columns side by side */
+  /* At >= 900px, add a static right gutter so the story column keeps
+     its current width and the floating frame spawns in familiar
+     territory. The gutter occupies the space the phone column used to. */
   @media (min-width: 900px) {
     .story-layout {
-      flex-direction: row;
-      align-items: flex-start;
-      gap: 2.5rem;
       padding-top: 1.5rem;
-    }
-
-    .phone-column {
-      flex: 0 0 420px;
-    }
-
-    .phone-column {
-      top: 80px;
-    }
-
-    .phone-sticky {
-      height: calc(100vh - 96px);
-      min-height: 500px;
+      padding-right: 440px;
     }
 
     .story-column {
@@ -634,5 +930,236 @@
 
   :global(html.dark body) {
     background: #161618;
+  }
+
+  /* -----------------------------------------------------------------------
+     Floating frame layer
+     ----------------------------------------------------------------------- */
+
+  .floating-frame {
+    position: fixed;
+    /* Between story content (z:1) and TopBar (z:100) */
+    z-index: 50;
+  }
+
+  /* Toolbar: slim bar docked above the frame */
+  .frame-toolbar {
+    position: absolute;
+    bottom: 100%;
+    left: 0;
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    padding: 4px;
+    background: rgba(245, 245, 247, 0.92);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    border-radius: 8px 8px 0 0;
+    border: 1px solid rgba(0, 0, 0, 0.08);
+    border-bottom: none;
+  }
+
+  :global(html.dark) .frame-toolbar {
+    background: rgba(44, 44, 46, 0.92);
+    border-color: rgba(255, 255, 255, 0.1);
+  }
+
+  .toolbar-grip {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    cursor: grab;
+    color: #86868b;
+    border-radius: 6px;
+    touch-action: none;
+  }
+
+  .toolbar-grip:active {
+    cursor: grabbing;
+  }
+
+  :global(html.dark) .toolbar-grip {
+    color: #98989d;
+  }
+
+  .toolbar-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 44px;
+    height: 44px;
+    min-height: 44px;
+    border: none;
+    border-radius: 6px;
+    background: transparent;
+    color: #636366;
+    cursor: pointer;
+    transition: background 0.15s ease;
+  }
+
+  .toolbar-btn:hover {
+    background: rgba(0, 0, 0, 0.06);
+  }
+
+  .toolbar-btn-active {
+    background: rgba(0, 122, 255, 0.1);
+    color: #007aff;
+  }
+
+  .toolbar-btn-active:hover {
+    background: rgba(0, 122, 255, 0.16);
+  }
+
+  :global(html.dark) .toolbar-btn {
+    color: #98989d;
+  }
+
+  :global(html.dark) .toolbar-btn:hover {
+    background: rgba(255, 255, 255, 0.08);
+  }
+
+  :global(html.dark) .toolbar-btn-active {
+    background: rgba(0, 122, 255, 0.2);
+    color: #64d2ff;
+  }
+
+  :global(html.dark) .toolbar-btn-active:hover {
+    background: rgba(0, 122, 255, 0.25);
+  }
+
+  /* Bezel drag strips: four edges that cover only the 12px bezel ring,
+     leaving the screen area free for iframe interaction. */
+  .bezel-strip {
+    position: absolute;
+    z-index: 3;
+    cursor: grab;
+    touch-action: none;
+  }
+
+  .bezel-strip:active {
+    cursor: grabbing;
+  }
+
+  .bezel-strip-top {
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 12px;
+  }
+
+  .bezel-strip-bottom {
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 12px;
+  }
+
+  .bezel-strip-left {
+    top: 12px;
+    left: 0;
+    bottom: 12px;
+    width: 12px;
+  }
+
+  .bezel-strip-right {
+    top: 12px;
+    right: 0;
+    bottom: 12px;
+    width: 12px;
+  }
+
+  /* Resize handles: invisible hit areas on edges and corners */
+  .resize-handle {
+    position: absolute;
+    z-index: 4;
+    touch-action: none;
+  }
+
+  .resize-n {
+    top: -4px;
+    left: 8px;
+    right: 8px;
+    height: 8px;
+    cursor: n-resize;
+  }
+
+  .resize-s {
+    bottom: -4px;
+    left: 8px;
+    right: 8px;
+    height: 8px;
+    cursor: s-resize;
+  }
+
+  .resize-e {
+    top: 8px;
+    right: -4px;
+    bottom: 8px;
+    width: 8px;
+    cursor: e-resize;
+  }
+
+  .resize-w {
+    top: 8px;
+    left: -4px;
+    bottom: 8px;
+    width: 8px;
+    cursor: w-resize;
+  }
+
+  .resize-ne {
+    top: -4px;
+    right: -4px;
+    width: 12px;
+    height: 12px;
+    cursor: ne-resize;
+  }
+
+  .resize-se {
+    bottom: -4px;
+    right: -4px;
+    width: 12px;
+    height: 12px;
+    cursor: se-resize;
+  }
+
+  .resize-sw {
+    bottom: -4px;
+    left: -4px;
+    width: 12px;
+    height: 12px;
+    cursor: sw-resize;
+  }
+
+  .resize-nw {
+    top: -4px;
+    left: -4px;
+    width: 12px;
+    height: 12px;
+    cursor: nw-resize;
+  }
+
+  /* Blur cover (fallback for preset animations, default off) */
+  .blur-cover {
+    position: absolute;
+    inset: 0;
+    z-index: 5;
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    background: rgba(0, 0, 0, 0.05);
+    border-radius: inherit;
+    pointer-events: none;
+    animation: blur-fade-in 0.15s ease-out;
+  }
+
+  @keyframes blur-fade-in {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
   }
 </style>

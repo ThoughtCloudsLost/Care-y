@@ -943,13 +943,15 @@
     overflow: hidden;
   }
 
-  /* Simulate the device safe areas the PWA gets from iOS. Konsta's
-     .safe-areas class sets these from env(), which is 0 in a desktop
-     iframe; this higher-specificity rule wins and pushes the shell
-     below the outer frame's status bar and above its home indicator. */
-  .phone-app :global(.app-shell) {
-    --k-safe-area-top: 59px;
-    --k-safe-area-bottom: 34px;
+  /* Push the shell below the status bar overlay at phone-sized viewports.
+     The DemoFrame status bar renders only below 768px; this inset must
+     match that threshold so the content clears the overlay exactly when
+     it is visible. At tablet/desktop widths the overlay is hidden and
+     the inset resets to 0 (Konsta's env() default). */
+  @media (max-width: 767px) {
+    .phone-app :global(.app-shell) {
+      --k-safe-area-top: 59px;
+    }
   }
 
   /* Page is a non-scrolling flex frame. Scrolling moves to <main> inside

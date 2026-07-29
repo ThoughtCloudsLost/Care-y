@@ -204,10 +204,6 @@ const stubMatchers: [RegExp, string][] = [
   ],
   [/^\$lib\/stores\/theme\.svelte(\.js|\.ts)?$/, "./src/stubs/theme.svelte.ts"],
   [
-    /^\$lib\/stores\/layout-mode\.svelte(\.js|\.ts)?$/,
-    "./src/stubs/layout-mode.svelte.ts",
-  ],
-  [
     /^\$lib\/stores\/saved-filters\.svelte(\.js|\.ts)?$/,
     "./src/stubs/saved-filters.svelte.ts",
   ],
