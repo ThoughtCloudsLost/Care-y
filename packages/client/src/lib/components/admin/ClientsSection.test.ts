@@ -434,6 +434,46 @@ describe("ClientsSection", () => {
       // At least 3 client row buttons (the save button in the sheet may also be present)
       expect(buttons.length).toBeGreaterThanOrEqual(3);
     });
+
+    // The roster used to send no limit and no cursor, so it silently took the
+    // server default of 25 rows with no way to reach row 26. These cover the
+    // load-more control that fixed it.
+    it("offers no load-more control when there is no next page", () => {
+      render(ClientsSection, {
+        props: { clients: [makeClient("c-1")], hasNextPage: false },
+      });
+      expect(screen.queryByText("Load more")).toBeNull();
+    });
+
+    it("requests the next page when load-more is activated", async () => {
+      const onfetchnext = vi.fn();
+      render(ClientsSection, {
+        props: { clients: [makeClient("c-1")], hasNextPage: true, onfetchnext },
+      });
+
+      const loadMore = screen.getByText("Load more");
+      await fireEvent.click(loadMore);
+
+      expect(onfetchnext).toHaveBeenCalledTimes(1);
+    });
+
+    it("disables load-more while the next page is in flight", () => {
+      const onfetchnext = vi.fn();
+      render(ClientsSection, {
+        props: {
+          clients: [makeClient("c-1")],
+          hasNextPage: true,
+          isFetchingNextPage: true,
+          onfetchnext,
+        },
+      });
+
+      // Guards against firing a second request for the same page.
+      const buttons = screen
+        .getAllByRole("button")
+        .filter((b) => b.hasAttribute("disabled"));
+      expect(buttons.length).toBeGreaterThanOrEqual(1);
+    });
   });
 
   describe("client detail sheet", () => {
