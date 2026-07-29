@@ -15,6 +15,14 @@ import type {
   DemoLocation,
 } from "./bridge.js";
 
+import {
+  SECTION_ROUTES,
+  SUB_ROUTES,
+  UNNARRATED_ROUTES,
+} from "./scroll-section-routes.js";
+
+export { SECTION_ROUTES, SUB_ROUTES, UNNARRATED_ROUTES };
+
 // -----------------------------------------------------------------------
 // Section / sub-section types
 // -----------------------------------------------------------------------
@@ -32,6 +40,8 @@ export interface SubSection {
   readonly headingKey: string;
   /** Message key suffix for the sub-section body */
   readonly bodyKey: string;
+  /** Route IDs this sub narrates (only present for route-specific subs). */
+  readonly routes?: readonly string[];
 }
 
 export interface Section {
@@ -41,6 +51,8 @@ export interface Section {
   /** Message key suffix for the section description */
   readonly descKey: string;
   readonly subs: readonly SubSection[];
+  /** All (app) route IDs this section narrates. */
+  readonly routes: readonly string[];
 }
 
 // -----------------------------------------------------------------------
@@ -52,6 +64,7 @@ export const SECTIONS: readonly Section[] = [
     id: "login",
     titleKey: "demo_section_login_title",
     descKey: "demo_section_login_desc",
+    routes: SECTION_ROUTES.login,
     subs: [
       {
         slug: "credentials",
@@ -122,6 +135,7 @@ export const SECTIONS: readonly Section[] = [
     id: "dashboard",
     titleKey: "demo_section_dashboard_title",
     descKey: "demo_section_dashboard_desc",
+    routes: SECTION_ROUTES.dashboard,
     subs: [
       {
         slug: "intro",
@@ -135,6 +149,7 @@ export const SECTIONS: readonly Section[] = [
     id: "tickets",
     titleKey: "demo_section_tickets_title",
     descKey: "demo_section_tickets_desc",
+    routes: SECTION_ROUTES.tickets,
     subs: [
       {
         slug: "sort",
@@ -172,6 +187,7 @@ export const SECTIONS: readonly Section[] = [
     id: "ticket-detail",
     titleKey: "demo_section_ticket_detail_title",
     descKey: "demo_section_ticket_detail_desc",
+    routes: SECTION_ROUTES["ticket-detail"],
     subs: [
       {
         slug: "thread-filters",
@@ -215,6 +231,7 @@ export const SECTIONS: readonly Section[] = [
     id: "search",
     titleKey: "demo_section_search_title",
     descKey: "demo_section_search_desc",
+    routes: SECTION_ROUTES.search,
     subs: [
       {
         slug: "intro",
@@ -228,6 +245,7 @@ export const SECTIONS: readonly Section[] = [
     id: "library",
     titleKey: "demo_section_library_title",
     descKey: "demo_section_library_desc",
+    routes: SECTION_ROUTES.library,
     subs: [
       {
         slug: "intro",
@@ -241,6 +259,7 @@ export const SECTIONS: readonly Section[] = [
     id: "admin",
     titleKey: "demo_section_admin_title",
     descKey: "demo_section_admin_desc",
+    routes: SECTION_ROUTES.admin,
     subs: [
       {
         slug: "intro",
@@ -253,18 +272,21 @@ export const SECTIONS: readonly Section[] = [
         topic: null,
         headingKey: "demo_narrative_admin_people_queues_heading",
         bodyKey: "demo_narrative_admin_people_queues_body",
+        routes: SUB_ROUTES["admin/people-queues"],
       },
       {
         slug: "org-config-keys",
         topic: null,
         headingKey: "demo_narrative_admin_org_config_keys_heading",
         bodyKey: "demo_narrative_admin_org_config_keys_body",
+        routes: SUB_ROUTES["admin/org-config-keys"],
       },
       {
         slug: "communications",
         topic: null,
         headingKey: "demo_narrative_admin_communications_heading",
         bodyKey: "demo_narrative_admin_communications_body",
+        routes: SUB_ROUTES["admin/communications"],
       },
     ],
   },
@@ -272,6 +294,7 @@ export const SECTIONS: readonly Section[] = [
     id: "schedule",
     titleKey: "demo_section_schedule_title",
     descKey: "demo_section_schedule_desc",
+    routes: SECTION_ROUTES.schedule,
     subs: [
       {
         slug: "intro",
@@ -285,6 +308,7 @@ export const SECTIONS: readonly Section[] = [
     id: "settings",
     titleKey: "demo_section_settings_title",
     descKey: "demo_section_settings_desc",
+    routes: SECTION_ROUTES.settings,
     subs: [
       {
         slug: "intro",
@@ -343,6 +367,38 @@ for (const section of SECTIONS) {
   }
 }
 
+/**
+ * Reverse index from route ID to its narration owner. Sub-route entries
+ * are inserted first so they take priority over section-level entries
+ * during lookup.
+ */
+const routeIndex = new Map<
+  string,
+  { readonly sectionId: SectionId; readonly subSlug: string | null }
+>();
+
+// Populate section-level entries first (broad matches).
+for (const section of SECTIONS) {
+  for (const routeId of section.routes) {
+    routeIndex.set(routeId, { sectionId: section.id, subSlug: null });
+  }
+}
+
+// Overwrite with sub-level entries where they exist (narrow matches
+// win). The sub literals already carry their routes from SUB_ROUTES,
+// so the section id and slug come typed from the taxonomy itself.
+for (const section of SECTIONS) {
+  for (const sub of section.subs) {
+    for (const routeId of sub.routes ?? []) {
+      routeIndex.set(routeId, { sectionId: section.id, subSlug: sub.slug });
+    }
+  }
+}
+
+// Mark unnarrated routes so the lookup can distinguish "known but
+// unnarrated" from "completely unknown".
+const unnarratedSet: ReadonlySet<string> = new Set(UNNARRATED_ROUTES);
+
 // -----------------------------------------------------------------------
 // Public lookup functions
 // -----------------------------------------------------------------------
@@ -362,6 +418,18 @@ export function getSub(
   subSlug: string,
 ): { readonly section: Section; readonly sub: SubSection } | undefined {
   return subIndex.get(`${sectionId}/${subSlug}`);
+}
+
+/**
+ * Resolve a route ID to the story section (and optional sub-section)
+ * that narrates it. A SUB_ROUTES match wins over a section-level
+ * match. Unnarrated routes and unknown route IDs both return null.
+ */
+export function sectionForRoute(
+  routeId: string,
+): { sectionId: SectionId; subSlug: string | null } | null {
+  if (unnarratedSet.has(routeId)) return null;
+  return routeIndex.get(routeId) ?? null;
 }
 
 // -----------------------------------------------------------------------
