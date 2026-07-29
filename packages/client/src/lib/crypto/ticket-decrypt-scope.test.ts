@@ -46,7 +46,10 @@ function createMocks(overrides?: {
   return {
     ticketCache: { decryptTitle } as unknown as TicketDecryptCache,
     followUpCache: { decryptContent } as unknown as FollowUpDecryptCache,
-    orgCache: { decrypt: orgDecrypt } as unknown as OrgDecryptCache,
+    orgCache: {
+      decrypt: orgDecrypt,
+      isFailed: () => false,
+    } as unknown as OrgDecryptCache,
     orgKeyManager: {
       get isLoaded() {
         return overrides?.isLoaded ?? false;
@@ -201,12 +204,12 @@ describe("TicketDecryptScope", () => {
       expect(result.status).toBe("loading");
     });
 
-    it("returns error when org key is loaded but decrypt returns null", () => {
+    it("returns loading when org key is loaded but decrypt returns null (pending microtask)", () => {
       const deps = createMocks({ orgReturn: null, isLoaded: true });
       const scope = createTicketDecryptScope(deps);
 
       const result = scope.volunteerName(USER_ID, ENCRYPTED_NAME);
-      expect(result.status).toBe("error");
+      expect(result.status).toBe("loading");
     });
 
     it("returns ready when decrypt succeeds", () => {
@@ -222,7 +225,7 @@ describe("TicketDecryptScope", () => {
       const scope = createTicketDecryptScope(deps);
 
       const result = scope.volunteerName(USER_ID, null);
-      expect(result.status).toBe("error");
+      expect(result.status).toBe("loading");
     });
   });
 

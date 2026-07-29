@@ -41,7 +41,11 @@
     orgCache.decrypt("me:display_name", encryptedDisplayName),
   );
   const nameResult = $derived(
-    resolveOrgDecrypt(displayNameRaw, orgKeyManager.isLoaded),
+    resolveOrgDecrypt(
+      displayNameRaw,
+      orgKeyManager.isLoaded,
+      orgCache.isFailed("me:display_name"),
+    ),
   );
 
   const initials = $derived(
