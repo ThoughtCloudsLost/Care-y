@@ -44,6 +44,7 @@ function createHarness(initial?: Partial<FakePhone>) {
     }),
     ensureScreen,
     getTicketDetailId: () => "tk-0001",
+    getArticleDetailId: () => "kb-0001",
   });
 
   /** Resolve every pending chain and flush the .finally continuations. */

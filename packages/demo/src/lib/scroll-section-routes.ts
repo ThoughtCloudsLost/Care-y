@@ -51,6 +51,8 @@ export const SUB_ROUTES: Readonly<Record<string, readonly string[]>> = {
   "admin/people-queues": ["/(app)/admin/people"],
   "admin/org-config-keys": ["/(app)/admin/organization"],
   "admin/communications": ["/(app)/admin/communications"],
+  "library/vote": ["/(app)/library/[articleId]"],
+  "library/editor": ["/(app)/library/new", "/(app)/library/[articleId]/edit"],
 };
 
 /**

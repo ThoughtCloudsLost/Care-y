@@ -227,145 +227,277 @@ describe("getSub", () => {
 
 describe("resolvePhoneCommand", () => {
   const TICKET_ID = "test-ticket-id";
+  const ARTICLE_ID = "test-article-id";
 
   it("resolves login/credentials to the sign-in form screen", () => {
-    const cmd = resolvePhoneCommand("login", "credentials", TICKET_ID);
+    const cmd = resolvePhoneCommand(
+      "login",
+      "credentials",
+      TICKET_ID,
+      ARTICLE_ID,
+    );
     expect(cmd.feature).toBe("login");
     expect(cmd.loginTarget).toBe("form");
     expect(cmd.pulseTopic).toBe("credentials");
   });
 
   it("resolves login/language to the form (where the picker lives)", () => {
-    const cmd = resolvePhoneCommand("login", "language", TICKET_ID);
+    const cmd = resolvePhoneCommand("login", "language", TICKET_ID, ARTICLE_ID);
     expect(cmd.loginTarget).toBe("form");
     expect(cmd.pulseTopic).toBe("language");
   });
 
   it("resolves login/two-factor to the method picker screen", () => {
-    const cmd = resolvePhoneCommand("login", "two-factor", TICKET_ID);
+    const cmd = resolvePhoneCommand(
+      "login",
+      "two-factor",
+      TICKET_ID,
+      ARTICLE_ID,
+    );
     expect(cmd.feature).toBe("login");
     expect(cmd.loginTarget).toBe("twofa-picker");
     expect(cmd.pulseTopic).toBe("twofa");
   });
 
   it("resolves each 2FA method sub to its method screen", () => {
-    expect(resolvePhoneCommand("login", "totp", TICKET_ID).loginTarget).toBe(
-      "method-totp",
-    );
-    expect(resolvePhoneCommand("login", "passkey", TICKET_ID).loginTarget).toBe(
-      "method-passkey",
-    );
-    expect(resolvePhoneCommand("login", "email", TICKET_ID).loginTarget).toBe(
-      "method-email",
-    );
-    expect(resolvePhoneCommand("login", "sms", TICKET_ID).loginTarget).toBe(
-      "method-sms",
-    );
-    expect(resolvePhoneCommand("login", "push", TICKET_ID).loginTarget).toBe(
-      "method-push",
-    );
     expect(
-      resolvePhoneCommand("login", "backup-codes", TICKET_ID).loginTarget,
+      resolvePhoneCommand("login", "totp", TICKET_ID, ARTICLE_ID).loginTarget,
+    ).toBe("method-totp");
+    expect(
+      resolvePhoneCommand("login", "passkey", TICKET_ID, ARTICLE_ID)
+        .loginTarget,
+    ).toBe("method-passkey");
+    expect(
+      resolvePhoneCommand("login", "email", TICKET_ID, ARTICLE_ID).loginTarget,
+    ).toBe("method-email");
+    expect(
+      resolvePhoneCommand("login", "sms", TICKET_ID, ARTICLE_ID).loginTarget,
+    ).toBe("method-sms");
+    expect(
+      resolvePhoneCommand("login", "push", TICKET_ID, ARTICLE_ID).loginTarget,
+    ).toBe("method-push");
+    expect(
+      resolvePhoneCommand("login", "backup-codes", TICKET_ID, ARTICLE_ID)
+        .loginTarget,
     ).toBe("method-backup");
   });
 
   it("resolves login/key-derivation without advancing (narration only)", () => {
-    const cmd = resolvePhoneCommand("login", "key-derivation", TICKET_ID);
+    const cmd = resolvePhoneCommand(
+      "login",
+      "key-derivation",
+      TICKET_ID,
+      ARTICLE_ID,
+    );
     expect(cmd.feature).toBe("login");
     expect(cmd.loginTarget).toBeNull();
     expect(cmd.pulseTopic).toBe("key-derivation");
   });
 
   it("resolves tickets section to tickets feature", () => {
-    const cmd = resolvePhoneCommand("tickets", "sort", TICKET_ID);
+    const cmd = resolvePhoneCommand("tickets", "sort", TICKET_ID, ARTICLE_ID);
     expect(cmd.feature).toBe("tickets");
     expect(cmd.detail).toBeNull();
     expect(cmd.pulseTopic).toBe("sort");
   });
 
   it("resolves ticket-detail to tickets with detail ID", () => {
-    const cmd = resolvePhoneCommand("ticket-detail", "reply", TICKET_ID);
+    const cmd = resolvePhoneCommand(
+      "ticket-detail",
+      "reply",
+      TICKET_ID,
+      ARTICLE_ID,
+    );
     expect(cmd.feature).toBe("tickets");
     expect(cmd.detail).toBe(TICKET_ID);
     expect(cmd.pulseTopic).toBe("reply");
   });
 
   it("resolves search section to openSearch", () => {
-    const cmd = resolvePhoneCommand("search", "intro", TICKET_ID);
+    const cmd = resolvePhoneCommand("search", "intro", TICKET_ID, ARTICLE_ID);
     expect(cmd.openSearch).toBe(true);
     expect(cmd.pulseTopic).toBeNull();
   });
 
   it("resolves section-only (no sub) with null topic", () => {
-    const cmd = resolvePhoneCommand("tickets", null, TICKET_ID);
+    const cmd = resolvePhoneCommand("tickets", null, TICKET_ID, ARTICLE_ID);
     expect(cmd.pulseTopic).toBeNull();
   });
 
   it("resolves dashboard section to home feature", () => {
-    const cmd = resolvePhoneCommand("dashboard", "intro", TICKET_ID);
+    const cmd = resolvePhoneCommand(
+      "dashboard",
+      "intro",
+      TICKET_ID,
+      ARTICLE_ID,
+    );
     expect(cmd.feature).toBe("home");
     expect(cmd.detail).toBeNull();
     expect(cmd.pulseTopic).toBeNull();
   });
 
+  it("resolves dashboard/queues to home with topic", () => {
+    const cmd = resolvePhoneCommand(
+      "dashboard",
+      "queues",
+      TICKET_ID,
+      ARTICLE_ID,
+    );
+    expect(cmd.feature).toBe("home");
+    expect(cmd.detail).toBeNull();
+    expect(cmd.pulseTopic).toBe("dashboard-queues");
+  });
+
+  it("resolves dashboard/activity to home with topic", () => {
+    const cmd = resolvePhoneCommand(
+      "dashboard",
+      "activity",
+      TICKET_ID,
+      ARTICLE_ID,
+    );
+    expect(cmd.feature).toBe("home");
+    expect(cmd.detail).toBeNull();
+    expect(cmd.pulseTopic).toBe("dashboard-activity");
+  });
+
   it("resolves library section to library feature", () => {
-    const cmd = resolvePhoneCommand("library", "intro", TICKET_ID);
+    const cmd = resolvePhoneCommand("library", "intro", TICKET_ID, ARTICLE_ID);
     expect(cmd.feature).toBe("library");
     expect(cmd.detail).toBeNull();
     expect(cmd.pulseTopic).toBeNull();
   });
 
+  it("resolves library/vote to library with article detail", () => {
+    const cmd = resolvePhoneCommand("library", "vote", TICKET_ID, ARTICLE_ID);
+    expect(cmd.feature).toBe("library");
+    expect(cmd.detail).toBe(ARTICLE_ID);
+    expect(cmd.pulseTopic).toBe("library-vote");
+  });
+
+  it("resolves library/categories to library list", () => {
+    const cmd = resolvePhoneCommand(
+      "library",
+      "categories",
+      TICKET_ID,
+      ARTICLE_ID,
+    );
+    expect(cmd.feature).toBe("library");
+    expect(cmd.detail).toBeNull();
+    expect(cmd.pulseTopic).toBe("library-categories");
+  });
+
+  it("resolves library/editor to library with 'new' detail", () => {
+    const cmd = resolvePhoneCommand("library", "editor", TICKET_ID, ARTICLE_ID);
+    expect(cmd.feature).toBe("library");
+    expect(cmd.detail).toBe("new");
+    expect(cmd.pulseTopic).toBe("library-editor");
+  });
+
   it("resolves admin section to admin feature", () => {
-    const cmd = resolvePhoneCommand("admin", "intro", TICKET_ID);
+    const cmd = resolvePhoneCommand("admin", "intro", TICKET_ID, ARTICLE_ID);
     expect(cmd.feature).toBe("admin");
     expect(cmd.detail).toBeNull();
     expect(cmd.pulseTopic).toBeNull();
   });
 
+  it("resolves admin/people-queues to admin with people detail", () => {
+    const cmd = resolvePhoneCommand(
+      "admin",
+      "people-queues",
+      TICKET_ID,
+      ARTICLE_ID,
+    );
+    expect(cmd.feature).toBe("admin");
+    expect(cmd.detail).toBe("people");
+    expect(cmd.pulseTopic).toBe("admin-roster-edit");
+  });
+
+  it("resolves admin/org-config-keys to admin with organization detail", () => {
+    const cmd = resolvePhoneCommand(
+      "admin",
+      "org-config-keys",
+      TICKET_ID,
+      ARTICLE_ID,
+    );
+    expect(cmd.feature).toBe("admin");
+    expect(cmd.detail).toBe("organization");
+    expect(cmd.pulseTopic).toBeNull();
+  });
+
+  it("resolves admin/communications to admin with communications detail", () => {
+    const cmd = resolvePhoneCommand(
+      "admin",
+      "communications",
+      TICKET_ID,
+      ARTICLE_ID,
+    );
+    expect(cmd.feature).toBe("admin");
+    expect(cmd.detail).toBe("communications");
+    expect(cmd.pulseTopic).toBeNull();
+  });
+
+  it("resolves admin/greetings to admin with communications detail", () => {
+    const cmd = resolvePhoneCommand(
+      "admin",
+      "greetings",
+      TICKET_ID,
+      ARTICLE_ID,
+    );
+    expect(cmd.feature).toBe("admin");
+    expect(cmd.detail).toBe("communications");
+    expect(cmd.pulseTopic).toBe("admin-greetings");
+  });
+
+  it("resolves admin/quarantine to admin with communications detail", () => {
+    const cmd = resolvePhoneCommand(
+      "admin",
+      "quarantine",
+      TICKET_ID,
+      ARTICLE_ID,
+    );
+    expect(cmd.feature).toBe("admin");
+    expect(cmd.detail).toBe("communications");
+    expect(cmd.pulseTopic).toBe("admin-quarantine");
+  });
+
   it("resolves schedule section to schedule feature", () => {
-    const cmd = resolvePhoneCommand("schedule", "intro", TICKET_ID);
+    const cmd = resolvePhoneCommand("schedule", "intro", TICKET_ID, ARTICLE_ID);
     expect(cmd.feature).toBe("schedule");
     expect(cmd.detail).toBeNull();
   });
 
   it("resolves settings section to settings feature", () => {
-    const cmd = resolvePhoneCommand("settings", "intro", TICKET_ID);
+    const cmd = resolvePhoneCommand("settings", "intro", TICKET_ID, ARTICLE_ID);
     expect(cmd.feature).toBe("settings");
     expect(cmd.detail).toBeNull();
   });
 
-  it("resolves settings sub-sections to settings feature", () => {
-    for (const sub of [
+  it("resolves settings sub-sections to settings feature with topics", () => {
+    const profileCmd = resolvePhoneCommand(
+      "settings",
       "profile-identity",
+      TICKET_ID,
+      ARTICLE_ID,
+    );
+    expect(profileCmd.feature).toBe("settings");
+    expect(profileCmd.detail).toBeNull();
+    expect(profileCmd.pulseTopic).toBe("settings-profile");
+
+    const passwordCmd = resolvePhoneCommand(
+      "settings",
       "password-keys",
+      TICKET_ID,
+      ARTICLE_ID,
+    );
+    expect(passwordCmd.pulseTopic).toBe("settings-password");
+
+    const twofaCmd = resolvePhoneCommand(
+      "settings",
       "two-factor-methods",
-    ]) {
-      const cmd = resolvePhoneCommand("settings", sub, TICKET_ID);
-      expect(cmd.feature).toBe("settings");
-      expect(cmd.detail).toBeNull();
-      expect(cmd.pulseTopic).toBeNull();
-    }
-  });
-
-  it("resolves admin/people-queues to admin feature", () => {
-    const cmd = resolvePhoneCommand("admin", "people-queues", TICKET_ID);
-    expect(cmd.feature).toBe("admin");
-    expect(cmd.detail).toBeNull();
-    expect(cmd.pulseTopic).toBeNull();
-  });
-
-  it("resolves admin/org-config-keys to admin feature", () => {
-    const cmd = resolvePhoneCommand("admin", "org-config-keys", TICKET_ID);
-    expect(cmd.feature).toBe("admin");
-    expect(cmd.detail).toBeNull();
-    expect(cmd.pulseTopic).toBeNull();
-  });
-
-  it("resolves admin/communications to admin feature", () => {
-    const cmd = resolvePhoneCommand("admin", "communications", TICKET_ID);
-    expect(cmd.feature).toBe("admin");
-    expect(cmd.detail).toBeNull();
-    expect(cmd.pulseTopic).toBeNull();
+      TICKET_ID,
+      ARTICLE_ID,
+    );
+    expect(twofaCmd.pulseTopic).toBe("settings-2fa");
   });
 });
 
@@ -480,9 +612,36 @@ describe("bridgeStateToLocation", () => {
     expect(loc).toEqual({ sectionId: "admin", subSlug: "intro" });
   });
 
-  it("maps admin feature with detail to admin section", () => {
+  it("maps admin feature with volunteer detail to admin intro", () => {
     const loc = bridgeStateToLocation("admin", "volunteer", false, null, null);
     expect(loc).toEqual({ sectionId: "admin", subSlug: "intro" });
+  });
+
+  it("maps admin feature with people detail to people-queues sub", () => {
+    const loc = bridgeStateToLocation("admin", "people", false, null, null);
+    expect(loc).toEqual({ sectionId: "admin", subSlug: "people-queues" });
+  });
+
+  it("maps admin feature with organization detail to org-config-keys sub", () => {
+    const loc = bridgeStateToLocation(
+      "admin",
+      "organization",
+      false,
+      null,
+      null,
+    );
+    expect(loc).toEqual({ sectionId: "admin", subSlug: "org-config-keys" });
+  });
+
+  it("maps admin feature with communications detail to communications sub", () => {
+    const loc = bridgeStateToLocation(
+      "admin",
+      "communications",
+      false,
+      null,
+      null,
+    );
+    expect(loc).toEqual({ sectionId: "admin", subSlug: "communications" });
   });
 
   it("maps schedule feature to schedule section", () => {
@@ -635,9 +794,9 @@ describe("SECTIONS taxonomy", () => {
     expect(login?.subs).toHaveLength(10);
   });
 
-  it("dashboard has 1 sub", () => {
+  it("dashboard has 3 subs", () => {
     const dashboard = SECTIONS.find((s) => s.id === "dashboard");
-    expect(dashboard?.subs).toHaveLength(1);
+    expect(dashboard?.subs).toHaveLength(3);
   });
 
   it("tickets has 5 subs", () => {
@@ -655,14 +814,14 @@ describe("SECTIONS taxonomy", () => {
     expect(search?.subs).toHaveLength(1);
   });
 
-  it("library has 1 sub", () => {
+  it("library has 4 subs", () => {
     const library = SECTIONS.find((s) => s.id === "library");
-    expect(library?.subs).toHaveLength(1);
+    expect(library?.subs).toHaveLength(4);
   });
 
-  it("admin has 4 subs", () => {
+  it("admin has 6 subs", () => {
     const admin = SECTIONS.find((s) => s.id === "admin");
-    expect(admin?.subs).toHaveLength(4);
+    expect(admin?.subs).toHaveLength(6);
   });
 
   it("schedule has 1 sub", () => {
@@ -778,5 +937,20 @@ describe("sectionForRoute", () => {
 
   it("returns null for an unknown route ID", () => {
     expect(sectionForRoute("/(app)/nonexistent")).toBeNull();
+  });
+
+  it("resolves /(app)/library/[articleId] to library/vote sub", () => {
+    const result = sectionForRoute("/(app)/library/[articleId]");
+    expect(result).toEqual({ sectionId: "library", subSlug: "vote" });
+  });
+
+  it("resolves /(app)/library/new to library/editor sub", () => {
+    const result = sectionForRoute("/(app)/library/new");
+    expect(result).toEqual({ sectionId: "library", subSlug: "editor" });
+  });
+
+  it("resolves /(app)/library/[articleId]/edit to library/editor sub", () => {
+    const result = sectionForRoute("/(app)/library/[articleId]/edit");
+    expect(result).toEqual({ sectionId: "library", subSlug: "editor" });
   });
 });

@@ -65,6 +65,11 @@ export interface LocationStoreDeps {
    * engine promise resolves without requiring re-construction.
    */
   readonly getTicketDetailId: () => string;
+  /**
+   * Resolve the article ID the library vote sub-section navigates
+   * to. Same getter pattern as getTicketDetailId.
+   */
+  readonly getArticleDetailId: () => string;
 }
 
 export class DemoLocationStore {
@@ -122,6 +127,7 @@ export class DemoLocationStore {
       sectionId,
       subSlug,
       this.deps.getTicketDetailId(),
+      this.deps.getArticleDetailId(),
     );
     void this.deps.ensureScreen(cmd, token).finally(() => {
       // eslint-disable-next-line security/detect-possible-timing-attacks -- monotonic staleness counter, not a secret

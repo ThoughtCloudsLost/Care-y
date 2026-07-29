@@ -2,8 +2,13 @@ import { describe, it, expect } from "vitest";
 import { classifyDemoLabel } from "./topic-classifier.js";
 import type { ClassifierContext } from "./topic-classifier.js";
 
-const listCtx: ClassifierContext = { inDetail: false };
-const detailCtx: ClassifierContext = { inDetail: true };
+const listCtx: ClassifierContext = { inDetail: false, feature: "tickets" };
+const detailCtx: ClassifierContext = { inDetail: true, feature: "tickets" };
+const loginCtx: ClassifierContext = { inDetail: false, feature: "login" };
+const settingsCtx: ClassifierContext = { inDetail: false, feature: "settings" };
+const adminCtx: ClassifierContext = { inDetail: false, feature: "admin" };
+const homeCtx: ClassifierContext = { inDetail: false, feature: "home" };
+const libraryCtx: ClassifierContext = { inDetail: false, feature: "library" };
 
 describe("classifyDemoLabel", () => {
   // -- sort --
@@ -167,22 +172,53 @@ describe("classifyDemoLabel", () => {
   });
 
   // -- twofa (per-method labels, shared controls stay generic) --
-  it("classifies TOTP label as twofa-totp", () => {
-    expect(classifyDemoLabel("Authenticator app", listCtx)).toBe("twofa-totp");
+  it("classifies TOTP label as twofa-totp on login", () => {
+    expect(classifyDemoLabel("Authenticator app", loginCtx)).toBe("twofa-totp");
   });
 
-  it("classifies Passkey label as twofa-passkey", () => {
-    expect(classifyDemoLabel("Use Passkey", listCtx)).toBe("twofa-passkey");
+  it("classifies Passkey label as twofa-passkey on login", () => {
+    expect(classifyDemoLabel("Use Passkey", loginCtx)).toBe("twofa-passkey");
   });
 
-  it("classifies Backup codes label as twofa-backup", () => {
-    expect(classifyDemoLabel("Enter backup code", listCtx)).toBe(
+  it("classifies Backup codes label as twofa-backup on login", () => {
+    expect(classifyDemoLabel("Enter backup code", loginCtx)).toBe(
       "twofa-backup",
     );
   });
 
-  it("classifies Verify submit as generic twofa", () => {
-    expect(classifyDemoLabel("Verify", listCtx)).toBe("twofa");
+  it("classifies Verify submit as generic twofa on login", () => {
+    expect(classifyDemoLabel("Verify", loginCtx)).toBe("twofa");
+  });
+
+  // -- twofa labels on settings classify as settings-2fa --
+  it("classifies TOTP label as settings-2fa on settings", () => {
+    expect(classifyDemoLabel("Authenticator app", settingsCtx)).toBe(
+      "settings-2fa",
+    );
+  });
+
+  it("classifies Passkey label as settings-2fa on settings", () => {
+    expect(classifyDemoLabel("Use Passkey", settingsCtx)).toBe("settings-2fa");
+  });
+
+  it("classifies Backup codes label as settings-2fa on settings", () => {
+    expect(classifyDemoLabel("Enter backup code", settingsCtx)).toBe(
+      "settings-2fa",
+    );
+  });
+
+  it("classifies Verify submit as settings-2fa on settings", () => {
+    expect(classifyDemoLabel("Verify", settingsCtx)).toBe("settings-2fa");
+  });
+
+  it("classifies Remove method confirm as settings-2fa on settings", () => {
+    expect(classifyDemoLabel("Remove this method?", settingsCtx)).toBe(
+      "settings-2fa",
+    );
+  });
+
+  it("does not classify Remove method confirm on login", () => {
+    expect(classifyDemoLabel("Remove this method?", loginCtx)).toBeNull();
   });
 
   // -- key-derivation --
@@ -211,5 +247,135 @@ describe("classifyDemoLabel", () => {
   it("Date pill on list is filters, not thread-filters", () => {
     // tickets_filter_date_range = "Date" in English
     expect(classifyDemoLabel("Date", listCtx)).toBe("filters");
+  });
+
+  // -- dashboard-queues --
+  it("classifies Queues heading as dashboard-queues (English)", () => {
+    expect(classifyDemoLabel("Queues", homeCtx)).toBe("dashboard-queues");
+  });
+
+  it("classifies Colas heading as dashboard-queues (Spanish)", () => {
+    expect(classifyDemoLabel("Colas", homeCtx)).toBe("dashboard-queues");
+  });
+
+  // -- dashboard-activity --
+  it("classifies Activity heading as dashboard-activity", () => {
+    expect(classifyDemoLabel("Activity", homeCtx)).toBe("dashboard-activity");
+  });
+
+  it("classifies Actividad heading as dashboard-activity (Spanish)", () => {
+    expect(classifyDemoLabel("Actividad", homeCtx)).toBe("dashboard-activity");
+  });
+
+  // -- library-vote --
+  it("classifies Was this helpful? as library-vote", () => {
+    expect(classifyDemoLabel("Was this helpful?", libraryCtx)).toBe(
+      "library-vote",
+    );
+  });
+
+  it("classifies Helpful as library-vote", () => {
+    expect(classifyDemoLabel("Helpful", libraryCtx)).toBe("library-vote");
+  });
+
+  it("classifies Not helpful as library-vote", () => {
+    expect(classifyDemoLabel("Not helpful", libraryCtx)).toBe("library-vote");
+  });
+
+  // -- library-categories --
+  it("classifies Manage categories as library-categories", () => {
+    expect(classifyDemoLabel("Manage categories", libraryCtx)).toBe(
+      "library-categories",
+    );
+  });
+
+  // -- library-editor --
+  it("classifies New Article as library-editor", () => {
+    expect(classifyDemoLabel("New Article", libraryCtx)).toBe("library-editor");
+  });
+
+  it("classifies Edit article as library-editor", () => {
+    expect(classifyDemoLabel("Edit article", libraryCtx)).toBe(
+      "library-editor",
+    );
+  });
+
+  // -- admin-roster-edit --
+  it("classifies Edit user as admin-roster-edit", () => {
+    expect(classifyDemoLabel("Edit user", adminCtx)).toBe("admin-roster-edit");
+  });
+
+  // -- settings_display_name disambiguation --
+  it("classifies Display Name as admin-roster-edit on admin", () => {
+    expect(classifyDemoLabel("Display Name", adminCtx)).toBe(
+      "admin-roster-edit",
+    );
+  });
+
+  it("classifies Display Name as settings-profile on settings", () => {
+    expect(classifyDemoLabel("Display Name", settingsCtx)).toBe(
+      "settings-profile",
+    );
+  });
+
+  it("classifies Login Username as admin-roster-edit on admin", () => {
+    expect(classifyDemoLabel("Login Username", adminCtx)).toBe(
+      "admin-roster-edit",
+    );
+  });
+
+  it("classifies Login Username as settings-profile on settings", () => {
+    expect(classifyDemoLabel("Login Username", settingsCtx)).toBe(
+      "settings-profile",
+    );
+  });
+
+  // -- admin-greetings --
+  it("classifies Add greeting as admin-greetings", () => {
+    expect(classifyDemoLabel("Add greeting", adminCtx)).toBe("admin-greetings");
+  });
+
+  it("classifies Greetings tab as admin-greetings", () => {
+    expect(classifyDemoLabel("Greetings", adminCtx)).toBe("admin-greetings");
+  });
+
+  // -- admin-quarantine --
+  it("classifies Play voicemail as admin-quarantine", () => {
+    expect(classifyDemoLabel("Play voicemail", adminCtx)).toBe(
+      "admin-quarantine",
+    );
+  });
+
+  it("classifies Route to ticket as admin-quarantine", () => {
+    expect(classifyDemoLabel("Route to ticket", adminCtx)).toBe(
+      "admin-quarantine",
+    );
+  });
+
+  it("classifies Dismiss as admin-quarantine", () => {
+    expect(classifyDemoLabel("Dismiss", adminCtx)).toBe("admin-quarantine");
+  });
+
+  it("classifies Unrouted tab as admin-quarantine", () => {
+    expect(classifyDemoLabel("Unrouted", adminCtx)).toBe("admin-quarantine");
+  });
+
+  // -- settings-password --
+  it("classifies Password as settings-password on settings (not credentials)", () => {
+    expect(classifyDemoLabel("Password", settingsCtx)).toBe(
+      "settings-password",
+    );
+  });
+
+  it("classifies Password as credentials on non-settings features", () => {
+    expect(classifyDemoLabel("Password", listCtx)).toBe("credentials");
+    expect(classifyDemoLabel("Password", loginCtx)).toBe("credentials");
+  });
+
+  // -- settings-2fa --
+  it("classifies Two-factor authentication as settings-2fa", () => {
+    expect(classifyDemoLabel("Two-factor authentication", settingsCtx)).toBe(
+      "settings-2fa",
+    );
   });
 });

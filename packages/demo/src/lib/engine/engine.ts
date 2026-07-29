@@ -95,6 +95,8 @@ export interface DemoEngineResult {
   readonly seedResult: SeedStructureResult;
   /** Seeded ticket IDs, ordered by creation. First entry has the richest thread. */
   readonly ticketIds: readonly string[];
+  /** Seeded KB article IDs, ordered by creation. First entry is the detail deep-link target. */
+  readonly articleIds: readonly string[];
   readonly demoVolScalar: Uint8Array;
   readonly platformDb: Kysely<PlatformDatabase>;
   readonly tDb: Kysely<TenantDatabase>;
@@ -359,7 +361,7 @@ export async function bootDemoEngine(): Promise<DemoEngineResult> {
 
   const { seedKbArticles } =
     await import("../../../../server/src/dev/seed-kb.js");
-  await seedKbArticles(
+  const kbResult = await seedKbArticles(
     tDb,
     sealedBox,
     seedResult.adminUserId,
@@ -962,6 +964,7 @@ export async function bootDemoEngine(): Promise<DemoEngineResult> {
     timings,
     seedResult,
     ticketIds: ticketResult.ticketIds,
+    articleIds: kbResult.articleIds,
     demoVolScalar,
     platformDb: db,
     tDb,

@@ -198,6 +198,37 @@
         m.demo_narrative_admin_communications_heading(),
       demo_narrative_admin_communications_body: () =>
         m.demo_narrative_admin_communications_body(),
+      // Dashboard topic sub-sections
+      demo_narrative_topic_dashboard_queues_heading: () =>
+        m.demo_narrative_topic_dashboard_queues_heading(),
+      demo_narrative_topic_dashboard_queues_body: () =>
+        m.demo_narrative_topic_dashboard_queues_body(),
+      demo_narrative_topic_dashboard_activity_heading: () =>
+        m.demo_narrative_topic_dashboard_activity_heading(),
+      demo_narrative_topic_dashboard_activity_body: () =>
+        m.demo_narrative_topic_dashboard_activity_body(),
+      // Library topic sub-sections
+      demo_narrative_topic_library_vote_heading: () =>
+        m.demo_narrative_topic_library_vote_heading(),
+      demo_narrative_topic_library_vote_body: () =>
+        m.demo_narrative_topic_library_vote_body(),
+      demo_narrative_topic_library_categories_heading: () =>
+        m.demo_narrative_topic_library_categories_heading(),
+      demo_narrative_topic_library_categories_body: () =>
+        m.demo_narrative_topic_library_categories_body(),
+      demo_narrative_topic_library_editor_heading: () =>
+        m.demo_narrative_topic_library_editor_heading(),
+      demo_narrative_topic_library_editor_body: () =>
+        m.demo_narrative_topic_library_editor_body(),
+      // Admin greetings and quarantine topic sub-sections
+      demo_narrative_topic_admin_greetings_heading: () =>
+        m.demo_narrative_topic_admin_greetings_heading(),
+      demo_narrative_topic_admin_greetings_body: () =>
+        m.demo_narrative_topic_admin_greetings_body(),
+      demo_narrative_topic_admin_quarantine_heading: () =>
+        m.demo_narrative_topic_admin_quarantine_heading(),
+      demo_narrative_topic_admin_quarantine_body: () =>
+        m.demo_narrative_topic_admin_quarantine_body(),
     };
 
     // eslint-disable-next-line security/detect-object-injection -- key is a message key from section config, not user input
