@@ -140,7 +140,8 @@ describe("reports router", () => {
       expect(result).toHaveLength(1);
       expect(result[0]).toEqual({
         queueId: "q1",
-        encryptedQueueName: Buffer.from("encrypted-general").toString("base64"),
+        encryptedQueueName:
+          Buffer.from("encrypted-general").toString("base64url"),
         open: 5,
         closed: 10,
       });

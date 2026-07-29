@@ -59,7 +59,7 @@
     KB_ALLOWED_CONTENT_TYPES,
     type KbAllowedContentType,
   } from "@care-y/shared";
-  import { uint8ArrayToBase64 } from "$lib/utils/buffer-encoding.js";
+  import { encode } from "@care-y/crypto";
   import { untrack } from "svelte";
   import { SvelteMap } from "svelte/reactivity";
 
@@ -611,7 +611,7 @@
 
       // Encrypt with org key
       const encrypted = await orgKeyManager.encrypt(plainBytes);
-      const blob = uint8ArrayToBase64(encrypted);
+      const blob = encode(encrypted);
 
       // We need an article ID for attachments. For new articles, we
       // need to save as draft first. For now, use a placeholder approach:
@@ -636,7 +636,7 @@
 
       // Encrypt filename
       const filenameBytes = new TextEncoder().encode(file.name);
-      const encryptedFilename = uint8ArrayToBase64(
+      const encryptedFilename = encode(
         await orgKeyManager.encrypt(filenameBytes),
       );
 
@@ -703,10 +703,10 @@
       const arrayBuf = await file.arrayBuffer();
       const plainBytes = new Uint8Array(arrayBuf);
       const encrypted = await orgKeyManager.encrypt(plainBytes);
-      const blob = uint8ArrayToBase64(encrypted);
+      const blob = encode(encrypted);
 
       const filenameBytes = new TextEncoder().encode(file.name);
-      const encryptedFilename = uint8ArrayToBase64(
+      const encryptedFilename = encode(
         await orgKeyManager.encrypt(filenameBytes),
       );
 
@@ -788,9 +788,9 @@
     for (const [blobUrl, pending] of pendingUploads) {
       try {
         const encrypted = await orgKeyManager.encrypt(pending.plainBytes);
-        const blob = uint8ArrayToBase64(encrypted);
+        const blob = encode(encrypted);
         const filenameBytes = new TextEncoder().encode(pending.filename);
-        const encryptedFilename = uint8ArrayToBase64(
+        const encryptedFilename = encode(
           await orgKeyManager.encrypt(filenameBytes),
         );
 
@@ -896,18 +896,14 @@
     try {
       // Encrypt title
       const titleBytes = new TextEncoder().encode(title.trim());
-      const encryptedTitle = uint8ArrayToBase64(
-        await orgKeyManager.encrypt(titleBytes),
-      );
+      const encryptedTitle = encode(await orgKeyManager.encrypt(titleBytes));
 
       if (isEditMode && existingArticle !== undefined) {
         // Edit mode: body is final (images already uploaded with article ID)
-        const encryptedBody = uint8ArrayToBase64(
-          await orgKeyManager.encrypt(bodyBytes),
-        );
+        const encryptedBody = encode(await orgKeyManager.encrypt(bodyBytes));
         const excerptText = extractExcerpt(editor.state.doc);
         const excerptBytes = new TextEncoder().encode(excerptText);
-        const encryptedExcerpt = uint8ArrayToBase64(
+        const encryptedExcerpt = encode(
           await orgKeyManager.encrypt(excerptBytes),
         );
 
@@ -924,12 +920,10 @@
       } else {
         // Create mode: first create the article, then upload pending
         // images, then update the body with corrected attachment URIs.
-        const encryptedBody = uint8ArrayToBase64(
-          await orgKeyManager.encrypt(bodyBytes),
-        );
+        const encryptedBody = encode(await orgKeyManager.encrypt(bodyBytes));
         const excerptText = extractExcerpt(editor.state.doc);
         const excerptBytes = new TextEncoder().encode(excerptText);
-        const encryptedExcerpt = uint8ArrayToBase64(
+        const encryptedExcerpt = encode(
           await orgKeyManager.encrypt(excerptBytes),
         );
 
@@ -954,10 +948,10 @@
 
             await kbRouter.updateItem.mutate({
               itemId: created.id,
-              encryptedBody: uint8ArrayToBase64(
+              encryptedBody: encode(
                 await orgKeyManager.encrypt(correctedBytes),
               ),
-              encryptedExcerpt: uint8ArrayToBase64(
+              encryptedExcerpt: encode(
                 await orgKeyManager.encrypt(correctedExcerptBytes),
               ),
             });

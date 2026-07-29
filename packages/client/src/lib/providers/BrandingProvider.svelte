@@ -26,11 +26,11 @@
     getAppleTouchIconHref,
   } from "$lib/branding/icon-link.svelte.js";
   import { setOrgLogoUrl } from "$lib/branding/logo-url.svelte.js";
+  import { decode } from "@care-y/crypto";
   import { getOrgKeyManager } from "$lib/crypto/context.js";
   import { isOrgKeyReady } from "$lib/crypto/org-key-ready.svelte.js";
   import { trpc } from "$lib/trpc/index.js";
   import { getOrgSlug } from "$lib/utils/org-slug.js";
-  import { base64ToUint8Array } from "$lib/utils/buffer-encoding.js";
   import type { OrgKeyManager } from "$lib/crypto/org-key.js";
   import {
     TERMINOLOGY_DEFAULTS_EN,
@@ -209,7 +209,7 @@
     if (encrypted === null || encrypted === "" || orgKeyManager === null)
       return null;
     try {
-      const bytes = base64ToUint8Array(encrypted);
+      const bytes = decode(encrypted);
       const plaintext = await orgKeyManager.decrypt(bytes);
       return decoder.decode(plaintext);
     } catch {

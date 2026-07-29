@@ -83,7 +83,7 @@ export function createTelephonyAdminRouter(deps: TelephonyAdminRouterDeps) {
         const entry = await repo.add(phoneHash, encryptedNumber, ctx.user.id);
         return {
           ...entry,
-          encryptedNumber: entry.encryptedNumber.toString("base64"),
+          encryptedNumber: entry.encryptedNumber.toString("base64url"),
         };
       }),
     ),
@@ -103,7 +103,7 @@ export function createTelephonyAdminRouter(deps: TelephonyAdminRouterDeps) {
         const entries = await repo.list();
         return entries.map((e) => ({
           ...e,
-          encryptedNumber: e.encryptedNumber.toString("base64"),
+          encryptedNumber: e.encryptedNumber.toString("base64url"),
         }));
       }),
     ),

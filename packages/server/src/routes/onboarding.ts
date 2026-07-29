@@ -315,7 +315,7 @@ export function createOnboardingRouter(deps: OnboardingRouterDeps) {
           invitedBy: inv.invitedBy,
           expiresAt: inv.expiresAt.toISOString(),
           createdAt: inv.createdAt.toISOString(),
-          encryptedToken: inv.encryptedToken?.toString("base64") ?? null,
+          encryptedToken: inv.encryptedToken?.toString("base64url") ?? null,
         }));
       }),
     ),

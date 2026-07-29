@@ -20,6 +20,7 @@
     checkBrandProximity,
     type BrandProximity,
   } from "$lib/branding/konsta-palette.js";
+  import { decode } from "@care-y/crypto";
   import Register from "$lib/components/Register.svelte";
   import {
     updateBrandingCache,
@@ -158,7 +159,7 @@
     const raw = brandingQuery.data.encryptedLogo;
     const ciphertext =
       typeof raw === "string"
-        ? Uint8Array.from(atob(raw), (c) => c.charCodeAt(0))
+        ? decode(raw)
         : new Uint8Array((raw as { data: number[] }).data);
 
     void (async () => {

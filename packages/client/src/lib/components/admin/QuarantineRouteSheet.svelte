@@ -11,8 +11,8 @@
   import { toastStore } from "$lib/stores/toast.svelte.js";
   import { announceToLiveRegion } from "$lib/utils/announce.js";
   import { haptic } from "$lib/utils/haptic.js";
+  import { encode } from "@care-y/crypto";
   import { requireRouter, ClientError } from "$lib/errors.js";
-  import { uint8ArrayToBase64 } from "$lib/utils/buffer-encoding.js";
   import { DEV_ORG_SLUG } from "$lib/utils/org-slug.js";
   import ShellSheet from "$lib/shell/ShellSheet.svelte";
   import SoftButton from "$lib/components/inputs/SoftButton.svelte";
@@ -123,7 +123,7 @@
         throw new ClientError("No unsealed audio available");
       }
 
-      const audioData = uint8ArrayToBase64(unsealedAudio);
+      const audioData = encode(unsealedAudio);
 
       let target:
         | { type: "clientId"; clientId: string }

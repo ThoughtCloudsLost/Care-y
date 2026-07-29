@@ -248,7 +248,7 @@ export function createOprfEvaluateService(
     const blindedBuf = Buffer.from(blindedElement, "base64");
     try {
       const evaluated = await deps.evaluator.evaluate(blindedBuf);
-      return { evaluated: Buffer.from(evaluated).toString("base64") };
+      return { evaluated: Buffer.from(evaluated).toString("base64url") };
     } catch (err: unknown) {
       await deps.auditLogger.logFailure(userId, ip, "oprf_failed");
       throw err;

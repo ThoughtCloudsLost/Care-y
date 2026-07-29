@@ -1,9 +1,9 @@
 /**
- * Base64 helpers for binary values held on the client.
+ * Standard base64 helpers for browser-local round-trips only.
  *
- * These are for local storage and envelope parsing, not for ciphertext on
- * the wire. Encrypted fields arrive from tRPC as base64 strings already and
- * go straight to the decrypt caches without conversion.
+ * Used for localStorage persistence (sealed envelopes, recent views) and
+ * offline file formats (escrow export). NOT for server wire values.
+ * Wire values use encode/decode from @care-y/crypto (base64url, no padding).
  */
 
 /**
