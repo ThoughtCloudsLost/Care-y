@@ -10,11 +10,13 @@
 import * as m from "$lib/paraglide/messages.js";
 import { locales } from "$lib/paraglide/runtime.js";
 import { withTerms } from "$lib/terminology/with-terms.js";
-import type { DemoTopic } from "./bridge.js";
+import type { DemoFeature, DemoTopic } from "./bridge.js";
 
 export interface ClassifierContext {
   /** True when the phone is displaying a ticket detail view. */
   readonly inDetail: boolean;
+  /** The active demo feature, used to disambiguate labels that appear on multiple surfaces. */
+  readonly feature: DemoFeature;
 }
 
 /**
@@ -35,44 +37,58 @@ export function classifyDemoLabel(
     const terms = withTerms();
 
     // --- credentials ---
+    // auth_password and settings_password share the same string ("Password"),
+    // so the match is gated on feature to avoid a collision on settings.
     if (
       label === m.auth_sign_in({}, opts) ||
       label === m.auth_username({}, opts) ||
-      label === m.auth_password({}, opts)
+      (label === m.auth_password({}, opts) && ctx.feature !== "settings")
     ) {
       return "credentials";
     }
 
     // --- twofa (per-method labels first, shared controls generic) ---
+    // The TwoFactorSheet on settings renders the same method labels as
+    // the login picker. The feature context disambiguates: on login they
+    // classify to their login-specific twofa-* topics; on settings they
+    // all classify as settings-2fa.
     if (label === m.twofa_totp_label({}, opts)) {
-      return "twofa-totp";
+      return ctx.feature === "settings" ? "settings-2fa" : "twofa-totp";
     }
     if (label === m.twofa_passkey_use({}, opts)) {
-      return "twofa-passkey";
+      return ctx.feature === "settings" ? "settings-2fa" : "twofa-passkey";
     }
     if (
       label === m.twofa_email_label({}, opts) ||
       label === m.twofa_email_send_code({}, opts)
     ) {
-      return "twofa-email";
+      return ctx.feature === "settings" ? "settings-2fa" : "twofa-email";
     }
     if (
       label === m.twofa_sms_label({}, opts) ||
       label === m.twofa_sms_send_code({}, opts)
     ) {
-      return "twofa-sms";
+      return ctx.feature === "settings" ? "settings-2fa" : "twofa-sms";
     }
     if (
       label === m.twofa_push_label({}, opts) ||
       label === m.twofa_push_send({}, opts)
     ) {
-      return "twofa-push";
+      return ctx.feature === "settings" ? "settings-2fa" : "twofa-push";
     }
     if (label === m.twofa_backup_codes_enter({}, opts)) {
-      return "twofa-backup";
+      return ctx.feature === "settings" ? "settings-2fa" : "twofa-backup";
     }
     if (label === m.twofa_verify_submit({}, opts)) {
-      return "twofa";
+      return ctx.feature === "settings" ? "settings-2fa" : "twofa";
+    }
+
+    // --- twofa_remove_confirm (settings-only) ---
+    if (
+      ctx.feature === "settings" &&
+      label === m.twofa_remove_confirm({}, opts)
+    ) {
+      return "settings-2fa";
     }
 
     // --- key-derivation ---
@@ -185,6 +201,81 @@ export function classifyDemoLabel(
     // --- language ---
     if (label === m.language_picker_label({}, opts)) {
       return "language";
+    }
+
+    // --- dashboard-queues ---
+    if (label === m.dashboard_queues_heading(terms, opts)) {
+      return "dashboard-queues";
+    }
+
+    // --- dashboard-activity ---
+    if (label === m.dashboard_activity_heading({}, opts)) {
+      return "dashboard-activity";
+    }
+
+    // --- library-vote ---
+    if (
+      label === m.library_was_helpful({}, opts) ||
+      label === m.library_vote_up({}, opts) ||
+      label === m.library_vote_down({}, opts)
+    ) {
+      return "library-vote";
+    }
+
+    // --- library-categories ---
+    if (label === m.library_manage_categories({}, opts)) {
+      return "library-categories";
+    }
+
+    // --- library-editor ---
+    if (
+      label === m.library_new_article({}, opts) ||
+      label === m.library_edit_article({}, opts)
+    ) {
+      return "library-editor";
+    }
+
+    // --- admin-roster-edit vs settings-profile ---
+    // settings_display_name and settings_username label the admin user-edit
+    // sheet inputs when on admin, and the profile sheet inputs on settings.
+    if (label === m.settings_display_name({}, opts)) {
+      return ctx.feature === "admin" ? "admin-roster-edit" : "settings-profile";
+    }
+    if (label === m.settings_username({}, opts)) {
+      return ctx.feature === "admin" ? "admin-roster-edit" : "settings-profile";
+    }
+
+    // --- admin-roster-edit (unambiguous) ---
+    if (label === m.admin_user_edit_actions({}, opts)) {
+      return "admin-roster-edit";
+    }
+
+    // --- admin-greetings ---
+    if (
+      label === m.admin_greetings_add_button({}, opts) ||
+      label === m.admin_tab_greetings({}, opts)
+    ) {
+      return "admin-greetings";
+    }
+
+    // --- admin-quarantine ---
+    if (
+      label === m.admin_quarantine_play({}, opts) ||
+      label === m.admin_quarantine_route({}, opts) ||
+      label === m.admin_quarantine_dismiss({}, opts) ||
+      label === m.admin_tab_quarantine({}, opts)
+    ) {
+      return "admin-quarantine";
+    }
+
+    // --- settings-password ---
+    if (label === m.settings_password({}, opts)) {
+      return "settings-password";
+    }
+
+    // --- settings-2fa ---
+    if (label === m.settings_2fa({}, opts)) {
+      return "settings-2fa";
     }
   }
 

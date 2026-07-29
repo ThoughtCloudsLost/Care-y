@@ -143,6 +143,18 @@ export const SECTIONS: readonly Section[] = [
         headingKey: "demo_narrative_dashboard_heading",
         bodyKey: "demo_narrative_dashboard_body",
       },
+      {
+        slug: "queues",
+        topic: "dashboard-queues",
+        headingKey: "demo_narrative_topic_dashboard_queues_heading",
+        bodyKey: "demo_narrative_topic_dashboard_queues_body",
+      },
+      {
+        slug: "activity",
+        topic: "dashboard-activity",
+        headingKey: "demo_narrative_topic_dashboard_activity_heading",
+        bodyKey: "demo_narrative_topic_dashboard_activity_body",
+      },
     ],
   },
   {
@@ -253,6 +265,26 @@ export const SECTIONS: readonly Section[] = [
         headingKey: "demo_narrative_library_heading",
         bodyKey: "demo_narrative_library_body",
       },
+      {
+        slug: "vote",
+        topic: "library-vote",
+        headingKey: "demo_narrative_topic_library_vote_heading",
+        bodyKey: "demo_narrative_topic_library_vote_body",
+        routes: SUB_ROUTES["library/vote"],
+      },
+      {
+        slug: "categories",
+        topic: "library-categories",
+        headingKey: "demo_narrative_topic_library_categories_heading",
+        bodyKey: "demo_narrative_topic_library_categories_body",
+      },
+      {
+        slug: "editor",
+        topic: "library-editor",
+        headingKey: "demo_narrative_topic_library_editor_heading",
+        bodyKey: "demo_narrative_topic_library_editor_body",
+        routes: SUB_ROUTES["library/editor"],
+      },
     ],
   },
   {
@@ -269,7 +301,7 @@ export const SECTIONS: readonly Section[] = [
       },
       {
         slug: "people-queues",
-        topic: null,
+        topic: "admin-roster-edit",
         headingKey: "demo_narrative_admin_people_queues_heading",
         bodyKey: "demo_narrative_admin_people_queues_body",
         routes: SUB_ROUTES["admin/people-queues"],
@@ -287,6 +319,18 @@ export const SECTIONS: readonly Section[] = [
         headingKey: "demo_narrative_admin_communications_heading",
         bodyKey: "demo_narrative_admin_communications_body",
         routes: SUB_ROUTES["admin/communications"],
+      },
+      {
+        slug: "greetings",
+        topic: "admin-greetings",
+        headingKey: "demo_narrative_topic_admin_greetings_heading",
+        bodyKey: "demo_narrative_topic_admin_greetings_body",
+      },
+      {
+        slug: "quarantine",
+        topic: "admin-quarantine",
+        headingKey: "demo_narrative_topic_admin_quarantine_heading",
+        bodyKey: "demo_narrative_topic_admin_quarantine_body",
       },
     ],
   },
@@ -318,19 +362,19 @@ export const SECTIONS: readonly Section[] = [
       },
       {
         slug: "profile-identity",
-        topic: null,
+        topic: "settings-profile",
         headingKey: "demo_narrative_settings_profile_identity_heading",
         bodyKey: "demo_narrative_settings_profile_identity_body",
       },
       {
         slug: "password-keys",
-        topic: null,
+        topic: "settings-password",
         headingKey: "demo_narrative_settings_password_keys_heading",
         bodyKey: "demo_narrative_settings_password_keys_body",
       },
       {
         slug: "two-factor-methods",
-        topic: null,
+        topic: "settings-2fa",
         headingKey: "demo_narrative_settings_two_factor_methods_heading",
         bodyKey: "demo_narrative_settings_two_factor_methods_body",
       },
@@ -496,12 +540,14 @@ export interface PhoneCommand {
  * Given a section and optional sub-section, compute what bridge commands
  * to send to the phone. The DEMO_DETAIL_TICKET_ID constant must be
  * passed in since this module cannot import it from bridge.ts at the
- * value level (it may not exist yet).
+ * value level (it may not exist yet). The articleDetailId serves the
+ * same role for the library section's vote sub.
  */
 export function resolvePhoneCommand(
   sectionId: SectionId,
   subSlug: string | null,
   ticketDetailId: string,
+  articleDetailId: string,
 ): PhoneCommand {
   // Find the topic for this sub-section
   let pulseTopic: DemoTopic | null = null;
@@ -573,22 +619,42 @@ export function resolvePhoneCommand(
         openSearch: true,
         pulseTopic,
       };
-    case "library":
+    case "library": {
+      let libraryDetail: string | null = null;
+      if (subSlug === "vote") {
+        libraryDetail = articleDetailId;
+      } else if (subSlug === "editor") {
+        libraryDetail = "new";
+      }
       return {
         feature: "library",
-        detail: null,
+        detail: libraryDetail,
         loginTarget: null,
         openSearch: false,
         pulseTopic,
       };
-    case "admin":
+    }
+    case "admin": {
+      let adminDetail: string | null = null;
+      if (subSlug === "people-queues") {
+        adminDetail = "people";
+      } else if (subSlug === "org-config-keys") {
+        adminDetail = "organization";
+      } else if (
+        subSlug === "communications" ||
+        subSlug === "greetings" ||
+        subSlug === "quarantine"
+      ) {
+        adminDetail = "communications";
+      }
       return {
         feature: "admin",
-        detail: null,
+        detail: adminDetail,
         loginTarget: null,
         openSearch: false,
         pulseTopic,
       };
+    }
     case "schedule":
       return {
         feature: "schedule",
@@ -702,6 +768,18 @@ export function bridgeStateToLocation(
   }
 
   if (feature === "admin") {
+    // When arriving at an admin sub-page without a topic, map the
+    // detail to the sub-section that narrates it so the page highlights
+    // the right card.
+    if (detail === "people") {
+      return { sectionId: "admin", subSlug: "people-queues" };
+    }
+    if (detail === "organization") {
+      return { sectionId: "admin", subSlug: "org-config-keys" };
+    }
+    if (detail === "communications") {
+      return { sectionId: "admin", subSlug: "communications" };
+    }
     return { sectionId: "admin", subSlug: "intro" };
   }
 

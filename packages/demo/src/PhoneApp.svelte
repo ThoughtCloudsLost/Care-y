@@ -55,7 +55,10 @@
     renderPulseMarker,
     TAP_TOPICS,
   } from "$demo/tap-pulse.js";
-  import { DEMO_DETAIL_TICKET_ID } from "$demo/bridge.js";
+  import {
+    DEMO_DETAIL_TICKET_ID,
+    DEMO_DETAIL_ARTICLE_ID,
+  } from "$demo/bridge.js";
   import {
     activateSettingsDriver,
     deactivateSettingsDriver,
@@ -100,22 +103,28 @@
   // back to the tickets list.
   let resolvedDetailId: string | null = $state(null);
 
+  // The real article ID for the library vote sub-section, resolved
+  // once the engine boots.
+  let resolvedArticleId: string | null = $state(null);
+
   /**
-   * Map the outer-page sentinel to the real ticket ID. Returns
-   * the real ID when the sentinel is passed and the engine has
-   * resolved, or null if the engine is not ready yet.
+   * Map the outer-page sentinel to the real ID. Returns the real
+   * ID when the sentinel is passed and the engine has resolved,
+   * or the original detail value otherwise.
    */
   function sentinelToReal(detail: DemoDetail): DemoDetail {
     if (detail === DEMO_DETAIL_TICKET_ID && resolvedDetailId !== null) {
       return resolvedDetailId;
     }
+    if (detail === DEMO_DETAIL_ARTICLE_ID && resolvedArticleId !== null) {
+      return resolvedArticleId;
+    }
     return detail;
   }
 
-  // Seed crypto-context and resolve the detail ticket ID once
-  // the engine finishes booting. Failures are already logged by
-  // phone-main.ts; we catch here to avoid an unhandled rejection
-  // inside the component.
+  // Seed crypto-context and resolve the detail IDs once the engine
+  // finishes booting. Failures are already logged by phone-main.ts;
+  // we catch here to avoid an unhandled rejection inside the component.
   //
   // engineReady is a Promise prop set once at mount; capturing the
   // initial value is intentional (the prop never changes).
@@ -128,6 +137,9 @@
       });
       if (e.ticketIds.length > 0) {
         resolvedDetailId = e.ticketIds[0] ?? null;
+      }
+      if (e.articleIds.length > 0) {
+        resolvedArticleId = e.articleIds[0] ?? null;
       }
     })
     .catch(() => {
@@ -216,6 +228,7 @@
     }),
     ensureScreen,
     getTicketDetailId: () => resolvedDetailId ?? DEMO_DETAIL_TICKET_ID,
+    getArticleDetailId: () => resolvedArticleId ?? DEMO_DETAIL_ARTICLE_ID,
   });
 
   // Every phone screen change lands in the store in the same reactive
@@ -262,7 +275,7 @@
       if (!(target instanceof Element)) return;
 
       const inDetail = router.detail !== null;
-      const ctx = { inDetail };
+      const ctx = { inDetail, feature: router.feature };
 
       // Try aria-label first
       const labeled = target.closest("[aria-label]");
@@ -403,15 +416,20 @@
         await waitFor(() => router.searchOpen, token, 1500);
       }
     } else {
-      // Translate the sentinel at the phone boundary: if the engine
+      // Translate sentinels at the phone boundary: if the engine
       // is not ready yet when a detail navigation arrives, fall back
-      // to the tickets list rather than navigating to a dead ID.
+      // to the list rather than navigating to a dead ID.
       let targetDetail = cmd.detail;
       if (targetDetail === DEMO_DETAIL_TICKET_ID) {
         if (resolvedDetailId !== null) {
           targetDetail = resolvedDetailId;
         } else {
-          // Engine not ready yet; fall back to list
+          targetDetail = null;
+        }
+      } else if (targetDetail === DEMO_DETAIL_ARTICLE_ID) {
+        if (resolvedArticleId !== null) {
+          targetDetail = resolvedArticleId;
+        } else {
           targetDetail = null;
         }
       }

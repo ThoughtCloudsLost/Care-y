@@ -14,7 +14,7 @@ import * as m from "$lib/paraglide/messages.js";
 import { locales } from "$lib/paraglide/runtime.js";
 import { withTerms } from "$lib/terminology/with-terms.js";
 import type { DemoTopic, DemoFeature } from "./bridge.js";
-import { DEMO_DETAIL_TICKET_ID } from "./bridge.js";
+import { DEMO_DETAIL_TICKET_ID, DEMO_DETAIL_ARTICLE_ID } from "./bridge.js";
 
 // -----------------------------------------------------------------------
 // Topic to feature mapping
@@ -50,6 +50,17 @@ const DETAIL_TOPICS: ReadonlySet<DemoTopic> = new Set([
   "timeline",
 ]);
 
+const DASHBOARD_TOPICS: ReadonlySet<DemoTopic> = new Set([
+  "dashboard-queues",
+  "dashboard-activity",
+]);
+
+const SETTINGS_TOPICS: ReadonlySet<DemoTopic> = new Set([
+  "settings-profile",
+  "settings-password",
+  "settings-2fa",
+]);
+
 /** Resolve the feature + detail a topic's element lives on. */
 export function topicFeatureTarget(topic: DemoTopic): {
   feature: DemoFeature;
@@ -63,6 +74,27 @@ export function topicFeatureTarget(topic: DemoTopic): {
   }
   if (DETAIL_TOPICS.has(topic)) {
     return { feature: "tickets", detail: DEMO_DETAIL_TICKET_ID };
+  }
+  if (DASHBOARD_TOPICS.has(topic)) {
+    return { feature: "home", detail: null };
+  }
+  if (topic === "library-vote") {
+    return { feature: "library", detail: DEMO_DETAIL_ARTICLE_ID };
+  }
+  if (topic === "library-categories") {
+    return { feature: "library", detail: null };
+  }
+  if (topic === "library-editor") {
+    return { feature: "library", detail: "new" };
+  }
+  if (topic === "admin-roster-edit") {
+    return { feature: "admin", detail: "people" };
+  }
+  if (topic === "admin-greetings" || topic === "admin-quarantine") {
+    return { feature: "admin", detail: "communications" };
+  }
+  if (SETTINGS_TOPICS.has(topic)) {
+    return { feature: "settings", detail: null };
   }
   return { feature: "tickets", detail: null };
 }
@@ -177,6 +209,50 @@ export function buildTopicCandidates(topic: DemoTopic): Set<string> {
         candidates.add(m.ticket_action_timeline({}, opts));
         candidates.add(m.ticket_action_messages({}, opts));
         break;
+      case "dashboard-queues":
+        candidates.add(m.dashboard_queues_heading(terms, opts));
+        break;
+      case "dashboard-activity":
+        candidates.add(m.dashboard_activity_heading({}, opts));
+        break;
+      case "library-vote":
+        candidates.add(m.library_was_helpful({}, opts));
+        candidates.add(m.library_vote_up({}, opts));
+        candidates.add(m.library_vote_down({}, opts));
+        break;
+      case "library-categories":
+        candidates.add(m.library_manage_categories({}, opts));
+        break;
+      case "library-editor":
+        candidates.add(m.library_new_article({}, opts));
+        candidates.add(m.library_edit_article({}, opts));
+        break;
+      case "admin-roster-edit":
+        candidates.add(m.admin_user_edit_actions({}, opts));
+        candidates.add(m.settings_display_name({}, opts));
+        candidates.add(m.settings_username({}, opts));
+        break;
+      case "admin-greetings":
+        candidates.add(m.admin_greetings_add_button({}, opts));
+        candidates.add(m.admin_tab_greetings({}, opts));
+        break;
+      case "admin-quarantine":
+        candidates.add(m.admin_quarantine_play({}, opts));
+        candidates.add(m.admin_quarantine_route({}, opts));
+        candidates.add(m.admin_quarantine_dismiss({}, opts));
+        candidates.add(m.admin_tab_quarantine({}, opts));
+        break;
+      case "settings-profile":
+        candidates.add(m.settings_display_name({}, opts));
+        candidates.add(m.settings_username({}, opts));
+        break;
+      case "settings-password":
+        candidates.add(m.settings_password({}, opts));
+        break;
+      case "settings-2fa":
+        candidates.add(m.settings_2fa({}, opts));
+        candidates.add(m.twofa_remove_confirm({}, opts));
+        break;
     }
   }
   return candidates;
@@ -204,6 +280,12 @@ export const TAP_TOPICS: ReadonlySet<DemoTopic> = new Set([
   "notes",
   "case-fold",
   "timeline",
+  "dashboard-queues",
+  "dashboard-activity",
+  "library-categories",
+  "admin-roster-edit",
+  "settings-profile",
+  "settings-2fa",
 ]);
 
 /**
@@ -251,6 +333,24 @@ export function buildActivationCandidates(topic: DemoTopic): Set<string> {
       case "timeline":
         candidates.add(m.ticket_action_timeline({}, opts));
         break;
+      case "dashboard-queues":
+        candidates.add(m.dashboard_queues_heading(terms, opts));
+        break;
+      case "dashboard-activity":
+        candidates.add(m.dashboard_activity_heading({}, opts));
+        break;
+      case "library-categories":
+        candidates.add(m.library_manage_categories({}, opts));
+        break;
+      case "admin-roster-edit":
+        candidates.add(m.admin_user_edit_actions({}, opts));
+        break;
+      case "settings-profile":
+        candidates.add(m.settings_display_name({}, opts));
+        break;
+      case "settings-2fa":
+        candidates.add(m.settings_2fa({}, opts));
+        break;
       case "credentials":
       case "language":
       case "twofa":
@@ -262,6 +362,11 @@ export function buildActivationCandidates(topic: DemoTopic): Set<string> {
       case "twofa-backup":
       case "key-derivation":
       case "reply":
+      case "library-vote":
+      case "library-editor":
+      case "admin-greetings":
+      case "admin-quarantine":
+      case "settings-password":
         break;
     }
   }
@@ -327,6 +432,21 @@ export function findTopicElement(
     if (text !== "" && candidates.has(text)) return el;
   }
 
+  // List items carry title and value in one textContent blob, so the
+  // whole-text pass above misses them. Match each childless leaf's own
+  // text instead, mirroring the click classifier's list-item handling.
+  const listItems = root.querySelectorAll(".k-list-item");
+  for (const item of listItems) {
+    if (!isVisible(item)) continue;
+    for (const leaf of item.querySelectorAll("*")) {
+      if (leaf.childElementCount > 0) continue;
+      const text = leaf.textContent.trim();
+      if (text !== "" && text.length <= 80 && candidates.has(text)) {
+        return item;
+      }
+    }
+  }
+
   // Check placeholder attributes on inputs
   const inputs = root.querySelectorAll("[placeholder]");
   for (const el of inputs) {
@@ -339,8 +459,21 @@ export function findTopicElement(
 }
 
 function isVisible(el: Element): boolean {
+  // Closed Konsta sheets stay mounted: their content is marked inert
+  // and the sheet is translated below the viewport, so size alone
+  // reports hidden elements as visible (the settings driver learned
+  // the same lesson). Require viewport intersection and a non-inert
+  // ancestry.
+  if (el.closest("[inert]") !== null) return false;
   const rect = el.getBoundingClientRect();
-  return rect.width > 0 && rect.height > 0;
+  const view = el.ownerDocument.defaultView;
+  if (view === null) return false;
+  return (
+    rect.width > 0 &&
+    rect.height > 0 &&
+    rect.bottom > 0 &&
+    rect.top < view.innerHeight
+  );
 }
 
 // -----------------------------------------------------------------------

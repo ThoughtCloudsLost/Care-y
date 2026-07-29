@@ -84,6 +84,8 @@ function featureToPathname(feature: DemoFeature, detail: DemoDetail): string {
       if (detail === "volunteer") return "/admin/volunteer";
       if (detail === "manager") return "/admin/manager";
       if (detail === "people") return "/admin/people";
+      if (detail === "organization") return "/admin/organization";
+      if (detail === "communications") return "/admin/communications";
       return "/admin";
     case "schedule":
       return "/more/schedule";

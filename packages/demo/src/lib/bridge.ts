@@ -108,7 +108,18 @@ export type DemoTopic =
   | "reply"
   | "notes"
   | "case-fold"
-  | "timeline";
+  | "timeline"
+  | "dashboard-queues"
+  | "dashboard-activity"
+  | "library-vote"
+  | "library-categories"
+  | "library-editor"
+  | "admin-roster-edit"
+  | "admin-greetings"
+  | "admin-quarantine"
+  | "settings-profile"
+  | "settings-password"
+  | "settings-2fa";
 
 /** All topics in display order. */
 export const DEMO_TOPICS: readonly DemoTopic[] = [
@@ -133,10 +144,24 @@ export const DEMO_TOPICS: readonly DemoTopic[] = [
   "notes",
   "case-fold",
   "timeline",
+  "dashboard-queues",
+  "dashboard-activity",
+  "library-vote",
+  "library-categories",
+  "library-editor",
+  "admin-roster-edit",
+  "admin-greetings",
+  "admin-quarantine",
+  "settings-profile",
+  "settings-password",
+  "settings-2fa",
 ] as const;
 
 /** Ticket the ticket-detail section navigates to. tk-0001 has the richest thread. */
 export const DEMO_DETAIL_TICKET_ID = "tk-0001";
+
+/** Article the library section opens for the vote sub-section. Resolved to a real seeded ID at runtime. */
+export const DEMO_DETAIL_ARTICLE_ID = "kb-0001";
 
 // -----------------------------------------------------------------------
 // Bridge state and interface

@@ -97,6 +97,12 @@ vi.mock("$demo/engine/route-manifest.js", () => ({
     if (pathname === "/admin/manager") {
       return { params: {}, routeId: "/(app)/admin/manager" };
     }
+    if (pathname === "/admin/organization") {
+      return { params: {}, routeId: "/(app)/admin/organization" };
+    }
+    if (pathname === "/admin/communications") {
+      return { params: {}, routeId: "/(app)/admin/communications" };
+    }
     if (pathname === "/more/settings") {
       return { params: {}, routeId: "/(app)/more/settings" };
     }
@@ -204,6 +210,20 @@ describe("DemoRouter", () => {
       expect(router.feature).toBe("admin");
       expect(router.detail).toBe("people");
       expect(router.activeArea).toBe("admin-people");
+    });
+
+    it("sets feature to admin with organization detail", () => {
+      router.navigate("admin", "organization");
+      expect(router.feature).toBe("admin");
+      expect(router.detail).toBe("organization");
+      expect(router.pathname).toBe("/admin/organization");
+    });
+
+    it("sets feature to admin with communications detail", () => {
+      router.navigate("admin", "communications");
+      expect(router.feature).toBe("admin");
+      expect(router.detail).toBe("communications");
+      expect(router.pathname).toBe("/admin/communications");
     });
 
     it("sets feature to schedule", () => {
@@ -358,6 +378,18 @@ describe("DemoRouter", () => {
       router.handleGoto("/admin/people");
       expect(router.feature).toBe("admin");
       expect(router.detail).toBe("people");
+    });
+
+    it("maps /admin/organization to admin with organization detail", () => {
+      router.handleGoto("/admin/organization");
+      expect(router.feature).toBe("admin");
+      expect(router.detail).toBe("organization");
+    });
+
+    it("maps /admin/communications to admin with communications detail", () => {
+      router.handleGoto("/admin/communications");
+      expect(router.feature).toBe("admin");
+      expect(router.detail).toBe("communications");
     });
 
     it("maps /more/settings to settings feature", () => {
