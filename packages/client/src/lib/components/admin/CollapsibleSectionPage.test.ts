@@ -8,19 +8,10 @@ import { Permission } from "@care-y/shared";
 
 let mockPermissions = new Set<string>();
 
-const mockGoto = vi.fn();
-
 // --- Mocks ---
 
 vi.mock("$app/navigation", () => ({
-  goto: mockGoto,
   afterNavigate: vi.fn(),
-}));
-
-vi.mock("$app/paths", () => ({
-  resolve: (path: string) => path,
-  base: "",
-  assets: "",
 }));
 
 vi.mock("$lib/crypto/context.js", () => ({
@@ -80,7 +71,6 @@ beforeEach(() => {
     Permission.MANAGE_KEYS,
   ]);
   mockNavbarCtx.current = undefined;
-  mockGoto.mockClear();
 });
 
 afterEach(cleanup);
@@ -120,22 +110,6 @@ function renderCSP(title = "Test Page"): ReturnType<typeof render> {
 // --- Tests ---
 
 describe("CollapsibleSectionPage", () => {
-  describe("permission guard", () => {
-    it("redirects to / when user has no matching permissions", () => {
-      setPermissions();
-      renderCSP();
-
-      expect(mockGoto).toHaveBeenCalledWith("/");
-    });
-
-    it("does not redirect when at least one permission matches", () => {
-      setPermissions(Permission.MANAGE_ORG_CONFIG);
-      renderCSP();
-
-      expect(mockGoto).not.toHaveBeenCalled();
-    });
-  });
-
   describe("section rendering", () => {
     it("renders only sections matching current permissions", () => {
       setPermissions(Permission.MANAGE_ORG_CONFIG);

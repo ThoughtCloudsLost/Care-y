@@ -1616,6 +1616,9 @@
   onnewticketdismiss={() => {
     newTicketOpen = false;
   }}
+  onnewticketcollision={(ticketId: string) => {
+    void goto(resolve(`/tickets/${ticketId}`));
+  }}
   {savedFilterModalOpen}
   {filterSummary}
   onsavedfilterdismiss={() => {
