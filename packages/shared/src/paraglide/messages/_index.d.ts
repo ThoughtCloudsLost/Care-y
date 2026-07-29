@@ -2002,4 +2002,8 @@ export * from "./demo_narrative_topic_admin_greetings_heading.js";
 export * from "./demo_narrative_topic_admin_greetings_body.js";
 export * from "./demo_narrative_topic_admin_quarantine_heading.js";
 export * from "./demo_narrative_topic_admin_quarantine_body.js";
+export * from "./demo_coming_soon_title.js";
+export * from "./demo_coming_soon_desc.js";
+export * from "./demo_coming_soon_heading.js";
+export * from "./demo_coming_soon_body.js";
 export type LocalizedString = import("../runtime.js").LocalizedString;

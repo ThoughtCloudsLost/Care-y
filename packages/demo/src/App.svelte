@@ -18,7 +18,11 @@
     createScrollEngine,
     createTopicProgress,
   } from "$demo/scroll-engine.svelte.js";
-  import { SECTIONS, type SectionId } from "$demo/scroll-sections.js";
+  import {
+    SECTIONS,
+    type SectionId,
+    type Section,
+  } from "$demo/scroll-sections.js";
   import type { DemoBridge, DemoBridgeState, DemoTopic } from "$demo/bridge.js";
   import { DEMO_TOPICS } from "$demo/bridge.js";
 
@@ -255,11 +259,41 @@
   // Active section view (one list rendered at a time)
   // -----------------------------------------------------------------------
 
-  const activeSectionDef = $derived(
-    SECTIONS.find((s) => s.id === scrollEngine.activeSection),
-  );
+  /**
+   * Synthesize a Section object for the coming-soon placeholder. The
+   * active subSlug (a route slug) is used as the single sub's slug so
+   * element IDs match what the scroll engine expects (sub-coming-soon-<slug>).
+   */
+  function comingSoonSection(subSlug: string | null): Section {
+    const slug = subSlug ?? "unknown";
+    return {
+      id: "coming-soon",
+      titleKey: "demo_coming_soon_title",
+      descKey: "demo_coming_soon_desc",
+      routes: [],
+      subs: [
+        {
+          slug,
+          topic: null,
+          headingKey: "demo_coming_soon_heading",
+          bodyKey: "demo_coming_soon_body",
+        },
+      ],
+    };
+  }
 
-  const nextSectionDef = $derived.by(() => {
+  const activeSectionDef = $derived.by((): Section | undefined => {
+    if (scrollEngine.activeSection === "coming-soon") {
+      return comingSoonSection(scrollEngine.activeSub);
+    }
+    return SECTIONS.find((s) => s.id === scrollEngine.activeSection);
+  });
+
+  // The coming-soon section is synthesized and not in SECTIONS, so the
+  // next-section button is absent for it (null) rather than guessing
+  // an order.
+  const nextSectionDef = $derived.by((): Section | null => {
+    if (scrollEngine.activeSection === "coming-soon") return null;
     const idx = SECTIONS.findIndex((s) => s.id === scrollEngine.activeSection);
     return idx >= 0 ? (SECTIONS.at(idx + 1) ?? null) : null;
   });
@@ -284,6 +318,8 @@
         return m.demo_section_schedule_title();
       case "settings":
         return m.demo_section_settings_title();
+      case "coming-soon":
+        return m.demo_coming_soon_title();
     }
   }
 

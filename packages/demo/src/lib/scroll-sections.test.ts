@@ -13,6 +13,8 @@ import {
   sectionElementId,
   subElementId,
   sectionForRoute,
+  slugForRoute,
+  routeForSlug,
   SECTIONS,
   SECTION_ROUTES,
   SUB_ROUTES,
@@ -154,6 +156,17 @@ describe("parseHash", () => {
       sectionId: "admin",
       subSlug: "communications",
     });
+  });
+
+  it("parses coming-soon/reports as a valid location", () => {
+    expect(parseHash("#coming-soon/reports")).toEqual({
+      sectionId: "coming-soon",
+      subSlug: "reports",
+    });
+  });
+
+  it("returns null for a bare #coming-soon with no slug", () => {
+    expect(parseHash("#coming-soon")).toBeNull();
   });
 });
 
@@ -952,5 +965,158 @@ describe("sectionForRoute", () => {
   it("resolves /(app)/library/[articleId]/edit to library/editor sub", () => {
     const result = sectionForRoute("/(app)/library/[articleId]/edit");
     expect(result).toEqual({ sectionId: "library", subSlug: "editor" });
+  });
+});
+
+// -----------------------------------------------------------------------
+// slugForRoute / routeForSlug
+// -----------------------------------------------------------------------
+
+describe("slugForRoute", () => {
+  it("strips the (app) group and joins remaining segments", () => {
+    expect(slugForRoute("/(app)/reports")).toBe("reports");
+  });
+
+  it("removes brackets from param segments", () => {
+    expect(slugForRoute("/(app)/a/[x]")).toBe("a-x");
+  });
+
+  it("handles multi-segment paths", () => {
+    expect(slugForRoute("/(app)/more/settings")).toBe("more-settings");
+  });
+
+  it("handles ticket detail param route", () => {
+    expect(slugForRoute("/(app)/tickets/[id]")).toBe("tickets-id");
+  });
+
+  it("handles deeply nested param route", () => {
+    expect(slugForRoute("/(app)/library/[articleId]/edit")).toBe(
+      "library-articleId-edit",
+    );
+  });
+
+  it("strips rest-param dots", () => {
+    expect(slugForRoute("/(app)/[...path]")).toBe("path");
+  });
+
+  it("round-trips every manifest route to a non-empty slug", () => {
+    for (const rid of listRouteIds()) {
+      const slug = slugForRoute(rid);
+      expect(slug.length).toBeGreaterThan(0);
+    }
+  });
+});
+
+describe("routeForSlug", () => {
+  it("returns the first unmapped route whose slug matches", () => {
+    // The catch-all is unnarrated, so its slug should resolve.
+    const slug = slugForRoute("/(app)/[...path]");
+    const result = routeForSlug(slug, listRouteIds());
+    expect(result).toBe("/(app)/[...path]");
+  });
+
+  it("returns null when the slug matches a mapped (narrated) route", () => {
+    // "/(app)/tickets" is narrated. Its slug should not resolve through
+    // routeForSlug because that function filters to unmapped only.
+    const slug = slugForRoute("/(app)/tickets");
+    const result = routeForSlug(slug, listRouteIds());
+    expect(result).toBeNull();
+  });
+
+  it("returns null for a slug that matches no route", () => {
+    expect(routeForSlug("nonexistent-page", listRouteIds())).toBeNull();
+  });
+});
+
+// -----------------------------------------------------------------------
+// coming-soon: bridgeStateToLocation
+// -----------------------------------------------------------------------
+
+describe("bridgeStateToLocation (coming-soon)", () => {
+  it("maps feature other with an unmapped routeId to coming-soon", () => {
+    const loc = bridgeStateToLocation(
+      "other",
+      null,
+      false,
+      null,
+      null,
+      "/(app)/[...path]",
+    );
+    expect(loc.sectionId).toBe("coming-soon");
+    expect(loc.subSlug).toBe(slugForRoute("/(app)/[...path]"));
+  });
+
+  it("does not yield coming-soon for a MAPPED routeId", () => {
+    const loc = bridgeStateToLocation(
+      "tickets",
+      null,
+      false,
+      null,
+      null,
+      "/(app)/tickets",
+    );
+    expect(loc.sectionId).toBe("tickets");
+  });
+});
+
+// -----------------------------------------------------------------------
+// coming-soon: sectionMatchesPhone
+// -----------------------------------------------------------------------
+
+describe("sectionMatchesPhone (coming-soon)", () => {
+  it("matches when the routeId is unmapped and the slug equals the subSlug", () => {
+    const rid = "/(app)/[...path]";
+    const slug = slugForRoute(rid);
+    expect(
+      sectionMatchesPhone("coming-soon", "other", null, false, rid, slug),
+    ).toBe(true);
+  });
+
+  it("does not match when the routeId is mapped (narrated)", () => {
+    const rid = "/(app)/tickets";
+    const slug = slugForRoute(rid);
+    expect(
+      sectionMatchesPhone("coming-soon", "other", null, false, rid, slug),
+    ).toBe(false);
+  });
+
+  it("does not match when routeId is null", () => {
+    expect(
+      sectionMatchesPhone("coming-soon", "other", null, false, null, "path"),
+    ).toBe(false);
+  });
+
+  it("does not match when the slug does not correspond to the routeId", () => {
+    const rid = "/(app)/[...path]";
+    expect(
+      sectionMatchesPhone("coming-soon", "other", null, false, rid, "wrong"),
+    ).toBe(false);
+  });
+});
+
+// -----------------------------------------------------------------------
+// coming-soon: resolvePhoneCommand
+// -----------------------------------------------------------------------
+
+describe("resolvePhoneCommand (coming-soon)", () => {
+  const TICKET_ID = "test-ticket-id";
+  const ARTICLE_ID = "test-article-id";
+
+  it("resolves coming-soon to feature other with routeSlug", () => {
+    const cmd = resolvePhoneCommand(
+      "coming-soon",
+      "reports",
+      TICKET_ID,
+      ARTICLE_ID,
+    );
+    expect(cmd.feature).toBe("other");
+    expect(cmd.routeSlug).toBe("reports");
+    expect(cmd.pulseTopic).toBeNull();
+    expect(cmd.loginTarget).toBeNull();
+  });
+
+  it("narrated sections have null routeSlug", () => {
+    const cmd = resolvePhoneCommand("tickets", "sort", TICKET_ID, ARTICLE_ID);
+    expect(cmd.routeSlug).toBeNull();
   });
 });

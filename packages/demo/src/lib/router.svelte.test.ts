@@ -129,10 +129,15 @@ vi.mock("$demo/engine/route-manifest.js", () => ({
         routeId: "/(app)/library/[articleId]/edit",
       };
     }
+    // Simulate a manifest-known route that resolveFeature does not map.
+    // Used to test the "other" feature fallback for unmapped routes.
+    if (pathname === "/reports") {
+      return { params: {}, routeId: "/(app)/reports" };
+    }
     return null;
   },
   listRouteIds(): string[] {
-    return ["/(app)/tickets", "/(app)/tickets/[id]"];
+    return ["/(app)/tickets", "/(app)/tickets/[id]", "/(app)/reports"];
   },
 }));
 
@@ -450,10 +455,18 @@ describe("DemoRouter", () => {
       expect(router.detail).toBe("edit");
     });
 
-    it("ignores unknown paths", () => {
+    it("ignores unknown paths (no manifest match)", () => {
       router.navigate("tickets");
       router.handleGoto("/some/random/path");
       expect(router.feature).toBe("tickets");
+    });
+
+    it("maps a manifest-matched but feature-unmapped path to other", () => {
+      router.handleGoto("/reports");
+      expect(router.feature).toBe("other");
+      expect(router.detail).toBeNull();
+      expect(router.pathname).toBe("/reports");
+      expect(router.routeId).toBe("/(app)/reports");
     });
 
     it("strips /Care-y base path prefix", () => {
@@ -550,6 +563,28 @@ describe("DemoRouter", () => {
         detail: "tk-0001",
         searchOpen: false,
       });
+    });
+  });
+
+  describe("routeId derivation", () => {
+    it("is null during login", () => {
+      expect(router.routeId).toBeNull();
+    });
+
+    it("resolves for a mapped route", () => {
+      router.navigate("tickets");
+      expect(router.routeId).toBe("/(app)/tickets");
+    });
+
+    it("resolves for the other feature fallback", () => {
+      router.handleGoto("/reports");
+      expect(router.routeId).toBe("/(app)/reports");
+    });
+
+    it("resets to null on reset()", () => {
+      router.navigate("tickets");
+      router.reset();
+      expect(router.routeId).toBeNull();
     });
   });
 });

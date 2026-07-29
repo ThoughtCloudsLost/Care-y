@@ -2002,5 +2002,9 @@
   "demo_narrative_topic_admin_greetings_heading": "Saludos",
   "demo_narrative_topic_admin_greetings_body": "Los saludos grabados y de texto son lo que los llamantes escuchan al comunicarse con una linea telefonica. El demo incluye ambos tipos de saludo y reproduce un archivo de audio real a traves de un punto de vista previa autenticado. Agregar o editar un saludo escribe en la base de datos del navegador.",
   "demo_narrative_topic_admin_quarantine_heading": "Cuarentena de correo de voz",
-  "demo_narrative_topic_admin_quarantine_body": "Los correos de voz de llamantes desconocidos esperan aqui para revision. El audio se sella con la clave de la organizacion antes del almacenamiento, por lo que el servidor nunca escucha la grabacion. La reproduccion descifra el audio en el navegador. Los administradores pueden enrutar un correo de voz a un ticket nuevo o existente, o descartarlo."
+  "demo_narrative_topic_admin_quarantine_body": "Los correos de voz de llamantes desconocidos esperan aqui para revision. El audio se sella con la clave de la organizacion antes del almacenamiento, por lo que el servidor nunca escucha la grabacion. La reproduccion descifra el audio en el navegador. Los administradores pueden enrutar un correo de voz a un ticket nuevo o existente, o descartarlo.",
+  "demo_coming_soon_title": "Proximamente",
+  "demo_coming_soon_desc": "Esta pantalla forma parte del producto real, pero su recorrido guiado aun no se ha escrito.",
+  "demo_coming_soon_heading": "Explore libremente",
+  "demo_coming_soon_body": "Puede interactuar con esta pantalla en el telefono. Funciona contra la misma base de datos del navegador que el resto del demo. Se agregara un recorrido guiado para esta area en una actualizacion futura."
 }

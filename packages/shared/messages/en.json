@@ -2002,5 +2002,9 @@
   "demo_narrative_topic_admin_greetings_heading": "Greetings",
   "demo_narrative_topic_admin_greetings_body": "Recorded and text greetings are what callers hear when they reach a phone line. The demo seeds both greeting types and plays a real audio file through an authenticated preview endpoint. Adding or editing a greeting writes to the in-browser database.",
   "demo_narrative_topic_admin_quarantine_heading": "Voicemail quarantine",
-  "demo_narrative_topic_admin_quarantine_body": "Voicemails from unknown callers wait here for review. The audio is sealed to the organization key before storage, so the server never hears the recording. Playback decrypts the audio in the browser. Administrators can route a voicemail to a new or existing ticket, or dismiss it."
+  "demo_narrative_topic_admin_quarantine_body": "Voicemails from unknown callers wait here for review. The audio is sealed to the organization key before storage, so the server never hears the recording. Playback decrypts the audio in the browser. Administrators can route a voicemail to a new or existing ticket, or dismiss it.",
+  "demo_coming_soon_title": "Coming soon",
+  "demo_coming_soon_desc": "This screen is part of the real product build, but its guided story has not been written yet.",
+  "demo_coming_soon_heading": "Explore freely",
+  "demo_coming_soon_body": "You can interact with this screen in the phone. It runs against the same in-browser database as the rest of the demo. A guided walkthrough for this area will be added in a future update."
 }

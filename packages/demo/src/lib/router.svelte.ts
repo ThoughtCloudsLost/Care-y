@@ -69,8 +69,16 @@ const INERT_TABS: ReadonlySet<TabId> = new Set([]);
  * Map a DemoFeature and optional detail back to a pathname.
  * Used by navigate() (outer-page entry point) to set the
  * canonical pathname from feature+detail.
+ *
+ * Feature "other" returns the current instance's pathname unchanged
+ * because navigate(feature) is never the entry path for "other";
+ * its goto comes through handleGoto, which sets the pathname directly.
  */
-function featureToPathname(feature: DemoFeature, detail: DemoDetail): string {
+function featureToPathname(
+  feature: DemoFeature,
+  detail: DemoDetail,
+  currentPathname = "/",
+): string {
   switch (feature) {
     case "login":
       return "/login";
@@ -91,6 +99,8 @@ function featureToPathname(feature: DemoFeature, detail: DemoDetail): string {
       return "/more/schedule";
     case "settings":
       return "/more/settings";
+    case "other":
+      return currentPathname;
   }
 }
 
@@ -195,6 +205,12 @@ export class DemoRouter {
   detail: DemoDetail = $state(null);
   searchOpen: boolean = $state(false);
 
+  /**
+   * The manifest route ID for the current pathname. Null during login
+   * (which has no manifest entry) and when the pathname has no match.
+   */
+  routeId: string | null = $state(null);
+
   // Shell prop mirrors (reactive for AppShell binding)
   activeTab: TabId | null = $state("tickets");
   activeArea: AreaId | null = $state(null);
@@ -211,7 +227,11 @@ export class DemoRouter {
     return demoUrl(this.pathname, this.search);
   }
 
-  /** Sync derived shell props from a resolved NavContext. */
+  /**
+   * Sync derived shell props from a resolved NavContext. When both
+   * tab and area are null (feature "other" on a route outside the
+   * nav tree), the shell props are nulled so no tab or area highlights.
+   */
   private syncShellProps(pathname: string): void {
     const ctx = resolveNavContext(pathname);
     if (ctx.tab !== null) {
@@ -220,6 +240,9 @@ export class DemoRouter {
     } else if (ctx.area !== null) {
       this.activeTab = null;
       this.activeArea = ctx.area;
+    } else {
+      this.activeTab = null;
+      this.activeArea = null;
     }
   }
 
@@ -252,13 +275,15 @@ export class DemoRouter {
   navigate(feature: DemoFeature, detail?: DemoDetail): void {
     const fromUrl = this.currentUrl();
     const resolvedDetail = detail ?? null;
-    const pathname = featureToPathname(feature, resolvedDetail);
+    const pathname = featureToPathname(feature, resolvedDetail, this.pathname);
 
     this.pathname = pathname;
     this.search = "";
     this.searchOpen = false;
     this.feature = feature;
     this.detail = resolvedDetail;
+    this.routeId =
+      feature === "login" ? null : (matchRoute(pathname)?.routeId ?? null);
     this.syncShellProps(pathname);
 
     this.fireLifecycle(fromUrl, this.currentUrl());
@@ -283,6 +308,7 @@ export class DemoRouter {
     this.searchOpen = false;
     this.feature = feature;
     this.detail = null;
+    this.routeId = matchRoute(pathname)?.routeId ?? null;
 
     this.fireLifecycle(fromUrl, this.currentUrl());
   }
@@ -321,10 +347,20 @@ export class DemoRouter {
       return;
     }
 
-    const { feature, detail } = resolveFeature(pathname);
+    const resolved = resolveFeature(pathname);
+    let feature = resolved.feature;
+    let detail = resolved.detail;
+    const match = matchRoute(pathname);
+
+    // When resolveFeature returns null (no built feature for this path)
+    // but matchRoute succeeds, the phone can still mount the route via
+    // RouteMount. Navigate with feature "other" so the outer page
+    // shows the coming-soon placeholder. Truly unknown pathnames (no
+    // manifest match either) stay ignored as before.
     if (feature === null) {
-      // Inert path: do nothing
-      return;
+      if (match === null) return;
+      feature = "other";
+      detail = null;
     }
 
     const fromUrl = this.currentUrl();
@@ -333,6 +369,7 @@ export class DemoRouter {
     this.feature = feature;
     this.detail = detail;
     this.searchOpen = false;
+    this.routeId = match?.routeId ?? null;
     this.syncShellProps(pathname);
 
     this.fireLifecycle(fromUrl, this.currentUrl());
@@ -360,6 +397,7 @@ export class DemoRouter {
     this.search = "";
     this.activeTab = "tickets";
     this.activeArea = null;
+    this.routeId = null;
     this.restartSeq = 0;
 
     // Login is outside RouteMount, so the router drives page state here.
