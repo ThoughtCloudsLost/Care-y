@@ -12,8 +12,13 @@ import {
   getSub,
   sectionElementId,
   subElementId,
+  sectionForRoute,
   SECTIONS,
+  SECTION_ROUTES,
+  SUB_ROUTES,
+  UNNARRATED_ROUTES,
 } from "./scroll-sections.js";
+import { listRouteIds } from "./engine/route-manifest.js";
 
 describe("parseHash", () => {
   it("returns null for empty hash", () => {
@@ -668,5 +673,110 @@ describe("SECTIONS taxonomy", () => {
   it("settings has 4 subs", () => {
     const settings = SECTIONS.find((s) => s.id === "settings");
     expect(settings?.subs).toHaveLength(4);
+  });
+});
+
+// -----------------------------------------------------------------------
+// Route mapping completeness
+// -----------------------------------------------------------------------
+
+describe("route mapping completeness", () => {
+  /** Collect every route ID that appears in any mapping array. */
+  function allMappedRoutes(): Set<string> {
+    const mapped = new Set<string>();
+    for (const routes of Object.values(SECTION_ROUTES)) {
+      for (const r of routes) mapped.add(r);
+    }
+    for (const routes of Object.values(SUB_ROUTES)) {
+      for (const r of routes) mapped.add(r);
+    }
+    for (const r of UNNARRATED_ROUTES) {
+      mapped.add(r);
+    }
+    return mapped;
+  }
+
+  it("every manifest route appears in exactly one of SECTION_ROUTES, SUB_ROUTES, or UNNARRATED_ROUTES", () => {
+    const manifestIds = listRouteIds();
+    const mapped = allMappedRoutes();
+    const unmapped = manifestIds.filter((id) => !mapped.has(id));
+    expect(unmapped).toEqual([]);
+  });
+
+  it("every mapped route ID exists in the manifest (no stale references)", () => {
+    const manifestSet = new Set(listRouteIds());
+    const mapped = allMappedRoutes();
+    const stale = [...mapped].filter((id) => !manifestSet.has(id));
+    expect(stale).toEqual([]);
+  });
+});
+
+// -----------------------------------------------------------------------
+// Route mapping structure
+// -----------------------------------------------------------------------
+
+describe("route mapping structure", () => {
+  it("every SUB_ROUTES key resolves via getSub", () => {
+    for (const compositeKey of Object.keys(SUB_ROUTES)) {
+      const slashIdx = compositeKey.indexOf("/");
+      const sectionId = compositeKey.slice(0, slashIdx);
+      const subSlug = compositeKey.slice(slashIdx + 1);
+      expect(getSub(sectionId, subSlug)).toBeDefined();
+    }
+  });
+
+  it("every SUB_ROUTES value is a subset of its section's SECTION_ROUTES", () => {
+    for (const [compositeKey, subRoutes] of Object.entries(SUB_ROUTES)) {
+      const sectionId = compositeKey.slice(
+        0,
+        compositeKey.indexOf("/"),
+      ) as keyof typeof SECTION_ROUTES;
+      const sectionRoutes = new Set(SECTION_ROUTES[sectionId]);
+      for (const route of subRoutes) {
+        expect(sectionRoutes.has(route)).toBe(true);
+      }
+    }
+  });
+
+  it("UNNARRATED_ROUTES ids appear in no SECTION_ROUTES or SUB_ROUTES array", () => {
+    const narrated = new Set<string>();
+    for (const routes of Object.values(SECTION_ROUTES)) {
+      for (const r of routes) narrated.add(r);
+    }
+    for (const routes of Object.values(SUB_ROUTES)) {
+      for (const r of routes) narrated.add(r);
+    }
+    for (const unnarrated of UNNARRATED_ROUTES) {
+      expect(narrated.has(unnarrated)).toBe(false);
+    }
+  });
+});
+
+// -----------------------------------------------------------------------
+// sectionForRoute
+// -----------------------------------------------------------------------
+
+describe("sectionForRoute", () => {
+  it("resolves /(app)/tickets/[id] to the ticket-detail section", () => {
+    const result = sectionForRoute("/(app)/tickets/[id]");
+    expect(result).toEqual({ sectionId: "ticket-detail", subSlug: null });
+  });
+
+  it("resolves /(app)/admin/people to admin/people-queues sub", () => {
+    const result = sectionForRoute("/(app)/admin/people");
+    expect(result).toEqual({ sectionId: "admin", subSlug: "people-queues" });
+  });
+
+  it("resolves /(app) to dashboard with null sub", () => {
+    const result = sectionForRoute("/(app)");
+    expect(result).toEqual({ sectionId: "dashboard", subSlug: null });
+  });
+
+  it("returns null for the catch-all not-found route", () => {
+    expect(sectionForRoute("/(app)/[...path]")).toBeNull();
+  });
+
+  it("returns null for an unknown route ID", () => {
+    expect(sectionForRoute("/(app)/nonexistent")).toBeNull();
   });
 });
