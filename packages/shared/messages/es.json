@@ -2006,5 +2006,9 @@
   "demo_coming_soon_title": "Proximamente",
   "demo_coming_soon_desc": "Esta pantalla forma parte del producto real, pero su recorrido guiado aun no se ha escrito.",
   "demo_coming_soon_heading": "Explore libremente",
-  "demo_coming_soon_body": "Puede interactuar con esta pantalla en el telefono. Funciona contra la misma base de datos del navegador que el resto del demo. Se agregara un recorrido guiado para esta area en una actualizacion futura."
+  "demo_coming_soon_body": "Puede interactuar con esta pantalla en el telefono. Funciona contra la misma base de datos del navegador que el resto del demo. Se agregara un recorrido guiado para esta area en una actualizacion futura.",
+  "demo_toolbar_phone_preset": "Tamano de telefono",
+  "demo_toolbar_phone_tooltip": "Cambiar a vista de telefono (390 x 844)",
+  "demo_toolbar_desktop_preset": "Tamano de escritorio",
+  "demo_toolbar_desktop_tooltip": "Cambiar a vista de escritorio (760 x 475)"
 }

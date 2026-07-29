@@ -25,13 +25,6 @@
       "$lib/stores/theme.svelte": ["./src/stubs/theme.svelte.ts"],
       "$lib/stores/theme.svelte.ts": ["./src/stubs/theme.svelte.ts"],
       "$lib/stores/theme.svelte.js": ["./src/stubs/theme.svelte.ts"],
-      "$lib/stores/layout-mode.svelte": ["./src/stubs/layout-mode.svelte.ts"],
-      "$lib/stores/layout-mode.svelte.ts": [
-        "./src/stubs/layout-mode.svelte.ts"
-      ],
-      "$lib/stores/layout-mode.svelte.js": [
-        "./src/stubs/layout-mode.svelte.ts"
-      ],
       "$lib/stores/saved-filters.svelte": [
         "./src/stubs/saved-filters.svelte.ts"
       ],
