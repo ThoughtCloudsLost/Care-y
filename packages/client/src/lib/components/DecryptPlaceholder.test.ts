@@ -84,8 +84,9 @@ describe("DecryptPlaceholder", () => {
   });
 
   it("computes width from ciphertext when provided", async () => {
-    // 60-byte ciphertext minus 40 overhead = 20ch
-    const ciphertext = new Uint8Array(60);
+    // 60 zero bytes in base64 = 80 chars; estimateLength: ceil(80*3/4) - 40 = 20ch
+    const ciphertext =
+      "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA";
     render(DecryptPlaceholder, { props: { ciphertext } });
     await advancePastDelay();
     const status = screen.getByRole("status");

@@ -17,15 +17,13 @@
     resolveQueueAppearance,
     queueAppearanceCacheKeys,
   } from "$lib/utils/queue-appearance.js";
-  import type { SerializedBuffer } from "$lib/utils/buffer-encoding.js";
-
   interface QueueEditorProps {
     readonly opened: boolean;
     readonly ondismiss: () => void;
     readonly queueId: string | null;
-    readonly queueEncryptedName: SerializedBuffer | Uint8Array | null;
-    readonly queueEncryptedColor: SerializedBuffer | Uint8Array | null;
-    readonly queueEncryptedIcon: SerializedBuffer | Uint8Array | null;
+    readonly queueEncryptedName: string | null;
+    readonly queueEncryptedColor: string | null;
+    readonly queueEncryptedIcon: string | null;
     readonly queueEscalateDays: number;
     readonly ondeletequeue: ((queueId: string) => void) | undefined;
   }

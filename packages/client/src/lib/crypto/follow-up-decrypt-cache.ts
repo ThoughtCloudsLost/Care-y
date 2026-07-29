@@ -10,10 +10,6 @@
 import { AsyncDecryptCache } from "./async-decrypt-cache.js";
 import type { CryptoBridge } from "$lib/workers/crypto-bridge.js";
 import type { TicketKeyWrap } from "./ticket-decrypt-cache.js";
-import {
-  serializedBufferToBase64,
-  type SerializedBuffer,
-} from "$lib/utils/buffer-encoding.js";
 
 export interface FollowUpRewrapContext {
   readonly followUpKeyWrap: TicketKeyWrap;
@@ -46,7 +42,7 @@ export class FollowUpDecryptCache extends AsyncDecryptCache {
     ticketId: string,
     slot: string,
     keyWrap: TicketKeyWrap | null,
-    encryptedContent: SerializedBuffer | string,
+    encryptedContent: string,
     rewrapContext?: FollowUpRewrapContext,
   ): string | undefined {
     if (rewrapContext) {
@@ -57,7 +53,7 @@ export class FollowUpDecryptCache extends AsyncDecryptCache {
         rewrapContext.followUpKeyWrap.ephemeralPoint,
         rewrapContext.followUpKeyWrap.nonce,
         rewrapContext.followUpKeyWrap.wrappedKey,
-        serializedBufferToBase64(encryptedContent),
+        encryptedContent,
       );
     }
 
@@ -69,7 +65,7 @@ export class FollowUpDecryptCache extends AsyncDecryptCache {
       keyWrap.ephemeralPoint,
       keyWrap.nonce,
       keyWrap.wrappedKey,
-      serializedBufferToBase64(encryptedContent),
+      encryptedContent,
     );
   }
 }

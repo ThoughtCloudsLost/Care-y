@@ -15,8 +15,6 @@ import {
   COLOR_HEX_BY_ID,
 } from "$lib/components/inputs/picker-options.js";
 import type { OrgDecryptCache } from "$lib/crypto/org-decrypt-cache.js";
-import type { SerializedBuffer } from "$lib/utils/buffer-encoding.js";
-
 /** Default picker tokens for queues without a stored value. */
 export const QUEUE_DEFAULT_COLOR = "grey";
 export const QUEUE_DEFAULT_ICON = "folder";
@@ -54,8 +52,8 @@ export function resolveQueueAppearance(
 
 export interface QueueAppearanceSource {
   readonly id: string;
-  readonly encryptedColor: SerializedBuffer | Uint8Array | null;
-  readonly encryptedIcon: SerializedBuffer | Uint8Array | null;
+  readonly encryptedColor: string | null;
+  readonly encryptedIcon: string | null;
 }
 
 /**

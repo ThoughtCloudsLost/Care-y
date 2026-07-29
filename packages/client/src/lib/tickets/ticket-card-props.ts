@@ -21,27 +21,30 @@ export type DataCardProps = Omit<
 export interface TicketLikeRecord {
   readonly id: string;
   readonly queueId: string;
-  readonly encryptedQueueName: unknown;
+  readonly encryptedQueueName: string;
   readonly status: TicketStatus;
   readonly onHold: boolean;
   readonly priority: "low" | "normal" | "high" | "urgent";
-  readonly encryptedTitle: unknown;
+  readonly encryptedTitle: string;
   readonly keyWrap: unknown;
   readonly clientId: string;
-  readonly encryptedClientAlias: unknown;
+  readonly encryptedClientAlias: string;
   readonly assignedTo: string | null;
-  readonly assignedDisplayName: unknown;
+  readonly assignedDisplayName: string | null;
   readonly createdAt: string;
   readonly lastActivityAt: string | null;
   readonly followUpCount: number;
 }
 
 export interface CardPropsMapperDeps {
-  readonly orgDecrypt: (cacheKey: string, ciphertext: unknown) => string | null;
+  readonly orgDecrypt: (
+    cacheKey: string,
+    ciphertext: string | null,
+  ) => string | null;
   readonly decryptTitle: (
     ticketId: string,
     keyWrap: unknown,
-    encryptedTitle: unknown,
+    encryptedTitle: string,
   ) => string | undefined;
   readonly currentUserId: string;
   readonly unreadCount: (ticketId: string) => number;

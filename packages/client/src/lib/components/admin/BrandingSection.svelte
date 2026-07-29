@@ -34,7 +34,6 @@
   } from "$lib/branding/encrypt.js";
   import { uploadPwaIcons } from "$lib/branding/icon-upload.js";
   import { getOrgSlug } from "$lib/utils/org-slug.js";
-  import { base64ToUint8Array } from "$lib/utils/buffer-encoding.js";
   import { requireRouter } from "$lib/errors.js";
   import type { BrandingField } from "@care-y/shared";
   import QueryError from "$lib/components/QueryError.svelte";
@@ -115,37 +114,32 @@
   }));
 
   // ── Decrypted values (main-thread org-key tier, not PII) ──
-  // Server returns base64 strings; OrgDecryptCache expects Uint8Array.
-
-  function b64Field(value: string | null): Uint8Array | null {
-    return value !== null && value !== "" ? base64ToUint8Array(value) : null;
-  }
 
   const decryptedName = $derived(
     orgCache.decrypt(
       "branding:name",
-      b64Field(brandingQuery.data?.encryptedName ?? null),
+      brandingQuery.data?.encryptedName ?? null,
     ),
   );
 
   const decryptedColor = $derived(
     orgCache.decrypt(
       "branding:color",
-      b64Field(brandingQuery.data?.encryptedPrimaryColor ?? null),
+      brandingQuery.data?.encryptedPrimaryColor ?? null,
     ),
   );
 
   const decryptedAccent = $derived(
     orgCache.decrypt(
       "branding:accent",
-      b64Field(brandingQuery.data?.encryptedAccentColor ?? null),
+      brandingQuery.data?.encryptedAccentColor ?? null,
     ),
   );
 
   const decryptedText = $derived(
     orgCache.decrypt(
       "branding:text",
-      b64Field(brandingQuery.data?.encryptedClientText ?? null),
+      brandingQuery.data?.encryptedClientText ?? null,
     ),
   );
 
@@ -398,7 +392,7 @@
         : currentAccent();
     const finalText = textChanged ? editText : (decryptedText ?? "");
 
-    // SOG-14: build the client branding blob with all current values
+    // Build the client branding blob with all current values
     let clientBlob: string;
     try {
       clientBlob = buildClientBrandingBlob(

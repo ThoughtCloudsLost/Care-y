@@ -45,7 +45,6 @@
   import { deriveDisplayStatus } from "$lib/tickets/display-status.js";
   import { makeSkeletonCardProps } from "$lib/tickets/skeleton-card-props.js";
   import { resolveAsyncDecrypt } from "$lib/crypto/decrypt-result.js";
-  import type { SerializedBuffer } from "$lib/utils/buffer-encoding.js";
   import {
     decryptQueueAppearance,
     type QueueAppearance,
@@ -391,13 +390,7 @@
   });
 
   const orgCipherByKey = $derived.by(() => {
-    // Mixed shapes: converted routes send base64 strings, unconverted ones
-    // still send Buffers that superjson expands. The org decrypt cache takes
-    // either while the conversion is in progress.
-    const map = new SvelteMap<
-      string,
-      SerializedBuffer | Uint8Array | string | null
-    >();
+    const map = new SvelteMap<string, string | null>();
     for (const t of mapperRecordById.values()) {
       map.set(`queue:${t.queueId}`, t.encryptedQueueName);
       map.set(`client-alias:${t.clientId}`, t.encryptedClientAlias);

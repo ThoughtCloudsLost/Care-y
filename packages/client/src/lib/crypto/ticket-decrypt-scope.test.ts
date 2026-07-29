@@ -18,7 +18,7 @@ const FOLLOW_UP_ID = "fu-001";
 const USER_ID = "user-001";
 const ENCRYPTED_TITLE = "enc-title-base64";
 const ENCRYPTED_CONTENT = "enc-content-base64";
-const ENCRYPTED_NAME = new Uint8Array([1, 2, 3]);
+const ENCRYPTED_NAME = "AQID";
 
 const KEY_WRAP: TicketKeyWrap = {
   ephemeralPoint: "ep-base64",

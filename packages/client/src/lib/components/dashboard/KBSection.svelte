@@ -10,7 +10,7 @@
 
   interface KBItem {
     id: string;
-    encryptedTitle: unknown;
+    encryptedTitle: string;
     updatedAt: Date | string;
     rating: number;
     decryptedTitle?: string;

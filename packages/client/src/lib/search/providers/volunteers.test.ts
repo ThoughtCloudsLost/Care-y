@@ -17,7 +17,7 @@ function makeUser(
   overrides: Partial<RawAdminUser> & { id: string },
 ): RawAdminUser {
   return {
-    encryptedDisplayName: new Uint8Array([1, 2, 3]),
+    encryptedDisplayName: "AQID",
     roleId: "volunteer",
     isActive: true,
     hasKeys: true,

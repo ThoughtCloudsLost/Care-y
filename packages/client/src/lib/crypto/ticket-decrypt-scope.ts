@@ -24,7 +24,6 @@ import type {
 import type { FollowUpDecryptCache } from "./follow-up-decrypt-cache.js";
 import type { OrgDecryptCache } from "./org-decrypt-cache.js";
 import type { OrgKeyManager } from "./org-key.js";
-import type { SerializedBuffer } from "$lib/utils/buffer-encoding.js";
 import type { DecryptResult } from "./decrypt-result.js";
 import { resolveAsyncDecrypt, resolveOrgDecrypt } from "./decrypt-result.js";
 
@@ -47,23 +46,20 @@ export interface TicketDecryptScopeDeps {
 
 export interface TicketDecryptScope {
   /** Decrypt the ticket title. */
-  title(encryptedTitle: SerializedBuffer | string): DecryptResult;
+  title(encryptedTitle: string): DecryptResult;
 
   /** Decrypt the ticket description. */
-  description(encryptedDescription: SerializedBuffer | string): DecryptResult;
+  description(encryptedDescription: string): DecryptResult;
 
   /** Decrypt a follow-up's content by its ID. When followUpKeyWrap is provided, uses it for tk_temp unwrapping. */
   followUp(
     followUpId: string,
-    encryptedContent: SerializedBuffer | string,
+    encryptedContent: string,
     followUpKeyWrap?: TicketKeyWrap | null,
   ): DecryptResult;
 
   /** Decrypt a volunteer's display name via the org-tier cache. */
-  volunteerName(
-    userId: string,
-    encryptedName: SerializedBuffer | Uint8Array | null,
-  ): DecryptResult;
+  volunteerName(userId: string, encryptedName: string | null): DecryptResult;
 
   /** Whether the current volunteer has key material for this ticket. */
   readonly hasAccess: boolean;
@@ -88,14 +84,12 @@ export function createTicketDecryptScope(
   const hasAccess = keyWrap !== null;
 
   return {
-    title(encryptedTitle: SerializedBuffer | string): DecryptResult {
+    title(encryptedTitle: string): DecryptResult {
       const raw = ticketCache.decryptTitle(ticketId, keyWrap, encryptedTitle);
       return resolveAsyncDecrypt(raw, hasAccess);
     },
 
-    description(
-      encryptedDescription: SerializedBuffer | string,
-    ): DecryptResult {
+    description(encryptedDescription: string): DecryptResult {
       const raw = ticketCache.decryptDescription(
         ticketId,
         keyWrap,
@@ -106,7 +100,7 @@ export function createTicketDecryptScope(
 
     followUp(
       followUpId: string,
-      encryptedContent: SerializedBuffer | string,
+      encryptedContent: string,
       followUpKeyWrap?: TicketKeyWrap | null,
     ): DecryptResult {
       const rewrapContext =
@@ -122,10 +116,7 @@ export function createTicketDecryptScope(
       return resolveAsyncDecrypt(raw, hasAccess);
     },
 
-    volunteerName(
-      userId: string,
-      encryptedName: SerializedBuffer | Uint8Array | null,
-    ): DecryptResult {
+    volunteerName(userId: string, encryptedName: string | null): DecryptResult {
       const raw = orgCache.decrypt(userId, encryptedName);
       return resolveOrgDecrypt(raw, orgKeyManager.isLoaded);
     },

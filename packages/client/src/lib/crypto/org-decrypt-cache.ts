@@ -15,25 +15,8 @@
 
 import { untrack } from "svelte";
 import { cacheRegistry } from "./cache-registry.js";
-import { encode } from "@care-y/crypto";
 import type { OrgKeyManager } from "./org-key.js";
 import type { CryptoBridge } from "$lib/workers/crypto-bridge.js";
-import type { SerializedBuffer } from "$lib/utils/buffer-encoding.js";
-
-function toBase64(data: Uint8Array | SerializedBuffer | string): string {
-  // base64 is the format for ciphertext on the wire. It is ~2.8x smaller
-  // than a Buffer, which superjson expands into {type,data}.
-  //
-  // The Buffer branches below are transitional. Older routes still return
-  // Buffers, and accepting them keeps those surfaces working while they are
-  // converted. Once every read path sends base64, this parameter narrows to
-  // `string | null` and the branches go away, so the compiler enforces the
-  // format instead of this function tolerating both. Write new routes as
-  // base64 rather than matching nearby Buffer code.
-  if (typeof data === "string") return data;
-  const bytes = data instanceof Uint8Array ? data : new Uint8Array(data.data);
-  return encode(bytes);
-}
 
 export class OrgDecryptCache {
   private readonly cache = cacheRegistry.createMap<string, string>(
@@ -61,12 +44,9 @@ export class OrgDecryptCache {
    * will re-evaluate once the batch response populates the cache.
    *
    * @param id   Unique key for caching (e.g., kb item ID, user ID)
-   * @param data Encrypted ciphertext as serialized Buffer or raw Uint8Array
+   * @param data Encrypted ciphertext as base64 string
    */
-  decrypt(
-    id: string,
-    data: SerializedBuffer | Uint8Array | string | null,
-  ): string | null {
+  decrypt(id: string, data: string | null): string | null {
     if (data === null) return null;
 
     const cached = this.cache.get(id);
@@ -76,10 +56,8 @@ export class OrgDecryptCache {
 
     if (!this.manager.isLoaded) return null;
 
-    const ciphertextB64 = toBase64(data);
-
     this.pending.add(id);
-    this.batchQueue.set(id, ciphertextB64);
+    this.batchQueue.set(id, data);
     this.scheduleBatch();
 
     return null;
@@ -117,10 +95,7 @@ export class OrgDecryptCache {
    * Use this in async functions like KB search `loadAll()` where the caller
    * needs the value immediately and won't re-run on cache updates.
    */
-  async decryptAsync(
-    id: string,
-    data: SerializedBuffer | Uint8Array | null,
-  ): Promise<string | null> {
+  async decryptAsync(id: string, data: string | null): Promise<string | null> {
     if (data === null) return null;
 
     const cached = this.cache.get(id);
@@ -128,11 +103,9 @@ export class OrgDecryptCache {
 
     if (!this.manager.isLoaded) return null;
 
-    const ciphertextB64 = toBase64(data);
-
     try {
       const results = await this.bridge.orgDecryptBatch([
-        { cacheKey: id, ciphertext: ciphertextB64 },
+        { cacheKey: id, ciphertext: data },
       ]);
       const result = results[0];
       if (result?.plaintext !== null && result?.plaintext !== undefined) {

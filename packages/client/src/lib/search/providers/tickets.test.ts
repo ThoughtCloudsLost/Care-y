@@ -59,14 +59,14 @@ function makeRawTicket(
 ): RawCachedTicket {
   return {
     queueId: "q1",
-    encryptedQueueName: null,
+    encryptedQueueName: "ZW5jLXF1ZXVl",
     status: "open",
     onHold: false,
     priority: "normal",
     encryptedTitle: "encrypted-blob",
     keyWrap: KW,
     clientId: "client-default",
-    encryptedClientAlias: null,
+    encryptedClientAlias: "ZW5jLWFsaWFz",
     assignedTo: null,
     assignedDisplayName: null,
     createdAt: "2026-01-01T00:00:00Z",

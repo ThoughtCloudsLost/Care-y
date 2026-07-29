@@ -30,12 +30,10 @@ import type {
   TicketDecryptCache,
   TicketKeyWrap,
 } from "$lib/crypto/ticket-decrypt-cache.js";
-import type { SerializedBuffer } from "$lib/utils/buffer-encoding.js";
-
-// ── Wire shapes (tRPC JSON: Buffers as SerializedBuffer, Dates as strings) ──
+// ── Wire shapes (tRPC JSON, dates as strings) ──
 
 export interface ReadStateWindowEntry {
-  readonly encryptedReadCursor: SerializedBuffer | string | null;
+  readonly encryptedReadCursor: string | null;
   readonly followUpCreatedAt: string[];
 }
 
@@ -44,7 +42,7 @@ export type ReadStateWindow = Record<string, ReadStateWindowEntry | undefined>;
 
 export interface SweepReadStateEntry {
   readonly ticketId: string;
-  readonly encryptedReadCursor: SerializedBuffer | string;
+  readonly encryptedReadCursor: string;
   readonly latestActivityAt: string | null;
   /** This user's wrap at the ticket's current generation; null = quietly not-unread. */
   readonly keyWrap: TicketKeyWrap | null;
@@ -137,7 +135,7 @@ export function createListReadState(
   function resolveReadUpTo(
     ticketId: string,
     keyWrap: TicketKeyWrap | null,
-    encryptedReadCursor: SerializedBuffer | string,
+    encryptedReadCursor: string,
   ): Date | null | undefined {
     const userId = config.getUserId();
     if (userId === "") return undefined;
@@ -184,7 +182,7 @@ export function createListReadState(
     entry: E,
     ticketId: string,
     keyWrap: TicketKeyWrap | null,
-    encryptedReadCursor: SerializedBuffer | string,
+    encryptedReadCursor: string,
   ): Date | null | undefined {
     const hit = memo.get(entry);
     if (hit !== undefined) return hit;

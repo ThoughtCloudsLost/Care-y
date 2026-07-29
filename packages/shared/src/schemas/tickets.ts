@@ -382,9 +382,8 @@ export type DeleteInternalNoteInput = z.infer<
 
 // --- Volunteer list (for @mention autocomplete) ---
 // Return type is inferred by tRPC from the resolver. The server returns
-// { id: string, encryptedDisplayName: Buffer } which tRPC serializes as
-// { type: "Buffer", data: number[] } over the wire. OrgDecryptCache
-// handles that shape via its SerializedBuffer type.
+// { id: string, encryptedDisplayName: string }, base64 encoded at the
+// router, which OrgDecryptCache consumes directly.
 
 export const queueAssignmentInputSchema = z.object({
   queueId: z.uuid(),

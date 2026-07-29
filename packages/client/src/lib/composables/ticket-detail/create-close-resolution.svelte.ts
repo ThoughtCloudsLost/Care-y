@@ -5,16 +5,14 @@ import type { QueryClient } from "@tanstack/svelte-query";
 import type { toastStore as ToastStoreType } from "$lib/stores/toast.svelte.js";
 import { ticketKeys } from "$lib/query/keys";
 import { invalidateReadState } from "$lib/query/invalidate-read-state.js";
-import type { SerializedBuffer } from "$lib/utils/buffer-encoding.js";
-
 type ToastStore = typeof ToastStoreType;
 
 // ── Note type shape (subset of server type) ──
 
 export interface NoteTypeRecord {
   readonly id: string;
-  readonly encryptedName: SerializedBuffer | Uint8Array | null;
-  readonly encryptedIcon: SerializedBuffer | Uint8Array | null;
+  readonly encryptedName: string | null;
+  readonly encryptedIcon: string | null;
   readonly requiresOnClose: boolean;
 }
 

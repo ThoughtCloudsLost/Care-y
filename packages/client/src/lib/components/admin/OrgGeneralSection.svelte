@@ -15,7 +15,6 @@
   import { toastStore } from "$lib/stores/toast.svelte.js";
   import { announceToLiveRegion } from "$lib/utils/announce.js";
   import { getOrgDecryptCache, getOrgKeyManager } from "$lib/crypto/context.js";
-  import { base64ToUint8Array } from "$lib/utils/buffer-encoding.js";
   import { buildClientBrandingBlob } from "$lib/branding/encrypt.js";
   import { requireRouter } from "$lib/errors.js";
   import QueryError from "$lib/components/QueryError.svelte";
@@ -57,15 +56,8 @@
     queryFn: async () => orgRouter.getOrgGeneral.query(),
   }));
 
-  function b64Field(value: string | null): Uint8Array | null {
-    return value !== null && value !== "" ? base64ToUint8Array(value) : null;
-  }
-
   const decryptedName = $derived(
-    orgCache.decrypt(
-      "org:name",
-      b64Field(generalQuery.data?.encryptedName ?? null),
-    ),
+    orgCache.decrypt("org:name", generalQuery.data?.encryptedName ?? null),
   );
 
   const serverLanguage = $derived(generalQuery.data?.defaultLanguage ?? "en");
@@ -104,31 +96,21 @@
     if (brandingRouter === null) return;
     const branding = await brandingRouter.getBranding.query();
 
-    function b64(v: string | null): Uint8Array | null {
-      return v !== null && v !== "" ? base64ToUint8Array(v) : null;
-    }
-
     // Trigger cache population, then wait for all pending decrypts.
-    orgCache.decrypt("branding:color", b64(branding.encryptedPrimaryColor));
-    orgCache.decrypt("branding:accent", b64(branding.encryptedAccentColor));
-    orgCache.decrypt(
-      "branding:text",
-      b64(branding.encryptedClientText ?? null),
-    );
+    orgCache.decrypt("branding:color", branding.encryptedPrimaryColor);
+    orgCache.decrypt("branding:accent", branding.encryptedAccentColor);
+    orgCache.decrypt("branding:text", branding.encryptedClientText ?? null);
     await orgCache.whenSettled();
 
     // Re-read after settlement.
     const color =
-      orgCache.decrypt("branding:color", b64(branding.encryptedPrimaryColor)) ??
+      orgCache.decrypt("branding:color", branding.encryptedPrimaryColor) ??
       "#636366";
     const accent =
-      orgCache.decrypt("branding:accent", b64(branding.encryptedAccentColor)) ??
-      "";
+      orgCache.decrypt("branding:accent", branding.encryptedAccentColor) ?? "";
     const text =
-      orgCache.decrypt(
-        "branding:text",
-        b64(branding.encryptedClientText ?? null),
-      ) ?? "";
+      orgCache.decrypt("branding:text", branding.encryptedClientText ?? null) ??
+      "";
 
     const clientBlob = buildClientBrandingBlob(
       {

@@ -19,7 +19,6 @@
   } from "$lib/crypto/context.js";
   import { getNavbarOverrideCtx } from "$lib/shell/context.js";
   import { shellBack } from "$lib/shell/navigation.js";
-  import { base64ToUint8Array } from "$lib/utils/buffer-encoding.js";
   import { themeStore } from "$lib/stores/theme.svelte";
   import { toggleSchemeWithPalette } from "$lib/branding/scheme-toggle.js";
   import { toastStore } from "$lib/stores/toast.svelte.js";
@@ -45,10 +44,7 @@
   );
   const currentDisplayName = $derived(
     encryptedDisplayName !== null
-      ? orgCache.decrypt(
-          "me:display_name",
-          base64ToUint8Array(encryptedDisplayName),
-        )
+      ? orgCache.decrypt("me:display_name", encryptedDisplayName)
       : null,
   );
   const encryptedIdentifier = $derived(
@@ -56,10 +52,7 @@
   );
   const currentUsername = $derived(
     encryptedIdentifier !== null
-      ? (orgCache.decrypt(
-          "me:identifier",
-          base64ToUint8Array(encryptedIdentifier),
-        ) ?? "")
+      ? (orgCache.decrypt("me:identifier", encryptedIdentifier) ?? "")
       : "",
   );
   const userId = $derived(meQuery.data?.user.id ?? "");

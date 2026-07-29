@@ -15,15 +15,11 @@
     type AdminDestination,
     type AdminGroup,
   } from "$lib/admin/destinations.js";
-  import {
-    base64ToUint8Array,
-    type SerializedBuffer,
-  } from "$lib/utils/buffer-encoding.js";
   import { User } from "@lucide/svelte";
   import { getOrgLogoUrl } from "$lib/branding/logo-url.svelte.js";
 
   interface AvatarPanelProps {
-    readonly encryptedDisplayName: unknown;
+    readonly encryptedDisplayName: string | null;
     readonly roleId: string;
     readonly permissions: ReadonlySet<Permission>;
     readonly onnavigate: (path: string) => void;
@@ -41,27 +37,8 @@
   const orgCache = getOrgDecryptCache();
   const orgKeyManager = getOrgKeyManager();
 
-  function isSerializedBuffer(val: unknown): val is SerializedBuffer {
-    return (
-      typeof val === "object" &&
-      val !== null &&
-      "type" in val &&
-      (val as Record<string, unknown>).type === "Buffer" &&
-      "data" in val &&
-      Array.isArray((val as Record<string, unknown>).data)
-    );
-  }
-
-  function toDecryptable(val: unknown): SerializedBuffer | Uint8Array | null {
-    if (typeof val === "string") return base64ToUint8Array(val);
-    if (val instanceof Uint8Array) return val;
-    if (isSerializedBuffer(val)) return val;
-    return null;
-  }
-
-  const displayNameCiphertext = $derived(toDecryptable(encryptedDisplayName));
   const displayNameRaw = $derived(
-    orgCache.decrypt("me:display_name", displayNameCiphertext),
+    orgCache.decrypt("me:display_name", encryptedDisplayName),
   );
   const nameResult = $derived(
     resolveOrgDecrypt(displayNameRaw, orgKeyManager.isLoaded),

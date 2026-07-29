@@ -29,6 +29,7 @@ import type {
   TicketService,
   TicketServiceDeps,
   TicketWithKeyWrap,
+  FollowUpPreview,
   PendingClient,
 } from "../tickets/ticket-service.js";
 import type { FollowUpService } from "../tickets/followup-service.js";
@@ -105,6 +106,19 @@ import {
   RoleId,
 } from "@care-y/shared";
 
+import { b64, b64n, b64KeyWrap } from "../utils/ciphertext-wire.js";
+
+/** Follow-up preview as it crosses the wire, ciphertext base64 encoded. */
+export interface WirePreview extends Omit<FollowUpPreview, "encryptedContent"> {
+  readonly encryptedContent: string;
+}
+
+/** Per-ticket read state as it crosses the wire. */
+export interface WireReadState {
+  encryptedReadCursor: string | null;
+  followUpCreatedAt: Date[];
+}
+
 export interface TicketRouterDeps {
   readonly blobStore: BlobStore;
   readonly createTicketAccess: (
@@ -169,7 +183,14 @@ function buildSearchRoutes(
     metadataSearch: volunteerProcedure.input(metadataSearchInputSchema).query(
       withErrorWrapping(async ({ ctx, input }) => {
         const search = factory(ctx.org.tenantDb);
-        return search.metadataSearch(input, ctx.user.id);
+        const result = await search.metadataSearch(input, ctx.user.id);
+        return {
+          ...result,
+          tickets: result.tickets.map((t) => ({
+            ...t,
+            encryptedClientAlias: b64(t.encryptedClientAlias),
+          })),
+        };
       }),
     ),
 
@@ -191,14 +212,29 @@ function buildNoteTypeRoutes(
       list: adminProcedure.query(
         withErrorWrapping(async ({ ctx }) => {
           const svc = factory(ctx.org.tenantDb);
-          return svc.list();
+          const rows = await svc.list();
+          return rows.map((r) => ({
+            ...r,
+            encryptedName: b64(r.encryptedName),
+            encryptedIcon: b64(r.encryptedIcon),
+            encryptedDescription: b64n(r.encryptedDescription),
+          }));
         }),
       ),
 
       listActive: volunteerProcedure.query(
         withErrorWrapping(async ({ ctx }) => {
           const svc = factory(ctx.org.tenantDb);
-          return svc.listActive(ctx.user.roleId);
+          const result = await svc.listActive(ctx.user.roleId);
+          return {
+            ...result,
+            types: result.types.map((r) => ({
+              ...r,
+              encryptedName: b64(r.encryptedName),
+              encryptedIcon: b64(r.encryptedIcon),
+              encryptedDescription: b64n(r.encryptedDescription),
+            })),
+          };
         }),
       ),
 
@@ -222,7 +258,12 @@ function buildNoteTypeRoutes(
             actorId: ctx.user.id,
             metadata: { noteTypeId: result.id },
           });
-          return result;
+          return {
+            ...result,
+            encryptedName: b64(result.encryptedName),
+            encryptedIcon: b64(result.encryptedIcon),
+            encryptedDescription: b64n(result.encryptedDescription),
+          };
         }),
       ),
 
@@ -256,7 +297,12 @@ function buildNoteTypeRoutes(
             actorId: ctx.user.id,
             metadata: { noteTypeId: input.id },
           });
-          return result;
+          return {
+            ...result,
+            encryptedName: b64(result.encryptedName),
+            encryptedIcon: b64(result.encryptedIcon),
+            encryptedDescription: b64n(result.encryptedDescription),
+          };
         }),
       ),
     }),
@@ -467,12 +513,15 @@ export function createTicketRouter(deps: TicketRouterDeps) {
   ) {
     const { clientPhoneEncrypted, encryptedClientAlias, ...rest } = ticket;
     const encryptor = deps.fieldEncryptor;
-    // base64 rather than a passed-through Buffer: superjson expands a Buffer
-    // into {type,data}, which is ~2.8x the bytes. The org decrypt cache takes
-    // either form.
+    // Convert all Buffer ciphertext to base64 for the wire. superjson expands
+    // a Buffer into {type,data}, which is ~2.8x the bytes of base64.
     const base = {
       ...rest,
       encryptedClientAlias: encryptedClientAlias.toString("base64"),
+      encryptedTitle: b64(rest.encryptedTitle),
+      encryptedDescription: b64(rest.encryptedDescription),
+      encryptedQueueName: b64(rest.encryptedQueueName),
+      assignedDisplayName: b64n(rest.assignedDisplayName),
     };
 
     // No phone on this client
@@ -524,7 +573,11 @@ export function createTicketRouter(deps: TicketRouterDeps) {
           actorId: ctx.user.id,
           ticketId: ticket.id,
         });
-        return ticket;
+        return {
+          ...ticket,
+          encryptedTitle: b64(ticket.encryptedTitle),
+          encryptedDescription: b64(ticket.encryptedDescription),
+        };
       }),
     ),
 
@@ -562,21 +615,50 @@ export function createTicketRouter(deps: TicketRouterDeps) {
     recentFollowUps: volunteerProcedure.input(recentFollowUpsInputSchema).query(
       withErrorWrapping(async ({ ctx, input }) => {
         const { svc } = ticketSvc(ctx.org.tenantDb);
-        return svc.recentFollowUps(ctx.user.id, input);
+        const grouped = await svc.recentFollowUps(ctx.user.id, input);
+        return Object.fromEntries(
+          Object.entries(grouped).map(
+            ([ticketId, previews]): [string, WirePreview[]] => [
+              ticketId,
+              previews.map((p) => ({
+                ...p,
+                encryptedContent: b64(p.encryptedContent),
+              })),
+            ],
+          ),
+        );
       }),
     ),
 
     listReadState: volunteerProcedure.input(listReadStateInputSchema).query(
       withErrorWrapping(async ({ ctx, input }) => {
         const { svc } = ticketSvc(ctx.org.tenantDb);
-        return svc.listReadState(ctx.user.id, input);
+        const stateMap = await svc.listReadState(ctx.user.id, input);
+        return Object.fromEntries(
+          Object.entries(stateMap).map(
+            ([id, state]): [string, WireReadState] => [
+              id,
+              {
+                encryptedReadCursor: b64n(state.encryptedReadCursor),
+                followUpCreatedAt: state.followUpCreatedAt,
+              },
+            ],
+          ),
+        );
       }),
     ),
 
     readStateSweep: volunteerProcedure.input(sweepReadStateInputSchema).query(
       withErrorWrapping(async ({ ctx, input }) => {
         const { svc } = ticketSvc(ctx.org.tenantDb);
-        return svc.sweepReadState(ctx.user.id, input);
+        const sweep = await svc.sweepReadState(ctx.user.id, input);
+        return {
+          ...sweep,
+          items: sweep.items.map((entry) => ({
+            ...entry,
+            encryptedReadCursor: b64(entry.encryptedReadCursor),
+          })),
+        };
       }),
     ),
 
@@ -607,13 +689,18 @@ export function createTicketRouter(deps: TicketRouterDeps) {
       withErrorWrapping(async ({ ctx, input }) => {
         const { svc } = ticketSvc(ctx.org.tenantDb);
         // care-y-ignore-next-line route-delegates-to-service -- delegates to svc.update; field extraction from Zod-validated input is wire-format mapping, not business logic
-        return svc.update(ctx.user.id, {
+        const updated = await svc.update(ctx.user.id, {
           ticketId: input.ticketId,
           status: input.status,
           priority: input.priority,
           queueId: input.queueId,
           onHold: input.onHold,
         });
+        return {
+          ...updated,
+          encryptedTitle: b64(updated.encryptedTitle),
+          encryptedDescription: b64(updated.encryptedDescription),
+        };
       }),
     ),
 
@@ -632,7 +719,11 @@ export function createTicketRouter(deps: TicketRouterDeps) {
           actorId: ctx.user.id,
           ticketId: input.ticketId,
         });
-        return ticket;
+        return {
+          ...ticket,
+          encryptedTitle: b64(ticket.encryptedTitle),
+          encryptedDescription: b64(ticket.encryptedDescription),
+        };
       }),
     ),
 
@@ -656,7 +747,11 @@ export function createTicketRouter(deps: TicketRouterDeps) {
             actorId: ctx.user.id,
             ticketId: input.ticketId,
           });
-          return ticket;
+          return {
+            ...ticket,
+            encryptedTitle: b64(ticket.encryptedTitle),
+            encryptedDescription: b64(ticket.encryptedDescription),
+          };
         }),
       ),
 
@@ -708,7 +803,11 @@ export function createTicketRouter(deps: TicketRouterDeps) {
             input.mentionedPseudonyms,
             input.noteTypeId,
           );
-          return followUp;
+          return {
+            ...followUp,
+            encryptedContent: b64(followUp.encryptedContent),
+            keyWrap: b64KeyWrap(followUp.keyWrap),
+          };
         }),
       ),
 
@@ -736,7 +835,14 @@ export function createTicketRouter(deps: TicketRouterDeps) {
         const reactions: Record<string, ReactionSummary[]> =
           Object.fromEntries(reactionsMap);
 
-        return { followUps, reactions };
+        return {
+          followUps: followUps.map((fu) => ({
+            ...fu,
+            encryptedContent: b64(fu.encryptedContent),
+            keyWrap: b64KeyWrap(fu.keyWrap),
+          })),
+          reactions,
+        };
       }),
     ),
 
@@ -766,7 +872,13 @@ export function createTicketRouter(deps: TicketRouterDeps) {
           const reactions: Record<string, ReactionSummary[]> =
             Object.fromEntries(reactionsMap);
 
-          return { summaries, reactions };
+          return {
+            summaries: summaries.map((s) => ({
+              ...s,
+              encryptedContent: b64n(s.encryptedContent),
+            })),
+            reactions,
+          };
         }),
       ),
 
@@ -776,9 +888,17 @@ export function createTicketRouter(deps: TicketRouterDeps) {
         withErrorWrapping(async ({ ctx, input }) => {
           const access = deps.createTicketAccess(ctx.org.tenantDb);
           const svc = deps.createFollowUpSvc(ctx.org.tenantDb, access);
-          return svc.listByIds(ctx.user.id, input.ticketId, input.followUpIds, {
-            types: input.types,
-          });
+          const fus = await svc.listByIds(
+            ctx.user.id,
+            input.ticketId,
+            input.followUpIds,
+            { types: input.types },
+          );
+          return fus.map((fu) => ({
+            ...fu,
+            encryptedContent: b64(fu.encryptedContent),
+            keyWrap: b64KeyWrap(fu.keyWrap),
+          }));
         }),
       ),
 
@@ -790,7 +910,11 @@ export function createTicketRouter(deps: TicketRouterDeps) {
         withErrorWrapping(async ({ ctx, input }) => {
           const access = deps.createTicketAccess(ctx.org.tenantDb);
           const svc = deps.createReadCursorSvc(ctx.org.tenantDb, access);
-          return svc.getOrCreate(ctx.user.id, input.ticketId);
+          const cursor = await svc.getOrCreate(ctx.user.id, input.ticketId);
+          return {
+            ...cursor,
+            encryptedReadCursor: b64(cursor.encryptedReadCursor),
+          };
         }),
       ),
 
@@ -834,7 +958,11 @@ export function createTicketRouter(deps: TicketRouterDeps) {
             notify(ctx, "followup_added", ticket, [], input.noteTypeId);
           }
 
-          return record;
+          return {
+            ...record,
+            encryptedContent: b64(record.encryptedContent),
+            keyWrap: b64KeyWrap(record.keyWrap),
+          };
         }),
       ),
 
@@ -883,12 +1011,17 @@ export function createTicketRouter(deps: TicketRouterDeps) {
     createPreset: managerProcedure.input(createPresetReplyInputSchema).mutation(
       withErrorWrapping(async ({ ctx, input }) => {
         const svc = deps.createPresetSvc(ctx.org.tenantDb);
-        return svc.create({
+        const preset = await svc.create({
           encryptedTitle: Buffer.from(input.encryptedTitle, "base64"),
           encryptedBody: Buffer.from(input.encryptedBody, "base64"),
           queueId: input.queueId,
           createdBy: ctx.user.id,
         });
+        return {
+          ...preset,
+          encryptedTitle: b64(preset.encryptedTitle),
+          encryptedBody: b64(preset.encryptedBody),
+        };
       }),
     ),
 
@@ -897,7 +1030,12 @@ export function createTicketRouter(deps: TicketRouterDeps) {
       .query(
         withErrorWrapping(async ({ ctx, input }) => {
           const svc = deps.createPresetSvc(ctx.org.tenantDb);
-          return svc.list(input.queueId);
+          const presets = await svc.list(input.queueId);
+          return presets.map((p) => ({
+            ...p,
+            encryptedTitle: b64(p.encryptedTitle),
+            encryptedBody: b64(p.encryptedBody),
+          }));
         }),
       ),
 
@@ -913,11 +1051,16 @@ export function createTicketRouter(deps: TicketRouterDeps) {
             ? Buffer.from(input.encryptedBody, "base64")
             : undefined;
         // care-y-ignore-next-line route-delegates-to-service -- delegates to svc.update; Buffer.from is wire-format (base64 to Buffer) conversion, not business logic
-        return svc.update(input.presetId, {
+        const updated = await svc.update(input.presetId, {
           encryptedTitle: title,
           encryptedBody: body,
           queueId: input.queueId,
         });
+        return {
+          ...updated,
+          encryptedTitle: b64(updated.encryptedTitle),
+          encryptedBody: b64(updated.encryptedBody),
+        };
       }),
     ),
 
@@ -980,7 +1123,10 @@ export function createTicketRouter(deps: TicketRouterDeps) {
             secondaryClientId: input.secondaryClientId,
           },
         });
-        return result;
+        return {
+          ...result,
+          snapshot: b64(result.snapshot),
+        };
       }),
     ),
 
@@ -996,7 +1142,10 @@ export function createTicketRouter(deps: TicketRouterDeps) {
           actorId: ctx.user.id,
           metadata: { mergeEventId: input.mergeEventId },
         });
-        return result;
+        return {
+          ...result,
+          snapshot: b64(result.snapshot),
+        };
       }),
     ),
 
@@ -1032,7 +1181,8 @@ export function createTicketRouter(deps: TicketRouterDeps) {
       .query(
         withErrorWrapping(async ({ ctx, input }) => {
           const svc = mediaSvc(ctx.org.tenantDb);
-          return svc.getAttachment(ctx.user.id, input.attachmentId);
+          const att = await svc.getAttachment(ctx.user.id, input.attachmentId);
+          return { ...att, encryptedFilename: b64n(att.encryptedFilename) };
         }),
       ),
 
@@ -1082,12 +1232,16 @@ export function createTicketRouter(deps: TicketRouterDeps) {
     listAttachments: volunteerProcedure.input(attachmentListInputSchema).query(
       withErrorWrapping(async ({ ctx, input }) => {
         const svc = mediaSvc(ctx.org.tenantDb);
-        return svc.listAttachments(ctx.user.id, input.ticketId, {
+        const atts = await svc.listAttachments(ctx.user.id, input.ticketId, {
           limit: input.limit,
           cursor: input.cursor,
           direction: input.direction,
           followupId: input.followupId,
         });
+        return atts.map((a) => ({
+          ...a,
+          encryptedFilename: b64n(a.encryptedFilename),
+        }));
       }),
     ),
 
@@ -1106,14 +1260,25 @@ export function createTicketRouter(deps: TicketRouterDeps) {
           actorId: ctx.user.id,
           metadata: { queueId: queue.id },
         });
-        return queue;
+        return {
+          ...queue,
+          encryptedName: b64(queue.encryptedName),
+          encryptedColor: b64n(queue.encryptedColor),
+          encryptedIcon: b64n(queue.encryptedIcon),
+        };
       }),
     ),
 
     listQueues: volunteerProcedure.query(
       withErrorWrapping(async ({ ctx }) => {
         const svc = deps.createQueueSvc(ctx.org.tenantDb);
-        return svc.listActive();
+        const queues = await svc.listActive();
+        return queues.map((q) => ({
+          ...q,
+          encryptedName: b64(q.encryptedName),
+          encryptedColor: b64n(q.encryptedColor),
+          encryptedIcon: b64n(q.encryptedIcon),
+        }));
       }),
     ),
 
@@ -1140,7 +1305,12 @@ export function createTicketRouter(deps: TicketRouterDeps) {
           actorId: ctx.user.id,
           metadata: { queueId: input.queueId },
         });
-        return queue;
+        return {
+          ...queue,
+          encryptedName: b64(queue.encryptedName),
+          encryptedColor: b64n(queue.encryptedColor),
+          encryptedIcon: b64n(queue.encryptedIcon),
+        };
       }),
     ),
 
@@ -1317,7 +1487,11 @@ export function createTicketRouter(deps: TicketRouterDeps) {
     listVolunteers: volunteerProcedure.query(
       withErrorWrapping(async ({ ctx }) => {
         const svc = createUserService(ctx.org.tenantDb);
-        return svc.listActiveVolunteers();
+        const vols = await svc.listActiveVolunteers();
+        return vols.map((v) => ({
+          ...v,
+          encryptedDisplayName: b64(v.encryptedDisplayName),
+        }));
       }),
     ),
 
@@ -1328,7 +1502,11 @@ export function createTicketRouter(deps: TicketRouterDeps) {
         withErrorWrapping(async ({ ctx, input }) => {
           const access = deps.createTicketAccess(ctx.org.tenantDb);
           const svc = deps.createFollowUpSvc(ctx.org.tenantDb, access);
-          return svc.listParticipants(ctx.user.id, input.ticketId);
+          const parts = await svc.listParticipants(ctx.user.id, input.ticketId);
+          return parts.map((p) => ({
+            ...p,
+            encryptedDisplayName: b64(p.encryptedDisplayName),
+          }));
         }),
       ),
 
@@ -1353,7 +1531,15 @@ export function createTicketRouter(deps: TicketRouterDeps) {
           if (queueIds.length === 0) return [];
 
           const auditSvc = deps.createAuditSvc(tDb);
-          return auditSvc.listRecentForQueues(queueIds, input.limit);
+          const entries = await auditSvc.listRecentForQueues(
+            queueIds,
+            input.limit,
+          );
+          return entries.map((e) => ({
+            ...e,
+            encryptedClientAlias: b64(e.encryptedClientAlias),
+            encryptedQueueName: b64(e.encryptedQueueName),
+          }));
         }),
       ),
 
@@ -1369,7 +1555,14 @@ export function createTicketRouter(deps: TicketRouterDeps) {
         const svc = deps.createQueueSvc(tDb);
         const allQueues = await svc.listActive();
         const allowed = new Set(queueIds);
-        return allQueues.filter((q) => allowed.has(q.id));
+        return allQueues
+          .filter((q) => allowed.has(q.id))
+          .map((q) => ({
+            ...q,
+            encryptedName: b64(q.encryptedName),
+            encryptedColor: b64n(q.encryptedColor),
+            encryptedIcon: b64n(q.encryptedIcon),
+          }));
       }),
     ),
 

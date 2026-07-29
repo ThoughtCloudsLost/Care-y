@@ -17,7 +17,7 @@
       readonly id: string;
       readonly source: string;
       readonly type: string;
-      readonly encryptedContent: unknown;
+      readonly encryptedContent: string | null;
       readonly createdAt: string;
       readonly eventParams?: Record<string, unknown> | null;
     };

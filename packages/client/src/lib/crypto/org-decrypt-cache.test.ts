@@ -55,8 +55,14 @@ describe("OrgDecryptCache", () => {
     cache = new OrgDecryptCache(manager, bridge as unknown as CryptoBridge);
   });
 
-  function fakeData(content: string): Uint8Array {
-    return new TextEncoder().encode(content);
+  /** Returns a deterministic base64 string for test ciphertext. */
+  function fakeData(content: string): string {
+    const bytes = new TextEncoder().encode(content);
+    let binary = "";
+    for (const byte of bytes) {
+      binary += String.fromCharCode(byte);
+    }
+    return btoa(binary);
   }
 
   describe("decrypt", () => {

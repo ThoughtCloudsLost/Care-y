@@ -37,8 +37,8 @@ function makeRawItem(
 ): RawKBItem {
   return {
     categoryId: "cat-1",
-    encryptedTitle: new Uint8Array([1, 2, 3]),
-    encryptedExcerpt: new Uint8Array([4, 5, 6]),
+    encryptedTitle: "AQID",
+    encryptedExcerpt: "BAUG",
     createdBy: "user-1",
     voteUpCount: 4,
     voteDownCount: 1,
@@ -373,7 +373,7 @@ describe("KB fullSearch (body content)", () => {
       fetchBodies: vi.fn(async (itemIds: string[]) =>
         itemIds.map((id) => ({
           id,
-          encryptedBody: new Uint8Array([99]),
+          encryptedBody: "Yw",
         })),
       ),
       decryptOrg: async (cacheKey: string, ciphertext: unknown) => {

@@ -6,7 +6,6 @@
   import { withTerms } from "$lib/terminology/with-terms.js";
   import { trpc } from "$lib/trpc/index.js";
   import { getOrgDecryptCache } from "$lib/crypto/context.js";
-  import { base64ToUint8Array } from "$lib/utils/buffer-encoding.js";
   import { requireRouter } from "$lib/errors.js";
   import QueryError from "$lib/components/QueryError.svelte";
   import DecryptPlaceholder from "$lib/components/DecryptPlaceholder.svelte";
@@ -88,8 +87,7 @@
     queueId: string,
     encryptedName: string,
   ): string | null {
-    const bytes = base64ToUint8Array(encryptedName);
-    return orgCache.decrypt(`queue:${queueId}`, bytes);
+    return orgCache.decrypt(`queue:${queueId}`, encryptedName);
   }
 
   const isLoading = $derived(
