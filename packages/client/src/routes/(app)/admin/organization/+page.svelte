@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { goto } from "$app/navigation";
+  import { resolve } from "$app/paths";
   import { Permission } from "@care-y/shared";
   import {
     Building2,
@@ -9,6 +11,7 @@
     Languages,
   } from "@lucide/svelte";
   import * as m from "$lib/paraglide/messages.js";
+  import { getCurrentPermissions } from "$lib/crypto/context.js";
   import CollapsibleSectionPage from "$lib/components/admin/CollapsibleSectionPage.svelte";
   import type { SectionDef } from "$lib/components/admin/collapsible-section-types.js";
   import OrgGeneralSection from "$lib/components/admin/OrgGeneralSection.svelte";
@@ -17,6 +20,9 @@
   import RetentionSection from "$lib/components/admin/RetentionSection.svelte";
   import NoteTypesSection from "$lib/components/admin/NoteTypesSection.svelte";
   import TerminologySection from "$lib/components/admin/TerminologySection.svelte";
+
+  const permissionsGetter = getCurrentPermissions();
+  const permissions = $derived(permissionsGetter());
 
   const SECTIONS: readonly SectionDef[] = [
     {
@@ -62,6 +68,16 @@
       component: NoteTypesSection,
     },
   ];
+
+  const hasAccess = $derived(
+    SECTIONS.some((s) => permissions.has(s.permission)),
+  );
+
+  $effect(() => {
+    if (!hasAccess) void goto(resolve("/"));
+  });
 </script>
 
-<CollapsibleSectionPage sections={SECTIONS} title={m.admin_org_title()} />
+{#if hasAccess}
+  <CollapsibleSectionPage sections={SECTIONS} title={m.admin_org_title()} />
+{/if}

@@ -4,8 +4,6 @@
   Same pattern as InternalNoteSheet / DisplayNameSheet.
 -->
 <script lang="ts">
-  import { goto } from "$app/navigation";
-  import { resolve } from "$app/paths";
   import {
     createQuery,
     createMutation,
@@ -33,9 +31,10 @@
   interface Props {
     opened: boolean;
     ondismiss: () => void;
+    oncollision: (ticketId: string) => void;
   }
 
-  let { opened, ondismiss }: Props = $props();
+  let { opened, ondismiss, oncollision }: Props = $props();
 
   const ticketRouter = requireRouter(trpc.tickets, "tickets");
 
@@ -87,7 +86,7 @@
   function handleCollision(info: CollisionInfo): void {
     ondismiss();
     const ticketId: string = info.openTicketId;
-    void goto(resolve(`/tickets/${ticketId}`));
+    oncollision(ticketId);
   }
 
   async function searchClients(query: string): Promise<ClientSearchResult[]> {

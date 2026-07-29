@@ -1,7 +1,6 @@
 <script lang="ts">
   import { SvelteSet } from "svelte/reactivity";
-  import { afterNavigate, goto } from "$app/navigation";
-  import { resolve } from "$app/paths";
+  import { afterNavigate } from "$app/navigation";
   import { getNavbarOverrideCtx } from "$lib/shell/context.js";
   import { getCurrentPermissions } from "$lib/crypto/context.js";
   import { createSectionScroll } from "$lib/components/useSectionScroll.svelte.js";
@@ -18,11 +17,6 @@
   const visibleSections = $derived(
     sections.filter((s) => permissions.has(s.permission)),
   );
-  const hasAccess = $derived(visibleSections.length > 0);
-
-  $effect(() => {
-    if (!hasAccess) void goto(resolve("/"));
-  });
 
   const collapsedSections = new SvelteSet<string>();
 
