@@ -230,6 +230,9 @@ importers:
       '@care-y/shared':
         specifier: workspace:*
         version: link:../shared
+      '@chenglou/pretext':
+        specifier: 0.0.7
+        version: 0.0.7
       '@electric-sql/pglite':
         specifier: 0.5.4
         version: 0.5.4
@@ -878,6 +881,9 @@ packages:
   '@bramus/specificity@2.4.2':
     resolution: {integrity: sha512-ctxtJ/eA+t+6q2++vj5j7FYX3nRu311q1wfYH3xjlLOsczhlhxAg2FWNUXhpGvAw3BWo1xBcvOV6/YLc2r5FJw==}
     hasBin: true
+
+  '@chenglou/pretext@0.0.7':
+    resolution: {integrity: sha512-FV5hj3fGqpBlzbANUbR+s+6XuNRrghVVyuNs33zdH2SzU7MvK+7GlW6xREjDCreixKbexEn7OEkDgAFeWuu5Hg==}
 
   '@commitlint/cli@21.2.1':
     resolution: {integrity: sha512-blsZGe29hJ72VGEFVl72IVYX+1vsfINpjA9yWQA6i7OKD/McGEOXg08sKIRKjFk4JvzhV/9n0l3i6NooPLTNfg==}
@@ -4847,6 +4853,8 @@ snapshots:
   '@bramus/specificity@2.4.2':
     dependencies:
       css-tree: 3.2.1
+
+  '@chenglou/pretext@0.0.7': {}
 
   '@commitlint/cli@21.2.1(@types/node@26.1.0)(conventional-commits-parser@7.1.0)(typescript@5.9.3)':
     dependencies:

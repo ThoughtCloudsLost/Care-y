@@ -185,15 +185,7 @@ describe("trpc stub", () => {
       expect(result).toBe(brandingResult);
     });
 
-    it("delegates onboarding.getStatus to the engine", async () => {
-      const statusResult = { needsSetup: false };
-      const fakeEngine = {
-        onboarding: {
-          getStatus: { query: vi.fn().mockResolvedValue(statusResult) },
-        },
-      };
-      setEngineTrpc(fakeEngine);
-
+    it("returns constant status from mock overlay (not engine-delegated)", async () => {
       const onboarding = mustGet(
         trpc as unknown as Record<string, Record<string, unknown>>,
         "onboarding",
@@ -201,7 +193,7 @@ describe("trpc stub", () => {
       const result = await (
         onboarding.getStatus as { query: () => Promise<unknown> }
       ).query();
-      expect(result).toBe(statusResult);
+      expect(result).toStrictEqual({ needsSetup: false });
     });
   });
 

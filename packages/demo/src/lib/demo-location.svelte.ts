@@ -223,9 +223,11 @@ export class DemoLocationStore {
     ) {
       return;
     }
-    // The very first sync (phone mount) is the boot baseline, not a
-    // phone interaction: the page highlights it without moving.
-    this.commit(candidate, this.locationSeq === 0 ? "init" : "phone");
+    // Every adoption here is a real phone-originated move. The boot
+    // baseline is the initial field value of `origin`, not a commit:
+    // the mount sync resolves to the location the store already holds
+    // and returns above without committing anything.
+    this.commit(candidate, "phone");
   }
 
   private commit(location: DemoLocation, origin: LocationOrigin): void {

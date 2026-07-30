@@ -1887,7 +1887,6 @@
   "demo_narrative_search_body2": "This means search results are as private as the tickets themselves. The server cannot log what you searched for or which results matched.",
   "demo_narrative_tip": "Select a feature above, scroll down, or interact with the CARE-Y app in the phone to learn more about what it can do.",
   "demo_phone_frame_title": "CARE-Y app demo",
-  "demo_status_bar_time": "9:41",
   "demo_progress_explored": "{seen} of {total} features explored",
   "demo_topic_sort": "Sort",
   "demo_topic_filters": "Filters",
@@ -2010,5 +2009,18 @@
   "demo_toolbar_phone_preset": "Phone size",
   "demo_toolbar_phone_tooltip": "Switch to phone layout (390 x 844)",
   "demo_toolbar_desktop_preset": "Desktop size",
-  "demo_toolbar_desktop_tooltip": "Switch to desktop layout (760 x 475)"
+  "demo_toolbar_desktop_tooltip": "Switch to desktop layout (760 x 475)",
+  "demo_toolbar_grip_tooltip": "Drag to reposition",
+  "demo_toolbar_shrink_tooltip": "Shrink the frame",
+  "demo_toolbar_grow_tooltip": "Restore frame size",
+  "demo_toolbar_link_linked": "Phone and story are linked (click to unlink)",
+  "demo_toolbar_link_unlinked": "Phone and story are unlinked (click to relink)",
+  "demo_entry_title": "How this demo works",
+  "demo_entry_desc": "CARE-Y is a call intake system for people who cannot afford to be identified. This demo runs the real application in your browser, with a story alongside it that explains what each screen is doing.",
+  "demo_entry_how_heading": "A story and a working app",
+  "demo_entry_how_body": "The phone on this page runs the actual CARE-Y client against a database that lives inside your browser. Nothing is sent to a server and nothing you type here leaves your device. The text you are reading follows along: pick a feature and the phone opens that screen, or move around in the phone and the story follows you. Each topic gets its own page, so you can read straight through or jump to whatever interests you.",
+  "demo_entry_phone_heading": "Move the phone wherever you like",
+  "demo_entry_phone_body": "Drag the phone by the grip above it, resize it from any edge, or use the toolbar buttons to shrink it, restore it, or switch to a desktop shaped window. The text reflows around wherever you put it. The link button breaks the connection between the phone and the story if you would rather explore one without moving the other.",
+  "demo_entry_start_heading": "Getting started",
+  "demo_entry_start_body": "The demo begins at the login screen, where CARE-Y derives the encryption keys that protect everything else. Everything you see is fictional: the volunteers, the clients, and every ticket are invented for this walkthrough. You can restart at any point to come back to this page."
 }

@@ -164,7 +164,7 @@ describe("classifyDemoLabel", () => {
   });
 
   it("classifies Username label as credentials", () => {
-    expect(classifyDemoLabel("Username", listCtx)).toBe("credentials");
+    expect(classifyDemoLabel("Login Username", listCtx)).toBe("credentials");
   });
 
   it("classifies Password label as credentials", () => {
@@ -177,7 +177,7 @@ describe("classifyDemoLabel", () => {
   });
 
   it("classifies Passkey label as twofa-passkey on login", () => {
-    expect(classifyDemoLabel("Use Passkey", loginCtx)).toBe("twofa-passkey");
+    expect(classifyDemoLabel("Use passkey", loginCtx)).toBe("twofa-passkey");
   });
 
   it("classifies Backup codes label as twofa-backup on login", () => {
@@ -198,7 +198,7 @@ describe("classifyDemoLabel", () => {
   });
 
   it("classifies Passkey label as settings-2fa on settings", () => {
-    expect(classifyDemoLabel("Use Passkey", settingsCtx)).toBe("settings-2fa");
+    expect(classifyDemoLabel("Use passkey", settingsCtx)).toBe("settings-2fa");
   });
 
   it("classifies Backup codes label as settings-2fa on settings", () => {
@@ -223,18 +223,18 @@ describe("classifyDemoLabel", () => {
 
   // -- key-derivation --
   it("classifies argon2id phase label as key-derivation", () => {
-    expect(classifyDemoLabel("Deriving keys...", listCtx)).toBe(
+    expect(classifyDemoLabel("Preparing your keys...", listCtx)).toBe(
       "key-derivation",
     );
   });
 
   // -- timeline --
   it("classifies timeline toggle as timeline", () => {
-    expect(classifyDemoLabel("Timeline", detailCtx)).toBe("timeline");
+    expect(classifyDemoLabel("View timeline", detailCtx)).toBe("timeline");
   });
 
   it("classifies messages toggle as timeline", () => {
-    expect(classifyDemoLabel("Messages", detailCtx)).toBe("timeline");
+    expect(classifyDemoLabel("View messages", detailCtx)).toBe("timeline");
   });
 
   // -- unrecognized --
@@ -254,8 +254,11 @@ describe("classifyDemoLabel", () => {
     expect(classifyDemoLabel("Queues", homeCtx)).toBe("dashboard-queues");
   });
 
-  it("classifies Colas heading as dashboard-queues (Spanish)", () => {
-    expect(classifyDemoLabel("Colas", homeCtx)).toBe("dashboard-queues");
+  it("classifies Queues heading as dashboard-queues (Spanish locale)", () => {
+    // The Spanish template also uses the {Queues} terminology param,
+    // which resolves to "Queues" (English terminology defaults). Both
+    // locales produce the same label for this parameterized heading.
+    expect(classifyDemoLabel("Queues", homeCtx)).toBe("dashboard-queues");
   });
 
   // -- dashboard-activity --

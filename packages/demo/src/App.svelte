@@ -13,11 +13,16 @@
   import {
     ArrowRight,
     GripVertical,
+    Link2,
+    Link2Off,
+    Maximize2,
+    Minimize2,
     Smartphone,
     Monitor,
   } from "@lucide/svelte";
   import TopBar from "$demo/TopBar.svelte";
-  import StorySection from "$demo/StorySection.svelte";
+  import FlowStory from "$demo/FlowStory.svelte";
+  import SectionIntro from "$demo/SectionIntro.svelte";
   import DemoFrame from "$demo/DemoFrame.svelte";
   import {
     createScrollEngine,
@@ -25,6 +30,8 @@
   } from "$demo/scroll-engine.svelte.js";
   import {
     SECTIONS,
+    ENTRY_SECTION,
+    parseHash,
     type SectionId,
     type Section,
   } from "$demo/scroll-sections.js";
@@ -32,9 +39,19 @@
   import { DEMO_TOPICS } from "$demo/bridge.js";
   import {
     createFrameGeometry,
+    deriveBezelRadius,
+    presetAnchoredLeft,
+    presetAnchoredTop,
+    clampTopToViewport,
+    BEZEL,
     PHONE_PRESET,
     DESKTOP_PRESET,
   } from "$demo/frame-geometry.svelte.js";
+  import {
+    isLinked,
+    toggleLinked,
+    resetLinked,
+  } from "$demo/link-state.svelte.js";
 
   // -----------------------------------------------------------------------
   // Dark mode with localStorage persistence
@@ -83,6 +100,17 @@
     }
     window.addEventListener("resize", onResize);
     return () => window.removeEventListener("resize", onResize);
+  });
+
+  // -----------------------------------------------------------------------
+  // Frame rect for FlowStory (reactive derived from geo)
+  // -----------------------------------------------------------------------
+
+  const frameRect = $derived({
+    left: geo.left,
+    top: geo.top,
+    outerW: geo.outerW,
+    outerH: geo.outerH,
   });
 
   // -----------------------------------------------------------------------
@@ -175,6 +203,10 @@
 
   function onPointerUp(e: PointerEvent): void {
     if (gesture?.pointerId !== e.pointerId) return;
+    // Manual resize invalidates the shrink memory
+    if (gesture.mode === "resize" && geo.shrunk) {
+      geo.clearShrinkMemory();
+    }
     gesture = null;
     gestureActive = false;
   }
@@ -194,9 +226,65 @@
   }
   let showBlurCover = $state(false);
 
+  // Edges the frame holds onto while a preset resizes it, so it grows
+  // toward the middle of the viewport instead of off the side or bottom.
+  // Both are decided once, at animation start.
+  let anchorRight: number | null = null;
+  let anchorBottom: number | null = null;
+
+  function viewportSize(): { w: number; h: number } {
+    if (typeof window === "undefined") return { w: 1280, h: 800 };
+    return { w: window.innerWidth, h: window.innerHeight };
+  }
+
+  /** Where the frame should sit for a given in-flight outer size. */
+  function positionFor(
+    outerW: number,
+    outerH: number,
+    fallbackTop: number,
+    fallbackLeft: number,
+  ): { top: number; left: number } {
+    const { h: windowH } = viewportSize();
+    const rawTop = anchorBottom !== null ? anchorBottom - outerH : fallbackTop;
+    return {
+      // Always fitted, not just when bottom-anchored: growing taller from
+      // a top anchor can overflow the bottom just as easily.
+      top: clampTopToViewport(rawTop, outerH, windowH),
+      left: anchorRight !== null ? anchorRight - outerW : fallbackLeft,
+    };
+  }
+
   function animateToPreset(targetW: number, targetH: number): void {
+    const targetOuterW = targetW + BEZEL * 2;
+    const targetOuterH = targetH + BEZEL * 2;
+    const { w: windowW, h: windowH } = viewportSize();
+
+    // Capture the starting box before setFootprint moves it.
+    const startTop = geo.top;
+    const startLeft = geo.left;
+    const startOuterW = geo.outerW;
+    const startOuterH = geo.outerH;
+
+    const newLeft = presetAnchoredLeft(
+      startLeft,
+      startOuterW,
+      targetOuterW,
+      windowW,
+    );
+    // Right-anchored when presetAnchoredLeft moved the left edge
+    anchorRight = newLeft !== startLeft ? startLeft + startOuterW : null;
+    anchorBottom =
+      startTop + startOuterH / 2 > windowH / 2 ? startTop + startOuterH : null;
+
     if (prefersReducedMotion.current) {
       geo.setFootprint(targetW, targetH);
+      geo.setPosition(
+        presetAnchoredTop(startTop, startOuterH, targetOuterH, windowH),
+        anchorRight !== null ? anchorRight - targetOuterW : startLeft,
+      );
+      geo.clampToViewport();
+      anchorRight = null;
+      anchorBottom = null;
       return;
     }
 
@@ -219,6 +307,11 @@
     const h = fpH.current;
     geo.setFootprint(w, h);
 
+    // Follow the anchored edges as the footprint changes, so the frame
+    // appears to grow toward the middle of the viewport.
+    const live = positionFor(w + BEZEL * 2, h + BEZEL * 2, geo.top, geo.left);
+    geo.setPosition(live.top, live.left);
+
     const wDone = Math.abs(w - fpW.target) < 0.5;
     const hDone = Math.abs(h - fpH.target) < 0.5;
     if (wDone && hDone) {
@@ -226,15 +319,48 @@
       showBlurCover = false;
       // Snap to exact target
       geo.setFootprint(fpW.target, fpH.target);
+      const final = positionFor(
+        fpW.target + BEZEL * 2,
+        fpH.target + BEZEL * 2,
+        geo.top,
+        geo.left,
+      );
+      geo.setPosition(final.top, final.left);
+      anchorRight = null;
+      anchorBottom = null;
+      geo.clampToViewport();
     }
   });
 
+  function applyPreset(w: number, h: number): void {
+    if (geo.shrunk) {
+      // Stay shrunk: adopt the preset's ratio at shrunken scale and
+      // point the grow memory at the preset's full footprint.
+      const target = geo.retargetShrunkTo(w, h);
+      animateToPreset(target.w, target.h);
+      return;
+    }
+    animateToPreset(w, h);
+  }
+
   function handlePhonePreset(): void {
-    animateToPreset(PHONE_PRESET.w, PHONE_PRESET.h);
+    applyPreset(PHONE_PRESET.w, PHONE_PRESET.h);
   }
 
   function handleDesktopPreset(): void {
-    animateToPreset(DESKTOP_PRESET.w, DESKTOP_PRESET.h);
+    applyPreset(DESKTOP_PRESET.w, DESKTOP_PRESET.h);
+  }
+
+  function handleShrinkGrow(): void {
+    if (geo.shrunk) {
+      const target = geo.grow();
+      if (target !== null) {
+        animateToPreset(target.w, target.h);
+      }
+    } else {
+      const target = geo.shrink();
+      animateToPreset(target.w, target.h);
+    }
   }
 
   // -----------------------------------------------------------------------
@@ -249,8 +375,21 @@
   const seenTopics = new SvelteSet<DemoTopic>();
   const progress = createTopicProgress(seenTopics, DEMO_TOPICS.length);
 
+  // Entry page: visible until the visitor dismisses it (next pill,
+  // section click, phone interaction, or deep link). A deep link
+  // skips it entirely.
+  let entryVisible = $state(parseHash(window.location.hash) === null);
+
   // Scroll engine (renders the shared location, sends page intents)
-  const scrollEngine = createScrollEngine(() => bridge);
+  // Link gate: the user's link choice, minus an in-flight drag/resize
+  // gesture. Suspending during gestures keeps dragging from driving
+  // either side; the choice itself is untouched, so lifting the pointer
+  // restores it.
+  const scrollEngine = createScrollEngine(
+    () => bridge,
+    () => isLinked() && !gestureActive,
+    () => !entryVisible,
+  );
 
   // Track the last-seen restartSeq per bridge instance. A fresh bridge
   // starts at 0; an increment means the phone requested a restart
@@ -273,6 +412,14 @@
 
     unsubscribe = b.subscribe((state: DemoBridgeState) => {
       progress.markFromState(state);
+
+      // A non-init bridge state while the entry page is up means the
+      // phone moved (deep link, phone interaction). Dismiss entry so
+      // the story follows.
+      if (entryVisible && state.origin !== "init") {
+        entryVisible = false;
+      }
+
       scrollEngine.handleBridgeState(state);
 
       // Phone-initiated restart (avatar sign-out -> /logout)
@@ -296,8 +443,10 @@
       "",
       window.location.pathname + window.location.search,
     );
-    // Reset frame geometry alongside the iframe reload (decision 6)
+    // Reset frame geometry and link state alongside the iframe reload
     geo.reset();
+    resetLinked();
+    entryVisible = true;
     frameRef?.reload();
     window.scrollTo({ top: 0, behavior: "auto" });
   }
@@ -307,18 +456,35 @@
   }
 
   function handleSectionClick(id: SectionId): void {
+    if (entryVisible) entryVisible = false;
     scrollEngine.selectSection(id);
   }
 
   /**
-   * The next-section button. From the login section it doubles as
-   * "complete login": the flow plays to the end in the phone (sign in,
-   * confirm a method, key derivation) and the narrative follows the
-   * phone through each stage, swapping to the tickets section when the
-   * phone actually lands there. Selecting tickets directly here would
-   * silently fast-forward auth and skip the story.
+   * Dismiss the entry page idempotently, then select the login section
+   * so the story and phone start. Guard on entryVisible so a double
+   * tap during the remount cannot fire twice.
+   */
+  function dismissEntry(): void {
+    if (!entryVisible) return;
+    entryVisible = false;
+    scrollEngine.selectSection("login");
+  }
+
+  /**
+   * The next-section button. While the entry page is visible it reads
+   * "next: sign in" and calls dismissEntry (it must NOT fall into the
+   * login -> completeLogin special case). From the login section it
+   * doubles as "complete login": the flow plays to the end in the phone
+   * (sign in, confirm a method, key derivation) and the narrative
+   * follows the phone through each stage, swapping to the tickets
+   * section when the phone actually lands there.
    */
   function handleNextSection(id: SectionId): void {
+    if (entryVisible) {
+      dismissEntry();
+      return;
+    }
     if (scrollEngine.activeSection === "login" && bridge !== undefined) {
       bridge.completeLogin();
       return;
@@ -327,106 +493,12 @@
   }
 
   function handleSubClick(sectionId: SectionId, subSlug: string): void {
+    // While the entry page is visible, sub clicks are inert: the entry
+    // page's slugs are not real login subs and must never reach the
+    // location store.
+    if (entryVisible) return;
     scrollEngine.selectSub(sectionId, subSlug);
   }
-
-  // -----------------------------------------------------------------------
-  // Slot frame: the fixed highlight the content snaps into. Its top
-  // never moves (the slot line); only its height animates to fit the
-  // item currently selected (the tip card when nothing is).
-  // -----------------------------------------------------------------------
-
-  let storyColumnEl: HTMLDivElement | undefined = $state();
-  let frame = $state({ top: 0, left: 0, width: 0, visible: false });
-
-  // The height resizes on a spring so the frame reads as liquid:
-  // it swells or shrinks around the item that lands in it, with a
-  // soft overshoot, instead of easing linearly.
-  const frameHeight = new Spring(72, { stiffness: 0.14, damping: 0.5 });
-  let frameMeasured = false;
-
-  function measureSlotFrame(): void {
-    const col = storyColumnEl;
-    if (col === undefined) return;
-    const line = scrollEngine.remeasure();
-    const rect = col.getBoundingClientRect();
-    // Items bleed 1rem past the column on both sides (their negative
-    // margins); the frame matches that footprint.
-    frame = {
-      top: line,
-      left: Math.max(0, rect.left - 16),
-      width: rect.width + 32,
-      visible: true,
-    };
-    updateSlotTracking();
-  }
-
-  // Focus fade: items dim with distance from the slot, bottoming out
-  // at this opacity, so the slotted item reads as the focal point.
-  const FADE_DISTANCE = 600;
-  const FADE_FLOOR = 0.35;
-
-  /**
-   * Retarget the frame's height spring to the item nearest the slot
-   * line and apply the distance fade to every item. Runs on scroll
-   * frames and after geometry changes, so the morph and the focus
-   * gradient play while content moves through the slot, not just when
-   * a selection settles.
-   */
-  function updateSlotTracking(): void {
-    if (!frame.visible) return;
-    const items = document.querySelectorAll<HTMLElement>("[data-snap-sub]");
-    let best: HTMLElement | null = null;
-    let bestDist = Number.POSITIVE_INFINITY;
-    for (const el of items) {
-      const dist = Math.abs(el.getBoundingClientRect().top - frame.top);
-      const fade = Math.min(1, dist / FADE_DISTANCE);
-      el.style.opacity = String(1 - fade * (1 - FADE_FLOOR));
-      if (dist < bestDist) {
-        bestDist = dist;
-        best = el;
-      }
-    }
-    if (best === null) return;
-    if (best.offsetHeight !== frameHeight.target || !frameMeasured) {
-      void frameHeight.set(best.offsetHeight, {
-        instant: !frameMeasured || prefersReducedMotion.current,
-      });
-    }
-    frameMeasured = true;
-  }
-
-  $effect(() => {
-    void scrollEngine.activeSection;
-    void scrollEngine.activeSub;
-    void uiLocale;
-    void tick().then(measureSlotFrame);
-  });
-
-  $effect(() => {
-    window.addEventListener("resize", measureSlotFrame);
-    return () => window.removeEventListener("resize", measureSlotFrame);
-  });
-
-  let trackRaf = 0;
-
-  function trackSlotWhileScrolling(): void {
-    if (trackRaf !== 0) return;
-    trackRaf = requestAnimationFrame(() => {
-      trackRaf = 0;
-      updateSlotTracking();
-    });
-  }
-
-  $effect(() => {
-    window.addEventListener("scroll", trackSlotWhileScrolling, {
-      passive: true,
-    });
-    return () => {
-      window.removeEventListener("scroll", trackSlotWhileScrolling);
-      cancelAnimationFrame(trackRaf);
-    };
-  });
 
   // -----------------------------------------------------------------------
   // Locale: reactive $state owned here, passed down as prop
@@ -435,7 +507,7 @@
   let uiLocale = $state(getLocale());
 
   // -----------------------------------------------------------------------
-  // Active section view (one list rendered at a time)
+  // Active section definition (one section per page)
   // -----------------------------------------------------------------------
 
   /**
@@ -461,17 +533,42 @@
     };
   }
 
-  const activeSectionDef = $derived.by((): Section | undefined => {
+  // Derive a primitive slug for the coming-soon branch so the derived
+  // below does not churn its identity on every sub change within a
+  // normal section (which would force a full block rebuild + relayout).
+  const comingSoonSlug: string | null = $derived(
+    scrollEngine.activeSection === "coming-soon"
+      ? scrollEngine.activeSub
+      : null,
+  );
+
+  const activeSectionDef: Section = $derived.by((): Section => {
+    if (entryVisible) return ENTRY_SECTION;
     if (scrollEngine.activeSection === "coming-soon") {
-      return comingSoonSection(scrollEngine.activeSub);
+      return comingSoonSection(comingSoonSlug);
     }
-    return SECTIONS.find((s) => s.id === scrollEngine.activeSection);
+    const found = SECTIONS.find((s) => s.id === scrollEngine.activeSection);
+    // SECTIONS always contains the active section for narrated ids;
+    // fall back to login as a defensive default.
+    return found ?? SECTIONS[0] ?? ENTRY_SECTION;
   });
 
+  const pageKey: string = $derived(
+    entryVisible ? "entry" : scrollEngine.activeSection,
+  );
+
+  // Held in a derived rather than built inline in the markup so the array
+  // identity only changes when the page does. FlowStory rebuilds its
+  // blocks (and re-measures every string) whenever this reference moves.
+  const pageSections: Section[] = $derived([activeSectionDef]);
+
   // The coming-soon section is synthesized and not in SECTIONS, so the
-  // next-section button is absent for it (null) rather than guessing
-  // an order.
+  // next-section pill is absent for it (null) rather than guessing an
+  // order. While the entry page is visible, the pill points at login.
   const nextSectionDef = $derived.by((): Section | null => {
+    if (entryVisible) {
+      return SECTIONS.find((s) => s.id === "login") ?? null;
+    }
     if (scrollEngine.activeSection === "coming-soon") return null;
     const idx = SECTIONS.findIndex((s) => s.id === scrollEngine.activeSection);
     return idx >= 0 ? (SECTIONS.at(idx + 1) ?? null) : null;
@@ -514,14 +611,14 @@
     document.documentElement.dir = getTextDirection(next);
     uiLocale = next;
 
-    // The intro re-renders with new copy; re-measure the slot line
+    // The flow re-renders with new copy; re-measure the reading line
     void tick().then(() => scrollEngine.remeasure());
   }
 </script>
 
 {#key uiLocale}
   <TopBar
-    activeSection={scrollEngine.activeSection}
+    activeSection={entryVisible ? null : scrollEngine.activeSection}
     {dark}
     locale={uiLocale}
     seen={progress.count}
@@ -541,15 +638,19 @@
   style:width="{geo.outerW}px"
   style:height="{geo.outerH}px"
 >
-  <!-- Toolbar: attached above the frame, travels with it -->
-  <div class="frame-toolbar">
+  <!-- Toolbar: visually merged with the device bezel by matching
+       the bezel background and extending the toolbar down to cover
+       the bezel's top-left/right corner area. The toolbar z-index
+       sits behind the bezel strips so drag surfaces still work. -->
+  <div class="frame-toolbar" style:left="{deriveBezelRadius(geo.footprintW)}px">
     <div
       class="toolbar-grip"
+      role="presentation"
       onpointerdown={startDrag}
       onpointermove={onPointerMove}
       onpointerup={onPointerUp}
       onpointercancel={onPointerUp}
-      aria-hidden="true"
+      title={m.demo_toolbar_grip_tooltip()}
     >
       <GripVertical size={16} />
     </div>
@@ -574,6 +675,45 @@
       title={m.demo_toolbar_desktop_tooltip()}
     >
       <Monitor size={16} />
+    </button>
+    <button
+      class="toolbar-btn"
+      class:toolbar-btn-active={geo.shrunk}
+      type="button"
+      onclick={handleShrinkGrow}
+      aria-label={geo.shrunk
+        ? m.demo_toolbar_grow_tooltip()
+        : m.demo_toolbar_shrink_tooltip()}
+      aria-pressed={geo.shrunk}
+      title={geo.shrunk
+        ? m.demo_toolbar_grow_tooltip()
+        : m.demo_toolbar_shrink_tooltip()}
+    >
+      {#if geo.shrunk}
+        <Maximize2 size={16} />
+      {:else}
+        <Minimize2 size={16} />
+      {/if}
+    </button>
+    <div class="toolbar-separator" aria-hidden="true"></div>
+    <button
+      class="toolbar-btn"
+      class:toolbar-btn-active={!isLinked()}
+      type="button"
+      onclick={toggleLinked}
+      aria-label={isLinked()
+        ? m.demo_toolbar_link_linked()
+        : m.demo_toolbar_link_unlinked()}
+      aria-pressed={!isLinked()}
+      title={isLinked()
+        ? m.demo_toolbar_link_linked()
+        : m.demo_toolbar_link_unlinked()}
+    >
+      {#if isLinked()}
+        <Link2 size={16} />
+      {:else}
+        <Link2Off size={16} />
+      {/if}
     </button>
   </div>
 
@@ -644,34 +784,37 @@
   ></div>
 
   <!-- Bezel drag strips: four edges around the screen so the 12px bezel
-       ring acts as a drag surface without blocking the iframe. -->
-  <!-- svelte-ignore a11y_no_static_element_interactions -->
+       ring acts as a drag surface without blocking the iframe. These are
+       pure pointer-capture surfaces duplicating the accessible grip
+       button's function, so role="presentation" keeps them out of the
+       accessibility tree. -->
   <div
     class="bezel-strip bezel-strip-top"
+    role="presentation"
     onpointerdown={startDrag}
     onpointermove={onPointerMove}
     onpointerup={onPointerUp}
     onpointercancel={onPointerUp}
   ></div>
-  <!-- svelte-ignore a11y_no_static_element_interactions -->
   <div
     class="bezel-strip bezel-strip-bottom"
+    role="presentation"
     onpointerdown={startDrag}
     onpointermove={onPointerMove}
     onpointerup={onPointerUp}
     onpointercancel={onPointerUp}
   ></div>
-  <!-- svelte-ignore a11y_no_static_element_interactions -->
   <div
     class="bezel-strip bezel-strip-left"
+    role="presentation"
     onpointerdown={startDrag}
     onpointermove={onPointerMove}
     onpointerup={onPointerUp}
     onpointercancel={onPointerUp}
   ></div>
-  <!-- svelte-ignore a11y_no_static_element_interactions -->
   <div
     class="bezel-strip bezel-strip-right"
+    role="presentation"
     onpointerdown={startDrag}
     onpointermove={onPointerMove}
     onpointerup={onPointerUp}
@@ -693,69 +836,58 @@
 </div>
 
 <div class="scroll-story">
-  <!-- The fixed selection slot: never moves, only resizes to fit the
-       item that snapped into it. Content scrolls over it (it paints
-       behind the story column). -->
-  <div
-    class="slot-frame"
-    class:slot-frame-empty={scrollEngine.activeSub === null}
-    style:top="{frame.top}px"
-    style:left="{frame.left}px"
-    style:width="{frame.width}px"
-    style:height="{frameHeight.current}px"
-    style:opacity={frame.visible ? 1 : 0}
-    aria-hidden="true"
-  ></div>
-
-  <div class="story-layout">
-    <!-- Story column: one section list at a time; the next-section
-         button and the top bar swap which list is rendered -->
-    <div class="story-column" bind:this={storyColumnEl}>
-      {#key uiLocale}
-        {#key scrollEngine.activeSection}
-          {#if activeSectionDef}
-            <div class="section-view">
-              <StorySection
-                section={activeSectionDef}
-                activeSection={scrollEngine.activeSection}
-                activeSub={scrollEngine.activeSub}
-                locale={uiLocale}
-                {seenTopics}
-                onSubClick={handleSubClick}
-                onSectionClick={handleSectionClick}
-              />
-
-              {#if nextSectionDef}
-                <div class="next-section">
-                  <button
-                    class="next-section-btn"
-                    type="button"
-                    onclick={() => handleNextSection(nextSectionDef.id)}
-                  >
-                    {m.demo_section_next({
-                      section: sectionTitle(nextSectionDef.id),
-                    })}
-                    <ArrowRight size={16} />
-                  </button>
-                </div>
-              {/if}
-            </div>
-          {/if}
-        {/key}
-      {/key}
-
-      <!-- Bottom spacer so the last sub can reach the selection slot -->
-      <div class="story-spacer" aria-hidden="true"></div>
-    </div>
+  <div class="flow-story-wrapper">
+    {#key uiLocale}{#key pageKey}
+        <div class="section-view">
+          <SectionIntro
+            section={activeSectionDef}
+            activeSub={scrollEngine.activeSub}
+            locale={uiLocale}
+            {seenTopics}
+            showToc={!entryVisible}
+            selectable={!entryVisible}
+            {frameRect}
+            onSubClick={handleSubClick}
+            onSectionClick={handleSectionClick}
+          />
+          <FlowStory
+            sections={pageSections}
+            locale={uiLocale}
+            activeSection={scrollEngine.activeSection}
+            activeSub={scrollEngine.activeSub}
+            {seenTopics}
+            {frameRect}
+            onSelectSection={handleSectionClick}
+            onSelectSub={handleSubClick}
+          />
+          <div class="story-spacer"></div>
+        </div>
+      {/key}{/key}
   </div>
 </div>
+
+<!-- Next-section pill: fixed at bottom center, hidden during gestures
+     and when there is no next section. -->
+{#if nextSectionDef !== null && !gestureActive}
+  <div class="next-pill-container">
+    <button
+      class="next-pill"
+      type="button"
+      onclick={() => handleNextSection(nextSectionDef.id)}
+    >
+      {m.demo_section_next({
+        section: sectionTitle(nextSectionDef.id),
+      })}
+      <ArrowRight size={16} />
+    </button>
+  </div>
+{/if}
 
 <style>
   .scroll-story {
     width: 100%;
-    max-width: 1280px;
-    margin: 0 auto;
-    padding: 0 1rem;
+    margin: 0;
+    padding: 0;
     font-family:
       system-ui,
       -apple-system,
@@ -770,64 +902,60 @@
     color: #f5f5f7;
   }
 
-  .story-layout {
-    display: flex;
-    flex-direction: column;
-    gap: 1rem;
-    padding-top: 1rem;
-    /* Above the slot frame so text is never tinted by it */
+  .flow-story-wrapper {
+    padding: 1rem 16px 0;
     position: relative;
     z-index: 1;
   }
 
-  /* The fixed selection slot. Top never moves; the height is driven
-     by a spring (see script) so resizes feel liquid. Painted behind
-     the story content so items slide over it into place. */
-  .slot-frame {
-    position: fixed;
-    z-index: 0;
-    border-radius: 8px;
-    background: rgba(0, 122, 255, 0.07);
-    border: 1.5px solid rgba(0, 122, 255, 0.25);
-    pointer-events: none;
-    transition:
-      background 0.25s ease,
-      border-color 0.25s ease;
-  }
-
-  .slot-frame-empty {
-    background: rgba(0, 0, 0, 0.02);
-    border: 1.5px dashed rgba(0, 0, 0, 0.2);
-  }
-
-  :global(html.dark) .slot-frame {
-    background: rgba(100, 210, 255, 0.09);
-    border-color: rgba(100, 210, 255, 0.3);
-  }
-
-  :global(html.dark) .slot-frame-empty {
-    background: rgba(255, 255, 255, 0.02);
-    border: 1.5px dashed rgba(255, 255, 255, 0.2);
-  }
-
-  @media (prefers-reduced-motion: reduce) {
-    .slot-frame {
-      transition: none;
+  @media (min-width: 900px) {
+    .flow-story-wrapper {
+      padding-top: 1.5rem;
     }
   }
 
-  .story-column {
-    flex: 1;
-    min-width: 0;
-    padding: 0 0 2rem;
+  /* shared.css locks html/body scroll for the product app shell (only
+     inner containers scroll on the phone). The scroll story needs the
+     document scroll back; html.light/html.dark outrank that bare rule
+     regardless of stylesheet order. The phone iframe keeps the lock
+     because this component's styles are only injected into the outer
+     document, never the iframe's. */
+  :global(html.light),
+  :global(html.dark) {
+    overflow: auto;
+    overscroll-behavior: auto;
+    /* Chrome's scroll anchoring fights the per-frame layout
+       recomputation (viewport-fixed hole, every line moves). No stable
+       anchor exists, so disable it on the root. */
+    overflow-anchor: none;
   }
+
+  :global(html.light body),
+  :global(html.dark body) {
+    overflow: visible;
+    overscroll-behavior: auto;
+  }
+
+  /* Ensure body background matches */
+  :global(body) {
+    background: #f5f5f7;
+    margin: 0;
+  }
+
+  :global(html.dark body) {
+    background: #161618;
+  }
+
+  /* -----------------------------------------------------------------------
+     Section view entrance + trailing spacer
+     ----------------------------------------------------------------------- */
 
   .story-spacer {
     height: 65vh;
     flex-shrink: 0;
   }
 
-  /* Light entrance when a section list swaps in */
+  /* Light entrance when a section page swaps in */
   .section-view {
     animation: section-in 0.2s ease-out;
   }
@@ -849,87 +977,72 @@
     }
   }
 
-  .next-section {
-    padding: 1.5rem 0 0;
+  /* -----------------------------------------------------------------------
+     Next-section pill (fixed, bottom center)
+     ----------------------------------------------------------------------- */
+
+  .next-pill-container {
+    position: fixed;
+    bottom: 24px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 40;
+    pointer-events: none;
   }
 
-  .next-section-btn {
+  .next-pill {
     display: inline-flex;
     align-items: center;
     gap: 0.5rem;
-    padding: 0.625rem 1.125rem;
-    border: none;
-    border-radius: 8px;
-    background: rgba(0, 122, 255, 0.1);
+    padding: 0.5rem 1rem;
+    border: 1px solid rgba(0, 0, 0, 0.08);
+    border-radius: 999px;
+    background: rgba(245, 245, 247, 0.92);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
     color: #007aff;
-    font-size: 0.9375rem;
+    font-size: 0.875rem;
     font-weight: 600;
     cursor: pointer;
     min-height: 44px;
-    transition: background 0.15s ease;
+    pointer-events: auto;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+    transition:
+      background 0.15s ease,
+      box-shadow 0.15s ease;
+    white-space: nowrap;
   }
 
-  .next-section-btn:hover {
-    background: rgba(0, 122, 255, 0.16);
+  .next-pill:hover {
+    background: rgba(245, 245, 247, 0.98);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
   }
 
-  :global(html.dark) .next-section-btn {
-    background: rgba(0, 122, 255, 0.2);
+  .next-pill:focus-visible {
+    outline: 2px solid #007aff;
+    outline-offset: 2px;
+  }
+
+  :global(html.dark) .next-pill {
+    border-color: rgba(255, 255, 255, 0.1);
+    background: rgba(30, 30, 32, 0.92);
     color: #64d2ff;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.24);
   }
 
-  :global(html.dark) .next-section-btn:hover {
-    background: rgba(0, 122, 255, 0.28);
+  :global(html.dark) .next-pill:hover {
+    background: rgba(30, 30, 32, 0.98);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.32);
   }
 
-  /* At >= 900px, add a static right gutter so the story column keeps
-     its current width and the floating frame spawns in familiar
-     territory. The gutter occupies the space the phone column used to. */
-  @media (min-width: 900px) {
-    .story-layout {
-      padding-top: 1.5rem;
-      padding-right: 440px;
+  :global(html.dark) .next-pill:focus-visible {
+    outline-color: #64d2ff;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .next-pill {
+      transition: none;
     }
-
-    .story-column {
-      flex: 1;
-      min-width: 0;
-      padding: 0 0 4rem;
-    }
-  }
-
-  /* shared.css locks html/body scroll for the product app shell (only
-     inner containers scroll on the phone). The scroll story needs the
-     document scroll back; html.light/html.dark outrank that bare rule
-     regardless of stylesheet order. The phone iframe keeps the lock
-     because this component's styles are only injected into the outer
-     document, never the iframe's.
-
-     Mandatory y-snapping drives the selection slot: sub cards and the
-     tip card are the only snap-aligned items, so scrolling always
-     settles with one of them at the slot line (scroll-padding-top,
-     maintained by the scroll engine). */
-  :global(html.light),
-  :global(html.dark) {
-    overflow: auto;
-    overscroll-behavior: auto;
-    scroll-snap-type: y mandatory;
-  }
-
-  :global(html.light body),
-  :global(html.dark body) {
-    overflow: visible;
-    overscroll-behavior: auto;
-  }
-
-  /* Ensure body background matches */
-  :global(body) {
-    background: #f5f5f7;
-    margin: 0;
-  }
-
-  :global(html.dark body) {
-    background: #161618;
   }
 
   /* -----------------------------------------------------------------------
@@ -942,7 +1055,11 @@
     z-index: 50;
   }
 
-  /* Toolbar: slim bar docked above the frame */
+  /* Toolbar: slim bar docked above the frame. Uses the bezel
+     background (#1a1a1a) so it merges with the device frame visually.
+     Top corners are a fixed radius; bottom corners match the bezel
+     radius inline so the transition from toolbar to bezel reads as
+     one continuous shape. */
   .frame-toolbar {
     position: absolute;
     bottom: 100%;
@@ -951,19 +1068,14 @@
     align-items: center;
     gap: 2px;
     padding: 4px;
-    background: rgba(245, 245, 247, 0.92);
-    backdrop-filter: blur(8px);
-    -webkit-backdrop-filter: blur(8px);
-    border-radius: 8px 8px 0 0;
-    border: 1px solid rgba(0, 0, 0, 0.08);
+    background: #1a1a1a;
+    border-radius: 10px 10px 0 0;
+    border: 2px solid #333;
     border-bottom: none;
   }
 
-  :global(html.dark) .frame-toolbar {
-    background: rgba(44, 44, 46, 0.92);
-    border-color: rgba(255, 255, 255, 0.1);
-  }
-
+  /* Toolbar controls sit on the bezel background (#1a1a1a) in both
+     light and dark modes, so they use a single color scheme. */
   .toolbar-grip {
     display: flex;
     align-items: center;
@@ -971,17 +1083,13 @@
     width: 32px;
     height: 32px;
     cursor: grab;
-    color: #86868b;
+    color: #98989d;
     border-radius: 6px;
     touch-action: none;
   }
 
   .toolbar-grip:active {
     cursor: grabbing;
-  }
-
-  :global(html.dark) .toolbar-grip {
-    color: #98989d;
   }
 
   .toolbar-btn {
@@ -994,39 +1102,30 @@
     border: none;
     border-radius: 6px;
     background: transparent;
-    color: #636366;
+    color: #98989d;
     cursor: pointer;
     transition: background 0.15s ease;
   }
 
   .toolbar-btn:hover {
-    background: rgba(0, 0, 0, 0.06);
-  }
-
-  .toolbar-btn-active {
-    background: rgba(0, 122, 255, 0.1);
-    color: #007aff;
-  }
-
-  .toolbar-btn-active:hover {
-    background: rgba(0, 122, 255, 0.16);
-  }
-
-  :global(html.dark) .toolbar-btn {
-    color: #98989d;
-  }
-
-  :global(html.dark) .toolbar-btn:hover {
     background: rgba(255, 255, 255, 0.08);
   }
 
-  :global(html.dark) .toolbar-btn-active {
+  .toolbar-btn-active {
     background: rgba(0, 122, 255, 0.2);
     color: #64d2ff;
   }
 
-  :global(html.dark) .toolbar-btn-active:hover {
+  .toolbar-btn-active:hover {
     background: rgba(0, 122, 255, 0.25);
+  }
+
+  .toolbar-separator {
+    width: 1px;
+    height: 24px;
+    background: rgba(255, 255, 255, 0.15);
+    margin: 0 2px;
+    flex-shrink: 0;
   }
 
   /* Bezel drag strips: four edges that cover only the 12px bezel ring,

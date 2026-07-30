@@ -1887,7 +1887,6 @@
   "demo_narrative_search_body2": "Los resultados de busqueda son tan privados como los tickets mismos. El servidor no puede registrar lo que buscaste ni que resultados coincidieron.",
   "demo_narrative_tip": "Selecciona una funcion arriba, desplazate hacia abajo o interactua con la aplicacion CARE-Y en el telefono para conocer lo que puede hacer.",
   "demo_phone_frame_title": "Demo de la aplicación CARE-Y",
-  "demo_status_bar_time": "9:41",
   "demo_progress_explored": "{seen} de {total} funciones exploradas",
   "demo_topic_sort": "Ordenar",
   "demo_topic_filters": "Filtros",
@@ -2010,5 +2009,18 @@
   "demo_toolbar_phone_preset": "Tamano de telefono",
   "demo_toolbar_phone_tooltip": "Cambiar a vista de telefono (390 x 844)",
   "demo_toolbar_desktop_preset": "Tamano de escritorio",
-  "demo_toolbar_desktop_tooltip": "Cambiar a vista de escritorio (760 x 475)"
+  "demo_toolbar_desktop_tooltip": "Cambiar a vista de escritorio (760 x 475)",
+  "demo_toolbar_grip_tooltip": "Arrastrar para reposicionar",
+  "demo_toolbar_shrink_tooltip": "Reducir el marco",
+  "demo_toolbar_grow_tooltip": "Restaurar tamano del marco",
+  "demo_toolbar_link_linked": "Telefono y historia vinculados (clic para desvincular)",
+  "demo_toolbar_link_unlinked": "Telefono y historia desvinculados (clic para vincular)",
+  "demo_entry_title": "Como funciona esta demostracion",
+  "demo_entry_desc": "CARE-Y es un sistema de recepcion de llamadas para personas que no pueden permitirse ser identificadas. Esta demostracion ejecuta la aplicacion real en tu navegador, junto a un relato que explica lo que hace cada pantalla.",
+  "demo_entry_how_heading": "Un relato y una aplicacion real",
+  "demo_entry_how_body": "El telefono de esta pagina ejecuta el cliente real de CARE-Y sobre una base de datos que vive dentro de tu navegador. No se envia nada a ningun servidor y nada de lo que escribas aqui sale de tu dispositivo. El texto que estas leyendo va en paralelo: elige una funcion y el telefono abre esa pantalla, o navega por el telefono y el relato te sigue. Cada tema tiene su propia pagina, asi que puedes leerlo todo seguido o saltar a lo que te interese.",
+  "demo_entry_phone_heading": "Mueve el telefono a donde quieras",
+  "demo_entry_phone_body": "Arrastra el telefono desde el asa superior, cambia su tamano desde cualquier borde o usa los botones de la barra para reducirlo, restaurarlo o pasar a una ventana con forma de escritorio. El texto se recoloca alrededor de donde lo dejes. El boton de enlace corta la conexion entre el telefono y el relato si prefieres explorar uno sin mover el otro.",
+  "demo_entry_start_heading": "Para empezar",
+  "demo_entry_start_body": "La demostracion empieza en la pantalla de inicio de sesion, donde CARE-Y deriva las claves de cifrado que protegen todo lo demas. Todo lo que ves es ficticio: las personas voluntarias, los clientes y cada caso estan inventados para este recorrido. Puedes reiniciar en cualquier momento para volver a esta pagina."
 }

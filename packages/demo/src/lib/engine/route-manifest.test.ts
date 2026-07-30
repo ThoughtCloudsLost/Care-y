@@ -45,9 +45,14 @@ describe("route-manifest", () => {
       expect(match?.layouts.length).toBeGreaterThanOrEqual(1);
     });
 
-    it("returns null for unknown paths", () => {
+    it("falls back to the catch-all route for unknown paths", () => {
+      // The client has an (app)/[...path] route, and the demo models it
+      // as an unnarrated route (see UNNARRATED_ROUTES), so an unknown
+      // path mounts the product's own not-found page rather than
+      // resolving to nothing. Rest routes sort last, so this only wins
+      // when no concrete route matches.
       const match = matchRoute("/nonexistent/route");
-      expect(match).toBeNull();
+      expect(match?.routeId).toBe("/(app)/[...path]");
     });
 
     it("prefers static segments over param segments", () => {

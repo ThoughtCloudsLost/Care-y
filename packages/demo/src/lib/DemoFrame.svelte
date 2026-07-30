@@ -16,7 +16,11 @@
 <script lang="ts">
   import type { DemoBridge } from "./bridge.js";
   import * as m from "$lib/paraglide/messages.js";
-  import { BEZEL, type FrameGeometry } from "./frame-geometry.svelte.js";
+  import {
+    BEZEL,
+    deriveBezelRadius,
+    type FrameGeometry,
+  } from "./frame-geometry.svelte.js";
 
   interface Props {
     dark?: boolean;
@@ -39,6 +43,21 @@
 
   /** Show the status bar only when viewport is phone-shaped (< 768). */
   const showStatusBar = $derived(geo.viewport.w < 768);
+
+  /** Real system time for the status bar clock, iOS style (no AM/PM). */
+  function formatClock(d: Date): string {
+    const h = d.getHours() % 12 === 0 ? 12 : d.getHours() % 12;
+    return `${String(h)}:${String(d.getMinutes()).padStart(2, "0")}`;
+  }
+
+  let clock = $state(formatClock(new Date()));
+
+  $effect(() => {
+    const id = setInterval(() => {
+      clock = formatClock(new Date());
+    }, 15_000);
+    return () => clearInterval(id);
+  });
 
   /**
    * Poll for the demoBridge on the iframe's contentWindow. The phone app
@@ -76,19 +95,7 @@
     iframeEl?.contentWindow?.location.reload();
   }
 
-  /**
-   * Scale down the bezel radius at large footprints so the rounded
-   * corners do not dominate the window appearance. At the phone preset
-   * (390px wide) the radius is 48px. Above 600px it tapers to 16px.
-   */
-  const bezelRadius = $derived.by((): number => {
-    const w = geo.footprintW;
-    if (w <= 390) return 48;
-    if (w >= 600) return 16;
-    // Linear interpolation between 48 and 16
-    const t = (w - 390) / (600 - 390);
-    return Math.round(48 - t * 32);
-  });
+  const bezelRadius = $derived(deriveBezelRadius(geo.footprintW));
 
   const screenRadius = $derived(Math.max(0, bezelRadius - BEZEL));
 </script>
@@ -138,7 +145,7 @@
       class:status-bar-hidden={!showStatusBar}
       aria-hidden="true"
     >
-      <span class="status-time">{m.demo_status_bar_time()}</span>
+      <span class="status-time">{clock}</span>
       <span class="status-glyphs">
         <svg width="18" height="12" viewBox="0 0 18 12" fill="currentColor">
           <rect x="0" y="8" width="3" height="4" rx="0.8" />

@@ -39,9 +39,14 @@ export function classifyDemoLabel(
     // --- credentials ---
     // auth_password and settings_password share the same string ("Password"),
     // so the match is gated on feature to avoid a collision on settings.
+    // auth_username and settings_username also share "Login Username", so
+    // the same gate applies: admin and settings contexts must fall through
+    // to the settings_username / settings_display_name check below.
     if (
       label === m.auth_sign_in({}, opts) ||
-      label === m.auth_username({}, opts) ||
+      (label === m.auth_username({}, opts) &&
+        ctx.feature !== "settings" &&
+        ctx.feature !== "admin") ||
       (label === m.auth_password({}, opts) && ctx.feature !== "settings")
     ) {
       return "credentials";

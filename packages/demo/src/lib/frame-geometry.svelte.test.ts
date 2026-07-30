@@ -1,13 +1,21 @@
 import { describe, it, expect } from "vitest";
 import {
+  createFrameGeometry,
   deriveZoomViewport,
+  deriveBezelRadius,
   computeSpawn,
+  computeShrunkFootprint,
   clampPosition,
+  presetAnchoredLeft,
+  presetAnchoredTop,
+  clampTopToViewport,
+  FRAME_FIT_MARGIN,
   PHONE_PRESET,
   DESKTOP_PRESET,
   MIN_FOOTPRINT,
   MIN_VIEWPORT,
   BEZEL,
+  SHRINK_VH_FRACTION,
 } from "./frame-geometry.svelte.js";
 
 // -----------------------------------------------------------------------
@@ -165,6 +173,93 @@ describe("clampPosition", () => {
 });
 
 // -----------------------------------------------------------------------
+// deriveBezelRadius
+// -----------------------------------------------------------------------
+
+describe("deriveBezelRadius", () => {
+  it("returns 48 at phone-preset width (390)", () => {
+    expect(deriveBezelRadius(390)).toBe(48);
+  });
+
+  it("returns 48 below phone-preset width", () => {
+    expect(deriveBezelRadius(200)).toBe(48);
+  });
+
+  it("returns 16 at 600px and above", () => {
+    expect(deriveBezelRadius(600)).toBe(16);
+    expect(deriveBezelRadius(800)).toBe(16);
+  });
+
+  it("interpolates between 390 and 600", () => {
+    const mid = deriveBezelRadius(495); // midpoint
+    expect(mid).toBeGreaterThan(16);
+    expect(mid).toBeLessThan(48);
+  });
+});
+
+// -----------------------------------------------------------------------
+// computeShrunkFootprint
+// -----------------------------------------------------------------------
+
+describe("computeShrunkFootprint", () => {
+  it("preserves aspect ratio when shrinking a phone-preset footprint", () => {
+    const result = computeShrunkFootprint(390, 844, 900);
+    const originalAspect = 390 / 844;
+    const shrunkAspect = result.w / result.h;
+    expect(shrunkAspect).toBeCloseTo(originalAspect, 1);
+  });
+
+  it("produces a smaller footprint than the original", () => {
+    const result = computeShrunkFootprint(PHONE_PRESET.w, PHONE_PRESET.h, 900);
+    expect(result.h).toBeLessThan(PHONE_PRESET.h);
+    expect(result.w).toBeLessThan(PHONE_PRESET.w);
+  });
+
+  it("targets SHRINK_VH_FRACTION of viewport height when the size floor does not bind", () => {
+    const viewportH = 900;
+    // 600x844 is tall enough to scale by height, and at the 315px
+    // target its width lands at 224, clear of the 200px floor.
+    const result = computeShrunkFootprint(600, 844, viewportH);
+    const targetH = viewportH * SHRINK_VH_FRACTION;
+    expect(result.h).toBeCloseTo(targetH, 0);
+    expect(result.w).toBeGreaterThan(MIN_FOOTPRINT.w);
+  });
+
+  it("overshoots the target height rather than distorting a narrow footprint", () => {
+    // A 390x844 phone at the 315px target would be 146 wide, under the
+    // 200px floor. Scaling both axes to clear the floor is preferred
+    // over stretching the width on its own, so the result is taller
+    // than SHRINK_VH_FRACTION would suggest but still phone-shaped.
+    const viewportH = 900;
+    const result = computeShrunkFootprint(390, 844, viewportH);
+    expect(result.w).toBe(MIN_FOOTPRINT.w);
+    expect(result.h).toBeGreaterThan(viewportH * SHRINK_VH_FRACTION);
+    expect(result.w / result.h).toBeCloseTo(390 / 844, 1);
+  });
+
+  it("clamps to MIN_FOOTPRINT", () => {
+    // Very small viewport makes the target tiny
+    const result = computeShrunkFootprint(390, 844, 100);
+    expect(result.w).toBeGreaterThanOrEqual(MIN_FOOTPRINT.w);
+    expect(result.h).toBeGreaterThanOrEqual(MIN_FOOTPRINT.h);
+  });
+
+  it("preserves aspect ratio for desktop-preset footprints", () => {
+    const result = computeShrunkFootprint(760, 475, 900);
+    const originalAspect = 760 / 475;
+    const shrunkAspect = result.w / result.h;
+    expect(shrunkAspect).toBeCloseTo(originalAspect, 1);
+  });
+
+  it("shrinks wide footprints by constraining the width", () => {
+    // A 2:1 landscape footprint at large viewport
+    const result = computeShrunkFootprint(800, 400, 900);
+    expect(result.w).toBeLessThan(800);
+    expect(result.h).toBeLessThan(400);
+  });
+});
+
+// -----------------------------------------------------------------------
 // Constants
 // -----------------------------------------------------------------------
 
@@ -184,5 +279,154 @@ describe("preset constants", () => {
 
   it("BEZEL matches the expected 12px", () => {
     expect(BEZEL).toBe(12);
+  });
+});
+
+// -----------------------------------------------------------------------
+// Shrink state on the factory
+// -----------------------------------------------------------------------
+
+describe("createFrameGeometry shrink semantics", () => {
+  it("retargetShrunkTo stays shrunk and rewrites grow memory to the preset", () => {
+    const geo = createFrameGeometry();
+    geo.setFootprint(PHONE_PRESET.w, PHONE_PRESET.h);
+
+    const shrunkTarget = geo.shrink();
+    geo.setFootprint(shrunkTarget.w, shrunkTarget.h);
+    expect(geo.shrunk).toBe(true);
+
+    const retarget = geo.retargetShrunkTo(DESKTOP_PRESET.w, DESKTOP_PRESET.h);
+    geo.setFootprint(retarget.w, retarget.h);
+    expect(geo.shrunk).toBe(true);
+    // Retarget keeps the shrunken scale: smaller than the full preset
+    expect(retarget.w).toBeLessThan(DESKTOP_PRESET.w);
+
+    // Grow restores the retargeted preset's FULL footprint
+    const grown = geo.grow();
+    expect(grown).toEqual({ w: DESKTOP_PRESET.w, h: DESKTOP_PRESET.h });
+    expect(geo.shrunk).toBe(false);
+  });
+
+  it("grow returns null without shrink memory", () => {
+    const geo = createFrameGeometry();
+    expect(geo.grow()).toBeNull();
+  });
+
+  it("clearShrinkMemory discards the remembered footprint", () => {
+    const geo = createFrameGeometry();
+    geo.shrink();
+    geo.clearShrinkMemory();
+    expect(geo.shrunk).toBe(false);
+    expect(geo.grow()).toBeNull();
+  });
+});
+
+// -----------------------------------------------------------------------
+// presetAnchoredLeft
+// -----------------------------------------------------------------------
+
+describe("presetAnchoredLeft", () => {
+  const windowW = 1280;
+
+  it("anchors the right edge when the frame center is in the right half", () => {
+    // Frame at left=800, outerW=414. Center = 800 + 207 = 1007. > 640.
+    // Growing to outerW=784: newLeft = 800 + 414 - 784 = 430.
+    const result = presetAnchoredLeft(800, 414, 784, windowW);
+    expect(result).toBe(800 + 414 - 784);
+  });
+
+  it("keeps left unchanged when the frame center is in the left half", () => {
+    // Frame at left=100, outerW=414. Center = 100 + 207 = 307. < 640.
+    const result = presetAnchoredLeft(100, 414, 784, windowW);
+    expect(result).toBe(100);
+  });
+
+  it("anchors left (keeps startLeft) when the center is exactly at midpoint", () => {
+    // Strict > comparison: dead center anchors left.
+    // center = startLeft + outerW/2 = windowW/2 = 640.
+    // startLeft = 640 - 207 = 433. outerW = 414.
+    const startLeft = windowW / 2 - 414 / 2;
+    const result = presetAnchoredLeft(startLeft, 414, 784, windowW);
+    expect(result).toBe(startLeft);
+  });
+
+  it("moves left rightward when shrinking a right-half frame", () => {
+    // Frame at left=800, outerW=784. Center = 800 + 392 = 1192. > 640.
+    // Shrinking to outerW=414: newLeft = 800 + 784 - 414 = 1170.
+    // Left moves rightward (larger value), right edge stays at 800 + 784 = 1584.
+    const result = presetAnchoredLeft(800, 784, 414, windowW);
+    expect(result).toBe(800 + 784 - 414);
+    expect(result).toBeGreaterThan(800);
+    // Right edge is preserved: result + targetOuterW = 800 + 784 = 1584
+    expect(result + 414).toBe(800 + 784);
+  });
+});
+
+// -----------------------------------------------------------------------
+// clampTopToViewport
+// -----------------------------------------------------------------------
+
+describe("clampTopToViewport", () => {
+  const windowH = 900;
+
+  it("leaves a fully visible frame alone", () => {
+    expect(clampTopToViewport(100, 500, windowH)).toBe(100);
+  });
+
+  it("pulls a frame up when its bottom would overflow", () => {
+    // top 700 + outerH 500 = 1200, past the 900 viewport.
+    const result = clampTopToViewport(700, 500, windowH);
+    expect(result).toBe(windowH - 500 - FRAME_FIT_MARGIN);
+    expect(result + 500).toBeLessThanOrEqual(windowH);
+  });
+
+  it("pushes a frame down when its top would overflow", () => {
+    expect(clampTopToViewport(-200, 500, windowH)).toBe(FRAME_FIT_MARGIN);
+  });
+
+  it("pins a frame taller than the viewport to the top", () => {
+    // Nothing fits, so keep the toolbar and phone header reachable.
+    expect(clampTopToViewport(-300, 1200, windowH)).toBe(FRAME_FIT_MARGIN);
+  });
+});
+
+// -----------------------------------------------------------------------
+// presetAnchoredTop
+// -----------------------------------------------------------------------
+
+describe("presetAnchoredTop", () => {
+  const windowH = 900;
+
+  it("anchors the bottom edge when the frame center is in the lower half", () => {
+    // Frame at top=500, outerH=300. Center = 650 > 450.
+    // Growing to outerH=500 keeps the bottom at 800, so top becomes 300.
+    const result = presetAnchoredTop(500, 300, 500, windowH);
+    expect(result).toBe(300);
+    expect(result + 500).toBe(500 + 300);
+  });
+
+  it("keeps top unchanged when the frame center is in the upper half", () => {
+    // Frame at top=100, outerH=300. Center = 250 < 450. Grows downward,
+    // and 100 + 500 = 600 still fits, so no fitting adjustment applies.
+    expect(presetAnchoredTop(100, 300, 500, windowH)).toBe(100);
+  });
+
+  it("anchors top when the center is exactly at the midpoint", () => {
+    // Strict > comparison, matching presetAnchoredLeft.
+    const startTop = windowH / 2 - 300 / 2;
+    expect(presetAnchoredTop(startTop, 300, 500, windowH)).toBe(startTop);
+  });
+
+  it("fits a tall preset back on screen instead of hanging off the bottom", () => {
+    // Desktop (short) near the bottom, switching to the tall phone shape.
+    // Top-anchored growth would put the bottom at 700 + 860 = 1560.
+    const result = presetAnchoredTop(700, 475, 860, windowH);
+    expect(result).toBe(windowH - 860 - FRAME_FIT_MARGIN);
+    expect(result + 860).toBeLessThanOrEqual(windowH);
+  });
+
+  it("pins to the top when the phone preset is taller than the viewport", () => {
+    // Short viewport: 860 tall frame cannot fit in 700.
+    expect(presetAnchoredTop(300, 475, 860, 700)).toBe(FRAME_FIT_MARGIN);
   });
 });
