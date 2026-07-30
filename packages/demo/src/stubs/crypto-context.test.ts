@@ -23,7 +23,9 @@ vi.mock("$lib/workers/crypto-bridge.js", () => {
     zeroAll: vi.fn(),
   };
   return {
-    CryptoBridge: vi.fn(() => mockBridge),
+    CryptoBridge: vi.fn(function CryptoBridge() {
+      return mockBridge;
+    }),
   };
 });
 
@@ -35,32 +37,40 @@ vi.mock("$lib/crypto/org-key.js", () => {
     zero: vi.fn(),
   };
   return {
-    OrgKeyManager: vi.fn(() => mockManager),
+    OrgKeyManager: vi.fn(function OrgKeyManager() {
+      return mockManager;
+    }),
   };
 });
 
 vi.mock("$lib/crypto/org-decrypt-cache.js", () => ({
-  OrgDecryptCache: vi.fn(() => ({
-    decrypt: vi.fn(),
-    has: vi.fn(),
-    clear: vi.fn(),
-  })),
+  OrgDecryptCache: vi.fn(function OrgDecryptCache() {
+    return {
+      decrypt: vi.fn(),
+      has: vi.fn(),
+      clear: vi.fn(),
+    };
+  }),
 }));
 
 vi.mock("$lib/crypto/ticket-decrypt-cache.js", () => ({
-  TicketDecryptCache: vi.fn(() => ({
-    decryptTitle: vi.fn(),
-    has: vi.fn(),
-    clear: vi.fn(),
-  })),
+  TicketDecryptCache: vi.fn(function TicketDecryptCache() {
+    return {
+      decryptTitle: vi.fn(),
+      has: vi.fn(),
+      clear: vi.fn(),
+    };
+  }),
 }));
 
 vi.mock("$lib/crypto/follow-up-decrypt-cache.js", () => ({
-  FollowUpDecryptCache: vi.fn(() => ({
-    decryptContent: vi.fn(),
-    has: vi.fn(),
-    clear: vi.fn(),
-  })),
+  FollowUpDecryptCache: vi.fn(function FollowUpDecryptCache() {
+    return {
+      decryptContent: vi.fn(),
+      has: vi.fn(),
+      clear: vi.fn(),
+    };
+  }),
 }));
 
 vi.mock("$lib/tickets/preview-loader.svelte.js", () => ({
@@ -186,12 +196,12 @@ describe("crypto-context (lazy real objects)", () => {
       expect(perms.has(Permission.MANAGE_QUEUES)).toBe(true);
     });
 
-    it("does not include admin-only permissions by default", () => {
+    it("includes admin-level permissions by default (demo seeds as admin)", () => {
       const getPerms = getCurrentPermissions();
       const perms = getPerms();
-      expect(perms.has(Permission.MANAGE_ROLES)).toBe(false);
-      expect(perms.has(Permission.MANAGE_ORG_CONFIG)).toBe(false);
-      expect(perms.has(Permission.MANAGE_KEYS)).toBe(false);
+      expect(perms.has(Permission.MANAGE_ROLES)).toBe(true);
+      expect(perms.has(Permission.MANAGE_ORG_CONFIG)).toBe(true);
+      expect(perms.has(Permission.MANAGE_KEYS)).toBe(true);
     });
 
     it("can be overridden via demoSeed", () => {

@@ -8,7 +8,8 @@
 
 export { default as DemoFrame } from "./DemoFrame.svelte";
 export { default as TopBar } from "./TopBar.svelte";
-export { default as StorySection } from "./StorySection.svelte";
+export { default as FlowStory } from "./FlowStory.svelte";
+export { resolveStoryMessage } from "./story-messages.js";
 export { createDemoRouter } from "./router.svelte.js";
 export {
   createDemoQueryClient,
@@ -18,6 +19,7 @@ export { DEMO_TOPICS } from "./bridge.js";
 export { classifyDemoLabel } from "./topic-classifier.js";
 export {
   SECTIONS,
+  ENTRY_SECTION,
   parseHash,
   buildHash,
   resolvePhoneCommand,
@@ -59,3 +61,45 @@ export type {
   PhoneCommand,
 } from "./scroll-sections.js";
 export type { ScrollEngine, TopicProgress } from "./scroll-engine.svelte.js";
+export {
+  READING_LINE_RATIO,
+  readingLineY,
+  locationAtReadingLine,
+  scrollTargetFor,
+  flowGeometryReady,
+  setFlowGeometrySource,
+} from "./flow-geometry.svelte.js";
+export type {
+  FlowLocation,
+  FlowGeometrySource,
+} from "./flow-geometry.svelte.js";
+export {
+  computeFlowLayout,
+  hitTestBlock,
+  locationAtY,
+  scrollTargetForBlock,
+  DEFAULT_METRICS,
+  MIN_SEGMENT,
+  HOLE_GAP,
+  BOTH_SIDES_MIN,
+  BALANCE_RATIO,
+} from "./flow-layout.js";
+export {
+  presetAnchoredLeft,
+  presetAnchoredTop,
+  clampTopToViewport,
+  FRAME_FIT_MARGIN,
+} from "./frame-geometry.svelte.js";
+export type {
+  FlowBlock,
+  FlowBlockKind,
+  FlowHole,
+  FlowLine,
+  FlowBlockGeometry,
+  FlowLayoutResult,
+  FlowKindMetrics,
+  FlowMetrics,
+  LineFiller,
+  LineCursor,
+  LineFillerResult,
+} from "./flow-layout.js";

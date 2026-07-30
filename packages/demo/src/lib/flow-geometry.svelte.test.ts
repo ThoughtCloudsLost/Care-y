@@ -1,0 +1,459 @@
+import { describe, it, expect, beforeEach } from "vitest";
+import {
+  setFlowGeometrySource,
+  scrollTargetFor,
+  locationAtReadingLine,
+  flowGeometryReady,
+} from "./flow-geometry.svelte.js";
+import type { FlowGeometrySource } from "./flow-geometry.svelte.js";
+import type {
+  FlowBlock,
+  FlowBlockGeometry,
+  FlowHole,
+  FlowLayoutResult,
+} from "./flow-layout.js";
+
+// -----------------------------------------------------------------------
+// Helpers
+// -----------------------------------------------------------------------
+
+function makeBlock(
+  subSlug: string | null,
+  kind: "sub-heading" | "sub-body" = "sub-heading",
+  sectionId = "login" as FlowBlock["sectionId"],
+): FlowBlock {
+  return {
+    id: `b-${subSlug ?? "title"}`,
+    sectionId,
+    subSlug,
+    kind,
+    text: "placeholder",
+  };
+}
+
+function makeLayout(blockGeos: FlowBlockGeometry[]): FlowLayoutResult {
+  const lastGeo = blockGeos[blockGeos.length - 1];
+  return {
+    lines: blockGeos.map((bg, i) => ({
+      blockIndex: i,
+      x: 0,
+      y: bg.topY,
+      width: 400,
+      text: "line",
+    })),
+    blocks: blockGeos,
+    totalHeight: lastGeo !== undefined ? lastGeo.bottomY : 0,
+  };
+}
+
+/**
+ * Build a FlowGeometrySource with a layoutForHole that shifts block
+ * positions as a function of the hole. This exercises the fixed-point
+ * convergence: the target moves when the layout changes.
+ */
+function makeConvergingSource(
+  blocks: readonly FlowBlock[],
+  containerTop: number,
+  baseTopY: number,
+): FlowGeometrySource {
+  const baseGeo: FlowBlockGeometry = {
+    topY: baseTopY,
+    bottomY: baseTopY + 24,
+    firstLineIndex: 0,
+    lineCount: 1,
+  };
+  const baseLayout = makeLayout([baseGeo]);
+
+  return {
+    layoutResult: baseLayout,
+    blocks,
+    containerTop,
+    holeAtScrollY(scrollY: number): FlowHole | null {
+      // Hole moves with scrollY (viewport-fixed frame)
+      return {
+        left: 100,
+        top: 200 - scrollY + containerTop,
+        right: 300,
+        bottom: 400 - scrollY + containerTop,
+      };
+    },
+    layoutForHole(hole: FlowHole | null): FlowLayoutResult {
+      if (hole === null) return baseLayout;
+      // When the hole overlaps the block region, the block shifts down
+      // by a fraction of the overlap. This converges because the shift
+      // decreases as the candidate stabilizes.
+      const holeBottom = hole.bottom;
+      const shift =
+        holeBottom > baseTopY ? Math.min(holeBottom - baseTopY, 50) : 0;
+      const shiftedGeo: FlowBlockGeometry = {
+        topY: baseTopY + shift,
+        bottomY: baseTopY + shift + 24,
+        firstLineIndex: 0,
+        lineCount: 1,
+      };
+      return makeLayout([shiftedGeo]);
+    },
+  };
+}
+
+/**
+ * Build a deliberately oscillating source whose target alternates
+ * between two values, never converging. Tests the iteration cap.
+ */
+function makeOscillatingSource(
+  blocks: readonly FlowBlock[],
+  containerTop: number,
+): FlowGeometrySource {
+  let callCount = 0;
+  const geoA: FlowBlockGeometry = {
+    topY: 500,
+    bottomY: 524,
+    firstLineIndex: 0,
+    lineCount: 1,
+  };
+  const geoB: FlowBlockGeometry = {
+    topY: 520,
+    bottomY: 544,
+    firstLineIndex: 0,
+    lineCount: 1,
+  };
+
+  return {
+    layoutResult: makeLayout([geoA]),
+    blocks,
+    containerTop,
+    holeAtScrollY(): FlowHole | null {
+      return { left: 100, top: 100, right: 300, bottom: 300 };
+    },
+    layoutForHole(): FlowLayoutResult {
+      callCount++;
+      // Alternate between two layouts so the target oscillates
+      return callCount % 2 === 0 ? makeLayout([geoA]) : makeLayout([geoB]);
+    },
+  };
+}
+
+// -----------------------------------------------------------------------
+// Setup
+// -----------------------------------------------------------------------
+
+beforeEach(() => {
+  setFlowGeometrySource(null);
+});
+
+// -----------------------------------------------------------------------
+// scrollTargetFor: source null
+// -----------------------------------------------------------------------
+
+describe("scrollTargetFor", () => {
+  it("returns null when source is not set", () => {
+    const result = scrollTargetFor(
+      "login" as FlowBlock["sectionId"],
+      "overview",
+    );
+    expect(result).toBeNull();
+  });
+});
+
+// -----------------------------------------------------------------------
+// scrollTargetFor: stale-page guard
+// -----------------------------------------------------------------------
+
+describe("scrollTargetFor stale-page guard", () => {
+  it("returns null when blocks array is empty", () => {
+    const source: FlowGeometrySource = {
+      layoutResult: makeLayout([]),
+      blocks: [],
+      containerTop: 0,
+      holeAtScrollY: () => null,
+      layoutForHole: (_h) => makeLayout([]),
+    };
+    setFlowGeometrySource(source);
+    const result = scrollTargetFor(
+      "login" as FlowBlock["sectionId"],
+      "overview",
+    );
+    expect(result).toBeNull();
+  });
+
+  it("returns null when first block's sectionId does not match", () => {
+    const blocks = [
+      makeBlock(
+        "overview",
+        "sub-heading",
+        "dashboard" as FlowBlock["sectionId"],
+      ),
+    ];
+    const geo: FlowBlockGeometry = {
+      topY: 0,
+      bottomY: 24,
+      firstLineIndex: 0,
+      lineCount: 1,
+    };
+    const source: FlowGeometrySource = {
+      layoutResult: makeLayout([geo]),
+      blocks,
+      containerTop: 0,
+      holeAtScrollY: () => null,
+      layoutForHole: () => makeLayout([geo]),
+    };
+    setFlowGeometrySource(source);
+    const result = scrollTargetFor(
+      "login" as FlowBlock["sectionId"],
+      "overview",
+    );
+    expect(result).toBeNull();
+  });
+});
+
+// -----------------------------------------------------------------------
+// scrollTargetFor: null sub returns 0
+// -----------------------------------------------------------------------
+
+describe("scrollTargetFor null sub", () => {
+  it("returns 0 for a section-level target (subSlug null)", () => {
+    const blocks = [
+      makeBlock("overview", "sub-heading", "login" as FlowBlock["sectionId"]),
+    ];
+    const geo: FlowBlockGeometry = {
+      topY: 100,
+      bottomY: 124,
+      firstLineIndex: 0,
+      lineCount: 1,
+    };
+    const source: FlowGeometrySource = {
+      layoutResult: makeLayout([geo]),
+      blocks,
+      containerTop: 50,
+      holeAtScrollY: () => null,
+      layoutForHole: () => makeLayout([geo]),
+    };
+    setFlowGeometrySource(source);
+
+    const result = scrollTargetFor("login" as FlowBlock["sectionId"], null);
+    expect(result).toBe(0);
+  });
+});
+
+// -----------------------------------------------------------------------
+// scrollTargetFor: fixed-point convergence
+// -----------------------------------------------------------------------
+
+describe("scrollTargetFor fixed-point convergence", () => {
+  it("converges to a stable target with a hole-dependent layout", () => {
+    // Window height 800, reading line at 0.4 * 800 = 320
+    Object.defineProperty(window, "innerHeight", {
+      value: 800,
+      configurable: true,
+    });
+
+    const blocks = [
+      makeBlock("overview", "sub-heading", "login" as FlowBlock["sectionId"]),
+    ];
+    const containerTop = 100;
+    const source = makeConvergingSource(blocks, containerTop, 300);
+    setFlowGeometrySource(source);
+
+    const result = scrollTargetFor(
+      "login" as FlowBlock["sectionId"],
+      "overview",
+    );
+    expect(result).not.toBeNull();
+    if (result === null) throw new Error("expected non-null result");
+    // The result should be a reasonable scrollY value
+    expect(result).toBeGreaterThanOrEqual(0);
+  });
+
+  it("respects the iteration cap with an oscillating source", () => {
+    Object.defineProperty(window, "innerHeight", {
+      value: 800,
+      configurable: true,
+    });
+
+    const blocks = [
+      makeBlock("overview", "sub-heading", "login" as FlowBlock["sectionId"]),
+    ];
+    const containerTop = 100;
+    const source = makeOscillatingSource(blocks, containerTop);
+    setFlowGeometrySource(source);
+
+    // Should not throw or loop forever; returns a value after cap iterations
+    const result = scrollTargetFor(
+      "login" as FlowBlock["sectionId"],
+      "overview",
+    );
+    expect(result).not.toBeNull();
+    expect(typeof result).toBe("number");
+  });
+
+  it("returns null when the target block disappears during iteration", () => {
+    Object.defineProperty(window, "innerHeight", {
+      value: 800,
+      configurable: true,
+    });
+
+    const blocks = [
+      makeBlock("overview", "sub-heading", "login" as FlowBlock["sectionId"]),
+    ];
+    const containerTop = 100;
+    const geo: FlowBlockGeometry = {
+      topY: 300,
+      bottomY: 324,
+      firstLineIndex: 0,
+      lineCount: 1,
+    };
+    const source: FlowGeometrySource = {
+      layoutResult: makeLayout([geo]),
+      blocks,
+      containerTop,
+      holeAtScrollY: () => ({ left: 0, top: 0, right: 500, bottom: 500 }),
+      // layoutForHole returns empty layout, so scrollTargetForBlock returns null
+      layoutForHole: () => makeLayout([]),
+    };
+    setFlowGeometrySource(source);
+
+    const result = scrollTargetFor(
+      "login" as FlowBlock["sectionId"],
+      "overview",
+    );
+    expect(result).toBeNull();
+  });
+});
+
+// -----------------------------------------------------------------------
+// locationAtReadingLine
+// -----------------------------------------------------------------------
+
+describe("locationAtReadingLine", () => {
+  it("returns null when source is not set", () => {
+    expect(locationAtReadingLine()).toBeNull();
+  });
+
+  it("resolves the correct location given containerTop and scrollY", () => {
+    Object.defineProperty(window, "innerHeight", {
+      value: 1000,
+      configurable: true,
+    });
+    Object.defineProperty(window, "scrollY", {
+      value: 200,
+      configurable: true,
+      writable: true,
+    });
+
+    const blocks = [
+      makeBlock(null, "sub-heading", "login" as FlowBlock["sectionId"]),
+      makeBlock("overview", "sub-heading", "login" as FlowBlock["sectionId"]),
+    ];
+    const geo0: FlowBlockGeometry = {
+      topY: 0,
+      bottomY: 50,
+      firstLineIndex: 0,
+      lineCount: 1,
+    };
+    const geo1: FlowBlockGeometry = {
+      topY: 50,
+      bottomY: 100,
+      firstLineIndex: 1,
+      lineCount: 1,
+    };
+    const source: FlowGeometrySource = {
+      layoutResult: makeLayout([geo0, geo1]),
+      blocks,
+      containerTop: 100,
+      holeAtScrollY: () => null,
+      layoutForHole: (_h) => makeLayout([geo0, geo1]),
+    };
+    setFlowGeometrySource(source);
+
+    // readingLineY = 1000 * 0.4 = 400
+    // documentY = 400 + 200 = 600
+    // containerRelativeY = 600 - 100 = 500
+    // 500 is past both blocks, so locationAtY returns the nearest above
+    const loc = locationAtReadingLine();
+    expect(loc).not.toBeNull();
+    if (loc === null) throw new Error("expected non-null location");
+    expect(loc.sectionId).toBe("login");
+  });
+
+  it("returns the first block when scrollY is 0 and reading line is low", () => {
+    Object.defineProperty(window, "innerHeight", {
+      value: 1000,
+      configurable: true,
+    });
+    Object.defineProperty(window, "scrollY", {
+      value: 0,
+      configurable: true,
+      writable: true,
+    });
+
+    const blocks = [
+      makeBlock("overview", "sub-heading", "login" as FlowBlock["sectionId"]),
+    ];
+    const geo: FlowBlockGeometry = {
+      topY: 0,
+      bottomY: 1000,
+      firstLineIndex: 0,
+      lineCount: 1,
+    };
+    const source: FlowGeometrySource = {
+      layoutResult: makeLayout([geo]),
+      blocks,
+      containerTop: 0,
+      holeAtScrollY: () => null,
+      layoutForHole: (_h) => makeLayout([geo]),
+    };
+    setFlowGeometrySource(source);
+
+    // readingLineY = 400. documentY = 400. containerRelativeY = 400.
+    // Falls inside block 0 (0..1000).
+    const loc = locationAtReadingLine();
+    expect(loc).toEqual({ sectionId: "login", subSlug: "overview" });
+  });
+});
+
+// -----------------------------------------------------------------------
+// flowGeometryReady
+// -----------------------------------------------------------------------
+
+describe("flowGeometryReady", () => {
+  it("returns false when no source is set", () => {
+    expect(flowGeometryReady()).toBe(false);
+  });
+
+  it("returns true after setting a source", () => {
+    const blocks = [makeBlock("overview")];
+    const geo: FlowBlockGeometry = {
+      topY: 0,
+      bottomY: 24,
+      firstLineIndex: 0,
+      lineCount: 1,
+    };
+    setFlowGeometrySource({
+      layoutResult: makeLayout([geo]),
+      blocks,
+      containerTop: 0,
+      holeAtScrollY: () => null,
+      layoutForHole: (_h) => makeLayout([geo]),
+    });
+    expect(flowGeometryReady()).toBe(true);
+  });
+
+  it("returns false after clearing the source", () => {
+    const blocks = [makeBlock("overview")];
+    const geo: FlowBlockGeometry = {
+      topY: 0,
+      bottomY: 24,
+      firstLineIndex: 0,
+      lineCount: 1,
+    };
+    setFlowGeometrySource({
+      layoutResult: makeLayout([geo]),
+      blocks,
+      containerTop: 0,
+      holeAtScrollY: () => null,
+      layoutForHole: (_h) => makeLayout([geo]),
+    });
+    setFlowGeometrySource(null);
+    expect(flowGeometryReady()).toBe(false);
+  });
+});

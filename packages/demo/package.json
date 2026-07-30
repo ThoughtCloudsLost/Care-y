@@ -20,6 +20,7 @@
   "dependencies": {
     "@care-y/crypto": "workspace:*",
     "@care-y/shared": "workspace:*",
+    "@chenglou/pretext": "0.0.7",
     "@electric-sql/pglite": "0.5.4",
     "@lucide/svelte": "1.16.0",
     "@tanstack/svelte-query": "6.1.33",

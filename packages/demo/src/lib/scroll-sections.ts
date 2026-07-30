@@ -59,6 +59,41 @@ export interface Section {
 // Taxonomy (frozen)
 // -----------------------------------------------------------------------
 
+/**
+ * Entry page section: displayed before the visitor enters the story.
+ * Uses id "login" because FlowStory blocks need a legal SectionId and
+ * the phone is on the login splash under the entry page. NOT added to
+ * SECTIONS so TopBar, parseHash, pill math, and the 9-section invariant
+ * are unaffected. While the entry page is visible, App-level gates
+ * prevent these subs from reaching the location store.
+ */
+export const ENTRY_SECTION: Section = {
+  id: "login",
+  titleKey: "demo_entry_title",
+  descKey: "demo_entry_desc",
+  routes: [],
+  subs: [
+    {
+      slug: "how-it-works",
+      topic: null,
+      headingKey: "demo_entry_how_heading",
+      bodyKey: "demo_entry_how_body",
+    },
+    {
+      slug: "the-phone",
+      topic: null,
+      headingKey: "demo_entry_phone_heading",
+      bodyKey: "demo_entry_phone_body",
+    },
+    {
+      slug: "getting-started",
+      topic: null,
+      headingKey: "demo_entry_start_heading",
+      bodyKey: "demo_entry_start_body",
+    },
+  ],
+};
+
 export const SECTIONS: readonly Section[] = [
   {
     id: "login",
@@ -497,7 +532,10 @@ export function slugForRoute(routeId: string): string {
     // Clean param brackets and rest-param dots
     .map((s) => s.replace(/[[\]\.]/g, ""));
 
-  return parts.join("-");
+  // The root route /(app) leaves no segments after group stripping.
+  // Return "root" so every manifest route produces a non-empty slug.
+  const slug = parts.join("-");
+  return slug === "" ? "root" : slug;
 }
 
 /**

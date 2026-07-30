@@ -1,36 +1,39 @@
 /**
  * Scroll engine: the outer page's view of the shared demo location,
- * presented as a snap slot.
+ * presented through the flow layout's reading line.
  *
  * The page owns NO location state. activeSection/activeSub are derived
  * from the last bridge snapshot (a mirror of the phone-side location
  * store), so the narrative can only ever show what the store holds.
- * Page inputs (snap settles, clicks, deep links) are intents sent
+ * Page inputs (scroll settles, clicks, deep links) are intents sent
  * through bridge.setLocation; the page moves when the store echoes the
  * change back, one path for every input.
  *
- * Presentation model: the selection slot sits at a fixed spot (just
- * below the pinned section intro, or below the sticky phone on small
- * screens). The sub list scrolls under it with CSS scroll snapping,
- * so some item is always aligned in the slot; whichever item settles
- * there IS the selection. A helper-tip card is the list's first snap
- * item, so "nothing selected" means the tip occupies the slot.
- * Programmatic moves (clicks, phone interactions, deep links) jump
- * the list instantly; there is no smooth scrolling.
+ * Presentation model: a reading line sits at a fixed fraction of the
+ * viewport height. The flow layout reports which block crosses that
+ * line; the engine sends it as a location intent on scroll settle.
+ * Programmatic moves (clicks, phone interactions, deep links) scroll
+ * the page so the target block's top meets the reading line.
  *
- * DOM-dependent (measures elements, listens to scroll settle).
+ * DOM-dependent (listens to scroll settle, delegates geometry to
+ * flow-geometry).
  */
 
 import { tick } from "svelte";
 import {
   parseHash,
   buildHash,
-  subElementId,
   loginStageTopics,
   type SectionId,
-  type ParsedHash,
 } from "./scroll-sections.js";
 import type { DemoBridge, DemoBridgeState, DemoTopic } from "./bridge.js";
+import {
+  readingLineY,
+  locationAtReadingLine,
+  scrollTargetFor,
+  flowGeometryReady,
+  type FlowLocation,
+} from "./flow-geometry.svelte.js";
 
 // -----------------------------------------------------------------------
 // Scroll engine state
@@ -39,36 +42,37 @@ import type { DemoBridge, DemoBridgeState, DemoTopic } from "./bridge.js";
 export interface ScrollEngine {
   /** Currently active section (mirrors the shared location) */
   readonly activeSection: SectionId;
-  /** Currently active sub-section slug (null = tip in the slot) */
+  /** Currently active sub-section slug (null = no sub selected) */
   readonly activeSub: string | null;
   /** Select a section (top bar, intro click, next-section button) */
   selectSection(id: SectionId): void;
-  /** Select a sub-section (TOC or block click) */
+  /** Select a sub-section (block click) */
   selectSub(sectionId: SectionId, subSlug: string): void;
   /** Mirror a bridge snapshot and present its location transition */
   handleBridgeState(state: DemoBridgeState): void;
   /** Send the deep-link hash as an intent on first load */
   initFromHash(): void;
-  /** Re-measure the slot line; returns it (viewport px from the top) */
+  /** Returns the reading line position (viewport px from the top) */
   remeasure(): number;
   /** Cleanup listeners */
   destroy(): void;
 }
 
-// Sticky offsets of the elements the slot sits under (see App.svelte
-// and StorySection.svelte CSS).
-const STICKY_TOP = 64;
-// Breathing room between the pinned intro (or sticky phone) and the
-// selection slot.
-const SLOT_GAP = 28;
 // Settle debounce for browsers without the scrollend event (Safari)
 const SETTLE_QUIET_MS = 160;
-// An item counts as "in the slot" within this distance of the line;
-// mandatory snapping normally lands it exactly on it.
-const SLOT_TOLERANCE = 80;
+
+// Distance (px) within which a scroll position counts as "at the target"
+const ALIGN_TOLERANCE = 1;
+
+// Distance (px) within which a suppressed settle is considered close
+// enough to the aligned target to disarm (accounts for subpixel
+// rounding and font-metric shifts between settle and alignment)
+const SUPPRESS_TOLERANCE = 48;
 
 export function createScrollEngine(
   getBridge: () => DemoBridge | undefined,
+  getLinked: () => boolean = () => true,
+  getPageScrollEnabled: () => boolean = () => true,
 ): ScrollEngine {
   // The one location the page renders: a mirror of the bridge state.
   let mirror: DemoBridgeState | undefined = $state();
@@ -82,109 +86,111 @@ export function createScrollEngine(
   // while the store's echo is still in flight.
   let requestedSub: { section: SectionId; sub: string | null } | null = null;
 
-  // Suppress settle intents while a programmatic alignment is in
-  // flight. A section swap renders a new sub list under the old scroll
-  // position, so a settle there would put an arbitrary sub in the slot
-  // and could fire its tap-pulse in the phone; an interrupted smooth
-  // scroll settles mid-list and would cancel a scripted chain. Cleared
-  // when a settle lands on the aligned target, when alignAfterRender
-  // needs no scroll, or after the re-align retry cap.
+  // Monotonic counter bumped on every alignment transition so a stale
+  // retry loop can detect it has been superseded.
+  let locationSeq = 0;
+
+  // -----------------------------------------------------------------------
+  // Suppression: prevent our own programmatic scrolls from feeding
+  // back as page-scroll intents
+  // -----------------------------------------------------------------------
+
+  // Armed when a programmatic alignment scroll is in flight, or when
+  // an init/reboot transition swaps the rendered section list.
   let suppressSettle = false;
   let alignRetries = 0;
+  // The location we aligned to, for settle matching
+  let alignedTarget: FlowLocation | null = null;
+  // The scrollY we aligned to, for position matching
+  let alignedScrollY: number | null = null;
 
   // -----------------------------------------------------------------------
-  // Snap geometry
-  // -----------------------------------------------------------------------
-
-  /**
-   * The slot line: where snapped items rest. Desktop pins the section
-   * intro, so the slot sits under it; small screens pin the phone
-   * instead (the intro scrolls away), so the slot sits under that.
-   * Computed from offsetHeight so the value is scroll-independent.
-   */
-  function measureSlotLine(): number {
-    const intro = document.querySelector<HTMLElement>(".section-intro");
-    if (intro !== null && getComputedStyle(intro).position === "sticky") {
-      return STICKY_TOP + intro.offsetHeight + SLOT_GAP;
-    }
-    const phone = document.querySelector<HTMLElement>(".phone-column");
-    if (phone !== null && getComputedStyle(phone).position === "sticky") {
-      return STICKY_TOP + phone.offsetHeight + SLOT_GAP;
-    }
-    return STICKY_TOP + SLOT_GAP;
-  }
-
-  /** Publish the slot line as the root scroll-snap padding. */
-  function applySlotPadding(): number {
-    const line = measureSlotLine();
-    document.documentElement.style.scrollPaddingTop = `${String(line)}px`;
-    return line;
-  }
-
-  /**
-   * Which snap item currently occupies the slot. Returns the sub slug,
-   * null for the tip card, or undefined when nothing is near the line
-   * (mid-gesture or teardown).
-   */
-  function slotOccupant(line: number): string | null | undefined {
-    const items = document.querySelectorAll<HTMLElement>("[data-snap-sub]");
-    let best: HTMLElement | null = null;
-    let bestDist = Number.POSITIVE_INFINITY;
-    for (const el of items) {
-      const dist = Math.abs(el.getBoundingClientRect().top - line);
-      if (dist < bestDist) {
-        bestDist = dist;
-        best = el;
-      }
-    }
-    if (best === null || bestDist > SLOT_TOLERANCE) return undefined;
-    const slug = best.dataset.snapSub ?? "";
-    return slug === "" ? null : slug;
-  }
-
-  // -----------------------------------------------------------------------
-  // Settle detection: the snapped item is the selection
+  // Settle detection: the block at the reading line is the selection
   // -----------------------------------------------------------------------
 
   function onSettle(): void {
-    const line = applySlotPadding();
-    const occupant = slotOccupant(line);
-    if (occupant === undefined) return;
+    // Entry page or other page-level gate: ignore settles entirely.
+    if (!getPageScrollEnabled()) return;
+
+    // When unlinked, the story scroll must not drive the phone.
+    if (!getLinked()) return;
 
     if (suppressSettle) {
-      // Consume settles until the alignment scroll reaches its target;
-      // only then does the slot resume driving the location. A
-      // mismatched settle here is the browser fighting the alignment
-      // (mandatory snap re-snapping after a list swap, an interrupted
-      // smooth scroll): re-align instead of emitting an intent, with a
-      // cap so a real visitor scroll can always win.
-      if (occupant === activeSub) {
-        suppressSettle = false;
-        requestedSub = null;
-      } else if (alignRetries < 1 && mirror !== undefined) {
-        alignRetries += 1;
-        void alignAfterRender(mirror.location, "page-click");
-      } else {
-        suppressSettle = false;
-      }
+      handleSuppressedSettle();
       return;
     }
 
-    if (occupant === activeSub) {
+    if (!flowGeometryReady()) return;
+
+    const loc = locationAtReadingLine();
+    if (loc === null) return;
+
+    // Already showing this location: clear any pending request
+    if (loc.sectionId === activeSection && loc.subSlug === activeSub) {
       requestedSub = null;
       return;
     }
-    // The location is not page state: a settle sends an intent, and
-    // the page's highlight follows when the store echoes it back.
+
+    // Dedup against an in-flight request
     if (
       requestedSub !== null &&
-      requestedSub.section === activeSection &&
-      requestedSub.sub === occupant
+      requestedSub.section === loc.sectionId &&
+      requestedSub.sub === loc.subSlug
     ) {
       return;
     }
-    requestedSub = { section: activeSection, sub: occupant };
-    getBridge()?.setLocation(activeSection, occupant, "page-scroll");
+
+    requestedSub = { section: loc.sectionId, sub: loc.subSlug };
+    getBridge()?.setLocation(loc.sectionId, loc.subSlug, "page-scroll");
+  }
+
+  /**
+   * Handle a settle that fired while suppression is armed.
+   * If the reading line is at the aligned target (or scrollY is close
+   * enough), disarm. Otherwise re-align once, then disarm.
+   */
+  function handleSuppressedSettle(): void {
+    // Check position-based match: if we are close to where we scrolled,
+    // the settle is our own alignment completing.
+    if (
+      alignedScrollY !== null &&
+      Math.abs(window.scrollY - alignedScrollY) < SUPPRESS_TOLERANCE
+    ) {
+      suppressSettle = false;
+      alignedTarget = null;
+      alignedScrollY = null;
+      requestedSub = null;
+      return;
+    }
+
+    // Check location-based match
+    const loc = locationAtReadingLine();
+    if (
+      loc !== null &&
+      alignedTarget !== null &&
+      loc.sectionId === alignedTarget.sectionId &&
+      loc.subSlug === alignedTarget.subSlug
+    ) {
+      suppressSettle = false;
+      alignedTarget = null;
+      alignedScrollY = null;
+      requestedSub = null;
+      return;
+    }
+
+    // Mismatch: re-align once, then give up
+    if (alignRetries < 1 && mirror !== undefined) {
+      alignRetries += 1;
+      void alignToLocation(
+        mirror.location.sectionId,
+        mirror.location.subSlug,
+        mirror.origin,
+      );
+    } else {
+      suppressSettle = false;
+      alignedTarget = null;
+      alignedScrollY = null;
+    }
   }
 
   let settleTimer: ReturnType<typeof setTimeout> | undefined;
@@ -206,6 +212,11 @@ export function createScrollEngine(
   // -----------------------------------------------------------------------
 
   function handleBridgeState(state: DemoBridgeState): void {
+    // When unlinked, the phone must not auto-scroll the story.
+    // The mirror stays stale so activeSection/activeSub hold position;
+    // progress tracking runs upstream in App.svelte before this call.
+    if (!getLinked()) return;
+
     const prev = mirror;
     mirror = state;
 
@@ -228,56 +239,95 @@ export function createScrollEngine(
     }
 
     if (state.origin === "page-scroll") {
-      // The visitor snapped here; the item is already in the slot and
-      // the highlight follows via the derived active values.
+      // The visitor scrolled here; the reading line already shows this
+      // location and the highlight follows via the derived active values.
       return;
     }
 
     // Every programmatic transition arms settle suppression: the
-    // alignment scroll (and any snap correction the browser performs
-    // when the section list swaps) must not feed back into the slot
-    // as a page-scroll intent. An init-with-previous-mirror transition
-    // is a phone reboot (restart, sign-out): the section list swaps
-    // under the old scroll and mandatory snapping can re-snap to an
-    // arbitrary sub, so it gets the same treatment.
+    // alignment scroll must not feed back as a page-scroll intent.
+    // An init-with-previous-mirror transition is a phone reboot
+    // (restart, sign-out): the section swaps under the old scroll
+    // position and requires the same treatment.
     suppressSettle = true;
     alignRetries = 0;
 
-    if (
-      prev !== undefined &&
-      prev.location.sectionId !== state.location.sectionId
-    ) {
-      // Section change: start the new section at the top instead of
-      // inheriting the old section's reading position. A sub-targeted
-      // transition (deep link, topic) still aligns to its sub in
-      // alignAfterRender below.
+    // Section change (or init reboot): scroll to top before aligning
+    // so the new page remounts at a clean scroll position. The armed
+    // suppression absorbs the resulting settle.
+    const sectionChanged =
+      state.location.sectionId !== prev?.location.sectionId;
+    if (sectionChanged) {
       window.scrollTo({ top: 0, behavior: "auto" });
     }
 
-    // Click or deep link: jump the list so the selection lands in the
-    // slot instantly. Phone interaction: scroll it into the slot so
-    // the movement is visible (a section change still swaps the
-    // rendered list first through the derived activeSection). Section
-    // swaps and reboots keep suppression armed through the aligned
-    // fast path; the browser's snap correction may scroll later.
-    const keepArmed =
-      state.origin === "init" ||
-      (prev !== undefined &&
-        prev.location.sectionId !== state.location.sectionId);
-    void alignAfterRender(state.location, state.origin, keepArmed);
+    void alignToLocation(
+      state.location.sectionId,
+      state.location.subSlug,
+      state.origin,
+    );
   }
 
   // -----------------------------------------------------------------------
   // Programmatic alignment
   // -----------------------------------------------------------------------
 
-  async function alignAfterRender(
-    loc: ParsedHash,
+  async function alignToLocation(
+    sectionId: SectionId,
+    subSlug: string | null,
     origin: DemoBridgeState["origin"],
-    keepArmed = false,
   ): Promise<void> {
+    // Capture the sequence number so a superseding transition can abort
+    // this loop (the new page's alignToLocation bumps the counter).
+    const mySeq = ++locationSeq;
+
     await tick();
-    if (activeSection !== loc.sectionId || activeSub !== loc.subSlug) return;
+
+    let target = scrollTargetFor(sectionId, subSlug);
+
+    // Geometry may not be ready yet (page remount after a section
+    // change, or first load before fonts render). Retry up to 10
+    // times at 50ms intervals. The page swaps the FlowStory key on
+    // section change, so scrollTargetFor returns null until the new
+    // component publishes geometry.
+    if (target === null) {
+      const MAX_RETRIES = 10;
+      const RETRY_DELAY_MS = 50;
+      for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
+        if (locationSeq !== mySeq) return; // superseded
+        await new Promise<void>((resolve) => {
+          setTimeout(resolve, RETRY_DELAY_MS);
+        });
+        target = scrollTargetFor(sectionId, subSlug);
+        if (target !== null) break;
+      }
+    }
+
+    // Superseded while waiting
+    if (locationSeq !== mySeq) return;
+
+    if (target === null) {
+      // Exhausted retries: clear suppression so the engine is not
+      // left wedged, and return. The next bridge state change or
+      // scroll settle will pick up the location.
+      suppressSettle = false;
+      return;
+    }
+
+    // Record what we aligned to for suppression matching
+    alignedTarget = { sectionId, subSlug };
+    alignedScrollY = target;
+
+    if (Math.abs(window.scrollY - target) < ALIGN_TOLERANCE) {
+      // Already at the target: no scroll event will fire, so the
+      // settle path will not clear suppression. Clear it now unless
+      // this is an init/reboot transition where the browser may still
+      // snap-correct.
+      if (origin !== "init") {
+        suppressSettle = false;
+      }
+      return;
+    }
 
     const reduced = window.matchMedia(
       "(prefers-reduced-motion: reduce)",
@@ -285,29 +335,6 @@ export function createScrollEngine(
     const behavior: ScrollBehavior =
       origin === "phone" && !reduced ? "smooth" : "auto";
 
-    const line = applySlotPadding();
-    let target = 0;
-    if (loc.subSlug !== null) {
-      const el = document.getElementById(
-        subElementId(loc.sectionId, loc.subSlug),
-      );
-      if (el === null) {
-        suppressSettle = false;
-        return;
-      }
-      target = Math.max(
-        0,
-        el.getBoundingClientRect().top + window.scrollY - line,
-      );
-    }
-    if (Math.abs(window.scrollY - target) < 1) {
-      // Already there: no scroll event (and so no settle) will fire.
-      // Section swaps keep the suppression armed anyway, because the
-      // browser's mandatory-snap correction can still scroll after
-      // this check (the settle path re-aligns and then clears).
-      if (!keepArmed) suppressSettle = false;
-      return;
-    }
     window.scrollTo({ top: target, behavior });
   }
 
@@ -316,22 +343,25 @@ export function createScrollEngine(
   // -----------------------------------------------------------------------
 
   function selectSection(id: SectionId): void {
+    if (!getLinked()) return;
     getBridge()?.setLocation(id, null, "page-click");
   }
 
   function selectSub(sectionId: SectionId, subSlug: string): void {
+    if (!getLinked()) return;
     getBridge()?.setLocation(sectionId, subSlug, "page-click");
   }
 
   function initFromHash(): void {
     const parsed = parseHash(window.location.hash);
     if (parsed === null) return;
+    if (!getLinked()) return;
 
     getBridge()?.setLocation(parsed.sectionId, parsed.subSlug, "deep-link");
   }
 
   function remeasure(): number {
-    return applySlotPadding();
+    return readingLineY();
   }
 
   // -----------------------------------------------------------------------
@@ -342,15 +372,12 @@ export function createScrollEngine(
   if (hasScrollEnd) {
     window.addEventListener("scrollend", onScrollEnd);
   }
-  window.addEventListener("resize", remeasure);
-  applySlotPadding();
 
   function destroy(): void {
     window.removeEventListener("scroll", onScroll);
     if (hasScrollEnd) {
       window.removeEventListener("scrollend", onScrollEnd);
     }
-    window.removeEventListener("resize", remeasure);
     clearTimeout(settleTimer);
   }
 

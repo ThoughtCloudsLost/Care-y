@@ -4,7 +4,8 @@
   import { SECTIONS, type SectionId } from "./scroll-sections.js";
 
   interface Props {
-    activeSection: SectionId;
+    /** null on the entry page, where no section is being shown yet. */
+    activeSection: SectionId | null;
     dark: boolean;
     locale: string;
     seen: number;

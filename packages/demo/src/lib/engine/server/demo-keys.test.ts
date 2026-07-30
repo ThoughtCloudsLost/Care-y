@@ -1,3 +1,4 @@
+// @vitest-environment node
 /**
  * Unit tests for demo-keys.ts.
  *
@@ -5,6 +6,10 @@
  * pipeline, plus round-trip correctness of the demo OPRF service
  * (blind via @care-y/crypto, evaluate via the service, finalize,
  * derive keys, and verify the result matches direct-pipeline output).
+ *
+ * Runs in Node (not jsdom) because libsodium's WASM input validation
+ * uses `instanceof Uint8Array`, which fails in jsdom when TextEncoder
+ * returns a Uint8Array from a different realm.
  */
 
 import { describe, it, expect, beforeAll } from "vitest";

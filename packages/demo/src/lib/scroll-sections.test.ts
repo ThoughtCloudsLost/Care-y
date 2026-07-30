@@ -16,6 +16,7 @@ import {
   slugForRoute,
   routeForSlug,
   SECTIONS,
+  ENTRY_SECTION,
   SECTION_ROUTES,
   SUB_ROUTES,
   UNNARRATED_ROUTES,
@@ -1118,5 +1119,18 @@ describe("resolvePhoneCommand (coming-soon)", () => {
   it("narrated sections have null routeSlug", () => {
     const cmd = resolvePhoneCommand("tickets", "sort", TICKET_ID, ARTICLE_ID);
     expect(cmd.routeSlug).toBeNull();
+  });
+});
+
+describe("ENTRY_SECTION", () => {
+  it("is not in SECTIONS", () => {
+    expect(SECTIONS).not.toContain(ENTRY_SECTION);
+    expect(SECTIONS.some((s) => s === ENTRY_SECTION)).toBe(false);
+  });
+
+  it("every sub has topic: null", () => {
+    for (const sub of ENTRY_SECTION.subs) {
+      expect(sub.topic).toBeNull();
+    }
   });
 });

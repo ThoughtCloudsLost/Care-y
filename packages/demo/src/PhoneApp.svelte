@@ -896,9 +896,12 @@
     }
   }
 
-  // Splash dismisses once the module graph loads. router.feature is
-  // always defined, so this resolves to true from first render.
-  const splashDismissed = true;
+  // Splash stays while the location store has not been driven by an
+  // outer-page intent or phone interaction (origin "init" is the boot
+  // baseline). Deep links dismiss it immediately because they commit a
+  // non-init origin before the first render. Restart resets the store,
+  // so origin returns to "init" and the splash reappears.
+  const splashDismissed: boolean = $derived(store.origin !== "init");
 </script>
 
 <div class="phone-app">
