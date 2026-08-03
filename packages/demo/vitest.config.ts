@@ -13,5 +13,6 @@ export default defineConfig({
     include: ["src/**/*.test.ts", "scripts/**/*.test.mjs"],
     exclude: ["**/dist/**", "**/node_modules/**", "src/**/*.smoke.test.ts"],
     environment: "jsdom",
+    setupFiles: ["src/test-setup.ts"],
   },
 });

@@ -18,6 +18,7 @@ import {
   BEZEL,
   WIDE_BREAKPOINT,
   FRAME_FIT_MARGIN,
+  MIN_FOOTPRINT,
   clampTopToViewport,
   type FrameGeometry,
 } from "./frame-geometry.svelte.js";
@@ -37,12 +38,18 @@ export const COMMIT_DRAG_PX = 60;
 // -----------------------------------------------------------------------
 
 /**
- * Compute the peek footprint for a given window size.
+ * Compute the peek footprint for a given window size, fit-first.
  *
  * The frame keeps the phone aspect ratio (PHONE_PRESET). On narrow
  * viewports the peek spans nearly full width so the leftover side bands
  * fall under the layout's MIN_SEGMENT floor and text parts vertically.
  * On wide viewports the peek sits smaller so text can wrap beside it.
+ *
+ * The result always fits the window's available space, even on
+ * degenerate window sizes. MIN_FOOTPRINT is NOT enforced here:
+ * FrameGeometry.setFootprint owns that floor at apply time, because
+ * fitting on screen and a 200px minimum cannot both hold on a very
+ * small window, and fitting is what keeps the frame usable.
  */
 export function computePeekFootprint(
   windowW: number,
@@ -50,18 +57,18 @@ export function computePeekFootprint(
 ): { w: number; h: number } {
   const aspect = PHONE_PRESET.w / PHONE_PRESET.h;
   const bezelTotal = BEZEL * 2;
+  const maxH = Math.max(1, windowH - FRAME_FIT_MARGIN * 2 - bezelTotal);
 
   if (windowW < WIDE_BREAKPOINT) {
     // Narrow: span nearly the full width. Leave a small margin for the
-    // bezel so the frame does not bleed off-screen.
+    // bezel so the frame does not bleed off-screen. The MIN_FOOTPRINT
+    // lower bound keeps the width usable when the window barely clears
+    // the bezel overhead; the height fit below still wins over it.
     const maxW = windowW - FRAME_FIT_MARGIN * 2 - bezelTotal;
-    const fw = Math.min(PHONE_PRESET.w, Math.max(200, maxW));
+    const fw = Math.min(PHONE_PRESET.w, Math.max(MIN_FOOTPRINT.w, maxW));
     const fh = Math.round(fw / aspect);
-    // Cap height so the frame does not exceed the viewport
-    const maxH = windowH - FRAME_FIT_MARGIN * 2 - bezelTotal;
     if (fh > maxH) {
-      const clampedH = Math.max(200, maxH);
-      return { w: Math.round(clampedH * aspect), h: clampedH };
+      return { w: Math.max(1, Math.round(maxH * aspect)), h: maxH };
     }
     return { w: fw, h: fh };
   }
@@ -70,10 +77,8 @@ export function computePeekFootprint(
   // Use roughly 40% of the viewport width, keeping the phone aspect.
   const targetW = Math.min(PHONE_PRESET.w, Math.round(windowW * 0.4));
   const targetH = Math.round(targetW / aspect);
-  const maxH = windowH - FRAME_FIT_MARGIN * 2 - bezelTotal;
   if (targetH > maxH) {
-    const clampedH = Math.max(200, maxH);
-    return { w: Math.round(clampedH * aspect), h: clampedH };
+    return { w: Math.max(1, Math.round(maxH * aspect)), h: maxH };
   }
   return { w: targetW, h: targetH };
 }
