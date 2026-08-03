@@ -514,7 +514,7 @@ export interface ReactionSummary {
 // --- Client search ---
 
 export const searchClientsInputSchema = z.object({
-  query: z.string().min(1).max(100),
-  limit: z.number().int().min(1).max(20).default(10),
+  query: z.string().max(100).default(""),
+  limit: z.number().int().min(1).max(50).default(20),
 });
 export type SearchClientsInput = z.infer<typeof searchClientsInputSchema>;

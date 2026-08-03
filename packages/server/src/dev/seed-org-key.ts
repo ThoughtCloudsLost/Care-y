@@ -8,6 +8,7 @@ import {
 } from "@care-y/crypto";
 import sodium from "sodium-native";
 import { NotFoundError } from "../errors.js";
+import { generateAlias } from "../telephony/models/alias-generator.js";
 
 function sealWithOrgKey(plaintext: string, orgPk: Uint8Array): Buffer {
   const pt = Buffer.from(plaintext, "utf8");
@@ -107,6 +108,28 @@ async function resealOrgEncryptedNames(
   }
 }
 
+async function resealClientAliases(
+  tDb: Kysely<TenantDatabase>,
+  orgPk: Uint8Array,
+): Promise<void> {
+  const clients = await tDb.selectFrom("clients").select("id").execute();
+  console.log(
+    `[seed-org-key] re-sealing ${String(clients.length)} client records`,
+  );
+
+  for (const client of clients) {
+    const alias = await generateAlias(tDb);
+    await tDb
+      .updateTable("clients")
+      .set({
+        encrypted_alias: sealWithOrgKey(alias, orgPk),
+        alias_hash: null,
+      })
+      .where("id", "=", client.id)
+      .execute();
+  }
+}
+
 export async function seedOrgKey(
   tDb: Kysely<TenantDatabase>,
   userId: string,
@@ -118,6 +141,16 @@ export async function seedOrgKey(
     .executeTakeFirst();
 
   if (existing) {
+    // Key already exists, but client aliases may still be sealed with the
+    // throwaway key from a prior seed run. Re-seal unconditionally so a
+    // reused e2e database gets decryptable aliases.
+    const orgConfig = await tDb
+      .selectFrom("org_config")
+      .select("org_public_key")
+      .executeTakeFirstOrThrow();
+    if (orgConfig.org_public_key) {
+      await resealClientAliases(tDb, orgConfig.org_public_key);
+    }
     return { success: true, skipped: true };
   }
 
@@ -161,6 +194,7 @@ export async function seedOrgKey(
     // The server seed encrypts these with a throwaway key that gets replaced
     // above, so they need re-sealing to be decryptable by the client.
     await resealOrgEncryptedNames(tDb, publicKey);
+    await resealClientAliases(tDb, publicKey);
 
     return { success: true, skipped: false };
   } finally {
