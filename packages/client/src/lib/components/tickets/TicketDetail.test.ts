@@ -14,6 +14,11 @@
 
 import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
 import { render, cleanup } from "@testing-library/svelte";
+import type * as ErrorsModule from "$lib/errors.js";
+import type * as CryptoContextModule from "$lib/crypto/context.js";
+import type * as SvelteQueryModule from "@tanstack/svelte-query";
+import type * as TrpcModule from "$lib/trpc/index.js";
+import type * as ShellContextModule from "$lib/shell/context.js";
 
 // --- Query state controls ---
 // These let individual tests configure what the queries return.
@@ -28,30 +33,34 @@ let volunteersQueryState: Record<string, unknown> = {};
 // createQuery is called multiple times (ticket, followUps, recordings,
 // attachments). We identify which query is being created by the queryKey.
 
-vi.mock("@tanstack/svelte-query", () => ({
-  createQuery: (optsFn: () => Record<string, unknown>) => {
-    const opts = optsFn();
-    const key = (opts.queryKey as string[] | undefined) ?? [];
+vi.mock("@tanstack/svelte-query", async (importOriginal) => {
+  return {
+    ...(await importOriginal<typeof SvelteQueryModule>()),
+    createQuery: (optsFn: () => Record<string, unknown>) => {
+      const opts = optsFn();
+      const key = (opts.queryKey as string[] | undefined) ?? [];
 
-    // Match by the third key segment to identify the query.
-    if (key[2] === "followUps") return followUpsQueryState;
-    if (key[2] === "followUpSummary") return summaryQueryState;
-    if (key[2] === "recordings") return recordingsQueryState;
-    if (key[2] === "attachments") return attachmentsQueryState;
-    if (key[0] === "volunteers") return volunteersQueryState;
+      // Match by the third key segment to identify the query.
+      if (key[2] === "followUps") return followUpsQueryState;
+      if (key[2] === "followUpSummary") return summaryQueryState;
+      if (key[2] === "recordings") return recordingsQueryState;
+      if (key[2] === "attachments") return attachmentsQueryState;
+      if (key[0] === "volunteers") return volunteersQueryState;
 
-    // First call per render is the ticket query (key: ["ticket", id]).
-    return ticketQueryState;
-  },
-  useQueryClient: () => ({
-    fetchQuery: vi.fn().mockResolvedValue([]),
-    invalidateQueries: vi.fn(),
-    getQueryData: vi.fn(),
-    setQueryData: vi.fn(),
-  }),
-}));
+      // First call per render is the ticket query (key: ["ticket", id]).
+      return ticketQueryState;
+    },
+    useQueryClient: () => ({
+      fetchQuery: vi.fn().mockResolvedValue([]),
+      invalidateQueries: vi.fn(),
+      getQueryData: vi.fn(),
+      setQueryData: vi.fn(),
+    }),
+  };
+});
 
-vi.mock("$lib/trpc/index.js", () => ({
+vi.mock("$lib/trpc/index.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof TrpcModule>()),
   trpc: {
     tickets: {
       get: { query: vi.fn() },
@@ -79,47 +88,55 @@ vi.mock("$lib/trpc/index.js", () => ({
   },
 }));
 
-vi.mock("$lib/crypto/context.js", () => ({
-  getTicketDecryptCache: () => ({
-    decryptTitle: vi.fn().mockReturnValue("Test Ticket Title"),
-  }),
-  getFollowUpDecryptCache: () => ({
-    decryptContent: vi.fn().mockReturnValue("Decrypted message content"),
-    get: vi.fn().mockReturnValue(undefined),
-    has: vi.fn().mockReturnValue(false),
-  }),
-  getOrgDecryptCache: () => ({
-    decrypt: vi.fn().mockReturnValue(null),
-    get: vi.fn().mockReturnValue(undefined),
-    has: vi.fn().mockReturnValue(false),
-  }),
-  getOrgKeyManager: () => ({
-    isLoaded: false,
-  }),
-  getCurrentUserId: () => () => "user-001",
-  getCurrentUserRoleId: () => () => "dXwG0zR9BtJp",
-  getCurrentPermissions: () => () =>
-    new Set([
-      "view_tickets",
-      "manage_own_tickets",
-      "view_knowledge_base",
-      "edit_knowledge_base",
-      "view_own_shifts",
-    ]),
-  getPreviewLoader: () => ({
-    get: vi.fn().mockReturnValue(undefined),
-    observe: vi.fn(),
-    eagerLoad: vi.fn(),
-  }),
-}));
+vi.mock("$lib/crypto/context.js", async (importOriginal) => {
+  return {
+    ...(await importOriginal<typeof CryptoContextModule>()),
+    getTicketDecryptCache: () => ({
+      decryptTitle: vi.fn().mockReturnValue("Test Ticket Title"),
+    }),
+    getFollowUpDecryptCache: () => ({
+      decryptContent: vi.fn().mockReturnValue("Decrypted message content"),
+      get: vi.fn().mockReturnValue(undefined),
+      has: vi.fn().mockReturnValue(false),
+    }),
+    getOrgDecryptCache: () => ({
+      decrypt: vi
+        .fn()
+        .mockImplementation((key: string) =>
+          key.startsWith("client-alias:") ? "Sparrow" : null,
+        ),
+      get: vi.fn().mockReturnValue(undefined),
+      has: vi.fn().mockReturnValue(false),
+    }),
+    getOrgKeyManager: () => ({
+      isLoaded: false,
+    }),
+    getCurrentUserId: () => () => "user-001",
+    getCurrentUserRoleId: () => () => "dXwG0zR9BtJp",
+    getCurrentPermissions: () => () =>
+      new Set([
+        "view_tickets",
+        "manage_own_tickets",
+        "view_knowledge_base",
+        "edit_knowledge_base",
+        "view_own_shifts",
+      ]),
+    getPreviewLoader: () => ({
+      get: vi.fn().mockReturnValue(undefined),
+      observe: vi.fn(),
+      eagerLoad: vi.fn(),
+    }),
+  };
+});
 
-vi.mock("$lib/errors.js", () => ({
+vi.mock("$lib/errors.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof ErrorsModule>()),
   RouterNotAvailableError: class extends Error {},
   requireRouter: <T>(r: T) => r,
 }));
 
-// --- Mock shell context ---
-vi.mock("$lib/shell/context.js", () => ({
+vi.mock("$lib/shell/context.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof ShellContextModule>()),
   getScrollContainer: () => () => undefined,
   getTabbarOverrideCtx: () => ({ current: undefined }),
   getTabbarHiddenCtx: () => ({ current: false }),
@@ -185,7 +202,8 @@ function makeFollowUp(overrides: Record<string, unknown> = {}) {
 
 const baseTicket = {
   id: "ticket-001",
-  clientAlias: "Sparrow",
+  clientId: "c-sparrow",
+  encryptedClientAlias: "enc-sparrow",
   status: "open",
   priority: "normal",
   onHold: false,

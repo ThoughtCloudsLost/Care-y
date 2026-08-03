@@ -1,7 +1,13 @@
 import { test, expect } from "./coverage-fixture";
 import { startCoverage, stopAndWriteCoverage } from "./coverage-fixture";
 import type { Page } from "@playwright/test";
-import { CRYPTO_TIMEOUT, login, openTicketByTitle } from "./helpers";
+import {
+  clickComposeAction,
+  CRYPTO_TIMEOUT,
+  login,
+  openComposeActions,
+  openTicketByTitle,
+} from "./helpers";
 
 const REPLY_SUFFIX = String(Date.now()).slice(-6);
 const REPLY_TEXT = `E2E reply ${REPLY_SUFFIX}`;
@@ -50,14 +56,8 @@ test.describe.serial("Ticket Reply (Encrypted Message Send)", () => {
 
   test("can type a message in the compose bar", async () => {
     // Activate reply mode from the collapsed compose bar.
-    const composeBtn = page
-      .getByRole("main")
-      .getByRole("button", { name: /compose actions/i });
-    await composeBtn.click();
-    await page
-      .getByRole("list")
-      .getByText(/reply to/i)
-      .click();
+    const dialog = await openComposeActions(page);
+    await clickComposeAction(dialog, /reply to/i);
 
     // The messagebar textarea has a unique placeholder from i18n.
     // Use click + pressSequentially so Konsta Messagebar's value binding

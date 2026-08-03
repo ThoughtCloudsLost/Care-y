@@ -20,6 +20,7 @@ import {
   deriveVolunteerPrivateKey,
   deriveVolunteerPublicKey,
   wrapKey,
+  decode,
   encode,
   getSodium,
   zeroAll,
@@ -27,7 +28,6 @@ import {
 } from "@care-y/crypto";
 import type { BlindResult, Salt, Scalar, SymmetricKey } from "@care-y/crypto";
 import { trpc } from "$lib/trpc/index.js";
-import { decodeStandardBase64 } from "$lib/base64.js";
 import type { CryptoBridge } from "$lib/workers/crypto-bridge.js";
 
 export interface AdminBootstrapCallbacks {
@@ -64,7 +64,7 @@ export async function adminBootstrapUserCrypto(
       userId,
       blindedElement: encode(blind.blindedElement),
     });
-    const evaluatedBytes = decodeStandardBase64(evaluatedB64);
+    const evaluatedBytes = decode(evaluatedB64);
 
     oprfOutput = oprfFinalize(
       blind.blindState,

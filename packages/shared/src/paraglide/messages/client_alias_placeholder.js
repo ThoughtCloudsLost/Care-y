@@ -6,17 +6,17 @@ import { getLocale, experimentalStaticLocale } from '../runtime.js';
 /** @typedef {{}} Client_Alias_PlaceholderInputs */
 
 const en_client_alias_placeholder = /** @type {(inputs: Client_Alias_PlaceholderInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`lowercase-with-hyphens`)
+	return /** @type {LocalizedString} */ (`Enter an alias`)
 };
 
 const es_client_alias_placeholder = /** @type {(inputs: Client_Alias_PlaceholderInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`minusculas-con-guiones`)
+	return /** @type {LocalizedString} */ (`Ingresa un alias`)
 };
 
 /**
 * | output |
 * | --- |
-* | "lowercase-with-hyphens" |
+* | "Enter an alias" |
 *
 * @param {Client_Alias_PlaceholderInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

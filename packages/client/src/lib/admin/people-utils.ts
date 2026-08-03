@@ -39,7 +39,6 @@ export const VALID_KEY_STATUSES: ReadonlySet<string> = new Set<KeyStatus>([
 ]);
 
 export const CLIENT_SORT_FIELDS: readonly ClientSortField[] = [
-  "alias",
   "created_at",
   "ticket_count",
 ];

@@ -46,8 +46,8 @@ export interface KBSearchData {
 export interface RawKBItem {
   readonly id: string;
   readonly categoryId: string;
-  readonly encryptedTitle: unknown;
-  readonly encryptedExcerpt: unknown;
+  readonly encryptedTitle: string;
+  readonly encryptedExcerpt: string | null;
   readonly createdBy: string;
   readonly voteUpCount: number;
   readonly voteDownCount: number;
@@ -74,7 +74,7 @@ export interface KBSearchProviderDeps {
   /** Decrypt an org-key ciphertext. Async because the org key lives in the crypto Worker. */
   readonly decryptOrg: (
     cacheKey: string,
-    ciphertext: unknown,
+    ciphertext: string | null,
   ) => Promise<string | null>;
   /** Resolve a category name from its ID (reactive, reads OrgDecryptCache). */
   readonly resolveCategoryName: (categoryId: string) => string | null;
@@ -85,7 +85,7 @@ export interface KBSearchProviderDeps {
   /** Fetch encrypted article bodies for full-text search. Max 200 items. */
   readonly fetchBodies?: (
     itemIds: string[],
-  ) => Promise<readonly { id: string; encryptedBody: unknown }[]>;
+  ) => Promise<readonly { id: string; encryptedBody: string }[]>;
 }
 
 const EXCERPT_MAX_CHARS = 200;
@@ -271,7 +271,7 @@ export function createKbSearchProvider(
 
       if (nonMatchingIds.length === 0) return;
 
-      let bodies: readonly { id: string; encryptedBody: unknown }[];
+      let bodies: readonly { id: string; encryptedBody: string }[];
       try {
         bodies = await fetchBodies(nonMatchingIds);
       } catch {

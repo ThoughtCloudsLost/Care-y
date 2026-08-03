@@ -22,8 +22,8 @@ export interface TicketCardProps {
   readonly priority: "low" | "normal" | "high" | "urgent";
   readonly titleResult: DecryptResult;
   /** Ciphertext for auto-sizing the title placeholder */
-  readonly encryptedTitle?: unknown;
-  readonly clientAlias: string;
+  readonly encryptedTitle?: string;
+  readonly clientAlias: string | null;
   readonly assignedName: string | null;
   /** Renders the bold "you" meta segment when assigned to the viewer. */
   readonly assignedIsSelf?: boolean;

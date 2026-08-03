@@ -7,12 +7,11 @@
  */
 
 import type { OrgDecryptCache } from "$lib/crypto/org-decrypt-cache.js";
-import type { SerializedBuffer } from "$lib/utils/buffer-encoding.js";
 
-/** Volunteer record shape as it arrives over tRPC JSON (Buffer -> SerializedBuffer). */
+/** Volunteer record shape as it arrives over tRPC JSON. */
 export interface VolunteerRecord {
   readonly id: string;
-  readonly encryptedDisplayName: SerializedBuffer | Uint8Array | null;
+  readonly encryptedDisplayName: string | null;
 }
 
 /**

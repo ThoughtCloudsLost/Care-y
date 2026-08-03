@@ -627,15 +627,12 @@ describe.skipIf(!HAS_DB)("auth + org routers (DB integration)", () => {
     expect(result).toHaveProperty("queueCount");
     expect(result).toHaveProperty("keyStatus");
     expect(result).toHaveProperty("retentionDays");
-    expect(result).toHaveProperty("phoneCount");
     expect(result).toHaveProperty("blocklistCount");
     expect(result).toHaveProperty("greetingCount");
     expect(result).toHaveProperty("templateCount");
-    expect(typeof result.phoneCount).toBe("number");
     expect(typeof result.blocklistCount).toBe("number");
     expect(typeof result.greetingCount).toBe("number");
     expect(typeof result.templateCount).toBe("number");
-    expect(result.phoneCount).toBeGreaterThanOrEqual(0);
     expect(result.blocklistCount).toBeGreaterThanOrEqual(0);
     expect(result.greetingCount).toBeGreaterThanOrEqual(0);
     expect(result.templateCount).toBeGreaterThanOrEqual(0);

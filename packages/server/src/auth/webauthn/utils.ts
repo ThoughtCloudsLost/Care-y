@@ -34,11 +34,7 @@ export function toBase64url(buffer: ArrayBuffer | Uint8Array): Base64URLString {
           buffer.byteOffset + buffer.byteLength,
         )
       : buffer;
-  return Buffer.from(ab)
-    .toString("base64")
-    .replaceAll("+", "-")
-    .replaceAll("/", "_")
-    .replaceAll("=", "");
+  return Buffer.from(ab).toString("base64url");
 }
 
 /** Decodes a base64url string to an ArrayBuffer. */

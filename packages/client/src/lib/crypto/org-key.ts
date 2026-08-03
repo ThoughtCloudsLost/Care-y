@@ -16,7 +16,6 @@
  */
 
 import { decode, encode } from "@care-y/crypto";
-import { uint8ArrayToBase64 } from "$lib/utils/buffer-encoding.js";
 import type { CryptoBridge } from "$lib/workers/crypto-bridge.js";
 
 const textEncoder = new TextEncoder();
@@ -74,7 +73,7 @@ export class OrgKeyManager {
   /** Encrypt a UTF-8 string and return its base64 ciphertext. */
   async encryptText(plaintext: string): Promise<string> {
     const cipherBytes = await this.encrypt(textEncoder.encode(plaintext));
-    return uint8ArrayToBase64(cipherBytes);
+    return encode(cipherBytes);
   }
 
   /**
@@ -88,6 +87,19 @@ export class OrgKeyManager {
 
     const rawBytesB64 = await this.bridge.orgDecrypt(encode(ciphertext));
     return decode(rawBytesB64);
+  }
+
+  /**
+   * Compute the blind index hash of a raw alias string.
+   * Normalization (NFKC, case fold, trim, whitespace collapse) happens
+   * inside the Worker so the index key never crosses the boundary.
+   * Returns lowercase hex HMAC-SHA512.
+   */
+  async aliasHash(alias: string): Promise<string> {
+    if (!this.orgPublicKey) {
+      throw new OrgKeyNotLoadedError();
+    }
+    return this.bridge.aliasHash(alias);
   }
 
   /**

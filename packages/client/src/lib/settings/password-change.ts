@@ -15,9 +15,9 @@
  * keys so the session continues without interruption.
  */
 
-import { encode } from "@care-y/crypto";
+import { decode, encode } from "@care-y/crypto";
 import { trpc } from "$lib/trpc/index.js";
-import { decodeStandardBase64, toArrayBuffer } from "$lib/base64.js";
+import { toArrayBuffer } from "$lib/base64.js";
 import type { CryptoBridge } from "$lib/workers/crypto-bridge.js";
 import type { OrgKeyManager } from "$lib/crypto/org-key.js";
 import {
@@ -103,7 +103,7 @@ export async function changePassword(deps: PasswordChangeDeps): Promise<void> {
       blindedElement,
       onPowRequired,
     );
-    const evaluatedBytes = decodeStandardBase64(evaluatedB64);
+    const evaluatedBytes = decode(evaluatedB64);
     const result = await tempBridge.deriveKeys(toArrayBuffer(evaluatedBytes));
     newVolPublic = result.volPublic;
 
@@ -193,7 +193,7 @@ export async function changePassword(deps: PasswordChangeDeps): Promise<void> {
     blindedElement2,
     onPowRequired,
   );
-  const evaluated2Bytes = decodeStandardBase64(evaluated2B64);
+  const evaluated2Bytes = decode(evaluated2B64);
   await primaryBridge.deriveKeys(toArrayBuffer(evaluated2Bytes));
 
   // 8. Re-load org key into OrgKeyManager for continued session

@@ -4,8 +4,6 @@
   Same pattern as InternalNoteSheet / DisplayNameSheet.
 -->
 <script lang="ts">
-  import { goto } from "$app/navigation";
-  import { resolve } from "$app/paths";
   import {
     createQuery,
     createMutation,
@@ -20,11 +18,12 @@
     ClientSearchResult,
     PhoneLookupResult,
   } from "$lib/components/inputs/ClientSelect.svelte";
+  import { isPhoneLookupResult } from "$lib/components/inputs/client-select-types.js";
   import { getOrgDecryptCache } from "$lib/crypto/context.js";
   import { trpc } from "$lib/trpc/index.js";
   import { ticketsKeys } from "$lib/query/keys.js";
   import { toastStore } from "$lib/stores/toast.svelte.js";
-  import { requireRouter } from "$lib/errors.js";
+  import { requireRouter, RelayError } from "$lib/errors.js";
   import { DEV_ORG_SLUG } from "$lib/utils/org-slug.js";
   import * as m from "$lib/paraglide/messages.js";
   import { withTerms } from "$lib/terminology/with-terms.js";
@@ -32,9 +31,10 @@
   interface Props {
     opened: boolean;
     ondismiss: () => void;
+    oncollision: (ticketId: string) => void;
   }
 
-  let { opened, ondismiss }: Props = $props();
+  let { opened, ondismiss, oncollision }: Props = $props();
 
   const ticketRouter = requireRouter(trpc.tickets, "tickets");
 
@@ -86,11 +86,41 @@
   function handleCollision(info: CollisionInfo): void {
     ondismiss();
     const ticketId: string = info.openTicketId;
-    void goto(resolve(`/tickets/${ticketId}`));
+    oncollision(ticketId);
   }
 
+  let clientCache: ClientSearchResult[] | null = null;
+
+  $effect(() => {
+    if (!opened) {
+      clientCache = null;
+    }
+  });
+
   async function searchClients(query: string): Promise<ClientSearchResult[]> {
-    return ticketRouter.searchClients.query({ query, limit: 10 });
+    if (!clientCache) {
+      const raw = await ticketRouter.searchClients.query({
+        query: "",
+        limit: 50,
+      });
+      const decrypted = await Promise.all(
+        raw.map(async (r) => ({
+          ...r,
+          alias:
+            (await orgCache.decryptAsync(
+              `client-alias:${r.id}`,
+              r.encryptedAlias,
+            )) ?? r.id.slice(0, 8),
+        })),
+      );
+      clientCache = decrypted;
+    }
+
+    const q = query.toLowerCase().trim();
+    if (q.length === 0) return clientCache;
+    return clientCache.filter(
+      (c) => c.alias.toLowerCase().includes(q) === true,
+    );
   }
 
   async function phoneLookup(phone: string): Promise<PhoneLookupResult> {
@@ -109,10 +139,25 @@
     });
 
     if (!res.ok) {
-      throw new Error("Phone lookup failed");
+      throw new RelayError("PHONE_LOOKUP_FAILED", res.status);
     }
 
-    return (await res.json()) as PhoneLookupResult;
+    // Validate the shape rather than casting: this is a fetch boundary, and
+    // the guard exists for it.
+    const raw: unknown = await res.json();
+    if (!isPhoneLookupResult(raw)) {
+      throw new RelayError("PHONE_LOOKUP_MALFORMED", res.status);
+    }
+    if (!raw.found) return raw;
+
+    // Fall back to a short client id while the alias is still decrypting or
+    // if it cannot be decrypted, so the field is never blank.
+    return {
+      ...raw,
+      alias:
+        orgCache.decrypt(`client-alias:${raw.clientId}`, raw.encryptedAlias) ??
+        raw.clientId.slice(0, 8),
+    };
   }
 </script>
 

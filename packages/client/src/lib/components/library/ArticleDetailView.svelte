@@ -14,6 +14,7 @@
     createMutation,
     useQueryClient,
   } from "@tanstack/svelte-query";
+  import { decode } from "@care-y/crypto";
   import { Link } from "konsta/svelte";
   import { ChevronLeft, Pencil } from "@lucide/svelte";
   import * as m from "$lib/paraglide/messages.js";
@@ -32,11 +33,11 @@
   import { haptic } from "$lib/utils/haptic.js";
   import { toastStore } from "$lib/stores/toast.svelte.js";
   import { announceToLiveRegion } from "$lib/utils/announce.js";
-  import type { SerializedBuffer } from "$lib/utils/buffer-encoding.js";
   import {
     resolveKbImages,
     type KbImageResolverDeps,
   } from "$lib/utils/resolve-kb-images.js";
+  import { fetchBlob } from "$lib/utils/fetch-blob.js";
   import ArticleVote from "$lib/components/library/ArticleVote.svelte";
   import { untrack } from "svelte";
   import { recentViews } from "$lib/search/recent-views.js";
@@ -73,7 +74,7 @@
 
   interface CachedSummary {
     categoryId: string;
-    encryptedTitle: SerializedBuffer;
+    encryptedTitle: string;
     createdBy: string;
     voteUpCount: number;
     voteDownCount: number;
@@ -133,7 +134,11 @@
       : null,
   );
   const titleResult: DecryptResult = $derived(
-    resolveOrgDecrypt(titleRaw, orgKeyManager.isLoaded),
+    resolveOrgDecrypt(
+      titleRaw,
+      orgKeyManager.isLoaded,
+      orgCache.isFailed(`kb-item:${articleId}`),
+    ),
   );
 
   // ── Category name for navbar ──
@@ -184,9 +189,7 @@
       return;
     }
 
-    const raw = article.encryptedBody;
-    const ciphertext =
-      raw instanceof Uint8Array ? raw : new Uint8Array(raw.data);
+    const ciphertext = decode(article.encryptedBody);
     const title =
       titleResult.status === "ready" ? titleResult.value : undefined;
     const version = ++bodyDecryptVersion;
@@ -224,7 +227,7 @@
 
   const imageResolverDeps: KbImageResolverDeps = $derived({
     downloadBlob: async (attachmentId: string) =>
-      kbRouter.downloadAttachmentBlob.query({ attachmentId }),
+      fetchBlob(`/api/blobs/kb-attachments/${attachmentId}`),
     decrypt: async (ciphertext: Uint8Array) =>
       orgKeyManager.decrypt(ciphertext),
     contentKey: renderedBody,
@@ -263,11 +266,9 @@
         let filename = "attachment";
         if (att.encryptedFilename != null) {
           try {
-            const ct =
-              att.encryptedFilename instanceof Uint8Array
-                ? att.encryptedFilename
-                : new Uint8Array(att.encryptedFilename.data);
-            const plain = await orgKeyManager.decrypt(ct);
+            const plain = await orgKeyManager.decrypt(
+              decode(att.encryptedFilename),
+            );
             filename = new TextDecoder().decode(plain);
           } catch {
             // Decryption failed; fall back to generic name

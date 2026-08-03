@@ -93,7 +93,7 @@ export async function handleInboundSms(
   );
 
   // 4. Resolve or create ticket
-  const titleBuf = Buffer.from(`SMS from ${client.alias}`, "utf-8");
+  const titleBuf = Buffer.from("Inbound SMS", "utf-8");
   const descBuf = Buffer.from("Inbound SMS", "utf-8");
 
   const ticketResult = await resolveOrCreateTicket(

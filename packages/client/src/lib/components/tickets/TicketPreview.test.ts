@@ -38,13 +38,16 @@ vi.stubGlobal(
   }),
 );
 import type { RawFollowUpPreview } from "$lib/tickets/preview-loader.svelte.js";
+import type * as CryptoContextModule from "$lib/crypto/context.js";
+import type * as TrpcModule from "$lib/trpc/index.js";
 
 // --- Mocks ---
 
 const mockDecryptContent = vi.fn();
 const mockDeleteByPrefix = vi.fn();
 
-vi.mock("$lib/crypto/context.js", () => ({
+vi.mock("$lib/crypto/context.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof CryptoContextModule>()),
   getFollowUpDecryptCache: () => ({
     decryptContent: mockDecryptContent,
     deleteByPrefix: mockDeleteByPrefix,
@@ -54,7 +57,8 @@ vi.mock("$lib/crypto/context.js", () => ({
   }),
 }));
 
-vi.mock("$lib/trpc/index.js", () => ({
+vi.mock("$lib/trpc/index.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof TrpcModule>()),
   trpc: { tickets: undefined },
 }));
 
@@ -72,7 +76,7 @@ function makeFollowUp(
     id: `fu-${Math.random().toString(36).slice(2, 8)}`,
     source: "volunteer",
     type: "message",
-    encryptedContent: { type: "Buffer", data: [72, 101, 108, 108, 111] },
+    encryptedContent: "SGVsbG8",
     keyWrap: {
       ephemeralPoint: "AAAA",
       nonce: "BBBB",

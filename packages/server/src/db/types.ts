@@ -252,7 +252,8 @@ export interface PhonesTable {
 
 export interface ClientsTable {
   id: Generated<string>;
-  alias: string;
+  encrypted_alias: Buffer;
+  alias_hash: string | null;
   phone_id: string;
   merged_into: string | null;
   created_at: Generated<Date>;

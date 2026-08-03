@@ -100,6 +100,7 @@ export interface RouteQuarantineDeps {
   readonly blobStore: BlobStore;
   readonly orgSchema: string;
   readonly pendingClients: Map<string, PendingClient>;
+  readonly sealedBox: SealedBoxEncryptor;
 }
 
 export interface RouteQuarantineResult {
@@ -280,10 +281,10 @@ export async function listQuarantined(
     createdAt: row.created_at,
     durationSeconds: row.duration_seconds,
     encryptedCallerNumber: row.encrypted_caller_number
-      ? row.encrypted_caller_number.toString("base64")
+      ? row.encrypted_caller_number.toString("base64url")
       : null,
     encryptedCalledNumber: row.encrypted_called_number
-      ? row.encrypted_called_number.toString("base64")
+      ? row.encrypted_called_number.toString("base64url")
       : null,
     clientId: row.client_id,
     routedTicketId: row.routed_ticket_id,
@@ -326,7 +327,7 @@ export async function getQuarantineBlob(
   }
 
   return {
-    sealedBase64: sealedBlob.toString("base64"),
+    sealedBase64: sealedBlob.toString("base64url"),
     durationSeconds: row.duration_seconds,
   };
 }
@@ -402,7 +403,7 @@ export async function routeQuarantined(
       pendingClients.delete(input.target.clientToken);
 
       const phoneRepo = createPhoneRepository(tDb);
-      const clientRepo = createClientRepository(tDb, phoneRepo);
+      const clientRepo = createClientRepository(tDb, phoneRepo, deps.sealedBox);
       const result = await clientRepo.findOrCreateByPhoneHash(
         pending.phoneHash,
         pending.opsEncryptedPhone,

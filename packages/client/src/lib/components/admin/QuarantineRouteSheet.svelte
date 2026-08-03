@@ -11,12 +11,13 @@
   import { toastStore } from "$lib/stores/toast.svelte.js";
   import { announceToLiveRegion } from "$lib/utils/announce.js";
   import { haptic } from "$lib/utils/haptic.js";
+  import { encode } from "@care-y/crypto";
   import { requireRouter, ClientError } from "$lib/errors.js";
-  import { uint8ArrayToBase64 } from "$lib/utils/buffer-encoding.js";
   import { DEV_ORG_SLUG } from "$lib/utils/org-slug.js";
   import ShellSheet from "$lib/shell/ShellSheet.svelte";
   import SoftButton from "$lib/components/inputs/SoftButton.svelte";
   import { Preloader } from "konsta/svelte";
+  import { getOrgDecryptCache } from "$lib/crypto/context.js";
   import { isPhoneLookupResult } from "$lib/components/inputs/client-select-types.js";
   import type {
     ClientSelection,
@@ -49,6 +50,7 @@
   );
   const ticketRouter = requireRouter(trpc.tickets, "tickets");
   const queryClient = useQueryClient();
+  const orgCache = getOrgDecryptCache();
 
   let clientSelection = $state<ClientSelection>(null);
   let ticketIdInput = $state("");
@@ -68,7 +70,13 @@
   }
 
   async function searchClients(query: string): Promise<ClientSearchResult[]> {
-    return ticketRouter.searchClients.query({ query, limit: 10 });
+    const raw = await ticketRouter.searchClients.query({ query, limit: 10 });
+    return raw.map((r) => ({
+      ...r,
+      alias:
+        orgCache.decrypt(`client-alias:${r.id}`, r.encryptedAlias) ??
+        r.id.slice(0, 8),
+    }));
   }
 
   async function phoneLookup(phone: string): Promise<PhoneLookupResult> {
@@ -94,6 +102,13 @@
     if (!isPhoneLookupResult(data)) {
       throw new ClientError("Phone lookup returned an unexpected shape");
     }
+    if (data.found) {
+      data.alias =
+        orgCache.decrypt(
+          `client-alias:${data.clientId}`,
+          data.encryptedAlias,
+        ) ?? data.clientId.slice(0, 8);
+    }
     return data;
   }
 
@@ -108,7 +123,7 @@
         throw new ClientError("No unsealed audio available");
       }
 
-      const audioData = uint8ArrayToBase64(unsealedAudio);
+      const audioData = encode(unsealedAudio);
 
       let target:
         | { type: "clientId"; clientId: string }

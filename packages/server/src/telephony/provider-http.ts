@@ -24,6 +24,7 @@ export interface ProviderHttpClient {
 
 const DEFAULT_TIMEOUT_MS = 15_000;
 
+// Standard base64 per RFC 7617 (HTTP Basic auth). Not base64url.
 function buildAuthHeader(username: string, password: string): string {
   const encoded = Buffer.from(`${username}:${password}`).toString("base64");
   return `Basic ${encoded}`;

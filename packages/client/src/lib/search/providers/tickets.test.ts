@@ -2,8 +2,12 @@ import { describe, it, expect, vi } from "vitest";
 import type { RawCachedTicket } from "./tickets.js";
 import { createTicketSearchProvider } from "./tickets.js";
 import type { CoverageState, FullSearchState } from "../types.js";
+import type * as Messages from "$lib/paraglide/messages.js";
+import type * as WithTermsModule from "$lib/terminology/with-terms.js";
+import type * as AsyncDecryptCacheModule from "$lib/crypto/async-decrypt-cache.js";
 
-vi.mock("$lib/paraglide/messages.js", () => ({
+vi.mock("$lib/paraglide/messages.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof Messages>()),
   dashboard_assigned_you: () => "You",
   search_section_tickets: () => "Tickets",
   search_coverage_searching: (p: { searched: number; total: number }) =>
@@ -24,18 +28,27 @@ vi.mock("$lib/paraglide/messages.js", () => ({
 // context getter (createContext), which only exists during component
 // initialization; these tests call provider.coverage() outside any
 // component, where the real getter throws.
-vi.mock("$lib/terminology/with-terms.js", () => ({
+vi.mock("$lib/terminology/with-terms.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof WithTermsModule>()),
   withTerms: (extra?: Record<string, unknown>) => ({
     tickets: "tickets",
     ...extra,
   }),
 }));
 
-vi.mock("$lib/components/search/TicketSearchResult.svelte", () => ({
-  default: {} as never,
-}));
+// mock-factory-unguarded: intentional. Svelte component modules compile
+// to runtime-dependent code; importOriginal fails because Vite's
+// svelte plugin transform is not applied inside vi.mock factory resolution.
+vi.mock("$lib/components/search/TicketSearchResult.svelte", () => {
+  const _usedExports = null! as { default: unknown };
+  void _usedExports;
+  return {
+    default: {} as never,
+  };
+});
 
-vi.mock("$lib/crypto/async-decrypt-cache.js", () => ({
+vi.mock("$lib/crypto/async-decrypt-cache.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof AsyncDecryptCacheModule>()),
   DECRYPT_ERROR_SENTINEL: "\0DECRYPT_FAILED",
 }));
 
@@ -46,18 +59,20 @@ function makeRawTicket(
 ): RawCachedTicket {
   return {
     queueId: "q1",
-    encryptedQueueName: null,
+    encryptedQueueName: "ZW5jLXF1ZXVl",
     status: "open",
     onHold: false,
     priority: "normal",
     encryptedTitle: "encrypted-blob",
     keyWrap: KW,
-    clientAlias: "Anonymous",
+    clientId: "client-default",
+    encryptedClientAlias: "ZW5jLWFsaWFz",
     assignedTo: null,
     assignedDisplayName: null,
     createdAt: "2026-01-01T00:00:00Z",
     lastActivityAt: null,
     followUpCount: 0,
+    queueSortOrder: 1,
     ...overrides,
   };
 }
@@ -73,9 +88,9 @@ function liveSignal(): AbortSignal {
 
 describe("createTicketSearchProvider", () => {
   const rawTickets: RawCachedTicket[] = [
-    makeRawTicket({ id: "t1", clientAlias: "Maria" }),
-    makeRawTicket({ id: "t2", clientAlias: "Carlos" }),
-    makeRawTicket({ id: "t3", clientAlias: "Ana" }),
+    makeRawTicket({ id: "t1", clientId: "c1" }),
+    makeRawTicket({ id: "t2", clientId: "c2" }),
+    makeRawTicket({ id: "t3", clientId: "c3" }),
   ];
 
   const decryptedTitles: Record<string, string> = {
@@ -87,8 +102,11 @@ describe("createTicketSearchProvider", () => {
     return createTicketSearchProvider({
       getAllCachedTickets: () => rawTickets,
       decryptTitle: (id: string) => decryptedTitles[id],
-      orgDecrypt: (cacheKey: string) =>
-        cacheKey.startsWith("queue:") ? "General" : null,
+      orgDecrypt: (cacheKey: string) => {
+        if (cacheKey.startsWith("queue:")) return "General";
+        if (cacheKey === "client-alias:c1") return "Maria";
+        return null;
+      },
       currentUserId: () => "viewer-1",
       getPreviewFollowUps: () => undefined,
     });
@@ -185,11 +203,11 @@ describe("createTicketSearchProvider", () => {
     > {
       return createTicketSearchProvider({
         getAllCachedTickets: () => [
-          makeRawTicket({ id: "t1", queueId: "q1", clientAlias: "Maria" }),
+          makeRawTicket({ id: "t1", queueId: "q1", clientId: "c1" }),
           makeRawTicket({
             id: "t2",
             queueId: "q2",
-            clientAlias: "Carlos",
+            clientId: "c2",
             assignedTo: "u1",
           }),
         ],
@@ -550,8 +568,8 @@ describe("ticket fullSearch (two-phase)", () => {
 
 describe("ticket resolveById", () => {
   const rawTickets: RawCachedTicket[] = [
-    makeRawTicket({ id: "t1", clientAlias: "Maria" }),
-    makeRawTicket({ id: "t3", clientAlias: "Ana" }),
+    makeRawTicket({ id: "t1", clientId: "c1" }),
+    makeRawTicket({ id: "t3", clientId: "c3" }),
   ];
   const decryptedTitles: Record<string, string> = {
     t1: "Housing assistance request",

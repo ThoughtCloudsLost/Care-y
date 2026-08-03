@@ -21,26 +21,31 @@ export type DataCardProps = Omit<
 export interface TicketLikeRecord {
   readonly id: string;
   readonly queueId: string;
-  readonly encryptedQueueName: unknown;
+  readonly encryptedQueueName: string;
   readonly status: TicketStatus;
   readonly onHold: boolean;
   readonly priority: "low" | "normal" | "high" | "urgent";
-  readonly encryptedTitle: unknown;
+  readonly encryptedTitle: string;
   readonly keyWrap: unknown;
-  readonly clientAlias: string;
+  readonly clientId: string;
+  readonly encryptedClientAlias: string;
   readonly assignedTo: string | null;
-  readonly assignedDisplayName: unknown;
+  readonly assignedDisplayName: string | null;
   readonly createdAt: string;
   readonly lastActivityAt: string | null;
   readonly followUpCount: number;
+  readonly queueSortOrder: number;
 }
 
 export interface CardPropsMapperDeps {
-  readonly orgDecrypt: (cacheKey: string, ciphertext: unknown) => string | null;
+  readonly orgDecrypt: (
+    cacheKey: string,
+    ciphertext: string | null,
+  ) => string | null;
   readonly decryptTitle: (
     ticketId: string,
     keyWrap: unknown,
-    encryptedTitle: unknown,
+    encryptedTitle: string,
   ) => string | undefined;
   readonly currentUserId: string;
   readonly unreadCount: (ticketId: string) => number;
@@ -72,7 +77,7 @@ export interface TicketDisplayFields {
   readonly displayStatus: DisplayStatus;
   readonly priority: "low" | "normal" | "high" | "urgent";
   readonly titleResult: DecryptResult;
-  readonly clientAlias: string;
+  readonly clientAlias: string | null;
   readonly assignedName: string | null;
   readonly assignedIsSelf: boolean;
   readonly createdAt: Date;
@@ -104,7 +109,10 @@ export function mapTicketDisplayFields(
       deps.decryptTitle(t.id, t.keyWrap, t.encryptedTitle),
       t.keyWrap !== null,
     ),
-    clientAlias: t.clientAlias,
+    clientAlias: deps.orgDecrypt(
+      `client-alias:${t.clientId}`,
+      t.encryptedClientAlias,
+    ),
     assignedName,
     assignedIsSelf,
     createdAt: new Date(t.createdAt),

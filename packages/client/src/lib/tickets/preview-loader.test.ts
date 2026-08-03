@@ -24,7 +24,7 @@ function makePreview(id: string): RawFollowUpPreview {
     id,
     source: "volunteer",
     type: "message",
-    encryptedContent: { type: "Buffer", data: [1, 2, 3] },
+    encryptedContent: "AQID",
     keyWrap: KEY_WRAP,
     createdAt: "2026-04-01T00:00:00Z",
     hasRecording: false,

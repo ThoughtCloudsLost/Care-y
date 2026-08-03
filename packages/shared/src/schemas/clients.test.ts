@@ -16,8 +16,8 @@ describe("clientListInputSchema", () => {
     expect(result.success).toBe(true);
     if (result.success) {
       expect(result.data.query).toBe("");
-      expect(result.data.sortBy).toBe("alias");
-      expect(result.data.sortDirection).toBe("asc");
+      expect(result.data.sortBy).toBe("created_at");
+      expect(result.data.sortDirection).toBe("desc");
       expect(result.data.limit).toBe(25);
       expect(result.data.cursor).toBeUndefined();
     }
@@ -89,91 +89,54 @@ describe("clientGetInputSchema", () => {
 });
 
 describe("updateAliasInputSchema", () => {
-  it("accepts a valid lowercase alias with hyphens", () => {
+  it("accepts valid encrypted alias with hash", () => {
     const result = updateAliasInputSchema.safeParse({
       clientId: VALID_UUID,
-      alias: "calm-river-42",
+      encryptedAlias: "c2VhbGVkOmNhbG0tcml2ZXItNDI=",
+      aliasHash: "hmac-abc123",
     });
     expect(result.success).toBe(true);
     if (result.success) {
-      expect(result.data.alias).toBe("calm-river-42");
+      expect(result.data.encryptedAlias).toBe("c2VhbGVkOmNhbG0tcml2ZXItNDI=");
+      expect(result.data.aliasHash).toBe("hmac-abc123");
     }
   });
 
-  it("accepts a single-segment alias", () => {
-    const result = updateAliasInputSchema.safeParse({
-      clientId: VALID_UUID,
-      alias: "pebble",
-    });
-    expect(result.success).toBe(true);
-  });
-
-  it("rejects empty string alias", () => {
-    expect(
-      updateAliasInputSchema.safeParse({ clientId: VALID_UUID, alias: "" })
-        .success,
-    ).toBe(false);
-  });
-
-  it("rejects alias exceeding 100 characters", () => {
+  it("rejects empty encryptedAlias", () => {
     expect(
       updateAliasInputSchema.safeParse({
         clientId: VALID_UUID,
-        alias: "a".repeat(101),
+        encryptedAlias: "",
+        aliasHash: "hmac-abc123",
       }).success,
     ).toBe(false);
   });
 
-  it("rejects uppercase characters", () => {
+  it("rejects encryptedAlias exceeding 4096 characters", () => {
     expect(
       updateAliasInputSchema.safeParse({
         clientId: VALID_UUID,
-        alias: "Calm-River",
+        encryptedAlias: "a".repeat(4097),
+        aliasHash: "hmac-abc123",
       }).success,
     ).toBe(false);
   });
 
-  it("rejects special characters", () => {
+  it("rejects empty aliasHash", () => {
     expect(
       updateAliasInputSchema.safeParse({
         clientId: VALID_UUID,
-        alias: "calm_river",
+        encryptedAlias: "c2VhbGVk",
+        aliasHash: "",
       }).success,
     ).toBe(false);
   });
 
-  it("rejects leading hyphen", () => {
+  it("rejects missing aliasHash", () => {
     expect(
       updateAliasInputSchema.safeParse({
         clientId: VALID_UUID,
-        alias: "-calm",
-      }).success,
-    ).toBe(false);
-  });
-
-  it("rejects trailing hyphen", () => {
-    expect(
-      updateAliasInputSchema.safeParse({
-        clientId: VALID_UUID,
-        alias: "calm-",
-      }).success,
-    ).toBe(false);
-  });
-
-  it("rejects consecutive hyphens", () => {
-    expect(
-      updateAliasInputSchema.safeParse({
-        clientId: VALID_UUID,
-        alias: "calm--river",
-      }).success,
-    ).toBe(false);
-  });
-
-  it("rejects spaces", () => {
-    expect(
-      updateAliasInputSchema.safeParse({
-        clientId: VALID_UUID,
-        alias: "calm river",
+        encryptedAlias: "c2VhbGVk",
       }).success,
     ).toBe(false);
   });
@@ -182,7 +145,8 @@ describe("updateAliasInputSchema", () => {
     expect(
       updateAliasInputSchema.safeParse({
         clientId: "not-a-uuid",
-        alias: "pebble",
+        encryptedAlias: "c2VhbGVk",
+        aliasHash: "hmac-abc123",
       }).success,
     ).toBe(false);
   });

@@ -45,12 +45,11 @@
   import { deriveDisplayStatus } from "$lib/tickets/display-status.js";
   import { makeSkeletonCardProps } from "$lib/tickets/skeleton-card-props.js";
   import { resolveAsyncDecrypt } from "$lib/crypto/decrypt-result.js";
-  import type { SerializedBuffer } from "$lib/utils/buffer-encoding.js";
   import {
     decryptQueueAppearance,
     type QueueAppearance,
   } from "$lib/utils/queue-appearance.js";
-  import { getCollator } from "$lib/utils/collator.js";
+  import { sortTickets } from "$lib/tickets/sort-tickets.js";
   import { filterStore, type SortField } from "$lib/stores/filters.svelte.js";
   import { viewModeStore } from "$lib/stores/view-mode.svelte.js";
   import { newRepliesFirstStore } from "$lib/stores/new-replies-first.svelte.js";
@@ -169,7 +168,14 @@
   });
   const replyFlow = createReplyFlow({
     queryClient,
-    getTickets: () => allTickets,
+    getTickets: () =>
+      allTickets.map((t) => ({
+        ...t,
+        clientAlias: orgCache.decrypt(
+          `client-alias:${t.clientId}`,
+          t.encryptedClientAlias,
+        ),
+      })),
     getPreviewFollowUps: (id) => previewLoader.get(id),
     eagerLoadPreviews: async (ids) => previewLoader.eagerLoad(ids),
   });
@@ -384,9 +390,10 @@
   });
 
   const orgCipherByKey = $derived.by(() => {
-    const map = new SvelteMap<string, SerializedBuffer | Uint8Array | null>();
+    const map = new SvelteMap<string, string | null>();
     for (const t of mapperRecordById.values()) {
       map.set(`queue:${t.queueId}`, t.encryptedQueueName);
+      map.set(`client-alias:${t.clientId}`, t.encryptedClientAlias);
       if (t.assignedTo !== null) {
         map.set(`assignee:${t.assignedTo}`, t.assignedDisplayName);
       }
@@ -594,85 +601,26 @@
     return orgCache.decrypt(`assignee:${t.assignedTo}`, t.assignedDisplayName);
   }
 
-  // Hoisted rank maps: allocating these per comparison was measurable in
-  // list-sized sorts. Map lookup (not object indexing) per the StatusMark
-  // convention.
-  const PRIORITY_RANK = new Map<string, number>([
-    ["urgent", 0],
-    ["high", 1],
-    ["normal", 2],
-    ["low", 3],
-  ]);
-  const STATUS_RANK = new Map<string, number>([
-    ["new", 0],
-    ["active", 1],
-    ["hold", 2],
-    ["closed", 3],
-  ]);
-
-  function compareByField(
-    ta: TicketRecord,
-    tb: TicketRecord,
-    field: string,
-    dir: number,
-  ): number {
-    switch (field) {
-      case "status":
-        return (
-          ((STATUS_RANK.get(
-            deriveDisplayStatus(ta.status, ta.onHold, ta.followUpCount),
-          ) ?? 4) -
-            (STATUS_RANK.get(
-              deriveDisplayStatus(tb.status, tb.onHold, tb.followUpCount),
-            ) ?? 4)) *
-          dir
-        );
-      case "priority":
-        return (
-          ((PRIORITY_RANK.get(ta.priority) ?? 4) -
-            (PRIORITY_RANK.get(tb.priority) ?? 4)) *
-          dir
-        );
-      case "client":
-        return getCollator().compare(ta.clientAlias, tb.clientAlias) * dir;
-      case "title": {
-        const ra = resolveAsyncDecrypt(
-          titleById.get(ta.id),
-          ta.keyWrap !== null,
-        );
-        const rb = resolveAsyncDecrypt(
-          titleById.get(tb.id),
-          tb.keyWrap !== null,
-        );
-        const aVal = ra.status === "ready" ? ra.value : "";
-        const bVal = rb.status === "ready" ? rb.value : "";
-        return getCollator().compare(aVal, bVal) * dir;
-      }
-      case "queue": {
-        const qa =
-          orgCache.decrypt(`queue:${ta.queueId}`, ta.encryptedQueueName) ?? "";
-        const qb =
-          orgCache.decrypt(`queue:${tb.queueId}`, tb.encryptedQueueName) ?? "";
-        return getCollator().compare(qa, qb) * dir;
-      }
-      case "assignee": {
-        const aName = assignedSortName(ta);
-        const bName = assignedSortName(tb);
-        if (aName === null && bName === null) return 0;
-        if (aName === null) return 1;
-        if (bName === null) return -1;
-        return getCollator().compare(aName, bName) * dir;
-      }
-      case "last_activity": {
-        const aT = Date.parse(ta.lastActivityAt ?? ta.createdAt);
-        const bT = Date.parse(tb.lastActivityAt ?? tb.createdAt);
-        return (aT - bT) * dir;
-      }
-      case "msgs":
-        return (ta.followUpCount - tb.followUpCount) * dir;
-      default:
-        return 0;
-    }
+  function toSortable(t: TicketRecord): TicketRecord & {
+    displayStatus: string;
+    title: string | null;
+    clientAlias: string | null;
+    assigneeName: string | null;
+  } {
+    const titleResult = resolveAsyncDecrypt(
+      titleById.get(t.id),
+      t.keyWrap !== null,
+    );
+    return {
+      ...t,
+      displayStatus: deriveDisplayStatus(t.status, t.onHold, t.followUpCount),
+      title: titleResult.status === "ready" ? titleResult.value : null,
+      clientAlias: orgCache.decrypt(
+        `client-alias:${t.clientId}`,
+        t.encryptedClientAlias,
+      ),
+      assigneeName: assignedSortName(t),
+    };
   }
 
   function clientSortItems(
@@ -684,7 +632,10 @@
 
     if (!useClientSort) return items;
 
-    const dir = tableSortDirection === "asc" ? 1 : -1;
+    const sortCfg = {
+      field: tableSortField,
+      direction: tableSortDirection,
+    } as const;
     const preserveUnreadFirst =
       newRepliesFirstStore.enabled && isUnread !== undefined;
 
@@ -696,17 +647,13 @@
         else read.push(item);
       }
 
-      const sorter = (a: TicketRecord, b: TicketRecord): number =>
-        compareByField(a, b, tableSortField, dir);
-
-      unread.sort(sorter);
-      read.sort(sorter);
-      return [...unread, ...read];
+      return [
+        ...sortTickets(unread.map(toSortable), sortCfg),
+        ...sortTickets(read.map(toSortable), sortCfg),
+      ];
     }
 
-    const sorted = [...items];
-    sorted.sort((a, b) => compareByField(a, b, tableSortField, dir));
-    return sorted;
+    return sortTickets(items.map(toSortable), sortCfg);
   }
 
   const sortedListItems = $derived(
@@ -733,6 +680,7 @@
     "title",
     "assignee",
     "status",
+    "client",
   ]);
 
   function isTableSortField(v: string): v is TableSortField {
@@ -1593,6 +1541,9 @@
   {newTicketOpen}
   onnewticketdismiss={() => {
     newTicketOpen = false;
+  }}
+  onnewticketcollision={(ticketId: string) => {
+    void goto(resolve(`/tickets/${ticketId}`));
   }}
   {savedFilterModalOpen}
   {filterSummary}

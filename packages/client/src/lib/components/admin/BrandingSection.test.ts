@@ -192,11 +192,19 @@ vi.mock("$lib/crypto/context.js", async (importOriginal) => ({
       if (encrypted instanceof Uint8Array) {
         return new TextDecoder().decode(encrypted);
       }
-      return typeof encrypted === "string" ? encrypted : null;
+      if (typeof encrypted === "string") {
+        try {
+          return atob(encrypted);
+        } catch {
+          return encrypted;
+        }
+      }
+      return null;
     },
     get: vi.fn().mockReturnValue(undefined),
     has: vi.fn().mockReturnValue(false),
     delete: vi.fn(),
+    isFailed: vi.fn().mockReturnValue(false),
   }),
   getOrgKeyManager: () => ({
     isLoaded: true,

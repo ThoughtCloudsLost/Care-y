@@ -21,9 +21,9 @@
     ticketId: string;
     displayStatus: DisplayStatus;
     priority: "low" | "normal" | "high" | "urgent";
-    clientAlias: string;
+    clientAlias: string | null;
     titleResult: DecryptResult;
-    encryptedTitle?: unknown;
+    encryptedTitle?: string;
     queueName: string | null;
     assignedName: string | null;
     assignedIsSelf?: boolean;

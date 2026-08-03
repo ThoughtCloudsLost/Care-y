@@ -4,22 +4,27 @@ import {
   type ConversationSearchProviderDeps,
 } from "./conversation.js";
 import { DECRYPT_ERROR_SENTINEL } from "$lib/crypto/async-decrypt-cache.js";
+import type * as MessagesModule from "$lib/paraglide/messages.js";
+import type * as ConversationResultModule from "$lib/components/search/ConversationSearchResult.svelte";
 
-// Mock paraglide messages
-vi.mock("$lib/paraglide/messages.js", () => ({
+vi.mock("$lib/paraglide/messages.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof MessagesModule>()),
   search_section_conversation: () => "Conversation",
 }));
 
-// Mock the ConversationSearchResult component (not used in unit tests)
-vi.mock("$lib/components/search/ConversationSearchResult.svelte", () => ({
-  default: {} as never,
-}));
+vi.mock(
+  "$lib/components/search/ConversationSearchResult.svelte",
+  async (importOriginal) => ({
+    ...(await importOriginal<typeof ConversationResultModule>()),
+    default: {} as never,
+  }),
+);
 
 interface MockFollowUp {
   readonly id: string;
   readonly source: string;
   readonly type: string;
-  readonly encryptedContent: unknown;
+  readonly encryptedContent: string;
   readonly createdBy: string | null;
   readonly createdAt: string;
 }
@@ -30,7 +35,7 @@ function makeFollowUp(
   return {
     source: "client",
     type: "reply",
-    encryptedContent: new Uint8Array([1, 2, 3]),
+    encryptedContent: "AQID",
     createdBy: "user-1",
     createdAt: "2026-03-15T12:00:00Z",
     ...overrides,

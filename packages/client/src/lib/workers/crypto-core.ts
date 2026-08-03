@@ -44,6 +44,8 @@ import {
   fieldSlot,
   encode,
   decode,
+  hkdfDerive32,
+  HKDF_LABELS,
   type Scalar,
   type RistrettoPoint,
   type SymmetricKey,
@@ -74,12 +76,14 @@ import type {
   OrgEncryptRequest,
   OrgDecryptBatchRequest,
   ExportOrgSecretKeyRequest,
+  AliasHashRequest,
   WorkerRequest,
   WorkerRequestType,
   RewrapEvent,
   RewrapResultEvent,
   SharedWorkerState,
 } from "./crypto-protocol.js";
+import { normalizeAlias } from "@care-y/shared";
 import { TkCache } from "./tk-cache.js";
 
 // ── Sink type ──────────────────────────────────────────────────────
@@ -102,6 +106,7 @@ let volPublic: RistrettoPoint | null = null;
 
 let orgSecret: Uint8Array | null = null;
 let orgPublicKey: Uint8Array | null = null;
+let aliasIndexKey: Uint8Array | null = null;
 
 const tkCache = new TkCache({
   maxEntries: 50,
@@ -567,7 +572,7 @@ function handleRewrapBlob(req: RewrapBlobRequest, sink: Sink): void {
     return;
   }
 
-  const ciphertextBuf = decode(req.ciphertext);
+  const ciphertextBuf = new Uint8Array(req.ciphertext);
   // Bound to the attachments/recordings row id, which is stable across
   // the rewrap; the storage blobKey changes when the server re-stores.
   const aad = buildContentAad(req.ticketId, blobSlot(req.blobId));
@@ -624,7 +629,7 @@ function handleDecryptBlob(req: DecryptBlobRequest, sink: Sink): void {
   if (!tk) return;
 
   try {
-    const ciphertextBuf = decode(req.ciphertext);
+    const ciphertextBuf = new Uint8Array(req.ciphertext);
     const plainBytes = decryptContent(
       ciphertextBuf as Ciphertext,
       tk as SymmetricKey,
@@ -723,6 +728,7 @@ export function handleZeroAll(id: number, sink: Sink): void {
   stretched = zeroAndClear(sodium, stretched);
   blindState = zeroAndClear(sodium, blindState);
   orgSecret = zeroAndClear(sodium, orgSecret);
+  aliasIndexKey = zeroAndClear(sodium, aliasIndexKey);
 
   volPublic = null;
   orgPublicKey = null;
@@ -762,6 +768,7 @@ function handleUnwrapOrgKey(req: UnwrapOrgKeyRequest, sink: Sink): void {
     );
 
     orgSecret = zeroAndClear(sodium, orgSecret);
+    aliasIndexKey = zeroAndClear(sodium, aliasIndexKey);
     orgPublicKey = null;
 
     orgSecret = new Uint8Array(unwrappedOrgSecret.byteLength);
@@ -1095,6 +1102,38 @@ function handleOrgEncrypt(req: OrgEncryptRequest, sink: Sink): void {
   }
 }
 
+function ensureAliasIndexKey(): Uint8Array {
+  if (aliasIndexKey) return aliasIndexKey;
+  const secret = assertPresent(orgSecret, "orgSecret");
+  aliasIndexKey = hkdfDerive32(secret, HKDF_LABELS.ALIAS_INDEX);
+  return aliasIndexKey;
+}
+
+function handleAliasHash(req: AliasHashRequest, sink: Sink): void {
+  if (!requireOrgKeyed(sink, req.id, "aliasHash")) return;
+
+  const sodium = requireSodium();
+  const key = ensureAliasIndexKey();
+  const normalized = normalizeAlias(req.alias);
+  const hmac = sodium.crypto_auth_hmacsha512(
+    textEncoder.encode(normalized),
+    key,
+  );
+
+  // Convert to lowercase hex
+  const hex = Array.from(hmac, (b) => b.toString(16).padStart(2, "0")).join("");
+
+  sodium.memzero(hmac);
+
+  const msg: WorkerResponse = {
+    id: req.id,
+    ok: true,
+    type: "aliasHash",
+    hash: hex,
+  };
+  sink(msg);
+}
+
 function handleOrgDecryptBatch(req: OrgDecryptBatchRequest, sink: Sink): void {
   if (!requireOrgKeyed(sink, req.id, "orgDecryptBatch")) return;
 
@@ -1242,6 +1281,9 @@ export function createDispatcher(
           break;
         case "getOrgPublicKey":
           handleGetOrgPublicKey(req.id, sink);
+          break;
+        case "aliasHash":
+          handleAliasHash(req, sink);
           break;
         case "connect":
         case "disconnect":

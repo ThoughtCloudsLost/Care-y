@@ -6,10 +6,9 @@
  *   - buildClientBrandingBlob: public-key-derived (unauthenticated portal can decrypt)
  */
 
-import { encryptClientBranding } from "@care-y/crypto";
+import { encryptClientBranding, encode } from "@care-y/crypto";
 import type { OrgKeyManager } from "$lib/crypto/org-key.js";
 import { OrgKeyNotLoadedError } from "$lib/crypto/org-key.js";
-import { uint8ArrayToBase64 } from "$lib/utils/buffer-encoding.js";
 
 const encoder = new TextEncoder();
 
@@ -19,7 +18,7 @@ export async function encryptLogoFile(
 ): Promise<string> {
   const arrayBuffer = await file.arrayBuffer();
   const cipherBytes = await orgKeyManager.encrypt(new Uint8Array(arrayBuffer));
-  return uint8ArrayToBase64(cipherBytes);
+  return encode(cipherBytes);
 }
 
 export interface BrandingBlobParams {
@@ -46,5 +45,5 @@ export function buildClientBrandingBlob(
   });
   const payloadBytes = encoder.encode(payload);
   const ciphertext = encryptClientBranding(payloadBytes, orgPubKey);
-  return uint8ArrayToBase64(ciphertext);
+  return encode(ciphertext);
 }

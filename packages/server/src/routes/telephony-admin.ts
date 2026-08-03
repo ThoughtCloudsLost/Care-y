@@ -80,7 +80,11 @@ export function createTelephonyAdminRouter(deps: TelephonyAdminRouterDeps) {
         }
 
         const encryptedNumber = ctx.org.sealedBox.seal(input.phoneNumber);
-        return repo.add(phoneHash, encryptedNumber, ctx.user.id);
+        const entry = await repo.add(phoneHash, encryptedNumber, ctx.user.id);
+        return {
+          ...entry,
+          encryptedNumber: entry.encryptedNumber.toString("base64url"),
+        };
       }),
     ),
 
@@ -96,7 +100,11 @@ export function createTelephonyAdminRouter(deps: TelephonyAdminRouterDeps) {
     listBlocklist: adminProcedure.query(
       withErrorWrapping(async ({ ctx }) => {
         const repo = createBlocklistRepository(ctx.org.tenantDb);
-        return repo.list();
+        const entries = await repo.list();
+        return entries.map((e) => ({
+          ...e,
+          encryptedNumber: e.encryptedNumber.toString("base64url"),
+        }));
       }),
     ),
 

@@ -16,6 +16,7 @@ import type * as ErrorsModule from "$lib/errors.js";
 import type * as HapticModule from "$lib/utils/haptic.js";
 import type * as ToastModule from "$lib/stores/toast.svelte.js";
 import type * as KeysModule from "$lib/query/keys.js";
+import type * as CryptoContextModule from "$lib/crypto/context.js";
 
 // ---------------------------------------------------------------------------
 // Mocks
@@ -160,6 +161,25 @@ vi.mock("$lib/query/keys.js", async (importOriginal) => {
   };
 });
 
+// vi.mock required: createContext from Svelte 5 throws "missing_context"
+// outside a live component tree.
+vi.mock("$lib/crypto/context.js", async (importOriginal) => {
+  const original = await importOriginal<typeof CryptoContextModule>();
+  return {
+    ...original,
+    getOrgDecryptCache: () => ({
+      decrypt: vi
+        .fn()
+        .mockImplementation((key: string) =>
+          key === "client-alias:client-456" ? "gentle-moon-7" : null,
+        ),
+      get: vi.fn().mockReturnValue(undefined),
+      has: vi.fn().mockReturnValue(false),
+      delete: vi.fn().mockReturnValue(true),
+    }),
+  };
+});
+
 // jsdom lacks Web Animations API (used by Konsta transitions).
 if (typeof Element.prototype.animate !== "function") {
   Element.prototype.animate = vi.fn().mockReturnValue({
@@ -195,7 +215,7 @@ describe("PhoneEditSheet", () => {
       success: true,
       conflict: {
         conflictingClientId: "client-456",
-        conflictingClientAlias: "gentle-moon-7",
+        conflictingClientEncryptedAlias: "enc-gentle-moon-7",
       },
     });
     await waitFor(() => {
@@ -379,7 +399,7 @@ describe("PhoneEditSheet", () => {
       success: true,
       conflict: {
         conflictingClientId: "client-456",
-        conflictingClientAlias: "gentle-moon-7",
+        conflictingClientEncryptedAlias: "enc-gentle-moon-7",
       },
     });
     // No ondismiss call (conflict, not success)

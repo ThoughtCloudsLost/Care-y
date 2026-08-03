@@ -129,8 +129,8 @@ export interface RewrapBlobRequest {
   readonly id: number;
   readonly followUpId: string;
   readonly ticketId: string;
-  /** Encrypted blob data (nonce || ciphertext), base64. */
-  readonly ciphertext: string;
+  /** Encrypted blob data (nonce || ciphertext), raw bytes. */
+  readonly ciphertext: ArrayBuffer;
   readonly blobKey: string;
   /**
    * Attachments/recordings row id: the stable AAD component (ADR-053).
@@ -211,6 +211,13 @@ export interface GetOrgPublicKeyRequest {
   readonly id: number;
 }
 
+export interface AliasHashRequest {
+  readonly type: "aliasHash";
+  readonly id: number;
+  /** Raw alias string. The Worker normalizes internally before HMAC. */
+  readonly alias: string;
+}
+
 export interface DecryptBlobRequest {
   readonly type: "decryptBlob";
   readonly id: number;
@@ -223,8 +230,8 @@ export interface DecryptBlobRequest {
   readonly nonce: string;
   /** ECIES-wrapped ticket key, base64. */
   readonly wrappedKey: string;
-  /** Encrypted binary blob (nonce || ciphertext), base64. */
-  readonly ciphertext: string;
+  /** Encrypted binary blob (nonce || ciphertext), raw bytes. */
+  readonly ciphertext: ArrayBuffer;
   /** Content slot, normally "blob:<rowId>" (ADR-053). */
   readonly slot: string;
 }
@@ -349,6 +356,7 @@ export type WorkerRequest =
   | OrgDecryptBatchRequest
   | ExportOrgSecretKeyRequest
   | GetOrgPublicKeyRequest
+  | AliasHashRequest
   | ConnectRequest
   | DisconnectRequest;
 
@@ -531,6 +539,12 @@ export interface GetOrgPublicKeyResponse extends SuccessBase {
   readonly orgPublicKey: string;
 }
 
+export interface AliasHashResponse extends SuccessBase {
+  readonly type: "aliasHash";
+  /** Lowercase hex HMAC-SHA512 of the normalized alias. */
+  readonly hash: string;
+}
+
 // ── SharedWorker lifecycle responses ────────────────────────────────
 
 export type SharedWorkerState = "READY" | "KEYED";
@@ -573,6 +587,7 @@ export type WorkerSuccessResponse =
   | OrgDecryptBatchResponse
   | ExportOrgSecretKeyResponse
   | GetOrgPublicKeyResponse
+  | AliasHashResponse
   | ConnectResponse
   | DisconnectResponse;
 

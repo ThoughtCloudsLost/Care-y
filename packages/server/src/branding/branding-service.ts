@@ -18,7 +18,7 @@ function noop(): void {
 }
 
 function bufferToBase64(buf: Buffer | null): string | null {
-  return buf === null ? null : buf.toString("base64");
+  return buf === null ? null : buf.toString("base64url");
 }
 
 function brandingColumnUpdate(
@@ -126,7 +126,7 @@ export function createBrandingService(
     async saveBrandingField(input: SaveBrandingFieldInput): Promise<void> {
       const value = Buffer.from(input.encryptedValue, "base64");
 
-      // SOG-14: both volunteer-side and client-side blobs saved atomically
+      // Both volunteer-side and client-side blobs saved atomically
       await tenantDb.transaction().execute(async (tx) => {
         const columnUpdate = brandingColumnUpdate(input.field, value);
         const updates =

@@ -56,7 +56,7 @@ describe.skipIf(!process.env.DATABASE_URL)("createOrgConfigService", () => {
 
         // base64 is the tRPC wire encoding of the bytea column.
         expect(result.encryptedName).toBe(
-          SEED_ENCRYPTED_NAME.toString("base64"),
+          SEED_ENCRYPTED_NAME.toString("base64url"),
         );
       });
 
@@ -99,7 +99,7 @@ describe.skipIf(!process.env.DATABASE_URL)("createOrgConfigService", () => {
 
         const result = await svc.getOrgGeneral();
         expect(result).toEqual({
-          encryptedName: updatedName.toString("base64"),
+          encryptedName: updatedName.toString("base64url"),
           defaultLanguage: "es",
           countryCode: "+34",
         });

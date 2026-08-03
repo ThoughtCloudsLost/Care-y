@@ -236,7 +236,6 @@ describe("metadataSearchInputSchema", () => {
       status: "open",
       queueId: VALID_UUID,
       assignedTo: VALID_UUID_2,
-      clientAlias: "Jane",
       dateFrom: VALID_ISO,
       dateTo: VALID_ISO,
       page: 2,
@@ -275,11 +274,16 @@ describe("metadataSearchInputSchema", () => {
     ).toBe(false);
   });
 
-  it("rejects clientAlias over 100 chars", () => {
-    expect(
-      metadataSearchInputSchema.safeParse({ clientAlias: "a".repeat(101) })
-        .success,
-    ).toBe(false);
+  it("strips unknown field clientAlias (removed from schema)", () => {
+    // clientAlias was removed because the server cannot substring-match
+    // ciphertext. The field should be silently stripped by Zod.
+    const result = metadataSearchInputSchema.safeParse({
+      clientAlias: "a".repeat(101),
+    });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect("clientAlias" in result.data).toBe(false);
+    }
   });
 
   it("rejects invalid dateFrom", () => {

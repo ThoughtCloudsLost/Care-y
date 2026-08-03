@@ -14,10 +14,6 @@ import {
   DECRYPT_ERROR_SENTINEL,
 } from "./async-decrypt-cache.js";
 import type { CryptoBridge } from "$lib/workers/crypto-bridge.js";
-import {
-  serializedBufferToBase64,
-  type SerializedBuffer,
-} from "$lib/utils/buffer-encoding.js";
 
 export interface TicketKeyWrap {
   readonly ephemeralPoint: string;
@@ -42,7 +38,7 @@ export class TicketDecryptCache extends AsyncDecryptCache {
   decryptTitle(
     ticketId: string,
     keyWrap: TicketKeyWrap | null,
-    encryptedTitle: SerializedBuffer | string,
+    encryptedTitle: string,
   ): string | undefined {
     if (keyWrap === null) {
       // No key wrap means the ticket cannot be decrypted (missing key
@@ -58,8 +54,6 @@ export class TicketDecryptCache extends AsyncDecryptCache {
       return DECRYPT_ERROR_SENTINEL;
     }
 
-    const ciphertext = serializedBufferToBase64(encryptedTitle);
-
     return this.decrypt(
       ticketId,
       ticketId,
@@ -67,7 +61,7 @@ export class TicketDecryptCache extends AsyncDecryptCache {
       keyWrap.ephemeralPoint,
       keyWrap.nonce,
       keyWrap.wrappedKey,
-      ciphertext,
+      encryptedTitle,
     );
   }
 
@@ -80,7 +74,7 @@ export class TicketDecryptCache extends AsyncDecryptCache {
   decryptDescription(
     ticketId: string,
     keyWrap: TicketKeyWrap | null,
-    encryptedDescription: SerializedBuffer | string,
+    encryptedDescription: string,
   ): string | undefined {
     const cacheKey = `desc:${ticketId}`;
     if (keyWrap === null) {
@@ -94,8 +88,6 @@ export class TicketDecryptCache extends AsyncDecryptCache {
       return DECRYPT_ERROR_SENTINEL;
     }
 
-    const ciphertext = serializedBufferToBase64(encryptedDescription);
-
     return this.decrypt(
       cacheKey,
       ticketId,
@@ -103,7 +95,7 @@ export class TicketDecryptCache extends AsyncDecryptCache {
       keyWrap.ephemeralPoint,
       keyWrap.nonce,
       keyWrap.wrappedKey,
-      ciphertext,
+      encryptedDescription,
     );
   }
 
@@ -155,10 +147,9 @@ export class TicketDecryptCache extends AsyncDecryptCache {
     ticketId: string,
     userId: string,
     keyWrap: TicketKeyWrap | null,
-    encryptedReadCursor: SerializedBuffer | string,
+    encryptedReadCursor: string,
   ): string | undefined {
-    const ciphertext = serializedBufferToBase64(encryptedReadCursor);
-    const cacheKey = `cursor:${ticketId}:${ciphertext.slice(0, 24)}`;
+    const cacheKey = `cursor:${ticketId}:${encryptedReadCursor.slice(0, 24)}`;
     if (keyWrap === null) {
       if (!this.has(cacheKey)) {
         queueMicrotask(() => {
@@ -177,7 +168,7 @@ export class TicketDecryptCache extends AsyncDecryptCache {
       keyWrap.ephemeralPoint,
       keyWrap.nonce,
       keyWrap.wrappedKey,
-      ciphertext,
+      encryptedReadCursor,
       ticketId,
     );
   }

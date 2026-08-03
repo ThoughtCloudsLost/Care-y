@@ -33,6 +33,7 @@ const { default: ClientSelect } = await import("./ClientSelect.svelte");
 interface ClientSearchResult {
   id: string;
   alias: string;
+  encryptedAlias: string;
   maskedPhone: string;
 }
 
@@ -42,6 +43,7 @@ type PhoneLookupResult =
       found: true;
       clientId: string;
       alias: string;
+      encryptedAlias: string;
       openTicketId: string | null;
     };
 
@@ -328,6 +330,7 @@ describe("ClientSelect", () => {
         found: true,
         clientId: "c-1",
         alias: "Alice",
+        encryptedAlias: "enc-Alice",
         openTicketId: "t-99",
       }));
       const { container } = render(ClientSelect, {
@@ -369,6 +372,7 @@ describe("ClientSelect", () => {
         found: true,
         clientId: "c-2",
         alias: "Bob",
+        encryptedAlias: "enc-Bob",
         openTicketId: null,
       }));
       const { container } = render(ClientSelect, {

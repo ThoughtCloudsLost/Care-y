@@ -247,7 +247,7 @@ describe("KB Category routes", () => {
       encryptedName: VALID_BASE64,
     });
     expect(result.id).toBe(MOCK_CATEGORY.id);
-    expect(Buffer.isBuffer(result.encryptedName)).toBe(true);
+    expect(typeof result.encryptedName).toBe("string");
     expect(mockCatSvc.create).toHaveBeenCalledOnce();
   });
 
@@ -264,7 +264,7 @@ describe("KB Category routes", () => {
     });
 
     expect(result.id).toBe(MOCK_CATEGORY.id);
-    expect(Buffer.isBuffer(result.encryptedDescription)).toBe(true);
+    expect(typeof result.encryptedDescription).toBe("string");
     expect(mockCatSvc.create).toHaveBeenCalledOnce();
   });
 
@@ -281,7 +281,7 @@ describe("KB Category routes", () => {
 
     const result = await caller.listCategories();
     expect(result).toHaveLength(1);
-    expect(Buffer.isBuffer(result[0]!.encryptedName)).toBe(true);
+    expect(typeof result[0]!.encryptedName).toBe("string");
   });
 
   it("manager can update a category", async () => {
@@ -296,7 +296,7 @@ describe("KB Category routes", () => {
       categoryId: VALID_UUID,
       encryptedName: VALID_BASE64,
     });
-    expect(Buffer.isBuffer(result.encryptedName)).toBe(true);
+    expect(typeof result.encryptedName).toBe("string");
   });
 
   it("volunteer cannot update a category", async () => {
@@ -459,6 +459,10 @@ describe("KB listAuthors route", () => {
     expect(result).toHaveLength(2);
     expect(result[0]!.id).toBe("author-1");
     expect(result[1]!.id).toBe("author-2");
+    expect(typeof result[0]!.encryptedDisplayName).toBe("string");
+    expect(result[0]!.encryptedDisplayName).toBe(
+      Buffer.from("enc-name-1").toString("base64url"),
+    );
     expect(mockItemSvc.listAuthors).toHaveBeenCalledOnce();
   });
 });
@@ -488,6 +492,7 @@ describe("KB recentItems route", () => {
 
     expect(result).toHaveLength(1);
     expect(result[0]!.id).toBe(VALID_UUID);
+    expect(typeof result[0]!.encryptedTitle).toBe("string");
     expect(mockItemSvc.listRecentlyUpdated).toHaveBeenCalledWith(2);
   });
 });
@@ -508,6 +513,10 @@ describe("KB listBodies route", () => {
 
     const result = await caller.listBodies({ itemIds: [ITEM_ID_1, ITEM_ID_2] });
     expect(result).toHaveLength(2);
+    expect(typeof result[0]!.encryptedBody).toBe("string");
+    expect(result[0]!.encryptedBody).toBe(
+      Buffer.from("body-1").toString("base64"),
+    );
     expect(mockItemSvc.listBodies).toHaveBeenCalledWith([ITEM_ID_1, ITEM_ID_2]);
   });
 
@@ -614,28 +623,6 @@ describe("KB Attachment routes", () => {
     ).rejects.toThrow();
 
     expect(mockBlobStore.put).not.toHaveBeenCalled();
-  });
-
-  it("volunteer can download an attachment blob", async () => {
-    const caller = buildVolunteerCaller();
-
-    const result = await caller.downloadAttachmentBlob({
-      attachmentId: VALID_UUID,
-    });
-
-    expect(result.data).toBeDefined();
-    expect(typeof result.data).toBe("string");
-    expect(mockMediaSvc.getAttachment).toHaveBeenCalledWith(VALID_UUID);
-    expect(mockBlobStore.get).toHaveBeenCalledWith("blob-key-1");
-  });
-
-  it("download throws when blob is missing from store", async () => {
-    mockBlobStore.get.mockResolvedValueOnce(null);
-    const caller = buildVolunteerCaller();
-
-    await expect(
-      caller.downloadAttachmentBlob({ attachmentId: VALID_UUID }),
-    ).rejects.toThrow(TRPCError);
   });
 
   it("volunteer can list attachments for an item", async () => {

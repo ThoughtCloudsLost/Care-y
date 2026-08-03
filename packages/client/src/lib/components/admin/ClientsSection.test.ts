@@ -36,7 +36,8 @@ const {
 
 interface ClientListItem {
   id: string;
-  alias: string;
+  encryptedAlias: string;
+  aliasHash: string | null;
   phone: string;
   ticketCount: number;
   createdAt: string;
@@ -45,7 +46,8 @@ interface ClientListItem {
 
 interface ClientDetail {
   id: string;
-  alias: string;
+  encryptedAlias: string;
+  aliasHash: string | null;
   phone: string;
   phoneHash: string;
   ticketCount: number;
@@ -121,6 +123,7 @@ vi.mock("$lib/paraglide/messages.js", async (importOriginal) => ({
   admin_clients_title: () => "Clients",
   common_cancel: () => "Cancel",
   common_loading: () => "Loading",
+  common_load_more: () => "Load more",
   error_generic: () => "Something went wrong",
   shell_close: () => "Close",
   app_retry: () => "Retry",
@@ -141,6 +144,7 @@ vi.mock("$lib/trpc/index.js", () => ({
       get: { query: mockClientGet },
       updateAlias: { mutate: mockUpdateAlias },
       updatePhone: { mutate: mockUpdatePhone },
+      backfillAliasHash: { mutate: vi.fn().mockResolvedValue(undefined) },
     },
     tickets: {
       undoMerge: { mutate: mockUndoMerge },
@@ -173,6 +177,15 @@ vi.mock("@tanstack/svelte-query", async (importOriginal) => ({
       refetch: vi.fn(),
     };
   },
+  createInfiniteQuery: () => ({
+    data: { pages: [] },
+    hasNextPage: false,
+    isFetchingNextPage: false,
+    fetchNextPage: vi.fn(),
+    isLoading: false,
+    isError: false,
+    error: null,
+  }),
   createMutation: (optsFn: () => Record<string, unknown>) => {
     const opts = optsFn();
     const mutationFn = opts.mutationFn as (input: unknown) => Promise<unknown>;
@@ -217,6 +230,8 @@ vi.mock("$lib/crypto/context.js", async (importOriginal) => ({
       return true;
     },
     encrypt: vi.fn().mockReturnValue(new Uint8Array([1, 2, 3])),
+    encryptText: vi.fn().mockResolvedValue("encrypted-base64"),
+    aliasHash: vi.fn().mockResolvedValue("deadbeef"),
   }),
 }));
 
@@ -239,7 +254,7 @@ vi.mock("$lib/utils/announce.js", async (importOriginal) => ({
 vi.mock("$lib/stores/client-filters.svelte.js", async (importOriginal) => ({
   ...(await importOriginal<typeof ClientFilters>()),
   clientFilterStore: {
-    sort: { field: "alias", direction: "asc" },
+    sort: { field: "created_at", direction: "desc" },
     search: "",
     setSort: vi.fn(),
     setSearch: vi.fn(),
@@ -307,7 +322,8 @@ function makeClient(
 ): ClientListItem {
   return {
     id,
-    alias: `client-${id}`,
+    encryptedAlias: `enc-alias-${id}`,
+    aliasHash: `hash-${id}`,
     phone: "***1234",
     ticketCount: 2,
     createdAt: "2026-01-15T00:00:00.000Z",
@@ -322,7 +338,8 @@ function makeDetail(
 ): ClientDetail {
   return {
     id,
-    alias: `client-${id}`,
+    encryptedAlias: `enc-alias-${id}`,
+    aliasHash: `hash-${id}`,
     phone: "+1 (555) 000-1234",
     phoneHash: "abc123",
     ticketCount: 1,
@@ -417,6 +434,46 @@ describe("ClientsSection", () => {
       // At least 3 client row buttons (the save button in the sheet may also be present)
       expect(buttons.length).toBeGreaterThanOrEqual(3);
     });
+
+    // The roster used to send no limit and no cursor, so it silently took the
+    // server default of 25 rows with no way to reach row 26. These cover the
+    // load-more control that fixed it.
+    it("offers no load-more control when there is no next page", () => {
+      render(ClientsSection, {
+        props: { clients: [makeClient("c-1")], hasNextPage: false },
+      });
+      expect(screen.queryByText("Load more")).toBeNull();
+    });
+
+    it("requests the next page when load-more is activated", async () => {
+      const onfetchnext = vi.fn();
+      render(ClientsSection, {
+        props: { clients: [makeClient("c-1")], hasNextPage: true, onfetchnext },
+      });
+
+      const loadMore = screen.getByText("Load more");
+      await fireEvent.click(loadMore);
+
+      expect(onfetchnext).toHaveBeenCalledTimes(1);
+    });
+
+    it("disables load-more while the next page is in flight", () => {
+      const onfetchnext = vi.fn();
+      render(ClientsSection, {
+        props: {
+          clients: [makeClient("c-1")],
+          hasNextPage: true,
+          isFetchingNextPage: true,
+          onfetchnext,
+        },
+      });
+
+      // Guards against firing a second request for the same page.
+      const buttons = screen
+        .getAllByRole("button")
+        .filter((b) => b.hasAttribute("disabled"));
+      expect(buttons.length).toBeGreaterThanOrEqual(1);
+    });
   });
 
   describe("client detail sheet", () => {
@@ -428,7 +485,9 @@ describe("ClientsSection", () => {
       component.openClientDetail("c-1");
 
       const sheet = await findDetailSheet();
-      expect(sheet.getAttribute("data-title")).toBe("client-c-1");
+      // The title is the decrypted alias, supplied by the org cache mock,
+      // rather than the raw client id it used to fall back to.
+      expect(sheet.getAttribute("data-title")).toBe("Decrypted Name");
     });
 
     it("renders alias input in the detail sheet", async () => {
@@ -543,7 +602,8 @@ describe("ClientsSection", () => {
       await waitFor(() => {
         expect(mockUpdateAlias).toHaveBeenCalledWith({
           clientId: "c-1",
-          alias: "new-alias-name",
+          encryptedAlias: "encrypted-base64",
+          aliasHash: "deadbeef",
         });
       });
     });
@@ -673,7 +733,7 @@ describe("ClientsSection", () => {
       await waitFor(() => {
         expect(
           within(sheet).getByText(
-            "This changes the phone for client-c-1 across all their tickets.",
+            "This changes the phone for Decrypted Name across all their tickets.",
           ),
         ).toBeTruthy();
       });
@@ -723,7 +783,7 @@ describe("ClientsSection", () => {
         success: true,
         conflict: {
           conflictingClientId: "c-2",
-          conflictingClientAlias: "seaward-lamp",
+          conflictingClientEncryptedAlias: "enc-seaward-lamp",
         },
       });
       const sheet = await openWithPhone("+15550001234");
@@ -739,7 +799,7 @@ describe("ClientsSection", () => {
       await waitFor(() => {
         expect(
           within(sheet).getByText(
-            "This number belongs to seaward-lamp. Merge instead?",
+            "This number belongs to Decrypted Name. Merge instead?",
           ),
         ).toBeTruthy();
       });
@@ -773,7 +833,7 @@ describe("ClientsSection", () => {
         success: true,
         conflict: {
           conflictingClientId: "c-2",
-          conflictingClientAlias: "seaward-lamp",
+          conflictingClientEncryptedAlias: "enc-seaward-lamp",
         },
       });
       const sheet = await openWithPhone("+15550001234");
@@ -802,7 +862,7 @@ describe("ClientsSection", () => {
         success: true,
         conflict: {
           conflictingClientId: "c-2",
-          conflictingClientAlias: "seaward-lamp",
+          conflictingClientEncryptedAlias: "enc-seaward-lamp",
         },
       });
       const sheet = await openWithPhone("+15550001234");

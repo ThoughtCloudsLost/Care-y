@@ -23,7 +23,7 @@
 
     replySheetOpen: boolean;
     replyTargetTicketId: string;
-    replyClientAlias: string;
+    replyClientAlias: string | null;
     replyHasPhone: boolean;
     replyPreviewFollowUps: RawFollowUpPreview[] | undefined;
     replyFollowUpCount: number;
@@ -36,6 +36,7 @@
 
     newTicketOpen: boolean;
     onnewticketdismiss: () => void;
+    onnewticketcollision: (ticketId: string) => void;
 
     savedFilterModalOpen: boolean;
     filterSummary: string;
@@ -69,6 +70,7 @@
     oncallaction,
     newTicketOpen,
     onnewticketdismiss,
+    onnewticketcollision,
     savedFilterModalOpen,
     filterSummary,
     onsavedfilterdismiss,
@@ -118,4 +120,8 @@
   <CallOptionsContent hasVerifiedPhone={false} onaction={oncallaction} />
 </ShellActionSheet>
 
-<NewTicketController opened={newTicketOpen} ondismiss={onnewticketdismiss} />
+<NewTicketController
+  opened={newTicketOpen}
+  ondismiss={onnewticketdismiss}
+  oncollision={onnewticketcollision}
+/>

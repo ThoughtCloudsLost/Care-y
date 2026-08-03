@@ -24,7 +24,6 @@
   import { getOrgDecryptCache } from "$lib/crypto/context.js";
   import { haptic } from "$lib/utils/haptic.js";
   import { getCollator } from "$lib/utils/collator.js";
-  import { base64ToUint8Array } from "$lib/utils/buffer-encoding.js";
   import { toastStore } from "$lib/stores/toast.svelte.js";
   import { announceToLiveRegion } from "$lib/utils/announce.js";
   import { onKeyActivate } from "$lib/utils/a11y.js";
@@ -97,8 +96,7 @@
   function decryptUserName(userId: string): string | null {
     const user = userMap.get(userId);
     if (!user) return null;
-    const bytes = base64ToUint8Array(user.encryptedDisplayName);
-    return orgCache.decrypt(`user:${userId}`, bytes);
+    return orgCache.decrypt(`user:${userId}`, user.encryptedDisplayName);
   }
 
   // ── Queue members via createQueries (one query per queue) ──

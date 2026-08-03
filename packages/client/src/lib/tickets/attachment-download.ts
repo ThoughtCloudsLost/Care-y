@@ -14,8 +14,7 @@
 import { blobSlot } from "@care-y/crypto";
 import type { CryptoBridge } from "$lib/workers/crypto-bridge.js";
 import type { TicketKeyWrap } from "$lib/crypto/ticket-decrypt-cache.js";
-import type { TRPCClient } from "@trpc/client";
-import type { AppRouter } from "@care-y/server";
+import { fetchBlob } from "$lib/utils/fetch-blob.js";
 import { triggerBlobDownload } from "$lib/components/shared/attachment-download.js";
 
 // Re-export shared utilities so existing callers don't need path changes
@@ -25,29 +24,18 @@ export {
   triggerBlobDownload,
 } from "$lib/components/shared/attachment-download.js";
 
-type TicketRouter = NonNullable<TRPCClient<AppRouter>["tickets"]>;
-
 export interface DownloadDeps {
-  ticketRouter: TicketRouter;
   bridge: CryptoBridge;
   ticketId: string;
   keyWrap: TicketKeyWrap;
 }
 
-/**
- * Fetch an encrypted attachment blob, decrypt it via the crypto Worker,
- * and trigger a browser file download.
- *
- * The calling component owns the downloading-state guard (to prevent
- * duplicate clicks) and error catching if toast feedback is desired.
- */
 export async function downloadDecryptedAttachment(
   attachmentId: string,
   filename: string,
   deps: DownloadDeps,
 ): Promise<void> {
-  const { data: encryptedBase64 } =
-    await deps.ticketRouter.downloadAttachmentBlob.query({ attachmentId });
+  const ciphertext = await fetchBlob(`/api/blobs/attachments/${attachmentId}`);
 
   const decryptedBuf = await deps.bridge.decryptBlob(
     deps.ticketId,
@@ -55,7 +43,7 @@ export async function downloadDecryptedAttachment(
     deps.keyWrap.ephemeralPoint,
     deps.keyWrap.nonce,
     deps.keyWrap.wrappedKey,
-    encryptedBase64,
+    ciphertext,
   );
 
   triggerBlobDownload(decryptedBuf, filename);

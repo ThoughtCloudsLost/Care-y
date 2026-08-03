@@ -82,6 +82,7 @@ vi.mock("$lib/crypto/context.js", () => ({
     decrypt: mockOrgDecrypt,
     get: vi.fn().mockReturnValue(undefined),
     has: vi.fn().mockReturnValue(false),
+    isFailed: vi.fn().mockReturnValue(false),
   }),
   getOrgKeyManager: () => ({ isLoaded: true }),
 }));
@@ -239,10 +240,7 @@ describe("AvatarPanel", () => {
 
   it("renders DecryptPlaceholder for display name", () => {
     renderPanel();
-    expect(mockOrgDecrypt).toHaveBeenCalledWith(
-      "me:display_name",
-      expect.any(Uint8Array),
-    );
+    expect(mockOrgDecrypt).toHaveBeenCalledWith("me:display_name", "AQID");
   });
 
   it("shows initials derived from decrypted name", () => {

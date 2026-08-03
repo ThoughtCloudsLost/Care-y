@@ -64,6 +64,7 @@ export function createHmacValidator(
       authToken: string,
     ): string {
       const payload = config.buildPayload(url, body);
+      // Standard base64 per Twilio's signature spec. Not base64url.
       return createHmac(config.algorithm, authToken)
         .update(payload)
         .digest("base64");

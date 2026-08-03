@@ -7,7 +7,7 @@
  * Search is debounced by the calling component, not this store.
  */
 
-export type ClientSortField = "alias" | "created_at" | "ticket_count";
+export type ClientSortField = "created_at" | "ticket_count";
 export type SortDirection = "asc" | "desc";
 
 export interface ClientSortConfig {
@@ -34,8 +34,8 @@ function createClientFilterStore(): {
   clearAll(): void;
 } {
   let sort = $state<ClientSortConfig>({
-    field: "alias",
-    direction: "asc",
+    field: "created_at",
+    direction: "desc",
   });
 
   let search = $state("");

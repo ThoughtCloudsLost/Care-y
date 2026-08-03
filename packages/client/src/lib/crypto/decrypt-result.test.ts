@@ -62,8 +62,13 @@ describe("DecryptResult", () => {
       expect(resolveOrgDecrypt(null, false)).toBe(LOADING);
     });
 
-    it("returns ERROR when raw is null and key is loaded", () => {
-      expect(resolveOrgDecrypt(null, true)).toBe(ERROR);
+    it("returns LOADING when raw is null and key is loaded (pending microtask)", () => {
+      expect(resolveOrgDecrypt(null, true)).toBe(LOADING);
+    });
+
+    it("returns ERROR when failed flag is true", () => {
+      expect(resolveOrgDecrypt(null, true, true)).toBe(ERROR);
+      expect(resolveOrgDecrypt(null, false, true)).toBe(ERROR);
     });
 
     it("returns ready with plaintext value", () => {
@@ -76,6 +81,12 @@ describe("DecryptResult", () => {
       const result = resolveOrgDecrypt("cached", false);
       expect(result.status).toBe("ready");
       expect(result).toEqual({ status: "ready", value: "cached" });
+    });
+
+    it("returns ready regardless of failed flag when value is present", () => {
+      const result = resolveOrgDecrypt("value", true, true);
+      expect(result.status).toBe("ready");
+      expect(result).toEqual({ status: "ready", value: "value" });
     });
   });
 

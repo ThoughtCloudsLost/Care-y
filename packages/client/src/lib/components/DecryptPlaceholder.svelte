@@ -17,8 +17,8 @@
      *  Legacy prop, use result instead for new code. */
     content?: string | null;
     /** Encrypted data for automatic length estimation (ciphertext bytes - 40 = plaintext chars).
-     *  Accepts unknown to avoid forcing callers to import SerializedBuffer. Runtime type-checked. */
-    ciphertext?: unknown;
+     *  Accepts the base64 ciphertext string for size heuristics. */
+    ciphertext?: string | null;
     /**
      * Display mode:
      *  - "text": scrambled alphanumeric characters (inline text fields)
@@ -86,18 +86,12 @@
     return maxLines !== undefined ? Math.min(lines, maxLines) : lines;
   });
 
-  function estimateLength(ct: unknown, fallback: number): number {
+  function estimateLength(
+    ct: string | null | undefined,
+    fallback: number,
+  ): number {
     if (ct == null) return fallback;
-    if (ct instanceof Uint8Array) return Math.max(1, ct.length - 40);
-    if (typeof ct === "string")
-      return Math.max(1, Math.ceil((ct.length * 3) / 4) - 40);
-    if (typeof ct === "object" && "data" in ct) {
-      const obj: Record<string, unknown> = ct;
-      if (Array.isArray(obj.data)) {
-        return Math.max(1, obj.data.length - 40);
-      }
-    }
-    return fallback;
+    return Math.max(1, Math.ceil((ct.length * 3) / 4) - 40);
   }
 
   const isMedia = $derived(mode === "media");

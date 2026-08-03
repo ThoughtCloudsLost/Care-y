@@ -20,8 +20,8 @@ import type { OrgKeyManager } from "$lib/crypto/org-key.js";
 const KB_ATTACHMENT_PREFIX = "kb-attachment://";
 
 export interface ImageViewDeps {
-  /** tRPC kb router reference for fetching attachment blobs. */
-  readonly downloadBlob: (attachmentId: string) => Promise<{ data: string }>;
+  /** Fetches the encrypted attachment blob by ID. */
+  readonly downloadBlob: (attachmentId: string) => Promise<ArrayBuffer>;
   /** Org key manager for decrypting the blob. */
   readonly orgKeyManager: OrgKeyManager;
 }
@@ -155,10 +155,10 @@ class KbImageView implements NodeView {
 
   private async fetchAndDecrypt(attachmentId: string): Promise<void> {
     try {
-      const result = await this.deps.downloadBlob(attachmentId);
+      const buf = await this.deps.downloadBlob(attachmentId);
       if (this.aborted) return;
 
-      const raw = Uint8Array.from(atob(result.data), (c) => c.charCodeAt(0));
+      const raw = new Uint8Array(buf);
       const decrypted = await this.deps.orgKeyManager.decrypt(raw);
 
       const blob = new Blob([new Uint8Array(decrypted)]);

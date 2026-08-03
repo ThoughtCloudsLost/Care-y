@@ -1,16 +1,15 @@
 /**
  * Public branding: fetch + client-side decrypt for pre-auth pages.
  *
- * The server returns the org public key and encrypted branding blob (both
- * standard base64). The client derives the branding key via BLAKE2b and
+ * The server returns the org public key and encrypted branding blob as
+ * base64url strings. The client derives the branding key via BLAKE2b and
  * decrypts locally. This is the B1 two-tier "client-side blob" pattern,
  * reusable for the client portal and intake form.
  */
 
 import { createQuery } from "@tanstack/svelte-query";
-import { decryptClientBranding, type Ciphertext } from "@care-y/crypto";
+import { decryptClientBranding, decode, type Ciphertext } from "@care-y/crypto";
 import { trpc } from "$lib/trpc/index.js";
-import { base64ToUint8Array } from "$lib/utils/buffer-encoding.js";
 import { brandingIconUrl, sanitizeOrgName } from "$lib/branding/index.js";
 import { brandingKeys } from "$lib/query/keys.js";
 
@@ -37,8 +36,8 @@ async function fetchPublicBranding(): Promise<PublicBranding | null> {
     return null;
   }
 
-  const orgPubKey = base64ToUint8Array(data.orgPublicKey);
-  const blob = base64ToUint8Array(data.clientEncryptedBranding);
+  const orgPubKey = decode(data.orgPublicKey);
+  const blob = decode(data.clientEncryptedBranding);
 
   /* eslint-disable @typescript-eslint/no-unsafe-type-assertion -- Ciphertext is a branded Uint8Array; blob bytes are client-produced XChaCha20-Poly1305 AEAD ciphertext (ADR-053) */
   const plaintext = decryptClientBranding(blob as Ciphertext, orgPubKey);

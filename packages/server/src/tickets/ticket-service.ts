@@ -11,6 +11,7 @@
 
 import { type Kysely, type Transaction } from "kysely";
 import type { TenantDatabase } from "../db/types.js";
+import { keysetAfter } from "../db/keyset.js";
 import { createPhoneRepository } from "../telephony/models/phone-repo.js";
 import { createClientRepository } from "../telephony/models/client-repo.js";
 import type {
@@ -31,7 +32,8 @@ import {
   MergeError,
 } from "../errors.js";
 import type { FieldEncryptor } from "../crypto/field-encryptor.js";
-import { sanitizeLike, maskPhone } from "../utils/sql.js";
+import type { SealedBoxEncryptor } from "../crypto/sealed-box.js";
+import { maskPhone } from "../utils/sql.js";
 import { createDependencyService } from "./dependency-service.js";
 import { createReadCursorService } from "./read-cursor-service.js";
 import { ErrorCode } from "@care-y/shared";
@@ -53,7 +55,7 @@ export interface TicketRecord {
 
 /** Enriched ticket with joined metadata for list/detail views. */
 export interface TicketListRecord extends TicketRecord {
-  readonly clientAlias: string;
+  readonly encryptedClientAlias: Buffer;
   readonly hasPhone: boolean;
   /** OPS-encrypted phone number buffer, or null when the client has no phone. */
   readonly clientPhoneEncrypted: Buffer | null;
@@ -221,7 +223,7 @@ export interface TicketService {
 
 export interface ClientSearchResult {
   readonly id: string;
-  readonly alias: string;
+  readonly encryptedAlias: Buffer;
   readonly maskedPhone: string;
 }
 
@@ -256,7 +258,7 @@ interface BaseTicketRow {
 }
 
 interface EnrichedTicketRow extends BaseTicketRow {
-  client_alias: string;
+  encrypted_client_alias: Buffer;
   has_phone: boolean | 0 | 1;
   client_phone_encrypted: Buffer | null;
   client_phone_id: string | null;
@@ -286,7 +288,7 @@ function toRecord(row: BaseTicketRow): TicketRecord {
 function toListRecord(row: EnrichedTicketRow): TicketListRecord {
   return {
     ...toRecord(row),
-    clientAlias: row.client_alias,
+    encryptedClientAlias: row.encrypted_client_alias,
     hasPhone: Boolean(row.has_phone),
     clientPhoneEncrypted: row.client_phone_encrypted ?? null,
     clientPhoneId: row.client_phone_id ?? null,
@@ -334,6 +336,7 @@ export interface PendingClient {
 export interface TicketServiceDeps {
   readonly pendingClients?: Map<string, PendingClient>;
   readonly fieldEncryptor?: FieldEncryptor;
+  readonly sealedBox?: SealedBoxEncryptor;
 }
 
 export function createTicketService(
@@ -415,7 +418,14 @@ export function createTicketService(
           deps.pendingClients.delete(input.clientToken);
 
           const phoneRepo = createPhoneRepository(trx);
-          const clientRepo = createClientRepository(trx, phoneRepo);
+          if (!deps.sealedBox) {
+            throw new InternalError("sealedBox not wired into ticket service");
+          }
+          const clientRepo = createClientRepository(
+            trx,
+            phoneRepo,
+            deps.sealedBox,
+          );
           const result = await clientRepo.findOrCreateByPhoneHash(
             pending.phoneHash,
             pending.opsEncryptedPhone,
@@ -537,7 +547,7 @@ export function createTicketService(
         )
         .selectAll("t")
         .select(["tkw.ephemeral_point", "tkw.nonce", "tkw.wrapped_key"])
-        .select("c.alias as client_alias")
+        .select("c.encrypted_alias as encrypted_client_alias")
         .select((eb) => eb("c.phone_id", "is not", null).as("has_phone"))
         .select("ph.encrypted_number as client_phone_encrypted")
         .select("ph.id as client_phone_id")
@@ -591,7 +601,7 @@ export function createTicketService(
         )
         .selectAll("t")
         .select(["tkw.ephemeral_point", "tkw.nonce", "tkw.wrapped_key"])
-        .select("c.alias as client_alias")
+        .select("c.encrypted_alias as encrypted_client_alias")
         .select((eb) => eb("c.phone_id", "is not", null).as("has_phone"))
         .select("ph.encrypted_number as client_phone_encrypted")
         .select("ph.id as client_phone_id")
@@ -694,18 +704,15 @@ export function createTicketService(
               .else(4)
               .end();
 
-            return eb.or([
-              eb(rowKey, gt, cursorPriorityKey),
-              eb.and([
-                eb(rowKey, "=", cursorPriorityKey),
-                eb("t.created_at", gt, cursorCreatedAt),
-              ]),
-              eb.and([
-                eb(rowKey, "=", cursorPriorityKey),
-                eb("t.created_at", "=", cursorCreatedAt),
-                eb("t.id", ">", cursorId),
-              ]),
-            ]);
+            return keysetAfter(
+              eb,
+              gt,
+              [
+                [rowKey, cursorPriorityKey],
+                ["t.created_at", cursorCreatedAt],
+              ],
+              { column: "t.id", cursorId },
+            );
           });
         } else if (sortBy === "last_activity") {
           // Subquery expressions for the cursor row and the current row
@@ -731,6 +738,15 @@ export function createTicketService(
               .select((sb) => sb.fn.max("f2.created_at").as("max_at"))
               .whereRef("f2.ticket_id", "=", "t.id");
 
+            // Rows after the cursor once activity itself has tied, or when
+            // both rows sit in the NULL tail and only the tiebreak decides.
+            const afterOnTiebreak = keysetAfter(
+              eb,
+              gt,
+              [["t.created_at", cursorCreatedAt]],
+              { column: "t.id", cursorId },
+            );
+
             // Cursor has non-NULL activity
             const cursorNonNull = eb.and([
               eb(cursorLastActivity, "is not", null),
@@ -740,12 +756,7 @@ export function createTicketService(
                 // (b) Same activity, later tiebreaker
                 eb.and([
                   eb(rowActivity, "=", cursorLastActivity),
-                  eb("t.created_at", gt, cursorCreatedAt),
-                ]),
-                eb.and([
-                  eb(rowActivity, "=", cursorLastActivity),
-                  eb("t.created_at", "=", cursorCreatedAt),
-                  eb("t.id", ">", cursorId),
+                  afterOnTiebreak,
                 ]),
                 // (c) Row has NULL activity (NULLS LAST: after all non-NULL)
                 eb(rowActivity, "is", null),
@@ -756,13 +767,7 @@ export function createTicketService(
             const cursorNull = eb.and([
               eb(cursorLastActivity, "is", null),
               eb(rowActivity, "is", null),
-              eb.or([
-                eb("t.created_at", gt, cursorCreatedAt),
-                eb.and([
-                  eb("t.created_at", "=", cursorCreatedAt),
-                  eb("t.id", ">", cursorId),
-                ]),
-              ]),
+              afterOnTiebreak,
             ]);
 
             return eb.or([cursorNonNull, cursorNull]);
@@ -777,39 +782,15 @@ export function createTicketService(
 
           // Three-column keyset: (sort_order, created_at, id)
           query = query.where((eb) =>
-            eb.or([
-              eb("q.sort_order", gt, cursorSortOrder),
-              eb.and([
-                eb("q.sort_order", "=", cursorSortOrder),
-                eb("t.created_at", gt, cursorCreatedAt),
-              ]),
-              eb.and([
-                eb("q.sort_order", "=", cursorSortOrder),
-                eb("t.created_at", "=", cursorCreatedAt),
-                eb("t.id", ">", cursorId),
-              ]),
-            ]),
-          );
-        } else if (sortBy === "client") {
-          const cursorAlias = db
-            .selectFrom("tickets")
-            .innerJoin("clients", "clients.id", "tickets.client_id")
-            .select("clients.alias")
-            .where("tickets.id", "=", cursorId);
-
-          query = query.where((eb) =>
-            eb.or([
-              eb("c.alias", gt, cursorAlias),
-              eb.and([
-                eb("c.alias", "=", cursorAlias),
-                eb("t.created_at", gt, cursorCreatedAt),
-              ]),
-              eb.and([
-                eb("c.alias", "=", cursorAlias),
-                eb("t.created_at", "=", cursorCreatedAt),
-                eb("t.id", ">", cursorId),
-              ]),
-            ]),
+            keysetAfter(
+              eb,
+              gt,
+              [
+                ["q.sort_order", cursorSortOrder],
+                ["t.created_at", cursorCreatedAt],
+              ],
+              { column: "t.id", cursorId },
+            ),
           );
         } else if (sortBy === "msgs") {
           const cursorFollowupCount = db
@@ -823,29 +804,23 @@ export function createTicketService(
               .select((sb) => sb.fn.count<number>("f3.id").as("cnt"))
               .whereRef("f3.ticket_id", "=", "t.id");
 
-            return eb.or([
-              eb(rowCount, gt, cursorFollowupCount),
-              eb.and([
-                eb(rowCount, "=", cursorFollowupCount),
-                eb("t.created_at", gt, cursorCreatedAt),
-              ]),
-              eb.and([
-                eb(rowCount, "=", cursorFollowupCount),
-                eb("t.created_at", "=", cursorCreatedAt),
-                eb("t.id", ">", cursorId),
-              ]),
-            ]);
+            return keysetAfter(
+              eb,
+              gt,
+              [
+                [rowCount, cursorFollowupCount],
+                ["t.created_at", cursorCreatedAt],
+              ],
+              { column: "t.id", cursorId },
+            );
           });
         } else {
           // "date": two-column keyset (created_at, id)
           query = query.where((eb) =>
-            eb.or([
-              eb("t.created_at", gt, cursorCreatedAt),
-              eb.and([
-                eb("t.created_at", "=", cursorCreatedAt),
-                eb("t.id", ">", cursorId),
-              ]),
-            ]),
+            keysetAfter(eb, gt, [["t.created_at", cursorCreatedAt]], {
+              column: "t.id",
+              cursorId,
+            }),
           );
         }
       }
@@ -887,11 +862,6 @@ export function createTicketService(
       } else if (sortBy === "queue") {
         query = query
           .orderBy("q.sort_order", sortDirection)
-          .orderBy("t.created_at", sortDirection)
-          .orderBy("t.id", "asc");
-      } else if (sortBy === "client") {
-        query = query
-          .orderBy("c.alias", sortDirection)
           .orderBy("t.created_at", sortDirection)
           .orderBy("t.id", "asc");
       } else if (sortBy === "msgs") {
@@ -1496,12 +1466,24 @@ export function createTicketService(
         ? []
         : await getAccessibleQueueIds(userId);
 
+      // The server cannot substring-match ciphertext, so this returns the
+      // most recent clients in scope and the browser filters them after
+      // decrypting. A non-empty query is a blind index hash and narrows to an
+      // exact alias match, which reaches clients outside the recent window.
+      //
+      // The narrowing is conditional on purpose. Applying it unconditionally
+      // would return nothing for an empty query, and would permanently hide
+      // every client created by an inbound webhook, since those rows carry a
+      // null alias_hash until a browser backfills it.
       let search = db
         .selectFrom("clients as c")
         .innerJoin("phones as p", "p.id", "c.phone_id")
-        .select(["c.id", "c.alias", "p.encrypted_number"])
-        .where("c.merged_into", "is", null)
-        .where("c.alias", "ilike", `%${sanitizeLike(query)}%`);
+        .select(["c.id", "c.encrypted_alias", "p.encrypted_number"])
+        .where("c.merged_into", "is", null);
+
+      if (query !== "") {
+        search = search.where("c.alias_hash", "=", query);
+      }
 
       if (!isAdmin) {
         search = search.where((eb) =>
@@ -1533,7 +1515,7 @@ export function createTicketService(
       }
 
       const results = await search
-        .orderBy("c.alias", "asc")
+        .orderBy("c.created_at", "desc")
         .limit(limit)
         .execute();
 
@@ -1541,14 +1523,14 @@ export function createTicketService(
       if (!encryptor) {
         return results.map((r) => ({
           id: r.id,
-          alias: r.alias,
+          encryptedAlias: r.encrypted_alias,
           maskedPhone: "***",
         }));
       }
 
       return results.map((r) => ({
         id: r.id,
-        alias: r.alias,
+        encryptedAlias: r.encrypted_alias,
         maskedPhone: maskPhone(encryptor.decryptToBuffer(r.encrypted_number)),
       }));
     },
