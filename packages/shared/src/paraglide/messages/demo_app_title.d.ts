@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "CARE-Y Demo" |
+* | "Interactive Handbook" |
 *
 * @param {Demo_App_TitleInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

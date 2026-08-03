@@ -1,3 +1,11 @@
+<script module lang="ts">
+  // Module-level: survives remounts (App.svelte keys this component on
+  // locale + pageKey, so instance state is lost every section change).
+  // pretext's locale is global, so we track what we last set it to here
+  // to avoid redundant setLocale() calls that flush its measurement cache.
+  let lastAppliedLocale: string | null = null;
+</script>
+
 <script lang="ts">
   import { SvelteMap } from "svelte/reactivity";
   import { Check } from "@lucide/svelte";
@@ -6,19 +14,24 @@
     layoutNextLineRange,
     materializeLineRange,
     setLocale,
-    clearCache,
     type PreparedTextWithSegments,
     type LayoutCursor,
   } from "@chenglou/pretext";
   import type { Section, SectionId } from "./scroll-sections.js";
   import { getSection } from "./scroll-sections.js";
   import type { DemoTopic } from "./bridge.js";
-  import { resolveStoryMessage } from "./story-messages.js";
+  import {
+    resolveStoryMessage,
+    resolveParameterizedMessage,
+  } from "./story-messages.js";
   import {
     type FlowBlock,
-    type FlowBlockKind,
+    type FlowTextBlock,
+    type FlowFigureBlock,
+    type FlowTextKind,
     type FlowHole,
     type FlowLayoutResult,
+    type FlowFigureGeometry,
     type FlowLine,
     type LineFiller,
     type LineFillerResult,
@@ -28,9 +41,15 @@
     FRAME_PAD_BOTTOM,
     FRAME_PAD_X,
     computeFlowLayout,
+    computeLineSegments,
     hitTestBlock,
   } from "./flow-layout.js";
-  import { setFlowGeometrySource } from "./flow-geometry.svelte.js";
+  import { hasClip, getClip, type PeekFirePayload } from "./clip-registry.js";
+  import ClipFigure from "./ClipFigure.svelte";
+  import {
+    setFlowGeometrySource,
+    readingLineY,
+  } from "./flow-geometry.svelte.js";
 
   // -----------------------------------------------------------------------
   // Props
@@ -50,6 +69,18 @@
     };
     onSelectSection: (id: SectionId) => void;
     onSelectSub: (sectionId: SectionId, subSlug: string) => void;
+    /** Peek hold completed on a figure. */
+    onpeekfire?: (payload: PeekFirePayload) => void;
+    /** Drag delta while peek is held. */
+    onpeekdrag?: (dx: number, dy: number) => void;
+    /** Secondary tap during a held peek. */
+    onpeeksecondarytap?: () => void;
+    /** Primary pointer released after peek fired. */
+    onpeekrelease?: () => void;
+    /** Peek gesture cancelled. */
+    onpeekcancel?: () => void;
+    /** A figure's container element is ready (for engine prewarm). */
+    onelement?: (el: HTMLElement) => void;
   }
 
   let {
@@ -61,6 +92,12 @@
     frameRect,
     onSelectSection,
     onSelectSub,
+    onpeekfire,
+    onpeekdrag,
+    onpeeksecondarytap,
+    onpeekrelease,
+    onpeekcancel,
+    onelement,
   }: Props = $props();
 
   // -----------------------------------------------------------------------
@@ -70,11 +107,37 @@
 
   const FONT_FAMILY = '"Atkinson Hyperlegible Next"';
 
-  const FONT_STRINGS: Record<FlowBlockKind, string> = {
+  const FONT_STRINGS: Record<FlowTextKind, string> = {
     "section-title": `700 24px ${FONT_FAMILY}`,
     "section-desc": `400 15px ${FONT_FAMILY}`,
     "sub-heading": `700 18px ${FONT_FAMILY}`,
     "sub-body": `400 15px ${FONT_FAMILY}`,
+  };
+
+  // Precomputed per-kind style prefix: font + line-height never change,
+  // so we build these once at module init rather than per span per frame.
+  // Single-sourced from FONT_STRINGS and DEFAULT_METRICS above.
+  function stylePrefix(font: string, lineHeight: number): string {
+    return `font: ${font}; line-height: ${String(lineHeight)}px;`;
+  }
+
+  const KIND_STYLE_PREFIX: Record<FlowTextKind, string> = {
+    "section-title": stylePrefix(
+      FONT_STRINGS["section-title"],
+      DEFAULT_METRICS["section-title"].lineHeight,
+    ),
+    "section-desc": stylePrefix(
+      FONT_STRINGS["section-desc"],
+      DEFAULT_METRICS["section-desc"].lineHeight,
+    ),
+    "sub-heading": stylePrefix(
+      FONT_STRINGS["sub-heading"],
+      DEFAULT_METRICS["sub-heading"].lineHeight,
+    ),
+    "sub-body": stylePrefix(
+      FONT_STRINGS["sub-body"],
+      DEFAULT_METRICS["sub-body"].lineHeight,
+    ),
   };
 
   // -----------------------------------------------------------------------
@@ -84,21 +147,40 @@
   function buildBlocks(sects: Section[], loc: string): FlowBlock[] {
     const result: FlowBlock[] = [];
     for (const section of sects) {
-      for (const sub of section.subs) {
+      // Handbook-style numbering. Single-sub sections (the entry page,
+      // the coming-soon placeholder) read as a lone statement, not as
+      // step one of one, so they stay unnumbered.
+      const numbered = section.subs.length > 1;
+      for (let si = 0; si < section.subs.length; si++) {
+        const sub = section.subs.at(si);
+        if (sub === undefined) continue;
+        const headingText = resolveStoryMessage(sub.headingKey, loc);
         result.push({
           id: `${section.id}--${sub.slug}--heading`,
           sectionId: section.id,
           subSlug: sub.slug,
           kind: "sub-heading",
-          text: resolveStoryMessage(sub.headingKey, loc),
-        });
+          text: numbered ? `${String(si + 1)}. ${headingText}` : headingText,
+        } satisfies FlowTextBlock);
         result.push({
           id: `${section.id}--${sub.slug}--body`,
           sectionId: section.id,
           subSlug: sub.slug,
           kind: "sub-body",
           text: resolveStoryMessage(sub.bodyKey, loc),
-        });
+        } satisfies FlowTextBlock);
+
+        // Append a figure block when a clip exists for this sub.
+        if (hasClip(section.id, sub.slug)) {
+          const clip = getClip(section.id, sub.slug);
+          result.push({
+            id: `${section.id}--${sub.slug}--figure`,
+            sectionId: section.id,
+            subSlug: sub.slug,
+            kind: "figure",
+            aspectRatio: clip.aspectRatio,
+          } satisfies FlowFigureBlock);
+        }
       }
     }
     return result;
@@ -134,41 +216,49 @@
     // follow, so a plain `let cancelled = false` reads as always falsy.
     const run = new AbortController();
 
-    async function loadAndPrepare(): Promise<void> {
-      // Load all font variants we measure with. allSettled because the
-      // font set also carries the client's absolute-URL @font-face
-      // declarations, which 404 under the demo's serving root; load()
-      // rejects when ANY matched face fails even though the hashed
-      // faces load fine and rendering falls back to them.
-      const fontLoadPromises = Object.values(FONT_STRINGS).map(async (f) =>
-        document.fonts.load(f),
-      );
-      await Promise.allSettled(fontLoadPromises);
-      await document.fonts.ready;
-
-      if (run.signal.aborted) return;
-
-      // Set locale for pretext's Intl.Segmenter
-      setLocale(capturedLocale);
+    /** Measure every block with the faces available right now. */
+    function prepareBlocks(): void {
+      // Only call setLocale when the locale actually changed. setLocale
+      // flushes pretext's global two-level measurement cache, forcing a
+      // full Canvas re-measure of every segment. The check uses module-
+      // level state because this component remounts on every section
+      // change, but pretext's locale is process-global.
+      if (capturedLocale !== lastAppliedLocale) {
+        setLocale(capturedLocale);
+        lastAppliedLocale = capturedLocale;
+      }
 
       const handles = new SvelteMap<number, PreparedTextWithSegments>();
       for (let i = 0; i < capturedBlocks.length; i++) {
         const block = capturedBlocks.at(i);
         if (block === undefined) continue;
+        // Figure blocks have no text to measure.
+        if (block.kind === "figure") continue;
         const fontStr = FONT_STRINGS[block.kind];
         handles.set(i, prepareWithSegments(block.text, fontStr));
       }
-
-      // No second abort check: the loop above is synchronous, so nothing
-      // can abort between the check after the awaits and this assignment.
       prepared = { forBlocks: capturedBlocks, handles };
     }
 
-    void loadAndPrepare();
+    async function prepareAfterFonts(): Promise<void> {
+      // allSettled because the font set includes the client app's
+      // absolute-URL @font-face declarations, which do not resolve under
+      // the demo's serving root. load() rejects when ANY matched face
+      // fails, even though the hashed faces we actually render with load
+      // fine. allSettled lets those settle as rejected without blocking.
+      const fontLoadPromises = Object.values(FONT_STRINGS).map(async (f) =>
+        document.fonts.load(f),
+      );
+      await Promise.allSettled(fontLoadPromises);
+      if (run.signal.aborted) return;
+
+      prepareBlocks();
+    }
+
+    void prepareAfterFonts();
 
     return () => {
       run.abort();
-      clearCache();
     };
   });
 
@@ -223,9 +313,14 @@
   let containerEl = $state<HTMLDivElement | undefined>(undefined);
   let containerWidth = $state(0);
   let containerTop = $state(0);
+
   // $state.raw: replaced wholesale each pass, and a deep proxy would wrap
   // every line and block geometry object on every layout.
   let layoutResult: FlowLayoutResult | null = $state.raw(null);
+  // The hole the current layoutResult was computed against. Kept so the
+  // heading rules can be clipped by the same rectangle the text was,
+  // instead of recomputing it and risking a one-frame disagreement.
+  let layoutHole: FlowHole | null = $state.raw(null);
 
   // Viewport height for reactive virtualization (no window reads in $derived)
   let viewportH = $state(
@@ -303,6 +398,17 @@
   // Coalesced layout via rAF
   let rafId = 0;
 
+  // Previous-pass inputs for the no-op guard. When these all match the
+  // current call, the layout result is already correct and we skip the
+  // full recompute. Stored as plain variables (not $state) because they
+  // are only read and written inside runLayout, never in reactive deriveds.
+  let prevBlocks: readonly FlowBlock[] | null = null;
+  let prevContainerWidth = -1;
+  let prevHoleLeft = NaN;
+  let prevHoleTop = NaN;
+  let prevHoleRight = NaN;
+  let prevHoleBottom = NaN;
+
   function scheduleLayout(): void {
     if (rafId !== 0) return;
     rafId = requestAnimationFrame(() => {
@@ -324,7 +430,9 @@
       containerWidth <= 0
     ) {
       layoutResult = null;
+      layoutHole = null;
       setFlowGeometrySource(null);
+      prevBlocks = null;
       return;
     }
 
@@ -336,8 +444,32 @@
       contLeft = rect.left;
     }
 
+    // Compute the hole before the no-op check so we can compare against
+    // the previous pass's hole edges.
+    const candidateHole = rawHoleAt(
+      window.scrollY,
+      containerTop,
+      contLeft,
+      frameRect,
+    );
+
+    // Skip recompute when every layout input matches the previous pass.
+    // The hole edges move on every scroll frame even though the visual
+    // result often stays identical (the frame is viewport-fixed, so only
+    // the document-space translation changes).
+    if (
+      prevBlocks === blocks &&
+      prevContainerWidth === containerWidth &&
+      prevHoleLeft === candidateHole.left &&
+      prevHoleTop === candidateHole.top &&
+      prevHoleRight === candidateHole.right &&
+      prevHoleBottom === candidateHole.bottom
+    ) {
+      return;
+    }
+
     const filler = createFiller(prepared.handles);
-    const hole = rawHoleAt(window.scrollY, containerTop, contLeft, frameRect);
+    const hole = candidateHole;
     const result = computeFlowLayout(
       blocks,
       filler,
@@ -346,6 +478,15 @@
       DEFAULT_METRICS,
     );
     layoutResult = result;
+    layoutHole = hole;
+
+    // Record inputs so the next frame can skip if nothing changed.
+    prevBlocks = blocks;
+    prevContainerWidth = containerWidth;
+    prevHoleLeft = hole.left;
+    prevHoleTop = hole.top;
+    prevHoleRight = hole.right;
+    prevHoleBottom = hole.bottom;
 
     // Publish geometry for cross-module consumption.
     // Capture per-pass values so closures stay self-consistent.
@@ -431,7 +572,7 @@
 
   interface VisibleBlock {
     blockIndex: number;
-    block: FlowBlock;
+    block: FlowTextBlock;
     geo: {
       topY: number;
       bottomY: number;
@@ -462,6 +603,8 @@
       const geo = layoutResult.blocks.at(bi);
       const block = blocks.at(bi);
       if (geo === undefined || block === undefined) continue;
+      // Figure blocks are rendered from the figures array, not here.
+      if (block.kind === "figure") continue;
       if (!isBlockVisible(geo, containerTop, vpTop, vpBottom, buffer)) continue;
 
       const lines: FlowLine[] = [];
@@ -470,7 +613,52 @@
         const line = layoutResult.lines.at(li);
         if (line !== undefined) lines.push(line);
       }
-      result.push({ blockIndex: bi, block, geo, lines });
+      // The figure guard above narrows block to FlowTextBlock.
+      result.push({
+        blockIndex: bi,
+        block,
+        geo,
+        lines,
+      });
+    }
+    return result;
+  });
+
+  // -----------------------------------------------------------------------
+  // Visible figures: virtualized from the layout's figures array
+  // -----------------------------------------------------------------------
+
+  interface VisibleFigure {
+    blockIndex: number;
+    block: FlowFigureBlock;
+    geo: FlowFigureGeometry;
+    /** Block geometry from the blocks array, for fade calculation. */
+    blockGeo: { topY: number; bottomY: number };
+  }
+
+  let visibleFigures: VisibleFigure[] = $derived.by(() => {
+    if (layoutResult === null) return [];
+    if (layoutResult.blocks.length !== blocks.length) return [];
+
+    const vpTop = scrollY;
+    const vpBottom = vpTop + viewportH;
+    const buffer = viewportH;
+
+    const result: VisibleFigure[] = [];
+    for (const fig of layoutResult.figures) {
+      const blockGeo = layoutResult.blocks.at(fig.blockIndex);
+      const block = blocks.at(fig.blockIndex);
+      if (blockGeo === undefined || block === undefined) continue;
+      if (block.kind !== "figure") continue;
+      if (!isBlockVisible(blockGeo, containerTop, vpTop, vpBottom, buffer)) {
+        continue;
+      }
+      result.push({
+        blockIndex: fig.blockIndex,
+        block,
+        geo: fig,
+        blockGeo,
+      });
     }
     return result;
   });
@@ -535,6 +723,21 @@
     blockIndex: number;
   }
 
+  // Pre-built lookup so seenMarks avoids O(n) array scans per heading
+  // block on every layout pass. Keyed by "sectionId--subSlug", maps to
+  // the sub's DemoTopic (null-topic subs are excluded).
+  let subTopicLookup: ReadonlyMap<string, DemoTopic> = $derived.by(() => {
+    const map = new SvelteMap<string, DemoTopic>();
+    for (const section of sections) {
+      for (const sub of section.subs) {
+        if (sub.topic !== null) {
+          map.set(`${section.id}--${sub.slug}`, sub.topic);
+        }
+      }
+    }
+    return map;
+  });
+
   let seenMarks: SeenMark[] = $derived.by(() => {
     if (layoutResult === null) return [];
     if (layoutResult.blocks.length !== blocks.length) return [];
@@ -544,11 +747,10 @@
       const block = blocks.at(bi);
       if (block?.kind !== "sub-heading") continue;
 
-      // Look up the sub to check its topic
-      const section = sections.find((s) => s.id === block.sectionId);
-      const sub = section?.subs.find((s) => s.slug === block.subSlug);
-      const topic = sub?.topic;
-      if (topic === undefined || topic === null) continue;
+      const topic = subTopicLookup.get(
+        `${block.sectionId}--${block.subSlug ?? ""}`,
+      );
+      if (topic === undefined) continue;
       if (!seenTopics.has(topic)) continue;
 
       const geo = layoutResult.blocks.at(bi);
@@ -563,6 +765,112 @@
       });
     }
     return marks;
+  });
+
+  // -----------------------------------------------------------------------
+  // Focus fade
+  //
+  // Blocks dim with distance from the reading line, bottoming out at
+  // FADE_FLOOR, so whatever sits at the line reads as the focal point.
+  // Restored from the pre-flow-layout story, which applied the same
+  // gradient to its snap items; the constants are carried over verbatim
+  // so the feel is unchanged.
+  //
+  // Applied per block rather than per line: a gradient within a single
+  // paragraph would read as a rendering fault, not as focus.
+  // -----------------------------------------------------------------------
+
+  const FADE_DISTANCE = 600;
+  const FADE_FLOOR = 0.35;
+
+  /** Reading line in viewport space, refreshed with the layout. */
+  let readingLine = $state(0);
+
+  $effect(() => {
+    // Track the same inputs the layout does: the line is derived from
+    // viewport size, and scrolling changes which blocks sit near it.
+    void viewportH;
+    void scrollY;
+    readingLine = readingLineY();
+  });
+
+  function fadeFor(blockTopY: number, blockBottomY: number): number {
+    if (readingLine <= 0) return 1;
+    // Block position in viewport space. containerTop is document space,
+    // so subtracting scrollY brings it back to the viewport the reading
+    // line is measured in.
+    const midDocY = containerTop + (blockTopY + blockBottomY) / 2;
+    const dist = Math.abs(midDocY - scrollY - readingLine);
+    const fade = Math.min(1, dist / FADE_DISTANCE);
+    return 1 - fade * (1 - FADE_FLOOR);
+  }
+
+  // -----------------------------------------------------------------------
+  // Heading rules
+  //
+  // A hairline under each sub heading, drawn through the same segment
+  // function the text uses. When the frame overlaps the rule's row the
+  // segments come back split, so the rule renders as two short strokes
+  // flanking the frame rather than one line running behind it.
+  // -----------------------------------------------------------------------
+
+  /** Gap between a heading's baseline row and its rule, in px. */
+  const RULE_OFFSET = 7;
+  const RULE_THICKNESS = 1;
+
+  interface RuleRect {
+    x: number;
+    y: number;
+    width: number;
+    /** Stable across relayout: block index plus position within the row. */
+    key: string;
+    active: boolean;
+    /** Matches its heading's focus fade so the pair dim together. */
+    opacity: number;
+  }
+
+  let headingRules: RuleRect[] = $derived.by(() => {
+    if (layoutResult === null) return [];
+    if (layoutResult.blocks.length !== blocks.length) return [];
+
+    const rects: RuleRect[] = [];
+    for (let bi = 0; bi < blocks.length; bi++) {
+      const block = blocks.at(bi);
+      if (block?.kind !== "sub-heading") continue;
+
+      const geo = layoutResult.blocks.at(bi);
+      if (geo === undefined || geo.lineCount === 0) continue;
+
+      const lastLine = layoutResult.lines.at(
+        geo.firstLineIndex + geo.lineCount - 1,
+      );
+      if (lastLine === undefined) continue;
+
+      const km = DEFAULT_METRICS[block.kind];
+      const ruleY = lastLine.y + km.lineHeight + RULE_OFFSET;
+      const active =
+        block.sectionId === activeSection && block.subSlug === activeSub;
+
+      const segments = computeLineSegments(
+        ruleY,
+        RULE_THICKNESS,
+        containerWidth,
+        layoutHole,
+      );
+      for (let si = 0; si < segments.length; si++) {
+        const seg = segments.at(si);
+        if (seg === undefined) continue;
+        rects.push({
+          x: seg.x,
+          y: ruleY,
+          width: seg.width,
+          key: `${String(bi)}:${String(si)}`,
+          active,
+          opacity: fadeFor(geo.topY, geo.bottomY),
+        });
+      }
+    }
+    return rects;
   });
 
   // -----------------------------------------------------------------------
@@ -614,7 +922,8 @@
   // CSS class helpers per block kind
   // -----------------------------------------------------------------------
 
-  function blockTag(kind: FlowBlockKind): string {
+  /** Semantic tag for a text block. Only called for text blocks. */
+  function blockTag(kind: FlowTextKind): string {
     switch (kind) {
       case "section-title":
         return "h2";
@@ -627,7 +936,7 @@
   }
 
   function lineColorClass(
-    block: FlowBlock,
+    block: FlowTextBlock,
     activeSection_: SectionId,
     activeSub_: string | null,
   ): string {
@@ -677,6 +986,15 @@
       ></div>
     {/each}
 
+    <!-- Hairline rules under each sub heading -->
+    {#each headingRules as rule (rule.key)}
+      <div
+        class="flow-rule"
+        class:flow-rule--active={rule.active}
+        style="left: {rule.x}px; top: {rule.y}px; width: {rule.width}px; opacity: {rule.opacity};"
+      ></div>
+    {/each}
+
     <!-- Seen-topic check marks -->
     {#each seenMarks as mark (mark.blockIndex)}
       <div class="flow-seen-mark" style="left: {mark.x}px; top: {mark.y}px;">
@@ -690,7 +1008,13 @@
       {@const tag = blockTag(vb.block.kind)}
 
       {#if tag === "h2"}
-        <h2 class="flow-block" style="top: {vb.geo.topY}px;">
+        <h2
+          class="flow-block"
+          style="top: {vb.geo.topY}px; opacity: {fadeFor(
+            vb.geo.topY,
+            vb.geo.bottomY,
+          )};"
+        >
           {#each vb.lines as line, li (li)}
             <span
               class="flow-line {lineColorClass(
@@ -702,8 +1026,7 @@
                 left: {line.x}px;
                 top: {line.y - vb.geo.topY}px;
                 width: {line.width}px;
-                font: {FONT_STRINGS[vb.block.kind]};
-                line-height: {DEFAULT_METRICS[vb.block.kind].lineHeight}px;
+                {KIND_STYLE_PREFIX[vb.block.kind]}
               ">{line.text}</span
             >
           {/each}
@@ -713,7 +1036,10 @@
         <h3
           class="flow-block"
           class:flow-block--focusable={isFocusable}
-          style="top: {vb.geo.topY}px;"
+          style="top: {vb.geo.topY}px; opacity: {fadeFor(
+            vb.geo.topY,
+            vb.geo.bottomY,
+          )};"
           role={isFocusable ? "button" : undefined}
           tabindex={isFocusable ? 0 : undefined}
           data-section-id={vb.block.sectionId}
@@ -731,14 +1057,19 @@
                 left: {line.x}px;
                 top: {line.y - vb.geo.topY}px;
                 width: {line.width}px;
-                font: {FONT_STRINGS[vb.block.kind]};
-                line-height: {DEFAULT_METRICS[vb.block.kind].lineHeight}px;
+                {KIND_STYLE_PREFIX[vb.block.kind]}
               ">{line.text}</span
             >
           {/each}
         </h3>
       {:else}
-        <p class="flow-block" style="top: {vb.geo.topY}px;">
+        <p
+          class="flow-block"
+          style="top: {vb.geo.topY}px; opacity: {fadeFor(
+            vb.geo.topY,
+            vb.geo.bottomY,
+          )};"
+        >
           {#each vb.lines as line, li (li)}
             <span
               class="flow-line {lineColorClass(
@@ -750,13 +1081,49 @@
                 left: {line.x}px;
                 top: {line.y - vb.geo.topY}px;
                 width: {line.width}px;
-                font: {FONT_STRINGS[vb.block.kind]};
-                line-height: {DEFAULT_METRICS[vb.block.kind].lineHeight}px;
+                {KIND_STYLE_PREFIX[vb.block.kind]}
               ">{line.text}</span
             >
           {/each}
         </p>
       {/if}
+    {/each}
+
+    <!-- Visible figures: absolutely positioned clip elements -->
+    {#each visibleFigures as vf (vf.block.id)}
+      <div
+        class="flow-figure"
+        style="
+          left: {vf.geo.x}px;
+          top: {vf.geo.y}px;
+          width: {vf.geo.width}px;
+          height: {vf.geo.height}px;
+          opacity: {fadeFor(vf.blockGeo.topY, vf.blockGeo.bottomY)};
+        "
+      >
+        <ClipFigure
+          sectionId={vf.block.sectionId}
+          subSlug={vf.block.subSlug ?? ""}
+          width={vf.geo.width}
+          height={vf.geo.height}
+          ariaLabel={resolveParameterizedMessage(
+            "demo_figure_aria_label",
+            {
+              sub: resolveStoryMessage(
+                `demo_narrative_topic_${vf.block.subSlug ?? "unknown"}_heading`,
+                locale,
+              ),
+            },
+            locale,
+          )}
+          {onpeekfire}
+          {onpeekdrag}
+          {onpeeksecondarytap}
+          {onpeekrelease}
+          {onpeekcancel}
+          {onelement}
+        />
+      </div>
     {/each}
   {/if}
 </div>
@@ -773,6 +1140,14 @@
     right: 0;
     margin: 0;
     pointer-events: auto;
+    /* Smooths the distance fade, which is recomputed per scroll frame. */
+    transition: opacity 0.2s ease;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .flow-block {
+      transition: none;
+    }
   }
 
   .flow-block--focusable {
@@ -855,6 +1230,35 @@
     }
   }
 
+  /* Hairline rule under each sub heading */
+  .flow-rule {
+    position: absolute;
+    height: 1px;
+    background: rgba(0, 0, 0, 0.12);
+    pointer-events: none;
+    transition:
+      background 0.2s ease,
+      opacity 0.2s ease;
+  }
+
+  :global(html.dark) .flow-rule {
+    background: rgba(255, 255, 255, 0.14);
+  }
+
+  .flow-rule--active {
+    background: rgba(0, 122, 255, 0.45);
+  }
+
+  :global(html.dark) .flow-rule--active {
+    background: rgba(100, 210, 255, 0.5);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .flow-rule {
+      transition: none;
+    }
+  }
+
   /* Seen-topic check marks */
   .flow-seen-mark {
     position: absolute;
@@ -863,5 +1267,18 @@
     display: flex;
     align-items: center;
     justify-content: center;
+  }
+
+  /* Inline clip figures */
+  .flow-figure {
+    position: absolute;
+    pointer-events: auto;
+    transition: opacity 0.2s ease;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .flow-figure {
+      transition: none;
+    }
   }
 </style>

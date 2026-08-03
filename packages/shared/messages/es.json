@@ -1838,7 +1838,8 @@
   "clients_filter_include_merged_yes": "Mostrar fusionados",
   "clients_merged_label": "Fusionado",
   "sort_button_label": "{label}, {direction}",
-  "demo_app_title": "Demo de CARE-Y",
+  "demo_app_brand": "CARE-Y",
+  "demo_app_title": "Manual interactivo",
   "demo_scene_tickets": "Tickets",
   "demo_scene_search": "Buscar",
   "demo_theme_toggle": "Alternar modo oscuro",
@@ -1885,7 +1886,7 @@
   "demo_narrative_search_heading": "Busqueda en datos cifrados",
   "demo_narrative_search_body": "La busqueda funciona completamente en el navegador. Tu dispositivo descifra el contenido de los tickets localmente y compara tu consulta con el texto descifrado. Ningun termino de busqueda se envia al servidor.",
   "demo_narrative_search_body2": "Los resultados de busqueda son tan privados como los tickets mismos. El servidor no puede registrar lo que buscaste ni que resultados coincidieron.",
-  "demo_narrative_tip": "Selecciona una funcion arriba, desplazate hacia abajo o interactua con la aplicacion CARE-Y en el telefono para conocer lo que puede hacer.",
+  "demo_narrative_tip": "Selecciona una funcion de la lista, desplazate hacia abajo o interactua con la aplicacion CARE-Y en el telefono para conocer lo que puede hacer.",
   "demo_phone_frame_title": "Demo de la aplicación CARE-Y",
   "demo_progress_explored": "{seen} de {total} funciones exploradas",
   "demo_topic_sort": "Ordenar",
@@ -2022,5 +2023,7 @@
   "demo_entry_phone_heading": "Mueve el telefono a donde quieras",
   "demo_entry_phone_body": "Arrastra el telefono desde el asa superior, cambia su tamano desde cualquier borde o usa los botones de la barra para reducirlo, restaurarlo o pasar a una ventana con forma de escritorio. El texto se recoloca alrededor de donde lo dejes. El boton de enlace corta la conexion entre el telefono y el relato si prefieres explorar uno sin mover el otro.",
   "demo_entry_start_heading": "Para empezar",
-  "demo_entry_start_body": "La demostracion empieza en la pantalla de inicio de sesion, donde CARE-Y deriva las claves de cifrado que protegen todo lo demas. Todo lo que ves es ficticio: las personas voluntarias, los clientes y cada caso estan inventados para este recorrido. Puedes reiniciar en cualquier momento para volver a esta pagina."
+  "demo_entry_start_body": "La demostracion empieza en la pantalla de inicio de sesion, donde CARE-Y deriva las claves de cifrado que protegen todo lo demas. Todo lo que ves es ficticio: las personas voluntarias, los clientes y cada caso estan inventados para este recorrido. Puedes reiniciar en cualquier momento para volver a esta pagina.",
+  "demo_peek_back_to": "Volver a {section}",
+  "demo_figure_aria_label": "Manten pulsado para ver {sub}"
 }

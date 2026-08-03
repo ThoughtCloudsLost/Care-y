@@ -5,18 +5,18 @@
  * The page owns NO location state. activeSection/activeSub are derived
  * from the last bridge snapshot (a mirror of the phone-side location
  * store), so the narrative can only ever show what the store holds.
- * Page inputs (scroll settles, clicks, deep links) are intents sent
- * through bridge.setLocation; the page moves when the store echoes the
- * change back, one path for every input.
+ * Page inputs (derived scroll position, clicks, deep links) are intents
+ * sent through bridge.setLocation; the page moves when the store echoes
+ * the change back, one path for every input.
  *
- * Presentation model: a reading line sits at a fixed fraction of the
- * viewport height. The flow layout reports which block crosses that
- * line; the engine sends it as a location intent on scroll settle.
- * Programmatic moves (clicks, phone interactions, deep links) scroll
- * the page so the target block's top meets the reading line.
+ * Selection model: which sub is selected is a $derived value computed
+ * from locationWithVisibleHeading(). The geometry source is reactive
+ * (republished by FlowStory on every layout pass, which runs per scroll
+ * frame), so the derived recomputes automatically. Programmatic moves
+ * (clicks, phone interactions, deep links) scroll the page so the
+ * target block's top meets the reading line.
  *
- * DOM-dependent (listens to scroll settle, delegates geometry to
- * flow-geometry).
+ * DOM-dependent (delegates geometry to flow-geometry).
  */
 
 import { tick } from "svelte";
@@ -29,10 +29,9 @@ import {
 import type { DemoBridge, DemoBridgeState, DemoTopic } from "./bridge.js";
 import {
   readingLineY,
-  locationAtReadingLine,
   scrollTargetFor,
   flowGeometryReady,
-  type FlowLocation,
+  locationWithVisibleHeading,
 } from "./flow-geometry.svelte.js";
 
 // -----------------------------------------------------------------------
@@ -58,16 +57,15 @@ export interface ScrollEngine {
   destroy(): void;
 }
 
-// Settle debounce for browsers without the scrollend event (Safari)
-const SETTLE_QUIET_MS = 160;
-
 // Distance (px) within which a scroll position counts as "at the target"
 const ALIGN_TOLERANCE = 1;
 
-// Distance (px) within which a suppressed settle is considered close
-// enough to the aligned target to disarm (accounts for subpixel
-// rounding and font-metric shifts between settle and alignment)
-const SUPPRESS_TOLERANCE = 48;
+/**
+ * How long after a scroll the story refuses to auto-scroll itself.
+ * Covers the phone's late settles, which arrive shortly after the
+ * command that caused them has already resolved.
+ */
+const SCROLL_GRACE_MS = 400;
 
 export function createScrollEngine(
   getBridge: () => DemoBridge | undefined,
@@ -98,32 +96,58 @@ export function createScrollEngine(
   // Armed when a programmatic alignment scroll is in flight, or when
   // an init/reboot transition swaps the rendered section list.
   let suppressSettle = false;
-  let alignRetries = 0;
-  // The location we aligned to, for settle matching
-  let alignedTarget: FlowLocation | null = null;
-  // The scrollY we aligned to, for position matching
-  let alignedScrollY: number | null = null;
+
+  // Hard timeout handle for the suppression safety net. Cleared on
+  // every normal disarm path so it only fires when something goes wrong.
+  let suppressionTimeout: ReturnType<typeof setTimeout> | undefined;
+
+  /** Arm suppression with a hard timeout fallback that clears it
+   *  unconditionally, so a missed disarm can never latch forever. */
+  function armSuppression(): void {
+    suppressSettle = true;
+    clearTimeout(suppressionTimeout);
+    suppressionTimeout = setTimeout(() => {
+      suppressSettle = false;
+    }, 1000);
+  }
+
+  /** Disarm suppression and cancel the hard timeout. */
+  function disarmSuppression(): void {
+    suppressSettle = false;
+    clearTimeout(suppressionTimeout);
+  }
 
   // -----------------------------------------------------------------------
-  // Settle detection: the block at the reading line is the selection
+  // Derived selection: the sub at the band IS the selection
+  //
+  // locationWithVisibleHeading() reads module $state (the published
+  // geometry source) plus window.scrollY. The source is reactive and
+  // is republished by FlowStory on every layout pass; the layout runs
+  // on every scroll frame (scrollY is a $state in FlowStory that
+  // triggers a rAF-coalesced relayout, which calls
+  // setFlowGeometrySource). So the derived recomputes per scroll frame
+  // without needing its own scroll listener.
   // -----------------------------------------------------------------------
 
-  function onSettle(): void {
-    // Entry page or other page-level gate: ignore settles entirely.
-    if (!getPageScrollEnabled()) return;
+  // Timestamp only, no work: the align path reads it to avoid scrolling
+  // the story while the visitor is scrolling it themselves.
+  let lastScrollAt = 0;
 
-    // When unlinked, the story scroll must not drive the phone.
-    if (!getLinked()) return;
+  function noteUserScroll(): void {
+    lastScrollAt = Date.now();
+  }
 
-    if (suppressSettle) {
-      handleSuppressedSettle();
-      return;
-    }
+  window.addEventListener("scroll", noteUserScroll, { passive: true });
 
-    if (!flowGeometryReady()) return;
+  const derivedLocation = $derived(locationWithVisibleHeading());
 
-    const loc = locationAtReadingLine();
+  $effect(() => {
+    const loc = derivedLocation;
     if (loc === null) return;
+    if (!getPageScrollEnabled()) return;
+    if (!getLinked()) return;
+    if (suppressSettle) return;
+    if (!flowGeometryReady()) return;
 
     // Already showing this location: clear any pending request
     if (loc.sectionId === activeSection && loc.subSlug === activeSub) {
@@ -142,70 +166,7 @@ export function createScrollEngine(
 
     requestedSub = { section: loc.sectionId, sub: loc.subSlug };
     getBridge()?.setLocation(loc.sectionId, loc.subSlug, "page-scroll");
-  }
-
-  /**
-   * Handle a settle that fired while suppression is armed.
-   * If the reading line is at the aligned target (or scrollY is close
-   * enough), disarm. Otherwise re-align once, then disarm.
-   */
-  function handleSuppressedSettle(): void {
-    // Check position-based match: if we are close to where we scrolled,
-    // the settle is our own alignment completing.
-    if (
-      alignedScrollY !== null &&
-      Math.abs(window.scrollY - alignedScrollY) < SUPPRESS_TOLERANCE
-    ) {
-      suppressSettle = false;
-      alignedTarget = null;
-      alignedScrollY = null;
-      requestedSub = null;
-      return;
-    }
-
-    // Check location-based match
-    const loc = locationAtReadingLine();
-    if (
-      loc !== null &&
-      alignedTarget !== null &&
-      loc.sectionId === alignedTarget.sectionId &&
-      loc.subSlug === alignedTarget.subSlug
-    ) {
-      suppressSettle = false;
-      alignedTarget = null;
-      alignedScrollY = null;
-      requestedSub = null;
-      return;
-    }
-
-    // Mismatch: re-align once, then give up
-    if (alignRetries < 1 && mirror !== undefined) {
-      alignRetries += 1;
-      void alignToLocation(
-        mirror.location.sectionId,
-        mirror.location.subSlug,
-        mirror.origin,
-      );
-    } else {
-      suppressSettle = false;
-      alignedTarget = null;
-      alignedScrollY = null;
-    }
-  }
-
-  let settleTimer: ReturnType<typeof setTimeout> | undefined;
-  const hasScrollEnd = "onscrollend" in window;
-
-  function onScroll(): void {
-    if (hasScrollEnd) return;
-    clearTimeout(settleTimer);
-    settleTimer = setTimeout(onSettle, SETTLE_QUIET_MS);
-  }
-
-  function onScrollEnd(): void {
-    clearTimeout(settleTimer);
-    onSettle();
-  }
+  });
 
   // -----------------------------------------------------------------------
   // Mirror + presentation (the store's echo drives the page)
@@ -239,22 +200,30 @@ export function createScrollEngine(
     }
 
     if (state.origin === "page-scroll") {
-      // The visitor scrolled here; the reading line already shows this
-      // location and the highlight follows via the derived active values.
+      // The visitor scrolled here. Alignment is NOT re-run: bringing the
+      // sub to the reading line is done by CSS scroll snapping, which
+      // happens during the scroll itself. Scrolling them again here
+      // would yank the page after they had already stopped.
       return;
     }
 
-    // Every programmatic transition arms settle suppression: the
-    // alignment scroll must not feed back as a page-scroll intent.
-    // An init-with-previous-mirror transition is a phone reboot
-    // (restart, sign-out): the section swaps under the old scroll
-    // position and requires the same treatment.
-    suppressSettle = true;
-    alignRetries = 0;
+    if (state.origin === "phone-correction") {
+      // A page-initiated request did not converge, so the store
+      // snapped to the phone's actual screen. Mirror the state and
+      // update the URL hash, but do NOT arm suppression and do NOT
+      // scroll the page: corrections must never yank the reader.
+      return;
+    }
+
+    // Every programmatic transition arms suppression: the alignment
+    // scroll must not feed back as a page-scroll intent. The hard
+    // timeout inside armSuppression guarantees it clears even if the
+    // alignment path never reaches its own disarm call.
+    armSuppression();
 
     // Section change (or init reboot): scroll to top before aligning
     // so the new page remounts at a clean scroll position. The armed
-    // suppression absorbs the resulting settle.
+    // suppression absorbs the resulting derived update.
     const sectionChanged =
       state.location.sectionId !== prev?.location.sectionId;
     if (sectionChanged) {
@@ -277,6 +246,19 @@ export function createScrollEngine(
     subSlug: string | null,
     origin: DemoBridgeState["origin"],
   ): Promise<void> {
+    // Never scroll the story out from under someone who is scrolling it.
+    //
+    // A page-scroll intent makes the phone navigate, and the phone keeps
+    // settling after the command resolves. Those late settles arrive as
+    // origin "phone" and would scroll the story to match, which reads as
+    // the page jumping backwards mid-scroll. Only phone-origin moves are
+    // gated: clicks and deep links must always align, and neither is a
+    // scroll.
+    if (origin === "phone" && Date.now() - lastScrollAt < SCROLL_GRACE_MS) {
+      disarmSuppression();
+      return;
+    }
+
     // Capture the sequence number so a superseding transition can abort
     // this loop (the new page's alignToLocation bumps the counter).
     const mySeq = ++locationSeq;
@@ -294,7 +276,11 @@ export function createScrollEngine(
       const MAX_RETRIES = 10;
       const RETRY_DELAY_MS = 50;
       for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
-        if (locationSeq !== mySeq) return; // superseded
+        if (locationSeq !== mySeq) {
+          // Superseded: the new alignToLocation armed its own
+          // suppression, so do not clear it here.
+          return;
+        }
         await new Promise<void>((resolve) => {
           setTimeout(resolve, RETRY_DELAY_MS);
         });
@@ -307,24 +293,19 @@ export function createScrollEngine(
     if (locationSeq !== mySeq) return;
 
     if (target === null) {
-      // Exhausted retries: clear suppression so the engine is not
-      // left wedged, and return. The next bridge state change or
-      // scroll settle will pick up the location.
-      suppressSettle = false;
+      // Exhausted retries: clear suppression so the derived selection
+      // is not left muted. The hard timeout would catch this too, but
+      // clearing eagerly is better.
+      disarmSuppression();
       return;
     }
 
-    // Record what we aligned to for suppression matching
-    alignedTarget = { sectionId, subSlug };
-    alignedScrollY = target;
-
     if (Math.abs(window.scrollY - target) < ALIGN_TOLERANCE) {
-      // Already at the target: no scroll event will fire, so the
-      // settle path will not clear suppression. Clear it now unless
-      // this is an init/reboot transition where the browser may still
-      // snap-correct.
+      // Already at the target: no scroll event will fire, so clear
+      // suppression now unless this is an init/reboot transition
+      // where the browser may still snap-correct.
       if (origin !== "init") {
-        suppressSettle = false;
+        disarmSuppression();
       }
       return;
     }
@@ -336,6 +317,14 @@ export function createScrollEngine(
       origin === "phone" && !reduced ? "smooth" : "auto";
 
     window.scrollTo({ top: target, behavior });
+
+    // For "auto" (instant) scrolls, suppression can be cleared
+    // immediately since the scroll completes synchronously. Smooth
+    // scrolls rely on the hard timeout to clear suppression after
+    // the animation finishes.
+    if (behavior === "auto") {
+      disarmSuppression();
+    }
   }
 
   // -----------------------------------------------------------------------
@@ -368,17 +357,9 @@ export function createScrollEngine(
   // Lifecycle
   // -----------------------------------------------------------------------
 
-  window.addEventListener("scroll", onScroll, { passive: true });
-  if (hasScrollEnd) {
-    window.addEventListener("scrollend", onScrollEnd);
-  }
-
   function destroy(): void {
-    window.removeEventListener("scroll", onScroll);
-    if (hasScrollEnd) {
-      window.removeEventListener("scrollend", onScrollEnd);
-    }
-    clearTimeout(settleTimer);
+    clearTimeout(suppressionTimeout);
+    window.removeEventListener("scroll", noteUserScroll);
   }
 
   return {

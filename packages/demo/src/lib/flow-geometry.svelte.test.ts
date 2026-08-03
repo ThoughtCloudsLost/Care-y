@@ -42,6 +42,7 @@ function makeLayout(blockGeos: FlowBlockGeometry[]): FlowLayoutResult {
       text: "line",
     })),
     blocks: blockGeos,
+    figures: [],
     totalHeight: lastGeo !== undefined ? lastGeo.bottomY : 0,
   };
 }

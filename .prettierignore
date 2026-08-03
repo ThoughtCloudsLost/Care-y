@@ -20,6 +20,7 @@ Dockerfile.*
 *.toml
 .gitleaksignore
 .gitignore
+.gitkeep
 *.woff2
 *.patch
 *.png

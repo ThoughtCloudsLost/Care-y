@@ -5,11 +5,17 @@ import {
   deriveBezelRadius,
   computeSpawn,
   computeShrunkFootprint,
+  computeAutoGrowTarget,
+  bottomCentrePosition,
+  isAutoShrinkSize,
+  AUTO_SHRINK_MAX_EDGE,
+  AUTO_GROW_FACTOR,
   clampPosition,
   presetAnchoredLeft,
   presetAnchoredTop,
   clampTopToViewport,
   FRAME_FIT_MARGIN,
+  SPAWN_MARGIN,
   PHONE_PRESET,
   DESKTOP_PRESET,
   MIN_FOOTPRINT,
@@ -17,6 +23,7 @@ import {
   BEZEL,
   SHRINK_VH_FRACTION,
 } from "./frame-geometry.svelte.js";
+import { FRAME_PAD_TOP } from "./flow-layout.js";
 
 // -----------------------------------------------------------------------
 // deriveZoomViewport
@@ -94,17 +101,63 @@ describe("deriveZoomViewport", () => {
 describe("computeSpawn", () => {
   const topBar = 56;
 
-  it("uses phone preset dimensions for wide windows (>= 900px)", () => {
+  it("scales the phone down to fit the window height, keeping its ratio", () => {
+    // 900px tall cannot hold an 844px phone plus bezel, top bar, and
+    // toolbar, so the spawn must shrink rather than overflow.
     const spawn = computeSpawn(1280, 900, topBar);
+
+    expect(spawn.footprintH).toBeLessThan(PHONE_PRESET.h);
+    expect(spawn.footprintW / spawn.footprintH).toBeCloseTo(
+      PHONE_PRESET.w / PHONE_PRESET.h,
+      2,
+    );
+  });
+
+  it("leaves the toolbar visible below the top bar", () => {
+    // The toolbar is absolutely positioned above frameRect.top, so the
+    // frame must start at least its clearance below the bar.
+    const spawn = computeSpawn(1280, 900, topBar);
+    expect(spawn.top).toBeGreaterThanOrEqual(topBar + FRAME_PAD_TOP);
+  });
+
+  it("leaves clear space below the frame", () => {
+    const windowH = 900;
+    const spawn = computeSpawn(1280, windowH, topBar);
+    const outerH = spawn.footprintH + BEZEL * 2;
+    expect(spawn.top + outerH).toBeLessThanOrEqual(windowH - SPAWN_MARGIN);
+  });
+
+  it("does not scale down when the window is tall enough", () => {
+    // Plenty of height: full phone preset, no shrinking.
+    const spawn = computeSpawn(1600, 1200, topBar);
     expect(spawn.footprintW).toBe(PHONE_PRESET.w);
     expect(spawn.footprintH).toBe(PHONE_PRESET.h);
   });
 
-  it("places the frame on the right side at >= 900px", () => {
-    const spawn = computeSpawn(1280, 900, topBar);
-    // left = 1280 - 390 - 24 - 24 = 842
-    expect(spawn.left).toBe(1280 - PHONE_PRESET.w - BEZEL * 2 - 24);
+  it("centres the frame in the right half of the window at >= 900px", () => {
+    const windowW = 1280;
+    const spawn = computeSpawn(windowW, 900, topBar);
+    // Derived from the spawn, not the preset: the frame scales to fit.
+    const outerW = spawn.footprintW + BEZEL * 2;
+
+    // Equal slack between the window's midpoint and the frame, and
+    // between the frame and the right edge.
+    const slackLeft = spawn.left - windowW / 2;
+    const slackRight = windowW - (spawn.left + outerW);
+    expect(slackLeft).toBeCloseTo(slackRight, 5);
+    expect(slackLeft).toBeGreaterThan(0);
     expect(spawn.top).toBeGreaterThanOrEqual(topBar);
+  });
+
+  it("keeps a frame wider than the right half fully on screen", () => {
+    // 900px window: the right half is 450px, narrower than the 414px
+    // outer frame plus margins would comfortably allow once centred.
+    const windowW = 900;
+    const spawn = computeSpawn(windowW, 900, topBar);
+    const outerW = spawn.footprintW + BEZEL * 2;
+
+    expect(spawn.left).toBeGreaterThanOrEqual(FRAME_FIT_MARGIN);
+    expect(spawn.left + outerW).toBeLessThanOrEqual(windowW - FRAME_FIT_MARGIN);
   });
 
   it("scales down on narrow windows (< 900px)", () => {
@@ -123,15 +176,38 @@ describe("computeSpawn", () => {
     expect(spawn.left).toBeCloseTo(expectedLeft, 0);
   });
 
-  it("places below the top bar on narrow windows", () => {
+  it("places below the top bar and toolbar on narrow windows", () => {
     const spawn = computeSpawn(400, 800, topBar);
-    expect(spawn.top).toBe(topBar + 16);
+    expect(spawn.top).toBeGreaterThanOrEqual(topBar + FRAME_PAD_TOP);
   });
 
   it("enforces minimum footprint dimensions", () => {
     const spawn = computeSpawn(100, 200, topBar);
     expect(spawn.footprintW).toBeGreaterThanOrEqual(MIN_FOOTPRINT.w);
     expect(spawn.footprintH).toBeGreaterThanOrEqual(MIN_FOOTPRINT.h);
+  });
+});
+
+// -----------------------------------------------------------------------
+// bottomCentrePosition
+// -----------------------------------------------------------------------
+
+describe("bottomCentrePosition", () => {
+  it("centres horizontally and docks to the bottom", () => {
+    const pos = bottomCentrePosition(200, 300, 800, 1000);
+
+    expect(pos.left).toBe((800 - 200) / 2);
+    expect(pos.top).toBe(1000 - 300 - FRAME_FIT_MARGIN);
+  });
+
+  it("keeps a frame taller than the window from going off the top", () => {
+    const pos = bottomCentrePosition(200, 1200, 800, 1000);
+    expect(pos.top).toBe(FRAME_FIT_MARGIN);
+  });
+
+  it("keeps a frame wider than the window from going off the left", () => {
+    const pos = bottomCentrePosition(900, 300, 800, 1000);
+    expect(pos.left).toBe(FRAME_FIT_MARGIN);
   });
 });
 
@@ -316,6 +392,95 @@ describe("createFrameGeometry shrink semantics", () => {
     const geo = createFrameGeometry();
     geo.shrink();
     geo.clearShrinkMemory();
+    expect(geo.shrunk).toBe(false);
+    expect(geo.grow()).toBeNull();
+  });
+});
+
+// -----------------------------------------------------------------------
+// Auto-shrink on manual resize
+// -----------------------------------------------------------------------
+
+describe("isAutoShrinkSize", () => {
+  it("treats a footprint at the threshold as shrunk", () => {
+    expect(isAutoShrinkSize(130, AUTO_SHRINK_MAX_EDGE)).toBe(true);
+  });
+
+  it("does not trigger just past the threshold", () => {
+    expect(isAutoShrinkSize(130, AUTO_SHRINK_MAX_EDGE + 1)).toBe(false);
+  });
+
+  it("keys off the longest edge, not the shortest", () => {
+    // Thin but tall: still a usable frame, so not auto-shrunk.
+    expect(isAutoShrinkSize(60, 800)).toBe(false);
+  });
+
+  it("classifies the footprint the shrink control produces", () => {
+    // The manual threshold and the shrink button must agree about the
+    // same size, or grabbing a handle to that size would behave
+    // differently from pressing shrink.
+    const shrunk = computeShrunkFootprint(PHONE_PRESET.w, PHONE_PRESET.h, 900);
+    expect(isAutoShrinkSize(shrunk.w, shrunk.h)).toBe(true);
+  });
+});
+
+describe("computeAutoGrowTarget", () => {
+  it("scales both axes by the same factor, preserving the ratio", () => {
+    const target = computeAutoGrowTarget(210, 430);
+
+    expect(target.w).toBe(210 * AUTO_GROW_FACTOR);
+    expect(target.h).toBe(430 * AUTO_GROW_FACTOR);
+    // Ratio survives the round trip
+    expect(target.w / target.h).toBeCloseTo(210 / 430, 5);
+  });
+
+  it("returns a shrunk phone to roughly the phone preset", () => {
+    const shrunk = computeShrunkFootprint(PHONE_PRESET.w, PHONE_PRESET.h, 900);
+    const grown = computeAutoGrowTarget(shrunk.w, shrunk.h);
+
+    expect(grown.w).toBeGreaterThan(PHONE_PRESET.w * 0.9);
+    expect(grown.h).toBeGreaterThan(PHONE_PRESET.h * 0.9);
+  });
+});
+
+describe("settleShrinkAfterResize", () => {
+  it("adopts a hand-shrunk footprint and remembers a larger one at the same ratio", () => {
+    const geo = createFrameGeometry();
+    // Above MIN_FOOTPRINT so setFootprint keeps it verbatim.
+    geo.setFootprint(210, 430);
+
+    geo.settleShrinkAfterResize();
+    expect(geo.shrunk).toBe(true);
+
+    // Grow returns the same shape, AUTO_GROW_FACTOR times larger
+    const grown = geo.grow();
+    expect(grown).toEqual({
+      w: 210 * AUTO_GROW_FACTOR,
+      h: 430 * AUTO_GROW_FACTOR,
+    });
+    expect(geo.shrunk).toBe(false);
+  });
+
+  it("clears the shrink state when the frame was resized back up", () => {
+    const geo = createFrameGeometry();
+    geo.setFootprint(210, 430);
+    geo.settleShrinkAfterResize();
+    expect(geo.shrunk).toBe(true);
+
+    // User drags it large again
+    geo.setFootprint(PHONE_PRESET.w, PHONE_PRESET.h);
+    geo.settleShrinkAfterResize();
+
+    expect(geo.shrunk).toBe(false);
+    expect(geo.grow()).toBeNull();
+  });
+
+  it("leaves a normally sized frame unshrunk", () => {
+    const geo = createFrameGeometry();
+    geo.setFootprint(DESKTOP_PRESET.w, DESKTOP_PRESET.h);
+
+    geo.settleShrinkAfterResize();
+
     expect(geo.shrunk).toBe(false);
     expect(geo.grow()).toBeNull();
   });

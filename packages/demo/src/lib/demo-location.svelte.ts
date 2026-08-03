@@ -131,17 +131,17 @@ export class DemoLocationStore {
       this.deps.getTicketDetailId(),
       this.deps.getArticleDetailId(),
     );
-    void this.deps.ensureScreen(cmd, token).finally(() => {
+    void this.deps.ensureScreen(cmd, token).then(async () => {
       // eslint-disable-next-line security/detect-possible-timing-attacks -- monotonic staleness counter, not a secret
       if (this.pendingToken !== token) return;
-      this.pendingToken = null;
+
       // Convergence check: the chain was supposed to leave the phone
       // on this section's screen family. If it did not (element never
-      // appeared, stage timed out), the phone wins and the location
-      // snaps to what it actually shows.
+      // appeared, stage timed out), try forcing one more time before
+      // falling back to a correction.
       const phone = this.deps.getPhone();
       if (
-        !sectionMatchesPhone(
+        sectionMatchesPhone(
           sectionId,
           phone.feature,
           phone.detail,
@@ -150,7 +150,40 @@ export class DemoLocationStore {
           subSlug,
         )
       ) {
-        this.adoptPhone();
+        this.pendingToken = null;
+        return;
+      }
+
+      // Force: retry the same ensureScreen command. The phone may now
+      // be in a more favorable intermediate state that lets the chain
+      // complete. This is the best we can do without a direct
+      // navigation API on LocationStoreDeps (see class-level note).
+      await this.deps.ensureScreen(cmd, token);
+      // eslint-disable-next-line security/detect-possible-timing-attacks -- monotonic staleness counter, not a secret
+      if (this.pendingToken !== token) return;
+      this.pendingToken = null;
+
+      const afterForce = this.deps.getPhone();
+      const converged = sectionMatchesPhone(
+        sectionId,
+        afterForce.feature,
+        afterForce.detail,
+        afterForce.searchOpen,
+        afterForce.routeId,
+        subSlug,
+      );
+
+      if (import.meta.env.DEV) {
+        this.logConvergenceDiagnostic(
+          sectionId,
+          subSlug,
+          afterForce,
+          converged,
+        );
+      }
+
+      if (!converged) {
+        this.adoptPhone("phone-correction");
       }
     });
   }
@@ -206,8 +239,13 @@ export class DemoLocationStore {
     this.adoptPhone();
   }
 
-  /** Adopt whatever location the phone's current state maps to. */
-  private adoptPhone(): void {
+  /**
+   * Adopt whatever location the phone's current state maps to.
+   * The origin defaults to "phone" for genuine phone-initiated moves.
+   * Corrections from failed page-intent convergence pass
+   * "phone-correction" so the scroll engine can distinguish them.
+   */
+  private adoptPhone(origin: "phone" | "phone-correction" = "phone"): void {
     const phone = this.deps.getPhone();
     const candidate = bridgeStateToLocation(
       phone.feature,
@@ -223,11 +261,36 @@ export class DemoLocationStore {
     ) {
       return;
     }
-    // Every adoption here is a real phone-originated move. The boot
-    // baseline is the initial field value of `origin`, not a commit:
-    // the mount sync resolves to the location the store already holds
-    // and returns above without committing anything.
-    this.commit(candidate, "phone");
+    // Genuine phone moves use "phone"; convergence failures after a
+    // page intent use "phone-correction" to avoid yanking scroll.
+    // The boot baseline is the initial field value of `origin`, not
+    // a commit: the mount sync resolves to the location the store
+    // already holds and returns above without committing anything.
+    this.commit(candidate, origin);
+  }
+
+  /**
+   * Dev-only diagnostic for convergence failures. Logs the requested
+   * location, the phone's actual state, and whether forcing resolved
+   * the mismatch. Only static demo locations are logged (no PII).
+   */
+  private logConvergenceDiagnostic(
+    sectionId: SectionId,
+    subSlug: string | null,
+    phone: PhoneScreenState,
+    resolvedByForcing: boolean,
+  ): void {
+    console.warn("[demo-location] convergence mismatch", {
+      requested: { sectionId, subSlug },
+      phone: {
+        feature: phone.feature,
+        detail: phone.detail,
+        searchOpen: phone.searchOpen,
+        routeId: phone.routeId,
+        loginStage: phone.loginStage,
+      },
+      resolvedByForcing,
+    });
   }
 
   private commit(location: DemoLocation, origin: LocationOrigin): void {

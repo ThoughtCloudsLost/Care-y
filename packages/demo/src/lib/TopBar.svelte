@@ -53,6 +53,7 @@
 <header class="top-bar">
   <div class="top-bar-inner">
     <div class="top-bar-left">
+      <span class="top-bar-brand">{m.demo_app_brand()}</span>
       <span class="top-bar-title">{m.demo_app_title()}</span>
       <span class="top-bar-progress">
         {m.demo_progress_explored({
@@ -142,9 +143,26 @@
     min-width: 0;
   }
 
+  /* Brand line above the page title. Set small and letterspaced so
+     three stacked lines still clear the 56px bar. */
+  .top-bar-brand {
+    font-size: 0.625rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    line-height: 1.2;
+    text-transform: uppercase;
+    white-space: nowrap;
+    color: #86868b;
+  }
+
+  :global(html.dark) .top-bar-brand {
+    color: #98989d;
+  }
+
   .top-bar-title {
     font-size: 0.875rem;
     font-weight: 700;
+    line-height: 1.25;
     white-space: nowrap;
     color: #1d1d1f;
   }
@@ -155,6 +173,7 @@
 
   .top-bar-progress {
     font-size: 0.6875rem;
+    line-height: 1.2;
     color: #86868b;
     white-space: nowrap;
   }

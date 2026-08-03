@@ -81,7 +81,12 @@ export interface DemoLocation {
  * a phone transition must), never off timing windows.
  */
 export type LocationOrigin =
-  "init" | "phone" | "page-scroll" | "page-click" | "deep-link";
+  | "init"
+  | "phone"
+  | "phone-correction"
+  | "page-scroll"
+  | "page-click"
+  | "deep-link";
 
 /** Origins the outer page is allowed to claim in setLocation. */
 export type PageOrigin = "page-scroll" | "page-click" | "deep-link";
@@ -205,6 +210,12 @@ export interface DemoBridgeState {
    * a phone-initiated restart behaves exactly like the restart button.
    */
   readonly restartSeq: number;
+  /**
+   * False at boot, flips true once the PGlite engine finishes loading
+   * and stays true until the iframe reloads. The outer page uses it to
+   * sharpen the peek's blurred still into the live app.
+   */
+  readonly engineReady: boolean;
 }
 
 export type DemoBridgeListener = (state: DemoBridgeState) => void;

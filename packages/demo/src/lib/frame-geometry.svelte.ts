@@ -15,12 +15,20 @@
  * No persistence: every page load spawns the canonical initial state.
  */
 
+// FRAME_PAD_TOP is the toolbar's height plus breathing room. Imported
+// rather than redeclared so the spawn clearance and the text layout's
+// clearance can never drift apart when the toolbar changes size.
+import { FRAME_PAD_TOP } from "./flow-layout.js";
+
 // -----------------------------------------------------------------------
 // Preset targets
 // -----------------------------------------------------------------------
 
 /** Phone preset: 1:1 with the 390x844 minimum viewport. */
 export const PHONE_PRESET = { w: 390, h: 844 } as const;
+
+/** Clear space kept around the frame when it first appears. */
+export const SPAWN_MARGIN = 24;
 
 /**
  * Desktop preset: a footprint that shows the desktop shell scaled down.
@@ -105,29 +113,85 @@ export function computeSpawn(
   windowH: number,
   topBarH: number,
 ): SpawnState {
-  if (windowW >= 900) {
-    // Wide layout: place in the right gutter area
-    const fw = PHONE_PRESET.w;
-    const fh = PHONE_PRESET.h;
-    const availH = windowH - topBarH;
-    const top = topBarH + Math.max(0, (availH - fh - BEZEL * 2) / 2);
-    // Right-align with some margin
-    const left = windowW - fw - BEZEL * 2 - 24;
-    return { footprintW: fw, footprintH: fh, top, left };
-  }
+  // The frame spawns inside a band that already excludes the top bar,
+  // the toolbar, and a margin on every side. Sizing against that band
+  // rather than the raw window is what guarantees the toolbar's grip and
+  // buttons are on screen from the first frame: the toolbar is absolutely
+  // positioned ABOVE frameRect.top, so a frame merely "fitting the
+  // window" pushes its own controls off the top.
+  const bandTop = topBarH + FRAME_PAD_TOP;
+  const bandH = Math.max(MIN_FOOTPRINT.h, windowH - bandTop - SPAWN_MARGIN);
 
-  // Small layout: scale to fit ~40vh, centered
-  const targetH = windowH * 0.4;
-  const aspect = PHONE_PRESET.w / PHONE_PRESET.h;
-  const fh = Math.max(MIN_FOOTPRINT.h, Math.min(targetH, PHONE_PRESET.h));
-  const fw = Math.max(MIN_FOOTPRINT.w, Math.round(fh * aspect));
-  const top = topBarH + 16;
-  const left = Math.max(0, (windowW - fw - BEZEL * 2) / 2);
+  // Horizontal band: the right half on wide layouts (the space the frame
+  // has to itself there), the full width otherwise.
+  const bandLeft = windowW >= WIDE_BREAKPOINT ? windowW / 2 : 0;
+  const bandW = Math.max(
+    MIN_FOOTPRINT.w,
+    windowW - bandLeft - SPAWN_MARGIN * 2,
+  );
+
+  // Fit the phone into the band, both axes, preserving its aspect ratio.
+  // Scaling one factor across both axes rather than clamping each on its
+  // own is what keeps it reading as a phone instead of a squat box.
+  const fitScale = Math.min(
+    1,
+    (bandW - BEZEL * 2) / PHONE_PRESET.w,
+    (bandH - BEZEL * 2) / PHONE_PRESET.h,
+  );
+  // Never shrink below the minimum footprint, and apply that floor as a
+  // scale too so the ratio survives it.
+  const floorScale = Math.max(
+    MIN_FOOTPRINT.w / PHONE_PRESET.w,
+    MIN_FOOTPRINT.h / PHONE_PRESET.h,
+  );
+  const scale = Math.max(fitScale, floorScale);
+
+  const fw = Math.round(PHONE_PRESET.w * scale);
+  const fh = Math.round(PHONE_PRESET.h * scale);
+  const outerW = fw + BEZEL * 2;
+  const outerH = fh + BEZEL * 2;
+
+  // Centre within the band on both axes, then clamp so an oversized
+  // frame still lands on screen rather than hanging off an edge.
+  const top = bandTop + Math.max(0, (bandH - outerH) / 2);
+  const centredLeft = bandLeft + (windowW - bandLeft - outerW) / 2;
+  const left = Math.max(
+    FRAME_FIT_MARGIN,
+    Math.min(centredLeft, windowW - outerW - FRAME_FIT_MARGIN),
+  );
+
   return { footprintW: fw, footprintH: fh, top, left };
 }
 
 /** Breathing room kept around a frame that a preset must fit on screen. */
 export const FRAME_FIT_MARGIN = 8;
+
+/**
+ * Window width at or above which the wide layout applies: the frame
+ * spawns in the right half and the story text flows beside it. Below it
+ * the frame is centred and the layout is single-column.
+ */
+export const WIDE_BREAKPOINT = 900;
+
+/**
+ * Park a frame against the bottom centre of the window.
+ *
+ * Used for the shrunk frame on narrow layouts, where there is no side
+ * gutter to hold it: docking it to the bottom keeps it clear of the text
+ * without covering the section header at the top.
+ */
+export function bottomCentrePosition(
+  outerW: number,
+  outerH: number,
+  windowW: number,
+  windowH: number,
+  margin = FRAME_FIT_MARGIN,
+): { top: number; left: number } {
+  return {
+    top: Math.max(margin, windowH - outerH - margin),
+    left: Math.max(margin, (windowW - outerW) / 2),
+  };
+}
 
 /**
  * Compute the starting `left` for a width-changing preset animation so
@@ -234,6 +298,56 @@ export function computeShrunkFootprint(
   };
 }
 
+// -----------------------------------------------------------------------
+// Auto-shrink on manual resize
+// -----------------------------------------------------------------------
+
+/**
+ * Longest footprint edge at or below which a hand-resized frame is
+ * treated as shrunk.
+ *
+ * Calibrated against what the shrink control itself produces: at a 900px
+ * viewport, computeShrunkFootprint takes a phone to roughly 200x433. A
+ * frame dragged to that size by hand has to read as shrunk too, or the
+ * two paths would disagree about the same footprint. Note the 200px
+ * MIN_FOOTPRINT floor means the qualifying band is narrower than this
+ * number alone suggests.
+ */
+export const AUTO_SHRINK_MAX_EDGE = 450;
+
+/**
+ * How much larger the grow control makes an auto-shrunk frame. Applied
+ * to both axes, so the hand-chosen aspect ratio is what comes back.
+ *
+ * Doubling a shrunk phone (200x433) lands on 400x866, within a few px of
+ * the 390x844 phone preset, so growing an untouched shrunk frame returns
+ * it to about where it started.
+ */
+export const AUTO_GROW_FACTOR = 2;
+
+/**
+ * Whether a footprint is small enough to count as shrunk on its own.
+ * Keyed off the longest edge so a frame dragged thin in one axis but
+ * still long in the other does not qualify.
+ */
+export function isAutoShrinkSize(fw: number, fh: number): boolean {
+  return Math.max(fw, fh) <= AUTO_SHRINK_MAX_EDGE;
+}
+
+/**
+ * The grow target for a frame that shrank by hand: the same ratio,
+ * AUTO_GROW_FACTOR times larger on both axes.
+ */
+export function computeAutoGrowTarget(
+  fw: number,
+  fh: number,
+): { w: number; h: number } {
+  return {
+    w: Math.round(fw * AUTO_GROW_FACTOR),
+    h: Math.round(fh * AUTO_GROW_FACTOR),
+  };
+}
+
 /**
  * Clamp a position so some minimum portion of the frame stays reachable.
  * At least 80px of the frame must remain within the viewport.
@@ -305,6 +419,13 @@ export interface FrameGeometry {
    * returns the shrunk-scale target for the caller to animate to.
    */
   retargetShrunkTo(w: number, h: number): { w: number; h: number };
+  /**
+   * Settle the shrink state after a manual resize. A footprint that ended
+   * below the auto-shrink threshold becomes the shrunk state, with a grow
+   * memory AUTO_GROW_FACTOR times larger at the same ratio. Anything
+   * larger clears the memory, since the user has sized the frame directly.
+   */
+  settleShrinkAfterResize(): void;
 }
 
 const TOP_BAR_HEIGHT = 56;
@@ -387,6 +508,19 @@ export function createFrameGeometry(): FrameGeometry {
     return computeShrunkFootprint(w, h, viewportH);
   }
 
+  function settleShrinkAfterResize(): void {
+    if (isAutoShrinkSize(footprintW, footprintH)) {
+      const target = computeAutoGrowTarget(footprintW, footprintH);
+      preShrinkW = target.w;
+      preShrinkH = target.h;
+      shrunk = true;
+      return;
+    }
+    preShrinkW = null;
+    preShrinkH = null;
+    shrunk = false;
+  }
+
   function clampToViewport(): void {
     if (typeof window === "undefined") return;
     const clamped = clampPosition(
@@ -437,5 +571,6 @@ export function createFrameGeometry(): FrameGeometry {
     grow: growFrame,
     clearShrinkMemory,
     retargetShrunkTo,
+    settleShrinkAfterResize,
   };
 }
