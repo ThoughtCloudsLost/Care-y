@@ -55,10 +55,15 @@ describe("computePeekFootprint", () => {
     expect(result.h).toBeLessThanOrEqual(maxH);
   });
 
-  it("enforces minimum footprint of 200px on each axis", () => {
+  it("stays positive and aspect-true on degenerate windows", () => {
+    // Fit wins over MIN_FOOTPRINT here: an aspect-true frame with both
+    // axes at 200 cannot fit a 100px window. FrameGeometry.setFootprint
+    // applies the 200px floor at apply time.
+    const aspect = PHONE_PRESET.w / PHONE_PRESET.h;
     const result = computePeekFootprint(100, 100);
-    expect(result.w).toBeGreaterThanOrEqual(200);
-    expect(result.h).toBeGreaterThanOrEqual(200);
+    expect(result.w).toBeGreaterThan(0);
+    expect(result.h).toBeGreaterThan(0);
+    expect(Math.abs(result.w / result.h - aspect)).toBeLessThan(0.02);
   });
 });
 

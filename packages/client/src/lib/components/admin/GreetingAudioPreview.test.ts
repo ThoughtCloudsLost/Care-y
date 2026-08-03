@@ -5,7 +5,11 @@ import { render, screen, cleanup } from "@testing-library/svelte";
 import type * as ParaglideMessages from "$lib/paraglide/messages.js";
 import type * as BufferEncoding from "$lib/utils/buffer-encoding.js";
 
-const mockGetGreetingAudio = vi.fn();
+// vi.hoisted so the mock exists when the hoisted vi.mock factory below
+// runs; a plain top-level const is still in its temporal dead zone then.
+const { mockGetGreetingAudio } = vi.hoisted(() => ({
+  mockGetGreetingAudio: vi.fn(),
+}));
 
 // vi.mock required: $lib/paraglide/messages.js is a generated module
 // whose barrel import triggers Paraglide runtime side effects.
