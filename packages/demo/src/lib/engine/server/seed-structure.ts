@@ -378,24 +378,16 @@ export async function seedStructure(
     }
   }
 
-  // 9. Clients
+  // 9. Clients. Aliases are org-tier sealed (clients.encrypted_alias);
+  // alias_hash stays null, which the blind-index design allows for
+  // server-side write paths, and the sealed ciphertext carries no
+  // unique constraint, so no retry loop is needed.
   for (let i = 0; i < NUM_SEED_CLIENTS; i++) {
-    let created = false;
-    for (let attempt = 0; attempt < 5 && !created; attempt++) {
-      const alias = generateAlias();
-      try {
-        await tenantDb
-          .insertInto("clients")
-          .values({ alias, phone_id: phoneId })
-          .execute();
-        created = true;
-      } catch (err: unknown) {
-        if (err instanceof Error && err.message.includes("unique")) {
-          continue;
-        }
-        throw err;
-      }
-    }
+    const alias = generateAlias();
+    await tenantDb
+      .insertInto("clients")
+      .values({ encrypted_alias: sealedBox.seal(alias), phone_id: phoneId })
+      .execute();
   }
 
   // 10. KB categories
