@@ -89,14 +89,33 @@
     oncollision(ticketId);
   }
 
+  let clientCache: ClientSearchResult[] | null = null;
+
+  $effect(() => {
+    if (!opened) {
+      clientCache = null;
+    }
+  });
+
   async function searchClients(query: string): Promise<ClientSearchResult[]> {
-    const raw = await ticketRouter.searchClients.query({ query, limit: 10 });
-    return raw.map((r) => ({
-      ...r,
-      alias:
-        orgCache.decrypt(`client-alias:${r.id}`, r.encryptedAlias) ??
-        r.id.slice(0, 8),
-    }));
+    if (!clientCache) {
+      const raw = await ticketRouter.searchClients.query({
+        query: "",
+        limit: 50,
+      });
+      clientCache = raw.map((r) => ({
+        ...r,
+        alias:
+          orgCache.decrypt(`client-alias:${r.id}`, r.encryptedAlias) ??
+          r.id.slice(0, 8),
+      }));
+    }
+
+    const q = query.toLowerCase().trim();
+    if (q.length === 0) return clientCache;
+    return clientCache.filter(
+      (c) => c.alias.toLowerCase().includes(q) === true,
+    );
   }
 
   async function phoneLookup(phone: string): Promise<PhoneLookupResult> {

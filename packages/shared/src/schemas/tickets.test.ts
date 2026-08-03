@@ -629,7 +629,7 @@ describe("searchClientsInputSchema", () => {
     const result = searchClientsInputSchema.safeParse({ query: "calm" });
     expect(result.success).toBe(true);
     if (result.success) {
-      expect(result.data.limit).toBe(10);
+      expect(result.data.limit).toBe(20);
     }
   });
 
@@ -644,10 +644,13 @@ describe("searchClientsInputSchema", () => {
     }
   });
 
-  it("rejects empty query", () => {
-    expect(searchClientsInputSchema.safeParse({ query: "" }).success).toBe(
-      false,
-    );
+  it("accepts empty query with default values", () => {
+    const result = searchClientsInputSchema.safeParse({ query: "" });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.query).toBe("");
+      expect(result.data.limit).toBe(20);
+    }
   });
 
   it("rejects query exceeding max length", () => {
@@ -662,9 +665,9 @@ describe("searchClientsInputSchema", () => {
     ).toBe(false);
   });
 
-  it("rejects limit above 20", () => {
+  it("rejects limit above 50", () => {
     expect(
-      searchClientsInputSchema.safeParse({ query: "x", limit: 21 }).success,
+      searchClientsInputSchema.safeParse({ query: "x", limit: 51 }).success,
     ).toBe(false);
   });
 });
