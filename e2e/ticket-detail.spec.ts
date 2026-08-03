@@ -3,6 +3,7 @@ import { startCoverage, stopAndWriteCoverage } from "./coverage-fixture";
 import type { Page } from "@playwright/test";
 import {
   auditA11y,
+  clickComposeAction,
   CRYPTO_TIMEOUT,
   isDesktopLayout,
   login,
@@ -269,7 +270,7 @@ test.describe.serial("Ticket Detail (Chat View)", () => {
     // Expand compose: tap +, then "Reply to client" to activate reply mode.
     // The send button and textarea only appear when compose mode is active.
     const dialog = await openComposeActions(page);
-    await dialog.getByText(/reply to/i).click();
+    await clickComposeAction(dialog, /reply to/i);
 
     // Send button.
     const sendBtn = page.getByRole("button", { name: /send/i });
@@ -291,9 +292,7 @@ test.describe.serial("Ticket Detail (Chat View)", () => {
     const dialog = await openComposeActions(page);
 
     // Click "Preset replies" from the compose actions popover.
-    const presetItem = dialog.getByText(/preset replies/i).first();
-    await expect(presetItem).toBeVisible({ timeout: 3_000 });
-    await presetItem.click();
+    await clickComposeAction(dialog, /preset replies/i);
 
     // The preset sheet opens. Without seeded presets it shows the empty state.
     await expect(page.getByText(/nothing here yet/i)).toBeVisible({
@@ -460,7 +459,7 @@ test.describe.serial("Ticket Detail (Chat View)", () => {
 
     // Activate reply compose mode (collapsed bar only shows + button).
     const dialog = await openComposeActions(page);
-    await dialog.getByText(/reply to/i).click();
+    await clickComposeAction(dialog, /reply to/i);
 
     const textarea = page.getByRole("textbox");
     await expect(textarea).toBeVisible({ timeout: 3_000 });
@@ -482,7 +481,7 @@ test.describe.serial("Ticket Detail (Chat View)", () => {
 
     // Reopen compose mode to check if the draft was preserved.
     const dialog2 = await openComposeActions(page);
-    await dialog2.getByText(/reply to/i).click();
+    await clickComposeAction(dialog2, /reply to/i);
 
     const restoredTextarea = page.getByRole("textbox");
     await expect(restoredTextarea).toBeVisible({ timeout: 3_000 });

@@ -508,6 +508,25 @@ export async function openComposeActions(page: Page): Promise<Locator> {
   return dialog;
 }
 
+/**
+ * Click a compose-action item (e.g. "Reply to ...", "Text Client") inside
+ * the compose-actions popover.
+ *
+ * The popover opens above the messagebar at the viewport's bottom edge
+ * via `position: fixed`. Playwright's actionability check rejects clicks
+ * on fixed elements at the viewport boundary ("element is outside of the
+ * viewport"). `dispatchEvent` bypasses this check. Safe because the
+ * handlers use the element reference, not mouse coordinates.
+ */
+export async function clickComposeAction(
+  scope: Page | Locator,
+  pattern: RegExp,
+): Promise<void> {
+  const item = scope.getByText(pattern);
+  await expect(item).toBeVisible({ timeout: 3_000 });
+  await item.dispatchEvent("click");
+}
+
 // ── Production UI helpers for data creation ──────────────────────────
 
 export interface CreateTicketOptions {

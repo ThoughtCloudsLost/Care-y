@@ -103,12 +103,17 @@
         query: "",
         limit: 50,
       });
-      clientCache = raw.map((r) => ({
-        ...r,
-        alias:
-          orgCache.decrypt(`client-alias:${r.id}`, r.encryptedAlias) ??
-          r.id.slice(0, 8),
-      }));
+      const decrypted = await Promise.all(
+        raw.map(async (r) => ({
+          ...r,
+          alias:
+            (await orgCache.decryptAsync(
+              `client-alias:${r.id}`,
+              r.encryptedAlias,
+            )) ?? r.id.slice(0, 8),
+        })),
+      );
+      clientCache = decrypted;
     }
 
     const q = query.toLowerCase().trim();

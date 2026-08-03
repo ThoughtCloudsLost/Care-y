@@ -3,6 +3,7 @@ import { startCoverage, stopAndWriteCoverage } from "./coverage-fixture";
 import type { Page } from "@playwright/test";
 import {
   auditA11y,
+  clickComposeAction,
   CRYPTO_TIMEOUT,
   login,
   openComposeActions,
@@ -43,7 +44,7 @@ test.describe.serial("Ticket Actions (Call + SMS)", () => {
   // ── 2. SMS exposure hint ──────────────────────────────────────
 
   test("tapping 'Text Client' shows exposure hint on first use", async () => {
-    await page.getByText(/text client/i).click();
+    await clickComposeAction(page, /text client/i);
 
     // The exposure hint Toast should appear with the SMS warning.
     await expect(page.getByText(/SMS is not encrypted/i)).toBeVisible({
@@ -96,7 +97,7 @@ test.describe.serial("Ticket Actions (Call + SMS)", () => {
   test("reopening SMS compose does not show exposure hint again", async () => {
     // Reopen compose actions.
     const dialog = await openComposeActions(page);
-    await dialog.getByText(/text client/i).click();
+    await clickComposeAction(dialog, /text client/i);
 
     // Hint should NOT appear since it was already dismissed this session.
     // The SMS compose mode opens directly.
@@ -164,7 +165,7 @@ test.describe.serial("Ticket Actions (Call + SMS)", () => {
 
   test("SMS compose sheet passes axe-core accessibility scan", async () => {
     const dialog = await openComposeActions(page);
-    await dialog.getByText(/text client/i).click();
+    await clickComposeAction(dialog, /text client/i);
 
     await expect(page.getByText(/texting client via SMS/i)).toBeVisible({
       timeout: 3000,
