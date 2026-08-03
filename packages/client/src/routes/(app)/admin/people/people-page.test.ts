@@ -32,6 +32,7 @@ import type * as FilterDispatch from "$lib/composables/create-filter-dispatch.sv
 import type * as GestureFocus from "$lib/utils/gesture-focus.js";
 import type * as ParaglideMessages from "$lib/paraglide/messages.js";
 import type * as FilterTypes from "$lib/components/filters/filter-types.js";
+import type * as ClientFilters from "$lib/stores/client-filters.svelte.js";
 
 // --- Controllable mock state ---
 
@@ -83,6 +84,14 @@ vi.mock("$lib/crypto/context.js", async (importOriginal) => ({
     decrypt: vi.fn().mockReturnValue(null),
     get: vi.fn().mockReturnValue(undefined),
     has: vi.fn().mockReturnValue(false),
+    delete: vi.fn().mockReturnValue(true),
+  }),
+  getOrgKeyManager: () => ({
+    get isLoaded() {
+      return true;
+    },
+    encryptText: vi.fn().mockResolvedValue("encrypted-base64"),
+    aliasHash: vi.fn().mockResolvedValue("deadbeef"),
   }),
   getCurrentUserId: () => () => "user-001",
   getCurrentUserRoleId: () => () => "admin-role-id",
@@ -119,6 +128,9 @@ vi.mock("$lib/trpc/index.js", async (importOriginal) => ({
       getUserQueues: { query: vi.fn().mockResolvedValue([]) },
       listAllQueueAssignments: { query: vi.fn().mockResolvedValue([]) },
     },
+    clients: {
+      list: { query: vi.fn().mockResolvedValue([]) },
+    },
   },
 }));
 
@@ -138,6 +150,15 @@ vi.mock("@tanstack/svelte-query", async (importOriginal) => ({
     error: null,
     data: [],
     refetch: vi.fn(),
+  }),
+  createInfiniteQuery: () => ({
+    data: { pages: [] },
+    hasNextPage: false,
+    isFetchingNextPage: false,
+    fetchNextPage: vi.fn(),
+    isLoading: false,
+    isError: false,
+    error: null,
   }),
   useQueryClient: () => ({
     invalidateQueries: vi.fn(),
@@ -349,6 +370,26 @@ vi.mock("$lib/shell/ShellPopover.svelte", async () => ({
 
 vi.mock("$lib/components/filters/filter-types.js", async (importOriginal) => ({
   ...(await importOriginal<typeof FilterTypes>()),
+}));
+
+// vi.mock required: uses $state rune which needs Svelte compiler pipeline.
+vi.mock("$lib/stores/client-filters.svelte.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof ClientFilters>()),
+  clientFilterStore: {
+    sort: { field: "created_at", direction: "desc" },
+    search: "",
+    hasApplications: null,
+    createdAfter: null,
+    createdBefore: null,
+    includeMerged: false,
+    activeCount: 0,
+    setSort: vi.fn(),
+    setSearch: vi.fn(),
+    setHasApplications: vi.fn(),
+    setDateRange: vi.fn(),
+    setIncludeMerged: vi.fn(),
+    clearAll: vi.fn(),
+  },
 }));
 
 // jsdom lacks Web Animations API (used by Konsta transitions).

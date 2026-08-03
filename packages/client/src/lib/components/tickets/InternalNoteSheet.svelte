@@ -91,7 +91,7 @@
     const nt = noteTypesResult.data.types.find(
       (t) => t.id === effectiveNoteTypeId,
     );
-    if (!nt?.encryptedDescription) return undefined;
+    if (nt?.encryptedDescription == null) return undefined;
     return (
       orgCache.decrypt(nt.id + ":desc", nt.encryptedDescription) ?? undefined
     );

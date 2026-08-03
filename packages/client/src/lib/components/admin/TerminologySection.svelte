@@ -30,7 +30,6 @@
   import { toastStore } from "$lib/stores/toast.svelte.js";
   import { announceToLiveRegion } from "$lib/utils/announce.js";
   import { getOrgDecryptCache, getOrgKeyManager } from "$lib/crypto/context.js";
-  import { base64ToUint8Array } from "$lib/utils/buffer-encoding.js";
   import { cacheTerminology, normalizeLabels } from "$lib/terminology/index.js";
   import { capitalize } from "$lib/terminology/with-terms.js";
   import { requireRouter } from "$lib/errors.js";
@@ -128,14 +127,10 @@
     queryFn: async () => brandingRouter.getBranding.query(),
   }));
 
-  function base64FieldToBytes(value: string | null): Uint8Array | null {
-    return value !== null && value !== "" ? base64ToUint8Array(value) : null;
-  }
-
   const decryptedTerminologyJson = $derived(
     orgCache.decrypt(
       "branding:terminology",
-      base64FieldToBytes(brandingQuery.data?.encryptedTerminology ?? null),
+      brandingQuery.data?.encryptedTerminology ?? null,
     ),
   );
 

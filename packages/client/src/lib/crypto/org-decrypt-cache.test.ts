@@ -55,8 +55,14 @@ describe("OrgDecryptCache", () => {
     cache = new OrgDecryptCache(manager, bridge as unknown as CryptoBridge);
   });
 
-  function fakeData(content: string): Uint8Array {
-    return new TextEncoder().encode(content);
+  /** Returns a deterministic base64 string for test ciphertext. */
+  function fakeData(content: string): string {
+    const bytes = new TextEncoder().encode(content);
+    let binary = "";
+    for (const byte of bytes) {
+      binary += String.fromCharCode(byte);
+    }
+    return btoa(binary);
   }
 
   describe("decrypt", () => {
@@ -109,7 +115,7 @@ describe("OrgDecryptCache", () => {
       expect(items).toHaveLength(1);
     });
 
-    it("does not cache null results (allows retry)", async () => {
+    it("caches sentinel for failed items and blocks re-queuing", async () => {
       bridge.orgDecryptBatch.mockResolvedValueOnce([
         { cacheKey: "kb-fail", plaintext: null },
       ]);
@@ -117,8 +123,19 @@ describe("OrgDecryptCache", () => {
       cache.decrypt("kb-fail", fakeData("bad"));
       await cache.whenSettled();
 
-      // Not cached, so next call returns null (pending) and re-queues
-      expect(cache.has("kb-fail")).toBe(false);
+      expect(cache.has("kb-fail")).toBe(true);
+      expect(cache.isFailed("kb-fail")).toBe(true);
+      expect(cache.decrypt("kb-fail", fakeData("bad"))).toBeNull();
+
+      bridge.orgDecryptBatch.mockClear();
+      cache.decrypt("kb-fail", fakeData("bad"));
+      expect(bridge.orgDecryptBatch).not.toHaveBeenCalled();
+    });
+
+    it("returns null for empty string ciphertext without queuing", () => {
+      const result = cache.decrypt("opt-row", "");
+      expect(result).toBeNull();
+      expect(bridge.orgDecryptBatch).not.toHaveBeenCalled();
     });
   });
 
@@ -243,29 +260,94 @@ describe("OrgDecryptCache", () => {
       expect(result).toBeNull();
     });
 
-    it("returns null on bridge failure", async () => {
+    it("returns null on bridge failure and caches sentinel", async () => {
       bridge.orgDecryptBatch.mockRejectedValueOnce(new Error("Worker crash"));
       const result = await cache.decryptAsync("kb-async-6", fakeData("fail"));
       expect(result).toBeNull();
+      expect(cache.isFailed("kb-async-6")).toBe(true);
     });
 
-    it("returns null when Worker returns null plaintext", async () => {
+    it("returns null when Worker returns null plaintext and caches sentinel", async () => {
       bridge.orgDecryptBatch.mockResolvedValueOnce([
         { cacheKey: "kb-async-7", plaintext: null },
       ]);
       const result = await cache.decryptAsync("kb-async-7", fakeData("nil"));
       expect(result).toBeNull();
+      expect(cache.isFailed("kb-async-7")).toBe(true);
+    });
+
+    it("returns null for empty string without calling bridge", async () => {
+      const result = await cache.decryptAsync("kb-async-empty", "");
+      expect(result).toBeNull();
+      expect(bridge.orgDecryptBatch).not.toHaveBeenCalled();
+    });
+
+    it("returns null for sentinel-cached entry without calling bridge", async () => {
+      bridge.orgDecryptBatch.mockResolvedValueOnce([
+        { cacheKey: "kb-async-sentinel", plaintext: null },
+      ]);
+      await cache.decryptAsync("kb-async-sentinel", fakeData("bad"));
+      expect(cache.isFailed("kb-async-sentinel")).toBe(true);
+
+      bridge.orgDecryptBatch.mockClear();
+      const result = await cache.decryptAsync(
+        "kb-async-sentinel",
+        fakeData("bad"),
+      );
+      expect(result).toBeNull();
+      expect(bridge.orgDecryptBatch).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("isFailed", () => {
+    it("returns false for uncached id", () => {
+      expect(cache.isFailed("kb-none")).toBe(false);
+    });
+
+    it("returns false for successfully decrypted id", async () => {
+      cache.decrypt("kb-ok", fakeData("good"));
+      await cache.whenSettled();
+      expect(cache.isFailed("kb-ok")).toBe(false);
+    });
+
+    it("returns true after per-item decrypt failure", async () => {
+      bridge.orgDecryptBatch.mockResolvedValueOnce([
+        { cacheKey: "kb-bad", plaintext: null },
+      ]);
+      cache.decrypt("kb-bad", fakeData("corrupt"));
+      await cache.whenSettled();
+      expect(cache.isFailed("kb-bad")).toBe(true);
     });
   });
 
   describe("error handling", () => {
-    it("clears pending on bridge failure (allows retry)", async () => {
-      bridge.orgDecryptBatch.mockRejectedValueOnce(new Error("Worker crash"));
+    it("retries bridge failure once then caches sentinel", async () => {
+      bridge.orgDecryptBatch
+        .mockRejectedValueOnce(new Error("crash 1"))
+        .mockRejectedValueOnce(new Error("crash 2"));
 
+      // First failure: item clears pending, can re-queue
+      cache.decrypt("kb-err", fakeData("test"));
+      await cache.whenSettled();
+      expect(cache.isFailed("kb-err")).toBe(false);
+
+      // Re-queue on next call
       cache.decrypt("kb-err", fakeData("test"));
       await cache.whenSettled();
 
-      expect(cache.has("kb-err")).toBe(false);
+      // Second failure hits MAX_BRIDGE_RETRIES, sentinel cached
+      expect(cache.isFailed("kb-err")).toBe(true);
+      expect(cache.decrypt("kb-err", fakeData("test"))).toBeNull();
+    });
+
+    it("does not sentinel on first bridge failure", async () => {
+      bridge.orgDecryptBatch.mockRejectedValueOnce(new Error("transient"));
+
+      cache.decrypt("kb-retry", fakeData("test"));
+      await cache.whenSettled();
+
+      expect(cache.has("kb-retry")).toBe(false);
+      expect(cache.isFailed("kb-retry")).toBe(false);
     });
   });
 

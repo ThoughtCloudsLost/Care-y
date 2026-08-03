@@ -17,12 +17,12 @@
       readonly id: string;
       readonly source: string;
       readonly type: string;
-      readonly encryptedContent: unknown;
+      readonly encryptedContent: string | null;
       readonly createdAt: string;
       readonly eventParams?: Record<string, unknown> | null;
     };
     result: DecryptResult;
-    clientAlias?: string;
+    clientAlias?: string | null;
     isOwnNote?: boolean;
     searchTerm?: string | null;
     noteTypeName?: string;
@@ -74,7 +74,9 @@
 {:else}
   <ConversationBubble
     direction={followUp.source === "client" ? "received" : "sent"}
-    speaker={followUp.source === "client" ? clientAlias : undefined}
+    speaker={followUp.source === "client"
+      ? (clientAlias ?? undefined)
+      : undefined}
     source={followUp.source === "client" ? "client" : "volunteer"}
     timestamp={followUp.createdAt}
   >

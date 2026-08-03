@@ -14,16 +14,10 @@
  */
 
 import { untrack } from "svelte";
+import { DECRYPT_ERROR_SENTINEL } from "./async-decrypt-cache.js";
 import { cacheRegistry } from "./cache-registry.js";
-import { encode } from "@care-y/crypto";
 import type { OrgKeyManager } from "./org-key.js";
 import type { CryptoBridge } from "$lib/workers/crypto-bridge.js";
-import type { SerializedBuffer } from "$lib/utils/buffer-encoding.js";
-
-function toBase64(data: Uint8Array | SerializedBuffer): string {
-  const bytes = data instanceof Uint8Array ? data : new Uint8Array(data.data);
-  return encode(bytes);
-}
 
 export class OrgDecryptCache {
   private readonly cache = cacheRegistry.createMap<string, string>(
@@ -35,6 +29,8 @@ export class OrgDecryptCache {
   private readonly batchQueue = new Map<string, string>();
   private batchScheduled = false;
   private settledResolvers: (() => void)[] = [];
+  private readonly retryCount = new Map<string, number>();
+  private static readonly MAX_BRIDGE_RETRIES = 2;
 
   constructor(manager: OrgKeyManager, bridge: CryptoBridge) {
     this.manager = manager;
@@ -51,25 +47,22 @@ export class OrgDecryptCache {
    * will re-evaluate once the batch response populates the cache.
    *
    * @param id   Unique key for caching (e.g., kb item ID, user ID)
-   * @param data Encrypted ciphertext as serialized Buffer or raw Uint8Array
+   * @param data Encrypted ciphertext as base64 string
    */
-  decrypt(
-    id: string,
-    data: SerializedBuffer | Uint8Array | null,
-  ): string | null {
-    if (data === null) return null;
+  decrypt(id: string, data: string | null): string | null {
+    if (data === null || data === "") return null;
 
     const cached = this.cache.get(id);
-    if (cached !== undefined) return cached;
+    if (cached !== undefined) {
+      return cached === DECRYPT_ERROR_SENTINEL ? null : cached;
+    }
 
     if (this.pending.has(id)) return null;
 
     if (!this.manager.isLoaded) return null;
 
-    const ciphertextB64 = toBase64(data);
-
     this.pending.add(id);
-    this.batchQueue.set(id, ciphertextB64);
+    this.batchQueue.set(id, data);
     this.scheduleBatch();
 
     return null;
@@ -90,11 +83,17 @@ export class OrgDecryptCache {
     return this.cache.delete(id);
   }
 
+  /** Check whether decryption permanently failed for this id. */
+  isFailed(id: string): boolean {
+    return this.cache.get(id) === DECRYPT_ERROR_SENTINEL;
+  }
+
   /** Clear all cached decryptions (e.g., on logout or key rotation). */
   clear(): void {
     this.cache.clear();
     this.pending.clear();
     this.batchQueue.clear();
+    this.retryCount.clear();
   }
 
   /**
@@ -107,30 +106,32 @@ export class OrgDecryptCache {
    * Use this in async functions like KB search `loadAll()` where the caller
    * needs the value immediately and won't re-run on cache updates.
    */
-  async decryptAsync(
-    id: string,
-    data: SerializedBuffer | Uint8Array | null,
-  ): Promise<string | null> {
-    if (data === null) return null;
+  async decryptAsync(id: string, data: string | null): Promise<string | null> {
+    if (data === null || data === "") return null;
 
     const cached = this.cache.get(id);
-    if (cached !== undefined) return cached;
+    if (cached !== undefined) {
+      return cached === DECRYPT_ERROR_SENTINEL ? null : cached;
+    }
 
     if (!this.manager.isLoaded) return null;
 
-    const ciphertextB64 = toBase64(data);
-
     try {
       const results = await this.bridge.orgDecryptBatch([
-        { cacheKey: id, ciphertext: ciphertextB64 },
+        { cacheKey: id, ciphertext: data },
       ]);
       const result = results[0];
       if (result?.plaintext !== null && result?.plaintext !== undefined) {
+        // care-y-ignore-next-line no-plaintext-db-write -- SvelteMap in-memory cache, not a DB write
         this.cache.set(id, result.plaintext);
         return result.plaintext;
       }
+      // care-y-ignore-next-line no-plaintext-db-write -- SvelteMap in-memory cache, not a DB write
+      this.cache.set(id, DECRYPT_ERROR_SENTINEL);
       return null;
     } catch {
+      // care-y-ignore-next-line no-plaintext-db-write -- SvelteMap in-memory cache, not a DB write
+      this.cache.set(id, DECRYPT_ERROR_SENTINEL);
       return null;
     }
   }
@@ -179,14 +180,27 @@ export class OrgDecryptCache {
 
       for (const { cacheKey, plaintext } of results) {
         this.pending.delete(cacheKey);
+        this.retryCount.delete(cacheKey);
         if (plaintext !== null) {
+          // care-y-ignore-next-line no-plaintext-db-write -- SvelteMap in-memory cache, not a DB write
           untrack(() => this.cache.set(cacheKey, plaintext));
+        } else {
+          // care-y-ignore-next-line no-plaintext-db-write -- SvelteMap in-memory cache, not a DB write
+          untrack(() => this.cache.set(cacheKey, DECRYPT_ERROR_SENTINEL));
         }
       }
     } catch {
-      // Bridge-level failure: clear pending so items can retry on next render
       for (const { cacheKey } of items) {
-        this.pending.delete(cacheKey);
+        const count = (this.retryCount.get(cacheKey) ?? 0) + 1;
+        if (count >= OrgDecryptCache.MAX_BRIDGE_RETRIES) {
+          this.pending.delete(cacheKey);
+          // care-y-ignore-next-line no-plaintext-db-write -- SvelteMap in-memory cache, not a DB write
+          untrack(() => this.cache.set(cacheKey, DECRYPT_ERROR_SENTINEL));
+          this.retryCount.delete(cacheKey);
+        } else {
+          this.retryCount.set(cacheKey, count);
+          this.pending.delete(cacheKey);
+        }
       }
     }
 

@@ -144,9 +144,9 @@ import QueueEditor from "./QueueEditor.svelte";
 function renderEditor(
   overrides: Partial<{
     queueId: string | null;
-    queueEncryptedName: Uint8Array | null;
-    queueEncryptedColor: Uint8Array | null;
-    queueEncryptedIcon: Uint8Array | null;
+    queueEncryptedName: string | null;
+    queueEncryptedColor: string | null;
+    queueEncryptedIcon: string | null;
     queueEscalateDays: number;
     ondeletequeue: ((id: string) => void) | undefined;
   }> = {},
@@ -181,7 +181,7 @@ describe("QueueEditor", () => {
   it("shows Edit Queue title when queueId is provided", () => {
     renderEditor({
       queueId: "q-1",
-      queueEncryptedName: new Uint8Array([1, 2]),
+      queueEncryptedName: "AQI=",
     });
     expect(screen.getByText("Edit Queue")).toBeTruthy();
   });
@@ -225,7 +225,7 @@ describe("QueueEditor", () => {
   it("calls updateQueue.mutate on submit in edit mode", async () => {
     renderEditor({
       queueId: "q-1",
-      queueEncryptedName: new Uint8Array([1, 2]),
+      queueEncryptedName: "AQI=",
       queueEscalateDays: 5,
     });
 
@@ -253,7 +253,7 @@ describe("QueueEditor", () => {
   it("evicts orgCache entry on successful update", async () => {
     renderEditor({
       queueId: "q-1",
-      queueEncryptedName: new Uint8Array([1, 2]),
+      queueEncryptedName: "AQI=",
     });
 
     const inputs = document.querySelectorAll<HTMLInputElement>(
@@ -295,7 +295,7 @@ describe("QueueEditor", () => {
   it("shows delete button in edit mode with ondeletequeue provided", () => {
     renderEditor({
       queueId: "q-1",
-      queueEncryptedName: new Uint8Array([1, 2]),
+      queueEncryptedName: "AQI=",
       ondeletequeue: vi.fn(),
     });
     expect(screen.getByText("Delete Queue")).toBeTruthy();
@@ -309,7 +309,7 @@ describe("QueueEditor", () => {
   it("hides delete button in edit mode without ondeletequeue", () => {
     renderEditor({
       queueId: "q-1",
-      queueEncryptedName: new Uint8Array([1, 2]),
+      queueEncryptedName: "AQI=",
       ondeletequeue: undefined,
     });
     expect(screen.queryByText("Delete Queue")).toBeNull();
@@ -323,7 +323,7 @@ describe("QueueEditor", () => {
         opened: true,
         ondismiss,
         queueId: "q-1",
-        queueEncryptedName: new Uint8Array([1, 2]),
+        queueEncryptedName: "AQI=",
         queueEncryptedColor: null,
         queueEncryptedIcon: null,
         queueEscalateDays: 0,

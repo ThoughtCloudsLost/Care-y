@@ -93,3 +93,13 @@ export class BrandingError extends ClientError {
     this.name = "BrandingError";
   }
 }
+
+/** Blob download HTTP failures (non-tRPC binary endpoints). */
+export class BlobFetchError extends ClientError {
+  readonly status: number;
+  constructor(status: number) {
+    super(`Blob fetch failed: ${String(status)}`);
+    this.name = "BlobFetchError";
+    this.status = status;
+  }
+}

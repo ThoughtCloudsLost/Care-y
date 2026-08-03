@@ -237,7 +237,7 @@ describe("createSelectMode", () => {
 
       const volId = crypto.randomUUID();
       const volunteerMap = new Map<string, VolunteerRecord>([
-        [volId, { id: volId, encryptedDisplayName: new Uint8Array([1, 2, 3]) }],
+        [volId, { id: volId, encryptedDisplayName: "AQID" }],
       ]);
 
       const sm = createSelectMode(
@@ -276,7 +276,7 @@ describe("createSelectMode", () => {
 
       const volId = crypto.randomUUID();
       const volunteerMap = new Map<string, VolunteerRecord>([
-        [volId, { id: volId, encryptedDisplayName: new Uint8Array([1, 2, 3]) }],
+        [volId, { id: volId, encryptedDisplayName: "AQID" }],
       ]);
 
       const sm = createSelectMode(

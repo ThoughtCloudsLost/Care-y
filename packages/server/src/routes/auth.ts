@@ -336,13 +336,13 @@ export function createAuthRouter(deps: AuthRouterDeps) {
         const users = await svc.listAllForAdmin();
         return users.map((u) => ({
           id: u.id,
-          encryptedIdentifier: u.encryptedIdentifier.toString("base64"),
-          encryptedDisplayName: u.encryptedDisplayName.toString("base64"),
+          encryptedIdentifier: u.encryptedIdentifier.toString("base64url"),
+          encryptedDisplayName: u.encryptedDisplayName.toString("base64url"),
           roleId: u.roleId,
           isActive: u.isActive,
           hasKeys: u.hasKeys,
           hasOrgKeyWrap: u.hasOrgKeyWrap,
-          volPublic: u.volPublic ? u.volPublic.toString("base64") : null,
+          volPublic: u.volPublic ? u.volPublic.toString("base64url") : null,
         }));
       }),
     ),

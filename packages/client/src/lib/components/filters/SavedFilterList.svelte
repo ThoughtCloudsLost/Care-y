@@ -4,7 +4,6 @@
   import * as m from "$lib/paraglide/messages.js";
   import { getOrgDecryptCache } from "$lib/crypto/context.js";
   import DecryptPlaceholder from "$lib/components/DecryptPlaceholder.svelte";
-  import { base64ToUint8Array } from "$lib/utils/buffer-encoding.js";
   import ShellActionSheet from "$lib/shell/ShellActionSheet.svelte";
   import {
     ICON_BY_ID,
@@ -35,8 +34,7 @@
   let pressTriggered = false;
 
   function decryptName(record: SavedFilterRecord): string | null {
-    const ciphertextBytes = base64ToUint8Array(record.encryptedName);
-    return orgCache.decrypt(`saved-filter:${record.id}`, ciphertextBytes);
+    return orgCache.decrypt(`saved-filter:${record.id}`, record.encryptedName);
   }
 
   function onPointerDown(id: string): void {

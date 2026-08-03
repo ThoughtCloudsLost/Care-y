@@ -29,7 +29,7 @@ export function createReportsRouter() {
         const stats = await svc.queueStats();
         return stats.map((s) => ({
           queueId: s.queueId,
-          encryptedQueueName: s.encryptedQueueName.toString("base64"),
+          encryptedQueueName: s.encryptedQueueName.toString("base64url"),
           open: s.open,
           closed: s.closed,
         }));

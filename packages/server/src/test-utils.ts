@@ -472,10 +472,14 @@ export async function createTestTicketFixture(
     .returning("id")
     .executeTakeFirstOrThrow();
 
-  // care-y-ignore-next-line no-plaintext-db-write -- phone_id is a UUID FK (not PII); alias is a random test identifier
+  // care-y-ignore-next-line no-plaintext-db-write -- encrypted_alias is test ciphertext via testSealedBox; phone_id is a UUID FK
   const client = await db
     .insertInto("clients")
-    .values({ alias: `cl-${uid}`, phone_id: phone.id })
+    .values({
+      encrypted_alias: testSealedBox.sealBuffer(Buffer.from(`cl-${uid}`)),
+      alias_hash: null,
+      phone_id: phone.id,
+    })
     .returning("id")
     .executeTakeFirstOrThrow();
 
@@ -553,10 +557,14 @@ export async function createTestClientFixture(
     .returning("id")
     .executeTakeFirstOrThrow();
 
-  // care-y-ignore-next-line no-plaintext-db-write -- phone_id is a UUID FK (not PII); alias is a random test identifier
+  // care-y-ignore-next-line no-plaintext-db-write -- encrypted_alias is test ciphertext via testSealedBox; phone_id is a UUID FK
   const client = await db
     .insertInto("clients")
-    .values({ alias: `cl-${uid}`, phone_id: phone.id })
+    .values({
+      encrypted_alias: testSealedBox.sealBuffer(Buffer.from(`cl-${uid}`)),
+      alias_hash: null,
+      phone_id: phone.id,
+    })
     .returning("id")
     .executeTakeFirstOrThrow();
 

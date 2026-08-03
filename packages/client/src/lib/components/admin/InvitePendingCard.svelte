@@ -4,8 +4,6 @@
   import * as m from "$lib/paraglide/messages.js";
   import { onKeyActivate } from "$lib/utils/a11y.js";
   import { getOrgDecryptCache } from "$lib/crypto/context.js";
-  import { base64ToUint8Array } from "$lib/utils/buffer-encoding.js";
-
   interface InvitePendingCardProps {
     readonly id: string;
     readonly roleLabel: string;
@@ -32,7 +30,7 @@
 
   const decryptedToken = $derived(
     encryptedToken !== null
-      ? orgCache.decrypt(`invite:${id}`, base64ToUint8Array(encryptedToken))
+      ? orgCache.decrypt(`invite:${id}`, encryptedToken)
       : null,
   );
 

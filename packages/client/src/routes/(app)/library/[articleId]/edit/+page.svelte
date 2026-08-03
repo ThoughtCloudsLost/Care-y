@@ -7,6 +7,7 @@
   with scroll collapse and the a11y checker toggle), and PTR suppression.
 -->
 <script lang="ts">
+  import { decode } from "@care-y/crypto";
   import { createQuery, useQueryClient } from "@tanstack/svelte-query";
   import { page } from "$app/state";
   import { resolve } from "$app/paths";
@@ -102,14 +103,8 @@
       return;
     }
 
-    const titleCt =
-      article.encryptedTitle instanceof Uint8Array
-        ? article.encryptedTitle
-        : new Uint8Array(article.encryptedTitle.data);
-    const bodyCt =
-      article.encryptedBody instanceof Uint8Array
-        ? article.encryptedBody
-        : new Uint8Array(article.encryptedBody.data);
+    const titleCt = decode(article.encryptedTitle);
+    const bodyCt = decode(article.encryptedBody);
     const version = ++editDecryptVersion;
 
     void (async (): Promise<void> => {

@@ -70,7 +70,6 @@ export const metadataSearchInputSchema = z.object({
   status: z.enum(["open", "closed"]).optional(),
   queueId: z.uuid().optional(),
   assignedTo: z.uuid().optional(),
-  clientAlias: z.string().max(100).optional(),
   dateFrom: z.iso.datetime().optional(),
   dateTo: z.iso.datetime().optional(),
   page: z.number().int().min(1).default(1),

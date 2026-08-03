@@ -10,7 +10,6 @@ import {
   setAppleTouchIconHref,
 } from "./icon-link.svelte.js";
 import { getOrgSlug } from "$lib/utils/org-slug.js";
-import { uint8ArrayToBase64 } from "$lib/utils/buffer-encoding.js";
 
 const { fakeEncrypt } = vi.hoisted(() => ({
   /**
@@ -29,12 +28,18 @@ const { fakeEncrypt } = vi.hoisted(() => ({
 // vi.mock required: the @care-y/crypto barrel initializes libsodium WASM
 // via the getSodium() singleton at import time, which the Node/jsdom test
 // environment cannot load without the slow JS fallback (testing-reference
-// section 4, constraint 2). decode and encode are imported at module load
-// by $lib/crypto/org-key.js and are never called in these tests.
+// section 4, constraint 2).
 vi.mock("@care-y/crypto", () => ({
   encryptClientBranding: fakeEncrypt,
   decode: vi.fn(),
-  encode: vi.fn(),
+  encode: (bytes: Uint8Array): string => {
+    let binary = "";
+    for (const b of bytes) binary += String.fromCharCode(b);
+    return btoa(binary)
+      .replace(/\+/g, "-")
+      .replace(/\//g, "_")
+      .replace(/=+$/, "");
+  },
 }));
 
 // OffscreenCanvas and createImageBitmap do not exist in the test
@@ -132,9 +137,15 @@ function createRouter(): {
   return { router: { uploadIcons: { mutate } }, mutate };
 }
 
-/** Base64 ciphertext expected on the wire for a variant blob label. */
+/** Base64url ciphertext expected on the wire for a variant blob label. */
 function expectedPayload(label: string): string {
-  return uint8ArrayToBase64(fakeEncrypt(encoder.encode(label), ORG_PUB_KEY));
+  const bytes = fakeEncrypt(encoder.encode(label), ORG_PUB_KEY);
+  let binary = "";
+  for (const b of bytes) binary += String.fromCharCode(b);
+  return btoa(binary)
+    .replace(/\+/g, "-")
+    .replace(/\//g, "_")
+    .replace(/=+$/, "");
 }
 
 function sourceBlob(): Blob {
@@ -177,9 +188,8 @@ describe("uploadPwaIcons", () => {
 
     // The uploaded strings are ciphertext, never the plaintext icon bytes.
     const input = mutate.mock.calls[0]?.[0];
-    expect(input?.icon192).not.toBe(
-      uint8ArrayToBase64(encoder.encode("192x192")),
-    );
+    const plainB64 = btoa(String.fromCharCode(...encoder.encode("192x192")));
+    expect(input?.icon192).not.toBe(plainB64);
   });
 
   it("throws OrgKeyNotLoadedError and skips the upload when the org key is absent", async () => {

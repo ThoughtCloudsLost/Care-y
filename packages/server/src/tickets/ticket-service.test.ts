@@ -6,6 +6,7 @@ import {
   createTestQueue,
   createTestTicketFixture,
   createTestClientFixture,
+  testSealedBox,
   type TestDb,
 } from "../test-utils.js";
 import {
@@ -1730,46 +1731,6 @@ describe.skipIf(!process.env.DATABASE_URL)("TicketService (DB)", () => {
     expect(new Set(ours).size).toBe(4);
   });
 
-  // --- Sort mode keyset cursor: client ---
-
-  it("sortBy client pagination covers all tickets without duplicates", async () => {
-    const { userId, queueId } = await createClientFixture();
-
-    const ticketIds: string[] = [];
-    for (let i = 0; i < 4; i++) {
-      const c = await createTestClientFixture(testDb.db, { queueId });
-      const t = await svc.create(c.userId, {
-        id: crypto.randomUUID(),
-        clientId: c.clientId,
-        queueId,
-        encryptedTitle: Buffer.from(`client-sort-${i}`),
-        encryptedDescription: Buffer.from("d"),
-        priority: "normal",
-        keyGeneration: crypto.randomUUID(),
-        keyWrap: fakeKeyWrap(),
-      });
-      ticketIds.push(t.id);
-    }
-
-    const page1 = await svc.list(userId, {
-      queueIds: [queueId],
-      sortBy: "client",
-      sortDirection: "asc",
-      limit: 2,
-    });
-    const page2 = await svc.list(userId, {
-      queueIds: [queueId],
-      sortBy: "client",
-      sortDirection: "asc",
-      limit: 2,
-      cursor: page1[1]!.id,
-    });
-
-    const allReturned = [...page1.map((t) => t.id), ...page2.map((t) => t.id)];
-    const ours = allReturned.filter((id) => ticketIds.includes(id));
-    expect(new Set(ours).size).toBe(4);
-  });
-
   // --- Sort mode keyset cursor: msgs ---
 
   it("sortBy msgs pagination covers all tickets without duplicates", async () => {
@@ -1846,13 +1807,14 @@ describe.skipIf(!process.env.DATABASE_URL)("TicketService (DB)", () => {
       createdAt: Date.now(),
     });
 
-    // Build a new service with the pendingClients map
+    // Build a new service with the pendingClients map and sealedBox
+    // (client creation now seals the generated alias)
     const qps = createQueuePermissionsService(testDb.db);
     const svcWithPending = createTicketService(
       testDb.db,
       access,
       (uid) => qps.getUserQueues(uid),
-      { pendingClients },
+      { pendingClients, sealedBox: testSealedBox },
     );
 
     const ticket = await svcWithPending.create(userId, {
@@ -1952,49 +1914,42 @@ describe.skipIf(!process.env.DATABASE_URL)("TicketService (DB)", () => {
   // --- searchClients ---
 
   describe("searchClients", () => {
-    async function aliasOf(clientId: string): Promise<string> {
-      const row = await testDb.db
-        .selectFrom("clients")
-        .select("alias")
-        .where("id", "=", clientId)
-        .executeTakeFirstOrThrow();
-      return row.alias;
-    }
-
     it("returns masked *** when no fieldEncryptor is provided", async () => {
       const { userId, clientId } = await createTicketFixture();
-      const alias = await aliasOf(clientId);
 
-      const results = await svc.searchClients(alias, 10, userId, false);
+      // Empty query returns most recent clients in the caller's scope
+      const results = await svc.searchClients("", 10, userId, false);
       const found = results.find((r) => r.id === clientId);
       expect(found).toBeDefined();
       expect(found!.maskedPhone).toBe("***");
-      expect(found!.alias).toBe(alias);
+      expect(Buffer.isBuffer(found!.encryptedAlias)).toBe(true);
     });
 
     it("returns clients reachable through the volunteer's queue assignments", async () => {
       const { userId, clientId } = await createTicketFixture();
-      const alias = await aliasOf(clientId);
 
-      const results = await svc.searchClients(alias, 10, userId, false);
+      // Empty query returns most recent clients in the caller's scope
+      const results = await svc.searchClients("", 10, userId, false);
       expect(results.map((r) => r.id)).toContain(clientId);
     });
 
     it("hides clients whose tickets are all outside the volunteer's queues", async () => {
-      const fix = await createTestTicketFixture(testDb.db);
+      // Creates a client whose only ticket sits in a queue the outsider has
+      // no access to. The returned ids are not needed; the assertion is that
+      // the outsider sees nothing.
+      await createTestTicketFixture(testDb.db);
       const outsider = await createTestUser(testDb.db);
-      const alias = await aliasOf(fix.clientId);
 
-      const results = await svc.searchClients(alias, 10, outsider.id, false);
+      const results = await svc.searchClients("", 10, outsider.id, false);
       expect(results).toHaveLength(0);
     });
 
     it("hides clients with no tickets at all", async () => {
       const fix = await createTestClientFixture(testDb.db);
-      const alias = await aliasOf(fix.clientId);
 
-      const results = await svc.searchClients(alias, 10, fix.userId, false);
-      expect(results).toHaveLength(0);
+      const results = await svc.searchClients("", 10, fix.userId, false);
+      // Client has no ticket, so it is unreachable and filtered out
+      expect(results.find((r) => r.id === fix.clientId)).toBeUndefined();
     });
 
     it("returns a client from a ticket assigned to the volunteer outside their queues", async () => {
@@ -2005,9 +1960,9 @@ describe.skipIf(!process.env.DATABASE_URL)("TicketService (DB)", () => {
         .set({ assigned_to: outsider.id })
         .where("id", "=", fix.ticketId)
         .execute();
-      const alias = await aliasOf(fix.clientId);
 
-      const results = await svc.searchClients(alias, 10, outsider.id, false);
+      // Empty query returns clients the user can reach (including via assignment)
+      const results = await svc.searchClients("", 10, outsider.id, false);
       expect(results.map((r) => r.id)).toContain(fix.clientId);
     });
 
@@ -2018,21 +1973,37 @@ describe.skipIf(!process.env.DATABASE_URL)("TicketService (DB)", () => {
         .insertInto("ticket_watchers")
         .values({ ticket_id: fix.ticketId, user_id: watcher.id })
         .execute();
-      const alias = await aliasOf(fix.clientId);
 
-      const results = await svc.searchClients(alias, 10, watcher.id, false);
+      // Empty query returns clients the user can reach (including via watching)
+      const results = await svc.searchClients("", 10, watcher.id, false);
       expect(results.map((r) => r.id)).toContain(fix.clientId);
+    });
+
+    it("narrows to exact alias_hash match when query is non-empty", async () => {
+      const { userId, clientId } = await createTicketFixture();
+      const hash = `search-hash-${crypto.randomUUID().slice(0, 8)}`;
+
+      await testDb.db
+        .updateTable("clients")
+        .set({ alias_hash: hash })
+        .where("id", "=", clientId)
+        .execute();
+
+      const results = await svc.searchClients(hash, 10, userId, false);
+      expect(results).toHaveLength(1);
+      expect(results[0]!.id).toBe(clientId);
     });
 
     it("returns clients in every queue for admins", async () => {
       const fix = await createTestTicketFixture(testDb.db);
       const admin = await createTestUser(testDb.db);
-      const alias = await aliasOf(fix.clientId);
 
-      const scoped = await svc.searchClients(alias, 10, admin.id, false);
-      expect(scoped).toHaveLength(0);
+      // Non-admin without queue access sees nothing
+      const scoped = await svc.searchClients("", 10, admin.id, false);
+      expect(scoped.find((r) => r.id === fix.clientId)).toBeUndefined();
 
-      const results = await svc.searchClients(alias, 10, admin.id, true);
+      // Admin bypasses queue scoping and sees the client
+      const results = await svc.searchClients("", 10, admin.id, true);
       expect(results.map((r) => r.id)).toContain(fix.clientId);
     });
   });

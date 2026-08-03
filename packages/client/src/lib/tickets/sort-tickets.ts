@@ -7,26 +7,24 @@
  * pagination, not arbitrary ordering.
  */
 
-import type { SortConfig } from "$lib/stores/filters.svelte.js";
 import { getCollator } from "$lib/utils/collator.js";
 
-/**
- * Ticket shape consumed by {@link sortTickets}.
- *
- * Optional fields gate specific sort modes:
- * - `clientAlias` is required by the **client** sort (omitted tickets sort last).
- * - `followUpCount` is required by the **msgs** sort (omitted tickets sort last).
- *
- * All other sorts use only the required fields.
- */
-interface SortableTicket {
+export interface SortableTicket {
   readonly id: string;
   readonly priority: string;
-  readonly createdAt: string;
-  readonly lastActivityAt: string | null;
+  readonly createdAt: string | Date;
+  readonly lastActivityAt: string | Date | null;
   readonly queueSortOrder: number;
-  readonly clientAlias?: string;
   readonly followUpCount?: number;
+  readonly displayStatus?: string;
+  readonly title?: string | null;
+  readonly clientAlias?: string | null;
+  readonly assigneeName?: string | null;
+}
+
+export interface SortableTicketSort {
+  readonly field: string;
+  readonly direction: "asc" | "desc";
 }
 
 const PRIORITY_ORDER = new Map<string, number>([
@@ -36,8 +34,23 @@ const PRIORITY_ORDER = new Map<string, number>([
   ["low", 3],
 ]);
 
+const STATUS_RANK = new Map<string, number>([
+  ["new", 0],
+  ["active", 1],
+  ["hold", 2],
+  ["closed", 3],
+]);
+
 function priorityRank(priority: string): number {
   return PRIORITY_ORDER.get(priority) ?? 4;
+}
+
+function toTimestamp(v: string | Date): number {
+  return typeof v === "string" ? Date.parse(v) : v.getTime();
+}
+
+function toIsoString(v: string | Date): string {
+  return typeof v === "string" ? v : v.toISOString();
 }
 
 /**
@@ -46,7 +59,7 @@ function priorityRank(priority: string): number {
  */
 export function sortTickets<T extends SortableTicket>(
   tickets: readonly T[],
-  sort: SortConfig,
+  sort: SortableTicketSort,
 ): T[] {
   const sorted = [...tickets];
   const dir = sort.direction === "asc" ? 1 : -1;
@@ -56,29 +69,17 @@ export function sortTickets<T extends SortableTicket>(
 
     switch (sort.field) {
       case "priority":
-        // Priority rank is inverted: urgent=0 (highest priority) to low=3.
-        // "desc" should show highest priority first, so negate the comparison
-        // to align with the direction multiplier.
         cmp = priorityRank(b.priority) - priorityRank(a.priority);
         break;
       case "last_activity": {
-        const aTime = a.lastActivityAt ?? a.createdAt;
-        const bTime = b.lastActivityAt ?? b.createdAt;
-        cmp = aTime < bTime ? -1 : aTime > bTime ? 1 : 0;
+        const aTime = toTimestamp(a.lastActivityAt ?? a.createdAt);
+        const bTime = toTimestamp(b.lastActivityAt ?? b.createdAt);
+        cmp = aTime - bTime;
         break;
       }
       case "queue":
         cmp = a.queueSortOrder - b.queueSortOrder;
         break;
-      case "client": {
-        if (a.clientAlias == null && b.clientAlias != null) return 1;
-        if (a.clientAlias != null && b.clientAlias == null) return -1;
-        cmp =
-          a.clientAlias != null && b.clientAlias != null
-            ? getCollator().compare(a.clientAlias, b.clientAlias)
-            : 0;
-        break;
-      }
       case "msgs": {
         if (a.followUpCount == null && b.followUpCount != null) return 1;
         if (a.followUpCount != null && b.followUpCount == null) return -1;
@@ -88,14 +89,40 @@ export function sortTickets<T extends SortableTicket>(
             : 0;
         break;
       }
-      case "date":
-      default:
+      case "status":
         cmp =
-          a.createdAt < b.createdAt ? -1 : a.createdAt > b.createdAt ? 1 : 0;
+          (STATUS_RANK.get(a.displayStatus ?? "") ?? 4) -
+          (STATUS_RANK.get(b.displayStatus ?? "") ?? 4);
         break;
+      case "client":
+        // Pending-decrypt: null/undefined coerces to "" and sorts first,
+        // surfacing undecryptable rows rather than hiding them at the bottom.
+        cmp = getCollator().compare(a.clientAlias ?? "", b.clientAlias ?? "");
+        break;
+      case "title":
+        // Pending-decrypt: null/undefined coerces to "" and sorts first,
+        // surfacing undecryptable rows rather than hiding them at the bottom.
+        cmp = getCollator().compare(a.title ?? "", b.title ?? "");
+        break;
+      case "assignee": {
+        if (a.assigneeName == null && b.assigneeName == null) {
+          cmp = 0;
+          break;
+        }
+        if (a.assigneeName == null) return 1;
+        if (b.assigneeName == null) return -1;
+        cmp = getCollator().compare(a.assigneeName, b.assigneeName);
+        break;
+      }
+      case "date":
+      default: {
+        const aIso = toIsoString(a.createdAt);
+        const bIso = toIsoString(b.createdAt);
+        cmp = aIso < bIso ? -1 : aIso > bIso ? 1 : 0;
+        break;
+      }
     }
 
-    // Stable tiebreaker: fall back to id comparison
     if (cmp === 0) {
       cmp = a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
     }

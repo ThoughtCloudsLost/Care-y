@@ -8,6 +8,8 @@ import type * as ParaglideMessages from "$lib/paraglide/messages.js";
 
 let mockPermissions = new Set<string>();
 let mockHubStatusData: Record<string, unknown> | undefined;
+let mockProvisionedPhones:
+  readonly { number: string; sid: string }[] | undefined;
 
 const mockGoto = vi.fn();
 const mockToastShow = vi.fn();
@@ -48,15 +50,17 @@ vi.mock("@tanstack/svelte-query", () => ({
     getQueriesData: vi.fn().mockReturnValue([]),
   }),
   createQuery: (optsFn: () => Record<string, unknown>) => {
-    optsFn();
+    const opts = optsFn();
+    const key = opts.queryKey as readonly string[];
+    const isPhones = key.includes("provisionedPhones");
     return {
       get isLoading() {
-        return !mockHubStatusData;
+        return isPhones ? !mockProvisionedPhones : !mockHubStatusData;
       },
       isError: false,
       error: null,
       get data() {
-        return mockHubStatusData;
+        return isPhones ? mockProvisionedPhones : mockHubStatusData;
       },
     };
   },
@@ -67,7 +71,15 @@ vi.mock("$lib/trpc/index.js", () => ({
     auth: {
       hubStatus: { query: vi.fn().mockResolvedValue({}) },
     },
+    telephonyAdmin: {
+      getProvisionedPhones: { query: vi.fn().mockResolvedValue([]) },
+    },
   },
+}));
+
+vi.mock("$lib/errors.js", async (importOriginal) => ({
+  ...(await importOriginal()),
+  requireRouter: <T>(router: T) => router,
 }));
 
 // Spread the real module so a newly added panel key does not break this file;
@@ -166,6 +178,7 @@ beforeEach(() => {
     "view_reports",
   ]);
   mockHubStatusData = undefined;
+  mockProvisionedPhones = undefined;
   mockNavbarCtx.current = undefined;
   mockGoto.mockClear();
   mockToastShow.mockClear();
@@ -293,11 +306,16 @@ describe("Admin hub page", () => {
         queueCount: 1,
         keyStatus: "ok",
         retentionDays: 30,
-        phoneCount: 4,
         blocklistCount: 7,
         greetingCount: 3,
         templateCount: 5,
       };
+      mockProvisionedPhones = [
+        { number: "+15550001111", sid: "PN001" },
+        { number: "+15550002222", sid: "PN002" },
+        { number: "+15550003333", sid: "PN003" },
+        { number: "+15550004444", sid: "PN004" },
+      ];
       renderPage();
 
       expect(screen.getByText("4 numbers")).toBeTruthy();
@@ -305,11 +323,9 @@ describe("Admin hub page", () => {
       expect(screen.getByText("3 greetings")).toBeTruthy();
       expect(screen.getByText("5 templates")).toBeTruthy();
 
-      // Telephony badge shows ok when phones are provisioned
       const phoneBadge = screen.getByText("4 numbers");
       expect(phoneBadge.closest(".hub-badge-ok")).toBeTruthy();
 
-      // Greetings/templates show default (no warning) when counts > 0
       const greetingBadge = screen.getByText("3 greetings");
       expect(greetingBadge.closest(".hub-badge-warning")).toBeNull();
       const templateBadge = screen.getByText("5 templates");
@@ -322,11 +338,11 @@ describe("Admin hub page", () => {
         queueCount: 0,
         keyStatus: "ok",
         retentionDays: null,
-        phoneCount: 0,
         blocklistCount: 0,
         greetingCount: 0,
         templateCount: 0,
       };
+      mockProvisionedPhones = [];
       renderPage();
 
       expect(screen.getByText("No phones")).toBeTruthy();
@@ -334,7 +350,6 @@ describe("Admin hub page", () => {
       expect(screen.getByText("0 greetings")).toBeTruthy();
       expect(screen.getByText("0 templates")).toBeTruthy();
 
-      // Telephony, greetings, templates show warning when at zero
       const phoneBadge = screen.getByText("No phones");
       expect(phoneBadge.closest(".hub-badge-warning")).toBeTruthy();
       const greetingBadge = screen.getByText("0 greetings");
@@ -342,7 +357,6 @@ describe("Admin hub page", () => {
       const templateBadge = screen.getByText("0 templates");
       expect(templateBadge.closest(".hub-badge-warning")).toBeTruthy();
 
-      // Blocklist at 0 is normal (no warning)
       const blockBadge = screen.getByText("0 blocked");
       expect(blockBadge.closest(".hub-badge-warning")).toBeNull();
     });

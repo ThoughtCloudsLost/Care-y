@@ -11,6 +11,17 @@ import type { CryptoBridge } from "$lib/workers/crypto-bridge.js";
 import type { QueryClient } from "@tanstack/svelte-query";
 import { ticketKeys } from "$lib/query/keys.js";
 import { rewrapBlobsForFollowUp } from "./rewrap-blobs.js";
+import * as FetchBlobMod from "$lib/utils/fetch-blob.js";
+
+vi.mock("$lib/utils/fetch-blob.js", async (importOriginal) => {
+  const orig = await importOriginal<typeof FetchBlobMod>();
+  return {
+    ...orig,
+    fetchBlob: vi.fn(),
+  };
+});
+
+const mockFetchBlob = FetchBlobMod.fetchBlob as ReturnType<typeof vi.fn>;
 
 const TICKET_ID = "ticket-001";
 const FOLLOW_UP_ID = "fu-001";
@@ -32,12 +43,6 @@ function createMockTicketRouter() {
     },
     listAttachments: {
       query: vi.fn().mockResolvedValue([]),
-    },
-    downloadRecordingBlob: {
-      query: vi.fn().mockResolvedValue({ data: "encrypted-blob-base64" }),
-    },
-    downloadAttachmentBlob: {
-      query: vi.fn().mockResolvedValue({ data: "encrypted-att-base64" }),
     },
   };
 }
@@ -101,6 +106,7 @@ describe("rewrapBlobsForFollowUp", () => {
   beforeEach(() => {
     bridge = createMockBridge();
     router = createMockTicketRouter();
+    mockFetchBlob.mockReset();
   });
 
   it("returns empty array when follow-up has no blobs in cache", async () => {
@@ -162,6 +168,9 @@ describe("rewrapBlobsForFollowUp", () => {
       { id: "rec-1", blobKey: "blob-rec-1", followupId: FOLLOW_UP_ID },
     ]);
 
+    const recBuffer = new ArrayBuffer(8);
+    mockFetchBlob.mockResolvedValue(recBuffer);
+
     (bridge.rewrapBlob as ReturnType<typeof vi.fn>).mockResolvedValue({
       encryptedData: "re-encrypted-rec",
       blobKey: "blob-rec-1",
@@ -183,13 +192,11 @@ describe("rewrapBlobsForFollowUp", () => {
       category: "recording",
     });
 
-    expect(router.downloadRecordingBlob.query).toHaveBeenCalledWith({
-      recordingId: "rec-1",
-    });
+    expect(mockFetchBlob).toHaveBeenCalledWith("/api/blobs/recordings/rec-1");
     expect(bridge.rewrapBlob).toHaveBeenCalledWith(
       FOLLOW_UP_ID,
       TICKET_ID,
-      "encrypted-blob-base64",
+      recBuffer,
       "blob-rec-1",
       "rec-1",
       "recording",
@@ -203,6 +210,8 @@ describe("rewrapBlobsForFollowUp", () => {
       { id: "att-1", blobKey: "blob-att-1", followupId: FOLLOW_UP_ID },
       { id: "att-2", blobKey: "blob-att-2", followupId: FOLLOW_UP_ID },
     ]);
+
+    mockFetchBlob.mockResolvedValue(new ArrayBuffer(4));
 
     (bridge.rewrapBlob as ReturnType<typeof vi.fn>)
       .mockResolvedValueOnce({
@@ -237,9 +246,7 @@ describe("rewrapBlobsForFollowUp", () => {
     router.listRecordings.query.mockResolvedValue([
       { id: "rec-fail", blobKey: "blob-fail", followupId: FOLLOW_UP_ID },
     ]);
-    router.downloadRecordingBlob.query.mockRejectedValue(
-      new Error("Network error"),
-    );
+    mockFetchBlob.mockRejectedValue(new Error("Network error"));
 
     await expect(
       rewrapBlobsForFollowUp(
@@ -259,6 +266,7 @@ describe("rewrapBlobsForFollowUp", () => {
       { id: "att-fail", blobKey: "blob-fail", followupId: FOLLOW_UP_ID },
     ]);
 
+    mockFetchBlob.mockResolvedValue(new ArrayBuffer(4));
     (bridge.rewrapBlob as ReturnType<typeof vi.fn>).mockRejectedValue(
       new Error("REWRAP_FAILED"),
     );
@@ -286,6 +294,7 @@ describe("rewrapBlobsForFollowUp", () => {
       { id: "att-1", blobKey: "blob-att-1", followupId: FOLLOW_UP_ID },
     ]);
 
+    mockFetchBlob.mockResolvedValue(new ArrayBuffer(4));
     (bridge.rewrapBlob as ReturnType<typeof vi.fn>)
       .mockResolvedValueOnce({
         encryptedData: "re-enc-rec",
@@ -343,6 +352,7 @@ describe("rewrapBlobsForFollowUp", () => {
       { id: "att-file-1", blobKey: "blob-file-1", followupId: FOLLOW_UP_ID },
     ]);
 
+    mockFetchBlob.mockResolvedValue(new ArrayBuffer(4));
     (bridge.rewrapBlob as ReturnType<typeof vi.fn>).mockResolvedValue({
       encryptedData: "re-enc-file",
       blobKey: "blob-file-1",
@@ -359,9 +369,9 @@ describe("rewrapBlobsForFollowUp", () => {
 
     expect(result).toHaveLength(1);
     expect(result[0]!.category).toBe("attachment");
-    expect(router.downloadAttachmentBlob.query).toHaveBeenCalledWith({
-      attachmentId: "att-file-1",
-    });
+    expect(mockFetchBlob).toHaveBeenCalledWith(
+      "/api/blobs/attachments/att-file-1",
+    );
   });
 
   // ── followUpHasBlobs flag combination branches ───────────────────────
@@ -375,6 +385,7 @@ describe("rewrapBlobsForFollowUp", () => {
       { id: "file-1", blobKey: "blob-file-1", followupId: FOLLOW_UP_ID },
     ]);
 
+    mockFetchBlob.mockResolvedValue(new ArrayBuffer(4));
     (bridge.rewrapBlob as ReturnType<typeof vi.fn>).mockResolvedValue({
       encryptedData: "re-enc-file-only",
       blobKey: "blob-file-1",
@@ -412,7 +423,7 @@ describe("rewrapBlobsForFollowUp", () => {
 
   // ── Sequential rewrap loop dispatch ──────────────────────────────────
 
-  it("dispatches downloadRecordingBlob for recordings and downloadAttachmentBlob for attachments sequentially", async () => {
+  it("fetches blobs for recordings and attachments sequentially via fetchBlob", async () => {
     const qc = createMockQueryClient([
       { id: FOLLOW_UP_ID, hasRecording: true, hasFile: true },
     ]);
@@ -424,6 +435,8 @@ describe("rewrapBlobsForFollowUp", () => {
     router.listAttachments.query.mockResolvedValue([
       { id: "att-a", blobKey: "blob-att-a", followupId: FOLLOW_UP_ID },
     ]);
+
+    mockFetchBlob.mockResolvedValue(new ArrayBuffer(4));
 
     (bridge.rewrapBlob as ReturnType<typeof vi.fn>)
       .mockResolvedValueOnce({
@@ -452,20 +465,13 @@ describe("rewrapBlobsForFollowUp", () => {
 
     expect(result).toHaveLength(3);
 
-    // Recordings dispatched via downloadRecordingBlob
-    expect(router.downloadRecordingBlob.query).toHaveBeenCalledTimes(2);
-    expect(router.downloadRecordingBlob.query).toHaveBeenCalledWith({
-      recordingId: "rec-a",
-    });
-    expect(router.downloadRecordingBlob.query).toHaveBeenCalledWith({
-      recordingId: "rec-b",
-    });
+    // Recordings fetched via fetchBlob with recording paths
+    expect(mockFetchBlob).toHaveBeenCalledTimes(3);
+    expect(mockFetchBlob).toHaveBeenCalledWith("/api/blobs/recordings/rec-a");
+    expect(mockFetchBlob).toHaveBeenCalledWith("/api/blobs/recordings/rec-b");
 
-    // Attachments dispatched via downloadAttachmentBlob
-    expect(router.downloadAttachmentBlob.query).toHaveBeenCalledTimes(1);
-    expect(router.downloadAttachmentBlob.query).toHaveBeenCalledWith({
-      attachmentId: "att-a",
-    });
+    // Attachment fetched via fetchBlob with attachment path
+    expect(mockFetchBlob).toHaveBeenCalledWith("/api/blobs/attachments/att-a");
 
     // Each rewrapBlob call receives the correct category
     const rewrapCalls = (bridge.rewrapBlob as ReturnType<typeof vi.fn>).mock
@@ -488,6 +494,7 @@ describe("rewrapBlobsForFollowUp", () => {
       { id: "rec-skip", blobKey: "blob-skip", followupId: FOLLOW_UP_ID },
     ]);
 
+    mockFetchBlob.mockResolvedValue(new ArrayBuffer(4));
     (bridge.rewrapBlob as ReturnType<typeof vi.fn>)
       .mockResolvedValueOnce({
         encryptedData: "enc-ok",
@@ -508,11 +515,11 @@ describe("rewrapBlobsForFollowUp", () => {
 
     // First item was downloaded, second item failed at rewrap.
     // Third item was never downloaded (loop aborted).
-    expect(router.downloadRecordingBlob.query).toHaveBeenCalledTimes(2);
+    expect(mockFetchBlob).toHaveBeenCalledTimes(2);
     expect(bridge.rewrapBlob).toHaveBeenCalledTimes(2);
   });
 
-  it("skips attachment rewraps when recording rewrap fails first", async () => {
+  it("skips attachment rewraps when recording download fails first", async () => {
     const qc = createMockQueryClient([
       { id: FOLLOW_UP_ID, hasRecording: true, hasImage: true },
     ]);
@@ -524,9 +531,7 @@ describe("rewrapBlobsForFollowUp", () => {
       { id: "att-skip", blobKey: "blob-skip", followupId: FOLLOW_UP_ID },
     ]);
 
-    router.downloadRecordingBlob.query.mockRejectedValue(
-      new Error("download failed"),
-    );
+    mockFetchBlob.mockRejectedValue(new Error("download failed"));
 
     await expect(
       rewrapBlobsForFollowUp(
@@ -538,8 +543,9 @@ describe("rewrapBlobsForFollowUp", () => {
       ),
     ).rejects.toThrow("download failed");
 
-    // Recording download failed, so attachment rewrap never starts
-    expect(router.downloadAttachmentBlob.query).not.toHaveBeenCalled();
+    // Recording download failed, so attachment rewrap never starts.
+    // fetchBlob was called once (for the recording), then the error aborted.
+    expect(mockFetchBlob).toHaveBeenCalledTimes(1);
     expect(bridge.rewrapBlob).not.toHaveBeenCalled();
   });
 });

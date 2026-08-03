@@ -40,7 +40,12 @@ function createMockPhoneRepo(): PhoneRepository {
 function createMockClientRepo(): ClientRepository {
   return {
     findOrCreateByPhoneHash: vi.fn().mockResolvedValue({
-      client: { id: "client-1", alias: "calm-pebble-7", phoneId: "phone-1" },
+      client: {
+        id: "client-1",
+        encryptedAlias: Buffer.from("sealed:calm-pebble-7"),
+        aliasHash: null,
+        phoneId: "phone-1",
+      },
       phone: {
         id: "phone-1",
         phoneHash: "hashed-phone",
@@ -338,7 +343,12 @@ describe("handleInboundCall", () => {
   it("updates locale when DTMF-selected locale differs from phone record", async () => {
     // findOrCreateByPhoneHash returns phone with locale "en-US"
     vi.mocked(deps.clientRepo.findOrCreateByPhoneHash).mockResolvedValueOnce({
-      client: { id: "client-1", alias: "calm-pebble-7", phoneId: "phone-1" },
+      client: {
+        id: "client-1",
+        encryptedAlias: Buffer.from("sealed:calm-pebble-7"),
+        aliasHash: null,
+        phoneId: "phone-1",
+      },
       phone: {
         id: "phone-1",
         phoneHash: "hashed-phone",
@@ -364,7 +374,12 @@ describe("handleInboundCall", () => {
 
   it("does not update locale when DTMF-selected locale matches phone record", async () => {
     vi.mocked(deps.clientRepo.findOrCreateByPhoneHash).mockResolvedValueOnce({
-      client: { id: "client-1", alias: "calm-pebble-7", phoneId: "phone-1" },
+      client: {
+        id: "client-1",
+        encryptedAlias: Buffer.from("sealed:calm-pebble-7"),
+        aliasHash: null,
+        phoneId: "phone-1",
+      },
       phone: {
         id: "phone-1",
         phoneHash: "hashed-phone",
@@ -558,7 +573,12 @@ describe("handleInboundCall", () => {
 
   it("resolves DTMF digit 2 to es-MX and produces voicemail IVR", async () => {
     vi.mocked(deps.clientRepo.findOrCreateByPhoneHash).mockResolvedValueOnce({
-      client: { id: "client-1", alias: "calm-pebble-7", phoneId: "phone-1" },
+      client: {
+        id: "client-1",
+        encryptedAlias: Buffer.from("sealed:calm-pebble-7"),
+        aliasHash: null,
+        phoneId: "phone-1",
+      },
       phone: {
         id: "phone-1",
         phoneHash: "hashed-phone",
@@ -593,7 +613,12 @@ describe("handleInboundCall", () => {
 
   it("resolves DTMF digit 3 to fr-FR and produces voicemail IVR", async () => {
     vi.mocked(deps.clientRepo.findOrCreateByPhoneHash).mockResolvedValueOnce({
-      client: { id: "client-1", alias: "calm-pebble-7", phoneId: "phone-1" },
+      client: {
+        id: "client-1",
+        encryptedAlias: Buffer.from("sealed:calm-pebble-7"),
+        aliasHash: null,
+        phoneId: "phone-1",
+      },
       phone: {
         id: "phone-1",
         phoneHash: "hashed-phone",

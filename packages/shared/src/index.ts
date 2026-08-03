@@ -14,6 +14,7 @@ export {
 
 // --- Utilities ---
 export { extractSubdomain } from "./utils/subdomain.js";
+export { normalizeAlias } from "./utils/normalize-alias.js";
 
 export {
   emailSchema,
@@ -40,6 +41,7 @@ export {
   ROLE_ID_VALUES_TUPLE,
   ROLE_LEVEL,
   meetsRoleThreshold,
+  isRoleRestricted,
   getAllowedRoleIds,
   Permission,
 } from "./roles.js";
@@ -326,6 +328,8 @@ export {
   type ClientGetInput,
   updateAliasInputSchema,
   type UpdateAliasInput,
+  backfillAliasHashInputSchema,
+  type BackfillAliasHashInput,
   updatePhoneInputSchema,
   type UpdatePhoneInput,
   suggestDuplicatesInputSchema,

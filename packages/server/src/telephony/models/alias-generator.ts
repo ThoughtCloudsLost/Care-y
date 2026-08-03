@@ -1,15 +1,19 @@
 /**
  * Client alias generator: produces "adjective-noun-number" aliases
- * like "calm-pebble-7" or "bright-cedar-42".
+ * like "calm-pebble-40217" or "bright-cedar-3".
  *
  * Word lists are positive/neutral adjectives and nature-themed nouns.
- * With 80 adjectives, 80 nouns, and numbers 1-99, the keyspace is
- * roughly 633,000 combinations (minus blocked pairs). Callers must
- * handle collisions via retry (see client-repo.ts).
+ * The numeric suffix is drawn from a per-org PostgreSQL sequence so
+ * generated aliases cannot repeat within an org. Blocked adjective-noun
+ * pairs trigger a re-roll of the word pair only; the suffix is always
+ * unique.
  */
 
 import { randomInt } from "node:crypto";
 import { InternalError } from "../../errors.js";
+import type { Kysely } from "kysely";
+import type { TenantDatabase } from "../../db/types.js";
+import { sql } from "kysely";
 
 export const ADJECTIVES = [
   "bright",
@@ -208,13 +212,37 @@ export function isBlockedPair(adjective: string, noun: string): boolean {
   return BLOCKED_PAIRS.has(`${adjective}-${noun}`);
 }
 
-export function generateAlias(): string {
+/**
+ * Draws the next value from the per-org client_alias_seq sequence.
+ * The sequence lives in the tenant schema, so withSchema's search_path
+ * resolves it to the correct org.
+ */
+async function nextAliasSuffix(db: Kysely<TenantDatabase>): Promise<number> {
+  const result = await sql<{
+    nextval: string;
+  }>`SELECT nextval('client_alias_seq')`.execute(db);
+  const row = result.rows[0];
+  if (!row) {
+    throw new InternalError("client_alias_seq returned no rows");
+  }
+  return Number(row.nextval);
+}
+
+/**
+ * Generate a unique alias using the per-org sequence.
+ * The suffix is drawn from a PostgreSQL sequence so no two generated
+ * aliases can collide within an org.
+ */
+export async function generateAlias(
+  db: Kysely<TenantDatabase>,
+): Promise<string> {
+  const suffix = await nextAliasSuffix(db);
+
   for (let attempt = 0; attempt < MAX_REROLL_ATTEMPTS; attempt++) {
     const adj = pick(ADJECTIVES);
     const noun = pick(NOUNS);
     if (!isBlockedPair(adj, noun)) {
-      const num = randomInt(1, 100);
-      return `${adj}-${noun}-${String(num)}`;
+      return `${adj}-${noun}-${String(suffix)}`;
     }
   }
   throw new InternalError(

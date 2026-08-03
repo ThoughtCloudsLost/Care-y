@@ -64,7 +64,11 @@ const TEST_USER_ID = "a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d";
 const TEST_IP = "203.0.113.42";
 
 /** 32 bytes, base64-encoded. Simulates a blinded ristretto255 point. */
-const VALID_BLINDED_ELEMENT = Buffer.alloc(32, 0xab).toString("base64");
+const BLINDED_BYTES = Buffer.alloc(32, 0xab);
+const VALID_BLINDED_ELEMENT = BLINDED_BYTES.toString("base64");
+
+/** Expected output encoding (base64url, no padding). */
+const EXPECTED_EVALUATED = BLINDED_BYTES.toString("base64url");
 
 /** Evaluator that returns the input unchanged (sufficient for service-level tests). */
 function createPassthroughEvaluator(): OprfEvaluator {
@@ -206,7 +210,7 @@ describe("OprfEvaluateService", () => {
 
     const result = await service.evaluate(makeRequest());
 
-    expect(result.evaluated).toBe(VALID_BLINDED_ELEMENT);
+    expect(result.evaluated).toBe(EXPECTED_EVALUATED);
     expect(auditLogger.calls).toHaveLength(0);
   });
 
@@ -276,7 +280,7 @@ describe("OprfEvaluateService", () => {
     // Four successful evaluations stay below the threshold.
     for (let i = 0; i < 4; i++) {
       await expect(service.evaluate(makeRequest())).resolves.toEqual({
-        evaluated: VALID_BLINDED_ELEMENT,
+        evaluated: EXPECTED_EVALUATED,
       });
     }
 
@@ -346,7 +350,7 @@ describe("OprfEvaluateService", () => {
 
     const result = await service.evaluate(makeRequest({ sessionUserId: null }));
 
-    expect(result.evaluated).toBe(VALID_BLINDED_ELEMENT);
+    expect(result.evaluated).toBe(EXPECTED_EVALUATED);
     expect(auditLogger.calls).toHaveLength(0);
   });
 
@@ -407,7 +411,7 @@ describe("OprfEvaluateService", () => {
     // the caller is already authenticated with MANAGE_KEYS.
     for (let i = 0; i < 5; i++) {
       await expect(service.adminEvaluate(makeRequest())).resolves.toEqual({
-        evaluated: VALID_BLINDED_ELEMENT,
+        evaluated: EXPECTED_EVALUATED,
       });
     }
     expect(auditLogger.calls.some((c) => c.reason === "pow_required")).toBe(
@@ -513,7 +517,7 @@ describe("OPRF tRPC route", () => {
       blindedElement: VALID_BLINDED_ELEMENT,
     });
 
-    expect(result.evaluated).toBe(VALID_BLINDED_ELEMENT);
+    expect(result.evaluated).toBe(EXPECTED_EVALUATED);
   });
 
   it("maps ForbiddenError to FORBIDDEN tRPC error for session mismatch", async () => {
@@ -556,7 +560,7 @@ describe("OPRF tRPC route", () => {
 describe("OPRF adminEvaluate route", () => {
   function buildAdminCaller(ctxOverrides?: Partial<Context>) {
     const mockAdminEvaluate = vi.fn().mockResolvedValue({
-      evaluated: VALID_BLINDED_ELEMENT,
+      evaluated: EXPECTED_EVALUATED,
     });
     const service = createOprfEvaluateService(makeServiceDeps());
     const spiedService = {
@@ -656,7 +660,7 @@ describe("OPRF adminEvaluate route", () => {
       blindedElement: VALID_BLINDED_ELEMENT,
     });
 
-    expect(result.evaluated).toBe(VALID_BLINDED_ELEMENT);
+    expect(result.evaluated).toBe(EXPECTED_EVALUATED);
     expect(mockAdminEvaluate).toHaveBeenCalledOnce();
     expect(mockAdminEvaluate).toHaveBeenCalledWith(
       expect.objectContaining({

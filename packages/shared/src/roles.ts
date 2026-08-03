@@ -46,6 +46,13 @@ export function meetsRoleThreshold(
   return userLevel >= minLevel;
 }
 
+/** Returns true if the given minimum role is above the base volunteer level. */
+export function isRoleRestricted(minRoleId: string): boolean {
+  return (
+    (ROLE_LEVEL.get(minRoleId) ?? 0) > (ROLE_LEVEL.get(RoleId.VOLUNTEER) ?? 0)
+  );
+}
+
 /** Returns all role IDs at or below the given role's level (for SQL IN filtering). */
 export function getAllowedRoleIds(userRoleId: string): RoleIdValue[] {
   const userLevel = ROLE_LEVEL.get(userRoleId) ?? 0;

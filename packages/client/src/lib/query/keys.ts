@@ -184,6 +184,7 @@ export interface ClientListKeyParams {
   readonly createdAfter?: string;
   readonly createdBefore?: string;
   readonly includeMerged?: boolean;
+  readonly aliasHash?: string;
 }
 
 export const clientKeys = {

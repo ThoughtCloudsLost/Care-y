@@ -8,8 +8,7 @@
 -->
 <script lang="ts">
   import { getOrgKeyManager } from "$lib/crypto/context.js";
-  import { trpc } from "$lib/trpc/index.js";
-  import { requireRouter } from "$lib/errors.js";
+  import { fetchBlob } from "$lib/utils/fetch-blob.js";
   import { triggerBlobDownload } from "$lib/components/shared/attachment-download.js";
   import { toastStore } from "$lib/stores/toast.svelte.js";
   import * as m from "$lib/paraglide/messages.js";
@@ -24,15 +23,12 @@
 
   let { attachmentId, filename, sizeBytes, disabled = false }: Props = $props();
 
-  const kbRouter = requireRouter(trpc.kb, "kb");
   const orgKeyManager = getOrgKeyManager();
 
   async function handleDownload(id: string): Promise<void> {
     try {
-      const result = await kbRouter.downloadAttachmentBlob.query({
-        attachmentId: id,
-      });
-      const raw = Uint8Array.from(atob(result.data), (c) => c.charCodeAt(0));
+      const buf = await fetchBlob(`/api/blobs/kb-attachments/${id}`);
+      const raw = new Uint8Array(buf);
       const decrypted = await orgKeyManager.decrypt(raw);
       triggerBlobDownload(decrypted, filename);
     } catch (err: unknown) {

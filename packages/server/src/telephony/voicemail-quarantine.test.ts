@@ -520,11 +520,11 @@ describe.skipIf(!process.env.DATABASE_URL)(
       const results = await listQuarantined(testDb.db, { limit: 50 });
 
       const row = results.find(
-        (r) => r.encryptedCallerNumber === encCaller.toString("base64"),
+        (r) => r.encryptedCallerNumber === encCaller.toString("base64url"),
       );
       expect(row).toBeDefined();
-      expect(row!.encryptedCallerNumber).toBe(encCaller.toString("base64"));
-      expect(row!.encryptedCalledNumber).toBe(encCalled.toString("base64"));
+      expect(row!.encryptedCallerNumber).toBe(encCaller.toString("base64url"));
+      expect(row!.encryptedCalledNumber).toBe(encCalled.toString("base64url"));
       expect(row!.reason).toBe("unresolved_client");
       expect(row!.durationSeconds).toBe(15);
       expect(row!.status).toBe("pending");
@@ -576,7 +576,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
         inserted.id,
       );
 
-      expect(result.sealedBase64).toBe(sealedData.toString("base64"));
+      expect(result.sealedBase64).toBe(sealedData.toString("base64url"));
       expect(result.durationSeconds).toBe(22);
     });
 
@@ -708,6 +708,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
           blobStore: store,
           orgSchema: testDb.schemaName,
           pendingClients: new Map(),
+          sealedBox: createMockSealedBox(),
         };
         const input: RouteQuarantineInput = {
           quarantineId: crypto.randomUUID(),
@@ -736,6 +737,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
           blobStore: store,
           orgSchema: testDb.schemaName,
           pendingClients: new Map(),
+          sealedBox: createMockSealedBox(),
         };
         const input: RouteQuarantineInput = {
           quarantineId,
@@ -767,6 +769,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
           blobStore: store,
           orgSchema: testDb.schemaName,
           pendingClients: new Map(),
+          sealedBox: createMockSealedBox(),
         };
         const input: RouteQuarantineInput = {
           quarantineId,
@@ -788,6 +791,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
           blobStore: store,
           orgSchema: testDb.schemaName,
           pendingClients: new Map(),
+          sealedBox: createMockSealedBox(),
         };
         const input: RouteQuarantineInput = {
           quarantineId,

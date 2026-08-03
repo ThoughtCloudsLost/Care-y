@@ -187,7 +187,7 @@
     >
     <span class="head-main">
       <span class="r-alias-row">
-        <span class="r-alias">{@render hl(clientAlias)}</span>
+        <span class="r-alias">{@render hl(clientAlias ?? "...")}</span>
         <span class="r-side">
           {#if priority !== "normal"}<PriorityStamp {priority} />{/if}
           {#if isUnread}<NewPill count={unreadCount} />{/if}
@@ -267,7 +267,7 @@
     <button
       type="button"
       class="card-open-link"
-      aria-label={m.tickets_open(withTerms({ alias: clientAlias }))}
+      aria-label={m.tickets_open(withTerms({ alias: clientAlias ?? "..." }))}
       onclick={handleCardClick}
       ondblclick={handleCardDblClick}
     ></button>
@@ -346,7 +346,7 @@
           status={displayStatus}
           unreadHighlight={newRepliesFirst && isUnread}
         />
-        <span class="client-alias">{@render hl(clientAlias)}</span>
+        <span class="client-alias">{@render hl(clientAlias ?? "...")}</span>
         <span class="row-top-stamp"><PriorityStamp {priority} /></span>
       </div>
       <div class="content-group">

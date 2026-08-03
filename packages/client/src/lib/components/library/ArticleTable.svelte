@@ -17,7 +17,7 @@
   interface ArticleRow {
     id: string;
     titleResult: DecryptResult;
-    encryptedTitle?: unknown;
+    encryptedTitle?: string;
     categoryName: string | null;
     authorName: string | null;
     voteUpCount: number;

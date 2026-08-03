@@ -857,12 +857,15 @@ describe("crypto.worker", () => {
       );
 
       // rewrapBlob: tk_temp -> canonical tk
+      const blobCtBuf = new ArrayBuffer(blobCt.byteLength);
+      new Uint8Array(blobCtBuf).set(blobCt);
+
       const resp = (await sendAndWait({
         type: "rewrapBlob",
         id: 2103,
         followUpId: "fu-blob-1",
         ticketId: "ticket-blob",
-        ciphertext: encode(blobCt),
+        ciphertext: blobCtBuf,
         blobKey: "blob-key-001",
         blobId: "blob-row-1",
         category: "recording",
@@ -893,7 +896,7 @@ describe("crypto.worker", () => {
         id: 2110,
         followUpId: "fu-no-cache",
         ticketId: "ticket-blob",
-        ciphertext: encode(new Uint8Array(40)),
+        ciphertext: new ArrayBuffer(40),
         blobKey: "blob-key-bad",
         blobId: "blob-row-bad",
         category: "attachment",
@@ -925,7 +928,7 @@ describe("crypto.worker", () => {
         id: 2200,
         followUpId: "fu-blob-1",
         ticketId: "ticket-blob",
-        ciphertext: encode(new Uint8Array(40)),
+        ciphertext: new ArrayBuffer(40),
         blobKey: "blob-key-after",
         category: "recording",
       });

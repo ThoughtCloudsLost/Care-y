@@ -6,14 +6,13 @@
  * the branding cache and apple-touch-icon link.
  */
 
-import { encryptClientBranding } from "@care-y/crypto";
+import { encryptClientBranding, encode } from "@care-y/crypto";
 import type { OrgKeyManager } from "$lib/crypto/org-key.js";
 import { OrgKeyNotLoadedError } from "$lib/crypto/org-key.js";
 import { generateIconVariants } from "$lib/branding/icon-generator.js";
 import { updateBrandingCache } from "$lib/branding/index.js";
 import { setAppleTouchIconHref } from "$lib/branding/icon-link.svelte.js";
 import { getOrgSlug } from "$lib/utils/org-slug.js";
-import { uint8ArrayToBase64 } from "$lib/utils/buffer-encoding.js";
 
 export interface IconUploadRouter {
   readonly uploadIcons: {
@@ -51,7 +50,7 @@ export async function uploadPwaIcons(
       new Uint8Array(arrayBuffer),
       orgPubKey,
     );
-    const b64 = uint8ArrayToBase64(encrypted);
+    const b64 = encode(encrypted);
 
     if (variant.purpose === "maskable") {
       iconMaskable = b64;

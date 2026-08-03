@@ -6,13 +6,15 @@ import {
 } from "./kb.js";
 import type { FullSearchState } from "../types.js";
 import { cacheRegistry } from "$lib/crypto/cache-registry.js";
+import type * as MessagesModule from "$lib/paraglide/messages.js";
+import type * as KBResultItemModule from "$lib/components/search/KBResultItem.svelte";
 
 beforeEach(() => {
   cacheRegistry.reset();
 });
 
-// Mock paraglide messages
-vi.mock("$lib/paraglide/messages.js", () => ({
+vi.mock("$lib/paraglide/messages.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof MessagesModule>()),
   search_section_kb: () => "Articles",
   search_coverage_searching: (p: { searched: number; total: number }) =>
     `Searching ${String(p.searched)} of ${String(p.total)}...`,
@@ -25,10 +27,13 @@ vi.mock("$lib/paraglide/messages.js", () => ({
   search_fetch_more_articles: () => "Search inside full articles",
 }));
 
-// Mock the KBResultItem component (not needed for unit tests)
-vi.mock("$lib/components/search/KBResultItem.svelte", () => ({
-  default: {} as never,
-}));
+vi.mock(
+  "$lib/components/search/KBResultItem.svelte",
+  async (importOriginal) => ({
+    ...(await importOriginal<typeof KBResultItemModule>()),
+    default: {} as never,
+  }),
+);
 
 const baseDate = new Date("2026-03-15T12:00:00Z");
 
@@ -37,8 +42,8 @@ function makeRawItem(
 ): RawKBItem {
   return {
     categoryId: "cat-1",
-    encryptedTitle: new Uint8Array([1, 2, 3]),
-    encryptedExcerpt: new Uint8Array([4, 5, 6]),
+    encryptedTitle: "AQID",
+    encryptedExcerpt: "BAUG",
     createdBy: "user-1",
     voteUpCount: 4,
     voteDownCount: 1,
@@ -373,7 +378,7 @@ describe("KB fullSearch (body content)", () => {
       fetchBodies: vi.fn(async (itemIds: string[]) =>
         itemIds.map((id) => ({
           id,
-          encryptedBody: new Uint8Array([99]),
+          encryptedBody: "Yw",
         })),
       ),
       decryptOrg: async (cacheKey: string, ciphertext: unknown) => {

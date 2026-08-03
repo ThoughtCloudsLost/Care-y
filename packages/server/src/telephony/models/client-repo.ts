@@ -4,24 +4,25 @@
  * When an inbound call or SMS arrives, the handler hashes the caller's
  * number and calls findOrCreateByPhoneHash. If the phone is new, a
  * phone record and client record are created together. The client gets
- * an auto-generated alias ("adjective-noun-number").
+ * an auto-generated alias sealed with the org public key. The alias_hash
+ * is NULL because no browser session exists to compute it; it is lazily
+ * backfilled on first decrypt.
  *
- * Alias collisions (PostgreSQL unique constraint 23505) are retried
- * up to 5 times with a fresh alias each attempt.
+ * Generated aliases are structurally unique: the numeric suffix is
+ * drawn from a per-org sequence so no two generated aliases can collide.
  */
 
 import type { Kysely, Selectable } from "kysely";
 import type { ClientsTable, TenantDatabase } from "../../db/types.js";
 import type { PhoneRecord, PhoneRepository } from "./phone-repo.js";
 import { generateAlias } from "./alias-generator.js";
-import { ConflictError } from "../../errors.js";
-import { ErrorCode } from "@care-y/shared";
-
-const MAX_ALIAS_RETRIES = 5;
+import { sealString } from "../crypto-helpers.js";
+import type { SealedBoxEncryptor } from "../../crypto/sealed-box.js";
 
 export interface ClientRecord {
   readonly id: string;
-  readonly alias: string;
+  readonly encryptedAlias: Buffer;
+  readonly aliasHash: string | null;
   readonly phoneId: string;
 }
 
@@ -43,43 +44,16 @@ export interface ClientRepository {
 function mapClientRow(row: Selectable<ClientsTable>): ClientRecord {
   return {
     id: row.id,
-    alias: row.alias,
+    encryptedAlias: row.encrypted_alias,
+    aliasHash: row.alias_hash,
     phoneId: row.phone_id,
   };
-}
-
-function isUniqueViolation(err: unknown): boolean {
-  return (
-    typeof err === "object" &&
-    err !== null &&
-    "code" in err &&
-    err.code === "23505"
-  );
-}
-
-/**
- * Inserts a client row with the given generated label and phone reference.
- * The label is a random pseudonym (e.g. "calm-pebble-7"), not PII.
- * Extracted to isolate the DB write from the retry loop.
- */
-async function insertClientRow(
-  db: Kysely<TenantDatabase>,
-  generatedLabel: string,
-  phoneId: string,
-): Promise<Selectable<ClientsTable>> {
-  return db
-    .insertInto("clients")
-    .values({
-      alias: generatedLabel,
-      phone_id: phoneId,
-    })
-    .returningAll()
-    .executeTakeFirstOrThrow();
 }
 
 export function createClientRepository(
   db: Kysely<TenantDatabase>,
   phoneRepo: PhoneRepository,
+  sealedBox: SealedBoxEncryptor,
 ): ClientRepository {
   return {
     async findOrCreateByPhoneHash(
@@ -112,29 +86,28 @@ export function createClientRepository(
         encryptedNumber,
       });
 
-      // 4. Create client with generated pseudonym, retrying on unique constraint violation
-      for (let attempt = 0; attempt < MAX_ALIAS_RETRIES; attempt++) {
-        try {
-          const clientRow = await insertClientRow(
-            db,
-            generateAlias(),
-            phone.id,
-          );
+      // 4. Seal the generated label (sealString zeroes the input Buffer).
+      const sealedLabel = sealString(sealedBox, await generateAlias(db));
 
-          return {
-            client: mapClientRow(clientRow),
-            phone,
-            isNew: true,
-          };
-        } catch (err: unknown) {
-          if (isUniqueViolation(err)) {
-            continue;
-          }
-          throw err;
-        }
-      }
+      // Scoped to the two lines the rule flags rather than the whole file, so
+      // a future write added here is still checked.
+      const clientRow = await db
+        // care-y-ignore-next-line no-plaintext-db-write -- writes ciphertext only, see the value list below
+        .insertInto("clients")
+        // care-y-ignore-next-line no-plaintext-db-write -- encrypted_alias is sealed ciphertext from sealString above; alias_hash is null; phone_id is a FK, not a number
+        .values({
+          encrypted_alias: sealedLabel,
+          alias_hash: null,
+          phone_id: phone.id,
+        })
+        .returningAll()
+        .executeTakeFirstOrThrow();
 
-      throw new ConflictError(ErrorCode.ALIAS_GENERATION_FAILED);
+      return {
+        client: mapClientRow(clientRow),
+        phone,
+        isNew: true,
+      };
     },
 
     async findById(id: string): Promise<ClientRecord | null> {

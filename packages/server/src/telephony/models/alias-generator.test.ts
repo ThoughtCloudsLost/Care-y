@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import * as fc from "fast-check";
 
 import {
@@ -8,61 +8,44 @@ import {
   NOUNS,
   BLOCKED_PAIRS,
 } from "./alias-generator.js";
+import { createTestDb, type TestDb } from "../../test-utils.js";
 
 const ALIAS_PATTERN = /^[a-z]+-[a-z]+-\d+$/;
 
-describe("generateAlias", () => {
-  it("returns a string matching adjective-noun-number pattern", () => {
-    const alias = generateAlias();
+describe.skipIf(!process.env.DATABASE_URL)("generateAlias (DB)", () => {
+  let testDb: TestDb;
+
+  beforeAll(async () => {
+    testDb = await createTestDb();
+  });
+
+  afterAll(async () => {
+    await testDb.cleanup();
+  });
+
+  it("returns a string matching adjective-noun-number pattern", async () => {
+    const alias = await generateAlias(testDb.db);
     expect(alias).toMatch(ALIAS_PATTERN);
   });
 
-  it("produces a number suffix between 1 and 99", () => {
-    const alias = generateAlias();
-    const parts = alias.split("-");
-    const num = Number(parts[parts.length - 1]);
-    expect(num).toBeGreaterThanOrEqual(1);
-    expect(num).toBeLessThanOrEqual(99);
-  });
-
-  it("produces 100 aliases that all match the expected format", () => {
-    for (let i = 0; i < 100; i++) {
-      const alias = generateAlias();
-      expect(alias).toMatch(ALIAS_PATTERN);
-
+  it("produces unique suffixes across multiple calls", async () => {
+    const suffixes = new Set<string>();
+    for (let i = 0; i < 10; i++) {
+      const alias = await generateAlias(testDb.db);
       const parts = alias.split("-");
-      expect(parts.length).toBeGreaterThanOrEqual(3);
-
-      const numStr = parts[parts.length - 1];
-      const num = Number(numStr);
-      expect(num).toBeGreaterThanOrEqual(1);
-      expect(num).toBeLessThanOrEqual(99);
+      suffixes.add(parts[parts.length - 1]!);
     }
+    // All suffixes should be unique (drawn from a sequence)
+    expect(suffixes.size).toBe(10);
   });
 
-  it("produces different results across two calls (with retry)", () => {
-    let found = false;
-
-    for (let attempt = 0; attempt < 10; attempt++) {
-      const a = generateAlias();
-      const b = generateAlias();
-      if (a !== b) {
-        found = true;
-        break;
-      }
-    }
-
-    expect(found).toBe(true);
-  });
-
-  it("never emits a blocked pair across 1000 generations", () => {
-    for (let i = 0; i < 1000; i++) {
-      const alias = generateAlias();
+  it("never emits a blocked pair", async () => {
+    for (let i = 0; i < 50; i++) {
+      const alias = await generateAlias(testDb.db);
       const parts = alias.split("-");
-      const num = parts.pop();
+      parts.pop(); // remove number
       const noun = parts.pop()!;
       const adj = parts.join("-");
-      expect(num).toBeDefined();
       expect(isBlockedPair(adj, noun)).toBe(false);
     }
   });
@@ -102,15 +85,6 @@ describe("word lists", () => {
       expect(ADJECTIVES).toContain(adj);
       expect(NOUNS).toContain(noun);
     }
-  });
-});
-
-describe("keyspace", () => {
-  it("has at least 600,000 effective combinations", () => {
-    const totalPairs = ADJECTIVES.length * NOUNS.length;
-    const effectivePairs = totalPairs - BLOCKED_PAIRS.size;
-    const effectiveAliases = effectivePairs * 99;
-    expect(effectiveAliases).toBeGreaterThanOrEqual(600_000);
   });
 });
 

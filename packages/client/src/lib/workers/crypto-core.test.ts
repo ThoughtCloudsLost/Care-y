@@ -56,6 +56,7 @@ import type {
   OrgEncryptResponse,
   OrgDecryptResponse,
   OrgDecryptBatchResponse,
+  AliasHashResponse,
   RewrapTkResponse,
   RewrapBlobResponse,
   SharedWorkerState,
@@ -1081,7 +1082,7 @@ describe("crypto-core error paths", () => {
       id: 712,
       ticketId: "t-no-temp",
       followUpId: "fu-miss",
-      ciphertext: encode(new Uint8Array(64)),
+      ciphertext: new ArrayBuffer(64),
       blobKey: "blob-key",
       category: "image",
     });
@@ -1461,6 +1462,9 @@ describe("crypto-core decryptBlob success", () => {
     const slot = blobSlot("blob-id-1");
     const ct = encryptContent(blobData, tk, buildContentAad("t-blob", slot));
 
+    const ctBuf = new ArrayBuffer(ct.byteLength);
+    new Uint8Array(ctBuf).set(ct);
+
     const resp = (await dispatchAndWait({
       type: "decryptBlob",
       id: 1101,
@@ -1470,7 +1474,7 @@ describe("crypto-core decryptBlob success", () => {
       ephemeralPoint: encode(wrap.ephemeralPoint),
       nonce: encode(wrap.nonce),
       wrappedKey: encode(wrap.ciphertext),
-      ciphertext: encode(ct),
+      ciphertext: ctBuf,
     })) as DecryptBlobResponse;
 
     expect(resp.ok).toBe(true);
@@ -1507,7 +1511,7 @@ describe("crypto-core decryptBlob success", () => {
       ephemeralPoint: encode(wrap.ephemeralPoint),
       nonce: encode(wrap.nonce),
       wrappedKey: encode(wrap.ciphertext),
-      ciphertext: encode(new Uint8Array(64)),
+      ciphertext: new ArrayBuffer(64),
     });
 
     expect(resp.ok).toBe(false);
@@ -1582,12 +1586,15 @@ describe("crypto-core rewrapBlob success", () => {
     );
 
     sinkMessages = [];
+    const blobCtBuf = new ArrayBuffer(blobCt.byteLength);
+    new Uint8Array(blobCtBuf).set(blobCt);
+
     const resp = (await dispatchAndWait({
       type: "rewrapBlob",
       id: 1202,
       ticketId: "t-reblob",
       followUpId,
-      ciphertext: encode(blobCt),
+      ciphertext: blobCtBuf,
       blobKey: "blob-key-1",
       blobId: "attachment-1",
       category: "attachment",
@@ -1665,7 +1672,7 @@ describe("crypto-core rewrapBlob success", () => {
       id: 1212,
       ticketId: "t-no-such-ticket",
       followUpId,
-      ciphertext: encode(new Uint8Array(64)),
+      ciphertext: new ArrayBuffer(64),
       blobKey: "bk",
       blobId: "b1",
       category: "recording",
@@ -1802,7 +1809,7 @@ describe("crypto-core handleRewrapResult cleanup", () => {
       id: 1502,
       ticketId: "t-cleanup",
       followUpId,
-      ciphertext: encode(new Uint8Array(64)),
+      ciphertext: new ArrayBuffer(64),
       blobKey: "bk",
       blobId: "b1",
       category: "attachment",
@@ -1824,5 +1831,145 @@ describe("crypto-core handleRewrapResult cleanup", () => {
     });
     // No error thrown, no state corruption
     expect(getState()).not.toBe("UNINITIALIZED");
+  });
+});
+
+describe("crypto-core aliasHash blind index", () => {
+  let volPublicStr: string;
+
+  beforeEach(async () => {
+    handleZeroAll(-1, testSink);
+    sinkMessages = [];
+    dispatch = createDispatcher(testSink);
+    const sodium = requireSodium();
+    const salt = sodium.randombytes_buf(16);
+    const result = await loginFlow("alias-hash-pw", salt);
+    volPublicStr = result.volPublic;
+    sinkMessages = [];
+  });
+
+  /** Unwraps a fresh org secret so the alias index key can be derived. */
+  async function unwrapOrgSecret(id: number): Promise<Uint8Array> {
+    const sodium = requireSodium();
+    const orgSecret = sodium.crypto_core_ristretto255_scalar_random();
+    const volPub = decode(volPublicStr) as RistrettoPoint;
+    const wrap = eciesEncrypt(orgSecret, volPub);
+    await dispatchAndWait({
+      type: "unwrapOrgKey",
+      id,
+      ephemeralPoint: encode(wrap.ephemeralPoint),
+      nonce: encode(wrap.nonce),
+      wrappedOrgKey: encode(wrap.ciphertext),
+    });
+    sinkMessages = [];
+    return orgSecret;
+  }
+
+  async function hashOf(alias: string, id: number): Promise<string> {
+    const resp = (await dispatchAndWait({
+      type: "aliasHash",
+      id,
+      alias,
+    })) as AliasHashResponse;
+    expect(resp.ok).toBe(true);
+    return resp.hash;
+  }
+
+  it("returns a lowercase hex HMAC-SHA512 digest", async () => {
+    const orgSecret = await unwrapOrgSecret(900);
+
+    const hash = await hashOf("calm-pebble-7", 901);
+
+    // HMAC-SHA512 is 64 bytes, so 128 hex characters.
+    expect(hash).toMatch(/^[0-9a-f]{128}$/);
+
+    requireSodium().memzero(orgSecret);
+  });
+
+  it("is deterministic for the same alias", async () => {
+    const orgSecret = await unwrapOrgSecret(910);
+
+    const first = await hashOf("calm-pebble-7", 911);
+    const second = await hashOf("calm-pebble-7", 912);
+
+    // Uniqueness enforcement depends on this: the same alias written twice
+    // must collide on the unique index rather than producing two rows.
+    expect(first).toBe(second);
+
+    requireSodium().memzero(orgSecret);
+  });
+
+  it("normalizes before hashing, so case and spacing collide", async () => {
+    const orgSecret = await unwrapOrgSecret(920);
+
+    const plain = await hashOf("jane", 921);
+
+    expect(await hashOf("Jane", 922)).toBe(plain);
+    expect(await hashOf("  jane  ", 923)).toBe(plain);
+    expect(await hashOf("JANE", 924)).toBe(plain);
+
+    requireSodium().memzero(orgSecret);
+  });
+
+  it("produces different digests for different aliases", async () => {
+    const orgSecret = await unwrapOrgSecret(930);
+
+    const a = await hashOf("calm-pebble-7", 931);
+    const b = await hashOf("calm-pebble-8", 932);
+
+    expect(a).not.toBe(b);
+
+    requireSodium().memzero(orgSecret);
+  });
+
+  it("derives a different digest under a different org secret", async () => {
+    const sodium = requireSodium();
+
+    const firstSecret = await unwrapOrgSecret(940);
+    const underFirst = await hashOf("calm-pebble-7", 941);
+    sodium.memzero(firstSecret);
+
+    // A second org must not produce a matching digest for the same alias,
+    // or a seized index would correlate clients across tenants.
+    handleZeroAll(-1, testSink);
+    sinkMessages = [];
+    dispatch = createDispatcher(testSink);
+    const salt = sodium.randombytes_buf(16);
+    const result = await loginFlow("alias-hash-pw-2", salt);
+    volPublicStr = result.volPublic;
+    sinkMessages = [];
+
+    const secondSecret = await unwrapOrgSecret(942);
+    const underSecond = await hashOf("calm-pebble-7", 943);
+
+    expect(underSecond).not.toBe(underFirst);
+
+    sodium.memzero(secondSecret);
+  });
+
+  it("never returns key material, only the digest", async () => {
+    const orgSecret = await unwrapOrgSecret(950);
+
+    const resp = (await dispatchAndWait({
+      type: "aliasHash",
+      id: 951,
+      alias: "calm-pebble-7",
+    })) as AliasHashResponse;
+
+    // ADR-042: the org secret and everything derived from it stay inside the
+    // Worker. Only the digest crosses the boundary.
+    expect(Object.keys(resp).toSorted()).toEqual(["hash", "id", "ok", "type"]);
+
+    requireSodium().memzero(orgSecret);
+  });
+
+  it("fails when no org key has been unwrapped", async () => {
+    const resp = await dispatchAndWait({
+      type: "aliasHash",
+      id: 960,
+      alias: "calm-pebble-7",
+    });
+
+    expect(resp.ok).toBe(false);
   });
 });

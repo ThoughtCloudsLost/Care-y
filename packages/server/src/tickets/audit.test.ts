@@ -262,7 +262,8 @@ describe.skipIf(!process.env.DATABASE_URL)("AuditService (DB)", () => {
 
       expect(row).toBeDefined();
       expect(row!.queueId).toBe(fixture.queueId);
-      expect(typeof row!.clientAlias).toBe("string");
+      expect(row!.clientId).toBeDefined();
+      expect(Buffer.isBuffer(row!.encryptedClientAlias)).toBe(true);
       // Queue names are encrypted at rest (ADR-030); this service hands the
       // bytes through untouched for client-side decryption.
       expect(Buffer.isBuffer(row!.encryptedQueueName)).toBe(true);

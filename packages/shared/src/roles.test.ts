@@ -5,6 +5,7 @@ import {
   ROLE_ID_VALUES,
   meetsRoleThreshold,
   getAllowedRoleIds,
+  isRoleRestricted,
 } from "./roles.js";
 
 describe("meetsRoleThreshold", () => {
@@ -82,6 +83,24 @@ describe("getAllowedRoleIds", () => {
   it("unknown role gets empty array (level 0, nothing at or below)", () => {
     const result = getAllowedRoleIds("unknown-role-id");
     expect(result).toEqual([]);
+  });
+});
+
+describe("isRoleRestricted", () => {
+  it("returns true for manager (above volunteer)", () => {
+    expect(isRoleRestricted(RoleId.MANAGER)).toBe(true);
+  });
+
+  it("returns true for admin (above volunteer)", () => {
+    expect(isRoleRestricted(RoleId.ADMIN)).toBe(true);
+  });
+
+  it("returns false for volunteer (not above itself)", () => {
+    expect(isRoleRestricted(RoleId.VOLUNTEER)).toBe(false);
+  });
+
+  it("returns false for unknown role (falls back to level 0)", () => {
+    expect(isRoleRestricted("unknown-role-id")).toBe(false);
   });
 });
 

@@ -390,7 +390,7 @@ export class CryptoBridge {
   async rewrapBlob(
     followUpId: string,
     ticketId: string,
-    ciphertext: string,
+    ciphertext: ArrayBuffer,
     blobKey: string,
     blobId: string,
     category: "attachment" | "recording",
@@ -400,15 +400,18 @@ export class CryptoBridge {
     category: "attachment" | "recording";
   }> {
     const resp = expectResponse(
-      await this.sendRequest({
-        type: "rewrapBlob",
-        followUpId,
-        ticketId,
-        ciphertext,
-        blobKey,
-        blobId,
-        category,
-      }),
+      await this.sendRequest(
+        {
+          type: "rewrapBlob",
+          followUpId,
+          ticketId,
+          ciphertext,
+          blobKey,
+          blobId,
+          category,
+        },
+        [ciphertext],
+      ),
       "rewrapBlob",
     );
     return {
@@ -450,19 +453,22 @@ export class CryptoBridge {
     ephemeralPoint: string,
     nonce: string,
     wrappedKey: string,
-    ciphertext: string,
+    ciphertext: ArrayBuffer,
   ): Promise<ArrayBuffer> {
     const resp = expectResponse(
-      await this.sendRequest({
-        type: "decryptBlob",
-        ticketId,
-        keyCacheId: ticketId,
-        slot,
-        ephemeralPoint,
-        nonce,
-        wrappedKey,
-        ciphertext,
-      }),
+      await this.sendRequest(
+        {
+          type: "decryptBlob",
+          ticketId,
+          keyCacheId: ticketId,
+          slot,
+          ephemeralPoint,
+          nonce,
+          wrappedKey,
+          ciphertext,
+        },
+        [ciphertext],
+      ),
       "decryptBlob",
     );
     return resp.data;
@@ -681,6 +687,18 @@ export class CryptoBridge {
       "exportOrgSecretKey",
     );
     return resp.orgSecretKey;
+  }
+
+  /**
+   * Compute the blind index hash of an alias inside the Worker.
+   * The index key never leaves the Worker (ADR-042). Returns lowercase hex.
+   */
+  async aliasHash(alias: string): Promise<string> {
+    const resp = expectResponse(
+      await this.sendRequest({ type: "aliasHash", alias }),
+      "aliasHash",
+    );
+    return resp.hash;
   }
 
   /** Get the org public key (base64) from the Worker. */

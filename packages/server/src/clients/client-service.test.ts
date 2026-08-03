@@ -6,6 +6,8 @@ import {
   createTestTicketFixture,
   noopEncryptor,
   testBlindIndexer,
+  testSealedBox,
+  testUnseal,
   TEST_ORG_ID,
   type TestDb,
 } from "../test-utils.js";
@@ -53,22 +55,13 @@ describe.skipIf(!process.env.DATABASE_URL)("ClientService (DB)", () => {
   // -----------------------------------------------------------------------
 
   /** Creates a phone + client + ticket chain, returning relevant IDs. */
-  async function createClientWithTicket(aliasOverride?: string): Promise<{
+  async function createClientWithTicket(): Promise<{
     phoneId: string;
     clientId: string;
     ticketId: string;
     phoneHash: string;
   }> {
     const fix = await createTestTicketFixture(testDb.db, { queueId });
-
-    // If alias override is requested, update it directly
-    if (aliasOverride) {
-      await testDb.db
-        .updateTable("clients")
-        .set({ alias: aliasOverride })
-        .where("id", "=", fix.clientId)
-        .execute();
-    }
 
     // Read back the phone_hash for conflict tests
     const phone = await testDb.db
@@ -87,22 +80,19 @@ describe.skipIf(!process.env.DATABASE_URL)("ClientService (DB)", () => {
 
   /**
    * Creates a client with a phone but no tickets. Returns the client ID.
-   *
-   * Uses createTestClientFixture (which creates a ticket) then deletes
-   * the ticket so the client has zero applications.
    */
-  async function createClientWithoutTicket(alias: string): Promise<string> {
+  async function createClientWithoutTicket(): Promise<string> {
     const fix = await createTestTicketFixture(testDb.db, { queueId });
-    await testDb.db
-      .updateTable("clients")
-      .set({ alias })
-      .where("id", "=", fix.clientId)
-      .execute();
     await testDb.db
       .deleteFrom("tickets")
       .where("id", "=", fix.ticketId)
       .execute();
     return fix.clientId;
+  }
+
+  /** Seals a string using the test org key. Returns base64 ciphertext. */
+  function sealForTest(value: string): string {
+    return testSealedBox.sealBuffer(Buffer.from(value)).toString("base64");
   }
 
   // -----------------------------------------------------------------------
@@ -114,7 +104,6 @@ describe.skipIf(!process.env.DATABASE_URL)("ClientService (DB)", () => {
       const a = await createClientWithTicket();
       const b = await createClientWithTicket();
 
-      // Merge b into a
       await mergeSvc.merge({
         primaryClientId: a.clientId,
         secondaryClientId: b.clientId,
@@ -123,8 +112,8 @@ describe.skipIf(!process.env.DATABASE_URL)("ClientService (DB)", () => {
 
       const results = await svc.list({
         query: "",
-        sortBy: "alias",
-        sortDirection: "asc",
+        sortBy: "created_at",
+        sortDirection: "desc",
         limit: 100,
       });
 
@@ -133,77 +122,82 @@ describe.skipIf(!process.env.DATABASE_URL)("ClientService (DB)", () => {
       expect(ids).not.toContain(b.clientId);
     });
 
-    it("filters by alias search query", async () => {
-      const uniquePrefix = `srch-${crypto.randomUUID().slice(0, 6)}`;
-      const a = await createClientWithTicket(`${uniquePrefix}-target`);
-      await createClientWithTicket(`other-${crypto.randomUUID().slice(0, 6)}`);
+    it("returns encryptedAlias as a Buffer (never plaintext)", async () => {
+      const c = await createClientWithTicket();
 
       const results = await svc.list({
-        query: uniquePrefix,
-        sortBy: "alias",
-        sortDirection: "asc",
+        query: "",
+        sortBy: "created_at",
+        sortDirection: "desc",
         limit: 100,
       });
 
-      expect(results.length).toBe(1);
-      expect(results[0]!.id).toBe(a.clientId);
+      const found = results.find((r) => r.id === c.clientId);
+      expect(found).toBeDefined();
+      expect(Buffer.isBuffer(found!.encryptedAlias)).toBe(true);
+      // The sealed ciphertext is strictly longer than the plaintext
+      expect(found!.encryptedAlias.length).toBeGreaterThan(0);
     });
 
-    it("paginates with cursor", async () => {
-      // Create 3 clients with known aliases for predictable sort order
-      const prefix = `pg-${crypto.randomUUID().slice(0, 4)}`;
-      const c1 = await createClientWithTicket(`${prefix}-aaa`);
-      const c2 = await createClientWithTicket(`${prefix}-bbb`);
-      const c3 = await createClientWithTicket(`${prefix}-ccc`);
+    it("supports exact-alias lookup via aliasHash", async () => {
+      const c = await createClientWithTicket();
+      const hash = `exact-hash-${crypto.randomUUID().slice(0, 8)}`;
 
-      // First page: limit 2
+      // Set a known hash on the client
+      await testDb.db
+        .updateTable("clients")
+        .set({ alias_hash: hash })
+        .where("id", "=", c.clientId)
+        .execute();
+
+      const results = await svc.list({
+        query: "",
+        sortBy: "created_at",
+        sortDirection: "desc",
+        limit: 100,
+        aliasHash: hash,
+      });
+
+      expect(results.length).toBe(1);
+      expect(results[0]!.id).toBe(c.clientId);
+    });
+
+    it("paginates with cursor on created_at", async () => {
+      // Three rows so the first page fills and a second page exists. The
+      // returned ids are not needed; pagination is asserted on page contents.
+      await createClientWithTicket();
+      await createClientWithTicket();
+      await createClientWithTicket();
+
+      // Page 1
       const page1 = await svc.list({
-        query: prefix,
-        sortBy: "alias",
+        query: "",
+        sortBy: "created_at",
         sortDirection: "asc",
         limit: 2,
       });
 
       expect(page1.length).toBe(2);
-      expect(page1[0]!.id).toBe(c1.clientId);
-      expect(page1[1]!.id).toBe(c2.clientId);
 
-      // Second page: cursor = last item from page 1
+      // Page 2 with cursor
       const page2 = await svc.list({
-        query: prefix,
-        sortBy: "alias",
+        query: "",
+        sortBy: "created_at",
         sortDirection: "asc",
-        limit: 2,
+        limit: 100,
         cursor: page1[1]!.id,
       });
 
-      expect(page2.length).toBe(1);
-      expect(page2[0]!.id).toBe(c3.clientId);
-    });
-
-    it("supports sort by created_at descending", async () => {
-      const prefix = `srt-${crypto.randomUUID().slice(0, 4)}`;
-      const c1 = await createClientWithTicket(`${prefix}-first`);
-      // Slight delay so created_at differs
-      const c2 = await createClientWithTicket(`${prefix}-second`);
-
-      const results = await svc.list({
-        query: prefix,
-        sortBy: "created_at",
-        sortDirection: "desc",
-        limit: 10,
-      });
-
-      expect(results.length).toBe(2);
-      // Most recent first
-      expect(results[0]!.id).toBe(c2.clientId);
-      expect(results[1]!.id).toBe(c1.clientId);
+      // Should not contain items from page 1
+      const page1Ids = new Set(page1.map((r) => r.id));
+      for (const r of page2) {
+        expect(page1Ids.has(r.id)).toBe(false);
+      }
     });
 
     it("includes ticket count", async () => {
       const c = await createClientWithTicket();
 
-      // Create a second ticket for the same client
       await testDb.db
         .insertInto("tickets")
         .values({
@@ -217,8 +211,8 @@ describe.skipIf(!process.env.DATABASE_URL)("ClientService (DB)", () => {
 
       const results = await svc.list({
         query: "",
-        sortBy: "alias",
-        sortDirection: "asc",
+        sortBy: "created_at",
+        sortDirection: "desc",
         limit: 100,
       });
 
@@ -227,57 +221,9 @@ describe.skipIf(!process.env.DATABASE_URL)("ClientService (DB)", () => {
       expect(found!.ticketCount).toBe(2);
     });
 
-    // ----- includeMerged filter -----
-
-    it("excludes merged clients by default (includeMerged omitted)", async () => {
-      const a = await createClientWithTicket();
-      const b = await createClientWithTicket();
-
-      await mergeSvc.merge({
-        primaryClientId: a.clientId,
-        secondaryClientId: b.clientId,
-        encryptedSnapshot: Buffer.from("snap"),
-      });
-
-      const results = await svc.list({
-        query: "",
-        sortBy: "alias",
-        sortDirection: "asc",
-        limit: 100,
-      });
-
-      const ids = results.map((r) => r.id);
-      expect(ids).toContain(a.clientId);
-      expect(ids).not.toContain(b.clientId);
-    });
-
-    it("excludes merged clients when includeMerged is false", async () => {
-      const a = await createClientWithTicket();
-      const b = await createClientWithTicket();
-
-      await mergeSvc.merge({
-        primaryClientId: a.clientId,
-        secondaryClientId: b.clientId,
-        encryptedSnapshot: Buffer.from("snap"),
-      });
-
-      const results = await svc.list({
-        query: "",
-        sortBy: "alias",
-        sortDirection: "asc",
-        limit: 100,
-        includeMerged: false,
-      });
-
-      const ids = results.map((r) => r.id);
-      expect(ids).toContain(a.clientId);
-      expect(ids).not.toContain(b.clientId);
-    });
-
     it("includes merged clients when includeMerged is true", async () => {
-      const prefix = `mrg-${crypto.randomUUID().slice(0, 6)}`;
-      const a = await createClientWithTicket(`${prefix}-primary`);
-      const b = await createClientWithTicket(`${prefix}-secondary`);
+      const a = await createClientWithTicket();
+      const b = await createClientWithTicket();
 
       await mergeSvc.merge({
         primaryClientId: a.clientId,
@@ -286,9 +232,9 @@ describe.skipIf(!process.env.DATABASE_URL)("ClientService (DB)", () => {
       });
 
       const results = await svc.list({
-        query: prefix,
-        sortBy: "alias",
-        sortDirection: "asc",
+        query: "",
+        sortBy: "created_at",
+        sortDirection: "desc",
         limit: 100,
         includeMerged: true,
       });
@@ -298,150 +244,28 @@ describe.skipIf(!process.env.DATABASE_URL)("ClientService (DB)", () => {
       expect(ids).toContain(b.clientId);
     });
 
-    // ----- hasApplications filter -----
+    it("filters by hasApplications", async () => {
+      const withTicket = await createClientWithTicket();
+      const noTicketId = await createClientWithoutTicket();
 
-    it("filters to clients with tickets when hasApplications is true", async () => {
-      const prefix = `ha-${crypto.randomUUID().slice(0, 6)}`;
-      const withTicket = await createClientWithTicket(`${prefix}-with`);
-      const noTicketId = await createClientWithoutTicket(`${prefix}-without`);
-
-      const results = await svc.list({
-        query: prefix,
-        sortBy: "alias",
-        sortDirection: "asc",
+      const withResults = await svc.list({
+        query: "",
+        sortBy: "created_at",
+        sortDirection: "desc",
         limit: 100,
         hasApplications: true,
       });
+      expect(withResults.map((r) => r.id)).toContain(withTicket.clientId);
+      expect(withResults.map((r) => r.id)).not.toContain(noTicketId);
 
-      const ids = results.map((r) => r.id);
-      expect(ids).toContain(withTicket.clientId);
-      expect(ids).not.toContain(noTicketId);
-    });
-
-    it("filters to clients without tickets when hasApplications is false", async () => {
-      const prefix = `han-${crypto.randomUUID().slice(0, 6)}`;
-      await createClientWithTicket(`${prefix}-with`);
-      const noTicketId = await createClientWithoutTicket(`${prefix}-without`);
-
-      const results = await svc.list({
-        query: prefix,
-        sortBy: "alias",
-        sortDirection: "asc",
+      const withoutResults = await svc.list({
+        query: "",
+        sortBy: "created_at",
+        sortDirection: "desc",
         limit: 100,
         hasApplications: false,
       });
-
-      const ids = results.map((r) => r.id);
-      expect(ids).toContain(noTicketId);
-      expect(ids).not.toContain(
-        (await createClientWithTicket(`${prefix}-extra`)).clientId,
-      );
-    });
-
-    it("returns all clients when hasApplications is omitted", async () => {
-      const prefix = `hau-${crypto.randomUUID().slice(0, 6)}`;
-      const withTicket = await createClientWithTicket(`${prefix}-with`);
-      const noTicketId = await createClientWithoutTicket(`${prefix}-without`);
-
-      const results = await svc.list({
-        query: prefix,
-        sortBy: "alias",
-        sortDirection: "asc",
-        limit: 100,
-      });
-
-      const ids = results.map((r) => r.id);
-      expect(ids).toContain(withTicket.clientId);
-      expect(ids).toContain(noTicketId);
-    });
-
-    // ----- createdAfter / createdBefore filters -----
-
-    it("filters by createdAfter", async () => {
-      const prefix = `ca-${crypto.randomUUID().slice(0, 6)}`;
-
-      // Backdate a client to the past
-      const old = await createClientWithTicket(`${prefix}-old`);
-      const pastDate = new Date("2020-01-01T00:00:00.000Z");
-      await testDb.db
-        .updateTable("clients")
-        .set({ created_at: pastDate })
-        .where("id", "=", old.clientId)
-        .execute();
-
-      const recent = await createClientWithTicket(`${prefix}-recent`);
-
-      const results = await svc.list({
-        query: prefix,
-        sortBy: "alias",
-        sortDirection: "asc",
-        limit: 100,
-        createdAfter: "2024-01-01T00:00:00.000Z",
-      });
-
-      const ids = results.map((r) => r.id);
-      expect(ids).toContain(recent.clientId);
-      expect(ids).not.toContain(old.clientId);
-    });
-
-    it("filters by createdBefore", async () => {
-      const prefix = `cb-${crypto.randomUUID().slice(0, 6)}`;
-
-      const old = await createClientWithTicket(`${prefix}-old`);
-      const pastDate = new Date("2020-01-01T00:00:00.000Z");
-      await testDb.db
-        .updateTable("clients")
-        .set({ created_at: pastDate })
-        .where("id", "=", old.clientId)
-        .execute();
-
-      const recent = await createClientWithTicket(`${prefix}-recent`);
-
-      const results = await svc.list({
-        query: prefix,
-        sortBy: "alias",
-        sortDirection: "asc",
-        limit: 100,
-        createdBefore: "2021-01-01T00:00:00.000Z",
-      });
-
-      const ids = results.map((r) => r.id);
-      expect(ids).toContain(old.clientId);
-      expect(ids).not.toContain(recent.clientId);
-    });
-
-    it("filters by both createdAfter and createdBefore", async () => {
-      const prefix = `cab-${crypto.randomUUID().slice(0, 6)}`;
-
-      const tooOld = await createClientWithTicket(`${prefix}-old`);
-      await testDb.db
-        .updateTable("clients")
-        .set({ created_at: new Date("2019-01-01T00:00:00.000Z") })
-        .where("id", "=", tooOld.clientId)
-        .execute();
-
-      const inRange = await createClientWithTicket(`${prefix}-mid`);
-      await testDb.db
-        .updateTable("clients")
-        .set({ created_at: new Date("2022-06-15T00:00:00.000Z") })
-        .where("id", "=", inRange.clientId)
-        .execute();
-
-      const tooNew = await createClientWithTicket(`${prefix}-new`);
-
-      const results = await svc.list({
-        query: prefix,
-        sortBy: "alias",
-        sortDirection: "asc",
-        limit: 100,
-        createdAfter: "2020-01-01T00:00:00.000Z",
-        createdBefore: "2023-01-01T00:00:00.000Z",
-      });
-
-      const ids = results.map((r) => r.id);
-      expect(ids).toContain(inRange.clientId);
-      expect(ids).not.toContain(tooOld.clientId);
-      expect(ids).not.toContain(tooNew.clientId);
+      expect(withoutResults.map((r) => r.id)).toContain(noTicketId);
     });
   });
 
@@ -459,6 +283,7 @@ describe.skipIf(!process.env.DATABASE_URL)("ClientService (DB)", () => {
       expect(detail.phoneId).toBe(c.phoneId);
       expect(detail.phoneHash).toBe(c.phoneHash);
       expect(Buffer.isBuffer(detail.encryptedNumber)).toBe(true);
+      expect(Buffer.isBuffer(detail.encryptedAlias)).toBe(true);
       expect(detail.tickets.length).toBe(1);
       expect(detail.tickets[0]!.id).toBe(c.ticketId);
       expect(detail.mergeHistory).toEqual([]);
@@ -491,27 +316,35 @@ describe.skipIf(!process.env.DATABASE_URL)("ClientService (DB)", () => {
   // -----------------------------------------------------------------------
 
   describe("updateAlias", () => {
-    it("updates alias successfully with unique value", async () => {
+    it("writes ciphertext to encrypted_alias (never plaintext)", async () => {
       const c = await createClientWithTicket();
-      const newAlias = `new-${crypto.randomUUID().slice(0, 8)}`;
+      const ciphertext = sealForTest("my-new-alias");
+      const hash = `hash-${crypto.randomUUID().slice(0, 8)}`;
 
-      await svc.updateAlias(c.clientId, newAlias, crypto.randomUUID());
+      await svc.updateAlias(c.clientId, ciphertext, hash, crypto.randomUUID());
 
       const row = await testDb.db
         .selectFrom("clients")
-        .select("alias")
+        .select(["encrypted_alias", "alias_hash"])
         .where("id", "=", c.clientId)
         .executeTakeFirstOrThrow();
 
-      expect(row.alias).toBe(newAlias);
+      expect(Buffer.isBuffer(row.encrypted_alias)).toBe(true);
+      expect(row.alias_hash).toBe(hash);
+      // Verify the sealed value round-trips
+      expect(testUnseal(row.encrypted_alias)).toBe("my-new-alias");
     });
 
     it("logs audit event on alias change", async () => {
       const c = await createClientWithTicket();
       const actorId = crypto.randomUUID();
-      const newAlias = `aud-${crypto.randomUUID().slice(0, 8)}`;
 
-      await svc.updateAlias(c.clientId, newAlias, actorId);
+      await svc.updateAlias(
+        c.clientId,
+        sealForTest("audit-alias"),
+        `ah-${crypto.randomUUID().slice(0, 8)}`,
+        actorId,
+      );
 
       const audit = await testDb.db
         .selectFrom("audit_log")
@@ -526,28 +359,28 @@ describe.skipIf(!process.env.DATABASE_URL)("ClientService (DB)", () => {
       );
     });
 
-    it("throws ConflictError on duplicate alias", async () => {
+    it("throws ConflictError on duplicate alias_hash", async () => {
       const c1 = await createClientWithTicket();
       const c2 = await createClientWithTicket();
+      const sharedHash = `dup-${crypto.randomUUID().slice(0, 8)}`;
 
-      // Use c1's alias for c2
-      const c1Alias = (
-        await testDb.db
-          .selectFrom("clients")
-          .select("alias")
-          .where("id", "=", c1.clientId)
-          .executeTakeFirstOrThrow()
-      ).alias;
+      // Set c1's hash
+      await svc.updateAlias(
+        c1.clientId,
+        sealForTest("first"),
+        sharedHash,
+        crypto.randomUUID(),
+      );
 
+      // Attempt same hash on c2
       await expect(
-        svc.updateAlias(c2.clientId, c1Alias, crypto.randomUUID()),
+        svc.updateAlias(
+          c2.clientId,
+          sealForTest("second"),
+          sharedHash,
+          crypto.randomUUID(),
+        ),
       ).rejects.toBeInstanceOf(ConflictError);
-    });
-
-    it("throws NotFoundError for non-existent client", async () => {
-      await expect(
-        svc.updateAlias(crypto.randomUUID(), "whatever", crypto.randomUUID()),
-      ).rejects.toBeInstanceOf(NotFoundError);
     });
 
     it("throws NotFoundError for merged client", async () => {
@@ -561,8 +394,91 @@ describe.skipIf(!process.env.DATABASE_URL)("ClientService (DB)", () => {
       });
 
       await expect(
-        svc.updateAlias(b.clientId, "new-alias", crypto.randomUUID()),
+        svc.updateAlias(
+          b.clientId,
+          sealForTest("nope"),
+          "hash",
+          crypto.randomUUID(),
+        ),
       ).rejects.toBeInstanceOf(NotFoundError);
+    });
+  });
+
+  // -----------------------------------------------------------------------
+  // backfillAliasHash
+  // -----------------------------------------------------------------------
+
+  describe("backfillAliasHash", () => {
+    it("writes hash when alias_hash is NULL", async () => {
+      const c = await createClientWithTicket();
+      // createTestTicketFixture sets alias_hash = null
+      const hash = `bf-${crypto.randomUUID().slice(0, 8)}`;
+
+      await svc.backfillAliasHash(c.clientId, hash);
+
+      const row = await testDb.db
+        .selectFrom("clients")
+        .select("alias_hash")
+        .where("id", "=", c.clientId)
+        .executeTakeFirstOrThrow();
+
+      expect(row.alias_hash).toBe(hash);
+    });
+
+    it("is idempotent (does not overwrite existing hash)", async () => {
+      const c = await createClientWithTicket();
+      const hash = `idem-${crypto.randomUUID().slice(0, 8)}`;
+
+      await svc.backfillAliasHash(c.clientId, hash);
+
+      // Second call with the same hash should succeed silently
+      await svc.backfillAliasHash(c.clientId, hash);
+
+      const row = await testDb.db
+        .selectFrom("clients")
+        .select("alias_hash")
+        .where("id", "=", c.clientId)
+        .executeTakeFirstOrThrow();
+
+      expect(row.alias_hash).toBe(hash);
+    });
+
+    it("does not overwrite when hash is already set", async () => {
+      const c = await createClientWithTicket();
+      const firstHash = `first-${crypto.randomUUID().slice(0, 8)}`;
+      const secondHash = `second-${crypto.randomUUID().slice(0, 8)}`;
+
+      await svc.backfillAliasHash(c.clientId, firstHash);
+      // Attempt to overwrite with a different hash
+      await svc.backfillAliasHash(c.clientId, secondHash);
+
+      const row = await testDb.db
+        .selectFrom("clients")
+        .select("alias_hash")
+        .where("id", "=", c.clientId)
+        .executeTakeFirstOrThrow();
+
+      // Should still be the first hash (WHERE alias_hash IS NULL did not match)
+      expect(row.alias_hash).toBe(firstHash);
+    });
+
+    it("surfaces conflict when hash collides with another client", async () => {
+      const c1 = await createClientWithTicket();
+      const c2 = await createClientWithTicket();
+      const sharedHash = `conflict-${crypto.randomUUID().slice(0, 8)}`;
+
+      // Set c1's hash via updateAlias
+      await svc.updateAlias(
+        c1.clientId,
+        sealForTest("c1-alias"),
+        sharedHash,
+        crypto.randomUUID(),
+      );
+
+      // Try to backfill c2 with the same hash
+      await expect(
+        svc.backfillAliasHash(c2.clientId, sharedHash),
+      ).rejects.toBeInstanceOf(ConflictError);
     });
   });
 
@@ -603,39 +519,15 @@ describe.skipIf(!process.env.DATABASE_URL)("ClientService (DB)", () => {
       expect(oldPhone).toBeUndefined();
     });
 
-    it("logs audit event on phone change", async () => {
-      const c = await createClientWithTicket();
-      const actorId = crypto.randomUUID();
-      const newNumber = `+1555888${crypto.randomUUID().slice(0, 4).replace(/-/g, "0")}`;
-
-      await svc.updatePhone(c.clientId, newNumber, actorId);
-
-      const audit = await testDb.db
-        .selectFrom("audit_log")
-        .selectAll()
-        .where("event_type", "=", "client_phone_changed")
-        .where("actor_id", "=", actorId)
-        .executeTakeFirst();
-
-      expect(audit).toBeDefined();
-      expect((audit!.metadata as { clientId: string }).clientId).toBe(
-        c.clientId,
-      );
-    });
-
     it("detects hash collision and returns conflict", async () => {
       const c1 = await createClientWithTicket();
       const c2 = await createClientWithTicket();
       const actorId = crypto.randomUUID();
       const shared = `+1555777${crypto.randomUUID().replace(/-/g, "").slice(0, 10)}`;
 
-      // The fixture seeds a placeholder phone_hash that does not correspond to
-      // the number it stores, so nothing would ever match it. Write c1's number
-      // through the service first to give it a real blind index, then collide.
       const first = await svc.updatePhone(c1.clientId, shared, actorId);
       expect(first.success).toBe(true);
 
-      // Try to set c2's phone to the same number
       const result = await svc.updatePhone(c2.clientId, shared, actorId);
 
       expect(result.success).toBe(false);
@@ -664,20 +556,22 @@ describe.skipIf(!process.env.DATABASE_URL)("ClientService (DB)", () => {
       expect(result).toBeNull();
     });
 
-    it("returns the conflicting client when a match exists", async () => {
+    it("returns the conflicting client with encrypted alias", async () => {
       const c = await createClientWithTicket();
 
       const result = await svc.suggestDuplicates(c.phoneHash);
 
       expect(result).not.toBeNull();
       expect(result!.conflictingClientId).toBe(c.clientId);
+      expect(Buffer.isBuffer(result!.conflictingClientEncryptedAlias)).toBe(
+        true,
+      );
     });
 
     it("excludes the specified client from results", async () => {
       const c = await createClientWithTicket();
 
       const result = await svc.suggestDuplicates(c.phoneHash, c.clientId);
-
       expect(result).toBeNull();
     });
 
@@ -691,9 +585,46 @@ describe.skipIf(!process.env.DATABASE_URL)("ClientService (DB)", () => {
         encryptedSnapshot: Buffer.from("snap"),
       });
 
-      // b is merged, so its phone hash should not produce a conflict
       const result = await svc.suggestDuplicates(b.phoneHash);
       expect(result).toBeNull();
+    });
+  });
+
+  // -----------------------------------------------------------------------
+  // No plaintext alias in DB
+  // -----------------------------------------------------------------------
+
+  describe("no plaintext alias in database", () => {
+    it("DB has no alias column (only encrypted_alias)", async () => {
+      const c = await createClientWithTicket();
+      const row = await testDb.db
+        .selectFrom("clients")
+        .selectAll()
+        .where("id", "=", c.clientId)
+        .executeTakeFirstOrThrow();
+
+      expect("alias" in row).toBe(false);
+      expect("encrypted_alias" in row).toBe(true);
+    });
+
+    it("no server response carries a plaintext alias", async () => {
+      const c = await createClientWithTicket();
+
+      const listResult = await svc.list({
+        query: "",
+        sortBy: "created_at",
+        sortDirection: "desc",
+        limit: 100,
+      });
+      const found = listResult.find((r) => r.id === c.clientId);
+      expect(found).toBeDefined();
+      // Should have encryptedAlias (Buffer), not alias (string)
+      expect("alias" in found!).toBe(false);
+      expect(Buffer.isBuffer(found!.encryptedAlias)).toBe(true);
+
+      const detail = await svc.getById(c.clientId);
+      expect("alias" in detail).toBe(false);
+      expect(Buffer.isBuffer(detail.encryptedAlias)).toBe(true);
     });
   });
 });

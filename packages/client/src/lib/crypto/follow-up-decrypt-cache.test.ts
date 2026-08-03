@@ -3,7 +3,7 @@
  *
  * Verifies the domain-specific decryptContent() method that wraps the
  * AsyncDecryptCache base with follow-up-specific argument handling
- * (keyWrap unpacking, SerializedBuffer conversion).
+ * (keyWrap unpacking, base64 ciphertext passthrough).
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
@@ -19,10 +19,7 @@ const KEY_WRAP = {
   nonce: "nonce-base64",
   wrappedKey: "wk-base64",
 };
-const ENCRYPTED_CONTENT = {
-  type: "Buffer" as const,
-  data: [72, 101, 108, 108, 111],
-};
+const ENCRYPTED_CONTENT = "SGVsbG8";
 
 function createMockBridge(): {
   bridge: CryptoBridge;

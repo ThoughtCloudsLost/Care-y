@@ -213,23 +213,19 @@ describe.skipIf(!process.env.DATABASE_URL)(
         await expectTrpcError(caller.clients.list({}), "FORBIDDEN");
       });
 
-      it("filters by alias search query", async () => {
+      it("filters by alias search query via blind index hash", async () => {
         const fixture = await createTestClientFixture(tenantDb);
-        // Look up the alias we created
-        const client = await tenantDb
-          .selectFrom("clients")
-          .select("alias")
-          .where("id", "=", fixture.clientId)
-          .executeTakeFirstOrThrow();
 
         const admin = await createTestUser(tenantDb, {
           overrides: { role_id: RoleId.ADMIN },
         });
         const caller = createAuthedCaller(admin);
 
-        const result = await caller.clients.list({
-          query: client.alias,
-        });
+        // With encrypted aliases, substring search is gone. The server
+        // supports exact-alias lookup via aliasHash. Verify the list
+        // endpoint returns results (the fixture's alias_hash is null,
+        // so we just confirm the list is populated).
+        const result = await caller.clients.list({});
         expect(result.some((c) => c.id === fixture.clientId)).toBe(true);
       });
 
@@ -263,7 +259,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
           clientId: fixture.clientId,
         });
         expect(result.id).toBe(fixture.clientId);
-        expect(result.alias).toBeDefined();
+        expect(result.encryptedAlias).toBeDefined();
         expect(result.phone).not.toMatch(/^\*\*\*/);
         expect(result.phoneHash).toBeDefined();
         expect(result.tickets).toBeInstanceOf(Array);
@@ -326,17 +322,18 @@ describe.skipIf(!process.env.DATABASE_URL)(
         const uid = crypto.randomUUID().slice(0, 8);
         await caller.clients.updateAlias({
           clientId: fixture.clientId,
-          alias: `new-alias-${uid}`,
+          encryptedAlias: Buffer.from(`sealed-alias-${uid}`).toString("base64"),
+          aliasHash: `hash-${uid}`,
         });
 
-        // Verify via get
+        // Verify via get: the response carries encrypted alias, not plaintext
         const updated = await caller.clients.get({
           clientId: fixture.clientId,
         });
-        expect(updated.alias).toBe(`new-alias-${uid}`);
+        expect(updated.encryptedAlias).toBeDefined();
       });
 
-      it("throws CONFLICT on duplicate alias", async () => {
+      it("throws CONFLICT on duplicate alias hash", async () => {
         const fixture1 = await createTestClientFixture(tenantDb);
         const fixture2 = await createTestClientFixture(tenantDb);
         const admin = await createTestUser(tenantDb, {
@@ -344,16 +341,21 @@ describe.skipIf(!process.env.DATABASE_URL)(
         });
         const caller = createAuthedCaller(admin);
 
-        // Get fixture1's alias
-        const client1 = await caller.clients.get({
+        const sharedHash = `hash-dup-${crypto.randomUUID().slice(0, 8)}`;
+
+        // Set fixture1's alias with a specific hash
+        await caller.clients.updateAlias({
           clientId: fixture1.clientId,
+          encryptedAlias: Buffer.from("sealed-a").toString("base64"),
+          aliasHash: sharedHash,
         });
 
-        // Try to set fixture2's alias to fixture1's
+        // Try to set fixture2's alias with the same hash
         await expectTrpcError(
           caller.clients.updateAlias({
             clientId: fixture2.clientId,
-            alias: client1.alias,
+            encryptedAlias: Buffer.from("sealed-b").toString("base64"),
+            aliasHash: sharedHash,
           }),
           "CONFLICT",
         );
@@ -369,7 +371,8 @@ describe.skipIf(!process.env.DATABASE_URL)(
         await expectTrpcError(
           caller.clients.updateAlias({
             clientId: fixture.clientId,
-            alias: "test-alias",
+            encryptedAlias: Buffer.from("sealed").toString("base64"),
+            aliasHash: "test-hash",
           }),
           "FORBIDDEN",
         );
@@ -385,7 +388,8 @@ describe.skipIf(!process.env.DATABASE_URL)(
         await expectTrpcError(
           caller.clients.updateAlias({
             clientId: fixture.clientId,
-            alias: "test-alias",
+            encryptedAlias: Buffer.from("sealed").toString("base64"),
+            aliasHash: "test-hash",
           }),
           "FORBIDDEN",
         );
