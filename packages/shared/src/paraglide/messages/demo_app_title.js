@@ -6,17 +6,17 @@ import { getLocale, experimentalStaticLocale } from '../runtime.js';
 /** @typedef {{}} Demo_App_TitleInputs */
 
 const en_demo_app_title = /** @type {(inputs: Demo_App_TitleInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`CARE-Y Demo`)
+	return /** @type {LocalizedString} */ (`Interactive Handbook`)
 };
 
 const es_demo_app_title = /** @type {(inputs: Demo_App_TitleInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Demo de CARE-Y`)
+	return /** @type {LocalizedString} */ (`Manual interactivo`)
 };
 
 /**
 * | output |
 * | --- |
-* | "CARE-Y Demo" |
+* | "Interactive Handbook" |
 *
 * @param {Demo_App_TitleInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

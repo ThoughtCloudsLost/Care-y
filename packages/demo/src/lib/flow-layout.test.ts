@@ -4,13 +4,18 @@ import {
   scrollTargetForBlock,
   locationAtY,
   hitTestBlock,
+  computeLineSegments,
   DEFAULT_METRICS,
   HOLE_GAP,
   BOTH_SIDES_MIN,
   BALANCE_RATIO,
+  MAX_MEASURE,
+  MAX_FIGURE_WIDTH,
 } from "./flow-layout.js";
 import type {
   FlowBlock,
+  FlowTextBlock,
+  FlowFigureBlock,
   FlowHole,
   LineFiller,
   LineCursor,
@@ -42,6 +47,9 @@ function createFixedFiller(
       const offset = cursor as number;
       const block = blocks[blockIndex];
       if (block === undefined) return null;
+      // Figure blocks have no text; the layout engine never calls the
+      // filler for them, but the type system requires the guard.
+      if (block.kind === "figure") return null;
       const text = block.text;
       if (offset >= text.length) return null;
 
@@ -96,8 +104,22 @@ function makeBlock(
   kind: "sub-heading" | "sub-body" = "sub-body",
   sectionId = "login" as FlowBlock["sectionId"],
   subSlug: string | null = "overview",
-): FlowBlock {
+): FlowTextBlock {
   return { id: `b-${text.slice(0, 8)}`, sectionId, subSlug, kind, text };
+}
+
+function makeFigure(
+  aspectRatio: number = 390 / 220,
+  sectionId = "login" as FlowBlock["sectionId"],
+  subSlug: string | null = "overview",
+): FlowFigureBlock {
+  return {
+    id: `fig-${sectionId}-${subSlug ?? "none"}`,
+    sectionId,
+    subSlug,
+    kind: "figure",
+    aspectRatio,
+  };
 }
 
 // -----------------------------------------------------------------------
@@ -130,6 +152,135 @@ describe("computeFlowLayout without a hole", () => {
     // first bottomY = lineHeight (24) + marginBottom (0) = 24
     // second marginTop = 0 for sub-body
     expect(at(result.blocks, 1).topY).toBe(24);
+  });
+});
+
+// -----------------------------------------------------------------------
+// Reading measure: cap and centre
+// -----------------------------------------------------------------------
+
+describe("reading measure", () => {
+  const LINE_H = 24;
+
+  it("centres a single band in the container when it exceeds the measure", () => {
+    const containerWidth = MAX_MEASURE + 400;
+    const segments = computeLineSegments(0, LINE_H, containerWidth, null);
+
+    expect(segments).toHaveLength(1);
+    expect(at(segments, 0).width).toBe(MAX_MEASURE);
+    // Equal slack on both sides
+    const seg = at(segments, 0);
+    expect(seg.x).toBe(200);
+    expect(containerWidth - (seg.x + seg.width)).toBe(200);
+  });
+
+  it("leaves a container narrower than the measure untouched", () => {
+    const containerWidth = MAX_MEASURE - 100;
+    const segments = computeLineSegments(0, LINE_H, containerWidth, null);
+
+    expect(segments).toHaveLength(1);
+    expect(at(segments, 0).x).toBe(0);
+    expect(at(segments, 0).width).toBe(containerWidth);
+  });
+
+  it("centres within the band left behind when the frame takes the right", () => {
+    // Frame on the right: the left band is the only usable side and is
+    // wider than the measure, so text centres inside that band rather
+    // than hugging the container's left edge.
+    const containerWidth = 2000;
+    const hole: FlowHole = {
+      left: MAX_MEASURE + 400,
+      top: -10,
+      right: containerWidth,
+      bottom: 100,
+    };
+    const segments = computeLineSegments(0, LINE_H, containerWidth, hole);
+
+    expect(segments).toHaveLength(1);
+    const seg = at(segments, 0);
+    const bandWidth = hole.left - HOLE_GAP;
+    expect(seg.width).toBe(MAX_MEASURE);
+    expect(seg.x).toBe((bandWidth - MAX_MEASURE) / 2);
+  });
+
+  it("centres within the band left behind when the frame takes the left", () => {
+    const containerWidth = 2000;
+    const hole: FlowHole = {
+      left: 0,
+      top: -10,
+      right: 900,
+      bottom: 100,
+    };
+    const segments = computeLineSegments(0, LINE_H, containerWidth, hole);
+
+    expect(segments).toHaveLength(1);
+    const seg = at(segments, 0);
+    const bandStart = hole.right + HOLE_GAP;
+    const bandWidth = containerWidth - bandStart;
+    expect(seg.width).toBe(MAX_MEASURE);
+    expect(seg.x).toBe(bandStart + (bandWidth - MAX_MEASURE) / 2);
+  });
+
+  it("centres both flanks on the frame when it splits the column", () => {
+    // Lopsided but still balanced enough for both-side wrap: 384px of
+    // room on the left, 484px on the right. Both flanks take the
+    // narrower width and hug the frame, so the text block is symmetric
+    // about the frame's centre.
+    const containerWidth = 1400;
+    const hole: FlowHole = {
+      left: 400,
+      top: -10,
+      right: 900,
+      bottom: 100,
+    };
+    const segments = computeLineSegments(0, LINE_H, containerWidth, hole);
+
+    expect(segments).toHaveLength(2);
+    const left = at(segments, 0);
+    const right = at(segments, 1);
+
+    // Equal flanks, each hugging its side of the frame
+    expect(left.width).toBe(right.width);
+    expect(left.x + left.width).toBe(hole.left - HOLE_GAP);
+    expect(right.x).toBe(hole.right + HOLE_GAP);
+
+    // Symmetric about the frame's centre
+    const holeCentre = (hole.left + hole.right) / 2;
+    expect(holeCentre - left.x).toBe(right.x + right.width - holeCentre);
+
+    // The flank is the narrower side's width, so that side fills its
+    // space and the WIDER side is the one left with slack. That slack is
+    // the whole point: without it the text would stretch to the far
+    // container edge and stop looking centred on the frame.
+    expect(right.x + right.width).toBeLessThan(containerWidth);
+  });
+
+  it("bounds each flank at the measure when both sides are enormous", () => {
+    const containerWidth = 4000;
+    const hole: FlowHole = {
+      left: 1800,
+      top: -10,
+      right: 2200,
+      bottom: 100,
+    };
+    const segments = computeLineSegments(0, LINE_H, containerWidth, hole);
+
+    expect(segments).toHaveLength(2);
+    expect(at(segments, 0).width).toBe(MAX_MEASURE);
+    expect(at(segments, 1).width).toBe(MAX_MEASURE);
+  });
+
+  it("keeps wrapping through the layout at the capped width", () => {
+    // 200 chars at 10px each cannot fit the measure on one line, so the
+    // layout must break it even though the container is far wider.
+    const blocks = [makeBlock("A".repeat(200))];
+    const filler = createFixedFiller(blocks, 10);
+    const result = computeFlowLayout(blocks, filler, 3000, null);
+
+    expect(result.lines.length).toBeGreaterThan(1);
+    for (const line of result.lines) {
+      expect(line.width).toBeLessThanOrEqual(MAX_MEASURE);
+    }
   });
 });
 
@@ -549,7 +700,11 @@ describe("scrollTargetForBlock", () => {
     );
     expect(target).not.toBeNull();
     if (target === null) throw new Error("expected non-null target");
-    expect(target).toBe(792);
+    // Derived from the block's own geometry rather than hardcoded, so
+    // typography changes move the target instead of failing the test.
+    const targetTopY = at(result.blocks, 2).topY;
+    expect(target).toBe(containerTop + targetTopY - readingLineY);
+    expect(target).toBeGreaterThan(0);
   });
 });
 
@@ -612,6 +767,7 @@ describe("locationAtY", () => {
     const emptyResult = {
       lines: [],
       blocks: [],
+      figures: [],
       totalHeight: 0,
     };
     const loc = locationAtY(50, emptyResult, []);
@@ -676,5 +832,140 @@ describe("hitTestBlock", () => {
       blocks,
     );
     expect(bi).toBe(1);
+  });
+
+  it("does not claim figure block rects", () => {
+    const figBlocks: FlowBlock[] = [makeBlock("A".repeat(20)), makeFigure()];
+    const filler = createFixedFiller(figBlocks, 10);
+    const result = computeFlowLayout(figBlocks, filler, 500, null);
+
+    // The figure block has geometry (topY/bottomY) but hitTestBlock
+    // must skip it: clicks on the video are the figure's own business.
+    const figGeo = at(result.blocks, 1);
+    const midY = (figGeo.topY + figGeo.bottomY) / 2;
+    const bi = hitTestBlock(100, midY, result, DEFAULT_METRICS, figBlocks);
+    expect(bi).toBeNull();
+  });
+});
+
+// -----------------------------------------------------------------------
+// Figure block placement
+// -----------------------------------------------------------------------
+
+describe("figure block placement", () => {
+  const ASPECT = 390 / 220;
+
+  it("places a figure in the text band, capped to MAX_FIGURE_WIDTH", () => {
+    const blocks: FlowBlock[] = [makeFigure(ASPECT)];
+    const filler = createFixedFiller(blocks, 10);
+    const result = computeFlowLayout(blocks, filler, 500, null);
+
+    expect(result.figures).toHaveLength(1);
+    const fig = at(result.figures, 0);
+    expect(fig.blockIndex).toBe(0);
+    expect(fig.width).toBeLessThanOrEqual(MAX_FIGURE_WIDTH);
+    expect(fig.height).toBe(Math.round(fig.width / ASPECT));
+  });
+
+  it("centres the figure in the band", () => {
+    const blocks: FlowBlock[] = [makeFigure(ASPECT)];
+    const filler = createFixedFiller(blocks, 10);
+    const result = computeFlowLayout(blocks, filler, 500, null);
+
+    const fig = at(result.figures, 0);
+    // The band width is capped by MAX_MEASURE when no hole present.
+    // When containerWidth < MAX_MEASURE, band = containerWidth.
+    // When containerWidth > MAX_MEASURE, band = MAX_MEASURE, x starts at centre offset.
+    // For 500 < MAX_MEASURE (620), band is full width.
+    const bandWidth = 500;
+    const expectedX = (bandWidth - fig.width) / 2;
+    expect(fig.x).toBeCloseTo(expectedX, 5);
+  });
+
+  it("uses the band width when it is narrower than MAX_FIGURE_WIDTH", () => {
+    // Container 150px is below MIN_SEGMENT so no-hole path uses full width.
+    // But 150 < MAX_FIGURE_WIDTH, so figure width = 150.
+    const blocks: FlowBlock[] = [makeFigure(ASPECT)];
+    const filler = createFixedFiller(blocks, 10);
+    const result = computeFlowLayout(blocks, filler, 150, null);
+
+    expect(result.figures).toHaveLength(1);
+    const fig = at(result.figures, 0);
+    expect(fig.width).toBe(150);
+  });
+
+  it("drops below the hole when no band fits the figure", () => {
+    // Hole covers the entire container width: no segments available.
+    const hole: FlowHole = { left: 0, top: 0, right: 500, bottom: 100 };
+    const blocks: FlowBlock[] = [makeFigure(ASPECT)];
+    const filler = createFixedFiller(blocks, 10);
+    const result = computeFlowLayout(blocks, filler, 500, hole);
+
+    expect(result.figures).toHaveLength(1);
+    const fig = at(result.figures, 0);
+    // Figure should be placed below the hole.
+    expect(fig.y).toBeGreaterThanOrEqual(100 + HOLE_GAP);
+  });
+
+  it("records correct block geometry for a figure", () => {
+    const blocks: FlowBlock[] = [makeFigure(ASPECT)];
+    const filler = createFixedFiller(blocks, 10);
+    const result = computeFlowLayout(blocks, filler, 500, null);
+
+    const geo = at(result.blocks, 0);
+    const fig = at(result.figures, 0);
+    // Block geometry must enclose the figure.
+    expect(geo.topY).toBeLessThanOrEqual(fig.y);
+    expect(geo.bottomY).toBeGreaterThanOrEqual(fig.y + fig.height);
+    // Figure blocks have no lines.
+    expect(geo.lineCount).toBe(0);
+  });
+
+  it("places a figure after text in a mixed flow", () => {
+    const blocks: FlowBlock[] = [
+      makeBlock("A".repeat(50)),
+      makeFigure(ASPECT),
+      makeBlock("B".repeat(50)),
+    ];
+    const filler = createFixedFiller(blocks, 10);
+    const result = computeFlowLayout(blocks, filler, 500, null);
+
+    expect(result.figures).toHaveLength(1);
+    const textGeo0 = at(result.blocks, 0);
+    const figGeo = at(result.blocks, 1);
+    const textGeo2 = at(result.blocks, 2);
+    const fig = at(result.figures, 0);
+
+    // The figure sits between the two text blocks.
+    expect(fig.y).toBeGreaterThanOrEqual(textGeo0.bottomY);
+    expect(figGeo.bottomY).toBeLessThanOrEqual(textGeo2.topY);
+  });
+
+  it("figure belongs to its sub-section for scrollspy", () => {
+    const blocks: FlowBlock[] = [
+      makeBlock(
+        "Heading",
+        "sub-heading",
+        "login" as FlowBlock["sectionId"],
+        "credentials",
+      ),
+      makeBlock(
+        "Body text",
+        "sub-body",
+        "login" as FlowBlock["sectionId"],
+        "credentials",
+      ),
+      makeFigure(ASPECT, "login" as FlowBlock["sectionId"], "credentials"),
+    ];
+    const filler = createFixedFiller(blocks, 10);
+    const result = computeFlowLayout(blocks, filler, 500, null);
+
+    const figGeo = at(result.blocks, 2);
+    const midY = (figGeo.topY + figGeo.bottomY) / 2;
+    const loc = locationAtY(midY, result, blocks);
+    expect(loc).toEqual({
+      sectionId: "login",
+      subSlug: "credentials",
+    });
   });
 });

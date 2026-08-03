@@ -21,6 +21,7 @@
     deriveBezelRadius,
     type FrameGeometry,
   } from "./frame-geometry.svelte.js";
+  import { isRecordMode, forwardRecordParam } from "./record-mode.js";
 
   interface Props {
     dark?: boolean;
@@ -39,7 +40,7 @@
 
   let iframeEl: HTMLIFrameElement | undefined = $state();
 
-  const phoneUrl = `${import.meta.env.BASE_URL}phone.html`;
+  const phoneUrl = forwardRecordParam(`${import.meta.env.BASE_URL}phone.html`);
 
   /** Show the status bar only when viewport is phone-shaped (< 768). */
   const showStatusBar = $derived(geo.viewport.w < 768);
@@ -50,9 +51,14 @@
     return `${String(h)}:${String(d.getMinutes()).padStart(2, "0")}`;
   }
 
-  let clock = $state(formatClock(new Date()));
+  // In record mode the clock reads 9:41 (Apple marketing convention)
+  // and no interval fires, so every frame is identical.
+  const RECORD_CLOCK = "9:41";
+
+  let clock = $state(isRecordMode() ? RECORD_CLOCK : formatClock(new Date()));
 
   $effect(() => {
+    if (isRecordMode()) return;
     const id = setInterval(() => {
       clock = formatClock(new Date());
     }, 15_000);

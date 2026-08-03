@@ -19,11 +19,23 @@
     Minimize2,
     Smartphone,
     Monitor,
+    X,
   } from "@lucide/svelte";
   import TopBar from "$demo/TopBar.svelte";
   import FlowStory from "$demo/FlowStory.svelte";
   import SectionIntro from "$demo/SectionIntro.svelte";
+  import SectionRail from "$demo/SectionRail.svelte";
+  import StoryTip from "$demo/StoryTip.svelte";
   import DemoFrame from "$demo/DemoFrame.svelte";
+  import PeekStill from "$demo/PeekStill.svelte";
+  import { isRecordMode } from "$demo/record-mode.js";
+  import { captureStill, type CapturedStill } from "$demo/peek-still.js";
+  import {
+    createPeekController,
+    COMMIT_DRAG_PX,
+  } from "$demo/peek-controller.svelte.js";
+  import { createEnginePrewarm } from "$demo/engine-prewarm.svelte.js";
+  import type { PeekFirePayload } from "$demo/clip-registry.js";
   import {
     createScrollEngine,
     createTopicProgress,
@@ -43,9 +55,11 @@
     presetAnchoredLeft,
     presetAnchoredTop,
     clampTopToViewport,
+    bottomCentrePosition,
     BEZEL,
     PHONE_PRESET,
     DESKTOP_PRESET,
+    WIDE_BREAKPOINT,
   } from "$demo/frame-geometry.svelte.js";
   import {
     isLinked,
@@ -92,6 +106,27 @@
   // -----------------------------------------------------------------------
 
   const geo = createFrameGeometry();
+
+  // -----------------------------------------------------------------------
+  // Peek controller + engine prewarm
+  // -----------------------------------------------------------------------
+
+  const peekCtrl = createPeekController(geo);
+  const prewarm = createEnginePrewarm();
+
+  /** Still captured from the clip's current frame at peek fire time. */
+  let capturedStill: CapturedStill | null = $state(null);
+
+  /** True once the phone engine reports ready via the bridge. */
+  let engineReady = $state(false);
+
+  /** Whether the peek is in a non-idle phase (active for UI gating). */
+  const peekActive: boolean = $derived(peekCtrl.phase !== "idle");
+
+  // Tear down the prewarm observer when the component unmounts
+  $effect(() => {
+    return () => prewarm.destroy();
+  });
 
   // Clamp position on window resize so the frame stays reachable
   $effect(() => {
@@ -203,9 +238,12 @@
 
   function onPointerUp(e: PointerEvent): void {
     if (gesture?.pointerId !== e.pointerId) return;
-    // Manual resize invalidates the shrink memory
-    if (gesture.mode === "resize" && geo.shrunk) {
-      geo.clearShrinkMemory();
+    // Settle the shrink state now that the footprint is final. Evaluated
+    // on release rather than during the move: a drag sweeps back and
+    // forth across the threshold, and reacting live would flip the
+    // shrunk flag every frame and rewrite the grow memory with it.
+    if (gesture.mode === "resize") {
+      geo.settleShrinkAfterResize();
     }
     gesture = null;
     gestureActive = false;
@@ -232,6 +270,13 @@
   let anchorRight: number | null = null;
   let anchorBottom: number | null = null;
 
+  // Overrides both anchors: park the frame at the bottom centre for the
+  // whole animation. Set when shrinking on a narrow layout, where there
+  // is no side gutter for the thumbnail to live in. Recomputed per frame
+  // from the live size rather than solved once for the target, so the
+  // frame stays centred while it travels instead of only landing centred.
+  let dockBottomCentre = false;
+
   function viewportSize(): { w: number; h: number } {
     if (typeof window === "undefined") return { w: 1280, h: 800 };
     return { w: window.innerWidth, h: window.innerHeight };
@@ -244,7 +289,10 @@
     fallbackTop: number,
     fallbackLeft: number,
   ): { top: number; left: number } {
-    const { h: windowH } = viewportSize();
+    const { w: windowW, h: windowH } = viewportSize();
+    if (dockBottomCentre) {
+      return bottomCentrePosition(outerW, outerH, windowW, windowH);
+    }
     const rawTop = anchorBottom !== null ? anchorBottom - outerH : fallbackTop;
     return {
       // Always fitted, not just when bottom-anchored: growing taller from
@@ -278,13 +326,24 @@
 
     if (prefersReducedMotion.current) {
       geo.setFootprint(targetW, targetH);
-      geo.setPosition(
-        presetAnchoredTop(startTop, startOuterH, targetOuterH, windowH),
-        anchorRight !== null ? anchorRight - targetOuterW : startLeft,
-      );
+      if (dockBottomCentre) {
+        const docked = bottomCentrePosition(
+          targetOuterW,
+          targetOuterH,
+          windowW,
+          windowH,
+        );
+        geo.setPosition(docked.top, docked.left);
+      } else {
+        geo.setPosition(
+          presetAnchoredTop(startTop, startOuterH, targetOuterH, windowH),
+          anchorRight !== null ? anchorRight - targetOuterW : startLeft,
+        );
+      }
       geo.clampToViewport();
       anchorRight = null;
       anchorBottom = null;
+      dockBottomCentre = false;
       return;
     }
 
@@ -328,6 +387,7 @@
       geo.setPosition(final.top, final.left);
       anchorRight = null;
       anchorBottom = null;
+      dockBottomCentre = false;
       geo.clampToViewport();
     }
   });
@@ -355,12 +415,85 @@
     if (geo.shrunk) {
       const target = geo.grow();
       if (target !== null) {
+        // Growing releases the dock: the frame returns to wherever the
+        // normal anchoring puts it.
+        dockBottomCentre = false;
         animateToPreset(target.w, target.h);
       }
-    } else {
-      const target = geo.shrink();
-      animateToPreset(target.w, target.h);
+      return;
     }
+    const target = geo.shrink();
+    // On a narrow layout the shrunk frame has no side gutter to sit in,
+    // so it docks to the bottom centre instead of staying wherever the
+    // full-size frame happened to be.
+    dockBottomCentre = viewportSize().w < WIDE_BREAKPOINT;
+    animateToPreset(target.w, target.h);
+  }
+
+  // -----------------------------------------------------------------------
+  // Peek event handlers
+  // -----------------------------------------------------------------------
+
+  function handlePeekFire(payload: PeekFirePayload): void {
+    const still = captureStill(payload.video);
+    capturedStill = still;
+    peekCtrl.open(payload.rect);
+
+    // Keyboard fires bypass the long-press primitive (ClipFigure's
+    // handleKeydown calls onpeekfire directly), so no pointer is
+    // captured and no release will arrive. Schedule a commit on a
+    // microtask; handlePeekRelease cancels it when a real pointer
+    // release arrives first. Keyboard users land in committed state.
+    peekCommitPending = true;
+    queueMicrotask(() => {
+      if (peekCommitPending) {
+        peekCtrl.commit();
+        peekCommitPending = false;
+      }
+    });
+  }
+
+  /** Cleared by handlePeekRelease to distinguish pointer from keyboard fires. */
+  let peekCommitPending = false;
+
+  function handlePeekDrag(_dx: number, dy: number): void {
+    // dy < 0 = upward screen motion; commit when the drag exceeds threshold
+    if (dy < -COMMIT_DRAG_PX) {
+      peekCtrl.commit();
+    }
+  }
+
+  function handlePeekSecondaryTap(): void {
+    peekCtrl.commit();
+  }
+
+  function handlePeekRelease(): void {
+    // Cancel any pending keyboard commit: this is a pointer release
+    peekCommitPending = false;
+    if (peekCtrl.phase !== "committed") {
+      peekCtrl.collapse();
+    }
+  }
+
+  function handlePeekCancel(): void {
+    peekCommitPending = false;
+    // Nothing to do: the gesture was cancelled before fire
+  }
+
+  /** Close-and-continue: collapse from committed back to idle. */
+  function handlePeekClose(): void {
+    peekCtrl.collapse();
+    // The still fades on its own via onfaded; clearing here makes the
+    // still disappear together with the frame collapse.
+    capturedStill = null;
+  }
+
+  function handleStillFaded(): void {
+    capturedStill = null;
+  }
+
+  function handlePrewarmElement(el: HTMLElement): void {
+    prewarm.observe(el);
   }
 
   // -----------------------------------------------------------------------
@@ -387,7 +520,7 @@
   // restores it.
   const scrollEngine = createScrollEngine(
     () => bridge,
-    () => isLinked() && !gestureActive,
+    () => isLinked() && !gestureActive && !peekActive,
     () => !entryVisible,
   );
 
@@ -412,6 +545,9 @@
 
     unsubscribe = b.subscribe((state: DemoBridgeState) => {
       progress.markFromState(state);
+
+      // Track engine readiness for the peek still crossfade
+      engineReady = state.engineReady;
 
       // A non-init bridge state while the entry page is up means the
       // phone moved (deep link, phone interaction). Dismiss entry so
@@ -443,6 +579,10 @@
       "",
       window.location.pathname + window.location.search,
     );
+    // Reset peek, still, and engine state
+    peekCtrl.resetToIdle();
+    capturedStill = null;
+    engineReady = false;
     // Reset frame geometry and link state alongside the iframe reload
     geo.reset();
     resetLinked();
@@ -557,6 +697,66 @@
     entryVisible ? "entry" : scrollEngine.activeSection,
   );
 
+  // -----------------------------------------------------------------------
+  // Sub rail visibility
+  //
+  // Matched in JS rather than CSS because the rail's presence also
+  // decides whether SectionIntro renders its horizontal chips. A media
+  // query could hide one of them, but both would still be in the DOM and
+  // in the tab order.
+  // -----------------------------------------------------------------------
+
+  // -----------------------------------------------------------------------
+  // Narrow/wide viewport mode
+  // -----------------------------------------------------------------------
+
+  let windowW = $state(typeof window !== "undefined" ? window.innerWidth : 0);
+
+  $effect(() => {
+    function onResize(): void {
+      windowW = window.innerWidth;
+    }
+    window.addEventListener("resize", onResize, { passive: true });
+    return () => window.removeEventListener("resize", onResize);
+  });
+
+  const isNarrow: boolean = $derived(windowW < WIDE_BREAKPOINT);
+
+  // On narrow viewports the DemoFrame mounts only when the prewarm latch
+  // fires or a peek opens (whichever comes first). Once mounted it stays
+  // mounted for the page's lifetime so the iframe is never torn down.
+  let narrowMountLatch = $state(false);
+
+  $effect(() => {
+    if (isNarrow && (prewarm.warm || peekActive)) {
+      narrowMountLatch = true;
+    }
+  });
+
+  const frameShouldMount: boolean = $derived(!isNarrow || narrowMountLatch);
+
+  // On narrow viewports the floating frame is CSS-hidden when the peek
+  // controller is idle, and shown during any peek phase.
+  const frameVisibleOnNarrow: boolean = $derived(!isNarrow || peekActive);
+
+  // The desktop chrome (toolbar, resize handles, bezel strips) is shown
+  // on wide viewports unconditionally and on narrow only never (the
+  // committed state uses the close-and-continue button instead).
+  const showDesktopChrome: boolean = $derived(!isNarrow);
+
+  const RAIL_BREAKPOINT = 900;
+
+  // A single-sub section (the coming-soon placeholder) has nothing to
+  // navigate between, so the rail would be a list of one.
+  //
+  // The entry page DOES get a rail: its three subs preview what the
+  // handbook covers. They are not real routes though, so it renders
+  // inert there, matching the existing rule that entry sub clicks do
+  // nothing.
+  const showRail: boolean = $derived(
+    windowW >= RAIL_BREAKPOINT && activeSectionDef.subs.length > 1,
+  );
+
   // Held in a derived rather than built inline in the markup so the array
   // identity only changes when the page does. FlowStory rebuilds its
   // blocks (and re-measures every string) whenever this reference moves.
@@ -599,6 +799,10 @@
     }
   }
 
+  // Record mode: flat backdrop, no story chrome. The flag is static
+  // for the page's lifetime (query param, read once).
+  const recordMode = isRecordMode();
+
   function handleLocaleChange(): void {
     // Cycle through available locales
     const currentIdx = locales.indexOf(uiLocale);
@@ -616,23 +820,26 @@
   }
 </script>
 
-{#key uiLocale}
-  <TopBar
-    activeSection={entryVisible ? null : scrollEngine.activeSection}
-    {dark}
-    locale={uiLocale}
-    seen={progress.count}
-    total={progress.total}
-    onSectionClick={handleSectionClick}
-    onToggleDark={handleToggleDark}
-    onRestart={handleRestart}
-    onLocaleChange={handleLocaleChange}
-  />
-{/key}
+{#if !recordMode}
+  {#key uiLocale}
+    <TopBar
+      activeSection={entryVisible ? null : scrollEngine.activeSection}
+      {dark}
+      locale={uiLocale}
+      seen={progress.count}
+      total={progress.total}
+      onSectionClick={handleSectionClick}
+      onToggleDark={handleToggleDark}
+      onRestart={handleRestart}
+      onLocaleChange={handleLocaleChange}
+    />
+  {/key}
+{/if}
 
 <!-- Floating frame layer: fixed, between story content (z:1) and TopBar (z:100) -->
 <div
   class="floating-frame"
+  class:floating-frame--hidden={!frameVisibleOnNarrow}
   style:top="{geo.top}px"
   style:left="{geo.left}px"
   style:width="{geo.outerW}px"
@@ -642,192 +849,249 @@
        the bezel background and extending the toolbar down to cover
        the bezel's top-left/right corner area. The toolbar z-index
        sits behind the bezel strips so drag surfaces still work. -->
-  <div class="frame-toolbar" style:left="{deriveBezelRadius(geo.footprintW)}px">
+  {#if showDesktopChrome}
     <div
-      class="toolbar-grip"
+      class="frame-toolbar"
+      style:left="{deriveBezelRadius(geo.footprintW)}px"
+    >
+      <div
+        class="toolbar-grip"
+        role="presentation"
+        onpointerdown={startDrag}
+        onpointermove={onPointerMove}
+        onpointerup={onPointerUp}
+        onpointercancel={onPointerUp}
+        title={m.demo_toolbar_grip_tooltip()}
+      >
+        <GripVertical size={16} />
+      </div>
+      <!-- Presets are hidden while shrunk: at that size the frame is a
+         thumbnail, and switching its shape is a decision for after it
+         has been grown back. -->
+      {#if !geo.shrunk}
+        <button
+          class="toolbar-btn"
+          class:toolbar-btn-active={geo.footprintW === PHONE_PRESET.w &&
+            geo.footprintH === PHONE_PRESET.h}
+          type="button"
+          onclick={handlePhonePreset}
+          aria-label={m.demo_toolbar_phone_preset()}
+          title={m.demo_toolbar_phone_tooltip()}
+        >
+          <Smartphone size={16} />
+        </button>
+        <button
+          class="toolbar-btn"
+          class:toolbar-btn-active={geo.footprintW === DESKTOP_PRESET.w &&
+            geo.footprintH === DESKTOP_PRESET.h}
+          type="button"
+          onclick={handleDesktopPreset}
+          aria-label={m.demo_toolbar_desktop_preset()}
+          title={m.demo_toolbar_desktop_tooltip()}
+        >
+          <Monitor size={16} />
+        </button>
+      {/if}
+      <button
+        class="toolbar-btn"
+        class:toolbar-btn-active={geo.shrunk}
+        type="button"
+        onclick={handleShrinkGrow}
+        aria-label={geo.shrunk
+          ? m.demo_toolbar_grow_tooltip()
+          : m.demo_toolbar_shrink_tooltip()}
+        aria-pressed={geo.shrunk}
+        title={geo.shrunk
+          ? m.demo_toolbar_grow_tooltip()
+          : m.demo_toolbar_shrink_tooltip()}
+      >
+        {#if geo.shrunk}
+          <Maximize2 size={16} />
+        {:else}
+          <Minimize2 size={16} />
+        {/if}
+      </button>
+      <div class="toolbar-separator" aria-hidden="true"></div>
+      <button
+        class="toolbar-btn"
+        class:toolbar-btn-active={!isLinked()}
+        type="button"
+        onclick={toggleLinked}
+        aria-label={isLinked()
+          ? m.demo_toolbar_link_linked()
+          : m.demo_toolbar_link_unlinked()}
+        aria-pressed={!isLinked()}
+        title={isLinked()
+          ? m.demo_toolbar_link_linked()
+          : m.demo_toolbar_link_unlinked()}
+      >
+        {#if isLinked()}
+          <Link2 size={16} />
+        {:else}
+          <Link2Off size={16} />
+        {/if}
+      </button>
+    </div>
+  {/if}
+
+  <!-- Resize handles: 4 edges + 4 corners -->
+  {#if showDesktopChrome}
+    <!-- svelte-ignore a11y_no_static_element_interactions -->
+    <div
+      class="resize-handle resize-n"
+      onpointerdown={(e) => startResize(e, 1)}
+      onpointermove={onPointerMove}
+      onpointerup={onPointerUp}
+      onpointercancel={onPointerUp}
+    ></div>
+    <!-- svelte-ignore a11y_no_static_element_interactions -->
+    <div
+      class="resize-handle resize-e"
+      onpointerdown={(e) => startResize(e, 2)}
+      onpointermove={onPointerMove}
+      onpointerup={onPointerUp}
+      onpointercancel={onPointerUp}
+    ></div>
+    <!-- svelte-ignore a11y_no_static_element_interactions -->
+    <div
+      class="resize-handle resize-s"
+      onpointerdown={(e) => startResize(e, 4)}
+      onpointermove={onPointerMove}
+      onpointerup={onPointerUp}
+      onpointercancel={onPointerUp}
+    ></div>
+    <!-- svelte-ignore a11y_no_static_element_interactions -->
+    <div
+      class="resize-handle resize-w"
+      onpointerdown={(e) => startResize(e, 8)}
+      onpointermove={onPointerMove}
+      onpointerup={onPointerUp}
+      onpointercancel={onPointerUp}
+    ></div>
+    <!-- svelte-ignore a11y_no_static_element_interactions -->
+    <div
+      class="resize-handle resize-ne"
+      onpointerdown={(e) => startResize(e, 3)}
+      onpointermove={onPointerMove}
+      onpointerup={onPointerUp}
+      onpointercancel={onPointerUp}
+    ></div>
+    <!-- svelte-ignore a11y_no_static_element_interactions -->
+    <div
+      class="resize-handle resize-se"
+      onpointerdown={(e) => startResize(e, 6)}
+      onpointermove={onPointerMove}
+      onpointerup={onPointerUp}
+      onpointercancel={onPointerUp}
+    ></div>
+    <!-- svelte-ignore a11y_no_static_element_interactions -->
+    <div
+      class="resize-handle resize-sw"
+      onpointerdown={(e) => startResize(e, 12)}
+      onpointermove={onPointerMove}
+      onpointerup={onPointerUp}
+      onpointercancel={onPointerUp}
+    ></div>
+    <!-- svelte-ignore a11y_no_static_element_interactions -->
+    <div
+      class="resize-handle resize-nw"
+      onpointerdown={(e) => startResize(e, 9)}
+      onpointermove={onPointerMove}
+      onpointerup={onPointerUp}
+      onpointercancel={onPointerUp}
+    ></div>
+
+    <!-- Bezel drag strips: four edges around the screen so the 12px bezel
+       ring acts as a drag surface without blocking the iframe. These are
+       pure pointer-capture surfaces duplicating the accessible grip
+       button's function, so role="presentation" keeps them out of the
+       accessibility tree. -->
+    <div
+      class="bezel-strip bezel-strip-top"
       role="presentation"
       onpointerdown={startDrag}
       onpointermove={onPointerMove}
       onpointerup={onPointerUp}
       onpointercancel={onPointerUp}
-      title={m.demo_toolbar_grip_tooltip()}
+    ></div>
+    <div
+      class="bezel-strip bezel-strip-bottom"
+      role="presentation"
+      onpointerdown={startDrag}
+      onpointermove={onPointerMove}
+      onpointerup={onPointerUp}
+      onpointercancel={onPointerUp}
+    ></div>
+    <div
+      class="bezel-strip bezel-strip-left"
+      role="presentation"
+      onpointerdown={startDrag}
+      onpointermove={onPointerMove}
+      onpointerup={onPointerUp}
+      onpointercancel={onPointerUp}
+    ></div>
+    <div
+      class="bezel-strip bezel-strip-right"
+      role="presentation"
+      onpointerdown={startDrag}
+      onpointermove={onPointerMove}
+      onpointerup={onPointerUp}
+      onpointercancel={onPointerUp}
+    ></div>
+  {/if}
+
+  {#if frameShouldMount}
+    <DemoFrame
+      {dark}
+      {geo}
+      onbridgeready={handleBridgeReady}
+      gestureActive={gestureActive || peekActive}
+      bind:this={frameRef}
+    />
+  {/if}
+
+  <!-- Peek still: positioned over the screen area (inside the bezel),
+       shown while a still exists and the peek is not idle. -->
+  {#if capturedStill !== null && peekActive}
+    <div
+      class="peek-still-layer"
+      style="
+        top: {BEZEL}px;
+        left: {BEZEL}px;
+        width: {geo.footprintW}px;
+        height: {geo.footprintH}px;
+      "
     >
-      <GripVertical size={16} />
+      <PeekStill
+        still={capturedStill}
+        ready={engineReady}
+        onfaded={handleStillFaded}
+      />
     </div>
-    <button
-      class="toolbar-btn"
-      class:toolbar-btn-active={geo.footprintW === PHONE_PRESET.w &&
-        geo.footprintH === PHONE_PRESET.h}
-      type="button"
-      onclick={handlePhonePreset}
-      aria-label={m.demo_toolbar_phone_preset()}
-      title={m.demo_toolbar_phone_tooltip()}
-    >
-      <Smartphone size={16} />
-    </button>
-    <button
-      class="toolbar-btn"
-      class:toolbar-btn-active={geo.footprintW === DESKTOP_PRESET.w &&
-        geo.footprintH === DESKTOP_PRESET.h}
-      type="button"
-      onclick={handleDesktopPreset}
-      aria-label={m.demo_toolbar_desktop_preset()}
-      title={m.demo_toolbar_desktop_tooltip()}
-    >
-      <Monitor size={16} />
-    </button>
-    <button
-      class="toolbar-btn"
-      class:toolbar-btn-active={geo.shrunk}
-      type="button"
-      onclick={handleShrinkGrow}
-      aria-label={geo.shrunk
-        ? m.demo_toolbar_grow_tooltip()
-        : m.demo_toolbar_shrink_tooltip()}
-      aria-pressed={geo.shrunk}
-      title={geo.shrunk
-        ? m.demo_toolbar_grow_tooltip()
-        : m.demo_toolbar_shrink_tooltip()}
-    >
-      {#if geo.shrunk}
-        <Maximize2 size={16} />
-      {:else}
-        <Minimize2 size={16} />
-      {/if}
-    </button>
-    <div class="toolbar-separator" aria-hidden="true"></div>
-    <button
-      class="toolbar-btn"
-      class:toolbar-btn-active={!isLinked()}
-      type="button"
-      onclick={toggleLinked}
-      aria-label={isLinked()
-        ? m.demo_toolbar_link_linked()
-        : m.demo_toolbar_link_unlinked()}
-      aria-pressed={!isLinked()}
-      title={isLinked()
-        ? m.demo_toolbar_link_linked()
-        : m.demo_toolbar_link_unlinked()}
-    >
-      {#if isLinked()}
-        <Link2 size={16} />
-      {:else}
-        <Link2Off size={16} />
-      {/if}
-    </button>
-  </div>
+  {/if}
 
-  <!-- Resize handles: 4 edges + 4 corners -->
-  <!-- svelte-ignore a11y_no_static_element_interactions -->
-  <div
-    class="resize-handle resize-n"
-    onpointerdown={(e) => startResize(e, 1)}
-    onpointermove={onPointerMove}
-    onpointerup={onPointerUp}
-    onpointercancel={onPointerUp}
-  ></div>
-  <!-- svelte-ignore a11y_no_static_element_interactions -->
-  <div
-    class="resize-handle resize-e"
-    onpointerdown={(e) => startResize(e, 2)}
-    onpointermove={onPointerMove}
-    onpointerup={onPointerUp}
-    onpointercancel={onPointerUp}
-  ></div>
-  <!-- svelte-ignore a11y_no_static_element_interactions -->
-  <div
-    class="resize-handle resize-s"
-    onpointerdown={(e) => startResize(e, 4)}
-    onpointermove={onPointerMove}
-    onpointerup={onPointerUp}
-    onpointercancel={onPointerUp}
-  ></div>
-  <!-- svelte-ignore a11y_no_static_element_interactions -->
-  <div
-    class="resize-handle resize-w"
-    onpointerdown={(e) => startResize(e, 8)}
-    onpointermove={onPointerMove}
-    onpointerup={onPointerUp}
-    onpointercancel={onPointerUp}
-  ></div>
-  <!-- svelte-ignore a11y_no_static_element_interactions -->
-  <div
-    class="resize-handle resize-ne"
-    onpointerdown={(e) => startResize(e, 3)}
-    onpointermove={onPointerMove}
-    onpointerup={onPointerUp}
-    onpointercancel={onPointerUp}
-  ></div>
-  <!-- svelte-ignore a11y_no_static_element_interactions -->
-  <div
-    class="resize-handle resize-se"
-    onpointerdown={(e) => startResize(e, 6)}
-    onpointermove={onPointerMove}
-    onpointerup={onPointerUp}
-    onpointercancel={onPointerUp}
-  ></div>
-  <!-- svelte-ignore a11y_no_static_element_interactions -->
-  <div
-    class="resize-handle resize-sw"
-    onpointerdown={(e) => startResize(e, 12)}
-    onpointermove={onPointerMove}
-    onpointerup={onPointerUp}
-    onpointercancel={onPointerUp}
-  ></div>
-  <!-- svelte-ignore a11y_no_static_element_interactions -->
-  <div
-    class="resize-handle resize-nw"
-    onpointerdown={(e) => startResize(e, 9)}
-    onpointermove={onPointerMove}
-    onpointerup={onPointerUp}
-    onpointercancel={onPointerUp}
-  ></div>
-
-  <!-- Bezel drag strips: four edges around the screen so the 12px bezel
-       ring acts as a drag surface without blocking the iframe. These are
-       pure pointer-capture surfaces duplicating the accessible grip
-       button's function, so role="presentation" keeps them out of the
-       accessibility tree. -->
-  <div
-    class="bezel-strip bezel-strip-top"
-    role="presentation"
-    onpointerdown={startDrag}
-    onpointermove={onPointerMove}
-    onpointerup={onPointerUp}
-    onpointercancel={onPointerUp}
-  ></div>
-  <div
-    class="bezel-strip bezel-strip-bottom"
-    role="presentation"
-    onpointerdown={startDrag}
-    onpointermove={onPointerMove}
-    onpointerup={onPointerUp}
-    onpointercancel={onPointerUp}
-  ></div>
-  <div
-    class="bezel-strip bezel-strip-left"
-    role="presentation"
-    onpointerdown={startDrag}
-    onpointermove={onPointerMove}
-    onpointerup={onPointerUp}
-    onpointercancel={onPointerUp}
-  ></div>
-  <div
-    class="bezel-strip bezel-strip-right"
-    role="presentation"
-    onpointerdown={startDrag}
-    onpointermove={onPointerMove}
-    onpointerup={onPointerUp}
-    onpointercancel={onPointerUp}
-  ></div>
-
-  <DemoFrame
-    {dark}
-    {geo}
-    onbridgeready={handleBridgeReady}
-    {gestureActive}
-    bind:this={frameRef}
-  />
+  <!-- Close-and-continue: visible in committed phase, placed at the
+       bottom for thumb reach. Labels the destination section name
+       rather than a generic "Close". -->
+  {#if peekCtrl.phase === "committed"}
+    <div class="peek-close-bar">
+      <button
+        class="peek-close-btn"
+        type="button"
+        onclick={handlePeekClose}
+        aria-label={m.demo_peek_back_to({
+          section: sectionTitle(scrollEngine.activeSection),
+        })}
+      >
+        <X size={16} />
+        <span
+          >{m.demo_peek_back_to({
+            section: sectionTitle(scrollEngine.activeSection),
+          })}</span
+        >
+      </button>
+    </div>
+  {/if}
 
   <!-- Blur cover for preset animation (behind flag, default off) -->
   {#if showBlurCover}
@@ -835,52 +1099,75 @@
   {/if}
 </div>
 
-<div class="scroll-story">
-  <div class="flow-story-wrapper">
-    {#key uiLocale}{#key pageKey}
-        <div class="section-view">
-          <SectionIntro
-            section={activeSectionDef}
-            activeSub={scrollEngine.activeSub}
-            locale={uiLocale}
-            {seenTopics}
-            showToc={!entryVisible}
-            selectable={!entryVisible}
-            {frameRect}
-            onSubClick={handleSubClick}
-            onSectionClick={handleSectionClick}
-          />
-          <FlowStory
-            sections={pageSections}
-            locale={uiLocale}
-            activeSection={scrollEngine.activeSection}
-            activeSub={scrollEngine.activeSub}
-            {seenTopics}
-            {frameRect}
-            onSelectSection={handleSectionClick}
-            onSelectSub={handleSubClick}
-          />
-          <div class="story-spacer"></div>
-        </div>
-      {/key}{/key}
+{#if !recordMode}
+  <div class="scroll-story">
+    <div class="flow-story-wrapper">
+      {#key uiLocale}{#key pageKey}
+          <div class="section-view" class:section-view--railed={showRail}>
+            {#if showRail}
+              <SectionRail
+                section={activeSectionDef}
+                activeSub={entryVisible ? null : scrollEngine.activeSub}
+                locale={uiLocale}
+                {seenTopics}
+                interactive={!entryVisible}
+                onSubClick={handleSubClick}
+              />
+            {/if}
+            <div class="section-main">
+              <SectionIntro
+                section={activeSectionDef}
+                activeSub={scrollEngine.activeSub}
+                locale={uiLocale}
+                {seenTopics}
+                showToc={!entryVisible && !showRail}
+                selectable={!entryVisible}
+                {frameRect}
+                onSubClick={handleSubClick}
+                onSectionClick={handleSectionClick}
+              />
+              <!-- First snap target on the page, so it holds the
+                 selection slot before anything is selected. -->
+              <StoryTip selectable={!entryVisible} {frameRect} />
+              <FlowStory
+                sections={pageSections}
+                locale={uiLocale}
+                activeSection={scrollEngine.activeSection}
+                activeSub={scrollEngine.activeSub}
+                {seenTopics}
+                {frameRect}
+                onSelectSection={handleSectionClick}
+                onSelectSub={handleSubClick}
+                onpeekfire={handlePeekFire}
+                onpeekdrag={handlePeekDrag}
+                onpeeksecondarytap={handlePeekSecondaryTap}
+                onpeekrelease={handlePeekRelease}
+                onpeekcancel={handlePeekCancel}
+                onelement={handlePrewarmElement}
+              />
+              <div class="story-spacer"></div>
+            </div>
+          </div>
+        {/key}{/key}
+    </div>
   </div>
-</div>
 
-<!-- Next-section pill: fixed at bottom center, hidden during gestures
+  <!-- Next-section pill: fixed at bottom center, hidden during gestures
      and when there is no next section. -->
-{#if nextSectionDef !== null && !gestureActive}
-  <div class="next-pill-container">
-    <button
-      class="next-pill"
-      type="button"
-      onclick={() => handleNextSection(nextSectionDef.id)}
-    >
-      {m.demo_section_next({
-        section: sectionTitle(nextSectionDef.id),
-      })}
-      <ArrowRight size={16} />
-    </button>
-  </div>
+  {#if nextSectionDef !== null && !gestureActive && !peekActive}
+    <div class="next-pill-container">
+      <button
+        class="next-pill"
+        type="button"
+        onclick={() => handleNextSection(nextSectionDef.id)}
+      >
+        {m.demo_section_next({
+          section: sectionTitle(nextSectionDef.id),
+        })}
+        <ArrowRight size={16} />
+      </button>
+    </div>
+  {/if}
 {/if}
 
 <style>
@@ -958,6 +1245,20 @@
   /* Light entrance when a section page swaps in */
   .section-view {
     animation: section-in 0.2s ease-out;
+  }
+
+  /* Rail layout. The text column is a grid track, so FlowStory's
+     ResizeObserver simply measures narrower and its frame-dodging
+     geometry follows without knowing the rail is there. */
+  .section-view--railed {
+    display: grid;
+    grid-template-columns: minmax(0, 13rem) minmax(0, 1fr);
+    column-gap: 1.5rem;
+    align-items: start;
+  }
+
+  .section-main {
+    min-width: 0;
   }
 
   @keyframes section-in {
@@ -1053,6 +1354,14 @@
     position: fixed;
     /* Between story content (z:1) and TopBar (z:100) */
     z-index: 50;
+  }
+
+  /* Hidden on narrow while peek is idle. visibility + pointer-events
+     rather than display:none so the iframe stays mounted and the
+     engine boot is not thrown away. */
+  .floating-frame--hidden {
+    visibility: hidden;
+    pointer-events: none;
   }
 
   /* Toolbar: slim bar docked above the frame. Uses the bezel
@@ -1259,6 +1568,85 @@
     }
     to {
       opacity: 1;
+    }
+  }
+
+  /* -----------------------------------------------------------------------
+     Peek still layer. Sits inside the bezel, above the iframe, below
+     the bezel overlay and toolbar.
+     ----------------------------------------------------------------------- */
+
+  .peek-still-layer {
+    position: absolute;
+    z-index: 1;
+    overflow: hidden;
+    pointer-events: none;
+  }
+
+  /* -----------------------------------------------------------------------
+     Close-and-continue bar: committed peek chrome, bottom of frame
+     ----------------------------------------------------------------------- */
+
+  .peek-close-bar {
+    position: absolute;
+    bottom: -52px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 6;
+    pointer-events: auto;
+  }
+
+  .peek-close-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.375rem;
+    padding: 0.5rem 1rem;
+    border: 1px solid rgba(0, 0, 0, 0.08);
+    border-radius: 999px;
+    background: rgba(245, 245, 247, 0.92);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    color: #1d1d1f;
+    font-size: 0.8125rem;
+    font-weight: 600;
+    cursor: pointer;
+    min-height: 44px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+    transition:
+      background 0.15s ease,
+      box-shadow 0.15s ease;
+    white-space: nowrap;
+  }
+
+  .peek-close-btn:hover {
+    background: rgba(245, 245, 247, 0.98);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
+  }
+
+  .peek-close-btn:focus-visible {
+    outline: 2px solid #007aff;
+    outline-offset: 2px;
+  }
+
+  :global(html.dark) .peek-close-btn {
+    border-color: rgba(255, 255, 255, 0.1);
+    background: rgba(30, 30, 32, 0.92);
+    color: #f5f5f7;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.24);
+  }
+
+  :global(html.dark) .peek-close-btn:hover {
+    background: rgba(30, 30, 32, 0.98);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.32);
+  }
+
+  :global(html.dark) .peek-close-btn:focus-visible {
+    outline-color: #64d2ff;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .peek-close-btn {
+      transition: none;
     }
   }
 </style>

@@ -105,6 +105,11 @@
   // back to the tickets list.
   let resolvedDetailId: string | null = $state(null);
 
+  // Flipped once (false -> true) when the PGlite engine finishes
+  // booting. Never resets; a failed boot leaves it false so the
+  // peek surface keeps showing the blurred still.
+  let engineBooted = $state(false);
+
   // The real article ID for the library vote sub-section, resolved
   // once the engine boots.
   let resolvedArticleId: string | null = $state(null);
@@ -143,9 +148,11 @@
       if (e.articleIds.length > 0) {
         resolvedArticleId = e.articleIds[0] ?? null;
       }
+      engineBooted = true;
     })
     .catch(() => {
-      // Boot failure already surfaced by phone-main.ts console.error
+      // Boot failure already surfaced by phone-main.ts console.error.
+      // engineBooted stays false so the peek keeps showing a blurred still.
     });
 
   // -----------------------------------------------------------------------
@@ -509,6 +516,7 @@
       origin: store.origin,
       locationSeq: store.locationSeq,
       restartSeq: router.restartSeq,
+      engineReady: engineBooted,
     };
   }
 

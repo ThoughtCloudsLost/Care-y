@@ -103,14 +103,51 @@ describe("DemoLocationStore", () => {
       expect(store.origin).toBe("page-scroll");
     });
 
-    it("snaps to the phone when the chain fails to reach the section", async () => {
+    it("snaps to the phone when both the chain and force fail to converge", async () => {
       const { store, settleChain } = createHarness();
       store.setLocation("tickets", "sort", "page-click");
-      // Phone never leaves the login form
+      // Phone never leaves the login form. First ensureScreen attempt:
+      await settleChain();
+      // Force retry (second ensureScreen), still no convergence:
       await settleChain();
 
       expect(store.location).toEqual({ sectionId: "login", subSlug: null });
-      expect(store.origin).toBe("phone");
+      expect(store.origin).toBe("phone-correction");
+    });
+
+    it("uses phone-correction origin when convergence fails after force", async () => {
+      const { store, settleChain, commands } = createHarness();
+      store.setLocation("library", "vote", "page-click");
+      // First ensureScreen (initial attempt), phone stays on login:
+      await settleChain();
+      // Second ensureScreen (force retry), phone still on login:
+      await settleChain();
+
+      expect(store.origin).toBe("phone-correction");
+      // Both the initial attempt and the force retry called ensureScreen
+      expect(commands).toHaveLength(2);
+    });
+
+    it("does not correct when forcing succeeds", async () => {
+      const { store, phone, settleChain, commands } = createHarness();
+      store.setLocation("tickets", "sort", "page-click");
+      // First ensureScreen fails to converge (phone still on login):
+      await settleChain();
+      // Before the force retry resolves, move the phone to tickets
+      // to simulate the second attempt succeeding:
+      phone.feature = "tickets";
+      phone.detail = null;
+      phone.loginStage = null;
+      await settleChain();
+
+      // The location stays at the page-requested value, no correction
+      expect(store.location).toEqual({
+        sectionId: "tickets",
+        subSlug: "sort",
+      });
+      expect(store.origin).toBe("page-click");
+      // Two ensureScreen calls total (initial + force)
+      expect(commands).toHaveLength(2);
     });
 
     it("re-selecting the current location bumps the seq and re-drives", () => {

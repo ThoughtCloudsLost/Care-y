@@ -7,8 +7,10 @@
     FRAME_PAD_TOP,
     FRAME_PAD_BOTTOM,
     FRAME_PAD_X,
-    HOLE_GAP,
+    computeLineSegments,
+    type Segment,
   } from "./flow-layout.js";
+  import { setHeaderBottom } from "./flow-geometry.svelte.js";
 
   interface Props {
     section: Section;
@@ -47,74 +49,174 @@
   // Frame dodging
   //
   // The header is normal DOM (sticky at >=900px), so it cannot go through
-  // the flow layout engine. Instead it insets its text on whichever side
-  // the frame occupies. The tinted backdrop stays full width; only the
-  // inner content shrinks, which also keeps the measurement stable (the
-  // measured element's own box never changes as a result of the inset).
+  // the flow layout engine. It instead asks that engine's own segment
+  // function where a line at its position would be allowed to sit, then
+  // insets itself to match. Sharing computeLineSegments is what keeps the
+  // header's measure and centring identical to the body text below it.
+  //
+  // The tinted backdrop stays full width; only the inner content moves,
+  // which also keeps the measurement stable (the measured element's own
+  // box never changes as a result of the inset).
   // -----------------------------------------------------------------------
-
-  /** Below this the remaining column is too narrow to read, so give up
-   *  and let the frame overlap rather than squeezing to a sliver. */
-  const MIN_INTRO_TEXT = 220;
 
   let introEl = $state<HTMLDivElement | undefined>(undefined);
   let dodgeLeft = $state(0);
   let dodgeRight = $state(0);
+
+  /** Sticky offset from the CSS below. Both must move together. */
+  const STICKY_TOP = 64;
+  /** Width at or above which the header is sticky (matches the CSS). */
+  const STICKY_BREAKPOINT = 900;
+
+  // Cached geometry, re-measured only when the element or window
+  // resizes, never per scroll frame. `docTop` is stored in DOCUMENT
+  // space (rect.top + scrollY) because that is scroll-invariant; the
+  // viewport top is derived from it below. Caching the viewport rect
+  // directly would be wrong below the sticky breakpoint, where the
+  // header scrolls normally and its viewport rect moves every frame.
+  interface CachedBox {
+    docTop: number;
+    left: number;
+    width: number;
+    height: number;
+  }
+  let cachedBox = $state<CachedBox | null>(null);
+
+  // Scroll position, tracked as plain state. Reading window.scrollY does
+  // not force layout the way getBoundingClientRect does, so this is
+  // cheap to update per frame.
   let scrollY = $state(0);
+  let windowW = $state(0);
 
   $effect(() => {
-    function sync(): void {
+    function syncScroll(): void {
       scrollY = window.scrollY;
     }
-    sync();
-    window.addEventListener("scroll", sync, { passive: true });
-    window.addEventListener("resize", sync, { passive: true });
+    function syncWidth(): void {
+      windowW = window.innerWidth;
+    }
+    syncScroll();
+    syncWidth();
+    window.addEventListener("scroll", syncScroll, { passive: true });
+    window.addEventListener("resize", syncWidth, { passive: true });
     return () => {
-      window.removeEventListener("scroll", sync);
-      window.removeEventListener("resize", sync);
+      window.removeEventListener("scroll", syncScroll);
+      window.removeEventListener("resize", syncWidth);
     };
   });
 
   $effect(() => {
-    // The frame is viewport-fixed but a sticky header's viewport rect
-    // still moves as the page scrolls, so both are dependencies.
+    if (introEl === undefined) {
+      cachedBox = null;
+      return;
+    }
+    const el = introEl;
+
+    function measure(): void {
+      const r = el.getBoundingClientRect();
+      cachedBox = {
+        docTop: r.top + window.scrollY,
+        left: r.left,
+        width: r.width,
+        height: r.height,
+      };
+    }
+    measure();
+
+    const ro = new ResizeObserver(() => {
+      measure();
+    });
+    ro.observe(el);
+
+    // Window resize can reposition the element even without an element
+    // resize (e.g. the sticky offset shifts).
+    window.addEventListener("resize", measure, { passive: true });
+    return () => {
+      ro.disconnect();
+      window.removeEventListener("resize", measure);
+    };
+  });
+
+  $effect(() => {
     const fLeft = frameRect.left;
     const fTop = frameRect.top;
     const fW = frameRect.outerW;
     const fH = frameRect.outerH;
-    void scrollY;
 
-    if (introEl === undefined) {
+    const box = cachedBox;
+
+    if (introEl === undefined || box === null) {
       dodgeLeft = 0;
       dodgeRight = 0;
       return;
     }
 
-    const r = introEl.getBoundingClientRect();
-    const bandTop = fTop - FRAME_PAD_TOP;
-    const bandBottom = fTop + fH + FRAME_PAD_BOTTOM;
-    if (bandBottom <= r.top || bandTop >= r.bottom) {
-      dodgeLeft = 0;
-      dodgeRight = 0;
-      return;
-    }
+    // Derive the viewport top from the cached document position. Above
+    // the breakpoint the header is sticky, so it stops at STICKY_TOP
+    // once scrolled to; below it, it scrolls normally. Deriving rather
+    // than caching the viewport rect is what keeps this correct on
+    // narrow layouts, where the frame still overlaps the header.
+    const flowTop = box.docTop - scrollY;
+    const viewportTop =
+      windowW >= STICKY_BREAKPOINT ? Math.max(STICKY_TOP, flowTop) : flowTop;
+    const r = {
+      top: viewportTop,
+      left: box.left,
+      width: box.width,
+      height: box.height,
+    };
 
-    // Match the flow's horizontal clearance so the header and the body
-    // text below it line up against the same edge.
-    const gap = FRAME_PAD_X + HOLE_GAP;
-    const frameLeftEdge = fLeft - gap;
-    const frameRightEdge = fLeft + fW + gap;
+    // Build the padded hole in the header's own coordinate space, using
+    // the same padding constants the flow layout applies.
+    const hole = {
+      left: fLeft - FRAME_PAD_X - r.left,
+      top: fTop - FRAME_PAD_TOP - r.top,
+      right: fLeft + fW + FRAME_PAD_X - r.left,
+      bottom: fTop + fH + FRAME_PAD_BOTTOM - r.top,
+    };
 
-    // Keep the wider of the two sides and inset the other.
-    if (frameLeftEdge - r.left >= r.right - frameRightEdge) {
-      const inset = Math.max(0, r.right - frameLeftEdge);
-      dodgeRight = r.width - inset >= MIN_INTRO_TEXT ? inset : 0;
-      dodgeLeft = 0;
+    // Ask for the bands a single line spanning the header's full height
+    // would get. Height rather than a text line height because the whole
+    // header block has to clear the frame, not one row of it.
+    const segments = computeLineSegments(0, r.height, r.width, hole);
+
+    // Two bands means the frame splits the column. The header is one
+    // block of prose and cannot flow around it, so it picks a side.
+    //
+    // The two flanks come back equal (they are centred on the frame), so
+    // their widths cannot break the tie. Decide from the room each side
+    // actually has instead, which is what "the roomier side" means here.
+    // No bands at all means nothing fits: fall back to full width and
+    // let the frame overlap rather than collapsing the header.
+    let chosen: Segment | undefined;
+    if (segments.length > 1) {
+      const roomLeft = hole.left;
+      const roomRight = r.width - hole.right;
+      chosen = roomLeft >= roomRight ? segments.at(0) : segments.at(1);
     } else {
-      const inset = Math.max(0, frameRightEdge - r.left);
-      dodgeLeft = r.width - inset >= MIN_INTRO_TEXT ? inset : 0;
-      dodgeRight = 0;
+      chosen = segments.at(0);
     }
+    if (chosen === undefined) {
+      dodgeLeft = 0;
+      dodgeRight = 0;
+      return;
+    }
+
+    dodgeLeft = chosen.x;
+    dodgeRight = Math.max(0, r.width - (chosen.x + chosen.width));
+  });
+
+  // Publish the header's bottom edge so the selection band can sit just
+  // below it. Derived from the same cached box and sticky rule as the
+  // dodge above, so the two can never disagree about where the header
+  // ends.
+  $effect(() => {
+    const box = cachedBox;
+    if (box === null) return;
+    const flowTop = box.docTop - scrollY;
+    const viewportTop =
+      windowW >= STICKY_BREAKPOINT ? Math.max(STICKY_TOP, flowTop) : flowTop;
+    setHeaderBottom(viewportTop + box.height);
   });
 
   function msg(key: string): string {

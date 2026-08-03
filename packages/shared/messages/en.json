@@ -1838,7 +1838,8 @@
   "clients_filter_include_merged_yes": "Show merged",
   "clients_merged_label": "Merged",
   "sort_button_label": "{label}, {direction}",
-  "demo_app_title": "CARE-Y Demo",
+  "demo_app_brand": "CARE-Y",
+  "demo_app_title": "Interactive Handbook",
   "demo_scene_tickets": "Tickets",
   "demo_scene_search": "Search",
   "demo_theme_toggle": "Toggle dark mode",
@@ -1885,7 +1886,7 @@
   "demo_narrative_search_heading": "Searching encrypted data",
   "demo_narrative_search_body": "Search works entirely in the browser. Your device decrypts ticket content locally and matches your query against the plaintext. No search terms are ever sent to the server.",
   "demo_narrative_search_body2": "This means search results are as private as the tickets themselves. The server cannot log what you searched for or which results matched.",
-  "demo_narrative_tip": "Select a feature above, scroll down, or interact with the CARE-Y app in the phone to learn more about what it can do.",
+  "demo_narrative_tip": "Select a feature from the list, scroll down, or interact with the CARE-Y app in the phone to learn more about what it can do.",
   "demo_phone_frame_title": "CARE-Y app demo",
   "demo_progress_explored": "{seen} of {total} features explored",
   "demo_topic_sort": "Sort",
@@ -2022,5 +2023,7 @@
   "demo_entry_phone_heading": "Move the phone wherever you like",
   "demo_entry_phone_body": "Drag the phone by the grip above it, resize it from any edge, or use the toolbar buttons to shrink it, restore it, or switch to a desktop shaped window. The text reflows around wherever you put it. The link button breaks the connection between the phone and the story if you would rather explore one without moving the other.",
   "demo_entry_start_heading": "Getting started",
-  "demo_entry_start_body": "The demo begins at the login screen, where CARE-Y derives the encryption keys that protect everything else. Everything you see is fictional: the volunteers, the clients, and every ticket are invented for this walkthrough. You can restart at any point to come back to this page."
+  "demo_entry_start_body": "The demo begins at the login screen, where CARE-Y derives the encryption keys that protect everything else. Everything you see is fictional: the volunteers, the clients, and every ticket are invented for this walkthrough. You can restart at any point to come back to this page.",
+  "demo_peek_back_to": "Back to {section}",
+  "demo_figure_aria_label": "Hold to preview {sub}"
 }

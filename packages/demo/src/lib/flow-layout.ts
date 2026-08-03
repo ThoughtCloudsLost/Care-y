@@ -12,16 +12,35 @@ import type { SectionId } from "./scroll-sections.js";
 // Public types
 // -----------------------------------------------------------------------
 
-export type FlowBlockKind =
+export type FlowTextKind =
   "section-title" | "section-desc" | "sub-heading" | "sub-body";
 
-export interface FlowBlock {
+export type FlowBlockKind = FlowTextKind | "figure";
+
+/** A text block (title, description, heading, or body). */
+export interface FlowTextBlock {
   readonly id: string;
   readonly sectionId: SectionId;
   readonly subSlug: string | null;
-  readonly kind: FlowBlockKind;
+  readonly kind: FlowTextKind;
   readonly text: string;
 }
+
+/** An inline figure block (region clip). Has no text; sized by aspect ratio. */
+export interface FlowFigureBlock {
+  readonly id: string;
+  readonly sectionId: SectionId;
+  readonly subSlug: string | null;
+  readonly kind: "figure";
+  /** Intrinsic width / height ratio of the clip region. */
+  readonly aspectRatio: number;
+}
+
+/**
+ * Discriminated union: the layout engine places text and figure blocks
+ * through the same pipeline; the `kind` field separates them.
+ */
+export type FlowBlock = FlowTextBlock | FlowFigureBlock;
 
 export interface FlowHole {
   readonly left: number;
@@ -48,6 +67,7 @@ export interface FlowBlockGeometry {
 export interface FlowLayoutResult {
   readonly lines: FlowLine[];
   readonly blocks: FlowBlockGeometry[];
+  readonly figures: FlowFigureGeometry[];
   readonly totalHeight: number;
 }
 
@@ -61,6 +81,15 @@ export interface FlowKindMetrics {
 
 /** Full set of metrics keyed by block kind. */
 export type FlowMetrics = Record<FlowBlockKind, FlowKindMetrics>;
+
+/** Geometry for a positioned figure in the layout output. */
+export interface FlowFigureGeometry {
+  readonly blockIndex: number;
+  readonly x: number;
+  readonly y: number;
+  readonly width: number;
+  readonly height: number;
+}
 
 // -----------------------------------------------------------------------
 // Defaults tuned to the old StorySection look (Atkinson Hyperlegible Next)
@@ -82,12 +111,16 @@ const SECTION_DESC_METRICS: FlowKindMetrics = {
   marginBottom: 16,
 };
 
-/** Sub heading: 18px, weight 700. */
+/**
+ * Sub heading: 18px, weight 700. The bottom margin carries the hairline
+ * rule FlowStory draws under each heading, so it is wider than the gap
+ * the type alone would need.
+ */
 const SUB_HEADING_METRICS: FlowKindMetrics = {
   fontSize: 18,
   lineHeight: 24,
-  marginTop: 32,
-  marginBottom: 8,
+  marginTop: 40,
+  marginBottom: 18,
 };
 
 /** Sub body: 15px, 1.6 line height ratio. */
@@ -98,11 +131,33 @@ const SUB_BODY_METRICS: FlowKindMetrics = {
   marginBottom: 0,
 };
 
+/**
+ * Figure block: no font rendering. fontSize and lineHeight are unused
+ * but required by FlowKindMetrics. The margins separate the clip from
+ * surrounding prose.
+ */
+const FIGURE_METRICS: FlowKindMetrics = {
+  fontSize: 0,
+  lineHeight: 0,
+  marginTop: 16,
+  marginBottom: 16,
+};
+
+/**
+ * Maximum width for a figure in px. Region crops are roughly 390x220
+ * (aspect ~1.77). At 200px width the figure is about a quarter of a
+ * typical narrow viewport (390px), leaving room for prose above and
+ * below. On wider viewports the reading measure (MAX_MEASURE = 620)
+ * already constrains the band, so 200px keeps figures compact there too.
+ */
+export const MAX_FIGURE_WIDTH = 200;
+
 export const DEFAULT_METRICS: FlowMetrics = {
   "section-title": SECTION_TITLE_METRICS,
   "section-desc": SECTION_DESC_METRICS,
   "sub-heading": SUB_HEADING_METRICS,
   "sub-body": SUB_BODY_METRICS,
+  figure: FIGURE_METRICS,
 };
 
 // -----------------------------------------------------------------------
@@ -176,9 +231,30 @@ export const BOTH_SIDES_MIN = 240;
  */
 export const BALANCE_RATIO = 0.6;
 
-interface Segment {
+/**
+ * Maximum measure for a single band of text, in px. Roughly 62
+ * characters at the 15px body size, which is the comfortable reading
+ * range for continuous prose.
+ *
+ * Applied only when the text has ONE band to live in (no frame overlap,
+ * or the frame pushed everything to one side). When the frame splits the
+ * column into two flanking bands, each band is already narrower than
+ * this, so capping would starve both sides instead of improving them.
+ */
+export const MAX_MEASURE = 620;
+
+export interface Segment {
   readonly x: number;
   readonly width: number;
+}
+
+/**
+ * Centre a band's text within the space available to it, capped at
+ * `maxWidth`. Bands at or under the cap are returned untouched.
+ */
+function capAndCentre(seg: Segment, maxWidth: number): Segment {
+  if (seg.width <= maxWidth) return seg;
+  return { x: seg.x + (seg.width - maxWidth) / 2, width: maxWidth };
 }
 
 /**
@@ -189,8 +265,13 @@ interface Segment {
  * Both-side wrap only engages when both sides clear BOTH_SIDES_MIN and
  * the narrow/wide ratio meets BALANCE_RATIO. Otherwise, a single
  * segment on the wider side is used when it clears MIN_SEGMENT.
+ *
+ * Single-band results are capped to MAX_MEASURE and centred in whatever
+ * space that band occupies, so the column tracks the frame: it centres
+ * in the whole container when the frame is elsewhere, and in the
+ * remaining band when the frame takes one side.
  */
-function computeSegments(
+export function computeLineSegments(
   lineY: number,
   lineHeight: number,
   containerWidth: number,
@@ -198,12 +279,12 @@ function computeSegments(
 ): Segment[] {
   // No hole or line band does not overlap the hole vertically
   if (hole === null || lineY + lineHeight <= hole.top || lineY >= hole.bottom) {
-    return [{ x: 0, width: containerWidth }];
+    return [capAndCentre({ x: 0, width: containerWidth }, MAX_MEASURE)];
   }
 
   // Hole fully outside the container horizontally
   if (hole.right <= 0 || hole.left >= containerWidth) {
-    return [{ x: 0, width: containerWidth }];
+    return [capAndCentre({ x: 0, width: containerWidth }, MAX_MEASURE)];
   }
 
   const leftWidth = Math.max(0, hole.left - HOLE_GAP);
@@ -219,18 +300,30 @@ function computeSegments(
     maxSide > 0 &&
     minSide / maxSide >= BALANCE_RATIO
   ) {
+    // Centre the text on the FRAME, not on each band. Both flanks take
+    // the same width and hug the frame's edges, so the text block reads
+    // as one column with the phone sitting in the middle of it rather
+    // than as two ragged columns pinned to the container's edges.
+    //
+    // The width is the narrower of the two sides so the result stays
+    // symmetric; MAX_MEASURE still bounds each flank, though the gating
+    // above means the bands are rarely that wide.
+    const flank = Math.min(leftWidth, rightWidth, MAX_MEASURE);
+    const leftEnd = hole.left - HOLE_GAP;
     return [
-      { x: 0, width: leftWidth },
-      { x: rightStart, width: rightWidth },
+      { x: leftEnd - flank, width: flank },
+      { x: rightStart, width: flank },
     ];
   }
 
   // Single-side wrap on the wider side when it clears MIN_SEGMENT.
+  // Capped and centred within that side, so the column visually centres
+  // in the space the frame left behind rather than hugging its edge.
   if (maxSide >= MIN_SEGMENT) {
     if (leftWidth >= rightWidth) {
-      return [{ x: 0, width: leftWidth }];
+      return [capAndCentre({ x: 0, width: leftWidth }, MAX_MEASURE)];
     }
-    return [{ x: rightStart, width: rightWidth }];
+    return [capAndCentre({ x: rightStart, width: rightWidth }, MAX_MEASURE)];
   }
 
   return [];
@@ -258,6 +351,7 @@ export function computeFlowLayout(
 ): FlowLayoutResult {
   const lines: FlowLine[] = [];
   const blockGeometries: FlowBlockGeometry[] = [];
+  const figures: FlowFigureGeometry[] = [];
 
   let y = 0;
 
@@ -271,13 +365,90 @@ export function computeFlowLayout(
       y += km.marginTop;
     }
 
+    // Figure blocks occupy a rect instead of text lines.
+    if (block.kind === "figure") {
+      const figTopY = y;
+
+      // Use the current band to size the figure. Probe segments at the
+      // figure's top with a 1px tall band (the figure does not wrap text,
+      // so we only need horizontal availability).
+      let placed = false;
+      // Safety bound: avoid an infinite loop if the hole spans the entire
+      // container. After jumping below the hole once, segments must open.
+      let jumpCount = 0;
+      while (!placed && jumpCount < 2) {
+        const segments = computeLineSegments(y, 1, containerWidth, hole);
+
+        if (segments.length === 0) {
+          if (hole !== null) {
+            y = hole.bottom + HOLE_GAP;
+            jumpCount++;
+            continue;
+          }
+          // No hole and no segments: use full container width.
+          break;
+        }
+
+        // Pick the widest segment band for the figure.
+        let bestSeg = segments.at(0);
+        if (bestSeg === undefined) break;
+        for (let si = 1; si < segments.length; si++) {
+          const seg = segments.at(si);
+          if (seg !== undefined && seg.width > bestSeg.width) {
+            bestSeg = seg;
+          }
+        }
+
+        const figW = Math.min(bestSeg.width, MAX_FIGURE_WIDTH);
+        const figH = Math.round(figW / block.aspectRatio);
+        // Centre within the chosen band.
+        const figX = bestSeg.x + (bestSeg.width - figW) / 2;
+
+        figures.push({
+          blockIndex: bi,
+          x: figX,
+          y,
+          width: figW,
+          height: figH,
+        });
+
+        y += figH;
+        placed = true;
+      }
+
+      // When no segments opened even after jumping, use the container
+      // width and cap to MAX_FIGURE_WIDTH.
+      if (!placed) {
+        const figW = Math.min(containerWidth, MAX_FIGURE_WIDTH);
+        const figH = Math.round(figW / block.aspectRatio);
+        const figX = (containerWidth - figW) / 2;
+        figures.push({ blockIndex: bi, x: figX, y, width: figW, height: figH });
+        y += figH;
+      }
+
+      const bottomY = y + km.marginBottom;
+      blockGeometries.push({
+        topY: figTopY,
+        bottomY,
+        firstLineIndex: lines.length,
+        lineCount: 0,
+      });
+      y = bottomY;
+      continue;
+    }
+
     const blockTopY = y;
     const firstLineIndex = lines.length;
     let cursor = filler.startCursor(bi);
 
-    // Fill lines for this block
+    // Fill lines for this text block
     for (;;) {
-      const segments = computeSegments(y, km.lineHeight, containerWidth, hole);
+      const segments = computeLineSegments(
+        y,
+        km.lineHeight,
+        containerWidth,
+        hole,
+      );
 
       if (segments.length === 0) {
         // Both segments dropped by MIN_SEGMENT floor. Jump below the hole.
@@ -344,6 +515,7 @@ export function computeFlowLayout(
   return {
     lines,
     blocks: blockGeometries,
+    figures,
     totalHeight: y,
   };
 }
@@ -368,9 +540,13 @@ export function hitTestBlock(
     if (bg === undefined) continue;
     if (y < bg.topY || y >= bg.bottomY) continue;
 
-    // Check if x falls within any of this block's lines at this y
+    // Figure blocks are not claimed by hit testing; clicks on the
+    // video are the figure's own concern (long-press, peek, etc.).
     const srcBlock = blocks.at(bi);
     if (srcBlock === undefined) continue;
+    if (srcBlock.kind === "figure") continue;
+
+    // Check if x falls within any of this block's lines at this y
     const km = metrics[srcBlock.kind];
     for (
       let li = bg.firstLineIndex;
