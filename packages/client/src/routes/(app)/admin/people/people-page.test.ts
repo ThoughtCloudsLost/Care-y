@@ -320,6 +320,8 @@ vi.mock("$lib/paraglide/messages.js", async (importOriginal) => ({
   admin_users_select_mode: () => "Select",
   admin_users_filter_queue: () => "Queue",
   search_inline_trigger: () => "Search",
+  admin_tab_roles: () => "Roles",
+  roles_title: () => "Roles",
 }));
 
 // vi.mock required: Svelte component with Konsta/Lucide dependencies that
@@ -366,6 +368,12 @@ vi.mock("$lib/shell/ShellPopover.svelte", async () => ({
   default: (
     await import("$lib/components/tickets/test-helpers/PassthroughShell.svelte")
   ).default,
+}));
+
+// care-y-ignore-next-line mock-factory-unguarded -- component stub: single default export, passthrough cannot satisfy the component prop types
+vi.mock("$lib/components/admin/RolePermissionsSection.svelte", async () => ({
+  default: (await import("./test-helpers/StubRolePermissionsSection.svelte"))
+    .default,
 }));
 
 vi.mock("$lib/components/filters/filter-types.js", async (importOriginal) => ({
@@ -762,6 +770,36 @@ describe("People page", () => {
       const ctx = mockNavbarCtx.current as Record<string, unknown>;
       const hidden = ctx.subnavbarHidden as () => boolean;
       expect(hidden()).toBe(false);
+    });
+  });
+
+  describe("roles tab", () => {
+    it("renders RolePermissionsSection when ?tab=roles and user has MANAGE_ROLES", () => {
+      setPermissions("manage_users", "manage_queues", "manage_roles");
+      setUrl("/admin/people?tab=roles");
+      renderPage();
+
+      const panel = screen.getByRole("tabpanel");
+      expect(panel.id).toBe("panel-roles");
+      expect(panel.getAttribute("aria-labelledby")).toBe("tab-roles");
+      expect(screen.getByText("Role permissions loading...")).toBeTruthy();
+    });
+
+    it("does not render roles panel when user lacks MANAGE_ROLES", () => {
+      setPermissions("manage_users", "manage_queues");
+      setUrl("/admin/people?tab=roles");
+      renderPage();
+
+      // Falls back to default tab (users) since roles tab is gated
+      expect(screen.queryByText("Role permissions loading...")).toBeNull();
+    });
+
+    it("allows access when user only has MANAGE_ROLES", () => {
+      setPermissions("manage_roles");
+      renderPage();
+
+      // hasAccess should be true, no redirect
+      expect(mockGoto).not.toHaveBeenCalled();
     });
   });
 

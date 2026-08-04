@@ -126,6 +126,7 @@ export const adminKeys = {
     [...adminKeys.all, "auditLog", params] as const,
   escalationRules: (queueId: string) =>
     [...adminKeys.all, "escalationRules", queueId] as const,
+  rolePermissions: () => [...adminKeys.all, "rolePermissions"] as const,
 };
 
 export const queueKeys = {
