@@ -630,6 +630,14 @@ export interface EscalationRuleFiringsTable {
   fired_at: Generated<Date>;
 }
 
+// --- Role permission overrides ---
+
+export interface RolePermissionOverridesTable {
+  role_id: string;
+  permission: string;
+  enabled: boolean;
+}
+
 export interface TenantDatabase {
   users: UsersTable;
   sessions: SessionsTable;
@@ -689,6 +697,8 @@ export interface TenantDatabase {
   // Escalation rules
   escalation_rules: EscalationRulesTable;
   escalation_rule_firings: EscalationRuleFiringsTable;
+  // Role permission overrides
+  role_permission_overrides: RolePermissionOverridesTable;
   // Shifts (shifts, shift_occurrences)
   // Client portal (portal_channels)
 }

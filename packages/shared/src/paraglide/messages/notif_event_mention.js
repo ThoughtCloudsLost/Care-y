@@ -10,7 +10,7 @@ const en_notif_event_mention = /** @type {(inputs: Notif_Event_MentionInputs) =>
 };
 
 const es_notif_event_mention = /** @type {(inputs: Notif_Event_MentionInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Mencion`)
+	return /** @type {LocalizedString} */ (`Mención`)
 };
 
 /**

@@ -2327,5 +2327,10 @@
   "escalation_delete_confirm_body": "The rule \"{rule}\" will be removed permanently.",
   "escalation_rule_created": "Escalation rule created.",
   "escalation_rule_updated": "Escalation rule updated.",
-  "escalation_rule_deleted": "Escalation rule deleted."
+  "escalation_rule_deleted": "Escalation rule deleted.",
+  "notif_ticket_sheet_title": "Notifications for this {ticket}",
+  "notif_ticket_reset": "Reset to my defaults",
+  "notif_ticket_reset_success": "Ticket notifications reset to defaults",
+  "notif_ticket_pref_saved": "Ticket preference saved",
+  "notif_ticket_panel_action": "Notification channels"
 }

@@ -31,6 +31,9 @@ export {
   setPiiRetentionInputSchema,
   setUserActiveInputSchema,
   listUsersOutputItemSchema,
+  permissionValueSchema,
+  setRolePermissionInputSchema,
+  rolePermissionsOutputSchema,
 } from "./schemas/auth.js";
 
 // --- Roles and permissions ---

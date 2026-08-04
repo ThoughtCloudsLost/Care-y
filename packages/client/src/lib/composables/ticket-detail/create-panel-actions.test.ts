@@ -1,11 +1,15 @@
 import { describe, it, expect, vi, beforeEach, type Mock } from "vitest";
 import { createPanelActions } from "./create-panel-actions.svelte.js";
+import type * as Messages from "$lib/paraglide/messages.js";
+import type * as ToastMod from "$lib/stores/toast.svelte.js";
 
-vi.mock("$lib/paraglide/messages.js", () => ({
+vi.mock("$lib/paraglide/messages.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof Messages>()),
   error_generic: () => "Error",
 }));
 
-vi.mock("$lib/stores/toast.svelte.js", () => ({
+vi.mock("$lib/stores/toast.svelte.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof ToastMod>()),
   toastStore: { show: vi.fn() },
 }));
 
@@ -25,6 +29,7 @@ describe("createPanelActions", () => {
   let onassign: Mock;
   let onphone: Mock;
   let oneditcontent: Mock;
+  let onnotifications: Mock;
   let toastStore: { show: Mock; current: null; dismiss: Mock };
 
   beforeEach(() => {
@@ -39,6 +44,7 @@ describe("createPanelActions", () => {
     onassign = vi.fn();
     onphone = vi.fn();
     oneditcontent = vi.fn();
+    onnotifications = vi.fn();
     toastStore = { show: vi.fn(), current: null, dismiss: vi.fn() };
   });
 
@@ -57,6 +63,7 @@ describe("createPanelActions", () => {
       onassign,
       onphone,
       oneditcontent,
+      onnotifications,
     });
   }
 
@@ -73,6 +80,11 @@ describe("createPanelActions", () => {
   it("dispatches editContent to oneditcontent callback", () => {
     make().dispatch("editContent");
     expect(oneditcontent).toHaveBeenCalledOnce();
+  });
+
+  it("dispatches notifications to onnotifications callback", () => {
+    make().dispatch("notifications");
+    expect(onnotifications).toHaveBeenCalledOnce();
   });
 
   it("dispatches take mutation with ticketId", () => {
