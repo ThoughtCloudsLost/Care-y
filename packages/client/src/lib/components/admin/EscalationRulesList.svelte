@@ -1,6 +1,5 @@
 <script lang="ts">
   import {
-    Block,
     BlockTitle,
     List,
     ListItem,
