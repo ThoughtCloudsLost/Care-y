@@ -323,6 +323,32 @@ export async function deleteRule(
   return result.numDeletedRows > 0n;
 }
 
+/** Check whether a queue row exists. */
+export async function queueExists(
+  tDb: Kysely<TenantDatabase>,
+  queueId: string,
+): Promise<boolean> {
+  const row = await tDb
+    .selectFrom("queues")
+    .select("id")
+    .where("id", "=", queueId)
+    .executeTakeFirst();
+  return row !== undefined;
+}
+
+/** Fetch a single rule by id (for pre-delete audit metadata). */
+export async function getRuleById(
+  tDb: Kysely<TenantDatabase>,
+  ruleId: string,
+): Promise<EscalationRule | null> {
+  const row = await tDb
+    .selectFrom("escalation_rules")
+    .selectAll()
+    .where("id", "=", ruleId)
+    .executeTakeFirst();
+  return row ? mapRow(row) : null;
+}
+
 // ---------------------------------------------------------------------------
 // Internal helpers
 // ---------------------------------------------------------------------------

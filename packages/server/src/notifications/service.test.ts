@@ -10,6 +10,10 @@ import type { EmailSender } from "../email/email-sender.js";
 import type { PushNotificationSender } from "./push.js";
 import type { JobQueue } from "../jobs/queue.js";
 import type { NotificationRecipientList } from "../tickets/notification-recipients.js";
+import type {
+  NotificationPreferencesService,
+  DispatchAllowLists,
+} from "./preferences.js";
 import type { Kysely } from "kysely";
 import type { TenantDatabase } from "../db/types.js";
 import { notificationEventTypeSchema, sseEventSchema } from "@care-y/shared";
@@ -71,6 +75,37 @@ function mockJobQueue(): JobQueue & { enqueuedJobs: unknown[] } {
   };
 }
 
+/**
+ * Returns an all-allowed preferences stub by default. Pass `overrides` to
+ * customize specific allow lists, or `throwOnResolve` to simulate a query
+ * failure for the fail-open test.
+ */
+function mockPreferences(
+  opts: {
+    overrides?: Partial<DispatchAllowLists>;
+    throwOnResolve?: boolean;
+  } = {},
+): NotificationPreferencesService {
+  return {
+    getEffective: vi.fn(async () => true),
+    resolveForDispatch: vi.fn(async (_tDb, userIds) => {
+      if (opts.throwOnResolve) {
+        throw new Error("preferences DB unreachable");
+      }
+      const all = [...userIds];
+      return {
+        pushAllowed: opts.overrides?.pushAllowed ?? all,
+        emailAllowed: opts.overrides?.emailAllowed ?? all,
+        smsAllowed: opts.overrides?.smsAllowed ?? all,
+      };
+    }),
+    set: vi.fn(async () => undefined),
+    listForUser: vi.fn(async () => []),
+    reset: vi.fn(async () => undefined),
+    assertScopeAccessible: vi.fn(async () => undefined),
+  };
+}
+
 const TEST_RECIPIENTS: NotificationRecipientList = {
   recipients: [
     { userId: "user-1", source: "owner" },
@@ -90,6 +125,7 @@ describe("NotificationService.dispatch", () => {
       emailSender: mockEmailSender(),
       pushSender: mockPushSender(),
       jobQueue: mockJobQueue(),
+      preferences: mockPreferences(),
     });
 
     await svc.dispatch(
@@ -121,6 +157,7 @@ describe("NotificationService.dispatch", () => {
       emailSender: mockEmailSender(),
       pushSender: mockPushSender(),
       jobQueue,
+      preferences: mockPreferences(),
     });
 
     await svc.dispatch(
@@ -150,6 +187,7 @@ describe("NotificationService.dispatch", () => {
       emailSender: mockEmailSender(),
       pushSender,
       jobQueue: mockJobQueue(),
+      preferences: mockPreferences(),
     });
 
     await svc.dispatch(
@@ -174,6 +212,7 @@ describe("NotificationService.dispatch", () => {
       emailSender: mockEmailSender(),
       pushSender,
       jobQueue,
+      preferences: mockPreferences(),
     });
 
     await svc.dispatch(
@@ -198,6 +237,7 @@ describe("NotificationService.dispatch", () => {
       emailSender: mockEmailSender(),
       pushSender: mockPushSender(),
       jobQueue: mockJobQueue(),
+      preferences: mockPreferences(),
     });
 
     await svc.dispatch(
@@ -235,6 +275,7 @@ describe("NotificationService.dispatch", () => {
       emailSender: mockEmailSender(),
       pushSender,
       jobQueue,
+      preferences: mockPreferences(),
     });
 
     await svc.dispatch(
@@ -275,6 +316,7 @@ describe("NotificationService.dispatch", () => {
       emailSender: mockEmailSender(),
       pushSender: mockPushSender(),
       jobQueue: failingQueue,
+      preferences: mockPreferences(),
     });
 
     // The ticket routes catch and log this rejection; dispatch itself must
@@ -292,6 +334,153 @@ describe("NotificationService.dispatch", () => {
       ),
     ).rejects.toThrow("job queue unavailable");
   });
+
+  it("excludes push-disabled recipients from pushSender but SSE still includes them", async () => {
+    const sse = mockSse();
+    const pushSender = mockPushSender();
+    // user-1 has push disabled; user-2 still allowed
+    const prefs = mockPreferences({
+      overrides: {
+        pushAllowed: ["user-2"],
+        emailAllowed: ["user-1", "user-2"],
+        smsAllowed: ["user-1", "user-2"],
+      },
+    });
+    const svc = createNotificationService({
+      sse,
+      emailSender: mockEmailSender(),
+      pushSender,
+      jobQueue: mockJobQueue(),
+      preferences: prefs,
+    });
+
+    await svc.dispatch(
+      {} as Kysely<TenantDatabase>,
+      "org_test-1",
+      "myorg",
+      "ticket_assigned",
+      "ticket-uuid",
+      "queue-uuid",
+      TEST_RECIPIENTS,
+    );
+
+    // SSE broadcasts to all recipients (never filtered by preferences)
+    const broadcastArgs = (sse.broadcast as ReturnType<typeof vi.fn>).mock
+      .calls[0] as unknown[];
+    expect(broadcastArgs[1]).toEqual(["user-1", "user-2"]);
+
+    // Push only to user-2
+    expect(pushSender.sendToUsers).toHaveBeenCalledTimes(1);
+    const pushArgs = (pushSender.sendToUsers as ReturnType<typeof vi.fn>).mock
+      .calls[0] as unknown[];
+    expect(pushArgs[1]).toEqual(["user-2"]);
+  });
+
+  it("skips email enqueue entirely when all recipients have email disabled", async () => {
+    const jobQueue = mockJobQueue();
+    const prefs = mockPreferences({
+      overrides: {
+        pushAllowed: ["user-1", "user-2"],
+        emailAllowed: [],
+        smsAllowed: ["user-1", "user-2"],
+      },
+    });
+    const svc = createNotificationService({
+      sse: mockSse(),
+      emailSender: mockEmailSender(),
+      pushSender: mockPushSender(),
+      jobQueue,
+      preferences: prefs,
+    });
+
+    await svc.dispatch(
+      {} as Kysely<TenantDatabase>,
+      "org_test-1",
+      "myorg",
+      "ticket_created",
+      "ticket-uuid",
+      "queue-uuid",
+      TEST_RECIPIENTS,
+    );
+
+    // No email job enqueued at all
+    expect(jobQueue.enqueuedJobs).toHaveLength(0);
+  });
+
+  it("falls back to all-allowed when preferences service throws", async () => {
+    const errorSpy = vi
+      .spyOn(console, "error")
+      .mockImplementation(() => undefined);
+    try {
+      const sse = mockSse();
+      const pushSender = mockPushSender();
+      const jobQueue = mockJobQueue();
+      const prefs = mockPreferences({ throwOnResolve: true });
+      const svc = createNotificationService({
+        sse,
+        emailSender: mockEmailSender(),
+        pushSender,
+        jobQueue,
+        preferences: prefs,
+      });
+
+      await svc.dispatch(
+        {} as Kysely<TenantDatabase>,
+        "org_test-1",
+        "myorg",
+        "ticket_assigned",
+        "ticket-uuid",
+        "queue-uuid",
+        TEST_RECIPIENTS,
+      );
+
+      // Dispatch proceeds with all recipients on every channel
+      expect(sse.broadcast).toHaveBeenCalledTimes(1);
+      expect(pushSender.sendToUsers).toHaveBeenCalledTimes(1);
+      expect(jobQueue.enqueuedJobs).toHaveLength(1);
+
+      // The fallback logged the error (no PII in the log)
+      expect(errorSpy).toHaveBeenCalled();
+      const logged = errorSpy.mock.calls
+        .map((call) => call.map(String).join(" "))
+        .join("\n");
+      expect(logged).toContain("falling back to all-allowed");
+    } finally {
+      errorSpy.mockRestore();
+    }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// dispatchTicketless preference filtering
+// ---------------------------------------------------------------------------
+
+describe("NotificationService.dispatchTicketless preference filtering", () => {
+  it("consults global scope only (no ticket or queue forwarded to resolveForDispatch)", async () => {
+    const prefs = mockPreferences();
+    const svc = createNotificationService({
+      sse: mockSse(),
+      emailSender: mockEmailSender(),
+      pushSender: mockPushSender(),
+      jobQueue: mockJobQueue(),
+      preferences: prefs,
+    });
+
+    await svc.dispatchTicketless(
+      {} as Kysely<TenantDatabase>,
+      "org_test-1",
+      "myorg",
+      "voicemail_quarantined",
+      ["admin-1"],
+    );
+
+    expect(prefs.resolveForDispatch).toHaveBeenCalledTimes(1);
+    const resolveArgs = (prefs.resolveForDispatch as ReturnType<typeof vi.fn>)
+      .mock.calls[0] as unknown[];
+    // ticketId (arg index 3) and queueId (arg index 4) must be undefined
+    expect(resolveArgs[3]).toBeUndefined();
+    expect(resolveArgs[4]).toBeUndefined();
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -306,6 +495,7 @@ describe("NotificationService.dispatchTicketless", () => {
       emailSender: mockEmailSender(),
       pushSender: mockPushSender(),
       jobQueue: mockJobQueue(),
+      preferences: mockPreferences(),
     });
 
     await svc.dispatchTicketless(
@@ -338,6 +528,7 @@ describe("NotificationService.dispatchTicketless", () => {
       emailSender: mockEmailSender(),
       pushSender,
       jobQueue: mockJobQueue(),
+      preferences: mockPreferences(),
     });
 
     const tDb = {} as Kysely<TenantDatabase>;
@@ -360,6 +551,7 @@ describe("NotificationService.dispatchTicketless", () => {
       emailSender: mockEmailSender(),
       pushSender: mockPushSender(),
       jobQueue,
+      preferences: mockPreferences(),
     });
 
     await svc.dispatchTicketless(
@@ -393,6 +585,7 @@ describe("NotificationService.dispatchTicketless", () => {
       emailSender: mockEmailSender(),
       pushSender,
       jobQueue,
+      preferences: mockPreferences(),
     });
 
     await svc.dispatchTicketless(
