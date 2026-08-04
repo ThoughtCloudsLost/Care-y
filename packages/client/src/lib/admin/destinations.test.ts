@@ -42,8 +42,9 @@ describe("getVisibleDestinations", () => {
     const permissions = new Set([Permission.MANAGE_USERS]);
     const visible = getVisibleDestinations(permissions);
 
-    expect(visible.length).toBe(1);
-    expect(visible[0]!.id).toBe("users");
+    // The audit log destination gates on MANAGE_USERS too, mirroring the
+    // manager-level server endpoint behind it.
+    expect(visible.map((d) => d.id)).toEqual(["users", "audit-log"]);
   });
 
   it("returns multiple destinations for overlapping permissions", () => {
@@ -53,8 +54,7 @@ describe("getVisibleDestinations", () => {
     ]);
     const visible = getVisibleDestinations(permissions);
 
-    expect(visible.length).toBe(2);
-    expect(visible.map((d) => d.id)).toEqual(["users", "queues"]);
+    expect(visible.map((d) => d.id)).toEqual(["users", "queues", "audit-log"]);
   });
 
   it("returns empty array when no permissions match", () => {

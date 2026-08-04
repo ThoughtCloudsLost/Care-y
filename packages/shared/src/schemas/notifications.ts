@@ -114,6 +114,7 @@ export const auditEventTypeSchema = z.enum([
   "voicemail_quarantine_dismissed",
   "client_alias_changed",
   "client_phone_changed",
+  "ticket_content_updated",
 ]);
 export type AuditEventType = z.infer<typeof auditEventTypeSchema>;
 

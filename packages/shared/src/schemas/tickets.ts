@@ -518,3 +518,27 @@ export const searchClientsInputSchema = z.object({
   limit: z.number().int().min(1).max(50).default(20),
 });
 export type SearchClientsInput = z.infer<typeof searchClientsInputSchema>;
+
+// --- Ticket content editing (7.5b) ---
+
+export const updateTicketContentInputSchema = z
+  .object({
+    ticketId: z.uuid(),
+    encryptedTitle: base64String("encryptedTitle")
+      .refine((s) => s.length <= 4 * 1024, "encryptedTitle too large")
+      .optional(),
+    encryptedDescription: base64String("encryptedDescription")
+      .refine((s) => s.length <= 128 * 1024, "encryptedDescription too large")
+      .optional(),
+    keyGeneration: z.uuid(),
+  })
+  .refine(
+    (d) =>
+      d.encryptedTitle !== undefined || d.encryptedDescription !== undefined,
+    {
+      message: "Provide at least one of encryptedTitle or encryptedDescription",
+    },
+  );
+export type UpdateTicketContentInput = z.infer<
+  typeof updateTicketContentInputSchema
+>;

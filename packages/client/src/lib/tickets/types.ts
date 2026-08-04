@@ -11,4 +11,5 @@ export type TicketAction =
   | "reopen"
   | "watch"
   | "unwatch"
+  | "editContent"
   | "cancel";

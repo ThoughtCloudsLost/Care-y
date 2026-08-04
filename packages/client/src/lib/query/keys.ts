@@ -120,6 +120,10 @@ export const adminKeys = {
   queueAssignments: () => [...adminKeys.all, "queue-assignments"] as const,
   quarantine: () => [...adminKeys.all, "quarantine"] as const,
   intakeQueue: () => [...adminKeys.all, "intakeQueue"] as const,
+  callLog: (params: Record<string, unknown>) =>
+    [...adminKeys.all, "callLog", params] as const,
+  auditLog: (params: Record<string, unknown>) =>
+    [...adminKeys.all, "auditLog", params] as const,
 };
 
 export const queueKeys = {

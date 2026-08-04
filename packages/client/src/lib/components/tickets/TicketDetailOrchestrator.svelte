@@ -54,6 +54,7 @@
   import {
     createDeleteConfirm,
     createNoteEdit,
+    createContentEdit,
   } from "$lib/composables/ticket-detail/create-overlay-state.svelte.js";
   import { copyToClipboard } from "$lib/composables/ticket-detail/clipboard-copy.js";
   import {
@@ -608,6 +609,8 @@
       ticketRouter.createFollowUp.mutate(args),
   });
 
+  const contentEdit = createContentEdit();
+
   const panelActions = createPanelActions({
     getTicketId: () => ticketId,
     toastStore,
@@ -631,6 +634,10 @@
     },
     onphone: () => {
       phonePopoverOpen = true;
+    },
+    oneditcontent: () => {
+      closePanel();
+      contentEdit.open();
     },
   });
 
@@ -1040,6 +1047,7 @@
   currentAssigneeId={ticket?.assignedTo ?? null}
   {deleteConfirm}
   {noteEdit}
+  {contentEdit}
   {exposureHint}
   {lightbox}
   {contextMenu}

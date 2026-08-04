@@ -2180,4 +2180,272 @@ describe.skipIf(!process.env.DATABASE_URL)("TicketService (DB)", () => {
     expect(ticket!.clientPhoneEncrypted).not.toBeNull();
     expect(Buffer.isBuffer(ticket!.clientPhoneEncrypted)).toBe(true);
   });
+
+  // --- updateContent (7.5b) ---
+
+  describe("updateContent", () => {
+    async function createContentFixture(): Promise<{
+      userId: string;
+      ticketId: string;
+      keyGeneration: string;
+    }> {
+      const { userId, clientId, queueId } = await createClientFixture();
+      const keyGen = crypto.randomUUID();
+      const ticket = await svc.create(userId, {
+        id: crypto.randomUUID(),
+        clientId,
+        queueId,
+        encryptedTitle: Buffer.from("original-title"),
+        encryptedDescription: Buffer.from("original-desc"),
+        priority: "normal",
+        keyGeneration: keyGen,
+        keyWrap: fakeKeyWrap(),
+      });
+      return { userId, ticketId: ticket.id, keyGeneration: keyGen };
+    }
+
+    it("title-only update leaves encrypted_description byte-identical", async () => {
+      const { userId, ticketId, keyGeneration } = await createContentFixture();
+
+      const descBefore = await testDb.db
+        .selectFrom("tickets")
+        .select("encrypted_description")
+        .where("id", "=", ticketId)
+        .executeTakeFirstOrThrow();
+
+      await svc.updateContent(userId, {
+        ticketId,
+        actorId: userId,
+        encryptedTitle: Buffer.from("new-title"),
+        keyGeneration,
+      });
+
+      const descAfter = await testDb.db
+        .selectFrom("tickets")
+        .select("encrypted_description")
+        .where("id", "=", ticketId)
+        .executeTakeFirstOrThrow();
+
+      expect(descAfter.encrypted_description).toEqual(
+        descBefore.encrypted_description,
+      );
+    });
+
+    it("description-only update leaves encrypted_title byte-identical", async () => {
+      const { userId, ticketId, keyGeneration } = await createContentFixture();
+
+      const titleBefore = await testDb.db
+        .selectFrom("tickets")
+        .select("encrypted_title")
+        .where("id", "=", ticketId)
+        .executeTakeFirstOrThrow();
+
+      await svc.updateContent(userId, {
+        ticketId,
+        actorId: userId,
+        encryptedDescription: Buffer.from("new-desc"),
+        keyGeneration,
+      });
+
+      const titleAfter = await testDb.db
+        .selectFrom("tickets")
+        .select("encrypted_title")
+        .where("id", "=", ticketId)
+        .executeTakeFirstOrThrow();
+
+      expect(titleAfter.encrypted_title).toEqual(titleBefore.encrypted_title);
+    });
+
+    it("both-fields update replaces both title and description", async () => {
+      const { userId, ticketId, keyGeneration } = await createContentFixture();
+
+      const newTitle = Buffer.from("both-new-title");
+      const newDesc = Buffer.from("both-new-desc");
+
+      const result = await svc.updateContent(userId, {
+        ticketId,
+        actorId: userId,
+        encryptedTitle: newTitle,
+        encryptedDescription: newDesc,
+        keyGeneration,
+      });
+
+      expect(result.encryptedTitle).toEqual(newTitle);
+      expect(result.encryptedDescription).toEqual(newDesc);
+    });
+
+    it("stale keyGeneration throws TICKET_KEY_GENERATION_STALE and writes no audit row", async () => {
+      const { userId, ticketId } = await createContentFixture();
+
+      const staleKeyGen = crypto.randomUUID();
+
+      const auditCountBefore = await testDb.db
+        .selectFrom("audit_log")
+        .select((eb) => eb.fn.countAll().as("count"))
+        .where("ticket_id", "=", ticketId)
+        .where("event_type", "=", "ticket_content_updated")
+        .executeTakeFirstOrThrow();
+
+      await expect(
+        svc.updateContent(userId, {
+          ticketId,
+          actorId: userId,
+          encryptedTitle: Buffer.from("x"),
+          keyGeneration: staleKeyGen,
+        }),
+      ).rejects.toThrow("TICKET_KEY_GENERATION_STALE");
+
+      // Verify no audit row was written (transaction rolled back)
+      const auditCountAfter = await testDb.db
+        .selectFrom("audit_log")
+        .select((eb) => eb.fn.countAll().as("count"))
+        .where("ticket_id", "=", ticketId)
+        .where("event_type", "=", "ticket_content_updated")
+        .executeTakeFirstOrThrow();
+
+      expect(Number(auditCountAfter.count)).toBe(
+        Number(auditCountBefore.count),
+      );
+    });
+
+    it("stale keyGeneration leaves the ticket row unchanged", async () => {
+      const { userId, ticketId, keyGeneration } = await createContentFixture();
+
+      const rowBefore = await testDb.db
+        .selectFrom("tickets")
+        .selectAll()
+        .where("id", "=", ticketId)
+        .executeTakeFirstOrThrow();
+
+      await expect(
+        svc.updateContent(userId, {
+          ticketId,
+          actorId: userId,
+          encryptedTitle: Buffer.from("should-not-persist"),
+          keyGeneration: crypto.randomUUID(),
+        }),
+      ).rejects.toThrow("TICKET_KEY_GENERATION_STALE");
+
+      const rowAfter = await testDb.db
+        .selectFrom("tickets")
+        .selectAll()
+        .where("id", "=", ticketId)
+        .executeTakeFirstOrThrow();
+
+      expect(rowAfter.encrypted_title).toEqual(rowBefore.encrypted_title);
+      expect(rowAfter.key_generation).toBe(keyGeneration);
+    });
+
+    // assertAccess runs before the row lookup, so an unknown id is rejected as
+    // forbidden rather than not-found. That ordering is deliberate: a
+    // not-found error would tell an unauthorized caller which ticket ids
+    // exist. Same behaviour as findById and update.
+    it("unknown ticket is rejected without revealing existence", async () => {
+      const fix = await createTicketFixture();
+
+      await expect(
+        svc.updateContent(fix.userId, {
+          ticketId: crypto.randomUUID(),
+          actorId: fix.userId,
+          encryptedTitle: Buffer.from("x"),
+          keyGeneration: crypto.randomUUID(),
+        }),
+      ).rejects.toBeInstanceOf(ForbiddenError);
+    });
+
+    it("user without queue access is rejected by assertAccess", async () => {
+      const { ticketId, keyGeneration } = await createContentFixture();
+
+      // Create a separate user with no queue membership
+      const outsider = await createTestUser(testDb.db);
+
+      await expect(
+        svc.updateContent(outsider.id, {
+          ticketId,
+          actorId: outsider.id,
+          encryptedTitle: Buffer.from("x"),
+          keyGeneration,
+        }),
+      ).rejects.toBeInstanceOf(ForbiddenError);
+    });
+
+    it("happy path: writes exactly one audit_log row with correct metadata", async () => {
+      const { userId, ticketId, keyGeneration } = await createContentFixture();
+
+      const originalRow = await testDb.db
+        .selectFrom("tickets")
+        .select(["encrypted_title", "encrypted_description"])
+        .where("id", "=", ticketId)
+        .executeTakeFirstOrThrow();
+
+      await svc.updateContent(userId, {
+        ticketId,
+        actorId: userId,
+        encryptedTitle: Buffer.from("updated-title"),
+        keyGeneration,
+      });
+
+      const auditRows = await testDb.db
+        .selectFrom("audit_log")
+        .selectAll()
+        .where("ticket_id", "=", ticketId)
+        .where("event_type", "=", "ticket_content_updated")
+        .execute();
+
+      expect(auditRows).toHaveLength(1);
+      const audit = auditRows[0]!;
+      expect(audit.actor_id).toBe(userId);
+      expect(audit.metadata).toHaveProperty("keyGeneration", keyGeneration);
+      expect(audit.metadata).toHaveProperty("previousEncryptedTitle");
+
+      // Verify snapshot bytes decode to the pre-update ciphertext
+      const snapshotTitle = Buffer.from(
+        audit.metadata.previousEncryptedTitle as string,
+        "base64url",
+      );
+      expect(snapshotTitle).toEqual(originalRow.encrypted_title);
+
+      // Title-only edit should not have previousEncryptedDescription
+      expect(audit.metadata).not.toHaveProperty("previousEncryptedDescription");
+    });
+
+    it("both-fields edit snapshots both previous ciphertexts", async () => {
+      const { userId, ticketId, keyGeneration } = await createContentFixture();
+
+      const originalRow = await testDb.db
+        .selectFrom("tickets")
+        .select(["encrypted_title", "encrypted_description"])
+        .where("id", "=", ticketId)
+        .executeTakeFirstOrThrow();
+
+      await svc.updateContent(userId, {
+        ticketId,
+        actorId: userId,
+        encryptedTitle: Buffer.from("both-t"),
+        encryptedDescription: Buffer.from("both-d"),
+        keyGeneration,
+      });
+
+      const auditRows = await testDb.db
+        .selectFrom("audit_log")
+        .selectAll()
+        .where("ticket_id", "=", ticketId)
+        .where("event_type", "=", "ticket_content_updated")
+        .execute();
+
+      expect(auditRows).toHaveLength(1);
+      const audit = auditRows[0]!;
+
+      const snapshotTitle = Buffer.from(
+        audit.metadata.previousEncryptedTitle as string,
+        "base64url",
+      );
+      const snapshotDesc = Buffer.from(
+        audit.metadata.previousEncryptedDescription as string,
+        "base64url",
+      );
+      expect(snapshotTitle).toEqual(originalRow.encrypted_title);
+      expect(snapshotDesc).toEqual(originalRow.encrypted_description);
+    });
+  });
 });

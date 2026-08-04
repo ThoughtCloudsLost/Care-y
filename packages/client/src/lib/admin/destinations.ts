@@ -20,6 +20,8 @@ import {
   ChartBar,
   Search,
   PhoneMissed,
+  PhoneCall,
+  ScrollText,
 } from "@lucide/svelte";
 
 export type AdminGroup =
@@ -214,6 +216,26 @@ export const ADMIN_DESTINATIONS: readonly AdminDestination[] = [
     path: "/admin/analytics?tab=dash-3",
     permission: Permission.VIEW_REPORTS,
     implemented: false,
+  },
+  {
+    id: "call-log",
+    group: "analytics",
+    icon: PhoneCall,
+    label: m.panel_call_log,
+    subtitle: () => m.hub_call_log_subtitle(withTerms()),
+    path: "/admin/logs?tab=calls",
+    permission: Permission.VIEW_REPORTS,
+    implemented: true,
+  },
+  {
+    id: "audit-log",
+    group: "analytics",
+    icon: ScrollText,
+    label: m.panel_audit_log,
+    subtitle: m.hub_audit_log_subtitle,
+    path: "/admin/logs?tab=audit",
+    permission: Permission.MANAGE_USERS,
+    implemented: true,
   },
 ];
 
