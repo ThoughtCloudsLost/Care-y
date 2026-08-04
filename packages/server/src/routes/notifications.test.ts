@@ -1,15 +1,15 @@
 /**
  * Tests for the notification tRPC router.
  *
- * The router covers push subscription CRUD and VAPID public key
- * retrieval; the SSE stream is a raw HTTP handler in index.ts and is
- * outside this router. Unit tests exercise auth enforcement, input
- * validation, output shape, and error mapping with a mock
- * PushSubscriptionService. The DB integration suite runs the real
- * service against an isolated schema (upsert-on-endpoint semantics,
- * per-user listing, unsubscribe deletion) via pnpm test:server:db.
+ * The router covers push subscription CRUD, VAPID public key retrieval,
+ * and notification preference management (get/set/reset). The SSE stream
+ * is a raw HTTP handler in index.ts and is outside this router. Unit
+ * tests exercise auth enforcement, input validation, output shape, and
+ * error mapping with mock services. The DB integration suite runs the
+ * real services against an isolated schema via pnpm test:server:db.
  */
 
+import * as crypto from "node:crypto";
 import { describe, it, expect, vi, beforeAll, afterAll } from "vitest";
 import type { Selectable } from "kysely";
 import {
@@ -21,13 +21,20 @@ import {
   type PushSubscriptionRecord,
   type PushSubscriptionService,
 } from "../notifications/push-subscriptions.js";
+import {
+  createNotificationPreferencesService,
+  type NotificationPreferencesService,
+} from "../notifications/preferences.js";
 import { createCallerFactory } from "../trpc/trpc.js";
 import type { Context, OrgContext } from "../trpc/context.js";
 import type { UsersTable } from "../db/types.js";
-import { RoleId, ErrorCode } from "@care-y/shared";
+import { RoleId, ErrorCode, type PreferenceRow } from "@care-y/shared";
+import { NotFoundError } from "../errors.js";
 import {
   createTestDb,
   createTestUser,
+  createTestQueue,
+  createTestTicketFixture,
   expectTrpcError,
   mockReq,
   mockRes,
@@ -50,6 +57,22 @@ function createMockPushSubSvc(
     subscribe: vi.fn().mockResolvedValue(undefined),
     unsubscribe: vi.fn().mockResolvedValue(undefined),
     listForUser: vi.fn().mockResolvedValue([]),
+    ...overrides,
+  };
+}
+
+function createMockPreferencesSvc(
+  overrides?: Partial<NotificationPreferencesService>,
+): NotificationPreferencesService {
+  return {
+    getEffective: vi.fn().mockResolvedValue(true),
+    resolveForDispatch: vi
+      .fn()
+      .mockResolvedValue({ pushAllowed: [], emailAllowed: [], smsAllowed: [] }),
+    set: vi.fn().mockResolvedValue(undefined),
+    listForUser: vi.fn().mockResolvedValue([]),
+    reset: vi.fn().mockResolvedValue(undefined),
+    assertScopeAccessible: vi.fn().mockResolvedValue(undefined),
     ...overrides,
   };
 }
@@ -107,6 +130,7 @@ function createNoOrgContext(): Context {
 function buildCaller(
   ctx: Context,
   svc: PushSubscriptionService = createMockPushSubSvc(),
+  prefSvc: NotificationPreferencesService = createMockPreferencesSvc(),
 ) {
   const seen: { tenantDb: unknown } = { tenantDb: undefined };
   const deps: NotificationRouterDeps = {
@@ -115,9 +139,10 @@ function buildCaller(
       return svc;
     },
     vapidPublicKey: TEST_VAPID_PUBLIC_KEY,
+    preferencesService: prefSvc,
   };
   const caller = createCallerFactory(createNotificationRouter(deps))(ctx);
-  return { caller, seen };
+  return { caller, seen, prefSvc };
 }
 
 // --- Tests ---
@@ -229,6 +254,25 @@ describe("createNotificationRouter", () => {
         name: "listPushSubscriptions",
         invoke: (caller) => caller.listPushSubscriptions(),
       },
+      {
+        name: "getPreferences",
+        invoke: (caller) => caller.getPreferences(),
+      },
+      {
+        name: "setPreference",
+        invoke: (caller) =>
+          caller.setPreference({
+            scopeType: "global",
+            scopeId: null,
+            eventType: "ticket_created",
+            channel: "email",
+            enabled: false,
+          }),
+      },
+      {
+        name: "resetPreferences",
+        invoke: (caller) => caller.resetPreferences({}),
+      },
     ];
 
     for (const { name, invoke } of procedureInvocations) {
@@ -333,12 +377,136 @@ describe("createNotificationRouter", () => {
       );
     });
   });
+
+  // -----------------------------------------------------------------------
+  // Notification preferences route contracts (unit-level, mock service)
+  // -----------------------------------------------------------------------
+
+  describe("getPreferences", () => {
+    it("returns preference rows from the service for the session user", async () => {
+      const rows: PreferenceRow[] = [
+        {
+          scopeType: "global",
+          scopeId: null,
+          eventType: "ticket_created",
+          channel: "email",
+          enabled: false,
+        },
+      ];
+      const listSpy = vi.fn().mockResolvedValue(rows);
+      const prefSvc = createMockPreferencesSvc({ listForUser: listSpy });
+      const ctx = createVolunteerContext();
+      const { caller } = buildCaller(ctx, createMockPushSubSvc(), prefSvc);
+
+      const result = await caller.getPreferences();
+
+      expect(result).toEqual({ preferences: rows });
+      expect(listSpy).toHaveBeenCalledWith(ctx.org?.tenantDb, ctx.user?.id);
+    });
+  });
+
+  describe("setPreference", () => {
+    it("calls assertScopeAccessible then set with session user id", async () => {
+      const assertSpy = vi.fn().mockResolvedValue(undefined);
+      const setSpy = vi.fn().mockResolvedValue(undefined);
+      const prefSvc = createMockPreferencesSvc({
+        assertScopeAccessible: assertSpy,
+        set: setSpy,
+      });
+      const ctx = createVolunteerContext();
+      const { caller } = buildCaller(ctx, createMockPushSubSvc(), prefSvc);
+
+      const result = await caller.setPreference({
+        scopeType: "global",
+        scopeId: null,
+        eventType: "followup_added",
+        channel: "push",
+        enabled: false,
+      });
+
+      expect(result).toEqual({ saved: true });
+      // The route must call assertScopeAccessible before set.
+      expect(assertSpy).toHaveBeenCalledWith(ctx.org?.tenantDb, ctx.user?.id, {
+        scopeType: "global",
+        scopeId: null,
+      });
+      expect(setSpy).toHaveBeenCalledWith(
+        ctx.org?.tenantDb,
+        ctx.user?.id,
+        { scopeType: "global", scopeId: null },
+        "followup_added",
+        "push",
+        false,
+      );
+    });
+
+    it("maps NotFoundError from assertScopeAccessible to NOT_FOUND", async () => {
+      const prefSvc = createMockPreferencesSvc({
+        assertScopeAccessible: vi
+          .fn()
+          .mockRejectedValue(new NotFoundError("Scope referent not found")),
+      });
+      const { caller } = buildCaller(
+        createVolunteerContext(),
+        createMockPushSubSvc(),
+        prefSvc,
+      );
+
+      await expectTrpcError(
+        caller.setPreference({
+          scopeType: "ticket",
+          scopeId: "00000000-0000-0000-0000-000000000099",
+          eventType: "ticket_assigned",
+          channel: "email",
+          enabled: true,
+        }),
+        "NOT_FOUND",
+      );
+    });
+  });
+
+  describe("resetPreferences", () => {
+    it("delegates to service reset with scoped input", async () => {
+      const resetSpy = vi.fn().mockResolvedValue(undefined);
+      const prefSvc = createMockPreferencesSvc({ reset: resetSpy });
+      const ctx = createVolunteerContext();
+      const { caller } = buildCaller(ctx, createMockPushSubSvc(), prefSvc);
+
+      const result = await caller.resetPreferences({
+        scopeType: "queue",
+        scopeId: "00000000-0000-0000-0000-000000000042",
+      });
+
+      expect(result).toEqual({ reset: true });
+      expect(resetSpy).toHaveBeenCalledWith(ctx.org?.tenantDb, ctx.user?.id, {
+        scopeType: "queue",
+        scopeId: "00000000-0000-0000-0000-000000000042",
+      });
+    });
+
+    it("delegates to service reset without scope when input is empty", async () => {
+      const resetSpy = vi.fn().mockResolvedValue(undefined);
+      const prefSvc = createMockPreferencesSvc({ reset: resetSpy });
+      const ctx = createVolunteerContext();
+      const { caller } = buildCaller(ctx, createMockPushSubSvc(), prefSvc);
+
+      await caller.resetPreferences({});
+
+      expect(resetSpy).toHaveBeenCalledWith(
+        ctx.org?.tenantDb,
+        ctx.user?.id,
+        undefined,
+      );
+    });
+  });
 });
 
 // ---------------------------------------------------------------------------
-// DB integration tests (real PostgreSQL + real PushSubscriptionService,
+// DB integration tests (real PostgreSQL + real services,
 // run via pnpm test:server:db)
 // ---------------------------------------------------------------------------
+
+const preferencesServiceInstance = createNotificationPreferencesService();
 
 describe.skipIf(!process.env.DATABASE_URL)(
   "notification routes (DB integration)",
@@ -355,6 +523,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
       createNotificationRouter({
         createPushSubSvc: (tDb) => createPushSubscriptionService(tDb),
         vapidPublicKey: "test-vapid-public",
+        preferencesService: preferencesServiceInstance,
       }),
     );
 
@@ -495,6 +664,181 @@ describe.skipIf(!process.env.DATABASE_URL)(
           endpoint: "https://push.example.test/sub/never-registered",
         }),
       ).resolves.toEqual({ unsubscribed: true });
+    });
+
+    // -----------------------------------------------------------------
+    // Notification preferences DB integration
+    // -----------------------------------------------------------------
+
+    describe("notification preferences", () => {
+      it("setPreference global scope roundtrips through getPreferences", async () => {
+        const caller = createDbCaller(userA);
+
+        await caller.setPreference({
+          scopeType: "global",
+          scopeId: null,
+          eventType: "ticket_created",
+          channel: "email",
+          enabled: false,
+        });
+
+        const result = await caller.getPreferences();
+        const match = result.preferences.find(
+          (p) =>
+            p.scopeType === "global" &&
+            p.eventType === "ticket_created" &&
+            p.channel === "email",
+        );
+        expect(match).toBeDefined();
+        expect(match?.enabled).toBe(false);
+        expect(match?.scopeId).toBeNull();
+      });
+
+      it("ticket scope without a key wrap returns NOT_FOUND", async () => {
+        const caller = createDbCaller(userA);
+        const fakeTicketId = "00000000-0000-0000-0000-000000000099";
+
+        await expectTrpcError(
+          caller.setPreference({
+            scopeType: "ticket",
+            scopeId: fakeTicketId,
+            eventType: "followup_added",
+            channel: "push",
+            enabled: true,
+          }),
+          "NOT_FOUND",
+        );
+      });
+
+      it("ticket scope with a key wrap saves successfully", async () => {
+        const fixture = await createTestTicketFixture(testDb.db, {
+          createUser: true,
+        });
+        const ticketUser = await testDb.db
+          .selectFrom("users")
+          .selectAll()
+          .where("id", "=", fixture.userId!)
+          .executeTakeFirstOrThrow();
+
+        // Insert a key wrap so the user has ticket access.
+        await testDb.db
+          .insertInto("ticket_key_wraps")
+          .values({
+            ticket_id: fixture.ticketId,
+            volunteer_id: ticketUser.id,
+            key_generation: crypto.randomUUID(),
+            ephemeral_point: Buffer.alloc(32),
+            nonce: Buffer.alloc(24),
+            wrapped_key: Buffer.alloc(48),
+            algorithm: "ecies-ristretto255-v1",
+          })
+          .execute();
+
+        const ticketCaller = createDbCaller(ticketUser);
+        const result = await ticketCaller.setPreference({
+          scopeType: "ticket",
+          scopeId: fixture.ticketId,
+          eventType: "followup_added",
+          channel: "push",
+          enabled: false,
+        });
+        expect(result).toEqual({ saved: true });
+      });
+
+      it("produces identical NOT_FOUND for missing ticket and inaccessible ticket", async () => {
+        const callerA = createDbCaller(userA);
+        const nonexistentId = "00000000-0000-0000-0000-ffffffffffff";
+
+        // Missing ticket: no ticket row exists at all.
+        const errMissing = await expectTrpcError(
+          callerA.setPreference({
+            scopeType: "ticket",
+            scopeId: nonexistentId,
+            eventType: "ticket_assigned",
+            channel: "email",
+            enabled: true,
+          }),
+          "NOT_FOUND",
+        );
+
+        // Inaccessible ticket: ticket exists, but user holds no key wrap.
+        const fixture = await createTestTicketFixture(testDb.db);
+        const errInaccessible = await expectTrpcError(
+          callerA.setPreference({
+            scopeType: "ticket",
+            scopeId: fixture.ticketId,
+            eventType: "ticket_assigned",
+            channel: "email",
+            enabled: true,
+          }),
+          "NOT_FOUND",
+        );
+
+        // Both errors must be indistinguishable to the caller.
+        expect(errMissing.code).toBe(errInaccessible.code);
+        expect(errMissing.message).toBe(errInaccessible.message);
+      });
+
+      it("queue scope with unknown queue UUID returns NOT_FOUND", async () => {
+        const caller = createDbCaller(userA);
+
+        await expectTrpcError(
+          caller.setPreference({
+            scopeType: "queue",
+            scopeId: "00000000-0000-0000-0000-000000000077",
+            eventType: "ticket_created",
+            channel: "sms",
+            enabled: false,
+          }),
+          "NOT_FOUND",
+        );
+      });
+
+      it("queue scope with a valid queue saves successfully", async () => {
+        const queue = await createTestQueue(testDb.db);
+        const caller = createDbCaller(userA);
+
+        const result = await caller.setPreference({
+          scopeType: "queue",
+          scopeId: queue.id,
+          eventType: "ticket_created",
+          channel: "sms",
+          enabled: false,
+        });
+        expect(result).toEqual({ saved: true });
+      });
+
+      it("resetPreferences clears scoped rows", async () => {
+        const caller = createDbCaller(userA);
+
+        // Set a global pref so there is something to reset.
+        await caller.setPreference({
+          scopeType: "global",
+          scopeId: null,
+          eventType: "mention",
+          channel: "push",
+          enabled: false,
+        });
+        const before = await caller.getPreferences();
+        const mentionBefore = before.preferences.find(
+          (p) => p.eventType === "mention" && p.channel === "push",
+        );
+        expect(mentionBefore).toBeDefined();
+
+        await caller.resetPreferences({
+          scopeType: "global",
+          scopeId: null,
+        });
+
+        const after = await caller.getPreferences();
+        const globalMention = after.preferences.find(
+          (p) =>
+            p.scopeType === "global" &&
+            p.eventType === "mention" &&
+            p.channel === "push",
+        );
+        expect(globalMention).toBeUndefined();
+      });
     });
   },
 );

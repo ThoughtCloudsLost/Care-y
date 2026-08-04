@@ -116,6 +116,7 @@ import {
   createNotificationJobHandler,
   createNotificationService,
 } from "./notifications/service.js";
+import { createNotificationPreferencesService } from "./notifications/preferences.js";
 import { createSearchService } from "./tickets/search.js";
 import { createAuditService } from "./tickets/audit.js";
 import {
@@ -125,6 +126,17 @@ import {
 } from "./kb/service.js";
 import { createKBMediaService } from "./kb/kb-media-service.js";
 import { createClientService } from "./clients/client-service.js";
+import {
+  registerEscalationRulesHandler,
+  ESCALATION_RULES_QUEUE,
+  DEFAULT_ESCALATION_RULES_INTERVAL_MS,
+} from "./jobs/escalation-checker.js";
+import { ensureRecurringJob } from "./jobs/ensure-recurring.js";
+import {
+  runEscalationCheck,
+  type EscalationServiceDeps,
+} from "./tickets/escalation-service.js";
+import { RoleId } from "@care-y/shared";
 
 // --- DB startup probe ---
 
@@ -524,6 +536,7 @@ const appRouter = createAppRouter({
   notificationDeps: {
     createPushSubSvc: (tDb) => createPushSubscriptionService(tDb),
     vapidPublicKey: vapidKeys.publicKey,
+    preferencesService: createNotificationPreferencesService(),
   },
   brandingDeps: {
     blobStore,
@@ -597,6 +610,18 @@ async function listActiveOrgSchemas(): Promise<string[]> {
   return orgs.map((o) => o.schema_name);
 }
 
+/** Lists schema + slug pairs for all active orgs (single query). */
+async function listActiveOrgSchemasWithSlugs(): Promise<
+  readonly { schema: string; slug: string }[]
+> {
+  const orgs = await db
+    .selectFrom("orgs")
+    .select(["schema_name", "slug"])
+    .where("is_active", "=", true)
+    .execute();
+  return orgs.map((o) => ({ schema: o.schema_name, slug: o.slug }));
+}
+
 registerLogDeletionHandler(jobQueue, providerFactory);
 registerMediaCleanupHandler(
   jobQueue,
@@ -618,6 +643,52 @@ registerEscalationHandler(jobQueue, async () => {
     await escalateTenantTickets(tenantDb(schema));
   }
 });
+
+// Escalation rules checker: evaluates time-based rules across all tenants
+const escalationRulesDeps: EscalationServiceDeps = {
+  notificationService,
+  async getManagerIds(tDb) {
+    const managerRows = await tDb
+      .selectFrom("users")
+      .select("id")
+      .where("is_active", "=", true)
+      .where("role_id", "in", [RoleId.MANAGER, RoleId.ADMIN])
+      .execute();
+    return managerRows.map((r) => r.id);
+  },
+  async getQueueWatcherIds(tDb, queueId) {
+    const watcherRows = await tDb
+      .selectFrom("queue_watchers")
+      .select("user_id")
+      .where("queue_id", "=", queueId)
+      .execute();
+    return watcherRows.map((r) => r.user_id);
+  },
+};
+
+registerEscalationRulesHandler(
+  jobQueue,
+  async () => {
+    const orgs = await listActiveOrgSchemasWithSlugs();
+    for (const org of orgs) {
+      try {
+        await runEscalationCheck(
+          tenantDb(org.schema),
+          org.schema,
+          org.slug,
+          escalationRulesDeps,
+        );
+      } catch (err: unknown) {
+        console.error(
+          `Escalation rules check failed for schema ${org.schema}:`,
+          err instanceof Error ? err.message : String(err),
+        );
+      }
+    }
+  },
+  env.ESCALATION_RULES_INTERVAL_MS ?? DEFAULT_ESCALATION_RULES_INTERVAL_MS,
+);
+await ensureRecurringJob(db, jobQueue, ESCALATION_RULES_QUEUE);
 jobQueue.start();
 console.log("Job queue started");
 
