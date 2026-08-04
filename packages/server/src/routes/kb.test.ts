@@ -24,7 +24,7 @@ import type {
   KBItemSummary,
 } from "../kb/service.js";
 import { RoleId, KB_ATTACHMENT_MAX_BYTES } from "@care-y/shared";
-import { expectTrpcError } from "../test-utils.js";
+import { expectTrpcError, stubTenantDbDefaultRoles } from "../test-utils.js";
 
 // --- Mock services ---
 
@@ -69,7 +69,7 @@ function createMockOrgContext(): OrgContext {
     orgId: "org-kb-test",
     orgSlug: "test-org",
     orgSchema: "org_test",
-    tenantDb: {} as OrgContext["tenantDb"],
+    tenantDb: stubTenantDbDefaultRoles(),
     sealedBox: {} as OrgContext["sealedBox"],
   };
 }

@@ -50,6 +50,7 @@ import {
   testUnseal,
   TEST_OPS_KEY,
   type TestDb,
+  stubTenantDbDefaultRoles,
 } from "../test-utils.js";
 
 // --- Stubs and mock factories ---
@@ -89,7 +90,7 @@ function createMockOrgContext(): OrgContext {
     orgId: TEST_ORG_ID,
     orgSlug: "test-org",
     orgSchema: "org_test",
-    tenantDb: {} as OrgContext["tenantDb"],
+    tenantDb: stubTenantDbDefaultRoles(),
     sealedBox: {} as OrgContext["sealedBox"],
   };
 }

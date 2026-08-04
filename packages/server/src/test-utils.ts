@@ -1043,3 +1043,30 @@ export function createMockOprfDeps(): OprfRouterDeps {
     },
   };
 }
+
+/**
+ * Tenant DB stub for route contract tests that never touch the DB directly
+ * but whose procedures pass through requireRole, which reads the
+ * role_permission_overrides table on cache miss. Returns no override rows,
+ * so the hardcoded default role permissions apply.
+ *
+ * Any other query against this stub throws, keeping the "contract tests
+ * never hit a DB" property intact.
+ */
+export function stubTenantDbDefaultRoles(): Kysely<TenantDatabase> {
+  const stub = {
+    selectFrom: (table: string) => {
+      if (table !== "role_permission_overrides") {
+        throw new TestSetupError(
+          `stubTenantDbDefaultRoles: unexpected query on ${table}`,
+        );
+      }
+      return {
+        select: () => ({
+          execute: async (): Promise<unknown[]> => [],
+        }),
+      };
+    },
+  };
+  return stub as unknown as Kysely<TenantDatabase>;
+}

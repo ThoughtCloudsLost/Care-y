@@ -97,6 +97,16 @@ vi.mock("$lib/shell/navigation.js", async (importOriginal) => ({
   shellBack: vi.fn(),
 }));
 
+// care-y-ignore-next-line mock-factory-unguarded -- component stub: single default export, passthrough cannot satisfy the component prop types
+vi.mock(
+  "$lib/components/settings/NotificationPreferencesSection.svelte",
+  async () => ({
+    default: (
+      await import("./test-helpers/StubNotificationPreferencesSection.svelte")
+    ).default,
+  }),
+);
+
 // vi.mock required: $state rune module needs Svelte compiler pipeline
 vi.mock("$lib/stores/toast.svelte.js", async (importOriginal) => ({
   ...(await importOriginal<typeof ToastStore>()),

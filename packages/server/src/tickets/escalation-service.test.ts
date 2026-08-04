@@ -586,6 +586,10 @@ describe.skipIf(!process.env.DATABASE_URL)("EscalationService", () => {
 
   describe("inactive rules", () => {
     it("skips deactivated rules", async () => {
+      // Clear rules from earlier tests in this shared schema: the check
+      // evaluates every active rule, and the assertion below is a total.
+      await db.deleteFrom("escalation_rules").execute();
+
       const queue = await createTestQueue(db);
       const fixture = await createTestTicketFixture(db, { queueId: queue.id });
       await backdateTicket(db, fixture.ticketId, 35);

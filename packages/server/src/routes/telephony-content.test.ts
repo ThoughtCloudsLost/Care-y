@@ -14,7 +14,7 @@ import type { TelephonyContentService } from "../telephony/telephony-content-ser
 import type { GreetingRecord } from "../telephony/models/greeting-repo.js";
 import type { SmsResponseRecord } from "../telephony/models/sms-response-repo.js";
 import { RoleId } from "@care-y/shared";
-import { expectTrpcError } from "../test-utils.js";
+import { expectTrpcError, stubTenantDbDefaultRoles } from "../test-utils.js";
 
 // --- Mock service ---
 
@@ -74,7 +74,7 @@ function createMockOrgContext(): OrgContext {
     orgId: "org-content-test",
     orgSlug: "test-org",
     orgSchema: "org_test",
-    tenantDb: {} as OrgContext["tenantDb"],
+    tenantDb: stubTenantDbDefaultRoles(),
     sealedBox: {} as OrgContext["sealedBox"],
   };
 }

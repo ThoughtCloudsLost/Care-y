@@ -27,6 +27,7 @@ import {
   seedOrgPublicKey,
   testSealedBox,
   type TestDb,
+  stubTenantDbDefaultRoles,
 } from "../test-utils.js";
 
 // ---------------------------------------------------------------------------
@@ -64,7 +65,7 @@ function createMockOrgContext(): OrgContext {
     orgId: "org-quarantine-test",
     orgSlug: "quarantine-org",
     orgSchema: "org_quarantine",
-    tenantDb: {} as OrgContext["tenantDb"],
+    tenantDb: stubTenantDbDefaultRoles(),
     sealedBox: {} as OrgContext["sealedBox"],
   };
 }

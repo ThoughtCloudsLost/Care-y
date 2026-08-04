@@ -25,6 +25,7 @@ import {
   mockReq,
   mockRes,
   type TestDb,
+  stubTenantDbDefaultRoles,
 } from "../test-utils.js";
 
 const factory = createCallerFactory(createDashboardRouter());
@@ -42,7 +43,7 @@ function createAdminContext(): Context {
       orgId: "org-dashboard-unit",
       orgSlug: "test-org",
       orgSchema: "org_test",
-      tenantDb: {} as OrgContext["tenantDb"],
+      tenantDb: stubTenantDbDefaultRoles(),
       sealedBox: {} as OrgContext["sealedBox"],
     },
     session: {

@@ -28,29 +28,25 @@ export async function up(db: Kysely<unknown>): Promise<void> {
       ["user_id", "scope_type", "scope_id", "event_type", "channel"],
       (b) => b.nullsNotDistinct(),
     )
+    // CHECK constraints ride on the createTable builder: raw ALTER TABLE
+    // statements would bypass the tenant migrator's withSchema() prefixing
+    // (Kysely #761) and run against the wrong schema. The sql expressions
+    // reference columns only, never table names, so they are schema-safe.
+    .addCheckConstraint(
+      "notification_preferences_valid_scope_type",
+      sql`scope_type IN ('global', 'queue', 'ticket')`,
+    )
+    .addCheckConstraint(
+      "notification_preferences_valid_channel",
+      sql`channel IN ('push', 'email', 'sms')`,
+    )
+    // scope_id is NULL exactly when scope_type is 'global'. Global rows
+    // have no referent; queue/ticket rows always have one.
+    .addCheckConstraint(
+      "notification_preferences_scope_id_null_iff_global",
+      sql`(scope_type = 'global') = (scope_id IS NULL)`,
+    )
     .execute();
-
-  // CHECK: scope_type must be one of the known scope kinds.
-  await sql`
-    ALTER TABLE notification_preferences
-    ADD CONSTRAINT notification_preferences_valid_scope_type
-    CHECK (scope_type IN ('global', 'queue', 'ticket'))
-  `.execute(db);
-
-  // CHECK: channel must be a deliverable channel (SSE excluded by design).
-  await sql`
-    ALTER TABLE notification_preferences
-    ADD CONSTRAINT notification_preferences_valid_channel
-    CHECK (channel IN ('push', 'email', 'sms'))
-  `.execute(db);
-
-  // CHECK: scope_id is NULL exactly when scope_type is 'global'.
-  // Global rows have no referent; queue/ticket rows always have one.
-  await sql`
-    ALTER TABLE notification_preferences
-    ADD CONSTRAINT notification_preferences_scope_id_null_iff_global
-    CHECK ((scope_type = 'global') = (scope_id IS NULL))
-  `.execute(db);
 
   // Index for the dispatch read path: resolve preferences for a set of
   // users on a given event type without scanning the whole table.
