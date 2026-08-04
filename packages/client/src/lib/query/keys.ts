@@ -124,6 +124,8 @@ export const adminKeys = {
     [...adminKeys.all, "callLog", params] as const,
   auditLog: (params: Record<string, unknown>) =>
     [...adminKeys.all, "auditLog", params] as const,
+  escalationRules: (queueId: string) =>
+    [...adminKeys.all, "escalationRules", queueId] as const,
 };
 
 export const queueKeys = {
@@ -177,6 +179,7 @@ export const brandingKeys = {
 
 export const notificationKeys = {
   all: ["notifications"] as const,
+  preferences: () => [...notificationKeys.all, "preferences"] as const,
 };
 
 /** Search, sort, and filter state that scopes a client list query. */
