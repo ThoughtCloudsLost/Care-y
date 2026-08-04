@@ -33,10 +33,10 @@ import {
   withErrorWrapping,
 } from "../trpc/trpc.js";
 import {
-  hasPermission,
   getDefaultRoleId,
   isValidRoleId,
-  ROLE_CONFIG,
+  hasPermissionForOrg,
+  getEffectivePermissions,
 } from "../auth/roles.js";
 import { ForbiddenError, NotFoundError, RateLimitError } from "../errors.js";
 import type { RateLimiter } from "../ratelimit/rate-limiter.js";
@@ -247,11 +247,16 @@ export function createAuthRouter(deps: AuthRouterDeps) {
           const effectiveRoleId = input.roleId ?? getDefaultRoleId();
 
           // Non-default roles require MANAGE_ROLES permission.
-          if (
-            effectiveRoleId !== getDefaultRoleId() &&
-            !hasPermission(ctx.user.roleId, Permission.MANAGE_ROLES)
-          ) {
-            throw new ForbiddenError(ErrorCode.ONLY_ADMINS_CAN_ASSIGN_ROLES);
+          if (effectiveRoleId !== getDefaultRoleId()) {
+            const canAssign = await hasPermissionForOrg(
+              ctx.org.tenantDb,
+              ctx.org.orgSchema,
+              ctx.user.roleId,
+              Permission.MANAGE_ROLES,
+            );
+            if (!canAssign) {
+              throw new ForbiddenError(ErrorCode.ONLY_ADMINS_CAN_ASSIGN_ROLES);
+            }
           }
 
           const authService = getAuthService(ctx.org, deps);
@@ -277,12 +282,17 @@ export function createAuthRouter(deps: AuthRouterDeps) {
       return { success: true as const };
     }),
 
-    me: authedProcedure.query(({ ctx }) => {
+    me: authedProcedure.query(async ({ ctx }) => {
       const { roleId } = ctx.user;
-      const config = isValidRoleId(roleId)
-        ? ROLE_CONFIG.get(roleId)
-        : undefined;
-      const permissions = config ? [...config.permissions] : [];
+      let permissions: Permission[] = [];
+      if (isValidRoleId(roleId)) {
+        const effective = await getEffectivePermissions(
+          ctx.org.tenantDb,
+          ctx.org.orgSchema,
+          roleId,
+        );
+        permissions = [...effective];
+      }
       return {
         user: toUserResponse(ctx.user),
         permissions,

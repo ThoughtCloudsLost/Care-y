@@ -10,12 +10,14 @@
  */
 
 import type { IncomingMessage, ServerResponse } from "node:http";
+import type { Kysely } from "kysely";
 import { Permission } from "@care-y/shared";
-import { hasPermission } from "../auth/roles.js";
+import { hasPermissionForOrg } from "../auth/roles.js";
 import { NotFoundError, ForbiddenError } from "../errors.js";
 import type { BlobStore } from "../storage/store.js";
 import type { MediaService } from "../tickets/media-service.js";
 import type { KBMediaService } from "../kb/kb-media-service.js";
+import type { TenantDatabase } from "../db/types.js";
 import {
   authenticateRelay,
   sendJsonResponse,
@@ -49,6 +51,7 @@ export interface BlobDownloadHandlerDeps {
     orgSchema: string,
     userId: string,
   ) => Promise<string | null>;
+  readonly createTenantDb: (orgSchema: string) => Kysely<TenantDatabase>;
 }
 
 export function createBlobDownloadHandler(
@@ -62,6 +65,7 @@ export function createBlobDownloadHandler(
     createMediaSvc,
     createKBMediaSvc,
     getUserRole,
+    createTenantDb,
   } = deps;
 
   return async (req: IncomingMessage, res: ServerResponse): Promise<void> => {
@@ -108,7 +112,16 @@ export function createBlobDownloadHandler(
     const { orgSchema, userId } = auth.session;
 
     const roleId = await getUserRole(orgSchema, userId);
-    if (roleId === null || !hasPermission(roleId, Permission.VIEW_TICKETS)) {
+    const tDb = createTenantDb(orgSchema);
+    if (
+      roleId === null ||
+      !(await hasPermissionForOrg(
+        tDb,
+        orgSchema,
+        roleId,
+        Permission.VIEW_TICKETS,
+      ))
+    ) {
       sendJsonResponse(res, 403, { error: "forbidden" });
       return;
     }

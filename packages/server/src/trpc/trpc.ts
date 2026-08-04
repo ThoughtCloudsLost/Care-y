@@ -10,7 +10,7 @@
 import { initTRPC, TRPCError } from "@trpc/server";
 import type { Context } from "./context.js";
 import { Permission, ErrorCode } from "@care-y/shared";
-import { hasPermission } from "../auth/roles.js";
+import { hasPermissionForOrg } from "../auth/roles.js";
 import {
   isAppError,
   AuthError,
@@ -178,7 +178,14 @@ export function requireRole(permission: Permission) {
       });
     }
 
-    if (!hasPermission(ctx.user.roleId, permission)) {
+    if (
+      !(await hasPermissionForOrg(
+        ctx.org.tenantDb,
+        ctx.org.orgSchema,
+        ctx.user.roleId,
+        permission,
+      ))
+    ) {
       throw new TRPCError({
         code: "FORBIDDEN",
         message: ErrorCode.INSUFFICIENT_PERMISSIONS,

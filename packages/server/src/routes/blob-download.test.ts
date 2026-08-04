@@ -29,12 +29,12 @@ vi.mock("../auth/roles.js", async (importOriginal) => {
   const orig = await importOriginal<typeof Roles>();
   return {
     ...orig,
-    hasPermission: vi.fn(),
+    hasPermissionForOrg: vi.fn(),
   };
 });
 
 const mockAuth = RelayUtils.authenticateRelay as ReturnType<typeof vi.fn>;
-const mockHasPerm = Roles.hasPermission as ReturnType<typeof vi.fn>;
+const mockHasPermForOrg = Roles.hasPermissionForOrg as ReturnType<typeof vi.fn>;
 
 const TEST_UUID = "00000000-0000-0000-0000-000000000001";
 
@@ -90,6 +90,7 @@ function buildDeps(
       getAttachment: vi.fn(),
     })),
     getUserRole: vi.fn(async () => "volunteer"),
+    createTenantDb: vi.fn(() => ({})),
     ...overrides,
   } as unknown as BlobDownloadHandlerDeps;
 }
@@ -163,7 +164,7 @@ describe("blob download handler", () => {
 
   it("returns 403 when user lacks VIEW_TICKETS permission", async () => {
     authOk();
-    mockHasPerm.mockReturnValue(false);
+    mockHasPermForOrg.mockResolvedValue(false);
     deps = buildDeps({ getUserRole: vi.fn(async () => "some_role") });
     handler = createBlobDownloadHandler(deps);
 
@@ -176,7 +177,7 @@ describe("blob download handler", () => {
   describe("recordings", () => {
     it("returns 200 with blob data", async () => {
       authOk();
-      mockHasPerm.mockReturnValue(true);
+      mockHasPermForOrg.mockResolvedValue(true);
 
       const blobData = Buffer.from([1, 2, 3]);
       const getRecording = vi.fn().mockResolvedValue({ blobKey: "rec-key" });
@@ -209,7 +210,7 @@ describe("blob download handler", () => {
 
     it("returns 404 when recording not found", async () => {
       authOk();
-      mockHasPerm.mockReturnValue(true);
+      mockHasPermForOrg.mockResolvedValue(true);
 
       deps = buildDeps({
         getUserRole: vi.fn(async () => "volunteer"),
@@ -230,7 +231,7 @@ describe("blob download handler", () => {
 
     it("returns 403 when access denied", async () => {
       authOk();
-      mockHasPerm.mockReturnValue(true);
+      mockHasPermForOrg.mockResolvedValue(true);
 
       deps = buildDeps({
         getUserRole: vi.fn(async () => "volunteer"),
@@ -251,7 +252,7 @@ describe("blob download handler", () => {
 
     it("returns 404 when blob missing from store", async () => {
       authOk();
-      mockHasPerm.mockReturnValue(true);
+      mockHasPermForOrg.mockResolvedValue(true);
 
       deps = buildDeps({
         getUserRole: vi.fn(async () => "volunteer"),
@@ -278,7 +279,7 @@ describe("blob download handler", () => {
   describe("attachments", () => {
     it("returns 200 with blob data", async () => {
       authOk();
-      mockHasPerm.mockReturnValue(true);
+      mockHasPermForOrg.mockResolvedValue(true);
 
       const blobData = Buffer.from([4, 5, 6, 7]);
       const getAttachment = vi.fn().mockResolvedValue({ blobKey: "att-key" });
@@ -311,7 +312,7 @@ describe("blob download handler", () => {
   describe("kb-attachments", () => {
     it("returns 200 with blob data", async () => {
       authOk();
-      mockHasPerm.mockReturnValue(true);
+      mockHasPermForOrg.mockResolvedValue(true);
 
       const blobData = Buffer.from([8, 9]);
       const getAttachment = vi.fn().mockResolvedValue({ blobKey: "kb-key" });
@@ -341,7 +342,7 @@ describe("blob download handler", () => {
 
     it("returns 404 when kb attachment not found", async () => {
       authOk();
-      mockHasPerm.mockReturnValue(true);
+      mockHasPermForOrg.mockResolvedValue(true);
 
       deps = buildDeps({
         getUserRole: vi.fn(async () => "volunteer"),

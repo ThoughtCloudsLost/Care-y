@@ -915,6 +915,7 @@ const blobDownloadHandler = createBlobDownloadHandler({
       .executeTakeFirst();
     return row?.role_id ?? null;
   },
+  createTenantDb: (orgSchema) => tenantDb(orgSchema),
 });
 
 const manifestHandler = createManifestHandler({ orgService });
