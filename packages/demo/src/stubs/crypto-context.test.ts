@@ -109,7 +109,8 @@ const {
   ensureKeyed,
   registerTrpcForPreview,
   getPreviewLoader,
-} = await import("./crypto-context.js");
+  setRoleAndPermissions,
+} = await import("./crypto-context.svelte.js");
 
 describe("crypto-context (lazy real objects)", () => {
   beforeEach(() => {
@@ -252,6 +253,52 @@ describe("crypto-context (lazy real objects)", () => {
       demoReset();
       const getRoleId = getCurrentUserRoleId();
       expect(getRoleId()).toBe(RoleId.ADMIN);
+    });
+  });
+
+  describe("setRoleAndPermissions", () => {
+    it("updates roleId via the getter", () => {
+      setRoleAndPermissions(
+        RoleId.VOLUNTEER,
+        new Set([Permission.VIEW_TICKETS]),
+      );
+      const getRoleId = getCurrentUserRoleId();
+      expect(getRoleId()).toBe(RoleId.VOLUNTEER);
+    });
+
+    it("updates permissions via the getter", () => {
+      const volPerms = new Set([
+        Permission.VIEW_TICKETS,
+        Permission.VIEW_OWN_SHIFTS,
+      ]);
+      setRoleAndPermissions(RoleId.VOLUNTEER, volPerms);
+      const getPerms = getCurrentPermissions();
+      const perms = getPerms();
+      expect(perms.has(Permission.VIEW_TICKETS)).toBe(true);
+      expect(perms.has(Permission.VIEW_OWN_SHIFTS)).toBe(true);
+      expect(perms.has(Permission.MANAGE_USERS)).toBe(false);
+    });
+
+    it("is reversed by demoReset", () => {
+      setRoleAndPermissions(RoleId.MANAGER, new Set([Permission.VIEW_TICKETS]));
+      demoReset();
+      const getRoleId = getCurrentUserRoleId();
+      expect(getRoleId()).toBe(RoleId.ADMIN);
+      const getPerms = getCurrentPermissions();
+      expect(getPerms().has(Permission.MANAGE_ROLES)).toBe(true);
+    });
+
+    it("consecutive calls reflect the latest value", () => {
+      setRoleAndPermissions(
+        RoleId.VOLUNTEER,
+        new Set([Permission.VIEW_TICKETS]),
+      );
+      setRoleAndPermissions(RoleId.MANAGER, new Set([Permission.MANAGE_USERS]));
+      const getRoleId = getCurrentUserRoleId();
+      expect(getRoleId()).toBe(RoleId.MANAGER);
+      const getPerms = getCurrentPermissions();
+      expect(getPerms().has(Permission.MANAGE_USERS)).toBe(true);
+      expect(getPerms().has(Permission.VIEW_TICKETS)).toBe(false);
     });
   });
 

@@ -14,6 +14,8 @@
  * holds its own copy of "where the demo is", the two cannot drift.
  */
 
+import type { RoleIdValue } from "@care-y/shared";
+
 // -----------------------------------------------------------------------
 // Feature and detail types
 // -----------------------------------------------------------------------
@@ -216,6 +218,9 @@ export interface DemoBridgeState {
    * sharpen the peek's blurred still into the live app.
    */
   readonly engineReady: boolean;
+  /** The signed-in user's current role. Starts as ADMIN; tracks role
+   *  switcher state. */
+  readonly role: RoleIdValue;
 }
 
 export type DemoBridgeListener = (state: DemoBridgeState) => void;
@@ -271,6 +276,13 @@ export interface DemoBridge {
   completeLogin(): void;
   /** Apply light/dark scheme and glass classes to the phone document. */
   setDark(dark: boolean): void;
+  /**
+   * Switch the signed-in demo user's role. Mutates the DB row, updates
+   * server middleware enforcement, refreshes client permission gates, and
+   * invalidates role-scoped query caches. No-op before engine boot or
+   * when the role is already current.
+   */
+  setRole(role: RoleIdValue): void;
   /**
    * Subscribe to state changes. The callback fires immediately with
    * the current state and again on every change. Returns an

@@ -2053,5 +2053,14 @@
   "demo_entry_start_heading": "Getting started",
   "demo_entry_start_body": "The demo begins at the login screen, where CARE-Y derives the encryption keys that protect everything else. Everything you see is fictional: the volunteers, the clients, and every ticket are invented for this walkthrough. You can restart at any point to come back to this page.",
   "demo_peek_back_to": "Back to {section}",
-  "demo_figure_aria_label": "Hold to preview {sub}"
+  "demo_figure_aria_label": "Hold to preview {sub}",
+  "demo_role_rail_label": "User switcher",
+  "demo_role_admin_label": "Admin user",
+  "demo_role_admin_tooltip": "Admin user: full access to all features. Switch users to see how server-side enforcement changes every screen.",
+  "demo_role_manager_label": "Manager user",
+  "demo_role_manager_tooltip": "Manager user: can manage volunteers, queues, and reports, but cannot change org settings or infrastructure.",
+  "demo_role_volunteer_label": "Volunteer user",
+  "demo_role_volunteer_tooltip": "Volunteer user: can view and manage their own tickets. Admin-only screens are blocked by real server middleware.",
+  "demo_mode_toggle_to_read": "Switch to read mode",
+  "demo_mode_toggle_to_walk": "Switch to walkthrough mode"
 }

@@ -27,7 +27,7 @@ import type { trpc as realTrpcClient } from "../../../client/src/lib/trpc/index.
 type RealTrpc = typeof realTrpcClient;
 
 import { setLoginStage } from "../lib/login-stage.svelte.js";
-import { registerTrpcForPreview } from "./crypto-context.js";
+import { registerTrpcForPreview } from "./crypto-context.svelte.js";
 import { traceFlowSpan } from "../lib/flow-events.js";
 import type { DemoSeamKey } from "../lib/bridge.js";
 
