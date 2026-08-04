@@ -1,7 +1,16 @@
 <script lang="ts">
-  import { RotateCcw, Sun, Moon, Globe, Waypoints } from "@lucide/svelte";
+  import {
+    RotateCcw,
+    Sun,
+    Moon,
+    Globe,
+    Waypoints,
+    BookOpen,
+    AppWindow,
+  } from "@lucide/svelte";
   import * as m from "$lib/paraglide/messages.js";
   import { SECTIONS, type SectionId } from "./scroll-sections.js";
+  import type { DemoMode } from "./demo-mode.svelte.js";
 
   interface Props {
     /** null on the entry page, where no section is being shown yet. */
@@ -12,11 +21,14 @@
     total: number;
     /** True while the data flow band (or its small-viewport overlay) is shown. */
     flowBandOpen: boolean;
+    /** Current effective demo mode. */
+    mode: DemoMode;
     onSectionClick: (id: SectionId) => void;
     onToggleDark: () => void;
     onRestart: () => void;
     onLocaleChange: () => void;
     onToggleFlowBand: () => void;
+    onToggleMode: () => void;
   }
 
   let {
@@ -26,11 +38,13 @@
     seen,
     total,
     flowBandOpen,
+    mode,
     onSectionClick,
     onToggleDark,
     onRestart,
     onLocaleChange,
     onToggleFlowBand,
+    onToggleMode,
   }: Props = $props();
 
   /** Message-function lookup by section titleKey */
@@ -82,6 +96,25 @@
     </nav>
 
     <div class="top-bar-right">
+      <button
+        class="icon-btn"
+        class:icon-btn-active={mode === "read"}
+        onclick={onToggleMode}
+        aria-label={mode === "read"
+          ? m.demo_mode_toggle_to_walk()
+          : m.demo_mode_toggle_to_read()}
+        aria-pressed={mode === "read"}
+        title={mode === "read"
+          ? m.demo_mode_toggle_to_walk()
+          : m.demo_mode_toggle_to_read()}
+        type="button"
+      >
+        {#if mode === "read"}
+          <BookOpen size={18} />
+        {:else}
+          <AppWindow size={18} />
+        {/if}
+      </button>
       <button
         class="icon-btn"
         class:icon-btn-active={flowBandOpen}

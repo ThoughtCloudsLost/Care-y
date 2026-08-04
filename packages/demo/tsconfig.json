@@ -11,8 +11,8 @@
     "paths": {
       "$lib/trpc": ["./src/stubs/trpc.ts"],
       "$lib/trpc/index.js": ["./src/stubs/trpc.ts"],
-      "$lib/crypto/context": ["./src/stubs/crypto-context.ts"],
-      "$lib/crypto/context.js": ["./src/stubs/crypto-context.ts"],
+      "$lib/crypto/context": ["./src/stubs/crypto-context.svelte.ts"],
+      "$lib/crypto/context.js": ["./src/stubs/crypto-context.svelte.ts"],
       "$lib/terminology/context": ["./src/stubs/terminology-context.svelte.ts"],
       "$lib/terminology/context.js": [
         "./src/stubs/terminology-context.svelte.ts"

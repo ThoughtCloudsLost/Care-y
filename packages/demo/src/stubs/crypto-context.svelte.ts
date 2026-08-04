@@ -11,8 +11,13 @@
  *
  * ensureKeyed() runs the real loginCrypto pipeline with demo
  * credentials, idempotent and in-flight-guarded.
+ *
+ * Auth state (userId, roleId, permissions) is rune-backed so that
+ * consumers wrapping the getters in $derived re-derive when the
+ * role switcher mutates the signed-in user's role.
  */
 
+import { SvelteSet } from "svelte/reactivity";
 import { Permission } from "@care-y/shared";
 import { RoleId } from "@care-y/shared";
 import { CryptoBridge } from "$lib/workers/crypto-bridge.js";
@@ -78,7 +83,7 @@ function createPacingBridge(real: CryptoBridge): PacingBridgeWrapper {
 
   // Track which cache keys have had their first paced resolution.
   // Only the first decrypt per key gets the stagger delay.
-  const pacedKeys = new Set<string>();
+  const pacedKeys = new SvelteSet<string>();
 
   /**
    * Wait for keyed, then add a stagger delay on first access per key.
@@ -229,7 +234,7 @@ function initOrgKeyManager(): OrgKeyManager {
 }
 
 // -----------------------------------------------------------------------
-// Auth state
+// Auth state (rune-backed for reactive consumers)
 // -----------------------------------------------------------------------
 
 const DEFAULT_PERMISSIONS: ReadonlySet<Permission> = new Set<Permission>([
@@ -250,9 +255,9 @@ const DEFAULT_PERMISSIONS: ReadonlySet<Permission> = new Set<Permission>([
   Permission.MANAGE_ROLES,
 ]);
 
-let currentUserId: string | undefined = "demo-user-001";
-let currentUserRoleId: string | undefined = RoleId.ADMIN;
-let currentPermissions: ReadonlySet<Permission> = DEFAULT_PERMISSIONS;
+let currentUserId: string | undefined = $state("demo-user-001");
+let currentUserRoleId: string | undefined = $state(RoleId.ADMIN);
+let currentPermissions: ReadonlySet<Permission> = $state(DEFAULT_PERMISSIONS);
 
 // -----------------------------------------------------------------------
 // Public getters (mirror the real module's export names exactly)
@@ -509,4 +514,17 @@ export function demoReset(): void {
   currentUserId = "demo-user-001";
   currentUserRoleId = RoleId.ADMIN;
   currentPermissions = DEFAULT_PERMISSIONS;
+}
+
+/**
+ * Update the role and permissions of the signed-in demo user.
+ * Called by PhoneApp after the engine mutates the DB row and
+ * refetches auth.me to get the server-authoritative permission set.
+ */
+export function setRoleAndPermissions(
+  roleId: string,
+  permissions: ReadonlySet<Permission>,
+): void {
+  currentUserRoleId = roleId;
+  currentPermissions = permissions;
 }

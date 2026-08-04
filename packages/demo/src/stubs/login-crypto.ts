@@ -9,7 +9,7 @@
  */
 
 import type { CryptoBridge } from "$lib/workers/crypto-bridge.js";
-import { ensureKeyed, getEnsureKeyedResult } from "./crypto-context.js";
+import { ensureKeyed, getEnsureKeyedResult } from "./crypto-context.svelte.js";
 import { emitFlowEvent, flowNow } from "../lib/flow-events.js";
 
 // -----------------------------------------------------------------------

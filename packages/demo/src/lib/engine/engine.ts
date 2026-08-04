@@ -21,7 +21,7 @@ import type { Kysely } from "kysely";
 import { sql } from "kysely";
 import { TRPCError } from "@trpc/server";
 import { TRPCClientError } from "@trpc/client";
-import { RoleId } from "@care-y/shared";
+import { RoleId, type RoleIdValue, type Permission } from "@care-y/shared";
 
 import { NotFoundError } from "../../../../server/src/errors.js";
 import type { TelephonyProvider } from "../../../../server/src/telephony/provider.js";
@@ -110,6 +110,15 @@ export interface DemoEngineResult {
   readonly deniedTicketId: string;
   /** Map-backed blob store (greeting audio, attachments). */
   readonly blobStore: BlobStore;
+  /**
+   * Mutate the signed-in user's role_id in the tenant DB and refresh
+   * the cached admin user so subsequent middleware checks (requireRole)
+   * enforce the new role. Does not touch key material. Returns the
+   * server-authoritative permission set for the new role, read back
+   * through auth.me so client gates derive from the same ROLE_CONFIG
+   * the middleware enforces.
+   */
+  setSignedInRole(roleId: RoleIdValue): Promise<readonly Permission[]>;
 }
 
 // For backwards compat with the health page
@@ -958,6 +967,16 @@ export async function bootDemoEngine(): Promise<DemoEngineResult> {
     appRouter,
     deniedTicketId,
     blobStore,
+    async setSignedInRole(roleId: RoleIdValue): Promise<readonly Permission[]> {
+      await tDb
+        .updateTable("users")
+        .set({ role_id: roleId })
+        .where("id", "=", seedResult.adminUserId)
+        .execute();
+      await refreshAdminUser();
+      const me = await adminCaller.auth.me();
+      return me.permissions;
+    },
   };
 }
 

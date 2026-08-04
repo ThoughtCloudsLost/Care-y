@@ -12,7 +12,7 @@
   } from "$lib/paraglide/runtime.js";
   import {
     ArrowRight,
-    GripVertical,
+    GripHorizontal,
     Link2,
     Link2Off,
     Maximize2,
@@ -21,7 +21,9 @@
     Monitor,
     X,
   } from "@lucide/svelte";
+  import { RoleId, type RoleIdValue } from "@care-y/shared";
   import TopBar from "$demo/TopBar.svelte";
+  import RoleRail from "$demo/RoleRail.svelte";
   import FlowBand from "$demo/FlowBand.svelte";
   import FlowStory from "$demo/FlowStory.svelte";
   import SectionIntro from "$demo/SectionIntro.svelte";
@@ -52,7 +54,6 @@
   import { DEMO_TOPICS } from "$demo/bridge.js";
   import {
     createFrameGeometry,
-    deriveBezelRadius,
     presetAnchoredLeft,
     presetAnchoredTop,
     clampTopToViewport,
@@ -75,6 +76,7 @@
     resetLinked,
   } from "$demo/link-state.svelte.js";
   import { createFlowBandStore } from "$demo/flow-band.svelte.js";
+  import { createDemoMode } from "$demo/demo-mode.svelte.js";
 
   // -----------------------------------------------------------------------
   // Dark mode with localStorage persistence
@@ -148,6 +150,9 @@
 
   /** True once the phone engine reports ready via the bridge. */
   let engineReady = $state(false);
+
+  /** Active role from the bridge snapshot; admin at boot/restart. */
+  let activeRole: RoleIdValue = $state(RoleId.ADMIN);
 
   /** Whether the peek is in a non-idle phase (active for UI gating). */
   const peekActive: boolean = $derived(peekCtrl.phase !== "idle");
@@ -617,6 +622,9 @@
       // Track engine readiness for the peek still crossfade
       engineReady = state.engineReady;
 
+      // Sync the role rail highlight from the bridge snapshot
+      activeRole = state.role;
+
       // A non-init bridge state while the entry page is up means the
       // phone moved (deep link, phone interaction). Dismiss entry so
       // the story follows.
@@ -654,6 +662,7 @@
     peekCtrl.resetToIdle();
     capturedStill = null;
     engineReady = false;
+    activeRole = RoleId.ADMIN;
     // Reset frame geometry and link state alongside the iframe reload
     geo.reset();
     resetLinked();
@@ -664,6 +673,14 @@
 
   function handleToggleDark(): void {
     dark = !dark;
+  }
+
+  function handleToggleMode(): void {
+    demoMode.toggle();
+  }
+
+  function handleRoleChange(role: RoleIdValue): void {
+    bridge?.setRole(role);
   }
 
   function handleSectionClick(id: SectionId): void {
@@ -778,7 +795,7 @@
   // -----------------------------------------------------------------------
 
   // -----------------------------------------------------------------------
-  // Narrow/wide viewport mode
+  // Narrow/wide viewport and demo mode
   // -----------------------------------------------------------------------
 
   let windowW = $state(typeof window !== "undefined" ? window.innerWidth : 0);
@@ -793,27 +810,56 @@
 
   const isNarrow: boolean = $derived(windowW < WIDE_BREAKPOINT);
 
-  // On narrow viewports the DemoFrame mounts only when the prewarm latch
-  // fires or a peek opens (whichever comes first). Once mounted it stays
+  // Explicit demo mode: "read" (story-first, frame via peek) or "walk"
+  // (frame always visible with sidebar chrome). Default derives from
+  // viewport width; ?mode=read/walk overrides. The override survives
+  // restart (search string is preserved) and is not clobbered by resizes.
+  const demoMode = createDemoMode(() => isNarrow);
+
+  // In read mode the DemoFrame mounts only when the prewarm latch fires
+  // or a peek opens (whichever comes first). Once mounted it stays
   // mounted for the page's lifetime so the iframe is never torn down.
-  let narrowMountLatch = $state(false);
+  let readMountLatch = $state(false);
 
   $effect(() => {
-    if (isNarrow && (prewarm.warm || peekActive)) {
-      narrowMountLatch = true;
+    if (demoMode.mode === "read" && (prewarm.warm || peekActive)) {
+      readMountLatch = true;
     }
   });
 
-  const frameShouldMount: boolean = $derived(!isNarrow || narrowMountLatch);
+  const frameShouldMount: boolean = $derived(
+    demoMode.mode === "walk" || readMountLatch,
+  );
 
-  // On narrow viewports the floating frame is CSS-hidden when the peek
+  // In read mode the floating frame is CSS-hidden when the peek
   // controller is idle, and shown during any peek phase.
-  const frameVisibleOnNarrow: boolean = $derived(!isNarrow || peekActive);
+  const frameVisible: boolean = $derived(
+    demoMode.mode === "walk" || peekActive,
+  );
 
-  // The desktop chrome (toolbar, resize handles, bezel strips) is shown
-  // on wide viewports unconditionally and on narrow only never (the
-  // committed state uses the close-and-continue button instead).
-  const showDesktopChrome: boolean = $derived(!isNarrow);
+  // The desktop chrome (sidebar, resize handles, bezel strips) is shown
+  // in walk mode. Read mode uses the close-and-continue button instead.
+  const showDesktopChrome: boolean = $derived(demoMode.mode === "walk");
+
+  // Mode transition effects: switching modes at runtime resets state
+  // that belongs to the old mode.
+  let prevMode = demoMode.mode;
+
+  $effect(() => {
+    const current = demoMode.mode;
+    if (current === prevMode) return;
+    const switching = prevMode;
+    prevMode = current;
+
+    if (switching === "read" && current === "walk") {
+      // Entering walk: cancel any in-flight peek, present the frame
+      peekCtrl.resetToIdle();
+      capturedStill = null;
+      geo.reset();
+    }
+    // Entering read from walk: the CSS-hide path handles visibility.
+    // The iframe must NOT be unmounted (load-bearing invariant).
+  });
 
   const RAIL_BREAKPOINT = 900;
 
@@ -900,11 +946,13 @@
       seen={progress.count}
       total={progress.total}
       flowBandOpen={flowBand.open}
+      mode={demoMode.mode}
       onSectionClick={handleSectionClick}
       onToggleDark={handleToggleDark}
       onRestart={handleRestart}
       onLocaleChange={handleLocaleChange}
       onToggleFlowBand={handleToggleFlowBand}
+      onToggleMode={handleToggleMode}
     />
   {/key}
   <!-- Data flow band: normal flow directly after the sticky top bar, so
@@ -921,23 +969,19 @@
 <!-- Floating frame layer: fixed, between story content (z:1) and TopBar (z:100) -->
 <div
   class="floating-frame"
-  class:floating-frame--hidden={!frameVisibleOnNarrow}
+  class:floating-frame--hidden={!frameVisible}
   style:top="{geo.top}px"
   style:left="{geo.left}px"
   style:width="{geo.outerW}px"
   style:height="{geo.outerH}px"
 >
-  <!-- Toolbar: visually merged with the device bezel by matching
-       the bezel background and extending the toolbar down to cover
-       the bezel's top-left/right corner area. The toolbar z-index
-       sits behind the bezel strips so drag surfaces still work. -->
+  <!-- Sidebar: single vertical bar along the frame's left edge,
+       containing all chrome controls. Positioned outside the frame
+       (right: 100%) so it clears the west/NW resize handles. -->
   {#if showDesktopChrome}
-    <div
-      class="frame-toolbar"
-      style:left="{deriveBezelRadius(geo.footprintW)}px"
-    >
+    <div class="frame-sidebar">
       <div
-        class="toolbar-grip"
+        class="sidebar-grip"
         role="presentation"
         onpointerdown={startDrag}
         onpointermove={onPointerMove}
@@ -945,12 +989,18 @@
         onpointercancel={onPointerUp}
         title={m.demo_toolbar_grip_tooltip()}
       >
-        <GripVertical size={16} />
+        <GripHorizontal size={16} />
       </div>
-      <!-- Presets are hidden while shrunk: at that size the frame is a
-         thumbnail, and switching its shape is a decision for after it
-         has been grown back. -->
+      <!-- Role buttons and presets hide while shrunk -->
       {#if !geo.shrunk}
+        <div
+          class="sidebar-roles"
+          role="toolbar"
+          aria-label={m.demo_role_rail_label()}
+        >
+          <RoleRail {activeRole} onrolechange={handleRoleChange} />
+        </div>
+        <div class="sidebar-separator" aria-hidden="true"></div>
         <button
           class="toolbar-btn"
           class:toolbar-btn-active={geo.footprintW === PHONE_PRESET.w &&
@@ -993,7 +1043,6 @@
           <Minimize2 size={16} />
         {/if}
       </button>
-      <div class="toolbar-separator" aria-hidden="true"></div>
       <button
         class="toolbar-btn"
         class:toolbar-btn-active={!isLinked()}
@@ -1449,32 +1498,33 @@
     pointer-events: none;
   }
 
-  /* Toolbar: slim bar docked above the frame. Uses the bezel
-     background (#1a1a1a) so it merges with the device frame visually.
-     Top corners are a fixed radius; bottom corners match the bezel
-     radius inline so the transition from toolbar to bezel reads as
-     one continuous shape. */
-  .frame-toolbar {
+  /* Sidebar: vertical bar along the frame's left edge. Uses the bezel
+     background (#1a1a1a) so it reads as part of the device chrome.
+     Outer corners rounded, frame-facing edge borderless so it merges
+     with the bezel. right: 100% clears the west/NW resize handles
+     (which extend only 4px past the frame edge). */
+  .frame-sidebar {
     position: absolute;
-    bottom: 100%;
-    left: 0;
+    top: 0;
+    right: 100%;
     display: flex;
+    flex-direction: column;
     align-items: center;
     gap: 2px;
     padding: 4px;
     background: #1a1a1a;
-    border-radius: 10px 10px 0 0;
+    border-radius: 10px 0 0 10px;
     border: 2px solid #333;
-    border-bottom: none;
+    border-right: none;
   }
 
-  /* Toolbar controls sit on the bezel background (#1a1a1a) in both
-     light and dark modes, so they use a single color scheme. */
-  .toolbar-grip {
+  /* Controls sit on the bezel background (#1a1a1a) in both light and
+     dark modes, so they use a single color scheme throughout. */
+  .sidebar-grip {
     display: flex;
     align-items: center;
     justify-content: center;
-    width: 32px;
+    width: 44px;
     height: 32px;
     cursor: grab;
     color: #98989d;
@@ -1482,8 +1532,22 @@
     touch-action: none;
   }
 
-  .toolbar-grip:active {
+  .sidebar-grip:active {
     cursor: grabbing;
+  }
+
+  .sidebar-roles {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  .sidebar-separator {
+    width: 24px;
+    height: 1px;
+    background: rgba(255, 255, 255, 0.15);
+    margin: 2px 0;
+    flex-shrink: 0;
   }
 
   .toolbar-btn {
@@ -1512,14 +1576,6 @@
 
   .toolbar-btn-active:hover {
     background: rgba(0, 122, 255, 0.25);
-  }
-
-  .toolbar-separator {
-    width: 1px;
-    height: 24px;
-    background: rgba(255, 255, 255, 0.15);
-    margin: 0 2px;
-    flex-shrink: 0;
   }
 
   /* Bezel drag strips: four edges that cover only the 12px bezel ring,

@@ -37,8 +37,12 @@
   import type { PhoneCommand } from "$demo/scroll-sections.js";
   import { routeForSlug } from "$demo/scroll-sections.js";
   import { listRouteIds } from "$demo/engine/route-manifest.js";
-  import { demoSeed, ensureKeyed } from "$lib/crypto/context.js";
-  import { RoleId } from "@care-y/shared";
+  import {
+    demoSeed,
+    ensureKeyed,
+    setRoleAndPermissions,
+  } from "$lib/crypto/context.js";
+  import { RoleId, type RoleIdValue } from "@care-y/shared";
   import { classifyDemoLabel } from "$demo/topic-classifier.js";
   import {
     getLoginStage,
@@ -116,6 +120,13 @@
   // peek surface keeps showing the blurred still.
   let engineBooted = $state(false);
 
+  // Resolved engine instance, captured for the role switcher handler.
+  let resolvedEngine: DemoEngineResult | null = null;
+
+  // Current role of the signed-in demo user. Starts as ADMIN;
+  // the role switcher mutates it in place.
+  let currentRole: RoleIdValue = $state(RoleId.ADMIN);
+
   // The real article ID for the library vote sub-section, resolved
   // once the engine boots.
   let resolvedArticleId: string | null = $state(null);
@@ -154,6 +165,7 @@
       if (e.articleIds.length > 0) {
         resolvedArticleId = e.articleIds[0] ?? null;
       }
+      resolvedEngine = e;
       engineBooted = true;
     })
     .catch(() => {
@@ -547,6 +559,7 @@
       locationSeq: store.locationSeq,
       restartSeq: router.restartSeq,
       engineReady: engineBooted,
+      role: currentRole,
     };
   }
 
@@ -569,6 +582,30 @@
 
     setDark(value: boolean): void {
       dark = value;
+    },
+
+    setRole(role: RoleIdValue): void {
+      if (resolvedEngine === null || role === currentRole) return;
+      const engine = resolvedEngine;
+      void (async (): Promise<void> => {
+        // 1. Mutate the DB row and refresh the cached context user.
+        //    requireRole middleware enforces the new role from this point.
+        //    The engine reads the new role's permission set back through
+        //    auth.me, so client gates derive from the same ROLE_CONFIG
+        //    the middleware enforces.
+        const permissions = await engine.setSignedInRole(role);
+        // 2. Update the reactive stub so $derived consumers re-derive.
+        setRoleAndPermissions(role, new Set(permissions));
+        currentRole = role;
+        // 3. Invalidate all query caches. The demo QueryClient uses
+        //    staleTime: Infinity and refetchOnMount: false, so a plain
+        //    invalidateQueries with the default refetchType ("active")
+        //    only refetches ACTIVE observers. Surfaces mounted after the
+        //    switch would hit the stale cache and never refetch. Using
+        //    resetQueries removes the data entirely so the next mount
+        //    triggers a fresh fetch regardless of staleTime/refetchOnMount.
+        await queryClient.resetQueries();
+      })();
     },
 
     subscribe(listener: DemoBridgeListener): () => void {

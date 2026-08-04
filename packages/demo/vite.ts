@@ -197,7 +197,7 @@ export function serverRedirectPlugin(): Plugin {
 // anchored so "$lib/crypto/context-init.js" stays on the real module.
 const stubMatchers: [RegExp, string][] = [
   [/^\$lib\/trpc(\/index\.js)?$/, "./src/stubs/trpc.ts"],
-  [/^\$lib\/crypto\/context(\.js)?$/, "./src/stubs/crypto-context.ts"],
+  [/^\$lib\/crypto\/context(\.js)?$/, "./src/stubs/crypto-context.svelte.ts"],
   [
     /^\$lib\/terminology\/context(\.js)?$/,
     "./src/stubs/terminology-context.svelte.ts",
