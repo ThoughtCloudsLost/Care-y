@@ -1,18 +1,26 @@
 <script lang="ts">
   import { Save } from "@lucide/svelte";
+  import { DialogButton } from "konsta/svelte";
   import { createMutation, useQueryClient } from "@tanstack/svelte-query";
   import { queueKeys } from "$lib/query/keys.js";
   import * as m from "$lib/paraglide/messages.js";
   import { withTerms } from "$lib/terminology/with-terms.js";
   import { trpc } from "$lib/trpc/index.js";
-  import { getOrgDecryptCache } from "$lib/crypto/context.js";
+  import {
+    getCurrentPermissions,
+    getOrgDecryptCache,
+  } from "$lib/crypto/context.js";
+  import { Permission } from "@care-y/shared";
   import { haptic } from "$lib/utils/haptic.js";
   import { toastStore } from "$lib/stores/toast.svelte.js";
   import { announceToLiveRegion } from "$lib/utils/announce.js";
   import { requireRouter } from "$lib/errors.js";
+  import { DIALOG_DESTRUCTIVE_CLASS } from "$lib/components/shared/konsta-classes.js";
   import ShellSheet from "$lib/shell/ShellSheet.svelte";
+  import ShellDialog from "$lib/shell/ShellDialog.svelte";
   import SoftButton from "$lib/components/inputs/SoftButton.svelte";
   import QueueForm from "$lib/components/shared/QueueForm.svelte";
+  import EscalationRulesList from "./EscalationRulesList.svelte";
   import {
     resolveQueueAppearance,
     queueAppearanceCacheKeys,
@@ -42,8 +50,32 @@
   const ticketRouter = requireRouter(trpc.tickets, "tickets");
   const queryClient = useQueryClient();
   const orgCache = getOrgDecryptCache();
+  const permissionsGetter = getCurrentPermissions();
+  const permissions = $derived(permissionsGetter());
+  const isAdmin = $derived(permissions.has(Permission.MANAGE_ORG_CONFIG));
 
   const isCreateMode = $derived(queueId === null);
+
+  // Escalation rule delete dialog state (hosted here per shell/content boundary)
+  let ruleDeleteDialogOpened = $state(false);
+  let ruleDeleteId = $state("");
+  let ruleDeleteLabel = $state("");
+  let escalationRulesListRef = $state<
+    ReturnType<typeof EscalationRulesList> | undefined
+  >(undefined);
+
+  function openRuleDeleteDialog(ruleId: string, label: string): void {
+    ruleDeleteId = ruleId;
+    ruleDeleteLabel = label;
+    ruleDeleteDialogOpened = true;
+  }
+
+  function confirmRuleDelete(): void {
+    ruleDeleteDialogOpened = false;
+    if (escalationRulesListRef) {
+      escalationRulesListRef.confirmDelete(ruleDeleteId);
+    }
+  }
 
   let wasOpen = $state(false);
   let decryptedName = $state("");
@@ -203,6 +235,14 @@
       onstatechange={handleFormStateChange}
     />
 
+    {#if !isCreateMode && isAdmin && queueId !== null}
+      <EscalationRulesList
+        bind:this={escalationRulesListRef}
+        {queueId}
+        ondeleterule={openRuleDeleteDialog}
+      />
+    {/if}
+
     {#if !isCreateMode && ondeletequeue}
       <div class="delete-action">
         <button
@@ -217,6 +257,31 @@
     {/if}
   </div>
 </ShellSheet>
+
+<!-- Escalation rule delete confirmation dialog -->
+<ShellDialog
+  opened={ruleDeleteDialogOpened}
+  ondismiss={() => (ruleDeleteDialogOpened = false)}
+  title={m.escalation_delete_confirm_title()}
+>
+  {#snippet content()}
+    <p class="text-sm text-[--muted]">
+      {m.escalation_delete_confirm_body({ rule: ruleDeleteLabel })}
+    </p>
+  {/snippet}
+  {#snippet buttons()}
+    <DialogButton onclick={() => (ruleDeleteDialogOpened = false)}>
+      {m.common_cancel()}
+    </DialogButton>
+    <DialogButton
+      strong
+      class={DIALOG_DESTRUCTIVE_CLASS}
+      onclick={confirmRuleDelete}
+    >
+      {m.escalation_delete_button()}
+    </DialogButton>
+  {/snippet}
+</ShellDialog>
 
 <style>
   .editor-content {

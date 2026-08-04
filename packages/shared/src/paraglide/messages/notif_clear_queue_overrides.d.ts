@@ -1,0 +1,16 @@
+/**
+* | output |
+* | --- |
+* | "Clear overrides for this queue" |
+*
+* @param {Notif_Clear_Queue_OverridesInputs} inputs
+* @param {{ locale?: "en" | "es" }} options
+* @returns {LocalizedString}
+*/
+export const notif_clear_queue_overrides: ((inputs?: Notif_Clear_Queue_OverridesInputs, options?: {
+    locale?: "en" | "es";
+}) => LocalizedString) & import("../runtime.js").MessageMetadata<Notif_Clear_Queue_OverridesInputs, {
+    locale?: "en" | "es";
+}, {}>;
+export type LocalizedString = import("../runtime.js").LocalizedString;
+export type Notif_Clear_Queue_OverridesInputs = {};
