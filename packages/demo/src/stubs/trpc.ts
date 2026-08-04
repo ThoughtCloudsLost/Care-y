@@ -28,6 +28,8 @@ type RealTrpc = typeof realTrpcClient;
 
 import { setLoginStage } from "../lib/login-stage.svelte.js";
 import { registerTrpcForPreview } from "./crypto-context.js";
+import { traceFlowSpan } from "../lib/flow-events.js";
+import type { DemoSeamKey } from "../lib/bridge.js";
 
 // -----------------------------------------------------------------------
 // Error types (no bare Error throws)
@@ -178,6 +180,23 @@ function asciiToBase64url(plain: string): string {
   return btoa(plain).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
 }
 
+/**
+ * Emit a tRPC-lane request/response pair around a call. Procedure input
+ * is never previewed: login carries a password, and the band would put
+ * it on screen.
+ */
+async function tracedProc<T>(
+  path: string,
+  kind: "query" | "mutate",
+  seamKey: DemoSeamKey | null,
+  run: () => Promise<T>,
+): Promise<T> {
+  return await traceFlowSpan(
+    { lane: "trpc", label: `${path} ${kind}`, seamKey },
+    run,
+  );
+}
+
 // -----------------------------------------------------------------------
 // Mock overlay: 2FA verification choreography
 //
@@ -187,48 +206,71 @@ function asciiToBase64url(plain: string): string {
 // have no real transport.
 // -----------------------------------------------------------------------
 
+const TWOFA_SEAM: DemoSeamKey = "twofa-choreography";
+
+/** Trace a twoFactor.verify procedure under the choreography seam. */
+async function tracedVerify<T>(
+  proc: string,
+  kind: "query" | "mutate",
+  run: () => Promise<T>,
+): Promise<T> {
+  return await tracedProc(`twoFactor.verify.${proc}`, kind, TWOFA_SEAM, run);
+}
+
 const twoFactorVerifyRouter = {
   totp: {
     async mutate(_opts: { code: string }): Promise<{ success: boolean }> {
-      await delay(200);
-      markAuthed();
-      return { success: true };
+      return tracedVerify("totp", "mutate", async () => {
+        await delay(200);
+        markAuthed();
+        return { success: true };
+      });
     },
   },
   emailComplete: {
     async mutate(_opts: { code: string }): Promise<{ success: boolean }> {
-      await delay(200);
-      markAuthed();
-      return { success: true };
+      return tracedVerify("emailComplete", "mutate", async () => {
+        await delay(200);
+        markAuthed();
+        return { success: true };
+      });
     },
   },
   smsComplete: {
     async mutate(_opts: { code: string }): Promise<{ success: boolean }> {
-      await delay(200);
-      markAuthed();
-      return { success: true };
+      return tracedVerify("smsComplete", "mutate", async () => {
+        await delay(200);
+        markAuthed();
+        return { success: true };
+      });
     },
   },
   backupCode: {
     async mutate(_opts: { code: string }): Promise<{ success: boolean }> {
-      await delay(200);
-      markAuthed();
-      return { success: true };
+      return tracedVerify("backupCode", "mutate", async () => {
+        await delay(200);
+        markAuthed();
+        return { success: true };
+      });
     },
   },
   emailSend: {
     async mutate(): Promise<{ sent: true }> {
-      await delay(200);
-      // Auto-start methods call their send endpoint the moment they open
-      setLoginStage("twofa-method");
-      return { sent: true };
+      return tracedVerify("emailSend", "mutate", async () => {
+        await delay(200);
+        // Auto-start methods call their send endpoint the moment they open
+        setLoginStage("twofa-method");
+        return { sent: true };
+      });
     },
   },
   smsSend: {
     async mutate(): Promise<{ sent: true }> {
-      await delay(200);
-      setLoginStage("twofa-method");
-      return { sent: true };
+      return tracedVerify("smsSend", "mutate", async () => {
+        await delay(200);
+        setLoginStage("twofa-method");
+        return { sent: true };
+      });
     },
   },
   webauthnOptions: {
@@ -237,51 +279,63 @@ const twoFactorVerifyRouter = {
       rpId: string;
       allowCredentials: { id: string; transports: string[] }[];
     }> {
-      await delay(200);
-      setLoginStage("twofa-method");
-      return {
-        challenge: asciiToBase64url("demo-challenge-payload"),
-        rpId: "demo.local",
-        allowCredentials: [
-          {
-            id: asciiToBase64url("demo-credential-id"),
-            transports: ["internal"],
-          },
-        ],
-      };
+      return tracedVerify("webauthnOptions", "mutate", async () => {
+        await delay(200);
+        setLoginStage("twofa-method");
+        return {
+          challenge: asciiToBase64url("demo-challenge-payload"),
+          rpId: "demo.local",
+          allowCredentials: [
+            {
+              id: asciiToBase64url("demo-credential-id"),
+              transports: ["internal"],
+            },
+          ],
+        };
+      });
     },
   },
   webauthnComplete: {
     async mutate(_resp: unknown): Promise<{ success: true }> {
-      await delay(200);
-      markAuthed();
-      return { success: true };
+      return tracedVerify("webauthnComplete", "mutate", async () => {
+        await delay(200);
+        markAuthed();
+        return { success: true };
+      });
     },
   },
   pushSend: {
     async mutate(): Promise<{ challengeId: string; sent: true }> {
-      await delay(200);
-      setLoginStage("twofa-method");
-      pushPollCount = 0;
-      pushChallengeApproves = Date.now() <= pushArmedUntil;
-      return { challengeId: "demo-push-challenge", sent: true };
+      return tracedVerify("pushSend", "mutate", async () => {
+        await delay(200);
+        setLoginStage("twofa-method");
+        pushPollCount = 0;
+        pushChallengeApproves = Date.now() <= pushArmedUntil;
+        return { challengeId: "demo-push-challenge", sent: true };
+      });
     },
   },
   pushPoll: {
     async query(_opts: {
       challengeId: string;
     }): Promise<{ status: "pending" | "approved" | "denied" }> {
-      await delay(200);
-      pushPollCount += 1;
-      // Unarmed challenges (scroll-driven opens) wait forever: the
-      // visitor can view the waiting state and move on. An armed
-      // challenge stays "pending" long enough (~12s at the 3s poll
-      // interval) to read, then the approval resolves.
-      if (!pushChallengeApproves || pushPollCount <= 4) {
-        return { status: "pending" };
-      }
-      markAuthed();
-      return { status: "approved" };
+      return tracedVerify<{ status: "pending" | "approved" | "denied" }>(
+        "pushPoll",
+        "query",
+        async () => {
+          await delay(200);
+          pushPollCount += 1;
+          // Unarmed challenges (scroll-driven opens) wait forever: the
+          // visitor can view the waiting state and move on. An armed
+          // challenge stays "pending" long enough (~12s at the 3s poll
+          // interval) to read, then the approval resolves.
+          if (!pushChallengeApproves || pushPollCount <= 4) {
+            return { status: "pending" };
+          }
+          markAuthed();
+          return { status: "approved" };
+        },
+      );
     },
   },
 };
@@ -301,25 +355,27 @@ const mockOverlay: Record<string, Record<string, unknown>> = {
         // Delegate to the real engine for scrypt password verification
         // and real enrolledMethods from the seeded two_factor_methods rows.
         // The stage side effect is choreography, not a parallel data layer.
-        const engine = await getEngine();
-        const authRouter = Reflect.get(
-          engine as Record<string | symbol, unknown>,
-          "auth",
-        );
-        const loginProc = Reflect.get(
-          authRouter as Record<string | symbol, unknown>,
-          "login",
-        );
-        const mutFn = Reflect.get(
-          loginProc as Record<string | symbol, unknown>,
-          "mutate",
-        ) as (input: {
-          identifier: string;
-          password: string;
-        }) => Promise<unknown>;
-        const result = await mutFn(opts);
-        setLoginStage("twofa-picker");
-        return result;
+        return tracedProc("auth.login", "mutate", null, async () => {
+          const engine = await getEngine();
+          const authRouter = Reflect.get(
+            engine as Record<string | symbol, unknown>,
+            "auth",
+          );
+          const loginProc = Reflect.get(
+            authRouter as Record<string | symbol, unknown>,
+            "login",
+          );
+          const mutFn = Reflect.get(
+            loginProc as Record<string | symbol, unknown>,
+            "mutate",
+          ) as (input: {
+            identifier: string;
+            password: string;
+          }) => Promise<unknown>;
+          const result = await mutFn(opts);
+          setLoginStage("twofa-picker");
+          return result;
+        });
       },
     },
     me: {
@@ -327,23 +383,25 @@ const mockOverlay: Record<string, Record<string, unknown>> = {
       // DemoAuthError above for why the engine cannot provide this),
       // real engine auth.me afterwards.
       async query(): Promise<unknown> {
-        if (!demoAuthed) {
-          throw new DemoAuthError();
-        }
-        const engine = await getEngine();
-        const authRouter = Reflect.get(
-          engine as Record<string | symbol, unknown>,
-          "auth",
-        );
-        const meProc = Reflect.get(
-          authRouter as Record<string | symbol, unknown>,
-          "me",
-        );
-        const queryFn = Reflect.get(
-          meProc as Record<string | symbol, unknown>,
-          "query",
-        ) as () => Promise<unknown>;
-        return queryFn();
+        return tracedProc("auth.me", "query", null, async () => {
+          if (!demoAuthed) {
+            throw new DemoAuthError();
+          }
+          const engine = await getEngine();
+          const authRouter = Reflect.get(
+            engine as Record<string | symbol, unknown>,
+            "auth",
+          );
+          const meProc = Reflect.get(
+            authRouter as Record<string | symbol, unknown>,
+            "me",
+          );
+          const queryFn = Reflect.get(
+            meProc as Record<string | symbol, unknown>,
+            "query",
+          ) as () => Promise<unknown>;
+          return queryFn();
+        });
       },
     },
   },
@@ -358,7 +416,12 @@ const mockOverlay: Record<string, Record<string, unknown>> = {
       // set up (seed-structure completes before any request can be
       // served), so this constant equals what the engine would return.
       async query(): Promise<{ needsSetup: boolean }> {
-        return Promise.resolve({ needsSetup: false });
+        return await tracedProc(
+          "onboarding.getStatus",
+          "query",
+          null,
+          async () => await Promise.resolve({ needsSetup: false }),
+        );
       },
     },
   },
@@ -386,16 +449,19 @@ const mockOverlay: Record<string, Record<string, unknown>> = {
  */
 function makeEngineNode(path: readonly string[]): unknown {
   async function dispatch(kind: "query" | "mutate", input?: unknown) {
-    const eng = await getEngine();
-    let node: unknown = eng;
-    for (const segment of path) {
-      if (node === undefined || node === null) break;
-      node = Reflect.get(node as Record<string | symbol, unknown>, segment);
-    }
-    const fn = Reflect.get(node as Record<string | symbol, unknown>, kind) as (
-      i?: unknown,
-    ) => Promise<unknown>;
-    return fn(input);
+    return tracedProc(path.join("."), kind, null, async () => {
+      const eng = await getEngine();
+      let node: unknown = eng;
+      for (const segment of path) {
+        if (node === undefined || node === null) break;
+        node = Reflect.get(node as Record<string | symbol, unknown>, segment);
+      }
+      const fn = Reflect.get(
+        node as Record<string | symbol, unknown>,
+        kind,
+      ) as (i?: unknown) => Promise<unknown>;
+      return fn(input);
+    });
   }
   return new Proxy(
     {},

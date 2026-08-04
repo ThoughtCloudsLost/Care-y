@@ -32,6 +32,7 @@ import {
 
 import type { OprfEvaluateService } from "../../../../../server/src/crypto/oprf-evaluate-service.js";
 import { DemoEngineError } from "../errors.js";
+import { traceFlowLocal } from "../../flow-events.js";
 
 // ── Deterministic OPRF scalar ──────────────────────────────────────
 
@@ -141,23 +142,34 @@ export function createDemoOprfService(
   async function evaluate(request: {
     readonly blindedElement: string;
   }): Promise<{ evaluated: string }> {
-    await Promise.resolve();
-    const blindedBytes = decode(request.blindedElement);
+    // Badged as a seam: production splits this evaluation across two
+    // OPRF servers in separate jurisdictions.
+    return traceFlowLocal(
+      {
+        lane: "crypto",
+        label: "oprf evaluate",
+        seamKey: "oprf-evaluator",
+      },
+      async () => {
+        await Promise.resolve();
+        const blindedBytes = decode(request.blindedElement);
 
-    if (blindedBytes.length !== _sodium.crypto_core_ristretto255_BYTES) {
-      throw new DemoEngineError(
-        `Invalid blinded element length: expected ${String(_sodium.crypto_core_ristretto255_BYTES)}, got ${String(blindedBytes.length)}`,
-      );
-    }
+        if (blindedBytes.length !== _sodium.crypto_core_ristretto255_BYTES) {
+          throw new DemoEngineError(
+            `Invalid blinded element length: expected ${String(_sodium.crypto_core_ristretto255_BYTES)}, got ${String(blindedBytes.length)}`,
+          );
+        }
 
-    const evaluatedBytes = _sodium.crypto_scalarmult_ristretto255(
-      oprfScalar,
-      blindedBytes,
+        const evaluatedBytes = _sodium.crypto_scalarmult_ristretto255(
+          oprfScalar,
+          blindedBytes,
+        );
+
+        // Standard base64 to match the real service's Buffer encoding
+        // (login-crypto decodes this field with decodeStandardBase64).
+        return { evaluated: Buffer.from(evaluatedBytes).toString("base64") };
+      },
     );
-
-    // Standard base64 to match the real service's Buffer encoding
-    // (login-crypto decodes this field with decodeStandardBase64).
-    return { evaluated: Buffer.from(evaluatedBytes).toString("base64") };
   }
 
   return {

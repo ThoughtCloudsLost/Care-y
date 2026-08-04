@@ -35,6 +35,7 @@ import type {
 } from "$lib/tickets/preview-loader.svelte.js";
 import type { BridgeState } from "$lib/workers/crypto-bridge.js";
 import type { LoginCryptoResult } from "$lib/auth/login-crypto.js";
+import { traceFlowLocal } from "../lib/flow-events.js";
 
 // -----------------------------------------------------------------------
 // Error type
@@ -113,14 +114,20 @@ function createPacingBridge(real: CryptoBridge): PacingBridgeWrapper {
           ciphertext: string,
         ): Promise<string> {
           await pacedWait(keyCacheId);
-          return target.decrypt(
-            ticketId,
-            slot,
-            keyCacheId,
-            ephemeralPoint,
-            nonce,
-            wrappedKey,
-            ciphertext,
+          // Timed after pacedWait, so the reported duration is the real
+          // worker decrypt without the demo's reveal stagger.
+          return traceFlowLocal(
+            { lane: "crypto", label: `decrypt ${slot} ${keyCacheId}` },
+            async () =>
+              target.decrypt(
+                ticketId,
+                slot,
+                keyCacheId,
+                ephemeralPoint,
+                nonce,
+                wrappedKey,
+                ciphertext,
+              ),
           );
         };
       }
@@ -133,14 +140,19 @@ function createPacingBridge(real: CryptoBridge): PacingBridgeWrapper {
           wrappedKey: string,
           ciphertext: string,
         ): Promise<string> {
-          await pacedWait(`rewrap:${followUpId}`);
-          return target.decryptAndRewrap(
-            followUpId,
-            ticketId,
-            ephemeralPoint,
-            nonce,
-            wrappedKey,
-            ciphertext,
+          const cacheKey = `rewrap:${followUpId}`;
+          await pacedWait(cacheKey);
+          return traceFlowLocal(
+            { lane: "crypto", label: `decryptAndRewrap ${cacheKey}` },
+            async () =>
+              target.decryptAndRewrap(
+                followUpId,
+                ticketId,
+                ephemeralPoint,
+                nonce,
+                wrappedKey,
+                ciphertext,
+              ),
           );
         };
       }

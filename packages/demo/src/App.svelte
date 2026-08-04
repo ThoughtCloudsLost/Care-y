@@ -22,6 +22,7 @@
     X,
   } from "@lucide/svelte";
   import TopBar from "$demo/TopBar.svelte";
+  import FlowBand from "$demo/FlowBand.svelte";
   import FlowStory from "$demo/FlowStory.svelte";
   import SectionIntro from "$demo/SectionIntro.svelte";
   import SectionRail from "$demo/SectionRail.svelte";
@@ -57,15 +58,23 @@
     clampTopToViewport,
     bottomCentrePosition,
     BEZEL,
+    FRAME_FIT_MARGIN,
     PHONE_PRESET,
     DESKTOP_PRESET,
     WIDE_BREAKPOINT,
   } from "$demo/frame-geometry.svelte.js";
   import {
+    TOP_BAR_HEIGHT,
+    setTopChromeHeight,
+    topChromeHeight,
+    stickyTopOffset,
+  } from "$demo/flow-geometry.svelte.js";
+  import {
     isLinked,
     toggleLinked,
     resetLinked,
   } from "$demo/link-state.svelte.js";
+  import { createFlowBandStore } from "$demo/flow-band.svelte.js";
 
   // -----------------------------------------------------------------------
   // Dark mode with localStorage persistence
@@ -102,16 +111,36 @@
   });
 
   // -----------------------------------------------------------------------
+  // Data flow band + top chrome height
+  //
+  // The band is closed on every load, with no persistence. It lives in
+  // the top chrome and pushes the story down when open, so its height is
+  // measured (an expanded card's detail strip has no fixed height) and
+  // published to flow-geometry. Everything that parks below the chrome
+  // or computes a frame position reads that one number.
+  // -----------------------------------------------------------------------
+
+  const flowBand = createFlowBandStore();
+
+  function handleToggleFlowBand(): void {
+    flowBand.toggleOpen();
+  }
+
+  function handleBandFlowHeight(px: number): void {
+    setTopChromeHeight(TOP_BAR_HEIGHT + px);
+  }
+
+  // -----------------------------------------------------------------------
   // Frame geometry (floating window state)
   // -----------------------------------------------------------------------
 
-  const geo = createFrameGeometry();
+  const geo = createFrameGeometry(() => topChromeHeight());
 
   // -----------------------------------------------------------------------
   // Peek controller + engine prewarm
   // -----------------------------------------------------------------------
 
-  const peekCtrl = createPeekController(geo);
+  const peekCtrl = createPeekController(geo, () => topChromeHeight());
   const prewarm = createEnginePrewarm();
 
   /** Still captured from the clip's current frame at peek fire time. */
@@ -296,8 +325,16 @@
     const rawTop = anchorBottom !== null ? anchorBottom - outerH : fallbackTop;
     return {
       // Always fitted, not just when bottom-anchored: growing taller from
-      // a top anchor can overflow the bottom just as easily.
-      top: clampTopToViewport(rawTop, outerH, windowH),
+      // a top anchor can overflow the bottom just as easily. The chrome
+      // height keeps a preset from landing behind the open flow band,
+      // where the frame's own toolbar would be unreachable.
+      top: clampTopToViewport(
+        rawTop,
+        outerH,
+        windowH,
+        FRAME_FIT_MARGIN,
+        topChromeHeight(),
+      ),
       left: anchorRight !== null ? anchorRight - outerW : fallbackLeft,
     };
   }
@@ -336,7 +373,14 @@
         geo.setPosition(docked.top, docked.left);
       } else {
         geo.setPosition(
-          presetAnchoredTop(startTop, startOuterH, targetOuterH, windowH),
+          presetAnchoredTop(
+            startTop,
+            startOuterH,
+            targetOuterH,
+            windowH,
+            FRAME_FIT_MARGIN,
+            topChromeHeight(),
+          ),
           anchorRight !== null ? anchorRight - targetOuterW : startLeft,
         );
       }
@@ -502,6 +546,7 @@
 
   let bridge: DemoBridge | undefined = $state();
   let unsubscribe: (() => void) | undefined;
+  let unsubscribeFlow: (() => void) | undefined;
   let frameRef: DemoFrame | undefined = $state();
 
   // Topic progress tracking with SvelteSet for reactivity
@@ -524,6 +569,21 @@
     () => !entryVisible,
   );
 
+  // Chrome height at the last settled layout. Plain, not $state: it is
+  // the effect's own bookkeeping and must not make it re-run.
+  let lastChromeHeight = TOP_BAR_HEIGHT;
+
+  $effect(() => {
+    const next = topChromeHeight();
+    if (next === lastChromeHeight) return;
+    lastChromeHeight = next;
+    // Opening or closing the band moves every block on the page at once.
+    // The reading line moves with it, since the sticky intro parks under
+    // the chrome, so the selection holds once the reflow settles; muting
+    // covers the frames where it is only half applied.
+    scrollEngine.suppressLayoutShift();
+  });
+
   // Track the last-seen restartSeq per bridge instance. A fresh bridge
   // starts at 0; an increment means the phone requested a restart
   // (avatar-panel sign-out via /logout).
@@ -531,12 +591,20 @@
 
   function handleBridgeReady(b: DemoBridge): void {
     unsubscribe?.();
+    unsubscribeFlow?.();
     bridge = b;
     lastRestartSeq = 0;
 
     // Reset progress on restart/reload
     progress.reset();
     b.setDark(dark);
+
+    // A fresh bridge means a fresh phone, so the band starts from an
+    // empty timeline and fills from this bridge's events only.
+    flowBand.reset();
+    unsubscribeFlow = b.subscribeFlow((event) => {
+      flowBand.ingest(event);
+    });
 
     // Send the deep-link hash as an intent; the subscription below
     // replays the store's state (already moved if a hash was present)
@@ -573,6 +641,9 @@
     // of being re-driven to the old spot.
     unsubscribe?.();
     unsubscribe = undefined;
+    unsubscribeFlow?.();
+    unsubscribeFlow = undefined;
+    flowBand.reset();
     bridge = undefined;
     history.replaceState(
       null,
@@ -828,12 +899,23 @@
       locale={uiLocale}
       seen={progress.count}
       total={progress.total}
+      flowBandOpen={flowBand.open}
       onSectionClick={handleSectionClick}
       onToggleDark={handleToggleDark}
       onRestart={handleRestart}
       onLocaleChange={handleLocaleChange}
+      onToggleFlowBand={handleToggleFlowBand}
     />
   {/key}
+  <!-- Data flow band: normal flow directly after the sticky top bar, so
+       opening it moves the story down rather than covering it. The
+       floating frame (z:50) passes under it. -->
+  <FlowBand
+    store={flowBand}
+    narrow={isNarrow}
+    locale={uiLocale}
+    onFlowHeight={handleBandFlowHeight}
+  />
 {/if}
 
 <!-- Floating frame layer: fixed, between story content (z:1) and TopBar (z:100) -->
@@ -1100,7 +1182,10 @@
 </div>
 
 {#if !recordMode}
-  <div class="scroll-story">
+  <!-- --top-chrome-offset is where sticky story chrome parks: below the
+       top bar, and below the flow band when it is open. Published as a
+       custom property so the sticky rules stay declarative. -->
+  <div class="scroll-story" style="--top-chrome-offset: {stickyTopOffset()}px">
     <div class="flow-story-wrapper">
       {#key uiLocale}{#key pageKey}
           <div class="section-view" class:section-view--railed={showRail}>

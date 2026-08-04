@@ -53,6 +53,13 @@ export interface ScrollEngine {
   initFromHash(): void;
   /** Returns the reading line position (viewport px from the top) */
   remeasure(): number;
+  /**
+   * Mute selection for the frames a top-chrome change takes to reflow.
+   * Opening or closing the data flow band moves every block on the page
+   * at once, and a half-applied reflow must not read as the visitor
+   * having scrolled somewhere.
+   */
+  suppressLayoutShift(): void;
   /** Cleanup listeners */
   destroy(): void;
 }
@@ -66,6 +73,14 @@ const ALIGN_TOLERANCE = 1;
  * command that caused them has already resolved.
  */
 const SCROLL_GRACE_MS = 400;
+
+/**
+ * How long selection stays muted after the top chrome changes height.
+ * Long enough to cover the resize observation and the layout pass it
+ * schedules, short enough that a visitor scrolling straight after
+ * opening the band is still heard.
+ */
+export const LAYOUT_SHIFT_SETTLE_MS = 150;
 
 export function createScrollEngine(
   getBridge: () => DemoBridge | undefined,
@@ -353,12 +368,31 @@ export function createScrollEngine(
     return readingLineY();
   }
 
+  // Handle for the settle timer below, so a second toggle replaces the
+  // first rather than disarming early.
+  let layoutShiftTimeout: ReturnType<typeof setTimeout> | undefined;
+
+  function suppressLayoutShift(): void {
+    // No scroll compensation is applied on purpose. The band pushes the
+    // story down by its own height, and the sticky intro (which the
+    // reading line is derived from) moves down by exactly the same
+    // amount, so the sub at the reading line is unchanged once the
+    // reflow settles. Scrolling on top of that would move the selection
+    // rather than hold it.
+    armSuppression();
+    clearTimeout(layoutShiftTimeout);
+    layoutShiftTimeout = setTimeout(() => {
+      disarmSuppression();
+    }, LAYOUT_SHIFT_SETTLE_MS);
+  }
+
   // -----------------------------------------------------------------------
   // Lifecycle
   // -----------------------------------------------------------------------
 
   function destroy(): void {
     clearTimeout(suppressionTimeout);
+    clearTimeout(layoutShiftTimeout);
     window.removeEventListener("scroll", noteUserScroll);
   }
 
@@ -374,6 +408,7 @@ export function createScrollEngine(
     handleBridgeState,
     initFromHash,
     remeasure,
+    suppressLayoutShift,
     destroy,
   };
 }

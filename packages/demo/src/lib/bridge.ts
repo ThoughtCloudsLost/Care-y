@@ -220,6 +220,36 @@ export interface DemoBridgeState {
 
 export type DemoBridgeListener = (state: DemoBridgeState) => void;
 
+// -----------------------------------------------------------------------
+// Data-flow events (swimlane band)
+// -----------------------------------------------------------------------
+
+/**
+ * Architecture lane an event belongs to. Lane names are rendered by the
+ * outer page, which owns the localized copy; labels crossing the bridge
+ * stay technical and untranslated.
+ */
+export type FlowLane = "db" | "server" | "trpc" | "crypto" | "ui";
+export type FlowDirection = "up" | "down" | "local";
+/** Seams the demo scripts rather than runs for real. */
+export type DemoSeamKey =
+  | "login-pacing"
+  | "twofa-choreography"
+  | "webauthn-authenticator"
+  | "oprf-evaluator"
+  | "outbox-delivery";
+export interface DemoFlowEvent {
+  readonly id: number;
+  readonly interactionId: number;
+  readonly lane: FlowLane;
+  readonly direction: FlowDirection;
+  readonly label: string;
+  readonly seamKey: DemoSeamKey | null;
+  readonly payloadPreview: string | null;
+  readonly durationMs: number | null;
+}
+export type DemoFlowListener = (event: DemoFlowEvent) => void;
+
 export interface DemoBridge {
   /**
    * Move the shared location (the page's only way to drive the demo).
@@ -247,6 +277,12 @@ export interface DemoBridge {
    * unsubscribe function.
    */
   subscribe(listener: DemoBridgeListener): () => void;
+  /**
+   * Subscribe to data-flow events emitted by the phone's taps. Delivers
+   * NEW events only: the band opens empty, and a restart reloads the
+   * iframe, so there is nothing to replay.
+   */
+  subscribeFlow(listener: DemoFlowListener): () => void;
 }
 
 declare global {

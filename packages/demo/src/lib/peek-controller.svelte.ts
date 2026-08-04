@@ -50,14 +50,23 @@ export const COMMIT_DRAG_PX = 60;
  * FrameGeometry.setFootprint owns that floor at apply time, because
  * fitting on screen and a 200px minimum cannot both hold on a very
  * small window, and fitting is what keeps the frame usable.
+ *
+ * `chromeH` is the page's top chrome height. It comes off the available
+ * height because the peek is placed below the chrome: sizing against the
+ * raw window would put the bottom of the frame off screen whenever the
+ * data flow band is open.
  */
 export function computePeekFootprint(
   windowW: number,
   windowH: number,
+  chromeH = 0,
 ): { w: number; h: number } {
   const aspect = PHONE_PRESET.w / PHONE_PRESET.h;
   const bezelTotal = BEZEL * 2;
-  const maxH = Math.max(1, windowH - FRAME_FIT_MARGIN * 2 - bezelTotal);
+  const maxH = Math.max(
+    1,
+    windowH - chromeH - FRAME_FIT_MARGIN * 2 - bezelTotal,
+  );
 
   if (windowW < WIDE_BREAKPOINT) {
     // Narrow: span nearly the full width. Leave a small margin for the
@@ -83,20 +92,33 @@ export function computePeekFootprint(
   return { w: targetW, h: targetH };
 }
 
+/** Where the peek aims to sit, as a fraction of viewport height. */
+export const PEEK_TOP_FRACTION = 0.15;
+
 /**
  * Compute the position for a peek frame centred horizontally and placed
  * in the upper portion of the viewport.
+ *
+ * `chromeH` is the page's top chrome height, so a peek fired while the
+ * data flow band is open opens below the band rather than behind it.
  */
 export function computePeekPosition(
   outerW: number,
   outerH: number,
   windowW: number,
   windowH: number,
+  chromeH = 0,
 ): { top: number; left: number } {
   const left = Math.max(FRAME_FIT_MARGIN, Math.round((windowW - outerW) / 2));
   // Place in the upper third, but clamped so the frame fits.
-  const idealTop = Math.round(windowH * 0.15);
-  const top = clampTopToViewport(idealTop, outerH, windowH, FRAME_FIT_MARGIN);
+  const idealTop = Math.round(windowH * PEEK_TOP_FRACTION);
+  const top = clampTopToViewport(
+    idealTop,
+    outerH,
+    windowH,
+    FRAME_FIT_MARGIN,
+    chromeH,
+  );
   return { top, left };
 }
 
@@ -139,7 +161,16 @@ export interface PeekController {
 // Factory
 // -----------------------------------------------------------------------
 
-export function createPeekController(geo: FrameGeometry): PeekController {
+/**
+ * @param getChromeHeight Live height of the page's top chrome, so a peek
+ * opens below the data flow band. Injected rather than imported: the
+ * sizing and placement functions above stay pure and this module keeps
+ * no reactive dependency of its own.
+ */
+export function createPeekController(
+  geo: FrameGeometry,
+  getChromeHeight: () => number = () => 0,
+): PeekController {
   let phase: PeekPhase = $state("idle");
   let saved: SavedGeometry | null = null;
   let clipRect: ClipRect | null = null;
@@ -241,10 +272,11 @@ export function createPeekController(geo: FrameGeometry): PeekController {
     clipRect = rect;
 
     const { w: windowW, h: windowH } = viewportSize();
-    const peek = computePeekFootprint(windowW, windowH);
+    const chromeH = getChromeHeight();
+    const peek = computePeekFootprint(windowW, windowH, chromeH);
     const outerW = peek.w + BEZEL * 2;
     const outerH = peek.h + BEZEL * 2;
-    const pos = computePeekPosition(outerW, outerH, windowW, windowH);
+    const pos = computePeekPosition(outerW, outerH, windowW, windowH, chromeH);
 
     phase = "opening";
 

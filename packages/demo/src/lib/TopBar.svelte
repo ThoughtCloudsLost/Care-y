@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { RotateCcw, Sun, Moon, Globe } from "@lucide/svelte";
+  import { RotateCcw, Sun, Moon, Globe, Waypoints } from "@lucide/svelte";
   import * as m from "$lib/paraglide/messages.js";
   import { SECTIONS, type SectionId } from "./scroll-sections.js";
 
@@ -10,10 +10,13 @@
     locale: string;
     seen: number;
     total: number;
+    /** True while the data flow band (or its small-viewport overlay) is shown. */
+    flowBandOpen: boolean;
     onSectionClick: (id: SectionId) => void;
     onToggleDark: () => void;
     onRestart: () => void;
     onLocaleChange: () => void;
+    onToggleFlowBand: () => void;
   }
 
   let {
@@ -22,10 +25,12 @@
     locale,
     seen,
     total,
+    flowBandOpen,
     onSectionClick,
     onToggleDark,
     onRestart,
     onLocaleChange,
+    onToggleFlowBand,
   }: Props = $props();
 
   /** Message-function lookup by section titleKey */
@@ -77,6 +82,17 @@
     </nav>
 
     <div class="top-bar-right">
+      <button
+        class="icon-btn"
+        class:icon-btn-active={flowBandOpen}
+        onclick={onToggleFlowBand}
+        aria-label={m.demo_flow_toggle_label()}
+        aria-pressed={flowBandOpen}
+        title={m.demo_flow_toggle_label()}
+        type="button"
+      >
+        <Waypoints size={18} />
+      </button>
       <button
         class="icon-btn"
         onclick={onLocaleChange}
@@ -280,6 +296,26 @@
 
   :global(html.dark) .icon-btn:hover {
     background: #3a3a3c;
+  }
+
+  .icon-btn-active {
+    border-color: #007aff;
+    background: rgba(0, 122, 255, 0.1);
+    color: #007aff;
+  }
+
+  .icon-btn-active:hover {
+    background: rgba(0, 122, 255, 0.15);
+  }
+
+  :global(html.dark) .icon-btn-active {
+    border-color: #64d2ff;
+    background: rgba(0, 122, 255, 0.2);
+    color: #64d2ff;
+  }
+
+  :global(html.dark) .icon-btn-active:hover {
+    background: rgba(0, 122, 255, 0.25);
   }
 
   /* Small screens: hide title, compress tabs */

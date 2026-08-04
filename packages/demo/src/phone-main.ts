@@ -3,6 +3,7 @@ import * as m from "$lib/paraglide/messages.js";
 import { locales } from "$lib/paraglide/runtime.js";
 import type { DemoEngineResult } from "./lib/engine/engine.js";
 import { setEngineTrpc } from "./stubs/trpc.js";
+import { traceFlowLocal } from "./lib/flow-events.js";
 import PhoneApp from "./PhoneApp.svelte";
 import "./app.css";
 
@@ -70,29 +71,38 @@ const fakeCredentialsApi = {
       userHandle: null;
     };
   }> {
-    if (Date.now() > passkeyArmedUntil) {
-      // Auto-started ceremony: behave like a dismissed passkey prompt
-      await new Promise<void>((resolve) => {
-        setTimeout(resolve, WEBAUTHN_DISMISS_DELAY_MS);
-      });
-      throw new DOMException("Demo passkey prompt dismissed", "AbortError");
-    }
-    passkeyArmedUntil = 0;
-    await new Promise<void>((resolve) => {
-      setTimeout(resolve, WEBAUTHN_DELAY_MS);
-    });
-    return {
-      id: "demo-credential-id",
-      rawId: makeFakeArrayBuffer("demo-credential-id"),
-      authenticatorAttachment: "platform",
-      type: "public-key",
-      response: {
-        clientDataJSON: makeFakeArrayBuffer("demo-client-data"),
-        authenticatorData: makeFakeArrayBuffer("demo-auth-data"),
-        signature: makeFakeArrayBuffer("demo-signature"),
-        userHandle: null,
+    return traceFlowLocal(
+      {
+        lane: "crypto",
+        label: "webauthn assertion",
+        seamKey: "webauthn-authenticator",
       },
-    };
+      async () => {
+        if (Date.now() > passkeyArmedUntil) {
+          // Auto-started ceremony: behave like a dismissed passkey prompt
+          await new Promise<void>((resolve) => {
+            setTimeout(resolve, WEBAUTHN_DISMISS_DELAY_MS);
+          });
+          throw new DOMException("Demo passkey prompt dismissed", "AbortError");
+        }
+        passkeyArmedUntil = 0;
+        await new Promise<void>((resolve) => {
+          setTimeout(resolve, WEBAUTHN_DELAY_MS);
+        });
+        return {
+          id: "demo-credential-id",
+          rawId: makeFakeArrayBuffer("demo-credential-id"),
+          authenticatorAttachment: "platform",
+          type: "public-key",
+          response: {
+            clientDataJSON: makeFakeArrayBuffer("demo-client-data"),
+            authenticatorData: makeFakeArrayBuffer("demo-auth-data"),
+            signature: makeFakeArrayBuffer("demo-signature"),
+            userHandle: null,
+          },
+        };
+      },
+    );
   },
   async create(_options?: CredentialCreationOptions): Promise<null> {
     await Promise.resolve();

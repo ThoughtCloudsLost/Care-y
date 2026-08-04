@@ -52,6 +52,12 @@ export const READING_LINE_RATIO = 0.22;
 /** Gap between the header's bottom edge and the selection band. */
 export const BAND_GAP = 16;
 
+/** Height of the sticky top bar. The floor for the top chrome. */
+export const TOP_BAR_HEIGHT = 56;
+
+/** Breathing room between the top chrome and whatever parks under it. */
+export const CHROME_GAP = 8;
+
 // The sticky header's bottom edge in viewport space, published by
 // SectionIntro. Zero until it reports, which is why readingLineY falls
 // back to the ratio above.
@@ -60,6 +66,33 @@ let headerBottom = $state(0);
 /** Called by the sticky header whenever its box changes. */
 export function setHeaderBottom(px: number): void {
   headerBottom = px;
+}
+
+// Total height of the page's top chrome: the top bar plus whatever the
+// data flow band contributes to the flow when it is open. App publishes
+// the measured height; everything that parks below the chrome reads it
+// from here instead of restating the arithmetic.
+let chromeHeight = $state(TOP_BAR_HEIGHT);
+
+/**
+ * Publish the measured top chrome height. Values below the top bar are
+ * lifted to it: a transient zero measurement (a band mid-mount) must not
+ * pull sticky content up behind the bar.
+ */
+export function setTopChromeHeight(px: number): void {
+  chromeHeight = Number.isFinite(px)
+    ? Math.max(TOP_BAR_HEIGHT, Math.round(px))
+    : TOP_BAR_HEIGHT;
+}
+
+/** Current top chrome height in viewport px. */
+export function topChromeHeight(): number {
+  return chromeHeight;
+}
+
+/** Viewport offset a sticky element parks at, clear of the top chrome. */
+export function stickyTopOffset(): number {
+  return chromeHeight + CHROME_GAP;
 }
 
 /** Maximum fixed-point iterations for scroll-target convergence. */

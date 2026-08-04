@@ -10,6 +10,7 @@
 
 import type { CryptoBridge } from "$lib/workers/crypto-bridge.js";
 import { ensureKeyed, getEnsureKeyedResult } from "./crypto-context.js";
+import { emitFlowEvent, flowNow } from "../lib/flow-events.js";
 
 // -----------------------------------------------------------------------
 // Exported types (mirror the real module exactly)
@@ -66,6 +67,21 @@ export function setLoginCryptoStageListener(
 }
 
 /**
+ * Report a paced phase to the flow band. The durations are the demo's
+ * narratable timings, not the real derivation, which is why every phase
+ * event carries the login-pacing seam.
+ */
+function emitPhase(label: string, startedAt: number | null): void {
+  emitFlowEvent({
+    lane: "crypto",
+    direction: "local",
+    label,
+    seamKey: "login-pacing",
+    durationMs: startedAt === null ? null : flowNow() - startedAt,
+  });
+}
+
+/**
  * Demo loginCrypto: plays callbacks on timers at narratable speed
  * (~4.2s total) while the real derivation runs concurrently.
  * Resolves when BOTH the pacing sequence and the real derivation
@@ -86,18 +102,26 @@ export async function loginCrypto(
   // Argon2id phase (~1.5s)
   callbacks.onArgon2idStart();
   stageListener?.("argon2id");
+  const argon2idStartedAt = flowNow();
+  emitPhase("argon2id start", null);
   await wait(1500);
   callbacks.onArgon2idDone();
+  emitPhase("argon2id done", argon2idStartedAt);
 
   // OPRF phase (~1.5s)
   callbacks.onOprfStart();
   stageListener?.("oprf");
+  const oprfStartedAt = flowNow();
+  emitPhase("oprf start", null);
   await wait(1500);
   callbacks.onOprfDone();
+  emitPhase("oprf done", oprfStartedAt);
 
   // Derive phase (~1.2s)
   callbacks.onDeriveStart();
   stageListener?.("derive");
+  const deriveStartedAt = flowNow();
+  emitPhase("derive start", null);
   await wait(1200);
 
   // Wait for the real derivation to finish (it almost certainly
@@ -107,6 +131,7 @@ export async function loginCrypto(
   // Done
   callbacks.onDone();
   stageListener?.("done");
+  emitPhase("derive done", deriveStartedAt);
 
   // Return the REAL result from ensureKeyed
   const result = getEnsureKeyedResult();

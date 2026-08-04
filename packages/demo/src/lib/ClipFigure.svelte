@@ -73,18 +73,21 @@
   // Video autoplay via IntersectionObserver
   // -----------------------------------------------------------------------
 
-  let containerEl = $state<HTMLDivElement | undefined>(undefined);
-  let videoEl = $state<HTMLVideoElement | undefined>(undefined);
+  // bind:this nullifies the ref when the element leaves the DOM (for
+  // the video that happens on 404, when the error handler swaps in the
+  // placeholder), so both refs must model null, not just undefined.
+  let containerEl = $state<HTMLDivElement | null>(null);
+  let videoEl = $state<HTMLVideoElement | null>(null);
 
   // Report the container element upward for engine prewarm.
   $effect(() => {
-    if (containerEl !== undefined) {
+    if (containerEl !== null) {
       onelement?.(containerEl);
     }
   });
 
   $effect(() => {
-    if (videoEl === undefined) return;
+    if (videoEl === null) return;
     const v = videoEl;
     const reducedMotion = prefersReducedMotion.current;
 
@@ -118,10 +121,10 @@
   const longPress = createLongPress({
     onFire() {
       isHeld = true;
-      if (onpeekfire !== undefined && containerEl !== undefined) {
+      if (onpeekfire !== undefined && containerEl !== null) {
         const rect = containerEl.getBoundingClientRect();
         const v = videoEl;
-        if (v !== undefined) {
+        if (v !== null) {
           onpeekfire({
             rect,
             video: v,
@@ -157,7 +160,7 @@
 
   // Attach the long-press to the container element.
   $effect(() => {
-    if (containerEl === undefined) return;
+    if (containerEl === null) return;
     const cleanup = longPress.attach(containerEl);
     return () => cleanup.destroy();
   });
@@ -170,10 +173,10 @@
     if (ev.key !== "Enter" && ev.key !== " ") return;
     ev.preventDefault();
 
-    if (onpeekfire !== undefined && containerEl !== undefined) {
+    if (onpeekfire !== undefined && containerEl !== null) {
       const rect = containerEl.getBoundingClientRect();
       const v = videoEl;
-      if (v !== undefined) {
+      if (v !== null) {
         onpeekfire({
           rect,
           video: v,

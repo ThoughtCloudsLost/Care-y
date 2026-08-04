@@ -19,6 +19,9 @@
 // rather than redeclared so the spawn clearance and the text layout's
 // clearance can never drift apart when the toolbar changes size.
 import { FRAME_PAD_TOP } from "./flow-layout.js";
+// The default chrome height only. The live value is injected as a getter
+// so the pure placement functions below stay free of module state.
+import { TOP_BAR_HEIGHT } from "./flow-geometry.svelte.js";
 
 // -----------------------------------------------------------------------
 // Preset targets
@@ -219,20 +222,26 @@ export function presetAnchoredLeft(
 
 /**
  * Keep a frame of the given outer height fully on screen, with `margin`
- * of breathing room top and bottom. A frame too tall to fit is pinned to
- * the top so its toolbar and the phone's own header stay reachable.
+ * of breathing room top and bottom. A frame too tall to fit is pinned
+ * just below the chrome so its toolbar and the phone's own header stay
+ * reachable.
  *
- * Distinct from clampPosition, which only guarantees that a sliver stays
- * grabbable. Height-changing presets need the whole frame visible.
+ * `chromeH` is the page's top chrome height: the sticky top bar plus the
+ * data flow band when it is open. Computed placements start below it,
+ * because the toolbar sits ABOVE the frame's top edge and the chrome
+ * paints over it. Free drag deliberately ignores this and is clamped by
+ * clampPosition instead, which only guarantees a grabbable sliver.
  */
 export function clampTopToViewport(
   top: number,
   outerH: number,
   windowH: number,
   margin = FRAME_FIT_MARGIN,
+  chromeH = 0,
 ): number {
-  if (outerH + margin * 2 >= windowH) return margin;
-  return Math.min(Math.max(top, margin), windowH - outerH - margin);
+  const minTop = chromeH + margin;
+  if (outerH + margin + minTop >= windowH) return minTop;
+  return Math.min(Math.max(top, minTop), windowH - outerH - margin);
 }
 
 /**
@@ -252,11 +261,12 @@ export function presetAnchoredTop(
   targetOuterH: number,
   windowH: number,
   margin = FRAME_FIT_MARGIN,
+  chromeH = 0,
 ): number {
   const center = startTop + startOuterH / 2;
   const anchored =
     center > windowH / 2 ? startTop + startOuterH - targetOuterH : startTop;
-  return clampTopToViewport(anchored, targetOuterH, windowH, margin);
+  return clampTopToViewport(anchored, targetOuterH, windowH, margin, chromeH);
 }
 
 /** Target height for the shrunk state, as a fraction of the viewport height. */
@@ -428,13 +438,18 @@ export interface FrameGeometry {
   settleShrinkAfterResize(): void;
 }
 
-const TOP_BAR_HEIGHT = 56;
-
-export function createFrameGeometry(): FrameGeometry {
+/**
+ * @param getChromeHeight Live height of the page's top chrome. Injected
+ * rather than imported so this module owns no reactive dependency and
+ * the factory stays drivable from a test.
+ */
+export function createFrameGeometry(
+  getChromeHeight: () => number = () => TOP_BAR_HEIGHT,
+): FrameGeometry {
   const spawn = computeSpawn(
     typeof window !== "undefined" ? window.innerWidth : 1280,
     typeof window !== "undefined" ? window.innerHeight : 900,
-    TOP_BAR_HEIGHT,
+    getChromeHeight(),
   );
 
   let footprintW = $state(spawn.footprintW);
@@ -466,7 +481,7 @@ export function createFrameGeometry(): FrameGeometry {
     const s = computeSpawn(
       typeof window !== "undefined" ? window.innerWidth : 1280,
       typeof window !== "undefined" ? window.innerHeight : 900,
-      TOP_BAR_HEIGHT,
+      getChromeHeight(),
     );
     footprintW = s.footprintW;
     footprintH = s.footprintH;

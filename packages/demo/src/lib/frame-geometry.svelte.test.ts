@@ -24,6 +24,15 @@ import {
   SHRINK_VH_FRACTION,
 } from "./frame-geometry.svelte.js";
 import { FRAME_PAD_TOP } from "./flow-layout.js";
+import { TOP_BAR_HEIGHT } from "./flow-geometry.svelte.js";
+import { DEFAULT_BAND_HEIGHT } from "./flow-band.svelte.js";
+
+/**
+ * A representative open-chrome height: the top bar plus the flow band's
+ * default lane area. The band's own header and resize handle add a bit
+ * more in the page, which none of these assertions depend on.
+ */
+const OPEN_CHROME = TOP_BAR_HEIGHT + DEFAULT_BAND_HEIGHT;
 
 // -----------------------------------------------------------------------
 // deriveZoomViewport
@@ -99,7 +108,7 @@ describe("deriveZoomViewport", () => {
 // -----------------------------------------------------------------------
 
 describe("computeSpawn", () => {
-  const topBar = 56;
+  const topBar = TOP_BAR_HEIGHT;
 
   it("scales the phone down to fit the window height, keeping its ratio", () => {
     // 900px tall cannot hold an 844px phone plus bezel, top bar, and
@@ -185,6 +194,21 @@ describe("computeSpawn", () => {
     const spawn = computeSpawn(100, 200, topBar);
     expect(spawn.footprintW).toBeGreaterThanOrEqual(MIN_FOOTPRINT.w);
     expect(spawn.footprintH).toBeGreaterThanOrEqual(MIN_FOOTPRINT.h);
+  });
+
+  it("spawns below an open flow band, not just below the top bar", () => {
+    const spawn = computeSpawn(1280, 900, OPEN_CHROME);
+    expect(spawn.top).toBeGreaterThanOrEqual(OPEN_CHROME + FRAME_PAD_TOP);
+  });
+
+  it("shrinks the spawn to fit the band that an open chrome leaves", () => {
+    const tall = computeSpawn(1280, 900, topBar);
+    const short = computeSpawn(1280, 900, OPEN_CHROME);
+    expect(short.footprintH).toBeLessThan(tall.footprintH);
+    expect(short.footprintW / short.footprintH).toBeCloseTo(
+      PHONE_PRESET.w / PHONE_PRESET.h,
+      2,
+    );
   });
 });
 
@@ -361,6 +385,25 @@ describe("preset constants", () => {
 // -----------------------------------------------------------------------
 // Shrink state on the factory
 // -----------------------------------------------------------------------
+
+describe("createFrameGeometry chrome height", () => {
+  it("spawns below the chrome height the getter reports", () => {
+    const geo = createFrameGeometry(() => OPEN_CHROME);
+    expect(geo.top).toBeGreaterThanOrEqual(OPEN_CHROME + FRAME_PAD_TOP);
+  });
+
+  it("re-reads the chrome height on reset", () => {
+    let chrome = TOP_BAR_HEIGHT;
+    const geo = createFrameGeometry(() => chrome);
+    const spawnTop = geo.top;
+
+    chrome = OPEN_CHROME;
+    geo.reset();
+
+    expect(geo.top).toBeGreaterThan(spawnTop);
+    expect(geo.top).toBeGreaterThanOrEqual(OPEN_CHROME + FRAME_PAD_TOP);
+  });
+});
 
 describe("createFrameGeometry shrink semantics", () => {
   it("retargetShrunkTo stays shrunk and rewrites grow memory to the preset", () => {
@@ -553,6 +596,42 @@ describe("clampTopToViewport", () => {
     // Nothing fits, so keep the toolbar and phone header reachable.
     expect(clampTopToViewport(-300, 1200, windowH)).toBe(FRAME_FIT_MARGIN);
   });
+
+  it("pushes a placement out from under an open flow band", () => {
+    const result = clampTopToViewport(
+      100,
+      300,
+      windowH,
+      FRAME_FIT_MARGIN,
+      OPEN_CHROME,
+    );
+    expect(result).toBe(OPEN_CHROME + FRAME_FIT_MARGIN);
+  });
+
+  it("leaves a placement that already clears the band alone", () => {
+    const top = OPEN_CHROME + 100;
+    const result = clampTopToViewport(
+      top,
+      300,
+      windowH,
+      FRAME_FIT_MARGIN,
+      OPEN_CHROME,
+    );
+    expect(result).toBe(top);
+  });
+
+  it("pins below the band when the frame no longer fits under it", () => {
+    // 800 tall in the ~540px the open band leaves: nothing fits, so the
+    // toolbar stays reachable rather than the bottom edge.
+    const result = clampTopToViewport(
+      400,
+      800,
+      windowH,
+      FRAME_FIT_MARGIN,
+      OPEN_CHROME,
+    );
+    expect(result).toBe(OPEN_CHROME + FRAME_FIT_MARGIN);
+  });
 });
 
 // -----------------------------------------------------------------------
@@ -593,5 +672,19 @@ describe("presetAnchoredTop", () => {
   it("pins to the top when the phone preset is taller than the viewport", () => {
     // Short viewport: 860 tall frame cannot fit in 700.
     expect(presetAnchoredTop(300, 475, 860, 700)).toBe(FRAME_FIT_MARGIN);
+  });
+
+  it("lands a preset below an open flow band", () => {
+    // Upper-half start, so the anchor keeps top at 100; the chrome
+    // pushes it clear of the band.
+    const result = presetAnchoredTop(
+      100,
+      300,
+      500,
+      windowH,
+      FRAME_FIT_MARGIN,
+      OPEN_CHROME,
+    );
+    expect(result).toBe(OPEN_CHROME + FRAME_FIT_MARGIN);
   });
 });

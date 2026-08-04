@@ -4,6 +4,11 @@ import {
   scrollTargetFor,
   locationAtReadingLine,
   flowGeometryReady,
+  setTopChromeHeight,
+  topChromeHeight,
+  stickyTopOffset,
+  TOP_BAR_HEIGHT,
+  CHROME_GAP,
 } from "./flow-geometry.svelte.js";
 import type { FlowGeometrySource } from "./flow-geometry.svelte.js";
 import type {
@@ -140,6 +145,48 @@ function makeOscillatingSource(
 
 beforeEach(() => {
   setFlowGeometrySource(null);
+  setTopChromeHeight(TOP_BAR_HEIGHT);
+});
+
+// -----------------------------------------------------------------------
+// Top chrome height
+// -----------------------------------------------------------------------
+
+describe("topChromeHeight", () => {
+  it("starts at the top bar's height", () => {
+    expect(topChromeHeight()).toBe(TOP_BAR_HEIGHT);
+  });
+
+  it("reports the published height", () => {
+    setTopChromeHeight(TOP_BAR_HEIGHT + 292);
+    expect(topChromeHeight()).toBe(TOP_BAR_HEIGHT + 292);
+  });
+
+  it("rounds a fractional measurement", () => {
+    setTopChromeHeight(TOP_BAR_HEIGHT + 40.4);
+    expect(topChromeHeight()).toBe(TOP_BAR_HEIGHT + 40);
+  });
+
+  it("never falls below the top bar", () => {
+    setTopChromeHeight(0);
+    expect(topChromeHeight()).toBe(TOP_BAR_HEIGHT);
+  });
+
+  it("falls back to the top bar for a non-finite measurement", () => {
+    setTopChromeHeight(Number.NaN);
+    expect(topChromeHeight()).toBe(TOP_BAR_HEIGHT);
+  });
+});
+
+describe("stickyTopOffset", () => {
+  it("parks a gap below the bare top bar", () => {
+    expect(stickyTopOffset()).toBe(TOP_BAR_HEIGHT + CHROME_GAP);
+  });
+
+  it("moves down with the chrome", () => {
+    setTopChromeHeight(TOP_BAR_HEIGHT + 292);
+    expect(stickyTopOffset()).toBe(TOP_BAR_HEIGHT + 292 + CHROME_GAP);
+  });
 });
 
 // -----------------------------------------------------------------------

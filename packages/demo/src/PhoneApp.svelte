@@ -67,12 +67,18 @@
   } from "$demo/settings-driver.js";
   import type { DemoEngineResult } from "$demo/engine/engine.js";
   import { onOutboxAppend } from "$demo/engine/outbox.js";
+  import {
+    beginFlowInteraction,
+    emitFlowEvent,
+    subscribeFlowEvents,
+  } from "$demo/flow-events.js";
   import type {
     DemoBridge,
     DemoBridgeListener,
     DemoBridgeState,
     DemoFeature,
     DemoDetail,
+    DemoFlowListener,
     DemoTopic,
     LoginStage,
     LoginAdvanceTarget,
@@ -265,6 +271,13 @@
    *  opens never do, so the waiting screen alone cannot log in). */
   function applyTopic(classified: DemoTopic, trusted: boolean): void {
     store.reportTopic(classified);
+    if (trusted) {
+      emitFlowEvent({
+        lane: "ui",
+        direction: "up",
+        label: `tap ${classified}`,
+      });
+    }
     if (trusted && classified === "twofa-push") {
       armPushChallenge();
     }
@@ -279,6 +292,9 @@
       // events, so they never cancel themselves.
       if (event.isTrusted) {
         store.cancelChains();
+        // A trusted tap is the only reliable boundary between two
+        // bursts of work, so it opens the band's next interaction.
+        beginFlowInteraction();
       }
 
       const target = event.target;
@@ -288,15 +304,13 @@
       const ctx = { inDetail, feature: router.feature };
 
       // Try aria-label first
-      const labeled = target.closest("[aria-label]");
-      if (labeled !== null) {
-        const ariaLabel = labeled.getAttribute("aria-label");
-        if (ariaLabel !== null && ariaLabel !== "") {
-          const classified = classifyDemoLabel(ariaLabel, ctx);
-          if (classified !== null) {
-            applyTopic(classified, event.isTrusted);
-            return;
-          }
+      const labelCandidate =
+        target.closest("[aria-label]")?.getAttribute("aria-label") ?? null;
+      if (labelCandidate !== null && labelCandidate !== "") {
+        const classified = classifyDemoLabel(labelCandidate, ctx);
+        if (classified !== null) {
+          applyTopic(classified, event.isTrusted);
+          return;
         }
       }
 
@@ -342,6 +356,22 @@
             return;
           }
         }
+      }
+
+      // Unclassified trusted tap: the band still shows the interaction,
+      // labelled with whatever the element gives us.
+      if (event.isTrusted) {
+        const candidate = (
+          labelCandidate ??
+          interactive?.textContent ??
+          ""
+        ).trim();
+        const raw = candidate === "" ? target.tagName : candidate;
+        emitFlowEvent({
+          lane: "ui",
+          direction: "up",
+          label: `tap ${raw.slice(0, 40).toLowerCase()}`,
+        });
       }
     }
 
@@ -550,6 +580,10 @@
       return () => {
         listeners = listeners.filter((entry) => entry !== listener);
       };
+    },
+
+    subscribeFlow(listener: DemoFlowListener): () => void {
+      return subscribeFlowEvents(listener);
     },
   };
 

@@ -77,8 +77,10 @@
 <style>
   .section-rail {
     position: sticky;
-    /* Clears the top bar, matching the sticky section header. */
-    top: 64px;
+    /* Clears the top chrome, matching the sticky section header. The
+       story root publishes --top-chrome-offset; it grows when the data
+       flow band opens. */
+    top: var(--top-chrome-offset, 64px);
     align-self: start;
     padding: 2rem 0 1rem;
   }
