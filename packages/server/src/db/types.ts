@@ -600,6 +600,36 @@ export interface TrackedCallsTable {
   created_at: Generated<Date>;
 }
 
+// --- Notification preferences ---
+
+export interface NotificationPreferencesTable {
+  id: Generated<string>;
+  user_id: string;
+  scope_type: string;
+  scope_id: string | null;
+  event_type: string;
+  channel: string;
+  enabled: boolean;
+}
+
+// --- Escalation rules ---
+
+export interface EscalationRulesTable {
+  id: Generated<string>;
+  queue_id: string;
+  rule_type: string;
+  threshold_minutes: number;
+  action: string;
+  is_active: ColumnType<boolean, boolean | undefined, boolean>;
+  created_at: Generated<Date>;
+}
+
+export interface EscalationRuleFiringsTable {
+  rule_id: string;
+  ticket_id: string;
+  fired_at: Generated<Date>;
+}
+
 export interface TenantDatabase {
   users: UsersTable;
   sessions: SessionsTable;
@@ -654,6 +684,11 @@ export interface TenantDatabase {
   // Voicemail quarantine
   voicemail_quarantine: VoicemailQuarantineTable;
   tracked_calls: TrackedCallsTable;
+  // Notification preferences
+  notification_preferences: NotificationPreferencesTable;
+  // Escalation rules
+  escalation_rules: EscalationRulesTable;
+  escalation_rule_firings: EscalationRuleFiringsTable;
   // Shifts (shifts, shift_occurrences)
   // Client portal (portal_channels)
 }

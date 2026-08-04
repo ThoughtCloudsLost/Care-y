@@ -409,6 +409,16 @@ export {
   type ContentSearchInput,
   type AuditEventType,
   type AuditLogQueryInput,
+  notificationChannelSchema,
+  preferenceScopeTypeSchema,
+  setPreferenceInputSchema,
+  resetPreferencesInputSchema,
+  preferenceRowSchema,
+  type NotificationChannel,
+  type PreferenceScopeType,
+  type SetPreferenceInput,
+  type ResetPreferencesInput,
+  type PreferenceRow,
 } from "./schemas/notifications.js";
 
 // --- Browser call service interface ---
@@ -506,3 +516,19 @@ export {
   type TerminologyLabels,
   type TerminologyConfig,
 } from "./schemas/terminology.js";
+
+// --- Escalation rule schemas ---
+export {
+  escalationRuleTypeSchema,
+  escalationActionSchema,
+  createEscalationRuleInputSchema,
+  updateEscalationRuleInputSchema,
+  deleteEscalationRuleInputSchema,
+  listEscalationRulesInputSchema,
+  type EscalationRuleType,
+  type EscalationAction,
+  type CreateEscalationRuleInput,
+  type UpdateEscalationRuleInput,
+  type DeleteEscalationRuleInput,
+  type ListEscalationRulesInput,
+} from "./schemas/escalation.js";
