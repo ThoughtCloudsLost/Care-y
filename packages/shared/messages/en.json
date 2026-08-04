@@ -2062,5 +2062,8 @@
   "demo_role_volunteer_label": "Volunteer user",
   "demo_role_volunteer_tooltip": "Volunteer user: can view and manage their own tickets. Admin-only screens are blocked by real server middleware.",
   "demo_mode_toggle_to_read": "Switch to read mode",
-  "demo_mode_toggle_to_walk": "Switch to walkthrough mode"
+  "demo_mode_toggle_to_walk": "Switch to walkthrough mode",
+  "demo_role_admin_initial": "A",
+  "demo_role_manager_initial": "M",
+  "demo_role_volunteer_initial": "V"
 }

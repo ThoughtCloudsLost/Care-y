@@ -1,13 +1,17 @@
 <script lang="ts">
   /**
    * Account-switcher buttons for the three demo roles. Each renders a
-   * circular avatar icon (CircleUserRound) with a per-role accent ring.
-   * Chrome (background, border) is provided by the parent sidebar bar;
-   * this component is layout-less and renders only the buttons.
+   * brand-hued identity seal (the same stamp anatomy CARE-Y uses in the
+   * product) carrying the role's localized initial. The selected role is
+   * distinguished by ink weight (filled background + stronger ring), not
+   * by hue: all three seals are brand-colored.
+   *
+   * The chrome bar is permanently dark (#1a1a1a), so the seal tokens are
+   * pinned to the dark-scheme brand values to keep legibility regardless
+   * of the outer page's light/dark state.
    */
 
   import * as m from "$lib/paraglide/messages.js";
-  import { CircleUserRound } from "@lucide/svelte";
   import { RoleId, type RoleIdValue } from "@care-y/shared";
 
   interface Props {
@@ -23,8 +27,7 @@
     readonly id: RoleIdValue;
     readonly label: () => string;
     readonly tooltip: () => string;
-    /** CSS custom property value for the role's accent color. */
-    readonly accent: string;
+    readonly initial: () => string;
   }
 
   const roles: readonly RoleOption[] = [
@@ -32,42 +35,45 @@
       id: RoleId.ADMIN,
       label: () => m.demo_role_admin_label(),
       tooltip: () => m.demo_role_admin_tooltip(),
-      accent: "#ff453a",
+      initial: () => m.demo_role_admin_initial(),
     },
     {
       id: RoleId.MANAGER,
       label: () => m.demo_role_manager_label(),
       tooltip: () => m.demo_role_manager_tooltip(),
-      accent: "#ff9f0a",
+      initial: () => m.demo_role_manager_initial(),
     },
     {
       id: RoleId.VOLUNTEER,
       label: () => m.demo_role_volunteer_label(),
       tooltip: () => m.demo_role_volunteer_tooltip(),
-      accent: "#30d158",
+      initial: () => m.demo_role_volunteer_initial(),
     },
   ];
 </script>
 
 {#each roles as role (role.id)}
   <button
-    class="role-avatar"
-    class:role-avatar-active={activeRole === role.id}
+    class="role-seal-btn"
+    class:role-seal-btn--active={activeRole === role.id}
     type="button"
     onclick={() => onrolechange(role.id)}
     aria-label={role.label()}
     aria-pressed={activeRole === role.id}
     title={role.tooltip()}
-    style:--role-accent={role.accent}
   >
-    <span class="role-avatar-ring">
-      <CircleUserRound size={22} />
+    <span
+      class="identity-seal role-seal"
+      class:role-seal--active={activeRole === role.id}
+    >
+      {role.initial()}
     </span>
   </button>
 {/each}
 
 <style>
-  .role-avatar {
+  /* 44x44 touch target with the 34px seal centered inside. */
+  .role-seal-btn {
     display: flex;
     align-items: center;
     justify-content: center;
@@ -77,40 +83,35 @@
     border: none;
     border-radius: 6px;
     background: transparent;
-    color: #98989d;
     cursor: pointer;
     transition: background 0.15s ease;
     padding: 0;
   }
 
-  .role-avatar:hover {
+  .role-seal-btn:hover {
     background: rgba(255, 255, 255, 0.08);
   }
 
-  .role-avatar-ring {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 32px;
-    height: 32px;
-    border-radius: 50%;
-    border: 2px solid var(--role-accent);
-    transition: box-shadow 0.15s ease;
+  /* Pin seal ink to dark-scheme brand values so it reads on #1a1a1a
+     chrome regardless of the outer page theme. The product's default
+     dark brand-text is #a89b80 and brand-fill is #6e6553. */
+  .role-seal {
+    --brand-text: #a89b80;
+    --brand-fill: #6e6553;
+    color: var(--brand-text);
   }
 
-  /* Selected state: blue wash background (consistent with toolbar active)
-     plus a glow on the accent ring. Icon color shifts to match the active
-     toolbar treatment. */
-  .role-avatar-active {
-    background: rgba(0, 122, 255, 0.2);
-    color: #64d2ff;
+  /* Selected state: filled brand-soft background + stronger ring,
+     matching the product's identity semantics (distinguish by ink
+     weight, never by hue). */
+  .role-seal--active {
+    background: color-mix(in srgb, var(--brand-fill) 20%, transparent);
+    border-color: color-mix(in srgb, var(--brand-fill) 80%, transparent);
+    outline-color: color-mix(in srgb, var(--brand-fill) 50%, transparent);
+    opacity: 1;
   }
 
-  .role-avatar-active:hover {
-    background: rgba(0, 122, 255, 0.25);
-  }
-
-  .role-avatar-active .role-avatar-ring {
-    box-shadow: 0 0 6px var(--role-accent);
+  .role-seal-btn--active:hover {
+    background: rgba(255, 255, 255, 0.12);
   }
 </style>

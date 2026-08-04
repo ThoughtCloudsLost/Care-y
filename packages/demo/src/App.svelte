@@ -172,14 +172,50 @@
   });
 
   // -----------------------------------------------------------------------
-  // Frame rect for FlowStory (reactive derived from geo)
+  // Chrome arm dimensions (single source for layout and flow-hole)
+  //
+  // Each arm is: 4px padding + 44px button + 4px padding = 52px across
+  // its narrow axis. The top arm also has 2px top border = 54px total
+  // height above the frame. The left arm has 2px left border = 54px
+  // total width left of the frame.
   // -----------------------------------------------------------------------
 
+  /** Top arm height: 2px border-top + 4px padding + 44px tallest button + 4px padding. */
+  const CHROME_TOP_H = 54;
+  /** Left arm width: 2px border-left + 4px padding + 44px button + 4px padding. */
+  const CHROME_LEFT_W = 54;
+  /** Backplate drop below the frame top: the left arm's content height
+   *  (4px padding + 3x44px seals + 2x2px gaps + 4px padding = 144) plus
+   *  the plate's 2px bottom border, so the plate's bottom edge sits
+   *  flush with the last seal's row. */
+  const CHROME_DROP_H = 146;
+
+  // -----------------------------------------------------------------------
+  // Frame rects: bare (for peek controller) and chrome-inclusive (for flow)
+  // -----------------------------------------------------------------------
+
+  /** Bare frame box in viewport coordinates (peek, resize). */
   const frameRect = $derived({
     left: geo.left,
     top: geo.top,
     outerW: geo.outerW,
     outerH: geo.outerH,
+  });
+
+  /** Frame box expanded to cover the chrome arms so the flow hole
+   *  clears all L-shaped chrome. In non-walk mode or when chrome is
+   *  hidden, falls back to the bare rect. Shrunk state hides the left
+   *  arm (role seals), so only the top arm extends the hole then. */
+  const chromeFrameRect = $derived.by(() => {
+    if (!showDesktopChrome) return frameRect;
+    const topH = CHROME_TOP_H;
+    const leftW = geo.shrunk ? 0 : CHROME_LEFT_W;
+    return {
+      left: geo.left - leftW,
+      top: geo.top - topH,
+      outerW: geo.outerW + leftW,
+      outerH: geo.outerH + topH,
+    };
   });
 
   // -----------------------------------------------------------------------
@@ -975,13 +1011,21 @@
   style:width="{geo.outerW}px"
   style:height="{geo.outerH}px"
 >
-  <!-- Sidebar: single vertical bar along the frame's left edge,
-       containing all chrome controls. Positioned outside the frame
-       (right: 100%) so it clears the west/NW resize handles. -->
+  <!-- L-shaped chrome: corner grip + top arm (presets, shrink, link)
+       + left arm (role seals). Both arms sit fully outside the frame
+       box so they clear the resize handles (4px past frame edge). -->
   {#if showDesktopChrome}
-    <div class="frame-sidebar">
+    <!-- Top arm: horizontal bar above the frame. When the left arm is
+         visible, the top arm extends leftward by the arm's width so the
+         grip sits at the outer L-corner. When shrunk (no left arm), the
+         top arm starts flush with the frame's left edge. -->
+    <div
+      class="chrome-top-arm"
+      style:left="{geo.shrunk ? 0 : -CHROME_LEFT_W}px"
+      style:--chrome-drop="{CHROME_DROP_H}px"
+    >
       <div
-        class="sidebar-grip"
+        class="chrome-grip"
         role="presentation"
         onpointerdown={startDrag}
         onpointermove={onPointerMove}
@@ -991,16 +1035,7 @@
       >
         <GripHorizontal size={16} />
       </div>
-      <!-- Role buttons and presets hide while shrunk -->
       {#if !geo.shrunk}
-        <div
-          class="sidebar-roles"
-          role="toolbar"
-          aria-label={m.demo_role_rail_label()}
-        >
-          <RoleRail {activeRole} onrolechange={handleRoleChange} />
-        </div>
-        <div class="sidebar-separator" aria-hidden="true"></div>
         <button
           class="toolbar-btn"
           class:toolbar-btn-active={geo.footprintW === PHONE_PRESET.w &&
@@ -1063,6 +1098,17 @@
         {/if}
       </button>
     </div>
+    <!-- Left arm: vertical bar along the frame's left edge, below the
+         corner. Role seals only, hidden when shrunk. -->
+    {#if !geo.shrunk}
+      <div
+        class="chrome-left-arm"
+        role="toolbar"
+        aria-label={m.demo_role_rail_label()}
+      >
+        <RoleRail {activeRole} onrolechange={handleRoleChange} />
+      </div>
+    {/if}
   {/if}
 
   <!-- Resize handles: 4 edges + 4 corners -->
@@ -1256,20 +1302,23 @@
                 {seenTopics}
                 showToc={!entryVisible && !showRail}
                 selectable={!entryVisible}
-                {frameRect}
+                frameRect={chromeFrameRect}
                 onSubClick={handleSubClick}
                 onSectionClick={handleSectionClick}
               />
               <!-- First snap target on the page, so it holds the
                  selection slot before anything is selected. -->
-              <StoryTip selectable={!entryVisible} {frameRect} />
+              <StoryTip
+                selectable={!entryVisible}
+                frameRect={chromeFrameRect}
+              />
               <FlowStory
                 sections={pageSections}
                 locale={uiLocale}
                 activeSection={scrollEngine.activeSection}
                 activeSub={scrollEngine.activeSub}
                 {seenTopics}
-                {frameRect}
+                frameRect={chromeFrameRect}
                 onSelectSection={handleSectionClick}
                 onSelectSub={handleSubClick}
                 onpeekfire={handlePeekFire}
@@ -1498,12 +1547,59 @@
     pointer-events: none;
   }
 
-  /* Sidebar: vertical bar along the frame's left edge. Uses the bezel
-     background (#1a1a1a) so it reads as part of the device chrome.
-     Outer corners rounded, frame-facing edge borderless so it merges
-     with the bezel. right: 100% clears the west/NW resize handles
-     (which extend only 4px past the frame edge). */
-  .frame-sidebar {
+  /* ── L-shaped chrome ──
+     Two arms meet at the frame's top-left corner. Both sit fully
+     outside the frame box (right: 100% / bottom: 100%) so they clear
+     the 4px resize handles. Shared background, border, and color
+     scheme: permanently dark (#1a1a1a) in both page themes. The inner
+     edges (frame-facing) are borderless so the arms merge with the
+     bezel. Outer corners are rounded; the two arms share a single
+     continuous corner at the top-left. */
+
+  /* The top arm's left offset is set dynamically (inline style) so it
+     extends over the left arm when role seals are visible, or stays
+     flush with the frame edge when shrunk. The left arm's top aligns
+     with the top arm's bottom. Only the outer-most corners round;
+     the shared corner and frame-facing edges stay square. */
+  .chrome-top-arm {
+    position: absolute;
+    bottom: 100%;
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: 2px;
+    padding: 4px;
+    background: #1a1a1a;
+    border: 2px solid #333;
+    border-bottom: none;
+    border-radius: 10px 10px 0 0;
+  }
+
+  /* Backplate: the top arm's surface extends down behind the phone to
+     the left arm's bottom edge, so the two arms read as one plate.
+     The chrome block paints before DemoFrame in the DOM, so the frame
+     covers the plate everywhere except the seal strip on its left.
+     The drop applies in shrunk mode too (same vertical extent behind
+     the frame) so the plate silhouette through the bezel corner stays
+     constant across states. left/right -2px cover the arm's own border
+     so the outer edges are continuous lines. */
+  .chrome-top-arm::after {
+    content: "";
+    position: absolute;
+    top: 100%;
+    left: -2px;
+    right: -2px;
+    height: var(--chrome-drop);
+    background: #1a1a1a;
+    border: 2px solid #333;
+    border-top: none;
+    border-radius: 0 0 10px 10px;
+    pointer-events: none;
+  }
+
+  /* The left arm is a transparent content column riding the backplate;
+     the plate owns the chrome (background, border, rounding). */
+  .chrome-left-arm {
     position: absolute;
     top: 0;
     right: 100%;
@@ -1512,15 +1608,9 @@
     align-items: center;
     gap: 2px;
     padding: 4px;
-    background: #1a1a1a;
-    border-radius: 10px 0 0 10px;
-    border: 2px solid #333;
-    border-right: none;
   }
 
-  /* Controls sit on the bezel background (#1a1a1a) in both light and
-     dark modes, so they use a single color scheme throughout. */
-  .sidebar-grip {
+  .chrome-grip {
     display: flex;
     align-items: center;
     justify-content: center;
@@ -1532,22 +1622,8 @@
     touch-action: none;
   }
 
-  .sidebar-grip:active {
+  .chrome-grip:active {
     cursor: grabbing;
-  }
-
-  .sidebar-roles {
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-  }
-
-  .sidebar-separator {
-    width: 24px;
-    height: 1px;
-    background: rgba(255, 255, 255, 0.15);
-    margin: 2px 0;
-    flex-shrink: 0;
   }
 
   .toolbar-btn {
