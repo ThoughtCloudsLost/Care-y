@@ -22,7 +22,7 @@
     ListItem,
     Toggle,
   } from "konsta/svelte";
-  import { Phone, Pencil } from "@lucide/svelte";
+  import { Phone, Pencil, BellRing } from "@lucide/svelte";
   import * as m from "$lib/paraglide/messages.js";
   import { withTerms } from "$lib/terminology/with-terms.js";
   import StatusMark from "$lib/components/StatusMark.svelte";
@@ -254,6 +254,18 @@
         <Pencil class="w-5 h-5 text-[var(--ink-2)]" aria-hidden="true" />
       {/snippet}
     </ListItem>
+    {#if isWatching || isAssignedToMe}
+      <ListItem
+        link
+        chevron
+        title={m.notif_ticket_panel_action()}
+        onclick={() => onaction("notifications")}
+      >
+        {#snippet media()}
+          <BellRing class="w-5 h-5 text-[var(--ink-2)]" aria-hidden="true" />
+        {/snippet}
+      </ListItem>
+    {/if}
     <ListItem
       link
       chevron

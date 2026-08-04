@@ -10,7 +10,7 @@ const en_notif_event_merge_completed = /** @type {(inputs: Notif_Event_Merge_Com
 };
 
 const es_notif_event_merge_completed = /** @type {(inputs: Notif_Event_Merge_CompletedInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Fusion completada`)
+	return /** @type {LocalizedString} */ (`Fusión completada`)
 };
 
 /**

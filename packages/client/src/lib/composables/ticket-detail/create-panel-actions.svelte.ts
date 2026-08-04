@@ -24,6 +24,7 @@ export interface PanelActionsDeps {
   readonly onassign: () => void;
   readonly onphone: () => void;
   readonly oneditcontent: () => void;
+  readonly onnotifications: () => void;
 }
 
 export interface PanelActions {
@@ -80,6 +81,9 @@ export function createPanelActions(deps: PanelActionsDeps): PanelActions {
         break;
       case "editContent":
         deps.oneditcontent();
+        break;
+      case "notifications":
+        deps.onnotifications();
         break;
       case "cancel":
         break;

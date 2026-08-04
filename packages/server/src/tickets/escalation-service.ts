@@ -152,6 +152,7 @@ export async function runEscalationCheck(
   let firings = 0;
 
   for (const rule of rules) {
+    const firingsBeforeRule = firings;
     const candidates =
       rule.rule_type === "unassigned_duration"
         ? await findUnassignedCandidates(
@@ -218,7 +219,7 @@ export async function runEscalationCheck(
     // Log rule ID and count only (never queue names or ticket content)
     if (candidates.length > 0) {
       console.log(
-        `rule ${rule.id}: ${String(candidates.length)} candidates, ${String(firings)} firings`,
+        `rule ${rule.id}: ${String(candidates.length)} candidates, ${String(firings - firingsBeforeRule)} firings`,
       );
     }
   }

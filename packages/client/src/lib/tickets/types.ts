@@ -12,4 +12,5 @@ export type TicketAction =
   | "watch"
   | "unwatch"
   | "editContent"
+  | "notifications"
   | "cancel";

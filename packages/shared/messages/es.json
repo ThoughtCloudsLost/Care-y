@@ -2272,8 +2272,8 @@
   "notif_event_ticket_reopened": "Reabierto",
   "notif_event_ticket_escalated": "Escalado",
   "notif_event_followup_added": "Nueva respuesta",
-  "notif_event_mention": "Mencion",
-  "notif_event_merge_completed": "Fusion completada",
+  "notif_event_mention": "Mención",
+  "notif_event_merge_completed": "Fusión completada",
   "notif_event_voicemail_quarantined": "Correo de voz",
   "notif_channel_push": "Push",
   "notif_channel_email": "Email",
@@ -2291,7 +2291,7 @@
   "notif_reset_all_confirm": "Todas tus preferencias de notificacion volveran a los valores predeterminados. Esto no se puede deshacer.",
   "notif_reset_all_action": "Restablecer",
   "notif_clear_queue_title": "Borrar excepciones de cola?",
-  "notif_clear_queue_confirm": "Las excepciones para {queue} seran eliminadas. Tus preferencias globales se aplicaran en su lugar.",
+  "notif_clear_queue_confirm": "Las excepciones para {queue} serán eliminadas. Tus preferencias globales se aplicarán en su lugar.",
   "notif_clear_queue_action": "Borrar",
   "escalation_section_title": "Alertas de escalamiento",
   "escalation_explainer": "Las alertas notifican a las personas; la escala de prioridad de arriba cambia el caso en sí.",
@@ -2318,5 +2318,10 @@
   "escalation_delete_confirm_body": "La regla \"{rule}\" será eliminada permanentemente.",
   "escalation_rule_created": "Regla de escalamiento creada.",
   "escalation_rule_updated": "Regla de escalamiento actualizada.",
-  "escalation_rule_deleted": "Regla de escalamiento eliminada."
+  "escalation_rule_deleted": "Regla de escalamiento eliminada.",
+  "notif_ticket_sheet_title": "Notificaciones para este {ticket}",
+  "notif_ticket_reset": "Restablecer a mis valores predeterminados",
+  "notif_ticket_reset_success": "Notificaciones del ticket restablecidas",
+  "notif_ticket_pref_saved": "Preferencia del ticket guardada",
+  "notif_ticket_panel_action": "Canales de notificación"
 }

@@ -10,7 +10,7 @@ const en_notif_clear_queue_confirm = /** @type {(inputs: Notif_Clear_Queue_Confi
 };
 
 const es_notif_clear_queue_confirm = /** @type {(inputs: Notif_Clear_Queue_ConfirmInputs) => LocalizedString} */ (i) => {
-	return /** @type {LocalizedString} */ (`Las excepciones para ${i?.queue} seran eliminadas. Tus preferencias globales se aplicaran en su lugar.`)
+	return /** @type {LocalizedString} */ (`Las excepciones para ${i?.queue} serán eliminadas. Tus preferencias globales se aplicarán en su lugar.`)
 };
 
 /**

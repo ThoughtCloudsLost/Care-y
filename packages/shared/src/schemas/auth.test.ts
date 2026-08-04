@@ -8,7 +8,11 @@ import {
   loginInputSchema,
   registerInputSchema,
   setUserActiveInputSchema,
+  permissionValueSchema,
+  setRolePermissionInputSchema,
+  rolePermissionsOutputSchema,
 } from "./auth.js";
+import { RoleId, Permission } from "../roles.js";
 
 describe("emailSchema", () => {
   it("accepts a valid email", () => {
@@ -387,6 +391,167 @@ describe("setUserActiveInputSchema", () => {
       setUserActiveInputSchema.safeParse({
         userId: VALID_UUID,
         isActive: "false",
+      }).success,
+    ).toBe(false);
+  });
+});
+
+describe("permissionValueSchema", () => {
+  it("accepts a valid Permission enum value", () => {
+    const result = permissionValueSchema.safeParse(Permission.VIEW_TICKETS);
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data).toBe("view_tickets");
+    }
+  });
+
+  it("accepts all Permission enum values", () => {
+    for (const value of Object.values(Permission)) {
+      expect(permissionValueSchema.safeParse(value).success).toBe(true);
+    }
+  });
+
+  it("rejects unknown permission strings", () => {
+    expect(permissionValueSchema.safeParse("fly_helicopters").success).toBe(
+      false,
+    );
+    expect(permissionValueSchema.safeParse("MANAGE_KEYS").success).toBe(false);
+    expect(permissionValueSchema.safeParse("").success).toBe(false);
+  });
+
+  it("rejects non-string input", () => {
+    expect(permissionValueSchema.safeParse(42).success).toBe(false);
+    expect(permissionValueSchema.safeParse(null).success).toBe(false);
+    expect(permissionValueSchema.safeParse(undefined).success).toBe(false);
+  });
+});
+
+describe("setRolePermissionInputSchema", () => {
+  it("accepts valid input", () => {
+    const result = setRolePermissionInputSchema.safeParse({
+      roleId: RoleId.MANAGER,
+      permission: Permission.VIEW_REPORTS,
+      enabled: true,
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("accepts enabled=false", () => {
+    const result = setRolePermissionInputSchema.safeParse({
+      roleId: RoleId.VOLUNTEER,
+      permission: Permission.EDIT_KNOWLEDGE_BASE,
+      enabled: false,
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("rejects unknown role ids", () => {
+    expect(
+      setRolePermissionInputSchema.safeParse({
+        roleId: "unknown_role_id",
+        permission: Permission.VIEW_TICKETS,
+        enabled: true,
+      }).success,
+    ).toBe(false);
+  });
+
+  it("rejects unknown permission strings", () => {
+    expect(
+      setRolePermissionInputSchema.safeParse({
+        roleId: RoleId.ADMIN,
+        permission: "launch_missiles",
+        enabled: true,
+      }).success,
+    ).toBe(false);
+  });
+
+  it("rejects missing fields", () => {
+    expect(
+      setRolePermissionInputSchema.safeParse({
+        roleId: RoleId.ADMIN,
+        permission: Permission.VIEW_TICKETS,
+      }).success,
+    ).toBe(false);
+
+    expect(
+      setRolePermissionInputSchema.safeParse({
+        roleId: RoleId.ADMIN,
+        enabled: true,
+      }).success,
+    ).toBe(false);
+
+    expect(
+      setRolePermissionInputSchema.safeParse({
+        permission: Permission.VIEW_TICKETS,
+        enabled: true,
+      }).success,
+    ).toBe(false);
+  });
+
+  it("rejects non-boolean enabled", () => {
+    expect(
+      setRolePermissionInputSchema.safeParse({
+        roleId: RoleId.ADMIN,
+        permission: Permission.VIEW_TICKETS,
+        enabled: "true",
+      }).success,
+    ).toBe(false);
+  });
+});
+
+describe("rolePermissionsOutputSchema", () => {
+  it("accepts valid output shape", () => {
+    const result = rolePermissionsOutputSchema.safeParse({
+      roles: [
+        {
+          roleId: RoleId.VOLUNTEER,
+          permissions: [Permission.VIEW_TICKETS, Permission.VIEW_OWN_SHIFTS],
+          overridden: [],
+        },
+        {
+          roleId: RoleId.MANAGER,
+          permissions: [Permission.VIEW_TICKETS, Permission.MANAGE_USERS],
+          overridden: [Permission.MANAGE_USERS],
+        },
+        {
+          roleId: RoleId.ADMIN,
+          permissions: [Permission.MANAGE_KEYS, Permission.MANAGE_ROLES],
+          overridden: [],
+        },
+      ],
+      locked: [Permission.MANAGE_KEYS, Permission.MANAGE_ROLES],
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("accepts empty roles and locked arrays", () => {
+    const result = rolePermissionsOutputSchema.safeParse({
+      roles: [],
+      locked: [],
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("rejects invalid permission in locked array", () => {
+    expect(
+      rolePermissionsOutputSchema.safeParse({
+        roles: [],
+        locked: ["not_a_real_permission"],
+      }).success,
+    ).toBe(false);
+  });
+
+  it("rejects invalid role id in roles array", () => {
+    expect(
+      rolePermissionsOutputSchema.safeParse({
+        roles: [
+          {
+            roleId: "bad_role",
+            permissions: [],
+            overridden: [],
+          },
+        ],
+        locked: [],
       }).success,
     ).toBe(false);
   });
