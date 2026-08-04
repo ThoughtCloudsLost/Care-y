@@ -286,3 +286,102 @@ const KNOWN_PERMISSIONS: ReadonlySet<string> = new Set(
 function isKnownPermission(value: string): value is Permission {
   return KNOWN_PERMISSIONS.has(value);
 }
+
+// ---------------------------------------------------------------------------
+// Role permission override repository (thin DB access for the auth router)
+// ---------------------------------------------------------------------------
+
+/**
+ * Returns all override rows for the org. Used by getRolePermissions to
+ * compute which permissions differ from the ROLE_CONFIG default.
+ */
+export async function listAllOverrides(
+  tDb: Kysely<TenantDatabase>,
+): Promise<
+  readonly { role_id: string; permission: string; enabled: boolean }[]
+> {
+  return tDb
+    .selectFrom("role_permission_overrides")
+    .select(["role_id", "permission", "enabled"])
+    .execute();
+}
+
+/**
+ * Returns the set of overridden permission names for a role by comparing
+ * the effective set against the ROLE_CONFIG defaults. A permission is
+ * "overridden" if an explicit DB row exists that differs from the default.
+ */
+export function computeOverridden(
+  roleId: RoleIdValue,
+  overrideRows: readonly {
+    role_id: string;
+    permission: string;
+    enabled: boolean;
+  }[],
+): readonly Permission[] {
+  const roleRows = overrideRows.filter((r) => r.role_id === roleId);
+  const result: Permission[] = [];
+  for (const row of roleRows) {
+    if (isKnownPermission(row.permission)) {
+      result.push(row.permission);
+    }
+  }
+  return result;
+}
+
+/**
+ * Returns true if the given permission is enabled by default for the role.
+ */
+export function isDefaultEnabled(
+  roleId: RoleIdValue,
+  permission: Permission,
+): boolean {
+  const config = ROLE_CONFIG.get(roleId);
+  if (!config) return false;
+  return config.permissions.has(permission);
+}
+
+/**
+ * Upserts a role permission override row. If a row for (role_id, permission)
+ * already exists, updates its enabled flag; otherwise inserts a new row.
+ */
+export async function upsertOverride(
+  tDb: Kysely<TenantDatabase>,
+  roleId: RoleIdValue,
+  permission: Permission,
+  enabled: boolean,
+): Promise<void> {
+  await tDb
+    .insertInto("role_permission_overrides")
+    .values({ role_id: roleId, permission, enabled })
+    .onConflict((oc) =>
+      oc.columns(["role_id", "permission"]).doUpdateSet({ enabled }),
+    )
+    .execute();
+}
+
+/**
+ * Deletes the override row for a specific (role_id, permission) pair.
+ * Called when the caller sets a permission back to its ROLE_CONFIG default,
+ * keeping the table sparse.
+ */
+export async function deleteOverride(
+  tDb: Kysely<TenantDatabase>,
+  roleId: RoleIdValue,
+  permission: Permission,
+): Promise<void> {
+  await tDb
+    .deleteFrom("role_permission_overrides")
+    .where("role_id", "=", roleId)
+    .where("permission", "=", permission)
+    .execute();
+}
+
+/**
+ * Deletes all role permission override rows for the org (full reset).
+ */
+export async function deleteAllOverrides(
+  tDb: Kysely<TenantDatabase>,
+): Promise<void> {
+  await tDb.deleteFrom("role_permission_overrides").execute();
+}

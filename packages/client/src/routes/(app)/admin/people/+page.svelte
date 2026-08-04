@@ -11,6 +11,7 @@
     Users,
     Layers,
     HeartHandshake,
+    ShieldCheck,
     UserPlus,
     LayersPlus,
     Link2,
@@ -62,6 +63,7 @@
   import UsersSection from "$lib/components/admin/UsersSection.svelte";
   import QueuesSection from "$lib/components/admin/QueuesSection.svelte";
   import ClientsSection from "$lib/components/admin/ClientsSection.svelte";
+  import RolePermissionsSection from "$lib/components/admin/RolePermissionsSection.svelte";
 
   const permissionsGetter = getCurrentPermissions();
   const permissions = $derived(permissionsGetter());
@@ -69,9 +71,10 @@
   const canManageUsers = $derived(permissions.has(Permission.MANAGE_USERS));
   const canManageQueues = $derived(permissions.has(Permission.MANAGE_QUEUES));
   const canViewClients = $derived(permissions.has(Permission.VIEW_CLIENTS));
-  const canInviteWithLink = $derived(permissions.has(Permission.MANAGE_ROLES));
+  const canManageRoles = $derived(permissions.has(Permission.MANAGE_ROLES));
+  const canInviteWithLink = $derived(canManageRoles);
   const hasAccess = $derived(
-    canManageUsers || canManageQueues || canViewClients,
+    canManageUsers || canManageQueues || canViewClients || canManageRoles,
   );
 
   $effect(() => {
@@ -242,7 +245,9 @@
         ? usersSubnavbar
         : activeTab === "clients" && canViewClients
           ? clientsSubnavbar
-          : queuesSubnavbar;
+          : activeTab === "roles" && canManageRoles
+            ? rolesSubnavbar
+            : queuesSubnavbar;
 
     navbarCtx.current = {
       title: m.admin_people_title(),
@@ -618,6 +623,15 @@
           },
         ]
       : []),
+    ...(canManageRoles
+      ? [
+          {
+            id: "roles",
+            label: m.admin_tab_roles(),
+            icon: ShieldCheck,
+          },
+        ]
+      : []),
   ]}
   <IconTabToggle
     {tabs}
@@ -748,6 +762,23 @@
   />
 {/snippet}
 
+{#snippet rolesSubnavbar()}
+  <SubNavbarFilterLayout
+    title={m.roles_title()}
+    headerRight={tabSegmented}
+    selectLabel=""
+    onselect={noop}
+    filterPills={{
+      pills: [],
+      activeCount: 0,
+      ontoggle: noop,
+      onselect: noop,
+      ondatechange: noop,
+      onclearall: noop,
+    }}
+  />
+{/snippet}
+
 {#snippet clientSearchRow()}
   <div class="client-search-row">
     <input
@@ -801,6 +832,10 @@
       onfetchnext={() => void clientsQuery.fetchNextPage()}
       onretry={() => void clientsQuery.refetch()}
     />
+  </div>
+{:else if activeTab === "roles" && canManageRoles}
+  <div role="tabpanel" id="panel-roles" aria-labelledby="tab-roles">
+    <RolePermissionsSection />
   </div>
 {/if}
 

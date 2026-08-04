@@ -153,6 +153,9 @@ export const errorCodeMap: Record<ErrorCodeType, () => string> = {
     m.error_invalid_verification_code(),
   [ErrorCode.GREETING_NOT_FOUND]: () => m.error_greeting_not_found(),
   [ErrorCode.SMS_RESPONSE_NOT_FOUND]: () => m.error_sms_response_not_found(),
+
+  // Role permission overrides
+  [ErrorCode.PERMISSION_LOCKED]: () => m.error_permission_locked(),
 };
 
 /** Type guard: returns true when the string is a recognized ErrorCode value. */

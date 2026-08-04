@@ -8,7 +8,7 @@ import type {
 import type { QueueSortField } from "$lib/stores/queue-filters.svelte.js";
 import type { ClientSortField } from "$lib/stores/client-filters.svelte.js";
 
-export type PeopleTab = "users" | "queues" | "clients";
+export type PeopleTab = "users" | "queues" | "clients" | "roles";
 
 export const SORT_FIELDS: readonly UserSortField[] = ["name", "role", "status"];
 
@@ -44,7 +44,12 @@ export const CLIENT_SORT_FIELDS: readonly ClientSortField[] = [
 ];
 
 export function isPeopleTab(value: string): value is PeopleTab {
-  return value === "users" || value === "queues" || value === "clients";
+  return (
+    value === "users" ||
+    value === "queues" ||
+    value === "clients" ||
+    value === "roles"
+  );
 }
 
 export function isClientSortField(value: string): value is ClientSortField {
@@ -55,6 +60,7 @@ export function defaultTab(permissions: ReadonlySet<string>): PeopleTab {
   if (permissions.has(Permission.MANAGE_USERS)) return "users";
   if (permissions.has(Permission.MANAGE_QUEUES)) return "queues";
   if (permissions.has(Permission.VIEW_CLIENTS)) return "clients";
+  if (permissions.has(Permission.MANAGE_ROLES)) return "roles";
   return "queues";
 }
 

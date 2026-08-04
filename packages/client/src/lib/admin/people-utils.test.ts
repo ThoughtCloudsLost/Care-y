@@ -12,11 +12,11 @@ import {
 } from "./people-utils.js";
 
 describe("isPeopleTab", () => {
-  it.each(["users", "queues"])('accepts "%s"', (v) => {
+  it.each(["users", "queues", "clients", "roles"])('accepts "%s"', (v) => {
     expect(isPeopleTab(v)).toBe(true);
   });
 
-  it.each(["settings", "admin", "", "Users"])('rejects "%s"', (v) => {
+  it.each(["settings", "admin", "", "Users", "Roles"])('rejects "%s"', (v) => {
     expect(isPeopleTab(v)).toBe(false);
   });
 });
@@ -30,6 +30,16 @@ describe("defaultTab", () => {
   it("returns 'queues' when MANAGE_USERS permission is absent", () => {
     const perms = new Set([Permission.MANAGE_QUEUES]);
     expect(defaultTab(perms)).toBe("queues");
+  });
+
+  it("returns 'clients' when only VIEW_CLIENTS is present", () => {
+    const perms = new Set([Permission.VIEW_CLIENTS]);
+    expect(defaultTab(perms)).toBe("clients");
+  });
+
+  it("returns 'roles' when only MANAGE_ROLES is present", () => {
+    const perms = new Set([Permission.MANAGE_ROLES]);
+    expect(defaultTab(perms)).toBe("roles");
   });
 
   it("returns 'queues' for empty permissions", () => {
