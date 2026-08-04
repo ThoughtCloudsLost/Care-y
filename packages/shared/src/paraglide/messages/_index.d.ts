@@ -2062,4 +2062,7 @@ export * from "./demo_role_volunteer_label.js";
 export * from "./demo_role_volunteer_tooltip.js";
 export * from "./demo_mode_toggle_to_read.js";
 export * from "./demo_mode_toggle_to_walk.js";
+export * from "./demo_role_admin_initial.js";
+export * from "./demo_role_manager_initial.js";
+export * from "./demo_role_volunteer_initial.js";
 export type LocalizedString = import("../runtime.js").LocalizedString;

@@ -30,7 +30,7 @@ export const DEMO_ORG_SLUG = "demo-org";
 export const DEMO_ORG_SCHEMA = "demo_org";
 export const DEMO_ADMIN_IDENTIFIER = "jdoe";
 export const DEMO_ADMIN_PASSWORD = "DemoPassword2026";
-export const DEMO_ADMIN_DISPLAY_NAME = "Demo Admin";
+export const DEMO_ADMIN_DISPLAY_NAME = "Demo User";
 export const NUM_SEED_CLIENTS = 30; // Fewer than prod seed (120) for speed
 
 export interface SeedStructureResult {
