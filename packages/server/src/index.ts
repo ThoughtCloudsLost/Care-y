@@ -397,11 +397,14 @@ const pushSender = createPushNotificationSender(vapidKeys, "admin@care-y.app");
 // Job queue created early so NotificationService can use it during routing.
 const jobQueue = createJobQueue(db);
 
+const preferencesService = createNotificationPreferencesService();
+
 const notificationService = createNotificationService({
   sse: sseService,
   emailSender: notificationEmailSender,
   pushSender,
   jobQueue,
+  preferences: preferencesService,
 });
 
 const createContext = createContextFactory({
@@ -536,7 +539,10 @@ const appRouter = createAppRouter({
   notificationDeps: {
     createPushSubSvc: (tDb) => createPushSubscriptionService(tDb),
     vapidPublicKey: vapidKeys.publicKey,
-    preferencesService: createNotificationPreferencesService(),
+    preferencesService,
+  },
+  escalationDeps: {
+    createAuditSvc: (tDb) => createAuditService(tDb),
   },
   brandingDeps: {
     blobStore,
