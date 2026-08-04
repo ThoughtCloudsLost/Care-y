@@ -15,6 +15,7 @@
  */
 
 import { DemoEngineError } from "../errors.js";
+import { traceFlowLocal } from "../../flow-events.js";
 import type {
   DatabaseConnection,
   DatabaseIntrospector,
@@ -72,6 +73,78 @@ function convertParams(
   });
 }
 
+// ── Flow-band labelling ─────────────────────────────────────────────
+
+const SQL_VERB = /^\s*\(*\s*([a-z]+)/i;
+const SQL_FROM = /\bfrom\s+([^\s(),;]+)/i;
+const SQL_INTO = /\binto\s+([^\s(),;]+)/i;
+const SQL_UPDATE = /\bupdate\s+([^\s(),;]+)/i;
+const SQL_UPDATE_ONLY = /\bupdate\s+only\s+([^\s(),;]+)/i;
+
+/** Drop quoting and the schema qualifier from a table reference. */
+function bareTable(reference: string): string {
+  const parts = reference.replace(/"/g, "").split(".");
+  return parts.at(-1) ?? reference;
+}
+
+/** Leading verb plus primary table, or a clipped slice of the statement. */
+function describeSql(sql: string): string {
+  const flat = sql.replace(/\s+/g, " ").trim();
+  const verbMatch = SQL_VERB.exec(flat);
+  if (verbMatch === null) return flat.slice(0, 40);
+  const verb = (verbMatch.at(1) ?? "").toUpperCase();
+
+  let tableMatch: RegExpExecArray | null = null;
+  if (verb === "SELECT" || verb === "DELETE") tableMatch = SQL_FROM.exec(flat);
+  else if (verb === "INSERT") tableMatch = SQL_INTO.exec(flat);
+  else if (verb === "UPDATE") {
+    tableMatch = SQL_UPDATE.exec(flat);
+    if ((tableMatch?.at(1) ?? "").toLowerCase() === "only") {
+      tableMatch = SQL_UPDATE_ONLY.exec(flat);
+    }
+  }
+
+  const table = tableMatch === null ? null : (tableMatch.at(1) ?? null);
+  if (table === null) return verb === "" ? flat.slice(0, 40) : verb;
+  return `${verb} ${bareTable(table)}`;
+}
+
+/** Hex head of a byte parameter. Full ciphertext would flood the band. */
+function describeBytes(bytes: Uint8Array): string {
+  const head = Array.from(bytes.slice(0, 6))
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("");
+  return `bytes(${String(bytes.length)}) ${head}`;
+}
+
+/**
+ * Render bound parameters for the band. Encrypted columns arrive as
+ * ciphertext bytes, which is the point of showing them, so nothing is
+ * filtered here.
+ */
+function previewParams(params: readonly unknown[] | undefined): string | null {
+  if (params === undefined || params.length === 0) return null;
+  return params
+    .map((param): string => {
+      if (param === null) return "null";
+      if (param === undefined) return "undefined";
+      if (param instanceof Uint8Array) return describeBytes(param);
+      if (param instanceof Date) return param.toISOString();
+      if (typeof param === "string") {
+        return param.length > 24 ? `"${param.slice(0, 24)}..."` : `"${param}"`;
+      }
+      if (
+        typeof param === "number" ||
+        typeof param === "boolean" ||
+        typeof param === "bigint"
+      ) {
+        return String(param);
+      }
+      return "[object]";
+    })
+    .join(", ");
+}
+
 // ── Connection serialization queue ──────────────────────────────────
 
 class PGliteConnection implements DatabaseConnection {
@@ -83,9 +156,14 @@ class PGliteConnection implements DatabaseConnection {
   }): Promise<QueryResult<R>> {
     const params = convertParams(compiledQuery.parameters);
 
-    const result: Results<Record<string, unknown>> = await this.pg.query(
-      compiledQuery.sql,
-      params as unknown[],
+    const result: Results<Record<string, unknown>> = await traceFlowLocal(
+      {
+        lane: "db",
+        label: describeSql(compiledQuery.sql),
+        payloadPreview: previewParams(params),
+      },
+      async (): Promise<Results<Record<string, unknown>>> =>
+        this.pg.query(compiledQuery.sql, params as unknown[]),
     );
 
     const fields = result.fields;

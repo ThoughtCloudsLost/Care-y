@@ -21,8 +21,8 @@ export const PREWARM_ROOT_MARGIN = "100%";
 export interface EnginePrewarm {
   /** True once any observed element has approached the viewport. */
   readonly warm: boolean;
-  /** Attach an element for the observer to watch. Safe to call with undefined. */
-  observe(el: HTMLElement | undefined): void;
+  /** Attach an element for the observer to watch. Safe to call with null or undefined. */
+  observe(el: HTMLElement | null | undefined): void;
   /** Tear down the observer. Idempotent. */
   destroy(): void;
 }
@@ -59,10 +59,10 @@ export function createEnginePrewarm(): EnginePrewarm {
     );
   }
 
-  function observe(el: HTMLElement | undefined): void {
+  function observe(el: HTMLElement | null | undefined): void {
     if (destroyed || warm) return;
 
-    if (el === undefined) return;
+    if (el === null || el === undefined) return;
     if (observer === null) return;
     if (observed.has(el)) return;
 

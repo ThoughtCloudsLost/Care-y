@@ -15,6 +15,14 @@ import {
   FRAME_FIT_MARGIN,
   type FrameGeometry,
 } from "./frame-geometry.svelte.js";
+import { TOP_BAR_HEIGHT } from "./flow-geometry.svelte.js";
+import { DEFAULT_BAND_HEIGHT } from "./flow-band.svelte.js";
+
+/**
+ * A representative open-chrome height: the top bar plus the flow band's
+ * default lane area.
+ */
+const OPEN_CHROME = TOP_BAR_HEIGHT + DEFAULT_BAND_HEIGHT;
 
 // ---------------------------------------------------------------------------
 // Pure sizing functions
@@ -55,6 +63,15 @@ describe("computePeekFootprint", () => {
     expect(result.h).toBeLessThanOrEqual(maxH);
   });
 
+  it("sizes against the height an open flow band leaves", () => {
+    const full = computePeekFootprint(1200, 900);
+    const withBand = computePeekFootprint(1200, 900, OPEN_CHROME);
+    const maxH = 900 - OPEN_CHROME - FRAME_FIT_MARGIN * 2 - BEZEL * 2;
+
+    expect(withBand.h).toBeLessThan(full.h);
+    expect(withBand.h).toBeLessThanOrEqual(maxH);
+  });
+
   it("stays positive and aspect-true on degenerate windows", () => {
     // Fit wins over MIN_FOOTPRINT here: an aspect-true frame with both
     // axes at 200 cannot fit a 100px window. FrameGeometry.setFootprint
@@ -87,6 +104,16 @@ describe("computePeekPosition", () => {
     const pos = computePeekPosition(400, 1800, 1200, 900);
     // clampTopToViewport pins to margin when too tall
     expect(pos.top).toBe(FRAME_FIT_MARGIN);
+  });
+
+  it("opens below an open flow band", () => {
+    const pos = computePeekPosition(400, 300, 1200, 900, OPEN_CHROME);
+    expect(pos.top).toBe(OPEN_CHROME + FRAME_FIT_MARGIN);
+  });
+
+  it("centres horizontally regardless of the chrome height", () => {
+    const pos = computePeekPosition(400, 300, 1200, 900, OPEN_CHROME);
+    expect(pos.left).toBe(Math.round((1200 - 400) / 2));
   });
 });
 

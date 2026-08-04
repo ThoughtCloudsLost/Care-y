@@ -44,6 +44,7 @@ import {
 } from "./server/secrets-shim.js";
 import { createSealedBoxEncryptor } from "./server/sealed-box-shim.js";
 import { appendToOutbox } from "./outbox.js";
+import { traceFlowSpan } from "../flow-events.js";
 import { hkdfSync, createHmac } from "./server/node-crypto-shim.js";
 import {
   seedStructure,
@@ -876,35 +877,44 @@ export async function bootDemoEngine(): Promise<DemoEngineResult> {
     // enumeration (Object.entries) sees nothing. Always use Reflect.get.
     const callerObj = caller as unknown as Record<string, unknown>;
 
+    // Every phone-side call crosses this function, mock-overlay
+    // delegations included, so it is the demo's server boundary and
+    // the only honest place to time a request. The embedded router
+    // carries no demo middleware and must not grow one.
     async function dispatchPath(
       path: readonly string[],
       input?: unknown,
     ): Promise<unknown> {
-      try {
-        // Per-request user reload, mirroring the production session
-        // middleware: profile mutations must be visible to the very
-        // next ctx.user read.
-        await refreshAdminUser();
-        let node: unknown = callerObj;
-        for (const segment of path) {
-          if (node === undefined || node === null) break;
-          node = Reflect.get(node as Record<string, unknown>, segment);
-        }
-        if (typeof node !== "function") {
-          throw new TRPCError({
-            code: "NOT_FOUND",
-            message: `Procedure "${path.join(".")}" not found`,
-          });
-        }
-        return reshapeWire(
-          await (node as (i: unknown) => Promise<unknown>)(input),
-        );
-      } catch (err: unknown) {
-        if (err instanceof TRPCError) {
-          throw TRPCClientError.from(err);
-        }
-        throw err;
-      }
+      return traceFlowSpan(
+        { lane: "server", label: `route ${path.join(".")}` },
+        async () => {
+          try {
+            // Per-request user reload, mirroring the production session
+            // middleware: profile mutations must be visible to the very
+            // next ctx.user read.
+            await refreshAdminUser();
+            let node: unknown = callerObj;
+            for (const segment of path) {
+              if (node === undefined || node === null) break;
+              node = Reflect.get(node as Record<string, unknown>, segment);
+            }
+            if (typeof node !== "function") {
+              throw new TRPCError({
+                code: "NOT_FOUND",
+                message: `Procedure "${path.join(".")}" not found`,
+              });
+            }
+            return reshapeWire(
+              await (node as (i: unknown) => Promise<unknown>)(input),
+            );
+          } catch (err: unknown) {
+            if (err instanceof TRPCError) {
+              throw TRPCClientError.from(err);
+            }
+            throw err;
+          }
+        },
+      );
     }
 
     function makeNode(path: readonly string[]): unknown {

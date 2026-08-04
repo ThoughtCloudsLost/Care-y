@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import type { LoginCryptoCallbacks } from "./login-crypto.js";
+import { getFlowEvents, resetFlowEvents } from "../lib/flow-events.js";
 
 // Mock the crypto-context module to avoid real Worker construction
 vi.mock("./crypto-context.js", () => {
@@ -48,6 +49,7 @@ function makeCallbacks(): {
 describe("loginCrypto (choreography over ensureKeyed)", () => {
   beforeEach(() => {
     vi.useFakeTimers();
+    resetFlowEvents();
   });
 
   it("calls callbacks in the correct order", async () => {
@@ -95,6 +97,25 @@ describe("loginCrypto (choreography over ensureKeyed)", () => {
     expect(stages).toEqual(["argon2id", "oprf", "derive", "done"]);
 
     setLoginCryptoStageListener(null);
+  });
+
+  it("emits one flow event per phase under the login-pacing seam", async () => {
+    const { callbacks } = makeCallbacks();
+    const promise = loginCrypto("user", "pass", fakeBridge, callbacks);
+    await vi.advanceTimersByTimeAsync(4200);
+    await promise;
+
+    const paced = getFlowEvents().filter((e) => e.seamKey === "login-pacing");
+    expect(paced.map((e) => e.label)).toEqual([
+      "argon2id start",
+      "argon2id done",
+      "oprf start",
+      "oprf done",
+      "derive start",
+      "derive done",
+    ]);
+    expect(paced.every((e) => e.lane === "crypto")).toBe(true);
+    expect(paced.every((e) => e.direction === "local")).toBe(true);
   });
 
   it("total pacing is approximately 4.2 seconds", async () => {

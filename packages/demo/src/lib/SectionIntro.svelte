@@ -10,7 +10,7 @@
     computeLineSegments,
     type Segment,
   } from "./flow-layout.js";
-  import { setHeaderBottom } from "./flow-geometry.svelte.js";
+  import { setHeaderBottom, stickyTopOffset } from "./flow-geometry.svelte.js";
 
   interface Props {
     section: Section;
@@ -63,8 +63,13 @@
   let dodgeLeft = $state(0);
   let dodgeRight = $state(0);
 
-  /** Sticky offset from the CSS below. Both must move together. */
-  const STICKY_TOP = 64;
+  /**
+   * The offset the header parks at, clear of the top bar and the data
+   * flow band. The CSS below reads the same number through the
+   * --top-chrome-offset custom property, so the measurement here and the
+   * rendered position cannot drift apart.
+   */
+  const stickyTop: number = $derived(stickyTopOffset());
   /** Width at or above which the header is sticky (matches the CSS). */
   const STICKY_BREAKPOINT = 900;
 
@@ -105,6 +110,11 @@
     };
   });
 
+  // The live measure function, so a chrome-height change can trigger one
+  // without tearing down the observer below. Plain, not $state: only the
+  // effect underneath calls it, and it needs no reactivity of its own.
+  let remeasureBox: (() => void) | null = null;
+
   $effect(() => {
     if (introEl === undefined) {
       cachedBox = null;
@@ -122,6 +132,7 @@
       };
     }
     measure();
+    remeasureBox = measure;
 
     const ro = new ResizeObserver(() => {
       measure();
@@ -134,7 +145,16 @@
     return () => {
       ro.disconnect();
       window.removeEventListener("resize", measure);
+      remeasureBox = null;
     };
+  });
+
+  $effect(() => {
+    // Opening the flow band changes where the header parks and how far
+    // down the document it starts, but never its own box, so neither the
+    // ResizeObserver nor the resize listener fires. Re-measure by hand.
+    void stickyTop;
+    remeasureBox?.();
   });
 
   $effect(() => {
@@ -152,13 +172,13 @@
     }
 
     // Derive the viewport top from the cached document position. Above
-    // the breakpoint the header is sticky, so it stops at STICKY_TOP
+    // the breakpoint the header is sticky, so it stops at stickyTop
     // once scrolled to; below it, it scrolls normally. Deriving rather
     // than caching the viewport rect is what keeps this correct on
     // narrow layouts, where the frame still overlaps the header.
     const flowTop = box.docTop - scrollY;
     const viewportTop =
-      windowW >= STICKY_BREAKPOINT ? Math.max(STICKY_TOP, flowTop) : flowTop;
+      windowW >= STICKY_BREAKPOINT ? Math.max(stickyTop, flowTop) : flowTop;
     const r = {
       top: viewportTop,
       left: box.left,
@@ -215,7 +235,7 @@
     if (box === null) return;
     const flowTop = box.docTop - scrollY;
     const viewportTop =
-      windowW >= STICKY_BREAKPOINT ? Math.max(STICKY_TOP, flowTop) : flowTop;
+      windowW >= STICKY_BREAKPOINT ? Math.max(stickyTop, flowTop) : flowTop;
     setHeaderBottom(viewportTop + box.height);
   });
 
@@ -304,11 +324,13 @@
     background: rgba(100, 210, 255, 0.06);
   }
 
-  /* Desktop pinning: intro sticks at top below TopBar */
+  /* Desktop pinning: the intro sticks below the top chrome. The story
+     root publishes --top-chrome-offset, which grows when the data flow
+     band opens; the fallback is the bare top bar plus its gap. */
   @media (min-width: 900px) {
     .section-intro {
       position: sticky;
-      top: 64px;
+      top: var(--top-chrome-offset, 64px);
       z-index: 2;
       padding-bottom: 1rem;
       margin-bottom: 0;
