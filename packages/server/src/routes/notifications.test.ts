@@ -39,6 +39,7 @@ import {
   mockReq,
   mockRes,
   type TestDb,
+  stubTenantDbDefaultRoles,
 } from "../test-utils.js";
 
 // --- Unit-level stubs and context builders ---
@@ -85,7 +86,7 @@ function createVolunteerContext(): Context {
       orgId: "org-notifications-unit",
       orgSlug: "test-org",
       orgSchema: "org_test",
-      tenantDb: {} as OrgContext["tenantDb"],
+      tenantDb: stubTenantDbDefaultRoles(),
       sealedBox: {} as OrgContext["sealedBox"],
     },
     session: {
@@ -455,7 +456,7 @@ describe("createNotificationRouter", () => {
       await expectTrpcError(
         caller.setPreference({
           scopeType: "ticket",
-          scopeId: "00000000-0000-0000-0000-000000000099",
+          scopeId: "00000000-0000-4000-8000-000000000099",
           eventType: "ticket_assigned",
           channel: "email",
           enabled: true,
@@ -474,13 +475,13 @@ describe("createNotificationRouter", () => {
 
       const result = await caller.resetPreferences({
         scopeType: "queue",
-        scopeId: "00000000-0000-0000-0000-000000000042",
+        scopeId: "00000000-0000-4000-8000-000000000042",
       });
 
       expect(result).toEqual({ reset: true });
       expect(resetSpy).toHaveBeenCalledWith(ctx.org?.tenantDb, ctx.user?.id, {
         scopeType: "queue",
-        scopeId: "00000000-0000-0000-0000-000000000042",
+        scopeId: "00000000-0000-4000-8000-000000000042",
       });
     });
 
@@ -696,7 +697,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
 
       it("ticket scope without a key wrap returns NOT_FOUND", async () => {
         const caller = createDbCaller(userA);
-        const fakeTicketId = "00000000-0000-0000-0000-000000000099";
+        const fakeTicketId = "00000000-0000-4000-8000-000000000099";
 
         await expectTrpcError(
           caller.setPreference({
@@ -747,7 +748,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
 
       it("produces identical NOT_FOUND for missing ticket and inaccessible ticket", async () => {
         const callerA = createDbCaller(userA);
-        const nonexistentId = "00000000-0000-0000-0000-ffffffffffff";
+        const nonexistentId = "00000000-0000-4000-8000-ffffffffffff";
 
         // Missing ticket: no ticket row exists at all.
         const errMissing = await expectTrpcError(
@@ -785,7 +786,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
         await expectTrpcError(
           caller.setPreference({
             scopeType: "queue",
-            scopeId: "00000000-0000-0000-0000-000000000077",
+            scopeId: "00000000-0000-4000-8000-000000000077",
             eventType: "ticket_created",
             channel: "sms",
             enabled: false,

@@ -291,6 +291,10 @@ describe.skipIf(!process.env.DATABASE_URL)(
       it("writes audit entry with correct metadata on successful change", async () => {
         const caller = createAuthedCaller(adminUser);
 
+        // Earlier tests in this shared schema also toggle VIEW_REPORTS for
+        // Volunteer; only rows written after this point count.
+        const auditWindowStart = new Date();
+
         await caller.setRolePermission({
           roleId: RoleId.VOLUNTEER,
           permission: Permission.VIEW_REPORTS,
@@ -304,6 +308,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
           .selectFrom("audit_log")
           .selectAll()
           .where("event_type", "=", "role_permission_changed")
+          .where("created_at", ">", auditWindowStart)
           .execute();
         const matching = auditRows.filter(
           (r) =>

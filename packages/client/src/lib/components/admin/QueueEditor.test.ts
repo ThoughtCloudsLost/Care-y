@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
 import { render, screen, cleanup, fireEvent } from "@testing-library/svelte";
+import type * as CareYShared from "@care-y/shared";
 
 const { mockCreateQueue, mockUpdateQueue, mockToastShow, mockOrgCacheDelete } =
   vi.hoisted(() => ({
@@ -45,6 +46,9 @@ vi.mock("$lib/terminology/with-terms.js", () => ({
 }));
 
 vi.mock("$lib/crypto/context.js", () => ({
+  // Empty permission set: the admin-only escalation group stays unmounted,
+  // so these tests exercise the queue form in isolation.
+  getCurrentPermissions: () => () => new Set(),
   getOrgKeyManager: () => ({
     get isLoaded() {
       return mockOrgKeyLoaded;
@@ -97,7 +101,8 @@ vi.mock("@tanstack/svelte-query", () => ({
   }),
 }));
 
-vi.mock("@care-y/shared", () => ({
+vi.mock("@care-y/shared", async (importOriginal) => ({
+  ...(await importOriginal<typeof CareYShared>()),
   MAX_ESCALATION_DAYS: 365,
 }));
 

@@ -22,28 +22,24 @@ export async function up(db: Kysely<unknown>): Promise<void> {
     .addColumn("created_at", "timestamptz", (col) =>
       col.notNull().defaultTo(sql`now()`),
     )
+    // CHECK constraints ride on the createTable builder: raw ALTER TABLE
+    // statements would bypass the tenant migrator's withSchema() prefixing
+    // (Kysely #761) and run against the wrong schema. The sql expressions
+    // reference columns only, never table names, so they are schema-safe.
+    .addCheckConstraint(
+      "escalation_rules_valid_rule_type",
+      sql`rule_type IN ('unassigned_duration', 'inactive_duration')`,
+    )
+    .addCheckConstraint(
+      "escalation_rules_valid_action",
+      sql`action IN ('notify_managers', 'notify_queue_watchers')`,
+    )
+    // Threshold must be at least 5 minutes (the checker runs every 5 min).
+    .addCheckConstraint(
+      "escalation_rules_min_threshold",
+      sql`threshold_minutes >= 5`,
+    )
     .execute();
-
-  // CHECK: rule_type must be one of the known condition types.
-  await sql`
-    ALTER TABLE escalation_rules
-    ADD CONSTRAINT escalation_rules_valid_rule_type
-    CHECK (rule_type IN ('unassigned_duration', 'inactive_duration'))
-  `.execute(db);
-
-  // CHECK: action must be one of the known action types.
-  await sql`
-    ALTER TABLE escalation_rules
-    ADD CONSTRAINT escalation_rules_valid_action
-    CHECK (action IN ('notify_managers', 'notify_queue_watchers'))
-  `.execute(db);
-
-  // CHECK: threshold must be at least 5 minutes (checker runs every 5 min).
-  await sql`
-    ALTER TABLE escalation_rules
-    ADD CONSTRAINT escalation_rules_min_threshold
-    CHECK (threshold_minutes >= 5)
-  `.execute(db);
 
   // Index for the checker's read path: active rules by queue.
   await db.schema

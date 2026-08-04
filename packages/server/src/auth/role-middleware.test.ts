@@ -21,6 +21,7 @@ import {
   mockRes,
   expectTrpcError,
   testSealedBox,
+  stubTenantDbDefaultRoles,
 } from "../test-utils.js";
 
 // --- Stubs ---
@@ -29,7 +30,7 @@ const stubOrg: OrgContext = {
   orgId: "00000000-0000-0000-0000-000000000001",
   orgSlug: "test",
   orgSchema: "test_schema",
-  tenantDb: {} as OrgContext["tenantDb"],
+  tenantDb: stubTenantDbDefaultRoles(),
   sealedBox: testSealedBox,
 };
 

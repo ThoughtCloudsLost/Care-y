@@ -158,7 +158,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
         const caller = createAuthedCaller(volunteerUser);
         await expectTrpcError(
           caller.update({
-            ruleId: "00000000-0000-0000-0000-000000000099",
+            ruleId: "00000000-0000-4000-8000-000000000099",
             thresholdMinutes: 120,
           }),
           "FORBIDDEN",
@@ -169,7 +169,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
         const caller = createAuthedCaller(volunteerUser);
         await expectTrpcError(
           caller.remove({
-            ruleId: "00000000-0000-0000-0000-000000000099",
+            ruleId: "00000000-0000-4000-8000-000000000099",
           }),
           "FORBIDDEN",
         );
@@ -268,7 +268,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
         const caller = createAuthedCaller(adminUser);
         await expectTrpcError(
           caller.create({
-            queueId: "00000000-0000-0000-0000-000000000099",
+            queueId: "00000000-0000-4000-8000-000000000099",
             ruleType: "inactive_duration",
             thresholdMinutes: 30,
             action: "notify_managers",
@@ -288,7 +288,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
         const caller = createAuthedCaller(adminUser);
         await expectTrpcError(
           caller.update({
-            ruleId: "00000000-0000-0000-0000-000000000099",
+            ruleId: "00000000-0000-4000-8000-000000000099",
             thresholdMinutes: 30,
           }),
           "NOT_FOUND",
@@ -300,7 +300,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
         const caller = createAuthedCaller(adminUser);
         await expectTrpcError(
           caller.remove({
-            ruleId: "00000000-0000-0000-0000-000000000099",
+            ruleId: "00000000-0000-4000-8000-000000000099",
           }),
           "NOT_FOUND",
           "Escalation rule not found",
@@ -318,14 +318,14 @@ describe.skipIf(!process.env.DATABASE_URL)(
         // ruleType does not survive parsing, so it can never reach
         // the service layer.
         const parsed = updateEscalationRuleInputSchema.parse({
-          ruleId: "00000000-0000-0000-0000-000000000099",
+          ruleId: "00000000-0000-4000-8000-000000000099",
           ruleType: "inactive_duration",
           thresholdMinutes: 30,
         });
 
         expect(parsed).not.toHaveProperty("ruleType");
         expect(parsed).toEqual({
-          ruleId: "00000000-0000-0000-0000-000000000099",
+          ruleId: "00000000-0000-4000-8000-000000000099",
           thresholdMinutes: 30,
         });
       });

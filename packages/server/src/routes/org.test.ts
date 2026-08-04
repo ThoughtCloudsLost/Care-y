@@ -23,6 +23,7 @@ import {
   createTestQueue,
   testSealedBox,
   type TestDb,
+  stubTenantDbDefaultRoles,
 } from "../test-utils.js";
 import type { OrgService } from "../org/service.js";
 import * as crypto from "node:crypto";
@@ -46,7 +47,7 @@ function createMockOrgContext(): OrgContext {
     orgId: "org-test-general",
     orgSlug: "test-org",
     orgSchema: "org_test",
-    tenantDb: {} as OrgContext["tenantDb"],
+    tenantDb: stubTenantDbDefaultRoles(),
     sealedBox: {} as OrgContext["sealedBox"],
   };
 }

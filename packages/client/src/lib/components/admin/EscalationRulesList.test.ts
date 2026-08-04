@@ -16,6 +16,8 @@ import type * as TanstackQueryMod from "@tanstack/svelte-query";
 
 const {
   mockListQuery,
+  listQueryState,
+  defaultRulesFixture,
   mockCreateMutate,
   mockUpdateMutate,
   mockRemoveMutate,
@@ -23,8 +25,8 @@ const {
   mockHaptic,
   mockAnnounce,
   mockInvalidateQueries,
-} = vi.hoisted(() => ({
-  mockListQuery: vi.fn().mockResolvedValue({
+} = vi.hoisted(() => {
+  const rulesFixture = {
     rules: [
       {
         id: "rule-1",
@@ -45,15 +47,27 @@ const {
         createdAt: "2026-01-02T00:00:00Z",
       },
     ],
-  }),
-  mockCreateMutate: vi.fn().mockResolvedValue({ rule: { id: "rule-3" } }),
-  mockUpdateMutate: vi.fn().mockResolvedValue({ rule: { id: "rule-1" } }),
-  mockRemoveMutate: vi.fn().mockResolvedValue({ deleted: true }),
-  mockToastShow: vi.fn(),
-  mockHaptic: vi.fn(),
-  mockAnnounce: vi.fn(),
-  mockInvalidateQueries: vi.fn(),
-}));
+  };
+  return {
+    defaultRulesFixture: rulesFixture,
+    // Synchronous query state consumed by the createQuery mock. Tests set
+    // listQueryState.data BEFORE render; the mock has no reactivity, so
+    // data resolved after mount would never re-render the component.
+    listQueryState: {
+      data: rulesFixture as unknown,
+      isLoading: false,
+      isError: false,
+    },
+    mockListQuery: vi.fn().mockResolvedValue(rulesFixture),
+    mockCreateMutate: vi.fn().mockResolvedValue({ rule: { id: "rule-3" } }),
+    mockUpdateMutate: vi.fn().mockResolvedValue({ rule: { id: "rule-1" } }),
+    mockRemoveMutate: vi.fn().mockResolvedValue({ deleted: true }),
+    mockToastShow: vi.fn(),
+    mockHaptic: vi.fn(),
+    mockAnnounce: vi.fn(),
+    mockInvalidateQueries: vi.fn(),
+  };
+});
 
 // vi.mock required: paraglide messages are compile-generated, no on-disk source in test env
 vi.mock("$lib/paraglide/messages.js", async (importOriginal) => ({
@@ -117,48 +131,29 @@ vi.mock("$lib/trpc/index.js", async (importOriginal) => ({
 // vi.mock required: TanStack Query hooks need Svelte component context
 vi.mock("@tanstack/svelte-query", async (importOriginal) => {
   const original = await importOriginal<typeof TanstackQueryMod>();
-  let queryData: unknown = undefined;
-  let queryIsLoading = false;
-  let queryIsError = false;
-  let queryIsSuccess = true;
-  const queryError: Error | null = null;
 
   return {
     ...original,
-    createQuery: (optsFn: () => Record<string, unknown>) => {
-      const opts = optsFn();
-      const queryFn = opts.queryFn as () => Promise<unknown>;
-
-      queryFn()
-        .then((data) => {
-          queryData = data;
-          queryIsLoading = false;
-          queryIsSuccess = true;
-        })
-        .catch(() => {
-          queryIsError = true;
-          queryIsLoading = false;
-        });
-
-      return {
-        get data() {
-          return queryData;
-        },
-        get isLoading() {
-          return queryIsLoading;
-        },
-        get isError() {
-          return queryIsError;
-        },
-        get isSuccess() {
-          return queryIsSuccess;
-        },
-        get error() {
-          return queryError;
-        },
-        refetch: vi.fn(),
-      };
-    },
+    // Reads listQueryState synchronously: tests seed the state before
+    // render because this mock has no reactivity to propagate late data.
+    createQuery: () => ({
+      get data() {
+        return listQueryState.data;
+      },
+      get isLoading() {
+        return listQueryState.isLoading;
+      },
+      get isError() {
+        return listQueryState.isError;
+      },
+      get isSuccess() {
+        return !listQueryState.isLoading && !listQueryState.isError;
+      },
+      get error() {
+        return null;
+      },
+      refetch: vi.fn(),
+    }),
     createMutation: (optsFn: () => Record<string, unknown>) => {
       const opts = optsFn();
       const mutationFn = opts.mutationFn as (
@@ -245,28 +240,10 @@ function renderList(
 describe("EscalationRulesList", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mockListQuery.mockResolvedValue({
-      rules: [
-        {
-          id: "rule-1",
-          queueId: "q-1",
-          ruleType: "unassigned_duration",
-          thresholdMinutes: 2880,
-          action: "notify_managers",
-          isActive: true,
-          createdAt: "2026-01-01T00:00:00Z",
-        },
-        {
-          id: "rule-2",
-          queueId: "q-1",
-          ruleType: "inactive_duration",
-          thresholdMinutes: 720,
-          action: "notify_queue_watchers",
-          isActive: false,
-          createdAt: "2026-01-02T00:00:00Z",
-        },
-      ],
-    });
+    listQueryState.data = defaultRulesFixture;
+    listQueryState.isLoading = false;
+    listQueryState.isError = false;
+    mockListQuery.mockResolvedValue(defaultRulesFixture);
   });
 
   afterEach(cleanup);
@@ -294,6 +271,7 @@ describe("EscalationRulesList", () => {
   });
 
   it("renders empty state when no rules exist", async () => {
+    listQueryState.data = { rules: [] };
     mockListQuery.mockResolvedValue({ rules: [] });
     renderList();
     await vi.waitFor(() => {

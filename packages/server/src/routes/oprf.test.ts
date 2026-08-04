@@ -45,6 +45,7 @@ import {
   testBlindIndexer,
   testSessionTokenizer,
   DOCKER_OPRF_AVAILABLE,
+  stubTenantDbDefaultRoles,
 } from "../test-utils.js";
 import { createScryptHasher } from "../auth/password.js";
 import {
@@ -626,7 +627,7 @@ describe("OPRF adminEvaluate route", () => {
         orgId: "test-org-id",
         orgSlug: "test-org",
         orgSchema: "org_test",
-        tenantDb: null as never,
+        tenantDb: stubTenantDbDefaultRoles(),
         sealedBox: null as never,
       },
       session: {
