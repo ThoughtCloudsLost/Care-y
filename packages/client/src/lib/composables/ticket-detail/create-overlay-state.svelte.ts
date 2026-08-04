@@ -128,3 +128,27 @@ export function createNoteEdit(): NoteEditState {
     },
   };
 }
+
+// ── Content edit sheet ──
+
+export interface ContentEditState {
+  readonly sheetOpen: boolean;
+  open(): void;
+  dismiss(): void;
+}
+
+export function createContentEdit(): ContentEditState {
+  let sheetOpen = $state(false);
+
+  return {
+    get sheetOpen(): boolean {
+      return sheetOpen;
+    },
+    open(): void {
+      sheetOpen = true;
+    },
+    dismiss(): void {
+      sheetOpen = false;
+    },
+  };
+}

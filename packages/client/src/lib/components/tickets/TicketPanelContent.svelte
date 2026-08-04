@@ -22,7 +22,7 @@
     ListItem,
     Toggle,
   } from "konsta/svelte";
-  import { Phone } from "@lucide/svelte";
+  import { Phone, Pencil } from "@lucide/svelte";
   import * as m from "$lib/paraglide/messages.js";
   import { withTerms } from "$lib/terminology/with-terms.js";
   import StatusMark from "$lib/components/StatusMark.svelte";
@@ -244,6 +244,16 @@
 
   <!-- Ticket actions -->
   <List class="!my-3">
+    <ListItem
+      link
+      chevron
+      title={m.ticket_action_edit_case(withTerms())}
+      onclick={() => onaction("editContent")}
+    >
+      {#snippet media()}
+        <Pencil class="w-5 h-5 text-[var(--ink-2)]" aria-hidden="true" />
+      {/snippet}
+    </ListItem>
     <ListItem
       link
       chevron

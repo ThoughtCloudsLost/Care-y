@@ -24,6 +24,7 @@ import {
   searchClientsInputSchema,
   callStatusSchema,
   savedFilterStateSchema,
+  updateTicketContentInputSchema,
 } from "./tickets.js";
 
 /** Base64-encode a string of n arbitrary bytes. */
@@ -726,5 +727,96 @@ describe("savedFilterStateSchema", () => {
       JSON.parse(JSON.stringify(parsed)),
     );
     expect(roundTripped).toEqual(parsed);
+  });
+});
+
+describe("updateTicketContentInputSchema", () => {
+  it("accepts title-only update", () => {
+    const result = updateTicketContentInputSchema.safeParse({
+      ticketId: VALID_UUID,
+      encryptedTitle: VALID_BASE64,
+      keyGeneration: VALID_UUID_2,
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("accepts description-only update", () => {
+    const result = updateTicketContentInputSchema.safeParse({
+      ticketId: VALID_UUID,
+      encryptedDescription: VALID_BASE64,
+      keyGeneration: VALID_UUID_2,
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("accepts both title and description", () => {
+    const result = updateTicketContentInputSchema.safeParse({
+      ticketId: VALID_UUID,
+      encryptedTitle: VALID_BASE64,
+      encryptedDescription: VALID_BASE64,
+      keyGeneration: VALID_UUID_2,
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("rejects input with neither ciphertext field", () => {
+    const result = updateTicketContentInputSchema.safeParse({
+      ticketId: VALID_UUID,
+      keyGeneration: VALID_UUID_2,
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it("rejects non-base64 encryptedTitle", () => {
+    const result = updateTicketContentInputSchema.safeParse({
+      ticketId: VALID_UUID,
+      encryptedTitle: "not valid base64!!!",
+      keyGeneration: VALID_UUID_2,
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it("rejects oversize encryptedTitle (> 4 KiB)", () => {
+    const result = updateTicketContentInputSchema.safeParse({
+      ticketId: VALID_UUID,
+      encryptedTitle: fakeBase64(4 * 1024),
+      keyGeneration: VALID_UUID_2,
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it("rejects oversize encryptedDescription (> 128 KiB)", () => {
+    const result = updateTicketContentInputSchema.safeParse({
+      ticketId: VALID_UUID,
+      encryptedDescription: fakeBase64(128 * 1024),
+      keyGeneration: VALID_UUID_2,
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it("rejects missing keyGeneration", () => {
+    const result = updateTicketContentInputSchema.safeParse({
+      ticketId: VALID_UUID,
+      encryptedTitle: VALID_BASE64,
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it("rejects non-UUID ticketId", () => {
+    const result = updateTicketContentInputSchema.safeParse({
+      ticketId: "not-a-uuid",
+      encryptedTitle: VALID_BASE64,
+      keyGeneration: VALID_UUID_2,
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it("rejects non-UUID keyGeneration", () => {
+    const result = updateTicketContentInputSchema.safeParse({
+      ticketId: VALID_UUID,
+      encryptedTitle: VALID_BASE64,
+      keyGeneration: "not-a-uuid",
+    });
+    expect(result.success).toBe(false);
   });
 });

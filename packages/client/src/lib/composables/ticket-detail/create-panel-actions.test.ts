@@ -24,6 +24,7 @@ describe("createPanelActions", () => {
   let oncall: Mock;
   let onassign: Mock;
   let onphone: Mock;
+  let oneditcontent: Mock;
   let toastStore: { show: Mock; current: null; dismiss: Mock };
 
   beforeEach(() => {
@@ -37,6 +38,7 @@ describe("createPanelActions", () => {
     oncall = vi.fn();
     onassign = vi.fn();
     onphone = vi.fn();
+    oneditcontent = vi.fn();
     toastStore = { show: vi.fn(), current: null, dismiss: vi.fn() };
   });
 
@@ -54,6 +56,7 @@ describe("createPanelActions", () => {
       oncall,
       onassign,
       onphone,
+      oneditcontent,
     });
   }
 
@@ -65,6 +68,11 @@ describe("createPanelActions", () => {
   it("dispatches phone to onphone callback", () => {
     make().dispatch("phone");
     expect(onphone).toHaveBeenCalledOnce();
+  });
+
+  it("dispatches editContent to oneditcontent callback", () => {
+    make().dispatch("editContent");
+    expect(oneditcontent).toHaveBeenCalledOnce();
   });
 
   it("dispatches take mutation with ticketId", () => {

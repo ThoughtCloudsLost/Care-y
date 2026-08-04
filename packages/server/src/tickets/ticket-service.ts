@@ -181,6 +181,15 @@ export interface CreateTarget {
   readonly reopenTicketId: string | null;
 }
 
+export interface UpdateTicketContentServiceInput {
+  readonly ticketId: string;
+  /** Audit row author; the router passes ctx.user.id. */
+  readonly actorId: string;
+  readonly encryptedTitle?: Buffer;
+  readonly encryptedDescription?: Buffer;
+  readonly keyGeneration: string;
+}
+
 export interface TicketService {
   create(userId: string, input: CreateTicketInput): Promise<TicketRecord>;
   /** Where a create for this client lands (open blocks, closed reopens). */
@@ -219,6 +228,10 @@ export interface TicketService {
     userId: string,
     isAdmin: boolean,
   ): Promise<ClientSearchResult[]>;
+  updateContent(
+    userId: string,
+    input: UpdateTicketContentServiceInput,
+  ): Promise<TicketRecord>;
 }
 
 export interface ClientSearchResult {
@@ -1534,6 +1547,79 @@ export function createTicketService(
         encryptedAlias: r.encrypted_alias,
         maskedPhone: maskPhone(encryptor.decryptToBuffer(r.encrypted_number)),
       }));
+    },
+
+    async updateContent(
+      userId: string,
+      input: UpdateTicketContentServiceInput,
+    ): Promise<TicketRecord> {
+      await access.assertAccess(userId, input.ticketId);
+
+      return db.transaction().execute(async (trx) => {
+        const existing = await trx
+          .selectFrom("tickets")
+          .selectAll()
+          .where("id", "=", input.ticketId)
+          .executeTakeFirst();
+
+        if (!existing) throw new NotFoundError(ErrorCode.TICKET_NOT_FOUND);
+
+        if (existing.key_generation !== input.keyGeneration) {
+          throw new TicketError(ErrorCode.TICKET_KEY_GENERATION_STALE);
+        }
+
+        const updates: Record<string, unknown> = {};
+        if (input.encryptedTitle !== undefined) {
+          updates.encrypted_title = input.encryptedTitle;
+        }
+        if (input.encryptedDescription !== undefined) {
+          updates.encrypted_description = input.encryptedDescription;
+        }
+
+        // Guard the write with the same key_generation so a reopen
+        // committing between the read above and this UPDATE cannot be
+        // overwritten.
+        const row = await trx
+          .updateTable("tickets")
+          .set(updates)
+          .where("id", "=", input.ticketId)
+          .where("key_generation", "=", input.keyGeneration)
+          .returningAll()
+          .executeTakeFirst();
+
+        if (!row) throw new TicketError(ErrorCode.TICKET_KEY_GENERATION_STALE);
+
+        // The snapshot insert is transactional with the UPDATE: the
+        // previous ciphertext exists nowhere else once the edit commits,
+        // so the edit and its snapshot must commit or roll back together.
+        // Direct insert here, NOT AuditService.log(): that method
+        // deliberately swallows failures (best-effort accountability
+        // logging), which is the wrong contract when the audit row is
+        // the only copy of replaced ciphertext.
+        const metadata: Record<string, unknown> = {
+          keyGeneration: input.keyGeneration,
+        };
+        if (input.encryptedTitle !== undefined) {
+          metadata.previousEncryptedTitle =
+            existing.encrypted_title.toString("base64url");
+        }
+        if (input.encryptedDescription !== undefined) {
+          metadata.previousEncryptedDescription =
+            existing.encrypted_description.toString("base64url");
+        }
+
+        await trx
+          .insertInto("audit_log")
+          .values({
+            event_type: "ticket_content_updated",
+            actor_id: input.actorId,
+            ticket_id: input.ticketId,
+            metadata,
+          })
+          .execute();
+
+        return toRecord(row);
+      });
     },
   };
 }

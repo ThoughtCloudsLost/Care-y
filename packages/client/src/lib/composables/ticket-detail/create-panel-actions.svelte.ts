@@ -23,6 +23,7 @@ export interface PanelActionsDeps {
   readonly oncall: () => void;
   readonly onassign: () => void;
   readonly onphone: () => void;
+  readonly oneditcontent: () => void;
 }
 
 export interface PanelActions {
@@ -76,6 +77,9 @@ export function createPanelActions(deps: PanelActionsDeps): PanelActions {
         break;
       case "unwatch":
         mutateWithToast(deps.unwatchMutate(ticketId));
+        break;
+      case "editContent":
+        deps.oneditcontent();
         break;
       case "cancel":
         break;
