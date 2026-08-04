@@ -115,6 +115,11 @@ export const auditEventTypeSchema = z.enum([
   "client_alias_changed",
   "client_phone_changed",
   "ticket_content_updated",
+  "escalation_rule_created",
+  "escalation_rule_updated",
+  "escalation_rule_deleted",
+  "role_permission_changed",
+  "role_permissions_reset",
 ]);
 export type AuditEventType = z.infer<typeof auditEventTypeSchema>;
 
@@ -128,3 +133,48 @@ export const auditLogQueryInputSchema = z.object({
   pageSize: z.number().int().min(1).max(100).default(50),
 });
 export type AuditLogQueryInput = z.infer<typeof auditLogQueryInputSchema>;
+
+// --- Notification preference schemas ---
+
+/** Deliverable channels. SSE is excluded: always delivered, never toggleable. */
+export const notificationChannelSchema = z.enum(["push", "email", "sms"]);
+export type NotificationChannel = z.infer<typeof notificationChannelSchema>;
+
+export const preferenceScopeTypeSchema = z.enum(["global", "queue", "ticket"]);
+export type PreferenceScopeType = z.infer<typeof preferenceScopeTypeSchema>;
+
+export const setPreferenceInputSchema = z
+  .object({
+    scopeType: preferenceScopeTypeSchema,
+    scopeId: z.uuid().nullable(),
+    eventType: notificationEventTypeSchema,
+    channel: notificationChannelSchema,
+    enabled: z.boolean(),
+  })
+  .refine((v) => (v.scopeType === "global") === (v.scopeId === null), {
+    message: "scopeId must be null exactly when scopeType is global",
+  });
+export type SetPreferenceInput = z.infer<typeof setPreferenceInputSchema>;
+
+export const resetPreferencesInputSchema = z
+  .object({
+    scopeType: preferenceScopeTypeSchema.optional(),
+    scopeId: z.uuid().nullable().optional(),
+  })
+  .refine(
+    (v) => {
+      if (v.scopeType === undefined) return true;
+      return (v.scopeType === "global") === (v.scopeId === null);
+    },
+    { message: "scopeId must be null exactly when scopeType is global" },
+  );
+export type ResetPreferencesInput = z.infer<typeof resetPreferencesInputSchema>;
+
+export const preferenceRowSchema = z.object({
+  scopeType: preferenceScopeTypeSchema,
+  scopeId: z.uuid().nullable(),
+  eventType: notificationEventTypeSchema,
+  channel: notificationChannelSchema,
+  enabled: z.boolean(),
+});
+export type PreferenceRow = z.infer<typeof preferenceRowSchema>;
