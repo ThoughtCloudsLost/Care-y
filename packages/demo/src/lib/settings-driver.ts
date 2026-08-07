@@ -104,29 +104,29 @@ function findCodeInput(scope: Document | Element): HTMLInputElement | null {
 /**
  * Scan the DOM for the TOTP enroll sheet's secret display. When found,
  * compute the current code and fill the input after a readable delay.
- * Returns true if a fill was dispatched, false if the sheet was not
- * in the right state.
+ * Returns the timer handle if a fill was dispatched, null if the sheet
+ * was not in the right state.
  */
-function tryTotpFill(root: Document): boolean {
+function tryTotpFill(root: Document): ReturnType<typeof setTimeout> | null {
   const secretEl = root.querySelector<HTMLElement>(
     '[data-testid="totp-secret"]',
   );
-  if (secretEl === null || !isOnScreen(secretEl)) return false;
+  if (secretEl === null || !isOnScreen(secretEl)) return null;
 
   const base32Text = secretEl.textContent.trim();
-  if (base32Text.length === 0) return false;
+  if (base32Text.length === 0) return null;
 
   // Scope to the TOTP sheet's own dialog so the fill never lands in
   // another mounted sheet's code input.
   const scope = secretEl.closest('[role="dialog"]') ?? root;
   const codeInput = findCodeInput(scope);
-  if (codeInput === null) return false;
+  if (codeInput === null) return null;
 
   // Already filled (avoid re-dispatching on observer re-fire)
-  if (codeInput.value.length === 6) return false;
+  if (codeInput.value.length === 6) return null;
 
   const code = computeTotpCode(base32Text);
-  setTimeout(() => {
+  return setTimeout(() => {
     // Re-check: the sheet may have been dismissed during the delay
     const stillVisible = root.querySelector('[data-testid="totp-secret"]');
     const input = findCodeInput(scope);
@@ -139,8 +139,6 @@ function tryTotpFill(root: Document): boolean {
       fillInput(input, code);
     }
   }, AUTOFILL_DELAY_MS);
-
-  return true;
 }
 
 // -----------------------------------------------------------------------
@@ -150,14 +148,18 @@ function tryTotpFill(root: Document): boolean {
 /**
  * Handle an outbox entry: if a one-time-code input is visible, extract
  * the 6-digit code and fill it after a readable delay. Works for both
- * email and sms entry types.
+ * email and sms entry types. Returns the timer handle if a fill was
+ * dispatched, null otherwise.
  */
-function handleOutboxEntry(root: Document, entry: OutboxEntry): void {
+function handleOutboxEntry(
+  root: Document,
+  entry: OutboxEntry,
+): ReturnType<typeof setTimeout> | null {
   const body = entry.body ?? "";
   const code = extractCodeFromBody(body);
-  if (code === null) return;
+  if (code === null) return null;
 
-  setTimeout(() => {
+  return setTimeout(() => {
     const input = findCodeInput(root);
     if (input !== null && input.value.length < 6) {
       fillInput(input, code);
@@ -193,6 +195,15 @@ export function activateSettingsDriver(
     activeHandle = null;
   }
 
+  // Track delayed fill timer handles so disconnect() can cancel them.
+  // Leaving settings and returning within the delay window would
+  // otherwise type a stale code into whatever field is on screen.
+  const pendingTimers: ReturnType<typeof setTimeout>[] = [];
+
+  function trackTimer(id: ReturnType<typeof setTimeout>): void {
+    pendingTimers.push(id);
+  }
+
   // TOTP: watch for the secret element to appear. Reset the filled
   // flag when the secret element disappears so re-opening the sheet
   // within the same settings session triggers a fresh fill.
@@ -214,11 +225,33 @@ export function activateSettingsDriver(
       return;
     }
     if (!totpFilled) {
-      totpFilled = tryTotpFill(root);
+      const timerId = tryTotpFill(root);
+      if (timerId !== null) {
+        trackTimer(timerId);
+        totpFilled = true;
+      }
     }
   }
 
-  const observer = new MutationObserver(scan);
+  // Coalesce DOM-triggered scans behind a single requestAnimationFrame.
+  // Konsta sheet transitions mutate style per animation frame, which
+  // would force layout (getBoundingClientRect in isOnScreen) on every
+  // batch without coalescing.
+  let scanPending = false;
+  function scheduleScan(): void {
+    if (scanPending) return;
+    scanPending = true;
+    requestAnimationFrame(() => {
+      scanPending = false;
+      scan();
+    });
+  }
+
+  const observer = new MutationObserver(scheduleScan);
+  // No narrower stable container exists on the settings page; the
+  // sheets mount as siblings of the page content, so body is the
+  // closest common ancestor that captures both the secret element
+  // and sheet open/close mutations.
   observer.observe(root.body, {
     childList: true,
     subtree: true,
@@ -231,13 +264,20 @@ export function activateSettingsDriver(
 
   // Outbox: subscribe for email/SMS codes
   const unsubOutbox = onOutbox((entry: OutboxEntry) => {
-    handleOutboxEntry(root, entry);
+    const timerId = handleOutboxEntry(root, entry);
+    if (timerId !== null) {
+      trackTimer(timerId);
+    }
   });
 
   activeHandle = {
     disconnect(): void {
       observer.disconnect();
       unsubOutbox();
+      for (const id of pendingTimers) {
+        clearTimeout(id);
+      }
+      pendingTimers.length = 0;
     },
   };
 }

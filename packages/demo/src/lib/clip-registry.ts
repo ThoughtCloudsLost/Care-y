@@ -24,6 +24,12 @@ export interface PeekFirePayload {
   sectionId: SectionId;
   /** Sub-section this figure belongs to. */
   subSlug: string;
+  /**
+   * True when the fire originated from a keyboard event (Enter/Space)
+   * rather than the long-press pointer gesture. Keyboard fires have no
+   * subsequent drag or release, so the peek commits immediately.
+   */
+  viaKeyboard?: boolean;
 }
 
 // -----------------------------------------------------------------------

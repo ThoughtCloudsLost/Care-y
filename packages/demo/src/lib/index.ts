@@ -1,7 +1,10 @@
 /**
  * Public barrel for @care-y/demo.
  *
- * External consumers (care-y.com embed) import from this entry point.
+ * No in-monorepo consumer imports from this barrel today. It is the
+ * intentional future embed surface for care-y.com. Kept by design so
+ * the API contract is maintained and tested as the package evolves.
+ *
  * RouteMount renders real client routes via the glob-derived manifest;
  * LoginMount is imported directly for the login feature.
  */
@@ -12,10 +15,7 @@ export { default as FlowStory } from "./FlowStory.svelte";
 export type { PeekFirePayload } from "./clip-registry.js";
 export { resolveStoryMessage } from "./story-messages.js";
 export { createDemoRouter } from "./router.svelte.js";
-export {
-  createDemoQueryClient,
-  reseedDemoQueryClient,
-} from "./demo-query-client.js";
+export { createDemoQueryClient } from "./demo-query-client.js";
 export { DEMO_TOPICS } from "./bridge.js";
 export { classifyDemoLabel } from "./topic-classifier.js";
 export {
@@ -33,12 +33,7 @@ export {
   createScrollEngine,
   createTopicProgress,
 } from "./scroll-engine.svelte.js";
-export type {
-  DemoFeature,
-  DemoDetail,
-  DemoRouterState,
-  DemoRouter,
-} from "./router.svelte.js";
+export type { DemoFeature, DemoDetail, DemoRouter } from "./router.svelte.js";
 export type {
   DemoBridge,
   DemoBridgeState,
@@ -65,7 +60,6 @@ export type { ScrollEngine, TopicProgress } from "./scroll-engine.svelte.js";
 export {
   READING_LINE_RATIO,
   readingLineY,
-  locationAtReadingLine,
   scrollTargetFor,
   flowGeometryReady,
   setFlowGeometrySource,

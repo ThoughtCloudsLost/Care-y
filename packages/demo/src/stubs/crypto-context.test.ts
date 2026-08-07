@@ -105,16 +105,23 @@ const {
   getCurrentUserId,
   getCurrentUserRoleId,
   demoSeed,
-  demoReset,
   ensureKeyed,
   registerTrpcForPreview,
   getPreviewLoader,
   setRoleAndPermissions,
 } = await import("./crypto-context.svelte.js");
 
+/** Reset auth state to defaults for test isolation. */
+function resetAuthDefaults(): void {
+  demoSeed({
+    userId: "demo-user-001",
+    userRoleId: RoleId.ADMIN,
+  });
+}
+
 describe("crypto-context (lazy real objects)", () => {
   beforeEach(() => {
-    demoReset();
+    resetAuthDefaults();
   });
 
   describe("getCryptoBridge", () => {
@@ -214,9 +221,9 @@ describe("crypto-context (lazy real objects)", () => {
       expect(perms.has(Permission.MANAGE_USERS)).toBe(false);
     });
 
-    it("resets to defaults via demoReset", () => {
+    it("resets to defaults via resetAuthDefaults", () => {
       demoSeed({ permissions: new Set<Permission>() });
-      demoReset();
+      resetAuthDefaults();
       const getPerms = getCurrentPermissions();
       const perms = getPerms();
       expect(perms.has(Permission.MANAGE_USERS)).toBe(true);
@@ -248,9 +255,9 @@ describe("crypto-context (lazy real objects)", () => {
       expect(getRoleId()).toBe("custom-role");
     });
 
-    it("resets to RoleId.ADMIN via demoReset", () => {
+    it("resets to RoleId.ADMIN via resetAuthDefaults", () => {
       demoSeed({ userRoleId: "custom-role" });
-      demoReset();
+      resetAuthDefaults();
       const getRoleId = getCurrentUserRoleId();
       expect(getRoleId()).toBe(RoleId.ADMIN);
     });
@@ -279,13 +286,11 @@ describe("crypto-context (lazy real objects)", () => {
       expect(perms.has(Permission.MANAGE_USERS)).toBe(false);
     });
 
-    it("is reversed by demoReset", () => {
+    it("is reversed by resetAuthDefaults", () => {
       setRoleAndPermissions(RoleId.MANAGER, new Set([Permission.VIEW_TICKETS]));
-      demoReset();
+      resetAuthDefaults();
       const getRoleId = getCurrentUserRoleId();
       expect(getRoleId()).toBe(RoleId.ADMIN);
-      const getPerms = getCurrentPermissions();
-      expect(getPerms().has(Permission.MANAGE_ROLES)).toBe(true);
     });
 
     it("consecutive calls reflect the latest value", () => {

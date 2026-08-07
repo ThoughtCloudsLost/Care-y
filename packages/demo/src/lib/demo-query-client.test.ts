@@ -1,8 +1,5 @@
 import { describe, it, expect } from "vitest";
-import {
-  createDemoQueryClient,
-  reseedDemoQueryClient,
-} from "./demo-query-client.js";
+import { createDemoQueryClient } from "./demo-query-client.js";
 import { authKeys } from "$lib/query/keys.js";
 
 describe("createDemoQueryClient", () => {
@@ -28,17 +25,5 @@ describe("createDemoQueryClient", () => {
     expect(defaults.queries?.refetchOnMount).toBe(false);
     expect(defaults.queries?.refetchOnWindowFocus).toBe(false);
     expect(defaults.queries?.refetchOnReconnect).toBe(false);
-  });
-});
-
-describe("reseedDemoQueryClient", () => {
-  it("clears all query data", () => {
-    const client = createDemoQueryClient();
-    client.setQueryData(["test-key"], { value: 42 });
-    expect(client.getQueryData(["test-key"])).toBeDefined();
-
-    reseedDemoQueryClient(client);
-
-    expect(client.getQueryData(["test-key"])).toBeUndefined();
   });
 });

@@ -17,18 +17,17 @@
  * pattern (page.state.ticketId, ?user= deep links) works correctly.
  */
 
-import { SvelteURL } from "svelte/reactivity";
+import { DEMO_ORIGIN } from "../lib/demo-origin.js";
+import { parseUrl } from "../lib/non-reactive.js";
 
 // -----------------------------------------------------------------------
 // Reactive page state (driven by setDemoPage)
 // -----------------------------------------------------------------------
 
-const DEMO_ORIGIN = "http://demo.local";
-
 // Instances are swapped wholesale, never mutated, so $state.raw provides
 // exactly the reference-level reactivity needed; a fresh URL per
 // navigation mirrors how SvelteKit replaces page.url.
-let pageUrl = $state.raw(new SvelteURL("/tickets", DEMO_ORIGIN));
+let pageUrl = $state.raw(parseUrl("/tickets", DEMO_ORIGIN));
 let pageParams = $state<Record<string, string>>({});
 let pageRouteId = $state<string>("/(app)/tickets");
 let pageState = $state<Record<string, unknown>>({});
@@ -46,7 +45,7 @@ export interface DemoPageUpdate {
  * and routeId from the manifest match.
  */
 export function setDemoPage(update: DemoPageUpdate): void {
-  pageUrl = new SvelteURL(
+  pageUrl = parseUrl(
     update.url.pathname + update.url.search + update.url.hash,
     DEMO_ORIGIN,
   );
@@ -66,7 +65,7 @@ export function setDemoPageShallow(
   url: URL,
   state: Record<string, unknown>,
 ): void {
-  pageUrl = new SvelteURL(url.pathname + url.search + url.hash, DEMO_ORIGIN);
+  pageUrl = parseUrl(url.pathname + url.search + url.hash, DEMO_ORIGIN);
   pageState = state;
 }
 

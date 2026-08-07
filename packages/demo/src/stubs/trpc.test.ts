@@ -3,8 +3,6 @@ import {
   trpc,
   demoTrpcMock,
   demoResetTrpc,
-  isDevDelayEnabled,
-  setDevDelay,
   isDemoAuthed,
   setDemoAuthed,
   armPushChallenge,
@@ -12,7 +10,17 @@ import {
   resetEngineTrpc,
   DemoEngineNotReadyError,
 } from "./trpc.js";
-import { getFlowEvents, resetFlowEvents } from "../lib/flow-events.js";
+import { resetFlowEvents, subscribeFlowEvents } from "../lib/flow-events.js";
+import type { DemoFlowEvent } from "../lib/bridge.js";
+
+/** Collect flow events via subscription into a local array. */
+function collectFlowEvents(): DemoFlowEvent[] {
+  const events: DemoFlowEvent[] = [];
+  subscribeFlowEvents((event) => {
+    events.push(event);
+  });
+  return events;
+}
 
 /** Retrieve a value from a record, throwing if the key is absent. */
 function mustGet<V>(record: Record<string, V | undefined>, key: string): V {
@@ -333,6 +341,7 @@ describe("trpc stub", () => {
 
   describe("flow events", () => {
     it("emits a request/response pair for an engine-delegated call", async () => {
+      const flow = collectFlowEvents();
       setEngineTrpc({
         tickets: { list: { query: vi.fn().mockResolvedValue([]) } },
       });
@@ -347,16 +356,19 @@ describe("trpc stub", () => {
         },
       );
 
-      const flow = getFlowEvents().filter((e) => e.lane === "trpc");
-      expect(flow.map((e) => [e.direction, e.label])).toEqual([
+      const trpcEvents = flow.filter((e) => e.lane === "trpc");
+      expect(trpcEvents.map((e) => [e.direction, e.label])).toEqual([
         ["up", "tickets.list query"],
         ["down", "tickets.list query"],
       ]);
-      expect(flow.at(1)?.interactionId).toBe(flow.at(0)?.interactionId);
-      expect(flow.at(0)?.seamKey).toBeNull();
+      expect(trpcEvents.at(1)?.interactionId).toBe(
+        trpcEvents.at(0)?.interactionId,
+      );
+      expect(trpcEvents.at(0)?.seamKey).toBeNull();
     });
 
     it("never previews procedure input (login carries a password)", async () => {
+      const flow = collectFlowEvents();
       setEngineTrpc({
         auth: { login: { mutate: vi.fn().mockResolvedValue({}) } },
       });
@@ -369,11 +381,12 @@ describe("trpc stub", () => {
       };
       await login.mutate({ identifier: "jdoe", password: "DemoPassword2026" });
 
-      const previews = getFlowEvents().map((e) => e.payloadPreview);
+      const previews = flow.map((e) => e.payloadPreview);
       expect(previews.every((p) => p === null)).toBe(true);
     });
 
     it("flags a failed call without leaking the message", async () => {
+      const flow = collectFlowEvents();
       const authProxy = mustGet(
         trpc as unknown as Record<string, Record<string, unknown>>,
         "auth",
@@ -382,12 +395,13 @@ describe("trpc stub", () => {
         (authProxy.me as { query: () => Promise<unknown> }).query(),
       ).rejects.toThrow("Not authenticated");
 
-      const last = getFlowEvents().at(-1);
+      const last = flow.at(-1);
       expect(last?.label).toBe("auth.me query failed");
       expect(last?.payloadPreview).toBe("DemoAuthError");
     });
 
     it("stamps the twofa choreography seam", async () => {
+      const flow = collectFlowEvents();
       const verify = demoTrpcMock.twoFactor?.verify as {
         totp: {
           mutate: (opts: { code: string }) => Promise<{ success: boolean }>;
@@ -395,20 +409,19 @@ describe("trpc stub", () => {
       };
       await verify.totp.mutate({ code: "123456" });
 
-      const flow = getFlowEvents();
       expect(flow).toHaveLength(2);
       expect(flow.every((e) => e.seamKey === "twofa-choreography")).toBe(true);
       expect(flow.at(0)?.label).toBe("twoFactor.verify.totp mutate");
     });
 
     it("stamps no seam on the onboarding status overlay", async () => {
+      const flow = collectFlowEvents();
       const onboarding = mustGet(
         trpc as unknown as Record<string, Record<string, unknown>>,
         "onboarding",
       );
       await (onboarding.getStatus as { query: () => Promise<unknown> }).query();
 
-      const flow = getFlowEvents();
       expect(flow.at(0)?.label).toBe("onboarding.getStatus query");
       expect(flow.at(0)?.seamKey).toBeNull();
     });
@@ -428,19 +441,6 @@ describe("trpc stub", () => {
       expect(isDemoAuthed()).toBe(false);
       setDemoAuthed(true);
       expect(isDemoAuthed()).toBe(true);
-    });
-  });
-
-  describe("dev delay toggle", () => {
-    it("defaults to false", () => {
-      expect(isDevDelayEnabled()).toBe(false);
-    });
-
-    it("can be toggled", () => {
-      setDevDelay(true);
-      expect(isDevDelayEnabled()).toBe(true);
-      setDevDelay(false);
-      expect(isDevDelayEnabled()).toBe(false);
     });
   });
 

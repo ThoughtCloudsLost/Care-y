@@ -163,11 +163,8 @@ function createMapBlobStore(): BlobStore {
 // Email/SMS outbox for inspection. The implementation lives in outbox.ts
 // so phone-side subscribers do not create a static edge to this module.
 // Re-exported here for the health page and any engine-side consumers.
-export { appendToOutbox, getOutbox, onOutboxAppend } from "./outbox.js";
+export { appendToOutbox, onOutboxAppend } from "./outbox.js";
 export type { OutboxEntry } from "./outbox.js";
-
-// Set-Cookie capture
-const capturedCookies: string[] = [];
 
 // ── Boot ────────────────────────────────────────────────────────────
 
@@ -192,6 +189,26 @@ export async function bootDemoEngine(): Promise<DemoEngineResult> {
 
   // Wire up the DB shim
   initDb(pg);
+
+  // Kick off all six dynamic imports in parallel so module fetch/eval
+  // overlaps with migrations and seeding. None depends on another's
+  // evaluation; the globals-init constraint (engine.ts:11-14) is
+  // satisfied because it is a static import that evaluates first.
+  const [
+    scryptHashMod,
+    seedTicketsMod,
+    seedKbMod,
+    serviceStubsMod,
+    trpcMod,
+    callerAdapterMod,
+  ] = await Promise.all([
+    import("../../../../server/src/auth/scrypt-hash.js"),
+    import("../../../../server/src/dev/seed-tickets.js"),
+    import("../../../../server/src/dev/seed-kb.js"),
+    import("./server/service-stubs.js"),
+    import("../../../../server/src/trpc/trpc.js"),
+    import("./caller-adapter.js"),
+  ]);
 
   // 2. Platform migrations
   const t2 = timeMs();
@@ -243,9 +260,7 @@ export async function bootDemoEngine(): Promise<DemoEngineResult> {
   };
 
   // Scrypt hasher (via shim)
-  const { createScryptHasher: createBaseHasher } =
-    await import("../../../../server/src/auth/scrypt-hash.js");
-  const hasher = createBaseHasher(64);
+  const hasher = scryptHashMod.createScryptHasher(64);
 
   // 5. Structural seed
   const t5 = timeMs();
@@ -308,9 +323,7 @@ export async function bootDemoEngine(): Promise<DemoEngineResult> {
     })
     .execute();
 
-  const { seedTestTickets } =
-    await import("../../../../server/src/dev/seed-tickets.js");
-  const ticketResult = await seedTestTickets(
+  const ticketResult = await seedTicketsMod.seedTestTickets(
     tDb,
     blobStore,
     seedResult.adminUserId,
@@ -335,9 +348,7 @@ export async function bootDemoEngine(): Promise<DemoEngineResult> {
     .where("ticket_id", "=", deniedTicketId)
     .execute();
 
-  const { seedKbArticles } =
-    await import("../../../../server/src/dev/seed-kb.js");
-  const kbResult = await seedKbArticles(
+  const kbResult = await seedKbMod.seedKbArticles(
     tDb,
     sealedBox,
     seedResult.adminUserId,
@@ -359,8 +370,7 @@ export async function bootDemoEngine(): Promise<DemoEngineResult> {
     "ticket_closed",
   ] as const;
   const now = Date.now();
-  for (const [i, eventType] of auditEventTypes.entries()) {
-    // Pick a ticket from the seeded set (cycle through them)
+  const auditRows = auditEventTypes.map((eventType, i) => {
     const ticketId = ticketResult.ticketIds.at(
       i % ticketResult.ticketIds.length,
     );
@@ -372,24 +382,21 @@ export async function bootDemoEngine(): Promise<DemoEngineResult> {
     // Stagger from 2 hours ago to 5 days ago
     const hoursBack = 2 + i * 14;
     const createdAt = new Date(now - hoursBack * 60 * 60 * 1000);
-    await tDb
-      .insertInto("audit_log")
-      .values({
-        event_type: eventType,
-        actor_id: seedResult.adminUserId,
-        ticket_id: ticketId,
-        metadata: {},
-        created_at: createdAt,
-      })
-      .execute();
-  }
+    return {
+      event_type: eventType,
+      actor_id: seedResult.adminUserId,
+      ticket_id: ticketId,
+      metadata: {},
+      created_at: createdAt,
+    };
+  });
+  await tDb.insertInto("audit_log").values(auditRows).execute();
 
   timings.push({ label: "seed-content", ms: timeMs() - t6 });
 
   // 7. Build router (service stubs, provider factories, createAppRouter)
   const t7 = timeMs();
-  const { buildServiceStubs } = await import("./server/service-stubs.js");
-  const { appRouter } = await buildServiceStubs({
+  const { appRouter } = await serviceStubsMod.buildServiceStubs({
     opsKey,
     seedResult,
     encryptor,
@@ -403,8 +410,7 @@ export async function bootDemoEngine(): Promise<DemoEngineResult> {
   });
 
   // Create caller factory
-  const { createCallerFactory } =
-    await import("../../../../server/src/trpc/trpc.js");
+  const { createCallerFactory } = trpcMod;
 
   // Fabricated context for the admin user
   const orgCtx: OrgContext = {
@@ -458,10 +464,10 @@ export async function bootDemoEngine(): Promise<DemoEngineResult> {
 
   let currentAdminUser: UserRecord = await loadAdminUser();
 
-  // Dirty flag: set after any mutation dispatch completes and inside
-  // setSignedInRole (which mutates users.role_id outside the dispatch
-  // path). The adapter only runs a PGlite SELECT when dirty, avoiding
-  // a full reload before pure reads.
+  // Dirty flag: set after any mutation dispatch completes (including
+  // failures) via the adapter's finally block. The adapter only runs
+  // a PGlite SELECT when dirty, avoiding a full reload before pure
+  // reads. setSignedInRole refreshes directly instead of marking dirty.
   let adminUserDirty = false;
 
   async function refreshAdminUser(): Promise<void> {
@@ -482,10 +488,9 @@ export async function bootDemoEngine(): Promise<DemoEngineResult> {
       socket: { remoteAddress: "127.0.0.1" },
     } as unknown as Context["req"],
     res: {
-      setHeader(name: string, value: string): void {
-        if (name.toLowerCase() === "set-cookie") {
-          capturedCookies.push(value);
-        }
+      // No-op: the embedded engine has no HTTP transport to receive headers.
+      setHeader(_name: string, _value: string): void {
+        // intentional no-op
       },
     } as unknown as Context["res"],
     org: orgCtx,
@@ -516,8 +521,7 @@ export async function bootDemoEngine(): Promise<DemoEngineResult> {
   };
 
   // 8. Build caller adapter (wire reshape + dispatch proxy)
-  const { createCallerAdapter } = await import("./caller-adapter.js");
-  const trpcAdapter = createCallerAdapter({
+  const trpcAdapter = callerAdapterMod.createCallerAdapter({
     callerObj: adminCaller,
     refreshAdminUser,
     markDirty: markAdminUserDirty,
@@ -551,9 +555,11 @@ export async function bootDemoEngine(): Promise<DemoEngineResult> {
         .set({ role_id: roleId })
         .where("id", "=", seedResult.adminUserId)
         .execute();
-      // Mark dirty so the adapter refreshes on the next dispatch,
-      // and also refresh immediately for the auth.me call below.
-      markAdminUserDirty();
+      // Refresh immediately so the auth.me call below (and every
+      // subsequent ctx.user read) sees the new role_id. The adapter's
+      // own finally-based markDirty handles the dispatch path; this
+      // out-of-band UPDATE bypasses dispatch, so a direct refresh is
+      // the correct synchronization point.
       await refreshAdminUser();
       const me = await adminCaller.auth.me();
       return me.permissions;
@@ -658,20 +664,30 @@ export async function runHealthProofs(
       .select("schema_name")
       .where("schema_name", "=", DEMO_ORG_SCHEMA)
       .executeTakeFirst();
-
-    // Count by checking timings for platform/tenant migrate labels
-    const platformTiming = timings.find((t) => t.label === "platform-migrate");
-    const tenantTiming = timings.find((t) => t.label === "tenant-migrate");
-    const platformOk = platformTiming !== undefined;
-    const tenantOk = tenantTiming !== undefined;
     const schemaOk = schemaCheck !== undefined;
+
+    // Query Kysely's migration bookkeeping table (default name:
+    // "kysely_migration") in both schemas and compare row counts
+    // against the expected values from the glob-based providers.
+    const platformMigRows = await sql<{ cnt: string }>`
+      SELECT count(*)::text AS cnt FROM public.kysely_migration
+    `.execute(platformDb);
+    const actualPlatform = Number(platformMigRows.rows[0]?.cnt ?? "0");
+
+    const tenantMigRows = await sql<{ cnt: string }>`
+      SELECT count(*)::text AS cnt FROM ${sql.ref(DEMO_ORG_SCHEMA)}.kysely_migration
+    `.execute(tDb);
+    const actualTenant = Number(tenantMigRows.rows[0]?.cnt ?? "0");
+
+    const platformOk = actualPlatform === expectedPlatform;
+    const tenantOk = actualTenant === expectedTenant;
 
     report({
       name: "P1 migrations",
       pass: platformOk && tenantOk && schemaOk,
       detail:
-        `platform: ${String(expectedPlatform)} expected, ` +
-        `tenant: ${String(expectedTenant)} expected, ` +
+        `platform: ${String(actualPlatform)}/${String(expectedPlatform)}, ` +
+        `tenant: ${String(actualTenant)}/${String(expectedTenant)}, ` +
         `schema exists: ${String(schemaOk)}`,
     });
   } catch (err: unknown) {
@@ -710,11 +726,12 @@ export async function runHealthProofs(
 
   // P3: Serialization hammer
   try {
-    const watchdog = new Promise<"timeout">((resolve) =>
-      setTimeout(() => {
+    let watchdogTimer: ReturnType<typeof setTimeout> | undefined;
+    const watchdog = new Promise<"timeout">((resolve) => {
+      watchdogTimer = setTimeout(() => {
         resolve("timeout");
-      }, 10_000),
-    );
+      }, 10_000);
+    });
 
     const txPromise = tDb.transaction().execute(async (tx) => {
       await tx.selectFrom("tickets").select("id").limit(1).executeTakeFirst();
@@ -739,6 +756,7 @@ export async function runHealthProofs(
       Promise.all([txPromise, burstPromise]).then(() => "ok" as const),
       watchdog,
     ]);
+    clearTimeout(watchdogTimer);
 
     report({
       name: "P3 serialization hammer",
@@ -769,11 +787,13 @@ export async function runHealthProofs(
     }
 
     let adminPassed = false;
+    let adminError = "";
     try {
       await dispatch(adminCaller, "reports", "queueStats", undefined);
       adminPassed = true;
-    } catch {
-      adminPassed = true;
+    } catch (adminErr: unknown) {
+      adminError =
+        adminErr instanceof Error ? adminErr.message : String(adminErr);
     }
 
     report({
@@ -782,7 +802,8 @@ export async function runHealthProofs(
       detail:
         `forbidden caught: ${String(forbiddenCaught)}, ` +
         `isTRPCClientError: ${String(isTrpcClientErr)}, ` +
-        `admin passed: ${String(adminPassed)}`,
+        `admin passed: ${String(adminPassed)}` +
+        (adminError ? `, admin error: ${adminError}` : ""),
     });
   } catch (err: unknown) {
     report({

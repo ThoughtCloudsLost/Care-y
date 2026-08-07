@@ -42,15 +42,25 @@ export interface ProcedureProxy {
  */
 export function makeProcedureProxy(dispatch: ProcDispatch): ProcedureProxy {
   function makeNode(path: readonly string[]): ProcedureProxy {
+    // Memoize child nodes and terminal functions so repeated access
+    // to the same dispatch path is allocation-free.
+    const children = new Map<string, ProcedureProxy>();
+    const queryFn = async (input?: unknown): Promise<unknown> =>
+      dispatch(path, "query", input);
+    const mutateFn = async (input?: unknown): Promise<unknown> =>
+      dispatch(path, "mutate", input);
+
     return new Proxy({} as ProcedureProxy, {
       get(_target, prop: string | symbol): unknown {
         if (typeof prop === "symbol") return undefined;
-        if (prop === "query" || prop === "mutate") {
-          const kind = prop;
-          return async (input?: unknown): Promise<unknown> =>
-            dispatch(path, kind, input);
+        if (prop === "query") return queryFn;
+        if (prop === "mutate") return mutateFn;
+        let child = children.get(prop);
+        if (child === undefined) {
+          child = makeNode([...path, prop]);
+          children.set(prop, child);
         }
-        return makeNode([...path, prop]);
+        return child;
       },
     });
   }

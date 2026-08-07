@@ -21,8 +21,13 @@ import type { Component } from "svelte";
 
 type Loader = () => Promise<{ default: Component }>;
 
+/** Abstraction over URLPattern and the regex fallback. */
+interface PatternMatcher {
+  exec(pathname: string): Record<string, string> | null;
+}
+
 interface RouteEntry {
-  readonly pattern: URLPattern;
+  readonly matcher: PatternMatcher;
   readonly routeId: string;
   readonly page: Loader;
   readonly layouts: readonly Loader[];
@@ -72,7 +77,7 @@ function toRoutePath(globKey: string): string {
  * Convert a route-relative directory path to a URL pattern string.
  * Strips (group) segments, converts [param] to :param, [...rest] to *.
  */
-function dirToUrlPattern(dir: string): string {
+export function dirToUrlPattern(dir: string): string {
   const segments = dir.split("/").filter((s) => s.length > 0);
   const urlParts: string[] = [];
 
@@ -120,6 +125,95 @@ function countStaticSegments(dir: string): number {
  */
 function hasRestParam(dir: string): boolean {
   return dir.split("/").some((s) => s.startsWith("[..."));
+}
+
+// -----------------------------------------------------------------------
+// Pattern matching: URLPattern primary, regex fallback
+// -----------------------------------------------------------------------
+
+const HAS_URL_PATTERN = typeof URLPattern !== "undefined";
+
+/**
+ * Compile a URL pattern string (e.g. "/tickets/:id") into a
+ * PatternMatcher. Uses URLPattern when available, otherwise compiles
+ * a regex from the same pattern string.
+ *
+ * The patterns produced by dirToUrlPattern are simple: static segments,
+ * ":param" named segments, and a trailing "*" catch-all. This subset
+ * is straightforward to translate to regex.
+ */
+export function compilePattern(urlPattern: string): PatternMatcher {
+  if (HAS_URL_PATTERN) {
+    const up = new URLPattern({ pathname: urlPattern });
+    return {
+      exec(pathname: string): Record<string, string> | null {
+        const result = up.exec({ pathname });
+        if (result === null) return null;
+        const groups = result.pathname.groups;
+        // Map instead of computed property writes: group names come
+        // from route file paths, and Map.set carries no
+        // prototype-pollution surface.
+        const params = new Map<string, string>();
+        for (const [key, value] of Object.entries(groups)) {
+          if (value !== undefined && key !== "0") {
+            params.set(key, value);
+          }
+        }
+        return Object.fromEntries(params);
+      },
+    };
+  }
+
+  return compileSegmentMatcher(urlPattern);
+}
+
+/**
+ * Build a segment-comparison PatternMatcher from a URL pattern string.
+ * Handles three segment types:
+ *   - static literal (e.g. "tickets")
+ *   - ":name" named param (matches one path segment)
+ *   - "*" trailing catch-all (matches remaining path; the matched value
+ *     is not included in the returned params, matching URLPattern's
+ *     filtered key "0")
+ *
+ * Segment comparison instead of a compiled regex: the pattern alphabet
+ * is closed (three shapes), and plain string equality needs neither
+ * escaping nor a dynamically built RegExp.
+ *
+ * Exported for testing.
+ */
+export function compileSegmentMatcher(urlPattern: string): PatternMatcher {
+  const patternSegs = urlPattern.split("/").filter((s) => s.length > 0);
+
+  return {
+    exec(pathname: string): Record<string, string> | null {
+      const pathSegs = pathname.split("/").filter((s) => s.length > 0);
+      // Map instead of computed property writes; see compilePattern.
+      const params = new Map<string, string>();
+
+      for (let i = 0; i < patternSegs.length; i++) {
+        const seg = patternSegs.at(i);
+        if (seg === undefined) return null;
+        if (seg === "*") {
+          // Catch-all must consume at least one remaining segment.
+          return pathSegs.length > i ? Object.fromEntries(params) : null;
+        }
+        const actual = pathSegs.at(i);
+        if (actual === undefined) return null;
+        if (seg.startsWith(":")) {
+          params.set(seg.slice(1), actual);
+        } else if (seg !== actual) {
+          return null;
+        }
+      }
+
+      // No catch-all: the path must not have extra segments. Trailing
+      // slashes are already normalized away by the filter above.
+      return pathSegs.length === patternSegs.length
+        ? Object.fromEntries(params)
+        : null;
+    },
+  };
 }
 
 // -----------------------------------------------------------------------
@@ -174,7 +268,7 @@ function buildManifest(): readonly RouteEntry[] {
     }
 
     entries.push({
-      pattern: new URLPattern({ pathname: urlPattern }),
+      matcher: compilePattern(urlPattern),
       routeId,
       page: pageLoader,
       layouts,
@@ -213,17 +307,10 @@ const manifest: readonly RouteEntry[] = buildManifest();
  */
 export function matchRoute(pathname: string): RouteMatch | null {
   for (const entry of manifest) {
-    const result = entry.pattern.exec({ pathname });
-    if (result !== null) {
-      const groups = result.pathname.groups;
-      const paramMap = new Map<string, string>();
-      for (const [key, value] of Object.entries(groups)) {
-        if (value !== undefined && key !== "0") {
-          paramMap.set(key, value);
-        }
-      }
+    const params = entry.matcher.exec(pathname);
+    if (params !== null) {
       return {
-        params: Object.fromEntries(paramMap),
+        params,
         routeId: entry.routeId,
         page: entry.page,
         layouts: entry.layouts,

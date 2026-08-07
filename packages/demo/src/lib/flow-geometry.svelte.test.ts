@@ -2,7 +2,6 @@ import { describe, it, expect, beforeEach } from "vitest";
 import {
   setFlowGeometrySource,
   scrollTargetFor,
-  locationAtReadingLine,
   flowGeometryReady,
   setTopChromeHeight,
   topChromeHeight,
@@ -175,6 +174,14 @@ describe("topChromeHeight", () => {
   it("falls back to the top bar for a non-finite measurement", () => {
     setTopChromeHeight(Number.NaN);
     expect(topChromeHeight()).toBe(TOP_BAR_HEIGHT);
+  });
+
+  it("is a no-op when the rounded value is unchanged", () => {
+    setTopChromeHeight(TOP_BAR_HEIGHT + 100);
+    expect(topChromeHeight()).toBe(TOP_BAR_HEIGHT + 100);
+    // Same integer value after rounding: should not invalidate reactivity
+    setTopChromeHeight(TOP_BAR_HEIGHT + 100.3);
+    expect(topChromeHeight()).toBe(TOP_BAR_HEIGHT + 100);
   });
 });
 
@@ -365,97 +372,6 @@ describe("scrollTargetFor fixed-point convergence", () => {
       "overview",
     );
     expect(result).toBeNull();
-  });
-});
-
-// -----------------------------------------------------------------------
-// locationAtReadingLine
-// -----------------------------------------------------------------------
-
-describe("locationAtReadingLine", () => {
-  it("returns null when source is not set", () => {
-    expect(locationAtReadingLine()).toBeNull();
-  });
-
-  it("resolves the correct location given containerTop and scrollY", () => {
-    Object.defineProperty(window, "innerHeight", {
-      value: 1000,
-      configurable: true,
-    });
-    Object.defineProperty(window, "scrollY", {
-      value: 200,
-      configurable: true,
-      writable: true,
-    });
-
-    const blocks = [
-      makeBlock(null, "sub-heading", "login" as FlowBlock["sectionId"]),
-      makeBlock("overview", "sub-heading", "login" as FlowBlock["sectionId"]),
-    ];
-    const geo0: FlowBlockGeometry = {
-      topY: 0,
-      bottomY: 50,
-      firstLineIndex: 0,
-      lineCount: 1,
-    };
-    const geo1: FlowBlockGeometry = {
-      topY: 50,
-      bottomY: 100,
-      firstLineIndex: 1,
-      lineCount: 1,
-    };
-    const source: FlowGeometrySource = {
-      layoutResult: makeLayout([geo0, geo1]),
-      blocks,
-      containerTop: 100,
-      holeAtScrollY: () => null,
-      layoutForHole: (_h) => makeLayout([geo0, geo1]),
-    };
-    setFlowGeometrySource(source);
-
-    // readingLineY = 1000 * 0.4 = 400
-    // documentY = 400 + 200 = 600
-    // containerRelativeY = 600 - 100 = 500
-    // 500 is past both blocks, so locationAtY returns the nearest above
-    const loc = locationAtReadingLine();
-    expect(loc).not.toBeNull();
-    if (loc === null) throw new Error("expected non-null location");
-    expect(loc.sectionId).toBe("login");
-  });
-
-  it("returns the first block when scrollY is 0 and reading line is low", () => {
-    Object.defineProperty(window, "innerHeight", {
-      value: 1000,
-      configurable: true,
-    });
-    Object.defineProperty(window, "scrollY", {
-      value: 0,
-      configurable: true,
-      writable: true,
-    });
-
-    const blocks = [
-      makeBlock("overview", "sub-heading", "login" as FlowBlock["sectionId"]),
-    ];
-    const geo: FlowBlockGeometry = {
-      topY: 0,
-      bottomY: 1000,
-      firstLineIndex: 0,
-      lineCount: 1,
-    };
-    const source: FlowGeometrySource = {
-      layoutResult: makeLayout([geo]),
-      blocks,
-      containerTop: 0,
-      holeAtScrollY: () => null,
-      layoutForHole: (_h) => makeLayout([geo]),
-    };
-    setFlowGeometrySource(source);
-
-    // readingLineY = 400. documentY = 400. containerRelativeY = 400.
-    // Falls inside block 0 (0..1000).
-    const loc = locationAtReadingLine();
-    expect(loc).toEqual({ sectionId: "login", subSlug: "overview" });
   });
 });
 

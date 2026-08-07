@@ -90,8 +90,7 @@ export interface CallerAdapterDeps {
 }
 
 /**
- * Create the caller adapter. Returns the ProcedureProxy tree and a
- * markDirty function for out-of-band mutations (setSignedInRole).
+ * Create the caller adapter. Returns the ProcedureProxy tree.
  *
  * Every phone-side call crosses dispatchPath, so it is the demo's
  * server boundary and the only honest place to time a request. The
@@ -130,15 +129,20 @@ export function createCallerAdapter(deps: CallerAdapterDeps): ProcedureProxy {
               message: `Procedure "${path.join(".")}" not found`,
             });
           }
-          const result = await (node as (i: unknown) => Promise<unknown>)(
-            input,
-          );
-          // Mark dirty after any mutation completes so the next dispatch
-          // (which may be a read) sees the updated user record.
-          if (kind === "mutate") {
-            markDirty();
+          try {
+            const result = await (node as (i: unknown) => Promise<unknown>)(
+              input,
+            );
+            return reshapeWire(result);
+          } finally {
+            // Mark dirty after any mutation (success or failure) so the
+            // next dispatch sees the updated user record. A procedure that
+            // writes rows then throws still dirties the DB, and the next
+            // read must reflect those writes.
+            if (kind === "mutate") {
+              markDirty();
+            }
           }
-          return reshapeWire(result);
         } catch (err: unknown) {
           if (err instanceof TRPCError) {
             throw TRPCClientError.from(err);

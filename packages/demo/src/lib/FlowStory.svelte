@@ -7,7 +7,6 @@
 </script>
 
 <script lang="ts">
-  import { SvelteMap } from "svelte/reactivity";
   import { Check } from "@lucide/svelte";
   import {
     prepareWithSegments,
@@ -24,6 +23,7 @@
     resolveStoryMessage,
     resolveParameterizedMessage,
   } from "./story-messages.js";
+  import { buildSubTopicLookup } from "./story-maps.js";
   import {
     type FlowBlock,
     type FlowTextBlock,
@@ -46,6 +46,7 @@
   } from "./flow-layout.js";
   import { hasClip, getClip, type PeekFirePayload } from "./clip-registry.js";
   import { createFigureHysteresis } from "./figure-hysteresis.js";
+  import { plainMap } from "./non-reactive.js";
   import ClipFigure from "./ClipFigure.svelte";
   import {
     setFlowGeometrySource,
@@ -109,6 +110,13 @@
 
   const FONT_FAMILY = '"Atkinson Hyperlegible Next"';
 
+  /**
+   * The one authoritative record of font shorthands. Canvas text measurement
+   * (prepare() calls) uses these strings directly, and the per-kind CSS
+   * classes consume them via custom properties on the flow container.
+   * Keeping one record prevents pretext and the rendered spans from
+   * drifting apart.
+   */
   const FONT_STRINGS: Record<FlowTextKind, string> = {
     "section-title": `700 24px ${FONT_FAMILY}`,
     "section-desc": `400 15px ${FONT_FAMILY}`,
@@ -116,9 +124,31 @@
     "sub-body": `400 15px ${FONT_FAMILY}`,
   };
 
-  // Font and line-height are now in the per-kind CSS classes
-  // (flow-line--title, flow-line--desc, etc.) rather than in inline
-  // style strings. Only position and width vary per line per frame.
+  /**
+   * Line-height values per kind. Must agree with flow-layout.ts metrics
+   * (section-title=32, others=24). Published as CSS custom properties
+   * alongside FONT_STRINGS so the CSS classes stay single-sourced.
+   */
+  const LINE_HEIGHTS: Record<FlowTextKind, string> = {
+    "section-title": "32px",
+    "section-desc": "24px",
+    "sub-heading": "24px",
+    "sub-body": "24px",
+  };
+
+  /** CSS custom property inline style for the flow container. */
+  const fontVarsStyle = [
+    `--flow-font-title: ${FONT_STRINGS["section-title"]}`,
+    `--flow-font-desc: ${FONT_STRINGS["section-desc"]}`,
+    `--flow-font-sub-heading: ${FONT_STRINGS["sub-heading"]}`,
+    `--flow-font-sub-body: ${FONT_STRINGS["sub-body"]}`,
+    `--flow-lh-title: ${LINE_HEIGHTS["section-title"]}`,
+    `--flow-lh-desc: ${LINE_HEIGHTS["section-desc"]}`,
+    `--flow-lh-sub-heading: ${LINE_HEIGHTS["sub-heading"]}`,
+    `--flow-lh-sub-body: ${LINE_HEIGHTS["sub-body"]}`,
+  ].join("; ");
+
+  // Only position and width vary per line per frame.
 
   // -----------------------------------------------------------------------
   // Block list derivation
@@ -174,7 +204,7 @@
 
   interface PreparedState {
     forBlocks: readonly FlowBlock[];
-    handles: SvelteMap<number, PreparedTextWithSegments>;
+    handles: Map<number, PreparedTextWithSegments>;
   }
 
   // $state.raw, not $state: the value is swapped wholesale and never
@@ -208,7 +238,7 @@
         lastAppliedLocale = capturedLocale;
       }
 
-      const handles = new SvelteMap<number, PreparedTextWithSegments>();
+      const handles = plainMap<number, PreparedTextWithSegments>();
       for (let i = 0; i < capturedBlocks.length; i++) {
         const block = capturedBlocks.at(i);
         if (block === undefined) continue;
@@ -835,15 +865,7 @@
   // block on every layout pass. Keyed by "sectionId--subSlug", maps to
   // the sub's DemoTopic (null-topic subs are excluded).
   let subTopicLookup: ReadonlyMap<string, DemoTopic> = $derived.by(() => {
-    const map = new SvelteMap<string, DemoTopic>();
-    for (const section of sections) {
-      for (const sub of section.subs) {
-        if (sub.topic !== null) {
-          map.set(`${section.id}--${sub.slug}`, sub.topic);
-        }
-      }
-    }
-    return map;
+    return buildSubTopicLookup(sections);
   });
 
   let seenMarks: SeenMark[] = $derived.by(() => {
@@ -1082,7 +1104,7 @@
   onclick={handleClick}
   style="height: {layoutResult !== null
     ? layoutResult.totalHeight
-    : 0}px; position: relative;"
+    : 0}px; position: relative; {fontVarsStyle}"
 >
   {#if layoutResult !== null}
     <!-- Highlight rects behind active sub lines (unkeyed: stateless decoration) -->
@@ -1268,8 +1290,8 @@
 
   /* Section title: dark text, weight 700 */
   .flow-line--title {
-    font: 700 24px "Atkinson Hyperlegible Next";
-    line-height: 32px;
+    font: var(--flow-font-title);
+    line-height: var(--flow-lh-title);
     color: #1d1d1f;
   }
   :global(html.dark) .flow-line--title {
@@ -1278,8 +1300,8 @@
 
   /* Section description: muted text */
   .flow-line--desc {
-    font: 400 15px "Atkinson Hyperlegible Next";
-    line-height: 24px;
+    font: var(--flow-font-desc);
+    line-height: var(--flow-lh-desc);
     color: #636366;
   }
   :global(html.dark) .flow-line--desc {
@@ -1288,18 +1310,18 @@
 
   /* Sub heading: dark text */
   .flow-line--sub-heading {
-    font: 700 18px "Atkinson Hyperlegible Next";
-    line-height: 24px;
+    font: var(--flow-font-sub-heading);
+    line-height: var(--flow-lh-sub-heading);
     color: #1d1d1f;
   }
   :global(html.dark) .flow-line--sub-heading {
     color: #f5f5f7;
   }
 
-  /* Active sub heading: accent color (inherits sub-heading font) */
+  /* Active sub heading: same font as sub-heading, accent color only */
   .flow-line--active-heading {
-    font: 700 18px "Atkinson Hyperlegible Next";
-    line-height: 24px;
+    font: var(--flow-font-sub-heading);
+    line-height: var(--flow-lh-sub-heading);
     color: #007aff;
   }
   :global(html.dark) .flow-line--active-heading {
@@ -1308,8 +1330,8 @@
 
   /* Sub body: slightly muted text */
   .flow-line--sub-body {
-    font: 400 15px "Atkinson Hyperlegible Next";
-    line-height: 24px;
+    font: var(--flow-font-sub-body);
+    line-height: var(--flow-lh-sub-body);
     color: #424245;
   }
   :global(html.dark) .flow-line--sub-body {

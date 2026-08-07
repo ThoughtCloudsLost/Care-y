@@ -182,6 +182,7 @@
           video: v,
           sectionId,
           subSlug,
+          viaKeyboard: true,
         });
       }
     }

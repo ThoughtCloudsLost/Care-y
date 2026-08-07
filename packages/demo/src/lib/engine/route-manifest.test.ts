@@ -7,7 +7,12 @@
  */
 
 import { describe, it, expect } from "vitest";
-import { matchRoute, listRouteIds } from "./route-manifest.js";
+import {
+  matchRoute,
+  listRouteIds,
+  compileSegmentMatcher,
+  dirToUrlPattern,
+} from "./route-manifest.js";
 
 describe("route-manifest", () => {
   it("lists known route IDs from the glob", () => {
@@ -67,5 +72,61 @@ describe("route-manifest", () => {
       expect(match?.routeId).toBe("/(app)/library/[articleId]");
       expect(match?.params).toEqual({ articleId: "art-456" });
     });
+  });
+});
+
+describe("compileSegmentMatcher", () => {
+  it("matches a static-only path", () => {
+    const m = compileSegmentMatcher("/tickets");
+    expect(m.exec("/tickets")).toEqual({});
+    expect(m.exec("/tickets/")).toEqual({});
+    expect(m.exec("/other")).toBeNull();
+  });
+
+  it("extracts a named param", () => {
+    const m = compileSegmentMatcher("/tickets/:id");
+    const result = m.exec("/tickets/abc-123");
+    expect(result).toEqual({ id: "abc-123" });
+    expect(m.exec("/tickets")).toBeNull();
+  });
+
+  it("extracts multiple params", () => {
+    const m = compileSegmentMatcher("/org/:orgId/users/:userId");
+    const result = m.exec("/org/org-1/users/u-2");
+    expect(result).toEqual({ orgId: "org-1", userId: "u-2" });
+  });
+
+  it("matches a catch-all wildcard", () => {
+    const m = compileSegmentMatcher("/*");
+    // Catch-all params are excluded from the returned map
+    // (matching URLPattern behavior where key "0" is filtered).
+    expect(m.exec("/anything/here")).toEqual({});
+    expect(m.exec("/a")).toEqual({});
+    // Single slash should not match (requires at least one segment)
+    expect(m.exec("/")).toBeNull();
+  });
+
+  it("does not match a non-matching path", () => {
+    const m = compileSegmentMatcher("/settings");
+    expect(m.exec("/settings/profile")).toBeNull();
+  });
+
+  it("handles the root path", () => {
+    const m = compileSegmentMatcher("/");
+    expect(m.exec("/")).toEqual({});
+  });
+});
+
+describe("dirToUrlPattern", () => {
+  it("strips group segments", () => {
+    expect(dirToUrlPattern("/(app)/tickets")).toBe("/tickets");
+  });
+
+  it("converts param brackets to colon params", () => {
+    expect(dirToUrlPattern("/(app)/tickets/[id]")).toBe("/tickets/:id");
+  });
+
+  it("converts rest params to wildcard", () => {
+    expect(dirToUrlPattern("/(app)/[...path]")).toBe("/*");
   });
 });

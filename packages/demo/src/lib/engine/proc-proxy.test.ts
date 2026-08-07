@@ -59,6 +59,17 @@ describe("makeProcedureProxy", () => {
     expect(dispatch).toHaveBeenCalledWith(["auth", "login"], "mutate", input);
   });
 
+  it("returns the same node identity for repeated path accesses", () => {
+    const dispatch = vi.fn<ProcDispatch>();
+    const proxy = makeProcedureProxy(dispatch);
+    const a = node(proxy, "tickets", "list");
+    const b = node(proxy, "tickets", "list");
+    expect(a).toBe(b);
+    // Terminal functions are also stable references
+    expect(a.query).toBe(b.query);
+    expect(a.mutate).toBe(b.mutate);
+  });
+
   it("propagates dispatch errors", async () => {
     const dispatch = vi
       .fn<ProcDispatch>()

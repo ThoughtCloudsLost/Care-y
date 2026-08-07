@@ -442,7 +442,6 @@ async function main() {
   });
 
   const failures = [];
-  let firstSub = true;
 
   for (const subKey of subsToCapture) {
     const [sectionId, subSlug] = subKey.split("/");
@@ -456,19 +455,22 @@ async function main() {
 
     console.log(`[${subKey}]`);
 
+    /** @type {import("@playwright/test").Page | null} */
+    let page = null;
+    /** @type {string | null} */
+    let frameDir = null;
     try {
-      const page = await context.newPage();
+      page = await context.newPage();
       const targetUrl = `${args.url}?record=1#${sectionId}/${subSlug}`;
       console.log(`  navigating: ${targetUrl}`);
       await page.goto(targetUrl, { waitUntil: "networkidle" });
 
-      // On the first sub, wait for the engine to boot.
-      if (firstSub) {
-        console.log("  waiting for engine ready...");
-        await waitForEngineReady(page, ENGINE_READY_TIMEOUT_MS);
-        console.log("  engine ready.");
-        firstSub = false;
-      }
+      // Wait for engine readiness on every page. Each subsection gets
+      // a FRESH page, so clips 2..N would record against a still-booting
+      // engine without this check.
+      console.log("  waiting for engine ready...");
+      await waitForEngineReady(page, ENGINE_READY_TIMEOUT_MS);
+      console.log("  engine ready.");
 
       // Settle: let animations and layout stabilize.
       await new Promise((r) => setTimeout(r, 1500));
@@ -511,7 +513,7 @@ async function main() {
       );
 
       // Record screencast
-      const frameDir = mkdtempSync(
+      frameDir = mkdtempSync(
         join(tmpdir(), `carey-capture-${sectionId}-${subSlug}-`),
       );
       console.log("  recording...");
@@ -554,19 +556,24 @@ async function main() {
         encodeGif(demuxerPath, deviceRect, duration, sectionId, subSlug);
       }
 
-      // Clean up
-      if (!args["keep-master"]) {
-        rmSync(frameDir, { recursive: true, force: true });
-      } else {
-        console.log(`  master frames retained: ${frameDir}`);
-      }
-
-      await page.close();
       console.log(`  done.\n`);
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       console.error(`  FAILED: ${msg}\n`);
       failures.push(subKey);
+    } finally {
+      // Clean up the page and temp dir even on failure; without this
+      // a PGlite-bearing page and a temp dir of PNGs leak per failure.
+      if (page !== null) {
+        await page.close().catch(() => {
+          // Best-effort; the browser may already be closing.
+        });
+      }
+      if (frameDir !== null && !args["keep-master"]) {
+        rmSync(frameDir, { recursive: true, force: true });
+      } else if (frameDir !== null) {
+        console.log(`  master frames retained: ${frameDir}`);
+      }
     }
   }
 

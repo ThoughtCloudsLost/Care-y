@@ -18,13 +18,10 @@
 
 import { DemoEngineError } from "../errors.js";
 import _sodium from "libsodium-wrappers-sumo";
+import { assertSodiumReady } from "./sodium-ready.js";
 
 function ready(): typeof _sodium {
-  if (typeof _sodium.crypto_secretbox_open_easy !== "function") {
-    throw new DemoEngineError(
-      "sodium-native shim used before sodium.ready resolved",
-    );
-  }
+  assertSodiumReady();
   return _sodium;
 }
 

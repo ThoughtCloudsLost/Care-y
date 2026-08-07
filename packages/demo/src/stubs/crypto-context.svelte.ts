@@ -17,8 +17,8 @@
  * role switcher mutates the signed-in user's role.
  */
 
-import { SvelteSet } from "svelte/reactivity";
 import { Permission } from "@care-y/shared";
+import { plainSet } from "../lib/non-reactive.js";
 import { RoleId } from "@care-y/shared";
 import { CryptoBridge } from "$lib/workers/crypto-bridge.js";
 import { OrgKeyManager } from "$lib/crypto/org-key.js";
@@ -83,7 +83,9 @@ function createPacingBridge(real: CryptoBridge): PacingBridgeWrapper {
 
   // Track which cache keys have had their first paced resolution.
   // Only the first decrypt per key gets the stagger delay.
-  const pacedKeys = new SvelteSet<string>();
+  // Plain Set: used as non-reactive bookkeeping on the per-decrypt
+  // hot path, never read by a $derived or template expression.
+  const pacedKeys = plainSet<string>();
 
   /**
    * Wait for keyed, then add a stagger delay on first access per key.
@@ -99,68 +101,71 @@ function createPacingBridge(real: CryptoBridge): PacingBridgeWrapper {
     }
   }
 
+  // Create the paced wrapper functions once, up front. The Proxy get
+  // trap returns these cached references instead of allocating a fresh
+  // closure per property access.
+  const pacedDecrypt = async function pacedDecrypt(
+    ticketId: string,
+    slot: string,
+    keyCacheId: string,
+    ephemeralPoint: string,
+    nonce: string,
+    wrappedKey: string,
+    ciphertext: string,
+  ): Promise<string> {
+    await pacedWait(keyCacheId);
+    // Timed after pacedWait, so the reported duration is the real
+    // worker decrypt without the demo's reveal stagger.
+    return traceFlowLocal(
+      { lane: "crypto", label: `decrypt ${slot} ${keyCacheId}` },
+      async () =>
+        real.decrypt(
+          ticketId,
+          slot,
+          keyCacheId,
+          ephemeralPoint,
+          nonce,
+          wrappedKey,
+          ciphertext,
+        ),
+    );
+  };
+
+  const pacedDecryptAndRewrap = async function pacedDecryptAndRewrap(
+    followUpId: string,
+    ticketId: string,
+    ephemeralPoint: string,
+    nonce: string,
+    wrappedKey: string,
+    ciphertext: string,
+  ): Promise<string> {
+    const cacheKey = `rewrap:${followUpId}`;
+    await pacedWait(cacheKey);
+    return traceFlowLocal(
+      { lane: "crypto", label: `decryptAndRewrap ${cacheKey}` },
+      async () =>
+        real.decryptAndRewrap(
+          followUpId,
+          ticketId,
+          ephemeralPoint,
+          nonce,
+          wrappedKey,
+          ciphertext,
+        ),
+    );
+  };
+
   // Build the wrapper as a Proxy. All property accesses pass through
   // to the real bridge except decrypt and decryptAndRewrap, which
-  // queue behind the keyed promise with pacing.
+  // return the pre-built paced wrappers.
   const handler: ProxyHandler<CryptoBridge> = {
     get(
       target: CryptoBridge,
       prop: string | symbol,
       _receiver: unknown,
     ): unknown {
-      if (prop === "decrypt") {
-        return async function pacedDecrypt(
-          ticketId: string,
-          slot: string,
-          keyCacheId: string,
-          ephemeralPoint: string,
-          nonce: string,
-          wrappedKey: string,
-          ciphertext: string,
-        ): Promise<string> {
-          await pacedWait(keyCacheId);
-          // Timed after pacedWait, so the reported duration is the real
-          // worker decrypt without the demo's reveal stagger.
-          return traceFlowLocal(
-            { lane: "crypto", label: `decrypt ${slot} ${keyCacheId}` },
-            async () =>
-              target.decrypt(
-                ticketId,
-                slot,
-                keyCacheId,
-                ephemeralPoint,
-                nonce,
-                wrappedKey,
-                ciphertext,
-              ),
-          );
-        };
-      }
-      if (prop === "decryptAndRewrap") {
-        return async function pacedDecryptAndRewrap(
-          followUpId: string,
-          ticketId: string,
-          ephemeralPoint: string,
-          nonce: string,
-          wrappedKey: string,
-          ciphertext: string,
-        ): Promise<string> {
-          const cacheKey = `rewrap:${followUpId}`;
-          await pacedWait(cacheKey);
-          return traceFlowLocal(
-            { lane: "crypto", label: `decryptAndRewrap ${cacheKey}` },
-            async () =>
-              target.decryptAndRewrap(
-                followUpId,
-                ticketId,
-                ephemeralPoint,
-                nonce,
-                wrappedKey,
-                ciphertext,
-              ),
-          );
-        };
-      }
+      if (prop === "decrypt") return pacedDecrypt;
+      if (prop === "decryptAndRewrap") return pacedDecryptAndRewrap;
       // All other methods pass through to the real bridge.
       // Use Reflect.get with the real target as receiver so private
       // fields resolve correctly (Kysely Proxy lesson).
@@ -504,16 +509,6 @@ export function demoSeed(data: DemoSeedData): void {
   if (data.userId !== undefined) currentUserId = data.userId;
   if (data.userRoleId !== undefined) currentUserRoleId = data.userRoleId;
   if (data.permissions !== undefined) currentPermissions = data.permissions;
-}
-
-/**
- * Reset auth state to defaults. Does NOT destroy the bridge (restart
- * is an iframe reload that gives a fresh module graph).
- */
-export function demoReset(): void {
-  currentUserId = "demo-user-001";
-  currentUserRoleId = RoleId.ADMIN;
-  currentPermissions = DEFAULT_PERMISSIONS;
 }
 
 /**

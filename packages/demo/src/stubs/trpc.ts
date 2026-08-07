@@ -49,20 +49,6 @@ class DemoEngineNotReadyError extends Error {
 export { DemoEngineNotReadyError };
 
 // -----------------------------------------------------------------------
-// Dev delay toggle
-// -----------------------------------------------------------------------
-
-let devDelayOn = false;
-
-export function isDevDelayEnabled(): boolean {
-  return devDelayOn;
-}
-
-export function setDevDelay(enabled: boolean): void {
-  devDelayOn = enabled;
-}
-
-// -----------------------------------------------------------------------
 // Engine adapter slot (accepts a value or a Promise)
 // -----------------------------------------------------------------------
 
@@ -150,29 +136,18 @@ export function setDemoAuthed(authed: boolean): void {
 // Helpers
 // -----------------------------------------------------------------------
 
-async function delay(ms: number, signal?: AbortSignal): Promise<void> {
-  await new Promise<void>((resolve, reject) => {
-    if (signal?.aborted === true) {
-      reject(
-        signal.reason instanceof Error
-          ? signal.reason
-          : new DOMException("Aborted", "AbortError"),
-      );
-      return;
-    }
-    const timer = setTimeout(resolve, ms);
-    signal?.addEventListener(
-      "abort",
-      () => {
-        clearTimeout(timer);
-        reject(
-          signal.reason instanceof Error
-            ? signal.reason
-            : new DOMException("Aborted", "AbortError"),
-        );
-      },
-      { once: true },
-    );
+/**
+ * Mirror of the real $lib/trpc dev-delay probe. The client's
+ * async-decrypt-cache imports it, so the stub must keep the export
+ * even though the demo never turns the delay on.
+ */
+export function isDevDelayEnabled(): boolean {
+  return false;
+}
+
+async function delay(ms: number): Promise<void> {
+  await new Promise<void>((resolve) => {
+    setTimeout(resolve, ms);
   });
 }
 

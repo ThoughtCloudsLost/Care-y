@@ -555,6 +555,35 @@ export function slugForRoute(routeId: string): string {
 }
 
 /**
+ * Lazily-built reverse index from slug to the first unmapped route ID.
+ * Initialized on first routeForSlug call when the route manifest is
+ * available (the caller passes the full route ID list).
+ */
+let slugToRouteId: ReadonlyMap<string, string> | null = null;
+let slugToRouteIdSource: readonly string[] | null = null;
+
+function ensureSlugIndex(
+  routeIds: readonly string[],
+): ReadonlyMap<string, string> {
+  // Re-build only when the input changes (in practice it never does
+  // after the first call, but referential equality keeps it honest).
+  if (slugToRouteId !== null && slugToRouteIdSource === routeIds) {
+    return slugToRouteId;
+  }
+  const index = new Map<string, string>();
+  for (const rid of routeIds) {
+    const slug = slugForRoute(rid);
+    // First unmapped route wins; narrated routes are excluded.
+    if (!index.has(slug) && sectionForRoute(rid) === null) {
+      index.set(slug, rid);
+    }
+  }
+  slugToRouteId = index;
+  slugToRouteIdSource = routeIds;
+  return index;
+}
+
+/**
  * Reverse lookup: find the first route ID whose slugForRoute matches
  * the given slug AND whose sectionForRoute is null (unmapped). Returns
  * null when no candidate qualifies.
@@ -563,12 +592,7 @@ export function routeForSlug(
   slug: string,
   routeIds: readonly string[],
 ): string | null {
-  for (const rid of routeIds) {
-    if (slugForRoute(rid) === slug && sectionForRoute(rid) === null) {
-      return rid;
-    }
-  }
-  return null;
+  return ensureSlugIndex(routeIds).get(slug) ?? null;
 }
 
 // -----------------------------------------------------------------------
@@ -629,6 +653,22 @@ export function subElementId(sectionId: SectionId, subSlug: string): string {
 }
 
 // -----------------------------------------------------------------------
+// Login sub-target map (module-scope, constructed once)
+// -----------------------------------------------------------------------
+
+const LOGIN_SUB_TARGETS: ReadonlyMap<string, LoginAdvanceTarget> = new Map([
+  ["credentials", "form"],
+  ["language", "form"],
+  ["two-factor", "twofa-picker"],
+  ["totp", "method-totp"],
+  ["passkey", "method-passkey"],
+  ["email", "method-email"],
+  ["sms", "method-sms"],
+  ["push", "method-push"],
+  ["backup-codes", "method-backup"],
+]);
+
+// -----------------------------------------------------------------------
 // Phone command resolution
 // -----------------------------------------------------------------------
 
@@ -675,18 +715,6 @@ export function resolvePhoneCommand(
       // key-derivation only narrates (its screen exists only during
       // completion, which the bridge's completeLogin plays outside
       // this resolver).
-      const LOGIN_SUB_TARGETS: ReadonlyMap<string, LoginAdvanceTarget> =
-        new Map([
-          ["credentials", "form"],
-          ["language", "form"],
-          ["two-factor", "twofa-picker"],
-          ["totp", "method-totp"],
-          ["passkey", "method-passkey"],
-          ["email", "method-email"],
-          ["sms", "method-sms"],
-          ["push", "method-push"],
-          ["backup-codes", "method-backup"],
-        ]);
       const loginTarget =
         subSlug === null ? "form" : (LOGIN_SUB_TARGETS.get(subSlug) ?? null);
       return {

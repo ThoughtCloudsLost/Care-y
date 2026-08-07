@@ -24,9 +24,6 @@ import type {
 // Tuning
 // -----------------------------------------------------------------------
 
-/** Ring buffer size. Older events are dropped once the cap is reached. */
-export const MAX_FLOW_EVENTS = 500;
-
 /** Quiet gap after which an event starts a new interaction on its own. */
 export const FLOW_INTERACTION_IDLE_MS = 1500;
 
@@ -57,7 +54,6 @@ export function flowNow(): number {
 // Bus state
 // -----------------------------------------------------------------------
 
-const events: DemoFlowEvent[] = [];
 const listeners: DemoFlowListener[] = [];
 
 let nextEventId = 1;
@@ -123,9 +119,11 @@ export function describeFlowError(err: unknown): string {
 export interface FlowEventInput {
   readonly lane: FlowLane;
   readonly direction: FlowDirection;
-  readonly label: string;
+  /** Plain string or a thunk that is resolved only when a listener exists. */
+  readonly label: string | (() => string);
   readonly seamKey?: DemoSeamKey | null;
-  readonly payloadPreview?: string | null;
+  /** Plain string, null, or a thunk resolved only when a listener exists. */
+  readonly payloadPreview?: string | null | (() => string);
   readonly durationMs?: number | null;
   /**
    * Pin the event to an existing group. Response halves pass the id
@@ -137,29 +135,59 @@ export interface FlowEventInput {
   readonly at?: number;
 }
 
-/** Append an event to the ring buffer and notify subscribers. */
+/** Resolve a string-or-thunk field. */
+function resolveField(field: string | (() => string)): string {
+  return typeof field === "function" ? field() : field;
+}
+
+/**
+ * Build and dispatch a flow event to subscribers. When no listener is
+ * attached the id/grouping bookkeeping still advances so late subscribers
+ * see a consistent id sequence, but the event object itself is not
+ * allocated and thunks are not resolved.
+ */
 export function emitFlowEvent(input: FlowEventInput): DemoFlowEvent {
   const at = input.at ?? flowNow();
   const grouped = resolveInteractionId(at);
+  const id = nextEventId;
+  nextEventId += 1;
+
+  // No listeners: skip event construction entirely. Id and grouping
+  // state have already advanced. subscribeFlowEvents does not replay,
+  // so the missing event object is invisible to future subscribers.
+  if (listeners.length === 0) {
+    // Return a minimal sentinel so callers that destructure the
+    // return value (e.g. traceFlowSpan reading interactionId) still work.
+    return {
+      id,
+      interactionId: input.interactionId ?? grouped,
+      lane: input.lane,
+      direction: input.direction,
+      label: typeof input.label === "function" ? "" : input.label,
+      seamKey: input.seamKey ?? null,
+      payloadPreview: null,
+      durationMs: input.durationMs ?? null,
+    };
+  }
+
+  const rawPreview = input.payloadPreview;
+  const resolvedPreview =
+    rawPreview === undefined || rawPreview === null
+      ? null
+      : typeof rawPreview === "function"
+        ? truncateFlowPreview(rawPreview())
+        : truncateFlowPreview(rawPreview);
+
   const event: DemoFlowEvent = {
-    id: nextEventId,
+    id,
     interactionId: input.interactionId ?? grouped,
     lane: input.lane,
     direction: input.direction,
-    label: input.label,
+    label: resolveField(input.label),
     seamKey: input.seamKey ?? null,
-    payloadPreview:
-      input.payloadPreview === undefined || input.payloadPreview === null
-        ? null
-        : truncateFlowPreview(input.payloadPreview),
+    payloadPreview: resolvedPreview,
     durationMs: input.durationMs ?? null,
   };
-  nextEventId += 1;
-
-  events.push(event);
-  if (events.length > MAX_FLOW_EVENTS) {
-    events.splice(0, events.length - MAX_FLOW_EVENTS);
-  }
 
   for (const listener of listeners) {
     listener(event);
@@ -173,9 +201,9 @@ export function emitFlowEvent(input: FlowEventInput): DemoFlowEvent {
 
 export interface FlowSpanSpec {
   readonly lane: FlowLane;
-  readonly label: string;
+  readonly label: string | (() => string);
   readonly seamKey?: DemoSeamKey | null;
-  readonly payloadPreview?: string | null;
+  readonly payloadPreview?: string | null | (() => string);
   /** Direction of the request half. Defaults to "up". */
   readonly direction?: FlowDirection;
   /** Direction of the response half. Defaults to "down". */
@@ -187,11 +215,43 @@ export interface FlowSpanSpec {
  * the interaction id captured before the call runs; the response half
  * carries the elapsed time and, on rejection, a failure marker. The
  * rejection is rethrown untouched.
+ *
+ * When no listeners are attached, the two performance.now() calls and
+ * the event-object allocations are skipped; only the id/grouping state
+ * advances, which is cheap.
  */
 export async function traceFlowSpan<T>(
   spec: FlowSpanSpec,
   run: () => Promise<T>,
 ): Promise<T> {
+  if (listeners.length === 0) {
+    // Advance ids/grouping but skip timing and allocation.
+    const { interactionId } = emitFlowEvent({
+      lane: spec.lane,
+      direction: spec.direction ?? "up",
+      label: spec.label,
+      seamKey: spec.seamKey ?? null,
+    });
+    try {
+      const result = await run();
+      emitFlowEvent({
+        lane: spec.lane,
+        direction: spec.returnDirection ?? "down",
+        label: spec.label,
+        interactionId,
+      });
+      return result;
+    } catch (err: unknown) {
+      emitFlowEvent({
+        lane: spec.lane,
+        direction: spec.returnDirection ?? "down",
+        label: `${resolveField(spec.label)} failed`,
+        interactionId,
+      });
+      throw err;
+    }
+  }
+
   const started = flowNow();
   const { interactionId } = emitFlowEvent({
     lane: spec.lane,
@@ -216,7 +276,7 @@ export async function traceFlowSpan<T>(
     emitFlowEvent({
       lane: spec.lane,
       direction: spec.returnDirection ?? "down",
-      label: `${spec.label} failed`,
+      label: `${resolveField(spec.label)} failed`,
       seamKey: spec.seamKey ?? null,
       payloadPreview: describeFlowError(err),
       durationMs: flowNow() - started,
@@ -228,20 +288,44 @@ export async function traceFlowSpan<T>(
 
 export interface FlowLocalSpec {
   readonly lane: FlowLane;
-  readonly label: string;
+  readonly label: string | (() => string);
   readonly seamKey?: DemoSeamKey | null;
-  readonly payloadPreview?: string | null;
+  readonly payloadPreview?: string | null | (() => string);
 }
 
 /**
  * Emit ONE event once an async call settles, timed across the call and
  * grouped with whatever interaction was current when it started.
  * Rejections emit a failure event and rethrow.
+ *
+ * Timing and allocation are skipped when no listener is attached.
  */
 export async function traceFlowLocal<T>(
   spec: FlowLocalSpec,
   run: () => Promise<T>,
 ): Promise<T> {
+  if (listeners.length === 0) {
+    const interactionId = currentFlowInteractionId();
+    try {
+      const result = await run();
+      emitFlowEvent({
+        lane: spec.lane,
+        direction: "local",
+        label: spec.label,
+        interactionId,
+      });
+      return result;
+    } catch (err: unknown) {
+      emitFlowEvent({
+        lane: spec.lane,
+        direction: "local",
+        label: `${resolveField(spec.label)} failed`,
+        interactionId,
+      });
+      throw err;
+    }
+  }
+
   const started = flowNow();
   const interactionId = currentFlowInteractionId();
   try {
@@ -260,7 +344,7 @@ export async function traceFlowLocal<T>(
     emitFlowEvent({
       lane: spec.lane,
       direction: "local",
-      label: `${spec.label} failed`,
+      label: `${resolveField(spec.label)} failed`,
       seamKey: spec.seamKey ?? null,
       payloadPreview: describeFlowError(err),
       durationMs: flowNow() - started,
@@ -285,18 +369,11 @@ export function subscribeFlowEvents(listener: DemoFlowListener): () => void {
   };
 }
 
-/** Snapshot of the buffered events, oldest first. */
-export function getFlowEvents(): readonly DemoFlowEvent[] {
-  return [...events];
-}
-
 /**
- * Clear the bus: buffered events, ids, grouping state, listeners, and
- * the clock. The demo's own restart is an iframe reload, so this exists
- * for tests.
+ * Clear the bus: ids, grouping state, listeners, and the clock. The
+ * demo's own restart is an iframe reload, so this exists for tests.
  */
 export function resetFlowEvents(): void {
-  events.length = 0;
   listeners.length = 0;
   nextEventId = 1;
   currentInteractionId = 1;

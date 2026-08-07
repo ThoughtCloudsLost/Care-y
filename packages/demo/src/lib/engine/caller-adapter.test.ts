@@ -1,5 +1,6 @@
-import { describe, it, expect } from "vitest";
-import { reshapeWire } from "./caller-adapter.js";
+import { describe, it, expect, vi } from "vitest";
+import { reshapeWire, createCallerAdapter } from "./caller-adapter.js";
+import type { CallerAdapterDeps } from "./caller-adapter.js";
 
 describe("reshapeWire", () => {
   it("returns the same reference for a buffer-free object", () => {
@@ -78,5 +79,48 @@ describe("reshapeWire", () => {
     const result = reshapeWire(outer);
     expect(result).toBe(outer);
     expect((result as Record<string, unknown>).list).toBe(inner);
+  });
+});
+
+// Mock traceFlowSpan so the adapter test doesn't depend on flow-events.
+vi.mock("../flow-events.js", () => ({
+  traceFlowSpan: (_opts: unknown, fn: () => unknown) => fn(),
+}));
+
+describe("createCallerAdapter", () => {
+  it("marks dirty when a mutation throws", async () => {
+    const markDirtyFn = vi.fn();
+    let dirty = false;
+    const deps: CallerAdapterDeps = {
+      // The callerObj is a recursive proxy. dispatchPath walks the
+      // path segments with Reflect.get, then calls the leaf as a
+      // function. Set up a nested object whose leaf throws.
+      callerObj: {
+        failing: {
+          boom: () => Promise.reject(new Error("mutation exploded")),
+        },
+      } as unknown as Record<string, unknown>,
+      refreshAdminUser: vi.fn(async () => {
+        dirty = false;
+      }),
+      markDirty: () => {
+        dirty = true;
+        markDirtyFn();
+      },
+      isDirty: () => dirty,
+    };
+
+    const proxy = createCallerAdapter(deps);
+    // The ProcedureProxy requires .mutate to dispatch with kind "mutate".
+    // Path: ["failing", "boom"], terminal: "mutate".
+    const failingBoom = (
+      proxy as unknown as {
+        failing: { boom: { mutate: (input?: unknown) => Promise<unknown> } };
+      }
+    ).failing.boom;
+    await expect(failingBoom.mutate()).rejects.toThrow();
+
+    // The dirty flag must be set even though the mutation threw
+    expect(markDirtyFn).toHaveBeenCalledOnce();
   });
 });

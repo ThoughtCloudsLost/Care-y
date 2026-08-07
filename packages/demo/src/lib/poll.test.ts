@@ -65,6 +65,29 @@ describe("pollUntil", () => {
     const result = await promise;
     expect(result).toBe("done");
   });
+
+  it("resolves null on immediate probe when already stale", async () => {
+    // A poll started after its token was superseded must not resolve
+    // with a stale value, even if the probe would succeed immediately.
+    const probeSpy = vi.fn(() => "found");
+    const result = await pollUntil({
+      probe: probeSpy,
+      isStale: () => true,
+      timeoutMs: 5000,
+    });
+    expect(result).toBeNull();
+    // The probe should never be called if staleness is detected first
+    expect(probeSpy).not.toHaveBeenCalled();
+  });
+
+  it("calls probe when isStale returns false at start", async () => {
+    const result = await pollUntil({
+      probe: () => "ok",
+      isStale: () => false,
+      timeoutMs: 5000,
+    });
+    expect(result).toBe("ok");
+  });
 });
 
 describe("timing constants", () => {

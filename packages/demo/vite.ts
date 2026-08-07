@@ -2,10 +2,7 @@
  * Shared alias and plugin exports for the demo package.
  *
  * demoAliases() returns a Vite resolve.alias array used by the
- * demo's own vite.config.ts. demoResolvePlugin() wraps the same
- * mapping as an enforce-pre resolveId plugin for future SvelteKit
- * consumers (care-y.com) where Vite's alias array is prepended by
- * the SvelteKit plugin and cannot shadow $lib.
+ * demo's own vite.config.ts.
  *
  * serverHealthAliases and serverRedirectPlugin() map server module
  * specifiers to browser-compatible shims under src/lib/engine/server/.
@@ -304,45 +301,6 @@ export function demoSplashPlugin(): Plugin {
           `<body>\n${schemeScript}\n${styles}\n${markup}`,
         );
       },
-    },
-  };
-}
-
-export function demoResolvePlugin(): Plugin {
-  const exact = new Map(
-    exactPairs.map(([find, relative]) => [find, resolve(relative)]),
-  );
-  const dirs = dirPairs.map(
-    ([prefix, relative]) => [prefix, resolve(relative)] as const,
-  );
-
-  return {
-    name: "care-y-demo-resolve",
-    enforce: "pre",
-    async resolveId(source: string, importer: string | undefined) {
-      // Stub matchers and exact ids map to real files on disk; return
-      // the target directly.
-      for (const [pattern, relative] of stubMatchers) {
-        if (pattern.test(source)) return resolve(relative);
-      }
-      const exactHit = exact.get(source);
-      if (exactHit !== undefined) return exactHit;
-
-      // Directory rewrites keep the remainder (often a ".js" specifier
-      // for an on-disk ".ts" file), so delegate back to the resolver
-      // chain for extension substitution instead of returning the raw
-      // rewritten path.
-      for (const [prefix, target] of dirs) {
-        if (source === prefix || source.startsWith(prefix + "/")) {
-          const rewritten = target + source.slice(prefix.length);
-          const resolved = await this.resolve(rewritten, importer, {
-            skipSelf: true,
-          });
-          return resolved ?? rewritten;
-        }
-      }
-
-      return undefined;
     },
   };
 }

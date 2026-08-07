@@ -221,7 +221,13 @@ export function resolveStoryMessage(key: string, locale: string): string {
   void locale;
   // eslint-disable-next-line security/detect-object-injection -- key is a message key from section config, not user input
   const fn = lookup[key];
-  return fn !== undefined ? fn() : key;
+  if (fn !== undefined) return fn();
+  if (import.meta.env.DEV) {
+    // Surface missing keys during development so they do not silently
+    // render literal demo_* strings to visitors.
+    console.warn(`[story-messages] missing lookup key: "${key}"`);
+  }
+  return key;
 }
 
 // -----------------------------------------------------------------------

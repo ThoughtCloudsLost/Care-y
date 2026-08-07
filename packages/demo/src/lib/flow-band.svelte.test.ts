@@ -15,6 +15,7 @@ import {
   MAX_BAND_HEIGHT,
   DEFAULT_BAND_HEIGHT,
   MAX_SLICES,
+  EXPANDED_SLICE_WINDOW,
   CARD_COLUMN_WIDTH,
   CARD_COLUMN_GAP,
   PREVIEW_MAX_CHARS,
@@ -234,6 +235,38 @@ describe("ingestFlowEvent", () => {
     );
     expect(lower.at(0)?.events).toHaveLength(1);
   });
+
+  it("preserves identity of untouched slices (shallow-copy optimization)", () => {
+    let slices = ingestFlowEvent([], makeEvent({ id: 1, interactionId: 1 }));
+    slices = ingestFlowEvent(slices, makeEvent({ id: 2, interactionId: 2 }));
+    const beforeFirst = slices[0];
+    // Appending to slice 2 should not copy slice 1
+    const after = ingestFlowEvent(
+      slices,
+      makeEvent({ id: 3, interactionId: 2, lane: "crypto" }),
+    );
+    expect(after[0]).toBe(beforeFirst);
+  });
+
+  it("auto-collapses older slices outside the expanded window", () => {
+    let slices: FlowSlice[] = [];
+    const total = EXPANDED_SLICE_WINDOW + 2;
+    for (let i = 1; i <= total; i++) {
+      slices = ingestFlowEvent(slices, makeEvent({ id: i, interactionId: i }));
+    }
+    // The newest EXPANDED_SLICE_WINDOW slices should be expanded
+    for (
+      let i = slices.length - EXPANDED_SLICE_WINDOW;
+      i < slices.length;
+      i++
+    ) {
+      expect(slices.at(i)?.collapsed).toBe(false);
+    }
+    // Older slices should be collapsed
+    for (let i = 0; i < slices.length - EXPANDED_SLICE_WINDOW; i++) {
+      expect(slices.at(i)?.collapsed).toBe(true);
+    }
+  });
 });
 
 describe("toggleSliceCollapsed", () => {
@@ -393,6 +426,30 @@ describe("createFlowBandStore", () => {
     store.toggleExpanded(2);
     flushSync();
     expect(store.expandedEvent).toBeNull();
+    teardown();
+  });
+
+  it("tracks event count accurately when slices are dropped", () => {
+    const { store, teardown } = setup();
+    // Ingest enough interactions to exceed MAX_SLICES
+    for (let i = 1; i <= MAX_SLICES + 2; i++) {
+      store.ingest(makeEvent({ id: i, interactionId: i }));
+    }
+    flushSync();
+    expect(store.slices).toHaveLength(MAX_SLICES);
+    expect(store.eventCount).toBe(MAX_SLICES);
+    teardown();
+  });
+
+  it("resolves expandedEvent via O(1) map lookup", () => {
+    const { store, teardown } = setup();
+    // Ingest events across multiple slices
+    store.ingest(makeEvent({ id: 1, interactionId: 1, label: "alpha" }));
+    store.ingest(makeEvent({ id: 2, interactionId: 2, label: "beta" }));
+    store.ingest(makeEvent({ id: 3, interactionId: 1, label: "gamma" }));
+    store.toggleExpanded(3);
+    flushSync();
+    expect(store.expandedEvent?.label).toBe("gamma");
     teardown();
   });
 
