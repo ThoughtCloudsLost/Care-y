@@ -19,7 +19,7 @@ import _sodium from "libsodium-wrappers-sumo";
 import { PGlite } from "@electric-sql/pglite";
 import type { Kysely } from "kysely";
 import { sql } from "kysely";
-import { TRPCError } from "@trpc/server";
+import { isTrpcServerError } from "./caller-adapter.js";
 import { TRPCClientError } from "@trpc/client";
 import { RoleId, type RoleIdValue, type Permission } from "@care-y/shared";
 
@@ -775,14 +775,23 @@ export async function runHealthProofs(
   try {
     let forbiddenCaught = false;
     let isTrpcClientErr = false;
+    let volunteerOutcome = "resolved without error";
 
     try {
       await dispatch(volunteerCaller, "reports", "queueStats", undefined);
     } catch (err: unknown) {
-      if (err instanceof TRPCError && err.code === "FORBIDDEN") {
+      // Structural brand check, not instanceof: the router chunk's
+      // TRPCError copy differs from this module's (see isTrpcServerError
+      // in caller-adapter.ts).
+      if (isTrpcServerError(err) && err.code === "FORBIDDEN") {
         forbiddenCaught = true;
         const clientErr = TRPCClientError.from(err);
         isTrpcClientErr = clientErr instanceof TRPCClientError;
+        volunteerOutcome = "forbidden";
+      } else if (err instanceof Error) {
+        volunteerOutcome = `${err.name}: ${err.message}`;
+      } else {
+        volunteerOutcome = String(err);
       }
     }
 
@@ -803,6 +812,7 @@ export async function runHealthProofs(
         `forbidden caught: ${String(forbiddenCaught)}, ` +
         `isTRPCClientError: ${String(isTrpcClientErr)}, ` +
         `admin passed: ${String(adminPassed)}` +
+        (forbiddenCaught ? "" : `, volunteer outcome: ${volunteerOutcome}`) +
         (adminError ? `, admin error: ${adminError}` : ""),
     });
   } catch (err: unknown) {

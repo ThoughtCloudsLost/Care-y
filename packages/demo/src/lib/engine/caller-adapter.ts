@@ -66,6 +66,23 @@ export function reshapeWire(value: unknown): unknown {
   return value;
 }
 
+// ── Error branding ─────────────────────────────────────────────────
+
+/**
+ * Brand-check a thrown value as a TRPCError without relying on
+ * instanceof. @trpc/server v11 duplicates its core (including the
+ * TRPCError class) across its own published entry bundles, so the copy
+ * a router chunk throws is not reliably the copy this module imported;
+ * instanceof across those copies is false while the shape is identical.
+ */
+export function isTrpcServerError(err: unknown): err is TRPCError {
+  return (
+    err instanceof Error &&
+    err.name === "TRPCError" &&
+    typeof (err as { code?: unknown }).code === "string"
+  );
+}
+
 // ── Adapter factory ────────────────────────────────────────────────
 
 export interface CallerAdapterDeps {
@@ -144,7 +161,7 @@ export function createCallerAdapter(deps: CallerAdapterDeps): ProcedureProxy {
             }
           }
         } catch (err: unknown) {
-          if (err instanceof TRPCError) {
+          if (isTrpcServerError(err)) {
             throw TRPCClientError.from(err);
           }
           throw err;
