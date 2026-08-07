@@ -189,6 +189,7 @@
             subSlug: sub.slug,
             kind: "figure",
             aspectRatio: clip.aspectRatio,
+            headingKey: sub.headingKey,
           } satisfies FlowFigureBlock);
         }
       }
@@ -1226,10 +1227,7 @@
           ariaLabel={resolveParameterizedMessage(
             "demo_figure_aria_label",
             {
-              sub: resolveStoryMessage(
-                `demo_narrative_topic_${vf.block.subSlug ?? "unknown"}_heading`,
-                locale,
-              ),
+              sub: resolveStoryMessage(vf.block.headingKey, locale),
             },
             locale,
           )}

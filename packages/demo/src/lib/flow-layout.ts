@@ -34,6 +34,12 @@ export interface FlowFigureBlock {
   readonly kind: "figure";
   /** Intrinsic width / height ratio of the clip region. */
   readonly aspectRatio: number;
+  /**
+   * Paraglide key of the sub's heading, carried from the taxonomy so
+   * the figure's accessible label resolves through the same key as the
+   * prose (slug-derived key names break on hyphenated slugs).
+   */
+  readonly headingKey: string;
 }
 
 /**
