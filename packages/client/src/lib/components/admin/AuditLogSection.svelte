@@ -6,7 +6,7 @@
   import * as m from "$lib/paraglide/messages.js";
   import { List, ListItem, Preloader } from "konsta/svelte";
   import { ScrollText } from "@lucide/svelte";
-  import { getOrgDecryptCache, getOrgKeyManager } from "$lib/crypto/context.js";
+  import { getOrgDecryptCache } from "$lib/crypto/context.js";
   import {
     resolveOrgDecrypt,
     LOADING,
@@ -65,17 +65,12 @@
   // ---------------------------------------------------------------------------
 
   const orgCache = getOrgDecryptCache();
-  const orgKeyManager = getOrgKeyManager();
 
   function actorResult(row: AuditRow): DecryptResult {
     const ciphertext = actorNames.get(row.actorId) ?? null;
     if (ciphertext === null) return LOADING;
     const raw = orgCache.decrypt(`assignee:${row.actorId}`, ciphertext);
-    return resolveOrgDecrypt(
-      raw,
-      orgKeyManager.isLoaded,
-      orgCache.isFailed(`assignee:${row.actorId}`),
-    );
+    return resolveOrgDecrypt(raw, orgCache.isFailed(`assignee:${row.actorId}`));
   }
 
   function actorCiphertext(row: AuditRow): string | null {

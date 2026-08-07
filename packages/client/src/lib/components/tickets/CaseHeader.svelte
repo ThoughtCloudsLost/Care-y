@@ -29,7 +29,6 @@
     getTicketDecryptCache,
     getFollowUpDecryptCache,
     getOrgDecryptCache,
-    getOrgKeyManager,
     getCurrentUserId,
   } from "$lib/crypto/context.js";
   import { createTicketDecryptScope } from "$lib/crypto/ticket-decrypt-scope.js";
@@ -56,7 +55,6 @@
   const ticketCache = getTicketDecryptCache();
   const followUpCache = getFollowUpDecryptCache();
   const orgCache = getOrgDecryptCache();
-  const orgKeyManager = getOrgKeyManager();
   const currentUserIdGetter = getCurrentUserId();
 
   const ticketQuery = createQuery(() => ({
@@ -72,7 +70,6 @@
           ticketCache,
           followUpCache,
           orgCache,
-          orgKeyManager,
           ticketId: ticket.id,
           keyWrap: ticket.keyWrap,
         })

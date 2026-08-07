@@ -34,7 +34,6 @@
   import { kbKeys } from "$lib/query/keys.js";
   import {
     getOrgDecryptCache,
-    getOrgKeyManager,
     getCurrentUserId,
     getCurrentPermissions,
   } from "$lib/crypto/context.js";
@@ -76,7 +75,6 @@
   import { fuzzySearch } from "$lib/search/fuzzy.js";
 
   const orgCache = getOrgDecryptCache();
-  const orgKeyManager = getOrgKeyManager();
   const currentUserIdGetter = getCurrentUserId();
   const currentUserId = $derived(currentUserIdGetter());
   const permissionsGetter = getCurrentPermissions();
@@ -190,8 +188,6 @@
       kbFilterStore.categoryIds.has(a.categoryId),
     );
   });
-
-  const isOrgKeyLoaded = $derived(orgKeyManager.isLoaded);
 
   type CardViewMode = "list" | "cards" | "grid";
   function isCardViewMode(v: string): v is CardViewMode {
@@ -737,7 +733,6 @@
       id: article.id,
       titleResult: resolveOrgDecrypt(
         orgCache.decrypt(`kb-item:${article.id}`, article.encryptedTitle),
-        isOrgKeyLoaded,
         orgCache.isFailed(`kb-item:${article.id}`),
       ),
       encryptedTitle: article.encryptedTitle,
@@ -950,7 +945,6 @@
                   `kb-item:${article.id}`,
                   article.encryptedTitle,
                 ),
-                isOrgKeyLoaded,
                 orgCache.isFailed(`kb-item:${article.id}`),
               )}
               excerptResult={resolveOrgDecrypt(
@@ -958,7 +952,6 @@
                   `kb-excerpt:${article.id}`,
                   article.encryptedExcerpt,
                 ),
-                isOrgKeyLoaded,
                 orgCache.isFailed(`kb-excerpt:${article.id}`),
               )}
               encryptedTitle={article.encryptedTitle}

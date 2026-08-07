@@ -90,14 +90,11 @@ export class CryptoBridge {
   private stateCallback: ((state: BridgeState) => void) | null = null;
   private settledCallback: (() => void) | null = null;
   private settled = false;
-  private readonly mode: BridgeMode;
   private reconnected = false;
   private reconnectVolPublic: string | undefined;
   private reconnectOrgPublicKey: string | undefined;
 
   constructor(mode: BridgeMode = "shared") {
-    this.mode = mode;
-
     if (mode === "shared" && typeof SharedWorker !== "undefined") {
       this.initShared();
     } else {

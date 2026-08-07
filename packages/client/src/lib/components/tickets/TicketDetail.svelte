@@ -31,7 +31,6 @@
     getFollowUpDecryptCache,
     getTicketDecryptCache,
     getOrgDecryptCache,
-    getOrgKeyManager,
     getPreviewLoader,
     getCurrentUserId,
     getCurrentPermissions,
@@ -202,7 +201,6 @@
   const ticketCache = getTicketDecryptCache();
   const followUpCache = getFollowUpDecryptCache();
   const orgCache = getOrgDecryptCache();
-  const orgKeyManager = getOrgKeyManager();
   const previewLoader = getPreviewLoader();
   const currentUserIdGetter = getCurrentUserId();
   const currentUserId = $derived(currentUserIdGetter());
@@ -317,7 +315,6 @@
           ticketCache,
           followUpCache,
           orgCache,
-          orgKeyManager,
           ticketId: ticket.id,
           keyWrap: ticket.keyWrap,
         })
