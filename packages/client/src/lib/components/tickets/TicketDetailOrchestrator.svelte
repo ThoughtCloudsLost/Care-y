@@ -232,7 +232,7 @@
 
   // Consultant phone registration (for call options).
   const consultantQuery = createQuery(() => ({
-    queryKey: consultantKeys.all,
+    queryKey: consultantKeys.self(),
     queryFn: async () => trpc.consultant?.get.query() ?? null,
     staleTime: 5 * 60 * 1000,
   }));

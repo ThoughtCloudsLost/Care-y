@@ -11,7 +11,7 @@
   import { createQuery } from "@tanstack/svelte-query";
   import * as m from "$lib/paraglide/messages.js";
   import { trpc } from "$lib/trpc/index.js";
-  import { authKeys, twoFactorKeys } from "$lib/query/keys.js";
+  import { authKeys, twoFactorKeys, consultantKeys } from "$lib/query/keys.js";
   import {
     getOrgDecryptCache,
     getCryptoBridge,
@@ -28,6 +28,7 @@
   import TwoFactorSheet from "$lib/components/settings/TwoFactorSheet.svelte";
   import SecurityBriefingPopup from "$lib/components/settings/SecurityBriefingPopup.svelte";
   import NotificationPreferencesSection from "$lib/components/settings/NotificationPreferencesSection.svelte";
+  import ConsultantPhoneSheet from "$lib/components/settings/ConsultantPhoneSheet.svelte";
 
   const orgCache = getOrgDecryptCache();
   const cryptoBridge = getCryptoBridge();
@@ -63,6 +64,19 @@
   let passwordSheetOpen = $state(false);
   let twoFactorSheetOpen = $state(false);
   let briefingPopupOpen = $state(false);
+  let consultantPhoneSheetOpen = $state(false);
+
+  const consultantQuery = createQuery(() => ({
+    queryKey: consultantKeys.self(),
+    queryFn: async () => trpc.consultant?.get.query() ?? null,
+  }));
+
+  const consultantPhoneStatus = $derived.by(() => {
+    if (!consultantQuery.data) return m.consultant_phone_status_none();
+    if (consultantQuery.data.isVerified)
+      return m.consultant_phone_status_verified();
+    return m.consultant_phone_status_unverified();
+  });
 
   const twoFactorStatusQuery = createQuery(() => ({
     queryKey: twoFactorKeys.status(),
@@ -179,6 +193,18 @@
     />
   </List>
 
+  <BlockTitle>{m.consultant_phone_reachability_title()}</BlockTitle>
+  <List strong inset>
+    <ListItem
+      title={m.consultant_phone_title()}
+      after={consultantPhoneStatus}
+      link
+      onclick={() => {
+        consultantPhoneSheetOpen = true;
+      }}
+    />
+  </List>
+
   <BlockTitle>{m.settings_security()}</BlockTitle>
   <List strong inset>
     <ListItem
@@ -264,6 +290,13 @@
   opened={briefingPopupOpen}
   onclose={() => {
     briefingPopupOpen = false;
+  }}
+/>
+
+<ConsultantPhoneSheet
+  opened={consultantPhoneSheetOpen}
+  ondismiss={() => {
+    consultantPhoneSheetOpen = false;
   }}
 />
 

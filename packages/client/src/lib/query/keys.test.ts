@@ -109,5 +109,12 @@ describe("query key factories", () => {
       expect(notificationKeys.all).toEqual(["notifications"]);
       expect(presetKeys.byQueue("q-1")).toEqual(["presets", "q-1"]);
     });
+
+    it("consultantKeys.self nests under consultant", () => {
+      const self = consultantKeys.self();
+      expect(self).toEqual(["consultant", "self"]);
+      const parent = consultantKeys.all;
+      expect(self.slice(0, parent.length)).toEqual(parent);
+    });
   });
 });

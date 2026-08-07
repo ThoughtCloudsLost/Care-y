@@ -1,4 +1,4 @@
-import { RoleId } from "@care-y/shared";
+import { RoleId, type VolunteerReachabilityWire } from "@care-y/shared";
 import type { KeyStatus } from "$lib/stores/user-filters.svelte.js";
 import { normalizeForSearch } from "$lib/search/normalize.js";
 import { getCollator } from "$lib/utils/collator.js";
@@ -11,6 +11,7 @@ export interface UserRecord {
   readonly hasOrgKeyWrap: boolean;
   readonly encryptedDisplayName: string;
   readonly encryptedIdentifier: string;
+  readonly reachability: VolunteerReachabilityWire;
 }
 
 export interface UserFilterCriteria {
