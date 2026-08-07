@@ -9,6 +9,7 @@
 
 import _sodium from "libsodium-wrappers-sumo";
 import { hkdfSync, createHmac } from "./node-crypto-shim.js";
+import { assertSodiumReady } from "./sodium-ready.js";
 
 class CryptoError extends Error {
   constructor(message: string) {
@@ -41,6 +42,7 @@ const FIELD_ENCRYPT_INFO = "care-y-field-encrypt-v1";
 const REQUIRED_KEY_LENGTH = 32;
 
 export function deriveKeys(opsSecretsKey: Buffer): DerivedKeys {
+  assertSodiumReady();
   if (opsSecretsKey.length !== REQUIRED_KEY_LENGTH) {
     throw new CryptoError(
       `OPS_SECRETS_KEY must be exactly ${String(REQUIRED_KEY_LENGTH)} bytes, got ${String(opsSecretsKey.length)}`,

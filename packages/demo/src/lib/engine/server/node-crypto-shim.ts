@@ -16,26 +16,13 @@
 
 import { DemoEngineError } from "../errors.js";
 import _sodium from "libsodium-wrappers-sumo";
+import { markSodiumReady, assertSodiumReady } from "./sodium-ready.js";
 
-class SodiumNotReadyError extends Error {
-  constructor() {
-    super(
-      "node:crypto shim called before sodium.ready was awaited. " +
-        "bootDemoEngine must call await sodium.ready first.",
-    );
-    this.name = "SodiumNotReadyError";
-  }
-}
-
-let sodiumReady = false;
-
-/** Called by engine.ts after await sodium.ready */
-export function markSodiumReady(): void {
-  sodiumReady = true;
-}
+// Re-export so engine.ts can continue importing from this module.
+export { markSodiumReady };
 
 function assertReady(): void {
-  if (!sodiumReady) throw new SodiumNotReadyError();
+  assertSodiumReady();
 }
 
 // ── randomBytes ──────────────────────────────────────────────────────
@@ -312,30 +299,40 @@ export function scrypt(
   callback: (err: Error | null, derivedKey: Buffer) => void,
 ): void {
   assertReady();
-  try {
-    const passBuf =
-      typeof password === "string"
-        ? new TextEncoder().encode(password)
-        : new Uint8Array(password);
-    const saltU8 = new Uint8Array(salt);
 
-    // Node's default scrypt params: N=16384, r=8, p=1
-    const result = _sodium.crypto_pwhash_scryptsalsa208sha256_ll(
-      passBuf,
-      saltU8,
-      16384, // N
-      8, // r
-      1, // p
-      keylen,
-    );
+  // Defer the heavy KDF work by one macrotask so the calling UI can
+  // paint the "deriving key" state before the synchronous block runs.
+  // A microtask (queueMicrotask / Promise.resolve) is not sufficient
+  // because microtasks drain before the browser paints.
+  //
+  // TODO(perf): profile the 16384-round scrypt on low-end mobile and
+  // consider moving it to a Web Worker if the block exceeds ~50ms.
+  setTimeout(() => {
+    try {
+      const passBuf =
+        typeof password === "string"
+          ? new TextEncoder().encode(password)
+          : new Uint8Array(password);
+      const saltU8 = new Uint8Array(salt);
 
-    callback(null, Buffer.from(result));
-  } catch (err: unknown) {
-    callback(
-      err instanceof Error ? err : new Error(String(err)),
-      Buffer.alloc(0),
-    );
-  }
+      // Node's default scrypt params: N=16384, r=8, p=1
+      const result = _sodium.crypto_pwhash_scryptsalsa208sha256_ll(
+        passBuf,
+        saltU8,
+        16384, // N
+        8, // r
+        1, // p
+        keylen,
+      );
+
+      callback(null, Buffer.from(result));
+    } catch (err: unknown) {
+      callback(
+        err instanceof Error ? err : new Error(String(err)),
+        Buffer.alloc(0),
+      );
+    }
+  }, 0);
 }
 
 // ── promisify helper (for scrypt-hash.ts compatibility) ──────────────

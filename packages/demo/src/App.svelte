@@ -547,20 +547,12 @@
 
     // Keyboard fires bypass the long-press primitive (ClipFigure's
     // handleKeydown calls onpeekfire directly), so no pointer is
-    // captured and no release will arrive. Schedule a commit on a
-    // microtask; handlePeekRelease cancels it when a real pointer
-    // release arrives first. Keyboard users land in committed state.
-    peekCommitPending = true;
-    queueMicrotask(() => {
-      if (peekCommitPending) {
-        peekCtrl.commit();
-        peekCommitPending = false;
-      }
-    });
+    // captured and no release will arrive. Commit synchronously so
+    // keyboard users land in full-screen state.
+    if (payload.viaKeyboard === true) {
+      peekCtrl.commit();
+    }
   }
-
-  /** Cleared by handlePeekRelease to distinguish pointer from keyboard fires. */
-  let peekCommitPending = false;
 
   function handlePeekDrag(_dx: number, dy: number): void {
     // dy < 0 = upward screen motion; commit when the drag exceeds threshold
@@ -574,15 +566,12 @@
   }
 
   function handlePeekRelease(): void {
-    // Cancel any pending keyboard commit: this is a pointer release
-    peekCommitPending = false;
     if (peekCtrl.phase !== "committed") {
       peekCtrl.collapse();
     }
   }
 
   function handlePeekCancel(): void {
-    peekCommitPending = false;
     // Nothing to do: the gesture was cancelled before fire
   }
 

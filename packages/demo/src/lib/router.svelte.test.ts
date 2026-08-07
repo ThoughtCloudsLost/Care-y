@@ -554,18 +554,6 @@ describe("DemoRouter", () => {
     });
   });
 
-  describe("state getter", () => {
-    it("returns a snapshot of current state", () => {
-      router.navigate("tickets", "tk-0001");
-      const snapshot = router.state;
-      expect(snapshot).toEqual({
-        feature: "tickets",
-        detail: "tk-0001",
-        searchOpen: false,
-      });
-    });
-  });
-
   describe("routeId derivation", () => {
     it("is null during login", () => {
       expect(router.routeId).toBeNull();

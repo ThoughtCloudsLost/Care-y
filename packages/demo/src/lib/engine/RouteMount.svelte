@@ -23,7 +23,7 @@
   import { matchRoute } from "./route-manifest.js";
   import { setDemoPage } from "../../stubs/app-state.svelte.js";
 
-  const DEMO_ORIGIN = "http://demo.local";
+  import { DEMO_ORIGIN } from "$demo/demo-origin.js";
 
   let {
     pathname,
@@ -42,17 +42,6 @@
   const matchPath = $derived(pathname.split("?")[0] ?? pathname);
 
   let matchResult = $derived(matchRoute(matchPath));
-
-  // ── Drive the $app stubs whenever pathname changes ──
-  $effect(() => {
-    if (matchResult !== null) {
-      setDemoPage({
-        url: new URL(pathname, DEMO_ORIGIN),
-        params: matchResult.params,
-        routeId: matchResult.routeId,
-      });
-    }
-  });
 
   // ── Async component loading ──
 
@@ -75,9 +64,16 @@
   // whose late resolution must not clobber the newer route.
   let loadSeq = 0;
 
-  // Load page + layouts whenever the match changes
+  // Load page + layouts whenever the match changes. The $app stubs
+  // (page.url, page.params, page.route.id) are updated only once the
+  // new page's chunks have loaded, so the outgoing page never reads
+  // params that belong to the incoming route.
   $effect(() => {
     const match = matchResult;
+    // Snapshot the pathname at navigation time so the deferred
+    // setDemoPage call uses the value that produced this match, not a
+    // later one mutated by a subsequent navigation.
+    const currentPathname = pathname;
     const seq = ++loadSeq;
     if (match === null) {
       loaded = null;
@@ -103,6 +99,13 @@
         if (pageModule === undefined) {
           loadError = "Page module failed to load";
         } else {
+          // Drive the $app stubs AFTER chunks are ready so the old page
+          // never sees the new route's params while still mounted.
+          setDemoPage({
+            url: new URL(currentPathname, DEMO_ORIGIN),
+            params: match.params,
+            routeId: match.routeId,
+          });
           loaded = {
             page: pageModule.default,
             layouts: layoutModules.map((mod) => mod.default),

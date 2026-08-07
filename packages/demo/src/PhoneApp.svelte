@@ -44,9 +44,9 @@
   import { RoleId, type RoleIdValue } from "@care-y/shared";
   import {
     classifyDemoLabel,
-    matchesAnyLocale,
     type DemoLocale,
   } from "$demo/topic-classifier.js";
+  import { locales } from "$lib/paraglide/runtime.js";
   import {
     getLoginStage,
     setLoginStage,
@@ -526,14 +526,16 @@
   /**
    * Resolve the search button's aria-label via the paraglide message
    * the AppShell actually uses (m.nav_search), across all locales.
+   * Labels are pre-computed once per call, not per candidate.
    */
   function findSearchButton(): HTMLElement | null {
+    const searchLabels = locales.map((locale) => m.nav_search({}, { locale }));
     const buttons = document.querySelectorAll<HTMLElement>(
       '[role="button"][aria-label]',
     );
     for (const btn of buttons) {
       const label = btn.getAttribute("aria-label") ?? "";
-      if (matchesAnyLocale(label, (opts) => m.nav_search({}, opts))) {
+      if (searchLabels.some((sl) => label === sl)) {
         return btn;
       }
     }
@@ -825,6 +827,9 @@
   ): Promise<HTMLElement | null> {
     // eslint-disable-next-line security/detect-object-injection -- key is a typed keyof typeof METHOD_LABELS
     const messageFn = METHOD_LABELS[target];
+    // Hoist the resolved label list so it is computed once per call
+    // rather than re-evaluated for every candidate element in find().
+    const labels = locales.map((locale) => messageFn({ locale }));
 
     function find(): HTMLElement | null {
       // Picker items and the alternatives shown under an open method.
@@ -837,10 +842,11 @@
       for (const control of controls) {
         const text = control.textContent.trim();
         if (text === "") continue;
-        const mode = control.matches(".k-list-item") ? "includes" : "equals";
-        if (matchesAnyLocale(text, messageFn, mode)) {
-          return control;
-        }
+        const isListItem = control.matches(".k-list-item");
+        const matched = isListItem
+          ? labels.some((label) => text.includes(label))
+          : labels.some((label) => text === label);
+        if (matched) return control;
       }
       return null;
     }

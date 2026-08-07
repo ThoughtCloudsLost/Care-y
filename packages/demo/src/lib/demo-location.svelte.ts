@@ -173,16 +173,10 @@ export class DemoLocationStore {
         subSlug,
       );
 
-      if (import.meta.env.DEV) {
-        this.logConvergenceDiagnostic(
-          sectionId,
-          subSlug,
-          afterForce,
-          converged,
-        );
-      }
-
       if (!converged) {
+        if (import.meta.env.DEV) {
+          this.logConvergenceDiagnostic(sectionId, subSlug, afterForce);
+        }
         this.adoptPhone("phone-correction");
       }
     });
@@ -271,14 +265,14 @@ export class DemoLocationStore {
 
   /**
    * Dev-only diagnostic for convergence failures. Logs the requested
-   * location, the phone's actual state, and whether forcing resolved
-   * the mismatch. Only static demo locations are logged (no PII).
+   * location and the phone's actual state. Only called when the phone
+   * did NOT converge (i.e. forcing did not resolve the mismatch).
+   * Only static demo locations are logged (no PII).
    */
   private logConvergenceDiagnostic(
     sectionId: SectionId,
     subSlug: string | null,
     phone: PhoneScreenState,
-    resolvedByForcing: boolean,
   ): void {
     console.warn("[demo-location] convergence mismatch", {
       requested: { sectionId, subSlug },
@@ -289,7 +283,6 @@ export class DemoLocationStore {
         routeId: phone.routeId,
         loginStage: phone.loginStage,
       },
-      resolvedByForcing,
     });
   }
 

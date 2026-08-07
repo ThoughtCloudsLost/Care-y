@@ -134,13 +134,30 @@
     };
   }
 
-  function scrollToNewest(): void {
+  /** Minimum gap between two smooth scrolls before switching to instant. */
+  const SCROLL_BURST_MS = 200;
+
+  let scrollRaf = 0;
+  let lastScrollAt = 0;
+
+  function applyScroll(): void {
+    scrollRaf = 0;
     const el = trackEl;
     if (el === null) return;
+    const now = performance.now();
+    const useInstant =
+      prefersReducedMotion.current || now - lastScrollAt < SCROLL_BURST_MS;
+    lastScrollAt = now;
     el.scrollTo({
       left: el.scrollWidth,
-      behavior: prefersReducedMotion.current ? "auto" : "smooth",
+      behavior: useInstant ? "auto" : "smooth",
     });
+  }
+
+  function scrollToNewest(): void {
+    if (scrollRaf === 0) {
+      scrollRaf = requestAnimationFrame(applyScroll);
+    }
   }
 
   $effect(() => {
@@ -164,6 +181,16 @@
   }
 
   let resizeGesture: ResizeOrigin | null = null;
+  let resizeRaf = 0;
+  let lastResizeY = 0;
+
+  function applyResizeFrame(): void {
+    resizeRaf = 0;
+    if (resizeGesture === null) return;
+    store.setHeight(
+      resizeGesture.startHeight + (lastResizeY - resizeGesture.startY),
+    );
+  }
 
   function startResize(e: PointerEvent): void {
     if (e.button !== 0) return;
@@ -174,17 +201,25 @@
       startY: e.clientY,
       startHeight: store.height,
     };
+    lastResizeY = e.clientY;
   }
 
   function moveResize(e: PointerEvent): void {
     if (resizeGesture?.pointerId !== e.pointerId) return;
-    store.setHeight(
-      resizeGesture.startHeight + (e.clientY - resizeGesture.startY),
-    );
+    lastResizeY = e.clientY;
+    if (resizeRaf === 0) {
+      resizeRaf = requestAnimationFrame(applyResizeFrame);
+    }
   }
 
   function endResize(e: PointerEvent): void {
     if (resizeGesture?.pointerId !== e.pointerId) return;
+    if (resizeRaf !== 0) {
+      cancelAnimationFrame(resizeRaf);
+      resizeRaf = 0;
+    }
+    lastResizeY = e.clientY;
+    applyResizeFrame();
     resizeGesture = null;
   }
 
@@ -220,6 +255,16 @@
   function close(): void {
     store.setOpen(false);
   }
+
+  // Stable callbacks passed to every FlowBandSlice. Hoisted so the
+  // template does not allocate new closures on every render.
+  const isExpandedCb = (id: number): boolean => store.isExpanded(id);
+  const onToggleSliceCb = (id: number): void => {
+    store.toggleSlice(id);
+  };
+  const onToggleCardCb = (id: number): void => {
+    store.toggleExpanded(id);
+  };
 </script>
 
 <svelte:window onkeydown={handleWindowKeydown} />
@@ -377,9 +422,9 @@
                 expandHint={m.demo_flow_expand()}
                 collapseHint={m.demo_flow_collapse()}
                 {laneName}
-                isExpanded={(id: number) => store.isExpanded(id)}
-                onToggleSlice={(id: number) => store.toggleSlice(id)}
-                onToggleCard={(id: number) => store.toggleExpanded(id)}
+                isExpanded={isExpandedCb}
+                onToggleSlice={onToggleSliceCb}
+                onToggleCard={onToggleCardCb}
               />
             {/each}
           {/if}

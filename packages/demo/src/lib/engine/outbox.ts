@@ -31,11 +31,6 @@ export function appendToOutbox(entry: OutboxEntry): void {
   }
 }
 
-/** Returns a snapshot of all outbox entries (emails and SMS messages). */
-export function getOutbox(): readonly OutboxEntry[] {
-  return outbox;
-}
-
 /** Registers a callback fired each time a new entry is appended to the outbox. Returns an unsubscribe function. */
 export function onOutboxAppend(cb: (entry: OutboxEntry) => void): () => void {
   outboxListeners.push(cb);

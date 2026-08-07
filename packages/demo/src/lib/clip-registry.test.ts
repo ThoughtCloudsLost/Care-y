@@ -4,6 +4,7 @@ import {
   getClip,
   buildClipUrl,
   DEFAULT_CLIP_ASPECT,
+  type PeekFirePayload,
 } from "./clip-registry.js";
 import type { SectionId } from "./scroll-sections.js";
 
@@ -63,5 +64,33 @@ describe("getClip", () => {
   it("returns a URL ending in .webm with the section and sub path", () => {
     const clip = getClip("admin" as SectionId, "quarantine");
     expect(clip.url).toContain("/clips/admin/quarantine.webm");
+  });
+});
+
+// -----------------------------------------------------------------------
+// PeekFirePayload viaKeyboard discriminator
+// -----------------------------------------------------------------------
+
+describe("PeekFirePayload", () => {
+  it("accepts viaKeyboard as an optional boolean", () => {
+    // The type contract: pointer fires omit viaKeyboard (or set false),
+    // keyboard fires set true. This test pins the discriminator field so
+    // removing it from the interface causes a compile error.
+    const pointerPayload: PeekFirePayload = {
+      rect: new DOMRect(),
+      video: document.createElement("video"),
+      sectionId: "login" as SectionId,
+      subSlug: "credentials",
+    };
+    expect(pointerPayload.viaKeyboard).toBeUndefined();
+
+    const kbPayload: PeekFirePayload = {
+      rect: new DOMRect(),
+      video: document.createElement("video"),
+      sectionId: "login" as SectionId,
+      subSlug: "credentials",
+      viaKeyboard: true,
+    };
+    expect(kbPayload.viaKeyboard).toBe(true);
   });
 });

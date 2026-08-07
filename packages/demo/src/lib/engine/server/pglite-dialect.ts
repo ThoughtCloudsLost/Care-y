@@ -156,14 +156,15 @@ class PGliteConnection implements DatabaseConnection {
   }): Promise<QueryResult<R>> {
     const params = convertParams(compiledQuery.parameters);
 
+    const sql = compiledQuery.sql;
     const result: Results<Record<string, unknown>> = await traceFlowLocal(
       {
         lane: "db",
-        label: describeSql(compiledQuery.sql),
-        payloadPreview: previewParams(params),
+        label: () => describeSql(sql),
+        payloadPreview: () => previewParams(params) ?? "",
       },
       async (): Promise<Results<Record<string, unknown>>> =>
-        this.pg.query(compiledQuery.sql, params as unknown[]),
+        this.pg.query(sql, params as unknown[]),
     );
 
     const fields = result.fields;

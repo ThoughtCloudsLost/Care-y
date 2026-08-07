@@ -8,7 +8,7 @@
 
 import type { SectionId } from "./scroll-sections.js";
 import type { FlowBlock, FlowHole, FlowLayoutResult } from "./flow-layout.js";
-import { locationAtY, scrollTargetForBlock } from "./flow-layout.js";
+import { scrollTargetForBlock } from "./flow-layout.js";
 
 // -----------------------------------------------------------------------
 // Public types
@@ -80,9 +80,11 @@ let chromeHeight = $state(TOP_BAR_HEIGHT);
  * pull sticky content up behind the bar.
  */
 export function setTopChromeHeight(px: number): void {
-  chromeHeight = Number.isFinite(px)
+  const clamped = Number.isFinite(px)
     ? Math.max(TOP_BAR_HEIGHT, Math.round(px))
     : TOP_BAR_HEIGHT;
+  if (clamped === chromeHeight) return;
+  chromeHeight = clamped;
 }
 
 /** Current top chrome height in viewport px. */
@@ -169,22 +171,6 @@ export function locationWithVisibleHeading(): FlowLocation | null {
     if (top >= band) return last;
   }
   return last;
-}
-
-/**
- * Resolve the flow location at the reading line, given the current
- * scroll position. Returns null before the first layout pass.
- */
-export function locationAtReadingLine(): FlowLocation | null {
-  if (source === null) return null;
-  if (typeof window === "undefined") return null;
-
-  const viewportY = readingLineY();
-  // Convert viewport Y to document-space Y within the container
-  const documentY = viewportY + window.scrollY;
-  const containerRelativeY = documentY - source.containerTop;
-
-  return locationAtY(containerRelativeY, source.layoutResult, source.blocks);
 }
 
 /**

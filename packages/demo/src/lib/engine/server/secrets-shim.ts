@@ -9,6 +9,7 @@
 
 import _sodium from "libsodium-wrappers-sumo";
 import { hkdfSync } from "./node-crypto-shim.js";
+import { assertSodiumReady } from "./sodium-ready.js";
 
 class SecretCryptoError extends Error {
   constructor(message: string) {
@@ -24,6 +25,7 @@ const MAC_BYTES = 16; // crypto_secretbox_MACBYTES
 const KEY_BYTES = 32; // crypto_secretbox_KEYBYTES
 
 export function deriveSecretsKey(opsSecretsKey: Buffer): Buffer {
+  assertSodiumReady();
   if (opsSecretsKey.length !== REQUIRED_KEY_LENGTH) {
     throw new SecretCryptoError(
       `OPS_SECRETS_KEY must be exactly ${String(REQUIRED_KEY_LENGTH)} bytes, got ${String(opsSecretsKey.length)}`,

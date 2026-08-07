@@ -19,28 +19,25 @@
  * once and shared across the demo surface and outer page.
  */
 
-import { SvelteURL } from "svelte/reactivity";
 import { setDemoPage } from "$app/state";
-import { resolveNavContext, areaRoute } from "$lib/shell/nav-context.js";
-import { matchRoute } from "$demo/engine/route-manifest.js";
+import {
+  resolveNavContext,
+  areaRoute,
+  type NavContext,
+} from "$lib/shell/nav-context.js";
+import { matchRoute, type RouteMatch } from "$demo/engine/route-manifest.js";
 import type { TabId, AreaId } from "$lib/shell/types";
 import type { DemoFeature, DemoDetail } from "./bridge.js";
 import { fireBeforeNavigate, fireAfterNavigate } from "$app/navigation";
+import { DEMO_ORIGIN } from "./demo-origin.js";
+import { parseUrl } from "./non-reactive.js";
 
 // Re-exported type aliases for external barrel consumers.
 export type { DemoFeature, DemoDetail } from "./bridge.js";
 
-export interface DemoRouterState {
-  readonly feature: DemoFeature;
-  readonly detail: DemoDetail;
-  readonly searchOpen: boolean;
-}
-
 // -----------------------------------------------------------------------
 // URL helpers
 // -----------------------------------------------------------------------
-
-const DEMO_ORIGIN = "http://demo.local";
 
 /** Build a demo URL from a pathname and optional search string. */
 function demoUrl(pathname: string, search = ""): URL {
@@ -61,9 +58,6 @@ const TAB_TO_FEATURE: ReadonlyMap<TabId, DemoFeature> = new Map([
   ["tickets", "tickets"],
   ["library", "library"],
 ]);
-
-/** Inert tabs: visible in the shell but taps do nothing. */
-const INERT_TABS: ReadonlySet<TabId> = new Set([]);
 
 /**
  * Map a DemoFeature and optional detail back to a pathname.
@@ -105,22 +99,25 @@ function featureToPathname(
 }
 
 /**
- * Resolve a pathname (from goto interception) to a feature + detail.
+ * Resolve a pathname (from goto interception) to a feature, detail,
+ * and the NavContext that was used for the resolution (so callers can
+ * thread it through to syncShellProps without re-computing it).
  * Returns null feature for inert/unknown paths.
  */
 function resolveFeature(pathname: string): {
   feature: DemoFeature | null;
   detail: DemoDetail;
+  ctx: NavContext;
 } {
-  // "/" maps to home (post-auth landing)
-  if (pathname === "/" || pathname === "") {
-    return { feature: "home", detail: null };
-  }
-
   const ctx = resolveNavContext(pathname);
 
+  // "/" maps to home (post-auth landing)
+  if (pathname === "/" || pathname === "") {
+    return { feature: "home", detail: null, ctx };
+  }
+
   if (ctx.tab === "home") {
-    return { feature: "home", detail: null };
+    return { feature: "home", detail: null, ctx };
   }
 
   if (ctx.tab === "tickets") {
@@ -132,29 +129,30 @@ function resolveFeature(pathname: string): {
       // "/tickets/tk-0001/conversation" -> detail = "conversation"
       const rawSub = segments[1];
       const sub = rawSub !== undefined && rawSub !== "" ? rawSub : null;
-      return { feature: "tickets", detail: sub ?? ticketId };
+      return { feature: "tickets", detail: sub ?? ticketId, ctx };
     }
-    return { feature: "tickets", detail: null };
+    return { feature: "tickets", detail: null, ctx };
   }
 
   // Area-based features
   if (ctx.area !== null) {
     // Admin areas
-    if (ctx.area === "admin") return { feature: "admin", detail: null };
+    if (ctx.area === "admin") return { feature: "admin", detail: null, ctx };
     if (ctx.area === "admin-volunteer")
-      return { feature: "admin", detail: "volunteer" };
+      return { feature: "admin", detail: "volunteer", ctx };
     if (ctx.area === "admin-manager")
-      return { feature: "admin", detail: "manager" };
+      return { feature: "admin", detail: "manager", ctx };
     if (ctx.area === "admin-people")
-      return { feature: "admin", detail: "people" };
+      return { feature: "admin", detail: "people", ctx };
     if (ctx.area === "admin-communications")
-      return { feature: "admin", detail: "communications" };
+      return { feature: "admin", detail: "communications", ctx };
     if (ctx.area === "admin-organization")
-      return { feature: "admin", detail: "organization" };
+      return { feature: "admin", detail: "organization", ctx };
 
     // More menu areas: settings is the only remaining area member
-    if (ctx.area === "schedule") return { feature: "schedule", detail: null };
-    return { feature: "settings", detail: null };
+    if (ctx.area === "schedule")
+      return { feature: "schedule", detail: null, ctx };
+    return { feature: "settings", detail: null, ctx };
   }
 
   if (ctx.tab === "library") {
@@ -166,24 +164,27 @@ function resolveFeature(pathname: string): {
     if (articleId !== null) {
       const rawSub = segments[1];
       const sub = rawSub !== undefined && rawSub !== "" ? rawSub : null;
-      return { feature: "library", detail: sub ?? articleId };
+      return { feature: "library", detail: sub ?? articleId, ctx };
     }
-    return { feature: "library", detail: null };
+    return { feature: "library", detail: null, ctx };
   }
 
-  return { feature: null, detail: null };
+  return { feature: null, detail: null, ctx };
 }
 
 // -----------------------------------------------------------------------
 // Navigation lifecycle helpers
 // -----------------------------------------------------------------------
 
-function buildEndpoint(url: URL): {
+function buildEndpoint(
+  url: URL,
+  preMatch?: RouteMatch | null,
+): {
   url: URL;
   params: Record<string, string>;
   route: { id: string | null };
 } {
-  const match = matchRoute(url.pathname);
+  const match = preMatch !== undefined ? preMatch : matchRoute(url.pathname);
   return {
     url,
     params: match !== null ? match.params : {},
@@ -218,9 +219,6 @@ export class DemoRouter {
   // Restart sequence (bumped by /logout handling)
   restartSeq: number = $state(0);
 
-  // Track last URL for lifecycle callbacks
-  private lastUrl: URL = loginUrl();
-
   /** Compute the current URL from the canonical pathname + search. */
   private currentUrl(): URL {
     if (this.feature === "login") return loginUrl();
@@ -232,8 +230,7 @@ export class DemoRouter {
    * tab and area are null (feature "other" on a route outside the
    * nav tree), the shell props are nulled so no tab or area highlights.
    */
-  private syncShellProps(pathname: string): void {
-    const ctx = resolveNavContext(pathname);
+  private syncShellProps(ctx: NavContext): void {
     if (ctx.tab !== null) {
       this.activeTab = ctx.tab;
       this.activeArea = null;
@@ -247,9 +244,13 @@ export class DemoRouter {
   }
 
   /** Fire the navigation lifecycle callbacks (before + after). */
-  private fireLifecycle(fromUrl: URL, toUrl: URL): void {
+  private fireLifecycle(
+    fromUrl: URL,
+    toUrl: URL,
+    toMatch?: RouteMatch | null,
+  ): void {
     const from = buildEndpoint(fromUrl);
-    const to = buildEndpoint(toUrl);
+    const to = buildEndpoint(toUrl, toMatch);
     const resolved = Promise.resolve();
     fireBeforeNavigate({
       from,
@@ -268,7 +269,6 @@ export class DemoRouter {
       type: "goto",
       complete: resolved,
     });
-    this.lastUrl = toUrl;
   }
 
   /** Navigate to a built feature (outer page entry point). */
@@ -276,31 +276,28 @@ export class DemoRouter {
     const fromUrl = this.currentUrl();
     const resolvedDetail = detail ?? null;
     const pathname = featureToPathname(feature, resolvedDetail, this.pathname);
+    const match = feature === "login" ? null : matchRoute(pathname);
 
     this.pathname = pathname;
     this.search = "";
     this.searchOpen = false;
     this.feature = feature;
     this.detail = resolvedDetail;
-    this.routeId =
-      feature === "login" ? null : (matchRoute(pathname)?.routeId ?? null);
-    this.syncShellProps(pathname);
+    this.routeId = match?.routeId ?? null;
+    this.syncShellProps(resolveNavContext(pathname));
 
-    this.fireLifecycle(fromUrl, this.currentUrl());
+    const toUrl = this.currentUrl();
+    this.fireLifecycle(fromUrl, toUrl, match);
   }
 
   /** Handler wired to AppShell's ontabchange prop. */
   handleTabChange(tabId: TabId): void {
-    if (INERT_TABS.has(tabId)) {
-      // Inert: update shell visual but don't navigate to a feature
-      return;
-    }
-
     const feature = TAB_TO_FEATURE.get(tabId) ?? null;
     if (feature === null) return;
 
     const fromUrl = this.currentUrl();
     const pathname = featureToPathname(feature, null);
+    const match = matchRoute(pathname);
     this.pathname = pathname;
     this.search = "";
     this.activeTab = tabId;
@@ -308,9 +305,9 @@ export class DemoRouter {
     this.searchOpen = false;
     this.feature = feature;
     this.detail = null;
-    this.routeId = matchRoute(pathname)?.routeId ?? null;
+    this.routeId = match?.routeId ?? null;
 
-    this.fireLifecycle(fromUrl, this.currentUrl());
+    this.fireLifecycle(fromUrl, this.currentUrl(), match);
   }
 
   /** Handler wired to AppShell's onareatap prop. */
@@ -333,10 +330,12 @@ export class DemoRouter {
    * "/logout" bumps restartSeq without navigating.
    */
   handleGoto(href: string): void {
-    // Strip any base path prefix (in case resolve() was called)
+    // Strip any base path prefix (in case resolve() was called).
+    // Plain URL: the result is read once and discarded; SvelteURL's
+    // reactive wrappers would be wasted allocation.
     const raw = href.startsWith("http")
-      ? new SvelteURL(href)
-      : new SvelteURL(href.replace(/^\/Care-y/i, ""), DEMO_ORIGIN);
+      ? parseUrl(href)
+      : parseUrl(href.replace(/^\/Care-y/i, ""), DEMO_ORIGIN);
 
     const pathname = raw.pathname;
     const search = raw.search;
@@ -370,22 +369,11 @@ export class DemoRouter {
     this.detail = detail;
     this.searchOpen = false;
     this.routeId = match?.routeId ?? null;
-    this.syncShellProps(pathname);
+    // Thread the NavContext computed by resolveFeature so
+    // syncShellProps does not re-call resolveNavContext.
+    this.syncShellProps(resolved.ctx);
 
-    this.fireLifecycle(fromUrl, this.currentUrl());
-  }
-
-  /** Snapshot of the current state (for external reads). */
-  get state(): {
-    readonly feature: DemoFeature;
-    readonly detail: DemoDetail;
-    readonly searchOpen: boolean;
-  } {
-    return {
-      feature: this.feature,
-      detail: this.detail,
-      searchOpen: this.searchOpen,
-    };
+    this.fireLifecycle(fromUrl, this.currentUrl(), match);
   }
 
   /** Reset to initial state (login). */

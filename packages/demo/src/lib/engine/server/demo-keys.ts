@@ -33,6 +33,7 @@ import {
 import type { OprfEvaluateService } from "../../../../../server/src/crypto/oprf-evaluate-service.js";
 import { DemoEngineError } from "../errors.js";
 import { traceFlowLocal } from "../../flow-events.js";
+import { assertSodiumReady } from "./sodium-ready.js";
 
 // ── Deterministic OPRF scalar ──────────────────────────────────────
 
@@ -45,6 +46,7 @@ const DEMO_OPRF_SEED = "care-y-demo-oprf-scalar-v1";
  * Must be called after sodium is ready.
  */
 export function deriveDemoOprfScalar(): Uint8Array {
+  assertSodiumReady();
   const encoder = new TextEncoder();
   const seedBytes = encoder.encode(DEMO_OPRF_SEED);
   const hash = _sodium.crypto_hash_sha512(seedBytes);

@@ -16,6 +16,7 @@
  */
 
 import type { DemoFlowEvent, FlowLane } from "./bridge.js";
+import { plainMap } from "./non-reactive.js";
 
 // -----------------------------------------------------------------------
 // Lane order and sizing
@@ -54,6 +55,13 @@ export const MAX_SLICES = 40;
 
 /** Cap on events within a single slice. Oldest events drop off the front. */
 export const MAX_EVENTS_PER_SLICE = 60;
+
+/**
+ * Number of newest slices that stay expanded when a new slice is appended.
+ * Older slices are auto-collapsed so the DOM ceiling stays bounded. The
+ * user can still re-expand any collapsed slice via its header button.
+ */
+export const EXPANDED_SLICE_WINDOW = 3;
 
 /**
  * Cap on a rendered payload preview. The phone side decides what a
@@ -147,6 +155,9 @@ function lastIndexForInteraction(
  * (flow-events.ts:157): comparing against the last event id suffices
  * instead of a linear scan. Events per slice are capped at
  * MAX_EVENTS_PER_SLICE; oldest events drop off the front on overflow.
+ *
+ * Only the touched slice path is shallow-copied; untouched slices share
+ * identity with the input array.
  */
 export function ingestFlowEvent(
   slices: readonly FlowSlice[],
@@ -157,19 +168,23 @@ export function ingestFlowEvent(
   const idx = lastIndexForInteraction(slices, event.interactionId);
 
   if (idx >= 0) {
-    return slices.map((slice, i) => {
-      if (i !== idx) return slice;
-      // Monotonic ids: if the last event's id >= this id, it is a duplicate.
-      const lastEvent = slice.events.at(-1);
-      if (lastEvent !== undefined && lastEvent.id >= event.id) return slice;
-      const updated = [...slice.events, event];
-      // Cap: drop oldest from the front when the slice overflows.
-      const trimmed =
-        updated.length > maxEventsPerSlice
-          ? updated.slice(updated.length - maxEventsPerSlice)
-          : updated;
-      return { ...slice, events: trimmed };
-    });
+    const target = slices.at(idx);
+    if (target === undefined) return slices.slice();
+
+    // Monotonic ids: if the last event's id >= this id, it is a duplicate.
+    const lastEvent = target.events.at(-1);
+    if (lastEvent !== undefined && lastEvent.id >= event.id) {
+      return slices.slice();
+    }
+    const updated = [...target.events, event];
+    // Cap: drop oldest from the front when the slice overflows.
+    const trimmed =
+      updated.length > maxEventsPerSlice
+        ? updated.slice(updated.length - maxEventsPerSlice)
+        : updated;
+    return slices.map((s, i) =>
+      i === idx ? { ...target, events: trimmed } : s,
+    );
   }
 
   const appended: FlowSlice[] = [
@@ -180,8 +195,19 @@ export function ingestFlowEvent(
       collapsed: false,
     },
   ];
-  if (appended.length <= maxSlices) return appended;
-  return appended.slice(appended.length - maxSlices);
+  const trimmed =
+    appended.length <= maxSlices
+      ? appended
+      : appended.slice(appended.length - maxSlices);
+
+  // Auto-collapse slices outside the expanded window so the DOM ceiling
+  // stays bounded. Slices the user manually re-expanded will be
+  // re-collapsed here on the next new-slice ingest, which is acceptable:
+  // the user sees the newest work, and can re-expand any slice again.
+  const windowStart = trimmed.length - EXPANDED_SLICE_WINDOW;
+  return trimmed.map((s, i) =>
+    i < windowStart && !s.collapsed ? { ...s, collapsed: true } : s,
+  );
 }
 
 /** Flip the collapsed flag of one slice, leaving the rest untouched. */
@@ -276,22 +302,31 @@ export function createFlowBandStore(): FlowBandStore {
   let slices: readonly FlowSlice[] = $state([]);
   let expandedId: number | null = $state(null);
 
-  const eventCount = $derived(
-    slices.reduce((total, slice) => total + slice.events.length, 0),
-  );
+  // Running count avoids reducing over all slices per read.
+  let runningEventCount = $state(0);
+
+  // O(1) lookup for the expanded event, avoids linear scan over all events.
+  const eventById = plainMap<number, DemoFlowEvent>();
 
   const expandedEvent = $derived.by((): DemoFlowEvent | null => {
     if (expandedId === null) return null;
-    for (const slice of slices) {
-      const found = slice.events.find((e) => e.id === expandedId);
-      if (found !== undefined) return found;
-    }
-    return null;
+    return eventById.get(expandedId) ?? null;
   });
+
+  function rebuildIndex(current: readonly FlowSlice[]): void {
+    eventById.clear();
+    for (const slice of current) {
+      for (const event of slice.events) {
+        eventById.set(event.id, event);
+      }
+    }
+  }
 
   function reset(): void {
     slices = [];
     expandedId = null;
+    runningEventCount = 0;
+    eventById.clear();
   }
 
   return {
@@ -305,7 +340,7 @@ export function createFlowBandStore(): FlowBandStore {
       return slices;
     },
     get eventCount(): number {
-      return eventCount;
+      return runningEventCount;
     },
     get expandedEvent(): DemoFlowEvent | null {
       return expandedEvent;
@@ -320,7 +355,20 @@ export function createFlowBandStore(): FlowBandStore {
       height = clampBandHeight(next);
     },
     ingest(event: DemoFlowEvent): void {
-      slices = ingestFlowEvent(slices, event);
+      const prev = slices;
+      const next = ingestFlowEvent(prev, event);
+      slices = next;
+      // Recount: the diff is the new total minus the old total.
+      // ingestFlowEvent can add one event or trim the oldest slice.
+      let count = 0;
+      for (const s of next) {
+        count += s.events.length;
+      }
+      runningEventCount = count;
+      // Keep the index in sync. A full rebuild is simpler than tracking
+      // which events were added or trimmed, and the map is bounded by
+      // MAX_SLICES * MAX_EVENTS_PER_SLICE.
+      rebuildIndex(next);
     },
     toggleSlice(interactionId: number): void {
       slices = toggleSliceCollapsed(slices, interactionId);

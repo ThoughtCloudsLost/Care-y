@@ -32,11 +32,3 @@ export function createDemoQueryClient(): QueryClient {
     },
   });
 }
-
-/**
- * Clear all cached data. Restart is an iframe reload in the current
- * demo, so this exists for tests and any future soft-reset path.
- */
-export function reseedDemoQueryClient(client: QueryClient): void {
-  client.clear();
-}

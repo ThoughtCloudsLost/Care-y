@@ -58,6 +58,13 @@ export async function pollUntil<T>(opts: PollOptions<T>): Promise<T | null> {
   } = opts;
 
   return new Promise<T | null>((resolve) => {
+    // Check staleness before the immediate probe so a poll started
+    // after its token was superseded never resolves with a stale value.
+    if (isStale?.() === true) {
+      resolve(null);
+      return;
+    }
+
     // Immediate check
     const immediate = probe();
     if (immediate !== null) {

@@ -87,9 +87,17 @@ if (envKeys.length < 15) {
 
 const distJsFiles = collectFiles(DIST, ".js");
 
+// Read each dist file once, then check all env keys against the cached
+// content. The per-key loop previously re-read every file (~25x including
+// the multi-MB PGlite chunk).
+const distJsContents = new Map();
+for (const file of distJsFiles) {
+  distJsContents.set(file, readFileSync(file, "utf-8"));
+}
+
 for (const name of scanKeys) {
   for (const file of distJsFiles) {
-    const content = readFileSync(file, "utf-8");
+    const content = distJsContents.get(file);
     let idx = -1;
     while ((idx = content.indexOf(name, idx + 1)) !== -1) {
       // OPS_SECRETS_KEY legitimately appears in two benign contexts inside
@@ -141,7 +149,7 @@ const devKeyPatterns = devProcedures.map(
 );
 
 for (const file of distJsFiles) {
-  const content = readFileSync(file, "utf-8");
+  const content = distJsContents.get(file);
   for (let i = 0; i < devProcedures.length; i++) {
     if (devKeyPatterns[i].test(content)) {
       const relPath = file.slice(DIST.length + 1);

@@ -13,7 +13,7 @@
  * iframe unmounted forever, which is the expensive failure mode.
  */
 
-import { SvelteSet } from "svelte/reactivity";
+import { createPrewarmObserved } from "./prewarm-observed.js";
 
 /** Roughly one viewport of lead distance for the observer trigger. */
 export const PREWARM_ROOT_MARGIN = "100%";
@@ -34,8 +34,10 @@ export function createEnginePrewarm(): EnginePrewarm {
 
   // Track observed elements so destroy() can clean up, and so
   // re-calling observe(undefined) for a previously-observed element
-  // unobserves it.
-  const observed = new SvelteSet<HTMLElement>();
+  // unobserves it. Uses a plain Set (via prewarm-observed.ts) to avoid
+  // O(n^2) churn: nothing renders from this set, and a SvelteSet would
+  // bump the version on every .add(), re-running every figure's effect.
+  const observed = createPrewarmObserved();
 
   // IntersectionObserver is absent in jsdom. Latch immediately rather
   // than never: a prewarm that never fires is worse than one that
