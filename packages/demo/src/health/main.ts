@@ -8,15 +8,12 @@
 
 import { mount } from "svelte";
 import HealthApp from "./HealthApp.svelte";
+import { DemoMountError } from "../lib/errors.js";
 import "../app.css";
-
-class HealthMountError extends Error {
-  override name = "HealthMountError" as const;
-}
 
 document.title = "CARE-Y Demo Health Check";
 
 const target = document.getElementById("health-app");
-if (!target) throw new HealthMountError("Missing #health-app mount target");
+if (!target) throw new DemoMountError("Missing #health-app mount target");
 
 mount(HealthApp, { target });

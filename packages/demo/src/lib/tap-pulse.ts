@@ -15,6 +15,7 @@ import { locales } from "$lib/paraglide/runtime.js";
 import { withTerms } from "$lib/terminology/with-terms.js";
 import type { DemoTopic, DemoFeature } from "./bridge.js";
 import { DEMO_DETAIL_TICKET_ID, DEMO_DETAIL_ARTICLE_ID } from "./bridge.js";
+import { pollUntil, POLL_TIMEOUT_STANDARD_MS } from "./poll.js";
 
 // -----------------------------------------------------------------------
 // Topic to feature mapping
@@ -103,8 +104,20 @@ export function topicFeatureTarget(topic: DemoTopic): {
 // Candidate string builder (mirrors classifier's message sets)
 // -----------------------------------------------------------------------
 
+// Memoization cache: keyed by `topic + "\0" + localeKey` so a locale
+// switch invalidates cached candidates without manual clearing.
+const candidateCache = new Map<string, Set<string>>();
+
+function candidateCacheKey(topic: DemoTopic): string {
+  return `${topic}\0${locales.join(",")}`;
+}
+
 /** Build all possible label strings for a topic across all locales. */
 export function buildTopicCandidates(topic: DemoTopic): Set<string> {
+  const key = candidateCacheKey(topic);
+  const cached = candidateCache.get(key);
+  if (cached !== undefined) return cached;
+
   const candidates = new Set<string>();
   for (const locale of locales) {
     const opts = { locale };
@@ -255,6 +268,8 @@ export function buildTopicCandidates(topic: DemoTopic): Set<string> {
         break;
     }
   }
+
+  candidateCache.set(key, candidates);
   return candidates;
 }
 
@@ -409,17 +424,21 @@ export function dismissOpenOverlays(except: Element | null): void {
 // Element finder (reverse label matching)
 // -----------------------------------------------------------------------
 
-/** Find the first visible element matching a topic's candidate strings. */
+/**
+ * Find the first visible element matching a topic's candidate strings.
+ *
+ * Each pass matches the label text FIRST, then checks visibility only
+ * on matches. This avoids forced reflows on non-matching elements.
+ */
 export function findTopicElement(
   root: Document | Element,
   candidates: Set<string>,
 ): Element | null {
-  // Check aria-label attributes
+  // Check aria-label attributes (text match first, visibility only on hits)
   const ariaLabeled = root.querySelectorAll("[aria-label]");
   for (const el of ariaLabeled) {
-    if (!isVisible(el)) continue;
     const label = el.getAttribute("aria-label");
-    if (label !== null && candidates.has(label)) return el;
+    if (label !== null && candidates.has(label) && isVisible(el)) return el;
   }
 
   // Check text content of interactive elements
@@ -427,9 +446,8 @@ export function findTopicElement(
     'button, [role="button"], a, .k-list-item, label',
   );
   for (const el of interactive) {
-    if (!isVisible(el)) continue;
     const text = el.textContent.trim().slice(0, 80);
-    if (text !== "" && candidates.has(text)) return el;
+    if (text !== "" && candidates.has(text) && isVisible(el)) return el;
   }
 
   // List items carry title and value in one textContent blob, so the
@@ -437,11 +455,15 @@ export function findTopicElement(
   // text instead, mirroring the click classifier's list-item handling.
   const listItems = root.querySelectorAll(".k-list-item");
   for (const item of listItems) {
-    if (!isVisible(item)) continue;
     for (const leaf of item.querySelectorAll("*")) {
       if (leaf.childElementCount > 0) continue;
       const text = leaf.textContent.trim();
-      if (text !== "" && text.length <= 80 && candidates.has(text)) {
+      if (
+        text !== "" &&
+        text.length <= 80 &&
+        candidates.has(text) &&
+        isVisible(item)
+      ) {
         return item;
       }
     }
@@ -450,9 +472,9 @@ export function findTopicElement(
   // Check placeholder attributes on inputs
   const inputs = root.querySelectorAll("[placeholder]");
   for (const el of inputs) {
-    if (!isVisible(el)) continue;
     const placeholder = el.getAttribute("placeholder");
-    if (placeholder !== null && candidates.has(placeholder)) return el;
+    if (placeholder !== null && candidates.has(placeholder) && isVisible(el))
+      return el;
   }
 
   return null;
@@ -542,37 +564,16 @@ export function renderPulseMarker(target: Element): void {
 }
 
 // -----------------------------------------------------------------------
-// Wait for element to appear (with timeout)
+// Wait for element to appear (via pollUntil)
 // -----------------------------------------------------------------------
-
-const WAIT_TIMEOUT_MS = 3000;
-const WAIT_POLL_MS = 100;
 
 /** Poll until the topic element appears, or timeout. */
 export async function waitForElement(
   root: Document | Element,
   candidates: Set<string>,
 ): Promise<Element | null> {
-  return new Promise<Element | null>((resolve) => {
-    const el = findTopicElement(root, candidates);
-    if (el !== null) {
-      resolve(el);
-      return;
-    }
-
-    let elapsed = 0;
-    const timer = setInterval(() => {
-      elapsed += WAIT_POLL_MS;
-      const found = findTopicElement(root, candidates);
-      if (found !== null) {
-        clearInterval(timer);
-        resolve(found);
-        return;
-      }
-      if (elapsed >= WAIT_TIMEOUT_MS) {
-        clearInterval(timer);
-        resolve(null);
-      }
-    }, WAIT_POLL_MS);
+  return pollUntil<Element>({
+    probe: () => findTopicElement(root, candidates),
+    timeoutMs: POLL_TIMEOUT_STANDARD_MS,
   });
 }

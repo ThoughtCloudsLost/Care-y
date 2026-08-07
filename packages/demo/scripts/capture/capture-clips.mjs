@@ -54,8 +54,9 @@ const DEMO_PKG = resolve(import.meta.dirname, "../..");
 const CLIPS_OUT = join(DEMO_PKG, "public", "clips");
 const REPO_ROOT = resolve(DEMO_PKG, "../..");
 
+import { BEZEL } from "./constants.mjs";
+
 const DEFAULT_URL = "http://localhost:4173";
-const BEZEL = 12;
 const CAPTURE_DURATION_MS = 3500;
 const ENGINE_READY_TIMEOUT_MS = 30_000;
 const SCREENCAST_FORMAT = "png";

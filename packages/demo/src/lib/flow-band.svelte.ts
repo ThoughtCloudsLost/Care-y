@@ -52,6 +52,9 @@ export const MAX_BAND_HEIGHT = 520;
 /** Retained slices. Older interactions drop off the left edge. */
 export const MAX_SLICES = 40;
 
+/** Cap on events within a single slice. Oldest events drop off the front. */
+export const MAX_EVENTS_PER_SLICE = 60;
+
 /**
  * Cap on a rendered payload preview. The phone side decides what a
  * preview contains; truncating here bounds what any single event can put
@@ -139,19 +142,33 @@ function lastIndexForInteraction(
  * Returns a new array; the input is never mutated. Re-ingesting an event
  * id already held by the slice is a no-op, so a double subscription
  * cannot double the cards.
+ *
+ * Dedup uses the fact that event ids are monotonically increasing
+ * (flow-events.ts:157): comparing against the last event id suffices
+ * instead of a linear scan. Events per slice are capped at
+ * MAX_EVENTS_PER_SLICE; oldest events drop off the front on overflow.
  */
 export function ingestFlowEvent(
   slices: readonly FlowSlice[],
   event: DemoFlowEvent,
   maxSlices: number = MAX_SLICES,
+  maxEventsPerSlice: number = MAX_EVENTS_PER_SLICE,
 ): FlowSlice[] {
   const idx = lastIndexForInteraction(slices, event.interactionId);
 
   if (idx >= 0) {
     return slices.map((slice, i) => {
       if (i !== idx) return slice;
-      if (slice.events.some((e) => e.id === event.id)) return slice;
-      return { ...slice, events: [...slice.events, event] };
+      // Monotonic ids: if the last event's id >= this id, it is a duplicate.
+      const lastEvent = slice.events.at(-1);
+      if (lastEvent !== undefined && lastEvent.id >= event.id) return slice;
+      const updated = [...slice.events, event];
+      // Cap: drop oldest from the front when the slice overflows.
+      const trimmed =
+        updated.length > maxEventsPerSlice
+          ? updated.slice(updated.length - maxEventsPerSlice)
+          : updated;
+      return { ...slice, events: trimmed };
     });
   }
 

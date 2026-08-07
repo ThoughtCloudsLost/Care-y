@@ -61,19 +61,6 @@ const CLIP_OVERRIDES: ReadonlyMap<string, ClipOverride> = new Map<
 ]);
 
 // -----------------------------------------------------------------------
-// Narrated section set
-// -----------------------------------------------------------------------
-
-/**
- * Sections whose subs get inline clips. Every sub of every narrated
- * section has a figure unless explicitly disabled in CLIP_OVERRIDES.
- * The spec budget counts one clip per subsection across all sections.
- */
-const NARRATED_SECTION_IDS: ReadonlySet<SectionId> = new Set<SectionId>(
-  SECTIONS.map((s) => s.id),
-);
-
-// -----------------------------------------------------------------------
 // Public types
 // -----------------------------------------------------------------------
 
@@ -106,9 +93,21 @@ export function buildClipUrl(
 // Lookup functions
 // -----------------------------------------------------------------------
 
-/** Whether a clip exists for the given section/sub pair. */
+/**
+ * Whether a clip exists for the given section/sub pair.
+ *
+ * Currently returns true for every SECTIONS entry and false only for
+ * non-SECTIONS ids (e.g. "coming-soon"). The per-sub CLIP_OVERRIDES
+ * disabled flag is checked so the override seam is exercised, but no
+ * overrides are populated yet, so in practice this is a section
+ * membership check. Capture tooling will populate overrides as clips
+ * are recorded; until then, the behavior is intentionally permissive.
+ */
 export function hasClip(sectionId: SectionId, subSlug: string): boolean {
-  if (!NARRATED_SECTION_IDS.has(sectionId)) return false;
+  // SECTIONS covers all narrated sections. A dedicated set would be
+  // redundant; the linear scan fires at most 9 times and only during
+  // layout, not per frame.
+  if (!SECTIONS.some((s) => s.id === sectionId)) return false;
   const key = `${sectionId}/${subSlug}`;
   const override = CLIP_OVERRIDES.get(key);
   if (override?.disabled === true) return false;

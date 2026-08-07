@@ -335,6 +335,13 @@ export function createPeekController(
 
     phase = "committed";
     animating = false;
+    // Settle all four springs instantly so their rAF loops stop writing
+    // values nobody reads. Without this, each spring runs its own rAF
+    // until it converges naturally, wasting frames post-commit.
+    void fpW.set(fpW.target, { instant: true });
+    void fpH.set(fpH.target, { instant: true });
+    void posTop.set(posTop.target, { instant: true });
+    void posLeft.set(posLeft.target, { instant: true });
     // The saved geometry is kept so App.svelte can restore it if needed.
     // The controller's job ends here; the committed state is the consumer's
     // signal to switch to full-screen chrome.

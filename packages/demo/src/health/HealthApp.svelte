@@ -17,13 +17,24 @@
     HealthTimings,
     HealthProofResult,
     HealthEngine,
-  } from "./engine.js";
-  import { bootHealthEngine } from "./engine.js";
+  } from "$demo/engine/engine.js";
+  import { bootDemoEngine, runHealthProofs } from "$demo/engine/engine.js";
   import { setEngineTrpc } from "../stubs/trpc.js";
   import RouteMount from "$demo/engine/RouteMount.svelte";
   import HealthProviders from "./HealthProviders.svelte";
   import TimingRow from "./ui/TimingRow.svelte";
   import ProofRow from "./ui/ProofRow.svelte";
+
+  async function bootHealthEngine(): Promise<HealthEngine> {
+    const engine = await bootDemoEngine();
+    return {
+      trpc: engine.trpc,
+      timings: engine.timings,
+      async runProofs(report: (r: HealthProofResult) => void): Promise<void> {
+        return runHealthProofs(engine, report);
+      },
+    };
+  }
 
   // ── Boot state ──
 

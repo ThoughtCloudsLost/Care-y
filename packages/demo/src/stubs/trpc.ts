@@ -30,6 +30,7 @@ import { setLoginStage } from "../lib/login-stage.svelte.js";
 import { registerTrpcForPreview } from "./crypto-context.svelte.js";
 import { traceFlowSpan } from "../lib/flow-events.js";
 import type { DemoSeamKey } from "../lib/bridge.js";
+import { makeProcedureProxy } from "../lib/engine/proc-proxy.js";
 
 // -----------------------------------------------------------------------
 // Error types (no bare Error throws)
@@ -442,42 +443,41 @@ const mockOverlay: Record<string, Record<string, unknown>> = {
 // while the engine is still booting will wait transparently.
 // -----------------------------------------------------------------------
 
+// Map lookups instead of computed property access: routerName and
+// procName arrive from arbitrary proxy gets, and Map.get carries
+// no prototype-pollution surface. Built once at module init (the
+// overlay is static).
+const overlayRouterMap = new Map(Object.entries(mockOverlay));
+const overlayProcMaps = new Map<string, Map<string, unknown>>();
+for (const [routerName, routerObj] of overlayRouterMap) {
+  overlayProcMaps.set(routerName, new Map(Object.entries(routerObj)));
+}
+
 /**
- * Build a proxy node that delegates to the engine adapter at `path`.
- * "query"/"mutate" terminate into a dispatch; other property gets
- * extend the path.
+ * Build an engine-delegating proxy using the shared makeProcedureProxy.
+ * The dispatch wraps each call in a flow-event trace span.
  */
-function makeEngineNode(path: readonly string[]): unknown {
-  async function dispatch(kind: "query" | "mutate", input?: unknown) {
-    return tracedProc(path.join("."), kind, null, async () => {
-      const eng = await getEngine();
-      let node: unknown = eng;
-      for (const segment of path) {
-        if (node === undefined || node === null) break;
-        node = Reflect.get(node as Record<string | symbol, unknown>, segment);
-      }
-      const fn = Reflect.get(
-        node as Record<string | symbol, unknown>,
-        kind,
-      ) as (i?: unknown) => Promise<unknown>;
-      return fn(input);
-    });
-  }
-  return new Proxy(
-    {},
-    {
-      get(_target, prop: string | symbol): unknown {
-        if (typeof prop === "symbol") return undefined;
-        if (prop === "query") {
-          return async (input?: unknown): Promise<unknown> =>
-            dispatch("query", input);
+function makeEngineProxy(basePath: readonly string[]): unknown {
+  return makeProcedureProxy(
+    async (
+      path: readonly string[],
+      kind: "query" | "mutate",
+      input?: unknown,
+    ): Promise<unknown> => {
+      const fullPath = [...basePath, ...path];
+      return tracedProc(fullPath.join("."), kind, null, async () => {
+        const eng = await getEngine();
+        let node: unknown = eng;
+        for (const segment of fullPath) {
+          if (node === undefined || node === null) break;
+          node = Reflect.get(node as Record<string | symbol, unknown>, segment);
         }
-        if (prop === "mutate") {
-          return async (input?: unknown): Promise<unknown> =>
-            dispatch("mutate", input);
-        }
-        return makeEngineNode([...path, prop]);
-      },
+        const fn = Reflect.get(
+          node as Record<string | symbol, unknown>,
+          kind,
+        ) as (i?: unknown) => Promise<unknown>;
+        return fn(input);
+      });
     },
   );
 }
@@ -488,13 +488,12 @@ export const trpc: RealTrpc = new Proxy(
     get(_target, routerName: string | symbol): unknown {
       if (typeof routerName === "symbol") return undefined;
 
-      // Map lookups instead of computed property access: routerName and
-      // procName arrive from arbitrary proxy gets, and Map.get carries
-      // no prototype-pollution surface.
-      const mockRouter = new Map(Object.entries(mockOverlay)).get(routerName);
+      const mockRouter = overlayRouterMap.get(routerName);
       if (mockRouter === undefined) {
-        return makeEngineNode([routerName]);
+        return makeEngineProxy([routerName]);
       }
+
+      const procMap = overlayProcMaps.get(routerName);
 
       // Has some mocked procedures: return a proxy that checks procedure names
       return new Proxy(
@@ -502,10 +501,10 @@ export const trpc: RealTrpc = new Proxy(
         {
           get(_t2, procName: string | symbol): unknown {
             if (typeof procName === "symbol") return undefined;
-            const mockProc = new Map(Object.entries(mockRouter)).get(procName);
+            const mockProc = procMap?.get(procName);
             if (mockProc !== undefined) return mockProc;
             // Fall through to engine for non-mocked members on this router
-            return makeEngineNode([routerName, procName]);
+            return makeEngineProxy([routerName, procName]);
           },
         },
       );

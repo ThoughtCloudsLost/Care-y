@@ -3,14 +3,31 @@
  * element to a DemoTopic by matching against paraglide message
  * outputs across all available locales.
  *
- * Called at event time so a locale switch mid-session does not
- * break classification. Never bakes label strings at module init.
+ * The label-to-topic lookup is built lazily on first call, cached in
+ * a Map for O(1) classification, and invalidated when the locale set
+ * changes (mid-session locale switches are the reason the old code
+ * evaluated at call time).
+ *
+ * Labels that map to different topics depending on context (feature,
+ * inDetail) are stored in a separate disambiguation table consulted
+ * after the Map hit.
  */
 
 import * as m from "$lib/paraglide/messages.js";
 import { locales } from "$lib/paraglide/runtime.js";
 import { withTerms } from "$lib/terminology/with-terms.js";
 import type { DemoFeature, DemoTopic } from "./bridge.js";
+
+// -----------------------------------------------------------------------
+// Locale type (re-exported for D4 consumers)
+// -----------------------------------------------------------------------
+
+/** A locale value from the paraglide runtime. */
+export type DemoLocale = (typeof locales)[number];
+
+// -----------------------------------------------------------------------
+// Classifier context
+// -----------------------------------------------------------------------
 
 export interface ClassifierContext {
   /** True when the phone is displaying a ticket detail view. */
@@ -19,270 +36,614 @@ export interface ClassifierContext {
   readonly feature: DemoFeature;
 }
 
+// -----------------------------------------------------------------------
+// matchesAnyLocale (D4: shared locale-sweep label matching)
+// -----------------------------------------------------------------------
+
 /**
- * Classify a label string (aria-label, text content, or placeholder)
- * to a DemoTopic. Returns null if the label does not match any known
- * topic.
+ * Test whether `text` matches the output of `messageFn` in any locale.
  *
- * Matches are tested against all configured locales so that a stale
- * DOM label (rendered before a locale switch) still classifies.
+ * `mode` controls comparison:
+ *   "equals"   - exact match (default)
+ *   "includes" - text.includes(messageFn output)
  */
-export function classifyDemoLabel(
+export function matchesAnyLocale(
+  text: string,
+  messageFn: (opts: { locale: DemoLocale }) => string,
+  mode: "equals" | "includes" = "equals",
+): boolean {
+  for (const locale of locales) {
+    const label = messageFn({ locale });
+    if (mode === "equals" ? text === label : text.includes(label)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+// -----------------------------------------------------------------------
+// Disambiguation rules
+// -----------------------------------------------------------------------
+
+/**
+ * Labels that resolve to different topics depending on feature or
+ * inDetail context. The Map lookup gives the "unambiguous" topic; these
+ * entries override it when the context matches.
+ */
+interface DisambiguationRule {
+  /** The topic to return. */
+  readonly topic: DemoTopic;
+  /** Feature(s) that must match for this override to fire. Null means "any". */
+  readonly features: ReadonlySet<DemoFeature> | null;
+  /** When true, only fires in a detail context. When false, only on the list. Null means either. */
+  readonly inDetail: boolean | null;
+}
+
+// Keyed by label string; built alongside the label map.
+let disambiguationCache: ReadonlyMap<
+  string,
+  readonly DisambiguationRule[]
+> | null = null;
+
+// -----------------------------------------------------------------------
+// Cached label-to-topic Map
+// -----------------------------------------------------------------------
+
+let labelMapCache: ReadonlyMap<string, DemoTopic> | null = null;
+let cachedLocaleKey: string | null = null;
+
+/** A serialized key representing the current locale set, for cache invalidation. */
+function localeKey(): string {
+  return locales.join(",");
+}
+
+/**
+ * Register a label in the label map. For unambiguous labels (no context
+ * dependency), this is the only entry. Ambiguous labels also get a
+ * disambiguation rule so the Map hit can be refined.
+ */
+function register(
+  map: Map<string, DemoTopic>,
+  disambig: Map<string, DisambiguationRule[]>,
   label: string,
-  ctx: ClassifierContext,
-): DemoTopic | null {
-  // Build match sets for all locales at call time
+  topic: DemoTopic,
+  features: ReadonlySet<DemoFeature> | null = null,
+  inDetail: boolean | null = null,
+): void {
+  if (features !== null || inDetail !== null) {
+    // Ambiguous: store a rule, and set the map to a "needs disambiguation"
+    // sentinel topic if not already set.
+    const rules = disambig.get(label) ?? [];
+    rules.push({ topic, features, inDetail });
+    disambig.set(label, rules);
+    // The Map entry stores the first topic registered as a fallback.
+    if (!map.has(label)) {
+      map.set(label, topic);
+    }
+  } else {
+    // Unambiguous
+    if (!map.has(label)) {
+      map.set(label, topic);
+    }
+  }
+}
+
+interface ClassifierCaches {
+  readonly labels: ReadonlyMap<string, DemoTopic>;
+  readonly rules: ReadonlyMap<string, readonly DisambiguationRule[]>;
+}
+
+function buildLabelMap(): ClassifierCaches {
+  const map = new Map<string, DemoTopic>();
+  const disambig = new Map<string, DisambiguationRule[]>();
+
+  const settingsSet: ReadonlySet<DemoFeature> = new Set(["settings"]);
+  const adminSet: ReadonlySet<DemoFeature> = new Set(["admin"]);
+  const notSettingsNotAdmin: ReadonlySet<DemoFeature> = new Set([
+    "login",
+    "home",
+    "tickets",
+    "library",
+    "schedule",
+    "other",
+  ]);
+  const notSettings: ReadonlySet<DemoFeature> = new Set([
+    "login",
+    "home",
+    "tickets",
+    "library",
+    "admin",
+    "schedule",
+    "other",
+  ]);
+
   for (const locale of locales) {
     const opts = { locale };
     const terms = withTerms();
 
     // --- credentials ---
-    // auth_password and settings_password share the same string ("Password"),
-    // so the match is gated on feature to avoid a collision on settings.
-    // auth_username and settings_username also share "Login Username", so
-    // the same gate applies: admin and settings contexts must fall through
-    // to the settings_username / settings_display_name check below.
-    if (
-      label === m.auth_sign_in({}, opts) ||
-      (label === m.auth_username({}, opts) &&
-        ctx.feature !== "settings" &&
-        ctx.feature !== "admin") ||
-      (label === m.auth_password({}, opts) && ctx.feature !== "settings")
-    ) {
-      return "credentials";
-    }
+    // auth_password / settings_password and auth_username / settings_username
+    // share strings; feature gates avoid collisions.
+    register(map, disambig, m.auth_sign_in({}, opts), "credentials");
+    register(
+      map,
+      disambig,
+      m.auth_username({}, opts),
+      "credentials",
+      notSettingsNotAdmin,
+    );
+    register(
+      map,
+      disambig,
+      m.auth_password({}, opts),
+      "credentials",
+      notSettings,
+    );
 
-    // --- twofa (per-method labels first, shared controls generic) ---
-    // The TwoFactorSheet on settings renders the same method labels as
-    // the login picker. The feature context disambiguates: on login they
-    // classify to their login-specific twofa-* topics; on settings they
-    // all classify as settings-2fa.
-    if (label === m.twofa_totp_label({}, opts)) {
-      return ctx.feature === "settings" ? "settings-2fa" : "twofa-totp";
-    }
-    if (label === m.twofa_passkey_use({}, opts)) {
-      return ctx.feature === "settings" ? "settings-2fa" : "twofa-passkey";
-    }
-    if (
-      label === m.twofa_email_label({}, opts) ||
-      label === m.twofa_email_send_code({}, opts)
-    ) {
-      return ctx.feature === "settings" ? "settings-2fa" : "twofa-email";
-    }
-    if (
-      label === m.twofa_sms_label({}, opts) ||
-      label === m.twofa_sms_send_code({}, opts)
-    ) {
-      return ctx.feature === "settings" ? "settings-2fa" : "twofa-sms";
-    }
-    if (
-      label === m.twofa_push_label({}, opts) ||
-      label === m.twofa_push_send({}, opts)
-    ) {
-      return ctx.feature === "settings" ? "settings-2fa" : "twofa-push";
-    }
-    if (label === m.twofa_backup_codes_enter({}, opts)) {
-      return ctx.feature === "settings" ? "settings-2fa" : "twofa-backup";
-    }
-    if (label === m.twofa_verify_submit({}, opts)) {
-      return ctx.feature === "settings" ? "settings-2fa" : "twofa";
-    }
+    // --- twofa per-method (feature-gated: login vs settings-2fa) ---
+    register(
+      map,
+      disambig,
+      m.twofa_totp_label({}, opts),
+      "twofa-totp",
+      notSettings,
+    );
+    register(
+      map,
+      disambig,
+      m.twofa_totp_label({}, opts),
+      "settings-2fa",
+      settingsSet,
+    );
+    register(
+      map,
+      disambig,
+      m.twofa_passkey_use({}, opts),
+      "twofa-passkey",
+      notSettings,
+    );
+    register(
+      map,
+      disambig,
+      m.twofa_passkey_use({}, opts),
+      "settings-2fa",
+      settingsSet,
+    );
+    register(
+      map,
+      disambig,
+      m.twofa_email_label({}, opts),
+      "twofa-email",
+      notSettings,
+    );
+    register(
+      map,
+      disambig,
+      m.twofa_email_label({}, opts),
+      "settings-2fa",
+      settingsSet,
+    );
+    register(
+      map,
+      disambig,
+      m.twofa_email_send_code({}, opts),
+      "twofa-email",
+      notSettings,
+    );
+    register(
+      map,
+      disambig,
+      m.twofa_email_send_code({}, opts),
+      "settings-2fa",
+      settingsSet,
+    );
+    register(
+      map,
+      disambig,
+      m.twofa_sms_label({}, opts),
+      "twofa-sms",
+      notSettings,
+    );
+    register(
+      map,
+      disambig,
+      m.twofa_sms_label({}, opts),
+      "settings-2fa",
+      settingsSet,
+    );
+    register(
+      map,
+      disambig,
+      m.twofa_sms_send_code({}, opts),
+      "twofa-sms",
+      notSettings,
+    );
+    register(
+      map,
+      disambig,
+      m.twofa_sms_send_code({}, opts),
+      "settings-2fa",
+      settingsSet,
+    );
+    register(
+      map,
+      disambig,
+      m.twofa_push_label({}, opts),
+      "twofa-push",
+      notSettings,
+    );
+    register(
+      map,
+      disambig,
+      m.twofa_push_label({}, opts),
+      "settings-2fa",
+      settingsSet,
+    );
+    register(
+      map,
+      disambig,
+      m.twofa_push_send({}, opts),
+      "twofa-push",
+      notSettings,
+    );
+    register(
+      map,
+      disambig,
+      m.twofa_push_send({}, opts),
+      "settings-2fa",
+      settingsSet,
+    );
+    register(
+      map,
+      disambig,
+      m.twofa_backup_codes_enter({}, opts),
+      "twofa-backup",
+      notSettings,
+    );
+    register(
+      map,
+      disambig,
+      m.twofa_backup_codes_enter({}, opts),
+      "settings-2fa",
+      settingsSet,
+    );
+    register(
+      map,
+      disambig,
+      m.twofa_verify_submit({}, opts),
+      "twofa",
+      notSettings,
+    );
+    register(
+      map,
+      disambig,
+      m.twofa_verify_submit({}, opts),
+      "settings-2fa",
+      settingsSet,
+    );
 
     // --- twofa_remove_confirm (settings-only) ---
-    if (
-      ctx.feature === "settings" &&
-      label === m.twofa_remove_confirm({}, opts)
-    ) {
-      return "settings-2fa";
-    }
+    register(
+      map,
+      disambig,
+      m.twofa_remove_confirm({}, opts),
+      "settings-2fa",
+      settingsSet,
+    );
 
     // --- key-derivation ---
-    if (
-      label === m.auth_phase_argon2id({}, opts) ||
-      label === m.auth_phase_oprf({}, opts) ||
-      label === m.auth_phase_derive({}, opts) ||
-      label === m.auth_phase_auth({}, opts) ||
-      label === m.auth_phase_done({}, opts)
-    ) {
-      return "key-derivation";
-    }
+    register(map, disambig, m.auth_phase_argon2id({}, opts), "key-derivation");
+    register(map, disambig, m.auth_phase_oprf({}, opts), "key-derivation");
+    register(map, disambig, m.auth_phase_derive({}, opts), "key-derivation");
+    register(map, disambig, m.auth_phase_auth({}, opts), "key-derivation");
+    register(map, disambig, m.auth_phase_done({}, opts), "key-derivation");
 
     // --- sort ---
-    if (label === m.tickets_sort({}, opts)) {
-      return "sort";
-    }
+    register(map, disambig, m.tickets_sort({}, opts), "sort");
 
     // --- filters vs thread-filters ---
     // The FilterPillBar toolbar label is shared between list and detail.
-    // ctx.inDetail disambiguates.
-    if (label === m.tickets_filter(terms, opts)) {
-      return ctx.inDetail ? "thread-filters" : "filters";
-    }
-    // List filter pill popovers (only fires on list)
-    if (
-      !ctx.inDetail &&
-      (label === m.tickets_filter_status({}, opts) ||
-        label === m.tickets_filter_queue(terms, opts) ||
-        label === m.tickets_filter_priority({}, opts) ||
-        label === m.tickets_filter_assignee({}, opts) ||
-        label === m.tickets_filter_date_range({}, opts) ||
-        label === m.tickets_create_shortcut({}, opts))
-    ) {
-      return "filters";
-    }
+    const filterLabel = m.tickets_filter(terms, opts);
+    register(map, disambig, filterLabel, "filters", null, false);
+    register(map, disambig, filterLabel, "thread-filters", null, true);
+
+    // List filter pill popovers (only on list)
+    register(
+      map,
+      disambig,
+      m.tickets_filter_status({}, opts),
+      "filters",
+      null,
+      false,
+    );
+    register(
+      map,
+      disambig,
+      m.tickets_filter_queue(terms, opts),
+      "filters",
+      null,
+      false,
+    );
+    register(
+      map,
+      disambig,
+      m.tickets_filter_priority({}, opts),
+      "filters",
+      null,
+      false,
+    );
+    register(
+      map,
+      disambig,
+      m.tickets_filter_assignee({}, opts),
+      "filters",
+      null,
+      false,
+    );
+    register(
+      map,
+      disambig,
+      m.tickets_filter_date_range({}, opts),
+      "filters",
+      null,
+      false,
+    );
+    register(
+      map,
+      disambig,
+      m.tickets_create_shortcut({}, opts),
+      "filters",
+      null,
+      false,
+    );
+
     // Detail thread filter pill labels
-    if (
-      ctx.inDetail &&
-      (label === m.ticket_filter_type({}, opts) ||
-        label === m.ticket_filter_author({}, opts) ||
-        label === m.ticket_filter_date({}, opts))
-    ) {
-      return "thread-filters";
-    }
+    register(
+      map,
+      disambig,
+      m.ticket_filter_type({}, opts),
+      "thread-filters",
+      null,
+      true,
+    );
+    register(
+      map,
+      disambig,
+      m.ticket_filter_author({}, opts),
+      "thread-filters",
+      null,
+      true,
+    );
+    register(
+      map,
+      disambig,
+      m.ticket_filter_date({}, opts),
+      "thread-filters",
+      null,
+      true,
+    );
 
     // --- view-modes ---
-    if (
-      label === m.view_switcher_label({}, opts) ||
-      label === m.view_switcher_table({}, opts) ||
-      label === m.view_switcher_rows({}, opts) ||
-      label === m.view_switcher_cards({}, opts) ||
-      label === m.view_switcher_grid({}, opts) ||
-      label === m.view_switcher_kanban({}, opts)
-    ) {
-      return "view-modes";
-    }
+    register(map, disambig, m.view_switcher_label({}, opts), "view-modes");
+    register(map, disambig, m.view_switcher_table({}, opts), "view-modes");
+    register(map, disambig, m.view_switcher_rows({}, opts), "view-modes");
+    register(map, disambig, m.view_switcher_cards({}, opts), "view-modes");
+    register(map, disambig, m.view_switcher_grid({}, opts), "view-modes");
+    register(map, disambig, m.view_switcher_kanban({}, opts), "view-modes");
 
     // --- select-mode ---
-    if (
-      label === m.tickets_select_mode({}, opts) ||
-      label === m.ticket_select_mode({}, opts)
-    ) {
-      return "select-mode";
-    }
+    register(map, disambig, m.tickets_select_mode({}, opts), "select-mode");
+    register(map, disambig, m.ticket_select_mode({}, opts), "select-mode");
 
     // --- new-ticket ---
-    if (label === m.nav_new_ticket(terms, opts)) {
-      return "new-ticket";
-    }
+    register(map, disambig, m.nav_new_ticket(terms, opts), "new-ticket");
 
     // --- compose-actions ---
-    if (label === m.ticket_compose_actions({}, opts)) {
-      return "compose-actions";
-    }
+    register(
+      map,
+      disambig,
+      m.ticket_compose_actions({}, opts),
+      "compose-actions",
+    );
 
     // --- reply ---
-    if (
-      label === m.ticket_send({}, opts) ||
-      label === m.ticket_sms_send({}, opts)
-    ) {
-      return "reply";
-    }
+    register(map, disambig, m.ticket_send({}, opts), "reply");
+    register(map, disambig, m.ticket_sms_send({}, opts), "reply");
 
     // --- notes ---
-    if (
-      label === m.ticket_add_internal_note({}, opts) ||
-      label === m.ticket_edit_note({}, opts) ||
-      label === m.ticket_save_note({}, opts)
-    ) {
-      return "notes";
-    }
+    register(map, disambig, m.ticket_add_internal_note({}, opts), "notes");
+    register(map, disambig, m.ticket_edit_note({}, opts), "notes");
+    register(map, disambig, m.ticket_save_note({}, opts), "notes");
 
     // --- case-fold ---
-    if (
-      label === m.ticket_case_details(terms, opts) ||
-      label === m.ticket_fold_case_details(terms, opts)
-    ) {
-      return "case-fold";
-    }
+    register(map, disambig, m.ticket_case_details(terms, opts), "case-fold");
+    register(
+      map,
+      disambig,
+      m.ticket_fold_case_details(terms, opts),
+      "case-fold",
+    );
 
     // --- timeline ---
-    if (
-      label === m.ticket_action_timeline({}, opts) ||
-      label === m.ticket_action_messages({}, opts)
-    ) {
-      return "timeline";
-    }
+    register(map, disambig, m.ticket_action_timeline({}, opts), "timeline");
+    register(map, disambig, m.ticket_action_messages({}, opts), "timeline");
 
     // --- language ---
-    if (label === m.language_picker_label({}, opts)) {
-      return "language";
-    }
+    register(map, disambig, m.language_picker_label({}, opts), "language");
 
     // --- dashboard-queues ---
-    if (label === m.dashboard_queues_heading(terms, opts)) {
-      return "dashboard-queues";
-    }
+    register(
+      map,
+      disambig,
+      m.dashboard_queues_heading(terms, opts),
+      "dashboard-queues",
+    );
 
     // --- dashboard-activity ---
-    if (label === m.dashboard_activity_heading({}, opts)) {
-      return "dashboard-activity";
-    }
+    register(
+      map,
+      disambig,
+      m.dashboard_activity_heading({}, opts),
+      "dashboard-activity",
+    );
 
     // --- library-vote ---
-    if (
-      label === m.library_was_helpful({}, opts) ||
-      label === m.library_vote_up({}, opts) ||
-      label === m.library_vote_down({}, opts)
-    ) {
-      return "library-vote";
-    }
+    register(map, disambig, m.library_was_helpful({}, opts), "library-vote");
+    register(map, disambig, m.library_vote_up({}, opts), "library-vote");
+    register(map, disambig, m.library_vote_down({}, opts), "library-vote");
 
     // --- library-categories ---
-    if (label === m.library_manage_categories({}, opts)) {
-      return "library-categories";
-    }
+    register(
+      map,
+      disambig,
+      m.library_manage_categories({}, opts),
+      "library-categories",
+    );
 
     // --- library-editor ---
-    if (
-      label === m.library_new_article({}, opts) ||
-      label === m.library_edit_article({}, opts)
-    ) {
-      return "library-editor";
-    }
+    register(map, disambig, m.library_new_article({}, opts), "library-editor");
+    register(map, disambig, m.library_edit_article({}, opts), "library-editor");
 
     // --- admin-roster-edit vs settings-profile ---
-    // settings_display_name and settings_username label the admin user-edit
-    // sheet inputs when on admin, and the profile sheet inputs on settings.
-    if (label === m.settings_display_name({}, opts)) {
-      return ctx.feature === "admin" ? "admin-roster-edit" : "settings-profile";
-    }
-    if (label === m.settings_username({}, opts)) {
-      return ctx.feature === "admin" ? "admin-roster-edit" : "settings-profile";
-    }
+    register(
+      map,
+      disambig,
+      m.settings_display_name({}, opts),
+      "admin-roster-edit",
+      adminSet,
+    );
+    register(
+      map,
+      disambig,
+      m.settings_display_name({}, opts),
+      "settings-profile",
+      settingsSet,
+    );
+    register(
+      map,
+      disambig,
+      m.settings_username({}, opts),
+      "admin-roster-edit",
+      adminSet,
+    );
+    register(
+      map,
+      disambig,
+      m.settings_username({}, opts),
+      "settings-profile",
+      settingsSet,
+    );
 
     // --- admin-roster-edit (unambiguous) ---
-    if (label === m.admin_user_edit_actions({}, opts)) {
-      return "admin-roster-edit";
-    }
+    register(
+      map,
+      disambig,
+      m.admin_user_edit_actions({}, opts),
+      "admin-roster-edit",
+    );
 
     // --- admin-greetings ---
-    if (
-      label === m.admin_greetings_add_button({}, opts) ||
-      label === m.admin_tab_greetings({}, opts)
-    ) {
-      return "admin-greetings";
-    }
+    register(
+      map,
+      disambig,
+      m.admin_greetings_add_button({}, opts),
+      "admin-greetings",
+    );
+    register(map, disambig, m.admin_tab_greetings({}, opts), "admin-greetings");
 
     // --- admin-quarantine ---
-    if (
-      label === m.admin_quarantine_play({}, opts) ||
-      label === m.admin_quarantine_route({}, opts) ||
-      label === m.admin_quarantine_dismiss({}, opts) ||
-      label === m.admin_tab_quarantine({}, opts)
-    ) {
-      return "admin-quarantine";
-    }
+    register(
+      map,
+      disambig,
+      m.admin_quarantine_play({}, opts),
+      "admin-quarantine",
+    );
+    register(
+      map,
+      disambig,
+      m.admin_quarantine_route({}, opts),
+      "admin-quarantine",
+    );
+    register(
+      map,
+      disambig,
+      m.admin_quarantine_dismiss({}, opts),
+      "admin-quarantine",
+    );
+    register(
+      map,
+      disambig,
+      m.admin_tab_quarantine({}, opts),
+      "admin-quarantine",
+    );
 
     // --- settings-password ---
-    if (label === m.settings_password({}, opts)) {
-      return "settings-password";
-    }
+    register(map, disambig, m.settings_password({}, opts), "settings-password");
 
     // --- settings-2fa ---
-    if (label === m.settings_2fa({}, opts)) {
-      return "settings-2fa";
+    register(map, disambig, m.settings_2fa({}, opts), "settings-2fa");
+  }
+
+  labelMapCache = map;
+  disambiguationCache = disambig;
+  cachedLocaleKey = localeKey();
+  return { labels: map, rules: disambig };
+}
+
+/** Ensure the label map is built and current. */
+function ensureLabelMap(): ClassifierCaches {
+  if (
+    labelMapCache !== null &&
+    disambiguationCache !== null &&
+    cachedLocaleKey === localeKey()
+  ) {
+    return { labels: labelMapCache, rules: disambiguationCache };
+  }
+  return buildLabelMap();
+}
+
+/** Invalidate the cached label map. Primarily for testing. */
+export function invalidateClassifierCache(): void {
+  labelMapCache = null;
+  disambiguationCache = null;
+  cachedLocaleKey = null;
+}
+
+// -----------------------------------------------------------------------
+// Public classifier
+// -----------------------------------------------------------------------
+
+/**
+ * Classify a label string (aria-label, text content, or placeholder)
+ * to a DemoTopic. Returns null if the label does not match any known
+ * topic.
+ *
+ * The lookup table is built lazily once per locale set, making
+ * classification O(1) per call instead of O(locales * messages).
+ */
+export function classifyDemoLabel(
+  label: string,
+  ctx: ClassifierContext,
+): DemoTopic | null {
+  const { labels, rules: ruleMap } = ensureLabelMap();
+
+  // Fast path: not in the map at all
+  if (!labels.has(label)) return null;
+
+  // Check disambiguation rules for this label
+  const rules = ruleMap.get(label);
+  if (rules !== undefined) {
+    for (const rule of rules) {
+      const featureMatch =
+        rule.features === null || rule.features.has(ctx.feature);
+      const detailMatch =
+        rule.inDetail === null || rule.inDetail === ctx.inDetail;
+      if (featureMatch && detailMatch) {
+        return rule.topic;
+      }
     }
   }
 
-  return null;
+  // No disambiguation rule matched: return the default map entry
+  return labels.get(label) ?? null;
 }

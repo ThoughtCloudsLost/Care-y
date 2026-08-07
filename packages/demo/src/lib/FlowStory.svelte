@@ -45,10 +45,12 @@
     hitTestBlock,
   } from "./flow-layout.js";
   import { hasClip, getClip, type PeekFirePayload } from "./clip-registry.js";
+  import { createFigureHysteresis } from "./figure-hysteresis.js";
   import ClipFigure from "./ClipFigure.svelte";
   import {
     setFlowGeometrySource,
     readingLineY,
+    stickyTopOffset,
   } from "./flow-geometry.svelte.js";
 
   // -----------------------------------------------------------------------
@@ -114,31 +116,9 @@
     "sub-body": `400 15px ${FONT_FAMILY}`,
   };
 
-  // Precomputed per-kind style prefix: font + line-height never change,
-  // so we build these once at module init rather than per span per frame.
-  // Single-sourced from FONT_STRINGS and DEFAULT_METRICS above.
-  function stylePrefix(font: string, lineHeight: number): string {
-    return `font: ${font}; line-height: ${String(lineHeight)}px;`;
-  }
-
-  const KIND_STYLE_PREFIX: Record<FlowTextKind, string> = {
-    "section-title": stylePrefix(
-      FONT_STRINGS["section-title"],
-      DEFAULT_METRICS["section-title"].lineHeight,
-    ),
-    "section-desc": stylePrefix(
-      FONT_STRINGS["section-desc"],
-      DEFAULT_METRICS["section-desc"].lineHeight,
-    ),
-    "sub-heading": stylePrefix(
-      FONT_STRINGS["sub-heading"],
-      DEFAULT_METRICS["sub-heading"].lineHeight,
-    ),
-    "sub-body": stylePrefix(
-      FONT_STRINGS["sub-body"],
-      DEFAULT_METRICS["sub-body"].lineHeight,
-    ),
-  };
+  // Font and line-height are now in the per-kind CSS classes
+  // (flow-line--title, flow-line--desc, etc.) rather than in inline
+  // style strings. Only position and width vary per line per frame.
 
   // -----------------------------------------------------------------------
   // Block list derivation
@@ -312,7 +292,10 @@
 
   let containerEl = $state<HTMLDivElement | undefined>(undefined);
   let containerWidth = $state(0);
+  // Document-space top and left of the container, scroll-invariant.
+  // Measured in the ResizeObserver and on window resize, never per frame.
   let containerTop = $state(0);
+  let containerLeft = $state(0);
 
   // $state.raw: replaced wholesale each pass, and a deep proxy would wrap
   // every line and block geometry object on every layout.
@@ -327,24 +310,44 @@
     typeof window !== "undefined" ? window.innerHeight : 0,
   );
 
+  /** Re-measure the container's document-space position. Called from the
+   *  ResizeObserver and window resize, not from the per-frame rAF. */
+  function measureContainerPosition(): void {
+    if (containerEl === undefined) return;
+    const rect = containerEl.getBoundingClientRect();
+    containerTop = rect.top + window.scrollY;
+    containerLeft = rect.left;
+  }
+
   $effect(() => {
     function onResize(): void {
       viewportH = window.innerHeight;
+      measureContainerPosition();
     }
     window.addEventListener("resize", onResize, { passive: true });
     return () => window.removeEventListener("resize", onResize);
   });
 
-  // Track container width via ResizeObserver
+  // Track container width and position via ResizeObserver
   $effect(() => {
     if (containerEl === undefined) return;
     const ro = new ResizeObserver((entries) => {
       for (const entry of entries) {
         containerWidth = entry.contentRect.width;
       }
+      measureContainerPosition();
     });
     ro.observe(containerEl);
     return () => ro.disconnect();
+  });
+
+  // Opening the flow band changes the container's document-space
+  // position but not its own size, so neither the ResizeObserver nor
+  // the resize listener fires. Re-measure when the chrome height
+  // changes (stickyTopOffset tracks it).
+  $effect(() => {
+    void stickyTopOffset();
+    measureContainerPosition();
   });
 
   // -----------------------------------------------------------------------
@@ -367,20 +370,16 @@
     const frameDocTop = fr.top + sy;
     const frameDocLeft = fr.left;
 
-    // Make coordinates relative to the container
-    const rawHole: FlowHole = {
-      left: frameDocLeft - contLeft,
-      top: frameDocTop - contTop,
-      right: frameDocLeft + fr.outerW - contLeft,
-      bottom: frameDocTop + fr.outerH - contTop,
-    };
-
-    // Apply padding at the single exit point
+    // Make coordinates relative to the container, then pad.
+    // Round to integer px so sub-pixel scroll deltas do not defeat the
+    // no-op guard. The frame is viewport-fixed, so only the document
+    // translation changes during scroll; rounding collapses those
+    // fractional shifts into the same cached value.
     return {
-      left: rawHole.left - FRAME_PAD_X,
-      top: rawHole.top - FRAME_PAD_TOP,
-      right: rawHole.right + FRAME_PAD_X,
-      bottom: rawHole.bottom + FRAME_PAD_BOTTOM,
+      left: Math.round(frameDocLeft - contLeft - FRAME_PAD_X),
+      top: Math.round(frameDocTop - contTop - FRAME_PAD_TOP),
+      right: Math.round(frameDocLeft + fr.outerW - contLeft + FRAME_PAD_X),
+      bottom: Math.round(frameDocTop + fr.outerH - contTop + FRAME_PAD_BOTTOM),
     };
   }
 
@@ -409,6 +408,27 @@
   let prevHoleRight = NaN;
   let prevHoleBottom = NaN;
 
+  // Cached no-hole layout. When the padded hole is vertically disjoint
+  // from [0, totalHeight] or horizontally outside [0, containerWidth],
+  // every line gets an identical full-width segment, so we reuse this
+  // single layout rather than re-running computeFlowLayout per frame.
+  let noHoleBlocks: readonly FlowBlock[] | null = null;
+  let noHoleWidth = -1;
+  let noHoleResult: FlowLayoutResult | null = null;
+
+  // When the hole does not intersect the flow content, every line gets
+  // the same full-width segment. Hoisted out of runLayout to avoid a
+  // fresh function allocation per rAF frame.
+  function holeIntersectsContent(
+    h: FlowHole,
+    totalH: number,
+    cw: number,
+  ): boolean {
+    if (h.bottom <= 0 || h.top >= totalH) return false;
+    if (h.right <= 0 || h.left >= cw) return false;
+    return true;
+  }
+
   function scheduleLayout(): void {
     if (rafId !== 0) return;
     rafId = requestAnimationFrame(() => {
@@ -436,62 +456,129 @@
       return;
     }
 
-    // Measure container position (the only DOM read in the layout path)
-    let contLeft = 0;
-    if (containerEl !== undefined) {
-      const rect = containerEl.getBoundingClientRect();
-      containerTop = rect.top + window.scrollY;
-      contLeft = rect.left;
-    }
+    // Container position is measured in the ResizeObserver and on window
+    // resize, not here. That avoids a forced reflow per rAF frame.
 
     // Compute the hole before the no-op check so we can compare against
     // the previous pass's hole edges.
     const candidateHole = rawHoleAt(
       window.scrollY,
       containerTop,
-      contLeft,
+      containerLeft,
       frameRect,
     );
 
     // Skip recompute when every layout input matches the previous pass.
-    // The hole edges move on every scroll frame even though the visual
-    // result often stays identical (the frame is viewport-fixed, so only
-    // the document-space translation changes).
-    if (
-      prevBlocks === blocks &&
-      prevContainerWidth === containerWidth &&
-      prevHoleLeft === candidateHole.left &&
-      prevHoleTop === candidateHole.top &&
-      prevHoleRight === candidateHole.right &&
-      prevHoleBottom === candidateHole.bottom
-    ) {
-      return;
+    // Integer rounding in rawHoleAt collapses sub-pixel scroll deltas.
+    // When the previous pass used the no-hole cache (prevHoleLeft is NaN),
+    // check whether the candidate is STILL disjoint from the cached
+    // totalHeight so consecutive no-hole frames skip without comparing
+    // the moving hole edges.
+    const prevWasNoHole = Number.isNaN(prevHoleLeft);
+    if (prevBlocks === blocks && prevContainerWidth === containerWidth) {
+      if (prevWasNoHole) {
+        // Previous layout was hole-independent. Stay on that path if
+        // the hole is still disjoint from the content.
+        if (
+          noHoleResult !== null &&
+          (candidateHole.bottom <= 0 ||
+            candidateHole.top >= noHoleResult.totalHeight ||
+            candidateHole.right <= 0 ||
+            candidateHole.left >= containerWidth)
+        ) {
+          return;
+        }
+      } else if (
+        prevHoleLeft === candidateHole.left &&
+        prevHoleTop === candidateHole.top &&
+        prevHoleRight === candidateHole.right &&
+        prevHoleBottom === candidateHole.bottom
+      ) {
+        return;
+      }
     }
 
     const filler = createFiller(prepared.handles);
-    const hole = candidateHole;
-    const result = computeFlowLayout(
-      blocks,
-      filler,
-      containerWidth,
-      hole,
-      DEFAULT_METRICS,
-    );
+
+    // Try the no-hole cache first. If blocks and width match, run a
+    // no-hole layout once, then check the hole against its totalHeight.
+    let result: FlowLayoutResult;
+    let hole: FlowHole | null;
+
+    if (
+      noHoleBlocks === blocks &&
+      noHoleWidth === containerWidth &&
+      noHoleResult !== null
+    ) {
+      // Re-use the cached no-hole layout when the hole is disjoint
+      if (
+        !holeIntersectsContent(
+          candidateHole,
+          noHoleResult.totalHeight,
+          containerWidth,
+        )
+      ) {
+        result = noHoleResult;
+        hole = null;
+      } else {
+        hole = candidateHole;
+        result = computeFlowLayout(
+          blocks,
+          filler,
+          containerWidth,
+          hole,
+          DEFAULT_METRICS,
+        );
+      }
+    } else {
+      // First pass with these blocks/width: compute no-hole layout
+      const noHole = computeFlowLayout(
+        blocks,
+        filler,
+        containerWidth,
+        null,
+        DEFAULT_METRICS,
+      );
+      noHoleBlocks = blocks;
+      noHoleWidth = containerWidth;
+      noHoleResult = noHole;
+
+      if (
+        !holeIntersectsContent(
+          candidateHole,
+          noHole.totalHeight,
+          containerWidth,
+        )
+      ) {
+        result = noHole;
+        hole = null;
+      } else {
+        hole = candidateHole;
+        result = computeFlowLayout(
+          blocks,
+          filler,
+          containerWidth,
+          hole,
+          DEFAULT_METRICS,
+        );
+      }
+    }
+
     layoutResult = result;
     layoutHole = hole;
 
     // Record inputs so the next frame can skip if nothing changed.
     prevBlocks = blocks;
     prevContainerWidth = containerWidth;
-    prevHoleLeft = hole.left;
-    prevHoleTop = hole.top;
-    prevHoleRight = hole.right;
-    prevHoleBottom = hole.bottom;
+    prevHoleLeft = hole?.left ?? NaN;
+    prevHoleTop = hole?.top ?? NaN;
+    prevHoleRight = hole?.right ?? NaN;
+    prevHoleBottom = hole?.bottom ?? NaN;
 
     // Publish geometry for cross-module consumption.
     // Capture per-pass values so closures stay self-consistent.
     const passContainerTop = containerTop;
-    const passContainerLeft = contLeft;
+    const passContainerLeft = containerLeft;
     const passContainerWidth = containerWidth;
     const passFrameRect = {
       left: frameRect.left,
@@ -531,6 +618,8 @@
     // Read all reactive dependencies that should trigger relayout
     void prepared;
     void containerWidth;
+    void containerTop;
+    void containerLeft;
     void frameRect.left;
     void frameRect.top;
     void frameRect.outerW;
@@ -636,13 +725,27 @@
     blockGeo: { topY: number; bottomY: number };
   }
 
+  // Asymmetric enter/leave margins prevent a figure oscillating across
+  // the boundary from unmounting and remounting ClipFigure (which
+  // destroys its video element and IntersectionObserver). Enter at 1
+  // viewport; leave only after 1.5 viewports of distance.
+  const FIGURE_ENTER_BUFFER_RATIO = 1;
+  const FIGURE_LEAVE_BUFFER_RATIO = 1.5;
+
+  // Track which block indices are currently mounted, so the wider leave
+  // margin can keep them alive after they would have failed the enter
+  // test. The tracker is scratch memory updated inside the $derived.by
+  // and read only there, so it lives outside component state.
+  const figureHysteresis = createFigureHysteresis();
+
   let visibleFigures: VisibleFigure[] = $derived.by(() => {
     if (layoutResult === null) return [];
     if (layoutResult.blocks.length !== blocks.length) return [];
 
     const vpTop = scrollY;
     const vpBottom = vpTop + viewportH;
-    const buffer = viewportH;
+    const enterBuffer = viewportH * FIGURE_ENTER_BUFFER_RATIO;
+    const leaveBuffer = viewportH * FIGURE_LEAVE_BUFFER_RATIO;
 
     const result: VisibleFigure[] = [];
     for (const fig of layoutResult.figures) {
@@ -650,9 +753,13 @@
       const block = blocks.at(fig.blockIndex);
       if (blockGeo === undefined || block === undefined) continue;
       if (block.kind !== "figure") continue;
+
+      const wasMounted = figureHysteresis.wasMounted(fig.blockIndex);
+      const buffer = wasMounted ? leaveBuffer : enterBuffer;
       if (!isBlockVisible(blockGeo, containerTop, vpTop, vpBottom, buffer)) {
         continue;
       }
+      figureHysteresis.keep(fig.blockIndex);
       result.push({
         blockIndex: fig.blockIndex,
         block,
@@ -660,6 +767,7 @@
         blockGeo,
       });
     }
+    figureHysteresis.commit();
     return result;
   });
 
@@ -783,16 +891,19 @@
   const FADE_DISTANCE = 600;
   const FADE_FLOOR = 0.35;
 
-  /** Reading line in viewport space, refreshed with the layout. */
-  let readingLine = $state(0);
-
-  $effect(() => {
-    // Track the same inputs the layout does: the line is derived from
-    // viewport size, and scrolling changes which blocks sit near it.
+  /** Reading line in viewport space. Derived from viewportH and scrollY
+   *  so it tracks the same inputs the layout does. */
+  let readingLine: number = $derived.by(() => {
+    // Read reactive deps so Svelte tracks them
     void viewportH;
     void scrollY;
-    readingLine = readingLineY();
+    return readingLineY();
   });
+
+  /** Number of discrete opacity steps. 20 steps gives 5% increments,
+   *  which the 0.2s CSS transition smooths between. Most scroll frames
+   *  land on the same step, so no style write occurs. */
+  const FADE_STEPS = 20;
 
   function fadeFor(blockTopY: number, blockBottomY: number): number {
     if (readingLine <= 0) return 1;
@@ -802,7 +913,8 @@
     const midDocY = containerTop + (blockTopY + blockBottomY) / 2;
     const dist = Math.abs(midDocY - scrollY - readingLine);
     const fade = Math.min(1, dist / FADE_DISTANCE);
-    return 1 - fade * (1 - FADE_FLOOR);
+    const continuous = 1 - fade * (1 - FADE_FLOOR);
+    return Math.round(continuous * FADE_STEPS) / FADE_STEPS;
   }
 
   // -----------------------------------------------------------------------
@@ -1010,10 +1122,8 @@
       {#if tag === "h2"}
         <h2
           class="flow-block"
-          style="top: {vb.geo.topY}px; opacity: {fadeFor(
-            vb.geo.topY,
-            vb.geo.bottomY,
-          )};"
+          style:top="{vb.geo.topY}px"
+          style:opacity={fadeFor(vb.geo.topY, vb.geo.bottomY)}
         >
           {#each vb.lines as line, li (li)}
             <span
@@ -1022,12 +1132,9 @@
                 activeSection,
                 activeSub,
               )}"
-              style="
-                left: {line.x}px;
-                top: {line.y - vb.geo.topY}px;
-                width: {line.width}px;
-                {KIND_STYLE_PREFIX[vb.block.kind]}
-              ">{line.text}</span
+              style:left="{line.x}px"
+              style:top="{line.y - vb.geo.topY}px"
+              style:width="{line.width}px">{line.text}</span
             >
           {/each}
         </h2>
@@ -1036,10 +1143,8 @@
         <h3
           class="flow-block"
           class:flow-block--focusable={isFocusable}
-          style="top: {vb.geo.topY}px; opacity: {fadeFor(
-            vb.geo.topY,
-            vb.geo.bottomY,
-          )};"
+          style:top="{vb.geo.topY}px"
+          style:opacity={fadeFor(vb.geo.topY, vb.geo.bottomY)}
           role={isFocusable ? "button" : undefined}
           tabindex={isFocusable ? 0 : undefined}
           data-section-id={vb.block.sectionId}
@@ -1053,22 +1158,17 @@
                 activeSection,
                 activeSub,
               )}"
-              style="
-                left: {line.x}px;
-                top: {line.y - vb.geo.topY}px;
-                width: {line.width}px;
-                {KIND_STYLE_PREFIX[vb.block.kind]}
-              ">{line.text}</span
+              style:left="{line.x}px"
+              style:top="{line.y - vb.geo.topY}px"
+              style:width="{line.width}px">{line.text}</span
             >
           {/each}
         </h3>
       {:else}
         <p
           class="flow-block"
-          style="top: {vb.geo.topY}px; opacity: {fadeFor(
-            vb.geo.topY,
-            vb.geo.bottomY,
-          )};"
+          style:top="{vb.geo.topY}px"
+          style:opacity={fadeFor(vb.geo.topY, vb.geo.bottomY)}
         >
           {#each vb.lines as line, li (li)}
             <span
@@ -1077,12 +1177,9 @@
                 activeSection,
                 activeSub,
               )}"
-              style="
-                left: {line.x}px;
-                top: {line.y - vb.geo.topY}px;
-                width: {line.width}px;
-                {KIND_STYLE_PREFIX[vb.block.kind]}
-              ">{line.text}</span
+              style:left="{line.x}px"
+              style:top="{line.y - vb.geo.topY}px"
+              style:width="{line.width}px">{line.text}</span
             >
           {/each}
         </p>
@@ -1093,13 +1190,11 @@
     {#each visibleFigures as vf (vf.block.id)}
       <div
         class="flow-figure"
-        style="
-          left: {vf.geo.x}px;
-          top: {vf.geo.y}px;
-          width: {vf.geo.width}px;
-          height: {vf.geo.height}px;
-          opacity: {fadeFor(vf.blockGeo.topY, vf.blockGeo.bottomY)};
-        "
+        style:left="{vf.geo.x}px"
+        style:top="{vf.geo.y}px"
+        style:width="{vf.geo.width}px"
+        style:height="{vf.geo.height}px"
+        style:opacity={fadeFor(vf.blockGeo.topY, vf.blockGeo.bottomY)}
       >
         <ClipFigure
           sectionId={vf.block.sectionId}
@@ -1173,6 +1268,8 @@
 
   /* Section title: dark text, weight 700 */
   .flow-line--title {
+    font: 700 24px "Atkinson Hyperlegible Next";
+    line-height: 32px;
     color: #1d1d1f;
   }
   :global(html.dark) .flow-line--title {
@@ -1181,6 +1278,8 @@
 
   /* Section description: muted text */
   .flow-line--desc {
+    font: 400 15px "Atkinson Hyperlegible Next";
+    line-height: 24px;
     color: #636366;
   }
   :global(html.dark) .flow-line--desc {
@@ -1189,14 +1288,18 @@
 
   /* Sub heading: dark text */
   .flow-line--sub-heading {
+    font: 700 18px "Atkinson Hyperlegible Next";
+    line-height: 24px;
     color: #1d1d1f;
   }
   :global(html.dark) .flow-line--sub-heading {
     color: #f5f5f7;
   }
 
-  /* Active sub heading: accent color */
+  /* Active sub heading: accent color (inherits sub-heading font) */
   .flow-line--active-heading {
+    font: 700 18px "Atkinson Hyperlegible Next";
+    line-height: 24px;
     color: #007aff;
   }
   :global(html.dark) .flow-line--active-heading {
@@ -1205,6 +1308,8 @@
 
   /* Sub body: slightly muted text */
   .flow-line--sub-body {
+    font: 400 15px "Atkinson Hyperlegible Next";
+    line-height: 24px;
     color: #424245;
   }
   :global(html.dark) .flow-line--sub-body {

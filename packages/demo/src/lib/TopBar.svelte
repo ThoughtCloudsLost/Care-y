@@ -10,6 +10,7 @@
   } from "@lucide/svelte";
   import * as m from "$lib/paraglide/messages.js";
   import { SECTIONS, type SectionId } from "./scroll-sections.js";
+  import { resolveStoryMessage } from "./story-messages.js";
   import type { DemoMode } from "./demo-mode.svelte.js";
 
   interface Props {
@@ -47,25 +48,9 @@
     onToggleMode,
   }: Props = $props();
 
-  /** Message-function lookup by section titleKey */
+  /** Section title via the canonical story-messages resolver. */
   function sectionLabel(titleKey: string): string {
-    // Read locale prop to establish reactive dependency (re-render on change)
-    void locale;
-    const lookup: Record<string, () => string> = {
-      demo_section_login_title: () => m.demo_section_login_title(),
-      demo_section_tickets_title: () => m.demo_section_tickets_title(),
-      demo_section_ticket_detail_title: () =>
-        m.demo_section_ticket_detail_title(),
-      demo_section_search_title: () => m.demo_section_search_title(),
-      demo_section_dashboard_title: () => m.demo_section_dashboard_title(),
-      demo_section_library_title: () => m.demo_section_library_title(),
-      demo_section_admin_title: () => m.demo_section_admin_title(),
-      demo_section_schedule_title: () => m.demo_section_schedule_title(),
-      demo_section_settings_title: () => m.demo_section_settings_title(),
-    };
-    // eslint-disable-next-line security/detect-object-injection -- key is a section titleKey from config, not user input
-    const fn = lookup[titleKey];
-    return fn !== undefined ? fn() : titleKey;
+    return resolveStoryMessage(titleKey, locale);
   }
 </script>
 

@@ -1,6 +1,6 @@
 <script lang="ts">
   import { Check } from "@lucide/svelte";
-  import { resolveStoryMessage } from "./story-messages.js";
+  import { resolveStoryMessage, deriveSubState } from "./story-messages.js";
   import type { Section, SectionId } from "./scroll-sections.js";
   import type { DemoTopic } from "./bridge.js";
 
@@ -42,8 +42,14 @@
 <nav class="section-rail" aria-label={msg(section.titleKey)}>
   <ol class="rail-list">
     {#each section.subs as sub, i (sub.slug)}
-      {@const isActive = activeSub === sub.slug}
-      {@const isSeen = sub.topic !== null && seenTopics.has(sub.topic)}
+      {@const state = deriveSubState(
+        sub.slug,
+        activeSub,
+        sub.topic,
+        seenTopics,
+      )}
+      {@const isActive = state.isActive}
+      {@const isSeen = state.isSeen}
       <li>
         {#if interactive}
           <button

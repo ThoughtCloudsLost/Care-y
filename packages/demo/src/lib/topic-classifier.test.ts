@@ -1,5 +1,9 @@
 import { describe, it, expect } from "vitest";
-import { classifyDemoLabel } from "./topic-classifier.js";
+import {
+  classifyDemoLabel,
+  matchesAnyLocale,
+  invalidateClassifierCache,
+} from "./topic-classifier.js";
 import type { ClassifierContext } from "./topic-classifier.js";
 
 const listCtx: ClassifierContext = { inDetail: false, feature: "tickets" };
@@ -379,6 +383,42 @@ describe("classifyDemoLabel", () => {
   it("classifies Two-factor authentication as settings-2fa", () => {
     expect(classifyDemoLabel("Two-factor authentication", settingsCtx)).toBe(
       "settings-2fa",
+    );
+  });
+
+  it("survives a cache invalidation without changing results", () => {
+    // The classifier uses a lazy-built map. Invalidating and re-classifying
+    // must produce identical results.
+    expect(classifyDemoLabel("Sort", listCtx)).toBe("sort");
+    invalidateClassifierCache();
+    expect(classifyDemoLabel("Sort", listCtx)).toBe("sort");
+  });
+});
+
+describe("matchesAnyLocale", () => {
+  it("returns true for an exact match in any locale", () => {
+    // "Sort" is the English tickets_sort label
+    expect(
+      matchesAnyLocale("Sort", (opts) => {
+        // Simplified: return the literal the real message fn produces
+        return opts.locale === "en" ? "Sort" : "Ordenar";
+      }),
+    ).toBe(true);
+  });
+
+  it("returns false when no locale matches", () => {
+    expect(matchesAnyLocale("Unknown", () => "Sort")).toBe(false);
+  });
+
+  it("supports includes mode", () => {
+    expect(
+      matchesAnyLocale("This has Sort in it", () => "Sort", "includes"),
+    ).toBe(true);
+  });
+
+  it("includes mode does not match when text does not contain the label", () => {
+    expect(matchesAnyLocale("No match here", () => "Sort", "includes")).toBe(
+      false,
     );
   });
 });

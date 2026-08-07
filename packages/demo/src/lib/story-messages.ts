@@ -224,6 +224,34 @@ export function resolveStoryMessage(key: string, locale: string): string {
   return fn !== undefined ? fn() : key;
 }
 
+// -----------------------------------------------------------------------
+// Sub-item state derivation
+//
+// Shared between SectionRail and SectionIntro to keep the isActive /
+// isSeen logic in one place.
+// -----------------------------------------------------------------------
+
+export interface SubItemState {
+  readonly isActive: boolean;
+  readonly isSeen: boolean;
+}
+
+/**
+ * Derive the display state for a sub-section item.
+ * Used by both the rail and the intro TOC.
+ */
+export function deriveSubState(
+  subSlug: string,
+  activeSub: string | null,
+  subTopic: string | null,
+  seenTopics: ReadonlySet<string>,
+): SubItemState {
+  return {
+    isActive: activeSub === subSlug,
+    isSeen: subTopic !== null && seenTopics.has(subTopic),
+  };
+}
+
 /**
  * Resolve a parameterized message. Used for keys that accept substitution
  * parameters (for example demo_figure_aria_label with {sub}).
