@@ -116,14 +116,31 @@ try {
 }
 
 // -----------------------------------------------------------------------
-// Engine boot (starts immediately, before mount)
+// Engine boot (starts after the first frame commits)
 // -----------------------------------------------------------------------
 
 // Dynamic import moves the engine (PGlite, migrations, seeds, router)
-// off the initial chunk. Boot starts immediately at module evaluation;
-// only the bytes are deferred, not the work.
-const enginePromise: Promise<DemoEngineResult> =
-  import("./lib/engine/engine.js").then(async (mod) => mod.bootDemoEngine());
+// off the initial chunk. Issuing the import at module evaluation still
+// put the chunk's fetch, parse, and wasm compile in contention with the
+// login screen's first paint on this same thread, so the import waits
+// for one frame plus a macrotask: the frame commits, then boot starts
+// within a few ms of load. The rAF guard covers non-browser test envs.
+const afterFirstPaint = new Promise<void>((resolve) => {
+  if (typeof requestAnimationFrame === "function") {
+    requestAnimationFrame(() => {
+      setTimeout(resolve, 0);
+    });
+  } else {
+    setTimeout(resolve, 0);
+  }
+});
+
+const enginePromise: Promise<DemoEngineResult> = afterFirstPaint
+  .then(async () => {
+    performance.mark("demo-engine-import-start");
+    return import("./lib/engine/engine.js");
+  })
+  .then(async (mod) => mod.bootDemoEngine());
 
 // setEngineTrpc accepts a Promise: calls to trpc.* before boot
 // completes will await it. A rejected boot surfaces through the
