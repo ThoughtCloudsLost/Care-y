@@ -285,12 +285,22 @@ export interface SmsResponsesTable {
 export interface ConsultantsTable {
   id: Generated<string>;
   user_id: string;
-  encrypted_phone: Buffer;
-  phone_hash: string;
+  encrypted_phone: ColumnType<
+    Buffer | null,
+    Buffer | null | undefined,
+    Buffer | null
+  >;
   is_verified: ColumnType<boolean, boolean | undefined, boolean>;
   verification_code_hash: string | null;
   verification_expires_at: Date | null;
   preferred_call_method: string;
+  ops_phone_hash: string | null;
+  ops_encrypted_phone: Buffer | null;
+  sms_pings_enabled: ColumnType<boolean, boolean | undefined, boolean>;
+  verify_sends_hour_start: Date | null;
+  verify_sends_in_hour: ColumnType<number, number | undefined, number>;
+  verify_last_sent_at: Date | null;
+  verification_attempts: ColumnType<number, number | undefined, number>;
   created_at: Generated<Date>;
   updated_at: Generated<Date>;
 }

@@ -1,12 +1,12 @@
 /**
  * Volunteer self-service routes for personal phone registration.
  *
- * Volunteers register their personal phone number (client-side sealed-box
- * encrypted) for callback flows. Business logic (code generation, hashing,
- * verification, lookup) is delegated to ConsultantService.
+ * Volunteers register metadata (preferred call method, SMS pings opt-in)
+ * via tRPC. Phone numbers are submitted exclusively through the relay
+ * verification endpoint (ADR-065: single write path). The server never
+ * sees plaintext phone numbers in tRPC inputs.
  *
  * All endpoints require org + auth + completed 2FA (authed2faProcedure).
- * The server never sees or returns the plaintext phone number.
  */
 
 import { router, authed2faProcedure, withErrorWrapping } from "../trpc/trpc.js";
@@ -20,6 +20,7 @@ import {
   updateConsultantInputSchema,
   verifyConsultantInputSchema,
 } from "@care-y/shared";
+import { z } from "zod";
 
 export interface ConsultantRouterDeps {
   readonly createService: (
@@ -30,6 +31,10 @@ export interface ConsultantRouterDeps {
 const defaultDeps: ConsultantRouterDeps = {
   createService: createConsultantService,
 };
+
+const setSmsPingsInputSchema = z.object({
+  enabled: z.boolean(),
+});
 
 // care-y-ignore-next-line missing-return-type -- tRPC router() returns a deeply generic type that cannot be written explicitly
 export function createConsultantRouter(
@@ -48,12 +53,10 @@ export function createConsultantRouter(
     register: authed2faProcedure.input(registerConsultantInputSchema).mutation(
       withErrorWrapping(async ({ ctx, input }) => {
         const svc = createService(ctx.org.tenantDb);
-        const encryptedPhone = Buffer.from(input.encryptedPhone, "base64");
         return svc.register(
           ctx.user.id,
-          encryptedPhone,
-          input.phoneHash,
           input.preferredCallMethod,
+          input.smsPingsOptIn,
         );
       }),
     ),
@@ -77,6 +80,14 @@ export function createConsultantRouter(
           return { success: true as const };
         }),
       ),
+
+    setSmsPings: authed2faProcedure.input(setSmsPingsInputSchema).mutation(
+      withErrorWrapping(async ({ ctx, input }) => {
+        const svc = createService(ctx.org.tenantDb);
+        await svc.setSmsPings(ctx.user.id, input.enabled);
+        return { success: true as const };
+      }),
+    ),
 
     delete: authed2faProcedure.mutation(
       withErrorWrapping(async ({ ctx }) => {

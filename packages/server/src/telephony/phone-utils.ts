@@ -153,3 +153,38 @@ export function normalizePhoneNumber(raw: string, countryCode: string): string {
 export function isE164(phone: string): boolean {
   return /^\+[1-9]\d{6,14}$/.test(phone);
 }
+
+// Byte constants for E.164 validation
+const BYTE_PLUS = 0x2b; // '+'
+const BYTE_0 = 0x30; // '0'
+const BYTE_1 = 0x31; // '1'
+const BYTE_9 = 0x39; // '9'
+
+/**
+ * Validates that a Buffer contains a valid E.164 phone number by inspecting
+ * raw bytes. Never converts to a JS string (relay-grade code paths require
+ * Buffer-only handling to preserve zeroability).
+ *
+ * Mirrors the isE164(string) regex: ^\+[1-9]\d{6,14}$
+ * Total length: 8-16 bytes ('+' plus 7-15 digits).
+ */
+export function isE164Buffer(buf: Buffer): boolean {
+  const len = buf.length;
+  // '+' (1 byte) + 7..15 digits = 8..16 total bytes
+  if (len < 8 || len > 16) return false;
+
+  // First byte must be '+'
+  if (buf.at(0) !== BYTE_PLUS) return false;
+
+  // Second byte must be '1'-'9' (no leading zero after '+')
+  const second = buf.at(1);
+  if (second === undefined || second < BYTE_1 || second > BYTE_9) return false;
+
+  // Remaining bytes must be '0'-'9'
+  for (let i = 2; i < len; i++) {
+    const b = buf.at(i);
+    if (b === undefined || b < BYTE_0 || b > BYTE_9) return false;
+  }
+
+  return true;
+}

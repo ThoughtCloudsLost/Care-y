@@ -40,6 +40,9 @@ const testNoopIndexer: BlindIndexer = {
   hash(input: string, orgId: string): string {
     return `hash(${input}:${orgId})`;
   },
+  hashBuffer(input: Buffer, orgId: string): string {
+    return `hash(${input.toString("utf-8")}:${orgId})`;
+  },
 };
 
 // ---------------------------------------------------------------------------
