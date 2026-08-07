@@ -50,6 +50,7 @@
     type SectionId,
     type Section,
   } from "$demo/scroll-sections.js";
+  import { resolveStoryMessage } from "$demo/story-messages.js";
   import type { DemoBridge, DemoBridgeState, DemoTopic } from "$demo/bridge.js";
   import { DEMO_TOPICS } from "$demo/bridge.js";
   import {
@@ -157,9 +158,14 @@
   /** Whether the peek is in a non-idle phase (active for UI gating). */
   const peekActive: boolean = $derived(peekCtrl.phase !== "idle");
 
-  // Tear down the prewarm observer when the component unmounts
+  // Tear down observers and listeners when the component unmounts
   $effect(() => {
-    return () => prewarm.destroy();
+    return () => {
+      prewarm.destroy();
+      scrollEngine.destroy();
+      unsubscribe?.();
+      unsubscribeFlow?.();
+    };
   });
 
   // Clamp position on window resize so the frame stays reachable
@@ -275,10 +281,17 @@
     gestureActive = true;
   }
 
-  function onPointerMove(e: PointerEvent): void {
-    if (gesture?.pointerId !== e.pointerId) return;
-    const dx = e.clientX - gesture.startX;
-    const dy = e.clientY - gesture.startY;
+  // rAF handle for coalesced gesture writes. Stored so pointerup/cancel
+  // can cancel the pending frame and apply the final position once.
+  let gestureRaf = 0;
+  let lastPointerX = 0;
+  let lastPointerY = 0;
+
+  function applyGestureFrame(): void {
+    gestureRaf = 0;
+    if (gesture === null) return;
+    const dx = lastPointerX - gesture.startX;
+    const dy = lastPointerY - gesture.startY;
 
     if (gesture.mode === "drag") {
       geo.setPosition(gesture.startTop + dy, gesture.startLeft + dx);
@@ -306,8 +319,25 @@
     geo.setPosition(newTop, newLeft);
   }
 
+  function onPointerMove(e: PointerEvent): void {
+    if (gesture?.pointerId !== e.pointerId) return;
+    lastPointerX = e.clientX;
+    lastPointerY = e.clientY;
+    if (gestureRaf === 0) {
+      gestureRaf = requestAnimationFrame(applyGestureFrame);
+    }
+  }
+
   function onPointerUp(e: PointerEvent): void {
     if (gesture?.pointerId !== e.pointerId) return;
+    // Cancel any pending rAF and apply the final position synchronously
+    if (gestureRaf !== 0) {
+      cancelAnimationFrame(gestureRaf);
+      gestureRaf = 0;
+    }
+    lastPointerX = e.clientX;
+    lastPointerY = e.clientY;
+    applyGestureFrame();
     // Settle the shrink state now that the footprint is final. Evaluated
     // on release rather than during the move: a drag sweeps back and
     // forth across the threshold, and reacting live would flip the
@@ -326,13 +356,6 @@
   const fpW = new Spring(geo.footprintW, { stiffness: 0.12, damping: 0.6 });
   const fpH = new Spring(geo.footprintH, { stiffness: 0.12, damping: 0.6 });
   let animating = $state(false);
-
-  // Blur cover fallback (approved but default off; flip the return to enable
-  // if live reflow stutters during preset animation)
-  function blurCoverEnabled(): boolean {
-    return false;
-  }
-  let showBlurCover = $state(false);
 
   // Edges the frame holds onto while a preset resizes it, so it grows
   // toward the middle of the viewport instead of off the side or bottom.
@@ -433,7 +456,6 @@
     }
 
     animating = true;
-    if (blurCoverEnabled()) showBlurCover = true;
 
     // Sync springs to current values before retargeting
     void fpW.set(geo.footprintW, { instant: true });
@@ -460,7 +482,6 @@
     const hDone = Math.abs(h - fpH.target) < 0.5;
     if (wDone && hDone) {
       animating = false;
-      showBlurCover = false;
       // Snap to exact target
       geo.setFootprint(fpW.target, fpH.target);
       const final = positionFor(
@@ -897,8 +918,6 @@
     // The iframe must NOT be unmounted (load-bearing invariant).
   });
 
-  const RAIL_BREAKPOINT = 900;
-
   // A single-sub section (the coming-soon placeholder) has nothing to
   // navigate between, so the rail would be a list of one.
   //
@@ -907,7 +926,7 @@
   // inert there, matching the existing rule that entry sub clicks do
   // nothing.
   const showRail: boolean = $derived(
-    windowW >= RAIL_BREAKPOINT && activeSectionDef.subs.length > 1,
+    windowW >= WIDE_BREAKPOINT && activeSectionDef.subs.length > 1,
   );
 
   // Held in a derived rather than built inline in the markup so the array
@@ -927,29 +946,14 @@
     return idx >= 0 ? (SECTIONS.at(idx + 1) ?? null) : null;
   });
 
+  /** Section title lookup keyed by titleKey in the canonical SECTIONS list. */
   function sectionTitle(id: SectionId): string {
-    switch (id) {
-      case "login":
-        return m.demo_section_login_title();
-      case "tickets":
-        return m.demo_section_tickets_title();
-      case "ticket-detail":
-        return m.demo_section_ticket_detail_title();
-      case "search":
-        return m.demo_section_search_title();
-      case "dashboard":
-        return m.demo_section_dashboard_title();
-      case "library":
-        return m.demo_section_library_title();
-      case "admin":
-        return m.demo_section_admin_title();
-      case "schedule":
-        return m.demo_section_schedule_title();
-      case "settings":
-        return m.demo_section_settings_title();
-      case "coming-soon":
-        return m.demo_coming_soon_title();
+    if (id === "coming-soon") {
+      return resolveStoryMessage("demo_coming_soon_title", uiLocale);
     }
+    const section = SECTIONS.find((s) => s.id === id);
+    if (section === undefined) return id;
+    return resolveStoryMessage(section.titleKey, uiLocale);
   }
 
   // Record mode: flat backdrop, no story chrome. The flag is static
@@ -1010,6 +1014,8 @@
   style:left="{geo.left}px"
   style:width="{geo.outerW}px"
   style:height="{geo.outerH}px"
+  style:--chrome-top-h="{CHROME_TOP_H}px"
+  style:--chrome-left-w="{CHROME_LEFT_W}px"
 >
   <!-- L-shaped chrome: corner grip + top arm (presets, shrink, link)
        + left arm (role seals). Both arms sit fully outside the frame
@@ -1269,11 +1275,6 @@
       </button>
     </div>
   {/if}
-
-  <!-- Blur cover for preset animation (behind flag, default off) -->
-  {#if showBlurCover}
-    <div class="blur-cover" aria-hidden="true"></div>
-  {/if}
 </div>
 
 {#if !recordMode}
@@ -1308,10 +1309,7 @@
               />
               <!-- First snap target on the page, so it holds the
                  selection slot before anything is selected. -->
-              <StoryTip
-                selectable={!entryVisible}
-                frameRect={chromeFrameRect}
-              />
+              <StoryTip frameRect={chromeFrameRect} />
               <FlowStory
                 sections={pageSections}
                 locale={uiLocale}
@@ -1378,6 +1376,7 @@
     z-index: 1;
   }
 
+  /* 900px mirrors WIDE_BREAKPOINT from frame-geometry.svelte.ts */
   @media (min-width: 900px) {
     .flow-story-wrapper {
       padding-top: 1.5rem;
@@ -1764,28 +1763,6 @@
     width: 12px;
     height: 12px;
     cursor: nw-resize;
-  }
-
-  /* Blur cover (fallback for preset animations, default off) */
-  .blur-cover {
-    position: absolute;
-    inset: 0;
-    z-index: 5;
-    backdrop-filter: blur(8px);
-    -webkit-backdrop-filter: blur(8px);
-    background: rgba(0, 0, 0, 0.05);
-    border-radius: inherit;
-    pointer-events: none;
-    animation: blur-fade-in 0.15s ease-out;
-  }
-
-  @keyframes blur-fade-in {
-    from {
-      opacity: 0;
-    }
-    to {
-      opacity: 1;
-    }
   }
 
   /* -----------------------------------------------------------------------

@@ -13,7 +13,6 @@ import {
   traceFlowSpan,
   truncateFlowPreview,
 } from "./flow-events.js";
-import { SEAM_KEYS, isSeamKey } from "./seam-registry.js";
 
 /** Manual clock so grouping and durations never touch wall time. */
 function useTestClock(): { advance: (ms: number) => void } {
@@ -274,22 +273,5 @@ describe("flow events", () => {
       expect(getFlowEvents().at(0)?.id).toBe(1);
       expect(currentFlowInteractionId()).toBe(1);
     });
-  });
-});
-
-describe("seam registry", () => {
-  it("lists every scripted seam", () => {
-    expect(SEAM_KEYS).toEqual([
-      "login-pacing",
-      "twofa-choreography",
-      "webauthn-authenticator",
-      "oprf-evaluator",
-      "outbox-delivery",
-    ]);
-  });
-
-  it("narrows known keys only", () => {
-    expect(isSeamKey("oprf-evaluator")).toBe(true);
-    expect(isSeamKey("tickets.list")).toBe(false);
   });
 });

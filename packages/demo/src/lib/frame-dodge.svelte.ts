@@ -28,13 +28,28 @@ export interface DodgeFrameRect {
   readonly outerH: number;
 }
 
+/** Cached document-space box for the observed element. */
+export interface DodgeBox {
+  /** Document-space top offset. */
+  readonly docTop: number;
+  readonly left: number;
+  readonly width: number;
+  readonly height: number;
+}
+
 export interface FrameDodge {
   /** Left inset in px. */
   readonly left: number;
   /** Right inset in px. */
   readonly right: number;
+  /** Cached document-space box, or null before first measurement. */
+  readonly box: DodgeBox | null;
+  /** Current scroll position tracked by this dodge instance. */
+  readonly scrollY: number;
   /** Attach to the element being dodged. */
   observe(el: HTMLElement | undefined): void;
+  /** Force a re-measure of the element's box. */
+  remeasure(): void;
 }
 
 export interface FrameDodgeOptions {
@@ -76,6 +91,10 @@ export function createFrameDodge(
     return () => window.removeEventListener("scroll", sync);
   });
 
+  // Exposed so callers can trigger a re-measure when something outside
+  // the element (e.g. the top chrome height) moves it.
+  let measureFn: (() => void) | null = null;
+
   // Re-measure only when the element or the window resizes. Reading
   // layout on every scroll frame is what this avoids: it forces a
   // synchronous reflow, and the result is written straight back as a
@@ -84,6 +103,7 @@ export function createFrameDodge(
     const target = el;
     if (target === undefined) {
       box = null;
+      measureFn = null;
       return;
     }
 
@@ -98,6 +118,7 @@ export function createFrameDodge(
       };
     }
     measure();
+    measureFn = measure;
 
     const ro = new ResizeObserver(measure);
     ro.observe(target);
@@ -105,6 +126,7 @@ export function createFrameDodge(
     return () => {
       ro.disconnect();
       window.removeEventListener("resize", measure);
+      measureFn = null;
     };
   });
 
@@ -165,8 +187,17 @@ export function createFrameDodge(
     get right(): number {
       return right;
     },
+    get box(): DodgeBox | null {
+      return box;
+    },
+    get scrollY(): number {
+      return scrollY;
+    },
     observe(next: HTMLElement | undefined): void {
       el = next;
+    },
+    remeasure(): void {
+      measureFn?.();
     },
   };
 }

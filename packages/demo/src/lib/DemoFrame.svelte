@@ -65,6 +65,11 @@
     return () => clearInterval(id);
   });
 
+  // rAF handle for the bridge acquisition loop. Stored so a reload()
+  // during the retry window can cancel the in-flight loop before
+  // starting a fresh one (prevents two loops racing).
+  let bridgeRaf = 0;
+
   /**
    * Poll for the demoBridge on the iframe's contentWindow. The phone app
    * assigns it synchronously during module execution (before the load
@@ -76,6 +81,7 @@
     let attempt = 0;
 
     function poll(): void {
+      bridgeRaf = 0;
       const bridge = win.demoBridge;
       if (bridge !== undefined) {
         onbridgeready(bridge);
@@ -83,14 +89,22 @@
       }
       attempt += 1;
       if (attempt < MAX_ATTEMPTS) {
-        requestAnimationFrame(poll);
+        bridgeRaf = requestAnimationFrame(poll);
       }
     }
 
     poll();
   }
 
+  function cancelPendingBridgePoll(): void {
+    if (bridgeRaf !== 0) {
+      cancelAnimationFrame(bridgeRaf);
+      bridgeRaf = 0;
+    }
+  }
+
   function handleLoad(): void {
+    cancelPendingBridgePoll();
     const win = iframeEl?.contentWindow;
     if (win === null || win === undefined) return;
     acquireBridge(win);
@@ -98,6 +112,7 @@
 
   /** Reload the phone iframe for a full app restart. */
   export function reload(): void {
+    cancelPendingBridgePoll();
     iframeEl?.contentWindow?.location.reload();
   }
 

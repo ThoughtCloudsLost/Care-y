@@ -25,17 +25,16 @@
     unregisterDemoNavigationHandler,
   } from "$app/navigation";
   import * as m from "$lib/paraglide/messages.js";
-  import { locales } from "$lib/paraglide/runtime.js";
   import type { TabId, AreaId } from "$lib/shell/types.js";
   import AppShell from "$lib/shell/AppShell.svelte";
   import DemoSplash from "$demo/DemoSplash.svelte";
-  import LoginMount from "$demo/scenes/LoginMount.svelte";
+  import LoginMount from "$demo/LoginMount.svelte";
   import RouteMount from "$demo/engine/RouteMount.svelte";
   import { createDemoRouter } from "$demo/router.svelte.js";
   import { createDemoQueryClient } from "$demo/demo-query-client.js";
   import { createDemoLocationStore } from "$demo/demo-location.svelte.js";
   import type { PhoneCommand } from "$demo/scroll-sections.js";
-  import { routeForSlug } from "$demo/scroll-sections.js";
+  import { routeForSlug, pathnameForRouteId } from "$demo/scroll-sections.js";
   import { listRouteIds } from "$demo/engine/route-manifest.js";
   import {
     demoSeed,
@@ -43,7 +42,11 @@
     setRoleAndPermissions,
   } from "$lib/crypto/context.js";
   import { RoleId, type RoleIdValue } from "@care-y/shared";
-  import { classifyDemoLabel } from "$demo/topic-classifier.js";
+  import {
+    classifyDemoLabel,
+    matchesAnyLocale,
+    type DemoLocale,
+  } from "$demo/topic-classifier.js";
   import {
     getLoginStage,
     setLoginStage,
@@ -69,6 +72,12 @@
     activateSettingsDriver,
     deactivateSettingsDriver,
   } from "$demo/settings-driver.js";
+  import {
+    pollUntil,
+    POLL_TIMEOUT_SHORT_MS,
+    POLL_TIMEOUT_MEDIUM_MS,
+    POLL_TIMEOUT_STANDARD_MS,
+  } from "$demo/poll.js";
   import type { DemoEngineResult } from "$demo/engine/engine.js";
   import { onOutboxAppend } from "$demo/engine/outbox.js";
   import {
@@ -94,7 +103,8 @@
   // Props
   // -----------------------------------------------------------------------
 
-  let { engineReady }: { engineReady: Promise<DemoEngineResult> } = $props();
+  let { enginePromise }: { enginePromise: Promise<DemoEngineResult> } =
+    $props();
 
   // -----------------------------------------------------------------------
   // Router + query client
@@ -118,7 +128,7 @@
   // Flipped once (false -> true) when the PGlite engine finishes
   // booting. Never resets; a failed boot leaves it false so the
   // peek surface keeps showing the blurred still.
-  let engineBooted = $state(false);
+  let engineReady = $state(false);
 
   // Resolved engine instance, captured for the role switcher handler.
   let resolvedEngine: DemoEngineResult | null = null;
@@ -133,15 +143,24 @@
 
   /**
    * Map the outer-page sentinel to the real ID. Returns the real
-   * ID when the sentinel is passed and the engine has resolved,
-   * or the original detail value otherwise.
+   * ID when the sentinel is passed and the engine has resolved.
+   *
+   * When the engine has not resolved, behavior depends on `unresolved`:
+   *   "sentinel" (default) - returns the sentinel value unchanged
+   *   "null" - returns null, so callers that need a valid ID can
+   *            fall back to the list rather than navigating to a dead ID
    */
-  function sentinelToReal(detail: DemoDetail): DemoDetail {
-    if (detail === DEMO_DETAIL_TICKET_ID && resolvedDetailId !== null) {
-      return resolvedDetailId;
+  function sentinelToReal(
+    detail: DemoDetail,
+    unresolved: "sentinel" | "null" = "sentinel",
+  ): DemoDetail {
+    if (detail === DEMO_DETAIL_TICKET_ID) {
+      if (resolvedDetailId !== null) return resolvedDetailId;
+      return unresolved === "null" ? null : detail;
     }
-    if (detail === DEMO_DETAIL_ARTICLE_ID && resolvedArticleId !== null) {
-      return resolvedArticleId;
+    if (detail === DEMO_DETAIL_ARTICLE_ID) {
+      if (resolvedArticleId !== null) return resolvedArticleId;
+      return unresolved === "null" ? null : detail;
     }
     return detail;
   }
@@ -150,10 +169,10 @@
   // finishes booting. Failures are already logged by phone-main.ts;
   // we catch here to avoid an unhandled rejection inside the component.
   //
-  // engineReady is a Promise prop set once at mount; capturing the
+  // enginePromise is a Promise prop set once at mount; capturing the
   // initial value is intentional (the prop never changes).
   // svelte-ignore state_referenced_locally
-  void engineReady
+  void enginePromise
     .then((e) => {
       demoSeed({
         userId: e.seedResult.adminUserId,
@@ -166,11 +185,11 @@
         resolvedArticleId = e.articleIds[0] ?? null;
       }
       resolvedEngine = e;
-      engineBooted = true;
+      engineReady = true;
     })
     .catch(() => {
       // Boot failure already surfaced by phone-main.ts console.error.
-      // engineBooted stays false so the peek keeps showing a blurred still.
+      // engineReady stays false so the peek keeps showing a blurred still.
     });
 
   // -----------------------------------------------------------------------
@@ -465,12 +484,7 @@
     if (cmd.routeSlug !== null) {
       const resolvedRouteId = routeForSlug(cmd.routeSlug, listRouteIds());
       if (resolvedRouteId !== null && !resolvedRouteId.includes("[")) {
-        // Strip group segments to build a navigable pathname.
-        const pathname =
-          resolvedRouteId
-            .split("/")
-            .filter((s) => !(s.startsWith("(") && s.endsWith(")")))
-            .join("/") || "/";
+        const pathname = pathnameForRouteId(resolvedRouteId);
 
         // The post-login fast-forward: if the phone is still on login,
         // run the same auth transition that internalNavigate provides
@@ -491,26 +505,13 @@
         findSearchButton()?.click();
         // The toggle reaches the router through Konsta's event; wait
         // for it so the convergence check sees the open overlay.
-        await waitFor(() => router.searchOpen, token, 1500);
+        await waitFor(() => router.searchOpen, token, POLL_TIMEOUT_SHORT_MS);
       }
     } else {
       // Translate sentinels at the phone boundary: if the engine
       // is not ready yet when a detail navigation arrives, fall back
       // to the list rather than navigating to a dead ID.
-      let targetDetail = cmd.detail;
-      if (targetDetail === DEMO_DETAIL_TICKET_ID) {
-        if (resolvedDetailId !== null) {
-          targetDetail = resolvedDetailId;
-        } else {
-          targetDetail = null;
-        }
-      } else if (targetDetail === DEMO_DETAIL_ARTICLE_ID) {
-        if (resolvedArticleId !== null) {
-          targetDetail = resolvedArticleId;
-        } else {
-          targetDetail = null;
-        }
-      }
+      const targetDetail = sentinelToReal(cmd.detail, "null");
       await internalNavigate(cmd.feature, targetDetail);
       if (cmd.loginTarget !== null) {
         await runAdvance(cmd.loginTarget, token);
@@ -527,12 +528,14 @@
    * the AppShell actually uses (m.nav_search), across all locales.
    */
   function findSearchButton(): HTMLElement | null {
-    for (const locale of locales) {
-      const label = m.nav_search({}, { locale });
-      const btn = document.querySelector<HTMLElement>(
-        `[role="button"][aria-label="${CSS.escape(label)}"]`,
-      );
-      if (btn !== null) return btn;
+    const buttons = document.querySelectorAll<HTMLElement>(
+      '[role="button"][aria-label]',
+    );
+    for (const btn of buttons) {
+      const label = btn.getAttribute("aria-label") ?? "";
+      if (matchesAnyLocale(label, (opts) => m.nav_search({}, opts))) {
+        return btn;
+      }
     }
     return null;
   }
@@ -558,7 +561,7 @@
       origin: store.origin,
       locationSeq: store.locationSeq,
       restartSeq: router.restartSeq,
-      engineReady: engineBooted,
+      engineReady: engineReady,
       role: currentRole,
     };
   }
@@ -662,7 +665,6 @@
   };
 
   /** Message function producing each method's picker/alt-button label. */
-  type DemoLocale = (typeof locales)[number];
   const METHOD_LABELS: Record<
     | "method-totp"
     | "method-passkey"
@@ -709,37 +711,19 @@
     token: number,
     timeoutMs: number,
   ): Promise<boolean> {
-    return new Promise<boolean>((resolve) => {
-      if (predicate()) {
-        resolve(true);
-        return;
-      }
-      let elapsed = 0;
-      const timer = setInterval(() => {
-        elapsed += 100;
-        if (store.isStale(token)) {
-          clearInterval(timer);
-          resolve(false);
-          return;
-        }
-        if (predicate()) {
-          clearInterval(timer);
-          resolve(true);
-          return;
-        }
-        if (elapsed >= timeoutMs) {
-          clearInterval(timer);
-          resolve(false);
-        }
-      }, 100);
+    const result = await pollUntil<true>({
+      probe: () => (predicate() ? true : null),
+      isStale: () => store.isStale(token),
+      timeoutMs,
     });
+    return result !== null;
   }
 
   /** Wait for a specific login stage; false on timeout or cancellation. */
   async function waitForStage(
     targetStage: LoginStage,
     token: number,
-    timeoutMs = 5000,
+    timeoutMs: number = POLL_TIMEOUT_STANDARD_MS,
   ): Promise<boolean> {
     return waitFor(() => getLoginStage() === targetStage, token, timeoutMs);
   }
@@ -748,28 +732,12 @@
   async function waitForSelector(
     selector: string,
     token: number,
-    timeoutMs = 4000,
+    timeoutMs: number = POLL_TIMEOUT_MEDIUM_MS,
   ): Promise<HTMLElement | null> {
-    return new Promise<HTMLElement | null>((resolve) => {
-      const immediate = document.querySelector<HTMLElement>(selector);
-      if (immediate !== null) {
-        resolve(immediate);
-        return;
-      }
-      let elapsed = 0;
-      const timer = setInterval(() => {
-        elapsed += 100;
-        if (advanceStale(token) || elapsed >= timeoutMs) {
-          clearInterval(timer);
-          resolve(null);
-          return;
-        }
-        const found = document.querySelector<HTMLElement>(selector);
-        if (found !== null) {
-          clearInterval(timer);
-          resolve(found);
-        }
-      }, 100);
+    return pollUntil<HTMLElement>({
+      probe: () => document.querySelector<HTMLElement>(selector),
+      isStale: () => advanceStale(token),
+      timeoutMs,
     });
   }
 
@@ -855,52 +823,32 @@
     token: number,
     timeoutMs: number,
   ): Promise<HTMLElement | null> {
-    return new Promise<HTMLElement | null>((resolve) => {
-      function find(): HTMLElement | null {
-        // Picker items and the alternatives shown under an open method.
-        // Deliberately NOT a method page's own confirm button (same
-        // label): when only that matches, the method is already open
-        // and re-clicking it would re-trigger its action.
-        const controls = document.querySelectorAll<HTMLElement>(
-          ".k-list-item, button.alt-method-btn, button.backup-code-link",
-        );
-        for (const control of controls) {
-          const text = control.textContent.trim();
-          if (text === "") continue;
-          for (const locale of locales) {
-            // eslint-disable-next-line security/detect-object-injection -- key is a typed keyof typeof METHOD_LABELS
-            const label = METHOD_LABELS[target]({ locale });
-            if (
-              control.matches(".k-list-item")
-                ? text.includes(label)
-                : text === label
-            ) {
-              return control;
-            }
-          }
-        }
-        return null;
-      }
+    // eslint-disable-next-line security/detect-object-injection -- key is a typed keyof typeof METHOD_LABELS
+    const messageFn = METHOD_LABELS[target];
 
-      const immediate = find();
-      if (immediate !== null) {
-        resolve(immediate);
-        return;
+    function find(): HTMLElement | null {
+      // Picker items and the alternatives shown under an open method.
+      // Deliberately NOT a method page's own confirm button (same
+      // label): when only that matches, the method is already open
+      // and re-clicking it would re-trigger its action.
+      const controls = document.querySelectorAll<HTMLElement>(
+        ".k-list-item, button.alt-method-btn, button.backup-code-link",
+      );
+      for (const control of controls) {
+        const text = control.textContent.trim();
+        if (text === "") continue;
+        const mode = control.matches(".k-list-item") ? "includes" : "equals";
+        if (matchesAnyLocale(text, messageFn, mode)) {
+          return control;
+        }
       }
-      let elapsed = 0;
-      const timer = setInterval(() => {
-        elapsed += 100;
-        if (advanceStale(token) || elapsed >= timeoutMs) {
-          clearInterval(timer);
-          resolve(null);
-          return;
-        }
-        const found = find();
-        if (found !== null) {
-          clearInterval(timer);
-          resolve(found);
-        }
-      }, 100);
+      return null;
+    }
+
+    return pollUntil<HTMLElement>({
+      probe: find,
+      isStale: () => advanceStale(token),
+      timeoutMs,
     });
   }
 

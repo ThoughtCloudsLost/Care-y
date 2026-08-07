@@ -13,7 +13,7 @@
   import LoginPage from "$routes/(auth)/login/+page.svelte";
   import { setLoginStage } from "$demo/login-stage.svelte.js";
   import { maskPasswordControls } from "$demo/password-mask.js";
-  import { setLoginCryptoStageListener } from "../../stubs/login-crypto.js";
+  import { setLoginCryptoStageListener } from "../stubs/login-crypto.js";
 
   // Prefill credentials after the form mounts. Uses input events so
   // Svelte's bind:value picks up the change (setting .value alone

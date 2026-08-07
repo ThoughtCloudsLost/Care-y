@@ -15,6 +15,7 @@ import {
   sectionForRoute,
   slugForRoute,
   routeForSlug,
+  pathnameForRouteId,
   SECTIONS,
   ENTRY_SECTION,
   SECTION_ROUTES,
@@ -1132,5 +1133,35 @@ describe("ENTRY_SECTION", () => {
     for (const sub of ENTRY_SECTION.subs) {
       expect(sub.topic).toBeNull();
     }
+  });
+});
+
+// -----------------------------------------------------------------------
+// pathnameForRouteId
+// -----------------------------------------------------------------------
+
+describe("pathnameForRouteId", () => {
+  it("strips the (app) group segment", () => {
+    expect(pathnameForRouteId("/(app)/tickets")).toBe("/tickets");
+  });
+
+  it("strips nested group segments", () => {
+    expect(pathnameForRouteId("/(app)/(auth)/login")).toBe("/login");
+  });
+
+  it("returns / for a bare group route", () => {
+    expect(pathnameForRouteId("/(app)")).toBe("/");
+  });
+
+  it("preserves non-group segments including params", () => {
+    expect(pathnameForRouteId("/(app)/tickets/[id]")).toBe("/tickets/[id]");
+  });
+
+  it("agrees with the slug builder's group stripping", () => {
+    // pathnameForRouteId and slugForRoute both strip group segments;
+    // slugForRoute also strips brackets and joins with dashes.
+    const rid = "/(app)/library/[articleId]/edit";
+    const pathname = pathnameForRouteId(rid);
+    expect(pathname).toBe("/library/[articleId]/edit");
   });
 });

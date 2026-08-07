@@ -1,10 +1,7 @@
 import { mount } from "svelte";
 import App from "./App.svelte";
+import { DemoMountError } from "./lib/errors.js";
 import "./app.css";
-
-class DemoMountError extends Error {
-  override name = "DemoMountError" as const;
-}
 
 const target = document.getElementById("app");
 if (!target) throw new DemoMountError("Missing #app mount target");

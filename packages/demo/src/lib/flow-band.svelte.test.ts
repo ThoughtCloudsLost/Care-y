@@ -200,6 +200,40 @@ describe("ingestFlowEvent", () => {
     ingestFlowEvent(first, makeEvent({ id: 2, interactionId: 1 }));
     expect(first.at(0)?.events).toHaveLength(1);
   });
+
+  it("caps events per slice, dropping oldest from the front", () => {
+    let slices: FlowSlice[] = [];
+    const cap = 5;
+    for (let i = 1; i <= cap + 3; i++) {
+      slices = ingestFlowEvent(
+        slices,
+        makeEvent({ id: i, interactionId: 1 }),
+        MAX_SLICES,
+        cap,
+      );
+    }
+    expect(slices).toHaveLength(1);
+    expect(slices.at(0)?.events).toHaveLength(cap);
+    // Oldest (id=1,2,3) dropped; first retained is id=4
+    expect(slices.at(0)?.events.at(0)?.id).toBe(4);
+    expect(slices.at(0)?.events.at(-1)?.id).toBe(cap + 3);
+  });
+
+  it("uses monotonic id comparison for dedup (O(1) instead of linear scan)", () => {
+    const first = ingestFlowEvent([], makeEvent({ id: 5, interactionId: 1 }));
+    // Re-ingest with the same id: should be a no-op
+    const again = ingestFlowEvent(
+      first,
+      makeEvent({ id: 5, interactionId: 1 }),
+    );
+    expect(again.at(0)?.events).toHaveLength(1);
+    // An id LOWER than the last should also be treated as duplicate
+    const lower = ingestFlowEvent(
+      first,
+      makeEvent({ id: 3, interactionId: 1 }),
+    );
+    expect(lower.at(0)?.events).toHaveLength(1);
+  });
 });
 
 describe("toggleSliceCollapsed", () => {

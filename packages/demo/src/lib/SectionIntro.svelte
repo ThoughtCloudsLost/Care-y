@@ -1,16 +1,14 @@
 <script lang="ts">
   import { Check } from "@lucide/svelte";
-  import { resolveStoryMessage } from "./story-messages.js";
+  import { resolveStoryMessage, deriveSubState } from "./story-messages.js";
   import type { Section, SectionId } from "./scroll-sections.js";
   import type { DemoTopic } from "./bridge.js";
   import {
-    FRAME_PAD_TOP,
-    FRAME_PAD_BOTTOM,
-    FRAME_PAD_X,
-    computeLineSegments,
-    type Segment,
-  } from "./flow-layout.js";
+    createFrameDodge,
+    type DodgeFrameRect,
+  } from "./frame-dodge.svelte.js";
   import { setHeaderBottom, stickyTopOffset } from "./flow-geometry.svelte.js";
+  import { WIDE_BREAKPOINT } from "./frame-geometry.svelte.js";
 
   interface Props {
     section: Section;
@@ -23,12 +21,7 @@
     selectable: boolean;
     /** Viewport-space frame rect, so the header can inset its text out
      *  from under the phone the same way the flow layout does. */
-    frameRect: {
-      left: number;
-      top: number;
-      outerW: number;
-      outerH: number;
-    };
+    frameRect: DodgeFrameRect;
     onSubClick: (sectionId: SectionId, subSlug: string) => void;
     onSectionClick: (sectionId: SectionId) => void;
   }
@@ -46,196 +39,42 @@
   }: Props = $props();
 
   // -----------------------------------------------------------------------
-  // Frame dodging
+  // Frame dodging via the shared createFrameDodge utility
   //
   // The header is normal DOM (sticky at >=900px), so it cannot go through
-  // the flow layout engine. It instead asks that engine's own segment
-  // function where a line at its position would be allowed to sit, then
-  // insets itself to match. Sharing computeLineSegments is what keeps the
-  // header's measure and centring identical to the body text below it.
-  //
-  // The tinted backdrop stays full width; only the inner content moves,
-  // which also keeps the measurement stable (the measured element's own
-  // box never changes as a result of the inset).
+  // the flow layout engine. createFrameDodge handles all the segment
+  // computation, measurement caching, and scroll tracking.
   // -----------------------------------------------------------------------
 
   let introEl = $state<HTMLDivElement | undefined>(undefined);
-  let dodgeLeft = $state(0);
-  let dodgeRight = $state(0);
 
-  /**
-   * The offset the header parks at, clear of the top bar and the data
-   * flow band. The CSS below reads the same number through the
-   * --top-chrome-offset custom property, so the measurement here and the
-   * rendered position cannot drift apart.
-   */
-  const stickyTop: number = $derived(stickyTopOffset());
-  /** Width at or above which the header is sticky (matches the CSS). */
-  const STICKY_BREAKPOINT = 900;
-
-  // Cached geometry, re-measured only when the element or window
-  // resizes, never per scroll frame. `docTop` is stored in DOCUMENT
-  // space (rect.top + scrollY) because that is scroll-invariant; the
-  // viewport top is derived from it below. Caching the viewport rect
-  // directly would be wrong below the sticky breakpoint, where the
-  // header scrolls normally and its viewport rect moves every frame.
-  interface CachedBox {
-    docTop: number;
-    left: number;
-    width: number;
-    height: number;
-  }
-  let cachedBox = $state<CachedBox | null>(null);
-
-  // Scroll position, tracked as plain state. Reading window.scrollY does
-  // not force layout the way getBoundingClientRect does, so this is
-  // cheap to update per frame.
-  let scrollY = $state(0);
-  let windowW = $state(0);
-
-  $effect(() => {
-    function syncScroll(): void {
-      scrollY = window.scrollY;
-    }
-    function syncWidth(): void {
-      windowW = window.innerWidth;
-    }
-    syncScroll();
-    syncWidth();
-    window.addEventListener("scroll", syncScroll, { passive: true });
-    window.addEventListener("resize", syncWidth, { passive: true });
-    return () => {
-      window.removeEventListener("scroll", syncScroll);
-      window.removeEventListener("resize", syncWidth);
-    };
-  });
-
-  // The live measure function, so a chrome-height change can trigger one
-  // without tearing down the observer below. Plain, not $state: only the
-  // effect underneath calls it, and it needs no reactivity of its own.
-  let remeasureBox: (() => void) | null = null;
-
-  $effect(() => {
-    if (introEl === undefined) {
-      cachedBox = null;
-      return;
-    }
-    const el = introEl;
-
-    function measure(): void {
-      const r = el.getBoundingClientRect();
-      cachedBox = {
-        docTop: r.top + window.scrollY,
-        left: r.left,
-        width: r.width,
-        height: r.height,
-      };
-    }
-    measure();
-    remeasureBox = measure;
-
-    const ro = new ResizeObserver(() => {
-      measure();
-    });
-    ro.observe(el);
-
-    // Window resize can reposition the element even without an element
-    // resize (e.g. the sticky offset shifts).
-    window.addEventListener("resize", measure, { passive: true });
-    return () => {
-      ro.disconnect();
-      window.removeEventListener("resize", measure);
-      remeasureBox = null;
-    };
+  const dodge = createFrameDodge(() => frameRect, {
+    stickyTop: () => stickyTopOffset(),
   });
 
   $effect(() => {
-    // Opening the flow band changes where the header parks and how far
-    // down the document it starts, but never its own box, so neither the
-    // ResizeObserver nor the resize listener fires. Re-measure by hand.
-    void stickyTop;
-    remeasureBox?.();
+    dodge.observe(introEl);
   });
 
+  // Opening the flow band changes where the header parks and how far
+  // down the document it starts, but not its own size. Re-measure.
   $effect(() => {
-    const fLeft = frameRect.left;
-    const fTop = frameRect.top;
-    const fW = frameRect.outerW;
-    const fH = frameRect.outerH;
-
-    const box = cachedBox;
-
-    if (introEl === undefined || box === null) {
-      dodgeLeft = 0;
-      dodgeRight = 0;
-      return;
-    }
-
-    // Derive the viewport top from the cached document position. Above
-    // the breakpoint the header is sticky, so it stops at stickyTop
-    // once scrolled to; below it, it scrolls normally. Deriving rather
-    // than caching the viewport rect is what keeps this correct on
-    // narrow layouts, where the frame still overlaps the header.
-    const flowTop = box.docTop - scrollY;
-    const viewportTop =
-      windowW >= STICKY_BREAKPOINT ? Math.max(stickyTop, flowTop) : flowTop;
-    const r = {
-      top: viewportTop,
-      left: box.left,
-      width: box.width,
-      height: box.height,
-    };
-
-    // Build the padded hole in the header's own coordinate space, using
-    // the same padding constants the flow layout applies.
-    const hole = {
-      left: fLeft - FRAME_PAD_X - r.left,
-      top: fTop - FRAME_PAD_TOP - r.top,
-      right: fLeft + fW + FRAME_PAD_X - r.left,
-      bottom: fTop + fH + FRAME_PAD_BOTTOM - r.top,
-    };
-
-    // Ask for the bands a single line spanning the header's full height
-    // would get. Height rather than a text line height because the whole
-    // header block has to clear the frame, not one row of it.
-    const segments = computeLineSegments(0, r.height, r.width, hole);
-
-    // Two bands means the frame splits the column. The header is one
-    // block of prose and cannot flow around it, so it picks a side.
-    //
-    // The two flanks come back equal (they are centred on the frame), so
-    // their widths cannot break the tie. Decide from the room each side
-    // actually has instead, which is what "the roomier side" means here.
-    // No bands at all means nothing fits: fall back to full width and
-    // let the frame overlap rather than collapsing the header.
-    let chosen: Segment | undefined;
-    if (segments.length > 1) {
-      const roomLeft = hole.left;
-      const roomRight = r.width - hole.right;
-      chosen = roomLeft >= roomRight ? segments.at(0) : segments.at(1);
-    } else {
-      chosen = segments.at(0);
-    }
-    if (chosen === undefined) {
-      dodgeLeft = 0;
-      dodgeRight = 0;
-      return;
-    }
-
-    dodgeLeft = chosen.x;
-    dodgeRight = Math.max(0, r.width - (chosen.x + chosen.width));
+    void stickyTopOffset();
+    dodge.remeasure();
   });
 
   // Publish the header's bottom edge so the selection band can sit just
-  // below it. Derived from the same cached box and sticky rule as the
-  // dodge above, so the two can never disagree about where the header
-  // ends.
+  // below it. Derived from the dodge's cached box and the same sticky
+  // rule, so the two can never disagree about where the header ends.
   $effect(() => {
-    const box = cachedBox;
+    const box = dodge.box;
     if (box === null) return;
-    const flowTop = box.docTop - scrollY;
+    const flowTop = box.docTop - dodge.scrollY;
+    const pinned = stickyTopOffset();
     const viewportTop =
-      windowW >= STICKY_BREAKPOINT ? Math.max(stickyTop, flowTop) : flowTop;
+      typeof window !== "undefined" && window.innerWidth >= WIDE_BREAKPOINT
+        ? Math.max(pinned, flowTop)
+        : flowTop;
     setHeaderBottom(viewportTop + box.height);
   });
 
@@ -262,8 +101,8 @@
 >
   <div
     class="section-intro-inner"
-    style:margin-left="{dodgeLeft}px"
-    style:margin-right="{dodgeRight}px"
+    style:margin-left="{dodge.left}px"
+    style:margin-right="{dodge.right}px"
   >
     <h2 class="section-title">{msg(section.titleKey)}</h2>
     <p class="section-desc">{msg(section.descKey)}</p>
@@ -271,17 +110,21 @@
     {#if showToc && section.subs.length > 1}
       <nav class="section-toc" aria-label={msg(section.titleKey)}>
         {#each section.subs as sub (sub.slug)}
-          {@const subActive = activeSub === sub.slug}
-          {@const subSeen = sub.topic !== null && seenTopics.has(sub.topic)}
+          {@const s = deriveSubState(
+            sub.slug,
+            activeSub,
+            sub.topic,
+            seenTopics,
+          )}
           <button
             class="toc-item"
-            class:toc-item-active={subActive}
-            class:toc-item-seen={subSeen && !subActive}
+            class:toc-item-active={s.isActive}
+            class:toc-item-seen={s.isSeen && !s.isActive}
             type="button"
             onclick={() => onSubClick(section.id, sub.slug)}
           >
             <span class="toc-label">{msg(sub.headingKey)}</span>
-            {#if subSeen}
+            {#if s.isSeen}
               <Check size={12} class="toc-check" />
             {/if}
           </button>
@@ -326,7 +169,8 @@
 
   /* Desktop pinning: the intro sticks below the top chrome. The story
      root publishes --top-chrome-offset, which grows when the data flow
-     band opens; the fallback is the bare top bar plus its gap. */
+     band opens; the fallback is the bare top bar plus its gap.
+     900px mirrors WIDE_BREAKPOINT from frame-geometry.svelte.ts */
   @media (min-width: 900px) {
     .section-intro {
       position: sticky;
@@ -344,7 +188,8 @@
     }
   }
 
-  /* Small screens: no sticky intro, hide description */
+  /* Small screens: no sticky intro, hide description.
+     899px = WIDE_BREAKPOINT - 1 (see frame-geometry.svelte.ts) */
   @media (max-width: 899px) {
     .section-intro {
       padding: 1.5rem 0 0.75rem;

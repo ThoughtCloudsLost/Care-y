@@ -492,6 +492,7 @@ export function getSubByTopic(
   return topicIndex.get(topic);
 }
 
+/** Internal lookup; exported only for test contract validation. */
 export function getSub(
   sectionId: string,
   subSlug: string,
@@ -499,6 +500,7 @@ export function getSub(
   return subIndex.get(`${sectionId}/${subSlug}`);
 }
 
+/** Exported as public contract (consumed by tests and the location store). */
 /**
  * Resolve a route ID to the story section (and optional sub-section)
  * that narrates it. A SUB_ROUTES match wins over a section-level
@@ -509,6 +511,20 @@ export function sectionForRoute(
 ): { sectionId: SectionId; subSlug: string | null } | null {
   if (unnarratedSet.has(routeId)) return null;
   return routeIndex.get(routeId) ?? null;
+}
+
+/**
+ * Convert a route ID to a navigable pathname by stripping group
+ * segments (parenthesised, e.g. "(app)"). Shared by the slug builder
+ * below and PhoneApp's route-slug navigation.
+ */
+export function pathnameForRouteId(routeId: string): string {
+  return (
+    routeId
+      .split("/")
+      .filter((s) => !(s.startsWith("(") && s.endsWith(")")))
+      .join("/") || "/"
+  );
 }
 
 /**

@@ -288,6 +288,45 @@ describe("createPeekController", () => {
 // COMMIT_DRAG_PX exported for consumer reference
 // ---------------------------------------------------------------------------
 
+describe("commit settles springs", () => {
+  const sampleClip: ClipRect = {
+    left: 50,
+    top: 100,
+    width: 300,
+    height: 200,
+  };
+
+  beforeEach(() => {
+    vi.stubGlobal("innerWidth", 1200);
+    vi.stubGlobal("innerHeight", 900);
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("transitions to committed and preserves saved geometry", () => {
+    let geo!: FrameGeometry;
+    let ctrl!: PeekController;
+    const teardown = $effect.root(() => {
+      geo = createFrameGeometry();
+      ctrl = createPeekController(geo);
+    });
+    flushSync();
+
+    ctrl.open(sampleClip);
+    flushSync();
+
+    ctrl.commit();
+    flushSync();
+
+    expect(ctrl.phase).toBe("committed");
+    expect(ctrl.savedGeometry).not.toBeNull();
+
+    teardown();
+  });
+});
+
 describe("COMMIT_DRAG_PX", () => {
   it("is a positive number", () => {
     expect(COMMIT_DRAG_PX).toBeGreaterThan(0);

@@ -1,15 +1,12 @@
 import { mount } from "svelte";
 import * as m from "$lib/paraglide/messages.js";
-import { locales } from "$lib/paraglide/runtime.js";
 import type { DemoEngineResult } from "./lib/engine/engine.js";
 import { setEngineTrpc } from "./stubs/trpc.js";
 import { traceFlowLocal } from "./lib/flow-events.js";
+import { matchesAnyLocale } from "./lib/topic-classifier.js";
+import { DemoMountError } from "./lib/errors.js";
 import PhoneApp from "./PhoneApp.svelte";
 import "./app.css";
-
-class DemoMountError extends Error {
-  override name = "DemoMountError" as const;
-}
 
 // -----------------------------------------------------------------------
 // WebAuthn monkeypatch (demo code only, never product)
@@ -48,11 +45,8 @@ document.addEventListener(
     const button = target.closest("button");
     if (button === null) return;
     const text = button.textContent.trim();
-    for (const locale of locales) {
-      if (text === m.twofa_passkey_use({}, { locale })) {
-        passkeyArmedUntil = Date.now() + ARM_WINDOW_MS;
-        return;
-      }
+    if (matchesAnyLocale(text, (opts) => m.twofa_passkey_use({}, opts))) {
+      passkeyArmedUntil = Date.now() + ARM_WINDOW_MS;
     }
   },
   { capture: true },
@@ -128,17 +122,17 @@ try {
 // Dynamic import moves the engine (PGlite, migrations, seeds, router)
 // off the initial chunk. Boot starts immediately at module evaluation;
 // only the bytes are deferred, not the work.
-const engineReady: Promise<DemoEngineResult> =
+const enginePromise: Promise<DemoEngineResult> =
   import("./lib/engine/engine.js").then(async (mod) => mod.bootDemoEngine());
 
 // setEngineTrpc accepts a Promise: calls to trpc.* before boot
 // completes will await it. A rejected boot surfaces through the
 // first tRPC call that reads the rejected promise.
-setEngineTrpc(engineReady.then((e) => e.trpc));
+setEngineTrpc(enginePromise.then((e) => e.trpc));
 
 // Measurement hook: marks when the engine (DB, migrations, seeds,
 // router) is ready. Read via performance.getEntriesByName in devtools.
-engineReady.then(
+enginePromise.then(
   () => {
     performance.mark("demo-engine-ready");
   },
@@ -149,7 +143,7 @@ engineReady.then(
 
 // Surface boot failures loudly rather than letting them become
 // silent unhandled rejections.
-engineReady.catch((err: unknown) => {
+enginePromise.catch((err: unknown) => {
   console.error(
     "[demo] Engine boot failed:",
     err instanceof Error ? err.message : String(err),
@@ -163,4 +157,4 @@ engineReady.catch((err: unknown) => {
 const target = document.getElementById("app");
 if (!target) throw new DemoMountError("Missing #app mount target");
 
-mount(PhoneApp, { target, props: { engineReady } });
+mount(PhoneApp, { target, props: { enginePromise } });

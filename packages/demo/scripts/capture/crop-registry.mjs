@@ -35,7 +35,9 @@
  * the top of the viewport to capture the primary content area below
  * the navbar.
  */
-const DEFAULT_RECT = { x: 0, y: 56, w: 390, h: 220 };
+import { DEFAULT_CROP_W, DEFAULT_CROP_H } from "./constants.mjs";
+
+const DEFAULT_RECT = { x: 0, y: 56, w: DEFAULT_CROP_W, h: DEFAULT_CROP_H };
 
 /**
  * Crop registry keyed by "sectionId/subSlug".
