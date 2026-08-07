@@ -308,7 +308,6 @@ export async function listQuarantined(
 export async function getQuarantineBlob(
   tDb: Kysely<TenantDatabase>,
   blobStore: BlobStore,
-  orgSchema: string,
   quarantineId: string,
 ): Promise<QuarantineBlobResult> {
   const row = await tDb

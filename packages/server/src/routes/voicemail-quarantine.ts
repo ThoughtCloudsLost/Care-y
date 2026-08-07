@@ -47,7 +47,6 @@ export function createVoicemailQuarantineRouter(
         return getQuarantineBlob(
           ctx.org.tenantDb,
           blobStore,
-          ctx.org.orgSchema,
           input.quarantineId,
         );
       }),

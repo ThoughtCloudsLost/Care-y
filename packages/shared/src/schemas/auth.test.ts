@@ -116,7 +116,7 @@ describe("passwordSchema", () => {
   });
 
   it("rejects non-string input", () => {
-    expect(passwordSchema.safeParse(12345678901234567).success).toBe(false);
+    expect(passwordSchema.safeParse(1234567890123456).success).toBe(false);
     expect(passwordSchema.safeParse(null).success).toBe(false);
   });
 

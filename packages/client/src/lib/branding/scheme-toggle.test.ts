@@ -1,9 +1,14 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-
 // Mock the Material Color Utilities dynamic import (same approach as
 // konsta-palette.test.ts). The palette pass is observed through the brand
 // CSS custom properties; the library's color math is not under test.
+//
+// mock-factory-unguarded: intentional. importOriginal cannot be used because
+// @material/material-color-utilities@0.4.0 has internal bare-specifier imports
+// (color_spec_2025.js -> './dynamic_color') that fail ERR_MODULE_NOT_FOUND
+// under Vitest's mock interception. See konsta-palette.test.ts for the
+// documented incident.
 vi.mock("@material/material-color-utilities", () => {
   const fakeColor = (name: string) => ({
     name,
@@ -19,12 +24,23 @@ vi.mock("@material/material-color-utilities", () => {
     colors = { allColors: fakeAllColors };
   }
 
+  // importOriginal unusable: the package's internal ESM imports use bare
+  // specifiers that fail under Vitest's mock interception (ERR_MODULE_NOT_FOUND).
+  // This typed shape tracks the four exports destructured in konsta-palette.ts:256.
+  const _usedExports = null! as {
+    argbFromHex: unknown;
+    Hct: unknown;
+    SchemeTonalSpot: unknown;
+    hexFromArgb: unknown;
+  };
+  void _usedExports;
+
   return {
     argbFromHex: () => 0xff000000,
     Hct: { fromInt: () => ({}) },
     SchemeTonalSpot: MockSchemeTonalSpot,
     hexFromArgb: () => "#336699",
-  };
+  } satisfies typeof _usedExports;
 });
 
 const DARK_QUERY = "(prefers-color-scheme: dark)";
@@ -54,7 +70,7 @@ function createMatchMediaStub(): {
     addEventListener(type: string, listener: SchemeChangeListener): void {
       if (type === "change") listeners.add(listener);
     },
-    removeEventListener(type: string, listener: SchemeChangeListener): void {
+    removeEventListener(_type: string, listener: SchemeChangeListener): void {
       listeners.delete(listener);
     },
     addListener(listener: SchemeChangeListener): void {
@@ -123,7 +139,7 @@ describe("toggleSchemeWithPalette", () => {
     // Let the first deferred palette application finish before toggling
     // again: two applications queued in the same frame start concurrent
     // dynamic imports, and a concurrent pair races past the material mock
-    // to the native loader (test-audit-attention-log.md item 60c).
+    // to the native loader.
     await new Promise((resolve) => setTimeout(resolve, 0));
     await vi.dynamicImportSettled();
 

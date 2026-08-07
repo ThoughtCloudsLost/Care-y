@@ -134,7 +134,7 @@ describe("reactionsForTicket", () => {
 describe("matchTitles", () => {
   const mockFuzzy = (haystack: readonly string[], _query: string) => {
     return haystack
-      .map((h, i) => ({ index: i, score: i }))
+      .map((_, i) => ({ index: i, score: i }))
       .filter((_, i) => haystack[i]?.toLowerCase().includes("test"));
   };
 
@@ -170,7 +170,7 @@ describe("matchTitles", () => {
   it("matches against queueName", () => {
     const fuzzy = (haystack: readonly string[], _q: string) =>
       haystack
-        .map((h, i) => ({ index: i, score: i }))
+        .map((_, i) => ({ index: i, score: i }))
         .filter((_, i) => haystack[i]?.toLowerCase().includes("housing"));
     const entries = [
       {
@@ -188,7 +188,7 @@ describe("matchTitles", () => {
   it("matches against assignedName", () => {
     const fuzzy = (haystack: readonly string[], _q: string) =>
       haystack
-        .map((h, i) => ({ index: i, score: i }))
+        .map((_, i) => ({ index: i, score: i }))
         .filter((_, i) => haystack[i]?.toLowerCase().includes("maria"));
     const entries = [
       {
@@ -211,7 +211,7 @@ describe("matchTitles", () => {
   it("treats missing queueName and assignedName as empty strings", () => {
     const fuzzy = (haystack: readonly string[], _q: string) =>
       haystack
-        .map((h, i) => ({ index: i, score: i }))
+        .map((_, i) => ({ index: i, score: i }))
         .filter((_, i) => haystack[i]?.toLowerCase().includes("test"));
     const entries = [{ id: "t1", title: "Test ticket", clientAlias: "Alice" }];
     const result = matchTitles(entries, "test", fuzzy);

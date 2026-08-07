@@ -11,7 +11,6 @@ import type {
 } from "./ticket-decrypt-cache.js";
 import type { FollowUpDecryptCache } from "./follow-up-decrypt-cache.js";
 import type { OrgDecryptCache } from "./org-decrypt-cache.js";
-import type { OrgKeyManager } from "./org-key.js";
 
 const TICKET_ID = "ticket-001";
 const FOLLOW_UP_ID = "fu-001";
@@ -30,7 +29,6 @@ function createMocks(overrides?: {
   titleReturn?: string | undefined;
   contentReturn?: string | undefined;
   orgReturn?: string | null;
-  isLoaded?: boolean;
 }): TicketDecryptScopeDeps & {
   mocks: Record<string, ReturnType<typeof vi.fn>>;
 } {
@@ -50,11 +48,6 @@ function createMocks(overrides?: {
       decrypt: orgDecrypt,
       isFailed: () => false,
     } as unknown as OrgDecryptCache,
-    orgKeyManager: {
-      get isLoaded() {
-        return overrides?.isLoaded ?? false;
-      },
-    } as OrgKeyManager,
     ticketId: TICKET_ID,
     keyWrap: KEY_WRAP,
     mocks: { decryptTitle, decryptContent, orgDecrypt },
@@ -184,7 +177,7 @@ describe("TicketDecryptScope", () => {
 
   describe("volunteerName()", () => {
     it("delegates to orgCache.decrypt", () => {
-      const deps = createMocks({ orgReturn: null, isLoaded: false });
+      const deps = createMocks({ orgReturn: null });
       const scope = createTicketDecryptScope(deps);
 
       scope.volunteerName(USER_ID, ENCRYPTED_NAME);
@@ -196,16 +189,8 @@ describe("TicketDecryptScope", () => {
       );
     });
 
-    it("returns loading when org key is not loaded", () => {
-      const deps = createMocks({ orgReturn: null, isLoaded: false });
-      const scope = createTicketDecryptScope(deps);
-
-      const result = scope.volunteerName(USER_ID, ENCRYPTED_NAME);
-      expect(result.status).toBe("loading");
-    });
-
-    it("returns loading when org key is loaded but decrypt returns null (pending microtask)", () => {
-      const deps = createMocks({ orgReturn: null, isLoaded: true });
+    it("returns loading when decrypt returns null (pending microtask)", () => {
+      const deps = createMocks({ orgReturn: null });
       const scope = createTicketDecryptScope(deps);
 
       const result = scope.volunteerName(USER_ID, ENCRYPTED_NAME);
@@ -213,7 +198,7 @@ describe("TicketDecryptScope", () => {
     });
 
     it("returns ready when decrypt succeeds", () => {
-      const deps = createMocks({ orgReturn: "Jane Doe", isLoaded: true });
+      const deps = createMocks({ orgReturn: "Jane Doe" });
       const scope = createTicketDecryptScope(deps);
 
       const result = scope.volunteerName(USER_ID, ENCRYPTED_NAME);
@@ -221,7 +206,7 @@ describe("TicketDecryptScope", () => {
     });
 
     it("handles null encryptedName (org cache returns null for null data)", () => {
-      const deps = createMocks({ orgReturn: null, isLoaded: true });
+      const deps = createMocks({ orgReturn: null });
       const scope = createTicketDecryptScope(deps);
 
       const result = scope.volunteerName(USER_ID, null);
@@ -249,7 +234,7 @@ describe("TicketDecryptScope", () => {
     });
 
     it("volunteerName is unaffected by keyWrap (uses org cache)", () => {
-      const deps = createMocks({ orgReturn: "Jane Doe", isLoaded: true });
+      const deps = createMocks({ orgReturn: "Jane Doe" });
       deps.keyWrap = null;
       const scope = createTicketDecryptScope(deps);
 
