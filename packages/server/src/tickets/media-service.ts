@@ -1,7 +1,7 @@
 /**
  * Media service: recording and attachment CRUD with retention cleanup.
  *
- * Encrypted blobs are stored via BlobStore (H-017). The server never
+ * Encrypted blobs are stored via BlobStore. The server never
  * decrypts media content. Soft-delete sets deleted_at, follow-ups
  * show "attachment expired." Hard-delete removes blob + DB row.
  * Irreversible in an E2E encrypted system.
@@ -380,37 +380,49 @@ async function purgeDeletedMedia(
   }
 }
 
+export const MEDIA_CLEANUP_QUEUE = "media-cleanup";
+export const MEDIA_CLEANUP_INTERVAL_MS = 24 * 60 * 60 * 1000; // daily
+
 export function registerMediaCleanupHandler(
   jobQueue: JobQueue,
   getTenantDb: (orgSchema: string) => Kysely<TenantDatabase>,
   blobStore: BlobStore,
   listOrgSchemas: () => Promise<string[]>,
 ): void {
-  jobQueue.process("media-cleanup", async () => {
-    const schemas = await listOrgSchemas();
+  jobQueue.process(MEDIA_CLEANUP_QUEUE, async () => {
+    try {
+      const schemas = await listOrgSchemas();
 
-    for (const schema of schemas) {
-      const tDb = getTenantDb(schema);
+      for (const schema of schemas) {
+        const tDb = getTenantDb(schema);
 
-      const config = await tDb
-        .selectFrom("org_config")
-        .select(["media_retention_days", "media_purge_days"])
-        .executeTakeFirst();
+        const config = await tDb
+          .selectFrom("org_config")
+          .select(["media_retention_days", "media_purge_days"])
+          .executeTakeFirst();
 
-      if (!config) continue;
+        if (!config) continue;
 
-      const retentionCutoff = new Date(
-        Date.now() - config.media_retention_days * 24 * 60 * 60 * 1000,
+        const retentionCutoff = new Date(
+          Date.now() - config.media_retention_days * 24 * 60 * 60 * 1000,
+        );
+        const purgeCutoff = new Date(
+          Date.now() - config.media_purge_days * 24 * 60 * 60 * 1000,
+        );
+
+        await softDeleteExpiredMedia(tDb, "recordings", retentionCutoff);
+        await softDeleteExpiredMedia(tDb, "attachments", retentionCutoff);
+        await purgeDeletedMedia(tDb, "recordings", purgeCutoff, blobStore);
+        await purgeDeletedMedia(tDb, "attachments", purgeCutoff, blobStore);
+        await purgeDeletedMedia(tDb, "kb_attachments", purgeCutoff, blobStore);
+      }
+    } finally {
+      // Self-enqueue in finally so the chain survives a failing run
+      await jobQueue.enqueue(
+        MEDIA_CLEANUP_QUEUE,
+        {},
+        { delay: MEDIA_CLEANUP_INTERVAL_MS },
       );
-      const purgeCutoff = new Date(
-        Date.now() - config.media_purge_days * 24 * 60 * 60 * 1000,
-      );
-
-      await softDeleteExpiredMedia(tDb, "recordings", retentionCutoff);
-      await softDeleteExpiredMedia(tDb, "attachments", retentionCutoff);
-      await purgeDeletedMedia(tDb, "recordings", purgeCutoff, blobStore);
-      await purgeDeletedMedia(tDb, "attachments", purgeCutoff, blobStore);
-      await purgeDeletedMedia(tDb, "kb_attachments", purgeCutoff, blobStore);
     }
   });
 }

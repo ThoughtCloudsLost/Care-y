@@ -5,44 +5,13 @@ import { FileMigrationProvider, Migrator } from "kysely/migration";
 import * as path from "node:path";
 import * as fs from "node:fs/promises";
 import type { PlatformDatabase } from "../db/types.js";
-import type { JobQueue } from "./queue.js";
 import { ensureRecurringJob } from "./ensure-recurring.js";
 import {
   registerEscalationRulesHandler,
   ESCALATION_RULES_QUEUE,
   DEFAULT_ESCALATION_RULES_INTERVAL_MS,
 } from "./escalation-checker.js";
-import { TestSetupError } from "../test-utils.js";
-
-// ---------------------------------------------------------------------------
-// Stub JobQueue (unit tests, no DB)
-// ---------------------------------------------------------------------------
-
-function createMockJobQueue(): {
-  jobQueue: JobQueue;
-  handlers: Map<string, (payload: Record<string, unknown>) => Promise<void>>;
-} {
-  const handlers = new Map<
-    string,
-    (payload: Record<string, unknown>) => Promise<void>
-  >();
-
-  const jobQueue: JobQueue = {
-    enqueue: vi.fn().mockResolvedValue("job-123"),
-    process: vi.fn(
-      (
-        queue: string,
-        handler: (p: Record<string, unknown>) => Promise<void>,
-      ) => {
-        handlers.set(queue, handler);
-      },
-    ),
-    start: vi.fn(),
-    stop: vi.fn().mockResolvedValue(undefined),
-  };
-
-  return { jobQueue, handlers };
-}
+import { TestSetupError, createMockJobQueue } from "../test-utils.js";
 
 // ---------------------------------------------------------------------------
 // registerEscalationRulesHandler (unit tests)
