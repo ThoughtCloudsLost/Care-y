@@ -22,6 +22,7 @@ function makeUser(overrides: Partial<UserRecord> = {}): UserRecord {
     hasOrgKeyWrap: true,
     encryptedDisplayName: "enc-alice",
     encryptedIdentifier: "enc-ident-alice",
+    reachability: "none",
     ...overrides,
   };
 }

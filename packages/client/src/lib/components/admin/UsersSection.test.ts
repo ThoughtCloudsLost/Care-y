@@ -414,6 +414,7 @@ function makeUser(id: string, overrides: Partial<UserData> = {}): UserData {
     hasKeys: true,
     hasOrgKeyWrap: true,
     volPublic: null,
+    reachability: "none",
     ...overrides,
   };
 }
