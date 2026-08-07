@@ -660,6 +660,7 @@ export function mockRes(): MockResWithCookies {
 import { expect, vi } from "vitest";
 import { TRPCError } from "@trpc/server";
 import type { EmailSender, EmailMessage } from "./email/email-sender.js";
+import type { JobQueue } from "./jobs/queue.js";
 import { generateTotpCode, base32Decode } from "./auth/totp.js";
 import type { TwoFactorService } from "./auth/two-factor-service.js";
 import { TwoFactorMethod, RoleId } from "@care-y/shared";
@@ -1069,4 +1070,46 @@ export function stubTenantDbDefaultRoles(): Kysely<TenantDatabase> {
     },
   };
   return stub as unknown as Kysely<TenantDatabase>;
+}
+
+// ---------------------------------------------------------------------------
+// Mock job queue
+// ---------------------------------------------------------------------------
+
+export interface MockJobQueue {
+  readonly jobQueue: JobQueue;
+  /** Handlers captured from process() calls, keyed by queue name. */
+  readonly handlers: Map<
+    string,
+    (payload: Record<string, unknown>) => Promise<void>
+  >;
+}
+
+/**
+ * Creates a mock JobQueue that captures registered handlers and records
+ * enqueue() calls (all JobQueue methods are vi.fn spies). Tests invoke
+ * captured handlers directly and assert on enqueue() to verify
+ * self-enqueue chains.
+ */
+export function createMockJobQueue(): MockJobQueue {
+  const handlers = new Map<
+    string,
+    (payload: Record<string, unknown>) => Promise<void>
+  >();
+
+  const jobQueue: JobQueue = {
+    enqueue: vi.fn().mockResolvedValue("job-123"),
+    process: vi.fn(
+      (
+        queue: string,
+        handler: (p: Record<string, unknown>) => Promise<void>,
+      ) => {
+        handlers.set(queue, handler);
+      },
+    ),
+    start: vi.fn(),
+    stop: vi.fn().mockResolvedValue(undefined),
+  };
+
+  return { jobQueue, handlers };
 }

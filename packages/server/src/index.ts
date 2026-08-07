@@ -97,6 +97,7 @@ import { createDependencyService } from "./tickets/dependency-service.js";
 import {
   createMediaService,
   registerMediaCleanupHandler,
+  MEDIA_CLEANUP_QUEUE,
 } from "./tickets/media-service.js";
 import { createQueueService } from "./tickets/queue-service.js";
 import { createAssignmentService } from "./tickets/assignment.js";
@@ -106,6 +107,7 @@ import { createQueuePermissionsService } from "./tickets/queue-permissions.js";
 import {
   registerEscalationHandler,
   escalateTenantTickets,
+  ESCALATION_QUEUE,
 } from "./tickets/escalation.js";
 import { loadOrCreateVapidKeys } from "./notifications/vapid.js";
 import { createSseService } from "./notifications/sse.js";
@@ -695,6 +697,8 @@ registerEscalationRulesHandler(
   env.ESCALATION_RULES_INTERVAL_MS ?? DEFAULT_ESCALATION_RULES_INTERVAL_MS,
 );
 await ensureRecurringJob(db, jobQueue, ESCALATION_RULES_QUEUE);
+await ensureRecurringJob(db, jobQueue, ESCALATION_QUEUE);
+await ensureRecurringJob(db, jobQueue, MEDIA_CLEANUP_QUEUE);
 jobQueue.start();
 console.log("Job queue started");
 

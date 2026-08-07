@@ -1,16 +1,19 @@
 import * as crypto from "node:crypto";
-import { describe, it, expect, beforeAll, afterAll } from "vitest";
+import { describe, it, expect, beforeAll, afterAll, vi } from "vitest";
 import {
   createTestDb,
   createTestUser,
   seedOrgPublicKey,
   createTestQueue,
   createTestTicketFixture,
+  createMockJobQueue,
   type TestDb,
 } from "../test-utils.js";
 import {
   createMediaService,
   registerMediaCleanupHandler,
+  MEDIA_CLEANUP_QUEUE,
+  MEDIA_CLEANUP_INTERVAL_MS,
   type MediaService,
 } from "./media-service.js";
 import {
@@ -19,7 +22,6 @@ import {
 } from "./access.js";
 import { ForbiddenError, NotFoundError } from "../errors.js";
 import type { BlobStore } from "../storage/store.js";
-import type { JobQueue } from "../jobs/queue.js";
 
 function createMockBlobStore(): BlobStore & { deletedKeys: string[] } {
   const deletedKeys: string[] = [];
@@ -617,33 +619,16 @@ describe.skipIf(!process.env.DATABASE_URL)(
         .executeTakeFirstOrThrow();
 
       // Capture the cleanup handler via a mock JobQueue
-      let capturedHandler:
-        ((payload: Record<string, unknown>) => Promise<void>) | undefined;
-
-      const mockJobQueue: JobQueue = {
-        process(queue, handler) {
-          if (queue === "media-cleanup") {
-            capturedHandler = handler;
-          }
-        },
-        async enqueue() {
-          return crypto.randomUUID();
-        },
-        start() {
-          return;
-        },
-        async stop() {
-          return;
-        },
-      };
+      const { jobQueue, handlers } = createMockJobQueue();
 
       registerMediaCleanupHandler(
-        mockJobQueue,
+        jobQueue,
         () => testDb.db,
         blobStore,
         async () => [testDb.schemaName],
       );
 
+      const capturedHandler = handlers.get(MEDIA_CLEANUP_QUEUE);
       expect(capturedHandler).toBeDefined();
       await capturedHandler!({});
 
@@ -675,3 +660,58 @@ describe.skipIf(!process.env.DATABASE_URL)(
     });
   },
 );
+
+describe("registerMediaCleanupHandler self-enqueue", () => {
+  it("re-enqueues with the cleanup interval after a run", async () => {
+    const { jobQueue, handlers } = createMockJobQueue();
+    const listOrgSchemas = vi.fn().mockResolvedValue([]);
+
+    registerMediaCleanupHandler(
+      jobQueue,
+      () => {
+        throw new Error("no tenant DB expected for empty schema list");
+      },
+      createMockBlobStore(),
+      listOrgSchemas,
+    );
+
+    const handler = handlers.get(MEDIA_CLEANUP_QUEUE);
+    expect(handler).toBeDefined();
+
+    await handler!({});
+
+    expect(listOrgSchemas).toHaveBeenCalledOnce();
+    expect(jobQueue.enqueue).toHaveBeenCalledWith(
+      MEDIA_CLEANUP_QUEUE,
+      {},
+      { delay: MEDIA_CLEANUP_INTERVAL_MS },
+    );
+  });
+
+  it("re-enqueues even when the run throws", async () => {
+    const { jobQueue, handlers } = createMockJobQueue();
+    const listOrgSchemas = vi
+      .fn()
+      .mockRejectedValue(new Error("schema listing blew up"));
+
+    registerMediaCleanupHandler(
+      jobQueue,
+      () => {
+        throw new Error("no tenant DB expected");
+      },
+      createMockBlobStore(),
+      listOrgSchemas,
+    );
+
+    const handler = handlers.get(MEDIA_CLEANUP_QUEUE);
+
+    // The finally block re-enqueues; the original error still propagates.
+    await expect(handler!({})).rejects.toThrow("schema listing blew up");
+
+    expect(jobQueue.enqueue).toHaveBeenCalledWith(
+      MEDIA_CLEANUP_QUEUE,
+      {},
+      { delay: MEDIA_CLEANUP_INTERVAL_MS },
+    );
+  });
+});
