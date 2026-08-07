@@ -69,6 +69,17 @@ export const setUserActiveInputSchema = z.object({
   isActive: z.boolean(),
 });
 
+export const volunteerReachabilitySchema = z.enum([
+  "none",
+  "unverified",
+  "verified",
+  "verified_sms",
+]);
+
+export type VolunteerReachabilityWire = z.infer<
+  typeof volunteerReachabilitySchema
+>;
+
 export const listUsersOutputItemSchema = z.object({
   id: z.uuid(),
   identifier: z.string(),
@@ -78,6 +89,7 @@ export const listUsersOutputItemSchema = z.object({
   hasKeys: z.boolean(),
   hasOrgKeyWrap: z.boolean(),
   volPublic: z.string().nullable(),
+  reachability: volunteerReachabilitySchema,
 });
 
 // --- Role permission overrides ---

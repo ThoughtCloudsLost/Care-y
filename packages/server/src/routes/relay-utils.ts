@@ -96,12 +96,10 @@ function extractValueFromPosition(
   // + real closing quote).
   let end = valueStart;
   while (end < raw.length) {
-    // eslint-disable-next-line security/detect-object-injection -- Buffer indexed by loop counter bounded by raw.length
-    if (raw[end] === 0x22 /* " */) {
+    if (raw.at(end) === 0x22 /* " */) {
       let backslashes = 0;
       let scan = end - 1;
-      // eslint-disable-next-line security/detect-object-injection -- Buffer indexed by decrementing scan, bounded by valueStart
-      while (scan >= valueStart && raw[scan] === 0x5c /* \ */) {
+      while (scan >= valueStart && raw.at(scan) === 0x5c /* \ */) {
         backslashes++;
         scan--;
       }
@@ -126,6 +124,76 @@ export function extractStringField(
   return buf ? buf.toString("utf-8") : null;
 }
 
+/**
+ * Extracts a JSON boolean field value from a raw Buffer without JSON.parse.
+ *
+ * Searches for `"fieldName":true` or `"fieldName":false` (with optional
+ * whitespace after the colon) in the raw bytes. Returns the boolean value,
+ * or null if the field is not found or is not a boolean literal.
+ *
+ * This avoids JSON.parse(rawBody.toString()) which would copy sensitive
+ * fields (like phone numbers) into unzeroable JS strings.
+ */
+export function extractBooleanField(
+  raw: Buffer,
+  fieldName: string,
+): boolean | null {
+  // Build needles for both possible patterns: with and without space after colon
+  const needleNoSpace = Buffer.from(`"${fieldName}":`);
+  const needleSpace = Buffer.from(`"${fieldName}": `);
+
+  let valueStart = -1;
+  try {
+    const idxNoSpace = raw.indexOf(needleNoSpace);
+    if (idxNoSpace !== -1) {
+      valueStart = idxNoSpace + needleNoSpace.length;
+    } else {
+      const idxSpace = raw.indexOf(needleSpace);
+      if (idxSpace !== -1) {
+        valueStart = idxSpace + needleSpace.length;
+      }
+    }
+  } finally {
+    needleNoSpace.fill(0);
+    needleSpace.fill(0);
+  }
+
+  if (valueStart === -1) return null;
+
+  // Skip any whitespace between the colon and the value
+  while (
+    valueStart < raw.length &&
+    (raw.at(valueStart) === 0x20 || raw.at(valueStart) === 0x09)
+  ) {
+    valueStart++;
+  }
+
+  // Check for "true" (4 bytes: 0x74 0x72 0x75 0x65)
+  if (
+    valueStart + 4 <= raw.length &&
+    raw.at(valueStart) === 0x74 &&
+    raw.at(valueStart + 1) === 0x72 &&
+    raw.at(valueStart + 2) === 0x75 &&
+    raw.at(valueStart + 3) === 0x65
+  ) {
+    return true;
+  }
+
+  // Check for "false" (5 bytes: 0x66 0x61 0x6c 0x73 0x65)
+  if (
+    valueStart + 5 <= raw.length &&
+    raw.at(valueStart) === 0x66 &&
+    raw.at(valueStart + 1) === 0x61 &&
+    raw.at(valueStart + 2) === 0x6c &&
+    raw.at(valueStart + 3) === 0x73 &&
+    raw.at(valueStart + 4) === 0x65
+  ) {
+    return false;
+  }
+
+  return null;
+}
+
 /** Session data extracted from the cookie for relay auth. */
 export interface RelaySession {
   readonly userId: string;
@@ -140,7 +208,7 @@ export type RelayAuthResult =
  * Resolves the org schema from the request Host header.
  * Same logic as the tRPC context factory and hooks.server.ts:
  * - Production: extract subdomain from Host (slug.care-y.app -> org_slug)
- * - Dev: read X-Org-Slug header (SOG-07 fallback), then fall back to Host
+ * - Dev: read X-Org-Slug header, then fall back to Host
  *
  * The orgResolver dependency is injected so relay-utils doesn't import
  * org resolution code directly (keeps it testable with a simple mock).

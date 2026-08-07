@@ -123,11 +123,14 @@ export type ListSmsResponsesInput = z.infer<typeof listSmsResponsesInputSchema>;
 export const preferredCallMethodSchema = z.enum(["phone_callback", "webrtc"]);
 export type PreferredCallMethod = z.infer<typeof preferredCallMethodSchema>;
 
-export const registerConsultantInputSchema = z.object({
-  encryptedPhone: z.string().min(1),
-  phoneHash: z.string().min(1),
-  preferredCallMethod: preferredCallMethodSchema,
-});
+// ADR-065: register carries no phone fields. The relay verification endpoint
+// (/relay/consultant-verify) is the only write path for phone-derived data.
+export const registerConsultantInputSchema = z
+  .object({
+    preferredCallMethod: preferredCallMethodSchema,
+    smsPingsOptIn: z.boolean().default(false),
+  })
+  .strict();
 export type RegisterConsultantInput = z.infer<
   typeof registerConsultantInputSchema
 >;
@@ -141,3 +144,14 @@ export const verifyConsultantInputSchema = z.object({
   code: z.string().length(6),
 });
 export type VerifyConsultantInput = z.infer<typeof verifyConsultantInputSchema>;
+
+/** GET output additions for consultant reachability. */
+export const consultantOutputSchema = z.object({
+  id: z.string(),
+  isVerified: z.boolean(),
+  preferredCallMethod: preferredCallMethodSchema,
+  encryptedPhone: z.string().nullable(),
+  smsPingsEnabled: z.boolean(),
+  hasOpsPhone: z.boolean(),
+});
+export type ConsultantOutput = z.infer<typeof consultantOutputSchema>;

@@ -16,7 +16,9 @@ import {
 } from "./relay.js";
 import * as relayUtils from "./relay-utils.js";
 import { createCallTracker } from "../telephony/call-tracker.js";
-import { TestSetupError } from "../test-utils.js";
+import { TestSetupError, testSealedBox, testUnseal } from "../test-utils.js";
+import type { ConsultantService } from "../telephony/consultant-service.js";
+import { RateLimitError } from "../errors.js";
 
 // ---------------------------------------------------------------------------
 // Test helpers
@@ -97,10 +99,18 @@ function mockConsultantRepo(
     ? {
         id: "consultant-001",
         userId: "user-001",
-        encryptedPhone: Buffer.alloc(16), // test stub, content irrelevant
-        phoneHash: "hash123",
+        encryptedPhone: Buffer.alloc(16) as Buffer | null,
         isVerified: consultant.isVerified,
         preferredCallMethod: consultant.preferredCallMethod,
+        opsPhoneHash: "consultant-phone-hash" as string | null,
+        opsEncryptedPhone: null as Buffer | null,
+        smsPingsEnabled: false,
+        verificationCodeHash: null as string | null,
+        verificationExpiresAt: null as Date | null,
+        verificationAttempts: 0,
+        verifySendsHourStart: null as Date | null,
+        verifySendsInHour: 0,
+        verifyLastSentAt: null as Date | null,
       }
     : null;
 
@@ -108,9 +118,28 @@ function mockConsultantRepo(
     findByUserId: vi.fn().mockResolvedValue(record),
     create: vi.fn(),
     setVerificationCode: vi.fn(),
+    stageVerification: vi.fn().mockResolvedValue(1),
     verifyAndActivate: vi.fn(),
+    incrementVerificationAttempts: vi.fn().mockResolvedValue(1),
+    clearVerificationCode: vi.fn(),
     updatePreferredCallMethod: vi.fn(),
+    setSmsPingsEnabled: vi.fn(),
     delete: vi.fn(),
+  };
+}
+
+function mockConsultantService(
+  overrides?: Partial<ConsultantService>,
+): ConsultantService {
+  return {
+    getByUserId: vi.fn().mockResolvedValue(null),
+    register: vi.fn().mockResolvedValue({ id: "consultant-001" }),
+    prepareVerification: vi.fn().mockResolvedValue({ code: "123456" }),
+    verify: vi.fn(),
+    updatePreference: vi.fn(),
+    deleteByUserId: vi.fn(),
+    setSmsPings: vi.fn(),
+    ...overrides,
   };
 }
 
@@ -126,9 +155,13 @@ function makeDeps(overrides?: Partial<RelayHandlerDeps>): RelayHandlerDeps {
     ),
     resolveCallerIdByPurpose: vi.fn().mockResolvedValue("+15559999999"),
     pendingCalls: new Map<string, PendingCall>(),
-    indexer: { hash: vi.fn().mockReturnValue("fake-hash") },
+    indexer: {
+      hash: vi.fn().mockReturnValue("fake-hash"),
+      hashBuffer: vi.fn().mockReturnValue("fake-hash"),
+    },
     fieldEncryptor: {
       encrypt: vi.fn().mockReturnValue(Buffer.from("encrypted")),
+      encryptBuffer: vi.fn().mockReturnValue(Buffer.from("encrypted")),
       decrypt: vi.fn().mockReturnValue("decrypted"),
       decryptToBuffer: vi.fn().mockReturnValue(Buffer.from("decrypted")),
     },
@@ -145,6 +178,12 @@ function makeDeps(overrides?: Partial<RelayHandlerDeps>): RelayHandlerDeps {
       .fn()
       .mockReturnValue(mockSessionRepo(makeSessionData())),
     resolveClientPhone: vi.fn().mockResolvedValue(Buffer.from("+15551234567")),
+    consultantPhoneIndexer: {
+      hash: vi.fn().mockReturnValue("consultant-phone-hash"),
+      hashBuffer: vi.fn().mockReturnValue("consultant-phone-hash"),
+    },
+    getSealedBoxEncryptor: vi.fn().mockResolvedValue(testSealedBox),
+    createConsultantService: vi.fn().mockReturnValue(mockConsultantService()),
     ...overrides,
   };
 }
@@ -589,6 +628,178 @@ describe("createRelayHandler", () => {
       expect(JSON.parse(res.body)).toEqual({
         error: "MISSING_CONSULTANT_PHONE",
       });
+    });
+
+    // ----- Bridge verification enforcement -----
+
+    it("bridges successfully when consultant is verified and phone hash matches", async () => {
+      const provider = mockProvider();
+      const pendingCalls = new Map<string, PendingCall>();
+      // hashBuffer returns "consultant-phone-hash" by default,
+      // matching the default opsPhoneHash in mockConsultantRepo.
+      const deps = makeDeps({
+        getProvider: vi.fn().mockResolvedValue(provider),
+        pendingCalls,
+      });
+      const handler = createRelayHandler(deps);
+      const req = createMockReq(
+        "POST",
+        "/relay/call",
+        '{"ticketId":"test-ticket-id","consultantPhone":"+15552222222"}',
+      );
+      const res = createMockRes();
+      await handler(req, res as unknown as ServerResponse);
+
+      expect(res.statusCode).toBe(200);
+      const parsed = JSON.parse(res.body) as {
+        callSid: string;
+        method: string;
+      };
+      expect(parsed.method).toBe("phone_callback");
+      expect(provider.initiateOutboundCall).toHaveBeenCalledOnce();
+    });
+
+    it("returns 403 when consultant has null opsPhoneHash", async () => {
+      const provider = mockProvider();
+      const consultantRepoWithNullHash = mockConsultantRepo({
+        isVerified: true,
+        preferredCallMethod: "phone_callback",
+      });
+      // Override the record to have null opsPhoneHash
+      (
+        consultantRepoWithNullHash.findByUserId as ReturnType<typeof vi.fn>
+      ).mockResolvedValue({
+        id: "consultant-001",
+        userId: "user-001",
+        encryptedPhone: Buffer.alloc(16),
+        isVerified: true,
+        preferredCallMethod: "phone_callback",
+        opsPhoneHash: null,
+        opsEncryptedPhone: null,
+        smsPingsEnabled: false,
+        verificationCodeHash: null,
+        verificationExpiresAt: null,
+        verificationAttempts: 0,
+        verifySendsHourStart: null,
+        verifySendsInHour: 0,
+        verifyLastSentAt: null,
+      });
+      const deps = makeDeps({
+        getProvider: vi.fn().mockResolvedValue(provider),
+        createConsultantRepo: vi
+          .fn()
+          .mockReturnValue(consultantRepoWithNullHash),
+      });
+      const handler = createRelayHandler(deps);
+      const req = createMockReq(
+        "POST",
+        "/relay/call",
+        '{"ticketId":"test-ticket-id","consultantPhone":"+15552222222"}',
+      );
+      const res = createMockRes();
+      await handler(req, res as unknown as ServerResponse);
+
+      expect(res.statusCode).toBe(403);
+      expect(JSON.parse(res.body)).toEqual({
+        error: "CONSULTANT_NOT_VERIFIED",
+      });
+      // Provider was never called
+      expect(provider.initiateOutboundCall).not.toHaveBeenCalled();
+    });
+
+    it("returns 403 when submitted phone hash does not match stored hash", async () => {
+      const provider = mockProvider();
+      // consultantPhoneIndexer.hashBuffer returns a value that differs
+      // from the stored opsPhoneHash
+      const deps = makeDeps({
+        getProvider: vi.fn().mockResolvedValue(provider),
+        consultantPhoneIndexer: {
+          hash: vi.fn().mockReturnValue("mismatched-hash"),
+          hashBuffer: vi.fn().mockReturnValue("mismatched-hash"),
+        },
+      });
+      const handler = createRelayHandler(deps);
+      const req = createMockReq(
+        "POST",
+        "/relay/call",
+        '{"ticketId":"test-ticket-id","consultantPhone":"+15559999001"}',
+      );
+      const res = createMockRes();
+      await handler(req, res as unknown as ServerResponse);
+
+      expect(res.statusCode).toBe(403);
+      expect(JSON.parse(res.body)).toEqual({
+        error: "CONSULTANT_NOT_VERIFIED",
+      });
+      // Provider was never called
+      expect(provider.initiateOutboundCall).not.toHaveBeenCalled();
+    });
+
+    it("all three enforcement failures produce the same 403 response", async () => {
+      const provider = mockProvider();
+
+      // Case 1: no consultant row
+      const deps1 = makeDeps({
+        getProvider: vi.fn().mockResolvedValue(provider),
+        createConsultantRepo: vi.fn().mockReturnValue(mockConsultantRepo(null)),
+      });
+      const handler1 = createRelayHandler(deps1);
+      const req1 = createMockReq(
+        "POST",
+        "/relay/call",
+        '{"ticketId":"test-ticket-id","consultantPhone":"+15552222222"}',
+      );
+      const res1 = createMockRes();
+      await handler1(req1, res1 as unknown as ServerResponse);
+
+      // Case 2: unverified consultant
+      const deps2 = makeDeps({
+        getProvider: vi.fn().mockResolvedValue(provider),
+        createConsultantRepo: vi.fn().mockReturnValue(
+          mockConsultantRepo({
+            isVerified: false,
+            preferredCallMethod: "phone_callback",
+          }),
+        ),
+      });
+      const handler2 = createRelayHandler(deps2);
+      const req2 = createMockReq(
+        "POST",
+        "/relay/call",
+        '{"ticketId":"test-ticket-id","consultantPhone":"+15552222222"}',
+      );
+      const res2 = createMockRes();
+      await handler2(req2, res2 as unknown as ServerResponse);
+
+      // Case 3: hash mismatch
+      const deps3 = makeDeps({
+        getProvider: vi.fn().mockResolvedValue(provider),
+        consultantPhoneIndexer: {
+          hash: vi.fn().mockReturnValue("wrong-hash"),
+          hashBuffer: vi.fn().mockReturnValue("wrong-hash"),
+        },
+      });
+      const handler3 = createRelayHandler(deps3);
+      const req3 = createMockReq(
+        "POST",
+        "/relay/call",
+        '{"ticketId":"test-ticket-id","consultantPhone":"+15552222222"}',
+      );
+      const res3 = createMockRes();
+      await handler3(req3, res3 as unknown as ServerResponse);
+
+      // All three produce identical responses (no oracle)
+      expect(res1.statusCode).toBe(403);
+      expect(res2.statusCode).toBe(403);
+      expect(res3.statusCode).toBe(403);
+      expect(res1.body).toBe(res2.body);
+      expect(res2.body).toBe(res3.body);
+      expect(JSON.parse(res1.body)).toEqual({
+        error: "CONSULTANT_NOT_VERIFIED",
+      });
+
+      // Provider never called in any case
+      expect(provider.initiateOutboundCall).not.toHaveBeenCalled();
     });
   });
 
@@ -1920,6 +2131,7 @@ describe("createRelayHandler", () => {
         getTenantDb: vi.fn().mockReturnValue(mockDb),
         fieldEncryptor: {
           encrypt: vi.fn().mockReturnValue(opsEncBuf),
+          encryptBuffer: vi.fn().mockReturnValue(opsEncBuf),
           decrypt: vi.fn().mockReturnValue("decrypted"),
           decryptToBuffer: vi.fn().mockReturnValue(Buffer.from("decrypted")),
         },
@@ -1977,6 +2189,7 @@ describe("createRelayHandler", () => {
         getTenantDb: vi.fn().mockReturnValue(mockDb),
         fieldEncryptor: {
           encrypt: vi.fn().mockReturnValue(Buffer.from("encrypted")),
+          encryptBuffer: vi.fn().mockReturnValue(Buffer.from("encrypted")),
           decrypt: vi.fn().mockReturnValue("decrypted"),
           decryptToBuffer: vi.fn().mockReturnValue(decryptedPhoneBuf),
         },
@@ -2036,6 +2249,345 @@ describe("createRelayHandler", () => {
         "rawBody zeroed after CLIENT_PHONE_NOT_FOUND (default resolve)",
       );
       spy.restore();
+    });
+  });
+
+  // -----------------------------------------------------------------------
+  // Consultant phone verification (POST /relay/consultant-verify)
+  // -----------------------------------------------------------------------
+
+  describe("POST /relay/consultant-verify", () => {
+    afterEach(() => {
+      vi.restoreAllMocks();
+    });
+
+    it("sends verification SMS and stages all artifacts with wantsPings=true", async () => {
+      const spy = spyOnReadRawBody();
+      const provider = mockProvider();
+      const svc = mockConsultantService();
+      const deps = makeDeps({
+        getProvider: vi.fn().mockResolvedValue(provider),
+        createConsultantService: vi.fn().mockReturnValue(svc),
+      });
+      const handler = createRelayHandler(deps);
+
+      const phone = "+15551112222";
+      const req = createMockReq(
+        "POST",
+        "/relay/consultant-verify",
+        JSON.stringify({ phone, wantsPings: true }),
+      );
+      const res = createMockRes();
+      await handler(req, res as unknown as ServerResponse);
+
+      expect(res.statusCode).toBe(200);
+      expect(JSON.parse(res.body)).toEqual({ sent: true });
+
+      // Provider received the SMS with the code
+      expect(provider.sendSms).toHaveBeenCalledOnce();
+      const sendArgs = (provider.sendSms as ReturnType<typeof vi.fn>).mock
+        .calls[0] as [string, string, string];
+      expect(sendArgs[0]).toBe(phone);
+      expect(sendArgs[1]).toContain("123456");
+      expect(sendArgs[2]).toBe("+15559999999");
+
+      // prepareVerification was called with all three artifacts
+      expect(svc.prepareVerification).toHaveBeenCalledOnce();
+      const prepArgs = (svc.prepareVerification as ReturnType<typeof vi.fn>)
+        .mock.calls[0] as [
+        string,
+        {
+          orgSealedPhone: Buffer;
+          opsPhoneHash: string;
+          opsEncryptedPhone: Buffer | null;
+        },
+      ];
+      expect(prepArgs[0]).toBe("user-001");
+      const artifacts = prepArgs[1];
+      // org-sealed phone roundtrips: decrypt with test keypair
+      expect(testUnseal(artifacts.orgSealedPhone)).toBe(phone);
+      expect(artifacts.opsPhoneHash).toBe("consultant-phone-hash");
+      // OPS copy was encrypted because wantsPings=true
+      expect(artifacts.opsEncryptedPhone).not.toBeNull();
+
+      // Security contract: raw body buffer zeroed
+      expectZeroed(
+        spy.getCapturedBuffer(),
+        "rawBody after consultant-verify success",
+      );
+      spy.restore();
+    });
+
+    it("skips OPS encrypted phone when wantsPings is false", async () => {
+      const svc = mockConsultantService();
+      const deps = makeDeps({
+        createConsultantService: vi.fn().mockReturnValue(svc),
+      });
+      const handler = createRelayHandler(deps);
+
+      const req = createMockReq(
+        "POST",
+        "/relay/consultant-verify",
+        JSON.stringify({ phone: "+15551112222", wantsPings: false }),
+      );
+      const res = createMockRes();
+      await handler(req, res as unknown as ServerResponse);
+
+      expect(res.statusCode).toBe(200);
+
+      const prepArgs = (svc.prepareVerification as ReturnType<typeof vi.fn>)
+        .mock.calls[0] as [
+        string,
+        {
+          orgSealedPhone: Buffer;
+          opsPhoneHash: string;
+          opsEncryptedPhone: Buffer | null;
+        },
+      ];
+      expect(prepArgs[1].opsEncryptedPhone).toBeNull();
+    });
+
+    it("returns 429 RATE_LIMITED when prepareVerification throws RateLimitError", async () => {
+      const svc = mockConsultantService({
+        prepareVerification: vi
+          .fn()
+          .mockRejectedValue(new RateLimitError("RATE_LIMIT_COOLDOWN", 45)),
+      });
+      const provider = mockProvider();
+      const deps = makeDeps({
+        createConsultantService: vi.fn().mockReturnValue(svc),
+        getProvider: vi.fn().mockResolvedValue(provider),
+      });
+      const handler = createRelayHandler(deps);
+
+      const req = createMockReq(
+        "POST",
+        "/relay/consultant-verify",
+        JSON.stringify({ phone: "+15551112222", wantsPings: false }),
+      );
+      const res = createMockRes();
+      await handler(req, res as unknown as ServerResponse);
+
+      expect(res.statusCode).toBe(429);
+      expect(JSON.parse(res.body)).toEqual({ error: "RATE_LIMITED" });
+      // Provider was never called
+      expect(provider.sendSms).not.toHaveBeenCalled();
+    });
+
+    it("returns 400 INVALID_PHONE for non-E164 number without calling service", async () => {
+      const svc = mockConsultantService();
+      const deps = makeDeps({
+        createConsultantService: vi.fn().mockReturnValue(svc),
+      });
+      const handler = createRelayHandler(deps);
+
+      const req = createMockReq(
+        "POST",
+        "/relay/consultant-verify",
+        JSON.stringify({ phone: "not-a-phone" }),
+      );
+      const res = createMockRes();
+      await handler(req, res as unknown as ServerResponse);
+
+      expect(res.statusCode).toBe(400);
+      expect(JSON.parse(res.body)).toEqual({ error: "INVALID_PHONE" });
+      // Service was never touched
+      expect(svc.prepareVerification).not.toHaveBeenCalled();
+    });
+
+    it("returns 400 INVALID_PHONE when phone field is missing", async () => {
+      const svc = mockConsultantService();
+      const deps = makeDeps({
+        createConsultantService: vi.fn().mockReturnValue(svc),
+      });
+      const handler = createRelayHandler(deps);
+
+      const req = createMockReq(
+        "POST",
+        "/relay/consultant-verify",
+        JSON.stringify({ wantsPings: true }),
+      );
+      const res = createMockRes();
+      await handler(req, res as unknown as ServerResponse);
+
+      expect(res.statusCode).toBe(400);
+      expect(JSON.parse(res.body)).toEqual({ error: "INVALID_PHONE" });
+      expect(svc.prepareVerification).not.toHaveBeenCalled();
+    });
+
+    it("returns 502 PROVIDER_ERROR when sendSms throws and row state is preserved", async () => {
+      const spy = spyOnReadRawBody();
+      const svc = mockConsultantService();
+      const provider = mockProvider({
+        sendSms: vi.fn().mockRejectedValue(new Error("Twilio down")),
+      });
+      const deps = makeDeps({
+        createConsultantService: vi.fn().mockReturnValue(svc),
+        getProvider: vi.fn().mockResolvedValue(provider),
+      });
+      const handler = createRelayHandler(deps);
+
+      const req = createMockReq(
+        "POST",
+        "/relay/consultant-verify",
+        JSON.stringify({ phone: "+15551112222", wantsPings: false }),
+      );
+      const res = createMockRes();
+      await handler(req, res as unknown as ServerResponse);
+
+      expect(res.statusCode).toBe(502);
+      expect(JSON.parse(res.body)).toEqual({ error: "PROVIDER_ERROR" });
+      // prepareVerification was called (row state staged)
+      expect(svc.prepareVerification).toHaveBeenCalledOnce();
+
+      expectZeroed(
+        spy.getCapturedBuffer(),
+        "rawBody after consultant-verify PROVIDER_ERROR",
+      );
+      spy.restore();
+    });
+
+    it("response bodies never contain the input phone number", async () => {
+      const phone = "+15559876543";
+      const provider = mockProvider();
+      const deps = makeDeps({
+        getProvider: vi.fn().mockResolvedValue(provider),
+      });
+      const handler = createRelayHandler(deps);
+
+      // Success case
+      const reqOk = createMockReq(
+        "POST",
+        "/relay/consultant-verify",
+        JSON.stringify({ phone, wantsPings: true }),
+      );
+      const resOk = createMockRes();
+      await handler(reqOk, resOk as unknown as ServerResponse);
+      expect(resOk.body).not.toContain(phone);
+
+      // Invalid phone case
+      const reqBad = createMockReq(
+        "POST",
+        "/relay/consultant-verify",
+        JSON.stringify({ phone: "bad" }),
+      );
+      const resBad = createMockRes();
+      await handler(reqBad, resBad as unknown as ServerResponse);
+      expect(resBad.body).not.toContain("bad");
+
+      // Provider error case
+      const providerErr = mockProvider({
+        sendSms: vi.fn().mockRejectedValue(new Error("fail")),
+      });
+      const depsErr = makeDeps({
+        getProvider: vi.fn().mockResolvedValue(providerErr),
+      });
+      const handlerErr = createRelayHandler(depsErr);
+      const reqErr = createMockReq(
+        "POST",
+        "/relay/consultant-verify",
+        JSON.stringify({ phone, wantsPings: false }),
+      );
+      const resErr = createMockRes();
+      await handlerErr(reqErr, resErr as unknown as ServerResponse);
+      expect(resErr.body).not.toContain(phone);
+    });
+
+    it("zeros rawBody and phoneBuf on all paths", async () => {
+      const spy = spyOnReadRawBody();
+      const deps = makeDeps();
+      const handler = createRelayHandler(deps);
+
+      // Valid phone, success path
+      const req = createMockReq(
+        "POST",
+        "/relay/consultant-verify",
+        JSON.stringify({ phone: "+15551112222", wantsPings: false }),
+      );
+      const res = createMockRes();
+      await handler(req, res as unknown as ServerResponse);
+
+      expect(res.statusCode).toBe(200);
+      expectZeroed(
+        spy.getCapturedBuffer(),
+        "rawBody zeroed after consultant-verify success",
+      );
+      spy.restore();
+    });
+
+    it("zeros rawBody on invalid phone (early return)", async () => {
+      const spy = spyOnReadRawBody();
+      const deps = makeDeps();
+      const handler = createRelayHandler(deps);
+
+      const req = createMockReq(
+        "POST",
+        "/relay/consultant-verify",
+        JSON.stringify({ phone: "12345" }),
+      );
+      const res = createMockRes();
+      await handler(req, res as unknown as ServerResponse);
+
+      expect(res.statusCode).toBe(400);
+      expectZeroed(
+        spy.getCapturedBuffer(),
+        "rawBody zeroed after INVALID_PHONE",
+      );
+      spy.restore();
+    });
+
+    it("returns 500 NO_ORG_KEY when SealedBoxEncryptor is unavailable", async () => {
+      const deps = makeDeps({
+        getSealedBoxEncryptor: vi.fn().mockResolvedValue(null),
+      });
+      const handler = createRelayHandler(deps);
+
+      const req = createMockReq(
+        "POST",
+        "/relay/consultant-verify",
+        JSON.stringify({ phone: "+15551112222", wantsPings: false }),
+      );
+      const res = createMockRes();
+      await handler(req, res as unknown as ServerResponse);
+
+      expect(res.statusCode).toBe(500);
+      expect(JSON.parse(res.body)).toEqual({ error: "NO_ORG_KEY" });
+    });
+
+    it("returns 500 NO_PROVIDER when provider not configured", async () => {
+      const deps = makeDeps({
+        getProvider: vi.fn().mockResolvedValue(null),
+      });
+      const handler = createRelayHandler(deps);
+
+      const req = createMockReq(
+        "POST",
+        "/relay/consultant-verify",
+        JSON.stringify({ phone: "+15551112222", wantsPings: false }),
+      );
+      const res = createMockRes();
+      await handler(req, res as unknown as ServerResponse);
+
+      expect(res.statusCode).toBe(500);
+      expect(JSON.parse(res.body)).toEqual({ error: "NO_PROVIDER" });
+    });
+
+    it("returns 400 NO_CALLER_ID when no outbound number provisioned", async () => {
+      const deps = makeDeps({
+        resolveCallerIdByPurpose: vi.fn().mockResolvedValue(null),
+      });
+      const handler = createRelayHandler(deps);
+
+      const req = createMockReq(
+        "POST",
+        "/relay/consultant-verify",
+        JSON.stringify({ phone: "+15551112222", wantsPings: false }),
+      );
+      const res = createMockRes();
+      await handler(req, res as unknown as ServerResponse);
+
+      expect(res.statusCode).toBe(400);
+      expect(JSON.parse(res.body)).toEqual({ error: "NO_CALLER_ID" });
     });
   });
 });

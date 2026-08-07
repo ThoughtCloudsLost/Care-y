@@ -158,6 +158,10 @@ describe("createTelephonyAdminRouter", () => {
 
   const mockIndexer = {
     hash: vi.fn((input: string, orgId: string) => `hash_${orgId}_${input}`),
+    hashBuffer: vi.fn(
+      (input: Buffer, orgId: string) =>
+        `hash_${orgId}_${input.toString("utf-8")}`,
+    ),
   };
 
   function buildDeps(

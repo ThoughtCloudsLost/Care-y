@@ -1,4 +1,12 @@
-import { describe, expect, it, vi, beforeAll, afterAll } from "vitest";
+import {
+  describe,
+  expect,
+  it,
+  vi,
+  beforeEach,
+  beforeAll,
+  afterAll,
+} from "vitest";
 import {
   createNotificationService,
   createNotificationJobHandler,
@@ -26,6 +34,19 @@ import {
   testFieldEncryptor,
   type TestDb,
 } from "../test-utils.js";
+import type { VolunteerReachability } from "../telephony/reachability.js";
+import { NOTIFICATION_SMS_QUEUE } from "../jobs/notification-sms.js";
+
+vi.mock("../telephony/reachability.js", async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  getReachabilityForUsers: vi.fn(
+    async () => new Map<string, VolunteerReachability>(),
+  ),
+}));
+
+// Imported after vi.mock so the mock is in place
+const { getReachabilityForUsers } =
+  await import("../telephony/reachability.js");
 
 function mockSse(): SseService & { calls: unknown[] } {
   const calls: unknown[] = [];
@@ -118,6 +139,14 @@ const EMPTY_RECIPIENTS: NotificationRecipientList = {
 };
 
 describe("NotificationService.dispatch", () => {
+  beforeEach(() => {
+    vi.mocked(getReachabilityForUsers).mockReset();
+    // Default: return empty map (all smsAllowed users fall back to email)
+    vi.mocked(getReachabilityForUsers).mockResolvedValue(
+      new Map<string, VolunteerReachability>(),
+    );
+  });
+
   it("broadcasts SSE event to all recipients", async () => {
     const sse = mockSse();
     const svc = createNotificationService({
@@ -376,13 +405,13 @@ describe("NotificationService.dispatch", () => {
     expect(pushArgs[1]).toEqual(["user-2"]);
   });
 
-  it("skips email enqueue entirely when all recipients have email disabled", async () => {
+  it("skips email enqueue entirely when all recipients have email and sms disabled", async () => {
     const jobQueue = mockJobQueue();
     const prefs = mockPreferences({
       overrides: {
         pushAllowed: ["user-1", "user-2"],
         emailAllowed: [],
-        smsAllowed: ["user-1", "user-2"],
+        smsAllowed: [],
       },
     });
     const svc = createNotificationService({
@@ -403,7 +432,8 @@ describe("NotificationService.dispatch", () => {
       TEST_RECIPIENTS,
     );
 
-    // No email job enqueued at all
+    // No jobs enqueued at all (smsAllowed empty skips reachability,
+    // emailAllowed empty skips the email enqueue)
     expect(jobQueue.enqueuedJobs).toHaveLength(0);
   });
 
@@ -449,6 +479,144 @@ describe("NotificationService.dispatch", () => {
       errorSpy.mockRestore();
     }
   });
+
+  it("splits smsAllowed by reachability: deliverable to SMS queue, fallback merged into email", async () => {
+    // user-1 is verified_sms (deliverable), user-2 is verified (no SMS, fallback)
+    vi.mocked(getReachabilityForUsers).mockResolvedValue(
+      new Map<string, VolunteerReachability>([
+        ["user-1", "verified_sms"],
+        ["user-2", "verified"],
+      ]),
+    );
+
+    const jobQueue = mockJobQueue();
+    const prefs = mockPreferences({
+      overrides: {
+        pushAllowed: ["user-1", "user-2"],
+        emailAllowed: [],
+        smsAllowed: ["user-1", "user-2"],
+      },
+    });
+    const svc = createNotificationService({
+      sse: mockSse(),
+      emailSender: mockEmailSender(),
+      pushSender: mockPushSender(),
+      jobQueue,
+      preferences: prefs,
+    });
+
+    await svc.dispatch(
+      {} as Kysely<TenantDatabase>,
+      "org_test-1",
+      "myorg",
+      "ticket_escalated",
+      "ticket-uuid",
+      "queue-uuid",
+      TEST_RECIPIENTS,
+    );
+
+    // Two enqueued jobs: one SMS, one email (for the fallback user)
+    expect(jobQueue.enqueuedJobs).toHaveLength(2);
+    const smsJob = jobQueue.enqueuedJobs.find(
+      (j) => (j as { queue: string }).queue === NOTIFICATION_SMS_QUEUE,
+    ) as { queue: string; payload: Record<string, unknown> };
+    const emailJob = jobQueue.enqueuedJobs.find(
+      (j) => (j as { queue: string }).queue === "notification-email",
+    ) as { queue: string; payload: Record<string, unknown> };
+
+    expect(smsJob).toBeDefined();
+    expect(smsJob.payload.recipientUserIds).toEqual(["user-1"]);
+    expect(smsJob.payload.eventType).toBe("ticket_escalated");
+
+    expect(emailJob).toBeDefined();
+    // user-2 falls back to email despite emailAllowed being empty,
+    // because the fallback deliberately overrides a disabled email
+    // preference: a silently dropped escalation ping is the worse failure.
+    expect(emailJob.payload.recipientUserIds).toEqual(["user-2"]);
+  });
+
+  it("deduplicates the email list when a user appears in both emailAllowed and smsFallback", async () => {
+    // user-1 has email enabled AND sms enabled but is not SMS-reachable
+    vi.mocked(getReachabilityForUsers).mockResolvedValue(
+      new Map<string, VolunteerReachability>([["user-1", "unverified"]]),
+    );
+
+    const jobQueue = mockJobQueue();
+    const prefs = mockPreferences({
+      overrides: {
+        pushAllowed: [],
+        emailAllowed: ["user-1"],
+        smsAllowed: ["user-1"],
+      },
+    });
+    const svc = createNotificationService({
+      sse: mockSse(),
+      emailSender: mockEmailSender(),
+      pushSender: mockPushSender(),
+      jobQueue,
+      preferences: prefs,
+    });
+
+    await svc.dispatch(
+      {} as Kysely<TenantDatabase>,
+      "org_test-1",
+      "myorg",
+      "ticket_created",
+      "ticket-uuid",
+      "queue-uuid",
+      TEST_RECIPIENTS,
+    );
+
+    // One email job only (no SMS job since user-1 is not verified_sms)
+    expect(jobQueue.enqueuedJobs).toHaveLength(1);
+    const emailJob = jobQueue.enqueuedJobs[0] as {
+      queue: string;
+      payload: Record<string, unknown>;
+    };
+    expect(emailJob.queue).toBe("notification-email");
+    // user-1 appears once, not twice (Set dedupe)
+    expect(emailJob.payload.recipientUserIds).toEqual(["user-1"]);
+  });
+
+  it("skips the reachability query entirely when smsAllowed is empty", async () => {
+    const jobQueue = mockJobQueue();
+    const prefs = mockPreferences({
+      overrides: {
+        pushAllowed: ["user-1", "user-2"],
+        emailAllowed: ["user-1", "user-2"],
+        smsAllowed: [],
+      },
+    });
+    const svc = createNotificationService({
+      sse: mockSse(),
+      emailSender: mockEmailSender(),
+      pushSender: mockPushSender(),
+      jobQueue,
+      preferences: prefs,
+    });
+
+    await svc.dispatch(
+      {} as Kysely<TenantDatabase>,
+      "org_test-1",
+      "myorg",
+      "ticket_assigned",
+      "ticket-uuid",
+      "queue-uuid",
+      TEST_RECIPIENTS,
+    );
+
+    // Reachability module never called
+    expect(getReachabilityForUsers).not.toHaveBeenCalled();
+
+    // Email still enqueued normally from emailAllowed
+    expect(jobQueue.enqueuedJobs).toHaveLength(1);
+    const emailJob = jobQueue.enqueuedJobs[0] as {
+      queue: string;
+      payload: Record<string, unknown>;
+    };
+    expect(emailJob.queue).toBe("notification-email");
+    expect(emailJob.payload.recipientUserIds).toEqual(["user-1", "user-2"]);
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -456,6 +624,13 @@ describe("NotificationService.dispatch", () => {
 // ---------------------------------------------------------------------------
 
 describe("NotificationService.dispatchTicketless preference filtering", () => {
+  beforeEach(() => {
+    vi.mocked(getReachabilityForUsers).mockReset();
+    vi.mocked(getReachabilityForUsers).mockResolvedValue(
+      new Map<string, VolunteerReachability>(),
+    );
+  });
+
   it("consults global scope only (no ticket or queue forwarded to resolveForDispatch)", async () => {
     const prefs = mockPreferences();
     const svc = createNotificationService({
@@ -488,6 +663,13 @@ describe("NotificationService.dispatchTicketless preference filtering", () => {
 // ---------------------------------------------------------------------------
 
 describe("NotificationService.dispatchTicketless", () => {
+  beforeEach(() => {
+    vi.mocked(getReachabilityForUsers).mockReset();
+    vi.mocked(getReachabilityForUsers).mockResolvedValue(
+      new Map<string, VolunteerReachability>(),
+    );
+  });
+
   it("broadcasts a system SSE event with type and timestamp only", async () => {
     const sse = mockSse();
     const svc = createNotificationService({

@@ -39,6 +39,7 @@ import {
   deriveKeys,
   createFieldEncryptor,
   createBlindIndexer,
+  deriveConsultantPhoneIndexKey,
   type FieldEncryptor,
   type BlindIndexer,
 } from "./crypto/field-encryptor.js";
@@ -75,12 +76,16 @@ import { extractOrgSlug } from "./org/slug-resolver.js";
 import { NotFoundError } from "./errors.js";
 import { createPhoneResolver } from "./telephony/phone-resolver.js";
 import { createConsultantRepository } from "./telephony/models/consultant-repo.js";
+import { createConsultantService } from "./telephony/consultant-service.js";
 import { createDbSessionRepository } from "./auth/session-repository.js";
 import { createDedupStore } from "./telephony/dedup-store.js";
 import { registerLogDeletionHandler } from "./jobs/log-deletion.js";
 import { createTelephonyConfigService } from "./telephony/config-service.js";
 import { createBlobStore, type BlobStore } from "./storage/index.js";
-import { createSealedBoxEncryptor } from "./crypto/sealed-box.js";
+import {
+  createSealedBoxEncryptor,
+  type SealedBoxEncryptor,
+} from "./crypto/sealed-box.js";
 import type { Kysely } from "kysely";
 import type { TenantDatabase } from "./db/types.js";
 import { createWebhookDispatch } from "./telephony/webhook-dispatch.js";
@@ -118,6 +123,7 @@ import {
   createNotificationJobHandler,
   createNotificationService,
 } from "./notifications/service.js";
+import { registerNotificationSmsHandler } from "./jobs/notification-sms.js";
 import { createNotificationPreferencesService } from "./notifications/preferences.js";
 import { createSearchService } from "./tickets/search.js";
 import { createAuditService } from "./tickets/audit.js";
@@ -160,6 +166,7 @@ async function probeDatabase(): Promise<void> {
 interface CryptoServices {
   readonly encryptor: FieldEncryptor;
   readonly indexer: BlindIndexer;
+  readonly consultantPhoneIndexer: BlindIndexer;
   readonly fakeSaltKey: Buffer;
   readonly tokenizer: SessionTokenizer;
   readonly pushChallengeHmacKey: Buffer;
@@ -183,10 +190,20 @@ async function deriveCryptoServices(
   const derived = deriveKeys(opsKey);
   const encryptor = createFieldEncryptor(derived.fieldEncryptKey);
   const indexer = createBlindIndexer(derived.blindIndexKey);
+  const consultantPhoneIndexer = createBlindIndexer(
+    deriveConsultantPhoneIndexKey(opsKey),
+  );
   const fakeSaltKey = await deriveFakeSaltKey(opsSecretsKeyHex);
   const tokenizer = createSessionTokenizer(deriveSessionHmacKey(opsKey));
   const pushChallengeHmacKey = derivePushChallengeHmacKey(opsKey);
-  return { encryptor, indexer, fakeSaltKey, tokenizer, pushChallengeHmacKey };
+  return {
+    encryptor,
+    indexer,
+    consultantPhoneIndexer,
+    fakeSaltKey,
+    tokenizer,
+    pushChallengeHmacKey,
+  };
 }
 
 // --- CORS ---
@@ -347,8 +364,14 @@ const env: EnvVars = getEnv();
 assertSingleInstanceRateLimiting(env.APP_MULTI_INSTANCE);
 assertSingleInstanceTotpReplayCache(env.APP_MULTI_INSTANCE);
 
-const { encryptor, indexer, fakeSaltKey, tokenizer, pushChallengeHmacKey } =
-  await deriveCryptoServices(env.OPS_SECRETS_KEY);
+const {
+  encryptor,
+  indexer,
+  consultantPhoneIndexer,
+  fakeSaltKey,
+  tokenizer,
+  pushChallengeHmacKey,
+} = await deriveCryptoServices(env.OPS_SECRETS_KEY);
 
 // --- Telephony provider factory ---
 
@@ -645,6 +668,14 @@ const notificationJobHandler = createNotificationJobHandler({
 });
 jobQueue.process("notification-email", notificationJobHandler);
 
+registerNotificationSmsHandler(jobQueue, {
+  encryptor,
+  getTenantDb: tenantDb,
+  getProvider: async (orgSchema: string) =>
+    providerFactory.getProvider(orgSchema),
+  resolveCallerIdByPurpose: phoneResolver,
+});
+
 registerEscalationHandler(jobQueue, async () => {
   const schemas = await listActiveOrgSchemas();
   for (const schema of schemas) {
@@ -822,6 +853,20 @@ async function requireWebhookConfig(
   return lookup;
 }
 
+/** Builds a SealedBoxEncryptor from the org's public key, or null when the
+ *  org has not completed onboarding (no key set yet). */
+async function getOrgSealedBoxEncryptor(
+  orgSchema: string,
+): Promise<SealedBoxEncryptor | null> {
+  const row = await tenantDb(orgSchema)
+    .selectFrom("org_config")
+    .select("org_public_key")
+    .executeTakeFirst();
+  return row?.org_public_key
+    ? createSealedBoxEncryptor(row.org_public_key)
+    : null;
+}
+
 const relayHandler = createRelayHandler({
   getProvider: async (orgId: string) => providerFactory.getProvider(orgId),
   getTenantDb: tenantDb,
@@ -847,6 +892,9 @@ const relayHandler = createRelayHandler({
   fieldEncryptor: encryptor,
   pendingClients,
   callTracker,
+  consultantPhoneIndexer,
+  getSealedBoxEncryptor: getOrgSealedBoxEncryptor,
+  createConsultantService,
 });
 
 // --- HTTP server ---

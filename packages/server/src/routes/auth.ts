@@ -71,6 +71,7 @@ import type { EmailSender } from "../email/email-sender.js";
 import { createScopedTwoFactorServices } from "./two-factor.js";
 import type { ProviderFactory } from "../telephony/factory.js";
 import type { CallerIdResolver } from "../auth/sms-code.js";
+import { getReachabilityForUsers } from "../telephony/reachability.js";
 import type { TotpReplayCache } from "../auth/totp-replay-cache.js";
 
 export interface AuthRouterDeps extends AuthServiceDeps {
@@ -357,6 +358,11 @@ export function createAuthRouter(deps: AuthRouterDeps) {
       withErrorWrapping(async ({ ctx }) => {
         const svc = createUserService(ctx.org.tenantDb);
         const users = await svc.listAllForAdmin();
+        const userIds = users.map((u) => u.id);
+        const reachabilityMap = await getReachabilityForUsers(
+          ctx.org.tenantDb,
+          userIds,
+        );
         return users.map((u) => ({
           id: u.id,
           encryptedIdentifier: u.encryptedIdentifier.toString("base64url"),
@@ -366,6 +372,7 @@ export function createAuthRouter(deps: AuthRouterDeps) {
           hasKeys: u.hasKeys,
           hasOrgKeyWrap: u.hasOrgKeyWrap,
           volPublic: u.volPublic ? u.volPublic.toString("base64url") : null,
+          reachability: reachabilityMap.get(u.id) ?? "none",
         }));
       }),
     ),
