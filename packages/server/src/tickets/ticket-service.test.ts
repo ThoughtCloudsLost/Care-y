@@ -7,6 +7,7 @@ import {
   createTestTicketFixture,
   createTestClientFixture,
   testSealedBox,
+  noopEncryptor,
   type TestDb,
 } from "../test-utils.js";
 import {
@@ -2007,6 +2008,51 @@ describe.skipIf(!process.env.DATABASE_URL)("TicketService (DB)", () => {
       // Admin bypasses queue scoping and sees the client
       const results = await svc.searchClients("", 10, admin.id, true);
       expect(results.map((r) => r.id)).toContain(fix.clientId);
+    });
+
+    it("returns a phone-less client with null maskedPhone", async () => {
+      const queue = await createTestQueue(testDb.db);
+      const user = await createTestUser(testDb.db);
+
+      // Assign user to the queue so scoping includes it
+      await testDb.db
+        .insertInto("queue_assignments")
+        // care-y-ignore-next-line no-plaintext-db-write -- opaque UUIDs, not PII
+        .values({ queue_id: queue.id, user_id: user.id })
+        .onConflict((oc) => oc.columns(["queue_id", "user_id"]).doNothing())
+        .execute();
+
+      // Insert a phone-less client (web intake path)
+      const client = await testDb.db
+        .insertInto("clients")
+        // care-y-ignore-next-line no-plaintext-db-write -- test sealed ciphertext, phone_id null (web intake)
+        .values({
+          encrypted_alias: testSealedBox.sealBuffer(
+            Buffer.from("search-web-client"),
+          ),
+          alias_hash: null,
+          phone_id: null,
+        })
+        .returning("id")
+        .executeTakeFirstOrThrow();
+
+      // Create a ticket so the client is reachable
+      await testDb.db
+        .insertInto("tickets")
+        .values({
+          client_id: client.id,
+          queue_id: queue.id,
+          encrypted_title: noopEncryptor.encrypt("web-title"),
+          encrypted_description: noopEncryptor.encrypt("web-desc"),
+          key_generation: crypto.randomUUID(),
+        })
+        .execute();
+
+      const results = await svc.searchClients("", 50, user.id, false);
+      const found = results.find((r) => r.id === client.id);
+      expect(found).toBeDefined();
+      // Phone-less clients should return null maskedPhone, not crash
+      expect(found!.maskedPhone).toBeNull();
     });
   });
 

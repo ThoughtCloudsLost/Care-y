@@ -23,7 +23,7 @@ export interface ClientRecord {
   readonly id: string;
   readonly encryptedAlias: Buffer;
   readonly aliasHash: string | null;
-  readonly phoneId: string;
+  readonly phoneId: string | null;
 }
 
 export interface FindOrCreateResult {

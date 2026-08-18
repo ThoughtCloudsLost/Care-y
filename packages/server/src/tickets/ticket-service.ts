@@ -77,6 +77,13 @@ export interface TicketKeyWrap {
 
 export interface TicketWithKeyWrap extends TicketListRecord {
   readonly keyWrap: TicketKeyWrap | null;
+  /**
+   * Base64-encoded sealed-box wrap of tk sealed to the org public key.
+   * Present only on intake tickets that have not been converted yet
+   * (intake_key_wraps row exists AND this volunteer has no ECIES wrap).
+   * The Worker uses crypto_box_seal_open to recover tk from this wrap.
+   */
+  readonly intakeWrap: string | null;
 }
 
 export interface FollowUpPreview {
@@ -237,7 +244,7 @@ export interface TicketService {
 export interface ClientSearchResult {
   readonly id: string;
   readonly encryptedAlias: Buffer;
-  readonly maskedPhone: string;
+  readonly maskedPhone: string | null;
 }
 
 export interface TicketCounts {
@@ -331,11 +338,21 @@ function toRecordWithKeyWrap(
     ephemeral_point: Buffer | null;
     nonce: Buffer | null;
     wrapped_key: Buffer | null;
+    intake_wrapped_tk?: Buffer | null;
   },
 ): TicketWithKeyWrap {
+  const keyWrap = buildKeyWrap(row.ephemeral_point, row.nonce, row.wrapped_key);
+  // Populate intakeWrap only when the volunteer has no ECIES wrap but an
+  // intake_key_wraps row exists. The Worker uses this to unseal tk via
+  // crypto_box_seal_open with the org secret key.
+  const intakeWrap =
+    keyWrap === null && row.intake_wrapped_tk
+      ? encode(new Uint8Array(row.intake_wrapped_tk))
+      : null;
   return {
     ...toListRecord(row),
-    keyWrap: buildKeyWrap(row.ephemeral_point, row.nonce, row.wrapped_key),
+    keyWrap,
+    intakeWrap,
   };
 }
 
@@ -550,6 +567,7 @@ export function createTicketService(
             .on("tkw.volunteer_id", "=", userId)
             .onRef("tkw.key_generation", "=", "t.key_generation"),
         )
+        .leftJoin("intake_key_wraps as ikw", "ikw.ticket_id", "t.id")
         .innerJoin("clients as c", "c.id", "t.client_id")
         .leftJoin("phones as ph", "ph.id", "c.phone_id")
         .innerJoin("queues as q", "q.id", "t.queue_id")
@@ -560,6 +578,7 @@ export function createTicketService(
         )
         .selectAll("t")
         .select(["tkw.ephemeral_point", "tkw.nonce", "tkw.wrapped_key"])
+        .select("ikw.wrapped_tk as intake_wrapped_tk")
         .select("c.encrypted_alias as encrypted_client_alias")
         .select((eb) => eb("c.phone_id", "is not", null).as("has_phone"))
         .select("ph.encrypted_number as client_phone_encrypted")
@@ -613,6 +632,7 @@ export function createTicketService(
             .on("tkw.volunteer_id", "=", userId)
             .onRef("tkw.key_generation", "=", "t.key_generation"),
         )
+        .leftJoin("intake_key_wraps as ikw", "ikw.ticket_id", "t.id")
         .innerJoin("clients as c", "c.id", "t.client_id")
         .leftJoin("phones as ph", "ph.id", "c.phone_id")
         .innerJoin("queues as q", "q.id", "t.queue_id")
@@ -623,6 +643,7 @@ export function createTicketService(
         )
         .selectAll("t")
         .select(["tkw.ephemeral_point", "tkw.nonce", "tkw.wrapped_key"])
+        .select("ikw.wrapped_tk as intake_wrapped_tk")
         .select("c.encrypted_alias as encrypted_client_alias")
         .select((eb) => eb("c.phone_id", "is not", null).as("has_phone"))
         .select("ph.encrypted_number as client_phone_encrypted")
@@ -1491,7 +1512,7 @@ export function createTicketService(
       // null alias_hash until a browser backfills it.
       let search = db
         .selectFrom("clients as c")
-        .innerJoin("phones as p", "p.id", "c.phone_id")
+        .leftJoin("phones as p", "p.id", "c.phone_id")
         .select(["c.id", "c.encrypted_alias", "p.encrypted_number"])
         .where("c.merged_into", "is", null);
 
@@ -1538,14 +1559,16 @@ export function createTicketService(
         return results.map((r) => ({
           id: r.id,
           encryptedAlias: r.encrypted_alias,
-          maskedPhone: "***",
+          maskedPhone: r.encrypted_number ? "***" : null,
         }));
       }
 
       return results.map((r) => ({
         id: r.id,
         encryptedAlias: r.encrypted_alias,
-        maskedPhone: maskPhone(encryptor.decryptToBuffer(r.encrypted_number)),
+        maskedPhone: r.encrypted_number
+          ? maskPhone(encryptor.decryptToBuffer(r.encrypted_number))
+          : null,
       }));
     },
 

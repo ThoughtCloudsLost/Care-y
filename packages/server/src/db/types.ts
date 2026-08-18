@@ -254,7 +254,7 @@ export interface ClientsTable {
   id: Generated<string>;
   encrypted_alias: Buffer;
   alias_hash: string | null;
-  phone_id: string;
+  phone_id: string | null;
   merged_into: string | null;
   created_at: Generated<Date>;
   updated_at: Generated<Date>;
@@ -648,6 +648,46 @@ export interface RolePermissionOverridesTable {
   enabled: boolean;
 }
 
+// --- Intake forms (dynamic form definitions + responses + interim key wraps) ---
+
+export interface IntakeFormsTable {
+  id: Generated<string>;
+  name: string;
+  is_active: ColumnType<boolean, boolean | undefined, boolean>;
+  created_at: Generated<Date>;
+  updated_at: Generated<Date>;
+}
+
+export interface IntakeFormFieldsTable {
+  id: Generated<string>;
+  form_id: string;
+  position: number;
+  field_type: string;
+  encrypted_label: Buffer;
+  encrypted_config: Buffer;
+  is_required: ColumnType<boolean, boolean | undefined, boolean>;
+  created_at: Generated<Date>;
+}
+
+export interface QueueIntakeFormsTable {
+  queue_id: string;
+  form_id: string;
+}
+
+export interface IntakeFormResponsesTable {
+  ticket_id: string;
+  form_id: string;
+  encrypted_response: Buffer;
+  created_at: Generated<Date>;
+}
+
+export interface IntakeKeyWrapsTable {
+  ticket_id: string;
+  wrapped_tk: Buffer;
+  algorithm: Generated<string>;
+  created_at: Generated<Date>;
+}
+
 export interface TenantDatabase {
   users: UsersTable;
   sessions: SessionsTable;
@@ -710,5 +750,11 @@ export interface TenantDatabase {
   // Role permission overrides
   role_permission_overrides: RolePermissionOverridesTable;
   // Shifts (shifts, shift_occurrences)
+  // Intake forms
+  intake_forms: IntakeFormsTable;
+  intake_form_fields: IntakeFormFieldsTable;
+  queue_intake_forms: QueueIntakeFormsTable;
+  intake_form_responses: IntakeFormResponsesTable;
+  intake_key_wraps: IntakeKeyWrapsTable;
   // Client portal (portal_channels)
 }

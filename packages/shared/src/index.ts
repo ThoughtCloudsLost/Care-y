@@ -539,3 +539,32 @@ export {
   type DeleteEscalationRuleInput,
   type ListEscalationRulesInput,
 } from "./schemas/escalation.js";
+
+// --- Client portal schemas ---
+export {
+  intakeWrappedTkSchema,
+  intakeSubmissionInputSchema,
+  intakeChallengeResponseSchema,
+  intakeSubmitResponseSchema,
+  intakeConfigResponseSchema,
+  type IntakeSubmissionInput,
+  type IntakeChallengeResponse,
+  type IntakeSubmitResponse,
+  type IntakeConfigResponse,
+} from "./schemas/client-portal.js";
+
+// --- Intake form schemas ---
+export {
+  intakeFieldTypeSchema,
+  intakeFieldConfigSchema,
+  dayOfWeekSchema,
+  availabilityDataSchema,
+  intakeFormResponseSchema,
+  saveIntakeFormInputSchema,
+  type IntakeFieldType,
+  type IntakeFieldConfig,
+  type DayOfWeek,
+  type AvailabilityData,
+  type IntakeFormResponse,
+  type SaveIntakeFormInput,
+} from "./schemas/intake-forms.js";

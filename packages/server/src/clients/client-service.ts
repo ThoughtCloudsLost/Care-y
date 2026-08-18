@@ -33,7 +33,7 @@ export interface ClientListRecord {
   readonly id: string;
   readonly encryptedAlias: Buffer;
   readonly aliasHash: string | null;
-  readonly encryptedNumber: Buffer;
+  readonly encryptedNumber: Buffer | null;
   readonly ticketCount: number;
   readonly createdAt: Date;
   readonly mergedInto: string | null;
@@ -52,8 +52,8 @@ export interface ClientTicketRecord {
 }
 
 export interface ClientDetailRecord extends ClientListRecord {
-  readonly phoneId: string;
-  readonly phoneHash: string;
+  readonly phoneId: string | null;
+  readonly phoneHash: string | null;
   readonly tickets: readonly ClientTicketRecord[];
   readonly mergeHistory: readonly MergeEventRecord[];
 }
@@ -145,7 +145,7 @@ export function createClientService(deps: ClientServiceDeps): ClientService {
 
       let query = db
         .selectFrom("clients as c")
-        .innerJoin("phones as p", "p.id", "c.phone_id")
+        .leftJoin("phones as p", "p.id", "c.phone_id")
         .select([
           "c.id",
           "c.encrypted_alias",
@@ -249,7 +249,7 @@ export function createClientService(deps: ClientServiceDeps): ClientService {
         id: r.id,
         encryptedAlias: r.encrypted_alias,
         aliasHash: r.alias_hash,
-        encryptedNumber: r.encrypted_number,
+        encryptedNumber: r.encrypted_number ?? null,
         ticketCount: r.ticketCount ?? 0,
         createdAt: r.created_at,
         mergedInto: r.merged_into,
@@ -259,7 +259,7 @@ export function createClientService(deps: ClientServiceDeps): ClientService {
     async getById(clientId): Promise<ClientDetailRecord> {
       const row = await db
         .selectFrom("clients as c")
-        .innerJoin("phones as p", "p.id", "c.phone_id")
+        .leftJoin("phones as p", "p.id", "c.phone_id")
         .select([
           "c.id",
           "c.encrypted_alias",
@@ -315,12 +315,12 @@ export function createClientService(deps: ClientServiceDeps): ClientService {
         id: row.id,
         encryptedAlias: row.encrypted_alias,
         aliasHash: row.alias_hash,
-        encryptedNumber: row.encrypted_number,
+        encryptedNumber: row.encrypted_number ?? null,
         ticketCount: row.ticketCount ?? 0,
         createdAt: row.created_at,
         mergedInto: row.merged_into,
-        phoneId: row.phone_id,
-        phoneHash: row.phone_hash,
+        phoneId: row.phone_id ?? null,
+        phoneHash: row.phone_hash ?? null,
         tickets: tickets.map((t) => ({
           id: t.id,
           encryptedTitle: t.encrypted_title,
@@ -472,6 +472,9 @@ export function createClientService(deps: ClientServiceDeps): ClientService {
       phoneHash,
       excludeClientId,
     ): Promise<PhoneConflict | null> {
+      // Inner join is correct here: phone-less clients (web intake, phone_id
+      // NULL) have no phone hash to match against, so they should never appear
+      // as duplicate suggestions.
       let query = db
         .selectFrom("phones as p")
         .innerJoin("clients as c", "c.phone_id", "p.id")

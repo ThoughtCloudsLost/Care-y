@@ -627,4 +627,59 @@ describe.skipIf(!process.env.DATABASE_URL)("ClientService (DB)", () => {
       expect(Buffer.isBuffer(detail.encryptedAlias)).toBe(true);
     });
   });
+
+  // -----------------------------------------------------------------------
+  // phone-less clients (web intake, phone_id NULL)
+  // -----------------------------------------------------------------------
+
+  describe("phone-less clients", () => {
+    let phonelessClientId: string;
+
+    beforeAll(async () => {
+      // Insert a client with no phone (web intake path)
+      const row = await testDb.db
+        .insertInto("clients")
+        // care-y-ignore-next-line no-plaintext-db-write -- encrypted_alias is test ciphertext via testSealedBox; phone_id is null (web intake)
+        .values({
+          encrypted_alias: testSealedBox.sealBuffer(Buffer.from("web-client")),
+          alias_hash: null,
+          phone_id: null,
+        })
+        .returning("id")
+        .executeTakeFirstOrThrow();
+      phonelessClientId = row.id;
+
+      // Give it a ticket so it appears in scoped queries
+      await testDb.db
+        .insertInto("tickets")
+        .values({
+          client_id: phonelessClientId,
+          queue_id: queueId,
+          encrypted_title: noopEncryptor.encrypt("intake-title"),
+          encrypted_description: noopEncryptor.encrypt("intake-desc"),
+          key_generation: crypto.randomUUID(),
+        })
+        .execute();
+    });
+
+    it("list returns a phone-less client with null encryptedNumber", async () => {
+      const results = await svc.list({
+        query: "",
+        sortBy: "created_at",
+        sortDirection: "desc",
+        limit: 200,
+      });
+
+      const found = results.find((r) => r.id === phonelessClientId);
+      expect(found).toBeDefined();
+      expect(found!.encryptedNumber).toBeNull();
+    });
+
+    it("getById returns null phone fields for a phone-less client", async () => {
+      const detail = await svc.getById(phonelessClientId);
+      expect(detail.phoneId).toBeNull();
+      expect(detail.phoneHash).toBeNull();
+      expect(detail.encryptedNumber).toBeNull();
+    });
+  });
 });
