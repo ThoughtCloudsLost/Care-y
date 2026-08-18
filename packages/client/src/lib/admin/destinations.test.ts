@@ -54,7 +54,12 @@ describe("getVisibleDestinations", () => {
     ]);
     const visible = getVisibleDestinations(permissions);
 
-    expect(visible.map((d) => d.id)).toEqual(["users", "queues", "audit-log"]);
+    expect(visible.map((d) => d.id)).toEqual([
+      "users",
+      "queues",
+      "intake-forms",
+      "audit-log",
+    ]);
   });
 
   it("returns empty array when no permissions match", () => {
@@ -116,6 +121,7 @@ describe("groupDestinations", () => {
       "keys",
       "retention",
       "note-types",
+      "intake-forms",
     ]);
   });
 });
