@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "Sort options reorder tickets by priority, date, activity, or queue. Sorting operates on metadata the server can compare without decrypting content, so the se..." |
+* | "Sort options reorder the ticket list by priority, date, last activity, queue, status, title, assignee, or client. **Server side fields.** Priority, date, las..." |
 *
 * @param {Demo_Narrative_Topic_Sort_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

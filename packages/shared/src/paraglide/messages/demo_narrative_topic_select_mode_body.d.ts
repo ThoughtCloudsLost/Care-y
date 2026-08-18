@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "Select multiple tickets or messages to perform batch actions. Selection state is purely local. The server never learns which items you selected or why." |
+* | "Select mode lets volunteers pick multiple tickets for batch actions. Tap the select button in the toolbar to enter selection mode, then tap tickets to add th..." |
 *
 * @param {Demo_Narrative_Topic_Select_Mode_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

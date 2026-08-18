@@ -6,17 +6,17 @@ import { getLocale, experimentalStaticLocale } from '../runtime.js';
 /** @typedef {{}} Demo_Section_Library_DescInputs */
 
 const en_demo_section_library_desc = /** @type {(inputs: Demo_Section_Library_DescInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`The library is a shared knowledge base for the organization. Browse articles, read detailed entries with attachments and votes, and write new content in the rich-text editor. Everything here runs against the real in-browser server with real encryption.`)
+	return /** @type {LocalizedString} */ (`The library is a shared knowledge base for the organization. Volunteers browse articles, read detailed entries with attachments and votes, and write new content in the rich text editor. Article titles and bodies are encrypted with the organization key before storage.`)
 };
 
 const es_demo_section_library_desc = /** @type {(inputs: Demo_Section_Library_DescInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`La biblioteca es una base de conocimiento compartida para la organizacion. Navega articulos, lee entradas detalladas con adjuntos y votos, y escribe nuevo contenido en el editor de texto enriquecido. Todo aqui se ejecuta contra el servidor real en el navegador con cifrado real.`)
+	return /** @type {LocalizedString} */ (`La biblioteca es una base de conocimiento compartida para la organizacion. Los voluntarios navegan articulos, leen entradas detalladas con adjuntos y votos, y escriben nuevo contenido en el editor de texto enriquecido. Los titulos y cuerpos de los articulos se cifran con la clave de la organizacion antes de almacenarse.`)
 };
 
 /**
 * | output |
 * | --- |
-* | "The library is a shared knowledge base for the organization. Browse articles, read detailed entries with attachments and votes, and write new content in the ..." |
+* | "The library is a shared knowledge base for the organization. Volunteers browse articles, read detailed entries with attachments and votes, and write new cont..." |
 *
 * @param {Demo_Section_Library_DescInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

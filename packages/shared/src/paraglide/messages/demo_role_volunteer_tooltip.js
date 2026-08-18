@@ -6,17 +6,17 @@ import { getLocale, experimentalStaticLocale } from '../runtime.js';
 /** @typedef {{}} Demo_Role_Volunteer_TooltipInputs */
 
 const en_demo_role_volunteer_tooltip = /** @type {(inputs: Demo_Role_Volunteer_TooltipInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Volunteer user: can view and manage their own tickets. Admin-only screens are blocked by real server middleware.`)
+	return /** @type {LocalizedString} */ (`Volunteer with access to their own tickets. Admin only screens are blocked by real server middleware.`)
 };
 
 const es_demo_role_volunteer_tooltip = /** @type {(inputs: Demo_Role_Volunteer_TooltipInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Usuario voluntario: puede ver y gestionar sus propios casos. Las pantallas de administracion estan bloqueadas por el middleware real del servidor.`)
+	return /** @type {LocalizedString} */ (`Voluntario con acceso a sus propios tickets. Las pantallas de administracion estan bloqueadas por el middleware real del servidor.`)
 };
 
 /**
 * | output |
 * | --- |
-* | "Volunteer user: can view and manage their own tickets. Admin-only screens are blocked by real server middleware." |
+* | "Volunteer with access to their own tickets. Admin only screens are blocked by real server middleware." |
 *
 * @param {Demo_Role_Volunteer_TooltipInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

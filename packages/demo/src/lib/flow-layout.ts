@@ -7,6 +7,7 @@
  */
 
 import type { SectionId } from "./scroll-sections.js";
+import type { MarkupRun } from "./flow-markup.js";
 
 // -----------------------------------------------------------------------
 // Public types
@@ -24,6 +25,28 @@ export interface FlowTextBlock {
   readonly subSlug: string | null;
   readonly kind: FlowTextKind;
   readonly text: string;
+  /**
+   * Styled runs when the block's text carries bold markup. The layout
+   * engine never reads these; the LineFiller (which owns measurement)
+   * uses them to prepare rich-inline items. Absent for plain blocks.
+   */
+  readonly runs?: readonly MarkupRun[];
+  /**
+   * Horizontal inset in px applied to every segment of every line
+   * (hanging indent for list items). Absent means 0.
+   */
+  readonly indent?: number;
+  /**
+   * Gutter prefix rendered left of the first line ("•" or "3.").
+   * Layout ignores it; the renderer positions it at firstLine.x - indent.
+   */
+  readonly marker?: string;
+  /**
+   * Extra vertical space in px above this block, on top of the kind's
+   * marginTop. Carries paragraph and list-item spacing for the units a
+   * single marked-up body block was split into.
+   */
+  readonly spaceBefore?: number;
 }
 
 /** An inline figure block (region clip). Has no text; sized by aspect ratio. */
@@ -55,12 +78,25 @@ export interface FlowHole {
   readonly bottom: number;
 }
 
+/**
+ * One styled piece of a line, offset dx px from the line's x. Present
+ * only on lines of blocks with bold runs; plain lines render from
+ * FlowLine.text alone.
+ */
+export interface FlowLineFragment {
+  readonly text: string;
+  readonly bold: boolean;
+  readonly dx: number;
+  readonly width: number;
+}
+
 export interface FlowLine {
   readonly blockIndex: number;
   readonly x: number;
   readonly y: number;
   readonly width: number;
   readonly text: string;
+  readonly fragments?: readonly FlowLineFragment[];
 }
 
 export interface FlowBlockGeometry {
@@ -158,6 +194,20 @@ const FIGURE_METRICS: FlowKindMetrics = {
  */
 export const MAX_FIGURE_WIDTH = 200;
 
+// -----------------------------------------------------------------------
+// Markup unit spacing (used by the block builder when a body block is
+// split into paragraph / list-item units)
+// -----------------------------------------------------------------------
+
+/** Hanging indent for list items; also the marker gutter width. */
+export const LIST_INDENT = 22;
+
+/** Vertical gap above a paragraph unit (and above a list's first item). */
+export const PARA_SPACE = 12;
+
+/** Vertical gap between consecutive items of the same list. */
+export const LIST_ITEM_SPACE = 4;
+
 export const DEFAULT_METRICS: FlowMetrics = {
   "section-title": SECTION_TITLE_METRICS,
   "section-desc": SECTION_DESC_METRICS,
@@ -180,6 +230,8 @@ export interface LineFillerResult {
   readonly text: string;
   readonly width: number;
   readonly nextCursor: LineCursor;
+  /** Styled fragments for rich lines; copied verbatim onto the FlowLine. */
+  readonly fragments?: readonly FlowLineFragment[];
 }
 
 /**
@@ -443,8 +495,12 @@ export function computeFlowLayout(
       continue;
     }
 
+    // Unit spacing for split body blocks (paragraph / list-item gaps).
+    y += block.spaceBefore ?? 0;
+
     const blockTopY = y;
     const firstLineIndex = lines.length;
+    const indent = block.indent ?? 0;
     let cursor = filler.startCursor(bi);
 
     // Fill lines for this text block
@@ -475,6 +531,7 @@ export function computeFlowLayout(
           y,
           width: result.width,
           text: result.text,
+          fragments: result.fragments,
         });
         cursor = result.nextCursor;
         y += km.lineHeight;
@@ -485,17 +542,23 @@ export function computeFlowLayout(
       // continues from left into right (both-side wrap).
       let filled = false;
       for (const seg of segments) {
-        const result = filler.fillLine(bi, cursor, seg.width);
+        // List items inset every segment, giving continuation lines a
+        // hanging indent. A segment the indent consumes is skipped.
+        const segX = seg.x + indent;
+        const segWidth = seg.width - indent;
+        if (segWidth <= 0) continue;
+        const result = filler.fillLine(bi, cursor, segWidth);
         if (result === null) break;
         // Zero-progress guard: a filler that returns empty text has
         // made no progress; treat as exhaustion to prevent looping.
         if (result.text === "") break;
         lines.push({
           blockIndex: bi,
-          x: seg.x,
+          x: segX,
           y,
           width: result.width,
           text: result.text,
+          fragments: result.fragments,
         });
         cursor = result.nextCursor;
         filled = true;

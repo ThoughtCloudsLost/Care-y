@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "How this demo works" |
+* | "How CARE-Y works" |
 *
 * @param {Demo_Entry_TitleInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

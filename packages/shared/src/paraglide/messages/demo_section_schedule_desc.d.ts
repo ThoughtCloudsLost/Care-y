@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "The schedule page is a placeholder for shift management. The scheduling feature is not built yet, so this page shows a coming-soon notice." |
+* | "The schedule page will manage volunteer shifts. The scheduling feature is still in development." |
 *
 * @param {Demo_Section_Schedule_DescInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

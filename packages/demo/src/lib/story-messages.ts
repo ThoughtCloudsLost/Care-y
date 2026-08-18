@@ -65,6 +65,10 @@ const lookup: Record<string, () => string> = {
     m.demo_narrative_topic_filters_heading(),
   demo_narrative_topic_filters_body: () =>
     m.demo_narrative_topic_filters_body(),
+  demo_narrative_topic_saved_filters_heading: () =>
+    m.demo_narrative_topic_saved_filters_heading(),
+  demo_narrative_topic_saved_filters_body: () =>
+    m.demo_narrative_topic_saved_filters_body(),
   demo_narrative_topic_view_modes_heading: () =>
     m.demo_narrative_topic_view_modes_heading(),
   demo_narrative_topic_view_modes_body: () =>
@@ -73,12 +77,36 @@ const lookup: Record<string, () => string> = {
     m.demo_narrative_topic_select_mode_heading(),
   demo_narrative_topic_select_mode_body: () =>
     m.demo_narrative_topic_select_mode_body(),
+  demo_narrative_topic_quick_actions_heading: () =>
+    m.demo_narrative_topic_quick_actions_heading(),
+  demo_narrative_topic_quick_actions_body: () =>
+    m.demo_narrative_topic_quick_actions_body(),
+  demo_narrative_topic_unread_badges_heading: () =>
+    m.demo_narrative_topic_unread_badges_heading(),
+  demo_narrative_topic_unread_badges_body: () =>
+    m.demo_narrative_topic_unread_badges_body(),
+  demo_narrative_topic_decryption_heading: () =>
+    m.demo_narrative_topic_decryption_heading(),
+  demo_narrative_topic_decryption_body: () =>
+    m.demo_narrative_topic_decryption_body(),
   demo_narrative_topic_new_ticket_heading: () =>
     m.demo_narrative_topic_new_ticket_heading(),
   demo_narrative_topic_new_ticket_body: () =>
     m.demo_narrative_topic_new_ticket_body(),
+  demo_narrative_topic_split_view_heading: () =>
+    m.demo_narrative_topic_split_view_heading(),
+  demo_narrative_topic_split_view_body: () =>
+    m.demo_narrative_topic_split_view_body(),
 
   // Ticket detail sub-sections
+  demo_narrative_topic_case_header_heading: () =>
+    m.demo_narrative_topic_case_header_heading(),
+  demo_narrative_topic_case_header_body: () =>
+    m.demo_narrative_topic_case_header_body(),
+  demo_narrative_topic_conversation_heading: () =>
+    m.demo_narrative_topic_conversation_heading(),
+  demo_narrative_topic_conversation_body: () =>
+    m.demo_narrative_topic_conversation_body(),
   demo_narrative_topic_thread_filters_heading: () =>
     m.demo_narrative_topic_thread_filters_heading(),
   demo_narrative_topic_thread_filters_body: () =>
@@ -101,38 +129,102 @@ const lookup: Record<string, () => string> = {
     m.demo_narrative_topic_timeline_heading(),
   demo_narrative_topic_timeline_body: () =>
     m.demo_narrative_topic_timeline_body(),
+  demo_narrative_topic_deep_search_heading: () =>
+    m.demo_narrative_topic_deep_search_heading(),
+  demo_narrative_topic_deep_search_body: () =>
+    m.demo_narrative_topic_deep_search_body(),
+  demo_narrative_topic_message_actions_heading: () =>
+    m.demo_narrative_topic_message_actions_heading(),
+  demo_narrative_topic_message_actions_body: () =>
+    m.demo_narrative_topic_message_actions_body(),
+  demo_narrative_topic_close_reopen_heading: () =>
+    m.demo_narrative_topic_close_reopen_heading(),
+  demo_narrative_topic_close_reopen_body: () =>
+    m.demo_narrative_topic_close_reopen_body(),
+  demo_narrative_topic_exposure_hints_heading: () =>
+    m.demo_narrative_topic_exposure_hints_heading(),
+  demo_narrative_topic_exposure_hints_body: () =>
+    m.demo_narrative_topic_exposure_hints_body(),
   demo_narrative_topic_language_heading: () =>
     m.demo_narrative_topic_language_heading(),
   demo_narrative_topic_language_body: () =>
     m.demo_narrative_topic_language_body(),
 
   // Search
-  demo_narrative_search_heading: () => m.demo_narrative_search_heading(),
-  demo_narrative_search_body: () => m.demo_narrative_search_body(),
+  demo_narrative_search_how_heading: () =>
+    m.demo_narrative_search_how_heading(),
+  demo_narrative_search_how_body: () => m.demo_narrative_search_how_body(),
+  demo_narrative_search_entities_heading: () =>
+    m.demo_narrative_search_entities_heading(),
+  demo_narrative_search_entities_body: () =>
+    m.demo_narrative_search_entities_body(),
 
   // Dashboard
   demo_section_dashboard_title: () => m.demo_section_dashboard_title(),
   demo_section_dashboard_desc: () => m.demo_section_dashboard_desc(),
-  demo_narrative_dashboard_heading: () => m.demo_narrative_dashboard_heading(),
-  demo_narrative_dashboard_body: () => m.demo_narrative_dashboard_body(),
-  demo_narrative_topic_dashboard_queues_heading: () =>
-    m.demo_narrative_topic_dashboard_queues_heading(),
-  demo_narrative_topic_dashboard_queues_body: () =>
-    m.demo_narrative_topic_dashboard_queues_body(),
-  demo_narrative_topic_dashboard_activity_heading: () =>
-    m.demo_narrative_topic_dashboard_activity_heading(),
-  demo_narrative_topic_dashboard_activity_body: () =>
-    m.demo_narrative_topic_dashboard_activity_body(),
+  demo_narrative_dashboard_shift_heading: () =>
+    m.demo_narrative_dashboard_shift_heading(),
+  demo_narrative_dashboard_shift_body: () =>
+    m.demo_narrative_dashboard_shift_body(),
+  demo_narrative_dashboard_queues_heading: () =>
+    m.demo_narrative_dashboard_queues_heading(),
+  demo_narrative_dashboard_queues_body: () =>
+    m.demo_narrative_dashboard_queues_body(),
+  demo_narrative_dashboard_activity_heading: () =>
+    m.demo_narrative_dashboard_activity_heading(),
+  demo_narrative_dashboard_activity_body: () =>
+    m.demo_narrative_dashboard_activity_body(),
+  demo_narrative_dashboard_kb_heading: () =>
+    m.demo_narrative_dashboard_kb_heading(),
+  demo_narrative_dashboard_kb_body: () => m.demo_narrative_dashboard_kb_body(),
+  demo_narrative_dashboard_view_switcher_heading: () =>
+    m.demo_narrative_dashboard_view_switcher_heading(),
+  demo_narrative_dashboard_view_switcher_body: () =>
+    m.demo_narrative_dashboard_view_switcher_body(),
+  demo_narrative_dashboard_needs_attention_heading: () =>
+    m.demo_narrative_dashboard_needs_attention_heading(),
+  demo_narrative_dashboard_needs_attention_body: () =>
+    m.demo_narrative_dashboard_needs_attention_body(),
+  demo_narrative_dashboard_my_tickets_heading: () =>
+    m.demo_narrative_dashboard_my_tickets_heading(),
+  demo_narrative_dashboard_my_tickets_body: () =>
+    m.demo_narrative_dashboard_my_tickets_body(),
+  demo_narrative_dashboard_unassigned_heading: () =>
+    m.demo_narrative_dashboard_unassigned_heading(),
+  demo_narrative_dashboard_unassigned_body: () =>
+    m.demo_narrative_dashboard_unassigned_body(),
+  demo_narrative_dashboard_on_hold_heading: () =>
+    m.demo_narrative_dashboard_on_hold_heading(),
+  demo_narrative_dashboard_on_hold_body: () =>
+    m.demo_narrative_dashboard_on_hold_body(),
+  demo_narrative_dashboard_create_heading: () =>
+    m.demo_narrative_dashboard_create_heading(),
+  demo_narrative_dashboard_create_body: () =>
+    m.demo_narrative_dashboard_create_body(),
 
   // Library
   demo_section_library_title: () => m.demo_section_library_title(),
   demo_section_library_desc: () => m.demo_section_library_desc(),
-  demo_narrative_library_heading: () => m.demo_narrative_library_heading(),
-  demo_narrative_library_body: () => m.demo_narrative_library_body(),
+  demo_narrative_library_browse_heading: () =>
+    m.demo_narrative_library_browse_heading(),
+  demo_narrative_library_browse_body: () =>
+    m.demo_narrative_library_browse_body(),
+  demo_narrative_library_detail_heading: () =>
+    m.demo_narrative_library_detail_heading(),
+  demo_narrative_library_detail_body: () =>
+    m.demo_narrative_library_detail_body(),
+  demo_narrative_library_attachments_heading: () =>
+    m.demo_narrative_library_attachments_heading(),
+  demo_narrative_library_attachments_body: () =>
+    m.demo_narrative_library_attachments_body(),
   demo_narrative_topic_library_vote_heading: () =>
     m.demo_narrative_topic_library_vote_heading(),
   demo_narrative_topic_library_vote_body: () =>
     m.demo_narrative_topic_library_vote_body(),
+  demo_narrative_topic_library_search_heading: () =>
+    m.demo_narrative_topic_library_search_heading(),
+  demo_narrative_topic_library_search_body: () =>
+    m.demo_narrative_topic_library_search_body(),
   demo_narrative_topic_library_categories_heading: () =>
     m.demo_narrative_topic_library_categories_heading(),
   demo_narrative_topic_library_categories_body: () =>
@@ -145,28 +237,67 @@ const lookup: Record<string, () => string> = {
   // Admin
   demo_section_admin_title: () => m.demo_section_admin_title(),
   demo_section_admin_desc: () => m.demo_section_admin_desc(),
-  demo_narrative_admin_heading: () => m.demo_narrative_admin_heading(),
-  demo_narrative_admin_body: () => m.demo_narrative_admin_body(),
-  demo_narrative_admin_people_queues_heading: () =>
-    m.demo_narrative_admin_people_queues_heading(),
-  demo_narrative_admin_people_queues_body: () =>
-    m.demo_narrative_admin_people_queues_body(),
-  demo_narrative_admin_org_config_keys_heading: () =>
-    m.demo_narrative_admin_org_config_keys_heading(),
-  demo_narrative_admin_org_config_keys_body: () =>
-    m.demo_narrative_admin_org_config_keys_body(),
-  demo_narrative_admin_communications_heading: () =>
-    m.demo_narrative_admin_communications_heading(),
-  demo_narrative_admin_communications_body: () =>
-    m.demo_narrative_admin_communications_body(),
-  demo_narrative_topic_admin_greetings_heading: () =>
-    m.demo_narrative_topic_admin_greetings_heading(),
-  demo_narrative_topic_admin_greetings_body: () =>
-    m.demo_narrative_topic_admin_greetings_body(),
-  demo_narrative_topic_admin_quarantine_heading: () =>
-    m.demo_narrative_topic_admin_quarantine_heading(),
-  demo_narrative_topic_admin_quarantine_body: () =>
-    m.demo_narrative_topic_admin_quarantine_body(),
+  demo_section_admin_people_title: () => m.demo_section_admin_people_title(),
+  demo_section_admin_people_desc: () => m.demo_section_admin_people_desc(),
+  demo_section_admin_comms_title: () => m.demo_section_admin_comms_title(),
+  demo_section_admin_comms_desc: () => m.demo_section_admin_comms_desc(),
+  demo_section_admin_org_title: () => m.demo_section_admin_org_title(),
+  demo_section_admin_org_desc: () => m.demo_section_admin_org_desc(),
+  demo_narrative_admin_hub_heading: () => m.demo_narrative_admin_hub_heading(),
+  demo_narrative_admin_hub_body: () => m.demo_narrative_admin_hub_body(),
+  demo_narrative_admin_people_heading: () =>
+    m.demo_narrative_admin_people_heading(),
+  demo_narrative_admin_people_body: () => m.demo_narrative_admin_people_body(),
+  demo_narrative_admin_queues_heading: () =>
+    m.demo_narrative_admin_queues_heading(),
+  demo_narrative_admin_queues_body: () => m.demo_narrative_admin_queues_body(),
+  demo_narrative_admin_clients_heading: () =>
+    m.demo_narrative_admin_clients_heading(),
+  demo_narrative_admin_clients_body: () =>
+    m.demo_narrative_admin_clients_body(),
+  demo_narrative_admin_general_heading: () =>
+    m.demo_narrative_admin_general_heading(),
+  demo_narrative_admin_general_body: () =>
+    m.demo_narrative_admin_general_body(),
+  demo_narrative_admin_branding_heading: () =>
+    m.demo_narrative_admin_branding_heading(),
+  demo_narrative_admin_branding_body: () =>
+    m.demo_narrative_admin_branding_body(),
+  demo_narrative_admin_terminology_heading: () =>
+    m.demo_narrative_admin_terminology_heading(),
+  demo_narrative_admin_terminology_body: () =>
+    m.demo_narrative_admin_terminology_body(),
+  demo_narrative_admin_note_types_heading: () =>
+    m.demo_narrative_admin_note_types_heading(),
+  demo_narrative_admin_note_types_body: () =>
+    m.demo_narrative_admin_note_types_body(),
+  demo_narrative_admin_keys_heading: () =>
+    m.demo_narrative_admin_keys_heading(),
+  demo_narrative_admin_keys_body: () => m.demo_narrative_admin_keys_body(),
+  demo_narrative_admin_retention_heading: () =>
+    m.demo_narrative_admin_retention_heading(),
+  demo_narrative_admin_retention_body: () =>
+    m.demo_narrative_admin_retention_body(),
+  demo_narrative_admin_phone_lines_heading: () =>
+    m.demo_narrative_admin_phone_lines_heading(),
+  demo_narrative_admin_phone_lines_body: () =>
+    m.demo_narrative_admin_phone_lines_body(),
+  demo_narrative_admin_greetings_heading: () =>
+    m.demo_narrative_admin_greetings_heading(),
+  demo_narrative_admin_greetings_body: () =>
+    m.demo_narrative_admin_greetings_body(),
+  demo_narrative_admin_sms_templates_heading: () =>
+    m.demo_narrative_admin_sms_templates_heading(),
+  demo_narrative_admin_sms_templates_body: () =>
+    m.demo_narrative_admin_sms_templates_body(),
+  demo_narrative_admin_blocklist_heading: () =>
+    m.demo_narrative_admin_blocklist_heading(),
+  demo_narrative_admin_blocklist_body: () =>
+    m.demo_narrative_admin_blocklist_body(),
+  demo_narrative_admin_quarantine_heading: () =>
+    m.demo_narrative_admin_quarantine_heading(),
+  demo_narrative_admin_quarantine_body: () =>
+    m.demo_narrative_admin_quarantine_body(),
 
   // Schedule
   demo_section_schedule_title: () => m.demo_section_schedule_title(),
@@ -177,20 +308,26 @@ const lookup: Record<string, () => string> = {
   // Settings
   demo_section_settings_title: () => m.demo_section_settings_title(),
   demo_section_settings_desc: () => m.demo_section_settings_desc(),
-  demo_narrative_settings_heading: () => m.demo_narrative_settings_heading(),
-  demo_narrative_settings_body: () => m.demo_narrative_settings_body(),
-  demo_narrative_settings_profile_identity_heading: () =>
-    m.demo_narrative_settings_profile_identity_heading(),
-  demo_narrative_settings_profile_identity_body: () =>
-    m.demo_narrative_settings_profile_identity_body(),
-  demo_narrative_settings_password_keys_heading: () =>
-    m.demo_narrative_settings_password_keys_heading(),
-  demo_narrative_settings_password_keys_body: () =>
-    m.demo_narrative_settings_password_keys_body(),
-  demo_narrative_settings_two_factor_methods_heading: () =>
-    m.demo_narrative_settings_two_factor_methods_heading(),
-  demo_narrative_settings_two_factor_methods_body: () =>
-    m.demo_narrative_settings_two_factor_methods_body(),
+  demo_narrative_settings_identity_heading: () =>
+    m.demo_narrative_settings_identity_heading(),
+  demo_narrative_settings_identity_body: () =>
+    m.demo_narrative_settings_identity_body(),
+  demo_narrative_settings_password_heading: () =>
+    m.demo_narrative_settings_password_heading(),
+  demo_narrative_settings_password_body: () =>
+    m.demo_narrative_settings_password_body(),
+  demo_narrative_settings_twofa_heading: () =>
+    m.demo_narrative_settings_twofa_heading(),
+  demo_narrative_settings_twofa_body: () =>
+    m.demo_narrative_settings_twofa_body(),
+  demo_narrative_settings_appearance_heading: () =>
+    m.demo_narrative_settings_appearance_heading(),
+  demo_narrative_settings_appearance_body: () =>
+    m.demo_narrative_settings_appearance_body(),
+  demo_narrative_settings_security_heading: () =>
+    m.demo_narrative_settings_security_heading(),
+  demo_narrative_settings_security_body: () =>
+    m.demo_narrative_settings_security_body(),
 
   // Coming-soon placeholder
   demo_coming_soon_title: () => m.demo_coming_soon_title(),
@@ -201,12 +338,14 @@ const lookup: Record<string, () => string> = {
   // Entry page
   demo_entry_title: () => m.demo_entry_title(),
   demo_entry_desc: () => m.demo_entry_desc(),
-  demo_entry_how_heading: () => m.demo_entry_how_heading(),
-  demo_entry_how_body: () => m.demo_entry_how_body(),
-  demo_entry_phone_heading: () => m.demo_entry_phone_heading(),
-  demo_entry_phone_body: () => m.demo_entry_phone_body(),
-  demo_entry_start_heading: () => m.demo_entry_start_heading(),
-  demo_entry_start_body: () => m.demo_entry_start_body(),
+  demo_entry_nav_heading: () => m.demo_entry_nav_heading(),
+  demo_entry_nav_body: () => m.demo_entry_nav_body(),
+  demo_entry_controls_heading: () => m.demo_entry_controls_heading(),
+  demo_entry_controls_body: () => m.demo_entry_controls_body(),
+  demo_entry_flow_heading: () => m.demo_entry_flow_heading(),
+  demo_entry_flow_body: () => m.demo_entry_flow_body(),
+  demo_entry_roles_heading: () => m.demo_entry_roles_heading(),
+  demo_entry_roles_body: () => m.demo_entry_roles_body(),
 };
 
 /**

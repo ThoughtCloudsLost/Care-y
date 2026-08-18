@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "Credentials and password stretching" |
+* | "Username and password" |
 *
 * @param {Demo_Narrative_Topic_Credentials_HeadingInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "Filtering the ticket list" |
+* | "Filters" |
 *
 * @param {Demo_Narrative_Topic_Filters_HeadingInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

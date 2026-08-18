@@ -6,17 +6,17 @@ import { getLocale, experimentalStaticLocale } from '../runtime.js';
 /** @typedef {{}} Demo_Narrative_Topic_Compose_Actions_HeadingInputs */
 
 const en_demo_narrative_topic_compose_actions_heading = /** @type {(inputs: Demo_Narrative_Topic_Compose_Actions_HeadingInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Compose actions`)
+	return /** @type {LocalizedString} */ (`Compose bar`)
 };
 
 const es_demo_narrative_topic_compose_actions_heading = /** @type {(inputs: Demo_Narrative_Topic_Compose_Actions_HeadingInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Acciones de composicion`)
+	return /** @type {LocalizedString} */ (`Barra de composicion`)
 };
 
 /**
 * | output |
 * | --- |
-* | "Compose actions" |
+* | "Compose bar" |
 *
 * @param {Demo_Narrative_Topic_Compose_Actions_HeadingInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

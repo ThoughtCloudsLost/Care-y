@@ -6,17 +6,21 @@ import { getLocale, experimentalStaticLocale } from '../runtime.js';
 /** @typedef {{}} Demo_Narrative_Topic_Twofa_Push_BodyInputs */
 
 const en_demo_narrative_topic_twofa_push_body = /** @type {(inputs: Demo_Narrative_Topic_Twofa_Push_BodyInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`A prompt is sent to another device where you are already signed in. Approving it there completes the sign in here. The waiting screen polls until the challenge is approved, denied, or times out.`)
+	return /** @type {LocalizedString} */ (`A notification sent to another device where the volunteer is already signed in. Approving the notification on that device completes the sign in on this one without typing a code.
+**How it works.** The login screen waits until the challenge is approved, denied, or times out. Push approval is useful when a volunteer has the app open on a second device, such as a tablet at a desk and a phone in hand.
+**Fallback.** If the volunteer denies the push or it times out, they can switch to another enrolled method from the login screen.`)
 };
 
 const es_demo_narrative_topic_twofa_push_body = /** @type {(inputs: Demo_Narrative_Topic_Twofa_Push_BodyInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Se envia un aviso a otro dispositivo donde ya tienes sesion iniciada. Aprobarlo alli completa el inicio de sesion aqui. La pantalla de espera consulta hasta que el desafio se aprueba, se niega o caduca.`)
+	return /** @type {LocalizedString} */ (`Una notificacion enviada a otro dispositivo donde el voluntario ya tiene sesion iniciada. Aprobar la notificacion en ese dispositivo completa el inicio de sesion en este sin escribir ningun codigo.
+**Como funciona.** La pantalla de inicio de sesion espera hasta que el desafio se aprueba, se niega o caduca. La aprobacion push es util cuando un voluntario tiene la aplicacion abierta en un segundo dispositivo, como una tableta en el escritorio y un telefono en la mano.
+**Alternativa.** Si el voluntario niega la notificacion push o caduca, puede cambiar a otro metodo registrado desde la pantalla de inicio de sesion.`)
 };
 
 /**
 * | output |
 * | --- |
-* | "A prompt is sent to another device where you are already signed in. Approving it there completes the sign in here. The waiting screen polls until the challen..." |
+* | "A notification sent to another device where the volunteer is already signed in. Approving the notification on that device completes the sign in on this one w..." |
 *
 * @param {Demo_Narrative_Topic_Twofa_Push_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

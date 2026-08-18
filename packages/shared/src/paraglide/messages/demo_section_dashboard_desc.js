@@ -6,17 +6,17 @@ import { getLocale, experimentalStaticLocale } from '../runtime.js';
 /** @typedef {{}} Demo_Section_Dashboard_DescInputs */
 
 const en_demo_section_dashboard_desc = /** @type {(inputs: Demo_Section_Dashboard_DescInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`The home screen shows recent activity and queue counts. The activity feed and statistics pull real data from the in-browser database. The shift summary card shows placeholder data (scheduling is not built yet).`)
+	return /** @type {LocalizedString} */ (`The dashboard is the home screen after login. It shows the volunteer's current shift, ticket counts per queue, recent activity, and quick access to knowledge base articles. All sections pull live data from the encrypted database. Sections are collapsible so volunteers can focus on what they need.`)
 };
 
 const es_demo_section_dashboard_desc = /** @type {(inputs: Demo_Section_Dashboard_DescInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`La pantalla de inicio muestra la actividad reciente y los conteos por cola. El feed de actividad y las estadisticas obtienen datos reales de la base de datos del navegador. La tarjeta de turno muestra datos de ejemplo (la programacion aun no esta construida).`)
+	return /** @type {LocalizedString} */ (`El panel principal es la pantalla de inicio despues de iniciar sesion. Muestra el turno actual del voluntario, conteos de tickets por cola, actividad reciente y acceso rapido a articulos de la base de conocimiento. Todas las secciones obtienen datos en tiempo real de la base de datos cifrada. Las secciones son plegables para que los voluntarios puedan concentrarse en lo que necesitan.`)
 };
 
 /**
 * | output |
 * | --- |
-* | "The home screen shows recent activity and queue counts. The activity feed and statistics pull real data from the in-browser database. The shift summary card ..." |
+* | "The dashboard is the home screen after login. It shows the volunteer's current shift, ticket counts per queue, recent activity, and quick access to knowledge..." |
 *
 * @param {Demo_Section_Dashboard_DescInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

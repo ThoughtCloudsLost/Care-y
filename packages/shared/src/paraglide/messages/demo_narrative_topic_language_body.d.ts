@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "Switch the interface language without reloading. Translations are bundled in the app. The server does not know which language you are using because no prefer..." |
+* | "Volunteers can switch the interface language at the login screen or at any point after signing in. The switch happens instantly without a page reload because..." |
 *
 * @param {Demo_Narrative_Topic_Language_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

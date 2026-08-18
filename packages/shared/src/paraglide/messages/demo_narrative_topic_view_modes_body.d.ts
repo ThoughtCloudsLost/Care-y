@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "Switch between compact rows, cards, grid, table, or kanban. The layout changes how tickets are displayed but not what is decrypted. Your browser decrypts eac..." |
+* | "The ticket list supports four layout options with a fifth planned. - **Rows** show compact single line entries with status indicators - **Cards** show each t..." |
 *
 * @param {Demo_Narrative_Topic_View_Modes_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

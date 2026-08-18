@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "Two-factor authentication policy" |
+* | "Two factor authentication policy" |
 *
 * @param {Onboarding_Briefing_Choice_2fa_TitleInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

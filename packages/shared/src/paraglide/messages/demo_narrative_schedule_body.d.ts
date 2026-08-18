@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "This page will let managers create and assign shifts. The scheduling feature is still in development. For now, the page shows a placeholder notice." |
+* | "This page will let managers create and assign volunteer shifts. Shift start and end times, coverage requirements, and volunteer availability will be managed ..." |
 *
 * @param {Demo_Narrative_Schedule_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

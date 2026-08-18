@@ -63,7 +63,7 @@ export interface Section {
  * Entry page section: displayed before the visitor enters the story.
  * Uses id "login" because FlowStory blocks need a legal SectionId and
  * the phone is on the login splash under the entry page. NOT added to
- * SECTIONS so TopBar, parseHash, pill math, and the 9-section invariant
+ * SECTIONS so TopBar, parseHash, pill math, and the 12-section invariant
  * are unaffected. While the entry page is visible, App-level gates
  * prevent these subs from reaching the location store.
  */
@@ -74,22 +74,28 @@ export const ENTRY_SECTION: Section = {
   routes: [],
   subs: [
     {
-      slug: "how-it-works",
+      slug: "navigation",
       topic: null,
-      headingKey: "demo_entry_how_heading",
-      bodyKey: "demo_entry_how_body",
+      headingKey: "demo_entry_nav_heading",
+      bodyKey: "demo_entry_nav_body",
     },
     {
-      slug: "the-phone",
+      slug: "simulator-controls",
       topic: null,
-      headingKey: "demo_entry_phone_heading",
-      bodyKey: "demo_entry_phone_body",
+      headingKey: "demo_entry_controls_heading",
+      bodyKey: "demo_entry_controls_body",
     },
     {
-      slug: "getting-started",
+      slug: "data-flow",
       topic: null,
-      headingKey: "demo_entry_start_heading",
-      bodyKey: "demo_entry_start_body",
+      headingKey: "demo_entry_flow_heading",
+      bodyKey: "demo_entry_flow_body",
+    },
+    {
+      slug: "role-switching",
+      topic: null,
+      headingKey: "demo_entry_roles_heading",
+      bodyKey: "demo_entry_roles_body",
     },
   ],
 };
@@ -102,18 +108,16 @@ export const SECTIONS: readonly Section[] = [
     routes: SECTION_ROUTES.login,
     subs: [
       {
-        slug: "credentials",
-        topic: "credentials",
-        headingKey: "demo_narrative_topic_credentials_heading",
-        bodyKey: "demo_narrative_topic_credentials_body",
-      },
-      // Language sits with credentials: the picker is visible on the
-      // sign-in form the visitor is looking at.
-      {
         slug: "language",
         topic: "language",
         headingKey: "demo_narrative_topic_language_heading",
         bodyKey: "demo_narrative_topic_language_body",
+      },
+      {
+        slug: "credentials",
+        topic: "credentials",
+        headingKey: "demo_narrative_topic_credentials_heading",
+        bodyKey: "demo_narrative_topic_credentials_body",
       },
       {
         slug: "two-factor",
@@ -173,22 +177,64 @@ export const SECTIONS: readonly Section[] = [
     routes: SECTION_ROUTES.dashboard,
     subs: [
       {
-        slug: "intro",
-        topic: null,
-        headingKey: "demo_narrative_dashboard_heading",
-        bodyKey: "demo_narrative_dashboard_body",
+        slug: "shift",
+        topic: "dashboard-shift",
+        headingKey: "demo_narrative_dashboard_shift_heading",
+        bodyKey: "demo_narrative_dashboard_shift_body",
       },
       {
         slug: "queues",
         topic: "dashboard-queues",
-        headingKey: "demo_narrative_topic_dashboard_queues_heading",
-        bodyKey: "demo_narrative_topic_dashboard_queues_body",
+        headingKey: "demo_narrative_dashboard_queues_heading",
+        bodyKey: "demo_narrative_dashboard_queues_body",
       },
       {
         slug: "activity",
         topic: "dashboard-activity",
-        headingKey: "demo_narrative_topic_dashboard_activity_heading",
-        bodyKey: "demo_narrative_topic_dashboard_activity_body",
+        headingKey: "demo_narrative_dashboard_activity_heading",
+        bodyKey: "demo_narrative_dashboard_activity_body",
+      },
+      {
+        slug: "kb",
+        topic: "dashboard-kb",
+        headingKey: "demo_narrative_dashboard_kb_heading",
+        bodyKey: "demo_narrative_dashboard_kb_body",
+      },
+      {
+        slug: "view-switcher",
+        topic: "dashboard-view-switcher",
+        headingKey: "demo_narrative_dashboard_view_switcher_heading",
+        bodyKey: "demo_narrative_dashboard_view_switcher_body",
+      },
+      {
+        slug: "needs-attention",
+        topic: "dashboard-needs-attention",
+        headingKey: "demo_narrative_dashboard_needs_attention_heading",
+        bodyKey: "demo_narrative_dashboard_needs_attention_body",
+      },
+      {
+        slug: "my-tickets",
+        topic: "dashboard-my-tickets",
+        headingKey: "demo_narrative_dashboard_my_tickets_heading",
+        bodyKey: "demo_narrative_dashboard_my_tickets_body",
+      },
+      {
+        slug: "unassigned",
+        topic: "dashboard-unassigned",
+        headingKey: "demo_narrative_dashboard_unassigned_heading",
+        bodyKey: "demo_narrative_dashboard_unassigned_body",
+      },
+      {
+        slug: "on-hold",
+        topic: "dashboard-on-hold",
+        headingKey: "demo_narrative_dashboard_on_hold_heading",
+        bodyKey: "demo_narrative_dashboard_on_hold_body",
+      },
+      {
+        slug: "create",
+        topic: "dashboard-create",
+        headingKey: "demo_narrative_dashboard_create_heading",
+        bodyKey: "demo_narrative_dashboard_create_body",
       },
     ],
   },
@@ -211,6 +257,12 @@ export const SECTIONS: readonly Section[] = [
         bodyKey: "demo_narrative_topic_filters_body",
       },
       {
+        slug: "saved-filters",
+        topic: "saved-filters",
+        headingKey: "demo_narrative_topic_saved_filters_heading",
+        bodyKey: "demo_narrative_topic_saved_filters_body",
+      },
+      {
         slug: "view-modes",
         topic: "view-modes",
         headingKey: "demo_narrative_topic_view_modes_heading",
@@ -223,10 +275,34 @@ export const SECTIONS: readonly Section[] = [
         bodyKey: "demo_narrative_topic_select_mode_body",
       },
       {
+        slug: "quick-actions",
+        topic: "quick-actions",
+        headingKey: "demo_narrative_topic_quick_actions_heading",
+        bodyKey: "demo_narrative_topic_quick_actions_body",
+      },
+      {
+        slug: "unread-badges",
+        topic: "unread-badges",
+        headingKey: "demo_narrative_topic_unread_badges_heading",
+        bodyKey: "demo_narrative_topic_unread_badges_body",
+      },
+      {
+        slug: "decryption",
+        topic: "decryption",
+        headingKey: "demo_narrative_topic_decryption_heading",
+        bodyKey: "demo_narrative_topic_decryption_body",
+      },
+      {
         slug: "new-ticket",
         topic: "new-ticket",
         headingKey: "demo_narrative_topic_new_ticket_heading",
         bodyKey: "demo_narrative_topic_new_ticket_body",
+      },
+      {
+        slug: "split-view",
+        topic: "split-view",
+        headingKey: "demo_narrative_topic_split_view_heading",
+        bodyKey: "demo_narrative_topic_split_view_body",
       },
     ],
   },
@@ -236,6 +312,18 @@ export const SECTIONS: readonly Section[] = [
     descKey: "demo_section_ticket_detail_desc",
     routes: SECTION_ROUTES["ticket-detail"],
     subs: [
+      {
+        slug: "case-header",
+        topic: "case-header",
+        headingKey: "demo_narrative_topic_case_header_heading",
+        bodyKey: "demo_narrative_topic_case_header_body",
+      },
+      {
+        slug: "conversation",
+        topic: "conversation",
+        headingKey: "demo_narrative_topic_conversation_heading",
+        bodyKey: "demo_narrative_topic_conversation_body",
+      },
       {
         slug: "thread-filters",
         topic: "thread-filters",
@@ -272,6 +360,30 @@ export const SECTIONS: readonly Section[] = [
         headingKey: "demo_narrative_topic_timeline_heading",
         bodyKey: "demo_narrative_topic_timeline_body",
       },
+      {
+        slug: "deep-search",
+        topic: "deep-search",
+        headingKey: "demo_narrative_topic_deep_search_heading",
+        bodyKey: "demo_narrative_topic_deep_search_body",
+      },
+      {
+        slug: "message-actions",
+        topic: "message-actions",
+        headingKey: "demo_narrative_topic_message_actions_heading",
+        bodyKey: "demo_narrative_topic_message_actions_body",
+      },
+      {
+        slug: "close-reopen",
+        topic: "close-reopen",
+        headingKey: "demo_narrative_topic_close_reopen_heading",
+        bodyKey: "demo_narrative_topic_close_reopen_body",
+      },
+      {
+        slug: "exposure-hints",
+        topic: "exposure-hints",
+        headingKey: "demo_narrative_topic_exposure_hints_heading",
+        bodyKey: "demo_narrative_topic_exposure_hints_body",
+      },
     ],
   },
   {
@@ -281,10 +393,16 @@ export const SECTIONS: readonly Section[] = [
     routes: SECTION_ROUTES.search,
     subs: [
       {
-        slug: "intro",
+        slug: "how-it-works",
         topic: null,
-        headingKey: "demo_narrative_search_heading",
-        bodyKey: "demo_narrative_search_body",
+        headingKey: "demo_narrative_search_how_heading",
+        bodyKey: "demo_narrative_search_how_body",
+      },
+      {
+        slug: "entities",
+        topic: null,
+        headingKey: "demo_narrative_search_entities_heading",
+        bodyKey: "demo_narrative_search_entities_body",
       },
     ],
   },
@@ -295,10 +413,22 @@ export const SECTIONS: readonly Section[] = [
     routes: SECTION_ROUTES.library,
     subs: [
       {
-        slug: "intro",
+        slug: "browse",
         topic: null,
-        headingKey: "demo_narrative_library_heading",
-        bodyKey: "demo_narrative_library_body",
+        headingKey: "demo_narrative_library_browse_heading",
+        bodyKey: "demo_narrative_library_browse_body",
+      },
+      {
+        slug: "detail",
+        topic: null,
+        headingKey: "demo_narrative_library_detail_heading",
+        bodyKey: "demo_narrative_library_detail_body",
+      },
+      {
+        slug: "attachments",
+        topic: null,
+        headingKey: "demo_narrative_library_attachments_heading",
+        bodyKey: "demo_narrative_library_attachments_body",
       },
       {
         slug: "vote",
@@ -306,6 +436,12 @@ export const SECTIONS: readonly Section[] = [
         headingKey: "demo_narrative_topic_library_vote_heading",
         bodyKey: "demo_narrative_topic_library_vote_body",
         routes: SUB_ROUTES["library/vote"],
+      },
+      {
+        slug: "search",
+        topic: "library-search",
+        headingKey: "demo_narrative_topic_library_search_heading",
+        bodyKey: "demo_narrative_topic_library_search_body",
       },
       {
         slug: "categories",
@@ -329,43 +465,118 @@ export const SECTIONS: readonly Section[] = [
     routes: SECTION_ROUTES.admin,
     subs: [
       {
-        slug: "intro",
+        slug: "hub",
         topic: null,
-        headingKey: "demo_narrative_admin_heading",
-        bodyKey: "demo_narrative_admin_body",
+        headingKey: "demo_narrative_admin_hub_heading",
+        bodyKey: "demo_narrative_admin_hub_body",
       },
+    ],
+  },
+  {
+    id: "admin-people",
+    titleKey: "demo_section_admin_people_title",
+    descKey: "demo_section_admin_people_desc",
+    routes: SECTION_ROUTES["admin-people"],
+    subs: [
       {
-        slug: "people-queues",
+        slug: "people",
         topic: "admin-roster-edit",
-        headingKey: "demo_narrative_admin_people_queues_heading",
-        bodyKey: "demo_narrative_admin_people_queues_body",
-        routes: SUB_ROUTES["admin/people-queues"],
+        headingKey: "demo_narrative_admin_people_heading",
+        bodyKey: "demo_narrative_admin_people_body",
       },
       {
-        slug: "org-config-keys",
-        topic: null,
-        headingKey: "demo_narrative_admin_org_config_keys_heading",
-        bodyKey: "demo_narrative_admin_org_config_keys_body",
-        routes: SUB_ROUTES["admin/org-config-keys"],
+        slug: "queues",
+        topic: "admin-queues",
+        headingKey: "demo_narrative_admin_queues_heading",
+        bodyKey: "demo_narrative_admin_queues_body",
       },
       {
-        slug: "communications",
-        topic: null,
-        headingKey: "demo_narrative_admin_communications_heading",
-        bodyKey: "demo_narrative_admin_communications_body",
-        routes: SUB_ROUTES["admin/communications"],
+        slug: "clients",
+        topic: "admin-clients",
+        headingKey: "demo_narrative_admin_clients_heading",
+        bodyKey: "demo_narrative_admin_clients_body",
+      },
+    ],
+  },
+  {
+    id: "admin-comms",
+    titleKey: "demo_section_admin_comms_title",
+    descKey: "demo_section_admin_comms_desc",
+    routes: SECTION_ROUTES["admin-comms"],
+    subs: [
+      {
+        slug: "phone-lines",
+        topic: "admin-phone-lines",
+        headingKey: "demo_narrative_admin_phone_lines_heading",
+        bodyKey: "demo_narrative_admin_phone_lines_body",
       },
       {
         slug: "greetings",
         topic: "admin-greetings",
-        headingKey: "demo_narrative_topic_admin_greetings_heading",
-        bodyKey: "demo_narrative_topic_admin_greetings_body",
+        headingKey: "demo_narrative_admin_greetings_heading",
+        bodyKey: "demo_narrative_admin_greetings_body",
+      },
+      {
+        slug: "sms-templates",
+        topic: "admin-sms-templates",
+        headingKey: "demo_narrative_admin_sms_templates_heading",
+        bodyKey: "demo_narrative_admin_sms_templates_body",
+      },
+      {
+        slug: "blocklist",
+        topic: "admin-blocklist",
+        headingKey: "demo_narrative_admin_blocklist_heading",
+        bodyKey: "demo_narrative_admin_blocklist_body",
       },
       {
         slug: "quarantine",
         topic: "admin-quarantine",
-        headingKey: "demo_narrative_topic_admin_quarantine_heading",
-        bodyKey: "demo_narrative_topic_admin_quarantine_body",
+        headingKey: "demo_narrative_admin_quarantine_heading",
+        bodyKey: "demo_narrative_admin_quarantine_body",
+      },
+    ],
+  },
+  {
+    id: "admin-org",
+    titleKey: "demo_section_admin_org_title",
+    descKey: "demo_section_admin_org_desc",
+    routes: SECTION_ROUTES["admin-org"],
+    subs: [
+      {
+        slug: "general",
+        topic: "admin-general",
+        headingKey: "demo_narrative_admin_general_heading",
+        bodyKey: "demo_narrative_admin_general_body",
+      },
+      {
+        slug: "branding",
+        topic: "admin-branding",
+        headingKey: "demo_narrative_admin_branding_heading",
+        bodyKey: "demo_narrative_admin_branding_body",
+      },
+      {
+        slug: "terminology",
+        topic: "admin-terminology",
+        headingKey: "demo_narrative_admin_terminology_heading",
+        bodyKey: "demo_narrative_admin_terminology_body",
+      },
+      {
+        slug: "note-types",
+        topic: "admin-note-types",
+        headingKey: "demo_narrative_admin_note_types_heading",
+        bodyKey: "demo_narrative_admin_note_types_body",
+      },
+      {
+        slug: "keys",
+        topic: "admin-keys",
+        headingKey: "demo_narrative_admin_keys_heading",
+        bodyKey: "demo_narrative_admin_keys_body",
+      },
+      {
+        slug: "retention",
+        topic: "admin-retention",
+        headingKey: "demo_narrative_admin_retention_heading",
+        bodyKey: "demo_narrative_admin_retention_body",
       },
     ],
   },
@@ -390,28 +601,34 @@ export const SECTIONS: readonly Section[] = [
     routes: SECTION_ROUTES.settings,
     subs: [
       {
-        slug: "intro",
-        topic: null,
-        headingKey: "demo_narrative_settings_heading",
-        bodyKey: "demo_narrative_settings_body",
-      },
-      {
-        slug: "profile-identity",
+        slug: "identity",
         topic: "settings-profile",
-        headingKey: "demo_narrative_settings_profile_identity_heading",
-        bodyKey: "demo_narrative_settings_profile_identity_body",
+        headingKey: "demo_narrative_settings_identity_heading",
+        bodyKey: "demo_narrative_settings_identity_body",
       },
       {
-        slug: "password-keys",
+        slug: "password",
         topic: "settings-password",
-        headingKey: "demo_narrative_settings_password_keys_heading",
-        bodyKey: "demo_narrative_settings_password_keys_body",
+        headingKey: "demo_narrative_settings_password_heading",
+        bodyKey: "demo_narrative_settings_password_body",
       },
       {
-        slug: "two-factor-methods",
+        slug: "two-factor",
         topic: "settings-2fa",
-        headingKey: "demo_narrative_settings_two_factor_methods_heading",
-        bodyKey: "demo_narrative_settings_two_factor_methods_body",
+        headingKey: "demo_narrative_settings_twofa_heading",
+        bodyKey: "demo_narrative_settings_twofa_body",
+      },
+      {
+        slug: "appearance",
+        topic: "settings-appearance",
+        headingKey: "demo_narrative_settings_appearance_heading",
+        bodyKey: "demo_narrative_settings_appearance_body",
+      },
+      {
+        slug: "security",
+        topic: "settings-security",
+        headingKey: "demo_narrative_settings_security_heading",
+        bodyKey: "demo_narrative_settings_security_body",
       },
     ],
   },
@@ -778,28 +995,42 @@ export function resolvePhoneCommand(
         routeSlug: null,
       };
     }
-    case "admin": {
-      let adminDetail: string | null = null;
-      if (subSlug === "people-queues") {
-        adminDetail = "people";
-      } else if (subSlug === "org-config-keys") {
-        adminDetail = "organization";
-      } else if (
-        subSlug === "communications" ||
-        subSlug === "greetings" ||
-        subSlug === "quarantine"
-      ) {
-        adminDetail = "communications";
-      }
+    case "admin":
       return {
         feature: "admin",
-        detail: adminDetail,
+        detail: null,
         loginTarget: null,
         openSearch: false,
         pulseTopic,
         routeSlug: null,
       };
-    }
+    case "admin-people":
+      return {
+        feature: "admin",
+        detail: "people",
+        loginTarget: null,
+        openSearch: false,
+        pulseTopic,
+        routeSlug: null,
+      };
+    case "admin-comms":
+      return {
+        feature: "admin",
+        detail: "communications",
+        loginTarget: null,
+        openSearch: false,
+        pulseTopic,
+        routeSlug: null,
+      };
+    case "admin-org":
+      return {
+        feature: "admin",
+        detail: "organization",
+        loginTarget: null,
+        openSearch: false,
+        pulseTopic,
+        routeSlug: null,
+      };
     case "schedule":
       return {
         feature: "schedule",
@@ -870,7 +1101,16 @@ export function sectionMatchesPhone(
     case "library":
       return feature === "library";
     case "admin":
-      return feature === "admin";
+      return feature === "admin" && detail === null;
+    case "admin-people":
+      return (
+        feature === "admin" &&
+        (detail === "people" || detail === "manager" || detail === "volunteer")
+      );
+    case "admin-comms":
+      return feature === "admin" && detail === "communications";
+    case "admin-org":
+      return feature === "admin" && detail === "organization";
     case "schedule":
       return feature === "schedule";
     case "settings":
@@ -946,18 +1186,18 @@ export function bridgeStateToLocation(
 
   if (feature === "admin") {
     // When arriving at an admin sub-page without a topic, map the
-    // detail to the sub-section that narrates it so the page highlights
-    // the right card.
-    if (detail === "people") {
-      return { sectionId: "admin", subSlug: "people-queues" };
+    // detail to the section that narrates it. The first sub is selected
+    // so the page highlights the card for the screen's landing state.
+    if (detail === "people" || detail === "manager" || detail === "volunteer") {
+      return { sectionId: "admin-people", subSlug: "people" };
     }
     if (detail === "organization") {
-      return { sectionId: "admin", subSlug: "org-config-keys" };
+      return { sectionId: "admin-org", subSlug: "general" };
     }
     if (detail === "communications") {
-      return { sectionId: "admin", subSlug: "communications" };
+      return { sectionId: "admin-comms", subSlug: "phone-lines" };
     }
-    return { sectionId: "admin", subSlug: "intro" };
+    return { sectionId: "admin", subSlug: "hub" };
   }
 
   if (feature === "schedule") {

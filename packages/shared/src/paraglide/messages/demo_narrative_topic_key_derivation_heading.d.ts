@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "OPRF split-key derivation" |
+* | "How encryption keys are derived" |
 *
 * @param {Demo_Narrative_Topic_Key_Derivation_HeadingInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

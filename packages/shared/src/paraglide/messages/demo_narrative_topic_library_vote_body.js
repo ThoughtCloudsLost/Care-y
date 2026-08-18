@@ -6,17 +6,19 @@ import { getLocale, experimentalStaticLocale } from '../runtime.js';
 /** @typedef {{}} Demo_Narrative_Topic_Library_Vote_BodyInputs */
 
 const en_demo_narrative_topic_library_vote_body = /** @type {(inputs: Demo_Narrative_Topic_Library_Vote_BodyInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Volunteers can rate whether a knowledge article helped resolve a call. Votes are recorded under a pseudonym instead of a volunteer name and persist in the visitor's own in-browser database. The aggregate score uses a Wilson confidence interval so articles with few votes do not outrank well-tested ones.`)
+	return /** @type {LocalizedString} */ (`Volunteers can rate whether a knowledge base article helped resolve a call. Each volunteer gets one vote per article (up or down).
+**Ranking.** The aggregate score uses a Wilson confidence interval so that articles with only a few votes do not outrank articles that have been tested by many volunteers. An article with two votes and no downvotes does not automatically appear above an article with fifty votes and a few downvotes.`)
 };
 
 const es_demo_narrative_topic_library_vote_body = /** @type {(inputs: Demo_Narrative_Topic_Library_Vote_BodyInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Los voluntarios pueden calificar si un articulo del conocimiento ayudo a resolver una llamada. Los votos se registran bajo un seudonimo en lugar del nombre del voluntario y persisten en la base de datos del navegador del visitante. La puntuacion agregada usa un intervalo de confianza de Wilson para que articulos con pocos votos no superen a los bien evaluados.`)
+	return /** @type {LocalizedString} */ (`Los voluntarios pueden calificar si un articulo de la base de conocimiento ayudo a resolver una llamada. Cada voluntario tiene un voto por articulo (a favor o en contra).
+**Clasificacion.** La puntuacion agregada usa un intervalo de confianza de Wilson para que los articulos con solo unos pocos votos no superen a los que han sido evaluados por muchos voluntarios. Un articulo con dos votos y ningun voto en contra no aparece automaticamente por encima de un articulo con cincuenta votos y algunos en contra.`)
 };
 
 /**
 * | output |
 * | --- |
-* | "Volunteers can rate whether a knowledge article helped resolve a call. Votes are recorded under a pseudonym instead of a volunteer name and persist in the vi..." |
+* | "Volunteers can rate whether a knowledge base article helped resolve a call. Each volunteer gets one vote per article (up or down). **Ranking.** The aggregate..." |
 *
 * @param {Demo_Narrative_Topic_Library_Vote_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

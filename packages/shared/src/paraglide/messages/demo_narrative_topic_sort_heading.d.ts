@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "Sorting encrypted tickets" |
+* | "Sorting" |
 *
 * @param {Demo_Narrative_Topic_Sort_HeadingInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

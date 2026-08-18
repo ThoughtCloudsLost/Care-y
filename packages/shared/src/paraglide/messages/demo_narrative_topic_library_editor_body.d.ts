@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "The rich text editor supports headings, lists, links, and inline images. Articles are encrypted before storage with the organization key. Every change stays ..." |
+* | "The rich text editor supports headings (four levels), bold, italic, strikethrough, inline code, blockquotes, bullet lists, ordered lists, code blocks, links,..." |
 *
 * @param {Demo_Narrative_Topic_Library_Editor_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

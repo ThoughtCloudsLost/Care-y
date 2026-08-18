@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "Search operates entirely in the browser. Your device decrypts ticket content locally and matches your query against the plaintext. No search terms leave the ..." |
+* | "Search finds results across tickets, knowledge base articles, and volunteers from a single interface. All text matching happens in the browser against decryp..." |
 *
 * @param {Demo_Section_Search_DescInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

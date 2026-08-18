@@ -6,17 +6,17 @@ import { getLocale, experimentalStaticLocale } from '../runtime.js';
 /** @typedef {{}} Demo_Section_Search_DescInputs */
 
 const en_demo_section_search_desc = /** @type {(inputs: Demo_Section_Search_DescInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Search operates entirely in the browser. Your device decrypts ticket content locally and matches your query against the plaintext. No search terms leave the device.`)
+	return /** @type {LocalizedString} */ (`Search finds results across tickets, knowledge base articles, and volunteers from a single interface. All text matching happens in the browser against decrypted content. No search terms are sent to the server.`)
 };
 
 const es_demo_section_search_desc = /** @type {(inputs: Demo_Section_Search_DescInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`La busqueda funciona completamente en el navegador. Tu dispositivo descifra el contenido de los tickets localmente y compara tu consulta contra el texto descifrado. Ningun termino de busqueda sale del dispositivo.`)
+	return /** @type {LocalizedString} */ (`La busqueda encuentra resultados en tickets, articulos de la base de conocimiento y voluntarios desde una unica interfaz. Toda la comparacion de texto ocurre en el navegador contra contenido descifrado. Ningun termino de busqueda se envia al servidor.`)
 };
 
 /**
 * | output |
 * | --- |
-* | "Search operates entirely in the browser. Your device decrypts ticket content locally and matches your query against the plaintext. No search terms leave the ..." |
+* | "Search finds results across tickets, knowledge base articles, and volunteers from a single interface. All text matching happens in the browser against decryp..." |
 *
 * @param {Demo_Section_Search_DescInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

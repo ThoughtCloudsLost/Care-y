@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "A prompt is sent to another device where you are already signed in. Approving it there completes the sign in here. The waiting screen polls until the challen..." |
+* | "A notification sent to another device where the volunteer is already signed in. Approving the notification on that device completes the sign in on this one w..." |
 *
 * @param {Demo_Narrative_Topic_Twofa_Push_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

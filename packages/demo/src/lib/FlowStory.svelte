@@ -16,6 +16,13 @@
     type PreparedTextWithSegments,
     type LayoutCursor,
   } from "@chenglou/pretext";
+  import {
+    prepareRichInline,
+    layoutNextRichInlineLineRange,
+    materializeRichInlineLineRange,
+    type PreparedRichInline,
+    type RichInlineCursor,
+  } from "@chenglou/pretext/rich-inline";
   import type { Section, SectionId } from "./scroll-sections.js";
   import { getSection } from "./scroll-sections.js";
   import type { DemoTopic } from "./bridge.js";
@@ -33,9 +40,13 @@
     type FlowLayoutResult,
     type FlowFigureGeometry,
     type FlowLine,
+    type FlowLineFragment,
     type LineFiller,
     type LineFillerResult,
     type LineCursor,
+    LIST_INDENT,
+    PARA_SPACE,
+    LIST_ITEM_SPACE,
     DEFAULT_METRICS,
     FRAME_PAD_TOP,
     FRAME_PAD_BOTTOM,
@@ -44,6 +55,12 @@
     computeLineSegments,
     hitTestBlock,
   } from "./flow-layout.js";
+  import {
+    hasFlowMarkup,
+    parseFlowMarkup,
+    unitHasBold,
+    unitText,
+  } from "./flow-markup.js";
   import { hasClip, getClip, type PeekFirePayload } from "./clip-registry.js";
   import { createFigureHysteresis } from "./figure-hysteresis.js";
   import { plainMap } from "./non-reactive.js";
@@ -125,6 +142,14 @@
   };
 
   /**
+   * Bold variant of the sub-body font, for **bold** markup runs. Same
+   * size and family as sub-body so bold and plain fragments share a
+   * baseline; only the weight differs. Used for rich-inline measurement
+   * and published as a CSS custom property like the kind fonts.
+   */
+  const FONT_SUB_BODY_BOLD = `700 15px ${FONT_FAMILY}`;
+
+  /**
    * Line-height values per kind. Must agree with flow-layout.ts metrics
    * (section-title=32, others=24). Published as CSS custom properties
    * alongside FONT_STRINGS so the CSS classes stay single-sourced.
@@ -142,6 +167,7 @@
     `--flow-font-desc: ${FONT_STRINGS["section-desc"]}`,
     `--flow-font-sub-heading: ${FONT_STRINGS["sub-heading"]}`,
     `--flow-font-sub-body: ${FONT_STRINGS["sub-body"]}`,
+    `--flow-font-sub-body-bold: ${FONT_SUB_BODY_BOLD}`,
     `--flow-lh-title: ${LINE_HEIGHTS["section-title"]}`,
     `--flow-lh-desc: ${LINE_HEIGHTS["section-desc"]}`,
     `--flow-lh-sub-heading: ${LINE_HEIGHTS["sub-heading"]}`,
@@ -172,13 +198,45 @@
           kind: "sub-heading",
           text: numbered ? `${String(si + 1)}. ${headingText}` : headingText,
         } satisfies FlowTextBlock);
-        result.push({
-          id: `${section.id}--${sub.slug}--body`,
-          sectionId: section.id,
-          subSlug: sub.slug,
-          kind: "sub-body",
-          text: resolveStoryMessage(sub.bodyKey, loc),
-        } satisfies FlowTextBlock);
+        const bodyText = resolveStoryMessage(sub.bodyKey, loc);
+        const bodyId = `${section.id}--${sub.slug}--body`;
+        if (!hasFlowMarkup(bodyText)) {
+          // Plain copy keeps its historical single block, byte-for-byte.
+          result.push({
+            id: bodyId,
+            sectionId: section.id,
+            subSlug: sub.slug,
+            kind: "sub-body",
+            text: bodyText,
+          } satisfies FlowTextBlock);
+        } else {
+          // Marked-up copy splits into one block per unit (paragraph or
+          // list item) so the layout engine spaces and indents them.
+          const units = parseFlowMarkup(bodyText);
+          for (let ui = 0; ui < units.length; ui++) {
+            const unit = units.at(ui);
+            if (unit === undefined) continue;
+            const prev = ui > 0 ? units.at(ui - 1) : undefined;
+            const isListItem = unit.kind !== "paragraph";
+            const continuesList = isListItem && prev?.kind === unit.kind;
+            result.push({
+              id: `${bodyId}--u${String(ui)}`,
+              sectionId: section.id,
+              subSlug: sub.slug,
+              kind: "sub-body",
+              text: unitText(unit),
+              runs: unitHasBold(unit) ? unit.runs : undefined,
+              indent: isListItem ? LIST_INDENT : undefined,
+              marker: unit.marker ?? undefined,
+              spaceBefore:
+                ui === 0
+                  ? undefined
+                  : continuesList
+                    ? LIST_ITEM_SPACE
+                    : PARA_SPACE,
+            } satisfies FlowTextBlock);
+          }
+        }
 
         // Append a figure block when a clip exists for this sub.
         if (hasClip(section.id, sub.slug)) {
@@ -203,9 +261,25 @@
   // Pretext preparation (font loading + prepare)
   // -----------------------------------------------------------------------
 
+  /** Plain block: measured as one segment run with the kind's font. */
+  interface PlainHandle {
+    readonly type: "plain";
+    readonly handle: PreparedTextWithSegments;
+  }
+
+  /** Block with bold runs: measured via rich-inline, one item per run. */
+  interface RichHandle {
+    readonly type: "rich";
+    readonly handle: PreparedRichInline;
+    /** Bold flag per rich-inline item, indexed by fragment itemIndex. */
+    readonly bold: readonly boolean[];
+  }
+
+  type BlockHandle = PlainHandle | RichHandle;
+
   interface PreparedState {
     forBlocks: readonly FlowBlock[];
-    handles: Map<number, PreparedTextWithSegments>;
+    handles: Map<number, BlockHandle>;
   }
 
   // $state.raw, not $state: the value is swapped wholesale and never
@@ -239,14 +313,33 @@
         lastAppliedLocale = capturedLocale;
       }
 
-      const handles = plainMap<number, PreparedTextWithSegments>();
+      const handles = plainMap<number, BlockHandle>();
       for (let i = 0; i < capturedBlocks.length; i++) {
         const block = capturedBlocks.at(i);
         if (block === undefined) continue;
         // Figure blocks have no text to measure.
         if (block.kind === "figure") continue;
         const fontStr = FONT_STRINGS[block.kind];
-        handles.set(i, prepareWithSegments(block.text, fontStr));
+        if (block.runs !== undefined) {
+          // Bold markup: one rich-inline item per run, each measured
+          // with its own weight so line breaks account for the wider
+          // bold glyphs.
+          handles.set(i, {
+            type: "rich",
+            handle: prepareRichInline(
+              block.runs.map((r) => ({
+                text: r.text,
+                font: r.bold ? FONT_SUB_BODY_BOLD : fontStr,
+              })),
+            ),
+            bold: block.runs.map((r) => r.bold),
+          });
+        } else {
+          handles.set(i, {
+            type: "plain",
+            handle: prepareWithSegments(block.text, fontStr),
+          });
+        }
       }
       prepared = { forBlocks: capturedBlocks, handles };
     }
@@ -257,9 +350,10 @@
       // the demo's serving root. load() rejects when ANY matched face
       // fails, even though the hashed faces we actually render with load
       // fine. allSettled lets those settle as rejected without blocking.
-      const fontLoadPromises = Object.values(FONT_STRINGS).map(async (f) =>
-        document.fonts.load(f),
-      );
+      const fontLoadPromises = [
+        ...Object.values(FONT_STRINGS),
+        FONT_SUB_BODY_BOLD,
+      ].map(async (f) => document.fonts.load(f));
       await Promise.allSettled(fontLoadPromises);
       if (run.signal.aborted) return;
 
@@ -288,11 +382,53 @@
     );
   }
 
-  function createFiller(
-    handles: ReadonlyMap<number, PreparedTextWithSegments>,
-  ): LineFiller {
+  /** Runtime check for the rich-inline cursor shape (adds itemIndex). */
+  function isRichCursor(c: LineCursor): c is RichInlineCursor {
+    return (
+      isLayoutCursor(c) && "itemIndex" in c && typeof c.itemIndex === "number"
+    );
+  }
+
+  /** Fill one rich-inline line and flatten it into a filler result. */
+  function fillRichLine(
+    entry: RichHandle,
+    cursor: RichInlineCursor,
+    maxWidth: number,
+  ): LineFillerResult | null {
+    const range = layoutNextRichInlineLineRange(entry.handle, maxWidth, cursor);
+    if (range === null) return null;
+
+    const line = materializeRichInlineLineRange(entry.handle, range);
+    // Fragment offsets are relative to the line start: each fragment
+    // advances by its gapBefore (inter-item spacing pretext collapsed)
+    // plus its occupied width.
+    const fragments: FlowLineFragment[] = [];
+    let dx = 0;
+    let text = "";
+    for (const frag of line.fragments) {
+      dx += frag.gapBefore;
+      fragments.push({
+        text: frag.text,
+        bold: entry.bold.at(frag.itemIndex) ?? false,
+        dx,
+        width: frag.occupiedWidth,
+      });
+      dx += frag.occupiedWidth;
+      text += frag.text;
+    }
+    return { text, width: line.width, nextCursor: range.end, fragments };
+  }
+
+  function createFiller(handles: ReadonlyMap<number, BlockHandle>): LineFiller {
     return {
-      startCursor(_blockIndex: number): LineCursor {
+      startCursor(blockIndex: number): LineCursor {
+        if (handles.get(blockIndex)?.type === "rich") {
+          return {
+            itemIndex: 0,
+            segmentIndex: 0,
+            graphemeIndex: 0,
+          } satisfies RichInlineCursor;
+        }
         return { segmentIndex: 0, graphemeIndex: 0 } satisfies LayoutCursor;
       },
       fillLine(
@@ -300,14 +436,19 @@
         cursor: LineCursor,
         maxWidth: number,
       ): LineFillerResult | null {
-        const handle = handles.get(blockIndex);
-        if (handle === undefined) return null;
+        const entry = handles.get(blockIndex);
+        if (entry === undefined) return null;
+
+        if (entry.type === "rich") {
+          if (!isRichCursor(cursor)) return null;
+          return fillRichLine(entry, cursor, maxWidth);
+        }
 
         if (!isLayoutCursor(cursor)) return null;
-        const range = layoutNextLineRange(handle, cursor, maxWidth);
+        const range = layoutNextLineRange(entry.handle, cursor, maxWidth);
         if (range === null) return null;
 
-        const materialized = materializeLineRange(handle, range);
+        const materialized = materializeLineRange(entry.handle, range);
         return {
           text: materialized.text,
           width: materialized.width,
@@ -1188,22 +1329,52 @@
           {/each}
         </h3>
       {:else}
+        {@const firstLine = vb.lines.at(0)}
         <p
           class="flow-block"
           style:top="{vb.geo.topY}px"
           style:opacity={fadeFor(vb.geo.topY, vb.geo.bottomY)}
         >
-          {#each vb.lines as line, li (li)}
+          <!-- List marker in the gutter the item's indent reserved -->
+          {#if vb.block.marker !== undefined && firstLine !== undefined}
             <span
               class="flow-line {lineColorClass(
                 vb.block,
                 activeSection,
                 activeSub,
               )}"
-              style:left="{line.x}px"
-              style:top="{line.y - vb.geo.topY}px"
-              style:width="{line.width}px">{line.text}</span
+              style:left="{firstLine.x - (vb.block.indent ?? 0)}px"
+              style:top="{firstLine.y - vb.geo.topY}px">{vb.block.marker}</span
             >
+          {/if}
+          {#each vb.lines as line, li (li)}
+            {#if line.fragments !== undefined}
+              <!-- Rich line: one span per styled fragment -->
+              {#each line.fragments as frag, fi (fi)}
+                <span
+                  class="flow-line {lineColorClass(
+                    vb.block,
+                    activeSection,
+                    activeSub,
+                  )}"
+                  class:flow-line--bold={frag.bold}
+                  style:left="{line.x + frag.dx}px"
+                  style:top="{line.y - vb.geo.topY}px"
+                  style:width="{frag.width}px">{frag.text}</span
+                >
+              {/each}
+            {:else}
+              <span
+                class="flow-line {lineColorClass(
+                  vb.block,
+                  activeSection,
+                  activeSub,
+                )}"
+                style:left="{line.x}px"
+                style:top="{line.y - vb.geo.topY}px"
+                style:width="{line.width}px">{line.text}</span
+              >
+            {/if}
           {/each}
         </p>
       {/if}
@@ -1334,6 +1505,12 @@
   }
   :global(html.dark) .flow-line--sub-body {
     color: #a1a1a6;
+  }
+
+  /* Bold markup runs: same metrics as sub-body, weight 700. Declared
+     after the kind classes so the font override wins on shared spans. */
+  .flow-line--bold {
+    font: var(--flow-font-sub-body-bold);
   }
 
   /* Highlight rects behind active sub lines */

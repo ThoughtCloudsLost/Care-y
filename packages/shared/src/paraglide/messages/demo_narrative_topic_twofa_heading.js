@@ -6,7 +6,7 @@ import { getLocale, experimentalStaticLocale } from '../runtime.js';
 /** @typedef {{}} Demo_Narrative_Topic_Twofa_HeadingInputs */
 
 const en_demo_narrative_topic_twofa_heading = /** @type {(inputs: Demo_Narrative_Topic_Twofa_HeadingInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Two-factor authentication`)
+	return /** @type {LocalizedString} */ (`Two factor authentication`)
 };
 
 const es_demo_narrative_topic_twofa_heading = /** @type {(inputs: Demo_Narrative_Topic_Twofa_HeadingInputs) => LocalizedString} */ () => {
@@ -16,7 +16,7 @@ const es_demo_narrative_topic_twofa_heading = /** @type {(inputs: Demo_Narrative
 /**
 * | output |
 * | --- |
-* | "Two-factor authentication" |
+* | "Two factor authentication" |
 *
 * @param {Demo_Narrative_Topic_Twofa_HeadingInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

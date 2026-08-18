@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "Administrators organize the knowledge library into categories from this sheet. Categories are stored as org-key-encrypted records, so a database breach revea..." |
+* | "Administrators organize the knowledge library into categories. Each category name is encrypted with the organization key before storage, so a database breach..." |
 *
 * @param {Demo_Narrative_Topic_Library_Categories_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

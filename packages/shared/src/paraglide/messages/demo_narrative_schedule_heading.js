@@ -6,17 +6,17 @@ import { getLocale, experimentalStaticLocale } from '../runtime.js';
 /** @typedef {{}} Demo_Narrative_Schedule_HeadingInputs */
 
 const en_demo_narrative_schedule_heading = /** @type {(inputs: Demo_Narrative_Schedule_HeadingInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Shift scheduling (coming soon)`)
+	return /** @type {LocalizedString} */ (`Shift scheduling`)
 };
 
 const es_demo_narrative_schedule_heading = /** @type {(inputs: Demo_Narrative_Schedule_HeadingInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Programacion de turnos (proximamente)`)
+	return /** @type {LocalizedString} */ (`Programacion de turnos`)
 };
 
 /**
 * | output |
 * | --- |
-* | "Shift scheduling (coming soon)" |
+* | "Shift scheduling" |
 *
 * @param {Demo_Narrative_Schedule_HeadingInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

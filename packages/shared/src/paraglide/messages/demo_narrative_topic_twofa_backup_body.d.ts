@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "Backup codes are generated once at enrollment and stored by you, outside the system. Each code works exactly once. They are the recovery path for when no oth..." |
+* | "A set of one time codes generated during enrollment and stored by the volunteer outside the system. Each code works exactly once. **When to use them.** Backu..." |
 *
 * @param {Demo_Narrative_Topic_Twofa_Backup_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

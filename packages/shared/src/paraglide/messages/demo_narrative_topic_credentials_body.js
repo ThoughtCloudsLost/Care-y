@@ -6,17 +6,21 @@ import { getLocale, experimentalStaticLocale } from '../runtime.js';
 /** @typedef {{}} Demo_Narrative_Topic_Credentials_BodyInputs */
 
 const en_demo_narrative_topic_credentials_body = /** @type {(inputs: Demo_Narrative_Topic_Credentials_BodyInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`You type a username and password. The password never leaves your device in its original form. CARE-Y runs Argon2id, a memory-hard key stretching function, to transform it into a high-entropy value. This stretched output becomes the starting point for key derivation. Even if someone intercepts the network traffic, they get a value that is computationally impractical to reverse.`)
+	return /** @type {LocalizedString} */ (`Volunteers sign in with a username and password assigned by their organization. The password is never sent to the server in any form.
+When you submit your password, CARE-Y runs it through **Argon2id**, a function that transforms it into a value that is extremely difficult to reverse, even with dedicated hardware. This function is intentionally slow and memory intensive, which makes it costly for an attacker to try large numbers of guesses. The result becomes the starting point for deriving encryption keys.
+The login screen updates its label through each step of the process so volunteers know the app is working, not frozen. Even if someone intercepts network traffic between the device and the server, they cannot recover the original password from what was transmitted.`)
 };
 
 const es_demo_narrative_topic_credentials_body = /** @type {(inputs: Demo_Narrative_Topic_Credentials_BodyInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Escribes un nombre de usuario y contrasena. La contrasena nunca sale de tu dispositivo en su forma original. CARE-Y ejecuta Argon2id, una funcion de estiramiento de clave con uso intensivo de memoria, para transformarla en un valor de alta entropia. Este resultado estirado se convierte en el punto de partida para la derivacion de claves. Aunque alguien intercepte el trafico de red, obtiene un valor computacionalmente impracticable de revertir.`)
+	return /** @type {LocalizedString} */ (`Las personas voluntarias inician sesion con un nombre de usuario y contrasena asignados por su organizacion. La contrasena nunca se envia al servidor en ninguna forma.
+Al enviar la contrasena, CARE-Y la procesa con **Argon2id**, una funcion que la transforma en un valor extremadamente dificil de revertir, incluso con hardware dedicado. Esta funcion es intencionalmente lenta y consume mucha memoria, lo que hace costoso para un atacante probar grandes cantidades de intentos. El resultado se convierte en el punto de partida para derivar las claves de cifrado.
+La pantalla de inicio de sesion actualiza su etiqueta a traves de cada paso del proceso para que las personas voluntarias sepan que la aplicacion esta trabajando, no congelada. Aunque alguien intercepte el trafico de red entre el dispositivo y el servidor, no puede recuperar la contrasena original de lo que se transmitio.`)
 };
 
 /**
 * | output |
 * | --- |
-* | "You type a username and password. The password never leaves your device in its original form. CARE-Y runs Argon2id, a memory-hard key stretching function, to..." |
+* | "Volunteers sign in with a username and password assigned by their organization. The password is never sent to the server in any form. When you submit your pa..." |
 *
 * @param {Demo_Narrative_Topic_Credentials_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

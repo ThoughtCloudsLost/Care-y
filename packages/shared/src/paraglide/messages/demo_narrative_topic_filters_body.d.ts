@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "Filter by status, queue, priority, assignee, or date range. The server evaluates filters against encrypted metadata indexes. It returns matching rows without..." |
+* | "Filter pills narrow the ticket list by status, queue, priority, assignee, date range, or unread state. Multiple filters can be active at once. **Server side ..." |
 *
 * @param {Demo_Narrative_Topic_Filters_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "The compose bar offers quick actions: attach files, switch to SMS, toggle internal note mode. Attachments are encrypted before upload. The server stores bina..." |
+* | "The compose bar at the bottom of the screen is where volunteers write replies and notes. **Mode switching.** The compose bar can switch between reply mode an..." |
 *
 * @param {Demo_Narrative_Topic_Compose_Actions_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

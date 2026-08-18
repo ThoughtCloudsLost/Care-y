@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "Multiple view layouts" |
+* | "View modes" |
 *
 * @param {Demo_Narrative_Topic_View_Modes_HeadingInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

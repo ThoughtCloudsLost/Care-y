@@ -6,17 +6,21 @@ import { getLocale, experimentalStaticLocale } from '../runtime.js';
 /** @typedef {{}} Demo_Narrative_Topic_Select_Mode_BodyInputs */
 
 const en_demo_narrative_topic_select_mode_body = /** @type {(inputs: Demo_Narrative_Topic_Select_Mode_BodyInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Select multiple tickets or messages to perform batch actions. Selection state is purely local. The server never learns which items you selected or why.`)
+	return /** @type {LocalizedString} */ (`Select mode lets volunteers pick multiple tickets for batch actions. Tap the select button in the toolbar to enter selection mode, then tap tickets to add them to the selection.
+**Available actions.** The bulk action bar appears at the bottom of the screen with options that apply to all selected tickets. Actions depend on the volunteer's permissions.
+**Privacy.** Selection state is purely local. The server does not know which tickets are selected or why.`)
 };
 
 const es_demo_narrative_topic_select_mode_body = /** @type {(inputs: Demo_Narrative_Topic_Select_Mode_BodyInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Selecciona varios tickets o mensajes para realizar acciones en lote. El estado de seleccion es puramente local. El servidor nunca sabe cuales elementos seleccionaste ni por que.`)
+	return /** @type {LocalizedString} */ (`El modo de seleccion permite a los voluntarios elegir varios tickets para acciones en lote. Toca el boton de seleccion en la barra de herramientas para entrar en modo de seleccion, luego toca los tickets para agregarlos a la seleccion.
+**Acciones disponibles.** La barra de acciones masivas aparece en la parte inferior de la pantalla con opciones que se aplican a todos los tickets seleccionados. Las acciones dependen de los permisos del voluntario.
+**Privacidad.** El estado de seleccion es puramente local. El servidor no sabe cuales tickets estan seleccionados ni por que.`)
 };
 
 /**
 * | output |
 * | --- |
-* | "Select multiple tickets or messages to perform batch actions. Selection state is purely local. The server never learns which items you selected or why." |
+* | "Select mode lets volunteers pick multiple tickets for batch actions. Tap the select button in the toolbar to enter selection mode, then tap tickets to add th..." |
 *
 * @param {Demo_Narrative_Topic_Select_Mode_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

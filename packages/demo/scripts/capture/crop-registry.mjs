@@ -51,11 +51,11 @@ const DEFAULT_RECT = { x: 0, y: 56, w: DEFAULT_CROP_W, h: DEFAULT_CROP_H };
  */
 export const CROP_REGISTRY = {
   // -- login --
-  "login/credentials": {
+  "login/language": {
     selector: null,
     fallbackRect: { ...DEFAULT_RECT },
   },
-  "login/language": {
+  "login/credentials": {
     selector: null,
     fallbackRect: { ...DEFAULT_RECT },
   },
@@ -93,7 +93,7 @@ export const CROP_REGISTRY = {
   },
 
   // -- dashboard --
-  "dashboard/intro": {
+  "dashboard/shift": {
     selector: null,
     fallbackRect: { ...DEFAULT_RECT },
   },
@@ -102,6 +102,34 @@ export const CROP_REGISTRY = {
     fallbackRect: { ...DEFAULT_RECT },
   },
   "dashboard/activity": {
+    selector: null,
+    fallbackRect: { ...DEFAULT_RECT },
+  },
+  "dashboard/kb": {
+    selector: null,
+    fallbackRect: { ...DEFAULT_RECT },
+  },
+  "dashboard/view-switcher": {
+    selector: null,
+    fallbackRect: { ...DEFAULT_RECT },
+  },
+  "dashboard/needs-attention": {
+    selector: null,
+    fallbackRect: { ...DEFAULT_RECT },
+  },
+  "dashboard/my-tickets": {
+    selector: null,
+    fallbackRect: { ...DEFAULT_RECT },
+  },
+  "dashboard/unassigned": {
+    selector: null,
+    fallbackRect: { ...DEFAULT_RECT },
+  },
+  "dashboard/on-hold": {
+    selector: null,
+    fallbackRect: { ...DEFAULT_RECT },
+  },
+  "dashboard/create": {
     selector: null,
     fallbackRect: { ...DEFAULT_RECT },
   },
@@ -115,6 +143,10 @@ export const CROP_REGISTRY = {
     selector: null,
     fallbackRect: { ...DEFAULT_RECT },
   },
+  "tickets/saved-filters": {
+    selector: null,
+    fallbackRect: { ...DEFAULT_RECT },
+  },
   "tickets/view-modes": {
     selector: null,
     fallbackRect: { ...DEFAULT_RECT },
@@ -123,12 +155,36 @@ export const CROP_REGISTRY = {
     selector: null,
     fallbackRect: { ...DEFAULT_RECT },
   },
+  "tickets/quick-actions": {
+    selector: null,
+    fallbackRect: { ...DEFAULT_RECT },
+  },
+  "tickets/unread-badges": {
+    selector: null,
+    fallbackRect: { ...DEFAULT_RECT },
+  },
+  "tickets/decryption": {
+    selector: null,
+    fallbackRect: { ...DEFAULT_RECT },
+  },
   "tickets/new-ticket": {
+    selector: null,
+    fallbackRect: { ...DEFAULT_RECT },
+  },
+  "tickets/split-view": {
     selector: null,
     fallbackRect: { ...DEFAULT_RECT },
   },
 
   // -- ticket-detail --
+  "ticket-detail/case-header": {
+    selector: null,
+    fallbackRect: { ...DEFAULT_RECT },
+  },
+  "ticket-detail/conversation": {
+    selector: null,
+    fallbackRect: { ...DEFAULT_RECT },
+  },
   "ticket-detail/thread-filters": {
     selector: null,
     fallbackRect: { ...DEFAULT_RECT },
@@ -153,19 +209,51 @@ export const CROP_REGISTRY = {
     selector: null,
     fallbackRect: { ...DEFAULT_RECT },
   },
+  "ticket-detail/deep-search": {
+    selector: null,
+    fallbackRect: { ...DEFAULT_RECT },
+  },
+  "ticket-detail/message-actions": {
+    selector: null,
+    fallbackRect: { ...DEFAULT_RECT },
+  },
+  "ticket-detail/close-reopen": {
+    selector: null,
+    fallbackRect: { ...DEFAULT_RECT },
+  },
+  "ticket-detail/exposure-hints": {
+    selector: null,
+    fallbackRect: { ...DEFAULT_RECT },
+  },
 
   // -- search --
-  "search/intro": {
+  "search/how-it-works": {
+    selector: null,
+    fallbackRect: { ...DEFAULT_RECT },
+  },
+  "search/entities": {
     selector: null,
     fallbackRect: { ...DEFAULT_RECT },
   },
 
   // -- library --
-  "library/intro": {
+  "library/browse": {
+    selector: null,
+    fallbackRect: { ...DEFAULT_RECT },
+  },
+  "library/detail": {
+    selector: null,
+    fallbackRect: { ...DEFAULT_RECT },
+  },
+  "library/attachments": {
     selector: null,
     fallbackRect: { ...DEFAULT_RECT },
   },
   "library/vote": {
+    selector: null,
+    fallbackRect: { ...DEFAULT_RECT },
+  },
+  "library/search": {
     selector: null,
     fallbackRect: { ...DEFAULT_RECT },
   },
@@ -179,27 +267,69 @@ export const CROP_REGISTRY = {
   },
 
   // -- admin --
-  "admin/intro": {
+  "admin/hub": {
     selector: null,
     fallbackRect: { ...DEFAULT_RECT },
   },
-  "admin/people-queues": {
+
+  // -- admin-people --
+  "admin-people/people": {
     selector: null,
     fallbackRect: { ...DEFAULT_RECT },
   },
-  "admin/org-config-keys": {
+  "admin-people/queues": {
     selector: null,
     fallbackRect: { ...DEFAULT_RECT },
   },
-  "admin/communications": {
+  "admin-people/clients": {
     selector: null,
     fallbackRect: { ...DEFAULT_RECT },
   },
-  "admin/greetings": {
+
+  // -- admin-comms --
+  "admin-comms/phone-lines": {
     selector: null,
     fallbackRect: { ...DEFAULT_RECT },
   },
-  "admin/quarantine": {
+  "admin-comms/greetings": {
+    selector: null,
+    fallbackRect: { ...DEFAULT_RECT },
+  },
+  "admin-comms/sms-templates": {
+    selector: null,
+    fallbackRect: { ...DEFAULT_RECT },
+  },
+  "admin-comms/blocklist": {
+    selector: null,
+    fallbackRect: { ...DEFAULT_RECT },
+  },
+  "admin-comms/quarantine": {
+    selector: null,
+    fallbackRect: { ...DEFAULT_RECT },
+  },
+
+  // -- admin-org --
+  "admin-org/general": {
+    selector: null,
+    fallbackRect: { ...DEFAULT_RECT },
+  },
+  "admin-org/branding": {
+    selector: null,
+    fallbackRect: { ...DEFAULT_RECT },
+  },
+  "admin-org/terminology": {
+    selector: null,
+    fallbackRect: { ...DEFAULT_RECT },
+  },
+  "admin-org/note-types": {
+    selector: null,
+    fallbackRect: { ...DEFAULT_RECT },
+  },
+  "admin-org/keys": {
+    selector: null,
+    fallbackRect: { ...DEFAULT_RECT },
+  },
+  "admin-org/retention": {
     selector: null,
     fallbackRect: { ...DEFAULT_RECT },
   },
@@ -211,19 +341,23 @@ export const CROP_REGISTRY = {
   },
 
   // -- settings --
-  "settings/intro": {
+  "settings/identity": {
     selector: null,
     fallbackRect: { ...DEFAULT_RECT },
   },
-  "settings/profile-identity": {
+  "settings/password": {
     selector: null,
     fallbackRect: { ...DEFAULT_RECT },
   },
-  "settings/password-keys": {
+  "settings/two-factor": {
     selector: null,
     fallbackRect: { ...DEFAULT_RECT },
   },
-  "settings/two-factor-methods": {
+  "settings/appearance": {
+    selector: null,
+    fallbackRect: { ...DEFAULT_RECT },
+  },
+  "settings/security": {
     selector: null,
     fallbackRect: { ...DEFAULT_RECT },
   },

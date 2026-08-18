@@ -6,7 +6,7 @@ import { getLocale, experimentalStaticLocale } from '../runtime.js';
 /** @typedef {{}} Onboarding_Briefing_Choice_2fa_WhyInputs */
 
 const en_onboarding_briefing_choice_2fa_why = /** @type {(inputs: Onboarding_Briefing_Choice_2fa_WhyInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`A password alone can be guessed, leaked, or stolen through a fake login page. Two-factor authentication adds a second check that makes stolen passwords useless on their own.`)
+	return /** @type {LocalizedString} */ (`A password alone can be guessed, leaked, or stolen through a fake login page. Two factor authentication adds a second check that makes stolen passwords useless on their own.`)
 };
 
 const es_onboarding_briefing_choice_2fa_why = /** @type {(inputs: Onboarding_Briefing_Choice_2fa_WhyInputs) => LocalizedString} */ () => {
@@ -16,7 +16,7 @@ const es_onboarding_briefing_choice_2fa_why = /** @type {(inputs: Onboarding_Bri
 /**
 * | output |
 * | --- |
-* | "A password alone can be guessed, leaked, or stolen through a fake login page. Two-factor authentication adds a second check that makes stolen passwords usele..." |
+* | "A password alone can be guessed, leaked, or stolen through a fake login page. Two factor authentication adds a second check that makes stolen passwords usele..." |
 *
 * @param {Onboarding_Briefing_Choice_2fa_WhyInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

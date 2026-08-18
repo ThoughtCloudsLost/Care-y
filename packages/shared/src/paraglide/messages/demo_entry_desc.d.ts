@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "CARE-Y is a call intake system for people who cannot afford to be identified. This demo runs the real application in your browser, with a story alongside it ..." |
+* | "CARE-Y is a call intake and case management system for mutual aid organizations serving at-risk populations. Both clients and volunteers face real danger if ..." |
 *
 * @param {Demo_Entry_DescInputs} inputs
 * @param {{ locale?: "en" | "es" }} options
