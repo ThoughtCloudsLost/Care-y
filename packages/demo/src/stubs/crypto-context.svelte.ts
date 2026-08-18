@@ -390,6 +390,23 @@ let ensureKeyedPromise: Promise<void> | null = null;
 let ensureKeyedResult: LoginCryptoResult | null = null;
 
 /**
+ * Whether a login crypto derivation has started and not failed. True
+ * from the moment ensureKeyed() is first called, which covers the
+ * verify-to-derive handoff gap before the login-stage callback fires
+ * "deriving". Stays true after a successful derivation for the rest
+ * of the iframe's lifetime: the keyed worker equally must not have a
+ * rewind-replay zeroAll spliced into its queue. Cleared only on
+ * rejection (the promise cache resets so retry works), which reopens
+ * the gate for the retry's own run.
+ *
+ * PhoneApp's advance chain reads this to refuse rewinding the login
+ * scene over a running or completed derivation.
+ */
+export function isLoginCryptoInFlight(): boolean {
+  return ensureKeyedPromise !== null;
+}
+
+/**
  * Run the real loginCrypto pipeline with demo credentials if the bridge
  * is not already KEYED. Idempotent: concurrent calls share the same
  * in-flight promise. On completion, the pacing bridge's keyed promise
