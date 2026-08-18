@@ -136,11 +136,13 @@ vi.mock("$lib/crypto/context.js", async (importOriginal) => ({
 // spreading importOriginal would fail at runtime.
 vi.mock("@tanstack/svelte-query", async (importOriginal) => {
   const original = await importOriginal<Record<string, unknown>>();
-  const queryData = { current: null as unknown };
   return {
     ...original,
     createQuery: (optsFn: () => Record<string, unknown>) => {
       const opts = optsFn();
+      // Per-call state: a factory-level holder would leak resolved data
+      // across tests, since the mock factory runs once per module.
+      const queryData = { current: null as unknown };
       if (typeof opts.queryFn === "function") {
         void (opts.queryFn as () => Promise<unknown>)().then(
           (data: unknown) => {
@@ -221,6 +223,23 @@ function renderSheet(
       ondismiss: overrides.ondismiss ?? vi.fn(),
     },
   });
+}
+
+/**
+ * Renders the sheet closed, lets the consultant query resolve, then opens it.
+ * Mirrors real usage: the settings page runs the same query (shared queryKey)
+ * while the sheet is closed, so data is already cached when the open
+ * transition picks the step. Opening at mount would race the async queryFn
+ * and always land on the entry step.
+ */
+async function renderSheetOpenedAfterData(): Promise<void> {
+  const { rerender } = render(ConsultantPhoneSheet, {
+    props: { opened: false, ondismiss: vi.fn() },
+  });
+  await new Promise((r) => setTimeout(r, 0));
+  await rerender({ opened: true });
+  await new Promise((r) => setTimeout(r, 0));
+  await tick();
 }
 
 describe("ConsultantPhoneSheet", () => {
@@ -405,10 +424,7 @@ describe("ConsultantPhoneSheet", () => {
         hasOpsPhone: true,
       });
 
-      renderSheet();
-      await tick();
-      await new Promise((r) => setTimeout(r, 50));
-      await tick();
+      await renderSheetOpenedAfterData();
 
       // The verified state shows the verified label.
       expect(screen.getByText(/Verified/)).toBeTruthy();
@@ -430,10 +446,7 @@ describe("ConsultantPhoneSheet", () => {
         hasOpsPhone: false,
       });
 
-      renderSheet();
-      await tick();
-      await new Promise((r) => setTimeout(r, 50));
-      await tick();
+      await renderSheetOpenedAfterData();
 
       const removeBtn = screen.getByText("Remove phone").closest("button");
       if (removeBtn) {
@@ -477,21 +490,18 @@ describe("ConsultantPhoneSheet", () => {
       await vi.advanceTimersByTimeAsync(100);
       await tick();
 
-      // After submission, we should be on code step with cooldown active.
-      // The cooldown should show "Resend in 60s".
-      const cooldownText = screen.queryByText(/Resend in \d+s/);
-      if (cooldownText) {
-        expect(cooldownText.textContent).toContain("Resend in");
-      }
+      // After submission, we are on the code step with the cooldown active.
+      expect(screen.getByText(/Resend in \d+s/).textContent).toContain(
+        "Resend in 60s",
+      );
 
       // Advance 10 seconds.
       await vi.advanceTimersByTimeAsync(10_000);
       await tick();
 
-      const updatedText = screen.queryByText(/Resend in \d+s/);
-      if (updatedText) {
-        expect(updatedText.textContent).toContain("Resend in 50s");
-      }
+      expect(screen.getByText(/Resend in \d+s/).textContent).toContain(
+        "Resend in 50s",
+      );
 
       vi.useRealTimers();
     });
