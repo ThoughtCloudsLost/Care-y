@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "See how end-to-end encryption protects every conversation." |
+* | "See how end to end encryption protects every conversation." |
 *
 * @param {Demo_SubtitleInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

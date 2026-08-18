@@ -6,17 +6,17 @@ import { getLocale, experimentalStaticLocale } from '../runtime.js';
 /** @typedef {{}} Demo_Entry_DescInputs */
 
 const en_demo_entry_desc = /** @type {(inputs: Demo_Entry_DescInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`CARE-Y is a call intake system for people who cannot afford to be identified. This demo runs the real application in your browser, with a story alongside it that explains what each screen is doing.`)
+	return /** @type {LocalizedString} */ (`CARE-Y is a call intake and case management system for mutual aid organizations serving at-risk populations. Both clients and volunteers face real danger if their identities or case details are exposed. The simulator on this page runs the real application against a database in your browser. The text alongside it explains what each screen is doing.`)
 };
 
 const es_demo_entry_desc = /** @type {(inputs: Demo_Entry_DescInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`CARE-Y es un sistema de recepcion de llamadas para personas que no pueden permitirse ser identificadas. Esta demostracion ejecuta la aplicacion real en tu navegador, junto a un relato que explica lo que hace cada pantalla.`)
+	return /** @type {LocalizedString} */ (`CARE-Y es un sistema de gestion de llamadas y casos para organizaciones de ayuda mutua que atienden a poblaciones en riesgo. Tanto los clientes como las personas voluntarias corren peligro real si se exponen sus identidades o los detalles de sus casos. El simulador en esta pagina ejecuta la aplicacion real sobre una base de datos en tu navegador. El texto a su lado explica lo que hace cada pantalla.`)
 };
 
 /**
 * | output |
 * | --- |
-* | "CARE-Y is a call intake system for people who cannot afford to be identified. This demo runs the real application in your browser, with a story alongside it ..." |
+* | "CARE-Y is a call intake and case management system for mutual aid organizations serving at-risk populations. Both clients and volunteers face real danger if ..." |
 *
 * @param {Demo_Entry_DescInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

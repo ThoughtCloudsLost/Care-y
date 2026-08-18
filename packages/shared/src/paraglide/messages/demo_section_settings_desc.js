@@ -6,17 +6,17 @@ import { getLocale, experimentalStaticLocale } from '../runtime.js';
 /** @typedef {{}} Demo_Section_Settings_DescInputs */
 
 const en_demo_section_settings_desc = /** @type {(inputs: Demo_Section_Settings_DescInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`The settings page lets volunteers update their profile, change their password, and manage notification preferences.`)
+	return /** @type {LocalizedString} */ (`The settings page lets volunteers update their profile, manage their password and encryption keys, configure appearance, and enroll in two factor authentication methods.`)
 };
 
 const es_demo_section_settings_desc = /** @type {(inputs: Demo_Section_Settings_DescInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`La pagina de configuracion permite a los voluntarios actualizar su perfil, cambiar su contrasena y gestionar preferencias de notificacion.`)
+	return /** @type {LocalizedString} */ (`La pagina de configuracion permite a los voluntarios actualizar su perfil, gestionar su contrasena y claves de cifrado, configurar la apariencia y registrarse en metodos de autenticacion de dos factores.`)
 };
 
 /**
 * | output |
 * | --- |
-* | "The settings page lets volunteers update their profile, change their password, and manage notification preferences." |
+* | "The settings page lets volunteers update their profile, manage their password and encryption keys, configure appearance, and enroll in two factor authenticat..." |
 *
 * @param {Demo_Section_Settings_DescInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

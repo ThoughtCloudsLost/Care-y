@@ -6,17 +6,17 @@ import { getLocale, experimentalStaticLocale } from '../runtime.js';
 /** @typedef {{}} Demo_Narrative_Topic_Filters_HeadingInputs */
 
 const en_demo_narrative_topic_filters_heading = /** @type {(inputs: Demo_Narrative_Topic_Filters_HeadingInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Filtering the ticket list`)
+	return /** @type {LocalizedString} */ (`Filters`)
 };
 
 const es_demo_narrative_topic_filters_heading = /** @type {(inputs: Demo_Narrative_Topic_Filters_HeadingInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Filtrando la lista de tickets`)
+	return /** @type {LocalizedString} */ (`Filtros`)
 };
 
 /**
 * | output |
 * | --- |
-* | "Filtering the ticket list" |
+* | "Filters" |
 *
 * @param {Demo_Narrative_Topic_Filters_HeadingInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

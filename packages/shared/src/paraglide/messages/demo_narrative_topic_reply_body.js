@@ -6,17 +6,21 @@ import { getLocale, experimentalStaticLocale } from '../runtime.js';
 /** @typedef {{}} Demo_Narrative_Topic_Reply_BodyInputs */
 
 const en_demo_narrative_topic_reply_body = /** @type {(inputs: Demo_Narrative_Topic_Reply_BodyInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Your reply is encrypted on device before it reaches the server. The server relays ciphertext to the intended recipient. If the channel is SMS, the relay forwards to the carrier and zeros the buffer immediately.`)
+	return /** @type {LocalizedString} */ (`When a volunteer sends a reply, the message is encrypted on the device with the per ticket key before it reaches the server. The server stores the ciphertext and delivers it to the recipient.
+**SMS replies.** If the channel is SMS, the server forwards the message to the telephony provider through a stateless relay that reads the request body as a raw buffer and zeros it from memory immediately after forwarding. The relay never creates a JavaScript string from the content, and the server does not store or log the outbound message. A residual risk is acknowledged in the code: the telephony provider's SDK may create internal string copies that persist until garbage collection.
+**Delivery confirmation.** The thread shows delivery status for each outbound message so the volunteer knows whether the message reached the client.`)
 };
 
 const es_demo_narrative_topic_reply_body = /** @type {(inputs: Demo_Narrative_Topic_Reply_BodyInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Tu respuesta se cifra en el dispositivo antes de llegar al servidor. El servidor retransmite texto cifrado al destinatario previsto. Si el canal es SMS, el relay envia al operador y borra el buffer inmediatamente.`)
+	return /** @type {LocalizedString} */ (`Cuando un voluntario envia una respuesta, el mensaje se cifra en el dispositivo con la clave por ticket antes de llegar al servidor. El servidor almacena el texto cifrado y lo entrega al destinatario.
+**Respuestas por SMS.** Si el canal es SMS, el servidor reenvia el mensaje al proveedor de telefonia a traves de un relay sin estado que lee el cuerpo de la solicitud como un buffer crudo y lo borra de memoria inmediatamente despues del reenvio. El relay nunca crea una cadena JavaScript del contenido, y el servidor no almacena ni registra el mensaje saliente. Se reconoce un riesgo residual en el codigo: el SDK del proveedor de telefonia puede crear copias internas de cadenas que persisten hasta la recoleccion de basura.
+**Confirmacion de entrega.** El hilo muestra el estado de entrega de cada mensaje saliente para que el voluntario sepa si el mensaje llego al cliente.`)
 };
 
 /**
 * | output |
 * | --- |
-* | "Your reply is encrypted on device before it reaches the server. The server relays ciphertext to the intended recipient. If the channel is SMS, the relay forw..." |
+* | "When a volunteer sends a reply, the message is encrypted on the device with the per ticket key before it reaches the server. The server stores the ciphertext..." |
 *
 * @param {Demo_Narrative_Topic_Reply_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

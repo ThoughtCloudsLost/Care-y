@@ -6,17 +6,17 @@ import { getLocale, experimentalStaticLocale } from '../runtime.js';
 /** @typedef {{}} Demo_Narrative_Topic_Credentials_HeadingInputs */
 
 const en_demo_narrative_topic_credentials_heading = /** @type {(inputs: Demo_Narrative_Topic_Credentials_HeadingInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Credentials and password stretching`)
+	return /** @type {LocalizedString} */ (`Username and password`)
 };
 
 const es_demo_narrative_topic_credentials_heading = /** @type {(inputs: Demo_Narrative_Topic_Credentials_HeadingInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Credenciales y estiramiento de contrasena`)
+	return /** @type {LocalizedString} */ (`Nombre de usuario y contrasena`)
 };
 
 /**
 * | output |
 * | --- |
-* | "Credentials and password stretching" |
+* | "Username and password" |
 *
 * @param {Demo_Narrative_Topic_Credentials_HeadingInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

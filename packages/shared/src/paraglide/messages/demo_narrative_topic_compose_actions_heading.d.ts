@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "Compose actions" |
+* | "Compose bar" |
 *
 * @param {Demo_Narrative_Topic_Compose_Actions_HeadingInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

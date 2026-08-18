@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "Two-factor authentication" |
+* | "Two factor authentication" |
 *
 * @param {Demo_Narrative_Topic_Twofa_HeadingInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

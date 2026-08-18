@@ -67,6 +67,9 @@ export type SectionId =
   | "search"
   | "library"
   | "admin"
+  | "admin-people"
+  | "admin-comms"
+  | "admin-org"
   | "schedule"
   | "settings"
   | "coming-soon";
@@ -115,26 +118,59 @@ export type DemoTopic =
   | "key-derivation"
   | "sort"
   | "filters"
+  | "saved-filters"
   | "view-modes"
   | "select-mode"
+  | "quick-actions"
+  | "unread-badges"
+  | "decryption"
   | "new-ticket"
+  | "split-view"
+  | "case-header"
+  | "conversation"
   | "thread-filters"
   | "compose-actions"
   | "reply"
   | "notes"
   | "case-fold"
   | "timeline"
+  | "deep-search"
+  | "message-actions"
+  | "close-reopen"
+  | "exposure-hints"
+  | "dashboard-shift"
   | "dashboard-queues"
   | "dashboard-activity"
+  | "dashboard-kb"
+  | "dashboard-view-switcher"
+  | "dashboard-needs-attention"
+  | "dashboard-my-tickets"
+  | "dashboard-unassigned"
+  | "dashboard-on-hold"
+  | "dashboard-create"
   | "library-vote"
+  | "library-search"
   | "library-categories"
   | "library-editor"
   | "admin-roster-edit"
+  | "admin-queues"
+  | "admin-clients"
+  | "admin-general"
+  | "admin-branding"
+  | "admin-terminology"
+  | "admin-note-types"
+  | "admin-keys"
+  | "admin-retention"
+  | "admin-phone-lines"
   | "admin-greetings"
+  | "admin-sms-templates"
+  | "admin-blocklist"
   | "admin-quarantine"
   | "settings-profile"
   | "settings-password"
-  | "settings-2fa";
+  | "settings-2fa"
+  | "settings-appearance"
+  | "settings-security";
 
 /** All topics in display order. */
 export const DEMO_TOPICS: readonly DemoTopic[] = [
@@ -150,26 +186,59 @@ export const DEMO_TOPICS: readonly DemoTopic[] = [
   "key-derivation",
   "sort",
   "filters",
+  "saved-filters",
   "view-modes",
   "select-mode",
+  "quick-actions",
+  "unread-badges",
+  "decryption",
   "new-ticket",
+  "split-view",
+  "case-header",
+  "conversation",
   "thread-filters",
   "compose-actions",
   "reply",
   "notes",
   "case-fold",
   "timeline",
+  "deep-search",
+  "message-actions",
+  "close-reopen",
+  "exposure-hints",
+  "dashboard-shift",
   "dashboard-queues",
   "dashboard-activity",
+  "dashboard-kb",
+  "dashboard-view-switcher",
+  "dashboard-needs-attention",
+  "dashboard-my-tickets",
+  "dashboard-unassigned",
+  "dashboard-on-hold",
+  "dashboard-create",
   "library-vote",
+  "library-search",
   "library-categories",
   "library-editor",
   "admin-roster-edit",
+  "admin-queues",
+  "admin-clients",
+  "admin-general",
+  "admin-branding",
+  "admin-terminology",
+  "admin-note-types",
+  "admin-keys",
+  "admin-retention",
+  "admin-phone-lines",
   "admin-greetings",
+  "admin-sms-templates",
+  "admin-blocklist",
   "admin-quarantine",
   "settings-profile",
   "settings-password",
   "settings-2fa",
+  "settings-appearance",
+  "settings-security",
 ] as const;
 
 /** Ticket the ticket-detail section navigates to. tk-0001 has the richest thread. */

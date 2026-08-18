@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "This screen is part of the real product build, but its guided story has not been written yet." |
+* | "This screen is part of the full application, but its documentation has not been written yet." |
 *
 * @param {Demo_Coming_Soon_DescInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

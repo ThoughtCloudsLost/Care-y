@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "Manager user: can manage volunteers, queues, and reports, but cannot change org settings or infrastructure." |
+* | "Manager with access to volunteers, queues, and reports. Cannot change org settings or infrastructure." |
 *
 * @param {Demo_Role_Manager_TooltipInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

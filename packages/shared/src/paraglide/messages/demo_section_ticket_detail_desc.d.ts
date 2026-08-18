@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "Inside a ticket, volunteers read messages, reply, take notes, and review case metadata. Every field shown here was decrypted locally. The server relayed the ..." |
+* | "The ticket detail view is where volunteers read messages, reply, take notes, and manage a case. Every field shown here was decrypted locally by the volunteer..." |
 *
 * @param {Demo_Section_Ticket_Detail_DescInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

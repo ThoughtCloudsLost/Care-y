@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "A passkey asks your device to sign a one time challenge with a private key that never leaves it. Your fingerprint or face unlocks the signature locally. Ther..." |
+* | "A passkey uses the device itself as the second factor. There is no code to type. **During enrollment,** the device creates a cryptographic key pair and store..." |
 *
 * @param {Demo_Narrative_Topic_Twofa_Passkey_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

@@ -6,17 +6,17 @@ import { getLocale, experimentalStaticLocale } from '../runtime.js';
 /** @typedef {{}} Demo_Narrative_Schedule_BodyInputs */
 
 const en_demo_narrative_schedule_body = /** @type {(inputs: Demo_Narrative_Schedule_BodyInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`This page will let managers create and assign shifts. The scheduling feature is still in development. For now, the page shows a placeholder notice.`)
+	return /** @type {LocalizedString} */ (`This page will let managers create and assign volunteer shifts. Shift start and end times, coverage requirements, and volunteer availability will be managed here. The shift summary card on the dashboard already reads from the shift data structure, and the card will show real data once scheduling is complete.`)
 };
 
 const es_demo_narrative_schedule_body = /** @type {(inputs: Demo_Narrative_Schedule_BodyInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Esta pagina permitira a los gerentes crear y asignar turnos. La funcion de programacion aun esta en desarrollo. Por ahora, la pagina muestra un aviso de marcador.`)
+	return /** @type {LocalizedString} */ (`Esta pagina permitira a los gestores crear y asignar turnos de voluntarios. Los horarios de inicio y fin de turno, requisitos de cobertura y disponibilidad de voluntarios se gestionaran aqui. La tarjeta de resumen de turno en el panel principal ya lee de la estructura de datos de turnos, y la tarjeta mostrara datos reales cuando la programacion este completa.`)
 };
 
 /**
 * | output |
 * | --- |
-* | "This page will let managers create and assign shifts. The scheduling feature is still in development. For now, the page shows a placeholder notice." |
+* | "This page will let managers create and assign volunteer shifts. Shift start and end times, coverage requirements, and volunteer availability will be managed ..." |
 *
 * @param {Demo_Narrative_Schedule_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

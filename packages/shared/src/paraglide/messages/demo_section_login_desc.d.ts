@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "Authentication in CARE-Y protects more than your account. The login flow derives the encryption keys that guard every piece of data in the system. No passwor..." |
+* | "The login screen is where volunteers sign in and where CARE-Y derives the encryption keys that protect all data in the system. Volunteers enter a username an..." |
 *
 * @param {Demo_Section_Login_DescInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

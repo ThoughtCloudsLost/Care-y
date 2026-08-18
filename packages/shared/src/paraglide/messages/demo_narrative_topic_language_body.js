@@ -6,17 +6,21 @@ import { getLocale, experimentalStaticLocale } from '../runtime.js';
 /** @typedef {{}} Demo_Narrative_Topic_Language_BodyInputs */
 
 const en_demo_narrative_topic_language_body = /** @type {(inputs: Demo_Narrative_Topic_Language_BodyInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Switch the interface language without reloading. Translations are bundled in the app. The server does not know which language you are using because no preference is transmitted.`)
+	return /** @type {LocalizedString} */ (`Volunteers can switch the interface language at the login screen or at any point after signing in. The switch happens instantly without a page reload because all translations are bundled in the app.
+**Privacy.** The server does not know which language a volunteer is using because no language preference is transmitted. Language choice is private by default.
+**Supported languages.** English and Spanish are currently included. Adding a new language requires only a translation file.`)
 };
 
 const es_demo_narrative_topic_language_body = /** @type {(inputs: Demo_Narrative_Topic_Language_BodyInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Cambia el idioma de la interfaz sin recargar. Las traducciones estan incluidas en la aplicacion. El servidor no sabe que idioma estas usando porque no se transmite ninguna preferencia.`)
+	return /** @type {LocalizedString} */ (`Las personas voluntarias pueden cambiar el idioma de la interfaz en la pantalla de inicio de sesion o en cualquier momento despues de iniciar sesion. El cambio es instantaneo sin recargar la pagina porque todas las traducciones estan incluidas en la aplicacion.
+**Privacidad.** El servidor no sabe que idioma usa cada voluntario porque no se transmite ninguna preferencia de idioma. La eleccion de idioma es privada por defecto.
+**Idiomas disponibles.** Actualmente se incluyen ingles y espanol. Anadir un nuevo idioma solo requiere un archivo de traduccion.`)
 };
 
 /**
 * | output |
 * | --- |
-* | "Switch the interface language without reloading. Translations are bundled in the app. The server does not know which language you are using because no prefer..." |
+* | "Volunteers can switch the interface language at the login screen or at any point after signing in. The switch happens instantly without a page reload because..." |
 *
 * @param {Demo_Narrative_Topic_Language_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

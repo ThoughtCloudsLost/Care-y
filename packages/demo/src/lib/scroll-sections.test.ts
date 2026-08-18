@@ -76,10 +76,10 @@ describe("parseHash", () => {
     });
   });
 
-  it("parses dashboard/intro sub", () => {
-    expect(parseHash("#dashboard/intro")).toEqual({
+  it("parses dashboard/shift sub", () => {
+    expect(parseHash("#dashboard/shift")).toEqual({
       sectionId: "dashboard",
-      subSlug: "intro",
+      subSlug: "shift",
     });
   });
 
@@ -90,10 +90,10 @@ describe("parseHash", () => {
     });
   });
 
-  it("parses library/intro sub", () => {
-    expect(parseHash("#library/intro")).toEqual({
+  it("parses library/browse sub", () => {
+    expect(parseHash("#library/browse")).toEqual({
       sectionId: "library",
-      subSlug: "intro",
+      subSlug: "browse",
     });
   });
 
@@ -118,45 +118,52 @@ describe("parseHash", () => {
     });
   });
 
-  it("parses settings/profile-identity sub", () => {
-    expect(parseHash("#settings/profile-identity")).toEqual({
+  it("parses settings/identity sub", () => {
+    expect(parseHash("#settings/identity")).toEqual({
       sectionId: "settings",
-      subSlug: "profile-identity",
+      subSlug: "identity",
     });
   });
 
-  it("parses settings/password-keys sub", () => {
-    expect(parseHash("#settings/password-keys")).toEqual({
+  it("parses settings/password sub", () => {
+    expect(parseHash("#settings/password")).toEqual({
       sectionId: "settings",
-      subSlug: "password-keys",
+      subSlug: "password",
     });
   });
 
-  it("parses settings/two-factor-methods sub", () => {
-    expect(parseHash("#settings/two-factor-methods")).toEqual({
+  it("parses settings/two-factor sub", () => {
+    expect(parseHash("#settings/two-factor")).toEqual({
       sectionId: "settings",
-      subSlug: "two-factor-methods",
+      subSlug: "two-factor",
     });
   });
 
-  it("parses admin/people-queues sub", () => {
-    expect(parseHash("#admin/people-queues")).toEqual({
+  it("parses admin/hub sub", () => {
+    expect(parseHash("#admin/hub")).toEqual({
       sectionId: "admin",
-      subSlug: "people-queues",
+      subSlug: "hub",
     });
   });
 
-  it("parses admin/org-config-keys sub", () => {
-    expect(parseHash("#admin/org-config-keys")).toEqual({
-      sectionId: "admin",
-      subSlug: "org-config-keys",
+  it("parses admin-people/queues sub", () => {
+    expect(parseHash("#admin-people/queues")).toEqual({
+      sectionId: "admin-people",
+      subSlug: "queues",
     });
   });
 
-  it("parses admin/communications sub", () => {
-    expect(parseHash("#admin/communications")).toEqual({
-      sectionId: "admin",
-      subSlug: "communications",
+  it("parses admin-comms/quarantine sub", () => {
+    expect(parseHash("#admin-comms/quarantine")).toEqual({
+      sectionId: "admin-comms",
+      subSlug: "quarantine",
+    });
+  });
+
+  it("parses admin-org/keys sub", () => {
+    expect(parseHash("#admin-org/keys")).toEqual({
+      sectionId: "admin-org",
+      subSlug: "keys",
     });
   });
 
@@ -408,17 +415,17 @@ describe("resolvePhoneCommand", () => {
     expect(cmd.pulseTopic).toBe("library-editor");
   });
 
-  it("resolves admin section to admin feature", () => {
-    const cmd = resolvePhoneCommand("admin", "intro", TICKET_ID, ARTICLE_ID);
+  it("resolves admin section to admin feature with no detail", () => {
+    const cmd = resolvePhoneCommand("admin", "hub", TICKET_ID, ARTICLE_ID);
     expect(cmd.feature).toBe("admin");
     expect(cmd.detail).toBeNull();
     expect(cmd.pulseTopic).toBeNull();
   });
 
-  it("resolves admin/people-queues to admin with people detail", () => {
+  it("resolves admin-people/people to admin with people detail", () => {
     const cmd = resolvePhoneCommand(
-      "admin",
-      "people-queues",
+      "admin-people",
+      "people",
       TICKET_ID,
       ARTICLE_ID,
     );
@@ -427,33 +434,33 @@ describe("resolvePhoneCommand", () => {
     expect(cmd.pulseTopic).toBe("admin-roster-edit");
   });
 
-  it("resolves admin/org-config-keys to admin with organization detail", () => {
+  it("resolves admin-org/general to admin with organization detail", () => {
     const cmd = resolvePhoneCommand(
-      "admin",
-      "org-config-keys",
+      "admin-org",
+      "general",
       TICKET_ID,
       ARTICLE_ID,
     );
     expect(cmd.feature).toBe("admin");
     expect(cmd.detail).toBe("organization");
-    expect(cmd.pulseTopic).toBeNull();
+    expect(cmd.pulseTopic).toBe("admin-general");
   });
 
-  it("resolves admin/communications to admin with communications detail", () => {
+  it("resolves admin-comms/phone-lines to admin with communications detail", () => {
     const cmd = resolvePhoneCommand(
-      "admin",
-      "communications",
+      "admin-comms",
+      "phone-lines",
       TICKET_ID,
       ARTICLE_ID,
     );
     expect(cmd.feature).toBe("admin");
     expect(cmd.detail).toBe("communications");
-    expect(cmd.pulseTopic).toBeNull();
+    expect(cmd.pulseTopic).toBe("admin-phone-lines");
   });
 
-  it("resolves admin/greetings to admin with communications detail", () => {
+  it("resolves admin-comms/greetings to admin with communications detail", () => {
     const cmd = resolvePhoneCommand(
-      "admin",
+      "admin-comms",
       "greetings",
       TICKET_ID,
       ARTICLE_ID,
@@ -463,9 +470,9 @@ describe("resolvePhoneCommand", () => {
     expect(cmd.pulseTopic).toBe("admin-greetings");
   });
 
-  it("resolves admin/quarantine to admin with communications detail", () => {
+  it("resolves admin-comms/quarantine to admin with communications detail", () => {
     const cmd = resolvePhoneCommand(
-      "admin",
+      "admin-comms",
       "quarantine",
       TICKET_ID,
       ARTICLE_ID,
@@ -490,7 +497,7 @@ describe("resolvePhoneCommand", () => {
   it("resolves settings sub-sections to settings feature with topics", () => {
     const profileCmd = resolvePhoneCommand(
       "settings",
-      "profile-identity",
+      "identity",
       TICKET_ID,
       ARTICLE_ID,
     );
@@ -500,7 +507,7 @@ describe("resolvePhoneCommand", () => {
 
     const passwordCmd = resolvePhoneCommand(
       "settings",
-      "password-keys",
+      "password",
       TICKET_ID,
       ARTICLE_ID,
     );
@@ -508,7 +515,7 @@ describe("resolvePhoneCommand", () => {
 
     const twofaCmd = resolvePhoneCommand(
       "settings",
-      "two-factor-methods",
+      "two-factor",
       TICKET_ID,
       ARTICLE_ID,
     );
@@ -622,22 +629,22 @@ describe("bridgeStateToLocation", () => {
     expect(loc).toEqual({ sectionId: "library", subSlug: "intro" });
   });
 
-  it("maps admin feature to admin section", () => {
+  it("maps admin feature to the admin hub section", () => {
     const loc = bridgeStateToLocation("admin", null, false, null, null);
-    expect(loc).toEqual({ sectionId: "admin", subSlug: "intro" });
+    expect(loc).toEqual({ sectionId: "admin", subSlug: "hub" });
   });
 
-  it("maps admin feature with volunteer detail to admin intro", () => {
+  it("maps admin feature with volunteer detail to admin-people", () => {
     const loc = bridgeStateToLocation("admin", "volunteer", false, null, null);
-    expect(loc).toEqual({ sectionId: "admin", subSlug: "intro" });
+    expect(loc).toEqual({ sectionId: "admin-people", subSlug: "people" });
   });
 
-  it("maps admin feature with people detail to people-queues sub", () => {
+  it("maps admin feature with people detail to admin-people", () => {
     const loc = bridgeStateToLocation("admin", "people", false, null, null);
-    expect(loc).toEqual({ sectionId: "admin", subSlug: "people-queues" });
+    expect(loc).toEqual({ sectionId: "admin-people", subSlug: "people" });
   });
 
-  it("maps admin feature with organization detail to org-config-keys sub", () => {
+  it("maps admin feature with organization detail to admin-org", () => {
     const loc = bridgeStateToLocation(
       "admin",
       "organization",
@@ -645,10 +652,10 @@ describe("bridgeStateToLocation", () => {
       null,
       null,
     );
-    expect(loc).toEqual({ sectionId: "admin", subSlug: "org-config-keys" });
+    expect(loc).toEqual({ sectionId: "admin-org", subSlug: "general" });
   });
 
-  it("maps admin feature with communications detail to communications sub", () => {
+  it("maps admin feature with communications detail to admin-comms", () => {
     const loc = bridgeStateToLocation(
       "admin",
       "communications",
@@ -656,7 +663,7 @@ describe("bridgeStateToLocation", () => {
       null,
       null,
     );
-    expect(loc).toEqual({ sectionId: "admin", subSlug: "communications" });
+    expect(loc).toEqual({ sectionId: "admin-comms", subSlug: "phone-lines" });
   });
 
   it("maps schedule feature to schedule section", () => {
@@ -716,12 +723,50 @@ describe("sectionMatchesPhone", () => {
     expect(sectionMatchesPhone("library", "tickets", null, false)).toBe(false);
   });
 
-  it("matches admin section for any admin detail", () => {
+  it("matches admin section only on the hub landing", () => {
     expect(sectionMatchesPhone("admin", "admin", null, false)).toBe(true);
-    expect(sectionMatchesPhone("admin", "admin", "volunteer", false)).toBe(
+    expect(sectionMatchesPhone("admin", "admin", "people", false)).toBe(false);
+    expect(sectionMatchesPhone("admin", "tickets", null, false)).toBe(false);
+  });
+
+  it("matches admin-people for people, manager, and volunteer details", () => {
+    expect(sectionMatchesPhone("admin-people", "admin", "people", false)).toBe(
       true,
     );
-    expect(sectionMatchesPhone("admin", "tickets", null, false)).toBe(false);
+    expect(sectionMatchesPhone("admin-people", "admin", "manager", false)).toBe(
+      true,
+    );
+    expect(
+      sectionMatchesPhone("admin-people", "admin", "volunteer", false),
+    ).toBe(true);
+    expect(sectionMatchesPhone("admin-people", "admin", null, false)).toBe(
+      false,
+    );
+    expect(
+      sectionMatchesPhone("admin-people", "admin", "organization", false),
+    ).toBe(false);
+  });
+
+  it("matches admin-comms only for the communications detail", () => {
+    expect(
+      sectionMatchesPhone("admin-comms", "admin", "communications", false),
+    ).toBe(true);
+    expect(sectionMatchesPhone("admin-comms", "admin", null, false)).toBe(
+      false,
+    );
+    expect(sectionMatchesPhone("admin-comms", "tickets", null, false)).toBe(
+      false,
+    );
+  });
+
+  it("matches admin-org only for the organization detail", () => {
+    expect(
+      sectionMatchesPhone("admin-org", "admin", "organization", false),
+    ).toBe(true);
+    expect(sectionMatchesPhone("admin-org", "admin", null, false)).toBe(false);
+    expect(
+      sectionMatchesPhone("admin-org", "admin", "communications", false),
+    ).toBe(false);
   });
 
   it("matches schedule section only for schedule feature", () => {
@@ -786,8 +831,8 @@ describe("loginStageTopics", () => {
 });
 
 describe("SECTIONS taxonomy", () => {
-  it("has nine sections", () => {
-    expect(SECTIONS).toHaveLength(9);
+  it("has twelve sections", () => {
+    expect(SECTIONS).toHaveLength(12);
   });
 
   it("section IDs are in visitor-journey order", () => {
@@ -799,6 +844,9 @@ describe("SECTIONS taxonomy", () => {
       "search",
       "library",
       "admin",
+      "admin-people",
+      "admin-comms",
+      "admin-org",
       "schedule",
       "settings",
     ]);
@@ -809,34 +857,49 @@ describe("SECTIONS taxonomy", () => {
     expect(login?.subs).toHaveLength(10);
   });
 
-  it("dashboard has 3 subs", () => {
+  it("dashboard has 10 subs", () => {
     const dashboard = SECTIONS.find((s) => s.id === "dashboard");
-    expect(dashboard?.subs).toHaveLength(3);
+    expect(dashboard?.subs).toHaveLength(10);
   });
 
-  it("tickets has 5 subs", () => {
+  it("tickets has 10 subs", () => {
     const tickets = SECTIONS.find((s) => s.id === "tickets");
-    expect(tickets?.subs).toHaveLength(5);
+    expect(tickets?.subs).toHaveLength(10);
   });
 
-  it("ticket-detail has 6 subs", () => {
+  it("ticket-detail has 12 subs", () => {
     const detail = SECTIONS.find((s) => s.id === "ticket-detail");
-    expect(detail?.subs).toHaveLength(6);
+    expect(detail?.subs).toHaveLength(12);
   });
 
-  it("search has 1 sub", () => {
+  it("search has 2 subs", () => {
     const search = SECTIONS.find((s) => s.id === "search");
-    expect(search?.subs).toHaveLength(1);
+    expect(search?.subs).toHaveLength(2);
   });
 
-  it("library has 4 subs", () => {
+  it("library has 7 subs", () => {
     const library = SECTIONS.find((s) => s.id === "library");
-    expect(library?.subs).toHaveLength(4);
+    expect(library?.subs).toHaveLength(7);
   });
 
-  it("admin has 6 subs", () => {
+  it("admin has 1 sub (the hub)", () => {
     const admin = SECTIONS.find((s) => s.id === "admin");
-    expect(admin?.subs).toHaveLength(6);
+    expect(admin?.subs).toHaveLength(1);
+  });
+
+  it("admin-people has 3 subs", () => {
+    const people = SECTIONS.find((s) => s.id === "admin-people");
+    expect(people?.subs).toHaveLength(3);
+  });
+
+  it("admin-comms has 5 subs", () => {
+    const comms = SECTIONS.find((s) => s.id === "admin-comms");
+    expect(comms?.subs).toHaveLength(5);
+  });
+
+  it("admin-org has 6 subs", () => {
+    const org = SECTIONS.find((s) => s.id === "admin-org");
+    expect(org?.subs).toHaveLength(6);
   });
 
   it("schedule has 1 sub", () => {
@@ -844,9 +907,9 @@ describe("SECTIONS taxonomy", () => {
     expect(schedule?.subs).toHaveLength(1);
   });
 
-  it("settings has 4 subs", () => {
+  it("settings has 5 subs", () => {
     const settings = SECTIONS.find((s) => s.id === "settings");
-    expect(settings?.subs).toHaveLength(4);
+    expect(settings?.subs).toHaveLength(5);
   });
 });
 
@@ -936,9 +999,24 @@ describe("sectionForRoute", () => {
     expect(result).toEqual({ sectionId: "ticket-detail", subSlug: null });
   });
 
-  it("resolves /(app)/admin/people to admin/people-queues sub", () => {
+  it("resolves /(app)/admin/people to the admin-people section", () => {
     const result = sectionForRoute("/(app)/admin/people");
-    expect(result).toEqual({ sectionId: "admin", subSlug: "people-queues" });
+    expect(result).toEqual({ sectionId: "admin-people", subSlug: null });
+  });
+
+  it("resolves /(app)/admin to the admin hub section", () => {
+    const result = sectionForRoute("/(app)/admin");
+    expect(result).toEqual({ sectionId: "admin", subSlug: null });
+  });
+
+  it("resolves /(app)/admin/communications to the admin-comms section", () => {
+    const result = sectionForRoute("/(app)/admin/communications");
+    expect(result).toEqual({ sectionId: "admin-comms", subSlug: null });
+  });
+
+  it("resolves /(app)/admin/organization to the admin-org section", () => {
+    const result = sectionForRoute("/(app)/admin/organization");
+    expect(result).toEqual({ sectionId: "admin-org", subSlug: null });
   });
 
   it("resolves /(app) to dashboard with null sub", () => {

@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "The detail subnavbar includes a chat/timeline toggle. Timeline view replaces the message thread with a structured table of contents. It shows status changes,..." |
+* | "The detail view includes a toggle between the conversation thread and a timeline view. The timeline replaces the message thread with a structured chronologic..." |
 *
 * @param {Demo_Narrative_Topic_Timeline_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

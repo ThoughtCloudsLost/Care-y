@@ -6,7 +6,7 @@ import { getLocale, experimentalStaticLocale } from '../runtime.js';
 /** @typedef {{}} Settings_2faInputs */
 
 const en_settings_2fa = /** @type {(inputs: Settings_2faInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Two-factor authentication`)
+	return /** @type {LocalizedString} */ (`Two factor authentication`)
 };
 
 const es_settings_2fa = /** @type {(inputs: Settings_2faInputs) => LocalizedString} */ () => {
@@ -16,7 +16,7 @@ const es_settings_2fa = /** @type {(inputs: Settings_2faInputs) => LocalizedStri
 /**
 * | output |
 * | --- |
-* | "Two-factor authentication" |
+* | "Two factor authentication" |
 *
 * @param {Settings_2faInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

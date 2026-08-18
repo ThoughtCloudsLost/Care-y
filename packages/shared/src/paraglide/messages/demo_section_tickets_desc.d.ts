@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "The ticket list is where volunteers manage incoming cases. Titles, descriptions, and every message are encrypted with keys only the browser holds. The server..." |
+* | "The ticket list is where volunteers manage incoming cases. Every ticket title, description, and message is encrypted with keys only the browser holds. The se..." |
 *
 * @param {Demo_Section_Tickets_DescInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

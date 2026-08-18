@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "After your password, CARE-Y requires a second factor. Six methods are supported, and each one confirms your identity before the system proceeds to derive you..." |
+* | "After entering a password, CARE-Y requires a second factor to verify the volunteer's identity before deriving encryption keys. A stolen or guessed password a..." |
 *
 * @param {Demo_Narrative_Topic_Twofa_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

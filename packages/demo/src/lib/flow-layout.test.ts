@@ -124,6 +124,95 @@ function makeFigure(
 }
 
 // -----------------------------------------------------------------------
+// Markup unit fields
+// -----------------------------------------------------------------------
+
+describe("computeFlowLayout markup unit fields", () => {
+  it("adds spaceBefore above a block on top of its marginTop", () => {
+    const plain = makeBlock("aaaa");
+    const spaced: FlowTextBlock = { ...makeBlock("bbbb"), spaceBefore: 12 };
+    const blocks = [plain, spaced];
+    const filler = createFixedFiller(blocks, 10);
+    const result = computeFlowLayout(blocks, filler, 200, null);
+
+    const first = at(result.blocks, 0);
+    const second = at(result.blocks, 1);
+    // sub-body marginTop is 0, so the whole gap is the spaceBefore.
+    expect(second.topY).toBe(first.bottomY + 12);
+  });
+
+  it("insets every line of an indented block and narrows its measure", () => {
+    // 20 chars at 10px in a 200px container: unindented fits one line.
+    const blocks: FlowTextBlock[] = [
+      { ...makeBlock("aaaaaaaaaaaaaaaaaaaa"), indent: 40 },
+    ];
+    const filler = createFixedFiller(blocks, 10);
+    const result = computeFlowLayout(blocks, filler, 200, null);
+
+    // 160px of room fits 16 chars, so the text wraps to two lines,
+    // both starting at the indent.
+    expect(result.lines).toHaveLength(2);
+    expect(at(result.lines, 0).x).toBe(40);
+    expect(at(result.lines, 1).x).toBe(40);
+    expect(at(result.lines, 0).text).toHaveLength(16);
+  });
+
+  it("keeps zero indent behavior identical to an absent indent", () => {
+    const bare = [makeBlock("aaaaaaaaaa")];
+    const zero: FlowTextBlock[] = [{ ...makeBlock("aaaaaaaaaa"), indent: 0 }];
+    const bareResult = computeFlowLayout(
+      bare,
+      createFixedFiller(bare, 10),
+      200,
+      null,
+    );
+    const zeroResult = computeFlowLayout(
+      zero,
+      createFixedFiller(zero, 10),
+      200,
+      null,
+    );
+    expect(zeroResult.lines).toEqual(bareResult.lines);
+    expect(zeroResult.totalHeight).toBe(bareResult.totalHeight);
+  });
+
+  it("passes filler fragments through onto the emitted lines", () => {
+    const blocks = [makeBlock("abcd")];
+    const fragments = [
+      { text: "ab", bold: false, dx: 0, width: 20 },
+      { text: "cd", bold: true, dx: 20, width: 20 },
+    ];
+    const filler: LineFiller = {
+      startCursor(): LineCursor {
+        return 0;
+      },
+      fillLine(
+        _blockIndex: number,
+        cursor: LineCursor,
+        _maxWidth: number,
+      ): LineFillerResult | null {
+        if ((cursor as number) > 0) return null;
+        return { text: "abcd", width: 40, nextCursor: 1, fragments };
+      },
+    };
+    const result = computeFlowLayout(blocks, filler, 200, null);
+    expect(result.lines).toHaveLength(1);
+    expect(at(result.lines, 0).fragments).toEqual(fragments);
+  });
+
+  it("leaves fragments undefined for plain fillers", () => {
+    const blocks = [makeBlock("aaaa")];
+    const result = computeFlowLayout(
+      blocks,
+      createFixedFiller(blocks, 10),
+      200,
+      null,
+    );
+    expect(at(result.lines, 0).fragments).toBeUndefined();
+  });
+});
+
+// -----------------------------------------------------------------------
 // computeFlowLayout: no hole
 // -----------------------------------------------------------------------
 

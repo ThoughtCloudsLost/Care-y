@@ -6,17 +6,21 @@ import { getLocale, experimentalStaticLocale } from '../runtime.js';
 /** @typedef {{}} Demo_Narrative_Topic_New_Ticket_BodyInputs */
 
 const en_demo_narrative_topic_new_ticket_body = /** @type {(inputs: Demo_Narrative_Topic_New_Ticket_BodyInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`When you create a ticket, the title and description are encrypted in your browser before they leave the device. The server stores ciphertext and assigns a ticket ID without reading the content.`)
+	return /** @type {LocalizedString} */ (`When a volunteer creates a ticket, the title and description are encrypted in the browser before they leave the device. The server stores the ciphertext and assigns a ticket ID without reading the content.
+**Required fields.** A new ticket needs a title and a queue assignment at minimum. Description, priority, and initial assignee are optional.
+**Permissions.** All volunteers can create tickets. Queue assignment is limited to queues the volunteer has access to.`)
 };
 
 const es_demo_narrative_topic_new_ticket_body = /** @type {(inputs: Demo_Narrative_Topic_New_Ticket_BodyInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Cuando creas un ticket, el titulo y la descripcion se cifran en tu navegador antes de salir del dispositivo. El servidor almacena texto cifrado y asigna un ID de ticket sin leer el contenido.`)
+	return /** @type {LocalizedString} */ (`Cuando un voluntario crea un ticket, el titulo y la descripcion se cifran en el navegador antes de salir del dispositivo. El servidor almacena el texto cifrado y asigna un ID de ticket sin leer el contenido.
+**Campos requeridos.** Un nuevo ticket necesita un titulo y una asignacion de cola como minimo. La descripcion, prioridad y asignado inicial son opcionales.
+**Permisos.** Todos los voluntarios pueden crear tickets. La asignacion de cola se limita a las colas a las que el voluntario tiene acceso.`)
 };
 
 /**
 * | output |
 * | --- |
-* | "When you create a ticket, the title and description are encrypted in your browser before they leave the device. The server stores ciphertext and assigns a ti..." |
+* | "When a volunteer creates a ticket, the title and description are encrypted in the browser before they leave the device. The server stores the ciphertext and ..." |
 *
 * @param {Demo_Narrative_Topic_New_Ticket_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

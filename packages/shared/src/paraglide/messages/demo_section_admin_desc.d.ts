@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "The admin hub gives managers a bird's-eye view of the organization: active volunteers, queues, phone lines, and communication templates. Every count shown he..." |
+* | "The admin hub is the landing page for organization management. It groups the management pages into People, Communications, Organization, and Analytics cards,..." |
 *
 * @param {Demo_Section_Admin_DescInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

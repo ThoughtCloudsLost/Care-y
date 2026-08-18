@@ -6,17 +6,17 @@ import { getLocale, experimentalStaticLocale } from '../runtime.js';
 /** @typedef {{}} Demo_Narrative_Topic_Sort_HeadingInputs */
 
 const en_demo_narrative_topic_sort_heading = /** @type {(inputs: Demo_Narrative_Topic_Sort_HeadingInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Sorting encrypted tickets`)
+	return /** @type {LocalizedString} */ (`Sorting`)
 };
 
 const es_demo_narrative_topic_sort_heading = /** @type {(inputs: Demo_Narrative_Topic_Sort_HeadingInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Ordenando tickets cifrados`)
+	return /** @type {LocalizedString} */ (`Ordenamiento`)
 };
 
 /**
 * | output |
 * | --- |
-* | "Sorting encrypted tickets" |
+* | "Sorting" |
 *
 * @param {Demo_Narrative_Topic_Sort_HeadingInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "The case details fold shows ticket metadata: status, priority, assignee, queues, and client alias. Sensitive fields are encrypted. Expanding or collapsing th..." |
+* | "The case details panel shows ticket metadata in a structured field list. **Encrypted fields.** Title and description are encrypted with the per ticket key. Q..." |
 *
 * @param {Demo_Narrative_Topic_Case_Fold_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

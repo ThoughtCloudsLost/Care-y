@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "Your reply is encrypted on device before it reaches the server. The server relays ciphertext to the intended recipient. If the channel is SMS, the relay forw..." |
+* | "When a volunteer sends a reply, the message is encrypted on the device with the per ticket key before it reaches the server. The server stores the ciphertext..." |
 *
 * @param {Demo_Narrative_Topic_Reply_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

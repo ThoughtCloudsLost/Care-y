@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "Shift scheduling (coming soon)" |
+* | "Shift scheduling" |
 *
 * @param {Demo_Narrative_Schedule_HeadingInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

@@ -6,17 +6,17 @@ import { getLocale, experimentalStaticLocale } from '../runtime.js';
 /** @typedef {{}} Demo_Narrative_Topic_Key_Derivation_HeadingInputs */
 
 const en_demo_narrative_topic_key_derivation_heading = /** @type {(inputs: Demo_Narrative_Topic_Key_Derivation_HeadingInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`OPRF split-key derivation`)
+	return /** @type {LocalizedString} */ (`How encryption keys are derived`)
 };
 
 const es_demo_narrative_topic_key_derivation_heading = /** @type {(inputs: Demo_Narrative_Topic_Key_Derivation_HeadingInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Derivacion de clave dividida OPRF`)
+	return /** @type {LocalizedString} */ (`Como se derivan las claves de cifrado`)
 };
 
 /**
 * | output |
 * | --- |
-* | "OPRF split-key derivation" |
+* | "How encryption keys are derived" |
 *
 * @param {Demo_Narrative_Topic_Key_Derivation_HeadingInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

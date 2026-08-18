@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "Volunteer user: can view and manage their own tickets. Admin-only screens are blocked by real server middleware." |
+* | "Volunteer with access to their own tickets. Admin only screens are blocked by real server middleware." |
 *
 * @param {Demo_Role_Volunteer_TooltipInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

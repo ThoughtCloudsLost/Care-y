@@ -6,17 +6,23 @@ import { getLocale, experimentalStaticLocale } from '../runtime.js';
 /** @typedef {{}} Demo_Narrative_Topic_Sort_BodyInputs */
 
 const en_demo_narrative_topic_sort_body = /** @type {(inputs: Demo_Narrative_Topic_Sort_BodyInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Sort options reorder tickets by priority, date, activity, or queue. Sorting operates on metadata the server can compare without decrypting content, so the server never sees what is inside each ticket.`)
+	return /** @type {LocalizedString} */ (`Sort options reorder the ticket list by priority, date, last activity, queue, status, title, assignee, or client.
+**Server side fields.** Priority, date, last activity, queue, and message count are sorted on the server using plaintext metadata columns. The server returns rows in the requested order without accessing encrypted content.
+**Client side fields.** Title, assignee, status, and client are sorted in the browser after decryption because these values are only readable on the device.
+**New replies first.** A toggle in the sort options pins tickets with unread replies to the top of the list, regardless of the primary sort order. Read state is encrypted per volunteer, so the server cannot sort by it. This sort happens entirely in the browser.`)
 };
 
 const es_demo_narrative_topic_sort_body = /** @type {(inputs: Demo_Narrative_Topic_Sort_BodyInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Las opciones de orden reorganizan los tickets por prioridad, fecha, actividad o cola. El ordenamiento opera sobre metadatos que el servidor puede comparar sin descifrar el contenido, por lo que nunca ve lo que hay dentro de cada ticket.`)
+	return /** @type {LocalizedString} */ (`Las opciones de orden reorganizan la lista de tickets por prioridad, fecha, ultima actividad, cola, estado, titulo, asignado o cliente.
+**Campos del servidor.** Prioridad, fecha, ultima actividad, cola y cantidad de mensajes se ordenan en el servidor usando columnas de metadatos en texto plano. El servidor devuelve las filas en el orden solicitado sin acceder al contenido cifrado.
+**Campos del cliente.** Titulo, asignado, estado y cliente se ordenan en el navegador despues del descifrado porque estos valores solo son legibles en el dispositivo.
+**Nuevas respuestas primero.** Un interruptor en las opciones de orden fija los tickets con respuestas no leidas en la parte superior de la lista, independientemente del orden principal. El estado de lectura esta cifrado por voluntario, por lo que el servidor no puede ordenar por el. Este ordenamiento ocurre completamente en el navegador.`)
 };
 
 /**
 * | output |
 * | --- |
-* | "Sort options reorder tickets by priority, date, activity, or queue. Sorting operates on metadata the server can compare without decrypting content, so the se..." |
+* | "Sort options reorder the ticket list by priority, date, last activity, queue, status, title, assignee, or client. **Server side fields.** Priority, date, las..." |
 *
 * @param {Demo_Narrative_Topic_Sort_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

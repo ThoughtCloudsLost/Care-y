@@ -32,14 +32,14 @@ export const SECTION_ROUTES: Record<
     "/(app)/library/[articleId]/edit",
     "/(app)/library/new",
   ],
-  admin: [
-    "/(app)/admin",
-    "/(app)/admin/communications",
-    "/(app)/admin/manager",
-    "/(app)/admin/organization",
+  admin: ["/(app)/admin"],
+  "admin-people": [
     "/(app)/admin/people",
+    "/(app)/admin/manager",
     "/(app)/admin/volunteer",
   ],
+  "admin-comms": ["/(app)/admin/communications"],
+  "admin-org": ["/(app)/admin/organization"],
   schedule: ["/(app)/more/schedule"],
   settings: ["/(app)/more/settings"],
 };
@@ -51,9 +51,6 @@ export const SECTION_ROUTES: Record<
  * in SECTION_ROUTES.
  */
 export const SUB_ROUTES: Readonly<Record<string, readonly string[]>> = {
-  "admin/people-queues": ["/(app)/admin/people"],
-  "admin/org-config-keys": ["/(app)/admin/organization"],
-  "admin/communications": ["/(app)/admin/communications"],
   "library/vote": ["/(app)/library/[articleId]"],
   "library/editor": ["/(app)/library/new", "/(app)/library/[articleId]/edit"],
 };

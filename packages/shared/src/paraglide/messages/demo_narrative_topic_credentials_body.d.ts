@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "You type a username and password. The password never leaves your device in its original form. CARE-Y runs Argon2id, a memory-hard key stretching function, to..." |
+* | "Volunteers sign in with a username and password assigned by their organization. The password is never sent to the server in any form. When you submit your pa..." |
 *
 * @param {Demo_Narrative_Topic_Credentials_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

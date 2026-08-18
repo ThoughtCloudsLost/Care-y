@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "A six digit code is sent to the email address on file. Codes expire quickly and each one works exactly once. The resend timer prevents rapid retries." |
+* | "A six digit code sent to the email address on file for the volunteer's account. Codes expire after a short window and each one works exactly once. **Resend.*..." |
 *
 * @param {Demo_Narrative_Topic_Twofa_Email_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

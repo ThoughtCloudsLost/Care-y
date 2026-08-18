@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "You can interact with this screen in the phone. It runs against the same in-browser database as the rest of the demo. A guided walkthrough for this area will..." |
+* | "You can interact with this screen in the simulator. It runs against the same in browser database as the rest of the application. Documentation for this area ..." |
 *
 * @param {Demo_Coming_Soon_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

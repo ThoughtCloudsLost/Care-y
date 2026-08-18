@@ -6,7 +6,7 @@ import { getLocale, experimentalStaticLocale } from '../runtime.js';
 /** @typedef {{}} Demo_SubtitleInputs */
 
 const en_demo_subtitle = /** @type {(inputs: Demo_SubtitleInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`See how end-to-end encryption protects every conversation.`)
+	return /** @type {LocalizedString} */ (`See how end to end encryption protects every conversation.`)
 };
 
 const es_demo_subtitle = /** @type {(inputs: Demo_SubtitleInputs) => LocalizedString} */ () => {
@@ -16,7 +16,7 @@ const es_demo_subtitle = /** @type {(inputs: Demo_SubtitleInputs) => LocalizedSt
 /**
 * | output |
 * | --- |
-* | "See how end-to-end encryption protects every conversation." |
+* | "See how end to end encryption protects every conversation." |
 *
 * @param {Demo_SubtitleInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

@@ -6,17 +6,17 @@ import { getLocale, experimentalStaticLocale } from '../runtime.js';
 /** @typedef {{}} Demo_Coming_Soon_BodyInputs */
 
 const en_demo_coming_soon_body = /** @type {(inputs: Demo_Coming_Soon_BodyInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`You can interact with this screen in the phone. It runs against the same in-browser database as the rest of the demo. A guided walkthrough for this area will be added in a future update.`)
+	return /** @type {LocalizedString} */ (`You can interact with this screen in the simulator. It runs against the same in browser database as the rest of the application. Documentation for this area will be added in a future update.`)
 };
 
 const es_demo_coming_soon_body = /** @type {(inputs: Demo_Coming_Soon_BodyInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Puede interactuar con esta pantalla en el telefono. Funciona contra la misma base de datos del navegador que el resto del demo. Se agregara un recorrido guiado para esta area en una actualizacion futura.`)
+	return /** @type {LocalizedString} */ (`Puede interactuar con esta pantalla en el simulador. Funciona contra la misma base de datos del navegador que el resto de la aplicacion. La documentacion para esta area se anadira en una actualizacion futura.`)
 };
 
 /**
 * | output |
 * | --- |
-* | "You can interact with this screen in the phone. It runs against the same in-browser database as the rest of the demo. A guided walkthrough for this area will..." |
+* | "You can interact with this screen in the simulator. It runs against the same in browser database as the rest of the application. Documentation for this area ..." |
 *
 * @param {Demo_Coming_Soon_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

@@ -6,7 +6,7 @@ import { getLocale, experimentalStaticLocale } from '../runtime.js';
 /** @typedef {{}} Onboarding_Briefing_Choice_2fa_TitleInputs */
 
 const en_onboarding_briefing_choice_2fa_title = /** @type {(inputs: Onboarding_Briefing_Choice_2fa_TitleInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Two-factor authentication policy`)
+	return /** @type {LocalizedString} */ (`Two factor authentication policy`)
 };
 
 const es_onboarding_briefing_choice_2fa_title = /** @type {(inputs: Onboarding_Briefing_Choice_2fa_TitleInputs) => LocalizedString} */ () => {
@@ -16,7 +16,7 @@ const es_onboarding_briefing_choice_2fa_title = /** @type {(inputs: Onboarding_B
 /**
 * | output |
 * | --- |
-* | "Two-factor authentication policy" |
+* | "Two factor authentication policy" |
 *
 * @param {Onboarding_Briefing_Choice_2fa_TitleInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

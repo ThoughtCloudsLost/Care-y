@@ -6,17 +6,17 @@ import { getLocale, experimentalStaticLocale } from '../runtime.js';
 /** @typedef {{}} Demo_Narrative_Topic_View_Modes_HeadingInputs */
 
 const en_demo_narrative_topic_view_modes_heading = /** @type {(inputs: Demo_Narrative_Topic_View_Modes_HeadingInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Multiple view layouts`)
+	return /** @type {LocalizedString} */ (`View modes`)
 };
 
 const es_demo_narrative_topic_view_modes_heading = /** @type {(inputs: Demo_Narrative_Topic_View_Modes_HeadingInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Multiples modos de vista`)
+	return /** @type {LocalizedString} */ (`Modos de vista`)
 };
 
 /**
 * | output |
 * | --- |
-* | "Multiple view layouts" |
+* | "View modes" |
 *
 * @param {Demo_Narrative_Topic_View_Modes_HeadingInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

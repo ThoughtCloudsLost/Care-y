@@ -6,7 +6,7 @@ import { getLocale, experimentalStaticLocale } from '../runtime.js';
 /** @typedef {{}} Twofa_Enroll_TitleInputs */
 
 const en_twofa_enroll_title = /** @type {(inputs: Twofa_Enroll_TitleInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Two-factor authentication`)
+	return /** @type {LocalizedString} */ (`Two factor authentication`)
 };
 
 const es_twofa_enroll_title = /** @type {(inputs: Twofa_Enroll_TitleInputs) => LocalizedString} */ () => {
@@ -16,7 +16,7 @@ const es_twofa_enroll_title = /** @type {(inputs: Twofa_Enroll_TitleInputs) => L
 /**
 * | output |
 * | --- |
-* | "Two-factor authentication" |
+* | "Two factor authentication" |
 *
 * @param {Twofa_Enroll_TitleInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

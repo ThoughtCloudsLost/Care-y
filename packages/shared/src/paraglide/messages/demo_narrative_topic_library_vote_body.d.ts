@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "Volunteers can rate whether a knowledge article helped resolve a call. Votes are recorded under a pseudonym instead of a volunteer name and persist in the vi..." |
+* | "Volunteers can rate whether a knowledge base article helped resolve a call. Each volunteer gets one vote per article (up or down). **Ranking.** The aggregate..." |
 *
 * @param {Demo_Narrative_Topic_Library_Vote_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

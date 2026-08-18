@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "Admin user: full access to all features. Switch users to see how server-side enforcement changes every screen." |
+* | "Admin with full access to all features. Switch users to see how server side enforcement changes every screen." |
 *
 * @param {Demo_Role_Admin_TooltipInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

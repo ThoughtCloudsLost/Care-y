@@ -6,17 +6,19 @@ import { getLocale, experimentalStaticLocale } from '../runtime.js';
 /** @typedef {{}} Demo_Narrative_Topic_Library_Categories_BodyInputs */
 
 const en_demo_narrative_topic_library_categories_body = /** @type {(inputs: Demo_Narrative_Topic_Library_Categories_BodyInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Administrators organize the knowledge library into categories from this sheet. Categories are stored as org-key-encrypted records, so a database breach reveals no category names. The demo database starts with a small set of seeded categories.`)
+	return /** @type {LocalizedString} */ (`Administrators organize the knowledge library into categories. Each category name is encrypted with the organization key before storage, so a database breach reveals no category names.
+**Permissions.** Only administrators can create, rename, or delete categories. All volunteers can browse articles within any category.`)
 };
 
 const es_demo_narrative_topic_library_categories_body = /** @type {(inputs: Demo_Narrative_Topic_Library_Categories_BodyInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Los administradores organizan la biblioteca de conocimiento en categorias desde esta ventana. Las categorias se almacenan como registros cifrados con la clave de la organizacion, por lo que una filtracion de la base de datos no revela los nombres de las categorias. La base de datos del demo comienza con un conjunto pequeno de categorias.`)
+	return /** @type {LocalizedString} */ (`Los administradores organizan la biblioteca de conocimiento en categorias. Cada nombre de categoria se cifra con la clave de la organizacion antes de almacenarse, por lo que una filtracion de la base de datos no revela los nombres de las categorias.
+**Permisos.** Solo los administradores pueden crear, renombrar o eliminar categorias. Todos los voluntarios pueden navegar los articulos dentro de cualquier categoria.`)
 };
 
 /**
 * | output |
 * | --- |
-* | "Administrators organize the knowledge library into categories from this sheet. Categories are stored as org-key-encrypted records, so a database breach revea..." |
+* | "Administrators organize the knowledge library into categories. Each category name is encrypted with the organization key before storage, so a database breach..." |
 *
 * @param {Demo_Narrative_Topic_Library_Categories_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

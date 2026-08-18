@@ -6,17 +6,17 @@ import { getLocale, experimentalStaticLocale } from '../runtime.js';
 /** @typedef {{}} Demo_Section_Schedule_DescInputs */
 
 const en_demo_section_schedule_desc = /** @type {(inputs: Demo_Section_Schedule_DescInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`The schedule page is a placeholder for shift management. The scheduling feature is not built yet, so this page shows a coming-soon notice.`)
+	return /** @type {LocalizedString} */ (`The schedule page will manage volunteer shifts. The scheduling feature is still in development.`)
 };
 
 const es_demo_section_schedule_desc = /** @type {(inputs: Demo_Section_Schedule_DescInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`La pagina de horario es un marcador para la gestion de turnos. La funcion de programacion aun no esta construida, por lo que esta pagina muestra un aviso de proximamente.`)
+	return /** @type {LocalizedString} */ (`La pagina de horario gestionara los turnos de voluntarios. La funcion de programacion aun esta en desarrollo.`)
 };
 
 /**
 * | output |
 * | --- |
-* | "The schedule page is a placeholder for shift management. The scheduling feature is not built yet, so this page shows a coming-soon notice." |
+* | "The schedule page will manage volunteer shifts. The scheduling feature is still in development." |
 *
 * @param {Demo_Section_Schedule_DescInputs} inputs
 * @param {{ locale?: "en" | "es" }} options
