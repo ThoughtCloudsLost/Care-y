@@ -35,10 +35,12 @@
   import { createDemoLocationStore } from "$demo/demo-location.svelte.js";
   import type { PhoneCommand } from "$demo/scroll-sections.js";
   import { routeForSlug, pathnameForRouteId } from "$demo/scroll-sections.js";
+  import { evaluateAdvance } from "$demo/login-advance-guard.js";
   import { listRouteIds } from "$demo/engine/route-manifest.js";
   import {
     demoSeed,
     ensureKeyed,
+    isLoginCryptoInFlight,
     setRoleAndPermissions,
   } from "$lib/crypto/context.js";
   import { RoleId, type RoleIdValue } from "@care-y/shared";
@@ -645,27 +647,6 @@
   // Login advance chain
   // -----------------------------------------------------------------------
 
-  // Stage ordering for rewind decisions. Targets rank alongside stages;
-  // "done" outranks everything so it always plays forward to the end.
-  const STAGE_RANK: Record<LoginStage, number> = {
-    form: 0,
-    "twofa-picker": 1,
-    "twofa-method": 2,
-    deriving: 3,
-  };
-  const TARGET_RANK: Record<LoginAdvanceTarget, number> = {
-    form: 0,
-    "twofa-picker": 1,
-    "method-totp": 2,
-    "method-passkey": 2,
-    "method-email": 2,
-    "method-sms": 2,
-    "method-push": 2,
-    "method-backup": 2,
-    deriving: 3,
-    done: 4,
-  };
-
   /** Message function producing each method's picker/alt-button label. */
   const METHOD_LABELS: Record<
     | "method-totp"
@@ -748,19 +729,10 @@
     token: number,
   ): Promise<void> {
     const current = getLoginStage() ?? "form";
-    // eslint-disable-next-line security/detect-object-injection -- key is a typed LoginAdvanceTarget union member
-    const targetRank = TARGET_RANK[target];
-
-    // eslint-disable-next-line security/detect-object-injection -- key is a typed LoginStage union member
-    if (STAGE_RANK[current] > targetRank) {
-      // Rewind: the mounted login page holds its phase internally, so
-      // the only honest rewind is a fresh mount, then playing forward.
+    const decision = evaluateAdvance(current, target, isLoginCryptoInFlight());
+    if (decision === "drop" || decision === "already") return;
+    if (decision === "rewind") {
       resetLoginFlow();
-      // eslint-disable-next-line security/detect-object-injection -- key is a typed LoginStage union member
-    } else if (STAGE_RANK[current] === targetRank && !isMethodTarget(target)) {
-      // Method targets at equal rank may still need a method SWITCH;
-      // everything else at its own rank is already there.
-      if (target !== "done") return;
     }
 
     if (target === "form") return;

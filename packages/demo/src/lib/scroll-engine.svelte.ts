@@ -27,6 +27,7 @@ import {
   type SectionId,
 } from "./scroll-sections.js";
 import type { DemoBridge, DemoBridgeState, DemoTopic } from "./bridge.js";
+import { shouldBackstopUnmute } from "./scroll-intent-guard.js";
 import {
   readingLineY,
   scrollTargetFor,
@@ -112,23 +113,54 @@ export function createScrollEngine(
   // an init/reboot transition swaps the rendered section list.
   let suppressSettle = false;
 
+  // The location the in-flight alignment targets, so the backstop
+  // timeout can check whether the page reached it before unmuting.
+  let suppressionTarget: { section: SectionId; sub: string | null } | null =
+    null;
+
   // Hard timeout handle for the suppression safety net. Cleared on
   // every normal disarm path so it only fires when something goes wrong.
   let suppressionTimeout: ReturnType<typeof setTimeout> | undefined;
 
-  /** Arm suppression with a hard timeout fallback that clears it
-   *  unconditionally, so a missed disarm can never latch forever. */
-  function armSuppression(): void {
+  /** Arm suppression for a given target location. The hard timeout is
+   *  a backstop that only unmutes when the derived location matches
+   *  the target, preventing a mid-animation expiry from leaking stale
+   *  intents while the page is misaligned. Armed without a target
+   *  (layout-shift settles), the backstop unmutes unconditionally. */
+  function armSuppression(target?: {
+    section: SectionId;
+    sub: string | null;
+  }): void {
     suppressSettle = true;
+    suppressionTarget = target ?? null;
     clearTimeout(suppressionTimeout);
     suppressionTimeout = setTimeout(() => {
-      suppressSettle = false;
+      const loc = derivedLocation;
+      if (
+        shouldBackstopUnmute(
+          suppressionTarget,
+          loc?.sectionId ?? null,
+          loc?.subSlug ?? null,
+        )
+      ) {
+        suppressSettle = false;
+        suppressionTarget = null;
+      } else {
+        // Still misaligned: re-arm with a shorter backstop. The
+        // condition-based disarm in the derived-intent effect will
+        // clear it once the derived position settles.
+        suppressionTimeout = setTimeout(() => {
+          suppressSettle = false;
+          suppressionTarget = null;
+        }, 500);
+      }
     }, 1000);
   }
 
   /** Disarm suppression and cancel the hard timeout. */
   function disarmSuppression(): void {
     suppressSettle = false;
+    suppressionTarget = null;
     clearTimeout(suppressionTimeout);
   }
 
@@ -161,8 +193,22 @@ export function createScrollEngine(
     if (loc === null) return;
     if (!getPageScrollEnabled()) return;
     if (!getLinked()) return;
-    if (suppressSettle) return;
     if (!flowGeometryReady()) return;
+
+    // Condition-based suppression disarm: the derived position has
+    // reached the programmatic target, so the alignment scroll is
+    // done and suppression can be lifted. This replaces the old
+    // timer-only expiry that could unmute mid-animation.
+    if (suppressSettle) {
+      if (
+        suppressionTarget !== null &&
+        loc.sectionId === suppressionTarget.section &&
+        loc.subSlug === suppressionTarget.sub
+      ) {
+        disarmSuppression();
+      }
+      return;
+    }
 
     // Already showing this location: clear any pending request
     if (loc.sectionId === activeSection && loc.subSlug === activeSub) {
@@ -230,11 +276,14 @@ export function createScrollEngine(
       return;
     }
 
-    // Every programmatic transition arms suppression: the alignment
-    // scroll must not feed back as a page-scroll intent. The hard
-    // timeout inside armSuppression guarantees it clears even if the
-    // alignment path never reaches its own disarm call.
-    armSuppression();
+    // Every programmatic transition arms suppression with the target
+    // location so the condition-based disarm can detect when the scroll
+    // reaches it. The hard timeout inside armSuppression is a backstop
+    // that only unmutes when aligned.
+    armSuppression({
+      section: state.location.sectionId,
+      sub: state.location.subSlug,
+    });
 
     // Section change (or init reboot): scroll to top before aligning
     // so the new page remounts at a clean scroll position. The armed
@@ -270,7 +319,12 @@ export function createScrollEngine(
     // gated: clicks and deep links must always align, and neither is a
     // scroll.
     if (origin === "phone" && Date.now() - lastScrollAt < SCROLL_GRACE_MS) {
-      disarmSuppression();
+      // Alignment is skipped, so the page may sit misaligned with the
+      // mirror. Leave suppression armed: the derived-intent effect
+      // unmutes once the reading line reaches the target, and the
+      // backstop unmutes within 1.5s otherwise. Disarming here would
+      // let the misaligned reading line fire a stale page-scroll
+      // intent back at the phone mid-transition.
       return;
     }
 
@@ -335,8 +389,9 @@ export function createScrollEngine(
 
     // For "auto" (instant) scrolls, suppression can be cleared
     // immediately since the scroll completes synchronously. Smooth
-    // scrolls rely on the hard timeout to clear suppression after
-    // the animation finishes.
+    // scrolls stay suppressed until the derived-intent effect sees
+    // the reading line reach the target, with the armSuppression
+    // backstop as the fallback.
     if (behavior === "auto") {
       disarmSuppression();
     }
