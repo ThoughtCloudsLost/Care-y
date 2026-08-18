@@ -119,6 +119,7 @@ function makeFigure(
     subSlug,
     kind: "figure",
     aspectRatio,
+    headingKey: "demo_narrative_topic_credentials_heading",
   };
 }
 
