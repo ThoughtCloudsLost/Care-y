@@ -490,7 +490,12 @@
       decryptTitle: (ticketId) => {
         const t = ticketById.get(ticketId);
         return t
-          ? ticketCache.decryptTitle(t.id, t.keyWrap, t.encryptedTitle)
+          ? ticketCache.decryptTitle(
+              t.id,
+              t.keyWrap,
+              t.encryptedTitle,
+              t.intakeWrap,
+            )
           : undefined;
       },
       currentUserId: currentUserId ?? "",

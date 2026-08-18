@@ -67,6 +67,7 @@ import type {
   EvictTkRequest,
   UnwrapOrgKeyRequest,
   UnwrapTkRequest,
+  UnwrapIntakeTkRequest,
   WrapWithVolPublicRequest,
   SealSelfBlobRequest,
   OpenSelfBlobRequest,
@@ -1035,6 +1036,74 @@ function handleCreateTicketKey(req: CreateTicketKeyRequest, sink: Sink): void {
   }
 }
 
+// ── Intake wrap handler ────────────────────────────────────────────
+
+function handleUnwrapIntakeTk(req: UnwrapIntakeTkRequest, sink: Sink): void {
+  if (!requireOrgKeyed(sink, req.id, "unwrapIntakeTk")) return;
+
+  const sodium = requireSodium();
+  const sealedWrap = decode(req.sealedWrap);
+  const pk = assertPresent(orgPublicKey, "orgPublicKey");
+  const sk = assertPresent(orgSecret, "orgSecret");
+
+  let tk: Uint8Array;
+  try {
+    tk = sodium.crypto_box_seal_open(sealedWrap, pk, sk);
+  } catch (err: unknown) {
+    postError(
+      sink,
+      req.id,
+      "unwrapIntakeTk",
+      err instanceof Error ? err.message : String(err),
+      "DECRYPT_FAILED",
+    );
+    return;
+  }
+
+  // Cache tk so subsequent decryptContent calls (title, description,
+  // follow-ups) work immediately without another unseal.
+  tkCache.set(req.ticketId, tk);
+
+  // When targets are provided, produce ECIES wraps for conversion.
+  if (req.targets && req.targets.length > 0) {
+    try {
+      const wraps = req.targets.map((t) => {
+        const volPub = decode(t.volPublic);
+        const wrap = eciesEncrypt(tk, volPub as RistrettoPoint);
+        return {
+          volunteerId: t.volunteerId,
+          ephemeralPoint: encode(wrap.ephemeralPoint),
+          nonce: encode(wrap.nonce),
+          wrappedKey: encode(wrap.ciphertext),
+        };
+      });
+
+      const msg: WorkerResponse = {
+        id: req.id,
+        ok: true,
+        type: "unwrapIntakeTk",
+        wraps,
+      };
+      sink(msg);
+    } catch (err: unknown) {
+      postError(
+        sink,
+        req.id,
+        "unwrapIntakeTk",
+        err instanceof Error ? err.message : String(err),
+        "ENCRYPT_FAILED",
+      );
+    }
+  } else {
+    const msg: WorkerResponse = {
+      id: req.id,
+      ok: true,
+      type: "unwrapIntakeTk",
+    };
+    sink(msg);
+  }
+}
+
 // ── Org-tier sealed-box handlers ────────────────────────────────────
 
 function handleOrgDecrypt(req: OrgDecryptRequest, sink: Sink): void {
@@ -1251,6 +1320,9 @@ export function createDispatcher(
           break;
         case "unwrapTk":
           handleUnwrapTk(req, sink);
+          break;
+        case "unwrapIntakeTk":
+          handleUnwrapIntakeTk(req, sink);
           break;
         case "wrapWithVolPublic":
           handleWrapWithVolPublic(req, sink);

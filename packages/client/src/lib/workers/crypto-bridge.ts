@@ -698,6 +698,35 @@ export class CryptoBridge {
     return resp.hash;
   }
 
+  /**
+   * Unseal an intake wrap (crypto_box_seal_open with orgSecret) and cache
+   * the recovered tk. When targets are provided, also produce ECIES wraps
+   * for the conversion mutation.
+   */
+  async unwrapIntakeTk(
+    ticketId: string,
+    sealedWrap: string,
+    targets?: readonly { volunteerId: string; volPublic: string }[],
+  ): Promise<{
+    wraps?: readonly {
+      volunteerId: string;
+      ephemeralPoint: string;
+      nonce: string;
+      wrappedKey: string;
+    }[];
+  }> {
+    const resp = expectResponse(
+      await this.sendRequest({
+        type: "unwrapIntakeTk",
+        ticketId,
+        sealedWrap,
+        targets,
+      }),
+      "unwrapIntakeTk",
+    );
+    return { wraps: resp.wraps };
+  }
+
   /** Get the org public key (base64) from the Worker. */
   async getOrgPublicKey(): Promise<string> {
     const resp = expectResponse(
