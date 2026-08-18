@@ -14,6 +14,11 @@ import { ValidationError } from "../errors.js";
 
 // --- Stubs ---
 
+// notificationSmsPayloadSchema requires recipient ids to be UUIDs
+// (Zod v4 also validates version bytes, so hand-written ids fail).
+const USER_A = crypto.randomUUID();
+const USER_B = crypto.randomUUID();
+
 function stubEncryptor(phone: string): FieldEncryptor {
   const phoneBuf = Buffer.from(phone, "utf-8");
   return {
@@ -123,7 +128,7 @@ function buildDeps(
   const enc = stubEncryptor("+15551234567");
   const tDb = stubTenantDb([
     {
-      user_id: "user-a",
+      user_id: USER_A,
       ops_encrypted_phone: Buffer.from("encrypted-phone"),
       sms_pings_enabled: true,
     },
@@ -144,7 +149,7 @@ function buildDeps(
 const VALID_PAYLOAD = {
   orgSchema: "org_abc",
   orgSlug: "test-org",
-  recipientUserIds: ["user-a"],
+  recipientUserIds: [USER_A],
   eventType: "ticket_assigned" as const,
 };
 
@@ -154,7 +159,7 @@ describe("notification-sms job handler", () => {
     const enc = stubEncryptor("+15551234567");
     const tDb = stubTenantDb([
       {
-        user_id: "user-a",
+        user_id: USER_A,
         ops_encrypted_phone: Buffer.from("encrypted-phone"),
         sms_pings_enabled: true,
       },
@@ -203,7 +208,7 @@ describe("notification-sms job handler", () => {
     const provider = stubProvider();
     const tDb = stubTenantDb([
       {
-        user_id: "user-a",
+        user_id: USER_A,
         ops_encrypted_phone: null,
         sms_pings_enabled: true,
       },
@@ -255,12 +260,12 @@ describe("notification-sms job handler", () => {
 
     const tDb = stubTenantDb([
       {
-        user_id: "user-a",
+        user_id: USER_A,
         ops_encrypted_phone: Buffer.from("enc-phone-a"),
         sms_pings_enabled: true,
       },
       {
-        user_id: "user-b",
+        user_id: USER_B,
         ops_encrypted_phone: Buffer.from("enc-phone-b"),
         sms_pings_enabled: true,
       },
@@ -280,13 +285,13 @@ describe("notification-sms job handler", () => {
     const handler = createNotificationSmsJobHandler(deps);
     await handler({
       ...VALID_PAYLOAD,
-      recipientUserIds: ["user-a", "user-b"],
+      recipientUserIds: [USER_A, USER_B],
     });
 
     // Both recipients were attempted
     expect(sendSmsCalls).toHaveLength(2);
     // Error was logged for the first recipient
-    expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining("user-a"));
+    expect(consoleSpy).toHaveBeenCalledWith(expect.stringContaining(USER_A));
     // The log message must not contain any phone number
     for (const call of consoleSpy.mock.calls) {
       const msg = String(call[0]);
@@ -312,7 +317,7 @@ describe("notification-sms job handler", () => {
       handler({
         orgSchema: "x",
         orgSlug: "y",
-        recipientUserIds: ["user-a"],
+        recipientUserIds: [USER_A],
         eventType: "not_a_real_event",
       }),
     ).rejects.toThrow(ValidationError);
