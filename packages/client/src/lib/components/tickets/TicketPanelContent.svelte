@@ -121,6 +121,7 @@
           orgCache,
           ticketId: ticket.id,
           keyWrap: ticket.keyWrap,
+          intakeWrap: ticket.intakeWrap,
         })
       : null,
   );

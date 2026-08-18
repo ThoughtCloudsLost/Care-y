@@ -316,6 +316,21 @@ export interface CreateTicketKeyRequest {
  * and public keys if keyed. Used after F5 to detect a still-keyed Worker
  * and skip the password prompt.
  */
+/**
+ * Unseal an intake wrap (crypto_box_seal_open with orgSecret) and cache
+ * the recovered tk. When targets are provided, also produce ECIES wraps
+ * for the conversion mutation.
+ */
+export interface UnwrapIntakeTkRequest {
+  readonly type: "unwrapIntakeTk";
+  readonly id: number;
+  readonly ticketId: string;
+  /** Base64-encoded 80-byte sealed box (crypto_box_seal output). */
+  readonly sealedWrap: string;
+  /** When present, the Worker also produces ECIES wraps for conversion. */
+  readonly targets?: readonly { volunteerId: string; volPublic: string }[];
+}
+
 export interface ConnectRequest {
   readonly type: "connect";
   readonly id: number;
@@ -346,6 +361,7 @@ export type WorkerRequest =
   | GetVolPublicRequest
   | UnwrapOrgKeyRequest
   | UnwrapTkRequest
+  | UnwrapIntakeTkRequest
   | WrapWithVolPublicRequest
   | SealSelfBlobRequest
   | OpenSelfBlobRequest
@@ -545,6 +561,17 @@ export interface AliasHashResponse extends SuccessBase {
   readonly hash: string;
 }
 
+export interface UnwrapIntakeTkResponse extends SuccessBase {
+  readonly type: "unwrapIntakeTk";
+  /** ECIES wraps for conversion, present only when targets were provided. */
+  readonly wraps?: readonly {
+    readonly volunteerId: string;
+    readonly ephemeralPoint: string;
+    readonly nonce: string;
+    readonly wrappedKey: string;
+  }[];
+}
+
 // ── SharedWorker lifecycle responses ────────────────────────────────
 
 export type SharedWorkerState = "READY" | "KEYED";
@@ -575,6 +602,7 @@ export type WorkerSuccessResponse =
   | GetVolPublicResponse
   | UnwrapOrgKeyResponse
   | UnwrapTkResponse
+  | UnwrapIntakeTkResponse
   | WrapWithVolPublicResponse
   | SealSelfBlobResponse
   | OpenSelfBlobResponse
