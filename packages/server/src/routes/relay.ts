@@ -861,7 +861,7 @@ async function handleConsultantVerifyRelay(
     }
 
     sendJsonResponse(res, 200, { sent: true });
-  } catch (err: unknown) {
+  } catch {
     // Catch-all for unexpected errors (NotFoundError from missing consultant
     // registration, etc.). Log user ID only.
     console.error(`Consultant verify relay failed for user ${session.userId}`);

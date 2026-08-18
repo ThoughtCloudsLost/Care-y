@@ -120,6 +120,9 @@ export const auditEventTypeSchema = z.enum([
   "escalation_rule_deleted",
   "role_permission_changed",
   "role_permissions_reset",
+  "intake_form_saved",
+  "intake_form_deleted",
+  "intake_form_bound",
 ]);
 export type AuditEventType = z.infer<typeof auditEventTypeSchema>;
 

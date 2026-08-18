@@ -134,6 +134,7 @@ import {
 } from "./kb/service.js";
 import { createKBMediaService } from "./kb/kb-media-service.js";
 import { createClientService } from "./clients/client-service.js";
+import { createIntakeFormService } from "./portal/intake-form-service.js";
 import {
   registerEscalationRulesHandler,
   ESCALATION_RULES_QUEUE,
@@ -568,6 +569,29 @@ const appRouter = createAppRouter({
   },
   escalationDeps: {
     createAuditSvc: (tDb) => createAuditService(tDb),
+  },
+  intakeFormDeps: {
+    createAuditSvc: (tDb) => createAuditService(tDb),
+    intakeFormService: createIntakeFormService(),
+  },
+  clientPortalDeps: {
+    submissionLimiter: createInMemoryRateLimiter({
+      windowMs: RATE_WINDOW_1H,
+      maxRequests: 3,
+    }),
+    challengeLimiter: createInMemoryRateLimiter({
+      windowMs: RATE_WINDOW_1H,
+      maxRequests: 10,
+    }),
+    powVerifier:
+      env.INTAKE_POW_DIFFICULTY > 0
+        ? createPowVerifier({
+            baseDifficulty: env.INTAKE_POW_DIFFICULTY,
+            challengeTtlMs: 5 * 60 * 1000,
+          })
+        : null,
+    intakeFormService: createIntakeFormService(),
+    notificationService,
   },
   brandingDeps: {
     blobStore,

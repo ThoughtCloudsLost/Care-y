@@ -73,7 +73,11 @@ export function createPowVerifier(
   return {
     createChallenge(userId: string, failureCount: number) {
       const nonce = randomBytes(32).toString("hex");
-      const difficulty = getDifficulty(failureCount);
+      const difficulty = findTier(
+        DIFFICULTY_TIERS,
+        failureCount,
+        config.baseDifficulty,
+      );
       const expiresAt = now() + config.challengeTtlMs;
 
       challenges.set(nonce, {

@@ -118,6 +118,9 @@ export const ErrorCode = {
 
   // --- Role permission overrides ---
   PERMISSION_LOCKED: "PERMISSION_LOCKED",
+
+  // --- Intake forms ---
+  FORM_HAS_RESPONSES: "FORM_HAS_RESPONSES",
 } as const;
 
 export type ErrorCodeType = (typeof ErrorCode)[keyof typeof ErrorCode];

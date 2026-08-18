@@ -73,10 +73,11 @@ export interface ClientRouterDeps {
  * formatPhone/maskPhone in their finally blocks.
  */
 function phoneForRole(
-  encryptedNumber: Buffer,
+  encryptedNumber: Buffer | null,
   roleId: string,
   encryptor: FieldEncryptor,
-): string {
+): string | null {
+  if (!encryptedNumber) return null;
   const buf = encryptor.decryptToBuffer(encryptedNumber);
   if (roleId === RoleId.ADMIN) {
     return formatPhone(buf);
