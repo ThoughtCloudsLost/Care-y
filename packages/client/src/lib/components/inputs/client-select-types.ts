@@ -22,7 +22,8 @@ export interface ClientSearchResult {
   id: string;
   alias: string;
   encryptedAlias: string;
-  maskedPhone: string;
+  /** Null for web-intake clients, which have no phone record. */
+  maskedPhone: string | null;
 }
 
 export type PhoneLookupResult =
