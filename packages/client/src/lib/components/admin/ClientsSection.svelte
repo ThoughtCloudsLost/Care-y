@@ -47,7 +47,7 @@
     readonly id: string;
     readonly encryptedAlias: string;
     readonly aliasHash: string | null;
-    readonly phone: string;
+    readonly phone: string | null;
     readonly ticketCount: number;
     readonly createdAt: string;
     readonly mergedInto: string | null;
@@ -572,10 +572,12 @@
            takes a full replacement rather than an edit of what is shown. -->
       <div class="detail-section">
         <p class="section-label">{m.client_phone_label()}</p>
-        <p class="current-phone">
-          <Phone size={16} aria-hidden="true" />
-          {detail.phone}
-        </p>
+        {#if detail.phone !== null && detail.phone !== ""}
+          <p class="current-phone">
+            <Phone size={16} aria-hidden="true" />
+            {detail.phone}
+          </p>
+        {/if}
         <List nested>
           <ListInput
             label={m.client_phone_label()}

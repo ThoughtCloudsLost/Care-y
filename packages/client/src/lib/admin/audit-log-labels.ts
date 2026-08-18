@@ -61,6 +61,9 @@ const EVENT_LABELS = new Map<string, (terms: Terms) => string>([
   ["client_alias_changed", (t) => m.audit_event_client_alias_changed(t)],
   ["client_phone_changed", (t) => m.audit_event_client_phone_changed(t)],
   ["ticket_content_updated", (t) => m.audit_event_ticket_content_updated(t)],
+  ["intake_form_saved", () => m.audit_event_intake_form_saved()],
+  ["intake_form_deleted", () => m.audit_event_intake_form_deleted()],
+  ["intake_form_bound", () => m.audit_event_intake_form_bound()],
 ]);
 
 /**

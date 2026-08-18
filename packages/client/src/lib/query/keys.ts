@@ -213,3 +213,15 @@ export const reactionKeys = {
   byIds: (followUpIds: readonly string[]) =>
     [...reactionKeys.all, followUpIds] as const,
 };
+
+export const intakeFormKeys = {
+  all: ["intakeForms"] as const,
+  list: () => [...intakeFormKeys.all, "list"] as const,
+  detail: (formId: string) =>
+    [...intakeFormKeys.all, "detail", formId] as const,
+};
+
+export const portalKeys = {
+  all: ["portal"] as const,
+  orgPublicKey: () => [...portalKeys.all, "orgPublicKey"] as const,
+};

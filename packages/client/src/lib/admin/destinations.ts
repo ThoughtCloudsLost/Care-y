@@ -22,6 +22,7 @@ import {
   PhoneMissed,
   PhoneCall,
   ScrollText,
+  ClipboardList,
 } from "@lucide/svelte";
 
 export type AdminGroup =
@@ -183,6 +184,16 @@ export const ADMIN_DESTINATIONS: readonly AdminDestination[] = [
     subtitle: m.hub_note_types_subtitle,
     path: "/admin/organization?tab=note-types",
     permission: Permission.MANAGE_ORG_CONFIG,
+    implemented: true,
+  },
+  {
+    id: "intake-forms",
+    group: "organization",
+    icon: ClipboardList,
+    label: m.intake_forms_title,
+    subtitle: m.hub_intake_forms_subtitle,
+    path: "/admin/forms",
+    permission: Permission.MANAGE_QUEUES,
     implemented: true,
   },
 

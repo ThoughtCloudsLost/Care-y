@@ -160,6 +160,9 @@ export const errorCodeMap: Record<ErrorCodeType, () => string> = {
 
   // Role permission overrides
   [ErrorCode.PERMISSION_LOCKED]: () => m.error_permission_locked(),
+
+  // Intake forms
+  [ErrorCode.FORM_HAS_RESPONSES]: () => m.error_form_has_responses(),
 };
 
 /** Type guard: returns true when the string is a recognized ErrorCode value. */
