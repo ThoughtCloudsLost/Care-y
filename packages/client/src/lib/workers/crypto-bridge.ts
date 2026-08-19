@@ -33,6 +33,8 @@ import type {
   WorkerEvent,
   RewrapResultEvent,
   StateChangeEvent,
+  MergeScanClient,
+  MergeCandidate,
 } from "./crypto-protocol.js";
 
 export type BridgeState = "LOADING" | "READY" | "KEYED" | "DESTROYED";
@@ -725,6 +727,21 @@ export class CryptoBridge {
       "unwrapIntakeTk",
     );
     return { wraps: resp.wraps };
+  }
+
+  /**
+   * Detect merge candidates by batch-decrypting intake responses and
+   * comparing normalized contact values. Returns only client-id pairs
+   * and match kind. Contact values never leave the Worker.
+   */
+  async detectMergeCandidates(
+    clients: readonly MergeScanClient[],
+  ): Promise<readonly MergeCandidate[]> {
+    const resp = expectResponse(
+      await this.sendRequest({ type: "detectMergeCandidates", clients }),
+      "detectMergeCandidates",
+    );
+    return resp.candidates;
   }
 
   /** Get the org public key (base64) from the Worker. */
