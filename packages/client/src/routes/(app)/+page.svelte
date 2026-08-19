@@ -373,10 +373,13 @@
           : null,
       intakeWrap: "intakeWrap" in t ? t.intakeWrap : null,
     })),
-    clientPhones: new SvelteMap<string, string>(),
+    canViewClients: permissions.has(Permission.VIEW_CLIENTS),
   }));
 
-  const showMergeCandidates = $derived(mergeScan.undismissed.length > 0);
+  const showMergeCandidates = $derived(
+    permissions.has(Permission.VIEW_CLIENTS) &&
+      mergeScan.undismissed.length > 0,
+  );
 
   // --- Section scroll nav ---
 

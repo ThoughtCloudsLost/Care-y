@@ -57,6 +57,7 @@ import type {
   OrgDecryptResponse,
   OrgDecryptBatchResponse,
   AliasHashResponse,
+  PhoneMatchHashResponse,
   RewrapTkResponse,
   RewrapBlobResponse,
   SharedWorkerState,
@@ -1968,6 +1969,142 @@ describe("crypto-core aliasHash blind index", () => {
       type: "aliasHash",
       id: 960,
       alias: "calm-pebble-7",
+    });
+
+    expect(resp.ok).toBe(false);
+  });
+});
+
+describe("crypto-core phoneMatchHash blind index", () => {
+  let volPublicStr: string;
+
+  beforeEach(async () => {
+    handleZeroAll(-1, testSink);
+    sinkMessages = [];
+    dispatch = createDispatcher(testSink);
+    const sodium = requireSodium();
+    const salt = sodium.randombytes_buf(16);
+    const result = await loginFlow("phone-hash-pw", salt);
+    volPublicStr = result.volPublic;
+    sinkMessages = [];
+  });
+
+  async function unwrapOrgSecret(id: number): Promise<Uint8Array> {
+    const sodium = requireSodium();
+    const orgSecret = sodium.crypto_core_ristretto255_scalar_random();
+    const volPub = decode(volPublicStr) as RistrettoPoint;
+    const wrap = eciesEncrypt(orgSecret, volPub);
+    await dispatchAndWait({
+      type: "unwrapOrgKey",
+      id,
+      ephemeralPoint: encode(wrap.ephemeralPoint),
+      nonce: encode(wrap.nonce),
+      wrappedOrgKey: encode(wrap.ciphertext),
+    });
+    sinkMessages = [];
+    return orgSecret;
+  }
+
+  async function phoneHashOf(
+    phone: string,
+    id: number,
+  ): Promise<string | null> {
+    const resp = (await dispatchAndWait({
+      type: "phoneMatchHash",
+      id,
+      phone,
+    })) as PhoneMatchHashResponse;
+    expect(resp.ok).toBe(true);
+    return resp.hash;
+  }
+
+  it("returns a lowercase hex HMAC-SHA512 digest for a valid phone", async () => {
+    const orgSecret = await unwrapOrgSecret(1000);
+
+    const hash = await phoneHashOf("+12125551234", 1001);
+
+    // HMAC-SHA512 is 64 bytes, so 128 hex characters.
+    expect(hash).toMatch(/^[0-9a-f]{128}$/);
+
+    requireSodium().memzero(orgSecret);
+  });
+
+  it("returns null for a phone too short to normalize", async () => {
+    const orgSecret = await unwrapOrgSecret(1010);
+
+    const hash = await phoneHashOf("12345", 1011);
+
+    expect(hash).toBeNull();
+
+    requireSodium().memzero(orgSecret);
+  });
+
+  it("is deterministic for the same phone number", async () => {
+    const orgSecret = await unwrapOrgSecret(1020);
+
+    const first = await phoneHashOf("+12125551234", 1021);
+    const second = await phoneHashOf("+12125551234", 1022);
+
+    expect(first).toBe(second);
+
+    requireSodium().memzero(orgSecret);
+  });
+
+  it("normalizes before hashing, so formatting differences collide", async () => {
+    const orgSecret = await unwrapOrgSecret(1030);
+
+    const e164 = await phoneHashOf("+12125551234", 1031);
+    const parenthetical = await phoneHashOf("(212) 555-1234", 1032);
+    const dashed = await phoneHashOf("212-555-1234", 1033);
+
+    expect(e164).toBe(parenthetical);
+    expect(e164).toBe(dashed);
+
+    requireSodium().memzero(orgSecret);
+  });
+
+  it("produces different hashes under different HKDF labels (alias vs phone)", async () => {
+    const orgSecret = await unwrapOrgSecret(1040);
+
+    // Hash the same string through both index keys
+    const aliasResp = (await dispatchAndWait({
+      type: "aliasHash",
+      id: 1041,
+      alias: "2125551234",
+    })) as AliasHashResponse;
+
+    const phoneResp = (await dispatchAndWait({
+      type: "phoneMatchHash",
+      id: 1042,
+      phone: "2125551234",
+    })) as PhoneMatchHashResponse;
+
+    // Domain separation: the same input under alias vs phone-match keys
+    // must produce different digests.
+    expect(aliasResp.hash).not.toBe(phoneResp.hash);
+
+    requireSodium().memzero(orgSecret);
+  });
+
+  it("never returns key material, only the digest", async () => {
+    const orgSecret = await unwrapOrgSecret(1050);
+
+    const resp = (await dispatchAndWait({
+      type: "phoneMatchHash",
+      id: 1051,
+      phone: "+12125551234",
+    })) as PhoneMatchHashResponse;
+
+    expect(Object.keys(resp).toSorted()).toEqual(["hash", "id", "ok", "type"]);
+
+    requireSodium().memzero(orgSecret);
+  });
+
+  it("fails when no org key has been unwrapped", async () => {
+    const resp = await dispatchAndWait({
+      type: "phoneMatchHash",
+      id: 1060,
+      phone: "+12125551234",
     });
 
     expect(resp.ok).toBe(false);

@@ -45,8 +45,8 @@ export interface MergeScanDeps {
   readonly dashboardReady: boolean;
   /** All tickets from the dashboard query. */
   readonly tickets: readonly TicketRef[];
-  /** Resolved (decrypted) phone per client id, from the dashboard's phone display. */
-  readonly clientPhones: ReadonlyMap<string, string>;
+  /** Whether the session holds VIEW_CLIENTS permission. */
+  readonly canViewClients: boolean;
 }
 
 export interface MergeScanResult {
@@ -74,7 +74,8 @@ export function createMergeScan(getDeps: () => MergeScanDeps): MergeScanResult {
   const bridge = getCryptoBridge();
   const queryClient = useQueryClient();
 
-  // Fetch merge scan data from server (intake responses + field roles)
+  // Fetch merge scan data from server (intake responses + field roles + phone hashes).
+  // Gated on VIEW_CLIENTS: the server returns FORBIDDEN without it.
   const mergeScanDataQuery = createQuery(() => {
     const deps = getDeps();
     return {
@@ -83,13 +84,14 @@ export function createMergeScan(getDeps: () => MergeScanDeps): MergeScanResult {
         const clientsRouter = requireRouter(trpc.clients, "clients");
         return clientsRouter.mergeScanData.query();
       },
-      enabled: deps.dashboardReady,
+      enabled: deps.dashboardReady && deps.canViewClients,
       staleTime: Infinity,
       gcTime: Infinity,
     };
   });
 
-  // Build MergeScanClient[] from server data + dashboard ticket refs
+  // Build MergeScanClient[] from server data + dashboard ticket refs.
+  // phoneHashes from the server replace the old plaintext clientPhones map.
   const scanClients = $derived.by((): readonly MergeScanClient[] => {
     const deps = getDeps();
     const serverData = mergeScanDataQuery.data;
@@ -129,6 +131,17 @@ export function createMergeScan(getDeps: () => MergeScanDeps): MergeScanResult {
       }
     }
 
+    // Index phone hashes from server payload
+    const phoneHashMap = new SvelteMap<string, string>();
+    if ("phoneHashes" in serverData && Array.isArray(serverData.phoneHashes)) {
+      for (const ph of serverData.phoneHashes as readonly {
+        clientId: string;
+        phoneMatchHash: string;
+      }[]) {
+        phoneHashMap.set(ph.clientId, ph.phoneMatchHash);
+      }
+    }
+
     // Merge server intake data with dashboard key wraps
     const clients: MergeScanClient[] = [];
     const clientIdSet = new SvelteSet<string>();
@@ -154,24 +167,26 @@ export function createMergeScan(getDeps: () => MergeScanDeps): MergeScanResult {
         });
       }
 
-      const decryptedPhone = deps.clientPhones.get(sc.clientId) ?? null;
+      const hash = phoneHashMap.get(sc.clientId) ?? null;
 
-      if (intakeResponses.length > 0 || decryptedPhone != null) {
+      if (intakeResponses.length > 0 || hash != null) {
         clients.push({
           clientId: sc.clientId,
-          decryptedPhone,
+          phoneMatchHash: hash,
           intakeResponses,
         });
         clientIdSet.add(sc.clientId);
       }
     }
 
-    // Add telephony-only clients (have phone but no intake responses)
-    for (const [clientId, phone] of deps.clientPhones) {
+    // Include hash-only clients (have a stored phone match hash but no
+    // intake responses in the server data). These are telephony-only
+    // clients whose hash was backfilled by an authorized session.
+    for (const [clientId, hash] of phoneHashMap) {
       if (!clientIdSet.has(clientId)) {
         clients.push({
           clientId,
-          decryptedPhone: phone,
+          phoneMatchHash: hash,
           intakeResponses: [],
         });
       }

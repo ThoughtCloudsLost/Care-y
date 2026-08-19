@@ -218,6 +218,13 @@ export interface AliasHashRequest {
   readonly alias: string;
 }
 
+export interface PhoneMatchHashRequest {
+  readonly type: "phoneMatchHash";
+  readonly id: number;
+  /** Raw phone string. The Worker normalizes via normalizeContactPhone before HMAC. */
+  readonly phone: string;
+}
+
 export interface DecryptBlobRequest {
   readonly type: "decryptBlob";
   readonly id: number;
@@ -331,10 +338,12 @@ export interface DetectMergeCandidatesRequest {
 export interface MergeScanClient {
   readonly clientId: string;
   /**
-   * Telephony phone (already decrypted by the volunteer on the main
-   * thread via org-tier phone display). Null for web-intake-only clients.
+   * Browser-computed phone match hash (HMAC-SHA512, org-derived key).
+   * Null for clients whose phone is unknown or too short to normalize.
+   * Used for cross-channel matching against hashes computed from intake
+   * form answers inside the Worker.
    */
-  readonly decryptedPhone: string | null;
+  readonly phoneMatchHash: string | null;
   /** Per-ticket intake response blobs for this client. */
   readonly intakeResponses: readonly MergeScanIntakeResponse[];
 }
@@ -425,6 +434,7 @@ export type WorkerRequest =
   | ExportOrgSecretKeyRequest
   | GetOrgPublicKeyRequest
   | AliasHashRequest
+  | PhoneMatchHashRequest
   | DetectMergeCandidatesRequest
   | ConnectRequest
   | DisconnectRequest;
@@ -614,6 +624,15 @@ export interface AliasHashResponse extends SuccessBase {
   readonly hash: string;
 }
 
+export interface PhoneMatchHashResponse extends SuccessBase {
+  readonly type: "phoneMatchHash";
+  /**
+   * Lowercase hex HMAC-SHA512 of the normalized phone, or null when the
+   * phone is too short to normalize (under 7 digits).
+   */
+  readonly hash: string | null;
+}
+
 export interface UnwrapIntakeTkResponse extends SuccessBase {
   readonly type: "unwrapIntakeTk";
   /** ECIES wraps for conversion, present only when targets were provided. */
@@ -676,6 +695,7 @@ export type WorkerSuccessResponse =
   | ExportOrgSecretKeyResponse
   | GetOrgPublicKeyResponse
   | AliasHashResponse
+  | PhoneMatchHashResponse
   | ConnectResponse
   | DisconnectResponse;
 

@@ -78,6 +78,7 @@ import type {
   OrgDecryptBatchRequest,
   ExportOrgSecretKeyRequest,
   AliasHashRequest,
+  PhoneMatchHashRequest,
   DetectMergeCandidatesRequest,
   MergeCandidate,
   WorkerRequest,
@@ -116,6 +117,7 @@ let volPublic: RistrettoPoint | null = null;
 let orgSecret: Uint8Array | null = null;
 let orgPublicKey: Uint8Array | null = null;
 let aliasIndexKey: Uint8Array | null = null;
+let phoneMatchIndexKey: Uint8Array | null = null;
 
 const tkCache = new TkCache({
   maxEntries: 50,
@@ -738,6 +740,7 @@ export function handleZeroAll(id: number, sink: Sink): void {
   blindState = zeroAndClear(sodium, blindState);
   orgSecret = zeroAndClear(sodium, orgSecret);
   aliasIndexKey = zeroAndClear(sodium, aliasIndexKey);
+  phoneMatchIndexKey = zeroAndClear(sodium, phoneMatchIndexKey);
 
   volPublic = null;
   orgPublicKey = null;
@@ -778,6 +781,7 @@ function handleUnwrapOrgKey(req: UnwrapOrgKeyRequest, sink: Sink): void {
 
     orgSecret = zeroAndClear(sodium, orgSecret);
     aliasIndexKey = zeroAndClear(sodium, aliasIndexKey);
+    phoneMatchIndexKey = zeroAndClear(sodium, phoneMatchIndexKey);
     orgPublicKey = null;
 
     orgSecret = new Uint8Array(unwrappedOrgSecret.byteLength);
@@ -1211,6 +1215,48 @@ function handleAliasHash(req: AliasHashRequest, sink: Sink): void {
   sink(msg);
 }
 
+function ensurePhoneMatchIndexKey(): Uint8Array {
+  if (phoneMatchIndexKey) return phoneMatchIndexKey;
+  const secret = assertPresent(orgSecret, "orgSecret");
+  phoneMatchIndexKey = hkdfDerive32(secret, HKDF_LABELS.PHONE_MATCH_INDEX);
+  return phoneMatchIndexKey;
+}
+
+function handlePhoneMatchHash(req: PhoneMatchHashRequest, sink: Sink): void {
+  if (!requireOrgKeyed(sink, req.id, "phoneMatchHash")) return;
+
+  const normalized = normalizeContactPhone(req.phone);
+  if (normalized == null) {
+    const msg: WorkerResponse = {
+      id: req.id,
+      ok: true,
+      type: "phoneMatchHash",
+      hash: null,
+    };
+    sink(msg);
+    return;
+  }
+
+  const sodium = requireSodium();
+  const key = ensurePhoneMatchIndexKey();
+  const hmac = sodium.crypto_auth_hmacsha512(
+    textEncoder.encode(normalized),
+    key,
+  );
+
+  const hex = Array.from(hmac, (b) => b.toString(16).padStart(2, "0")).join("");
+
+  sodium.memzero(hmac);
+
+  const msg: WorkerResponse = {
+    id: req.id,
+    ok: true,
+    type: "phoneMatchHash",
+    hash: hex,
+  };
+  sink(msg);
+}
+
 function handleOrgDecryptBatch(req: OrgDecryptBatchRequest, sink: Sink): void {
   if (!requireOrgKeyed(sink, req.id, "orgDecryptBatch")) return;
 
@@ -1364,16 +1410,16 @@ function handleDetectMergeCandidates(
   if (!requireKeyed(sink, req.id, "detectMergeCandidates")) return;
 
   const sodium = requireSodium();
+  const phoneKey = ensurePhoneMatchIndexKey();
   const fingerprints: ClientContactFingerprint[] = [];
 
   for (const client of req.clients) {
-    const clientPhones: string[] = [];
+    const clientPhoneHashes: string[] = [];
     const clientEmails: string[] = [];
 
-    // Telephony phone (already decrypted, passed from main thread)
-    if (client.decryptedPhone != null) {
-      const norm = normalizeContactPhone(client.decryptedPhone);
-      if (norm != null) clientPhones.push(norm);
+    // Stored phone match hash (server-persisted, browser-computed)
+    if (client.phoneMatchHash != null) {
+      clientPhoneHashes.push(client.phoneMatchHash);
     }
 
     // Decrypt intake response blobs and extract contacts
@@ -1437,7 +1483,18 @@ function handleDetectMergeCandidates(
             responseJson,
             resp.fieldRoles,
           );
-          clientPhones.push(...contacts.phones);
+          // Hash extracted phone numbers for comparison
+          for (const phone of contacts.phones) {
+            const hmac = sodium.crypto_auth_hmacsha512(
+              textEncoder.encode(phone),
+              phoneKey,
+            );
+            const hex = Array.from(hmac, (b) =>
+              b.toString(16).padStart(2, "0"),
+            ).join("");
+            sodium.memzero(hmac);
+            clientPhoneHashes.push(hex);
+          }
           clientEmails.push(...contacts.emails);
         } finally {
           sodium.memzero(plaintext);
@@ -1447,10 +1504,10 @@ function handleDetectMergeCandidates(
       }
     }
 
-    if (clientPhones.length > 0 || clientEmails.length > 0) {
+    if (clientPhoneHashes.length > 0 || clientEmails.length > 0) {
       fingerprints.push({
         clientId: client.clientId,
-        phones: clientPhones,
+        phones: clientPhoneHashes,
         emails: clientEmails,
       });
     }
@@ -1475,9 +1532,9 @@ function handleDetectMergeCandidates(
           : `${b.clientId}:${a.clientId}`;
       if (seen.has(pairKey)) continue;
 
-      // Check phone match
-      for (const phone of a.phones) {
-        if (b.phones.includes(phone)) {
+      // Check phone hash match
+      for (const phoneHash of a.phones) {
+        if (b.phones.includes(phoneHash)) {
           candidates.push({
             clientIdA: a.clientId < b.clientId ? a.clientId : b.clientId,
             clientIdB: a.clientId < b.clientId ? b.clientId : a.clientId,
@@ -1606,6 +1663,9 @@ export function createDispatcher(
           break;
         case "aliasHash":
           handleAliasHash(req, sink);
+          break;
+        case "phoneMatchHash":
+          handlePhoneMatchHash(req, sink);
           break;
         case "detectMergeCandidates":
           handleDetectMergeCandidates(req, sink);

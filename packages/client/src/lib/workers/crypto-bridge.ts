@@ -701,6 +701,19 @@ export class CryptoBridge {
   }
 
   /**
+   * Compute the phone match blind index hash inside the Worker.
+   * The index key never leaves the Worker. Returns lowercase hex, or null
+   * when the phone is too short to normalize (under 7 digits).
+   */
+  async phoneMatchHash(phone: string): Promise<string | null> {
+    const resp = expectResponse(
+      await this.sendRequest({ type: "phoneMatchHash", phone }),
+      "phoneMatchHash",
+    );
+    return resp.hash;
+  }
+
+  /**
    * Unseal an intake wrap (crypto_box_seal_open with orgSecret) and cache
    * the recovered tk. When targets are provided, also produce ECIES wraps
    * for the conversion mutation.

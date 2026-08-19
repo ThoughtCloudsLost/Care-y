@@ -349,6 +349,8 @@ export {
   type BackfillAliasHashInput,
   updatePhoneInputSchema,
   type UpdatePhoneInput,
+  backfillPhoneMatchHashInputSchema,
+  type BackfillPhoneMatchHashInput,
   suggestDuplicatesInputSchema,
   type SuggestDuplicatesInput,
 } from "./schemas/clients.js";

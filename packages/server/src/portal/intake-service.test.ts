@@ -23,6 +23,7 @@ import {
   createTestUser,
   testSealedBox,
   testUnseal,
+  noopEncryptor,
 } from "../test-utils.js";
 import type { NotificationService } from "../notifications/service.js";
 import {
@@ -371,7 +372,9 @@ describe.skipIf(!process.env.DATABASE_URL)(
           position: 0,
           field_type: "checkbox",
           role: "escalation",
-          escalation_recipient_ids: [user.id],
+          encrypted_escalation_recipient_ids: noopEncryptor.encrypt(
+            JSON.stringify([user.id]),
+          ),
           encrypted_label: Buffer.from("l"),
           encrypted_config: Buffer.from("c"),
           is_required: false,
@@ -388,6 +391,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
         {
           notificationService: ns,
           sealedBox: testSealedBox,
+          fieldEncryptor: noopEncryptor,
           orgSchema: testDb.schemaName,
           orgSlug: "test-org",
         },

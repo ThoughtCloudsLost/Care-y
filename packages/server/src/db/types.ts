@@ -243,6 +243,7 @@ export interface PhonesTable {
   id: Generated<string>;
   phone_hash: string;
   encrypted_number: Buffer;
+  phone_match_hash: string | null;
   locale: string;
   location_city: string | null;
   location_region: string | null;
@@ -672,7 +673,7 @@ export interface IntakeFormFieldsTable {
   encrypted_config: Buffer;
   is_required: ColumnType<boolean, boolean | undefined, boolean>;
   routing_queue_ids: string[] | null;
-  escalation_recipient_ids: string[] | null;
+  encrypted_escalation_recipient_ids: Buffer | null;
   created_at: Generated<Date>;
 }
 

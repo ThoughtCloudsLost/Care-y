@@ -15,6 +15,10 @@ import type { TenantDatabase } from "../db/types.js";
 import { ConflictError, NotFoundError, ValidationError } from "../errors.js";
 import { ErrorCode } from "@care-y/shared";
 import type { SaveIntakeFormInput } from "@care-y/shared";
+import type { FieldEncryptor } from "../crypto/field-encryptor.js";
+import { z } from "zod";
+
+const recipientIdsSchema = z.array(z.uuid());
 
 // ---------------------------------------------------------------------------
 // Public read return shape
@@ -167,7 +171,10 @@ export interface IntakeFormService {
 // Implementation
 // ---------------------------------------------------------------------------
 
-export function createIntakeFormService(): IntakeFormService {
+export function createIntakeFormService(deps: {
+  readonly fieldEncryptor: FieldEncryptor;
+}): IntakeFormService {
+  const { fieldEncryptor } = deps;
   return {
     async getPublicForm(
       db: Kysely<TenantDatabase>,
@@ -256,7 +263,7 @@ export function createIntakeFormService(): IntakeFormService {
           "field_type",
           "role",
           "routing_queue_ids",
-          "escalation_recipient_ids",
+          "encrypted_escalation_recipient_ids",
           "encrypted_label",
           "encrypted_config",
           "is_required",
@@ -273,18 +280,31 @@ export function createIntakeFormService(): IntakeFormService {
         isActive: form.is_active,
         isDefault: form.is_default,
         destinationQueueId: form.destination_queue_id,
-        fields: fields.map((f) => ({
-          id: f.id,
-          fieldType: f.field_type,
-          role: f.role,
-          routingQueueIds: f.routing_queue_ids,
-          escalationRecipientIds: f.escalation_recipient_ids,
-          // care-y-ignore-next-line no-standard-base64-server -- client-facing ciphertext: browser sends/receives standard base64 per the shared base64String validator
-          encryptedLabel: f.encrypted_label.toString("base64"),
-          // care-y-ignore-next-line no-standard-base64-server -- same as above
-          encryptedConfig: f.encrypted_config.toString("base64"),
-          isRequired: f.is_required,
-        })),
+        fields: fields.map((f) => {
+          // Decrypt OPS-encrypted escalation recipient IDs for the admin UI.
+          let escalationRecipientIds: readonly string[] | null = null;
+          if (f.encrypted_escalation_recipient_ids !== null) {
+            // care-y-ignore-next-line server-no-decrypt -- OPS-tier decryption: escalation recipient IDs are server-side operational data encrypted with OPS_SECRETS_KEY, same pattern as phones.encrypted_number in client-service.ts
+            const json = fieldEncryptor.decrypt(
+              f.encrypted_escalation_recipient_ids,
+            );
+            const parsed: unknown = JSON.parse(json);
+            escalationRecipientIds = recipientIdsSchema.parse(parsed);
+          }
+
+          return {
+            id: f.id,
+            fieldType: f.field_type,
+            role: f.role,
+            routingQueueIds: f.routing_queue_ids,
+            escalationRecipientIds,
+            // care-y-ignore-next-line no-standard-base64-server -- client-facing ciphertext: browser sends/receives standard base64 per the shared base64String validator
+            encryptedLabel: f.encrypted_label.toString("base64"),
+            // care-y-ignore-next-line no-standard-base64-server -- same as above
+            encryptedConfig: f.encrypted_config.toString("base64"),
+            isRequired: f.is_required,
+          };
+        }),
       };
     },
 
@@ -410,7 +430,12 @@ export function createIntakeFormService(): IntakeFormService {
                 field_type: f.fieldType,
                 role: f.role ?? null,
                 routing_queue_ids: f.routingQueueIds ?? null,
-                escalation_recipient_ids: f.escalationRecipientIds ?? null,
+                encrypted_escalation_recipient_ids:
+                  f.escalationRecipientIds != null
+                    ? fieldEncryptor.encrypt(
+                        JSON.stringify(f.escalationRecipientIds),
+                      )
+                    : null,
                 encrypted_label: Buffer.from(f.encryptedLabel, "base64"),
                 encrypted_config: Buffer.from(f.encryptedConfig, "base64"),
                 is_required: f.isRequired,

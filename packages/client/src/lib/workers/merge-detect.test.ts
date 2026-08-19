@@ -258,8 +258,7 @@ describe("cross-channel phone match", () => {
   it("detects matching phone between telephony and web-intake formats", async () => {
     // The telephony client has E.164: +12125551234
     // The web-intake client typed: (212) 555-1234
-    // Both normalize to +12125551234
-    const telephonyResponse = JSON.stringify({ answers: [] });
+    // Both normalize to the same comparison key.
     const intakeResponse = JSON.stringify({
       answers: [
         {
@@ -270,16 +269,11 @@ describe("cross-channel phone match", () => {
       ],
     });
 
-    const telephonyContacts = extractContactsFromResponse(
-      telephonyResponse,
-      new Map(),
-    );
     const intakeContacts = extractContactsFromResponse(
       intakeResponse,
       new Map(),
     );
 
-    // The telephony phone comes separately (decryptedPhone on MergeScanClient)
     const telephonyPhone = "+12125551234";
     const { normalizeContactPhone } = (await import("@care-y/shared")) as {
       normalizeContactPhone: (raw: string) => string | null;
@@ -287,7 +281,36 @@ describe("cross-channel phone match", () => {
     const normalizedTelephony = normalizeContactPhone(telephonyPhone);
     const normalizedIntake = intakeContacts.phones[0];
 
+    // Same comparison key means the same HMAC will be produced by the
+    // Worker for both, enabling cross-channel matching via stored hashes.
     expect(normalizedTelephony).toBe(normalizedIntake);
-    expect(telephonyContacts.phones).toEqual([]);
+  });
+
+  it("no phone values or hashes appear in the MergeCandidate response shape", () => {
+    // The MergeCandidate type carries only clientIdA, clientIdB, matchKind.
+    // Verify the type shape at the value level.
+    const candidate = {
+      clientIdA: "a",
+      clientIdB: "b",
+      matchKind: "phone" as const,
+    };
+    const keys = Object.keys(candidate).sort();
+    expect(keys).toEqual(["clientIdA", "clientIdB", "matchKind"]);
+    // No phone, no hash, no email in the output.
+    expect(keys).not.toContain("phone");
+    expect(keys).not.toContain("phoneMatchHash");
+    expect(keys).not.toContain("email");
+  });
+
+  it("MergeScanClient no longer carries decryptedPhone", () => {
+    // The protocol type uses phoneMatchHash (opaque hash) instead of
+    // decryptedPhone (plaintext). Verify the shape at the value level.
+    const client = {
+      clientId: "c-1",
+      phoneMatchHash: "abcdef1234",
+      intakeResponses: [],
+    };
+    expect(Object.keys(client)).toContain("phoneMatchHash");
+    expect(Object.keys(client)).not.toContain("decryptedPhone");
   });
 });

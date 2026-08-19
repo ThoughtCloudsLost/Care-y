@@ -572,7 +572,7 @@ const appRouter = createAppRouter({
   },
   intakeFormDeps: {
     createAuditSvc: (tDb) => createAuditService(tDb),
-    intakeFormService: createIntakeFormService(),
+    intakeFormService: createIntakeFormService({ fieldEncryptor: encryptor }),
   },
   clientPortalDeps: {
     submissionLimiter: createInMemoryRateLimiter({
@@ -590,8 +590,9 @@ const appRouter = createAppRouter({
             challengeTtlMs: 5 * 60 * 1000,
           })
         : null,
-    intakeFormService: createIntakeFormService(),
+    intakeFormService: createIntakeFormService({ fieldEncryptor: encryptor }),
     notificationService,
+    fieldEncryptor: encryptor,
   },
   brandingDeps: {
     blobStore,

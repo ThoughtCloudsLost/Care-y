@@ -11,6 +11,7 @@ import {
   createTestDb,
   createTestQueue,
   seedOrgPublicKey,
+  noopEncryptor,
   type TestDb,
 } from "../test-utils.js";
 import { createIntakeFormService } from "./intake-form-service.js";
@@ -27,7 +28,7 @@ describe.skipIf(!process.env.DATABASE_URL)("IntakeFormService", () => {
   beforeAll(async () => {
     testDb = await createTestDb();
     await seedOrgPublicKey(testDb.db);
-    svc = createIntakeFormService();
+    svc = createIntakeFormService({ fieldEncryptor: noopEncryptor });
   });
 
   afterAll(async () => {
@@ -459,6 +460,96 @@ describe.skipIf(!process.env.DATABASE_URL)("IntakeFormService", () => {
         expect(typeof f.isDefault).toBe("boolean");
         expect(typeof f.fieldCount).toBe("number");
       }
+    });
+  });
+
+  describe("escalation recipients round-trip", () => {
+    it("encrypts on save and decrypts on read", async () => {
+      const recipientA = crypto.randomUUID();
+      const recipientB = crypto.randomUUID();
+
+      const formId = await createForm("Escalation RT", {
+        fields: [
+          {
+            fieldType: "checkbox",
+            role: "escalation",
+            escalationRecipientIds: [recipientA, recipientB],
+          },
+        ],
+      });
+
+      const detail = await svc.getForm(testDb.db, formId);
+      expect(detail.fields).toHaveLength(1);
+      expect(detail.fields[0]?.escalationRecipientIds).toEqual([
+        recipientA,
+        recipientB,
+      ]);
+    });
+
+    it("stores null when no escalation recipients provided", async () => {
+      const formId = await createForm("No Escalation", {
+        fields: [
+          {
+            fieldType: "text",
+            escalationRecipientIds: null,
+          },
+        ],
+      });
+
+      const detail = await svc.getForm(testDb.db, formId);
+      expect(detail.fields[0]?.escalationRecipientIds).toBeNull();
+    });
+
+    it("does not expose escalation recipients in public form", async () => {
+      const formId = await createForm("Public Esc", {
+        slug: "public-esc-test",
+        fields: [
+          {
+            fieldType: "checkbox",
+            role: "escalation",
+            escalationRecipientIds: [crypto.randomUUID()],
+          },
+        ],
+      });
+      await svc.setActive(testDb.db, formId, true);
+
+      const publicForm = await svc.getPublicForm(testDb.db, "public-esc-test");
+      expect(publicForm).not.toBeNull();
+      // Public form fields should not have escalationRecipientIds
+      for (const field of publicForm!.fields) {
+        expect("escalationRecipientIds" in field).toBe(false);
+      }
+
+      await svc.setActive(testDb.db, formId, false);
+    });
+
+    it("stores ciphertext in the database (not plaintext array)", async () => {
+      const recipientId = crypto.randomUUID();
+      const formId = await createForm("Cipher Check", {
+        fields: [
+          {
+            fieldType: "checkbox",
+            role: "escalation",
+            escalationRecipientIds: [recipientId],
+          },
+        ],
+      });
+
+      // Read raw from DB to verify it is bytea, not a uuid[]
+      const rawField = await testDb.db
+        .selectFrom("intake_form_fields")
+        .select("encrypted_escalation_recipient_ids")
+        .where("form_id", "=", formId)
+        .executeTakeFirstOrThrow();
+
+      expect(Buffer.isBuffer(rawField.encrypted_escalation_recipient_ids)).toBe(
+        true,
+      );
+      // The column is bytea (Buffer), not a Postgres uuid[] array.
+      // With noopEncryptor the content is the JSON string as bytes;
+      // in production it would be XSalsa20-Poly1305 ciphertext.
+      const raw = rawField.encrypted_escalation_recipient_ids!;
+      expect(raw.length).toBeGreaterThan(0);
     });
   });
 });

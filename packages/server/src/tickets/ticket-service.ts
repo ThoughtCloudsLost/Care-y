@@ -359,6 +359,7 @@ function toRecordWithKeyWrap(
 export interface PendingClient {
   readonly phoneHash: string;
   readonly opsEncryptedPhone: Buffer;
+  readonly phoneMatchHash: string | null;
   readonly orgSchema: string;
   readonly createdAt: number;
 }
@@ -459,6 +460,7 @@ export function createTicketService(
           const result = await clientRepo.findOrCreateByPhoneHash(
             pending.phoneHash,
             pending.opsEncryptedPhone,
+            pending.phoneMatchHash,
           );
           clientId = result.client.id;
         } else if (input.clientId !== undefined) {

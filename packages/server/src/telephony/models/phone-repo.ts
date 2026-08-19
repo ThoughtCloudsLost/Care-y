@@ -14,6 +14,7 @@ export interface PhoneRecord {
   readonly id: string;
   readonly phoneHash: string;
   readonly encryptedNumber: Buffer;
+  readonly phoneMatchHash: string | null;
   readonly locale: string;
   readonly locationCity: string | null;
   readonly locationRegion: string | null;
@@ -23,6 +24,7 @@ export interface PhoneRecord {
 export interface CreatePhoneInput {
   readonly phoneHash: string;
   readonly encryptedNumber: Buffer;
+  readonly phoneMatchHash?: string | null;
   readonly locale?: string;
   readonly locationCity?: string;
   readonly locationRegion?: string;
@@ -40,6 +42,7 @@ function mapPhoneRow(row: Selectable<PhonesTable>): PhoneRecord {
     id: row.id,
     phoneHash: row.phone_hash,
     encryptedNumber: row.encrypted_number,
+    phoneMatchHash: row.phone_match_hash,
     locale: row.locale,
     locationCity: row.location_city,
     locationRegion: row.location_region,
@@ -69,6 +72,7 @@ export function createPhoneRepository(
         .values({
           phone_hash: input.phoneHash,
           encrypted_number: input.encryptedNumber,
+          phone_match_hash: input.phoneMatchHash ?? null,
           locale: input.locale ?? "en-US",
           location_city: input.locationCity ?? null,
           location_region: input.locationRegion ?? null,
