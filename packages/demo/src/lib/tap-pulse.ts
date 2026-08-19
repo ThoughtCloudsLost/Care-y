@@ -778,6 +778,85 @@ export function dismissOpenOverlays(except: Element | null): void {
 }
 
 // -----------------------------------------------------------------------
+// Mode toggles (persistent inline modes a pulse can switch ON)
+// -----------------------------------------------------------------------
+
+/**
+ * Topics whose tap enables a persistent inline mode with no backdrop:
+ * dismissOpenOverlays cannot close these, so a reader scrolling the
+ * story would accumulate open toolbars (in-page search, selection
+ * modes) sub after sub. The pulse that switches a mode on registers a
+ * pending exit in PhoneApp, and the phone closes the mode when the
+ * story leaves the sub. Only pulse-opened modes are ever closed; a
+ * visitor's own toggles stand.
+ */
+export const MODE_TOGGLE_TOPICS: ReadonlySet<DemoTopic> = new Set([
+  "select-mode",
+  "message-select",
+  "page-search",
+  "deep-search",
+]);
+
+/** Labels of the controls that exit a selection mode, across locales. */
+function selectionExitLabels(): Set<string> {
+  const labels = new Set<string>();
+  for (const locale of locales) {
+    labels.add(m.ticket_select_cancel({}, { locale }));
+    labels.add(m.admin_users_exit_multiselect({}, { locale }));
+  }
+  return labels;
+}
+
+/**
+ * Close the mode a pulse opened for `topic`. Returns whether an exit
+ * control was found and clicked; false when the visitor already
+ * closed the mode (nothing to do).
+ */
+export function closeModeToggle(
+  topic: DemoTopic,
+  lastTapped: HTMLElement | null,
+): boolean {
+  // Both search navigators (in-page and in-thread) share the product's
+  // close-button class, so the exit is structural and locale-proof.
+  if (topic === "page-search" || topic === "deep-search") {
+    let closed = false;
+    for (const btn of document.querySelectorAll<HTMLElement>(
+      ".search-close-btn",
+    )) {
+      if (!isVisible(btn)) continue;
+      btn.click();
+      closed = true;
+    }
+    return closed;
+  }
+
+  // Selection modes exit through their cancel control.
+  const exitLabels = selectionExitLabels();
+  for (const btn of document.querySelectorAll<HTMLElement>(
+    'button, [role="button"]',
+  )) {
+    const text = (btn.getAttribute("aria-label") ?? btn.textContent).trim();
+    if (text.length === 0 || !exitLabels.has(text)) continue;
+    if (!isVisible(btn)) continue;
+    btn.click();
+    return true;
+  }
+
+  // Fallback: the mode control itself is a toggle; if it still reads
+  // pressed, click it again.
+  if (
+    lastTapped !== null &&
+    lastTapped.isConnected &&
+    lastTapped.getAttribute("aria-pressed") === "true"
+  ) {
+    lastTapped.click();
+    return true;
+  }
+
+  return false;
+}
+
+// -----------------------------------------------------------------------
 // Element finder (reverse label matching)
 // -----------------------------------------------------------------------
 

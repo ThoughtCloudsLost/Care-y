@@ -37,6 +37,7 @@
   import type { PhoneCommand } from "$demo/scroll-sections.js";
   import { routeForSlug, pathnameForRouteId } from "$demo/scroll-sections.js";
   import { evaluateAdvance } from "$demo/login-advance-guard.js";
+  import { splashCovers } from "$demo/boot-landing.js";
   import { listRouteIds } from "$demo/engine/route-manifest.js";
   import {
     demoSeed,
@@ -45,12 +46,18 @@
     replayDescramble,
   } from "$lib/crypto/context.js";
   import { isPacedLoginInFlight } from "./stubs/login-crypto.js";
+  import { sealSeedFilterNames } from "./stubs/saved-filters.svelte.js";
   import { RoleId, type RoleIdValue } from "@care-y/shared";
   import {
     classifyDemoLabel,
     type DemoLocale,
   } from "$demo/topic-classifier.js";
-  import { locales } from "$lib/paraglide/runtime.js";
+  import {
+    locales,
+    setLocale as setPhoneLocale,
+    getTextDirection,
+    type Locale,
+  } from "$lib/paraglide/runtime.js";
   import {
     getLoginStage,
     setLoginStage,
@@ -69,6 +76,8 @@
     waitForElement,
     renderPulseMarker,
     TAP_TOPICS,
+    MODE_TOGGLE_TOPICS,
+    closeModeToggle,
   } from "$demo/tap-pulse.js";
   import { recordPulseOutcome } from "$demo/pulse-log.js";
   import {
@@ -197,22 +206,65 @@
       if (e.articleIds.length > 0) {
         resolvedArticleId = e.articleIds[0] ?? null;
       }
+      // Seal the saved-filter seed names to the org public key so the
+      // OrgDecryptCache can decrypt them via the real crypto worker.
+      sealSeedFilterNames(e.seedResult.orgPublicKey);
+
       resolvedEngine = e;
       engineReady = true;
       // Eager keying: start the real derivation the moment the engine
       // is up, so the first login-to-elsewhere fast-forward (and every
       // queued decrypt) finds the worker already keyed instead of
-      // paying Argon2id at navigation time. The prewarm latch mounts
-      // this iframe roughly a viewport before the first clip, so the
-      // derivation spends itself against reading time. Failures are
-      // swallowed: ensureKeyed clears its cached promise on rejection
-      // and the fast-forward path retries.
-      void ensureKeyed().catch(() => undefined);
+      // paying Argon2id at navigation time. The iframe mounts eagerly
+      // on page load, so the derivation spends itself against reading
+      // time on the entry page. The phone RESTS behind the splash:
+      // no navigation and no sign-in happen here. The first real
+      // navigation (section click, deep link) goes through the
+      // internalNavigate fast-forward, which awaits this same
+      // ensureKeyed promise (instant once settled), signs in, and
+      // jumps straight to the target. keyedDone only gates the
+      // splash, and flips on failure too so a broken boot degrades
+      // to a visible screen instead of an eternal splash (the
+      // fast-forward path retries derivation).
+      void ensureKeyed()
+        .then(() => {
+          settleBackgroundLogin();
+        })
+        .catch(() => {
+          settleBackgroundLogin();
+        });
     })
     .catch(() => {
       // Boot failure already surfaced by phone-main.ts console.error.
       // engineReady stays false so the peek keeps showing a blurred still.
+      keyedDone = true;
     });
+
+  // Flips when the background login settles (success or failure).
+  // Gates the splash; resets naturally on restart (iframe reload).
+  let keyedDone = $state(false);
+
+  /**
+   * Settle the background login. A deep link or click that landed
+   * while the phone was still keying may have ended its drive chain
+   * unconverged (phone-corrections are suppressed behind the splash),
+   * so re-select the standing location to drive the phone to it now
+   * that keys are warm. The login section is left to its scripted
+   * flow, and origin "init" means nothing was chosen yet: the phone
+   * keeps resting behind the splash until the first navigation.
+   */
+  function settleBackgroundLogin(): void {
+    keyedDone = true;
+    if (store.origin === "init") return;
+    if (store.location.sectionId === "login") return;
+    const reOrigin: PageOrigin =
+      store.origin === "deep-link" ? "deep-link" : "page-click";
+    store.setLocation(
+      store.location.sectionId,
+      store.location.subSlug,
+      reOrigin,
+    );
+  }
 
   // -----------------------------------------------------------------------
   // Dark scheme
@@ -315,6 +367,7 @@
     ensureScreen,
     getTicketDetailId: () => resolvedDetailId ?? DEMO_DETAIL_TICKET_ID,
     getArticleDetailId: () => resolvedArticleId ?? DEMO_DETAIL_ARTICLE_ID,
+    isBootSettled: () => keyedDone,
   });
 
   // Every phone screen change lands in the store in the same reactive
@@ -326,6 +379,41 @@
     void router.searchOpen;
     void loginStage;
     store.notePhoneChange();
+  });
+
+  // The last pulse-opened inline mode awaiting its exit. Deliberately
+  // non-reactive: only location changes should run the closing effect,
+  // never the registration itself (which happens while still ON the
+  // registering sub).
+  let pendingModeExit: {
+    topic: DemoTopic;
+    sectionId: SectionId;
+    subSlug: string | null;
+    control: HTMLElement | null;
+  } | null = null;
+
+  // Close a pulse-opened inline mode (in-page search, selection mode)
+  // once the story leaves the sub whose pulse opened it. The mode
+  // stays visible while its own narration is on screen, and a
+  // visitor's manually opened modes are never touched (only pulses
+  // register an exit).
+  $effect(() => {
+    const sectionId = store.location.sectionId;
+    const subSlug = store.location.subSlug;
+    if (pendingModeExit === null) return;
+    if (
+      pendingModeExit.sectionId === sectionId &&
+      pendingModeExit.subSlug === subSlug
+    ) {
+      return;
+    }
+    const exit = pendingModeExit;
+    pendingModeExit = null;
+    // Past the pulse's own 150ms click schedule, so a fast sub change
+    // cannot close the mode before it opened.
+    setTimeout(() => {
+      closeModeToggle(exit.topic, exit.control);
+    }, 250);
   });
 
   // -----------------------------------------------------------------------
@@ -667,6 +755,12 @@
         //    triggers a fresh fetch regardless of staleTime/refetchOnMount.
         await queryClient.resetQueries();
       })();
+    },
+
+    setLocale(locale: Locale): void {
+      void setPhoneLocale(locale);
+      document.documentElement.lang = locale;
+      document.documentElement.dir = getTextDirection(locale);
     },
 
     subscribe(listener: DemoBridgeListener): () => void {
@@ -1033,6 +1127,17 @@
         setTimeout(() => {
           clickable?.click();
         }, 150);
+        // A tap that switches ON a persistent inline mode (in-page
+        // search, selection mode) registers its exit; the effect
+        // below closes the mode when the story leaves this sub.
+        if (MODE_TOGGLE_TOPICS.has(pulseTopic)) {
+          pendingModeExit = {
+            topic: pulseTopic,
+            sectionId: store.location.sectionId,
+            subSlug: store.location.subSlug,
+            control: clickable,
+          };
+        }
       }
     }
 
@@ -1059,12 +1164,19 @@
     }
   }
 
-  // Splash stays while the location store has not been driven by an
-  // outer-page intent or phone interaction (origin "init" is the boot
-  // baseline). Deep links dismiss it immediately because they commit a
-  // non-init origin before the first render. Restart resets the store,
-  // so origin returns to "init" and the splash reappears.
-  const splashDismissed: boolean = $derived(store.origin !== "init");
+  // Splash covers the resting phone and lifts only when the router is
+  // actually showing a non-login screen after the background login
+  // settles, so the login screens are never visible outside the login
+  // section (whose narration lifts it early). Restart reloads the
+  // iframe, which resets keyedDone and brings the splash back.
+  const splashDismissed: boolean = $derived(
+    !splashCovers(
+      keyedDone,
+      router.feature,
+      store.location.sectionId,
+      store.origin,
+    ),
+  );
 </script>
 
 <div class="phone-app">
@@ -1098,6 +1210,17 @@
       </div>
     {/if}
     <DemoSplash dismissed={splashDismissed} />
+    {#if !splashDismissed}
+      <!-- Boot narration over the splash (splash z-index is 99999;
+           the fast-forward overlay carrying the same message sits
+           UNDER it and is invisible during boot). The reveal is
+           CSS-delayed 600ms so a fast boot never flashes it;
+           visitors who wait learn why they wait. -->
+      <div class="boot-status" role="status">
+        <span class="boot-status-spinner" aria-hidden="true"></span>
+        <span>{m.demo_preparing()}</span>
+      </div>
+    {/if}
   </QueryClientProvider>
 </div>
 
@@ -1138,6 +1261,54 @@
   @keyframes fast-forward-reveal {
     to {
       opacity: 1;
+    }
+  }
+
+  /* Boot narration over the splash (z-index above the injected
+     splash's 99999). Same delayed-reveal pattern as the fast-forward
+     overlay, longer delay: sub-600ms boots never show it. */
+  .boot-status {
+    position: fixed;
+    inset: auto 0 12%;
+    z-index: 100000;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0 2rem;
+    text-align: center;
+    font-size: 0.8125rem;
+    line-height: 1.4;
+    color: #666;
+    opacity: 0;
+    animation: fast-forward-reveal 400ms ease 600ms forwards;
+  }
+
+  :global(.dark) .boot-status {
+    color: #aaa;
+  }
+
+  .boot-status-spinner {
+    width: 1.25rem;
+    height: 1.25rem;
+    border: 2px solid currentColor;
+    border-top-color: transparent;
+    border-radius: 50%;
+    animation:
+      fast-forward-reveal 400ms ease 600ms forwards,
+      boot-status-spin 0.9s linear infinite;
+    opacity: 0;
+  }
+
+  @keyframes boot-status-spin {
+    to {
+      transform: rotate(360deg);
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .boot-status-spinner {
+      animation: fast-forward-reveal 400ms ease 600ms forwards;
     }
   }
 

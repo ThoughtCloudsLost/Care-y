@@ -72,6 +72,14 @@ export interface LocationStoreDeps {
    * to. Same getter pattern as getTicketDetailId.
    */
   readonly getArticleDetailId: () => string;
+  /**
+   * Whether the background login has settled (success or failure).
+   * While false, the phone rests hidden behind the boot splash, so a
+   * failed convergence must NOT correct the story to the phone's
+   * screen: the linked location stands, and the phone is re-driven
+   * to it once the background login lands.
+   */
+  readonly isBootSettled: () => boolean;
 }
 
 export class DemoLocationStore {
@@ -174,6 +182,14 @@ export class DemoLocationStore {
       );
 
       if (!converged) {
+        if (!this.deps.isBootSettled()) {
+          // The phone is still behind the boot splash: its actual
+          // screen is hidden, so correcting the story to it would
+          // yank a deep-linked visitor to the login section for no
+          // visible reason. Leave the intended location standing;
+          // PhoneApp re-drives it when the background login settles.
+          return;
+        }
         if (import.meta.env.DEV) {
           this.logConvergenceDiagnostic(sectionId, subSlug, afterForce);
         }

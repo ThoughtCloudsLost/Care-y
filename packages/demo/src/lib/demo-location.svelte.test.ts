@@ -37,6 +37,10 @@ function createHarness(initial?: Partial<FakePhone>) {
     });
   });
 
+  // Settled by default so existing convergence tests exercise the
+  // correction path; boot-window tests flip it to false.
+  const boot = { settled: true };
+
   const store = createDemoLocationStore({
     getPhone: (): PhoneScreenState => ({
       feature: phone.feature,
@@ -48,6 +52,7 @@ function createHarness(initial?: Partial<FakePhone>) {
     ensureScreen,
     getTicketDetailId: () => "tk-0001",
     getArticleDetailId: () => "kb-0001",
+    isBootSettled: () => boot.settled,
   });
 
   /** Resolve every pending chain and flush the .finally continuations. */
@@ -58,7 +63,7 @@ function createHarness(initial?: Partial<FakePhone>) {
     await new Promise<void>((resolve) => setTimeout(resolve, 0));
   }
 
-  return { store, phone, commands, settleChain };
+  return { store, phone, commands, settleChain, boot };
 }
 
 describe("DemoLocationStore", () => {
@@ -112,6 +117,42 @@ describe("DemoLocationStore", () => {
       await settleChain();
 
       expect(store.location).toEqual({ sectionId: "login", subSlug: null });
+      expect(store.origin).toBe("phone-correction");
+    });
+
+    it("never corrects while the background login has not settled", async () => {
+      const { store, settleChain, boot } = createHarness();
+      boot.settled = false;
+
+      // A deep link lands while the phone is still keying behind the
+      // boot splash. The phone never leaves the login form, but the
+      // linked location must stand: correcting would yank the visitor
+      // to the login section for no visible reason.
+      store.setLocation("dashboard", null, "deep-link");
+      await settleChain();
+      await settleChain();
+
+      expect(store.location).toEqual({
+        sectionId: "dashboard",
+        subSlug: null,
+      });
+      expect(store.origin).toBe("deep-link");
+    });
+
+    it("corrects again once the background login settles", async () => {
+      const { store, settleChain, boot } = createHarness();
+      boot.settled = false;
+      store.setLocation("dashboard", null, "deep-link");
+      await settleChain();
+      await settleChain();
+
+      // Background login lands; PhoneApp re-selects the standing
+      // location. The phone STILL failing to converge now corrects.
+      boot.settled = true;
+      store.setLocation("dashboard", null, "deep-link");
+      await settleChain();
+      await settleChain();
+
       expect(store.origin).toBe("phone-correction");
     });
 

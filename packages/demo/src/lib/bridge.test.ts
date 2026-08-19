@@ -50,9 +50,23 @@ describe("DemoBridge interface", () => {
       completeLogin: () => undefined,
       setDark: () => undefined,
       setRole: () => undefined,
+      setLocale: () => undefined,
       subscribe: () => () => undefined,
       subscribeFlow: () => () => undefined,
     };
     expect(typeof stub.setRole).toBe("function");
+  });
+
+  it("requires setLocale in the interface shape", () => {
+    const stub: DemoBridge = {
+      setLocation: () => undefined,
+      completeLogin: () => undefined,
+      setDark: () => undefined,
+      setRole: () => undefined,
+      setLocale: () => undefined,
+      subscribe: () => () => undefined,
+      subscribeFlow: () => () => undefined,
+    };
+    expect(typeof stub.setLocale).toBe("function");
   });
 });
