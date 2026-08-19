@@ -28,7 +28,7 @@ import {
   type SectionId,
 } from "./scroll-sections.js";
 import type { DemoBridge, DemoBridgeState, DemoTopic } from "./bridge.js";
-import { shouldBackstopUnmute } from "./scroll-intent-guard.js";
+import { backstopDecision } from "./scroll-intent-guard.js";
 import {
   readingLineY,
   scrollTargetFor,
@@ -93,10 +93,18 @@ export function createScrollEngine(
   // The one location the page renders: a mirror of the bridge state.
   let mirror: DemoBridgeState | undefined = $state();
 
+  // Before the bridge exists (phone iframe still booting on a hard
+  // reload), present the deep-linked section directly from the hash.
+  // Falling back to the first section would show "Login and security"
+  // for the whole phone boot on every deep-linked reload.
+  const initialHash = parseHash(window.location.hash);
+
   const activeSection: SectionId = $derived(
-    mirror?.location.sectionId ?? "login",
+    mirror?.location.sectionId ?? initialHash?.sectionId ?? "login",
   );
-  const activeSub: string | null = $derived(mirror?.location.subSlug ?? null);
+  const activeSub: string | null = $derived(
+    mirror?.location.subSlug ?? initialHash?.subSlug ?? null,
+  );
 
   // Last sub requested from a settle, so one settle sends one intent
   // while the store's echo is still in flight.
@@ -124,6 +132,10 @@ export function createScrollEngine(
   // every normal disarm path so it only fires when something goes wrong.
   let suppressionTimeout: ReturnType<typeof setTimeout> | undefined;
 
+  // Whether the current arming already spent its healing re-align.
+  // Reset on every armSuppression so each transition gets one retry.
+  let realignAttempted = false;
+
   /** Arm suppression for a given target location. The hard timeout is
    *  a backstop that only unmutes when the derived location matches
    *  the target, preventing a mid-animation expiry from leaking stale
@@ -135,28 +147,52 @@ export function createScrollEngine(
   }): void {
     suppressSettle = true;
     suppressionTarget = target ?? null;
+    realignAttempted = false;
     clearTimeout(suppressionTimeout);
+    suppressionTimeout = setTimeout(runBackstop, 1000);
+  }
+
+  /** Backstop body. Aligned: unmute. Misaligned with a target and no
+   *  retry spent: re-align once against the settled geometry. The
+   *  first alignment can land short when geometry moves under it (the
+   *  preset spring resizing the frame, a hole re-layout past the
+   *  fixed-point cap), leaving the derived selection on a neighboring
+   *  sub; unmuting then lets that stale position fire a page-scroll
+   *  intent that overrides the visitor's click. Only after the retry
+   *  also misses does it surrender and unmute on a short fuse. */
+  function runBackstop(): void {
+    const loc = derivedLocation;
+    const decision = backstopDecision(
+      suppressionTarget,
+      loc?.sectionId ?? null,
+      loc?.subSlug ?? null,
+      realignAttempted,
+    );
+
+    if (decision === "unmute") {
+      suppressSettle = false;
+      suppressionTarget = null;
+      return;
+    }
+
+    if (decision === "realign" && suppressionTarget !== null) {
+      realignAttempted = true;
+      void alignToLocation(
+        suppressionTarget.section,
+        suppressionTarget.sub,
+        "page-click",
+      );
+      suppressionTimeout = setTimeout(runBackstop, 1000);
+      return;
+    }
+
+    // Surrender: still misaligned after the re-align. Unmute on a
+    // short fuse so the derived selection is not muted indefinitely;
+    // the condition-based disarm still wins if alignment lands first.
     suppressionTimeout = setTimeout(() => {
-      const loc = derivedLocation;
-      if (
-        shouldBackstopUnmute(
-          suppressionTarget,
-          loc?.sectionId ?? null,
-          loc?.subSlug ?? null,
-        )
-      ) {
-        suppressSettle = false;
-        suppressionTarget = null;
-      } else {
-        // Still misaligned: re-arm with a shorter backstop. The
-        // condition-based disarm in the derived-intent effect will
-        // clear it once the derived position settles.
-        suppressionTimeout = setTimeout(() => {
-          suppressSettle = false;
-          suppressionTarget = null;
-        }, 500);
-      }
-    }, 1000);
+      suppressSettle = false;
+      suppressionTarget = null;
+    }, 500);
   }
 
   /** Disarm suppression and cancel the hard timeout. */

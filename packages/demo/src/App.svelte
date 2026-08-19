@@ -38,7 +38,6 @@
     createPeekController,
     COMMIT_DRAG_PX,
   } from "$demo/peek-controller.svelte.js";
-  import { createEnginePrewarm } from "$demo/engine-prewarm.svelte.js";
   import type { PeekFirePayload } from "$demo/clip-registry.js";
   import {
     createScrollEngine,
@@ -141,11 +140,10 @@
   const geo = createFrameGeometry(() => topChromeHeight());
 
   // -----------------------------------------------------------------------
-  // Peek controller + engine prewarm
+  // Peek controller
   // -----------------------------------------------------------------------
 
   const peekCtrl = createPeekController(geo, () => topChromeHeight());
-  const prewarm = createEnginePrewarm();
 
   /** Still captured from the clip's current frame at peek fire time. */
   let capturedStill: CapturedStill | null = $state(null);
@@ -162,10 +160,9 @@
   /** Whether the peek is in a non-idle phase (active for UI gating). */
   const peekActive: boolean = $derived(peekCtrl.phase !== "idle");
 
-  // Tear down observers and listeners when the component unmounts
+  // Tear down listeners when the component unmounts
   $effect(() => {
     return () => {
-      prewarm.destroy();
       scrollEngine.destroy();
       unsubscribe?.();
       unsubscribeFlow?.();
@@ -591,10 +588,6 @@
     capturedStill = null;
   }
 
-  function handlePrewarmElement(el: HTMLElement): void {
-    prewarm.observe(el);
-  }
-
   // -----------------------------------------------------------------------
   // Bridge + phone state
   // -----------------------------------------------------------------------
@@ -653,6 +646,7 @@
     // Reset progress on restart/reload
     progress.reset();
     b.setDark(dark);
+    b.setLocale(uiLocale);
 
     // A fresh bridge means a fresh phone, so the band starts from an
     // empty timeline and fills from this bridge's events only.
@@ -872,20 +866,12 @@
   // restart (search string is preserved) and is not clobbered by resizes.
   const demoMode = createDemoMode(() => isNarrow);
 
-  // In read mode the DemoFrame mounts only when the prewarm latch fires
-  // or a peek opens (whichever comes first). Once mounted it stays
-  // mounted for the page's lifetime so the iframe is never torn down.
-  let readMountLatch = $state(false);
-
-  $effect(() => {
-    if (demoMode.mode === "read" && (prewarm.warm || peekActive)) {
-      readMountLatch = true;
-    }
-  });
-
-  const frameShouldMount: boolean = $derived(
-    demoMode.mode === "walk" || readMountLatch,
-  );
+  // The phone iframe mounts eagerly in both modes so the PGlite engine
+  // boots and background keying starts on page load. The visitor never
+  // sees the phone logging in; by the time they leave the entry page,
+  // keying has completed and the phone shows the signed-in state.
+  // Visibility is controlled separately by frameVisible (CSS hide in
+  // read mode until peek opens); see the DemoFrame in the template.
 
   // In read mode the floating frame is CSS-hidden when the peek
   // controller is idle, and shown during any peek phase.
@@ -970,6 +956,10 @@
     document.documentElement.lang = next;
     document.documentElement.dir = getTextDirection(next);
     uiLocale = next;
+
+    // Push locale to the phone iframe (one-way: outer -> phone).
+    // Phone-side locale switches do NOT propagate back to the outer page.
+    bridge?.setLocale(next);
 
     // The flow re-renders with new copy; re-measure the reading line
     void tick().then(() => scrollEngine.remeasure());
@@ -1222,15 +1212,13 @@
     ></div>
   {/if}
 
-  {#if frameShouldMount}
-    <DemoFrame
-      {dark}
-      {geo}
-      onbridgeready={handleBridgeReady}
-      gestureActive={gestureActive || peekActive}
-      bind:this={frameRef}
-    />
-  {/if}
+  <DemoFrame
+    {dark}
+    {geo}
+    onbridgeready={handleBridgeReady}
+    gestureActive={gestureActive || peekActive}
+    bind:this={frameRef}
+  />
 
   <!-- Peek still: positioned over the screen area (inside the bezel),
        shown while a still exists and the peek is not idle. -->
@@ -1323,7 +1311,6 @@
                 onpeeksecondarytap={handlePeekSecondaryTap}
                 onpeekrelease={handlePeekRelease}
                 onpeekcancel={handlePeekCancel}
-                onelement={handlePrewarmElement}
               />
               <div class="story-spacer"></div>
             </div>

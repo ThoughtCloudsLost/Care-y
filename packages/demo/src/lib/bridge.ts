@@ -15,6 +15,7 @@
  */
 
 import type { RoleIdValue } from "@care-y/shared";
+import type { Locale } from "$lib/paraglide/runtime.js";
 
 // -----------------------------------------------------------------------
 // Feature and detail types
@@ -375,6 +376,15 @@ export interface DemoBridge {
    * when the role is already current.
    */
   setRole(role: RoleIdValue): void;
+  /**
+   * Switch the phone's UI locale. Updates the reactive locale state
+   * so all visible paraglide messages re-render without a reload.
+   *
+   * Locale flow is one-way: the outer page pushes to the phone.
+   * Phone-side locale switches (LanguagePicker, avatar panel) do NOT
+   * propagate back to the outer page.
+   */
+  setLocale(locale: Locale): void;
   /**
    * Subscribe to state changes. The callback fires immediately with
    * the current state and again on every change. Returns an

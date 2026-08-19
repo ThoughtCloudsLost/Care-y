@@ -31,3 +31,38 @@ export function shouldBackstopUnmute(
   if (derivedSection === null) return true;
   return derivedSection === target.section && derivedSub === target.sub;
 }
+
+// -----------------------------------------------------------------------
+// Backstop action
+// -----------------------------------------------------------------------
+
+export type BackstopDecision = "unmute" | "realign" | "surrender";
+
+/**
+ * What the suppression backstop should do when it fires.
+ *
+ * - "unmute": the derived position reached the target (or no target
+ *   was armed); lift suppression normally.
+ * - "realign": the page is misaligned and no healing re-align has
+ *   run yet for this arming. The first alignment can land short when
+ *   geometry moves under it (the preset spring resizing the frame, a
+ *   late font swap, a hole re-layout past the fixed-point cap), and
+ *   the derived selection then sits on a neighboring sub forever.
+ *   Re-aligning against the settled geometry reaches the target and
+ *   keeps the visitor's click from being overridden by a stale
+ *   page-scroll intent.
+ * - "surrender": still misaligned after the re-align; give up and
+ *   let the caller schedule the final unmute so the derived
+ *   selection is not muted indefinitely.
+ */
+export function backstopDecision(
+  target: { section: SectionId; sub: string | null } | null,
+  derivedSection: SectionId | null,
+  derivedSub: string | null,
+  realignAttempted: boolean,
+): BackstopDecision {
+  if (shouldBackstopUnmute(target, derivedSection, derivedSub)) {
+    return "unmute";
+  }
+  return realignAttempted ? "surrender" : "realign";
+}
