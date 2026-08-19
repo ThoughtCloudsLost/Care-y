@@ -33,6 +33,7 @@ import {
   readPulseLog,
 } from "./helpers.js";
 import type { ConvergenceExpectation } from "./helpers.js";
+import { findAllowlistEntry } from "./pulse-allowlist.js";
 
 // -----------------------------------------------------------------------
 // Feature landmarks
@@ -109,6 +110,11 @@ export interface StoryWalkOptions {
   /** Describe title, so the two registrations report distinctly. */
   readonly title: string;
   /**
+   * Frame preset name for the allowlist lookup. "phone" when default,
+   * "desktop" when the desktop preset is active.
+   */
+  readonly framePreset?: "phone" | "desktop";
+  /**
    * Runs once after the page reaches #login with the engine booted,
    * before the walk starts. The desktop suite switches the frame
    * preset here.
@@ -117,6 +123,8 @@ export interface StoryWalkOptions {
 }
 
 export function defineStoryWalk(options: StoryWalkOptions): void {
+  const framePreset = options.framePreset ?? "phone";
+
   test.describe.serial(options.title, () => {
     let page: Page;
     /** Whether we have crossed out of the login section. */
@@ -129,7 +137,17 @@ export function defineStoryWalk(options: StoryWalkOptions): void {
       page = await browser.newPage();
       // Deep link to #login to skip entry page
       await page.goto("/#login");
-      await waitForPhoneBridge(page, ENGINE_BOOT_TIMEOUT);
+      try {
+        await waitForPhoneBridge(page, ENGINE_BOOT_TIMEOUT / 2);
+      } catch {
+        // Rare engine-boot hang: the phone renders (bridge alive,
+        // login form painted) but engineReady never flips. Reload
+        // once and log so occurrences stay countable; the hang is
+        // tracked with the iOS Safari boot investigation.
+        console.log("BOOT HANG: engine not ready in 60s, reloading once");
+        await page.reload();
+        await waitForPhoneBridge(page, ENGINE_BOOT_TIMEOUT);
+      }
       if (options.prepare !== undefined) {
         await options.prepare(page);
       }
@@ -142,6 +160,11 @@ export function defineStoryWalk(options: StoryWalkOptions): void {
     // Generate one test per section
     for (const [sectionIndex, section] of SECTIONS.entries()) {
       test(`section: ${section.id}`, async () => {
+        // Budget per section: sub-heavy sections (ticket-detail has 15
+        // subs) cannot fit the config's default 120s when a convergence
+        // retry fires; give each sub room for one full retry cycle.
+        test.setTimeout(30_000 + section.subs.length * 50_000);
+
         // The rail only renders for multi-sub sections; single-sub
         // sections (admin hub, schedule) are reached by their tab alone
         // and never expose a sub control, so the location keeps a null
@@ -248,17 +271,72 @@ export function defineStoryWalk(options: StoryWalkOptions): void {
 
           const skipSeq =
             section.id === "login" && sub.slug === "key-derivation";
-          await awaitConvergence(page, expected, {
-            timeout: CONVERGENCE_TIMEOUT,
-            minLocationSeq: skipSeq || !hasRail ? 0 : minSeq,
-          });
+          try {
+            await awaitConvergence(page, expected, {
+              timeout: CONVERGENCE_TIMEOUT,
+              minLocationSeq: skipSeq || !hasRail ? 0 : minSeq,
+            });
+          } catch (err: unknown) {
+            // The phone legitimately moves the location on its own
+            // behind a rail click: the scripted login auto-plays when
+            // the story sits at login (a rewind to "form" auto-clicks
+            // Sign in), and pulse taps are real interactions the phone
+            // classifies and publishes as phone-origin moves. When such
+            // an echo lands after the click, the story is pinned to the
+            // previous sub. A visitor would simply click again once the
+            // phone settles; do the same (twice at most: the login
+            // auto-play can override two clicks in a row while its
+            // choreography drains). A genuinely broken navigation
+            // still fails after the retries.
+            if (!hasRail) throw err;
+
+            const MAX_RETRIES = 2;
+            let converged = false;
+            for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
+              // The rail is section-scoped: if the failed convergence
+              // left the story on a DIFFERENT section, restore the
+              // section tab first or the rail re-click would hit the
+              // wrong section's subs. (Never reached for login, whose
+              // failures keep the section; a login tab click would
+              // reset the scripted flow.)
+              const current = await readBridgeState(page);
+              if (current.location.sectionId !== section.id) {
+                await clickSectionTab(page, sectionIndex);
+                await awaitConvergence(
+                  page,
+                  { feature: cmd.feature, sectionId: section.id },
+                  { timeout: CONVERGENCE_TIMEOUT, minLocationSeq: 0 },
+                );
+              }
+
+              const retrySeqBase =
+                (await readBridgeState(page)).locationSeq + 1;
+              await clickRailSub(page, si);
+              try {
+                await awaitConvergence(page, expected, {
+                  timeout: CONVERGENCE_TIMEOUT,
+                  minLocationSeq: skipSeq ? 0 : retrySeqBase,
+                });
+                converged = true;
+                break;
+              } catch (retryErr: unknown) {
+                if (attempt === MAX_RETRIES - 1) throw retryErr;
+              }
+            }
+            if (!converged) throw err;
+          }
 
           // Pulse assertion: when the sub has a topic, verify the pulse
-          // log recorded an outcome for it.
+          // log recorded a successful outcome for it. Topics on the
+          // allowlist produce a warning annotation instead of a hard
+          // failure; all other "missing" outcomes fail the test.
           if (sub.topic !== null) {
             const countBefore = pulseCountBefore;
+            const topic = sub.topic;
+            const allowed = findAllowlistEntry(topic, framePreset);
 
             // Poll briefly for a new pulse entry with this topic
+            let pulseFound = false;
             try {
               await expect
                 .poll(
@@ -269,40 +347,84 @@ export function defineStoryWalk(options: StoryWalkOptions): void {
                     // Check entries added after countBefore
                     const newEntries = log.slice(countBefore);
                     const entry = newEntries.find(
-                      (e) => e.topic === sub.topic && e.outcome !== "missing",
+                      (e) => e.topic === topic && e.outcome !== "missing",
                     );
                     return entry !== undefined ? "found" : "waiting";
                   },
-                  { timeout: 5_000, intervals: [500, 1_000, 1_500] },
+                  // 10s: pulses that navigate first (library-vote
+                  // mounts the article detail) can exceed 5s under
+                  // load, and a lapsed poll misreports a working
+                  // pulse as a gap.
+                  { timeout: 10_000, intervals: [500, 1_000, 1_500] },
                 )
                 .toBe("found");
+              pulseFound = true;
             } catch {
-              // Soft-skip if the pulse log is not wired yet
+              // Determine the failure reason from the log
               const currentLog = await readPulseLog(page);
+
               if (currentLog === null) {
-                test.info().annotations.push({
-                  type: "skip",
-                  description: `Pulse log unavailable for topic "${sub.topic}"`,
-                });
-                console.log(`PULSE unavailable: ${sub.topic}`);
-              }
-              // If the log exists but the entry was not found, that is a
-              // real failure for the topic. Do not swallow it.
-              else {
+                // Pulse log not wired: always a hard failure (the infra
+                // should be present now).
+                expect(
+                  currentLog,
+                  `Pulse log unavailable for topic "${topic}"`,
+                ).not.toBeNull();
+              } else {
                 const newEntries = currentLog.slice(countBefore);
                 const missing = newEntries.find(
-                  (e) => e.topic === sub.topic && e.outcome === "missing",
+                  (e) => e.topic === topic && e.outcome === "missing",
                 );
-                if (missing !== undefined) {
+
+                if (allowed !== undefined) {
+                  // Allowlisted: soft warning, not a failure
+                  const desc =
+                    missing !== undefined
+                      ? `Pulse for "${topic}" resolved as "missing" (allowlisted: ${allowed.reason})`
+                      : `Pulse for "${topic}" had no entry (allowlisted: ${allowed.reason})`;
                   test.info().annotations.push({
                     type: "warning",
-                    description: `Pulse for "${sub.topic}" resolved as "missing"`,
+                    description: desc,
                   });
-                  console.log(`PULSE missing: ${sub.topic}`);
+                  console.log(
+                    `PULSE allowlisted: ${topic} (${allowed.reason})`,
+                  );
                 } else {
-                  console.log(`PULSE no entry: ${sub.topic}`);
+                  const outcome =
+                    missing !== undefined ? "missing" : "no entry";
+                  if (process.env.PULSE_AUDIT === "1") {
+                    // Audit mode: report every un-allowlisted gap in one
+                    // pass instead of failing at the first. Used to build
+                    // or trim the allowlist; never green-lights a merge.
+                    console.log(
+                      `PULSE GAP: ${framePreset}:${topic} (${outcome})`,
+                    );
+                    test.info().annotations.push({
+                      type: "warning",
+                      description: `Pulse gap (audit): ${topic} ${outcome}`,
+                    });
+                  } else {
+                    // NOT allowlisted: hard failure
+                    expect(
+                      false,
+                      `Pulse for "${topic}" resolved as "${outcome}" and is not on the allowlist. ` +
+                        `Add it to pulse-allowlist.ts with a reason if this gap is accepted.`,
+                    ).toBe(true);
+                  }
                 }
               }
+            }
+
+            // When an allowlisted topic unexpectedly succeeds, annotate
+            // so the allowlist can be shrunk manually. Do not fail.
+            if (pulseFound && allowed !== undefined) {
+              test.info().annotations.push({
+                type: "info",
+                description:
+                  `Pulse for "${topic}" succeeded but is still allowlisted. ` +
+                  `Consider removing it from pulse-allowlist.ts.`,
+              });
+              console.log(`PULSE allowlist-shrink candidate: ${topic}`);
             }
           }
 

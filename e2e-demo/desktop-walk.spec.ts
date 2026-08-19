@@ -10,5 +10,6 @@ import { enterDesktopPreset } from "./helpers.js";
 
 defineStoryWalk({
   title: "story walk (desktop frame)",
+  framePreset: "desktop",
   prepare: enterDesktopPreset,
 });

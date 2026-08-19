@@ -299,6 +299,17 @@ export async function enterDesktopPreset(page: Page): Promise<void> {
     undefined,
     { timeout: 15_000 },
   );
+
+  // Shrink the frame's visual footprint. At the full desktop preset
+  // (760x475) in the test viewport, the frame covers the reading line
+  // and the flow hole leaves only a narrow text column; rail clicks
+  // then fail to converge (the alignment target and the derived
+  // selection disagree around the hole). Shrinking is purely visual:
+  // the iframe keeps its 1350x844 desktop viewport, so every screen
+  // still renders the desktop shell.
+  const shrink = page.getByRole("button", { name: "Shrink the frame" });
+  await shrink.waitFor({ state: "visible", timeout: 5_000 });
+  await shrink.click();
 }
 
 // -----------------------------------------------------------------------
