@@ -78,13 +78,21 @@ import type {
   OrgDecryptBatchRequest,
   ExportOrgSecretKeyRequest,
   AliasHashRequest,
+  DetectMergeCandidatesRequest,
+  MergeCandidate,
   WorkerRequest,
   WorkerRequestType,
   RewrapEvent,
   RewrapResultEvent,
   SharedWorkerState,
 } from "./crypto-protocol.js";
-import { normalizeAlias } from "@care-y/shared";
+import {
+  normalizeAlias,
+  normalizeContactPhone,
+  normalizeContactEmail,
+  looksLikePhone,
+  looksLikeEmail,
+} from "@care-y/shared";
 import { TkCache } from "./tk-cache.js";
 
 // ── Sink type ──────────────────────────────────────────────────────
@@ -1263,6 +1271,248 @@ function handleGetOrgPublicKey(id: number, sink: Sink): void {
   sink(msg);
 }
 
+// ── Merge candidate detection ──────────────────────────────────────
+
+/**
+ * Per-client contact fingerprint: normalized phone/email values extracted
+ * from decrypted intake responses and telephony phone records.
+ */
+interface ClientContactFingerprint {
+  readonly clientId: string;
+  readonly phones: readonly string[];
+  readonly emails: readonly string[];
+}
+
+/**
+ * Extracts contact values from a decrypted intake form response blob,
+ * using the field-id-to-role map for tagged extraction and falling back
+ * to pattern matching on untagged text fields.
+ */
+/** Exported for tests. */
+export function extractContactsFromResponse(
+  responseJson: string,
+  fieldRoles: ReadonlyMap<string, string>,
+): { phones: string[]; emails: string[] } {
+  const phones: string[] = [];
+  const emails: string[] = [];
+
+  let parsed: { answers?: unknown[] };
+  try {
+    parsed = JSON.parse(responseJson) as { answers?: unknown[] };
+  } catch {
+    return { phones, emails };
+  }
+
+  if (!Array.isArray(parsed.answers)) return { phones, emails };
+
+  for (const answer of parsed.answers) {
+    if (
+      typeof answer !== "object" ||
+      answer === null ||
+      !("fieldId" in answer) ||
+      !("value" in answer)
+    ) {
+      continue;
+    }
+    const a = answer as { fieldId: string; value: unknown; fieldType?: string };
+    if (typeof a.value !== "string") continue;
+
+    const role = fieldRoles.get(a.fieldId);
+
+    // Role-tagged extraction (priority)
+    if (role === "phone-contact") {
+      const norm = normalizeContactPhone(a.value);
+      if (norm != null) phones.push(norm);
+      continue;
+    }
+    if (role === "email-contact") {
+      const norm = normalizeContactEmail(a.value);
+      if (norm != null) emails.push(norm);
+      continue;
+    }
+
+    // Default-form stable ids: "default:phone" / "default:email"
+    if (a.fieldId === "default:phone") {
+      const norm = normalizeContactPhone(a.value);
+      if (norm != null) phones.push(norm);
+      continue;
+    }
+    if (a.fieldId === "default:email") {
+      const norm = normalizeContactEmail(a.value);
+      if (norm != null) emails.push(norm);
+      continue;
+    }
+
+    // Pattern-match fallback for untagged text fields only
+    if (role != null) continue; // tagged field with a non-contact role, skip
+    if (looksLikePhone(a.value)) {
+      const norm = normalizeContactPhone(a.value);
+      if (norm != null) phones.push(norm);
+    } else if (looksLikeEmail(a.value)) {
+      const norm = normalizeContactEmail(a.value);
+      if (norm != null) emails.push(norm);
+    }
+  }
+
+  return { phones, emails };
+}
+
+function handleDetectMergeCandidates(
+  req: DetectMergeCandidatesRequest,
+  sink: Sink,
+): void {
+  if (!requireKeyed(sink, req.id, "detectMergeCandidates")) return;
+
+  const sodium = requireSodium();
+  const fingerprints: ClientContactFingerprint[] = [];
+
+  for (const client of req.clients) {
+    const clientPhones: string[] = [];
+    const clientEmails: string[] = [];
+
+    // Telephony phone (already decrypted, passed from main thread)
+    if (client.decryptedPhone != null) {
+      const norm = normalizeContactPhone(client.decryptedPhone);
+      if (norm != null) clientPhones.push(norm);
+    }
+
+    // Decrypt intake response blobs and extract contacts
+    for (const resp of client.intakeResponses) {
+      let tk: Uint8Array | null = null;
+
+      // Try intake wrap first (sealed box), then vol-wrap (ECIES)
+      if (resp.intakeWrap != null && resp.intakeWrap !== "") {
+        const pk = orgPublicKey;
+        const sk = orgSecret;
+        if (pk != null && sk != null) {
+          try {
+            const sealedWrap = decode(resp.intakeWrap);
+            tk = sodium.crypto_box_seal_open(sealedWrap, pk, sk);
+            tkCache.set(resp.ticketId, tk);
+          } catch {
+            // Intake wrap unseal failed; skip this response
+            continue;
+          }
+        }
+      }
+
+      if (!tk) {
+        // Try ECIES vol-wrap
+        const cached = tkCache.get(resp.ticketId);
+        if (cached) {
+          tk = cached;
+        } else {
+          const vp = volPrivate;
+          if (!vp) continue;
+          try {
+            const ephemeralPoint = decode(resp.ephemeralPoint);
+            const nonce = decode(resp.nonce);
+            const wrappedKey = decode(resp.wrappedKey);
+            tk = eciesDecrypt(
+              ephemeralPoint as RistrettoPoint,
+              nonce as Nonce,
+              wrappedKey,
+              vp,
+            );
+            tkCache.set(resp.ticketId, tk);
+          } catch {
+            continue;
+          }
+        }
+      }
+
+      // Decrypt the response blob
+      try {
+        const ciphertextBuf = decode(resp.encryptedResponse);
+        const aad = buildContentAad(resp.ticketId, "intake-response");
+        const plaintext = decryptContent(
+          ciphertextBuf as Ciphertext,
+          tk as SymmetricKey,
+          aad,
+        );
+
+        try {
+          const responseJson = textDecoder.decode(plaintext);
+          const contacts = extractContactsFromResponse(
+            responseJson,
+            resp.fieldRoles,
+          );
+          clientPhones.push(...contacts.phones);
+          clientEmails.push(...contacts.emails);
+        } finally {
+          sodium.memzero(plaintext);
+        }
+      } catch {
+        // Decrypt failed for this response; continue with others
+      }
+    }
+
+    if (clientPhones.length > 0 || clientEmails.length > 0) {
+      fingerprints.push({
+        clientId: client.clientId,
+        phones: clientPhones,
+        emails: clientEmails,
+      });
+    }
+  }
+
+  // Compare all pairs for matching contacts
+  const candidates: MergeCandidate[] = [];
+  const seen = new Set<string>();
+
+  for (let i = 0; i < fingerprints.length; i++) {
+    // eslint-disable-next-line security/detect-object-injection -- i is bounded by fingerprints.length in the for-loop condition
+    const a = fingerprints[i];
+    if (!a) continue;
+    for (let j = i + 1; j < fingerprints.length; j++) {
+      // eslint-disable-next-line security/detect-object-injection -- j is bounded by fingerprints.length in the for-loop condition
+      const b = fingerprints[j];
+      if (!b) continue;
+
+      const pairKey =
+        a.clientId < b.clientId
+          ? `${a.clientId}:${b.clientId}`
+          : `${b.clientId}:${a.clientId}`;
+      if (seen.has(pairKey)) continue;
+
+      // Check phone match
+      for (const phone of a.phones) {
+        if (b.phones.includes(phone)) {
+          candidates.push({
+            clientIdA: a.clientId < b.clientId ? a.clientId : b.clientId,
+            clientIdB: a.clientId < b.clientId ? b.clientId : a.clientId,
+            matchKind: "phone",
+          });
+          seen.add(pairKey);
+          break;
+        }
+      }
+      if (seen.has(pairKey)) continue;
+
+      // Check email match
+      for (const email of a.emails) {
+        if (b.emails.includes(email)) {
+          candidates.push({
+            clientIdA: a.clientId < b.clientId ? a.clientId : b.clientId,
+            clientIdB: a.clientId < b.clientId ? b.clientId : a.clientId,
+            matchKind: "email",
+          });
+          seen.add(pairKey);
+          break;
+        }
+      }
+    }
+  }
+
+  const msg: WorkerResponse = {
+    id: req.id,
+    ok: true,
+    type: "detectMergeCandidates",
+    candidates,
+  };
+  sink(msg);
+}
+
 // ── Dispatcher factory ──────────────────────────────────────────────
 
 export function createDispatcher(
@@ -1356,6 +1606,9 @@ export function createDispatcher(
           break;
         case "aliasHash":
           handleAliasHash(req, sink);
+          break;
+        case "detectMergeCandidates":
+          handleDetectMergeCandidates(req, sink);
           break;
         case "connect":
         case "disconnect":

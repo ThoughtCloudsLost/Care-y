@@ -35,6 +35,7 @@
   import QueueCards from "$lib/components/dashboard/QueueCards.svelte";
   import ActivitySection from "$lib/components/dashboard/ActivitySection.svelte";
   import KBSection from "$lib/components/dashboard/KBSection.svelte";
+  import MergeCandidatesSection from "$lib/components/dashboard/MergeCandidatesSection.svelte";
   import TicketAlert from "$lib/components/icons/TicketAlert.svelte";
   import TicketPause from "$lib/components/icons/TicketPause.svelte";
   import ViewSwitcher from "$lib/components/ViewSwitcher.svelte";
@@ -74,6 +75,8 @@
     fetchSweepToExhaustion,
   } from "$lib/tickets/create-list-read-state.svelte.js";
   import { isCryptoKeyed } from "$lib/crypto/crypto-keyed.svelte.js";
+  import { createMergeScan } from "$lib/composables/create-merge-scan.svelte.js";
+  import { GitMerge } from "@lucide/svelte";
   import type { TicketQuickAction } from "$lib/components/tickets/ticket-types.js";
   import { createHoldAction } from "$lib/composables/ticket-list/create-hold-action.svelte.js";
   import { createAssignFlow } from "$lib/composables/ticket-list/create-assign-flow.svelte.js";
@@ -353,6 +356,28 @@
       checklistQuery.data.items.length > 0,
   );
 
+  // --- Merge candidate detection (low-priority after dashboard settles) ---
+
+  const mergeScan = createMergeScan(() => ({
+    dashboardReady: ticketsQuery.isSuccess,
+    tickets: allTickets.map((t) => ({
+      id: t.id,
+      clientId: t.clientId,
+      keyWrap:
+        "keyWrap" in t && t.keyWrap
+          ? (t.keyWrap as {
+              ephemeralPoint: string;
+              nonce: string;
+              wrappedKey: string;
+            })
+          : null,
+      intakeWrap: "intakeWrap" in t ? t.intakeWrap : null,
+    })),
+    clientPhones: new SvelteMap<string, string>(),
+  }));
+
+  const showMergeCandidates = $derived(mergeScan.undismissed.length > 0);
+
   // --- Section scroll nav ---
 
   const showOnHold = $derived(
@@ -393,6 +418,13 @@
       label: () => m.dashboard_kb_heading(withTerms()),
       icon: BookOpen,
     });
+    if (showMergeCandidates) {
+      sections.push({
+        id: "merge-candidates",
+        label: m.mergeCandidates_heading,
+        icon: GitMerge,
+      });
+    }
     if (showNeedsAttention) {
       sections.push({
         id: "needs-attention",
@@ -591,6 +623,27 @@
     toastStore.show(m.feature_coming_soon());
   }
 
+  function resolveClientAlias(clientId: string): string | null {
+    const ticket = allTickets.find((t) => t.clientId === clientId);
+    if (!ticket) return null;
+    return orgCache.decrypt(
+      `client-alias:${clientId}`,
+      ticket.encryptedClientAlias,
+    );
+  }
+
+  function handleMergeReview(clientIdA: string, clientIdB: string): void {
+    void goto(
+      resolve(
+        `/admin/people?tab=clients&action=merge&clientA=${encodeURIComponent(clientIdA)}&clientB=${encodeURIComponent(clientIdB)}`,
+      ),
+    );
+  }
+
+  function handleMergeDismiss(clientIdA: string, clientIdB: string): void {
+    mergeScan.dismiss(clientIdA, clientIdB);
+  }
+
   // Login summary notification slot (6k provides content).
   let exposureNotificationVisible = $state(false);
 
@@ -682,6 +735,19 @@
       ontap={handleKBTap}
     />
   </div>
+
+  {#if showMergeCandidates}
+    <div id="section-merge-candidates" class="scroll-target" data-column="left">
+      <MergeCandidatesSection
+        candidates={mergeScan.undismissed}
+        expanded={!collapsedSections.has("merge-candidates")}
+        ontoggle={() => toggleSection("merge-candidates")}
+        resolveAlias={resolveClientAlias}
+        ondismiss={handleMergeDismiss}
+        onreview={handleMergeReview}
+      />
+    </div>
+  {/if}
 
   {#if showNeedsAttention}
     <div id="section-needs-attention" class="scroll-target" data-column="right">

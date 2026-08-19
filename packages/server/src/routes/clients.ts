@@ -35,11 +35,14 @@ import {
   suggestDuplicatesInputSchema,
 } from "@care-y/shared";
 import type { ClientService } from "../clients/client-service.js";
+import type { DismissalService } from "../clients/dismissal-service.js";
+import type { MergeScanService } from "../clients/merge-scan-service.js";
 import type { FieldEncryptor } from "../crypto/field-encryptor.js";
 import { maskPhone, formatPhone } from "../utils/sql.js";
 import { ForbiddenError } from "../errors.js";
 import type { Kysely } from "kysely";
 import type { TenantDatabase } from "../db/types.js";
+import { z } from "zod";
 
 // ---------------------------------------------------------------------------
 // Deps
@@ -60,6 +63,12 @@ export interface ClientRouterDeps {
     clientId: string,
     userId: string,
   ) => Promise<boolean>;
+  readonly createDismissalSvc?: (
+    db: Kysely<TenantDatabase>,
+  ) => DismissalService;
+  readonly createMergeScanSvc?: (
+    db: Kysely<TenantDatabase>,
+  ) => MergeScanService;
 }
 
 // ---------------------------------------------------------------------------
@@ -271,5 +280,89 @@ export function createClientRouter(deps: ClientRouterDeps) {
           };
         }),
       ),
+
+    /**
+     * Get the encrypted merge candidate dismissals blob.
+     * Returns null when no dismissals have been stored yet.
+     */
+    getDismissals: volunteerProcedure.query(
+      withErrorWrapping(async ({ ctx }) => {
+        if (!deps.createDismissalSvc) return null;
+        const svc = deps.createDismissalSvc(ctx.org.tenantDb);
+        const record = await svc.get();
+        if (!record) return null;
+        return {
+          encryptedDismissals: record.encryptedDismissals,
+          updatedAt: record.updatedAt.toISOString(),
+        };
+      }),
+    ),
+
+    /**
+     * Upsert the encrypted merge candidate dismissals blob.
+     * Ciphertext passthrough: the server never reads the content.
+     * Last-write-wins concurrency (see dismissal-service.ts).
+     */
+    putDismissals: volunteerProcedure
+      .input(
+        z.object({
+          encryptedDismissals: z.string().min(1).max(1_000_000),
+        }),
+      )
+      .mutation(
+        withErrorWrapping(async ({ ctx, input }) => {
+          if (!deps.createDismissalSvc) return;
+          const svc = deps.createDismissalSvc(ctx.org.tenantDb);
+          const buf = Buffer.from(input.encryptedDismissals, "base64");
+          await svc.put(buf);
+        }),
+      ),
+
+    /**
+     * Returns intake form response blobs + field role maps for merge
+     * candidate detection. Ciphertext only; decryption is browser-side.
+     */
+    mergeScanData: volunteerProcedure.query(
+      withErrorWrapping(async ({ ctx }) => {
+        if (!deps.createMergeScanSvc) {
+          return {
+            clients: [] as readonly {
+              clientId: string;
+              responses: readonly {
+                ticketId: string;
+                formId: string;
+                encryptedResponse: string;
+              }[];
+            }[],
+            fieldRoles: [] as readonly {
+              formId: string;
+              fieldId: string;
+              role: string;
+            }[],
+          };
+        }
+        const svc = deps.createMergeScanSvc(ctx.org.tenantDb);
+        const [clients, fieldRoles] = await Promise.all([
+          svc.getResponsesByClient(ctx.user.id),
+          svc.getFieldRoles(),
+        ]);
+
+        return {
+          clients: clients.map((c) => ({
+            clientId: c.clientId,
+            responses: c.responses.map((r) => ({
+              ticketId: r.ticketId,
+              formId: r.formId,
+              encryptedResponse: r.encryptedResponse.toString("base64url"),
+            })),
+          })),
+          fieldRoles: fieldRoles.map((fr) => ({
+            formId: fr.formId,
+            fieldId: fr.fieldId,
+            role: fr.role,
+          })),
+        };
+      }),
+    ),
   });
 }

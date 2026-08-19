@@ -308,6 +308,58 @@ export interface CreateTicketKeyRequest {
   readonly fields: readonly { name: string; plaintext: string }[];
 }
 
+// ── Merge candidate detection ──────────────────────────────────────
+
+/**
+ * Batch-decrypt intake form responses and telephony phone numbers to
+ * detect likely duplicate clients. The Worker decrypts each blob with
+ * the corresponding tk (via the existing tkCache/wrap machinery),
+ * normalizes contact values, and returns ONLY candidate pairs (client
+ * ids + match kind). Matched contact values never leave the Worker.
+ *
+ * fieldRoleMap maps fieldId -> role so the Worker can extract
+ * phone-contact / email-contact answers from custom-form responses
+ * without pattern matching.
+ */
+export interface DetectMergeCandidatesRequest {
+  readonly type: "detectMergeCandidates";
+  readonly id: number;
+  readonly clients: readonly MergeScanClient[];
+}
+
+/** Per-client data needed by the merge scan Worker op. */
+export interface MergeScanClient {
+  readonly clientId: string;
+  /**
+   * Telephony phone (already decrypted by the volunteer on the main
+   * thread via org-tier phone display). Null for web-intake-only clients.
+   */
+  readonly decryptedPhone: string | null;
+  /** Per-ticket intake response blobs for this client. */
+  readonly intakeResponses: readonly MergeScanIntakeResponse[];
+}
+
+export interface MergeScanIntakeResponse {
+  /** Ticket id that owns the response blob (AAD component). */
+  readonly ticketId: string;
+  /** ECIES key wrap for the ticket key. */
+  readonly ephemeralPoint: string;
+  readonly nonce: string;
+  readonly wrappedKey: string;
+  /** Intake wrap (sealed box). Null when the ticket has a vol-wrap. */
+  readonly intakeWrap: string | null;
+  /** Encrypted form response blob (nonce || ciphertext), base64. */
+  readonly encryptedResponse: string;
+  /** Field-id-to-role map from the form definition. */
+  readonly fieldRoles: ReadonlyMap<string, string>;
+}
+
+export interface MergeCandidate {
+  readonly clientIdA: string;
+  readonly clientIdB: string;
+  readonly matchKind: "phone" | "email";
+}
+
 // ── SharedWorker lifecycle requests ─────────────────────────────────
 
 /**
@@ -373,6 +425,7 @@ export type WorkerRequest =
   | ExportOrgSecretKeyRequest
   | GetOrgPublicKeyRequest
   | AliasHashRequest
+  | DetectMergeCandidatesRequest
   | ConnectRequest
   | DisconnectRequest;
 
@@ -572,6 +625,12 @@ export interface UnwrapIntakeTkResponse extends SuccessBase {
   }[];
 }
 
+export interface DetectMergeCandidatesResponse extends SuccessBase {
+  readonly type: "detectMergeCandidates";
+  /** Candidate pairs. Contains only client ids and match kind, never contact values. */
+  readonly candidates: readonly MergeCandidate[];
+}
+
 // ── SharedWorker lifecycle responses ────────────────────────────────
 
 export type SharedWorkerState = "READY" | "KEYED";
@@ -603,6 +662,7 @@ export type WorkerSuccessResponse =
   | UnwrapOrgKeyResponse
   | UnwrapTkResponse
   | UnwrapIntakeTkResponse
+  | DetectMergeCandidatesResponse
   | WrapWithVolPublicResponse
   | SealSelfBlobResponse
   | OpenSelfBlobResponse
