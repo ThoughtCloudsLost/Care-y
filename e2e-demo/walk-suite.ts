@@ -330,7 +330,14 @@ export function defineStoryWalk(options: StoryWalkOptions): void {
           // log recorded a successful outcome for it. Topics on the
           // allowlist produce a warning annotation instead of a hard
           // failure; all other "missing" outcomes fail the test.
-          if (sub.topic !== null) {
+          //
+          // Desktop-only subs (e.g. split-view) are skipped on the
+          // phone preset: the phone demo never shows them, so no pulse
+          // log entry is recorded and asserting one would always fail.
+          if (
+            sub.topic !== null &&
+            !(sub.desktopOnly === true && framePreset === "phone")
+          ) {
             const countBefore = pulseCountBefore;
             const topic = sub.topic;
             const allowed = findAllowlistEntry(topic, framePreset);
@@ -351,11 +358,12 @@ export function defineStoryWalk(options: StoryWalkOptions): void {
                     );
                     return entry !== undefined ? "found" : "waiting";
                   },
-                  // 10s: pulses that navigate first (library-vote
-                  // mounts the article detail) can exceed 5s under
-                  // load, and a lapsed poll misreports a working
-                  // pulse as a gap.
-                  { timeout: 10_000, intervals: [500, 1_000, 1_500] },
+                  // Must outlast the pulse resolver's 12s window
+                  // (POLL_TIMEOUT_LONG_MS): a pulse landing on a
+                  // still-compiling route (cold dev-server chunk
+                  // graph) records its outcome late, and a lapsed
+                  // poll misreports a working pulse as a gap.
+                  { timeout: 15_000, intervals: [500, 1_000, 2_000] },
                 )
                 .toBe("found");
               pulseFound = true;
@@ -378,6 +386,8 @@ export function defineStoryWalk(options: StoryWalkOptions): void {
 
                 if (allowed !== undefined) {
                   // Allowlisted: soft warning, not a failure
+                  const outcome =
+                    missing !== undefined ? "missing" : "no entry";
                   const desc =
                     missing !== undefined
                       ? `Pulse for "${topic}" resolved as "missing" (allowlisted: ${allowed.reason})`
@@ -387,7 +397,7 @@ export function defineStoryWalk(options: StoryWalkOptions): void {
                     description: desc,
                   });
                   console.log(
-                    `PULSE allowlisted: ${topic} (${allowed.reason})`,
+                    `PULSE allowlisted: ${topic} ${outcome} (${allowed.reason})`,
                   );
                 } else {
                   const outcome =

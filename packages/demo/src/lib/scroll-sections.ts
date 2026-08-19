@@ -42,6 +42,9 @@ export interface SubSection {
   readonly bodyKey: string;
   /** Route IDs this sub narrates (only present for route-specific subs). */
   readonly routes?: readonly string[];
+  /** When true, the pulse fires only at desktop width (1024px+). The
+   *  phone-width pulse is skipped entirely (no log entry). */
+  readonly desktopOnly?: boolean;
 }
 
 export interface Section {
@@ -322,6 +325,7 @@ export const SECTIONS: readonly Section[] = [
         topic: "split-view",
         headingKey: "demo_narrative_topic_split_view_heading",
         bodyKey: "demo_narrative_topic_split_view_body",
+        desktopOnly: true,
       },
     ],
   },
@@ -968,6 +972,9 @@ export interface PhoneCommand {
   readonly loginTarget: LoginAdvanceTarget | null;
   readonly openSearch: boolean;
   readonly pulseTopic: DemoTopic | null;
+  /** When true, the pulse fires only at desktop width (1024px+).
+   *  Resolved from the sub entry's desktopOnly flag (false when absent). */
+  readonly pulseDesktopOnly: boolean;
   /**
    * For "coming-soon" sections: the route slug that identifies which
    * unmapped route the phone should navigate to. Null for all narrated
@@ -989,12 +996,14 @@ export function resolvePhoneCommand(
   ticketDetailId: string,
   articleDetailId: string,
 ): PhoneCommand {
-  // Find the topic for this sub-section
+  // Find the topic and desktopOnly flag for this sub-section
   let pulseTopic: DemoTopic | null = null;
+  let pulseDesktopOnly = false;
   if (subSlug !== null) {
     const entry = subIndex.get(`${sectionId}/${subSlug}`);
     if (entry !== undefined) {
       pulseTopic = entry.sub.topic;
+      pulseDesktopOnly = entry.sub.desktopOnly === true;
     }
   }
 
@@ -1013,6 +1022,7 @@ export function resolvePhoneCommand(
         loginTarget,
         openSearch: false,
         pulseTopic,
+        pulseDesktopOnly,
         routeSlug: null,
       };
     }
@@ -1023,6 +1033,7 @@ export function resolvePhoneCommand(
         loginTarget: null,
         openSearch: false,
         pulseTopic,
+        pulseDesktopOnly,
         routeSlug: null,
       };
     case "tickets":
@@ -1032,6 +1043,7 @@ export function resolvePhoneCommand(
         loginTarget: null,
         openSearch: false,
         pulseTopic,
+        pulseDesktopOnly,
         routeSlug: null,
       };
     case "ticket-detail":
@@ -1041,6 +1053,7 @@ export function resolvePhoneCommand(
         loginTarget: null,
         openSearch: false,
         pulseTopic,
+        pulseDesktopOnly,
         routeSlug: null,
       };
     case "search":
@@ -1050,6 +1063,7 @@ export function resolvePhoneCommand(
         loginTarget: null,
         openSearch: true,
         pulseTopic,
+        pulseDesktopOnly,
         routeSlug: null,
       };
     case "library": {
@@ -1069,6 +1083,7 @@ export function resolvePhoneCommand(
         loginTarget: null,
         openSearch: false,
         pulseTopic,
+        pulseDesktopOnly,
         routeSlug: null,
       };
     }
@@ -1079,6 +1094,7 @@ export function resolvePhoneCommand(
         loginTarget: null,
         openSearch: false,
         pulseTopic,
+        pulseDesktopOnly,
         routeSlug: null,
       };
     case "admin-people":
@@ -1088,6 +1104,7 @@ export function resolvePhoneCommand(
         loginTarget: null,
         openSearch: false,
         pulseTopic,
+        pulseDesktopOnly,
         routeSlug: null,
       };
     case "admin-comms":
@@ -1097,6 +1114,7 @@ export function resolvePhoneCommand(
         loginTarget: null,
         openSearch: false,
         pulseTopic,
+        pulseDesktopOnly,
         routeSlug: null,
       };
     case "admin-org":
@@ -1106,6 +1124,7 @@ export function resolvePhoneCommand(
         loginTarget: null,
         openSearch: false,
         pulseTopic,
+        pulseDesktopOnly,
         routeSlug: null,
       };
     case "schedule":
@@ -1115,6 +1134,7 @@ export function resolvePhoneCommand(
         loginTarget: null,
         openSearch: false,
         pulseTopic,
+        pulseDesktopOnly,
         routeSlug: null,
       };
     case "settings":
@@ -1124,6 +1144,7 @@ export function resolvePhoneCommand(
         loginTarget: null,
         openSearch: false,
         pulseTopic,
+        pulseDesktopOnly,
         routeSlug: null,
       };
     case "coming-soon":
@@ -1133,6 +1154,7 @@ export function resolvePhoneCommand(
         loginTarget: null,
         openSearch: false,
         pulseTopic: null,
+        pulseDesktopOnly: false,
         routeSlug: subSlug,
       };
   }

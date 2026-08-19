@@ -1288,3 +1288,49 @@ describe("pathnameForRouteId", () => {
     expect(pathname).toBe("/library/[articleId]/edit");
   });
 });
+
+// -----------------------------------------------------------------------
+// pulseDesktopOnly
+// -----------------------------------------------------------------------
+
+describe("pulseDesktopOnly", () => {
+  const TICKET_ID = "test-ticket-id";
+  const ARTICLE_ID = "test-article-id";
+
+  it("split-view sub resolves pulseDesktopOnly true", () => {
+    const cmd = resolvePhoneCommand(
+      "tickets",
+      "split-view",
+      TICKET_ID,
+      ARTICLE_ID,
+    );
+    expect(cmd.pulseDesktopOnly).toBe(true);
+    expect(cmd.pulseTopic).toBe("split-view");
+  });
+
+  it("a normal sub resolves pulseDesktopOnly false", () => {
+    const cmd = resolvePhoneCommand("tickets", "sort", TICKET_ID, ARTICLE_ID);
+    expect(cmd.pulseDesktopOnly).toBe(false);
+    expect(cmd.pulseTopic).toBe("sort");
+  });
+
+  it("dashboard sub resolves pulseDesktopOnly false", () => {
+    const cmd = resolvePhoneCommand(
+      "dashboard",
+      "queues",
+      TICKET_ID,
+      ARTICLE_ID,
+    );
+    expect(cmd.pulseDesktopOnly).toBe(false);
+  });
+
+  it("coming-soon always resolves pulseDesktopOnly false", () => {
+    const cmd = resolvePhoneCommand(
+      "coming-soon",
+      "reports",
+      TICKET_ID,
+      ARTICLE_ID,
+    );
+    expect(cmd.pulseDesktopOnly).toBe(false);
+  });
+});

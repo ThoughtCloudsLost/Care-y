@@ -22,6 +22,15 @@ export const POLL_TIMEOUT_MEDIUM_MS = 4000;
 /** Standard timeout for most element-appearance waits. */
 export const POLL_TIMEOUT_STANDARD_MS = 5000;
 
+/**
+ * Long timeout for pulse target resolution. A pulse may land while the
+ * destination route's chunks are still loading (first mount of a heavy
+ * route, cold dev-server compile), and giving up early records a gap
+ * for a target that renders moments later. A late marker is harmless;
+ * a false "missing" is not.
+ */
+export const POLL_TIMEOUT_LONG_MS = 12_000;
+
 // -----------------------------------------------------------------------
 // pollUntil
 // -----------------------------------------------------------------------

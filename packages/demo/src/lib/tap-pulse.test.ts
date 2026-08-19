@@ -1,11 +1,15 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import { SECTIONS, resolvePhoneCommand } from "./scroll-sections.js";
 import {
   topicFeatureTarget,
   buildTopicCandidates,
   buildActivationCandidates,
+  buildSmsTitleCandidates,
   findTopicElement,
+  findTopicElementLoose,
   isNavChrome,
+  isSectionToggle,
+  resolveTopicElement,
   TAP_TOPICS,
   TOPIC_SELECTORS,
   MODE_TOGGLE_TOPICS,
@@ -218,5 +222,244 @@ describe("closeModeToggle", () => {
       "page-search",
       "select-mode",
     ]);
+  });
+});
+
+// -----------------------------------------------------------------------
+// Leaf pass: CollapsibleSection headings and bare LI group titles
+// -----------------------------------------------------------------------
+
+describe("findTopicElement leaf pass", () => {
+  function mount(html: string): void {
+    document.body.innerHTML = html;
+    for (const el of document.body.querySelectorAll("*")) {
+      (el as HTMLElement).getBoundingClientRect = () =>
+        ({
+          width: 100,
+          height: 40,
+          top: 10,
+          bottom: 50,
+          left: 0,
+          right: 100,
+          x: 0,
+          y: 10,
+          toJSON: () => ({}),
+        }) as DOMRect;
+    }
+  }
+
+  it("resolves a CollapsibleSection-shaped button via its span leaf", () => {
+    // The button's whole textContent includes the chevron and count,
+    // but the span.secline-eb leaf has the exact label alone.
+    mount(`
+      <button class="section-toggle" id="toggle">
+        <span class="secline">
+          <span class="secline-eb">Needs Attention</span>
+          <span class="secline-rule" aria-hidden="true"></span>
+          <span class="secline-cnt" aria-hidden="true">7</span>
+        </span>
+        <span aria-hidden="true">&#x276F;</span>
+      </button>
+    `);
+    const el = findTopicElement(document, new Set(["Needs Attention"]));
+    expect(el).not.toBeNull();
+    expect(el?.id).toBe("toggle");
+  });
+
+  it("resolves a bare childless LI group title", () => {
+    // Admin manager page renders group titles as childless LI elements.
+    mount(`
+      <ul>
+        <li id="role-title">Your Role</li>
+        <li class="k-list-item"><div>Some other item</div></li>
+      </ul>
+    `);
+    const el = findTopicElement(document, new Set(["Your Role"]));
+    expect(el).not.toBeNull();
+    expect(el?.id).toBe("role-title");
+  });
+});
+
+// -----------------------------------------------------------------------
+// Composed sort candidates
+// -----------------------------------------------------------------------
+
+describe("composed sort candidates", () => {
+  it("includes composed labels for both sort directions in both locales", () => {
+    const candidates = buildTopicCandidates("sort");
+    // The bare label must be present
+    expect(candidates.has("Sort")).toBe(true);
+    // English composed labels
+    expect(candidates.has("Sort, ascending")).toBe(true);
+    expect(candidates.has("Sort, descending")).toBe(true);
+    // Spanish composed labels
+    expect(candidates.has("Ordenar, ascendente")).toBe(true);
+    expect(candidates.has("Ordenar, descendente")).toBe(true);
+  });
+
+  it("includes composed labels in activation candidates", () => {
+    const candidates = buildActivationCandidates("sort");
+    expect(candidates.has("Sort")).toBe(true);
+    expect(candidates.has("Sort, ascending")).toBe(true);
+    expect(candidates.has("Sort, descending")).toBe(true);
+  });
+});
+
+// -----------------------------------------------------------------------
+// SMS title candidates (exposure-hints second stage)
+// -----------------------------------------------------------------------
+
+describe("buildSmsTitleCandidates", () => {
+  it("contains only the SMS title labels, not the compose actions label", () => {
+    const candidates = buildSmsTitleCandidates();
+    const full = buildTopicCandidates("exposure-hints");
+    expect(candidates.size).toBeGreaterThan(0);
+    for (const label of candidates) {
+      expect(full.has(label)).toBe(true);
+    }
+    // The compose actions label must be absent: its visible button
+    // would win the aria pass before the popover item mounts.
+    for (const label of buildTopicCandidates("compose-actions")) {
+      expect(candidates.has(label)).toBe(false);
+    }
+  });
+});
+
+// -----------------------------------------------------------------------
+// Section-toggle tap guard
+// -----------------------------------------------------------------------
+
+describe("isSectionToggle", () => {
+  function mount(html: string): void {
+    document.body.innerHTML = html;
+  }
+
+  it("returns true for an element inside .section-toggle", () => {
+    mount(
+      '<button class="section-toggle"><span id="leaf">Label</span></button>',
+    );
+    const leaf = document.getElementById("leaf")!;
+    expect(isSectionToggle(leaf)).toBe(true);
+  });
+
+  it("returns true for the .section-toggle element itself", () => {
+    mount('<button class="section-toggle" id="btn">Label</button>');
+    const btn = document.getElementById("btn")!;
+    expect(isSectionToggle(btn)).toBe(true);
+  });
+
+  it("returns false for elements outside .section-toggle", () => {
+    mount('<button id="normal">Label</button>');
+    const btn = document.getElementById("normal")!;
+    expect(isSectionToggle(btn)).toBe(false);
+  });
+});
+
+// -----------------------------------------------------------------------
+// Loose visibility tier and resolver scroll behavior
+// -----------------------------------------------------------------------
+
+describe("loose visibility tier", () => {
+  function mount(html: string): void {
+    document.body.innerHTML = html;
+  }
+
+  /** Stub getBoundingClientRect to place the element below the viewport. */
+  function stubBelowViewport(el: HTMLElement): void {
+    el.getBoundingClientRect = () =>
+      ({
+        width: 100,
+        height: 40,
+        top: 2000,
+        bottom: 2040,
+        left: 0,
+        right: 100,
+        x: 0,
+        y: 2000,
+        toJSON: () => ({}),
+      }) as DOMRect;
+  }
+
+  it("strict finder rejects an element below the viewport", () => {
+    mount('<button aria-label="Activity" id="target">Activity</button>');
+    const target = document.getElementById("target") as HTMLElement;
+    stubBelowViewport(target);
+    const el = findTopicElement(document, new Set(["Activity"]));
+    expect(el).toBeNull();
+  });
+
+  it("loose finder finds an element below the viewport", () => {
+    mount('<button aria-label="Activity" id="target">Activity</button>');
+    const target = document.getElementById("target") as HTMLElement;
+    stubBelowViewport(target);
+    const el = findTopicElementLoose(document, new Set(["Activity"]));
+    expect(el).not.toBeNull();
+    expect(el?.id).toBe("target");
+  });
+
+  it("resolver scrolls the scrollable ancestor for a loose match", async () => {
+    mount(`
+      <div id="scroller" style="overflow-y: auto; height: 200px;">
+        <div style="height: 3000px;">
+          <button aria-label="Deep Item" id="deep">Deep Item</button>
+        </div>
+      </div>
+    `);
+
+    const scroller = document.getElementById("scroller") as HTMLElement;
+    const deep = document.getElementById("deep") as HTMLElement;
+
+    // Make the scroller report as scrollable
+    Object.defineProperty(scroller, "scrollHeight", { value: 3000 });
+    Object.defineProperty(scroller, "clientHeight", { value: 200 });
+
+    // Initially below viewport
+    stubBelowViewport(deep);
+    scroller.getBoundingClientRect = () =>
+      ({
+        width: 300,
+        height: 200,
+        top: 0,
+        bottom: 200,
+        left: 0,
+        right: 300,
+        x: 0,
+        y: 0,
+        toJSON: () => ({}),
+      }) as DOMRect;
+
+    // After the resolver scrolls, simulate the element becoming visible.
+    const originalGetRect = deep.getBoundingClientRect.bind(deep);
+    deep.getBoundingClientRect = () => {
+      // After scrollIntoViewIframeSafe fires, the next poll should
+      // see the element in the viewport.
+      if (scroller.scrollTop > 0) {
+        return {
+          width: 100,
+          height: 40,
+          top: 100,
+          bottom: 140,
+          left: 0,
+          right: 100,
+          x: 0,
+          y: 100,
+          toJSON: () => ({}),
+        } as DOMRect;
+      }
+      return originalGetRect();
+    };
+
+    vi.useFakeTimers();
+    const resolvePromise = resolveTopicElement(
+      document,
+      new Set(["Deep Item"]),
+    );
+    // Run through the poll ticks
+    await vi.advanceTimersByTimeAsync(6000);
+    vi.useRealTimers();
+
+    const result = await resolvePromise;
+    expect(result).not.toBeNull();
+    expect(scroller.scrollTop).toBeGreaterThan(0);
   });
 });

@@ -68,12 +68,14 @@
     topicFeatureTarget,
     buildTopicCandidates,
     buildActivationCandidates,
-    findTopicElement,
-    findTopicElementBySelector,
+    buildSmsTitleCandidates,
     findClickableTarget,
     isNavChrome,
+    isSectionToggle,
     dismissOpenOverlays,
     waitForElement,
+    resolveTopicElement,
+    resolveSelectorElement,
     renderPulseMarker,
     TAP_TOPICS,
     MODE_TOGGLE_TOPICS,
@@ -350,7 +352,17 @@
     const id = demoPage.state.ticketId;
     return typeof id === "string" && id !== "" ? id : null;
   });
-  const effectiveDetail = $derived(router.detail ?? splitViewTicketId);
+  // The library does the same dance: /library/[articleId] redirects to
+  // /library and carries the article in page.state.articleId, so a
+  // desktop vote narration would otherwise snap back to browsing.
+  const splitViewArticleId = $derived.by((): string | null => {
+    if (router.feature !== "library" || router.detail !== null) return null;
+    const id = demoPage.state.articleId;
+    return typeof id === "string" && id !== "" ? id : null;
+  });
+  const effectiveDetail = $derived(
+    router.detail ?? splitViewTicketId ?? splitViewArticleId,
+  );
 
   // -----------------------------------------------------------------------
   // Location store (canonical state owner)
@@ -424,10 +436,23 @@
   // event target up to the nearest [aria-label] element and classifies
   // the label string to a DemoTopic via the pure classifier. Falls
   // back to text content for interactive elements without aria-labels.
+  // The topic of the most recent pulse. Synthetic clicks are pulse
+  // choreography: a pulse may click a control whose label classifies
+  // as a DIFFERENT topic (the exposure-hints pulse opens the compose
+  // actions popover), and reporting that raw classification yanks the
+  // story off the narrated sub. Synthetic clicks therefore report the
+  // owning pulse's topic; a trusted visitor tap clears the override
+  // so the visitor's own interactions classify normally again.
+  let activePulseTopic: DemoTopic | null = null;
+
   /** Record a classified interaction; real visitor taps on the push
    *  method also arm its challenge to approve (synthetic scroll-driven
    *  opens never do, so the waiting screen alone cannot log in). */
   function applyTopic(classified: DemoTopic, trusted: boolean): void {
+    if (!trusted && activePulseTopic !== null) {
+      store.reportTopic(activePulseTopic);
+      return;
+    }
     store.reportTopic(classified);
     if (trusted) {
       emitFlowEvent({
@@ -450,6 +475,8 @@
       // events, so they never cancel themselves.
       if (event.isTrusted) {
         store.cancelChains();
+        // The visitor took over: their clicks classify normally again.
+        activePulseTopic = null;
         // A trusted tap is the only reliable boundary between two
         // bursts of work, so it opens the band's next interaction.
         beginFlowInteraction();
@@ -663,6 +690,14 @@
     }
 
     if (cmd.pulseTopic !== null && !store.isStale(token)) {
+      // Desktop-only subs (split-view) are skipped entirely at phone
+      // width, recording nothing so the e2e suite can skip them too.
+      if (
+        cmd.pulseDesktopOnly &&
+        !window.matchMedia("(min-width: 1024px)").matches
+      ) {
+        return;
+      }
       void handlePulse(cmd.pulseTopic);
     }
   }
@@ -983,6 +1018,10 @@
   // -----------------------------------------------------------------------
 
   async function handlePulse(pulseTopic: DemoTopic): Promise<void> {
+    // Own all synthetic clicks until the next pulse or a visitor tap:
+    // the pulse's choreography clicks report this topic, never their
+    // raw classification (see applyTopic).
+    activePulseTopic = pulseTopic;
     const { feature, detail } = topicFeatureTarget(pulseTopic);
     // Translate the sentinel at the boundary
     const resolvedDetail = sentinelToReal(detail);
@@ -1004,18 +1043,24 @@
       ? buildActivationCandidates(pulseTopic)
       : buildTopicCandidates(pulseTopic);
 
-    let el = findTopicElement(document, candidates);
-    el ??= await waitForElement(document, candidates);
+    // Use the two-tier resolver: strict first (in-viewport), then
+    // loose (below the fold). A loose hit is scrolled into view
+    // automatically before the resolver returns.
+    let el = await resolveTopicElement(document, candidates);
     if (el === null && tap) {
       // The specific control is absent (different view state); fall
       // back to marking the broader element without tapping.
       tap = false;
-      el = findTopicElement(document, buildTopicCandidates(pulseTopic));
+      el = await resolveTopicElement(
+        document,
+        buildTopicCandidates(pulseTopic),
+      );
     }
 
-    // Selector fallback: topics whose targets have no matchable label
+    // Selector fallback: topics whose targets have no matchable label.
+    // Uses the same strict-then-loose strategy with scroll.
     if (el === null) {
-      const selectorEl = findTopicElementBySelector(document, pulseTopic);
+      const selectorEl = await resolveSelectorElement(document, pulseTopic);
       if (selectorEl !== null) {
         dismissOpenOverlays(selectorEl);
         renderPulseMarker(selectorEl);
@@ -1074,7 +1119,11 @@
       const clickable = findClickableTarget(el);
       if (clickable !== null) {
         clickable.click();
-        const smsCandidates = buildTopicCandidates("exposure-hints");
+        // Search for the SMS entry alone: the full exposure candidates
+        // include the compose actions label, and the aria pass would
+        // resolve the still-visible compose button before the popover
+        // mounts, re-toggling the popover instead of selecting SMS.
+        const smsCandidates = buildSmsTitleCandidates();
         const smsEl = await waitForElement(document, smsCandidates);
         if (smsEl !== null) {
           const smsClickable = findClickableTarget(smsEl);
@@ -1100,9 +1149,17 @@
     renderPulseMarker(el);
 
     // Never tap shell navigation: when only a nav-chrome element
-    // matched the label (findTopicElement's last resort), activating
+    // matched the label (resolveTopicElement's last resort), activating
     // it would navigate away from the narrated screen.
     if (tap && isNavChrome(el)) {
+      tap = false;
+    }
+
+    // Never tap a collapse toggle: collapsing hides the very content
+    // the narration is describing. Section-heading topics whose
+    // activation labels now resolve to CollapsibleSection toggles
+    // are downgraded to mark-only.
+    if (tap && isSectionToggle(el)) {
       tap = false;
     }
 
@@ -1122,6 +1179,13 @@
           tap = false;
         }
       }
+
+      // Also guard the clickable itself against collapse toggles:
+      // findClickableTarget may have walked into a toggle ancestor.
+      if (tap && clickable !== null && isSectionToggle(clickable)) {
+        tap = false;
+      }
+
       if (tap) {
         // Let the marker paint first so the response reads as its effect
         setTimeout(() => {
