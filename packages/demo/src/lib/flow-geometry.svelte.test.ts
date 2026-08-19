@@ -1,4 +1,5 @@
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect, beforeEach, afterEach } from "vitest";
+import { flushSync } from "svelte";
 import {
   setFlowGeometrySource,
   scrollTargetFor,
@@ -6,10 +7,16 @@ import {
   setTopChromeHeight,
   topChromeHeight,
   stickyTopOffset,
+  locationWithVisibleHeading,
+  setViewportScrollY,
+  setHeaderBottom,
   TOP_BAR_HEIGHT,
   CHROME_GAP,
 } from "./flow-geometry.svelte.js";
-import type { FlowGeometrySource } from "./flow-geometry.svelte.js";
+import type {
+  FlowGeometrySource,
+  FlowLocation,
+} from "./flow-geometry.svelte.js";
 import type {
   FlowBlock,
   FlowBlockGeometry,
@@ -419,5 +426,111 @@ describe("flowGeometryReady", () => {
     });
     setFlowGeometrySource(null);
     expect(flowGeometryReady()).toBe(false);
+  });
+});
+
+// -----------------------------------------------------------------------
+// locationWithVisibleHeading: selection rule + scroll reactivity
+// -----------------------------------------------------------------------
+
+describe("locationWithVisibleHeading", () => {
+  // Two sub-headings: the first sits at the container top, the second
+  // 500px lower. containerTop 200 puts the first heading below the
+  // band at scroll 0 (band = headerBottom 100 + BAND_GAP).
+  function makeHeadingSource(): FlowGeometrySource {
+    const blocks = [makeBlock("credentials"), makeBlock("two-factor")];
+    const geos: FlowBlockGeometry[] = [
+      { topY: 0, bottomY: 40, firstLineIndex: 0, lineCount: 1 },
+      { topY: 500, bottomY: 540, firstLineIndex: 1, lineCount: 1 },
+    ];
+    return {
+      layoutResult: makeLayout(geos),
+      blocks,
+      containerTop: 200,
+      holeAtScrollY: () => null,
+      layoutForHole: () => makeLayout(geos),
+    };
+  }
+
+  beforeEach(() => {
+    setHeaderBottom(100);
+    setViewportScrollY(0);
+  });
+
+  afterEach(() => {
+    setHeaderBottom(0);
+    setViewportScrollY(0);
+  });
+
+  it("selects the first sub whose heading has not passed above the band", () => {
+    setFlowGeometrySource(makeHeadingSource());
+    expect(locationWithVisibleHeading()).toEqual({
+      sectionId: "login",
+      subSlug: "credentials",
+    });
+    // Scroll the first heading above the band: the next one is selected.
+    setViewportScrollY(300);
+    expect(locationWithVisibleHeading()).toEqual({
+      sectionId: "login",
+      subSlug: "two-factor",
+    });
+  });
+
+  it("keeps the aligned sub selected through sub-pixel overshoot", () => {
+    // Regression: alignment solves heading top == band exactly
+    // (credentials aligns at scrollY 84 here: 200 - band 116). Browser
+    // scroll rounding or a fixed-point residual can overshoot by a
+    // fraction, leaving the heading just above the band. A strict
+    // top >= band then flips selection to the next sub and fires a
+    // stale page-scroll intent that overrides the click that caused
+    // the alignment.
+    setFlowGeometrySource(makeHeadingSource());
+    setViewportScrollY(84);
+    expect(locationWithVisibleHeading()?.subSlug).toBe("credentials");
+    // Overshoot within tolerance still selects the aligned sub
+    setViewportScrollY(88);
+    expect(locationWithVisibleHeading()?.subSlug).toBe("credentials");
+    // Beyond tolerance the heading has genuinely passed the band
+    setViewportScrollY(89);
+    expect(locationWithVisibleHeading()?.subSlug).toBe("two-factor");
+  });
+
+  it("falls back to the last sub once every heading is above the band", () => {
+    setFlowGeometrySource(makeHeadingSource());
+    setViewportScrollY(900);
+    expect(locationWithVisibleHeading()).toEqual({
+      sectionId: "login",
+      subSlug: "two-factor",
+    });
+  });
+
+  it("recomputes reactively from the published scroll position alone", () => {
+    // Regression: FlowStory's runLayout skips republishing the geometry
+    // source when a pass is a no-op (hole unchanged or disjoint), which
+    // is the common case during plain scrolling. The selection must
+    // therefore depend on the published scroll position, not on
+    // window.scrollY, or a derived over it freezes and the story stops
+    // selecting subs as the visitor scrolls.
+    setFlowGeometrySource(makeHeadingSource());
+    let computeCount = 0;
+    let latest: FlowLocation | null = null;
+    const cleanup = $effect.root(() => {
+      const loc = $derived.by(() => {
+        computeCount++;
+        return locationWithVisibleHeading();
+      });
+      $effect(() => {
+        latest = loc;
+      });
+    });
+    flushSync();
+    expect(latest).toEqual({ sectionId: "login", subSlug: "credentials" });
+    const before = computeCount;
+    // Only the scroll position changes; the source is untouched.
+    setViewportScrollY(300);
+    flushSync();
+    expect(computeCount).toBeGreaterThan(before);
+    expect(latest).toEqual({ sectionId: "login", subSlug: "two-factor" });
+    cleanup();
   });
 });

@@ -19,6 +19,7 @@ import {
   deriveDemoVolPublic,
   createDemoOprfService,
 } from "./demo-keys.js";
+import { markSodiumReady } from "./sodium-ready.js";
 import {
   getSodium,
   oprfBlind,
@@ -35,6 +36,9 @@ import {
 beforeAll(async () => {
   await _sodium.ready;
   await getSodium();
+  // The shims gate every sodium call on the engine's readiness flag;
+  // tests own the boot sequence here, so they mark it themselves.
+  markSodiumReady();
 });
 
 describe("deriveDemoOprfScalar", () => {

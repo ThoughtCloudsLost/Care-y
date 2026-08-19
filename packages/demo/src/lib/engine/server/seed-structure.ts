@@ -140,7 +140,13 @@ export async function seedStructure(
     .values({
       org_public_key: orgPublicKey,
       setup_completed: true,
-      getting_started_dismissed_at: new Date(),
+      // Left undismissed so the dashboard's getting started checklist
+      // renders; the handbook narrates it and visitors can dismiss it
+      // themselves (the write lands in the in-browser PGlite only).
+      getting_started_dismissed_at: null,
+      // Seed a retention policy so RetentionSection renders its active
+      // path with a populated days input (365 days is a common baseline).
+      pii_retention_days: 365,
     })
     .execute();
 

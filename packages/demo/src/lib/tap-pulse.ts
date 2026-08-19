@@ -37,29 +37,56 @@ const LOGIN_TOPICS: ReadonlySet<DemoTopic> = new Set([
 const LIST_TOPICS: ReadonlySet<DemoTopic> = new Set([
   "sort",
   "filters",
+  "saved-filters",
   "view-modes",
   "select-mode",
+  "page-search",
+  "list-stats",
+  "quick-actions",
+  "unread-badges",
+  "decryption",
   "new-ticket",
+  "split-view",
 ]);
 
 const DETAIL_TOPICS: ReadonlySet<DemoTopic> = new Set([
+  "case-header",
+  "conversation",
   "thread-filters",
   "compose-actions",
   "reply",
   "notes",
   "case-fold",
   "timeline",
+  "deep-search",
+  "thread-anatomy",
+  "case-panel",
+  "message-select",
+  "message-actions",
+  "close-reopen",
+  "exposure-hints",
 ]);
 
 const DASHBOARD_TOPICS: ReadonlySet<DemoTopic> = new Set([
+  "dashboard-shift",
   "dashboard-queues",
   "dashboard-activity",
+  "dashboard-kb",
+  "dashboard-view-switcher",
+  "dashboard-getting-started",
+  "dashboard-needs-attention",
+  "dashboard-my-tickets",
+  "dashboard-unassigned",
+  "dashboard-on-hold",
+  "dashboard-create",
 ]);
 
 const SETTINGS_TOPICS: ReadonlySet<DemoTopic> = new Set([
   "settings-profile",
   "settings-password",
   "settings-2fa",
+  "settings-appearance",
+  "settings-security",
 ]);
 
 /** Resolve the feature + detail a topic's element lives on. */
@@ -82,17 +109,49 @@ export function topicFeatureTarget(topic: DemoTopic): {
   if (topic === "library-vote") {
     return { feature: "library", detail: DEMO_DETAIL_ARTICLE_ID };
   }
+  if (topic === "library-search") {
+    return { feature: "library", detail: null };
+  }
+  if (topic === "library-tools") {
+    return { feature: "library", detail: null };
+  }
   if (topic === "library-categories") {
     return { feature: "library", detail: null };
   }
   if (topic === "library-editor") {
     return { feature: "library", detail: "new" };
   }
-  if (topic === "admin-roster-edit") {
+  if (
+    topic === "admin-roster-edit" ||
+    topic === "admin-roster-tools" ||
+    topic === "admin-queues" ||
+    topic === "admin-clients" ||
+    topic === "admin-client-merge"
+  ) {
     return { feature: "admin", detail: "people" };
   }
-  if (topic === "admin-greetings" || topic === "admin-quarantine") {
+  if (topic === "admin-roles") {
+    return { feature: "admin", detail: "manager" };
+  }
+  if (
+    topic === "admin-greetings" ||
+    topic === "admin-quarantine" ||
+    topic === "admin-phone-lines" ||
+    topic === "admin-telephony-provider" ||
+    topic === "admin-sms-templates" ||
+    topic === "admin-blocklist"
+  ) {
     return { feature: "admin", detail: "communications" };
+  }
+  if (
+    topic === "admin-general" ||
+    topic === "admin-branding" ||
+    topic === "admin-terminology" ||
+    topic === "admin-note-types" ||
+    topic === "admin-keys" ||
+    topic === "admin-retention"
+  ) {
+    return { feature: "admin", detail: "organization" };
   }
   if (SETTINGS_TOPICS.has(topic)) {
     return { feature: "settings", detail: null };
@@ -179,7 +238,34 @@ export function buildTopicCandidates(topic: DemoTopic): Set<string> {
         candidates.add(m.tickets_filter_priority({}, opts));
         candidates.add(m.tickets_filter_assignee({}, opts));
         candidates.add(m.tickets_filter_date_range({}, opts));
+        break;
+      case "saved-filters":
         candidates.add(m.tickets_create_shortcut({}, opts));
+        candidates.add(m.saved_filter_apply({}, opts));
+        candidates.add(m.saved_filter_modal_title({}, opts));
+        break;
+      case "quick-actions":
+        candidates.add(m.tickets_action_reply({}, opts));
+        candidates.add(m.tickets_action_call({}, opts));
+        candidates.add(m.tickets_action_assign({}, opts));
+        candidates.add(m.tickets_action_hold({}, opts));
+        break;
+      case "unread-badges":
+        candidates.add(m.tickets_sort_new_replies_first({}, opts));
+        break;
+      case "decryption":
+        // No label candidates; the PhoneApp special case owns this topic
+        break;
+      case "split-view":
+        candidates.add(m.split_view_resize_label({}, opts));
+        break;
+      case "list-stats":
+        candidates.add(m.tickets_status_new({}, opts));
+        candidates.add(m.tickets_status_active({}, opts));
+        candidates.add(m.tickets_status_on_hold({}, opts));
+        break;
+      case "page-search":
+        candidates.add(m.search_inline_trigger({}, opts));
         break;
       case "view-modes":
         candidates.add(m.view_switcher_label({}, opts));
@@ -191,6 +277,8 @@ export function buildTopicCandidates(topic: DemoTopic): Set<string> {
         break;
       case "select-mode":
         candidates.add(m.tickets_select_mode({}, opts));
+        break;
+      case "message-select":
         candidates.add(m.ticket_select_mode({}, opts));
         break;
       case "new-ticket":
@@ -220,13 +308,75 @@ export function buildTopicCandidates(topic: DemoTopic): Set<string> {
         break;
       case "timeline":
         candidates.add(m.ticket_action_timeline({}, opts));
+        break;
+      case "case-header":
+        candidates.add(m.ticket_more_actions({}, opts));
+        break;
+      case "conversation":
         candidates.add(m.ticket_action_messages({}, opts));
+        break;
+      case "thread-anatomy":
+        candidates.add(m.ticket_new_messages({}, opts));
+        break;
+      case "case-panel":
+        candidates.add(m.ticket_more_actions({}, opts));
+        candidates.add(m.ticket_panel_call({}, opts));
+        break;
+      case "deep-search":
+        candidates.add(m.search_inline_trigger({}, opts));
+        candidates.add(m.search_refine_label({}, opts));
+        candidates.add(m.search_conversation_nav_label({}, opts));
+        candidates.add(m.search_deep_nav_trigger({}, opts));
+        break;
+      case "message-actions":
+        candidates.add(m.ticket_context_menu_title({}, opts));
+        break;
+      case "close-reopen":
+        candidates.add(m.ticket_action_close({}, opts));
+        candidates.add(m.ticket_action_reopen({}, opts));
+        candidates.add(m.ticket_more_actions({}, opts));
+        break;
+      case "exposure-hints":
+        candidates.add(m.ticket_compose_actions({}, opts));
+        candidates.add(m.ticket_sms_title(terms, opts));
+        candidates.add(m.exposure_hint_dismiss({}, opts));
+        break;
+      case "dashboard-shift":
+        candidates.add(m.dashboard_shift_heading({}, opts));
         break;
       case "dashboard-queues":
         candidates.add(m.dashboard_queues_heading(terms, opts));
         break;
       case "dashboard-activity":
         candidates.add(m.dashboard_activity_heading({}, opts));
+        break;
+      case "dashboard-kb":
+        candidates.add(m.dashboard_kb_heading(terms, opts));
+        break;
+      case "dashboard-view-switcher":
+        candidates.add(m.view_switcher_label({}, opts));
+        candidates.add(m.view_switcher_table({}, opts));
+        candidates.add(m.view_switcher_rows({}, opts));
+        candidates.add(m.view_switcher_cards({}, opts));
+        candidates.add(m.view_switcher_grid({}, opts));
+        break;
+      case "dashboard-needs-attention":
+        candidates.add(m.dashboard_section_needs_attention({}, opts));
+        break;
+      case "dashboard-my-tickets":
+        candidates.add(m.dashboard_section_my_tickets(terms, opts));
+        break;
+      case "dashboard-unassigned":
+        candidates.add(m.dashboard_section_unassigned({}, opts));
+        break;
+      case "dashboard-on-hold":
+        candidates.add(m.dashboard_section_on_hold({}, opts));
+        break;
+      case "dashboard-getting-started":
+        candidates.add(m.getting_started_heading({}, opts));
+        break;
+      case "dashboard-create":
+        candidates.add(m.nav_create_new({}, opts));
         break;
       case "library-vote":
         candidates.add(m.library_was_helpful({}, opts));
@@ -236,14 +386,88 @@ export function buildTopicCandidates(topic: DemoTopic): Set<string> {
       case "library-categories":
         candidates.add(m.library_manage_categories({}, opts));
         break;
+      case "library-search":
+        candidates.add(m.search_inline_trigger({}, opts));
+        candidates.add(m.search_deep_nav_trigger({}, opts));
+        break;
       case "library-editor":
         candidates.add(m.library_new_article({}, opts));
         candidates.add(m.library_edit_article({}, opts));
+        break;
+      case "library-tools":
+        candidates.add(m.view_switcher_label({}, opts));
+        candidates.add(m.view_switcher_cards({}, opts));
+        candidates.add(m.library_sort({}, opts));
+        candidates.add(m.library_select_mode({}, opts));
         break;
       case "admin-roster-edit":
         candidates.add(m.admin_user_edit_actions({}, opts));
         candidates.add(m.settings_display_name({}, opts));
         candidates.add(m.settings_username({}, opts));
+        break;
+      case "admin-roster-tools":
+        candidates.add(m.admin_users_sort({}, opts));
+        candidates.add(m.admin_users_filter_role({}, opts));
+        candidates.add(m.admin_users_filter_status({}, opts));
+        candidates.add(m.admin_users_filter_keys({}, opts));
+        candidates.add(m.admin_users_filter_queue(terms, opts));
+        break;
+      case "admin-queues":
+        candidates.add(m.admin_tab_queues(terms, opts));
+        candidates.add(m.admin_queues_title(terms, opts));
+        break;
+      case "admin-clients":
+        candidates.add(m.admin_clients_title(terms, opts));
+        break;
+      case "admin-client-merge":
+        candidates.add(m.client_merge_sheet_title(terms, opts));
+        candidates.add(m.client_merge_history_heading({}, opts));
+        candidates.add(m.client_merge_undo({}, opts));
+        candidates.add(m.client_merge_confirm_button(terms, opts));
+        break;
+      case "admin-roles":
+        candidates.add(m.mgr_section_role({}, opts));
+        candidates.add(m.mgr_section_ops({}, opts));
+        candidates.add(m.mgr_section_queues({}, opts));
+        candidates.add(m.mgr_section_protected({}, opts));
+        break;
+      case "admin-telephony-provider":
+        candidates.add(m.admin_telephony_change_mode({}, opts));
+        candidates.add(m.admin_tab_telephony({}, opts));
+        break;
+      case "admin-phone-lines":
+        candidates.add(m.admin_tab_telephony({}, opts));
+        break;
+      case "admin-sms-templates":
+        candidates.add(m.admin_tab_sms_templates({}, opts));
+        candidates.add(m.admin_templates_add_button({}, opts));
+        break;
+      case "admin-blocklist":
+        candidates.add(m.admin_tab_blocklist({}, opts));
+        candidates.add(m.admin_blocklist_add_button({}, opts));
+        break;
+      case "admin-general":
+        candidates.add(m.admin_tab_org_general({}, opts));
+        candidates.add(m.admin_org_general_edit_button({}, opts));
+        break;
+      case "admin-branding":
+        candidates.add(m.admin_tab_branding({}, opts));
+        candidates.add(m.admin_branding_edit_button({}, opts));
+        break;
+      case "admin-terminology":
+        candidates.add(m.admin_tab_terminology({}, opts));
+        candidates.add(m.admin_terminology_edit_button({}, opts));
+        break;
+      case "admin-note-types":
+        candidates.add(m.admin_tab_note_types({}, opts));
+        candidates.add(m.admin_note_types_add({}, opts));
+        break;
+      case "admin-keys":
+        candidates.add(m.admin_tab_keys({}, opts));
+        break;
+      case "admin-retention":
+        candidates.add(m.admin_tab_retention({}, opts));
+        candidates.add(m.admin_retention_days_label({}, opts));
         break;
       case "admin-greetings":
         candidates.add(m.admin_greetings_add_button({}, opts));
@@ -265,6 +489,12 @@ export function buildTopicCandidates(topic: DemoTopic): Set<string> {
       case "settings-2fa":
         candidates.add(m.settings_2fa({}, opts));
         candidates.add(m.twofa_remove_confirm({}, opts));
+        break;
+      case "settings-appearance":
+        candidates.add(m.settings_color_scheme({}, opts));
+        break;
+      case "settings-security":
+        candidates.add(m.settings_review_briefing({}, opts));
         break;
     }
   }
@@ -289,18 +519,46 @@ export const TAP_TOPICS: ReadonlySet<DemoTopic> = new Set([
   "filters",
   "view-modes",
   "select-mode",
+  "page-search",
   "new-ticket",
   "thread-filters",
   "compose-actions",
   "notes",
   "case-fold",
+  "case-panel",
+  "message-select",
   "timeline",
+  "conversation",
+  "deep-search",
+  "dashboard-shift",
   "dashboard-queues",
   "dashboard-activity",
+  "dashboard-kb",
+  "dashboard-view-switcher",
+  "dashboard-needs-attention",
+  "dashboard-my-tickets",
+  "dashboard-unassigned",
+  "dashboard-on-hold",
+  "dashboard-create",
+  "library-search",
+  "library-tools",
   "library-categories",
   "admin-roster-edit",
+  "admin-roster-tools",
+  "admin-queues",
+  "admin-clients",
+  "admin-phone-lines",
+  "admin-sms-templates",
+  "admin-blocklist",
+  "admin-general",
+  "admin-branding",
+  "admin-terminology",
+  "admin-note-types",
+  "admin-keys",
+  "admin-retention",
   "settings-profile",
   "settings-2fa",
+  "settings-security",
 ]);
 
 /**
@@ -327,7 +585,9 @@ export function buildActivationCandidates(topic: DemoTopic): Set<string> {
         break;
       case "select-mode":
         candidates.add(m.tickets_select_mode({}, opts));
-        candidates.add(m.ticket_select_mode({}, opts));
+        break;
+      case "page-search":
+        candidates.add(m.search_inline_trigger({}, opts));
         break;
       case "new-ticket":
         candidates.add(m.nav_new_ticket(terms, opts));
@@ -345,8 +605,23 @@ export function buildActivationCandidates(topic: DemoTopic): Set<string> {
         candidates.add(m.ticket_case_details(terms, opts));
         candidates.add(m.ticket_fold_case_details(terms, opts));
         break;
+      case "case-panel":
+        candidates.add(m.ticket_more_actions({}, opts));
+        break;
+      case "message-select":
+        candidates.add(m.ticket_select_mode({}, opts));
+        break;
       case "timeline":
         candidates.add(m.ticket_action_timeline({}, opts));
+        break;
+      case "conversation":
+        candidates.add(m.ticket_action_messages({}, opts));
+        break;
+      case "deep-search":
+        candidates.add(m.search_inline_trigger({}, opts));
+        break;
+      case "dashboard-shift":
+        candidates.add(m.dashboard_shift_heading({}, opts));
         break;
       case "dashboard-queues":
         candidates.add(m.dashboard_queues_heading(terms, opts));
@@ -354,17 +629,83 @@ export function buildActivationCandidates(topic: DemoTopic): Set<string> {
       case "dashboard-activity":
         candidates.add(m.dashboard_activity_heading({}, opts));
         break;
+      case "dashboard-kb":
+        candidates.add(m.dashboard_kb_heading(terms, opts));
+        break;
+      case "dashboard-view-switcher":
+        candidates.add(m.view_switcher_cards({}, opts));
+        break;
+      case "dashboard-needs-attention":
+        candidates.add(m.dashboard_section_needs_attention({}, opts));
+        break;
+      case "dashboard-my-tickets":
+        candidates.add(m.dashboard_section_my_tickets(terms, opts));
+        break;
+      case "dashboard-unassigned":
+        candidates.add(m.dashboard_section_unassigned({}, opts));
+        break;
+      case "dashboard-on-hold":
+        candidates.add(m.dashboard_section_on_hold({}, opts));
+        break;
+      case "dashboard-create":
+        candidates.add(m.nav_create_new({}, opts));
+        break;
+      case "library-search":
+        candidates.add(m.search_inline_trigger({}, opts));
+        break;
+      case "library-tools":
+        candidates.add(m.view_switcher_cards({}, opts));
+        break;
       case "library-categories":
         candidates.add(m.library_manage_categories({}, opts));
         break;
       case "admin-roster-edit":
         candidates.add(m.admin_user_edit_actions({}, opts));
         break;
+      case "admin-roster-tools":
+        candidates.add(m.admin_users_sort({}, opts));
+        break;
+      case "admin-queues":
+        candidates.add(m.admin_tab_queues(terms, opts));
+        break;
+      case "admin-clients":
+        candidates.add(m.admin_clients_title(terms, opts));
+        break;
+      case "admin-phone-lines":
+        candidates.add(m.admin_tab_telephony({}, opts));
+        break;
+      case "admin-sms-templates":
+        candidates.add(m.admin_tab_sms_templates({}, opts));
+        break;
+      case "admin-blocklist":
+        candidates.add(m.admin_tab_blocklist({}, opts));
+        break;
+      case "admin-general":
+        candidates.add(m.admin_tab_org_general({}, opts));
+        break;
+      case "admin-branding":
+        candidates.add(m.admin_tab_branding({}, opts));
+        break;
+      case "admin-terminology":
+        candidates.add(m.admin_tab_terminology({}, opts));
+        break;
+      case "admin-note-types":
+        candidates.add(m.admin_tab_note_types({}, opts));
+        break;
+      case "admin-keys":
+        candidates.add(m.admin_tab_keys({}, opts));
+        break;
+      case "admin-retention":
+        candidates.add(m.admin_tab_retention({}, opts));
+        break;
       case "settings-profile":
         candidates.add(m.settings_display_name({}, opts));
         break;
       case "settings-2fa":
         candidates.add(m.settings_2fa({}, opts));
+        break;
+      case "settings-security":
+        candidates.add(m.settings_review_briefing({}, opts));
         break;
       case "credentials":
       case "language":
@@ -377,11 +718,27 @@ export function buildActivationCandidates(topic: DemoTopic): Set<string> {
       case "twofa-backup":
       case "key-derivation":
       case "reply":
+      case "saved-filters":
+      case "quick-actions":
+      case "unread-badges":
+      case "decryption":
+      case "split-view":
+      case "case-header":
+      case "list-stats":
+      case "thread-anatomy":
+      case "close-reopen":
+      case "message-actions":
+      case "exposure-hints":
+      case "settings-appearance":
       case "library-vote":
       case "library-editor":
+      case "admin-client-merge":
+      case "admin-roles":
+      case "admin-telephony-provider":
       case "admin-greetings":
       case "admin-quarantine":
       case "settings-password":
+      case "dashboard-getting-started":
         break;
     }
   }
@@ -434,11 +791,27 @@ export function findTopicElement(
   root: Document | Element,
   candidates: Set<string>,
 ): Element | null {
+  // First matching NAV-CHROME element, kept as a last resort. The
+  // desktop shell duplicates content wording in its navigation (the
+  // sidebar's items, the overview subnavbar), and the sidebar sits
+  // before the page content in DOM order, so a naive first-match
+  // would pin every colliding label to navigation. Content wins;
+  // chrome is returned only when no content element matches.
+  let chromeMatch: Element | null = null;
+  const prefer = (el: Element): Element | null => {
+    if (!isNavChrome(el)) return el;
+    chromeMatch ??= el;
+    return null;
+  };
+
   // Check aria-label attributes (text match first, visibility only on hits)
   const ariaLabeled = root.querySelectorAll("[aria-label]");
   for (const el of ariaLabeled) {
     const label = el.getAttribute("aria-label");
-    if (label !== null && candidates.has(label) && isVisible(el)) return el;
+    if (label !== null && candidates.has(label) && isVisible(el)) {
+      const hit = prefer(el);
+      if (hit !== null) return hit;
+    }
   }
 
   // Check text content of interactive elements
@@ -447,7 +820,10 @@ export function findTopicElement(
   );
   for (const el of interactive) {
     const text = el.textContent.trim().slice(0, 80);
-    if (text !== "" && candidates.has(text) && isVisible(el)) return el;
+    if (text !== "" && candidates.has(text) && isVisible(el)) {
+      const hit = prefer(el);
+      if (hit !== null) return hit;
+    }
   }
 
   // List items carry title and value in one textContent blob, so the
@@ -464,7 +840,8 @@ export function findTopicElement(
         candidates.has(text) &&
         isVisible(item)
       ) {
-        return item;
+        const hit = prefer(item);
+        if (hit !== null) return hit;
       }
     }
   }
@@ -473,11 +850,25 @@ export function findTopicElement(
   const inputs = root.querySelectorAll("[placeholder]");
   for (const el of inputs) {
     const placeholder = el.getAttribute("placeholder");
-    if (placeholder !== null && candidates.has(placeholder) && isVisible(el))
-      return el;
+    if (placeholder !== null && candidates.has(placeholder) && isVisible(el)) {
+      const hit = prefer(el);
+      if (hit !== null) return hit;
+    }
   }
 
-  return null;
+  return chromeMatch;
+}
+
+/**
+ * Whether the element sits in shell navigation chrome: the desktop
+ * sidebar, tab bars, or any nav landmark. Pulse taps must never
+ * activate navigation (clicking a sidebar item leaves the screen
+ * being narrated), and target resolution prefers content matches.
+ */
+export function isNavChrome(el: Element): boolean {
+  return (
+    el.closest('nav, [role="navigation"], [role="tablist"], .k-tabbar') !== null
+  );
 }
 
 function isVisible(el: Element): boolean {
@@ -496,6 +887,52 @@ function isVisible(el: Element): boolean {
     rect.bottom > 0 &&
     rect.top < view.innerHeight
   );
+}
+
+// -----------------------------------------------------------------------
+// CSS selector fallback for topics with no matchable message-key label
+// -----------------------------------------------------------------------
+
+/**
+ * CSS selectors tried in order for topics whose target has no aria-label
+ * or text content that matches a paraglide message key.
+ */
+export const TOPIC_SELECTORS: ReadonlyMap<DemoTopic, readonly string[]> =
+  new Map([
+    // SwipeableCard: data-testid="ticket-card" (SwipeableCard.svelte line 339)
+    ["quick-actions", ['[data-testid="ticket-card"]']],
+    // NewPill badge .new-pill (NewPill.svelte line 24), then the count badge
+    ["unread-badges", [".new-pill", '[data-testid="count-new-replies"]']],
+    // Stats row count badge, then the stats row container
+    // (tickets/+page.svelte lines 1278-1311, data-testid="count-new-replies")
+    ["list-stats", ['[data-testid="count-new-replies"]', ".stats-counts"]],
+    // CaseHeader root .case-header (CaseHeader.svelte line 166)
+    ["case-header", [".case-header"]],
+    // DecryptPlaceholder renders role="status" while scrambling (line 161)
+    ["decryption", ['[role="status"][aria-busy="true"]']],
+    // Date separator line in the thread (TicketDetail.svelte line 1253)
+    ["thread-anatomy", [".date-separator", ".unread-divider"]],
+    // GettingStartedCard collapse toggle (CollapsibleSection.svelte line 55)
+    ["dashboard-getting-started", [".collapsible-section .section-toggle"]],
+  ]);
+
+/**
+ * Find the first visible element matching one of the topic's CSS
+ * selectors. Consulted by PhoneApp when label matching fails.
+ */
+export function findTopicElementBySelector(
+  root: Document | Element,
+  topic: DemoTopic,
+): Element | null {
+  const selectors = TOPIC_SELECTORS.get(topic);
+  if (selectors === undefined) return null;
+  for (const selector of selectors) {
+    const elements = root.querySelectorAll(selector);
+    for (const el of elements) {
+      if (isVisible(el)) return el;
+    }
+  }
+  return null;
 }
 
 // -----------------------------------------------------------------------

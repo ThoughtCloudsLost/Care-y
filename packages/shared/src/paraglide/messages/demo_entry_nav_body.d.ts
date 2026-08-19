@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "Pick a feature from the list and the simulator opens that screen. Tap around in the simulator and the story follows you. Nothing you type here leaves your de..." |
+* | "Pick a feature from the list and the simulator opens that screen. Tapping around in the simulator works in the other direction, the handbook follows where yo..." |
 *
 * @param {Demo_Entry_Nav_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

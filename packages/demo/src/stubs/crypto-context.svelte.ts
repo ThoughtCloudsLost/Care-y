@@ -40,7 +40,12 @@ import type {
 } from "$lib/tickets/preview-loader.svelte.js";
 import type { BridgeState } from "$lib/workers/crypto-bridge.js";
 import type { LoginCryptoResult } from "$lib/auth/login-crypto.js";
-import { traceFlowLocal } from "../lib/flow-events.js";
+import {
+  traceFlowLocal,
+  startFlowRecording,
+  stopFlowRecording,
+} from "../lib/flow-events.js";
+import type { RecordedFlowEvent } from "../lib/flow-events.js";
 
 // -----------------------------------------------------------------------
 // Error type
@@ -73,6 +78,9 @@ interface PacingBridgeWrapper {
   resolveKeyed(): void;
   /** The underlying promise that resolves when keyed. */
   readonly keyedPromise: Promise<void>;
+  /** Clear the first-resolution stagger cache so subsequent decrypts
+   *  re-play the descramble delay. */
+  clearPacedKeys(): void;
 }
 
 function createPacingBridge(real: CryptoBridge): PacingBridgeWrapper {
@@ -155,9 +163,23 @@ function createPacingBridge(real: CryptoBridge): PacingBridgeWrapper {
     );
   };
 
+  // The login page's handleSubmit calls bridge.zeroAll() before every
+  // submit (a product defense against a stale KEYED worker from a
+  // previous session). In the demo, the worker is keyed exactly once
+  // per iframe with the demo credentials and the login scene replays
+  // its submit over that keyed worker. Letting the zeroAll through
+  // would wipe the keys while the memoized ensureKeyed promise keeps
+  // reporting them derived, breaking every decrypt afterward. The
+  // stale-session case the product defends against cannot occur here,
+  // so the wrapper swallows zeroAll entirely.
+  const noopZeroAll = async function noopZeroAll(): Promise<void> {
+    await Promise.resolve();
+  };
+
   // Build the wrapper as a Proxy. All property accesses pass through
   // to the real bridge except decrypt and decryptAndRewrap, which
-  // return the pre-built paced wrappers.
+  // return the pre-built paced wrappers, and zeroAll, which is
+  // swallowed (see above).
   const handler: ProxyHandler<CryptoBridge> = {
     get(
       target: CryptoBridge,
@@ -166,6 +188,7 @@ function createPacingBridge(real: CryptoBridge): PacingBridgeWrapper {
     ): unknown {
       if (prop === "decrypt") return pacedDecrypt;
       if (prop === "decryptAndRewrap") return pacedDecryptAndRewrap;
+      if (prop === "zeroAll") return noopZeroAll;
       // All other methods pass through to the real bridge.
       // Use Reflect.get with the real target as receiver so private
       // fields resolve correctly (Kysely Proxy lesson).
@@ -182,6 +205,9 @@ function createPacingBridge(real: CryptoBridge): PacingBridgeWrapper {
       resolveKeyed = null;
     },
     keyedPromise,
+    clearPacedKeys(): void {
+      pacedKeys.clear();
+    },
   };
 }
 
@@ -254,6 +280,8 @@ const DEFAULT_PERMISSIONS: ReadonlySet<Permission> = new Set<Permission>([
   Permission.MANAGE_PRESETS,
   Permission.MANAGE_KNOWLEDGE_BASE_CATEGORIES,
   Permission.VIEW_REPORTS,
+  Permission.DELETE_CLIENTS,
+  Permission.VIEW_CLIENTS,
   Permission.MANAGE_ORG_CONFIG,
   Permission.MANAGE_KEYS,
   Permission.MANAGE_INFRASTRUCTURE,
@@ -388,22 +416,14 @@ export function setCurrentPermissions(_v: unknown): void {
 
 let ensureKeyedPromise: Promise<void> | null = null;
 let ensureKeyedResult: LoginCryptoResult | null = null;
+let derivationRecording: readonly RecordedFlowEvent[] | null = null;
 
 /**
- * Whether a login crypto derivation has started and not failed. True
- * from the moment ensureKeyed() is first called, which covers the
- * verify-to-derive handoff gap before the login-stage callback fires
- * "deriving". Stays true after a successful derivation for the rest
- * of the iframe's lifetime: the keyed worker equally must not have a
- * rewind-replay zeroAll spliced into its queue. Cleared only on
- * rejection (the promise cache resets so retry works), which reopens
- * the gate for the retry's own run.
- *
- * PhoneApp's advance chain reads this to refuse rewinding the login
- * scene over a running or completed derivation.
+ * Retrieve the flow events recorded during the real derivation.
+ * Returns null until the first ensureKeyed run completes.
  */
-export function isLoginCryptoInFlight(): boolean {
-  return ensureKeyedPromise !== null;
+export function getDerivationRecording(): readonly RecordedFlowEvent[] | null {
+  return derivationRecording;
 }
 
 /**
@@ -487,18 +507,27 @@ async function runEnsureKeyed(): Promise<void> {
     },
   };
 
-  const result = await realLoginCrypto(
-    DEMO_ADMIN_IDENTIFIER,
-    DEMO_ADMIN_PASSWORD,
-    bridge,
-    noopCallbacks,
-  );
-
-  ensureKeyedResult = result;
+  // Record flow events emitted during the real derivation so the
+  // boot burst does not appear in the band. The login-crypto stub
+  // replays the recording during its paced choreography.
+  startFlowRecording();
+  let recorded: readonly RecordedFlowEvent[];
+  try {
+    const result = await realLoginCrypto(
+      DEMO_ADMIN_IDENTIFIER,
+      DEMO_ADMIN_PASSWORD,
+      bridge,
+      noopCallbacks,
+    );
+    ensureKeyedResult = result;
+  } finally {
+    recorded = stopFlowRecording();
+  }
+  derivationRecording = recorded;
 
   // Load the org key so OrgDecryptCache can decrypt
-  if (result.orgPublicKey !== null) {
-    okm.load(result.orgPublicKey);
+  if (ensureKeyedResult.orgPublicKey != null) {
+    okm.load(ensureKeyedResult.orgPublicKey);
   }
 
   // Unblock all queued decrypt calls in the pacing wrapper
@@ -539,4 +568,15 @@ export function setRoleAndPermissions(
 ): void {
   currentUserRoleId = roleId;
   currentPermissions = permissions;
+}
+
+/**
+ * Clear the pacing bridge's first-resolution stagger cache so the next
+ * query reset re-triggers the descramble animation on every visible
+ * decrypt placeholder. Called by the PhoneApp "decryption" pulse topic.
+ */
+export function replayDescramble(): void {
+  if (pacingBridge !== null) {
+    pacingBridge.clearPacedKeys();
+  }
 }

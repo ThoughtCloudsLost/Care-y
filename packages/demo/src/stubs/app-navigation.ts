@@ -19,7 +19,11 @@
  */
 
 import { SvelteURL } from "svelte/reactivity";
-import { page, setDemoPageShallow } from "./app-state.svelte.js";
+import {
+  page,
+  setDemoPageShallow,
+  nextPageCommit,
+} from "./app-state.svelte.js";
 
 // -----------------------------------------------------------------------
 // Structural types matching SvelteKit's BeforeNavigate/AfterNavigate
@@ -149,13 +153,32 @@ function resolveUrl(url: string): URL {
 // $app/navigation API surface
 // -----------------------------------------------------------------------
 
+/**
+ * Ceiling on how long goto waits for the page commit. Navigations that
+ * never reach RouteMount (same-route gotos, login transitions) produce
+ * no setDemoPage call, and goto must not hang on them.
+ */
+const GOTO_COMMIT_TIMEOUT_MS = 1_000;
+
 export async function goto(
   url: string,
   _opts?: Record<string, unknown>,
 ): Promise<void> {
   await Promise.resolve();
   if (handler !== null) {
+    // Resolve when the navigation COMMITS (RouteMount's deferred
+    // setDemoPage), matching SvelteKit's goto contract. Callers rely
+    // on it: the client's desktop split view runs goto("/tickets")
+    // then pushState({ticketId}), and pushState must land AFTER the
+    // commit or the commit's state reset erases it.
+    const commit = nextPageCommit();
     handler(url);
+    await Promise.race([
+      commit,
+      new Promise<void>((resolve) => {
+        setTimeout(resolve, GOTO_COMMIT_TIMEOUT_MS);
+      }),
+    ]);
     return;
   }
   // No handler registered: swallow the navigation silently.

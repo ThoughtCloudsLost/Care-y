@@ -53,8 +53,10 @@ describe("classifyDemoLabel", () => {
     expect(classifyDemoLabel("Queue", listCtx)).toBe("filters");
   });
 
-  it("classifies Save filter shortcut as filters", () => {
-    expect(classifyDemoLabel("Save filter shortcut", listCtx)).toBe("filters");
+  it("classifies Save filter shortcut as saved-filters", () => {
+    expect(classifyDemoLabel("Save filter shortcut", listCtx)).toBe(
+      "saved-filters",
+    );
   });
 
   // -- thread-filters (detail context) --
@@ -95,13 +97,20 @@ describe("classifyDemoLabel", () => {
     expect(classifyDemoLabel("Tabla", listCtx)).toBe("view-modes");
   });
 
-  // -- select-mode --
-  it("classifies list select mode label", () => {
+  // -- select-mode vs message-select --
+  it("classifies list select mode label as select-mode", () => {
     expect(classifyDemoLabel("Select", listCtx)).toBe("select-mode");
   });
 
-  it("classifies detail select mode label", () => {
-    expect(classifyDemoLabel("Select messages", detailCtx)).toBe("select-mode");
+  it("classifies detail select mode label as message-select", () => {
+    expect(classifyDemoLabel("Select messages", detailCtx)).toBe(
+      "message-select",
+    );
+  });
+
+  it("classifies detail select mode label on the list as select-mode", () => {
+    // ticket_select_mode ("Select messages") with inDetail false falls to select-mode
+    expect(classifyDemoLabel("Select messages", listCtx)).toBe("select-mode");
   });
 
   // -- new-ticket --
@@ -237,8 +246,8 @@ describe("classifyDemoLabel", () => {
     expect(classifyDemoLabel("View timeline", detailCtx)).toBe("timeline");
   });
 
-  it("classifies messages toggle as timeline", () => {
-    expect(classifyDemoLabel("View messages", detailCtx)).toBe("timeline");
+  it("classifies messages toggle as conversation in detail", () => {
+    expect(classifyDemoLabel("View messages", detailCtx)).toBe("conversation");
   });
 
   // -- unrecognized --
@@ -381,7 +390,7 @@ describe("classifyDemoLabel", () => {
 
   // -- settings-2fa --
   it("classifies Two-factor authentication as settings-2fa", () => {
-    expect(classifyDemoLabel("Two-factor authentication", settingsCtx)).toBe(
+    expect(classifyDemoLabel("Two factor authentication", settingsCtx)).toBe(
       "settings-2fa",
     );
   });
@@ -392,6 +401,126 @@ describe("classifyDemoLabel", () => {
     expect(classifyDemoLabel("Sort", listCtx)).toBe("sort");
     invalidateClassifierCache();
     expect(classifyDemoLabel("Sort", listCtx)).toBe("sort");
+  });
+
+  // -- view-switcher collision: home vs tickets --
+  it("classifies Cards as dashboard-view-switcher on home", () => {
+    expect(classifyDemoLabel("Cards", homeCtx)).toBe("dashboard-view-switcher");
+  });
+
+  it("classifies Cards as view-modes on tickets", () => {
+    expect(classifyDemoLabel("Cards", listCtx)).toBe("view-modes");
+  });
+
+  it("classifies View as label as dashboard-view-switcher on home", () => {
+    expect(classifyDemoLabel("View as", homeCtx)).toBe(
+      "dashboard-view-switcher",
+    );
+  });
+
+  it("classifies View as label as view-modes on tickets", () => {
+    expect(classifyDemoLabel("View as", listCtx)).toBe("view-modes");
+  });
+
+  it("classifies Cards as library-tools on library", () => {
+    expect(classifyDemoLabel("Cards", libraryCtx)).toBe("library-tools");
+  });
+
+  it("classifies View as label as library-tools on library", () => {
+    expect(classifyDemoLabel("View as", libraryCtx)).toBe("library-tools");
+  });
+
+  // -- Queues collision: admin vs home --
+  it("classifies Queues as dashboard-queues on home", () => {
+    expect(classifyDemoLabel("Queues", homeCtx)).toBe("dashboard-queues");
+  });
+
+  it("classifies Queues tab as admin-queues on admin", () => {
+    // admin_tab_queues renders the same "Queues" string with terminology
+    expect(classifyDemoLabel("Queues", adminCtx)).toBe("admin-queues");
+  });
+
+  // -- search_inline_trigger three-way split: list vs detail vs library --
+  it("classifies search trigger as page-search on ticket list", () => {
+    expect(classifyDemoLabel("Search this page", listCtx)).toBe("page-search");
+  });
+
+  it("classifies search trigger as deep-search on ticket detail", () => {
+    expect(classifyDemoLabel("Search this page", detailCtx)).toBe(
+      "deep-search",
+    );
+  });
+
+  it("classifies search trigger as library-search on library", () => {
+    expect(classifyDemoLabel("Search this page", libraryCtx)).toBe(
+      "library-search",
+    );
+  });
+
+  // -- dashboard-shift --
+  it("classifies Shift heading as dashboard-shift", () => {
+    expect(classifyDemoLabel("Shift", homeCtx)).toBe("dashboard-shift");
+  });
+
+  // -- dashboard-needs-attention --
+  it("classifies Needs Attention as dashboard-needs-attention", () => {
+    expect(classifyDemoLabel("Needs Attention", homeCtx)).toBe(
+      "dashboard-needs-attention",
+    );
+  });
+
+  // -- admin-phone-lines --
+  it("classifies Telephony tab as admin-phone-lines", () => {
+    expect(classifyDemoLabel("Telephony", adminCtx)).toBe("admin-phone-lines");
+  });
+
+  // -- admin-branding --
+  it("classifies Branding tab as admin-branding", () => {
+    expect(classifyDemoLabel("Branding", adminCtx)).toBe("admin-branding");
+  });
+
+  // -- admin-keys --
+  it("classifies Keys tab as admin-keys", () => {
+    expect(classifyDemoLabel("Keys", adminCtx)).toBe("admin-keys");
+  });
+
+  // -- settings-appearance --
+  it("classifies Color scheme as settings-appearance on settings", () => {
+    expect(classifyDemoLabel("Color scheme", settingsCtx)).toBe(
+      "settings-appearance",
+    );
+  });
+
+  // -- settings-security --
+  it("classifies Review security briefing as settings-security on settings", () => {
+    expect(classifyDemoLabel("Review security briefing", settingsCtx)).toBe(
+      "settings-security",
+    );
+  });
+
+  // -- case-panel (took over ticket_more_actions from close-reopen) --
+  it("classifies More actions as case-panel in detail", () => {
+    expect(classifyDemoLabel("More actions", detailCtx)).toBe("case-panel");
+  });
+
+  it("classifies Call button as case-panel in detail", () => {
+    expect(classifyDemoLabel("Call", detailCtx)).toBe("case-panel");
+  });
+
+  // -- close-reopen (no longer owns ticket_more_actions) --
+  it("classifies Close as close-reopen in detail", () => {
+    expect(classifyDemoLabel("Close", detailCtx)).toBe("close-reopen");
+  });
+
+  it("classifies Reopen as close-reopen in detail", () => {
+    expect(classifyDemoLabel("Reopen", detailCtx)).toBe("close-reopen");
+  });
+
+  // -- saved-filters --
+  it("classifies saved filter apply as saved-filters", () => {
+    expect(classifyDemoLabel("Apply saved filter", listCtx)).toBe(
+      "saved-filters",
+    );
   });
 });
 

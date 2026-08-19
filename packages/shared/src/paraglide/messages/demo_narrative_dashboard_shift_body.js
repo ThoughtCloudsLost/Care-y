@@ -9,14 +9,16 @@ const en_demo_narrative_dashboard_shift_body = /** @type {(inputs: Demo_Narrativ
 	return /** @type {LocalizedString} */ (`The shift card shows the volunteer's current or upcoming shift.
 **During a shift,** the card displays start and end times and a countdown to the end of the shift. It also shows how many open tickets are currently assigned to the volunteer.
 **Before a shift,** the card shows a countdown to the start time.
-**After a shift ends** or when no shift is scheduled, the card shows a notice. The scheduling feature that manages shift creation is still in development.`)
+**After a shift ends** or when no shift is scheduled, the card shows a notice. The scheduling feature that manages shift creation is still in development.
+**On the card.** Initial chips show the volunteers currently on shift, and an end shift button is present. Like shift creation, ending a shift activates once the scheduling feature is complete.`)
 };
 
 const es_demo_narrative_dashboard_shift_body = /** @type {(inputs: Demo_Narrative_Dashboard_Shift_BodyInputs) => LocalizedString} */ () => {
 	return /** @type {LocalizedString} */ (`La tarjeta de turno muestra el turno actual o proximo del voluntario.
 **Durante un turno,** la tarjeta muestra las horas de inicio y fin y una cuenta regresiva hasta el final del turno. Tambien muestra cuantos tickets abiertos estan asignados actualmente al voluntario.
 **Antes de un turno,** la tarjeta muestra una cuenta regresiva hasta la hora de inicio.
-**Despues de que termina un turno** o cuando no hay turno programado, la tarjeta muestra un aviso. La funcion de programacion que gestiona la creacion de turnos aun esta en desarrollo.`)
+**Despues de que termina un turno** o cuando no hay turno programado, la tarjeta muestra un aviso. La funcion de programacion que gestiona la creacion de turnos aun esta en desarrollo.
+**En la tarjeta.** Chips iniciales muestran los voluntarios actualmente en turno, y un boton de terminar turno esta presente. Al igual que la creacion de turnos, terminar un turno se activara cuando la funcion de programacion este completa.`)
 };
 
 /**

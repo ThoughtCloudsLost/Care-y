@@ -38,6 +38,21 @@ export interface DemoPageUpdate {
   readonly routeId: string;
 }
 
+// One-shot resolvers for goto callers awaiting the next page commit.
+// SvelteKit's goto resolves once navigation COMPLETES; the demo's
+// equivalent of completion is RouteMount's deferred setDemoPage call.
+// Resolving goto earlier breaks the goto().then(() => pushState(...))
+// pattern: the shallow state lands first and the late commit wipes it
+// (the desktop tickets split view sets page.state.ticketId this way).
+let commitResolvers: (() => void)[] = [];
+
+/** Resolves when the next setDemoPage commit lands. */
+export async function nextPageCommit(): Promise<void> {
+  return new Promise((resolve) => {
+    commitResolvers.push(resolve);
+  });
+}
+
 /**
  * Set the current demo page. Called by RouteMount when its manifest
  * match changes (post-login), or by the router for login state.
@@ -54,6 +69,10 @@ export function setDemoPage(update: DemoPageUpdate): void {
   // SvelteKit clears page.state on full navigations (only pushState/
   // replaceState set it); setDemoPage is a full navigation equivalent.
   pageState = {};
+
+  const resolvers = commitResolvers;
+  commitResolvers = [];
+  for (const resolve of resolvers) resolve();
 }
 
 /**

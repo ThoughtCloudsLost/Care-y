@@ -208,6 +208,15 @@ describe("DemoRouter", () => {
       expect(router.feature).toBe("admin");
       expect(router.detail).toBe("volunteer");
       expect(router.activeArea).toBe("admin-volunteer");
+      expect(router.pathname).toBe("/admin/volunteer");
+    });
+
+    it("sets feature to admin with manager detail", () => {
+      router.navigate("admin", "manager");
+      expect(router.feature).toBe("admin");
+      expect(router.detail).toBe("manager");
+      expect(router.activeArea).toBe("admin-manager");
+      expect(router.pathname).toBe("/admin/manager");
     });
 
     it("sets feature to admin with people detail", () => {

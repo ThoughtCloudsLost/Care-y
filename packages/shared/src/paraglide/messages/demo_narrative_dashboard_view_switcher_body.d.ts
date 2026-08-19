@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "The view switcher in the page header changes how ticket lists on the dashboard are displayed. **Available modes:** - **Rows** show compact single line entrie..." |
+* | "The view switcher in the page header changes how ticket lists on the dashboard are displayed. **Available modes:** - **Table** presents tickets in a sortable..." |
 *
 * @param {Demo_Narrative_Dashboard_View_Switcher_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

@@ -6,17 +6,17 @@ import { getLocale, experimentalStaticLocale } from '../runtime.js';
 /** @typedef {{}} Demo_Entry_Flow_BodyInputs */
 
 const en_demo_entry_flow_body = /** @type {(inputs: Demo_Entry_Flow_BodyInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Open the data flow panel from the top bar. Every interaction in the simulator shows its path through the screen, encryption, API, server, and database lanes. Each step shows direction, timing, and a payload preview. Where the page scripts something that the real app handles differently, a badge marks the seam.`)
+	return /** @type {LocalizedString} */ (`Open the data flow panel from the top bar and every interaction in the simulator draws its path through the screen, encryption, API, server, and database lanes, with each step showing direction, timing, and a payload preview. Where the page scripts something that the real app handles differently, a badge marks that step as scripted.`)
 };
 
 const es_demo_entry_flow_body = /** @type {(inputs: Demo_Entry_Flow_BodyInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Abre el panel de flujo de datos desde la barra superior. Cada interaccion en el simulador muestra su recorrido a traves de las lineas de pantalla, cifrado, API, servidor y base de datos. Cada paso muestra direccion, duracion y una vista previa del contenido. Donde la pagina simula algo que la aplicacion real maneja de otra forma, una insignia marca la diferencia.`)
+	return /** @type {LocalizedString} */ (`Abre el panel de flujo de datos desde la barra superior y cada interaccion en el simulador dibuja su recorrido a traves de las lineas de pantalla, cifrado, API, servidor y base de datos, con cada paso mostrando direccion, duracion y una vista previa del contenido. Donde la pagina simula algo que la aplicacion real maneja de otra forma, una insignia marca ese paso como simulado.`)
 };
 
 /**
 * | output |
 * | --- |
-* | "Open the data flow panel from the top bar. Every interaction in the simulator shows its path through the screen, encryption, API, server, and database lanes...." |
+* | "Open the data flow panel from the top bar and every interaction in the simulator draws its path through the screen, encryption, API, server, and database lan..." |
 *
 * @param {Demo_Entry_Flow_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

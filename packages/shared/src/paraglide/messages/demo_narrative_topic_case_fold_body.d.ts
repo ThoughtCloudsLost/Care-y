@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "The case details panel shows ticket metadata in a structured field list. **Encrypted fields.** Title and description are encrypted with the per ticket key. Q..." |
+* | "The disclosure handle under the ticket header folds the case fields away to give the conversation more room and brings them back when needed. **What folds.**..." |
 *
 * @param {Demo_Narrative_Topic_Case_Fold_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

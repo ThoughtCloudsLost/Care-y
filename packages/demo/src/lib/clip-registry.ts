@@ -37,6 +37,13 @@ export interface PeekFirePayload {
 // -----------------------------------------------------------------------
 
 /**
+ * Global kill switch: set to true once clip assets exist on disk.
+ * While false, hasClip() returns false for every sub, suppressing
+ * all figure placeholders from the flow layout.
+ */
+const CLIPS_ENABLED = false as boolean;
+
+/**
  * Default region crop aspect ratio. The spec's region crops are roughly
  * 390x220, giving 390 / 220 = ~1.7727. Figures use this unless a
  * per-sub override specifies a different shape.
@@ -110,9 +117,9 @@ export function buildClipUrl(
  * are recorded; until then, the behavior is intentionally permissive.
  */
 export function hasClip(sectionId: SectionId, subSlug: string): boolean {
-  // SECTIONS covers all narrated sections. A dedicated set would be
-  // redundant; the linear scan fires at most 9 times and only during
-  // layout, not per frame.
+  // No clip assets exist yet; suppress all figures until recordings land.
+  if (!CLIPS_ENABLED) return false;
+
   if (!SECTIONS.some((s) => s.id === sectionId)) return false;
   const key = `${sectionId}/${subSlug}`;
   const override = CLIP_OVERRIDES.get(key);

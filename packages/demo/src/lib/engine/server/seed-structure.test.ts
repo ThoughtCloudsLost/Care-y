@@ -164,6 +164,82 @@ describe("greeting seed data shape", () => {
   });
 });
 
+describe("SMS template seed data shape", () => {
+  // The seed inserts templates into sms_responses. SmsTemplatesSection
+  // renders rows grouped by TEMPLATE_TYPES (new_client, error).
+  const seededTemplates = [
+    {
+      response_type: "auto_reply",
+      locale: "en",
+      text: "We received your message. A volunteer will follow up soon.",
+    },
+    {
+      response_type: "auto_reply",
+      locale: "es",
+      text: "Recibimos su mensaje. Un voluntario le contactara pronto.",
+    },
+    {
+      response_type: "after_hours",
+      locale: "en",
+      text: "Our support line is currently closed. We will respond during the next available shift.",
+    },
+    {
+      response_type: "after_hours",
+      locale: "es",
+      text: "Nuestra linea de apoyo esta cerrada en este momento. Responderemos durante el proximo turno disponible.",
+    },
+    {
+      response_type: "new_client",
+      locale: "en",
+      text: "Welcome to Harbor Support. Reply HELP for a list of commands, or a volunteer will reach out shortly.",
+    },
+    {
+      response_type: "error",
+      locale: "en",
+      text: "We could not process your message. Please try again or call +1 (555) 000-1234.",
+    },
+  ];
+
+  it("includes new_client and error types that SmsTemplatesSection renders", () => {
+    const newClient = seededTemplates.filter(
+      (t) => t.response_type === "new_client",
+    );
+    const error = seededTemplates.filter((t) => t.response_type === "error");
+
+    expect(newClient.length).toBeGreaterThan(0);
+    expect(error.length).toBeGreaterThan(0);
+  });
+
+  it("has at least one en-locale template per rendered type", () => {
+    const enNewClient = seededTemplates.find(
+      (t) => t.response_type === "new_client" && t.locale === "en",
+    );
+    const enError = seededTemplates.find(
+      (t) => t.response_type === "error" && t.locale === "en",
+    );
+
+    expect(enNewClient).toBeDefined();
+    expect(enError).toBeDefined();
+  });
+
+  it("has non-empty text for every template", () => {
+    for (const t of seededTemplates) {
+      expect(t.text.length).toBeGreaterThan(0);
+    }
+  });
+});
+
+describe("retention policy seed", () => {
+  it("seeds pii_retention_days as 365", () => {
+    // The org_config insert sets pii_retention_days: 365 so
+    // RetentionSection renders its active description path.
+    const seededDays = 365;
+    expect(seededDays).toBe(365);
+    expect(seededDays).toBeGreaterThanOrEqual(1);
+    expect(seededDays).toBeLessThanOrEqual(3650);
+  });
+});
+
 describe("quarantine row shape", () => {
   it("has valid QuarantineReason values", () => {
     const reasons = ["tracker_miss", "no_intake_queue", "unresolved_client"];

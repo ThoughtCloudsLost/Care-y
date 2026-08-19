@@ -113,6 +113,10 @@ export const CROP_REGISTRY = {
     selector: null,
     fallbackRect: { ...DEFAULT_RECT },
   },
+  "dashboard/getting-started": {
+    selector: null,
+    fallbackRect: { ...DEFAULT_RECT },
+  },
   "dashboard/needs-attention": {
     selector: null,
     fallbackRect: { ...DEFAULT_RECT },
@@ -155,6 +159,10 @@ export const CROP_REGISTRY = {
     selector: null,
     fallbackRect: { ...DEFAULT_RECT },
   },
+  "tickets/page-search": {
+    selector: null,
+    fallbackRect: { ...DEFAULT_RECT },
+  },
   "tickets/quick-actions": {
     selector: null,
     fallbackRect: { ...DEFAULT_RECT },
@@ -164,6 +172,10 @@ export const CROP_REGISTRY = {
     fallbackRect: { ...DEFAULT_RECT },
   },
   "tickets/decryption": {
+    selector: null,
+    fallbackRect: { ...DEFAULT_RECT },
+  },
+  "tickets/stats": {
     selector: null,
     fallbackRect: { ...DEFAULT_RECT },
   },
@@ -182,6 +194,10 @@ export const CROP_REGISTRY = {
     fallbackRect: { ...DEFAULT_RECT },
   },
   "ticket-detail/conversation": {
+    selector: null,
+    fallbackRect: { ...DEFAULT_RECT },
+  },
+  "ticket-detail/thread-anatomy": {
     selector: null,
     fallbackRect: { ...DEFAULT_RECT },
   },
@@ -205,6 +221,10 @@ export const CROP_REGISTRY = {
     selector: null,
     fallbackRect: { ...DEFAULT_RECT },
   },
+  "ticket-detail/case-panel": {
+    selector: null,
+    fallbackRect: { ...DEFAULT_RECT },
+  },
   "ticket-detail/timeline": {
     selector: null,
     fallbackRect: { ...DEFAULT_RECT },
@@ -214,6 +234,10 @@ export const CROP_REGISTRY = {
     fallbackRect: { ...DEFAULT_RECT },
   },
   "ticket-detail/message-actions": {
+    selector: null,
+    fallbackRect: { ...DEFAULT_RECT },
+  },
+  "ticket-detail/message-select": {
     selector: null,
     fallbackRect: { ...DEFAULT_RECT },
   },
@@ -227,6 +251,10 @@ export const CROP_REGISTRY = {
   },
 
   // -- search --
+  "search/overlay": {
+    selector: null,
+    fallbackRect: { ...DEFAULT_RECT },
+  },
   "search/how-it-works": {
     selector: null,
     fallbackRect: { ...DEFAULT_RECT },
@@ -238,6 +266,10 @@ export const CROP_REGISTRY = {
 
   // -- library --
   "library/browse": {
+    selector: null,
+    fallbackRect: { ...DEFAULT_RECT },
+  },
+  "library/tools": {
     selector: null,
     fallbackRect: { ...DEFAULT_RECT },
   },
@@ -277,6 +309,10 @@ export const CROP_REGISTRY = {
     selector: null,
     fallbackRect: { ...DEFAULT_RECT },
   },
+  "admin-people/roster-tools": {
+    selector: null,
+    fallbackRect: { ...DEFAULT_RECT },
+  },
   "admin-people/queues": {
     selector: null,
     fallbackRect: { ...DEFAULT_RECT },
@@ -285,9 +321,21 @@ export const CROP_REGISTRY = {
     selector: null,
     fallbackRect: { ...DEFAULT_RECT },
   },
+  "admin-people/client-merge": {
+    selector: null,
+    fallbackRect: { ...DEFAULT_RECT },
+  },
+  "admin-people/roles": {
+    selector: null,
+    fallbackRect: { ...DEFAULT_RECT },
+  },
 
   // -- admin-comms --
   "admin-comms/phone-lines": {
+    selector: null,
+    fallbackRect: { ...DEFAULT_RECT },
+  },
+  "admin-comms/provider": {
     selector: null,
     fallbackRect: { ...DEFAULT_RECT },
   },

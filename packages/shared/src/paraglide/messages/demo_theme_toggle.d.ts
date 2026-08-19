@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "Toggle dark mode" |
+* | "Toggle dark/light mode" |
 *
 * @param {Demo_Theme_ToggleInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

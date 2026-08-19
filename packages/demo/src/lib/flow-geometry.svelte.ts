@@ -63,6 +63,21 @@ export const CHROME_GAP = 8;
 // back to the ratio above.
 let headerBottom = $state(0);
 
+// Window scroll position as reactive state, published by the scroll
+// engine's scroll listener. locationWithVisibleHeading must read this
+// instead of window.scrollY: the geometry source is NOT republished on
+// every scroll frame (runLayout's no-op guard skips passes whose hole
+// is unchanged or disjoint), so a plain window.scrollY read would leave
+// the derived selection frozen while the visitor scrolls.
+let viewportScrollY = $state(
+  typeof window === "undefined" ? 0 : window.scrollY,
+);
+
+/** Publish the current window scroll position. */
+export function setViewportScrollY(px: number): void {
+  viewportScrollY = px;
+}
+
 /** Called by the sticky header whenever its box changes. */
 export function setHeaderBottom(px: number): void {
   headerBottom = px;
@@ -153,6 +168,21 @@ export function readingLineY(): number {
  * Falls back to the last sub once every heading is above the band, which
  * is the state at the bottom of a page.
  */
+
+/**
+ * Slack (px) a heading may sit above the band and still count as "at"
+ * it. Alignment scrolls place the target heading's top exactly on the
+ * band (scrollTargetForBlock solves top == band), so with a strict
+ * `top >= band` the aligned state rests on a knife edge: browser
+ * scroll rounding or a fixed-point residual (FIXED_POINT_EPSILON 1px)
+ * can leave the heading a fraction ABOVE the band, flipping the
+ * selection to the NEXT sub. That stale flip then fires a page-scroll
+ * intent that overrides the click that caused the alignment. The
+ * tolerance absorbs both error sources while staying far below a line
+ * height, so adjacent headings can never both qualify at rest.
+ */
+const BAND_TOLERANCE = 4;
+
 export function locationWithVisibleHeading(): FlowLocation | null {
   if (source === null) return null;
   if (typeof window === "undefined") return null;
@@ -167,8 +197,8 @@ export function locationWithVisibleHeading(): FlowLocation | null {
     if (geo === undefined) continue;
 
     last = { sectionId: block.sectionId, subSlug: block.subSlug };
-    const top = source.containerTop + geo.topY - window.scrollY;
-    if (top >= band) return last;
+    const top = source.containerTop + geo.topY - viewportScrollY;
+    if (top >= band - BAND_TOLERANCE) return last;
   }
   return last;
 }

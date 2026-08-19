@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "Phone and story are linked (click to unlink)" |
+* | "Phone and handbook are linked (click to unlink)" |
 *
 * @param {Demo_Toolbar_Link_LinkedInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

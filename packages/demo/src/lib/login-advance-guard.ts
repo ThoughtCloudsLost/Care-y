@@ -52,19 +52,23 @@ export type AdvanceDecision = "rewind" | "proceed" | "already" | "drop";
 
 /**
  * Decide what a login advance chain should do given the current stage,
- * the requested target, and whether a crypto derivation is in flight.
+ * the requested target, and whether the paced login choreography is
+ * mid-flight.
  *
- * The crypto in-flight signal is true from the moment ensureKeyed()
- * is first called (covering the gap before the login-stage callback
- * fires "deriving") and stays true after success; it clears only on
- * rejection. Rewinds are therefore refused over a running derivation
- * AND over a keyed worker, both of which a replayed submit's zeroAll
- * would corrupt.
+ * The paced in-flight signal is true from the moment the login scene's
+ * submit enters the demo loginCrypto stub (covering the gap before the
+ * login-stage callback fires "deriving") until the choreography
+ * settles. Rewinds are refused while it is set: a remount mid-pacing
+ * would leave the old pacing timers driving the new scene's stage
+ * listener. The background ensureKeyed (eager keying after engine
+ * boot) never sets this signal, and the worker itself is safe to
+ * replay over because the demo bridge swallows the login page's
+ * defensive zeroAll.
  */
 export function evaluateAdvance(
   currentStage: LoginStage,
   target: LoginAdvanceTarget,
-  cryptoInFlight: boolean,
+  pacedInFlight: boolean,
 ): AdvanceDecision {
   // eslint-disable-next-line security/detect-object-injection -- key is a typed LoginAdvanceTarget union member
   const targetRank = TARGET_RANK[target];
@@ -72,11 +76,11 @@ export function evaluateAdvance(
   const stageRank = STAGE_RANK[currentStage];
 
   if (stageRank > targetRank) {
-    // A lower-rank target while the derivation is running means a
-    // stale scroll-derived intent leaked through. The running pipeline
-    // owns the scene; rewinding would splice a zeroAll into the worker
-    // queue and corrupt it.
-    if (cryptoInFlight) return "drop";
+    // A lower-rank target while the choreography is playing means a
+    // stale scroll-derived intent leaked through. The running pacing
+    // sequence owns the scene; discard the intent instead of
+    // remounting under it.
+    if (pacedInFlight) return "drop";
     return "rewind";
   }
 

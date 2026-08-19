@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "Volunteers can toggle between light and dark color schemes. The preference is saved locally on the device and is not sent to the server." |
+* | "Volunteers can toggle between light and dark color schemes. The preference is saved locally on the device and is not sent to the server, and a refresh app en..." |
 *
 * @param {Demo_Narrative_Settings_Appearance_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" }} options
