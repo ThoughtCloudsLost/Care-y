@@ -10,7 +10,7 @@ const en_demo_narrative_search_entities_heading = /** @type {(inputs: Demo_Narra
 };
 
 const es_demo_narrative_search_entities_heading = /** @type {(inputs: Demo_Narrative_Search_Entities_HeadingInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Que cubre la busqueda`)
+	return /** @type {LocalizedString} */ (`Qué cubre la búsqueda`)
 };
 
 /**

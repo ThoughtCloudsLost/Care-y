@@ -10,7 +10,7 @@ const en_demo_narrative_library_detail_heading = /** @type {(inputs: Demo_Narrat
 };
 
 const es_demo_narrative_library_detail_heading = /** @type {(inputs: Demo_Narrative_Library_Detail_HeadingInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Vista detallada del articulo`)
+	return /** @type {LocalizedString} */ (`Vista detallada del artículo`)
 };
 
 /**

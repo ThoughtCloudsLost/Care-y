@@ -12,9 +12,9 @@ const en_demo_narrative_topic_thread_filters_body = /** @type {(inputs: Demo_Nar
 };
 
 const es_demo_narrative_topic_thread_filters_body = /** @type {(inputs: Demo_Narrative_Topic_Thread_Filters_BodyInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Dentro de un ticket, filtra el hilo por tipo de mensaje, autor o fecha. Los filtros de conversacion reducen los mensajes visibles sin una nueva solicitud al servidor porque todos los mensajes ya estan descifrados localmente.
-**Tipos de mensaje.** Filtra para mostrar solo mensajes del cliente, respuestas de voluntarios, notas internas, cambios de estado o asignaciones. Esto es util en hilos largos donde el voluntario necesita encontrar un tipo especifico de entrada.
-**Filtro por autor.** En tickets con varios voluntarios, filtra para mostrar mensajes de una persona especifica.`)
+	return /** @type {LocalizedString} */ (`Dentro de un ticket, filtra el hilo por tipo de mensaje, autor o fecha. Los filtros de conversación reducen los mensajes visibles sin una nueva solicitud al servidor porque todos los mensajes ya están descifrados localmente.
+**Tipos de mensaje.** Filtra para mostrar solo mensajes del cliente, respuestas de voluntarios, notas internas, cambios de estado o asignaciones. Esto es útil en hilos largos donde el voluntario necesita encontrar un tipo específico de entrada.
+**Filtro por autor.** En tickets con varios voluntarios, filtra para mostrar mensajes de una persona específica.`)
 };
 
 /**

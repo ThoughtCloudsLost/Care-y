@@ -12,8 +12,8 @@ const en_demo_narrative_dashboard_getting_started_body = /** @type {(inputs: Dem
 };
 
 const es_demo_narrative_dashboard_getting_started_body = /** @type {(inputs: Demo_Narrative_Dashboard_Getting_Started_BodyInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Los administradores ven una lista de configuracion en la parte superior del panel principal hasta que la organizacion este completamente configurada. Cada fila es una tarea de configuracion que enlaza directamente a la pagina de administracion donde se completa.
-**Descarte.** La tarjeta puede colapsarse mientras se trabaja en ella, y descartarse por completo una vez terminada la configuracion. El descarte se registra por organizacion, por lo que permanece oculta para todos los administradores.
+	return /** @type {LocalizedString} */ (`Los administradores ven una lista de configuración en la parte superior del panel principal hasta que la organización esté completamente configurada. Cada fila es una tarea de configuración que enlaza directamente a la página de administración donde se completa.
+**Descarte.** La tarjeta puede colapsarse mientras se trabaja en ella, y descartarse por completo una vez terminada la configuración. El descarte se registra por organización, por lo que permanece oculta para todos los administradores.
 **Visibilidad.** Los voluntarios y gestores nunca ven esta tarjeta porque requiere el rol de administrador, por lo que cambiar el demo a un rol diferente la oculta.`)
 };
 

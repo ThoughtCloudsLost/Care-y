@@ -12,9 +12,9 @@ const en_demo_narrative_topic_reply_body = /** @type {(inputs: Demo_Narrative_To
 };
 
 const es_demo_narrative_topic_reply_body = /** @type {(inputs: Demo_Narrative_Topic_Reply_BodyInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Cuando un voluntario envia una respuesta, el mensaje se cifra en el dispositivo con la clave por ticket antes de llegar al servidor. El servidor almacena el texto cifrado y lo entrega al destinatario.
-**Respuestas por SMS.** Si el canal es SMS, el servidor reenvia el mensaje al proveedor de telefonia a traves de un relay sin estado que lee el cuerpo de la solicitud como un buffer crudo y lo borra de memoria inmediatamente despues del reenvio. El relay nunca crea una cadena JavaScript del contenido, y el servidor no almacena ni registra el mensaje saliente. Se reconoce un riesgo residual en el codigo: el SDK del proveedor de telefonia puede crear copias internas de cadenas que persisten hasta la recoleccion de basura.
-**Confirmacion de entrega.** El hilo muestra el estado de entrega de cada mensaje saliente para que el voluntario sepa si el mensaje llego al cliente.`)
+	return /** @type {LocalizedString} */ (`Cuando un voluntario envía una respuesta, el mensaje se cifra en el dispositivo con la clave por ticket antes de llegar al servidor. El servidor almacena el texto cifrado y lo entrega al destinatario.
+**Respuestas por SMS.** Si el canal es SMS, el servidor reenvia el mensaje al proveedor de telefonía a través de un relay sin estado que lee el cuerpo de la solicitud como un buffer crudo y lo borra de memoria inmediatamente después del reenvío. El relay nunca crea una cadena JavaScript del contenido, y el servidor no almacena ni registra el mensaje saliente. Se reconoce un riesgo residual en el código: el SDK del proveedor de telefonía puede crear copias internas de cadenas que persisten hasta la recolección de basura.
+**Confirmación de entrega.** El hilo muestra el estado de entrega de cada mensaje saliente para que el voluntario sepa si el mensaje llegó al cliente.`)
 };
 
 /**

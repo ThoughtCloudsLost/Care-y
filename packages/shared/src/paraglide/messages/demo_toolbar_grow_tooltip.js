@@ -10,7 +10,7 @@ const en_demo_toolbar_grow_tooltip = /** @type {(inputs: Demo_Toolbar_Grow_Toolt
 };
 
 const es_demo_toolbar_grow_tooltip = /** @type {(inputs: Demo_Toolbar_Grow_TooltipInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Restaurar tamano del marco`)
+	return /** @type {LocalizedString} */ (`Restaurar tamaño del marco`)
 };
 
 /**

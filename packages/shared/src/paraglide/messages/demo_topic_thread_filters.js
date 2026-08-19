@@ -10,7 +10,7 @@ const en_demo_topic_thread_filters = /** @type {(inputs: Demo_Topic_Thread_Filte
 };
 
 const es_demo_topic_thread_filters = /** @type {(inputs: Demo_Topic_Thread_FiltersInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Filtros de conversacion`)
+	return /** @type {LocalizedString} */ (`Filtros de conversación`)
 };
 
 /**

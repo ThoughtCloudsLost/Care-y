@@ -13,10 +13,10 @@ const en_demo_narrative_admin_quarantine_body = /** @type {(inputs: Demo_Narrati
 };
 
 const es_demo_narrative_admin_quarantine_body = /** @type {(inputs: Demo_Narrative_Admin_Quarantine_BodyInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Los correos de voz de llamantes desconocidos esperan aqui para revision. El audio se sella con la clave publica de la organizacion antes de almacenarse usando crypto_box_seal, por lo que el servidor nunca tiene acceso a la grabacion.
-**Reproduccion.** Descifra el audio en el navegador. El servidor entrega el texto cifrado sellado y el navegador del voluntario lo desbloquea con la clave de la organizacion.
-**Enrutamiento.** Los administradores pueden enrutar un correo de voz a un ticket nuevo o existente, o descartarlo. Los numeros del llamante y de la linea llamada tambien se sellan antes de almacenarse.
-**Por que un correo de voz llega aqui.** Cada entrada muestra su motivo. O no se configuro una cola de recepcion para recibir la llamada, o el llamante no pudo ser asociado a un cliente, o la coincidencia fue ambigua.`)
+	return /** @type {LocalizedString} */ (`Los correos de voz de llamantes desconocidos esperan aquí para revisión. El audio se sella con la clave pública de la organización antes de almacenarse usando crypto_box_seal, por lo que el servidor nunca tiene acceso a la grabación.
+**Reproducción.** Descifra el audio en el navegador. El servidor entrega el texto cifrado sellado y el navegador del voluntario lo desbloquea con la clave de la organización.
+**Enrutamiento.** Los administradores pueden enrutar un correo de voz a un ticket nuevo o existente, o descartarlo. Los números del llamante y de la línea llamada también se sellan antes de almacenarse.
+**Por qué un correo de voz llega aquí.** Cada entrada muestra su motivo. O no se configuró una cola de recepción para recibir la llamada, o el llamante no pudo ser asociado a un cliente, o la coincidencia fue ambigua.`)
 };
 
 /**

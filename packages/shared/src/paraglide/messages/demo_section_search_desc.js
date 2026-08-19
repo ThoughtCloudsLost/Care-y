@@ -10,7 +10,7 @@ const en_demo_section_search_desc = /** @type {(inputs: Demo_Section_Search_Desc
 };
 
 const es_demo_section_search_desc = /** @type {(inputs: Demo_Section_Search_DescInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`La busqueda encuentra resultados en tickets, articulos de la base de conocimiento y voluntarios desde una unica interfaz. Toda la comparacion de texto ocurre en el navegador contra contenido descifrado. Ningun termino de busqueda se envia al servidor.`)
+	return /** @type {LocalizedString} */ (`La búsqueda encuentra resultados en tickets, artículos de la base de conocimiento y voluntarios desde una única interfaz. Toda la comparación de texto ocurre en el navegador contra contenido descifrado. Ningún término de búsqueda se envía al servidor.`)
 };
 
 /**

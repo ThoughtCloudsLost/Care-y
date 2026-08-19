@@ -10,7 +10,7 @@ const en_demo_narrative_admin_terminology_heading = /** @type {(inputs: Demo_Nar
 };
 
 const es_demo_narrative_admin_terminology_heading = /** @type {(inputs: Demo_Narrative_Admin_Terminology_HeadingInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Terminologia`)
+	return /** @type {LocalizedString} */ (`Terminología`)
 };
 
 /**

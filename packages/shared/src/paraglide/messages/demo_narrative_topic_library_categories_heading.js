@@ -10,7 +10,7 @@ const en_demo_narrative_topic_library_categories_heading = /** @type {(inputs: D
 };
 
 const es_demo_narrative_topic_library_categories_heading = /** @type {(inputs: Demo_Narrative_Topic_Library_Categories_HeadingInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Gestion de categorias`)
+	return /** @type {LocalizedString} */ (`Gestión de categorías`)
 };
 
 /**

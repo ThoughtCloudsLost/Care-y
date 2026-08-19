@@ -10,7 +10,7 @@ const en_demo_narrative_topic_library_editor_heading = /** @type {(inputs: Demo_
 };
 
 const es_demo_narrative_topic_library_editor_heading = /** @type {(inputs: Demo_Narrative_Topic_Library_Editor_HeadingInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Editor de articulos`)
+	return /** @type {LocalizedString} */ (`Editor de artículos`)
 };
 
 /**

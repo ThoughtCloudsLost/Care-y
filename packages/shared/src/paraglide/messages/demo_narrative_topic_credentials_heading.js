@@ -10,7 +10,7 @@ const en_demo_narrative_topic_credentials_heading = /** @type {(inputs: Demo_Nar
 };
 
 const es_demo_narrative_topic_credentials_heading = /** @type {(inputs: Demo_Narrative_Topic_Credentials_HeadingInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Nombre de usuario y contrasena`)
+	return /** @type {LocalizedString} */ (`Nombre de usuario y contraseña`)
 };
 
 /**

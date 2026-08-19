@@ -10,7 +10,7 @@ const en_demo_flow_seam_outbox_delivery = /** @type {(inputs: Demo_Flow_Seam_Out
 };
 
 const es_demo_flow_seam_outbox_delivery = /** @type {(inputs: Demo_Flow_Seam_Outbox_DeliveryInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Los correos y los mensajes de texto se entregan a un buzon dentro de este demo. No se envia nada a una direccion o un numero real.`)
+	return /** @type {LocalizedString} */ (`Los correos y los mensajes de texto se entregan a un buzón dentro de este demo. No se envía nada a una dirección o un número real.`)
 };
 
 /**

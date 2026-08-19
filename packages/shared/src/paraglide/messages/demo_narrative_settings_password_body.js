@@ -12,9 +12,9 @@ const en_demo_narrative_settings_password_body = /** @type {(inputs: Demo_Narrat
 };
 
 const es_demo_narrative_settings_password_body = /** @type {(inputs: Demo_Narrative_Settings_Password_BodyInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Cambiar la contrasena ejecuta el proceso completo de derivacion de claves. El navegador procesa la contrasena con Argon2id, realiza el intercambio OPRF con los servidores de umbral y re-envuelve las claves criptograficas.
-**Que ocurre durante un cambio de contrasena.** El navegador deriva nuevas claves de cifrado a partir de la nueva contrasena, luego re-envuelve la clave de la organizacion y cada clave de ticket a la que el voluntario tiene acceso bajo las nuevas claves. La contrasena anterior se verifica, la nueva se procesa, todos los envolvimientos de claves se rotan y las demas sesiones activas se terminan, todo en una unica llamada atomica al servidor.
-**Lo que ve el servidor.** El servidor nunca ve el texto plano de la nueva clave privada. Recibe solo el material de claves re-envuelto, que esta cifrado y solo puede descifrarlo el voluntario.`)
+	return /** @type {LocalizedString} */ (`Cambiar la contraseña ejecuta el proceso completo de derivación de claves. El navegador procesa la contraseña con Argon2id, realiza el intercambio OPRF con los servidores de umbral y re-envuelve las claves criptográficas.
+**Qué ocurre durante un cambio de contraseña.** El navegador deriva nuevas claves de cifrado a partir de la nueva contraseña, luego re-envuelve la clave de la organización y cada clave de ticket a la que el voluntario tiene acceso bajo las nuevas claves. La contraseña anterior se verifica, la nueva se procesa, todos los envolvimientos de claves se rotan y las demás sesiones activas se terminan, todo en una única llamada atómica al servidor.
+**Lo que ve el servidor.** El servidor nunca ve el texto plano de la nueva clave privada. Recibe solo el material de claves re-envuelto, que está cifrado y solo puede descifrarlo el voluntario.`)
 };
 
 /**

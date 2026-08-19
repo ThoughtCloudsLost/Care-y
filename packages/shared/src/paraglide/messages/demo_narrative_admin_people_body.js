@@ -12,9 +12,9 @@ const en_demo_narrative_admin_people_body = /** @type {(inputs: Demo_Narrative_A
 };
 
 const es_demo_narrative_admin_people_body = /** @type {(inputs: Demo_Narrative_Admin_People_BodyInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`El directorio muestra cada voluntario de la organizacion con su rol y colas asignadas.
-**Gestion de roles.** Cada voluntario tiene uno de tres roles: Voluntario, Gestor o Administrador. El rol determina que funciones y datos son accesibles.
-**Invitaciones.** Los administradores invitan a nuevos voluntarios generando un enlace de invitacion para compartir o creando la cuenta manualmente. Una invitacion pendiente puede revocarse antes de ser aceptada. El voluntario invitado completa la incorporacion y la generacion de claves en su propio dispositivo.`)
+	return /** @type {LocalizedString} */ (`El directorio muestra cada voluntario de la organización con su rol y colas asignadas.
+**Gestión de roles.** Cada voluntario tiene uno de tres roles: Voluntario, Gestor o Administrador. El rol determina qué funciones y datos son accesibles.
+**Invitaciones.** Los administradores invitan a nuevos voluntarios generando un enlace de invitación para compartir o creando la cuenta manualmente. Una invitación pendiente puede revocarse antes de ser aceptada. El voluntario invitado completa la incorporación y la generación de claves en su propio dispositivo.`)
 };
 
 /**

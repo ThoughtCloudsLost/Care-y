@@ -13,10 +13,10 @@ const en_demo_narrative_topic_exposure_hints_body = /** @type {(inputs: Demo_Nar
 };
 
 const es_demo_narrative_topic_exposure_hints_body = /** @type {(inputs: Demo_Narrative_Topic_Exposure_Hints_BodyInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Cuando un voluntario inicia una respuesta por SMS o una llamada telefonica desde un ticket, aparece un breve aviso recordandole que el canal no esta cifrado.
-**Aviso de SMS.** "El SMS no esta cifrado. Tu proveedor de telefonia puede leerlo. Mantén los detalles sensibles en el chat cifrado."
-**Aviso de llamada.** "Esta llamada pasa por tu proveedor de telefonia. Pueden escuchar la llamada. Mantén los detalles sensibles en el chat cifrado."
-**Frecuencia.** Cada aviso aparece una vez por sesion. Despues de que el voluntario lo descarta, el mismo aviso no aparece de nuevo hasta el proximo inicio de sesion. Los avisos son informativos y no bloquean la accion.`)
+	return /** @type {LocalizedString} */ (`Cuando un voluntario inicia una respuesta por SMS o una llamada telefónica desde un ticket, aparece un breve aviso recordándole que el canal no está cifrado.
+**Aviso de SMS.** "El SMS no está cifrado. Tu proveedor de telefonía puede leerlo. Mantén los detalles sensibles en el chat cifrado."
+**Aviso de llamada.** "Esta llamada pasa por tu proveedor de telefonía. Pueden escuchar la llamada. Mantén los detalles sensibles en el chat cifrado."
+**Frecuencia.** Cada aviso aparece una vez por sesión. Después de que el voluntario lo descarta, el mismo aviso no aparece de nuevo hasta el próximo inicio de sesión. Los avisos son informativos y no bloquean la acción.`)
 };
 
 /**

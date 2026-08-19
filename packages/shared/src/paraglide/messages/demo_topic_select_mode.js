@@ -10,7 +10,7 @@ const en_demo_topic_select_mode = /** @type {(inputs: Demo_Topic_Select_ModeInpu
 };
 
 const es_demo_topic_select_mode = /** @type {(inputs: Demo_Topic_Select_ModeInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Modo seleccion`)
+	return /** @type {LocalizedString} */ (`Modo selección`)
 };
 
 /**

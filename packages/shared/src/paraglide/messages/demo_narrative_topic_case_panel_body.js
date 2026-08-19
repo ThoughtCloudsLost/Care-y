@@ -14,11 +14,11 @@ const en_demo_narrative_topic_case_panel_body = /** @type {(inputs: Demo_Narrati
 };
 
 const es_demo_narrative_topic_case_panel_body = /** @type {(inputs: Demo_Narrative_Topic_Case_Panel_BodyInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Tocar el alias del cliente o el boton de caso en la barra de navegacion abre un panel con el registro completo del caso y todas las acciones a nivel de caso.
-**Campos.** El panel muestra el titulo, la descripcion, el estado, el numero de telefono del cliente enmascarado por rol y la fecha de apertura, junto con las notas y los archivos adjuntos al caso.
+	return /** @type {LocalizedString} */ (`Tocar el alias del cliente o el botón de caso en la barra de navegación abre un panel con el registro completo del caso y todas las acciones a nivel de caso.
+**Campos.** El panel muestra el título, la descripción, el estado, el número de teléfono del cliente enmascarado por rol y la fecha de apertura, junto con las notas y los archivos adjuntos al caso.
 **Acciones.** Desde el panel un voluntario puede llamar al cliente, asignar el ticket, tomarlo o liberarlo, ponerlo en espera, observarlo para seguir actualizaciones sin estar asignado, y cerrarlo o reabrirlo.
-**Numero de telefono.** Tocar la fila de telefono ofrece copiar y editar. Si un numero editado coincide con un cliente existente, una hoja de fusion resuelve el conflicto.
-**Cifrado.** Cada cambio realizado desde el panel se cifra en el navegador antes de enviarse, igual que las ediciones hechas en cualquier otra parte de la aplicacion.`)
+**Número de teléfono.** Tocar la fila de teléfono ofrece copiar y editar. Si un número editado coincide con un cliente existente, una hoja de fusión resuelve el conflicto.
+**Cifrado.** Cada cambio realizado desde el panel se cifra en el navegador antes de enviarse, igual que las ediciones hechas en cualquier otra parte de la aplicación.`)
 };
 
 /**

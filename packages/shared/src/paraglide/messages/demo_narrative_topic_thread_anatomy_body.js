@@ -14,11 +14,11 @@ const en_demo_narrative_topic_thread_anatomy_body = /** @type {(inputs: Demo_Nar
 };
 
 const es_demo_narrative_topic_thread_anatomy_body = /** @type {(inputs: Demo_Narrative_Topic_Thread_Anatomy_BodyInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`El hilo contiene mas que burbujas de mensaje.
-**Separadores de fecha.** Estos marcan donde termina un dia y comienza el siguiente.
-**Divisor de no leidos.** Una linea marca el primer mensaje que el voluntario aun no ha leido, para que al volver a un ticket ocupado la lectura comience en el lugar correcto.
-**Eventos del sistema.** Asignaciones, cambios de estado, cambios de prioridad, esperas y fusiones aparecen como entradas compactas entre mensajes, y los eventos consecutivos se agrupan para que una rafaga de gestion del caso no entierre la conversacion.
-**Mensajes anteriores.** Las conversaciones largas se cargan por paginas. Al desplazarse hacia arriba se obtiene y descifra la pagina siguiente, y un indicador de hueco muestra cuando parte del historial aun no se ha cargado.`)
+	return /** @type {LocalizedString} */ (`El hilo contiene más que burbujas de mensaje.
+**Separadores de fecha.** Estos marcan donde termina un día y comienza el siguiente.
+**Divisor de no leídos.** Una línea marca el primer mensaje que el voluntario aún no ha leído, para que al volver a un ticket ocupado la lectura comience en el lugar correcto.
+**Eventos del sistema.** Asignaciones, cambios de estado, cambios de prioridad, esperas y fusiones aparecen como entradas compactas entre mensajes, y los eventos consecutivos se agrupan para que una ráfaga de gestión del caso no entierre la conversación.
+**Mensajes anteriores.** Las conversaciones largas se cargan por páginas. Al desplazarse hacia arriba se obtiene y descifra la página siguiente, y un indicador de hueco muestra cuando parte del historial aún no se ha cargado.`)
 };
 
 /**

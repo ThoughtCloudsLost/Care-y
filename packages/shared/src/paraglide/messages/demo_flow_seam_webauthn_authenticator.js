@@ -10,7 +10,7 @@ const en_demo_flow_seam_webauthn_authenticator = /** @type {(inputs: Demo_Flow_S
 };
 
 const es_demo_flow_seam_webauthn_authenticator = /** @type {(inputs: Demo_Flow_Seam_Webauthn_AuthenticatorInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`El autenticador de la llave de acceso se simula en la pagina. En un dispositivo real el autenticador esta fuera de la pestana del navegador y guarda la clave.`)
+	return /** @type {LocalizedString} */ (`El autenticador de la llave de acceso se simula en la página. En un dispositivo real el autenticador está fuera de la pestaña del navegador y guarda la clave.`)
 };
 
 /**

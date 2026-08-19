@@ -14,9 +14,9 @@ const en_demo_narrative_topic_compose_actions_body = /** @type {(inputs: Demo_Na
 };
 
 const es_demo_narrative_topic_compose_actions_body = /** @type {(inputs: Demo_Narrative_Topic_Compose_Actions_BodyInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`La barra de composicion en la parte inferior de la pantalla es donde los voluntarios escriben respuestas y notas.
-**Cambio de modo.** La barra de composicion puede alternar entre modo de respuesta y modo de nota interna. En modo de respuesta, el mensaje se envia al cliente. En modo de nota, solo es visible para otros voluntarios.
-**Seleccion de canal.** Cuando el cliente tiene varios metodos de contacto, la barra de composicion permite al voluntario elegir por que canal enviar.
+	return /** @type {LocalizedString} */ (`La barra de composición en la parte inferior de la pantalla es donde los voluntarios escriben respuestas y notas.
+**Cambio de modo.** La barra de composición puede alternar entre modo de respuesta y modo de nota interna. En modo de respuesta, el mensaje se envía al cliente. En modo de nota, solo es visible para otros voluntarios.
+**Selección de canal.** Cuando el cliente tiene varios métodos de contacto, la barra de composición permite al voluntario elegir por qué canal enviar.
 **Mientras se escribe.** Escribir @ en una respuesta sugiere otros voluntarios para mencionar, y en modo SMS un contador de caracteres registra la longitud del mensaje.
 **Adjuntos.** Los archivos adjuntos a un ticket se cifran con la clave por ticket en el servidor usando XChaCha20-Poly1305 y se almacenan como datos binarios cifrados. El servidor nunca descifra los adjuntos almacenados. Los voluntarios los descargan y descifran en el navegador.`)
 };

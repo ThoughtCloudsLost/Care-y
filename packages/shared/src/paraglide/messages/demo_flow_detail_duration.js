@@ -10,7 +10,7 @@ const en_demo_flow_detail_duration = /** @type {(inputs: Demo_Flow_Detail_Durati
 };
 
 const es_demo_flow_detail_duration = /** @type {(inputs: Demo_Flow_Detail_DurationInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Duracion`)
+	return /** @type {LocalizedString} */ (`Duración`)
 };
 
 /**

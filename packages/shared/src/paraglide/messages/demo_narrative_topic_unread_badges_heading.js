@@ -10,7 +10,7 @@ const en_demo_narrative_topic_unread_badges_heading = /** @type {(inputs: Demo_N
 };
 
 const es_demo_narrative_topic_unread_badges_heading = /** @type {(inputs: Demo_Narrative_Topic_Unread_Badges_HeadingInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Insignias de no leidos`)
+	return /** @type {LocalizedString} */ (`Insignias de no leídos`)
 };
 
 /**

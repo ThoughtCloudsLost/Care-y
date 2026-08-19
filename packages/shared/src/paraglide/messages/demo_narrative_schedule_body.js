@@ -10,7 +10,7 @@ const en_demo_narrative_schedule_body = /** @type {(inputs: Demo_Narrative_Sched
 };
 
 const es_demo_narrative_schedule_body = /** @type {(inputs: Demo_Narrative_Schedule_BodyInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Esta pagina permitira a los gestores crear y asignar turnos de voluntarios. Los horarios de inicio y fin de turno, requisitos de cobertura y disponibilidad de voluntarios se gestionaran aqui. La tarjeta de resumen de turno en el panel principal ya lee de la estructura de datos de turnos, y la tarjeta mostrara datos reales cuando la programacion este completa.`)
+	return /** @type {LocalizedString} */ (`Esta página permitirá a los gestores crear y asignar turnos de voluntarios. Los horarios de inicio y fin de turno, requisitos de cobertura y disponibilidad de voluntarios se gestionarán aquí. La tarjeta de resumen de turno en el panel principal ya lee de la estructura de datos de turnos, y la tarjeta mostrará datos reales cuando la programación esté completa.`)
 };
 
 /**

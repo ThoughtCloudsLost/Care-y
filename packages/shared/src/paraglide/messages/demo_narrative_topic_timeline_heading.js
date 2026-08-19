@@ -10,7 +10,7 @@ const en_demo_narrative_topic_timeline_heading = /** @type {(inputs: Demo_Narrat
 };
 
 const es_demo_narrative_topic_timeline_heading = /** @type {(inputs: Demo_Narrative_Topic_Timeline_HeadingInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Vista de linea de tiempo`)
+	return /** @type {LocalizedString} */ (`Vista de línea de tiempo`)
 };
 
 /**

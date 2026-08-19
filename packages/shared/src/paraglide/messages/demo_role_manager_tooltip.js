@@ -10,7 +10,7 @@ const en_demo_role_manager_tooltip = /** @type {(inputs: Demo_Role_Manager_Toolt
 };
 
 const es_demo_role_manager_tooltip = /** @type {(inputs: Demo_Role_Manager_TooltipInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Responsable con acceso a voluntarios, colas e informes. No puede cambiar la configuracion de la organizacion ni la infraestructura.`)
+	return /** @type {LocalizedString} */ (`Responsable con acceso a voluntarios, colas e informes. No puede cambiar la configuración de la organización ni la infraestructura.`)
 };
 
 /**

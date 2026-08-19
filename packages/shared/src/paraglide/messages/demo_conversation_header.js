@@ -10,7 +10,7 @@ const en_demo_conversation_header = /** @type {(inputs: Demo_Conversation_Header
 };
 
 const es_demo_conversation_header = /** @type {(inputs: Demo_Conversation_HeaderInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Viendo la conversacion`)
+	return /** @type {LocalizedString} */ (`Viendo la conversación`)
 };
 
 /**

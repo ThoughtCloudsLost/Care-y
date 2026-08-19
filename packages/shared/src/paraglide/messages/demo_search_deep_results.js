@@ -10,7 +10,7 @@ const en_demo_search_deep_results = /** @type {(inputs: Demo_Search_Deep_Results
 };
 
 const es_demo_search_deep_results = /** @type {(inputs: Demo_Search_Deep_ResultsInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Mostrando resultados de busqueda profunda`)
+	return /** @type {LocalizedString} */ (`Mostrando resultados de búsqueda profunda`)
 };
 
 /**

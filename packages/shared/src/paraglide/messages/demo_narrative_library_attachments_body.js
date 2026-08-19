@@ -12,8 +12,8 @@ const en_demo_narrative_library_attachments_body = /** @type {(inputs: Demo_Narr
 };
 
 const es_demo_narrative_library_attachments_body = /** @type {(inputs: Demo_Narrative_Library_Attachments_BodyInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Los articulos pueden tener archivos adjuntos. Las imagenes insertadas en el cuerpo del articulo aparecen dentro del texto. Otros tipos de archivo aparecen como fichas de descarga debajo del articulo.
-**Cifrado.** Todos los adjuntos se cifran con la clave de la organizacion antes de almacenarse. El servidor almacena datos binarios cifrados. Los voluntarios descargan y descifran los adjuntos en el navegador.
+	return /** @type {LocalizedString} */ (`Los artículos pueden tener archivos adjuntos. Las imágenes insertadas en el cuerpo del artículo aparecen dentro del texto. Otros tipos de archivo aparecen como fichas de descarga debajo del artículo.
+**Cifrado.** Todos los adjuntos se cifran con la clave de la organización antes de almacenarse. El servidor almacena datos binarios cifrados. Los voluntarios descargan y descifran los adjuntos en el navegador.
 **Tipos permitidos.** Se aceptan archivos JPEG, PNG, GIF, WebP y PDF.`)
 };
 

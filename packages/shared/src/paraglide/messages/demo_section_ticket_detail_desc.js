@@ -10,7 +10,7 @@ const en_demo_section_ticket_detail_desc = /** @type {(inputs: Demo_Section_Tick
 };
 
 const es_demo_section_ticket_detail_desc = /** @type {(inputs: Demo_Section_Ticket_Detail_DescInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`La vista de detalle del ticket es donde los voluntarios leen mensajes, responden, toman notas y gestionan un caso. Cada campo mostrado aqui fue descifrado localmente por el navegador del voluntario. El servidor almacena y retransmite texto cifrado sin acceso al contenido. La vista tiene dos modos. Un hilo de conversacion para leer y responder, y una linea de tiempo para revisar el historial completo del caso.`)
+	return /** @type {LocalizedString} */ (`La vista de detalle del ticket es donde los voluntarios leen mensajes, responden, toman notas y gestionan un caso. Cada campo mostrado aquí fue descifrado localmente por el navegador del voluntario. El servidor almacena y retransmite texto cifrado sin acceso al contenido. La vista tiene dos modos. Un hilo de conversación para leer y responder, y una línea de tiempo para revisar el historial completo del caso.`)
 };
 
 /**

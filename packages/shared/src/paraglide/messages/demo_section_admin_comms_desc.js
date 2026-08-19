@@ -10,7 +10,7 @@ const en_demo_section_admin_comms_desc = /** @type {(inputs: Demo_Section_Admin_
 };
 
 const es_demo_section_admin_comms_desc = /** @type {(inputs: Demo_Section_Admin_Comms_DescInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`La pagina de comunicaciones configura como la organizacion se comunica con los clientes por telefono y mensajes de texto. Cubre las lineas telefonicas y sus saludos, las plantillas de SMS, la lista de bloqueo y la cuarentena de mensajes de voz donde las grabaciones de llamantes desconocidos esperan revision. Una fila de botones de seccion debajo del titulo salta a cualquiera de ellos.`)
+	return /** @type {LocalizedString} */ (`La página de comunicaciones configura cómo la organización se comunica con los clientes por teléfono y mensajes de texto. Cubre las líneas telefónicas y sus saludos, las plantillas de SMS, la lista de bloqueo y la cuarentena de mensajes de voz donde las grabaciones de llamantes desconocidos esperan revisión. Una fila de botones de sección debajo del título salta a cualquiera de ellos.`)
 };
 
 /**

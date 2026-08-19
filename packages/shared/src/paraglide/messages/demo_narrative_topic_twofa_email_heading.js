@@ -10,7 +10,7 @@ const en_demo_narrative_topic_twofa_email_heading = /** @type {(inputs: Demo_Nar
 };
 
 const es_demo_narrative_topic_twofa_email_heading = /** @type {(inputs: Demo_Narrative_Topic_Twofa_Email_HeadingInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Codigos por correo`)
+	return /** @type {LocalizedString} */ (`Códigos por correo`)
 };
 
 /**

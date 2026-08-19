@@ -14,11 +14,11 @@ const en_demo_narrative_dashboard_shift_body = /** @type {(inputs: Demo_Narrativ
 };
 
 const es_demo_narrative_dashboard_shift_body = /** @type {(inputs: Demo_Narrative_Dashboard_Shift_BodyInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`La tarjeta de turno muestra el turno actual o proximo del voluntario.
-**Durante un turno,** la tarjeta muestra las horas de inicio y fin y una cuenta regresiva hasta el final del turno. Tambien muestra cuantos tickets abiertos estan asignados actualmente al voluntario.
+	return /** @type {LocalizedString} */ (`La tarjeta de turno muestra el turno actual o próximo del voluntario.
+**Durante un turno,** la tarjeta muestra las horas de inicio y fin y una cuenta regresiva hasta el final del turno. También muestra cuántos tickets abiertos están asignados actualmente al voluntario.
 **Antes de un turno,** la tarjeta muestra una cuenta regresiva hasta la hora de inicio.
-**Despues de que termina un turno** o cuando no hay turno programado, la tarjeta muestra un aviso. La funcion de programacion que gestiona la creacion de turnos aun esta en desarrollo.
-**En la tarjeta.** Chips iniciales muestran los voluntarios actualmente en turno, y un boton de terminar turno esta presente. Al igual que la creacion de turnos, terminar un turno se activara cuando la funcion de programacion este completa.`)
+**Después de que termina un turno** o cuando no hay turno programado, la tarjeta muestra un aviso. La función de programación que gestiona la creación de turnos aún está en desarrollo.
+**En la tarjeta.** Chips iniciales muestran los voluntarios actualmente en turno, y un botón de terminar turno está presente. Al igual que la creación de turnos, terminar un turno se activará cuando la función de programación esté completa.`)
 };
 
 /**

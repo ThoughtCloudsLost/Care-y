@@ -10,7 +10,7 @@ const en_demo_narrative_admin_roles_heading = /** @type {(inputs: Demo_Narrative
 };
 
 const es_demo_narrative_admin_roles_heading = /** @type {(inputs: Demo_Narrative_Admin_Roles_HeadingInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Paginas de referencia de roles`)
+	return /** @type {LocalizedString} */ (`Páginas de referencia de roles`)
 };
 
 /**

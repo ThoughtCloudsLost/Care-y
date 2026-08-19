@@ -10,7 +10,7 @@ const en_demo_narrative_admin_phone_lines_heading = /** @type {(inputs: Demo_Nar
 };
 
 const es_demo_narrative_admin_phone_lines_heading = /** @type {(inputs: Demo_Narrative_Admin_Phone_Lines_HeadingInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Lineas telefonicas`)
+	return /** @type {LocalizedString} */ (`Líneas telefónicas`)
 };
 
 /**

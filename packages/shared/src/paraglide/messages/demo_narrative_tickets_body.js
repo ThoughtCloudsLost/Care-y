@@ -10,7 +10,7 @@ const en_demo_narrative_tickets_body = /** @type {(inputs: Demo_Narrative_Ticket
 };
 
 const es_demo_narrative_tickets_body = /** @type {(inputs: Demo_Narrative_Tickets_BodyInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Los titulos, descripciones y mensajes de los tickets se cifran con claves que solo tu navegador posee. El servidor almacena texto cifrado y nunca ve el contenido.`)
+	return /** @type {LocalizedString} */ (`Los títulos, descripciones y mensajes de los tickets se cifran con claves que solo tu navegador posee. El servidor almacena texto cifrado y nunca ve el contenido.`)
 };
 
 /**

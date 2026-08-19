@@ -10,7 +10,7 @@ const en_demo_search_instant = /** @type {(inputs: Demo_Search_InstantInputs) =>
 };
 
 const es_demo_search_instant = /** @type {(inputs: Demo_Search_InstantInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Mostrando resultados instantaneos`)
+	return /** @type {LocalizedString} */ (`Mostrando resultados instantáneos`)
 };
 
 /**

@@ -12,9 +12,9 @@ const en_demo_narrative_topic_library_search_body = /** @type {(inputs: Demo_Nar
 };
 
 const es_demo_narrative_topic_library_search_body = /** @type {(inputs: Demo_Narrative_Topic_Library_Search_BodyInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`La biblioteca tiene su propia barra de busqueda que encuentra articulos mediante comparacion aproximada contra titulos y extractos descifrados.
-**Busqueda completa.** Si no se encuentran coincidencias entre los articulos ya descifrados, la busqueda puede obtener y descifrar todo el texto de los articulos para buscar en el contenido completo. Un indicador de cobertura muestra cuantos articulos se han buscado del total.
-**Privacidad.** Ningun termino de busqueda se envia al servidor. El servidor no sabe que busco el voluntario ni que articulos coincidieron.`)
+	return /** @type {LocalizedString} */ (`La biblioteca tiene su propia barra de búsqueda que encuentra artículos mediante comparación aproximada contra títulos y extractos descifrados.
+**Búsqueda completa.** Si no se encuentran coincidencias entre los artículos ya descifrados, la búsqueda puede obtener y descifrar todo el texto de los artículos para buscar en el contenido completo. Un indicador de cobertura muestra cuántos artículos se han buscado del total.
+**Privacidad.** Ningún término de búsqueda se envía al servidor. El servidor no sabe qué buscó el voluntario ni qué artículos coincidieron.`)
 };
 
 /**

@@ -13,10 +13,10 @@ const en_demo_narrative_admin_telephony_provider_body = /** @type {(inputs: Demo
 };
 
 const es_demo_narrative_admin_telephony_provider_body = /** @type {(inputs: Demo_Narrative_Admin_Telephony_Provider_BodyInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`La seccion de telefonia comienza con como la organizacion se conecta a su proveedor de telefono.
-**Dos modos.** En modo gestionado los numeros se aprovisionan para la organizacion. En modo de telefonia propia la organizacion conecta su cuenta de proveedor existente con sus propias credenciales y mantiene la propiedad directa de sus numeros.
-**Credenciales.** El ID de cuenta del proveedor se muestra enmascarado, y las credenciales se actualizan a traves de una hoja dedicada. Una accion de actualizar relee el inventario de numeros del proveedor, y cambiar de modo pide confirmacion porque cambia como se aprovisiona cada linea.
-**Roles de numeros.** Un editor asigna que numero maneja las llamadas salientes y cual envia mensajes del sistema.`)
+	return /** @type {LocalizedString} */ (`La sección de telefonía comienza con cómo la organización se conecta a su proveedor de teléfono.
+**Dos modos.** En modo gestionado los números se aprovisionan para la organización. En modo de telefonía propia la organización conecta su cuenta de proveedor existente con sus propias credenciales y mantiene la propiedad directa de sus números.
+**Credenciales.** El ID de cuenta del proveedor se muestra enmascarado, y las credenciales se actualizan a través de una hoja dedicada. Una acción de actualizar relee el inventario de números del proveedor, y cambiar de modo pide confirmación porque cambia cómo se aprovisiona cada línea.
+**Roles de números.** Un editor asigna qué número maneja las llamadas salientes y cuál envía mensajes del sistema.`)
 };
 
 /**

@@ -10,7 +10,7 @@ const en_demo_narrative_conversation_body2 = /** @type {(inputs: Demo_Narrative_
 };
 
 const es_demo_narrative_conversation_body2 = /** @type {(inputs: Demo_Narrative_Conversation_Body2Inputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Las notas internas entre voluntarios tambien se cifran. El servidor transmite texto cifrado sin leer el contenido.`)
+	return /** @type {LocalizedString} */ (`Las notas internas entre voluntarios también se cifran. El servidor transmite texto cifrado sin leer el contenido.`)
 };
 
 /**

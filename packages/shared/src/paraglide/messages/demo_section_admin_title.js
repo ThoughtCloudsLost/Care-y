@@ -10,7 +10,7 @@ const en_demo_section_admin_title = /** @type {(inputs: Demo_Section_Admin_Title
 };
 
 const es_demo_section_admin_title = /** @type {(inputs: Demo_Section_Admin_TitleInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Centro de administracion`)
+	return /** @type {LocalizedString} */ (`Centro de administración`)
 };
 
 /**

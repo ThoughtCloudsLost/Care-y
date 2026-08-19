@@ -10,7 +10,7 @@ const en_demo_narrative_topic_conversation_heading = /** @type {(inputs: Demo_Na
 };
 
 const es_demo_narrative_topic_conversation_heading = /** @type {(inputs: Demo_Narrative_Topic_Conversation_HeadingInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Hilo de conversacion`)
+	return /** @type {LocalizedString} */ (`Hilo de conversación`)
 };
 
 /**

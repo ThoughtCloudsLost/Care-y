@@ -12,9 +12,9 @@ const en_demo_narrative_dashboard_kb_body = /** @type {(inputs: Demo_Narrative_D
 };
 
 const es_demo_narrative_dashboard_kb_body = /** @type {(inputs: Demo_Narrative_Dashboard_Kb_BodyInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Una vista previa de los articulos de la base de conocimiento actualizados recientemente en el panel principal. Tocar un articulo navega al articulo completo en la biblioteca.
-**Cifrado.** Los titulos de los articulos estan cifrados con la clave de la organizacion antes de almacenarse. El servidor almacena texto cifrado y el navegador descifra los titulos localmente para mostrarlos. Una brecha en la base de datos no revelaria que articulos ha escrito la organizacion ni que contienen.
-**Cuando la biblioteca esta vacia,** la seccion muestra un aviso en lugar de una lista.`)
+	return /** @type {LocalizedString} */ (`Una vista previa de los artículos de la base de conocimiento actualizados recientemente en el panel principal. Tocar un artículo navega al artículo completo en la biblioteca.
+**Cifrado.** Los títulos de los artículos están cifrados con la clave de la organización antes de almacenarse. El servidor almacena texto cifrado y el navegador descifra los títulos localmente para mostrarlos. Una brecha en la base de datos no revelaría qué artículos ha escrito la organización ni qué contienen.
+**Cuando la biblioteca está vacía,** la sección muestra un aviso en lugar de una lista.`)
 };
 
 /**

@@ -10,7 +10,7 @@ const en_demo_entry_desc = /** @type {(inputs: Demo_Entry_DescInputs) => Localiz
 };
 
 const es_demo_entry_desc = /** @type {(inputs: Demo_Entry_DescInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`CARE-Y es un sistema de gestion de llamadas y casos para organizaciones de ayuda mutua que atienden a poblaciones en riesgo. Tanto los clientes como las personas voluntarias corren peligro real si se exponen sus identidades o los detalles de sus casos. El simulador en esta pagina ejecuta la aplicacion real sobre una base de datos en tu navegador. El texto a su lado explica lo que hace cada pantalla.`)
+	return /** @type {LocalizedString} */ (`CARE-Y es un sistema de gestión de llamadas y casos para organizaciones de ayuda mutua que atienden a poblaciones en riesgo. Tanto los clientes como las personas voluntarias corren peligro real si se exponen sus identidades o los detalles de sus casos. El simulador en esta página ejecuta la aplicación real sobre una base de datos en tu navegador. El texto a su lado explica lo que hace cada pantalla.`)
 };
 
 /**

@@ -12,9 +12,9 @@ const en_demo_narrative_admin_greetings_body = /** @type {(inputs: Demo_Narrativ
 };
 
 const es_demo_narrative_admin_greetings_body = /** @type {(inputs: Demo_Narrative_Admin_Greetings_BodyInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Los saludos son lo que escuchan los llamantes cuando se comunican con una linea telefonica. Se admiten cinco tipos de saludo. Respuesta, seleccion de idioma, cliente nuevo, cliente existente y menu de personal sirven cada uno en un punto diferente del flujo de la llamada.
-**Formatos.** Cada saludo puede ser texto convertido en voz por el proveedor de telefonia, o un archivo de audio grabado. Los saludos de audio se reproducen a traves de un punto de acceso autenticado en la interfaz de administracion.
-**Configuracion por linea.** Cada linea telefonica puede tener su propio conjunto de saludos para cada tipo.`)
+	return /** @type {LocalizedString} */ (`Los saludos son lo que escuchan los llamantes cuando se comunican con una línea telefónica. Se admiten cinco tipos de saludo. Respuesta, selección de idioma, cliente nuevo, cliente existente y menú de personal sirven cada uno en un punto diferente del flujo de la llamada.
+**Formatos.** Cada saludo puede ser texto convertido en voz por el proveedor de telefonía, o un archivo de audio grabado. Los saludos de audio se reproducen a través de un punto de acceso autenticado en la interfaz de administración.
+**Configuración por línea.** Cada línea telefónica puede tener su propio conjunto de saludos para cada tipo.`)
 };
 
 /**

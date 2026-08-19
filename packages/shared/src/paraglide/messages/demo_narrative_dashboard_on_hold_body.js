@@ -12,9 +12,9 @@ const en_demo_narrative_dashboard_on_hold_body = /** @type {(inputs: Demo_Narrat
 };
 
 const es_demo_narrative_dashboard_on_hold_body = /** @type {(inputs: Demo_Narrative_Dashboard_On_Hold_BodyInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Tickets que un voluntario ha puesto en espera. Un ticket en espera sigue abierto pero temporalmente apartado, normalmente porque el voluntario esta esperando una respuesta del cliente o de una parte externa.
-**Visibilidad.** Esta seccion solo aparece en el panel principal cuando al menos un ticket esta en espera y se oculta de lo contrario, y al igual que sin asignar comienza colapsada.
-**Reanudar.** Cuando el voluntario esta listo para volver a un ticket en espera, puede cambiar su estado a activo desde la vista detallada del ticket. El ticket entonces vuelve a la seccion de mis tickets.`)
+	return /** @type {LocalizedString} */ (`Tickets que un voluntario ha puesto en espera. Un ticket en espera sigue abierto pero temporalmente apartado, normalmente porque el voluntario está esperando una respuesta del cliente o de una parte externa.
+**Visibilidad.** Esta sección solo aparece en el panel principal cuando al menos un ticket está en espera y se oculta de lo contrario, y al igual que sin asignar comienza colapsada.
+**Reanudar.** Cuando el voluntario está listo para volver a un ticket en espera, puede cambiar su estado a activo desde la vista detallada del ticket. El ticket entonces vuelve a la sección de mis tickets.`)
 };
 
 /**

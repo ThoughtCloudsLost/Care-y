@@ -10,7 +10,7 @@ const en_demo_section_admin_desc = /** @type {(inputs: Demo_Section_Admin_DescIn
 };
 
 const es_demo_section_admin_desc = /** @type {(inputs: Demo_Section_Admin_DescInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`El centro de administracion es la pagina de inicio de la gestion de la organizacion. Agrupa las paginas de gestion en tarjetas de Personas, Comunicaciones, Organizacion y Analiticas, cada una con un conteo en vivo de la base de datos. Los administradores ven todas las tarjetas. Los gestores ven un subconjunto segun sus permisos.`)
+	return /** @type {LocalizedString} */ (`El centro de administración es la página de inicio de la gestión de la organización. Agrupa las páginas de gestión en tarjetas de Personas, Comunicaciones, Organización y Analíticas, cada una con un conteo en vivo de la base de datos. Los administradores ven todas las tarjetas. Los gestores ven un subconjunto según sus permisos.`)
 };
 
 /**

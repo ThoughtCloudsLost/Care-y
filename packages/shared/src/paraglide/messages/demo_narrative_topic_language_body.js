@@ -12,9 +12,9 @@ const en_demo_narrative_topic_language_body = /** @type {(inputs: Demo_Narrative
 };
 
 const es_demo_narrative_topic_language_body = /** @type {(inputs: Demo_Narrative_Topic_Language_BodyInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Las personas voluntarias pueden cambiar el idioma de la interfaz en la pantalla de inicio de sesion o en cualquier momento despues de iniciar sesion. El cambio es instantaneo sin recargar la pagina porque todas las traducciones estan incluidas en la aplicacion.
-**Privacidad.** El servidor no sabe que idioma usa cada voluntario porque no se transmite ninguna preferencia de idioma. La eleccion de idioma es privada por defecto.
-**Idiomas disponibles.** Actualmente se incluyen ingles y espanol, y anadir un nuevo idioma solo requiere un archivo de traduccion.`)
+	return /** @type {LocalizedString} */ (`Las personas voluntarias pueden cambiar el idioma de la interfaz en la pantalla de inicio de sesión o en cualquier momento después de iniciar sesión. El cambio es instantáneo sin recargar la página porque todas las traducciones están incluidas en la aplicación.
+**Privacidad.** El servidor no sabe qué idioma usa cada voluntario porque no se transmite ninguna preferencia de idioma. La elección de idioma es privada por defecto.
+**Idiomas disponibles.** Actualmente se incluyen inglés y español, y añadir un nuevo idioma solo requiere un archivo de traducción.`)
 };
 
 /**

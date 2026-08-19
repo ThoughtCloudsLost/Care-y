@@ -11,8 +11,8 @@ const en_demo_narrative_library_browse_body = /** @type {(inputs: Demo_Narrative
 };
 
 const es_demo_narrative_library_browse_body = /** @type {(inputs: Demo_Narrative_Library_Browse_BodyInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`La biblioteca lista todos los articulos publicados agrupados por categoria. Cada articulo muestra un titulo y extracto descifrados, y ambos llegan desordenados y se resuelven en texto legible a medida que el navegador los descifra con la clave de la organizacion, el mismo descifrado visible que en la lista de tickets. Tocar un articulo abre la vista detallada completa con el texto integro, adjuntos de archivos y controles de votacion.
-**Vista dividida en escritorio.** En pantallas mas anchas, la lista de articulos y la vista detallada se colocan lado a lado, similar a la vista dividida de la lista de tickets.`)
+	return /** @type {LocalizedString} */ (`La biblioteca lista todos los artículos publicados agrupados por categoría. Cada artículo muestra un título y extracto descifrados, y ambos llegan desordenados y se resuelven en texto legible a medida que el navegador los descifra con la clave de la organización, el mismo descifrado visible que en la lista de tickets. Tocar un artículo abre la vista detallada completa con el texto íntegro, adjuntos de archivos y controles de votación.
+**Vista dividida en escritorio.** En pantallas más anchas, la lista de artículos y la vista detallada se colocan lado a lado, similar a la vista dividida de la lista de tickets.`)
 };
 
 /**

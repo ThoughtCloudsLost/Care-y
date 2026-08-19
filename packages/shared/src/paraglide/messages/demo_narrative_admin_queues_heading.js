@@ -10,7 +10,7 @@ const en_demo_narrative_admin_queues_heading = /** @type {(inputs: Demo_Narrativ
 };
 
 const es_demo_narrative_admin_queues_heading = /** @type {(inputs: Demo_Narrative_Admin_Queues_HeadingInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Gestion de colas`)
+	return /** @type {LocalizedString} */ (`Gestión de colas`)
 };
 
 /**

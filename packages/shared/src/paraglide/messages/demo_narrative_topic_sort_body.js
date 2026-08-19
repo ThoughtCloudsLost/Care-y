@@ -13,10 +13,10 @@ const en_demo_narrative_topic_sort_body = /** @type {(inputs: Demo_Narrative_Top
 };
 
 const es_demo_narrative_topic_sort_body = /** @type {(inputs: Demo_Narrative_Topic_Sort_BodyInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Las opciones de orden reorganizan la lista de tickets por prioridad, fecha, ultima actividad, cola, estado, titulo, asignado o cliente.
-**Campos del servidor.** Prioridad, fecha, ultima actividad, cola y cantidad de mensajes se ordenan en el servidor usando columnas de metadatos en texto plano. El servidor devuelve las filas en el orden solicitado sin acceder al contenido cifrado.
-**Campos del cliente.** Titulo, asignado, estado y cliente se ordenan en el navegador despues del descifrado porque estos valores solo son legibles en el dispositivo.
-**Nuevas respuestas primero.** Un interruptor en las opciones de orden fija los tickets con respuestas no leidas en la parte superior de la lista, independientemente del orden principal. El estado de lectura esta cifrado por voluntario, por lo que el servidor no puede ordenar por el y este ordenamiento ocurre completamente en el navegador.`)
+	return /** @type {LocalizedString} */ (`Las opciones de orden reorganizan la lista de tickets por prioridad, fecha, última actividad, cola, estado, título, asignado o cliente.
+**Campos del servidor.** Prioridad, fecha, última actividad, cola y cantidad de mensajes se ordenan en el servidor usando columnas de metadatos en texto plano. El servidor devuelve las filas en el orden solicitado sin acceder al contenido cifrado.
+**Campos del cliente.** Título, asignado, estado y cliente se ordenan en el navegador después del descifrado porque estos valores solo son legibles en el dispositivo.
+**Nuevas respuestas primero.** Un interruptor en las opciones de orden fija los tickets con respuestas no leídas en la parte superior de la lista, independientemente del orden principal. El estado de lectura está cifrado por voluntario, por lo que el servidor no puede ordenar por él y este ordenamiento ocurre completamente en el navegador.`)
 };
 
 /**

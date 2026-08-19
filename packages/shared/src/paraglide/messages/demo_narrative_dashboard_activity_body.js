@@ -12,9 +12,9 @@ const en_demo_narrative_dashboard_activity_body = /** @type {(inputs: Demo_Narra
 };
 
 const es_demo_narrative_dashboard_activity_body = /** @type {(inputs: Demo_Narrative_Dashboard_Activity_BodyInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Una lista cronologica de eventos recientes en toda la organizacion. Los eventos incluyen nuevos tickets, cambios de estado, asignaciones y mensajes.
-**Cifrado.** El alias del cliente y el nombre de la cola en cada evento estan cifrados con la clave de la organizacion. Solo aparecen como texto legible despues de que el navegador los descifra. Los metadatos estructurales como el tipo de evento, el ID del ticket y la marca de tiempo no estan cifrados porque el servidor los necesita para ordenar y filtrar el feed.
-**Lo que esto significa para los voluntarios.** El feed de actividad ofrece una vision rapida de lo que esta pasando en la organizacion sin necesidad de abrir tickets individuales, y tocar un evento navega al elemento correspondiente.`)
+	return /** @type {LocalizedString} */ (`Una lista cronológica de eventos recientes en toda la organización. Los eventos incluyen nuevos tickets, cambios de estado, asignaciones y mensajes.
+**Cifrado.** El alias del cliente y el nombre de la cola en cada evento están cifrados con la clave de la organización. Solo aparecen como texto legible después de que el navegador los descifra. Los metadatos estructurales como el tipo de evento, el ID del ticket y la marca de tiempo no están cifrados porque el servidor los necesita para ordenar y filtrar el feed.
+**Lo que esto significa para los voluntarios.** El feed de actividad ofrece una visión rápida de lo que está pasando en la organización sin necesidad de abrir tickets individuales, y tocar un evento navega al elemento correspondiente.`)
 };
 
 /**

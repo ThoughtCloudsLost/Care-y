@@ -12,9 +12,9 @@ const en_demo_narrative_topic_conversation_body = /** @type {(inputs: Demo_Narra
 };
 
 const es_demo_narrative_topic_conversation_body = /** @type {(inputs: Demo_Narrative_Topic_Conversation_BodyInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`El cuerpo principal del detalle del ticket es un hilo de conversacion que muestra mensajes entre el voluntario y el cliente. Los mensajes aparecen como burbujas, con los mensajes del voluntario en un lado y los del cliente en el otro.
-**Descifrado.** Cada mensaje esta cifrado individualmente con la clave por ticket usando XChaCha20-Poly1305. El navegador los descifra localmente y el servidor nunca ve el contenido en texto plano.
-**Canales.** Los mensajes pueden llegar por diferentes canales. Un mensaje SMS del cliente y una respuesta web del voluntario aparecen en el mismo hilo. El indicador de canal en cada mensaje muestra como fue enviado.`)
+	return /** @type {LocalizedString} */ (`El cuerpo principal del detalle del ticket es un hilo de conversación que muestra mensajes entre el voluntario y el cliente. Los mensajes aparecen como burbujas, con los mensajes del voluntario en un lado y los del cliente en el otro.
+**Descifrado.** Cada mensaje está cifrado individualmente con la clave por ticket usando XChaCha20-Poly1305. El navegador los descifra localmente y el servidor nunca ve el contenido en texto plano.
+**Canales.** Los mensajes pueden llegar por diferentes canales. Un mensaje SMS del cliente y una respuesta web del voluntario aparecen en el mismo hilo. El indicador de canal en cada mensaje muestra cómo fue enviado.`)
 };
 
 /**

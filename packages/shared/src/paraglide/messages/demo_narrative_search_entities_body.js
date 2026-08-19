@@ -13,9 +13,9 @@ const en_demo_narrative_search_entities_body = /** @type {(inputs: Demo_Narrativ
 };
 
 const es_demo_narrative_search_entities_body = /** @type {(inputs: Demo_Narrative_Search_Entities_BodyInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`La busqueda devuelve resultados de tres tipos de entidad.
-**Tickets.** Coincide con titulo descifrado, alias del cliente, nombre de la cola y nombre del asignado. La busqueda completa tambien coincide con el contenido de los mensajes dentro de los tickets.
-**Articulos de la base de conocimiento.** Coincide con titulo y extracto descifrados. La busqueda completa tambien coincide con el texto completo del articulo.
+	return /** @type {LocalizedString} */ (`La búsqueda devuelve resultados de tres tipos de entidad.
+**Tickets.** Coincide con título descifrado, alias del cliente, nombre de la cola y nombre del asignado. La búsqueda completa también coincide con el contenido de los mensajes dentro de los tickets.
+**Artículos de la base de conocimiento.** Coincide con título y extracto descifrados. La búsqueda completa también coincide con el texto completo del artículo.
 **Voluntarios.** Disponible solo para administradores y gestores. Coincide con nombres visibles descifrados.`)
 };
 

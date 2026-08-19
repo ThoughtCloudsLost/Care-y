@@ -13,10 +13,10 @@ const en_demo_narrative_topic_twofa_totp_body = /** @type {(inputs: Demo_Narrati
 };
 
 const es_demo_narrative_topic_twofa_totp_body = /** @type {(inputs: Demo_Narrative_Topic_Twofa_Totp_BodyInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Un codigo de seis digitos generado por una aplicacion de autenticacion en el dispositivo del voluntario.
-**Aplicaciones compatibles.** Todas las aplicaciones TOTP estandar funcionan, y el registro se realiza escaneando un codigo QR que comparte un secreto entre la aplicacion y CARE-Y.
-**Como funciona.** Despues del registro, el autenticador genera un nuevo codigo cada treinta segundos usando ese secreto compartido. Generar el codigo no requiere conexion a internet, lo que hace este metodo fiable incluso con mala conectividad.
-**Desfase horario.** CARE-Y acepta el codigo actual y una pequena ventana alrededor para compensar pequenas diferencias de tiempo entre el dispositivo y el servidor. Cada codigo solo puede usarse una vez.`)
+	return /** @type {LocalizedString} */ (`Un código de seis dígitos generado por una aplicación de autenticación en el dispositivo del voluntario.
+**Aplicaciones compatibles.** Todas las aplicaciones TOTP estándar funcionan, y el registro se realiza escaneando un código QR que comparte un secreto entre la aplicación y CARE-Y.
+**Cómo funciona.** Después del registro, el autenticador genera un nuevo código cada treinta segundos usando ese secreto compartido. Generar el código no requiere conexión a internet, lo que hace este método fiable incluso con mala conectividad.
+**Desfase horario.** CARE-Y acepta el código actual y una pequeña ventana alrededor para compensar pequeñas diferencias de tiempo entre el dispositivo y el servidor. Cada código solo puede usarse una vez.`)
 };
 
 /**

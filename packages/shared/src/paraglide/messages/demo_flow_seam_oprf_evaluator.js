@@ -10,7 +10,7 @@ const en_demo_flow_seam_oprf_evaluator = /** @type {(inputs: Demo_Flow_Seam_Oprf
 };
 
 const es_demo_flow_seam_oprf_evaluator = /** @type {(inputs: Demo_Flow_Seam_Oprf_EvaluatorInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Este demo ejecuta un evaluador OPRF de un solo escalar en el navegador. En produccion la clave OPRF se reparte entre dos servidores en jurisdicciones distintas, y ninguno puede evaluarla por su cuenta.`)
+	return /** @type {LocalizedString} */ (`Este demo ejecuta un evaluador OPRF de un solo escalar en el navegador. En producción la clave OPRF se reparte entre dos servidores en jurisdicciones distintas, y ninguno puede evaluarla por su cuenta.`)
 };
 
 /**

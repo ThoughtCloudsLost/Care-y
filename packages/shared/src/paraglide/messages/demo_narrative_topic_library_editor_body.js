@@ -14,11 +14,11 @@ const en_demo_narrative_topic_library_editor_body = /** @type {(inputs: Demo_Nar
 };
 
 const es_demo_narrative_topic_library_editor_body = /** @type {(inputs: Demo_Narrative_Topic_Library_Editor_BodyInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`El editor de texto enriquecido admite encabezados (cuatro niveles), negrita, cursiva, tachado, codigo en linea, citas, listas con vinetas, listas ordenadas, bloques de codigo, enlaces, tablas, lineas horizontales y figuras con pies de foto.
-**Controles de redaccion.** La barra de navegacion del editor lleva deshacer, rehacer y un boton de publicar que permanece deshabilitado hasta que el articulo esta suficientemente completo para guardar, y cancelar con cambios sin guardar pregunta antes de descartar.
-**Imagenes y adjuntos.** Las imagenes se pueden insertar directamente en el cuerpo del articulo. Otros tipos de archivo como PDFs se pueden adjuntar al articulo y aparecen como fichas de descarga. Todos los adjuntos se cifran con la clave de la organizacion antes de almacenarse.
-**Accesibilidad.** El editor verifica la jerarquia de encabezados, advierte sobre texto de enlace generico y solicita texto alternativo para las imagenes antes de insertarlas. Una casilla marca las imagenes decorativas que no necesitan texto alternativo.
-**Cifrado.** El cuerpo completo del articulo se cifra con la clave de la organizacion en el navegador antes de enviarse a un servidor que almacena texto cifrado que no puede leer.`)
+	return /** @type {LocalizedString} */ (`El editor de texto enriquecido admite encabezados (cuatro niveles), negrita, cursiva, tachado, código en línea, citas, listas con viñetas, listas ordenadas, bloques de código, enlaces, tablas, líneas horizontales y figuras con pies de foto.
+**Controles de redacción.** La barra de navegación del editor lleva deshacer, rehacer y un botón de publicar que permanece deshabilitado hasta que el artículo está suficientemente completo para guardar, y cancelar con cambios sin guardar pregunta antes de descartar.
+**imágenes y adjuntos.** Las imágenes se pueden insertar directamente en el cuerpo del artículo. Otros tipos de archivo como PDFs se pueden adjuntar al artículo y aparecen como fichas de descarga. Todos los adjuntos se cifran con la clave de la organización antes de almacenarse.
+**Accesibilidad.** El editor verifica la jerarquía de encabezados, advierte sobre texto de enlace genérico y solicita texto alternativo para las imágenes antes de insertarlas. Una casilla marca las imágenes decorativas que no necesitan texto alternativo.
+**Cifrado.** El cuerpo completo del artículo se cifra con la clave de la organización en el navegador antes de enviarse a un servidor que almacena texto cifrado que no puede leer.`)
 };
 
 /**

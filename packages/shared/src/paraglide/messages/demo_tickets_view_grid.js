@@ -10,7 +10,7 @@ const en_demo_tickets_view_grid = /** @type {(inputs: Demo_Tickets_View_GridInpu
 };
 
 const es_demo_tickets_view_grid = /** @type {(inputs: Demo_Tickets_View_GridInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Cambiando a vista de cuadricula`)
+	return /** @type {LocalizedString} */ (`Cambiando a vista de cuadrícula`)
 };
 
 /**

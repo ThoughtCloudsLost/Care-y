@@ -10,7 +10,7 @@ const en_demo_flow_slice_expand = /** @type {(inputs: Demo_Flow_Slice_ExpandInpu
 };
 
 const es_demo_flow_slice_expand = /** @type {(inputs: Demo_Flow_Slice_ExpandInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`expandir esta interaccion`)
+	return /** @type {LocalizedString} */ (`expandir esta interacción`)
 };
 
 /**

@@ -10,7 +10,7 @@ const en_demo_narrative_topic_language_heading = /** @type {(inputs: Demo_Narrat
 };
 
 const es_demo_narrative_topic_language_heading = /** @type {(inputs: Demo_Narrative_Topic_Language_HeadingInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Seleccion de idioma`)
+	return /** @type {LocalizedString} */ (`Selección de idioma`)
 };
 
 /**

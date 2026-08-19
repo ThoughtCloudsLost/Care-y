@@ -12,9 +12,9 @@ const en_demo_narrative_topic_new_ticket_body = /** @type {(inputs: Demo_Narrati
 };
 
 const es_demo_narrative_topic_new_ticket_body = /** @type {(inputs: Demo_Narrative_Topic_New_Ticket_BodyInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Cuando un voluntario crea un ticket, el titulo y la descripcion se cifran en el navegador antes de salir del dispositivo. El servidor almacena el texto cifrado y asigna un ID de ticket sin leer el contenido.
-**Campos requeridos.** Un nuevo ticket necesita un titulo y una asignacion de cola como minimo. La descripcion, prioridad y asignado inicial son opcionales.
-**Permisos.** Todos los voluntarios pueden crear tickets. La asignacion de cola se limita a las colas a las que el voluntario tiene acceso.`)
+	return /** @type {LocalizedString} */ (`Cuando un voluntario crea un ticket, el título y la descripción se cifran en el navegador antes de salir del dispositivo. El servidor almacena el texto cifrado y asigna un ID de ticket sin leer el contenido.
+**Campos requeridos.** Un nuevo ticket necesita un título y una asignación de cola como mínimo. La descripción, prioridad y asignado inicial son opcionales.
+**Permisos.** Todos los voluntarios pueden crear tickets. La asignación de cola se limita a las colas a las que el voluntario tiene acceso.`)
 };
 
 /**

@@ -10,7 +10,7 @@ const en_demo_entry_controls_body = /** @type {(inputs: Demo_Entry_Controls_Body
 };
 
 const es_demo_entry_controls_body = /** @type {(inputs: Demo_Entry_Controls_BodyInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Arrastra el simulador desde el asa superior y cambia su tamano desde cualquier borde, y usa la barra de herramientas para alternar entre disposiciones de telefono y escritorio. El simulador y el manual se desplazan juntos por defecto, pero el boton de enlace en la barra de herramientas rompe esa conexion para que puedas explorar uno sin mover el otro.`)
+	return /** @type {LocalizedString} */ (`Arrastra el simulador desde el asa superior y cambia su tamaño desde cualquier borde, y usa la barra de herramientas para alternar entre disposiciones de teléfono y escritorio. El simulador y el manual se desplazan juntos por defecto, pero el botón de enlace en la barra de herramientas rompe esa conexión para que puedas explorar uno sin mover el otro.`)
 };
 
 /**

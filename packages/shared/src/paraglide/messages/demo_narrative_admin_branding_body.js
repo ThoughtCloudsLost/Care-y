@@ -12,8 +12,8 @@ const en_demo_narrative_admin_branding_body = /** @type {(inputs: Demo_Narrative
 };
 
 const es_demo_narrative_admin_branding_body = /** @type {(inputs: Demo_Narrative_Admin_Branding_BodyInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`El nombre de la organizacion, los colores principal y de acento, el logotipo y el texto visible para clientes se cifran con la clave de la organizacion antes de almacenarse. El servidor almacena texto cifrado.
-**Contraste forzado.** El editor de marca aplica relaciones de contraste WCAG AA. Si el color de marca elegido por la organizacion no cumple la relacion 4.5:1 contra su fondo, el sistema lo ajusta en tiempo de ejecucion tanto en modo claro como oscuro.
+	return /** @type {LocalizedString} */ (`El nombre de la organización, los colores principal y de acento, el logotipo y el texto visible para clientes se cifran con la clave de la organización antes de almacenarse. El servidor almacena texto cifrado.
+**Contraste forzado.** El editor de marca aplica relaciones de contraste WCAG AA. Si el color de marca elegido por la organización no cumple la relación 4.5:1 contra su fondo, el sistema lo ajusta en tiempo de ejecución tanto en modo claro como oscuro.
 **Vista previa.** El editor muestra una vista previa en tiempo real de botones, insignias, enlaces e iconos en los colores elegidos antes de guardar.`)
 };
 

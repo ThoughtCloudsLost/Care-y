@@ -13,10 +13,10 @@ const en_demo_narrative_admin_client_merge_body = /** @type {(inputs: Demo_Narra
 };
 
 const es_demo_narrative_admin_client_merge_body = /** @type {(inputs: Demo_Narrative_Admin_Client_Merge_BodyInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`La misma persona puede terminar como dos registros de cliente, normalmente despues de llamar desde un numero nuevo. Los administradores resuelven esto fusionando los registros desde la hoja de detalle del cliente.
-**Que hace una fusion.** Los tickets del duplicado se mueven al registro superviviente para que el historial del caso se lea como un solo cliente.
-**Historial y deshacer.** Cada fusion se registra en un historial que el administrador puede revisar, y una fusion puede deshacerse, lo que restaura los registros separados.
-**Bloqueo.** Un registro de cliente puede bloquearse contra fusiones cuando la separacion es intencional.`)
+	return /** @type {LocalizedString} */ (`La misma persona puede terminar como dos registros de cliente, normalmente después de llamar desde un número nuevo. Los administradores resuelven esto fusionando los registros desde la hoja de detalle del cliente.
+**Qué hace una fusión.** Los tickets del duplicado se mueven al registro superviviente para que el historial del caso se lea como un solo cliente.
+**Historial y deshacer.** Cada fusión se registra en un historial que el administrador puede revisar, y una fusión puede deshacerse, lo que restaura los registros separados.
+**Bloqueo.** Un registro de cliente puede bloquearse contra fusiones cuando la separación es intencional.`)
 };
 
 /**

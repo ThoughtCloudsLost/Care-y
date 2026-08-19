@@ -10,7 +10,7 @@ const en_demo_section_settings_title = /** @type {(inputs: Demo_Section_Settings
 };
 
 const es_demo_section_settings_title = /** @type {(inputs: Demo_Section_Settings_TitleInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Configuracion`)
+	return /** @type {LocalizedString} */ (`Configuración`)
 };
 
 /**

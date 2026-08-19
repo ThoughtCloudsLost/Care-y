@@ -12,9 +12,9 @@ const en_demo_narrative_topic_decryption_body = /** @type {(inputs: Demo_Narrati
 };
 
 const es_demo_narrative_topic_decryption_body = /** @type {(inputs: Demo_Narrative_Topic_Decryption_BodyInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Cuando la lista de tickets se carga, los titulos aparecen como texto desordenado que se resuelve en palabras legibles a medida que el navegador descifra cada uno. Este es el proceso de descifrado hecho visible.
-**Como funciona.** El navegador obtiene los datos cifrados del ticket del servidor, luego usa las claves de cifrado del voluntario para descifrar cada titulo localmente. La animacion de descifrado muestra este proceso en tiempo real.
-**Rendimiento.** Los tickets que ya han sido descifrados durante la sesion actual se almacenan en la memoria del navegador, por lo que revisitar la lista los muestra instantaneamente sin re-descifrar.`)
+	return /** @type {LocalizedString} */ (`Cuando la lista de tickets se carga, los títulos aparecen como texto desordenado que se resuelve en palabras legibles a medida que el navegador descifra cada uno. Este es el proceso de descifrado hecho visible.
+**Cómo funciona.** El navegador obtiene los datos cifrados del ticket del servidor, luego usa las claves de cifrado del voluntario para descifrar cada título localmente. La animación de descifrado muestra este proceso en tiempo real.
+**Rendimiento.** Los tickets que ya han sido descifrados durante la sesión actual se almacenan en la memoria del navegador, por lo que revisitar la lista los muestra instantáneamente sin re-descifrar.`)
 };
 
 /**

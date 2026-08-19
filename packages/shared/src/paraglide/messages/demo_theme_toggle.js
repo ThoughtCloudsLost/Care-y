@@ -10,7 +10,7 @@ const en_demo_theme_toggle = /** @type {(inputs: Demo_Theme_ToggleInputs) => Loc
 };
 
 const es_demo_theme_toggle = /** @type {(inputs: Demo_Theme_ToggleInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Alternar modo oscuro`)
+	return /** @type {LocalizedString} */ (`Alternar modo claro/oscuro`)
 };
 
 /**

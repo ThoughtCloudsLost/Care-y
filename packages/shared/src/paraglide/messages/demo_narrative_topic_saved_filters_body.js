@@ -13,7 +13,7 @@ const en_demo_narrative_topic_saved_filters_body = /** @type {(inputs: Demo_Narr
 };
 
 const es_demo_narrative_topic_saved_filters_body = /** @type {(inputs: Demo_Narrative_Topic_Saved_Filters_BodyInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Los voluntarios pueden guardar una combinacion de filtros activos como un preset nombrado para reutilizar. Los filtros guardados aparecen como botones de acceso rapido encima de las pastillas de filtro.
+	return /** @type {LocalizedString} */ (`Los voluntarios pueden guardar una combinación de filtros activos como un preset nombrado para reutilizar. Los filtros guardados aparecen como botones de acceso rápido encima de las pastillas de filtro.
 **Persistencia.** Los filtros guardados se almacenan localmente en el dispositivo y permanecen privados a menos que un voluntario comparta uno deliberadamente.
 **Opciones del chip.** Mantener pulsado un chip de filtro guardado abre sus opciones, donde el filtro puede eliminarse o marcarse como compartido.
 **Colores.** Cada filtro guardado puede tener un color asignado para distinguirlo visualmente en la lista de presets.`)

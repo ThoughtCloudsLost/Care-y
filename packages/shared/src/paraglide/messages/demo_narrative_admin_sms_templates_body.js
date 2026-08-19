@@ -11,8 +11,8 @@ const en_demo_narrative_admin_sms_templates_body = /** @type {(inputs: Demo_Narr
 };
 
 const es_demo_narrative_admin_sms_templates_body = /** @type {(inputs: Demo_Narrative_Admin_Sms_Templates_BodyInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Las plantillas SMS definen los mensajes automatizados que el sistema envia a los clientes. Las plantillas admiten multiples idiomas para que el sistema pueda enviar mensajes en el idioma preferido del cliente.
-**Longitud del mensaje.** El editor cuenta caracteres mientras escribes y muestra cuantos segmentos SMS usara el mensaje.`)
+	return /** @type {LocalizedString} */ (`Las plantillas SMS definen los mensajes automatizados que el sistema envía a los clientes. Las plantillas admiten múltiples idiomas para que el sistema pueda enviar mensajes en el idioma preferido del cliente.
+**Longitud del mensaje.** El editor cuenta caracteres mientras escribes y muestra cuántos segmentos SMS usará el mensaje.`)
 };
 
 /**

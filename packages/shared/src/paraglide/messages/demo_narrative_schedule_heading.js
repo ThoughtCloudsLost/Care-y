@@ -10,7 +10,7 @@ const en_demo_narrative_schedule_heading = /** @type {(inputs: Demo_Narrative_Sc
 };
 
 const es_demo_narrative_schedule_heading = /** @type {(inputs: Demo_Narrative_Schedule_HeadingInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Programacion de turnos`)
+	return /** @type {LocalizedString} */ (`Programación de turnos`)
 };
 
 /**

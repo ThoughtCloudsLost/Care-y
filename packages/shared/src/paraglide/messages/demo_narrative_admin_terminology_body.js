@@ -10,7 +10,7 @@ const en_demo_narrative_admin_terminology_body = /** @type {(inputs: Demo_Narrat
 };
 
 const es_demo_narrative_admin_terminology_body = /** @type {(inputs: Demo_Narrative_Admin_Terminology_BodyInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Las organizaciones pueden renombrar terminos estandar para coincidir con su propio lenguaje. Por ejemplo, una organizacion podria llamar a los tickets "casos" o a los voluntarios "defensores". La terminologia se cifra con la clave de la organizacion antes de almacenarse y se aplica en toda la interfaz.`)
+	return /** @type {LocalizedString} */ (`Las organizaciones pueden renombrar términos estándar para coincidir con su propio lenguaje. Por ejemplo, una organización podría llamar a los tickets "casos" o a los voluntarios "defensores". La terminología se cifra con la clave de la organización antes de almacenarse y se aplica en toda la interfaz.`)
 };
 
 /**

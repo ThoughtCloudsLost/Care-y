@@ -10,7 +10,7 @@ const en_demo_flow_seam_login_pacing = /** @type {(inputs: Demo_Flow_Seam_Login_
 };
 
 const es_demo_flow_seam_login_pacing = /** @type {(inputs: Demo_Flow_Seam_Login_PacingInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`El ritmo del inicio de sesion esta recreado en este demo. La derivacion de claves real se ejecuta, con cada paso sostenido lo suficiente para leerlo.`)
+	return /** @type {LocalizedString} */ (`El ritmo del inicio de sesión está recreado en este demo. La derivación de claves real se ejecuta, con cada paso sostenido lo suficiente para leerlo.`)
 };
 
 /**

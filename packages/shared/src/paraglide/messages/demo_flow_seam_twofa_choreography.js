@@ -10,7 +10,7 @@ const en_demo_flow_seam_twofa_choreography = /** @type {(inputs: Demo_Flow_Seam_
 };
 
 const es_demo_flow_seam_twofa_choreography = /** @type {(inputs: Demo_Flow_Seam_Twofa_ChoreographyInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`La comprobacion del segundo factor esta recreada en este demo. La aplicacion instalada verifica el codigo contra el servidor.`)
+	return /** @type {LocalizedString} */ (`La comprobación del segundo factor está recreada en este demo. La aplicación instalada verifica el código contra el servidor.`)
 };
 
 /**

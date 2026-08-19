@@ -10,7 +10,7 @@ const en_demo_toolbar_phone_preset = /** @type {(inputs: Demo_Toolbar_Phone_Pres
 };
 
 const es_demo_toolbar_phone_preset = /** @type {(inputs: Demo_Toolbar_Phone_PresetInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Tamano de telefono`)
+	return /** @type {LocalizedString} */ (`Tamaño de teléfono`)
 };
 
 /**

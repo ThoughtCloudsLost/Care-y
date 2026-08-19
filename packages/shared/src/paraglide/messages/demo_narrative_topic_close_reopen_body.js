@@ -12,9 +12,9 @@ const en_demo_narrative_topic_close_reopen_body = /** @type {(inputs: Demo_Narra
 };
 
 const es_demo_narrative_topic_close_reopen_body = /** @type {(inputs: Demo_Narrative_Topic_Close_Reopen_BodyInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Los voluntarios pueden cerrar un ticket cuando el caso esta resuelto.
-**Notas de resolucion.** Al cerrar, el sistema verifica que tipos de nota estan marcados como requeridos al cierre. Si hay alguno, el voluntario los recorre uno a uno. Cada paso se puede omitir. Si ningun tipo de nota requiere notas al cierre, el ticket se cierra inmediatamente sin solicitud. Las notas de resolucion se cifran con la clave por ticket antes de almacenarse.
-**Reabrir.** Un ticket cerrado se puede reabrir si el caso necesita mas atencion. Reabrir restaura el ticket a estado activo y reaparece en las listas de trabajo del voluntario.`)
+	return /** @type {LocalizedString} */ (`Los voluntarios pueden cerrar un ticket cuando el caso está resuelto.
+**Notas de resolución.** Al cerrar, el sistema verifica qué tipos de nota están marcados como requeridos al cierre. Si hay alguno, el voluntario los recorre uno a uno. Cada paso se puede omitir. Si ningún tipo de nota requiere notas al cierre, el ticket se cierra inmediatamente sin solicitud. Las notas de resolución se cifran con la clave por ticket antes de almacenarse.
+**Reabrir.** Un ticket cerrado se puede reabrir si el caso necesita más atención. Reabrir restaura el ticket a estado activo y reaparece en las listas de trabajo del voluntario.`)
 };
 
 /**

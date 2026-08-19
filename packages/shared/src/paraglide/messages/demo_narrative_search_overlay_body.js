@@ -13,10 +13,10 @@ const en_demo_narrative_search_overlay_body = /** @type {(inputs: Demo_Narrative
 };
 
 const es_demo_narrative_search_overlay_body = /** @type {(inputs: Demo_Narrative_Search_Overlay_BodyInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`La lupa en la barra de navegacion reemplaza el titulo por un campo de busqueda, y los resultados aparecen en una hoja debajo mientras escribes.
-**Antes de escribir.** La hoja muestra busquedas recientes, que se pueden eliminar una por una o borrar todas, y tiras de tickets y articulos vistos recientemente para volver rapidamente a algo ya abierto.
-**Grupos de resultados.** Los resultados se agrupan por tipo, y el grupo que coincide con la pagina actual se ordena primero, por lo que buscar desde la lista de tickets pone los resultados de tickets arriba. Cada grupo muestra cuantas coincidencias se encontraron y un enlace de mostrar todos que abre la lista filtrada completa.
-**Navegacion.** Tocar un resultado lo abre y cierra la busqueda, y tocar una busqueda reciente la ejecuta de nuevo.`)
+	return /** @type {LocalizedString} */ (`La lupa en la barra de navegación reemplaza el título por un campo de búsqueda, y los resultados aparecen en una hoja debajo mientras escribes.
+**Antes de escribir.** La hoja muestra búsquedas recientes, que se pueden eliminar una por una o borrar todas, y tiras de tickets y artículos vistos recientemente para volver rápidamente a algo ya abierto.
+**Grupos de resultados.** Los resultados se agrupan por tipo, y el grupo que coincide con la página actual se ordena primero, por lo que buscar desde la lista de tickets pone los resultados de tickets arriba. Cada grupo muestra cuántas coincidencias se encontraron y un enlace de mostrar todos que abre la lista filtrada completa.
+**Navegación.** Tocar un resultado lo abre y cierra la búsqueda, y tocar una búsqueda reciente la ejecuta de nuevo.`)
 };
 
 /**

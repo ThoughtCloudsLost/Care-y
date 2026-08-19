@@ -12,9 +12,9 @@ const en_demo_narrative_admin_roles_body = /** @type {(inputs: Demo_Narrative_Ad
 };
 
 const es_demo_narrative_admin_roles_body = /** @type {(inputs: Demo_Narrative_Admin_Roles_BodyInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Una pagina de referencia para cada rol describe lo que los gestores y voluntarios pueden ver y hacer.
-**Contenido.** Cada pagina resume los permisos del rol, las colas en las que puede trabajar, sus estadisticas operativas, que campos protegidos permanecen ocultos para el, y enlaces a informes y estado de seguridad.
-**Por que importa.** Las paginas de roles son la forma mas rapida de responder que podria exponer la cuenta de un voluntario si fuera comprometida, porque los limites del cifrado se describen por rol.`)
+	return /** @type {LocalizedString} */ (`Una página de referencia para cada rol describe lo que los gestores y voluntarios pueden ver y hacer.
+**Contenido.** Cada página resume los permisos del rol, las colas en las que puede trabajar, sus estadísticas operativas, qué campos protegidos permanecen ocultos para el, y enlaces a informes y estado de seguridad.
+**Por qué importa.** Las páginas de roles son la forma más rápida de responder qué podría exponer la cuenta de un voluntario si fuera comprometida, porque los límites del cifrado se describen por rol.`)
 };
 
 /**

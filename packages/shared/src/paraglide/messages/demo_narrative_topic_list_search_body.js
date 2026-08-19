@@ -12,9 +12,9 @@ const en_demo_narrative_topic_list_search_body = /** @type {(inputs: Demo_Narrat
 };
 
 const es_demo_narrative_topic_list_search_body = /** @type {(inputs: Demo_Narrative_Topic_List_Search_BodyInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`La lupa en la barra de herramientas abre una fila de busqueda para la lista de tickets. Al escribir, compara contra los tickets que el navegador ya ha descifrado, y botones de navegacion avanzan por las coincidencias en orden.
-**Busqueda profunda.** Cuando los tickets cargados no producen ninguna coincidencia, la busqueda ofrece obtener y descifrar los tickets restantes y buscar en ellos tambien. Un indicador de progreso muestra cuantos se han cubierto del total.
-**Relacion con la busqueda global.** Esta busqueda se mantiene en la lista de tickets y recorre las coincidencias en su lugar. La busqueda global en la barra de navegacion, descrita en su propia seccion, busca en tickets, articulos y voluntarios a la vez, y como toda busqueda en CARE-Y los terminos nunca salen del dispositivo.`)
+	return /** @type {LocalizedString} */ (`La lupa en la barra de herramientas abre una fila de búsqueda para la lista de tickets. Al escribir, compara contra los tickets que el navegador ya ha descifrado, y botones de navegación avanzan por las coincidencias en orden.
+**Búsqueda profunda.** Cuando los tickets cargados no producen ninguna coincidencia, la búsqueda ofrece obtener y descifrar los tickets restantes y buscar en ellos también. Un indicador de progreso muestra cuántos se han cubierto del total.
+**Relación con la búsqueda global.** Esta búsqueda se mantiene en la lista de tickets y recorre las coincidencias en su lugar. La búsqueda global en la barra de navegación, descrita en su propia sección, busca en tickets, artículos y voluntarios a la vez, y como toda búsqueda en CARE-Y los términos nunca salen del dispositivo.`)
 };
 
 /**

@@ -10,7 +10,7 @@ const en_demo_flow_slice_collapse = /** @type {(inputs: Demo_Flow_Slice_Collapse
 };
 
 const es_demo_flow_slice_collapse = /** @type {(inputs: Demo_Flow_Slice_CollapseInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`contraer esta interaccion`)
+	return /** @type {LocalizedString} */ (`contraer esta interacción`)
 };
 
 /**

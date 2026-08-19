@@ -10,7 +10,7 @@ const en_demo_coming_soon_desc = /** @type {(inputs: Demo_Coming_Soon_DescInputs
 };
 
 const es_demo_coming_soon_desc = /** @type {(inputs: Demo_Coming_Soon_DescInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Esta pantalla forma parte de la aplicacion completa, pero su documentacion aun no se ha escrito.`)
+	return /** @type {LocalizedString} */ (`Esta pantalla forma parte de la aplicación completa, pero su documentación aún no se ha escrito.`)
 };
 
 /**

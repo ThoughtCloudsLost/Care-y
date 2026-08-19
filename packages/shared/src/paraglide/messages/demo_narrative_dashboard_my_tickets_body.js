@@ -13,10 +13,10 @@ const en_demo_narrative_dashboard_my_tickets_body = /** @type {(inputs: Demo_Nar
 };
 
 const es_demo_narrative_dashboard_my_tickets_body = /** @type {(inputs: Demo_Narrative_Dashboard_My_Tickets_BodyInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Todos los tickets abiertos asignados actualmente al voluntario. Esta es la lista de trabajo principal para la gestion diaria de casos.
-**Que aparece aqui.** Cada ticket donde el voluntario es el asignado actual y el ticket no esta cerrado. Los tickets en espera aparecen en su propia seccion.
-**Navegacion.** Tocar un ticket abre su vista detallada donde el voluntario puede leer mensajes, responder, anadir notas y revisar los metadatos del caso.
-**Conteos.** El conteo junto al encabezado de la seccion es el numero total de tickets abiertos asignados al voluntario. Este numero tambien aparece en la tarjeta de turno como referencia rapida.`)
+	return /** @type {LocalizedString} */ (`Todos los tickets abiertos asignados actualmente al voluntario. Esta es la lista de trabajo principal para la gestión diaria de casos.
+**Qué aparece aquí.** Cada ticket donde el voluntario es el asignado actual y el ticket no está cerrado. Los tickets en espera aparecen en su propia sección.
+**Navegación.** Tocar un ticket abre su vista detallada donde el voluntario puede leer mensajes, responder, añadir notas y revisar los metadatos del caso.
+**Conteos.** El conteo junto al encabezado de la sección es el número total de tickets abiertos asignados al voluntario. Este número también aparece en la tarjeta de turno como referencia rápida.`)
 };
 
 /**

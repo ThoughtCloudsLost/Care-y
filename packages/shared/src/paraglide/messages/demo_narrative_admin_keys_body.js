@@ -12,9 +12,9 @@ const en_demo_narrative_admin_keys_body = /** @type {(inputs: Demo_Narrative_Adm
 };
 
 const es_demo_narrative_admin_keys_body = /** @type {(inputs: Demo_Narrative_Admin_Keys_BodyInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`La seccion de claves muestra el estado de la clave de la organizacion y ofrece exportacion de custodia.
-**Custodia.** El flujo de custodia crea un archivo protegido con frase de paso (minimo 20 caracteres) que contiene la clave secreta de la organizacion. La frase de paso protege la clave usando derivacion de claves Argon2id. El administrador descarga el archivo y lo almacena sin conexion en una memoria USB u otro medio seguro. Este archivo es la via de recuperacion si todos los voluntarios pierden acceso a sus cuentas simultaneamente.
-**Rotacion de claves.** Los administradores pueden rotar la clave de la organizacion desde esta seccion.`)
+	return /** @type {LocalizedString} */ (`La sección de claves muestra el estado de la clave de la organización y ofrece exportación de custodia.
+**Custodia.** El flujo de custodia crea un archivo protegido con frase de paso (mínimo 20 caracteres) que contiene la clave secreta de la organización. La frase de paso protege la clave usando derivación de claves Argon2id. El administrador descarga el archivo y lo almacena sin conexión en una memoria USB u otro medio seguro. Este archivo es la vía de recuperación si todos los voluntarios pierden acceso a sus cuentas simultáneamente.
+**Rotación de claves.** Los administradores pueden rotar la clave de la organización desde esta sección.`)
 };
 
 /**

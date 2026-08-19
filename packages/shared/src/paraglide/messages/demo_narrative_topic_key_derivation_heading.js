@@ -10,7 +10,7 @@ const en_demo_narrative_topic_key_derivation_heading = /** @type {(inputs: Demo_
 };
 
 const es_demo_narrative_topic_key_derivation_heading = /** @type {(inputs: Demo_Narrative_Topic_Key_Derivation_HeadingInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Como se derivan las claves de cifrado`)
+	return /** @type {LocalizedString} */ (`Cómo se derivan las claves de cifrado`)
 };
 
 /**

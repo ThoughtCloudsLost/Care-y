@@ -12,9 +12,9 @@ The login screen updates its label through each step of the process so volunteer
 };
 
 const es_demo_narrative_topic_credentials_body = /** @type {(inputs: Demo_Narrative_Topic_Credentials_BodyInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Las personas voluntarias inician sesion con un nombre de usuario y contrasena asignados por su organizacion. La contrasena nunca se envia al servidor en ninguna forma.
-Al enviar la contrasena, CARE-Y la procesa con Argon2id, una funcion que la transforma en un valor extremadamente dificil de revertir, incluso con hardware dedicado. Esta funcion es intencionalmente lenta y consume mucha memoria, lo que hace costoso para un atacante probar grandes cantidades de intentos. El resultado se convierte en el punto de partida para derivar las claves de cifrado.
-La pantalla de inicio de sesion actualiza su etiqueta a traves de cada paso del proceso para que las personas voluntarias sepan que la aplicacion esta trabajando, no congelada. Aunque alguien intercepte el trafico de red entre el dispositivo y el servidor, no puede recuperar la contrasena original de lo que se transmitio.`)
+	return /** @type {LocalizedString} */ (`Las personas voluntarias inician sesión con un nombre de usuario y contraseña asignados por su organización. La contraseña nunca se envía al servidor en ninguna forma.
+Al enviar la contraseña, CARE-Y la procesa con Argon2id, una función que la transforma en un valor extremadamente difícil de revertir, incluso con hardware dedicado. Esta función es intencionalmente lenta y consume mucha memoria, lo que hace costoso para un atacante probar grandes cantidades de intentos. El resultado se convierte en el punto de partida para derivar las claves de cifrado.
+La pantalla de inicio de sesión actualiza su etiqueta a través de cada paso del proceso para que las personas voluntarias sepan que la aplicación está trabajando, no congelada. Aunque alguien intercepte el tráfico de red entre el dispositivo y el servidor, no puede recuperar la contraseña original de lo que se transmitió.`)
 };
 
 /**

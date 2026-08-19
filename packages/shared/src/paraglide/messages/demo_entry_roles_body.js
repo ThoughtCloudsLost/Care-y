@@ -10,7 +10,7 @@ const en_demo_entry_roles_body = /** @type {(inputs: Demo_Entry_Roles_BodyInputs
 };
 
 const es_demo_entry_roles_body = /** @type {(inputs: Demo_Entry_Roles_BodyInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Los tres iconos de usuario en el lado izquierdo alternan entre cuentas de Administrador, Gestor y Voluntario, y cambiar de usuario modifica lo que muestra cada pantalla y las acciones disponibles. La aplicacion de permisos detras de esto es middleware de servidor real ejecutandose en tu navegador.`)
+	return /** @type {LocalizedString} */ (`Los tres iconos de usuario en el lado izquierdo alternan entre cuentas de Administrador, Gestor y Voluntario, y cambiar de usuario modifica lo que muestra cada pantalla y las acciones disponibles. La aplicación de permisos detrás de esto es middleware de servidor real ejecutándose en tu navegador.`)
 };
 
 /**

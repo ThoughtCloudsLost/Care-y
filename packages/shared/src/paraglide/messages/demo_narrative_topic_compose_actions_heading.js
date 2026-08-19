@@ -10,7 +10,7 @@ const en_demo_narrative_topic_compose_actions_heading = /** @type {(inputs: Demo
 };
 
 const es_demo_narrative_topic_compose_actions_heading = /** @type {(inputs: Demo_Narrative_Topic_Compose_Actions_HeadingInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Barra de composicion`)
+	return /** @type {LocalizedString} */ (`Barra de composición`)
 };
 
 /**

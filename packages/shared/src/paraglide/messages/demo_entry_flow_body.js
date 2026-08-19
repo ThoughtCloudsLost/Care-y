@@ -10,7 +10,7 @@ const en_demo_entry_flow_body = /** @type {(inputs: Demo_Entry_Flow_BodyInputs) 
 };
 
 const es_demo_entry_flow_body = /** @type {(inputs: Demo_Entry_Flow_BodyInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Abre el panel de flujo de datos desde la barra superior y cada interaccion en el simulador dibuja su recorrido a traves de las lineas de pantalla, cifrado, API, servidor y base de datos, con cada paso mostrando direccion, duracion y una vista previa del contenido. Donde la pagina simula algo que la aplicacion real maneja de otra forma, una insignia marca ese paso como simulado.`)
+	return /** @type {LocalizedString} */ (`Abre el panel de flujo de datos desde la barra superior y cada interacción en el simulador dibuja su recorrido a través de las líneas de pantalla, cifrado, API, servidor y base de datos, con cada paso mostrando dirección, duración y una vista previa del contenido. Donde la página simula algo que la aplicación real maneja de otra forma, una insignia marca ese paso como simulado.`)
 };
 
 /**
