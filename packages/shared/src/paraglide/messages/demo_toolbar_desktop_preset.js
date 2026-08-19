@@ -10,7 +10,7 @@ const en_demo_toolbar_desktop_preset = /** @type {(inputs: Demo_Toolbar_Desktop_
 };
 
 const es_demo_toolbar_desktop_preset = /** @type {(inputs: Demo_Toolbar_Desktop_PresetInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Tamano de escritorio`)
+	return /** @type {LocalizedString} */ (`Tamaño de escritorio`)
 };
 
 /**

@@ -14,9 +14,9 @@ const en_demo_narrative_topic_filters_body = /** @type {(inputs: Demo_Narrative_
 
 const es_demo_narrative_topic_filters_body = /** @type {(inputs: Demo_Narrative_Topic_Filters_BodyInputs) => LocalizedString} */ () => {
 	return /** @type {LocalizedString} */ (`Las pastillas de filtro reducen la lista de tickets por estado, cola, prioridad, asignado, rango de fechas o estado de lectura. Se pueden activar varios filtros a la vez.
-**Filtros del servidor.** Estado, cola, prioridad, asignado, estado de espera y rango de fechas se evaluan en el servidor usando columnas de metadatos en texto plano. El servidor devuelve las filas coincidentes sin acceder al contenido cifrado del ticket.
-**Filtros del cliente.** Los filtros de no leidos y necesita atencion se ejecutan en el navegador porque el estado de lectura es por voluntario y no puede ser consultado por el servidor.
-**Filtro de no leidos.** Un filtro dedicado muestra solo los tickets con mensajes no leidos. Combinado con la opcion de nuevas respuestas primero, esto da a los voluntarios una vista enfocada de los casos que necesitan atencion.`)
+**Filtros del servidor.** Estado, cola, prioridad, asignado, estado de espera y rango de fechas se evalúan en el servidor usando columnas de metadatos en texto plano. El servidor devuelve las filas coincidentes sin acceder al contenido cifrado del ticket.
+**Filtros del cliente.** Los filtros de no leídos y necesita atención se ejecutan en el navegador porque el estado de lectura es por voluntario y no puede ser consultado por el servidor.
+**Filtro de no leídos.** Un filtro dedicado muestra solo los tickets con mensajes no leídos. Combinado con la opción de nuevas respuestas primero, esto da a los voluntarios una vista enfocada de los casos que necesitan atención.`)
 };
 
 /**

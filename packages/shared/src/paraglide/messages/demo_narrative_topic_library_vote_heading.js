@@ -10,7 +10,7 @@ const en_demo_narrative_topic_library_vote_heading = /** @type {(inputs: Demo_Na
 };
 
 const es_demo_narrative_topic_library_vote_heading = /** @type {(inputs: Demo_Narrative_Topic_Library_Vote_HeadingInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Votacion de utilidad`)
+	return /** @type {LocalizedString} */ (`Votación de utilidad`)
 };
 
 /**

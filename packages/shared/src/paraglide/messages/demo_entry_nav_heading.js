@@ -10,7 +10,7 @@ const en_demo_entry_nav_heading = /** @type {(inputs: Demo_Entry_Nav_HeadingInpu
 };
 
 const es_demo_entry_nav_heading = /** @type {(inputs: Demo_Entry_Nav_HeadingInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Navegacion`)
+	return /** @type {LocalizedString} */ (`Navegación`)
 };
 
 /**

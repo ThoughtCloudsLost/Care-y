@@ -11,8 +11,8 @@ const en_demo_narrative_topic_library_vote_body = /** @type {(inputs: Demo_Narra
 };
 
 const es_demo_narrative_topic_library_vote_body = /** @type {(inputs: Demo_Narrative_Topic_Library_Vote_BodyInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Los voluntarios pueden calificar si un articulo de la base de conocimiento ayudo a resolver una llamada. Cada voluntario tiene un voto por articulo (a favor o en contra).
-**Clasificacion.** La puntuacion agregada usa un intervalo de confianza de Wilson para que los articulos con solo unos pocos votos no superen a los que han sido evaluados por muchos voluntarios. Un articulo con dos votos y ningun voto en contra no aparece automaticamente por encima de un articulo con cincuenta votos y algunos en contra.`)
+	return /** @type {LocalizedString} */ (`Los voluntarios pueden calificar si un artículo de la base de conocimiento ayudó a resolver una llamada. Cada voluntario tiene un voto por artículo (a favor o en contra).
+**Clasificación.** La puntuación agregada usa un intervalo de confianza de Wilson para que los artículos con solo unos pocos votos no superen a los que han sido evaluados por muchos voluntarios. Un artículo con dos votos y ningún voto en contra no aparece automáticamente por encima de un artículo con cincuenta votos y algunos en contra.`)
 };
 
 /**

@@ -10,7 +10,7 @@ const en_demo_section_schedule_desc = /** @type {(inputs: Demo_Section_Schedule_
 };
 
 const es_demo_section_schedule_desc = /** @type {(inputs: Demo_Section_Schedule_DescInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`La pagina de horario gestionara los turnos de voluntarios. La funcion de programacion aun esta en desarrollo.`)
+	return /** @type {LocalizedString} */ (`La página de horario gestionará los turnos de voluntarios. La función de programación aún está en desarrollo.`)
 };
 
 /**

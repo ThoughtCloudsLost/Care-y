@@ -13,10 +13,10 @@ const en_demo_narrative_dashboard_create_body = /** @type {(inputs: Demo_Narrati
 };
 
 const es_demo_narrative_dashboard_create_body = /** @type {(inputs: Demo_Narrative_Dashboard_Create_BodyInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`El boton de mas en la barra de navegacion abre un menu para crear nuevos elementos. Las opciones mostradas dependen del rol y los permisos del voluntario.
+	return /** @type {LocalizedString} */ (`El botón de más en la barra de navegación abre un menú para crear nuevos elementos. Las opciones mostradas dependen del rol y los permisos del voluntario.
 **Todos los voluntarios** pueden crear un nuevo ticket.
-**Administradores y gestores** tambien pueden ver opciones para crear articulos de la base de conocimiento, categorias, colas o invitar nuevos voluntarios, dependiendo de sus permisos especificos.
-**Atajo de opcion unica.** Si el voluntario solo tiene permiso para crear un tipo de elemento, tocar el boton salta el menu y va directamente al formulario de creacion.`)
+**Administradores y gestores** también pueden ver opciones para crear artículos de la base de conocimiento, categorías, colas o invitar nuevos voluntarios, dependiendo de sus permisos específicos.
+**Atajo de opción única.** Si el voluntario solo tiene permiso para crear un tipo de elemento, tocar el botón salta el menú y va directamente al formulario de creación.`)
 };
 
 /**

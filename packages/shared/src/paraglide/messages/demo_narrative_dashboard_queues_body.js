@@ -13,10 +13,10 @@ const en_demo_narrative_dashboard_queues_body = /** @type {(inputs: Demo_Narrati
 };
 
 const es_demo_narrative_dashboard_queues_body = /** @type {(inputs: Demo_Narrative_Dashboard_Queues_BodyInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Los tickets se organizan en colas definidas por la organizacion. El panel principal muestra una tarjeta por cada cola con conteos de abiertos y urgentes en tiempo real.
-**Navegacion.** Tocar una tarjeta de cola lleva a la lista de tickets filtrada por esa cola.
-**Conteos en tiempo real.** Los conteos se actualizan automaticamente cuando se crean, cierran o reasignan tickets en cualquier parte de la aplicacion. Los numeros son consultas reales contra la base de datos, no capturas en cache.
-**Cifrado.** Los nombres y la configuracion de apariencia de las colas estan cifrados con la clave de la organizacion. El servidor los almacena como texto cifrado y el navegador los descifra para mostrarlos. Un atacante con acceso a la base de datos no sabria como se llaman las colas ni como estan configuradas.`)
+	return /** @type {LocalizedString} */ (`Los tickets se organizan en colas definidas por la organización. El panel principal muestra una tarjeta por cada cola con conteos de abiertos y urgentes en tiempo real.
+**Navegación.** Tocar una tarjeta de cola lleva a la lista de tickets filtrada por esa cola.
+**Conteos en tiempo real.** Los conteos se actualizan automáticamente cuando se crean, cierran o reasignan tickets en cualquier parte de la aplicación. Los números son consultas reales contra la base de datos, no capturas en cache.
+**Cifrado.** Los nombres y la configuración de apariencia de las colas están cifrados con la clave de la organización. El servidor los almacena como texto cifrado y el navegador los descifra para mostrarlos. Un atacante con acceso a la base de datos no sabría cómo se llaman las colas ni como están configuradas.`)
 };
 
 /**

@@ -10,7 +10,7 @@ const en_demo_narrative_settings_password_heading = /** @type {(inputs: Demo_Nar
 };
 
 const es_demo_narrative_settings_password_heading = /** @type {(inputs: Demo_Narrative_Settings_Password_HeadingInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Contrasena y re-envolvimiento de claves`)
+	return /** @type {LocalizedString} */ (`Contraseña y re-envolvimiento de claves`)
 };
 
 /**

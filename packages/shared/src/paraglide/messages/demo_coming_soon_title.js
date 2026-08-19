@@ -10,7 +10,7 @@ const en_demo_coming_soon_title = /** @type {(inputs: Demo_Coming_Soon_TitleInpu
 };
 
 const es_demo_coming_soon_title = /** @type {(inputs: Demo_Coming_Soon_TitleInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Proximamente`)
+	return /** @type {LocalizedString} */ (`Próximamente`)
 };
 
 /**

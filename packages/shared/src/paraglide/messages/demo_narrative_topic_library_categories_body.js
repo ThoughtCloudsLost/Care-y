@@ -11,8 +11,8 @@ const en_demo_narrative_topic_library_categories_body = /** @type {(inputs: Demo
 };
 
 const es_demo_narrative_topic_library_categories_body = /** @type {(inputs: Demo_Narrative_Topic_Library_Categories_BodyInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Los administradores organizan la biblioteca de conocimiento en categorias. Cada nombre de categoria se cifra con la clave de la organizacion antes de almacenarse, por lo que una filtracion de la base de datos no revela los nombres de las categorias.
-**Permisos.** Solo los administradores pueden crear, renombrar o eliminar categorias, mientras que todos los voluntarios pueden navegar los articulos dentro de cualquier categoria.`)
+	return /** @type {LocalizedString} */ (`Los administradores organizan la biblioteca de conocimiento en categorías. Cada nombre de categoría se cifra con la clave de la organización antes de almacenarse, por lo que una filtración de la base de datos no revela los nombres de las categorías.
+**Permisos.** Solo los administradores pueden crear, renombrar o eliminar categorías, mientras que todos los voluntarios pueden navegar los artículos dentro de cualquier categoría.`)
 };
 
 /**

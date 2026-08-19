@@ -10,7 +10,7 @@ const en_demo_coming_soon_body = /** @type {(inputs: Demo_Coming_Soon_BodyInputs
 };
 
 const es_demo_coming_soon_body = /** @type {(inputs: Demo_Coming_Soon_BodyInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Puede interactuar con esta pantalla en el simulador, que funciona contra la misma base de datos del navegador que el resto de la aplicacion. La documentacion para esta area se anadira en una actualizacion futura.`)
+	return /** @type {LocalizedString} */ (`Puede interactuar con esta pantalla en el simulador, que funciona contra la misma base de datos del navegador que el resto de la aplicación. La documentación para esta área se añadirá en una actualización futura.`)
 };
 
 /**

@@ -16,13 +16,13 @@ const en_demo_narrative_topic_view_modes_body = /** @type {(inputs: Demo_Narrati
 };
 
 const es_demo_narrative_topic_view_modes_body = /** @type {(inputs: Demo_Narrative_Topic_View_Modes_BodyInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`La lista de tickets soporta cuatro opciones de disposicion con una quinta planificada.
-- **Filas** muestran entradas compactas de una linea con indicadores de estado
-- **Tarjetas** muestran cada ticket con una burbuja de vista previa del mensaje para mas contexto
-- **Cuadricula** organiza los tickets en una cuadricula de tarjetas mas pequenas
+	return /** @type {LocalizedString} */ (`La lista de tickets soporta cuatro opciones de disposición con una quinta planificada.
+- **Filas** muestran entradas compactas de una línea con indicadores de estado
+- **Tarjetas** muestran cada ticket con una burbuja de vista previa del mensaje para más contexto
+- **Cuadrícula** organiza los tickets en una cuadrícula de tarjetas más pequeñas
 - **Tabla** presenta los tickets en una tabla de datos ordenable con columnas para cada campo
-- **Kanban** (proximamente) agrupara los tickets en carriles por estado
-**Persistencia.** El modo seleccionado se guarda localmente y persiste entre sesiones. Las mismas opciones de modo de vista estan disponibles en las secciones de tickets del panel principal.`)
+- **Kanban** (próximamente) agrupará los tickets en carriles por estado
+**Persistencia.** El modo seleccionado se guarda localmente y persiste entre sesiones. Las mismas opciones de modo de vista están disponibles en las secciones de tickets del panel principal.`)
 };
 
 /**

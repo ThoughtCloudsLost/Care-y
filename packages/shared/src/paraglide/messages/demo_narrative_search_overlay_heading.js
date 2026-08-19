@@ -10,7 +10,7 @@ const en_demo_narrative_search_overlay_heading = /** @type {(inputs: Demo_Narrat
 };
 
 const es_demo_narrative_search_overlay_heading = /** @type {(inputs: Demo_Narrative_Search_Overlay_HeadingInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Abrir la busqueda`)
+	return /** @type {LocalizedString} */ (`Abrir la búsqueda`)
 };
 
 /**

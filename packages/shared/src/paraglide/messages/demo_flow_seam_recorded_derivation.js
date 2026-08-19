@@ -10,7 +10,7 @@ const en_demo_flow_seam_recorded_derivation = /** @type {(inputs: Demo_Flow_Seam
 };
 
 const es_demo_flow_seam_recorded_derivation = /** @type {(inputs: Demo_Flow_Seam_Recorded_DerivationInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Este intercambio con el servidor se ejecuto una vez al iniciar el demo. Se reproduce aqui con su duracion real medida para que la seccion de inicio de sesion muestre la secuencia completa de ida y vuelta.`)
+	return /** @type {LocalizedString} */ (`Este intercambio con el servidor se ejecutó una vez al iniciar el demo. Se reproduce aquí con su duración real medida para que la sección de inicio de sesión muestre la secuencia completa de ida y vuelta.`)
 };
 
 /**

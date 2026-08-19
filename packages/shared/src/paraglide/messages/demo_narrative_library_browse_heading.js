@@ -10,7 +10,7 @@ const en_demo_narrative_library_browse_heading = /** @type {(inputs: Demo_Narrat
 };
 
 const es_demo_narrative_library_browse_heading = /** @type {(inputs: Demo_Narrative_Library_Browse_HeadingInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Navegar articulos`)
+	return /** @type {LocalizedString} */ (`Navegar artículos`)
 };
 
 /**

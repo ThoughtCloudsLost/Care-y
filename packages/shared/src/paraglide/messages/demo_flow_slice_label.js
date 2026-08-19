@@ -10,7 +10,7 @@ const en_demo_flow_slice_label = /** @type {(inputs: Demo_Flow_Slice_LabelInputs
 };
 
 const es_demo_flow_slice_label = /** @type {(inputs: Demo_Flow_Slice_LabelInputs) => LocalizedString} */ (i) => {
-	return /** @type {LocalizedString} */ (`Interaccion ${i?.index}`)
+	return /** @type {LocalizedString} */ (`Interacción ${i?.index}`)
 };
 
 /**

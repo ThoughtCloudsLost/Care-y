@@ -10,7 +10,7 @@ const en_demo_section_dashboard_desc = /** @type {(inputs: Demo_Section_Dashboar
 };
 
 const es_demo_section_dashboard_desc = /** @type {(inputs: Demo_Section_Dashboard_DescInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`El panel principal es la pantalla de inicio despues de iniciar sesion. Muestra el turno actual del voluntario, conteos de tickets por cola, actividad reciente y acceso rapido a articulos de la base de conocimiento. Todas las secciones obtienen datos en tiempo real de la base de datos cifrada. Las secciones son plegables para que los voluntarios puedan concentrarse en lo que necesitan, y una fila de botones de seccion debajo del titulo salta a cualquier seccion y la expande si estaba colapsada.`)
+	return /** @type {LocalizedString} */ (`El panel principal es la pantalla de inicio después de iniciar sesión. Muestra el turno actual del voluntario, conteos de tickets por cola, actividad reciente y acceso rápido a artículos de la base de conocimiento. Todas las secciones obtienen datos en tiempo real de la base de datos cifrada. Las secciones son plegables para que los voluntarios puedan concentrarse en lo que necesitan, y una fila de botones de sección debajo del título salta a cualquier sección y la expande si estaba colapsada.`)
 };
 
 /**

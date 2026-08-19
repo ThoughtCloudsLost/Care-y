@@ -10,7 +10,7 @@ const en_demo_section_tickets_desc = /** @type {(inputs: Demo_Section_Tickets_De
 };
 
 const es_demo_section_tickets_desc = /** @type {(inputs: Demo_Section_Tickets_DescInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`La lista de tickets es donde los voluntarios gestionan los casos entrantes. Cada titulo, descripcion y mensaje de ticket esta cifrado con claves que solo el navegador posee. El servidor almacena texto cifrado y lo transmite sin leerlo. Los voluntarios ordenan, filtran y buscan tickets localmente despues de que su navegador descifra el contenido.`)
+	return /** @type {LocalizedString} */ (`La lista de tickets es donde los voluntarios gestionan los casos entrantes. Cada título, descripción y mensaje de ticket está cifrado con claves que solo el navegador posee. El servidor almacena texto cifrado y lo transmite sin leerlo. Los voluntarios ordenan, filtran y buscan tickets localmente después de que su navegador descifra el contenido.`)
 };
 
 /**

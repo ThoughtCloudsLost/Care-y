@@ -13,8 +13,8 @@ const en_demo_narrative_admin_queues_body = /** @type {(inputs: Demo_Narrative_A
 
 const es_demo_narrative_admin_queues_body = /** @type {(inputs: Demo_Narrative_Admin_Queues_BodyInputs) => LocalizedString} */ () => {
 	return /** @type {LocalizedString} */ (`Las colas controlan como se organizan y enrutan los tickets. Los administradores crean colas, asignan voluntarios a ellas y configuran el orden y la apariencia.
-**Ciclo de vida.** Eliminar una cola solicita otra cola para recibir sus tickets, para que nada quede huerfano. Una cola puede designarse como la cola de recepcion que recibe tickets de llamadas entrantes.
-**Cifrado.** Los nombres, colores e iconos de las colas se cifran con la clave de la organizacion antes de almacenarse. El servidor almacena texto cifrado y el navegador los descifra localmente para mostrarlos.`)
+**Ciclo de vida.** Eliminar una cola solicita otra cola para recibir sus tickets, para que nada quede huérfano. Una cola puede designarse como la cola de recepción que recibe tickets de llamadas entrantes.
+**Cifrado.** Los nombres, colores e iconos de las colas se cifran con la clave de la organización antes de almacenarse. El servidor almacena texto cifrado y el navegador los descifra localmente para mostrarlos.`)
 };
 
 /**

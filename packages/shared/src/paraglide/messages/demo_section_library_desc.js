@@ -10,7 +10,7 @@ const en_demo_section_library_desc = /** @type {(inputs: Demo_Section_Library_De
 };
 
 const es_demo_section_library_desc = /** @type {(inputs: Demo_Section_Library_DescInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`La biblioteca es una base de conocimiento compartida para la organizacion. Los voluntarios navegan articulos, leen entradas detalladas con adjuntos y votos, y escriben nuevo contenido en el editor de texto enriquecido. Los titulos y cuerpos de los articulos se cifran con la clave de la organizacion antes de almacenarse.`)
+	return /** @type {LocalizedString} */ (`La biblioteca es una base de conocimiento compartida para la organización. Los voluntarios navegan artículos, leen entradas detalladas con adjuntos y votos, y escriben nuevo contenido en el editor de texto enriquecido. Los títulos y cuerpos de los artículos se cifran con la clave de la organización antes de almacenarse.`)
 };
 
 /**

@@ -10,7 +10,7 @@ const en_demo_role_admin_tooltip = /** @type {(inputs: Demo_Role_Admin_TooltipIn
 };
 
 const es_demo_role_admin_tooltip = /** @type {(inputs: Demo_Role_Admin_TooltipInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Administrador con acceso completo a todas las funciones. Cambia de usuario para ver como la autorizacion del servidor cambia cada pantalla.`)
+	return /** @type {LocalizedString} */ (`Administrador con acceso completo a todas las funciones. Cambia de usuario para ver cómo la autorización del servidor cambia cada pantalla.`)
 };
 
 /**

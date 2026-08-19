@@ -13,10 +13,10 @@ const en_demo_narrative_dashboard_needs_attention_body = /** @type {(inputs: Dem
 };
 
 const es_demo_narrative_dashboard_needs_attention_body = /** @type {(inputs: Demo_Narrative_Dashboard_Needs_Attention_BodyInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Una lista de tickets por voluntario filtrada a casos que necesitan accion inmediata de ese voluntario especifico. Cada voluntario ve solo sus propios tickets que califican.
-**Que califica.** Un ticket aparece aqui cuando esta abierto, no esta en espera, esta marcado como urgente o alta prioridad, y esta sin asignar o asignado al voluntario con respuestas no leidas.
-**Visibilidad.** Esta seccion solo aparece en el panel principal cuando al menos un ticket califica. Si todos los casos estan al dia, la seccion se oculta completamente en lugar de mostrar una lista vacia.
-**Proposito.** Este es el primer lugar donde los voluntarios deben mirar al abrir la aplicacion. Muestra el trabajo mas urgente sin que el voluntario tenga que ordenar o filtrar la lista completa de tickets manualmente.`)
+	return /** @type {LocalizedString} */ (`Una lista de tickets por voluntario filtrada a casos que necesitan acción inmediata de ese voluntario específico. Cada voluntario ve solo sus propios tickets que califican.
+**Qué califica.** Un ticket aparece aquí cuando está abierto, no está en espera, está marcado como urgente o alta prioridad, y está sin asignar o asignado al voluntario con respuestas no leídas.
+**Visibilidad.** Esta sección solo aparece en el panel principal cuando al menos un ticket califica. Si todos los casos están al día, la sección se oculta completamente en lugar de mostrar una lista vacía.
+**Propósito.** Este es el primer lugar donde los voluntarios deben mirar al abrir la aplicación. Muestra el trabajo más urgente sin que el voluntario tenga que ordenar o filtrar la lista completa de tickets manualmente.`)
 };
 
 /**

@@ -10,7 +10,7 @@ const en_demo_toolbar_phone_tooltip = /** @type {(inputs: Demo_Toolbar_Phone_Too
 };
 
 const es_demo_toolbar_phone_tooltip = /** @type {(inputs: Demo_Toolbar_Phone_TooltipInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Cambiar a vista de telefono (390 x 844)`)
+	return /** @type {LocalizedString} */ (`Cambiar a vista de teléfono (390 x 844)`)
 };
 
 /**

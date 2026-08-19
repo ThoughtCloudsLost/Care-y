@@ -10,7 +10,7 @@ const en_demo_narrative_topic_twofa_heading = /** @type {(inputs: Demo_Narrative
 };
 
 const es_demo_narrative_topic_twofa_heading = /** @type {(inputs: Demo_Narrative_Topic_Twofa_HeadingInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Autenticacion de dos factores`)
+	return /** @type {LocalizedString} */ (`Autenticación de dos factores`)
 };
 
 /**

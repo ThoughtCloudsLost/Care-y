@@ -13,10 +13,10 @@ const en_demo_narrative_search_how_body = /** @type {(inputs: Demo_Narrative_Sea
 };
 
 const es_demo_narrative_search_how_body = /** @type {(inputs: Demo_Narrative_Search_How_BodyInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`La busqueda funciona en dos niveles.
-**Resultados instantaneos.** Al escribir, el navegador compara de forma aproximada tu consulta contra el contenido que ya descifro y almaceno en cache. Los resultados aparecen inmediatamente sin llamada de red.
-**Busqueda completa.** Si los resultados instantaneos no incluyen lo que necesitas, un boton ofrece buscar en los registros restantes. El navegador obtiene datos cifrados del servidor, los descifra localmente y compara tu consulta contra el texto plano. El servidor envia bloques cifrados en este paso pero no realiza ninguna comparacion de texto. Todos los terminos de busqueda permanecen en el dispositivo.
-**Indicador de cobertura.** Una linea debajo de los resultados muestra cuantos registros se han buscado del total, para que los voluntarios sepan si han visto todo o si una busqueda completa cubriria mas.`)
+	return /** @type {LocalizedString} */ (`La búsqueda funciona en dos niveles.
+**Resultados instantáneos.** Al escribir, el navegador compara de forma aproximada tu consulta contra el contenido que ya descifró y almacenó en cache. Los resultados aparecen inmediatamente sin llamada de red.
+**Búsqueda completa.** Si los resultados instantáneos no incluyen lo que necesitas, un botón ofrece buscar en los registros restantes. El navegador obtiene datos cifrados del servidor, los descifra localmente y compara tu consulta contra el texto plano. El servidor envía bloques cifrados en este paso pero no realiza ninguna comparación de texto. Todos los términos de búsqueda permanecen en el dispositivo.
+**Indicador de cobertura.** Una línea debajo de los resultados muestra cuántos registros se han buscado del total, para que los voluntarios sepan si han visto todo o si una búsqueda completa cubriría más.`)
 };
 
 /**

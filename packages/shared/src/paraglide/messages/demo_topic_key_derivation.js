@@ -10,7 +10,7 @@ const en_demo_topic_key_derivation = /** @type {(inputs: Demo_Topic_Key_Derivati
 };
 
 const es_demo_topic_key_derivation = /** @type {(inputs: Demo_Topic_Key_DerivationInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Derivacion de claves`)
+	return /** @type {LocalizedString} */ (`Derivación de claves`)
 };
 
 /**

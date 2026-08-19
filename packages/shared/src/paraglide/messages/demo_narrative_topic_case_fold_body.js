@@ -13,10 +13,10 @@ const en_demo_narrative_topic_case_fold_body = /** @type {(inputs: Demo_Narrativ
 };
 
 const es_demo_narrative_topic_case_fold_body = /** @type {(inputs: Demo_Narrative_Topic_Case_Fold_BodyInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`El asa de apertura debajo del encabezado del ticket pliega los campos del caso para dar mas espacio a la conversacion y los muestra de nuevo cuando se necesitan.
-**Que se pliega.** La descripcion, la cola y el asignado, y la fecha de apertura se colapsan detras del asa. El titulo, el estado y la prioridad permanecen visibles en el encabezado de arriba.
-**Cifrado.** La descripcion esta cifrada con la clave por ticket, y los nombres de la cola y del asignado con la clave de la organizacion. La fecha de apertura es un metadato en texto plano que el servidor usa para ordenar.
-**El registro completo.** La lista completa de campos, junto con el numero de telefono del cliente enmascarado por rol y las acciones del caso, vive en el panel del caso descrito mas adelante en esta seccion.`)
+	return /** @type {LocalizedString} */ (`El asa de apertura debajo del encabezado del ticket pliega los campos del caso para dar más espacio a la conversación y los muestra de nuevo cuando se necesitan.
+**Qué se pliega.** La descripción, la cola y el asignado, y la fecha de apertura se colapsan detrás del asa. El título, el estado y la prioridad permanecen visibles en el encabezado de arriba.
+**Cifrado.** La descripción está cifrada con la clave por ticket, y los nombres de la cola y del asignado con la clave de la organización. La fecha de apertura es un metadato en texto plano que el servidor usa para ordenar.
+**El registro completo.** La lista completa de campos, junto con el número de teléfono del cliente enmascarado por rol y las acciones del caso, vive en el panel del caso descrito más adelante en esta sección.`)
 };
 
 /**

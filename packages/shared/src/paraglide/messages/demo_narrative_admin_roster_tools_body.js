@@ -14,11 +14,11 @@ const en_demo_narrative_admin_roster_tools_body = /** @type {(inputs: Demo_Narra
 };
 
 const es_demo_narrative_admin_roster_tools_body = /** @type {(inputs: Demo_Narrative_Admin_Roster_Tools_BodyInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`La pestana de usuarios tiene las mismas herramientas de trabajo que la lista de tickets.
+	return /** @type {LocalizedString} */ (`La pestaña de usuarios tiene las mismas herramientas de trabajo que la lista de tickets.
 **Filtros.** Pastillas reducen el directorio por rol, estado, estado de clave y pertenencia a colas.
 **Ordenar.** El directorio se ordena por nombre, rol o estado.
-**Buscar.** La lupa abre una busqueda en la pagina que recorre los voluntarios coincidentes.
-**Acciones masivas.** El modo de seleccion permite a un administrador elegir varios voluntarios y desactivarlos en una sola accion, con confirmacion previa, y la desactivacion es reversible.`)
+**Buscar.** La lupa abre una búsqueda en la página que recorre los voluntarios coincidentes.
+**Acciones masivas.** El modo de selección permite a un administrador elegir varios voluntarios y desactivarlos en una sola acción, con confirmación previa, y la desactivación es reversible.`)
 };
 
 /**

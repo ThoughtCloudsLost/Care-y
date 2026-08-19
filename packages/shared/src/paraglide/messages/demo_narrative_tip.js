@@ -10,7 +10,7 @@ const en_demo_narrative_tip = /** @type {(inputs: Demo_Narrative_TipInputs) => L
 };
 
 const es_demo_narrative_tip = /** @type {(inputs: Demo_Narrative_TipInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Selecciona una funcion de la lista, desplazate hacia abajo o interactua con la aplicacion CARE-Y en el telefono para conocer lo que puede hacer.`)
+	return /** @type {LocalizedString} */ (`Selecciona una función de la lista, desplázate hacia abajo o interactúa con la aplicación CARE-Y en el teléfono para conocer lo que puede hacer.`)
 };
 
 /**

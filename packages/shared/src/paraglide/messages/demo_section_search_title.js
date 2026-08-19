@@ -10,7 +10,7 @@ const en_demo_section_search_title = /** @type {(inputs: Demo_Section_Search_Tit
 };
 
 const es_demo_section_search_title = /** @type {(inputs: Demo_Section_Search_TitleInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Busqueda`)
+	return /** @type {LocalizedString} */ (`Búsqueda`)
 };
 
 /**

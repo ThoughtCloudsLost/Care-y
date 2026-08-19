@@ -10,7 +10,7 @@ const en_demo_topic_twofa = /** @type {(inputs: Demo_Topic_TwofaInputs) => Local
 };
 
 const es_demo_topic_twofa = /** @type {(inputs: Demo_Topic_TwofaInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Autenticacion de dos factores`)
+	return /** @type {LocalizedString} */ (`Autenticación de dos factores`)
 };
 
 /**

@@ -10,7 +10,7 @@ const en_demo_narrative_admin_telephony_provider_heading = /** @type {(inputs: D
 };
 
 const es_demo_narrative_admin_telephony_provider_heading = /** @type {(inputs: Demo_Narrative_Admin_Telephony_Provider_HeadingInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Conexion con el proveedor`)
+	return /** @type {LocalizedString} */ (`Conexión con el proveedor`)
 };
 
 /**

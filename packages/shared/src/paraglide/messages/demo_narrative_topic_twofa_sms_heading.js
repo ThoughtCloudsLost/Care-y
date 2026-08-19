@@ -10,7 +10,7 @@ const en_demo_narrative_topic_twofa_sms_heading = /** @type {(inputs: Demo_Narra
 };
 
 const es_demo_narrative_topic_twofa_sms_heading = /** @type {(inputs: Demo_Narrative_Topic_Twofa_Sms_HeadingInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Codigos por mensaje de texto`)
+	return /** @type {LocalizedString} */ (`Códigos por mensaje de texto`)
 };
 
 /**

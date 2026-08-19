@@ -10,7 +10,7 @@ const en_demo_tickets_descramble = /** @type {(inputs: Demo_Tickets_DescrambleIn
 };
 
 const es_demo_tickets_descramble = /** @type {(inputs: Demo_Tickets_DescrambleInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Descifrando titulos de tickets`)
+	return /** @type {LocalizedString} */ (`Descifrando títulos de tickets`)
 };
 
 /**

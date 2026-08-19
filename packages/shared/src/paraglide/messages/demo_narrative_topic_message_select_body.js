@@ -12,9 +12,9 @@ const en_demo_narrative_topic_message_select_body = /** @type {(inputs: Demo_Nar
 };
 
 const es_demo_narrative_topic_message_select_body = /** @type {(inputs: Demo_Narrative_Topic_Message_Select_BodyInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`El boton de seleccion en la barra de herramientas cambia el hilo al modo de seleccion. Tocar mensajes los agrega a la seleccion, y una opcion de seleccionar todo abarca el hilo visible completo.
-**Copiar.** La barra de seleccion copia el texto descifrado de todos los mensajes seleccionados al portapapeles en una sola accion, lo cual es util para pasar un resumen del caso a otro voluntario o pegar en una nota.
-**Privacidad.** El estado de seleccion y el texto copiado permanecen en el dispositivo, y el servidor no sabe cuales mensajes fueron seleccionados.`)
+	return /** @type {LocalizedString} */ (`El botón de selección en la barra de herramientas cambia el hilo al modo de selección. Tocar mensajes los agrega a la selección, y una opción de seleccionar todo abarca el hilo visible completo.
+**Copiar.** La barra de selección copia el texto descifrado de todos los mensajes seleccionados al portapapeles en una sola acción, lo cual es útil para pasar un resumen del caso a otro voluntario o pegar en una nota.
+**Privacidad.** El estado de selección y el texto copiado permanecen en el dispositivo, y el servidor no sabe cuáles mensajes fueron seleccionados.`)
 };
 
 /**

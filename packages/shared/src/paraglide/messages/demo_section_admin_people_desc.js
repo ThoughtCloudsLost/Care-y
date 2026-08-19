@@ -10,7 +10,7 @@ const en_demo_section_admin_people_desc = /** @type {(inputs: Demo_Section_Admin
 };
 
 const es_demo_section_admin_people_desc = /** @type {(inputs: Demo_Section_Admin_People_DescInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`La pagina de personas gestiona a todas las personas con las que trabaja la organizacion. Los administradores mantienen el registro de voluntarios y sus roles, configuran las colas que organizan y enrutan los tickets, y revisan la lista de clientes. Los identificadores de clientes y los nombres de las colas se cifran antes de llegar a la base de datos.`)
+	return /** @type {LocalizedString} */ (`La página de personas gestiona a todas las personas con las que trabaja la organización. Los administradores mantienen el registro de voluntarios y sus roles, configuran las colas que organizan y enrutan los tickets, y revisan la lista de clientes. Los identificadores de clientes y los nombres de las colas se cifran antes de llegar a la base de datos.`)
 };
 
 /**

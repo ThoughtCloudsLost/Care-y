@@ -12,9 +12,9 @@ const en_demo_narrative_topic_list_stats_body = /** @type {(inputs: Demo_Narrati
 };
 
 const es_demo_narrative_topic_list_stats_body = /** @type {(inputs: Demo_Narrative_Topic_List_Stats_BodyInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`La fila debajo del titulo de la pagina muestra conteos en tiempo real de tickets nuevos, activos y en espera, y un conteo de nuevas respuestas una vez que el navegador termina de comprobar el estado de lectura.
-**Sello de al dia.** Cuando todos los tickets han sido leidos, un sello con fecha aparece encima de la lista marcando el momento en que el voluntario se puso al dia. Los tickets nuevos que lleguen despues se apilan por encima.
-**De donde vienen los numeros.** Los conteos de estado se calculan a partir de columnas de metadatos en texto plano, por lo que el servidor los proporciona sin leer ningun contenido de ticket. El conteo de nuevas respuestas proviene del seguimiento de lectura por voluntario descrito en la seccion de insignias de no leidos.`)
+	return /** @type {LocalizedString} */ (`La fila debajo del título de la página muestra conteos en tiempo real de tickets nuevos, activos y en espera, y un conteo de nuevas respuestas una vez que el navegador termina de comprobar el estado de lectura.
+**Sello de al día.** Cuando todos los tickets han sido leídos, un sello con fecha aparece encima de la lista marcando el momento en que el voluntario se puso al día. Los tickets nuevos que lleguen después se apilan por encima.
+**De dónde vienen los números.** Los conteos de estado se calculan a partir de columnas de metadatos en texto plano, por lo que el servidor los proporciona sin leer ningún contenido de ticket. El conteo de nuevas respuestas proviene del seguimiento de lectura por voluntario descrito en la sección de insignias de no leídos.`)
 };
 
 /**

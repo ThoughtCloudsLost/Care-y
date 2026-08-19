@@ -10,7 +10,7 @@ const en_demo_narrative_admin_clients_heading = /** @type {(inputs: Demo_Narrati
 };
 
 const es_demo_narrative_admin_clients_heading = /** @type {(inputs: Demo_Narrative_Admin_Clients_HeadingInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Gestion de clientes`)
+	return /** @type {LocalizedString} */ (`Gestión de clientes`)
 };
 
 /**

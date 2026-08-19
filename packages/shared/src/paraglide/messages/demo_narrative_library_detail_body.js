@@ -11,8 +11,8 @@ const en_demo_narrative_library_detail_body = /** @type {(inputs: Demo_Narrative
 };
 
 const es_demo_narrative_library_detail_body = /** @type {(inputs: Demo_Narrative_Library_Detail_BodyInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`La vista completa del articulo muestra el texto integro, adjuntos de archivos y controles de votacion. El cuerpo se descifra localmente a partir del texto cifrado almacenado en el servidor.
-**Metadatos.** La vista detallada muestra el titulo del articulo, la categoria, el autor, la fecha de creacion y la fecha de ultima actualizacion. El nombre visible del autor se descifra a partir de la clave de la organizacion.`)
+	return /** @type {LocalizedString} */ (`La vista completa del artículo muestra el texto íntegro, adjuntos de archivos y controles de votación. El cuerpo se descifra localmente a partir del texto cifrado almacenado en el servidor.
+**Metadatos.** La vista detallada muestra el título del artículo, la categoría, el autor, la fecha de creación y la fecha de última actualización. El nombre visible del autor se descifra a partir de la clave de la organización.`)
 };
 
 /**

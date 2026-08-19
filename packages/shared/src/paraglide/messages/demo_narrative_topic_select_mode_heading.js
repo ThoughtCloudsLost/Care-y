@@ -10,7 +10,7 @@ const en_demo_narrative_topic_select_mode_heading = /** @type {(inputs: Demo_Nar
 };
 
 const es_demo_narrative_topic_select_mode_heading = /** @type {(inputs: Demo_Narrative_Topic_Select_Mode_HeadingInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Seleccion masiva`)
+	return /** @type {LocalizedString} */ (`Selección masiva`)
 };
 
 /**

@@ -13,10 +13,10 @@ const en_demo_narrative_topic_message_actions_body = /** @type {(inputs: Demo_Na
 };
 
 const es_demo_narrative_topic_message_actions_body = /** @type {(inputs: Demo_Narrative_Topic_Message_Actions_BodyInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Mantener pulsado un mensaje abre un menu contextual con acciones para ese mensaje especifico.
-**Acciones disponibles.** Tres acciones estan disponibles: copiar, editar y eliminar. Editar y eliminar estan restringidos a notas internas creadas por el voluntario actual. Los administradores pueden eliminar notas de otros voluntarios pero no pueden editarlas.
+	return /** @type {LocalizedString} */ (`Mantener pulsado un mensaje abre un menú contextual con acciones para ese mensaje específico.
+**Acciones disponibles.** Tres acciones están disponibles: copiar, editar y eliminar. Editar y eliminar están restringidos a notas internas creadas por el voluntario actual. Los administradores pueden eliminar notas de otros voluntarios pero no pueden editarlas.
 **Copiar.** Copia el texto descifrado del mensaje al portapapeles. El texto copiado permanece en el dispositivo.
-**Mensajes del cliente.** Los mensajes de clientes y las respuestas de voluntarios solo admiten copiar. Editar y eliminar no estan disponibles para estos tipos de mensaje.`)
+**Mensajes del cliente.** Los mensajes de clientes y las respuestas de voluntarios solo admiten copiar. Editar y eliminar no están disponibles para estos tipos de mensaje.`)
 };
 
 /**

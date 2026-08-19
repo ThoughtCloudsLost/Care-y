@@ -10,7 +10,7 @@ const en_demo_narrative_settings_appearance_body = /** @type {(inputs: Demo_Narr
 };
 
 const es_demo_narrative_settings_appearance_body = /** @type {(inputs: Demo_Narrative_Settings_Appearance_BodyInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Los voluntarios pueden alternar entre esquemas de color claro y oscuro. La preferencia se guarda localmente en el dispositivo y no se envia al servidor, y una entrada de actualizar aplicacion debajo del selector de esquema recarga la aplicacion en su lugar.`)
+	return /** @type {LocalizedString} */ (`Los voluntarios pueden alternar entre esquemas de color claro y oscuro. La preferencia se guarda localmente en el dispositivo y no se envía al servidor, y una entrada de actualizar aplicación debajo del selector de esquema recarga la aplicación en su lugar.`)
 };
 
 /**

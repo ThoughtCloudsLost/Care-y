@@ -10,7 +10,7 @@ const en_demo_subtitle = /** @type {(inputs: Demo_SubtitleInputs) => LocalizedSt
 };
 
 const es_demo_subtitle = /** @type {(inputs: Demo_SubtitleInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Descubre como el cifrado de extremo a extremo protege cada conversacion.`)
+	return /** @type {LocalizedString} */ (`Descubre cómo el cifrado de extremo a extremo protege cada conversación.`)
 };
 
 /**

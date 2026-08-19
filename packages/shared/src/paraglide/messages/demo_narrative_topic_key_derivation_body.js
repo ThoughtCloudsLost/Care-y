@@ -17,14 +17,14 @@ Volunteers do not need to understand the cryptography to use CARE-Y, but organiz
 };
 
 const es_demo_narrative_topic_key_derivation_body = /** @type {(inputs: Demo_Narrative_Topic_Key_Derivation_BodyInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Este es el nucleo de como CARE-Y protege los datos y lo que lo diferencia de un sistema que simplemente cifra una base de datos.
-Despues de procesar la contrasena y verificar el segundo factor, CARE-Y realiza un paso de derivacion de claves llamado una Funcion Pseudoaleatoria Oblivious con umbral con dos servidores independientes alojados en paises separados. Ningun servidor ve nunca la contrasena ni la clave final. Cada uno posee solo una parte del material criptografico, y ambos deben participar para que la derivacion tenga exito. El resultado es una clave maestra de la cual se derivan todas las claves de cifrado del voluntario.
-**Lo que esto significa en la practica:**
-- Ningun compromiso de un solo servidor puede reconstruir las claves de un voluntario
-- Ninguna orden legal en un solo pais puede forzar el descifrado
-- Un atacante necesitaria comprometer ambos servidores simultaneamente, en dos jurisdicciones legales diferentes, y ademas poseer la contrasena y el segundo factor del voluntario
-- Las partes de las claves se renuevan regularmente, por lo que una parte capturada de un periodo es inutil en el siguiente
-Los voluntarios no necesitan entender la criptografia para usar CARE-Y, pero las organizaciones que evaluan el sistema deben saber que esta es la base sobre la que se apoya todo lo demas.`)
+	return /** @type {LocalizedString} */ (`Este es el núcleo de cómo CARE-Y protege los datos y lo que lo diferencia de un sistema que simplemente cifra una base de datos.
+Después de procesar la contraseña y verificar el segundo factor, CARE-Y realiza un paso de derivación de claves llamado una Función Pseudoaleatoria Oblivious con umbral con dos servidores independientes alojados en países separados. Ningún servidor ve nunca la contraseña ni la clave final. Cada uno posee solo una parte del material criptográfico, y ambos deben participar para que la derivación tenga éxito. El resultado es una clave maestra de la cual se derivan todas las claves de cifrado del voluntario.
+**Lo que esto significa en la práctica:**
+- Ningún compromiso de un solo servidor puede reconstruir las claves de un voluntario
+- Ninguna orden legal en un solo país puede forzar el descifrado
+- Un atacante necesitaría comprometer ambos servidores simultáneamente, en dos jurisdicciones legales diferentes, y además poseer la contraseña y el segundo factor del voluntario
+- Las partes de las claves se renuevan regularmente, por lo que una parte capturada de un período es inútil en el siguiente
+Los voluntarios no necesitan entender la criptografía para usar CARE-Y, pero las organizaciones que evalúan el sistema deben saber que esta es la base sobre la que se apoya todo lo demás.`)
 };
 
 /**

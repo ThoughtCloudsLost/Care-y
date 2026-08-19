@@ -12,9 +12,9 @@ const en_demo_narrative_topic_twofa_email_body = /** @type {(inputs: Demo_Narrat
 };
 
 const es_demo_narrative_topic_twofa_email_body = /** @type {(inputs: Demo_Narrative_Topic_Twofa_Email_BodyInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Un codigo de seis digitos enviado a la direccion de correo registrada en la cuenta del voluntario. Los codigos caducan tras una ventana corta y cada uno funciona exactamente una vez.
-**Reenvio.** Si el codigo no llega, aparece un boton de reenvio tras un breve temporizador para evitar inundar la bandeja de entrada.
-**Compromiso de seguridad.** Cualquier persona con acceso al correo del voluntario podria interceptar el codigo. Las organizaciones que manejan casos especialmente sensibles pueden querer fomentar metodos mas seguros como passkeys o aplicaciones de autenticacion como factor principal.`)
+	return /** @type {LocalizedString} */ (`Un código de seis dígitos enviado a la dirección de correo registrada en la cuenta del voluntario. Los códigos caducan tras una ventana corta y cada uno funciona exactamente una vez.
+**Reenvío.** Si el código no llega, aparece un botón de reenvío tras un breve temporizador para evitar inundar la bandeja de entrada.
+**Compromiso de seguridad.** Cualquier persona con acceso al correo del voluntario podría interceptar el código. Las organizaciones que manejan casos especialmente sensibles pueden querer fomentar métodos más seguros como passkeys o aplicaciones de autenticación como factor principal.`)
 };
 
 /**

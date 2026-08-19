@@ -10,7 +10,7 @@ const en_demo_toolbar_link_linked = /** @type {(inputs: Demo_Toolbar_Link_Linked
 };
 
 const es_demo_toolbar_link_linked = /** @type {(inputs: Demo_Toolbar_Link_LinkedInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Telefono y manual vinculados (clic para desvincular)`)
+	return /** @type {LocalizedString} */ (`Teléfono y manual vinculados (clic para desvincular)`)
 };
 
 /**

@@ -13,10 +13,10 @@ const en_demo_narrative_topic_twofa_backup_body = /** @type {(inputs: Demo_Narra
 };
 
 const es_demo_narrative_topic_twofa_backup_body = /** @type {(inputs: Demo_Narrative_Topic_Twofa_Backup_BodyInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Un conjunto de codigos de un solo uso generados durante el registro y almacenados por el voluntario fuera del sistema. Cada codigo funciona exactamente una vez.
-**Cuando usarlos.** Los codigos de respaldo son el ultimo recurso cuando ningun otro metodo de segundo factor esta disponible, como un telefono perdido, un dispositivo nuevo o una aplicacion de autenticacion rota.
-**Almacenamiento.** Los voluntarios deben anotar estos codigos o guardarlos en un gestor de contrasenas. No deben almacenarse en el mismo dispositivo usado para iniciar sesion, ya que perder ese dispositivo significaria perder tanto el metodo principal como el respaldo.
-**Regeneracion.** Se pueden generar nuevos codigos de respaldo desde la pagina de Configuracion, lo que invalida todos los codigos emitidos anteriormente.`)
+	return /** @type {LocalizedString} */ (`Un conjunto de códigos de un solo uso generados durante el registro y almacenados por el voluntario fuera del sistema. Cada código funciona exactamente una vez.
+**Cuándo usarlos.** Los códigos de respaldo son el último recurso cuando ningún otro método de segundo factor está disponible, como un teléfono perdido, un dispositivo nuevo o una aplicación de autenticación rota.
+**Almacenamiento.** Los voluntarios deben anotar estos códigos o guardarlos en un gestor de contraseñas. No deben almacenarse en el mismo dispositivo usado para iniciar sesión, ya que perder ese dispositivo significaría perder tanto el método principal como el respaldo.
+**Regeneración.** Se pueden generar nuevos códigos de respaldo desde la página de Configuración, lo que invalida todos los códigos emitidos anteriormente.`)
 };
 
 /**

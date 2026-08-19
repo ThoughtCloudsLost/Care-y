@@ -12,9 +12,9 @@ const en_demo_narrative_topic_timeline_body = /** @type {(inputs: Demo_Narrative
 };
 
 const es_demo_narrative_topic_timeline_body = /** @type {(inputs: Demo_Narrative_Topic_Timeline_BodyInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`La vista de detalle incluye un selector entre el hilo de conversacion y una vista de linea de tiempo. La linea de tiempo reemplaza el hilo de mensajes con un resumen cronologico estructurado que muestra cambios de estado, asignaciones, notas y mensajes como una lista plana.
-**Cuando usarla.** La vista de linea de tiempo es util para revisar el historial completo de un caso, especialmente cuando el voluntario necesita ver que acciones se tomaron y cuando. La vista de conversacion es mejor para leer y responder mensajes.
-**Cifrado.** Todas las entradas de la linea de tiempo se descifran localmente, y el servidor las almacena como texto cifrado opaco.`)
+	return /** @type {LocalizedString} */ (`La vista de detalle incluye un selector entre el hilo de conversación y una vista de línea de tiempo. La línea de tiempo reemplaza el hilo de mensajes con un resumen cronológico estructurado que muestra cambios de estado, asignaciones, notas y mensajes como una lista plana.
+**Cuándo usarla.** La vista de línea de tiempo es útil para revisar el historial completo de un caso, especialmente cuando el voluntario necesita ver qué acciones se tomaron y cuando. La vista de conversación es mejor para leer y responder mensajes.
+**Cifrado.** Todas las entradas de la línea de tiempo se descifran localmente, y el servidor las almacena como texto cifrado opaco.`)
 };
 
 /**

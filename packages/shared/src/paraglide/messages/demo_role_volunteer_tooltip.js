@@ -10,7 +10,7 @@ const en_demo_role_volunteer_tooltip = /** @type {(inputs: Demo_Role_Volunteer_T
 };
 
 const es_demo_role_volunteer_tooltip = /** @type {(inputs: Demo_Role_Volunteer_TooltipInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Voluntario con acceso a sus propios tickets. Las pantallas de administracion estan bloqueadas por el middleware real del servidor.`)
+	return /** @type {LocalizedString} */ (`Voluntario con acceso a sus propios tickets. Las pantallas de administración están bloqueadas por el middleware real del servidor.`)
 };
 
 /**

@@ -10,7 +10,7 @@ const en_demo_narrative_admin_blocklist_body = /** @type {(inputs: Demo_Narrativ
 };
 
 const es_demo_narrative_admin_blocklist_body = /** @type {(inputs: Demo_Narrative_Admin_Blocklist_BodyInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Los numeros de telefono pueden bloquearse para que no lleguen a la organizacion, y un numero bloqueado se rechaza antes de que se cree un ticket.`)
+	return /** @type {LocalizedString} */ (`Los números de teléfono pueden bloquearse para que no lleguen a la organización, y un número bloqueado se rechaza antes de que se cree un ticket.`)
 };
 
 /**

@@ -10,7 +10,7 @@ const en_demo_narrative_topic_twofa_totp_heading = /** @type {(inputs: Demo_Narr
 };
 
 const es_demo_narrative_topic_twofa_totp_heading = /** @type {(inputs: Demo_Narrative_Topic_Twofa_Totp_HeadingInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Codigos de aplicacion de autenticacion`)
+	return /** @type {LocalizedString} */ (`Códigos de aplicación de autenticación`)
 };
 
 /**

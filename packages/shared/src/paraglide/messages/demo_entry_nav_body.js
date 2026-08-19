@@ -10,7 +10,7 @@ const en_demo_entry_nav_body = /** @type {(inputs: Demo_Entry_Nav_BodyInputs) =>
 };
 
 const es_demo_entry_nav_body = /** @type {(inputs: Demo_Entry_Nav_BodyInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Elige una funcion de la lista y el simulador abre esa pantalla. Tocar por el simulador funciona en la otra direccion, el manual sigue a donde vayas, y nada de lo que escribas aqui sale de tu dispositivo.`)
+	return /** @type {LocalizedString} */ (`Elige una función de la lista y el simulador abre esa pantalla. Tocar por el simulador funciona en la otra dirección, el manual sigue a donde vayas, y nada de lo que escribas aquí sale de tu dispositivo.`)
 };
 
 /**

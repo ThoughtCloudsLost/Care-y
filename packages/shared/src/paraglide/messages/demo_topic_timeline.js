@@ -10,7 +10,7 @@ const en_demo_topic_timeline = /** @type {(inputs: Demo_Topic_TimelineInputs) =>
 };
 
 const es_demo_topic_timeline = /** @type {(inputs: Demo_Topic_TimelineInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Linea de tiempo`)
+	return /** @type {LocalizedString} */ (`Línea de tiempo`)
 };
 
 /**

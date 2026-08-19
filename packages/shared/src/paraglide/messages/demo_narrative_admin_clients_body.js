@@ -11,8 +11,8 @@ const en_demo_narrative_admin_clients_body = /** @type {(inputs: Demo_Narrative_
 };
 
 const es_demo_narrative_admin_clients_body = /** @type {(inputs: Demo_Narrative_Admin_Clients_BodyInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`La lista de clientes muestra todos los clientes que han contactado a la organizacion. Los registros de clientes enlazan a sus tickets asociados.
-**Cifrado.** Los identificadores de los clientes estan cifrados. El nivel de detalle visible para cada voluntario depende de su rol y asignacion a los tickets correspondientes.`)
+	return /** @type {LocalizedString} */ (`La lista de clientes muestra todos los clientes que han contactado a la organización. Los registros de clientes enlazan a sus tickets asociados.
+**Cifrado.** Los identificadores de los clientes están cifrados. El nivel de detalle visible para cada voluntario depende de su rol y asignación a los tickets correspondientes.`)
 };
 
 /**

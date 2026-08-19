@@ -10,7 +10,7 @@ const en_demo_section_settings_desc = /** @type {(inputs: Demo_Section_Settings_
 };
 
 const es_demo_section_settings_desc = /** @type {(inputs: Demo_Section_Settings_DescInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`La pagina de configuracion permite a los voluntarios actualizar su perfil, gestionar su contrasena y claves de cifrado, configurar la apariencia y registrarse en metodos de autenticacion de dos factores.`)
+	return /** @type {LocalizedString} */ (`La página de configuración permite a los voluntarios actualizar su perfil, gestionar su contraseña y claves de cifrado, configurar la apariencia y registrarse en métodos de autenticación de dos factores.`)
 };
 
 /**

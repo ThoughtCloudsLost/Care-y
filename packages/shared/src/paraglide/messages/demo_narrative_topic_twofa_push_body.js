@@ -12,9 +12,9 @@ const en_demo_narrative_topic_twofa_push_body = /** @type {(inputs: Demo_Narrati
 };
 
 const es_demo_narrative_topic_twofa_push_body = /** @type {(inputs: Demo_Narrative_Topic_Twofa_Push_BodyInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Una notificacion enviada a otro dispositivo donde el voluntario ya tiene sesion iniciada. Aprobar la notificacion en ese dispositivo completa el inicio de sesion en este sin escribir ningun codigo.
-**Como funciona.** La pantalla de inicio de sesion espera hasta que el desafio se aprueba, se niega o caduca. La aprobacion push es util cuando un voluntario tiene la aplicacion abierta en un segundo dispositivo, como una tableta en el escritorio y un telefono en la mano.
-**Alternativa.** Si el voluntario niega la notificacion push o caduca, puede cambiar a otro metodo registrado desde la pantalla de inicio de sesion.`)
+	return /** @type {LocalizedString} */ (`Una notificación enviada a otro dispositivo donde el voluntario ya tiene sesión iniciada. Aprobar la notificación en ese dispositivo completa el inicio de sesión en este sin escribir ningún código.
+**Cómo funciona.** La pantalla de inicio de sesión espera hasta que el desafío se aprueba, se niega o caduca. La aprobación push es útil cuando un voluntario tiene la aplicación abierta en un segundo dispositivo, como una tableta en el escritorio y un teléfono en la mano.
+**Alternativa.** Si el voluntario niega la notificación push o caduca, puede cambiar a otro método registrado desde la pantalla de inicio de sesión.`)
 };
 
 /**

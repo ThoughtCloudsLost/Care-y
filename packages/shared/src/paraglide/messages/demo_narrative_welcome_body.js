@@ -10,7 +10,7 @@ const en_demo_narrative_welcome_body = /** @type {(inputs: Demo_Narrative_Welcom
 };
 
 const es_demo_narrative_welcome_body = /** @type {(inputs: Demo_Narrative_Welcome_BodyInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Toca una funcion en la lista o usa las pestanas dentro del telefono para explorar. Cada dato que ves se cifra en el navegador antes de llegar al servidor. El servidor nunca tiene tus claves.`)
+	return /** @type {LocalizedString} */ (`Toca una función en la lista o usa las pestañas dentro del teléfono para explorar. Cada dato que ves se cifra en el navegador antes de llegar al servidor. El servidor nunca tiene tus claves.`)
 };
 
 /**

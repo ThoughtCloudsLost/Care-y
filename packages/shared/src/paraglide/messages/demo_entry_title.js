@@ -10,7 +10,7 @@ const en_demo_entry_title = /** @type {(inputs: Demo_Entry_TitleInputs) => Local
 };
 
 const es_demo_entry_title = /** @type {(inputs: Demo_Entry_TitleInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Como funciona CARE-Y`)
+	return /** @type {LocalizedString} */ (`Cómo funciona CARE-Y`)
 };
 
 /**

@@ -10,7 +10,7 @@ const en_demo_narrative_topic_twofa_backup_heading = /** @type {(inputs: Demo_Na
 };
 
 const es_demo_narrative_topic_twofa_backup_heading = /** @type {(inputs: Demo_Narrative_Topic_Twofa_Backup_HeadingInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Codigos de respaldo`)
+	return /** @type {LocalizedString} */ (`Códigos de respaldo`)
 };
 
 /**

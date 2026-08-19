@@ -16,12 +16,12 @@ const en_demo_narrative_dashboard_view_switcher_body = /** @type {(inputs: Demo_
 };
 
 const es_demo_narrative_dashboard_view_switcher_body = /** @type {(inputs: Demo_Narrative_Dashboard_View_Switcher_BodyInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`El selector de vista en el encabezado de la pagina cambia como se muestran las listas de tickets en el panel principal.
+	return /** @type {LocalizedString} */ (`El selector de vista en el encabezado de la página cambia cómo se muestran las listas de tickets en el panel principal.
 **Modos disponibles:**
 - **Tabla** presenta los tickets en una tabla de datos ordenable
-- **Filas** muestran entradas compactas de una linea con indicadores de estado, ideales para recorrer una lista larga rapidamente
-- **Tarjetas** muestran cada ticket como una tarjeta con una burbuja de vista previa del mensaje, dando mas contexto de un vistazo
-- **Cuadricula** organiza los tickets en una cuadricula de tarjetas mas pequenas para una vision general mas densa
+- **Filas** muestran entradas compactas de una línea con indicadores de estado, ideales para recorrer una lista larga rápidamente
+- **Tarjetas** muestran cada ticket como una tarjeta con una burbuja de vista previa del mensaje, dando más contexto de un vistazo
+- **Cuadrícula** organiza los tickets en una cuadrícula de tarjetas más pequeñas para una visión general más densa
 **Persistencia.** El modo seleccionado se guarda localmente en el dispositivo. Se aplica a todas las secciones de tickets del panel principal y persiste entre sesiones.`)
 };
 

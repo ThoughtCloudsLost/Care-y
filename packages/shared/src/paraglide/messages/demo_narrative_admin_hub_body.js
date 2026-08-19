@@ -13,10 +13,10 @@ const en_demo_narrative_admin_hub_body = /** @type {(inputs: Demo_Narrative_Admi
 };
 
 const es_demo_narrative_admin_hub_body = /** @type {(inputs: Demo_Narrative_Admin_Hub_BodyInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`El centro organiza los destinos en cuatro grupos. Personas, Comunicaciones, Organizacion y Analiticas muestran cada uno un conteo en vivo de la base de datos y enlazan a la pagina de gestion correspondiente.
-**Insignias de estado.** El conteo de cada destino funciona tambien como senal de salud. Una insignia cambia a estilo de advertencia cuando algo necesita atencion, como claves faltantes o lineas telefonicas sin conectar.
-**Permisos.** Los destinos mostrados dependen del rol del voluntario. Los administradores ven todos los destinos. Los gestores ven la gestion de personas, colas, la lista de clientes y analiticas, pero no la configuracion de la organizacion ni los ajustes de infraestructura.
-**Analiticas.** El grupo de analiticas esta planificado pero aun no disponible, por lo que sus filas aparecen atenuadas y tocar una muestra un aviso.`)
+	return /** @type {LocalizedString} */ (`El centro organiza los destinos en cuatro grupos. Personas, Comunicaciones, Organización y Analíticas muestran cada uno un conteo en vivo de la base de datos y enlazan a la página de gestión correspondiente.
+**Insignias de estado.** El conteo de cada destino funciona también como señal de salud. Una insignia cambia a estilo de advertencia cuando algo necesita atención, como claves faltantes o líneas telefónicas sin conectar.
+**Permisos.** Los destinos mostrados dependen del rol del voluntario. Los administradores ven todos los destinos. Los gestores ven la gestión de personas, colas, la lista de clientes y analíticas, pero no la configuración de la organización ni los ajustes de infraestructura.
+**Analíticas.** El grupo de analíticas está planificado pero aún no disponible, por lo que sus filas aparecen atenuadas y tocar una muestra un aviso.`)
 };
 
 /**

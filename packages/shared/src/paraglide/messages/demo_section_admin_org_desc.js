@@ -10,7 +10,7 @@ const en_demo_section_admin_org_desc = /** @type {(inputs: Demo_Section_Admin_Or
 };
 
 const es_demo_section_admin_org_desc = /** @type {(inputs: Demo_Section_Admin_Org_DescInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`La pagina de organizacion contiene los ajustes que dan forma a todo el espacio de trabajo. La informacion general, la marca y la terminologia se cifran con la clave de la organizacion antes de almacenarse. El deposito de claves de cifrado y la politica de retencion de datos vienen despues, y los tipos de nota que los voluntarios usan en los tickets se definen al final de la pagina. Una fila de botones de seccion debajo del titulo salta a cualquier seccion.`)
+	return /** @type {LocalizedString} */ (`La página de organización contiene los ajustes que dan forma a todo el espacio de trabajo. La información general, la marca y la terminología se cifran con la clave de la organización antes de almacenarse. El depósito de claves de cifrado y la política de retención de datos vienen después, y los tipos de nota que los voluntarios usan en los tickets se definen al final de la página. Una fila de botones de sección debajo del título salta a cualquier sección.`)
 };
 
 /**

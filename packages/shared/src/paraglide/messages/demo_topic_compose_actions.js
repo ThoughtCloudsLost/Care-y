@@ -10,7 +10,7 @@ const en_demo_topic_compose_actions = /** @type {(inputs: Demo_Topic_Compose_Act
 };
 
 const es_demo_topic_compose_actions = /** @type {(inputs: Demo_Topic_Compose_ActionsInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Acciones de composicion`)
+	return /** @type {LocalizedString} */ (`Acciones de composición`)
 };
 
 /**

@@ -10,7 +10,7 @@ const en_demo_narrative_admin_general_heading = /** @type {(inputs: Demo_Narrati
 };
 
 const es_demo_narrative_admin_general_heading = /** @type {(inputs: Demo_Narrative_Admin_General_HeadingInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Informacion general`)
+	return /** @type {LocalizedString} */ (`Información general`)
 };
 
 /**

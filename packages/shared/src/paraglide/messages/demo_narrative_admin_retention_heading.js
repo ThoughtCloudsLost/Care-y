@@ -10,7 +10,7 @@ const en_demo_narrative_admin_retention_heading = /** @type {(inputs: Demo_Narra
 };
 
 const es_demo_narrative_admin_retention_heading = /** @type {(inputs: Demo_Narrative_Admin_Retention_HeadingInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Politica de retencion`)
+	return /** @type {LocalizedString} */ (`Política de retención`)
 };
 
 /**

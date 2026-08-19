@@ -10,7 +10,7 @@ const en_demo_figure_aria_label = /** @type {(inputs: Demo_Figure_Aria_LabelInpu
 };
 
 const es_demo_figure_aria_label = /** @type {(inputs: Demo_Figure_Aria_LabelInputs) => LocalizedString} */ (i) => {
-	return /** @type {LocalizedString} */ (`Manten pulsado para ver ${i?.sub}`)
+	return /** @type {LocalizedString} */ (`Mantén pulsado para ver ${i?.sub}`)
 };
 
 /**

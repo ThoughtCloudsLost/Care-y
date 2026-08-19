@@ -10,7 +10,7 @@ const en_demo_flow_empty = /** @type {(inputs: Demo_Flow_EmptyInputs) => Localiz
 };
 
 const es_demo_flow_empty = /** @type {(inputs: Demo_Flow_EmptyInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Todavia no hay actividad. Usa el telefono y cada paso del flujo aparece aqui.`)
+	return /** @type {LocalizedString} */ (`Todavía no hay actividad. Usa el teléfono y cada paso del flujo aparece aquí.`)
 };
 
 /**

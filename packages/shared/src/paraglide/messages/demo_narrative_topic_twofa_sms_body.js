@@ -11,8 +11,8 @@ const en_demo_narrative_topic_twofa_sms_body = /** @type {(inputs: Demo_Narrativ
 };
 
 const es_demo_narrative_topic_twofa_sms_body = /** @type {(inputs: Demo_Narrative_Topic_Twofa_Sms_BodyInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Un codigo de seis digitos enviado al numero de telefono registrado a traves del proveedor de telefonia de la organizacion. Como los codigos por correo, cada codigo es de un solo uso y caduca rapidamente.
-**Compromiso de seguridad.** Los codigos por mensaje de texto tienen el mismo riesgo de interceptacion que los codigos por correo, con la preocupacion adicional de que los numeros de telefono pueden transferirse mediante ataques de ingenieria social a las operadoras. Las organizaciones deberian tratar los SMS como una alternativa de conveniencia en lugar de un segundo factor principal para voluntarios que manejan casos de alto riesgo.`)
+	return /** @type {LocalizedString} */ (`Un código de seis dígitos enviado al número de teléfono registrado a través del proveedor de telefonía de la organización. Como los códigos por correo, cada código es de un solo uso y caduca rápidamente.
+**Compromiso de seguridad.** Los códigos por mensaje de texto tienen el mismo riesgo de interceptación que los códigos por correo, con la preocupación adicional de que los números de teléfono pueden transferirse mediante ataques de ingeniería social a las operadoras. Las organizaciones deberían tratar los SMS como una alternativa de conveniencia en lugar de un segundo factor principal para voluntarios que manejan casos de alto riesgo.`)
 };
 
 /**

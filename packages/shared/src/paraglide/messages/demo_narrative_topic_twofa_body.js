@@ -12,9 +12,9 @@ const en_demo_narrative_topic_twofa_body = /** @type {(inputs: Demo_Narrative_To
 };
 
 const es_demo_narrative_topic_twofa_body = /** @type {(inputs: Demo_Narrative_Topic_Twofa_BodyInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Despues de introducir la contrasena, CARE-Y requiere un segundo factor para verificar la identidad antes de derivar las claves de cifrado. Una contrasena robada o adivinada por si sola no es suficiente para acceder a ningun dato.
-**Metodos.** Se admiten seis, las personas voluntarias pueden registrarse en mas de uno desde la pagina de Configuracion, y cada metodo se describe en su propia seccion a continuacion.
-**Guia de registro.** Las organizaciones deben animar a sus voluntarios a registrar al menos dos metodos para tener una alternativa si uno deja de estar disponible, como un telefono perdido o un dispositivo nuevo.`)
+	return /** @type {LocalizedString} */ (`Después de introducir la contraseña, CARE-Y requiere un segundo factor para verificar la identidad antes de derivar las claves de cifrado. Una contraseña robada o adivinada por sí sola no es suficiente para acceder a ningún dato.
+**Métodos.** Se admiten seis, las personas voluntarias pueden registrarse en más de uno desde la página de Configuración, y cada método se describe en su propia sección a continuación.
+**Guía de registro.** Las organizaciones deben animar a sus voluntarios a registrar al menos dos métodos para tener una alternativa si uno deja de estar disponible, como un teléfono perdido o un dispositivo nuevo.`)
 };
 
 /**

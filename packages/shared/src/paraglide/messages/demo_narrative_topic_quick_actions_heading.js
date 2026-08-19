@@ -10,7 +10,7 @@ const en_demo_narrative_topic_quick_actions_heading = /** @type {(inputs: Demo_N
 };
 
 const es_demo_narrative_topic_quick_actions_heading = /** @type {(inputs: Demo_Narrative_Topic_Quick_Actions_HeadingInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Acciones rapidas`)
+	return /** @type {LocalizedString} */ (`Acciones rápidas`)
 };
 
 /**

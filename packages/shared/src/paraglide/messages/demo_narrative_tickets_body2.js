@@ -10,7 +10,7 @@ const en_demo_narrative_tickets_body2 = /** @type {(inputs: Demo_Narrative_Ticke
 };
 
 const es_demo_narrative_tickets_body2 = /** @type {(inputs: Demo_Narrative_Tickets_Body2Inputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Cuando abres la aplicacion, tu navegador descifra cada ticket sobre la marcha. Si tu sesion termina, las claves se borran de la memoria y los datos vuelven a ser texto cifrado.`)
+	return /** @type {LocalizedString} */ (`Cuando abres la aplicación, tu navegador descifra cada ticket sobre la marcha. Si tu sesión termina, las claves se borran de la memoria y los datos vuelven a ser texto cifrado.`)
 };
 
 /**

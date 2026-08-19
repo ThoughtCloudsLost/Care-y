@@ -10,7 +10,7 @@ const en_demo_narrative_dashboard_needs_attention_heading = /** @type {(inputs: 
 };
 
 const es_demo_narrative_dashboard_needs_attention_heading = /** @type {(inputs: Demo_Narrative_Dashboard_Needs_Attention_HeadingInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Necesita atencion`)
+	return /** @type {LocalizedString} */ (`Necesita atención`)
 };
 
 /**

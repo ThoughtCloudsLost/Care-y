@@ -10,7 +10,7 @@ const en_demo_narrative_topic_twofa_push_heading = /** @type {(inputs: Demo_Narr
 };
 
 const es_demo_narrative_topic_twofa_push_heading = /** @type {(inputs: Demo_Narrative_Topic_Twofa_Push_HeadingInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Aprobacion push`)
+	return /** @type {LocalizedString} */ (`Aprobación push`)
 };
 
 /**

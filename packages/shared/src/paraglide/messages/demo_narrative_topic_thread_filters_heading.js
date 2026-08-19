@@ -10,7 +10,7 @@ const en_demo_narrative_topic_thread_filters_heading = /** @type {(inputs: Demo_
 };
 
 const es_demo_narrative_topic_thread_filters_heading = /** @type {(inputs: Demo_Narrative_Topic_Thread_Filters_HeadingInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Filtrando una conversacion`)
+	return /** @type {LocalizedString} */ (`Filtrando una conversación`)
 };
 
 /**

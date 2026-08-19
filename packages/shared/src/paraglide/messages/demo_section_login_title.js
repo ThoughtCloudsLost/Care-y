@@ -10,7 +10,7 @@ const en_demo_section_login_title = /** @type {(inputs: Demo_Section_Login_Title
 };
 
 const es_demo_section_login_title = /** @type {(inputs: Demo_Section_Login_TitleInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Inicio de sesion y seguridad`)
+	return /** @type {LocalizedString} */ (`Inicio de sesión y seguridad`)
 };
 
 /**

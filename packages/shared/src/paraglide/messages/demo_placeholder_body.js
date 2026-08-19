@@ -10,7 +10,7 @@ const en_demo_placeholder_body = /** @type {(inputs: Demo_Placeholder_BodyInputs
 };
 
 const es_demo_placeholder_body = /** @type {(inputs: Demo_Placeholder_BodyInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Selecciona una funcion de la lista para comenzar.`)
+	return /** @type {LocalizedString} */ (`Selecciona una función de la lista para comenzar.`)
 };
 
 /**

@@ -12,9 +12,9 @@ const en_demo_narrative_topic_deep_search_body = /** @type {(inputs: Demo_Narrat
 };
 
 const es_demo_narrative_topic_deep_search_body = /** @type {(inputs: Demo_Narrative_Topic_Deep_Search_BodyInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Los voluntarios pueden buscar dentro de la conversacion de un ticket palabras o frases especificas. La busqueda se ejecuta completamente en el navegador contra el contenido descifrado de los mensajes.
-**Busqueda profunda.** Si el termino de busqueda no produce resultados entre los mensajes actualmente cargados, el sistema carga y descifra automaticamente paginas mas antiguas de la conversacion y busca en ellas tambien. Un indicador de progreso muestra cuantos mensajes se han buscado del total. El termino de busqueda debe tener al menos dos caracteres.
-**Privacidad.** Ningun termino de busqueda se envia al servidor. El servidor no sabe que busco el voluntario ni que mensajes coincidieron.`)
+	return /** @type {LocalizedString} */ (`Los voluntarios pueden buscar dentro de la conversación de un ticket palabras o frases específicas. La búsqueda se ejecuta completamente en el navegador contra el contenido descifrado de los mensajes.
+**Búsqueda profunda.** Si el término de búsqueda no produce resultados entre los mensajes actualmente cargados, el sistema carga y descifra automáticamente páginas más antiguas de la conversación y busca en ellas también. Un indicador de progreso muestra cuántos mensajes se han buscado del total. El término de búsqueda debe tener al menos dos caracteres.
+**Privacidad.** Ningún término de búsqueda se envía al servidor. El servidor no sabe qué buscó el voluntario ni qué mensajes coincidieron.`)
 };
 
 /**

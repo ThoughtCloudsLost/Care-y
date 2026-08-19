@@ -10,7 +10,7 @@ const en_demo_narrative_topic_list_search_heading = /** @type {(inputs: Demo_Nar
 };
 
 const es_demo_narrative_topic_list_search_heading = /** @type {(inputs: Demo_Narrative_Topic_List_Search_HeadingInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Buscar en esta pagina`)
+	return /** @type {LocalizedString} */ (`Buscar en esta página`)
 };
 
 /**

@@ -10,7 +10,7 @@ const en_demo_narrative_admin_hub_heading = /** @type {(inputs: Demo_Narrative_A
 };
 
 const es_demo_narrative_admin_hub_heading = /** @type {(inputs: Demo_Narrative_Admin_Hub_HeadingInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Navegacion del centro`)
+	return /** @type {LocalizedString} */ (`Navegación del centro`)
 };
 
 /**

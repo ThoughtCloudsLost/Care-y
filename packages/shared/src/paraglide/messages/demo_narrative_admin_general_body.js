@@ -10,7 +10,7 @@ const en_demo_narrative_admin_general_body = /** @type {(inputs: Demo_Narrative_
 };
 
 const es_demo_narrative_admin_general_body = /** @type {(inputs: Demo_Narrative_Admin_General_BodyInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`El nombre de la organizacion, el pais y el idioma predeterminado de la interfaz se configuran aqui, y cada uno se cifra con la clave de la organizacion antes de almacenarse.`)
+	return /** @type {LocalizedString} */ (`El nombre de la organización, el país y el idioma predeterminado de la interfaz se configuran aquí, y cada uno se cifra con la clave de la organización antes de almacenarse.`)
 };
 
 /**

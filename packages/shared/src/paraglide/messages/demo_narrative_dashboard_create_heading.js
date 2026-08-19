@@ -10,7 +10,7 @@ const en_demo_narrative_dashboard_create_heading = /** @type {(inputs: Demo_Narr
 };
 
 const es_demo_narrative_dashboard_create_heading = /** @type {(inputs: Demo_Narrative_Dashboard_Create_HeadingInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Boton de crear`)
+	return /** @type {LocalizedString} */ (`Botón de crear`)
 };
 
 /**

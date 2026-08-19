@@ -12,9 +12,9 @@ const en_demo_narrative_settings_twofa_body = /** @type {(inputs: Demo_Narrative
 };
 
 const es_demo_narrative_settings_twofa_body = /** @type {(inputs: Demo_Narrative_Settings_Twofa_BodyInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Los voluntarios pueden registrarse en cualquiera de los metodos de segundo factor admitidos desde esta pagina.
-**Metodos disponibles.** Passkeys (autenticadores de plataforma y llaves de seguridad externas), codigos de aplicacion de autenticacion (TOTP), codigos por correo, codigos por mensaje de texto y aprobacion push. Los codigos de respaldo se generan automaticamente despues de registrar el primer metodo.
-**Flujo de registro.** Cada metodo tiene su propia ventana de registro con instrucciones de configuracion y verificacion. El simulador sustituye dispositivos externos llenando automaticamente los codigos de verificacion tras una breve pausa, mientras que la verificacion del lado del servidor es real.`)
+	return /** @type {LocalizedString} */ (`Los voluntarios pueden registrarse en cualquiera de los métodos de segundo factor admitidos desde esta página.
+**Métodos disponibles.** Passkeys (autenticadores de plataforma y llaves de seguridad externas), códigos de aplicación de autenticación (TOTP), códigos por correo, códigos por mensaje de texto y aprobación push. Los códigos de respaldo se generan automáticamente después de registrar el primer método.
+**Flujo de registro.** Cada método tiene su propia ventana de registro con instrucciones de configuración y verificación. El simulador sustituye dispositivos externos llenando automáticamente los códigos de verificación tras una breve pausa, mientras que la verificación del lado del servidor es real.`)
 };
 
 /**

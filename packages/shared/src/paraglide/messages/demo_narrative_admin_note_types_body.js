@@ -14,9 +14,9 @@ const en_demo_narrative_admin_note_types_body = /** @type {(inputs: Demo_Narrati
 
 const es_demo_narrative_admin_note_types_body = /** @type {(inputs: Demo_Narrative_Admin_Note_Types_BodyInputs) => LocalizedString} */ () => {
 	return /** @type {LocalizedString} */ (`Los administradores crean y configuran los tipos de nota que los voluntarios usan al escribir notas internas en los tickets.
-**Configuracion.** Cada tipo de nota tiene un nombre, icono, descripcion, rol minimo para visualizar, rol minimo para crear y objetivos de escalamiento que controlan quien recibe notificacion cuando se escribe una nota de ese tipo.
-**Predeterminados.** Los cuatro tipos predeterminados son Comentario, Resolucion, Preocupacion de Seguridad y Solicitud. Los administradores pueden anadir tipos personalizados para el flujo de trabajo de su organizacion.
-**Solicitudes al cierre.** Los tipos de nota pueden marcarse como requeridos al cierre. Cuando un voluntario cierra un ticket, se le guia a traves de cada tipo requerido y se le solicita escribir una nota, y cada solicitud se puede omitir.`)
+**Configuración.** Cada tipo de nota tiene un nombre, icono, descripción, rol mínimo para visualizar, rol mínimo para crear y objetivos de escalamiento que controlan quién recibe notificación cuando se escribe una nota de ese tipo.
+**Predeterminados.** Los cuatro tipos predeterminados son Comentario, Resolución, Preocupación de Seguridad y Solicitud. Los administradores pueden añadir tipos personalizados para el flujo de trabajo de su organización.
+**Solicitudes al cierre.** Los tipos de nota pueden marcarse como requeridos al cierre. Cuando un voluntario cierra un ticket, se le guía a través de cada tipo requerido y se le solicita escribir una nota, y cada solicitud se puede omitir.`)
 };
 
 /**

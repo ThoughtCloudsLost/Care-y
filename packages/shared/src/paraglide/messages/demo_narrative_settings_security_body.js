@@ -13,8 +13,8 @@ const en_demo_narrative_settings_security_body = /** @type {(inputs: Demo_Narrat
 
 const es_demo_narrative_settings_security_body = /** @type {(inputs: Demo_Narrative_Settings_Security_BodyInputs) => LocalizedString} */ () => {
 	return /** @type {LocalizedString} */ (`Dos entradas se encuentran bajo el encabezado de seguridad junto al registro de segundo factor.
-**Revisar resumen de seguridad** abre el resumen del recorrido de inicio de sesion. Explica que protege CARE-Y, como funciona el cifrado a alto nivel y que riesgos quedan fuera del control del sistema.
-**Revisar guía de seguridad** reproducira el recorrido interactivo y aun no esta disponible.`)
+**Revisar resumen de seguridad** abre el resumen del recorrido de inicio de sesión. Explica qué protege CARE-Y, cómo funciona el cifrado a alto nivel y qué riesgos quedan fuera del control del sistema.
+**Revisar guía de seguridad** reproducirá el recorrido interactivo y aún no está disponible.`)
 };
 
 /**

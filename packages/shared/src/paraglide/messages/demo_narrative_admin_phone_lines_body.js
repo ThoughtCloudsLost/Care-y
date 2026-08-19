@@ -10,7 +10,7 @@ const en_demo_narrative_admin_phone_lines_body = /** @type {(inputs: Demo_Narrat
 };
 
 const es_demo_narrative_admin_phone_lines_body = /** @type {(inputs: Demo_Narrative_Admin_Phone_Lines_BodyInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Cada linea telefonica tiene un numero, un rol de proposito y saludos asociados. Los roles de proposito como recepcion y salida determinan como se usa la linea. El simulador configura dos numeros ficticios 555 con roles de proposito para la demostracion.`)
+	return /** @type {LocalizedString} */ (`Cada línea telefónica tiene un número, un rol de propósito y saludos asociados. Los roles de propósito como recepción y salida determinan cómo se usa la línea. El simulador configura dos números ficticios 555 con roles de propósito para la demostración.`)
 };
 
 /**

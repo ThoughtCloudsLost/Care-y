@@ -14,11 +14,11 @@ const en_demo_narrative_topic_twofa_passkey_body = /** @type {(inputs: Demo_Narr
 };
 
 const es_demo_narrative_topic_twofa_passkey_body = /** @type {(inputs: Demo_Narrative_Topic_Twofa_Passkey_BodyInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Una passkey usa el propio dispositivo como segundo factor. No hay codigo que escribir.
-**Durante el registro,** el dispositivo crea un par de claves criptograficas y almacena la clave privada en su hardware seguro.
-**Al iniciar sesion,** la huella o el rostro del voluntario desbloquea la clave privada, que firma un desafio de un solo uso del servidor. El servidor verifica la firma sin ver nunca la clave privada.
-**Resistencia al phishing.** La firma solo funciona para este intento de inicio de sesion especifico en este sitio especifico. Un atacante no puede repetirla ni redirigirla a otro servidor.
-**Perdida del dispositivo.** Si se pierde el dispositivo, el voluntario puede iniciar sesion con otro metodo registrado y eliminar la passkey antigua desde Configuracion.`)
+	return /** @type {LocalizedString} */ (`Una passkey usa el propio dispositivo como segundo factor. No hay código que escribir.
+**Durante el registro,** el dispositivo crea un par de claves criptográficas y almacena la clave privada en su hardware seguro.
+**Al iniciar sesión,** la huella o el rostro del voluntario desbloquea la clave privada, que firma un desafío de un solo uso del servidor. El servidor verifica la firma sin ver nunca la clave privada.
+**Resistencia al phishing.** La firma solo funciona para este intento de inicio de sesión específico en este sitio específico. Un atacante no puede repetirla ni redirigirla a otro servidor.
+**Pérdida del dispositivo.** Si se pierde el dispositivo, el voluntario puede iniciar sesión con otro método registrado y eliminar la passkey antigua desde Configuración.`)
 };
 
 /**
