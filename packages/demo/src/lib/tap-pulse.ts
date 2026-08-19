@@ -15,7 +15,11 @@ import { locales } from "$lib/paraglide/runtime.js";
 import { withTerms } from "$lib/terminology/with-terms.js";
 import type { DemoTopic, DemoFeature } from "./bridge.js";
 import { DEMO_DETAIL_TICKET_ID, DEMO_DETAIL_ARTICLE_ID } from "./bridge.js";
-import { pollUntil, POLL_TIMEOUT_STANDARD_MS } from "./poll.js";
+import {
+  pollUntil,
+  POLL_TIMEOUT_STANDARD_MS,
+  POLL_TIMEOUT_LONG_MS,
+} from "./poll.js";
 
 // -----------------------------------------------------------------------
 // Topic to feature mapping
@@ -230,6 +234,26 @@ export function buildTopicCandidates(topic: DemoTopic): Set<string> {
         break;
       case "sort":
         candidates.add(m.tickets_sort({}, opts));
+        // Composed labels the SubNavbarFilterLayout builds for the
+        // sort button's aria-label (label + direction):
+        candidates.add(
+          m.sort_button_label(
+            {
+              label: m.tickets_sort({}, opts),
+              direction: m.table_sort_ascending({}, opts),
+            },
+            opts,
+          ),
+        );
+        candidates.add(
+          m.sort_button_label(
+            {
+              label: m.tickets_sort({}, opts),
+              direction: m.table_sort_descending({}, opts),
+            },
+            opts,
+          ),
+        );
         break;
       case "filters":
         candidates.add(m.tickets_filter(terms, opts));
@@ -503,6 +527,23 @@ export function buildTopicCandidates(topic: DemoTopic): Set<string> {
   return candidates;
 }
 
+/**
+ * Labels for the SMS entry inside the compose actions popover, across
+ * locales. The exposure-hints second stage must search for this label
+ * alone: the full exposure candidates also contain the compose actions
+ * label, and the aria pass would resolve the still-visible compose
+ * button before the popover item mounts, so the stage-two click would
+ * toggle the popover instead of selecting the SMS entry.
+ */
+export function buildSmsTitleCandidates(): Set<string> {
+  const candidates = new Set<string>();
+  const terms = withTerms();
+  for (const locale of locales) {
+    candidates.add(m.ticket_sms_title(terms, { locale }));
+  }
+  return candidates;
+}
+
 // -----------------------------------------------------------------------
 // Activation (real tap) vocabulary
 // -----------------------------------------------------------------------
@@ -530,7 +571,6 @@ export const TAP_TOPICS: ReadonlySet<DemoTopic> = new Set([
   "timeline",
   "conversation",
   "deep-search",
-  "dashboard-shift",
   "dashboard-queues",
   "dashboard-activity",
   "dashboard-kb",
@@ -576,6 +616,24 @@ export function buildActivationCandidates(topic: DemoTopic): Set<string> {
     switch (topic) {
       case "sort":
         candidates.add(m.tickets_sort({}, opts));
+        candidates.add(
+          m.sort_button_label(
+            {
+              label: m.tickets_sort({}, opts),
+              direction: m.table_sort_ascending({}, opts),
+            },
+            opts,
+          ),
+        );
+        candidates.add(
+          m.sort_button_label(
+            {
+              label: m.tickets_sort({}, opts),
+              direction: m.table_sort_descending({}, opts),
+            },
+            opts,
+          ),
+        );
         break;
       case "filters":
         candidates.add(m.tickets_filter_status({}, opts));
@@ -619,9 +677,6 @@ export function buildActivationCandidates(topic: DemoTopic): Set<string> {
         break;
       case "deep-search":
         candidates.add(m.search_inline_trigger({}, opts));
-        break;
-      case "dashboard-shift":
-        candidates.add(m.dashboard_shift_heading({}, opts));
         break;
       case "dashboard-queues":
         candidates.add(m.dashboard_queues_heading(terms, opts));
@@ -738,6 +793,7 @@ export function buildActivationCandidates(topic: DemoTopic): Set<string> {
       case "admin-greetings":
       case "admin-quarantine":
       case "settings-password":
+      case "dashboard-shift":
       case "dashboard-getting-started":
         break;
     }
@@ -857,18 +913,57 @@ export function closeModeToggle(
 }
 
 // -----------------------------------------------------------------------
-// Element finder (reverse label matching)
+// Visibility predicates
 // -----------------------------------------------------------------------
 
 /**
- * Find the first visible element matching a topic's candidate strings.
- *
- * Each pass matches the label text FIRST, then checks visibility only
- * on matches. This avoids forced reflows on non-matching elements.
+ * Strict visibility: requires non-inert ancestry, a nonzero rect, AND
+ * viewport intersection. Closed Konsta sheets stay mounted but are
+ * inert and translated off-screen, so the inert check excludes them.
  */
-export function findTopicElement(
+function isVisible(el: Element): boolean {
+  if (el.closest("[inert]") !== null) return false;
+  const rect = el.getBoundingClientRect();
+  const view = el.ownerDocument.defaultView;
+  if (view === null) return false;
+  return (
+    rect.width > 0 &&
+    rect.height > 0 &&
+    rect.bottom > 0 &&
+    rect.top < view.innerHeight
+  );
+}
+
+/**
+ * Loose visibility: requires non-inert ancestry and a nonzero rect but
+ * NOT viewport intersection. Elements scrolled below the fold pass,
+ * while zero-width nav chips and closed sheets are still excluded.
+ */
+function isLooselyVisible(el: Element): boolean {
+  if (el.closest("[inert]") !== null) return false;
+  const rect = el.getBoundingClientRect();
+  return rect.width > 0 && rect.height > 0;
+}
+
+// -----------------------------------------------------------------------
+// Element finder (reverse label matching)
+// -----------------------------------------------------------------------
+
+/** Selector matching all interactive container elements. */
+const INTERACTIVE_SELECTOR =
+  'button, [role="button"], a, label, li, .k-list-item';
+
+/**
+ * Core finder shared by the strict and loose variants. Matches a
+ * topic's candidate strings against the DOM in pass order:
+ * aria-label, whole-text interactive, leaf-text interactive,
+ * placeholder. Text-first, visibility-second to avoid forced reflows
+ * on non-matching elements.
+ */
+function findTopicElementWith(
   root: Document | Element,
   candidates: Set<string>,
+  check: (el: Element) => boolean,
 ): Element | null {
   // First matching NAV-CHROME element, kept as a last resort. The
   // desktop shell duplicates content wording in its navigation (the
@@ -883,59 +978,97 @@ export function findTopicElement(
     return null;
   };
 
-  // Check aria-label attributes (text match first, visibility only on hits)
+  // Pass 1: aria-label attributes
   const ariaLabeled = root.querySelectorAll("[aria-label]");
   for (const el of ariaLabeled) {
     const label = el.getAttribute("aria-label");
-    if (label !== null && candidates.has(label) && isVisible(el)) {
+    if (label !== null && candidates.has(label) && check(el)) {
       const hit = prefer(el);
       if (hit !== null) return hit;
     }
   }
 
-  // Check text content of interactive elements
-  const interactive = root.querySelectorAll(
-    'button, [role="button"], a, .k-list-item, label',
-  );
+  // Pass 2: whole textContent of interactive elements
+  const interactive = root.querySelectorAll(INTERACTIVE_SELECTOR);
   for (const el of interactive) {
     const text = el.textContent.trim().slice(0, 80);
-    if (text !== "" && candidates.has(text) && isVisible(el)) {
+    if (text !== "" && candidates.has(text) && check(el)) {
       const hit = prefer(el);
       if (hit !== null) return hit;
     }
   }
 
-  // List items carry title and value in one textContent blob, so the
-  // whole-text pass above misses them. Match each childless leaf's own
-  // text instead, mirroring the click classifier's list-item handling.
-  const listItems = root.querySelectorAll(".k-list-item");
-  for (const item of listItems) {
-    for (const leaf of item.querySelectorAll("*")) {
-      if (leaf.childElementCount > 0) continue;
-      const text = leaf.textContent.trim();
+  // Pass 3: childless leaf descendants inside interactive containers.
+  // Covers CollapsibleSection heading buttons (span.secline-eb carries
+  // the exact label while the button's whole text includes a chevron
+  // and count), bare childless LI group titles, and k-list-item leaf
+  // fields. For each container, when the container itself is childless,
+  // its own text is checked (covers bare LI group titles).
+  for (const container of interactive) {
+    if (container.childElementCount === 0) {
+      // The container itself is childless; check its own text.
+      const text = container.textContent.trim();
       if (
         text !== "" &&
         text.length <= 80 &&
         candidates.has(text) &&
-        isVisible(item)
+        check(container)
       ) {
-        const hit = prefer(item);
+        const hit = prefer(container);
         if (hit !== null) return hit;
+      }
+    } else {
+      for (const leaf of container.querySelectorAll("*")) {
+        if (leaf.childElementCount > 0) continue;
+        const text = leaf.textContent.trim();
+        if (
+          text !== "" &&
+          text.length <= 80 &&
+          candidates.has(text) &&
+          check(container)
+        ) {
+          const hit = prefer(container);
+          if (hit !== null) return hit;
+        }
       }
     }
   }
 
-  // Check placeholder attributes on inputs
+  // Pass 4: placeholder attributes on inputs
   const inputs = root.querySelectorAll("[placeholder]");
   for (const el of inputs) {
     const placeholder = el.getAttribute("placeholder");
-    if (placeholder !== null && candidates.has(placeholder) && isVisible(el)) {
+    if (placeholder !== null && candidates.has(placeholder) && check(el)) {
       const hit = prefer(el);
       if (hit !== null) return hit;
     }
   }
 
   return chromeMatch;
+}
+
+/**
+ * Find the first strictly visible element matching a topic's candidate
+ * strings. Strictly visible means in-viewport, non-inert, nonzero rect.
+ */
+export function findTopicElement(
+  root: Document | Element,
+  candidates: Set<string>,
+): Element | null {
+  return findTopicElementWith(root, candidates, isVisible);
+}
+
+/**
+ * Find the first loosely visible element matching a topic's candidate
+ * strings. Loosely visible means non-inert with a nonzero rect, but
+ * not necessarily in the viewport. Zero-width nav chips and closed
+ * sheets are still excluded.
+ */
+export function findTopicElementLoose(
+  root: Document | Element,
+  candidates: Set<string>,
+): Element | null {
+  return findTopicElementWith(root, candidates, isLooselyVisible);
 }
 
 /**
@@ -950,22 +1083,13 @@ export function isNavChrome(el: Element): boolean {
   );
 }
 
-function isVisible(el: Element): boolean {
-  // Closed Konsta sheets stay mounted: their content is marked inert
-  // and the sheet is translated below the viewport, so size alone
-  // reports hidden elements as visible (the settings driver learned
-  // the same lesson). Require viewport intersection and a non-inert
-  // ancestry.
-  if (el.closest("[inert]") !== null) return false;
-  const rect = el.getBoundingClientRect();
-  const view = el.ownerDocument.defaultView;
-  if (view === null) return false;
-  return (
-    rect.width > 0 &&
-    rect.height > 0 &&
-    rect.bottom > 0 &&
-    rect.top < view.innerHeight
-  );
+/**
+ * Whether the element is or sits inside a CollapsibleSection toggle.
+ * Tapping a collapse toggle hides the very content the narration is
+ * describing, so these are always downgraded to mark-only.
+ */
+export function isSectionToggle(el: Element): boolean {
+  return el.closest(".section-toggle") !== null;
 }
 
 // -----------------------------------------------------------------------
@@ -997,21 +1121,179 @@ export const TOPIC_SELECTORS: ReadonlyMap<DemoTopic, readonly string[]> =
 
 /**
  * Find the first visible element matching one of the topic's CSS
- * selectors. Consulted by PhoneApp when label matching fails.
+ * selectors. Uses strict-then-loose two-tier search: a strict (in-
+ * viewport) hit is preferred, but a loosely visible element is returned
+ * when nothing is in the viewport.
  */
 export function findTopicElementBySelector(
   root: Document | Element,
   topic: DemoTopic,
-): Element | null {
+): { el: Element; loose: boolean } | null {
   const selectors = TOPIC_SELECTORS.get(topic);
   if (selectors === undefined) return null;
+
+  // Strict pass first
   for (const selector of selectors) {
     const elements = root.querySelectorAll(selector);
     for (const el of elements) {
-      if (isVisible(el)) return el;
+      if (isVisible(el)) return { el, loose: false };
     }
   }
+
+  // Loose pass
+  for (const selector of selectors) {
+    const elements = root.querySelectorAll(selector);
+    for (const el of elements) {
+      if (isLooselyVisible(el)) return { el, loose: true };
+    }
+  }
+
   return null;
+}
+
+// -----------------------------------------------------------------------
+// Scrolling helper (iframe-safe)
+// -----------------------------------------------------------------------
+
+/**
+ * Scroll an element into view by setting the scrollTop of its nearest
+ * scrollable ancestor within the same document. Never calls
+ * Element.scrollIntoView, which propagates to the parent document in
+ * same-origin iframes and would fight the outer story page's scrollspy.
+ */
+export function scrollIntoViewIframeSafe(el: Element): void {
+  const doc = el.ownerDocument;
+  let scrollable: Element | null = null;
+  let node = el.parentElement;
+  while (node !== null && node !== doc.documentElement) {
+    const style = getComputedStyle(node);
+    const oy = style.overflowY;
+    if (
+      (oy === "auto" || oy === "scroll") &&
+      node.scrollHeight > node.clientHeight
+    ) {
+      scrollable = node;
+      break;
+    }
+    node = node.parentElement;
+  }
+
+  scrollable ??= doc.scrollingElement ?? doc.documentElement;
+
+  // Position the element's vertical center at the viewport center of
+  // the scrollable container.
+  const elRect = el.getBoundingClientRect();
+  const containerRect = scrollable.getBoundingClientRect();
+  const elCenter = elRect.top + elRect.height / 2;
+  const containerCenter = containerRect.top + containerRect.height / 2;
+  const offset = elCenter - containerCenter;
+  scrollable.scrollTop += offset;
+}
+
+// -----------------------------------------------------------------------
+// Two-tier resolver (strict first, loose with scroll fallback)
+// -----------------------------------------------------------------------
+
+/** Interval between rect-stability polls (ms). */
+const STABILITY_POLL_MS = 80;
+/** Maximum wait for the element to become strictly visible after a
+ *  scroll (ms). */
+const SCROLL_SETTLE_MS = 1500;
+
+/**
+ * Resolve an element for a topic, polling with strict-then-loose
+ * fallback. A strict (in-viewport) hit resolves immediately. A
+ * loose-only hit is scrolled into view and the resolver waits until
+ * the element is strictly visible with a rect stable across two
+ * consecutive polls before returning it.
+ */
+export async function resolveTopicElement(
+  root: Document | Element,
+  candidates: Set<string>,
+): Promise<Element | null> {
+  // Topics with no label candidates (decryption) resolve through the
+  // selector fallback; polling an empty set would only burn the full
+  // timeout matching nothing.
+  if (candidates.size === 0) return null;
+
+  const result = await pollUntil<{ el: Element; loose: boolean }>({
+    probe: (): { el: Element; loose: boolean } | null => {
+      const strict = findTopicElement(root, candidates);
+      if (strict !== null) return { el: strict, loose: false };
+      const loose = findTopicElementLoose(root, candidates);
+      if (loose !== null) return { el: loose, loose: true };
+      return null;
+    },
+    timeoutMs: POLL_TIMEOUT_LONG_MS,
+  });
+
+  if (result === null) return null;
+  if (!result.loose) return result.el;
+
+  // Loose match: scroll it into view and wait for strict visibility
+  // with a stable rect. When the settle wait lapses (a layout that
+  // keeps shifting under decrypt reveals) but the element is still
+  // present, return it anyway: a best-effort marker beats a false
+  // "missing".
+  scrollIntoViewIframeSafe(result.el);
+  const settled = await waitForStrictVisibility(result.el);
+  if (settled !== null) return settled;
+  return result.el.isConnected && isLooselyVisible(result.el)
+    ? result.el
+    : null;
+}
+
+/**
+ * Wait until an element passes isVisible with a rect that is stable
+ * across two consecutive polls. Returns the element on success, null
+ * on timeout.
+ */
+async function waitForStrictVisibility(el: Element): Promise<Element | null> {
+  let previousRect: DOMRect | null = null;
+
+  const settled = await pollUntil<Element>({
+    probe: (): Element | null => {
+      if (!isVisible(el)) {
+        previousRect = null;
+        return null;
+      }
+      const rect = el.getBoundingClientRect();
+      if (previousRect !== null && rectsEqual(rect, previousRect)) {
+        return el;
+      }
+      previousRect = rect;
+      return null;
+    },
+    timeoutMs: SCROLL_SETTLE_MS,
+    pollMs: STABILITY_POLL_MS,
+  });
+
+  return settled;
+}
+
+function rectsEqual(a: DOMRect, b: DOMRect): boolean {
+  return (
+    a.top === b.top &&
+    a.left === b.left &&
+    a.width === b.width &&
+    a.height === b.height
+  );
+}
+
+/**
+ * Resolve an element for a topic's CSS selector, using the same
+ * strict-then-loose strategy. A loose hit is scrolled into view and
+ * the resolver waits for strict visibility before returning.
+ */
+export async function resolveSelectorElement(
+  root: Document | Element,
+  topic: DemoTopic,
+): Promise<Element | null> {
+  const found = findTopicElementBySelector(root, topic);
+  if (found === null) return null;
+  if (!found.loose) return found.el;
+  scrollIntoViewIframeSafe(found.el);
+  return waitForStrictVisibility(found.el);
 }
 
 // -----------------------------------------------------------------------
