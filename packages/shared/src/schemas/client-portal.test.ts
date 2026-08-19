@@ -5,6 +5,8 @@ import {
   intakeChallengeResponseSchema,
   intakeSubmitResponseSchema,
   intakeConfigResponseSchema,
+  publicIntakeFieldSchema,
+  publicIntakeFormSchema,
 } from "./client-portal.js";
 
 /**
@@ -113,6 +115,67 @@ describe("intakeSubmissionInputSchema", () => {
     delete input.encryptedMessage;
     const result = intakeSubmissionInputSchema.safeParse(input);
     expect(result.success).toBe(true);
+  });
+
+  // --- submit-time metadata fields ---
+
+  it("accepts resolvedQueueId as UUID", () => {
+    const input = {
+      ...validSubmission(),
+      resolvedQueueId: crypto.randomUUID(),
+    };
+    const result = intakeSubmissionInputSchema.safeParse(input);
+    expect(result.success).toBe(true);
+  });
+
+  it("accepts resolvedQueueId as null", () => {
+    const input = { ...validSubmission(), resolvedQueueId: null };
+    const result = intakeSubmissionInputSchema.safeParse(input);
+    expect(result.success).toBe(true);
+  });
+
+  it("rejects invalid resolvedQueueId", () => {
+    const input = { ...validSubmission(), resolvedQueueId: "not-a-uuid" };
+    const result = intakeSubmissionInputSchema.safeParse(input);
+    expect(result.success).toBe(false);
+  });
+
+  it("accepts valid resolvedPriority values", () => {
+    for (const p of ["low", "normal", "high", "urgent"]) {
+      const input = { ...validSubmission(), resolvedPriority: p };
+      const result = intakeSubmissionInputSchema.safeParse(input);
+      expect(result.success, `priority ${p} should be accepted`).toBe(true);
+    }
+  });
+
+  it("rejects invalid resolvedPriority value", () => {
+    const input = { ...validSubmission(), resolvedPriority: "critical" };
+    const result = intakeSubmissionInputSchema.safeParse(input);
+    expect(result.success).toBe(false);
+  });
+
+  it("accepts valid resolvedEscalationLevel", () => {
+    const input = {
+      ...validSubmission(),
+      resolvedEscalationLevel: "immediate",
+    };
+    const result = intakeSubmissionInputSchema.safeParse(input);
+    expect(result.success).toBe(true);
+  });
+
+  it("rejects empty resolvedEscalationLevel", () => {
+    const input = { ...validSubmission(), resolvedEscalationLevel: "" };
+    const result = intakeSubmissionInputSchema.safeParse(input);
+    expect(result.success).toBe(false);
+  });
+
+  it("rejects resolvedEscalationLevel exceeding 50 chars", () => {
+    const input = {
+      ...validSubmission(),
+      resolvedEscalationLevel: "x".repeat(51),
+    };
+    const result = intakeSubmissionInputSchema.safeParse(input);
+    expect(result.success).toBe(false);
   });
 
   it("accepts nullable followUpId", () => {
@@ -260,5 +323,81 @@ describe("intakeConfigResponseSchema", () => {
   it("rejects missing powRequired", () => {
     const result = intakeConfigResponseSchema.safeParse({});
     expect(result.success).toBe(false);
+  });
+});
+
+describe("publicIntakeFieldSchema", () => {
+  it("accepts a valid public field", () => {
+    const result = publicIntakeFieldSchema.safeParse({
+      id: crypto.randomUUID(),
+      fieldType: "text",
+      role: "phone-contact",
+      encryptedLabel: "abc123",
+      encryptedConfig: "def456",
+      isRequired: true,
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("accepts null role", () => {
+    const result = publicIntakeFieldSchema.safeParse({
+      id: crypto.randomUUID(),
+      fieldType: "select",
+      role: null,
+      encryptedLabel: "abc",
+      encryptedConfig: "def",
+      isRequired: false,
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("rejects unknown role", () => {
+    const result = publicIntakeFieldSchema.safeParse({
+      id: crypto.randomUUID(),
+      fieldType: "text",
+      role: "unknown-role",
+      encryptedLabel: "abc",
+      encryptedConfig: "def",
+      isRequired: false,
+    });
+    expect(result.success).toBe(false);
+  });
+});
+
+describe("publicIntakeFormSchema", () => {
+  it("accepts a valid public form with fields", () => {
+    const result = publicIntakeFormSchema.safeParse({
+      id: crypto.randomUUID(),
+      slug: "general-help",
+      fields: [
+        {
+          id: crypto.randomUUID(),
+          fieldType: "text",
+          role: null,
+          encryptedLabel: "abc",
+          encryptedConfig: "def",
+          isRequired: true,
+        },
+      ],
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("accepts null slug (default form)", () => {
+    const result = publicIntakeFormSchema.safeParse({
+      id: crypto.randomUUID(),
+      slug: null,
+      fields: [],
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("accepts empty fields array", () => {
+    const result = publicIntakeFormSchema.safeParse({
+      id: crypto.randomUUID(),
+      slug: "test",
+      fields: [],
+    });
+    expect(result.success).toBe(true);
   });
 });

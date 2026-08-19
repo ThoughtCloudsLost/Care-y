@@ -64,6 +64,20 @@ vi.mock("$lib/paraglide/messages.js", async (importOriginal) => ({
   intake_forms_deleted: () => "Form deleted",
   intake_char_count: ({ count, max }: { count: number; max: number }) =>
     `${String(count)}/${String(max)}`,
+  intake_forms_slug_label: () => "Slug",
+  intake_forms_slug_placeholder: () => "form-slug",
+  intake_forms_slug_hint: () => "URL-safe slug",
+  intake_forms_destination_label: () => "Destination queue",
+  intake_forms_destination_none: () => "Default",
+  intake_forms_default_toggle: () => "Default form",
+  intake_forms_default_hint: () => "Shown at /intake",
+  intake_forms_share_link: () => "Share link",
+  intake_forms_link_copied: () => "Copied",
+  intake_forms_remove_field: () => "Remove",
+  intake_forms_field_type_checkbox: () => "Checkbox",
+  intake_forms_field_type_checkbox_desc: () => "Yes/no toggle",
+  intake_forms_edit_title: () => "Edit form",
+  intake_forms_create_title: () => "Create form",
 }));
 
 vi.mock("$lib/terminology/with-terms.js", async (importOriginal) => ({
@@ -81,6 +95,7 @@ vi.mock("$lib/trpc/index.js", async (importOriginal) => ({
     },
     tickets: {
       listQueues: { query: vi.fn().mockResolvedValue([]) },
+      listVolunteers: { query: vi.fn().mockResolvedValue([]) },
     },
   },
 }));
@@ -158,6 +173,13 @@ vi.mock("@tanstack/svelte-query", async (importOriginal) => ({
 
 import IntakeFormEditor from "./IntakeFormEditor.svelte";
 
+/** Minimal field defaults for the new role fields. */
+const NO_ROLE = {
+  role: null as null,
+  routingQueueIds: null as null,
+  escalationRecipientIds: null as null,
+} as const;
+
 describe("IntakeFormEditor", () => {
   afterEach(() => {
     cleanup();
@@ -167,8 +189,10 @@ describe("IntakeFormEditor", () => {
   const baseProps = {
     formId: null,
     initialName: "",
+    initialSlug: null as string | null,
+    initialIsDefault: false,
+    initialDestinationQueueId: null as string | null,
     initialFields: [],
-    boundQueueIds: [] as readonly string[],
     onback: vi.fn(),
     ondeleted: vi.fn(),
   };
@@ -201,12 +225,14 @@ describe("IntakeFormEditor", () => {
             isRequired: false,
             config: { type: "text" as const },
             fieldType: "text" as const,
+            ...NO_ROLE,
           },
           {
             label: "Message",
             isRequired: true,
             config: { type: "textarea" as const },
             fieldType: "textarea" as const,
+            ...NO_ROLE,
           },
         ],
       },
@@ -244,6 +270,7 @@ describe("IntakeFormEditor", () => {
             isRequired: false,
             config: { type: "text" as const },
             fieldType: "text" as const,
+            ...NO_ROLE,
           },
         ],
       },
@@ -272,12 +299,14 @@ describe("IntakeFormEditor", () => {
             isRequired: true,
             config: { type: "text" as const },
             fieldType: "text" as const,
+            ...NO_ROLE,
           },
           {
             label: "Your situation",
             isRequired: true,
             config: { type: "textarea" as const, maxLength: 5000 },
             fieldType: "textarea" as const,
+            ...NO_ROLE,
           },
           {
             label: "Services needed",
@@ -287,9 +316,12 @@ describe("IntakeFormEditor", () => {
               options: ["Housing", "Legal"],
             },
             fieldType: "multiselect" as const,
+            ...NO_ROLE,
           },
         ],
-        boundQueueIds: ["queue-1"],
+        initialSlug: "main-intake",
+        initialIsDefault: true,
+        initialDestinationQueueId: "queue-1",
       },
     });
 
@@ -316,6 +348,7 @@ describe("IntakeFormEditor", () => {
             isRequired: false,
             config: { type: "text" as const },
             fieldType: "text" as const,
+            ...NO_ROLE,
           },
         ],
       },

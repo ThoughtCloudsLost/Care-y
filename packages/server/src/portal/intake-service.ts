@@ -5,8 +5,15 @@
  * client + ticket + optional follow-up + interim org-key wrap in one
  * transaction. The server never holds plaintext or key material.
  *
+ * Routing precedence (ADR-068):
+ *   resolvedQueueId (validated against field allow-list) >
+ *   form destination_queue_id >
+ *   org_config.intake_queue_id
+ *
  * Post-commit: dispatches ticket_created notifications to queue
- * volunteers (best-effort, same as the telephony path).
+ * volunteers (best-effort, same as the telephony path). When escalation
+ * metadata is present, dispatches immediate escalation notifications to
+ * configured recipients.
  */
 
 import crypto from "node:crypto";
@@ -21,9 +28,10 @@ import { generateAlias } from "../telephony/models/alias-generator.js";
 import { sealString } from "../telephony/crypto-helpers.js";
 import type { SealedBoxEncryptor } from "../crypto/sealed-box.js";
 import { ValidationError } from "../errors.js";
+import { ErrorCode } from "@care-y/shared";
 
 // ---------------------------------------------------------------------------
-// Custom error
+// Custom errors
 // ---------------------------------------------------------------------------
 
 /**
@@ -34,6 +42,16 @@ import { ValidationError } from "../errors.js";
 export class IntakeQueueNotConfiguredError extends ValidationError {
   constructor() {
     super("Intake queue is not configured");
+  }
+}
+
+/**
+ * Thrown when org_config.web_intake_enabled is false (kill switch).
+ * The route maps this to a NOT_FOUND for the client (no internals leaked).
+ */
+export class IntakeDisabledError extends ValidationError {
+  constructor() {
+    super(ErrorCode.INTAKE_DISABLED);
   }
 }
 
@@ -50,6 +68,9 @@ export interface IntakeTicketInput {
   readonly encryptedFormResponse: Buffer;
   readonly formId: string | null;
   readonly wrappedTk: Buffer;
+  readonly resolvedQueueId: string | null;
+  readonly resolvedPriority: "low" | "normal" | "high" | "urgent" | null;
+  readonly resolvedEscalationLevel: string | null;
 }
 
 export interface IntakeTicketResult {
@@ -66,11 +87,15 @@ export interface IntakeTicketResult {
  *
  * Resolves intake_queue_id from org_config (service-layer resolution,
  * same pattern as telephony/webhook-dispatch.ts). Throws
- * IntakeQueueNotConfiguredError when null.
+ * IntakeQueueNotConfiguredError when null. Throws IntakeDisabledError
+ * when web_intake_enabled is false.
  *
- * All six DB writes run inside one transaction. After commit, a
- * best-effort ticket_created notification dispatches to queue
- * volunteers. Dispatch failure logs and does not roll back the ticket.
+ * Routing: resolvedQueueId (validated against field allow-list) >
+ * form destination_queue_id > org_config.intake_queue_id.
+ *
+ * All DB writes run inside one transaction. After commit, a best-effort
+ * ticket_created notification dispatches to queue volunteers. Escalation
+ * notifications dispatch when resolvedEscalationLevel is present.
  */
 export async function createIntakeTicket(
   db: Kysely<TenantDatabase>,
@@ -82,23 +107,85 @@ export async function createIntakeTicket(
   },
   input: IntakeTicketInput,
 ): Promise<IntakeTicketResult> {
-  // Resolve intake queue from org_config (service-layer, no route DB access)
+  // Check kill switch
   const orgConfig = await db
     .selectFrom("org_config")
-    .select("intake_queue_id")
+    .select(["intake_queue_id", "web_intake_enabled"])
     .executeTakeFirst();
 
-  const intakeQueueId = orgConfig?.intake_queue_id ?? null;
-  if (intakeQueueId === null) {
+  if (orgConfig?.web_intake_enabled === false) {
+    throw new IntakeDisabledError();
+  }
+
+  const orgIntakeQueueId = orgConfig?.intake_queue_id ?? null;
+  if (orgIntakeQueueId === null) {
     throw new IntakeQueueNotConfiguredError();
   }
+
+  // Resolve destination queue via routing precedence
+  let destinationQueueId = orgIntakeQueueId;
+  let formDestinationQueueId: string | null = null;
+
+  // Load form metadata when a formId is provided
+  if (input.formId !== null) {
+    const formRow = await db
+      .selectFrom("intake_forms")
+      .select(["id", "is_active", "destination_queue_id"])
+      .where("id", "=", input.formId)
+      .executeTakeFirst();
+
+    if (formRow?.is_active !== true) {
+      throw new ValidationError("Form is not active or does not exist");
+    }
+
+    formDestinationQueueId = formRow.destination_queue_id;
+
+    if (formDestinationQueueId !== null) {
+      destinationQueueId = formDestinationQueueId;
+    }
+  }
+
+  // Validate and apply field-level queue routing
+  if (input.resolvedQueueId !== null) {
+    // Validate against the form's field-level routing allow-list
+    if (input.formId !== null) {
+      const routingFields = await db
+        .selectFrom("intake_form_fields")
+        .select("routing_queue_ids")
+        .where("form_id", "=", input.formId)
+        .where("role", "=", "queue-routing")
+        .execute();
+
+      const allowedQueueIds = new Set<string>();
+      for (const field of routingFields) {
+        if (field.routing_queue_ids !== null) {
+          for (const qid of field.routing_queue_ids) {
+            allowedQueueIds.add(qid);
+          }
+        }
+      }
+
+      if (!allowedQueueIds.has(input.resolvedQueueId)) {
+        throw new ValidationError(
+          "Resolved queue id is not in the form field allow-list",
+        );
+      }
+    } else {
+      // No form context: cannot validate routing, reject
+      throw new ValidationError(
+        "Queue routing requires a form with a queue-routing role field",
+      );
+    }
+
+    destinationQueueId = input.resolvedQueueId;
+  }
+
+  // Resolve priority
+  const priority = input.resolvedPriority ?? "normal";
 
   // Run all inserts in one transaction
   const result = await db.transaction().execute(async (trx) => {
     // 1. Client with generated alias sealed under the org public key
-    //    (sealString zeroes the intermediate Buffer, matching client-repo.ts).
-    //    alias_hash is NULL: no browser session exists to compute it; it is
-    //    lazily backfilled on first client-side unseal (same as telephony clients).
     const alias = await generateAlias(trx);
     const sealedAlias = sealString(deps.sealedBox, alias);
 
@@ -120,11 +207,11 @@ export async function createIntakeTicket(
       .values({
         id: input.ticketId,
         client_id: client.id,
-        queue_id: intakeQueueId,
+        queue_id: destinationQueueId,
         encrypted_title: input.encryptedTitle,
         encrypted_description: input.encryptedDescription,
         key_generation: crypto.randomUUID(),
-        priority: "normal",
+        priority,
       })
       .executeTakeFirstOrThrow();
 
@@ -155,17 +242,6 @@ export async function createIntakeTicket(
 
     // 5. Form response row (only for custom forms with a non-null formId)
     if (input.formId !== null) {
-      // Verify the formId matches the queue's current binding
-      const binding = await trx
-        .selectFrom("queue_intake_forms")
-        .select("form_id")
-        .where("queue_id", "=", intakeQueueId)
-        .executeTakeFirst();
-
-      if (binding?.form_id !== input.formId) {
-        throw new ValidationError("Form binding is stale or invalid");
-      }
-
       await trx
         .insertInto("intake_form_responses")
         .values({
@@ -181,7 +257,18 @@ export async function createIntakeTicket(
   });
 
   // Post-commit: best-effort notification dispatch (no actor, same as telephony)
-  dispatchTicketCreated(db, deps, intakeQueueId, result.ticketId);
+  dispatchTicketCreated(db, deps, destinationQueueId, result.ticketId);
+
+  // Post-commit: escalation dispatch when escalation metadata is present
+  if (input.resolvedEscalationLevel !== null && input.formId !== null) {
+    dispatchEscalationAlert(
+      db,
+      deps,
+      input.formId,
+      destinationQueueId,
+      result.ticketId,
+    );
+  }
 
   return result;
 }
@@ -234,6 +321,85 @@ function dispatchTicketCreated(
     } catch (err: unknown) {
       console.error(
         "Intake notification dispatch failed:",
+        err instanceof Error ? err.message : String(err),
+      );
+    }
+  })();
+}
+
+/**
+ * Dispatches escalation alert to configured recipients or destination queue
+ * watchers. Best-effort: logs on failure, never throws. No PII in the
+ * notification body (server never holds plaintext content).
+ */
+function dispatchEscalationAlert(
+  db: Kysely<TenantDatabase>,
+  deps: {
+    readonly notificationService: NotificationService;
+    readonly orgSchema: string;
+    readonly orgSlug: string;
+  },
+  formId: string,
+  queueId: string,
+  ticketId: string,
+): void {
+  void (async () => {
+    try {
+      // Find escalation-role fields and their recipient ids
+      const escalationFields = await db
+        .selectFrom("intake_form_fields")
+        .select("escalation_recipient_ids")
+        .where("form_id", "=", formId)
+        .where("role", "=", "escalation")
+        .execute();
+
+      const recipientIds = new Set<string>();
+      for (const field of escalationFields) {
+        if (field.escalation_recipient_ids !== null) {
+          for (const rid of field.escalation_recipient_ids) {
+            recipientIds.add(rid);
+          }
+        }
+      }
+
+      let recipients: NotificationRecipientList;
+
+      if (recipientIds.size > 0) {
+        // Use configured escalation recipients
+        recipients = {
+          recipients: [...recipientIds].map((uid): NotificationRecipient => ({
+            userId: uid,
+            source: "escalation_recipient",
+          })),
+        };
+      } else {
+        // Fallback: destination queue's watchers
+        const watchers = await db
+          .selectFrom("queue_watchers")
+          .select("user_id")
+          .where("queue_id", "=", queueId)
+          .execute();
+
+        recipients = {
+          recipients: watchers.map((w): NotificationRecipient => ({
+            userId: w.user_id,
+            source: "queue_watcher",
+          })),
+        };
+      }
+
+      await deps.notificationService.dispatch(
+        db,
+        deps.orgSchema,
+        deps.orgSlug,
+        "ticket_escalated",
+        ticketId,
+        queueId,
+        recipients,
+      );
+    } catch (err: unknown) {
+      console.error(
+        "Intake escalation dispatch failed:",
         err instanceof Error ? err.message : String(err),
       );
     }

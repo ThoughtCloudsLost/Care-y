@@ -21,8 +21,11 @@ import {
 } from "@care-y/crypto";
 import type {
   IntakeFieldType,
+  IntakeFieldRole,
+  IntakeFieldConfig,
   AvailabilityData,
   IntakeFormResponse,
+  TicketPriority,
 } from "@care-y/shared";
 
 const textEncoder = new TextEncoder();
@@ -36,7 +39,7 @@ export interface IntakeAnswer {
   readonly fieldId: string;
   readonly fieldType: IntakeFieldType;
   readonly label: string;
-  readonly value: string | readonly string[] | AvailabilityData;
+  readonly value: string | readonly string[] | AvailabilityData | boolean;
 }
 
 export interface EncryptedIntake {
@@ -75,7 +78,7 @@ function formatAvailability(data: AvailabilityData): string {
  * an unsafe type assertion.
  */
 function isAvailabilityData(
-  v: string | readonly string[] | AvailabilityData,
+  v: string | readonly string[] | AvailabilityData | boolean,
 ): v is AvailabilityData {
   return typeof v === "object" && !Array.isArray(v) && "timezone" in v;
 }
@@ -84,8 +87,9 @@ function isAvailabilityData(
  * Format a single answer value as a string for the description.
  */
 function formatValue(
-  value: string | readonly string[] | AvailabilityData,
+  value: string | readonly string[] | AvailabilityData | boolean,
 ): string {
+  if (typeof value === "boolean") return value ? "Yes" : "No";
   if (typeof value === "string") return value;
   if (isAvailabilityData(value)) return formatAvailability(value);
   return value.join(", ");
@@ -96,8 +100,9 @@ function formatValue(
  * Availability is stored as-is; arrays and strings pass through.
  */
 function toResponseValue(
-  value: string | readonly string[] | AvailabilityData,
-): string | string[] | AvailabilityData {
+  value: string | readonly string[] | AvailabilityData | boolean,
+): string | string[] | AvailabilityData | boolean {
+  if (typeof value === "boolean") return value;
   if (typeof value === "string") return value;
   if (isAvailabilityData(value)) return value;
   return [...value];
@@ -213,4 +218,85 @@ export function encryptIntake(
   } finally {
     requireSodium().memzero(tk);
   }
+}
+
+// ---------------------------------------------------------------------------
+// Submit-time metadata resolution (ADR-068)
+// ---------------------------------------------------------------------------
+
+export interface SubmitMetadata {
+  readonly resolvedQueueId: string | null;
+  readonly resolvedPriority: TicketPriority | null;
+  readonly resolvedEscalationLevel: string | null;
+}
+
+interface FieldWithRole {
+  readonly role: IntakeFieldRole | null;
+  readonly config: IntakeFieldConfig;
+  readonly id: string;
+}
+
+/**
+ * Resolves server-metadata role mappings from decrypted field configs
+ * and current field values. The browser resolves the mapping; only the
+ * derived signal (queue id, priority, escalation level) is sent plaintext.
+ * Answer text stays encrypted.
+ */
+export function resolveSubmitMetadata(
+  fields: readonly FieldWithRole[],
+  values: Readonly<
+    Record<string, string | string[] | AvailabilityData | boolean | undefined>
+  >,
+): SubmitMetadata {
+  let resolvedQueueId: string | null = null;
+  let resolvedPriority: TicketPriority | null = null;
+  let resolvedEscalationLevel: string | null = null;
+
+  for (const field of fields) {
+    if (field.role === null) continue;
+    const val = values[field.id];
+
+    if (field.role === "queue-routing" && typeof val === "string") {
+      const cfg = field.config;
+      if (
+        (cfg.type === "select" || cfg.type === "multiselect") &&
+        cfg.queueRoutingMapping != null
+      ) {
+        const mapping = cfg.queueRoutingMapping;
+        const mapped = mapping[val]; // eslint-disable-line security/detect-object-injection -- val is the user-selected option from the form
+        if (mapped !== undefined) {
+          resolvedQueueId = mapped;
+        }
+      }
+    }
+
+    if (field.role === "urgency" && typeof val === "string") {
+      const cfg = field.config;
+      if (cfg.type === "select" && cfg.urgencyMapping != null) {
+        const mapping = cfg.urgencyMapping;
+        const mapped = mapping[val]; // eslint-disable-line security/detect-object-injection -- val from form
+        if (mapped !== undefined) {
+          resolvedPriority = mapped;
+        }
+      }
+    }
+
+    if (field.role === "escalation") {
+      const cfg = field.config;
+      if (cfg.type === "select" && typeof val === "string") {
+        if (cfg.escalationMapping != null) {
+          const mapping = cfg.escalationMapping;
+          const mapped = mapping[val]; // eslint-disable-line security/detect-object-injection -- val from form
+          if (mapped !== undefined) {
+            resolvedEscalationLevel = mapped;
+          }
+        }
+      } else if (cfg.type === "checkbox" && val === true) {
+        // Checkbox escalation: checked triggers the escalation
+        resolvedEscalationLevel = "triggered";
+      }
+    }
+  }
+
+  return { resolvedQueueId, resolvedPriority, resolvedEscalationLevel };
 }

@@ -2,8 +2,8 @@
  * Admin intake form tRPC router.
  *
  * Thin procedures over IntakeFormService, gated with the MANAGE_QUEUES
- * permission. Audit events are dispatched for save, delete, and bind
- * operations.
+ * permission. Audit events are dispatched for save, delete, and
+ * web-intake-toggle operations.
  */
 
 import { z } from "zod";
@@ -101,25 +101,31 @@ export function createIntakeFormRouter(deps: IntakeFormRouterDeps) {
         }),
       ),
 
-    /** Bind a form to a queue, or unbind (null formId). */
-    bindQueue: queueManagerProcedure
-      .input(z.object({ queueId: z.uuid(), formId: z.uuid().nullable() }))
+    /** Read the org-wide web intake enabled flag. */
+    getWebIntakeEnabled: queueManagerProcedure.query(
+      withErrorWrapping(async ({ ctx }) => {
+        const enabled = await deps.intakeFormService.isWebIntakeEnabled(
+          ctx.org.tenantDb,
+        );
+        return { enabled };
+      }),
+    ),
+
+    /** Toggle the org-wide web intake enabled flag. */
+    setWebIntakeEnabled: queueManagerProcedure
+      .input(z.object({ enabled: z.boolean() }))
       .mutation(
         withErrorWrapping(async ({ ctx, input }) => {
-          await deps.intakeFormService.bindQueue(
+          await deps.intakeFormService.setWebIntakeEnabled(
             ctx.org.tenantDb,
-            input.queueId,
-            input.formId,
+            input.enabled,
           );
 
           const audit = deps.createAuditSvc(ctx.org.tenantDb);
           void audit.log({
-            eventType: "intake_form_bound",
+            eventType: "web_intake_toggled",
             actorId: ctx.user.id,
-            metadata: {
-              queueId: input.queueId,
-              formId: input.formId,
-            },
+            metadata: { enabled: input.enabled },
           });
 
           return { ok: true };

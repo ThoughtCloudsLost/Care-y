@@ -1,7 +1,11 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { render, screen, cleanup, fireEvent } from "@testing-library/svelte";
-import type { IntakeFieldConfig, AvailabilityData } from "@care-y/shared";
+import type {
+  IntakeFieldConfig,
+  IntakeFieldRole,
+  AvailabilityData,
+} from "@care-y/shared";
 import type * as ParaglideMessages from "$lib/paraglide/messages.js";
 import type * as AvailFieldMod from "./AvailabilityField.svelte";
 
@@ -11,6 +15,8 @@ vi.mock("$lib/paraglide/messages.js", async (importOriginal) => ({
   intake_char_count: ({ count, max }: { count: number; max: number }) =>
     `${String(count)} / ${String(max)}`,
   intake_error_field_required: () => "This field is required.",
+  intake_privacy_encrypted: () => "Fully encrypted.",
+  intake_privacy_metadata: () => "Metadata shared.",
 }));
 
 // vi.mock required: AvailabilityField has deep Konsta/ShellSheet dependencies.
@@ -34,9 +40,10 @@ interface RendererProps {
   label: string;
   config: IntakeFieldConfig;
   isRequired: boolean;
-  value: string | string[] | AvailabilityData | undefined;
+  role?: IntakeFieldRole | null;
+  value: string | string[] | AvailabilityData | boolean | undefined;
   error?: string;
-  onchange: (value: string | string[] | AvailabilityData) => void;
+  onchange: (value: string | string[] | AvailabilityData | boolean) => void;
 }
 
 function makeProps(overrides: Partial<RendererProps> = {}): RendererProps {
@@ -215,6 +222,81 @@ describe("IntakeFieldRenderer", () => {
         props: makeProps({ config: { type: "text" } }),
       });
       expect(screen.queryByRole("alert")).toBeNull();
+    });
+  });
+
+  describe("checkbox type", () => {
+    it("renders a single checkbox with the label", () => {
+      render(IntakeFieldRenderer, {
+        props: makeProps({
+          config: { type: "checkbox" },
+          value: false,
+        }),
+      });
+      expect(screen.getByText("Test field")).toBeTruthy();
+    });
+
+    it("reflects checked state from value prop", () => {
+      const { container } = render(IntakeFieldRenderer, {
+        props: makeProps({
+          config: { type: "checkbox" },
+          value: true,
+        }),
+      });
+      // Konsta Checkbox renders an input[type=checkbox] internally
+      const checkbox = container.querySelector("input[type='checkbox']");
+      // The checkbox should be checked (value=true)
+      expect(checkbox).not.toBeNull();
+    });
+
+    it("emits toggled boolean on change", async () => {
+      const onchange = vi.fn();
+      const { container } = render(IntakeFieldRenderer, {
+        props: makeProps({
+          config: { type: "checkbox" },
+          value: false,
+          onchange,
+        }),
+      });
+      // Find and click the checkbox label (Konsta wraps in ListItem label)
+      const listItem = container.querySelector("label");
+      if (listItem) {
+        await fireEvent.click(listItem);
+      }
+      expect(onchange).toHaveBeenCalledWith(true);
+    });
+  });
+
+  describe("privacy indicator", () => {
+    it("shows encrypted indicator for browser-side role", () => {
+      render(IntakeFieldRenderer, {
+        props: makeProps({
+          config: { type: "text" },
+          role: "phone-contact",
+        }),
+      });
+      expect(screen.getByText("Fully encrypted.")).toBeTruthy();
+    });
+
+    it("shows metadata indicator for server-metadata role", () => {
+      render(IntakeFieldRenderer, {
+        props: makeProps({
+          config: { type: "select", options: ["A", "B"] },
+          role: "queue-routing",
+        }),
+      });
+      expect(screen.getByText("Metadata shared.")).toBeTruthy();
+    });
+
+    it("omits indicator when role is null", () => {
+      render(IntakeFieldRenderer, {
+        props: makeProps({
+          config: { type: "text" },
+          role: null,
+        }),
+      });
+      expect(screen.queryByText("Fully encrypted.")).toBeNull();
+      expect(screen.queryByText("Metadata shared.")).toBeNull();
     });
   });
 

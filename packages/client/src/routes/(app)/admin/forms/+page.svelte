@@ -8,8 +8,10 @@
   import { createQuery } from "@tanstack/svelte-query";
   import {
     intakeFieldTypeSchema,
+    intakeFieldRoleSchema,
     type IntakeFieldConfig,
     type IntakeFieldType,
+    type IntakeFieldRole,
   } from "@care-y/shared";
   import * as m from "$lib/paraglide/messages.js";
   import { trpc } from "$lib/trpc/index.js";
@@ -26,6 +28,9 @@
     isRequired: boolean;
     config: IntakeFieldConfig;
     fieldType: IntakeFieldType;
+    role: IntakeFieldRole | null;
+    routingQueueIds: string[] | null;
+    escalationRecipientIds: string[] | null;
   }
 
   /** Wire shape returned by intakeForms.list */
@@ -34,7 +39,6 @@
     readonly name: string;
     readonly isActive: boolean;
     readonly fieldCount: number;
-    readonly boundQueueIds: readonly string[];
   }
 
   type ViewState =
@@ -45,8 +49,10 @@
         kind: "editor";
         formId: string | null;
         formName: string;
+        slug: string | null;
+        isDefault: boolean;
+        destinationQueueId: string | null;
         fields: PlaintextField[];
-        boundQueueIds: readonly string[];
       };
 
   let view = $state<ViewState>({ kind: "list" });
@@ -92,6 +98,9 @@
           encryptedConfig: string;
           isRequired: boolean;
           fieldType: string;
+          role: string | null;
+          routingQueueIds: readonly string[] | null;
+          escalationRecipientIds: readonly string[] | null;
         }) => {
           const decrypted = decryptFieldContent(
             {
@@ -105,6 +114,16 @@
             isRequired: field.isRequired,
             config: decrypted.config,
             fieldType: intakeFieldTypeSchema.parse(field.fieldType),
+            role:
+              field.role != null
+                ? intakeFieldRoleSchema.parse(field.role)
+                : null,
+            routingQueueIds:
+              field.routingQueueIds != null ? [...field.routingQueueIds] : null,
+            escalationRecipientIds:
+              field.escalationRecipientIds != null
+                ? [...field.escalationRecipientIds]
+                : null,
           };
         },
       );
@@ -113,8 +132,10 @@
         kind: "editor",
         formId,
         formName: formDetail.name,
+        slug: formDetail.slug ?? null,
+        isDefault: formDetail.isDefault,
+        destinationQueueId: formDetail.destinationQueueId ?? null,
         fields: decryptedFields,
-        boundQueueIds: formSummary.boundQueueIds,
       };
     } catch {
       view = { kind: "load-error", message: m.error_generic() };
@@ -126,8 +147,10 @@
       kind: "editor",
       formId: null,
       formName: "",
+      slug: null,
+      isDefault: false,
+      destinationQueueId: null,
       fields: [],
-      boundQueueIds: [],
     };
   }
 
@@ -172,8 +195,10 @@
   <IntakeFormEditor
     formId={view.formId}
     initialName={view.formName}
+    initialSlug={view.slug}
+    initialIsDefault={view.isDefault}
+    initialDestinationQueueId={view.destinationQueueId}
     initialFields={view.fields}
-    boundQueueIds={view.boundQueueIds}
     onback={backToList}
     ondeleted={backToList}
   />

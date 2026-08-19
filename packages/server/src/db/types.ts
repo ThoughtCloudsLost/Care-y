@@ -134,6 +134,7 @@ export interface OrgConfigTable {
   encrypted_terminology: Buffer | null; // encrypted JSON blob (nonce || ciphertext), per-language labels
   default_note_type_id: string | null;
   intake_queue_id: string | null;
+  web_intake_enabled: ColumnType<boolean, boolean | undefined, boolean>;
   getting_started_dismissed_at: ColumnType<
     Date | null,
     Date | null | undefined,
@@ -653,7 +654,10 @@ export interface RolePermissionOverridesTable {
 export interface IntakeFormsTable {
   id: Generated<string>;
   name: string;
+  slug: string | null;
   is_active: ColumnType<boolean, boolean | undefined, boolean>;
+  is_default: ColumnType<boolean, boolean | undefined, boolean>;
+  destination_queue_id: string | null;
   created_at: Generated<Date>;
   updated_at: Generated<Date>;
 }
@@ -663,15 +667,21 @@ export interface IntakeFormFieldsTable {
   form_id: string;
   position: number;
   field_type: string;
+  role: string | null;
   encrypted_label: Buffer;
   encrypted_config: Buffer;
   is_required: ColumnType<boolean, boolean | undefined, boolean>;
+  routing_queue_ids: string[] | null;
+  escalation_recipient_ids: string[] | null;
   created_at: Generated<Date>;
 }
 
-export interface QueueIntakeFormsTable {
-  queue_id: string;
-  form_id: string;
+// --- Merge candidate dismissals (org-key-sealed blob) ---
+
+export interface MergeCandidateDismissalsTable {
+  id: ColumnType<number, number | undefined, never>;
+  encrypted_dismissals: Buffer;
+  updated_at: Generated<Date>;
 }
 
 export interface IntakeFormResponsesTable {
@@ -753,8 +763,9 @@ export interface TenantDatabase {
   // Intake forms
   intake_forms: IntakeFormsTable;
   intake_form_fields: IntakeFormFieldsTable;
-  queue_intake_forms: QueueIntakeFormsTable;
   intake_form_responses: IntakeFormResponsesTable;
   intake_key_wraps: IntakeKeyWrapsTable;
+  // Merge candidate dismissals
+  merge_candidate_dismissals: MergeCandidateDismissalsTable;
   // Client portal (portal_channels)
 }

@@ -2,8 +2,8 @@
  * Intake form definition service.
  *
  * Admin CRUD for intake form definitions (whole-form saves, activation,
- * queue binding) and public read (resolve the intake queue's bound form
- * for the anonymous intake page).
+ * slug/default/destination handling) and public read (resolve by slug or
+ * is_default flag for the anonymous intake page).
  *
  * Field labels and config are encrypted ciphertext (bytea) that the
  * server never decrypts or validates. Size caps are enforced by the Zod
@@ -23,6 +23,7 @@ import type { SaveIntakeFormInput } from "@care-y/shared";
 export interface PublicIntakeFormField {
   readonly id: string;
   readonly fieldType: string;
+  readonly role: string | null;
   readonly encryptedLabel: string;
   readonly encryptedConfig: string;
   readonly isRequired: boolean;
@@ -30,18 +31,44 @@ export interface PublicIntakeFormField {
 
 export interface PublicIntakeForm {
   readonly formId: string;
+  readonly slug: string | null;
   readonly fields: readonly PublicIntakeFormField[];
+}
+
+/**
+ * Full result from resolvePublicForm, ready for the route to return as-is.
+ * Handles kill switch, slug resolution, and default fallback in one call.
+ */
+export interface PublicFormResult {
+  readonly formId: string | null;
+  readonly slug: string | null;
+  readonly fields: readonly PublicIntakeFormField[] | null;
+  readonly intakeDisabled: boolean;
 }
 
 // ---------------------------------------------------------------------------
 // Admin detail return shape
 // ---------------------------------------------------------------------------
 
+export interface FormDetailField {
+  readonly id: string;
+  readonly fieldType: string;
+  readonly role: string | null;
+  readonly routingQueueIds: readonly string[] | null;
+  readonly escalationRecipientIds: readonly string[] | null;
+  readonly encryptedLabel: string;
+  readonly encryptedConfig: string;
+  readonly isRequired: boolean;
+}
+
 export interface FormDetail {
   readonly formId: string;
   readonly name: string;
+  readonly slug: string | null;
   readonly isActive: boolean;
-  readonly fields: readonly PublicIntakeFormField[];
+  readonly isDefault: boolean;
+  readonly destinationQueueId: string | null;
+  readonly fields: readonly FormDetailField[];
 }
 
 // ---------------------------------------------------------------------------
@@ -51,9 +78,11 @@ export interface FormDetail {
 export interface FormSummary {
   readonly id: string;
   readonly name: string;
+  readonly slug: string | null;
   readonly isActive: boolean;
+  readonly isDefault: boolean;
+  readonly destinationQueueId: string | null;
   readonly fieldCount: number;
-  readonly boundQueueIds: readonly string[];
 }
 
 // ---------------------------------------------------------------------------
@@ -62,13 +91,22 @@ export interface FormSummary {
 
 export interface IntakeFormService {
   /**
-   * Public read: resolve org_config.intake_queue_id -> queue_intake_forms
-   * binding -> active form + ordered fields. Returns null when no form is
-   * bound or the bound form is inactive (caller renders the default form).
+   * Public read: resolve by slug (when given) or fall back to the
+   * is_default form. Returns null when no matching active form exists
+   * (caller renders the default built-in form or not-available state).
+   *
+   * When a slug IS provided but does not match any active form, returns
+   * null. The route maps this to not-available (never falls through to
+   * another form).
+   *
    * Ciphertext passthrough: labels/config are returned as base64 strings
-   * without decryption. No queue names or ids in the response.
+   * without decryption. No queue names or ids in the response (only the
+   * form id and slug for the client to submit back).
    */
-  getPublicForm(db: Kysely<TenantDatabase>): Promise<PublicIntakeForm | null>;
+  getPublicForm(
+    db: Kysely<TenantDatabase>,
+    slug?: string | null,
+  ): Promise<PublicIntakeForm | null>;
 
   /**
    * Admin read: load a single form with its fields in position order.
@@ -80,7 +118,8 @@ export interface IntakeFormService {
   /**
    * Admin whole-form save (create when formId null): replaces the field set
    * in one transaction (DELETE + INSERT with positions 0..n-1), enforcing
-   * the one-availability rule server-side. Returns the form id.
+   * the one-availability rule server-side. Handles slug uniqueness,
+   * is_default atomicity, and destination queue validation. Returns the form id.
    */
   saveForm(
     db: Kysely<TenantDatabase>,
@@ -88,7 +127,7 @@ export interface IntakeFormService {
     input: SaveIntakeFormInput,
   ): Promise<{ formId: string }>;
 
-  /** List all forms with summary info (id, name, active, field count, bound queues). */
+  /** List all forms with summary info (id, name, slug, active, default, destination, field count). */
   listForms(db: Kysely<TenantDatabase>): Promise<FormSummary[]>;
 
   /**
@@ -104,15 +143,24 @@ export interface IntakeFormService {
     active: boolean,
   ): Promise<void>;
 
-  /**
-   * Bind a form to a queue. Pass null formId to unbind (queue falls back
-   * to the default form).
-   */
-  bindQueue(
+  /** Returns false when org_config.web_intake_enabled is false (kill switch). */
+  isWebIntakeEnabled(db: Kysely<TenantDatabase>): Promise<boolean>;
+
+  /** Sets the org-wide web intake enabled flag (kill switch toggle). */
+  setWebIntakeEnabled(
     db: Kysely<TenantDatabase>,
-    queueId: string,
-    formId: string | null,
+    enabled: boolean,
   ): Promise<void>;
+
+  /**
+   * Full public resolution: checks kill switch, resolves by slug or
+   * is_default, returns a complete result the route returns as-is.
+   * No business logic needed in the route handler.
+   */
+  resolvePublicForm(
+    db: Kysely<TenantDatabase>,
+    slug: string | null,
+  ): Promise<PublicFormResult>;
 }
 
 // ---------------------------------------------------------------------------
@@ -123,45 +171,39 @@ export function createIntakeFormService(): IntakeFormService {
   return {
     async getPublicForm(
       db: Kysely<TenantDatabase>,
+      slug?: string | null,
     ): Promise<PublicIntakeForm | null> {
-      // Step 1: find the intake queue id from org_config
-      const config = await db
-        .selectFrom("org_config")
-        .select("intake_queue_id")
-        .executeTakeFirst();
+      let form;
 
-      if (config?.intake_queue_id == null) {
+      if (slug != null) {
+        // Resolve by slug: only return an active form matching the slug
+        form = await db
+          .selectFrom("intake_forms")
+          .select(["id", "slug"])
+          .where("slug", "=", slug)
+          .where("is_active", "=", true)
+          .executeTakeFirst();
+      } else {
+        // Resolve by is_default: find the active default form
+        form = await db
+          .selectFrom("intake_forms")
+          .select(["id", "slug"])
+          .where("is_default", "=", true)
+          .where("is_active", "=", true)
+          .executeTakeFirst();
+      }
+
+      if (!form) {
         return null;
       }
 
-      // Step 2: find the form bound to that queue
-      const binding = await db
-        .selectFrom("queue_intake_forms")
-        .select("form_id")
-        .where("queue_id", "=", config.intake_queue_id)
-        .executeTakeFirst();
-
-      if (!binding) {
-        return null;
-      }
-
-      // Step 3: check the form is active
-      const form = await db
-        .selectFrom("intake_forms")
-        .select(["id", "is_active"])
-        .where("id", "=", binding.form_id)
-        .executeTakeFirst();
-
-      if (form?.is_active !== true) {
-        return null;
-      }
-
-      // Step 4: load fields in position order
+      // Load fields in position order
       const fields = await db
         .selectFrom("intake_form_fields")
         .select([
           "id",
           "field_type",
+          "role",
           "encrypted_label",
           "encrypted_config",
           "is_required",
@@ -172,9 +214,11 @@ export function createIntakeFormService(): IntakeFormService {
 
       return {
         formId: form.id,
+        slug: form.slug,
         fields: fields.map((f) => ({
           id: f.id,
           fieldType: f.field_type,
+          role: f.role,
           // care-y-ignore-next-line no-standard-base64-server -- client-facing ciphertext: browser sends/receives standard base64 per the shared base64String validator
           encryptedLabel: f.encrypted_label.toString("base64"),
           // care-y-ignore-next-line no-standard-base64-server -- same as above
@@ -190,7 +234,14 @@ export function createIntakeFormService(): IntakeFormService {
     ): Promise<FormDetail> {
       const form = await db
         .selectFrom("intake_forms")
-        .select(["id", "name", "is_active"])
+        .select([
+          "id",
+          "name",
+          "slug",
+          "is_active",
+          "is_default",
+          "destination_queue_id",
+        ])
         .where("id", "=", formId)
         .executeTakeFirst();
 
@@ -203,6 +254,9 @@ export function createIntakeFormService(): IntakeFormService {
         .select([
           "id",
           "field_type",
+          "role",
+          "routing_queue_ids",
+          "escalation_recipient_ids",
           "encrypted_label",
           "encrypted_config",
           "is_required",
@@ -215,10 +269,16 @@ export function createIntakeFormService(): IntakeFormService {
         formId: form.id,
         // care-y-ignore-next-line ast-pii-in-db-write -- `name` is the form's admin label, not a person's name; not PII
         name: form.name,
+        slug: form.slug,
         isActive: form.is_active,
+        isDefault: form.is_default,
+        destinationQueueId: form.destination_queue_id,
         fields: fields.map((f) => ({
           id: f.id,
           fieldType: f.field_type,
+          role: f.role,
+          routingQueueIds: f.routing_queue_ids,
+          escalationRecipientIds: f.escalation_recipient_ids,
           // care-y-ignore-next-line no-standard-base64-server -- client-facing ciphertext: browser sends/receives standard base64 per the shared base64String validator
           encryptedLabel: f.encrypted_label.toString("base64"),
           // care-y-ignore-next-line no-standard-base64-server -- same as above
@@ -241,11 +301,37 @@ export function createIntakeFormService(): IntakeFormService {
         throw new ValidationError("One availability field per form");
       }
 
+      // Validate destination queue exists (when provided)
+      if (input.destinationQueueId != null) {
+        const queue = await db
+          .selectFrom("queues")
+          .select("id")
+          .where("id", "=", input.destinationQueueId)
+          .executeTakeFirst();
+
+        if (!queue) {
+          throw new NotFoundError("Destination queue not found");
+        }
+      }
+
       return db.transaction().execute(async (trx) => {
         let formId: string;
 
+        // Slug uniqueness check (within the transaction)
+        if (input.slug != null) {
+          const existingSlug = await trx
+            .selectFrom("intake_forms")
+            .select("id")
+            .where("slug", "=", input.slug)
+            .executeTakeFirst();
+
+          if (existingSlug && existingSlug.id !== input.formId) {
+            throw new ConflictError(ErrorCode.INTAKE_SLUG_TAKEN);
+          }
+        }
+
         if (input.formId !== null) {
-          // Update existing form name
+          // Update existing form
           const existing = await trx
             .selectFrom("intake_forms")
             .select("id")
@@ -258,8 +344,13 @@ export function createIntakeFormService(): IntakeFormService {
 
           await trx
             .updateTable("intake_forms")
-            // care-y-ignore-next-line ast-pii-in-db-write -- `name` is the form's admin label (e.g. "Main Intake"), not a person's name; not PII
-            .set({ name: input.name, updated_at: new Date() })
+            .set({
+              // care-y-ignore-next-line ast-pii-in-db-write -- `name` is the form's admin label (e.g. "Main Intake"), not a person's name; not PII
+              name: input.name,
+              slug: input.slug ?? null,
+              destination_queue_id: input.destinationQueueId ?? null,
+              updated_at: new Date(),
+            })
             .where("id", "=", input.formId)
             .execute();
 
@@ -274,12 +365,38 @@ export function createIntakeFormService(): IntakeFormService {
           // Create new form
           const row = await trx
             .insertInto("intake_forms")
-            // care-y-ignore-next-line ast-pii-in-db-write -- `name` is the form's admin label (e.g. "Main Intake"), not a person's name; not PII
-            .values({ name: input.name })
+            .values({
+              // care-y-ignore-next-line ast-pii-in-db-write -- `name` is the form's admin label (e.g. "Main Intake"), not a person's name; not PII
+              name: input.name,
+              slug: input.slug ?? null,
+              destination_queue_id: input.destinationQueueId ?? null,
+            })
             .returning("id")
             .executeTakeFirstOrThrow();
 
           formId = row.id;
+        }
+
+        // Atomically clear any existing default if this form is becoming default
+        if (input.isDefault === true) {
+          await trx
+            .updateTable("intake_forms")
+            .set({ is_default: false })
+            .where("is_default", "=", true)
+            .where("id", "!=", formId)
+            .execute();
+
+          await trx
+            .updateTable("intake_forms")
+            .set({ is_default: true })
+            .where("id", "=", formId)
+            .execute();
+        } else if (input.isDefault === false) {
+          await trx
+            .updateTable("intake_forms")
+            .set({ is_default: false })
+            .where("id", "=", formId)
+            .execute();
         }
 
         // Insert fields with positions 0..n-1
@@ -291,6 +408,9 @@ export function createIntakeFormService(): IntakeFormService {
                 form_id: formId,
                 position: idx,
                 field_type: f.fieldType,
+                role: f.role ?? null,
+                routing_queue_ids: f.routingQueueIds ?? null,
+                escalation_recipient_ids: f.escalationRecipientIds ?? null,
                 encrypted_label: Buffer.from(f.encryptedLabel, "base64"),
                 encrypted_config: Buffer.from(f.encryptedConfig, "base64"),
                 is_required: f.isRequired,
@@ -306,7 +426,14 @@ export function createIntakeFormService(): IntakeFormService {
     async listForms(db: Kysely<TenantDatabase>): Promise<FormSummary[]> {
       const forms = await db
         .selectFrom("intake_forms")
-        .select(["id", "name", "is_active"])
+        .select([
+          "id",
+          "name",
+          "slug",
+          "is_active",
+          "is_default",
+          "destination_queue_id",
+        ])
         .orderBy("created_at", "asc")
         .execute();
 
@@ -328,29 +455,14 @@ export function createIntakeFormService(): IntakeFormService {
         fieldCounts.map((r) => [r.form_id, r.count]),
       );
 
-      // Queue bindings per form
-      const bindings = await db
-        .selectFrom("queue_intake_forms")
-        .select(["form_id", "queue_id"])
-        .where("form_id", "in", formIds)
-        .execute();
-
-      const bindingMap = new Map<string, string[]>();
-      for (const b of bindings) {
-        const existing = bindingMap.get(b.form_id);
-        if (existing) {
-          existing.push(b.queue_id);
-        } else {
-          bindingMap.set(b.form_id, [b.queue_id]);
-        }
-      }
-
       return forms.map((f) => ({
         id: f.id,
         name: f.name,
+        slug: f.slug,
         isActive: f.is_active,
+        isDefault: f.is_default,
+        destinationQueueId: f.destination_queue_id,
         fieldCount: fieldCountMap.get(f.id) ?? 0,
-        boundQueueIds: bindingMap.get(f.id) ?? [],
       }));
     },
 
@@ -396,50 +508,54 @@ export function createIntakeFormService(): IntakeFormService {
       }
     },
 
-    async bindQueue(
+    async isWebIntakeEnabled(db: Kysely<TenantDatabase>): Promise<boolean> {
+      const config = await db
+        .selectFrom("org_config")
+        .select("web_intake_enabled")
+        .executeTakeFirst();
+
+      // Default to true when no row exists (pre-migration orgs)
+      return config?.web_intake_enabled !== false;
+    },
+
+    async setWebIntakeEnabled(
       db: Kysely<TenantDatabase>,
-      queueId: string,
-      formId: string | null,
+      enabled: boolean,
     ): Promise<void> {
-      // Verify queue exists
-      const queue = await db
-        .selectFrom("queues")
-        .select("id")
-        .where("id", "=", queueId)
-        .executeTakeFirst();
-
-      if (!queue) {
-        throw new NotFoundError("Queue not found");
-      }
-
-      if (formId === null) {
-        // Unbind: delete the binding row
-        await db
-          .deleteFrom("queue_intake_forms")
-          .where("queue_id", "=", queueId)
-          .execute();
-        return;
-      }
-
-      // Verify form exists
-      const form = await db
-        .selectFrom("intake_forms")
-        .select("id")
-        .where("id", "=", formId)
-        .executeTakeFirst();
-
-      if (!form) {
-        throw new NotFoundError("Form not found");
-      }
-
-      // Upsert the binding (queue_id is PK)
       await db
-        .insertInto("queue_intake_forms")
-        .values({ queue_id: queueId, form_id: formId })
-        .onConflict((oc) =>
-          oc.column("queue_id").doUpdateSet({ form_id: formId }),
-        )
+        .updateTable("org_config")
+        .set({ web_intake_enabled: enabled })
         .execute();
+    },
+
+    async resolvePublicForm(
+      db: Kysely<TenantDatabase>,
+      slug: string | null,
+    ): Promise<PublicFormResult> {
+      // Kill switch
+      const enabled = await this.isWebIntakeEnabled(db);
+      if (!enabled) {
+        return { formId: null, fields: null, slug: null, intakeDisabled: true };
+      }
+
+      const form = await this.getPublicForm(db, slug);
+
+      if (form === null) {
+        // Slug was given but no active form matched, or no default form
+        return {
+          formId: null,
+          fields: null,
+          slug,
+          intakeDisabled: false,
+        };
+      }
+
+      return {
+        formId: form.formId,
+        slug: form.slug,
+        fields: form.fields,
+        intakeDisabled: false,
+      };
     },
   };
 }

@@ -9,6 +9,7 @@
  * procedures here following the append-only convention.
  */
 
+import { z } from "zod";
 import { router, orgProcedure, withErrorWrapping } from "../trpc/trpc.js";
 import { TRPCError } from "@trpc/server";
 import { intakeSubmissionInputSchema } from "@care-y/shared";
@@ -19,6 +20,7 @@ import type { NotificationService } from "../notifications/service.js";
 import {
   createIntakeTicket,
   IntakeQueueNotConfiguredError,
+  IntakeDisabledError,
 } from "../portal/intake-service.js";
 import { extractClientIp } from "../http/request-utils.js";
 
@@ -38,17 +40,18 @@ export function createClientPortalRouter(deps: ClientPortalRouterDeps) {
       powRequired: deps.powVerifier !== null,
     })),
 
-    getIntakeForm: orgProcedure.query(
-      withErrorWrapping(async ({ ctx }) => {
-        const form = await deps.intakeFormService.getPublicForm(
-          ctx.org.tenantDb,
-        );
-        if (form === null) {
-          return { formId: null, fields: null };
-        }
-        return form;
-      }),
-    ),
+    getIntakeForm: orgProcedure
+      .input(
+        z.object({ slug: z.string().min(1).max(80).optional() }).optional(),
+      )
+      .query(
+        withErrorWrapping(async ({ ctx, input }) => {
+          return deps.intakeFormService.resolvePublicForm(
+            ctx.org.tenantDb,
+            input?.slug ?? null,
+          );
+        }),
+      ),
 
     getIntakeChallenge: orgProcedure.query(
       withErrorWrapping(({ ctx }) => {
@@ -162,6 +165,9 @@ export function createClientPortalRouter(deps: ClientPortalRouterDeps) {
               encryptedFormResponse,
               formId: input.formId ?? null,
               wrappedTk,
+              resolvedQueueId: input.resolvedQueueId ?? null,
+              resolvedPriority: input.resolvedPriority ?? null,
+              resolvedEscalationLevel: input.resolvedEscalationLevel ?? null,
             },
           );
 
@@ -176,6 +182,17 @@ export function createClientPortalRouter(deps: ClientPortalRouterDeps) {
             throw new TRPCError({
               code: "INTERNAL_SERVER_ERROR",
               message: "Service temporarily unavailable",
+            });
+          }
+          if (err instanceof IntakeDisabledError) {
+            console.warn("Intake submission rejected (disabled)", {
+              orgSlug: ctx.org.orgSlug,
+              ip,
+              reason: "intake_disabled",
+            });
+            throw new TRPCError({
+              code: "FORBIDDEN",
+              message: "Web intake is not available",
             });
           }
           throw err;

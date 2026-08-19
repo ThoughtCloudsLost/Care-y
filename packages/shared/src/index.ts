@@ -15,6 +15,12 @@ export {
 // --- Utilities ---
 export { extractSubdomain } from "./utils/subdomain.js";
 export { normalizeAlias } from "./utils/normalize-alias.js";
+export {
+  normalizeContactPhone,
+  normalizeContactEmail,
+  looksLikePhone,
+  looksLikeEmail,
+} from "./utils/normalize-contact.js";
 
 export {
   emailSchema,
@@ -547,21 +553,36 @@ export {
   intakeChallengeResponseSchema,
   intakeSubmitResponseSchema,
   intakeConfigResponseSchema,
+  publicIntakeFieldSchema,
+  publicIntakeFormSchema,
   type IntakeSubmissionInput,
   type IntakeChallengeResponse,
   type IntakeSubmitResponse,
   type IntakeConfigResponse,
+  type PublicIntakeField,
+  type PublicIntakeForm,
 } from "./schemas/client-portal.js";
 
 // --- Intake form schemas ---
 export {
   intakeFieldTypeSchema,
+  intakeFieldRoleSchema,
+  UNIQUE_ROLES_PER_FORM,
+  ROLE_WIDGET_COMPATIBILITY,
+  queueRoutingMappingSchema,
+  urgencyMappingSchema,
+  escalationMappingSchema,
   intakeFieldConfigSchema,
   dayOfWeekSchema,
   availabilityDataSchema,
   intakeFormResponseSchema,
+  intakeFormSlugSchema,
   saveIntakeFormInputSchema,
   type IntakeFieldType,
+  type IntakeFieldRole,
+  type QueueRoutingMapping,
+  type UrgencyMapping,
+  type EscalationMapping,
   type IntakeFieldConfig,
   type DayOfWeek,
   type AvailabilityData,

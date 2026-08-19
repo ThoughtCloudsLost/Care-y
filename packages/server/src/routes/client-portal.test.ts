@@ -88,7 +88,14 @@ function mockIntakeFormService(): IntakeFormService {
     listForms: vi.fn(),
     deleteForm: vi.fn(),
     setActive: vi.fn(),
-    bindQueue: vi.fn(),
+    isWebIntakeEnabled: vi.fn().mockResolvedValue(true),
+    setWebIntakeEnabled: vi.fn(),
+    resolvePublicForm: vi.fn().mockResolvedValue({
+      formId: null,
+      slug: null,
+      fields: null,
+      intakeDisabled: false,
+    }),
   };
 }
 
@@ -171,32 +178,44 @@ describe("client-portal router", () => {
   });
 
   describe("getIntakeForm", () => {
-    it("returns null fields when no form is bound", async () => {
+    it("returns null fields when no form resolves (built-in fallback signal)", async () => {
       const caller = buildCaller();
       const result = await caller.getIntakeForm();
-      expect(result).toEqual({ formId: null, fields: null });
+      expect(result).toEqual({
+        formId: null,
+        slug: null,
+        fields: null,
+        intakeDisabled: false,
+      });
     });
 
-    it("returns form data when a form is bound", async () => {
+    it("passes the resolved form through as-is", async () => {
       const formService = mockIntakeFormService();
       const formData = {
         formId: "f-1",
+        slug: "general-help",
         fields: [
           {
             id: "field-1",
             fieldType: "text",
+            role: null,
             encryptedLabel: VALID_BASE64,
             encryptedConfig: VALID_BASE64,
             isRequired: true,
           },
         ],
+        intakeDisabled: false,
       };
-      (formService.getPublicForm as ReturnType<typeof vi.fn>).mockResolvedValue(
-        formData,
-      );
+      (
+        formService.resolvePublicForm as ReturnType<typeof vi.fn>
+      ).mockResolvedValue(formData);
       const caller = buildCaller(buildDeps({ intakeFormService: formService }));
-      const result = await caller.getIntakeForm();
+      const result = await caller.getIntakeForm({ slug: "general-help" });
       expect(result).toEqual(formData);
+      expect(formService.resolvePublicForm).toHaveBeenCalledWith(
+        expect.anything(),
+        "general-help",
+      );
     });
   });
 

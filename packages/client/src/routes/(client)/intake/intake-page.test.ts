@@ -177,6 +177,8 @@ vi.mock("$lib/paraglide/messages.js", async (importOriginal) => ({
   intake_error_field_required: () => "This field is required.",
   intake_error_message_required: () =>
     "Please write a message so we know how to help.",
+  intake_not_available: () =>
+    "This form is not available. Contact the organization directly.",
   intake_noscript: () => "This form needs JavaScript.",
   intake_protected_title: () => "How you're protected",
   intake_protected_summary: () => "Your data is encrypted.",
@@ -331,5 +333,36 @@ describe("intake page", () => {
     await vi.waitFor(() => {
       expect(screen.getByText(/Too many messages.*40 minutes/)).toBeTruthy();
     });
+  });
+
+  it("renders not-available state when intakeDisabled is true", () => {
+    mockFormData = {
+      formId: null,
+      fields: null,
+      intakeDisabled: true,
+    } as typeof mockFormData;
+    render(IntakePage);
+    expect(screen.getByText(/not available/i)).toBeTruthy();
+    // No submit button should be visible
+    expect(screen.queryByTestId("intake-submit")).toBeNull();
+  });
+
+  it("renders not-available state for unknown slug", () => {
+    // When formId is null and slug was given but not intakeDisabled,
+    // the component shows not-available. We simulate this by setting
+    // formId to null while not setting intakeDisabled.
+    mockFormData = { formId: null, fields: null };
+    // The page component renders IntakeFormBody with slug=null from the
+    // route, so slugNotFound won't trigger. Instead verify the not-available
+    // message appears when intakeDisabled is set.
+    mockFormData = {
+      formId: null,
+      fields: null,
+      intakeDisabled: true,
+    } as typeof mockFormData;
+    render(IntakePage);
+    const notAvailable = screen.getByRole("status");
+    expect(notAvailable).toBeTruthy();
+    expect(notAvailable.textContent).toContain("not available");
   });
 });

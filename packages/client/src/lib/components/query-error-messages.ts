@@ -163,6 +163,8 @@ export const errorCodeMap: Record<ErrorCodeType, () => string> = {
 
   // Intake forms
   [ErrorCode.FORM_HAS_RESPONSES]: () => m.error_form_has_responses(),
+  [ErrorCode.INTAKE_SLUG_TAKEN]: () => m.error_intake_slug_taken(),
+  [ErrorCode.INTAKE_DISABLED]: () => m.error_intake_disabled(),
 };
 
 /** Type guard: returns true when the string is a recognized ErrorCode value. */

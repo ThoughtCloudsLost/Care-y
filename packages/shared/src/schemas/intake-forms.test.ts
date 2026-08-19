@@ -1,11 +1,18 @@
 import { describe, expect, it } from "vitest";
 import {
   intakeFieldTypeSchema,
+  intakeFieldRoleSchema,
   intakeFieldConfigSchema,
   dayOfWeekSchema,
   availabilityDataSchema,
   intakeFormResponseSchema,
   saveIntakeFormInputSchema,
+  intakeFormSlugSchema,
+  UNIQUE_ROLES_PER_FORM,
+  ROLE_WIDGET_COMPATIBILITY,
+  queueRoutingMappingSchema,
+  urgencyMappingSchema,
+  escalationMappingSchema,
 } from "./intake-forms.js";
 
 /** Generate a base64 string that decodes to exactly `n` bytes. */
@@ -26,6 +33,23 @@ function base64Chars(len: number): string {
   return "A".repeat(len);
 }
 
+function validField(): Record<string, unknown> {
+  return {
+    fieldType: "text",
+    encryptedLabel: base64OfBytes(32),
+    encryptedConfig: base64OfBytes(64),
+    isRequired: true,
+  };
+}
+
+function validFormInput(): Record<string, unknown> {
+  return {
+    formId: null,
+    name: "Intake Form",
+    fields: [validField()],
+  };
+}
+
 describe("intakeFieldTypeSchema", () => {
   it("accepts all valid field types", () => {
     for (const t of [
@@ -33,6 +57,7 @@ describe("intakeFieldTypeSchema", () => {
       "textarea",
       "select",
       "multiselect",
+      "checkbox",
       "availability",
     ]) {
       expect(intakeFieldTypeSchema.safeParse(t).success).toBe(true);
@@ -40,7 +65,84 @@ describe("intakeFieldTypeSchema", () => {
   });
 
   it("rejects unknown field type", () => {
-    expect(intakeFieldTypeSchema.safeParse("checkbox").success).toBe(false);
+    expect(intakeFieldTypeSchema.safeParse("radio").success).toBe(false);
+  });
+});
+
+describe("intakeFieldRoleSchema", () => {
+  it("accepts all 10 defined roles", () => {
+    const roles = [
+      "queue-routing",
+      "urgency",
+      "escalation",
+      "phone-contact",
+      "email-contact",
+      "real-name",
+      "pronouns",
+      "contact-safety",
+      "consent",
+      "language-preference",
+    ];
+    for (const r of roles) {
+      expect(intakeFieldRoleSchema.safeParse(r).success).toBe(true);
+    }
+  });
+
+  it("rejects availability (widget type, not a role)", () => {
+    expect(intakeFieldRoleSchema.safeParse("availability").success).toBe(false);
+  });
+
+  it("rejects unknown role", () => {
+    expect(intakeFieldRoleSchema.safeParse("custom-role").success).toBe(false);
+  });
+});
+
+describe("role mapping schemas", () => {
+  it("queueRoutingMapping accepts option -> UUID record", () => {
+    const result = queueRoutingMappingSchema.safeParse({
+      "Option A": crypto.randomUUID(),
+      "Option B": crypto.randomUUID(),
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("queueRoutingMapping rejects non-UUID values", () => {
+    const result = queueRoutingMappingSchema.safeParse({
+      "Option A": "not-a-uuid",
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it("urgencyMapping accepts option -> priority record", () => {
+    const result = urgencyMappingSchema.safeParse({
+      Low: "low",
+      Normal: "normal",
+      High: "high",
+      Urgent: "urgent",
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("urgencyMapping rejects invalid priority value", () => {
+    const result = urgencyMappingSchema.safeParse({
+      Critical: "critical",
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it("escalationMapping accepts option -> alert level record", () => {
+    const result = escalationMappingSchema.safeParse({
+      "In danger": "immediate",
+      "Needs follow-up": "standard",
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("escalationMapping rejects empty alert level", () => {
+    const result = escalationMappingSchema.safeParse({
+      "In danger": "",
+    });
+    expect(result.success).toBe(false);
   });
 });
 
@@ -91,6 +193,45 @@ describe("intakeFieldConfigSchema", () => {
     expect(result.success).toBe(true);
   });
 
+  it("accepts select config with queue-routing mapping", () => {
+    const result = intakeFieldConfigSchema.safeParse({
+      type: "select",
+      options: ["General", "Urgent"],
+      queueRoutingMapping: {
+        General: crypto.randomUUID(),
+        Urgent: crypto.randomUUID(),
+      },
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("accepts select config with urgency mapping", () => {
+    const result = intakeFieldConfigSchema.safeParse({
+      type: "select",
+      options: ["Low", "High"],
+      urgencyMapping: { Low: "low", High: "high" },
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("accepts select config with escalation mapping", () => {
+    const result = intakeFieldConfigSchema.safeParse({
+      type: "select",
+      options: ["Safe", "Danger"],
+      escalationMapping: { Safe: "none", Danger: "immediate" },
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("accepts multiselect config with queue-routing mapping", () => {
+    const result = intakeFieldConfigSchema.safeParse({
+      type: "multiselect",
+      options: ["A", "B"],
+      queueRoutingMapping: { A: crypto.randomUUID() },
+    });
+    expect(result.success).toBe(true);
+  });
+
   it("rejects select config with empty options array", () => {
     const result = intakeFieldConfigSchema.safeParse({
       type: "select",
@@ -120,6 +261,21 @@ describe("intakeFieldConfigSchema", () => {
     const result = intakeFieldConfigSchema.safeParse({
       type: "multiselect",
       options: ["A", "B", "C"],
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("accepts checkbox config with requiredTrue", () => {
+    const result = intakeFieldConfigSchema.safeParse({
+      type: "checkbox",
+      requiredTrue: true,
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("accepts checkbox config without requiredTrue", () => {
+    const result = intakeFieldConfigSchema.safeParse({
+      type: "checkbox",
     });
     expect(result.success).toBe(true);
   });
@@ -284,6 +440,14 @@ describe("intakeFormResponseSchema", () => {
     expect(result.success).toBe(true);
   });
 
+  it("accepts valid response with boolean answer (checkbox)", () => {
+    const result = intakeFormResponseSchema.safeParse({
+      formId: crypto.randomUUID(),
+      answers: [{ fieldId: "f1", fieldType: "checkbox", value: true }],
+    });
+    expect(result.success).toBe(true);
+  });
+
   it("accepts valid response with availability answer", () => {
     const result = intakeFormResponseSchema.safeParse({
       formId: crypto.randomUUID(),
@@ -310,8 +474,8 @@ describe("intakeFormResponseSchema", () => {
     expect(result.success).toBe(true);
   });
 
-  it("caps answers at 20", () => {
-    const answers = Array.from({ length: 21 }, (_, i) => ({
+  it("caps answers at 100", () => {
+    const answers = Array.from({ length: 101 }, (_, i) => ({
       fieldId: `f${String(i)}`,
       fieldType: "text" as const,
       value: "x",
@@ -323,8 +487,8 @@ describe("intakeFormResponseSchema", () => {
     expect(result.success).toBe(false);
   });
 
-  it("accepts exactly 20 answers", () => {
-    const answers = Array.from({ length: 20 }, (_, i) => ({
+  it("accepts exactly 100 answers", () => {
+    const answers = Array.from({ length: 100 }, (_, i) => ({
       fieldId: `f${String(i)}`,
       fieldType: "text" as const,
       value: "x",
@@ -347,22 +511,87 @@ describe("intakeFormResponseSchema", () => {
   });
 });
 
-describe("saveIntakeFormInputSchema", () => {
-  function validFormInput(): Record<string, unknown> {
-    return {
-      formId: null,
-      name: "Intake Form",
-      fields: [
-        {
-          fieldType: "text",
-          encryptedLabel: base64OfBytes(32),
-          encryptedConfig: base64OfBytes(64),
-          isRequired: true,
-        },
-      ],
-    };
-  }
+describe("intakeFormSlugSchema", () => {
+  it("accepts valid kebab-case slugs", () => {
+    for (const slug of ["general", "my-form", "partner-referral-2026", "ab"]) {
+      expect(intakeFormSlugSchema.safeParse(slug).success).toBe(true);
+    }
+  });
 
+  it("rejects uppercase", () => {
+    expect(intakeFormSlugSchema.safeParse("My-Form").success).toBe(false);
+  });
+
+  it("rejects leading hyphen", () => {
+    expect(intakeFormSlugSchema.safeParse("-general").success).toBe(false);
+  });
+
+  it("rejects trailing hyphen", () => {
+    expect(intakeFormSlugSchema.safeParse("general-").success).toBe(false);
+  });
+
+  it("rejects consecutive hyphens", () => {
+    expect(intakeFormSlugSchema.safeParse("my--form").success).toBe(false);
+  });
+
+  it("rejects single character", () => {
+    expect(intakeFormSlugSchema.safeParse("a").success).toBe(false);
+  });
+
+  it("rejects slug over 80 chars", () => {
+    expect(intakeFormSlugSchema.safeParse("a".repeat(81)).success).toBe(false);
+  });
+
+  it("accepts 80-char slug", () => {
+    expect(intakeFormSlugSchema.safeParse("a".repeat(80)).success).toBe(true);
+  });
+
+  it("rejects spaces", () => {
+    expect(intakeFormSlugSchema.safeParse("my form").success).toBe(false);
+  });
+
+  it("rejects underscores", () => {
+    expect(intakeFormSlugSchema.safeParse("my_form").success).toBe(false);
+  });
+});
+
+describe("ROLE_WIDGET_COMPATIBILITY", () => {
+  it("maps queue-routing to select and multiselect only", () => {
+    expect(ROLE_WIDGET_COMPATIBILITY["queue-routing"]).toEqual([
+      "select",
+      "multiselect",
+    ]);
+  });
+
+  it("maps consent to checkbox only", () => {
+    expect(ROLE_WIDGET_COMPATIBILITY.consent).toEqual(["checkbox"]);
+  });
+
+  it("maps phone-contact to text only", () => {
+    expect(ROLE_WIDGET_COMPATIBILITY["phone-contact"]).toEqual(["text"]);
+  });
+
+  it("maps escalation to select and checkbox", () => {
+    expect(ROLE_WIDGET_COMPATIBILITY.escalation).toEqual([
+      "select",
+      "checkbox",
+    ]);
+  });
+});
+
+describe("UNIQUE_ROLES_PER_FORM", () => {
+  it("contains 7 identity/contact roles", () => {
+    expect(UNIQUE_ROLES_PER_FORM).toHaveLength(7);
+  });
+
+  it("does not include server-metadata roles", () => {
+    for (const r of ["queue-routing", "urgency", "escalation"] as const) {
+      expect(UNIQUE_ROLES_PER_FORM).not.toContain(r);
+    }
+  });
+});
+
+describe("saveIntakeFormInputSchema", () => {
   it("accepts valid form input", () => {
     const result = saveIntakeFormInputSchema.safeParse(validFormInput());
     expect(result.success).toBe(true);
@@ -392,19 +621,24 @@ describe("saveIntakeFormInputSchema", () => {
     expect(result.success).toBe(false);
   });
 
-  it("rejects more than 20 fields", () => {
-    const field = {
-      fieldType: "text" as const,
-      encryptedLabel: base64OfBytes(32),
-      encryptedConfig: base64OfBytes(64),
-      isRequired: false,
-    };
+  it("rejects more than 100 fields", () => {
+    const field = validField();
     const input = {
       ...validFormInput(),
-      fields: Array.from({ length: 21 }, () => field),
+      fields: Array.from({ length: 101 }, () => field),
     };
     const result = saveIntakeFormInputSchema.safeParse(input);
     expect(result.success).toBe(false);
+  });
+
+  it("accepts exactly 100 fields", () => {
+    const field = validField();
+    const input = {
+      ...validFormInput(),
+      fields: Array.from({ length: 100 }, () => field),
+    };
+    const result = saveIntakeFormInputSchema.safeParse(input);
+    expect(result.success).toBe(true);
   });
 
   it("rejects two availability fields (one-per-form rule)", () => {
@@ -429,15 +663,9 @@ describe("saveIntakeFormInputSchema", () => {
       encryptedConfig: base64OfBytes(64),
       isRequired: false,
     };
-    const textField = {
-      fieldType: "text" as const,
-      encryptedLabel: base64OfBytes(32),
-      encryptedConfig: base64OfBytes(64),
-      isRequired: true,
-    };
     const input = {
       ...validFormInput(),
-      fields: [textField, avField],
+      fields: [validField(), avField],
     };
     const result = saveIntakeFormInputSchema.safeParse(input);
     expect(result.success).toBe(true);
@@ -500,6 +728,185 @@ describe("saveIntakeFormInputSchema", () => {
           encryptedLabel: base64OfBytes(32),
           encryptedConfig: base64OfBytes(64),
           isRequired: true,
+        },
+      ],
+    };
+    const result = saveIntakeFormInputSchema.safeParse(input);
+    expect(result.success).toBe(false);
+  });
+
+  // --- slug/isDefault/destinationQueueId ---
+
+  it("accepts slug, isDefault, and destinationQueueId", () => {
+    const input = {
+      ...validFormInput(),
+      slug: "general-help",
+      isDefault: true,
+      destinationQueueId: crypto.randomUUID(),
+    };
+    const result = saveIntakeFormInputSchema.safeParse(input);
+    expect(result.success).toBe(true);
+  });
+
+  it("accepts null slug and null destinationQueueId", () => {
+    const input = {
+      ...validFormInput(),
+      slug: null,
+      destinationQueueId: null,
+    };
+    const result = saveIntakeFormInputSchema.safeParse(input);
+    expect(result.success).toBe(true);
+  });
+
+  it("rejects invalid slug format", () => {
+    const input = {
+      ...validFormInput(),
+      slug: "UPPER_CASE",
+    };
+    const result = saveIntakeFormInputSchema.safeParse(input);
+    expect(result.success).toBe(false);
+  });
+
+  // --- field roles ---
+
+  it("accepts fields with valid roles", () => {
+    const input = {
+      ...validFormInput(),
+      fields: [
+        { ...validField(), role: "phone-contact" },
+        {
+          fieldType: "select",
+          encryptedLabel: base64OfBytes(32),
+          encryptedConfig: base64OfBytes(64),
+          isRequired: false,
+          role: "queue-routing",
+          routingQueueIds: [crypto.randomUUID()],
+        },
+      ],
+    };
+    const result = saveIntakeFormInputSchema.safeParse(input);
+    expect(result.success).toBe(true);
+  });
+
+  it("accepts fields with null role", () => {
+    const input = {
+      ...validFormInput(),
+      fields: [{ ...validField(), role: null }],
+    };
+    const result = saveIntakeFormInputSchema.safeParse(input);
+    expect(result.success).toBe(true);
+  });
+
+  it("rejects duplicate unique-per-form roles", () => {
+    const input = {
+      ...validFormInput(),
+      fields: [
+        { ...validField(), role: "phone-contact" },
+        { ...validField(), role: "phone-contact" },
+      ],
+    };
+    const result = saveIntakeFormInputSchema.safeParse(input);
+    expect(result.success).toBe(false);
+  });
+
+  it("allows duplicate server-metadata roles (queue-routing on two selects)", () => {
+    const selectField = {
+      fieldType: "select" as const,
+      encryptedLabel: base64OfBytes(32),
+      encryptedConfig: base64OfBytes(64),
+      isRequired: false,
+      role: "queue-routing" as const,
+    };
+    const input = {
+      ...validFormInput(),
+      fields: [selectField, selectField],
+    };
+    const result = saveIntakeFormInputSchema.safeParse(input);
+    expect(result.success).toBe(true);
+  });
+
+  it("rejects role incompatible with widget type (consent on text)", () => {
+    const input = {
+      ...validFormInput(),
+      fields: [{ ...validField(), role: "consent" }],
+    };
+    const result = saveIntakeFormInputSchema.safeParse(input);
+    expect(result.success).toBe(false);
+  });
+
+  it("rejects role incompatible with widget type (queue-routing on text)", () => {
+    const input = {
+      ...validFormInput(),
+      fields: [{ ...validField(), role: "queue-routing" }],
+    };
+    const result = saveIntakeFormInputSchema.safeParse(input);
+    expect(result.success).toBe(false);
+  });
+
+  it("accepts consent role on checkbox widget", () => {
+    const input = {
+      ...validFormInput(),
+      fields: [
+        {
+          fieldType: "checkbox" as const,
+          encryptedLabel: base64OfBytes(32),
+          encryptedConfig: base64OfBytes(64),
+          isRequired: true,
+          role: "consent",
+        },
+      ],
+    };
+    const result = saveIntakeFormInputSchema.safeParse(input);
+    expect(result.success).toBe(true);
+  });
+
+  it("accepts escalation role on checkbox widget", () => {
+    const input = {
+      ...validFormInput(),
+      fields: [
+        {
+          fieldType: "checkbox" as const,
+          encryptedLabel: base64OfBytes(32),
+          encryptedConfig: base64OfBytes(64),
+          isRequired: false,
+          role: "escalation",
+          escalationRecipientIds: [crypto.randomUUID()],
+        },
+      ],
+    };
+    const result = saveIntakeFormInputSchema.safeParse(input);
+    expect(result.success).toBe(true);
+  });
+
+  it("accepts routingQueueIds on a queue-routing field", () => {
+    const input = {
+      ...validFormInput(),
+      fields: [
+        {
+          fieldType: "select" as const,
+          encryptedLabel: base64OfBytes(32),
+          encryptedConfig: base64OfBytes(64),
+          isRequired: false,
+          role: "queue-routing",
+          routingQueueIds: [crypto.randomUUID(), crypto.randomUUID()],
+        },
+      ],
+    };
+    const result = saveIntakeFormInputSchema.safeParse(input);
+    expect(result.success).toBe(true);
+  });
+
+  it("rejects routingQueueIds with non-UUID entries", () => {
+    const input = {
+      ...validFormInput(),
+      fields: [
+        {
+          fieldType: "select" as const,
+          encryptedLabel: base64OfBytes(32),
+          encryptedConfig: base64OfBytes(64),
+          isRequired: false,
+          role: "queue-routing",
+          routingQueueIds: ["not-a-uuid"],
         },
       ],
     };
