@@ -150,7 +150,35 @@ const lookup: Record<string, () => string> = {
   demo_narrative_topic_language_body: () =>
     m.demo_narrative_topic_language_body(),
 
+  // Tickets (new subs)
+  demo_narrative_topic_list_stats_heading: () =>
+    m.demo_narrative_topic_list_stats_heading(),
+  demo_narrative_topic_list_stats_body: () =>
+    m.demo_narrative_topic_list_stats_body(),
+  demo_narrative_topic_list_search_heading: () =>
+    m.demo_narrative_topic_list_search_heading(),
+  demo_narrative_topic_list_search_body: () =>
+    m.demo_narrative_topic_list_search_body(),
+
+  // Ticket detail (new subs)
+  demo_narrative_topic_thread_anatomy_heading: () =>
+    m.demo_narrative_topic_thread_anatomy_heading(),
+  demo_narrative_topic_thread_anatomy_body: () =>
+    m.demo_narrative_topic_thread_anatomy_body(),
+  demo_narrative_topic_case_panel_heading: () =>
+    m.demo_narrative_topic_case_panel_heading(),
+  demo_narrative_topic_case_panel_body: () =>
+    m.demo_narrative_topic_case_panel_body(),
+  demo_narrative_topic_message_select_heading: () =>
+    m.demo_narrative_topic_message_select_heading(),
+  demo_narrative_topic_message_select_body: () =>
+    m.demo_narrative_topic_message_select_body(),
+
   // Search
+  demo_narrative_search_overlay_heading: () =>
+    m.demo_narrative_search_overlay_heading(),
+  demo_narrative_search_overlay_body: () =>
+    m.demo_narrative_search_overlay_body(),
   demo_narrative_search_how_heading: () =>
     m.demo_narrative_search_how_heading(),
   demo_narrative_search_how_body: () => m.demo_narrative_search_how_body(),
@@ -162,6 +190,10 @@ const lookup: Record<string, () => string> = {
   // Dashboard
   demo_section_dashboard_title: () => m.demo_section_dashboard_title(),
   demo_section_dashboard_desc: () => m.demo_section_dashboard_desc(),
+  demo_narrative_dashboard_getting_started_heading: () =>
+    m.demo_narrative_dashboard_getting_started_heading(),
+  demo_narrative_dashboard_getting_started_body: () =>
+    m.demo_narrative_dashboard_getting_started_body(),
   demo_narrative_dashboard_shift_heading: () =>
     m.demo_narrative_dashboard_shift_heading(),
   demo_narrative_dashboard_shift_body: () =>
@@ -221,6 +253,10 @@ const lookup: Record<string, () => string> = {
     m.demo_narrative_topic_library_vote_heading(),
   demo_narrative_topic_library_vote_body: () =>
     m.demo_narrative_topic_library_vote_body(),
+  demo_narrative_topic_library_tools_heading: () =>
+    m.demo_narrative_topic_library_tools_heading(),
+  demo_narrative_topic_library_tools_body: () =>
+    m.demo_narrative_topic_library_tools_body(),
   demo_narrative_topic_library_search_heading: () =>
     m.demo_narrative_topic_library_search_heading(),
   demo_narrative_topic_library_search_body: () =>
@@ -248,6 +284,10 @@ const lookup: Record<string, () => string> = {
   demo_narrative_admin_people_heading: () =>
     m.demo_narrative_admin_people_heading(),
   demo_narrative_admin_people_body: () => m.demo_narrative_admin_people_body(),
+  demo_narrative_admin_roster_tools_heading: () =>
+    m.demo_narrative_admin_roster_tools_heading(),
+  demo_narrative_admin_roster_tools_body: () =>
+    m.demo_narrative_admin_roster_tools_body(),
   demo_narrative_admin_queues_heading: () =>
     m.demo_narrative_admin_queues_heading(),
   demo_narrative_admin_queues_body: () => m.demo_narrative_admin_queues_body(),
@@ -255,6 +295,17 @@ const lookup: Record<string, () => string> = {
     m.demo_narrative_admin_clients_heading(),
   demo_narrative_admin_clients_body: () =>
     m.demo_narrative_admin_clients_body(),
+  demo_narrative_admin_client_merge_heading: () =>
+    m.demo_narrative_admin_client_merge_heading(),
+  demo_narrative_admin_client_merge_body: () =>
+    m.demo_narrative_admin_client_merge_body(),
+  demo_narrative_admin_roles_heading: () =>
+    m.demo_narrative_admin_roles_heading(),
+  demo_narrative_admin_roles_body: () => m.demo_narrative_admin_roles_body(),
+  demo_narrative_admin_telephony_provider_heading: () =>
+    m.demo_narrative_admin_telephony_provider_heading(),
+  demo_narrative_admin_telephony_provider_body: () =>
+    m.demo_narrative_admin_telephony_provider_body(),
   demo_narrative_admin_general_heading: () =>
     m.demo_narrative_admin_general_heading(),
   demo_narrative_admin_general_body: () =>

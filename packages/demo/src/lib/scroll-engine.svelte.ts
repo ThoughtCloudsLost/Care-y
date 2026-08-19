@@ -23,6 +23,7 @@ import { tick } from "svelte";
 import {
   parseHash,
   buildHash,
+  getSection,
   loginStageTopics,
   type SectionId,
 } from "./scroll-sections.js";
@@ -33,6 +34,7 @@ import {
   scrollTargetFor,
   flowGeometryReady,
   locationWithVisibleHeading,
+  setViewportScrollY,
 } from "./flow-geometry.svelte.js";
 
 // -----------------------------------------------------------------------
@@ -164,27 +166,55 @@ export function createScrollEngine(
     clearTimeout(suppressionTimeout);
   }
 
+  /**
+   * Disarm only when the derived selection already matches the armed
+   * target. Alignment can land with a residual (fixed-point cap, hole
+   * re-layout after the scroll, browser rounding) that leaves the
+   * derived selection on a NEIGHBORING sub; disarming then lets the
+   * very next derived update fire a stale page-scroll intent that
+   * overrides the transition being presented. Left armed, the
+   * condition-based disarm in the derived-intent effect unmutes once
+   * the positions agree, and the armSuppression backstop covers the
+   * never-agrees case.
+   */
+  function disarmSuppressionIfAligned(): void {
+    const loc = derivedLocation;
+    if (
+      loc !== null &&
+      suppressionTarget !== null &&
+      loc.sectionId === suppressionTarget.section &&
+      loc.subSlug === suppressionTarget.sub
+    ) {
+      disarmSuppression();
+    }
+  }
+
   // -----------------------------------------------------------------------
   // Derived selection: the sub at the band IS the selection
   //
-  // locationWithVisibleHeading() reads module $state (the published
-  // geometry source) plus window.scrollY. The source is reactive and
-  // is republished by FlowStory on every layout pass; the layout runs
-  // on every scroll frame (scrollY is a $state in FlowStory that
-  // triggers a rAF-coalesced relayout, which calls
-  // setFlowGeometrySource). So the derived recomputes per scroll frame
-  // without needing its own scroll listener.
+  // locationWithVisibleHeading() reads module $state in flow-geometry:
+  // the published geometry source AND the published scroll position.
+  // The source alone is not enough to keep the selection live, because
+  // FlowStory's runLayout skips republishing when a pass is a no-op
+  // (hole unchanged or disjoint from the content), which is the common
+  // case during plain scrolling. The scroll listener below publishes
+  // the position so the derived recomputes on every scroll event.
   // -----------------------------------------------------------------------
 
-  // Timestamp only, no work: the align path reads it to avoid scrolling
-  // the story while the visitor is scrolling it themselves.
+  // The align path reads the timestamp to avoid scrolling the story
+  // while the visitor is scrolling it themselves.
   let lastScrollAt = 0;
 
   function noteUserScroll(): void {
     lastScrollAt = Date.now();
+    setViewportScrollY(window.scrollY);
   }
 
   window.addEventListener("scroll", noteUserScroll, { passive: true });
+  // Baseline for pages restored mid-scroll (bfcache, reload with a
+  // remembered position) where no scroll event fires before the first
+  // derived read.
+  setViewportScrollY(window.scrollY);
 
   const derivedLocation = $derived(locationWithVisibleHeading());
 
@@ -280,9 +310,20 @@ export function createScrollEngine(
     // location so the condition-based disarm can detect when the scroll
     // reaches it. The hard timeout inside armSuppression is a backstop
     // that only unmutes when aligned.
+    //
+    // Section-level targets (null sub) are resolved to the section's
+    // first sub before arming: the derived selection always names a
+    // sub-heading, so a null-sub target could never match it and the
+    // disarm would be left to the timed backstop, muting selection for
+    // up to 1.5s after every section transition. At the section top the
+    // derived selection IS the first sub, so the resolved target is the
+    // aligned state.
     armSuppression({
       section: state.location.sectionId,
-      sub: state.location.subSlug,
+      sub:
+        state.location.subSlug ??
+        getSection(state.location.sectionId)?.subs[0]?.slug ??
+        null,
     });
 
     // Section change (or init reboot): scroll to top before aligning
@@ -370,11 +411,13 @@ export function createScrollEngine(
     }
 
     if (Math.abs(window.scrollY - target) < ALIGN_TOLERANCE) {
-      // Already at the target: no scroll event will fire, so clear
-      // suppression now unless this is an init/reboot transition
-      // where the browser may still snap-correct.
+      // Already at the target: no scroll event will fire. Clear
+      // suppression only when the derived selection agrees with the
+      // target (a residual can leave it on a neighbor, and disarming
+      // then leaks a stale intent). Init/reboot transitions stay
+      // armed regardless: the browser may still snap-correct.
       if (origin !== "init") {
-        disarmSuppression();
+        disarmSuppressionIfAligned();
       }
       return;
     }
@@ -387,14 +430,12 @@ export function createScrollEngine(
 
     window.scrollTo({ top: target, behavior });
 
-    // For "auto" (instant) scrolls, suppression can be cleared
-    // immediately since the scroll completes synchronously. Smooth
-    // scrolls stay suppressed until the derived-intent effect sees
-    // the reading line reach the target, with the armSuppression
+    // Suppression is NOT cleared here, even for "auto" scrolls that
+    // apply scrollY synchronously: the scroll EVENT arrives async, and
+    // the aligned position can carry a residual that derives to a
+    // neighboring sub. The derived-intent effect disarms once the
+    // reading line reaches the target, with the armSuppression
     // backstop as the fallback.
-    if (behavior === "auto") {
-      disarmSuppression();
-    }
   }
 
   // -----------------------------------------------------------------------

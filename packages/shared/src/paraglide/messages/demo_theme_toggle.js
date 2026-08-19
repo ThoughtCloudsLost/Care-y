@@ -6,7 +6,7 @@ import { getLocale, experimentalStaticLocale } from '../runtime.js';
 /** @typedef {{}} Demo_Theme_ToggleInputs */
 
 const en_demo_theme_toggle = /** @type {(inputs: Demo_Theme_ToggleInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Toggle dark mode`)
+	return /** @type {LocalizedString} */ (`Toggle dark/light mode`)
 };
 
 const es_demo_theme_toggle = /** @type {(inputs: Demo_Theme_ToggleInputs) => LocalizedString} */ () => {
@@ -16,7 +16,7 @@ const es_demo_theme_toggle = /** @type {(inputs: Demo_Theme_ToggleInputs) => Loc
 /**
 * | output |
 * | --- |
-* | "Toggle dark mode" |
+* | "Toggle dark/light mode" |
 *
 * @param {Demo_Theme_ToggleInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

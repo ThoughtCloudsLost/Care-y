@@ -11,6 +11,10 @@ import {
   BALANCE_RATIO,
   MAX_MEASURE,
   MAX_FIGURE_WIDTH,
+  MIN_SEGMENT,
+  FULL_BLEED_SLIVER,
+  FULL_BLEED_EXTENT,
+  extendHoleForFullBleed,
 } from "./flow-layout.js";
 import type {
   FlowBlock,
@@ -1057,5 +1061,80 @@ describe("figure block placement", () => {
       sectionId: "login",
       subSlug: "credentials",
     });
+  });
+});
+
+// -----------------------------------------------------------------------
+// Full-bleed frame: scroll-invariant hole
+// -----------------------------------------------------------------------
+
+describe("extendHoleForFullBleed", () => {
+  // 800px container, hole in the middle: both flanks are 284px wide,
+  // clearing MIN_SEGMENT (180) and BOTH_SIDES_MIN (240).
+  const WIDTH = 800;
+  const baseHole: FlowHole = { left: 300, top: 100, right: 500, bottom: 600 };
+  const SLIVER = FULL_BLEED_SLIVER - 1;
+
+  it("stretches the hole vertically when both gaps are slivers", () => {
+    const out = extendHoleForFullBleed(baseHole, SLIVER, SLIVER, WIDTH);
+    expect(out.top).toBe(-FULL_BLEED_EXTENT);
+    expect(out.bottom).toBe(FULL_BLEED_EXTENT);
+  });
+
+  it("keeps the horizontal edges untouched in full-bleed mode", () => {
+    const out = extendHoleForFullBleed(baseHole, SLIVER, SLIVER, WIDTH);
+    expect(out.left).toBe(baseHole.left);
+    expect(out.right).toBe(baseHole.right);
+  });
+
+  it("returns the hole unchanged when the gap above fits three lines", () => {
+    const out = extendHoleForFullBleed(
+      baseHole,
+      FULL_BLEED_SLIVER,
+      SLIVER,
+      WIDTH,
+    );
+    expect(out).toEqual(baseHole);
+  });
+
+  it("returns the hole unchanged when the gap below fits three lines", () => {
+    const out = extendHoleForFullBleed(
+      baseHole,
+      SLIVER,
+      FULL_BLEED_SLIVER,
+      WIDTH,
+    );
+    expect(out).toEqual(baseHole);
+  });
+
+  it("returns the hole unchanged when neither flank clears MIN_SEGMENT", () => {
+    // 400px container, centred hole: flanks are 134px and 34px, both
+    // under MIN_SEGMENT. Stretching would push all text below the hole.
+    const narrow: FlowHole = { left: 150, top: 100, right: 350, bottom: 600 };
+    expect(150 - HOLE_GAP).toBeLessThan(MIN_SEGMENT);
+    const out = extendHoleForFullBleed(narrow, SLIVER, SLIVER, 400);
+    expect(out).toEqual(narrow);
+  });
+
+  it("engages when only one flank is viable", () => {
+    // Hole hugs the right edge: right flank is 0, left flank is 484.
+    const offset: FlowHole = { left: 500, top: 100, right: 800, bottom: 600 };
+    const out = extendHoleForFullBleed(offset, SLIVER, SLIVER, WIDTH);
+    expect(out.top).toBe(-FULL_BLEED_EXTENT);
+    expect(out.bottom).toBe(FULL_BLEED_EXTENT);
+  });
+
+  it("keeps every layout line flanking a stretched hole", () => {
+    const blocks: FlowBlock[] = [makeBlock("x".repeat(400), "sub-body")];
+    const filler = createFixedFiller(blocks, 10);
+    const stretched = extendHoleForFullBleed(baseHole, SLIVER, SLIVER, WIDTH);
+    const result = computeFlowLayout(blocks, filler, WIDTH, stretched);
+
+    expect(result.lines.length).toBeGreaterThan(0);
+    for (const line of result.lines) {
+      const inLeftFlank = line.x + line.width <= baseHole.left - HOLE_GAP;
+      const inRightFlank = line.x >= baseHole.right + HOLE_GAP;
+      expect(inLeftFlank || inRightFlank).toBe(true);
+    }
   });
 });

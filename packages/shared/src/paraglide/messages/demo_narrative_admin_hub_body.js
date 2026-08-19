@@ -7,14 +7,16 @@ import { getLocale, experimentalStaticLocale } from '../runtime.js';
 
 const en_demo_narrative_admin_hub_body = /** @type {(inputs: Demo_Narrative_Admin_Hub_BodyInputs) => LocalizedString} */ () => {
 	return /** @type {LocalizedString} */ (`The hub organizes destinations into four groups. People, Communications, Organization, and Analytics each show a live count from the database and link to the relevant management page.
-**Permissions.** The destinations shown depend on the volunteer's role. Administrators see all destinations. Managers see people and queue management but not organization configuration or infrastructure settings.
-**Analytics.** The analytics group is planned but not yet available.`)
+**Status badges.** Each destination's count doubles as a health signal. A badge switches to a warning style when something needs attention, such as missing keys or no connected phone numbers.
+**Permissions.** The destinations shown depend on the volunteer's role. Administrators see all destinations. Managers see people management, queues, the client list, and analytics, but not organization configuration or infrastructure settings.
+**Analytics.** The analytics group is planned but not yet available, so its rows are dimmed and tapping one shows a notice.`)
 };
 
 const es_demo_narrative_admin_hub_body = /** @type {(inputs: Demo_Narrative_Admin_Hub_BodyInputs) => LocalizedString} */ () => {
 	return /** @type {LocalizedString} */ (`El centro organiza los destinos en cuatro grupos. Personas, Comunicaciones, Organizacion y Analiticas muestran cada uno un conteo en vivo de la base de datos y enlazan a la pagina de gestion correspondiente.
-**Permisos.** Los destinos mostrados dependen del rol del voluntario. Los administradores ven todos los destinos. Los gestores ven la gestion de personas y colas, pero no la configuracion de la organizacion ni los ajustes de infraestructura.
-**Analiticas.** El grupo de analiticas esta planificado pero aun no disponible.`)
+**Insignias de estado.** El conteo de cada destino funciona tambien como senal de salud. Una insignia cambia a estilo de advertencia cuando algo necesita atencion, como claves faltantes o lineas telefonicas sin conectar.
+**Permisos.** Los destinos mostrados dependen del rol del voluntario. Los administradores ven todos los destinos. Los gestores ven la gestion de personas, colas, la lista de clientes y analiticas, pero no la configuracion de la organizacion ni los ajustes de infraestructura.
+**Analiticas.** El grupo de analiticas esta planificado pero aun no disponible, por lo que sus filas aparecen atenuadas y tocar una muestra un aviso.`)
 };
 
 /**

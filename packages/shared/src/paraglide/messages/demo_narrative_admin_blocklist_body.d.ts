@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "Phone numbers can be blocked from reaching the organization. Blocked numbers are rejected before a ticket is created." |
+* | "Phone numbers can be blocked from reaching the organization, and a blocked number is rejected before a ticket is created." |
 *
 * @param {Demo_Narrative_Admin_Blocklist_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

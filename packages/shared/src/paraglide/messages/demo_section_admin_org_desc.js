@@ -6,17 +6,17 @@ import { getLocale, experimentalStaticLocale } from '../runtime.js';
 /** @typedef {{}} Demo_Section_Admin_Org_DescInputs */
 
 const en_demo_section_admin_org_desc = /** @type {(inputs: Demo_Section_Admin_Org_DescInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`The organization page holds settings that shape the whole workspace. General info, branding, terminology, and note types are encrypted with the organization key before storage. Encryption key escrow and the data retention policy are also configured here.`)
+	return /** @type {LocalizedString} */ (`The organization page holds settings that shape the whole workspace. General info, branding, and terminology are encrypted with the organization key before storage. Encryption key escrow and the data retention policy come next, and the note types volunteers use on tickets are defined at the end of the page. A row of section buttons under the title jumps to any section.`)
 };
 
 const es_demo_section_admin_org_desc = /** @type {(inputs: Demo_Section_Admin_Org_DescInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`La pagina de organizacion contiene los ajustes que dan forma a todo el espacio de trabajo. La informacion general, la marca, la terminologia y los tipos de nota se cifran con la clave de la organizacion antes de almacenarse. El deposito de claves de cifrado y la politica de retencion de datos tambien se configuran aqui.`)
+	return /** @type {LocalizedString} */ (`La pagina de organizacion contiene los ajustes que dan forma a todo el espacio de trabajo. La informacion general, la marca y la terminologia se cifran con la clave de la organizacion antes de almacenarse. El deposito de claves de cifrado y la politica de retencion de datos vienen despues, y los tipos de nota que los voluntarios usan en los tickets se definen al final de la pagina. Una fila de botones de seccion debajo del titulo salta a cualquier seccion.`)
 };
 
 /**
 * | output |
 * | --- |
-* | "The organization page holds settings that shape the whole workspace. General info, branding, terminology, and note types are encrypted with the organization ..." |
+* | "The organization page holds settings that shape the whole workspace. General info, branding, and terminology are encrypted with the organization key before s..." |
 *
 * @param {Demo_Section_Admin_Org_DescInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

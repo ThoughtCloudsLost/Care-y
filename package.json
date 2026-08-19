@@ -23,6 +23,7 @@
     "test:down": "docker compose -f docker-compose.test.yml down",
     "test:down:clean": "docker compose -f docker-compose.test.yml down -v",
     "test:e2e": "playwright test",
+    "test:e2e:demo": "playwright test --config playwright.demo.config.ts",
     "test:e2e:coverage": "playwright test --project=chromium --project=onboarding-setup --project=onboarding --project=first-login",
     "test:e2e:seed": "docker compose exec -e SEED_ORG_SLUG=e2e-org app pnpm --filter @care-y/server exec tsx src/scripts/seed.ts",
     "coverage:merge": "node scripts/merge-coverage.mjs",

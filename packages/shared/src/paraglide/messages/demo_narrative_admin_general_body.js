@@ -6,17 +6,17 @@ import { getLocale, experimentalStaticLocale } from '../runtime.js';
 /** @typedef {{}} Demo_Narrative_Admin_General_BodyInputs */
 
 const en_demo_narrative_admin_general_body = /** @type {(inputs: Demo_Narrative_Admin_General_BodyInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Basic organization settings like the organization name and contact information. These fields are encrypted with the organization key before storage.`)
+	return /** @type {LocalizedString} */ (`The organization name, country, and default interface language are configured here, and each is encrypted with the organization key before storage.`)
 };
 
 const es_demo_narrative_admin_general_body = /** @type {(inputs: Demo_Narrative_Admin_General_BodyInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Ajustes basicos de la organizacion como el nombre y la informacion de contacto. Estos campos se cifran con la clave de la organizacion antes de almacenarse.`)
+	return /** @type {LocalizedString} */ (`El nombre de la organizacion, el pais y el idioma predeterminado de la interfaz se configuran aqui, y cada uno se cifra con la clave de la organizacion antes de almacenarse.`)
 };
 
 /**
 * | output |
 * | --- |
-* | "Basic organization settings like the organization name and contact information. These fields are encrypted with the organization key before storage." |
+* | "The organization name, country, and default interface language are configured here, and each is encrypted with the organization key before storage." |
 *
 * @param {Demo_Narrative_Admin_General_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

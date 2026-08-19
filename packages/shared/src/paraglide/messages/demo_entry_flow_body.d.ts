@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "Open the data flow panel from the top bar. Every interaction in the simulator shows its path through the screen, encryption, API, server, and database lanes...." |
+* | "Open the data flow panel from the top bar and every interaction in the simulator draws its path through the screen, encryption, API, server, and database lan..." |
 *
 * @param {Demo_Entry_Flow_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

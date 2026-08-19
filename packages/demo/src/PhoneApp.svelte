@@ -18,7 +18,7 @@
   and resolves the real detail ticket ID for the outer-page sentinel.
 -->
 <script lang="ts">
-  import { App } from "konsta/svelte";
+  import { App, Preloader } from "konsta/svelte";
   import { QueryClientProvider } from "@tanstack/svelte-query";
   import {
     registerDemoNavigationHandler,
@@ -30,7 +30,8 @@
   import DemoSplash from "$demo/DemoSplash.svelte";
   import LoginMount from "$demo/LoginMount.svelte";
   import RouteMount from "$demo/engine/RouteMount.svelte";
-  import { createDemoRouter } from "$demo/router.svelte.js";
+  import { createDemoRouter, featureForPathname } from "$demo/router.svelte.js";
+  import { page as demoPage } from "./stubs/app-state.svelte.js";
   import { createDemoQueryClient } from "$demo/demo-query-client.js";
   import { createDemoLocationStore } from "$demo/demo-location.svelte.js";
   import type { PhoneCommand } from "$demo/scroll-sections.js";
@@ -40,9 +41,10 @@
   import {
     demoSeed,
     ensureKeyed,
-    isLoginCryptoInFlight,
     setRoleAndPermissions,
+    replayDescramble,
   } from "$lib/crypto/context.js";
+  import { isPacedLoginInFlight } from "./stubs/login-crypto.js";
   import { RoleId, type RoleIdValue } from "@care-y/shared";
   import {
     classifyDemoLabel,
@@ -60,12 +62,15 @@
     buildTopicCandidates,
     buildActivationCandidates,
     findTopicElement,
+    findTopicElementBySelector,
     findClickableTarget,
+    isNavChrome,
     dismissOpenOverlays,
     waitForElement,
     renderPulseMarker,
     TAP_TOPICS,
   } from "$demo/tap-pulse.js";
+  import { recordPulseOutcome } from "$demo/pulse-log.js";
   import {
     DEMO_DETAIL_TICKET_ID,
     DEMO_DETAIL_ARTICLE_ID,
@@ -135,6 +140,12 @@
   // Resolved engine instance, captured for the role switcher handler.
   let resolvedEngine: DemoEngineResult | null = null;
 
+  // Count of in-flight login fast-forwards (leaving the login feature
+  // before the keys are derived). The preparing overlay renders while
+  // nonzero; its CSS reveal is delayed so the common instant
+  // resolution never flashes it.
+  let fastForwardPending = $state(0);
+
   // Current role of the signed-in demo user. Starts as ADMIN;
   // the role switcher mutates it in place.
   let currentRole: RoleIdValue = $state(RoleId.ADMIN);
@@ -188,6 +199,15 @@
       }
       resolvedEngine = e;
       engineReady = true;
+      // Eager keying: start the real derivation the moment the engine
+      // is up, so the first login-to-elsewhere fast-forward (and every
+      // queued decrypt) finds the worker already keyed instead of
+      // paying Argon2id at navigation time. The prewarm latch mounts
+      // this iframe roughly a viewport before the first clip, so the
+      // derivation spends itself against reading time. Failures are
+      // swallowed: ensureKeyed clears its cached promise on rejection
+      // and the fast-forward path retries.
+      void ensureKeyed().catch(() => undefined);
     })
     .catch(() => {
       // Boot failure already surfaced by phone-main.ts console.error.
@@ -264,13 +284,30 @@
   });
 
   // -----------------------------------------------------------------------
+  // Effective detail (desktop split view overlay)
+  // -----------------------------------------------------------------------
+
+  // At desktop width the client redirects /tickets/[id] to /tickets and
+  // carries the ticket in page.state.ticketId (shallow routing; see the
+  // client's tickets/[id] route). The router derives detail from the
+  // pathname alone, so without this overlay the bridge reports the
+  // split view as the bare list and the location store snaps a
+  // ticket-detail narration back to the tickets section.
+  const splitViewTicketId = $derived.by((): string | null => {
+    if (router.feature !== "tickets" || router.detail !== null) return null;
+    const id = demoPage.state.ticketId;
+    return typeof id === "string" && id !== "" ? id : null;
+  });
+  const effectiveDetail = $derived(router.detail ?? splitViewTicketId);
+
+  // -----------------------------------------------------------------------
   // Location store (canonical state owner)
   // -----------------------------------------------------------------------
 
   const store = createDemoLocationStore({
     getPhone: () => ({
       feature: router.feature,
-      detail: router.detail,
+      detail: effectiveDetail,
       searchOpen: router.searchOpen,
       loginStage,
       routeId: router.routeId,
@@ -285,7 +322,7 @@
   // never be dropped (there is no event to miss and no window to hit).
   $effect(() => {
     void router.feature;
-    void router.detail;
+    void effectiveDetail;
     void router.searchOpen;
     void loginStage;
     store.notePhoneChange();
@@ -333,7 +370,7 @@
       const target = event.target;
       if (!(target instanceof Element)) return;
 
-      const inDetail = router.detail !== null;
+      const inDetail = effectiveDetail !== null;
       const ctx = { inDetail, feature: router.feature };
 
       // Try aria-label first
@@ -453,12 +490,18 @@
       // reactive (the product guarantees key load precedes page mounts),
       // so a route mounted pre-keyed would stay scrambled forever.
       // Awaiting here restores the product's ordering guarantee.
+      // Eager keying usually makes this resolve instantly; when it
+      // does not (slow device, fast scroll past the prewarm lead),
+      // the pending counter reveals the preparing overlay.
+      fastForwardPending += 1;
       try {
         await ensureKeyed();
       } catch {
         // Engine still booting or a raced worker state: navigate anyway.
         // ensureKeyed clears its cached promise on rejection, so the
         // next transition (or the scripted login) retries derivation.
+      } finally {
+        fastForwardPending -= 1;
       }
       setDemoAuthed(true);
       setLoginStage(null);
@@ -514,7 +557,18 @@
       // is not ready yet when a detail navigation arrives, fall back
       // to the list rather than navigating to a dead ID.
       const targetDetail = sentinelToReal(cmd.detail, "null");
-      await internalNavigate(cmd.feature, targetDetail);
+      // Skip the navigation when the phone effectively shows the
+      // target already. This matters at desktop width: a ticket
+      // detail lives at /tickets with page.state.ticketId (split
+      // view), and re-navigating to /tickets/[id] replays the
+      // client's redirect on every sub selection.
+      const alreadyThere =
+        router.feature === cmd.feature &&
+        effectiveDetail === targetDetail &&
+        !router.searchOpen;
+      if (!alreadyThere) {
+        await internalNavigate(cmd.feature, targetDetail);
+      }
       if (cmd.loginTarget !== null) {
         await runAdvance(cmd.loginTarget, token);
       }
@@ -556,7 +610,7 @@
   function buildSnapshot(): DemoBridgeState {
     return {
       feature: router.feature,
-      detail: router.detail,
+      detail: effectiveDetail,
       searchOpen: router.searchOpen,
       topic: store.topic,
       loginStage,
@@ -729,7 +783,7 @@
     token: number,
   ): Promise<void> {
     const current = getLoginStage() ?? "form";
-    const decision = evaluateAdvance(current, target, isLoginCryptoInFlight());
+    const decision = evaluateAdvance(current, target, isPacedLoginInFlight());
     if (decision === "drop" || decision === "already") return;
     if (decision === "rewind") {
       resetLoginFlow();
@@ -841,7 +895,7 @@
 
     // Navigate if needed (normally a no-op: ensureScreen already
     // navigated before pulsing)
-    if (router.feature !== feature || router.detail !== resolvedDetail) {
+    if (router.feature !== feature || effectiveDetail !== resolvedDetail) {
       await internalNavigate(feature, resolvedDetail);
       // Wait a frame for the scene to mount
       await new Promise<void>((r) => {
@@ -864,7 +918,86 @@
       tap = false;
       el = findTopicElement(document, buildTopicCandidates(pulseTopic));
     }
-    if (el === null) return; // Element never appeared, skip silently
+
+    // Selector fallback: topics whose targets have no matchable label
+    if (el === null) {
+      const selectorEl = findTopicElementBySelector(document, pulseTopic);
+      if (selectorEl !== null) {
+        dismissOpenOverlays(selectorEl);
+        renderPulseMarker(selectorEl);
+        recordPulseOutcome(pulseTopic, "selector");
+
+        // decryption: replay the descramble animation while the marker
+        // sits on a DecryptPlaceholder. Clearing the pacing bridge's
+        // first-resolution cache and resetting queries causes every
+        // visible title to re-scramble and descramble.
+        if (pulseTopic === "decryption") {
+          replayDescramble();
+          await queryClient.resetQueries();
+        }
+
+        // Selector fallback never taps (the element is not a labeled control)
+        return;
+      }
+    }
+
+    // --- Special cases (topic-gated, before the standard flow) ---
+
+    // message-actions: the label (ticket_context_menu_title) only exists
+    // while the action sheet is open, so el is typically null here. Find
+    // a conversation bubble directly and dispatch the product's
+    // accessibility keyboard shortcut (Shift+F10) to open the menu.
+    if (pulseTopic === "message-actions") {
+      const bubble = document.querySelector<HTMLElement>(".fu-wrapper");
+      if (bubble !== null) {
+        dismissOpenOverlays(bubble);
+        renderPulseMarker(bubble);
+        recordPulseOutcome(pulseTopic, "tapped");
+        setTimeout(() => {
+          bubble.dispatchEvent(
+            new KeyboardEvent("keydown", {
+              key: "F10",
+              shiftKey: true,
+              bubbles: true,
+            }),
+          );
+        }, 250);
+      } else {
+        recordPulseOutcome(pulseTopic, "missing");
+      }
+      return;
+    }
+
+    // exposure-hints: two-stage click. The compose actions button matches
+    // el from the standard candidates. Click it, then wait for the SMS
+    // title list item and click it. The real exposure toast appears
+    // (ShellToast, role=status). SMS mode activates only when the visitor
+    // taps dismiss, so this mutates nothing.
+    if (pulseTopic === "exposure-hints" && el !== null) {
+      dismissOpenOverlays(el);
+      renderPulseMarker(el);
+      recordPulseOutcome(pulseTopic, "tapped");
+      const clickable = findClickableTarget(el);
+      if (clickable !== null) {
+        clickable.click();
+        const smsCandidates = buildTopicCandidates("exposure-hints");
+        const smsEl = await waitForElement(document, smsCandidates);
+        if (smsEl !== null) {
+          const smsClickable = findClickableTarget(smsEl);
+          if (smsClickable !== null) {
+            setTimeout(() => {
+              smsClickable.click();
+            }, 150);
+          }
+        }
+      }
+      return;
+    }
+
+    if (el === null) {
+      recordPulseOutcome(pulseTopic, "missing");
+      return;
+    }
 
     // Close whatever a previous activation opened, unless the target
     // lives inside that overlay.
@@ -872,13 +1005,38 @@
 
     renderPulseMarker(el);
 
+    // Never tap shell navigation: when only a nav-chrome element
+    // matched the label (findTopicElement's last resort), activating
+    // it would navigate away from the narrated screen.
+    if (tap && isNavChrome(el)) {
+      tap = false;
+    }
+
     if (tap) {
       const clickable = findClickableTarget(el);
-      // Let the marker paint first so the response reads as its effect
-      setTimeout(() => {
-        clickable?.click();
-      }, 150);
+      // An activation that would navigate to a DIFFERENT feature must
+      // not fire: the tap illustrates the narrated screen, and leaving
+      // it derails the shared location (at desktop width the dashboard
+      // KB heading is a link into the library, for example).
+      const anchor = clickable?.closest("a") ?? null;
+      const href = anchor?.getAttribute("href") ?? null;
+      if (href !== null) {
+        const destination = featureForPathname(
+          new URL(href, window.location.origin).pathname,
+        );
+        if (destination !== null && destination !== feature) {
+          tap = false;
+        }
+      }
+      if (tap) {
+        // Let the marker paint first so the response reads as its effect
+        setTimeout(() => {
+          clickable?.click();
+        }, 150);
+      }
     }
+
+    recordPulseOutcome(pulseTopic, tap ? "tapped" : "marked");
 
     // The language picker is a native select. Browsers only open its
     // dropdown from a user gesture: outer-page clicks count as
@@ -929,6 +1087,16 @@
         </AppShell>
       {/if}
     </App>
+    {#if fastForwardPending > 0}
+      <!-- Shown while a jump past the login scene waits on engine
+           boot + key derivation. The reveal is delayed via CSS so the
+           usual instant fast-forward (eager keying already done)
+           never flashes it. -->
+      <div class="fast-forward-overlay" role="status">
+        <Preloader class="w-8 h-8" />
+        <span>{m.demo_preparing()}</span>
+      </div>
+    {/if}
     <DemoSplash dismissed={splashDismissed} />
   </QueryClientProvider>
 </div>
@@ -936,6 +1104,41 @@
 <style>
   .phone-app {
     height: 100dvh;
+  }
+
+  /* Covers the phone screen while a fast-forward waits on the engine
+     and key derivation. Fixed inside the iframe, so it spans exactly
+     the phone viewport. Sits under the splash (phone.html sets the
+     splash z-index higher) and above the app content. */
+  .fast-forward-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 40;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 0.75rem;
+    padding: 1.5rem;
+    text-align: center;
+    font-size: 0.875rem;
+    color: #444;
+    background: rgb(255 255 255 / 0.88);
+    backdrop-filter: blur(4px);
+    /* Delayed reveal: instant fast-forwards never show it. */
+    opacity: 0;
+    animation: fast-forward-reveal 200ms ease 300ms forwards;
+  }
+
+  :global(.dark) .fast-forward-overlay {
+    color: #ccc;
+    background: rgb(10 10 10 / 0.82);
+  }
+
+  @keyframes fast-forward-reveal {
+    to {
+      opacity: 1;
+    }
   }
 
   /* Mirror the client root layout (+layout.svelte lines 84-105).

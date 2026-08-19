@@ -301,6 +301,64 @@ export const BALANCE_RATIO = 0.6;
  */
 export const MAX_MEASURE = 620;
 
+// -----------------------------------------------------------------------
+// Full-bleed frame: scroll-invariant hole
+// -----------------------------------------------------------------------
+
+/**
+ * Visible-gap threshold in px for full-bleed detection. Three sub-body
+ * lines (3 x 24px): a gap under this shows at most two full text
+ * lines, and a two-line sliver above or below the frame is not worth
+ * the per-scroll reflow it costs. Three or more visible lines is real
+ * reading room, so the normal moving hole takes over.
+ */
+export const FULL_BLEED_SLIVER = 72;
+
+/**
+ * Vertical extent the hole is stretched to in full-bleed mode. Far
+ * beyond any real flow height, small enough that rounding and
+ * arithmetic on the edges stay exact integers.
+ */
+export const FULL_BLEED_EXTENT = 1e7;
+
+/**
+ * When the frame covers (nearly) the full usable viewport height,
+ * stretch the hole to a vast vertical span so it stops depending on
+ * scrollY. The frame is viewport-fixed, so only the hole's top and
+ * bottom edges move during scroll; with both pushed out of reach the
+ * layout becomes scroll-invariant and the flanking text columns hold
+ * still instead of re-wrapping around the sweeping hole edges.
+ *
+ * `gapAbove` / `gapBelow` are the visible viewport gaps between the
+ * padded hole and the usable viewport edges (below the top chrome,
+ * above the window bottom). Both must be under FULL_BLEED_SLIVER.
+ *
+ * Only engages when at least one flanking column clears MIN_SEGMENT:
+ * with no viable side, the layout's "jump below the hole" fallback
+ * would push all text below the stretched bottom edge.
+ */
+export function extendHoleForFullBleed(
+  hole: FlowHole,
+  gapAbove: number,
+  gapBelow: number,
+  containerWidth: number,
+): FlowHole {
+  if (gapAbove >= FULL_BLEED_SLIVER || gapBelow >= FULL_BLEED_SLIVER) {
+    return hole;
+  }
+
+  const leftWidth = hole.left - HOLE_GAP;
+  const rightWidth = containerWidth - (hole.right + HOLE_GAP);
+  if (Math.max(leftWidth, rightWidth) < MIN_SEGMENT) return hole;
+
+  return {
+    left: hole.left,
+    right: hole.right,
+    top: -FULL_BLEED_EXTENT,
+    bottom: FULL_BLEED_EXTENT,
+  };
+}
+
 export interface Segment {
   readonly x: number;
   readonly width: number;

@@ -6,17 +6,17 @@ import { getLocale, experimentalStaticLocale } from '../runtime.js';
 /** @typedef {{}} Demo_Entry_Roles_BodyInputs */
 
 const en_demo_entry_roles_body = /** @type {(inputs: Demo_Entry_Roles_BodyInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`The three user icons on the left side switch between Admin, Manager, and Volunteer accounts. Permission enforcement is real server middleware running in your browser. Switching users changes what every screen shows and what actions are available.`)
+	return /** @type {LocalizedString} */ (`The three user icons on the left side switch between Admin, Manager, and Volunteer accounts, and switching changes what every screen shows and what actions are available. The permission enforcement behind this is real server middleware running in your browser.`)
 };
 
 const es_demo_entry_roles_body = /** @type {(inputs: Demo_Entry_Roles_BodyInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Los tres iconos de usuario en el lado izquierdo alternan entre cuentas de Administrador, Gestor y Voluntario. La aplicacion de permisos es middleware de servidor real ejecutandose en tu navegador. Cambiar de usuario modifica lo que muestra cada pantalla y las acciones disponibles.`)
+	return /** @type {LocalizedString} */ (`Los tres iconos de usuario en el lado izquierdo alternan entre cuentas de Administrador, Gestor y Voluntario, y cambiar de usuario modifica lo que muestra cada pantalla y las acciones disponibles. La aplicacion de permisos detras de esto es middleware de servidor real ejecutandose en tu navegador.`)
 };
 
 /**
 * | output |
 * | --- |
-* | "The three user icons on the left side switch between Admin, Manager, and Volunteer accounts. Permission enforcement is real server middleware running in your..." |
+* | "The three user icons on the left side switch between Admin, Manager, and Volunteer accounts, and switching changes what every screen shows and what actions a..." |
 *
 * @param {Demo_Entry_Roles_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

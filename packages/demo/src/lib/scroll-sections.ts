@@ -125,18 +125,19 @@ export const SECTIONS: readonly Section[] = [
         headingKey: "demo_narrative_topic_twofa_heading",
         bodyKey: "demo_narrative_topic_twofa_body",
       },
-      // One sub per 2FA method, in the phone picker's order
-      {
-        slug: "totp",
-        topic: "twofa-totp",
-        headingKey: "demo_narrative_topic_twofa_totp_heading",
-        bodyKey: "demo_narrative_topic_twofa_totp_body",
-      },
+      // One sub per 2FA method, in the seed's enrolled method insert
+      // order (webauthn first)
       {
         slug: "passkey",
         topic: "twofa-passkey",
         headingKey: "demo_narrative_topic_twofa_passkey_heading",
         bodyKey: "demo_narrative_topic_twofa_passkey_body",
+      },
+      {
+        slug: "totp",
+        topic: "twofa-totp",
+        headingKey: "demo_narrative_topic_twofa_totp_heading",
+        bodyKey: "demo_narrative_topic_twofa_totp_body",
       },
       {
         slug: "email",
@@ -177,6 +178,18 @@ export const SECTIONS: readonly Section[] = [
     routes: SECTION_ROUTES.dashboard,
     subs: [
       {
+        slug: "view-switcher",
+        topic: "dashboard-view-switcher",
+        headingKey: "demo_narrative_dashboard_view_switcher_heading",
+        bodyKey: "demo_narrative_dashboard_view_switcher_body",
+      },
+      {
+        slug: "getting-started",
+        topic: "dashboard-getting-started",
+        headingKey: "demo_narrative_dashboard_getting_started_heading",
+        bodyKey: "demo_narrative_dashboard_getting_started_body",
+      },
+      {
         slug: "shift",
         topic: "dashboard-shift",
         headingKey: "demo_narrative_dashboard_shift_heading",
@@ -199,12 +212,6 @@ export const SECTIONS: readonly Section[] = [
         topic: "dashboard-kb",
         headingKey: "demo_narrative_dashboard_kb_heading",
         bodyKey: "demo_narrative_dashboard_kb_body",
-      },
-      {
-        slug: "view-switcher",
-        topic: "dashboard-view-switcher",
-        headingKey: "demo_narrative_dashboard_view_switcher_heading",
-        bodyKey: "demo_narrative_dashboard_view_switcher_body",
       },
       {
         slug: "needs-attention",
@@ -245,22 +252,10 @@ export const SECTIONS: readonly Section[] = [
     routes: SECTION_ROUTES.tickets,
     subs: [
       {
-        slug: "sort",
-        topic: "sort",
-        headingKey: "demo_narrative_topic_sort_heading",
-        bodyKey: "demo_narrative_topic_sort_body",
-      },
-      {
-        slug: "filters",
-        topic: "filters",
-        headingKey: "demo_narrative_topic_filters_heading",
-        bodyKey: "demo_narrative_topic_filters_body",
-      },
-      {
-        slug: "saved-filters",
-        topic: "saved-filters",
-        headingKey: "demo_narrative_topic_saved_filters_heading",
-        bodyKey: "demo_narrative_topic_saved_filters_body",
+        slug: "decryption",
+        topic: "decryption",
+        headingKey: "demo_narrative_topic_decryption_heading",
+        bodyKey: "demo_narrative_topic_decryption_body",
       },
       {
         slug: "view-modes",
@@ -269,16 +264,40 @@ export const SECTIONS: readonly Section[] = [
         bodyKey: "demo_narrative_topic_view_modes_body",
       },
       {
+        slug: "stats",
+        topic: "list-stats",
+        headingKey: "demo_narrative_topic_list_stats_heading",
+        bodyKey: "demo_narrative_topic_list_stats_body",
+      },
+      {
+        slug: "sort",
+        topic: "sort",
+        headingKey: "demo_narrative_topic_sort_heading",
+        bodyKey: "demo_narrative_topic_sort_body",
+      },
+      {
         slug: "select-mode",
         topic: "select-mode",
         headingKey: "demo_narrative_topic_select_mode_heading",
         bodyKey: "demo_narrative_topic_select_mode_body",
       },
       {
-        slug: "quick-actions",
-        topic: "quick-actions",
-        headingKey: "demo_narrative_topic_quick_actions_heading",
-        bodyKey: "demo_narrative_topic_quick_actions_body",
+        slug: "page-search",
+        topic: "page-search",
+        headingKey: "demo_narrative_topic_list_search_heading",
+        bodyKey: "demo_narrative_topic_list_search_body",
+      },
+      {
+        slug: "saved-filters",
+        topic: "saved-filters",
+        headingKey: "demo_narrative_topic_saved_filters_heading",
+        bodyKey: "demo_narrative_topic_saved_filters_body",
+      },
+      {
+        slug: "filters",
+        topic: "filters",
+        headingKey: "demo_narrative_topic_filters_heading",
+        bodyKey: "demo_narrative_topic_filters_body",
       },
       {
         slug: "unread-badges",
@@ -287,10 +306,10 @@ export const SECTIONS: readonly Section[] = [
         bodyKey: "demo_narrative_topic_unread_badges_body",
       },
       {
-        slug: "decryption",
-        topic: "decryption",
-        headingKey: "demo_narrative_topic_decryption_heading",
-        bodyKey: "demo_narrative_topic_decryption_body",
+        slug: "quick-actions",
+        topic: "quick-actions",
+        headingKey: "demo_narrative_topic_quick_actions_heading",
+        bodyKey: "demo_narrative_topic_quick_actions_body",
       },
       {
         slug: "new-ticket",
@@ -319,10 +338,10 @@ export const SECTIONS: readonly Section[] = [
         bodyKey: "demo_narrative_topic_case_header_body",
       },
       {
-        slug: "conversation",
-        topic: "conversation",
-        headingKey: "demo_narrative_topic_conversation_heading",
-        bodyKey: "demo_narrative_topic_conversation_body",
+        slug: "timeline",
+        topic: "timeline",
+        headingKey: "demo_narrative_topic_timeline_heading",
+        bodyKey: "demo_narrative_topic_timeline_body",
       },
       {
         slug: "thread-filters",
@@ -331,16 +350,22 @@ export const SECTIONS: readonly Section[] = [
         bodyKey: "demo_narrative_topic_thread_filters_body",
       },
       {
-        slug: "compose-actions",
-        topic: "compose-actions",
-        headingKey: "demo_narrative_topic_compose_actions_heading",
-        bodyKey: "demo_narrative_topic_compose_actions_body",
+        slug: "deep-search",
+        topic: "deep-search",
+        headingKey: "demo_narrative_topic_deep_search_heading",
+        bodyKey: "demo_narrative_topic_deep_search_body",
       },
       {
-        slug: "reply",
-        topic: "reply",
-        headingKey: "demo_narrative_topic_reply_heading",
-        bodyKey: "demo_narrative_topic_reply_body",
+        slug: "conversation",
+        topic: "conversation",
+        headingKey: "demo_narrative_topic_conversation_heading",
+        bodyKey: "demo_narrative_topic_conversation_body",
+      },
+      {
+        slug: "thread-anatomy",
+        topic: "thread-anatomy",
+        headingKey: "demo_narrative_topic_thread_anatomy_heading",
+        bodyKey: "demo_narrative_topic_thread_anatomy_body",
       },
       {
         slug: "notes",
@@ -355,16 +380,28 @@ export const SECTIONS: readonly Section[] = [
         bodyKey: "demo_narrative_topic_case_fold_body",
       },
       {
-        slug: "timeline",
-        topic: "timeline",
-        headingKey: "demo_narrative_topic_timeline_heading",
-        bodyKey: "demo_narrative_topic_timeline_body",
+        slug: "case-panel",
+        topic: "case-panel",
+        headingKey: "demo_narrative_topic_case_panel_heading",
+        bodyKey: "demo_narrative_topic_case_panel_body",
       },
       {
-        slug: "deep-search",
-        topic: "deep-search",
-        headingKey: "demo_narrative_topic_deep_search_heading",
-        bodyKey: "demo_narrative_topic_deep_search_body",
+        slug: "compose-actions",
+        topic: "compose-actions",
+        headingKey: "demo_narrative_topic_compose_actions_heading",
+        bodyKey: "demo_narrative_topic_compose_actions_body",
+      },
+      {
+        slug: "reply",
+        topic: "reply",
+        headingKey: "demo_narrative_topic_reply_heading",
+        bodyKey: "demo_narrative_topic_reply_body",
+      },
+      {
+        slug: "message-select",
+        topic: "message-select",
+        headingKey: "demo_narrative_topic_message_select_heading",
+        bodyKey: "demo_narrative_topic_message_select_body",
       },
       {
         slug: "message-actions",
@@ -373,16 +410,16 @@ export const SECTIONS: readonly Section[] = [
         bodyKey: "demo_narrative_topic_message_actions_body",
       },
       {
-        slug: "close-reopen",
-        topic: "close-reopen",
-        headingKey: "demo_narrative_topic_close_reopen_heading",
-        bodyKey: "demo_narrative_topic_close_reopen_body",
-      },
-      {
         slug: "exposure-hints",
         topic: "exposure-hints",
         headingKey: "demo_narrative_topic_exposure_hints_heading",
         bodyKey: "demo_narrative_topic_exposure_hints_body",
+      },
+      {
+        slug: "close-reopen",
+        topic: "close-reopen",
+        headingKey: "demo_narrative_topic_close_reopen_heading",
+        bodyKey: "demo_narrative_topic_close_reopen_body",
       },
     ],
   },
@@ -393,16 +430,22 @@ export const SECTIONS: readonly Section[] = [
     routes: SECTION_ROUTES.search,
     subs: [
       {
-        slug: "how-it-works",
+        slug: "overlay",
         topic: null,
-        headingKey: "demo_narrative_search_how_heading",
-        bodyKey: "demo_narrative_search_how_body",
+        headingKey: "demo_narrative_search_overlay_heading",
+        bodyKey: "demo_narrative_search_overlay_body",
       },
       {
         slug: "entities",
         topic: null,
         headingKey: "demo_narrative_search_entities_heading",
         bodyKey: "demo_narrative_search_entities_body",
+      },
+      {
+        slug: "how-it-works",
+        topic: null,
+        headingKey: "demo_narrative_search_how_heading",
+        bodyKey: "demo_narrative_search_how_body",
       },
     ],
   },
@@ -419,23 +462,10 @@ export const SECTIONS: readonly Section[] = [
         bodyKey: "demo_narrative_library_browse_body",
       },
       {
-        slug: "detail",
-        topic: null,
-        headingKey: "demo_narrative_library_detail_heading",
-        bodyKey: "demo_narrative_library_detail_body",
-      },
-      {
-        slug: "attachments",
-        topic: null,
-        headingKey: "demo_narrative_library_attachments_heading",
-        bodyKey: "demo_narrative_library_attachments_body",
-      },
-      {
-        slug: "vote",
-        topic: "library-vote",
-        headingKey: "demo_narrative_topic_library_vote_heading",
-        bodyKey: "demo_narrative_topic_library_vote_body",
-        routes: SUB_ROUTES["library/vote"],
+        slug: "tools",
+        topic: "library-tools",
+        headingKey: "demo_narrative_topic_library_tools_heading",
+        bodyKey: "demo_narrative_topic_library_tools_body",
       },
       {
         slug: "search",
@@ -455,6 +485,25 @@ export const SECTIONS: readonly Section[] = [
         headingKey: "demo_narrative_topic_library_editor_heading",
         bodyKey: "demo_narrative_topic_library_editor_body",
         routes: SUB_ROUTES["library/editor"],
+      },
+      {
+        slug: "detail",
+        topic: null,
+        headingKey: "demo_narrative_library_detail_heading",
+        bodyKey: "demo_narrative_library_detail_body",
+      },
+      {
+        slug: "attachments",
+        topic: null,
+        headingKey: "demo_narrative_library_attachments_heading",
+        bodyKey: "demo_narrative_library_attachments_body",
+      },
+      {
+        slug: "vote",
+        topic: "library-vote",
+        headingKey: "demo_narrative_topic_library_vote_heading",
+        bodyKey: "demo_narrative_topic_library_vote_body",
+        routes: SUB_ROUTES["library/vote"],
       },
     ],
   },
@@ -485,6 +534,12 @@ export const SECTIONS: readonly Section[] = [
         bodyKey: "demo_narrative_admin_people_body",
       },
       {
+        slug: "roster-tools",
+        topic: "admin-roster-tools",
+        headingKey: "demo_narrative_admin_roster_tools_heading",
+        bodyKey: "demo_narrative_admin_roster_tools_body",
+      },
+      {
         slug: "queues",
         topic: "admin-queues",
         headingKey: "demo_narrative_admin_queues_heading",
@@ -496,6 +551,18 @@ export const SECTIONS: readonly Section[] = [
         headingKey: "demo_narrative_admin_clients_heading",
         bodyKey: "demo_narrative_admin_clients_body",
       },
+      {
+        slug: "client-merge",
+        topic: "admin-client-merge",
+        headingKey: "demo_narrative_admin_client_merge_heading",
+        bodyKey: "demo_narrative_admin_client_merge_body",
+      },
+      {
+        slug: "roles",
+        topic: "admin-roles",
+        headingKey: "demo_narrative_admin_roles_heading",
+        bodyKey: "demo_narrative_admin_roles_body",
+      },
     ],
   },
   {
@@ -504,6 +571,12 @@ export const SECTIONS: readonly Section[] = [
     descKey: "demo_section_admin_comms_desc",
     routes: SECTION_ROUTES["admin-comms"],
     subs: [
+      {
+        slug: "provider",
+        topic: "admin-telephony-provider",
+        headingKey: "demo_narrative_admin_telephony_provider_heading",
+        bodyKey: "demo_narrative_admin_telephony_provider_body",
+      },
       {
         slug: "phone-lines",
         topic: "admin-phone-lines",
@@ -561,12 +634,6 @@ export const SECTIONS: readonly Section[] = [
         bodyKey: "demo_narrative_admin_terminology_body",
       },
       {
-        slug: "note-types",
-        topic: "admin-note-types",
-        headingKey: "demo_narrative_admin_note_types_heading",
-        bodyKey: "demo_narrative_admin_note_types_body",
-      },
-      {
         slug: "keys",
         topic: "admin-keys",
         headingKey: "demo_narrative_admin_keys_heading",
@@ -577,6 +644,12 @@ export const SECTIONS: readonly Section[] = [
         topic: "admin-retention",
         headingKey: "demo_narrative_admin_retention_heading",
         bodyKey: "demo_narrative_admin_retention_body",
+      },
+      {
+        slug: "note-types",
+        topic: "admin-note-types",
+        headingKey: "demo_narrative_admin_note_types_heading",
+        bodyKey: "demo_narrative_admin_note_types_body",
       },
     ],
   },
@@ -613,16 +686,16 @@ export const SECTIONS: readonly Section[] = [
         bodyKey: "demo_narrative_settings_password_body",
       },
       {
-        slug: "two-factor",
-        topic: "settings-2fa",
-        headingKey: "demo_narrative_settings_twofa_heading",
-        bodyKey: "demo_narrative_settings_twofa_body",
-      },
-      {
         slug: "appearance",
         topic: "settings-appearance",
         headingKey: "demo_narrative_settings_appearance_heading",
         bodyKey: "demo_narrative_settings_appearance_body",
+      },
+      {
+        slug: "two-factor",
+        topic: "settings-2fa",
+        headingKey: "demo_narrative_settings_twofa_heading",
+        bodyKey: "demo_narrative_settings_twofa_body",
       },
       {
         slug: "security",
@@ -981,7 +1054,11 @@ export function resolvePhoneCommand(
       };
     case "library": {
       let libraryDetail: string | null = null;
-      if (subSlug === "vote") {
+      if (
+        subSlug === "vote" ||
+        subSlug === "detail" ||
+        subSlug === "attachments"
+      ) {
         libraryDetail = articleDetailId;
       } else if (subSlug === "editor") {
         libraryDetail = "new";
@@ -1007,7 +1084,7 @@ export function resolvePhoneCommand(
     case "admin-people":
       return {
         feature: "admin",
-        detail: "people",
+        detail: subSlug === "roles" ? "manager" : "people",
         loginTarget: null,
         openSearch: false,
         pulseTopic,
@@ -1162,7 +1239,7 @@ export function bridgeStateToLocation(
   }
 
   if (searchOpen) {
-    return { sectionId: "search", subSlug: "intro" };
+    return { sectionId: "search", subSlug: "overlay" };
   }
 
   if (feature === "login") {
@@ -1177,25 +1254,34 @@ export function bridgeStateToLocation(
   }
 
   if (feature === "home") {
-    return { sectionId: "dashboard", subSlug: "intro" };
+    return { sectionId: "dashboard", subSlug: "view-switcher" };
   }
 
   if (feature === "library") {
-    return { sectionId: "library", subSlug: "intro" };
+    if (detail === "new") {
+      return { sectionId: "library", subSlug: "editor" };
+    }
+    if (detail !== null) {
+      return { sectionId: "library", subSlug: "detail" };
+    }
+    return { sectionId: "library", subSlug: "browse" };
   }
 
   if (feature === "admin") {
     // When arriving at an admin sub-page without a topic, map the
     // detail to the section that narrates it. The first sub is selected
     // so the page highlights the card for the screen's landing state.
-    if (detail === "people" || detail === "manager" || detail === "volunteer") {
+    if (detail === "manager" || detail === "volunteer") {
+      return { sectionId: "admin-people", subSlug: "roles" };
+    }
+    if (detail === "people") {
       return { sectionId: "admin-people", subSlug: "people" };
     }
     if (detail === "organization") {
       return { sectionId: "admin-org", subSlug: "general" };
     }
     if (detail === "communications") {
-      return { sectionId: "admin-comms", subSlug: "phone-lines" };
+      return { sectionId: "admin-comms", subSlug: "provider" };
     }
     return { sectionId: "admin", subSlug: "hub" };
   }
@@ -1205,7 +1291,7 @@ export function bridgeStateToLocation(
   }
 
   if (feature === "settings") {
-    return { sectionId: "settings", subSlug: "intro" };
+    return { sectionId: "settings", subSlug: "identity" };
   }
 
   // Feature "other" means the phone is on a route the manifest knows

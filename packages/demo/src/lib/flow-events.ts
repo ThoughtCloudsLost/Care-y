@@ -51,6 +51,86 @@ export function flowNow(): number {
 }
 
 // -----------------------------------------------------------------------
+// Recording mode
+// -----------------------------------------------------------------------
+
+/**
+ * A captured flow event, stripped of ids and interaction grouping, which
+ * are meaningless outside the interaction context that produced them.
+ * Carries enough to replay through the normal emit path later.
+ */
+export interface RecordedFlowEvent {
+  readonly lane: FlowLane;
+  readonly direction: FlowDirection;
+  readonly label: string;
+  readonly seamKey: DemoSeamKey | null;
+  readonly payloadPreview: string | null;
+  readonly durationMs: number | null;
+}
+
+let recording: RecordedFlowEvent[] | null = null;
+
+/**
+ * Start recording mode. While active, emitFlowEvent diverts events into
+ * an internal buffer instead of delivering them to listeners. Id and
+ * interaction grouping state still advances (callers that destructure
+ * the return value keep working), but listener callbacks are skipped
+ * and thunks are resolved eagerly so the recording captures labels.
+ *
+ * Only one recording can be active at a time; starting a second throws.
+ */
+export function startFlowRecording(): void {
+  if (recording !== null) {
+    throw new FlowRecordingError("A recording is already in progress");
+  }
+  recording = [];
+}
+
+/**
+ * Stop recording mode and return the captured events. Returns an empty
+ * array if no events were captured. Throws if no recording is active.
+ */
+export function stopFlowRecording(): RecordedFlowEvent[] {
+  if (recording === null) {
+    throw new FlowRecordingError("No recording is in progress");
+  }
+  const captured = recording;
+  recording = null;
+  return captured;
+}
+
+/** Whether recording mode is currently active. */
+export function isFlowRecording(): boolean {
+  return recording !== null;
+}
+
+class FlowRecordingError extends Error {
+  override readonly name = "FlowRecordingError";
+}
+
+/**
+ * Replay previously recorded events through the normal emit path.
+ * Each event is emitted with the given seamKey and inherits the
+ * current interaction grouping context so the band attributes it to
+ * the active scene interaction.
+ */
+export function replayRecordedEvents(
+  events: readonly RecordedFlowEvent[],
+  seamKey: DemoSeamKey,
+): void {
+  for (const event of events) {
+    emitFlowEvent({
+      lane: event.lane,
+      direction: event.direction,
+      label: event.label,
+      seamKey,
+      payloadPreview: event.payloadPreview,
+      durationMs: event.durationMs,
+    });
+  }
+}
+
+// -----------------------------------------------------------------------
 // Bus state
 // -----------------------------------------------------------------------
 
@@ -145,12 +225,49 @@ function resolveField(field: string | (() => string)): string {
  * attached the id/grouping bookkeeping still advances so late subscribers
  * see a consistent id sequence, but the event object itself is not
  * allocated and thunks are not resolved.
+ *
+ * When recording mode is active, events are captured into the recording
+ * buffer with thunks resolved, but listeners are not called. Id and
+ * grouping state still advance.
  */
 export function emitFlowEvent(input: FlowEventInput): DemoFlowEvent {
   const at = input.at ?? flowNow();
   const grouped = resolveInteractionId(at);
   const id = nextEventId;
   nextEventId += 1;
+
+  // Recording mode: capture the event and skip listener delivery.
+  // Thunks are resolved so the recording stores concrete labels.
+  if (recording !== null) {
+    const rawPreview = input.payloadPreview;
+    const resolvedPreview =
+      rawPreview === undefined || rawPreview === null
+        ? null
+        : typeof rawPreview === "function"
+          ? truncateFlowPreview(rawPreview())
+          : truncateFlowPreview(rawPreview);
+
+    const resolvedLabel = resolveField(input.label);
+    recording.push({
+      lane: input.lane,
+      direction: input.direction,
+      label: resolvedLabel,
+      seamKey: input.seamKey ?? null,
+      payloadPreview: resolvedPreview,
+      durationMs: input.durationMs ?? null,
+    });
+
+    return {
+      id,
+      interactionId: input.interactionId ?? grouped,
+      lane: input.lane,
+      direction: input.direction,
+      label: resolvedLabel,
+      seamKey: input.seamKey ?? null,
+      payloadPreview: resolvedPreview,
+      durationMs: input.durationMs ?? null,
+    };
+  }
 
   // No listeners: skip event construction entirely. Id and grouping
   // state have already advanced. subscribeFlowEvents does not replay,
@@ -224,7 +341,7 @@ export async function traceFlowSpan<T>(
   spec: FlowSpanSpec,
   run: () => Promise<T>,
 ): Promise<T> {
-  if (listeners.length === 0) {
+  if (listeners.length === 0 && recording === null) {
     // Advance ids/grouping but skip timing and allocation.
     const { interactionId } = emitFlowEvent({
       lane: spec.lane,
@@ -304,7 +421,7 @@ export async function traceFlowLocal<T>(
   spec: FlowLocalSpec,
   run: () => Promise<T>,
 ): Promise<T> {
-  if (listeners.length === 0) {
+  if (listeners.length === 0 && recording === null) {
     const interactionId = currentFlowInteractionId();
     try {
       const result = await run();
@@ -370,13 +487,15 @@ export function subscribeFlowEvents(listener: DemoFlowListener): () => void {
 }
 
 /**
- * Clear the bus: ids, grouping state, listeners, and the clock. The
- * demo's own restart is an iframe reload, so this exists for tests.
+ * Clear the bus: ids, grouping state, listeners, recording, and the
+ * clock. The demo's own restart is an iframe reload, so this exists
+ * for tests.
  */
 export function resetFlowEvents(): void {
   listeners.length = 0;
   nextEventId = 1;
   currentInteractionId = 1;
   lastEventAt = null;
+  recording = null;
   clock = defaultNow;
 }

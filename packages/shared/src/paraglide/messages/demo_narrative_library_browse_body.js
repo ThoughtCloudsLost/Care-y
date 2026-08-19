@@ -6,19 +6,19 @@ import { getLocale, experimentalStaticLocale } from '../runtime.js';
 /** @typedef {{}} Demo_Narrative_Library_Browse_BodyInputs */
 
 const en_demo_narrative_library_browse_body = /** @type {(inputs: Demo_Narrative_Library_Browse_BodyInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`The library lists all published articles grouped by category. Each article shows a decrypted title and excerpt. Tapping an article opens the full detail view with the complete body text, file attachments, and voting controls.
+	return /** @type {LocalizedString} */ (`The library lists all published articles grouped by category. Each article shows a decrypted title and excerpt, and both land scrambled and resolve into readable text as the browser decrypts them with the organization key, the same visible decryption as the ticket list. Tapping an article opens the full detail view with the complete body text, file attachments, and voting controls.
 **Desktop split view.** On wider screens, the article list and detail view sit side by side, similar to the ticket list split view.`)
 };
 
 const es_demo_narrative_library_browse_body = /** @type {(inputs: Demo_Narrative_Library_Browse_BodyInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`La biblioteca lista todos los articulos publicados agrupados por categoria. Cada articulo muestra un titulo y extracto descifrados. Tocar un articulo abre la vista detallada completa con el texto integro, adjuntos de archivos y controles de votacion.
+	return /** @type {LocalizedString} */ (`La biblioteca lista todos los articulos publicados agrupados por categoria. Cada articulo muestra un titulo y extracto descifrados, y ambos llegan desordenados y se resuelven en texto legible a medida que el navegador los descifra con la clave de la organizacion, el mismo descifrado visible que en la lista de tickets. Tocar un articulo abre la vista detallada completa con el texto integro, adjuntos de archivos y controles de votacion.
 **Vista dividida en escritorio.** En pantallas mas anchas, la lista de articulos y la vista detallada se colocan lado a lado, similar a la vista dividida de la lista de tickets.`)
 };
 
 /**
 * | output |
 * | --- |
-* | "The library lists all published articles grouped by category. Each article shows a decrypted title and excerpt. Tapping an article opens the full detail view..." |
+* | "The library lists all published articles grouped by category. Each article shows a decrypted title and excerpt, and both land scrambled and resolve into read..." |
 *
 * @param {Demo_Narrative_Library_Browse_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

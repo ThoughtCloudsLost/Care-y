@@ -34,15 +34,14 @@ describe("buildClipUrl", () => {
 // -----------------------------------------------------------------------
 
 describe("hasClip", () => {
-  it("returns true for a narrated section sub", () => {
-    expect(hasClip("login" as SectionId, "credentials")).toBe(true);
-  });
-
-  it("returns true for subs across all narrated sections", () => {
-    // Spot check several sections
-    expect(hasClip("dashboard" as SectionId, "queues")).toBe(true);
-    expect(hasClip("tickets" as SectionId, "sort")).toBe(true);
-    expect(hasClip("settings" as SectionId, "intro")).toBe(true);
+  // CLIPS_ENABLED is false until clip assets exist on disk, so hasClip
+  // reports false for every sub, narrated or not. When the switch
+  // flips, restore positive assertions for narrated subs here
+  // (e.g. login/credentials, dashboard/queues, tickets/sort).
+  it("returns false for narrated subs while clips are disabled", () => {
+    expect(hasClip("login" as SectionId, "credentials")).toBe(false);
+    expect(hasClip("dashboard" as SectionId, "queues")).toBe(false);
+    expect(hasClip("tickets" as SectionId, "sort")).toBe(false);
   });
 
   it("returns false for a non-narrated section", () => {

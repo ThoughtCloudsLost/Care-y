@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "The three user icons on the left side switch between Admin, Manager, and Volunteer accounts. Permission enforcement is real server middleware running in your..." |
+* | "The three user icons on the left side switch between Admin, Manager, and Volunteer accounts, and switching changes what every screen shows and what actions a..." |
 *
 * @param {Demo_Entry_Roles_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

@@ -6,11 +6,11 @@ import { getLocale, experimentalStaticLocale } from '../runtime.js';
 /** @typedef {{}} Demo_Section_Admin_Comms_DescInputs */
 
 const en_demo_section_admin_comms_desc = /** @type {(inputs: Demo_Section_Admin_Comms_DescInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`The communications page configures how the organization talks to clients by phone and text. It covers phone lines and their greetings, SMS templates, the blocklist, and the voicemail quarantine where recordings from unknown callers wait for review.`)
+	return /** @type {LocalizedString} */ (`The communications page configures how the organization talks to clients by phone and text. It covers phone lines and their greetings, SMS templates, the blocklist, and the voicemail quarantine where recordings from unknown callers wait for review. A row of section buttons under the title jumps to any of them.`)
 };
 
 const es_demo_section_admin_comms_desc = /** @type {(inputs: Demo_Section_Admin_Comms_DescInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`La pagina de comunicaciones configura como la organizacion se comunica con los clientes por telefono y mensajes de texto. Cubre las lineas telefonicas y sus saludos, las plantillas de SMS, la lista de bloqueo y la cuarentena de mensajes de voz donde las grabaciones de llamantes desconocidos esperan revision.`)
+	return /** @type {LocalizedString} */ (`La pagina de comunicaciones configura como la organizacion se comunica con los clientes por telefono y mensajes de texto. Cubre las lineas telefonicas y sus saludos, las plantillas de SMS, la lista de bloqueo y la cuarentena de mensajes de voz donde las grabaciones de llamantes desconocidos esperan revision. Una fila de botones de seccion debajo del titulo salta a cualquiera de ellos.`)
 };
 
 /**

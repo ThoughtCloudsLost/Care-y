@@ -111,11 +111,17 @@ const {
   setRoleAndPermissions,
 } = await import("./crypto-context.svelte.js");
 
+// Captured before any test mutates module state: demoSeed only
+// assigns the keys it is given, so restoring the default permission
+// set requires passing it back explicitly.
+const defaultPermissions = getCurrentPermissions()();
+
 /** Reset auth state to defaults for test isolation. */
 function resetAuthDefaults(): void {
   demoSeed({
     userId: "demo-user-001",
     userRoleId: RoleId.ADMIN,
+    permissions: defaultPermissions,
   });
 }
 
@@ -136,6 +142,17 @@ describe("crypto-context (lazy real objects)", () => {
       const a = getCryptoBridge();
       const b = getCryptoBridge();
       expect(a).toBe(b);
+    });
+
+    it("swallows zeroAll without reaching the real bridge", async () => {
+      // The mocked constructor returns one shared instance, so
+      // constructing here yields the same object the wrapper wraps.
+      const { CryptoBridge } = await import("$lib/workers/crypto-bridge.js");
+      const real = new CryptoBridge("dedicated");
+
+      await getCryptoBridge().zeroAll();
+
+      expect(real.zeroAll).not.toHaveBeenCalled();
     });
   });
 
@@ -210,6 +227,8 @@ describe("crypto-context (lazy real objects)", () => {
       expect(perms.has(Permission.MANAGE_ROLES)).toBe(true);
       expect(perms.has(Permission.MANAGE_ORG_CONFIG)).toBe(true);
       expect(perms.has(Permission.MANAGE_KEYS)).toBe(true);
+      expect(perms.has(Permission.VIEW_CLIENTS)).toBe(true);
+      expect(perms.has(Permission.DELETE_CLIENTS)).toBe(true);
     });
 
     it("can be overridden via demoSeed", () => {

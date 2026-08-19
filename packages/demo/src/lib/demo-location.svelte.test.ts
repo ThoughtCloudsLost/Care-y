@@ -275,7 +275,10 @@ describe("DemoLocationStore", () => {
       store.notePhoneChange();
 
       expect(store.topic).toBeNull();
-      expect(store.location).toEqual({ sectionId: "search", subSlug: "intro" });
+      expect(store.location).toEqual({
+        sectionId: "search",
+        subSlug: "overlay",
+      });
     });
 
     it("clears a login topic when the stage moves past its screen", () => {

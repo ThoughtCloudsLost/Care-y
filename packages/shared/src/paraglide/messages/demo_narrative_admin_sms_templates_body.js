@@ -6,11 +6,13 @@ import { getLocale, experimentalStaticLocale } from '../runtime.js';
 /** @typedef {{}} Demo_Narrative_Admin_Sms_Templates_BodyInputs */
 
 const en_demo_narrative_admin_sms_templates_body = /** @type {(inputs: Demo_Narrative_Admin_Sms_Templates_BodyInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`SMS templates define the automated messages the system sends to clients. Templates support multiple languages so the system can send messages in the client's preferred language.`)
+	return /** @type {LocalizedString} */ (`SMS templates define the automated messages the system sends to clients. Templates support multiple languages so the system can send messages in the client's preferred language.
+**Message length.** The editor counts characters as you type and shows how many SMS segments the message will use.`)
 };
 
 const es_demo_narrative_admin_sms_templates_body = /** @type {(inputs: Demo_Narrative_Admin_Sms_Templates_BodyInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Las plantillas SMS definen los mensajes automatizados que el sistema envia a los clientes. Las plantillas admiten multiples idiomas para que el sistema pueda enviar mensajes en el idioma preferido del cliente.`)
+	return /** @type {LocalizedString} */ (`Las plantillas SMS definen los mensajes automatizados que el sistema envia a los clientes. Las plantillas admiten multiples idiomas para que el sistema pueda enviar mensajes en el idioma preferido del cliente.
+**Longitud del mensaje.** El editor cuenta caracteres mientras escribes y muestra cuantos segmentos SMS usara el mensaje.`)
 };
 
 /**

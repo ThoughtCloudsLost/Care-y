@@ -4,8 +4,12 @@ import {
   beginFlowInteraction,
   currentFlowInteractionId,
   emitFlowEvent,
+  isFlowRecording,
+  replayRecordedEvents,
   resetFlowEvents,
   setFlowClock,
+  startFlowRecording,
+  stopFlowRecording,
   subscribeFlowEvents,
   traceFlowLocal,
   traceFlowSpan,
@@ -298,6 +302,170 @@ describe("flow events", () => {
     });
   });
 
+  describe("recording mode", () => {
+    it("diverts events to the recording buffer instead of listeners", () => {
+      useTestClock();
+      const events = collectEvents();
+      startFlowRecording();
+      emitFlowEvent({
+        lane: "server",
+        direction: "up",
+        label: "route auth.getSalt",
+        durationMs: 42,
+      });
+      emitFlowEvent({
+        lane: "server",
+        direction: "down",
+        label: "route auth.getSalt",
+        durationMs: 55,
+      });
+      const recorded = stopFlowRecording();
+
+      // Listeners received nothing during recording
+      expect(events).toHaveLength(0);
+
+      // Recording captured both events with resolved fields
+      expect(recorded).toHaveLength(2);
+      expect(recorded[0]?.label).toBe("route auth.getSalt");
+      expect(recorded[0]?.lane).toBe("server");
+      expect(recorded[0]?.direction).toBe("up");
+      expect(recorded[0]?.durationMs).toBe(42);
+      expect(recorded[1]?.direction).toBe("down");
+    });
+
+    it("resolves thunks eagerly during recording", () => {
+      useTestClock();
+      startFlowRecording();
+      const labelThunk = vi.fn(() => "thunked label");
+      emitFlowEvent({
+        lane: "crypto",
+        direction: "local",
+        label: labelThunk,
+        payloadPreview: () => "preview from thunk",
+      });
+      const recorded = stopFlowRecording();
+
+      expect(labelThunk).toHaveBeenCalledOnce();
+      expect(recorded[0]?.label).toBe("thunked label");
+      expect(recorded[0]?.payloadPreview).toBe("preview from thunk");
+    });
+
+    it("advances ids during recording so post-recording ids are consistent", () => {
+      useTestClock();
+      startFlowRecording();
+      emitFlowEvent({ lane: "ui", direction: "up", label: "recorded" });
+      emitFlowEvent({ lane: "ui", direction: "up", label: "recorded 2" });
+      stopFlowRecording();
+
+      const events = collectEvents();
+      emitFlowEvent({ lane: "ui", direction: "up", label: "after recording" });
+      // Two events consumed ids 1 and 2 during recording
+      expect(events[0]?.id).toBe(3);
+    });
+
+    it("throws when starting a second concurrent recording", () => {
+      useTestClock();
+      startFlowRecording();
+      expect(() => {
+        startFlowRecording();
+      }).toThrow("already in progress");
+      stopFlowRecording(); // cleanup
+    });
+
+    it("throws when stopping with no active recording", () => {
+      useTestClock();
+      expect(() => stopFlowRecording()).toThrow("No recording");
+    });
+
+    it("reports recording state via isFlowRecording", () => {
+      useTestClock();
+      expect(isFlowRecording()).toBe(false);
+      startFlowRecording();
+      expect(isFlowRecording()).toBe(true);
+      stopFlowRecording();
+      expect(isFlowRecording()).toBe(false);
+    });
+
+    it("resets recording state via resetFlowEvents", () => {
+      useTestClock();
+      startFlowRecording();
+      resetFlowEvents();
+      // After reset, no recording is active
+      expect(isFlowRecording()).toBe(false);
+      // Starting a new recording works without error
+      startFlowRecording();
+      stopFlowRecording();
+    });
+  });
+
+  describe("replayRecordedEvents", () => {
+    it("emits recorded events through the normal path with the given seam key", () => {
+      useTestClock();
+      const events = collectEvents();
+
+      startFlowRecording();
+      emitFlowEvent({
+        lane: "server",
+        direction: "up",
+        label: "route auth.getSalt",
+        durationMs: 30,
+      });
+      emitFlowEvent({
+        lane: "server",
+        direction: "down",
+        label: "route auth.getSalt",
+        durationMs: 45,
+      });
+      const recorded = stopFlowRecording();
+
+      // Replay the recorded events
+      replayRecordedEvents(recorded, "recorded-derivation");
+
+      expect(events).toHaveLength(2);
+      expect(events[0]?.label).toBe("route auth.getSalt");
+      expect(events[0]?.seamKey).toBe("recorded-derivation");
+      expect(events[0]?.durationMs).toBe(30);
+      expect(events[1]?.seamKey).toBe("recorded-derivation");
+      expect(events[1]?.durationMs).toBe(45);
+    });
+
+    it("attributes replayed events to the current interaction", () => {
+      useTestClock();
+      const events = collectEvents();
+
+      startFlowRecording();
+      emitFlowEvent({
+        lane: "server",
+        direction: "up",
+        label: "route auth.getSalt",
+      });
+      const recorded = stopFlowRecording();
+
+      // Start a new interaction, then replay
+      const interactionId = beginFlowInteraction();
+      replayRecordedEvents(recorded, "recorded-derivation");
+
+      expect(events[0]?.interactionId).toBe(interactionId);
+    });
+
+    it("preserves real durationMs values from the recording", () => {
+      useTestClock();
+      const events = collectEvents();
+
+      startFlowRecording();
+      emitFlowEvent({
+        lane: "server",
+        direction: "down",
+        label: "route auth.oprfEvaluate",
+        durationMs: 137,
+      });
+      const recorded = stopFlowRecording();
+
+      replayRecordedEvents(recorded, "recorded-derivation");
+      expect(events[0]?.durationMs).toBe(137);
+    });
+  });
+
   describe("reset", () => {
     it("clears ids and listeners", () => {
       useTestClock();
@@ -306,12 +474,12 @@ describe("flow events", () => {
       emitFlowEvent({ lane: "ui", direction: "up", label: "tap sort" });
 
       resetFlowEvents();
+      // Subscribe before emitting: ids advance on every emit, observed
+      // or not, so the first post-reset emit is the one carrying id 1.
+      const events = collectEvents();
       emitFlowEvent({ lane: "ui", direction: "up", label: "tap filters" });
 
       expect(listener).toHaveBeenCalledTimes(1);
-      // After reset, ids restart at 1
-      const events = collectEvents();
-      emitFlowEvent({ lane: "ui", direction: "up", label: "tap again" });
       expect(events.at(0)?.id).toBe(1);
       expect(currentFlowInteractionId()).toBe(1);
     });

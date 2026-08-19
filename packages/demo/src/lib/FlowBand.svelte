@@ -93,6 +93,8 @@
         return m.demo_flow_seam_oprf_evaluator();
       case "outbox-delivery":
         return m.demo_flow_seam_outbox_delivery();
+      case "recorded-derivation":
+        return m.demo_flow_seam_recorded_derivation();
     }
   }
 

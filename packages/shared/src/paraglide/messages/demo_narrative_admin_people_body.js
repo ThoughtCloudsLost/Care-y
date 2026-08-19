@@ -8,13 +8,13 @@ import { getLocale, experimentalStaticLocale } from '../runtime.js';
 const en_demo_narrative_admin_people_body = /** @type {(inputs: Demo_Narrative_Admin_People_BodyInputs) => LocalizedString} */ () => {
 	return /** @type {LocalizedString} */ (`The roster shows every volunteer in the organization with their role and assigned queues.
 **Role management.** Each volunteer has one of three roles: Volunteer, Manager, or Admin. The role determines which features and data are accessible.
-**Invitations.** Administrators can invite new volunteers by generating an invitation. The invited volunteer completes onboarding and key generation on their own device.`)
+**Invitations.** Administrators invite new volunteers either by generating an invite link to share or by creating the account manually. A pending invitation can be revoked before it is accepted. The invited volunteer completes onboarding and key generation on their own device.`)
 };
 
 const es_demo_narrative_admin_people_body = /** @type {(inputs: Demo_Narrative_Admin_People_BodyInputs) => LocalizedString} */ () => {
 	return /** @type {LocalizedString} */ (`El directorio muestra cada voluntario de la organizacion con su rol y colas asignadas.
 **Gestion de roles.** Cada voluntario tiene uno de tres roles: Voluntario, Gestor o Administrador. El rol determina que funciones y datos son accesibles.
-**Invitaciones.** Los administradores pueden invitar nuevos voluntarios generando una invitacion. El voluntario invitado completa la incorporacion y la generacion de claves en su propio dispositivo.`)
+**Invitaciones.** Los administradores invitan a nuevos voluntarios generando un enlace de invitacion para compartir o creando la cuenta manualmente. Una invitacion pendiente puede revocarse antes de ser aceptada. El voluntario invitado completa la incorporacion y la generacion de claves en su propio dispositivo.`)
 };
 
 /**

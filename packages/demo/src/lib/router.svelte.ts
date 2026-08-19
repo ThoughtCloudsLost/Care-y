@@ -99,6 +99,16 @@ function featureToPathname(
 }
 
 /**
+ * The feature a pathname belongs to, or null for inert/unknown paths.
+ * Exported for the pulse handler's activation guard: a scripted tap
+ * whose click target links to a different feature must downgrade to a
+ * marker, or narrating one screen navigates the phone to another.
+ */
+export function featureForPathname(pathname: string): DemoFeature | null {
+  return resolveFeature(pathname).feature;
+}
+
+/**
  * Resolve a pathname (from goto interception) to a feature, detail,
  * and the NavContext that was used for the resolution (so callers can
  * thread it through to syncShellProps without re-computing it).

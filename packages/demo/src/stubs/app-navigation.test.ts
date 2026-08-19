@@ -18,7 +18,24 @@ let mockPageUrl = new URL("http://demo.local/tickets");
 let mockPageState: Record<string, unknown> = {};
 let shallowCalls: Array<{ url: URL; state: Record<string, unknown> }> = [];
 
+// Commit control for nextPageCommit: null means auto-resolve (the
+// common case for tests that only care that goto returns); an array
+// collects resolvers for tests that assert goto waits for the commit.
+let pendingCommits: Array<() => void> | null = null;
+
+function releaseCommits(): void {
+  const resolvers = pendingCommits ?? [];
+  pendingCommits = [];
+  for (const resolve of resolvers) resolve();
+}
+
 vi.mock("./app-state.svelte.js", () => ({
+  nextPageCommit(): Promise<void> {
+    if (pendingCommits === null) return Promise.resolve();
+    return new Promise((resolve) => {
+      pendingCommits?.push(resolve);
+    });
+  },
   page: {
     get url(): URL {
       return mockPageUrl;
@@ -55,6 +72,57 @@ describe("app-navigation stub", () => {
     mockPageUrl = new URL("http://demo.local/tickets");
     mockPageState = {};
     shallowCalls = [];
+    pendingCommits = null;
+  });
+
+  it("goto with a handler resolves only after the page commit", async () => {
+    pendingCommits = [];
+    const handler: DemoNavigationHandler = () => {
+      /* navigation side effects irrelevant here */
+    };
+    registerDemoNavigationHandler(handler);
+
+    let resolved = false;
+    const promise = goto("/tickets").then(() => {
+      resolved = true;
+    });
+
+    // Give the pre-handler microtask a chance; goto must still be
+    // pending because no commit has landed.
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(resolved).toBe(false);
+
+    releaseCommits();
+    await promise;
+    expect(resolved).toBe(true);
+
+    unregisterDemoNavigationHandler(handler);
+  });
+
+  it("goto with a handler falls back to the timeout when no commit lands", async () => {
+    vi.useFakeTimers();
+    try {
+      pendingCommits = [];
+      const handler: DemoNavigationHandler = () => {
+        /* same-route navigation: no commit will follow */
+      };
+      registerDemoNavigationHandler(handler);
+
+      let resolved = false;
+      const promise = goto("/tickets").then(() => {
+        resolved = true;
+      });
+      await vi.advanceTimersByTimeAsync(999);
+      expect(resolved).toBe(false);
+      await vi.advanceTimersByTimeAsync(2);
+      await promise;
+      expect(resolved).toBe(true);
+
+      unregisterDemoNavigationHandler(handler);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("goto resolves without error when no handler is registered", async () => {

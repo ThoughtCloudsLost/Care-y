@@ -6,17 +6,17 @@ import { getLocale, experimentalStaticLocale } from '../runtime.js';
 /** @typedef {{}} Demo_Entry_Nav_BodyInputs */
 
 const en_demo_entry_nav_body = /** @type {(inputs: Demo_Entry_Nav_BodyInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Pick a feature from the list and the simulator opens that screen. Tap around in the simulator and the story follows you. Nothing you type here leaves your device.`)
+	return /** @type {LocalizedString} */ (`Pick a feature from the list and the simulator opens that screen. Tapping around in the simulator works in the other direction, the handbook follows where you go, and nothing you type here leaves your device.`)
 };
 
 const es_demo_entry_nav_body = /** @type {(inputs: Demo_Entry_Nav_BodyInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Elige una funcion de la lista y el simulador abre esa pantalla. Toca por el simulador y el texto te sigue. Nada de lo que escribas aqui sale de tu dispositivo.`)
+	return /** @type {LocalizedString} */ (`Elige una funcion de la lista y el simulador abre esa pantalla. Tocar por el simulador funciona en la otra direccion, el manual sigue a donde vayas, y nada de lo que escribas aqui sale de tu dispositivo.`)
 };
 
 /**
 * | output |
 * | --- |
-* | "Pick a feature from the list and the simulator opens that screen. Tap around in the simulator and the story follows you. Nothing you type here leaves your de..." |
+* | "Pick a feature from the list and the simulator opens that screen. Tapping around in the simulator works in the other direction, the handbook follows where yo..." |
 *
 * @param {Demo_Entry_Nav_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

@@ -53,6 +53,7 @@
     FRAME_PAD_X,
     computeFlowLayout,
     computeLineSegments,
+    extendHoleForFullBleed,
     hitTestBlock,
   } from "./flow-layout.js";
   import {
@@ -67,7 +68,6 @@
   import ClipFigure from "./ClipFigure.svelte";
   import {
     setFlowGeometrySource,
-    readingLineY,
     stickyTopOffset,
   } from "./flow-geometry.svelte.js";
 
@@ -531,12 +531,21 @@
    * for a given scrollY. Both the live layout path and the published
    * holeAtScrollY closure go through this so they can never drift apart.
    * A hole outside the container is fine: computeSegments handles it.
+   *
+   * When the frame fills (nearly) the usable viewport height, the hole
+   * is stretched to a scroll-invariant vertical span (see
+   * extendHoleForFullBleed) so fast scrolls do not re-wrap the flanking
+   * columns. The gaps are viewport-space and sy-independent, so callers
+   * compute them once per pass and hand them in.
    */
   function rawHoleAt(
     sy: number,
     contTop: number,
     contLeft: number,
     fr: { left: number; top: number; outerW: number; outerH: number },
+    cw: number,
+    gapAbove: number,
+    gapBelow: number,
   ): FlowHole {
     // Frame rect is in viewport coordinates. Convert to document space.
     const frameDocTop = fr.top + sy;
@@ -547,11 +556,28 @@
     // no-op guard. The frame is viewport-fixed, so only the document
     // translation changes during scroll; rounding collapses those
     // fractional shifts into the same cached value.
-    return {
+    const hole: FlowHole = {
       left: Math.round(frameDocLeft - contLeft - FRAME_PAD_X),
       top: Math.round(frameDocTop - contTop - FRAME_PAD_TOP),
       right: Math.round(frameDocLeft + fr.outerW - contLeft + FRAME_PAD_X),
       bottom: Math.round(frameDocTop + fr.outerH - contTop + FRAME_PAD_BOTTOM),
+    };
+    return extendHoleForFullBleed(hole, gapAbove, gapBelow, cw);
+  }
+
+  /**
+   * Visible viewport gaps between the padded hole and the usable
+   * viewport: below the top chrome, above the window bottom. Inputs to
+   * the full-bleed decision in rawHoleAt.
+   */
+  function frameViewportGaps(
+    fr: { top: number; outerH: number },
+    vh: number,
+    chromeBottom: number,
+  ): { above: number; below: number } {
+    return {
+      above: fr.top - FRAME_PAD_TOP - chromeBottom,
+      below: vh - (fr.top + fr.outerH + FRAME_PAD_BOTTOM),
     };
   }
 
@@ -633,11 +659,15 @@
 
     // Compute the hole before the no-op check so we can compare against
     // the previous pass's hole edges.
+    const gaps = frameViewportGaps(frameRect, viewportH, stickyTopOffset());
     const candidateHole = rawHoleAt(
       window.scrollY,
       containerTop,
       containerLeft,
       frameRect,
+      containerWidth,
+      gaps.above,
+      gaps.below,
     );
 
     // Skip recompute when every layout input matches the previous pass.
@@ -760,6 +790,8 @@
     };
     const passBlocks = blocks;
     const passFiller = filler;
+    const passGapAbove = gaps.above;
+    const passGapBelow = gaps.below;
 
     setFlowGeometrySource({
       layoutResult: result,
@@ -771,6 +803,9 @@
           passContainerTop,
           passContainerLeft,
           passFrameRect,
+          passContainerWidth,
+          passGapAbove,
+          passGapBelow,
         );
       },
       layoutForHole(h: FlowHole | null): FlowLayoutResult {
@@ -797,6 +832,9 @@
     void frameRect.outerW;
     void frameRect.outerH;
     void scrollY;
+    // Full-bleed detection reads the viewport height and chrome bottom.
+    void viewportH;
+    void stickyTopOffset();
 
     scheduleLayout();
   });
@@ -1040,48 +1078,6 @@
   });
 
   // -----------------------------------------------------------------------
-  // Focus fade
-  //
-  // Blocks dim with distance from the reading line, bottoming out at
-  // FADE_FLOOR, so whatever sits at the line reads as the focal point.
-  // Restored from the pre-flow-layout story, which applied the same
-  // gradient to its snap items; the constants are carried over verbatim
-  // so the feel is unchanged.
-  //
-  // Applied per block rather than per line: a gradient within a single
-  // paragraph would read as a rendering fault, not as focus.
-  // -----------------------------------------------------------------------
-
-  const FADE_DISTANCE = 600;
-  const FADE_FLOOR = 0.35;
-
-  /** Reading line in viewport space. Derived from viewportH and scrollY
-   *  so it tracks the same inputs the layout does. */
-  let readingLine: number = $derived.by(() => {
-    // Read reactive deps so Svelte tracks them
-    void viewportH;
-    void scrollY;
-    return readingLineY();
-  });
-
-  /** Number of discrete opacity steps. 20 steps gives 5% increments,
-   *  which the 0.2s CSS transition smooths between. Most scroll frames
-   *  land on the same step, so no style write occurs. */
-  const FADE_STEPS = 20;
-
-  function fadeFor(blockTopY: number, blockBottomY: number): number {
-    if (readingLine <= 0) return 1;
-    // Block position in viewport space. containerTop is document space,
-    // so subtracting scrollY brings it back to the viewport the reading
-    // line is measured in.
-    const midDocY = containerTop + (blockTopY + blockBottomY) / 2;
-    const dist = Math.abs(midDocY - scrollY - readingLine);
-    const fade = Math.min(1, dist / FADE_DISTANCE);
-    const continuous = 1 - fade * (1 - FADE_FLOOR);
-    return Math.round(continuous * FADE_STEPS) / FADE_STEPS;
-  }
-
-  // -----------------------------------------------------------------------
   // Heading rules
   //
   // A hairline under each sub heading, drawn through the same segment
@@ -1101,8 +1097,6 @@
     /** Stable across relayout: block index plus position within the row. */
     key: string;
     active: boolean;
-    /** Matches its heading's focus fade so the pair dim together. */
-    opacity: number;
   }
 
   let headingRules: RuleRect[] = $derived.by(() => {
@@ -1142,7 +1136,6 @@
           width: seg.width,
           key: `${String(bi)}:${String(si)}`,
           active,
-          opacity: fadeFor(geo.topY, geo.bottomY),
         });
       }
     }
@@ -1267,7 +1260,7 @@
       <div
         class="flow-rule"
         class:flow-rule--active={rule.active}
-        style="left: {rule.x}px; top: {rule.y}px; width: {rule.width}px; opacity: {rule.opacity};"
+        style="left: {rule.x}px; top: {rule.y}px; width: {rule.width}px;"
       ></div>
     {/each}
 
@@ -1284,11 +1277,7 @@
       {@const tag = blockTag(vb.block.kind)}
 
       {#if tag === "h2"}
-        <h2
-          class="flow-block"
-          style:top="{vb.geo.topY}px"
-          style:opacity={fadeFor(vb.geo.topY, vb.geo.bottomY)}
-        >
+        <h2 class="flow-block" style:top="{vb.geo.topY}px">
           {#each vb.lines as line, li (li)}
             <span
               class="flow-line {lineColorClass(
@@ -1308,7 +1297,6 @@
           class="flow-block"
           class:flow-block--focusable={isFocusable}
           style:top="{vb.geo.topY}px"
-          style:opacity={fadeFor(vb.geo.topY, vb.geo.bottomY)}
           role={isFocusable ? "button" : undefined}
           tabindex={isFocusable ? 0 : undefined}
           data-section-id={vb.block.sectionId}
@@ -1330,11 +1318,7 @@
         </h3>
       {:else}
         {@const firstLine = vb.lines.at(0)}
-        <p
-          class="flow-block"
-          style:top="{vb.geo.topY}px"
-          style:opacity={fadeFor(vb.geo.topY, vb.geo.bottomY)}
-        >
+        <p class="flow-block" style:top="{vb.geo.topY}px">
           <!-- List marker in the gutter the item's indent reserved -->
           {#if vb.block.marker !== undefined && firstLine !== undefined}
             <span
@@ -1388,7 +1372,6 @@
         style:top="{vf.geo.y}px"
         style:width="{vf.geo.width}px"
         style:height="{vf.geo.height}px"
-        style:opacity={fadeFor(vf.blockGeo.topY, vf.blockGeo.bottomY)}
       >
         <ClipFigure
           sectionId={vf.block.sectionId}
@@ -1426,14 +1409,6 @@
     right: 0;
     margin: 0;
     pointer-events: auto;
-    /* Smooths the distance fade, which is recomputed per scroll frame. */
-    transition: opacity 0.2s ease;
-  }
-
-  @media (prefers-reduced-motion: reduce) {
-    .flow-block {
-      transition: none;
-    }
   }
 
   .flow-block--focusable {

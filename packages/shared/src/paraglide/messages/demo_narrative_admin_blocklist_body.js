@@ -6,17 +6,17 @@ import { getLocale, experimentalStaticLocale } from '../runtime.js';
 /** @typedef {{}} Demo_Narrative_Admin_Blocklist_BodyInputs */
 
 const en_demo_narrative_admin_blocklist_body = /** @type {(inputs: Demo_Narrative_Admin_Blocklist_BodyInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Phone numbers can be blocked from reaching the organization. Blocked numbers are rejected before a ticket is created.`)
+	return /** @type {LocalizedString} */ (`Phone numbers can be blocked from reaching the organization, and a blocked number is rejected before a ticket is created.`)
 };
 
 const es_demo_narrative_admin_blocklist_body = /** @type {(inputs: Demo_Narrative_Admin_Blocklist_BodyInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Los numeros de telefono pueden bloquearse para que no lleguen a la organizacion. Los numeros bloqueados se rechazan antes de crear un ticket.`)
+	return /** @type {LocalizedString} */ (`Los numeros de telefono pueden bloquearse para que no lleguen a la organizacion, y un numero bloqueado se rechaza antes de que se cree un ticket.`)
 };
 
 /**
 * | output |
 * | --- |
-* | "Phone numbers can be blocked from reaching the organization. Blocked numbers are rejected before a ticket is created." |
+* | "Phone numbers can be blocked from reaching the organization, and a blocked number is rejected before a ticket is created." |
 *
 * @param {Demo_Narrative_Admin_Blocklist_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

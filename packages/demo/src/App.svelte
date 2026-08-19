@@ -15,6 +15,7 @@
     GripHorizontal,
     Link2,
     Link2Off,
+    LoaderCircle,
     Maximize2,
     Minimize2,
     Smartphone,
@@ -154,6 +155,9 @@
 
   /** Active role from the bridge snapshot; admin at boot/restart. */
   let activeRole: RoleIdValue = $state(RoleId.ADMIN);
+
+  /** True while the login choreography is in flight after the user clicked the pill. */
+  let loginPending = $state(false);
 
   /** Whether the peek is in a non-idle phase (active for UI gating). */
   const peekActive: boolean = $derived(peekCtrl.phase !== "idle");
@@ -671,6 +675,10 @@
       // Sync the role rail highlight from the bridge snapshot
       activeRole = state.role;
 
+      if (loginPending && state.feature !== "login") {
+        loginPending = false;
+      }
+
       // A non-init bridge state while the entry page is up means the
       // phone moved (deep link, phone interaction). Dismiss entry so
       // the story follows.
@@ -699,6 +707,7 @@
     unsubscribeFlow = undefined;
     flowBand.reset();
     bridge = undefined;
+    loginPending = false;
     history.replaceState(
       null,
       "",
@@ -760,6 +769,7 @@
       return;
     }
     if (scrollEngine.activeSection === "login" && bridge !== undefined) {
+      loginPending = true;
       bridge.completeLogin();
       return;
     }
@@ -1329,12 +1339,18 @@
       <button
         class="next-pill"
         type="button"
+        disabled={loginPending}
         onclick={() => handleNextSection(nextSectionDef.id)}
       >
-        {m.demo_section_next({
-          section: sectionTitle(nextSectionDef.id),
-        })}
-        <ArrowRight size={16} />
+        {#if loginPending}
+          {m.auth_signing_in()}
+          <LoaderCircle size={16} class="next-pill-spinner" />
+        {:else}
+          {m.demo_section_next({
+            section: sectionTitle(nextSectionDef.id),
+          })}
+          <ArrowRight size={16} />
+        {/if}
       </button>
     </div>
   {/if}
@@ -1511,9 +1527,38 @@
     outline-color: #64d2ff;
   }
 
+  .next-pill:disabled {
+    cursor: default;
+    opacity: 0.85;
+  }
+
+  .next-pill:disabled:hover {
+    background: rgba(245, 245, 247, 0.92);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  }
+
+  :global(html.dark) .next-pill:disabled:hover {
+    background: rgba(30, 30, 32, 0.92);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.24);
+  }
+
+  :global(.next-pill-spinner) {
+    animation: pill-spin 1s linear infinite;
+  }
+
+  @keyframes pill-spin {
+    to {
+      transform: rotate(360deg);
+    }
+  }
+
   @media (prefers-reduced-motion: reduce) {
     .next-pill {
       transition: none;
+    }
+
+    :global(.next-pill-spinner) {
+      animation: none;
     }
   }
 

@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "Basic organization settings like the organization name and contact information. These fields are encrypted with the organization key before storage." |
+* | "The organization name, country, and default interface language are configured here, and each is encrypted with the organization key before storage." |
 *
 * @param {Demo_Narrative_Admin_General_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

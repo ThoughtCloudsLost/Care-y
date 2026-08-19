@@ -111,17 +111,16 @@ function register(
   inDetail: boolean | null = null,
 ): void {
   if (features !== null || inDetail !== null) {
-    // Ambiguous: store a rule, and set the map to a "needs disambiguation"
-    // sentinel topic if not already set.
+    // Context-gated: rules only. Gated registrations must never seed
+    // the fallback map, or a label whose every registration is gated
+    // classifies in contexts none of its gates allow (a settings-only
+    // confirm leaking onto the login screen, an admin Dismiss falling
+    // back to the dashboard topic registered first).
     const rules = disambig.get(label) ?? [];
     rules.push({ topic, features, inDetail });
     disambig.set(label, rules);
-    // The Map entry stores the first topic registered as a fallback.
-    if (!map.has(label)) {
-      map.set(label, topic);
-    }
   } else {
-    // Unambiguous
+    // Ungated: the fallback when no rule matches the context.
     if (!map.has(label)) {
       map.set(label, topic);
     }
@@ -139,6 +138,9 @@ function buildLabelMap(): ClassifierCaches {
 
   const settingsSet: ReadonlySet<DemoFeature> = new Set(["settings"]);
   const adminSet: ReadonlySet<DemoFeature> = new Set(["admin"]);
+  const homeSet: ReadonlySet<DemoFeature> = new Set(["home"]);
+  const ticketsSet: ReadonlySet<DemoFeature> = new Set(["tickets"]);
+  const librarySet: ReadonlySet<DemoFeature> = new Set(["library"]);
   const notSettingsNotAdmin: ReadonlySet<DemoFeature> = new Set([
     "login",
     "home",
@@ -338,6 +340,33 @@ function buildLabelMap(): ClassifierCaches {
     register(map, disambig, m.auth_phase_auth({}, opts), "key-derivation");
     register(map, disambig, m.auth_phase_done({}, opts), "key-derivation");
 
+    // --- list-stats (tickets list only; no classifier disambiguation needed,
+    //     the stats row elements only appear on the list) ---
+    register(
+      map,
+      disambig,
+      m.tickets_status_new({}, opts),
+      "list-stats",
+      ticketsSet,
+      false,
+    );
+    register(
+      map,
+      disambig,
+      m.tickets_status_active({}, opts),
+      "list-stats",
+      ticketsSet,
+      false,
+    );
+    register(
+      map,
+      disambig,
+      m.tickets_status_on_hold({}, opts),
+      "list-stats",
+      ticketsSet,
+      false,
+    );
+
     // --- sort ---
     register(map, disambig, m.tickets_sort({}, opts), "sort");
 
@@ -388,14 +417,14 @@ function buildLabelMap(): ClassifierCaches {
       null,
       false,
     );
+    // --- saved-filters ---
     register(
       map,
       disambig,
       m.tickets_create_shortcut({}, opts),
-      "filters",
-      null,
-      false,
+      "saved-filters",
     );
+    register(map, disambig, m.saved_filter_apply({}, opts), "saved-filters");
 
     // Detail thread filter pill labels
     register(
@@ -423,17 +452,42 @@ function buildLabelMap(): ClassifierCaches {
       true,
     );
 
-    // --- view-modes ---
-    register(map, disambig, m.view_switcher_label({}, opts), "view-modes");
-    register(map, disambig, m.view_switcher_table({}, opts), "view-modes");
-    register(map, disambig, m.view_switcher_rows({}, opts), "view-modes");
-    register(map, disambig, m.view_switcher_cards({}, opts), "view-modes");
-    register(map, disambig, m.view_switcher_grid({}, opts), "view-modes");
-    register(map, disambig, m.view_switcher_kanban({}, opts), "view-modes");
+    // --- view-modes vs dashboard-view-switcher vs library-tools ---
+    // On "home" feature, view switcher labels classify as dashboard-view-switcher.
+    // On "library" feature, they classify as library-tools.
+    // On tickets they stay view-modes.
+    const viewSwitcherLabels = [
+      m.view_switcher_label({}, opts),
+      m.view_switcher_table({}, opts),
+      m.view_switcher_rows({}, opts),
+      m.view_switcher_cards({}, opts),
+      m.view_switcher_grid({}, opts),
+      m.view_switcher_kanban({}, opts),
+    ];
+    for (const vsLabel of viewSwitcherLabels) {
+      register(map, disambig, vsLabel, "view-modes", ticketsSet);
+      register(map, disambig, vsLabel, "dashboard-view-switcher", homeSet);
+      register(map, disambig, vsLabel, "library-tools", librarySet);
+    }
 
-    // --- select-mode ---
+    // --- select-mode (list-level only; detail select is message-select) ---
     register(map, disambig, m.tickets_select_mode({}, opts), "select-mode");
-    register(map, disambig, m.ticket_select_mode({}, opts), "select-mode");
+    register(
+      map,
+      disambig,
+      m.ticket_select_mode({}, opts),
+      "message-select",
+      null,
+      true,
+    );
+    register(
+      map,
+      disambig,
+      m.ticket_select_mode({}, opts),
+      "select-mode",
+      null,
+      false,
+    );
 
     // --- new-ticket ---
     register(map, disambig, m.nav_new_ticket(terms, opts), "new-ticket");
@@ -466,17 +520,194 @@ function buildLabelMap(): ClassifierCaches {
 
     // --- timeline ---
     register(map, disambig, m.ticket_action_timeline({}, opts), "timeline");
-    register(map, disambig, m.ticket_action_messages({}, opts), "timeline");
+
+    // --- conversation ---
+    register(
+      map,
+      disambig,
+      m.ticket_action_messages({}, opts),
+      "conversation",
+      null,
+      true,
+    );
+
+    // --- unread-badges ---
+    register(
+      map,
+      disambig,
+      m.tickets_sort_new_replies_first({}, opts),
+      "unread-badges",
+    );
+
+    // --- split-view ---
+    register(map, disambig, m.split_view_resize_label({}, opts), "split-view");
+
+    // --- case-panel (takes over ticket_more_actions from close-reopen) ---
+    register(
+      map,
+      disambig,
+      m.ticket_more_actions({}, opts),
+      "case-panel",
+      null,
+      true,
+    );
+    register(
+      map,
+      disambig,
+      m.ticket_panel_call({}, opts),
+      "case-panel",
+      null,
+      true,
+    );
+
+    // --- close-reopen ---
+    register(
+      map,
+      disambig,
+      m.ticket_action_close({}, opts),
+      "close-reopen",
+      null,
+      true,
+    );
+    register(
+      map,
+      disambig,
+      m.ticket_action_reopen({}, opts),
+      "close-reopen",
+      null,
+      true,
+    );
+
+    // --- message-actions ---
+    register(
+      map,
+      disambig,
+      m.ticket_context_menu_title({}, opts),
+      "message-actions",
+      null,
+      true,
+    );
+
+    // --- exposure-hints ---
+    register(
+      map,
+      disambig,
+      m.ticket_sms_title(terms, opts),
+      "exposure-hints",
+      null,
+      true,
+    );
+    register(
+      map,
+      disambig,
+      m.exposure_hint_dismiss({}, opts),
+      "exposure-hints",
+      null,
+      true,
+    );
+
+    // --- deep-search vs page-search vs library-search ---
+    // search_inline_trigger splits three ways: tickets detail is deep-search,
+    // tickets list is page-search, library is library-search.
+    register(
+      map,
+      disambig,
+      m.search_inline_trigger({}, opts),
+      "deep-search",
+      ticketsSet,
+      true,
+    );
+    register(
+      map,
+      disambig,
+      m.search_inline_trigger({}, opts),
+      "page-search",
+      ticketsSet,
+      false,
+    );
+    register(
+      map,
+      disambig,
+      m.search_inline_trigger({}, opts),
+      "library-search",
+      librarySet,
+    );
+    register(
+      map,
+      disambig,
+      m.search_refine_label({}, opts),
+      "deep-search",
+      null,
+      true,
+    );
+    register(
+      map,
+      disambig,
+      m.search_conversation_nav_label({}, opts),
+      "deep-search",
+      null,
+      true,
+    );
+    register(
+      map,
+      disambig,
+      m.search_deep_nav_trigger({}, opts),
+      "deep-search",
+      ticketsSet,
+      true,
+    );
+    register(
+      map,
+      disambig,
+      m.search_deep_nav_trigger({}, opts),
+      "library-search",
+      librarySet,
+    );
+
+    // --- thread-anatomy (detail only; the unread divider's aria-label) ---
+    register(
+      map,
+      disambig,
+      m.ticket_new_messages({}, opts),
+      "thread-anatomy",
+      null,
+      true,
+    );
 
     // --- language ---
     register(map, disambig, m.language_picker_label({}, opts), "language");
 
-    // --- dashboard-queues ---
+    // --- dashboard-getting-started ---
+    register(
+      map,
+      disambig,
+      m.getting_started_heading({}, opts),
+      "dashboard-getting-started",
+      homeSet,
+    );
+    register(
+      map,
+      disambig,
+      m.getting_started_dismiss({}, opts),
+      "dashboard-getting-started",
+      homeSet,
+    );
+
+    // --- dashboard-shift ---
+    register(
+      map,
+      disambig,
+      m.dashboard_shift_heading({}, opts),
+      "dashboard-shift",
+    );
+
+    // --- dashboard-queues (scoped to home; admin_tab_queues goes to admin-queues) ---
     register(
       map,
       disambig,
       m.dashboard_queues_heading(terms, opts),
       "dashboard-queues",
+      homeSet,
     );
 
     // --- dashboard-activity ---
@@ -485,6 +716,56 @@ function buildLabelMap(): ClassifierCaches {
       disambig,
       m.dashboard_activity_heading({}, opts),
       "dashboard-activity",
+    );
+
+    // --- dashboard-kb ---
+    register(
+      map,
+      disambig,
+      m.dashboard_kb_heading(terms, opts),
+      "dashboard-kb",
+      homeSet,
+    );
+
+    // --- dashboard-needs-attention ---
+    register(
+      map,
+      disambig,
+      m.dashboard_section_needs_attention({}, opts),
+      "dashboard-needs-attention",
+    );
+
+    // --- dashboard-my-tickets ---
+    register(
+      map,
+      disambig,
+      m.dashboard_section_my_tickets(terms, opts),
+      "dashboard-my-tickets",
+    );
+
+    // --- dashboard-unassigned ---
+    register(
+      map,
+      disambig,
+      m.dashboard_section_unassigned({}, opts),
+      "dashboard-unassigned",
+    );
+
+    // --- dashboard-on-hold ---
+    register(
+      map,
+      disambig,
+      m.dashboard_section_on_hold({}, opts),
+      "dashboard-on-hold",
+    );
+
+    // --- dashboard-create ---
+    register(
+      map,
+      disambig,
+      m.nav_create_new({}, opts),
+      "dashboard-create",
+      homeSet,
     );
 
     // --- library-vote ---
@@ -498,6 +779,22 @@ function buildLabelMap(): ClassifierCaches {
       disambig,
       m.library_manage_categories({}, opts),
       "library-categories",
+    );
+
+    // --- library-tools (sort and select on the library list) ---
+    register(
+      map,
+      disambig,
+      m.library_sort({}, opts),
+      "library-tools",
+      librarySet,
+    );
+    register(
+      map,
+      disambig,
+      m.library_select_mode({}, opts),
+      "library-tools",
+      librarySet,
     );
 
     // --- library-editor ---
@@ -542,6 +839,43 @@ function buildLabelMap(): ClassifierCaches {
       "admin-roster-edit",
     );
 
+    // --- admin-roster-tools (sort and filter pills on the people tab) ---
+    register(
+      map,
+      disambig,
+      m.admin_users_sort({}, opts),
+      "admin-roster-tools",
+      adminSet,
+    );
+    register(
+      map,
+      disambig,
+      m.admin_users_filter_role({}, opts),
+      "admin-roster-tools",
+      adminSet,
+    );
+    register(
+      map,
+      disambig,
+      m.admin_users_filter_status({}, opts),
+      "admin-roster-tools",
+      adminSet,
+    );
+    register(
+      map,
+      disambig,
+      m.admin_users_filter_keys({}, opts),
+      "admin-roster-tools",
+      adminSet,
+    );
+    register(
+      map,
+      disambig,
+      m.admin_users_filter_queue(terms, opts),
+      "admin-roster-tools",
+      adminSet,
+    );
+
     // --- admin-greetings ---
     register(
       map,
@@ -577,11 +911,219 @@ function buildLabelMap(): ClassifierCaches {
       "admin-quarantine",
     );
 
+    // --- admin-queues (scoped to admin; dashboard_queues_heading goes to dashboard-queues) ---
+    register(
+      map,
+      disambig,
+      m.admin_tab_queues(terms, opts),
+      "admin-queues",
+      adminSet,
+    );
+    register(
+      map,
+      disambig,
+      m.admin_queues_title(terms, opts),
+      "admin-queues",
+      adminSet,
+    );
+    register(
+      map,
+      disambig,
+      m.admin_queues_create_button(terms, opts),
+      "admin-queues",
+      adminSet,
+    );
+
+    // --- admin-clients ---
+    register(
+      map,
+      disambig,
+      m.admin_clients_title(terms, opts),
+      "admin-clients",
+      adminSet,
+    );
+
+    // --- admin-client-merge (merge sheet labels; visible only when sheet is open) ---
+    register(
+      map,
+      disambig,
+      m.client_merge_sheet_title(terms, opts),
+      "admin-client-merge",
+      adminSet,
+    );
+    register(
+      map,
+      disambig,
+      m.client_merge_history_heading({}, opts),
+      "admin-client-merge",
+      adminSet,
+    );
+    register(
+      map,
+      disambig,
+      m.client_merge_undo({}, opts),
+      "admin-client-merge",
+      adminSet,
+    );
+    register(
+      map,
+      disambig,
+      m.client_merge_confirm_button(terms, opts),
+      "admin-client-merge",
+      adminSet,
+    );
+
+    // --- admin-roles (manager page section headings) ---
+    register(
+      map,
+      disambig,
+      m.mgr_section_role({}, opts),
+      "admin-roles",
+      adminSet,
+    );
+    register(
+      map,
+      disambig,
+      m.mgr_section_ops({}, opts),
+      "admin-roles",
+      adminSet,
+    );
+    register(
+      map,
+      disambig,
+      m.mgr_section_queues({}, opts),
+      "admin-roles",
+      adminSet,
+    );
+    register(
+      map,
+      disambig,
+      m.mgr_section_protected({}, opts),
+      "admin-roles",
+      adminSet,
+    );
+
+    // --- admin-telephony-provider ---
+    register(
+      map,
+      disambig,
+      m.admin_telephony_change_mode({}, opts),
+      "admin-telephony-provider",
+      adminSet,
+    );
+
+    // --- admin-phone-lines ---
+    register(
+      map,
+      disambig,
+      m.admin_tab_telephony({}, opts),
+      "admin-phone-lines",
+    );
+
+    // --- admin-sms-templates ---
+    register(
+      map,
+      disambig,
+      m.admin_tab_sms_templates({}, opts),
+      "admin-sms-templates",
+    );
+    register(
+      map,
+      disambig,
+      m.admin_templates_add_button({}, opts),
+      "admin-sms-templates",
+    );
+
+    // --- admin-blocklist ---
+    register(map, disambig, m.admin_tab_blocklist({}, opts), "admin-blocklist");
+    register(
+      map,
+      disambig,
+      m.admin_blocklist_add_button({}, opts),
+      "admin-blocklist",
+    );
+
+    // --- admin-general ---
+    register(map, disambig, m.admin_tab_org_general({}, opts), "admin-general");
+    register(
+      map,
+      disambig,
+      m.admin_org_general_edit_button({}, opts),
+      "admin-general",
+    );
+
+    // --- admin-branding ---
+    register(map, disambig, m.admin_tab_branding({}, opts), "admin-branding");
+    register(
+      map,
+      disambig,
+      m.admin_branding_edit_button({}, opts),
+      "admin-branding",
+    );
+
+    // --- admin-terminology ---
+    register(
+      map,
+      disambig,
+      m.admin_tab_terminology({}, opts),
+      "admin-terminology",
+    );
+    register(
+      map,
+      disambig,
+      m.admin_terminology_edit_button({}, opts),
+      "admin-terminology",
+    );
+
+    // --- admin-note-types ---
+    register(
+      map,
+      disambig,
+      m.admin_tab_note_types({}, opts),
+      "admin-note-types",
+    );
+    register(
+      map,
+      disambig,
+      m.admin_note_types_add({}, opts),
+      "admin-note-types",
+    );
+
+    // --- admin-keys ---
+    register(map, disambig, m.admin_tab_keys({}, opts), "admin-keys");
+
+    // --- admin-retention ---
+    register(map, disambig, m.admin_tab_retention({}, opts), "admin-retention");
+    register(
+      map,
+      disambig,
+      m.admin_retention_days_label({}, opts),
+      "admin-retention",
+    );
+
     // --- settings-password ---
     register(map, disambig, m.settings_password({}, opts), "settings-password");
 
     // --- settings-2fa ---
     register(map, disambig, m.settings_2fa({}, opts), "settings-2fa");
+
+    // --- settings-appearance ---
+    register(
+      map,
+      disambig,
+      m.settings_color_scheme({}, opts),
+      "settings-appearance",
+      settingsSet,
+    );
+
+    // --- settings-security ---
+    register(
+      map,
+      disambig,
+      m.settings_review_briefing({}, opts),
+      "settings-security",
+      settingsSet,
+    );
   }
 
   labelMapCache = map;
@@ -627,9 +1169,6 @@ export function classifyDemoLabel(
 ): DemoTopic | null {
   const { labels, rules: ruleMap } = ensureLabelMap();
 
-  // Fast path: not in the map at all
-  if (!labels.has(label)) return null;
-
   // Check disambiguation rules for this label
   const rules = ruleMap.get(label);
   if (rules !== undefined) {
@@ -644,6 +1183,8 @@ export function classifyDemoLabel(
     }
   }
 
-  // No disambiguation rule matched: return the default map entry
+  // No rule matched: fall back to the ungated registration, if any.
+  // A label with only gated registrations yields null outside its
+  // gates rather than leaking into a foreign context.
   return labels.get(label) ?? null;
 }

@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "The organization page holds settings that shape the whole workspace. General info, branding, terminology, and note types are encrypted with the organization ..." |
+* | "The organization page holds settings that shape the whole workspace. General info, branding, and terminology are encrypted with the organization key before s..." |
 *
 * @param {Demo_Section_Admin_Org_DescInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

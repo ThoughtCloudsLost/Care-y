@@ -116,128 +116,150 @@ export type DemoTopic =
   | "twofa-push"
   | "twofa-backup"
   | "key-derivation"
-  | "sort"
-  | "filters"
-  | "saved-filters"
-  | "view-modes"
-  | "select-mode"
-  | "quick-actions"
-  | "unread-badges"
-  | "decryption"
-  | "new-ticket"
-  | "split-view"
-  | "case-header"
-  | "conversation"
-  | "thread-filters"
-  | "compose-actions"
-  | "reply"
-  | "notes"
-  | "case-fold"
-  | "timeline"
-  | "deep-search"
-  | "message-actions"
-  | "close-reopen"
-  | "exposure-hints"
+  | "dashboard-view-switcher"
+  | "dashboard-getting-started"
   | "dashboard-shift"
   | "dashboard-queues"
   | "dashboard-activity"
   | "dashboard-kb"
-  | "dashboard-view-switcher"
   | "dashboard-needs-attention"
   | "dashboard-my-tickets"
   | "dashboard-unassigned"
   | "dashboard-on-hold"
   | "dashboard-create"
+  | "decryption"
+  | "view-modes"
+  | "list-stats"
+  | "sort"
+  | "select-mode"
+  | "page-search"
+  | "saved-filters"
+  | "filters"
+  | "unread-badges"
+  | "quick-actions"
+  | "new-ticket"
+  | "split-view"
+  | "case-header"
+  | "timeline"
+  | "thread-filters"
+  | "deep-search"
+  | "conversation"
+  | "thread-anatomy"
+  | "notes"
+  | "case-fold"
+  | "case-panel"
+  | "compose-actions"
+  | "reply"
+  | "message-select"
+  | "message-actions"
+  | "exposure-hints"
+  | "close-reopen"
   | "library-vote"
+  | "library-tools"
   | "library-search"
   | "library-categories"
   | "library-editor"
   | "admin-roster-edit"
+  | "admin-roster-tools"
   | "admin-queues"
   | "admin-clients"
-  | "admin-general"
-  | "admin-branding"
-  | "admin-terminology"
-  | "admin-note-types"
-  | "admin-keys"
-  | "admin-retention"
+  | "admin-client-merge"
+  | "admin-roles"
+  | "admin-telephony-provider"
   | "admin-phone-lines"
   | "admin-greetings"
   | "admin-sms-templates"
   | "admin-blocklist"
   | "admin-quarantine"
+  | "admin-general"
+  | "admin-branding"
+  | "admin-terminology"
+  | "admin-keys"
+  | "admin-retention"
+  | "admin-note-types"
   | "settings-profile"
   | "settings-password"
-  | "settings-2fa"
   | "settings-appearance"
+  | "settings-2fa"
   | "settings-security";
 
-/** All topics in display order. */
+/** All topics in display order (matches taxonomy section ordering). */
 export const DEMO_TOPICS: readonly DemoTopic[] = [
-  "credentials",
   "language",
+  "credentials",
   "twofa",
-  "twofa-totp",
   "twofa-passkey",
+  "twofa-totp",
   "twofa-email",
   "twofa-sms",
   "twofa-push",
   "twofa-backup",
   "key-derivation",
-  "sort",
-  "filters",
-  "saved-filters",
-  "view-modes",
-  "select-mode",
-  "quick-actions",
-  "unread-badges",
-  "decryption",
-  "new-ticket",
-  "split-view",
-  "case-header",
-  "conversation",
-  "thread-filters",
-  "compose-actions",
-  "reply",
-  "notes",
-  "case-fold",
-  "timeline",
-  "deep-search",
-  "message-actions",
-  "close-reopen",
-  "exposure-hints",
+  "dashboard-view-switcher",
+  "dashboard-getting-started",
   "dashboard-shift",
   "dashboard-queues",
   "dashboard-activity",
   "dashboard-kb",
-  "dashboard-view-switcher",
   "dashboard-needs-attention",
   "dashboard-my-tickets",
   "dashboard-unassigned",
   "dashboard-on-hold",
   "dashboard-create",
+  "decryption",
+  "view-modes",
+  "list-stats",
+  "sort",
+  "select-mode",
+  "page-search",
+  "saved-filters",
+  "filters",
+  "unread-badges",
+  "quick-actions",
+  "new-ticket",
+  "split-view",
+  "case-header",
+  "timeline",
+  "thread-filters",
+  "deep-search",
+  "conversation",
+  "thread-anatomy",
+  "notes",
+  "case-fold",
+  "case-panel",
+  "compose-actions",
+  "reply",
+  "message-select",
+  "message-actions",
+  "exposure-hints",
+  "close-reopen",
   "library-vote",
+  "library-tools",
   "library-search",
   "library-categories",
   "library-editor",
   "admin-roster-edit",
+  "admin-roster-tools",
   "admin-queues",
   "admin-clients",
-  "admin-general",
-  "admin-branding",
-  "admin-terminology",
-  "admin-note-types",
-  "admin-keys",
-  "admin-retention",
+  "admin-client-merge",
+  "admin-roles",
+  "admin-telephony-provider",
   "admin-phone-lines",
   "admin-greetings",
   "admin-sms-templates",
   "admin-blocklist",
   "admin-quarantine",
+  "admin-general",
+  "admin-branding",
+  "admin-terminology",
+  "admin-keys",
+  "admin-retention",
+  "admin-note-types",
   "settings-profile",
   "settings-password",
-  "settings-2fa",
   "settings-appearance",
+  "settings-2fa",
   "settings-security",
 ] as const;
 
@@ -311,7 +333,8 @@ export type DemoSeamKey =
   | "twofa-choreography"
   | "webauthn-authenticator"
   | "oprf-evaluator"
-  | "outbox-delivery";
+  | "outbox-delivery"
+  | "recorded-derivation";
 export interface DemoFlowEvent {
   readonly id: number;
   readonly interactionId: number;

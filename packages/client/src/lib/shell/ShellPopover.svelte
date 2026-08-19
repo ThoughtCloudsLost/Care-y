@@ -53,7 +53,7 @@
       inert={!opened ? true : undefined}
       class="shell-popover-content"
     >
-      {#if mounted.current}{@render children()}{/if}
+      {#if opened || mounted.current}{@render children()}{/if}
     </div>
   </Popover>
 </div>

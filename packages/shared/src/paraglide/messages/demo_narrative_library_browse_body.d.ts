@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "The library lists all published articles grouped by category. Each article shows a decrypted title and excerpt. Tapping an article opens the full detail view..." |
+* | "The library lists all published articles grouped by category. Each article shows a decrypted title and excerpt, and both land scrambled and resolve into read..." |
 *
 * @param {Demo_Narrative_Library_Browse_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" }} options
