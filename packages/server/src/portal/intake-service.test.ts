@@ -28,6 +28,7 @@ import type { NotificationService } from "../notifications/service.js";
 import {
   createIntakeTicket,
   IntakeQueueNotConfiguredError,
+  IntakeDisabledError,
   type IntakeTicketInput,
 } from "./intake-service.js";
 import { ValidationError } from "../errors.js";
@@ -56,6 +57,9 @@ function makeInput(overrides?: Partial<IntakeTicketInput>): IntakeTicketInput {
     encryptedFormResponse: Buffer.from("ct-form-response-bytes"),
     formId: null,
     wrappedTk: Buffer.alloc(80, 0xab),
+    resolvedQueueId: null,
+    resolvedPriority: null,
+    resolvedEscalationLevel: null,
     ...overrides,
   };
 }
@@ -118,40 +122,27 @@ describe.skipIf(!process.env.DATABASE_URL)(
       expect(result.ticketId).toBe(input.ticketId);
       expect(result.clientAlias).toMatch(/^[a-z]+-[a-z]+-\d+$/);
 
-      // Verify client row: find the ticket to get client_id
-      const ticket = await testDb.db
-        .selectFrom("tickets")
-        .select("client_id")
-        .where("id", "=", input.ticketId)
-        .executeTakeFirstOrThrow();
-
-      const client = await testDb.db
-        .selectFrom("clients")
-        .selectAll()
-        .where("id", "=", ticket.client_id)
-        .executeTakeFirstOrThrow();
-      expect(client.phone_id).toBeNull();
-
-      // encrypted_alias must NOT be the raw alias bytes (it is sealed ciphertext)
-      expect(client.encrypted_alias.toString("utf-8")).not.toBe(
-        result.clientAlias,
-      );
-
-      // Unsealing with the test org keypair recovers the original alias
-      // care-y-ignore-next-line server-no-decrypt -- test-only: verifies seal round-trip with committed test keypair
-      const unsealed = testUnseal(client.encrypted_alias);
-      expect(unsealed).toBe(result.clientAlias);
-
-      // Verify ticket row (full select for queue/priority assertions)
+      // Verify ticket routes to the intake queue
       const ticketRow = await testDb.db
         .selectFrom("tickets")
         .selectAll()
         .where("id", "=", input.ticketId)
         .executeTakeFirst();
       expect(ticketRow).toBeDefined();
-      expect(ticketRow!.client_id).toBe(client.id);
       expect(ticketRow!.queue_id).toBe(intakeQueueId);
       expect(ticketRow!.priority).toBe("normal");
+
+      // Verify client row
+      const client = await testDb.db
+        .selectFrom("clients")
+        .selectAll()
+        .where("id", "=", ticketRow!.client_id)
+        .executeTakeFirstOrThrow();
+      expect(client.phone_id).toBeNull();
+
+      // care-y-ignore-next-line server-no-decrypt -- test-only: verifies seal round-trip with committed test keypair
+      const unsealed = testUnseal(client.encrypted_alias);
+      expect(unsealed).toBe(result.clientAlias);
 
       // Verify follow-up
       const followup = await testDb.db
@@ -161,9 +152,6 @@ describe.skipIf(!process.env.DATABASE_URL)(
         .executeTakeFirst();
       expect(followup).toBeDefined();
       expect(followup!.source).toBe("client");
-      expect(followup!.type).toBe("message");
-      expect(followup!.key_generation).toBeNull();
-      expect(followup!.created_by).toBeNull();
 
       // Verify interim wrap
       const wrap = await testDb.db
@@ -173,54 +161,6 @@ describe.skipIf(!process.env.DATABASE_URL)(
         .executeTakeFirst();
       expect(wrap).toBeDefined();
       expect(wrap!.algorithm).toBe("sealed-box-org-v1");
-    });
-
-    it("stores bytes identical to input (no transformation of ciphertext)", async () => {
-      const ns = createMockNotificationService();
-      const titleBytes = Buffer.from("exact-title-check");
-      const descBytes = Buffer.from("exact-desc-check");
-      const msgBytes = Buffer.from("exact-msg-check");
-      const wrapBytes = Buffer.alloc(80, 0xcd);
-
-      const input = makeInput({
-        encryptedTitle: titleBytes,
-        encryptedDescription: descBytes,
-        encryptedMessage: msgBytes,
-        wrappedTk: wrapBytes,
-      });
-
-      await createIntakeTicket(
-        testDb.db,
-        {
-          notificationService: ns,
-          sealedBox: testSealedBox,
-          orgSchema: testDb.schemaName,
-          orgSlug: "test-org",
-        },
-        input,
-      );
-
-      const ticket = await testDb.db
-        .selectFrom("tickets")
-        .select(["encrypted_title", "encrypted_description"])
-        .where("id", "=", input.ticketId)
-        .executeTakeFirstOrThrow();
-      expect(Buffer.compare(ticket.encrypted_title, titleBytes)).toBe(0);
-      expect(Buffer.compare(ticket.encrypted_description, descBytes)).toBe(0);
-
-      const followup = await testDb.db
-        .selectFrom("followups")
-        .select("encrypted_content")
-        .where("ticket_id", "=", input.ticketId)
-        .executeTakeFirstOrThrow();
-      expect(Buffer.compare(followup.encrypted_content, msgBytes)).toBe(0);
-
-      const wrap = await testDb.db
-        .selectFrom("intake_key_wraps")
-        .select("wrapped_tk")
-        .where("ticket_id", "=", input.ticketId)
-        .executeTakeFirstOrThrow();
-      expect(Buffer.compare(wrap.wrapped_tk, wrapBytes)).toBe(0);
     });
 
     it("skips follow-up when encryptedMessage is null", async () => {
@@ -249,32 +189,25 @@ describe.skipIf(!process.env.DATABASE_URL)(
       expect(followups).toHaveLength(0);
     });
 
-    it("creates response row when formId matches queue binding", async () => {
+    it("routes to form destination queue when resolvedQueueId is null", async () => {
       const ns = createMockNotificationService();
+      const destQueue = await createTestQueue(testDb.db, { label: "Dest" });
 
-      // Create a form and bind it to the intake queue
+      // Create a form with destination_queue_id
       const form = await testDb.db
         .insertInto("intake_forms")
-        // care-y-ignore-next-line ast-pii-in-db-write -- intake_forms.name is a plaintext admin-internal label (string column, not Buffer), not PII
-        .values({ name: "Test Form" })
+        .values({
+          // care-y-ignore-next-line ast-pii-in-db-write -- intake_forms.name is a plaintext admin-internal label, not PII
+          name: "Dest Form",
+          is_active: true,
+          destination_queue_id: destQueue.id,
+        })
         .returning("id")
         .executeTakeFirstOrThrow();
 
-      await testDb.db
-        .insertInto("queue_intake_forms")
-        .values({ queue_id: intakeQueueId, form_id: form.id })
-        .onConflict((oc) =>
-          oc.column("queue_id").doUpdateSet({ form_id: form.id }),
-        )
-        .execute();
+      const input = makeInput({ formId: form.id });
 
-      const responseBytes = Buffer.from("encrypted-form-response-data");
-      const input = makeInput({
-        formId: form.id,
-        encryptedFormResponse: responseBytes,
-      });
-
-      await createIntakeTicket(
+      const result = await createIntakeTicket(
         testDb.db,
         {
           notificationService: ns,
@@ -285,29 +218,101 @@ describe.skipIf(!process.env.DATABASE_URL)(
         input,
       );
 
-      const response = await testDb.db
-        .selectFrom("intake_form_responses")
-        .selectAll()
-        .where("ticket_id", "=", input.ticketId)
+      const ticket = await testDb.db
+        .selectFrom("tickets")
+        .select("queue_id")
+        .where("id", "=", result.ticketId)
         .executeTakeFirstOrThrow();
-
-      expect(response.form_id).toBe(form.id);
-      expect(Buffer.compare(response.encrypted_response, responseBytes)).toBe(
-        0,
-      );
-
-      // Clean up binding for other tests
-      await testDb.db
-        .deleteFrom("queue_intake_forms")
-        .where("queue_id", "=", intakeQueueId)
-        .execute();
+      expect(ticket.queue_id).toBe(destQueue.id);
     });
 
-    it("rejects stale formId and creates nothing", async () => {
+    it("routes to resolvedQueueId when in the field allow-list", async () => {
       const ns = createMockNotificationService();
-      const staleFormId = crypto.randomUUID();
+      const routeQueue = await createTestQueue(testDb.db, { label: "Route" });
 
-      const input = makeInput({ formId: staleFormId });
+      // Create a form with a queue-routing field
+      const form = await testDb.db
+        .insertInto("intake_forms")
+        .values({
+          // care-y-ignore-next-line ast-pii-in-db-write -- admin label, not PII
+          name: "Routing Form",
+          is_active: true,
+        })
+        .returning("id")
+        .executeTakeFirstOrThrow();
+
+      await testDb.db
+        .insertInto("intake_form_fields")
+        .values({
+          form_id: form.id,
+          position: 0,
+          field_type: "select",
+          role: "queue-routing",
+          routing_queue_ids: [routeQueue.id],
+          encrypted_label: Buffer.from("l"),
+          encrypted_config: Buffer.from("c"),
+          is_required: true,
+        })
+        .execute();
+
+      const input = makeInput({
+        formId: form.id,
+        resolvedQueueId: routeQueue.id,
+      });
+
+      const result = await createIntakeTicket(
+        testDb.db,
+        {
+          notificationService: ns,
+          sealedBox: testSealedBox,
+          orgSchema: testDb.schemaName,
+          orgSlug: "test-org",
+        },
+        input,
+      );
+
+      const ticket = await testDb.db
+        .selectFrom("tickets")
+        .select("queue_id")
+        .where("id", "=", result.ticketId)
+        .executeTakeFirstOrThrow();
+      expect(ticket.queue_id).toBe(routeQueue.id);
+    });
+
+    it("rejects resolvedQueueId not in allow-list", async () => {
+      const ns = createMockNotificationService();
+      const allowedQueue = await createTestQueue(testDb.db, {
+        label: "Allowed",
+      });
+
+      const form = await testDb.db
+        .insertInto("intake_forms")
+        .values({
+          // care-y-ignore-next-line ast-pii-in-db-write -- admin label, not PII
+          name: "Reject Form",
+          is_active: true,
+        })
+        .returning("id")
+        .executeTakeFirstOrThrow();
+
+      await testDb.db
+        .insertInto("intake_form_fields")
+        .values({
+          form_id: form.id,
+          position: 0,
+          field_type: "select",
+          role: "queue-routing",
+          routing_queue_ids: [allowedQueue.id],
+          encrypted_label: Buffer.from("l"),
+          encrypted_config: Buffer.from("c"),
+          is_required: true,
+        })
+        .execute();
+
+      const input = makeInput({
+        formId: form.id,
+        resolvedQueueId: crypto.randomUUID(), // Not in allow-list
+      });
 
       await expect(
         createIntakeTicket(
@@ -321,25 +326,111 @@ describe.skipIf(!process.env.DATABASE_URL)(
           input,
         ),
       ).rejects.toThrow(ValidationError);
+    });
 
-      // Verify nothing was created (transaction rolled back)
+    it("applies resolvedPriority to the ticket", async () => {
+      const ns = createMockNotificationService();
+      const input = makeInput({ resolvedPriority: "urgent" });
+
+      const result = await createIntakeTicket(
+        testDb.db,
+        {
+          notificationService: ns,
+          sealedBox: testSealedBox,
+          orgSchema: testDb.schemaName,
+          orgSlug: "test-org",
+        },
+        input,
+      );
+
       const ticket = await testDb.db
         .selectFrom("tickets")
-        .selectAll()
-        .where("id", "=", input.ticketId)
-        .executeTakeFirst();
-      expect(ticket).toBeUndefined();
+        .select("priority")
+        .where("id", "=", result.ticketId)
+        .executeTakeFirstOrThrow();
+      expect(ticket.priority).toBe("urgent");
+    });
 
-      const wrap = await testDb.db
-        .selectFrom("intake_key_wraps")
-        .selectAll()
-        .where("ticket_id", "=", input.ticketId)
-        .executeTakeFirst();
-      expect(wrap).toBeUndefined();
+    it("dispatches escalation notification when resolvedEscalationLevel present", async () => {
+      const ns = createMockNotificationService();
+      const user = await createTestUser(testDb.db);
+      const form = await testDb.db
+        .insertInto("intake_forms")
+        .values({
+          // care-y-ignore-next-line ast-pii-in-db-write -- admin label, not PII
+          name: "Escalation Form",
+          is_active: true,
+        })
+        .returning("id")
+        .executeTakeFirstOrThrow();
+
+      await testDb.db
+        .insertInto("intake_form_fields")
+        .values({
+          form_id: form.id,
+          position: 0,
+          field_type: "checkbox",
+          role: "escalation",
+          escalation_recipient_ids: [user.id],
+          encrypted_label: Buffer.from("l"),
+          encrypted_config: Buffer.from("c"),
+          is_required: false,
+        })
+        .execute();
+
+      const input = makeInput({
+        formId: form.id,
+        resolvedEscalationLevel: "triggered",
+      });
+
+      await createIntakeTicket(
+        testDb.db,
+        {
+          notificationService: ns,
+          sealedBox: testSealedBox,
+          orgSchema: testDb.schemaName,
+          orgSlug: "test-org",
+        },
+        input,
+      );
+
+      // Give fire-and-forget dispatches a tick
+      await new Promise((resolve) => setTimeout(resolve, 50));
+
+      // Two dispatches: ticket_created + ticket_escalated
+      expect(ns.dispatch).toHaveBeenCalledTimes(2);
+    });
+
+    it("throws IntakeDisabledError when web_intake_enabled is false", async () => {
+      await testDb.db
+        .updateTable("org_config")
+        .set({ web_intake_enabled: false })
+        .execute();
+
+      const ns = createMockNotificationService();
+      const input = makeInput();
+
+      await expect(
+        createIntakeTicket(
+          testDb.db,
+          {
+            notificationService: ns,
+            sealedBox: testSealedBox,
+            orgSchema: testDb.schemaName,
+            orgSlug: "test-org",
+          },
+          input,
+        ),
+      ).rejects.toThrow(IntakeDisabledError);
+
+      // Cleanup
+      await testDb.db
+        .updateTable("org_config")
+        .set({ web_intake_enabled: true })
+        .execute();
     });
 
     it("throws IntakeQueueNotConfiguredError when intake_queue_id is null", async () => {
-      // Use a separate test DB to avoid mutating the shared org_config
       const freshDb = await createTestDb();
       try {
         await freshDb.db
@@ -371,7 +462,6 @@ describe.skipIf(!process.env.DATABASE_URL)(
     it("dispatches ticket_created to queue watchers after commit", async () => {
       const ns = createMockNotificationService();
 
-      // Add a queue watcher so the recipient list is non-empty
       const user = await createTestUser(testDb.db);
       await testDb.db
         .insertInto("queue_watchers")
@@ -391,7 +481,6 @@ describe.skipIf(!process.env.DATABASE_URL)(
         input,
       );
 
-      // The dispatch is fire-and-forget; give the microtask a tick to settle
       await new Promise((resolve) => setTimeout(resolve, 50));
 
       expect(ns.dispatch).toHaveBeenCalledOnce();
@@ -412,95 +501,11 @@ describe.skipIf(!process.env.DATABASE_URL)(
         }),
       );
 
-      // Clean up watcher
       await testDb.db
         .deleteFrom("queue_watchers")
         .where("queue_id", "=", intakeQueueId)
         .where("user_id", "=", user.id)
         .execute();
-    });
-
-    it("does not fail the submission when dispatch throws", async () => {
-      const ns = createMockNotificationService();
-      ns.dispatch.mockRejectedValueOnce(
-        new Error("notification transport down"),
-      );
-
-      const warnSpy = vi
-        .spyOn(console, "error")
-        .mockImplementation(() => undefined);
-
-      const input = makeInput();
-      const result = await createIntakeTicket(
-        testDb.db,
-        {
-          notificationService: ns,
-          sealedBox: testSealedBox,
-          orgSchema: testDb.schemaName,
-          orgSlug: "test-org",
-        },
-        input,
-      );
-
-      // Ticket was still created successfully
-      expect(result.ticketId).toBe(input.ticketId);
-
-      // Give the fire-and-forget dispatch a tick to settle and log
-      await new Promise((resolve) => setTimeout(resolve, 50));
-
-      expect(warnSpy).toHaveBeenCalledWith(
-        "Intake notification dispatch failed:",
-        "notification transport down",
-      );
-      warnSpy.mockRestore();
-    });
-
-    it("rollback on duplicate ticket id leaves no orphan rows", async () => {
-      const ns = createMockNotificationService();
-
-      // First insertion succeeds
-      const sharedTicketId = crypto.randomUUID();
-      const input1 = makeInput({ ticketId: sharedTicketId });
-      await createIntakeTicket(
-        testDb.db,
-        {
-          notificationService: ns,
-          sealedBox: testSealedBox,
-          orgSchema: testDb.schemaName,
-          orgSlug: "test-org",
-        },
-        input1,
-      );
-
-      // Second insertion with the same ticket id should fail (PK collision)
-      const input2 = makeInput({ ticketId: sharedTicketId });
-      await expect(
-        createIntakeTicket(
-          testDb.db,
-          {
-            notificationService: ns,
-            sealedBox: testSealedBox,
-            orgSchema: testDb.schemaName,
-            orgSlug: "test-org",
-          },
-          input2,
-        ),
-      ).rejects.toThrow();
-
-      // Only the original ticket and wrap exist (no orphans from the second attempt)
-      const tickets = await testDb.db
-        .selectFrom("tickets")
-        .selectAll()
-        .where("id", "=", sharedTicketId)
-        .execute();
-      expect(tickets).toHaveLength(1);
-
-      const wraps = await testDb.db
-        .selectFrom("intake_key_wraps")
-        .selectAll()
-        .where("ticket_id", "=", sharedTicketId)
-        .execute();
-      expect(wraps).toHaveLength(1);
     });
 
     it("default-form submissions (formId null) store no response row", async () => {

@@ -1,8 +1,9 @@
 /**
  * Tests for IntakeFormService.
  *
- * DB integration tests that verify form CRUD, public form resolution,
- * queue binding, and the FORM_HAS_RESPONSES guard.
+ * DB integration tests that verify form CRUD, public form resolution
+ * by slug/default, slug uniqueness, default atomicity, destination
+ * queue validation, kill switch, and the FORM_HAS_RESPONSES guard.
  */
 
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
@@ -16,6 +17,7 @@ import { createIntakeFormService } from "./intake-form-service.js";
 import type { IntakeFormService } from "./intake-form-service.js";
 import { ConflictError, NotFoundError, ValidationError } from "../errors.js";
 import { ErrorCode } from "@care-y/shared";
+import type { IntakeFieldRole } from "@care-y/shared";
 import * as crypto from "node:crypto";
 
 describe.skipIf(!process.env.DATABASE_URL)("IntakeFormService", () => {
@@ -35,14 +37,22 @@ describe.skipIf(!process.env.DATABASE_URL)("IntakeFormService", () => {
   /** Helper: create a form with minimal fields. */
   async function createForm(
     name: string,
-    fields?: Array<{
-      fieldType: string;
-      encryptedLabel?: string;
-      encryptedConfig?: string;
-      isRequired?: boolean;
-    }>,
+    opts?: {
+      fields?: Array<{
+        fieldType: string;
+        encryptedLabel?: string;
+        encryptedConfig?: string;
+        isRequired?: boolean;
+        role?: IntakeFieldRole | null;
+        routingQueueIds?: string[] | null;
+        escalationRecipientIds?: string[] | null;
+      }>;
+      slug?: string | null;
+      isDefault?: boolean;
+      destinationQueueId?: string | null;
+    },
   ): Promise<string> {
-    const defaultFields = fields ?? [
+    const defaultFields = opts?.fields ?? [
       {
         fieldType: "text",
         encryptedLabel: Buffer.from("label").toString("base64"),
@@ -54,188 +64,192 @@ describe.skipIf(!process.env.DATABASE_URL)("IntakeFormService", () => {
     const result = await svc.saveForm(testDb.db, crypto.randomUUID(), {
       formId: null,
       name,
+      slug: opts?.slug ?? null,
+      isDefault: opts?.isDefault ?? false,
+      destinationQueueId: opts?.destinationQueueId ?? null,
       fields: defaultFields.map((f) => ({
         fieldType: f.fieldType as "text",
         encryptedLabel: f.encryptedLabel ?? Buffer.from("l").toString("base64"),
         encryptedConfig:
           f.encryptedConfig ?? Buffer.from("c").toString("base64"),
         isRequired: f.isRequired ?? false,
+        role: f.role ?? null,
+        routingQueueIds: f.routingQueueIds ?? null,
+        escalationRecipientIds: f.escalationRecipientIds ?? null,
       })),
     });
     return result.formId;
   }
 
   describe("getPublicForm", () => {
-    it("returns null when intake_queue_id is not set", async () => {
+    it("returns null when no default form exists", async () => {
       const result = await svc.getPublicForm(testDb.db);
       expect(result).toBeNull();
     });
 
-    it("returns null when no form is bound to the intake queue", async () => {
-      const queue = await createTestQueue(testDb.db);
-
-      await testDb.db
-        .updateTable("org_config")
-        .set({ intake_queue_id: queue.id })
-        .execute();
-
-      const result = await svc.getPublicForm(testDb.db);
-      expect(result).toBeNull();
-
-      // Cleanup
-      await testDb.db
-        .updateTable("org_config")
-        .set({ intake_queue_id: null })
-        .execute();
-    });
-
-    it("returns null when the bound form is inactive", async () => {
-      const queue = await createTestQueue(testDb.db);
-      const formId = await createForm("Inactive Form");
-
-      // Form starts inactive by default
-      await svc.bindQueue(testDb.db, queue.id, formId);
-      await testDb.db
-        .updateTable("org_config")
-        .set({ intake_queue_id: queue.id })
-        .execute();
-
-      const result = await svc.getPublicForm(testDb.db);
-      expect(result).toBeNull();
-
-      // Cleanup
-      await testDb.db
-        .updateTable("org_config")
-        .set({ intake_queue_id: null })
-        .execute();
-    });
-
-    it("resolves binding to active form with fields in position order", async () => {
-      const queue = await createTestQueue(testDb.db);
-      const label1 = Buffer.from("First").toString("base64");
-      const label2 = Buffer.from("Second").toString("base64");
-      const config1 = Buffer.from("c1").toString("base64");
-      const config2 = Buffer.from("c2").toString("base64");
-
-      const formId = await createForm("Active Form", [
-        {
-          fieldType: "text",
-          encryptedLabel: label1,
-          encryptedConfig: config1,
-          isRequired: true,
-        },
-        {
-          fieldType: "textarea",
-          encryptedLabel: label2,
-          encryptedConfig: config2,
-          isRequired: false,
-        },
-      ]);
-
+    it("resolves active default form", async () => {
+      const formId = await createForm("Default Form", {
+        isDefault: true,
+        slug: "default-test",
+      });
       await svc.setActive(testDb.db, formId, true);
-      await svc.bindQueue(testDb.db, queue.id, formId);
-      await testDb.db
-        .updateTable("org_config")
-        .set({ intake_queue_id: queue.id })
-        .execute();
 
       const result = await svc.getPublicForm(testDb.db);
-
       expect(result).not.toBeNull();
       expect(result?.formId).toBe(formId);
-      expect(result?.fields).toHaveLength(2);
-      expect(result?.fields[0]?.fieldType).toBe("text");
-      expect(result?.fields[0]?.encryptedLabel).toBe(label1);
-      expect(result?.fields[0]?.encryptedConfig).toBe(config1);
-      expect(result?.fields[0]?.isRequired).toBe(true);
-      expect(result?.fields[1]?.fieldType).toBe("textarea");
-      expect(result?.fields[1]?.encryptedLabel).toBe(label2);
-      expect(result?.fields[1]?.isRequired).toBe(false);
-
-      // Response does not contain queue ids
-      const serialized = JSON.stringify(result);
-      expect(serialized).not.toContain(queue.id);
+      expect(result?.slug).toBe("default-test");
 
       // Cleanup
+      await svc.setActive(testDb.db, formId, false);
       await testDb.db
-        .updateTable("org_config")
-        .set({ intake_queue_id: null })
+        .updateTable("intake_forms")
+        .set({ is_default: false })
+        .where("id", "=", formId)
         .execute();
+    });
+
+    it("resolves by slug when given", async () => {
+      const formId = await createForm("Slug Form", {
+        slug: "test-slug-resolve",
+      });
+      await svc.setActive(testDb.db, formId, true);
+
+      const result = await svc.getPublicForm(testDb.db, "test-slug-resolve");
+      expect(result).not.toBeNull();
+      expect(result?.formId).toBe(formId);
+      expect(result?.slug).toBe("test-slug-resolve");
+
+      await svc.setActive(testDb.db, formId, false);
+    });
+
+    it("returns null for unknown slug", async () => {
+      const result = await svc.getPublicForm(testDb.db, "nonexistent-slug");
+      expect(result).toBeNull();
+    });
+
+    it("returns null for inactive slug form", async () => {
+      await createForm("Inactive Slug", { slug: "inactive-slug" });
+      // Form starts inactive by default
+
+      const result = await svc.getPublicForm(testDb.db, "inactive-slug");
+      expect(result).toBeNull();
+    });
+
+    it("returns fields with role in position order", async () => {
+      const formId = await createForm("Role Fields", {
+        slug: "role-fields",
+        fields: [
+          {
+            fieldType: "text",
+            role: "phone-contact",
+            encryptedLabel: Buffer.from("Phone").toString("base64"),
+            encryptedConfig: Buffer.from("{}").toString("base64"),
+            isRequired: true,
+          },
+          {
+            fieldType: "select",
+            role: "queue-routing",
+            encryptedLabel: Buffer.from("Route").toString("base64"),
+            encryptedConfig: Buffer.from("{}").toString("base64"),
+            isRequired: true,
+          },
+        ],
+      });
+      await svc.setActive(testDb.db, formId, true);
+
+      const result = await svc.getPublicForm(testDb.db, "role-fields");
+      expect(result?.fields).toHaveLength(2);
+      expect(result?.fields[0]?.role).toBe("phone-contact");
+      expect(result?.fields[1]?.role).toBe("queue-routing");
+
+      await svc.setActive(testDb.db, formId, false);
     });
   });
 
-  describe("getForm", () => {
-    it("returns form with fields in position order and base64 ciphertext", async () => {
-      const label1 = Buffer.from("Question 1").toString("base64");
-      const label2 = Buffer.from("Question 2").toString("base64");
-      const config1 = Buffer.from("cfg1").toString("base64");
-      const config2 = Buffer.from("cfg2").toString("base64");
+  describe("resolvePublicForm", () => {
+    it("returns intakeDisabled when web_intake_enabled is false", async () => {
+      await testDb.db
+        .updateTable("org_config")
+        .set({ web_intake_enabled: false })
+        .execute();
 
-      const formId = await createForm("Detail Test", [
-        {
-          fieldType: "text",
-          encryptedLabel: label1,
-          encryptedConfig: config1,
-          isRequired: true,
-        },
-        {
-          fieldType: "select",
-          encryptedLabel: label2,
-          encryptedConfig: config2,
-          isRequired: false,
-        },
-      ]);
+      const result = await svc.resolvePublicForm(testDb.db, null);
+      expect(result.intakeDisabled).toBe(true);
+      expect(result.formId).toBeNull();
 
-      const detail = await svc.getForm(testDb.db, formId);
-
-      expect(detail.formId).toBe(formId);
-      expect(detail.name).toBe("Detail Test");
-      expect(detail.isActive).toBe(false);
-      expect(detail.fields).toHaveLength(2);
-
-      // Fields in position order
-      expect(detail.fields[0]?.fieldType).toBe("text");
-      expect(detail.fields[0]?.encryptedLabel).toBe(label1);
-      expect(detail.fields[0]?.encryptedConfig).toBe(config1);
-      expect(detail.fields[0]?.isRequired).toBe(true);
-
-      expect(detail.fields[1]?.fieldType).toBe("select");
-      expect(detail.fields[1]?.encryptedLabel).toBe(label2);
-      expect(detail.fields[1]?.encryptedConfig).toBe(config2);
-      expect(detail.fields[1]?.isRequired).toBe(false);
+      // Cleanup
+      await testDb.db
+        .updateTable("org_config")
+        .set({ web_intake_enabled: true })
+        .execute();
     });
 
-    it("throws NotFoundError for an unknown form id", async () => {
-      await expect(svc.getForm(testDb.db, crypto.randomUUID())).rejects.toThrow(
-        NotFoundError,
-      );
+    it("returns form data when intake is enabled and slug matches", async () => {
+      const formId = await createForm("Resolve Test", { slug: "resolve-test" });
+      await svc.setActive(testDb.db, formId, true);
+
+      const result = await svc.resolvePublicForm(testDb.db, "resolve-test");
+      expect(result.intakeDisabled).toBe(false);
+      expect(result.formId).toBe(formId);
+
+      await svc.setActive(testDb.db, formId, false);
     });
   });
 
   describe("saveForm", () => {
-    it("creates a new form when formId is null", async () => {
-      const formId = await createForm("New Form");
-      expect(formId).toBeDefined();
-      expect(typeof formId).toBe("string");
+    it("creates a new form with slug and destination", async () => {
+      const queue = await createTestQueue(testDb.db);
+      const formId = await createForm("Slug Dest Form", {
+        slug: "slug-dest",
+        destinationQueueId: queue.id,
+      });
 
-      const forms = await svc.listForms(testDb.db);
-      const found = forms.find((f) => f.id === formId);
-      expect(found).toBeDefined();
-      expect(found?.name).toBe("New Form");
-      expect(found?.fieldCount).toBe(1);
+      const detail = await svc.getForm(testDb.db, formId);
+      expect(detail.slug).toBe("slug-dest");
+      expect(detail.destinationQueueId).toBe(queue.id);
+    });
+
+    it("rejects duplicate slug with INTAKE_SLUG_TAKEN", async () => {
+      await createForm("First Slug", { slug: "unique-slug-test" });
+
+      try {
+        await createForm("Second Slug", { slug: "unique-slug-test" });
+        expect.fail("Should have thrown");
+      } catch (err: unknown) {
+        expect(err).toBeInstanceOf(ConflictError);
+        expect((err as ConflictError).message).toBe(
+          ErrorCode.INTAKE_SLUG_TAKEN,
+        );
+      }
+    });
+
+    it("atomically clears previous default when setting is_default", async () => {
+      const idA = await createForm("Default A", { isDefault: true });
+      const idB = await createForm("Default B", { isDefault: true });
+
+      const detailA = await svc.getForm(testDb.db, idA);
+      const detailB = await svc.getForm(testDb.db, idB);
+
+      expect(detailA.isDefault).toBe(false);
+      expect(detailB.isDefault).toBe(true);
+    });
+
+    it("rejects nonexistent destination queue", async () => {
+      await expect(
+        createForm("Bad Queue", {
+          destinationQueueId: crypto.randomUUID(),
+        }),
+      ).rejects.toThrow(NotFoundError);
     });
 
     it("replaces fields atomically on update", async () => {
-      const formId = await createForm("Replace Test", [
-        { fieldType: "text" },
-        { fieldType: "textarea" },
-      ]);
+      const formId = await createForm("Replace Test", {
+        fields: [{ fieldType: "text" }, { fieldType: "textarea" }],
+      });
 
-      // Verify initial field count
       let forms = await svc.listForms(testDb.db);
       expect(forms.find((f) => f.id === formId)?.fieldCount).toBe(2);
 
-      // Update with different fields
       await svc.saveForm(testDb.db, crypto.randomUUID(), {
         formId,
         name: "Replace Test Updated",
@@ -296,6 +310,37 @@ describe.skipIf(!process.env.DATABASE_URL)("IntakeFormService", () => {
     });
   });
 
+  describe("getForm", () => {
+    it("returns form with slug, default, destination, and field roles", async () => {
+      const queue = await createTestQueue(testDb.db);
+      const formId = await createForm("Detail Test", {
+        slug: "detail-slug",
+        isDefault: false,
+        destinationQueueId: queue.id,
+        fields: [
+          {
+            fieldType: "text",
+            role: "real-name",
+            encryptedLabel: Buffer.from("Q1").toString("base64"),
+            encryptedConfig: Buffer.from("c1").toString("base64"),
+            isRequired: true,
+          },
+        ],
+      });
+
+      const detail = await svc.getForm(testDb.db, formId);
+      expect(detail.slug).toBe("detail-slug");
+      expect(detail.destinationQueueId).toBe(queue.id);
+      expect(detail.fields[0]?.role).toBe("real-name");
+    });
+
+    it("throws NotFoundError for an unknown form id", async () => {
+      await expect(svc.getForm(testDb.db, crypto.randomUUID())).rejects.toThrow(
+        NotFoundError,
+      );
+    });
+  });
+
   describe("deleteForm", () => {
     it("deletes a form with no responses", async () => {
       const formId = await createForm("Delete Me");
@@ -310,7 +355,6 @@ describe.skipIf(!process.env.DATABASE_URL)("IntakeFormService", () => {
       const formId = await createForm("Has Responses");
       const queue = await createTestQueue(testDb.db);
 
-      // Create a minimal ticket + client to satisfy FK
       const client = await testDb.db
         .insertInto("clients")
         .values({
@@ -331,7 +375,6 @@ describe.skipIf(!process.env.DATABASE_URL)("IntakeFormService", () => {
         .returning("id")
         .executeTakeFirstOrThrow();
 
-      // Insert a response row
       await testDb.db
         .insertInto("intake_form_responses")
         .values({
@@ -381,61 +424,31 @@ describe.skipIf(!process.env.DATABASE_URL)("IntakeFormService", () => {
     });
   });
 
-  describe("bindQueue", () => {
-    it("binds and unbinds a form to a queue", async () => {
-      const queue = await createTestQueue(testDb.db);
-      const formId = await createForm("Bind Test");
-
-      // Bind
-      await svc.bindQueue(testDb.db, queue.id, formId);
-
-      let forms = await svc.listForms(testDb.db);
-      let bound = forms.find((f) => f.id === formId);
-      expect(bound?.boundQueueIds).toContain(queue.id);
-
-      // Unbind
-      await svc.bindQueue(testDb.db, queue.id, null);
-
-      forms = await svc.listForms(testDb.db);
-      bound = forms.find((f) => f.id === formId);
-      expect(bound?.boundQueueIds).not.toContain(queue.id);
+  describe("isWebIntakeEnabled", () => {
+    it("returns true by default", async () => {
+      const enabled = await svc.isWebIntakeEnabled(testDb.db);
+      expect(enabled).toBe(true);
     });
 
-    it("rebinding replaces the previous form on the same queue", async () => {
-      const queue = await createTestQueue(testDb.db);
-      const formA = await createForm("Form A");
-      const formB = await createForm("Form B");
+    it("returns false when web_intake_enabled is false", async () => {
+      await testDb.db
+        .updateTable("org_config")
+        .set({ web_intake_enabled: false })
+        .execute();
 
-      await svc.bindQueue(testDb.db, queue.id, formA);
-      await svc.bindQueue(testDb.db, queue.id, formB);
+      const enabled = await svc.isWebIntakeEnabled(testDb.db);
+      expect(enabled).toBe(false);
 
-      const forms = await svc.listForms(testDb.db);
-      expect(forms.find((f) => f.id === formA)?.boundQueueIds).not.toContain(
-        queue.id,
-      );
-      expect(forms.find((f) => f.id === formB)?.boundQueueIds).toContain(
-        queue.id,
-      );
-    });
-
-    it("throws NotFoundError for a nonexistent queue", async () => {
-      const formId = await createForm("Queue Not Found");
-      await expect(
-        svc.bindQueue(testDb.db, crypto.randomUUID(), formId),
-      ).rejects.toThrow(NotFoundError);
-    });
-
-    it("throws NotFoundError for a nonexistent form", async () => {
-      const queue = await createTestQueue(testDb.db);
-      await expect(
-        svc.bindQueue(testDb.db, queue.id, crypto.randomUUID()),
-      ).rejects.toThrow(NotFoundError);
+      // Cleanup
+      await testDb.db
+        .updateTable("org_config")
+        .set({ web_intake_enabled: true })
+        .execute();
     });
   });
 
   describe("listForms", () => {
-    it("returns forms ordered by creation time with correct summaries", async () => {
-      // This test relies on forms created above; verify structure
+    it("returns forms with slug, default, and destination info", async () => {
       const forms = await svc.listForms(testDb.db);
       expect(forms.length).toBeGreaterThan(0);
 
@@ -443,8 +456,8 @@ describe.skipIf(!process.env.DATABASE_URL)("IntakeFormService", () => {
         expect(f.id).toBeDefined();
         expect(typeof f.name).toBe("string");
         expect(typeof f.isActive).toBe("boolean");
+        expect(typeof f.isDefault).toBe("boolean");
         expect(typeof f.fieldCount).toBe("number");
-        expect(Array.isArray(f.boundQueueIds)).toBe(true);
       }
     });
   });

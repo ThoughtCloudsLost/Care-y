@@ -64,6 +64,7 @@ const EVENT_LABELS = new Map<string, (terms: Terms) => string>([
   ["intake_form_saved", () => m.audit_event_intake_form_saved()],
   ["intake_form_deleted", () => m.audit_event_intake_form_deleted()],
   ["intake_form_bound", () => m.audit_event_intake_form_bound()],
+  ["web_intake_toggled", () => m.audit_event_web_intake_toggled()],
 ]);
 
 /**

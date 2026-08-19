@@ -123,6 +123,7 @@ export const auditEventTypeSchema = z.enum([
   "intake_form_saved",
   "intake_form_deleted",
   "intake_form_bound",
+  "web_intake_toggled",
 ]);
 export type AuditEventType = z.infer<typeof auditEventTypeSchema>;
 

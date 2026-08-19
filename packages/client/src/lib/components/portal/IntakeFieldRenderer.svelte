@@ -11,19 +11,27 @@
     Checkbox,
     BlockTitle,
   } from "konsta/svelte";
-  import type { IntakeFieldConfig, AvailabilityData } from "@care-y/shared";
+  import type {
+    IntakeFieldConfig,
+    IntakeFieldRole,
+    AvailabilityData,
+  } from "@care-y/shared";
   import * as m from "$lib/paraglide/messages.js";
   import FieldError from "$lib/components/FieldError.svelte";
   import AvailabilityField from "./AvailabilityField.svelte";
+  import IntakePrivacyIndicator from "./IntakePrivacyIndicator.svelte";
 
   interface IntakeFieldRendererProps {
     readonly fieldId: string;
     readonly label: string;
     readonly config: IntakeFieldConfig;
     readonly isRequired: boolean;
-    readonly value: string | string[] | AvailabilityData | undefined;
+    readonly role?: IntakeFieldRole | null;
+    readonly value: string | string[] | AvailabilityData | boolean | undefined;
     readonly error?: string;
-    readonly onchange: (value: string | string[] | AvailabilityData) => void;
+    readonly onchange: (
+      value: string | string[] | AvailabilityData | boolean,
+    ) => void;
   }
 
   let {
@@ -31,6 +39,7 @@
     label,
     config,
     isRequired,
+    role = null,
     value,
     error,
     onchange,
@@ -67,9 +76,20 @@
     onchange(next);
   }
 
+  function handleCheckboxSingleToggle(): void {
+    onchange(value !== true);
+  }
+
   function handleAvailabilityChange(data: AvailabilityData): void {
     onchange(data);
   }
+
+  /** Server-metadata roles produce a plaintext derived signal at submit. */
+  const SERVER_METADATA_ROLES: ReadonlySet<string> = new Set([
+    "queue-routing",
+    "urgency",
+    "escalation",
+  ]);
 
   const charCount = $derived.by((): { current: number; max: number } | null => {
     if (config.type !== "text" && config.type !== "textarea") return null;
@@ -100,6 +120,11 @@
     </p>
   {/if}
   <FieldError message={error} />
+  {#if role}
+    <IntakePrivacyIndicator
+      hasMetadataSignal={SERVER_METADATA_ROLES.has(role)}
+    />
+  {/if}
 {:else if config.type === "textarea"}
   <label for={inputId} class="sr-only">{displayLabel}</label>
   <BlockTitle id={labelId}>{displayLabel}</BlockTitle>
@@ -121,6 +146,11 @@
     </p>
   {/if}
   <FieldError message={error} />
+  {#if role}
+    <IntakePrivacyIndicator
+      hasMetadataSignal={SERVER_METADATA_ROLES.has(role)}
+    />
+  {/if}
 {:else if config.type === "select"}
   <label for={inputId} class="sr-only">{displayLabel}</label>
   <BlockTitle id={labelId}>{displayLabel}</BlockTitle>
@@ -141,6 +171,11 @@
     </ListInput>
   </List>
   <FieldError message={error} />
+  {#if role}
+    <IntakePrivacyIndicator
+      hasMetadataSignal={SERVER_METADATA_ROLES.has(role)}
+    />
+  {/if}
 {:else if config.type === "multiselect"}
   <BlockTitle id={labelId}>{displayLabel}</BlockTitle>
   <List strong inset role="group" aria-labelledby={labelId}>
@@ -157,6 +192,29 @@
     {/each}
   </List>
   <FieldError message={error} />
+  {#if role}
+    <IntakePrivacyIndicator
+      hasMetadataSignal={SERVER_METADATA_ROLES.has(role)}
+    />
+  {/if}
+{:else if config.type === "checkbox"}
+  <List strong inset>
+    <ListItem label title={displayLabel}>
+      {#snippet media()}
+        <Checkbox
+          component="div"
+          checked={value === true}
+          onChange={handleCheckboxSingleToggle}
+        />
+      {/snippet}
+    </ListItem>
+  </List>
+  <FieldError message={error} />
+  {#if role}
+    <IntakePrivacyIndicator
+      hasMetadataSignal={SERVER_METADATA_ROLES.has(role)}
+    />
+  {/if}
 {:else if config.type === "availability"}
   <BlockTitle id={labelId}>{displayLabel}</BlockTitle>
   <AvailabilityField

@@ -2,7 +2,7 @@ import { test, expect } from "./coverage-fixture";
 import { startCoverage, stopAndWriteCoverage } from "./coverage-fixture";
 import type { Page, Request } from "@playwright/test";
 import { auditA11y, CRYPTO_TIMEOUT, login, openTicketByTitle } from "./helpers";
-import { countRows } from "./db-probe";
+import { countRows, queryDb } from "./db-probe";
 
 /**
  * Public intake form E2E roundtrip.
@@ -257,5 +257,183 @@ test.describe.serial("Public Intake Form", () => {
     // of what state we reached (the audit should pass on any page state).
     await auditA11y(errorPage);
     await errorPage.close();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Multi-form intake with per-slug routing and not-available states
+// ---------------------------------------------------------------------------
+
+test.describe.serial("Multi-form Intake Routing", () => {
+  /**
+   * Seed two active forms with distinct slugs and destination queues using
+   * db-probe helpers (raw SQL). The seeded forms are minimal: one text field
+   * each, different destination_queue_id values. The tests then submit
+   * against each slug URL and verify tickets landed in the correct queues.
+   */
+
+  const SLUG_A = "e2e-form-alpha";
+  const SLUG_B = "e2e-form-beta";
+  let queueAId: string;
+  let queueBId: string;
+  let formAId: string;
+  let formBId: string;
+
+  test.beforeAll(() => {
+    // Resolve existing queue ids from the e2e org. The seed creates at least
+    // one queue (the intake queue). We create a second if needed.
+    const existingQueues = queryDb(
+      "SELECT id FROM queues ORDER BY created_at LIMIT 2;",
+    );
+    const queueIds = existingQueues
+      .split("\n")
+      .map((s) => s.trim())
+      .filter(Boolean);
+
+    if (queueIds.length < 2) {
+      // Create a second queue for routing differentiation
+      queryDb(
+        `INSERT INTO queues (id, encrypted_name, sort_order, created_at, updated_at)
+         VALUES (gen_random_uuid(), 'enc-test-q', 99, now(), now());`,
+      );
+      const refreshed = queryDb(
+        "SELECT id FROM queues ORDER BY created_at LIMIT 2;",
+      );
+      const ids = refreshed
+        .split("\n")
+        .map((s) => s.trim())
+        .filter(Boolean);
+      queueAId = ids[0]!;
+      queueBId = ids[1]!;
+    } else {
+      queueAId = queueIds[0]!;
+      queueBId = queueIds[1]!;
+    }
+
+    // Insert two minimal intake forms with distinct slugs and destinations
+    formAId = queryDb(
+      `INSERT INTO intake_forms (id, name, slug, is_active, is_default, destination_queue_id, created_at, updated_at)
+       VALUES (gen_random_uuid(), 'Alpha Form', '${SLUG_A}', true, false, '${queueAId}', now(), now())
+       RETURNING id;`,
+    ).trim();
+
+    formBId = queryDb(
+      `INSERT INTO intake_forms (id, name, slug, is_active, is_default, destination_queue_id, created_at, updated_at)
+       VALUES (gen_random_uuid(), 'Beta Form', '${SLUG_B}', true, false, '${queueBId}', now(), now())
+       RETURNING id;`,
+    ).trim();
+
+    // Each form needs at least one field (the renderer requires it).
+    // Insert a minimal text field with encrypted label/config (placeholder ciphertext).
+    for (const fid of [formAId, formBId]) {
+      queryDb(
+        `INSERT INTO intake_form_fields (id, form_id, field_type, encrypted_label, encrypted_config, is_required, position, created_at, updated_at)
+         VALUES (gen_random_uuid(), '${fid}', 'textarea', 'dGVzdC1sYWJlbA', 'eyJ0eXBlIjoidGV4dGFyZWEifQ', true, 0, now(), now());`,
+      );
+    }
+  });
+
+  test("not-available state for unknown slug", async ({
+    browser,
+  }, testInfo) => {
+    testInfo.setTimeout(CRYPTO_TIMEOUT * 2);
+    const page = await browser.newPage();
+    await page.goto("/intake/nonexistent-slug-xyz");
+    // The not-available state renders a role="status" element with the message
+    const statusEl = page.locator("[role='status']");
+    await expect(statusEl).toBeVisible({ timeout: CRYPTO_TIMEOUT });
+    const text = await statusEl.textContent();
+    expect(text).toContain("not available");
+    await page.close();
+  });
+
+  test("not-available state when web_intake_enabled is false", async ({
+    browser,
+  }, testInfo) => {
+    testInfo.setTimeout(CRYPTO_TIMEOUT * 2);
+
+    // Disable web intake via DB
+    queryDb("UPDATE org_config SET web_intake_enabled = false WHERE true;");
+
+    const page = await browser.newPage();
+    await page.goto("/intake");
+    const statusEl = page.locator("[role='status']");
+    await expect(statusEl).toBeVisible({ timeout: CRYPTO_TIMEOUT });
+    const text = await statusEl.textContent();
+    expect(text).toContain("not available");
+
+    // Re-enable for subsequent tests
+    queryDb("UPDATE org_config SET web_intake_enabled = true WHERE true;");
+    await page.close();
+  });
+
+  test("submit to slug-A routes ticket to queue A", async ({
+    browser,
+  }, testInfo) => {
+    testInfo.setTimeout(CRYPTO_TIMEOUT * 3);
+    const page = await browser.newPage();
+    await page.goto(`/intake/${SLUG_A}`);
+
+    // Wait for the form to render (the branding-key decrypt exposes the field)
+    // Since the encrypted label/config are placeholder ciphertext, the form
+    // may show a decrypt error or a generic textarea. We look for a textarea
+    // (the fallback when decrypt fails renders the default form, which has a
+    // textarea).
+    const textarea = page.locator("textarea").first();
+    await expect(textarea).toBeVisible({ timeout: CRYPTO_TIMEOUT });
+    await textarea.fill("Alpha queue submission");
+
+    const submitBtn = page.getByRole("button", { name: /submit/i });
+    await expect(submitBtn).toBeEnabled({ timeout: CRYPTO_TIMEOUT });
+    await submitBtn.click();
+
+    // Wait for success (reference code visible)
+    const refEl = page.locator("code").first();
+    await expect(refEl).toBeVisible({ timeout: CRYPTO_TIMEOUT });
+
+    // DB probe: the most recent ticket should be in queue A
+    const latestQueueId = queryDb(
+      "SELECT queue_id FROM tickets ORDER BY created_at DESC LIMIT 1;",
+    ).trim();
+    expect(latestQueueId).toBe(queueAId);
+
+    await page.close();
+  });
+
+  test("submit to slug-B routes ticket to queue B", async ({
+    browser,
+  }, testInfo) => {
+    testInfo.setTimeout(CRYPTO_TIMEOUT * 3);
+    const page = await browser.newPage();
+    await page.goto(`/intake/${SLUG_B}`);
+
+    const textarea = page.locator("textarea").first();
+    await expect(textarea).toBeVisible({ timeout: CRYPTO_TIMEOUT });
+    await textarea.fill("Beta queue submission");
+
+    const submitBtn = page.getByRole("button", { name: /submit/i });
+    await expect(submitBtn).toBeEnabled({ timeout: CRYPTO_TIMEOUT });
+    await submitBtn.click();
+
+    const refEl = page.locator("code").first();
+    await expect(refEl).toBeVisible({ timeout: CRYPTO_TIMEOUT });
+
+    // DB probe: the most recent ticket should be in queue B
+    const latestQueueId = queryDb(
+      "SELECT queue_id FROM tickets ORDER BY created_at DESC LIMIT 1;",
+    ).trim();
+    expect(latestQueueId).toBe(queueBId);
+
+    await page.close();
+  });
+
+  test.afterAll(() => {
+    // Cleanup: remove the seeded forms and their fields
+    queryDb(
+      `DELETE FROM intake_form_fields WHERE form_id IN ('${formAId}', '${formBId}');`,
+    );
+    queryDb(
+      `DELETE FROM intake_forms WHERE id IN ('${formAId}', '${formBId}');`,
+    );
   });
 });

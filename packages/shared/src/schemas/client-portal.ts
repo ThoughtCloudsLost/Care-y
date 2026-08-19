@@ -11,6 +11,7 @@
 
 import { z } from "zod";
 import { base64Bytes, base64String } from "./validators.js";
+import { intakeFieldRoleSchema } from "./intake-forms.js";
 
 /** crypto_box_seal(32-byte tk) = 32 + 48 = 80 bytes (variant-agnostic exact-byte check). */
 export const intakeWrappedTkSchema = base64Bytes(80, "wrappedTk (sealed box)");
@@ -50,6 +51,11 @@ export const intakeSubmissionInputSchema = z.object({
   pow: z
     .object({ challenge: z.string().max(128), solution: z.string().max(128) })
     .optional(),
+  // Submit-time plaintext metadata resolved from encrypted field config
+  // by the submitter's browser (ADR-068 server-metadata roles).
+  resolvedQueueId: z.uuid().nullable().optional(),
+  resolvedPriority: z.enum(["low", "normal", "high", "urgent"]).optional(),
+  resolvedEscalationLevel: z.string().min(1).max(50).optional(),
 });
 export type IntakeSubmissionInput = z.infer<typeof intakeSubmissionInputSchema>;
 
@@ -71,3 +77,26 @@ export const intakeConfigResponseSchema = z.object({
   powRequired: z.boolean(),
 });
 export type IntakeConfigResponse = z.infer<typeof intakeConfigResponseSchema>;
+
+// ---------------------------------------------------------------------------
+// Public form read shape (returned by getIntakeForm)
+// ---------------------------------------------------------------------------
+
+/** Wire shape for a single field as seen by the public renderer. */
+export const publicIntakeFieldSchema = z.object({
+  id: z.uuid(),
+  fieldType: z.string(),
+  role: intakeFieldRoleSchema.nullable(),
+  encryptedLabel: z.string(),
+  encryptedConfig: z.string(),
+  isRequired: z.boolean(),
+});
+export type PublicIntakeField = z.infer<typeof publicIntakeFieldSchema>;
+
+/** Wire shape for the public form as seen by the anonymous submitter. */
+export const publicIntakeFormSchema = z.object({
+  id: z.uuid(),
+  slug: z.string().nullable(),
+  fields: z.array(publicIntakeFieldSchema),
+});
+export type PublicIntakeForm = z.infer<typeof publicIntakeFormSchema>;

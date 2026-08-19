@@ -1,6 +1,7 @@
 <!--
   Admin intake form editor. Renders the ordered field list, add/reorder/remove
-  controls, queue binding, read-only preview, and save/delete actions.
+  controls, slug, destination queue, default toggle, share link, read-only
+  preview, and save/delete actions.
 
   Edits plaintext in component-local state only. Nothing plaintext persists.
   On save, every field's label and config are encrypted via encryptFieldContent
@@ -14,19 +15,24 @@
     Button,
     BlockTitle,
     Block,
+    Toggle,
     DialogButton,
   } from "konsta/svelte";
-  import { ArrowUp, ArrowDown, Settings, X } from "@lucide/svelte";
+  import { ArrowUp, ArrowDown, Settings, X, Copy } from "@lucide/svelte";
   import {
     createMutation,
     createQuery,
     useQueryClient,
   } from "@tanstack/svelte-query";
-  import type { IntakeFieldConfig, IntakeFieldType } from "@care-y/shared";
+  import type {
+    IntakeFieldConfig,
+    IntakeFieldType,
+    IntakeFieldRole,
+  } from "@care-y/shared";
   import * as m from "$lib/paraglide/messages.js";
   import { trpc } from "$lib/trpc/index.js";
   import { requireRouter } from "$lib/errors.js";
-  import { intakeFormKeys, queueKeys } from "$lib/query/keys.js";
+  import { intakeFormKeys, queueKeys, volunteerKeys } from "$lib/query/keys.js";
   import { getOrgKeyManager, getOrgDecryptCache } from "$lib/crypto/context.js";
   import { encryptFieldContent } from "$lib/portal/intake-form-crypto.js";
   import { haptic } from "$lib/utils/haptic.js";
@@ -37,6 +43,12 @@
   import ShellSheet from "$lib/shell/ShellSheet.svelte";
   import ShellDialog from "$lib/shell/ShellDialog.svelte";
   import IntakeFieldConfigSheet from "./IntakeFieldConfigSheet.svelte";
+  import type {
+    FieldConfigState,
+    FieldConfigInitial,
+    QueueOption,
+    VolunteerOption,
+  } from "./intake-field-config-types.js";
   import IntakeFieldRenderer from "$lib/components/portal/IntakeFieldRenderer.svelte";
 
   interface PlaintextField {
@@ -44,13 +56,18 @@
     isRequired: boolean;
     config: IntakeFieldConfig;
     fieldType: IntakeFieldType;
+    role: IntakeFieldRole | null;
+    routingQueueIds: string[] | null;
+    escalationRecipientIds: string[] | null;
   }
 
   interface IntakeFormEditorProps {
     readonly formId: string | null;
     readonly initialName: string;
+    readonly initialSlug: string | null;
+    readonly initialIsDefault: boolean;
+    readonly initialDestinationQueueId: string | null;
     readonly initialFields: readonly PlaintextField[];
-    readonly boundQueueIds: readonly string[];
     readonly onback: () => void;
     readonly ondeleted: () => void;
   }
@@ -58,8 +75,10 @@
   let {
     formId,
     initialName,
+    initialSlug,
+    initialIsDefault,
+    initialDestinationQueueId,
     initialFields,
-    boundQueueIds,
     onback,
     ondeleted,
   }: IntakeFormEditorProps = $props();
@@ -71,17 +90,23 @@
   const orgCache = getOrgDecryptCache();
 
   let formName = $state(initialName);
+  let formSlug = $state(initialSlug ?? "");
+  let isDefault = $state(initialIsDefault);
+  let destinationQueueId = $state<string | null>(initialDestinationQueueId);
   let fields = $state<PlaintextField[]>([...initialFields]);
 
   // Field config sheet state
   let configSheetOpened = $state(false);
   let configFieldIndex = $state(-1);
   let configFieldType = $state<IntakeFieldType>("text");
-  let configFieldInitial = $state<{
-    label: string;
-    isRequired: boolean;
-    config: IntakeFieldConfig;
-  }>({ label: "", isRequired: false, config: { type: "text" } });
+  const defaultConfigInitial: FieldConfigInitial = {
+    label: "",
+    isRequired: false,
+    config: { type: "text" },
+    role: null,
+    escalationRecipientIds: null,
+  };
+  let configFieldInitial: FieldConfigInitial = $state(defaultConfigInitial);
 
   // Add-field type picker sheet state
   let addFieldSheetOpened = $state(false);
@@ -90,13 +115,17 @@
     fields.some((f) => f.fieldType === "availability"),
   );
 
-  // Local bound queue set for optimistic bind/unbind rendering
-  let localBoundQueueIds = $state<Set<string>>(new Set(boundQueueIds));
-
-  // Queue list query for the "Used by" section
+  // Queue list query for the destination selector
   const queuesQuery = createQuery(() => ({
     queryKey: queueKeys.all,
     queryFn: async () => ticketRouter.listQueues.query(),
+  }));
+
+  // Volunteer list query for escalation recipient picker
+  const volunteersQuery = createQuery(() => ({
+    queryKey: volunteerKeys.all,
+    queryFn: async () => ticketRouter.listVolunteers.query(),
+    staleTime: 5 * 60 * 1000,
   }));
 
   // Decrypt queue names
@@ -106,11 +135,61 @@
     );
   }
 
+  /** Decrypted queue options for the config sheet. */
+  const queueOptions = $derived.by((): QueueOption[] => {
+    if (queuesQuery.data == null) return [];
+    return queuesQuery.data.map((q: { id: string; encryptedName: string }) => ({
+      id: q.id,
+      name: getQueueName(q),
+    }));
+  });
+
+  /** Decrypted volunteer options for the escalation recipient picker. */
+  const volunteerOptions = $derived.by((): VolunteerOption[] => {
+    if (volunteersQuery.data == null) return [];
+    return volunteersQuery.data.map(
+      (v: { id: string; encryptedDisplayName: string }) => ({
+        id: v.id,
+        name: orgCache.decrypt(`vol:${v.id}`, v.encryptedDisplayName) ?? v.id,
+      }),
+    );
+  });
+
+  // Auto-suggest slug from form name
+  function suggestSlug(name: string): string {
+    return name
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "")
+      .slice(0, 80);
+  }
+
+  // Share link derivation
+  const shareLink = $derived.by((): string | null => {
+    if (!formSlug.trim()) return null;
+    // Use window.location.origin when available, else placeholder
+    const origin = typeof window !== "undefined" ? window.location.origin : "";
+    return `${origin}/intake/${formSlug.trim()}`;
+  });
+
+  async function copyShareLink(): Promise<void> {
+    if (shareLink === null) return;
+    try {
+      await navigator.clipboard.writeText(shareLink);
+      toastStore.show(m.intake_forms_link_copied());
+    } catch {
+      // Clipboard API may fail on some browsers; no-op
+    }
+  }
+
   // Save mutation
   const saveMutation = createMutation(() => ({
     mutationFn: async (input: {
       formId: string | null;
       name: string;
+      slug: string | null;
+      isDefault: boolean;
+      destinationQueueId: string | null;
       fields: PlaintextField[];
     }) => {
       const orgPub = orgKeyManager.getPublicKey();
@@ -128,12 +207,18 @@
           encryptedLabel: encrypted.encryptedLabel,
           encryptedConfig: encrypted.encryptedConfig,
           isRequired: f.isRequired,
+          role: f.role ?? undefined,
+          routingQueueIds: f.routingQueueIds ?? undefined,
+          escalationRecipientIds: f.escalationRecipientIds ?? undefined,
         };
       });
 
       return intakeFormsRouter.save.mutate({
         formId: input.formId,
         name: input.name,
+        slug: input.slug,
+        isDefault: input.isDefault,
+        destinationQueueId: input.destinationQueueId,
         fields: encryptedFields,
       });
     },
@@ -145,31 +230,6 @@
         queryKey: intakeFormKeys.all,
       });
       onback();
-    },
-    onError: (err: unknown) => {
-      toastStore.show(getErrorMessage(err));
-    },
-  }));
-
-  // Bind/unbind mutation
-  const bindMutation = createMutation(() => ({
-    mutationFn: async (input: { queueId: string; formId: string | null }) =>
-      intakeFormsRouter.bindQueue.mutate(input),
-    onSuccess: (_data, variables) => {
-      // Optimistic update of local bound set
-      if (variables.formId === null) {
-        localBoundQueueIds = new Set(
-          [...localBoundQueueIds].filter((id) => id !== variables.queueId),
-        );
-      } else {
-        localBoundQueueIds = new Set([
-          ...localBoundQueueIds,
-          variables.queueId,
-        ]);
-      }
-      void queryClient.invalidateQueries({
-        queryKey: intakeFormKeys.all,
-      });
     },
     onError: (err: unknown) => {
       toastStore.show(getErrorMessage(err));
@@ -224,6 +284,24 @@
     const target = e.target;
     if (target instanceof HTMLInputElement) {
       formName = target.value;
+      // Auto-suggest slug when creating a new form and slug is empty
+      if (formId === null && formSlug === "") {
+        formSlug = suggestSlug(target.value);
+      }
+    }
+  }
+
+  function handleSlugInput(e: Event): void {
+    const target = e.target;
+    if (target instanceof HTMLInputElement) {
+      formSlug = target.value;
+    }
+  }
+
+  function handleDestinationChange(e: Event): void {
+    const target = e.target;
+    if (target instanceof HTMLSelectElement) {
+      destinationQueueId = target.value === "" ? null : target.value;
     }
   }
 
@@ -253,27 +331,28 @@
       label: field.label,
       isRequired: field.isRequired,
       config: field.config,
+      role: field.role,
+      escalationRecipientIds: field.escalationRecipientIds,
     };
     configSheetOpened = true;
   }
 
-  function handleConfigDone(result: {
-    label: string;
-    isRequired: boolean;
-    config: IntakeFieldConfig;
-  }): void {
+  function handleConfigDone(result: FieldConfigState): void {
     configSheetOpened = false;
     if (configFieldIndex >= 0 && configFieldIndex < fields.length) {
-      fields = fields.map((f, i) =>
-        i === configFieldIndex
-          ? {
-              ...f,
-              label: result.label,
-              isRequired: result.isRequired,
-              config: result.config,
-            }
-          : f,
-      );
+      fields = fields.map((f, i) => {
+        if (i !== configFieldIndex) return f;
+        const updated: PlaintextField = {
+          fieldType: f.fieldType,
+          label: result.label,
+          isRequired: result.isRequired,
+          config: result.config,
+          role: result.role,
+          routingQueueIds: result.routingQueueIds,
+          escalationRecipientIds: result.escalationRecipientIds,
+        };
+        return updated;
+      });
     }
   }
 
@@ -292,6 +371,9 @@
       isRequired: false,
       config: defaultConfig,
       fieldType: type,
+      role: null,
+      routingQueueIds: null,
+      escalationRecipientIds: null,
     };
 
     fields = [...fields, newField];
@@ -310,6 +392,8 @@
         return m.intake_forms_field_type_select();
       case "multiselect":
         return m.intake_forms_field_type_multiselect();
+      case "checkbox":
+        return m.intake_forms_field_type_checkbox();
       case "availability":
         return m.intake_forms_field_type_availability();
     }
@@ -325,6 +409,8 @@
         return { type: "select", options: [""] };
       case "multiselect":
         return { type: "multiselect", options: [""] };
+      case "checkbox":
+        return { type: "checkbox" };
       case "availability":
         return {
           type: "availability",
@@ -344,6 +430,8 @@
         return m.intake_forms_field_type_select();
       case "multiselect":
         return m.intake_forms_field_type_multiselect();
+      case "checkbox":
+        return m.intake_forms_field_type_checkbox();
       case "availability":
         return m.intake_forms_field_type_availability();
     }
@@ -359,6 +447,8 @@
         return m.intake_forms_field_type_select_desc();
       case "multiselect":
         return m.intake_forms_field_type_multiselect_desc();
+      case "checkbox":
+        return m.intake_forms_field_type_checkbox_desc();
       case "availability":
         return m.intake_forms_field_type_availability_desc();
     }
@@ -366,9 +456,13 @@
 
   function handleSave(): void {
     if (!formName.trim() || fields.length === 0) return;
+    const slugValue = formSlug.trim() || null;
     saveMutation.mutate({
       formId,
       name: formName.trim(),
+      slug: slugValue,
+      isDefault,
+      destinationQueueId,
       fields,
     });
   }
@@ -378,6 +472,7 @@
     "textarea",
     "select",
     "multiselect",
+    "checkbox",
     "availability",
   ];
 
@@ -395,6 +490,69 @@
     onInput={handleNameInput}
   />
 </List>
+
+<!-- Slug -->
+<BlockTitle>{m.intake_forms_slug_label()}</BlockTitle>
+<List strong inset>
+  <ListInput
+    type="text"
+    placeholder={m.intake_forms_slug_placeholder()}
+    value={formSlug}
+    onInput={handleSlugInput}
+  />
+</List>
+<Block>
+  <p class="slug-hint">{m.intake_forms_slug_hint()}</p>
+</Block>
+
+<!-- Destination queue -->
+{#if queuesQuery.data}
+  <BlockTitle>{m.intake_forms_destination_label()}</BlockTitle>
+  <List strong inset>
+    <ListInput
+      type="select"
+      dropdown
+      value={destinationQueueId ?? ""}
+      onChange={handleDestinationChange}
+    >
+      <option value="">{m.intake_forms_destination_none()}</option>
+      {#each queuesQuery.data as queue (queue.id)}
+        <option value={queue.id}>{getQueueName(queue)}</option>
+      {/each}
+    </ListInput>
+  </List>
+{/if}
+
+<!-- Default toggle -->
+<List strong inset>
+  <ListItem title={m.intake_forms_default_toggle()}>
+    {#snippet subtitle()}
+      <span class="default-hint">{m.intake_forms_default_hint()}</span>
+    {/snippet}
+    {#snippet after()}
+      <Toggle checked={isDefault} onChange={() => (isDefault = !isDefault)} />
+    {/snippet}
+  </ListItem>
+</List>
+
+<!-- Share link -->
+{#if shareLink}
+  <BlockTitle>{m.intake_forms_share_link()}</BlockTitle>
+  <List strong inset>
+    <ListItem title={shareLink}>
+      {#snippet after()}
+        <button
+          type="button"
+          class="copy-btn"
+          onclick={() => void copyShareLink()}
+          aria-label={m.intake_forms_link_copied()}
+        >
+          <Copy size={18} />
+        </button>
+      {/snippet}
+    </ListItem>
+  </List>
+{/if}
 
 <BlockTitle>
   {m.intake_forms_fields_heading({ count: String(fields.length) })}
@@ -452,31 +610,6 @@
     {m.intake_forms_add_field()}
   </Button>
 </Block>
-
-{#if formId !== null && queuesQuery.data}
-  <BlockTitle>{m.intake_forms_used_by()}</BlockTitle>
-  <List strong inset>
-    {#each queuesQuery.data as queue (queue.id)}
-      {@const isBound = localBoundQueueIds.has(queue.id)}
-      <ListItem title={getQueueName(queue)}>
-        {#snippet after()}
-          <Button
-            small
-            clear
-            disabled={bindMutation.isPending}
-            onclick={() =>
-              bindMutation.mutate({
-                queueId: queue.id,
-                formId: isBound ? null : formId,
-              })}
-          >
-            {isBound ? m.intake_forms_unbind() : m.intake_forms_bind()}
-          </Button>
-        {/snippet}
-      </ListItem>
-    {/each}
-  </List>
-{/if}
 
 {#if fields.length > 0}
   <BlockTitle>{m.intake_forms_preview()}</BlockTitle>
@@ -569,6 +702,8 @@
   opened={configSheetOpened}
   fieldType={configFieldType}
   initial={configFieldInitial}
+  queues={queueOptions}
+  volunteers={volunteerOptions}
   ondone={handleConfigDone}
   ondismiss={() => (configSheetOpened = false)}
 />
@@ -606,5 +741,34 @@
   :global(.field-type-disabled) {
     opacity: 0.5;
     pointer-events: none;
+  }
+
+  .slug-hint {
+    font-size: var(--text-xs);
+    color: var(--muted);
+    margin: 0;
+  }
+
+  .default-hint {
+    font-size: var(--text-xs);
+    color: var(--muted);
+  }
+
+  .copy-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 36px;
+    height: 36px;
+    border: none;
+    background: none;
+    color: var(--ink);
+    cursor: pointer;
+    border-radius: 50%;
+    padding: 0;
+  }
+
+  .copy-btn:active {
+    background: color-mix(in srgb, var(--ink) 10%, transparent);
   }
 </style>
