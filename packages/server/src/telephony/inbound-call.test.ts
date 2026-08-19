@@ -54,6 +54,7 @@ function createMockClientRepo(): ClientRepository {
         locale: "en-US",
         locationCity: null,
         locationRegion: null,
+        phoneMatchHash: null,
         isActive: true,
       },
       isNew: true,
@@ -210,6 +211,7 @@ describe("handleInboundCall", () => {
       locale: "es-MX",
       locationCity: null,
       locationRegion: null,
+      phoneMatchHash: null,
       isActive: true,
     };
     vi.mocked(deps.phoneRepo.findByHash).mockResolvedValueOnce(existingPhone);
@@ -253,6 +255,7 @@ describe("handleInboundCall", () => {
       locale: "en-US",
       locationCity: null,
       locationRegion: null,
+      phoneMatchHash: null,
       isActive: true,
     };
     vi.mocked(deps.phoneRepo.findByHash).mockResolvedValueOnce(existingPhone);
@@ -304,6 +307,7 @@ describe("handleInboundCall", () => {
       locale: "en-US",
       locationCity: null,
       locationRegion: null,
+      phoneMatchHash: null,
       isActive: true,
     };
     vi.mocked(deps.phoneRepo.findByHash).mockResolvedValueOnce(existingPhone);
@@ -358,6 +362,7 @@ describe("handleInboundCall", () => {
         locale: "en-US",
         locationCity: null,
         locationRegion: null,
+        phoneMatchHash: null,
         isActive: true,
       },
       isNew: false,
@@ -389,6 +394,7 @@ describe("handleInboundCall", () => {
         locale: "en-US",
         locationCity: null,
         locationRegion: null,
+        phoneMatchHash: null,
         isActive: true,
       },
       isNew: false,
@@ -498,6 +504,7 @@ describe("handleInboundCall", () => {
       locale: "en-US",
       locationCity: null,
       locationRegion: null,
+      phoneMatchHash: null,
       isActive: true,
     };
     vi.mocked(deps2.phoneRepo.findByHash).mockResolvedValueOnce(existingPhone);
@@ -544,6 +551,7 @@ describe("handleInboundCall", () => {
       locale: "en-US",
       locationCity: null,
       locationRegion: null,
+      phoneMatchHash: null,
       isActive: true,
     };
     vi.mocked(deps.phoneRepo.findByHash).mockResolvedValueOnce(existingPhone);
@@ -588,6 +596,7 @@ describe("handleInboundCall", () => {
         locale: "en-US", // different from es-MX, triggers updateLocale
         locationCity: null,
         locationRegion: null,
+        phoneMatchHash: null,
         isActive: true,
       },
       isNew: true,
@@ -628,6 +637,7 @@ describe("handleInboundCall", () => {
         locale: "en-US", // different from fr-FR, triggers updateLocale
         locationCity: null,
         locationRegion: null,
+        phoneMatchHash: null,
         isActive: true,
       },
       isNew: true,

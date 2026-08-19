@@ -1796,6 +1796,7 @@ describe.skipIf(!process.env.DATABASE_URL)("TicketService (DB)", () => {
       {
         phoneHash: string;
         opsEncryptedPhone: Buffer;
+        phoneMatchHash: string | null;
         orgSchema: string;
         createdAt: number;
       }
@@ -1806,6 +1807,7 @@ describe.skipIf(!process.env.DATABASE_URL)("TicketService (DB)", () => {
     pendingClients.set(token, {
       phoneHash,
       opsEncryptedPhone: Buffer.from("encrypted-phone"),
+      phoneMatchHash: null,
       orgSchema: "test_schema",
       createdAt: Date.now(),
     });
@@ -1865,6 +1867,7 @@ describe.skipIf(!process.env.DATABASE_URL)("TicketService (DB)", () => {
       {
         phoneHash: string;
         opsEncryptedPhone: Buffer;
+        phoneMatchHash: string | null;
         orgSchema: string;
         createdAt: number;
       }

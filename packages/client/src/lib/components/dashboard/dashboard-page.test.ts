@@ -430,6 +430,23 @@ describe("Dashboard page", () => {
     ]);
   });
 
+  it("does not render merge candidates section without VIEW_CLIENTS permission", () => {
+    // Default permissions do not include view_clients.
+    infiniteTicketsState = ticketsInfinite({
+      isLoading: false,
+      isError: false,
+      error: null,
+      data: [makeTicket({ assignedTo: USER_ID })],
+    });
+    queryStates = buildQueryStates();
+
+    render(PageModule.default);
+
+    // The section id "merge-candidates" should not exist.
+    const section = document.getElementById("merge-candidates");
+    expect(section).toBeNull();
+  });
+
   it("links needs-attention overflow to the tickets needs-attention filter", async () => {
     // Six urgent unassigned tickets exceed the five-item preview cap, so
     // needs-attention renders its "See all" action. The two normal

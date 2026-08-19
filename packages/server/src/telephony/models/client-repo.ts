@@ -36,6 +36,7 @@ export interface ClientRepository {
   findOrCreateByPhoneHash(
     phoneHash: string,
     encryptedNumber: Buffer,
+    phoneMatchHash?: string | null,
   ): Promise<FindOrCreateResult>;
   findById(id: string): Promise<ClientRecord | null>;
   findByPhoneId(phoneId: string): Promise<ClientRecord | null>;
@@ -59,6 +60,7 @@ export function createClientRepository(
     async findOrCreateByPhoneHash(
       phoneHash: string,
       encryptedNumber: Buffer,
+      phoneMatchHash?: string | null,
     ): Promise<FindOrCreateResult> {
       // 1. Check for existing phone
       const existingPhone = await phoneRepo.findByHash(phoneHash);
@@ -84,6 +86,7 @@ export function createClientRepository(
       const phone = await phoneRepo.create({
         phoneHash,
         encryptedNumber,
+        phoneMatchHash: phoneMatchHash ?? null,
       });
 
       // 4. Seal the generated label (sealString zeroes the input Buffer).

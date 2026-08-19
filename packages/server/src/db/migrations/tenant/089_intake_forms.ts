@@ -9,8 +9,10 @@
 //      destination_queue_id routes submissions to a specific queue.
 //   2. intake_form_fields: ordered field definitions per form; encrypted_label
 //      and encrypted_config hold ciphertext the public page decrypts. role
-//      is a plaintext semantic tag (ADR-068). routing_queue_ids and
-//      escalation_recipient_ids are plaintext allow-lists the server validates.
+//      is a plaintext semantic tag (ADR-068). routing_queue_ids is a plaintext
+//      allow-list. encrypted_escalation_recipient_ids is OPS-encrypted bytea
+//      (a JSON array of volunteer UUIDs, encrypted to protect the responder
+//      shortlist at rest).
 //   3. intake_form_responses: per-ticket structured answer blob, encrypted with
 //      the ticket key (tk). The availability-matching Worker reads this seam.
 //   4. intake_key_wraps: interim wrap of the per-ticket key sealed to the org
@@ -93,7 +95,7 @@ export async function up(db: Kysely<unknown>): Promise<void> {
       col.notNull().defaultTo(false),
     )
     .addColumn("routing_queue_ids", sql`uuid[]`)
-    .addColumn("escalation_recipient_ids", sql`uuid[]`)
+    .addColumn("encrypted_escalation_recipient_ids", "bytea")
     .addColumn("created_at", "timestamptz", (col) =>
       col.notNull().defaultTo(sql`now()`),
     )

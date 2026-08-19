@@ -17,6 +17,7 @@ import type { RateLimiter } from "../ratelimit/rate-limiter.js";
 import type { PowVerifier } from "../crypto/pow.js";
 import type { IntakeFormService } from "../portal/intake-form-service.js";
 import type { NotificationService } from "../notifications/service.js";
+import type { FieldEncryptor } from "../crypto/field-encryptor.js";
 import {
   createIntakeTicket,
   IntakeQueueNotConfiguredError,
@@ -30,6 +31,7 @@ export interface ClientPortalRouterDeps {
   readonly powVerifier: PowVerifier | null;
   readonly intakeFormService: IntakeFormService;
   readonly notificationService: NotificationService;
+  readonly fieldEncryptor?: FieldEncryptor;
 }
 
 // care-y-ignore-next-line missing-return-type -- tRPC router() returns a deeply generic type that cannot be written explicitly
@@ -153,6 +155,7 @@ export function createClientPortalRouter(deps: ClientPortalRouterDeps) {
             {
               notificationService: deps.notificationService,
               sealedBox: ctx.org.sealedBox,
+              fieldEncryptor: deps.fieldEncryptor,
               orgSchema: ctx.org.orgSchema,
               orgSlug: ctx.org.orgSlug,
             },

@@ -103,6 +103,20 @@ export class OrgKeyManager {
   }
 
   /**
+   * Compute the phone match blind index hash of a raw phone string.
+   * Normalization (digit extraction, last-10 comparison key) happens
+   * inside the Worker so the index key never crosses the boundary.
+   * Returns lowercase hex HMAC-SHA512, or null when the phone is too
+   * short to normalize.
+   */
+  async phoneMatchHash(phone: string): Promise<string | null> {
+    if (!this.orgPublicKey) {
+      throw new OrgKeyNotLoadedError();
+    }
+    return this.bridge.phoneMatchHash(phone);
+  }
+
+  /**
    * Export the org secret key from the Worker for escrow/password-change.
    * The caller MUST zero the returned buffer immediately after use.
    */

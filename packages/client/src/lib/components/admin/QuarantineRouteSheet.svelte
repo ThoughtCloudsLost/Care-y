@@ -17,7 +17,7 @@
   import ShellSheet from "$lib/shell/ShellSheet.svelte";
   import SoftButton from "$lib/components/inputs/SoftButton.svelte";
   import { Preloader } from "konsta/svelte";
-  import { getOrgDecryptCache } from "$lib/crypto/context.js";
+  import { getOrgDecryptCache, getOrgKeyManager } from "$lib/crypto/context.js";
   import { isPhoneLookupResult } from "$lib/components/inputs/client-select-types.js";
   import type {
     ClientSelection,
@@ -51,6 +51,7 @@
   const ticketRouter = requireRouter(trpc.tickets, "tickets");
   const queryClient = useQueryClient();
   const orgCache = getOrgDecryptCache();
+  const orgKeyManager = getOrgKeyManager();
 
   let clientSelection = $state<ClientSelection>(null);
   let ticketIdInput = $state("");
@@ -87,11 +88,16 @@
       headers["x-org-slug"] = DEV_ORG_SLUG;
     }
 
+    const phoneMatchHash = await orgKeyManager.phoneMatchHash(phone);
+
     const res = await fetch("/relay/phone-lookup", {
       method: "POST",
       credentials: "include",
       headers,
-      body: JSON.stringify({ phone }),
+      body: JSON.stringify({
+        phone,
+        ...(phoneMatchHash != null ? { phoneMatchHash } : {}),
+      }),
     });
 
     if (!res.ok) {

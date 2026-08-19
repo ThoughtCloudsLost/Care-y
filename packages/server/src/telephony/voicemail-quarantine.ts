@@ -406,6 +406,7 @@ export async function routeQuarantined(
       const result = await clientRepo.findOrCreateByPhoneHash(
         pending.phoneHash,
         pending.opsEncryptedPhone,
+        pending.phoneMatchHash,
       );
 
       ticketId = await resolveInboundTicket(

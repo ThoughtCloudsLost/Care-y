@@ -163,7 +163,7 @@ describe.skipIf(!process.env.DATABASE_URL)("089_intake_forms migration", () => {
   });
 
   // -------------------------------------------------------------------
-  // intake_form_fields (role, routing_queue_ids, escalation_recipient_ids)
+  // intake_form_fields (role, routing_queue_ids, encrypted_escalation_recipient_ids)
   // -------------------------------------------------------------------
 
   it("inserts form fields with encrypted data", async () => {
@@ -192,7 +192,7 @@ describe.skipIf(!process.env.DATABASE_URL)("089_intake_forms migration", () => {
     expect(field.is_required).toBe(true);
     expect(field.role).toBeNull();
     expect(field.routing_queue_ids).toBeNull();
-    expect(field.escalation_recipient_ids).toBeNull();
+    expect(field.encrypted_escalation_recipient_ids).toBeNull();
     expect(Buffer.isBuffer(field.encrypted_label)).toBe(true);
     expect(Buffer.isBuffer(field.encrypted_config)).toBe(true);
   });
@@ -226,7 +226,7 @@ describe.skipIf(!process.env.DATABASE_URL)("089_intake_forms migration", () => {
     expect(field.routing_queue_ids).toEqual([queueA.id, queueB.id]);
   });
 
-  it("inserts a field with escalation_recipient_ids", async () => {
+  it("inserts a field with encrypted_escalation_recipient_ids", async () => {
     const form = await testDb.db
       .insertInto("intake_forms")
       // care-y-ignore-next-line ast-pii-in-db-write -- admin-internal form label, not PII
@@ -235,6 +235,8 @@ describe.skipIf(!process.env.DATABASE_URL)("089_intake_forms migration", () => {
       .executeTakeFirstOrThrow();
 
     const userId = crypto.randomUUID();
+    // Simulate OPS-encrypted JSON array of recipient IDs
+    const encryptedIds = Buffer.from(JSON.stringify([userId]));
 
     const field = await testDb.db
       .insertInto("intake_form_fields")
@@ -245,13 +247,38 @@ describe.skipIf(!process.env.DATABASE_URL)("089_intake_forms migration", () => {
         role: "escalation",
         encrypted_label: Buffer.from("label"),
         encrypted_config: Buffer.from("config"),
-        escalation_recipient_ids: [userId],
+        encrypted_escalation_recipient_ids: encryptedIds,
       })
       .returningAll()
       .executeTakeFirstOrThrow();
 
     expect(field.role).toBe("escalation");
-    expect(field.escalation_recipient_ids).toEqual([userId]);
+    expect(Buffer.isBuffer(field.encrypted_escalation_recipient_ids)).toBe(
+      true,
+    );
+  });
+
+  it("allows null encrypted_escalation_recipient_ids", async () => {
+    const form = await testDb.db
+      .insertInto("intake_forms")
+      // care-y-ignore-next-line ast-pii-in-db-write -- admin-internal form label, not PII
+      .values({ name: "No Escalation Form" })
+      .returning("id")
+      .executeTakeFirstOrThrow();
+
+    const field = await testDb.db
+      .insertInto("intake_form_fields")
+      .values({
+        form_id: form.id,
+        position: 0,
+        field_type: "text",
+        encrypted_label: Buffer.from("label"),
+        encrypted_config: Buffer.from("config"),
+      })
+      .returningAll()
+      .executeTakeFirstOrThrow();
+
+    expect(field.encrypted_escalation_recipient_ids).toBeNull();
   });
 
   it("enforces (form_id, position) uniqueness", async () => {

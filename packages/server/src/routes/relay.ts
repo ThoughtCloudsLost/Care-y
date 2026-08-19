@@ -34,6 +34,7 @@ import {
   readRawBody,
   extractBufferField,
   extractBooleanField,
+  extractStringField,
   authenticateRelay,
   sendJsonResponse,
   sendRelayError,
@@ -699,6 +700,19 @@ async function handlePhoneLookup(
 
     const tenantDb = deps.getTenantDb(session.orgSchema);
 
+    // Extract optional browser-computed blind index hash (128 hex chars).
+    // This is an opaque hash value, not PII, so extractStringField is safe.
+    const rawPhoneMatchHash = extractStringField(rawBody, "phoneMatchHash");
+    const HEX128_RE = /^[0-9a-f]{128}$/;
+    let phoneMatchHash: string | null = null;
+    if (rawPhoneMatchHash !== null) {
+      if (!HEX128_RE.test(rawPhoneMatchHash)) {
+        sendRelayError(res, 400, "INVALID_PHONE_MATCH_HASH");
+        return;
+      }
+      phoneMatchHash = rawPhoneMatchHash;
+    }
+
     // Derive hash + OPS-encrypted phone in a tight scope so the JS string
     // reference drops before the await calls below. The string itself is
     // immutable and persists until GC (accepted residual risk, same as SMS
@@ -749,6 +763,7 @@ async function handlePhoneLookup(
     deps.pendingClients.set(token, {
       phoneHash,
       opsEncryptedPhone,
+      phoneMatchHash,
       orgSchema: session.orgSchema,
       createdAt: Date.now(),
     });

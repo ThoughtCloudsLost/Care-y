@@ -34,6 +34,7 @@ export interface ClientListRecord {
   readonly encryptedAlias: Buffer;
   readonly aliasHash: string | null;
   readonly encryptedNumber: Buffer | null;
+  readonly phoneMatchHash: string | null;
   readonly ticketCount: number;
   readonly createdAt: Date;
   readonly mergedInto: string | null;
@@ -97,10 +98,16 @@ export interface ClientService {
 
   backfillAliasHash(clientId: string, aliasHash: string): Promise<void>;
 
+  backfillPhoneMatchHash(
+    clientId: string,
+    phoneMatchHash: string,
+  ): Promise<void>;
+
   updatePhone(
     clientId: string,
     phoneNumber: string,
     actorId: string,
+    phoneMatchHash?: string | null,
   ): Promise<UpdatePhoneResult>;
 
   suggestDuplicates(
@@ -153,6 +160,7 @@ export function createClientService(deps: ClientServiceDeps): ClientService {
           "c.created_at",
           "c.merged_into",
           "p.encrypted_number",
+          "p.phone_match_hash",
         ])
         .select((eb) =>
           eb
@@ -250,6 +258,7 @@ export function createClientService(deps: ClientServiceDeps): ClientService {
         encryptedAlias: r.encrypted_alias,
         aliasHash: r.alias_hash,
         encryptedNumber: r.encrypted_number ?? null,
+        phoneMatchHash: r.phone_match_hash ?? null,
         ticketCount: r.ticketCount ?? 0,
         createdAt: r.created_at,
         mergedInto: r.merged_into,
@@ -269,6 +278,7 @@ export function createClientService(deps: ClientServiceDeps): ClientService {
           "c.phone_id",
           "p.encrypted_number",
           "p.phone_hash",
+          "p.phone_match_hash",
         ])
         .select((eb) =>
           eb
@@ -321,6 +331,7 @@ export function createClientService(deps: ClientServiceDeps): ClientService {
         mergedInto: row.merged_into,
         phoneId: row.phone_id ?? null,
         phoneHash: row.phone_hash ?? null,
+        phoneMatchHash: row.phone_match_hash ?? null,
         tickets: tickets.map((t) => ({
           id: t.id,
           encryptedTitle: t.encrypted_title,
@@ -402,10 +413,32 @@ export function createClientService(deps: ClientServiceDeps): ClientService {
       }
     },
 
+    async backfillPhoneMatchHash(clientId, phoneMatchHash): Promise<void> {
+      // Tolerate clients with null phone_id (web-intake, no phone row).
+      const client = await db
+        .selectFrom("clients")
+        .select("phone_id")
+        .where("id", "=", clientId)
+        .executeTakeFirst();
+
+      const phoneId = client?.phone_id ?? null;
+      if (phoneId === null) return;
+
+      // Write only when the row's hash is currently NULL (idempotent).
+      // care-y-ignore-next-line no-plaintext-db-write -- phone_match_hash is a browser-computed HMAC blind index, not the phone number itself.
+      await db
+        .updateTable("phones")
+        .set({ phone_match_hash: phoneMatchHash })
+        .where("id", "=", phoneId)
+        .where("phone_match_hash", "is", null)
+        .execute();
+    },
+
     async updatePhone(
       clientId,
       phoneNumber,
       actorId,
+      phoneMatchHash,
     ): Promise<UpdatePhoneResult> {
       // phoneNumber arrives as a JS string from the tRPC input layer and cannot
       // be zeroed. The encryptor copies it into a Buffer and zeroes that copy in
@@ -442,6 +475,7 @@ export function createClientService(deps: ClientServiceDeps): ClientService {
           .values({
             phone_hash: phoneHash,
             encrypted_number: encryptedNumber,
+            phone_match_hash: phoneMatchHash ?? null,
             locale: "en-US",
           })
           .returning("id")

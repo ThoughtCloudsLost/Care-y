@@ -591,6 +591,169 @@ describe.skipIf(!process.env.DATABASE_URL)("ClientService (DB)", () => {
   });
 
   // -----------------------------------------------------------------------
+  // backfillPhoneMatchHash
+  // -----------------------------------------------------------------------
+
+  describe("backfillPhoneMatchHash", () => {
+    const VALID_HASH = "a".repeat(128);
+    const OTHER_HASH = "b".repeat(128);
+
+    it("writes hash when phone_match_hash is NULL", async () => {
+      const c = await createClientWithTicket();
+
+      await svc.backfillPhoneMatchHash(c.clientId, VALID_HASH);
+
+      const phone = await testDb.db
+        .selectFrom("phones")
+        .select("phone_match_hash")
+        .where("id", "=", c.phoneId)
+        .executeTakeFirstOrThrow();
+
+      expect(phone.phone_match_hash).toBe(VALID_HASH);
+    });
+
+    it("is idempotent (does not overwrite existing hash)", async () => {
+      const c = await createClientWithTicket();
+
+      await svc.backfillPhoneMatchHash(c.clientId, VALID_HASH);
+      await svc.backfillPhoneMatchHash(c.clientId, OTHER_HASH);
+
+      const phone = await testDb.db
+        .selectFrom("phones")
+        .select("phone_match_hash")
+        .where("id", "=", c.phoneId)
+        .executeTakeFirstOrThrow();
+
+      // Should still be the first hash (WHERE phone_match_hash IS NULL did not match)
+      expect(phone.phone_match_hash).toBe(VALID_HASH);
+    });
+
+    it("is a no-op for client with null phone_id", async () => {
+      const row = await testDb.db
+        .insertInto("clients")
+        // care-y-ignore-next-line no-plaintext-db-write -- encrypted_alias is test ciphertext; phone_id is null (web intake)
+        .values({
+          encrypted_alias: testSealedBox.sealBuffer(
+            Buffer.from("no-phone-client"),
+          ),
+          alias_hash: null,
+          phone_id: null,
+        })
+        .returning("id")
+        .executeTakeFirstOrThrow();
+
+      // Should not throw
+      await svc.backfillPhoneMatchHash(row.id, VALID_HASH);
+    });
+  });
+
+  // -----------------------------------------------------------------------
+  // updatePhone (phoneMatchHash parameter)
+  // -----------------------------------------------------------------------
+
+  describe("updatePhone with phoneMatchHash", () => {
+    it("stores phoneMatchHash on the new phone row", async () => {
+      const c = await createClientWithTicket();
+      const hash = "c".repeat(128);
+      const newNumber = `+1555888${crypto.randomUUID().slice(0, 4).replace(/-/g, "0")}`;
+
+      const result = await svc.updatePhone(
+        c.clientId,
+        newNumber,
+        crypto.randomUUID(),
+        hash,
+      );
+
+      expect(result.success).toBe(true);
+
+      const client = await testDb.db
+        .selectFrom("clients")
+        .select("phone_id")
+        .where("id", "=", c.clientId)
+        .executeTakeFirstOrThrow();
+
+      const phone = await testDb.db
+        .selectFrom("phones")
+        .select("phone_match_hash")
+        .where("id", "=", client.phone_id!)
+        .executeTakeFirstOrThrow();
+
+      expect(phone.phone_match_hash).toBe(hash);
+    });
+
+    it("stores null phoneMatchHash when not provided", async () => {
+      const c = await createClientWithTicket();
+      const newNumber = `+1555889${crypto.randomUUID().slice(0, 4).replace(/-/g, "0")}`;
+
+      const result = await svc.updatePhone(
+        c.clientId,
+        newNumber,
+        crypto.randomUUID(),
+      );
+
+      expect(result.success).toBe(true);
+
+      const client = await testDb.db
+        .selectFrom("clients")
+        .select("phone_id")
+        .where("id", "=", c.clientId)
+        .executeTakeFirstOrThrow();
+
+      const phone = await testDb.db
+        .selectFrom("phones")
+        .select("phone_match_hash")
+        .where("id", "=", client.phone_id!)
+        .executeTakeFirstOrThrow();
+
+      expect(phone.phone_match_hash).toBeNull();
+    });
+  });
+
+  // -----------------------------------------------------------------------
+  // list (phoneMatchHash in result)
+  // -----------------------------------------------------------------------
+
+  describe("list phoneMatchHash", () => {
+    it("returns phoneMatchHash from the joined phone row", async () => {
+      const c = await createClientWithTicket();
+      const hash = "d".repeat(128);
+
+      await testDb.db
+        .updateTable("phones")
+        // care-y-ignore-next-line no-plaintext-db-write -- phone_match_hash is a browser-computed HMAC blind index
+        .set({ phone_match_hash: hash })
+        .where("id", "=", c.phoneId)
+        .execute();
+
+      const results = await svc.list({
+        query: "",
+        sortBy: "created_at",
+        sortDirection: "desc",
+        limit: 200,
+      });
+
+      const found = results.find((r) => r.id === c.clientId);
+      expect(found).toBeDefined();
+      expect(found!.phoneMatchHash).toBe(hash);
+    });
+
+    it("returns null phoneMatchHash for phone rows without it", async () => {
+      const c = await createClientWithTicket();
+
+      const results = await svc.list({
+        query: "",
+        sortBy: "created_at",
+        sortDirection: "desc",
+        limit: 200,
+      });
+
+      const found = results.find((r) => r.id === c.clientId);
+      expect(found).toBeDefined();
+      expect(found!.phoneMatchHash).toBeNull();
+    });
+  });
+
+  // -----------------------------------------------------------------------
   // No plaintext alias in DB
   // -----------------------------------------------------------------------
 

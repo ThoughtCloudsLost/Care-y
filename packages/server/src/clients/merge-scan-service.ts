@@ -31,6 +31,11 @@ export interface MergeScanFieldRoleRecord {
   readonly role: string;
 }
 
+export interface MergeScanPhoneHashRecord {
+  readonly clientId: string;
+  readonly phoneMatchHash: string;
+}
+
 // ---------------------------------------------------------------------------
 // Service interface
 // ---------------------------------------------------------------------------
@@ -50,6 +55,16 @@ export interface MergeScanService {
    * at least one role-tagged field.
    */
   getFieldRoles(): Promise<readonly MergeScanFieldRoleRecord[]>;
+
+  /**
+   * Returns browser-computed phone blind index hashes for all non-merged
+   * clients whose phone row has a non-null phone_match_hash. This covers
+   * both intake-created and telephony-created clients. The hash list
+   * draws only from the phones table (clients); consultant reachability
+   * rows live in a separate table with their own HKDF label and never
+   * appear here.
+   */
+  getPhoneHashes(): Promise<readonly MergeScanPhoneHashRecord[]>;
 }
 
 // ---------------------------------------------------------------------------
@@ -124,6 +139,24 @@ export function createMergeScanService(
         formId: r.formId,
         fieldId: r.fieldId,
         role: typeof r.role === "string" ? r.role : String(r.role),
+      }));
+    },
+
+    async getPhoneHashes(): Promise<readonly MergeScanPhoneHashRecord[]> {
+      const rows = await db
+        .selectFrom("clients as c")
+        .innerJoin("phones as p", "p.id", "c.phone_id")
+        .select(["c.id as clientId", "p.phone_match_hash as phoneMatchHash"])
+        .where("c.merged_into", "is", null)
+        .where("p.phone_match_hash", "is not", null)
+        .execute();
+
+      // phone_match_hash is guaranteed non-null by the WHERE clause, but
+      // Kysely types it as nullable. The cast is safe here.
+      return rows.map((r) => ({
+        clientId: r.clientId,
+        // eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- filtered by WHERE phone_match_hash IS NOT NULL
+        phoneMatchHash: r.phoneMatchHash!,
       }));
     },
   };

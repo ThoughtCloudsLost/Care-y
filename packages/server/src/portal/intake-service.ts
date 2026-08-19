@@ -29,6 +29,10 @@ import { sealString } from "../telephony/crypto-helpers.js";
 import type { SealedBoxEncryptor } from "../crypto/sealed-box.js";
 import { ValidationError } from "../errors.js";
 import { ErrorCode } from "@care-y/shared";
+import type { FieldEncryptor } from "../crypto/field-encryptor.js";
+import { z } from "zod";
+
+const recipientIdsSchema = z.array(z.uuid());
 
 // ---------------------------------------------------------------------------
 // Custom errors
@@ -102,6 +106,7 @@ export async function createIntakeTicket(
   deps: {
     readonly notificationService: NotificationService;
     readonly sealedBox: SealedBoxEncryptor;
+    readonly fieldEncryptor?: FieldEncryptor;
     readonly orgSchema: string;
     readonly orgSlug: string;
   },
@@ -267,6 +272,7 @@ export async function createIntakeTicket(
       input.formId,
       destinationQueueId,
       result.ticketId,
+      deps.fieldEncryptor ?? null,
     );
   }
 
@@ -342,21 +348,31 @@ function dispatchEscalationAlert(
   formId: string,
   queueId: string,
   ticketId: string,
+  encryptor: FieldEncryptor | null,
 ): void {
   void (async () => {
     try {
-      // Find escalation-role fields and their recipient ids
+      // Find escalation-role fields and decrypt their OPS-encrypted recipient ids
       const escalationFields = await db
         .selectFrom("intake_form_fields")
-        .select("escalation_recipient_ids")
+        .select("encrypted_escalation_recipient_ids")
         .where("form_id", "=", formId)
         .where("role", "=", "escalation")
         .execute();
 
       const recipientIds = new Set<string>();
       for (const field of escalationFields) {
-        if (field.escalation_recipient_ids !== null) {
-          for (const rid of field.escalation_recipient_ids) {
+        if (
+          field.encrypted_escalation_recipient_ids !== null &&
+          encryptor !== null
+        ) {
+          // care-y-ignore-next-line server-no-decrypt -- OPS-tier decryption: escalation recipient IDs are server-side operational data encrypted with OPS_SECRETS_KEY
+          const json = encryptor.decrypt(
+            field.encrypted_escalation_recipient_ids,
+          );
+          const parsed: unknown = JSON.parse(json);
+          const ids = recipientIdsSchema.parse(parsed);
+          for (const rid of ids) {
             recipientIds.add(rid);
           }
         }

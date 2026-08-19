@@ -19,7 +19,7 @@
     PhoneLookupResult,
   } from "$lib/components/inputs/ClientSelect.svelte";
   import { isPhoneLookupResult } from "$lib/components/inputs/client-select-types.js";
-  import { getOrgDecryptCache } from "$lib/crypto/context.js";
+  import { getOrgDecryptCache, getOrgKeyManager } from "$lib/crypto/context.js";
   import { trpc } from "$lib/trpc/index.js";
   import { ticketsKeys } from "$lib/query/keys.js";
   import { toastStore } from "$lib/stores/toast.svelte.js";
@@ -40,6 +40,7 @@
 
   const queryClient = useQueryClient();
   const orgCache = getOrgDecryptCache();
+  const orgKeyManager = getOrgKeyManager();
 
   const queuesQuery = createQuery(() => ({
     queryKey: ["queues"],
@@ -131,11 +132,16 @@
       headers["x-org-slug"] = DEV_ORG_SLUG;
     }
 
+    const phoneMatchHash = await orgKeyManager.phoneMatchHash(phone);
+
     const res = await fetch("/relay/phone-lookup", {
       method: "POST",
       credentials: "include",
       headers,
-      body: JSON.stringify({ phone }),
+      body: JSON.stringify({
+        phone,
+        ...(phoneMatchHash != null ? { phoneMatchHash } : {}),
+      }),
     });
 
     if (!res.ok) {
