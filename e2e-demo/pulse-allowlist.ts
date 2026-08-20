@@ -62,44 +62,6 @@ export const PULSE_ALLOWLIST: ReadonlyMap<string, AllowlistEntry> = new Map([
     { reason: "deriving screen requires completeLogin, walk visits sub only" },
   ],
 
-  // Each 2FA method sub narrates one method, but the phone shows a
-  // method's own screen only while the scripted login sits at that
-  // method's stage. The walk steps through the subs without driving
-  // the method screens, so the method-specific labels are absent and
-  // no pulse entry is recorded.
-  [
-    allowlistKey("twofa-totp", null),
-    { reason: "method screen is stage-gated within the scripted login" },
-  ],
-  [
-    allowlistKey("twofa-email", null),
-    { reason: "method screen is stage-gated within the scripted login" },
-  ],
-  [
-    allowlistKey("twofa-sms", null),
-    { reason: "method screen is stage-gated within the scripted login" },
-  ],
-  [
-    allowlistKey("twofa-push", null),
-    { reason: "method screen is stage-gated within the scripted login" },
-  ],
-  [
-    allowlistKey("twofa-backup", null),
-    { reason: "method screen is stage-gated within the scripted login" },
-  ],
-
-  // -- Tickets section ------------------------------------------------
-
-  // The decryption pulse targets the "Unlocking" busy placeholders
-  // ([role="status"][aria-busy="true"]). Since the phone signs in
-  // during boot, the ticket list is fully decrypted before a visitor
-  // can reach this sub, so no busy elements remain to mark. The
-  // staggered descramble reveal now plays at boot time.
-  [
-    allowlistKey("decryption", null),
-    { reason: "list decrypts during boot sign-in, busy placeholders gone" },
-  ],
-
   // -- Admin-people section -------------------------------------------
 
   // Client merge is an action sheet opened from the clients sub-page.
