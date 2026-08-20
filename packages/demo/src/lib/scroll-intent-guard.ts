@@ -66,3 +66,32 @@ export function backstopDecision(
   }
   return realignAttempted ? "surrender" : "realign";
 }
+
+// -----------------------------------------------------------------------
+// Relink reconciliation
+// -----------------------------------------------------------------------
+
+export type RelinkDecision = "push-local" | "adopt-phone" | "none";
+
+/**
+ * Who adopts whose position when the visitor relinks the story and
+ * the phone: whichever side moved most recently during the unlink
+ * wins. Timestamps are epoch ms of the last move on each side, 0
+ * meaning that side never moved while unlinked.
+ *
+ * - "push-local": the story moved last; its location is sent to the
+ *   phone as a page-click intent.
+ * - "adopt-phone": the phone moved last; its stored snapshot is
+ *   presented through the normal linked path.
+ * - "none": neither side moved; the two are still in agreement.
+ *
+ * A tie favors the reader ("push-local"): they were the one holding
+ * the page when the link was restored.
+ */
+export function relinkDecision(
+  lastLocalMoveAt: number,
+  lastPhoneMoveAt: number,
+): RelinkDecision {
+  if (lastLocalMoveAt === 0 && lastPhoneMoveAt === 0) return "none";
+  return lastLocalMoveAt >= lastPhoneMoveAt ? "push-local" : "adopt-phone";
+}
