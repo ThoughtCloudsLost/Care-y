@@ -1,0 +1,1794 @@
+<script module lang="ts">
+  // Module-level: survives remounts (App.svelte keys this component on
+  // locale + pageKey, so instance state is lost every section change).
+  // pretext's locale is global, so we track what we last set it to here
+  // to avoid redundant setLocale() calls that flush its measurement cache.
+  let lastAppliedLocale: string | null = null;
+</script>
+
+<script lang="ts">
+  import { Check, MousePointerClick } from "@lucide/svelte";
+  import {
+    prepareWithSegments,
+    layoutNextLineRange,
+    materializeLineRange,
+    setLocale,
+    type PreparedTextWithSegments,
+    type LayoutCursor,
+  } from "@chenglou/pretext";
+  import {
+    prepareRichInline,
+    layoutNextRichInlineLineRange,
+    materializeRichInlineLineRange,
+    type PreparedRichInline,
+    type RichInlineCursor,
+  } from "@chenglou/pretext/rich-inline";
+  import type { Section, SectionId } from "./scroll-sections.js";
+  import { getSection } from "./scroll-sections.js";
+  import type { DemoTopic } from "./bridge.js";
+  import {
+    resolveStoryMessage,
+    resolveParameterizedMessage,
+  } from "./story-messages.js";
+  import { buildSubTopicLookup } from "./story-maps.js";
+  import {
+    type FlowBlock,
+    type FlowTextBlock,
+    type FlowFigureBlock,
+    type FlowTextKind,
+    type FlowHole,
+    type FlowLayoutResult,
+    type FlowColumn,
+    type FlowFigureGeometry,
+    type FlowLine,
+    type FlowLineFragment,
+    type LineFiller,
+    type LineFillerResult,
+    type LineCursor,
+    LIST_INDENT,
+    PARA_SPACE,
+    LIST_ITEM_SPACE,
+    DEFAULT_METRICS,
+    FRAME_PAD_TOP,
+    FRAME_PAD_BOTTOM,
+    FRAME_PAD_X,
+    computeFlowLayout,
+    computeColumnSegments,
+    extendHoleForFullBleed,
+    hitTestBlock,
+  } from "./flow-layout.js";
+  import {
+    hasFlowMarkup,
+    parseFlowMarkup,
+    unitHasBold,
+    unitText,
+  } from "./flow-markup.js";
+  import { hasClip, getClip, type PeekFirePayload } from "./clip-registry.js";
+  import { createFigureHysteresis } from "./figure-hysteresis.js";
+  import { plainMap } from "./non-reactive.js";
+  import ClipFigure from "./ClipFigure.svelte";
+  import {
+    setFlowGeometrySource,
+    stickyTopOffset,
+  } from "./flow-geometry.svelte.js";
+  import {
+    setColumnContainer,
+    setColumnWindowWidth,
+    evaluateColumnPressure,
+    columnRect,
+    restingColumnRect,
+  } from "./flow-column.svelte.js";
+
+  // -----------------------------------------------------------------------
+  // Props
+  // -----------------------------------------------------------------------
+
+  interface Props {
+    sections: Section[];
+    locale: string;
+    activeSection: SectionId;
+    activeSub: string | null;
+    seenTopics: ReadonlySet<DemoTopic>;
+    /** Viewport-space frame box the text wraps around, or null when the
+     *  frame is hidden (read mode, no peek): the flow carves no hole. */
+    frameRect: {
+      left: number;
+      top: number;
+      outerW: number;
+      outerH: number;
+    } | null;
+    onSelectSection: (id: SectionId) => void;
+    onSelectSub: (sectionId: SectionId, subSlug: string) => void;
+    /** Peek hold completed on a figure. */
+    onpeekfire?: (payload: PeekFirePayload) => void;
+    /** Drag delta while peek is held. */
+    onpeekdrag?: (dx: number, dy: number) => void;
+    /** Secondary tap during a held peek. */
+    onpeeksecondarytap?: () => void;
+    /** Primary pointer released after peek fired. */
+    onpeekrelease?: () => void;
+    /** Peek gesture cancelled. */
+    onpeekcancel?: () => void;
+    /** A figure's container element is ready (for engine prewarm). */
+    onelement?: (el: HTMLElement) => void;
+  }
+
+  let {
+    sections,
+    locale,
+    activeSection,
+    activeSub,
+    seenTopics,
+    frameRect,
+    onSelectSection,
+    onSelectSub,
+    onpeekfire,
+    onpeekdrag,
+    onpeeksecondarytap,
+    onpeekrelease,
+    onpeekcancel,
+    onelement,
+  }: Props = $props();
+
+  // -----------------------------------------------------------------------
+  // Font strings for canvas measurement and CSS rendering.
+  // These MUST match exactly between prepare() calls and rendered spans.
+  // -----------------------------------------------------------------------
+
+  const FONT_FAMILY = '"Atkinson Hyperlegible Next"';
+
+  /**
+   * The one authoritative record of font shorthands. Canvas text measurement
+   * (prepare() calls) uses these strings directly, and the per-kind CSS
+   * classes consume them via custom properties on the flow container.
+   * Keeping one record prevents pretext and the rendered spans from
+   * drifting apart.
+   */
+  const FONT_STRINGS: Record<FlowTextKind, string> = {
+    "section-title": `700 24px ${FONT_FAMILY}`,
+    "section-desc": `400 15px ${FONT_FAMILY}`,
+    "story-tip": `400 15px ${FONT_FAMILY}`,
+    "sub-heading": `700 18px ${FONT_FAMILY}`,
+    "sub-body": `400 15px ${FONT_FAMILY}`,
+  };
+
+  /**
+   * Bold variant of the sub-body font, for **bold** markup runs. Same
+   * size and family as sub-body so bold and plain fragments share a
+   * baseline; only the weight differs. Used for rich-inline measurement
+   * and published as a CSS custom property like the kind fonts.
+   */
+  const FONT_SUB_BODY_BOLD = `700 15px ${FONT_FAMILY}`;
+
+  /**
+   * Line-height values per kind. Must agree with flow-layout.ts metrics
+   * (section-title=32, others=24). Published as CSS custom properties
+   * alongside FONT_STRINGS so the CSS classes stay single-sourced.
+   */
+  const LINE_HEIGHTS: Record<FlowTextKind, string> = {
+    "section-title": "32px",
+    "section-desc": "24px",
+    "story-tip": "24px",
+    "sub-heading": "24px",
+    "sub-body": "24px",
+  };
+
+  /** CSS custom property inline style for the flow container. */
+  const fontVarsStyle = [
+    `--flow-font-title: ${FONT_STRINGS["section-title"]}`,
+    `--flow-font-desc: ${FONT_STRINGS["section-desc"]}`,
+    `--flow-font-tip: ${FONT_STRINGS["story-tip"]}`,
+    `--flow-font-sub-heading: ${FONT_STRINGS["sub-heading"]}`,
+    `--flow-font-sub-body: ${FONT_STRINGS["sub-body"]}`,
+    `--flow-font-sub-body-bold: ${FONT_SUB_BODY_BOLD}`,
+    `--flow-lh-title: ${LINE_HEIGHTS["section-title"]}`,
+    `--flow-lh-desc: ${LINE_HEIGHTS["section-desc"]}`,
+    `--flow-lh-tip: ${LINE_HEIGHTS["story-tip"]}`,
+    `--flow-lh-sub-heading: ${LINE_HEIGHTS["sub-heading"]}`,
+    `--flow-lh-sub-body: ${LINE_HEIGHTS["sub-body"]}`,
+  ].join("; ");
+
+  // Only position and width vary per line per frame.
+
+  // -----------------------------------------------------------------------
+  // Block list derivation
+  // -----------------------------------------------------------------------
+
+  function buildBlocks(sects: Section[], loc: string): FlowBlock[] {
+    const result: FlowBlock[] = [];
+    for (let sx = 0; sx < sects.length; sx++) {
+      const section = sects.at(sx);
+      if (section === undefined) continue;
+
+      // The page's title, description and tip are blocks like any other,
+      // so they wrap around the frame through the same layout pass the
+      // prose does. They used to be ordinary DOM above the flow, which
+      // meant a second, approximate dodge that never quite matched.
+      result.push({
+        id: `${section.id}--title`,
+        sectionId: section.id,
+        subSlug: null,
+        kind: "section-title",
+        text: resolveStoryMessage(section.titleKey, loc),
+      } satisfies FlowTextBlock);
+      result.push({
+        id: `${section.id}--desc`,
+        sectionId: section.id,
+        subSlug: null,
+        kind: "section-desc",
+        text: resolveStoryMessage(section.descKey, loc),
+      } satisfies FlowTextBlock);
+      // One tip per page, under the first section's description. The
+      // indent reserves the gutter its icon is drawn in.
+      if (sx === 0) {
+        result.push({
+          id: `${section.id}--tip`,
+          sectionId: section.id,
+          subSlug: null,
+          kind: "story-tip",
+          text: resolveStoryMessage("demo_narrative_tip", loc),
+          indent: LIST_INDENT,
+        } satisfies FlowTextBlock);
+      }
+
+      // Handbook-style numbering. Single-sub sections (the entry page,
+      // the coming-soon placeholder) read as a lone statement, not as
+      // step one of one, so they stay unnumbered.
+      const numbered = section.subs.length > 1;
+      for (let si = 0; si < section.subs.length; si++) {
+        const sub = section.subs.at(si);
+        if (sub === undefined) continue;
+        const headingText = resolveStoryMessage(sub.headingKey, loc);
+        result.push({
+          id: `${section.id}--${sub.slug}--heading`,
+          sectionId: section.id,
+          subSlug: sub.slug,
+          kind: "sub-heading",
+          text: numbered ? `${String(si + 1)}. ${headingText}` : headingText,
+        } satisfies FlowTextBlock);
+        const bodyText = resolveStoryMessage(sub.bodyKey, loc);
+        const bodyId = `${section.id}--${sub.slug}--body`;
+        if (!hasFlowMarkup(bodyText)) {
+          // Plain copy keeps its historical single block, byte-for-byte.
+          result.push({
+            id: bodyId,
+            sectionId: section.id,
+            subSlug: sub.slug,
+            kind: "sub-body",
+            text: bodyText,
+          } satisfies FlowTextBlock);
+        } else {
+          // Marked-up copy splits into one block per unit (paragraph or
+          // list item) so the layout engine spaces and indents them.
+          const units = parseFlowMarkup(bodyText);
+          for (let ui = 0; ui < units.length; ui++) {
+            const unit = units.at(ui);
+            if (unit === undefined) continue;
+            const prev = ui > 0 ? units.at(ui - 1) : undefined;
+            const isListItem = unit.kind !== "paragraph";
+            const continuesList = isListItem && prev?.kind === unit.kind;
+            result.push({
+              id: `${bodyId}--u${String(ui)}`,
+              sectionId: section.id,
+              subSlug: sub.slug,
+              kind: "sub-body",
+              text: unitText(unit),
+              runs: unitHasBold(unit) ? unit.runs : undefined,
+              indent: isListItem ? LIST_INDENT : undefined,
+              marker: unit.marker ?? undefined,
+              spaceBefore:
+                ui === 0
+                  ? undefined
+                  : continuesList
+                    ? LIST_ITEM_SPACE
+                    : PARA_SPACE,
+            } satisfies FlowTextBlock);
+          }
+        }
+
+        // Append a figure block when a clip exists for this sub.
+        if (hasClip(section.id, sub.slug)) {
+          const clip = getClip(section.id, sub.slug);
+          result.push({
+            id: `${section.id}--${sub.slug}--figure`,
+            sectionId: section.id,
+            subSlug: sub.slug,
+            kind: "figure",
+            aspectRatio: clip.aspectRatio,
+            headingKey: sub.headingKey,
+          } satisfies FlowFigureBlock);
+        }
+      }
+    }
+    return result;
+  }
+
+  let blocks = $derived(buildBlocks(sections, locale));
+
+  // -----------------------------------------------------------------------
+  // Pretext preparation (font loading + prepare)
+  // -----------------------------------------------------------------------
+
+  /** Plain block: measured as one segment run with the kind's font. */
+  interface PlainHandle {
+    readonly type: "plain";
+    readonly handle: PreparedTextWithSegments;
+  }
+
+  /** Block with bold runs: measured via rich-inline, one item per run. */
+  interface RichHandle {
+    readonly type: "rich";
+    readonly handle: PreparedRichInline;
+    /** Bold flag per rich-inline item, indexed by fragment itemIndex. */
+    readonly bold: readonly boolean[];
+  }
+
+  type BlockHandle = PlainHandle | RichHandle;
+
+  interface PreparedState {
+    forBlocks: readonly FlowBlock[];
+    handles: Map<number, BlockHandle>;
+  }
+
+  // $state.raw, not $state: the value is swapped wholesale and never
+  // mutated, and runLayout compares forBlocks by identity against the
+  // blocks derived. A deep $state proxy would give forBlocks a different
+  // identity from the array it wraps, so that check would always fail.
+  let prepared: PreparedState | null = $state.raw(null);
+
+  $effect(() => {
+    // Read blocks and locale synchronously BEFORE any await so the effect
+    // tracks them as dependencies. Without this, the effect would never
+    // re-run when the page's blocks change (the reads after await are
+    // untracked).
+    const capturedBlocks = blocks;
+    const capturedLocale = locale;
+
+    // AbortController rather than a captured boolean: the flag is set by
+    // the cleanup closure and read after awaits, which the checker cannot
+    // follow, so a plain `let cancelled = false` reads as always falsy.
+    const run = new AbortController();
+
+    /** Measure every block with the faces available right now. */
+    function prepareBlocks(): void {
+      // Only call setLocale when the locale actually changed. setLocale
+      // flushes pretext's global two-level measurement cache, forcing a
+      // full Canvas re-measure of every segment. The check uses module-
+      // level state because this component remounts on every section
+      // change, but pretext's locale is process-global.
+      if (capturedLocale !== lastAppliedLocale) {
+        setLocale(capturedLocale);
+        lastAppliedLocale = capturedLocale;
+      }
+
+      const handles = plainMap<number, BlockHandle>();
+      for (let i = 0; i < capturedBlocks.length; i++) {
+        const block = capturedBlocks.at(i);
+        if (block === undefined) continue;
+        // Figure blocks have no text to measure.
+        if (block.kind === "figure") continue;
+        const fontStr = FONT_STRINGS[block.kind];
+        if (block.runs !== undefined) {
+          // Bold markup: one rich-inline item per run, each measured
+          // with its own weight so line breaks account for the wider
+          // bold glyphs.
+          handles.set(i, {
+            type: "rich",
+            handle: prepareRichInline(
+              block.runs.map((r) => ({
+                text: r.text,
+                font: r.bold ? FONT_SUB_BODY_BOLD : fontStr,
+              })),
+            ),
+            bold: block.runs.map((r) => r.bold),
+          });
+        } else {
+          handles.set(i, {
+            type: "plain",
+            handle: prepareWithSegments(block.text, fontStr),
+          });
+        }
+      }
+      prepared = { forBlocks: capturedBlocks, handles };
+    }
+
+    async function prepareAfterFonts(): Promise<void> {
+      // allSettled because the font set includes the client app's
+      // absolute-URL @font-face declarations, which do not resolve under
+      // the demo's serving root. load() rejects when ANY matched face
+      // fails, even though the hashed faces we actually render with load
+      // fine. allSettled lets those settle as rejected without blocking.
+      const fontLoadPromises = [
+        ...Object.values(FONT_STRINGS),
+        FONT_SUB_BODY_BOLD,
+      ].map(async (f) => document.fonts.load(f));
+      await Promise.allSettled(fontLoadPromises);
+      if (run.signal.aborted) return;
+
+      prepareBlocks();
+    }
+
+    void prepareAfterFonts();
+
+    return () => {
+      run.abort();
+    };
+  });
+
+  // -----------------------------------------------------------------------
+  // LineFiller implementation backed by pretext
+  // -----------------------------------------------------------------------
+
+  /** Runtime check that a LineCursor has the LayoutCursor shape. */
+  function isLayoutCursor(c: LineCursor): c is LayoutCursor {
+    if (typeof c !== "object" || c === null) return false;
+    return (
+      "segmentIndex" in c &&
+      typeof c.segmentIndex === "number" &&
+      "graphemeIndex" in c &&
+      typeof c.graphemeIndex === "number"
+    );
+  }
+
+  /** Runtime check for the rich-inline cursor shape (adds itemIndex). */
+  function isRichCursor(c: LineCursor): c is RichInlineCursor {
+    return (
+      isLayoutCursor(c) && "itemIndex" in c && typeof c.itemIndex === "number"
+    );
+  }
+
+  /** Fill one rich-inline line and flatten it into a filler result. */
+  function fillRichLine(
+    entry: RichHandle,
+    cursor: RichInlineCursor,
+    maxWidth: number,
+  ): LineFillerResult | null {
+    const range = layoutNextRichInlineLineRange(entry.handle, maxWidth, cursor);
+    if (range === null) return null;
+
+    const line = materializeRichInlineLineRange(entry.handle, range);
+    // Fragment offsets are relative to the line start: each fragment
+    // advances by its gapBefore (inter-item spacing pretext collapsed)
+    // plus its occupied width.
+    const fragments: FlowLineFragment[] = [];
+    let dx = 0;
+    let text = "";
+    for (const frag of line.fragments) {
+      dx += frag.gapBefore;
+      fragments.push({
+        text: frag.text,
+        bold: entry.bold.at(frag.itemIndex) ?? false,
+        dx,
+        width: frag.occupiedWidth,
+      });
+      dx += frag.occupiedWidth;
+      text += frag.text;
+    }
+    return { text, width: line.width, nextCursor: range.end, fragments };
+  }
+
+  function createFiller(handles: ReadonlyMap<number, BlockHandle>): LineFiller {
+    return {
+      startCursor(blockIndex: number): LineCursor {
+        if (handles.get(blockIndex)?.type === "rich") {
+          return {
+            itemIndex: 0,
+            segmentIndex: 0,
+            graphemeIndex: 0,
+          } satisfies RichInlineCursor;
+        }
+        return { segmentIndex: 0, graphemeIndex: 0 } satisfies LayoutCursor;
+      },
+      fillLine(
+        blockIndex: number,
+        cursor: LineCursor,
+        maxWidth: number,
+      ): LineFillerResult | null {
+        const entry = handles.get(blockIndex);
+        if (entry === undefined) return null;
+
+        if (entry.type === "rich") {
+          if (!isRichCursor(cursor)) return null;
+          return fillRichLine(entry, cursor, maxWidth);
+        }
+
+        if (!isLayoutCursor(cursor)) return null;
+        const range = layoutNextLineRange(entry.handle, cursor, maxWidth);
+        if (range === null) return null;
+
+        const materialized = materializeLineRange(entry.handle, range);
+        return {
+          text: materialized.text,
+          width: materialized.width,
+          nextCursor: range.end,
+        };
+      },
+    };
+  }
+
+  // -----------------------------------------------------------------------
+  // Container and layout state
+  // -----------------------------------------------------------------------
+
+  let containerEl = $state<HTMLDivElement | undefined>(undefined);
+  let containerWidth = $state(0);
+  // Document-space top and left of the container, scroll-invariant.
+  // Measured in the ResizeObserver and on window resize, never per frame.
+  let containerTop = $state(0);
+  let containerLeft = $state(0);
+
+  // $state.raw: replaced wholesale each pass, and a deep proxy would wrap
+  // every line and block geometry object on every layout.
+  let layoutResult: FlowLayoutResult | null = $state.raw(null);
+  // The hole the current layoutResult was computed against. Kept so the
+  // heading rules can be clipped by the same rectangle the text was,
+  // instead of recomputing it and risking a one-frame disagreement.
+  let layoutHole: FlowHole | null = $state.raw(null);
+  // The column rect the current layoutResult was computed against, for
+  // the same one-frame-disagreement reason layoutHole exists.
+  let layoutColumn: FlowColumn | null = $state.raw(null);
+
+  // Viewport height for reactive virtualization (no window reads in $derived)
+  let viewportH = $state(
+    typeof window !== "undefined" ? window.innerHeight : 0,
+  );
+
+  /** Re-measure the container's document-space position. Called from the
+   *  ResizeObserver and window resize, not from the per-frame rAF. */
+  function measureContainerPosition(): void {
+    if (containerEl === undefined) return;
+    const rect = containerEl.getBoundingClientRect();
+    containerTop = rect.top + window.scrollY;
+    containerLeft = rect.left;
+    setColumnContainer(containerWidth, containerLeft);
+  }
+
+  $effect(() => {
+    function onResize(): void {
+      viewportH = window.innerHeight;
+      setColumnWindowWidth(window.innerWidth);
+      measureContainerPosition();
+    }
+    window.addEventListener("resize", onResize, { passive: true });
+    return () => window.removeEventListener("resize", onResize);
+  });
+
+  // Track container width and position via ResizeObserver
+  $effect(() => {
+    if (containerEl === undefined) return;
+    const ro = new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        containerWidth = entry.contentRect.width;
+      }
+      // measureContainerPosition calls setColumnContainer, so the
+      // column module receives the new width and left edge together.
+      measureContainerPosition();
+    });
+    ro.observe(containerEl);
+    return () => ro.disconnect();
+  });
+
+  // Opening the flow band changes the container's document-space
+  // position but not its own size, so neither the ResizeObserver nor
+  // the resize listener fires. Re-measure when the chrome height
+  // changes (stickyTopOffset tracks it).
+  $effect(() => {
+    void stickyTopOffset();
+    measureContainerPosition();
+  });
+
+  // -----------------------------------------------------------------------
+  // Hole computation: single helper for both live layout and published closure
+  // -----------------------------------------------------------------------
+
+  /**
+   * Convert the viewport-fixed frameRect to a padded container-space hole
+   * for a given scrollY. Both the live layout path and the published
+   * holeAtScrollY closure go through this so they can never drift apart.
+   * A hole outside the container is fine: computeSegments handles it.
+   *
+   * When the frame fills (nearly) the usable viewport height, the hole
+   * is stretched to a scroll-invariant vertical span (see
+   * extendHoleForFullBleed) so fast scrolls do not re-wrap the flanking
+   * columns. The gaps are viewport-space and sy-independent, so callers
+   * compute them once per pass and hand them in.
+   */
+  function rawHoleAt(
+    sy: number,
+    contTop: number,
+    contLeft: number,
+    fr: { left: number; top: number; outerW: number; outerH: number },
+    cw: number,
+    gapAbove: number,
+    gapBelow: number,
+    col: FlowColumn,
+  ): FlowHole {
+    // Frame rect is in viewport coordinates. Convert to document space.
+    const frameDocTop = fr.top + sy;
+    const frameDocLeft = fr.left;
+
+    // Make coordinates relative to the container, then pad.
+    // Round to integer px so sub-pixel scroll deltas do not defeat the
+    // no-op guard. The frame is viewport-fixed, so only the document
+    // translation changes during scroll; rounding collapses those
+    // fractional shifts into the same cached value.
+    const hole: FlowHole = {
+      left: Math.round(frameDocLeft - contLeft - FRAME_PAD_X),
+      top: Math.round(frameDocTop - contTop - FRAME_PAD_TOP),
+      right: Math.round(frameDocLeft + fr.outerW - contLeft + FRAME_PAD_X),
+      bottom: Math.round(frameDocTop + fr.outerH - contTop + FRAME_PAD_BOTTOM),
+    };
+    return extendHoleForFullBleed(hole, gapAbove, gapBelow, cw, col);
+  }
+
+  /**
+   * Visible viewport gaps between the padded hole and the usable
+   * viewport: below the top chrome, above the window bottom. Inputs to
+   * the full-bleed decision in rawHoleAt.
+   */
+  function frameViewportGaps(
+    fr: { top: number; outerH: number },
+    vh: number,
+    chromeBottom: number,
+  ): { above: number; below: number } {
+    return {
+      above: fr.top - FRAME_PAD_TOP - chromeBottom,
+      below: vh - (fr.top + fr.outerH + FRAME_PAD_BOTTOM),
+    };
+  }
+
+  // Track scroll position for hole computation
+  let scrollY = $state(typeof window !== "undefined" ? window.scrollY : 0);
+
+  $effect(() => {
+    function onScroll(): void {
+      scrollY = window.scrollY;
+    }
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => window.removeEventListener("scroll", onScroll);
+  });
+
+  // Coalesced layout via rAF
+  let rafId = 0;
+
+  // Previous-pass inputs for the no-op guard. When these all match the
+  // current call, the layout result is already correct and we skip the
+  // full recompute. Stored as plain variables (not $state) because they
+  // are only read and written inside runLayout, never in reactive deriveds.
+  let prevBlocks: readonly FlowBlock[] | null = null;
+  let prevContainerWidth = -1;
+  let prevHoleLeft = NaN;
+  let prevHoleTop = NaN;
+  let prevHoleRight = NaN;
+  let prevHoleBottom = NaN;
+  // Rounded column x and width so tween float churn does not defeat the guard.
+  let prevColumnX = NaN;
+  let prevColumnW = NaN;
+
+  // Cached no-hole layout. When the padded hole is vertically disjoint
+  // from [0, totalHeight] or horizontally outside [0, containerWidth],
+  // every line gets an identical full-width segment, so we reuse this
+  // single layout rather than re-running computeFlowLayout per frame.
+  let noHoleBlocks: readonly FlowBlock[] | null = null;
+  let noHoleWidth = -1;
+  let noHoleColumnX = NaN;
+  let noHoleColumnW = NaN;
+  let noHoleResult: FlowLayoutResult | null = null;
+
+  // When the hole does not intersect the flow content, every line gets
+  // the same full-width segment. Hoisted out of runLayout to avoid a
+  // fresh function allocation per rAF frame.
+  function holeIntersectsContent(
+    h: FlowHole,
+    totalH: number,
+    cw: number,
+  ): boolean {
+    if (h.bottom <= 0 || h.top >= totalH) return false;
+    if (h.right <= 0 || h.left >= cw) return false;
+    return true;
+  }
+
+  function scheduleLayout(): void {
+    if (rafId !== 0) return;
+    rafId = requestAnimationFrame(() => {
+      rafId = 0;
+      runLayout();
+    });
+  }
+
+  function runLayout(): void {
+    // Bail when the handles were prepared for a different blocks array.
+    // Clearing rather than keeping the old layout is deliberate: the
+    // render deriveds pair layoutResult.blocks with blocks by index, so a
+    // layout from a different blocks array has no safe reading. Font prep
+    // resolves within a frame or two once the fonts are cached, and both
+    // locale and section changes remount this component anyway.
+    if (
+      prepared?.forBlocks !== blocks ||
+      prepared.handles.size === 0 ||
+      containerWidth <= 0
+    ) {
+      layoutResult = null;
+      layoutHole = null;
+      layoutColumn = null;
+      setFlowGeometrySource(null);
+      prevBlocks = null;
+      return;
+    }
+
+    // Container position is measured in the ResizeObserver and on window
+    // resize, not here. That avoids a forced reflow per rAF frame.
+
+    // Compute the hole before the no-op check so we can compare against
+    // the previous pass's hole edges. A hidden frame (null rect) carves
+    // no hole, so the candidate is null and the no-hole paths below apply.
+    const gaps =
+      frameRect === null
+        ? null
+        : frameViewportGaps(frameRect, viewportH, stickyTopOffset());
+    // Read the animated column rect once per pass. Round x to integer px
+    // so tween float churn does not defeat the no-op guard.
+    const col = columnRect();
+    const candidateHole =
+      frameRect === null || gaps === null
+        ? null
+        : rawHoleAt(
+            window.scrollY,
+            containerTop,
+            containerLeft,
+            frameRect,
+            containerWidth,
+            gaps.above,
+            gaps.below,
+            col,
+          );
+
+    // Evaluate slot pressure immediately after the hole is known but
+    // before any guard/cache branch. runLayout executes in a rAF callback
+    // (outside effect tracking), so the slot write cannot create a
+    // tracked effect loop.
+    evaluateColumnPressure(candidateHole);
+
+    const roundedColX = Math.round(col.x);
+    const roundedColW = Math.round(col.width);
+
+    // Skip recompute when every layout input matches the previous pass.
+    // Integer rounding in rawHoleAt collapses sub-pixel scroll deltas.
+    // When the previous pass used the no-hole cache (prevHoleLeft is NaN),
+    // check whether the candidate is STILL disjoint from the cached
+    // totalHeight so consecutive no-hole frames skip without comparing
+    // the moving hole edges.
+    const prevWasNoHole = Number.isNaN(prevHoleLeft);
+    if (
+      prevBlocks === blocks &&
+      prevContainerWidth === containerWidth &&
+      prevColumnX === roundedColX &&
+      prevColumnW === roundedColW
+    ) {
+      if (prevWasNoHole) {
+        // Previous layout was hole-independent. Stay on that path if
+        // there is still no hole, or it is still disjoint from the content.
+        if (
+          noHoleResult !== null &&
+          (candidateHole === null ||
+            candidateHole.bottom <= 0 ||
+            candidateHole.top >= noHoleResult.totalHeight ||
+            candidateHole.right <= 0 ||
+            candidateHole.left >= containerWidth)
+        ) {
+          return;
+        }
+      } else if (
+        candidateHole !== null &&
+        prevHoleLeft === candidateHole.left &&
+        prevHoleTop === candidateHole.top &&
+        prevHoleRight === candidateHole.right &&
+        prevHoleBottom === candidateHole.bottom
+      ) {
+        return;
+      }
+    }
+
+    const filler = createFiller(prepared.handles);
+
+    // Try the no-hole cache first. If blocks and width match, run a
+    // no-hole layout once, then check the hole against its totalHeight.
+    // The no-hole cache also keys on the column rect: a slot flip changes
+    // where text wraps even without a hole.
+    let result: FlowLayoutResult;
+    let hole: FlowHole | null;
+
+    if (
+      noHoleBlocks === blocks &&
+      noHoleWidth === containerWidth &&
+      noHoleColumnX === roundedColX &&
+      noHoleColumnW === roundedColW &&
+      noHoleResult !== null
+    ) {
+      // Re-use the cached no-hole layout when there is no hole or it
+      // is disjoint from the content.
+      if (
+        candidateHole === null ||
+        !holeIntersectsContent(
+          candidateHole,
+          noHoleResult.totalHeight,
+          containerWidth,
+        )
+      ) {
+        result = noHoleResult;
+        hole = null;
+      } else {
+        hole = candidateHole;
+        result = computeFlowLayout(
+          blocks,
+          filler,
+          containerWidth,
+          hole,
+          DEFAULT_METRICS,
+          col,
+        );
+      }
+    } else {
+      // First pass with these blocks/width/column: compute no-hole layout
+      const noHole = computeFlowLayout(
+        blocks,
+        filler,
+        containerWidth,
+        null,
+        DEFAULT_METRICS,
+        col,
+      );
+      noHoleBlocks = blocks;
+      noHoleWidth = containerWidth;
+      noHoleColumnX = roundedColX;
+      noHoleColumnW = roundedColW;
+      noHoleResult = noHole;
+
+      if (
+        candidateHole === null ||
+        !holeIntersectsContent(
+          candidateHole,
+          noHole.totalHeight,
+          containerWidth,
+        )
+      ) {
+        result = noHole;
+        hole = null;
+      } else {
+        hole = candidateHole;
+        result = computeFlowLayout(
+          blocks,
+          filler,
+          containerWidth,
+          hole,
+          DEFAULT_METRICS,
+          col,
+        );
+      }
+    }
+
+    layoutResult = result;
+    layoutHole = hole;
+    layoutColumn = col;
+
+    // Record inputs so the next frame can skip if nothing changed.
+    prevBlocks = blocks;
+    prevContainerWidth = containerWidth;
+    prevHoleLeft = hole?.left ?? NaN;
+    prevHoleTop = hole?.top ?? NaN;
+    prevHoleRight = hole?.right ?? NaN;
+    prevHoleBottom = hole?.bottom ?? NaN;
+    prevColumnX = roundedColX;
+    prevColumnW = roundedColW;
+
+    // Publish geometry for cross-module consumption.
+    // Capture per-pass values so closures stay self-consistent.
+    // The resting column rect (not the mid-flight tween value) is used
+    // inside layoutForHole so the fixed-point loop converges against
+    // settled geometry.
+    const passContainerTop = containerTop;
+    const passContainerLeft = containerLeft;
+    const passContainerWidth = containerWidth;
+    const passColumn = restingColumnRect();
+    const passFrameRect =
+      frameRect === null
+        ? null
+        : {
+            left: frameRect.left,
+            top: frameRect.top,
+            outerW: frameRect.outerW,
+            outerH: frameRect.outerH,
+          };
+    const passBlocks = blocks;
+    const passFiller = filler;
+    const passGapAbove = gaps?.above ?? 0;
+    const passGapBelow = gaps?.below ?? 0;
+
+    setFlowGeometrySource({
+      layoutResult: result,
+      blocks: passBlocks,
+      containerTop: passContainerTop,
+      holeAtScrollY(sy: number): FlowHole | null {
+        if (passFrameRect === null) return null;
+        return rawHoleAt(
+          sy,
+          passContainerTop,
+          passContainerLeft,
+          passFrameRect,
+          passContainerWidth,
+          passGapAbove,
+          passGapBelow,
+          passColumn,
+        );
+      },
+      layoutForHole(h: FlowHole | null): FlowLayoutResult {
+        // Pure layout call: pressure must never be evaluated here.
+        return computeFlowLayout(
+          passBlocks,
+          passFiller,
+          passContainerWidth,
+          h,
+          DEFAULT_METRICS,
+          passColumn,
+        );
+      },
+    });
+  }
+
+  // Re-layout when dependencies change
+  $effect(() => {
+    // Read all reactive dependencies that should trigger relayout
+    void prepared;
+    void containerWidth;
+    void containerTop;
+    void containerLeft;
+    void frameRect?.left;
+    void frameRect?.top;
+    void frameRect?.outerW;
+    void frameRect?.outerH;
+    void scrollY;
+    // Full-bleed detection reads the viewport height and chrome bottom.
+    void viewportH;
+    void stickyTopOffset();
+    // The animated column x schedules passes during a slot flip
+    // animation so the text tracks the tweening column position.
+    void columnRect().x;
+
+    scheduleLayout();
+  });
+
+  // Clean up on destroy
+  $effect(() => {
+    return () => {
+      if (rafId !== 0) {
+        cancelAnimationFrame(rafId);
+        rafId = 0;
+      }
+      setFlowGeometrySource(null);
+    };
+  });
+
+  // -----------------------------------------------------------------------
+  // Virtualization: only render blocks in viewport + buffer
+  // -----------------------------------------------------------------------
+
+  function isBlockVisible(
+    blockGeo: { topY: number; bottomY: number },
+    containerDocTop: number,
+    viewportTop: number,
+    viewportBottom: number,
+    buffer: number,
+  ): boolean {
+    const blockDocTop = containerDocTop + blockGeo.topY;
+    const blockDocBottom = containerDocTop + blockGeo.bottomY;
+    return (
+      blockDocBottom >= viewportTop - buffer &&
+      blockDocTop <= viewportBottom + buffer
+    );
+  }
+
+  interface VisibleBlock {
+    blockIndex: number;
+    block: FlowTextBlock;
+    geo: {
+      topY: number;
+      bottomY: number;
+      firstLineIndex: number;
+      lineCount: number;
+    };
+    /** This block's own lines, resolved once so the markup iterates a
+     *  concrete list instead of indexing into the shared line array. */
+    lines: FlowLine[];
+  }
+
+  // Reactive virtualization: reads only reactive $state/$derived values,
+  // never window.* or getBoundingClientRect() directly.
+  let visibleBlocks: VisibleBlock[] = $derived.by(() => {
+    if (layoutResult === null) return [];
+    // Layout geometry pairs with blocks by index, so a length mismatch
+    // means this layout belongs to a different blocks array and cannot be
+    // read safely. Rendering must never throw: a throw aborts the flush
+    // and freezes the DOM while the rAF loop keeps computing.
+    if (layoutResult.blocks.length !== blocks.length) return [];
+
+    const vpTop = scrollY;
+    const vpBottom = vpTop + viewportH;
+    const buffer = viewportH;
+
+    const result: VisibleBlock[] = [];
+    for (let bi = 0; bi < layoutResult.blocks.length; bi++) {
+      const geo = layoutResult.blocks.at(bi);
+      const block = blocks.at(bi);
+      if (geo === undefined || block === undefined) continue;
+      // Figure blocks are rendered from the figures array, not here.
+      if (block.kind === "figure") continue;
+      if (!isBlockVisible(geo, containerTop, vpTop, vpBottom, buffer)) continue;
+
+      const lines: FlowLine[] = [];
+      const end = geo.firstLineIndex + geo.lineCount;
+      for (let li = geo.firstLineIndex; li < end; li++) {
+        const line = layoutResult.lines.at(li);
+        if (line !== undefined) lines.push(line);
+      }
+      // The figure guard above narrows block to FlowTextBlock.
+      result.push({
+        blockIndex: bi,
+        block,
+        geo,
+        lines,
+      });
+    }
+    return result;
+  });
+
+  // -----------------------------------------------------------------------
+  // Visible figures: virtualized from the layout's figures array
+  // -----------------------------------------------------------------------
+
+  interface VisibleFigure {
+    blockIndex: number;
+    block: FlowFigureBlock;
+    geo: FlowFigureGeometry;
+    /** Block geometry from the blocks array, for fade calculation. */
+    blockGeo: { topY: number; bottomY: number };
+  }
+
+  // Asymmetric enter/leave margins prevent a figure oscillating across
+  // the boundary from unmounting and remounting ClipFigure (which
+  // destroys its video element and IntersectionObserver). Enter at 1
+  // viewport; leave only after 1.5 viewports of distance.
+  const FIGURE_ENTER_BUFFER_RATIO = 1;
+  const FIGURE_LEAVE_BUFFER_RATIO = 1.5;
+
+  // Track which block indices are currently mounted, so the wider leave
+  // margin can keep them alive after they would have failed the enter
+  // test. The tracker is scratch memory updated inside the $derived.by
+  // and read only there, so it lives outside component state.
+  const figureHysteresis = createFigureHysteresis();
+
+  let visibleFigures: VisibleFigure[] = $derived.by(() => {
+    if (layoutResult === null) return [];
+    if (layoutResult.blocks.length !== blocks.length) return [];
+
+    const vpTop = scrollY;
+    const vpBottom = vpTop + viewportH;
+    const enterBuffer = viewportH * FIGURE_ENTER_BUFFER_RATIO;
+    const leaveBuffer = viewportH * FIGURE_LEAVE_BUFFER_RATIO;
+
+    const result: VisibleFigure[] = [];
+    for (const fig of layoutResult.figures) {
+      const blockGeo = layoutResult.blocks.at(fig.blockIndex);
+      const block = blocks.at(fig.blockIndex);
+      if (blockGeo === undefined || block === undefined) continue;
+      if (block.kind !== "figure") continue;
+
+      const wasMounted = figureHysteresis.wasMounted(fig.blockIndex);
+      const buffer = wasMounted ? leaveBuffer : enterBuffer;
+      if (!isBlockVisible(blockGeo, containerTop, vpTop, vpBottom, buffer)) {
+        continue;
+      }
+      figureHysteresis.keep(fig.blockIndex);
+      result.push({
+        blockIndex: fig.blockIndex,
+        block,
+        geo: fig,
+        blockGeo,
+      });
+    }
+    figureHysteresis.commit();
+    return result;
+  });
+
+  // -----------------------------------------------------------------------
+  // Active sub highlight geometry
+  // -----------------------------------------------------------------------
+
+  interface HighlightRect {
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+  }
+
+  const HIGHLIGHT_PAD_X = 8;
+
+  let highlightRects: HighlightRect[] = $derived.by(() => {
+    if (layoutResult === null || activeSub === null) return [];
+    if (layoutResult.blocks.length !== blocks.length) return [];
+
+    const rects: HighlightRect[] = [];
+    for (let bi = 0; bi < blocks.length; bi++) {
+      const block = blocks.at(bi);
+      if (block === undefined) continue;
+      if (block.sectionId !== activeSection || block.subSlug !== activeSub) {
+        continue;
+      }
+
+      const geo = layoutResult.blocks.at(bi);
+      if (geo === undefined || geo.lineCount === 0) continue;
+
+      const km = DEFAULT_METRICS[block.kind];
+
+      for (
+        let li = geo.firstLineIndex;
+        li < geo.firstLineIndex + geo.lineCount;
+        li++
+      ) {
+        const line = layoutResult.lines.at(li);
+        if (line === undefined) continue;
+        // Exactly the line box, no vertical padding: consecutive lines
+        // sit one lineHeight apart, so anything taller makes neighbours
+        // overlap and the translucent wash doubles up into a band along
+        // every seam. Horizontal padding is safe, lines do not abut.
+        rects.push({
+          x: line.x - HIGHLIGHT_PAD_X,
+          y: line.y,
+          width: line.width + HIGHLIGHT_PAD_X * 2,
+          height: km.lineHeight,
+        });
+      }
+    }
+    return rects;
+  });
+
+  // -----------------------------------------------------------------------
+  // Seen-topic check marks: positioned at the left of each seen sub's
+  // heading first line.
+  // -----------------------------------------------------------------------
+
+  interface SeenMark {
+    x: number;
+    y: number;
+    blockIndex: number;
+  }
+
+  // Pre-built lookup so seenMarks avoids O(n) array scans per heading
+  // block on every layout pass. Keyed by "sectionId--subSlug", maps to
+  // the sub's DemoTopic (null-topic subs are excluded).
+  let subTopicLookup: ReadonlyMap<string, DemoTopic> = $derived.by(() => {
+    return buildSubTopicLookup(sections);
+  });
+
+  let seenMarks: SeenMark[] = $derived.by(() => {
+    if (layoutResult === null) return [];
+    if (layoutResult.blocks.length !== blocks.length) return [];
+
+    const marks: SeenMark[] = [];
+    for (let bi = 0; bi < blocks.length; bi++) {
+      const block = blocks.at(bi);
+      if (block?.kind !== "sub-heading") continue;
+
+      const topic = subTopicLookup.get(
+        `${block.sectionId}--${block.subSlug ?? ""}`,
+      );
+      if (topic === undefined) continue;
+      if (!seenTopics.has(topic)) continue;
+
+      const geo = layoutResult.blocks.at(bi);
+      if (geo === undefined || geo.lineCount === 0) continue;
+
+      const firstLine = layoutResult.lines.at(geo.firstLineIndex);
+      if (firstLine === undefined) continue;
+      marks.push({
+        x: firstLine.x - 20,
+        y: firstLine.y + 2,
+        blockIndex: bi,
+      });
+    }
+    return marks;
+  });
+
+  // -----------------------------------------------------------------------
+  // Header panel: the tint that used to be the section header's card,
+  // drawn behind the title, description and tip. Sized from the pass's
+  // column rather than from the lines themselves, so it stays a panel
+  // instead of tracking every wrap the frame causes. The frame paints
+  // over it, the way it paints over the text it displaces.
+  // -----------------------------------------------------------------------
+
+  const PANEL_PAD_X = 16;
+  const PANEL_PAD_TOP = 16;
+  const PANEL_PAD_BOTTOM = 16;
+
+  interface PanelRect {
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+  }
+
+  let headerPanel: PanelRect | null = $derived.by(() => {
+    if (layoutResult === null || layoutColumn === null) return null;
+    if (layoutResult.blocks.length !== blocks.length) return null;
+
+    let top = Infinity;
+    let bottom = -Infinity;
+    for (let bi = 0; bi < blocks.length; bi++) {
+      const block = blocks.at(bi);
+      if (block === undefined) continue;
+      if (
+        block.kind !== "section-title" &&
+        block.kind !== "section-desc" &&
+        block.kind !== "story-tip"
+      ) {
+        continue;
+      }
+      const geo = layoutResult.blocks.at(bi);
+      if (geo === undefined || geo.lineCount === 0) continue;
+      top = Math.min(top, geo.topY);
+      // bottomY carries the kind's bottom margin, which belongs to the
+      // gap below the panel rather than to the panel itself.
+      bottom = Math.max(
+        bottom,
+        geo.bottomY - DEFAULT_METRICS[block.kind].marginBottom,
+      );
+    }
+    if (top === Infinity) return null;
+
+    return {
+      x: layoutColumn.x - PANEL_PAD_X,
+      y: top - PANEL_PAD_TOP,
+      width: layoutColumn.width + PANEL_PAD_X * 2,
+      height: bottom - top + PANEL_PAD_TOP + PANEL_PAD_BOTTOM,
+    };
+  });
+
+  // -----------------------------------------------------------------------
+  // Tip icon: drawn in the gutter the tip block's indent reserves,
+  // beside its first line, the way the seen marks sit beside a heading.
+  // -----------------------------------------------------------------------
+
+  let tipMark: { x: number; y: number } | null = $derived.by(() => {
+    if (layoutResult === null) return null;
+    if (layoutResult.blocks.length !== blocks.length) return null;
+
+    for (let bi = 0; bi < blocks.length; bi++) {
+      if (blocks.at(bi)?.kind !== "story-tip") continue;
+      const geo = layoutResult.blocks.at(bi);
+      if (geo === undefined || geo.lineCount === 0) continue;
+      const firstLine = layoutResult.lines.at(geo.firstLineIndex);
+      if (firstLine === undefined) continue;
+      return { x: firstLine.x - LIST_INDENT, y: firstLine.y + 3 };
+    }
+    return null;
+  });
+
+  // -----------------------------------------------------------------------
+  // Heading rules
+  //
+  // A hairline under each sub heading, drawn through the same segment
+  // function the text uses. When the frame overlaps the rule's row the
+  // segments come back split, so the rule renders as two short strokes
+  // flanking the frame rather than one line running behind it.
+  // -----------------------------------------------------------------------
+
+  /** Gap between a heading's baseline row and its rule, in px. */
+  const RULE_OFFSET = 7;
+  const RULE_THICKNESS = 1;
+
+  interface RuleRect {
+    x: number;
+    y: number;
+    width: number;
+    /** Stable across relayout: block index plus position within the row. */
+    key: string;
+    active: boolean;
+  }
+
+  let headingRules: RuleRect[] = $derived.by(() => {
+    if (layoutResult === null) return [];
+    if (layoutResult.blocks.length !== blocks.length) return [];
+
+    // Use the column captured from the same pass that produced layoutResult
+    // so rules clip against the same inputs the text used (no one-frame
+    // disagreement between the rule and the text it decorates).
+    const col = layoutColumn;
+
+    const rects: RuleRect[] = [];
+    for (let bi = 0; bi < blocks.length; bi++) {
+      const block = blocks.at(bi);
+      if (block?.kind !== "sub-heading") continue;
+
+      const geo = layoutResult.blocks.at(bi);
+      if (geo === undefined || geo.lineCount === 0) continue;
+
+      const lastLine = layoutResult.lines.at(
+        geo.firstLineIndex + geo.lineCount - 1,
+      );
+      if (lastLine === undefined) continue;
+
+      const km = DEFAULT_METRICS[block.kind];
+      const ruleY = lastLine.y + km.lineHeight + RULE_OFFSET;
+      const active =
+        block.sectionId === activeSection && block.subSlug === activeSub;
+
+      const segments =
+        col !== null
+          ? computeColumnSegments(
+              ruleY,
+              RULE_THICKNESS,
+              containerWidth,
+              col,
+              layoutHole,
+            )
+          : [{ x: 0, width: containerWidth }];
+      for (let si = 0; si < segments.length; si++) {
+        const seg = segments.at(si);
+        if (seg === undefined) continue;
+        rects.push({
+          x: seg.x,
+          y: ruleY,
+          width: seg.width,
+          key: `${String(bi)}:${String(si)}`,
+          active,
+        });
+      }
+    }
+    return rects;
+  });
+
+  // -----------------------------------------------------------------------
+  // Click handling
+  // -----------------------------------------------------------------------
+
+  function handleClick(ev: MouseEvent): void {
+    if (layoutResult === null || containerEl === undefined) return;
+
+    const rect = containerEl.getBoundingClientRect();
+    const x = ev.clientX - rect.left;
+    const y = ev.clientY - rect.top;
+
+    // Convert to container-relative document-space coordinates
+    // The lines are positioned relative to the container's content, not scroll
+    const bi = hitTestBlock(x, y, layoutResult, DEFAULT_METRICS, blocks);
+    if (bi === null) return;
+
+    const block = blocks.at(bi);
+    if (block === undefined) return;
+    if (block.subSlug !== null) {
+      onSelectSub(block.sectionId, block.subSlug);
+    } else {
+      onSelectSection(block.sectionId);
+    }
+  }
+
+  function handleKeydown(ev: KeyboardEvent): void {
+    if (ev.key !== "Enter" && ev.key !== " ") return;
+    const target = ev.target;
+    if (!(target instanceof HTMLElement)) return;
+    const rawId = target.dataset.sectionId;
+    const subSlug = target.dataset.subSlug;
+    if (rawId === undefined) return;
+
+    // Validate the dataset value against the real section taxonomy
+    const section = getSection(rawId);
+    if (section === undefined) return;
+
+    ev.preventDefault();
+    if (subSlug !== undefined && subSlug !== "") {
+      onSelectSub(section.id, subSlug);
+    } else {
+      onSelectSection(section.id);
+    }
+  }
+
+  // -----------------------------------------------------------------------
+  // CSS class helpers per block kind
+  // -----------------------------------------------------------------------
+
+  /** Semantic tag for a text block. Only called for text blocks. */
+  function blockTag(kind: FlowTextKind): string {
+    switch (kind) {
+      case "section-title":
+        return "h2";
+      case "sub-heading":
+        return "h3";
+      case "section-desc":
+      case "story-tip":
+      case "sub-body":
+        return "p";
+    }
+  }
+
+  function lineColorClass(
+    block: FlowTextBlock,
+    activeSection_: SectionId,
+    activeSub_: string | null,
+  ): string {
+    // Active sub heading gets accent color
+    if (
+      block.kind === "sub-heading" &&
+      block.sectionId === activeSection_ &&
+      block.subSlug === activeSub_
+    ) {
+      return "flow-line--active-heading";
+    }
+    // Style classes per kind
+    switch (block.kind) {
+      case "section-title":
+        return "flow-line--title";
+      case "section-desc":
+        return "flow-line--desc";
+      case "story-tip":
+        return "flow-line--tip";
+      case "sub-heading":
+        return "flow-line--sub-heading";
+      case "sub-body":
+        return "flow-line--sub-body";
+    }
+  }
+</script>
+
+<!-- svelte-ignore a11y_click_events_have_key_events -->
+<!-- svelte-ignore a11y_no_static_element_interactions -->
+<div
+  class="flow-story"
+  bind:this={containerEl}
+  onclick={handleClick}
+  style="height: {layoutResult !== null
+    ? layoutResult.totalHeight
+    : 0}px; position: relative; {fontVarsStyle}"
+>
+  {#if layoutResult !== null}
+    <!-- Header tint, first so every line paints over it -->
+    {#if headerPanel !== null}
+      <div
+        class="flow-header-panel"
+        style="
+          left: {headerPanel.x}px;
+          top: {headerPanel.y}px;
+          width: {headerPanel.width}px;
+          height: {headerPanel.height}px;
+        "
+      ></div>
+    {/if}
+
+    <!-- Highlight rects behind active sub lines (unkeyed: stateless decoration) -->
+    {#each highlightRects as hr, i (i)}
+      <div
+        class="flow-highlight"
+        style="
+          left: {hr.x}px;
+          top: {hr.y}px;
+          width: {hr.width}px;
+          height: {hr.height}px;
+        "
+      ></div>
+    {/each}
+
+    <!-- Hairline rules under each sub heading -->
+    {#each headingRules as rule (rule.key)}
+      <div
+        class="flow-rule"
+        class:flow-rule--active={rule.active}
+        style="left: {rule.x}px; top: {rule.y}px; width: {rule.width}px;"
+      ></div>
+    {/each}
+
+    <!-- Tip icon in the gutter beside its first line -->
+    {#if tipMark !== null}
+      <div
+        class="flow-tip-mark"
+        style="left: {tipMark.x}px; top: {tipMark.y}px;"
+      >
+        <MousePointerClick size={16} />
+      </div>
+    {/if}
+
+    <!-- Seen-topic check marks -->
+    {#each seenMarks as mark (mark.blockIndex)}
+      <div class="flow-seen-mark" style="left: {mark.x}px; top: {mark.y}px;">
+        <Check size={14} />
+      </div>
+    {/each}
+
+    <!-- Visible blocks with their line spans -->
+    {#each visibleBlocks as vb (vb.block.id)}
+      {@const isFocusable = vb.block.kind === "sub-heading"}
+      {@const tag = blockTag(vb.block.kind)}
+
+      {#if tag === "h2"}
+        <h2 class="flow-block" style:top="{vb.geo.topY}px">
+          {#each vb.lines as line, li (li)}
+            <span
+              class="flow-line {lineColorClass(
+                vb.block,
+                activeSection,
+                activeSub,
+              )}"
+              style:left="{line.x}px"
+              style:top="{line.y - vb.geo.topY}px"
+              style:width="{line.width}px">{line.text}</span
+            >
+          {/each}
+        </h2>
+      {:else if tag === "h3"}
+        <!-- svelte-ignore a11y_no_noninteractive_tabindex -->
+        <h3
+          class="flow-block"
+          class:flow-block--focusable={isFocusable}
+          style:top="{vb.geo.topY}px"
+          role={isFocusable ? "button" : undefined}
+          tabindex={isFocusable ? 0 : undefined}
+          data-section-id={vb.block.sectionId}
+          data-sub-slug={vb.block.subSlug}
+          onkeydown={isFocusable ? handleKeydown : undefined}
+        >
+          {#each vb.lines as line, li (li)}
+            <span
+              class="flow-line {lineColorClass(
+                vb.block,
+                activeSection,
+                activeSub,
+              )}"
+              style:left="{line.x}px"
+              style:top="{line.y - vb.geo.topY}px"
+              style:width="{line.width}px">{line.text}</span
+            >
+          {/each}
+        </h3>
+      {:else}
+        {@const firstLine = vb.lines.at(0)}
+        <p class="flow-block" style:top="{vb.geo.topY}px">
+          <!-- List marker in the gutter the item's indent reserved -->
+          {#if vb.block.marker !== undefined && firstLine !== undefined}
+            <span
+              class="flow-line {lineColorClass(
+                vb.block,
+                activeSection,
+                activeSub,
+              )}"
+              style:left="{firstLine.x - (vb.block.indent ?? 0)}px"
+              style:top="{firstLine.y - vb.geo.topY}px">{vb.block.marker}</span
+            >
+          {/if}
+          {#each vb.lines as line, li (li)}
+            {#if line.fragments !== undefined}
+              <!-- Rich line: one span per styled fragment -->
+              {#each line.fragments as frag, fi (fi)}
+                <span
+                  class="flow-line {lineColorClass(
+                    vb.block,
+                    activeSection,
+                    activeSub,
+                  )}"
+                  class:flow-line--bold={frag.bold}
+                  style:left="{line.x + frag.dx}px"
+                  style:top="{line.y - vb.geo.topY}px"
+                  style:width="{frag.width}px">{frag.text}</span
+                >
+              {/each}
+            {:else}
+              <span
+                class="flow-line {lineColorClass(
+                  vb.block,
+                  activeSection,
+                  activeSub,
+                )}"
+                style:left="{line.x}px"
+                style:top="{line.y - vb.geo.topY}px"
+                style:width="{line.width}px">{line.text}</span
+              >
+            {/if}
+          {/each}
+        </p>
+      {/if}
+    {/each}
+
+    <!-- Visible figures: absolutely positioned clip elements -->
+    {#each visibleFigures as vf (vf.block.id)}
+      <div
+        class="flow-figure"
+        style:left="{vf.geo.x}px"
+        style:top="{vf.geo.y}px"
+        style:width="{vf.geo.width}px"
+        style:height="{vf.geo.height}px"
+      >
+        <ClipFigure
+          sectionId={vf.block.sectionId}
+          subSlug={vf.block.subSlug ?? ""}
+          width={vf.geo.width}
+          height={vf.geo.height}
+          ariaLabel={resolveParameterizedMessage(
+            "demo_figure_aria_label",
+            {
+              sub: resolveStoryMessage(vf.block.headingKey, locale),
+            },
+            locale,
+          )}
+          {onpeekfire}
+          {onpeekdrag}
+          {onpeeksecondarytap}
+          {onpeekrelease}
+          {onpeekcancel}
+          {onelement}
+        />
+      </div>
+    {/each}
+  {/if}
+</div>
+
+<style>
+  .flow-story {
+    position: relative;
+    width: 100%;
+  }
+
+  .flow-block {
+    position: absolute;
+    left: 0;
+    right: 0;
+    margin: 0;
+    pointer-events: auto;
+  }
+
+  .flow-block--focusable {
+    cursor: pointer;
+  }
+
+  .flow-block--focusable:focus-visible {
+    outline: 2px solid var(--demo-accent);
+    outline-offset: 2px;
+    border-radius: 4px;
+  }
+
+  .flow-line {
+    position: absolute;
+    white-space: pre;
+    pointer-events: auto;
+    display: block;
+  }
+
+  /* Section title: primary text, weight 700 */
+  .flow-line--title {
+    font: var(--flow-font-title);
+    line-height: var(--flow-lh-title);
+    color: var(--ink);
+  }
+
+  /* Section description: muted text */
+  .flow-line--desc {
+    font: var(--flow-font-desc);
+    line-height: var(--flow-lh-desc);
+    color: var(--muted);
+  }
+
+  /* Story tip: muted, same measure as body copy */
+  .flow-line--tip {
+    font: var(--flow-font-tip);
+    line-height: var(--flow-lh-tip);
+    color: var(--muted);
+  }
+
+  /* Sub heading: primary text */
+  .flow-line--sub-heading {
+    font: var(--flow-font-sub-heading);
+    line-height: var(--flow-lh-sub-heading);
+    color: var(--ink);
+  }
+
+  /* Active sub heading: the yellow wash behind it is what marks it, so
+     the text keeps the ordinary heading colour and stays readable
+     through the highlight. */
+  .flow-line--active-heading {
+    font: var(--flow-font-sub-heading);
+    line-height: var(--flow-lh-sub-heading);
+    color: var(--ink);
+  }
+
+  /* Sub body: slightly muted text */
+  .flow-line--sub-body {
+    font: var(--flow-font-sub-body);
+    line-height: var(--flow-lh-sub-body);
+    color: var(--ink-2);
+  }
+
+  /* Bold markup runs: same metrics as sub-body, weight 700. Declared
+     after the kind classes so the font override wins on shared spans. */
+  .flow-line--bold {
+    font: var(--flow-font-sub-body-bold);
+  }
+
+  /* Tint behind the page title and description */
+  .flow-header-panel {
+    position: absolute;
+    border-radius: 8px;
+    background: color-mix(in srgb, var(--demo-accent) 5%, transparent);
+    pointer-events: none;
+  }
+
+  /* Highlight rects behind active sub lines. Yellow rather than the
+     interface blue: this marks passages the way a highlighter does,
+     and it should not read as another selectable control. */
+  .flow-highlight {
+    position: absolute;
+    /* One rect per line, stacked edge to edge, so a wider radius would
+       scallop the seam between every pair of lines. */
+    border-radius: 2px;
+    background: rgba(255, 214, 10, 0.38);
+    pointer-events: none;
+    transition: opacity 0.2s ease;
+  }
+
+  :global(html.dark) .flow-highlight {
+    background: rgba(255, 214, 10, 0.24);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .flow-highlight {
+      transition: none;
+    }
+  }
+
+  /* Hairline rule under each sub heading */
+  .flow-rule {
+    position: absolute;
+    height: 1px;
+    background: var(--hair-2);
+    pointer-events: none;
+    transition:
+      background 0.2s ease,
+      opacity 0.2s ease;
+  }
+
+  .flow-rule--active {
+    background: color-mix(in srgb, var(--demo-accent) 45%, transparent);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .flow-rule {
+      transition: none;
+    }
+  }
+
+  /* Tip icon */
+  .flow-tip-mark {
+    position: absolute;
+    color: var(--muted);
+    pointer-events: none;
+    display: flex;
+  }
+
+  /* Seen-topic check marks */
+  .flow-seen-mark {
+    position: absolute;
+    color: var(--meter-strong);
+    pointer-events: none;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  /* Inline clip figures */
+  .flow-figure {
+    position: absolute;
+    pointer-events: auto;
+    transition: opacity 0.2s ease;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .flow-figure {
+      transition: none;
+    }
+  }
+</style>

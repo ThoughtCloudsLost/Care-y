@@ -130,6 +130,8 @@
     flex-shrink: 0;
     cursor: grab;
     touch-action: none;
+    user-select: none;
+    -webkit-user-select: none;
   }
 
   .panel-drag-handle:active {

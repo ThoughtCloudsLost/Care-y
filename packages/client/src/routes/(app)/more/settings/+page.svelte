@@ -151,6 +151,7 @@
       title={m.settings_password()}
       after="********"
       link
+      data-testid="settings-password-row"
       onclick={() => {
         passwordSheetOpen = true;
       }}
@@ -165,6 +166,7 @@
         ? m.settings_dark_mode()
         : m.settings_light_mode()}
       link
+      data-testid="settings-color-scheme-row"
       onclick={toggleSchemeWithPalette}
     />
     <ListItem

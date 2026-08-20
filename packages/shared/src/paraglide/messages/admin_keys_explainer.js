@@ -6,7 +6,7 @@ import { getLocale, experimentalStaticLocale } from '../runtime.js';
 /** @typedef {{}} Admin_Keys_ExplainerInputs */
 
 const en_admin_keys_explainer = /** @type {(inputs: Admin_Keys_ExplainerInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Your organization key encrypts shared data: volunteer names, knowledge base articles, queue names, and branding. Ticket conversations and client information use separate per-ticket keys.`)
+	return /** @type {LocalizedString} */ (`Your organization key encrypts shared data: volunteer names, knowledge base articles, queue names, and branding. Ticket conversations and client information use separate per ticket keys.`)
 };
 
 const es_admin_keys_explainer = /** @type {(inputs: Admin_Keys_ExplainerInputs) => LocalizedString} */ () => {

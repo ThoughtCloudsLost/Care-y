@@ -48,6 +48,27 @@ describe.skipIf(!process.env.DATABASE_URL)("GreetingRepository", () => {
     expect(found!.text).toBe("Welcome to our service.");
   });
 
+  it("findById returns a greeting by ID", async () => {
+    const greeting = await greetingRepo.create({
+      phoneNumber: PHONE_NUMBER,
+      greetingType: "findbyid_test",
+      locale: "en-US",
+      text: "Find me by ID.",
+    });
+
+    const found = await greetingRepo.findById(greeting.id);
+    expect(found).not.toBeNull();
+    expect(found!.id).toBe(greeting.id);
+    expect(found!.text).toBe("Find me by ID.");
+  });
+
+  it("findById returns null for missing ID", async () => {
+    const found = await greetingRepo.findById(
+      "00000000-0000-4000-8000-000000000099",
+    );
+    expect(found).toBeNull();
+  });
+
   it("listByNumber returns all greetings for that phone number", async () => {
     const phone2 = "+15550020002";
 

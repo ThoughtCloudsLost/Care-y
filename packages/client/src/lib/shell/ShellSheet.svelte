@@ -214,6 +214,8 @@
     padding: 10px 0 6px;
     cursor: grab;
     touch-action: none;
+    user-select: none;
+    -webkit-user-select: none;
     flex-shrink: 0;
   }
 

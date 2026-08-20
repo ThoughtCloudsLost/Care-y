@@ -1,0 +1,72 @@
+name: Deploy demo site
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - packages/demo/**
+      - packages/client/src/lib/**
+      - packages/client/src/styles/**
+      - packages/client/src/routes/**
+      - packages/client/static/fonts/**
+      - packages/shared/messages/**
+      - packages/shared/src/**
+      - packages/server/src/**
+      - packages/crypto/src/**
+  workflow_dispatch:
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v5.0.0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Compile shared paraglide
+        run: pnpm --filter @care-y/shared run build:paraglide
+
+      - name: Build demo
+        run: pnpm --filter @care-y/demo run build
+
+      - name: Upload pages artifact
+        uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
+        with:
+          path: packages/demo/dist
+
+  deploy:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    needs: build
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deploy
+        uses: actions/deploy-pages@cd2ce8fcbc39b97be8ca5fce6e763baed58fa128 # v5.0.0

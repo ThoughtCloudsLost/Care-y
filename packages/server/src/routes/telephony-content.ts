@@ -19,6 +19,7 @@ import {
   listGreetingsInputSchema,
   uploadGreetingAudioInputSchema,
   createAudioGreetingInputSchema,
+  getGreetingAudioInputSchema,
   createSmsResponseInputSchema,
   updateSmsResponseInputSchema,
   deleteSmsResponseInputSchema,
@@ -52,6 +53,16 @@ export function createTelephonyContentRouter(
       withErrorWrapping(async ({ ctx, input }) => {
         const svc = createService(ctx.org.tenantDb);
         return svc.listGreetings(input.phoneNumber);
+      }),
+    ),
+
+    getGreetingAudio: adminProcedure.input(getGreetingAudioInputSchema).query(
+      withErrorWrapping(async ({ ctx, input }) => {
+        if (!blobStore) {
+          throw new InternalError("BlobStore not configured");
+        }
+        const svc = createService(ctx.org.tenantDb);
+        return svc.getGreetingAudio(blobStore, input.greetingId);
       }),
     ),
 

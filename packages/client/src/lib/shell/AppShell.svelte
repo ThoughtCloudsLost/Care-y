@@ -573,6 +573,7 @@
     orgName = "CARE-Y",
     ontabchange,
     onareatap,
+    onsearchtoggle,
     children,
   }: AppShellProps = $props();
 
@@ -597,11 +598,13 @@
           "input[type='text']",
         ),
     );
+    onsearchtoggle?.(true);
   }
 
   function closeSearch(): void {
     searchOpen = false;
     searchQuery = "";
+    onsearchtoggle?.(false);
   }
 
   // ── Search provider registration ────────────────────────────────────

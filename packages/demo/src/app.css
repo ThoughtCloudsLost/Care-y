@@ -1,0 +1,30 @@
+@import "tailwindcss";
+
+/* Scan client components and demo components for Tailwind class names. */
+@source "../../client/src/lib";
+@source "./lib";
+
+@import "konsta/svelte/theme.css";
+@import "../../client/src/styles/shared.css";
+@import "../../client/src/styles/touch.css";
+@import "../../client/src/styles/animations.css";
+@import "../../client/src/styles/themes/default.css";
+
+/* The handbook's selection accent.
+
+   Everything else in the handbook draws straight from the app's tokens,
+   but selection needs a hue that reads as "chosen" rather than as
+   chrome, and the brand tokens are a taupe close to the paper. The
+   palette carries exactly one blue, already tuned against these warm
+   surfaces in both schemes, so selection borrows it. Aliased here so
+   the handbook has one place to retune it. */
+.theme-default {
+  --demo-accent: var(--unread);
+  --demo-accent-soft: color-mix(in srgb, var(--unread) 12%, transparent);
+  --demo-accent-strong: color-mix(in srgb, var(--unread) 20%, transparent);
+}
+
+/* Redeclared @font-face with relative URLs (last import wins the cascade).
+   The client's fonts.css uses absolute /fonts/* URLs which break when
+   the demo is served under a base path like /Care-y/. */
+@import "./styles/demo-fonts.css";

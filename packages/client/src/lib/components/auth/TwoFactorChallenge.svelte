@@ -464,6 +464,7 @@
         title={getMethodLabel(method)}
         subtitle={getMethodDescription(method)}
         link
+        data-testid={`twofa-method-${method}`}
         onclick={() => {
           selectMethod(method);
         }}
