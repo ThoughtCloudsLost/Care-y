@@ -13,11 +13,7 @@ import { Tween, prefersReducedMotion } from "svelte/motion";
 import { cubicOut } from "svelte/easing";
 import { WIDE_BREAKPOINT } from "./frame-geometry.svelte.js";
 import type { FlowColumn, FlowHole } from "./flow-layout.js";
-import {
-  MAX_MEASURE,
-  SLOT_FLIP_RATIO,
-  SLOT_FLIP_DEADBAND,
-} from "./flow-layout.js";
+import { MAX_MEASURE, SLOT_FLIP_RATIO } from "./flow-layout.js";
 
 // -----------------------------------------------------------------------
 // Constants
@@ -39,14 +35,21 @@ let windowWidth = $state(typeof window === "undefined" ? 0 : window.innerWidth);
 // tween with duration 0 instead of animating.
 let firstEvaluation = $state(true);
 
-// The tween holds the animated x position of the column. Initialized to 0;
-// initColumnSlot snaps it to the correct slot position before the first
-// render. The tween target represents the resting x; .current provides the
-// mid-flight animated value for rendering.
-const columnXTween = new Tween(0, {
+// The tween holds a NORMALIZED slot position: 0 is the left slot, 1 the
+// right. Rendered x is that position times the right slot's offset, read
+// live, so a container measured after the slot was chosen still lands the
+// column correctly. Tweening absolute px instead would freeze whatever
+// width was known at init: App calls initColumnSlot before FlowStory has
+// measured, so the right slot would resolve to 0 and never recover.
+const slotPosTween = new Tween(0, {
   duration: TWEEN_DURATION_MS,
   easing: cubicOut,
 });
+
+/** Normalized tween target for a slot. */
+function posForSlot(s: "left" | "right"): number {
+  return s === "left" ? 0 : 1;
+}
 
 // -----------------------------------------------------------------------
 // Internal helpers
@@ -57,24 +60,18 @@ function isSlotMode(): boolean {
   return windowWidth >= WIDE_BREAKPOINT;
 }
 
-/** Slot width: half the container, capped at MAX_MEASURE. */
+/**
+ * Slot width: a full container half, uncapped. The two slots tile the
+ * container edge to edge, so the text owns one side and the frame the
+ * other with no unused gutter between them.
+ */
 function computeSlotW(): number {
-  return Math.min(MAX_MEASURE, containerWidth / 2);
+  return containerWidth / 2;
 }
 
 /** Resting x for a given slot. */
 function xForSlot(s: "left" | "right"): number {
   return s === "left" ? 0 : containerWidth / 2;
-}
-
-/** Compute overlap between two horizontal intervals [aL, aR] and [bL, bR]. */
-function horizontalOverlap(
-  aLeft: number,
-  aRight: number,
-  bLeft: number,
-  bRight: number,
-): number {
-  return Math.max(0, Math.min(aRight, bRight) - Math.max(aLeft, bLeft));
 }
 
 // -----------------------------------------------------------------------
@@ -88,11 +85,27 @@ function horizontalOverlap(
 export function initColumnSlot(mode: "read" | "walk"): void {
   slot = mode === "read" ? "left" : "right";
   firstEvaluation = true;
-  const x = isSlotMode()
-    ? xForSlot(slot)
-    : Math.max(0, (containerWidth - MAX_MEASURE) / 2);
+  // Normalized, so this is correct before the container is measured.
   // Tween.set resolves when the motion finishes; nothing awaits a snap.
-  void columnXTween.set(x, { duration: 0 });
+  void slotPosTween.set(posForSlot(slot), { duration: 0 });
+}
+
+/**
+ * Move the column to a slot, animated.
+ *
+ * For moves the layout dictates rather than the frame's travel. Entering
+ * walk mode spawns the frame centered in the left slot, on top of a
+ * column that read mode left there. Nothing travelled into the column,
+ * so the pressure rule correctly declines to fire, but the two still
+ * cannot share a side: the mode change itself is what re-establishes
+ * the arrangement.
+ */
+export function moveColumnToSlot(s: "left" | "right"): void {
+  if (slot === s) return;
+  slot = s;
+  firstEvaluation = false;
+  const dur = prefersReducedMotion.current ? 0 : TWEEN_DURATION_MS;
+  void slotPosTween.set(posForSlot(s), { duration: dur, easing: cubicOut });
 }
 
 /**
@@ -113,15 +126,21 @@ export function setColumnWindowWidth(w: number): void {
 }
 
 /**
- * Evaluate whether the frame's horizontal pressure warrants a slot flip.
+ * Evaluate whether the frame has pushed far enough into the column to
+ * take its side.
  *
- * Reads only hole.left/right (scroll-invariant). Evaluates against the
- * resting slot rects, never the mid-flight animated x, which could
- * oscillate the decision during a flip animation.
+ * The frame's center crosses into the column at the edge facing the
+ * other slot, and the column yields once that center is more than
+ * SLOT_FLIP_RATIO of the way across. Frame width does not enter into
+ * it, so every frame size behaves the same.
  *
- * Flips when overlap with the current slot exceeds slotW * SLOT_FLIP_RATIO,
- * unless the other slot's would-be overlap is within SLOT_FLIP_DEADBAND
- * of the current overlap (straddling frame: lesser overlap wins).
+ * Reads only hole.left/right (scroll-invariant) and the resting slot
+ * rect, never the mid-flight animated x, which would let the decision
+ * oscillate during a flip.
+ *
+ * The two trigger points sit a long way apart (at one sixth and five
+ * sixths of the container), so a flip always lands the column somewhere
+ * the reverse test fails, and no separate hysteresis is needed.
  *
  * Null hole is a no-op (frame hidden, slot stays).
  */
@@ -130,47 +149,24 @@ export function evaluateColumnPressure(hole: FlowHole | null): void {
   if (!isSlotMode()) return;
 
   const slotW = computeSlotW();
-  const threshold = slotW * SLOT_FLIP_RATIO;
+  const colX = xForSlot(slot);
+  const centerX = (hole.left + hole.right) / 2;
 
-  const currentX = xForSlot(slot);
-  const otherSlot: "left" | "right" = slot === "left" ? "right" : "left";
-  const otherX = xForSlot(otherSlot);
+  // How far the center has reached into the column, measured from the
+  // edge it enters by: the left edge for a right-hand column, the right
+  // edge for a left-hand one.
+  const depth = slot === "right" ? centerX - colX : colX + slotW - centerX;
+  if (depth <= slotW * SLOT_FLIP_RATIO) return;
 
-  // Hole coordinates are container-space.
-  const currentOverlap = horizontalOverlap(
-    currentX,
-    currentX + slotW,
-    hole.left,
-    hole.right,
-  );
-  const otherOverlap = horizontalOverlap(
-    otherX,
-    otherX + slotW,
-    hole.left,
-    hole.right,
-  );
-
-  if (currentOverlap <= threshold) return;
-
-  // Dead band: only flip when the other slot is meaningfully better.
-  // If the difference is within the dead band, staying put avoids
-  // oscillation for frames that straddle both slots roughly equally.
-  if (currentOverlap - otherOverlap < SLOT_FLIP_DEADBAND) return;
-
-  // Equality guard: no-op when the computed slot matches the current one.
-  // (Unreachable here since otherSlot !== slot by construction, but
-  // documents the contract.)
-  if (otherSlot === slot) return;
-
-  slot = otherSlot;
-  const targetX = xForSlot(slot);
+  slot = slot === "right" ? "left" : "right";
+  const targetPos = posForSlot(slot);
 
   if (firstEvaluation) {
     firstEvaluation = false;
-    void columnXTween.set(targetX, { duration: 0 });
+    void slotPosTween.set(targetPos, { duration: 0 });
   } else {
     const dur = prefersReducedMotion.current ? 0 : TWEEN_DURATION_MS;
-    void columnXTween.set(targetX, { duration: dur, easing: cubicOut });
+    void slotPosTween.set(targetPos, { duration: dur, easing: cubicOut });
   }
 }
 
@@ -183,7 +179,12 @@ export function columnRect(): FlowColumn {
     const w = Math.min(MAX_MEASURE, containerWidth);
     return { x: Math.max(0, (containerWidth - MAX_MEASURE) / 2), width: w };
   }
-  return { x: columnXTween.current, width: computeSlotW() };
+  // Interpolate between the slot offsets, both read from the live
+  // container width, so a resize mid-flip stays consistent.
+  return {
+    x: slotPosTween.current * xForSlot("right"),
+    width: computeSlotW(),
+  };
 }
 
 /**
@@ -223,5 +224,5 @@ export function resetColumnForTests(): void {
   containerLeft = 0;
   windowWidth = typeof window === "undefined" ? 0 : window.innerWidth;
   firstEvaluation = true;
-  void columnXTween.set(0, { duration: 0 });
+  void slotPosTween.set(0, { duration: 0 });
 }

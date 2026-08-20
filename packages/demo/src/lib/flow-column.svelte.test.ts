@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach } from "vitest";
 import { flushSync } from "svelte";
 import {
   initColumnSlot,
+  moveColumnToSlot,
   setColumnContainer,
   setColumnWindowWidth,
   evaluateColumnPressure,
@@ -11,21 +12,17 @@ import {
   resetColumnForTests,
 } from "./flow-column.svelte.js";
 import type { FlowHole } from "./flow-layout.js";
-import {
-  MAX_MEASURE,
-  SLOT_FLIP_RATIO,
-  SLOT_FLIP_DEADBAND,
-} from "./flow-layout.js";
+import { MAX_MEASURE, SLOT_FLIP_RATIO } from "./flow-layout.js";
 
 // -----------------------------------------------------------------------
 // Helpers
 // -----------------------------------------------------------------------
 
-/** Container width wide enough for two MAX_MEASURE slots. */
+/** A wide container. Slots take a half each, so both clear MAX_MEASURE. */
 const WIDE_CW = MAX_MEASURE * 3;
 
-/** Standard slot width at WIDE_CW. */
-const SLOT_W = Math.min(MAX_MEASURE, WIDE_CW / 2);
+/** Standard slot width at WIDE_CW: a full container half. */
+const SLOT_W = WIDE_CW / 2;
 
 /**
  * Build a FlowHole with the given left/right. Top/bottom are arbitrary
@@ -76,6 +73,19 @@ describe("initColumnSlot", () => {
     expect(restingColumnRect().x).toBe(WIDE_CW / 2);
   });
 
+  it("places the column correctly when init precedes the container measurement", () => {
+    // App calls initColumnSlot during script init, before FlowStory has
+    // measured the container. The slot must resolve against the width
+    // that arrives afterwards, not the zero it was chosen under.
+    setColumnWindowWidth(1200);
+    initColumnSlot("walk");
+    setColumnContainer(WIDE_CW, 0);
+    flushSync();
+
+    expect(columnRect().x).toBe(WIDE_CW / 2);
+    expect(columnRect().x).toBe(restingColumnRect().x);
+  });
+
   it("init snaps without animation (animated x equals resting x)", () => {
     setupWide();
     initColumnSlot("walk");
@@ -91,161 +101,187 @@ describe("initColumnSlot", () => {
 // -----------------------------------------------------------------------
 
 describe("slot width", () => {
-  it("is capped at MAX_MEASURE", () => {
+  it("takes a full container half, uncapped", () => {
     setupWide();
     initColumnSlot("read");
     flushSync();
 
-    expect(columnRect().width).toBe(MAX_MEASURE);
+    expect(columnRect().width).toBe(WIDE_CW / 2);
+    expect(columnRect().width).toBeGreaterThan(MAX_MEASURE);
   });
 
-  it("is half the container when container is narrow enough", () => {
+  it("tracks the container half at any wide width", () => {
     setColumnWindowWidth(1200);
-    // Container narrow enough that half < MAX_MEASURE
-    const narrowCW = MAX_MEASURE * 1.5;
-    setColumnContainer(narrowCW, 0);
+    const otherCW = MAX_MEASURE * 1.5;
+    setColumnContainer(otherCW, 0);
     initColumnSlot("read");
     flushSync();
 
-    expect(columnRect().width).toBe(narrowCW / 2);
+    expect(columnRect().width).toBe(otherCW / 2);
+  });
+
+  it("leaves no gutter between the two slots", () => {
+    setupWide();
+    initColumnSlot("read");
+    flushSync();
+    const left = restingColumnRect();
+
+    initColumnSlot("walk");
+    flushSync();
+    const right = restingColumnRect();
+
+    expect(left.x + left.width).toBe(right.x);
+    expect(right.x + right.width).toBe(WIDE_CW);
   });
 });
 
 // -----------------------------------------------------------------------
-// Pressure threshold boundary
+// Pressure: frame center crossing the flip depth
 // -----------------------------------------------------------------------
 
-describe("evaluateColumnPressure threshold", () => {
-  it("does not flip when overlap equals exactly slotW * SLOT_FLIP_RATIO", () => {
+/** A hole of the given width centered on centerX. */
+function holeCenteredAt(centerX: number, width = 400): FlowHole {
+  return holeAt(centerX - width / 2, centerX + width / 2);
+}
+
+/** Container-space x the frame center must pass to flip a left column. */
+const LEFT_FLIP_X = SLOT_W - SLOT_W * SLOT_FLIP_RATIO;
+
+/** Same for a right column, measured in from its left edge. */
+const RIGHT_FLIP_X = SLOT_W + SLOT_W * SLOT_FLIP_RATIO;
+
+describe("evaluateColumnPressure flip depth", () => {
+  it("holds while the center sits at exactly the flip depth", () => {
     setupWide();
     initColumnSlot("read");
     flushSync();
 
-    // Left slot spans [0, SLOT_W]. Place a hole that overlaps exactly
-    // slotW * SLOT_FLIP_RATIO from the right edge of the slot.
-    const overlapTarget = SLOT_W * SLOT_FLIP_RATIO;
-    // Hole left edge at (SLOT_W - overlapTarget), right edge past the slot
-    const hole = holeAt(SLOT_W - overlapTarget, SLOT_W + 200);
-    evaluateColumnPressure(hole);
+    // Left column [0, SLOT_W]: the frame enters at the right edge and
+    // must travel two thirds of the width to take the side.
+    evaluateColumnPressure(holeCenteredAt(LEFT_FLIP_X));
     flushSync();
 
     expect(columnSlot()).toBe("left");
   });
 
-  it("flips when overlap exceeds slotW * SLOT_FLIP_RATIO by 1px", () => {
+  it("flips once the center passes the flip depth", () => {
     setupWide();
     initColumnSlot("read");
     flushSync();
 
-    const overlapTarget = SLOT_W * SLOT_FLIP_RATIO + 1;
-    // Hole overlaps the left slot by just over the threshold, and does NOT
-    // meaningfully overlap the right slot (well clear of it), so dead band
-    // does not suppress the flip.
-    const hole = holeAt(SLOT_W - overlapTarget, SLOT_W + 10);
-    evaluateColumnPressure(hole);
+    evaluateColumnPressure(holeCenteredAt(LEFT_FLIP_X - 1));
     flushSync();
 
     expect(columnSlot()).toBe("right");
   });
-});
 
-// -----------------------------------------------------------------------
-// Dead band
-// -----------------------------------------------------------------------
-
-describe("dead band", () => {
-  it("suppresses flip when current/other overlap differ by less than SLOT_FLIP_DEADBAND", () => {
+  it("flips a right column when the center passes its flip depth", () => {
     setupWide();
-    initColumnSlot("read");
+    initColumnSlot("walk");
     flushSync();
 
-    // A hole centered between the two slots so both overlaps are equal.
-    // Left slot [0, SLOT_W], right slot [WIDE_CW/2, WIDE_CW/2 + SLOT_W].
-    // Equal-width slots make the symmetric point the midpoint of the
-    // slot centers: (SLOT_W + WIDE_CW/2) / 2. At WIDE_CW 1860 that is
-    // 775; a 400px half-span overlaps each slot by 245 (> threshold
-    // 206.7) with difference 0 (< dead band).
-    const center = (SLOT_W + WIDE_CW / 2) / 2;
-    const halfSpan = 400;
-    const hole = holeAt(center - halfSpan, center + halfSpan);
-
-    // Verify the overlap difference is within the dead band
-    const leftOverlap = Math.max(
-      0,
-      Math.min(SLOT_W, center + halfSpan) - Math.max(0, center - halfSpan),
-    );
-    const rightOverlap = Math.max(
-      0,
-      Math.min(WIDE_CW / 2 + SLOT_W, center + halfSpan) -
-        Math.max(WIDE_CW / 2, center - halfSpan),
-    );
-    const diff = leftOverlap - rightOverlap;
-
-    // Precondition: both overlaps exceed threshold but difference is small
-    expect(leftOverlap).toBeGreaterThan(SLOT_W * SLOT_FLIP_RATIO);
-    expect(Math.abs(diff)).toBeLessThan(SLOT_FLIP_DEADBAND);
-
-    evaluateColumnPressure(hole);
+    evaluateColumnPressure(holeCenteredAt(RIGHT_FLIP_X + 1));
     flushSync();
 
-    // Should NOT flip because the dead band suppresses it
     expect(columnSlot()).toBe("left");
   });
 
-  it("flips when overlap difference exceeds SLOT_FLIP_DEADBAND", () => {
+  it("ignores frame width: only the center position decides", () => {
     setupWide();
     initColumnSlot("read");
     flushSync();
 
-    // A hole that overlaps the left slot heavily but barely touches the
-    // right slot. The difference will exceed the dead band.
-    const hole = holeAt(0, SLOT_W - 10);
-    evaluateColumnPressure(hole);
+    // A frame far narrower than the flip depth still flips the column
+    // once its center is deep enough, which a rule measured against
+    // overlap could never let it reach.
+    evaluateColumnPressure(holeCenteredAt(LEFT_FLIP_X - 1, 80));
+    flushSync();
+    expect(columnSlot()).toBe("right");
+
+    // A very wide frame at a shallow center does not.
+    initColumnSlot("read");
+    flushSync();
+    evaluateColumnPressure(holeCenteredAt(SLOT_W, 1200));
+    flushSync();
+    expect(columnSlot()).toBe("left");
+  });
+
+  it("holds a frame parked on the seam between the slots", () => {
+    setupWide();
+    initColumnSlot("read");
     flushSync();
 
-    // Left overlap is nearly the full slot width, right overlap is 0.
-    // Difference (SLOT_W - 10) is well above SLOT_FLIP_DEADBAND (40).
+    // The seam is one third short of either flip depth, so a frame
+    // centered there is absorbed by the line dodge instead.
+    evaluateColumnPressure(holeCenteredAt(WIDE_CW / 2));
+    flushSync();
+
+    expect(columnSlot()).toBe("left");
+  });
+
+  it("does not flip back when the frame holds still after a flip", () => {
+    setupWide();
+    initColumnSlot("read");
+    flushSync();
+
+    // The flip points sit at one sixth and five sixths of the container,
+    // so the position that triggers a flip always leaves the column
+    // somewhere the reverse test fails. No dead band needed.
+    const hole = holeCenteredAt(LEFT_FLIP_X - 1);
+    evaluateColumnPressure(hole);
+    flushSync();
+    expect(columnSlot()).toBe("right");
+
+    evaluateColumnPressure(hole);
+    evaluateColumnPressure(hole);
+    flushSync();
     expect(columnSlot()).toBe("right");
   });
 });
 
 // -----------------------------------------------------------------------
-// Straddling frame: lesser overlap wins
+// Layout-dictated moves
 // -----------------------------------------------------------------------
 
-describe("straddling frame tie-break", () => {
-  it("flips to the slot with lesser overlap", () => {
+describe("moveColumnToSlot", () => {
+  it("moves the column to the named slot", () => {
     setupWide();
     initColumnSlot("read");
     flushSync();
 
-    // Hole covers more of the left slot than the right. The right slot
-    // has strictly less overlap, so it wins.
-    // Left slot [0, SLOT_W], right slot [WIDE_CW/2, WIDE_CW/2 + SLOT_W].
-    // Place a hole that spans from inside the left slot well into the gap,
-    // overlapping the right slot only slightly.
-    const hole = holeAt(SLOT_W * 0.3, WIDE_CW / 2 + SLOT_FLIP_DEADBAND + 20);
-    const leftOverlap = Math.max(
-      0,
-      Math.min(SLOT_W, WIDE_CW / 2 + SLOT_FLIP_DEADBAND + 20) -
-        Math.max(0, SLOT_W * 0.3),
-    );
-    const rightOverlap = Math.max(
-      0,
-      Math.min(WIDE_CW / 2 + SLOT_W, WIDE_CW / 2 + SLOT_FLIP_DEADBAND + 20) -
-        Math.max(WIDE_CW / 2, SLOT_W * 0.3),
-    );
-
-    // Preconditions
-    expect(leftOverlap).toBeGreaterThan(SLOT_W * SLOT_FLIP_RATIO);
-    expect(leftOverlap - rightOverlap).toBeGreaterThanOrEqual(
-      SLOT_FLIP_DEADBAND,
-    );
-
-    evaluateColumnPressure(hole);
+    moveColumnToSlot("right");
     flushSync();
 
-    // Lesser overlap is on the right slot, so column moves there
+    expect(columnSlot()).toBe("right");
+    expect(restingColumnRect().x).toBe(WIDE_CW / 2);
+  });
+
+  it("is a no-op when the column already holds that slot", () => {
+    setupWide();
+    initColumnSlot("walk");
+    flushSync();
+
+    moveColumnToSlot("right");
+    flushSync();
+
+    expect(columnSlot()).toBe("right");
+  });
+
+  it("covers a frame appearing on top of the column", () => {
+    // Entering walk spawns the frame centred in the left slot while the
+    // column is still there. Its center lands at the column's midpoint,
+    // short of the flip depth, so pressure alone leaves the two stacked.
+    // The mode change moves the column instead.
+    setupWide();
+    initColumnSlot("read");
+    flushSync();
+
+    evaluateColumnPressure(holeCenteredAt(SLOT_W / 2));
+    flushSync();
+    expect(columnSlot()).toBe("left");
+
+    moveColumnToSlot("right");
+    flushSync();
     expect(columnSlot()).toBe("right");
   });
 });
@@ -278,8 +314,8 @@ describe("frame-hidden slot persistence", () => {
     initColumnSlot("read");
     flushSync();
 
-    // Force a flip to right
-    const hole = holeAt(0, SLOT_W);
+    // Drive the frame's centre past the flip depth so the column moves.
+    const hole = holeCenteredAt(LEFT_FLIP_X - 1);
     evaluateColumnPressure(hole);
     flushSync();
     expect(columnSlot()).toBe("right");

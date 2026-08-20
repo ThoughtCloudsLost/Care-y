@@ -10,6 +10,9 @@
 import * as m from "$lib/paraglide/messages.js";
 
 const lookup: Record<string, () => string> = {
+  // Story chrome that reaches the flow as a block of its own
+  demo_narrative_tip: () => m.demo_narrative_tip(),
+
   // Section titles and descriptions
   demo_section_login_title: () => m.demo_section_login_title(),
   demo_section_login_desc: () => m.demo_section_login_desc(),
@@ -423,7 +426,7 @@ export function resolveStoryMessage(key: string, locale: string): string {
 // -----------------------------------------------------------------------
 // Sub-item state derivation
 //
-// Shared between SectionRail and SectionIntro to keep the isActive /
+// Shared between SectionRail and SectionStrip to keep the isActive /
 // isSeen logic in one place.
 // -----------------------------------------------------------------------
 

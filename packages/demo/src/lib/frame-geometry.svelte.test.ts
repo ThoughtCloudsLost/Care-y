@@ -23,6 +23,15 @@ import {
   MIN_VIEWPORT,
   BEZEL,
   SHRINK_VH_FRACTION,
+  contentBandFor,
+  frameSlotFor,
+  computeFitBand,
+  fitPreset,
+  RAIL_WIDTH,
+  RAIL_GAP,
+  WRAPPER_PAD_LEFT,
+  WRAPPER_PAD_RIGHT,
+  WIDE_BREAKPOINT,
 } from "./frame-geometry.svelte.js";
 import { TOOLBAR_CLEARANCE } from "./flow-layout.js";
 import { TOP_BAR_HEIGHT } from "./flow-geometry.svelte.js";
@@ -144,24 +153,30 @@ describe("computeSpawn", () => {
     expect(spawn.footprintH).toBe(PHONE_PRESET.h);
   });
 
-  it("centres the frame in the left half of the window at >= 900px", () => {
+  it("centres the frame in its slot at >= 900px", () => {
     const windowW = 1280;
     const spawn = computeSpawn(windowW, 900, topBar);
     const outerW = spawn.footprintW + BEZEL * 2;
+    const slot = frameSlotFor(windowW);
 
-    // Equal slack between the left edge and the frame, and between
-    // the frame and the window's midpoint.
-    const slackLeft = spawn.left;
-    const slackRight = windowW / 2 - (spawn.left + outerW);
+    // Equal slack on both sides of the frame within its slot.
+    const slackLeft = spawn.left - slot.left;
+    const slackRight = slot.right - (spawn.left + outerW);
     expect(slackLeft).toBeCloseTo(slackRight, 5);
     expect(slackLeft).toBeGreaterThan(0);
     expect(spawn.top).toBeGreaterThanOrEqual(topBar);
   });
 
-  it("keeps a frame wider than the left half fully on screen", () => {
-    // 900px window: the left half is 450px, narrower than the 414px
-    // outer frame plus margins would comfortably allow once centred.
-    // The clamp keeps the frame on screen at the left band.
+  it("clears the rail the slot starts after", () => {
+    // The slot begins right of the rail track, so a centred frame never
+    // sits over the rail.
+    const spawn = computeSpawn(1280, 900, topBar);
+    expect(spawn.left).toBeGreaterThanOrEqual(WRAPPER_PAD_LEFT + RAIL_WIDTH);
+  });
+
+  it("keeps a frame wider than its slot fully on screen", () => {
+    // 900px window: the slot is narrow enough that the frame plus
+    // margins does not fit once centred. The clamp keeps it on screen.
     const windowW = 900;
     const spawn = computeSpawn(windowW, 900, topBar);
     const outerW = spawn.footprintW + BEZEL * 2;
@@ -210,6 +225,118 @@ describe("computeSpawn", () => {
       PHONE_PRESET.w / PHONE_PRESET.h,
       2,
     );
+  });
+});
+
+// -----------------------------------------------------------------------
+// Story bands and slots
+// -----------------------------------------------------------------------
+
+describe("contentBandFor", () => {
+  it("starts the container after the wrapper padding and the rail", () => {
+    const band = contentBandFor(1512);
+    expect(band.left).toBe(WRAPPER_PAD_LEFT + RAIL_WIDTH + RAIL_GAP);
+    expect(band.left + band.width).toBe(1512 - WRAPPER_PAD_RIGHT);
+  });
+
+  it("drops the rail allowance below the wide breakpoint", () => {
+    const band = contentBandFor(WIDE_BREAKPOINT - 1);
+    expect(band.left).toBe(WRAPPER_PAD_LEFT);
+  });
+});
+
+describe("frameSlotFor", () => {
+  it("gives the frame the container's left half at wide widths", () => {
+    const content = contentBandFor(1512);
+    const slot = frameSlotFor(1512);
+    expect(slot.left).toBe(content.left);
+    expect(slot.right - slot.left).toBe(content.width / 2);
+  });
+
+  it("clears the rail track", () => {
+    expect(frameSlotFor(1512).left).toBeGreaterThanOrEqual(
+      WRAPPER_PAD_LEFT + RAIL_WIDTH,
+    );
+  });
+
+  it("gives the whole window below the wide breakpoint", () => {
+    const slot = frameSlotFor(600);
+    expect(slot.left).toBe(0);
+    expect(slot.right).toBe(600);
+  });
+});
+
+// -----------------------------------------------------------------------
+// fitPreset
+// -----------------------------------------------------------------------
+
+describe("fitPreset", () => {
+  const roomy = { w: 2000, h: 2000 };
+
+  it("leaves a preset that already fits untouched", () => {
+    expect(fitPreset(PHONE_PRESET.w, PHONE_PRESET.h, roomy)).toEqual({
+      w: PHONE_PRESET.w,
+      h: PHONE_PRESET.h,
+    });
+    expect(fitPreset(DESKTOP_PRESET.w, DESKTOP_PRESET.h, roomy)).toEqual({
+      w: DESKTOP_PRESET.w,
+      h: DESKTOP_PRESET.h,
+    });
+  });
+
+  it("scales a preset down to the band, preserving aspect ratio", () => {
+    const fitted = fitPreset(PHONE_PRESET.w, PHONE_PRESET.h, {
+      w: 600,
+      h: 500,
+    });
+    expect(fitted.h).toBeLessThan(PHONE_PRESET.h);
+    expect(fitted.w / fitted.h).toBeCloseTo(PHONE_PRESET.w / PHONE_PRESET.h, 2);
+  });
+
+  it("never scales a preset up past its nominal size", () => {
+    const fitted = fitPreset(PHONE_PRESET.w, PHONE_PRESET.h, {
+      w: 10000,
+      h: 10000,
+    });
+    expect(fitted.w).toBe(PHONE_PRESET.w);
+  });
+
+  it("holds the footprint at the minimum without distorting it", () => {
+    const fitted = fitPreset(PHONE_PRESET.w, PHONE_PRESET.h, { w: 20, h: 20 });
+    expect(fitted.w).toBeGreaterThanOrEqual(MIN_FOOTPRINT.w);
+    expect(fitted.h).toBeGreaterThanOrEqual(MIN_FOOTPRINT.h);
+    expect(fitted.w / fitted.h).toBeCloseTo(PHONE_PRESET.w / PHONE_PRESET.h, 2);
+  });
+
+  it("keeps the derived viewport when a preset is scaled down", () => {
+    // zoom is footprint over the minimum viewport, so a scaled footprint
+    // scales zoom with it and the viewport comes out unchanged. This is
+    // what lets a fitted desktop preset still clear the desktop
+    // breakpoint inside the iframe.
+    const full = deriveZoomViewport(DESKTOP_PRESET.w, DESKTOP_PRESET.h);
+    const fitted = fitPreset(DESKTOP_PRESET.w, DESKTOP_PRESET.h, {
+      w: 520,
+      h: 400,
+    });
+    const scaled = deriveZoomViewport(fitted.w, fitted.h);
+    expect(scaled.viewport.w).toBeCloseTo(full.viewport.w, -1);
+    expect(scaled.viewport.h).toBeCloseTo(full.viewport.h, -1);
+  });
+});
+
+describe("computeFitBand", () => {
+  it("excludes the top bar, the toolbar clearance, and the bottom margin", () => {
+    const band = computeFitBand(1512, 982, TOP_BAR_HEIGHT, false);
+    expect(band.h).toBe(
+      982 - TOP_BAR_HEIGHT - TOOLBAR_CLEARANCE - SPAWN_MARGIN,
+    );
+    expect(band.w).toBe(1512 - SPAWN_MARGIN * 2);
+  });
+
+  it("narrows to the frame's slot when asked for the half band", () => {
+    const slot = frameSlotFor(1512);
+    const band = computeFitBand(1512, 982, TOP_BAR_HEIGHT, true);
+    expect(band.w).toBe(slot.right - slot.left - SPAWN_MARGIN * 2);
   });
 });
 

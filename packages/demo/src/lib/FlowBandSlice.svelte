@@ -156,12 +156,8 @@
     flex: 0 0 auto;
     display: flex;
     flex-direction: column;
-    border-left: 1px solid rgba(0, 0, 0, 0.06);
+    border-left: 1px solid color-mix(in srgb, var(--ink) 6%, transparent);
     padding-left: 0.5rem;
-  }
-
-  :global(html.dark) .slice {
-    border-left-color: rgba(255, 255, 255, 0.08);
   }
 
   .slice-head {
@@ -174,7 +170,7 @@
     border: none;
     border-radius: 6px;
     background: transparent;
-    color: #86868b;
+    color: var(--muted);
     font-size: 0.625rem;
     font-weight: 600;
     letter-spacing: 0.02em;
@@ -184,26 +180,13 @@
   }
 
   .slice-head:hover {
-    background: rgba(0, 0, 0, 0.04);
-    color: #1d1d1f;
+    background: color-mix(in srgb, var(--ink) 4%, transparent);
+    color: var(--ink);
   }
 
   .slice-head:focus-visible {
-    outline: 2px solid #007aff;
+    outline: 2px solid var(--demo-accent);
     outline-offset: -2px;
-  }
-
-  :global(html.dark) .slice-head {
-    color: #98989d;
-  }
-
-  :global(html.dark) .slice-head:hover {
-    background: rgba(255, 255, 255, 0.06);
-    color: #f5f5f7;
-  }
-
-  :global(html.dark) .slice-head:focus-visible {
-    outline-color: #64d2ff;
   }
 
   .slice-head-label {
@@ -241,26 +224,17 @@
     min-height: 2px;
     margin-left: -1px;
     border-radius: 1px;
-    background: rgba(0, 0, 0, 0.16);
-  }
-
-  :global(html.dark) .slice-span {
-    background: rgba(255, 255, 255, 0.2);
+    background: color-mix(in srgb, var(--ink) 16%, transparent);
   }
 
   .slice-count {
     position: relative;
     padding: 0 0.25rem;
     border-radius: 4px;
-    background: rgba(245, 245, 247, 0.9);
+    background: color-mix(in srgb, var(--paper) 90%, transparent);
     font-size: 0.75rem;
     font-variant-numeric: tabular-nums;
-    color: #86868b;
-  }
-
-  :global(html.dark) .slice-count {
-    background: rgba(22, 22, 24, 0.9);
-    color: #98989d;
+    color: var(--muted);
   }
 
   .slice-connector {
@@ -271,31 +245,23 @@
 
   .connector-base {
     fill: none;
-    stroke: rgba(0, 0, 0, 0.16);
+    stroke: color-mix(in srgb, var(--ink) 16%, transparent);
     stroke-width: 2;
     stroke-linejoin: round;
     stroke-linecap: round;
-  }
-
-  :global(html.dark) .connector-base {
-    stroke: rgba(255, 255, 255, 0.18);
   }
 
   /* Travelling dash: the request climbing the lanes and the response
      coming back down. Runs twice, then the base line carries the shape. */
   .connector-pulse {
     fill: none;
-    stroke: rgba(0, 122, 255, 0.55);
+    stroke: color-mix(in srgb, var(--demo-accent) 55%, transparent);
     stroke-width: 2;
     stroke-linejoin: round;
     stroke-linecap: round;
     stroke-dasharray: 28 2000;
     animation: connector-travel 1.6s linear 2;
     animation-fill-mode: forwards;
-  }
-
-  :global(html.dark) .connector-pulse {
-    stroke: rgba(100, 210, 255, 0.6);
   }
 
   @keyframes connector-travel {
