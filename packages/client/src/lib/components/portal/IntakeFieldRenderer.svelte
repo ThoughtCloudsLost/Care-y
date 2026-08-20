@@ -110,7 +110,7 @@
       value={typeof value === "string" ? value : ""}
       maxlength={config.maxLength}
       autocomplete="off"
-      aria-required={isRequired ? "true" : undefined}
+      required={isRequired}
       onInput={handleTextInput}
     />
   </List>
@@ -136,7 +136,7 @@
       value={typeof value === "string" ? value : ""}
       maxlength={config.maxLength}
       autocomplete="off"
-      aria-required={isRequired ? "true" : undefined}
+      required={isRequired}
       onInput={handleTextInput}
     />
   </List>
@@ -161,7 +161,7 @@
       dropdown
       value={typeof value === "string" ? value : ""}
       autocomplete="off"
-      aria-required={isRequired ? "true" : undefined}
+      required={isRequired}
       onChange={handleSelectChange}
     >
       <option value="" disabled selected>{label}</option>

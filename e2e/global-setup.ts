@@ -113,5 +113,61 @@ export default async function globalSetup(): Promise<void> {
     console.warn("[e2e] Could not clean stale KB articles (non-fatal)");
   }
 
+  // Point the org at an intake queue. The seed creates queues but leaves
+  // org_config.intake_queue_id null, which an admin would set during
+  // onboarding. Without it every public intake submission fails with
+  // IntakeQueueNotConfiguredError and the form shows a generic "didn't
+  // go through" error, so no intake flow can be tested at all.
+  console.log("[e2e] Ensuring intake queue is configured...");
+  try {
+    const queueSql = [
+      "DO $fn$ DECLARE s TEXT; BEGIN",
+      `SELECT schema_name INTO s FROM orgs WHERE slug = '${E2E_ORG_SLUG}';`,
+      "IF s IS NOT NULL THEN",
+      "EXECUTE format('UPDATE %I.org_config SET intake_queue_id = (SELECT id FROM %I.queues ORDER BY sort_order, created_at LIMIT 1) WHERE intake_queue_id IS NULL', s, s);",
+      "END IF; END $fn$;",
+    ].join("\n");
+    execSync(
+      `${COMPOSE} exec -T db psql -U care_y -d care_y -v ON_ERROR_STOP=1`,
+      {
+        input: queueSql,
+        stdio: ["pipe", "inherit", "inherit"],
+        cwd: process.cwd(),
+      },
+    );
+  } catch {
+    console.warn("[e2e] Could not configure intake queue (non-fatal)");
+  }
+
+  // Reset client communication tiers. The portal and share-link specs
+  // both assume they are starting from a fresh SMS/Email client, but
+  // upgrading one to Secure Link or Account persists in the org across
+  // runs, after which "Set up secure link" is gone and the spec fails
+  // looking for it. Each run recreates whatever channels it needs.
+  console.log("[e2e] Resetting client communication tiers...");
+  try {
+    const tierSql = [
+      "DO $fn$ DECLARE s TEXT; BEGIN",
+      `SELECT schema_name INTO s FROM orgs WHERE slug = '${E2E_ORG_SLUG}';`,
+      "IF s IS NOT NULL THEN",
+      "EXECUTE format('DELETE FROM %I.portal_messages', s);",
+      "EXECUTE format('DELETE FROM %I.portal_channels', s);",
+      "EXECUTE format('DELETE FROM %I.client_accounts', s);",
+      "EXECUTE format('DELETE FROM %I.share_links', s);",
+      "EXECUTE format('UPDATE %I.clients SET communication_tier = ''sms_email'' WHERE communication_tier <> ''sms_email''', s);",
+      "END IF; END $fn$;",
+    ].join("\n");
+    execSync(
+      `${COMPOSE} exec -T db psql -U care_y -d care_y -v ON_ERROR_STOP=1`,
+      {
+        input: tierSql,
+        stdio: ["pipe", "inherit", "inherit"],
+        cwd: process.cwd(),
+      },
+    );
+  } catch {
+    console.warn("[e2e] Could not reset client tiers (non-fatal)");
+  }
+
   console.log("[e2e] E2E org ready");
 }
