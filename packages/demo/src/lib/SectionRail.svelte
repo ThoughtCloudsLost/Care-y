@@ -31,7 +31,7 @@
 
 <!--
   Vertical sub navigation for the active section. Only rendered on wide
-  layouts; below that the horizontal chips in SectionIntro carry the same
+  layouts; below that the scrolling strip in SectionStrip carries the same
   job, so the two are never on screen together.
 
   The rail lives in its own grid column rather than overlaying the text.
@@ -100,11 +100,7 @@
     gap: 0.125rem;
     /* The active marker is drawn as a left border on each item, so the
        track reads as one continuous line down the rail. */
-    border-left: 1px solid rgba(0, 0, 0, 0.1);
-  }
-
-  :global(html.dark) .rail-list {
-    border-left-color: rgba(255, 255, 255, 0.12);
+    border-left: 1px solid color-mix(in srgb, var(--ink) 10%, transparent);
   }
 
   .rail-item {
@@ -124,7 +120,7 @@
     font-size: 0.8125rem;
     font-weight: 500;
     text-align: left;
-    color: #636366;
+    color: var(--muted);
     cursor: pointer;
     transition:
       background 0.15s ease,
@@ -133,8 +129,8 @@
   }
 
   .rail-item:hover {
-    background: rgba(0, 0, 0, 0.04);
-    color: #1d1d1f;
+    background: color-mix(in srgb, var(--ink) 4%, transparent);
+    color: var(--ink);
   }
 
   /* Must follow .rail-item:hover to win on equal specificity. */
@@ -145,37 +141,19 @@
   }
 
   .rail-item:focus-visible {
-    outline: 2px solid #007aff;
+    outline: 2px solid var(--demo-accent);
     outline-offset: -2px;
     border-radius: 4px;
   }
 
-  :global(html.dark) .rail-item {
-    color: #98989d;
-  }
-
-  :global(html.dark) .rail-item:hover {
-    background: rgba(255, 255, 255, 0.06);
-    color: #f5f5f7;
-  }
-
-  :global(html.dark) .rail-item:focus-visible {
-    outline-color: #64d2ff;
-  }
-
   .rail-item--active {
-    border-left-color: #007aff;
-    color: #007aff;
+    border-left-color: var(--demo-accent);
+    color: var(--demo-accent);
     font-weight: 600;
   }
 
-  :global(html.dark) .rail-item--active {
-    border-left-color: #64d2ff;
-    color: #64d2ff;
-  }
-
   .rail-item--seen {
-    color: #86868b;
+    color: var(--muted);
   }
 
   /* Index numeral, matching the numbered headings in the flow text. */
@@ -184,7 +162,7 @@
     min-width: 1.1em;
     font-variant-numeric: tabular-nums;
     font-size: 0.75rem;
-    color: #a1a1a6;
+    color: var(--muted);
   }
 
   .rail-item--active .rail-index {
@@ -198,7 +176,7 @@
 
   .rail-item :global(.rail-check) {
     flex-shrink: 0;
-    color: #34c759;
+    color: var(--meter-strong);
   }
 
   @media (prefers-reduced-motion: reduce) {

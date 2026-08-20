@@ -7,7 +7,7 @@
 </script>
 
 <script lang="ts">
-  import { Check } from "@lucide/svelte";
+  import { Check, MousePointerClick } from "@lucide/svelte";
   import {
     prepareWithSegments,
     layoutNextLineRange,
@@ -147,6 +147,7 @@
   const FONT_STRINGS: Record<FlowTextKind, string> = {
     "section-title": `700 24px ${FONT_FAMILY}`,
     "section-desc": `400 15px ${FONT_FAMILY}`,
+    "story-tip": `400 15px ${FONT_FAMILY}`,
     "sub-heading": `700 18px ${FONT_FAMILY}`,
     "sub-body": `400 15px ${FONT_FAMILY}`,
   };
@@ -167,6 +168,7 @@
   const LINE_HEIGHTS: Record<FlowTextKind, string> = {
     "section-title": "32px",
     "section-desc": "24px",
+    "story-tip": "24px",
     "sub-heading": "24px",
     "sub-body": "24px",
   };
@@ -175,11 +177,13 @@
   const fontVarsStyle = [
     `--flow-font-title: ${FONT_STRINGS["section-title"]}`,
     `--flow-font-desc: ${FONT_STRINGS["section-desc"]}`,
+    `--flow-font-tip: ${FONT_STRINGS["story-tip"]}`,
     `--flow-font-sub-heading: ${FONT_STRINGS["sub-heading"]}`,
     `--flow-font-sub-body: ${FONT_STRINGS["sub-body"]}`,
     `--flow-font-sub-body-bold: ${FONT_SUB_BODY_BOLD}`,
     `--flow-lh-title: ${LINE_HEIGHTS["section-title"]}`,
     `--flow-lh-desc: ${LINE_HEIGHTS["section-desc"]}`,
+    `--flow-lh-tip: ${LINE_HEIGHTS["story-tip"]}`,
     `--flow-lh-sub-heading: ${LINE_HEIGHTS["sub-heading"]}`,
     `--flow-lh-sub-body: ${LINE_HEIGHTS["sub-body"]}`,
   ].join("; ");
@@ -192,7 +196,41 @@
 
   function buildBlocks(sects: Section[], loc: string): FlowBlock[] {
     const result: FlowBlock[] = [];
-    for (const section of sects) {
+    for (let sx = 0; sx < sects.length; sx++) {
+      const section = sects.at(sx);
+      if (section === undefined) continue;
+
+      // The page's title, description and tip are blocks like any other,
+      // so they wrap around the frame through the same layout pass the
+      // prose does. They used to be ordinary DOM above the flow, which
+      // meant a second, approximate dodge that never quite matched.
+      result.push({
+        id: `${section.id}--title`,
+        sectionId: section.id,
+        subSlug: null,
+        kind: "section-title",
+        text: resolveStoryMessage(section.titleKey, loc),
+      } satisfies FlowTextBlock);
+      result.push({
+        id: `${section.id}--desc`,
+        sectionId: section.id,
+        subSlug: null,
+        kind: "section-desc",
+        text: resolveStoryMessage(section.descKey, loc),
+      } satisfies FlowTextBlock);
+      // One tip per page, under the first section's description. The
+      // indent reserves the gutter its icon is drawn in.
+      if (sx === 0) {
+        result.push({
+          id: `${section.id}--tip`,
+          sectionId: section.id,
+          subSlug: null,
+          kind: "story-tip",
+          text: resolveStoryMessage("demo_narrative_tip", loc),
+          indent: LIST_INDENT,
+        } satisfies FlowTextBlock);
+      }
+
       // Handbook-style numbering. Single-sub sections (the entry page,
       // the coming-soon placeholder) read as a lone statement, not as
       // step one of one, so they stay unnumbered.
@@ -1073,7 +1111,6 @@
   }
 
   const HIGHLIGHT_PAD_X = 8;
-  const HIGHLIGHT_PAD_Y = 2;
 
   let highlightRects: HighlightRect[] = $derived.by(() => {
     if (layoutResult === null || activeSub === null) return [];
@@ -1099,11 +1136,15 @@
       ) {
         const line = layoutResult.lines.at(li);
         if (line === undefined) continue;
+        // Exactly the line box, no vertical padding: consecutive lines
+        // sit one lineHeight apart, so anything taller makes neighbours
+        // overlap and the translucent wash doubles up into a band along
+        // every seam. Horizontal padding is safe, lines do not abut.
         rects.push({
           x: line.x - HIGHLIGHT_PAD_X,
-          y: line.y - HIGHLIGHT_PAD_Y,
+          y: line.y,
           width: line.width + HIGHLIGHT_PAD_X * 2,
-          height: km.lineHeight + HIGHLIGHT_PAD_Y * 2,
+          height: km.lineHeight,
         });
       }
     }
@@ -1155,6 +1196,81 @@
       });
     }
     return marks;
+  });
+
+  // -----------------------------------------------------------------------
+  // Header panel: the tint that used to be the section header's card,
+  // drawn behind the title, description and tip. Sized from the pass's
+  // column rather than from the lines themselves, so it stays a panel
+  // instead of tracking every wrap the frame causes. The frame paints
+  // over it, the way it paints over the text it displaces.
+  // -----------------------------------------------------------------------
+
+  const PANEL_PAD_X = 16;
+  const PANEL_PAD_TOP = 16;
+  const PANEL_PAD_BOTTOM = 16;
+
+  interface PanelRect {
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+  }
+
+  let headerPanel: PanelRect | null = $derived.by(() => {
+    if (layoutResult === null || layoutColumn === null) return null;
+    if (layoutResult.blocks.length !== blocks.length) return null;
+
+    let top = Infinity;
+    let bottom = -Infinity;
+    for (let bi = 0; bi < blocks.length; bi++) {
+      const block = blocks.at(bi);
+      if (block === undefined) continue;
+      if (
+        block.kind !== "section-title" &&
+        block.kind !== "section-desc" &&
+        block.kind !== "story-tip"
+      ) {
+        continue;
+      }
+      const geo = layoutResult.blocks.at(bi);
+      if (geo === undefined || geo.lineCount === 0) continue;
+      top = Math.min(top, geo.topY);
+      // bottomY carries the kind's bottom margin, which belongs to the
+      // gap below the panel rather than to the panel itself.
+      bottom = Math.max(
+        bottom,
+        geo.bottomY - DEFAULT_METRICS[block.kind].marginBottom,
+      );
+    }
+    if (top === Infinity) return null;
+
+    return {
+      x: layoutColumn.x - PANEL_PAD_X,
+      y: top - PANEL_PAD_TOP,
+      width: layoutColumn.width + PANEL_PAD_X * 2,
+      height: bottom - top + PANEL_PAD_TOP + PANEL_PAD_BOTTOM,
+    };
+  });
+
+  // -----------------------------------------------------------------------
+  // Tip icon: drawn in the gutter the tip block's indent reserves,
+  // beside its first line, the way the seen marks sit beside a heading.
+  // -----------------------------------------------------------------------
+
+  let tipMark: { x: number; y: number } | null = $derived.by(() => {
+    if (layoutResult === null) return null;
+    if (layoutResult.blocks.length !== blocks.length) return null;
+
+    for (let bi = 0; bi < blocks.length; bi++) {
+      if (blocks.at(bi)?.kind !== "story-tip") continue;
+      const geo = layoutResult.blocks.at(bi);
+      if (geo === undefined || geo.lineCount === 0) continue;
+      const firstLine = layoutResult.lines.at(geo.firstLineIndex);
+      if (firstLine === undefined) continue;
+      return { x: firstLine.x - LIST_INDENT, y: firstLine.y + 3 };
+    }
+    return null;
   });
 
   // -----------------------------------------------------------------------
@@ -1288,6 +1404,7 @@
       case "sub-heading":
         return "h3";
       case "section-desc":
+      case "story-tip":
       case "sub-body":
         return "p";
     }
@@ -1312,6 +1429,8 @@
         return "flow-line--title";
       case "section-desc":
         return "flow-line--desc";
+      case "story-tip":
+        return "flow-line--tip";
       case "sub-heading":
         return "flow-line--sub-heading";
       case "sub-body":
@@ -1331,6 +1450,19 @@
     : 0}px; position: relative; {fontVarsStyle}"
 >
   {#if layoutResult !== null}
+    <!-- Header tint, first so every line paints over it -->
+    {#if headerPanel !== null}
+      <div
+        class="flow-header-panel"
+        style="
+          left: {headerPanel.x}px;
+          top: {headerPanel.y}px;
+          width: {headerPanel.width}px;
+          height: {headerPanel.height}px;
+        "
+      ></div>
+    {/if}
+
     <!-- Highlight rects behind active sub lines (unkeyed: stateless decoration) -->
     {#each highlightRects as hr, i (i)}
       <div
@@ -1352,6 +1484,16 @@
         style="left: {rule.x}px; top: {rule.y}px; width: {rule.width}px;"
       ></div>
     {/each}
+
+    <!-- Tip icon in the gutter beside its first line -->
+    {#if tipMark !== null}
+      <div
+        class="flow-tip-mark"
+        style="left: {tipMark.x}px; top: {tipMark.y}px;"
+      >
+        <MousePointerClick size={16} />
+      </div>
+    {/if}
 
     <!-- Seen-topic check marks -->
     {#each seenMarks as mark (mark.blockIndex)}
@@ -1505,13 +1647,9 @@
   }
 
   .flow-block--focusable:focus-visible {
-    outline: 2px solid #007aff;
+    outline: 2px solid var(--demo-accent);
     outline-offset: 2px;
     border-radius: 4px;
-  }
-
-  :global(html.dark) .flow-block--focusable:focus-visible {
-    outline-color: #64d2ff;
   }
 
   .flow-line {
@@ -1521,54 +1659,48 @@
     display: block;
   }
 
-  /* Section title: dark text, weight 700 */
+  /* Section title: primary text, weight 700 */
   .flow-line--title {
     font: var(--flow-font-title);
     line-height: var(--flow-lh-title);
-    color: #1d1d1f;
-  }
-  :global(html.dark) .flow-line--title {
-    color: #f5f5f7;
+    color: var(--ink);
   }
 
   /* Section description: muted text */
   .flow-line--desc {
     font: var(--flow-font-desc);
     line-height: var(--flow-lh-desc);
-    color: #636366;
-  }
-  :global(html.dark) .flow-line--desc {
-    color: #a1a1a6;
+    color: var(--muted);
   }
 
-  /* Sub heading: dark text */
+  /* Story tip: muted, same measure as body copy */
+  .flow-line--tip {
+    font: var(--flow-font-tip);
+    line-height: var(--flow-lh-tip);
+    color: var(--muted);
+  }
+
+  /* Sub heading: primary text */
   .flow-line--sub-heading {
     font: var(--flow-font-sub-heading);
     line-height: var(--flow-lh-sub-heading);
-    color: #1d1d1f;
-  }
-  :global(html.dark) .flow-line--sub-heading {
-    color: #f5f5f7;
+    color: var(--ink);
   }
 
-  /* Active sub heading: same font as sub-heading, accent color only */
+  /* Active sub heading: the yellow wash behind it is what marks it, so
+     the text keeps the ordinary heading colour and stays readable
+     through the highlight. */
   .flow-line--active-heading {
     font: var(--flow-font-sub-heading);
     line-height: var(--flow-lh-sub-heading);
-    color: #007aff;
-  }
-  :global(html.dark) .flow-line--active-heading {
-    color: #64d2ff;
+    color: var(--ink);
   }
 
   /* Sub body: slightly muted text */
   .flow-line--sub-body {
     font: var(--flow-font-sub-body);
     line-height: var(--flow-lh-sub-body);
-    color: #424245;
-  }
-  :global(html.dark) .flow-line--sub-body {
-    color: #a1a1a6;
+    color: var(--ink-2);
   }
 
   /* Bold markup runs: same metrics as sub-body, weight 700. Declared
@@ -1577,17 +1709,29 @@
     font: var(--flow-font-sub-body-bold);
   }
 
-  /* Highlight rects behind active sub lines */
+  /* Tint behind the page title and description */
+  .flow-header-panel {
+    position: absolute;
+    border-radius: 8px;
+    background: color-mix(in srgb, var(--demo-accent) 5%, transparent);
+    pointer-events: none;
+  }
+
+  /* Highlight rects behind active sub lines. Yellow rather than the
+     interface blue: this marks passages the way a highlighter does,
+     and it should not read as another selectable control. */
   .flow-highlight {
     position: absolute;
-    border-radius: 6px;
-    background: rgba(0, 122, 255, 0.1);
+    /* One rect per line, stacked edge to edge, so a wider radius would
+       scallop the seam between every pair of lines. */
+    border-radius: 2px;
+    background: rgba(255, 214, 10, 0.38);
     pointer-events: none;
     transition: opacity 0.2s ease;
   }
 
   :global(html.dark) .flow-highlight {
-    background: rgba(100, 210, 255, 0.14);
+    background: rgba(255, 214, 10, 0.24);
   }
 
   @media (prefers-reduced-motion: reduce) {
@@ -1600,23 +1744,15 @@
   .flow-rule {
     position: absolute;
     height: 1px;
-    background: rgba(0, 0, 0, 0.12);
+    background: var(--hair-2);
     pointer-events: none;
     transition:
       background 0.2s ease,
       opacity 0.2s ease;
   }
 
-  :global(html.dark) .flow-rule {
-    background: rgba(255, 255, 255, 0.14);
-  }
-
   .flow-rule--active {
-    background: rgba(0, 122, 255, 0.45);
-  }
-
-  :global(html.dark) .flow-rule--active {
-    background: rgba(100, 210, 255, 0.5);
+    background: color-mix(in srgb, var(--demo-accent) 45%, transparent);
   }
 
   @media (prefers-reduced-motion: reduce) {
@@ -1625,10 +1761,18 @@
     }
   }
 
+  /* Tip icon */
+  .flow-tip-mark {
+    position: absolute;
+    color: var(--muted);
+    pointer-events: none;
+    display: flex;
+  }
+
   /* Seen-topic check marks */
   .flow-seen-mark {
     position: absolute;
-    color: #34c759;
+    color: var(--meter-strong);
     pointer-events: none;
     display: flex;
     align-items: center;

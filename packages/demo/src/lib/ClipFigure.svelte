@@ -245,12 +245,8 @@
   }
 
   .clip-figure:focus-visible {
-    outline: 2px solid #007aff;
+    outline: 2px solid var(--demo-accent);
     outline-offset: 2px;
-  }
-
-  :global(html.dark) .clip-figure:focus-visible {
-    outline-color: #64d2ff;
   }
 
   .clip-figure__video {
@@ -265,11 +261,7 @@
     width: 100%;
     height: 100%;
     border-radius: 8px;
-    background: rgba(0, 0, 0, 0.06);
-  }
-
-  :global(html.dark) .clip-figure__placeholder {
-    background: rgba(255, 255, 255, 0.08);
+    background: color-mix(in srgb, var(--ink) 6%, transparent);
   }
 
   .clip-figure__ring {

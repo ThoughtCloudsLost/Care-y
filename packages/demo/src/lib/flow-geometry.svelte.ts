@@ -42,10 +42,12 @@ export interface FlowGeometrySource {
 // -----------------------------------------------------------------------
 
 /**
- * Fallback reading line, as a fraction of viewport height. Used only
- * until the sticky header reports its real bottom edge, since deriving
- * the band from the header keeps it correct as the header's height
- * changes with content and locale.
+ * Reading line as a fraction of viewport height.
+ *
+ * This is the live value now that the page title and description are
+ * blocks in the story flow: nothing publishes a header bottom any more,
+ * so the band sits at a fixed fraction of the viewport. setHeaderBottom
+ * remains for a chrome element that wants the band below itself.
  */
 export const READING_LINE_RATIO = 0.22;
 
@@ -59,7 +61,7 @@ export const TOP_BAR_HEIGHT = 56;
 export const CHROME_GAP = 8;
 
 // The sticky header's bottom edge in viewport space, published by
-// SectionIntro. Zero until it reports, which is why readingLineY falls
+// a chrome element. Zero until one reports, which is why readingLineY falls
 // back to the ratio above.
 let headerBottom = $state(0);
 
@@ -225,8 +227,8 @@ export function scrollTargetFor(
     return null;
   }
 
-  // Section target (no sub): the title/desc now live in a sticky intro
-  // above the flow, so the target is the top of the page.
+  // Section target (no sub): the title is the first block of the page,
+  // so the top of the page already puts it at the reading line.
   if (subSlug === null) return 0;
 
   const rlY = readingLineY();

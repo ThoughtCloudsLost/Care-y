@@ -490,15 +490,10 @@
     z-index: 90;
     display: flex;
     flex-direction: column;
-    background: rgba(245, 245, 247, 0.96);
+    background: color-mix(in srgb, var(--paper) 96%, transparent);
     backdrop-filter: blur(12px);
     -webkit-backdrop-filter: blur(12px);
-    border-bottom: 1px solid rgba(0, 0, 0, 0.08);
-  }
-
-  :global(html.dark) .band {
-    background: rgba(22, 22, 24, 0.96);
-    border-bottom-color: rgba(255, 255, 255, 0.08);
+    border-bottom: 1px solid var(--hair);
   }
 
   .band-header {
@@ -507,11 +502,7 @@
     gap: 0.5rem;
     height: 28px;
     padding: 0 0.75rem;
-    color: #86868b;
-  }
-
-  :global(html.dark) .band-header {
-    color: #98989d;
+    color: var(--muted);
   }
 
   .band-title {
@@ -543,20 +534,12 @@
   }
 
   .band-close:hover {
-    background: rgba(0, 0, 0, 0.05);
+    background: color-mix(in srgb, var(--ink) 6%, transparent);
   }
 
   .band-close:focus-visible {
-    outline: 2px solid #007aff;
+    outline: 2px solid var(--demo-accent);
     outline-offset: -2px;
-  }
-
-  :global(html.dark) .band-close:hover {
-    background: rgba(255, 255, 255, 0.08);
-  }
-
-  :global(html.dark) .band-close:focus-visible {
-    outline-color: #64d2ff;
   }
 
   .band-main {
@@ -573,12 +556,8 @@
     width: 8.5rem;
     display: flex;
     flex-direction: column;
-    border-right: 1px solid rgba(0, 0, 0, 0.08);
+    border-right: 1px solid var(--hair);
     padding-right: 0.5rem;
-  }
-
-  :global(html.dark) .lane-column {
-    border-right-color: rgba(255, 255, 255, 0.1);
   }
 
   .lane-spacer {
@@ -611,14 +590,10 @@
   .lane-name {
     font-size: 0.75rem;
     font-weight: 600;
-    color: #1d1d1f;
+    color: var(--ink);
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-  }
-
-  :global(html.dark) .lane-name {
-    color: #f5f5f7;
   }
 
   /* Timeline: slices append rightward, newest scrolled into view. The
@@ -645,11 +620,7 @@
     padding: 0.75rem 1rem;
     align-self: center;
     font-size: 0.8125rem;
-    color: #86868b;
-  }
-
-  :global(html.dark) .band-empty {
-    color: #98989d;
+    color: var(--muted);
   }
 
   /* Resize handle on the bottom edge. */
@@ -667,31 +638,19 @@
   }
 
   .band-resize:hover .band-resize-grip {
-    background: rgba(0, 0, 0, 0.3);
-  }
-
-  :global(html.dark) .band-resize:hover .band-resize-grip {
-    background: rgba(255, 255, 255, 0.35);
+    background: color-mix(in srgb, var(--ink) 30%, transparent);
   }
 
   .band-resize:focus-visible {
-    outline: 2px solid #007aff;
+    outline: 2px solid var(--demo-accent);
     outline-offset: -2px;
-  }
-
-  :global(html.dark) .band-resize:focus-visible {
-    outline-color: #64d2ff;
   }
 
   .band-resize-grip {
     width: 36px;
     height: 3px;
     border-radius: 2px;
-    background: rgba(0, 0, 0, 0.18);
-  }
-
-  :global(html.dark) .band-resize-grip {
-    background: rgba(255, 255, 255, 0.22);
+    background: color-mix(in srgb, var(--ink) 18%, transparent);
   }
 
   /* -----------------------------------------------------------------------
@@ -699,15 +658,10 @@
      ----------------------------------------------------------------------- */
 
   .detail {
-    border-top: 1px solid rgba(0, 0, 0, 0.08);
+    border-top: 1px solid var(--hair);
     border-left: 3px solid var(--lane-color);
     padding: 0.5rem 0.75rem;
-    background: rgba(255, 255, 255, 0.6);
-  }
-
-  :global(html.dark) .detail {
-    border-top-color: rgba(255, 255, 255, 0.1);
-    background: rgba(30, 30, 32, 0.6);
+    background: color-mix(in srgb, var(--raised) 60%, transparent);
   }
 
   .detail-head {
@@ -723,11 +677,7 @@
     align-items: center;
     gap: 0.25rem;
     font-weight: 700;
-    color: #1d1d1f;
-  }
-
-  :global(html.dark) .detail-lane {
-    color: #f5f5f7;
+    color: var(--ink);
   }
 
   .detail-lane-icon {
@@ -736,11 +686,7 @@
   }
 
   .detail-meta {
-    color: #86868b;
-  }
-
-  :global(html.dark) .detail-meta {
-    color: #98989d;
+    color: var(--muted);
   }
 
   .detail-badge {
@@ -748,14 +694,9 @@
     align-items: center;
     gap: 0.25rem;
     padding: 0.0625rem 0.375rem;
-    border: 1px dashed rgba(0, 0, 0, 0.25);
+    border: 1px dashed color-mix(in srgb, var(--ink) 25%, transparent);
     border-radius: 999px;
-    color: #636366;
-  }
-
-  :global(html.dark) .detail-badge {
-    border-color: rgba(255, 255, 255, 0.3);
-    color: #98989d;
+    color: var(--muted);
   }
 
   .detail-close {
@@ -768,46 +709,30 @@
     border: none;
     border-radius: 6px;
     background: transparent;
-    color: #86868b;
+    color: var(--muted);
     cursor: pointer;
   }
 
   .detail-close:hover {
-    background: rgba(0, 0, 0, 0.05);
+    background: color-mix(in srgb, var(--ink) 6%, transparent);
   }
 
   .detail-close:focus-visible {
-    outline: 2px solid #007aff;
+    outline: 2px solid var(--demo-accent);
     outline-offset: -2px;
-  }
-
-  :global(html.dark) .detail-close:hover {
-    background: rgba(255, 255, 255, 0.08);
-  }
-
-  :global(html.dark) .detail-close:focus-visible {
-    outline-color: #64d2ff;
   }
 
   .detail-label {
     margin: 0.25rem 0 0;
     font-size: 0.8125rem;
-    color: #1d1d1f;
-  }
-
-  :global(html.dark) .detail-label {
-    color: #f5f5f7;
+    color: var(--ink);
   }
 
   .detail-payload {
     margin: 0.25rem 0 0;
     font-size: 0.75rem;
-    color: #636366;
+    color: var(--muted);
     overflow-wrap: anywhere;
-  }
-
-  :global(html.dark) .detail-payload {
-    color: #98989d;
   }
 
   .detail-key {
@@ -822,11 +747,7 @@
   .detail-seam {
     margin: 0.25rem 0 0;
     font-size: 0.75rem;
-    color: #636366;
-  }
-
-  :global(html.dark) .detail-seam {
-    color: #98989d;
+    color: var(--muted);
   }
 
   /* -----------------------------------------------------------------------
@@ -846,13 +767,8 @@
     z-index: 90;
     display: flex;
     flex-direction: column;
-    background: #f5f5f7;
-    border-top: 1px solid rgba(0, 0, 0, 0.08);
-  }
-
-  :global(html.dark) .overlay {
-    background: #161618;
-    border-top-color: rgba(255, 255, 255, 0.08);
+    background: var(--paper);
+    border-top: 1px solid var(--hair);
   }
 
   .overlay-list {
@@ -875,10 +791,6 @@
     font-weight: 700;
     letter-spacing: 0.04em;
     text-transform: uppercase;
-    color: #86868b;
-  }
-
-  :global(html.dark) .overlay-slice-title {
-    color: #98989d;
+    color: var(--muted);
   }
 </style>

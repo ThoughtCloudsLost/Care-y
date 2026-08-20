@@ -16,9 +16,8 @@
   import FrameToolbar from "$demo/FrameToolbar.svelte";
   import FlowBand from "$demo/FlowBand.svelte";
   import FlowStory from "$demo/FlowStory.svelte";
-  import SectionIntro from "$demo/SectionIntro.svelte";
+  import SectionStrip from "$demo/SectionStrip.svelte";
   import SectionRail from "$demo/SectionRail.svelte";
-  import StoryTip from "$demo/StoryTip.svelte";
   import DemoFrame from "$demo/DemoFrame.svelte";
   import PeekStill from "$demo/PeekStill.svelte";
   import { isRecordMode } from "$demo/record-mode.js";
@@ -47,6 +46,13 @@
     BEZEL,
     PHONE_PRESET,
     DESKTOP_PRESET,
+    computeFitBand,
+    fitPreset,
+    DESKTOP_SLOT_INSET,
+    RAIL_WIDTH,
+    RAIL_GAP,
+    WRAPPER_PAD_LEFT,
+    WRAPPER_PAD_RIGHT,
     WIDE_BREAKPOINT,
   } from "$demo/frame-geometry.svelte.js";
   import {
@@ -62,7 +68,13 @@
   } from "$demo/link-state.svelte.js";
   import { createFlowBandStore } from "$demo/flow-band.svelte.js";
   import { createDemoMode } from "$demo/demo-mode.svelte.js";
-  import { initColumnSlot } from "$demo/flow-column.svelte.js";
+  import {
+    initColumnSlot,
+    moveColumnToSlot,
+    columnRect,
+    columnContainerLeft,
+    columnContainerWidth,
+  } from "$demo/flow-column.svelte.js";
 
   // -----------------------------------------------------------------------
   // Dark mode with localStorage persistence
@@ -114,8 +126,26 @@
     flowBand.toggleOpen();
   }
 
+  // Chrome height is the bar plus whatever docks under it. The band and
+  // the sub strip never coexist (the band contributes nothing at narrow
+  // widths, and the strip only exists there), but summing them keeps the
+  // rule true either way rather than relying on that.
+  let bandFlowHeight = $state(0);
+  let stripHeight = $state(0);
+
+  $effect(() => {
+    setTopChromeHeight(TOP_BAR_HEIGHT + bandFlowHeight + stripHeight);
+  });
+
+  // bind:offsetHeight leaves its last value behind when the element is
+  // removed, which would keep reserving chrome for a strip that is no
+  // longer there once the rail takes over.
+  $effect(() => {
+    if (entryVisible || showRail) stripHeight = 0;
+  });
+
   function handleBandFlowHeight(px: number): void {
-    setTopChromeHeight(TOP_BAR_HEIGHT + px);
+    bandFlowHeight = px;
   }
 
   // -----------------------------------------------------------------------
@@ -465,11 +495,11 @@
   }
 
   function handlePhonePreset(): void {
-    applyPreset(PHONE_PRESET.w, PHONE_PRESET.h);
+    applyPreset(fittedPhone.w, fittedPhone.h);
   }
 
   function handleDesktopPreset(): void {
-    applyPreset(DESKTOP_PRESET.w, DESKTOP_PRESET.h);
+    applyPreset(fittedDesktop.w, fittedDesktop.h);
   }
 
   function handleShrinkGrow(): void {
@@ -680,8 +710,12 @@
     capturedStill = null;
     engineReady = false;
     activeRole = RoleId.ADMIN;
-    // Reset frame geometry and link state alongside the iframe reload
+    // Reset frame geometry and link state alongside the iframe reload.
+    // The column goes back to the side the current mode starts on, so a
+    // restart in read mode returns the story to the left rather than
+    // leaving it parked where a walk pushed it.
     geo.reset();
+    moveColumnToSlot(demoMode.mode === "read" ? "left" : "right");
     resetLinked();
     entryVisible = true;
     frameRef?.reload();
@@ -812,9 +846,8 @@
   // Sub rail visibility
   //
   // Matched in JS rather than CSS because the rail's presence also
-  // decides whether SectionIntro renders its horizontal chips. A media
-  // query could hide one of them, but both would still be in the DOM and
-  // in the tab order.
+  // decides whether SectionStrip renders. A media query could hide one
+  // of them, but both would still be in the DOM and in the tab order.
   // -----------------------------------------------------------------------
 
   // -----------------------------------------------------------------------
@@ -823,6 +856,37 @@
 
   let windowW = $state(typeof window !== "undefined" ? window.innerWidth : 0);
   let windowH = $state(typeof window !== "undefined" ? window.innerHeight : 0);
+
+  // Preset sizes track the window the way the spawn does: the nominal
+  // footprint scaled down to whatever the current band allows, never up.
+  // The band is the frame's own slot, so the desktop preset lands a
+  // little inside the column the frame occupies rather than sprawling
+  // across the story, and the phone preset returns the frame to exactly
+  // its spawn size.
+  const presetBand = $derived(
+    computeFitBand(windowW, windowH, topChromeHeight(), true),
+  );
+  const fittedPhone = $derived(
+    fitPreset(PHONE_PRESET.w, PHONE_PRESET.h, presetBand),
+  );
+  const fittedDesktop = $derived(
+    fitPreset(DESKTOP_PRESET.w, DESKTOP_PRESET.h, {
+      w: presetBand.w - DESKTOP_SLOT_INSET * 2,
+      h: presetBand.h,
+    }),
+  );
+
+  // Viewport x the next-section pill centres on: the middle of the text
+  // column rather than of the window, so it sits under the text it
+  // continues. Reads the animated column rect, so it rides along with a
+  // slot flip. The container's left is already viewport-space, which is
+  // what a fixed-position element needs. Falls back to the window centre
+  // until the container has reported its box.
+  const pillCenterX = $derived.by(() => {
+    if (columnContainerWidth() <= 0) return windowW / 2;
+    const col = columnRect();
+    return columnContainerLeft() + col.x + col.width / 2;
+  });
 
   $effect(() => {
     function onResize(): void {
@@ -884,27 +948,27 @@
 
     if (switching === "read" && current === "walk") {
       // Entering walk: cancel any in-flight peek, present the frame.
-      // geo.reset() spawns the frame in the left half; the column slot
-      // flips right through normal spawn-pressure evaluation in
-      // FlowStory's layout pass (no special-case code needed here).
+      // geo.reset() spawns the frame centred in the left slot, so the
+      // column takes the right one. This is a move the mode change
+      // dictates, not one the frame pressured: the frame appears on top
+      // of the column rather than travelling into it, which is exactly
+      // the case the flip depth declines to fire on.
       peekCtrl.resetToIdle();
       capturedStill = null;
       geo.reset();
+      moveColumnToSlot("right");
     }
     // Entering read from walk: the CSS-hide path handles visibility.
     // The iframe must NOT be unmounted (load-bearing invariant).
   });
 
-  // A single-sub section (the coming-soon placeholder) has nothing to
-  // navigate between, so the rail would be a list of one.
+  // Every wide page carries the rail. Single-sub pages get one too, so
+  // the text column keeps the same left edge from page to page.
   //
-  // The entry page DOES get a rail: its three subs preview what the
-  // handbook covers. They are not real routes though, so it renders
-  // inert there, matching the existing rule that entry sub clicks do
-  // nothing.
-  const showRail: boolean = $derived(
-    windowW >= WIDE_BREAKPOINT && activeSectionDef.subs.length > 1,
-  );
+  // The entry page's rail is inert: its subs preview what the handbook
+  // covers rather than naming real routes, matching the existing rule
+  // that entry sub clicks do nothing.
+  const showRail: boolean = $derived(windowW >= WIDE_BREAKPOINT);
 
   // Held in a derived rather than built inline in the markup so the array
   // identity only changes when the page does. FlowStory rebuilds its
@@ -976,6 +1040,25 @@
       onToggleMode={handleToggleMode}
     />
   {/key}
+  <!-- Sub navigation for viewports without the rail. Part of the top
+       chrome rather than the story: it docks under the bar and reports
+       its height, so everything that parks below the chrome (the story,
+       the frame's spawn band) accounts for it. -->
+  {#if !entryVisible && !showRail}
+    <div
+      class="strip-dock"
+      style="--wrapper-pad-left: {WRAPPER_PAD_LEFT}px; --wrapper-pad-right: {WRAPPER_PAD_RIGHT}px"
+      bind:offsetHeight={stripHeight}
+    >
+      <SectionStrip
+        section={activeSectionDef}
+        activeSub={scrollEngine.activeSub}
+        locale={uiLocale}
+        {seenTopics}
+        onSubClick={handleSubClick}
+      />
+    </div>
+  {/if}
   <!-- Data flow band: normal flow directly after the sticky top bar, so
        opening it moves the story down rather than covering it. The
        floating frame (z:50) passes under it. -->
@@ -1005,10 +1088,10 @@
          band-proportional rescale legitimately deactivates them. -->
     <FrameToolbar
       shrunk={geo.shrunk}
-      phoneActive={geo.footprintW === PHONE_PRESET.w &&
-        geo.footprintH === PHONE_PRESET.h}
-      desktopActive={geo.footprintW === DESKTOP_PRESET.w &&
-        geo.footprintH === DESKTOP_PRESET.h}
+      phoneActive={geo.footprintW === fittedPhone.w &&
+        geo.footprintH === fittedPhone.h}
+      desktopActive={geo.footprintW === fittedDesktop.w &&
+        geo.footprintH === fittedDesktop.h}
       linked={isLinked()}
       {activeRole}
       footprintW={geo.footprintW}
@@ -1186,7 +1269,10 @@
   <!-- --top-chrome-offset is where sticky story chrome parks: below the
        top bar, and below the flow band when it is open. Published as a
        custom property so the sticky rules stay declarative. -->
-  <div class="scroll-story" style="--top-chrome-offset: {stickyTopOffset()}px">
+  <div
+    class="scroll-story"
+    style="--top-chrome-offset: {stickyTopOffset()}px; --rail-w: {RAIL_WIDTH}px; --rail-gap: {RAIL_GAP}px; --wrapper-pad-left: {WRAPPER_PAD_LEFT}px; --wrapper-pad-right: {WRAPPER_PAD_RIGHT}px"
+  >
     <div class="flow-story-wrapper">
       {#key uiLocale}{#key pageKey}
           <div class="section-view" class:section-view--railed={showRail}>
@@ -1201,20 +1287,12 @@
               />
             {/if}
             <div class="section-main">
-              <SectionIntro
-                section={activeSectionDef}
-                activeSub={scrollEngine.activeSub}
-                locale={uiLocale}
-                {seenTopics}
-                showToc={!entryVisible && !showRail}
-                selectable={!entryVisible}
-                frameRect={flowFrameRect}
-                onSubClick={handleSubClick}
-                onSectionClick={handleSectionClick}
-              />
-              <!-- First snap target on the page, so it holds the
-                 selection slot before anything is selected. -->
-              <StoryTip frameRect={flowFrameRect} />
+              <!-- The page title, description and tip are blocks inside
+                   FlowStory, so they wrap around the frame through the
+                   same layout pass the prose does. Sub navigation lives
+                   outside this container entirely: the rail beside it at
+                   wide widths, the strip docked under the top bar below
+                   them. -->
               <FlowStory
                 sections={pageSections}
                 locale={uiLocale}
@@ -1240,7 +1318,7 @@
   <!-- Next-section pill: fixed at bottom center, hidden during gestures
      and when there is no next section. -->
   {#if nextSectionDef !== null && !gestureActive && !peekActive}
-    <div class="next-pill-container">
+    <div class="next-pill-container" style="left: {pillCenterX}px">
       <button
         class="next-pill"
         type="button"
@@ -1262,6 +1340,20 @@
 {/if}
 
 <style>
+  /* Docks under the sticky top bar and carries its treatment, so the
+     two read as one piece of chrome. 56px is TOP_BAR_HEIGHT; the bar
+     sits at z-index 100, so this stays just under it. */
+  .strip-dock {
+    position: sticky;
+    top: 56px;
+    z-index: 99;
+    padding: 0 var(--wrapper-pad-right) 0 var(--wrapper-pad-left);
+    background: color-mix(in srgb, var(--paper) 92%, transparent);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border-bottom: 1px solid var(--hair);
+  }
+
   .scroll-story {
     width: 100%;
     margin: 0;
@@ -1270,18 +1362,16 @@
       system-ui,
       -apple-system,
       sans-serif;
-    background: #f5f5f7;
-    color: #1d1d1f;
+    background: var(--paper);
+    color: var(--ink);
     min-height: 100vh;
   }
 
-  :global(html.dark) .scroll-story {
-    background: #161618;
-    color: #f5f5f7;
-  }
-
+  /* The horizontal padding and the rail track below are published from
+     frame-geometry's constants, which the frame's spawn placement also
+     reads. Changing either one there moves both together. */
   .flow-story-wrapper {
-    padding: 1rem 16px 0;
+    padding: 1rem var(--wrapper-pad-right) 0 var(--wrapper-pad-left);
     position: relative;
     z-index: 1;
   }
@@ -1317,12 +1407,8 @@
 
   /* Ensure body background matches */
   :global(body) {
-    background: #f5f5f7;
+    background: var(--paper);
     margin: 0;
-  }
-
-  :global(html.dark body) {
-    background: #161618;
   }
 
   /* -----------------------------------------------------------------------
@@ -1344,8 +1430,8 @@
      geometry follows without knowing the rail is there. */
   .section-view--railed {
     display: grid;
-    grid-template-columns: minmax(0, 13rem) minmax(0, 1fr);
-    column-gap: 1.5rem;
+    grid-template-columns: minmax(0, var(--rail-w)) minmax(0, 1fr);
+    column-gap: var(--rail-gap);
     align-items: start;
   }
 
@@ -1374,10 +1460,11 @@
      Next-section pill (fixed, bottom center)
      ----------------------------------------------------------------------- */
 
+  /* left is set inline to the text column's centre; the translate keeps
+     the pill centred on that point rather than starting at it. */
   .next-pill-container {
     position: fixed;
     bottom: 24px;
-    left: 50%;
     transform: translateX(-50%);
     z-index: 40;
     pointer-events: none;
@@ -1388,18 +1475,18 @@
     align-items: center;
     gap: 0.5rem;
     padding: 0.5rem 1rem;
-    border: 1px solid rgba(0, 0, 0, 0.08);
+    border: 1px solid var(--hair);
     border-radius: 999px;
-    background: rgba(245, 245, 247, 0.92);
+    background: color-mix(in srgb, var(--paper) 92%, transparent);
     backdrop-filter: blur(12px);
     -webkit-backdrop-filter: blur(12px);
-    color: #007aff;
+    color: var(--demo-accent);
     font-size: 0.875rem;
     font-weight: 600;
     cursor: pointer;
     min-height: 44px;
     pointer-events: auto;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+    box-shadow: 0 2px 8px var(--glass-shadow);
     transition:
       background 0.15s ease,
       box-shadow 0.15s ease;
@@ -1407,29 +1494,13 @@
   }
 
   .next-pill:hover {
-    background: rgba(245, 245, 247, 0.98);
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
+    background: color-mix(in srgb, var(--paper) 98%, transparent);
+    box-shadow: 0 4px 12px var(--glass-shadow);
   }
 
   .next-pill:focus-visible {
-    outline: 2px solid #007aff;
+    outline: 2px solid var(--demo-accent);
     outline-offset: 2px;
-  }
-
-  :global(html.dark) .next-pill {
-    border-color: rgba(255, 255, 255, 0.1);
-    background: rgba(30, 30, 32, 0.92);
-    color: #64d2ff;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.24);
-  }
-
-  :global(html.dark) .next-pill:hover {
-    background: rgba(30, 30, 32, 0.98);
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.32);
-  }
-
-  :global(html.dark) .next-pill:focus-visible {
-    outline-color: #64d2ff;
   }
 
   .next-pill:disabled {
@@ -1438,13 +1509,8 @@
   }
 
   .next-pill:disabled:hover {
-    background: rgba(245, 245, 247, 0.92);
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
-  }
-
-  :global(html.dark) .next-pill:disabled:hover {
-    background: rgba(30, 30, 32, 0.92);
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.24);
+    background: color-mix(in srgb, var(--paper) 92%, transparent);
+    box-shadow: 0 2px 8px var(--glass-shadow);
   }
 
   :global(.next-pill-spinner) {
@@ -1627,17 +1693,17 @@
     align-items: center;
     gap: 0.375rem;
     padding: 0.5rem 1rem;
-    border: 1px solid rgba(0, 0, 0, 0.08);
+    border: 1px solid var(--hair);
     border-radius: 999px;
-    background: rgba(245, 245, 247, 0.92);
+    background: color-mix(in srgb, var(--paper) 92%, transparent);
     backdrop-filter: blur(12px);
     -webkit-backdrop-filter: blur(12px);
-    color: #1d1d1f;
+    color: var(--ink);
     font-size: 0.8125rem;
     font-weight: 600;
     cursor: pointer;
     min-height: 44px;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+    box-shadow: 0 2px 8px var(--glass-shadow);
     transition:
       background 0.15s ease,
       box-shadow 0.15s ease;
@@ -1645,29 +1711,13 @@
   }
 
   .peek-close-btn:hover {
-    background: rgba(245, 245, 247, 0.98);
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
+    background: color-mix(in srgb, var(--paper) 98%, transparent);
+    box-shadow: 0 4px 12px var(--glass-shadow);
   }
 
   .peek-close-btn:focus-visible {
-    outline: 2px solid #007aff;
+    outline: 2px solid var(--demo-accent);
     outline-offset: 2px;
-  }
-
-  :global(html.dark) .peek-close-btn {
-    border-color: rgba(255, 255, 255, 0.1);
-    background: rgba(30, 30, 32, 0.92);
-    color: #f5f5f7;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.24);
-  }
-
-  :global(html.dark) .peek-close-btn:hover {
-    background: rgba(30, 30, 32, 0.98);
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.32);
-  }
-
-  :global(html.dark) .peek-close-btn:focus-visible {
-    outline-color: #64d2ff;
   }
 
   @media (prefers-reduced-motion: reduce) {

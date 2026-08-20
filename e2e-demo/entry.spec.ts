@@ -20,8 +20,8 @@ test.describe("entry page", () => {
     await page.goto("/");
 
     // The entry section title "How CARE-Y works" is the stable marker.
-    // SectionIntro renders it as h2.section-title.
-    const entryTitle = page.locator("h2.section-title");
+    // The story flow renders it as the page's only h2 block.
+    const entryTitle = page.locator("h2.flow-block");
     await expect(entryTitle).toBeVisible({ timeout: 10_000 });
     await expect(entryTitle).toContainText("How CARE-Y works");
 
@@ -71,7 +71,7 @@ test.describe("entry page", () => {
     // A section title should now be visible (login if the pill
     // dismissed the entry, or dashboard/another section if silent auth
     // drove the transition).
-    const sectionTitle = page.locator("h2.section-title");
+    const sectionTitle = page.locator("h2.flow-block");
     await expect(sectionTitle).toBeVisible();
   });
 });

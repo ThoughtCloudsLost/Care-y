@@ -148,16 +148,11 @@
     position: sticky;
     top: 0;
     z-index: 100;
-    background: rgba(245, 245, 247, 0.92);
+    background: color-mix(in srgb, var(--paper) 92%, transparent);
     backdrop-filter: blur(12px);
     -webkit-backdrop-filter: blur(12px);
-    border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+    border-bottom: 1px solid var(--hair);
     padding: 0 1rem;
-  }
-
-  :global(html.dark) .top-bar {
-    background: rgba(22, 22, 24, 0.92);
-    border-bottom-color: rgba(255, 255, 255, 0.08);
   }
 
   .top-bar-inner {
@@ -186,11 +181,7 @@
     line-height: 1.2;
     text-transform: uppercase;
     white-space: nowrap;
-    color: #86868b;
-  }
-
-  :global(html.dark) .top-bar-brand {
-    color: #98989d;
+    color: var(--muted);
   }
 
   .top-bar-title {
@@ -198,22 +189,14 @@
     font-weight: 700;
     line-height: 1.25;
     white-space: nowrap;
-    color: #1d1d1f;
-  }
-
-  :global(html.dark) .top-bar-title {
-    color: #f5f5f7;
+    color: var(--ink);
   }
 
   .top-bar-progress {
     font-size: 0.6875rem;
     line-height: 1.2;
-    color: #86868b;
+    color: var(--muted);
     white-space: nowrap;
-  }
-
-  :global(html.dark) .top-bar-progress {
-    color: #98989d;
   }
 
   .section-tabs {
@@ -239,7 +222,7 @@
     background: transparent;
     font-size: 0.8125rem;
     font-weight: 500;
-    color: #636366;
+    color: var(--muted);
     cursor: pointer;
     white-space: nowrap;
     transition:
@@ -248,37 +231,18 @@
   }
 
   .section-tab:hover {
-    background: rgba(0, 0, 0, 0.04);
-    color: #1d1d1f;
-  }
-
-  :global(html.dark) .section-tab {
-    color: #98989d;
-  }
-
-  :global(html.dark) .section-tab:hover {
-    background: rgba(255, 255, 255, 0.06);
-    color: #f5f5f7;
+    background: color-mix(in srgb, var(--ink) 4%, transparent);
+    color: var(--ink);
   }
 
   .section-tab-active {
-    background: rgba(0, 122, 255, 0.1);
-    color: #007aff;
+    background: var(--demo-accent-soft);
+    color: var(--demo-accent);
   }
 
   .section-tab-active:hover {
-    background: rgba(0, 122, 255, 0.15);
-    color: #007aff;
-  }
-
-  :global(html.dark) .section-tab-active {
-    background: rgba(0, 122, 255, 0.2);
-    color: #64d2ff;
-  }
-
-  :global(html.dark) .section-tab-active:hover {
-    background: rgba(0, 122, 255, 0.25);
-    color: #64d2ff;
+    background: var(--demo-accent-strong);
+    color: var(--demo-accent);
   }
 
   .top-bar-right {
@@ -295,45 +259,25 @@
     width: 36px;
     height: 36px;
     border-radius: 50%;
-    border: 1px solid #d1d1d6;
-    background: white;
+    border: 1px solid var(--hair-2);
+    background: var(--raised);
     cursor: pointer;
-    color: #1d1d1f;
+    color: var(--ink);
     flex-shrink: 0;
   }
 
   .icon-btn:hover {
-    background: #f0f0f0;
-  }
-
-  :global(html.dark) .icon-btn {
-    background: #2c2c2e;
-    border-color: #3a3a3c;
-    color: #f5f5f7;
-  }
-
-  :global(html.dark) .icon-btn:hover {
-    background: #3a3a3c;
+    background: color-mix(in srgb, var(--ink) 6%, transparent);
   }
 
   .icon-btn-active {
-    border-color: #007aff;
-    background: rgba(0, 122, 255, 0.1);
-    color: #007aff;
+    border-color: var(--demo-accent);
+    background: var(--demo-accent-soft);
+    color: var(--demo-accent);
   }
 
   .icon-btn-active:hover {
-    background: rgba(0, 122, 255, 0.15);
-  }
-
-  :global(html.dark) .icon-btn-active {
-    border-color: #64d2ff;
-    background: rgba(0, 122, 255, 0.2);
-    color: #64d2ff;
-  }
-
-  :global(html.dark) .icon-btn-active:hover {
-    background: rgba(0, 122, 255, 0.25);
+    background: var(--demo-accent-strong);
   }
 
   /* Small screens: hide title, compress tabs */

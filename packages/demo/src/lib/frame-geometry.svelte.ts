@@ -43,6 +43,14 @@ export const DESKTOP_PRESET = { w: 760, h: 475 } as const;
 /** Minimum footprint dimensions (prevents collapsing to nothing). */
 export const MIN_FOOTPRINT = { w: 200, h: 200 } as const;
 
+/**
+ * Extra breathing room per side, on top of the band's own margin, when
+ * fitting the desktop preset into the frame's slot. The desktop frame
+ * reads as an object sitting in its column rather than as the column
+ * itself, which a preset that filled the slot edge to edge would not.
+ */
+export const DESKTOP_SLOT_INSET = 24;
+
 /** Minimum viewport base for the iframe. */
 export const MIN_VIEWPORT = { w: 390, h: 844 } as const;
 
@@ -104,6 +112,135 @@ export interface SpawnState {
   readonly left: number;
 }
 
+// -----------------------------------------------------------------------
+// Story layout metrics
+//
+// The frame spawns into the half of the story container the text column
+// leaves for it, so it has to know where that container sits. These are
+// the authoritative values: App.svelte publishes them as CSS custom
+// properties and its rules read them back, so the spawn placement and
+// the rendered layout cannot drift apart.
+// -----------------------------------------------------------------------
+
+/** Width of the section rail (13rem). */
+export const RAIL_WIDTH = 208;
+
+/** Gap between the rail and the story column (1.5rem). */
+export const RAIL_GAP = 24;
+
+/** Padding between the window's left edge and the story wrapper. */
+export const WRAPPER_PAD_LEFT = 16;
+
+/**
+ * Padding on the right. Wider than the left, which has the rail and the
+ * frame beside it: the text column ends here, and nothing in the story
+ * should run up against the window edge.
+ */
+export const WRAPPER_PAD_RIGHT = 32;
+
+/** Horizontal extent of the flow container in window coordinates. */
+export interface ContentBand {
+  readonly left: number;
+  readonly width: number;
+}
+
+/**
+ * Where the flow container sits for a given window width. The rail is
+ * present on every wide page, so this is derivable without measuring,
+ * which matters because the spawn runs before the container mounts.
+ */
+export function contentBandFor(windowW: number): ContentBand {
+  // The wrapper's padding, then the rail track and its column gap. The
+  // rail lives inside the padding, so the padding counts once.
+  const rail = windowW >= WIDE_BREAKPOINT ? RAIL_WIDTH + RAIL_GAP : 0;
+  const left = WRAPPER_PAD_LEFT + rail;
+  return {
+    left,
+    width: Math.max(MIN_FOOTPRINT.w, windowW - left - WRAPPER_PAD_RIGHT),
+  };
+}
+
+/**
+ * The half of the container the frame occupies: the left slot, mirroring
+ * the text column's right slot. Below the wide breakpoint there are no
+ * slots and the frame gets the whole window.
+ */
+export function frameSlotFor(windowW: number): { left: number; right: number } {
+  if (windowW < WIDE_BREAKPOINT) return { left: 0, right: windowW };
+  const content = contentBandFor(windowW);
+  return { left: content.left, right: content.left + content.width / 2 };
+}
+
+/** Space a frame has to fit into, excluding chrome and margins. */
+export interface FitBand {
+  readonly w: number;
+  readonly h: number;
+}
+
+/**
+ * The band a frame must fit inside: below the top bar and the floating
+ * toolbar, above the bottom margin, and inside the side margins.
+ *
+ * Sizing against this rather than the raw window is what guarantees the
+ * toolbar's grip and buttons stay on screen: the toolbar is absolutely
+ * positioned ABOVE frameRect.top, so a frame merely "fitting the window"
+ * pushes its own controls off the top.
+ *
+ * `halfWidth` narrows the horizontal band to the frame's own slot, which
+ * is what the spawn wants. Presets pass false: by the time one is
+ * clicked the frame may sit anywhere, so the only requirement is that it
+ * fits the screen.
+ */
+export function computeFitBand(
+  windowW: number,
+  windowH: number,
+  topBarH: number,
+  halfWidth: boolean,
+): FitBand {
+  const bandTop = topBarH + TOOLBAR_CLEARANCE;
+  const slot = frameSlotFor(windowW);
+  const usableW = halfWidth ? slot.right - slot.left : windowW;
+  return {
+    w: Math.max(MIN_FOOTPRINT.w, usableW - SPAWN_MARGIN * 2),
+    h: Math.max(MIN_FOOTPRINT.h, windowH - bandTop - SPAWN_MARGIN),
+  };
+}
+
+/**
+ * Scale a preset footprint down to fit the band, preserving its aspect
+ * ratio. Never scales up: the presets are the intended sizes, and the
+ * band only ever takes size away.
+ *
+ * One scale across both axes rather than clamping each on its own is
+ * what keeps the phone reading as a phone instead of a squat box. The
+ * MIN_FOOTPRINT floor is applied as a scale too, for the same reason.
+ *
+ * The derived viewport survives this untouched: zoom is footprint over
+ * the minimum viewport, so scaling the footprint scales zoom with it and
+ * viewport (footprint / zoom) comes out the same. A fitted desktop
+ * preset still clears the desktop breakpoint inside the iframe.
+ */
+export function fitPreset(
+  presetW: number,
+  presetH: number,
+  band: FitBand,
+): { w: number; h: number } {
+  const fitScale = Math.min(
+    1,
+    (band.w - BEZEL * 2) / presetW,
+    (band.h - BEZEL * 2) / presetH,
+  );
+  const floorScale = Math.max(
+    MIN_FOOTPRINT.w / presetW,
+    MIN_FOOTPRINT.h / presetH,
+  );
+  const scale = Math.max(fitScale, floorScale);
+  return {
+    w: Math.round(presetW * scale),
+    h: Math.round(presetH * scale),
+  };
+}
+
 /**
  * Compute the initial spawn position and footprint.
  *
@@ -117,52 +254,22 @@ export function computeSpawn(
   windowH: number,
   topBarH: number,
 ): SpawnState {
-  // The frame spawns inside a band that already excludes the top bar,
-  // the toolbar, and a margin on every side. Sizing against that band
-  // rather than the raw window is what guarantees the toolbar's grip and
-  // buttons are on screen from the first frame: the toolbar is absolutely
-  // positioned ABOVE frameRect.top, so a frame merely "fitting the
-  // window" pushes its own controls off the top.
+  const band = computeFitBand(windowW, windowH, topBarH, true);
   const bandTop = topBarH + TOOLBAR_CLEARANCE;
-  const bandH = Math.max(MIN_FOOTPRINT.h, windowH - bandTop - SPAWN_MARGIN);
 
-  // Horizontal band: the left half on wide layouts (the frame spawns
-  // there so the story text can flow in the right half), full width
-  // otherwise.
-  const bandLeft = 0;
-  const bandW = Math.max(
-    MIN_FOOTPRINT.w,
-    (windowW >= WIDE_BREAKPOINT ? windowW / 2 : windowW) - SPAWN_MARGIN * 2,
-  );
-
-  // Fit the phone into the band, both axes, preserving its aspect ratio.
-  // Scaling one factor across both axes rather than clamping each on its
-  // own is what keeps it reading as a phone instead of a squat box.
-  const fitScale = Math.min(
-    1,
-    (bandW - BEZEL * 2) / PHONE_PRESET.w,
-    (bandH - BEZEL * 2) / PHONE_PRESET.h,
-  );
-  // Never shrink below the minimum footprint, and apply that floor as a
-  // scale too so the ratio survives it.
-  const floorScale = Math.max(
-    MIN_FOOTPRINT.w / PHONE_PRESET.w,
-    MIN_FOOTPRINT.h / PHONE_PRESET.h,
-  );
-  const scale = Math.max(fitScale, floorScale);
-
-  const fw = Math.round(PHONE_PRESET.w * scale);
-  const fh = Math.round(PHONE_PRESET.h * scale);
+  const fitted = fitPreset(PHONE_PRESET.w, PHONE_PRESET.h, band);
+  const fw = fitted.w;
+  const fh = fitted.h;
   const outerW = fw + BEZEL * 2;
   const outerH = fh + BEZEL * 2;
 
-  // Centre within the band on both axes, then clamp so an oversized
-  // frame still lands on screen rather than hanging off an edge.
-  // bandRight is the right edge of the spawn band (the left half at
-  // wide widths, the full window otherwise).
-  const top = bandTop + Math.max(0, (bandH - outerH) / 2);
-  const bandRight = windowW >= WIDE_BREAKPOINT ? windowW / 2 : windowW;
-  const centredLeft = bandLeft + (bandRight - bandLeft - outerW) / 2;
+  // Centre within the slot on both axes, then clamp so an oversized
+  // frame still lands on screen rather than hanging off an edge. The
+  // slot starts right of the rail, so a frame centred in it clears the
+  // rail instead of sitting over it.
+  const top = bandTop + Math.max(0, (band.h - outerH) / 2);
+  const slot = frameSlotFor(windowW);
+  const centredLeft = slot.left + (slot.right - slot.left - outerW) / 2;
   const left = Math.max(
     FRAME_FIT_MARGIN,
     Math.min(centredLeft, windowW - outerW - FRAME_FIT_MARGIN),

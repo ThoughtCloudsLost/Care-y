@@ -14,7 +14,7 @@ import type { MarkupRun } from "./flow-markup.js";
 // -----------------------------------------------------------------------
 
 export type FlowTextKind =
-  "section-title" | "section-desc" | "sub-heading" | "sub-body";
+  "section-title" | "section-desc" | "story-tip" | "sub-heading" | "sub-body";
 
 export type FlowBlockKind = FlowTextKind | "figure";
 
@@ -165,6 +165,17 @@ const SUB_HEADING_METRICS: FlowKindMetrics = {
   marginBottom: 18,
 };
 
+/**
+ * Story tip: body size, muted, with a gutter for its icon. The bottom
+ * margin separates it from the first sub heading below.
+ */
+const STORY_TIP_METRICS: FlowKindMetrics = {
+  fontSize: 15,
+  lineHeight: 24,
+  marginTop: 0,
+  marginBottom: 24,
+};
+
 /** Sub body: 15px, 1.6 line height ratio. */
 const SUB_BODY_METRICS: FlowKindMetrics = {
   fontSize: 15,
@@ -189,8 +200,8 @@ const FIGURE_METRICS: FlowKindMetrics = {
  * Maximum width for a figure in px. Region crops are roughly 390x220
  * (aspect ~1.77). At 200px width the figure is about a quarter of a
  * typical narrow viewport (390px), leaving room for prose above and
- * below. On wider viewports the reading measure (MAX_MEASURE = 620)
- * already constrains the band, so 200px keeps figures compact there too.
+ * below. On wider viewports the column is a container half, so 200px
+ * keeps figures from dominating the band there too.
  */
 export const MAX_FIGURE_WIDTH = 200;
 
@@ -211,6 +222,7 @@ export const LIST_ITEM_SPACE = 4;
 export const DEFAULT_METRICS: FlowMetrics = {
   "section-title": SECTION_TITLE_METRICS,
   "section-desc": SECTION_DESC_METRICS,
+  "story-tip": STORY_TIP_METRICS,
   "sub-heading": SUB_HEADING_METRICS,
   "sub-body": SUB_BODY_METRICS,
   figure: FIGURE_METRICS,
@@ -292,8 +304,10 @@ export const FRAME_PAD_X = 4;
 /**
  * Maximum measure for a single band of text, in px. Roughly 62
  * characters at the 15px body size, which is the comfortable reading
- * range for continuous prose. Used by the slot-state module to size
- * the column and by the spawn band calculation.
+ * range for continuous prose. Applies to the single centered column
+ * below the wide breakpoint. The wide layout's slots deliberately take
+ * a full container half instead, so the text and the frame each own a
+ * side outright.
  */
 export const MAX_MEASURE = 620;
 
@@ -313,19 +327,15 @@ export interface FlowColumn {
 }
 
 /**
- * Hole-overlap fraction of the column width that triggers a slot flip.
- * When the hole's horizontal overlap with the resting column exceeds
- * `column.width * SLOT_FLIP_RATIO`, pressure flips the slot.
+ * How far the frame's center must travel into the column, as a fraction
+ * of the column width, before the column takes the other slot.
+ *
+ * Two thirds, so the column yields only once the frame is most of the
+ * way across it. Everything short of that is absorbed by the shift and
+ * refill stages, which is what keeps the column still while the frame
+ * moves.
  */
-export const SLOT_FLIP_RATIO = 1 / 3;
-
-/**
- * Deadband in px for the slot flip. When the difference between the
- * overlap on the current slot and the would-be overlap on the other
- * slot is within this threshold, the flip is suppressed (straddling
- * frames: lesser overlap wins).
- */
-export const SLOT_FLIP_DEADBAND = 40;
+export const SLOT_FLIP_RATIO = 2 / 3;
 
 /**
  * Maximum per-line horizontal shift in px. Lines may poke past the

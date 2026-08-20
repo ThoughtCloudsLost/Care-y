@@ -77,11 +77,11 @@
     width: 100%;
     min-width: 0;
     padding: 0.25rem 0.375rem;
-    border: 1px solid rgba(0, 0, 0, 0.1);
+    border: 1px solid color-mix(in srgb, var(--ink) 10%, transparent);
     border-left: 3px solid var(--lane-color);
     border-radius: 8px;
-    background: #ffffff;
-    color: #1d1d1f;
+    background: var(--raised);
+    color: var(--ink);
     text-align: left;
     cursor: pointer;
     overflow: hidden;
@@ -91,16 +91,17 @@
   }
 
   .flow-card:hover {
-    background: #f5f5f7;
+    background: color-mix(in srgb, var(--ink) 4%, transparent);
   }
 
   .flow-card:focus-visible {
-    outline: 2px solid #007aff;
+    outline: 2px solid var(--demo-accent);
     outline-offset: 1px;
   }
 
   .flow-card--open {
-    box-shadow: 0 0 0 2px rgba(0, 122, 255, 0.35);
+    box-shadow: 0 0 0 2px
+      color-mix(in srgb, var(--demo-accent) 35%, transparent);
   }
 
   /* Scripted seams read as scripted through shape, not color: a dashed
@@ -114,25 +115,6 @@
     align-items: center;
     padding: 0.5rem 0.625rem;
     min-height: 44px;
-  }
-
-  :global(html.dark) .flow-card {
-    border-color: rgba(255, 255, 255, 0.12);
-    border-left-color: var(--lane-color);
-    background: #1e1e20;
-    color: #f5f5f7;
-  }
-
-  :global(html.dark) .flow-card:hover {
-    background: #2c2c2e;
-  }
-
-  :global(html.dark) .flow-card:focus-visible {
-    outline-color: #64d2ff;
-  }
-
-  :global(html.dark) .flow-card--open {
-    box-shadow: 0 0 0 2px rgba(100, 210, 255, 0.4);
   }
 
   .card-icon {
@@ -156,11 +138,7 @@
     font-weight: 600;
     letter-spacing: 0.04em;
     text-transform: uppercase;
-    color: #86868b;
-  }
-
-  :global(html.dark) .card-lane {
-    color: #98989d;
+    color: var(--muted);
   }
 
   .card-label {
@@ -183,11 +161,7 @@
     display: flex;
     flex-shrink: 0;
     align-items: center;
-    color: #86868b;
-  }
-
-  :global(html.dark) .card-seam {
-    color: #98989d;
+    color: var(--muted);
   }
 
   .card-sr {
