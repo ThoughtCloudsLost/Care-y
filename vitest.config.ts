@@ -13,6 +13,11 @@ const clientAvailable = existsSync(
   "packages/client/node_modules/@sveltejs/vite-plugin-svelte",
 );
 
+// The demo package is not copied into the Docker test container (only server,
+// shared, and crypto are). Include it only when the directory exists.
+const demoAvailable =
+  clientAvailable && existsSync("packages/demo/vitest.config.ts");
+
 export default defineConfig({
   test: {
     pool: "threads",
@@ -113,9 +118,8 @@ export default defineConfig({
       // Skipped inside Docker where SvelteKit deps are not installed.
       // The demo package shares the client's toolchain (svelte plugin,
       // browser conditions), so it follows the same availability gate.
-      ...(clientAvailable
-        ? ["packages/client" as const, "packages/demo" as const]
-        : []),
+      ...(clientAvailable ? ["packages/client" as const] : []),
+      ...(demoAvailable ? ["packages/demo" as const] : []),
     ],
   },
 });
