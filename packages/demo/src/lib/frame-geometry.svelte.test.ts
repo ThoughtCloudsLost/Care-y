@@ -24,7 +24,7 @@ import {
   BEZEL,
   SHRINK_VH_FRACTION,
 } from "./frame-geometry.svelte.js";
-import { FRAME_PAD_TOP } from "./flow-layout.js";
+import { TOOLBAR_CLEARANCE } from "./flow-layout.js";
 import { TOP_BAR_HEIGHT } from "./flow-geometry.svelte.js";
 import { DEFAULT_BAND_HEIGHT } from "./flow-band.svelte.js";
 
@@ -127,7 +127,7 @@ describe("computeSpawn", () => {
     // The toolbar is absolutely positioned above frameRect.top, so the
     // frame must start at least its clearance below the bar.
     const spawn = computeSpawn(1280, 900, topBar);
-    expect(spawn.top).toBeGreaterThanOrEqual(topBar + FRAME_PAD_TOP);
+    expect(spawn.top).toBeGreaterThanOrEqual(topBar + TOOLBAR_CLEARANCE);
   });
 
   it("leaves clear space below the frame", () => {
@@ -144,24 +144,24 @@ describe("computeSpawn", () => {
     expect(spawn.footprintH).toBe(PHONE_PRESET.h);
   });
 
-  it("centres the frame in the right half of the window at >= 900px", () => {
+  it("centres the frame in the left half of the window at >= 900px", () => {
     const windowW = 1280;
     const spawn = computeSpawn(windowW, 900, topBar);
-    // Derived from the spawn, not the preset: the frame scales to fit.
     const outerW = spawn.footprintW + BEZEL * 2;
 
-    // Equal slack between the window's midpoint and the frame, and
-    // between the frame and the right edge.
-    const slackLeft = spawn.left - windowW / 2;
-    const slackRight = windowW - (spawn.left + outerW);
+    // Equal slack between the left edge and the frame, and between
+    // the frame and the window's midpoint.
+    const slackLeft = spawn.left;
+    const slackRight = windowW / 2 - (spawn.left + outerW);
     expect(slackLeft).toBeCloseTo(slackRight, 5);
     expect(slackLeft).toBeGreaterThan(0);
     expect(spawn.top).toBeGreaterThanOrEqual(topBar);
   });
 
-  it("keeps a frame wider than the right half fully on screen", () => {
-    // 900px window: the right half is 450px, narrower than the 414px
+  it("keeps a frame wider than the left half fully on screen", () => {
+    // 900px window: the left half is 450px, narrower than the 414px
     // outer frame plus margins would comfortably allow once centred.
+    // The clamp keeps the frame on screen at the left band.
     const windowW = 900;
     const spawn = computeSpawn(windowW, 900, topBar);
     const outerW = spawn.footprintW + BEZEL * 2;
@@ -188,7 +188,7 @@ describe("computeSpawn", () => {
 
   it("places below the top bar and toolbar on narrow windows", () => {
     const spawn = computeSpawn(400, 800, topBar);
-    expect(spawn.top).toBeGreaterThanOrEqual(topBar + FRAME_PAD_TOP);
+    expect(spawn.top).toBeGreaterThanOrEqual(topBar + TOOLBAR_CLEARANCE);
   });
 
   it("enforces minimum footprint dimensions", () => {
@@ -199,7 +199,7 @@ describe("computeSpawn", () => {
 
   it("spawns below an open flow band, not just below the top bar", () => {
     const spawn = computeSpawn(1280, 900, OPEN_CHROME);
-    expect(spawn.top).toBeGreaterThanOrEqual(OPEN_CHROME + FRAME_PAD_TOP);
+    expect(spawn.top).toBeGreaterThanOrEqual(OPEN_CHROME + TOOLBAR_CLEARANCE);
   });
 
   it("shrinks the spawn to fit the band that an open chrome leaves", () => {
@@ -505,7 +505,7 @@ describe("preset constants", () => {
 describe("createFrameGeometry chrome height", () => {
   it("spawns below the chrome height the getter reports", () => {
     const geo = createFrameGeometry(() => OPEN_CHROME);
-    expect(geo.top).toBeGreaterThanOrEqual(OPEN_CHROME + FRAME_PAD_TOP);
+    expect(geo.top).toBeGreaterThanOrEqual(OPEN_CHROME + TOOLBAR_CLEARANCE);
   });
 
   it("re-reads the chrome height on reset", () => {
@@ -517,7 +517,7 @@ describe("createFrameGeometry chrome height", () => {
     geo.reset();
 
     expect(geo.top).toBeGreaterThan(spawnTop);
-    expect(geo.top).toBeGreaterThanOrEqual(OPEN_CHROME + FRAME_PAD_TOP);
+    expect(geo.top).toBeGreaterThanOrEqual(OPEN_CHROME + TOOLBAR_CLEARANCE);
   });
 });
 

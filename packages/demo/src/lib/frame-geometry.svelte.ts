@@ -15,10 +15,10 @@
  * No persistence: every page load spawns the canonical initial state.
  */
 
-// FRAME_PAD_TOP is the toolbar's height plus breathing room. Imported
-// rather than redeclared so the spawn clearance and the text layout's
-// clearance can never drift apart when the toolbar changes size.
-import { FRAME_PAD_TOP } from "./flow-layout.js";
+// TOOLBAR_CLEARANCE is the toolbar's height plus breathing room.
+// Imported rather than redeclared so the spawn clearance and the text
+// layout's clearance can never drift apart when the toolbar changes size.
+import { TOOLBAR_CLEARANCE } from "./flow-layout.js";
 // The default chrome height only. The live value is injected as a getter
 // so the pure placement functions below stay free of module state.
 import { TOP_BAR_HEIGHT } from "./flow-geometry.svelte.js";
@@ -107,8 +107,9 @@ export interface SpawnState {
 /**
  * Compute the initial spawn position and footprint.
  *
- * At >= 900px window width: phone preset in the right gutter area,
- * vertically centered in the viewport below the top bar.
+ * At >= 900px window width: phone preset in the left half, vertically
+ * centered in the viewport below the top bar. The story text flows in
+ * the right half beside it.
  * Below 900px: scaled down to fit roughly 40vh, centered horizontally.
  */
 export function computeSpawn(
@@ -122,15 +123,16 @@ export function computeSpawn(
   // buttons are on screen from the first frame: the toolbar is absolutely
   // positioned ABOVE frameRect.top, so a frame merely "fitting the
   // window" pushes its own controls off the top.
-  const bandTop = topBarH + FRAME_PAD_TOP;
+  const bandTop = topBarH + TOOLBAR_CLEARANCE;
   const bandH = Math.max(MIN_FOOTPRINT.h, windowH - bandTop - SPAWN_MARGIN);
 
-  // Horizontal band: the right half on wide layouts (the space the frame
-  // has to itself there), the full width otherwise.
-  const bandLeft = windowW >= WIDE_BREAKPOINT ? windowW / 2 : 0;
+  // Horizontal band: the left half on wide layouts (the frame spawns
+  // there so the story text can flow in the right half), full width
+  // otherwise.
+  const bandLeft = 0;
   const bandW = Math.max(
     MIN_FOOTPRINT.w,
-    windowW - bandLeft - SPAWN_MARGIN * 2,
+    (windowW >= WIDE_BREAKPOINT ? windowW / 2 : windowW) - SPAWN_MARGIN * 2,
   );
 
   // Fit the phone into the band, both axes, preserving its aspect ratio.
@@ -156,8 +158,11 @@ export function computeSpawn(
 
   // Centre within the band on both axes, then clamp so an oversized
   // frame still lands on screen rather than hanging off an edge.
+  // bandRight is the right edge of the spawn band (the left half at
+  // wide widths, the full window otherwise).
   const top = bandTop + Math.max(0, (bandH - outerH) / 2);
-  const centredLeft = bandLeft + (windowW - bandLeft - outerW) / 2;
+  const bandRight = windowW >= WIDE_BREAKPOINT ? windowW / 2 : windowW;
+  const centredLeft = bandLeft + (bandRight - bandLeft - outerW) / 2;
   const left = Math.max(
     FRAME_FIT_MARGIN,
     Math.min(centredLeft, windowW - outerW - FRAME_FIT_MARGIN),
@@ -171,8 +176,8 @@ export const FRAME_FIT_MARGIN = 8;
 
 /**
  * Window width at or above which the wide layout applies: the frame
- * spawns in the right half and the story text flows beside it. Below it
- * the frame is centred and the layout is single-column.
+ * spawns in the left half and the story text flows in the right half.
+ * Below it the frame is centred and the layout is single-column.
  */
 export const WIDE_BREAKPOINT = 900;
 

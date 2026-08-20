@@ -20,8 +20,9 @@
      *  entry page, where a stray click must not skip into the demo. */
     selectable: boolean;
     /** Viewport-space frame rect, so the header can inset its text out
-     *  from under the phone the same way the flow layout does. */
-    frameRect: DodgeFrameRect;
+     *  from under the phone the same way the flow layout does. Null when
+     *  the frame is hidden (read mode, no peek): nothing to dodge. */
+    frameRect: DodgeFrameRect | null;
     onSubClick: (sectionId: SectionId, subSlug: string) => void;
     onSectionClick: (sectionId: SectionId) => void;
   }
@@ -135,6 +136,12 @@
 </div>
 
 <style>
+  /* The -1rem margin / 1rem padding cancellation must stay equal to
+     CONTENT_GUTTER (16px) in frame-dodge.svelte.ts, or the dodge
+     alignment drifts.
+     Below 900px the horizontal padding drops to 0 (see max-width:899px
+     block), so the cancellation is off by 16px at narrow widths; the
+     resulting column-slot misalignment is tolerated. */
   .section-intro {
     cursor: pointer;
     padding: 2rem 1rem 1rem;

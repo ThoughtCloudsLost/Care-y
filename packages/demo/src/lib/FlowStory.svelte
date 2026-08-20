@@ -38,6 +38,7 @@
     type FlowTextKind,
     type FlowHole,
     type FlowLayoutResult,
+    type FlowColumn,
     type FlowFigureGeometry,
     type FlowLine,
     type FlowLineFragment,
@@ -52,7 +53,7 @@
     FRAME_PAD_BOTTOM,
     FRAME_PAD_X,
     computeFlowLayout,
-    computeLineSegments,
+    computeColumnSegments,
     extendHoleForFullBleed,
     hitTestBlock,
   } from "./flow-layout.js";
@@ -70,6 +71,13 @@
     setFlowGeometrySource,
     stickyTopOffset,
   } from "./flow-geometry.svelte.js";
+  import {
+    setColumnContainer,
+    setColumnWindowWidth,
+    evaluateColumnPressure,
+    columnRect,
+    restingColumnRect,
+  } from "./flow-column.svelte.js";
 
   // -----------------------------------------------------------------------
   // Props
@@ -81,12 +89,14 @@
     activeSection: SectionId;
     activeSub: string | null;
     seenTopics: ReadonlySet<DemoTopic>;
+    /** Viewport-space frame box the text wraps around, or null when the
+     *  frame is hidden (read mode, no peek): the flow carves no hole. */
     frameRect: {
       left: number;
       top: number;
       outerW: number;
       outerH: number;
-    };
+    } | null;
     onSelectSection: (id: SectionId) => void;
     onSelectSub: (sectionId: SectionId, subSlug: string) => void;
     /** Peek hold completed on a figure. */
@@ -476,6 +486,9 @@
   // heading rules can be clipped by the same rectangle the text was,
   // instead of recomputing it and risking a one-frame disagreement.
   let layoutHole: FlowHole | null = $state.raw(null);
+  // The column rect the current layoutResult was computed against, for
+  // the same one-frame-disagreement reason layoutHole exists.
+  let layoutColumn: FlowColumn | null = $state.raw(null);
 
   // Viewport height for reactive virtualization (no window reads in $derived)
   let viewportH = $state(
@@ -489,11 +502,13 @@
     const rect = containerEl.getBoundingClientRect();
     containerTop = rect.top + window.scrollY;
     containerLeft = rect.left;
+    setColumnContainer(containerWidth, containerLeft);
   }
 
   $effect(() => {
     function onResize(): void {
       viewportH = window.innerHeight;
+      setColumnWindowWidth(window.innerWidth);
       measureContainerPosition();
     }
     window.addEventListener("resize", onResize, { passive: true });
@@ -507,6 +522,8 @@
       for (const entry of entries) {
         containerWidth = entry.contentRect.width;
       }
+      // measureContainerPosition calls setColumnContainer, so the
+      // column module receives the new width and left edge together.
       measureContainerPosition();
     });
     ro.observe(containerEl);
@@ -546,6 +563,7 @@
     cw: number,
     gapAbove: number,
     gapBelow: number,
+    col: FlowColumn,
   ): FlowHole {
     // Frame rect is in viewport coordinates. Convert to document space.
     const frameDocTop = fr.top + sy;
@@ -562,7 +580,7 @@
       right: Math.round(frameDocLeft + fr.outerW - contLeft + FRAME_PAD_X),
       bottom: Math.round(frameDocTop + fr.outerH - contTop + FRAME_PAD_BOTTOM),
     };
-    return extendHoleForFullBleed(hole, gapAbove, gapBelow, cw);
+    return extendHoleForFullBleed(hole, gapAbove, gapBelow, cw, col);
   }
 
   /**
@@ -605,6 +623,9 @@
   let prevHoleTop = NaN;
   let prevHoleRight = NaN;
   let prevHoleBottom = NaN;
+  // Rounded column x and width so tween float churn does not defeat the guard.
+  let prevColumnX = NaN;
+  let prevColumnW = NaN;
 
   // Cached no-hole layout. When the padded hole is vertically disjoint
   // from [0, totalHeight] or horizontally outside [0, containerWidth],
@@ -612,6 +633,8 @@
   // single layout rather than re-running computeFlowLayout per frame.
   let noHoleBlocks: readonly FlowBlock[] | null = null;
   let noHoleWidth = -1;
+  let noHoleColumnX = NaN;
+  let noHoleColumnW = NaN;
   let noHoleResult: FlowLayoutResult | null = null;
 
   // When the hole does not intersect the flow content, every line gets
@@ -649,6 +672,7 @@
     ) {
       layoutResult = null;
       layoutHole = null;
+      layoutColumn = null;
       setFlowGeometrySource(null);
       prevBlocks = null;
       return;
@@ -658,17 +682,37 @@
     // resize, not here. That avoids a forced reflow per rAF frame.
 
     // Compute the hole before the no-op check so we can compare against
-    // the previous pass's hole edges.
-    const gaps = frameViewportGaps(frameRect, viewportH, stickyTopOffset());
-    const candidateHole = rawHoleAt(
-      window.scrollY,
-      containerTop,
-      containerLeft,
-      frameRect,
-      containerWidth,
-      gaps.above,
-      gaps.below,
-    );
+    // the previous pass's hole edges. A hidden frame (null rect) carves
+    // no hole, so the candidate is null and the no-hole paths below apply.
+    const gaps =
+      frameRect === null
+        ? null
+        : frameViewportGaps(frameRect, viewportH, stickyTopOffset());
+    // Read the animated column rect once per pass. Round x to integer px
+    // so tween float churn does not defeat the no-op guard.
+    const col = columnRect();
+    const candidateHole =
+      frameRect === null || gaps === null
+        ? null
+        : rawHoleAt(
+            window.scrollY,
+            containerTop,
+            containerLeft,
+            frameRect,
+            containerWidth,
+            gaps.above,
+            gaps.below,
+            col,
+          );
+
+    // Evaluate slot pressure immediately after the hole is known but
+    // before any guard/cache branch. runLayout executes in a rAF callback
+    // (outside effect tracking), so the slot write cannot create a
+    // tracked effect loop.
+    evaluateColumnPressure(candidateHole);
+
+    const roundedColX = Math.round(col.x);
+    const roundedColW = Math.round(col.width);
 
     // Skip recompute when every layout input matches the previous pass.
     // Integer rounding in rawHoleAt collapses sub-pixel scroll deltas.
@@ -677,13 +721,19 @@
     // totalHeight so consecutive no-hole frames skip without comparing
     // the moving hole edges.
     const prevWasNoHole = Number.isNaN(prevHoleLeft);
-    if (prevBlocks === blocks && prevContainerWidth === containerWidth) {
+    if (
+      prevBlocks === blocks &&
+      prevContainerWidth === containerWidth &&
+      prevColumnX === roundedColX &&
+      prevColumnW === roundedColW
+    ) {
       if (prevWasNoHole) {
         // Previous layout was hole-independent. Stay on that path if
-        // the hole is still disjoint from the content.
+        // there is still no hole, or it is still disjoint from the content.
         if (
           noHoleResult !== null &&
-          (candidateHole.bottom <= 0 ||
+          (candidateHole === null ||
+            candidateHole.bottom <= 0 ||
             candidateHole.top >= noHoleResult.totalHeight ||
             candidateHole.right <= 0 ||
             candidateHole.left >= containerWidth)
@@ -691,6 +741,7 @@
           return;
         }
       } else if (
+        candidateHole !== null &&
         prevHoleLeft === candidateHole.left &&
         prevHoleTop === candidateHole.top &&
         prevHoleRight === candidateHole.right &&
@@ -704,16 +755,22 @@
 
     // Try the no-hole cache first. If blocks and width match, run a
     // no-hole layout once, then check the hole against its totalHeight.
+    // The no-hole cache also keys on the column rect: a slot flip changes
+    // where text wraps even without a hole.
     let result: FlowLayoutResult;
     let hole: FlowHole | null;
 
     if (
       noHoleBlocks === blocks &&
       noHoleWidth === containerWidth &&
+      noHoleColumnX === roundedColX &&
+      noHoleColumnW === roundedColW &&
       noHoleResult !== null
     ) {
-      // Re-use the cached no-hole layout when the hole is disjoint
+      // Re-use the cached no-hole layout when there is no hole or it
+      // is disjoint from the content.
       if (
+        candidateHole === null ||
         !holeIntersectsContent(
           candidateHole,
           noHoleResult.totalHeight,
@@ -730,22 +787,27 @@
           containerWidth,
           hole,
           DEFAULT_METRICS,
+          col,
         );
       }
     } else {
-      // First pass with these blocks/width: compute no-hole layout
+      // First pass with these blocks/width/column: compute no-hole layout
       const noHole = computeFlowLayout(
         blocks,
         filler,
         containerWidth,
         null,
         DEFAULT_METRICS,
+        col,
       );
       noHoleBlocks = blocks;
       noHoleWidth = containerWidth;
+      noHoleColumnX = roundedColX;
+      noHoleColumnW = roundedColW;
       noHoleResult = noHole;
 
       if (
+        candidateHole === null ||
         !holeIntersectsContent(
           candidateHole,
           noHole.totalHeight,
@@ -762,12 +824,14 @@
           containerWidth,
           hole,
           DEFAULT_METRICS,
+          col,
         );
       }
     }
 
     layoutResult = result;
     layoutHole = hole;
+    layoutColumn = col;
 
     // Record inputs so the next frame can skip if nothing changed.
     prevBlocks = blocks;
@@ -776,28 +840,38 @@
     prevHoleTop = hole?.top ?? NaN;
     prevHoleRight = hole?.right ?? NaN;
     prevHoleBottom = hole?.bottom ?? NaN;
+    prevColumnX = roundedColX;
+    prevColumnW = roundedColW;
 
     // Publish geometry for cross-module consumption.
     // Capture per-pass values so closures stay self-consistent.
+    // The resting column rect (not the mid-flight tween value) is used
+    // inside layoutForHole so the fixed-point loop converges against
+    // settled geometry.
     const passContainerTop = containerTop;
     const passContainerLeft = containerLeft;
     const passContainerWidth = containerWidth;
-    const passFrameRect = {
-      left: frameRect.left,
-      top: frameRect.top,
-      outerW: frameRect.outerW,
-      outerH: frameRect.outerH,
-    };
+    const passColumn = restingColumnRect();
+    const passFrameRect =
+      frameRect === null
+        ? null
+        : {
+            left: frameRect.left,
+            top: frameRect.top,
+            outerW: frameRect.outerW,
+            outerH: frameRect.outerH,
+          };
     const passBlocks = blocks;
     const passFiller = filler;
-    const passGapAbove = gaps.above;
-    const passGapBelow = gaps.below;
+    const passGapAbove = gaps?.above ?? 0;
+    const passGapBelow = gaps?.below ?? 0;
 
     setFlowGeometrySource({
       layoutResult: result,
       blocks: passBlocks,
       containerTop: passContainerTop,
       holeAtScrollY(sy: number): FlowHole | null {
+        if (passFrameRect === null) return null;
         return rawHoleAt(
           sy,
           passContainerTop,
@@ -806,15 +880,18 @@
           passContainerWidth,
           passGapAbove,
           passGapBelow,
+          passColumn,
         );
       },
       layoutForHole(h: FlowHole | null): FlowLayoutResult {
+        // Pure layout call: pressure must never be evaluated here.
         return computeFlowLayout(
           passBlocks,
           passFiller,
           passContainerWidth,
           h,
           DEFAULT_METRICS,
+          passColumn,
         );
       },
     });
@@ -827,14 +904,17 @@
     void containerWidth;
     void containerTop;
     void containerLeft;
-    void frameRect.left;
-    void frameRect.top;
-    void frameRect.outerW;
-    void frameRect.outerH;
+    void frameRect?.left;
+    void frameRect?.top;
+    void frameRect?.outerW;
+    void frameRect?.outerH;
     void scrollY;
     // Full-bleed detection reads the viewport height and chrome bottom.
     void viewportH;
     void stickyTopOffset();
+    // The animated column x schedules passes during a slot flip
+    // animation so the text tracks the tweening column position.
+    void columnRect().x;
 
     scheduleLayout();
   });
@@ -1103,6 +1183,11 @@
     if (layoutResult === null) return [];
     if (layoutResult.blocks.length !== blocks.length) return [];
 
+    // Use the column captured from the same pass that produced layoutResult
+    // so rules clip against the same inputs the text used (no one-frame
+    // disagreement between the rule and the text it decorates).
+    const col = layoutColumn;
+
     const rects: RuleRect[] = [];
     for (let bi = 0; bi < blocks.length; bi++) {
       const block = blocks.at(bi);
@@ -1121,12 +1206,16 @@
       const active =
         block.sectionId === activeSection && block.subSlug === activeSub;
 
-      const segments = computeLineSegments(
-        ruleY,
-        RULE_THICKNESS,
-        containerWidth,
-        layoutHole,
-      );
+      const segments =
+        col !== null
+          ? computeColumnSegments(
+              ruleY,
+              RULE_THICKNESS,
+              containerWidth,
+              col,
+              layoutHole,
+            )
+          : [{ x: 0, width: containerWidth }];
       for (let si = 0; si < segments.length; si++) {
         const seg = segments.at(si);
         if (seg === undefined) continue;
