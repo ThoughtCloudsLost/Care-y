@@ -53,6 +53,8 @@
     ticketId: string;
     clientAlias: string | null;
     hasPhone: boolean;
+    /** Whether the client has an active portal channel (gates in-app reply). */
+    portalCapable?: boolean;
     previewFollowUps: RawFollowUpPreview[] | undefined;
     followUpCount: number;
     ondismiss: () => void;
@@ -64,6 +66,7 @@
     ticketId,
     clientAlias,
     hasPhone,
+    portalCapable = false,
     previewFollowUps,
     followUpCount,
     ondismiss,
@@ -183,16 +186,34 @@
   });
 
   // Auto-activate when only one client-reply method exists.
-  // When both are available, stay collapsed and let the volunteer tap +.
+  // Both available: auto-open the popover. One available: auto-activate
+  // that mode. Neither: notes only (no auto-activation).
   let prevOpened = $state(false);
   $effect(() => {
     const justOpened = opened && !prevOpened;
     prevOpened = opened;
     if (!justOpened) return;
 
-    if (!hasPhone) {
+    const hasReply = portalCapable;
+    const hasSms = hasPhone;
+
+    if (hasReply && hasSms) {
+      // Both available: open the compose actions popover so the
+      // volunteer can choose between reply and SMS.
+      // Defer to next tick so TicketCompose has mounted.
+      requestAnimationFrame(() => {
+        const anchor = document.querySelector<HTMLElement>(
+          ".reply-shell-sheet [data-compose-plus]",
+        );
+        if (anchor) {
+          composeActionsAnchor = anchor;
+          composeActionsOpen = true;
+        }
+      });
+    } else if (hasReply && !hasSms) {
       compose?.activateReply();
     }
+    // SMS-only or neither: stay collapsed, volunteer taps + for options.
   });
 
   let optimisticMessage = $state<{
@@ -368,7 +389,7 @@
     setDraftForMode(ticketId, "reply", body);
     compose?.activateReply();
   }}
-  onreply={() => compose?.activateReply()}
+  onreply={portalCapable ? () => compose?.activateReply() : undefined}
   ontextclient={hasPhone
     ? () => exposureHint.show("sms", () => compose?.activateSms())
     : undefined}

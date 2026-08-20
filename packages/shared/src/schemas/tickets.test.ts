@@ -25,6 +25,8 @@ import {
   callStatusSchema,
   savedFilterStateSchema,
   updateTicketContentInputSchema,
+  upgradeToSecureLinkInputSchema,
+  updateOutboundMessageInputSchema,
 } from "./tickets.js";
 
 /** Base64-encode a string of n arbitrary bytes. */
@@ -818,5 +820,156 @@ describe("updateTicketContentInputSchema", () => {
       keyGeneration: "not-a-uuid",
     });
     expect(result.success).toBe(false);
+  });
+});
+
+// --- Secure Link tier schemas ---
+
+describe("upgradeToSecureLinkInputSchema", () => {
+  function validUpgrade(): Record<string, unknown> {
+    return {
+      ticketId: VALID_UUID,
+      channelId: "a".repeat(48),
+      authHash: fakeBase64(32),
+      clientPublic: fakeBase64(32),
+      hasPassphrase: false,
+      keyCheck: {
+        ephemeralPoint: fakeBase64(32),
+        nonce: fakeBase64(24),
+        ciphertext: fakeBase64(64),
+      },
+    };
+  }
+
+  it("accepts a valid upgrade input", () => {
+    expect(
+      upgradeToSecureLinkInputSchema.safeParse(validUpgrade()).success,
+    ).toBe(true);
+  });
+
+  it("accepts with hasPassphrase true", () => {
+    const input = { ...validUpgrade(), hasPassphrase: true };
+    expect(upgradeToSecureLinkInputSchema.safeParse(input).success).toBe(true);
+  });
+
+  it("rejects 47-char channelId", () => {
+    const input = { ...validUpgrade(), channelId: "a".repeat(47) };
+    expect(upgradeToSecureLinkInputSchema.safeParse(input).success).toBe(false);
+  });
+
+  it("rejects 49-char channelId", () => {
+    const input = { ...validUpgrade(), channelId: "a".repeat(49) };
+    expect(upgradeToSecureLinkInputSchema.safeParse(input).success).toBe(false);
+  });
+
+  it("rejects wrong-length authHash", () => {
+    const input = { ...validUpgrade(), authHash: fakeBase64(16) };
+    expect(upgradeToSecureLinkInputSchema.safeParse(input).success).toBe(false);
+  });
+
+  it("rejects wrong-length clientPublic", () => {
+    const input = { ...validUpgrade(), clientPublic: fakeBase64(33) };
+    expect(upgradeToSecureLinkInputSchema.safeParse(input).success).toBe(false);
+  });
+
+  it("portalCopy is not a field on this schema", () => {
+    // Ensure no extra fields leak through
+    const result = upgradeToSecureLinkInputSchema.safeParse(validUpgrade());
+    expect(result.success).toBe(true);
+  });
+});
+
+describe("updateOutboundMessageInputSchema", () => {
+  function validEdit(): Record<string, unknown> {
+    return {
+      followUpId: VALID_UUID,
+      encryptedContent: VALID_BASE64,
+    };
+  }
+
+  it("accepts a valid edit without portalCopy", () => {
+    expect(
+      updateOutboundMessageInputSchema.safeParse(validEdit()).success,
+    ).toBe(true);
+  });
+
+  it("accepts with portalCopy present", () => {
+    const input = {
+      ...validEdit(),
+      portalCopy: {
+        ephemeralPoint: fakeBase64(32),
+        nonce: fakeBase64(24),
+        ciphertext: fakeBase64(64),
+      },
+    };
+    expect(updateOutboundMessageInputSchema.safeParse(input).success).toBe(
+      true,
+    );
+  });
+
+  it("portalCopy is optional", () => {
+    const input = validEdit();
+    expect(updateOutboundMessageInputSchema.safeParse(input).success).toBe(
+      true,
+    );
+  });
+
+  it("rejects oversized encryptedContent", () => {
+    const input = {
+      ...validEdit(),
+      encryptedContent: "A".repeat(28_001),
+    };
+    expect(updateOutboundMessageInputSchema.safeParse(input).success).toBe(
+      false,
+    );
+  });
+
+  it("rejects non-UUID followUpId", () => {
+    const input = { ...validEdit(), followUpId: "not-a-uuid" };
+    expect(updateOutboundMessageInputSchema.safeParse(input).success).toBe(
+      false,
+    );
+  });
+});
+
+describe("createFollowUpInputSchema (portalCopy)", () => {
+  function validFollowUp(): Record<string, unknown> {
+    return {
+      id: VALID_UUID,
+      ticketId: VALID_UUID_2,
+      encryptedContent: VALID_BASE64,
+      source: "volunteer",
+      type: "message",
+    };
+  }
+
+  it("accepts without portalCopy", () => {
+    expect(createFollowUpInputSchema.safeParse(validFollowUp()).success).toBe(
+      true,
+    );
+  });
+
+  it("accepts with portalCopy present", () => {
+    const input = {
+      ...validFollowUp(),
+      portalCopy: {
+        ephemeralPoint: fakeBase64(32),
+        nonce: fakeBase64(24),
+        ciphertext: fakeBase64(64),
+      },
+    };
+    expect(createFollowUpInputSchema.safeParse(input).success).toBe(true);
+  });
+
+  it("rejects portalCopy with wrong-length ephemeralPoint", () => {
+    const input = {
+      ...validFollowUp(),
+      portalCopy: {
+        ephemeralPoint: fakeBase64(16),
+        nonce: fakeBase64(24),
+        ciphertext: fakeBase64(64),
+      },
+    };
+    expect(createFollowUpInputSchema.safeParse(input).success).toBe(false);
   });
 });

@@ -94,6 +94,9 @@ export const HKDF_LABELS = {
   ECIES_WRAP: "care-y-ecies-wrap-v1",
   ALIAS_INDEX: "care-y-alias-index-v1",
   PHONE_MATCH_INDEX: "care-y-phone-match-index-v1",
+  PORTAL_AUTH: "care-y-portal-auth-v1",
+  PORTAL_SALT: "care-y-portal-salt-v1",
+  PORTAL_ECIES: "care-y-portal-ecies-v1",
 } as const;
 
 /** BLAKE2b domain separation label for branding key derivation */

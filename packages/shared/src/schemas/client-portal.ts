@@ -100,3 +100,51 @@ export const publicIntakeFormSchema = z.object({
   fields: z.array(publicIntakeFieldSchema),
 });
 export type PublicIntakeForm = z.infer<typeof publicIntakeFormSchema>;
+
+// ---------------------------------------------------------------------------
+// Secure Link portal schemas (8b)
+// ---------------------------------------------------------------------------
+
+/** Communication tier for a client. 8c appends "account". */
+export const communicationTierSchema = z.enum(["sms_email", "secure_link"]);
+export type CommunicationTier = z.infer<typeof communicationTierSchema>;
+
+/** 48 lowercase hex chars: hex(sha512(seed)[0:24]). */
+export const portalChannelIdSchema = z.string().regex(/^[0-9a-f]{48}$/);
+
+/** 32-byte bearer auth token, base64-encoded. */
+export const portalAuthSchema = base64Bytes(32, "channelAuth");
+
+/** EciesOutput on the wire: 32-byte point, 24-byte nonce, capped ciphertext. */
+export const eciesTripleSchema = z.object({
+  ephemeralPoint: base64Bytes(32, "ephemeralPoint"),
+  nonce: base64Bytes(24, "nonce"),
+  ciphertext: base64String("ciphertext").refine(
+    (s) => s.length <= 28_000,
+    "ciphertext too large",
+  ),
+});
+export type EciesTriple = z.infer<typeof eciesTripleSchema>;
+
+/** Bootstrap request: resolve channel by id + auth, return key check and messages. */
+export const portalBootstrapInputSchema = z.object({
+  channelId: portalChannelIdSchema,
+  auth: portalAuthSchema,
+});
+export type PortalBootstrapInput = z.infer<typeof portalBootstrapInputSchema>;
+
+/** Client reply: encrypted content + sealed tk_temp wrap + self copy. */
+export const portalReplyInputSchema = z.object({
+  channelId: portalChannelIdSchema,
+  auth: portalAuthSchema,
+  ticketId: z.uuid(),
+  followUpId: z.uuid(),
+  keyGeneration: z.uuid(),
+  encryptedContent: base64String("encryptedContent").refine(
+    (s) => s.length <= 28_000,
+    "too large",
+  ),
+  wrappedTkTemp: base64Bytes(80, "wrappedTkTemp (sealed box)"),
+  selfCopy: eciesTripleSchema,
+});
+export type PortalReplyInput = z.infer<typeof portalReplyInputSchema>;

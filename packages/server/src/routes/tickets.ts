@@ -33,7 +33,10 @@ import type {
   FollowUpPreview,
   PendingClient,
 } from "../tickets/ticket-service.js";
-import type { FollowUpService } from "../tickets/followup-service.js";
+import type {
+  FollowUpService,
+  FollowUpServiceDeps,
+} from "../tickets/followup-service.js";
 import type { MergeService } from "../tickets/merge-service.js";
 import type { PresetService } from "../tickets/preset-service.js";
 import type { DependencyService } from "../tickets/dependency-service.js";
@@ -56,8 +59,20 @@ import type {
   TicketStatus,
   TicketPriority,
 } from "@care-y/shared";
-import { ErrorCode, meetsRoleThreshold } from "@care-y/shared";
-import { ForbiddenError } from "../errors.js";
+import {
+  ErrorCode,
+  meetsRoleThreshold,
+  upgradeToSecureLinkInputSchema,
+  updateOutboundMessageInputSchema,
+} from "@care-y/shared";
+import { ForbiddenError, NotFoundError } from "../errors.js";
+import {
+  createChannel,
+  regenerateChannel,
+  revokeChannel,
+  type ChannelRegistration,
+} from "../portal/channel-service.js";
+import { ChannelAlreadyActiveError } from "../portal/portal-errors.js";
 import {
   buildRecipientList,
   resolveEscalationTargets,
@@ -143,6 +158,14 @@ export interface TicketWireRecord {
   readonly keyWrap: TicketKeyWrap | null;
   readonly intakeWrap: string | null;
   readonly clientPhone: string | null;
+  readonly clientTier: string;
+  readonly portalCapable: boolean;
+  readonly portalChannel: {
+    readonly clientPublic: string;
+    readonly hasPassphrase: boolean;
+    readonly createdAt: string;
+    readonly lastSeenAt: string | null;
+  } | null;
 }
 
 /** Follow-up preview as it crosses the wire, ciphertext base64 encoded. */
@@ -170,7 +193,10 @@ export interface TicketRouterDeps {
   readonly createFollowUpSvc: (
     tDb: OrgContext["tenantDb"],
     access: TicketAccessChecker,
+    deps?: FollowUpServiceDeps,
   ) => FollowUpService;
+  /** Portal message service deps for dual-copy follow-up creation. */
+  readonly followUpServiceDeps?: FollowUpServiceDeps;
   readonly createMergeSvc: (tDb: OrgContext["tenantDb"]) => MergeService;
   readonly createPresetSvc: (tDb: OrgContext["tenantDb"]) => PresetService;
   readonly createDependencySvc: (
@@ -811,7 +837,21 @@ export function createTicketRouter(deps: TicketRouterDeps) {
             }
           }
           const access = deps.createTicketAccess(ctx.org.tenantDb);
-          const svc = deps.createFollowUpSvc(ctx.org.tenantDb, access);
+          const svc = deps.createFollowUpSvc(
+            ctx.org.tenantDb,
+            access,
+            deps.followUpServiceDeps,
+          );
+          const portalCopy = input.portalCopy
+            ? {
+                ephemeralPoint: Buffer.from(
+                  input.portalCopy.ephemeralPoint,
+                  "base64",
+                ),
+                nonce: Buffer.from(input.portalCopy.nonce, "base64"),
+                ciphertext: Buffer.from(input.portalCopy.ciphertext, "base64"),
+              }
+            : undefined;
           const followUp = await svc.create(ctx.user.id, {
             id: input.id,
             ticketId: input.ticketId,
@@ -821,6 +861,7 @@ export function createTicketRouter(deps: TicketRouterDeps) {
             isPrivate: input.isPrivate,
             mentionedPseudonyms: input.mentionedPseudonyms,
             noteTypeId: input.noteTypeId,
+            portalCopy,
           });
           // Look up ticket for notification context
           const { svc: tSvc } = ticketSvc(ctx.org.tenantDb);
@@ -1714,6 +1755,156 @@ export function createTicketRouter(deps: TicketRouterDeps) {
               wrappedKey: Buffer.from(w.wrappedKey, "base64"),
             })),
           });
+        }),
+      ),
+
+    // --- Secure Link tier management ---
+
+    upgradeToSecureLink: volunteerProcedure
+      .input(upgradeToSecureLinkInputSchema)
+      .mutation(
+        withErrorWrapping(async ({ ctx, input }) => {
+          const { svc } = ticketSvc(ctx.org.tenantDb);
+          // findById asserts ticket access for the caller
+          const ticket = await svc.findById(input.ticketId, ctx.user.id);
+          const clientId = ticket.clientId;
+
+          const reg: ChannelRegistration = {
+            channelId: input.channelId,
+            authHash: Buffer.from(input.authHash, "base64"),
+            clientPublic: Buffer.from(input.clientPublic, "base64"),
+            hasPassphrase: input.hasPassphrase,
+            keyCheck: {
+              ephemeralPoint: Buffer.from(
+                input.keyCheck.ephemeralPoint,
+                "base64",
+              ),
+              nonce: Buffer.from(input.keyCheck.nonce, "base64"),
+              ciphertext: Buffer.from(input.keyCheck.ciphertext, "base64"),
+            },
+          };
+
+          try {
+            await createChannel(ctx.org.tenantDb, clientId, reg);
+          } catch (err: unknown) {
+            if (err instanceof ChannelAlreadyActiveError) {
+              throw new ForbiddenError(ErrorCode.PORTAL_CHANNEL_EXISTS);
+            }
+            throw err;
+          }
+
+          audit(ctx.org.tenantDb, {
+            eventType: "client_tier_changed",
+            actorId: ctx.user.id,
+            metadata: { operation: "upgrade_to_secure_link" },
+          });
+        }),
+      ),
+
+    regenerateSecureLink: volunteerProcedure
+      .input(
+        z.object({
+          ticketId: z.uuid(),
+          channelId: z.string().regex(/^[0-9a-f]{48}$/),
+          authHash: z.string().min(1),
+          clientPublic: z.string().min(1),
+          hasPassphrase: z.boolean(),
+          keyCheck: z.object({
+            ephemeralPoint: z.string().min(1),
+            nonce: z.string().min(1),
+            ciphertext: z.string().min(1),
+          }),
+        }),
+      )
+      .mutation(
+        withErrorWrapping(async ({ ctx, input }) => {
+          const { svc } = ticketSvc(ctx.org.tenantDb);
+          const ticket = await svc.findById(input.ticketId, ctx.user.id);
+
+          // portalCapable is server-computed from the portal_channels
+          // join in findById; no direct DB query needed here.
+          if (!ticket.portalCapable) {
+            throw new NotFoundError(ErrorCode.PORTAL_CHANNEL_NOT_FOUND);
+          }
+
+          const reg: ChannelRegistration = {
+            channelId: input.channelId,
+            authHash: Buffer.from(input.authHash, "base64"),
+            clientPublic: Buffer.from(input.clientPublic, "base64"),
+            hasPassphrase: input.hasPassphrase,
+            keyCheck: {
+              ephemeralPoint: Buffer.from(
+                input.keyCheck.ephemeralPoint,
+                "base64",
+              ),
+              nonce: Buffer.from(input.keyCheck.nonce, "base64"),
+              ciphertext: Buffer.from(input.keyCheck.ciphertext, "base64"),
+            },
+          };
+
+          await regenerateChannel(ctx.org.tenantDb, ticket.clientId, reg);
+
+          audit(ctx.org.tenantDb, {
+            eventType: "portal_channel_regenerated",
+            actorId: ctx.user.id,
+            metadata: { operation: "regenerate" },
+          });
+        }),
+      ),
+
+    revokeSecureLink: volunteerProcedure
+      .input(z.object({ ticketId: z.uuid() }))
+      .mutation(
+        withErrorWrapping(async ({ ctx, input }) => {
+          const { svc } = ticketSvc(ctx.org.tenantDb);
+          const ticket = await svc.findById(input.ticketId, ctx.user.id);
+
+          // portalCapable check gates revocation on channel existence.
+          if (!ticket.portalCapable) {
+            throw new NotFoundError(ErrorCode.PORTAL_CHANNEL_NOT_FOUND);
+          }
+
+          await revokeChannel(ctx.org.tenantDb, ticket.clientId);
+
+          audit(ctx.org.tenantDb, {
+            eventType: "portal_channel_revoked",
+            actorId: ctx.user.id,
+            metadata: { operation: "revoke" },
+          });
+        }),
+      ),
+
+    // --- Outbound message editing ---
+
+    updateOutboundMessage: volunteerProcedure
+      .input(updateOutboundMessageInputSchema)
+      .mutation(
+        withErrorWrapping(async ({ ctx, input }) => {
+          const access = deps.createTicketAccess(ctx.org.tenantDb);
+          const svc = deps.createFollowUpSvc(ctx.org.tenantDb, access);
+          const portalCopy = input.portalCopy
+            ? {
+                ephemeralPoint: Buffer.from(
+                  input.portalCopy.ephemeralPoint,
+                  "base64",
+                ),
+                nonce: Buffer.from(input.portalCopy.nonce, "base64"),
+                ciphertext: Buffer.from(input.portalCopy.ciphertext, "base64"),
+              }
+            : undefined;
+
+          const record = await svc.updateOutboundMessage(
+            ctx.user.id,
+            input.followUpId,
+            Buffer.from(input.encryptedContent, "base64"),
+            portalCopy,
+          );
+
+          return {
+            ...record,
+            encryptedContent: b64(record.encryptedContent),
+            keyWrap: b64KeyWrap(record.keyWrap),
+          };
         }),
       ),
 

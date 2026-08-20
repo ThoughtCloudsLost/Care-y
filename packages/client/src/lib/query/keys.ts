@@ -226,4 +226,8 @@ export const intakeFormKeys = {
 export const portalKeys = {
   all: ["portal"] as const,
   orgPublicKey: () => [...portalKeys.all, "orgPublicKey"] as const,
+  bootstrap: (channelId: string) =>
+    [...portalKeys.all, "bootstrap", channelId] as const,
+  messages: (channelId: string) =>
+    [...portalKeys.all, "messages", channelId] as const,
 };

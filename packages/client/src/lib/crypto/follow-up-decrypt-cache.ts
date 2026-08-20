@@ -36,6 +36,11 @@ export class FollowUpDecryptCache extends AsyncDecryptCache {
    * id: the Worker unwraps tk_temp with the follow-up's own key wrap,
    * then re-encrypts with the ticket's canonical tk as a background
    * side-effect, keeping the same followup slot AAD.
+   *
+   * When `portalWrap` is provided (and no rewrapContext), `cacheKey`
+   * MUST also be the follow-up id: the row is a portal client reply
+   * whose tk_temp is sealed to the org key. The Worker unseals it and
+   * follows the same rewrap tail.
    */
   decryptContent(
     cacheKey: string,
@@ -44,6 +49,7 @@ export class FollowUpDecryptCache extends AsyncDecryptCache {
     keyWrap: TicketKeyWrap | null,
     encryptedContent: string,
     rewrapContext?: FollowUpRewrapContext,
+    portalWrap?: string | null,
   ): string | undefined {
     if (rewrapContext) {
       return this.decryptAndRewrap(
@@ -53,6 +59,16 @@ export class FollowUpDecryptCache extends AsyncDecryptCache {
         rewrapContext.followUpKeyWrap.ephemeralPoint,
         rewrapContext.followUpKeyWrap.nonce,
         rewrapContext.followUpKeyWrap.wrappedKey,
+        encryptedContent,
+      );
+    }
+
+    if (portalWrap != null && portalWrap !== "") {
+      return this.decryptPortalReply(
+        cacheKey,
+        cacheKey,
+        ticketId,
+        portalWrap,
         encryptedContent,
       );
     }

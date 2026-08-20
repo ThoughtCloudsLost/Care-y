@@ -392,6 +392,25 @@ export interface UnwrapIntakeTkRequest {
   readonly targets?: readonly { volunteerId: string; volPublic: string }[];
 }
 
+/**
+ * Decrypt a portal client reply whose tk_temp is sealed to the org key
+ * (crypto_box_seal) instead of ECIES-wrapped to vol_private. After the
+ * unseal, this follows the same tail as decryptAndRewrap: tk_temp is
+ * cached for the follow-up and a RewrapEvent is posted so the existing
+ * convergence mutation runs.
+ */
+export interface DecryptPortalReplyRequest {
+  readonly type: "decryptPortalReply";
+  readonly id: number;
+  readonly followUpId: string;
+  /** Ticket that owns the canonical tk (already cached from a prior unwrap). */
+  readonly ticketId: string;
+  /** Base64-encoded 80-byte sealed box (portal reply key wrap). */
+  readonly sealedWrap: string;
+  /** Encrypted content (nonce || ciphertext), base64. */
+  readonly ciphertext: string;
+}
+
 export interface ConnectRequest {
   readonly type: "connect";
   readonly id: number;
@@ -423,6 +442,7 @@ export type WorkerRequest =
   | UnwrapOrgKeyRequest
   | UnwrapTkRequest
   | UnwrapIntakeTkRequest
+  | DecryptPortalReplyRequest
   | WrapWithVolPublicRequest
   | SealSelfBlobRequest
   | OpenSelfBlobRequest
@@ -644,6 +664,12 @@ export interface UnwrapIntakeTkResponse extends SuccessBase {
   }[];
 }
 
+export interface DecryptPortalReplyResponse extends SuccessBase {
+  readonly type: "decryptPortalReply";
+  /** UTF-8 decrypted content (displayed to the volunteer). */
+  readonly plaintext: string;
+}
+
 export interface DetectMergeCandidatesResponse extends SuccessBase {
   readonly type: "detectMergeCandidates";
   /** Candidate pairs. Contains only client ids and match kind, never contact values. */
@@ -681,6 +707,7 @@ export type WorkerSuccessResponse =
   | UnwrapOrgKeyResponse
   | UnwrapTkResponse
   | UnwrapIntakeTkResponse
+  | DecryptPortalReplyResponse
   | DetectMergeCandidatesResponse
   | WrapWithVolPublicResponse
   | SealSelfBlobResponse

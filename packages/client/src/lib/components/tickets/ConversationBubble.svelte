@@ -15,6 +15,7 @@
 -->
 <script lang="ts">
   import type { Snippet } from "svelte";
+  import * as m from "$lib/paraglide/messages.js";
   import { formatRelativeTime } from "$lib/utils/format-time.js";
 
   interface Props {
@@ -24,10 +25,13 @@
     /** Follow-up source, exposed as data-source (E2E locator contract). */
     source?: "client" | "volunteer";
     timestamp: string;
+    /** ISO timestamp when the message was last edited. */
+    editedAt?: string | null;
     children: Snippet;
   }
 
-  let { direction, speaker, source, timestamp, children }: Props = $props();
+  let { direction, speaker, source, timestamp, editedAt, children }: Props =
+    $props();
 </script>
 
 <div
@@ -42,9 +46,14 @@
   <div class="msg-body">
     {@render children()}
   </div>
-  <time class="msg-when" datetime={timestamp}>
-    {formatRelativeTime(new Date(timestamp))}
-  </time>
+  <div class="msg-footer">
+    <time class="msg-when" datetime={timestamp}>
+      {formatRelativeTime(new Date(timestamp))}
+    </time>
+    {#if editedAt}
+      <span class="msg-edited">{m.ticket_message_edited()}</span>
+    {/if}
+  </div>
 </div>
 
 <style>
@@ -95,10 +104,21 @@
     border-bottom-right-radius: 5px;
   }
 
+  .msg-footer {
+    display: flex;
+    align-items: center;
+    gap: 0.375rem;
+    padding: 0 4px;
+  }
+
   .msg-when {
     font-size: 0.6875rem;
     color: var(--muted);
     font-variant-numeric: tabular-nums;
-    padding: 0 4px;
+  }
+
+  .msg-edited {
+    font-size: 0.6875rem;
+    color: var(--muted);
   }
 </style>
