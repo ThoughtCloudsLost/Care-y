@@ -2162,5 +2162,6 @@
   "demo_mode_toggle_to_walk": "Switch to walkthrough mode",
   "demo_role_admin_initial": "A",
   "demo_role_manager_initial": "M",
-  "demo_role_volunteer_initial": "V"
+  "demo_role_volunteer_initial": "V",
+  "demo_compose_sample": "Thank you for reaching out. Let me look into this for you."
 }
