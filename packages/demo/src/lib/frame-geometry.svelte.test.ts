@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
   createFrameGeometry,
+  computeBandRescale,
   deriveZoomViewport,
   deriveBezelRadius,
   computeSpawn,
@@ -360,6 +361,121 @@ describe("computeShrunkFootprint", () => {
 });
 
 // -----------------------------------------------------------------------
+// computeBandRescale
+// -----------------------------------------------------------------------
+
+describe("computeBandRescale", () => {
+  /**
+   * Anchor sized so a halved band keeps both axes clear of the 200px
+   * MIN_FOOTPRINT floor (600 * 0.5 = 300); floor behavior gets its own
+   * tests with the phone footprint, where halving does bind.
+   */
+  const anchor = {
+    bandTop: TOP_BAR_HEIGHT,
+    bandH: 800,
+    footprintW: 600,
+    footprintH: 1000,
+    top: TOP_BAR_HEIGHT + 100,
+    preShrinkW: null,
+    preShrinkH: null,
+  };
+
+  it("scales the footprint by the band height ratio, preserving aspect", () => {
+    const result = computeBandRescale(anchor, TOP_BAR_HEIGHT, 400);
+    expect(result.footprintW).toBeCloseTo(300, 5);
+    expect(result.footprintH).toBeCloseTo(500, 5);
+    expect(result.footprintW / result.footprintH).toBeCloseTo(600 / 1000, 2);
+  });
+
+  it("scales the top offset within the band by the same factor", () => {
+    // Offset in the band is 100; halving the band halves it.
+    const result = computeBandRescale(anchor, TOP_BAR_HEIGHT, 400);
+    expect(result.top).toBeCloseTo(TOP_BAR_HEIGHT + 50, 5);
+  });
+
+  it("translates without scaling when only the band top moves", () => {
+    // Same band height at a new top (band dragged, window grown to
+    // match): factor 1, so the frame rides the band without resizing.
+    const result = computeBandRescale(anchor, OPEN_CHROME, 800);
+    expect(result.footprintW).toBe(600);
+    expect(result.footprintH).toBe(1000);
+    expect(result.top).toBe(OPEN_CHROME + 100);
+  });
+
+  it("grows the frame when the band grows", () => {
+    const result = computeBandRescale(anchor, TOP_BAR_HEIGHT, 1200);
+    expect(result.footprintW).toBeCloseTo(900, 5);
+    expect(result.footprintH).toBeCloseTo(1500, 5);
+    expect(result.footprintW / result.footprintH).toBeCloseTo(600 / 1000, 2);
+  });
+
+  it("applies the MIN_FOOTPRINT floor as a joint scale so the ratio survives", () => {
+    // A phone at quarter scale would be 97x211; the floor lifts BOTH
+    // axes together (200/390 wins), not just the one that violated it.
+    const phoneAnchor = {
+      ...anchor,
+      footprintW: PHONE_PRESET.w,
+      footprintH: PHONE_PRESET.h,
+    };
+    const result = computeBandRescale(phoneAnchor, TOP_BAR_HEIGHT, 200);
+    // Epsilon: the joint scale is 200/390, and 390 * (200/390) lands a
+    // float ulp below 200. setFootprint's per-axis floor absorbs it.
+    expect(result.footprintW).toBeGreaterThanOrEqual(MIN_FOOTPRINT.w - 1e-6);
+    expect(result.footprintH).toBeGreaterThanOrEqual(MIN_FOOTPRINT.h - 1e-6);
+    expect(result.footprintW / result.footprintH).toBeCloseTo(
+      PHONE_PRESET.w / PHONE_PRESET.h,
+      2,
+    );
+  });
+
+  it("keeps the position tracking the band after the footprint bottoms out", () => {
+    // The top offset uses the raw factor even when the floor holds the
+    // footprint, so placement still follows the band.
+    const phoneAnchor = {
+      ...anchor,
+      footprintW: PHONE_PRESET.w,
+      footprintH: PHONE_PRESET.h,
+    };
+    const factor = 200 / phoneAnchor.bandH;
+    const result = computeBandRescale(phoneAnchor, TOP_BAR_HEIGHT, 200);
+    expect(result.top).toBeCloseTo(TOP_BAR_HEIGHT + 100 * factor, 5);
+  });
+
+  it("recovers the exact anchor geometry when the band returns to its anchor height", () => {
+    // The anti-ratchet property: rescale is anchor-relative, so a band
+    // that shrank past the floor and came back restores the anchor
+    // exactly, with no drift from the clamped intermediate.
+    const result = computeBandRescale(anchor, anchor.bandTop, anchor.bandH);
+    expect(result.footprintW).toBe(anchor.footprintW);
+    expect(result.footprintH).toBe(anchor.footprintH);
+    expect(result.top).toBe(anchor.top);
+  });
+
+  it("scales shrink memory by the raw factor and passes null through", () => {
+    const withMemory = { ...anchor, preShrinkW: 400, preShrinkH: 866 };
+    const scaled = computeBandRescale(withMemory, TOP_BAR_HEIGHT, 400);
+    expect(scaled.preShrinkW).toBeCloseTo(200, 5);
+    expect(scaled.preShrinkH).toBeCloseTo(433, 5);
+
+    const without = computeBandRescale(anchor, TOP_BAR_HEIGHT, 400);
+    expect(without.preShrinkW).toBeNull();
+    expect(without.preShrinkH).toBeNull();
+  });
+
+  it("returns anchor geometry unchanged for zero or negative band heights", () => {
+    // The flow band's bind:offsetHeight reports 0 for a frame while
+    // mounting; scaling toward a degenerate band would collapse the
+    // frame, so the anchor passes through verbatim.
+    for (const bandH of [0, -50]) {
+      const result = computeBandRescale(anchor, TOP_BAR_HEIGHT, bandH);
+      expect(result.footprintW).toBe(anchor.footprintW);
+      expect(result.footprintH).toBe(anchor.footprintH);
+      expect(result.top).toBe(anchor.top);
+    }
+  });
+});
+
+// -----------------------------------------------------------------------
 // Constants
 // -----------------------------------------------------------------------
 
@@ -402,6 +518,102 @@ describe("createFrameGeometry chrome height", () => {
 
     expect(geo.top).toBeGreaterThan(spawnTop);
     expect(geo.top).toBeGreaterThanOrEqual(OPEN_CHROME + FRAME_PAD_TOP);
+  });
+});
+
+describe("createFrameGeometry band rescale", () => {
+  // The factory reads the environment's window height (jsdom provides
+  // one; 900 is the SSR fallback), so the band is WINDOW_H - chrome.
+  const WINDOW_H = typeof window === "undefined" ? 900 : window.innerHeight;
+
+  it("rescaleForBand shrinks the footprint when the chrome grows, preserving aspect", () => {
+    let chrome = TOP_BAR_HEIGHT;
+    const geo = createFrameGeometry(() => chrome);
+    const w0 = geo.footprintW;
+    const h0 = geo.footprintH;
+
+    chrome = OPEN_CHROME;
+    geo.rescaleForBand();
+
+    // The spawn under a short test window sits near the MIN_FOOTPRINT
+    // floor, so the shrink may bottom out; exact-factor behavior is
+    // covered by the basis-controlled tests below. What must hold
+    // regardless: smaller than before, same shape.
+    expect(geo.footprintW).toBeLessThan(w0);
+    expect(geo.footprintH).toBeLessThan(h0);
+    expect(geo.footprintW / geo.footprintH).toBeCloseTo(w0 / h0, 2);
+  });
+
+  it("rescaleForBand is a no-op when the band has not changed", () => {
+    let chrome = TOP_BAR_HEIGHT;
+    const geo = createFrameGeometry(() => chrome);
+    const w0 = geo.footprintW;
+    const top0 = geo.top;
+
+    geo.rescaleForBand();
+    expect(geo.footprintW).toBe(w0);
+    expect(geo.top).toBe(top0);
+
+    chrome = OPEN_CHROME;
+    geo.rescaleForBand();
+    const w1 = geo.footprintW;
+    const top1 = geo.top;
+    geo.rescaleForBand();
+    expect(geo.footprintW).toBe(w1);
+    expect(geo.top).toBe(top1);
+  });
+
+  it("reanchorBand makes the current geometry the new scaling basis", () => {
+    let chrome = TOP_BAR_HEIGHT;
+    const geo = createFrameGeometry(() => chrome);
+
+    // A user-authored size, adopted as the basis (App reanchors at
+    // gesture end and preset settle).
+    geo.setFootprint(500, 600);
+    geo.reanchorBand();
+
+    chrome = OPEN_CHROME;
+    geo.rescaleForBand();
+
+    const factor = (WINDOW_H - OPEN_CHROME) / (WINDOW_H - TOP_BAR_HEIGHT);
+    expect(geo.footprintW).toBeCloseTo(500 * factor, 5);
+    expect(geo.footprintH).toBeCloseTo(600 * factor, 5);
+  });
+
+  it("grow after a band rescale returns the proportionally scaled memory", () => {
+    let chrome = TOP_BAR_HEIGHT;
+    const geo = createFrameGeometry(() => chrome);
+    geo.setFootprint(PHONE_PRESET.w, PHONE_PRESET.h);
+
+    const shrunkTarget = geo.shrink();
+    geo.setFootprint(shrunkTarget.w, shrunkTarget.h);
+    geo.reanchorBand();
+
+    chrome = OPEN_CHROME;
+    geo.rescaleForBand();
+
+    const factor = (WINDOW_H - OPEN_CHROME) / (WINDOW_H - TOP_BAR_HEIGHT);
+    const grown = geo.grow();
+    expect(grown).not.toBeNull();
+    expect(grown?.w).toBeCloseTo(PHONE_PRESET.w * factor, 5);
+    expect(grown?.h).toBeCloseTo(PHONE_PRESET.h * factor, 5);
+  });
+
+  it("reset re-anchors against the current band", () => {
+    let chrome = OPEN_CHROME;
+    const geo = createFrameGeometry(() => chrome);
+    geo.reset();
+    const w0 = geo.footprintW;
+    const h0 = geo.footprintH;
+
+    // Closing the band scales the fresh spawn from ITS band, not the
+    // band that existed before the reset (which would double-scale).
+    chrome = TOP_BAR_HEIGHT;
+    geo.rescaleForBand();
+
+    const factor = (WINDOW_H - TOP_BAR_HEIGHT) / (WINDOW_H - OPEN_CHROME);
+    expect(geo.footprintW).toBeCloseTo(w0 * factor, 5);
+    expect(geo.footprintH).toBeCloseTo(h0 * factor, 5);
   });
 });
 
