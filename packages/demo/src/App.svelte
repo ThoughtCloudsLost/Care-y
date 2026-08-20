@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { tick } from "svelte";
+  import { tick, untrack } from "svelte";
   import { Spring, prefersReducedMotion } from "svelte/motion";
   import { SvelteSet } from "svelte/reactivity";
   import * as m from "$lib/paraglide/messages.js";
@@ -329,6 +329,9 @@
     if (gesture.mode === "resize") {
       geo.settleShrinkAfterResize();
     }
+    // Hand-placed or hand-sized geometry is the new scaling basis for
+    // band-proportional rescale.
+    geo.reanchorBand();
     gesture = null;
     gestureActive = false;
   }
@@ -406,6 +409,7 @@
       geo.setPosition(pos.top, pos.left);
       geo.clampToViewport();
       toolbarHold = null;
+      geo.reanchorBand();
       return;
     }
 
@@ -441,6 +445,10 @@
       geo.setPosition(final.top, final.left);
       toolbarHold = null;
       geo.clampToViewport();
+      // The settled preset is the new scaling basis. A band change
+      // that happened mid-animation is dropped, not deferred: the user
+      // chose these dims under the band they can see.
+      geo.reanchorBand();
     }
   });
 
@@ -571,6 +579,24 @@
     // the chrome, so the selection holds once the reflow settles; muting
     // covers the frames where it is only half applied.
     scrollEngine.suppressLayoutShift();
+  });
+
+  // Rescale the frame when the vertical band changes (chrome height or
+  // window height), so the frame keeps its size ratio to the story's
+  // available space. Suspended while the user or an animation owns the
+  // geometry; reading the flags reactively is what re-runs the effect
+  // when suspension lifts, and the rescale is anchor-relative, so the
+  // deferred catch-up lands in one exact step. Peek needs no special
+  // handling beyond the gate: on collapse the controller restores the
+  // saved pre-peek geometry, peekActive flips false, and this effect
+  // maps that restored geometry to the current band once.
+  $effect(() => {
+    void topChromeHeight();
+    void windowH;
+    if (gestureActive || animating || peekActive) return;
+    // untrack: rescaleForBand reads and writes geo $state; without it
+    // the effect would re-run on its own footprint writes.
+    untrack(() => geo.rescaleForBand());
   });
 
   // Track the last-seen restartSeq per bridge instance. A fresh bridge
@@ -795,10 +821,19 @@
   // -----------------------------------------------------------------------
 
   let windowW = $state(typeof window !== "undefined" ? window.innerWidth : 0);
+  let windowH = $state(typeof window !== "undefined" ? window.innerHeight : 0);
 
   $effect(() => {
     function onResize(): void {
       windowW = window.innerWidth;
+      // A height change moves the story's band and triggers the
+      // frame-rescale effect below, which reflows the text around the
+      // resized frame; mute the derived selection while that settles
+      // (the scroll engine has no resize listener of its own).
+      if (window.innerHeight !== windowH) {
+        scrollEngine.suppressLayoutShift();
+        windowH = window.innerHeight;
+      }
     }
     window.addEventListener("resize", onResize, { passive: true });
     return () => window.removeEventListener("resize", onResize);
@@ -955,6 +990,8 @@
        badge with role dropdown on the right. The bar's background is
        the drag surface (pointer handlers passed through). -->
   {#if showDesktopChrome}
+    <!-- phoneActive/desktopActive are exact-dimension compares: a
+         band-proportional rescale legitimately deactivates them. -->
     <FrameToolbar
       shrunk={geo.shrunk}
       phoneActive={geo.footprintW === PHONE_PRESET.w &&

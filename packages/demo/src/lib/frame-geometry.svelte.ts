@@ -309,6 +309,89 @@ export function computeShrunkFootprint(
 }
 
 // -----------------------------------------------------------------------
+// Band-proportional rescale
+// -----------------------------------------------------------------------
+
+/**
+ * Snapshot of the frame geometry against the story band it was sized in.
+ *
+ * The band is the vertical space the story has: from the top chrome's
+ * bottom edge (bandTop) to the window's bottom (bandH tall). When the
+ * band changes (flow band toggled or dragged, window height resized),
+ * the frame rescales proportionally FROM THIS SNAPSHOT rather than from
+ * its live geometry. Anchor-relative scaling is what keeps repeated
+ * band changes exact: composing per-change ratios would accumulate
+ * float drift, and the MIN_FOOTPRINT floor would ratchet (a clamped
+ * shrink scales back up from the clamped size, not the original).
+ */
+export interface BandAnchor {
+  /** Chrome height (band top edge) at anchor time. */
+  readonly bandTop: number;
+  /** Band height (windowH - bandTop) at anchor time. */
+  readonly bandH: number;
+  readonly footprintW: number;
+  readonly footprintH: number;
+  readonly top: number;
+  readonly preShrinkW: number | null;
+  readonly preShrinkH: number | null;
+}
+
+export interface BandRescaleResult {
+  readonly footprintW: number;
+  readonly footprintH: number;
+  readonly top: number;
+  readonly preShrinkW: number | null;
+  readonly preShrinkH: number | null;
+}
+
+/**
+ * Map the anchored geometry into a new band, preserving aspect ratio.
+ *
+ * factor = newBandH / anchor.bandH, applied uniformly to both footprint
+ * axes and to the frame's offset within the band, so the whole scene
+ * reads as zooming with the story. The MIN_FOOTPRINT floor is applied
+ * as a joint scale (computeSpawn's floorScale pattern) so the ratio
+ * survives it; the top offset keeps using the raw factor so placement
+ * tracks the band even after the footprint bottoms out. The shrink/grow
+ * memory scales by the raw factor for the same reason.
+ *
+ * No rounding here: this runs per animation frame while the flow band's
+ * resize handle is dragged, and rounding every pass would drift.
+ * Degenerate bands (zero or negative height, e.g. the flow band's
+ * one-frame zero measurement while mounting) return the anchor verbatim.
+ */
+export function computeBandRescale(
+  anchor: BandAnchor,
+  newBandTop: number,
+  newBandH: number,
+): BandRescaleResult {
+  if (anchor.bandH <= 0 || newBandH <= 0) {
+    return {
+      footprintW: anchor.footprintW,
+      footprintH: anchor.footprintH,
+      top: anchor.top,
+      preShrinkW: anchor.preShrinkW,
+      preShrinkH: anchor.preShrinkH,
+    };
+  }
+
+  const factor = newBandH / anchor.bandH;
+  const effScale = Math.max(
+    factor,
+    MIN_FOOTPRINT.w / anchor.footprintW,
+    MIN_FOOTPRINT.h / anchor.footprintH,
+  );
+
+  return {
+    footprintW: anchor.footprintW * effScale,
+    footprintH: anchor.footprintH * effScale,
+    top: newBandTop + (anchor.top - anchor.bandTop) * factor,
+    preShrinkW: anchor.preShrinkW === null ? null : anchor.preShrinkW * factor,
+    preShrinkH: anchor.preShrinkH === null ? null : anchor.preShrinkH * factor,
+  };
+}
+
+// -----------------------------------------------------------------------
 // Auto-shrink on manual resize
 // -----------------------------------------------------------------------
 
@@ -436,6 +519,21 @@ export interface FrameGeometry {
    * larger clears the memory, since the user has sized the frame directly.
    */
   settleShrinkAfterResize(): void;
+  /**
+   * Snapshot the current geometry against the current band as the new
+   * scaling basis. Call after every user-authored geometry write
+   * (gesture end, preset/shrink/grow settle); spawn and reset anchor
+   * themselves.
+   */
+  reanchorBand(): void;
+  /**
+   * Rescale footprint, top, and shrink memory from the band anchor to
+   * the current band, then clamp on screen. No-op when the band matches
+   * the anchor. Never moves the anchor: repeated calls stay exact and
+   * a band that returns to its anchor height restores the anchor
+   * geometry precisely.
+   */
+  rescaleForBand(): void;
 }
 
 /**
@@ -462,6 +560,21 @@ export function createFrameGeometry(
   let preShrinkW: number | null = null;
   let preShrinkH: number | null = null;
   let shrunk = $state(false);
+
+  // Band anchor: plain, not $state. It is bookkeeping for the rescale
+  // path; a reactive anchor would retrigger the App effect that calls
+  // rescaleForBand (same reasoning as App's lastChromeHeight guard).
+  let anchor: BandAnchor = {
+    bandTop: getChromeHeight(),
+    bandH:
+      (typeof window !== "undefined" ? window.innerHeight : 900) -
+      getChromeHeight(),
+    footprintW: spawn.footprintW,
+    footprintH: spawn.footprintH,
+    top: spawn.top,
+    preShrinkW: null,
+    preShrinkH: null,
+  };
 
   const derived_ = $derived(deriveZoomViewport(footprintW, footprintH));
   const outerW = $derived(footprintW + BEZEL * 2);
@@ -490,6 +603,38 @@ export function createFrameGeometry(
     preShrinkW = null;
     preShrinkH = null;
     shrunk = false;
+    reanchorBand();
+  }
+
+  function reanchorBand(): void {
+    const chromeH = getChromeHeight();
+    anchor = {
+      bandTop: chromeH,
+      bandH:
+        (typeof window !== "undefined" ? window.innerHeight : 900) - chromeH,
+      footprintW,
+      footprintH,
+      top,
+      preShrinkW,
+      preShrinkH,
+    };
+  }
+
+  function rescaleForBand(): void {
+    const bandTop = getChromeHeight();
+    const bandH =
+      (typeof window !== "undefined" ? window.innerHeight : 900) - bandTop;
+    if (bandTop === anchor.bandTop && bandH === anchor.bandH) return;
+
+    const scaled = computeBandRescale(anchor, bandTop, bandH);
+    // computeBandRescale already holds the footprint at or above
+    // MIN_FOOTPRINT jointly, so setFootprint's per-axis floor is inert
+    // here and cannot distort the ratio.
+    setFootprint(scaled.footprintW, scaled.footprintH);
+    top = scaled.top;
+    preShrinkW = scaled.preShrinkW;
+    preShrinkH = scaled.preShrinkH;
+    clampToViewport();
   }
 
   function shrinkFrame(): { w: number; h: number } {
@@ -587,5 +732,7 @@ export function createFrameGeometry(
     clearShrinkMemory,
     retargetShrunkTo,
     settleShrinkAfterResize,
+    reanchorBand,
+    rescaleForBand,
   };
 }
