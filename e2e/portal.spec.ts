@@ -6,7 +6,6 @@ import {
   clickComposeAction,
   CRYPTO_TIMEOUT,
   openTicketInfoPanel,
-  waitForKeysUnlocked,
   login,
   openComposeActions,
   openTicketByTitle,
@@ -138,11 +137,15 @@ test.describe.serial("Secure Link Portal", () => {
     await volunteerPage.waitForTimeout(300);
 
     // "Reply to ..." is available because the client is now
-    // portal-capable. Reload so the detail payload carries the flag.
-    // The detail is an overlay rather than a route, so the reload drops
-    // back to the ticket list and the ticket has to be reopened.
-    await volunteerPage.reload();
-    await waitForKeysUnlocked(volunteerPage);
+    // portal-capable, and the detail payload has to be refetched to
+    // carry the flag; without it the volunteer sends an ordinary reply
+    // and no client copy is written. Navigate away and back inside the
+    // app rather than reloading the page: the volunteer's keys live
+    // only in memory for the session, so a reload discards them and the
+    // app returns to a blocked state with nothing decrypted.
+    await volunteerPage.keyboard.press("Escape");
+    await volunteerPage.getByRole("tab", { name: "Overview" }).click();
+    await volunteerPage.getByRole("tab", { name: "Tickets" }).click();
     await openTicketByTitle(volunteerPage, TICKET_TITLE);
     await expect(volunteerPage.locator('[role="log"]')).toBeVisible({
       timeout: CRYPTO_TIMEOUT,
