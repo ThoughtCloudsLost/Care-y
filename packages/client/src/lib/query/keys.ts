@@ -72,6 +72,8 @@ export const ticketKeys = {
   followUpSummary: (ticketId: string, ...filterParams: unknown[]) =>
     [...ticketKeys.followUps(ticketId), "summary", ...filterParams] as const,
 
+  shares: (ticketId: string) =>
+    [...ticketKeys.all(ticketId), "shares"] as const,
   attachments: (ticketId: string) =>
     [...ticketKeys.all(ticketId), "attachments"] as const,
   recordings: (ticketId: string) =>

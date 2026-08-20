@@ -176,3 +176,27 @@ export function createNotificationSheet(): NotificationSheetState {
     },
   };
 }
+
+// ── Share link sheet ──
+
+export interface ShareSheetState {
+  readonly sheetOpen: boolean;
+  open(): void;
+  dismiss(): void;
+}
+
+export function createShareSheet(): ShareSheetState {
+  let sheetOpen = $state(false);
+
+  return {
+    get sheetOpen(): boolean {
+      return sheetOpen;
+    },
+    open(): void {
+      sheetOpen = true;
+    },
+    dismiss(): void {
+      sheetOpen = false;
+    },
+  };
+}

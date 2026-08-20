@@ -10,12 +10,19 @@
  */
 
 import { z } from "zod";
-import { router, orgProcedure, withErrorWrapping } from "../trpc/trpc.js";
+import {
+  router,
+  orgProcedure,
+  volunteerProcedure,
+  withErrorWrapping,
+} from "../trpc/trpc.js";
 import { TRPCError } from "@trpc/server";
 import {
   intakeSubmissionInputSchema,
   portalBootstrapInputSchema,
   portalReplyInputSchema,
+  createShareInputSchema,
+  openShareInputSchema,
 } from "@care-y/shared";
 import type { IncomingMessage } from "node:http";
 import type { RateLimiter } from "../ratelimit/rate-limiter.js";
@@ -38,6 +45,11 @@ import {
   IntakeDisabledError,
 } from "../portal/intake-service.js";
 import { extractClientIp } from "../http/request-utils.js";
+import {
+  createShare,
+  openShare,
+  listSharesByTicket,
+} from "../portal/share-service.js";
 
 export interface ClientPortalRouterDeps {
   readonly submissionLimiter: RateLimiter;
@@ -82,6 +94,10 @@ export interface ClientPortalRouterDeps {
     orgSchema: string,
     purpose: "outbound" | "system",
   ) => Promise<string | null>;
+
+  // Share link deps (appended by 8d)
+  /** 10 req/min per IP on the public openShare endpoint. */
+  readonly shareLimiter?: RateLimiter;
 }
 
 // care-y-ignore-next-line missing-return-type -- tRPC router() returns a deeply generic type that cannot be written explicitly
@@ -393,6 +409,69 @@ export function createClientPortalRouter(deps: ClientPortalRouterDeps) {
         );
 
         return {};
+      }),
+    ),
+
+    // -----------------------------------------------------------------
+    // Share link procedures (appended by 8d)
+    // -----------------------------------------------------------------
+
+    createShare: volunteerProcedure.input(createShareInputSchema).mutation(
+      withErrorWrapping(async ({ ctx, input }) => {
+        const result = await createShare(ctx.org.tenantDb, {
+          shareId: input.shareId,
+          ticketId: input.ticketId,
+          ciphertext: Buffer.from(input.ciphertext, "base64"),
+          followUpId: input.followUpId,
+          encryptedFollowUp: Buffer.from(input.encryptedFollowUp, "base64"),
+          createdBy: ctx.session.userId,
+        });
+        return { expiresAt: result.expiresAt.toISOString() };
+      }),
+    ),
+
+    listShares: volunteerProcedure
+      .input(z.object({ ticketId: z.uuid() }))
+      .query(
+        withErrorWrapping(async ({ ctx, input }) => {
+          const rows = await listSharesByTicket(
+            ctx.org.tenantDb,
+            input.ticketId,
+          );
+          return rows.map((r) => ({
+            id: r.id,
+            createdAt: r.createdAt.toISOString(),
+            expiresAt: r.expiresAt.toISOString(),
+            readAt: r.readAt?.toISOString() ?? null,
+          }));
+        }),
+      ),
+
+    openShare: orgProcedure.input(openShareInputSchema).mutation(
+      withErrorWrapping(async ({ ctx, input }) => {
+        if (deps.shareLimiter) {
+          const ip = extractClientIp(ctx.req);
+          const limit = deps.shareLimiter.check(ip);
+          if (!limit.allowed) {
+            console.warn("Share open rate limited", {
+              orgSlug: ctx.org.orgSlug,
+              reason: "rate_limit",
+            });
+            throw new TRPCError({
+              code: "TOO_MANY_REQUESTS",
+              message: `Rate limited. Retry after ${String(Math.ceil(limit.retryAfterMs / 1000))}s`,
+            });
+          }
+        }
+
+        const result = await openShare(ctx.org.tenantDb, input.shareId);
+        if (result.status === "ready") {
+          return {
+            status: "ready" as const,
+            ciphertext: result.ciphertext.toString("base64url"),
+          };
+        }
+        return { status: result.status };
       }),
     ),
   });

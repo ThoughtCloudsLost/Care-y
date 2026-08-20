@@ -143,6 +143,10 @@ import {
   PORTAL_EXPIRY_QUEUE,
 } from "./jobs/portal-message-expiry.js";
 import {
+  registerShareCleanupHandler,
+  SHARE_CLEANUP_QUEUE,
+} from "./portal/share-service.js";
+import {
   registerEscalationRulesHandler,
   ESCALATION_RULES_QUEUE,
   DEFAULT_ESCALATION_RULES_INTERVAL_MS,
@@ -298,6 +302,11 @@ const RATE_PORTAL_READ_MAX = 60;
 // (follow-up + portal wrap + portal message), so a lower cap limits
 // storage DoS from a single source.
 const RATE_PORTAL_REPLY_MAX = 30;
+
+// Share open: 10 req/min per IP. Defense in depth on the public consume
+// endpoint. UUIDv4 ids (122 random bits) make enumeration infeasible;
+// the limiter caps probe volume and log noise.
+const RATE_SHARE_OPEN_MAX = 10;
 
 // --- Rate limiters ---
 
@@ -629,6 +638,10 @@ const appRouter = createAppRouter({
     portalGetProvider: async (orgId: string) =>
       providerFactory.getProvider(orgId),
     portalResolveCallerId: phoneResolver,
+    shareLimiter: createInMemoryRateLimiter({
+      windowMs: RATE_WINDOW_1M,
+      maxRequests: RATE_SHARE_OPEN_MAX,
+    }),
   },
   brandingDeps: {
     blobStore,
@@ -808,10 +821,13 @@ registerPortalExpiryHandler(jobQueue, async () => {
   }
 });
 
+registerShareCleanupHandler(jobQueue, tenantDb, listActiveOrgSchemas);
+
 await ensureRecurringJob(db, jobQueue, ESCALATION_RULES_QUEUE);
 await ensureRecurringJob(db, jobQueue, ESCALATION_QUEUE);
 await ensureRecurringJob(db, jobQueue, MEDIA_CLEANUP_QUEUE);
 await ensureRecurringJob(db, jobQueue, PORTAL_EXPIRY_QUEUE);
+await ensureRecurringJob(db, jobQueue, SHARE_CLEANUP_QUEUE);
 jobQueue.start();
 console.log("Job queue started");
 

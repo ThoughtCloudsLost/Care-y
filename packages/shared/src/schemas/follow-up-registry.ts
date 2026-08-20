@@ -138,4 +138,12 @@ export const CONTENT_TYPE_REGISTRY: Record<FollowUpType, ContentTypeMeta> = {
     hasEventParams: false,
     groupable: false,
   },
+  share_link: {
+    category: "message",
+    allowedSources: ["volunteer"],
+    encryption: "ticket-key",
+    hasEncryptedContent: true,
+    hasEventParams: true,
+    groupable: false,
+  },
 } as const;
