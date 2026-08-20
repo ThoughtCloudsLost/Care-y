@@ -17,6 +17,7 @@ import type * as Errors from "$lib/errors.js";
 import type * as ShellContext from "$lib/shell/context.js";
 import type * as PanelNotesSection from "./PanelNotesSection.svelte";
 import type * as PanelMediaSection from "./PanelMediaSection.svelte";
+import type * as PortalTierSection from "./PortalTierSection.svelte";
 
 // --- Mocks ---
 
@@ -141,6 +142,11 @@ vi.mock("./PanelNotesSection.svelte", async (importOriginal) => ({
 
 vi.mock("./PanelMediaSection.svelte", async (importOriginal) => ({
   ...(await importOriginal<typeof PanelMediaSection>()),
+  default: () => null,
+}));
+
+vi.mock("./PortalTierSection.svelte", async (importOriginal) => ({
+  ...(await importOriginal<typeof PortalTierSection>()),
   default: () => null,
 }));
 

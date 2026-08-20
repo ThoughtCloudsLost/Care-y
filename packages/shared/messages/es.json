@@ -2687,5 +2687,6 @@
   "audit_event_client_tier_changed": "Nivel de comunicación de {client} cambiado",
   "audit_event_portal_channel_regenerated": "Enlace seguro regenerado",
   "audit_event_portal_channel_revoked": "Enlace seguro eliminado",
-  "error_portal_channel_exists": "Este {client} ya tiene un enlace seguro activo."
+  "error_portal_channel_exists": "Este {client} ya tiene un enlace seguro activo.",
+  "error_portal_channel_not_found": "Este enlace seguro no está disponible. Es posible que haya sido revocado o que nunca haya existido."
 }

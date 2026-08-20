@@ -26,6 +26,7 @@ interface OrgGeneralData {
   encryptedName: string | null;
   defaultLanguage: string;
   countryCode: string;
+  portalSafeExitUrl: string | null;
 }
 
 let mockGeneralData: OrgGeneralData | undefined;
@@ -51,6 +52,10 @@ vi.mock("$lib/paraglide/messages.js", () => ({
   admin_org_general_error: () =>
     "Could not save organization details. Try again.",
   admin_org_general_client_blob_error: () => CLIENT_BLOB_ERROR,
+  admin_org_general_safe_exit_url_label: () => "Quick-exit URL",
+  admin_org_general_safe_exit_url_placeholder: () => "https://weather.gov",
+  admin_org_general_safe_exit_url_hint: () =>
+    "Where the quick-exit button sends portal visitors.",
   decrypt_placeholder_loading: () => "Decrypting...",
   decrypt_placeholder_denied: () => "Access denied",
   error_decryption_failed: () => "Decryption failed",
@@ -212,6 +217,7 @@ describe("OrgGeneralSection", () => {
       encryptedName: btoa("Safe Harbor"),
       defaultLanguage: "en",
       countryCode: "+1",
+      portalSafeExitUrl: null,
     };
     mockIsLoading = false;
     mockUpdateOrgGeneral.mockResolvedValue(undefined);

@@ -8,6 +8,7 @@
 import crypto from "node:crypto";
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import type { Kysely } from "kysely";
+import { getSodium } from "@care-y/crypto";
 import type { TenantDatabase } from "../db/types.js";
 import {
   createTestDb,
@@ -110,6 +111,7 @@ describe.skipIf(!process.env.DATABASE_URL)("PortalChannelService", () => {
   let db: Kysely<TenantDatabase>;
 
   beforeAll(async () => {
+    await getSodium();
     testDb = await createTestDb();
     db = testDb.db;
   }, 30_000);

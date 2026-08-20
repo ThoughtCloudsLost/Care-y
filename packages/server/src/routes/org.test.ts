@@ -307,6 +307,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
         encryptedName: null,
         defaultLanguage: "en",
         countryCode: "+1",
+        portalSafeExitUrl: null,
       });
     }, 30_000);
 
