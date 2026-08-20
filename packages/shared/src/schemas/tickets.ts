@@ -40,6 +40,7 @@ export const followUpTypeSchema = z.enum([
   "status_closed",
   "priority_changed",
   "merge_note",
+  "share_link",
 ]);
 export type FollowUpType = z.infer<typeof followUpTypeSchema>;
 

@@ -31,7 +31,10 @@ import type { NotificationService } from "../notifications/service.js";
 import type { FieldEncryptor } from "../crypto/field-encryptor.js";
 import { IntakeQueueNotConfiguredError } from "../portal/intake-service.js";
 import type * as IntakeServiceModule from "../portal/intake-service.js";
+import type * as ShareServiceModule from "../portal/share-service.js";
 import type { IntakeSubmissionInput } from "@care-y/shared";
+import { RoleId } from "@care-y/shared";
+import type { SessionData } from "../auth/session-repository.js";
 import type { PortalChannelRow } from "../portal/channel-service.js";
 import type {
   PortalBootstrapResult,
@@ -48,6 +51,22 @@ vi.mock("../portal/intake-service.js", async (importOriginal) => ({
   ...(await importOriginal<typeof IntakeServiceModule>()),
   createIntakeTicket: (...args: unknown[]) =>
     (mockCreateIntakeTicket as (...a: unknown[]) => unknown)(...args),
+}));
+
+// --- Mock share service ---
+
+const mockCreateShare = vi.fn();
+const mockOpenShare = vi.fn();
+const mockListSharesByTicket = vi.fn();
+
+vi.mock("../portal/share-service.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof ShareServiceModule>()),
+  createShare: (...args: unknown[]) =>
+    (mockCreateShare as (...a: unknown[]) => unknown)(...args),
+  openShare: (...args: unknown[]) =>
+    (mockOpenShare as (...a: unknown[]) => unknown)(...args),
+  listSharesByTicket: (...args: unknown[]) =>
+    (mockListSharesByTicket as (...a: unknown[]) => unknown)(...args),
 }));
 
 // --- Helpers ---
@@ -120,7 +139,39 @@ function buildDeps(
     powVerifier: null,
     intakeFormService: mockIntakeFormService(),
     notificationService: mockNotificationService(),
+    shareLimiter: allowLimiter(),
     ...overrides,
+  };
+}
+
+function makeVolunteerSession(): SessionData {
+  return {
+    id: crypto.randomUUID(),
+    token: crypto.randomUUID(),
+    userId: "vol-user-1",
+    ipToken: "ip-tok",
+    uaToken: "ua-tok",
+    expiresAt: new Date(Date.now() + 3_600_000),
+    twofaVerified: true,
+    webauthnChallenge: null,
+  };
+}
+
+function makeVolunteerContext(): Context {
+  return {
+    req: mockReq({ remoteAddress: "10.0.0.1" }),
+    res: mockRes(),
+    org: createMockOrgContext(),
+    session: makeVolunteerSession(),
+    user: {
+      id: "vol-user-1",
+      encryptedIdentifier: "enc-id",
+      encryptedDisplayName: "enc-name",
+      encryptedPreferredLocale: null,
+      roleId: RoleId.VOLUNTEER,
+      isActive: true,
+      hasSeenBriefing: true,
+    },
   };
 }
 
@@ -853,6 +904,205 @@ describe("client-portal router", () => {
         caller.portalReply(makeReplyInput()),
         "TOO_MANY_REQUESTS",
       );
+      warnSpy.mockRestore();
+    });
+  });
+
+  // -----------------------------------------------------------------
+  // Share link procedures (appended by 8d)
+  // -----------------------------------------------------------------
+
+  describe("createShare", () => {
+    const VALID_SHARE_CT = Buffer.alloc(64, 0xab).toString("base64");
+
+    function makeCreateShareInput(): {
+      shareId: string;
+      ticketId: string;
+      ciphertext: string;
+      followUpId: string;
+      encryptedFollowUp: string;
+    } {
+      return {
+        shareId: crypto.randomUUID(),
+        ticketId: crypto.randomUUID(),
+        ciphertext: VALID_SHARE_CT,
+        followUpId: crypto.randomUUID(),
+        encryptedFollowUp: VALID_SHARE_CT,
+      };
+    }
+
+    beforeEach(() => {
+      mockCreateShare.mockResolvedValue({
+        expiresAt: new Date("2026-08-22T00:00:00Z"),
+      });
+    });
+
+    it("rejects unauthenticated callers", async () => {
+      const caller = buildCaller(buildDeps(), makeContext());
+      await expectTrpcError(
+        caller.createShare(makeCreateShareInput()),
+        "UNAUTHORIZED",
+      );
+    });
+
+    it("returns expiresAt as ISO string on success", async () => {
+      const caller = buildCaller(buildDeps(), makeVolunteerContext());
+      const result = await caller.createShare(makeCreateShareInput());
+      expect(result.expiresAt).toBe("2026-08-22T00:00:00.000Z");
+      expect(mockCreateShare).toHaveBeenCalledOnce();
+    });
+
+    it("passes createdBy from session userId", async () => {
+      const caller = buildCaller(buildDeps(), makeVolunteerContext());
+      await caller.createShare(makeCreateShareInput());
+      const serviceInput = mockCreateShare.mock.calls[0]?.[1] as {
+        createdBy: string;
+      };
+      expect(serviceInput.createdBy).toBe("vol-user-1");
+    });
+
+    it("decodes base64 ciphertext to Buffer before delegating to service", async () => {
+      const caller = buildCaller(buildDeps(), makeVolunteerContext());
+      await caller.createShare(makeCreateShareInput());
+      const serviceInput = mockCreateShare.mock.calls[0]?.[1] as {
+        ciphertext: Buffer;
+        encryptedFollowUp: Buffer;
+      };
+      expect(Buffer.isBuffer(serviceInput.ciphertext)).toBe(true);
+      expect(Buffer.isBuffer(serviceInput.encryptedFollowUp)).toBe(true);
+    });
+
+    it("rejects oversized ciphertext via Zod", async () => {
+      const input = makeCreateShareInput();
+      input.ciphertext = "A".repeat(88_001);
+      const caller = buildCaller(buildDeps(), makeVolunteerContext());
+      await expectTrpcError(
+        caller.createShare(input),
+        "BAD_REQUEST",
+        "ciphertext too large",
+      );
+      expect(mockCreateShare).not.toHaveBeenCalled();
+    });
+
+    it("maps ShareTicketNotFoundError to BAD_REQUEST", async () => {
+      const { ShareTicketNotFoundError } =
+        await import("../portal/share-service.js");
+      mockCreateShare.mockRejectedValue(new ShareTicketNotFoundError());
+      const caller = buildCaller(buildDeps(), makeVolunteerContext());
+      const err = await expectTrpcError(
+        caller.createShare(makeCreateShareInput()),
+        "BAD_REQUEST",
+      );
+      // Message should not leak internal details
+      expect(err.message).toBe("Ticket not found");
+    });
+  });
+
+  describe("listShares", () => {
+    it("rejects unauthenticated callers", async () => {
+      const caller = buildCaller(buildDeps(), makeContext());
+      await expectTrpcError(
+        caller.listShares({ ticketId: crypto.randomUUID() }),
+        "UNAUTHORIZED",
+      );
+    });
+
+    it("returns status rows with ISO date strings and no ciphertext", async () => {
+      const now = new Date("2026-08-19T12:00:00Z");
+      const expires = new Date("2026-08-22T12:00:00Z");
+      mockListSharesByTicket.mockResolvedValue([
+        {
+          id: crypto.randomUUID(),
+          createdAt: now,
+          expiresAt: expires,
+          readAt: null,
+        },
+      ]);
+      const caller = buildCaller(buildDeps(), makeVolunteerContext());
+      const result = await caller.listShares({
+        ticketId: crypto.randomUUID(),
+      });
+      expect(result).toHaveLength(1);
+      expect(result[0]!.createdAt).toBe(now.toISOString());
+      expect(result[0]!.expiresAt).toBe(expires.toISOString());
+      expect(result[0]!.readAt).toBeNull();
+      // Must never include ciphertext in the response
+      expect(result[0]).not.toHaveProperty("ciphertext");
+    });
+  });
+
+  describe("openShare", () => {
+    function makeOpenInput(): { shareId: string } {
+      return { shareId: crypto.randomUUID() };
+    }
+
+    it("returns ready status with base64url ciphertext", async () => {
+      const raw = Buffer.from("encrypted-share-content");
+      mockOpenShare.mockResolvedValue({
+        status: "ready",
+        ciphertext: raw,
+      });
+      const caller = buildCaller();
+      const result = await caller.openShare(makeOpenInput());
+      expect(result.status).toBe("ready");
+      if (result.status === "ready") {
+        expect(result.ciphertext).toBe(raw.toString("base64url"));
+        // Verify it's a string, not a Buffer
+        expect(typeof result.ciphertext).toBe("string");
+      }
+    });
+
+    it("returns opened status", async () => {
+      mockOpenShare.mockResolvedValue({ status: "opened" });
+      const caller = buildCaller();
+      const result = await caller.openShare(makeOpenInput());
+      expect(result.status).toBe("opened");
+      expect(result).not.toHaveProperty("ciphertext");
+    });
+
+    it("returns expired status", async () => {
+      mockOpenShare.mockResolvedValue({ status: "expired" });
+      const caller = buildCaller();
+      const result = await caller.openShare(makeOpenInput());
+      expect(result.status).toBe("expired");
+    });
+
+    it("returns not_found status", async () => {
+      mockOpenShare.mockResolvedValue({ status: "not_found" });
+      const caller = buildCaller();
+      const result = await caller.openShare(makeOpenInput());
+      expect(result.status).toBe("not_found");
+    });
+
+    it("returns TOO_MANY_REQUESTS when share rate limit is exceeded", async () => {
+      const deps = buildDeps({ shareLimiter: denyLimiter(5000) });
+      const caller = buildCaller(deps);
+      const warnSpy = vi
+        .spyOn(console, "warn")
+        .mockImplementation(() => undefined);
+      const err = await expectTrpcError(
+        caller.openShare(makeOpenInput()),
+        "TOO_MANY_REQUESTS",
+      );
+      warnSpy.mockRestore();
+      expect(err.message).toContain("Retry after");
+      expect(mockOpenShare).not.toHaveBeenCalled();
+    });
+
+    it("warn log contains only orgSlug and reason, no share id", async () => {
+      const deps = buildDeps({ shareLimiter: denyLimiter(5000) });
+      const caller = buildCaller(deps);
+      const warnSpy = vi
+        .spyOn(console, "warn")
+        .mockImplementation(() => undefined);
+      await expectTrpcError(
+        caller.openShare(makeOpenInput()),
+        "TOO_MANY_REQUESTS",
+      );
+      expect(warnSpy).toHaveBeenCalledWith("Share open rate limited", {
+        orgSlug: "test-org",
+        reason: "rate_limit",
+      });
       warnSpy.mockRestore();
     });
   });

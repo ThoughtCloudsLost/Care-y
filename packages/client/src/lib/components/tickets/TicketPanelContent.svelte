@@ -22,7 +22,7 @@
     ListItem,
     Toggle,
   } from "konsta/svelte";
-  import { Phone, Pencil, BellRing } from "@lucide/svelte";
+  import { Phone, Pencil, BellRing, Link2 } from "@lucide/svelte";
   import * as m from "$lib/paraglide/messages.js";
   import { withTerms } from "$lib/terminology/with-terms.js";
   import StatusMark from "$lib/components/StatusMark.svelte";
@@ -279,6 +279,16 @@
       title={m.ticket_action_assign()}
       onclick={() => onaction("assign")}
     />
+    <ListItem
+      link
+      chevron
+      title={m.share_sheet_title()}
+      onclick={() => onaction("shareLink")}
+    >
+      {#snippet media()}
+        <Link2 class="w-5 h-5 text-[var(--ink-2)]" aria-hidden="true" />
+      {/snippet}
+    </ListItem>
     <ListItem title={m.ticket_action_hold()}>
       {#snippet after()}
         <span use:labelToggleInput={m.ticket_action_hold()}>

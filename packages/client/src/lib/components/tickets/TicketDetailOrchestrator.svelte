@@ -57,6 +57,7 @@
     createNoteEdit,
     createContentEdit,
     createNotificationSheet,
+    createShareSheet,
   } from "$lib/composables/ticket-detail/create-overlay-state.svelte.js";
   import { copyToClipboard } from "$lib/composables/ticket-detail/clipboard-copy.js";
   import {
@@ -677,6 +678,7 @@
 
   const contentEdit = createContentEdit();
   const notificationSheet = createNotificationSheet();
+  const shareSheet = createShareSheet();
 
   const panelActions = createPanelActions({
     getTicketId: () => ticketId,
@@ -709,6 +711,10 @@
     onnotifications: () => {
       closePanel();
       notificationSheet.open();
+    },
+    onsharelink: () => {
+      closePanel();
+      shareSheet.open();
     },
   });
 
@@ -1138,6 +1144,8 @@
   {lightbox}
   {contextMenu}
   {closeFlow}
+  {shareSheet}
+  clientPhone={ticket?.clientPhone ?? null}
   onpaneldismiss={closePanel}
   onpanelaction={(action: TicketAction) => panelActions.dispatch(action)}
   onnotetap={handleNoteTap}

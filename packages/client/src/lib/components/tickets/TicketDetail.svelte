@@ -77,6 +77,7 @@
   import FollowUpBubble from "$lib/components/tickets/FollowUpBubble.svelte";
   import TicketPlaceholder from "$lib/components/tickets/TicketPlaceholder.svelte";
   import GapIndicator from "$lib/components/GapIndicator.svelte";
+  import ShareStatusLine from "$lib/components/tickets/ShareStatusLine.svelte";
   import {
     followUpKind,
     groupConsecutive,
@@ -250,6 +251,33 @@
         direction: "older",
       }),
   }));
+
+  // Share status query: resolves waiting/opened/expired for share_link bubbles.
+  const portalRouter = trpc.clientPortal;
+  const sharesQuery = createQuery(() => ({
+    queryKey: ticketKeys.shares(ticketId),
+    queryFn: async () => {
+      if (!portalRouter) return [];
+      return portalRouter.listShares.query({ ticketId });
+    },
+    enabled: portalRouter !== undefined,
+  }));
+
+  interface ShareRow {
+    id: string;
+    createdAt: string;
+    expiresAt: string;
+    readAt: string | null;
+  }
+
+  function findShareForFollowUp(
+    eventParams: Record<string, unknown> | null | undefined,
+  ): ShareRow | undefined {
+    if (!sharesQuery.data || !eventParams) return undefined;
+    const shareId = eventParams.shareId;
+    if (typeof shareId !== "string") return undefined;
+    return sharesQuery.data.find((s: ShareRow) => s.id === shareId);
+  }
 
   // Volunteer list (cached query, deduped with other consumers by key).
   const volunteersQuery = createVolunteersQuery(ticketRouter);
@@ -1245,6 +1273,12 @@
                     onlightbox={(url: string) => onlightbox?.(url)}
                   />
                 {/if}
+                {#if rec.type === "share_link"}
+                  <ShareStatusLine
+                    share={findShareForFollowUp(rec.eventParams)}
+                    loading={sharesQuery.isLoading}
+                  />
+                {/if}
               </ConversationBubble>
             {/if}
           </div>
@@ -1469,6 +1503,12 @@
                           hasImage={fu.hasImage}
                           hasFile={fu.hasFile}
                           onlightbox={(url: string) => onlightbox?.(url)}
+                        />
+                      {/if}
+                      {#if fu.type === "share_link"}
+                        <ShareStatusLine
+                          share={findShareForFollowUp(fu.eventParams)}
+                          loading={sharesQuery.isLoading}
                         />
                       {/if}
                     </ConversationBubble>

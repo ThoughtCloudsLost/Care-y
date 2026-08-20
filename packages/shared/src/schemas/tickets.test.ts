@@ -100,10 +100,15 @@ describe("followUpTypeSchema", () => {
       "status_closed",
       "priority_changed",
       "merge_note",
+      "share_link",
     ];
     for (const t of valid) {
       expect(followUpTypeSchema.safeParse(t).success).toBe(true);
     }
+  });
+
+  it("accepts share_link type", () => {
+    expect(followUpTypeSchema.safeParse("share_link").success).toBe(true);
   });
 
   it("rejects invalid type", () => {

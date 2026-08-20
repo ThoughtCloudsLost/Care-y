@@ -702,6 +702,17 @@ export interface IntakeKeyWrapsTable {
   created_at: Generated<Date>;
 }
 
+// --- Share links (one-time encrypted content links) ---
+
+export interface ShareLinksTable {
+  id: string;
+  ticket_id: string;
+  ciphertext: Buffer | null;
+  created_at: Generated<Date>;
+  expires_at: Date;
+  read_at: Date | null;
+}
+
 // --- Portal channels (communication tier, encrypted client copies) ---
 
 export interface PortalChannelsTable {
@@ -812,4 +823,6 @@ export interface TenantDatabase {
   portal_channels: PortalChannelsTable;
   portal_messages: PortalMessagesTable;
   portal_reply_key_wraps: PortalReplyKeyWrapsTable;
+  // Client portal (share links)
+  share_links: ShareLinksTable;
 }

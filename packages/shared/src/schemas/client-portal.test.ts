@@ -13,6 +13,10 @@ import {
   eciesTripleSchema,
   portalBootstrapInputSchema,
   portalReplyInputSchema,
+  createShareInputSchema,
+  openShareInputSchema,
+  openShareResponseSchema,
+  shareStatusSchema,
 } from "./client-portal.js";
 
 /**
@@ -585,5 +589,176 @@ describe("portalReplyInputSchema", () => {
     const input = validReply();
     delete input.selfCopy;
     expect(portalReplyInputSchema.safeParse(input).success).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Share link schemas
+// ---------------------------------------------------------------------------
+
+describe("createShareInputSchema", () => {
+  function validCreateShare(): Record<string, unknown> {
+    return {
+      shareId: crypto.randomUUID(),
+      ticketId: crypto.randomUUID(),
+      ciphertext: base64Chars(500),
+      followUpId: crypto.randomUUID(),
+      encryptedFollowUp: base64Chars(500),
+    };
+  }
+
+  it("accepts a valid payload", () => {
+    const result = createShareInputSchema.safeParse(validCreateShare());
+    expect(result.success).toBe(true);
+  });
+
+  it("accepts ciphertext at exactly 88,000 chars", () => {
+    const input = { ...validCreateShare(), ciphertext: base64Chars(88_000) };
+    const result = createShareInputSchema.safeParse(input);
+    expect(result.success).toBe(true);
+  });
+
+  it("rejects ciphertext at 88,001 chars", () => {
+    const input = { ...validCreateShare(), ciphertext: base64Chars(88_001) };
+    const result = createShareInputSchema.safeParse(input);
+    expect(result.success).toBe(false);
+  });
+
+  it("accepts encryptedFollowUp at exactly 88,000 chars", () => {
+    const input = {
+      ...validCreateShare(),
+      encryptedFollowUp: base64Chars(88_000),
+    };
+    const result = createShareInputSchema.safeParse(input);
+    expect(result.success).toBe(true);
+  });
+
+  it("rejects encryptedFollowUp at 88,001 chars", () => {
+    const input = {
+      ...validCreateShare(),
+      encryptedFollowUp: base64Chars(88_001),
+    };
+    const result = createShareInputSchema.safeParse(input);
+    expect(result.success).toBe(false);
+  });
+
+  it("rejects non-UUID shareId", () => {
+    const input = { ...validCreateShare(), shareId: "not-a-uuid" };
+    const result = createShareInputSchema.safeParse(input);
+    expect(result.success).toBe(false);
+  });
+
+  it("rejects non-UUID ticketId", () => {
+    const input = { ...validCreateShare(), ticketId: "not-a-uuid" };
+    const result = createShareInputSchema.safeParse(input);
+    expect(result.success).toBe(false);
+  });
+
+  it("rejects non-UUID followUpId", () => {
+    const input = { ...validCreateShare(), followUpId: "not-a-uuid" };
+    const result = createShareInputSchema.safeParse(input);
+    expect(result.success).toBe(false);
+  });
+
+  it("rejects non-base64 ciphertext", () => {
+    const input = { ...validCreateShare(), ciphertext: "not!valid@base64" };
+    const result = createShareInputSchema.safeParse(input);
+    expect(result.success).toBe(false);
+  });
+
+  it("rejects missing required fields", () => {
+    const result = createShareInputSchema.safeParse({});
+    expect(result.success).toBe(false);
+  });
+});
+
+describe("openShareInputSchema", () => {
+  it("accepts a valid UUID", () => {
+    const result = openShareInputSchema.safeParse({
+      shareId: crypto.randomUUID(),
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("rejects non-UUID shareId", () => {
+    const result = openShareInputSchema.safeParse({ shareId: "not-a-uuid" });
+    expect(result.success).toBe(false);
+  });
+
+  it("rejects empty object", () => {
+    const result = openShareInputSchema.safeParse({});
+    expect(result.success).toBe(false);
+  });
+});
+
+describe("openShareResponseSchema", () => {
+  it("parses 'ready' with ciphertext", () => {
+    const result = openShareResponseSchema.safeParse({
+      status: "ready",
+      ciphertext: base64Chars(100),
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("rejects 'ready' without ciphertext", () => {
+    const result = openShareResponseSchema.safeParse({ status: "ready" });
+    expect(result.success).toBe(false);
+  });
+
+  it("parses 'opened'", () => {
+    const result = openShareResponseSchema.safeParse({ status: "opened" });
+    expect(result.success).toBe(true);
+  });
+
+  it("parses 'expired'", () => {
+    const result = openShareResponseSchema.safeParse({ status: "expired" });
+    expect(result.success).toBe(true);
+  });
+
+  it("parses 'not_found'", () => {
+    const result = openShareResponseSchema.safeParse({ status: "not_found" });
+    expect(result.success).toBe(true);
+  });
+
+  it("rejects unknown status", () => {
+    const result = openShareResponseSchema.safeParse({ status: "unknown" });
+    expect(result.success).toBe(false);
+  });
+});
+
+describe("shareStatusSchema", () => {
+  it("accepts a valid share status", () => {
+    const result = shareStatusSchema.safeParse({
+      id: crypto.randomUUID(),
+      createdAt: "2026-08-18T12:00:00Z",
+      expiresAt: "2026-08-21T12:00:00Z",
+      readAt: null,
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("accepts non-null readAt", () => {
+    const result = shareStatusSchema.safeParse({
+      id: crypto.randomUUID(),
+      createdAt: "2026-08-18T12:00:00Z",
+      expiresAt: "2026-08-21T12:00:00Z",
+      readAt: "2026-08-19T08:00:00Z",
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("rejects non-UUID id", () => {
+    const result = shareStatusSchema.safeParse({
+      id: "not-a-uuid",
+      createdAt: "2026-08-18T12:00:00Z",
+      expiresAt: "2026-08-21T12:00:00Z",
+      readAt: null,
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it("rejects missing fields", () => {
+    const result = shareStatusSchema.safeParse({});
+    expect(result.success).toBe(false);
   });
 });

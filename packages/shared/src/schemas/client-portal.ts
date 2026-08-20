@@ -148,3 +148,41 @@ export const portalReplyInputSchema = z.object({
   selfCopy: eciesTripleSchema,
 });
 export type PortalReplyInput = z.infer<typeof portalReplyInputSchema>;
+
+// ---------------------------------------------------------------------------
+// Share link schemas (8d)
+// ---------------------------------------------------------------------------
+
+/** Share ciphertext cap matches the intake description cap. */
+const shareCiphertextSchema = base64String("ciphertext").refine(
+  (s) => s.length <= 88_000,
+  "ciphertext too large",
+);
+
+export const createShareInputSchema = z.object({
+  shareId: z.uuid(),
+  ticketId: z.uuid(),
+  ciphertext: shareCiphertextSchema,
+  followUpId: z.uuid(),
+  encryptedFollowUp: shareCiphertextSchema,
+});
+export type CreateShareInput = z.infer<typeof createShareInputSchema>;
+
+export const openShareInputSchema = z.object({ shareId: z.uuid() });
+export type OpenShareInput = z.infer<typeof openShareInputSchema>;
+
+export const openShareResponseSchema = z.discriminatedUnion("status", [
+  z.object({ status: z.literal("ready"), ciphertext: z.string() }),
+  z.object({ status: z.literal("opened") }),
+  z.object({ status: z.literal("expired") }),
+  z.object({ status: z.literal("not_found") }),
+]);
+export type OpenShareResponse = z.infer<typeof openShareResponseSchema>;
+
+export const shareStatusSchema = z.object({
+  id: z.uuid(),
+  createdAt: z.string(),
+  expiresAt: z.string(),
+  readAt: z.string().nullable(),
+});
+export type ShareStatus = z.infer<typeof shareStatusSchema>;

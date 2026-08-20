@@ -577,6 +577,14 @@ export {
   type EciesTriple,
   type PortalBootstrapInput,
   type PortalReplyInput,
+  createShareInputSchema,
+  openShareInputSchema,
+  openShareResponseSchema,
+  shareStatusSchema,
+  type CreateShareInput,
+  type OpenShareInput,
+  type OpenShareResponse,
+  type ShareStatus,
 } from "./schemas/client-portal.js";
 
 // --- Intake form schemas ---

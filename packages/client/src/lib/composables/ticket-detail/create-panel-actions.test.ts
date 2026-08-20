@@ -30,6 +30,7 @@ describe("createPanelActions", () => {
   let onphone: Mock;
   let oneditcontent: Mock;
   let onnotifications: Mock;
+  let onsharelink: Mock;
   let toastStore: { show: Mock; current: null; dismiss: Mock };
 
   beforeEach(() => {
@@ -45,6 +46,7 @@ describe("createPanelActions", () => {
     onphone = vi.fn();
     oneditcontent = vi.fn();
     onnotifications = vi.fn();
+    onsharelink = vi.fn();
     toastStore = { show: vi.fn(), current: null, dismiss: vi.fn() };
   });
 
@@ -64,6 +66,7 @@ describe("createPanelActions", () => {
       onphone,
       oneditcontent,
       onnotifications,
+      onsharelink,
     });
   }
 
@@ -85,6 +88,11 @@ describe("createPanelActions", () => {
   it("dispatches notifications to onnotifications callback", () => {
     make().dispatch("notifications");
     expect(onnotifications).toHaveBeenCalledOnce();
+  });
+
+  it("dispatches shareLink to onsharelink callback", () => {
+    make().dispatch("shareLink");
+    expect(onsharelink).toHaveBeenCalledOnce();
   });
 
   it("dispatches take mutation with ticketId", () => {

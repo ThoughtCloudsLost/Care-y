@@ -1,19 +1,20 @@
 <!--
   Shared portal message thread.
-  Renders messages using Konsta Messages/Message display components.
-  Konsta display components (Messages, Message, MessagesTitle) are allowed
-  in content components per code-standards Konsta Import Discipline.
+  Renders messages using the pinned ConversationBubble anatomy (the same
+  bubble the volunteer ticket thread uses). Direction mapping:
+  from_client = sent (right, brand-soft), to_client = received (left, raised).
 
   Decryption: each message is ECIES-decrypted in the main thread.
   DecryptPlaceholder with locally built DecryptResult provides the
   loading/error/ready states.
 -->
 <script lang="ts">
-  import { Messages, Message } from "konsta/svelte";
   import * as m from "$lib/paraglide/messages.js";
+  import ConversationBubble from "$lib/components/tickets/ConversationBubble.svelte";
   import DecryptPlaceholder from "$lib/components/DecryptPlaceholder.svelte";
   import type { DecryptResult } from "$lib/crypto/decrypt-result.js";
   import { LOADING, ERROR } from "$lib/crypto/decrypt-result.js";
+  import { formatRelativeTime } from "$lib/utils/format-time.js";
   import {
     decryptPortalMessage,
     decodeEciesTriple,
@@ -74,17 +75,15 @@
     });
   });
 
-  function formatTime(iso: string): string {
-    try {
-      const d = new Date(iso);
-      return d.toLocaleString(undefined, {
-        weekday: "short",
-        hour: "numeric",
-        minute: "2-digit",
-      });
-    } catch {
-      return "";
-    }
+  function bubbleDirection(dir: string): "sent" | "received" {
+    return dir === "from_client" ? "sent" : "received";
+  }
+
+  function bubbleAriaLabel(msg: DecryptedMessage): string {
+    const isSent = msg.direction === "from_client";
+    const label = isSent ? m.portal_you() : m.portal_support_team();
+    const time = formatRelativeTime(new Date(msg.createdAt));
+    return `${label}, ${time}`;
   }
 </script>
 
@@ -95,46 +94,45 @@
   data-testid="portal-thread"
 >
   {#if loading}
-    <Messages>
+    <div class="portal-messages" data-testid="portal-loading">
       {#each [1, 2, 3] as i (i)}
-        <Message type="received">
-          {#snippet text()}
-            <DecryptPlaceholder result={LOADING} length={40} />
-          {/snippet}
-        </Message>
+        <ConversationBubble
+          direction="received"
+          timestamp={new Date().toISOString()}
+        >
+          <DecryptPlaceholder result={LOADING} length={40} />
+        </ConversationBubble>
       {/each}
-    </Messages>
+    </div>
   {:else if decryptedMessages.length === 0}
     <div class="empty-state" data-testid="portal-empty-state">
       <p>{m.portal_empty_thread()}</p>
     </div>
   {:else}
     <p class="expiry-note">{m.portal_expiry_note()}</p>
-    <Messages>
+    <div class="portal-messages">
       {#each decryptedMessages as msg, idx (idx)}
         {@const isSent = msg.direction === "from_client"}
-        {@const label = isSent ? m.portal_you() : m.portal_support_team()}
-        {@const time = formatTime(msg.createdAt)}
-        <Message
-          type={isSent ? "sent" : "received"}
-          aria-label={`${label}, ${time}`}
+        <div
+          class="portal-bubble-wrapper"
+          role="article"
+          aria-label={bubbleAriaLabel(msg)}
         >
-          {#snippet text()}
+          <ConversationBubble
+            direction={bubbleDirection(msg.direction)}
+            speaker={isSent ? undefined : m.portal_support_team()}
+            timestamp={msg.createdAt}
+            editedAt={msg.editedAt}
+          >
             {#if msg.result.status === "ready"}
               {msg.result.value}
             {:else}
               <DecryptPlaceholder result={msg.result} length={30} />
             {/if}
-          {/snippet}
-          {#snippet footer()}
-            {#if msg.editedAt}
-              <span class="edited-marker">{m.portal_message_edited()}</span>
-            {/if}
-            <span class="msg-time">{time}</span>
-          {/snippet}
-        </Message>
+          </ConversationBubble>
+        </div>
       {/each}
-    </Messages>
+    </div>
   {/if}
 </div>
 
@@ -143,6 +141,19 @@
     flex: 1;
     overflow-y: auto;
     padding-bottom: calc(var(--messagebar-height, 60px) + 16px);
+  }
+
+  .portal-messages {
+    display: flex;
+    flex-direction: column;
+    gap: 13px;
+    padding: 16px;
+    padding-left: calc(16px + env(safe-area-inset-left, 0px));
+    padding-right: calc(16px + env(safe-area-inset-right, 0px));
+  }
+
+  .portal-bubble-wrapper {
+    display: contents;
   }
 
   .empty-state {
@@ -163,15 +174,5 @@
     color: var(--muted);
     padding: var(--space-md) var(--space-lg);
     margin: 0;
-  }
-
-  .edited-marker {
-    font-size: var(--text-xs, 0.75rem);
-    color: var(--muted);
-  }
-
-  .msg-time {
-    font-size: var(--text-xs, 0.75rem);
-    color: var(--muted);
   }
 </style>
