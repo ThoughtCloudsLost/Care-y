@@ -34,6 +34,9 @@ import {
 } from "./helpers.js";
 import type { ConvergenceExpectation } from "./helpers.js";
 import { findAllowlistEntry } from "./pulse-allowlist.js";
+import type { AllowlistEntry } from "./pulse-allowlist.js";
+import { EFFECTS } from "./effects/index.js";
+import type { EffectSpec } from "./effects/types.js";
 
 // -----------------------------------------------------------------------
 // Feature landmarks
@@ -103,6 +106,52 @@ function detailExpectation(
 }
 
 // -----------------------------------------------------------------------
+// Assertion gap helper
+//
+// Three-way branch shared by pulse, viewport, and effect assertions:
+// allowlisted topics produce a warning annotation; PULSE_AUDIT=1 logs
+// the gap without failing (audit mode enumerates every gap in one run,
+// never green-lights a merge); everything else is a hard failure.
+// -----------------------------------------------------------------------
+
+interface AssertionGap {
+  readonly tag: "PULSE GAP" | "VIEWPORT GAP" | "EFFECT GAP";
+  readonly description: string;
+  readonly failMessage: string;
+  readonly logSuffix: string;
+}
+
+function assertOrAnnotateGap(
+  testInfo: ReturnType<typeof test.info>,
+  topic: string,
+  framePreset: "phone" | "desktop",
+  allowed: AllowlistEntry | undefined,
+  gap: AssertionGap,
+): void {
+  if (allowed !== undefined) {
+    testInfo.annotations.push({
+      type: "warning",
+      description: `${gap.description} (allowlisted: ${allowed.reason})`,
+    });
+    console.log(
+      `${gap.tag} allowlisted: ${framePreset}:${topic} (${gap.logSuffix})`,
+    );
+    return;
+  }
+
+  if (process.env.PULSE_AUDIT === "1") {
+    console.log(`${gap.tag}: ${framePreset}:${topic} (${gap.logSuffix})`);
+    testInfo.annotations.push({
+      type: "warning",
+      description: `${gap.tag} (audit): ${topic} ${gap.logSuffix}`,
+    });
+    return;
+  }
+
+  expect(false, gap.failMessage).toBe(true);
+}
+
+// -----------------------------------------------------------------------
 // Suite builder
 // -----------------------------------------------------------------------
 
@@ -163,7 +212,7 @@ export function defineStoryWalk(options: StoryWalkOptions): void {
         // Budget per section: sub-heavy sections (ticket-detail has 15
         // subs) cannot fit the config's default 120s when a convergence
         // retry fires; give each sub room for one full retry cycle.
-        test.setTimeout(30_000 + section.subs.length * 50_000);
+        test.setTimeout(30_000 + section.subs.length * 60_000);
 
         // The rail only renders for multi-sub sections; single-sub
         // sections (admin hub, schedule) are reached by their tab alone
@@ -383,45 +432,16 @@ export function defineStoryWalk(options: StoryWalkOptions): void {
                 const missing = newEntries.find(
                   (e) => e.topic === topic && e.outcome === "missing",
                 );
+                const outcome = missing !== undefined ? "missing" : "no entry";
 
-                if (allowed !== undefined) {
-                  // Allowlisted: soft warning, not a failure
-                  const outcome =
-                    missing !== undefined ? "missing" : "no entry";
-                  const desc =
-                    missing !== undefined
-                      ? `Pulse for "${topic}" resolved as "missing" (allowlisted: ${allowed.reason})`
-                      : `Pulse for "${topic}" had no entry (allowlisted: ${allowed.reason})`;
-                  test.info().annotations.push({
-                    type: "warning",
-                    description: desc,
-                  });
-                  console.log(
-                    `PULSE allowlisted: ${topic} ${outcome} (${allowed.reason})`,
-                  );
-                } else {
-                  const outcome =
-                    missing !== undefined ? "missing" : "no entry";
-                  if (process.env.PULSE_AUDIT === "1") {
-                    // Audit mode: report every un-allowlisted gap in one
-                    // pass instead of failing at the first. Used to build
-                    // or trim the allowlist; never green-lights a merge.
-                    console.log(
-                      `PULSE GAP: ${framePreset}:${topic} (${outcome})`,
-                    );
-                    test.info().annotations.push({
-                      type: "warning",
-                      description: `Pulse gap (audit): ${topic} ${outcome}`,
-                    });
-                  } else {
-                    // NOT allowlisted: hard failure
-                    expect(
-                      false,
-                      `Pulse for "${topic}" resolved as "${outcome}" and is not on the allowlist. ` +
-                        `Add it to pulse-allowlist.ts with a reason if this gap is accepted.`,
-                    ).toBe(true);
-                  }
-                }
+                assertOrAnnotateGap(test.info(), topic, framePreset, allowed, {
+                  tag: "PULSE GAP",
+                  description: `Pulse for "${topic}" resolved as "${outcome}"`,
+                  failMessage:
+                    `Pulse for "${topic}" resolved as "${outcome}" and is not on the allowlist. ` +
+                    `Add it to pulse-allowlist.ts with a reason if this gap is accepted.`,
+                  logSuffix: outcome,
+                });
               }
             }
 
@@ -435,6 +455,108 @@ export function defineStoryWalk(options: StoryWalkOptions): void {
                   `Consider removing it from pulse-allowlist.ts.`,
               });
               console.log(`PULSE allowlist-shrink candidate: ${topic}`);
+            }
+
+            // LAYER 1: viewport assertion
+            //
+            // When the pulse was found, verify the target element was
+            // inside the phone viewport. The demo instrumentation
+            // records a target snapshot for every non-missing outcome;
+            // its absence or a false inViewport is a gap.
+            if (pulseFound) {
+              const viewportLog = await readPulseLog(page);
+              if (viewportLog !== null) {
+                const viewportEntries = viewportLog.slice(countBefore);
+                const foundEntry = viewportEntries.find(
+                  (e) => e.topic === topic && e.outcome !== "missing",
+                );
+                if (foundEntry?.target?.inViewport !== true) {
+                  const vpDetail =
+                    foundEntry?.target === undefined
+                      ? "no target recorded"
+                      : "target outside viewport";
+                  assertOrAnnotateGap(
+                    test.info(),
+                    topic,
+                    framePreset,
+                    allowed,
+                    {
+                      tag: "VIEWPORT GAP",
+                      description: `Pulse for "${topic}" ${vpDetail}`,
+                      failMessage:
+                        `Pulse for "${topic}" marked an element that is outside the phone viewport ` +
+                        `(or recorded no target). The choreography should scroll the target into ` +
+                        `view before marking.`,
+                      logSuffix: vpDetail,
+                    },
+                  );
+                }
+              }
+            }
+
+            // LAYER 2: effect assertions (live iframe DOM inspection)
+            //
+            // This is the only layer that inspects the live iframe DOM
+            // rather than trusting the demo's self-reported log, so it
+            // runs even when the pulse failed or the topic is allowlisted.
+            {
+              const spec: EffectSpec | undefined = EFFECTS.get(topic);
+              if (
+                spec !== undefined &&
+                (spec.framePreset === undefined ||
+                  spec.framePreset === framePreset)
+              ) {
+                const phoneFrame = page.frameLocator("iframe.phone-iframe");
+                const effectTimeout = spec.timeout ?? 10_000;
+
+                for (const sel of spec.visible) {
+                  try {
+                    await expect(phoneFrame.locator(sel).first()).toBeVisible({
+                      timeout: effectTimeout,
+                    });
+                  } catch {
+                    assertOrAnnotateGap(
+                      test.info(),
+                      topic,
+                      framePreset,
+                      allowed,
+                      {
+                        tag: "EFFECT GAP",
+                        description: `Effect for "${topic}": expected visible selector "${sel}" (${spec.description})`,
+                        failMessage:
+                          `Effect for "${topic}": selector "${sel}" was not visible after ` +
+                          `${String(effectTimeout)}ms. ${spec.description}`,
+                        logSuffix: `visible: ${sel}`,
+                      },
+                    );
+                  }
+                }
+
+                if (spec.hidden !== undefined) {
+                  for (const sel of spec.hidden) {
+                    try {
+                      await expect(
+                        phoneFrame.locator(sel).first(),
+                      ).not.toBeVisible({ timeout: effectTimeout });
+                    } catch {
+                      assertOrAnnotateGap(
+                        test.info(),
+                        topic,
+                        framePreset,
+                        allowed,
+                        {
+                          tag: "EFFECT GAP",
+                          description: `Effect for "${topic}": expected hidden selector "${sel}" (${spec.description})`,
+                          failMessage:
+                            `Effect for "${topic}": selector "${sel}" was still visible after ` +
+                            `${String(effectTimeout)}ms. ${spec.description}`,
+                          logSuffix: `hidden: ${sel}`,
+                        },
+                      );
+                    }
+                  }
+                }
+              }
             }
           }
 

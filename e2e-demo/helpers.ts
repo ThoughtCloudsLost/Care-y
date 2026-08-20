@@ -334,8 +334,22 @@ export async function readPulseLog(
     // The pulse-log module's global Window augmentation types this
     const log = win.__demoPulseLog;
     if (log === undefined) return null;
-    // Copy the known fields so the result serializes cleanly
-    return log.map((entry) => ({ topic: entry.topic, outcome: entry.outcome }));
+    // Copy the known fields so the result serializes cleanly. The
+    // target snapshot rides along for the walk's viewport assertion.
+    return log.map((entry) => ({
+      topic: entry.topic,
+      outcome: entry.outcome,
+      target:
+        entry.target === undefined
+          ? undefined
+          : {
+              tag: entry.target.tag,
+              label: entry.target.label,
+              inViewport: entry.target.inViewport,
+              rect: { ...entry.target.rect },
+              navChrome: entry.target.navChrome,
+            },
+    }));
   });
 
   return result;
