@@ -6,17 +6,17 @@ import { getLocale, experimentalStaticLocale } from '../runtime.js';
 /** @typedef {{}} Demo_Entry_Nav_BodyInputs */
 
 const en_demo_entry_nav_body = /** @type {(inputs: Demo_Entry_Nav_BodyInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Pick a feature from the list and the simulator opens that screen. Tapping around in the simulator works in the other direction, the handbook follows where you go, and nothing you type here leaves your device.`)
+	return /** @type {LocalizedString} */ (`The section tabs at the top of the page jump to a feature, and the simulator opens that screen. Tapping around inside the simulator works in the other direction, the handbook follows where you go, and nothing you type here leaves your device.`)
 };
 
 const es_demo_entry_nav_body = /** @type {(inputs: Demo_Entry_Nav_BodyInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Elige una función de la lista y el simulador abre esa pantalla. Tocar por el simulador funciona en la otra dirección, el manual sigue a donde vayas, y nada de lo que escribas aquí sale de tu dispositivo.`)
+	return /** @type {LocalizedString} */ (`Las pestañas de sección en la parte superior de la página saltan a una función, y el simulador abre esa pantalla. Tocar dentro del simulador funciona en la otra dirección, el manual sigue a donde vayas, y nada de lo que escribas aquí sale de tu dispositivo.`)
 };
 
 /**
 * | output |
 * | --- |
-* | "Pick a feature from the list and the simulator opens that screen. Tapping around in the simulator works in the other direction, the handbook follows where yo..." |
+* | "The section tabs at the top of the page jump to a feature, and the simulator opens that screen. Tapping around inside the simulator works in the other direct..." |
 *
 * @param {Demo_Entry_Nav_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

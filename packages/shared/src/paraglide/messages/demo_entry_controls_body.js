@@ -6,17 +6,17 @@ import { getLocale, experimentalStaticLocale } from '../runtime.js';
 /** @typedef {{}} Demo_Entry_Controls_BodyInputs */
 
 const en_demo_entry_controls_body = /** @type {(inputs: Demo_Entry_Controls_BodyInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Drag the simulator by the bar above it and resize it from any edge, and use the toolbar to switch between phone and desktop layouts. The simulator and the handbook scroll together by default, but the link button in the toolbar breaks that connection so you can explore one without moving the other.`)
+	return /** @type {LocalizedString} */ (`The floating toolbar above the simulator is also a drag handle, so you can grab it anywhere to reposition the frame. Phone and desktop preset buttons in the center switch between layouts, and you can resize the frame from any edge. The link button keeps the handbook and simulator in sync by default, but you can break that connection to explore one without moving the other.`)
 };
 
 const es_demo_entry_controls_body = /** @type {(inputs: Demo_Entry_Controls_BodyInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Arrastra el simulador desde la barra superior y cambia su tamaño desde cualquier borde, y usa la barra de herramientas para alternar entre disposiciones de teléfono y escritorio. El simulador y el manual se desplazan juntos por defecto, pero el botón de enlace en la barra de herramientas rompe esa conexión para que puedas explorar uno sin mover el otro.`)
+	return /** @type {LocalizedString} */ (`La barra de herramientas flotante sobre el simulador también sirve como asa de arrastre, así que puedes agarrarla en cualquier punto para reposicionar el marco. Los botones de preajuste de teléfono y escritorio en el centro alternan entre disposiciones, y puedes cambiar el tamaño del marco desde cualquier borde. El botón de enlace mantiene el manual y el simulador sincronizados por defecto, pero puedes romper esa conexión para explorar uno sin mover el otro.`)
 };
 
 /**
 * | output |
 * | --- |
-* | "Drag the simulator by the bar above it and resize it from any edge, and use the toolbar to switch between phone and desktop layouts. The simulator and the ha..." |
+* | "The floating toolbar above the simulator is also a drag handle, so you can grab it anywhere to reposition the frame. Phone and desktop preset buttons in the ..." |
 *
 * @param {Demo_Entry_Controls_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

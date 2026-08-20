@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "Pick a feature from the list and the simulator opens that screen. Tapping around in the simulator works in the other direction, the handbook follows where yo..." |
+* | "The section tabs at the top of the page jump to a feature, and the simulator opens that screen. Tapping around inside the simulator works in the other direct..." |
 *
 * @param {Demo_Entry_Nav_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" }} options
