@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "Scripted in this demo" |
+* | "Scripted in the handbook" |
 *
 * @param {Demo_Flow_Seam_BadgeInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

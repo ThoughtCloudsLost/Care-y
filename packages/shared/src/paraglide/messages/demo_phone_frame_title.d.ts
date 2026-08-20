@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "CARE-Y app demo" |
+* | "CARE-Y app handbook" |
 *
 * @param {Demo_Phone_Frame_TitleInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "This server exchange ran once when the demo started. It is replayed here with its real measured timing so the login section shows the full round-trip sequence." |
+* | "This server exchange ran once when the handbook started. It is replayed here with its real measured timing so the login section shows the full round-trip seq..." |
 *
 * @param {Demo_Flow_Seam_Recorded_DerivationInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

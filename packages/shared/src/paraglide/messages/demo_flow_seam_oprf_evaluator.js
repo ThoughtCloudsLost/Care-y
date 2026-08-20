@@ -6,17 +6,17 @@ import { getLocale, experimentalStaticLocale } from '../runtime.js';
 /** @typedef {{}} Demo_Flow_Seam_Oprf_EvaluatorInputs */
 
 const en_demo_flow_seam_oprf_evaluator = /** @type {(inputs: Demo_Flow_Seam_Oprf_EvaluatorInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`This demo runs a single scalar OPRF evaluator in the browser. In production the OPRF key is split across two servers in separate jurisdictions, and neither one can evaluate on its own.`)
+	return /** @type {LocalizedString} */ (`The handbook runs a single scalar OPRF evaluator in the browser. In production the OPRF key is split across two servers in separate jurisdictions, and neither one can evaluate on its own.`)
 };
 
 const es_demo_flow_seam_oprf_evaluator = /** @type {(inputs: Demo_Flow_Seam_Oprf_EvaluatorInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Este demo ejecuta un evaluador OPRF de un solo escalar en el navegador. En producción la clave OPRF se reparte entre dos servidores en jurisdicciones distintas, y ninguno puede evaluarla por su cuenta.`)
+	return /** @type {LocalizedString} */ (`El manual ejecuta un evaluador OPRF de un solo escalar en el navegador. En producción la clave OPRF se reparte entre dos servidores en jurisdicciones distintas, y ninguno puede evaluarla por su cuenta.`)
 };
 
 /**
 * | output |
 * | --- |
-* | "This demo runs a single scalar OPRF evaluator in the browser. In production the OPRF key is split across two servers in separate jurisdictions, and neither o..." |
+* | "The handbook runs a single scalar OPRF evaluator in the browser. In production the OPRF key is split across two servers in separate jurisdictions, and neithe..." |
 *
 * @param {Demo_Flow_Seam_Oprf_EvaluatorInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

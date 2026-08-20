@@ -6,17 +6,17 @@ import { getLocale, experimentalStaticLocale } from '../runtime.js';
 /** @typedef {{}} Demo_Feature_List_LabelInputs */
 
 const en_demo_feature_list_label = /** @type {(inputs: Demo_Feature_List_LabelInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Demo features`)
+	return /** @type {LocalizedString} */ (`Handbook features`)
 };
 
 const es_demo_feature_list_label = /** @type {(inputs: Demo_Feature_List_LabelInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Funciones del demo`)
+	return /** @type {LocalizedString} */ (`Funciones del manual`)
 };
 
 /**
 * | output |
 * | --- |
-* | "Demo features" |
+* | "Handbook features" |
 *
 * @param {Demo_Feature_List_LabelInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

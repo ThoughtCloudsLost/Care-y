@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "One moment, loading this screen. This short wait happens only in the browser demo, not in the installed app." |
+* | "One moment, loading this screen. This short wait happens only in the handbook, not in the installed app." |
 *
 * @param {Demo_Route_LoadingInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

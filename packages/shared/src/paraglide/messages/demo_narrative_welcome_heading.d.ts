@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "Welcome to the CARE-Y demo" |
+* | "Welcome to the CARE-Y handbook" |
 *
 * @param {Demo_Narrative_Welcome_HeadingInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

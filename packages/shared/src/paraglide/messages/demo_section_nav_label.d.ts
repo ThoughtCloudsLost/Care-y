@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "Demo sections" |
+* | "Handbook sections" |
 *
 * @param {Demo_Section_Nav_LabelInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

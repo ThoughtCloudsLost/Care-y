@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "Email and text messages are delivered to an outbox inside this demo. Nothing is sent to a real address or phone number." |
+* | "Email and text messages are delivered to an outbox inside the handbook. Nothing is sent to a real address or phone number." |
 *
 * @param {Demo_Flow_Seam_Outbox_DeliveryInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

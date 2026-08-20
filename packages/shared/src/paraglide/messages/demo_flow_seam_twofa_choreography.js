@@ -6,17 +6,17 @@ import { getLocale, experimentalStaticLocale } from '../runtime.js';
 /** @typedef {{}} Demo_Flow_Seam_Twofa_ChoreographyInputs */
 
 const en_demo_flow_seam_twofa_choreography = /** @type {(inputs: Demo_Flow_Seam_Twofa_ChoreographyInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`The second factor check is choreographed in this demo. The installed app verifies the code against the server.`)
+	return /** @type {LocalizedString} */ (`The second factor check is choreographed in the handbook. The installed app verifies the code against the server.`)
 };
 
 const es_demo_flow_seam_twofa_choreography = /** @type {(inputs: Demo_Flow_Seam_Twofa_ChoreographyInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`La comprobación del segundo factor está recreada en este demo. La aplicación instalada verifica el código contra el servidor.`)
+	return /** @type {LocalizedString} */ (`La comprobación del segundo factor está recreada en el manual. La aplicación instalada verifica el código contra el servidor.`)
 };
 
 /**
 * | output |
 * | --- |
-* | "The second factor check is choreographed in this demo. The installed app verifies the code against the server." |
+* | "The second factor check is choreographed in the handbook. The installed app verifies the code against the server." |
 *
 * @param {Demo_Flow_Seam_Twofa_ChoreographyInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

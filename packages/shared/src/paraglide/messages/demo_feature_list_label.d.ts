@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "Demo features" |
+* | "Handbook features" |
 *
 * @param {Demo_Feature_List_LabelInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

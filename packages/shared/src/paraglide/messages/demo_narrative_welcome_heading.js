@@ -6,17 +6,17 @@ import { getLocale, experimentalStaticLocale } from '../runtime.js';
 /** @typedef {{}} Demo_Narrative_Welcome_HeadingInputs */
 
 const en_demo_narrative_welcome_heading = /** @type {(inputs: Demo_Narrative_Welcome_HeadingInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Welcome to the CARE-Y demo`)
+	return /** @type {LocalizedString} */ (`Welcome to the CARE-Y handbook`)
 };
 
 const es_demo_narrative_welcome_heading = /** @type {(inputs: Demo_Narrative_Welcome_HeadingInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Bienvenido al demo de CARE-Y`)
+	return /** @type {LocalizedString} */ (`Bienvenido al manual de CARE-Y`)
 };
 
 /**
 * | output |
 * | --- |
-* | "Welcome to the CARE-Y demo" |
+* | "Welcome to the CARE-Y handbook" |
 *
 * @param {Demo_Narrative_Welcome_HeadingInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

@@ -6,17 +6,17 @@ import { getLocale, experimentalStaticLocale } from '../runtime.js';
 /** @typedef {{}} Demo_Flow_Seam_Login_PacingInputs */
 
 const en_demo_flow_seam_login_pacing = /** @type {(inputs: Demo_Flow_Seam_Login_PacingInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`The pace of the login is scripted in this demo. The real key derivation runs, with each callback held long enough to read.`)
+	return /** @type {LocalizedString} */ (`The pace of the login is scripted in the handbook. The real key derivation runs, with each callback held long enough to read.`)
 };
 
 const es_demo_flow_seam_login_pacing = /** @type {(inputs: Demo_Flow_Seam_Login_PacingInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`El ritmo del inicio de sesión está recreado en este demo. La derivación de claves real se ejecuta, con cada paso sostenido lo suficiente para leerlo.`)
+	return /** @type {LocalizedString} */ (`El ritmo del inicio de sesión está recreado en el manual. La derivación de claves real se ejecuta, con cada paso sostenido lo suficiente para leerlo.`)
 };
 
 /**
 * | output |
 * | --- |
-* | "The pace of the login is scripted in this demo. The real key derivation runs, with each callback held long enough to read." |
+* | "The pace of the login is scripted in the handbook. The real key derivation runs, with each callback held long enough to read." |
 *
 * @param {Demo_Flow_Seam_Login_PacingInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

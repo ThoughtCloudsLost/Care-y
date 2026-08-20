@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "The second factor check is choreographed in this demo. The installed app verifies the code against the server." |
+* | "The second factor check is choreographed in the handbook. The installed app verifies the code against the server." |
 *
 * @param {Demo_Flow_Seam_Twofa_ChoreographyInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

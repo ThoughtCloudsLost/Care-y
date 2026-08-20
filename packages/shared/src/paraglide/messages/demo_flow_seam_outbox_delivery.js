@@ -6,17 +6,17 @@ import { getLocale, experimentalStaticLocale } from '../runtime.js';
 /** @typedef {{}} Demo_Flow_Seam_Outbox_DeliveryInputs */
 
 const en_demo_flow_seam_outbox_delivery = /** @type {(inputs: Demo_Flow_Seam_Outbox_DeliveryInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Email and text messages are delivered to an outbox inside this demo. Nothing is sent to a real address or phone number.`)
+	return /** @type {LocalizedString} */ (`Email and text messages are delivered to an outbox inside the handbook. Nothing is sent to a real address or phone number.`)
 };
 
 const es_demo_flow_seam_outbox_delivery = /** @type {(inputs: Demo_Flow_Seam_Outbox_DeliveryInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Los correos y los mensajes de texto se entregan a un buzón dentro de este demo. No se envía nada a una dirección o un número real.`)
+	return /** @type {LocalizedString} */ (`Los correos y los mensajes de texto se entregan a un buzón dentro del manual. No se envía nada a una dirección o un número real.`)
 };
 
 /**
 * | output |
 * | --- |
-* | "Email and text messages are delivered to an outbox inside this demo. Nothing is sent to a real address or phone number." |
+* | "Email and text messages are delivered to an outbox inside the handbook. Nothing is sent to a real address or phone number." |
 *
 * @param {Demo_Flow_Seam_Outbox_DeliveryInputs} inputs
 * @param {{ locale?: "en" | "es" }} options
