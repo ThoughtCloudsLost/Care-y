@@ -20,15 +20,15 @@
   "dependencies": {
     "@care-y/crypto": "workspace:*",
     "@care-y/shared": "workspace:*",
-    "@chenglou/pretext": "0.0.7",
-    "@electric-sql/pglite": "0.5.4",
-    "@lucide/svelte": "1.16.0",
-    "@tanstack/svelte-query": "6.1.33",
+    "@chenglou/pretext": "0.0.8",
+    "@electric-sql/pglite": "0.5.5",
+    "@lucide/svelte": "1.31.0",
+    "@tanstack/svelte-query": "6.1.38",
     "@trpc/client": "11.10.0",
     "@trpc/server": "11.10.0",
     "buffer": "6.0.3",
-    "konsta": "5.0.9",
-    "kysely": "0.29.2",
+    "konsta": "5.3.0",
+    "kysely": "0.29.5",
     "libsodium-wrappers-sumo": "0.8.4"
   },
   "devDependencies": {
