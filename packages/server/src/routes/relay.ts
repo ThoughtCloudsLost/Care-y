@@ -26,6 +26,7 @@ import type { ConsultantService } from "../telephony/consultant-service.js";
 import type { PendingClient } from "../tickets/ticket-service.js";
 import type { CallTracker } from "../telephony/call-tracker.js";
 import { generateTwilioAccessToken } from "../telephony/twilio-token.js";
+import type { OrgIdentifiers } from "../telephony/phone-resolver.js";
 import { createPhoneRepository } from "../telephony/models/phone-repo.js";
 import { isE164Buffer } from "../telephony/phone-utils.js";
 import { getStrings } from "../notifications/i18n.js";
@@ -58,9 +59,11 @@ export interface RelayHandlerDeps {
   /**
    * Resolve a caller ID E.164 number by purpose.
    * Uses org_config purpose SIDs with fallback chain.
+   * Takes both org identifiers so it can query both the tenant schema
+   * (for purpose SIDs) and the platform table (for provisioned numbers).
    */
   readonly resolveCallerIdByPurpose: (
-    orgSchema: string,
+    org: OrgIdentifiers,
     purpose: "outbound" | "system",
   ) => Promise<string | null>;
   /** Map of CallSid -> pending call state for DTMF confirmation. */
@@ -106,7 +109,10 @@ export interface RelayHandlerDeps {
 export interface PendingCall {
   readonly clientPhoneBuf: Buffer;
   readonly callerIdBuf: Buffer;
+  /** Platform-table key: the raw org UUID. Used by getAuthToken/getProvider. */
   readonly orgId: string;
+  /** Tenant-schema name. Carried for any confirm-path logic that needs it. */
+  readonly orgSchema: string;
   readonly createdAt: number;
 }
 
@@ -237,14 +243,14 @@ async function handleSmsRelay(
       return;
     }
 
-    const provider = await deps.getProvider(session.orgSchema);
+    const provider = await deps.getProvider(session.orgId);
     if (!provider) {
       sendRelayError(res, 500, "NO_PROVIDER");
       return;
     }
 
     const callerIdStr = await deps.resolveCallerIdByPurpose(
-      session.orgSchema,
+      { orgId: session.orgId, orgSchema: session.orgSchema },
       "outbound",
     );
     if (callerIdStr === null) {
@@ -328,14 +334,14 @@ async function resolveCallContext(
     return { ok: false };
   }
 
-  const provider = await deps.getProvider(session.orgSchema);
+  const provider = await deps.getProvider(session.orgId);
   if (!provider) {
     sendRelayError(res, 500, "NO_PROVIDER");
     return { ok: false };
   }
 
   const callerIdStr = await deps.resolveCallerIdByPurpose(
-    session.orgSchema,
+    { orgId: session.orgId, orgSchema: session.orgSchema },
     "outbound",
   );
   if (callerIdStr === null) {
@@ -402,7 +408,7 @@ async function handleCallRelay(
     const consultantPhoneStr = callCtx.consultantPhoneBuf.toString("utf-8");
 
     const confirmUrl = `${deps.webhookBaseUrl}/relay/call-confirm/${session.orgSchema}`;
-    const statusUrl = `${deps.webhookBaseUrl}/webhooks/twilio/${session.orgSchema}/status`;
+    const statusUrl = `${deps.webhookBaseUrl}/webhooks/twilio/${session.orgId}/status`;
 
     let callSid: string;
     try {
@@ -424,7 +430,8 @@ async function handleCallRelay(
     deps.pendingCalls.set(callSid, {
       clientPhoneBuf: clientPhoneClone,
       callerIdBuf,
-      orgId: session.orgSchema,
+      orgId: session.orgId,
+      orgSchema: session.orgSchema,
       createdAt: Date.now(),
     });
 
@@ -630,7 +637,7 @@ async function handleWebrtcToken(
     return;
   }
 
-  const provider = await deps.getProvider(session.orgSchema);
+  const provider = await deps.getProvider(session.orgId);
   if (!provider) {
     sendRelayError(res, 500, "NO_PROVIDER");
     return;
@@ -645,7 +652,7 @@ async function handleWebrtcToken(
   const ttl = 300; // 5 minutes
   const token = generateTwilioAccessToken(
     {
-      accountSid: await deps.getAccountSid(session.orgSchema),
+      accountSid: await deps.getAccountSid(session.orgId),
       apiKeySid: deps.apiKeySid,
       apiKeySecret: deps.apiKeySecret,
       twimlAppSid: deps.twimlAppSid,
@@ -848,14 +855,14 @@ async function handleConsultantVerifyRelay(
       throw err;
     }
 
-    const provider = await deps.getProvider(session.orgSchema);
+    const provider = await deps.getProvider(session.orgId);
     if (!provider) {
       sendRelayError(res, 500, "NO_PROVIDER");
       return;
     }
 
     const from = await deps.resolveCallerIdByPurpose(
-      session.orgSchema,
+      { orgId: session.orgId, orgSchema: session.orgSchema },
       "outbound",
     );
     if (from === null) {

@@ -10,6 +10,22 @@
 
 export type PhonePurpose = "outbound" | "system";
 
+/**
+ * The two org identifiers, carried together.
+ *
+ * Purpose SIDs live in the tenant `org_config` table, addressed by schema
+ * name. Provisioned numbers live in the platform `telephony_config` table,
+ * addressed by org UUID. Both are strings, so passing one where the other
+ * belongs type-checks and then fails at the database. Callers pass both and
+ * each dependency takes the one it needs.
+ */
+export interface OrgIdentifiers {
+  /** Platform-table key: the org UUID. */
+  readonly orgId: string;
+  /** Tenant-schema name, of the form `org_<uuid>`. */
+  readonly orgSchema: string;
+}
+
 export interface PhoneResolverDeps {
   /** Read org_config phone purpose SIDs from the tenant schema. */
   readonly getOrgConfig: (orgSchema: string) => Promise<{
@@ -18,7 +34,7 @@ export interface PhoneResolverDeps {
   }>;
   /** Get provisioned phone numbers from the provider config blob. */
   readonly getProvisionedPhones: (
-    orgSchema: string,
+    orgId: string,
   ) => Promise<readonly { number: string; sid: string }[]>;
 }
 
@@ -38,15 +54,15 @@ export interface PhoneResolverDeps {
  */
 export function createPhoneResolver(
   deps: PhoneResolverDeps,
-): (orgSchema: string, purpose: PhonePurpose) => Promise<string | null> {
+): (org: OrgIdentifiers, purpose: PhonePurpose) => Promise<string | null> {
   return async function resolveCallerIdByPurpose(
-    orgSchema: string,
+    org: OrgIdentifiers,
     purpose: PhonePurpose,
   ): Promise<string | null> {
-    const phones = await deps.getProvisionedPhones(orgSchema);
+    const phones = await deps.getProvisionedPhones(org.orgId);
     if (phones.length === 0) return null;
 
-    const config = await deps.getOrgConfig(orgSchema);
+    const config = await deps.getOrgConfig(org.orgSchema);
 
     // Build the SID fallback chain for this purpose
     const sidCandidates: (string | null)[] =

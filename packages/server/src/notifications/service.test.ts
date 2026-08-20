@@ -127,6 +127,8 @@ function mockPreferences(
   };
 }
 
+const TEST_ORG_ID = "a1b2c3d4-e5f6-7890-abcd-000000000001";
+
 const TEST_RECIPIENTS: NotificationRecipientList = {
   recipients: [
     { userId: "user-1", source: "owner" },
@@ -159,6 +161,7 @@ describe("NotificationService.dispatch", () => {
 
     await svc.dispatch(
       {} as Kysely<TenantDatabase>,
+      TEST_ORG_ID,
       "org_test-1",
       "myorg",
       "ticket_assigned",
@@ -191,6 +194,7 @@ describe("NotificationService.dispatch", () => {
 
     await svc.dispatch(
       {} as Kysely<TenantDatabase>,
+      TEST_ORG_ID,
       "org_test-1",
       "myorg",
       "ticket_created",
@@ -221,6 +225,7 @@ describe("NotificationService.dispatch", () => {
 
     await svc.dispatch(
       {} as Kysely<TenantDatabase>,
+      TEST_ORG_ID,
       "org_test-1",
       "myorg",
       "ticket_assigned",
@@ -246,6 +251,7 @@ describe("NotificationService.dispatch", () => {
 
     await svc.dispatch(
       {} as Kysely<TenantDatabase>,
+      TEST_ORG_ID,
       "org_test-1",
       "myorg",
       "ticket_assigned",
@@ -271,6 +277,7 @@ describe("NotificationService.dispatch", () => {
 
     await svc.dispatch(
       {} as Kysely<TenantDatabase>,
+      TEST_ORG_ID,
       "org_test-1",
       "myorg",
       "followup_added",
@@ -309,6 +316,7 @@ describe("NotificationService.dispatch", () => {
 
     await svc.dispatch(
       {} as Kysely<TenantDatabase>,
+      TEST_ORG_ID,
       "org_test-1",
       "myorg",
       "ticket_created",
@@ -354,6 +362,7 @@ describe("NotificationService.dispatch", () => {
     await expect(
       svc.dispatch(
         {} as Kysely<TenantDatabase>,
+        TEST_ORG_ID,
         "org_test-1",
         "myorg",
         "ticket_created",
@@ -385,6 +394,7 @@ describe("NotificationService.dispatch", () => {
 
     await svc.dispatch(
       {} as Kysely<TenantDatabase>,
+      TEST_ORG_ID,
       "org_test-1",
       "myorg",
       "ticket_assigned",
@@ -424,6 +434,7 @@ describe("NotificationService.dispatch", () => {
 
     await svc.dispatch(
       {} as Kysely<TenantDatabase>,
+      TEST_ORG_ID,
       "org_test-1",
       "myorg",
       "ticket_created",
@@ -456,6 +467,7 @@ describe("NotificationService.dispatch", () => {
 
       await svc.dispatch(
         {} as Kysely<TenantDatabase>,
+        TEST_ORG_ID,
         "org_test-1",
         "myorg",
         "ticket_assigned",
@@ -507,6 +519,7 @@ describe("NotificationService.dispatch", () => {
 
     await svc.dispatch(
       {} as Kysely<TenantDatabase>,
+      TEST_ORG_ID,
       "org_test-1",
       "myorg",
       "ticket_escalated",
@@ -527,12 +540,62 @@ describe("NotificationService.dispatch", () => {
     expect(smsJob).toBeDefined();
     expect(smsJob.payload.recipientUserIds).toEqual(["user-1"]);
     expect(smsJob.payload.eventType).toBe("ticket_escalated");
+    // orgId must be present and match the UUID passed to dispatch.
+    // This is the only guard against a runtime Zod rejection at dequeue time.
+    expect(smsJob.payload.orgId).toBe(TEST_ORG_ID);
 
     expect(emailJob).toBeDefined();
     // user-2 falls back to email despite emailAllowed being empty,
     // because the fallback deliberately overrides a disabled email
     // preference: a silently dropped escalation ping is the worse failure.
     expect(emailJob.payload.recipientUserIds).toEqual(["user-2"]);
+  });
+
+  it("includes orgId as a valid UUID in the notification-sms payload from dispatch", async () => {
+    vi.mocked(getReachabilityForUsers).mockResolvedValue(
+      new Map<string, VolunteerReachability>([["user-1", "verified_sms"]]),
+    );
+
+    const jobQueue = mockJobQueue();
+    const prefs = mockPreferences({
+      overrides: {
+        pushAllowed: [],
+        emailAllowed: [],
+        smsAllowed: ["user-1"],
+      },
+    });
+    const svc = createNotificationService({
+      sse: mockSse(),
+      emailSender: mockEmailSender(),
+      pushSender: mockPushSender(),
+      jobQueue,
+      preferences: prefs,
+    });
+
+    await svc.dispatch(
+      {} as Kysely<TenantDatabase>,
+      TEST_ORG_ID,
+      "org_test-1",
+      "myorg",
+      "ticket_assigned",
+      "ticket-uuid",
+      "queue-uuid",
+      TEST_RECIPIENTS,
+    );
+
+    const smsJob = jobQueue.enqueuedJobs.find(
+      (j) => (j as { queue: string }).queue === NOTIFICATION_SMS_QUEUE,
+    ) as { queue: string; payload: Record<string, unknown> };
+    expect(smsJob).toBeDefined();
+    expect(smsJob.payload.orgId).toBe(TEST_ORG_ID);
+    // Validate the full payload matches the schema the job handler expects
+    expect(smsJob.payload).toEqual({
+      orgId: TEST_ORG_ID,
+      orgSchema: "org_test-1",
+      orgSlug: "myorg",
+      recipientUserIds: ["user-1"],
+      eventType: "ticket_assigned",
+    });
   });
 
   it("deduplicates the email list when a user appears in both emailAllowed and smsFallback", async () => {
@@ -559,6 +622,7 @@ describe("NotificationService.dispatch", () => {
 
     await svc.dispatch(
       {} as Kysely<TenantDatabase>,
+      TEST_ORG_ID,
       "org_test-1",
       "myorg",
       "ticket_created",
@@ -597,6 +661,7 @@ describe("NotificationService.dispatch", () => {
 
     await svc.dispatch(
       {} as Kysely<TenantDatabase>,
+      TEST_ORG_ID,
       "org_test-1",
       "myorg",
       "ticket_assigned",
@@ -643,6 +708,7 @@ describe("NotificationService.dispatchTicketless preference filtering", () => {
 
     await svc.dispatchTicketless(
       {} as Kysely<TenantDatabase>,
+      TEST_ORG_ID,
       "org_test-1",
       "myorg",
       "voicemail_quarantined",
@@ -682,6 +748,7 @@ describe("NotificationService.dispatchTicketless", () => {
 
     await svc.dispatchTicketless(
       {} as Kysely<TenantDatabase>,
+      TEST_ORG_ID,
       "org_test-1",
       "myorg",
       "voicemail_quarantined",
@@ -716,6 +783,7 @@ describe("NotificationService.dispatchTicketless", () => {
     const tDb = {} as Kysely<TenantDatabase>;
     await svc.dispatchTicketless(
       tDb,
+      TEST_ORG_ID,
       "org_test-1",
       "myorg",
       "voicemail_quarantined",
@@ -738,6 +806,7 @@ describe("NotificationService.dispatchTicketless", () => {
 
     await svc.dispatchTicketless(
       {} as Kysely<TenantDatabase>,
+      TEST_ORG_ID,
       "org_test-1",
       "myorg",
       "voicemail_quarantined",
@@ -772,6 +841,7 @@ describe("NotificationService.dispatchTicketless", () => {
 
     await svc.dispatchTicketless(
       {} as Kysely<TenantDatabase>,
+      TEST_ORG_ID,
       "org_test-1",
       "myorg",
       "voicemail_quarantined",
@@ -781,6 +851,49 @@ describe("NotificationService.dispatchTicketless", () => {
     expect(sse.broadcast).not.toHaveBeenCalled();
     expect(pushSender.sendToUsers).not.toHaveBeenCalled();
     expect(jobQueue.enqueuedJobs).toHaveLength(0);
+  });
+
+  it("includes orgId as a valid UUID in the notification-sms payload from dispatchTicketless", async () => {
+    vi.mocked(getReachabilityForUsers).mockResolvedValue(
+      new Map<string, VolunteerReachability>([["admin-1", "verified_sms"]]),
+    );
+
+    const jobQueue = mockJobQueue();
+    const prefs = mockPreferences({
+      overrides: {
+        pushAllowed: [],
+        emailAllowed: [],
+        smsAllowed: ["admin-1"],
+      },
+    });
+    const svc = createNotificationService({
+      sse: mockSse(),
+      emailSender: mockEmailSender(),
+      pushSender: mockPushSender(),
+      jobQueue,
+      preferences: prefs,
+    });
+
+    await svc.dispatchTicketless(
+      {} as Kysely<TenantDatabase>,
+      TEST_ORG_ID,
+      "org_test-1",
+      "myorg",
+      "voicemail_quarantined",
+      ["admin-1"],
+    );
+
+    const smsJob = jobQueue.enqueuedJobs.find(
+      (j) => (j as { queue: string }).queue === NOTIFICATION_SMS_QUEUE,
+    ) as { queue: string; payload: Record<string, unknown> };
+    expect(smsJob).toBeDefined();
+    expect(smsJob.payload).toEqual({
+      orgId: TEST_ORG_ID,
+      orgSchema: "org_test-1",
+      orgSlug: "myorg",
+      recipientUserIds: ["admin-1"],
+      eventType: "voicemail_quarantined",
+    });
   });
 });
 

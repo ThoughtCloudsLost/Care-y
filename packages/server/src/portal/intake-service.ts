@@ -120,6 +120,7 @@ export async function createIntakeTicket(
     readonly notificationService: NotificationService;
     readonly sealedBox: SealedBoxEncryptor;
     readonly fieldEncryptor?: FieldEncryptor;
+    readonly orgId: string;
     readonly orgSchema: string;
     readonly orgSlug: string;
     readonly accountServiceDeps?: AccountServiceDeps;
@@ -342,6 +343,7 @@ function dispatchTicketCreated(
   db: Kysely<TenantDatabase>,
   deps: {
     readonly notificationService: NotificationService;
+    readonly orgId: string;
     readonly orgSchema: string;
     readonly orgSlug: string;
   },
@@ -367,6 +369,7 @@ function dispatchTicketCreated(
 
       await deps.notificationService.dispatch(
         db,
+        deps.orgId,
         deps.orgSchema,
         deps.orgSlug,
         "ticket_created",
@@ -392,6 +395,7 @@ function dispatchEscalationAlert(
   db: Kysely<TenantDatabase>,
   deps: {
     readonly notificationService: NotificationService;
+    readonly orgId: string;
     readonly orgSchema: string;
     readonly orgSlug: string;
   },
@@ -456,6 +460,7 @@ function dispatchEscalationAlert(
 
       await deps.notificationService.dispatch(
         db,
+        deps.orgId,
         deps.orgSchema,
         deps.orgSlug,
         "ticket_escalated",

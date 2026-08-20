@@ -146,8 +146,12 @@ function buildDeps(
   };
 }
 
+const TEST_ORG_ID = "00000000-0000-4000-8000-aaaaaaaaaaaa";
+const TEST_ORG_SCHEMA = "org_00000000-0000-4000-8000-aaaaaaaaaaaa";
+
 const VALID_PAYLOAD = {
-  orgSchema: "org_abc",
+  orgId: TEST_ORG_ID,
+  orgSchema: TEST_ORG_SCHEMA,
   orgSlug: "test-org",
   recipientUserIds: [USER_A],
   eventType: "ticket_assigned" as const,
@@ -340,5 +344,39 @@ describe("notification-sms job handler", () => {
 
     // getTenantDb should not have been called (no DB work)
     expect(getTenantDb).not.toHaveBeenCalled();
+  });
+
+  it("passes the org UUID to getProvider and OrgIdentifiers to the resolver", async () => {
+    const provider = stubProvider();
+    const enc = stubEncryptor("+15551234567");
+    const tDb = stubTenantDb([
+      {
+        user_id: USER_A,
+        ops_encrypted_phone: Buffer.from("encrypted-phone"),
+        sms_pings_enabled: true,
+      },
+    ]);
+
+    const getProvider = vi.fn(async () => provider);
+    const resolveCallerIdByPurpose = vi.fn(async () => "+15559990000");
+
+    const deps: NotificationSmsJobDeps = {
+      encryptor: enc,
+      getTenantDb: vi.fn(() => tDb),
+      getProvider,
+      resolveCallerIdByPurpose,
+    };
+
+    const handler = createNotificationSmsJobHandler(deps);
+    await handler(VALID_PAYLOAD);
+
+    // getProvider receives the org UUID, not the schema name
+    expect(getProvider).toHaveBeenCalledWith(TEST_ORG_ID);
+
+    // resolveCallerIdByPurpose receives OrgIdentifiers, not a bare string
+    expect(resolveCallerIdByPurpose).toHaveBeenCalledWith(
+      { orgId: TEST_ORG_ID, orgSchema: TEST_ORG_SCHEMA },
+      "outbound",
+    );
   });
 });

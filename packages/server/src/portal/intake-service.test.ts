@@ -25,6 +25,7 @@ import {
   testUnseal,
   noopEncryptor,
   testBlindIndexer,
+  TEST_ORG_ID,
 } from "../test-utils.js";
 import type { NotificationService } from "../notifications/service.js";
 import {
@@ -152,6 +153,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
         {
           notificationService: ns,
           sealedBox: testSealedBox,
+          orgId: TEST_ORG_ID,
           orgSchema: testDb.schemaName,
           orgSlug: "test-org",
         },
@@ -214,6 +216,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
         {
           notificationService: ns,
           sealedBox: testSealedBox,
+          orgId: TEST_ORG_ID,
           orgSchema: testDb.schemaName,
           orgSlug: "test-org",
         },
@@ -251,6 +254,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
         {
           notificationService: ns,
           sealedBox: testSealedBox,
+          orgId: TEST_ORG_ID,
           orgSchema: testDb.schemaName,
           orgSlug: "test-org",
         },
@@ -304,6 +308,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
         {
           notificationService: ns,
           sealedBox: testSealedBox,
+          orgId: TEST_ORG_ID,
           orgSchema: testDb.schemaName,
           orgSlug: "test-org",
         },
@@ -359,6 +364,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
           {
             notificationService: ns,
             sealedBox: testSealedBox,
+            orgId: TEST_ORG_ID,
             orgSchema: testDb.schemaName,
             orgSlug: "test-org",
           },
@@ -376,6 +382,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
         {
           notificationService: ns,
           sealedBox: testSealedBox,
+          orgId: TEST_ORG_ID,
           orgSchema: testDb.schemaName,
           orgSlug: "test-org",
         },
@@ -430,6 +437,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
           notificationService: ns,
           sealedBox: testSealedBox,
           fieldEncryptor: noopEncryptor,
+          orgId: TEST_ORG_ID,
           orgSchema: testDb.schemaName,
           orgSlug: "test-org",
         },
@@ -458,6 +466,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
           {
             notificationService: ns,
             sealedBox: testSealedBox,
+            orgId: TEST_ORG_ID,
             orgSchema: testDb.schemaName,
             orgSlug: "test-org",
           },
@@ -490,6 +499,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
             {
               notificationService: ns,
               sealedBox: testSealedBox,
+              orgId: TEST_ORG_ID,
               orgSchema: freshDb.schemaName,
               orgSlug: "test-org",
             },
@@ -517,6 +527,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
         {
           notificationService: ns,
           sealedBox: testSealedBox,
+          orgId: TEST_ORG_ID,
           orgSchema: testDb.schemaName,
           orgSlug: "test-org",
         },
@@ -528,6 +539,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
       expect(ns.dispatch).toHaveBeenCalledOnce();
       expect(ns.dispatch).toHaveBeenCalledWith(
         testDb.db,
+        TEST_ORG_ID,
         testDb.schemaName,
         "test-org",
         "ticket_created",
@@ -559,6 +571,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
         {
           notificationService: ns,
           sealedBox: testSealedBox,
+          orgId: TEST_ORG_ID,
           orgSchema: testDb.schemaName,
           orgSlug: "test-org",
         },
@@ -582,7 +595,6 @@ describe.skipIf(!process.env.DATABASE_URL)(
 
       beforeAll(async () => {
         const { deriveFakeSaltKey } = await import("../auth/salt-defense.js");
-        const { TEST_ORG_ID } = await import("../test-utils.js");
         const opsHex =
           "cafebabecafebabecafebabecafebabecafebabecafebabecafebabecafebabe";
         const fakeSaltKey = await deriveFakeSaltKey(opsHex);
@@ -603,6 +615,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
           {
             notificationService: ns,
             sealedBox: testSealedBox,
+            orgId: TEST_ORG_ID,
             orgSchema: testDb.schemaName,
             orgSlug: "test-org",
             accountServiceDeps: accountDeps,
@@ -658,6 +671,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
           {
             notificationService: ns,
             sealedBox: testSealedBox,
+            orgId: TEST_ORG_ID,
             orgSchema: testDb.schemaName,
             orgSlug: "test-org",
             accountServiceDeps: accountDeps,
@@ -703,6 +717,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
           {
             notificationService: ns,
             sealedBox: testSealedBox,
+            orgId: TEST_ORG_ID,
             orgSchema: testDb.schemaName,
             orgSlug: "test-org",
             accountServiceDeps: accountDeps,
@@ -720,6 +735,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
             {
               notificationService: ns,
               sealedBox: testSealedBox,
+              orgId: TEST_ORG_ID,
               orgSchema: testDb.schemaName,
               orgSlug: "test-org",
               accountServiceDeps: accountDeps,
@@ -746,6 +762,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
           {
             notificationService: ns,
             sealedBox: testSealedBox,
+            orgId: TEST_ORG_ID,
             orgSchema: testDb.schemaName,
             orgSlug: "test-org",
           },

@@ -550,6 +550,7 @@ export function createTicketRouter(deps: TicketRouterDeps) {
         );
         await ns.dispatch(
           tDb,
+          ctx.org.orgId,
           ctx.org.orgSchema,
           ctx.org.orgSlug,
           eventType,

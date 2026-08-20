@@ -886,8 +886,13 @@ describe.skipIf(!process.env.DATABASE_URL)(
       // dispatchTicketless was called on the notification service mock.
       // The mock does not actually enqueue jobs, but the call proves
       // the quarantine path attempted admin notification.
+      // orgId and orgSchema are adjacent strings, so matching orgId on UUID
+      // shape rather than on type is what catches a swap between them.
       expect(mockNotificationService.dispatchTicketless).toHaveBeenCalledWith(
         expect.anything(), // tDb
+        expect.stringMatching(
+          /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/,
+        ), // orgId
         expect.any(String), // orgSchema
         expect.any(String), // orgSlug
         "voicemail_quarantined",

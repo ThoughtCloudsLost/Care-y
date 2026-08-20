@@ -85,11 +85,12 @@ export interface PortalBootstrapResult {
 export interface PortalMessageServiceDeps {
   readonly getProvider: (orgId: string) => Promise<TelephonyProvider | null>;
   readonly resolveCallerIdByPurpose: (
-    orgSchema: string,
+    org: { readonly orgId: string; readonly orgSchema: string },
     purpose: "outbound" | "system",
   ) => Promise<string | null>;
   readonly fieldEncryptor: FieldEncryptor;
   readonly notificationService: NotificationService;
+  readonly orgId: string;
   readonly orgSchema: string;
   readonly orgSlug: string;
 }
@@ -342,11 +343,11 @@ export async function nudgeClient(
 
     if (!phoneBuf) return;
 
-    const provider = await deps.getProvider(deps.orgSchema);
+    const provider = await deps.getProvider(deps.orgId);
     if (!provider) return;
 
     const callerId = await deps.resolveCallerIdByPurpose(
-      deps.orgSchema,
+      { orgId: deps.orgId, orgSchema: deps.orgSchema },
       "system",
     );
     if (callerId == null || callerId === "") return;
@@ -463,6 +464,7 @@ function dispatchClientReplyNotification(
 
       await deps.notificationService.dispatch(
         db,
+        deps.orgId,
         deps.orgSchema,
         deps.orgSlug,
         "followup_added",

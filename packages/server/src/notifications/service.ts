@@ -39,6 +39,7 @@ export interface NotificationServiceDeps {
 export interface NotificationService {
   dispatch(
     tDb: Kysely<TenantDatabase>,
+    orgId: string,
     orgSchema: string,
     orgSlug: string,
     eventType: NotificationEventType,
@@ -54,6 +55,7 @@ export interface NotificationService {
    */
   dispatchTicketless(
     tDb: Kysely<TenantDatabase>,
+    orgId: string,
     orgSchema: string,
     orgSlug: string,
     eventType: NotificationEventType,
@@ -67,6 +69,7 @@ export function createNotificationService(
   return {
     async dispatch(
       tDb,
+      orgId,
       orgSchema,
       orgSlug,
       eventType,
@@ -141,6 +144,7 @@ export function createNotificationService(
 
         if (smsDeliverable.length > 0) {
           await deps.jobQueue.enqueue(NOTIFICATION_SMS_QUEUE, {
+            orgId,
             orgSchema,
             orgSlug,
             recipientUserIds: smsDeliverable,
@@ -161,7 +165,14 @@ export function createNotificationService(
       }
     },
 
-    async dispatchTicketless(tDb, orgSchema, orgSlug, eventType, userIds) {
+    async dispatchTicketless(
+      tDb,
+      orgId,
+      orgSchema,
+      orgSlug,
+      eventType,
+      userIds,
+    ) {
       if (userIds.length === 0) return;
 
       // Ticketless dispatch: no ticket or queue context, so preferences
@@ -216,6 +227,7 @@ export function createNotificationService(
 
         if (smsDeliverable.length > 0) {
           await deps.jobQueue.enqueue(NOTIFICATION_SMS_QUEUE, {
+            orgId,
             orgSchema,
             orgSlug,
             recipientUserIds: smsDeliverable,

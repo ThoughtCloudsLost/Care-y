@@ -61,6 +61,9 @@ function createMockProvider(): TelephonyProvider & { sendSms: Mock } {
   } as unknown as TelephonyProvider & { sendSms: Mock };
 }
 
+const TEST_ORG_ID = "00000000-0000-4000-8000-bbbbbbbbbbbb";
+const TEST_ORG_SCHEMA = "test_schema";
+
 function makeDeps(
   overrides?: Partial<PortalMessageServiceDeps>,
 ): PortalMessageServiceDeps {
@@ -70,7 +73,8 @@ function makeDeps(
     resolveCallerIdByPurpose: vi.fn().mockResolvedValue("+15550001234"),
     fieldEncryptor: noopEncryptor,
     notificationService: createMockNotificationService(),
-    orgSchema: "test_schema",
+    orgId: TEST_ORG_ID,
+    orgSchema: TEST_ORG_SCHEMA,
     orgSlug: "test-org",
     ...overrides,
   };
@@ -427,6 +431,38 @@ describe.skipIf(!process.env.DATABASE_URL)(
           .execute();
         expect(fuRows.length).toBe(1);
       });
+
+      it("passes orgId to notification dispatch for SMS payload correctness", async () => {
+        const fixture = await createTestTicketFixture(testDb.db);
+        const channel = await insertChannel(testDb.db, fixture.clientId);
+        const notificationService = createMockNotificationService();
+        const deps = makeDeps({ notificationService });
+
+        const input: PortalReplyServiceInput = {
+          ticketId: fixture.ticketId,
+          followUpId: crypto.randomUUID(),
+          keyGeneration: crypto.randomUUID(),
+          encryptedContent: Buffer.from("encrypted-reply"),
+          wrappedTkTemp: Buffer.alloc(80, 0xef),
+          selfCopy: fakeTriple(),
+        };
+
+        await clientReply(testDb.db, deps, channel, input);
+
+        // The notification block runs several awaited queries before it
+        // dispatches, and nothing awaits it, so a single tick is not enough.
+        await vi.waitFor(() => {
+          expect(notificationService.dispatch).toHaveBeenCalledTimes(1);
+        });
+
+        // dispatch is called with orgId as the second positional argument
+        // (after tDb). This is the only compile-time-invisible contract
+        // that prevents a Zod rejection when the SMS job dequeues.
+        const dispatchArgs = notificationService.dispatch.mock
+          .calls[0] as unknown[];
+        // arg[0] = tDb, arg[1] = orgId
+        expect(dispatchArgs[1]).toBe(TEST_ORG_ID);
+      });
     });
 
     // -----------------------------------------------------------------------
@@ -528,6 +564,32 @@ describe.skipIf(!process.env.DATABASE_URL)(
         await expect(
           nudgeClient(testDb.db, deps, channel),
         ).resolves.toBeUndefined();
+      });
+
+      it("passes the org UUID to getProvider and OrgIdentifiers to the resolver", async () => {
+        const fixture = await createTestTicketFixture(testDb.db);
+        const channel = await insertChannel(testDb.db, fixture.clientId, {
+          last_seen_at: new Date(Date.now() - 60_000),
+          last_notified_at: null,
+        });
+
+        const mockProvider = createMockProvider();
+        const getProvider = vi.fn().mockResolvedValue(mockProvider);
+        const resolveCallerIdByPurpose = vi
+          .fn()
+          .mockResolvedValue("+15550001234");
+        const deps = makeDeps({ getProvider, resolveCallerIdByPurpose });
+
+        await nudgeClient(testDb.db, deps, channel);
+
+        // getProvider receives the org UUID, not the schema name
+        expect(getProvider).toHaveBeenCalledWith(TEST_ORG_ID);
+
+        // resolveCallerIdByPurpose receives OrgIdentifiers, not a bare string
+        expect(resolveCallerIdByPurpose).toHaveBeenCalledWith(
+          { orgId: TEST_ORG_ID, orgSchema: TEST_ORG_SCHEMA },
+          "system",
+        );
       });
     });
   },

@@ -173,7 +173,9 @@ function makeDeps(overrides?: Partial<RelayHandlerDeps>): RelayHandlerDeps {
     apiKeySid: "SKtest",
     apiKeySecret: "test_secret",
     twimlAppSid: "APtest",
-    orgResolver: vi.fn().mockReturnValue("org_test"),
+    orgResolver: vi
+      .fn()
+      .mockReturnValue({ orgId: "test-uuid-001", orgSchema: "org_test" }),
     createSessionRepo: vi
       .fn()
       .mockReturnValue(mockSessionRepo(makeSessionData())),
@@ -528,7 +530,8 @@ describe("createRelayHandler", () => {
       expect(pendingCalls.size).toBe(1);
       const pending = pendingCalls.get("CA_test_456");
       expect(pending).toBeDefined();
-      expect(pending!.orgId).toBe("org_test");
+      expect(pending!.orgId).toBe("test-uuid-001");
+      expect(pending!.orgSchema).toBe("org_test");
     });
 
     it("returns webrtc method when consultant prefers WebRTC", async () => {
@@ -812,7 +815,8 @@ describe("createRelayHandler", () => {
       return {
         clientPhoneBuf: Buffer.from("+15553333333"),
         callerIdBuf: Buffer.from("+15559999999"),
-        orgId: "org_test",
+        orgId: "test-uuid-001",
+        orgSchema: "org_test",
         createdAt: Date.now(),
       };
     }
@@ -1350,7 +1354,8 @@ describe("createRelayHandler", () => {
       const pending: PendingCall = {
         clientPhoneBuf: Buffer.from("+15553333333"),
         callerIdBuf: Buffer.from("+15559999999"),
-        orgId: "org_test",
+        orgId: "test-uuid-001",
+        orgSchema: "org_test",
         createdAt: Date.now(),
       };
       const pendingCalls = new Map<string, PendingCall>();
@@ -1614,7 +1619,8 @@ describe("createRelayHandler", () => {
       const pending: PendingCall = {
         clientPhoneBuf: pendingBuf,
         callerIdBuf: callerBuf,
-        orgId: "org_test",
+        orgId: "test-uuid-001",
+        orgSchema: "org_test",
         createdAt: Date.now(),
       };
       const pendingCalls = new Map<string, PendingCall>();
@@ -1659,7 +1665,8 @@ describe("createRelayHandler", () => {
       const pending: PendingCall = {
         clientPhoneBuf: pendingBuf,
         callerIdBuf: callerBuf,
-        orgId: "org_test",
+        orgId: "test-uuid-001",
+        orgSchema: "org_test",
         createdAt: Date.now(),
       };
       const pendingCalls = new Map<string, PendingCall>();
@@ -2594,6 +2601,221 @@ describe("createRelayHandler", () => {
 
       expect(res.statusCode).toBe(400);
       expect(JSON.parse(res.body)).toEqual({ error: "NO_CALLER_ID" });
+    });
+  });
+
+  // -----------------------------------------------------------------------
+  // Org identifier routing: UUID to platform calls, schema to tenant calls
+  // -----------------------------------------------------------------------
+
+  describe("org identifier routing", () => {
+    const ORG_UUID = "test-uuid-001";
+    const ORG_SCHEMA = "org_test";
+
+    it("SMS relay passes UUID to getProvider and OrgIdentifiers to resolveCallerIdByPurpose", async () => {
+      const getProvider = vi.fn().mockResolvedValue(mockProvider());
+      const resolveCallerIdByPurpose = vi
+        .fn()
+        .mockResolvedValue("+15559999999");
+      const getTenantDb = vi.fn().mockReturnValue({} as Kysely<TenantDatabase>);
+      const deps = makeDeps({
+        getProvider,
+        resolveCallerIdByPurpose,
+        getTenantDb,
+      });
+      const handler = createRelayHandler(deps);
+
+      const req = createMockReq(
+        "POST",
+        "/relay/sms",
+        '{"ticketId":"test-ticket-id","body":"hi"}',
+      );
+      const res = createMockRes();
+      await handler(req, res as unknown as ServerResponse);
+
+      expect(res.statusCode).toBe(200);
+      // UUID reaches the platform-table lookup
+      expect(getProvider).toHaveBeenCalledWith(ORG_UUID);
+      // Schema name reaches the tenant-scoped DB
+      expect(getTenantDb).toHaveBeenCalledWith(ORG_SCHEMA);
+      // Caller-ID resolver receives both identifiers
+      expect(resolveCallerIdByPurpose).toHaveBeenCalledWith(
+        { orgId: ORG_UUID, orgSchema: ORG_SCHEMA },
+        "outbound",
+      );
+    });
+
+    it("call relay passes UUID to getProvider and schema to getTenantDb", async () => {
+      const getProvider = vi.fn().mockResolvedValue(mockProvider());
+      const resolveCallerIdByPurpose = vi
+        .fn()
+        .mockResolvedValue("+15559999999");
+      const getTenantDb = vi.fn().mockReturnValue({} as Kysely<TenantDatabase>);
+      const deps = makeDeps({
+        getProvider,
+        resolveCallerIdByPurpose,
+        getTenantDb,
+      });
+      const handler = createRelayHandler(deps);
+
+      const req = createMockReq(
+        "POST",
+        "/relay/call",
+        '{"ticketId":"test-ticket-id","consultantPhone":"+15552222222"}',
+      );
+      const res = createMockRes();
+      await handler(req, res as unknown as ServerResponse);
+
+      expect(res.statusCode).toBe(200);
+      expect(getProvider).toHaveBeenCalledWith(ORG_UUID);
+      expect(getTenantDb).toHaveBeenCalledWith(ORG_SCHEMA);
+      expect(resolveCallerIdByPurpose).toHaveBeenCalledWith(
+        { orgId: ORG_UUID, orgSchema: ORG_SCHEMA },
+        "outbound",
+      );
+    });
+
+    it("WebRTC token passes UUID to getProvider and getAccountSid, schema to getTenantDb", async () => {
+      const getProvider = vi.fn().mockResolvedValue(mockProvider());
+      const getAccountSid = vi.fn().mockResolvedValue("ACtest123");
+      const getTenantDb = vi.fn().mockReturnValue({} as Kysely<TenantDatabase>);
+      const deps = makeDeps({ getProvider, getAccountSid, getTenantDb });
+      const handler = createRelayHandler(deps);
+
+      const req = createMockReq("POST", "/relay/webrtc-token", "");
+      const res = createMockRes();
+      await handler(req, res as unknown as ServerResponse);
+
+      expect(res.statusCode).toBe(200);
+      expect(getProvider).toHaveBeenCalledWith(ORG_UUID);
+      expect(getAccountSid).toHaveBeenCalledWith(ORG_UUID);
+      expect(getTenantDb).toHaveBeenCalledWith(ORG_SCHEMA);
+    });
+
+    it("consultant-verify passes UUID to getProvider and OrgIdentifiers to resolveCallerIdByPurpose", async () => {
+      const getProvider = vi.fn().mockResolvedValue(mockProvider());
+      const resolveCallerIdByPurpose = vi
+        .fn()
+        .mockResolvedValue("+15559999999");
+      const getTenantDb = vi.fn().mockReturnValue({} as Kysely<TenantDatabase>);
+      const deps = makeDeps({
+        getProvider,
+        resolveCallerIdByPurpose,
+        getTenantDb,
+      });
+      const handler = createRelayHandler(deps);
+
+      const req = createMockReq(
+        "POST",
+        "/relay/consultant-verify",
+        JSON.stringify({ phone: "+15551112222", wantsPings: false }),
+      );
+      const res = createMockRes();
+      await handler(req, res as unknown as ServerResponse);
+
+      expect(res.statusCode).toBe(200);
+      expect(getProvider).toHaveBeenCalledWith(ORG_UUID);
+      expect(getTenantDb).toHaveBeenCalledWith(ORG_SCHEMA);
+      expect(resolveCallerIdByPurpose).toHaveBeenCalledWith(
+        { orgId: ORG_UUID, orgSchema: ORG_SCHEMA },
+        "outbound",
+      );
+    });
+
+    it("call relay stores UUID on PendingCall.orgId and schema on PendingCall.orgSchema", async () => {
+      const pendingCalls = new Map<string, PendingCall>();
+      const deps = makeDeps({ pendingCalls });
+      const handler = createRelayHandler(deps);
+
+      const req = createMockReq(
+        "POST",
+        "/relay/call",
+        '{"ticketId":"test-ticket-id","consultantPhone":"+15552222222"}',
+      );
+      const res = createMockRes();
+      await handler(req, res as unknown as ServerResponse);
+
+      expect(res.statusCode).toBe(200);
+      expect(pendingCalls.size).toBe(1);
+      const [, pending] = [...pendingCalls.entries()][0]!;
+      expect(pending.orgId).toBe(ORG_UUID);
+      expect(pending.orgSchema).toBe(ORG_SCHEMA);
+    });
+
+    it("call-confirm passes UUID from PendingCall to getAuthToken and getProvider", async () => {
+      const pending: PendingCall = {
+        clientPhoneBuf: Buffer.from("+15553333333"),
+        callerIdBuf: Buffer.from("+15559999999"),
+        orgId: ORG_UUID,
+        orgSchema: ORG_SCHEMA,
+        createdAt: Date.now(),
+      };
+      const pendingCalls = new Map<string, PendingCall>();
+      pendingCalls.set("CA_pin_1", pending);
+
+      const getAuthToken = vi.fn().mockResolvedValue("test_auth_token");
+      const getProvider = vi.fn().mockResolvedValue(
+        mockProvider({
+          validateWebhook: vi.fn().mockReturnValue(true),
+        }),
+      );
+      const deps = makeDeps({ pendingCalls, getAuthToken, getProvider });
+      const handler = createRelayHandler(deps);
+
+      const formBody = "CallSid=CA_pin_1&Digits=1";
+      const req = createMockReq(
+        "POST",
+        "/relay/call-confirm/org_test",
+        formBody,
+        {
+          "content-type": "application/x-www-form-urlencoded",
+          "x-twilio-signature": "valid_sig",
+        },
+      );
+      req.headers.cookie = "";
+      const res = createMockRes();
+      await handler(req, res as unknown as ServerResponse);
+
+      expect(res.statusCode).toBe(200);
+      // Platform-table calls receive the UUID, not the schema name
+      expect(getAuthToken).toHaveBeenCalledWith(ORG_UUID);
+      expect(getProvider).toHaveBeenCalledWith(ORG_UUID);
+    });
+
+    it("call relay builds status webhook URL with UUID, not schema name", async () => {
+      const provider = mockProvider();
+      const deps = makeDeps({
+        getProvider: vi.fn().mockResolvedValue(provider),
+        webhookBaseUrl: "https://api.care-y.app",
+      });
+      const handler = createRelayHandler(deps);
+
+      const req = createMockReq(
+        "POST",
+        "/relay/call",
+        '{"ticketId":"test-ticket-id","consultantPhone":"+15552222222"}',
+      );
+      const res = createMockRes();
+      await handler(req, res as unknown as ServerResponse);
+
+      expect(res.statusCode).toBe(200);
+      const callArgs = (
+        provider.initiateOutboundCall as ReturnType<typeof vi.fn>
+      ).mock.calls[0] as [
+        {
+          statusWebhookUrl: string;
+          confirmWebhookUrl: string;
+        },
+      ];
+      const { statusWebhookUrl, confirmWebhookUrl } = callArgs[0];
+      // Status webhook uses UUID (matches routes/webhooks.ts expectations)
+      expect(statusWebhookUrl).toBe(
+        `https://api.care-y.app/webhooks/twilio/${ORG_UUID}/status`,
+      );
+      // Confirm URL uses schema name (opaque path segment, not a DB lookup key)
+      expect(confirmWebhookUrl).toBe(
+        `https://api.care-y.app/relay/call-confirm/${ORG_SCHEMA}`,
+      );
     });
   });
 });
