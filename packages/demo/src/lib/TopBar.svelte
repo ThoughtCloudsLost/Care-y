@@ -83,12 +83,12 @@
     <div class="top-bar-right">
       <button
         class="icon-btn"
-        class:icon-btn-active={mode === "read"}
+        class:icon-btn-active={mode === "walk"}
         onclick={onToggleMode}
         aria-label={mode === "read"
           ? m.demo_mode_toggle_to_walk()
           : m.demo_mode_toggle_to_read()}
-        aria-pressed={mode === "read"}
+        aria-pressed={mode === "walk"}
         title={mode === "read"
           ? m.demo_mode_toggle_to_walk()
           : m.demo_mode_toggle_to_read()}

@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "Phone and handbook are unlinked (click to relink)" |
+* | "Simulator and handbook are unlinked (click to relink)" |
 *
 * @param {Demo_Toolbar_Link_UnlinkedInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

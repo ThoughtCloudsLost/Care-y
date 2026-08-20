@@ -6,17 +6,17 @@ import { getLocale, experimentalStaticLocale } from '../runtime.js';
 /** @typedef {{}} Demo_Flow_EmptyInputs */
 
 const en_demo_flow_empty = /** @type {(inputs: Demo_Flow_EmptyInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`No activity yet. Use the phone and each step of the flow appears here.`)
+	return /** @type {LocalizedString} */ (`No activity yet. Use the simulator and each step of the flow appears here.`)
 };
 
 const es_demo_flow_empty = /** @type {(inputs: Demo_Flow_EmptyInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Todavía no hay actividad. Usa el teléfono y cada paso del flujo aparece aquí.`)
+	return /** @type {LocalizedString} */ (`Todavía no hay actividad. Usa el simulador y cada paso del flujo aparece aquí.`)
 };
 
 /**
 * | output |
 * | --- |
-* | "No activity yet. Use the phone and each step of the flow appears here." |
+* | "No activity yet. Use the simulator and each step of the flow appears here." |
 *
 * @param {Demo_Flow_EmptyInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

@@ -10,21 +10,10 @@
     locales,
     isLocale,
   } from "$lib/paraglide/runtime.js";
-  import {
-    ArrowRight,
-    GripHorizontal,
-    Link2,
-    Link2Off,
-    LoaderCircle,
-    Maximize2,
-    Minimize2,
-    Smartphone,
-    Monitor,
-    X,
-  } from "@lucide/svelte";
+  import { ArrowRight, LoaderCircle, X } from "@lucide/svelte";
   import { RoleId, type RoleIdValue } from "@care-y/shared";
   import TopBar from "$demo/TopBar.svelte";
-  import RoleRail from "$demo/RoleRail.svelte";
+  import FrameToolbar from "$demo/FrameToolbar.svelte";
   import FlowBand from "$demo/FlowBand.svelte";
   import FlowStory from "$demo/FlowStory.svelte";
   import SectionIntro from "$demo/SectionIntro.svelte";
@@ -55,12 +44,7 @@
   import { DEMO_TOPICS } from "$demo/bridge.js";
   import {
     createFrameGeometry,
-    presetAnchoredLeft,
-    presetAnchoredTop,
-    clampTopToViewport,
-    bottomCentrePosition,
     BEZEL,
-    FRAME_FIT_MARGIN,
     PHONE_PRESET,
     DESKTOP_PRESET,
     WIDE_BREAKPOINT,
@@ -179,23 +163,18 @@
   });
 
   // -----------------------------------------------------------------------
-  // Chrome arm dimensions (single source for layout and flow-hole)
+  // Floating toolbar dimensions (single source for layout and flow-hole)
   //
-  // Each arm is: 4px padding + 44px button + 4px padding = 52px across
-  // its narrow axis. The top arm also has 2px top border = 54px total
-  // height above the frame. The left arm has 2px left border = 54px
-  // total width left of the frame.
+  // The toolbar is a rounded bar floating above the frame, detached by a
+  // gap. It spans the frame's full width and resizes with it. Height:
+  // 2px border x2 + 4px padding x2 + 44px tallest button = 56px.
+  // No left-arm reservation: the bar is horizontally flush with the frame.
   // -----------------------------------------------------------------------
 
-  /** Top arm height: 2px border-top + 4px padding + 44px tallest button + 4px padding. */
-  const CHROME_TOP_H = 54;
-  /** Left arm width: 2px border-left + 4px padding + 44px button + 4px padding. */
-  const CHROME_LEFT_W = 54;
-  /** Backplate drop below the frame top: the left arm's content height
-   *  (4px padding + 3x44px seals + 2x2px gaps + 4px padding = 144) plus
-   *  the plate's 2px bottom border, so the plate's bottom edge sits
-   *  flush with the last seal's row. */
-  const CHROME_DROP_H = 146;
+  /** Toolbar height: 2px border x2 + 4px padding x2 + 44px button row. */
+  const TOOLBAR_H = 56;
+  /** Gap between the toolbar's bottom edge and the frame's top edge. */
+  const TOOLBAR_GAP = 8;
 
   // -----------------------------------------------------------------------
   // Frame rects: bare (for peek controller) and chrome-inclusive (for flow)
@@ -209,19 +188,19 @@
     outerH: geo.outerH,
   });
 
-  /** Frame box expanded to cover the chrome arms so the flow hole
-   *  clears all L-shaped chrome. In non-walk mode or when chrome is
-   *  hidden, falls back to the bare rect. Shrunk state hides the left
-   *  arm (role seals), so only the top arm extends the hole then. */
+  /** Frame box expanded upward to cover the floating toolbar so the
+   *  flow hole clears the bar + gap above the frame. No horizontal
+   *  expansion: the toolbar spans the frame width, not beyond it.
+   *  In non-walk mode (read) or when chrome is hidden, falls back to
+   *  the bare rect. */
   const chromeFrameRect = $derived.by(() => {
     if (!showDesktopChrome) return frameRect;
-    const topH = CHROME_TOP_H;
-    const leftW = geo.shrunk ? 0 : CHROME_LEFT_W;
+    const aboveH = TOOLBAR_H + TOOLBAR_GAP;
     return {
-      left: geo.left - leftW,
-      top: geo.top - topH,
-      outerW: geo.outerW + leftW,
-      outerH: geo.outerH + topH,
+      left: geo.left,
+      top: geo.top - aboveH,
+      outerW: geo.outerW,
+      outerH: geo.outerH + aboveH,
     };
   });
 
@@ -247,7 +226,11 @@
   let gesture: GestureOrigin | null = null;
 
   function startDrag(e: PointerEvent): void {
-    if (e.button !== 0) return;
+    // Accept pointerdown with the primary button (button 0) AND
+    // pointermove events (button -1): the toolbar promotes a held
+    // button press into a drag mid-move, so the gesture can begin on
+    // a move event. Only secondary/middle presses are rejected.
+    if (e.button > 0) return;
     if (!(e.currentTarget instanceof HTMLElement)) return;
     e.currentTarget.setPointerCapture(e.pointerId);
     gesture = {
@@ -358,101 +341,71 @@
   const fpH = new Spring(geo.footprintH, { stiffness: 0.12, damping: 0.6 });
   let animating = $state(false);
 
-  // Edges the frame holds onto while a preset resizes it, so it grows
-  // toward the middle of the viewport instead of off the side or bottom.
-  // Both are decided once, at animation start.
-  let anchorRight: number | null = null;
-  let anchorBottom: number | null = null;
-
-  // Overrides both anchors: park the frame at the bottom centre for the
-  // whole animation. Set when shrinking on a narrow layout, where there
-  // is no side gutter for the thumbnail to live in. Recomputed per frame
-  // from the live size rather than solved once for the target, so the
-  // frame stays centred while it travels instead of only landing centred.
-  let dockBottomCentre = false;
-
-  function viewportSize(): { w: number; h: number } {
-    if (typeof window === "undefined") return { w: 1280, h: 800 };
-    return { w: window.innerWidth, h: window.innerHeight };
+  // Toolbar-hold anchor, set for the duration of every button-driven
+  // resize (presets, shrink, grow). The invariant: the clicked button
+  // must not move out from under the pointer. The bar spans the frame
+  // width, so the frame's top edge is always held; the horizontal
+  // reference depends on which zone the clicked button lives in:
+  //
+  //   "centre": preset buttons sit at the bar's horizontal midpoint,
+  //             so the frame's centre X is held and the footprint
+  //             grows symmetrically around it.
+  //   "left":   shrink/grow sit in the bar's left zone, flush with
+  //             the frame's left edge, so the left edge is held and
+  //             the footprint grows rightward.
+  //
+  // A taller or wider target may extend past the viewport edges as a
+  // result; that is the accepted tradeoff (the frame stays draggable,
+  // and the settle-time clampToViewport still prevents a mostly-
+  // offscreen frame).
+  interface ToolbarHold {
+    mode: "centre" | "left";
+    /** Frame centre X ("centre") or frame left edge ("left"). */
+    x: number;
+    top: number;
   }
 
-  /** Where the frame should sit for a given in-flight outer size. */
+  let toolbarHold: ToolbarHold | null = null;
+
+  /** Where the frame should sit for a given in-flight outer width. */
   function positionFor(
     outerW: number,
-    outerH: number,
     fallbackTop: number,
     fallbackLeft: number,
   ): { top: number; left: number } {
-    const { w: windowW, h: windowH } = viewportSize();
-    if (dockBottomCentre) {
-      return bottomCentrePosition(outerW, outerH, windowW, windowH);
+    if (toolbarHold === null) {
+      return { top: fallbackTop, left: fallbackLeft };
     }
-    const rawTop = anchorBottom !== null ? anchorBottom - outerH : fallbackTop;
+    // No clamping while the spring runs: any clamp would translate
+    // the frame and pull the clicked button away from the pointer,
+    // which is the one thing this anchor exists to prevent.
     return {
-      // Always fitted, not just when bottom-anchored: growing taller from
-      // a top anchor can overflow the bottom just as easily. The chrome
-      // height keeps a preset from landing behind the open flow band,
-      // where the frame's own toolbar would be unreachable.
-      top: clampTopToViewport(
-        rawTop,
-        outerH,
-        windowH,
-        FRAME_FIT_MARGIN,
-        topChromeHeight(),
-      ),
-      left: anchorRight !== null ? anchorRight - outerW : fallbackLeft,
+      top: toolbarHold.top,
+      left:
+        toolbarHold.mode === "centre"
+          ? toolbarHold.x - outerW / 2
+          : toolbarHold.x,
     };
   }
 
-  function animateToPreset(targetW: number, targetH: number): void {
-    const targetOuterW = targetW + BEZEL * 2;
-    const targetOuterH = targetH + BEZEL * 2;
-    const { w: windowW, h: windowH } = viewportSize();
-
-    // Capture the starting box before setFootprint moves it.
-    const startTop = geo.top;
-    const startLeft = geo.left;
-    const startOuterW = geo.outerW;
-    const startOuterH = geo.outerH;
-
-    const newLeft = presetAnchoredLeft(
-      startLeft,
-      startOuterW,
-      targetOuterW,
-      windowW,
-    );
-    // Right-anchored when presetAnchoredLeft moved the left edge
-    anchorRight = newLeft !== startLeft ? startLeft + startOuterW : null;
-    anchorBottom =
-      startTop + startOuterH / 2 > windowH / 2 ? startTop + startOuterH : null;
+  function animateToPreset(
+    targetW: number,
+    targetH: number,
+    hold: ToolbarHold["mode"],
+  ): void {
+    // Capture the anchor before setFootprint moves the box.
+    toolbarHold = {
+      mode: hold,
+      x: hold === "centre" ? geo.left + geo.outerW / 2 : geo.left,
+      top: geo.top,
+    };
 
     if (prefersReducedMotion.current) {
       geo.setFootprint(targetW, targetH);
-      if (dockBottomCentre) {
-        const docked = bottomCentrePosition(
-          targetOuterW,
-          targetOuterH,
-          windowW,
-          windowH,
-        );
-        geo.setPosition(docked.top, docked.left);
-      } else {
-        geo.setPosition(
-          presetAnchoredTop(
-            startTop,
-            startOuterH,
-            targetOuterH,
-            windowH,
-            FRAME_FIT_MARGIN,
-            topChromeHeight(),
-          ),
-          anchorRight !== null ? anchorRight - targetOuterW : startLeft,
-        );
-      }
+      const pos = positionFor(targetW + BEZEL * 2, geo.top, geo.left);
+      geo.setPosition(pos.top, pos.left);
       geo.clampToViewport();
-      anchorRight = null;
-      anchorBottom = null;
-      dockBottomCentre = false;
+      toolbarHold = null;
       return;
     }
 
@@ -474,9 +427,8 @@
     const h = fpH.current;
     geo.setFootprint(w, h);
 
-    // Follow the anchored edges as the footprint changes, so the frame
-    // appears to grow toward the middle of the viewport.
-    const live = positionFor(w + BEZEL * 2, h + BEZEL * 2, geo.top, geo.left);
+    // Hold the toolbar anchor as the footprint changes.
+    const live = positionFor(w + BEZEL * 2, geo.top, geo.left);
     geo.setPosition(live.top, live.left);
 
     const wDone = Math.abs(w - fpW.target) < 0.5;
@@ -485,16 +437,9 @@
       animating = false;
       // Snap to exact target
       geo.setFootprint(fpW.target, fpH.target);
-      const final = positionFor(
-        fpW.target + BEZEL * 2,
-        fpH.target + BEZEL * 2,
-        geo.top,
-        geo.left,
-      );
+      const final = positionFor(fpW.target + BEZEL * 2, geo.top, geo.left);
       geo.setPosition(final.top, final.left);
-      anchorRight = null;
-      anchorBottom = null;
-      dockBottomCentre = false;
+      toolbarHold = null;
       geo.clampToViewport();
     }
   });
@@ -504,10 +449,10 @@
       // Stay shrunk: adopt the preset's ratio at shrunken scale and
       // point the grow memory at the preset's full footprint.
       const target = geo.retargetShrunkTo(w, h);
-      animateToPreset(target.w, target.h);
+      animateToPreset(target.w, target.h, "centre");
       return;
     }
-    animateToPreset(w, h);
+    animateToPreset(w, h, "centre");
   }
 
   function handlePhonePreset(): void {
@@ -522,19 +467,12 @@
     if (geo.shrunk) {
       const target = geo.grow();
       if (target !== null) {
-        // Growing releases the dock: the frame returns to wherever the
-        // normal anchoring puts it.
-        dockBottomCentre = false;
-        animateToPreset(target.w, target.h);
+        animateToPreset(target.w, target.h, "left");
       }
       return;
     }
     const target = geo.shrink();
-    // On a narrow layout the shrunk frame has no side gutter to sit in,
-    // so it docks to the bottom centre instead of staying wherever the
-    // full-size frame happened to be.
-    dockBottomCentre = viewportSize().w < WIDE_BREAKPOINT;
-    animateToPreset(target.w, target.h);
+    animateToPreset(target.w, target.h, "left");
   }
 
   // -----------------------------------------------------------------------
@@ -610,11 +548,14 @@
   // Link gate: the user's link choice, minus an in-flight drag/resize
   // gesture. Suspending during gestures keeps dragging from driving
   // either side; the choice itself is untouched, so lifting the pointer
-  // restores it.
+  // restores it. The bare choice is passed separately: while the user
+  // has explicitly unlinked, the engine navigates the story locally,
+  // and it must not mistake a transient gesture for that state.
   const scrollEngine = createScrollEngine(
     () => bridge,
     () => isLinked() && !gestureActive && !peekActive,
     () => !entryVisible,
+    () => isLinked(),
   );
 
   // Chrome height at the last settled layout. Plain, not $state: it is
@@ -726,6 +667,11 @@
 
   function handleToggleMode(): void {
     demoMode.toggle();
+  }
+
+  /** Toolbar close button: leave walk mode for the reading view. */
+  function handleCloseToRead(): void {
+    demoMode.set("read");
   }
 
   function handleRoleChange(role: RoleIdValue): void {
@@ -1003,107 +949,31 @@
   style:left="{geo.left}px"
   style:width="{geo.outerW}px"
   style:height="{geo.outerH}px"
-  style:--chrome-top-h="{CHROME_TOP_H}px"
-  style:--chrome-left-w="{CHROME_LEFT_W}px"
 >
-  <!-- L-shaped chrome: corner grip + top arm (presets, shrink, link)
-       + left arm (role seals). Both arms sit fully outside the frame
-       box so they clear the resize handles (4px past frame edge). -->
+  <!-- Floating toolbar: rounded bar above the frame, spanning its width.
+       Close + shrink/grow + link on the left, presets centered, user
+       badge with role dropdown on the right. The bar's background is
+       the drag surface (pointer handlers passed through). -->
   {#if showDesktopChrome}
-    <!-- Top arm: horizontal bar above the frame. When the left arm is
-         visible, the top arm extends leftward by the arm's width so the
-         grip sits at the outer L-corner. When shrunk (no left arm), the
-         top arm starts flush with the frame's left edge. -->
-    <div
-      class="chrome-top-arm"
-      style:left="{geo.shrunk ? 0 : -CHROME_LEFT_W}px"
-      style:--chrome-drop="{CHROME_DROP_H}px"
-    >
-      <div
-        class="chrome-grip"
-        role="presentation"
-        onpointerdown={startDrag}
-        onpointermove={onPointerMove}
-        onpointerup={onPointerUp}
-        onpointercancel={onPointerUp}
-        title={m.demo_toolbar_grip_tooltip()}
-      >
-        <GripHorizontal size={16} />
-      </div>
-      {#if !geo.shrunk}
-        <button
-          class="toolbar-btn"
-          class:toolbar-btn-active={geo.footprintW === PHONE_PRESET.w &&
-            geo.footprintH === PHONE_PRESET.h}
-          type="button"
-          onclick={handlePhonePreset}
-          aria-label={m.demo_toolbar_phone_preset()}
-          title={m.demo_toolbar_phone_tooltip()}
-        >
-          <Smartphone size={16} />
-        </button>
-        <button
-          class="toolbar-btn"
-          class:toolbar-btn-active={geo.footprintW === DESKTOP_PRESET.w &&
-            geo.footprintH === DESKTOP_PRESET.h}
-          type="button"
-          onclick={handleDesktopPreset}
-          aria-label={m.demo_toolbar_desktop_preset()}
-          title={m.demo_toolbar_desktop_tooltip()}
-        >
-          <Monitor size={16} />
-        </button>
-      {/if}
-      <button
-        class="toolbar-btn"
-        class:toolbar-btn-active={geo.shrunk}
-        type="button"
-        onclick={handleShrinkGrow}
-        aria-label={geo.shrunk
-          ? m.demo_toolbar_grow_tooltip()
-          : m.demo_toolbar_shrink_tooltip()}
-        aria-pressed={geo.shrunk}
-        title={geo.shrunk
-          ? m.demo_toolbar_grow_tooltip()
-          : m.demo_toolbar_shrink_tooltip()}
-      >
-        {#if geo.shrunk}
-          <Maximize2 size={16} />
-        {:else}
-          <Minimize2 size={16} />
-        {/if}
-      </button>
-      <button
-        class="toolbar-btn"
-        class:toolbar-btn-active={!isLinked()}
-        type="button"
-        onclick={toggleLinked}
-        aria-label={isLinked()
-          ? m.demo_toolbar_link_linked()
-          : m.demo_toolbar_link_unlinked()}
-        aria-pressed={!isLinked()}
-        title={isLinked()
-          ? m.demo_toolbar_link_linked()
-          : m.demo_toolbar_link_unlinked()}
-      >
-        {#if isLinked()}
-          <Link2 size={16} />
-        {:else}
-          <Link2Off size={16} />
-        {/if}
-      </button>
-    </div>
-    <!-- Left arm: vertical bar along the frame's left edge, below the
-         corner. Role seals only, hidden when shrunk. -->
-    {#if !geo.shrunk}
-      <div
-        class="chrome-left-arm"
-        role="toolbar"
-        aria-label={m.demo_role_rail_label()}
-      >
-        <RoleRail {activeRole} onrolechange={handleRoleChange} />
-      </div>
-    {/if}
+    <FrameToolbar
+      shrunk={geo.shrunk}
+      phoneActive={geo.footprintW === PHONE_PRESET.w &&
+        geo.footprintH === PHONE_PRESET.h}
+      desktopActive={geo.footprintW === DESKTOP_PRESET.w &&
+        geo.footprintH === DESKTOP_PRESET.h}
+      linked={isLinked()}
+      {activeRole}
+      footprintW={geo.footprintW}
+      onPhonePreset={handlePhonePreset}
+      onDesktopPreset={handleDesktopPreset}
+      onShrinkGrow={handleShrinkGrow}
+      onToggleLink={toggleLinked}
+      onRoleChange={handleRoleChange}
+      onClose={handleCloseToRead}
+      ondragstart={startDrag}
+      ondragmove={onPointerMove}
+      ondragend={onPointerUp}
+    />
   {/if}
 
   <!-- Resize handles: 4 edges + 4 corners -->
@@ -1175,8 +1045,8 @@
 
     <!-- Bezel drag strips: four edges around the screen so the 12px bezel
        ring acts as a drag surface without blocking the iframe. These are
-       pure pointer-capture surfaces duplicating the accessible grip
-       button's function, so role="presentation" keeps them out of the
+       pure pointer-capture surfaces duplicating the toolbar's drag
+       surface, so role="presentation" keeps them out of the
        accessibility tree. -->
     <div
       class="bezel-strip bezel-strip-top"
@@ -1565,113 +1435,6 @@
   .floating-frame--hidden {
     visibility: hidden;
     pointer-events: none;
-  }
-
-  /* ── L-shaped chrome ──
-     Two arms meet at the frame's top-left corner. Both sit fully
-     outside the frame box (right: 100% / bottom: 100%) so they clear
-     the 4px resize handles. Shared background, border, and color
-     scheme: permanently dark (#1a1a1a) in both page themes. The inner
-     edges (frame-facing) are borderless so the arms merge with the
-     bezel. Outer corners are rounded; the two arms share a single
-     continuous corner at the top-left. */
-
-  /* The top arm's left offset is set dynamically (inline style) so it
-     extends over the left arm when role seals are visible, or stays
-     flush with the frame edge when shrunk. The left arm's top aligns
-     with the top arm's bottom. Only the outer-most corners round;
-     the shared corner and frame-facing edges stay square. */
-  .chrome-top-arm {
-    position: absolute;
-    bottom: 100%;
-    display: flex;
-    flex-direction: row;
-    align-items: center;
-    gap: 2px;
-    padding: 4px;
-    background: #1a1a1a;
-    border: 2px solid #333;
-    border-bottom: none;
-    border-radius: 10px 10px 0 0;
-  }
-
-  /* Backplate: the top arm's surface extends down behind the phone to
-     the left arm's bottom edge, so the two arms read as one plate.
-     The chrome block paints before DemoFrame in the DOM, so the frame
-     covers the plate everywhere except the seal strip on its left.
-     The drop applies in shrunk mode too (same vertical extent behind
-     the frame) so the plate silhouette through the bezel corner stays
-     constant across states. left/right -2px cover the arm's own border
-     so the outer edges are continuous lines. */
-  .chrome-top-arm::after {
-    content: "";
-    position: absolute;
-    top: 100%;
-    left: -2px;
-    right: -2px;
-    height: var(--chrome-drop);
-    background: #1a1a1a;
-    border: 2px solid #333;
-    border-top: none;
-    border-radius: 0 0 10px 10px;
-    pointer-events: none;
-  }
-
-  /* The left arm is a transparent content column riding the backplate;
-     the plate owns the chrome (background, border, rounding). */
-  .chrome-left-arm {
-    position: absolute;
-    top: 0;
-    right: 100%;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 2px;
-    padding: 4px;
-  }
-
-  .chrome-grip {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 44px;
-    height: 32px;
-    cursor: grab;
-    color: #98989d;
-    border-radius: 6px;
-    touch-action: none;
-  }
-
-  .chrome-grip:active {
-    cursor: grabbing;
-  }
-
-  .toolbar-btn {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 44px;
-    height: 44px;
-    min-height: 44px;
-    border: none;
-    border-radius: 6px;
-    background: transparent;
-    color: #98989d;
-    cursor: pointer;
-    transition: background 0.15s ease;
-  }
-
-  .toolbar-btn:hover {
-    background: rgba(255, 255, 255, 0.08);
-  }
-
-  .toolbar-btn-active {
-    background: rgba(0, 122, 255, 0.2);
-    color: #64d2ff;
-  }
-
-  .toolbar-btn-active:hover {
-    background: rgba(0, 122, 255, 0.25);
   }
 
   /* Bezel drag strips: four edges that cover only the 12px bezel ring,
