@@ -9,7 +9,10 @@ import type { Kysely } from "kysely";
 import type { TenantDatabase } from "../db/types.js";
 import type { FieldEncryptor } from "../crypto/field-encryptor.js";
 import type { TelephonyProvider } from "../telephony/provider.js";
-import type { PhonePurpose } from "../telephony/phone-resolver.js";
+import type {
+  PhonePurpose,
+  OrgIdentifiers,
+} from "../telephony/phone-resolver.js";
 import type { JobQueue } from "./queue.js";
 import { notificationEventTypeSchema } from "@care-y/shared";
 import { getStrings, buildLoginUrl } from "../notifications/i18n.js";
@@ -18,6 +21,7 @@ import { ValidationError } from "../errors.js";
 export const NOTIFICATION_SMS_QUEUE = "notification-sms";
 
 const notificationSmsPayloadSchema = z.object({
+  orgId: z.uuid(),
   orgSchema: z.string().min(1),
   orgSlug: z.string().min(1),
   recipientUserIds: z.array(z.uuid()),
@@ -31,9 +35,9 @@ export type NotificationSmsPayload = z.infer<
 export interface NotificationSmsJobDeps {
   readonly encryptor: FieldEncryptor;
   readonly getTenantDb: (orgSchema: string) => Kysely<TenantDatabase>;
-  readonly getProvider: (orgSchema: string) => Promise<TelephonyProvider>;
+  readonly getProvider: (orgId: string) => Promise<TelephonyProvider>;
   readonly resolveCallerIdByPurpose: (
-    orgSchema: string,
+    org: OrgIdentifiers,
     purpose: PhonePurpose,
   ) => Promise<string | null>;
 }
@@ -59,7 +63,7 @@ export function createNotificationSmsJobHandler(
       );
     }
 
-    const { orgSchema, orgSlug, recipientUserIds, eventType } =
+    const { orgId, orgSchema, orgSlug, recipientUserIds, eventType } =
       parseResult.data;
     if (recipientUserIds.length === 0) return;
 
@@ -67,8 +71,9 @@ export function createNotificationSmsJobHandler(
     const strings = getStrings("en");
     const body = strings.smsPing(loginUrl);
 
+    const org: OrgIdentifiers = { orgId, orgSchema };
     const tDb = deps.getTenantDb(orgSchema);
-    const from = await deps.resolveCallerIdByPurpose(orgSchema, "outbound");
+    const from = await deps.resolveCallerIdByPurpose(org, "outbound");
     if (from === null) {
       console.error(
         `No caller ID for org ${orgSchema}, skipping SMS pings for event ${eventType}`,
@@ -76,7 +81,7 @@ export function createNotificationSmsJobHandler(
       return;
     }
 
-    const provider = await deps.getProvider(orgSchema);
+    const provider = await deps.getProvider(orgId);
 
     // Load opted-in consultant rows in one query
     const rows = await tDb

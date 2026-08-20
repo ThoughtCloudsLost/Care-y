@@ -15,14 +15,17 @@ import { randomInt } from "node:crypto";
 import type { Kysely, Selectable } from "kysely";
 import type { TenantDatabase, SmsCodesTable } from "../db/types.js";
 import type { TelephonyProvider } from "../telephony/provider.js";
-import type { PhonePurpose } from "../telephony/phone-resolver.js";
+import type {
+  PhonePurpose,
+  OrgIdentifiers,
+} from "../telephony/phone-resolver.js";
 import { RateLimitError, ValidationError } from "../errors.js";
 import { ErrorCode } from "@care-y/shared";
 import { toCount } from "../db/query-utils.js";
 import { createScryptHasher } from "./scrypt-hash.js";
 
 export type CallerIdResolver = (
-  orgSchema: string,
+  org: OrgIdentifiers,
   purpose: PhonePurpose,
 ) => Promise<string | null>;
 
@@ -62,7 +65,7 @@ export function createSmsCodeService(
   db: Kysely<TenantDatabase>,
   provider: TelephonyProvider,
   resolveCallerId: CallerIdResolver,
-  orgSchema: string,
+  org: OrgIdentifiers,
 ): SmsCodeService {
   /** Throws RateLimitError if the most recent code was sent less than 90s ago. */
   async function enforceCooldown(userId: string, now: Date): Promise<void> {
@@ -164,7 +167,7 @@ export function createSmsCodeService(
       await enforceCooldown(userId, now);
       await enforceHourlyLimit(userId, now);
 
-      const callerId = await resolveCallerId(orgSchema, "system");
+      const callerId = await resolveCallerId(org, "system");
       if (callerId === null) {
         throw new ValidationError(ErrorCode.NO_PHONE_NUMBERS_CONFIGURED);
       }

@@ -70,7 +70,7 @@ import { createBrandingIconHandler } from "./routes/branding-icons.js";
 import { createBlobDownloadHandler } from "./routes/blob-download.js";
 import { createManifestHandler } from "./routes/manifest.js";
 import { createRelayHandler, type PendingCall } from "./routes/relay.js";
-import { authenticateRelay } from "./routes/relay-utils.js";
+import { authenticateRelay, type OrgResolved } from "./routes/relay-utils.js";
 import { createDbCallTracker } from "./telephony/call-tracker.js";
 import { extractOrgSlug } from "./org/slug-resolver.js";
 import { NotFoundError } from "./errors.js";
@@ -495,8 +495,8 @@ const phoneResolver = createPhoneResolver({
       phone_system_sid: row?.phone_system_sid ?? null,
     };
   },
-  async getProvisionedPhones(orgSchema: string) {
-    return telephonyConfigService.lookupProvisionedPhones(orgSchema);
+  async getProvisionedPhones(orgId: string) {
+    return telephonyConfigService.lookupProvisionedPhones(orgId);
   },
 });
 
@@ -734,16 +734,22 @@ async function listActiveOrgSchemas(): Promise<string[]> {
   return orgs.map((o) => o.schema_name);
 }
 
-/** Lists schema + slug pairs for all active orgs (single query). */
+/** Lists id + schema + slug for all active orgs (single query). Cross-tenant
+ *  job handlers need the id for platform tables and the schema for tenant
+ *  queries, so both travel together. */
 async function listActiveOrgSchemasWithSlugs(): Promise<
-  readonly { schema: string; slug: string }[]
+  readonly { id: string; schema: string; slug: string }[]
 > {
   const orgs = await db
     .selectFrom("orgs")
-    .select(["schema_name", "slug"])
+    .select(["id", "schema_name", "slug"])
     .where("is_active", "=", true)
     .execute();
-  return orgs.map((o) => ({ schema: o.schema_name, slug: o.slug }));
+  return orgs.map((o) => ({
+    id: o.id,
+    schema: o.schema_name,
+    slug: o.slug,
+  }));
 }
 
 registerLogDeletionHandler(jobQueue, providerFactory);
@@ -764,8 +770,7 @@ jobQueue.process("notification-email", notificationJobHandler);
 registerNotificationSmsHandler(jobQueue, {
   encryptor,
   getTenantDb: tenantDb,
-  getProvider: async (orgSchema: string) =>
-    providerFactory.getProvider(orgSchema),
+  getProvider: async (orgId: string) => providerFactory.getProvider(orgId),
   resolveCallerIdByPurpose: phoneResolver,
 });
 
@@ -806,6 +811,7 @@ registerEscalationRulesHandler(
       try {
         await runEscalationCheck(
           tenantDb(org.schema),
+          org.id,
           org.schema,
           org.slug,
           escalationRulesDeps,
@@ -928,13 +934,16 @@ const pendingCallCleanupInterval = setInterval(() => {
 }, 60_000);
 
 // Org resolver for relay endpoints: looks up the org by slug via orgService
-// (same pattern as tRPC context) to get the correct UUID-based schema name.
-async function relayOrgResolver(req: IncomingMessage): Promise<string | null> {
+// (same pattern as tRPC context). Returns both identifiers, because platform
+// tables are keyed by the org UUID while tenant queries need the schema name.
+async function relayOrgResolver(
+  req: IncomingMessage,
+): Promise<OrgResolved | null> {
   const slug = extractOrgSlug(req);
   if (slug === null) return null;
   const org = await orgService.findBySlug(slug);
   if (org?.isActive !== true) return null;
-  return org.schemaName;
+  return { orgId: org.id, orgSchema: org.schemaName };
 }
 
 // Session repo factory for relay auth. Loads the real org_public_key

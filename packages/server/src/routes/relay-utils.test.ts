@@ -237,7 +237,10 @@ describe("parseCookieValue", () => {
 // ---------------------------------------------------------------------------
 
 describe("authenticateRelay", () => {
-  const validOrgResolver = () => "org_test";
+  const validOrgResolver = () => ({
+    orgId: "test-uuid-001",
+    orgSchema: "org_test",
+  });
 
   function mockSessionRepo(
     session: SessionData | null,
@@ -269,6 +272,7 @@ describe("authenticateRelay", () => {
       ok: true,
       session: {
         userId: "user-001",
+        orgId: "test-uuid-001",
         orgSchema: "org_test",
         sessionId: "session-001",
       },

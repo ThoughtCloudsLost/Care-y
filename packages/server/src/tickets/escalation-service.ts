@@ -139,6 +139,7 @@ async function findInactiveCandidates(
 /** Evaluate all active rules for one tenant and execute matching actions. */
 export async function runEscalationCheck(
   tDb: Kysely<TenantDatabase>,
+  orgId: string,
   orgSchema: string,
   orgSlug: string,
   deps: EscalationServiceDeps,
@@ -205,6 +206,7 @@ export async function runEscalationCheck(
 
       await deps.notificationService.dispatch(
         tDb,
+        orgId,
         orgSchema,
         orgSlug,
         "ticket_escalated",

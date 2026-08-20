@@ -217,6 +217,7 @@ export async function quarantineRecording(
     if (adminIds.length > 0) {
       await notificationService.dispatchTicketless(
         tDb,
+        orgId,
         orgSchema,
         orgSlug,
         "voicemail_quarantined",

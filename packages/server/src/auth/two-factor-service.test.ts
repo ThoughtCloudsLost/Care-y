@@ -1290,7 +1290,10 @@ describe.skipIf(!process.env.DATABASE_URL)("TwoFactorService", () => {
   // --- SMS enrollment (pending -> active) ---
 
   describe("SMS enrollment", () => {
-    const TEST_ORG_SCHEMA = "org_test";
+    const TEST_ORG = {
+      orgId: TEST_ORG_ID,
+      orgSchema: `org_${TEST_ORG_ID}`,
+    } as const;
 
     const smsResolver: CallerIdResolver = vi
       .fn<CallerIdResolver>()
@@ -1317,7 +1320,7 @@ describe.skipIf(!process.env.DATABASE_URL)("TwoFactorService", () => {
         db,
         provider,
         smsResolver,
-        TEST_ORG_SCHEMA,
+        TEST_ORG,
       );
       const emailCodes = createEmailCodeService(db, createMockEmailSender());
       const service = createTwoFactorService(
@@ -1370,7 +1373,7 @@ describe.skipIf(!process.env.DATABASE_URL)("TwoFactorService", () => {
         db,
         provider,
         smsResolver,
-        TEST_ORG_SCHEMA,
+        TEST_ORG,
       );
       await smsCodes.sendCode(user.id, phone);
 
@@ -1397,7 +1400,7 @@ describe.skipIf(!process.env.DATABASE_URL)("TwoFactorService", () => {
         db,
         provider,
         smsResolver,
-        TEST_ORG_SCHEMA,
+        TEST_ORG,
       );
       await smsCodes.sendCode(user.id, "+12125551234");
 
@@ -1444,7 +1447,7 @@ describe.skipIf(!process.env.DATABASE_URL)("TwoFactorService", () => {
         db,
         provider,
         smsResolver,
-        TEST_ORG_SCHEMA,
+        TEST_ORG,
       );
       await smsCodes.sendCode(user.id, phone);
       const codeMatch = /(\d{6})/.exec(provider.smsCalls[0]!.body);
@@ -1473,7 +1476,7 @@ describe.skipIf(!process.env.DATABASE_URL)("TwoFactorService", () => {
         db,
         provider,
         smsResolver,
-        TEST_ORG_SCHEMA,
+        TEST_ORG,
       );
       await smsCodes.sendCode(user.id, phone);
       const codeMatch = /(\d{6})/.exec(provider.smsCalls[0]!.body);

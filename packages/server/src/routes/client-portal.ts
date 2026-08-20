@@ -109,7 +109,7 @@ export interface ClientPortalRouterDeps {
   ) => Promise<TelephonyProvider | null>;
   /** Phone purpose resolver for portal nudge caller ID. */
   readonly portalResolveCallerId?: (
-    orgSchema: string,
+    org: { readonly orgId: string; readonly orgSchema: string },
     purpose: "outbound" | "system",
   ) => Promise<string | null>;
 
@@ -274,6 +274,7 @@ export function createClientPortalRouter(deps: ClientPortalRouterDeps) {
               notificationService: deps.notificationService,
               sealedBox: ctx.org.sealedBox,
               fieldEncryptor: deps.fieldEncryptor,
+              orgId: ctx.org.orgId,
               orgSchema: ctx.org.orgSchema,
               orgSlug: ctx.org.orgSlug,
               accountServiceDeps: acctDeps,
@@ -1072,6 +1073,7 @@ function buildPortalMessageDeps(
   ctx: {
     org: {
       tenantDb: Kysely<TenantDatabase>;
+      orgId: string;
       orgSlug: string;
       orgSchema: string;
     };
@@ -1090,6 +1092,7 @@ function buildPortalMessageDeps(
       deps.portalResolveCallerId ?? (async () => Promise.resolve(null)),
     fieldEncryptor,
     notificationService: deps.notificationService,
+    orgId: ctx.org.orgId,
     orgSchema: ctx.org.orgSchema,
     orgSlug: ctx.org.orgSlug,
   };

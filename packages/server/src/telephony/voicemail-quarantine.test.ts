@@ -448,6 +448,46 @@ describe.skipIf(!process.env.DATABASE_URL)(
       expect(rows[0]!.status).toBe("pending");
     });
 
+    it("passes orgId to dispatchTicketless when admins exist", async () => {
+      const admin = await createTestUser(testDb.db, {
+        overrides: { role_id: RoleId.ADMIN },
+      });
+
+      const blobStore = createMockBlobStore();
+      const notificationService = createMockNotificationService();
+      const testOrgId = crypto.randomUUID();
+
+      const deps: QuarantineDeps = {
+        tDb: testDb.db,
+        provider: createMockProvider(),
+        blobStore,
+        jobQueue: createMockJobQueue(),
+        sealedBox: createMockSealedBox(),
+        orgId: testOrgId,
+        orgSchema: testDb.schemaName,
+        orgSlug: "integ-org",
+        notificationService,
+      };
+
+      await quarantineRecording(deps, {
+        recordingSid: `RE_ORGID_${crypto.randomUUID().slice(0, 8)}`,
+        callSid: `CA_ORGID_${crypto.randomUUID().slice(0, 8)}`,
+        reason: "tracker_miss",
+      });
+
+      expect(notificationService.dispatchTicketless).toHaveBeenCalledWith(
+        testDb.db,
+        testOrgId,
+        testDb.schemaName,
+        "integ-org",
+        "voicemail_quarantined",
+        expect.arrayContaining([admin.id]),
+      );
+
+      // Clean up admin to avoid interference with other tests
+      await testDb.db.deleteFrom("users").where("id", "=", admin.id).execute();
+    });
+
     it("duplicate recording_sid deletes the duplicate blob and returns early", async () => {
       const blobStore = createMockBlobStore();
       const deleteSpy = vi.spyOn(blobStore, "delete");
