@@ -203,6 +203,10 @@ export function buildTopicCandidates(topic: DemoTopic): Set<string> {
         break;
       case "twofa-totp":
         candidates.add(m.twofa_totp_label({}, opts));
+        // Settled TOTP screen (TwoFactorChallenge.svelte:491-512):
+        // code input placeholder and verify button
+        candidates.add(m.twofa_totp_code_placeholder({}, opts));
+        candidates.add(m.twofa_verify_submit({}, opts));
         break;
       case "twofa-passkey":
         candidates.add(m.twofa_passkey_use({}, opts));
@@ -210,17 +214,31 @@ export function buildTopicCandidates(topic: DemoTopic): Set<string> {
       case "twofa-email":
         candidates.add(m.twofa_email_label({}, opts));
         candidates.add(m.twofa_email_send_code({}, opts));
+        // Post-auto-send state (TwoFactorChallenge.svelte:556-588):
+        // code input placeholder and verify button
+        candidates.add(m.twofa_totp_code_placeholder({}, opts));
+        candidates.add(m.twofa_verify_submit({}, opts));
         break;
       case "twofa-sms":
         candidates.add(m.twofa_sms_label({}, opts));
         candidates.add(m.twofa_sms_send_code({}, opts));
+        // Post-auto-send state (TwoFactorChallenge.svelte:609-643):
+        // code input placeholder and verify button
+        candidates.add(m.twofa_totp_code_placeholder({}, opts));
+        candidates.add(m.twofa_verify_submit({}, opts));
         break;
       case "twofa-push":
         candidates.add(m.twofa_push_label({}, opts));
         candidates.add(m.twofa_push_send({}, opts));
+        // Push waiting state (TwoFactorChallenge.svelte:648-652)
+        candidates.add(m.twofa_push_waiting({}, opts));
         break;
       case "twofa-backup":
         candidates.add(m.twofa_backup_codes_enter({}, opts));
+        // Backup code entry screen (TwoFactorChallenge.svelte:682-701):
+        // backup code input placeholder and verify button
+        candidates.add(m.twofa_backup_codes_placeholder({}, opts));
+        candidates.add(m.twofa_verify_submit({}, opts));
         break;
       case "key-derivation":
         candidates.add(m.auth_phase_argon2id({}, opts));
@@ -278,7 +296,8 @@ export function buildTopicCandidates(topic: DemoTopic): Set<string> {
         candidates.add(m.tickets_sort_new_replies_first({}, opts));
         break;
       case "decryption":
-        // No label candidates; the PhoneApp special case owns this topic
+        // No label candidates; PhoneApp handles this as a first-class
+        // special case (replay descramble, poll for busy placeholder)
         break;
       case "split-view":
         candidates.add(m.split_view_resize_label({}, opts));
@@ -318,6 +337,11 @@ export function buildTopicCandidates(topic: DemoTopic): Set<string> {
         candidates.add(m.ticket_compose_actions({}, opts));
         break;
       case "reply":
+        // The compose-actions button is the entry point for the reply
+        // choreography in PhoneApp (stage 1 clicks it to open the
+        // popover, stage 2 selects Reply). Also include the send
+        // labels for classification of visitor taps.
+        candidates.add(m.ticket_compose_actions({}, opts));
         candidates.add(m.ticket_send({}, opts));
         candidates.add(m.ticket_sms_send({}, opts));
         break;
@@ -431,6 +455,26 @@ export function buildTopicCandidates(topic: DemoTopic): Set<string> {
         break;
       case "admin-roster-tools":
         candidates.add(m.admin_users_sort({}, opts));
+        // Composed labels the SubNavbarFilterLayout builds for the
+        // sort button's aria-label (SubNavbarFilterLayout.svelte:71-79):
+        candidates.add(
+          m.sort_button_label(
+            {
+              label: m.admin_users_sort({}, opts),
+              direction: m.table_sort_ascending({}, opts),
+            },
+            opts,
+          ),
+        );
+        candidates.add(
+          m.sort_button_label(
+            {
+              label: m.admin_users_sort({}, opts),
+              direction: m.table_sort_descending({}, opts),
+            },
+            opts,
+          ),
+        );
         candidates.add(m.admin_users_filter_role({}, opts));
         candidates.add(m.admin_users_filter_status({}, opts));
         candidates.add(m.admin_users_filter_keys({}, opts));
@@ -540,6 +584,49 @@ export function buildSmsTitleCandidates(): Set<string> {
   const terms = withTerms();
   for (const locale of locales) {
     candidates.add(m.ticket_sms_title(terms, { locale }));
+  }
+  return candidates;
+}
+
+/**
+ * Labels for the "Reply to client" entry inside the compose actions
+ * popover (ComposeActions.svelte:98-106), across locales. The reply
+ * choreography's second stage searches for this label alone so the
+ * still-visible compose button does not win the aria pass.
+ */
+export function buildReplyTitleCandidates(): Set<string> {
+  const candidates = new Set<string>();
+  const terms = withTerms();
+  for (const locale of locales) {
+    candidates.add(m.ticket_reply_to_client(terms, { locale }));
+  }
+  return candidates;
+}
+
+/**
+ * Labels for the compose dismiss button (TicketCompose.svelte:176),
+ * across locales. Used by the reply cleanup to collapse the compose
+ * bar the demo opened.
+ */
+export function buildComposeDismissCandidates(): Set<string> {
+  const candidates = new Set<string>();
+  for (const locale of locales) {
+    candidates.add(m.ticket_compose_dismiss_mode({}, { locale }));
+  }
+  return candidates;
+}
+
+/**
+ * Labels for the close and reopen actions inside the more-actions
+ * panel (TicketPanelContent.svelte:291-305), across locales. The
+ * close-reopen choreography opens the panel and marks whichever of
+ * the two actions the ticket's state renders.
+ */
+export function buildCloseReopenCandidates(): Set<string> {
+  const candidates = new Set<string>();
+  for (const locale of locales) {
+    candidates.add(m.ticket_action_close({}, { locale }));
+    candidates.add(m.ticket_action_reopen({}, { locale }));
   }
   return candidates;
 }
@@ -719,6 +806,26 @@ export function buildActivationCandidates(topic: DemoTopic): Set<string> {
         break;
       case "admin-roster-tools":
         candidates.add(m.admin_users_sort({}, opts));
+        // Composed labels matching the sort button's aria-label
+        // (SubNavbarFilterLayout.svelte:71-79, people/+page.svelte:295):
+        candidates.add(
+          m.sort_button_label(
+            {
+              label: m.admin_users_sort({}, opts),
+              direction: m.table_sort_ascending({}, opts),
+            },
+            opts,
+          ),
+        );
+        candidates.add(
+          m.sort_button_label(
+            {
+              label: m.admin_users_sort({}, opts),
+              direction: m.table_sort_descending({}, opts),
+            },
+            opts,
+          ),
+        );
         break;
       case "admin-queues":
         candidates.add(m.admin_tab_queues(terms, opts));
@@ -1073,9 +1180,10 @@ export function findTopicElementLoose(
 
 /**
  * Whether the element sits in shell navigation chrome: the desktop
- * sidebar, tab bars, or any nav landmark. Pulse taps must never
- * activate navigation (clicking a sidebar item leaves the screen
- * being narrated), and target resolution prefers content matches.
+ * sidebar, tab bars, or any nav landmark. Used by the element finder
+ * to prefer content matches over chrome duplicates. Includes content-
+ * level tablists (IconTabToggle with semantics "tabs") because the
+ * finder should still prefer a non-tablist match when available.
  */
 export function isNavChrome(el: Element): boolean {
   return (
@@ -1084,12 +1192,35 @@ export function isNavChrome(el: Element): boolean {
 }
 
 /**
+ * Whether the element sits in strict shell navigation: the desktop
+ * sidebar, Konsta tabbar, or a nav landmark. Unlike isNavChrome, this
+ * excludes content-level tablists (IconTabToggle with semantics "tabs",
+ * used by the admin people page). Tapping a content tablist switches a
+ * tab within the narrated screen and IS the demonstration, so taps are
+ * allowed. Used by handlePulse to decide whether to downgrade a tap.
+ */
+export function isStrictShellNav(el: Element): boolean {
+  return el.closest('nav, [role="navigation"], .k-tabbar') !== null;
+}
+
+/**
  * Whether the element is or sits inside a CollapsibleSection toggle.
- * Tapping a collapse toggle hides the very content the narration is
- * describing, so these are always downgraded to mark-only.
  */
 export function isSectionToggle(el: Element): boolean {
   return el.closest(".section-toggle") !== null;
+}
+
+/**
+ * Whether tapping the element would collapse an already-expanded
+ * CollapsibleSection. Returns true only when the toggle's
+ * aria-expanded is "true" (CollapsibleSection.svelte:59). When the
+ * section is currently collapsed (aria-expanded="false"), tapping
+ * EXPANDS it, which is the demonstration, so the tap is allowed.
+ */
+export function isSectionToggleCollapsing(el: Element): boolean {
+  const toggle = el.closest(".section-toggle");
+  if (toggle === null) return false;
+  return toggle.getAttribute("aria-expanded") === "true";
 }
 
 // -----------------------------------------------------------------------
@@ -1111,8 +1242,6 @@ export const TOPIC_SELECTORS: ReadonlyMap<DemoTopic, readonly string[]> =
     ["list-stats", ['[data-testid="count-new-replies"]', ".stats-counts"]],
     // CaseHeader root .case-header (CaseHeader.svelte line 166)
     ["case-header", [".case-header"]],
-    // DecryptPlaceholder renders role="status" while scrambling (line 161)
-    ["decryption", ['[role="status"][aria-busy="true"]']],
     // Date separator line in the thread (TicketDetail.svelte line 1253)
     ["thread-anatomy", [".date-separator", ".unread-divider"]],
     // GettingStartedCard collapse toggle (CollapsibleSection.svelte line 55)
