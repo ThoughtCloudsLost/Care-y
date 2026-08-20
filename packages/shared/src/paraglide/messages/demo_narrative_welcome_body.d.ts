@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "Tap a feature in the list or use the tabs inside the phone to explore. Every piece of data you see is encrypted on the client before it reaches the server. T..." |
+* | "Tap a feature in the list or use the tabs inside the CARE-Y simulator to explore. Every piece of data you see is encrypted on the client before it reaches th..." |
 *
 * @param {Demo_Narrative_Welcome_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

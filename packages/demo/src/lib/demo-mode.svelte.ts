@@ -50,6 +50,8 @@ export interface DemoModeStore {
   readonly override: DemoMode | null;
   /** Toggle to the opposite of the current effective mode. Writes the URL param. */
   toggle(): void;
+  /** Set a specific mode (toolbar close button). Writes the URL param. */
+  set(next: DemoMode): void;
 }
 
 /**
@@ -63,8 +65,7 @@ export function createDemoMode(isNarrow: () => boolean): DemoModeStore {
 
   const mode: DemoMode = $derived(override ?? (isNarrow() ? "read" : "walk"));
 
-  function toggle(): void {
-    const next: DemoMode = mode === "read" ? "walk" : "read";
+  function set(next: DemoMode): void {
     override = next;
 
     if (typeof history !== "undefined") {
@@ -77,6 +78,10 @@ export function createDemoMode(isNarrow: () => boolean): DemoModeStore {
     }
   }
 
+  function toggle(): void {
+    set(mode === "read" ? "walk" : "read");
+  }
+
   return {
     get mode(): DemoMode {
       return mode;
@@ -85,5 +90,6 @@ export function createDemoMode(isNarrow: () => boolean): DemoModeStore {
       return override;
     },
     toggle,
+    set,
   };
 }

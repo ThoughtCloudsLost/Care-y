@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "No activity yet. Use the phone and each step of the flow appears here." |
+* | "No activity yet. Use the simulator and each step of the flow appears here." |
 *
 * @param {Demo_Flow_EmptyInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

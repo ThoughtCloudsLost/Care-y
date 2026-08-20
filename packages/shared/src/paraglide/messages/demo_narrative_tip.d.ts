@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "Select a feature from the list, scroll down, or interact with the CARE-Y app in the phone to learn more about what it can do." |
+* | "Select a feature from the list, scroll down, or interact with the CARE-Y app in the simulator to learn more about what it can do." |
 *
 * @param {Demo_Narrative_TipInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

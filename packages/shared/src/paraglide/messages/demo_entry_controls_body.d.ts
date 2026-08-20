@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "Drag the simulator by the grip above it and resize it from any edge, and use the toolbar to switch between phone and desktop layouts. The simulator and the h..." |
+* | "Drag the simulator by the bar above it and resize it from any edge, and use the toolbar to switch between phone and desktop layouts. The simulator and the ha..." |
 *
 * @param {Demo_Entry_Controls_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

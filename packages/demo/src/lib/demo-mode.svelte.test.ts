@@ -182,4 +182,39 @@ describe("createDemoMode", () => {
     expect(store.mode).toBe("walk");
     expect(store.override).toBe("walk");
   });
+
+  it("set('read') overrides the walk default (toolbar close button)", () => {
+    const store = createDemoMode(() => false);
+    expect(store.mode).toBe("walk");
+    store.set("read");
+    expect(store.mode).toBe("read");
+    expect(store.override).toBe("read");
+  });
+
+  it("set is idempotent for the current mode", () => {
+    const store = createDemoMode(() => true);
+    store.set("read");
+    expect(store.mode).toBe("read");
+    expect(store.override).toBe("read");
+  });
+
+  it("set writes URL param via replaceState", () => {
+    Object.defineProperty(window, "location", {
+      value: {
+        ...window.location,
+        search: "",
+        pathname: "/demo",
+        hash: "#login/overview",
+      },
+      writable: true,
+      configurable: true,
+    });
+    const store = createDemoMode(() => false);
+    store.set("read");
+    expect(replaceStateSpy).toHaveBeenCalledOnce();
+    const url = replaceStateSpy.mock.calls[0]?.[2] as string;
+    expect(url).toContain("mode=read");
+    expect(url).toContain("/demo");
+    expect(url).toContain("#login/overview");
+  });
 });

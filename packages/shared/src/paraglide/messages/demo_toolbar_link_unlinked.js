@@ -6,17 +6,17 @@ import { getLocale, experimentalStaticLocale } from '../runtime.js';
 /** @typedef {{}} Demo_Toolbar_Link_UnlinkedInputs */
 
 const en_demo_toolbar_link_unlinked = /** @type {(inputs: Demo_Toolbar_Link_UnlinkedInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Phone and handbook are unlinked (click to relink)`)
+	return /** @type {LocalizedString} */ (`Simulator and handbook are unlinked (click to relink)`)
 };
 
 const es_demo_toolbar_link_unlinked = /** @type {(inputs: Demo_Toolbar_Link_UnlinkedInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Teléfono y manual desvinculados (clic para vincular)`)
+	return /** @type {LocalizedString} */ (`Simulador y manual desvinculados (clic para vincular)`)
 };
 
 /**
 * | output |
 * | --- |
-* | "Phone and handbook are unlinked (click to relink)" |
+* | "Simulator and handbook are unlinked (click to relink)" |
 *
 * @param {Demo_Toolbar_Link_UnlinkedInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

@@ -260,17 +260,17 @@ export const HOLE_GAP = 16;
 // -----------------------------------------------------------------------
 // Frame clearance
 //
-// The frame's toolbar is `.frame-toolbar` in App.svelte: it is
-// `position: absolute; bottom: 100%`, so it sits entirely ABOVE
-// frameRect.top and outside outerH. It measures 44px of buttons plus 8px
-// of padding plus a 2px border, so 54px. Resize handles protrude about
-// 4px on every edge. Every consumer that keeps text clear of the frame
-// uses these, so the flow layout and the sticky section header cannot
-// drift apart.
+// The floating toolbar (FrameToolbar.svelte) sits above the frame via
+// `position: absolute; bottom: calc(100% + 8px)`. It measures 56px tall
+// (2px border x2 + 4px padding x2 + 44px button row) and floats 8px
+// above the frame's top edge. Resize handles protrude about 4px on
+// every edge. Every consumer that keeps text clear of the frame uses
+// these, so the flow layout and the sticky section header cannot drift
+// apart.
 // -----------------------------------------------------------------------
 
-/** 54px toolbar above the frame, plus breathing room. */
-export const FRAME_PAD_TOP = 66;
+/** 56px toolbar + 8px gap above the frame, plus breathing room. */
+export const FRAME_PAD_TOP = 72;
 export const FRAME_PAD_BOTTOM = 12;
 /** Horizontal clearance. The flow adds HOLE_GAP on top of this. */
 export const FRAME_PAD_X = 8;

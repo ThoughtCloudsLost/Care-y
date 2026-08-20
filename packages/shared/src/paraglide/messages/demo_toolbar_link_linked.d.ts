@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "Phone and handbook are linked (click to unlink)" |
+* | "Simulator and handbook are linked (click to unlink)" |
 *
 * @param {Demo_Toolbar_Link_LinkedInputs} inputs
 * @param {{ locale?: "en" | "es" }} options
