@@ -158,7 +158,7 @@
 
 <div class="health-shell">
   <header class="health-header">
-    <h1>CARE-Y Demo Health Check</h1>
+    <h1>CARE-Y Handbook Health Check</h1>
     <p class="health-subtitle">
       PGlite engine, glob-derived routes, real client components
     </p>
