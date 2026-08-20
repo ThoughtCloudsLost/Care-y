@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "A password alone can be guessed, leaked, or stolen through a fake login page. Two-factor authentication adds a second check that makes stolen passwords usele..." |
+* | "A password alone can be guessed, leaked, or stolen through a fake login page. Two factor authentication adds a second check that makes stolen passwords usele..." |
 *
 * @param {Onboarding_Briefing_Choice_2fa_WhyInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

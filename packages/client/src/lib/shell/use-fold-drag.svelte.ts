@@ -1,19 +1,23 @@
 /**
  * Two-state drag gesture for fold/expand toggles.
  *
- * Finger-tracked vertical drag on a handle element that progressively
+ * Pointer-tracked vertical drag on a handle element that progressively
  * reveals or hides a content area by controlling its visible height.
  * Drag down when folded reveals the content; drag up when expanded
  * hides it. The finger position maps 1:1 to the content height, so the
  * panel slides open or closed directly under the user's finger.
  *
+ * Pointer Events are the single event model covering mouse, pen, and
+ * touch input (MDN Pointer_events), so one listener set handles all
+ * three. Scroll suppression for touch interactions is controlled by
+ * the CSS property `touch-action: none` on the drag handle, not by
+ * calling preventDefault on pointermove. The handle must carry that
+ * declaration; without it, touch drags will scroll instead of dragging.
+ *
  * The action attaches to the handle element. The caller passes a
  * reference to the content wrapper (wrapEl) whose first child element's
  * maxHeight is controlled during the drag. The wrapper's CSS
  * grid-template-rows is temporarily overridden to allow height control.
- *
- * Touch-only: desktop mice do not fire touch events, so drag is naturally
- * inert on desktop without an explicit guard.
  *
  * Must be called during component initialization (top-level script).
  */
@@ -63,17 +67,20 @@ export function useFoldDrag(config: FoldDragConfig): FoldDragReturn {
   let startTime = 0;
   let committed = false;
   let currentOffset = 0;
-  let prevTouchY = 0;
-  let currentTouchY = 0;
+  let prevPointerY = 0;
+  let currentPointerY = 0;
   let dragConsumed = false;
   let naturalHeight = 0;
+
+  /** pointerId of the active drag, or null when idle. */
+  let activePointerId: number | null = null;
 
   let wrapRef: HTMLElement | null = null;
   let contentRef: HTMLElement | null = null;
 
-  function onTouchStart(e: TouchEvent): void {
-    const touch = e.touches[0];
-    if (e.touches.length !== 1 || touch == null) return;
+  function onPointerDown(e: PointerEvent): void {
+    // Ignore secondary pointers (multi-touch, non-primary pen).
+    if (!e.isPrimary || activePointerId != null) return;
 
     wrapRef = config.wrapEl ?? null;
     if (wrapRef == null) return;
@@ -81,21 +88,25 @@ export function useFoldDrag(config: FoldDragConfig): FoldDragReturn {
     contentRef = first instanceof HTMLElement ? first : null;
     if (contentRef == null) return;
 
+    // Canceling pointerdown on the handle suppresses the compatibility
+    // mouse events that would otherwise start text selection.
+    e.preventDefault();
+
     naturalHeight = contentRef.scrollHeight;
     if (naturalHeight <= 0) naturalHeight = 200;
 
-    startY = touch.clientY;
+    activePointerId = e.pointerId;
+    startY = e.clientY;
     startTime = Date.now();
     committed = false;
     currentOffset = 0;
   }
 
-  function onTouchMove(e: TouchEvent): void {
-    const touch = e.touches[0];
-    if (e.touches.length !== 1 || touch == null) return;
+  function onPointerMove(e: PointerEvent, node: HTMLElement): void {
+    if (e.pointerId !== activePointerId) return;
     if (wrapRef == null || contentRef == null) return;
 
-    const current = touch.clientY;
+    const current = e.clientY;
     const rawDelta = current - startY;
 
     // Folded: drag DOWN (positive delta) to reveal.
@@ -109,6 +120,13 @@ export function useFoldDrag(config: FoldDragConfig): FoldDragReturn {
       startY = current;
       startTime = Date.now();
 
+      // Capture the pointer so moves continue even if the finger
+      // leaves the node mid-drag. jsdom does not implement capture,
+      // so guard with a feature check.
+      if (typeof node.setPointerCapture === "function") {
+        node.setPointerCapture(e.pointerId);
+      }
+
       // Take over layout from CSS: override grid, disable transitions.
       wrapRef.style.transition = "none";
       wrapRef.style.gridTemplateRows = "1fr";
@@ -117,8 +135,8 @@ export function useFoldDrag(config: FoldDragConfig): FoldDragReturn {
         String(config.folded ? 0 : naturalHeight) + "px";
     }
 
-    prevTouchY = currentTouchY;
-    currentTouchY = current;
+    prevPointerY = currentPointerY;
+    currentPointerY = current;
 
     const dragDelta = current - startY;
 
@@ -144,10 +162,28 @@ export function useFoldDrag(config: FoldDragConfig): FoldDragReturn {
     wrapRef.style.marginTop = String(Math.round(fraction * 10)) + "px";
     wrapRef.style.borderTopColor = targetHeight > 0 ? "" : "transparent";
 
-    e.preventDefault();
+    // No preventDefault on pointermove: scroll suppression is handled by
+    // touch-action CSS on the handle, not by canceling the event.
   }
 
-  function onTouchEnd(reducedMotion: boolean): void {
+  function onPointerEnd(
+    e: PointerEvent,
+    node: HTMLElement,
+    reducedMotion: boolean,
+  ): void {
+    if (e.pointerId !== activePointerId) return;
+
+    activePointerId = null;
+
+    // Release pointer capture if held. hasPointerCapture guards against
+    // releasing an already-released capture (pointerup auto-releases).
+    if (
+      typeof node.hasPointerCapture === "function" &&
+      node.hasPointerCapture(e.pointerId)
+    ) {
+      node.releasePointerCapture(e.pointerId);
+    }
+
     if (!committed || wrapRef == null || contentRef == null) {
       resetInlineStyles();
       return;
@@ -158,8 +194,8 @@ export function useFoldDrag(config: FoldDragConfig): FoldDragReturn {
 
     // Swiping back = finger reversed from the primary drag direction.
     const swipingBack = config.folded
-      ? currentTouchY < prevTouchY
-      : currentTouchY > prevTouchY;
+      ? currentPointerY < prevPointerY
+      : currentPointerY > prevPointerY;
 
     const shouldToggle = decideFoldSnap(currentOffset, velocity, swipingBack);
 
@@ -238,22 +274,22 @@ export function useFoldDrag(config: FoldDragConfig): FoldDragReturn {
   function action(node: HTMLElement): { destroy: () => void } {
     const mql = window.matchMedia("(prefers-reduced-motion: reduce)");
 
-    const boundStart = (e: TouchEvent): void => onTouchStart(e);
-    const boundMove = (e: TouchEvent): void => onTouchMove(e);
-    const boundEnd = (): void => onTouchEnd(mql.matches);
-    const boundCancel = boundEnd;
+    const boundDown = (e: PointerEvent): void => onPointerDown(e);
+    const boundMove = (e: PointerEvent): void => onPointerMove(e, node);
+    const boundEnd = (e: PointerEvent): void =>
+      onPointerEnd(e, node, mql.matches);
 
-    node.addEventListener("touchstart", boundStart, { passive: true });
-    node.addEventListener("touchmove", boundMove, { passive: false });
-    node.addEventListener("touchend", boundEnd);
-    node.addEventListener("touchcancel", boundCancel);
+    node.addEventListener("pointerdown", boundDown);
+    node.addEventListener("pointermove", boundMove);
+    node.addEventListener("pointerup", boundEnd);
+    node.addEventListener("pointercancel", boundEnd);
 
     return {
       destroy(): void {
-        node.removeEventListener("touchstart", boundStart);
-        node.removeEventListener("touchmove", boundMove);
-        node.removeEventListener("touchend", boundEnd);
-        node.removeEventListener("touchcancel", boundCancel);
+        node.removeEventListener("pointerdown", boundDown);
+        node.removeEventListener("pointermove", boundMove);
+        node.removeEventListener("pointerup", boundEnd);
+        node.removeEventListener("pointercancel", boundEnd);
         resetInlineStyles();
       },
     };

@@ -1,0 +1,52 @@
+name: Demo build
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - packages/demo/**
+      - packages/client/src/**
+      - packages/client/static/**
+      - packages/shared/**
+      - packages/crypto/src/**
+      - packages/server/src/**
+      - pnpm-lock.yaml
+      - .github/workflows/demo-build.yml
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v5.0.0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Compile shared paraglide
+        run: pnpm --filter @care-y/shared run build:paraglide
+
+      - name: Build demo
+        run: pnpm --filter @care-y/demo run build
+
+      - name: Verify built demo assets
+        run: node packages/demo/scripts/verify-dist.mjs

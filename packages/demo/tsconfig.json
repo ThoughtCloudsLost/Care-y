@@ -1,0 +1,65 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "target": "ES2022",
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "allowJs": true,
+    "checkJs": true,
+    "outDir": "dist",
+    "paths": {
+      "$lib/trpc": ["./src/stubs/trpc.ts"],
+      "$lib/trpc/index.js": ["./src/stubs/trpc.ts"],
+      "$lib/crypto/context": ["./src/stubs/crypto-context.svelte.ts"],
+      "$lib/crypto/context.js": ["./src/stubs/crypto-context.svelte.ts"],
+      "$lib/terminology/context": ["./src/stubs/terminology-context.svelte.ts"],
+      "$lib/terminology/context.js": [
+        "./src/stubs/terminology-context.svelte.ts"
+      ],
+      "@care-y/crypto": ["../crypto/src/index.ts"],
+      "$app/environment": ["./src/stubs/app-environment.ts"],
+      "$app/navigation": ["./src/stubs/app-navigation.ts"],
+      "$app/paths": ["./src/stubs/app-paths.ts"],
+      "$app/state": ["./src/stubs/app-state.svelte.ts"],
+      "$lib/stores/theme.svelte": ["./src/stubs/theme.svelte.ts"],
+      "$lib/stores/theme.svelte.ts": ["./src/stubs/theme.svelte.ts"],
+      "$lib/stores/theme.svelte.js": ["./src/stubs/theme.svelte.ts"],
+      "$lib/stores/saved-filters.svelte": [
+        "./src/stubs/saved-filters.svelte.ts"
+      ],
+      "$lib/stores/saved-filters.svelte.ts": [
+        "./src/stubs/saved-filters.svelte.ts"
+      ],
+      "$lib/stores/saved-filters.svelte.js": [
+        "./src/stubs/saved-filters.svelte.ts"
+      ],
+      "$lib/auth/login-crypto": ["./src/stubs/login-crypto.ts"],
+      "$lib/auth/login-crypto.js": ["./src/stubs/login-crypto.ts"],
+      "$lib/shell/navigation": ["./src/stubs/shell-navigation.ts"],
+      "$lib/shell/navigation.js": ["./src/stubs/shell-navigation.ts"],
+      "$lib/*": ["../client/src/lib/*"],
+      "$lib": ["../client/src/lib"],
+      "$routes/*": ["../client/src/routes/*"],
+      "$routes": ["../client/src/routes"],
+      "$demo/*": ["./src/lib/*"],
+      "$demo": ["./src/lib"]
+    }
+  },
+  "include": [
+    "src/**/*.ts",
+    "src/**/*.js",
+    "src/**/*.svelte",
+    "vite.ts",
+    "vite.config.ts",
+    "vitest.config.ts",
+    "vitest.smoke.config.ts",
+    "../client/src/lib/workers/shared-worker-types.d.ts",
+    "../server/src/types/sodium-native.d.ts"
+  ],
+  "references": [
+    { "path": "../shared" },
+    { "path": "../crypto" },
+    { "path": "../server" }
+  ]
+}

@@ -23,10 +23,14 @@
 
   // Deep link redirect: at desktop without ?full=1, navigate to /tickets
   // then set ticketId in page state so the layout shows the split view.
+  // The id is snapshotted before the goto: once navigation completes,
+  // page.params.id is gone and the derived reads "", so pushing the
+  // derived from inside .then() would open an empty pane.
   $effect(() => {
-    if (layoutMode.isDesktop && ticketId && !fullView) {
+    const id = ticketId;
+    if (layoutMode.isDesktop && id && !fullView) {
       void goto(resolve("/tickets"), { replaceState: true }).then(() => {
-        pushState("", { ticketId });
+        pushState("", { ticketId: id });
       });
     }
   });

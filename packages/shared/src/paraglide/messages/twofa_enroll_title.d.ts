@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "Two-factor authentication" |
+* | "Two factor authentication" |
 *
 * @param {Twofa_Enroll_TitleInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

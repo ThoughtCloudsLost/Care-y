@@ -15,8 +15,8 @@ import type { Kysely } from "kysely";
 import type { TenantDatabase } from "../db/types.js";
 import type { BlobStore } from "../storage/store.js";
 import type { GreetingAudioContentType } from "@care-y/shared";
-import { GREETING_AUDIO_MAX_BYTES } from "@care-y/shared";
-import { ValidationError } from "../errors.js";
+import { GREETING_AUDIO_MAX_BYTES, ErrorCode } from "@care-y/shared";
+import { NotFoundError, ValidationError } from "../errors.js";
 import {
   createGreetingRepository,
   type GreetingRecord,
@@ -59,6 +59,11 @@ export interface TelephonyContentService {
       contentType: GreetingAudioContentType;
     },
   ): Promise<GreetingRecord>;
+  /** Fetch audio blob bytes for a greeting by its ID. */
+  getGreetingAudio(
+    blobStore: BlobStore,
+    greetingId: string,
+  ): Promise<{ audioBase64: string; contentType: string }>;
   listSmsResponses(locale?: string): Promise<readonly SmsResponseRecord[]>;
   createSmsResponse(input: {
     responseType: string;
@@ -180,6 +185,27 @@ export function createTelephonyContentService(
         audioBlobKey: blobKey,
         audioContentType: verified,
       });
+    },
+
+    async getGreetingAudio(
+      blobStore: BlobStore,
+      greetingId: string,
+    ): Promise<{ audioBase64: string; contentType: string }> {
+      const greeting = await greetingRepo.findById(greetingId);
+      if (!greeting) {
+        throw new NotFoundError(ErrorCode.GREETING_NOT_FOUND);
+      }
+      if (!greeting.isAudio || greeting.audioBlobKey === null) {
+        throw new ValidationError("Greeting does not have audio content");
+      }
+      const blob = await blobStore.get(greeting.audioBlobKey);
+      if (blob === null) {
+        throw new NotFoundError(ErrorCode.GREETING_NOT_FOUND);
+      }
+      return {
+        audioBase64: blob.toString("base64"),
+        contentType: greeting.audioContentType ?? "application/octet-stream",
+      };
     },
 
     async listSmsResponses(

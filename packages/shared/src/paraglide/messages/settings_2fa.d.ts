@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "Two-factor authentication" |
+* | "Two factor authentication" |
 *
 * @param {Settings_2faInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

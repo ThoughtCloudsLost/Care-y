@@ -330,6 +330,44 @@ export default tseslint.config(
     },
   },
 
+  // Demo stub modules are module-level test doubles: they present the real
+  // client types at their export boundary (so the mounted production
+  // component graph type-checks unchanged) over partial implementations,
+  // which requires narrowing assertions the same way test mocks do.
+  {
+    files: ["packages/demo/src/stubs/**"],
+    rules: {
+      "@typescript-eslint/no-unsafe-type-assertion": "off",
+    },
+  },
+
+  // The demo health check is an internal diagnostic tool: its server
+  // shims present real server types over browser implementations (the
+  // same narrowing class as the stub override above), and its UI is a
+  // deliberately English-only dev surface, not product copy, so the
+  // paraglide rule does not apply.
+  {
+    files: ["packages/demo/src/health/**"],
+    rules: {
+      "@typescript-eslint/no-unsafe-type-assertion": "off",
+      "care-y/no-hardcoded-strings": "off",
+    },
+  },
+
+  // The demo engine is the health check's server-on-PGlite core promoted
+  // to a shared location (the phone and the health page consume one
+  // implementation). Same rule class as the health override: the server
+  // shims and caller adapter present real server types over browser
+  // implementations, and RouteMount's match/load failure states are
+  // diagnostics that indicate a broken demo build, not product copy.
+  {
+    files: ["packages/demo/src/lib/engine/**"],
+    rules: {
+      "@typescript-eslint/no-unsafe-type-assertion": "off",
+      "care-y/no-hardcoded-strings": "off",
+    },
+  },
+
   // Disable type-checked rules for config files not covered by any tsconfig
   // (root tsconfig.json has "files": [] so projectService rejects root-level
   // configs, and packages/client/svelte.config.js is outside its src/ include)

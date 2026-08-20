@@ -26,6 +26,7 @@ function createMockService(): TelephonyContentService {
     deleteGreeting: vi.fn(),
     uploadGreetingAudio: vi.fn(),
     createAudioGreeting: vi.fn(),
+    getGreetingAudio: vi.fn(),
     listSmsResponses: vi.fn(),
     createSmsResponse: vi.fn(),
     updateSmsResponse: vi.fn(),
@@ -146,6 +147,37 @@ describe("createTelephonyContentRouter", () => {
 
       expect(result).toEqual([GREETING_RECORD]);
       expect(mockService.listGreetings).toHaveBeenCalledWith(undefined);
+    });
+  });
+
+  describe("getGreetingAudio", () => {
+    it("returns audio data from service", async () => {
+      const audioResult = {
+        audioBase64: "QUFBQQ==",
+        contentType: "audio/wav",
+      };
+      vi.mocked(mockService.getGreetingAudio).mockResolvedValue(audioResult);
+
+      const result = await caller.getGreetingAudio({
+        greetingId: GREETING_ID,
+      });
+
+      expect(result).toEqual(audioResult);
+      expect(mockService.getGreetingAudio).toHaveBeenCalled();
+    });
+
+    it("rejects with INTERNAL_SERVER_ERROR when blobStore is not configured", async () => {
+      const noBlobRouter = createTelephonyContentRouter({
+        createService: () => mockService,
+        blobStore: undefined,
+      });
+      const noBlobCaller =
+        createCallerFactory(noBlobRouter)(createAdminContext());
+
+      await expectTrpcError(
+        noBlobCaller.getGreetingAudio({ greetingId: GREETING_ID }),
+        "INTERNAL_SERVER_ERROR",
+      );
     });
   });
 

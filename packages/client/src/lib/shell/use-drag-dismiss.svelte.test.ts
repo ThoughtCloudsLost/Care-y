@@ -10,23 +10,23 @@ import {
 // Helpers
 // ---------------------------------------------------------------------------
 
-/** Minimal Touch-like object carrying only clientX/clientY. */
-function fakeTouch(clientX: number, clientY: number): Touch {
-  return { clientX, clientY } as unknown as Touch;
-}
-
-/** Dispatch a synthetic TouchEvent on `target`. */
-function fireTouchEvent(
+/** Dispatch a synthetic PointerEvent on `target`. */
+function firePointerEvent(
   target: HTMLElement,
-  type: "touchstart" | "touchmove" | "touchend" | "touchcancel",
-  touches: Touch[] = [],
-): void {
-  const ev = new TouchEvent(type, {
-    touches,
-    cancelable: true,
+  type: "pointerdown" | "pointermove" | "pointerup" | "pointercancel",
+  init?: Partial<PointerEventInit>,
+): PointerEvent {
+  const ev = new PointerEvent(type, {
+    pointerId: 1,
+    isPrimary: true,
+    clientX: 0,
+    clientY: 0,
     bubbles: true,
+    cancelable: true,
+    ...init,
   });
   target.dispatchEvent(ev);
+  return ev;
 }
 
 /**
@@ -119,15 +119,15 @@ describe("useDragDismiss", () => {
   // Action setup
   // -----------------------------------------------------------------------
 
-  it("attaches touch listeners on the node", () => {
+  it("attaches pointer listeners on the node", () => {
     const addSpy = vi.spyOn(HTMLElement.prototype, "addEventListener");
     setup();
 
     const calls = addSpy.mock.calls.map(([type]) => type);
-    expect(calls).toContain("touchstart");
-    expect(calls).toContain("touchmove");
-    expect(calls).toContain("touchend");
-    expect(calls).toContain("touchcancel");
+    expect(calls).toContain("pointerdown");
+    expect(calls).toContain("pointermove");
+    expect(calls).toContain("pointerup");
+    expect(calls).toContain("pointercancel");
     addSpy.mockRestore();
   });
 
@@ -167,16 +167,15 @@ describe("useDragDismiss", () => {
     const { config, node } = setup();
     const handle = config.handleEl!;
 
-    // Start touch on the handle at y=100 (bubbles to the node listener
-    // with target=handle, so fromHandle commits the drag).
-    fireTouchEvent(handle, "touchstart", [fakeTouch(0, 100)]);
+    // Start on the handle at y=100.
+    firePointerEvent(handle, "pointerdown", { clientY: 100 });
     // Move down 4px to commit (past COMMIT_DELTA_PX = 3).
     vi.advanceTimersByTime(10);
-    fireTouchEvent(node, "touchmove", [fakeTouch(0, 104)]);
+    firePointerEvent(node, "pointermove", { clientY: 104 });
     // Move down total ~50px from commit point (below 80px threshold).
     vi.advanceTimersByTime(500);
-    fireTouchEvent(node, "touchmove", [fakeTouch(0, 154)]);
-    fireTouchEvent(node, "touchend");
+    firePointerEvent(node, "pointermove", { clientY: 154 });
+    firePointerEvent(node, "pointerup");
 
     expect(config.ondismiss).not.toHaveBeenCalled();
   });
@@ -189,15 +188,15 @@ describe("useDragDismiss", () => {
     const { config, node } = setup();
     const handle = config.handleEl!;
 
-    fireTouchEvent(handle, "touchstart", [fakeTouch(0, 100)]);
+    firePointerEvent(handle, "pointerdown", { clientY: 100 });
     // Commit.
     vi.advanceTimersByTime(10);
-    fireTouchEvent(node, "touchmove", [fakeTouch(0, 104)]);
+    firePointerEvent(node, "pointermove", { clientY: 104 });
     // Drag well past 80px (no swiping back: each move is further down).
     vi.advanceTimersByTime(400);
-    fireTouchEvent(node, "touchmove", [fakeTouch(0, 180)]);
-    fireTouchEvent(node, "touchmove", [fakeTouch(0, 210)]);
-    fireTouchEvent(node, "touchend");
+    firePointerEvent(node, "pointermove", { clientY: 180 });
+    firePointerEvent(node, "pointermove", { clientY: 210 });
+    firePointerEvent(node, "pointerup");
 
     expect(config.ondismiss).toHaveBeenCalledOnce();
   });
@@ -209,11 +208,11 @@ describe("useDragDismiss", () => {
   it("ignores drag in the negative direction when direction is 1", () => {
     const { config, node } = setup({ direction: 1 });
 
-    fireTouchEvent(config.handleEl!, "touchstart", [fakeTouch(0, 200)]);
+    firePointerEvent(config.handleEl!, "pointerdown", { clientY: 200 });
     // Move upward (negative delta, wrong direction). Delta = -100.
     vi.advanceTimersByTime(100);
-    fireTouchEvent(node, "touchmove", [fakeTouch(0, 100)]);
-    fireTouchEvent(node, "touchend");
+    firePointerEvent(node, "pointermove", { clientY: 100 });
+    firePointerEvent(node, "pointerup");
 
     // Never committed, so no dismiss.
     expect(config.ondismiss).not.toHaveBeenCalled();
@@ -222,12 +221,12 @@ describe("useDragDismiss", () => {
   it("ignores drag in the positive direction when direction is -1", () => {
     const { config, node } = setup({ direction: -1, axis: "x" });
 
-    fireTouchEvent(config.handleEl!, "touchstart", [fakeTouch(200, 0)]);
+    firePointerEvent(config.handleEl!, "pointerdown", { clientX: 200 });
     // Move right (positive delta). For direction=-1, commit requires
     // delta * direction >= COMMIT_DELTA_PX, i.e. negative delta needed.
     vi.advanceTimersByTime(100);
-    fireTouchEvent(node, "touchmove", [fakeTouch(300, 0)]);
-    fireTouchEvent(node, "touchend");
+    firePointerEvent(node, "pointermove", { clientX: 300 });
+    firePointerEvent(node, "pointerup");
 
     expect(config.ondismiss).not.toHaveBeenCalled();
   });
@@ -239,14 +238,14 @@ describe("useDragDismiss", () => {
   it("dismisses on fast flick even when distance is below 80px threshold", () => {
     const { config, node } = setup();
 
-    fireTouchEvent(config.handleEl!, "touchstart", [fakeTouch(0, 100)]);
+    firePointerEvent(config.handleEl!, "pointerdown", { clientY: 100 });
     // Commit.
     vi.advanceTimersByTime(1);
-    fireTouchEvent(node, "touchmove", [fakeTouch(0, 104)]);
+    firePointerEvent(node, "pointermove", { clientY: 104 });
     // Fast move: 40px in ~5ms. velocity = 40/6 ~= 6.67 px/ms > 0.4.
     vi.advanceTimersByTime(5);
-    fireTouchEvent(node, "touchmove", [fakeTouch(0, 144)]);
-    fireTouchEvent(node, "touchend");
+    firePointerEvent(node, "pointermove", { clientY: 144 });
+    firePointerEvent(node, "pointerup");
 
     expect(config.ondismiss).toHaveBeenCalledOnce();
   });
@@ -255,20 +254,20 @@ describe("useDragDismiss", () => {
   // Cancel mid-drag
   // -----------------------------------------------------------------------
 
-  it("springs back on touchcancel without dismissing", () => {
+  it("springs back on pointercancel without dismissing", () => {
     const { config, node, base } = setup();
 
-    fireTouchEvent(config.handleEl!, "touchstart", [fakeTouch(0, 100)]);
+    firePointerEvent(config.handleEl!, "pointerdown", { clientY: 100 });
     vi.advanceTimersByTime(10);
-    fireTouchEvent(node, "touchmove", [fakeTouch(0, 104)]);
+    firePointerEvent(node, "pointermove", { clientY: 104 });
     // 46px over 200ms keeps velocity at 0.23, under the 0.4 dismiss cutoff.
     vi.advanceTimersByTime(200);
-    fireTouchEvent(node, "touchmove", [fakeTouch(0, 150)]);
+    firePointerEvent(node, "pointermove", { clientY: 150 });
 
     // Cancel instead of end.
-    fireTouchEvent(node, "touchcancel");
+    firePointerEvent(node, "pointercancel");
 
-    // touchcancel routes through the same onTouchEnd handler.
+    // pointercancel routes through the same end handler.
     // With only ~46px offset and slow velocity, no dismiss.
     expect(config.ondismiss).not.toHaveBeenCalled();
     // The spring-back transition is applied.
@@ -285,15 +284,15 @@ describe("useDragDismiss", () => {
       direction: -1,
     });
 
-    fireTouchEvent(config.handleEl!, "touchstart", [fakeTouch(300, 0)]);
+    firePointerEvent(config.handleEl!, "pointerdown", { clientX: 300 });
     // Commit: delta (300 - 296) * -1 = 4 > 3.
     vi.advanceTimersByTime(10);
-    fireTouchEvent(node, "touchmove", [fakeTouch(296, 0)]);
+    firePointerEvent(node, "pointermove", { clientX: 296 });
     // Drag left past 80px threshold.
     vi.advanceTimersByTime(300);
-    fireTouchEvent(node, "touchmove", [fakeTouch(210, 0)]);
-    fireTouchEvent(node, "touchmove", [fakeTouch(200, 0)]);
-    fireTouchEvent(node, "touchend");
+    firePointerEvent(node, "pointermove", { clientX: 210 });
+    firePointerEvent(node, "pointermove", { clientX: 200 });
+    firePointerEvent(node, "pointerup");
 
     expect(config.ondismiss).toHaveBeenCalledOnce();
   });
@@ -305,17 +304,17 @@ describe("useDragDismiss", () => {
   it("does not dismiss when user reverses drag direction (swiping back)", () => {
     const { config, node } = setup();
 
-    fireTouchEvent(config.handleEl!, "touchstart", [fakeTouch(0, 100)]);
+    firePointerEvent(config.handleEl!, "pointerdown", { clientY: 100 });
     vi.advanceTimersByTime(10);
-    fireTouchEvent(node, "touchmove", [fakeTouch(0, 104)]);
+    firePointerEvent(node, "pointermove", { clientY: 104 });
     // Drag past threshold.
     vi.advanceTimersByTime(400);
-    fireTouchEvent(node, "touchmove", [fakeTouch(0, 250)]);
+    firePointerEvent(node, "pointermove", { clientY: 250 });
     // Swipe back: final position is less than the previous.
-    fireTouchEvent(node, "touchmove", [fakeTouch(0, 200)]);
-    fireTouchEvent(node, "touchend");
+    firePointerEvent(node, "pointermove", { clientY: 200 });
+    firePointerEvent(node, "pointerup");
 
-    // swipingBack is true because currentTouchPos < prevTouchPos.
+    // swipingBack is true because currentPointerPos < prevPointerPos.
     expect(config.ondismiss).not.toHaveBeenCalled();
   });
 
@@ -323,67 +322,98 @@ describe("useDragDismiss", () => {
   // Opened=false guard
   // -----------------------------------------------------------------------
 
-  it("ignores touch events when overlay is not opened", () => {
+  it("ignores pointer events when overlay is not opened", () => {
     const { config, node } = setup({ opened: false });
 
-    fireTouchEvent(config.handleEl!, "touchstart", [fakeTouch(0, 100)]);
-    fireTouchEvent(node, "touchmove", [fakeTouch(0, 200)]);
-    fireTouchEvent(node, "touchend");
+    firePointerEvent(config.handleEl!, "pointerdown", { clientY: 100 });
+    firePointerEvent(node, "pointermove", { clientY: 200 });
+    firePointerEvent(node, "pointerup");
 
     expect(config.ondismiss).not.toHaveBeenCalled();
   });
 
   // -----------------------------------------------------------------------
-  // Multi-touch ignored
+  // Non-primary pointer ignored (replaces multi-touch test)
   // -----------------------------------------------------------------------
 
-  it("ignores multi-touch (more than one finger)", () => {
+  it("ignores non-primary pointers", () => {
     const { config, node } = setup();
 
-    fireTouchEvent(config.handleEl!, "touchstart", [
-      fakeTouch(0, 100),
-      fakeTouch(50, 200),
-    ]);
-    fireTouchEvent(node, "touchmove", [fakeTouch(0, 200), fakeTouch(50, 300)]);
-    fireTouchEvent(node, "touchend");
+    firePointerEvent(config.handleEl!, "pointerdown", {
+      clientY: 100,
+      isPrimary: false,
+      pointerId: 2,
+    });
+    firePointerEvent(node, "pointermove", { clientY: 200, pointerId: 2 });
+    firePointerEvent(node, "pointerup", { pointerId: 2 });
 
     expect(config.ondismiss).not.toHaveBeenCalled();
   });
 
   // -----------------------------------------------------------------------
-  // Non-handle touch does not start drag
+  // Second pointer while first is active is ignored
   // -----------------------------------------------------------------------
 
-  it("does not commit drag when touch starts outside the handle", () => {
+  it("ignores a second pointerdown while a pointer is already active", () => {
     const { config, node } = setup();
 
-    // touchstart fires on the node itself; the target is the node, not the handle.
-    const startEvent = new TouchEvent("touchstart", {
-      touches: [fakeTouch(0, 100)],
+    // First pointer starts on handle.
+    firePointerEvent(config.handleEl!, "pointerdown", {
+      clientY: 100,
+      pointerId: 1,
+    });
+    // Second pointer arrives (different id), should be ignored.
+    firePointerEvent(config.handleEl!, "pointerdown", {
+      clientY: 300,
+      pointerId: 2,
+    });
+
+    vi.advanceTimersByTime(10);
+    // Move with the second pointer id: should be ignored.
+    firePointerEvent(node, "pointermove", { clientY: 500, pointerId: 2 });
+    firePointerEvent(node, "pointerup", { pointerId: 2 });
+
+    // First pointer never moved past commit, so no dismiss.
+    firePointerEvent(node, "pointerup", { pointerId: 1 });
+    expect(config.ondismiss).not.toHaveBeenCalled();
+  });
+
+  // -----------------------------------------------------------------------
+  // Non-handle start does not commit drag
+  // -----------------------------------------------------------------------
+
+  it("does not commit drag when pointer starts outside the handle", () => {
+    const { config, node } = setup();
+
+    // pointerdown fires on the node itself, not the handle.
+    const startEvent = new PointerEvent("pointerdown", {
+      pointerId: 1,
+      isPrimary: true,
+      clientX: 0,
+      clientY: 100,
       cancelable: true,
       bubbles: true,
     });
-    // Override event.target to point at the node, not the handle.
     Object.defineProperty(startEvent, "target", { value: node });
     node.dispatchEvent(startEvent);
 
     vi.advanceTimersByTime(100);
-    fireTouchEvent(node, "touchmove", [fakeTouch(0, 300)]);
-    fireTouchEvent(node, "touchend");
+    firePointerEvent(node, "pointermove", { clientY: 300 });
+    firePointerEvent(node, "pointerup");
 
     expect(config.ondismiss).not.toHaveBeenCalled();
   });
 
   // -----------------------------------------------------------------------
-  // Non-committed touchend resets transition
+  // Non-committed pointerup resets transition
   // -----------------------------------------------------------------------
 
-  it("resets transition on touchend when drag was never committed", () => {
+  it("resets transition on pointerup when drag was never committed", () => {
     const { node, base } = setup();
 
-    fireTouchEvent(node, "touchstart", [fakeTouch(0, 100)]);
-    // No touchmove, so not committed.
-    fireTouchEvent(node, "touchend");
+    firePointerEvent(node, "pointerdown", { clientY: 100 });
+    // No pointermove, so not committed.
+    firePointerEvent(node, "pointerup");
 
     expect(base.style.transition).toBe("");
   });
@@ -395,17 +425,17 @@ describe("useDragDismiss", () => {
   it("uses grandparent as base when parentDepth is 2", () => {
     const { config, node, base } = setup({ parentDepth: 2 });
 
-    fireTouchEvent(config.handleEl!, "touchstart", [fakeTouch(0, 100)]);
+    firePointerEvent(config.handleEl!, "pointerdown", { clientY: 100 });
     vi.advanceTimersByTime(10);
-    fireTouchEvent(node, "touchmove", [fakeTouch(0, 104)]);
+    firePointerEvent(node, "pointermove", { clientY: 104 });
     vi.advanceTimersByTime(300);
-    fireTouchEvent(node, "touchmove", [fakeTouch(0, 210)]);
+    firePointerEvent(node, "pointermove", { clientY: 210 });
 
     // The drag transform lands on the grandparent, not the direct parent.
     expect(base.style.transform).toContain("translateY(");
 
-    fireTouchEvent(node, "touchmove", [fakeTouch(0, 220)]);
-    fireTouchEvent(node, "touchend");
+    firePointerEvent(node, "pointermove", { clientY: 220 });
+    firePointerEvent(node, "pointerup");
 
     // 116px offset exceeds the 80px threshold, so the dismiss fires too.
     expect(config.ondismiss).toHaveBeenCalledOnce();
@@ -463,18 +493,18 @@ describe("useDragDismiss", () => {
   it("clamps drag offset to non-negative for direction=1", () => {
     const { config, node, base } = setup({ direction: 1 });
 
-    fireTouchEvent(config.handleEl!, "touchstart", [fakeTouch(0, 200)]);
+    firePointerEvent(config.handleEl!, "pointerdown", { clientY: 200 });
     vi.advanceTimersByTime(10);
     // Move down to commit, then move up so dragDelta goes negative.
-    fireTouchEvent(node, "touchmove", [fakeTouch(0, 204)]);
+    firePointerEvent(node, "pointermove", { clientY: 204 });
     // Now move up past the commit start point (dragDelta becomes negative).
     vi.advanceTimersByTime(100);
-    fireTouchEvent(node, "touchmove", [fakeTouch(0, 190)]);
+    firePointerEvent(node, "pointermove", { clientY: 190 });
 
     // Transform should clamp to 0, not go negative.
     expect(base.style.transform).toBe("translateY(0px)");
 
-    fireTouchEvent(node, "touchend");
+    firePointerEvent(node, "pointerup");
   });
 
   // -----------------------------------------------------------------------
@@ -484,18 +514,18 @@ describe("useDragDismiss", () => {
   it("clamps drag offset to non-positive for direction=-1 on x-axis", () => {
     const { config, node, base } = setup({ axis: "x", direction: -1 });
 
-    fireTouchEvent(config.handleEl!, "touchstart", [fakeTouch(200, 0)]);
+    firePointerEvent(config.handleEl!, "pointerdown", { clientX: 200 });
     vi.advanceTimersByTime(10);
     // Commit: move left.
-    fireTouchEvent(node, "touchmove", [fakeTouch(196, 0)]);
+    firePointerEvent(node, "pointermove", { clientX: 196 });
     // Move right past the commit start (dragDelta becomes positive).
     vi.advanceTimersByTime(100);
-    fireTouchEvent(node, "touchmove", [fakeTouch(210, 0)]);
+    firePointerEvent(node, "pointermove", { clientX: 210 });
 
     // Transform should clamp to 0.
     expect(base.style.transform).toBe("translateX(0px)");
 
-    fireTouchEvent(node, "touchend");
+    firePointerEvent(node, "pointerup");
   });
 
   // -----------------------------------------------------------------------
@@ -505,29 +535,29 @@ describe("useDragDismiss", () => {
   it("applies translateX when axis is x", () => {
     const { config, node, base } = setup({ axis: "x", direction: 1 });
 
-    fireTouchEvent(config.handleEl!, "touchstart", [fakeTouch(100, 0)]);
+    firePointerEvent(config.handleEl!, "pointerdown", { clientX: 100 });
     vi.advanceTimersByTime(10);
-    fireTouchEvent(node, "touchmove", [fakeTouch(104, 0)]);
+    firePointerEvent(node, "pointermove", { clientX: 104 });
     vi.advanceTimersByTime(100);
-    fireTouchEvent(node, "touchmove", [fakeTouch(150, 0)]);
+    firePointerEvent(node, "pointermove", { clientX: 150 });
 
     expect(base.style.transform).toContain("translateX(");
 
-    fireTouchEvent(node, "touchend");
+    firePointerEvent(node, "pointerup");
   });
 
   it("applies translateY when axis is y", () => {
     const { config, node, base } = setup({ axis: "y", direction: 1 });
 
-    fireTouchEvent(config.handleEl!, "touchstart", [fakeTouch(0, 100)]);
+    firePointerEvent(config.handleEl!, "pointerdown", { clientY: 100 });
     vi.advanceTimersByTime(10);
-    fireTouchEvent(node, "touchmove", [fakeTouch(0, 104)]);
+    firePointerEvent(node, "pointermove", { clientY: 104 });
     vi.advanceTimersByTime(100);
-    fireTouchEvent(node, "touchmove", [fakeTouch(0, 150)]);
+    firePointerEvent(node, "pointermove", { clientY: 150 });
 
     expect(base.style.transform).toContain("translateY(");
 
-    fireTouchEvent(node, "touchend");
+    firePointerEvent(node, "pointerup");
   });
 
   // -----------------------------------------------------------------------
@@ -537,13 +567,13 @@ describe("useDragDismiss", () => {
   it("applies spring-back transition and clears it on transitionend", () => {
     const { config, node, base } = setup();
 
-    fireTouchEvent(config.handleEl!, "touchstart", [fakeTouch(0, 100)]);
+    firePointerEvent(config.handleEl!, "pointerdown", { clientY: 100 });
     vi.advanceTimersByTime(10);
-    fireTouchEvent(node, "touchmove", [fakeTouch(0, 104)]);
+    firePointerEvent(node, "pointermove", { clientY: 104 });
     // Small drag, slow velocity, not enough to dismiss.
     vi.advanceTimersByTime(500);
-    fireTouchEvent(node, "touchmove", [fakeTouch(0, 130)]);
-    fireTouchEvent(node, "touchend");
+    firePointerEvent(node, "pointermove", { clientY: 130 });
+    firePointerEvent(node, "pointerup");
 
     expect(config.ondismiss).not.toHaveBeenCalled();
     expect(base.style.transition).toBe("transform 0.3s ease-out");
@@ -561,39 +591,66 @@ describe("useDragDismiss", () => {
   it("sets fromHandle to false when handleEl is undefined", () => {
     const { config, node } = setup({ handleEl: undefined });
 
-    fireTouchEvent(node, "touchstart", [fakeTouch(0, 100)]);
+    firePointerEvent(node, "pointerdown", { clientY: 100 });
     vi.advanceTimersByTime(100);
-    fireTouchEvent(node, "touchmove", [fakeTouch(0, 250)]);
-    fireTouchEvent(node, "touchend");
+    firePointerEvent(node, "pointermove", { clientY: 250 });
+    firePointerEvent(node, "pointerup");
 
     // fromHandle is false, so commit never happens.
     expect(config.ondismiss).not.toHaveBeenCalled();
   });
 
   // -----------------------------------------------------------------------
-  // Prevent default on committed touchmove
+  // preventDefault on handle pointerdown suppresses compat mouse events
   // -----------------------------------------------------------------------
 
-  it("calls preventDefault on touchmove after commit", () => {
+  it("calls preventDefault on pointerdown when it starts on the handle", () => {
+    const { config } = setup();
+    const handle = config.handleEl!;
+
+    const ev = firePointerEvent(handle, "pointerdown", { clientY: 100 });
+
+    expect(ev.defaultPrevented).toBe(true);
+  });
+
+  it("does not call preventDefault on pointerdown outside the handle", () => {
+    const { node } = setup();
+
+    const ev = firePointerEvent(node, "pointerdown", { clientY: 100 });
+
+    expect(ev.defaultPrevented).toBe(false);
+  });
+
+  // -----------------------------------------------------------------------
+  // Mouse pointer (pointerType "mouse") commits and dismisses
+  // -----------------------------------------------------------------------
+
+  it("commits and dismisses with a mouse-primary pointer", () => {
     const { config, node } = setup();
+    const handle = config.handleEl!;
 
-    fireTouchEvent(config.handleEl!, "touchstart", [fakeTouch(0, 100)]);
-    vi.advanceTimersByTime(10);
-    fireTouchEvent(node, "touchmove", [fakeTouch(0, 104)]);
-
-    // Next move is post-commit.
-    vi.advanceTimersByTime(100);
-    const moveEvent = new TouchEvent("touchmove", {
-      touches: [fakeTouch(0, 150)],
-      cancelable: true,
-      bubbles: true,
+    firePointerEvent(handle, "pointerdown", {
+      clientY: 100,
+      pointerType: "mouse",
     });
-    const pdSpy = vi.spyOn(moveEvent, "preventDefault");
-    node.dispatchEvent(moveEvent);
+    vi.advanceTimersByTime(10);
+    firePointerEvent(node, "pointermove", {
+      clientY: 104,
+      pointerType: "mouse",
+    });
+    vi.advanceTimersByTime(300);
+    firePointerEvent(node, "pointermove", {
+      clientY: 210,
+      pointerType: "mouse",
+    });
+    firePointerEvent(node, "pointermove", {
+      clientY: 220,
+      pointerType: "mouse",
+    });
+    firePointerEvent(node, "pointerup", {
+      pointerType: "mouse",
+    });
 
-    expect(pdSpy).toHaveBeenCalledOnce();
-    pdSpy.mockRestore();
-
-    fireTouchEvent(node, "touchend");
+    expect(config.ondismiss).toHaveBeenCalledOnce();
   });
 });

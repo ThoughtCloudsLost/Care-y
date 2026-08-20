@@ -191,9 +191,11 @@ export {
   greetingAudioContentTypeSchema,
   uploadGreetingAudioInputSchema,
   createAudioGreetingInputSchema,
+  getGreetingAudioInputSchema,
   type GreetingAudioContentType,
   type UploadGreetingAudioInput,
   type CreateAudioGreetingInput,
+  type GetGreetingAudioInput,
 } from "./schemas/telephony-content.js";
 
 // --- Relay schemas ---

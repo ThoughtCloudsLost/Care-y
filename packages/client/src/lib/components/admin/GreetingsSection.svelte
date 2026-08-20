@@ -29,7 +29,7 @@
   import SoftButton from "$lib/components/inputs/SoftButton.svelte";
   import ShellSheet from "$lib/shell/ShellSheet.svelte";
   import ShellDialog from "$lib/shell/ShellDialog.svelte";
-  import AudioPlayer from "$lib/components/AudioPlayer.svelte";
+  import GreetingAudioPreview from "./GreetingAudioPreview.svelte";
   import {
     needsConversion,
     convertToWav,
@@ -483,9 +483,7 @@
                       <span class="gr-locale-badge">{greeting.locale}</span>
                       {#if greeting.isAudio && greeting.audioBlobKey}
                         <div class="gr-player-wrap">
-                          <AudioPlayer
-                            src="/api/greetings/{greeting.audioBlobKey}"
-                          />
+                          <GreetingAudioPreview greetingId={greeting.id} />
                         </div>
                       {:else}
                         <span class="gr-text">{greeting.text}</span>
@@ -644,7 +642,7 @@
       <div class="audio-upload-area">
         {#if isEditing && editingGreeting?.isAudio === true && editingGreeting.audioBlobKey !== null}
           <div class="audio-preview card-elevated">
-            <AudioPlayer src="/api/greetings/{editingGreeting.audioBlobKey}" />
+            <GreetingAudioPreview greetingId={editingGreeting.id} />
           </div>
         {/if}
 
