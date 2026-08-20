@@ -33,6 +33,10 @@ import type {
   FollowUpPreview,
   PendingClient,
 } from "../tickets/ticket-service.js";
+import {
+  setAccountOfferForClient,
+  clientHasAccount,
+} from "../tickets/ticket-service.js";
 import type {
   FollowUpService,
   FollowUpServiceDeps,
@@ -64,6 +68,8 @@ import {
   meetsRoleThreshold,
   upgradeToSecureLinkInputSchema,
   updateOutboundMessageInputSchema,
+  setAccountOfferInputSchema,
+  resetClientAccountInputSchema,
 } from "@care-y/shared";
 import { ForbiddenError, NotFoundError } from "../errors.js";
 import {
@@ -165,6 +171,8 @@ export interface TicketWireRecord {
     readonly hasPassphrase: boolean;
     readonly createdAt: string;
     readonly lastSeenAt: string | null;
+    readonly kind: string;
+    readonly accountOffer: boolean;
   } | null;
 }
 
@@ -1905,6 +1913,58 @@ export function createTicketRouter(deps: TicketRouterDeps) {
             encryptedContent: b64(record.encryptedContent),
             keyWrap: b64KeyWrap(record.keyWrap),
           };
+        }),
+      ),
+
+    // --- Encrypted Account: volunteer-side offer toggle and reset ---
+
+    setAccountOffer: volunteerProcedure
+      .input(setAccountOfferInputSchema)
+      .mutation(
+        withErrorWrapping(async ({ ctx, input }) => {
+          const { svc } = ticketSvc(ctx.org.tenantDb);
+          const ticket = await svc.findById(input.ticketId, ctx.user.id);
+
+          const updated = await setAccountOfferForClient(
+            ctx.org.tenantDb,
+            ticket.clientId,
+            input.enabled,
+          );
+          if (!updated) {
+            throw new NotFoundError(ErrorCode.PORTAL_CHANNEL_NOT_FOUND);
+          }
+
+          audit(ctx.org.tenantDb, {
+            eventType: "account_offer_changed",
+            actorId: ctx.user.id,
+            metadata: { operation: input.enabled ? "enabled" : "disabled" },
+          });
+        }),
+      ),
+
+    resetClientAccount: volunteerProcedure
+      .input(resetClientAccountInputSchema)
+      .mutation(
+        withErrorWrapping(async ({ ctx, input }) => {
+          const { svc } = ticketSvc(ctx.org.tenantDb);
+          const ticket = await svc.findById(input.ticketId, ctx.user.id);
+
+          const hasAccount = await clientHasAccount(
+            ctx.org.tenantDb,
+            ticket.clientId,
+          );
+          if (!hasAccount) {
+            throw new NotFoundError(ErrorCode.ACCOUNT_ALREADY_EXISTS);
+          }
+
+          const { resetAccount } = await import("../portal/account-service.js");
+          await resetAccount(ctx.org.tenantDb, ticket.clientId);
+
+          audit(ctx.org.tenantDb, {
+            eventType: "client_account_reset",
+            actorId: ctx.user.id,
+            metadata: { operation: "reset" },
+          });
         }),
       ),
 

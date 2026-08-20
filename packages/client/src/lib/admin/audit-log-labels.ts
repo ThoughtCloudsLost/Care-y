@@ -71,6 +71,13 @@ const EVENT_LABELS = new Map<string, (terms: Terms) => string>([
     () => m.audit_event_portal_channel_regenerated(),
   ],
   ["portal_channel_revoked", () => m.audit_event_portal_channel_revoked()],
+  ["client_account_created", (t) => m.audit_event_client_account_created(t)],
+  [
+    "client_account_password_changed",
+    (t) => m.audit_event_client_account_password_changed(t),
+  ],
+  ["client_account_reset", (t) => m.audit_event_client_account_reset(t)],
+  ["account_offer_changed", () => m.audit_event_account_offer_changed()],
 ]);
 
 /**

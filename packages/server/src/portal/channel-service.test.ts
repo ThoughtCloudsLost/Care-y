@@ -470,6 +470,72 @@ describe.skipIf(!process.env.DATABASE_URL)("PortalChannelService", () => {
   });
 
   // -----------------------------------------------------------------------
+  // resolveAuthedChannel: kind clause
+  // -----------------------------------------------------------------------
+
+  describe("resolveAuthedChannel kind clause", () => {
+    it("returns null for a kind='account' row even with correct auth preimage", async () => {
+      const { hashChannelAuth: hash } = await import("@care-y/crypto");
+
+      const clientId = await insertClient(db);
+      const rawAuth = crypto.randomBytes(32);
+      const authHash = Buffer.from(hash(rawAuth));
+
+      // Insert a channel row with kind='account' directly.
+      // Account channels carry random auth_hash bytes in production
+      // (no token exists), but here we use a real hash to prove the
+      // kind clause blocks resolution even when the auth would match.
+      await db
+        .insertInto("portal_channels")
+        .values({
+          client_id: clientId,
+          channel_id: crypto.randomBytes(24).toString("hex"),
+          auth_hash: authHash,
+          client_public: crypto.randomBytes(32),
+          has_passphrase: false,
+          key_check_ephemeral_point: crypto.randomBytes(32),
+          key_check_nonce: crypto.randomBytes(24),
+          key_check_ciphertext: crypto.randomBytes(48),
+          status: "active",
+          kind: "account",
+        })
+        .returning("channel_id")
+        .executeTakeFirstOrThrow()
+        .then((row) => {
+          // Present the correct auth preimage; should still return null
+          return resolveAuthedChannel(db, row.channel_id, rawAuth);
+        })
+        .then((result) => {
+          expect(result).toBeNull();
+        });
+    });
+
+    it("still resolves kind='secure_link' rows (default behavior preserved)", async () => {
+      const { hashChannelAuth: hash } = await import("@care-y/crypto");
+
+      const clientId = await insertClient(db);
+      const rawAuth = crypto.randomBytes(32);
+      const authHash = Buffer.from(hash(rawAuth));
+
+      const reg = makeRegistration({ authHash });
+      await createChannel(db, clientId, reg);
+
+      // Verify the row has kind='secure_link' (the default)
+      const channel = await db
+        .selectFrom("portal_channels")
+        .select("kind")
+        .where("channel_id", "=", reg.channelId)
+        .executeTakeFirstOrThrow();
+      expect(channel.kind).toBe("secure_link");
+
+      // resolveAuthedChannel should still work for secure_link rows
+      const result = await resolveAuthedChannel(db, reg.channelId, rawAuth);
+      expect(result).not.toBeNull();
+      expect(result!.channel_id).toBe(reg.channelId);
+    });
+  });
+
+  // -----------------------------------------------------------------------
   // Regeneration + auth resolution interaction
   // -----------------------------------------------------------------------
 

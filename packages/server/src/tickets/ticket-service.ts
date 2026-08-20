@@ -80,6 +80,8 @@ export interface PortalChannelMeta {
   readonly hasPassphrase: boolean;
   readonly createdAt: string;
   readonly lastSeenAt: string | null;
+  readonly kind: string;
+  readonly accountOffer: boolean;
 }
 
 export interface TicketWithKeyWrap extends TicketListRecord {
@@ -358,6 +360,8 @@ function toRecordWithKeyWrap(
     portal_has_passphrase?: boolean | null;
     portal_created_at?: Date | null;
     portal_last_seen_at?: Date | null;
+    portal_kind?: string | null;
+    portal_account_offer?: boolean | null;
   },
 ): TicketWithKeyWrap {
   const keyWrap = buildKeyWrap(row.ephemeral_point, row.nonce, row.wrapped_key);
@@ -386,6 +390,8 @@ function toRecordWithKeyWrap(
           lastSeenAt: row.portal_last_seen_at
             ? row.portal_last_seen_at.toISOString()
             : null,
+          kind: row.portal_kind ?? "secure_link",
+          accountOffer: Boolean(row.portal_account_offer),
         }
       : null;
 
@@ -642,6 +648,8 @@ export function createTicketService(
         .select("pc.has_passphrase as portal_has_passphrase")
         .select("pc.created_at as portal_created_at")
         .select("pc.last_seen_at as portal_last_seen_at")
+        .select("pc.kind as portal_kind")
+        .select("pc.account_offer as portal_account_offer")
         .select((eb) => [
           // Creation counts as the ticket's first activity: GREATEST
           // ignores the NULL max() of an empty follow-up set, so tickets
@@ -1701,4 +1709,46 @@ export function createTicketService(
       });
     },
   };
+}
+
+// ---------------------------------------------------------------------------
+// Encrypted Account helpers (volunteer-side, called from tickets router)
+// ---------------------------------------------------------------------------
+
+/**
+ * Toggles the account_offer flag on a client's active secure_link channel.
+ * Returns true when a row was updated. Returns false when no qualifying
+ * channel exists (the caller maps this to a typed NotFound).
+ */
+export async function setAccountOfferForClient(
+  db: Kysely<TenantDatabase>,
+  clientId: string,
+  enabled: boolean,
+): Promise<boolean> {
+  const result = await db
+    .updateTable("portal_channels")
+    .set({ account_offer: enabled })
+    .where("client_id", "=", clientId)
+    .where("status", "=", "active")
+    .where("kind", "=", "secure_link")
+    .executeTakeFirst();
+
+  return result.numUpdatedRows > 0n;
+}
+
+/**
+ * Checks whether a client has an encrypted account row.
+ * Used by the reset procedure to surface a typed NotFound before delegating
+ * to account-service (which is no-op-safe and would silently succeed).
+ */
+export async function clientHasAccount(
+  db: Kysely<TenantDatabase>,
+  clientId: string,
+): Promise<boolean> {
+  const row = await db
+    .selectFrom("client_accounts")
+    .select("id")
+    .where("client_id", "=", clientId)
+    .executeTakeFirst();
+  return row !== undefined;
 }

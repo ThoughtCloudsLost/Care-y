@@ -7,7 +7,7 @@
   while the query loads, never DecryptPlaceholder.
 -->
 <script lang="ts">
-  import { Block, BlockTitle, Button, Chip } from "konsta/svelte";
+  import { Block, BlockTitle, Button, Chip, Toggle } from "konsta/svelte";
   import * as m from "$lib/paraglide/messages.js";
   import { withTerms } from "$lib/terminology/with-terms.js";
   import InlineSkeleton from "$lib/components/InlineSkeleton.svelte";
@@ -32,6 +32,8 @@
           hasPassphrase: boolean;
           createdAt: string;
           lastSeenAt: string | null;
+          kind: string;
+          accountOffer: boolean;
         }
       | null
       | undefined;
@@ -57,7 +59,12 @@
   let revokeDialogOpen = $state(false);
   let revoking = $state(false);
 
-  const isSecureLink = $derived(clientTier === "secure_link");
+  const isSecureLink = $derived(
+    clientTier === "secure_link" && portalChannel?.kind === "secure_link",
+  );
+  const isAccount = $derived(
+    clientTier === "account" && portalChannel?.kind === "account",
+  );
 
   function openSetup(): void {
     secureLinkMode = "setup";
@@ -102,6 +109,57 @@
       queryKey: ticketKeys.detail(ticketId),
     });
   }
+
+  // --- Account offer toggle ---
+
+  let offerUpdating = $state(false);
+
+  async function handleOfferToggle(): Promise<void> {
+    if (offerUpdating || !portalChannel) return;
+    offerUpdating = true;
+    try {
+      await ticketRouter.setAccountOffer.mutate({
+        ticketId,
+        enabled: !portalChannel.accountOffer,
+      });
+      haptic();
+      toastStore.show(m.ticket_toast_offer_updated());
+      void queryClient.invalidateQueries({
+        queryKey: ticketKeys.detail(ticketId),
+      });
+    } catch {
+      toastStore.show(m.error_generic(), 3000);
+    } finally {
+      offerUpdating = false;
+    }
+  }
+
+  // --- Account reset ---
+
+  let resetDialogOpen = $state(false);
+  let resetting = $state(false);
+
+  function openResetDialog(): void {
+    resetDialogOpen = true;
+  }
+
+  async function handleReset(): Promise<void> {
+    if (resetting) return;
+    resetting = true;
+    try {
+      await ticketRouter.resetClientAccount.mutate({ ticketId });
+      resetDialogOpen = false;
+      haptic();
+      toastStore.show(m.ticket_toast_account_reset());
+      void queryClient.invalidateQueries({
+        queryKey: ticketKeys.detail(ticketId),
+      });
+    } catch {
+      toastStore.show(m.error_generic(), 3000);
+    } finally {
+      resetting = false;
+    }
+  }
 </script>
 
 <BlockTitle class="!mt-6 !-mb-2">{m.ticket_tier_label()}</BlockTitle>
@@ -128,12 +186,38 @@
         <span>{formatRelativeTime(new Date(portalChannel.lastSeenAt))}</span>
       {/if}
     </p>
+    <div class="offer-row">
+      <span class="offer-label">{m.ticket_tier_offer_toggle()}</span>
+      <Toggle
+        checked={portalChannel.accountOffer}
+        disabled={offerUpdating}
+        onchange={() => void handleOfferToggle()}
+        aria-label={m.ticket_tier_offer_toggle()}
+      />
+    </div>
+    <p class="offer-hint">{m.ticket_tier_offer_hint(withTerms())}</p>
     <div class="tier-actions">
       <Button small outline onclick={openRegenerate}>
         {m.ticket_tier_regenerate()}
       </Button>
       <Button small outline class="tier-revoke-btn" onclick={openRevokeDialog}>
         {m.ticket_tier_revoke()}
+      </Button>
+    </div>
+  </Block>
+{:else if isAccount && portalChannel}
+  <Block class="!my-3">
+    <p class="tier-name">{m.ticket_tier_account()}</p>
+    <p class="tier-meta">
+      <span>{formatRelativeTime(new Date(portalChannel.createdAt))}</span>
+      {#if portalChannel.lastSeenAt}
+        <span class="meta-sep" aria-hidden="true"></span>
+        <span>{formatRelativeTime(new Date(portalChannel.lastSeenAt))}</span>
+      {/if}
+    </p>
+    <div class="tier-actions">
+      <Button small outline class="tier-reset-btn" onclick={openResetDialog}>
+        {m.ticket_tier_account_reset()}
       </Button>
     </div>
   </Block>
@@ -187,6 +271,33 @@
   {/snippet}
 </ShellDialog>
 
+<ShellDialog
+  opened={resetDialogOpen}
+  ondismiss={() => {
+    resetDialogOpen = false;
+  }}
+  title={m.ticket_tier_account_reset()}
+>
+  {#snippet content()}
+    <p>{m.ticket_tier_account_reset_confirm(withTerms())}</p>
+  {/snippet}
+  {#snippet buttons()}
+    <DialogButton
+      onclick={() => {
+        resetDialogOpen = false;
+      }}
+    >
+      {m.common_cancel()}
+    </DialogButton>
+    <DialogButton
+      onclick={() => void handleReset()}
+      class={DIALOG_DESTRUCTIVE_CLASS}
+    >
+      {m.ticket_tier_account_reset()}
+    </DialogButton>
+  {/snippet}
+</ShellDialog>
+
 <style>
   .tier-name {
     color: var(--ink);
@@ -225,5 +336,30 @@
     gap: 0.5rem;
     margin-top: 0.75rem;
     flex-wrap: wrap;
+  }
+
+  .offer-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+    margin-top: 0.75rem;
+    min-height: 44px;
+  }
+
+  .offer-label {
+    color: var(--ink);
+    font-size: var(--text-sm);
+  }
+
+  .offer-hint {
+    color: var(--muted);
+    font-size: var(--text-xs);
+    margin: 0.25rem 0 0;
+    line-height: 1.4;
+  }
+
+  :global(.tier-reset-btn) {
+    --k-color-primary: var(--danger) !important;
   }
 </style>

@@ -24,6 +24,7 @@ import {
   testSealedBox,
   testUnseal,
   noopEncryptor,
+  testBlindIndexer,
 } from "../test-utils.js";
 import type { NotificationService } from "../notifications/service.js";
 import {
@@ -31,8 +32,11 @@ import {
   IntakeQueueNotConfiguredError,
   IntakeDisabledError,
   type IntakeTicketInput,
+  type IntakeAccountInput,
 } from "./intake-service.js";
 import { ValidationError } from "../errors.js";
+import { UsernameTakenError } from "./portal-errors.js";
+import type { AccountServiceDeps } from "./account-service.js";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -61,7 +65,41 @@ function makeInput(overrides?: Partial<IntakeTicketInput>): IntakeTicketInput {
     resolvedQueueId: null,
     resolvedPriority: null,
     resolvedEscalationLevel: null,
+    account: null,
     ...overrides,
+  };
+}
+
+function makeAccountInput(usernameOverride?: string): IntakeAccountInput {
+  return {
+    registration: {
+      accountId: crypto.randomUUID(),
+      username:
+        usernameOverride ?? `testuser-${crypto.randomUUID().slice(0, 8)}`,
+      salt: crypto.randomBytes(16),
+      publicKey: crypto.randomBytes(32),
+      authHash: crypto.randomBytes(32),
+      keyCheck: {
+        ephemeralPoint: crypto.randomBytes(32),
+        nonce: crypto.randomBytes(24),
+        ciphertext: Buffer.from("keycheck-ciphertext"),
+      },
+    },
+    selfCopy: null,
+  };
+}
+
+function makeAccountInputWithSelfCopy(
+  usernameOverride?: string,
+): IntakeAccountInput {
+  const base = makeAccountInput(usernameOverride);
+  return {
+    ...base,
+    selfCopy: {
+      ephemeralPoint: crypto.randomBytes(32),
+      nonce: crypto.randomBytes(24),
+      ciphertext: Buffer.from("selfcopy-ciphertext"),
+    },
   };
 }
 
@@ -533,6 +571,213 @@ describe.skipIf(!process.env.DATABASE_URL)(
         .where("ticket_id", "=", result.ticketId)
         .execute();
       expect(responses).toHaveLength(0);
+    });
+
+    // -----------------------------------------------------------------
+    // Account branch integration tests
+    // -----------------------------------------------------------------
+
+    describe("account branch", () => {
+      let accountDeps: AccountServiceDeps;
+
+      beforeAll(async () => {
+        const { deriveFakeSaltKey } = await import("../auth/salt-defense.js");
+        const { TEST_ORG_ID } = await import("../test-utils.js");
+        const opsHex =
+          "cafebabecafebabecafebabecafebabecafebabecafebabecafebabecafebabe";
+        const fakeSaltKey = await deriveFakeSaltKey(opsHex);
+        accountDeps = {
+          indexer: testBlindIndexer,
+          fakeSaltKey,
+          orgUuid: TEST_ORG_ID,
+        };
+      });
+
+      it("creates client + ticket + account + kind-account channel + tier atomically", async () => {
+        const ns = createMockNotificationService();
+        const acct = makeAccountInput();
+        const input = makeInput({ account: acct });
+
+        const result = await createIntakeTicket(
+          testDb.db,
+          {
+            notificationService: ns,
+            sealedBox: testSealedBox,
+            orgSchema: testDb.schemaName,
+            orgSlug: "test-org",
+            accountServiceDeps: accountDeps,
+          },
+          input,
+        );
+
+        expect(result.ticketId).toBe(input.ticketId);
+
+        // Verify ticket
+        const ticket = await testDb.db
+          .selectFrom("tickets")
+          .select("client_id")
+          .where("id", "=", input.ticketId)
+          .executeTakeFirstOrThrow();
+
+        // Verify account row
+        const account = await testDb.db
+          .selectFrom("client_accounts")
+          .selectAll()
+          .where("client_id", "=", ticket.client_id)
+          .executeTakeFirst();
+        expect(account).toBeDefined();
+        expect(account!.id).toBe(acct.registration.accountId);
+
+        // Verify channel with kind='account'
+        const channel = await testDb.db
+          .selectFrom("portal_channels")
+          .selectAll()
+          .where("client_id", "=", ticket.client_id)
+          .where("status", "=", "active")
+          .where("kind", "=", "account")
+          .executeTakeFirst();
+        expect(channel).toBeDefined();
+
+        // Verify tier
+        const client = await testDb.db
+          .selectFrom("clients")
+          .select("communication_tier")
+          .where("id", "=", ticket.client_id)
+          .executeTakeFirstOrThrow();
+        expect(client.communication_tier).toBe("account");
+      });
+
+      it("stores selfCopy row with the correct followup_id", async () => {
+        const ns = createMockNotificationService();
+        const acct = makeAccountInputWithSelfCopy();
+        const followUpId = crypto.randomUUID();
+        const input = makeInput({ account: acct, followUpId });
+
+        await createIntakeTicket(
+          testDb.db,
+          {
+            notificationService: ns,
+            sealedBox: testSealedBox,
+            orgSchema: testDb.schemaName,
+            orgSlug: "test-org",
+            accountServiceDeps: accountDeps,
+          },
+          input,
+        );
+
+        // Get the account channel
+        const ticket = await testDb.db
+          .selectFrom("tickets")
+          .select("client_id")
+          .where("id", "=", input.ticketId)
+          .executeTakeFirstOrThrow();
+
+        const channel = await testDb.db
+          .selectFrom("portal_channels")
+          .select("id")
+          .where("client_id", "=", ticket.client_id)
+          .where("kind", "=", "account")
+          .executeTakeFirstOrThrow();
+
+        // Verify portal_messages row
+        const messages = await testDb.db
+          .selectFrom("portal_messages")
+          .selectAll()
+          .where("channel_id", "=", channel.id)
+          .execute();
+
+        expect(messages).toHaveLength(1);
+        expect(messages[0]!.followup_id).toBe(followUpId);
+        expect(messages[0]!.direction).toBe("from_client");
+      });
+
+      it("rolls back everything on duplicate username", async () => {
+        const ns = createMockNotificationService();
+        const sharedUsername = `dup-${crypto.randomUUID().slice(0, 8)}`;
+
+        // First submission with this username should succeed
+        const acct1 = makeAccountInput(sharedUsername);
+        const input1 = makeInput({ account: acct1 });
+        await createIntakeTicket(
+          testDb.db,
+          {
+            notificationService: ns,
+            sealedBox: testSealedBox,
+            orgSchema: testDb.schemaName,
+            orgSlug: "test-org",
+            accountServiceDeps: accountDeps,
+          },
+          input1,
+        );
+
+        // Second submission with the same username should fail and rollback
+        const acct2 = makeAccountInput(sharedUsername);
+        const input2 = makeInput({ account: acct2 });
+
+        await expect(
+          createIntakeTicket(
+            testDb.db,
+            {
+              notificationService: ns,
+              sealedBox: testSealedBox,
+              orgSchema: testDb.schemaName,
+              orgSlug: "test-org",
+              accountServiceDeps: accountDeps,
+            },
+            input2,
+          ),
+        ).rejects.toThrow(UsernameTakenError);
+
+        // Assert nothing persisted for the second attempt
+        const ticket = await testDb.db
+          .selectFrom("tickets")
+          .select("id")
+          .where("id", "=", input2.ticketId)
+          .executeTakeFirst();
+        expect(ticket).toBeUndefined();
+      });
+
+      it("without account branch is byte-identical to prior behavior", async () => {
+        const ns = createMockNotificationService();
+        const input = makeInput({ account: null });
+
+        const result = await createIntakeTicket(
+          testDb.db,
+          {
+            notificationService: ns,
+            sealedBox: testSealedBox,
+            orgSchema: testDb.schemaName,
+            orgSlug: "test-org",
+          },
+          input,
+        );
+
+        expect(result.ticketId).toBe(input.ticketId);
+        expect(result.clientAlias).toMatch(/^[a-z]+-[a-z]+-\d+$/);
+
+        // No account should exist
+        const ticket = await testDb.db
+          .selectFrom("tickets")
+          .select("client_id")
+          .where("id", "=", input.ticketId)
+          .executeTakeFirstOrThrow();
+
+        const account = await testDb.db
+          .selectFrom("client_accounts")
+          .select("id")
+          .where("client_id", "=", ticket.client_id)
+          .executeTakeFirst();
+        expect(account).toBeUndefined();
+
+        // No account channel should exist
+        const channel = await testDb.db
+          .selectFrom("portal_channels")
+          .select("id")
+          .where("client_id", "=", ticket.client_id)
+          .where("kind", "=", "account")
+          .executeTakeFirst();
+        expect(channel).toBeUndefined();
+      });
     });
   },
 );

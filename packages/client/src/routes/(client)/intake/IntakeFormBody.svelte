@@ -26,12 +26,16 @@
   import {
     encryptIntake,
     resolveSubmitMetadata,
+    buildAccountPayload,
     type IntakeAnswer,
+    type IntakeAccountPayload,
   } from "./intake-crypto.js";
   import FieldError from "$lib/components/FieldError.svelte";
   import HowProtected from "$lib/components/portal/HowProtected.svelte";
   import IntakeSubmitHint from "$lib/components/portal/IntakeSubmitHint.svelte";
   import IntakeFieldRenderer from "$lib/components/portal/IntakeFieldRenderer.svelte";
+  import type { LoginCryptoCallbacks } from "$lib/auth/login-crypto.js";
+  import { buildLoginCallbacks } from "$lib/auth/crypto-callbacks.js";
   import {
     intakeFieldTypeSchema,
     intakeFieldRoleSchema,
@@ -40,6 +44,7 @@
     type IntakeFieldRole,
     type AvailabilityData,
     type TicketPriority,
+    ErrorCode,
   } from "@care-y/shared";
 
   // ---- Props ----
@@ -293,6 +298,21 @@
     };
   });
 
+  // ---- Account opt-in state ----
+
+  let accountExpanded = $state(false);
+  let accountUsername = $state("");
+  let accountPassword = $state("");
+  let accountConfirmPassword = $state("");
+  let accountPending = $state(false);
+  let accountError = $state<string | undefined>(undefined);
+
+  const accountShowMismatch = $derived(
+    accountConfirmPassword.length > 0 &&
+      accountPassword.length > 0 &&
+      accountPassword !== accountConfirmPassword,
+  );
+
   // ---- Submission ----
 
   let submitted = $state(false);
@@ -314,6 +334,7 @@
       resolvedQueueId?: string | null;
       resolvedPriority?: TicketPriority;
       resolvedEscalationLevel?: string;
+      account?: IntakeAccountPayload;
     }) => {
       if (!trpc.clientPortal) {
         throw new Error("Client portal not available");
@@ -390,6 +411,16 @@
         valid = false;
       } else {
         contactDetailError = undefined;
+      }
+    }
+
+    // Validate account opt-in fields when the section is expanded
+    if (accountExpanded) {
+      if (
+        accountPassword.length > 0 &&
+        accountPassword !== accountConfirmPassword
+      ) {
+        valid = false;
       }
     }
 
@@ -543,6 +574,7 @@
       resolvedQueueId?: string | null;
       resolvedPriority?: TicketPriority;
       resolvedEscalationLevel?: string;
+      account?: IntakeAccountPayload;
     } = {
       ticketId,
       followUpId,
@@ -570,6 +602,52 @@
     }
     if (metadata.resolvedEscalationLevel != null) {
       payload.resolvedEscalationLevel = metadata.resolvedEscalationLevel;
+    }
+
+    // Account opt-in: derive keys and build the account payload
+    // when the section is expanded and the user filled in credentials.
+    const wantsAccount =
+      accountExpanded &&
+      accountUsername.trim().length >= 3 &&
+      accountPassword.length >= 8 &&
+      accountPassword === accountConfirmPassword;
+
+    if (wantsAccount) {
+      accountPending = true;
+      accountError = undefined;
+
+      // Find the message text for the selfCopy (first textarea answer)
+      const messageForCopy = answers.find(
+        (a) => a.fieldType === "textarea" && typeof a.value === "string",
+      );
+      const messageText =
+        messageForCopy !== undefined && typeof messageForCopy.value === "string"
+          ? messageForCopy.value
+          : null;
+
+      // Single indeterminate progressbar; phases are not surfaced separately.
+      const callbacks: LoginCryptoCallbacks = buildLoginCallbacks(
+        () => undefined,
+      );
+
+      try {
+        const accountPayload = await buildAccountPayload(
+          accountUsername,
+          accountPassword,
+          messageText,
+          callbacks,
+        );
+        payload.account = accountPayload;
+      } catch {
+        accountPending = false;
+        submitError = m.intake_error_generic();
+        return;
+      } finally {
+        accountPending = false;
+        // Clear passwords from local state after payload assembly
+        accountPassword = "";
+        accountConfirmPassword = "";
+      }
     }
 
     try {
@@ -623,6 +701,17 @@
       submitError = m.intake_error_rate_limited({ minutes: String(minutes) });
       announceToLiveRegion("polite", submitError);
       focusError();
+      return;
+    }
+
+    // A taken username surfaces inline without discarding the typed form
+    if (code === "CONFLICT" && message === ErrorCode.ACCOUNT_USERNAME_TAKEN) {
+      accountError = m.account_username_taken();
+      announceToLiveRegion("polite", m.account_username_taken());
+      requestAnimationFrame(() => {
+        const el = document.getElementById("account-create-username");
+        if (el) el.focus();
+      });
       return;
     }
 
@@ -687,6 +776,7 @@
 
   const submitDisabled = $derived(
     isSubmitting ||
+      accountPending ||
       submitted ||
       orgKeyUnavailable ||
       resolvedForm.error ||
@@ -727,6 +817,19 @@
     </code>
     <p class="intake-reference-save">{m.intake_reference_save()}</p>
   </Block>
+
+  {#if accountExpanded && accountUsername.trim().length > 0}
+    <Block>
+      <div
+        class="intake-account-reminder"
+        data-testid="intake-account-reminder"
+      >
+        <p class="intake-account-reminder-text">
+          {m.account_intake_confirm_reminder({ username: accountUsername })}
+        </p>
+      </div>
+    </Block>
+  {/if}
 
   <IntakeSubmitHint
     opened={hintShown}
@@ -857,6 +960,119 @@
       {/if}
     {/if}
 
+    <!-- Account opt-in disclosure (collapsed by default) -->
+    <Block>
+      <button
+        class="intake-account-toggle"
+        type="button"
+        aria-expanded={accountExpanded}
+        onclick={() => {
+          accountExpanded = !accountExpanded;
+        }}
+        disabled={isSubmitting || accountPending}
+        data-testid="intake-account-toggle"
+      >
+        <span class="intake-account-toggle-arrow"
+          >{accountExpanded ? "▾" : "▸"}</span
+        >
+        <span class="intake-account-toggle-content">
+          <span class="intake-account-toggle-title"
+            >{m.account_intake_optin_title()}</span
+          >
+          <span class="intake-account-toggle-body"
+            >{m.account_intake_optin_body()}</span
+          >
+        </span>
+      </button>
+    </Block>
+
+    {#if accountExpanded}
+      <Block>
+        <List strong inset class="intake-account-fields">
+          <ListInput
+            type="text"
+            inputId="account-create-username"
+            placeholder={m.account_login_username()}
+            value={accountUsername}
+            onInput={(e: Event) => {
+              if (e.target instanceof HTMLInputElement) {
+                accountUsername = e.target.value;
+                accountError = undefined;
+              }
+            }}
+            disabled={isSubmitting || accountPending}
+            autocomplete="off"
+            data-testid="account-create-username"
+          >
+            {#snippet label()}
+              <span class="sr-only">{m.account_login_username()}</span>
+            {/snippet}
+          </ListInput>
+          <ListInput
+            type="password"
+            inputId="account-create-password"
+            placeholder={m.account_login_password()}
+            value={accountPassword}
+            onInput={(e: Event) => {
+              if (e.target instanceof HTMLInputElement)
+                accountPassword = e.target.value;
+            }}
+            disabled={isSubmitting || accountPending}
+            data-testid="account-create-password"
+          >
+            {#snippet label()}
+              <span class="sr-only">{m.account_login_password()}</span>
+            {/snippet}
+          </ListInput>
+          <ListInput
+            type="password"
+            inputId="account-create-confirm"
+            placeholder={m.account_create_confirm()}
+            value={accountConfirmPassword}
+            onInput={(e: Event) => {
+              if (e.target instanceof HTMLInputElement)
+                accountConfirmPassword = e.target.value;
+            }}
+            disabled={isSubmitting || accountPending}
+            data-testid="account-create-confirm"
+          >
+            {#snippet label()}
+              <span class="sr-only">{m.account_create_confirm()}</span>
+            {/snippet}
+          </ListInput>
+        </List>
+
+        {#if accountShowMismatch}
+          <p class="intake-account-mismatch" data-testid="account-mismatch">
+            {m.account_create_mismatch()}
+          </p>
+        {/if}
+
+        {#if accountError}
+          <p
+            id="intake-account-error"
+            class="intake-error"
+            tabindex="-1"
+            data-testid="account-create-error"
+          >
+            {accountError}
+          </p>
+        {/if}
+
+        <p class="intake-account-hint">{m.account_create_username_hint()}</p>
+        <p class="intake-account-hint">{m.account_create_password_hint()}</p>
+
+        <div class="intake-account-warnings">
+          <p class="intake-account-warning" data-testid="warning-password">
+            {m.account_create_warning_password()}
+          </p>
+          <p class="intake-account-warning" data-testid="warning-reset">
+            {m.account_create_warning_reset()}
+          </p>
+        </div>
+      </Block>
+    {/if}
+
     <!-- Submit error -->
     {#if submitError}
       <Block>
@@ -879,13 +1095,17 @@
         onclick={() => void handleSubmit()}
         data-testid="intake-submit"
       >
-        {#if isSubmitting || (powRequired && powSolving && !submitted)}
+        {#if isSubmitting || accountPending || (powRequired && powSolving && !submitted)}
           <span
             role="progressbar"
-            aria-label={m.intake_solving_challenge()}
+            aria-label={accountPending
+              ? m.account_unlocking()
+              : m.intake_solving_challenge()}
             class="intake-progress"
           >
-            {m.intake_solving_challenge()}
+            {accountPending
+              ? m.account_unlocking()
+              : m.intake_solving_challenge()}
           </span>
         {:else}
           {m.intake_submit()}
@@ -971,5 +1191,107 @@
     .intake-progress {
       animation: none;
     }
+  }
+
+  .intake-account-toggle {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--space-sm);
+    width: 100%;
+    padding: var(--space-sm) 0;
+    min-height: 44px;
+    background: none;
+    border: none;
+    cursor: pointer;
+    text-align: left;
+    color: var(--ink);
+    font-size: var(--text-sm);
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  .intake-account-toggle:disabled {
+    opacity: 0.5;
+    cursor: default;
+  }
+
+  .intake-account-toggle-arrow {
+    flex-shrink: 0;
+    font-size: var(--text-base);
+    line-height: 1.5;
+  }
+
+  .intake-account-toggle-content {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .intake-account-toggle-title {
+    font-weight: 500;
+    line-height: 1.5;
+  }
+
+  .intake-account-toggle-body {
+    color: var(--muted);
+    line-height: 1.5;
+  }
+
+  .intake-account-reminder {
+    padding: var(--space-sm) var(--space-md);
+    border-radius: 8px;
+    background: var(--raised);
+  }
+
+  .intake-account-reminder-text {
+    font-size: var(--text-sm);
+    color: var(--ink);
+    line-height: 1.5;
+    margin: 0;
+  }
+
+  :global(.intake-account-fields) {
+    margin: 0 !important;
+  }
+
+  .intake-account-hint {
+    font-size: var(--text-sm);
+    color: var(--muted);
+    margin-top: var(--space-sm);
+    line-height: 1.5;
+  }
+
+  .intake-account-mismatch {
+    font-size: var(--text-sm);
+    color: var(--danger);
+    margin-top: var(--space-xs);
+  }
+
+  .intake-account-warnings {
+    margin-top: var(--space-md);
+    padding: var(--space-sm) var(--space-md);
+    border-radius: 8px;
+    background: var(--careful-bg, rgba(234, 179, 8, 0.08));
+  }
+
+  .intake-account-warning {
+    font-size: var(--text-sm);
+    color: var(--careful-text, var(--ink));
+    line-height: 1.5;
+    margin: 0;
+  }
+
+  .intake-account-warning + .intake-account-warning {
+    margin-top: var(--space-xs);
+  }
+
+  .sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
   }
 </style>

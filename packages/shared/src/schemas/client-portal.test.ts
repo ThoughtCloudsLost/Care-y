@@ -9,6 +9,7 @@ import {
   publicIntakeFormSchema,
   communicationTierSchema,
   portalChannelIdSchema,
+  portalChannelKindSchema,
   portalAuthSchema,
   eciesTripleSchema,
   portalBootstrapInputSchema,
@@ -17,6 +18,12 @@ import {
   openShareInputSchema,
   openShareResponseSchema,
   shareStatusSchema,
+  accountUsernameSchema,
+  accountRegistrationSchema,
+  accountLoginInputSchema,
+  rewrappedMessagesSchema,
+  accountUpgradeInputSchema,
+  accountChangePasswordInputSchema,
 } from "./client-portal.js";
 
 /**
@@ -425,8 +432,8 @@ describe("communicationTierSchema", () => {
     expect(communicationTierSchema.safeParse("secure_link").success).toBe(true);
   });
 
-  it("rejects 'account' (reserved for 8c)", () => {
-    expect(communicationTierSchema.safeParse("account").success).toBe(false);
+  it("accepts 'account'", () => {
+    expect(communicationTierSchema.safeParse("account").success).toBe(true);
   });
 
   it("rejects free strings", () => {
@@ -759,6 +766,304 @@ describe("shareStatusSchema", () => {
 
   it("rejects missing fields", () => {
     const result = shareStatusSchema.safeParse({});
+    expect(result.success).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Encrypted Account schemas
+// ---------------------------------------------------------------------------
+
+describe("portalChannelKindSchema", () => {
+  it("accepts 'secure_link'", () => {
+    expect(portalChannelKindSchema.safeParse("secure_link").success).toBe(true);
+  });
+
+  it("accepts 'account'", () => {
+    expect(portalChannelKindSchema.safeParse("account").success).toBe(true);
+  });
+
+  it("rejects free strings", () => {
+    expect(portalChannelKindSchema.safeParse("share_link").success).toBe(false);
+    expect(portalChannelKindSchema.safeParse("").success).toBe(false);
+  });
+});
+
+describe("accountUsernameSchema", () => {
+  it("accepts a 3-char username", () => {
+    expect(accountUsernameSchema.safeParse("abc").success).toBe(true);
+  });
+
+  it("accepts a 64-char username", () => {
+    expect(accountUsernameSchema.safeParse("a".repeat(64)).success).toBe(true);
+  });
+
+  it("rejects a 2-char username (below min)", () => {
+    expect(accountUsernameSchema.safeParse("ab").success).toBe(false);
+  });
+
+  it("rejects a 65-char username (above max)", () => {
+    expect(accountUsernameSchema.safeParse("a".repeat(65)).success).toBe(false);
+  });
+
+  it("rejects empty string", () => {
+    expect(accountUsernameSchema.safeParse("").success).toBe(false);
+  });
+});
+
+describe("accountRegistrationSchema", () => {
+  function validRegistration(): Record<string, unknown> {
+    return {
+      accountId: crypto.randomUUID(),
+      username: "testuser",
+      salt: base64OfBytes(16),
+      publicKey: base64OfBytes(32),
+      authHash: base64OfBytes(32),
+      keyCheck: {
+        ephemeralPoint: base64OfBytes(32),
+        nonce: base64OfBytes(24),
+        ciphertext: base64Chars(100),
+      },
+    };
+  }
+
+  it("accepts a valid registration", () => {
+    expect(
+      accountRegistrationSchema.safeParse(validRegistration()).success,
+    ).toBe(true);
+  });
+
+  it("rejects wrong-length salt (15 bytes)", () => {
+    const input = { ...validRegistration(), salt: base64OfBytes(15) };
+    expect(accountRegistrationSchema.safeParse(input).success).toBe(false);
+  });
+
+  it("rejects wrong-length salt (17 bytes)", () => {
+    const input = { ...validRegistration(), salt: base64OfBytes(17) };
+    expect(accountRegistrationSchema.safeParse(input).success).toBe(false);
+  });
+
+  it("rejects wrong-length publicKey (31 bytes)", () => {
+    const input = { ...validRegistration(), publicKey: base64OfBytes(31) };
+    expect(accountRegistrationSchema.safeParse(input).success).toBe(false);
+  });
+
+  it("rejects wrong-length publicKey (33 bytes)", () => {
+    const input = { ...validRegistration(), publicKey: base64OfBytes(33) };
+    expect(accountRegistrationSchema.safeParse(input).success).toBe(false);
+  });
+
+  it("rejects wrong-length authHash (31 bytes)", () => {
+    const input = { ...validRegistration(), authHash: base64OfBytes(31) };
+    expect(accountRegistrationSchema.safeParse(input).success).toBe(false);
+  });
+
+  it("rejects wrong-length authHash (33 bytes)", () => {
+    const input = { ...validRegistration(), authHash: base64OfBytes(33) };
+    expect(accountRegistrationSchema.safeParse(input).success).toBe(false);
+  });
+});
+
+describe("accountLoginInputSchema", () => {
+  it("accepts valid login input", () => {
+    const result = accountLoginInputSchema.safeParse({
+      accountId: crypto.randomUUID(),
+      authToken: base64OfBytes(32),
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("rejects wrong-length authToken (31 bytes)", () => {
+    const result = accountLoginInputSchema.safeParse({
+      accountId: crypto.randomUUID(),
+      authToken: base64OfBytes(31),
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it("rejects wrong-length authToken (33 bytes)", () => {
+    const result = accountLoginInputSchema.safeParse({
+      accountId: crypto.randomUUID(),
+      authToken: base64OfBytes(33),
+    });
+    expect(result.success).toBe(false);
+  });
+});
+
+describe("rewrappedMessagesSchema", () => {
+  function validRewrapped(): Record<string, unknown> {
+    return {
+      id: crypto.randomUUID(),
+      copy: {
+        ephemeralPoint: base64OfBytes(32),
+        nonce: base64OfBytes(24),
+        ciphertext: base64Chars(100),
+      },
+    };
+  }
+
+  it("accepts an array of 500 rows", () => {
+    const arr = Array.from({ length: 500 }, () => validRewrapped());
+    expect(rewrappedMessagesSchema.safeParse(arr).success).toBe(true);
+  });
+
+  it("rejects an array of 501 rows", () => {
+    const arr = Array.from({ length: 501 }, () => validRewrapped());
+    expect(rewrappedMessagesSchema.safeParse(arr).success).toBe(false);
+  });
+
+  it("accepts an empty array", () => {
+    expect(rewrappedMessagesSchema.safeParse([]).success).toBe(true);
+  });
+});
+
+describe("accountUpgradeInputSchema", () => {
+  function validUpgrade(): Record<string, unknown> {
+    return {
+      channelId: "a".repeat(48),
+      auth: base64OfBytes(32),
+      account: {
+        accountId: crypto.randomUUID(),
+        username: "testuser",
+        salt: base64OfBytes(16),
+        publicKey: base64OfBytes(32),
+        authHash: base64OfBytes(32),
+        keyCheck: {
+          ephemeralPoint: base64OfBytes(32),
+          nonce: base64OfBytes(24),
+          ciphertext: base64Chars(100),
+        },
+      },
+      rewrappedMessages: [],
+    };
+  }
+
+  it("accepts a valid upgrade input", () => {
+    expect(accountUpgradeInputSchema.safeParse(validUpgrade()).success).toBe(
+      true,
+    );
+  });
+
+  it("requires channel auth (channelId + auth)", () => {
+    const input = validUpgrade();
+    delete input.channelId;
+    expect(accountUpgradeInputSchema.safeParse(input).success).toBe(false);
+
+    const input2 = validUpgrade();
+    delete input2.auth;
+    expect(accountUpgradeInputSchema.safeParse(input2).success).toBe(false);
+  });
+});
+
+describe("accountChangePasswordInputSchema", () => {
+  function validChangePassword(): Record<string, unknown> {
+    return {
+      currentAuthToken: base64OfBytes(32),
+      account: {
+        salt: base64OfBytes(16),
+        publicKey: base64OfBytes(32),
+        authHash: base64OfBytes(32),
+        keyCheck: {
+          ephemeralPoint: base64OfBytes(32),
+          nonce: base64OfBytes(24),
+          ciphertext: base64Chars(100),
+        },
+      },
+      rewrappedMessages: [],
+    };
+  }
+
+  it("accepts a valid change-password input", () => {
+    expect(
+      accountChangePasswordInputSchema.safeParse(validChangePassword()).success,
+    ).toBe(true);
+  });
+
+  it("omits accountId and username from the account sub-object", () => {
+    const input = validChangePassword();
+    const acct = input.account as Record<string, unknown>;
+    acct.accountId = crypto.randomUUID();
+    acct.username = "shouldfail";
+    const result = accountChangePasswordInputSchema.safeParse(input);
+    // Zod's .omit() strips unrecognized keys in strict mode. With default
+    // stripping, the extra keys are silently dropped and the parse succeeds.
+    // Verify the parsed output does NOT contain accountId or username.
+    if (result.success) {
+      const parsed = result.data.account as Record<string, unknown>;
+      expect("accountId" in parsed).toBe(false);
+      expect("username" in parsed).toBe(false);
+    }
+  });
+});
+
+describe("intakeSubmissionInputSchema account branch", () => {
+  it("accepts intake without account (optional)", () => {
+    const result = intakeSubmissionInputSchema.safeParse(validSubmission());
+    expect(result.success).toBe(true);
+  });
+
+  it("accepts intake with account branch (no selfCopy)", () => {
+    const input = {
+      ...validSubmission(),
+      account: {
+        accountId: crypto.randomUUID(),
+        username: "testuser",
+        salt: base64OfBytes(16),
+        publicKey: base64OfBytes(32),
+        authHash: base64OfBytes(32),
+        keyCheck: {
+          ephemeralPoint: base64OfBytes(32),
+          nonce: base64OfBytes(24),
+          ciphertext: base64Chars(100),
+        },
+      },
+    };
+    const result = intakeSubmissionInputSchema.safeParse(input);
+    expect(result.success).toBe(true);
+  });
+
+  it("accepts intake with account branch including selfCopy", () => {
+    const input = {
+      ...validSubmission(),
+      account: {
+        accountId: crypto.randomUUID(),
+        username: "testuser",
+        salt: base64OfBytes(16),
+        publicKey: base64OfBytes(32),
+        authHash: base64OfBytes(32),
+        keyCheck: {
+          ephemeralPoint: base64OfBytes(32),
+          nonce: base64OfBytes(24),
+          ciphertext: base64Chars(100),
+        },
+        selfCopy: {
+          ephemeralPoint: base64OfBytes(32),
+          nonce: base64OfBytes(24),
+          ciphertext: base64Chars(100),
+        },
+      },
+    };
+    const result = intakeSubmissionInputSchema.safeParse(input);
+    expect(result.success).toBe(true);
+  });
+
+  it("rejects intake account branch with invalid username", () => {
+    const input = {
+      ...validSubmission(),
+      account: {
+        accountId: crypto.randomUUID(),
+        username: "ab", // too short
+        salt: base64OfBytes(16),
+        publicKey: base64OfBytes(32),
+        authHash: base64OfBytes(32),
+        keyCheck: {
+          ephemeralPoint: base64OfBytes(32),
+          nonce: base64OfBytes(24),
+          ciphertext: base64Chars(100),
+        },
+      },
+    };
+    const result = intakeSubmissionInputSchema.safeParse(input);
     expect(result.success).toBe(false);
   });
 });

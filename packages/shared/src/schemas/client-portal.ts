@@ -56,6 +56,34 @@ export const intakeSubmissionInputSchema = z.object({
   resolvedQueueId: z.uuid().nullable().optional(),
   resolvedPriority: z.enum(["low", "normal", "high", "urgent"]).optional(),
   resolvedEscalationLevel: z.string().min(1).max(50).optional(),
+  /** Optional account registration branch (client opts into Encrypted Account at intake). */
+  account: z
+    .object({
+      accountId: z.uuid(),
+      username: z.string().min(3).max(64),
+      salt: base64Bytes(16, "argon2Salt"),
+      publicKey: base64Bytes(32, "accountPublicKey"),
+      authHash: base64Bytes(32, "authHash"),
+      keyCheck: z.object({
+        ephemeralPoint: base64Bytes(32, "ephemeralPoint"),
+        nonce: base64Bytes(24, "nonce"),
+        ciphertext: base64String("ciphertext").refine(
+          (s) => s.length <= 28_000,
+          "ciphertext too large",
+        ),
+      }),
+      selfCopy: z
+        .object({
+          ephemeralPoint: base64Bytes(32, "ephemeralPoint"),
+          nonce: base64Bytes(24, "nonce"),
+          ciphertext: base64String("ciphertext").refine(
+            (s) => s.length <= 28_000,
+            "ciphertext too large",
+          ),
+        })
+        .optional(),
+    })
+    .optional(),
 });
 export type IntakeSubmissionInput = z.infer<typeof intakeSubmissionInputSchema>;
 
@@ -105,9 +133,17 @@ export type PublicIntakeForm = z.infer<typeof publicIntakeFormSchema>;
 // Secure Link portal schemas (8b)
 // ---------------------------------------------------------------------------
 
-/** Communication tier for a client. 8c appends "account". */
-export const communicationTierSchema = z.enum(["sms_email", "secure_link"]);
+/** Communication tier for a client. */
+export const communicationTierSchema = z.enum([
+  "sms_email",
+  "secure_link",
+  "account",
+]);
 export type CommunicationTier = z.infer<typeof communicationTierSchema>;
+
+/** Portal channel kind discriminator. */
+export const portalChannelKindSchema = z.enum(["secure_link", "account"]);
+export type PortalChannelKind = z.infer<typeof portalChannelKindSchema>;
 
 /** 48 lowercase hex chars: hex(sha512(seed)[0:24]). */
 export const portalChannelIdSchema = z.string().regex(/^[0-9a-f]{48}$/);
@@ -186,3 +222,59 @@ export const shareStatusSchema = z.object({
   readAt: z.string().nullable(),
 });
 export type ShareStatus = z.infer<typeof shareStatusSchema>;
+
+// ---------------------------------------------------------------------------
+// Encrypted Account schemas (8c)
+// ---------------------------------------------------------------------------
+
+/** Normalized client-side before hashing server-side; length limits on the RAW input. */
+export const accountUsernameSchema = z.string().min(3).max(64);
+
+/** Payload registering a new account (intake branch, in-portal upgrade, password change). */
+export const accountRegistrationSchema = z.object({
+  accountId: z.uuid(),
+  username: accountUsernameSchema,
+  salt: base64Bytes(16, "argon2Salt"),
+  publicKey: base64Bytes(32, "accountPublicKey"),
+  authHash: base64Bytes(32, "authHash"),
+  keyCheck: eciesTripleSchema,
+});
+export type AccountRegistration = z.infer<typeof accountRegistrationSchema>;
+
+export const getAccountSaltInputSchema = z.object({
+  username: accountUsernameSchema,
+});
+export type GetAccountSaltInput = z.infer<typeof getAccountSaltInputSchema>;
+
+export const accountLoginInputSchema = z.object({
+  accountId: z.uuid(),
+  authToken: base64Bytes(32, "authToken"),
+});
+export type AccountLoginInput = z.infer<typeof accountLoginInputSchema>;
+
+/** Re-encrypted copy swap rows for upgrade and password change. */
+export const rewrappedMessageSchema = z.object({
+  id: z.uuid(),
+  copy: eciesTripleSchema,
+});
+export type RewrappedMessage = z.infer<typeof rewrappedMessageSchema>;
+
+export const rewrappedMessagesSchema = z.array(rewrappedMessageSchema).max(500);
+export type RewrappedMessages = z.infer<typeof rewrappedMessagesSchema>;
+
+export const accountUpgradeInputSchema = z.object({
+  channelId: portalChannelIdSchema,
+  auth: portalAuthSchema,
+  account: accountRegistrationSchema,
+  rewrappedMessages: rewrappedMessagesSchema,
+});
+export type AccountUpgradeInput = z.infer<typeof accountUpgradeInputSchema>;
+
+export const accountChangePasswordInputSchema = z.object({
+  currentAuthToken: base64Bytes(32, "currentAuthToken"),
+  account: accountRegistrationSchema.omit({ accountId: true, username: true }),
+  rewrappedMessages: rewrappedMessagesSchema,
+});
+export type AccountChangePasswordInput = z.infer<
+  typeof accountChangePasswordInputSchema
+>;

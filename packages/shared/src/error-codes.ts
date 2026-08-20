@@ -128,6 +128,9 @@ export const ErrorCode = {
   PORTAL_CHANNEL_EXISTS: "PORTAL_CHANNEL_EXISTS",
   /** Generic portal error: unknown, revoked, or bad-auth (indistinguishable). */
   PORTAL_CHANNEL_NOT_FOUND: "PORTAL_CHANNEL_NOT_FOUND",
+
+  // --- Client accounts ---
+  ACCOUNT_USERNAME_TAKEN: "ACCOUNT_USERNAME_TAKEN",
 } as const;
 
 export type ErrorCodeType = (typeof ErrorCode)[keyof typeof ErrorCode];

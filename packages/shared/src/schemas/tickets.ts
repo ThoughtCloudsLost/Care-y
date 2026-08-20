@@ -10,7 +10,11 @@
 import { z } from "zod";
 import { base64Bytes, base64String } from "./validators.js";
 import { ROLE_ID_VALUES_TUPLE } from "../roles.js";
-import { portalChannelIdSchema, eciesTripleSchema } from "./client-portal.js";
+import {
+  portalChannelIdSchema,
+  portalChannelKindSchema,
+  eciesTripleSchema,
+} from "./client-portal.js";
 
 // --- Ticket enums ---
 
@@ -575,3 +579,31 @@ export const updateOutboundMessageInputSchema = z.object({
 export type UpdateOutboundMessageInput = z.infer<
   typeof updateOutboundMessageInputSchema
 >;
+
+// --- Encrypted Account (volunteer side, 8c) ---
+
+/** Volunteer enables or disables the account upgrade offer on a Secure Link channel. */
+export const setAccountOfferInputSchema = z.object({
+  ticketId: z.uuid(),
+  enabled: z.boolean(),
+});
+export type SetAccountOfferInput = z.infer<typeof setAccountOfferInputSchema>;
+
+/** Volunteer resets (deletes) a client's encrypted account. */
+export const resetClientAccountInputSchema = z.object({
+  ticketId: z.uuid(),
+});
+export type ResetClientAccountInput = z.infer<
+  typeof resetClientAccountInputSchema
+>;
+
+/** Wire shape for the portal channel metadata on a ticket payload. */
+export const portalChannelMetaSchema = z.object({
+  clientPublic: z.string(),
+  hasPassphrase: z.boolean(),
+  createdAt: z.string(),
+  lastSeenAt: z.string().nullable(),
+  kind: portalChannelKindSchema,
+  accountOffer: z.boolean(),
+});
+export type PortalChannelMetaWire = z.infer<typeof portalChannelMetaSchema>;

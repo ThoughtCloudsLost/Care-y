@@ -308,6 +308,12 @@ const RATE_PORTAL_REPLY_MAX = 30;
 // the limiter caps probe volume and log noise.
 const RATE_SHARE_OPEN_MAX = 10;
 
+// Account salt + login: 10 req/hour per IP each. Online guessing is
+// already throttled at the OPRF step; these bound salt-endpoint
+// scraping and login spam independently.
+const RATE_ACCOUNT_SALT_MAX = 10;
+const RATE_ACCOUNT_LOGIN_MAX = 10;
+
 // --- Rate limiters ---
 
 const noopLimiter: RateLimiter = {
@@ -641,6 +647,19 @@ const appRouter = createAppRouter({
     shareLimiter: createInMemoryRateLimiter({
       windowMs: RATE_WINDOW_1M,
       maxRequests: RATE_SHARE_OPEN_MAX,
+    }),
+    // Encrypted Account deps (orgUuid resolved per-request from ctx.org)
+    accountServiceDeps: {
+      indexer,
+      fakeSaltKey,
+    },
+    accountSaltLimiter: createInMemoryRateLimiter({
+      windowMs: RATE_WINDOW_1H,
+      maxRequests: RATE_ACCOUNT_SALT_MAX,
+    }),
+    accountLoginLimiter: createInMemoryRateLimiter({
+      windowMs: RATE_WINDOW_1H,
+      maxRequests: RATE_ACCOUNT_LOGIN_MAX,
     }),
   },
   brandingDeps: {

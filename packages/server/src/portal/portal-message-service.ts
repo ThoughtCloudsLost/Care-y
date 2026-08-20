@@ -57,6 +57,7 @@ export interface PortalReplyServiceInput {
 }
 
 export interface PortalMessageWire {
+  readonly id: string;
   readonly direction: string;
   readonly ephemeralPoint: string;
   readonly nonce: string;
@@ -77,6 +78,8 @@ export interface PortalBootstrapResult {
   readonly messagesExpireDays: number;
   /** Org-configured quick-exit target; null falls back to the client default. */
   readonly safeExitUrl: string | null;
+  /** True when a Secure Link channel has the account offer enabled. */
+  readonly accountOffer: boolean;
 }
 
 export interface PortalMessageServiceDeps {
@@ -137,6 +140,7 @@ export async function bootstrap(
   const rows = await db
     .selectFrom("portal_messages")
     .select([
+      "id",
       "direction",
       "ephemeral_point",
       "nonce",
@@ -149,6 +153,7 @@ export async function bootstrap(
     .execute();
 
   const messages: PortalMessageWire[] = rows.map((r) => ({
+    id: r.id,
     direction: r.direction,
     ephemeralPoint: encode(new Uint8Array(r.ephemeral_point)),
     nonce: encode(new Uint8Array(r.nonce)),
@@ -173,6 +178,7 @@ export async function bootstrap(
     messages,
     messagesExpireDays: EXPIRY_DAYS,
     safeExitUrl: orgConfig?.portal_safe_exit_url ?? null,
+    accountOffer: channel.kind === "secure_link" && channel.account_offer,
   };
 }
 

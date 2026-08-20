@@ -17,7 +17,8 @@
 <script lang="ts">
   import { page } from "$app/state";
   import { browser } from "$app/environment";
-  import { Block, BlockTitle } from "konsta/svelte";
+  import { resolve } from "$app/paths";
+  import { Block, BlockTitle, Card } from "konsta/svelte";
   import {
     createQuery,
     createMutation,
@@ -34,13 +35,22 @@
     encryptReply,
     createPortalSession,
     decodeEciesTriple,
+    decryptPortalMessage,
     type PortalSession,
   } from "$lib/portal/portal-crypto.js";
+  import {
+    buildAccountRegistration,
+    rewrapMessages,
+  } from "$lib/portal/account-crypto.js";
+  import type { LoginCryptoCallbacks } from "$lib/auth/login-crypto.js";
+  import { buildLoginCallbacks } from "$lib/auth/crypto-callbacks.js";
   import QuickExit from "$lib/components/portal/QuickExit.svelte";
   import WebChatHint from "$lib/components/portal/WebChatHint.svelte";
   import PortalPassphraseGate from "$lib/portal/PortalPassphraseGate.svelte";
   import PortalThread from "$lib/portal/PortalThread.svelte";
   import PortalComposer from "$lib/portal/PortalComposer.svelte";
+  import AccountCreateForm from "$lib/portal/AccountCreateForm.svelte";
+  import { X } from "@lucide/svelte";
 
   // Default safe URL when the org has not configured one
   const DEFAULT_SAFE_URL = "https://weather.gov";
@@ -320,6 +330,120 @@
     hintShown = false;
     hintDismissed = true;
   }
+
+  // ---------------------------------------------------------------------------
+  // Upgrade card (shows when bootstrap.accountOffer is true)
+  // ---------------------------------------------------------------------------
+
+  let upgradeCardDismissed = $state(false);
+  let upgradeCardExpanded = $state(false);
+  let upgradePending = $state(false);
+  let upgradeError = $state("");
+  let upgradeSuccess = $state(false);
+  let upgradeUsername = $state("");
+
+  const showAccountOffer = $derived(
+    bootstrapQuery.data?.accountOffer === true && !upgradeSuccess,
+  );
+
+  function dismissUpgradeCard(): void {
+    upgradeCardDismissed = true;
+  }
+
+  function expandUpgradeCard(): void {
+    upgradeCardExpanded = true;
+  }
+
+  function makeCryptoCallbacks(): LoginCryptoCallbacks {
+    // Single indeterminate progressbar; phases are not surfaced separately.
+    return buildLoginCallbacks(() => undefined);
+  }
+
+  function handleUpgradeSubmit(username: string, password: string): void {
+    if (upgradePending || !session || !fragmentData) return;
+    upgradePending = true;
+    upgradeError = "";
+
+    const callbacks = makeCryptoCallbacks();
+
+    void (async () => {
+      try {
+        const { payload, keypair: newKeypair } = await buildAccountRegistration(
+          username,
+          password,
+          null,
+          callbacks,
+        );
+
+        // Re-encrypt already-decrypted thread messages to the new key
+        const decryptedMsgs = collectDecryptedMessagesForUpgrade();
+        const rewrapped = rewrapMessages(
+          decryptedMsgs,
+          newKeypair.clientPublic,
+        );
+
+        // Submit the upgrade mutation
+        if (!trpc.clientPortal) return;
+        await trpc.clientPortal.accountUpgrade.mutate({
+          channelId: fragmentData.channelId,
+          auth: encode(fragmentData.auth),
+          account: payload,
+          rewrappedMessages: rewrapped,
+        });
+
+        // Clean up new keypair (upgrade page shows success, not a session)
+        const { requireSodium } = await import("@care-y/crypto");
+        requireSodium().memzero(newKeypair.clientPrivate);
+
+        // Destroy the old session (channel is revoked server-side)
+        destroySession();
+
+        upgradeUsername = username;
+        upgradeSuccess = true;
+      } catch (err: unknown) {
+        // Check for CONFLICT (stale thread)
+        if (
+          typeof err === "object" &&
+          err !== null &&
+          "data" in err &&
+          typeof (err as Record<string, unknown>).data === "object"
+        ) {
+          upgradeError = m.account_stale_thread();
+          // Refetch messages so the client can try again
+          void queryClient.invalidateQueries({
+            queryKey: portalKeys.messages(routeChannelId),
+          });
+        } else {
+          upgradeError = m.account_login_failed();
+        }
+      } finally {
+        upgradePending = false;
+      }
+    })();
+  }
+
+  function collectDecryptedMessagesForUpgrade(): readonly {
+    id: string;
+    text: string;
+  }[] {
+    const msgs = messagesQuery.data?.messages ?? [];
+    if (!session) return [];
+    const result: { id: string; text: string }[] = [];
+    for (const msg of msgs) {
+      if (!("id" in msg) || typeof msg.id !== "string") continue;
+      try {
+        const triple = decodeEciesTriple(msg);
+        const text = decryptPortalMessage(
+          triple,
+          session.keypair.clientPrivate,
+        );
+        result.push({ id: msg.id, text });
+      } catch {
+        // Skip messages that fail to decrypt
+      }
+    }
+    return result;
+  }
 </script>
 
 <svelte:head>
@@ -359,7 +483,60 @@
     pending={passphraseDerivePending}
     error={passphraseError}
   />
+{:else if upgradeSuccess}
+  <!-- Upgrade success state -->
+  <Block>
+    <BlockTitle>{m.account_upgrade_success_title()}</BlockTitle>
+    <p class="portal-body-text">{m.account_upgrade_success_body()}</p>
+    <p class="portal-body-text upgrade-username">
+      {m.account_login_username()}: {upgradeUsername}
+    </p>
+    <a
+      href={resolve("/account")}
+      class="upgrade-go-link"
+      data-testid="upgrade-go-to-login"
+    >
+      {m.account_login_submit()}
+    </a>
+  </Block>
 {:else if keyCheckPassed && session}
+  <!-- Upgrade offer card (above thread when offered, dismissible) -->
+  {#if showAccountOffer && !upgradeCardDismissed}
+    {#if !upgradeCardExpanded}
+      <Card data-testid="upgrade-card" class="upgrade-card">
+        <div class="upgrade-card-header">
+          <p class="upgrade-card-title">{m.account_upgrade_card_title()}</p>
+          <button
+            type="button"
+            class="upgrade-card-dismiss"
+            aria-label={m.account_upgrade_card_dismiss()}
+            onclick={dismissUpgradeCard}
+            data-testid="upgrade-card-dismiss"
+          >
+            <X size={16} aria-hidden="true" />
+          </button>
+        </div>
+        <p class="upgrade-card-body">{m.account_upgrade_card_body()}</p>
+        <button
+          type="button"
+          class="upgrade-card-action"
+          onclick={expandUpgradeCard}
+          data-testid="upgrade-card-setup"
+        >
+          {m.account_upgrade_setup()}
+        </button>
+      </Card>
+    {:else}
+      <AccountCreateForm
+        onsubmit={handleUpgradeSubmit}
+        pending={upgradePending}
+        errorMessage={upgradeError || undefined}
+        showLinkNote={true}
+        submitLabel={m.account_upgrade_setup()}
+      />
+    {/if}
+  {/if}
+
   <!-- State 4 + 5: Thread + Composer -->
   <PortalThread
     messages={allMessages}
@@ -410,5 +587,72 @@
       animation: none;
       opacity: 0.5;
     }
+  }
+
+  .upgrade-card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 8px;
+  }
+
+  .upgrade-card-title {
+    font-weight: 600;
+    font-size: var(--text-base);
+    color: var(--ink);
+    margin: 0;
+  }
+
+  .upgrade-card-dismiss {
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: none;
+    border: none;
+    color: var(--muted);
+    cursor: pointer;
+    padding: 0;
+    flex-shrink: 0;
+  }
+
+  .upgrade-card-body {
+    font-size: var(--text-sm);
+    color: var(--muted);
+    line-height: 1.5;
+    margin: var(--space-xs) 0 0;
+  }
+
+  .upgrade-card-action {
+    display: inline-block;
+    margin-top: var(--space-md);
+    padding: var(--space-sm) var(--space-md);
+    background: var(--brand-fill);
+    color: var(--brand-on);
+    border: none;
+    border-radius: 8px;
+    font-size: var(--text-sm);
+    font-weight: 600;
+    cursor: pointer;
+    min-height: 44px;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  .upgrade-card-action:active {
+    opacity: 0.7;
+  }
+
+  .upgrade-username {
+    font-weight: 600;
+    color: var(--ink);
+  }
+
+  .upgrade-go-link {
+    display: inline-block;
+    margin-top: var(--space-md);
+    color: var(--brand-text);
+    font-weight: 600;
+    text-decoration: none;
   }
 </style>
