@@ -609,7 +609,7 @@ const appRouter = createAppRouter({
   clientPortalDeps: {
     submissionLimiter: createInMemoryRateLimiter({
       windowMs: RATE_WINDOW_1H,
-      maxRequests: 3,
+      maxRequests: env.INTAKE_SUBMISSION_LIMIT,
     }),
     challengeLimiter: createInMemoryRateLimiter({
       windowMs: RATE_WINDOW_1H,

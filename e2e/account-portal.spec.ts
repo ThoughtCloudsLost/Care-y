@@ -95,6 +95,15 @@ test.describe.serial("Encrypted Account Portal", () => {
     const messageInput = intakePage.locator("textarea").first();
     await messageInput.fill(INTAKE_MESSAGE);
 
+    // The default contact method (phone) leaves the number field
+    // required, which blocks submit. The account is the reply channel
+    // here, so no contact detail is needed.
+    const noneRadio = intakePage.getByRole("radio", {
+      name: /check back myself/i,
+    });
+    await expect(noneRadio).toBeVisible({ timeout: 5_000 });
+    await noneRadio.dispatchEvent("click");
+
     // Expand the opt-in section and fill the account fields.
     const optinToggle = intakePage.getByRole("button", {
       name: /add a secure account/i,
@@ -102,7 +111,9 @@ test.describe.serial("Encrypted Account Portal", () => {
     await optinToggle.click();
     await expect(optinToggle).toHaveAttribute("aria-expanded", "true");
 
-    const usernameInput = intakePage.getByLabel(/username/i).last();
+    const usernameInput = intakePage.getByRole("textbox", {
+      name: /username/i,
+    });
     await usernameInput.fill(USERNAME);
     const passwordInputs = intakePage.locator('input[type="password"]');
     await passwordInputs.nth(0).fill(PASSWORD);
@@ -110,7 +121,9 @@ test.describe.serial("Encrypted Account Portal", () => {
 
     await auditA11y(intakePage);
 
-    const submitBtn = intakePage.getByRole("button", { name: /submit/i });
+    const submitBtn = intakePage.getByRole("button", {
+      name: /send encrypted message/i,
+    });
     await expect(submitBtn).toBeEnabled({ timeout: CRYPTO_TIMEOUT });
     await submitBtn.click();
 
@@ -403,7 +416,9 @@ test.describe.serial("Encrypted Account Portal", () => {
     await card.click();
     await auditA11y(upgradePage);
 
-    const usernameInput = upgradePage.getByLabel(/username/i).last();
+    const usernameInput = upgradePage.getByRole("textbox", {
+      name: /username/i,
+    });
     await usernameInput.fill(UPGRADE_USERNAME);
     const passwordInputs = upgradePage.locator('input[type="password"]');
     await passwordInputs.nth(0).fill(UPGRADE_PASSWORD);

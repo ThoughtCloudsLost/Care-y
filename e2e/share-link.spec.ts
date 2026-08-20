@@ -4,7 +4,7 @@ import type { Page, Request } from "@playwright/test";
 import {
   auditA11y,
   CRYPTO_TIMEOUT,
-  isDesktopLayout,
+  openTicketInfoPanel,
   login,
   openTicketByTitle,
 } from "./helpers";
@@ -64,15 +64,9 @@ test.describe.serial("One-Time Share Link", () => {
   });
 
   test("volunteer opens panel and taps 'Send secure link'", async () => {
-    // Open the ticket panel (popup on mobile, aside on desktop).
-    const desktop = await isDesktopLayout(volunteerPage);
-    if (!desktop) {
-      const moreBtn = volunteerPage.getByRole("button", {
-        name: /more actions/i,
-      });
-      await expect(moreBtn).toBeVisible({ timeout: 10_000 });
-      await moreBtn.dispatchEvent("click");
-    }
+    // The panel sits behind "More actions" in the detail overlay at
+    // every width, desktop included.
+    await openTicketInfoPanel(volunteerPage, "Send secure link");
 
     // Wait for the panel content to render, then tap the share link row.
     const shareRow = volunteerPage.getByText("Send secure link");

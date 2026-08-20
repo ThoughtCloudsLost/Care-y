@@ -38,6 +38,10 @@ services:
     env_file: .env
     environment:
       - NODE_ENV=development
+      # The E2E suite submits many intakes from one address in a single
+      # run. Production keeps the schema default of 3 per hour; this
+      # compose file is development and E2E only.
+      - INTAKE_SUBMISSION_LIMIT=${INTAKE_SUBMISSION_LIMIT:-500}
       - OPRF_SOCKET_A=/run/oprf/oprf-a.sock
       - OPRF_SOCKET_B=/run/oprf/oprf-b.sock
       - TOTP_REPLAY_BYPASS=1

@@ -930,7 +930,7 @@
             placeholder={m.intake_field_contact_detail_phone_label()}
             value={contactDetail}
             autocomplete="off"
-            aria-required="true"
+            required
             onInput={handleContactDetailInput}
           />
         </List>
@@ -946,7 +946,7 @@
             placeholder={m.intake_field_contact_detail_email_label()}
             value={contactDetail}
             autocomplete="off"
-            aria-required="true"
+            required
             onInput={handleContactDetailInput}
           />
         </List>
