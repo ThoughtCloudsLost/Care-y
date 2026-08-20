@@ -5,6 +5,11 @@ import type { PlatformDatabase } from "../db/types.js";
 import type { SecretsEncryptor } from "../config/secrets.js";
 import { createProviderFactory, type ProviderFactory } from "./factory.js";
 import { createTwilioProvider } from "./twilio.js";
+import {
+  createMockProvider,
+  DEV_MOCK_ACCOUNT_SID,
+  DEV_MOCK_AUTH_TOKEN,
+} from "./mock-provider.js";
 import type {
   TelephonyProvider,
   TelephonyProviderStatic,
@@ -414,7 +419,10 @@ describe.skipIf(!process.env.DATABASE_URL)(
       return createProviderFactory({
         db: testDb.platformDb,
         secretsEncryptor,
-        providerConstructors: new Map([["twilio", createTwilioProvider]]),
+        providerConstructors: new Map([
+          ["twilio", createTwilioProvider],
+          ["mock", createMockProvider],
+        ]),
       });
     }
 
@@ -915,7 +923,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
     });
 
     describe("devSeedConfigWithPhones", () => {
-      it("seeds a valid provider config that serves the given phones (development only)", async () => {
+      it("seeds a valid mock provider config that serves the given phones (development only)", async () => {
         const orgId = await insertOrgRow("devseed");
         const factory = buildRealFactory();
         const service = createServiceInDevEnv({
@@ -934,18 +942,19 @@ describe.skipIf(!process.env.DATABASE_URL)(
           { number: "+15550500002", sid: "PNseed002" },
         ]);
 
-        // The seeded blob must be a valid twilio config: a real provider is
+        // The seeded blob must be a valid mock config: a real provider is
         // constructible from it and serves the seeded numbers.
         const provider = await factory.getProvider(orgId);
+        expect(provider.providerId).toBe("mock");
         expect(provider.maskConfig().phoneNumbers).toEqual([
-          { number: "+15550500001" },
-          { number: "+15550500002" },
+          { number: "+15550500001", label: "Main" },
+          { number: "+15550500002", label: undefined },
         ]);
 
         const webhookCfg = await service.lookupWebhookConfig(orgId);
-        expect(webhookCfg?.provider).toBe("twilio");
-        expect(webhookCfg?.accountSid).toBeTruthy();
-        expect(webhookCfg?.authToken).toBeTruthy();
+        expect(webhookCfg?.provider).toBe("mock");
+        expect(webhookCfg?.accountSid).toBe(DEV_MOCK_ACCOUNT_SID);
+        expect(webhookCfg?.authToken).toBe(DEV_MOCK_AUTH_TOKEN);
       });
     });
   },

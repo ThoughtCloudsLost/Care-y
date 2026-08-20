@@ -1,19 +1,50 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { createMockProvider } from "./mock-provider.js";
+import {
+  createMockProvider,
+  mockProviderStatic,
+  DEV_MOCK_ACCOUNT_SID,
+  DEV_MOCK_AUTH_TOKEN,
+} from "./mock-provider.js";
 import type { MockTelephonyProvider } from "./mock-provider.js";
+import type { MockConfig } from "./schemas.js";
+import { createHmacValidator, twilioPayloadBuilder } from "./webhook-crypto.js";
+import { TelephonyConfigError } from "../errors.js";
+
+/** Minimal valid mock config for tests that do not care about phone numbers. */
+const MINIMAL_CONFIG: MockConfig = {
+  accountSid: DEV_MOCK_ACCOUNT_SID,
+  authToken: DEV_MOCK_AUTH_TOKEN,
+  phoneNumbers: [],
+};
+
+/** Config with seeded phone numbers for maskConfig tests. */
+const CONFIG_WITH_PHONES: MockConfig = {
+  accountSid: DEV_MOCK_ACCOUNT_SID,
+  authToken: DEV_MOCK_AUTH_TOKEN,
+  phoneNumbers: [
+    { number: "+15550001111", sid: "PNdev001", label: "Main" },
+    { number: "+15550002222", sid: "PNdev002" },
+  ],
+};
 
 describe("createMockProvider", () => {
   let provider: MockTelephonyProvider;
   let warnSpy: ReturnType<typeof vi.spyOn>;
 
   beforeEach(() => {
-    provider = createMockProvider();
+    provider = createMockProvider(MINIMAL_CONFIG);
     // Silences the mock provider's per-call console.warn output.
     warnSpy = vi.spyOn(console, "warn").mockImplementation(() => undefined);
   });
 
   afterEach(() => {
     warnSpy.mockRestore();
+  });
+
+  it("throws TelephonyConfigError for invalid config", () => {
+    expect(() => createMockProvider({ bad: true })).toThrow(
+      TelephonyConfigError,
+    );
   });
 
   describe("sendSms", () => {
@@ -68,15 +99,35 @@ describe("createMockProvider", () => {
   });
 
   describe("validateWebhook", () => {
-    it("returns true regardless of input", () => {
+    const hmac = createHmacValidator({
+      algorithm: "sha1",
+      buildPayload: twilioPayloadBuilder,
+    });
+
+    it("accepts a correctly-signed request", () => {
+      const url = "https://example.com/webhooks/mock/org-1/sms";
+      const body = { CallSid: "CA123", From: "+15550001111" };
+      const signature = hmac.computeSignature(url, body, DEV_MOCK_AUTH_TOKEN);
+
+      const result = provider.validateWebhook({
+        url,
+        body,
+        signature,
+        authToken: DEV_MOCK_AUTH_TOKEN,
+      });
+
+      expect(result).toBe(true);
+    });
+
+    it("rejects a bad signature", () => {
       const result = provider.validateWebhook({
         url: "https://example.com/webhook",
         body: { CallSid: "CA123" },
         signature: "completely-wrong-signature",
-        authToken: "some-token",
+        authToken: DEV_MOCK_AUTH_TOKEN,
       });
 
-      expect(result).toBe(true);
+      expect(result).toBe(false);
     });
   });
 
@@ -208,7 +259,7 @@ describe("createMockProvider", () => {
   });
 
   describe("maskConfig", () => {
-    it("returns mock config shape with expected fields", () => {
+    it("returns empty phoneNumbers for a config with none", () => {
       const masked = provider.maskConfig();
 
       expect(masked).toEqual({
@@ -218,6 +269,28 @@ describe("createMockProvider", () => {
         maskedAuthToken: "****",
         phoneNumbers: [],
       });
+    });
+
+    it("reports seeded phone numbers with labels", () => {
+      const p = createMockProvider(CONFIG_WITH_PHONES);
+      const masked = p.maskConfig();
+
+      expect(masked.phoneNumbers).toEqual([
+        { number: "+15550001111", label: "Main" },
+        { number: "+15550002222", label: undefined },
+      ]);
+    });
+
+    it("masks credentials (does not return raw accountSid or authToken)", () => {
+      const p = createMockProvider(CONFIG_WITH_PHONES);
+      const masked = p.maskConfig();
+
+      expect(masked.maskedAccountId).toBe("MOCK_ACCOUNT");
+      expect(masked.maskedAuthToken).toBe("****");
+      // The masked config must not contain the raw credentials
+      const serialized = JSON.stringify(masked);
+      expect(serialized).not.toContain(DEV_MOCK_ACCOUNT_SID);
+      expect(serialized).not.toContain(DEV_MOCK_AUTH_TOKEN);
     });
   });
 
@@ -281,5 +354,47 @@ describe("createMockProvider", () => {
     it("is set to mock", () => {
       expect(provider.providerId).toBe("mock");
     });
+  });
+});
+
+describe("mockProviderStatic", () => {
+  describe("validateConfig", () => {
+    it("accepts a valid mock config", () => {
+      const result = mockProviderStatic.validateConfig(MINIMAL_CONFIG);
+      expect(result).toEqual(MINIMAL_CONFIG);
+    });
+
+    it("throws TelephonyConfigError for invalid config", () => {
+      expect(() => mockProviderStatic.validateConfig({})).toThrow(
+        TelephonyConfigError,
+      );
+    });
+  });
+
+  describe("provisionWebhooks", () => {
+    it("returns the config unchanged (no remote provider)", async () => {
+      const result = await mockProviderStatic.provisionWebhooks(
+        MINIMAL_CONFIG,
+        "org-1",
+        "https://hooks.example.test",
+      );
+      expect(result).toBe(MINIMAL_CONFIG);
+    });
+  });
+});
+
+describe("dev credential constants", () => {
+  it("account id carries the AC prefix the webhook handler compares against", () => {
+    // routes/webhooks.ts checks body.AccountSid against the stored config,
+    // and a simulator sending a differently shaped id would be rejected.
+    expect(DEV_MOCK_ACCOUNT_SID).toMatch(/^AC/);
+  });
+
+  it("auth token is long enough to serve as an HMAC key", () => {
+    expect(DEV_MOCK_AUTH_TOKEN.length).toBeGreaterThanOrEqual(32);
+  });
+
+  it("account id and auth token are distinct", () => {
+    expect(DEV_MOCK_ACCOUNT_SID).not.toBe(DEV_MOCK_AUTH_TOKEN);
   });
 });

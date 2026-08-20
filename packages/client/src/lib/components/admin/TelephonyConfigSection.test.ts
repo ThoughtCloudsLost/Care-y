@@ -56,6 +56,14 @@ const MANAGED_CONFIG: MaskedConfig = {
   phoneNumbers: [{ number: "+15551234567" }],
 };
 
+const MOCK_CONFIG: MaskedConfig = {
+  provider: "mock",
+  mode: "mock",
+  maskedAccountId: "MOCK_ACCOUNT",
+  maskedAuthToken: "****",
+  phoneNumbers: [{ number: "+15550001111", label: "Main" }],
+};
+
 const PROVISIONED_PHONES = [
   { number: "+15551234567", sid: "PN001" },
   { number: "+15559876543", sid: "PN002" },
@@ -73,6 +81,9 @@ vi.mock("$lib/paraglide/messages.js", () => ({
   admin_telephony_mode_managed: () => "Managed by platform",
   admin_telephony_managed_note: () =>
     "Your phone service is managed for you. Contact your admin for changes.",
+  admin_telephony_mode_mock: () => "Simulated provider (development only)",
+  admin_telephony_mock_note: () =>
+    "This organization uses a simulated phone provider. No real calls or messages are sent or received.",
   admin_telephony_update_credentials: () => "Update credentials",
   admin_telephony_credentials_heading: ({ provider }: { provider: string }) =>
     `Update ${provider} credentials`,
@@ -260,6 +271,43 @@ describe("TelephonyConfigSection", () => {
 
     expect(screen.getByText("Phone service not set up")).toBeTruthy();
     expect(screen.getByText("Go to setup")).toBeTruthy();
+  });
+
+  describe("simulated provider mode", () => {
+    beforeEach(() => {
+      mockConfigLoading = false;
+      mockConfigData = MOCK_CONFIG;
+    });
+
+    it("labels the org as a simulated provider rather than managed", () => {
+      render(TelephonyConfigSection);
+
+      expect(
+        screen.getByText("Simulated provider (development only)"),
+      ).toBeTruthy();
+      expect(screen.queryByText("Managed by platform")).toBeNull();
+    });
+
+    it("explains that no real calls or messages are sent", () => {
+      render(TelephonyConfigSection);
+
+      expect(
+        screen.getByText(
+          "This organization uses a simulated phone provider. No real calls or messages are sent or received.",
+        ),
+      ).toBeTruthy();
+      expect(
+        screen.queryByText(
+          "Your phone service is managed for you. Contact your admin for changes.",
+        ),
+      ).toBeNull();
+    });
+
+    it("reports phone service active when the config carries numbers", () => {
+      render(TelephonyConfigSection);
+
+      expect(screen.getByText("Phone service active")).toBeTruthy();
+    });
   });
 
   describe("BYOT mode", () => {

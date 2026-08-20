@@ -1,9 +1,12 @@
 import { createHmac, randomUUID } from "node:crypto";
+import { DEV_MOCK_ACCOUNT_SID } from "./mock-provider.js";
 
 export interface MockWebhookConfig {
   readonly authToken: string;
   readonly baseUrl: string;
   readonly orgId: string;
+  /** Provider segment for the webhook URL path (defaults to "mock"). */
+  readonly provider?: string;
 }
 
 export interface MockSmsPayload {
@@ -51,7 +54,8 @@ async function sendSignedWebhook(
   // replay protection (5-minute window). Matches production URL format
   // where provisioned webhooks include ?ts=<epoch_seconds>.
   const ts = Math.floor(Date.now() / 1000);
-  const url = `${config.baseUrl}/webhooks/twilio/${config.orgId}/${endpoint}?ts=${String(ts)}`;
+  const provider = config.provider ?? "mock";
+  const url = `${config.baseUrl}/webhooks/${provider}/${config.orgId}/${endpoint}?ts=${String(ts)}`;
   const signature = computeTwilioSignature(url, body, config.authToken);
   const params = new URLSearchParams(body);
 
@@ -73,7 +77,7 @@ export async function sendMockSmsWebhook(
 ): Promise<MockWebhookResult> {
   const body: Record<string, string> = {
     MessageSid: `SM_test_${randomUUID()}`,
-    AccountSid: "AC_test_mock",
+    AccountSid: DEV_MOCK_ACCOUNT_SID,
     From: payload?.from ?? "+15550001111",
     To: payload?.to ?? "+15550002222",
     Body: payload?.body ?? "Test message from mock webhook sender",
@@ -89,7 +93,7 @@ export async function sendMockCallWebhook(
 ): Promise<MockWebhookResult> {
   const body: Record<string, string> = {
     CallSid: `CA_test_${randomUUID()}`,
-    AccountSid: "AC_test_mock",
+    AccountSid: DEV_MOCK_ACCOUNT_SID,
     From: payload?.from ?? "+15550001111",
     To: payload?.to ?? "+15550002222",
     CallStatus: payload?.callStatus ?? "ringing",

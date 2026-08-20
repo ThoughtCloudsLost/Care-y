@@ -112,6 +112,7 @@ function makeDeps(overrides?: Partial<InboundCallDeps>): InboundCallDeps {
     webhookBaseUrl: "https://example.com",
     defaultLocale: "en-US",
     callTracker: createCallTracker(),
+    providerId: "mock",
     ...overrides,
   };
 }
@@ -543,7 +544,7 @@ describe("handleInboundCall", () => {
   // --- Webhook URL construction ---
   // Wire format contract: webhook URLs must follow /webhooks/<provider>/<org-uuid>/<endpoint> pattern
 
-  it("constructs voice webhook URL from webhookBaseUrl and orgId", async () => {
+  it("constructs voice webhook URL using providerId rather than hardcoded provider", async () => {
     const existingPhone = {
       id: "phone-existing",
       phoneHash: "hashed-phone",
@@ -575,7 +576,7 @@ describe("handleInboundCall", () => {
     const recordInstructions = findInstructions(result, "record");
     expect(recordInstructions).toHaveLength(1);
     expect(recordInstructions[0]!.attributes?.action).toBe(
-      "https://example.com/webhooks/twilio/org-1/voice",
+      "https://example.com/webhooks/mock/org-1/voice",
     );
   });
 

@@ -2808,9 +2808,9 @@ describe("createRelayHandler", () => {
         },
       ];
       const { statusWebhookUrl, confirmWebhookUrl } = callArgs[0];
-      // Status webhook uses UUID (matches routes/webhooks.ts expectations)
+      // Status webhook uses provider ID + UUID (matches routes/webhooks.ts expectations)
       expect(statusWebhookUrl).toBe(
-        `https://api.care-y.app/webhooks/twilio/${ORG_UUID}/status`,
+        `https://api.care-y.app/webhooks/mock/${ORG_UUID}/status`,
       );
       // Confirm URL uses schema name (opaque path segment, not a DB lookup key)
       expect(confirmWebhookUrl).toBe(

@@ -1,10 +1,11 @@
-// Wire format + crypto contract: tests verify Twilio webhook URL patterns, required form fields,
-// and HMAC-SHA1 signature computation that must match Twilio's algorithm exactly.
+// Wire format + crypto contract: tests verify webhook URL patterns, required form fields,
+// and HMAC-SHA1 signature computation that must match the provider's algorithm exactly.
 
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { createHmac } from "node:crypto";
 import { sendMockSmsWebhook, sendMockCallWebhook } from "./mock-webhook.js";
 import type { MockWebhookConfig } from "./mock-webhook.js";
+import { DEV_MOCK_ACCOUNT_SID } from "./mock-provider.js";
 
 const config: MockWebhookConfig = {
   authToken: "test-auth-token-for-hmac",
@@ -37,13 +38,13 @@ describe("sendMockSmsWebhook", () => {
     vi.unstubAllGlobals();
   });
 
-  it("constructs correct URL path for SMS", async () => {
+  it("constructs correct URL path for SMS using mock provider segment", async () => {
     await sendMockSmsWebhook(config);
 
     expect(fetchStub).toHaveBeenCalledOnce();
     const [url] = fetchStub.mock.calls[0] as [string, RequestInit];
     expect(url).toMatch(
-      /^https:\/\/care-y\.example\.com\/webhooks\/twilio\/org-abc-123\/sms\?ts=\d+$/,
+      /^https:\/\/care-y\.example\.com\/webhooks\/mock\/org-abc-123\/sms\?ts=\d+$/,
     );
   });
 
@@ -58,11 +59,11 @@ describe("sendMockSmsWebhook", () => {
     expect(result.signature).toBe(expected);
   });
 
-  it("includes all required Twilio fields in body", async () => {
+  it("includes all required webhook fields in body with DEV_MOCK_ACCOUNT_SID", async () => {
     const result = await sendMockSmsWebhook(config);
 
     expect(result.body).toHaveProperty("MessageSid");
-    expect(result.body).toHaveProperty("AccountSid", "AC_test_mock");
+    expect(result.body).toHaveProperty("AccountSid", DEV_MOCK_ACCOUNT_SID);
     expect(result.body).toHaveProperty("From", "+15550001111");
     expect(result.body).toHaveProperty("To", "+15550002222");
     expect(result.body).toHaveProperty(
@@ -106,8 +107,34 @@ describe("sendMockCallWebhook", () => {
     vi.unstubAllGlobals();
   });
 
-  it("constructs correct URL path for voice", async () => {
+  it("constructs correct URL path for voice using mock provider segment", async () => {
     await sendMockCallWebhook(config);
+
+    expect(fetchStub).toHaveBeenCalledOnce();
+    const [url] = fetchStub.mock.calls[0] as [string, RequestInit];
+    expect(url).toMatch(
+      /^https:\/\/care-y\.example\.com\/webhooks\/mock\/org-abc-123\/voice\?ts=\d+$/,
+    );
+  });
+
+  it("includes all required call fields with DEV_MOCK_ACCOUNT_SID", async () => {
+    const result = await sendMockCallWebhook(config);
+
+    expect(result.body).toHaveProperty("CallSid");
+    expect(result.body).toHaveProperty("AccountSid", DEV_MOCK_ACCOUNT_SID);
+    expect(result.body).toHaveProperty("From", "+15550001111");
+    expect(result.body).toHaveProperty("To", "+15550002222");
+    expect(result.body).toHaveProperty("CallStatus", "ringing");
+    expect(result.body).toHaveProperty("Direction", "inbound");
+    expect(result.body.CallSid).toMatch(/^CA_test_/);
+  });
+
+  it("uses explicit provider override in URL path when specified", async () => {
+    const customConfig: MockWebhookConfig = {
+      ...config,
+      provider: "twilio",
+    };
+    await sendMockCallWebhook(customConfig);
 
     expect(fetchStub).toHaveBeenCalledOnce();
     const [url] = fetchStub.mock.calls[0] as [string, RequestInit];
@@ -116,19 +143,7 @@ describe("sendMockCallWebhook", () => {
     );
   });
 
-  it("includes all required Twilio call fields in body", async () => {
-    const result = await sendMockCallWebhook(config);
-
-    expect(result.body).toHaveProperty("CallSid");
-    expect(result.body).toHaveProperty("AccountSid", "AC_test_mock");
-    expect(result.body).toHaveProperty("From", "+15550001111");
-    expect(result.body).toHaveProperty("To", "+15550002222");
-    expect(result.body).toHaveProperty("CallStatus", "ringing");
-    expect(result.body).toHaveProperty("Direction", "inbound");
-    expect(result.body.CallSid).toMatch(/^CA_test_/);
-  });
-
-  it("generates signature following Twilio algorithm with sorted key-value pairs", async () => {
+  it("generates signature following HMAC-SHA1 algorithm with sorted key-value pairs", async () => {
     const result = await sendMockCallWebhook(config);
 
     // Manually reconstruct the payload: URL + sorted keys concatenated

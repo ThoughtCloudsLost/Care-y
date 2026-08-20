@@ -110,11 +110,24 @@ describe("signVapidJwt", () => {
     const s = signature.subarray(32, 64);
 
     function toDerInteger(val: Buffer): Buffer {
-      // Add leading 0x00 if high bit is set (positive integer encoding)
-      if (val[0] !== undefined && val[0] >= 0x80) {
-        return Buffer.concat([Buffer.from([0x02, val.length + 1, 0x00]), val]);
+      // DER INTEGERs are minimally encoded: strip leading zero bytes first,
+      // then re-add a single 0x00 only when the high bit would otherwise
+      // make the value negative. Skipping the strip produces non-minimal
+      // DER that OpenSSL rejects, which happens whenever R or S starts with
+      // a zero byte (roughly one signature in 128).
+      let start = 0;
+      while (start < val.length - 1 && val[start] === 0x00) {
+        start += 1;
       }
-      return Buffer.concat([Buffer.from([0x02, val.length]), val]);
+      const trimmed = val.subarray(start);
+      const first = trimmed[0];
+      if (first !== undefined && first >= 0x80) {
+        return Buffer.concat([
+          Buffer.from([0x02, trimmed.length + 1, 0x00]),
+          trimmed,
+        ]);
+      }
+      return Buffer.concat([Buffer.from([0x02, trimmed.length]), trimmed]);
     }
 
     const rDer = toDerInteger(r);
