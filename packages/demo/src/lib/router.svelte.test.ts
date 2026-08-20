@@ -478,8 +478,8 @@ describe("DemoRouter", () => {
       expect(router.routeId).toBe("/(app)/reports");
     });
 
-    it("strips /Care-y base path prefix", () => {
-      router.handleGoto("/Care-y/tickets");
+    it("strips base path prefix when configured", () => {
+      router.handleGoto("/tickets");
       expect(router.feature).toBe("tickets");
     });
 

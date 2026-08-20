@@ -31,6 +31,7 @@ import type { DemoFeature, DemoDetail } from "./bridge.js";
 import { fireBeforeNavigate, fireAfterNavigate } from "$app/navigation";
 import { DEMO_ORIGIN } from "./demo-origin.js";
 import { parseUrl } from "./non-reactive.js";
+import { base } from "$app/paths";
 
 // Re-exported type aliases for external barrel consumers.
 export type { DemoFeature, DemoDetail } from "./bridge.js";
@@ -343,9 +344,13 @@ export class DemoRouter {
     // Strip any base path prefix (in case resolve() was called).
     // Plain URL: the result is read once and discarded; SvelteURL's
     // reactive wrappers would be wasted allocation.
+    const stripped =
+      base && href.toLowerCase().startsWith(base.toLowerCase())
+        ? href.slice(base.length)
+        : href;
     const raw = href.startsWith("http")
       ? parseUrl(href)
-      : parseUrl(href.replace(/^\/Care-y/i, ""), DEMO_ORIGIN);
+      : parseUrl(stripped, DEMO_ORIGIN);
 
     const pathname = raw.pathname;
     const search = raw.search;

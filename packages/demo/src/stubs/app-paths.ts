@@ -2,8 +2,8 @@
  * Stub for $app/paths.
  *
  * Derives base from Vite's import.meta.env.BASE_URL so it works
- * both in local dev ("/") and under the GitHub Pages base path
- * ("/Care-y/"). The trailing slash is stripped so template
+ * both in local dev ("/") and under any configured base path.
+ * The trailing slash is stripped so template
  * expressions like `${base}/tickets` compose correctly, matching
  * how SvelteKit's base behaves.
  */

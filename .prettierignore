@@ -27,3 +27,4 @@ Dockerfile.*
 **/paraglide/**
 **/project.inlang/**
 *.sh
+CNAME
