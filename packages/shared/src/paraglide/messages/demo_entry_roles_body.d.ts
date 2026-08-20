@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "The three user icons on the left side switch between Admin, Manager, and Volunteer accounts, and switching changes what every screen shows and what actions a..." |
+* | "The user badge at the right end of the toolbar opens a dropdown to switch between Admin, Manager, and Volunteer accounts, and switching changes what every sc..." |
 *
 * @param {Demo_Entry_Roles_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

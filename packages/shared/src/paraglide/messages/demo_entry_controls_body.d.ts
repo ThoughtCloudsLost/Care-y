@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "Drag the simulator by the bar above it and resize it from any edge, and use the toolbar to switch between phone and desktop layouts. The simulator and the ha..." |
+* | "The floating toolbar above the simulator is also a drag handle, so you can grab it anywhere to reposition the frame. Phone and desktop preset buttons in the ..." |
 *
 * @param {Demo_Entry_Controls_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" }} options
