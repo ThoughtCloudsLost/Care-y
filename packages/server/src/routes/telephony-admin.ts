@@ -18,7 +18,7 @@ import {
   setPhonePurposeInputSchema,
   changeTelephonyModeInputSchema,
 } from "@care-y/shared";
-import { ConflictError } from "../errors.js";
+import { ConflictError, InternalError } from "../errors.js";
 
 export interface TelephonyAdminRouterDeps {
   readonly configService: TelephonyConfigService;
@@ -140,24 +140,24 @@ export function createTelephonyAdminRouter(deps: TelephonyAdminRouterDeps) {
                 { number: "+15550002222", sid: "PNdev002", label: "Support" },
               ] as const;
 
-              if (configService.devSeedConfigWithPhones) {
-                await configService.devSeedConfigWithPhones(
-                  ctx.org.orgId,
-                  devPhones,
+              if (!configService.devSeedConfigWithPhones) {
+                // Both this route and devSeedConfigWithPhones are gated on
+                // NODE_ENV === "development". If the route exists but the
+                // method does not, the env check is inconsistent.
+                throw new InternalError(
+                  "devSeedConfigWithPhones unavailable in development mode",
                 );
-
-                await configService.setPhonePurpose(ctx.org.tenantDb, {
-                  outboundSid: devPhones[0].sid,
-                  systemSid: devPhones[1].sid,
-                });
-              } else {
-                await configService.saveConfig({
-                  orgId: ctx.org.orgId,
-                  provider: "twilio",
-                  accountId: "ACdev00000000000000000000000mock",
-                  authToken: "dev_mock_auth_token_000000000000",
-                });
               }
+
+              await configService.devSeedConfigWithPhones(
+                ctx.org.orgId,
+                devPhones,
+              );
+
+              await configService.setPhonePurpose(ctx.org.tenantDb, {
+                outboundSid: devPhones[0].sid,
+                systemSid: devPhones[1].sid,
+              });
 
               return { skipped: false as const };
             }),

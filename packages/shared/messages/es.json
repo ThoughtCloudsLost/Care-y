@@ -969,6 +969,8 @@
   "admin_telephony_mode_byot": "{provider} (autogestionado)",
   "admin_telephony_mode_managed": "Gestionado por la plataforma",
   "admin_telephony_managed_note": "Su servicio telefonico es gestionado por la plataforma. Contacte a su administrador para realizar cambios.",
+  "admin_telephony_mode_mock": "Proveedor simulado (solo desarrollo)",
+  "admin_telephony_mock_note": "Esta organización usa un proveedor simulado. No se envían ni reciben llamadas ni mensajes reales.",
   "admin_telephony_update_credentials": "Actualizar credenciales",
   "admin_telephony_credentials_heading": "Actualizar credenciales de {provider}",
   "admin_telephony_account_id": "ID de cuenta",

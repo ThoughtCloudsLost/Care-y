@@ -38,6 +38,8 @@ export interface InboundCallDeps {
   readonly webhookBaseUrl: string;
   readonly defaultLocale: string;
   readonly callTracker: CallTracker;
+  /** Provider identifier for constructing webhook URLs (e.g. "twilio", "mock"). */
+  readonly providerId: string;
 }
 
 const FALLBACK_GREETING: GreetingRecord = {
@@ -98,7 +100,7 @@ export async function handleInboundCall(
   if (isBlocked) return [{ type: "reject", attributes: { reason: "busy" } }];
 
   // Single voice webhook URL handles DTMF, recording, and status callbacks
-  const voiceWebhookUrl = `${webhookBaseUrl}/webhooks/twilio/${orgId}/voice`;
+  const voiceWebhookUrl = `${webhookBaseUrl}/webhooks/${deps.providerId}/${orgId}/voice`;
 
   // Path 1: DTMF response from language selection
   if (digits !== undefined) {

@@ -52,6 +52,10 @@ import {
 import { deriveSecretsKey, createSecretsEncryptor } from "../config/secrets.js";
 import { seedDefaultNoteTypes } from "../tickets/note-type-service.js";
 import { generateAlias } from "../telephony/models/alias-generator.js";
+import {
+  DEV_MOCK_ACCOUNT_SID,
+  DEV_MOCK_AUTH_TOKEN,
+} from "../telephony/mock-provider.js";
 import type { Kysely } from "kysely";
 import type { TenantDatabase } from "../db/types.js";
 
@@ -398,6 +402,61 @@ async function seed(): Promise<void> {
     await seedDefaultNoteTypes(tenantDatabase, sealedBox, secretsEncryptor);
     console.log("Seeded 4 default note types.");
   }
+
+  // --- Seed mock telephony config ---
+  // Placement: AFTER the SEED_SKIP_ADMIN early return (line 154). The e2e
+  // onboarding test uses SEED_SKIP_ADMIN=1 to create an org with no telephony
+  // config, then asserts the communications wizard step shows "Skip" rather
+  // than "Next". Seeding telephony here keeps that org unconfigured.
+
+  // Platform table: telephony_config (keyed by org UUID, OPS-encrypted blob).
+  // Encrypt in a tight scope so the cleartext buffer is zeroed before the
+  // DB write (and the variable falls out of scope).
+  const telephonySealed = ((): Buffer => {
+    const configObj = {
+      accountSid: DEV_MOCK_ACCOUNT_SID,
+      authToken: DEV_MOCK_AUTH_TOKEN,
+      phoneNumbers: [
+        { number: "+15550001111", sid: "PNdev001", label: "Main" },
+        { number: "+15550002222", sid: "PNdev002", label: "Support" },
+      ],
+    };
+    const buf = Buffer.from(JSON.stringify(configObj), "utf-8");
+    try {
+      return secretsEncryptor.encrypt(buf);
+    } finally {
+      buf.fill(0);
+    }
+  })();
+
+  await db
+    .insertInto("telephony_config")
+    .values({
+      org_id: orgId,
+      provider: "mock",
+      config: telephonySealed,
+    })
+    .onConflict((oc) =>
+      oc.column("org_id").doUpdateSet({
+        provider: "mock",
+        config: telephonySealed,
+        updated_at: new Date(),
+      }),
+    )
+    .execute();
+  console.log("Seeded mock telephony config (platform table).");
+
+  // Tenant table: org_config purpose SIDs (migration 022 columns).
+  // These are provider SID identifiers (e.g. "PNdev001"), not numbers.
+  // care-y-ignore-next-line no-plaintext-db-write -- SIDs are opaque provider identifiers, not PII
+  await tenantDatabase
+    .updateTable("org_config")
+    .set({
+      phone_outbound_sid: "PNdev001",
+      phone_system_sid: "PNdev002",
+    })
+    .execute();
+  console.log("Seeded purpose SIDs (tenant org_config).");
 
   // --- Seed audit log entries (sample activity for dashboard feed) ---
   const ticketRows = await tenantDatabase

@@ -70,6 +70,10 @@
   const config = $derived(configQuery.data);
   const isByot = $derived(config?.mode === "byot");
   const isManaged = $derived(config?.mode === "managed");
+  // Simulated provider, only ever present in development and test builds.
+  // Modelled explicitly rather than folded into one of the other two, so an
+  // operator is never told a simulated line is a real one.
+  const isMock = $derived(config?.mode === "mock");
   const provisionedPhones = $derived(phonesQuery.data ?? []);
   const currentPurpose = $derived(purposeQuery.data);
 
@@ -336,9 +340,13 @@
                 : m.admin_telephony_status_pending()}
             </p>
             <p class="status-detail">
-              {isByot
-                ? m.admin_telephony_mode_byot({ provider: providerName })
-                : m.admin_telephony_mode_managed()}
+              {#if isByot}
+                {m.admin_telephony_mode_byot({ provider: providerName })}
+              {:else if isMock}
+                {m.admin_telephony_mode_mock()}
+              {:else}
+                {m.admin_telephony_mode_managed()}
+              {/if}
             </p>
             {#if isByot && config.maskedAccountId}
               <p class="status-detail">
@@ -351,6 +359,12 @@
         {#if isManaged}
           <Register kind="note">
             {m.admin_telephony_managed_note()}
+          </Register>
+        {/if}
+
+        {#if isMock}
+          <Register kind="note">
+            {m.admin_telephony_mock_note()}
           </Register>
         {/if}
 

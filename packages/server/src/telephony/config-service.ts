@@ -377,15 +377,19 @@ export function createTelephonyConfigService(
               label?: string;
             }[],
           ): Promise<void> {
+            // Lazy import keeps mock-provider out of the production bundle.
+            // The constants are dev-only shared secrets (not production
+            // credentials); see the doc comments on each export.
+            const { DEV_MOCK_ACCOUNT_SID, DEV_MOCK_AUTH_TOKEN } =
+              await import("./mock-provider.js");
+
             const configObj = {
-              mode: "byot" as const,
-              accountSid: "ACdev00000000000000000000000mock",
-              authToken: "dev_mock_auth_token_000000000000",
+              accountSid: DEV_MOCK_ACCOUNT_SID,
+              authToken: DEV_MOCK_AUTH_TOKEN,
               phoneNumbers: phones.map((p) => ({
                 number: p.number,
                 sid: p.sid,
                 label: p.label,
-                friendlyName: p.label ?? p.number,
               })),
             };
 
@@ -395,12 +399,12 @@ export function createTelephonyConfigService(
               .insertInto("telephony_config")
               .values({
                 org_id: orgId,
-                provider: "twilio",
+                provider: "mock",
                 config: sealed,
               })
               .onConflict((oc) =>
                 oc.column("org_id").doUpdateSet({
-                  provider: "twilio",
+                  provider: "mock",
                   config: sealed,
                   updated_at: new Date(),
                 }),

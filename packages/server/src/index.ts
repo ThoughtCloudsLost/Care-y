@@ -413,10 +413,12 @@ const secretsEncryptor = createSecretsEncryptor(secretsKey);
 
 const providerConstructors = new Map([["twilio", createTwilioProvider]]);
 
-// Register mock provider (dev/test only)
+// Register mock provider (dev/test only). Production stays fail-closed:
+// schema validation passes (mockConfigSchema is unconditional) but the
+// constructor lookup here fails, which is the correct behavior.
 if (env.NODE_ENV !== "production") {
   const { createMockProvider } = await import("./telephony/mock-provider.js");
-  providerConstructors.set("mock", () => createMockProvider());
+  providerConstructors.set("mock", createMockProvider);
 }
 
 const providerFactory = createProviderFactory({
@@ -474,6 +476,12 @@ const createContext = createContextFactory({
 });
 
 const providerStatics = new Map([["twilio", twilioProviderStatic]]);
+
+// Register mock statics (dev/test only), gated identically to the constructor.
+if (env.NODE_ENV !== "production") {
+  const { mockProviderStatic } = await import("./telephony/mock-provider.js");
+  providerStatics.set("mock", mockProviderStatic);
+}
 const telephonyConfigService = createTelephonyConfigService({
   db,
   secretsEncryptor,

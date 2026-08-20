@@ -408,7 +408,7 @@ async function handleCallRelay(
     const consultantPhoneStr = callCtx.consultantPhoneBuf.toString("utf-8");
 
     const confirmUrl = `${deps.webhookBaseUrl}/relay/call-confirm/${session.orgSchema}`;
-    const statusUrl = `${deps.webhookBaseUrl}/webhooks/twilio/${session.orgId}/status`;
+    const statusUrl = `${deps.webhookBaseUrl}/webhooks/${callCtx.provider.providerId}/${session.orgId}/status`;
 
     let callSid: string;
     try {
@@ -483,7 +483,35 @@ type CallConfirmValidation =
   | { status: "forbidden" }; // Auth failure (missing or invalid signature)
 
 /**
- * Validates a Twilio HMAC signature for a call-confirm callback.
+ * Reads the webhook signature header for a provider.
+ *
+ * Each provider is matched explicitly rather than through a lookup table,
+ * so neither the provider id nor the header name is ever used as a dynamic
+ * object key. An unrecognized provider returns null and the caller rejects
+ * the request, which is the correct outcome: guessing a header name for a
+ * provider whose documentation has not been read would either reject every
+ * callback or, worse, read the wrong header.
+ *
+ * The mock provider reuses Twilio's HMAC-SHA1 format, so it shares the
+ * header.
+ */
+function readSignatureHeader(
+  req: IncomingMessage,
+  providerId: string,
+): string | null {
+  switch (providerId) {
+    case "twilio":
+    case "mock": {
+      const value = req.headers["x-twilio-signature"];
+      return typeof value === "string" ? value : null;
+    }
+    default:
+      return null;
+  }
+}
+
+/**
+ * Validates an HMAC signature for a call-confirm callback.
  * Fetches the auth token and provider for the pending call's org,
  * then delegates to the provider's validateWebhook method.
  *
@@ -503,14 +531,14 @@ async function validateCallConfirmSignature(
     return { status: "hangup" };
   }
 
-  const signature = req.headers["x-twilio-signature"];
-  if (typeof signature !== "string") return { status: "forbidden" };
-
   const provider = await deps.getProvider(pending.orgId);
   if (!provider) {
     cleanupPendingCall(deps, callSid);
     return { status: "hangup" };
   }
+
+  const signature = readSignatureHeader(req, provider.providerId);
+  if (signature === null) return { status: "forbidden" };
 
   const fullUrl = deps.webhookBaseUrl + (req.url ?? "");
   const isValid = provider.validateWebhook({
@@ -523,12 +551,12 @@ async function validateCallConfirmSignature(
 }
 
 /**
- * Twilio DTMF callback after consultant presses a digit on leg 1.
- * Validates Twilio HMAC signature, then bridges to client (leg 2).
+ * DTMF callback after consultant presses a digit on leg 1.
+ * Validates provider HMAC signature, then bridges to client (leg 2).
  *
- * This is a Twilio webhook, NOT a browser request.
+ * This is a provider webhook, NOT a browser request.
  * Auth: HMAC signature validation (not session cookie).
- * Body: application/x-www-form-urlencoded (Twilio format).
+ * Body: application/x-www-form-urlencoded (provider format).
  */
 async function handleCallConfirm(
   req: IncomingMessage,

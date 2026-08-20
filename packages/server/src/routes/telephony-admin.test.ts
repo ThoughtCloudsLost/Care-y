@@ -662,9 +662,12 @@ describe("createTelephonyAdminRouter", () => {
       expect(seededSids).toContain(purposes?.systemSid);
     });
 
-    it("falls back to plain saveConfig when the service lacks dev seeding", async () => {
+    it("fails loudly rather than seeding a numberless config when dev seeding is absent", async () => {
       const saveSpy = vi.fn().mockResolvedValue({ success: true as const });
       // The default mock service has no devSeedConfigWithPhones method.
+      // That state is unreachable in practice, since this route and that
+      // method are gated on the same development check, so the route
+      // refuses rather than writing a config with no phone numbers.
       const service = createMockConfigService({
         getMaskedConfig: vi.fn().mockResolvedValue(null),
         saveConfig: saveSpy,
@@ -672,12 +675,8 @@ describe("createTelephonyAdminRouter", () => {
       const routerInstance = createRouterInDevEnv(buildDeps(service));
       const caller = createCallerFactory(routerInstance)(createMockContext());
 
-      const result = await caller.devSeedTelephony?.();
-
-      expect(result).toEqual({ skipped: false });
-      expect(saveSpy).toHaveBeenCalledWith(
-        expect.objectContaining({ orgId: TEST_ORG_ID, provider: "twilio" }),
-      );
+      await expect(caller.devSeedTelephony?.()).rejects.toThrow();
+      expect(saveSpy).not.toHaveBeenCalled();
     });
   });
 });

@@ -203,6 +203,7 @@ export function createWebhookDispatch(
         webhookBaseUrl,
         defaultLocale: "en-US",
         callTracker: deps.callTracker,
+        providerId: provider.providerId,
       });
 
       return provider.generateVoiceResponse(instructions);

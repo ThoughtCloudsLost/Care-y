@@ -7,6 +7,11 @@ import {
 import type { TelephonyProvider } from "./provider.js";
 import { deriveSecretsKey, createSecretsEncryptor } from "../config/secrets.js";
 import { NotFoundError, TelephonyConfigError } from "../errors.js";
+import {
+  createMockProvider,
+  DEV_MOCK_ACCOUNT_SID,
+  DEV_MOCK_AUTH_TOKEN,
+} from "./mock-provider.js";
 
 const TEST_OPS_KEY = Buffer.from(
   "cafebabecafebabecafebabecafebabecafebabecafebabecafebabecafebabe",
@@ -234,5 +239,58 @@ describe("createProviderFactory", () => {
     const second = await factory.getProvider("org-1");
     expect(second).not.toBe(first);
     expect(mockConstructor).toHaveBeenCalledTimes(2);
+  });
+
+  it("constructs a mock provider through the factory when registered", async () => {
+    const mockConfig = {
+      accountSid: DEV_MOCK_ACCOUNT_SID,
+      authToken: DEV_MOCK_AUTH_TOKEN,
+      phoneNumbers: [
+        { number: "+15550001111", sid: "PNdev001", label: "Main" },
+      ],
+    };
+    const { db } = createMockDb({
+      org_id: "org-mock",
+      provider: "mock",
+      config: encryptConfig(mockConfig),
+      key_version: 1,
+    });
+    const factory = createProviderFactory({
+      db,
+      secretsEncryptor,
+      providerConstructors: new Map<string, ProviderConstructor>([
+        ["twilio", mockConstructor],
+        ["mock", createMockProvider],
+      ]),
+    });
+
+    const provider = await factory.getProvider("org-mock");
+    expect(provider.providerId).toBe("mock");
+    expect(provider.maskConfig().phoneNumbers).toEqual([
+      { number: "+15550001111", label: "Main" },
+    ]);
+  });
+
+  it("production fail-closed: mock schema passes but missing constructor throws TelephonyConfigError", async () => {
+    // Simulates production: mock is in providerConfigSchemas (unconditional)
+    // but NOT in providerConstructors (prod-gated). Schema validation passes
+    // but the constructor lookup fails.
+    const mockConfig = {
+      accountSid: DEV_MOCK_ACCOUNT_SID,
+      authToken: DEV_MOCK_AUTH_TOKEN,
+      phoneNumbers: [],
+    };
+    const { db } = createMockDb({
+      org_id: "org-prod-mock",
+      provider: "mock",
+      config: encryptConfig(mockConfig),
+      key_version: 1,
+    });
+    // Only "twilio" registered, simulating production constructor map
+    const factory = buildFactory(db);
+
+    await expect(factory.getProvider("org-prod-mock")).rejects.toThrow(
+      TelephonyConfigError,
+    );
   });
 });

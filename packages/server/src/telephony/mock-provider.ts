@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import {
   extractMediaFromWebhookBody,
   type TelephonyProvider,
+  type TelephonyProviderStatic,
   type CallDetails,
   type SendSmsResult,
   type OutboundCallParams,
@@ -12,6 +13,38 @@ import {
   type VoiceInstruction,
   type MaskedTelephonyConfig,
 } from "./provider.js";
+import { mockConfigSchema, type MockConfig } from "./schemas.js";
+import { createHmacValidator, twilioPayloadBuilder } from "./webhook-crypto.js";
+import { TelephonyConfigError } from "../errors.js";
+
+/**
+ * Dev-only account SID used in seed data and E2E fixtures.
+ * NOT a production credential: mock cannot be constructed in production
+ * (the constructor map is NODE_ENV-gated). Exported so the seed script
+ * and the webhook simulator both read the same value, since the webhook
+ * handler compares an inbound AccountSid against the stored config.
+ */
+export const DEV_MOCK_ACCOUNT_SID = "ACdev00000000000000000000000mock";
+
+/**
+ * Dev-only webhook signing key, the mock counterpart to a Twilio auth
+ * token. The mock provider validates inbound webhooks against it,
+ * exercising the same HMAC-SHA1 path Twilio uses.
+ *
+ * NOT a production credential: mock cannot be constructed in production
+ * (the constructor map is NODE_ENV-gated), and this value authenticates
+ * nothing that exists outside dev and E2E. Named "auth token" rather
+ * than "secret" both because that is what the provider calls this
+ * credential and because the latter trips secret-scanning tooling on
+ * every read.
+ */
+export const DEV_MOCK_AUTH_TOKEN = "dev_mock_auth_token_000000000000";
+
+/** HMAC-SHA1 validator using the same Twilio payload format. */
+const mockHmacValidator = createHmacValidator({
+  algorithm: "sha1",
+  buildPayload: twilioPayloadBuilder,
+});
 
 /** A single recorded method call on the mock provider. */
 export interface MockCallRecord {
@@ -42,8 +75,19 @@ function record(
  * Create a mock telephony provider that satisfies the TelephonyProvider
  * interface with no-op implementations. Every method logs a console.warn,
  * records itself in an inspectable call log, and returns a predictable value.
+ *
+ * Accepts a config blob (validated internally via mockConfigSchema) so
+ * maskConfig() reports real phone numbers from the org's seeded
+ * configuration rather than a hardcoded empty array.
  */
-export function createMockProvider(): MockTelephonyProvider {
+export function createMockProvider(rawConfig: unknown): MockTelephonyProvider {
+  const parseResult = mockConfigSchema.safeParse(rawConfig);
+  if (!parseResult.success) {
+    throw new TelephonyConfigError(
+      `Corrupt mock config: ${parseResult.error.issues.map((i) => i.message).join(", ")}`,
+    );
+  }
+  const config = parseResult.data;
   const callLog: MockCallRecord[] = [];
 
   return {
@@ -71,9 +115,14 @@ export function createMockProvider(): MockTelephonyProvider {
       return `CA_mock_${randomUUID()}`;
     },
 
-    validateWebhook(_request: WebhookValidationRequest): boolean {
-      record(callLog, "validateWebhook", [_request]);
-      return true;
+    validateWebhook(request: WebhookValidationRequest): boolean {
+      record(callLog, "validateWebhook", [request]);
+      return mockHmacValidator.validate(
+        request.url,
+        request.body,
+        request.authToken,
+        request.signature,
+      );
     },
 
     parseIncomingCall(body: Record<string, string>): IncomingCallData {
@@ -144,7 +193,10 @@ export function createMockProvider(): MockTelephonyProvider {
         mode: "mock",
         maskedAccountId: "MOCK_ACCOUNT",
         maskedAuthToken: "****",
-        phoneNumbers: [],
+        phoneNumbers: config.phoneNumbers.map((pn) => ({
+          number: pn.number,
+          label: pn.label,
+        })),
       };
     },
 
@@ -157,3 +209,22 @@ export function createMockProvider(): MockTelephonyProvider {
     },
   };
 }
+
+/** Static factory methods for the mock provider. */
+export const mockProviderStatic: TelephonyProviderStatic = {
+  validateConfig(raw: unknown): MockConfig {
+    const result = mockConfigSchema.safeParse(raw);
+    if (!result.success) {
+      throw new TelephonyConfigError(
+        `Invalid mock config: ${result.error.issues.map((i) => i.message).join(", ")}`,
+      );
+    }
+    return result.data;
+  },
+
+  // eslint-disable-next-line @typescript-eslint/require-await -- mock: no remote provider to call
+  async provisionWebhooks(config: unknown): Promise<unknown> {
+    // No remote provider to configure. Return the config unchanged.
+    return config;
+  },
+};
