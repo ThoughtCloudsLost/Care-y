@@ -11,7 +11,7 @@ import HealthApp from "./HealthApp.svelte";
 import { DemoMountError } from "../lib/errors.js";
 import "../app.css";
 
-document.title = "CARE-Y Demo Health Check";
+document.title = "CARE-Y Handbook Health Check";
 
 const target = document.getElementById("health-app");
 if (!target) throw new DemoMountError("Missing #health-app mount target");
