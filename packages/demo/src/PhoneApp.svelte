@@ -69,9 +69,12 @@
     buildTopicCandidates,
     buildActivationCandidates,
     buildSmsTitleCandidates,
+    buildReplyTitleCandidates,
+    buildComposeDismissCandidates,
+    buildCloseReopenCandidates,
     findClickableTarget,
-    isNavChrome,
-    isSectionToggle,
+    isStrictShellNav,
+    isSectionToggleCollapsing,
     dismissOpenOverlays,
     waitForElement,
     resolveTopicElement,
@@ -404,11 +407,11 @@
     control: HTMLElement | null;
   } | null = null;
 
-  // Close a pulse-opened inline mode (in-page search, selection mode)
-  // once the story leaves the sub whose pulse opened it. The mode
-  // stays visible while its own narration is on screen, and a
-  // visitor's manually opened modes are never touched (only pulses
-  // register an exit).
+  // Close a pulse-opened inline mode (in-page search, selection mode,
+  // reply compose bar) once the story leaves the sub whose pulse
+  // opened it. The mode stays visible while its own narration is on
+  // screen, and a visitor's manually opened modes are never touched
+  // (only pulses register an exit).
   $effect(() => {
     const sectionId = store.location.sectionId;
     const subSlug = store.location.subSlug;
@@ -424,9 +427,33 @@
     // Past the pulse's own 150ms click schedule, so a fast sub change
     // cannot close the mode before it opened.
     setTimeout(() => {
-      closeModeToggle(exit.topic, exit.control);
+      if (exit.topic === "reply") {
+        // Collapse the compose bar the demo opened by clicking the
+        // dismiss control (TicketCompose.svelte:151-157). dismissCompose
+        // clears the active mode's draft (the demo's sample text) and
+        // collapses. This discards the demo-typed text without wiping a
+        // visitor's own draft for a different mode.
+        closeReplyCompose();
+      } else {
+        closeModeToggle(exit.topic, exit.control);
+      }
     }, 250);
   });
+
+  /** Click the compose dismiss button to collapse the reply bar. */
+  function closeReplyCompose(): void {
+    const dismissCandidates = buildComposeDismissCandidates();
+    const buttons = document.querySelectorAll<HTMLElement>(
+      'button, [role="button"]',
+    );
+    for (const btn of buttons) {
+      const label = btn.getAttribute("aria-label") ?? "";
+      if (dismissCandidates.has(label)) {
+        btn.click();
+        return;
+      }
+    }
+  }
 
   // -----------------------------------------------------------------------
   // Topic classification (with accessible-text fallback)
@@ -1064,16 +1091,7 @@
       if (selectorEl !== null) {
         dismissOpenOverlays(selectorEl);
         renderPulseMarker(selectorEl);
-        recordPulseOutcome(pulseTopic, "selector");
-
-        // decryption: replay the descramble animation while the marker
-        // sits on a DecryptPlaceholder. Clearing the pacing bridge's
-        // first-resolution cache and resetting queries causes every
-        // visible title to re-scramble and descramble.
-        if (pulseTopic === "decryption") {
-          replayDescramble();
-          await queryClient.resetQueries();
-        }
+        recordPulseOutcome(pulseTopic, "selector", selectorEl);
 
         // Selector fallback never taps (the element is not a labeled control)
         return;
@@ -1081,6 +1099,47 @@
     }
 
     // --- Special cases (topic-gated, before the standard flow) ---
+
+    // decryption: replay the descramble animation unconditionally.
+    // The phone signs in during boot, so the list is already decrypted
+    // and no busy placeholders exist on entry. The replay clears the
+    // pacing bridge's first-resolution cache and resets queries,
+    // causing every visible title to re-scramble and descramble.
+    // After the replay starts, poll for a busy placeholder to appear
+    // and render the pulse marker on it. If the replay raced a fast
+    // decrypt (no placeholder appeared), fall back to the first ticket
+    // card.
+    if (pulseTopic === "decryption") {
+      dismissOpenOverlays(null);
+      replayDescramble();
+      await queryClient.resetQueries();
+
+      // Poll for a DecryptPlaceholder's busy indicator to appear
+      const busyEl = await pollUntil<HTMLElement>({
+        probe: () =>
+          document.querySelector<HTMLElement>(
+            '[role="status"][aria-busy="true"]',
+          ),
+        timeoutMs: POLL_TIMEOUT_SHORT_MS,
+      });
+
+      if (busyEl !== null) {
+        renderPulseMarker(busyEl);
+        recordPulseOutcome(pulseTopic, "selector", busyEl);
+      } else {
+        // Fast decrypt raced past the scramble; mark the first ticket card
+        const cardEl = document.querySelector<HTMLElement>(
+          '[data-testid="ticket-card"]',
+        );
+        if (cardEl !== null) {
+          renderPulseMarker(cardEl);
+          recordPulseOutcome(pulseTopic, "selector", cardEl);
+        } else {
+          recordPulseOutcome(pulseTopic, "missing");
+        }
+      }
+      return;
+    }
 
     // message-actions: the label (ticket_context_menu_title) only exists
     // while the action sheet is open, so el is typically null here. Find
@@ -1091,7 +1150,7 @@
       if (bubble !== null) {
         dismissOpenOverlays(bubble);
         renderPulseMarker(bubble);
-        recordPulseOutcome(pulseTopic, "tapped");
+        recordPulseOutcome(pulseTopic, "tapped", bubble);
         setTimeout(() => {
           bubble.dispatchEvent(
             new KeyboardEvent("keydown", {
@@ -1115,7 +1174,7 @@
     if (pulseTopic === "exposure-hints" && el !== null) {
       dismissOpenOverlays(el);
       renderPulseMarker(el);
-      recordPulseOutcome(pulseTopic, "tapped");
+      recordPulseOutcome(pulseTopic, "tapped", el);
       const clickable = findClickableTarget(el);
       if (clickable !== null) {
         clickable.click();
@@ -1137,6 +1196,87 @@
       return;
     }
 
+    // reply: three-stage choreography. Stage 1: click the compose
+    // actions button. Stage 2: wait for the popover's Reply entry
+    // (ComposeActions.svelte:98-106, ticket_reply_to_client) and click
+    // it, which calls activateReply and expands the messagebar.
+    // Stage 3: set a sample draft in the expanded textarea so the send
+    // button and character affordances show.
+    if (pulseTopic === "reply" && el !== null) {
+      dismissOpenOverlays(el);
+      renderPulseMarker(el);
+      const clickable = findClickableTarget(el);
+      if (clickable !== null) {
+        clickable.click();
+        const replyCandidates = buildReplyTitleCandidates();
+        const replyEl = await waitForElement(document, replyCandidates);
+        if (replyEl !== null) {
+          const replyClickable = findClickableTarget(replyEl);
+          if (replyClickable !== null) {
+            await new Promise<void>((r) => setTimeout(r, 150));
+            replyClickable.click();
+            // Wait for the messagebar textarea to mount
+            // (ShellMessagebar.svelte:164-168 renders a Konsta Messagebar
+            // whose textarea is inside .shell-messagebar-anchor).
+            await new Promise<void>((r) => setTimeout(r, 300));
+            const textarea = document.querySelector<HTMLTextAreaElement>(
+              ".shell-messagebar-anchor textarea",
+            );
+            if (textarea !== null) {
+              // Svelte's bind:value reads the element value on the
+              // input event, so direct assignment plus a dispatched
+              // InputEvent updates the binding.
+              textarea.value = m.demo_compose_sample();
+              textarea.dispatchEvent(
+                new InputEvent("input", { bubbles: true }),
+              );
+            }
+          }
+        }
+      }
+      recordPulseOutcome(pulseTopic, "tapped", el);
+      // Register cleanup: when the story leaves this sub, collapse the
+      // compose bar the demo opened. Uses the dismiss control
+      // (TicketCompose.svelte:151-157, ticket_compose_dismiss_mode)
+      // which clears the active mode's draft (the demo's own text)
+      // and collapses without wiping a visitor's stored draft for the
+      // other mode. This is preferred over reset() because the demo
+      // typed sample text that should not persist.
+      pendingModeExit = {
+        topic: pulseTopic,
+        sectionId: store.location.sectionId,
+        subSlug: store.location.subSlug,
+        control: clickable,
+      };
+      return;
+    }
+
+    // close-reopen: open the more-actions panel, then mark (do not
+    // click) the close/reopen action inside it. The panel-opening
+    // click is the demonstration; the next pulse's dismissOpenOverlays
+    // closes the panel. (TicketPanelContent.svelte:291-305)
+    if (pulseTopic === "close-reopen" && el !== null) {
+      dismissOpenOverlays(el);
+      renderPulseMarker(el);
+      const clickable = findClickableTarget(el);
+      if (clickable !== null) {
+        clickable.click();
+        // Wait for the panel content to mount, then find the
+        // close/reopen action inside it.
+        const actionEl = await waitForElement(
+          document,
+          buildCloseReopenCandidates(),
+        );
+        if (actionEl !== null) {
+          // Mark the action visually but do not click it: closing or
+          // reopening would mutate the ticket state.
+          renderPulseMarker(actionEl);
+        }
+      }
+      recordPulseOutcome(pulseTopic, "tapped", el);
+      return;
+    }
+
     if (el === null) {
       recordPulseOutcome(pulseTopic, "missing");
       return;
@@ -1148,18 +1288,21 @@
 
     renderPulseMarker(el);
 
-    // Never tap shell navigation: when only a nav-chrome element
-    // matched the label (resolveTopicElement's last resort), activating
-    // it would navigate away from the narrated screen.
-    if (tap && isNavChrome(el)) {
+    // Never tap strict shell navigation (sidebar, tabbar, nav
+    // landmarks): activating it would navigate away from the narrated
+    // screen. Content-level tablists (IconTabToggle with semantics
+    // "tabs") are allowed because switching a tab within the narrated
+    // screen IS the demonstration.
+    if (tap && isStrictShellNav(el)) {
       tap = false;
     }
 
-    // Never tap a collapse toggle: collapsing hides the very content
-    // the narration is describing. Section-heading topics whose
-    // activation labels now resolve to CollapsibleSection toggles
-    // are downgraded to mark-only.
-    if (tap && isSectionToggle(el)) {
+    // Never tap a collapse toggle that would COLLAPSE an already-
+    // expanded section: collapsing hides the very content the narration
+    // is describing. When the section is currently collapsed, tapping
+    // EXPANDS it, which is the demonstration (dashboard-unassigned,
+    // dashboard-on-hold are collapsed by default).
+    if (tap && isSectionToggleCollapsing(el)) {
       tap = false;
     }
 
@@ -1180,9 +1323,10 @@
         }
       }
 
-      // Also guard the clickable itself against collapse toggles:
-      // findClickableTarget may have walked into a toggle ancestor.
-      if (tap && clickable !== null && isSectionToggle(clickable)) {
+      // Also guard the clickable itself against collapse toggles that
+      // would collapse: findClickableTarget may have walked into a
+      // toggle ancestor.
+      if (tap && clickable !== null && isSectionToggleCollapsing(clickable)) {
         tap = false;
       }
 
@@ -1205,7 +1349,7 @@
       }
     }
 
-    recordPulseOutcome(pulseTopic, tap ? "tapped" : "marked");
+    recordPulseOutcome(pulseTopic, tap ? "tapped" : "marked", el);
 
     // The language picker is a native select. Browsers only open its
     // dropdown from a user gesture: outer-page clicks count as

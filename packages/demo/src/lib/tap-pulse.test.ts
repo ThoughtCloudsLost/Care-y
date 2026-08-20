@@ -5,10 +5,15 @@ import {
   buildTopicCandidates,
   buildActivationCandidates,
   buildSmsTitleCandidates,
+  buildReplyTitleCandidates,
+  buildComposeDismissCandidates,
+  buildCloseReopenCandidates,
   findTopicElement,
   findTopicElementLoose,
   isNavChrome,
+  isStrictShellNav,
   isSectionToggle,
+  isSectionToggleCollapsing,
   resolveTopicElement,
   TAP_TOPICS,
   TOPIC_SELECTORS,
@@ -155,6 +160,59 @@ describe("findTopicElement nav-chrome preference", () => {
   });
 });
 
+// -----------------------------------------------------------------------
+// Shell-nav vs content-tablist predicate split
+// -----------------------------------------------------------------------
+
+describe("isStrictShellNav vs isNavChrome", () => {
+  function mount(html: string): void {
+    document.body.innerHTML = html;
+    for (const el of document.body.querySelectorAll("*")) {
+      (el as HTMLElement).getBoundingClientRect = () =>
+        ({
+          width: 100,
+          height: 40,
+          top: 10,
+          bottom: 50,
+          left: 0,
+          right: 100,
+          x: 0,
+          y: 10,
+          toJSON: () => ({}),
+        }) as DOMRect;
+    }
+  }
+
+  it("isStrictShellNav recognizes nav and tabbar but NOT tablist", () => {
+    mount(`
+      <nav><button id="a">x</button></nav>
+      <div role="tablist"><button id="b">x</button></div>
+      <div class="k-tabbar"><button id="c">x</button></div>
+      <main><button id="d">x</button></main>
+    `);
+    expect(isStrictShellNav(document.getElementById("a")!)).toBe(true);
+    expect(isStrictShellNav(document.getElementById("b")!)).toBe(false);
+    expect(isStrictShellNav(document.getElementById("c")!)).toBe(true);
+    expect(isStrictShellNav(document.getElementById("d")!)).toBe(false);
+  });
+
+  it("isNavChrome still includes tablist for finder preference", () => {
+    mount(`
+      <div role="tablist"><button id="tab">Tab</button></div>
+    `);
+    expect(isNavChrome(document.getElementById("tab")!)).toBe(true);
+    expect(isStrictShellNav(document.getElementById("tab")!)).toBe(false);
+  });
+
+  it("a tablist inside nav is strict shell nav", () => {
+    mount(`
+      <nav><div role="tablist"><button id="navtab">x</button></div></nav>
+    `);
+    expect(isStrictShellNav(document.getElementById("navtab")!)).toBe(true);
+    expect(isNavChrome(document.getElementById("navtab")!)).toBe(true);
+  });
+});
+
 describe("closeModeToggle", () => {
   function mount(html: string): void {
     document.body.innerHTML = html;
@@ -281,6 +339,110 @@ describe("findTopicElement leaf pass", () => {
 });
 
 // -----------------------------------------------------------------------
+// Extended 2FA candidate sets (settled method screens)
+// -----------------------------------------------------------------------
+
+describe("2FA method screen candidates", () => {
+  it("twofa-totp includes the code placeholder and verify button", () => {
+    const candidates = buildTopicCandidates("twofa-totp");
+    // Picker label
+    expect(candidates.has("Authenticator app")).toBe(true);
+    // Settled screen elements (TwoFactorChallenge.svelte:491-512)
+    expect(candidates.has("000000")).toBe(true);
+    expect(candidates.has("Verify")).toBe(true);
+  });
+
+  it("twofa-email includes post-auto-send code entry elements", () => {
+    const candidates = buildTopicCandidates("twofa-email");
+    // Picker and send labels
+    expect(candidates.has("Email code")).toBe(true);
+    expect(candidates.has("Send verification code")).toBe(true);
+    // Post-auto-send state (TwoFactorChallenge.svelte:556-588)
+    expect(candidates.has("000000")).toBe(true);
+    expect(candidates.has("Verify")).toBe(true);
+  });
+
+  it("twofa-sms includes post-auto-send code entry elements", () => {
+    const candidates = buildTopicCandidates("twofa-sms");
+    expect(candidates.has("Text message code")).toBe(true);
+    expect(candidates.has("Send text message code")).toBe(true);
+    // Post-auto-send state (TwoFactorChallenge.svelte:609-643)
+    expect(candidates.has("000000")).toBe(true);
+    expect(candidates.has("Verify")).toBe(true);
+  });
+
+  it("twofa-push includes the waiting state string", () => {
+    const candidates = buildTopicCandidates("twofa-push");
+    expect(candidates.has("Push notification")).toBe(true);
+    expect(candidates.has("Send notification")).toBe(true);
+    // Push waiting state (TwoFactorChallenge.svelte:648-652)
+    expect(candidates.has("Waiting for approval...")).toBe(true);
+  });
+
+  it("twofa-backup includes backup code entry elements", () => {
+    const candidates = buildTopicCandidates("twofa-backup");
+    expect(candidates.has("Enter backup code")).toBe(true);
+    // Backup code entry screen (TwoFactorChallenge.svelte:682-701)
+    expect(candidates.has("xxxxxxxx")).toBe(true);
+    expect(candidates.has("Verify")).toBe(true);
+  });
+});
+
+// -----------------------------------------------------------------------
+// Reply and compose dismiss candidates
+// -----------------------------------------------------------------------
+
+describe("buildReplyTitleCandidates", () => {
+  it("contains only the reply-to-client label, not compose actions", () => {
+    const candidates = buildReplyTitleCandidates();
+    expect(candidates.size).toBeGreaterThan(0);
+    for (const label of buildTopicCandidates("compose-actions")) {
+      expect(candidates.has(label)).toBe(false);
+    }
+  });
+});
+
+describe("buildComposeDismissCandidates", () => {
+  it("returns non-empty candidates", () => {
+    const candidates = buildComposeDismissCandidates();
+    expect(candidates.size).toBeGreaterThan(0);
+    expect(candidates.has("Dismiss compose")).toBe(true);
+  });
+});
+
+describe("buildCloseReopenCandidates", () => {
+  it("includes both the close and reopen action labels", () => {
+    const candidates = buildCloseReopenCandidates();
+    expect(candidates.has("Close")).toBe(true);
+    expect(candidates.has("Reopen")).toBe(true);
+  });
+});
+
+// -----------------------------------------------------------------------
+// Admin-roster-tools composed sort candidates
+// -----------------------------------------------------------------------
+
+describe("admin-roster-tools sort candidates", () => {
+  it("includes composed labels for both sort directions", () => {
+    const candidates = buildTopicCandidates("admin-roster-tools");
+    expect(candidates.has("Sort users")).toBe(true);
+    // English composed labels
+    expect(candidates.has("Sort users, ascending")).toBe(true);
+    expect(candidates.has("Sort users, descending")).toBe(true);
+    // Spanish composed labels
+    expect(candidates.has("Ordenar usuarios, ascendente")).toBe(true);
+    expect(candidates.has("Ordenar usuarios, descendente")).toBe(true);
+  });
+
+  it("includes composed labels in activation candidates", () => {
+    const candidates = buildActivationCandidates("admin-roster-tools");
+    expect(candidates.has("Sort users")).toBe(true);
+    expect(candidates.has("Sort users, ascending")).toBe(true);
+    expect(candidates.has("Sort users, descending")).toBe(true);
+  });
+});
+
+// -----------------------------------------------------------------------
 // Composed sort candidates
 // -----------------------------------------------------------------------
 
@@ -352,6 +514,54 @@ describe("isSectionToggle", () => {
     mount('<button id="normal">Label</button>');
     const btn = document.getElementById("normal")!;
     expect(isSectionToggle(btn)).toBe(false);
+  });
+});
+
+// -----------------------------------------------------------------------
+// Collapsed-vs-expanded section toggle decision
+// -----------------------------------------------------------------------
+
+describe("isSectionToggleCollapsing", () => {
+  function mount(html: string): void {
+    document.body.innerHTML = html;
+  }
+
+  it("returns true when the toggle is expanded (collapsing would hide content)", () => {
+    mount(
+      '<button class="section-toggle" aria-expanded="true" id="toggle">Label</button>',
+    );
+    const toggle = document.getElementById("toggle")!;
+    expect(isSectionToggleCollapsing(toggle)).toBe(true);
+  });
+
+  it("returns false when the toggle is collapsed (expanding reveals content)", () => {
+    mount(
+      '<button class="section-toggle" aria-expanded="false" id="toggle">Label</button>',
+    );
+    const toggle = document.getElementById("toggle")!;
+    expect(isSectionToggleCollapsing(toggle)).toBe(false);
+  });
+
+  it("returns false for elements not in a .section-toggle", () => {
+    mount('<button aria-expanded="true" id="btn">Label</button>');
+    const btn = document.getElementById("btn")!;
+    expect(isSectionToggleCollapsing(btn)).toBe(false);
+  });
+
+  it("returns true for a leaf inside an expanded toggle", () => {
+    mount(
+      '<button class="section-toggle" aria-expanded="true"><span id="leaf">Label</span></button>',
+    );
+    const leaf = document.getElementById("leaf")!;
+    expect(isSectionToggleCollapsing(leaf)).toBe(true);
+  });
+
+  it("returns false for a leaf inside a collapsed toggle", () => {
+    mount(
+      '<button class="section-toggle" aria-expanded="false"><span id="leaf">Label</span></button>',
+    );
+    const leaf = document.getElementById("leaf")!;
+    expect(isSectionToggleCollapsing(leaf)).toBe(false);
   });
 });
 
