@@ -6,17 +6,17 @@ import { getLocale, experimentalStaticLocale } from '../runtime.js';
 /** @typedef {{}} Demo_PreparingInputs */
 
 const en_demo_preparing = /** @type {(inputs: Demo_PreparingInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`One moment, preparing the demo. The app is signing in and deriving encryption keys, exactly as it would for a real volunteer.`)
+	return /** @type {LocalizedString} */ (`One moment, preparing the handbook. The app is signing in and deriving encryption keys, exactly as it would for a real volunteer.`)
 };
 
 const es_demo_preparing = /** @type {(inputs: Demo_PreparingInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Un momento, preparando la demo. La aplicación está iniciando sesión y derivando las claves de cifrado, igual que lo haría para una persona voluntaria real.`)
+	return /** @type {LocalizedString} */ (`Un momento, preparando el manual. La aplicación está iniciando sesión y derivando las claves de cifrado, igual que lo haría para una persona voluntaria real.`)
 };
 
 /**
 * | output |
 * | --- |
-* | "One moment, preparing the demo. The app is signing in and deriving encryption keys, exactly as it would for a real volunteer." |
+* | "One moment, preparing the handbook. The app is signing in and deriving encryption keys, exactly as it would for a real volunteer." |
 *
 * @param {Demo_PreparingInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

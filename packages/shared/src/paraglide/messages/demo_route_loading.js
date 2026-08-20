@@ -6,17 +6,17 @@ import { getLocale, experimentalStaticLocale } from '../runtime.js';
 /** @typedef {{}} Demo_Route_LoadingInputs */
 
 const en_demo_route_loading = /** @type {(inputs: Demo_Route_LoadingInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`One moment, loading this screen. This short wait happens only in the browser demo, not in the installed app.`)
+	return /** @type {LocalizedString} */ (`One moment, loading this screen. This short wait happens only in the handbook, not in the installed app.`)
 };
 
 const es_demo_route_loading = /** @type {(inputs: Demo_Route_LoadingInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Un momento, cargando esta pantalla. Esta breve espera ocurre solo en la demo del navegador, no en la aplicación instalada.`)
+	return /** @type {LocalizedString} */ (`Un momento, cargando esta pantalla. Esta breve espera ocurre solo en el manual, no en la aplicación instalada.`)
 };
 
 /**
 * | output |
 * | --- |
-* | "One moment, loading this screen. This short wait happens only in the browser demo, not in the installed app." |
+* | "One moment, loading this screen. This short wait happens only in the handbook, not in the installed app." |
 *
 * @param {Demo_Route_LoadingInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

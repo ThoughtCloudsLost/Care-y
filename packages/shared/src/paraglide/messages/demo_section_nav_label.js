@@ -6,17 +6,17 @@ import { getLocale, experimentalStaticLocale } from '../runtime.js';
 /** @typedef {{}} Demo_Section_Nav_LabelInputs */
 
 const en_demo_section_nav_label = /** @type {(inputs: Demo_Section_Nav_LabelInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Demo sections`)
+	return /** @type {LocalizedString} */ (`Handbook sections`)
 };
 
 const es_demo_section_nav_label = /** @type {(inputs: Demo_Section_Nav_LabelInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Secciones del demo`)
+	return /** @type {LocalizedString} */ (`Secciones del manual`)
 };
 
 /**
 * | output |
 * | --- |
-* | "Demo sections" |
+* | "Handbook sections" |
 *
 * @param {Demo_Section_Nav_LabelInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

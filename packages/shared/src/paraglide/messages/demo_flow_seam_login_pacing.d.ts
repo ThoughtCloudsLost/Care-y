@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "The pace of the login is scripted in this demo. The real key derivation runs, with each callback held long enough to read." |
+* | "The pace of the login is scripted in the handbook. The real key derivation runs, with each callback held long enough to read." |
 *
 * @param {Demo_Flow_Seam_Login_PacingInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

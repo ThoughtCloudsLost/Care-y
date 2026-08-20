@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "This demo runs a single scalar OPRF evaluator in the browser. In production the OPRF key is split across two servers in separate jurisdictions, and neither o..." |
+* | "The handbook runs a single scalar OPRF evaluator in the browser. In production the OPRF key is split across two servers in separate jurisdictions, and neithe..." |
 *
 * @param {Demo_Flow_Seam_Oprf_EvaluatorInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

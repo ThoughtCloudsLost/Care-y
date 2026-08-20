@@ -6,17 +6,17 @@ import { getLocale, experimentalStaticLocale } from '../runtime.js';
 /** @typedef {{}} Demo_Flow_Seam_BadgeInputs */
 
 const en_demo_flow_seam_badge = /** @type {(inputs: Demo_Flow_Seam_BadgeInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Scripted in this demo`)
+	return /** @type {LocalizedString} */ (`Scripted in the handbook`)
 };
 
 const es_demo_flow_seam_badge = /** @type {(inputs: Demo_Flow_Seam_BadgeInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Recreado en este demo`)
+	return /** @type {LocalizedString} */ (`Recreado en el manual`)
 };
 
 /**
 * | output |
 * | --- |
-* | "Scripted in this demo" |
+* | "Scripted in the handbook" |
 *
 * @param {Demo_Flow_Seam_BadgeInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

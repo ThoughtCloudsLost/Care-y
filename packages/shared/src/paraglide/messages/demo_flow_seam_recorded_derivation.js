@@ -6,17 +6,17 @@ import { getLocale, experimentalStaticLocale } from '../runtime.js';
 /** @typedef {{}} Demo_Flow_Seam_Recorded_DerivationInputs */
 
 const en_demo_flow_seam_recorded_derivation = /** @type {(inputs: Demo_Flow_Seam_Recorded_DerivationInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`This server exchange ran once when the demo started. It is replayed here with its real measured timing so the login section shows the full round-trip sequence.`)
+	return /** @type {LocalizedString} */ (`This server exchange ran once when the handbook started. It is replayed here with its real measured timing so the login section shows the full round-trip sequence.`)
 };
 
 const es_demo_flow_seam_recorded_derivation = /** @type {(inputs: Demo_Flow_Seam_Recorded_DerivationInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Este intercambio con el servidor se ejecutó una vez al iniciar el demo. Se reproduce aquí con su duración real medida para que la sección de inicio de sesión muestre la secuencia completa de ida y vuelta.`)
+	return /** @type {LocalizedString} */ (`Este intercambio con el servidor se ejecutó una vez al iniciar el manual. Se reproduce aquí con su duración real medida para que la sección de inicio de sesión muestre la secuencia completa de ida y vuelta.`)
 };
 
 /**
 * | output |
 * | --- |
-* | "This server exchange ran once when the demo started. It is replayed here with its real measured timing so the login section shows the full round-trip sequence." |
+* | "This server exchange ran once when the handbook started. It is replayed here with its real measured timing so the login section shows the full round-trip seq..." |
 *
 * @param {Demo_Flow_Seam_Recorded_DerivationInputs} inputs
 * @param {{ locale?: "en" | "es" }} options
