@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
   shouldBackstopUnmute,
   backstopDecision,
+  relinkDecision,
 } from "./scroll-intent-guard.js";
 
 describe("shouldBackstopUnmute", () => {
@@ -84,5 +85,36 @@ describe("backstopDecision", () => {
   it("unmutes when geometry is not ready rather than realigning blind", () => {
     const target = { section: "tickets" as const, sub: "sort" };
     expect(backstopDecision(target, null, null, false)).toBe("unmute");
+  });
+});
+
+describe("relinkDecision", () => {
+  // -----------------------------------------------------------------
+  // Relink reconciliation: whichever side moved most recently during
+  // the unlink wins. 0 means that side never moved.
+  // -----------------------------------------------------------------
+
+  it("returns none when neither side moved during the unlink", () => {
+    expect(relinkDecision(0, 0)).toBe("none");
+  });
+
+  it("pushes the local location when only the story moved", () => {
+    expect(relinkDecision(5000, 0)).toBe("push-local");
+  });
+
+  it("adopts the phone position when only the phone moved", () => {
+    expect(relinkDecision(0, 5000)).toBe("adopt-phone");
+  });
+
+  it("pushes the local location when the story moved after the phone", () => {
+    expect(relinkDecision(9000, 5000)).toBe("push-local");
+  });
+
+  it("adopts the phone position when the phone moved after the story", () => {
+    expect(relinkDecision(5000, 9000)).toBe("adopt-phone");
+  });
+
+  it("favors the reader on a same-millisecond tie", () => {
+    expect(relinkDecision(5000, 5000)).toBe("push-local");
   });
 });

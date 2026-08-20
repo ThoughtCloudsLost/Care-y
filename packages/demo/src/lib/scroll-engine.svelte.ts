@@ -2,12 +2,18 @@
  * Scroll engine: the outer page's view of the shared demo location,
  * presented through the flow layout's reading line.
  *
- * The page owns NO location state. activeSection/activeSub are derived
- * from the last bridge snapshot (a mirror of the phone-side location
- * store), so the narrative can only ever show what the store holds.
- * Page inputs (derived scroll position, clicks, deep links) are intents
- * sent through bridge.setLocation; the page moves when the store echoes
- * the change back, one path for every input.
+ * While linked, the page owns NO location state. activeSection/activeSub
+ * are derived from the last bridge snapshot (a mirror of the phone-side
+ * location store), so the narrative can only ever show what the store
+ * holds. Page inputs (derived scroll position, clicks, deep links) are
+ * intents sent through bridge.setLocation; the page moves when the store
+ * echoes the change back, one path for every input.
+ *
+ * While the user has explicitly unlinked, a local location override
+ * takes over: page inputs move the story directly (same alignment
+ * machinery, no phone intents), and phone snapshots are stored but not
+ * presented. Relink reconciles by recency: whichever side moved last
+ * during the unlink drives the other (see relinkDecision).
  *
  * Selection model: which sub is selected is a $derived value computed
  * from locationWithVisibleHeading(). The geometry source is reactive
@@ -28,7 +34,7 @@ import {
   type SectionId,
 } from "./scroll-sections.js";
 import type { DemoBridge, DemoBridgeState, DemoTopic } from "./bridge.js";
-import { backstopDecision } from "./scroll-intent-guard.js";
+import { backstopDecision, relinkDecision } from "./scroll-intent-guard.js";
 import {
   readingLineY,
   scrollTargetFor,
@@ -89,9 +95,40 @@ export function createScrollEngine(
   getBridge: () => DemoBridge | undefined,
   getLinked: () => boolean = () => true,
   getPageScrollEnabled: () => boolean = () => true,
+  getUserLinked: () => boolean = () => true,
 ): ScrollEngine {
   // The one location the page renders: a mirror of the bridge state.
   let mirror: DemoBridgeState | undefined = $state();
+
+  // -----------------------------------------------------------------------
+  // Unlinked local navigation
+  //
+  // getLinked() is the combined intent gate (the user's link choice
+  // minus transient drag/peek suspension). getUserLinked() is the
+  // choice alone. The distinction matters: while the user has
+  // explicitly unlinked, the story navigates LOCALLY (localLoc below
+  // overrides the stale mirror, alignment still runs, no intents go
+  // phone-ward). During a transient suspension the story stays inert
+  // as before, because a drag must not queue up reconciliation state.
+  //
+  // On relink, whichever side moved most recently during the unlink
+  // wins: the story pushes its local location to the phone, or the
+  // phone's stored snapshot is presented. Timestamps of the last move
+  // on each side decide (relinkDecision).
+  // -----------------------------------------------------------------------
+
+  interface LocalLocation {
+    sectionId: SectionId;
+    subSlug: string | null;
+  }
+
+  let localLoc = $state<LocalLocation | null>(null);
+  let lastLocalMoveAt = 0;
+
+  // Latest phone snapshot received while user-unlinked, so relink can
+  // adopt the phone's position without waiting for the next snapshot.
+  let pendingPhone: DemoBridgeState | null = null;
+  let lastPhoneMoveAt = 0;
 
   // Before the bridge exists (phone iframe still booting on a hard
   // reload), present the deep-linked section directly from the hash.
@@ -100,10 +137,15 @@ export function createScrollEngine(
   const initialHash = parseHash(window.location.hash);
 
   const activeSection: SectionId = $derived(
-    mirror?.location.sectionId ?? initialHash?.sectionId ?? "login",
+    localLoc?.sectionId ??
+      mirror?.location.sectionId ??
+      initialHash?.sectionId ??
+      "login",
   );
   const activeSub: string | null = $derived(
-    mirror?.location.subSlug ?? initialHash?.subSlug ?? null,
+    localLoc !== null
+      ? localLoc.subSlug
+      : (mirror?.location.subSlug ?? initialHash?.subSlug ?? null),
   );
 
   // Last sub requested from a settle, so one settle sends one intent
@@ -258,13 +300,14 @@ export function createScrollEngine(
     const loc = derivedLocation;
     if (loc === null) return;
     if (!getPageScrollEnabled()) return;
-    if (!getLinked()) return;
     if (!flowGeometryReady()) return;
 
     // Condition-based suppression disarm: the derived position has
     // reached the programmatic target, so the alignment scroll is
     // done and suppression can be lifted. This replaces the old
-    // timer-only expiry that could unmute mid-animation.
+    // timer-only expiry that could unmute mid-animation. Checked
+    // before the link gates because local (unlinked) alignments arm
+    // suppression too and must be able to disarm it.
     if (suppressSettle) {
       if (
         suppressionTarget !== null &&
@@ -275,6 +318,24 @@ export function createScrollEngine(
       }
       return;
     }
+
+    // Explicitly unlinked: scrolling still moves the LOCAL selection
+    // (rail highlight, URL hash), it just never becomes a phone
+    // intent. This is what keeps the story navigable on its own.
+    if (!getUserLinked()) {
+      if (loc.sectionId === activeSection && loc.subSlug === activeSub) return;
+      localLoc = { sectionId: loc.sectionId, subSlug: loc.subSlug };
+      lastLocalMoveAt = Date.now();
+      const hash = buildHash(loc.sectionId, loc.subSlug);
+      // eslint-disable-next-line security/detect-possible-timing-attacks -- URL hash comparison, no secret data
+      if (window.location.hash !== hash) {
+        history.replaceState(null, "", hash);
+      }
+      return;
+    }
+
+    // Transient suspension (drag/peek while linked): fully inert.
+    if (!getLinked()) return;
 
     // Already showing this location: clear any pending request
     if (loc.sectionId === activeSection && loc.subSlug === activeSub) {
@@ -300,10 +361,38 @@ export function createScrollEngine(
   // -----------------------------------------------------------------------
 
   function handleBridgeState(state: DemoBridgeState): void {
-    // When unlinked, the phone must not auto-scroll the story.
-    // The mirror stays stale so activeSection/activeSub hold position;
-    // progress tracking runs upstream in App.svelte before this call.
+    // Explicitly unlinked: the phone must not auto-scroll the story,
+    // but its latest snapshot is remembered so relink can adopt the
+    // phone's position when the phone was the last side to move.
+    // Progress tracking runs upstream in App.svelte before this call.
+    if (!getUserLinked()) {
+      const prevSeq = pendingPhone?.locationSeq ?? mirror?.locationSeq;
+      if (state.locationSeq !== prevSeq) {
+        lastPhoneMoveAt = Date.now();
+      }
+      pendingPhone = state;
+      return;
+    }
+
+    // Transient suspension (drag/peek while linked): drop the snapshot
+    // entirely. The mirror stays stale so the page holds position, and
+    // no reconciliation state accumulates from a gesture.
     if (!getLinked()) return;
+
+    // A linked snapshot supersedes the local override once it either
+    // matches the local location (the relink push echoed back) or
+    // carries a NEW location transition (the store moved; it is
+    // authoritative again). A stale same-seq snapshot in the window
+    // between the relink push and its echo keeps localLoc, so the
+    // page does not flash back to the old mirror position.
+    if (localLoc !== null) {
+      const matchesLocal =
+        state.location.sectionId === localLoc.sectionId &&
+        state.location.subSlug === localLoc.subSlug;
+      if (matchesLocal || state.locationSeq !== mirror?.locationSeq) {
+        localLoc = null;
+      }
+    }
 
     const prev = mirror;
     mirror = state;
@@ -478,12 +567,52 @@ export function createScrollEngine(
   // Page inputs: everything is an intent through the bridge
   // -----------------------------------------------------------------------
 
+  /**
+   * Navigate the story locally while user-unlinked: set the local
+   * override, stamp the move, update the hash, and run the same
+   * suppression + alignment machinery a linked presentation uses.
+   * The phone is never involved.
+   */
+  function localNavigate(sectionId: SectionId, subSlug: string | null): void {
+    const sectionChanged = sectionId !== activeSection;
+    localLoc = { sectionId, subSlug };
+    lastLocalMoveAt = Date.now();
+
+    const hash = buildHash(sectionId, subSlug);
+    // eslint-disable-next-line security/detect-possible-timing-attacks -- URL hash comparison, no secret data
+    if (window.location.hash !== hash) {
+      history.replaceState(null, "", hash);
+    }
+
+    // Same target resolution as the linked path: the derived selection
+    // always names a sub-heading, so a null sub could never match and
+    // the disarm would fall to the timed backstop.
+    armSuppression({
+      section: sectionId,
+      sub: subSlug ?? getSection(sectionId)?.subs[0]?.slug ?? null,
+    });
+
+    if (sectionChanged) {
+      window.scrollTo({ top: 0, behavior: "auto" });
+    }
+
+    void alignToLocation(sectionId, subSlug, "page-click");
+  }
+
   function selectSection(id: SectionId): void {
+    if (!getUserLinked()) {
+      localNavigate(id, null);
+      return;
+    }
     if (!getLinked()) return;
     getBridge()?.setLocation(id, null, "page-click");
   }
 
   function selectSub(sectionId: SectionId, subSlug: string): void {
+    if (!getUserLinked()) {
+      localNavigate(sectionId, subSlug);
+      return;
+    }
     if (!getLinked()) return;
     getBridge()?.setLocation(sectionId, subSlug, "page-click");
   }
@@ -491,10 +620,66 @@ export function createScrollEngine(
   function initFromHash(): void {
     const parsed = parseHash(window.location.hash);
     if (parsed === null) return;
+    if (!getUserLinked()) {
+      localNavigate(parsed.sectionId, parsed.subSlug);
+      return;
+    }
     if (!getLinked()) return;
 
     getBridge()?.setLocation(parsed.sectionId, parsed.subSlug, "deep-link");
   }
+
+  // -----------------------------------------------------------------------
+  // Relink reconciliation: whichever side moved last during the
+  // unlink wins (relinkDecision). Watched as an effect because the
+  // link choice is external $state the engine only reads.
+  // -----------------------------------------------------------------------
+
+  function resolveRelink(): void {
+    const bridge = getBridge();
+    const pending = pendingPhone;
+    const decision = relinkDecision(lastLocalMoveAt, lastPhoneMoveAt);
+    pendingPhone = null;
+    lastLocalMoveAt = 0;
+    lastPhoneMoveAt = 0;
+
+    // No bridge means this relink came from a restart's resetLinked
+    // while the phone is rebooting. Discard everything: the fresh
+    // bridge's init snapshot will present the clean boot state.
+    if (bridge === undefined) {
+      localLoc = null;
+      return;
+    }
+
+    if (decision === "push-local" && localLoc !== null) {
+      // The story moved last: the phone catches up. localLoc stays
+      // set until the intent's echo presents (handleBridgeState
+      // clears it), so the page never flashes the stale mirror.
+      bridge.setLocation(localLoc.sectionId, localLoc.subSlug, "page-click");
+      return;
+    }
+
+    if (decision === "adopt-phone" && pending !== null) {
+      // The phone moved last: present its stored snapshot through the
+      // normal linked path (now that getUserLinked() is true again).
+      localLoc = null;
+      handleBridgeState(pending);
+      return;
+    }
+
+    localLoc = null;
+  }
+
+  let prevUserLinked = getUserLinked();
+
+  $effect(() => {
+    const linked = getUserLinked();
+    if (linked === prevUserLinked) return;
+    prevUserLinked = linked;
+    if (linked) {
+      resolveRelink();
+    }
+  });
 
   function remeasure(): number {
     return readingLineY();
