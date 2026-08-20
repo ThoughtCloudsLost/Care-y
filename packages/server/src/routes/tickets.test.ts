@@ -10,7 +10,7 @@
  * matching production wiring behavior.
  */
 
-import { describe, it, expect, beforeAll, afterAll } from "vitest";
+import { describe, it, expect, beforeAll, afterAll, vi } from "vitest";
 import { randomUUID } from "node:crypto";
 import type { Kysely } from "kysely";
 import type { TenantDatabase } from "../db/types.js";
@@ -2383,15 +2383,20 @@ describe.skipIf(!process.env.DATABASE_URL)(
           },
         });
 
-        const auditRow = await tenantDb
-          .selectFrom("audit_log")
-          .select(["event_type", "actor_id"])
-          .where("event_type", "=", "client_tier_changed")
-          .where("actor_id", "=", user.id)
-          .orderBy("created_at", "desc")
-          .executeTakeFirst();
-        expect(auditRow).toBeDefined();
-        expect(auditRow!.event_type).toBe("client_tier_changed");
+        // The route-side audit helper is fire-and-forget (void svc.log),
+        // so the DB write may not have landed when the mutation returns.
+        const auditRow = await vi.waitFor(async () => {
+          const row = await tenantDb
+            .selectFrom("audit_log")
+            .select(["event_type", "actor_id"])
+            .where("event_type", "=", "client_tier_changed")
+            .where("actor_id", "=", user.id)
+            .orderBy("created_at", "desc")
+            .executeTakeFirst();
+          expect(row).toBeDefined();
+          return row!;
+        });
+        expect(auditRow.event_type).toBe("client_tier_changed");
       });
     });
 

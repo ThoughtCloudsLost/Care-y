@@ -2696,5 +2696,6 @@
   "audit_event_client_tier_changed": "{Client} communication tier changed",
   "audit_event_portal_channel_regenerated": "Secure link regenerated",
   "audit_event_portal_channel_revoked": "Secure link removed",
-  "error_portal_channel_exists": "This {client} already has an active secure link."
+  "error_portal_channel_exists": "This {client} already has an active secure link.",
+  "error_portal_channel_not_found": "This secure link is not available. It may have been revoked or never existed."
 }

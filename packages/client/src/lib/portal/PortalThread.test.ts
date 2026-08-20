@@ -1,5 +1,6 @@
-import { describe, it, expect, beforeAll } from "vitest";
-import { render } from "@testing-library/svelte";
+// @vitest-environment jsdom
+import { describe, it, expect, beforeAll, afterEach, vi } from "vitest";
+import { render, cleanup } from "@testing-library/svelte";
 import {
   getSodium,
   generatePortalSeed,
@@ -9,6 +10,20 @@ import {
   toRistrettoPoint,
 } from "@care-y/crypto";
 import PortalThread from "./PortalThread.svelte";
+
+// IntersectionObserver stub for DecryptPlaceholder
+vi.stubGlobal(
+  "IntersectionObserver",
+  vi.fn(function (this: {
+    observe: () => void;
+    disconnect: () => void;
+    unobserve: () => void;
+  }) {
+    this.observe = vi.fn();
+    this.disconnect = vi.fn();
+    this.unobserve = vi.fn();
+  }),
+);
 
 beforeAll(async () => {
   await getSodium();
@@ -42,6 +57,8 @@ function makeMessage(
 }
 
 describe("PortalThread", () => {
+  afterEach(cleanup);
+
   it("renders empty state when no messages", () => {
     const seed = generatePortalSeed();
     const keypair = derivePortalKeypair(seed);

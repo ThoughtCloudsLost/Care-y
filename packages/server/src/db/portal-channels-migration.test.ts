@@ -3,6 +3,7 @@ import { sql } from "kysely";
 import * as crypto from "node:crypto";
 import {
   createTestDb,
+  createTestClientFixture,
   createTestTicketFixture,
   type TestDb,
 } from "../test-utils.js";
@@ -139,7 +140,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
     });
 
     it("cascades channel deletion when client is deleted", async () => {
-      const fix = await createTestTicketFixture(testDb.db);
+      const fix = await createTestClientFixture(testDb.db);
       const channel = await insertChannel(fix.clientId);
 
       await testDb.db
@@ -436,7 +437,15 @@ describe.skipIf(!process.env.DATABASE_URL)(
         })
         .execute();
 
-      // Delete client cascades through portal_channels -> portal_messages
+      // Delete the ticket first so that tickets_client_id_fkey (no
+      // ON DELETE CASCADE) does not block the client deletion. The
+      // portal_channels FK does cascade, which is what this test
+      // verifies.
+      await testDb.db
+        .deleteFrom("tickets")
+        .where("id", "=", fix.ticketId)
+        .execute();
+
       await testDb.db
         .deleteFrom("clients")
         .where("id", "=", fix.clientId)

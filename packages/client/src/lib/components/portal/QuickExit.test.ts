@@ -1,8 +1,11 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, fireEvent } from "@testing-library/svelte";
+// @vitest-environment jsdom
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { render, fireEvent, cleanup } from "@testing-library/svelte";
 import QuickExit from "./QuickExit.svelte";
 
 describe("QuickExit", () => {
+  afterEach(cleanup);
+
   const mockDestroy = vi.fn();
 
   beforeEach(() => {
@@ -40,7 +43,9 @@ describe("QuickExit", () => {
       props: { ondestroy: mockDestroy, safeUrl: "https://weather.gov" },
     });
     await fireEvent.click(getByTestId("quick-exit"));
-    expect(document.title).toBe(" ");
+    // The component writes " ", but the document.title getter strips and
+    // collapses ASCII whitespace, so the scrubbed title reads back empty.
+    expect(document.title).toBe("");
   });
 
   it("Escape key triggers exit", async () => {
