@@ -113,6 +113,18 @@ export {
   deserializeEscrowBlob,
 } from "./escrow.js";
 
+// --- Portal Key Derivation ---
+export {
+  PORTAL_SEED_BYTES,
+  PORTAL_KEY_CHECK,
+  generatePortalSeed,
+  deriveChannelId,
+  deriveChannelAuth,
+  hashChannelAuth,
+  derivePortalKeypair,
+  type PortalKeypair,
+} from "./portal.js";
+
 // --- RFC 9497 / 9380 internals (testing + server-side OPRF) ---
 export {
   expandMessageXMD,

@@ -135,6 +135,13 @@ import {
 import { createKBMediaService } from "./kb/kb-media-service.js";
 import { createClientService } from "./clients/client-service.js";
 import { createIntakeFormService } from "./portal/intake-form-service.js";
+import * as portalChannelService from "./portal/channel-service.js";
+import * as portalMessageService from "./portal/portal-message-service.js";
+import {
+  registerPortalExpiryHandler,
+  expirePortalMessages,
+  PORTAL_EXPIRY_QUEUE,
+} from "./jobs/portal-message-expiry.js";
 import {
   registerEscalationRulesHandler,
   ESCALATION_RULES_QUEUE,
@@ -281,6 +288,16 @@ const RATE_UPLOAD_MAX = 3;
 const RATE_KB_UPLOAD_MAX = 5;
 const RATE_BRANDING_UPLOAD_MAX = 3;
 const RATE_BOOTSTRAP_MAX = getEnv().NODE_ENV === "production" ? 2 : 20;
+
+// Portal read: 60 req/hour per IP. A 5-minute polling interval uses 12/hr.
+// refetchOnWindowFocus adds ~5-10/hr. The remaining headroom covers
+// CGNAT-shared IPs where multiple clients behind the same NAT share
+// one public IP.
+const RATE_PORTAL_READ_MAX = 60;
+// Portal reply: 30 req/hour per IP. Reply writes 3 DB rows per call
+// (follow-up + portal wrap + portal message), so a lower cap limits
+// storage DoS from a single source.
+const RATE_PORTAL_REPLY_MAX = 30;
 
 // --- Rate limiters ---
 
@@ -593,6 +610,25 @@ const appRouter = createAppRouter({
     intakeFormService: createIntakeFormService({ fieldEncryptor: encryptor }),
     notificationService,
     fieldEncryptor: encryptor,
+    // Secure Link portal deps (separate limiters from intake)
+    portalChannelService: {
+      resolveAuthedChannel: portalChannelService.resolveAuthedChannel,
+    },
+    portalMessageService: {
+      bootstrap: portalMessageService.bootstrap,
+      clientReply: portalMessageService.clientReply,
+    },
+    portalReadLimiter: createInMemoryRateLimiter({
+      windowMs: RATE_WINDOW_1H,
+      maxRequests: RATE_PORTAL_READ_MAX,
+    }),
+    portalReplyLimiter: createInMemoryRateLimiter({
+      windowMs: RATE_WINDOW_1H,
+      maxRequests: RATE_PORTAL_REPLY_MAX,
+    }),
+    portalGetProvider: async (orgId: string) =>
+      providerFactory.getProvider(orgId),
+    portalResolveCallerId: phoneResolver,
   },
   brandingDeps: {
     blobStore,
@@ -752,9 +788,30 @@ registerEscalationRulesHandler(
   },
   env.ESCALATION_RULES_INTERVAL_MS ?? DEFAULT_ESCALATION_RULES_INTERVAL_MS,
 );
+// Portal message expiry: deletes client copies for inactive channels (30 days)
+registerPortalExpiryHandler(jobQueue, async () => {
+  const schemas = await listActiveOrgSchemas();
+  for (const schema of schemas) {
+    try {
+      const deleted = await expirePortalMessages(tenantDb(schema));
+      if (deleted > 0) {
+        console.log(
+          `Portal expiry: ${String(deleted)} rows removed in ${schema}`,
+        );
+      }
+    } catch (err: unknown) {
+      console.error(
+        `Portal expiry failed for schema ${schema}:`,
+        err instanceof Error ? err.message : String(err),
+      );
+    }
+  }
+});
+
 await ensureRecurringJob(db, jobQueue, ESCALATION_RULES_QUEUE);
 await ensureRecurringJob(db, jobQueue, ESCALATION_QUEUE);
 await ensureRecurringJob(db, jobQueue, MEDIA_CLEANUP_QUEUE);
+await ensureRecurringJob(db, jobQueue, PORTAL_EXPIRY_QUEUE);
 jobQueue.start();
 console.log("Job queue started");
 

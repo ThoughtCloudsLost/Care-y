@@ -77,7 +77,7 @@
     oncallaction: (action: CallAction) => void;
     oncalldismiss: () => void;
     oncomposedismiss: () => void;
-    onreply: () => void;
+    onreply?: () => void;
     ontextclient?: () => void;
     ondraftset: (body: string) => void;
   }

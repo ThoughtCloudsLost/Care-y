@@ -17,6 +17,7 @@ import type { TenantDatabase } from "../db/types.js";
 import { KeyRotationError, ConflictError } from "../errors.js";
 import { isPgUniqueViolation } from "../db/pg-errors.js";
 import { PendingIntakeWrapsError } from "../portal/intake-conversion-service.js";
+import { PendingPortalReplyWrapsError } from "../portal/portal-errors.js";
 
 export interface ReWrappedKey {
   readonly ticketId: string;
@@ -151,6 +152,15 @@ export function createKeyRotationService(
         .executeTakeFirst();
       if (pendingIntakeWraps) {
         throw new PendingIntakeWrapsError();
+      }
+
+      const pendingPortalReplyWraps = await db
+        .selectFrom("portal_reply_key_wraps")
+        .select("followup_id")
+        .limit(1)
+        .executeTakeFirst();
+      if (pendingPortalReplyWraps) {
+        throw new PendingPortalReplyWrapsError();
       }
 
       await db.transaction().execute(async (tx) => {

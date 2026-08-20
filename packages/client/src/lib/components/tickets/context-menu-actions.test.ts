@@ -5,6 +5,7 @@ const labels = {
   copy: "Copy",
   editNote: "Edit Note",
   deleteNote: "Delete Note",
+  editMessage: "Edit",
 };
 
 describe("getContextMenuActions", () => {

@@ -12,6 +12,7 @@ export interface ContextMenuCallbacks {
     plaintext: string,
     noteTypeId: string | null,
   ) => void;
+  readonly oneditmessage?: (followUpId: string, plaintext: string) => void;
   readonly ondelete: (followUpId: string) => void;
 }
 
@@ -50,6 +51,12 @@ export function createContextMenu(
           snapshot.followUpId,
           snapshot.plaintext ?? "",
           snapshot.noteTypeId ?? null,
+        );
+        break;
+      case "editMessage":
+        callbacks.oneditmessage?.(
+          snapshot.followUpId,
+          snapshot.plaintext ?? "",
         );
         break;
       case "delete":

@@ -44,6 +44,7 @@
   import InlineSkeleton from "$lib/components/InlineSkeleton.svelte";
   import PanelNotesSection from "./PanelNotesSection.svelte";
   import PanelMediaSection from "./PanelMediaSection.svelte";
+  import PortalTierSection from "./PortalTierSection.svelte";
   import { onKeyActivate } from "$lib/utils/a11y.js";
   import type { TicketAction } from "$lib/tickets/types.js";
 
@@ -239,6 +240,14 @@
   </List>
 
   <PanelNotesSection {ticketId} {keyWrap} {onnotetap} />
+
+  <PortalTierSection
+    {ticketId}
+    clientTier={ticket?.clientTier}
+    portalChannel={ticket?.portalChannel}
+    clientPhone={ticket?.clientPhone}
+    isLoading={ticketQuery.isLoading}
+  />
 
   <!-- Ticket actions -->
   <List class="!my-3">

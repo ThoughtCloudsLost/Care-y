@@ -335,6 +335,10 @@ export {
   type SearchClientsInput,
   updateTicketContentInputSchema,
   type UpdateTicketContentInput,
+  upgradeToSecureLinkInputSchema,
+  updateOutboundMessageInputSchema,
+  type UpgradeToSecureLinkInput,
+  type UpdateOutboundMessageInput,
 } from "./schemas/tickets.js";
 
 // --- Client management ---
@@ -557,12 +561,22 @@ export {
   intakeConfigResponseSchema,
   publicIntakeFieldSchema,
   publicIntakeFormSchema,
+  communicationTierSchema,
+  portalChannelIdSchema,
+  portalAuthSchema,
+  eciesTripleSchema,
+  portalBootstrapInputSchema,
+  portalReplyInputSchema,
   type IntakeSubmissionInput,
   type IntakeChallengeResponse,
   type IntakeSubmitResponse,
   type IntakeConfigResponse,
   type PublicIntakeField,
   type PublicIntakeForm,
+  type CommunicationTier,
+  type EciesTriple,
+  type PortalBootstrapInput,
+  type PortalReplyInput,
 } from "./schemas/client-portal.js";
 
 // --- Intake form schemas ---

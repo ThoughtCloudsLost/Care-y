@@ -51,11 +51,17 @@ export interface TicketDecryptScope {
   /** Decrypt the ticket description. */
   description(encryptedDescription: string): DecryptResult;
 
-  /** Decrypt a follow-up's content by its ID. When followUpKeyWrap is provided, uses it for tk_temp unwrapping. */
+  /**
+   * Decrypt a follow-up's content by its ID. When followUpKeyWrap is
+   * provided, uses it for tk_temp unwrapping. When portalWrap is provided
+   * instead, the row is a portal client reply whose tk_temp is sealed to
+   * the org key; the Worker unseals it and converges via the same rewrap.
+   */
   followUp(
     followUpId: string,
     encryptedContent: string,
     followUpKeyWrap?: TicketKeyWrap | null,
+    portalWrap?: string | null,
   ): DecryptResult;
 
   /** Decrypt a volunteer's display name via the org-tier cache. */
@@ -109,6 +115,7 @@ export function createTicketDecryptScope(
       followUpId: string,
       encryptedContent: string,
       followUpKeyWrap?: TicketKeyWrap | null,
+      portalWrap?: string | null,
     ): DecryptResult {
       const rewrapContext =
         followUpKeyWrap != null ? { followUpKeyWrap, ticketId } : undefined;
@@ -119,6 +126,7 @@ export function createTicketDecryptScope(
         keyWrap,
         encryptedContent,
         rewrapContext,
+        portalWrap,
       );
       return resolveAsyncDecrypt(raw, hasAccess);
     },

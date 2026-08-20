@@ -891,7 +891,7 @@ async function handleConsultantVerifyRelay(
 // Client phone resolution (ticket -> client -> phone -> OPS decrypt)
 // ---------------------------------------------------------------------------
 
-async function resolveClientPhone(
+export async function resolveClientPhone(
   ticketId: string,
   tenantDb: Kysely<TenantDatabase>,
   fieldEncryptor: FieldEncryptor,

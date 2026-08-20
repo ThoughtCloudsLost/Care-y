@@ -9,6 +9,7 @@ import {
 import { createKeyRotationService } from "./key-rotation.js";
 import { KeyRotationError } from "../errors.js";
 import { PendingIntakeWrapsError } from "../portal/intake-conversion-service.js";
+import { PendingPortalReplyWrapsError } from "../portal/portal-errors.js";
 import type { KeyRotationService } from "./key-rotation.js";
 
 describe.skipIf(!process.env.DATABASE_URL)("KeyRotationService", () => {
@@ -448,6 +449,156 @@ describe.skipIf(!process.env.DATABASE_URL)("KeyRotationService", () => {
         .deleteFrom("intake_key_wraps")
         .where("ticket_id", "=", ticketId)
         .execute();
+    });
+  });
+
+  describe("portal reply wrap rotation guard", () => {
+    it("throws PendingPortalReplyWrapsError when portal_reply_key_wraps is non-empty", async () => {
+      const user = await createTestUser(testDb.db);
+      await seedUserKeys(user.id, {
+        vol_public: crypto.randomBytes(32),
+        rotation_lock: false,
+      });
+      await seedWrappedOrgKey(user.id);
+      await service.acquireLock(user.id);
+
+      // Seed a portal_reply_key_wraps row (needs a follow-up referencing a ticket)
+      const q = await createTestQueue(testDb.db, {
+        label: "Portal Guard Q",
+      });
+      const clientAlias = `portal-guard-${crypto.randomUUID().slice(0, 8)}`;
+      const client = await testDb.db
+        .insertInto("clients")
+        .values({
+          encrypted_alias: Buffer.from(clientAlias),
+          alias_hash: clientAlias,
+        })
+        .returning("id")
+        .executeTakeFirstOrThrow();
+      const ticketId = crypto.randomUUID();
+      await testDb.db
+        .insertInto("tickets")
+        .values({
+          id: ticketId,
+          client_id: client.id,
+          queue_id: q.id,
+          status: "open",
+          priority: "normal",
+          encrypted_title: Buffer.from("ct-title"),
+          encrypted_description: Buffer.from("ct-desc"),
+          key_generation: crypto.randomUUID(),
+        })
+        .execute();
+      const followupId = crypto.randomUUID();
+      await testDb.db
+        .insertInto("followups")
+        .values({
+          id: followupId,
+          ticket_id: ticketId,
+          source: "client",
+          type: "message",
+          encrypted_content: Buffer.from("ct-content"),
+          created_by: null,
+          key_generation: crypto.randomUUID(),
+        })
+        .execute();
+      await testDb.db
+        .insertInto("portal_reply_key_wraps")
+        .values({
+          followup_id: followupId,
+          wrapped_tk: Buffer.alloc(80, 0xcd),
+        })
+        .execute();
+
+      await expect(
+        service.applyRotation({
+          userId: user.id,
+          saltNew: crypto.randomBytes(32),
+          volPublicNew: crypto.randomBytes(32),
+          reWrappedKeys: [],
+        }),
+      ).rejects.toThrow(PendingPortalReplyWrapsError);
+
+      // Clean up: release lock and remove the portal wrap
+      await service.releaseLock(user.id);
+      await testDb.db
+        .deleteFrom("portal_reply_key_wraps")
+        .where("followup_id", "=", followupId)
+        .execute();
+    });
+
+    it("succeeds after portal reply wrap is deleted", async () => {
+      const user = await createTestUser(testDb.db);
+      await seedUserKeys(user.id, {
+        vol_public: crypto.randomBytes(32),
+        rotation_lock: false,
+      });
+      await seedWrappedOrgKey(user.id);
+
+      // Insert and then delete a portal reply wrap to prove rotation passes
+      const q = await createTestQueue(testDb.db, {
+        label: "Portal Pass Q",
+      });
+      const clientAlias = `portal-pass-${crypto.randomUUID().slice(0, 8)}`;
+      const client = await testDb.db
+        .insertInto("clients")
+        .values({
+          encrypted_alias: Buffer.from(clientAlias),
+          alias_hash: clientAlias,
+        })
+        .returning("id")
+        .executeTakeFirstOrThrow();
+      const ticketId = crypto.randomUUID();
+      await testDb.db
+        .insertInto("tickets")
+        .values({
+          id: ticketId,
+          client_id: client.id,
+          queue_id: q.id,
+          status: "open",
+          priority: "normal",
+          encrypted_title: Buffer.from("ct-title"),
+          encrypted_description: Buffer.from("ct-desc"),
+          key_generation: crypto.randomUUID(),
+        })
+        .execute();
+      const followupId = crypto.randomUUID();
+      await testDb.db
+        .insertInto("followups")
+        .values({
+          id: followupId,
+          ticket_id: ticketId,
+          source: "client",
+          type: "message",
+          encrypted_content: Buffer.from("ct-content"),
+          created_by: null,
+          key_generation: crypto.randomUUID(),
+        })
+        .execute();
+      await testDb.db
+        .insertInto("portal_reply_key_wraps")
+        .values({
+          followup_id: followupId,
+          wrapped_tk: Buffer.alloc(80, 0xcd),
+        })
+        .execute();
+
+      // Delete the wrap before attempting rotation
+      await testDb.db
+        .deleteFrom("portal_reply_key_wraps")
+        .where("followup_id", "=", followupId)
+        .execute();
+
+      await service.acquireLock(user.id);
+
+      await expect(
+        service.applyRotation({
+          userId: user.id,
+          saltNew: crypto.randomBytes(32),
+          volPublicNew: crypto.randomBytes(32),
+          reWrappedKeys: [],
+        }),
+      ).resolves.toBeUndefined();
     });
   });
 });
