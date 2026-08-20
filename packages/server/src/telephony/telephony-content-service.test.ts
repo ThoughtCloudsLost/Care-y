@@ -358,7 +358,7 @@ describe.skipIf(!process.env.DATABASE_URL)("TelephonyContentService", () => {
         mockBlobStore,
         "00000000-0000-4000-8000-000000000099",
       ),
-    ).rejects.toThrow(/not found/i);
+    ).rejects.toThrow(/GREETING_NOT_FOUND/);
   });
 
   it("getGreetingAudio throws ValidationError for non-audio greeting", async () => {
