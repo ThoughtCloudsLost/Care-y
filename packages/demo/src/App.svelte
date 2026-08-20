@@ -62,6 +62,7 @@
   } from "$demo/link-state.svelte.js";
   import { createFlowBandStore } from "$demo/flow-band.svelte.js";
   import { createDemoMode } from "$demo/demo-mode.svelte.js";
+  import { initColumnSlot } from "$demo/flow-column.svelte.js";
 
   // -----------------------------------------------------------------------
   // Dark mode with localStorage persistence
@@ -846,6 +847,7 @@
   // viewport width; ?mode=read/walk overrides. The override survives
   // restart (search string is preserved) and is not clobbered by resizes.
   const demoMode = createDemoMode(() => isNarrow);
+  initColumnSlot(demoMode.mode);
 
   // The phone iframe mounts eagerly in both modes so the PGlite engine
   // boots and background keying starts on page load. The visitor never
@@ -864,6 +866,12 @@
   // in walk mode. Read mode uses the close-and-continue button instead.
   const showDesktopChrome: boolean = $derived(demoMode.mode === "walk");
 
+  // Rect the story layout wraps around. Null while the frame is
+  // CSS-hidden (read mode, peek idle) so the flow carves no hole and
+  // the header/tip dodges relax to full width. During a peek the rect
+  // comes back and the text parts around the peeked frame as designed.
+  const flowFrameRect = $derived(frameVisible ? chromeFrameRect : null);
+
   // Mode transition effects: switching modes at runtime resets state
   // that belongs to the old mode.
   let prevMode = demoMode.mode;
@@ -875,7 +883,10 @@
     prevMode = current;
 
     if (switching === "read" && current === "walk") {
-      // Entering walk: cancel any in-flight peek, present the frame
+      // Entering walk: cancel any in-flight peek, present the frame.
+      // geo.reset() spawns the frame in the left half; the column slot
+      // flips right through normal spawn-pressure evaluation in
+      // FlowStory's layout pass (no special-case code needed here).
       peekCtrl.resetToIdle();
       capturedStill = null;
       geo.reset();
@@ -1197,20 +1208,20 @@
                 {seenTopics}
                 showToc={!entryVisible && !showRail}
                 selectable={!entryVisible}
-                frameRect={chromeFrameRect}
+                frameRect={flowFrameRect}
                 onSubClick={handleSubClick}
                 onSectionClick={handleSectionClick}
               />
               <!-- First snap target on the page, so it holds the
                  selection slot before anything is selected. -->
-              <StoryTip frameRect={chromeFrameRect} />
+              <StoryTip frameRect={flowFrameRect} />
               <FlowStory
                 sections={pageSections}
                 locale={uiLocale}
                 activeSection={scrollEngine.activeSection}
                 activeSub={scrollEngine.activeSub}
                 {seenTopics}
-                frameRect={chromeFrameRect}
+                frameRect={flowFrameRect}
                 onSelectSection={handleSectionClick}
                 onSelectSub={handleSubClick}
                 onpeekfire={handlePeekFire}

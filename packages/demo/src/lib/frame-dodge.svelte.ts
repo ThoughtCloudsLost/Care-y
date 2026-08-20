@@ -6,20 +6,45 @@
  * section header, the tip card) still have to clear the same frame, or
  * they would sit underneath it while the text beside them dodges.
  *
- * They cannot be flowed, so they inset instead: this asks the layout
- * engine's own segment function where a line at the element's position
- * would be allowed to sit, and returns the margins that put the element
- * in that band. Sharing computeLineSegments is what keeps these blocks
- * aligned with the body text rather than drifting on their own math.
+ * They cannot be flowed, so they inset instead. The inset aligns the
+ * element's content band to the column slot (columnRect) via
+ * computeColumnSegments, following the same three-stage dodge ladder
+ * the flow text uses: shift, constrained-segment, full-width fallback.
+ *
+ * Both consumers (SectionIntro, StoryTip) cancel the flow container's
+ * padding with a matching negative margin / positive padding pair
+ * (CONTENT_GUTTER px each). At >= 900px width, container-space column
+ * values map straight through to margins because the cancellation
+ * zeroes the offset. Below 900px, SectionIntro drops its horizontal
+ * padding, so the cancellation is off by CONTENT_GUTTER px; the
+ * resulting misalignment with the column slot is tolerated.
  */
 
 import {
   FRAME_PAD_TOP,
   FRAME_PAD_BOTTOM,
   FRAME_PAD_X,
-  computeLineSegments,
+  HOLE_GAP,
+  SHIFT_MAX,
+  MIN_SEGMENT,
+  computeColumnSegments,
+  type FlowHole,
   type Segment,
 } from "./flow-layout.js";
+import {
+  columnRect,
+  columnContainerLeft,
+  columnContainerWidth,
+} from "./flow-column.svelte.js";
+
+/**
+ * Gutter in px that both dodge consumers use for their negative-margin /
+ * positive-padding cancellation pair. SectionIntro and StoryTip each
+ * carry `margin: 0 -1rem; padding: ... 1rem` (1rem = 16px); changing
+ * those values requires updating this constant too, or the dodge
+ * alignment drifts. Exported so tests can verify the conversion.
+ */
+export const CONTENT_GUTTER = 16;
 
 export interface DodgeFrameRect {
   readonly left: number;
@@ -62,8 +87,228 @@ export interface FrameDodgeOptions {
   stickyTop?: () => number | null;
 }
 
+// -----------------------------------------------------------------------
+// Pure inset computation (exported for direct unit testing)
+// -----------------------------------------------------------------------
+
+export interface DodgeInsetInput {
+  /** Element box width in px. */
+  readonly boxWidth: number;
+  /** Element box height in px. */
+  readonly boxHeight: number;
+  /** Element's document-space left edge. */
+  readonly boxLeft: number;
+  /** Viewport-space top of the element's visible band. */
+  readonly viewportTop: number;
+  /** The frame rect in viewport space, or null when the frame is hidden. */
+  readonly frameRect: DodgeFrameRect | null;
+  /** Column rect from the slot system (container space). */
+  readonly column: { readonly x: number; readonly width: number };
+  /** Document-space left edge of the flow container. */
+  readonly containerLeft: number;
+  /** Full container width. */
+  readonly containerWidth: number;
+}
+
+export interface DodgeInsetResult {
+  readonly left: number;
+  readonly right: number;
+}
+
+/**
+ * Compute left/right insets that place the element's content band
+ * inside the column slot, dodging the frame hole via the same ladder
+ * the flow text uses.
+ *
+ * All frame coordinates are viewport-space; the column and container
+ * are in container (document) space. The hole is built in container
+ * space so computeColumnSegments can evaluate it directly.
+ *
+ * Ladder stages:
+ * 1. No vertical overlap between element band and padded hole: align
+ *    content to the column rect.
+ * 2. Vertical overlap: try shifting the column band away from the hole
+ *    by up to SHIFT_MAX, clamped so it stays inside the element.
+ * 3. Fall back to computeColumnSegments for the element's full height,
+ *    pick the widest segment.
+ * 4. No viable segment: relax to full width (insets = 0).
+ */
+export function computeDodgeInsets(input: DodgeInsetInput): DodgeInsetResult {
+  const {
+    boxWidth,
+    boxHeight,
+    boxLeft,
+    viewportTop,
+    frameRect,
+    column,
+    containerLeft,
+    containerWidth,
+  } = input;
+
+  // No frame: align to the column, no dodge needed.
+  if (frameRect === null) {
+    return columnAlignedInsets(boxWidth, boxLeft, column, containerLeft);
+  }
+
+  // Build the padded hole in CONTAINER space. The frame rect is
+  // viewport-fixed (left/top in viewport px). Converting to container
+  // space: subtract the container's document-space left edge.
+  const holeLeft = frameRect.left - FRAME_PAD_X - containerLeft;
+  const holeRight =
+    frameRect.left + frameRect.outerW + FRAME_PAD_X - containerLeft;
+
+  // Vertical extents: the element band is [viewportTop, viewportTop + boxHeight)
+  // in viewport space. The hole's vertical extents are also viewport-space.
+  const holeTop = frameRect.top - FRAME_PAD_TOP;
+  const holeBottom = frameRect.top + frameRect.outerH + FRAME_PAD_BOTTOM;
+  const elTop = viewportTop;
+  const elBottom = viewportTop + boxHeight;
+
+  // Stage 1: no vertical overlap, just align to column.
+  if (elBottom <= holeTop || elTop >= holeBottom) {
+    return columnAlignedInsets(boxWidth, boxLeft, column, containerLeft);
+  }
+
+  // There is vertical overlap. Build a container-space hole for segment
+  // computation. The vertical range uses 0-based element-local coords.
+  const hole: FlowHole = {
+    left: holeLeft,
+    right: holeRight,
+    top: 0,
+    bottom: boxHeight,
+  };
+
+  // Stage 2: try shifting the column band away from the hole.
+  const colLeft = column.x;
+  const colRight = column.x + column.width;
+  const gapLeft = holeLeft - HOLE_GAP;
+  const gapRight = holeRight + HOLE_GAP;
+
+  // Only attempt shift when the column actually overlaps the hole horizontally.
+  if (colRight > gapLeft && colLeft < gapRight) {
+    // Shift direction: away from the hole center.
+    const holeCenterX = (holeLeft + holeRight) / 2;
+    const colCenterX = colLeft + column.width / 2;
+    const dir = holeCenterX > colCenterX ? -1 : 1;
+
+    let shift: number;
+    if (dir < 0) {
+      shift = colRight - gapLeft;
+    } else {
+      shift = gapRight - colLeft;
+    }
+
+    if (shift <= SHIFT_MAX) {
+      const shiftedColX = colLeft + dir * shift;
+      const shiftedColRight = shiftedColX + column.width;
+      // Verify clearance after shift.
+      if (shiftedColRight <= gapLeft || shiftedColX >= gapRight) {
+        // Clamp the shifted column to [0, containerWidth].
+        const clampedX = Math.max(
+          0,
+          Math.min(shiftedColX, containerWidth - column.width),
+        );
+        return containerToBoxInsets(
+          boxWidth,
+          boxLeft,
+          containerLeft,
+          clampedX,
+          column.width,
+        );
+      }
+    }
+  } else {
+    // Column does not overlap the hole horizontally: align to column.
+    return columnAlignedInsets(boxWidth, boxLeft, column, containerLeft);
+  }
+
+  // Stage 3: widest constrained segment via computeColumnSegments.
+  const segments = computeColumnSegments(
+    0,
+    boxHeight,
+    containerWidth,
+    column,
+    hole,
+  );
+
+  let widest: Segment | undefined;
+  let widestW = -1;
+  for (const seg of segments) {
+    if (seg.width > widestW) {
+      widestW = seg.width;
+      widest = seg;
+    }
+  }
+
+  if (widest !== undefined && widest.width >= MIN_SEGMENT) {
+    return containerToBoxInsets(
+      boxWidth,
+      boxLeft,
+      containerLeft,
+      widest.x,
+      widest.width,
+    );
+  }
+
+  // Stage 4: no viable segment. Relax to full width.
+  return { left: 0, right: 0 };
+}
+
+/**
+ * Convert a container-space content band [x, x + width) to left/right
+ * insets relative to the element's box.
+ */
+function containerToBoxInsets(
+  boxWidth: number,
+  boxLeft: number,
+  containerLeft: number,
+  contentX: number,
+  contentWidth: number,
+): DodgeInsetResult {
+  // Container-space x to element-box-space x. The element's left edge
+  // in container space is (boxLeft - containerLeft). The content band
+  // starts at contentX in container space, so the left inset within the
+  // element is contentX - (boxLeft - containerLeft).
+  //
+  // The CONTENT_GUTTER cancellation (negative margin / positive padding
+  // on each consumer) means the element's box extends CONTENT_GUTTER
+  // past the container on each side at >= 900px. boxLeft already
+  // reflects the expanded box, so (boxLeft - containerLeft) is
+  // -CONTENT_GUTTER, making the subtraction self-correcting.
+  const boxLeftInContainer = boxLeft - containerLeft;
+  const leftInset = Math.max(0, contentX - boxLeftInContainer);
+  const rightInset = Math.max(
+    0,
+    boxWidth - (contentX + contentWidth - boxLeftInContainer),
+  );
+  return { left: leftInset, right: rightInset };
+}
+
+/**
+ * Align content to the column rect with no dodge shift. Used when the
+ * hole does not vertically overlap the element or the frame is null.
+ */
+function columnAlignedInsets(
+  boxWidth: number,
+  boxLeft: number,
+  column: { readonly x: number; readonly width: number },
+  containerLeft: number,
+): DodgeInsetResult {
+  return containerToBoxInsets(
+    boxWidth,
+    boxLeft,
+    containerLeft,
+    column.x,
+    column.width,
+  );
+}
+
+// -----------------------------------------------------------------------
+// Reactive factory
+// -----------------------------------------------------------------------
+
 export function createFrameDodge(
-  getFrameRect: () => DodgeFrameRect,
+  getFrameRect: () => DodgeFrameRect | null,
   options: FrameDodgeOptions = {},
 ): FrameDodge {
   let el: HTMLElement | undefined = $state(undefined);
@@ -143,41 +388,23 @@ export function createFrameDodge(
     const pinned = options.stickyTop?.() ?? null;
     const viewportTop = pinned === null ? flowTop : Math.max(pinned, flowTop);
 
-    // The padded hole in the element's own coordinate space, using the
-    // same constants the flow layout applies.
-    const hole = {
-      left: fr.left - FRAME_PAD_X - b.left,
-      top: fr.top - FRAME_PAD_TOP - viewportTop,
-      right: fr.left + fr.outerW + FRAME_PAD_X - b.left,
-      bottom: fr.top + fr.outerH + FRAME_PAD_BOTTOM - viewportTop,
-    };
+    const col = columnRect();
+    const cLeft = columnContainerLeft();
+    const cWidth = columnContainerWidth();
 
-    // Ask for the bands a line spanning the element's full height would
-    // get. Its whole box has to clear the frame, not one row of it.
-    const segments = computeLineSegments(0, b.height, b.width, hole);
+    const result = computeDodgeInsets({
+      boxWidth: b.width,
+      boxHeight: b.height,
+      boxLeft: b.left,
+      viewportTop,
+      frameRect: fr,
+      column: col,
+      containerLeft: cLeft,
+      containerWidth: cWidth,
+    });
 
-    // Two bands means the frame splits the column. These blocks are
-    // single boxes and cannot flow around it, so they pick a side. The
-    // flanks come back equal (they are centred on the frame), so their
-    // widths cannot break the tie; decide from the room each side has.
-    let chosen: Segment | undefined;
-    if (segments.length > 1) {
-      chosen =
-        hole.left >= b.width - hole.right ? segments.at(0) : segments.at(1);
-    } else {
-      chosen = segments.at(0);
-    }
-
-    // No band fits: fall back to full width and let the frame overlap
-    // rather than collapsing the element to a sliver.
-    if (chosen === undefined) {
-      left = 0;
-      right = 0;
-      return;
-    }
-
-    left = chosen.x;
-    right = Math.max(0, b.width - (chosen.x + chosen.width));
+    left = result.left;
+    right = result.right;
   });
 
   return {

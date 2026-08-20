@@ -269,37 +269,70 @@ export const HOLE_GAP = 16;
 // apart.
 // -----------------------------------------------------------------------
 
-/** 56px toolbar + 8px gap above the frame, plus breathing room. */
-export const FRAME_PAD_TOP = 72;
+/**
+ * Toolbar clearance above the BARE frame top: 56px bar + 8px gap, plus
+ * breathing room. Used by frame-geometry to spawn/park the frame low
+ * enough that its absolutely-positioned toolbar stays on screen. NOT
+ * part of the hole padding: the rect the flow wraps already includes
+ * the toolbar when it is shown (App.svelte's chromeFrameRect).
+ */
+export const TOOLBAR_CLEARANCE = 72;
+
+/**
+ * Breathing room between the hole's edge and the box the flow wraps.
+ * The incoming rect already covers the toolbar when visible, so these
+ * pad the visible chrome only.
+ */
+export const FRAME_PAD_TOP = 12;
 export const FRAME_PAD_BOTTOM = 12;
-/** Horizontal clearance. The flow adds HOLE_GAP on top of this. */
-export const FRAME_PAD_X = 8;
-
-/**
- * Minimum width for EACH side before both-side wrap engages.
- * Wider than MIN_SEGMENT so narrow flanking columns do not appear
- * when the frame is near a viewport edge.
- */
-export const BOTH_SIDES_MIN = 240;
-
-/**
- * Minimum ratio of min(leftWidth, rightWidth) / max(...) for
- * both-side wrap. Expresses "frame is near horizontal center"
- * purely in segment widths, with no extra coordinate parameters.
- */
-export const BALANCE_RATIO = 0.6;
+/** Horizontal clearance: just enough for the ~4px resize handle
+ *  protrusion. The flow adds HOLE_GAP on top of this. */
+export const FRAME_PAD_X = 4;
 
 /**
  * Maximum measure for a single band of text, in px. Roughly 62
  * characters at the 15px body size, which is the comfortable reading
- * range for continuous prose.
- *
- * Applied only when the text has ONE band to live in (no frame overlap,
- * or the frame pushed everything to one side). When the frame splits the
- * column into two flanking bands, each band is already narrower than
- * this, so capping would starve both sides instead of improving them.
+ * range for continuous prose. Used by the slot-state module to size
+ * the column and by the spawn band calculation.
  */
 export const MAX_MEASURE = 620;
+
+// -----------------------------------------------------------------------
+// Column-slot types and pressure constants
+// -----------------------------------------------------------------------
+
+/**
+ * A stable reading column that the frame intrudes into. Provided by the
+ * slot-state module (flow-column.svelte.ts). All layout calls require a
+ * column; the slot module supplies one even for narrow viewports (a
+ * single centered measure).
+ */
+export interface FlowColumn {
+  readonly x: number;
+  readonly width: number;
+}
+
+/**
+ * Hole-overlap fraction of the column width that triggers a slot flip.
+ * When the hole's horizontal overlap with the resting column exceeds
+ * `column.width * SLOT_FLIP_RATIO`, pressure flips the slot.
+ */
+export const SLOT_FLIP_RATIO = 1 / 3;
+
+/**
+ * Deadband in px for the slot flip. When the difference between the
+ * overlap on the current slot and the would-be overlap on the other
+ * slot is within this threshold, the flip is suppressed (straddling
+ * frames: lesser overlap wins).
+ */
+export const SLOT_FLIP_DEADBAND = 40;
+
+/**
+ * Maximum per-line horizontal shift in px. Lines may poke past the
+ * column edge to dodge the hole, but never by more than this amount.
+ * Clamped to [0, containerWidth - lineWidth] so content stays visible.
+ */
+export const SHIFT_MAX = 72;
 
 // -----------------------------------------------------------------------
 // Full-bleed frame: scroll-invariant hole
@@ -336,19 +369,27 @@ export const FULL_BLEED_EXTENT = 1e7;
  * Only engages when at least one flanking column clears MIN_SEGMENT:
  * with no viable side, the layout's "jump below the hole" fallback
  * would push all text below the stretched bottom edge.
+ *
+ * The flank viability check measures against the column bounds, not
+ * the full container width. The `containerWidth` parameter is retained
+ * for call-site compatibility but unused; flanks are column-relative.
  */
 export function extendHoleForFullBleed(
   hole: FlowHole,
   gapAbove: number,
   gapBelow: number,
-  containerWidth: number,
+  _containerWidth: number,
+  column: FlowColumn,
 ): FlowHole {
   if (gapAbove >= FULL_BLEED_SLIVER || gapBelow >= FULL_BLEED_SLIVER) {
     return hole;
   }
 
-  const leftWidth = hole.left - HOLE_GAP;
-  const rightWidth = containerWidth - (hole.right + HOLE_GAP);
+  // Measure flanks against the column.
+  const bandLeft = column.x;
+  const bandRight = column.x + column.width;
+  const leftWidth = hole.left - HOLE_GAP - bandLeft;
+  const rightWidth = bandRight - (hole.right + HOLE_GAP);
   if (Math.max(leftWidth, rightWidth) < MIN_SEGMENT) return hole;
 
   return {
@@ -364,84 +405,81 @@ export interface Segment {
   readonly width: number;
 }
 
-/**
- * Centre a band's text within the space available to it, capped at
- * `maxWidth`. Bands at or under the cap are returned untouched.
- */
-function capAndCentre(seg: Segment, maxWidth: number): Segment {
-  if (seg.width <= maxWidth) return seg;
-  return { x: seg.x + (seg.width - maxWidth) / 2, width: maxWidth };
-}
+// -----------------------------------------------------------------------
+// Column-aware segment computation
+// -----------------------------------------------------------------------
 
 /**
- * Compute available text segments for a horizontal line band given the
- * hole (frame) rectangle. The line band is [lineY, lineY + lineHeight).
- * All coordinates are in document space.
+ * Compute constrained segments for a single line band within a column,
+ * implementing the dodge ladder stages for lines that vertically overlap
+ * the hole:
  *
- * Both-side wrap only engages when both sides clear BOTH_SIDES_MIN and
- * the narrow/wide ratio meets BALANCE_RATIO. Otherwise, a single
- * segment on the wider side is used when it clears MIN_SEGMENT.
- *
- * Single-band results are capped to MAX_MEASURE and centred in whatever
- * space that band occupies, so the column tracks the frame: it centres
- * in the whole container when the frame is elsewhere, and in the
- * remaining band when the frame takes one side.
+ * 1. No vertical overlap: the plain column segment.
+ * 2. Overlap: column minus hole intersection, plus shift slack
+ *    (SHIFT_MAX) on the open side, clamped so lines stay in
+ *    [0, containerWidth].
+ * 3. Hole interior to the column with >= MIN_SEGMENT on each
+ *    in-column flank: two flank segments bounded by the column.
+ * 4. Any segment under MIN_SEGMENT is dropped. An empty return
+ *    means the caller should jump below the hole.
  */
-export function computeLineSegments(
+export function computeColumnSegments(
   lineY: number,
   lineHeight: number,
   containerWidth: number,
+  column: FlowColumn,
   hole: FlowHole | null,
 ): Segment[] {
-  // No hole or line band does not overlap the hole vertically
+  const colLeft = column.x;
+  const colRight = column.x + column.width;
+
+  // No hole, or line band does not overlap the hole vertically:
+  // the plain column segment.
   if (hole === null || lineY + lineHeight <= hole.top || lineY >= hole.bottom) {
-    return [capAndCentre({ x: 0, width: containerWidth }, MAX_MEASURE)];
+    return [{ x: colLeft, width: column.width }];
   }
 
-  // Hole fully outside the container horizontally
-  if (hole.right <= 0 || hole.left >= containerWidth) {
-    return [capAndCentre({ x: 0, width: containerWidth }, MAX_MEASURE)];
+  // Hole fully outside the column horizontally: column is unobstructed.
+  if (hole.right + HOLE_GAP <= colLeft || hole.left - HOLE_GAP >= colRight) {
+    return [{ x: colLeft, width: column.width }];
   }
 
-  const leftWidth = Math.max(0, hole.left - HOLE_GAP);
-  const rightStart = Math.min(containerWidth, hole.right + HOLE_GAP);
-  const rightWidth = Math.max(0, containerWidth - rightStart);
+  // Measure the in-column flanks on each side of the hole.
+  const gapLeft = hole.left - HOLE_GAP;
+  const gapRight = hole.right + HOLE_GAP;
+  const leftFlank = Math.max(0, gapLeft - colLeft);
+  const rightFlank = Math.max(0, colRight - gapRight);
 
-  // Both-side wrap: both sides must clear BOTH_SIDES_MIN and be
-  // balanced (narrow/wide >= BALANCE_RATIO).
-  const minSide = Math.min(leftWidth, rightWidth);
-  const maxSide = Math.max(leftWidth, rightWidth);
-  if (
-    minSide >= BOTH_SIDES_MIN &&
-    maxSide > 0 &&
-    minSide / maxSide >= BALANCE_RATIO
-  ) {
-    // Centre the text on the FRAME, not on each band. Both flanks take
-    // the same width and hug the frame's edges, so the text block reads
-    // as one column with the phone sitting in the middle of it rather
-    // than as two ragged columns pinned to the container's edges.
-    //
-    // The width is the narrower of the two sides so the result stays
-    // symmetric; MAX_MEASURE still bounds each flank, though the gating
-    // above means the bands are rarely that wide.
-    const flank = Math.min(leftWidth, rightWidth, MAX_MEASURE);
-    const leftEnd = hole.left - HOLE_GAP;
+  // Both flanks viable (hole interior to column): return two segments
+  // bounded by the column, no shift slack needed.
+  if (leftFlank >= MIN_SEGMENT && rightFlank >= MIN_SEGMENT) {
     return [
-      { x: leftEnd - flank, width: flank },
-      { x: rightStart, width: flank },
+      { x: colLeft, width: leftFlank },
+      { x: gapRight, width: rightFlank },
     ];
   }
 
-  // Single-side wrap on the wider side when it clears MIN_SEGMENT.
-  // Capped and centred within that side, so the column visually centres
-  // in the space the frame left behind rather than hugging its edge.
-  if (maxSide >= MIN_SEGMENT) {
-    if (leftWidth >= rightWidth) {
-      return [capAndCentre({ x: 0, width: leftWidth }, MAX_MEASURE)];
-    }
-    return [capAndCentre({ x: rightStart, width: rightWidth }, MAX_MEASURE)];
+  // Single viable flank: constrained segment = flank + SHIFT_MAX slack
+  // on the open side (away from the hole), clamped to [0, containerWidth].
+  if (leftFlank >= MIN_SEGMENT) {
+    // Open side is to the left of the column.
+    const slackLeft = Math.min(SHIFT_MAX, colLeft);
+    const x = colLeft - slackLeft;
+    const width = Math.min(leftFlank + slackLeft, containerWidth - x);
+    if (width >= MIN_SEGMENT) return [{ x, width }];
+    return [];
   }
 
+  if (rightFlank >= MIN_SEGMENT) {
+    // Open side is to the right of the column.
+    const slackRight = Math.min(SHIFT_MAX, containerWidth - colRight);
+    const x = gapRight;
+    const width = Math.min(rightFlank + slackRight, containerWidth - x);
+    if (width >= MIN_SEGMENT) return [{ x, width }];
+    return [];
+  }
+
+  // Neither flank clears MIN_SEGMENT: no viable segment.
   return [];
 }
 
@@ -454,7 +492,10 @@ export function computeLineSegments(
  *
  * Walks blocks in order. For each block, fills lines using the injected
  * LineFiller. Per line, computes available segments (accounting for the
- * hole) and places text in one or both segments.
+ * hole) and places text within the column. A three-stage dodge ladder
+ * handles hole overlap: (a) shift lines away from the hole, capped at
+ * SHIFT_MAX; (b) refill against computeColumnSegments per line; (c)
+ * jump below the hole.
  *
  * The first block's marginTop is omitted (the flow starts at y = 0).
  */
@@ -464,6 +505,7 @@ export function computeFlowLayout(
   containerWidth: number,
   hole: FlowHole | null,
   metrics: FlowMetrics = DEFAULT_METRICS,
+  column: FlowColumn = { x: 0, width: containerWidth },
 ): FlowLayoutResult {
   const lines: FlowLine[] = [];
   const blockGeometries: FlowBlockGeometry[] = [];
@@ -484,63 +526,16 @@ export function computeFlowLayout(
     // Figure blocks occupy a rect instead of text lines.
     if (block.kind === "figure") {
       const figTopY = y;
-
-      // Use the current band to size the figure. Probe segments at the
-      // figure's top with a 1px tall band (the figure does not wrap text,
-      // so we only need horizontal availability).
-      let placed = false;
-      // Safety bound: avoid an infinite loop if the hole spans the entire
-      // container. After jumping below the hole once, segments must open.
-      let jumpCount = 0;
-      while (!placed && jumpCount < 2) {
-        const segments = computeLineSegments(y, 1, containerWidth, hole);
-
-        if (segments.length === 0) {
-          if (hole !== null) {
-            y = hole.bottom + HOLE_GAP;
-            jumpCount++;
-            continue;
-          }
-          // No hole and no segments: use full container width.
-          break;
-        }
-
-        // Pick the widest segment band for the figure.
-        let bestSeg = segments.at(0);
-        if (bestSeg === undefined) break;
-        for (let si = 1; si < segments.length; si++) {
-          const seg = segments.at(si);
-          if (seg !== undefined && seg.width > bestSeg.width) {
-            bestSeg = seg;
-          }
-        }
-
-        const figW = Math.min(bestSeg.width, MAX_FIGURE_WIDTH);
-        const figH = Math.round(figW / block.aspectRatio);
-        // Centre within the chosen band.
-        const figX = bestSeg.x + (bestSeg.width - figW) / 2;
-
-        figures.push({
-          blockIndex: bi,
-          x: figX,
-          y,
-          width: figW,
-          height: figH,
-        });
-
-        y += figH;
-        placed = true;
-      }
-
-      // When no segments opened even after jumping, use the container
-      // width and cap to MAX_FIGURE_WIDTH.
-      if (!placed) {
-        const figW = Math.min(containerWidth, MAX_FIGURE_WIDTH);
-        const figH = Math.round(figW / block.aspectRatio);
-        const figX = (containerWidth - figW) / 2;
-        figures.push({ blockIndex: bi, x: figX, y, width: figW, height: figH });
-        y += figH;
-      }
+      const placed = placeFigureColumn(
+        bi,
+        block,
+        y,
+        containerWidth,
+        hole,
+        column,
+        figures,
+      );
+      if (placed.y > y) y = placed.y;
 
       const bottomY = y + km.marginBottom;
       blockGeometries.push({
@@ -559,72 +554,18 @@ export function computeFlowLayout(
     const blockTopY = y;
     const firstLineIndex = lines.length;
     const indent = block.indent ?? 0;
-    let cursor = filler.startCursor(bi);
 
-    // Fill lines for this text block
-    for (;;) {
-      const segments = computeLineSegments(
-        y,
-        km.lineHeight,
-        containerWidth,
-        hole,
-      );
-
-      if (segments.length === 0) {
-        // Both segments dropped by MIN_SEGMENT floor. Jump below the hole.
-        if (hole !== null) {
-          y = hole.bottom + HOLE_GAP;
-          continue;
-        }
-        // No hole and no segments means containerWidth < MIN_SEGMENT.
-        // Force a single full-width segment to avoid an infinite loop.
-        const result = filler.fillLine(bi, cursor, containerWidth);
-        if (result === null) break;
-        // Zero-progress guard: empty text with no cursor advance means
-        // the filler cannot fit any content in this width.
-        if (result.text === "") break;
-        lines.push({
-          blockIndex: bi,
-          x: 0,
-          y,
-          width: result.width,
-          text: result.text,
-          fragments: result.fragments,
-        });
-        cursor = result.nextCursor;
-        y += km.lineHeight;
-        continue;
-      }
-
-      // Fill segments left to right. For two segments, the cursor
-      // continues from left into right (both-side wrap).
-      let filled = false;
-      for (const seg of segments) {
-        // List items inset every segment, giving continuation lines a
-        // hanging indent. A segment the indent consumes is skipped.
-        const segX = seg.x + indent;
-        const segWidth = seg.width - indent;
-        if (segWidth <= 0) continue;
-        const result = filler.fillLine(bi, cursor, segWidth);
-        if (result === null) break;
-        // Zero-progress guard: a filler that returns empty text has
-        // made no progress; treat as exhaustion to prevent looping.
-        if (result.text === "") break;
-        lines.push({
-          blockIndex: bi,
-          x: segX,
-          y,
-          width: result.width,
-          text: result.text,
-          fragments: result.fragments,
-        });
-        cursor = result.nextCursor;
-        filled = true;
-      }
-
-      if (!filled) break;
-      y += km.lineHeight;
-    }
+    y = fillBlockColumn(
+      bi,
+      y,
+      containerWidth,
+      hole,
+      column,
+      indent,
+      km.lineHeight,
+      filler,
+      lines,
+    );
 
     const lineCount = lines.length - firstLineIndex;
     const bottomY = lineCount > 0 ? y : blockTopY;
@@ -645,6 +586,337 @@ export function computeFlowLayout(
     figures,
     totalHeight: y,
   };
+}
+
+// -----------------------------------------------------------------------
+// Fill helpers (column path, dodge ladder)
+// -----------------------------------------------------------------------
+
+/**
+ * Test whether a line band [lineY, lineY + lineHeight) vertically
+ * overlaps the hole.
+ */
+function lineOverlapsHole(
+  lineY: number,
+  lineHeight: number,
+  hole: FlowHole,
+): boolean {
+  return lineY + lineHeight > hole.top && lineY < hole.bottom;
+}
+
+/**
+ * Compute the shift direction: away from the hole center, toward the
+ * side of the column with more room. Returns -1 (shift left) or +1
+ * (shift right).
+ */
+function shiftDirection(column: FlowColumn, hole: FlowHole): number {
+  const holeCenterX = (hole.left + hole.right) / 2;
+  const colCenterX = column.x + column.width / 2;
+  // Shift away from the hole: if hole center is to the right of the
+  // column center, shift left; otherwise shift right.
+  return holeCenterX > colCenterX ? -1 : 1;
+}
+
+/**
+ * Fill a text block using the column dodge ladder:
+ * 1. Fill against the plain column segment (ignoring the hole).
+ * 2. For lines that overlap the hole, try per-line shift (capped at
+ *    SHIFT_MAX, clamped to [0, containerWidth - lineWidth], direction
+ *    away from hole). If every overlapping line clears, emit shifted.
+ * 3. Otherwise discard and refill the whole block against
+ *    computeColumnSegments per line.
+ */
+function fillBlockColumn(
+  bi: number,
+  startY: number,
+  containerWidth: number,
+  hole: FlowHole | null,
+  column: FlowColumn,
+  indent: number,
+  lineHeight: number,
+  filler: LineFiller,
+  lines: FlowLine[],
+): number {
+  // Stage 1: fill against the plain column, ignoring the hole.
+  const colSeg: Segment = { x: column.x, width: column.width };
+  const plainLines: FlowLine[] = [];
+  let y = startY;
+  let cursor = filler.startCursor(bi);
+
+  for (;;) {
+    const segX = colSeg.x + indent;
+    const segWidth = colSeg.width - indent;
+    if (segWidth <= 0) break;
+    const result = filler.fillLine(bi, cursor, segWidth);
+    if (result === null) break;
+    if (result.text === "") break;
+    plainLines.push({
+      blockIndex: bi,
+      x: segX,
+      y,
+      width: result.width,
+      text: result.text,
+      fragments: result.fragments,
+    });
+    cursor = result.nextCursor;
+    y += lineHeight;
+  }
+
+  // No hole, or no lines overlap: emit plain lines directly.
+  if (hole === null || plainLines.length === 0) {
+    for (const pl of plainLines) lines.push(pl);
+    return y;
+  }
+
+  const hasOverlap = plainLines.some((pl) =>
+    lineOverlapsHole(pl.y, lineHeight, hole),
+  );
+  if (!hasOverlap) {
+    for (const pl of plainLines) lines.push(pl);
+    return y;
+  }
+
+  // Stage 2: try per-line shift for overlapping lines.
+  const dir = shiftDirection(column, hole);
+  let allShiftable = true;
+  const shiftedLines: FlowLine[] = [];
+
+  for (const pl of plainLines) {
+    if (!lineOverlapsHole(pl.y, lineHeight, hole)) {
+      shiftedLines.push(pl);
+      continue;
+    }
+
+    // Compute the minimum shift to clear the hole horizontally.
+    // The line occupies [pl.x, pl.x + pl.width].
+    // The hole gap region is [hole.left - HOLE_GAP, hole.right + HOLE_GAP].
+    const lineLeft = pl.x;
+    const lineRight = pl.x + pl.width;
+    const gapLeft = hole.left - HOLE_GAP;
+    const gapRight = hole.right + HOLE_GAP;
+
+    // No horizontal overlap with hole: no shift needed.
+    if (lineRight <= gapLeft || lineLeft >= gapRight) {
+      shiftedLines.push(pl);
+      continue;
+    }
+
+    // Compute shift needed in the chosen direction.
+    let shift: number;
+    if (dir < 0) {
+      // Shift left: line right edge must move to gapLeft.
+      shift = lineRight - gapLeft;
+    } else {
+      // Shift right: line left edge must move to gapRight.
+      shift = gapRight - lineLeft;
+    }
+
+    if (shift > SHIFT_MAX) {
+      allShiftable = false;
+      break;
+    }
+
+    // Apply shift and clamp to [0, containerWidth - lineWidth].
+    let newX = pl.x + dir * shift;
+    newX = Math.max(0, Math.min(newX, containerWidth - pl.width));
+
+    // Verify the shifted line actually clears the hole.
+    const newRight = newX + pl.width;
+    if (newRight > gapLeft && newX < gapRight) {
+      allShiftable = false;
+      break;
+    }
+
+    shiftedLines.push({ ...pl, x: newX });
+  }
+
+  if (allShiftable) {
+    for (const sl of shiftedLines) lines.push(sl);
+    return y;
+  }
+
+  // Stage 3: discard plain lines and refill against constrained
+  // segments per line.
+  y = startY;
+  cursor = filler.startCursor(bi);
+
+  for (;;) {
+    const segments = computeColumnSegments(
+      y,
+      lineHeight,
+      containerWidth,
+      column,
+      hole,
+    );
+
+    if (segments.length === 0) {
+      // No viable segment: jump below the hole. The null case returned
+      // before the shift stage, and a band below the hole always yields
+      // plain column segment, so this cannot loop.
+      y = hole.bottom + HOLE_GAP;
+      continue;
+    }
+
+    let filled = false;
+    for (const seg of segments) {
+      const segX = seg.x + indent;
+      const segWidth = seg.width - indent;
+      if (segWidth <= 0) continue;
+      const result = filler.fillLine(bi, cursor, segWidth);
+      if (result === null) break;
+      if (result.text === "") break;
+      lines.push({
+        blockIndex: bi,
+        x: segX,
+        y,
+        width: result.width,
+        text: result.text,
+        fragments: result.fragments,
+      });
+      cursor = result.nextCursor;
+      filled = true;
+    }
+
+    if (!filled) break;
+    y += lineHeight;
+  }
+
+  return y;
+}
+
+// -----------------------------------------------------------------------
+// Figure placement helpers
+// -----------------------------------------------------------------------
+
+interface FigurePlacementResult {
+  readonly y: number;
+}
+
+/**
+ * Pick the widest segment from a list, returning its index. Returns -1
+ * when the list is empty.
+ */
+function widestSegmentIndex(segments: readonly Segment[]): number {
+  let best = -1;
+  let bestW = -1;
+  for (let i = 0; i < segments.length; i++) {
+    const seg = segments.at(i);
+    if (seg !== undefined && seg.width > bestW) {
+      bestW = seg.width;
+      best = i;
+    }
+  }
+  return best;
+}
+
+/**
+ * Place a figure using the column dodge ladder. Probes the full vertical
+ * span [y, y + figH] instead of a 1px band, fixing a latent bug where a
+ * hole starting mid-figure is invisible.
+ *
+ * Ladder: in-column band -> shift up to SHIFT_MAX -> widest constrained
+ * segment (floor MIN_SEGMENT) -> existing jump-below fallback. The figure
+ * is centred within the chosen band.
+ */
+function placeFigureColumn(
+  bi: number,
+  block: FlowFigureBlock,
+  startY: number,
+  containerWidth: number,
+  hole: FlowHole | null,
+  column: FlowColumn,
+  figures: FlowFigureGeometry[],
+): FigurePlacementResult {
+  let y = startY;
+
+  // Estimate figure height at column width (needed for the full-span probe).
+  const estFigW = Math.min(column.width, MAX_FIGURE_WIDTH);
+  const estFigH = Math.round(estFigW / block.aspectRatio);
+
+  let jumpCount = 0;
+  while (jumpCount < 2) {
+    // Stage 1: in-column band, probe full [y, y + figH].
+    if (hole === null || y + estFigH <= hole.top || y >= hole.bottom) {
+      const figW = Math.min(column.width, MAX_FIGURE_WIDTH);
+      const figH = Math.round(figW / block.aspectRatio);
+      const figX = column.x + (column.width - figW) / 2;
+      figures.push({ blockIndex: bi, x: figX, y, width: figW, height: figH });
+      return { y: y + figH };
+    }
+
+    // The figure vertically overlaps the hole. Try shift.
+    const dir = shiftDirection(column, hole);
+    const gapLeft = hole.left - HOLE_GAP;
+    const gapRight = hole.right + HOLE_GAP;
+
+    // Check if the figure's horizontal band (column) overlaps the hole.
+    const colLeft = column.x;
+    const colRight = column.x + column.width;
+
+    if (colRight <= gapLeft || colLeft >= gapRight) {
+      // Column does not horizontally overlap the hole: place in column.
+      const figW = Math.min(column.width, MAX_FIGURE_WIDTH);
+      const figH = Math.round(figW / block.aspectRatio);
+      const figX = column.x + (column.width - figW) / 2;
+      figures.push({ blockIndex: bi, x: figX, y, width: figW, height: figH });
+      return { y: y + figH };
+    }
+
+    // Stage 2: try shifting the figure band.
+    let shift: number;
+    if (dir < 0) {
+      shift = colRight - gapLeft;
+    } else {
+      shift = gapRight - colLeft;
+    }
+
+    if (shift <= SHIFT_MAX) {
+      const shiftedX = column.x + dir * shift;
+      const figW = Math.min(column.width, MAX_FIGURE_WIDTH);
+      // Centre within the shifted band.
+      let figX = shiftedX + (column.width - figW) / 2;
+      figX = Math.max(0, Math.min(figX, containerWidth - figW));
+      // Verify clearance.
+      const figRight = figX + figW;
+      if (figRight <= gapLeft || figX >= gapRight) {
+        const figH = Math.round(figW / block.aspectRatio);
+        figures.push({ blockIndex: bi, x: figX, y, width: figW, height: figH });
+        return { y: y + figH };
+      }
+    }
+
+    // Stage 3: widest constrained segment (floor MIN_SEGMENT).
+    // Probe at figure top with full height to find usable bands.
+    const segments = computeColumnSegments(
+      y,
+      estFigH,
+      containerWidth,
+      column,
+      hole,
+    );
+    const bestIdx = widestSegmentIndex(segments);
+    if (bestIdx >= 0) {
+      const bestSeg = segments.at(bestIdx);
+      if (bestSeg !== undefined && bestSeg.width >= MIN_SEGMENT) {
+        const figW = Math.min(bestSeg.width, MAX_FIGURE_WIDTH);
+        const figH = Math.round(figW / block.aspectRatio);
+        const figX = bestSeg.x + (bestSeg.width - figW) / 2;
+        figures.push({ blockIndex: bi, x: figX, y, width: figW, height: figH });
+        return { y: y + figH };
+      }
+    }
+
+    // Stage 4: jump below the hole.
+    y = hole.bottom + HOLE_GAP;
+    jumpCount++;
+  }
+
+  // Fallback: container width, capped.
+  const figW = Math.min(containerWidth, MAX_FIGURE_WIDTH);
+  const figH = Math.round(figW / block.aspectRatio);
+  const figX = (containerWidth - figW) / 2;
+  figures.push({ blockIndex: bi, x: figX, y, width: figW, height: figH });
+  return { y: y + figH };
 }
 
 // -----------------------------------------------------------------------

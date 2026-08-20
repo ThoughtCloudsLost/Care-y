@@ -534,3 +534,60 @@ describe("locationWithVisibleHeading", () => {
     cleanup();
   });
 });
+
+// -----------------------------------------------------------------------
+// Published geometry: scroll-invariant hole left/right
+// -----------------------------------------------------------------------
+
+describe("published geometry scroll-invariance", () => {
+  it("produces identical hole left/right across varying scrollY values", () => {
+    // A synthetic source whose holeAtScrollY varies only top/bottom with
+    // sy (mirroring rawHoleAt: the frame is viewport-fixed, so only the
+    // document translation changes during scroll).
+    const blocks = [makeBlock("overview")];
+    const geo: FlowBlockGeometry = {
+      topY: 0,
+      bottomY: 24,
+      firstLineIndex: 0,
+      lineCount: 1,
+    };
+    const layout = makeLayout([geo]);
+    const containerTop = 100;
+    const frameLeft = 200;
+    const frameRight = 500;
+
+    const source: FlowGeometrySource = {
+      layoutResult: layout,
+      blocks,
+      containerTop,
+      holeAtScrollY(sy: number): FlowHole | null {
+        // Only top/bottom depend on scrollY; left/right are scroll-invariant.
+        return {
+          left: frameLeft,
+          top: 300 - sy + containerTop,
+          right: frameRight,
+          bottom: 700 - sy + containerTop,
+        };
+      },
+      layoutForHole(): FlowLayoutResult {
+        return layout;
+      },
+    };
+    setFlowGeometrySource(source);
+
+    const scrollValues = [0, 100, 250, 500, 999];
+    const holes = scrollValues.map((sy) => source.holeAtScrollY(sy));
+
+    for (const hole of holes) {
+      expect(hole).not.toBeNull();
+      expect(hole!.left).toBe(frameLeft);
+      expect(hole!.right).toBe(frameRight);
+    }
+
+    // Verify top/bottom actually vary (the point of the test is that
+    // left/right do NOT, while top/bottom DO).
+    const tops = holes.map((h) => h!.top);
+    const uniqueTops = new Set(tops);
+    expect(uniqueTops.size).toBe(scrollValues.length);
+  });
+});

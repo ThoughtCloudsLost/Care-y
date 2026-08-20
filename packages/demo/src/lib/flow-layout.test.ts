@@ -4,14 +4,12 @@ import {
   scrollTargetForBlock,
   locationAtY,
   hitTestBlock,
-  computeLineSegments,
+  computeColumnSegments,
   DEFAULT_METRICS,
   HOLE_GAP,
-  BOTH_SIDES_MIN,
-  BALANCE_RATIO,
-  MAX_MEASURE,
   MAX_FIGURE_WIDTH,
   MIN_SEGMENT,
+  SHIFT_MAX,
   FULL_BLEED_SLIVER,
   FULL_BLEED_EXTENT,
   extendHoleForFullBleed,
@@ -20,6 +18,7 @@ import type {
   FlowBlock,
   FlowTextBlock,
   FlowFigureBlock,
+  FlowColumn,
   FlowHole,
   LineFiller,
   LineCursor,
@@ -250,221 +249,6 @@ describe("computeFlowLayout without a hole", () => {
 });
 
 // -----------------------------------------------------------------------
-// Reading measure: cap and centre
-// -----------------------------------------------------------------------
-
-describe("reading measure", () => {
-  const LINE_H = 24;
-
-  it("centres a single band in the container when it exceeds the measure", () => {
-    const containerWidth = MAX_MEASURE + 400;
-    const segments = computeLineSegments(0, LINE_H, containerWidth, null);
-
-    expect(segments).toHaveLength(1);
-    expect(at(segments, 0).width).toBe(MAX_MEASURE);
-    // Equal slack on both sides
-    const seg = at(segments, 0);
-    expect(seg.x).toBe(200);
-    expect(containerWidth - (seg.x + seg.width)).toBe(200);
-  });
-
-  it("leaves a container narrower than the measure untouched", () => {
-    const containerWidth = MAX_MEASURE - 100;
-    const segments = computeLineSegments(0, LINE_H, containerWidth, null);
-
-    expect(segments).toHaveLength(1);
-    expect(at(segments, 0).x).toBe(0);
-    expect(at(segments, 0).width).toBe(containerWidth);
-  });
-
-  it("centres within the band left behind when the frame takes the right", () => {
-    // Frame on the right: the left band is the only usable side and is
-    // wider than the measure, so text centres inside that band rather
-    // than hugging the container's left edge.
-    const containerWidth = 2000;
-    const hole: FlowHole = {
-      left: MAX_MEASURE + 400,
-      top: -10,
-      right: containerWidth,
-      bottom: 100,
-    };
-    const segments = computeLineSegments(0, LINE_H, containerWidth, hole);
-
-    expect(segments).toHaveLength(1);
-    const seg = at(segments, 0);
-    const bandWidth = hole.left - HOLE_GAP;
-    expect(seg.width).toBe(MAX_MEASURE);
-    expect(seg.x).toBe((bandWidth - MAX_MEASURE) / 2);
-  });
-
-  it("centres within the band left behind when the frame takes the left", () => {
-    const containerWidth = 2000;
-    const hole: FlowHole = {
-      left: 0,
-      top: -10,
-      right: 900,
-      bottom: 100,
-    };
-    const segments = computeLineSegments(0, LINE_H, containerWidth, hole);
-
-    expect(segments).toHaveLength(1);
-    const seg = at(segments, 0);
-    const bandStart = hole.right + HOLE_GAP;
-    const bandWidth = containerWidth - bandStart;
-    expect(seg.width).toBe(MAX_MEASURE);
-    expect(seg.x).toBe(bandStart + (bandWidth - MAX_MEASURE) / 2);
-  });
-
-  it("centres both flanks on the frame when it splits the column", () => {
-    // Lopsided but still balanced enough for both-side wrap: 384px of
-    // room on the left, 484px on the right. Both flanks take the
-    // narrower width and hug the frame, so the text block is symmetric
-    // about the frame's centre.
-    const containerWidth = 1400;
-    const hole: FlowHole = {
-      left: 400,
-      top: -10,
-      right: 900,
-      bottom: 100,
-    };
-    const segments = computeLineSegments(0, LINE_H, containerWidth, hole);
-
-    expect(segments).toHaveLength(2);
-    const left = at(segments, 0);
-    const right = at(segments, 1);
-
-    // Equal flanks, each hugging its side of the frame
-    expect(left.width).toBe(right.width);
-    expect(left.x + left.width).toBe(hole.left - HOLE_GAP);
-    expect(right.x).toBe(hole.right + HOLE_GAP);
-
-    // Symmetric about the frame's centre
-    const holeCentre = (hole.left + hole.right) / 2;
-    expect(holeCentre - left.x).toBe(right.x + right.width - holeCentre);
-
-    // The flank is the narrower side's width, so that side fills its
-    // space and the WIDER side is the one left with slack. That slack is
-    // the whole point: without it the text would stretch to the far
-    // container edge and stop looking centred on the frame.
-    expect(right.x + right.width).toBeLessThan(containerWidth);
-  });
-
-  it("bounds each flank at the measure when both sides are enormous", () => {
-    const containerWidth = 4000;
-    const hole: FlowHole = {
-      left: 1800,
-      top: -10,
-      right: 2200,
-      bottom: 100,
-    };
-    const segments = computeLineSegments(0, LINE_H, containerWidth, hole);
-
-    expect(segments).toHaveLength(2);
-    expect(at(segments, 0).width).toBe(MAX_MEASURE);
-    expect(at(segments, 1).width).toBe(MAX_MEASURE);
-  });
-
-  it("keeps wrapping through the layout at the capped width", () => {
-    // 200 chars at 10px each cannot fit the measure on one line, so the
-    // layout must break it even though the container is far wider.
-    const blocks = [makeBlock("A".repeat(200))];
-    const filler = createFixedFiller(blocks, 10);
-    const result = computeFlowLayout(blocks, filler, 3000, null);
-
-    expect(result.lines.length).toBeGreaterThan(1);
-    for (const line of result.lines) {
-      expect(line.width).toBeLessThanOrEqual(MAX_MEASURE);
-    }
-  });
-});
-
-// -----------------------------------------------------------------------
-// computeFlowLayout: both-side wrap
-// -----------------------------------------------------------------------
-
-describe("computeFlowLayout both-side wrap", () => {
-  it("emits two lines with the same y and continuous cursor (regression anchor)", () => {
-    // Container 700px. Hole centered: left=250, right=450.
-    // leftWidth = 250 - 16(gap) = 234, but that is < BOTH_SIDES_MIN (240).
-    // So adjust: hole at left=260, right=440.
-    // leftWidth = 260 - 16 = 244, rightStart = 440 + 16 = 456,
-    // rightWidth = 700 - 456 = 244.
-    // min = 244 >= 240, ratio = 244/244 = 1.0 >= 0.6. Both sides engage.
-    const hole: FlowHole = { left: 260, top: 0, right: 440, bottom: 200 };
-    // 24 chars, 10px each. left segment fits 24 chars (244/10 = 24),
-    // but text is only 24 chars total. Use smaller charWidth to get wrap.
-    // charWidth = 10, leftWidth = 244 -> 24 chars per left segment.
-    // Use a 48-char text so it wraps across both segments on two rows.
-    const text = "AAAAAAAAAAAAAAAAAAAAAAAA" + "BBBBBBBBBBBBBBBBBBBBBBBB"; // 48 chars
-    const blocks = [makeBlock(text)];
-    const filler = createFixedFiller(blocks, 10);
-    const result = computeFlowLayout(blocks, filler, 700, hole);
-
-    // First line-row: left segment gets 24 chars, right segment gets 24 chars
-    // Both at y=0
-    const row0Lines = result.lines.filter((l) => l.y === 0);
-    expect(row0Lines).toHaveLength(2);
-    expect(at(row0Lines, 0).x).toBe(0); // left segment
-    expect(at(row0Lines, 1).x).toBe(456); // right segment
-    // Cursor continuity: combined text of row 0 covers all 48 chars
-    expect(at(row0Lines, 0).text + at(row0Lines, 1).text).toBe(text);
-  });
-
-  it("wraps across multiple rows with both-side segments", () => {
-    // Same geometry as above, but more text to fill two rows
-    const text = "A".repeat(96); // 96 chars, 48 per row
-    const hole: FlowHole = { left: 260, top: 0, right: 440, bottom: 200 };
-    const blocks = [makeBlock(text)];
-    const filler = createFixedFiller(blocks, 10);
-    const result = computeFlowLayout(blocks, filler, 700, hole);
-
-    // Two rows, each with 2 segments
-    expect(result.lines).toHaveLength(4);
-    expect(at(result.lines, 0).y).toBe(0);
-    expect(at(result.lines, 1).y).toBe(0);
-    expect(at(result.lines, 2).y).toBe(BODY_METRICS.lineHeight);
-    expect(at(result.lines, 3).y).toBe(BODY_METRICS.lineHeight);
-  });
-});
-
-// -----------------------------------------------------------------------
-// computeFlowLayout: single-side wrap
-// -----------------------------------------------------------------------
-
-describe("computeFlowLayout single-side wrap", () => {
-  it("uses only the wider side when the narrow side is below BOTH_SIDES_MIN", () => {
-    // Container 600px, hole near the left edge.
-    // hole left=50, right=300. leftWidth = 50-16 = 34 (too small).
-    // rightStart = 300+16 = 316. rightWidth = 600-316 = 284 >= MIN_SEGMENT.
-    // maxSide = 284 >= 180, so single right segment.
-    const hole: FlowHole = { left: 50, top: 0, right: 300, bottom: 200 };
-    const blocks = [makeBlock("A".repeat(20))];
-    const filler = createFixedFiller(blocks, 10);
-    const result = computeFlowLayout(blocks, filler, 600, hole);
-
-    // All lines should be on the right side
-    for (const line of result.lines) {
-      expect(line.x).toBe(316);
-    }
-  });
-
-  it("uses the left side when it is wider", () => {
-    // Container 600px, hole near the right edge.
-    // hole left=400, right=580. leftWidth = 400-16 = 384 >= MIN_SEGMENT.
-    // rightStart = 580+16 = 596. rightWidth = 600-596 = 4 (too small).
-    // maxSide = leftWidth = 384, single left segment.
-    const hole: FlowHole = { left: 400, top: 0, right: 580, bottom: 200 };
-    const blocks = [makeBlock("A".repeat(30))];
-    const filler = createFixedFiller(blocks, 10);
-    const result = computeFlowLayout(blocks, filler, 600, hole);
-
-    for (const line of result.lines) {
-      expect(line.x).toBe(0);
-    }
-  });
-});
-
-// -----------------------------------------------------------------------
 // computeFlowLayout: hole spanning (jump below hole)
 // -----------------------------------------------------------------------
 
@@ -563,107 +347,6 @@ describe("zero-progress guard", () => {
 
     // The filler returns empty on the first segment call, guard breaks
     expect(result.lines).toHaveLength(0);
-  });
-});
-
-// -----------------------------------------------------------------------
-// Wrap-policy boundary tests
-// -----------------------------------------------------------------------
-
-describe("wrap policy boundaries", () => {
-  it("engages both-side wrap at exactly BOTH_SIDES_MIN on each side", () => {
-    // leftWidth = BOTH_SIDES_MIN, rightWidth = BOTH_SIDES_MIN
-    const holeW = 100;
-    const holeLeft = BOTH_SIDES_MIN + HOLE_GAP;
-    const holeRight = holeLeft + holeW;
-    const rightStart = holeRight + HOLE_GAP;
-    const containerW = rightStart + BOTH_SIDES_MIN;
-    const hole: FlowHole = {
-      left: holeLeft,
-      top: 0,
-      right: holeRight,
-      bottom: 200,
-    };
-    const blocks = [makeBlock("A".repeat(48))];
-    const filler = createFixedFiller(blocks, 10);
-    const result = computeFlowLayout(blocks, filler, containerW, hole);
-
-    const row0 = result.lines.filter((l) => l.y === 0);
-    expect(row0).toHaveLength(2);
-  });
-
-  it("falls back to single-side just below BOTH_SIDES_MIN", () => {
-    // leftWidth = BOTH_SIDES_MIN - 1 (just under threshold)
-    const holeW = 100;
-    const holeLeft = BOTH_SIDES_MIN - 1 + HOLE_GAP;
-    const holeRight = holeLeft + holeW;
-    const rightStart = holeRight + HOLE_GAP;
-    // Right side well above BOTH_SIDES_MIN so it is the wider side
-    const rightWidth = 300;
-    const containerW = rightStart + rightWidth;
-    const hole: FlowHole = {
-      left: holeLeft,
-      top: 0,
-      right: holeRight,
-      bottom: 200,
-    };
-    const blocks = [makeBlock("A".repeat(20))];
-    const filler = createFixedFiller(blocks, 10);
-    const result = computeFlowLayout(blocks, filler, containerW, hole);
-
-    // Only right-side lines
-    for (const line of result.lines) {
-      expect(line.x).toBe(rightStart);
-    }
-  });
-
-  it("falls back to single-side when ratio is just below BALANCE_RATIO", () => {
-    // leftWidth = BOTH_SIDES_MIN, rightWidth chosen so ratio is just under BALANCE_RATIO
-    // BOTH_SIDES_MIN / rightWidth < BALANCE_RATIO
-    // rightWidth = floor(BOTH_SIDES_MIN / BALANCE_RATIO) + 1
-    const rightWidth = Math.floor(BOTH_SIDES_MIN / BALANCE_RATIO) + 1;
-    const holeW = 100;
-    const holeLeft = BOTH_SIDES_MIN + HOLE_GAP;
-    const holeRight = holeLeft + holeW;
-    const rightStart = holeRight + HOLE_GAP;
-    const containerW = rightStart + rightWidth;
-    const hole: FlowHole = {
-      left: holeLeft,
-      top: 0,
-      right: holeRight,
-      bottom: 200,
-    };
-    const blocks = [makeBlock("A".repeat(30))];
-    const filler = createFixedFiller(blocks, 10);
-    const result = computeFlowLayout(blocks, filler, containerW, hole);
-
-    // Single side: right is wider
-    for (const line of result.lines) {
-      expect(line.x).toBe(rightStart);
-    }
-  });
-
-  it("engages both-side wrap at exactly BALANCE_RATIO", () => {
-    // leftWidth = BOTH_SIDES_MIN, rightWidth = BOTH_SIDES_MIN / BALANCE_RATIO
-    // ratio = BOTH_SIDES_MIN / rightWidth = BALANCE_RATIO exactly
-    const rightWidth = BOTH_SIDES_MIN / BALANCE_RATIO;
-    const holeW = 100;
-    const holeLeft = BOTH_SIDES_MIN + HOLE_GAP;
-    const holeRight = holeLeft + holeW;
-    const rightStart = holeRight + HOLE_GAP;
-    const containerW = rightStart + rightWidth;
-    const hole: FlowHole = {
-      left: holeLeft,
-      top: 0,
-      right: holeRight,
-      bottom: 200,
-    };
-    const blocks = [makeBlock("A".repeat(60))];
-    const filler = createFixedFiller(blocks, 10);
-    const result = computeFlowLayout(blocks, filler, containerW, hole);
-
-    const row0 = result.lines.filter((l) => l.y === 0);
-    expect(row0).toHaveLength(2);
   });
 });
 
@@ -967,18 +650,16 @@ describe("figure block placement", () => {
     const result = computeFlowLayout(blocks, filler, 500, null);
 
     const fig = at(result.figures, 0);
-    // The band width is capped by MAX_MEASURE when no hole present.
-    // When containerWidth < MAX_MEASURE, band = containerWidth.
-    // When containerWidth > MAX_MEASURE, band = MAX_MEASURE, x starts at centre offset.
-    // For 500 < MAX_MEASURE (620), band is full width.
+    // Default column spans the full container (500px). The figure is
+    // centred within the column.
     const bandWidth = 500;
     const expectedX = (bandWidth - fig.width) / 2;
     expect(fig.x).toBeCloseTo(expectedX, 5);
   });
 
   it("uses the band width when it is narrower than MAX_FIGURE_WIDTH", () => {
-    // Container 150px is below MIN_SEGMENT so no-hole path uses full width.
-    // But 150 < MAX_FIGURE_WIDTH, so figure width = 150.
+    // Default column is 150px (full container width).
+    // 150 < MAX_FIGURE_WIDTH, so figure width = 150.
     const blocks: FlowBlock[] = [makeFigure(ASPECT)];
     const filler = createFixedFiller(blocks, 10);
     const result = computeFlowLayout(blocks, filler, 150, null);
@@ -1069,20 +750,20 @@ describe("figure block placement", () => {
 // -----------------------------------------------------------------------
 
 describe("extendHoleForFullBleed", () => {
-  // 800px container, hole in the middle: both flanks are 284px wide,
-  // clearing MIN_SEGMENT (180) and BOTH_SIDES_MIN (240).
-  const WIDTH = 800;
+  // Column [0, 800]. Hole in the middle: column-relative flanks are
+  // 284px each, both clearing MIN_SEGMENT (180).
+  const col: FlowColumn = { x: 0, width: 800 };
   const baseHole: FlowHole = { left: 300, top: 100, right: 500, bottom: 600 };
   const SLIVER = FULL_BLEED_SLIVER - 1;
 
   it("stretches the hole vertically when both gaps are slivers", () => {
-    const out = extendHoleForFullBleed(baseHole, SLIVER, SLIVER, WIDTH);
+    const out = extendHoleForFullBleed(baseHole, SLIVER, SLIVER, 800, col);
     expect(out.top).toBe(-FULL_BLEED_EXTENT);
     expect(out.bottom).toBe(FULL_BLEED_EXTENT);
   });
 
   it("keeps the horizontal edges untouched in full-bleed mode", () => {
-    const out = extendHoleForFullBleed(baseHole, SLIVER, SLIVER, WIDTH);
+    const out = extendHoleForFullBleed(baseHole, SLIVER, SLIVER, 800, col);
     expect(out.left).toBe(baseHole.left);
     expect(out.right).toBe(baseHole.right);
   });
@@ -1092,7 +773,8 @@ describe("extendHoleForFullBleed", () => {
       baseHole,
       FULL_BLEED_SLIVER,
       SLIVER,
-      WIDTH,
+      800,
+      col,
     );
     expect(out).toEqual(baseHole);
   });
@@ -1102,39 +784,628 @@ describe("extendHoleForFullBleed", () => {
       baseHole,
       SLIVER,
       FULL_BLEED_SLIVER,
-      WIDTH,
+      800,
+      col,
     );
     expect(out).toEqual(baseHole);
   });
 
-  it("returns the hole unchanged when neither flank clears MIN_SEGMENT", () => {
-    // 400px container, centred hole: flanks are 134px and 34px, both
+  it("returns the hole unchanged when neither column flank clears MIN_SEGMENT", () => {
+    // Column [0, 400], centred hole: flanks are 134px and 34px, both
     // under MIN_SEGMENT. Stretching would push all text below the hole.
+    const narrowCol: FlowColumn = { x: 0, width: 400 };
     const narrow: FlowHole = { left: 150, top: 100, right: 350, bottom: 600 };
     expect(150 - HOLE_GAP).toBeLessThan(MIN_SEGMENT);
-    const out = extendHoleForFullBleed(narrow, SLIVER, SLIVER, 400);
+    const out = extendHoleForFullBleed(narrow, SLIVER, SLIVER, 400, narrowCol);
     expect(out).toEqual(narrow);
   });
 
-  it("engages when only one flank is viable", () => {
-    // Hole hugs the right edge: right flank is 0, left flank is 484.
+  it("engages when only one column flank is viable", () => {
+    // Hole hugs the right edge of the column: right flank is 0, left is 484.
     const offset: FlowHole = { left: 500, top: 100, right: 800, bottom: 600 };
-    const out = extendHoleForFullBleed(offset, SLIVER, SLIVER, WIDTH);
+    const out = extendHoleForFullBleed(offset, SLIVER, SLIVER, 800, col);
     expect(out.top).toBe(-FULL_BLEED_EXTENT);
     expect(out.bottom).toBe(FULL_BLEED_EXTENT);
   });
 
-  it("keeps every layout line flanking a stretched hole", () => {
+  it("keeps every layout line within the column flanks of a stretched hole", () => {
     const blocks: FlowBlock[] = [makeBlock("x".repeat(400), "sub-body")];
     const filler = createFixedFiller(blocks, 10);
-    const stretched = extendHoleForFullBleed(baseHole, SLIVER, SLIVER, WIDTH);
-    const result = computeFlowLayout(blocks, filler, WIDTH, stretched);
+    const stretched = extendHoleForFullBleed(
+      baseHole,
+      SLIVER,
+      SLIVER,
+      800,
+      col,
+    );
+    const result = computeFlowLayout(
+      blocks,
+      filler,
+      800,
+      stretched,
+      DEFAULT_METRICS,
+      col,
+    );
 
     expect(result.lines.length).toBeGreaterThan(0);
     for (const line of result.lines) {
+      // Lines stay within the column or shifted by at most SHIFT_MAX.
       const inLeftFlank = line.x + line.width <= baseHole.left - HOLE_GAP;
       const inRightFlank = line.x >= baseHole.right + HOLE_GAP;
       expect(inLeftFlank || inRightFlank).toBe(true);
     }
+  });
+});
+
+// -----------------------------------------------------------------------
+// Column-aware layout: computeColumnSegments
+// -----------------------------------------------------------------------
+
+describe("computeColumnSegments", () => {
+  const LINE_H = 24;
+  const col: FlowColumn = { x: 0, width: 400 };
+
+  it("returns the plain column segment when no hole exists", () => {
+    const segs = computeColumnSegments(0, LINE_H, 800, col, null);
+    expect(segs).toHaveLength(1);
+    expect(at(segs, 0)).toEqual({ x: 0, width: 400 });
+  });
+
+  it("returns the plain column segment when the line does not overlap the hole", () => {
+    const hole: FlowHole = { left: 100, top: 200, right: 300, bottom: 400 };
+    const segs = computeColumnSegments(0, LINE_H, 800, col, hole);
+    expect(segs).toHaveLength(1);
+    expect(at(segs, 0)).toEqual({ x: 0, width: 400 });
+  });
+
+  it("returns the plain column when the hole is horizontally outside the column", () => {
+    const rightCol: FlowColumn = { x: 400, width: 400 };
+    const hole: FlowHole = { left: 100, top: 0, right: 300, bottom: 200 };
+    const segs = computeColumnSegments(0, LINE_H, 800, rightCol, hole);
+    expect(segs).toHaveLength(1);
+    expect(at(segs, 0)).toEqual({ x: 400, width: 400 });
+  });
+
+  it("returns two in-column flanks when the hole is interior and both sides clear MIN_SEGMENT", () => {
+    // Column [0, 500], hole in the middle: flanks 184 and 184.
+    const wideCol: FlowColumn = { x: 0, width: 500 };
+    // left flank = 200 - 16 = 184, right flank = 500 - (300 + 16) = 184
+    const hole: FlowHole = { left: 200, top: 0, right: 300, bottom: 200 };
+    const segs = computeColumnSegments(0, LINE_H, 800, wideCol, hole);
+    expect(segs).toHaveLength(2);
+    expect(at(segs, 0)).toEqual({ x: 0, width: 184 });
+    expect(at(segs, 1)).toEqual({ x: 316, width: 184 });
+  });
+
+  it("returns a single constrained segment with shift slack when one flank is viable", () => {
+    // Column [0, 400], hole left edge near column left.
+    // left flank = 50 - 16 = 34 (under MIN_SEGMENT)
+    // right flank = 400 - (200 + 16) = 184 (viable)
+    const hole: FlowHole = { left: 50, top: 0, right: 200, bottom: 200 };
+    // With col at [0,400]: right slack = min(72, containerWidth - 400)
+    // x = 216, width = min(184 + slack, containerWidth - 216)
+    const segs = computeColumnSegments(0, LINE_H, 800, col, hole);
+    expect(segs.length).toBeGreaterThanOrEqual(1);
+    // The right flank starts at 216; SHIFT_MAX slack extends it to 256 max.
+    const seg = at(segs, 0);
+    expect(seg.x).toBe(216);
+    expect(seg.width).toBe(184 + Math.min(SHIFT_MAX, 800 - 400));
+  });
+
+  it("returns empty when neither flank clears MIN_SEGMENT", () => {
+    // Column [0, 250], hole covers most of it.
+    const narrowCol: FlowColumn = { x: 0, width: 250 };
+    // left flank = 50 - 16 = 34, right flank = 250 - (200 + 16) = 34
+    const hole: FlowHole = { left: 50, top: 0, right: 200, bottom: 200 };
+    const segs = computeColumnSegments(0, LINE_H, 800, narrowCol, hole);
+    expect(segs).toHaveLength(0);
+  });
+});
+
+// -----------------------------------------------------------------------
+// Column-aware layout: base wrap in column
+// -----------------------------------------------------------------------
+
+describe("computeFlowLayout with column (base wrap)", () => {
+  it("wraps text within the column bounds, not the full container", () => {
+    const col: FlowColumn = { x: 100, width: 200 };
+    const blocks = [makeBlock("A".repeat(30))];
+    const filler = createFixedFiller(blocks, 10);
+    // Container 800px, but column is only 200px wide.
+    const result = computeFlowLayout(
+      blocks,
+      filler,
+      800,
+      null,
+      DEFAULT_METRICS,
+      col,
+    );
+
+    // 200px / 10px = 20 chars per line, 30 chars total -> 2 lines.
+    expect(result.lines).toHaveLength(2);
+    // Lines start at column.x, not at 0.
+    expect(at(result.lines, 0).x).toBe(100);
+    expect(at(result.lines, 1).x).toBe(100);
+    expect(at(result.lines, 0).text).toHaveLength(20);
+    expect(at(result.lines, 1).text).toHaveLength(10);
+  });
+
+  it("uses full container width when no explicit column is given", () => {
+    // The default column spans the full container, so omitting it
+    // and passing an explicit full-width column produce the same layout.
+    const blocks = [makeBlock("A".repeat(60))];
+    const filler = createFixedFiller(blocks, 10);
+    const fullCol: FlowColumn = { x: 0, width: 600 };
+
+    const implicit = computeFlowLayout(blocks, filler, 600, null);
+    const explicit = computeFlowLayout(
+      blocks,
+      filler,
+      600,
+      null,
+      DEFAULT_METRICS,
+      fullCol,
+    );
+
+    expect(explicit.lines).toEqual(implicit.lines);
+    expect(explicit.blocks).toEqual(implicit.blocks);
+    expect(explicit.totalHeight).toBe(implicit.totalHeight);
+  });
+});
+
+// -----------------------------------------------------------------------
+// Column-aware layout: shift cap and direction
+// -----------------------------------------------------------------------
+
+describe("computeFlowLayout with column (shift dodge)", () => {
+  it("shifts lines away from the hole (hole to the right, shift left)", () => {
+    // Column [100, 400] (width 300). 24 chars at 10px = 240px line width.
+    // Line at [100, 340]. Hole at [310, 500]: gapLeft = 294.
+    // Hole center (405) > column center (250) -> shift left.
+    // Shift: lineRight(340) - gapLeft(294) = 46 <= SHIFT_MAX(72).
+    // newX = 100 - 46 = 54, lineRight = 294. 294 <= 294 -> clears.
+    const col: FlowColumn = { x: 100, width: 300 };
+    const hole: FlowHole = { left: 310, top: 0, right: 500, bottom: 200 };
+    const blocks = [makeBlock("A".repeat(24))];
+    const filler = createFixedFiller(blocks, 10);
+    const result = computeFlowLayout(
+      blocks,
+      filler,
+      800,
+      hole,
+      DEFAULT_METRICS,
+      col,
+    );
+
+    expect(result.lines).toHaveLength(1);
+    const line = at(result.lines, 0);
+    expect(line.x).toBe(54);
+    expect(line.x + line.width).toBeLessThanOrEqual(hole.left - HOLE_GAP);
+  });
+
+  it("shifts lines away from the hole (hole to the left, shift right)", () => {
+    // Column [200, 500] (width 300). 15 chars at 10px = 150px line width.
+    // Line at [200, 350]. Hole at [100, 230]: gapRight = 246.
+    // Hole center (165) < column center (350) -> shift right.
+    // Shift: gapRight(246) - lineLeft(200) = 46 <= 72.
+    // newX = 200 + 46 = 246. Check: 246 < 246 is false -> clears.
+    const col: FlowColumn = { x: 200, width: 300 };
+    const hole: FlowHole = { left: 100, top: 0, right: 230, bottom: 200 };
+    const blocks = [makeBlock("A".repeat(15))];
+    const filler = createFixedFiller(blocks, 10);
+    const result = computeFlowLayout(
+      blocks,
+      filler,
+      800,
+      hole,
+      DEFAULT_METRICS,
+      col,
+    );
+
+    expect(result.lines).toHaveLength(1);
+    const line = at(result.lines, 0);
+    expect(line.x).toBe(246);
+    expect(line.x).toBeGreaterThanOrEqual(hole.right + HOLE_GAP);
+  });
+
+  it("caps shift at SHIFT_MAX and falls back to constrained refill", () => {
+    // Column [0, 400], hole requiring a shift > SHIFT_MAX.
+    const col: FlowColumn = { x: 0, width: 400 };
+    // Hole at [200, 350]: gapLeft = 184, gapRight = 366.
+    // 40-char text at 10px = 400px fills the column.
+    // Shift left to clear: lineRight(400) - gapLeft(184) = 216 > 72.
+    // Shift right to clear: gapRight(366) - lineLeft(0) = 366 > 72.
+    // Shift fails -> constrained refill.
+    // Left flank: 184, right flank: 400 - 366 = 34.
+    // Left flank 184 >= 180 = MIN_SEGMENT, right 34 < 180.
+    // Constrained: left flank + slack left = min(72, 0) = 0.
+    // Segment: x = 0, width = 184.
+    const hole: FlowHole = { left: 200, top: 0, right: 350, bottom: 200 };
+    const blocks = [makeBlock("A".repeat(40))];
+    const filler = createFixedFiller(blocks, 10);
+    const result = computeFlowLayout(
+      blocks,
+      filler,
+      800,
+      hole,
+      DEFAULT_METRICS,
+      col,
+    );
+
+    expect(result.lines.length).toBeGreaterThan(0);
+    for (const line of result.lines) {
+      // All lines from the constrained refill should respect the hole.
+      if (line.y < hole.bottom && line.y + BODY_METRICS.lineHeight > hole.top) {
+        // Overlapping lines must not cross into the hole gap.
+        const gapLeft = hole.left - HOLE_GAP;
+        expect(line.x + line.width).toBeLessThanOrEqual(gapLeft);
+      }
+    }
+  });
+
+  it("clamps shifted lines to the container edge (no negative x)", () => {
+    // Column at x=30 (width 300). 22-char text at 10px = 220px line width.
+    // Line at [30, 250]. Hole at [240, 500]: gapLeft = 224.
+    // Hole center (370) > column center (180) -> shift left.
+    // Shift: lineRight(250) - gapLeft(224) = 26. newX = 30 - 26 = 4.
+    // Clamped to max(0, 4) = 4. lineRight = 224 <= 224 -> clears.
+    // The clamp to 0 engages only when newX < 0, so use a wider shift
+    // that would go negative without clamping:
+    // Column at x=10, 23 chars at 10px = 230px. Line [10, 240].
+    // Hole at [228, 500]: gapLeft = 212. Shift: 240 - 212 = 28.
+    // newX = 10 - 28 = -18, clamped to 0. lineRight = 230. 230 > 212 -> fails.
+    // Shift fails but that tests the clamp path. The layout falls to
+    // constrained refill with left flank 202 (>= 180).
+    const col: FlowColumn = { x: 10, width: 300 };
+    const hole: FlowHole = { left: 228, top: 0, right: 500, bottom: 200 };
+    const blocks = [makeBlock("A".repeat(23))];
+    const filler = createFixedFiller(blocks, 10);
+    const result = computeFlowLayout(
+      blocks,
+      filler,
+      800,
+      hole,
+      DEFAULT_METRICS,
+      col,
+    );
+
+    expect(result.lines.length).toBeGreaterThan(0);
+    for (const line of result.lines) {
+      expect(line.x).toBeGreaterThanOrEqual(0);
+      if (line.y < hole.bottom && line.y + BODY_METRICS.lineHeight > hole.top) {
+        expect(line.x + line.width).toBeLessThanOrEqual(hole.left - HOLE_GAP);
+      }
+    }
+  });
+
+  it("clamps shifted lines to the container right edge", () => {
+    // Column near the right edge of the container, hole to the left.
+    const col: FlowColumn = { x: 450, width: 300 };
+    // Container is 780px. 25-char text at 10px = 250px.
+    // Hole at [400, 500]: gapRight = 516. Line [450, 700], overlaps.
+    // Shift right: 516 - 450 = 66. newX = 450 + 66 = 516.
+    // lineRight = 516 + 250 = 766, clamped to max containerWidth - width = 780 - 250 = 530.
+    // But 516 <= 530, so no clamp needed.
+    // Check: newX(516) < gapRight(516)? No (strict <). Clears.
+    const hole: FlowHole = { left: 400, top: 0, right: 500, bottom: 200 };
+    const blocks = [makeBlock("A".repeat(25))];
+    const filler = createFixedFiller(blocks, 10);
+    const result = computeFlowLayout(
+      blocks,
+      filler,
+      780,
+      hole,
+      DEFAULT_METRICS,
+      col,
+    );
+
+    expect(result.lines).toHaveLength(1);
+    const line = at(result.lines, 0);
+    expect(line.x + line.width).toBeLessThanOrEqual(780);
+    expect(line.x).toBeGreaterThanOrEqual(hole.right + HOLE_GAP);
+  });
+});
+
+// -----------------------------------------------------------------------
+// Column-aware layout: constrained refill
+// -----------------------------------------------------------------------
+
+describe("computeFlowLayout with column (constrained refill)", () => {
+  it("refills against constrained segments when shift is not sufficient", () => {
+    // Column [0, 400], large hole covering the middle.
+    const col: FlowColumn = { x: 0, width: 400 };
+    const hole: FlowHole = { left: 150, top: 0, right: 350, bottom: 200 };
+    // Left flank: 150 - 16 = 134 (< MIN_SEGMENT)
+    // Right flank: 400 - 366 = 34 (< MIN_SEGMENT)
+    // Neither flank viable -> empty segments -> jump below hole.
+    const blocks = [makeBlock("A".repeat(40))];
+    const filler = createFixedFiller(blocks, 10);
+    const result = computeFlowLayout(
+      blocks,
+      filler,
+      800,
+      hole,
+      DEFAULT_METRICS,
+      col,
+    );
+
+    expect(result.lines.length).toBeGreaterThan(0);
+    // All lines should be below the hole.
+    for (const line of result.lines) {
+      expect(line.y).toBeGreaterThanOrEqual(hole.bottom + HOLE_GAP);
+    }
+  });
+
+  it("uses two in-column flanks when hole is interior and both sides are viable", () => {
+    // Column [0, 500], hole centered with viable flanks.
+    const col: FlowColumn = { x: 0, width: 500 };
+    // Left flank: 200 - 16 = 184 >= 180, right flank: 500 - 316 = 184 >= 180.
+    const hole: FlowHole = { left: 200, top: 0, right: 300, bottom: 200 };
+    // 36 chars at 10px = 360px total. Left flank fits 18 chars, right fits 18.
+    const blocks = [makeBlock("A".repeat(36))];
+    const filler = createFixedFiller(blocks, 10);
+    const result = computeFlowLayout(
+      blocks,
+      filler,
+      800,
+      hole,
+      DEFAULT_METRICS,
+      col,
+    );
+
+    // Shift fails (line width 360 > both flanks).
+    // Constrained: two flanks of 184px each.
+    // 184px / 10px = 18 chars per segment, 36 chars -> 2 segments on one row.
+    const row0 = result.lines.filter((l) => l.y === 0);
+    expect(row0).toHaveLength(2);
+    // Left segment bounded by column: x = 0.
+    expect(at(row0, 0).x).toBe(0);
+    // Right segment at gapRight = 316.
+    expect(at(row0, 1).x).toBe(316);
+  });
+});
+
+// -----------------------------------------------------------------------
+// Column-aware layout: jump-below fallback
+// -----------------------------------------------------------------------
+
+describe("computeFlowLayout with column (jump below)", () => {
+  it("jumps below the hole when no constrained segment clears MIN_SEGMENT", () => {
+    // Column [0, 250], hole covering most of the column.
+    const col: FlowColumn = { x: 0, width: 250 };
+    // Left flank: 50 - 16 = 34, right flank: 250 - 216 = 34. Both < 180.
+    const hole: FlowHole = { left: 50, top: 0, right: 200, bottom: 100 };
+    const blocks = [makeBlock("A".repeat(20))];
+    const filler = createFixedFiller(blocks, 10);
+    const result = computeFlowLayout(
+      blocks,
+      filler,
+      800,
+      hole,
+      DEFAULT_METRICS,
+      col,
+    );
+
+    expect(result.lines.length).toBeGreaterThan(0);
+    expect(at(result.lines, 0).y).toBeGreaterThanOrEqual(
+      hole.bottom + HOLE_GAP,
+    );
+  });
+});
+
+// -----------------------------------------------------------------------
+// Column-aware layout: indent + marker under shift
+// -----------------------------------------------------------------------
+
+describe("computeFlowLayout with column (indent under shift)", () => {
+  it("applies indent before shift so segment width stays correct", () => {
+    // Column [0, 300], indent of 22px. Text fills the indented width.
+    // Effective segment = 300 - 22 = 278px. 27 chars at 10px = 270px.
+    // No hole: lines start at indent (22), width 270.
+    const col: FlowColumn = { x: 0, width: 300 };
+    const blocks: FlowTextBlock[] = [
+      { ...makeBlock("A".repeat(27)), indent: 22, marker: "1." },
+    ];
+    const filler = createFixedFiller(blocks, 10);
+    const result = computeFlowLayout(
+      blocks,
+      filler,
+      800,
+      null,
+      DEFAULT_METRICS,
+      col,
+    );
+
+    expect(result.lines).toHaveLength(1);
+    const line = at(result.lines, 0);
+    // Line x = column.x + indent = 0 + 22 = 22.
+    expect(line.x).toBe(22);
+    expect(line.width).toBe(270);
+  });
+
+  it("preserves indent through a shifted line", () => {
+    // Column [50, 350] (width 300), indent 22. 20-char text at 10px = 200px.
+    // Effective segment = 278, fits 27 chars, but text is only 20 chars.
+    // Line at [72, 272] (x = 50 + 22, width = 200).
+    // Hole to the right requiring shift left.
+    const col: FlowColumn = { x: 50, width: 300 };
+    const hole: FlowHole = { left: 260, top: 0, right: 400, bottom: 200 };
+    // gapLeft = 244. Line [72, 272]. Overlap: 272 > 244. Shift = 272 - 244 = 28.
+    // newX = 72 - 28 = 44. Clamped to max(0, 44) = 44.
+    // Check: 44 + 200 = 244 <= 244. Clears.
+    const blocks: FlowTextBlock[] = [
+      { ...makeBlock("A".repeat(20)), indent: 22, marker: "1." },
+    ];
+    const filler = createFixedFiller(blocks, 10);
+    const result = computeFlowLayout(
+      blocks,
+      filler,
+      800,
+      hole,
+      DEFAULT_METRICS,
+      col,
+    );
+
+    expect(result.lines).toHaveLength(1);
+    const line = at(result.lines, 0);
+    // The marker renders at firstLine.x - indent in the renderer,
+    // so the marker position is line.x - 22. The indent offset is
+    // baked into the fill (segWidth = col.width - indent), so the
+    // shift moves the whole line including its indent start.
+    expect(line.x).toBe(44);
+    expect(line.width).toBe(200);
+    // Downstream marker position: line.x - indent = 44 - 22 = 22.
+    // This is just a documentation assertion; layout does not emit markers.
+    expect(line.x - 22).toBe(22);
+  });
+});
+
+// -----------------------------------------------------------------------
+// Column-aware figure placement (full vertical probe, mid-figure hole)
+// -----------------------------------------------------------------------
+
+describe("computeFlowLayout with column (figure ladder)", () => {
+  const ASPECT = 390 / 220;
+
+  it("places a figure in the column when no hole exists", () => {
+    const col: FlowColumn = { x: 100, width: 400 };
+    const blocks: FlowBlock[] = [makeFigure(ASPECT)];
+    const filler = createFixedFiller(blocks, 10);
+    const result = computeFlowLayout(
+      blocks,
+      filler,
+      800,
+      null,
+      DEFAULT_METRICS,
+      col,
+    );
+
+    expect(result.figures).toHaveLength(1);
+    const fig = at(result.figures, 0);
+    expect(fig.width).toBeLessThanOrEqual(MAX_FIGURE_WIDTH);
+    // Centred within the column.
+    const expectedX = 100 + (400 - fig.width) / 2;
+    expect(fig.x).toBeCloseTo(expectedX, 5);
+  });
+
+  it("detects a hole starting mid-figure via full vertical probe", () => {
+    const col: FlowColumn = { x: 0, width: 400 };
+    // Figure at y=0. estFigW = min(400, 200) = 200, estFigH = round(200/1.77) = 113.
+    // Hole starts at y=50 (mid-figure) and overlaps the column.
+    const figW = Math.min(400, MAX_FIGURE_WIDTH);
+    const figH = Math.round(figW / ASPECT);
+    // Hole starting in the middle of the figure's estimated extent.
+    const holeTop = Math.floor(figH / 2);
+    const hole: FlowHole = { left: 100, top: holeTop, right: 300, bottom: 300 };
+    const blocks: FlowBlock[] = [makeFigure(ASPECT)];
+    const filler = createFixedFiller(blocks, 10);
+    const result = computeFlowLayout(
+      blocks,
+      filler,
+      800,
+      hole,
+      DEFAULT_METRICS,
+      col,
+    );
+
+    expect(result.figures).toHaveLength(1);
+    const fig = at(result.figures, 0);
+    // The figure should NOT be placed at y=0 (where the 1px probe would
+    // have missed the hole). It should either be shifted or placed below.
+    // With full probe, the overlap is detected and the ladder engages.
+    // The figure's bottom should not overlap the hole without clearance.
+    const figBottom = fig.y + fig.height;
+    const noOverlap =
+      figBottom <= hole.top ||
+      fig.y >= hole.bottom + HOLE_GAP ||
+      fig.x + fig.width <= hole.left - HOLE_GAP ||
+      fig.x >= hole.right + HOLE_GAP;
+    expect(noOverlap).toBe(true);
+  });
+
+  it("shifts a figure within SHIFT_MAX when hole partially overlaps", () => {
+    // Column [0, 300], hole touching the right edge.
+    const col: FlowColumn = { x: 0, width: 300 };
+    const hole: FlowHole = { left: 260, top: 0, right: 400, bottom: 200 };
+    // Column [0, 300] vs hole gap [244, 416].
+    // colRight(300) - gapLeft(244) = 56 <= 72. Shift should succeed.
+    const blocks: FlowBlock[] = [makeFigure(ASPECT)];
+    const filler = createFixedFiller(blocks, 10);
+    const result = computeFlowLayout(
+      blocks,
+      filler,
+      800,
+      hole,
+      DEFAULT_METRICS,
+      col,
+    );
+
+    expect(result.figures).toHaveLength(1);
+    const fig = at(result.figures, 0);
+    // Figure should be placed at y=0 (shifted, not jumped).
+    expect(fig.y).toBe(0);
+    // And should not overlap the hole horizontally.
+    expect(fig.x + fig.width).toBeLessThanOrEqual(hole.left - HOLE_GAP);
+  });
+
+  it("jumps below the hole when shift and constrained segments both fail", () => {
+    // Column [0, 250], hole covering most of the column.
+    const col: FlowColumn = { x: 0, width: 250 };
+    const hole: FlowHole = { left: 20, top: 0, right: 230, bottom: 100 };
+    const blocks: FlowBlock[] = [makeFigure(ASPECT)];
+    const filler = createFixedFiller(blocks, 10);
+    const result = computeFlowLayout(
+      blocks,
+      filler,
+      800,
+      hole,
+      DEFAULT_METRICS,
+      col,
+    );
+
+    expect(result.figures).toHaveLength(1);
+    const fig = at(result.figures, 0);
+    expect(fig.y).toBeGreaterThanOrEqual(hole.bottom + HOLE_GAP);
+  });
+});
+
+// -----------------------------------------------------------------------
+// extendHoleForFullBleed with column-relative viability
+// -----------------------------------------------------------------------
+
+describe("extendHoleForFullBleed with column", () => {
+  const SLIVER = FULL_BLEED_SLIVER - 1;
+
+  it("measures flanks against the column when provided", () => {
+    // Column [200, 600] (width 400). Hole [350, 450].
+    // Column-relative left flank: 350 - 16 - 200 = 134 (< MIN_SEGMENT).
+    // Column-relative right flank: 600 - (450 + 16) = 134 (< MIN_SEGMENT).
+    // Without column, container flanks would be much wider.
+    const col: FlowColumn = { x: 200, width: 400 };
+    const hole: FlowHole = { left: 350, top: 100, right: 450, bottom: 600 };
+    const out = extendHoleForFullBleed(hole, SLIVER, SLIVER, 1000, col);
+    // Neither flank clears MIN_SEGMENT relative to column, so no stretch.
+    expect(out).toEqual(hole);
+  });
+
+  it("stretches when a column-relative flank clears MIN_SEGMENT", () => {
+    // Column [0, 500]. Hole [300, 400].
+    // Left flank: 300 - 16 - 0 = 284 >= 180. Viable.
+    const col: FlowColumn = { x: 0, width: 500 };
+    const hole: FlowHole = { left: 300, top: 100, right: 400, bottom: 600 };
+    const out = extendHoleForFullBleed(hole, SLIVER, SLIVER, 1000, col);
+    expect(out.top).toBe(-FULL_BLEED_EXTENT);
+    expect(out.bottom).toBe(FULL_BLEED_EXTENT);
+  });
+
+  it("uses full-width column to replicate container-relative flanks", () => {
+    // A full-width column produces the same flank measurements that the
+    // former container-relative path did.
+    const fullCol: FlowColumn = { x: 0, width: 800 };
+    const hole: FlowHole = { left: 300, top: 100, right: 500, bottom: 600 };
+    const out = extendHoleForFullBleed(hole, SLIVER, SLIVER, 800, fullCol);
+    // Left flank: 300 - 16 - 0 = 284 >= 180. Engages.
+    expect(out.top).toBe(-FULL_BLEED_EXTENT);
+    expect(out.bottom).toBe(FULL_BLEED_EXTENT);
   });
 });

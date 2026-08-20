@@ -76,8 +76,6 @@ export {
   DEFAULT_METRICS,
   MIN_SEGMENT,
   HOLE_GAP,
-  BOTH_SIDES_MIN,
-  BALANCE_RATIO,
 } from "./flow-layout.js";
 export {
   presetAnchoredLeft,

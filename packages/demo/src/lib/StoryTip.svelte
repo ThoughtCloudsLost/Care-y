@@ -8,8 +8,9 @@
 
   interface Props {
     /** Viewport-space frame rect, so the tip clears the phone the same
-     *  way the story text below it does. */
-    frameRect: DodgeFrameRect;
+     *  way the story text below it does. Null when the frame is hidden
+     *  (read mode, no peek): nothing to clear. */
+    frameRect: DodgeFrameRect | null;
   }
 
   let { frameRect }: Props = $props();
@@ -43,6 +44,9 @@
 </div>
 
 <style>
+  /* The -1rem margin / 1rem padding cancellation must stay equal to
+     CONTENT_GUTTER (16px) in frame-dodge.svelte.ts, or the dodge
+     alignment drifts. */
   .snap-tip {
     padding: 1rem;
     margin: 0 -1rem;
