@@ -3,10 +3,10 @@
 
   Renders the iframe at a derived viewport size with a CSS scale
   transform so it fits the footprint. The outer element is sized to
-  the footprint plus bezel. The status bar overlay is shown when the
-  derived viewport is phone-shaped (width < 768); it hides with a
-  fade at wider viewports. Dynamic island and home indicator are
-  removed; at desktop widths the app renders edge to edge.
+  the footprint plus bezel. The status bar and home indicator overlays
+  are shown when the derived viewport is phone-shaped (width < 768);
+  they fade out at wider viewports. PhoneApp sets matching
+  --k-safe-area-top/bottom so Konsta components clear the overlays.
 
   Pointer handling: drag via bezel surface, resize via edge/corner
   handles. setPointerCapture keeps events arriving while the pointer
@@ -213,6 +213,16 @@
       </span>
     </div>
 
+    <!-- Home indicator: small pill at the bottom, matches real iPhone.
+         Visible only at phone-shaped viewports (same condition as status bar). -->
+    <div
+      class="home-indicator"
+      class:home-indicator-hidden={!showStatusBar}
+      aria-hidden="true"
+    >
+      <div class="home-pill"></div>
+    </div>
+
     <!-- Transparent shield: covers the iframe during active drag/resize
          so pointer events cannot leak into the iframe's document. -->
     {#if gestureActive}
@@ -297,6 +307,40 @@
     gap: 7px;
   }
 
+  .home-indicator {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 34px;
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+    padding-bottom: 8px;
+    pointer-events: none;
+    z-index: 3;
+    opacity: 1;
+    transition: opacity 0.2s ease;
+  }
+
+  .home-indicator-hidden {
+    opacity: 0;
+    pointer-events: none;
+  }
+
+  .home-pill {
+    width: 134px;
+    height: 5px;
+    border-radius: 3px;
+    background: #1d1d1f;
+    opacity: 0.3;
+  }
+
+  .screen.dark .home-pill {
+    background: #f5f5f7;
+    opacity: 0.4;
+  }
+
   .pointer-shield {
     position: absolute;
     inset: 0;
@@ -305,7 +349,8 @@
   }
 
   @media (prefers-reduced-motion: reduce) {
-    .status-bar {
+    .status-bar,
+    .home-indicator {
       transition: none;
     }
   }

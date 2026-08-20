@@ -1533,14 +1533,14 @@
     overflow: hidden;
   }
 
-  /* Push the shell below the status bar overlay at phone-sized viewports.
-     The DemoFrame status bar renders only below 768px; this inset must
-     match that threshold so the content clears the overlay exactly when
-     it is visible. At tablet/desktop widths the overlay is hidden and
-     the inset resets to 0 (Konsta's env() default). */
+  /* Simulate device safe areas at phone-sized viewports. DemoFrame
+     renders a status bar (top) and home indicator (bottom) only below
+     768px; these insets match that threshold. At tablet/desktop widths
+     the overlays are hidden and insets reset to 0 (Konsta env() default). */
   @media (max-width: 767px) {
     .phone-app :global(.app-shell) {
       --k-safe-area-top: 59px;
+      --k-safe-area-bottom: 34px;
     }
   }
 
