@@ -726,6 +726,8 @@ export interface PortalChannelsTable {
   key_check_nonce: Buffer;
   key_check_ciphertext: Buffer;
   status: ColumnType<string, string | undefined, string>;
+  kind: ColumnType<string, string | undefined, string>;
+  account_offer: ColumnType<boolean, boolean | undefined, boolean>;
   created_at: Generated<Date>;
   last_seen_at: Date | null;
   last_notified_at: Date | null;
@@ -747,6 +749,26 @@ export interface PortalMessagesTable {
 export interface PortalReplyKeyWrapsTable {
   followup_id: string;
   wrapped_tk: Buffer;
+  created_at: Generated<Date>;
+}
+
+// --- Client accounts (encrypted account portal) ---
+
+export interface ClientAccountsTable {
+  id: string; // client-minted UUID; OPRF runs against this before the row exists
+  client_id: string;
+  username_hash: string;
+  salt: Buffer;
+  public_key: Buffer;
+  auth_hash: Buffer;
+  created_at: Generated<Date>;
+}
+
+export interface ClientAccountSessionsTable {
+  id: Generated<string>;
+  account_id: string;
+  token_hash: Buffer;
+  expires_at: Date;
   created_at: Generated<Date>;
 }
 
@@ -825,4 +847,7 @@ export interface TenantDatabase {
   portal_reply_key_wraps: PortalReplyKeyWrapsTable;
   // Client portal (share links)
   share_links: ShareLinksTable;
+  // Client accounts (encrypted account portal)
+  client_accounts: ClientAccountsTable;
+  client_account_sessions: ClientAccountSessionsTable;
 }

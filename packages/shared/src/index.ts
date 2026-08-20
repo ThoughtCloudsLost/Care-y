@@ -14,7 +14,7 @@ export {
 
 // --- Utilities ---
 export { extractSubdomain } from "./utils/subdomain.js";
-export { normalizeAlias } from "./utils/normalize-alias.js";
+export { normalizeAlias, normalizeUsername } from "./utils/normalize-alias.js";
 export {
   normalizeContactPhone,
   normalizeContactEmail,
@@ -337,8 +337,14 @@ export {
   type UpdateTicketContentInput,
   upgradeToSecureLinkInputSchema,
   updateOutboundMessageInputSchema,
+  setAccountOfferInputSchema,
+  resetClientAccountInputSchema,
+  portalChannelMetaSchema,
   type UpgradeToSecureLinkInput,
   type UpdateOutboundMessageInput,
+  type SetAccountOfferInput,
+  type ResetClientAccountInput,
+  type PortalChannelMetaWire,
 } from "./schemas/tickets.js";
 
 // --- Client management ---
@@ -581,10 +587,27 @@ export {
   openShareInputSchema,
   openShareResponseSchema,
   shareStatusSchema,
+  portalChannelKindSchema,
+  accountUsernameSchema,
+  accountRegistrationSchema,
+  getAccountSaltInputSchema,
+  accountLoginInputSchema,
+  rewrappedMessageSchema,
+  rewrappedMessagesSchema,
+  accountUpgradeInputSchema,
+  accountChangePasswordInputSchema,
   type CreateShareInput,
   type OpenShareInput,
   type OpenShareResponse,
   type ShareStatus,
+  type PortalChannelKind,
+  type AccountRegistration,
+  type GetAccountSaltInput,
+  type AccountLoginInput,
+  type RewrappedMessage,
+  type RewrappedMessages,
+  type AccountUpgradeInput,
+  type AccountChangePasswordInput,
 } from "./schemas/client-portal.js";
 
 // --- Intake form schemas ---

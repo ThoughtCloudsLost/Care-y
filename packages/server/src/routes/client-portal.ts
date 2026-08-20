@@ -23,6 +23,11 @@ import {
   portalReplyInputSchema,
   createShareInputSchema,
   openShareInputSchema,
+  getAccountSaltInputSchema,
+  accountLoginInputSchema,
+  accountUpgradeInputSchema,
+  accountChangePasswordInputSchema,
+  ErrorCode,
 } from "@care-y/shared";
 import type { IncomingMessage } from "node:http";
 import type { RateLimiter } from "../ratelimit/rate-limiter.js";
@@ -39,11 +44,24 @@ import type {
   PortalReplyServiceInput,
   PortalMessageServiceDeps,
 } from "../portal/portal-message-service.js";
+import type {
+  AccountServiceDeps,
+  AccountRegistrationInput,
+  ClientAccountRow,
+  RewrappedMessageInput,
+} from "../portal/account-service.js";
+import * as accountService from "../portal/account-service.js";
+import {
+  UsernameTakenError,
+  StaleThreadError,
+} from "../portal/portal-errors.js";
+import { hashChannelAuth } from "@care-y/crypto";
 import {
   createIntakeTicket,
   IntakeQueueNotConfiguredError,
   IntakeDisabledError,
 } from "../portal/intake-service.js";
+import type { IntakeAccountInput } from "../portal/intake-service.js";
 import { extractClientIp } from "../http/request-utils.js";
 import {
   createShare,
@@ -98,6 +116,14 @@ export interface ClientPortalRouterDeps {
   // Share link deps (appended by 8d)
   /** 10 req/min per IP on the public openShare endpoint. */
   readonly shareLimiter?: RateLimiter;
+
+  // Encrypted Account deps (appended by 8c)
+  /** Startup-scoped deps (indexer + fakeSaltKey); orgUuid resolved per-request. */
+  readonly accountServiceDeps?: Omit<AccountServiceDeps, "orgUuid">;
+  /** 10 req/hour per IP on getAccountSalt. Bounds salt-endpoint scraping. */
+  readonly accountSaltLimiter?: RateLimiter;
+  /** 10 req/hour per IP on accountLogin. Bounds login spam. */
+  readonly accountLoginLimiter?: RateLimiter;
 }
 
 // care-y-ignore-next-line missing-return-type -- tRPC router() returns a deeply generic type that cannot be written explicitly
@@ -214,8 +240,34 @@ export function createClientPortalRouter(deps: ClientPortalRouterDeps) {
         );
         const wrappedTk = Buffer.from(input.wrappedTk, "base64");
 
-        // 5. Delegate to service
+        // 5. Decode optional account branch
+        let accountInput: IntakeAccountInput | null = null;
+        if (input.account != null) {
+          const reg = decodeAccountRegistration(input.account);
+          const selfCopy =
+            input.account.selfCopy != null
+              ? {
+                  ephemeralPoint: Buffer.from(
+                    input.account.selfCopy.ephemeralPoint,
+                    "base64",
+                  ),
+                  nonce: Buffer.from(input.account.selfCopy.nonce, "base64"),
+                  ciphertext: Buffer.from(
+                    input.account.selfCopy.ciphertext,
+                    "base64",
+                  ),
+                }
+              : null;
+          accountInput = { registration: reg, selfCopy };
+        }
+
+        // 6. Delegate to service
         try {
+          const acctDeps =
+            input.account != null
+              ? requireAccountDeps(deps, ctx.org.orgId)
+              : undefined;
+
           const result = await createIntakeTicket(
             ctx.org.tenantDb,
             {
@@ -224,6 +276,7 @@ export function createClientPortalRouter(deps: ClientPortalRouterDeps) {
               fieldEncryptor: deps.fieldEncryptor,
               orgSchema: ctx.org.orgSchema,
               orgSlug: ctx.org.orgSlug,
+              accountServiceDeps: acctDeps,
             },
             {
               ticketId: input.ticketId,
@@ -237,6 +290,7 @@ export function createClientPortalRouter(deps: ClientPortalRouterDeps) {
               resolvedQueueId: input.resolvedQueueId ?? null,
               resolvedPriority: input.resolvedPriority ?? null,
               resolvedEscalationLevel: input.resolvedEscalationLevel ?? null,
+              account: accountInput,
             },
           );
 
@@ -262,6 +316,12 @@ export function createClientPortalRouter(deps: ClientPortalRouterDeps) {
             throw new TRPCError({
               code: "FORBIDDEN",
               message: "Web intake is not available",
+            });
+          }
+          if (err instanceof UsernameTakenError) {
+            throw new TRPCError({
+              code: "CONFLICT",
+              message: ErrorCode.ACCOUNT_USERNAME_TAKEN,
             });
           }
           throw err;
@@ -367,43 +427,13 @@ export function createClientPortalRouter(deps: ClientPortalRouterDeps) {
           ctx,
           input,
         );
-        const fieldEncryptor = deps.fieldEncryptor;
-        if (!fieldEncryptor) {
-          throw new TRPCError({
-            code: "NOT_FOUND",
-            message: PORTAL_NOT_FOUND_MSG,
-          });
-        }
 
-        // Decode base64 fields to Buffers for the service layer
-        const serviceInput: PortalReplyServiceInput = {
-          ticketId: input.ticketId,
-          followUpId: input.followUpId,
-          keyGeneration: input.keyGeneration,
-          encryptedContent: Buffer.from(input.encryptedContent, "base64"),
-          wrappedTkTemp: Buffer.from(input.wrappedTkTemp, "base64"),
-          selfCopy: {
-            ephemeralPoint: Buffer.from(
-              input.selfCopy.ephemeralPoint,
-              "base64",
-            ),
-            nonce: Buffer.from(input.selfCopy.nonce, "base64"),
-            ciphertext: Buffer.from(input.selfCopy.ciphertext, "base64"),
-          },
-        };
+        const serviceInput = decodeReplyInput(input);
+        const msgDeps = buildPortalMessageDeps(deps, ctx);
 
         await portalMessageService.clientReply(
           ctx.org.tenantDb,
-          {
-            getProvider:
-              deps.portalGetProvider ?? (async () => Promise.resolve(null)),
-            resolveCallerIdByPurpose:
-              deps.portalResolveCallerId ?? (async () => Promise.resolve(null)),
-            fieldEncryptor,
-            notificationService: deps.notificationService,
-            orgSchema: ctx.org.orgSchema,
-            orgSlug: ctx.org.orgSlug,
-          },
+          msgDeps,
           channel,
           serviceInput,
         );
@@ -474,16 +504,454 @@ export function createClientPortalRouter(deps: ClientPortalRouterDeps) {
         return { status: result.status };
       }),
     ),
+
+    // -----------------------------------------------------------------
+    // Encrypted Account procedures (appended by 8c)
+    // -----------------------------------------------------------------
+
+    getAccountSalt: orgProcedure.input(getAccountSaltInputSchema).query(
+      withErrorWrapping(async ({ ctx, input }) => {
+        const ip = extractClientIp(ctx.req);
+
+        if (deps.accountSaltLimiter) {
+          const limitResult = deps.accountSaltLimiter.check(ip);
+          if (!limitResult.allowed) {
+            console.warn("Account salt rate limited", {
+              orgSlug: ctx.org.orgSlug,
+              ip,
+              reason: "rate_limit",
+            });
+            throw new TRPCError({
+              code: "TOO_MANY_REQUESTS",
+              message: `Rate limited. Retry after ${String(Math.ceil(limitResult.retryAfterMs / 1000))}s`,
+            });
+          }
+        }
+
+        const acctDeps = requireAccountDeps(deps, ctx.org.orgId);
+        const result = await accountService.getSaltForUsername(
+          ctx.org.tenantDb,
+          acctDeps,
+          input.username,
+        );
+
+        return {
+          salt: result.salt.toString("base64url"),
+          accountId: result.accountId,
+        };
+      }),
+    ),
+
+    accountLogin: orgProcedure.input(accountLoginInputSchema).mutation(
+      withErrorWrapping(async ({ ctx, input }) => {
+        const ip = extractClientIp(ctx.req);
+
+        if (deps.accountLoginLimiter) {
+          const limitResult = deps.accountLoginLimiter.check(ip);
+          if (!limitResult.allowed) {
+            console.warn("Account login rate limited", {
+              orgSlug: ctx.org.orgSlug,
+              ip,
+              reason: "rate_limit",
+            });
+            throw new TRPCError({
+              code: "TOO_MANY_REQUESTS",
+              message: `Rate limited. Retry after ${String(Math.ceil(limitResult.retryAfterMs / 1000))}s`,
+            });
+          }
+        }
+
+        const authTokenBuf = Buffer.from(input.authToken, "base64");
+        const result = await accountService.login(
+          ctx.org.tenantDb,
+          input.accountId,
+          authTokenBuf,
+        );
+
+        if (result === null) {
+          console.warn("Account login failed", {
+            orgSlug: ctx.org.orgSlug,
+            ip,
+            reason: "auth_failed",
+          });
+          throw new TRPCError({
+            code: "UNAUTHORIZED",
+            message: ACCOUNT_AUTH_FAILED_MSG,
+          });
+        }
+
+        const isSecure = ctx.req.headers["x-forwarded-proto"] === "https";
+        ctx.res.setHeader(
+          "Set-Cookie",
+          buildClientSessionCookie(
+            result.sessionToken,
+            result.expiresAt,
+            isSecure,
+          ),
+        );
+
+        return {};
+      }),
+    ),
+
+    accountBootstrap: orgProcedure.query(
+      withErrorWrapping(async ({ ctx }) => {
+        const session = await requireAccountSession(ctx);
+
+        const msgService = requirePortalMessageService(deps);
+        const result = await msgService.bootstrap(
+          ctx.org.tenantDb,
+          session.channel,
+        );
+
+        return {
+          ...result,
+          accountCreatedAt: session.account.created_at.toISOString(),
+        };
+      }),
+    ),
+
+    accountMessages: orgProcedure.query(
+      withErrorWrapping(async ({ ctx }) => {
+        const session = await requireAccountSession(ctx);
+
+        const msgService = requirePortalMessageService(deps);
+        const result = await msgService.bootstrap(
+          ctx.org.tenantDb,
+          session.channel,
+        );
+
+        return {
+          ticketId: result.ticketId,
+          messages: result.messages,
+          messagesExpireDays: result.messagesExpireDays,
+        };
+      }),
+    ),
+
+    accountReply: orgProcedure.input(accountReplyInputSchema).mutation(
+      withErrorWrapping(async ({ ctx, input }) => {
+        const ip = extractClientIp(ctx.req);
+
+        if (deps.portalReplyLimiter) {
+          const limitResult = deps.portalReplyLimiter.check(ip);
+          if (!limitResult.allowed) {
+            console.warn("Account reply rate limited", {
+              orgSlug: ctx.org.orgSlug,
+              ip,
+              reason: "rate_limit",
+            });
+            throw new TRPCError({
+              code: "TOO_MANY_REQUESTS",
+              message: `Rate limited. Retry after ${String(Math.ceil(limitResult.retryAfterMs / 1000))}s`,
+            });
+          }
+        }
+
+        const session = await requireAccountSession(ctx);
+
+        const serviceInput = decodeReplyInput(input);
+        const msgDeps = buildPortalMessageDeps(deps, ctx);
+
+        const msgService = requirePortalMessageService(deps);
+        await msgService.clientReply(
+          ctx.org.tenantDb,
+          msgDeps,
+          session.channel,
+          serviceInput,
+        );
+
+        return {};
+      }),
+    ),
+
+    accountUpgrade: orgProcedure.input(accountUpgradeInputSchema).mutation(
+      withErrorWrapping(async ({ ctx, input }) => {
+        const ip = extractClientIp(ctx.req);
+
+        if (deps.portalReplyLimiter) {
+          const limitResult = deps.portalReplyLimiter.check(ip);
+          if (!limitResult.allowed) {
+            console.warn("Account upgrade rate limited", {
+              orgSlug: ctx.org.orgSlug,
+              ip,
+              reason: "rate_limit",
+            });
+            throw new TRPCError({
+              code: "TOO_MANY_REQUESTS",
+              message: `Rate limited. Retry after ${String(Math.ceil(limitResult.retryAfterMs / 1000))}s`,
+            });
+          }
+        }
+
+        const { channel } = await requirePortalChannel(deps, ctx, input);
+        const acctDeps = requireAccountDeps(deps, ctx.org.orgId);
+
+        const reg = decodeAccountRegistration(input.account);
+        const rewrapped = decodeRewrappedMessages(input.rewrappedMessages);
+
+        try {
+          await accountService.upgradeFromSecureLink(
+            ctx.org.tenantDb,
+            acctDeps,
+            channel,
+            reg,
+            rewrapped,
+          );
+        } catch (err: unknown) {
+          if (err instanceof UsernameTakenError) {
+            throw new TRPCError({
+              code: "CONFLICT",
+              message: ErrorCode.ACCOUNT_USERNAME_TAKEN,
+            });
+          }
+          if (err instanceof StaleThreadError) {
+            throw new TRPCError({
+              code: "CONFLICT",
+              message: "Thread state changed; retry after refetch",
+            });
+          }
+          throw err;
+        }
+
+        return {};
+      }),
+    ),
+
+    accountChangePassword: orgProcedure
+      .input(accountChangePasswordInputSchema)
+      .mutation(
+        withErrorWrapping(async ({ ctx, input }) => {
+          const session = await requireAccountSession(ctx);
+
+          const currentAuthTokenBuf = Buffer.from(
+            input.currentAuthToken,
+            "base64",
+          );
+          const currentTokenHash = Buffer.from(
+            hashChannelAuth(currentAuthTokenBuf),
+          );
+
+          const acctInput = {
+            salt: Buffer.from(input.account.salt, "base64"),
+            publicKey: Buffer.from(input.account.publicKey, "base64"),
+            authHash: Buffer.from(input.account.authHash, "base64"),
+            keyCheck: {
+              ephemeralPoint: Buffer.from(
+                input.account.keyCheck.ephemeralPoint,
+                "base64",
+              ),
+              nonce: Buffer.from(input.account.keyCheck.nonce, "base64"),
+              ciphertext: Buffer.from(
+                input.account.keyCheck.ciphertext,
+                "base64",
+              ),
+            },
+            rewrappedMessages: decodeRewrappedMessages(input.rewrappedMessages),
+          };
+
+          let changed: boolean;
+          try {
+            changed = await accountService.changePassword(
+              ctx.org.tenantDb,
+              session.account,
+              session.channel,
+              currentTokenHash,
+              session.tokenHash,
+              acctInput,
+            );
+          } catch (err: unknown) {
+            if (err instanceof StaleThreadError) {
+              throw new TRPCError({
+                code: "CONFLICT",
+                message: "Thread state changed; retry after refetch",
+              });
+            }
+            throw err;
+          }
+
+          if (!changed) {
+            throw new TRPCError({
+              code: "UNAUTHORIZED",
+              message: ACCOUNT_AUTH_FAILED_MSG,
+            });
+          }
+
+          return {};
+        }),
+      ),
+
+    accountLogout: orgProcedure.mutation(
+      withErrorWrapping(async ({ ctx }) => {
+        // Gate on valid session (throws UNAUTHORIZED if invalid)
+        await requireAccountSession(ctx);
+
+        const cookieHeader = ctx.req.headers.cookie ?? null;
+        const cookies = parseClientCookies(cookieHeader);
+        const sessionToken = cookies.get(CLIENT_SESSION_COOKIE);
+
+        if (sessionToken !== undefined && sessionToken !== "") {
+          await accountService.logout(ctx.org.tenantDb, sessionToken);
+        }
+
+        ctx.res.setHeader("Set-Cookie", buildExpiredClientSessionCookie());
+
+        return {};
+      }),
+    ),
   });
+}
+
+// ---------------------------------------------------------------------------
+// Constants
+// ---------------------------------------------------------------------------
+
+const CLIENT_SESSION_COOKIE = "care_y_client_session";
+
+/** The ONE generic error message for unknown, revoked, or bad-auth channels.
+ *  All three paths return this identical shape (enumeration resistance). */
+const PORTAL_NOT_FOUND_MSG = "Channel not found or not available";
+
+/** The ONE generic error for any account auth failure: unknown account,
+ *  wrong token, expired session, missing cookie. Never branch on why. */
+const ACCOUNT_AUTH_FAILED_MSG = "Sign-in failed";
+
+// ---------------------------------------------------------------------------
+// Account reply input schema (no channelId/auth, session-gated)
+// ---------------------------------------------------------------------------
+
+/** Account reply: same fields as portalReply minus channelId/auth
+ *  (the session cookie is the credential). */
+const accountReplyInputSchema = portalReplyInputSchema.omit({
+  channelId: true,
+  auth: true,
+});
+
+// ---------------------------------------------------------------------------
+// Cookie parsing (duplicated locally; auth/cookies.ts imports
+// SESSION_COOKIE_NAME from auth/service.js, which pulls volunteer
+// session code transitively, violating the isolation anti-pattern)
+// ---------------------------------------------------------------------------
+
+/**
+ * Parses a raw Cookie header string into a Map of name-value pairs.
+ * Local duplicate of auth/cookies.ts parseCookies to avoid importing
+ * volunteer session code.
+ */
+function parseClientCookies(
+  header: string | null | undefined,
+): Map<string, string> {
+  const cookies = new Map<string, string>();
+  if (header == null || header === "") return cookies;
+
+  for (const pair of header.split(";")) {
+    const eqIndex = pair.indexOf("=");
+    if (eqIndex === -1) continue;
+
+    const name = pair.slice(0, eqIndex).trim();
+    const value = pair.slice(eqIndex + 1).trim();
+    if (name) {
+      cookies.set(name, value);
+    }
+  }
+
+  return cookies;
+}
+
+/**
+ * Builds a Set-Cookie header for the client session cookie.
+ * HttpOnly, SameSite=Strict, Path=/, no Domain attribute (GAP-12).
+ * Secure flag only when behind TLS.
+ */
+function buildClientSessionCookie(
+  token: string,
+  expiresAt: Date,
+  isSecure: boolean,
+): string {
+  const maxAge = Math.max(
+    0,
+    Math.floor((expiresAt.getTime() - Date.now()) / 1000),
+  );
+  const parts = [
+    `${CLIENT_SESSION_COOKIE}=${token}`,
+    `Max-Age=${String(maxAge)}`,
+    "Path=/",
+    "HttpOnly",
+    "SameSite=Strict",
+  ];
+
+  if (isSecure) {
+    parts.push("Secure");
+  }
+
+  return parts.join("; ");
+}
+
+/** Builds a Set-Cookie header that expires the client session cookie immediately. */
+function buildExpiredClientSessionCookie(): string {
+  return `${CLIENT_SESSION_COOKIE}=; Max-Age=0; Path=/; HttpOnly; SameSite=Strict`;
+}
+
+// ---------------------------------------------------------------------------
+// Account session resolution helper
+// ---------------------------------------------------------------------------
+
+/**
+ * Resolves the client account session from the cookie header.
+ * Throws one generic UNAUTHORIZED on any failure: missing cookie,
+ * garbage token, expired session, no active channel.
+ *
+ * Logs only { orgSlug, ip, reason }, never the token or account id.
+ */
+async function requireAccountSession(ctx: {
+  org: { tenantDb: Kysely<TenantDatabase>; orgSlug: string };
+  req: IncomingMessage;
+}): Promise<{
+  account: ClientAccountRow;
+  channel: PortalChannelRow;
+  tokenHash: Buffer;
+}> {
+  const cookieHeader = ctx.req.headers.cookie ?? null;
+  const cookies = parseClientCookies(cookieHeader);
+  const sessionToken = cookies.get(CLIENT_SESSION_COOKIE);
+
+  if (sessionToken === undefined || sessionToken === "") {
+    const ip = extractClientIp(ctx.req);
+    console.warn("Account session missing", {
+      orgSlug: ctx.org.orgSlug,
+      ip,
+      reason: "no_cookie",
+    });
+    throw new TRPCError({
+      code: "UNAUTHORIZED",
+      message: ACCOUNT_AUTH_FAILED_MSG,
+    });
+  }
+
+  const session = await accountService.resolveAccountSession(
+    ctx.org.tenantDb,
+    sessionToken,
+  );
+
+  if (session === null) {
+    const ip = extractClientIp(ctx.req);
+    console.warn("Account session resolution failed", {
+      orgSlug: ctx.org.orgSlug,
+      ip,
+      reason: "session_invalid",
+    });
+    throw new TRPCError({
+      code: "UNAUTHORIZED",
+      message: ACCOUNT_AUTH_FAILED_MSG,
+    });
+  }
+
+  return session;
 }
 
 // ---------------------------------------------------------------------------
 // Portal auth resolution helper
 // ---------------------------------------------------------------------------
-
-/** The ONE generic error message for unknown, revoked, or bad-auth channels.
- *  All three paths return this identical shape (enumeration resistance). */
-const PORTAL_NOT_FOUND_MSG = "Channel not found or not available";
 
 /**
  * Resolve an authenticated portal channel from the input's channelId + auth.
@@ -535,4 +1003,142 @@ async function requirePortalChannel(
   }
 
   return { channel, portalMessageService };
+}
+
+// ---------------------------------------------------------------------------
+// Shared decode helpers
+// ---------------------------------------------------------------------------
+
+/** Combines startup-scoped account deps with the per-request orgId. */
+function requireAccountDeps(
+  deps: ClientPortalRouterDeps,
+  orgId: string,
+): AccountServiceDeps {
+  if (!deps.accountServiceDeps) {
+    throw new TRPCError({
+      code: "NOT_FOUND",
+      message: ACCOUNT_AUTH_FAILED_MSG,
+    });
+  }
+  return { ...deps.accountServiceDeps, orgUuid: orgId };
+}
+
+/** Requires portal message service or throws. */
+function requirePortalMessageService(
+  deps: ClientPortalRouterDeps,
+): NonNullable<ClientPortalRouterDeps["portalMessageService"]> {
+  if (!deps.portalMessageService) {
+    throw new TRPCError({
+      code: "NOT_FOUND",
+      message: PORTAL_NOT_FOUND_MSG,
+    });
+  }
+  return deps.portalMessageService;
+}
+
+/**
+ * Decode base64 reply fields to Buffers. Shared between portalReply
+ * and accountReply to avoid duplicating the decode logic.
+ */
+function decodeReplyInput(input: {
+  ticketId: string;
+  followUpId: string;
+  keyGeneration: string;
+  encryptedContent: string;
+  wrappedTkTemp: string;
+  selfCopy: {
+    ephemeralPoint: string;
+    nonce: string;
+    ciphertext: string;
+  };
+}): PortalReplyServiceInput {
+  return {
+    ticketId: input.ticketId,
+    followUpId: input.followUpId,
+    keyGeneration: input.keyGeneration,
+    encryptedContent: Buffer.from(input.encryptedContent, "base64"),
+    wrappedTkTemp: Buffer.from(input.wrappedTkTemp, "base64"),
+    selfCopy: {
+      ephemeralPoint: Buffer.from(input.selfCopy.ephemeralPoint, "base64"),
+      nonce: Buffer.from(input.selfCopy.nonce, "base64"),
+      ciphertext: Buffer.from(input.selfCopy.ciphertext, "base64"),
+    },
+  };
+}
+
+/** Builds PortalMessageServiceDeps from the router deps and context. */
+function buildPortalMessageDeps(
+  deps: ClientPortalRouterDeps,
+  ctx: {
+    org: {
+      tenantDb: Kysely<TenantDatabase>;
+      orgSlug: string;
+      orgSchema: string;
+    };
+  },
+): PortalMessageServiceDeps {
+  const fieldEncryptor = deps.fieldEncryptor;
+  if (!fieldEncryptor) {
+    throw new TRPCError({
+      code: "NOT_FOUND",
+      message: PORTAL_NOT_FOUND_MSG,
+    });
+  }
+  return {
+    getProvider: deps.portalGetProvider ?? (async () => Promise.resolve(null)),
+    resolveCallerIdByPurpose:
+      deps.portalResolveCallerId ?? (async () => Promise.resolve(null)),
+    fieldEncryptor,
+    notificationService: deps.notificationService,
+    orgSchema: ctx.org.orgSchema,
+    orgSlug: ctx.org.orgSlug,
+  };
+}
+
+/** Decode account registration from wire base64 to Buffers. */
+function decodeAccountRegistration(input: {
+  accountId: string;
+  username: string;
+  salt: string;
+  publicKey: string;
+  authHash: string;
+  keyCheck: {
+    ephemeralPoint: string;
+    nonce: string;
+    ciphertext: string;
+  };
+}): AccountRegistrationInput {
+  return {
+    accountId: input.accountId,
+    username: input.username,
+    salt: Buffer.from(input.salt, "base64"),
+    publicKey: Buffer.from(input.publicKey, "base64"),
+    authHash: Buffer.from(input.authHash, "base64"),
+    keyCheck: {
+      ephemeralPoint: Buffer.from(input.keyCheck.ephemeralPoint, "base64"),
+      nonce: Buffer.from(input.keyCheck.nonce, "base64"),
+      ciphertext: Buffer.from(input.keyCheck.ciphertext, "base64"),
+    },
+  };
+}
+
+/** Decode rewrapped message array from wire base64 to Buffers. */
+function decodeRewrappedMessages(
+  messages: readonly {
+    id: string;
+    copy: {
+      ephemeralPoint: string;
+      nonce: string;
+      ciphertext: string;
+    };
+  }[],
+): RewrappedMessageInput[] {
+  return messages.map((msg) => ({
+    id: msg.id,
+    copy: {
+      ephemeralPoint: Buffer.from(msg.copy.ephemeralPoint, "base64"),
+      nonce: Buffer.from(msg.copy.nonce, "base64"),
+      ciphertext: Buffer.from(msg.copy.ciphertext, "base64"),
+    },
+  }));
 }

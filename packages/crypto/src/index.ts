@@ -125,6 +125,12 @@ export {
   type PortalKeypair,
 } from "./portal.js";
 
+// --- Client Account Key Derivation ---
+export {
+  deriveClientAccountKeys,
+  type ClientAccountKeys,
+} from "./client-account.js";
+
 // --- RFC 9497 / 9380 internals (testing + server-side OPRF) ---
 export {
   expandMessageXMD,

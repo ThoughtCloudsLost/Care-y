@@ -2558,5 +2558,351 @@ describe.skipIf(!process.env.DATABASE_URL)(
         expect(updated.id).toBe(fu.id);
       });
     });
+
+    // --- Encrypted Account: volunteer-side offer toggle and reset ---
+
+    /**
+     * Seeds a Secure Link channel for a client. Returns the channel_id.
+     */
+    async function seedSecureLinkChannel(
+      clientId: string,
+      overrides?: { kind?: string; accountOffer?: boolean },
+    ): Promise<string> {
+      const channelId =
+        randomUUID().replace(/-/g, "") +
+        randomUUID().replace(/-/g, "").slice(0, 16);
+      await tenantDb
+        .insertInto("portal_channels")
+        .values({
+          channel_id: channelId,
+          client_id: clientId,
+          auth_hash: Buffer.alloc(32, 0xab),
+          client_public: Buffer.alloc(32, 0xcd),
+          has_passphrase: false,
+          status: "active",
+          kind: overrides?.kind ?? "secure_link",
+          account_offer: overrides?.accountOffer ?? false,
+          key_check_ephemeral_point: Buffer.alloc(32, 0x01),
+          key_check_nonce: Buffer.alloc(24, 0x02),
+          key_check_ciphertext: Buffer.alloc(64, 0x03),
+        })
+        .execute();
+      return channelId;
+    }
+
+    /** Seeds a client_accounts row for a client. */
+    async function seedClientAccount(clientId: string): Promise<string> {
+      const accountId = randomUUID();
+      await tenantDb
+        .insertInto("client_accounts")
+        .values({
+          id: accountId,
+          client_id: clientId,
+          username_hash: `uh-${randomUUID().slice(0, 8)}`,
+          salt: Buffer.alloc(16, 0x11),
+          public_key: Buffer.alloc(32, 0x22),
+          auth_hash: Buffer.alloc(32, 0x33),
+        })
+        .execute();
+      return accountId;
+    }
+
+    describe("setAccountOffer", () => {
+      it("flips the flag on an active secure_link channel", async () => {
+        const { user, ...fixture } = await setupUserWithTicket();
+        const caller = createAuthedCaller(user);
+        await seedSecureLinkChannel(fixture.clientId);
+
+        await caller.tickets.setAccountOffer({
+          ticketId: fixture.ticketId,
+          enabled: true,
+        });
+
+        const channel = await tenantDb
+          .selectFrom("portal_channels")
+          .select("account_offer")
+          .where("client_id", "=", fixture.clientId)
+          .where("status", "=", "active")
+          .executeTakeFirstOrThrow();
+        expect(channel.account_offer).toBe(true);
+
+        // Flip it back
+        await caller.tickets.setAccountOffer({
+          ticketId: fixture.ticketId,
+          enabled: false,
+        });
+        const after = await tenantDb
+          .selectFrom("portal_channels")
+          .select("account_offer")
+          .where("client_id", "=", fixture.clientId)
+          .where("status", "=", "active")
+          .executeTakeFirstOrThrow();
+        expect(after.account_offer).toBe(false);
+      });
+
+      it("404s when no active channel exists", async () => {
+        const { user, ...fixture } = await setupUserWithTicket();
+        const caller = createAuthedCaller(user);
+
+        await expectTrpcError(
+          caller.tickets.setAccountOffer({
+            ticketId: fixture.ticketId,
+            enabled: true,
+          }),
+          "NOT_FOUND",
+        );
+      });
+
+      it("404s on an account-kind channel", async () => {
+        const { user, ...fixture } = await setupUserWithTicket();
+        const caller = createAuthedCaller(user);
+        await seedSecureLinkChannel(fixture.clientId, { kind: "account" });
+
+        await expectTrpcError(
+          caller.tickets.setAccountOffer({
+            ticketId: fixture.ticketId,
+            enabled: true,
+          }),
+          "NOT_FOUND",
+        );
+      });
+
+      it("denies a volunteer without ticket access", async () => {
+        const { user: _user, ...fixture } = await setupUserWithTicket();
+        // Create a second user with no queue membership
+        const otherUser = await createTestUser(tenantDb);
+        const otherCaller = createAuthedCaller(otherUser);
+
+        await seedSecureLinkChannel(fixture.clientId);
+
+        await expectTrpcError(
+          otherCaller.tickets.setAccountOffer({
+            ticketId: fixture.ticketId,
+            enabled: true,
+          }),
+          "FORBIDDEN",
+        );
+      });
+
+      it("emits account_offer_changed audit event with pseudonym only", async () => {
+        const { user, ...fixture } = await setupUserWithTicket();
+        const caller = createAuthedCaller(user);
+        await seedSecureLinkChannel(fixture.clientId);
+
+        await caller.tickets.setAccountOffer({
+          ticketId: fixture.ticketId,
+          enabled: true,
+        });
+
+        const auditRow = await vi.waitFor(async () => {
+          const row = await tenantDb
+            .selectFrom("audit_log")
+            .select(["event_type", "actor_id", "metadata"])
+            .where("event_type", "=", "account_offer_changed")
+            .where("actor_id", "=", user.id)
+            .orderBy("created_at", "desc")
+            .executeTakeFirst();
+          expect(row).toBeDefined();
+          return row!;
+        });
+        expect(auditRow.event_type).toBe("account_offer_changed");
+        // Metadata carries only the operation, no username, account id, or channel id
+        const meta = auditRow.metadata as Record<string, unknown>;
+        expect(meta).toEqual({ operation: "enabled" });
+        expect(meta).not.toHaveProperty("username");
+        expect(meta).not.toHaveProperty("accountId");
+        expect(meta).not.toHaveProperty("channelId");
+      });
+    });
+
+    describe("resetClientAccount", () => {
+      it("removes account and sessions, revokes channel, resets tier", async () => {
+        const { user, ...fixture } = await setupUserWithTicket();
+        const caller = createAuthedCaller(user);
+
+        // Set tier to account
+        await tenantDb
+          .updateTable("clients")
+          .set({ communication_tier: "account" })
+          .where("id", "=", fixture.clientId)
+          .execute();
+
+        // Seed an account-kind channel
+        await seedSecureLinkChannel(fixture.clientId, { kind: "account" });
+        const accountId = await seedClientAccount(fixture.clientId);
+
+        // Seed a session
+        await tenantDb
+          .insertInto("client_account_sessions")
+          .values({
+            account_id: accountId,
+            token_hash: Buffer.alloc(32, 0x44),
+            expires_at: new Date(Date.now() + 3_600_000),
+          })
+          .execute();
+
+        // Seed a portal message to verify copy deletion
+        const copyFollowup = await tenantDb
+          .insertInto("followups")
+          .values({
+            ticket_id: fixture.ticketId,
+            source: "volunteer",
+            type: "message",
+            encrypted_content: Buffer.alloc(64, 0x11),
+          })
+          .returning("id")
+          .executeTakeFirstOrThrow();
+        await tenantDb
+          .insertInto("portal_messages")
+          .values({
+            channel_id: (
+              await tenantDb
+                .selectFrom("portal_channels")
+                .select("id")
+                .where("client_id", "=", fixture.clientId)
+                .where("kind", "=", "account")
+                .executeTakeFirstOrThrow()
+            ).id,
+            followup_id: copyFollowup.id,
+            direction: "from_client",
+            ephemeral_point: Buffer.alloc(32, 0x55),
+            nonce: Buffer.alloc(24, 0x66),
+            ciphertext: Buffer.alloc(64, 0x77),
+          })
+          .execute();
+
+        await caller.tickets.resetClientAccount({
+          ticketId: fixture.ticketId,
+        });
+
+        // Account row deleted
+        const acct = await tenantDb
+          .selectFrom("client_accounts")
+          .select("id")
+          .where("client_id", "=", fixture.clientId)
+          .executeTakeFirst();
+        expect(acct).toBeUndefined();
+
+        // Sessions cascaded
+        const sessions = await tenantDb
+          .selectFrom("client_account_sessions")
+          .select("id")
+          .where("account_id", "=", accountId)
+          .execute();
+        expect(sessions).toHaveLength(0);
+
+        // Tier reset to sms_email
+        const client = await tenantDb
+          .selectFrom("clients")
+          .select("communication_tier")
+          .where("id", "=", fixture.clientId)
+          .executeTakeFirstOrThrow();
+        expect(client.communication_tier).toBe("sms_email");
+      });
+
+      it("404s when the client has no account", async () => {
+        const { user, ...fixture } = await setupUserWithTicket();
+        const caller = createAuthedCaller(user);
+
+        await expectTrpcError(
+          caller.tickets.resetClientAccount({
+            ticketId: fixture.ticketId,
+          }),
+          "NOT_FOUND",
+        );
+      });
+
+      it("emits client_account_reset audit event with pseudonym only", async () => {
+        const { user, ...fixture } = await setupUserWithTicket();
+        const caller = createAuthedCaller(user);
+
+        await tenantDb
+          .updateTable("clients")
+          .set({ communication_tier: "account" })
+          .where("id", "=", fixture.clientId)
+          .execute();
+        await seedSecureLinkChannel(fixture.clientId, { kind: "account" });
+        await seedClientAccount(fixture.clientId);
+
+        await caller.tickets.resetClientAccount({
+          ticketId: fixture.ticketId,
+        });
+
+        const auditRow = await vi.waitFor(async () => {
+          const row = await tenantDb
+            .selectFrom("audit_log")
+            .select(["event_type", "actor_id", "metadata"])
+            .where("event_type", "=", "client_account_reset")
+            .where("actor_id", "=", user.id)
+            .orderBy("created_at", "desc")
+            .executeTakeFirst();
+          expect(row).toBeDefined();
+          return row!;
+        });
+        expect(auditRow.event_type).toBe("client_account_reset");
+        const meta = auditRow.metadata as Record<string, unknown>;
+        expect(meta).toEqual({ operation: "reset" });
+        expect(meta).not.toHaveProperty("username");
+        expect(meta).not.toHaveProperty("accountId");
+        expect(meta).not.toHaveProperty("channelId");
+      });
+    });
+
+    describe("ticket detail portal fields (account)", () => {
+      it("carries kind and accountOffer for a secure_link channel", async () => {
+        const { user, ...fixture } = await setupUserWithTicket();
+        const caller = createAuthedCaller(user);
+        await seedSecureLinkChannel(fixture.clientId, {
+          kind: "secure_link",
+          accountOffer: true,
+        });
+
+        // Update the tier so the fixture is consistent
+        await tenantDb
+          .updateTable("clients")
+          .set({ communication_tier: "secure_link" })
+          .where("id", "=", fixture.clientId)
+          .execute();
+
+        const detail = await caller.tickets.get({
+          ticketId: fixture.ticketId,
+        });
+        expect(detail.portalCapable).toBe(true);
+        expect(detail.portalChannel).not.toBeNull();
+        expect(detail.portalChannel!.kind).toBe("secure_link");
+        expect(detail.portalChannel!.accountOffer).toBe(true);
+      });
+
+      it("carries kind and accountOffer for an account channel", async () => {
+        const { user, ...fixture } = await setupUserWithTicket();
+        const caller = createAuthedCaller(user);
+        await seedSecureLinkChannel(fixture.clientId, { kind: "account" });
+
+        await tenantDb
+          .updateTable("clients")
+          .set({ communication_tier: "account" })
+          .where("id", "=", fixture.clientId)
+          .execute();
+
+        const detail = await caller.tickets.get({
+          ticketId: fixture.ticketId,
+        });
+        expect(detail.portalCapable).toBe(true);
+        expect(detail.portalChannel).not.toBeNull();
+        expect(detail.portalChannel!.kind).toBe("account");
+        expect(detail.portalChannel!.accountOffer).toBe(false);
+      });
+
+      it("portalCapable is true for account clients", async () => {
+        const { user, ...fixture } = await setupUserWithTicket();
+        const caller = createAuthedCaller(user);
+        await seedSecureLinkChannel(fixture.clientId, { kind: "account" });
+
+        const detail = await caller.tickets.get({
+          ticketId: fixture.ticketId,
+        });
+        expect(detail.portalCapable).toBe(true);
+      });
+    });
   },
 );

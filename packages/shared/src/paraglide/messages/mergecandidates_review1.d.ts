@@ -1,4 +1,4 @@
-export { mergecandidates_review1 as "mergeCandidates_review" };
+export { mergecandidates_review1 as mergeCandidates_review };
 export type LocalizedString = import("../runtime.js").LocalizedString;
 export type Mergecandidates_Review1Inputs = {};
 /**

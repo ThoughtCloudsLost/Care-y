@@ -27,6 +27,9 @@ import {
   updateTicketContentInputSchema,
   upgradeToSecureLinkInputSchema,
   updateOutboundMessageInputSchema,
+  setAccountOfferInputSchema,
+  resetClientAccountInputSchema,
+  portalChannelMetaSchema,
 } from "./tickets.js";
 
 /** Base64-encode a string of n arbitrary bytes. */
@@ -976,5 +979,105 @@ describe("createFollowUpInputSchema (portalCopy)", () => {
       },
     };
     expect(createFollowUpInputSchema.safeParse(input).success).toBe(false);
+  });
+});
+
+// --- Encrypted Account (volunteer side) ---
+
+describe("setAccountOfferInputSchema", () => {
+  it("accepts a valid offer toggle (enabled)", () => {
+    const result = setAccountOfferInputSchema.safeParse({
+      ticketId: VALID_UUID,
+      enabled: true,
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("accepts a valid offer toggle (disabled)", () => {
+    const result = setAccountOfferInputSchema.safeParse({
+      ticketId: VALID_UUID,
+      enabled: false,
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("rejects non-UUID ticketId", () => {
+    const result = setAccountOfferInputSchema.safeParse({
+      ticketId: "not-a-uuid",
+      enabled: true,
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it("rejects missing enabled field", () => {
+    const result = setAccountOfferInputSchema.safeParse({
+      ticketId: VALID_UUID,
+    });
+    expect(result.success).toBe(false);
+  });
+});
+
+describe("resetClientAccountInputSchema", () => {
+  it("accepts a valid reset input", () => {
+    const result = resetClientAccountInputSchema.safeParse({
+      ticketId: VALID_UUID,
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("rejects non-UUID ticketId", () => {
+    const result = resetClientAccountInputSchema.safeParse({
+      ticketId: "not-a-uuid",
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it("rejects missing ticketId", () => {
+    const result = resetClientAccountInputSchema.safeParse({});
+    expect(result.success).toBe(false);
+  });
+});
+
+describe("portalChannelMetaSchema", () => {
+  function validMeta(): Record<string, unknown> {
+    return {
+      clientPublic: fakeBase64(32),
+      hasPassphrase: false,
+      createdAt: "2026-08-20T12:00:00Z",
+      lastSeenAt: null,
+      kind: "secure_link",
+      accountOffer: false,
+    };
+  }
+
+  it("accepts a valid meta with kind secure_link", () => {
+    expect(portalChannelMetaSchema.safeParse(validMeta()).success).toBe(true);
+  });
+
+  it("accepts a valid meta with kind account", () => {
+    const input = { ...validMeta(), kind: "account" };
+    expect(portalChannelMetaSchema.safeParse(input).success).toBe(true);
+  });
+
+  it("accepts accountOffer true", () => {
+    const input = { ...validMeta(), accountOffer: true };
+    expect(portalChannelMetaSchema.safeParse(input).success).toBe(true);
+  });
+
+  it("rejects unknown kind", () => {
+    const input = { ...validMeta(), kind: "share_link" };
+    expect(portalChannelMetaSchema.safeParse(input).success).toBe(false);
+  });
+
+  it("rejects missing kind", () => {
+    const input = validMeta();
+    delete input.kind;
+    expect(portalChannelMetaSchema.safeParse(input).success).toBe(false);
+  });
+
+  it("rejects missing accountOffer", () => {
+    const input = validMeta();
+    delete input.accountOffer;
+    expect(portalChannelMetaSchema.safeParse(input).success).toBe(false);
   });
 });

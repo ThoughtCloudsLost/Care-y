@@ -31,6 +31,13 @@ import { ValidationError } from "../errors.js";
 import { ErrorCode } from "@care-y/shared";
 import type { FieldEncryptor } from "../crypto/field-encryptor.js";
 import { z } from "zod";
+import type {
+  AccountRegistrationInput,
+  AccountServiceDeps,
+} from "./account-service.js";
+import { createAccount } from "./account-service.js";
+import { storeClientCopy } from "./portal-message-service.js";
+import type { EciesTripleBuffers } from "./portal-message-service.js";
 
 const recipientIdsSchema = z.array(z.uuid());
 
@@ -63,6 +70,11 @@ export class IntakeDisabledError extends ValidationError {
 // Interfaces
 // ---------------------------------------------------------------------------
 
+export interface IntakeAccountInput {
+  readonly registration: AccountRegistrationInput;
+  readonly selfCopy: EciesTripleBuffers | null;
+}
+
 export interface IntakeTicketInput {
   readonly ticketId: string;
   readonly followUpId: string | null;
@@ -75,6 +87,7 @@ export interface IntakeTicketInput {
   readonly resolvedQueueId: string | null;
   readonly resolvedPriority: "low" | "normal" | "high" | "urgent" | null;
   readonly resolvedEscalationLevel: string | null;
+  readonly account: IntakeAccountInput | null;
 }
 
 export interface IntakeTicketResult {
@@ -109,6 +122,7 @@ export async function createIntakeTicket(
     readonly fieldEncryptor?: FieldEncryptor;
     readonly orgSchema: string;
     readonly orgSlug: string;
+    readonly accountServiceDeps?: AccountServiceDeps;
   },
   input: IntakeTicketInput,
 ): Promise<IntakeTicketResult> {
@@ -257,7 +271,43 @@ export async function createIntakeTicket(
         .executeTakeFirstOrThrow();
     }
 
-    // 6. Return result
+    // 6. Account creation (opt-in at intake, inside the same transaction)
+    if (input.account !== null && deps.accountServiceDeps != null) {
+      await createAccount(
+        trx,
+        deps.accountServiceDeps,
+        client.id,
+        input.account.registration,
+      );
+
+      // Seed the account thread with the intake message when selfCopy is present
+      if (input.account.selfCopy !== null) {
+        // Resolve the follow-up id for the self copy: the intake message
+        // follow-up when one exists (the client wrote a message),
+        // otherwise no selfCopy (no follow-up to bind to).
+        const selfCopyFollowUpId = input.followUpId;
+        if (selfCopyFollowUpId !== null) {
+          // Fetch the new account channel row id (just created by createAccount)
+          const accountChannel = await trx
+            .selectFrom("portal_channels")
+            .select("id")
+            .where("client_id", "=", client.id)
+            .where("status", "=", "active")
+            .where("kind", "=", "account")
+            .executeTakeFirstOrThrow();
+
+          await storeClientCopy(
+            trx,
+            accountChannel.id,
+            selfCopyFollowUpId,
+            input.account.selfCopy,
+            "from_client",
+          );
+        }
+      }
+    }
+
+    // 7. Return result
     return { ticketId: input.ticketId, clientAlias: alias };
   });
 
