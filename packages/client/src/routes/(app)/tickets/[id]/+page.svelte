@@ -16,6 +16,10 @@
   import { resolve } from "$app/paths";
   import { shellBack } from "$lib/shell/navigation.js";
   import { layoutMode } from "$lib/stores/layout-mode.svelte.js";
+  import {
+    beginSplitHandoff,
+    endSplitHandoff,
+  } from "$lib/stores/split-handoff.svelte.js";
   import TicketDetailOrchestrator from "$lib/components/tickets/TicketDetailOrchestrator.svelte";
 
   const ticketId = $derived(page.params.id ?? "");
@@ -26,11 +30,17 @@
   // The id is snapshotted before the goto: once navigation completes,
   // page.params.id is gone and the derived reads "", so pushing the
   // derived from inside .then() would open an empty pane.
+  //
+  // The handoff spans the two steps. Neither the route param nor the
+  // page state holds the id while the goto is in flight, so without it
+  // the split view shows its empty placeholder for those frames.
   $effect(() => {
     const id = ticketId;
     if (layoutMode.isDesktop && id && !fullView) {
+      beginSplitHandoff("tickets", id);
       void goto(resolve("/tickets"), { replaceState: true }).then(() => {
         pushState("", { ticketId: id });
+        endSplitHandoff("tickets");
       });
     }
   });

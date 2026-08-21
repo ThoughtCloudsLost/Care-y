@@ -17,15 +17,25 @@
   import { resolve } from "$app/paths";
   import { shellBack } from "$lib/shell/navigation.js";
   import { layoutMode } from "$lib/stores/layout-mode.svelte.js";
+  import {
+    beginSplitHandoff,
+    endSplitHandoff,
+  } from "$lib/stores/split-handoff.svelte.js";
   import ArticleDetailView from "$lib/components/library/ArticleDetailView.svelte";
 
   const articleId = $derived(page.params.articleId ?? "");
   const fullView = $derived(page.url.searchParams.get("full") === "1");
 
+  // The handoff spans the two steps. Neither the route param nor the
+  // page state holds the id while the goto is in flight, so without it
+  // the split view shows its empty placeholder for those frames.
   $effect(() => {
-    if (layoutMode.isDesktop && articleId && !fullView) {
+    const id = articleId;
+    if (layoutMode.isDesktop && id && !fullView) {
+      beginSplitHandoff("library", id);
       void goto(resolve("/library"), { replaceState: true }).then(() => {
-        pushState("", { articleId });
+        pushState("", { articleId: id });
+        endSplitHandoff("library");
       });
     }
   });

@@ -20,6 +20,11 @@
   import * as m from "$lib/paraglide/messages.js";
   import { layoutMode } from "$lib/stores/layout-mode.svelte.js";
   import {
+    beginSplitHandoff,
+    endSplitHandoff,
+    splitHandoffId,
+  } from "$lib/stores/split-handoff.svelte.js";
+  import {
     getScrollContainer,
     setScrollContainer,
   } from "$lib/shell/context.js";
@@ -30,8 +35,13 @@
 
   let { children }: { children: Snippet } = $props();
 
+  // Page state is the real carrier. The handoff fallback covers the
+  // frames of a layout-mode switch where the id has left the route
+  // param but has not landed in page state yet (or the reverse).
   const selectedTicketId = $derived(
-    typeof page.state.ticketId === "string" ? page.state.ticketId : undefined,
+    typeof page.state.ticketId === "string"
+      ? page.state.ticketId
+      : (splitHandoffId("tickets") ?? undefined),
   );
 
   // Only show split view on the list route, not when a detail route
@@ -82,15 +92,24 @@
   // Desktop→mobile: if a detail is open in split view and the viewport
   // shrinks below 1024px, navigate to the full-page detail route so
   // the user doesn't lose the ticket they were viewing.
+  //
+  // The pending check is what stops this from re-running: the handoff
+  // keeps selectedTicketId non-null after replaceState clears the page
+  // state, which would otherwise re-enter on the next reactive turn.
   $effect(() => {
-    if (!layoutMode.isDesktop && selectedTicketId != null) {
-      // Capture before replaceState: clearing page.state invalidates the
-      // selectedTicketId derived, and reading it afterwards yields
-      // undefined (this used to navigate to /tickets/undefined).
-      const id = selectedTicketId;
-      replaceState("", {});
-      void goto(resolve(`/tickets/${id}`));
-    }
+    if (layoutMode.isDesktop) return;
+    if (splitHandoffId("tickets") !== null) return;
+    // Capture before replaceState: clearing page.state invalidates the
+    // selectedTicketId derived, and reading it afterwards yields
+    // undefined (this used to navigate to /tickets/undefined).
+    const id = selectedTicketId;
+    if (id == null) return;
+
+    beginSplitHandoff("tickets", id);
+    replaceState("", {});
+    void goto(resolve(`/tickets/${id}`)).then(() => {
+      endSplitHandoff("tickets");
+    });
   });
 </script>
 

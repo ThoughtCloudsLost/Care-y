@@ -26,6 +26,7 @@
   } from "$app/navigation";
   import * as m from "$lib/paraglide/messages.js";
   import type { TabId, AreaId } from "$lib/shell/types.js";
+  import { splitHandoffId } from "$lib/stores/split-handoff.svelte.js";
   import AppShell from "$lib/shell/AppShell.svelte";
   import DemoSplash from "$demo/DemoSplash.svelte";
   import LoginMount from "$demo/LoginMount.svelte";
@@ -350,10 +351,17 @@
   // pathname alone, so without this overlay the bridge reports the
   // split view as the bare list and the location store snaps a
   // ticket-detail narration back to the tickets section.
+  //
+  // The handoff fallback covers the frames mid-switch, where the
+  // pathname has already dropped the id but page state has not taken
+  // it up yet. Switching frame presets crosses that window every time,
+  // and without the fallback the story visibly bounces off the list
+  // section on the way through.
   const splitViewTicketId = $derived.by((): string | null => {
     if (router.feature !== "tickets" || router.detail !== null) return null;
     const id = demoPage.state.ticketId;
-    return typeof id === "string" && id !== "" ? id : null;
+    if (typeof id === "string" && id !== "") return id;
+    return splitHandoffId("tickets");
   });
   // The library does the same dance: /library/[articleId] redirects to
   // /library and carries the article in page.state.articleId, so a
@@ -361,7 +369,8 @@
   const splitViewArticleId = $derived.by((): string | null => {
     if (router.feature !== "library" || router.detail !== null) return null;
     const id = demoPage.state.articleId;
-    return typeof id === "string" && id !== "" ? id : null;
+    if (typeof id === "string" && id !== "") return id;
+    return splitHandoffId("library");
   });
   const effectiveDetail = $derived(
     router.detail ?? splitViewTicketId ?? splitViewArticleId,
