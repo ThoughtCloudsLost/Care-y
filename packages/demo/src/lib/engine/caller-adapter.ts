@@ -11,7 +11,11 @@
 import { TRPCError } from "@trpc/server";
 import { TRPCClientError } from "@trpc/client";
 import { makeProcedureProxy, type ProcedureProxy } from "./proc-proxy.js";
-import { traceFlowSpan } from "../flow-events.js";
+import {
+  traceFlowSpan,
+  buildFlowDetail,
+  describeFlowError,
+} from "../flow-events.js";
 
 // ── Wire reshaping ─────────────────────────────────────────────────
 //
@@ -121,8 +125,44 @@ export function createCallerAdapter(deps: CallerAdapterDeps): ProcedureProxy {
     kind: "query" | "mutate",
     input?: unknown,
   ): Promise<unknown> {
+    const procedurePath = path.join(".");
+    // reshapeWire returns the original reference when no Uint8Array was
+    // found in the tree, so a reference mismatch is the cheapest "has
+    // ciphertext" signal. Captured here because resultDetail receives
+    // the already-reshaped return value.
+    let responseHadCiphertext = false;
     return traceFlowSpan(
-      { lane: "server", label: `route ${path.join(".")}` },
+      {
+        lane: "server",
+        label: `route ${procedurePath}`,
+        detail: () =>
+          buildFlowDetail({
+            source: procedurePath,
+            input: [{ name: "kind", value: kind, kind: "identifier" }],
+          }),
+        resultDetail: () =>
+          buildFlowDetail({
+            source: procedurePath,
+            result: [
+              {
+                name: "carries ciphertext",
+                value: responseHadCiphertext ? "yes" : "no",
+                kind: responseHadCiphertext ? "ciphertext" : "metadata",
+              },
+            ],
+          }),
+        failureDetail: (err) => {
+          // Only the code travels. TRPCError.message is free text and
+          // can embed the input values that caused the failure.
+          const code = isTrpcServerError(err)
+            ? err.code
+            : describeFlowError(err);
+          return buildFlowDetail({
+            source: procedurePath,
+            result: [{ name: "error", value: code, kind: "metadata" }],
+          });
+        },
+      },
       async () => {
         try {
           // Per-request user reload, mirroring the production session
@@ -150,7 +190,9 @@ export function createCallerAdapter(deps: CallerAdapterDeps): ProcedureProxy {
             const result = await (node as (i: unknown) => Promise<unknown>)(
               input,
             );
-            return reshapeWire(result);
+            const reshaped = reshapeWire(result);
+            responseHadCiphertext = reshaped !== result;
+            return reshaped;
           } finally {
             // Mark dirty after any mutation (success or failure) so the
             // next dispatch sees the updated user record. A procedure that

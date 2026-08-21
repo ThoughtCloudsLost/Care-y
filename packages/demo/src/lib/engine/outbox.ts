@@ -3,7 +3,7 @@
 // module, which must stay off the initial chunk (the engine loads through
 // a dynamic import behind the login resting state).
 
-import { emitFlowEvent } from "../flow-events.js";
+import { emitFlowEvent, buildFlowDetail } from "../flow-events.js";
 
 export interface OutboxEntry {
   readonly type: "email" | "sms";
@@ -18,13 +18,24 @@ const outboxListeners: ((entry: OutboxEntry) => void)[] = [];
 /** Appends an entry and notifies subscribers. Called by the engine's delivery stubs. */
 export function appendToOutbox(entry: OutboxEntry): void {
   outbox.push(entry);
-  // Recipients stay out of the preview: addresses and phone numbers
-  // never reach a log or a screen, demo data included.
+  // Recipients and bodies stay out of the preview: addresses carry PII
+  // and bodies carry 2FA codes.
+  const queueDepth = outbox.length;
   emitFlowEvent({
     lane: "server",
     direction: "local",
     label: `${entry.type} delivery`,
     seamKey: "outbox-delivery",
+    detail: buildFlowDetail({
+      input: [{ name: "type", value: entry.type, kind: "identifier" }],
+      result: [
+        {
+          name: "queue depth",
+          value: String(queueDepth),
+          kind: "metadata",
+        },
+      ],
+    }),
   });
   for (const cb of outboxListeners) {
     cb(entry);

@@ -336,6 +336,53 @@ export type DemoSeamKey =
   | "oprf-evaluator"
   | "outbox-delivery"
   | "recorded-derivation";
+/**
+ * How a value should be read. This is the band's E2E proof rather than
+ * decoration: a row marked ciphertext in the db lane is the claim that
+ * a seized database yields nothing, and a plaintext row appearing above
+ * the crypto lane would be that claim failing in public.
+ *
+ * Kinds are assigned at the tap, where the real type is still in hand
+ * (a Uint8Array bound parameter is ciphertext by construction), never
+ * guessed from the rendered string.
+ */
+export type FlowValueKind =
+  "ciphertext" | "plaintext" | "key-material" | "identifier" | "metadata";
+
+/**
+ * One field of a payload. Values arrive already rendered and truncated:
+ * taps own the decision about what is safe to show, so nothing
+ * downstream has to re-derive it.
+ */
+export interface FlowDetailRow {
+  /** Technical field name, untranslated. "$1", "slot", "rows returned". */
+  readonly name: string;
+  /** Display value, truncated at the tap to DETAIL_VALUE_MAX_CHARS. */
+  readonly value: string;
+  readonly kind: FlowValueKind;
+  /** Size of the underlying value where it is binary or base64. */
+  readonly bytes?: number;
+}
+
+/**
+ * Structured payload for one event, replacing nothing: payloadPreview
+ * stays as it is, and this sits beside it. Taps opt in.
+ *
+ * Row counts and value lengths are capped at the tap so a single wide
+ * statement cannot flood the detail panel, and so an oversized detail
+ * never crosses the bridge in the first place.
+ */
+export interface FlowDetail {
+  /** Full statement, procedure path, or operation. Rendered monospace. */
+  readonly source: string | null;
+  /** Going in: bound parameters, call arguments. */
+  readonly input: readonly FlowDetailRow[];
+  /** Coming back: row counts, byte counts, status. */
+  readonly result: readonly FlowDetailRow[];
+  /** Dominant kind, for the header chip. Null when mixed or unclassified. */
+  readonly classification: FlowValueKind | null;
+}
+
 export interface DemoFlowEvent {
   readonly id: number;
   readonly interactionId: number;
@@ -345,6 +392,29 @@ export interface DemoFlowEvent {
   readonly seamKey: DemoSeamKey | null;
   readonly payloadPreview: string | null;
   readonly durationMs: number | null;
+  /** Structured payload, or null for taps that do not supply one. */
+  readonly detail: FlowDetail | null;
+  /**
+   * Shared by both halves of a request/response pair, and equal to the
+   * request half's own id. Null for events that are not part of a span.
+   */
+  readonly spanId: number | null;
+  /**
+   * Marks an event as one of a repeated operation, so a run of them can
+   * fold into a stack instead of eating a column each.
+   *
+   * Opt-in per tap, and deliberately not derived from the label: only
+   * the tap knows whether seeing each member separately tells the reader
+   * anything. Twelve decrypts of the same slot do not; three different
+   * SELECTs do. Null means this event never stacks.
+   */
+  readonly groupKey: string | null;
+  /**
+   * Emission time from the flow clock, which is injectable. Used for
+   * offset-from-interaction-start; never for ordering or identity,
+   * which come from the monotonic id.
+   */
+  readonly at: number;
 }
 export type DemoFlowListener = (event: DemoFlowEvent) => void;
 
