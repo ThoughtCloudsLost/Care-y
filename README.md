@@ -10,6 +10,8 @@
 
 A call intake and case management system for mutual aid organizations serving at-risk populations. Both clients and volunteers face real danger if their identities or case details are exposed. CARE-Y is built so that even a seized server reveals nothing about who sought help or who provided it.
 
+**[Try the interactive handbook](https://handbook.care-y.org)** to see every feature running in your browser.
+
 <p align="center">
   <img src="docs/images/ios-pwa/care-y-home-dashboard.png" alt="CARE-Y dashboard showing shift status, queue counts, and priority tickets" width="200">
   <img src="docs/images/ios-pwa/care-y-ticket-list-filtered.png" alt="Ticket list with filter pills, priority badges, and message previews" width="200">
@@ -25,7 +27,7 @@ CARE-Y is built for organizations where a database breach or legal subpoena coul
 
 The system is designed for small mutual aid nonprofits. These groups handle sensitive information with limited technical resources, and a data breach can have devastating consequences to both the members of the organization and the people they provide aid to.
 
-CARE-Y runs as a multi-tenant hosted service or a self-hosted single-tenant instance from the same codebase. Self-hosted deployments use BYOT (bring your own telephony) configuration.
+CARE-Y runs as a multi-tenant hosted service or a self-hosted single-tenant instance from the same codebase. Self-hosted deployments use BYOT (bring your own telephony) configuration. ([handbook: telephony provider setup](https://handbook.care-y.org/#admin-comms/provider))
 
 ---
 
@@ -63,14 +65,14 @@ CARE-Y makes that scenario architecturally impossible. The server stores only ci
   <img src="docs/images/ios-pwa/care-y-desktop-tickets.png" alt="Desktop split view with ticket list and ticket detail side by side" width="100%">
 </p>
 
-- **Encrypted case management.** Tickets, messages, case notes, and client data are encrypted with per-ticket keys in the browser before reaching the server.
-- Inbound texts are **encrypted on arrival**. Outbound messages pass through a stateless relay that zeros memory after forwarding.
-- **Knowledge base** with rich text articles, categories, voting, and search. Content encrypted with the org key before reaching the server.
-- **Queue-based routing.** Tickets go into org-defined queues with priority levels and assignment workflows.
-- Unified **search** across tickets, knowledge base articles, and volunteers from a single interface.
-- **Role-based access.** Volunteer, Manager, and Admin roles with granular permissions. Encryption key status visible per user.
+- **Encrypted case management.** Tickets, messages, case notes, and client data are encrypted with per-ticket keys in the browser before reaching the server. ([handbook: ticket decryption](https://handbook.care-y.org/#tickets/decryption), [ticket detail](https://handbook.care-y.org/#ticket-detail))
+- Inbound texts are **encrypted on arrival**. Outbound messages pass through a stateless relay that zeros memory after forwarding. ([handbook: conversation](https://handbook.care-y.org/#ticket-detail/conversation))
+- **Knowledge base** with rich text articles, categories, voting, and search. Content encrypted with the org key before reaching the server. ([handbook: library](https://handbook.care-y.org/#library))
+- **Queue-based routing.** Tickets go into org-defined queues with priority levels and assignment workflows. ([handbook: queue management](https://handbook.care-y.org/#admin-people/queues))
+- Unified **search** across tickets, knowledge base articles, and volunteers from a single interface. ([handbook: search](https://handbook.care-y.org/#search))
+- **Role-based access.** Volunteer, Manager, and Admin roles with granular permissions. Encryption key status visible per user. ([handbook: roles](https://handbook.care-y.org/#admin-people/roles))
 - Installable **PWA** with dark mode and offline asset caching. The service worker never caches encrypted content.
-- **i18n** via Paraglide JS (compile-time, tree-shaken). English and Spanish included.
+- **i18n** via Paraglide JS (compile-time, tree-shaken). English and Spanish included. ([handbook: language selection](https://handbook.care-y.org/#login/language))
 
 ---
 
@@ -78,12 +80,12 @@ CARE-Y makes that scenario architecturally impossible. The server stores only ci
 
 CARE-Y serves populations with varied technical backgrounds and language needs.
 
-- **WCAG AA contrast enforcement.** Each org sets its own brand colors. A contrast engine adjusts them at runtime to meet 4.5:1 ratios in both light and dark mode.
+- **WCAG AA contrast enforcement.** Each org sets its own brand colors. A contrast engine adjusts them at runtime to meet 4.5:1 ratios in both light and dark mode. ([handbook: branding](https://handbook.care-y.org/#admin-org/branding))
 - **Focus management.** Modal sheets and dialogs use focus traps with Tab/Shift+Tab wrapping and focus restoration on dismiss. Keyboard activation (Enter/Space) on all interactive elements.
 - **Reduced motion.** Animations respect `prefers-reduced-motion`. Users who need reduced motion get static alternatives.
 - **Increased contrast.** `prefers-contrast: more` is respected across all interactive elements.
 - **Screen reader support.** All interactive elements carry ARIA labels. Dynamic content changes are announced, and visual-only cues have text equivalents.
-- **Multilingual.** English and Spanish translations via Paraglide JS (compile-time, tree-shaken). Adding a new language requires only adding JSON file.
+- **Multilingual.** English and Spanish translations via Paraglide JS (compile-time, tree-shaken). Adding a new language requires only adding JSON file. ([handbook: language selection](https://handbook.care-y.org/#login/language))
 
 ---
 
@@ -95,7 +97,7 @@ Many of CARE-Y's users are not technical. The Exposure system teaches security t
 
 **How much of that protection the volunteer is using.** Some protections are architectural and always active (encryption). Others depend on choices the volunteer or their admin makes. A hardware security key prevents phishing. A Tor connection hides who is using the service. Self-hosted voice keeps call audio off third-party servers. The Exposure system shows which protections are active and what can be done to turn on the rest.
 
-**What the system cannot protect.** A compromised device or a malicious browser extension can read decrypted content, and CARE-Y cannot prevent that. The onboarding walkthrough and login summary name these risks directly and tell volunteers what to do about them. Contextual notifications reinforce this at the moment it matters. Opening an SMS-originated ticket, for example, reminds the volunteer that the original text passed through the phone provider before it was encrypted.
+**What the system cannot protect.** A compromised device or a malicious browser extension can read decrypted content, and CARE-Y cannot prevent that. The onboarding walkthrough and login summary name these risks directly and tell volunteers what to do about them. Contextual notifications reinforce this at the moment it matters. Opening an SMS-originated ticket, for example, reminds the volunteer that the original text passed through the phone provider before it was encrypted. ([handbook: exposure hints](https://handbook.care-y.org/#ticket-detail/exposure-hints))
 
 The Exposure system is under active development.
 
@@ -117,7 +119,7 @@ The client portal is under active development.
 
 ## How Your Data Is Protected
 
-CARE-Y encrypts data in the volunteer's browser. The server stores only ciphertext it cannot read.
+CARE-Y encrypts data in the volunteer's browser. The server stores only ciphertext it cannot read. ([handbook: key derivation](https://handbook.care-y.org/#login/key-derivation))
 
 <img src="docs/images/crypto-v2/simplified-transparent-crypto-v2-mermaid.png" alt="CARE-Y simplified crypto hierarchy: volunteer password derives split keys across two OPRF servers, producing encryption keys for client data, org resources, and public branding" width="800">
 
@@ -137,7 +139,7 @@ CARE-Y encrypts data in the volunteer's browser. The server stores only cipherte
 - **The split changes daily.** Even if someone captures one server's share, it expires within 24 hours.
 - **Phone calls and texts are not stored.** Outbound messages pass through the server and are erased from memory immediately.
 - **Inbound texts are encrypted on arrival.** The phone provider retains its own copy for ~30 days (federal law), but CARE-Y's copy is encrypted the moment it arrives.
-- **Escrow for emergencies.** Four separate recovery keys on offline USB drives held by different custodians.
+- **Escrow for emergencies.** Four separate recovery keys on offline USB drives held by different custodians. ([handbook: key management](https://handbook.care-y.org/#admin-org/keys))
 
 <details>
 <summary><b>E2EE Technical Details</b></summary>
@@ -189,10 +191,10 @@ Each organization gets an isolated PostgreSQL schema (`org_<uuid>`). Cross-org q
 
 **Data flow:**
 
-- **Web intake forms and case notes:** true end-to-end encryption. Plaintext never reaches the server.
-- **Outbound SMS/calls:** volunteer's browser decrypts, sends to one-shot relay endpoint, server forwards to telephony provider and zeros the buffer immediately. The server does not store or log the content.
+- **Web intake forms and case notes:** true end-to-end encryption. Plaintext never reaches the server. ([handbook: ticket decryption](https://handbook.care-y.org/#tickets/decryption))
+- **Outbound SMS/calls:** volunteer's browser decrypts, sends to one-shot relay endpoint, server forwards to telephony provider and zeros the buffer immediately. The server does not store or log the content. ([handbook: reply](https://handbook.care-y.org/#ticket-detail/reply))
 - **Inbound SMS:** encrypted on receipt, plaintext purged. Telephony provider retains independently (~30 days).
-- **Telephony abstraction:** Twilio initially, SignalWire hybrid (self-hosted voice) planned. Switching providers requires configuration changes only.
+- **Telephony abstraction:** Twilio initially, SignalWire hybrid (self-hosted voice) planned. Switching providers requires configuration changes only. ([handbook: telephony provider](https://handbook.care-y.org/#admin-comms/provider))
 
 ---
 
@@ -244,7 +246,7 @@ packages/
 
 ## Status
 
-CARE-Y is in active development. The backend (auth, crypto, telephony, ticket system) is functionally complete. The frontend volunteer app is nearing completion (design system, onboarding, dashboard, ticket views, knowledge base, and admin are built. Client portal, shift scheduling, and production infrastructure remain).
+CARE-Y is in active development. The backend (auth, crypto, telephony, ticket system) is functionally complete. The frontend volunteer app is nearing completion (design system, onboarding, [dashboard](https://handbook.care-y.org/#dashboard), [ticket views](https://handbook.care-y.org/#tickets), [knowledge base](https://handbook.care-y.org/#library), and [admin](https://handbook.care-y.org/#admin) are built. Client portal, [shift scheduling](https://handbook.care-y.org/#schedule), and production infrastructure remain).
 
 ---
 
@@ -254,11 +256,11 @@ See [SECURITY.md](SECURITY.md) for vulnerability reporting.
 
 Key security principles:
 
-- **Server cannot decrypt client data.** Decryption requires the volunteer's password plus OPRF evaluation from both threshold servers.
-- **E2E for all client-authored content.** Encrypted in the browser before transmission.
+- **Server cannot decrypt client data.** Decryption requires the volunteer's password plus OPRF evaluation from both threshold servers. ([handbook: key derivation](https://handbook.care-y.org/#login/key-derivation))
+- **E2E for all client-authored content.** Encrypted in the browser before transmission. ([handbook: ticket decryption](https://handbook.care-y.org/#tickets/decryption))
 - **Telephony relay zeroes memory.** `Buffer.fill(0)` in `finally` blocks. Plaintext is never held as a JS string and relay requests are not logged.
 - **Webhook signatures always validated**, even in development.
-- **2FA mandatory for data access.** All volunteers, all environments. Authentication succeeds without 2FA, but accessing any encrypted data requires a verified second factor.
+- **2FA mandatory for data access.** All volunteers, all environments. Authentication succeeds without 2FA, but accessing any encrypted data requires a verified second factor. ([handbook: two-factor auth](https://handbook.care-y.org/#login/two-factor))
 - **EU hosting.** Hetzner VPS, LUKS full-disk encryption, outside US legal jurisdiction.
 
 ---
