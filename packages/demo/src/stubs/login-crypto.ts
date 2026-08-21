@@ -17,7 +17,9 @@ import {
 import {
   emitFlowEvent,
   flowNow,
+  buildFlowDetail,
   replayRecordedEvents,
+  roundFlowDuration,
 } from "../lib/flow-events.js";
 import type { RecordedFlowEvent } from "../lib/flow-events.js";
 
@@ -172,18 +174,67 @@ export function setLoginCryptoStageListener(
   stageListener = listener;
 }
 
+/** Scripted durations for each phase, matching the wait() calls below. */
+/**
+ * The pace the demo plays each phase at, which is not the same as the
+ * time the real derivation takes. Both go in the detail so the seam is
+ * honest about which number is which.
+ *
+ * A switch rather than a keyed record: every phase is covered at compile
+ * time and no variable index reaches an object.
+ */
+function scriptedDurationMs(phase: ReplayPhase): number {
+  switch (phase) {
+    case "argon2id":
+      return 1500;
+    case "oprf":
+      return 1500;
+    case "derive":
+      return 1200;
+  }
+}
+
 /**
  * Report a paced phase to the flow band. The durations are the demo's
  * narratable timings, not the real derivation, which is why every phase
  * event carries the login-pacing seam.
  */
-function emitPhase(label: string, startedAt: number | null): void {
+function emitPhase(
+  phase: ReplayPhase,
+  polarity: "start" | "done",
+  startedAt: number | null,
+): void {
+  const measuredMs = startedAt === null ? null : flowNow() - startedAt;
   emitFlowEvent({
     lane: "crypto",
     direction: "local",
-    label,
+    label: `${phase} ${polarity}`,
     seamKey: "login-pacing",
-    durationMs: startedAt === null ? null : flowNow() - startedAt,
+    durationMs: measuredMs,
+    detail: buildFlowDetail({
+      input: [
+        { name: "phase", value: phase, kind: "identifier" },
+        { name: "polarity", value: polarity, kind: "metadata" },
+      ],
+      result:
+        polarity === "done"
+          ? [
+              {
+                name: "scripted duration",
+                value: `${String(scriptedDurationMs(phase))}ms`,
+                kind: "metadata",
+              },
+              {
+                name: "measured duration",
+                value:
+                  measuredMs === null
+                    ? "n/a"
+                    : `${String(roundFlowDuration(measuredMs) ?? 0)}ms`,
+                kind: "metadata",
+              },
+            ]
+          : [],
+    }),
   });
 }
 
@@ -225,31 +276,31 @@ async function runPacedLogin(
   callbacks.onArgon2idStart();
   stageListener?.("argon2id");
   const argon2idStartedAt = flowNow();
-  emitPhase("argon2id start", null);
+  emitPhase("argon2id", "start", null);
   if (phased !== null && phased.argon2id.length > 0) {
     replayRecordedEvents(phased.argon2id, "recorded-derivation");
   }
   await wait(1500);
   callbacks.onArgon2idDone();
-  emitPhase("argon2id done", argon2idStartedAt);
+  emitPhase("argon2id", "done", argon2idStartedAt);
 
   // OPRF phase (~1.5s)
   callbacks.onOprfStart();
   stageListener?.("oprf");
   const oprfStartedAt = flowNow();
-  emitPhase("oprf start", null);
+  emitPhase("oprf", "start", null);
   if (phased !== null && phased.oprf.length > 0) {
     replayRecordedEvents(phased.oprf, "recorded-derivation");
   }
   await wait(1500);
   callbacks.onOprfDone();
-  emitPhase("oprf done", oprfStartedAt);
+  emitPhase("oprf", "done", oprfStartedAt);
 
   // Derive phase (~1.2s)
   callbacks.onDeriveStart();
   stageListener?.("derive");
   const deriveStartedAt = flowNow();
-  emitPhase("derive start", null);
+  emitPhase("derive", "start", null);
   if (phased !== null && phased.derive.length > 0) {
     replayRecordedEvents(phased.derive, "recorded-derivation");
   }
@@ -262,7 +313,7 @@ async function runPacedLogin(
   // Done
   callbacks.onDone();
   stageListener?.("done");
-  emitPhase("derive done", deriveStartedAt);
+  emitPhase("derive", "done", deriveStartedAt);
 
   // Return the REAL result from ensureKeyed
   const result = getEnsureKeyedResult();

@@ -51,6 +51,7 @@
   } from "./types";
   import TabbarNav from "./TabbarNav.svelte";
   import { layoutMode } from "$lib/stores/layout-mode.svelte";
+  import { endSplitHandoff } from "$lib/stores/split-handoff.svelte.js";
   import DesktopSidebar from "./DesktopSidebar.svelte";
   import { savedFilterStore } from "$lib/stores/saved-filters.svelte";
   import { kbSavedFilterStore } from "$lib/stores/kb-saved-filters.svelte";
@@ -1114,6 +1115,10 @@
         typeof state.ticketId === "string" ||
         typeof state.articleId === "string"
       ) {
+        // Escape means the bare list. End both handoffs so a redirect
+        // still in flight cannot push its row back a moment later.
+        endSplitHandoff("tickets");
+        endSplitHandoff("library");
         replaceState("", {});
       }
       return;

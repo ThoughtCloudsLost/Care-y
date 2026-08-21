@@ -15,7 +15,8 @@
  */
 
 import { DemoEngineError } from "../errors.js";
-import { traceFlowLocal } from "../../flow-events.js";
+import { traceFlowLocal, buildFlowDetail } from "../../flow-events.js";
+import type { FlowDetailRowInput } from "../../flow-events.js";
 import type {
   DatabaseConnection,
   DatabaseIntrospector,
@@ -145,6 +146,70 @@ function previewParams(params: readonly unknown[] | undefined): string | null {
     .join(", ");
 }
 
+/** Classify a single bound parameter into a detail row. */
+function buildParamRows(
+  params: readonly unknown[] | undefined,
+): FlowDetailRowInput[] {
+  if (params === undefined || params.length === 0) return [];
+  return params.map((param, i): FlowDetailRowInput => {
+    const name = `$${String(i + 1)}`;
+    if (param === null || param === undefined) {
+      return { name, value: String(param), kind: "metadata" };
+    }
+    if (param instanceof Uint8Array) {
+      return {
+        name,
+        value: describeBytes(param),
+        kind: "ciphertext",
+        bytes: param.length,
+      };
+    }
+    if (param instanceof Date) {
+      return { name, value: param.toISOString(), kind: "metadata" };
+    }
+    if (typeof param === "string") {
+      const display =
+        param.length > 24 ? `"${param.slice(0, 24)}..."` : `"${param}"`;
+      return { name, value: display, kind: "plaintext" };
+    }
+    if (
+      typeof param === "number" ||
+      typeof param === "boolean" ||
+      typeof param === "bigint"
+    ) {
+      return { name, value: String(param), kind: "metadata" };
+    }
+    return { name, value: "[object]", kind: "metadata" };
+  });
+}
+
+/** Build result-side detail rows from a PGlite result. */
+function buildResultRows(
+  result: Results<Record<string, unknown>>,
+): FlowDetailRowInput[] {
+  const rows: FlowDetailRowInput[] = [
+    {
+      name: "rows returned",
+      value: String(result.rows.length),
+      kind: "metadata",
+    },
+    {
+      name: "column count",
+      value: String(result.fields.length),
+      kind: "metadata",
+    },
+  ];
+  // affectedRows is undefined for SELECT statements
+  if (result.affectedRows !== undefined) {
+    rows.push({
+      name: "rows affected",
+      value: String(result.affectedRows),
+      kind: "metadata",
+    });
+  }
+  return rows;
+}
+
 // ── Connection serialization queue ──────────────────────────────────
 
 class PGliteConnection implements DatabaseConnection {
@@ -161,7 +226,18 @@ class PGliteConnection implements DatabaseConnection {
       {
         lane: "db",
         label: () => describeSql(sql),
+        // The statement text itself, which costs nothing to produce and
+        // is exact: the same parameterized query run back to back over
+        // different rows folds, while two different statements never do.
+        // Never displayed; the detail carries the readable SQL.
+        groupKey: sql,
         payloadPreview: () => previewParams(params) ?? "",
+        resultDetail: (res) =>
+          buildFlowDetail({
+            source: sql,
+            input: buildParamRows(params),
+            result: buildResultRows(res),
+          }),
       },
       async (): Promise<Results<Record<string, unknown>>> =>
         this.pg.query(sql, params as unknown[]),

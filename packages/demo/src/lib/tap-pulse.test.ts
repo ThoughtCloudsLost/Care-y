@@ -196,6 +196,20 @@ describe("isStrictShellNav vs isNavChrome", () => {
     expect(isStrictShellNav(document.getElementById("d")!)).toBe(false);
   });
 
+  it("isStrictShellNav exempts the section scroll nav", () => {
+    // The guard stops taps that would leave the narrated screen. The
+    // SectionScrollNav scrolls WITHIN it, so its buttons stay tappable
+    // even though the control is a nav landmark.
+    mount(`
+      <nav class="section-scroll-nav">
+        <button id="sec" data-section-id="branding">x</button>
+      </nav>
+    `);
+    const button = document.getElementById("sec")!;
+    expect(isStrictShellNav(button)).toBe(false);
+    expect(isNavChrome(button)).toBe(true);
+  });
+
   it("isNavChrome still includes tablist for finder preference", () => {
     mount(`
       <div role="tablist"><button id="tab">Tab</button></div>

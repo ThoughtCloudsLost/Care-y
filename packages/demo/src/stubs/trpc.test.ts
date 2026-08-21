@@ -383,6 +383,21 @@ describe("trpc stub", () => {
 
       const previews = flow.map((e) => e.payloadPreview);
       expect(previews.every((p) => p === null)).toBe(true);
+
+      // The structured detail must obey the same blanket guard. Checking
+      // the serialized event rather than named fields catches a leak
+      // through any row, source, or field added to the shape later.
+      const serialized = JSON.stringify(flow);
+      expect(serialized).not.toContain("DemoPassword2026");
+      expect(serialized).not.toContain("jdoe");
+
+      // Nothing on the tRPC lane may carry an input row at all, whatever
+      // the procedure. The guard is blanket, not password-specific.
+      for (const event of flow) {
+        for (const row of event.detail?.input ?? []) {
+          expect(row.name).toBe("kind");
+        }
+      }
     });
 
     it("flags a failed call without leaking the message", async () => {

@@ -42,10 +42,12 @@ import type { BridgeState } from "$lib/workers/crypto-bridge.js";
 import type { LoginCryptoResult } from "$lib/auth/login-crypto.js";
 import {
   traceFlowLocal,
+  buildFlowDetail,
+  describeFlowBytes,
   startFlowRecording,
   stopFlowRecording,
 } from "../lib/flow-events.js";
-import type { RecordedFlowEvent } from "../lib/flow-events.js";
+import type { FlowDetail, RecordedFlowEvent } from "../lib/flow-events.js";
 
 // -----------------------------------------------------------------------
 // Error type
@@ -53,6 +55,98 @@ import type { RecordedFlowEvent } from "../lib/flow-events.js";
 
 class DemoCryptoContextError extends Error {
   override readonly name = "DemoCryptoContextError";
+}
+
+// -----------------------------------------------------------------------
+// Base64 byte-length arithmetic
+// -----------------------------------------------------------------------
+
+/**
+ * Compute the decoded byte length of a base64 string without decoding it.
+ * Handles both standard and URL-safe base64, with or without padding.
+ */
+export function base64DecodedLength(b64: string): number {
+  const len = b64.length;
+  if (len === 0) return 0;
+  // Count trailing '=' padding chars
+  let padding = 0;
+  if (b64[len - 1] === "=") padding += 1;
+  if (len > 1 && b64[len - 2] === "=") padding += 1;
+  return Math.floor((len * 3) / 4) - padding;
+}
+
+// -----------------------------------------------------------------------
+// Decrypt flow detail
+// -----------------------------------------------------------------------
+
+/** The ciphertext-side arguments a decrypt is handed. */
+export interface DecryptDetailArgs {
+  readonly slot: string;
+  readonly keyCacheId: string;
+  readonly ciphertext: string;
+  readonly wrappedKey: string;
+  readonly nonce: string;
+  readonly ephemeralPoint: string;
+}
+
+/**
+ * Rows describing one decrypt for the flow band.
+ *
+ * Everything going in is opaque, and the only thing reported coming out
+ * is how many bytes appeared. The decrypted string is never a parameter
+ * here: this function takes a LENGTH, so there is no argument a caller
+ * could pass that would put readable content on screen. That is the
+ * whole reason it is separate from the call site.
+ *
+ * Pure and exported so the guarantee can be tested directly, without
+ * standing up a keyed worker and waiting out the reveal stagger.
+ */
+export function buildDecryptDetail(
+  args: DecryptDetailArgs,
+  plaintextByteLength: number,
+): FlowDetail {
+  const ctBytes = base64DecodedLength(args.ciphertext);
+  const wrappedBytes = base64DecodedLength(args.wrappedKey);
+  const nonceBytes = base64DecodedLength(args.nonce);
+  const pointBytes = base64DecodedLength(args.ephemeralPoint);
+  return buildFlowDetail({
+    input: [
+      { name: "slot", value: args.slot, kind: "identifier" },
+      { name: "keyCacheId", value: args.keyCacheId, kind: "identifier" },
+      {
+        name: "ciphertext",
+        value: describeFlowBytes(ctBytes),
+        kind: "ciphertext",
+        bytes: ctBytes,
+      },
+      {
+        name: "wrappedKey",
+        value: describeFlowBytes(wrappedBytes),
+        kind: "key-material",
+        bytes: wrappedBytes,
+      },
+      {
+        name: "nonce",
+        value: describeFlowBytes(nonceBytes),
+        kind: "key-material",
+        bytes: nonceBytes,
+      },
+      {
+        name: "ephemeralPoint",
+        value: describeFlowBytes(pointBytes),
+        kind: "key-material",
+        bytes: pointBytes,
+      },
+    ],
+    result: [
+      {
+        name: "plaintext",
+        value: describeFlowBytes(plaintextByteLength),
+        kind: "plaintext",
+        bytes: plaintextByteLength,
+      },
+    ],
+  });
 }
 
 // -----------------------------------------------------------------------
@@ -125,7 +219,26 @@ function createPacingBridge(real: CryptoBridge): PacingBridgeWrapper {
     // Timed after pacedWait, so the reported duration is the real
     // worker decrypt without the demo's reveal stagger.
     return traceFlowLocal(
-      { lane: "crypto", label: `decrypt ${slot} ${keyCacheId}` },
+      {
+        lane: "crypto",
+        label: `decrypt ${slot} ${keyCacheId}`,
+        // Keyed per slot, so a list decrypting twelve titles folds into
+        // one stack while a title and a body stay apart. Reading each
+        // title decrypt separately tells you nothing the count does not.
+        groupKey: `decrypt:${slot}`,
+        resultDetail: (plaintext) =>
+          buildDecryptDetail(
+            {
+              slot,
+              keyCacheId,
+              ciphertext,
+              wrappedKey,
+              nonce,
+              ephemeralPoint,
+            },
+            plaintext.length,
+          ),
+      },
       async () =>
         real.decrypt(
           ticketId,
@@ -150,7 +263,23 @@ function createPacingBridge(real: CryptoBridge): PacingBridgeWrapper {
     const cacheKey = `rewrap:${followUpId}`;
     await pacedWait(cacheKey);
     return traceFlowLocal(
-      { lane: "crypto", label: `decryptAndRewrap ${cacheKey}` },
+      {
+        lane: "crypto",
+        label: `decryptAndRewrap ${cacheKey}`,
+        groupKey: "decryptAndRewrap",
+        resultDetail: (plaintext) =>
+          buildDecryptDetail(
+            {
+              slot: "followUp",
+              keyCacheId: cacheKey,
+              ciphertext,
+              wrappedKey,
+              nonce,
+              ephemeralPoint,
+            },
+            plaintext.length,
+          ),
+      },
       async () =>
         real.decryptAndRewrap(
           followUpId,

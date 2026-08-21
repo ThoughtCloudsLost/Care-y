@@ -1,23 +1,29 @@
 <script lang="ts">
   /**
-   * One flow event as a compact card. Carries its lane's icon and color
-   * accent so the lane stays readable wherever the card is shown: in a
-   * swimlane row, in the small-viewport list, or in the detail strip
-   * where row geometry is gone.
+   * One flow event as a compact card. The lane color washes the whole
+   * card surface at low alpha, matching the register/tinted-block pattern
+   * from the Inkwell design language. No left-border accent.
    *
-   * Text uses the page's normal colors. The lane color is an edge strip
-   * and an icon tint, never the label.
+   * The meta row (lane icon, direction, classification icon, duration)
+   * sits above the label so the card is legible without opening.
    */
 
-  import { Clapperboard } from "@lucide/svelte";
+  import { ArrowDown, ArrowUp, Clapperboard, RefreshCw } from "@lucide/svelte";
+  import * as m from "$lib/paraglide/messages.js";
   import FlowBandLaneIcon from "./FlowBandLaneIcon.svelte";
+  import FlowBandKindIcon from "./FlowBandKindIcon.svelte";
   import { laneColorVar } from "./flow-band.svelte.js";
-  import type { DemoFlowEvent } from "./bridge.js";
+  import type { DemoFlowEvent, FlowValueKind } from "./bridge.js";
 
   interface Props {
     event: DemoFlowEvent;
     /** Localized lane name. Shown in list mode, read out in lane mode. */
     laneName: string;
+    /**
+     * Localized direction name. The arrow is decorative, so this is what
+     * a screen reader gets for request versus response.
+     */
+    directionName: string;
     /** Localized "scripted in this demo" badge text. */
     seamBadge: string;
     /** Localized hint for what clicking does next, shown as the tooltip. */
@@ -25,18 +31,45 @@
     expanded: boolean;
     /** "lane" sits in a swimlane row; "list" is the small-viewport card. */
     variant?: "lane" | "list";
+    /** Read so message calls re-run when the page locale changes. */
+    locale?: string;
     onToggle: (eventId: number) => void;
   }
 
   let {
     event,
     laneName,
+    directionName,
     seamBadge,
     toggleHint,
     expanded,
     variant = "lane",
+    locale,
     onToggle,
   }: Props = $props();
+
+  function classificationLabel(kind: FlowValueKind): string {
+    void locale;
+    switch (kind) {
+      case "ciphertext":
+        return m.demo_flow_kind_ciphertext();
+      case "plaintext":
+        return m.demo_flow_kind_plaintext();
+      case "key-material":
+        return m.demo_flow_kind_key_material();
+      case "identifier":
+        return m.demo_flow_kind_identifier();
+      case "metadata":
+        return m.demo_flow_kind_metadata();
+    }
+  }
+
+  function durationText(ms: number): string {
+    void locale;
+    return m.demo_flow_duration_ms({ ms: String(ms) });
+  }
+
+  const classification = $derived(event.detail?.classification ?? null);
 </script>
 
 <button
@@ -50,37 +83,59 @@
   aria-expanded={expanded}
   onclick={() => onToggle(event.id)}
 >
-  <span class="card-icon" aria-hidden="true">
-    <FlowBandLaneIcon lane={event.lane} size={14} />
-  </span>
-  <span class="card-text">
+  <span class="card-meta">
+    <span class="card-meta-icon" aria-hidden="true">
+      <FlowBandLaneIcon lane={event.lane} size={12} />
+    </span>
     {#if variant === "list"}
-      <span class="card-lane">{laneName}</span>
+      <span class="card-lane-word">{laneName}</span>
     {:else}
       <span class="card-sr">{laneName}</span>
     {/if}
-    <span class="card-label">{event.label}</span>
-  </span>
-  {#if event.seamKey !== null}
-    <span class="card-seam">
-      <Clapperboard size={10} />
-      <span class="card-sr">{seamBadge}</span>
+    <span class="card-dir" aria-hidden="true">
+      {#if event.direction === "up"}
+        <ArrowUp size={11} />
+      {:else if event.direction === "down"}
+        <ArrowDown size={11} />
+      {:else}
+        <RefreshCw size={11} />
+      {/if}
     </span>
-  {/if}
+    <span class="card-sr">{directionName}</span>
+    {#if classification !== null}
+      <span
+        class="card-class"
+        aria-hidden="true"
+        title={classificationLabel(classification)}
+      >
+        <FlowBandKindIcon kind={classification} size={11} />
+      </span>
+      <span class="card-sr">{classificationLabel(classification)}</span>
+    {/if}
+    {#if event.durationMs !== null}
+      <span class="card-dur">{durationText(event.durationMs)}</span>
+    {/if}
+    {#if event.seamKey !== null}
+      <span class="card-seam" aria-hidden="true">
+        <Clapperboard size={10} />
+      </span>
+      <span class="card-sr">{seamBadge}</span>
+    {/if}
+  </span>
+  <span class="card-label">{event.label}</span>
 </button>
 
 <style>
   .flow-card {
     display: flex;
-    align-items: flex-start;
-    gap: 0.375rem;
+    flex-direction: column;
+    gap: 1px;
     width: 100%;
     min-width: 0;
-    padding: 0.25rem 0.375rem;
-    border: 1px solid color-mix(in srgb, var(--ink) 10%, transparent);
-    border-left: 3px solid var(--lane-color);
-    border-radius: 8px;
-    background: var(--raised);
+    padding: 3px 5px;
+    border: 1px solid var(--hair);
+    border-radius: 10px;
+    background: color-mix(in srgb, var(--lane-color) 8%, var(--raised));
     color: var(--ink);
     text-align: left;
     cursor: pointer;
@@ -90,8 +145,16 @@
       box-shadow 0.15s ease;
   }
 
+  :global(html.dark) .flow-card {
+    background: color-mix(in srgb, var(--lane-color) 12%, var(--raised));
+  }
+
   .flow-card:hover {
-    background: color-mix(in srgb, var(--ink) 4%, transparent);
+    background: color-mix(in srgb, var(--lane-color) 13%, var(--raised));
+  }
+
+  :global(html.dark) .flow-card:hover {
+    background: color-mix(in srgb, var(--lane-color) 17%, var(--raised));
   }
 
   .flow-card:focus-visible {
@@ -108,42 +171,68 @@
      outline plus the badge glyph, both independent of the lane hue. */
   .flow-card--seam {
     border-style: dashed;
-    border-left-style: solid;
   }
 
   .flow-card--list {
-    align-items: center;
     padding: 0.5rem 0.625rem;
     min-height: 44px;
+    gap: 2px;
   }
 
-  .card-icon {
+  /* Meta row: icon + lane word (sr-only in lane mode) + direction +
+     classification shape + duration. Fits in 12px line-height. */
+  .card-meta {
+    display: flex;
+    align-items: center;
+    gap: 3px;
+    min-width: 0;
+    line-height: 12px;
+    font-size: 0.5625rem;
+    color: var(--muted);
+  }
+
+  .card-meta-icon {
     display: flex;
     flex-shrink: 0;
     align-items: center;
-    padding-top: 1px;
     color: var(--lane-color);
   }
 
-  .card-text {
-    display: flex;
-    flex-direction: column;
-    gap: 0.0625rem;
-    min-width: 0;
-    flex: 1 1 auto;
-  }
-
-  .card-lane {
-    font-size: 0.625rem;
+  .card-lane-word {
     font-weight: 600;
     letter-spacing: 0.04em;
     text-transform: uppercase;
-    color: var(--muted);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  /* Both markers are icons, so they need the same flex centring the lane
+     icon gets. They inherit the meta row's --muted rather than taking the
+     lane hue: the lane already has its own icon two slots to the left,
+     and tinting these would read as a second lane signal. */
+  .card-dir,
+  .card-class {
+    display: flex;
+    flex-shrink: 0;
+    align-items: center;
+  }
+
+  .card-dur {
+    flex-shrink: 0;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .card-seam {
+    display: flex;
+    flex-shrink: 0;
+    align-items: center;
+    margin-left: auto;
   }
 
   .card-label {
     font-size: 0.6875rem;
-    line-height: 1.25;
+    line-height: 1.2;
     overflow: hidden;
     display: -webkit-box;
     -webkit-box-orient: vertical;
@@ -151,17 +240,15 @@
     line-clamp: 2;
   }
 
+  .flow-card--list .card-meta {
+    font-size: 0.625rem;
+    line-height: 14px;
+  }
+
   .flow-card--list .card-label {
     font-size: 0.8125rem;
     -webkit-line-clamp: 3;
     line-clamp: 3;
-  }
-
-  .card-seam {
-    display: flex;
-    flex-shrink: 0;
-    align-items: center;
-    color: var(--muted);
   }
 
   .card-sr {

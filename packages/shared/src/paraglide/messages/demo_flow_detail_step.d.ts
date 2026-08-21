@@ -1,0 +1,19 @@
+/**
+* | output |
+* | --- |
+* | "Step {index} of {count}" |
+*
+* @param {Demo_Flow_Detail_StepInputs} inputs
+* @param {{ locale?: "en" | "es" }} options
+* @returns {LocalizedString}
+*/
+export const demo_flow_detail_step: ((inputs: Demo_Flow_Detail_StepInputs, options?: {
+    locale?: "en" | "es";
+}) => LocalizedString) & import("../runtime.js").MessageMetadata<Demo_Flow_Detail_StepInputs, {
+    locale?: "en" | "es";
+}, {}>;
+export type LocalizedString = import("../runtime.js").LocalizedString;
+export type Demo_Flow_Detail_StepInputs = {
+    index: NonNullable<unknown>;
+    count: NonNullable<unknown>;
+};
