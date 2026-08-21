@@ -80,12 +80,19 @@
     waitForElement,
     resolveTopicElement,
     resolveSelectorElement,
+    resolveSelectorTarget,
     renderPulseMarker,
     TAP_TOPICS,
     MODE_TOGGLE_TOPICS,
     closeModeToggle,
   } from "$demo/tap-pulse.js";
   import { recordPulseOutcome } from "$demo/pulse-log.js";
+  import {
+    showHighlightRing,
+    clearHighlightRing,
+  } from "$demo/highlight-ring.js";
+  import { recordHighlightOutcome } from "$demo/highlight-log.js";
+  import { tapSectionNav } from "$demo/section-nav.js";
   import {
     DEMO_DETAIL_TICKET_ID,
     DEMO_DETAIL_ARTICLE_ID,
@@ -417,6 +424,29 @@
     control: HTMLElement | null;
   } | null = null;
 
+  // The sub-section the ring currently on screen was drawn for.
+  // Non-reactive: written by the highlight paths, read by the retire
+  // effect below.
+  let ringOwnerSub: string | null = null;
+
+  // Retire the ring when the story moves to another sub-section. The
+  // ring fades on its own timer, but a reader who scrolls on before
+  // that timer expires must not be left looking at the previous sub's
+  // region still circled.
+  //
+  // Keyed on the ring's OWNER rather than on the location changing,
+  // because the two race: the location change is what schedules this
+  // effect AND what starts the new highlight, and a plain "location
+  // changed, clear it" would sometimes wipe the incoming ring instead
+  // of the outgoing one.
+  $effect(() => {
+    const key = `${store.location.sectionId}/${store.location.subSlug ?? ""}`;
+    if (ringOwnerSub === null || ringOwnerSub === key) return;
+    ringOwnerSub = null;
+    highlightHandledSub = null;
+    clearHighlightRing();
+  });
+
   // Close a pulse-opened inline mode (in-page search, selection mode,
   // reply compose bar) once the story leaves the sub whose pulse
   // opened it. The mode stays visible while its own narration is on
@@ -713,6 +743,7 @@
         // for it so the convergence check sees the open overlay.
         await waitFor(() => router.searchOpen, token, POLL_TIMEOUT_SHORT_MS);
       }
+      await seedSearchQuery(token);
     } else {
       // Translate sentinels at the phone boundary: if the engine
       // is not ready yet when a detail navigation arrives, fall back
@@ -735,17 +766,167 @@
       }
     }
 
+    if (store.isStale(token)) return;
+
+    // Desktop-only subs (split-view) are skipped entirely at phone
+    // width, recording nothing so the e2e suite can skip them too.
+    if (
+      cmd.pulseDesktopOnly &&
+      !window.matchMedia("(min-width: 1024px)").matches
+    ) {
+      return;
+    }
+
+    // The highlight runs first and is awaited: on a scroll-nav page it
+    // moves the section under the sticky chrome, and a pulse that fired
+    // before that motion would mark an element mid-scroll.
+    await runHighlight(cmd, token);
+
     if (cmd.pulseTopic !== null && !store.isStale(token)) {
-      // Desktop-only subs (split-view) are skipped entirely at phone
-      // width, recording nothing so the e2e suite can skip them too.
-      if (
-        cmd.pulseDesktopOnly &&
-        !window.matchMedia("(min-width: 1024px)").matches
-      ) {
+      void handlePulse(cmd.pulseTopic, cmd);
+    }
+  }
+
+  // -----------------------------------------------------------------------
+  // Sub-section highlight
+  // -----------------------------------------------------------------------
+
+  /**
+   * Query the search overlay is seeded with. Not translated: it matches
+   * seeded ticket, queue, and label content, which is English whatever
+   * the demo's display locale. Without it the overlay stays on its
+   * empty-state hint, because SearchResults only renders entity groups
+   * and the deep-search panel past two characters
+   * (SearchResults.svelte:90-158), and the search sub-sections would
+   * have nothing to point at.
+   */
+  const DEMO_SEARCH_QUERY = "housing";
+
+  /**
+   * Type the sample query into the open search overlay. Assignment plus
+   * a dispatched InputEvent is what Svelte's bind:value reads, the same
+   * technique the reply choreography uses for the compose textarea.
+   */
+  async function seedSearchQuery(token: number): Promise<void> {
+    const input = await pollUntil<HTMLInputElement>({
+      probe: () =>
+        document.querySelector<HTMLInputElement>(
+          '.search-sheet input, .search-dropdown input, input[type="search"]',
+        ),
+      isStale: () => store.isStale(token),
+      timeoutMs: POLL_TIMEOUT_SHORT_MS,
+    });
+    if (input?.value !== "") return;
+
+    input.value = DEMO_SEARCH_QUERY;
+    input.dispatchEvent(new InputEvent("input", { bubbles: true }));
+  }
+
+  /** Stable key for the sub-section currently being narrated. */
+  function subKey(): string {
+    return `${store.location.sectionId}/${store.location.subSlug ?? ""}`;
+  }
+
+  /**
+   * The sub whose own highlight already drew a ring, so the pulse that
+   * follows marks its control without stealing the outline. Non-
+   * reactive: only the highlight path writes it.
+   */
+  let highlightHandledSub: string | null = null;
+
+  /**
+   * Point the phone at the region the current sub-section describes,
+   * and draw a ring around it.
+   *
+   * The pulse layer marks CONTROLS, found by matching translated
+   * labels. A sub-section usually narrates a REGION instead: a
+   * dashboard card, an admin settings block, the search overlay. This
+   * resolves that region, brings it into view the way the product
+   * itself would, and circles it.
+   *
+   * Every await re-checks staleness. A reader scrolling quickly can
+   * move two sub-sections on while a scroll settles, and a ring that
+   * lands late would circle the previous sub's region while the story
+   * shows the next one.
+   */
+  async function runHighlight(cmd: PhoneCommand, token: number): Promise<void> {
+    const highlight = cmd.highlight;
+    if (highlight === null) return;
+
+    const sectionId = store.location.sectionId;
+    const subSlug = store.location.subSlug;
+    const key = subKey();
+
+    // Scroll-nav section: tap the product's own subnavbar control so
+    // the section expands, lands under the sticky chrome, and moves
+    // the segmented indicator.
+    if (highlight.section !== undefined) {
+      const anchor = await tapSectionNav(document, highlight.section, () =>
+        store.isStale(token),
+      );
+      if (store.isStale(token)) return;
+      if (anchor !== null) {
+        showHighlightRing(anchor);
+        ringOwnerSub = key;
+        highlightHandledSub = key;
+        recordHighlightOutcome(sectionId, subSlug, "section", anchor);
         return;
       }
-      void handlePulse(cmd.pulseTopic);
     }
+
+    // Region named by CSS selector.
+    if (highlight.selectors !== undefined) {
+      const el = await resolveSelectorTarget(
+        document,
+        highlight.selectors,
+        () => store.isStale(token),
+      );
+      if (store.isStale(token)) return;
+      if (el !== null) {
+        showHighlightRing(el);
+        ringOwnerSub = key;
+        highlightHandledSub = key;
+        recordHighlightOutcome(sectionId, subSlug, "selector", el);
+        return;
+      }
+    }
+
+    // Nothing resolved. When a topic pulse follows it will ring its own
+    // element and log the outcome; otherwise this sub found nothing and
+    // the gap is recorded rather than passed over in silence.
+    if (cmd.pulseTopic === null) {
+      recordHighlightOutcome(sectionId, subSlug, "missing");
+    }
+  }
+
+  /**
+   * Ring whatever the pulse resolved, and log it as the sub-section's
+   * highlight. Routed through the pulse log's single choke point so
+   * every terminal path in handlePulse circles its target, the eight
+   * choreographed special cases along with the rest, from one call
+   * site instead of eight.
+   */
+  function markPulseTarget(
+    topic: DemoTopic,
+    outcome: "tapped" | "marked" | "selector" | "missing",
+    el?: Element,
+  ): void {
+    recordPulseOutcome(topic, outcome, el);
+
+    if (el === undefined) return;
+    // A sub that named its own region already has a ring; the pulse
+    // marks a control inside it and must not steal the outline.
+    const key = subKey();
+    if (highlightHandledSub === key) return;
+
+    showHighlightRing(el);
+    ringOwnerSub = key;
+    recordHighlightOutcome(
+      store.location.sectionId,
+      store.location.subSlug,
+      "pulse",
+      el,
+    );
   }
 
   /**
@@ -1063,7 +1244,10 @@
   // Pulse handler
   // -----------------------------------------------------------------------
 
-  async function handlePulse(pulseTopic: DemoTopic): Promise<void> {
+  async function handlePulse(
+    pulseTopic: DemoTopic,
+    cmd: PhoneCommand,
+  ): Promise<void> {
     // Own all synthetic clicks until the next pulse or a visitor tap:
     // the pulse's choreography clicks report this topic, never their
     // raw classification (see applyTopic).
@@ -1110,7 +1294,7 @@
       if (selectorEl !== null) {
         dismissOpenOverlays(selectorEl);
         renderPulseMarker(selectorEl);
-        recordPulseOutcome(pulseTopic, "selector", selectorEl);
+        markPulseTarget(pulseTopic, "selector", selectorEl);
 
         // Selector fallback never taps (the element is not a labeled control)
         return;
@@ -1144,7 +1328,7 @@
 
       if (busyEl !== null) {
         renderPulseMarker(busyEl);
-        recordPulseOutcome(pulseTopic, "selector", busyEl);
+        markPulseTarget(pulseTopic, "selector", busyEl);
       } else {
         // Fast decrypt raced past the scramble; mark the first ticket card
         const cardEl = document.querySelector<HTMLElement>(
@@ -1152,9 +1336,9 @@
         );
         if (cardEl !== null) {
           renderPulseMarker(cardEl);
-          recordPulseOutcome(pulseTopic, "selector", cardEl);
+          markPulseTarget(pulseTopic, "selector", cardEl);
         } else {
-          recordPulseOutcome(pulseTopic, "missing");
+          markPulseTarget(pulseTopic, "missing");
         }
       }
       return;
@@ -1169,7 +1353,7 @@
       if (bubble !== null) {
         dismissOpenOverlays(bubble);
         renderPulseMarker(bubble);
-        recordPulseOutcome(pulseTopic, "tapped", bubble);
+        markPulseTarget(pulseTopic, "tapped", bubble);
         setTimeout(() => {
           bubble.dispatchEvent(
             new KeyboardEvent("keydown", {
@@ -1180,7 +1364,7 @@
           );
         }, 250);
       } else {
-        recordPulseOutcome(pulseTopic, "missing");
+        markPulseTarget(pulseTopic, "missing");
       }
       return;
     }
@@ -1193,7 +1377,7 @@
     if (pulseTopic === "exposure-hints" && el !== null) {
       dismissOpenOverlays(el);
       renderPulseMarker(el);
-      recordPulseOutcome(pulseTopic, "tapped", el);
+      markPulseTarget(pulseTopic, "tapped", el);
       const clickable = findClickableTarget(el);
       if (clickable !== null) {
         clickable.click();
@@ -1253,7 +1437,7 @@
           }
         }
       }
-      recordPulseOutcome(pulseTopic, "tapped", el);
+      markPulseTarget(pulseTopic, "tapped", el);
       // Register cleanup: when the story leaves this sub, collapse the
       // compose bar the demo opened. Uses the dismiss control
       // (TicketCompose.svelte:151-157, ticket_compose_dismiss_mode)
@@ -1292,12 +1476,12 @@
           renderPulseMarker(actionEl);
         }
       }
-      recordPulseOutcome(pulseTopic, "tapped", el);
+      markPulseTarget(pulseTopic, "tapped", el);
       return;
     }
 
     if (el === null) {
-      recordPulseOutcome(pulseTopic, "missing");
+      markPulseTarget(pulseTopic, "missing");
       return;
     }
 
@@ -1322,6 +1506,14 @@
     // EXPANDS it, which is the demonstration (dashboard-unassigned,
     // dashboard-on-hold are collapsed by default).
     if (tap && isSectionToggleCollapsing(el)) {
+      tap = false;
+    }
+
+    // A sub that names a scroll-nav section has already had its nav
+    // button tapped, and the product's expandAndScroll expanded the
+    // section and scrolled it under the chrome. Tapping the section's
+    // own heading now would toggle it straight back shut.
+    if (tap && cmd.highlight?.section !== undefined) {
       tap = false;
     }
 
@@ -1368,7 +1560,7 @@
       }
     }
 
-    recordPulseOutcome(pulseTopic, tap ? "tapped" : "marked", el);
+    markPulseTarget(pulseTopic, tap ? "tapped" : "marked", el);
 
     // The language picker is a native select. Browsers only open its
     // dropdown from a user gesture: outer-page clicks count as

@@ -31,6 +31,32 @@ export { SECTION_ROUTES, SUB_ROUTES, UNNARRATED_ROUTES };
 // so taxonomy consumers keep importing it from the taxonomy module.
 export type { SectionId } from "./bridge.js";
 
+/**
+ * Where the phone should point while a sub-section is narrated.
+ *
+ * The pulse layer resolves its target from a DemoTopic by matching
+ * translated control labels, which only ever finds CONTROLS. A
+ * sub-section frequently narrates a region instead: a dashboard card,
+ * an admin settings block, the search overlay. This descriptor names
+ * that region directly so every sub has something to scroll to and
+ * circle, topic or not.
+ */
+export interface SubHighlight {
+  /**
+   * Section id on a scroll-nav page (dashboard, admin org, admin
+   * communications, manager). Drives a tap on the product's own
+   * SectionScrollNav button, which expands the section, applies the
+   * navbar + subnavbar offset, and moves the segmented indicator.
+   * The ring then lands on `#section-<id>`.
+   */
+  readonly section?: string;
+  /**
+   * CSS selectors tried in order, for regions that are not scroll-nav
+   * sections. Every selector must be traceable to product source.
+   */
+  readonly selectors?: readonly string[];
+}
+
 export interface SubSection {
   /** Stable slug for deep links and element IDs */
   readonly slug: string;
@@ -45,6 +71,9 @@ export interface SubSection {
   /** When true, the pulse fires only at desktop width (1024px+). The
    *  phone-width pulse is skipped entirely (no log entry). */
   readonly desktopOnly?: boolean;
+  /** Region the phone scrolls to and circles while this sub is read.
+   *  Absent means the topic's pulse target is the region. */
+  readonly highlight?: SubHighlight;
 }
 
 export interface Section {
@@ -186,59 +215,71 @@ export const SECTIONS: readonly Section[] = [
         headingKey: "demo_narrative_dashboard_view_switcher_heading",
         bodyKey: "demo_narrative_dashboard_view_switcher_body",
       },
+      // The dashboard is a scroll-nav page: every sub below except the
+      // view switcher and the create button narrates a `#section-<id>`
+      // block (routes/(app)/+page.svelte, the .scroll-target divs).
       {
         slug: "getting-started",
         topic: "dashboard-getting-started",
         headingKey: "demo_narrative_dashboard_getting_started_heading",
         bodyKey: "demo_narrative_dashboard_getting_started_body",
+        highlight: { section: "getting-started" },
       },
       {
         slug: "shift",
         topic: "dashboard-shift",
         headingKey: "demo_narrative_dashboard_shift_heading",
         bodyKey: "demo_narrative_dashboard_shift_body",
+        highlight: { section: "shift" },
       },
       {
         slug: "queues",
         topic: "dashboard-queues",
         headingKey: "demo_narrative_dashboard_queues_heading",
         bodyKey: "demo_narrative_dashboard_queues_body",
+        highlight: { section: "queues" },
       },
       {
         slug: "activity",
         topic: "dashboard-activity",
         headingKey: "demo_narrative_dashboard_activity_heading",
         bodyKey: "demo_narrative_dashboard_activity_body",
+        highlight: { section: "activity" },
       },
       {
         slug: "kb",
         topic: "dashboard-kb",
         headingKey: "demo_narrative_dashboard_kb_heading",
         bodyKey: "demo_narrative_dashboard_kb_body",
+        highlight: { section: "kb" },
       },
       {
         slug: "needs-attention",
         topic: "dashboard-needs-attention",
         headingKey: "demo_narrative_dashboard_needs_attention_heading",
         bodyKey: "demo_narrative_dashboard_needs_attention_body",
+        highlight: { section: "needs-attention" },
       },
       {
         slug: "my-tickets",
         topic: "dashboard-my-tickets",
         headingKey: "demo_narrative_dashboard_my_tickets_heading",
         bodyKey: "demo_narrative_dashboard_my_tickets_body",
+        highlight: { section: "my-tickets" },
       },
       {
         slug: "unassigned",
         topic: "dashboard-unassigned",
         headingKey: "demo_narrative_dashboard_unassigned_heading",
         bodyKey: "demo_narrative_dashboard_unassigned_body",
+        highlight: { section: "unassigned" },
       },
       {
         slug: "on-hold",
         topic: "dashboard-on-hold",
         headingKey: "demo_narrative_dashboard_on_hold_heading",
         bodyKey: "demo_narrative_dashboard_on_hold_body",
+        highlight: { section: "on-hold" },
       },
       {
         slug: "create",
@@ -433,23 +474,36 @@ export const SECTIONS: readonly Section[] = [
     descKey: "demo_section_search_desc",
     routes: SECTION_ROUTES.search,
     subs: [
+      // The search overlay renders its entity groups and deep-search
+      // panel only once the query passes two characters
+      // (SearchResults.svelte:90-158), so the phone seeds
+      // DEMO_SEARCH_QUERY on entry and these regions exist to circle.
       {
         slug: "overlay",
         topic: null,
         headingKey: "demo_narrative_search_overlay_heading",
         bodyKey: "demo_narrative_search_overlay_body",
+        // ShellSheet at phone width (AppShell.svelte:1462), dropdown
+        // at desktop width (AppShell.svelte:1437).
+        highlight: { selectors: [".search-sheet", ".search-dropdown"] },
       },
       {
         slug: "entities",
         topic: null,
         headingKey: "demo_narrative_search_entities_heading",
         bodyKey: "demo_narrative_search_entities_body",
+        // SearchSection root (SearchSection.svelte:59), one per
+        // provider group.
+        highlight: { selectors: [".search-section"] },
       },
       {
         slug: "how-it-works",
         topic: null,
         headingKey: "demo_narrative_search_how_heading",
         bodyKey: "demo_narrative_search_how_body",
+        // FullSearchPanel root (FullSearchPanel.svelte:53); the
+        // escalation trigger inside it (:87) is the fallback.
+        highlight: { selectors: [".full-search-panel", ".panel-trigger"] },
       },
     ],
   },
@@ -464,6 +518,8 @@ export const SECTIONS: readonly Section[] = [
         topic: null,
         headingKey: "demo_narrative_library_browse_heading",
         bodyKey: "demo_narrative_library_browse_body",
+        // Library list root (library/+page.svelte:852).
+        highlight: { selectors: [".library-page"] },
       },
       {
         slug: "tools",
@@ -495,12 +551,18 @@ export const SECTIONS: readonly Section[] = [
         topic: null,
         headingKey: "demo_narrative_library_detail_heading",
         bodyKey: "demo_narrative_library_detail_body",
+        // ArticleDetailView root (ArticleDetailView.svelte:446).
+        highlight: { selectors: [".article-detail"] },
       },
       {
         slug: "attachments",
         topic: null,
         headingKey: "demo_narrative_library_attachments_heading",
         bodyKey: "demo_narrative_library_attachments_body",
+        // Attachments section (ArticleDetailView.svelte:485), rendered
+        // only when the article carries non-image attachments; the
+        // article body stands in when the seed has none.
+        highlight: { selectors: [".attachments", ".article-detail"] },
       },
       {
         slug: "vote",
@@ -522,6 +584,10 @@ export const SECTIONS: readonly Section[] = [
         topic: null,
         headingKey: "demo_narrative_admin_hub_heading",
         bodyKey: "demo_narrative_admin_hub_body",
+        // Hub root (admin/+page.svelte:198). Its section ids come from
+        // GROUP_ORDER and vary with permissions, so the page as a
+        // whole is the region this sub narrates.
+        highlight: { selectors: [".admin-hub"] },
       },
     ],
   },
@@ -566,6 +632,9 @@ export const SECTIONS: readonly Section[] = [
         topic: "admin-roles",
         headingKey: "demo_narrative_admin_roles_heading",
         bodyKey: "demo_narrative_admin_roles_body",
+        // The manager page is a scroll-nav page; "role" is its first
+        // section (admin/manager/+page.svelte:82).
+        highlight: { section: "role" },
       },
     ],
   },
@@ -574,42 +643,51 @@ export const SECTIONS: readonly Section[] = [
     titleKey: "demo_section_admin_comms_title",
     descKey: "demo_section_admin_comms_desc",
     routes: SECTION_ROUTES["admin-comms"],
+    // Scroll-nav page (CollapsibleSectionPage). Section ids come from
+    // admin/communications/+page.svelte:21-49; two subs share the
+    // telephony section and sms-templates maps to "templates".
     subs: [
       {
         slug: "provider",
         topic: "admin-telephony-provider",
         headingKey: "demo_narrative_admin_telephony_provider_heading",
         bodyKey: "demo_narrative_admin_telephony_provider_body",
+        highlight: { section: "telephony" },
       },
       {
         slug: "phone-lines",
         topic: "admin-phone-lines",
         headingKey: "demo_narrative_admin_phone_lines_heading",
         bodyKey: "demo_narrative_admin_phone_lines_body",
+        highlight: { section: "telephony" },
       },
       {
         slug: "greetings",
         topic: "admin-greetings",
         headingKey: "demo_narrative_admin_greetings_heading",
         bodyKey: "demo_narrative_admin_greetings_body",
+        highlight: { section: "greetings" },
       },
       {
         slug: "sms-templates",
         topic: "admin-sms-templates",
         headingKey: "demo_narrative_admin_sms_templates_heading",
         bodyKey: "demo_narrative_admin_sms_templates_body",
+        highlight: { section: "templates" },
       },
       {
         slug: "blocklist",
         topic: "admin-blocklist",
         headingKey: "demo_narrative_admin_blocklist_heading",
         bodyKey: "demo_narrative_admin_blocklist_body",
+        highlight: { section: "blocklist" },
       },
       {
         slug: "quarantine",
         topic: "admin-quarantine",
         headingKey: "demo_narrative_admin_quarantine_heading",
         bodyKey: "demo_narrative_admin_quarantine_body",
+        highlight: { section: "quarantine" },
       },
     ],
   },
@@ -618,42 +696,50 @@ export const SECTIONS: readonly Section[] = [
     titleKey: "demo_section_admin_org_title",
     descKey: "demo_section_admin_org_desc",
     routes: SECTION_ROUTES["admin-org"],
+    // Scroll-nav page (CollapsibleSectionPage). Every sub slug matches
+    // its section id 1:1 (admin/organization/+page.svelte:27-67).
     subs: [
       {
         slug: "general",
         topic: "admin-general",
         headingKey: "demo_narrative_admin_general_heading",
         bodyKey: "demo_narrative_admin_general_body",
+        highlight: { section: "general" },
       },
       {
         slug: "branding",
         topic: "admin-branding",
         headingKey: "demo_narrative_admin_branding_heading",
         bodyKey: "demo_narrative_admin_branding_body",
+        highlight: { section: "branding" },
       },
       {
         slug: "terminology",
         topic: "admin-terminology",
         headingKey: "demo_narrative_admin_terminology_heading",
         bodyKey: "demo_narrative_admin_terminology_body",
+        highlight: { section: "terminology" },
       },
       {
         slug: "keys",
         topic: "admin-keys",
         headingKey: "demo_narrative_admin_keys_heading",
         bodyKey: "demo_narrative_admin_keys_body",
+        highlight: { section: "keys" },
       },
       {
         slug: "retention",
         topic: "admin-retention",
         headingKey: "demo_narrative_admin_retention_heading",
         bodyKey: "demo_narrative_admin_retention_body",
+        highlight: { section: "retention" },
       },
       {
         slug: "note-types",
         topic: "admin-note-types",
         headingKey: "demo_narrative_admin_note_types_heading",
         bodyKey: "demo_narrative_admin_note_types_body",
+        highlight: { section: "note-types" },
       },
     ],
   },
@@ -668,6 +754,9 @@ export const SECTIONS: readonly Section[] = [
         topic: null,
         headingKey: "demo_narrative_schedule_heading",
         bodyKey: "demo_narrative_schedule_body",
+        // Schedule placeholder (more/schedule/+page.svelte). The page
+        // is styled with utility classes only, so it carries a testid.
+        highlight: { selectors: ['[data-testid="schedule-placeholder"]'] },
       },
     ],
   },
@@ -981,6 +1070,12 @@ export interface PhoneCommand {
    * sections.
    */
   readonly routeSlug: string | null;
+  /**
+   * Region the phone scrolls to and circles for this sub. Null when
+   * the sub names no region of its own, in which case the pulse's
+   * resolved element is the region.
+   */
+  readonly highlight: SubHighlight | null;
 }
 
 /**
@@ -996,14 +1091,17 @@ export function resolvePhoneCommand(
   ticketDetailId: string,
   articleDetailId: string,
 ): PhoneCommand {
-  // Find the topic and desktopOnly flag for this sub-section
+  // Find the topic, desktopOnly flag, and highlight region for this
+  // sub-section
   let pulseTopic: DemoTopic | null = null;
   let pulseDesktopOnly = false;
+  let highlight: SubHighlight | null = null;
   if (subSlug !== null) {
     const entry = subIndex.get(`${sectionId}/${subSlug}`);
     if (entry !== undefined) {
       pulseTopic = entry.sub.topic;
       pulseDesktopOnly = entry.sub.desktopOnly === true;
+      highlight = entry.sub.highlight ?? null;
     }
   }
 
@@ -1024,6 +1122,7 @@ export function resolvePhoneCommand(
         pulseTopic,
         pulseDesktopOnly,
         routeSlug: null,
+        highlight,
       };
     }
     case "dashboard":
@@ -1035,6 +1134,7 @@ export function resolvePhoneCommand(
         pulseTopic,
         pulseDesktopOnly,
         routeSlug: null,
+        highlight,
       };
     case "tickets":
       return {
@@ -1045,6 +1145,7 @@ export function resolvePhoneCommand(
         pulseTopic,
         pulseDesktopOnly,
         routeSlug: null,
+        highlight,
       };
     case "ticket-detail":
       return {
@@ -1055,6 +1156,7 @@ export function resolvePhoneCommand(
         pulseTopic,
         pulseDesktopOnly,
         routeSlug: null,
+        highlight,
       };
     case "search":
       return {
@@ -1065,6 +1167,7 @@ export function resolvePhoneCommand(
         pulseTopic,
         pulseDesktopOnly,
         routeSlug: null,
+        highlight,
       };
     case "library": {
       let libraryDetail: string | null = null;
@@ -1085,6 +1188,7 @@ export function resolvePhoneCommand(
         pulseTopic,
         pulseDesktopOnly,
         routeSlug: null,
+        highlight,
       };
     }
     case "admin":
@@ -1096,6 +1200,7 @@ export function resolvePhoneCommand(
         pulseTopic,
         pulseDesktopOnly,
         routeSlug: null,
+        highlight,
       };
     case "admin-people":
       return {
@@ -1106,6 +1211,7 @@ export function resolvePhoneCommand(
         pulseTopic,
         pulseDesktopOnly,
         routeSlug: null,
+        highlight,
       };
     case "admin-comms":
       return {
@@ -1116,6 +1222,7 @@ export function resolvePhoneCommand(
         pulseTopic,
         pulseDesktopOnly,
         routeSlug: null,
+        highlight,
       };
     case "admin-org":
       return {
@@ -1126,6 +1233,7 @@ export function resolvePhoneCommand(
         pulseTopic,
         pulseDesktopOnly,
         routeSlug: null,
+        highlight,
       };
     case "schedule":
       return {
@@ -1136,6 +1244,7 @@ export function resolvePhoneCommand(
         pulseTopic,
         pulseDesktopOnly,
         routeSlug: null,
+        highlight,
       };
     case "settings":
       return {
@@ -1146,6 +1255,7 @@ export function resolvePhoneCommand(
         pulseTopic,
         pulseDesktopOnly,
         routeSlug: null,
+        highlight,
       };
     case "coming-soon":
       return {
@@ -1156,6 +1266,7 @@ export function resolvePhoneCommand(
         pulseTopic: null,
         pulseDesktopOnly: false,
         routeSlug: subSlug,
+        highlight: null,
       };
   }
 }
