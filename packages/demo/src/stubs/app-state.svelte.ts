@@ -10,7 +10,8 @@
  *
  * RouteMount owns page-state post-login: it has the manifest match
  * with real params and routeId. The router only calls setDemoPage for
- * the login URL (reset).
+ * the login URL (reset), and clearDemoPageState for a navigation that
+ * keeps the pathname, which RouteMount never commits for.
  *
  * page.state is reactive: pushState/replaceState in app-navigation.ts
  * update it through setDemoPageState, and SvelteKit's shallow routing
@@ -73,6 +74,20 @@ export function setDemoPage(update: DemoPageUpdate): void {
   const resolvers = commitResolvers;
   commitResolvers = [];
   for (const resolve of resolvers) resolve();
+}
+
+/**
+ * Drop page.state without touching the URL, params, or routeId.
+ *
+ * setDemoPage is the normal reset, but RouteMount only calls it when
+ * the matched pathname changes. A navigation that keeps the pathname
+ * (the desktop split view lives at /tickets and carries its open row
+ * in page.state) produces no commit, so the router calls this to keep
+ * shallow state from surviving a full navigation.
+ */
+export function clearDemoPageState(): void {
+  if (Object.keys(pageState).length === 0) return;
+  pageState = {};
 }
 
 /**

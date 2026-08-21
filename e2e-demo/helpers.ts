@@ -8,6 +8,7 @@
 import type { Page } from "@playwright/test";
 import type { DemoBridgeState } from "../packages/demo/src/lib/bridge.js";
 import type { PulseLogEntry } from "../packages/demo/src/lib/pulse-log.js";
+import type { HighlightLogEntry } from "../packages/demo/src/lib/highlight-log.js";
 
 // -----------------------------------------------------------------------
 // Custom error (repo bans bare Error throws)
@@ -353,4 +354,57 @@ export async function readPulseLog(
   });
 
   return result;
+}
+
+// -----------------------------------------------------------------------
+// Highlight log access
+// -----------------------------------------------------------------------
+
+/**
+ * Read the sub-section highlight log from the phone iframe window.
+ * Returns null when the array is undefined (no highlight has run yet).
+ *
+ * Separate from the pulse log because a highlight is keyed by
+ * sub-section rather than by topic, and several sub-sections carry no
+ * topic at all.
+ */
+export async function readHighlightLog(
+  page: Page,
+): Promise<HighlightLogEntry[] | null> {
+  return page.evaluate(() => {
+    const iframe = document.querySelector<HTMLIFrameElement>(
+      "iframe.phone-iframe",
+    );
+    if (iframe === null) return null;
+    const win = iframe.contentWindow;
+    if (win === null) return null;
+
+    const log = win.__demoHighlightLog;
+    if (log === undefined) return null;
+    return log.map((entry) => ({
+      sectionId: entry.sectionId,
+      subSlug: entry.subSlug,
+      outcome: entry.outcome,
+      target:
+        entry.target === undefined
+          ? undefined
+          : {
+              tag: entry.target.tag,
+              inViewport: entry.target.inViewport,
+              rect: { ...entry.target.rect },
+            },
+    }));
+  });
+}
+
+/** Whether a highlight ring is currently drawn inside the phone. */
+export async function hasVisibleRing(page: Page): Promise<boolean> {
+  return page.evaluate(() => {
+    const iframe = document.querySelector<HTMLIFrameElement>(
+      "iframe.phone-iframe",
+    );
+    const doc = iframe?.contentDocument ?? null;
+    if (doc === null) return false;
+    return doc.querySelector('[data-demo-highlight-ring="true"]') !== null;
+  });
 }

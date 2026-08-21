@@ -270,6 +270,18 @@ export const DEMO_DETAIL_TICKET_ID = "tk-0001";
 /** Article the library section opens for the vote sub-section. Resolved to a real seeded ID at runtime. */
 export const DEMO_DETAIL_ARTICLE_ID = "kb-0001";
 
+/**
+ * Query the search section seeds into the overlay. The overlay renders
+ * its entity groups and deep-search panel only past two characters
+ * (SearchResults.svelte:90-158), so without a query those sub-sections
+ * would narrate an empty sheet.
+ *
+ * Not a translated message: it matches seeded content, which is English
+ * regardless of the demo's display locale. "housing" hits a ticket
+ * title, a queue, and a label, so several entity groups render at once.
+ */
+export const DEMO_SEARCH_QUERY = "housing";
+
 // -----------------------------------------------------------------------
 // Bridge state and interface
 // -----------------------------------------------------------------------

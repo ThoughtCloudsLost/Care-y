@@ -13,18 +13,21 @@
  * RouteMount owns page-state (page.url, page.params, page.route.id) via
  * setDemoPage() because it has the manifest match with real params and
  * routeId. The router only calls setDemoPage for the login URL (reset)
- * since RouteMount is not mounted during login.
+ * since RouteMount is not mounted during login. It does drop shallow
+ * state (page.state plus any split handoff) on a navigation that keeps
+ * the pathname, which RouteMount never commits for.
  *
  * Uses Svelte 5 runes for reactivity. The singleton instance is created
  * once and shared across the demo surface and outer page.
  */
 
-import { setDemoPage } from "$app/state";
+import { setDemoPage, clearDemoPageState } from "$app/state";
 import {
   resolveNavContext,
   areaRoute,
   type NavContext,
 } from "$lib/shell/nav-context.js";
+import { endSplitHandoff } from "$lib/stores/split-handoff.svelte.js";
 import { matchRoute, type RouteMatch } from "$demo/engine/route-manifest.js";
 import type { TabId, AreaId } from "$lib/shell/types";
 import type { DemoFeature, DemoDetail } from "./bridge.js";
@@ -254,6 +257,28 @@ export class DemoRouter {
     }
   }
 
+  /**
+   * Drop shallow routing state when a navigation keeps the pathname.
+   *
+   * RouteMount clears page.state on every commit, but it only commits
+   * when the matched pathname changes. The desktop split view lives at
+   * /tickets with its open row in page.state, so going from the open
+   * row to the bare list keeps the pathname and would otherwise carry
+   * the row across: the pane stays open, the bridge keeps reporting a
+   * detail, and the story's convergence check corrects itself right
+   * back to the detail section.
+   *
+   * Call before assigning the new pathname. A pathname change is left
+   * alone so the client's own desktop redirect (/tickets/[id] ->
+   * /tickets, then pushState) still lands its row.
+   */
+  private resetShallowState(nextPathname: string): void {
+    if (nextPathname !== this.pathname) return;
+    clearDemoPageState();
+    endSplitHandoff("tickets");
+    endSplitHandoff("library");
+  }
+
   /** Fire the navigation lifecycle callbacks (before + after). */
   private fireLifecycle(
     fromUrl: URL,
@@ -289,6 +314,7 @@ export class DemoRouter {
     const pathname = featureToPathname(feature, resolvedDetail, this.pathname);
     const match = feature === "login" ? null : matchRoute(pathname);
 
+    this.resetShallowState(pathname);
     this.pathname = pathname;
     this.search = "";
     this.searchOpen = false;
@@ -309,6 +335,7 @@ export class DemoRouter {
     const fromUrl = this.currentUrl();
     const pathname = featureToPathname(feature, null);
     const match = matchRoute(pathname);
+    this.resetShallowState(pathname);
     this.pathname = pathname;
     this.search = "";
     this.activeTab = tabId;
@@ -378,6 +405,7 @@ export class DemoRouter {
     }
 
     const fromUrl = this.currentUrl();
+    this.resetShallowState(pathname);
     this.pathname = pathname;
     this.search = search;
     this.feature = feature;

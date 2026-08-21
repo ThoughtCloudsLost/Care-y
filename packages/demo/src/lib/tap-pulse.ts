@@ -1198,8 +1198,14 @@ export function isNavChrome(el: Element): boolean {
  * used by the admin people page). Tapping a content tablist switches a
  * tab within the narrated screen and IS the demonstration, so taps are
  * allowed. Used by handlePulse to decide whether to downgrade a tap.
+ *
+ * The SectionScrollNav is also exempt despite being a nav landmark.
+ * The guard exists to stop a tap from navigating away from the screen
+ * being narrated, and that control does the opposite: it scrolls to a
+ * section of the screen already on display.
  */
 export function isStrictShellNav(el: Element): boolean {
+  if (el.closest(".section-scroll-nav") !== null) return false;
   return el.closest('nav, [role="navigation"], .k-tabbar') !== null;
 }
 
@@ -1249,18 +1255,16 @@ export const TOPIC_SELECTORS: ReadonlyMap<DemoTopic, readonly string[]> =
   ]);
 
 /**
- * Find the first visible element matching one of the topic's CSS
+ * Find the first visible element matching one of the given CSS
  * selectors. Uses strict-then-loose two-tier search: a strict (in-
  * viewport) hit is preferred, but a loosely visible element is returned
- * when nothing is in the viewport.
+ * when nothing is in the viewport. Selectors are tried in order, so
+ * the caller lists its preferred target first and its fallbacks after.
  */
-export function findTopicElementBySelector(
+export function findFirstVisibleBySelector(
   root: Document | Element,
-  topic: DemoTopic,
+  selectors: readonly string[],
 ): { el: Element; loose: boolean } | null {
-  const selectors = TOPIC_SELECTORS.get(topic);
-  if (selectors === undefined) return null;
-
   // Strict pass first
   for (const selector of selectors) {
     const elements = root.querySelectorAll(selector);
@@ -1278,6 +1282,19 @@ export function findTopicElementBySelector(
   }
 
   return null;
+}
+
+/**
+ * Find the first visible element matching one of the topic's CSS
+ * selectors.
+ */
+export function findTopicElementBySelector(
+  root: Document | Element,
+  topic: DemoTopic,
+): { el: Element; loose: boolean } | null {
+  const selectors = TOPIC_SELECTORS.get(topic);
+  if (selectors === undefined) return null;
+  return findFirstVisibleBySelector(root, selectors);
 }
 
 // -----------------------------------------------------------------------
@@ -1423,6 +1440,34 @@ export async function resolveSelectorElement(
   if (!found.loose) return found.el;
   scrollIntoViewIframeSafe(found.el);
   return waitForStrictVisibility(found.el);
+}
+
+/**
+ * Resolve a sub-section's highlight region from its CSS selectors.
+ *
+ * Unlike resolveSelectorElement this POLLS for appearance: a highlight
+ * runs right after a route change, so the region it names is often
+ * still mounting. A loose hit is scrolled into view, and a settle
+ * timeout still returns the element, because pointing at a region that
+ * is easing into place beats reporting it missing.
+ */
+export async function resolveSelectorTarget(
+  root: Document | Element,
+  selectors: readonly string[],
+  isStale?: () => boolean,
+): Promise<Element | null> {
+  const found = await pollUntil<{ el: Element; loose: boolean }>({
+    probe: () => findFirstVisibleBySelector(root, selectors),
+    isStale,
+    timeoutMs: POLL_TIMEOUT_STANDARD_MS,
+  });
+
+  if (found === null) return null;
+  if (!found.loose) return found.el;
+
+  scrollIntoViewIframeSafe(found.el);
+  const settled = await waitForStrictVisibility(found.el);
+  return settled ?? (found.el.isConnected ? found.el : null);
 }
 
 // -----------------------------------------------------------------------
