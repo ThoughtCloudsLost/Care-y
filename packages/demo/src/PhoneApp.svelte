@@ -104,6 +104,7 @@
   import { onOutboxAppend } from "$demo/engine/outbox.js";
   import {
     beginFlowInteraction,
+    buildFlowDetail,
     emitFlowEvent,
     subscribeFlowEvents,
   } from "$demo/flow-events.js";
@@ -495,6 +496,12 @@
         lane: "ui",
         direction: "up",
         label: `tap ${classified}`,
+        detail: buildFlowDetail({
+          input: [
+            { name: "topic", value: classified, kind: "identifier" },
+            { name: "classified", value: "yes", kind: "metadata" },
+          ],
+        }),
       });
     }
     if (trusted && classified === "twofa-push") {
@@ -592,6 +599,9 @@
           lane: "ui",
           direction: "up",
           label: `tap ${raw.slice(0, 40).toLowerCase()}`,
+          detail: buildFlowDetail({
+            input: [{ name: "classified", value: "no", kind: "metadata" }],
+          }),
         });
       }
     }

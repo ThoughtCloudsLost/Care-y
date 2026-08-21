@@ -1,12 +1,18 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import {
+  DETAIL_MAX_INPUT_ROWS,
+  DETAIL_SOURCE_MAX_CHARS,
+  DETAIL_VALUE_MAX_CHARS,
   FLOW_INTERACTION_IDLE_MS,
   beginFlowInteraction,
+  buildFlowDetail,
+  describeFlowBytes,
   currentFlowInteractionId,
   emitFlowEvent,
   isFlowRecording,
   replayRecordedEvents,
   resetFlowEvents,
+  roundFlowDuration,
   setFlowClock,
   startFlowRecording,
   stopFlowRecording,
@@ -66,6 +72,19 @@ describe("flow events", () => {
       expect(event?.seamKey).toBeNull();
       expect(event?.payloadPreview).toBeNull();
       expect(event?.durationMs).toBeNull();
+      expect(event?.detail).toBeNull();
+      expect(event?.spanId).toBeNull();
+    });
+
+    it("stamps the emission time from the injected clock", () => {
+      const clock = useTestClock();
+      const events = collectEvents();
+      emitFlowEvent({ lane: "ui", direction: "up", label: "first" });
+      clock.advance(40);
+      emitFlowEvent({ lane: "ui", direction: "up", label: "second" });
+
+      expect(events.at(0)?.at).toBe(0);
+      expect(events.at(1)?.at).toBe(40);
     });
 
     it("skips event construction when no listeners are attached", () => {
@@ -102,15 +121,20 @@ describe("flow events", () => {
       useTestClock();
       const labelThunk = vi.fn(() => "SELECT users");
       const previewThunk = vi.fn(() => "limit 10");
+      const detailThunk = vi.fn(() => buildFlowDetail({ source: "SELECT 1" }));
       // No listener
       emitFlowEvent({
         lane: "db",
         direction: "local",
         label: labelThunk,
         payloadPreview: previewThunk,
+        detail: detailThunk,
       });
       expect(labelThunk).not.toHaveBeenCalled();
       expect(previewThunk).not.toHaveBeenCalled();
+      // Building a detail walks every bound parameter, which is the most
+      // expensive thing to skip when nobody has the band open.
+      expect(detailThunk).not.toHaveBeenCalled();
     });
   });
 
@@ -463,6 +487,260 @@ describe("flow events", () => {
 
       replayRecordedEvents(recorded, "recorded-derivation");
       expect(events[0]?.durationMs).toBe(137);
+    });
+  });
+
+  describe("roundFlowDuration", () => {
+    it("keeps one decimal below 10ms", () => {
+      // Sub-millisecond work is normal on the db and crypto lanes, so
+      // flattening it to 0 would report a real query as instant.
+      expect(roundFlowDuration(0.37)).toBe(0.4);
+      expect(roundFlowDuration(3.2499)).toBe(3.2);
+      expect(roundFlowDuration(9.96)).toBe(10);
+    });
+
+    it("uses whole milliseconds at 10ms and above", () => {
+      expect(roundFlowDuration(12.399999999552965)).toBe(12);
+      expect(roundFlowDuration(142.6)).toBe(143);
+    });
+
+    it("drops a trailing zero when the value is whole", () => {
+      // 5.02 must render "5 ms", not "5.0 ms".
+      expect(String(roundFlowDuration(5.02))).toBe("5");
+    });
+
+    it("passes null and undefined through", () => {
+      expect(roundFlowDuration(null)).toBeNull();
+      expect(roundFlowDuration(undefined)).toBeNull();
+    });
+
+    it("rejects a non-finite duration", () => {
+      expect(roundFlowDuration(Number.NaN)).toBeNull();
+      expect(roundFlowDuration(Number.POSITIVE_INFINITY)).toBeNull();
+    });
+
+    it("rounds every emitted duration, whatever the producer", () => {
+      useTestClock();
+      const events = collectEvents();
+      emitFlowEvent({
+        lane: "db",
+        direction: "local",
+        label: "SELECT tickets",
+        durationMs: 12.399999999552965,
+      });
+
+      expect(events.at(0)?.durationMs).toBe(12);
+    });
+  });
+
+  describe("buildFlowDetail", () => {
+    it("classifies by the strongest claim present", () => {
+      const detail = buildFlowDetail({
+        input: [
+          { name: "$1", value: '"open"', kind: "plaintext" },
+          { name: "$2", value: "bytes(48)", kind: "ciphertext", bytes: 48 },
+          { name: "$3", value: "3", kind: "metadata" },
+        ],
+      });
+      // One ciphertext parameter makes the whole event a ciphertext
+      // event: that is the claim worth putting on the card face.
+      expect(detail.classification).toBe("ciphertext");
+    });
+
+    it("falls back through the kind order when no ciphertext is present", () => {
+      expect(
+        buildFlowDetail({
+          input: [{ name: "slot", value: "title", kind: "identifier" }],
+        }).classification,
+      ).toBe("identifier");
+    });
+
+    it("classifies as null when there are no input rows", () => {
+      expect(buildFlowDetail({ source: "SELECT 1" }).classification).toBeNull();
+    });
+
+    it("honours an explicit classification over the derived one", () => {
+      const detail = buildFlowDetail({
+        input: [{ name: "n", value: "1", kind: "metadata" }],
+        classification: "key-material",
+      });
+      expect(detail.classification).toBe("key-material");
+    });
+
+    it("caps input rows and says how many it dropped", () => {
+      const rows = Array.from(
+        { length: DETAIL_MAX_INPUT_ROWS + 5 },
+        (_, i) => ({
+          name: `$${String(i + 1)}`,
+          value: String(i),
+          kind: "metadata" as const,
+        }),
+      );
+      const detail = buildFlowDetail({ input: rows });
+
+      // Capped rows plus one row reporting the overflow.
+      expect(detail.input).toHaveLength(DETAIL_MAX_INPUT_ROWS + 1);
+      expect(detail.input.at(-1)?.value).toBe("+5 more");
+    });
+
+    it("does not add an overflow row when nothing was dropped", () => {
+      const detail = buildFlowDetail({
+        input: [{ name: "$1", value: "1", kind: "metadata" }],
+      });
+      expect(detail.input).toHaveLength(1);
+    });
+
+    it("truncates long values", () => {
+      const detail = buildFlowDetail({
+        input: [{ name: "$1", value: "x".repeat(200), kind: "plaintext" }],
+      });
+      expect(detail.input.at(0)?.value).toHaveLength(DETAIL_VALUE_MAX_CHARS);
+      expect(detail.input.at(0)?.value.endsWith("...")).toBe(true);
+    });
+
+    it("truncates a long source", () => {
+      const detail = buildFlowDetail({ source: "s".repeat(900) });
+      expect(detail.source).toHaveLength(DETAIL_SOURCE_MAX_CHARS);
+    });
+
+    it("keeps a short source and a null source intact", () => {
+      expect(buildFlowDetail({ source: "SELECT 1" }).source).toBe("SELECT 1");
+      expect(buildFlowDetail({}).source).toBeNull();
+    });
+
+    it("preserves the byte count on rows that carry one", () => {
+      const detail = buildFlowDetail({
+        input: [
+          {
+            name: "$1",
+            value: describeFlowBytes(64),
+            kind: "ciphertext",
+            bytes: 64,
+          },
+        ],
+      });
+      expect(detail.input.at(0)?.bytes).toBe(64);
+      expect(detail.input.at(0)?.value).toBe("64 bytes");
+    });
+  });
+
+  describe("span pairing", () => {
+    it("gives both halves of a span the same spanId", async () => {
+      useTestClock();
+      const events = collectEvents();
+      await traceFlowSpan({ lane: "trpc", label: "tickets.list query" }, () =>
+        Promise.resolve("ok"),
+      );
+
+      const [request, response] = events;
+      expect(request?.spanId).toBe(request?.id);
+      expect(response?.spanId).toBe(request?.id);
+      expect(response?.id).not.toBe(request?.id);
+    });
+
+    it("pairs the failure half with its request", async () => {
+      useTestClock();
+      const events = collectEvents();
+      await expect(
+        traceFlowSpan({ lane: "trpc", label: "auth.me query" }, () =>
+          Promise.reject(new TypeError("boom")),
+        ),
+      ).rejects.toThrow(TypeError);
+
+      expect(events.at(1)?.spanId).toBe(events.at(0)?.id);
+    });
+
+    it("builds the response detail from the settled result", async () => {
+      useTestClock();
+      const events = collectEvents();
+      await traceFlowSpan(
+        {
+          lane: "server",
+          label: "route tickets.list",
+          resultDetail: (value: string[]) =>
+            buildFlowDetail({
+              result: [
+                {
+                  name: "rows",
+                  value: String(value.length),
+                  kind: "metadata",
+                },
+              ],
+            }),
+        },
+        () => Promise.resolve(["a", "b", "c"]),
+      );
+
+      expect(events.at(1)?.detail?.result.at(0)?.value).toBe("3");
+      // The request half has no result to describe.
+      expect(events.at(0)?.detail).toBeNull();
+    });
+
+    it("reports a failure through failureDetail without the message", async () => {
+      useTestClock();
+      const events = collectEvents();
+      await expect(
+        traceFlowSpan(
+          {
+            lane: "server",
+            label: "route tickets.get",
+            failureDetail: () =>
+              buildFlowDetail({
+                result: [
+                  { name: "code", value: "NOT_FOUND", kind: "metadata" },
+                ],
+              }),
+          },
+          () => Promise.reject(new TypeError("id 42 was not found")),
+        ),
+      ).rejects.toThrow(TypeError);
+
+      const failure = events.at(1);
+      expect(failure?.detail?.result.at(0)?.value).toBe("NOT_FOUND");
+      // The thrown message can embed input values, so it must not travel.
+      expect(JSON.stringify(failure)).not.toContain("42");
+    });
+  });
+
+  describe("local span detail", () => {
+    it("builds the whole detail from the settled result", async () => {
+      useTestClock();
+      const events = collectEvents();
+      await traceFlowLocal(
+        {
+          lane: "db",
+          label: "SELECT tickets",
+          resultDetail: (rows: number) =>
+            buildFlowDetail({
+              source: "select * from tickets",
+              input: [{ name: "$1", value: "10", kind: "metadata" }],
+              result: [
+                { name: "returned", value: String(rows), kind: "metadata" },
+              ],
+            }),
+        },
+        () => Promise.resolve(7),
+      );
+
+      const event = events.at(0);
+      expect(event?.detail?.source).toBe("select * from tickets");
+      expect(event?.detail?.input).toHaveLength(1);
+      expect(event?.detail?.result.at(0)?.value).toBe("7");
+    });
+
+    it("falls back to the static detail when there is no resultDetail", async () => {
+      useTestClock();
+      const events = collectEvents();
+      await traceFlowLocal(
+        {
+          lane: "crypto",
+          label: "oprf evaluate",
+          detail: buildFlowDetail({ source: "oprf" }),
+        },
+        () => Promise.resolve(undefined),
+      );
+
+      expect(events.at(0)?.detail?.source).toBe("oprf");
     });
   });
 

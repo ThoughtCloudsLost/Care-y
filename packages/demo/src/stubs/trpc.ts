@@ -28,7 +28,7 @@ type RealTrpc = typeof realTrpcClient;
 
 import { setLoginStage } from "../lib/login-stage.svelte.js";
 import { registerTrpcForPreview } from "./crypto-context.svelte.js";
-import { traceFlowSpan } from "../lib/flow-events.js";
+import { traceFlowSpan, buildFlowDetail } from "../lib/flow-events.js";
 import type { DemoSeamKey } from "../lib/bridge.js";
 import { makeProcedureProxy } from "../lib/engine/proc-proxy.js";
 
@@ -168,7 +168,21 @@ async function tracedProc<T>(
   run: () => Promise<T>,
 ): Promise<T> {
   return await traceFlowSpan(
-    { lane: "trpc", label: `${path} ${kind}`, seamKey },
+    {
+      lane: "trpc",
+      label: `${path} ${kind}`,
+      seamKey,
+      detail: () =>
+        buildFlowDetail({
+          source: path,
+          input: [{ name: "kind", value: kind, kind: "identifier" }],
+        }),
+      resultDetail: () =>
+        buildFlowDetail({
+          source: path,
+          result: [{ name: "status", value: "ok", kind: "metadata" }],
+        }),
+    },
     run,
   );
 }
