@@ -22,6 +22,7 @@
   import {
     beginSplitHandoff,
     endSplitHandoff,
+    isSplitHandoffCurrent,
     splitHandoffId,
   } from "$lib/stores/split-handoff.svelte.js";
   import {
@@ -74,6 +75,10 @@
   }
 
   function closeDetail(): void {
+    // Ending the handoff first: closing the pane is an explicit intent
+    // for the bare list, so a redirect still in flight must not push
+    // its ticket back into page state a moment later.
+    endSplitHandoff("tickets");
     replaceState("", {});
   }
 
@@ -105,9 +110,12 @@
     const id = selectedTicketId;
     if (id == null) return;
 
-    beginSplitHandoff("tickets", id);
+    const token = beginSplitHandoff("tickets", id);
     replaceState("", {});
     void goto(resolve(`/tickets/${id}`)).then(() => {
+      // Only release a handoff this effect still owns: once something
+      // else has taken the pane over, clearing it would release theirs.
+      if (!isSplitHandoffCurrent("tickets", token)) return;
       endSplitHandoff("tickets");
     });
   });

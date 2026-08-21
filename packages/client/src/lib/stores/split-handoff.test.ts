@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach } from "vitest";
 import {
   beginSplitHandoff,
   endSplitHandoff,
+  isSplitHandoffCurrent,
   splitHandoffId,
 } from "./split-handoff.svelte.js";
 
@@ -42,5 +43,33 @@ describe("splitHandoff", () => {
       endSplitHandoff("tickets");
     }).not.toThrow();
     expect(splitHandoffId("tickets")).toBeNull();
+  });
+
+  describe("supersession", () => {
+    it("reports its own token as current while in flight", () => {
+      const token = beginSplitHandoff("tickets", "tk-0001");
+      expect(isSplitHandoffCurrent("tickets", token)).toBe(true);
+    });
+
+    it("drops the token once the handoff ends", () => {
+      const token = beginSplitHandoff("tickets", "tk-0001");
+      endSplitHandoff("tickets");
+      expect(isSplitHandoffCurrent("tickets", token)).toBe(false);
+    });
+
+    it("drops the earlier token when a second handoff replaces it", () => {
+      const first = beginSplitHandoff("tickets", "tk-0001");
+      const second = beginSplitHandoff("tickets", "tk-0002");
+      expect(isSplitHandoffCurrent("tickets", first)).toBe(false);
+      expect(isSplitHandoffCurrent("tickets", second)).toBe(true);
+    });
+
+    it("issues tokens that never repeat across panes", () => {
+      const tickets = beginSplitHandoff("tickets", "tk-0001");
+      const library = beginSplitHandoff("library", "kb-0007");
+      expect(tickets).not.toBe(library);
+      expect(isSplitHandoffCurrent("tickets", library)).toBe(false);
+      expect(isSplitHandoffCurrent("library", tickets)).toBe(false);
+    });
   });
 });
