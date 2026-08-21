@@ -1334,3 +1334,94 @@ describe("pulseDesktopOnly", () => {
     expect(cmd.pulseDesktopOnly).toBe(false);
   });
 });
+
+// -----------------------------------------------------------------------
+// Highlight coverage
+//
+// Every sub-section must be able to point the phone at something. A sub
+// with no highlight region AND no topic narrates a screen while the
+// simulator circles nothing, which is the gap this contract exists to
+// keep closed as sections are added.
+// -----------------------------------------------------------------------
+
+describe("highlight coverage", () => {
+  const TICKET_ID = "test-ticket-id";
+  const ARTICLE_ID = "test-article-id";
+
+  it("every sub-section resolves to a highlight target", () => {
+    const uncovered: string[] = [];
+
+    for (const section of SECTIONS) {
+      for (const sub of section.subs) {
+        const highlight = sub.highlight;
+        const hasRegion =
+          highlight !== undefined &&
+          (highlight.section !== undefined ||
+            (highlight.selectors?.length ?? 0) > 0);
+        if (!hasRegion && sub.topic === null) {
+          uncovered.push(`${section.id}/${sub.slug}`);
+        }
+      }
+    }
+
+    expect(uncovered).toEqual([]);
+  });
+
+  it("carries the sub's highlight through to the phone command", () => {
+    const cmd = resolvePhoneCommand(
+      "admin-org",
+      "branding",
+      TICKET_ID,
+      ARTICLE_ID,
+    );
+    expect(cmd.highlight?.section).toBe("branding");
+  });
+
+  it("maps both telephony subs onto the one section that holds them", () => {
+    // provider and phone-lines narrate different parts of a single
+    // collapsible section (admin/communications/+page.svelte:21).
+    for (const slug of ["provider", "phone-lines"]) {
+      const cmd = resolvePhoneCommand(
+        "admin-comms",
+        slug,
+        TICKET_ID,
+        ARTICLE_ID,
+      );
+      expect(cmd.highlight?.section).toBe("telephony");
+    }
+  });
+
+  it("gives the topic-less subs a selector region", () => {
+    const topicless = [
+      ["search", "overlay"],
+      ["search", "entities"],
+      ["search", "how-it-works"],
+      ["library", "browse"],
+      ["library", "detail"],
+      ["library", "attachments"],
+      ["admin", "hub"],
+      ["schedule", "intro"],
+    ] as const;
+
+    for (const [sectionId, slug] of topicless) {
+      const cmd = resolvePhoneCommand(sectionId, slug, TICKET_ID, ARTICLE_ID);
+      expect(cmd.pulseTopic).toBeNull();
+      expect(cmd.highlight?.selectors?.length ?? 0).toBeGreaterThan(0);
+    }
+  });
+
+  it("resolves no highlight for coming-soon routes", () => {
+    const cmd = resolvePhoneCommand(
+      "coming-soon",
+      "reports",
+      TICKET_ID,
+      ARTICLE_ID,
+    );
+    expect(cmd.highlight).toBeNull();
+  });
+
+  it("resolves no highlight for a section with no sub selected", () => {
+    const cmd = resolvePhoneCommand("dashboard", null, TICKET_ID, ARTICLE_ID);
+    expect(cmd.highlight).toBeNull();
+  });
+});

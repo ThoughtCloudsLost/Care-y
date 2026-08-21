@@ -18,8 +18,10 @@
   import { Waypoints, X, Clapperboard } from "@lucide/svelte";
   import * as m from "$lib/paraglide/messages.js";
   import FlowBandCard from "./FlowBandCard.svelte";
+  import FlowBandCardStack from "./FlowBandCardStack.svelte";
   import FlowBandSlice from "./FlowBandSlice.svelte";
   import FlowBandLaneIcon from "./FlowBandLaneIcon.svelte";
+  import FlowBandKindIcon from "./FlowBandKindIcon.svelte";
   import {
     FLOW_LANES,
     SLICE_HEADER_HEIGHT,
@@ -27,9 +29,18 @@
     MAX_BAND_HEIGHT,
     laneColorVar,
     truncatePreview,
+    groupSliceEvents,
     type FlowBandStore,
+    type FlowCell,
+    type FlowSlice,
   } from "./flow-band.svelte.js";
-  import type { DemoFlowEvent, DemoSeamKey, FlowLane } from "./bridge.js";
+  import type {
+    DemoFlowEvent,
+    DemoSeamKey,
+    FlowDetailRow,
+    FlowLane,
+    FlowValueKind,
+  } from "./bridge.js";
 
   interface Props {
     store: FlowBandStore;
@@ -118,6 +129,38 @@
   function stepsLabel(count: number): string {
     void locale;
     return m.demo_flow_slice_steps({ count: String(count) });
+  }
+
+  function classificationName(kind: FlowValueKind): string {
+    void locale;
+    switch (kind) {
+      case "ciphertext":
+        return m.demo_flow_kind_ciphertext();
+      case "plaintext":
+        return m.demo_flow_kind_plaintext();
+      case "key-material":
+        return m.demo_flow_kind_key_material();
+      case "identifier":
+        return m.demo_flow_kind_identifier();
+      case "metadata":
+        return m.demo_flow_kind_metadata();
+    }
+  }
+
+  function kindNote(kind: FlowValueKind): string {
+    void locale;
+    switch (kind) {
+      case "ciphertext":
+        return m.demo_flow_kind_ciphertext_note();
+      case "plaintext":
+        return m.demo_flow_kind_plaintext_note();
+      case "key-material":
+        return m.demo_flow_kind_key_material_note();
+      case "identifier":
+        return m.demo_flow_kind_identifier_note();
+      case "metadata":
+        return m.demo_flow_kind_metadata_note();
+    }
   }
 
   // -----------------------------------------------------------------------
@@ -267,12 +310,66 @@
   const onToggleCardCb = (id: number): void => {
     store.toggleExpanded(id);
   };
+  const onToggleRunCb = (id: number): void => {
+    store.toggleRun(id);
+  };
+
+  /**
+   * Columns for one slice, used by the overlay list. Declared here with
+   * an explicit return type rather than called inline in the template:
+   * the type-aware lint rules cannot follow a generic return through a
+   * template each-expression, and read it as untyped.
+   */
+  function cellsOf(slice: FlowSlice): FlowCell[] {
+    return groupSliceEvents(slice.events);
+  }
 </script>
 
 <svelte:window onkeydown={handleWindowKeydown} />
 
+{#snippet detailRowTable(heading: string, rows: readonly FlowDetailRow[])}
+  <div class="detail-table-wrap">
+    <h4 class="detail-section-head">{heading}</h4>
+    <table class="detail-table">
+      <thead>
+        <tr>
+          <th>{m.demo_flow_detail_col_name()}</th>
+          <th>{m.demo_flow_detail_col_kind()}</th>
+          <th>{m.demo_flow_detail_col_value()}</th>
+        </tr>
+      </thead>
+      <tbody>
+        {#each rows as row (row.name)}
+          <tr>
+            <td class="detail-td-name">{row.name}</td>
+            <td class="detail-td-kind">
+              <span class="detail-kind-icon" aria-hidden="true">
+                <FlowBandKindIcon kind={row.kind} size={12} />
+              </span>
+              <span class="detail-kind-word"
+                >{classificationName(row.kind)}</span
+              >
+            </td>
+            <td class="detail-td-value">
+              <code>{row.value}</code>
+              {#if row.bytes !== undefined}
+                <span class="detail-bytes">
+                  {m.demo_flow_detail_bytes({ count: String(row.bytes) })}
+                </span>
+              {/if}
+            </td>
+          </tr>
+        {/each}
+      </tbody>
+    </table>
+  </div>
+{/snippet}
+
 {#snippet detailPanel(event: DemoFlowEvent)}
+  {@const ctx = store.expandedContext}
   {@const preview = truncatePreview(event.payloadPreview)}
+  {@const detail = event.detail}
+  {@const classification = detail?.classification ?? null}
   <div class="detail" style:--lane-color={laneColorVar(event.lane)}>
     <div class="detail-head">
       <span class="detail-lane">
@@ -282,10 +379,12 @@
         {laneName(event.lane)}
       </span>
       <span class="detail-meta">{directionLabel(event.direction)}</span>
-      {#if event.durationMs !== null}
-        <span class="detail-meta">
-          <span class="detail-key">{m.demo_flow_detail_duration()}</span>
-          {m.demo_flow_duration_ms({ ms: String(event.durationMs) })}
+      {#if classification !== null}
+        <span class="detail-chip" title={kindNote(classification)}>
+          <span class="detail-kind-icon" aria-hidden="true">
+            <FlowBandKindIcon kind={classification} size={12} />
+          </span>
+          {classificationName(classification)}
         </span>
       {/if}
       {#if event.seamKey !== null}
@@ -293,6 +392,19 @@
           <Clapperboard size={10} />
           {m.demo_flow_seam_badge()}
         </span>
+      {/if}
+      {#if ctx !== null}
+        <span class="detail-meta">
+          {m.demo_flow_detail_step({
+            index: String(ctx.stepIndex),
+            count: String(ctx.stepCount),
+          })}
+        </span>
+        {#if ctx.offsetMs > 0}
+          <span class="detail-meta detail-tabular">
+            {m.demo_flow_detail_offset({ ms: String(ctx.offsetMs) })}
+          </span>
+        {/if}
       {/if}
       <button
         class="detail-close"
@@ -304,7 +416,47 @@
       </button>
     </div>
     <p class="detail-label">{event.label}</p>
-    {#if preview !== null}
+
+    <!-- Timing line -->
+    <div class="detail-timing">
+      {#if event.durationMs !== null}
+        <span class="detail-meta">
+          <span class="detail-key">{m.demo_flow_detail_duration()}</span>
+          {m.demo_flow_duration_ms({ ms: String(event.durationMs) })}
+        </span>
+      {/if}
+      {#if ctx?.partner !== null && ctx?.partner?.durationMs !== null && event.durationMs !== null}
+        <span class="detail-meta">
+          <span class="detail-key">{m.demo_flow_detail_round_trip()}</span>
+          {m.demo_flow_duration_ms({
+            ms: String(event.durationMs + (ctx?.partner?.durationMs ?? 0)),
+          })}
+        </span>
+      {/if}
+    </div>
+
+    <!-- Source statement (SQL, procedure path, etc.) -->
+    {#if detail?.source !== null && detail?.source !== undefined}
+      <div class="detail-source-wrap">
+        <h4 class="detail-section-head">{m.demo_flow_detail_source()}</h4>
+        <div class="detail-source-scroll">
+          <pre class="detail-source"><code>{detail.source}</code></pre>
+        </div>
+      </div>
+    {/if}
+
+    <!-- Input rows -->
+    {#if detail !== null && detail.input.length > 0}
+      {@render detailRowTable(m.demo_flow_detail_input(), detail.input)}
+    {/if}
+
+    <!-- Result rows -->
+    {#if detail !== null && detail.result.length > 0}
+      {@render detailRowTable(m.demo_flow_detail_result(), detail.result)}
+    {/if}
+
+    <!-- Fallback for events without structured detail -->
+    {#if detail === null && preview !== null}
       <p class="detail-payload">
         <span class="detail-key">{m.demo_flow_detail_payload()}</span>
         <code>{preview}</code>
@@ -347,20 +499,51 @@
               <h3 class="overlay-slice-title">
                 {sliceLabel(slice.interactionId)}
               </h3>
-              {#each slice.events as event (event.id)}
-                <FlowBandCard
-                  {event}
-                  laneName={laneName(event.lane)}
-                  seamBadge={m.demo_flow_seam_badge()}
-                  toggleHint={store.isExpanded(event.id)
-                    ? m.demo_flow_collapse()
-                    : m.demo_flow_expand()}
-                  expanded={store.isExpanded(event.id)}
-                  variant="list"
-                  onToggle={(id: number) => store.toggleExpanded(id)}
-                />
-                {#if store.isExpanded(event.id)}
-                  {@render detailPanel(event)}
+              <!-- The overlay folds runs the same way the swimlane does.
+                   It has more to gain from it: a flat list has no columns
+                   to save, but twelve identical decrypt rows push whatever
+                   came next off the bottom of a phone screen. -->
+              {#each cellsOf(slice) as cell (cell.id)}
+                {#if cell.isRun}
+                  {@const anchor = cell.anchor}
+                  {@const open = store.expandedRuns.has(cell.id)}
+                  <FlowBandCardStack
+                    events={cell.events}
+                    expanded={open}
+                    laneName={laneName(anchor.lane)}
+                    directionName={directionLabel(anchor.direction)}
+                    seamBadge={m.demo_flow_seam_badge()}
+                    spreadHint={m.demo_flow_stack_spread()}
+                    expandHint={m.demo_flow_expand()}
+                    collapseHint={m.demo_flow_collapse()}
+                    restackLabel={m.demo_flow_stack_restack()}
+                    countLabel={stepsLabel(cell.events.length)}
+                    variant="list"
+                    {locale}
+                    isExpanded={isExpandedCb}
+                    onToggleCard={onToggleCardCb}
+                    onToggleStack={() => {
+                      store.toggleRun(cell.id);
+                    }}
+                  />
+                {:else}
+                  {@const event = cell.anchor}
+                  <FlowBandCard
+                    {event}
+                    laneName={laneName(event.lane)}
+                    directionName={directionLabel(event.direction)}
+                    seamBadge={m.demo_flow_seam_badge()}
+                    toggleHint={store.isExpanded(event.id)
+                      ? m.demo_flow_collapse()
+                      : m.demo_flow_expand()}
+                    expanded={store.isExpanded(event.id)}
+                    variant="list"
+                    {locale}
+                    onToggle={(id: number) => store.toggleExpanded(id)}
+                  />
+                  {#if store.isExpanded(event.id)}
+                    {@render detailPanel(event)}
+                  {/if}
                 {/if}
               {/each}
             </div>
@@ -397,7 +580,7 @@
               style:--lane-color={laneColorVar(lane)}
               style:height="{rowHeight}px"
             >
-              <span class="lane-strip" aria-hidden="true"></span>
+              <span class="lane-swatch" aria-hidden="true"></span>
               <span class="lane-icon" aria-hidden="true">
                 <FlowBandLaneIcon {lane} size={14} />
               </span>
@@ -420,10 +603,16 @@
                   ? m.demo_flow_slice_expand()
                   : m.demo_flow_slice_collapse()}
                 stepsLabel={stepsLabel(slice.events.length)}
+                countLabel={stepsLabel}
+                expandedRuns={store.expandedRuns}
+                onToggleRun={onToggleRunCb}
                 seamBadge={m.demo_flow_seam_badge()}
                 expandHint={m.demo_flow_expand()}
                 collapseHint={m.demo_flow_collapse()}
+                restackLabel={m.demo_flow_stack_restack()}
                 {laneName}
+                directionName={directionLabel}
+                {locale}
                 isExpanded={isExpandedCb}
                 onToggleSlice={onToggleSliceCb}
                 onToggleCard={onToggleCardCb}
@@ -548,9 +737,10 @@
     padding: 0 0.75rem;
   }
 
-  /* Lane column: icon, name, and a color edge per lane. Its spacer
-     matches the per-slice header strip so the rows line up with the
-     cards in the track. */
+  /* Lane column: icon, name, and a tinted swatch per lane. The old
+     left-border strip is gone per the Inkwell "no thick-left-border
+     accents" rule. The swatch is a small rounded block that reads as a
+     legend entry beside the icon and label. */
   .lane-column {
     flex: 0 0 auto;
     width: 8.5rem;
@@ -571,13 +761,16 @@
     min-height: 0;
   }
 
-  .lane-strip {
+  .lane-swatch {
     flex: 0 0 auto;
-    width: 3px;
-    height: 60%;
-    min-height: 14px;
-    border-radius: 2px;
-    background: var(--lane-color);
+    width: 10px;
+    height: 10px;
+    border-radius: 3px;
+    background: color-mix(in srgb, var(--lane-color) 20%, transparent);
+  }
+
+  :global(html.dark) .lane-swatch {
+    background: color-mix(in srgb, var(--lane-color) 28%, transparent);
   }
 
   .lane-icon {
@@ -654,14 +847,18 @@
   }
 
   /* -----------------------------------------------------------------------
-     Expanded detail
+     Expanded detail panel
      ----------------------------------------------------------------------- */
 
   .detail {
     border-top: 1px solid var(--hair);
-    border-left: 3px solid var(--lane-color);
     padding: 0.5rem 0.75rem;
-    background: color-mix(in srgb, var(--raised) 60%, transparent);
+    border-radius: 0 0 10px 10px;
+    background: color-mix(in srgb, var(--lane-color) 6%, var(--raised));
+  }
+
+  :global(html.dark) .detail {
+    background: color-mix(in srgb, var(--lane-color) 10%, var(--raised));
   }
 
   .detail-head {
@@ -687,6 +884,21 @@
 
   .detail-meta {
     color: var(--muted);
+  }
+
+  .detail-tabular {
+    font-variant-numeric: tabular-nums;
+  }
+
+  .detail-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    padding: 0.0625rem 0.375rem;
+    border: 1px solid var(--hair);
+    border-radius: 6px;
+    color: var(--ink-2);
+    font-size: 0.625rem;
   }
 
   .detail-badge {
@@ -728,6 +940,120 @@
     color: var(--ink);
   }
 
+  .detail-timing {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+    margin: 0.25rem 0 0;
+    font-size: 0.75rem;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .detail-key {
+    font-weight: 600;
+  }
+
+  /* Source (SQL, procedure path, etc.) */
+  .detail-source-wrap {
+    margin: 0.375rem 0 0;
+  }
+
+  .detail-section-head {
+    margin: 0 0 0.125rem;
+    font-size: 0.625rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+
+  .detail-source-scroll {
+    overflow-x: auto;
+    max-width: 100%;
+  }
+
+  .detail-source {
+    margin: 0;
+    padding: 0.375rem 0.5rem;
+    border: 1px solid var(--hair);
+    border-radius: 6px;
+    background: color-mix(in srgb, var(--paper-deep) 60%, transparent);
+    font-family:
+      "Atkinson Hyperlegible Mono Variable", ui-monospace, SFMono-Regular,
+      Menlo, monospace;
+    font-size: 0.6875rem;
+    line-height: 1.4;
+    white-space: pre;
+    color: var(--ink);
+  }
+
+  /* Input/result tables */
+  .detail-table-wrap {
+    margin: 0.375rem 0 0;
+    overflow-x: auto;
+    max-width: 100%;
+  }
+
+  .detail-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.6875rem;
+  }
+
+  .detail-table th {
+    text-align: left;
+    padding: 0.125rem 0.5rem 0.125rem 0;
+    font-weight: 600;
+    color: var(--muted);
+    border-bottom: 1px solid var(--hair);
+    white-space: nowrap;
+  }
+
+  .detail-table td {
+    padding: 0.125rem 0.5rem 0.125rem 0;
+    border-bottom: 1px solid color-mix(in srgb, var(--hair) 50%, transparent);
+    color: var(--ink);
+  }
+
+  .detail-td-name {
+    font-family:
+      "Atkinson Hyperlegible Mono Variable", ui-monospace, SFMono-Regular,
+      Menlo, monospace;
+    white-space: nowrap;
+    color: var(--ink-2);
+  }
+
+  .detail-td-kind {
+    white-space: nowrap;
+  }
+
+  .detail-kind-icon {
+    display: inline-flex;
+    flex-shrink: 0;
+    align-items: center;
+    color: var(--muted);
+  }
+
+  .detail-kind-word {
+    font-size: 0.625rem;
+    color: var(--muted);
+  }
+
+  .detail-td-value code {
+    font-family:
+      "Atkinson Hyperlegible Mono Variable", ui-monospace, SFMono-Regular,
+      Menlo, monospace;
+    font-size: 0.6875rem;
+    word-break: break-all;
+  }
+
+  .detail-bytes {
+    font-size: 0.625rem;
+    font-variant-numeric: tabular-nums;
+    color: var(--muted);
+    margin-left: 0.25rem;
+  }
+
   .detail-payload {
     margin: 0.25rem 0 0;
     font-size: 0.75rem;
@@ -735,12 +1061,10 @@
     overflow-wrap: anywhere;
   }
 
-  .detail-key {
-    font-weight: 600;
-  }
-
   .detail-payload code {
-    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-family:
+      "Atkinson Hyperlegible Mono Variable", ui-monospace, SFMono-Regular,
+      Menlo, monospace;
     font-size: 0.6875rem;
   }
 

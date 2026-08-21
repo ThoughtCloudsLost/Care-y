@@ -2,7 +2,7 @@ import { mount } from "svelte";
 import * as m from "$lib/paraglide/messages.js";
 import type { DemoEngineResult } from "./lib/engine/engine.js";
 import { setEngineTrpc } from "./stubs/trpc.js";
-import { traceFlowLocal } from "./lib/flow-events.js";
+import { traceFlowLocal, buildFlowDetail } from "./lib/flow-events.js";
 import { matchesAnyLocale } from "./lib/topic-classifier.js";
 import { DemoMountError } from "./lib/errors.js";
 import PhoneApp from "./PhoneApp.svelte";
@@ -70,9 +70,26 @@ const fakeCredentialsApi = {
         lane: "crypto",
         label: "webauthn assertion",
         seamKey: "webauthn-authenticator",
+        resultDetail: () =>
+          buildFlowDetail({
+            result: [
+              { name: "outcome", value: "armed (approved)", kind: "metadata" },
+            ],
+          }),
+        failureDetail: () =>
+          buildFlowDetail({
+            result: [
+              {
+                name: "outcome",
+                value: "dismissed (unarmed)",
+                kind: "metadata",
+              },
+            ],
+          }),
       },
       async () => {
-        if (Date.now() > passkeyArmedUntil) {
+        const armed = Date.now() <= passkeyArmedUntil;
+        if (!armed) {
           // Auto-started ceremony: behave like a dismissed passkey prompt
           await new Promise<void>((resolve) => {
             setTimeout(resolve, WEBAUTHN_DISMISS_DELAY_MS);

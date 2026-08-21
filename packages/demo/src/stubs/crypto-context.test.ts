@@ -109,6 +109,8 @@ const {
   registerTrpcForPreview,
   getPreviewLoader,
   setRoleAndPermissions,
+  buildDecryptDetail,
+  base64DecodedLength,
 } = await import("./crypto-context.svelte.js");
 
 // Captured before any test mutates module state: demoSeed only
@@ -329,6 +331,78 @@ describe("crypto-context (lazy real objects)", () => {
   describe("ensureKeyed", () => {
     it("is an exported async function", () => {
       expect(typeof ensureKeyed).toBe("function");
+    });
+  });
+
+  describe("base64DecodedLength", () => {
+    it("measures without decoding", () => {
+      // "hello world" is 11 bytes and encodes to "aGVsbG8gd29ybGQ=".
+      expect(base64DecodedLength("aGVsbG8gd29ybGQ=")).toBe(11);
+    });
+
+    it("handles both padding lengths", () => {
+      expect(base64DecodedLength("aGVsbG8=")).toBe(5);
+      expect(base64DecodedLength("aGVsbG9v")).toBe(6);
+      expect(base64DecodedLength("aGVsbA==")).toBe(4);
+    });
+
+    it("returns zero for an empty string", () => {
+      expect(base64DecodedLength("")).toBe(0);
+    });
+  });
+
+  describe("buildDecryptDetail (leak guard)", () => {
+    const args = {
+      slot: "title",
+      keyCacheId: "tk-0001",
+      ciphertext: "Y2lwaGVydGV4dA==",
+      wrappedKey: "d3JhcHBlZEtleQ==",
+      nonce: "bm9uY2U=",
+      ephemeralPoint: "ZXBoZW1lcmFs",
+    };
+
+    it("reports the decrypted size without the decrypted content", () => {
+      const secret = "Caller reported an unsafe situation at home";
+      const detail = buildDecryptDetail(args, secret.length);
+
+      const resultRow = detail.result.at(0);
+      expect(resultRow?.name).toBe("plaintext");
+      expect(resultRow?.bytes).toBe(secret.length);
+      // The whole point: a length crossed the boundary, the words did not.
+      expect(JSON.stringify(detail)).not.toContain("unsafe");
+      expect(JSON.stringify(detail)).not.toContain(secret);
+    });
+
+    it("never carries the raw ciphertext or key material", () => {
+      const serialized = JSON.stringify(buildDecryptDetail(args, 42));
+      expect(serialized).not.toContain(args.ciphertext);
+      expect(serialized).not.toContain(args.wrappedKey);
+      expect(serialized).not.toContain(args.nonce);
+      expect(serialized).not.toContain(args.ephemeralPoint);
+    });
+
+    it("classifies the event as ciphertext", () => {
+      // Ciphertext outranks the key material and identifier rows, so the
+      // card face carries the strongest claim in the set.
+      expect(buildDecryptDetail(args, 42).classification).toBe("ciphertext");
+    });
+
+    it("marks every input row as opaque, never plaintext", () => {
+      const detail = buildDecryptDetail(args, 42);
+      const kinds = new Set(detail.input.map((row) => row.kind));
+      expect(kinds.has("plaintext")).toBe(false);
+      expect(kinds).toEqual(
+        new Set(["identifier", "ciphertext", "key-material"]),
+      );
+    });
+
+    it("reports byte counts for every opaque input", () => {
+      const detail = buildDecryptDetail(args, 42);
+      for (const row of detail.input) {
+        if (row.kind === "identifier") continue;
+        expect(row.bytes).toBeGreaterThan(0);
+        expect(row.value).toBe(`${String(row.bytes ?? 0)} bytes`);
+      }
     });
   });
 });

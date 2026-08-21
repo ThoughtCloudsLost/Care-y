@@ -1,4 +1,9 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
+import {
+  beginSplitHandoff,
+  endSplitHandoff,
+  splitHandoffId,
+} from "$lib/stores/split-handoff.svelte.js";
 import { DemoRouter } from "./router.svelte.js";
 
 // The router imports setDemoPage from "$app/state" (aliased to the stub).
@@ -7,6 +12,7 @@ import { DemoRouter } from "./router.svelte.js";
 vi.mock("$app/state", () => {
   let lastUpdate:
     { url: URL; params: Record<string, string>; routeId: string } | undefined;
+  let pageState: Record<string, unknown> = {};
   return {
     setDemoPage(update: {
       url: URL;
@@ -14,9 +20,13 @@ vi.mock("$app/state", () => {
       routeId: string;
     }): void {
       lastUpdate = update;
+      pageState = {};
     },
-    setDemoPageShallow(_url: URL, _state: Record<string, unknown>): void {
-      // no-op in router tests
+    setDemoPageShallow(_url: URL, state: Record<string, unknown>): void {
+      pageState = state;
+    },
+    clearDemoPageState(): void {
+      pageState = {};
     },
     _getLastUpdate():
       | { url: URL; params: Record<string, string>; routeId: string }
@@ -26,6 +36,9 @@ vi.mock("$app/state", () => {
     _resetLastUpdate(): void {
       lastUpdate = undefined;
     },
+    _setPageState(state: Record<string, unknown>): void {
+      pageState = state;
+    },
     page: {
       params: {} as Record<string, string>,
       url: new URL("http://demo.local/tickets"),
@@ -34,7 +47,9 @@ vi.mock("$app/state", () => {
       error: null as unknown,
       data: {} as Record<string, unknown>,
       form: null as unknown,
-      state: {} as Record<string, unknown>,
+      get state(): Record<string, unknown> {
+        return pageState;
+      },
     },
     navigating: null,
     updated: {
@@ -148,6 +163,12 @@ describe("DemoRouter", () => {
     router = new DemoRouter();
     beforeCbs.length = 0;
     afterCbs.length = 0;
+    endSplitHandoff("tickets");
+    endSplitHandoff("library");
+    const mod = await vi.importMock<{
+      _setPageState: (state: Record<string, unknown>) => void;
+    }>("$app/state");
+    mod._setPageState({});
   });
 
   describe("initial state", () => {
@@ -560,6 +581,80 @@ describe("DemoRouter", () => {
       expect(update).toBeDefined();
       expect(update?.url.pathname).toBe("/login");
       expect(update?.routeId).toBe("/login");
+    });
+  });
+
+  describe("shallow routing state", () => {
+    async function readPageState(): Promise<Record<string, unknown>> {
+      const mod = await vi.importMock<{
+        page: { state: Record<string, unknown> };
+      }>("$app/state");
+      return mod.page.state;
+    }
+
+    async function seedPageState(
+      state: Record<string, unknown>,
+    ): Promise<void> {
+      const mod = await vi.importMock<{
+        _setPageState: (state: Record<string, unknown>) => void;
+      }>("$app/state");
+      mod._setPageState(state);
+    }
+
+    it("drops page state when navigate keeps the pathname", async () => {
+      router.navigate("tickets");
+      await seedPageState({ ticketId: "tk-0001" });
+
+      router.navigate("tickets");
+
+      expect(await readPageState()).toEqual({});
+    });
+
+    it("drops page state when a tab tap lands on the current pathname", async () => {
+      router.navigate("tickets");
+      await seedPageState({ ticketId: "tk-0001" });
+
+      router.handleTabChange("tickets");
+
+      expect(await readPageState()).toEqual({});
+    });
+
+    it("drops page state when goto lands on the current pathname", async () => {
+      router.navigate("tickets");
+      await seedPageState({ ticketId: "tk-0001" });
+
+      router.handleGoto("/tickets");
+
+      expect(await readPageState()).toEqual({});
+    });
+
+    it("leaves page state to the RouteMount commit when the pathname changes", async () => {
+      router.navigate("tickets");
+      await seedPageState({ ticketId: "tk-0001" });
+
+      router.navigate("tickets", "tk-0001");
+
+      expect(await readPageState()).toEqual({ ticketId: "tk-0001" });
+    });
+
+    it("ends a split handoff when navigate keeps the pathname", () => {
+      router.navigate("tickets");
+      beginSplitHandoff("tickets", "tk-0001");
+
+      router.navigate("tickets");
+
+      expect(splitHandoffId("tickets")).toBeNull();
+    });
+
+    it("keeps a split handoff across the desktop detail redirect", () => {
+      router.handleGoto("/tickets/tk-0001");
+      beginSplitHandoff("tickets", "tk-0001");
+
+      // The client's desktop redirect: /tickets/[id] -> /tickets, then
+      // pushState once the commit lands. The handoff has to survive it.
+      router.handleGoto("/tickets");
+
+      expect(splitHandoffId("tickets")).toBe("tk-0001");
     });
   });
 

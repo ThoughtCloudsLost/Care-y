@@ -32,7 +32,11 @@ import {
 
 import type { OprfEvaluateService } from "../../../../../server/src/crypto/oprf-evaluate-service.js";
 import { DemoEngineError } from "../errors.js";
-import { traceFlowLocal } from "../../flow-events.js";
+import {
+  traceFlowLocal,
+  buildFlowDetail,
+  describeFlowBytes,
+} from "../../flow-events.js";
 import { assertSodiumReady } from "./sodium-ready.js";
 
 // ── Deterministic OPRF scalar ──────────────────────────────────────
@@ -151,6 +155,27 @@ export function createDemoOprfService(
         lane: "crypto",
         label: "oprf evaluate",
         seamKey: "oprf-evaluator",
+        resultDetail: () => {
+          const pointSize = _sodium.crypto_core_ristretto255_BYTES;
+          return buildFlowDetail({
+            input: [
+              {
+                name: "blinded point",
+                value: describeFlowBytes(pointSize),
+                kind: "key-material",
+                bytes: pointSize,
+              },
+            ],
+            result: [
+              {
+                name: "evaluated point",
+                value: describeFlowBytes(pointSize),
+                kind: "key-material",
+                bytes: pointSize,
+              },
+            ],
+          });
+        },
       },
       async () => {
         await Promise.resolve();

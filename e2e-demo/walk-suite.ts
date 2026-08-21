@@ -31,6 +31,7 @@ import {
   clickSectionTab,
   clickRailSub,
   readPulseLog,
+  readHighlightLog,
 } from "./helpers.js";
 import type { ConvergenceExpectation } from "./helpers.js";
 import { findAllowlistEntry } from "./pulse-allowlist.js";
@@ -557,6 +558,72 @@ export function defineStoryWalk(options: StoryWalkOptions): void {
                   }
                 }
               }
+            }
+          }
+
+          // LAYER 3: highlight assertion
+          //
+          // Runs for EVERY sub, not just those carrying a topic: the
+          // point of the highlight layer is that a reader always sees
+          // the region a sub-section is describing, and the subs with
+          // no topic are exactly the ones that used to show nothing.
+          //
+          // Desktop-only subs are skipped on the phone preset for the
+          // same reason the pulse assertion skips them.
+          if (!(sub.desktopOnly === true && framePreset === "phone")) {
+            const subLabel = `${section.id}/${sub.slug}`;
+            let highlighted = false;
+
+            try {
+              await expect
+                .poll(
+                  async () => {
+                    const log = await readHighlightLog(page);
+                    if (log === null) return "unavailable";
+                    const entry = log.find(
+                      (e) =>
+                        e.sectionId === section.id &&
+                        e.subSlug === sub.slug &&
+                        e.outcome !== "missing",
+                    );
+                    return entry !== undefined ? "found" : "waiting";
+                  },
+                  // Outlasts the selector resolver's own window plus the
+                  // section-nav settle.
+                  { timeout: 15_000, intervals: [500, 1_000, 2_000] },
+                )
+                .toBe("found");
+              highlighted = true;
+            } catch {
+              test.info().annotations.push({
+                type: "issue",
+                description: `HIGHLIGHT GAP: "${subLabel}" pointed the phone at nothing`,
+              });
+              console.log(`HIGHLIGHT GAP: ${subLabel}`);
+              expect(
+                highlighted,
+                `Sub-section "${subLabel}" recorded no highlight. Every sub must name a ` +
+                  `region the phone can scroll to and circle (SubHighlight in ` +
+                  `scroll-sections.ts), or resolve one through its topic pulse.`,
+              ).toBe(true);
+            }
+
+            // The recorded target must be on screen. A highlight that
+            // resolves an element the reader cannot see is the exact
+            // failure this whole layer exists to prevent.
+            if (highlighted) {
+              const log = await readHighlightLog(page);
+              const entry = log?.find(
+                (e) =>
+                  e.sectionId === section.id &&
+                  e.subSlug === sub.slug &&
+                  e.outcome !== "missing",
+              );
+              expect(
+                entry?.target?.inViewport,
+                `Sub-section "${subLabel}" highlighted a region outside the phone viewport. ` +
+                  `The highlight should bring it into view before ringing it.`,
+              ).toBe(true);
             }
           }
 

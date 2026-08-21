@@ -16,9 +16,19 @@ import type {
   DemoFlowEvent,
   DemoFlowListener,
   DemoSeamKey,
+  FlowDetail,
+  FlowDetailRow,
   FlowDirection,
   FlowLane,
+  FlowValueKind,
 } from "./bridge.js";
+
+/**
+ * Re-exported so a tap has one import for everything it needs to build a
+ * detail. Type-only, so this adds no runtime edge and the leaf-module
+ * rule above still holds.
+ */
+export type { FlowDetail, FlowDetailRow, FlowValueKind };
 
 // -----------------------------------------------------------------------
 // Tuning
@@ -29,6 +39,17 @@ export const FLOW_INTERACTION_IDLE_MS = 1500;
 
 /** Cap for payload previews handed to the band. */
 export const FLOW_PREVIEW_MAX = 120;
+
+/**
+ * Detail caps. A single wide INSERT has enough bound parameters to fill
+ * the panel on its own, so the bounds are applied here, at the tap,
+ * rather than at the renderer: an oversized detail never crosses the
+ * bridge, which means nothing downstream has to defend against one.
+ */
+export const DETAIL_MAX_INPUT_ROWS = 12;
+export const DETAIL_MAX_RESULT_ROWS = 8;
+export const DETAIL_VALUE_MAX_CHARS = 64;
+export const DETAIL_SOURCE_MAX_CHARS = 512;
 
 // -----------------------------------------------------------------------
 // Clock
@@ -66,6 +87,7 @@ export interface RecordedFlowEvent {
   readonly seamKey: DemoSeamKey | null;
   readonly payloadPreview: string | null;
   readonly durationMs: number | null;
+  readonly detail: FlowDetail | null;
 }
 
 let recording: RecordedFlowEvent[] | null = null;
@@ -126,6 +148,7 @@ export function replayRecordedEvents(
       seamKey,
       payloadPreview: event.payloadPreview,
       durationMs: event.durationMs,
+      detail: event.detail,
     });
   }
 }
@@ -192,6 +215,116 @@ export function describeFlowError(err: unknown): string {
   return err instanceof Error ? err.name : "UnknownError";
 }
 
+/**
+ * Round a measured duration to something readable.
+ *
+ * Durations come from performance.now() deltas, so they arrive with the
+ * clock's full precision (12.399999999552965). None of that is real
+ * signal at this resolution, and a card is 152px wide.
+ *
+ * Under 10ms keeps one decimal, because sub-millisecond work is common
+ * on the db and crypto lanes and rounding it to a flat 0 would report a
+ * query as instant. At 10ms and above the decimal stops carrying
+ * anything and whole milliseconds read better in a tabular column.
+ *
+ * A whole result stringifies without a trailing zero on its own, so 5.02
+ * renders as "5 ms" rather than "5.0 ms".
+ */
+export function roundFlowDuration(
+  ms: number | null | undefined,
+): number | null {
+  if (ms === undefined || ms === null || !Number.isFinite(ms)) return null;
+  return ms >= 10 ? Math.round(ms) : Math.round(ms * 10) / 10;
+}
+
+// -----------------------------------------------------------------------
+// Detail construction
+// -----------------------------------------------------------------------
+
+/** One row before capping. Taps build these; buildFlowDetail bounds them. */
+export interface FlowDetailRowInput {
+  readonly name: string;
+  readonly value: string;
+  readonly kind: FlowValueKind;
+  readonly bytes?: number;
+}
+
+function capRows(
+  rows: readonly FlowDetailRowInput[],
+  max: number,
+): FlowDetailRow[] {
+  const kept: FlowDetailRow[] = rows.slice(0, max).map((row) => ({
+    name: row.name,
+    value:
+      row.value.length <= DETAIL_VALUE_MAX_CHARS
+        ? row.value
+        : `${row.value.slice(0, DETAIL_VALUE_MAX_CHARS - 3)}...`,
+    kind: row.kind,
+    ...(row.bytes === undefined ? {} : { bytes: row.bytes }),
+  }));
+  const dropped = rows.length - kept.length;
+  if (dropped > 0) {
+    // Say what was dropped rather than truncating silently: a panel that
+    // shows 12 of 40 parameters while looking complete is worse than one
+    // that admits the cut.
+    kept.push({
+      name: "...",
+      value: `+${String(dropped)} more`,
+      kind: "metadata",
+    });
+  }
+  return kept;
+}
+
+/**
+ * Build a bounded FlowDetail. Every tap goes through here so the caps
+ * cannot be forgotten at one call site.
+ *
+ * The classification is the dominant kind across the input rows, in
+ * severity order: any ciphertext makes the event a ciphertext event,
+ * then key material, then plaintext. That ordering is what puts the
+ * strongest claim on the card face.
+ */
+export function buildFlowDetail(spec: {
+  readonly source?: string | null;
+  readonly input?: readonly FlowDetailRowInput[];
+  readonly result?: readonly FlowDetailRowInput[];
+  readonly classification?: FlowValueKind | null;
+}): FlowDetail {
+  const input = capRows(spec.input ?? [], DETAIL_MAX_INPUT_ROWS);
+  const result = capRows(spec.result ?? [], DETAIL_MAX_RESULT_ROWS);
+  const source = spec.source ?? null;
+  return {
+    source:
+      source === null || source.length <= DETAIL_SOURCE_MAX_CHARS
+        ? source
+        : `${source.slice(0, DETAIL_SOURCE_MAX_CHARS - 3)}...`,
+    input,
+    result,
+    classification: spec.classification ?? dominantKind(input),
+  };
+}
+
+/** Strongest claim present in a row set, or null when there is none. */
+function dominantKind(rows: readonly FlowDetailRow[]): FlowValueKind | null {
+  const order: readonly FlowValueKind[] = [
+    "ciphertext",
+    "key-material",
+    "plaintext",
+    "identifier",
+    "metadata",
+  ];
+  for (const kind of order) {
+    if (rows.some((row) => row.kind === kind)) return kind;
+  }
+  return null;
+}
+
+/** Render a byte count as a value string. Length only, never content. */
+export function describeFlowBytes(byteLength: number): string {
+  return `${String(byteLength)} bytes`;
+}
+
 // -----------------------------------------------------------------------
 // Emit
 // -----------------------------------------------------------------------
@@ -204,7 +337,18 @@ export interface FlowEventInput {
   readonly seamKey?: DemoSeamKey | null;
   /** Plain string, null, or a thunk resolved only when a listener exists. */
   readonly payloadPreview?: string | null | (() => string);
+  /**
+   * Structured payload, or a thunk resolved only when a listener exists.
+   * Thunks matter more here than for payloadPreview: building a detail
+   * walks every bound parameter, which is real work to skip when nobody
+   * has the band open.
+   */
+  readonly detail?: FlowDetail | null | (() => FlowDetail);
   readonly durationMs?: number | null;
+  /** Pair key shared by both halves of a span. See DemoFlowEvent.spanId. */
+  readonly spanId?: number | null;
+  /** Repeat key, so a run of the same operation folds. See DemoFlowEvent.groupKey. */
+  readonly groupKey?: string | null;
   /**
    * Pin the event to an existing group. Response halves pass the id
    * captured when their request was emitted, so a slow call cannot
@@ -218,6 +362,24 @@ export interface FlowEventInput {
 /** Resolve a string-or-thunk field. */
 function resolveField(field: string | (() => string)): string {
   return typeof field === "function" ? field() : field;
+}
+
+/** Resolve a detail-or-thunk field. */
+function resolveDetail(
+  field: FlowDetail | null | (() => FlowDetail) | undefined,
+): FlowDetail | null {
+  if (field === undefined || field === null) return null;
+  return typeof field === "function" ? field() : field;
+}
+
+/**
+ * The id the next emitted event will receive. Span callers read this
+ * before emitting their request half so both halves can carry the same
+ * spanId, which makes the pair symmetric: neither half has to be looked
+ * up through the other.
+ */
+export function peekNextFlowEventId(): number {
+  return nextEventId;
 }
 
 /**
@@ -248,13 +410,15 @@ export function emitFlowEvent(input: FlowEventInput): DemoFlowEvent {
           : truncateFlowPreview(rawPreview);
 
     const resolvedLabel = resolveField(input.label);
+    const resolvedDetail = resolveDetail(input.detail);
     recording.push({
       lane: input.lane,
       direction: input.direction,
       label: resolvedLabel,
       seamKey: input.seamKey ?? null,
       payloadPreview: resolvedPreview,
-      durationMs: input.durationMs ?? null,
+      durationMs: roundFlowDuration(input.durationMs),
+      detail: resolvedDetail,
     });
 
     return {
@@ -265,7 +429,11 @@ export function emitFlowEvent(input: FlowEventInput): DemoFlowEvent {
       label: resolvedLabel,
       seamKey: input.seamKey ?? null,
       payloadPreview: resolvedPreview,
-      durationMs: input.durationMs ?? null,
+      durationMs: roundFlowDuration(input.durationMs),
+      detail: resolvedDetail,
+      spanId: input.spanId ?? null,
+      groupKey: input.groupKey ?? null,
+      at,
     };
   }
 
@@ -283,7 +451,11 @@ export function emitFlowEvent(input: FlowEventInput): DemoFlowEvent {
       label: typeof input.label === "function" ? "" : input.label,
       seamKey: input.seamKey ?? null,
       payloadPreview: null,
-      durationMs: input.durationMs ?? null,
+      durationMs: roundFlowDuration(input.durationMs),
+      detail: null,
+      spanId: input.spanId ?? null,
+      groupKey: input.groupKey ?? null,
+      at,
     };
   }
 
@@ -303,7 +475,11 @@ export function emitFlowEvent(input: FlowEventInput): DemoFlowEvent {
     label: resolveField(input.label),
     seamKey: input.seamKey ?? null,
     payloadPreview: resolvedPreview,
-    durationMs: input.durationMs ?? null,
+    durationMs: roundFlowDuration(input.durationMs),
+    detail: resolveDetail(input.detail),
+    spanId: input.spanId ?? null,
+    groupKey: input.groupKey ?? null,
+    at,
   };
 
   for (const listener of listeners) {
@@ -316,11 +492,24 @@ export function emitFlowEvent(input: FlowEventInput): DemoFlowEvent {
 // Spans
 // -----------------------------------------------------------------------
 
-export interface FlowSpanSpec {
+export interface FlowSpanSpec<T = unknown> {
   readonly lane: FlowLane;
   readonly label: string | (() => string);
   readonly seamKey?: DemoSeamKey | null;
   readonly payloadPreview?: string | null | (() => string);
+  /** Repeat key, carried by both halves so each side folds with its own kind. */
+  readonly groupKey?: string | null;
+  /** Structured detail for the request half. */
+  readonly detail?: FlowDetail | null | (() => FlowDetail);
+  /**
+   * Structured detail for the response half, built from the settled
+   * result. Called once, after run() resolves, and only when someone is
+   * listening. Not called on rejection: the failure path reports the
+   * error instead through failureDetail.
+   */
+  readonly resultDetail?: (value: T) => FlowDetail;
+  /** Structured detail for the response half when run() rejects. */
+  readonly failureDetail?: (err: unknown) => FlowDetail;
   /** Direction of the request half. Defaults to "up". */
   readonly direction?: FlowDirection;
   /** Direction of the response half. Defaults to "down". */
@@ -338,7 +527,7 @@ export interface FlowSpanSpec {
  * advances, which is cheap.
  */
 export async function traceFlowSpan<T>(
-  spec: FlowSpanSpec,
+  spec: FlowSpanSpec<T>,
   run: () => Promise<T>,
 ): Promise<T> {
   if (listeners.length === 0 && recording === null) {
@@ -370,26 +559,40 @@ export async function traceFlowSpan<T>(
   }
 
   const started = flowNow();
+  // Read before emitting so both halves carry the same pair key and the
+  // request half's spanId equals its own id.
+  const spanId = peekNextFlowEventId();
   const { interactionId } = emitFlowEvent({
     lane: spec.lane,
     direction: spec.direction ?? "up",
     label: spec.label,
     seamKey: spec.seamKey ?? null,
     payloadPreview: spec.payloadPreview ?? null,
+    detail: spec.detail,
+    groupKey: spec.groupKey ?? null,
+    spanId,
     at: started,
   });
   try {
     const result = await run();
+    const resultDetail = spec.resultDetail;
     emitFlowEvent({
       lane: spec.lane,
       direction: spec.returnDirection ?? "down",
       label: spec.label,
       seamKey: spec.seamKey ?? null,
       durationMs: flowNow() - started,
+      detail:
+        resultDetail === undefined
+          ? null
+          : (): FlowDetail => resultDetail(result),
+      groupKey: spec.groupKey ?? null,
+      spanId,
       interactionId,
     });
     return result;
   } catch (err: unknown) {
+    const failureDetail = spec.failureDetail;
     emitFlowEvent({
       lane: spec.lane,
       direction: spec.returnDirection ?? "down",
@@ -397,17 +600,38 @@ export async function traceFlowSpan<T>(
       seamKey: spec.seamKey ?? null,
       payloadPreview: describeFlowError(err),
       durationMs: flowNow() - started,
+      detail:
+        failureDetail === undefined
+          ? null
+          : (): FlowDetail => failureDetail(err),
+      groupKey: spec.groupKey ?? null,
+      spanId,
       interactionId,
     });
     throw err;
   }
 }
 
-export interface FlowLocalSpec {
+export interface FlowLocalSpec<T = unknown> {
   readonly lane: FlowLane;
   readonly label: string | (() => string);
   readonly seamKey?: DemoSeamKey | null;
   readonly payloadPreview?: string | null | (() => string);
+  /** Repeat key, so a run of the same operation folds into a stack. */
+  readonly groupKey?: string | null;
+  /** Structured detail for taps whose payload does not depend on the result. */
+  readonly detail?: FlowDetail | null | (() => FlowDetail);
+  /**
+   * Structured detail built from the settled result. A local span emits
+   * exactly one event, after run() resolves, so this returns the WHOLE
+   * detail (input rows included) rather than only the result half: the
+   * tap's closure already holds its arguments, so building both sides in
+   * one place is simpler than merging two partial details here. Takes
+   * precedence over `detail` when both are supplied.
+   */
+  readonly resultDetail?: (value: T) => FlowDetail;
+  /** Structured detail for the failure event when run() rejects. */
+  readonly failureDetail?: (err: unknown) => FlowDetail;
 }
 
 /**
@@ -418,7 +642,7 @@ export interface FlowLocalSpec {
  * Timing and allocation are skipped when no listener is attached.
  */
 export async function traceFlowLocal<T>(
-  spec: FlowLocalSpec,
+  spec: FlowLocalSpec<T>,
   run: () => Promise<T>,
 ): Promise<T> {
   if (listeners.length === 0 && recording === null) {
@@ -447,23 +671,35 @@ export async function traceFlowLocal<T>(
   const interactionId = currentFlowInteractionId();
   try {
     const result = await run();
+    const resultDetail = spec.resultDetail;
     emitFlowEvent({
       lane: spec.lane,
       direction: "local",
       label: spec.label,
       seamKey: spec.seamKey ?? null,
       payloadPreview: spec.payloadPreview ?? null,
+      detail:
+        resultDetail === undefined
+          ? spec.detail
+          : (): FlowDetail => resultDetail(result),
+      groupKey: spec.groupKey ?? null,
       durationMs: flowNow() - started,
       interactionId,
     });
     return result;
   } catch (err: unknown) {
+    const failureDetail = spec.failureDetail;
     emitFlowEvent({
       lane: spec.lane,
       direction: "local",
       label: `${resolveField(spec.label)} failed`,
       seamKey: spec.seamKey ?? null,
       payloadPreview: describeFlowError(err),
+      detail:
+        failureDetail === undefined
+          ? null
+          : (): FlowDetail => failureDetail(err),
+      groupKey: spec.groupKey ?? null,
       durationMs: flowNow() - started,
       interactionId,
     });

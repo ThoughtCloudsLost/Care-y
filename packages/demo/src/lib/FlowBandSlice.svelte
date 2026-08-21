@@ -12,16 +12,21 @@
 
   import { ChevronDown, ChevronRight } from "@lucide/svelte";
   import FlowBandCard from "./FlowBandCard.svelte";
+  import FlowBandCardStack from "./FlowBandCardStack.svelte";
   import {
     FLOW_LANES,
     laneIndex,
     connectorPoints,
-    sliceLaneSpan,
+    groupSliceEvents,
+    sliceEventsByLane,
+    cellSpan,
+    cellsColumnCount,
     CARD_COLUMN_WIDTH,
     CARD_COLUMN_GAP,
     type FlowSlice,
+    type FlowCell,
   } from "./flow-band.svelte.js";
-  import type { FlowLane } from "./bridge.js";
+  import type { DemoFlowEvent, FlowLane } from "./bridge.js";
 
   interface Props {
     slice: FlowSlice;
@@ -35,12 +40,23 @@
     toggleLabel: string;
     /** Localized step count, used as the collapsed column's name. */
     stepsLabel: string;
+    /** Localized "N events" text for a stack's count, shown outside the card. */
+    countLabel: (count: number) => string;
+    /** Cell ids of runs the visitor has unfolded. */
+    expandedRuns: ReadonlySet<number>;
+    onToggleRun: (cellId: number) => void;
     /** Localized "scripted in this demo" badge text. */
     seamBadge: string;
     /** Localized card tooltips for the two expand states. */
     expandHint: string;
     collapseHint: string;
+    /** Localized label for a stack's restack control. */
+    restackLabel: string;
     laneName: (lane: FlowLane) => string;
+    /** Localized direction name, read out in place of the arrow icon. */
+    directionName: (direction: DemoFlowEvent["direction"]) => string;
+    /** Passed through to FlowBandCard for locale-reactive message calls. */
+    locale?: string;
     isExpanded: (eventId: number) => boolean;
     onToggleSlice: (interactionId: number) => void;
     onToggleCard: (eventId: number) => void;
@@ -53,10 +69,16 @@
     label,
     toggleLabel,
     stepsLabel,
+    countLabel,
+    expandedRuns,
+    onToggleRun,
     seamBadge,
     expandHint,
     collapseHint,
+    restackLabel,
     laneName,
+    directionName,
+    locale,
     isExpanded,
     onToggleSlice,
     onToggleCard,
@@ -64,18 +86,54 @@
 
   const pitch = CARD_COLUMN_WIDTH + CARD_COLUMN_GAP;
 
+  // Columns, not events: a folded run holds one column and an open one
+  // holds a column per card, so width and connector both count columns.
+  const cells = $derived(groupSliceEvents(slice.events));
+
+  const columnCount: number = $derived(cellsColumnCount(cells, expandedRuns));
+
   const bodyWidth: number = $derived(
-    Math.max(CARD_COLUMN_WIDTH, slice.events.length * pitch - CARD_COLUMN_GAP),
+    Math.max(CARD_COLUMN_WIDTH, columnCount * pitch - CARD_COLUMN_GAP),
   );
 
-  const points: string = $derived(connectorPoints(slice.events, rowHeight));
+  const points: string = $derived(
+    connectorPoints(cells, rowHeight, expandedRuns),
+  );
 
-  // Lane span of a collapsed slice, drawn as a short vertical mark so a
-  // folded interaction still shows how far up the stack it reached.
-  const span = $derived(sliceLaneSpan(slice));
+  /** A cell with the grid columns it occupies, resolved once per change. */
+  interface PlacedCell {
+    readonly cell: FlowCell;
+    readonly column: number;
+    readonly span: number;
+  }
+
+  // Cells no longer map one to one onto columns, so a cell's start
+  // column is the running total of the spans before it. Resolved into a
+  // list rather than looked up per cell, which keeps the template free
+  // of both the running total and a lookup structure.
+  const placed: PlacedCell[] = $derived.by(() => {
+    const out: PlacedCell[] = [];
+    let column = 0;
+    for (const cell of cells) {
+      const span = cellSpan(cell, expandedRuns);
+      out.push({ cell, column, span });
+      column += span;
+    }
+    return out;
+  });
+
+  // A folded interaction shows one stack per lane it reached, so which
+  // layers were involved survives the fold.
+  const laneBuckets = $derived(sliceEventsByLane(slice));
 </script>
 
-<div class="slice" style:width="{slice.collapsed ? 48 : bodyWidth}px">
+<!-- Folded slices stay one column wide rather than a narrow stub, because
+     the stacks inside them are real cards. The saving is in columns,
+     which is where the cost was. A ten-event interaction folds to one. -->
+<div
+  class="slice"
+  style:width="{slice.collapsed ? CARD_COLUMN_WIDTH : bodyWidth}px"
+>
   <button
     class="slice-head"
     type="button"
@@ -92,16 +150,37 @@
   </button>
 
   {#if slice.collapsed}
-    <div class="slice-collapsed" style:height="{bodyHeight}px">
-      {#if span !== null}
-        <span
-          class="slice-span"
-          aria-hidden="true"
-          style:top="{span.first * rowHeight + rowHeight / 2}px"
-          style:height="{(span.last - span.first) * rowHeight}px"
-        ></span>
-      {/if}
-      <span class="slice-count" aria-hidden="true">{slice.events.length}</span>
+    <!-- Folded: one stack per lane the interaction reached, in the same
+         rows the cards would occupy, so the shape of what happened is
+         still readable without unfolding. Clicking any of them unfolds
+         the whole interaction. -->
+    <div
+      class="slice-folded"
+      style:height="{bodyHeight}px"
+      style:grid-template-rows="repeat({FLOW_LANES.length}, {rowHeight}px)"
+    >
+      {#each laneBuckets as bucket (bucket.lane)}
+        <div class="slice-cell" style:grid-row={laneIndex(bucket.lane) + 1}>
+          <FlowBandCardStack
+            events={bucket.events}
+            expanded={false}
+            laneName={laneName(bucket.lane)}
+            directionName={directionName(
+              bucket.events.at(-1)?.direction ?? "local",
+            )}
+            {seamBadge}
+            spreadHint={toggleLabel}
+            {expandHint}
+            {collapseHint}
+            {restackLabel}
+            countLabel={countLabel(bucket.events.length)}
+            {locale}
+            {isExpanded}
+            {onToggleCard}
+            onToggleStack={() => onToggleSlice(slice.interactionId)}
+          />
+        </div>
+      {/each}
       <span class="slice-sr">{stepsLabel}</span>
     </div>
   {:else}
@@ -129,21 +208,44 @@
         style:grid-auto-columns="{CARD_COLUMN_WIDTH}px"
         style:column-gap="{CARD_COLUMN_GAP}px"
       >
-        {#each slice.events as event, i (event.id)}
-          {@const expanded = isExpanded(event.id)}
+        {#each placed as { cell, column, span } (cell.id)}
+          {@const anchor = cell.anchor}
           <div
             class="slice-cell"
-            style:grid-row={laneIndex(event.lane) + 1}
-            style:grid-column={i + 1}
+            style:grid-row={laneIndex(anchor.lane) + 1}
+            style:grid-column="{column + 1} / span {span}"
           >
-            <FlowBandCard
-              {event}
-              laneName={laneName(event.lane)}
-              {seamBadge}
-              toggleHint={expanded ? collapseHint : expandHint}
-              {expanded}
-              onToggle={onToggleCard}
-            />
+            {#if cell.isRun}
+              {@const open = expandedRuns.has(cell.id)}
+              <FlowBandCardStack
+                events={cell.events}
+                expanded={open}
+                laneName={laneName(anchor.lane)}
+                directionName={directionName(anchor.direction)}
+                {seamBadge}
+                spreadHint={expandHint}
+                {expandHint}
+                {collapseHint}
+                {restackLabel}
+                countLabel={countLabel(cell.events.length)}
+                {locale}
+                {isExpanded}
+                {onToggleCard}
+                onToggleStack={() => onToggleRun(cell.id)}
+              />
+            {:else}
+              {@const expanded = isExpanded(cell.anchor.id)}
+              <FlowBandCard
+                event={cell.anchor}
+                laneName={laneName(anchor.lane)}
+                directionName={directionName(anchor.direction)}
+                {seamBadge}
+                toggleHint={expanded ? collapseHint : expandHint}
+                {expanded}
+                {locale}
+                onToggle={onToggleCard}
+              />
+            {/if}
           </div>
         {/each}
       </div>
@@ -198,11 +300,11 @@
     position: relative;
   }
 
-  .slice-collapsed {
+  /* Folded interactions keep the lane rows, so each lane's stack sits
+     where that lane's cards would have been. */
+  .slice-folded {
     position: relative;
-    display: flex;
-    align-items: center;
-    justify-content: center;
+    display: grid;
   }
 
   .slice-sr {
@@ -215,26 +317,6 @@
     clip-path: inset(50%);
     white-space: nowrap;
     border: 0;
-  }
-
-  .slice-span {
-    position: absolute;
-    left: 50%;
-    width: 2px;
-    min-height: 2px;
-    margin-left: -1px;
-    border-radius: 1px;
-    background: color-mix(in srgb, var(--ink) 16%, transparent);
-  }
-
-  .slice-count {
-    position: relative;
-    padding: 0 0.25rem;
-    border-radius: 4px;
-    background: color-mix(in srgb, var(--paper) 90%, transparent);
-    font-size: 0.75rem;
-    font-variant-numeric: tabular-nums;
-    color: var(--muted);
   }
 
   .slice-connector {
