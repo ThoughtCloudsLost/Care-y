@@ -19,6 +19,7 @@
   import {
     beginSplitHandoff,
     endSplitHandoff,
+    isSplitHandoffCurrent,
   } from "$lib/stores/split-handoff.svelte.js";
   import TicketDetailOrchestrator from "$lib/components/tickets/TicketDetailOrchestrator.svelte";
 
@@ -34,11 +35,17 @@
   // The handoff spans the two steps. Neither the route param nor the
   // page state holds the id while the goto is in flight, so without it
   // the split view shows its empty placeholder for those frames.
+  //
+  // A navigation that lands during the goto (a tab tap, the demo story
+  // asking for the bare list) ends the handoff, and the token check is
+  // how this half of the redirect finds out. Pushing the state anyway
+  // would re-open the ticket the visitor just navigated away from.
   $effect(() => {
     const id = ticketId;
     if (layoutMode.isDesktop && id && !fullView) {
-      beginSplitHandoff("tickets", id);
+      const token = beginSplitHandoff("tickets", id);
       void goto(resolve("/tickets"), { replaceState: true }).then(() => {
+        if (!isSplitHandoffCurrent("tickets", token)) return;
         pushState("", { ticketId: id });
         endSplitHandoff("tickets");
       });
