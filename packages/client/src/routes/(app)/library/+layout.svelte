@@ -23,6 +23,11 @@
   import * as m from "$lib/paraglide/messages.js";
   import { layoutMode } from "$lib/stores/layout-mode.svelte.js";
   import {
+    beginSplitHandoff,
+    endSplitHandoff,
+    splitHandoffId,
+  } from "$lib/stores/split-handoff.svelte.js";
+  import {
     getScrollContainer,
     setScrollContainer,
   } from "$lib/shell/context.js";
@@ -33,8 +38,13 @@
 
   let { children }: { children: Snippet } = $props();
 
+  // Page state is the real carrier. The handoff fallback covers the
+  // frames of a layout-mode switch where the id has left the route
+  // param but has not landed in page state yet (or the reverse).
   const selectedArticleId = $derived(
-    typeof page.state.articleId === "string" ? page.state.articleId : undefined,
+    typeof page.state.articleId === "string"
+      ? page.state.articleId
+      : (splitHandoffId("library") ?? undefined),
   );
 
   // Only show split view on the list route, not on detail/edit/new routes.
@@ -83,11 +93,24 @@
   // Desktop→mobile: if a detail is open in split view and the viewport
   // shrinks below 1024px, navigate to the full-page detail route so
   // the user doesn't lose the article they were viewing.
+  //
+  // The pending check is what stops this from re-running: the handoff
+  // keeps selectedArticleId non-null after replaceState clears the page
+  // state, which would otherwise re-enter on the next reactive turn.
   $effect(() => {
-    if (!layoutMode.isDesktop && selectedArticleId != null) {
-      replaceState("", {});
-      void goto(resolve(`/library/${selectedArticleId}`));
-    }
+    if (layoutMode.isDesktop) return;
+    if (splitHandoffId("library") !== null) return;
+    // Capture before replaceState: clearing page.state invalidates the
+    // selectedArticleId derived, and reading it afterwards yields
+    // undefined, which navigated to /library/undefined.
+    const id = selectedArticleId;
+    if (id == null) return;
+
+    beginSplitHandoff("library", id);
+    replaceState("", {});
+    void goto(resolve(`/library/${id}`)).then(() => {
+      endSplitHandoff("library");
+    });
   });
 </script>
 
