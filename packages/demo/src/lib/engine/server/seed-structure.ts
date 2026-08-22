@@ -159,7 +159,7 @@ export async function seedStructure(
   await tenantDb
     .updateTable("org_config")
     .set({
-      encrypted_name: sealedBox.seal("Harbor Support"),
+      encrypted_name: sealedBox.seal("Handbook Example Org"),
       default_language: "en",
       default_country_code: "US",
       encrypted_primary_color: sealedBox.seal("#4A6FA5"),
@@ -487,7 +487,7 @@ export async function seedStructure(
       phone_number: "+15550001234",
       greeting_type: "answer",
       locale: "en",
-      text: "Thank you for calling Harbor Support. Your call is important to us.",
+      text: "Thank you for calling Handbook Example Org. Your call is important to us.",
       is_audio: false,
       audio_blob_key: null,
       audio_content_type: null,
@@ -496,7 +496,7 @@ export async function seedStructure(
       phone_number: "+15550001234",
       greeting_type: "answer",
       locale: "es",
-      text: "Gracias por llamar a Harbor Support. Su llamada es importante para nosotros.",
+      text: "Gracias por llamar a Handbook Example Org. Su llamada es importante para nosotros.",
       is_audio: false,
       audio_blob_key: null,
       audio_content_type: null,
@@ -621,7 +621,7 @@ export async function seedStructure(
     {
       response_type: "new_client",
       locale: "en",
-      text: "Welcome to Harbor Support. Reply HELP for a list of commands, or a volunteer will reach out shortly.",
+      text: "Welcome to Handbook Example Org. Reply HELP for a list of commands, or a volunteer will reach out shortly.",
     },
     {
       response_type: "error",

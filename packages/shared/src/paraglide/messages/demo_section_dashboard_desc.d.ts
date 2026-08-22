@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "The dashboard is the home screen after login. It shows the volunteer's current shift, ticket counts per queue, recent activity, and quick access to knowledge..." |
+* | "The overview is the home screen after login. It shows the volunteer's current shift, ticket counts per queue, recent activity, and quick access to knowledge ..." |
 *
 * @param {Demo_Section_Dashboard_DescInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

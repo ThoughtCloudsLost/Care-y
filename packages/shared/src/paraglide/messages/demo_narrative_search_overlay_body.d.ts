@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "The magnifier in the navigation bar swaps the title for a search field, and results appear in a sheet below as you type. **Before typing.** The sheet shows r..." |
+* | "The magnifier in the navigation bar opens the global search field, and results appear in a sheet below as you type. **Before typing.** The sheet shows recent..." |
 *
 * @param {Demo_Narrative_Search_Overlay_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

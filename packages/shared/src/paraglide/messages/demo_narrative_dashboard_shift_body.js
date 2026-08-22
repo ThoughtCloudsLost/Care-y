@@ -10,7 +10,7 @@ const en_demo_narrative_dashboard_shift_body = /** @type {(inputs: Demo_Narrativ
 **During a shift,** the card displays start and end times and a countdown to the end of the shift. It also shows how many open tickets are currently assigned to the volunteer.
 **Before a shift,** the card shows a countdown to the start time.
 **After a shift ends** or when no shift is scheduled, the card shows a notice. The scheduling feature that manages shift creation is still in development.
-**On the card.** Initial chips show the volunteers currently on shift, and an end shift button is present. Like shift creation, ending a shift activates once the scheduling feature is complete.`)
+**On the card.** Initial chips show the volunteers currently on shift, and an end shift button is present.`)
 };
 
 const es_demo_narrative_dashboard_shift_body = /** @type {(inputs: Demo_Narrative_Dashboard_Shift_BodyInputs) => LocalizedString} */ () => {
@@ -18,7 +18,7 @@ const es_demo_narrative_dashboard_shift_body = /** @type {(inputs: Demo_Narrativ
 **Durante un turno,** la tarjeta muestra las horas de inicio y fin y una cuenta regresiva hasta el final del turno. También muestra cuántos tickets abiertos están asignados actualmente al voluntario.
 **Antes de un turno,** la tarjeta muestra una cuenta regresiva hasta la hora de inicio.
 **Después de que termina un turno** o cuando no hay turno programado, la tarjeta muestra un aviso. La función de programación que gestiona la creación de turnos aún está en desarrollo.
-**En la tarjeta.** Chips iniciales muestran los voluntarios actualmente en turno, y un botón de terminar turno está presente. Al igual que la creación de turnos, terminar un turno se activará cuando la función de programación esté completa.`)
+**En la tarjeta.** Chips iniciales muestran los voluntarios actualmente en turno, y un botón de terminar turno está presente.`)
 };
 
 /**

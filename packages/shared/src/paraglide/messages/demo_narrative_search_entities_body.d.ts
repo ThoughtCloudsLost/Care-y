@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "Search returns results from three entity types. **Tickets.** Matches on decrypted title, client alias, queue name, and assignee name. Full search also matche..." |
+* | "Global Search returns results from many different places in CARE-Y. **Tickets.** Matches on decrypted title, client alias, queue name, and assignee name. Ful..." |
 *
 * @param {Demo_Narrative_Search_Entities_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

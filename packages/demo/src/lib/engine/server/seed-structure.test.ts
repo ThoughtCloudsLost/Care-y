@@ -191,7 +191,7 @@ describe("SMS template seed data shape", () => {
     {
       response_type: "new_client",
       locale: "en",
-      text: "Welcome to Harbor Support. Reply HELP for a list of commands, or a volunteer will reach out shortly.",
+      text: "Welcome to Handbook Example Org. Reply HELP for a list of commands, or a volunteer will reach out shortly.",
     },
     {
       response_type: "error",

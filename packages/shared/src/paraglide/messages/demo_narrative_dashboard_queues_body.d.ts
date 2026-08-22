@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "Tickets are organized into queues defined by the organization. The dashboard shows a card for each queue with live open and urgent counts. **Navigation.** Ta..." |
+* | "Tickets are organized into queues defined by the organization. The overview page shows a card for each queue with live open and urgent counts. **Navigation.*..." |
 *
 * @param {Demo_Narrative_Dashboard_Queues_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

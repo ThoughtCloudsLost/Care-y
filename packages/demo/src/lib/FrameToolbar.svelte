@@ -21,10 +21,11 @@
    * chrome. No Konsta components: the outer-page chrome is hand-rolled
    * so it never inherits the phone theme CSS.
    *
-   * Shrunk state hides the center zone (presets) and user badge, leaving
-   * only close + restore + link for a slim bar. The center zone also
-   * hides when the bar is too narrow to fit all three groups (threshold
-   * computed from the frame's `footprintW`, already known reactively).
+   * Progressive collapse: as the bar narrows, it sheds visual weight
+   * in stages while keeping every function accessible:
+   *   1. Full (>= 440): two centered preset buttons + badge with label
+   *   2. Collapsed presets (340-439): single centered dropdown + label
+   *   3. Compact (< 340 or shrunk): picker moves right, label drops
    */
 
   import * as m from "$lib/paraglide/messages.js";
@@ -122,20 +123,23 @@
   ];
 
   // -----------------------------------------------------------------------
-  // Center-zone visibility threshold
+  // Progressive collapse thresholds
   //
-  // The three layout zones (left buttons, centered presets, right badge)
-  // need enough horizontal room to avoid overlapping. At narrow widths
-  // the center and right zones hide, matching the shrunk-state behavior.
   // Computed from footprintW (the frame width in CSS px, already reactive)
   // rather than a container query, since the value is already available.
   // -----------------------------------------------------------------------
 
-  /** Below this width the center zone and badge are hidden. */
-  const CENTER_ZONE_MIN_W = 360;
+  /** Below this width the centered presets collapse into a single dropdown. */
+  const PRESETS_COLLAPSE_W = 370;
 
-  const showExtras: boolean = $derived(
-    !shrunk && footprintW >= CENTER_ZONE_MIN_W,
+  /** Below this width the badge label hides and the preset picker moves right. */
+  const BADGE_COMPACT_W = 340;
+
+  const badgeCompact: boolean = $derived(
+    shrunk || footprintW < BADGE_COMPACT_W,
+  );
+  const presetsCollapsed: boolean = $derived(
+    shrunk || footprintW < PRESETS_COLLAPSE_W,
   );
 
   // -----------------------------------------------------------------------
@@ -173,7 +177,11 @@
     if (e.button !== 0) return;
     suppressClick = false;
     const el = e.target instanceof Element ? e.target : null;
-    if (el !== null && el.closest(".role-menu") !== null) return;
+    if (
+      el !== null &&
+      (el.closest(".role-menu") !== null || el.closest(".preset-menu") !== null)
+    )
+      return;
     if (el !== null && el.closest("button") !== null) {
       pendingPress = {
         pointerId: e.pointerId,
@@ -272,11 +280,92 @@
     return () => window.removeEventListener("keydown", onKeydown);
   });
 
-  // Close menu when the frame shrinks below the extras threshold
+  // -----------------------------------------------------------------------
+  // Preset picker dropdown (collapsed state)
+  // -----------------------------------------------------------------------
+
+  let presetMenuOpen = $state(false);
+  let presetTriggerRef: HTMLButtonElement | undefined = $state(undefined);
+  let presetMenuRef: HTMLDivElement | undefined = $state(undefined);
+
+  function togglePresetMenu(): void {
+    presetMenuOpen = !presetMenuOpen;
+  }
+
+  function closePresetMenu(): void {
+    presetMenuOpen = false;
+  }
+
+  function selectPreset(preset: "phone" | "desktop"): void {
+    if (preset === "phone") onPhonePreset();
+    else onDesktopPreset();
+    closePresetMenu();
+  }
+
   $effect(() => {
-    if (!showExtras && menuOpen) {
-      closeMenu();
+    if (!presetMenuOpen) return;
+
+    function onPointerDown(e: PointerEvent): void {
+      const target = e.target;
+      if (!(target instanceof Node)) return;
+      if (
+        presetTriggerRef?.contains(target) === true ||
+        presetMenuRef?.contains(target) === true
+      ) {
+        return;
+      }
+      closePresetMenu();
     }
+
+    window.addEventListener("pointerdown", onPointerDown);
+    return () => window.removeEventListener("pointerdown", onPointerDown);
+  });
+
+  $effect(() => {
+    if (!presetMenuOpen) return;
+
+    function onKeydown(e: KeyboardEvent): void {
+      if (e.key === "Escape") {
+        closePresetMenu();
+        presetTriggerRef?.focus();
+      }
+    }
+
+    window.addEventListener("keydown", onKeydown);
+    return () => window.removeEventListener("keydown", onKeydown);
+  });
+
+  function handlePresetMenuKeydown(e: KeyboardEvent): void {
+    if (e.key !== "ArrowDown" && e.key !== "ArrowUp") return;
+    e.preventDefault();
+    if (presetMenuRef === undefined) return;
+
+    const items = Array.from(
+      presetMenuRef.querySelectorAll<HTMLButtonElement>(
+        '[role="menuitemradio"]',
+      ),
+    );
+    if (items.length === 0) return;
+
+    const current = document.activeElement;
+    const idx = items.findIndex((el) => el === current);
+
+    if (e.key === "ArrowDown") {
+      const next = idx < items.length - 1 ? idx + 1 : 0;
+      items.at(next)?.focus();
+    } else {
+      const prev = idx > 0 ? idx - 1 : items.length - 1;
+      items.at(prev)?.focus();
+    }
+  }
+
+  // Close preset menu when layout thresholds cross. The menu lives in
+  // different DOM containers depending on badgeCompact, and disappears
+  // entirely when presets uncollapse.
+  $effect(() => {
+    void badgeCompact;
+    void presetsCollapsed;
+    closePresetMenu();
   });
 
   // -----------------------------------------------------------------------
@@ -381,11 +470,21 @@
     </button>
   </div>
 
-  <!-- Center group: phone + desktop presets, absolutely centered in the
-       bar so they stay visually centered regardless of side-group widths.
-       Hidden when shrunk or the bar is too narrow. -->
-  {#if showExtras}
-    <div class="toolbar-zone toolbar-zone--center">
+  <!-- Center group: three visual states, all CSS-animated.
+       1. Full (>= 440): two separate preset buttons
+       2. Collapsed (340-439): single dropdown button, still centered
+       3. Hidden (< 340 / shrunk): faded out, picker moves to right zone -->
+  <div
+    class="toolbar-zone toolbar-zone--center"
+    class:toolbar-zone--hidden={badgeCompact}
+    aria-hidden={badgeCompact}
+  >
+    <!-- Two separate buttons: visible when not collapsed -->
+    <div
+      class="center-full"
+      class:center-full--hidden={presetsCollapsed}
+      aria-hidden={presetsCollapsed}
+    >
       <button
         class="toolbar-btn"
         class:toolbar-btn-active={phoneActive}
@@ -393,6 +492,7 @@
         onclick={onPhonePreset}
         aria-label={m.demo_toolbar_phone_preset()}
         title={m.demo_toolbar_phone_tooltip()}
+        tabindex={presetsCollapsed ? -1 : 0}
       >
         <Smartphone size={16} />
       </button>
@@ -403,63 +503,179 @@
         onclick={onDesktopPreset}
         aria-label={m.demo_toolbar_desktop_preset()}
         title={m.demo_toolbar_desktop_tooltip()}
+        tabindex={presetsCollapsed ? -1 : 0}
       >
         <Monitor size={16} />
       </button>
     </div>
-  {/if}
 
-  <!-- Right group: user badge with role-switch dropdown. Hidden when
-       shrunk or the bar is too narrow. -->
-  <div class="toolbar-zone toolbar-zone--right">
-    {#if showExtras}
+    <!-- Single dropdown button: visible when collapsed but not compact -->
+    <div
+      class="center-collapsed"
+      class:center-collapsed--visible={presetsCollapsed && !badgeCompact}
+    >
       <button
-        class="badge-trigger"
+        class="toolbar-btn"
+        class:toolbar-btn-active={presetMenuOpen}
         type="button"
-        bind:this={triggerRef}
-        onclick={toggleMenu}
+        bind:this={presetTriggerRef}
+        onclick={togglePresetMenu}
         aria-haspopup="menu"
-        aria-expanded={menuOpen}
-        aria-label={m.demo_role_rail_label()}
+        aria-expanded={presetMenuOpen}
+        aria-label={m.demo_toolbar_phone_preset()}
+        title={desktopActive
+          ? m.demo_toolbar_desktop_tooltip()
+          : m.demo_toolbar_phone_tooltip()}
+        tabindex={presetsCollapsed && !badgeCompact ? 0 : -1}
       >
-        <span class="identity-seal badge-seal badge-seal--active">
-          {activeRoleOption?.initial() ?? "?"}
-        </span>
-        <span class="badge-label">{activeRoleOption?.label() ?? ""}</span>
-        <ChevronDown size={14} />
+        {#if desktopActive}
+          <Monitor size={16} />
+        {:else}
+          <Smartphone size={16} />
+        {/if}
       </button>
 
-      {#if menuOpen}
+      {#if presetMenuOpen && !badgeCompact}
         <div
-          class="role-menu"
+          class="preset-menu"
           role="menu"
           tabindex="-1"
-          aria-label={m.demo_role_rail_label()}
-          bind:this={menuRef}
-          onkeydown={handleMenuKeydown}
+          aria-label={m.demo_toolbar_phone_preset()}
+          bind:this={presetMenuRef}
+          onkeydown={handlePresetMenuKeydown}
         >
-          {#each TOOLBAR_ROLES as role (role.id)}
-            <button
-              class="role-menu-item"
-              role="menuitemradio"
-              aria-checked={activeRole === role.id}
-              type="button"
-              onclick={() => selectRole(role.id)}
-            >
-              <span
-                class="identity-seal menu-seal"
-                class:menu-seal--active={activeRole === role.id}
-              >
-                {role.initial()}
-              </span>
-              <div class="role-menu-text">
-                <span class="role-menu-label">{role.label()}</span>
-                <span class="role-menu-desc">{role.tooltip()}</span>
-              </div>
-            </button>
-          {/each}
+          <button
+            class="preset-menu-item"
+            role="menuitemradio"
+            aria-checked={phoneActive}
+            type="button"
+            onclick={() => selectPreset("phone")}
+          >
+            <Smartphone size={16} />
+            <span>{m.demo_toolbar_phone_preset()}</span>
+          </button>
+          <button
+            class="preset-menu-item"
+            role="menuitemradio"
+            aria-checked={desktopActive}
+            type="button"
+            onclick={() => selectPreset("desktop")}
+          >
+            <Monitor size={16} />
+            <span>{m.demo_toolbar_desktop_preset()}</span>
+          </button>
         </div>
       {/if}
+    </div>
+  </div>
+
+  <!-- Right group: role badge (always) + preset picker (only at compact). -->
+  <div class="toolbar-zone toolbar-zone--right">
+    <div class="preset-picker" class:preset-picker--visible={badgeCompact}>
+      <button
+        class="toolbar-btn"
+        class:toolbar-btn-active={presetMenuOpen}
+        type="button"
+        onclick={togglePresetMenu}
+        aria-haspopup="menu"
+        aria-expanded={presetMenuOpen}
+        aria-label={m.demo_toolbar_phone_preset()}
+        title={desktopActive
+          ? m.demo_toolbar_desktop_tooltip()
+          : m.demo_toolbar_phone_tooltip()}
+        tabindex={badgeCompact ? 0 : -1}
+      >
+        {#if desktopActive}
+          <Monitor size={16} />
+        {:else}
+          <Smartphone size={16} />
+        {/if}
+      </button>
+
+      {#if presetMenuOpen && badgeCompact}
+        <div
+          class="preset-menu"
+          role="menu"
+          tabindex="-1"
+          aria-label={m.demo_toolbar_phone_preset()}
+          bind:this={presetMenuRef}
+          onkeydown={handlePresetMenuKeydown}
+        >
+          <button
+            class="preset-menu-item"
+            role="menuitemradio"
+            aria-checked={phoneActive}
+            type="button"
+            onclick={() => selectPreset("phone")}
+          >
+            <Smartphone size={16} />
+            <span>{m.demo_toolbar_phone_preset()}</span>
+          </button>
+          <button
+            class="preset-menu-item"
+            role="menuitemradio"
+            aria-checked={desktopActive}
+            type="button"
+            onclick={() => selectPreset("desktop")}
+          >
+            <Monitor size={16} />
+            <span>{m.demo_toolbar_desktop_preset()}</span>
+          </button>
+        </div>
+      {/if}
+    </div>
+
+    <button
+      class="badge-trigger"
+      class:badge-trigger--compact={badgeCompact}
+      type="button"
+      bind:this={triggerRef}
+      onclick={toggleMenu}
+      aria-haspopup="menu"
+      aria-expanded={menuOpen}
+      aria-label={m.demo_role_rail_label()}
+    >
+      <span class="identity-seal badge-seal badge-seal--active">
+        {activeRoleOption?.initial() ?? "?"}
+      </span>
+      <span class="badge-label" class:badge-label--hidden={badgeCompact}>
+        {activeRoleOption?.label() ?? ""}
+      </span>
+      <span class="badge-chevron" class:badge-chevron--hidden={badgeCompact}>
+        <ChevronDown size={14} />
+      </span>
+    </button>
+
+    {#if menuOpen}
+      <div
+        class="role-menu"
+        role="menu"
+        tabindex="-1"
+        aria-label={m.demo_role_rail_label()}
+        bind:this={menuRef}
+        onkeydown={handleMenuKeydown}
+      >
+        {#each TOOLBAR_ROLES as role (role.id)}
+          <button
+            class="role-menu-item"
+            role="menuitemradio"
+            aria-checked={activeRole === role.id}
+            type="button"
+            onclick={() => selectRole(role.id)}
+          >
+            <span
+              class="identity-seal menu-seal"
+              class:menu-seal--active={activeRole === role.id}
+            >
+              {role.initial()}
+            </span>
+            <div class="role-menu-text">
+              <span class="role-menu-label">{role.label()}</span>
+              <span class="role-menu-desc">{role.tooltip()}</span>
+            </div>
+          </button>
+        {/each}
+      </div>
     {/if}
   </div>
 </div>
@@ -532,6 +748,48 @@
     position: absolute;
     left: 50%;
     transform: translateX(-50%);
+    transition:
+      opacity 0.2s ease,
+      transform 0.2s ease;
+  }
+
+  .toolbar-zone--hidden {
+    opacity: 0;
+    transform: translateX(-50%) scale(0.85);
+    pointer-events: none;
+  }
+
+  .center-full {
+    display: flex;
+    gap: 2px;
+    transition:
+      opacity 0.2s ease,
+      transform 0.2s ease;
+  }
+
+  .center-full--hidden {
+    position: absolute;
+    opacity: 0;
+    transform: scale(0.85);
+    pointer-events: none;
+  }
+
+  .center-collapsed {
+    display: flex;
+    position: absolute;
+    opacity: 0;
+    transform: scale(0.85);
+    pointer-events: none;
+    transition:
+      opacity 0.2s ease,
+      transform 0.2s ease;
+  }
+
+  .center-collapsed--visible {
+    position: static;
+    opacity: 1;
+    transform: scale(1);
+    pointer-events: auto;
   }
 
   .toolbar-zone--right {
@@ -594,6 +852,15 @@
     font-size: 0.8125rem;
     font-weight: 500;
     white-space: nowrap;
+    height: 44px;
+  }
+
+  .badge-trigger--compact {
+    gap: 0;
+    padding: 0;
+    width: 36px;
+    min-width: 36px;
+    justify-content: center;
   }
 
   .badge-trigger:hover {
@@ -607,11 +874,15 @@
 
   /* Pin seal ink to dark-scheme brand values (same tokens as the former
      RoleRail) so it reads on #1a1a1a chrome regardless of the outer
-     page's light/dark state. */
+     page's light/dark state. Sized to 26px so it reads at the same
+     visual weight as a 16px icon in a 44px button. */
   .badge-seal {
     --brand-text: #a89b80;
     --brand-fill: #6e6553;
     color: var(--brand-text);
+    width: 26px;
+    height: 26px;
+    font-size: 0.75rem;
   }
 
   .badge-seal--active {
@@ -623,6 +894,34 @@
 
   .badge-label {
     color: #ccc;
+    display: inline-block;
+    max-width: 120px;
+    overflow: hidden;
+    transition:
+      max-width 0.2s ease,
+      opacity 0.2s ease,
+      margin 0.2s ease;
+  }
+
+  .badge-label--hidden {
+    max-width: 0;
+    opacity: 0;
+    margin: 0 -3px;
+  }
+
+  .badge-chevron {
+    display: flex;
+    align-items: center;
+    transition:
+      width 0.2s ease,
+      opacity 0.2s ease;
+    width: 14px;
+    overflow: hidden;
+  }
+
+  .badge-chevron--hidden {
+    width: 0;
+    opacity: 0;
   }
 
   /* -----------------------------------------------------------------------
@@ -712,10 +1011,94 @@
     line-height: 1.3;
   }
 
+  /* -----------------------------------------------------------------------
+     Preset picker (collapsed presets dropdown)
+     -----------------------------------------------------------------------
+     Appears in the right zone when the bar is too narrow for centered
+     presets. Same dark chrome palette as the role menu. */
+
+  .preset-picker {
+    position: relative;
+    width: 0;
+    opacity: 0;
+    overflow: hidden;
+    pointer-events: none;
+    transition:
+      width 0.2s ease,
+      opacity 0.2s ease;
+  }
+
+  .preset-picker--visible {
+    width: 38px;
+    opacity: 1;
+    overflow: visible;
+    pointer-events: auto;
+  }
+
+  .preset-picker .toolbar-btn {
+    width: 38px;
+  }
+
+  .preset-menu {
+    position: absolute;
+    top: calc(100% + 6px);
+    right: 0;
+    min-width: 180px;
+    background: #1a1a1a;
+    border: 2px solid #333;
+    border-radius: 10px;
+    padding: 4px;
+    z-index: 6;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  .preset-menu-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px;
+    border: none;
+    border-radius: 6px;
+    background: transparent;
+    color: #ccc;
+    cursor: pointer;
+    transition: background 0.15s ease;
+    text-align: left;
+    width: 100%;
+    font-size: 0.8125rem;
+    font-weight: 500;
+  }
+
+  .preset-menu-item:hover {
+    background: rgba(255, 255, 255, 0.08);
+  }
+
+  .preset-menu-item:focus-visible {
+    outline: 2px solid #64d2ff;
+    outline-offset: -2px;
+  }
+
+  .preset-menu-item[aria-checked="true"] {
+    background: rgba(0, 122, 255, 0.2);
+    color: #64d2ff;
+  }
+
+  .preset-menu-item[aria-checked="true"]:hover {
+    background: rgba(0, 122, 255, 0.25);
+  }
+
   @media (prefers-reduced-motion: reduce) {
     .toolbar-btn,
     .badge-trigger,
-    .role-menu-item {
+    .role-menu-item,
+    .preset-menu-item,
+    .toolbar-zone--center,
+    .center-full,
+    .center-collapsed,
+    .badge-label,
+    .preset-picker {
       transition: none;
     }
   }

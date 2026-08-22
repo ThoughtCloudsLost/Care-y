@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "The ticket list supports four layout options with a fifth planned. - **Rows** show compact single line entries with status indicators - **Cards** show each t..." |
+* | "The ticket list supports five layout options. - **Table** presents tickets in a sortable data table with columns for each field - **Rows** show compact singl..." |
 *
 * @param {Demo_Narrative_Topic_View_Modes_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

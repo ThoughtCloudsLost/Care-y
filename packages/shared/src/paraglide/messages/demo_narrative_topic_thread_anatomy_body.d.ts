@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "The thread carries more than message bubbles. **Date separators.** These mark where one day ends and the next begins. **Unread divider.** A line marks the fi..." |
+* | "The thread carries more than message bubbles between clients and volunteers. **Date separators.** These mark where one date between follow ups. **Unread divi..." |
 *
 * @param {Demo_Narrative_Topic_Thread_Anatomy_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

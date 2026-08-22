@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "One moment, preparing the handbook. The app is signing in and deriving encryption keys, exactly as it would for a real volunteer." |
+* | "One moment, preparing the handbook. The app is signing in and deriving encryption keys in the background." |
 *
 * @param {Demo_PreparingInputs} inputs
 * @param {{ locale?: "en" | "es" }} options
