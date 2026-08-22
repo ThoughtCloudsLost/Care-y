@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "The floating toolbar above the simulator is also a drag handle, so you can grab it anywhere to reposition the frame. Phone and desktop preset buttons in the ..." |
+* | "The floating toolbar above the simulator is also a drag handle, so you can grab it anywhere to reposition the frame. Phone and desktop preset buttons switch ..." |
 *
 * @param {Demo_Entry_Controls_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

@@ -6,17 +6,17 @@ import { getLocale, experimentalStaticLocale } from '../runtime.js';
 /** @typedef {{}} Demo_Narrative_Search_Entities_HeadingInputs */
 
 const en_demo_narrative_search_entities_heading = /** @type {(inputs: Demo_Narrative_Search_Entities_HeadingInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`What search covers`)
+	return /** @type {LocalizedString} */ (`What global search covers`)
 };
 
 const es_demo_narrative_search_entities_heading = /** @type {(inputs: Demo_Narrative_Search_Entities_HeadingInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Qué cubre la búsqueda`)
+	return /** @type {LocalizedString} */ (`Qué cubre la búsqueda global`)
 };
 
 /**
 * | output |
 * | --- |
-* | "What search covers" |
+* | "What global search covers" |
 *
 * @param {Demo_Narrative_Search_Entities_HeadingInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

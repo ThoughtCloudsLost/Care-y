@@ -7,13 +7,13 @@ import { getLocale, experimentalStaticLocale } from '../runtime.js';
 
 const en_demo_narrative_library_attachments_body = /** @type {(inputs: Demo_Narrative_Library_Attachments_BodyInputs) => LocalizedString} */ () => {
 	return /** @type {LocalizedString} */ (`Articles can have file attachments. Images inserted inline in the article body appear within the text. Other file types appear as download chips below the article.
-**Encryption.** All attachments are encrypted with the organization key before storage. The server stores encrypted binary data. Volunteers download and decrypt attachments in the browser.
+**Encryption.** All attachments are encrypted with the organization key before storage. Volunteers download and decrypt attachments in the browser.
 **Allowed types.** JPEG, PNG, GIF, WebP, and PDF files are accepted.`)
 };
 
 const es_demo_narrative_library_attachments_body = /** @type {(inputs: Demo_Narrative_Library_Attachments_BodyInputs) => LocalizedString} */ () => {
 	return /** @type {LocalizedString} */ (`Los artículos pueden tener archivos adjuntos. Las imágenes insertadas en el cuerpo del artículo aparecen dentro del texto. Otros tipos de archivo aparecen como fichas de descarga debajo del artículo.
-**Cifrado.** Todos los adjuntos se cifran con la clave de la organización antes de almacenarse. El servidor almacena datos binarios cifrados. Los voluntarios descargan y descifran los adjuntos en el navegador.
+**Cifrado.** Todos los adjuntos se cifran con la clave de la organización antes de almacenarse. Los voluntarios descargan y descifran los adjuntos en el navegador.
 **Tipos permitidos.** Se aceptan archivos JPEG, PNG, GIF, WebP y PDF.`)
 };
 

@@ -7,13 +7,13 @@ import { getLocale, experimentalStaticLocale } from '../runtime.js';
 
 const en_demo_narrative_settings_identity_body = /** @type {(inputs: Demo_Narrative_Settings_Identity_BodyInputs) => LocalizedString} */ () => {
 	return /** @type {LocalizedString} */ (`Volunteers can change their display name and username from this page.
-**Display name.** The display name is encrypted with the organization key in the browser before being sent to the server. The server stores ciphertext.
+**Display name.** The display name is encrypted with the organization key in the browser before being sent to the server. This is the name shown to other org members. 
 **Username.** The username is sent to the server in plaintext (protected by TLS in transit) because it is used for authentication lookup, and the server re-encrypts it on receipt.`)
 };
 
 const es_demo_narrative_settings_identity_body = /** @type {(inputs: Demo_Narrative_Settings_Identity_BodyInputs) => LocalizedString} */ () => {
 	return /** @type {LocalizedString} */ (`Los voluntarios pueden cambiar su nombre visible y su nombre de usuario desde esta página.
-**Nombre visible.** El nombre visible se cifra con la clave de la organización en el navegador antes de enviarse al servidor. El servidor almacena texto cifrado.
+**Nombre visible.** El nombre visible se cifra con la clave de la organización en el navegador antes de enviarse al servidor. Este es el nombre que se muestra a otros miembros de la organización.
 **Nombre de usuario.** El nombre de usuario se envía al servidor en texto plano (protegido por TLS en tránsito) porque se usa para la búsqueda de autenticación, y el servidor lo re-cifra al recibirlo.`)
 };
 

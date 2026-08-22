@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "Administrators see a setup checklist at the top of the dashboard until the organization is fully configured. Each row is a setup task that links directly to ..." |
+* | "Administrators see a setup checklist at the top of the overview until the organization is fully configured. Each row is a setup task that links directly to t..." |
 *
 * @param {Demo_Narrative_Dashboard_Getting_Started_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

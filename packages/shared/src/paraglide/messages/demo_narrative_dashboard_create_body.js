@@ -7,14 +7,14 @@ import { getLocale, experimentalStaticLocale } from '../runtime.js';
 
 const en_demo_narrative_dashboard_create_body = /** @type {(inputs: Demo_Narrative_Dashboard_Create_BodyInputs) => LocalizedString} */ () => {
 	return /** @type {LocalizedString} */ (`The plus button in the navigation bar opens a menu for creating new items. The options shown depend on the volunteer's role and permissions.
-**All volunteers** can create a new ticket.
+**All volunteers** can create a new ticket by default.
 **Administrators and managers** may also see options to create knowledge base articles, categories, queues, or invite new volunteers, depending on their specific permissions.
 **Single option shortcut.** If the volunteer only has permission to create one type of item, tapping the button skips the menu and goes directly to the creation form.`)
 };
 
 const es_demo_narrative_dashboard_create_body = /** @type {(inputs: Demo_Narrative_Dashboard_Create_BodyInputs) => LocalizedString} */ () => {
 	return /** @type {LocalizedString} */ (`El botón de más en la barra de navegación abre un menú para crear nuevos elementos. Las opciones mostradas dependen del rol y los permisos del voluntario.
-**Todos los voluntarios** pueden crear un nuevo ticket.
+**Todos los voluntarios** pueden crear un nuevo ticket por defecto.
 **Administradores y gestores** también pueden ver opciones para crear artículos de la base de conocimiento, categorías, colas o invitar nuevos voluntarios, dependiendo de sus permisos específicos.
 **Atajo de opción única.** Si el voluntario solo tiene permiso para crear un tipo de elemento, tocar el botón salta el menú y va directamente al formulario de creación.`)
 };
