@@ -6,17 +6,17 @@ import { getLocale, experimentalStaticLocale } from '../runtime.js';
 /** @typedef {{}} Demo_Section_Dashboard_TitleInputs */
 
 const en_demo_section_dashboard_title = /** @type {(inputs: Demo_Section_Dashboard_TitleInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Dashboard`)
+	return /** @type {LocalizedString} */ (`Overview`)
 };
 
 const es_demo_section_dashboard_title = /** @type {(inputs: Demo_Section_Dashboard_TitleInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Panel principal`)
+	return /** @type {LocalizedString} */ (`Resumen`)
 };
 
 /**
 * | output |
 * | --- |
-* | "Dashboard" |
+* | "Overview" |
 *
 * @param {Demo_Section_Dashboard_TitleInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

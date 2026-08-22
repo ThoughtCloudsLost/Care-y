@@ -6,17 +6,17 @@ import { getLocale, experimentalStaticLocale } from '../runtime.js';
 /** @typedef {{}} Demo_Narrative_Welcome_BodyInputs */
 
 const en_demo_narrative_welcome_body = /** @type {(inputs: Demo_Narrative_Welcome_BodyInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Tap a feature in the list or use the tabs inside the CARE-Y simulator to explore. Every piece of data you see is encrypted on the client before it reaches the server. The server never holds your keys.`)
+	return /** @type {LocalizedString} */ (`Tap a feature in the list or use the CARE-Y simulator to explore and learn more about CARE-Y.`)
 };
 
 const es_demo_narrative_welcome_body = /** @type {(inputs: Demo_Narrative_Welcome_BodyInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Toca una función en la lista o usa las pestañas dentro del simulador CARE-Y para explorar. Cada dato que ves se cifra en el navegador antes de llegar al servidor. El servidor nunca tiene tus claves.`)
+	return /** @type {LocalizedString} */ (`Toca una función en la lista o usa el simulador CARE-Y para explorar y conocer más sobre CARE-Y.`)
 };
 
 /**
 * | output |
 * | --- |
-* | "Tap a feature in the list or use the tabs inside the CARE-Y simulator to explore. Every piece of data you see is encrypted on the client before it reaches th..." |
+* | "Tap a feature in the list or use the CARE-Y simulator to explore and learn more about CARE-Y." |
 *
 * @param {Demo_Narrative_Welcome_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

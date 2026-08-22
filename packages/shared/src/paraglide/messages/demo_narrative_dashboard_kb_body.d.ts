@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "A preview of recently updated knowledge base articles on the dashboard. Tapping an article navigates to the full article in the library. **Encryption.** Arti..." |
+* | "A preview of recently updated knowledge base articles on the overview page. Tapping an article navigates to the full article in the library. **Encryption.** ..." |
 *
 * @param {Demo_Narrative_Dashboard_Kb_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "The main body of the ticket detail is a conversation thread showing messages between the volunteer and the client. Messages appear as bubbles, with the volun..." |
+* | "The main body of the ticket detail is a conversation thread showing messages between the volunteer and the client. **Decryption.** Each message is individual..." |
 *
 * @param {Demo_Narrative_Topic_Conversation_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

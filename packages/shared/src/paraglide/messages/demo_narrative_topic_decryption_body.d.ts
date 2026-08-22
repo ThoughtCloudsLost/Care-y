@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "When the ticket list loads, titles appear as scrambled text that resolves into readable words as the browser decrypts each one. This is the decryption proces..." |
+* | "When the ticket list loads, titles appear as scrambled text that resolves into readable words as the browser decrypts each one. **How it works.** The browser..." |
 *
 * @param {Demo_Narrative_Topic_Decryption_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

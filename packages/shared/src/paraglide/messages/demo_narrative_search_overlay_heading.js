@@ -6,17 +6,17 @@ import { getLocale, experimentalStaticLocale } from '../runtime.js';
 /** @typedef {{}} Demo_Narrative_Search_Overlay_HeadingInputs */
 
 const en_demo_narrative_search_overlay_heading = /** @type {(inputs: Demo_Narrative_Search_Overlay_HeadingInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Opening search`)
+	return /** @type {LocalizedString} */ (`Opening global search`)
 };
 
 const es_demo_narrative_search_overlay_heading = /** @type {(inputs: Demo_Narrative_Search_Overlay_HeadingInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Abrir la búsqueda`)
+	return /** @type {LocalizedString} */ (`Abrir la búsqueda global`)
 };
 
 /**
 * | output |
 * | --- |
-* | "Opening search" |
+* | "Opening global search" |
 *
 * @param {Demo_Narrative_Search_Overlay_HeadingInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

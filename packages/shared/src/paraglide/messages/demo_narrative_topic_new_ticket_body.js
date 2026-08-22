@@ -8,13 +8,13 @@ import { getLocale, experimentalStaticLocale } from '../runtime.js';
 const en_demo_narrative_topic_new_ticket_body = /** @type {(inputs: Demo_Narrative_Topic_New_Ticket_BodyInputs) => LocalizedString} */ () => {
 	return /** @type {LocalizedString} */ (`When a volunteer creates a ticket, the title and description are encrypted in the browser before they leave the device. The server stores the ciphertext and assigns a ticket ID without reading the content.
 **Required fields.** A new ticket needs a title and a queue assignment at minimum. Description, priority, and initial assignee are optional.
-**Permissions.** All volunteers can create tickets. Queue assignment is limited to queues the volunteer has access to.`)
+**Permissions.** All volunteers can create tickets by default, this can be changed per org on the admin pages. Queue assignment is limited to queues the volunteer has access to.`)
 };
 
 const es_demo_narrative_topic_new_ticket_body = /** @type {(inputs: Demo_Narrative_Topic_New_Ticket_BodyInputs) => LocalizedString} */ () => {
 	return /** @type {LocalizedString} */ (`Cuando un voluntario crea un ticket, el título y la descripción se cifran en el navegador antes de salir del dispositivo. El servidor almacena el texto cifrado y asigna un ID de ticket sin leer el contenido.
 **Campos requeridos.** Un nuevo ticket necesita un título y una asignación de cola como mínimo. La descripción, prioridad y asignado inicial son opcionales.
-**Permisos.** Todos los voluntarios pueden crear tickets. La asignación de cola se limita a las colas a las que el voluntario tiene acceso.`)
+**Permisos.** Todos los voluntarios pueden crear tickets por defecto, esto se puede cambiar por organización en las páginas de administración. La asignación de cola se limita a las colas a las que el voluntario tiene acceso.`)
 };
 
 /**

@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "How search works" |
+* | "How global search works" |
 *
 * @param {Demo_Narrative_Search_How_HeadingInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

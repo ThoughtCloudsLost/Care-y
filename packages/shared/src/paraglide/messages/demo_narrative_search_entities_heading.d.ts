@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "What search covers" |
+* | "What global search covers" |
 *
 * @param {Demo_Narrative_Search_Entities_HeadingInputs} inputs
 * @param {{ locale?: "en" | "es" }} options
