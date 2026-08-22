@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "Search runs in two tiers. **Instant results.** When you type, the browser fuzzy matches your query against content it has already decrypted and cached. This ..." |
+* | "Global search runs in two tiers. **Instant results.** When you type, the browser fuzzy matches your query against content it has already decrypted and cached..." |
 *
 * @param {Demo_Narrative_Search_How_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

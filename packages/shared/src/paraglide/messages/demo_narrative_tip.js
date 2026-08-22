@@ -6,17 +6,17 @@ import { getLocale, experimentalStaticLocale } from '../runtime.js';
 /** @typedef {{}} Demo_Narrative_TipInputs */
 
 const en_demo_narrative_tip = /** @type {(inputs: Demo_Narrative_TipInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Select a feature from the list, scroll down, or interact with the CARE-Y app in the simulator to learn more about what it can do.`)
+	return /** @type {LocalizedString} */ (`Select a feature from the list, scroll, or interact with the CARE-Y app in the simulator to learn more.`)
 };
 
 const es_demo_narrative_tip = /** @type {(inputs: Demo_Narrative_TipInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Selecciona una función de la lista, desplázate hacia abajo o interactúa con la aplicación CARE-Y en el simulador para conocer lo que puede hacer.`)
+	return /** @type {LocalizedString} */ (`Selecciona una función de la lista, desplázate, o interactúa con la aplicación CARE-Y en el simulador para conocer más.`)
 };
 
 /**
 * | output |
 * | --- |
-* | "Select a feature from the list, scroll down, or interact with the CARE-Y app in the simulator to learn more about what it can do." |
+* | "Select a feature from the list, scroll, or interact with the CARE-Y app in the simulator to learn more." |
 *
 * @param {Demo_Narrative_TipInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

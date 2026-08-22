@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "Notes are visible only to volunteers and are encrypted with the same per ticket key as messages. The server cannot distinguish a note from a client message b..." |
+* | "Notes are visible only to org members and are encrypted with the same per ticket key as messages. The server cannot distinguish a note from a client message ..." |
 *
 * @param {Demo_Narrative_Topic_Notes_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

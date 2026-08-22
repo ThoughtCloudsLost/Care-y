@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "Organization name, primary and accent colors, logo, and client facing text are all encrypted with the organization key before storage. The server stores ciph..." |
+* | "Organization name, primary and accent colors, logo, and client facing text are all encrypted with the organization key before storage. **App icon** When a lo..." |
 *
 * @param {Demo_Narrative_Admin_Branding_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

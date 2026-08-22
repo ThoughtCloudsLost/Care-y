@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "Dashboard" |
+* | "Overview" |
 *
 * @param {Demo_Section_Dashboard_TitleInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

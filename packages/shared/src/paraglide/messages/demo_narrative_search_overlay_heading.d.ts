@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "Opening search" |
+* | "Opening global search" |
 *
 * @param {Demo_Narrative_Search_Overlay_HeadingInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "A passkey uses the device itself as the second factor. There is no code to type. **During enrollment,** the device creates a cryptographic key pair and store..." |
+* | "A passkey uses the device itself as the second factor, so there is no code to type. **During enrollment,** the device creates a cryptographic key pair and st..." |
 *
 * @param {Demo_Narrative_Topic_Twofa_Passkey_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" }} options
