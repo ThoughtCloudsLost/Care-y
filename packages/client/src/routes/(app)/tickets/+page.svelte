@@ -1544,6 +1544,7 @@
   replyTargetTicketId={replyFlow.targetTicketId}
   replyClientAlias={replyFlow.clientAlias}
   replyHasPhone={replyFlow.hasPhone}
+  replyClientPublic={replyFlow.clientPublic}
   replyPreviewFollowUps={replyFlow.previewFollowUps}
   replyFollowUpCount={replyFlow.followUpCount}
   onreplydismiss={() => replyFlow.dismiss()}

@@ -3,7 +3,13 @@ import { QueryClient } from "@tanstack/svelte-query";
 import { createReplyFlow } from "./create-reply-flow.svelte.js";
 
 const tickets = [
-  { id: "t1", clientAlias: "Alice", hasPhone: true, followUpCount: 3 },
+  {
+    id: "t1",
+    clientAlias: "Alice",
+    hasPhone: true,
+    followUpCount: 3,
+    portalChannel: { clientPublic: "pk-base64" },
+  },
   { id: "t2", clientAlias: "Bob", hasPhone: false, followUpCount: 0 },
 ];
 
@@ -54,6 +60,7 @@ describe("createReplyFlow", () => {
       expect(flow.sheetOpen).toBe(false);
       expect(flow.targetTicketId).toBe("");
       expect(flow.clientAlias).toBe("");
+      expect(flow.clientPublic).toBeNull();
       expect(flow.previewFollowUps).toBeUndefined();
       expect(flow.followUpCount).toBe(0);
     });
@@ -67,8 +74,15 @@ describe("createReplyFlow", () => {
       expect(flow.targetTicketId).toBe("t1");
       expect(flow.clientAlias).toBe("Alice");
       expect(flow.hasPhone).toBe(true);
+      expect(flow.clientPublic).toBe("pk-base64");
       expect(flow.previewFollowUps).toBe(previewData);
       expect(flow.followUpCount).toBe(3);
+    });
+
+    it("sets clientPublic to null when ticket has no portalChannel", () => {
+      const flow = make();
+      flow.open("t2");
+      expect(flow.clientPublic).toBeNull();
     });
 
     it("reflects hasPhone=false for phoneless client", () => {
@@ -134,6 +148,7 @@ describe("createReplyFlow", () => {
       expect(flow.targetTicketId).toBe("");
       expect(flow.clientAlias).toBe("");
       expect(flow.hasPhone).toBe(false);
+      expect(flow.clientPublic).toBeNull();
       expect(flow.previewFollowUps).toBeUndefined();
       expect(flow.followUpCount).toBe(0);
     });

@@ -502,6 +502,7 @@
         editedAt: null,
         eventParams: null,
       }) satisfies FollowUpList[number],
+    getClientPublic: () => ticket?.portalChannel?.clientPublic ?? null,
     createFollowUpMutate: async (args) =>
       ticketRouter.createFollowUp.mutate(args),
   });
