@@ -284,9 +284,25 @@ export async function clickRailSub(
  * the iframe then renders its desktop shell.
  */
 export async function enterDesktopPreset(page: Page): Promise<void> {
-  const button = page.getByRole("button", { name: "Desktop size" });
-  await button.waitFor({ state: "visible", timeout: 5_000 });
-  await button.click();
+  // The toolbar collapses progressively with frame width. At the
+  // default 390px phone preset the two preset buttons fold into a
+  // single dropdown trigger, so "Desktop size" is only reachable as a
+  // menu item; at full width it is a direct toolbar button.
+  const direct = page.getByRole("button", { name: "Desktop size" });
+  if (await direct.isVisible().catch(() => false)) {
+    await direct.click();
+  } else {
+    const trigger = page
+      .getByRole("button", { name: "Phone size" })
+      .and(page.locator('[aria-haspopup="menu"]'))
+      .locator("visible=true")
+      .first();
+    await trigger.waitFor({ state: "visible", timeout: 5_000 });
+    await trigger.click();
+    const item = page.getByRole("menuitemradio", { name: "Desktop size" });
+    await item.waitFor({ state: "visible", timeout: 5_000 });
+    await item.click();
+  }
 
   await page.waitForFunction(
     () => {

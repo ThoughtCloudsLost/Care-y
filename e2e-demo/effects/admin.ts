@@ -68,7 +68,7 @@ export const EFFECTS: EffectMap = new Map([
       description: "User edit sheet opens with edit form",
       visible: [
         // ShellSheet.svelte line 115: .shell-sheet-content
-        ".shell-sheet-content",
+        ".shell-sheet-content:visible",
         // UsersSection.svelte line 689: .edit-user-content
         ".edit-user-content",
       ],
@@ -97,7 +97,7 @@ export const EFFECTS: EffectMap = new Map([
         // ShellPopover.svelte line 49: the popover renders a div with
         // role="dialog". SubNavbarFilterLayout.svelte line 237-244
         // wraps the sort option list in this popover.
-        '[role="dialog"]',
+        '[role="dialog"]:visible',
       ],
     },
   ],
