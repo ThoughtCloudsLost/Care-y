@@ -22,10 +22,13 @@ type ResourceType = LogDeletionPayload["resourceType"];
 export async function deleteOrEnqueue(
   provider: TelephonyProvider,
   jobQueue: JobQueue,
-  orgId: OrgId,
-  resourceType: ResourceType,
-  resourceId: string,
+  target: {
+    orgId: OrgId;
+    resourceType: ResourceType;
+    resourceId: string;
+  },
 ): Promise<void> {
+  const { orgId, resourceType, resourceId } = target;
   try {
     switch (resourceType) {
       case "call":

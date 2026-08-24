@@ -243,8 +243,16 @@ export async function quarantineRecording(
   }
 
   // (g) Provider-side cleanup (only after durable insert).
-  await deleteOrEnqueue(provider, jobQueue, orgId, "recording", recordingSid);
-  await deleteOrEnqueue(provider, jobQueue, orgId, "call", callSid);
+  await deleteOrEnqueue(provider, jobQueue, {
+    orgId,
+    resourceType: "recording",
+    resourceId: recordingSid,
+  });
+  await deleteOrEnqueue(provider, jobQueue, {
+    orgId,
+    resourceType: "call",
+    resourceId: callSid,
+  });
 }
 
 // ---------------------------------------------------------------------------

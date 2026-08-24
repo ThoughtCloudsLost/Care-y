@@ -510,7 +510,11 @@ describe.skipIf(!process.env.DATABASE_URL)("TicketService (DB)", () => {
 
     // Add an unresolved dependency (fixture2's ticket is still open)
     const depService = createDependencyService(testDb.db);
-    await depService.add(fixture1.userId, fixture1.ticketId, fixture2.ticketId);
+    await depService.add({
+      userId: fixture1.userId,
+      ticketId: fixture1.ticketId,
+      dependsOnTicketId: fixture2.ticketId,
+    });
 
     await expect(
       svc.close(fixture1.userId, fixture1.ticketId),

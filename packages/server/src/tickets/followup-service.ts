@@ -949,7 +949,7 @@ export function createFollowUpService(
       if (
         row.min_view_role !== null &&
         row.created_by !== userId &&
-        !meetsRoleThreshold(userRoleId, row.min_view_role)
+        !meetsRoleThreshold({ userRoleId, minRoleId: row.min_view_role })
       ) {
         throw new ForbiddenError(ErrorCode.INSUFFICIENT_ROLE);
       }

@@ -856,7 +856,10 @@ export function createTicketRouter(deps: TicketRouterDeps) {
             const minRole = await ntSvc.getMinCreateRole(input.noteTypeId);
             if (
               minRole !== undefined &&
-              !meetsRoleThreshold(ctx.user.roleId, minRole)
+              !meetsRoleThreshold({
+                userRoleId: ctx.user.roleId,
+                minRoleId: minRole,
+              })
             ) {
               throw new ForbiddenError(ErrorCode.INSUFFICIENT_ROLE);
             }
@@ -1181,7 +1184,11 @@ export function createTicketRouter(deps: TicketRouterDeps) {
       withErrorWrapping(async ({ ctx, input }) => {
         const { access } = ticketSvc(ctx.org.tenantDb);
         const svc = deps.createDependencySvc(ctx.org.tenantDb, access);
-        return svc.add(ctx.user.id, input.ticketId, input.dependsOnTicketId);
+        return svc.add({
+          userId: ctx.user.id,
+          ticketId: input.ticketId,
+          dependsOnTicketId: input.dependsOnTicketId,
+        });
       }),
     ),
 
@@ -1191,11 +1198,11 @@ export function createTicketRouter(deps: TicketRouterDeps) {
         withErrorWrapping(async ({ ctx, input }) => {
           const { access } = ticketSvc(ctx.org.tenantDb);
           const svc = deps.createDependencySvc(ctx.org.tenantDb, access);
-          await svc.remove(
-            ctx.user.id,
-            input.ticketId,
-            input.dependsOnTicketId,
-          );
+          await svc.remove({
+            userId: ctx.user.id,
+            ticketId: input.ticketId,
+            dependsOnTicketId: input.dependsOnTicketId,
+          });
         }),
       ),
 

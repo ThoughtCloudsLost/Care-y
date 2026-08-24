@@ -131,11 +131,11 @@ describe.skipIf(!process.env.DATABASE_URL)("MergeService (DB)", () => {
 
     // Add an unresolved dependency: b's ticket depends on blocker's (still open)
     const depService = createDependencyService(testDb.db);
-    await depService.add(
-      crypto.randomUUID() as UserId,
-      b.ticketId,
-      blocker.ticketId,
-    );
+    await depService.add({
+      userId: crypto.randomUUID() as UserId,
+      ticketId: b.ticketId,
+      dependsOnTicketId: blocker.ticketId,
+    });
 
     await expect(
       svc.merge({

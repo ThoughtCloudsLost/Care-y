@@ -36,13 +36,17 @@ export const ROLE_LEVEL: ReadonlyMap<string, number> = new Map<string, number>([
   [RoleId.ADMIN, 3],
 ]);
 
-/** Returns true if the user's role meets or exceeds the minimum required role. */
-export function meetsRoleThreshold(
-  userRoleId: string,
-  minRoleId: string,
-): boolean {
-  const userLevel = ROLE_LEVEL.get(userRoleId) ?? 0;
-  const minLevel = ROLE_LEVEL.get(minRoleId) ?? 0;
+/**
+ * Returns true if the user's role meets or exceeds the minimum required role.
+ * Named parameters because both sides are role ids: swapping them inverts
+ * the comparison and grants access instead of denying it.
+ */
+export function meetsRoleThreshold(params: {
+  userRoleId: string;
+  minRoleId: string;
+}): boolean {
+  const userLevel = ROLE_LEVEL.get(params.userRoleId) ?? 0;
+  const minLevel = ROLE_LEVEL.get(params.minRoleId) ?? 0;
   return userLevel >= minLevel;
 }
 

@@ -224,10 +224,18 @@ export async function handleRecordingComplete(
   );
 
   // M3: Delete the recording from the provider
-  await deleteOrEnqueue(provider, jobQueue, orgId, "recording", recordingSid);
+  await deleteOrEnqueue(provider, jobQueue, {
+    orgId,
+    resourceType: "recording",
+    resourceId: recordingSid,
+  });
 
   // M1: Delete the call log from the provider
-  await deleteOrEnqueue(provider, jobQueue, orgId, "call", callSid);
+  await deleteOrEnqueue(provider, jobQueue, {
+    orgId,
+    resourceType: "call",
+    resourceId: callSid,
+  });
 
   return { ticketId, followUpId: fuResult.followUpId };
 }
