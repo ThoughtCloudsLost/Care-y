@@ -1,7 +1,13 @@
 import { test, expect } from "./coverage-fixture";
 import { startCoverage, stopAndWriteCoverage } from "./coverage-fixture";
 import type { Page, Request } from "@playwright/test";
-import { auditA11y, CRYPTO_TIMEOUT, login, openTicketByTitle } from "./helpers";
+import {
+  auditA11y,
+  CRYPTO_TIMEOUT,
+  E2eError,
+  login,
+  openTicketByTitle,
+} from "./helpers";
 import { countRows, queryDb } from "./db-probe";
 
 /**
@@ -271,10 +277,15 @@ test.describe.serial("Public Intake Form", () => {
 
 test.describe.serial("Multi-form Intake Routing", () => {
   /**
-   * Seed two active forms with distinct slugs and destination queues using
-   * db-probe helpers (raw SQL). The seeded forms are minimal: one text field
-   * each, different destination_queue_id values. The tests then submit
-   * against each slug URL and verify tickets landed in the correct queues.
+   * Seed two active forms with distinct slugs and destination queues.
+   * Forms are created from a logged-in browser context so field labels and
+   * configs are encrypted with the real org branding key (the same path the
+   * admin form editor uses). Raw SQL cannot produce decryptable ciphertext
+   * because the branding key is derived from the org public key, which only
+   * exists in browser sessions.
+   *
+   * Queue fixtures still use raw SQL because queue names are never rendered
+   * in these tests; only queue IDs matter for the routing assertion.
    */
 
   const SLUG_A = "e2e-form-alpha";
@@ -284,7 +295,9 @@ test.describe.serial("Multi-form Intake Routing", () => {
   let formAId: string;
   let formBId: string;
 
-  test.beforeAll(() => {
+  test.beforeAll(async ({ browser }, testInfo) => {
+    testInfo.setTimeout(CRYPTO_TIMEOUT * 4);
+
     // Resolve existing queue ids from the e2e org. The seed creates at least
     // one queue (the intake queue). We create a second if needed.
     const existingQueues = queryDb(
@@ -315,27 +328,157 @@ test.describe.serial("Multi-form Intake Routing", () => {
       queueBId = queueIds[1]!;
     }
 
-    // Insert two minimal intake forms with distinct slugs and destinations
-    formAId = queryDb(
-      `INSERT INTO intake_forms (id, name, slug, is_active, is_default, destination_queue_id, created_at, updated_at)
-       VALUES (gen_random_uuid(), 'Alpha Form', '${SLUG_A}', true, false, '${queueAId}', now(), now())
-       RETURNING id;`,
-    ).trim();
+    // Create both forms from a logged-in browser page so the field
+    // labels and configs are encrypted with the real branding key.
+    const setupPage = await browser.newPage();
+    await login(setupPage);
 
-    formBId = queryDb(
-      `INSERT INTO intake_forms (id, name, slug, is_active, is_default, destination_queue_id, created_at, updated_at)
-       VALUES (gen_random_uuid(), 'Beta Form', '${SLUG_B}', true, false, '${queueBId}', now(), now())
-       RETURNING id;`,
-    ).trim();
+    const formResults = await setupPage.evaluate(
+      async (args: {
+        slugA: string;
+        slugB: string;
+        queueA: string;
+        queueB: string;
+      }) => {
+        // Dynamic imports resolve through the Vite dev server, giving
+        // access to the same crypto helpers the admin form editor uses.
+        // Specifiers go through variables: the e2e tsconfig cannot type
+        // browser-served module paths, and a bare package specifier does
+        // not resolve in a native browser import, so the crypto barrel
+        // goes through Vite's /@id/ resolution endpoint.
+        const formCryptoUrl = "/src/lib/portal/intake-form-crypto.ts";
+        const cryptoBarrelUrl = "/@id/@care-y/crypto";
+        const { encryptFieldContent } = (await import(formCryptoUrl)) as {
+          encryptFieldContent: (
+            plain: { label: string; config: { type: string } },
+            orgPub: Uint8Array,
+          ) => { encryptedLabel: string; encryptedConfig: string };
+        };
+        const { decode } = (await import(cryptoBarrelUrl)) as {
+          decode: (b64: string) => Uint8Array;
+        };
 
-    // Each form needs at least one field (the renderer requires it).
-    // Insert a minimal text field with encrypted label/config (placeholder ciphertext).
-    for (const fid of [formAId, formBId]) {
-      queryDb(
-        `INSERT INTO intake_form_fields (id, form_id, field_type, encrypted_label, encrypted_config, is_required, position, created_at)
-         VALUES (gen_random_uuid(), '${fid}', 'textarea', 'dGVzdC1sYWJlbA', 'eyJ0eXBlIjoidGV4dGFyZWEifQ', true, 0, now());`,
+        // Fetch the org public key from the public branding endpoint.
+        const brandingRes = await fetch("/trpc/branding.getPublicBranding", {
+          credentials: "include",
+        });
+        if (!brandingRes.ok) {
+          return { ok: false as const, error: "branding fetch failed" };
+        }
+        const brandingJson = (await brandingRes.json()) as {
+          result: { data: { orgPublicKey: string | null } };
+        };
+        const orgPubB64 = brandingJson.result.data.orgPublicKey;
+        if (orgPubB64 === null) {
+          return { ok: false as const, error: "org public key is null" };
+        }
+        const orgPub = decode(orgPubB64);
+
+        // Encrypt a single textarea field for each form.
+        const encA = encryptFieldContent(
+          { label: "Message", config: { type: "textarea" } },
+          orgPub,
+        );
+        const encB = encryptFieldContent(
+          { label: "Details", config: { type: "textarea" } },
+          orgPub,
+        );
+
+        // Save form A via the admin tRPC mutation.
+        const saveA = await fetch("/trpc/intakeForms.save", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
+          body: JSON.stringify({
+            formId: null,
+            name: "Alpha Form",
+            slug: args.slugA,
+            isDefault: false,
+            destinationQueueId: args.queueA,
+            fields: [
+              {
+                fieldType: "textarea",
+                encryptedLabel: encA.encryptedLabel,
+                encryptedConfig: encA.encryptedConfig,
+                isRequired: true,
+              },
+            ],
+          }),
+        });
+        if (!saveA.ok) {
+          const body = await saveA.text();
+          return { ok: false as const, error: `save form A failed: ${body}` };
+        }
+        const dataA = (await saveA.json()) as {
+          result: { data: { formId: string } };
+        };
+
+        // Save form B via the admin tRPC mutation.
+        const saveB = await fetch("/trpc/intakeForms.save", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
+          body: JSON.stringify({
+            formId: null,
+            name: "Beta Form",
+            slug: args.slugB,
+            isDefault: false,
+            destinationQueueId: args.queueB,
+            fields: [
+              {
+                fieldType: "textarea",
+                encryptedLabel: encB.encryptedLabel,
+                encryptedConfig: encB.encryptedConfig,
+                isRequired: true,
+              },
+            ],
+          }),
+        });
+        if (!saveB.ok) {
+          const body = await saveB.text();
+          return { ok: false as const, error: `save form B failed: ${body}` };
+        }
+        const dataB = (await saveB.json()) as {
+          result: { data: { formId: string } };
+        };
+
+        // New forms are drafts (is_active defaults to false) and the
+        // public slug lookup only returns active forms; activate both.
+        for (const formId of [
+          dataA.result.data.formId,
+          dataB.result.data.formId,
+        ]) {
+          const act = await fetch("/trpc/intakeForms.setActive", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            credentials: "include",
+            body: JSON.stringify({ formId, active: true }),
+          });
+          if (!act.ok) {
+            const body = await act.text();
+            return { ok: false as const, error: `activate failed: ${body}` };
+          }
+        }
+
+        return {
+          ok: true as const,
+          formAId: dataA.result.data.formId,
+          formBId: dataB.result.data.formId,
+        };
+      },
+      { slugA: SLUG_A, slugB: SLUG_B, queueA: queueAId, queueB: queueBId },
+    );
+
+    await setupPage.close();
+
+    if (!formResults.ok) {
+      throw new E2eError(
+        `Multi-form fixture setup failed: ${formResults.error}`,
       );
     }
+
+    formAId = formResults.formAId;
+    formBId = formResults.formBId;
   });
 
   test("not-available state for unknown slug", async ({
@@ -379,11 +522,8 @@ test.describe.serial("Multi-form Intake Routing", () => {
     const page = await browser.newPage();
     await page.goto(`/intake/${SLUG_A}`);
 
-    // Wait for the form to render (the branding-key decrypt exposes the field)
-    // Since the encrypted label/config are placeholder ciphertext, the form
-    // may show a decrypt error or a generic textarea. We look for a textarea
-    // (the fallback when decrypt fails renders the default form, which has a
-    // textarea).
+    // Wait for the form to render. The branding-key decrypt decodes the
+    // encrypted field label and config, then the renderer shows a textarea.
     const textarea = page.locator("textarea").first();
     await expect(textarea).toBeVisible({ timeout: CRYPTO_TIMEOUT });
     await textarea.fill("Alpha queue submission");
@@ -437,9 +577,10 @@ test.describe.serial("Multi-form Intake Routing", () => {
   });
 
   test.afterAll(() => {
-    // Cleanup: remove the seeded forms and their fields
+    // Remove responses that reference these forms (no cascade on form_id FK),
+    // then the forms themselves. Fields cascade via FK from intake_forms.
     queryDb(
-      `DELETE FROM intake_form_fields WHERE form_id IN ('${formAId}', '${formBId}');`,
+      `DELETE FROM intake_form_responses WHERE form_id IN ('${formAId}', '${formBId}');`,
     );
     queryDb(
       `DELETE FROM intake_forms WHERE id IN ('${formAId}', '${formBId}');`,
