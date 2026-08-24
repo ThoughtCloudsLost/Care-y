@@ -1067,6 +1067,11 @@ export async function auditA11y(
     .withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa"])
     .exclude("#splash")
     .exclude("[inert]")
+    // Dev-only floating panel trigger: absent from production builds, and
+    // its overlay position trips target-size/target-offset on buttons it
+    // happens to float over during dev-server audits.
+    .exclude(".dev-trigger")
+    .exclude(".dev-panel")
     .disableRules([...SHARED_AXE_DISABLES, ...(opts.disableRules ?? [])]);
   if (opts.include !== undefined) {
     builder = builder.include(opts.include);
