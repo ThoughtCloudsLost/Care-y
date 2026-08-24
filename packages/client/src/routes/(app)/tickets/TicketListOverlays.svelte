@@ -25,6 +25,7 @@
     replyTargetTicketId: string;
     replyClientAlias: string | null;
     replyHasPhone: boolean;
+    replyClientPublic: string | null;
     replyPreviewFollowUps: RawFollowUpPreview[] | undefined;
     replyFollowUpCount: number;
     onreplydismiss: () => void;
@@ -61,6 +62,7 @@
     replyTargetTicketId,
     replyClientAlias,
     replyHasPhone,
+    replyClientPublic,
     replyPreviewFollowUps,
     replyFollowUpCount,
     onreplydismiss,
@@ -106,6 +108,7 @@
   ticketId={replyTargetTicketId}
   clientAlias={replyClientAlias}
   hasPhone={replyHasPhone}
+  clientPublic={replyClientPublic}
   previewFollowUps={replyPreviewFollowUps}
   followUpCount={replyFollowUpCount}
   ondismiss={onreplydismiss}

@@ -1,22 +1,52 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import type * as CryptoPkg from "@care-y/crypto";
+import type * as ToastStore from "$lib/stores/toast.svelte.js";
+import type * as Mentions from "$lib/utils/mentions.js";
+import type * as QueryKeys from "$lib/query/keys.js";
+import type * as BridgeErrors from "$lib/workers/crypto-bridge-errors.js";
+import type * as Paraglide from "$lib/paraglide/messages.js";
 import {
   createSendMessage,
   type SendMessageConfig,
 } from "./create-send-message.svelte.js";
 import { CryptoWorkerError } from "$lib/workers/crypto-bridge-errors.js";
 
-vi.mock("$lib/stores/toast.svelte.js", () => ({
+// vi.mock required: eciesEncrypt needs initialized libsodium (WASM via the
+// getSodium() singleton), unavailable in the node test environment without
+// the slow JS fallback. Stubs also make the portal-copy triple deterministic.
+// Creation-time implementation: the suite's restoreAllMocks would wipe a
+// mockReturnValue, but the original implementation survives restore.
+const { mockEciesEncrypt } = vi.hoisted(() => ({
+  mockEciesEncrypt: vi.fn(() => ({
+    ephemeralPoint: new Uint8Array([1]),
+    nonce: new Uint8Array([2]),
+    ciphertext: new Uint8Array([3]),
+  })),
+}));
+vi.mock("@care-y/crypto", async (importOriginal) => ({
+  ...(await importOriginal<typeof CryptoPkg>()),
+  eciesEncrypt: mockEciesEncrypt,
+  toRistrettoPoint: (b: Uint8Array) => b,
+  decode: () => new Uint8Array([9]),
+  encode: (b: Uint8Array) => `b64:${String(b[0] ?? "")}`,
+}));
+
+vi.mock("$lib/stores/toast.svelte.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof ToastStore>()),
   toastStore: { show: vi.fn() },
 }));
-vi.mock("$lib/paraglide/messages.js", () => ({
+vi.mock("$lib/paraglide/messages.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof Paraglide>()),
   ticket_reply_error_encrypt: () => "encrypt-error",
   ticket_reply_error_send: () => "send-error",
 }));
-vi.mock("$lib/utils/mentions.js", () => ({
+vi.mock("$lib/utils/mentions.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof Mentions>()),
   extractMentions: (text: string) =>
     text.includes("@") ? [text.split("@")[1]!.split(" ")[0]!] : [],
 }));
-vi.mock("$lib/query/keys.js", () => ({
+vi.mock("$lib/query/keys.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof QueryKeys>()),
   ticketKeys: {
     followUpsInitial: (id: string) => ["ticket", id, "followUps", "initial"],
     followUps: (id: string) => ["ticket", id, "followUps"],
@@ -27,7 +57,8 @@ vi.mock("$lib/query/keys.js", () => ({
   },
 }));
 
-vi.mock("$lib/workers/crypto-bridge-errors.js", () => ({
+vi.mock("$lib/workers/crypto-bridge-errors.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof BridgeErrors>()),
   CryptoWorkerError: class MockCryptoWorkerError extends Error {
     code: string;
     constructor(message: string, code: string) {
@@ -66,6 +97,7 @@ function makeConfig(
       id: pendingId,
       ticketId,
     }),
+    getClientPublic: () => null,
     createFollowUpMutate: vi.fn().mockResolvedValue(undefined),
     ...overrides,
   };
@@ -128,6 +160,33 @@ describe("createSendMessage", () => {
     expect(buildPendingEntry).toHaveBeenCalledWith(
       expect.objectContaining({ mentionedPseudonyms: ["Alice"] }),
     );
+  });
+
+  it("includes an ECIES portal copy when the client has a portal key", async () => {
+    const config = makeConfig({ getClientPublic: () => "client-pub-b64" });
+    const msg = createSendMessage(config);
+    await msg.handleSend();
+
+    expect(mockEciesEncrypt).toHaveBeenCalledTimes(1);
+    expect(config.createFollowUpMutate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        portalCopy: {
+          ephemeralPoint: "b64:1",
+          nonce: "b64:2",
+          ciphertext: "b64:3",
+        },
+      }),
+    );
+  });
+
+  it("omits the portal copy when the client has no portal key", async () => {
+    const config = makeConfig();
+    const msg = createSendMessage(config);
+    await msg.handleSend();
+
+    expect(mockEciesEncrypt).not.toHaveBeenCalled();
+    const mutate = config.createFollowUpMutate as ReturnType<typeof vi.fn>;
+    expect(mutate.mock.calls[0]?.[0]?.portalCopy).toBeUndefined();
   });
 
   it("skips send when text is empty", async () => {
