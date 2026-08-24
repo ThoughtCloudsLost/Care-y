@@ -6,12 +6,13 @@ import type { Kysely } from "kysely";
 import type { TenantDatabase } from "../db/types.js";
 import type { VapidKeys } from "./vapid.js";
 import { signVapidJwt } from "./push-crypto.js";
+import type { UserId } from "@care-y/shared";
 
 export interface PushNotificationSender {
   /** Sends an empty-body push to all subscriptions for the given user IDs. */
   sendToUsers(
     tDb: Kysely<TenantDatabase>,
-    userIds: readonly string[],
+    userIds: readonly UserId[],
     ttlSeconds?: number,
   ): Promise<void>;
 
