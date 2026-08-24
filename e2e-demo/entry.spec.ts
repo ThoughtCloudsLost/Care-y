@@ -20,9 +20,12 @@ test.describe("entry page", () => {
     await page.goto("/");
 
     // The entry section title "How CARE-Y works" is the stable marker.
-    // The story flow renders it as the page's only h2 block.
+    // The story flow renders it as the page's only h2 block. The h2
+    // itself is a zero-height flow anchor (absolute-positioned line
+    // spans), so visibility is asserted on the painted span.
     const entryTitle = page.locator("h2.flow-block");
-    await expect(entryTitle).toBeVisible({ timeout: 10_000 });
+    const entryTitleLine = entryTitle.locator(".flow-line").first();
+    await expect(entryTitleLine).toBeVisible({ timeout: 10_000 });
     await expect(entryTitle).toContainText("How CARE-Y works");
 
     // Wait for the phone engine to boot. Log the measured time so
@@ -34,10 +37,9 @@ test.describe("entry page", () => {
 
     // Read bridge state: should be at init origin right after boot.
     // The phone boots on login and begins background keying (ensureKeyed).
-    // Once keying completes, silent auth transitions the phone to home
-    // and origin changes from "init", which auto-dismisses the entry
-    // page. The window between boot and keying completion is typically
-    // several seconds (Argon2id), so this assertion is safe.
+    // Once keying completes, the splash lifts to reveal the login form
+    // as the ready state, but origin stays "init" and no navigation
+    // occurs, so the entry page remains visible.
     const initState = await readBridgeState(page);
     expect(initState.origin).toBe("init");
 
@@ -51,27 +53,60 @@ test.describe("entry page", () => {
     await expect(railStatics.first()).toBeVisible({ timeout: 5_000 });
     await expect(railButtons).toHaveCount(0);
 
-    // Dismiss the entry page via the next-section pill. If background
-    // keying completed and the silent auth already dismissed the entry
-    // page, the pill may have disappeared; in that case the entry is
-    // already gone and we verify the post-entry state directly.
+    // Dismiss the entry page via the next-section pill.
     const nextPill = page.locator("button.next-pill");
-    const pillVisible = await nextPill.isVisible().catch(() => false);
-    if (pillVisible) {
-      await nextPill.click();
-    }
+    await expect(nextPill).toBeVisible({ timeout: 5_000 });
+    await nextPill.click();
 
-    // Entry page is dismissed (by pill click or silent auth): the entry
-    // title ("How CARE-Y works") should be gone, replaced by a story
-    // section.
+    // Entry page is dismissed: the entry title ("How CARE-Y works")
+    // should be gone, replaced by a story section.
     await expect(entryTitle).not.toContainText("How CARE-Y works", {
       timeout: 5_000,
     });
 
-    // A section title should now be visible (login if the pill
-    // dismissed the entry, or dashboard/another section if silent auth
-    // drove the transition).
-    const sectionTitle = page.locator("h2.flow-block");
+    // A section title should now be visible (login, since the pill
+    // dismissed the entry).
+    const sectionTitle = page.locator("h2.flow-block .flow-line").first();
     await expect(sectionTitle).toBeVisible();
+  });
+
+  test("ready state: splash lifts while entry stays visible", async ({
+    page,
+  }) => {
+    await page.goto("/");
+
+    // Entry title must be visible on a fresh load with no hash. The
+    // h2 is a zero-height flow anchor; the painted line span is the
+    // visible element.
+    const entryTitle = page.locator("h2.flow-block");
+    await expect(entryTitle.locator(".flow-line").first()).toBeVisible({
+      timeout: 10_000,
+    });
+    await expect(entryTitle).toContainText("How CARE-Y works");
+
+    // Wait for the phone engine to boot (bridge becomes available).
+    await waitForPhoneBridge(page, ENGINE_BOOT_TIMEOUT);
+
+    // Wait for the phone iframe body to get the "hydrated" class,
+    // which signals the splash has lifted and the app is showing
+    // its real content.
+    await page.waitForFunction(
+      () => {
+        const iframe = document.querySelector<HTMLIFrameElement>(
+          "iframe.phone-iframe",
+        );
+        if (iframe === null) return false;
+        const doc = iframe.contentDocument;
+        if (doc === null) return false;
+        return doc.body.classList.contains("hydrated");
+      },
+      undefined,
+      { timeout: 30_000 },
+    );
+
+    // The entry title must still be visible after the splash lifted.
+    // Boot no longer navigates the phone, so the entry page remains.
+    await expect(entryTitle).toContainText("How CARE-Y works");
+    await expect(entryTitle.locator(".flow-line").first()).toBeVisible();
   });
 });

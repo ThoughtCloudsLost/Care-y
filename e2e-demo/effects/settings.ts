@@ -16,7 +16,7 @@ export const EFFECTS: EffectMap = new Map([
       visible: [
         // DisplayNameSheet.svelte:78 - ariaLabel={m.settings_display_name()}
         // ShellSheet.svelte:112 - role="dialog" with aria-label from ariaLabel
-        '.shell-sheet-content[role="dialog"]',
+        '.shell-sheet-content[role="dialog"]:visible',
       ],
     },
   ],
@@ -27,7 +27,7 @@ export const EFFECTS: EffectMap = new Map([
       visible: [
         // TwoFactorSheet.svelte:145 - ariaLabel={m.twofa_enroll_title()}
         // ShellSheet.svelte:112 - role="dialog" with aria-label from ariaLabel
-        '.shell-sheet-content[role="dialog"]',
+        '.shell-sheet-content[role="dialog"]:visible',
       ],
     },
   ],
@@ -38,7 +38,7 @@ export const EFFECTS: EffectMap = new Map([
       visible: [
         // SecurityBriefingPopup.svelte:32 - ariaLabel={m.onboarding_briefing_heading()}
         // ShellPopup.svelte:46-48 - role="dialog" on .popup-dialog
-        '.popup-dialog[role="dialog"]',
+        '.popup-dialog[role="dialog"]:visible',
       ],
     },
   ],
