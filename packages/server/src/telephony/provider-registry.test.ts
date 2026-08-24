@@ -1,7 +1,9 @@
 /**
  * Provider-registry consistency tests.
  *
- * Five independent lists define "valid provider" in different layers:
+ * Five registries define "valid provider" in different layers, all now keyed
+ * by the shared TELEPHONY_PROVIDER_IDS / STORED_PROVIDER_IDS arrays so an id
+ * outside that source fails to compile:
  *   1. shared telephonyProviderSchema (z.enum, what users can select)
  *   2. server providerConfigSchemas (config validation per provider)
  *   3. server index.ts providerConstructors (runtime constructor map)

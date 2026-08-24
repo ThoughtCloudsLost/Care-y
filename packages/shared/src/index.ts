@@ -147,6 +147,10 @@ export {
 
 // --- Telephony schemas ---
 export {
+  TELEPHONY_PROVIDER_IDS,
+  STORED_PROVIDER_IDS,
+  storedProviderIdSchema,
+  type StoredProviderId,
   telephonyProviderSchema,
   saveTelephonyConfigInputSchema,
   updateCountryCodeInputSchema,

@@ -82,6 +82,9 @@ export class FollowUpDecryptCache extends AsyncDecryptCache {
       keyWrap.nonce,
       keyWrap.wrappedKey,
       encryptedContent,
+      // Ticket id, not the follow-up cache key: every row of one ticket
+      // shares the same unwrapped ticket key in the Worker.
+      ticketId,
     );
   }
 }

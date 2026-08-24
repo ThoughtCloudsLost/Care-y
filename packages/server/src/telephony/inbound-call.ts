@@ -24,7 +24,7 @@ import type { PlayableGreeting } from "./ivr.js";
 import { sealString } from "./crypto-helpers.js";
 import type { CallTracker } from "./call-tracker.js";
 import { blobKeySchema } from "@care-y/shared";
-import type { OrgId, OrgSchema } from "@care-y/shared";
+import type { OrgId, OrgSchema, StoredProviderId } from "@care-y/shared";
 
 export interface InboundCallDeps {
   readonly sealedBox: SealedBoxEncryptor;
@@ -39,7 +39,7 @@ export interface InboundCallDeps {
   readonly defaultLocale: string;
   readonly callTracker: CallTracker;
   /** Provider identifier for constructing webhook URLs (e.g. "twilio", "mock"). */
-  readonly providerId: string;
+  readonly providerId: StoredProviderId;
 }
 
 const FALLBACK_GREETING: PlayableGreeting = {

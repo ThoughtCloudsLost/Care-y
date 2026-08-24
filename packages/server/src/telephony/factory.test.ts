@@ -12,7 +12,7 @@ import {
   DEV_MOCK_ACCOUNT_SID,
   DEV_MOCK_AUTH_TOKEN,
 } from "./mock-provider.js";
-import type { OrgId, CallSid, E164 } from "@care-y/shared";
+import type { OrgId, CallSid, E164, StoredProviderId } from "@care-y/shared";
 
 const TEST_OPS_KEY = Buffer.from(
   "cafebabecafebabecafebabecafebabecafebabecafebabecafebabecafebabe",
@@ -23,7 +23,7 @@ const secretsKey = deriveSecretsKey(TEST_OPS_KEY);
 const secretsEncryptor = createSecretsEncryptor(secretsKey);
 
 /** Minimal TelephonyProvider stub for testing. */
-function createStubProvider(providerId: string): TelephonyProvider {
+function createStubProvider(providerId: StoredProviderId): TelephonyProvider {
   return {
     providerId,
     async sendSms() {

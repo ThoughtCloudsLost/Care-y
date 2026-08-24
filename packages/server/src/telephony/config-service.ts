@@ -18,8 +18,12 @@ import { NotFoundError, TelephonyConfigError } from "../errors.js";
 import { providerConfigSchemas } from "./schemas.js";
 import { z } from "zod";
 import { ErrorCode } from "@care-y/shared";
-import { e164Schema, phoneSidSchema } from "@care-y/shared";
-import type { OrgId, PhoneSid, E164 } from "@care-y/shared";
+import {
+  e164Schema,
+  phoneSidSchema,
+  storedProviderIdSchema,
+} from "@care-y/shared";
+import type { OrgId, PhoneSid, E164, StoredProviderId } from "@care-y/shared";
 
 /** Type guard for objects with a phoneNumbers array. */
 function hasPhoneNumbers(
@@ -63,7 +67,7 @@ export interface ProvisionResult {
 
 /** Decrypted config fields needed for webhook validation. */
 export interface WebhookConfigLookup {
-  readonly provider: string;
+  readonly provider: StoredProviderId;
   readonly accountSid: string;
   readonly authToken: string;
 }
@@ -148,8 +152,14 @@ export function createTelephonyConfigService(
 
   return {
     async saveConfig(input: SaveConfigInput): Promise<{ success: true }> {
-      const providerStatic = providerStatics.get(input.provider);
-      if (!providerStatic) {
+      // The wire schema already constrains provider, but this service is a
+      // trust boundary of its own: re-narrow to the stored union before the
+      // value reaches the typed column, and fail closed on anything else.
+      const provider = storedProviderIdSchema.safeParse(input.provider);
+      const providerStatic = provider.success
+        ? providerStatics.get(provider.data)
+        : undefined;
+      if (!provider.success || !providerStatic) {
         throw new TelephonyConfigError(
           `Unsupported telephony provider: ${input.provider}`,
         );
@@ -170,12 +180,12 @@ export function createTelephonyConfigService(
         .insertInto("telephony_config")
         .values({
           org_id: input.orgId,
-          provider: input.provider,
+          provider: provider.data,
           config: sealed,
         })
         .onConflict((oc) =>
           oc.column("org_id").doUpdateSet({
-            provider: input.provider,
+            provider: provider.data,
             config: sealed,
             updated_at: new Date(),
           }),
@@ -299,11 +309,14 @@ export function createTelephonyConfigService(
 
       const rawConfig = decryptConfig(row.config);
 
-      // Validate the decrypted config has the fields needed for webhook validation.
-      // Use the provider's registered Zod schema if available, fall back to a
-      // minimal schema that extracts only what lookupWebhookConfig needs.
-      const schema = providerConfigSchemas[row.provider];
-      if (schema) {
+      // Check the decrypted config against the provider's registered schema.
+      // The column type says provider is a stored id, but a DB read is an
+      // unchecked assertion, so re-narrow before indexing the registry; an
+      // out-of-union value falls through to the minimal extraction below
+      // (whose required fields are still enforced), as before.
+      const provider = storedProviderIdSchema.safeParse(row.provider);
+      if (provider.success) {
+        const schema = providerConfigSchemas[provider.data];
         const result = schema.safeParse(rawConfig);
         if (!result.success) {
           throw new TelephonyConfigError(

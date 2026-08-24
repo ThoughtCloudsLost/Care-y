@@ -40,6 +40,7 @@ import {
   type OrgId,
   type OrgSchema,
   type OrgSlug,
+  type StoredProviderId,
 } from "@care-y/shared";
 
 // ---------------------------------------------------------------------------
@@ -419,7 +420,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
     /** Inserts a raw telephony_config row for read-path tests that need
      *  stored shapes saveConfig would never produce. Returns the org id. */
     async function insertRawConfigRow(
-      provider: string,
+      provider: StoredProviderId,
       config: Buffer,
     ): Promise<OrgId> {
       const orgId = await insertOrgRow("raw");

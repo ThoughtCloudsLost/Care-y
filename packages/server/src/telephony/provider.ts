@@ -1,4 +1,4 @@
-import type { CallSid, E164, OrgId } from "@care-y/shared";
+import type { CallSid, E164, OrgId, StoredProviderId } from "@care-y/shared";
 
 /** Result of sending an SMS. */
 export interface SendSmsResult {
@@ -66,7 +66,7 @@ export interface VoiceInstruction {
 
 /** Display-safe version of provider config (auth tokens masked). */
 export interface MaskedTelephonyConfig {
-  readonly provider: string;
+  readonly provider: StoredProviderId;
   readonly mode: string;
   readonly maskedAccountId: string;
   readonly maskedAuthToken: string;
@@ -104,7 +104,7 @@ export interface CallDetails {
  */
 export interface TelephonyProvider {
   /** Provider identifier (e.g., "twilio", "signalwire"). */
-  readonly providerId: string;
+  readonly providerId: StoredProviderId;
 
   // --- Outbound ---
 

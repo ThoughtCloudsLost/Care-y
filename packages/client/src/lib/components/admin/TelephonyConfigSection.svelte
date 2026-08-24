@@ -68,6 +68,13 @@
   }));
 
   const config = $derived(configQuery.data);
+  // The stored provider union is wider than the selectable enum (mock and
+  // signalwire rows exist but cannot be re-saved from this UI). Narrow once
+  // here; the credential sheet is only reachable in BYOT mode, where the
+  // stored provider is always one an admin originally selected.
+  const selectableProvider = $derived(
+    telephonyProviderSchema.safeParse(config?.provider),
+  );
   const isByot = $derived(config?.mode === "byot");
   const isManaged = $derived(config?.mode === "managed");
   // Simulated provider, only ever present in development and test builds.
@@ -95,9 +102,9 @@
 
   const saveCredentialsMutation = createMutation(() => ({
     mutationFn: async () => {
-      if (!config) return;
+      if (!config || !selectableProvider.success) return;
       return telephonyAdmin.saveConfig.mutate({
-        provider: telephonyProviderSchema.parse(config.provider),
+        provider: selectableProvider.data,
         accountId: accountIdInput,
         authToken: authTokenInput,
       });
