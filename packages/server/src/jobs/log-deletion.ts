@@ -1,36 +1,32 @@
 import type { JobQueue } from "./queue.js";
 import type { ProviderFactory } from "../telephony/factory.js";
 import { ValidationError } from "../errors.js";
+import type { OrgId } from "@care-y/shared";
+import { orgIdSchema } from "@care-y/shared";
+import { z } from "zod";
 
 export interface LogDeletionPayload {
-  readonly orgId: string;
+  readonly orgId: OrgId;
   readonly resourceType: "call" | "message" | "recording";
   readonly resourceId: string;
 }
 
 const QUEUE_NAME = "log-deletion";
-function isValidResourceType(
-  value: string,
-): value is LogDeletionPayload["resourceType"] {
-  return value === "call" || value === "message" || value === "recording";
-}
+
+const logDeletionPayloadSchema = z.object({
+  orgId: orgIdSchema,
+  resourceType: z.enum(["call", "message", "recording"]),
+  resourceId: z.string().min(1),
+});
 
 function validatePayload(raw: Record<string, unknown>): LogDeletionPayload {
-  const { orgId, resourceType, resourceId } = raw;
-
-  if (typeof orgId !== "string" || orgId.length === 0) {
-    throw new ValidationError("Log deletion payload missing valid orgId");
-  }
-  if (typeof resourceType !== "string" || !isValidResourceType(resourceType)) {
+  const result = logDeletionPayloadSchema.safeParse(raw);
+  if (!result.success) {
     throw new ValidationError(
-      `Log deletion payload has invalid resourceType: ${String(resourceType)}`,
+      `Log deletion payload validation failed: ${result.error.message}`,
     );
   }
-  if (typeof resourceId !== "string" || resourceId.length === 0) {
-    throw new ValidationError("Log deletion payload missing valid resourceId");
-  }
-
-  return { orgId, resourceType, resourceId };
+  return result.data;
 }
 
 /**

@@ -11,13 +11,20 @@ import type {
 import type { Kysely } from "kysely";
 import type { TenantDatabase } from "../db/types.js";
 import { ValidationError } from "../errors.js";
+import {
+  orgIdSchema,
+  orgSchemaNameSchema,
+  orgSlugIdSchema,
+  userIdSchema,
+  type E164,
+} from "@care-y/shared";
 
 // --- Stubs ---
 
 // notificationSmsPayloadSchema requires recipient ids to be UUIDs
 // (Zod v4 also validates version bytes, so hand-written ids fail).
-const USER_A = crypto.randomUUID();
-const USER_B = crypto.randomUUID();
+const USER_A = userIdSchema.parse(crypto.randomUUID());
+const USER_B = userIdSchema.parse(crypto.randomUUID());
 
 function stubEncryptor(phone: string): FieldEncryptor {
   const phoneBuf = Buffer.from(phone, "utf-8");
@@ -71,7 +78,7 @@ function stubProvider(
       return Buffer.alloc(0);
     },
     async getCallDetails() {
-      return { from: "+15550000001", to: "+15550000002" };
+      return { from: "+15550000001" as E164, to: "+15550000002" as E164 };
     },
     async deleteRecording() {
       // stub
@@ -146,13 +153,16 @@ function buildDeps(
   };
 }
 
-const TEST_ORG_ID = "00000000-0000-4000-8000-aaaaaaaaaaaa";
-const TEST_ORG_SCHEMA = "org_00000000-0000-4000-8000-aaaaaaaaaaaa";
+const TEST_ORG_ID = orgIdSchema.parse("00000000-0000-4000-8000-aaaaaaaaaaaa");
+const TEST_ORG_SCHEMA = orgSchemaNameSchema.parse(
+  "org_00000000-0000-4000-8000-aaaaaaaaaaaa",
+);
+const TEST_ORG_SLUG = orgSlugIdSchema.parse("test-org");
 
 const VALID_PAYLOAD = {
   orgId: TEST_ORG_ID,
   orgSchema: TEST_ORG_SCHEMA,
-  orgSlug: "test-org",
+  orgSlug: TEST_ORG_SLUG,
   recipientUserIds: [USER_A],
   eventType: "ticket_assigned" as const,
 };

@@ -4,6 +4,7 @@
 
 import type { TelephonyProvider } from "../telephony/provider.js";
 import { NotificationError } from "../errors.js";
+import type { OrgId } from "@care-y/shared";
 
 export interface NotificationSmsSender {
   sendPing(params: {
@@ -14,8 +15,8 @@ export interface NotificationSmsSender {
 }
 
 export function createNotificationSmsSender(
-  getProvider: (orgId: string) => Promise<TelephonyProvider>,
-  orgId: string,
+  getProvider: (orgId: OrgId) => Promise<TelephonyProvider>,
+  orgId: OrgId,
 ): NotificationSmsSender {
   return {
     async sendPing({ toPhoneNumber, fromPhoneNumber, body }): Promise<void> {

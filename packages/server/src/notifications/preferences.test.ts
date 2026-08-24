@@ -16,6 +16,9 @@ import type {
 import type {
   NotificationChannel,
   NotificationEventType,
+  UserId,
+  QueueId,
+  KeyGeneration,
 } from "@care-y/shared";
 import { NotFoundError } from "../errors.js";
 
@@ -39,7 +42,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
     // avoid the no-plaintext-db-write proximity heuristic. The table
     // stores only opaque UUIDs, enum strings, and booleans.
     async function setPref(
-      userId: string,
+      userId: UserId,
       scope: PreferenceScope,
       eventType: NotificationEventType,
       channel: NotificationChannel,
@@ -484,7 +487,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
         await expect(
           svc.assertScopeAccessible(testDb.db, user.id, {
             scopeType: "queue",
-            scopeId: crypto.randomUUID(),
+            scopeId: crypto.randomUUID() as QueueId,
           }),
         ).rejects.toBeInstanceOf(NotFoundError);
       });
@@ -504,7 +507,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
           .values({
             ticket_id: fix.ticketId,
             volunteer_id: uid,
-            key_generation: crypto.randomUUID(),
+            key_generation: crypto.randomUUID() as KeyGeneration,
             ephemeral_point: ep,
             nonce,
             wrapped_key: wk,
@@ -538,7 +541,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
         await expect(
           svc.assertScopeAccessible(testDb.db, user.id, {
             scopeType: "ticket",
-            scopeId: crypto.randomUUID(),
+            scopeId: crypto.randomUUID() as QueueId,
           }),
         ).rejects.toBeInstanceOf(NotFoundError);
       });
@@ -559,7 +562,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
         const noTicketErr = await svc
           .assertScopeAccessible(testDb.db, user.id, {
             scopeType: "ticket",
-            scopeId: crypto.randomUUID(),
+            scopeId: crypto.randomUUID() as QueueId,
           })
           .catch((e: unknown) => e);
 

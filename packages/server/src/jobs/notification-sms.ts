@@ -14,17 +14,24 @@ import type {
   OrgIdentifiers,
 } from "../telephony/phone-resolver.js";
 import type { JobQueue } from "./queue.js";
-import { notificationEventTypeSchema } from "@care-y/shared";
+import {
+  notificationEventTypeSchema,
+  orgIdSchema,
+  orgSchemaNameSchema,
+  orgSlugIdSchema,
+  userIdSchema,
+} from "@care-y/shared";
+import type { OrgId, OrgSchema } from "@care-y/shared";
 import { getStrings, buildLoginUrl } from "../notifications/i18n.js";
 import { ValidationError } from "../errors.js";
 
 export const NOTIFICATION_SMS_QUEUE = "notification-sms";
 
 const notificationSmsPayloadSchema = z.object({
-  orgId: z.uuid(),
-  orgSchema: z.string().min(1),
-  orgSlug: z.string().min(1),
-  recipientUserIds: z.array(z.uuid()),
+  orgId: orgIdSchema,
+  orgSchema: orgSchemaNameSchema,
+  orgSlug: orgSlugIdSchema,
+  recipientUserIds: z.array(userIdSchema),
   eventType: notificationEventTypeSchema,
 });
 
@@ -34,8 +41,8 @@ export type NotificationSmsPayload = z.infer<
 
 export interface NotificationSmsJobDeps {
   readonly encryptor: FieldEncryptor;
-  readonly getTenantDb: (orgSchema: string) => Kysely<TenantDatabase>;
-  readonly getProvider: (orgId: string) => Promise<TelephonyProvider>;
+  readonly getTenantDb: (orgSchema: OrgSchema) => Kysely<TenantDatabase>;
+  readonly getProvider: (orgId: OrgId) => Promise<TelephonyProvider>;
   readonly resolveCallerIdByPurpose: (
     org: OrgIdentifiers,
     purpose: PhonePurpose,

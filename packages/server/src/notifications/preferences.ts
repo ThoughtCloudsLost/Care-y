@@ -14,8 +14,16 @@ import type {
   NotificationChannel,
   NotificationEventType,
   PreferenceRow,
+  UserId,
+  NotificationScopeId,
+  TicketId,
+  QueueId,
 } from "@care-y/shared";
-import { preferenceRowSchema } from "@care-y/shared";
+import {
+  preferenceRowSchema,
+  queueIdSchema,
+  ticketIdSchema,
+} from "@care-y/shared";
 import { NotFoundError } from "../errors.js";
 
 // -----------------------------------------------------------------------
@@ -24,39 +32,39 @@ import { NotFoundError } from "../errors.js";
 
 export interface PreferenceScope {
   readonly scopeType: "global" | "queue" | "ticket";
-  readonly scopeId: string | null;
+  readonly scopeId: NotificationScopeId | null;
 }
 
 /** Per-channel allow lists for one dispatch. SSE is intentionally absent. */
 export interface DispatchAllowLists {
-  readonly pushAllowed: readonly string[];
-  readonly emailAllowed: readonly string[];
-  readonly smsAllowed: readonly string[];
+  readonly pushAllowed: readonly UserId[];
+  readonly emailAllowed: readonly UserId[];
+  readonly smsAllowed: readonly UserId[];
 }
 
 export interface NotificationPreferencesService {
   /** Resolve one user+event+channel through the cascade. No row = true. */
   getEffective(
     tDb: Kysely<TenantDatabase>,
-    userId: string,
+    userId: UserId,
     eventType: NotificationEventType,
     channel: NotificationChannel,
-    ticketId?: string,
-    queueId?: string,
+    ticketId?: TicketId,
+    queueId?: QueueId,
   ): Promise<boolean>;
 
   /** Batched resolution for dispatch: one query, per-channel allow lists. */
   resolveForDispatch(
     tDb: Kysely<TenantDatabase>,
-    userIds: readonly string[],
+    userIds: readonly UserId[],
     eventType: NotificationEventType,
-    ticketId?: string,
-    queueId?: string,
+    ticketId?: TicketId,
+    queueId?: QueueId,
   ): Promise<DispatchAllowLists>;
 
   set(
     tDb: Kysely<TenantDatabase>,
-    userId: string,
+    userId: UserId,
     scope: PreferenceScope,
     eventType: NotificationEventType,
     channel: NotificationChannel,
@@ -65,13 +73,13 @@ export interface NotificationPreferencesService {
 
   listForUser(
     tDb: Kysely<TenantDatabase>,
-    userId: string,
+    userId: UserId,
   ): Promise<PreferenceRow[]>;
 
   /** Delete override rows. Scope omitted = every row for the user. */
   reset(
     tDb: Kysely<TenantDatabase>,
-    userId: string,
+    userId: UserId,
     scope?: PreferenceScope,
   ): Promise<void>;
 
@@ -84,7 +92,7 @@ export interface NotificationPreferencesService {
    */
   assertScopeAccessible(
     tDb: Kysely<TenantDatabase>,
-    userId: string,
+    userId: UserId,
     scope: PreferenceScope,
   ): Promise<void>;
 }
@@ -182,9 +190,9 @@ export function createNotificationPreferencesService(): NotificationPreferencesS
         list.push(row);
       }
 
-      const pushAllowed: string[] = [];
-      const emailAllowed: string[] = [];
-      const smsAllowed: string[] = [];
+      const pushAllowed: UserId[] = [];
+      const emailAllowed: UserId[] = [];
+      const smsAllowed: UserId[] = [];
 
       for (const uid of userIds) {
         for (const ch of CHANNELS) {
@@ -271,10 +279,15 @@ export function createNotificationPreferencesService(): NotificationPreferencesS
       }
 
       if (scope.scopeType === "queue") {
+        // Narrow the union: scopeType === "queue" guarantees QueueId at
+        // runtime, but TypeScript cannot narrow NotificationScopeId from
+        // a sibling-property check. Use queueIdSchema.parse which
+        // validates and brands in one step.
+        const queueId = queueIdSchema.parse(scope.scopeId);
         const queue = await tDb
           .selectFrom("queues")
           .select("id")
-          .where("id", "=", scope.scopeId)
+          .where("id", "=", queueId)
           .executeTakeFirst();
 
         if (!queue) {
@@ -288,10 +301,12 @@ export function createNotificationPreferencesService(): NotificationPreferencesS
       // existence check: a missing ticket also yields no wrap row. Both
       // failures produce the same NotFoundError so the endpoint is not
       // an existence oracle.
+      // Same narrowing: ticketIdSchema.parse validates and brands.
+      const ticketId = ticketIdSchema.parse(scope.scopeId);
       const wrap = await tDb
         .selectFrom("ticket_key_wraps")
         .select("id")
-        .where("ticket_id", "=", scope.scopeId)
+        .where("ticket_id", "=", ticketId)
         .where("volunteer_id", "=", userId)
         .executeTakeFirst();
 
@@ -314,8 +329,8 @@ type PrefEB = ExpressionBuilder<TenantDatabase, "notification_preferences">;
  * If ticketId or queueId are provided, includes matching rows too.
  */
 function scopeFilter(
-  ticketId: string | undefined,
-  queueId: string | undefined,
+  ticketId: TicketId | undefined,
+  queueId: QueueId | undefined,
 ): (eb: PrefEB) => ReturnType<PrefEB["or"]> {
   return (eb: PrefEB) => {
     const conditions = [eb("scope_type", "=", "global")];
