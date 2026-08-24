@@ -7,6 +7,7 @@
     Waypoints,
     BookOpen,
     AppWindow,
+    House,
   } from "@lucide/svelte";
   import * as m from "$lib/paraglide/messages.js";
   import { SECTIONS, type SectionId } from "./scroll-sections.js";
@@ -30,6 +31,8 @@
     onLocaleChange: () => void;
     onToggleFlowBand: () => void;
     onToggleMode: () => void;
+    /** Return to the handbook introduction page. */
+    onHomeClick: () => void;
   }
 
   let {
@@ -46,6 +49,7 @@
     onLocaleChange,
     onToggleFlowBand,
     onToggleMode,
+    onHomeClick,
   }: Props = $props();
 
   /** Section title via the canonical story-messages resolver. */
@@ -66,6 +70,18 @@
         })}
       </span>
     </div>
+
+    <button
+      class="icon-btn home-btn"
+      class:icon-btn-active={activeSection === null}
+      onclick={onHomeClick}
+      aria-current={activeSection === null ? "page" : undefined}
+      aria-label={m.demo_home()}
+      title={m.demo_home()}
+      type="button"
+    >
+      <House size={18} />
+    </button>
 
     <nav class="section-tabs" aria-label={m.demo_section_nav_label()}>
       {#each SECTIONS as section (section.id)}
@@ -250,6 +266,10 @@
     align-items: center;
     gap: 0.25rem;
     flex-shrink: 0;
+  }
+
+  .home-btn {
+    margin-right: 0.25rem;
   }
 
   .icon-btn {

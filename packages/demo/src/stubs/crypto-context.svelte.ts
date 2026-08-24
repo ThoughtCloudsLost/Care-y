@@ -48,6 +48,11 @@ import {
   stopFlowRecording,
 } from "../lib/flow-events.js";
 import type { FlowDetail, RecordedFlowEvent } from "../lib/flow-events.js";
+import { cacheRegistry } from "$lib/crypto/cache-registry.js";
+import {
+  keepaliveDecision,
+  KEEPALIVE_INTERVAL_MS,
+} from "../lib/crypto-keepalive.js";
 
 // -----------------------------------------------------------------------
 // Error type
@@ -372,6 +377,12 @@ function initBridge(): CryptoBridge {
     setCryptoSettled(true);
   });
 
+  // Start the keepalive interval. Re-arms the worker's 30-minute idle
+  // timer by posting a lightweight getVolPublic message every 5 minutes.
+  // If the worker zeroed (e.g. machine slept past the backstop), the
+  // ping fails and the recovery path re-derives keys from demo creds.
+  startKeepalive(bridge);
+
   return realBridge;
 }
 
@@ -540,12 +551,88 @@ export function setCurrentPermissions(_v: unknown): void {
 }
 
 // -----------------------------------------------------------------------
+// Keepalive: re-arm the worker's idle timer + self-heal on silent zero
+// -----------------------------------------------------------------------
+
+let keepaliveStarted = false;
+let recoveryInFlight = false;
+let hasEverKeyed = false;
+
+function startKeepalive(bridge: CryptoBridge): void {
+  if (keepaliveStarted) return;
+  keepaliveStarted = true;
+
+  setInterval(() => {
+    // Fire-and-forget ping. The message itself re-arms the worker's
+    // idle timer regardless of whether the request succeeds.
+    void bridge
+      .getVolPublic()
+      .then(() => {
+        // Ping succeeded, worker is still keyed. Nothing to do.
+      })
+      .catch(() => {
+        // Ping failed. Evaluate whether this is a silent idle-zero
+        // that needs recovery (vs. a pre-keying boot failure or an
+        // already-in-flight recovery).
+        const action = keepaliveDecision({
+          pingFailed: true,
+          believedKeyed: bridge.getState() === "KEYED",
+          recoveryInFlight,
+          hasEverKeyed,
+        });
+
+        if (action === "recover") {
+          recoveryInFlight = true;
+
+          // Sync the stale main-thread bridge state to READY.
+          // The worker side already zeroed; this call is idempotent.
+          void bridge
+            .zeroAll()
+            .catch(() => {
+              // Swallowed: the worker may reject if already zeroed.
+              // The important thing is that the bridge state resets
+              // so the next ensureKeyed can re-derive.
+            })
+            .then(() => {
+              // Reset the ensureKeyed memos so a fresh derivation runs.
+              resetEnsureKeyedMemos();
+
+              // Clear all decrypt caches (including poisoned error sentinels).
+              cacheRegistry.reset();
+
+              // Re-derive keys with the demo credentials.
+              void ensureKeyed()
+                .catch(() => {
+                  // Swallowed: if re-keying fails the visitor is already
+                  // in a degraded state and a page reload is the only
+                  // real fix. Logging here would risk leaking internals.
+                })
+                .finally(() => {
+                  recoveryInFlight = false;
+                });
+            });
+        }
+      });
+  }, KEEPALIVE_INTERVAL_MS);
+}
+
+// -----------------------------------------------------------------------
 // ensureKeyed: idempotent real login crypto pipeline
 // -----------------------------------------------------------------------
 
 let ensureKeyedPromise: Promise<void> | null = null;
 let ensureKeyedResult: LoginCryptoResult | null = null;
 let derivationRecording: readonly RecordedFlowEvent[] | null = null;
+
+/**
+ * Reset the ensureKeyed memos so a subsequent call runs the full
+ * derivation pipeline again. Called by the keepalive recovery path
+ * after a silent worker idle-zero.
+ */
+function resetEnsureKeyedMemos(): void {
+  ensureKeyedPromise = null;
+  ensureKeyedResult = null;
+}
 
 /**
  * Retrieve the flow events recorded during the real derivation.
@@ -658,6 +745,11 @@ async function runEnsureKeyed(): Promise<void> {
   if (ensureKeyedResult.orgPublicKey != null) {
     okm.load(ensureKeyedResult.orgPublicKey);
   }
+
+  // Mark that initial keying succeeded so the keepalive recovery path
+  // knows a future getVolPublic failure is a silent idle-zero, not a
+  // boot-time error.
+  hasEverKeyed = true;
 
   // Unblock all queued decrypt calls in the pacing wrapper
   pacing.resolveKeyed();

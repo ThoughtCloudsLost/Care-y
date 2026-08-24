@@ -1842,6 +1842,7 @@
   "demo_app_title": "Manual interactivo",
   "demo_scene_tickets": "Tickets",
   "demo_scene_search": "Buscar",
+  "demo_home": "Introducción del manual",
   "demo_theme_toggle": "Alternar modo claro/oscuro",
   "demo_restart": "Reiniciar",
   "demo_step_of": "Paso {step} de {total}",

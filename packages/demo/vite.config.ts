@@ -5,6 +5,7 @@ import tailwindcss from "@tailwindcss/vite";
 import { defineConfig } from "vite";
 import type { Alias } from "vite";
 import {
+  clientStaticAssetsPlugin,
   demoAliases,
   demoSplashPlugin,
   serverHealthAliases,
@@ -82,6 +83,7 @@ export default defineConfig({
     tailwindcss(),
     svelte(),
     demoSplashPlugin(),
+    clientStaticAssetsPlugin(),
   ],
   base: process.env.BASE_PATH ?? "/",
   define: {
