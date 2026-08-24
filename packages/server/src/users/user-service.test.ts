@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import * as crypto from "node:crypto";
-import { RoleId } from "@care-y/shared";
+import { RoleId, newKeyGeneration } from "@care-y/shared";
+import type { TicketId, UserId } from "@care-y/shared";
 import {
   createTestDb,
   createTestTicketFixture,
@@ -107,15 +108,15 @@ describe.skipIf(!process.env.DATABASE_URL)("UserService (DB)", () => {
   describe("listActiveKeyWrapHolderIds", () => {
     /** Inserts a key wrap row with opaque test bytes for the crypto columns. */
     async function insertKeyWrap(
-      ticketId: string,
-      volunteerId: string,
+      ticketId: TicketId,
+      volunteerId: UserId,
     ): Promise<void> {
       await testDb.db
         .insertInto("ticket_key_wraps")
         .values({
           ticket_id: ticketId,
           volunteer_id: volunteerId,
-          key_generation: crypto.randomUUID(),
+          key_generation: newKeyGeneration(),
           ephemeral_point: Buffer.alloc(32, 1),
           nonce: Buffer.alloc(24, 2),
           wrapped_key: Buffer.alloc(48, 3),
@@ -208,7 +209,7 @@ describe.skipIf(!process.env.DATABASE_URL)("UserService (DB)", () => {
     it("drops IDs that match no user row", async () => {
       const svc = createUserService(testDb.db);
       const kept = await svc.filterByRoleThreshold(
-        [crypto.randomUUID()],
+        [crypto.randomUUID() as UserId],
         RoleId.VOLUNTEER,
       );
 

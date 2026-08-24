@@ -5,18 +5,26 @@
 
 import type { Kysely } from "kysely";
 import type { TenantDatabase } from "../db/types.js";
-import type { MetadataSearchInput, ContentSearchInput } from "@care-y/shared";
+import type {
+  MetadataSearchInput,
+  ContentSearchInput,
+  TicketId,
+  ClientId,
+  QueueId,
+  UserId,
+  FollowupId,
+} from "@care-y/shared";
 import { toCount } from "../db/query-utils.js";
 
 export interface MetadataSearchResult {
   readonly tickets: readonly {
-    readonly id: string;
-    readonly clientId: string;
+    readonly id: TicketId;
+    readonly clientId: ClientId;
     readonly encryptedClientAlias: Buffer;
     readonly status: string;
     readonly priority: string;
-    readonly queueId: string;
-    readonly assignedTo: string | null;
+    readonly queueId: QueueId;
+    readonly assignedTo: UserId | null;
     readonly onHold: boolean;
     readonly createdAt: Date;
   }[];
@@ -27,8 +35,8 @@ export interface MetadataSearchResult {
 
 export interface ContentSearchResult {
   readonly followups: readonly {
-    readonly ticketId: string;
-    readonly followupId: string;
+    readonly ticketId: TicketId;
+    readonly followupId: FollowupId;
     readonly encryptedContent: string; // base64-encoded ciphertext
     readonly type: string;
     readonly source: string;
@@ -42,18 +50,18 @@ export interface ContentSearchResult {
 export interface SearchService {
   metadataSearch(
     input: MetadataSearchInput,
-    userId: string,
+    userId: UserId,
   ): Promise<MetadataSearchResult>;
 
   contentSearch(
     input: ContentSearchInput,
-    userId: string,
+    userId: UserId,
   ): Promise<ContentSearchResult>;
 }
 
 export function createSearchService(
   db: Kysely<TenantDatabase>,
-  getAccessibleQueueIds: (userId: string) => Promise<readonly string[]>,
+  getAccessibleQueueIds: (userId: UserId) => Promise<readonly QueueId[]>,
 ): SearchService {
   return {
     async metadataSearch(input, userId) {

@@ -15,9 +15,18 @@ import {
   ErrorCode,
   getAllowedRoleIds,
   meetsRoleThreshold,
+  REACTION_TYPES,
 } from "@care-y/shared";
-import { REACTION_TYPES } from "@care-y/shared";
-import type { ReactionSummary, ReactionType } from "@care-y/shared";
+import type {
+  ReactionSummary,
+  ReactionType,
+  TicketId,
+  FollowupId,
+  UserId,
+  NoteTypeId,
+  KeyGeneration,
+  CallSid,
+} from "@care-y/shared";
 import { encode } from "@care-y/crypto";
 import {
   storeClientCopy,
@@ -33,24 +42,24 @@ export interface FollowUpKeyWrap {
 }
 
 export interface FollowUpRecord {
-  readonly id: string;
-  readonly ticketId: string;
+  readonly id: FollowupId;
+  readonly ticketId: TicketId;
   readonly source: string;
   readonly type: string;
   readonly isPrivate: boolean;
   readonly mentionedPseudonyms: string[];
   readonly encryptedContent: Buffer;
-  readonly createdBy: string | null;
+  readonly createdBy: UserId | null;
   readonly createdAt: Date;
   readonly editedAt: Date | null;
   readonly hasRecording: boolean;
   readonly hasImage: boolean;
   readonly hasFile: boolean;
-  readonly noteTypeId: string | null;
-  readonly callSid: string | null;
+  readonly noteTypeId: NoteTypeId | null;
+  readonly callSid: CallSid | null;
   readonly callStatus: string | null;
   readonly callDurationSeconds: number | null;
-  readonly keyGeneration: string | null;
+  readonly keyGeneration: KeyGeneration | null;
   readonly keyWrap: FollowUpKeyWrap | null;
   readonly eventParams: Record<string, unknown> | null;
   /**
@@ -71,15 +80,15 @@ export interface PortalCopyInput {
 
 export interface CreateFollowUpInput {
   /** Client-minted follow-up id the content AAD was bound to (ADR-053). */
-  readonly id: string;
-  readonly ticketId: string;
+  readonly id: FollowupId;
+  readonly ticketId: TicketId;
   readonly encryptedContent: Buffer;
   readonly source: string;
   readonly type: string;
   readonly isPrivate: boolean;
   readonly mentionedPseudonyms: string[];
-  readonly noteTypeId?: string;
-  readonly callSid?: string;
+  readonly noteTypeId?: NoteTypeId;
+  readonly callSid?: CallSid;
   readonly callStatus?: string;
   readonly callDurationSeconds?: number;
   /** ECIES copy for the client's active portal channel. */
@@ -88,22 +97,22 @@ export interface CreateFollowUpInput {
 
 /** Lightweight follow-up for timeline rendering. Plain messages omit encryptedContent. */
 export interface FollowUpSummaryRecord {
-  readonly id: string;
-  readonly ticketId: string;
+  readonly id: FollowupId;
+  readonly ticketId: TicketId;
   readonly source: string;
   readonly type: string;
   /** Present for system events and internal notes, null for plain messages. */
   readonly encryptedContent: Buffer | null;
-  readonly createdBy: string | null;
+  readonly createdBy: UserId | null;
   readonly createdAt: Date;
   readonly hasRecording: boolean;
   readonly recordingDurationSeconds: number | null;
   readonly hasImage: boolean;
   readonly hasFile: boolean;
-  readonly noteTypeId: string | null;
+  readonly noteTypeId: NoteTypeId | null;
   readonly callStatus: string | null;
   readonly callDurationSeconds: number | null;
-  readonly keyGeneration: string | null;
+  readonly keyGeneration: KeyGeneration | null;
   readonly eventParams: Record<string, unknown> | null;
   readonly fullPosition?: number;
   readonly totalCount?: number;
@@ -111,11 +120,11 @@ export interface FollowUpSummaryRecord {
 
 export interface FollowUpListOpts {
   limit: number;
-  cursor?: string;
+  cursor?: FollowupId;
   direction?: "newer" | "older";
   types?: string[];
   mediaFlags?: string[];
-  createdBy?: string[];
+  createdBy?: UserId[];
   includeClientSource?: boolean;
   dateFrom?: string;
   dateTo?: string;
@@ -123,10 +132,10 @@ export interface FollowUpListOpts {
 }
 
 export interface FollowUpService {
-  create(userId: string, input: CreateFollowUpInput): Promise<FollowUpRecord>;
+  create(userId: UserId, input: CreateFollowUpInput): Promise<FollowUpRecord>;
   listByTicket(
-    userId: string,
-    ticketId: string,
+    userId: UserId,
+    ticketId: TicketId,
     opts: FollowUpListOpts,
   ): Promise<FollowUpRecord[]>;
   /**
@@ -136,52 +145,54 @@ export interface FollowUpService {
    * for media flags.
    */
   listSummary(
-    userId: string,
-    ticketId: string,
+    userId: UserId,
+    ticketId: TicketId,
     opts: FollowUpListOpts,
   ): Promise<FollowUpSummaryRecord[]>;
   /** Fetch specific follow-ups by ID (for expanding timeline clusters). */
   listByIds(
-    userId: string,
-    ticketId: string,
-    followUpIds: string[],
+    userId: UserId,
+    ticketId: TicketId,
+    followUpIds: FollowupId[],
     opts?: { types?: string[] },
   ): Promise<FollowUpRecord[]>;
   /** Update encrypted content and/or note type of an internal note. Only the author can edit. */
   updateInternalNote(
-    userId: string,
-    followUpId: string,
+    userId: UserId,
+    followUpId: FollowupId,
     encryptedContent: Buffer,
-    noteTypeId?: string,
-  ): Promise<{ record: FollowUpRecord; previousNoteTypeId: string | null }>;
+    noteTypeId?: NoteTypeId,
+  ): Promise<{ record: FollowUpRecord; previousNoteTypeId: NoteTypeId | null }>;
   /** Soft-delete an internal note. Author or admin can delete. */
   softDeleteInternalNote(
-    userId: string,
-    followUpId: string,
+    userId: UserId,
+    followUpId: FollowupId,
     isAdmin: boolean,
   ): Promise<void>;
   /** Return distinct volunteer authors on a ticket with encrypted display names. */
   listParticipants(
-    userId: string,
-    ticketId: string,
-  ): Promise<readonly { volunteerId: string; encryptedDisplayName: Buffer }[]>;
+    userId: UserId,
+    ticketId: TicketId,
+  ): Promise<readonly { volunteerId: UserId; encryptedDisplayName: Buffer }[]>;
   /** Toggle a reaction on an internal note. Returns updated summaries. */
   toggleReaction(
-    userId: string,
+    userId: UserId,
     userRoleId: string,
-    followUpId: string,
+    followUpId: FollowupId,
     reaction: ReactionType,
   ): Promise<ReactionSummary[]>;
   /** Batch-load reactions for a list of followup IDs. */
-  getReactions(followUpIds: string[]): Promise<Map<string, ReactionSummary[]>>;
+  getReactions(
+    followUpIds: FollowupId[],
+  ): Promise<Map<FollowupId, ReactionSummary[]>>;
   /**
    * Update an outbound in-app message (type "message", source "volunteer", author only).
    * Re-encrypts the follow-up content and optionally updates the portal_messages
    * client copy. sms_outbound and client-sourced messages are never editable.
    */
   updateOutboundMessage(
-    userId: string,
-    followUpId: string,
+    userId: UserId,
+    followUpId: FollowupId,
     encryptedContent: Buffer,
     portalCopy?: PortalCopyInput,
   ): Promise<FollowUpRecord>;
@@ -194,12 +205,12 @@ export interface FollowUpService {
  */
 async function fetchFollowUpKeyWraps(
   db: Kysely<TenantDatabase>,
-  userId: string,
-  rows: readonly { key_generation?: string | null }[],
-): Promise<Map<string, FollowUpKeyWrap>> {
+  userId: UserId,
+  rows: readonly { key_generation?: KeyGeneration | null }[],
+): Promise<Map<KeyGeneration, FollowUpKeyWrap>> {
   const keyGens = rows
     .map((r) => r.key_generation)
-    .filter((kg): kg is string => kg !== null && kg !== undefined);
+    .filter((kg): kg is KeyGeneration => kg !== null && kg !== undefined);
 
   if (keyGens.length === 0) return new Map();
 
@@ -210,7 +221,7 @@ async function fetchFollowUpKeyWraps(
     .where("key_generation", "in", keyGens)
     .execute();
 
-  const result = new Map<string, FollowUpKeyWrap>();
+  const result = new Map<KeyGeneration, FollowUpKeyWrap>();
   for (const w of wraps) {
     result.set(w.key_generation, {
       ephemeralPoint: w.ephemeral_point,
@@ -230,8 +241,8 @@ async function fetchFollowUpKeyWraps(
  */
 async function fetchPortalWraps(
   db: Kysely<TenantDatabase>,
-  rows: readonly { id: string; key_generation?: string | null }[],
-): Promise<Map<string, string>> {
+  rows: readonly { id: FollowupId; key_generation?: KeyGeneration | null }[],
+): Promise<Map<FollowupId, string>> {
   const eligibleIds = rows
     .filter((r) => r.key_generation !== null && r.key_generation !== undefined)
     .map((r) => r.id);
@@ -244,7 +255,7 @@ async function fetchPortalWraps(
     .where("followup_id", "in", eligibleIds)
     .execute();
 
-  const result = new Map<string, string>();
+  const result = new Map<FollowupId, string>();
   for (const w of wraps) {
     result.set(w.followup_id, encode(new Uint8Array(w.wrapped_tk)));
   }
@@ -253,20 +264,20 @@ async function fetchPortalWraps(
 
 function toRecord(
   row: {
-    id: string;
-    ticket_id: string;
+    id: FollowupId;
+    ticket_id: TicketId;
     source: string;
     type: string;
     is_private: boolean;
     mentioned_pseudonyms: string[];
     encrypted_content: Buffer;
-    created_by: string | null;
+    created_by: UserId | null;
     deleted_at: Date | null;
     created_at: Date;
     edited_at?: Date | null;
-    key_generation?: string | null;
-    note_type_id?: string | null;
-    call_sid?: string | null;
+    key_generation?: KeyGeneration | null;
+    note_type_id?: NoteTypeId | null;
+    call_sid?: CallSid | null;
     call_status?: string | null;
     call_duration_seconds?: number | null;
     event_params?: Record<string, unknown> | null;
@@ -578,7 +589,7 @@ export function createFollowUpService(
       const records = rows.map((row) =>
         toRecord(
           row,
-          keyWraps.get(row.key_generation ?? ""),
+          row.key_generation ? keyWraps.get(row.key_generation) : undefined,
           pWraps.get(row.id),
         ),
       );
@@ -807,7 +818,7 @@ export function createFollowUpService(
       return rows.map((row) =>
         toRecord(
           row,
-          keyWraps.get(row.key_generation ?? ""),
+          row.key_generation ? keyWraps.get(row.key_generation) : undefined,
           pWraps.get(row.id),
         ),
       );
@@ -978,7 +989,7 @@ export function createFollowUpService(
         .orderBy("created_at", "asc")
         .execute();
 
-      const grouped = new Map<string, Map<string, string[]>>();
+      const grouped = new Map<FollowupId, Map<string, UserId[]>>();
       for (const r of rows) {
         let byReaction = grouped.get(r.followup_id);
         if (byReaction === undefined) {
@@ -993,7 +1004,7 @@ export function createFollowUpService(
         users.push(r.user_id);
       }
 
-      const result = new Map<string, ReactionSummary[]>();
+      const result = new Map<FollowupId, ReactionSummary[]>();
       for (const [fId, byReaction] of grouped) {
         const summaries: ReactionSummary[] = [];
         for (const [reaction, userIds] of byReaction) {
@@ -1091,7 +1102,7 @@ function toReactionType(value: string): ReactionType {
 
 async function buildReactionSummaries(
   db: Kysely<TenantDatabase>,
-  followUpId: string,
+  followUpId: FollowupId,
 ): Promise<ReactionSummary[]> {
   const rows = await db
     .selectFrom("followup_reactions")
@@ -1100,7 +1111,7 @@ async function buildReactionSummaries(
     .orderBy("created_at", "asc")
     .execute();
 
-  const grouped = new Map<string, string[]>();
+  const grouped = new Map<string, UserId[]>();
   for (const r of rows) {
     let users = grouped.get(r.reaction);
     if (users === undefined) {

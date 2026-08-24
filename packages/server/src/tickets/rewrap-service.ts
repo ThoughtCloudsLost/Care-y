@@ -2,12 +2,13 @@ import type { Kysely } from "kysely";
 import type { TenantDatabase } from "../db/types.js";
 import type { TicketAccessChecker } from "./access.js";
 import type { BlobStore, BlobCategory } from "../storage/store.js";
+import type { FollowupId, UserId, BlobKey, OrgSchema } from "@care-y/shared";
 
 export interface RewrapInput {
-  readonly followUpId: string;
+  readonly followUpId: FollowupId;
   readonly encryptedContent: Buffer;
   readonly blobUpdates?: readonly {
-    readonly oldBlobKey: string;
+    readonly oldBlobKey: BlobKey;
     readonly encryptedData: Buffer;
     readonly category: BlobCategory;
   }[];
@@ -28,10 +29,10 @@ export interface RewrapResult {
 export async function rewrapFollowUp(
   db: Kysely<TenantDatabase>,
   access: TicketAccessChecker,
-  userId: string,
+  userId: UserId,
   input: RewrapInput,
   blobStore?: BlobStore,
-  orgSchema?: string,
+  orgSchema?: OrgSchema,
 ): Promise<RewrapResult> {
   const followUp = await db
     .selectFrom("followups")
@@ -54,7 +55,7 @@ export async function rewrapFollowUp(
   const keyGen = followUp.key_generation;
 
   // Replace blobs before the transaction (BlobStore is external storage)
-  const blobReplacements: { oldKey: string; newKey: string }[] = [];
+  const blobReplacements: { oldKey: BlobKey; newKey: BlobKey }[] = [];
   if (input.blobUpdates && blobStore !== undefined && orgSchema !== undefined) {
     for (const update of input.blobUpdates) {
       const newKey = await blobStore.put(

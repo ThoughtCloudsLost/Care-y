@@ -15,6 +15,16 @@ import { createOrgRouter } from "./org.js";
 import { router, createCallerFactory } from "../trpc/trpc.js";
 import type { Context, OrgContext } from "../trpc/context.js";
 import { RoleId, ErrorCode } from "@care-y/shared";
+import type {
+  SessionId,
+  SessionToken,
+  UserId,
+  IpToken,
+  UaToken,
+  OrgId,
+  OrgSlug,
+  OrgSchema,
+} from "@care-y/shared";
 import {
   mockReq,
   mockRes,
@@ -44,9 +54,9 @@ function createMockOrgService(): OrgService {
 
 function createMockOrgContext(): OrgContext {
   return {
-    orgId: "org-test-general",
-    orgSlug: "test-org",
-    orgSchema: "org_test",
+    orgId: "org-test-general" as OrgId,
+    orgSlug: "test-org" as OrgSlug,
+    orgSchema: "org_test" as OrgSchema,
     tenantDb: stubTenantDbDefaultRoles(),
     sealedBox: {} as OrgContext["sealedBox"],
   };
@@ -58,17 +68,17 @@ function createAdminContext(): Context {
     res: mockRes(),
     org: createMockOrgContext(),
     session: {
-      id: "sess-org-1",
-      token: "tok-org-1",
-      userId: "user-org-1",
-      ipToken: "ip-tok",
-      uaToken: "ua-tok",
+      id: "sess-org-1" as SessionId,
+      token: "tok-org-1" as SessionToken,
+      userId: "user-org-1" as UserId,
+      ipToken: "ip-tok" as IpToken,
+      uaToken: "ua-tok" as UaToken,
       expiresAt: new Date(Date.now() + 3_600_000),
       twofaVerified: true,
       webauthnChallenge: null,
     },
     user: {
-      id: "user-org-1",
+      id: "user-org-1" as UserId,
       encryptedIdentifier: "admin-id",
       encryptedDisplayName: "encrypted-name",
       encryptedPreferredLocale: null,
@@ -83,7 +93,7 @@ function createVolunteerContext(): Context {
   return {
     ...createAdminContext(),
     user: {
-      id: "user-vol-1",
+      id: "user-vol-1" as UserId,
       encryptedIdentifier: "vol-id",
       encryptedDisplayName: "encrypted-vol",
       encryptedPreferredLocale: null,
@@ -260,9 +270,9 @@ describe.skipIf(!process.env.DATABASE_URL)(
 
     function buildDbCaller() {
       const orgContext: OrgContext = {
-        orgId: "org-db-test",
-        orgSlug: "db-test-org",
-        orgSchema: testDb.schemaName,
+        orgId: "org-db-test" as OrgId,
+        orgSlug: "db-test-org" as OrgSlug,
+        orgSchema: testDb.schemaName as OrgSchema,
         tenantDb: testDb.db,
         sealedBox: testSealedBox,
       };
@@ -272,17 +282,17 @@ describe.skipIf(!process.env.DATABASE_URL)(
         res: mockRes(),
         org: orgContext,
         session: {
-          id: "sess-db-1",
-          token: "tok-db-1",
-          userId: "user-db-1",
-          ipToken: "ip-tok",
-          uaToken: "ua-tok",
+          id: "sess-db-1" as SessionId,
+          token: "tok-db-1" as SessionToken,
+          userId: "user-db-1" as UserId,
+          ipToken: "ip-tok" as IpToken,
+          uaToken: "ua-tok" as UaToken,
           expiresAt: new Date(Date.now() + 3_600_000),
           twofaVerified: true,
           webauthnChallenge: null,
         },
         user: {
-          id: "user-db-1",
+          id: "user-db-1" as UserId,
           encryptedIdentifier: "db-admin",
           encryptedDisplayName: "encrypted-db",
           encryptedPreferredLocale: null,

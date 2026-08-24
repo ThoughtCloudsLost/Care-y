@@ -50,6 +50,8 @@ import {
   listKbAttachmentsInputSchema,
   listKbBodiesInputSchema,
   KB_ATTACHMENT_MAX_BYTES,
+  kbCategoryIdSchema,
+  kbItemIdSchema,
 } from "@care-y/shared";
 
 import { b64, b64n } from "../utils/ciphertext-wire.js";
@@ -126,7 +128,7 @@ export function createKbRouter(deps: KBRouterDeps) {
       ),
 
     deleteCategory: managerProcedure
-      .input(z.object({ categoryId: z.uuid() }))
+      .input(z.object({ categoryId: kbCategoryIdSchema }))
       .mutation(
         withErrorWrapping(async ({ ctx, input }) => {
           const svc = deps.createCategorySvc(ctx.org.tenantDb);
@@ -157,18 +159,20 @@ export function createKbRouter(deps: KBRouterDeps) {
       }),
     ),
 
-    getItem: volunteerProcedure.input(z.object({ itemId: z.uuid() })).query(
-      withErrorWrapping(async ({ ctx, input }) => {
-        const svc = deps.createItemSvc(ctx.org.tenantDb);
-        const item = await svc.findById(input.itemId);
-        return {
-          ...item,
-          encryptedTitle: b64(item.encryptedTitle),
-          encryptedBody: b64(item.encryptedBody),
-          encryptedExcerpt: b64n(item.encryptedExcerpt),
-        };
-      }),
-    ),
+    getItem: volunteerProcedure
+      .input(z.object({ itemId: kbItemIdSchema }))
+      .query(
+        withErrorWrapping(async ({ ctx, input }) => {
+          const svc = deps.createItemSvc(ctx.org.tenantDb);
+          const item = await svc.findById(input.itemId);
+          return {
+            ...item,
+            encryptedTitle: b64(item.encryptedTitle),
+            encryptedBody: b64(item.encryptedBody),
+            encryptedExcerpt: b64n(item.encryptedExcerpt),
+          };
+        }),
+      ),
 
     listItems: volunteerProcedure.input(kbItemListInputSchema).query(
       withErrorWrapping(async ({ ctx, input }) => {
@@ -223,20 +227,22 @@ export function createKbRouter(deps: KBRouterDeps) {
       }),
     ),
 
-    deleteItem: managerProcedure.input(z.object({ itemId: z.uuid() })).mutation(
-      withErrorWrapping(async ({ ctx, input }) => {
-        const mediaSvc = deps.createMediaSvc(ctx.org.tenantDb);
-        const attachments = await mediaSvc.listAttachments(input.itemId, {
-          includeSoftDeleted: true,
-        });
-        for (const att of attachments) {
-          await deps.blobStore.delete(att.blobKey);
-        }
+    deleteItem: managerProcedure
+      .input(z.object({ itemId: kbItemIdSchema }))
+      .mutation(
+        withErrorWrapping(async ({ ctx, input }) => {
+          const mediaSvc = deps.createMediaSvc(ctx.org.tenantDb);
+          const attachments = await mediaSvc.listAttachments(input.itemId, {
+            includeSoftDeleted: true,
+          });
+          for (const att of attachments) {
+            await deps.blobStore.delete(att.blobKey);
+          }
 
-        const svc = deps.createItemSvc(ctx.org.tenantDb);
-        await svc.delete(input.itemId);
-      }),
-    ),
+          const svc = deps.createItemSvc(ctx.org.tenantDb);
+          await svc.delete(input.itemId);
+        }),
+      ),
 
     // --- Authors (for client-side filter dropdown) ---
     listAuthors: volunteerProcedure.query(
@@ -295,12 +301,14 @@ export function createKbRouter(deps: KBRouterDeps) {
       }),
     ),
 
-    getUserVote: volunteerProcedure.input(z.object({ itemId: z.uuid() })).query(
-      withErrorWrapping(async ({ ctx, input }) => {
-        const svc = deps.createVoteSvc(ctx.org.tenantDb);
-        return svc.getUserVote(ctx.user.id, input.itemId);
-      }),
-    ),
+    getUserVote: volunteerProcedure
+      .input(z.object({ itemId: kbItemIdSchema }))
+      .query(
+        withErrorWrapping(async ({ ctx, input }) => {
+          const svc = deps.createVoteSvc(ctx.org.tenantDb);
+          return svc.getUserVote(ctx.user.id, input.itemId);
+        }),
+      ),
 
     // --- Attachments ---
     uploadAttachment: volunteerProcedure

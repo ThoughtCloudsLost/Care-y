@@ -15,13 +15,14 @@ import type { Kysely, Selectable } from "kysely";
 import type { TenantDatabase, PortalChannelsTable } from "../db/types.js";
 import { hashChannelAuth } from "@care-y/crypto";
 import { ChannelAlreadyActiveError } from "./portal-errors.js";
+import type { ClientId, ChannelSecret } from "@care-y/shared";
 
 // ---------------------------------------------------------------------------
 // Input types
 // ---------------------------------------------------------------------------
 
 export interface ChannelRegistration {
-  readonly channelId: string;
+  readonly channelId: ChannelSecret;
   readonly authHash: Buffer;
   readonly clientPublic: Buffer;
   readonly hasPassphrase: boolean;
@@ -48,7 +49,7 @@ export type PortalChannelRow = Selectable<PortalChannelsTable>;
  */
 async function insertChannel(
   db: Kysely<TenantDatabase>,
-  clientId: string,
+  clientId: ClientId,
   reg: ChannelRegistration,
 ): Promise<void> {
   await db
@@ -89,7 +90,7 @@ function isActiveChannelConstraintViolation(err: unknown): boolean {
  */
 export async function createChannel(
   db: Kysely<TenantDatabase>,
-  clientId: string,
+  clientId: ClientId,
   reg: ChannelRegistration,
 ): Promise<void> {
   try {
@@ -117,7 +118,7 @@ export async function createChannel(
  */
 export async function regenerateChannel(
   db: Kysely<TenantDatabase>,
-  clientId: string,
+  clientId: ClientId,
   reg: ChannelRegistration,
 ): Promise<void> {
   await db.transaction().execute(async (trx) => {
@@ -161,7 +162,7 @@ export async function regenerateChannel(
  */
 export async function revokeChannel(
   db: Kysely<TenantDatabase>,
-  clientId: string,
+  clientId: ClientId,
 ): Promise<void> {
   await db.transaction().execute(async (trx) => {
     const active = await trx
@@ -207,7 +208,7 @@ export async function revokeChannel(
  */
 export async function resolveAuthedChannel(
   db: Kysely<TenantDatabase>,
-  channelId: string,
+  channelId: ChannelSecret,
   auth: Buffer,
 ): Promise<PortalChannelRow | null> {
   // Look up by channel_id. Only active rows are valid.

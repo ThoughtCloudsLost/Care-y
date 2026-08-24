@@ -5,12 +5,14 @@
  * The shift schedule implementation replaces this with real schedule queries.
  */
 
+import type { QueueId, UserId } from "@care-y/shared";
+
 export interface ShiftProvider {
   /**
    * Returns user IDs of volunteers currently on shift for the given queue.
    * Empty array means no one is currently on shift.
    */
-  getCurrentShiftVolunteers(queueId: string): Promise<string[]>;
+  getCurrentShiftVolunteers(queueId: QueueId): Promise<UserId[]>;
 
   /**
    * Returns user IDs of volunteers on the next future shift for the given queue.
@@ -18,14 +20,14 @@ export interface ShiftProvider {
    * assign to the next-shift volunteer with fewest tickets.
    * Empty array means no future shifts are scheduled.
    */
-  getNextShiftVolunteers(queueId: string): Promise<string[]>;
+  getNextShiftVolunteers(queueId: QueueId): Promise<UserId[]>;
 }
 
 /**
  * Stub that treats all queue members as always available.
  */
 export function createStubShiftProvider(
-  getQueueMembers: (queueId: string) => Promise<string[]>,
+  getQueueMembers: (queueId: QueueId) => Promise<UserId[]>,
 ): ShiftProvider {
   return {
     async getCurrentShiftVolunteers(queueId) {

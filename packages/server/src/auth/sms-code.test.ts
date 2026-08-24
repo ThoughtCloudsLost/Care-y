@@ -25,6 +25,7 @@ import {
 } from "./sms-code.js";
 import type { OrgIdentifiers } from "../telephony/phone-resolver.js";
 import { RateLimitError, ValidationError } from "../errors.js";
+import type { OrgId, OrgSchema, CodeHash } from "@care-y/shared";
 
 describe.skipIf(!process.env.DATABASE_URL)("SmsCodeService", () => {
   let testDb: TestDb;
@@ -39,8 +40,9 @@ describe.skipIf(!process.env.DATABASE_URL)("SmsCodeService", () => {
     await testDb.cleanup();
   });
 
-  const TEST_ORG_ID = "00000000-0000-4000-8000-000000000001";
-  const TEST_ORG_SCHEMA = "org_00000000-0000-4000-8000-000000000001";
+  const TEST_ORG_ID = "00000000-0000-4000-8000-000000000001" as OrgId;
+  const TEST_ORG_SCHEMA =
+    "org_00000000-0000-4000-8000-000000000001" as OrgSchema;
   const TEST_ORG: OrgIdentifiers = {
     orgId: TEST_ORG_ID,
     orgSchema: TEST_ORG_SCHEMA,
@@ -150,7 +152,8 @@ describe.skipIf(!process.env.DATABASE_URL)("SmsCodeService", () => {
           .insertInto("sms_codes")
           .values({
             user_id: user.id,
-            code_hash: `scrypt:${"aa".repeat(16)}:${"bb".repeat(32)}`,
+            code_hash:
+              `scrypt:${"aa".repeat(16)}:${"bb".repeat(32)}` as CodeHash,
             // expires_at set so creation time is within the hour
             expires_at: new Date(now + 5 * 60 * 1000 - i * 90_000),
             consumed: true, // consumed so they don't interfere with cooldown

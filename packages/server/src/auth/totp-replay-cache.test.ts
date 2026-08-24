@@ -12,61 +12,66 @@ import {
   TOTP_REPLAY_TTL_MS,
 } from "./totp-replay-cache.js";
 import { ConfigError } from "../errors.js";
+import type { OrgId, UserId } from "@care-y/shared";
+
+/** Shorthand casts for test fixture strings. */
+const org = (s: string): OrgId => s as OrgId;
+const uid = (s: string): UserId => s as UserId;
 
 describe("TotpReplayCache", () => {
   describe("createInMemoryTotpReplayCache", () => {
     it("reports a code unused before markUsed and used after", () => {
       const cache = createInMemoryTotpReplayCache(() => 1_000);
 
-      expect(cache.isUsed("org", "user", "123456")).toBe(false);
-      cache.markUsed("org", "user", "123456");
-      expect(cache.isUsed("org", "user", "123456")).toBe(true);
+      expect(cache.isUsed(org("org"), uid("user"), "123456")).toBe(false);
+      cache.markUsed(org("org"), uid("user"), "123456");
+      expect(cache.isUsed(org("org"), uid("user"), "123456")).toBe(true);
     });
 
     it("does not mark other codes for the same user", () => {
       const cache = createInMemoryTotpReplayCache(() => 1_000);
 
-      cache.markUsed("org", "user", "123456");
-      expect(cache.isUsed("org", "user", "654321")).toBe(false);
+      cache.markUsed(org("org"), uid("user"), "123456");
+      expect(cache.isUsed(org("org"), uid("user"), "654321")).toBe(false);
     });
 
     it("isolates users within an org", () => {
       const cache = createInMemoryTotpReplayCache(() => 1_000);
 
-      cache.markUsed("org", "user-a", "123456");
-      expect(cache.isUsed("org", "user-b", "123456")).toBe(false);
+      cache.markUsed(org("org"), uid("user-a"), "123456");
+      expect(cache.isUsed(org("org"), uid("user-b"), "123456")).toBe(false);
     });
 
     it("isolates orgs for the same user ID", () => {
       const cache = createInMemoryTotpReplayCache(() => 1_000);
 
-      cache.markUsed("org-a", "user", "123456");
-      expect(cache.isUsed("org-b", "user", "123456")).toBe(false);
+      cache.markUsed(org("org-a"), uid("user"), "123456");
+      expect(cache.isUsed(org("org-b"), uid("user"), "123456")).toBe(false);
     });
 
     it("keeps a code used until the TTL elapses, then forgets it", () => {
       let time = 0;
       const cache = createInMemoryTotpReplayCache(() => time);
 
-      cache.markUsed("org", "user", "123456");
+      cache.markUsed(org("org"), uid("user"), "123456");
 
       time = TOTP_REPLAY_TTL_MS - 1;
-      expect(cache.isUsed("org", "user", "123456")).toBe(true);
+      expect(cache.isUsed(org("org"), uid("user"), "123456")).toBe(true);
 
       time = TOTP_REPLAY_TTL_MS;
-      expect(cache.isUsed("org", "user", "123456")).toBe(false);
+      expect(cache.isUsed(org("org"), uid("user"), "123456")).toBe(false);
     });
 
     it("accepts a fresh markUsed after a previous entry expired", () => {
       let time = 0;
       const cache = createInMemoryTotpReplayCache(() => time);
 
-      cache.markUsed("org", "user", "123456");
+      cache.markUsed(org("org"), uid("user"), "123456");
       time = TOTP_REPLAY_TTL_MS + 1;
-      expect(cache.isUsed("org", "user", "123456")).toBe(false);
+      expect(cache.isUsed(org("org"), uid("user"), "123456")).toBe(false);
 
-      cache.markUsed("org", "user", "123456");
-      expect(cache.isUsed("org", "user", "123456")).toBe(true);
+      cache.markUsed(org("org"), uid("user"), "123456");
+      expect(cache.isUsed(org("org"), uid("user"), "123456")).toBe(true);
     });
   });
 
@@ -80,15 +85,15 @@ describe("TotpReplayCache", () => {
       let time = 0;
       const cache = createInMemoryTotpReplayCache(() => time);
 
-      cache.markUsed("org", "user", "111111");
+      cache.markUsed(org("org"), uid("user"), "111111");
       time = TOTP_REPLAY_TTL_MS + 1;
-      cache.markUsed("org", "user", "222222");
+      cache.markUsed(org("org"), uid("user"), "222222");
 
       // Trigger the 60s cleanup interval.
       vi.advanceTimersByTime(60_000);
 
-      expect(cache.isUsed("org", "user", "111111")).toBe(false);
-      expect(cache.isUsed("org", "user", "222222")).toBe(true);
+      expect(cache.isUsed(org("org"), uid("user"), "111111")).toBe(false);
+      expect(cache.isUsed(org("org"), uid("user"), "222222")).toBe(true);
     });
   });
 
@@ -133,8 +138,8 @@ describe("TotpReplayCache", () => {
         const cache = createTotpReplayCache();
 
         // No-op cache: markUsed is silent, isUsed always returns false
-        cache.markUsed("org", "user", "123456");
-        expect(cache.isUsed("org", "user", "123456")).toBe(false);
+        cache.markUsed(org("org"), uid("user"), "123456");
+        expect(cache.isUsed(org("org"), uid("user"), "123456")).toBe(false);
       } finally {
         if (prevBypass === undefined) delete process.env.TOTP_REPLAY_BYPASS;
         else process.env.TOTP_REPLAY_BYPASS = prevBypass;
@@ -151,8 +156,8 @@ describe("TotpReplayCache", () => {
         const cache = createTotpReplayCache();
 
         // Real cache: markUsed causes isUsed to return true
-        cache.markUsed("org", "user", "654321");
-        expect(cache.isUsed("org", "user", "654321")).toBe(true);
+        cache.markUsed(org("org"), uid("user"), "654321");
+        expect(cache.isUsed(org("org"), uid("user"), "654321")).toBe(true);
       } finally {
         if (prevBypass === undefined) delete process.env.TOTP_REPLAY_BYPASS;
         else process.env.TOTP_REPLAY_BYPASS = prevBypass;

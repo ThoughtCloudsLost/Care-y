@@ -15,6 +15,12 @@ import type { Kysely } from "kysely";
 import type { TenantDatabase } from "../db/types.js";
 import type { PushNotificationSender } from "../notifications/push.js";
 import { InternalError } from "../errors.js";
+import type {
+  UserId,
+  SessionToken,
+  SessionTokenHash,
+  PushChallengeId,
+} from "@care-y/shared";
 
 export type ChallengeStatus = "pending" | "approved" | "denied" | "expired";
 
@@ -30,7 +36,7 @@ function isChallengeStatus(value: string): value is ChallengeStatus {
 }
 
 export interface SendChallengeResult {
-  readonly challengeId: string;
+  readonly challengeId: PushChallengeId | "";
   readonly sent: boolean;
 }
 
@@ -45,8 +51,8 @@ export interface PushChallengeService {
    * If the user has no push subscriptions, returns {sent: false}.
    */
   sendChallenge(
-    userId: string,
-    sessionToken: string,
+    userId: UserId,
+    sessionToken: SessionToken,
   ): Promise<SendChallengeResult>;
 
   /**
@@ -54,8 +60,8 @@ export interface PushChallengeService {
    * Returns 'expired' if the challenge TTL has passed or session doesn't match.
    */
   pollChallenge(
-    challengeId: string,
-    sessionToken: string,
+    challengeId: PushChallengeId,
+    sessionToken: SessionToken,
   ): Promise<PollChallengeResult>;
 
   /**
@@ -63,24 +69,27 @@ export interface PushChallengeService {
    * Verifies the approving user matches the challenge's user.
    * Returns true if approval succeeded (challenge was still pending).
    */
-  approveChallenge(challengeId: string, userId: string): Promise<boolean>;
+  approveChallenge(
+    challengeId: PushChallengeId,
+    userId: UserId,
+  ): Promise<boolean>;
 
   /**
    * Denies a pending challenge.
    * Returns true if denial succeeded (challenge was still pending).
    */
-  denyChallenge(challengeId: string, userId: string): Promise<boolean>;
+  denyChallenge(challengeId: PushChallengeId, userId: UserId): Promise<boolean>;
 
   /**
    * Sends a test push to verify enrollment. Returns true if at least one
    * subscription received the push (no 404/410 response).
    */
-  sendTestPush(userId: string): Promise<boolean>;
+  sendTestPush(userId: UserId): Promise<boolean>;
 
   /**
    * Deletes all push challenges for a user (used during method removal).
    */
-  deleteUserChallenges(userId: string): Promise<void>;
+  deleteUserChallenges(userId: UserId): Promise<void>;
 
   /**
    * Cleans up expired challenges. Called lazily or on a schedule.
@@ -96,10 +105,12 @@ const CHALLENGE_TTL_MS = 2 * 60 * 1000; // 2 minutes
  * at startup) so the mapping is unverifiable without server access.
  */
 export function hashSessionToken(
-  sessionToken: string,
+  sessionToken: SessionToken,
   hmacKey: Buffer,
-): string {
-  return createHmac("sha256", hmacKey).update(sessionToken).digest("hex");
+): SessionTokenHash {
+  return createHmac("sha256", hmacKey)
+    .update(sessionToken)
+    .digest("hex") as SessionTokenHash;
 }
 
 export function createPushChallengeService(

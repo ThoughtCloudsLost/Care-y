@@ -29,6 +29,17 @@ import { createCallerFactory } from "../trpc/trpc.js";
 import type { Context, OrgContext } from "../trpc/context.js";
 import type { UsersTable } from "../db/types.js";
 import { RoleId, ErrorCode, type PreferenceRow } from "@care-y/shared";
+import type {
+  SessionId,
+  SessionToken,
+  UserId,
+  IpToken,
+  UaToken,
+  OrgId,
+  OrgSlug,
+  OrgSchema,
+  KeyGeneration,
+} from "@care-y/shared";
 import { NotFoundError } from "../errors.js";
 import {
   createTestDb,
@@ -83,24 +94,24 @@ function createVolunteerContext(): Context {
     req: mockReq(),
     res: mockRes(),
     org: {
-      orgId: "org-notifications-unit",
-      orgSlug: "test-org",
-      orgSchema: "org_test",
+      orgId: "org-notifications-unit" as OrgId,
+      orgSlug: "test-org" as OrgSlug,
+      orgSchema: "org_test" as OrgSchema,
       tenantDb: stubTenantDbDefaultRoles(),
       sealedBox: {} as OrgContext["sealedBox"],
     },
     session: {
-      id: "sess-1",
-      token: "tok-1",
-      userId: "user-1",
-      ipToken: "ip-tok",
-      uaToken: "ua-tok",
+      id: "sess-1" as SessionId,
+      token: "tok-1" as SessionToken,
+      userId: "user-1" as UserId,
+      ipToken: "ip-tok" as IpToken,
+      uaToken: "ua-tok" as UaToken,
       expiresAt: new Date(Date.now() + 3_600_000),
       twofaVerified: true,
       webauthnChallenge: null,
     },
     user: {
-      id: "user-1",
+      id: "user-1" as UserId,
       encryptedIdentifier: "encrypted-identifier",
       encryptedDisplayName: "encrypted-name",
       encryptedPreferredLocale: null,
@@ -533,18 +544,18 @@ describe.skipIf(!process.env.DATABASE_URL)(
         req: mockReq(),
         res: mockRes(),
         org: {
-          orgId: "org-notifications-db-test",
-          orgSlug: "test-org",
-          orgSchema: testDb.schemaName,
+          orgId: "org-notifications-db-test" as OrgId,
+          orgSlug: "test-org" as OrgSlug,
+          orgSchema: testDb.schemaName as OrgSchema,
           tenantDb: testDb.db,
           sealedBox: {} as OrgContext["sealedBox"],
         },
         session: {
-          id: `sess-${user.id}`,
-          token: `tok-${user.id}`,
+          id: `sess-${user.id}` as SessionId,
+          token: `tok-${user.id}` as SessionToken,
           userId: user.id,
-          ipToken: "ip-tok",
-          uaToken: "ua-tok",
+          ipToken: "ip-tok" as IpToken,
+          uaToken: "ua-tok" as UaToken,
           expiresAt: new Date(Date.now() + 3_600_000),
           twofaVerified: true,
           webauthnChallenge: null,
@@ -727,7 +738,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
           .values({
             ticket_id: fixture.ticketId,
             volunteer_id: ticketUser.id,
-            key_generation: crypto.randomUUID(),
+            key_generation: crypto.randomUUID() as KeyGeneration,
             ephemeral_point: Buffer.alloc(32),
             nonce: Buffer.alloc(24),
             wrapped_key: Buffer.alloc(48),

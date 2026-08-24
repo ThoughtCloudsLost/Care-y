@@ -11,6 +11,7 @@
  */
 
 import type { IncomingMessage, ServerResponse } from "node:http";
+import { blobKeySchema } from "@care-y/shared";
 import type { BlobStore } from "../storage/store.js";
 
 export interface GreetingAudioHandlerDeps {
@@ -64,10 +65,16 @@ export function createGreetingAudioHandler(
     }
 
     // Blob key is everything after the prefix (e.g. "org_test/greeting/uuid")
-    const storeKey = decodeURIComponent(url.slice(PATH_PREFIX.length));
+    const rawKey = decodeURIComponent(url.slice(PATH_PREFIX.length));
+    const keyResult = blobKeySchema.safeParse(rawKey);
+    if (!keyResult.success) {
+      res.writeHead(404);
+      res.end();
+      return;
+    }
 
     try {
-      const blob = await blobStore.get(storeKey);
+      const blob = await blobStore.get(keyResult.data);
       if (blob === null) {
         res.writeHead(404);
         res.end();

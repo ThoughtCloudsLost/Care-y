@@ -21,14 +21,23 @@ import {
   escalationActionSchema,
   escalationRuleTypeSchema,
 } from "@care-y/shared";
+import type {
+  EscalationRuleId,
+  QueueId,
+  TicketId,
+  UserId,
+  OrgId,
+  OrgSchema,
+  OrgSlug,
+} from "@care-y/shared";
 
 // ---------------------------------------------------------------------------
 // Public types
 // ---------------------------------------------------------------------------
 
 export interface EscalationRule {
-  readonly id: string;
-  readonly queueId: string;
+  readonly id: EscalationRuleId;
+  readonly queueId: QueueId;
   readonly ruleType: "unassigned_duration" | "inactive_duration";
   readonly thresholdMinutes: number;
   readonly action: "notify_managers" | "notify_queue_watchers";
@@ -38,11 +47,11 @@ export interface EscalationRule {
 
 export interface EscalationServiceDeps {
   readonly notificationService: NotificationService;
-  readonly getManagerIds: (tDb: Kysely<TenantDatabase>) => Promise<string[]>;
+  readonly getManagerIds: (tDb: Kysely<TenantDatabase>) => Promise<UserId[]>;
   readonly getQueueWatcherIds: (
     tDb: Kysely<TenantDatabase>,
-    queueId: string,
-  ) => Promise<string[]>;
+    queueId: QueueId,
+  ) => Promise<UserId[]>;
 }
 
 export interface EscalationCheckResult {
@@ -55,14 +64,14 @@ export interface EscalationCheckResult {
 // ---------------------------------------------------------------------------
 
 interface CandidateTicket {
-  readonly id: string;
-  readonly queue_id: string;
+  readonly id: TicketId;
+  readonly queue_id: QueueId;
 }
 
 async function findUnassignedCandidates(
   tDb: Kysely<TenantDatabase>,
-  ruleId: string,
-  queueId: string,
+  ruleId: EscalationRuleId,
+  queueId: QueueId,
   thresholdMinutes: number,
 ): Promise<readonly CandidateTicket[]> {
   return tDb
@@ -93,8 +102,8 @@ async function findUnassignedCandidates(
 
 async function findInactiveCandidates(
   tDb: Kysely<TenantDatabase>,
-  ruleId: string,
-  queueId: string,
+  ruleId: EscalationRuleId,
+  queueId: QueueId,
   thresholdMinutes: number,
 ): Promise<readonly CandidateTicket[]> {
   // For each ticket, compare COALESCE(max(followups.created_at), tickets.created_at)
@@ -139,9 +148,9 @@ async function findInactiveCandidates(
 /** Evaluate all active rules for one tenant and execute matching actions. */
 export async function runEscalationCheck(
   tDb: Kysely<TenantDatabase>,
-  orgId: string,
-  orgSchema: string,
-  orgSlug: string,
+  orgId: OrgId,
+  orgSchema: OrgSchema,
+  orgSlug: OrgSlug,
   deps: EscalationServiceDeps,
 ): Promise<EscalationCheckResult> {
   const rules = await tDb
@@ -236,7 +245,7 @@ export async function runEscalationCheck(
 /** List all escalation rules for a queue. */
 export async function listRules(
   tDb: Kysely<TenantDatabase>,
-  queueId: string,
+  queueId: QueueId,
 ): Promise<readonly EscalationRule[]> {
   const rows = await tDb
     .selectFrom("escalation_rules")
@@ -252,7 +261,7 @@ export async function listRules(
 export async function createRule(
   tDb: Kysely<TenantDatabase>,
   input: {
-    readonly queueId: string;
+    readonly queueId: QueueId;
     readonly ruleType: "unassigned_duration" | "inactive_duration";
     readonly thresholdMinutes: number;
     readonly action: "notify_managers" | "notify_queue_watchers";
@@ -275,7 +284,7 @@ export async function createRule(
 /** Update an existing escalation rule. Returns the updated rule. */
 export async function updateRule(
   tDb: Kysely<TenantDatabase>,
-  ruleId: string,
+  ruleId: EscalationRuleId,
   patch: {
     readonly thresholdMinutes?: number;
     readonly action?: "notify_managers" | "notify_queue_watchers";
@@ -316,7 +325,7 @@ export async function updateRule(
 /** Delete an escalation rule. Returns true if a row was deleted. */
 export async function deleteRule(
   tDb: Kysely<TenantDatabase>,
-  ruleId: string,
+  ruleId: EscalationRuleId,
 ): Promise<boolean> {
   const result = await tDb
     .deleteFrom("escalation_rules")
@@ -329,7 +338,7 @@ export async function deleteRule(
 /** Check whether a queue row exists. */
 export async function queueExists(
   tDb: Kysely<TenantDatabase>,
-  queueId: string,
+  queueId: QueueId,
 ): Promise<boolean> {
   const row = await tDb
     .selectFrom("queues")
@@ -342,7 +351,7 @@ export async function queueExists(
 /** Fetch a single rule by id (for pre-delete audit metadata). */
 export async function getRuleById(
   tDb: Kysely<TenantDatabase>,
-  ruleId: string,
+  ruleId: EscalationRuleId,
 ): Promise<EscalationRule | null> {
   const row = await tDb
     .selectFrom("escalation_rules")
@@ -357,8 +366,8 @@ export async function getRuleById(
 // ---------------------------------------------------------------------------
 
 interface EscalationRuleRow {
-  readonly id: string;
-  readonly queue_id: string;
+  readonly id: EscalationRuleId;
+  readonly queue_id: QueueId;
   readonly rule_type: string;
   readonly threshold_minutes: number;
   readonly action: string;

@@ -9,6 +9,7 @@ import {
 } from "../test-utils.js";
 import { createAuditService, type AuditService } from "./audit.js";
 import * as crypto from "node:crypto";
+import { newTicketId, type TicketId, type UserId } from "@care-y/shared";
 
 describe.skipIf(!process.env.DATABASE_URL)("AuditService (DB)", () => {
   let testDb: TestDb;
@@ -30,7 +31,7 @@ describe.skipIf(!process.env.DATABASE_URL)("AuditService (DB)", () => {
 
   it("log inserts an audit entry", async () => {
     const user = await createTestUser(testDb.db);
-    const ticketId = crypto.randomUUID();
+    const ticketId: TicketId = newTicketId();
 
     await svc.log({
       eventType: "ticket_created",
@@ -80,7 +81,7 @@ describe.skipIf(!process.env.DATABASE_URL)("AuditService (DB)", () => {
     await expect(
       brokenSvc.log({
         eventType: "ticket_created",
-        actorId: crypto.randomUUID(),
+        actorId: crypto.randomUUID() as UserId,
       }),
     ).resolves.toBeUndefined();
   });
@@ -127,8 +128,8 @@ describe.skipIf(!process.env.DATABASE_URL)("AuditService (DB)", () => {
 
   it("query filters by ticketId", async () => {
     const user = await createTestUser(testDb.db);
-    const ticketA = crypto.randomUUID();
-    const ticketB = crypto.randomUUID();
+    const ticketA: TicketId = newTicketId();
+    const ticketB: TicketId = newTicketId();
 
     await svc.log({
       eventType: "ticket_created",

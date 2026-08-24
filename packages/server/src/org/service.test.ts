@@ -4,6 +4,7 @@ import { Kysely, PostgresDialect, sql } from "kysely";
 import type { PlatformDatabase, TenantDatabase } from "../db/types.js";
 import { createOrgService, type OrgService } from "./service.js";
 import { ValidationError, ConflictError, InternalError } from "../errors.js";
+import type { OrgId, OrgSchema, OrgSlug } from "@care-y/shared";
 
 // OrgService creates real PostgreSQL schemas. Mocking is not viable because
 // createOrg exercises CREATE SCHEMA, migration execution, and org_config
@@ -11,8 +12,8 @@ import { ValidationError, ConflictError, InternalError } from "../errors.js";
 describe.skipIf(!process.env.DATABASE_URL)("OrgService", () => {
   let platformDb: Kysely<PlatformDatabase>;
   let service: OrgService;
-  const createdSchemas: string[] = [];
-  const createdOrgIds: string[] = [];
+  const createdSchemas: OrgSchema[] = [];
+  const createdOrgIds: OrgId[] = [];
 
   // Override int8 parser (same as db.ts).
   pg.types.setTypeParser(pg.types.builtins.INT8, (val: string) =>
@@ -165,7 +166,7 @@ describe.skipIf(!process.env.DATABASE_URL)("OrgService", () => {
 
   it("findById returns null for nonexistent id", async () => {
     const found = await service.findById(
-      "00000000-0000-0000-0000-000000000000",
+      "00000000-0000-0000-0000-000000000000" as OrgId,
     );
     expect(found).toBeNull();
   });
@@ -195,7 +196,7 @@ describe.skipIf(!process.env.DATABASE_URL)("OrgService", () => {
 
   it("validateSetupToken returns false for nonexistent org", async () => {
     const valid = await service.validateSetupToken(
-      "00000000-0000-0000-0000-000000000000",
+      "00000000-0000-0000-0000-000000000000" as OrgId,
       "any-token",
     );
     expect(valid).toBe(false);
@@ -322,7 +323,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
       const row = await platformDb
         .selectFrom("orgs")
         .selectAll()
-        .where("slug", "=", "test-fault-migration")
+        .where("slug", "=", "test-fault-migration" as OrgSlug)
         .executeTakeFirst();
       expect(row).toBeUndefined();
 
@@ -346,7 +347,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
       const row = await platformDb
         .selectFrom("orgs")
         .selectAll()
-        .where("slug", "=", "test-fault-wrap")
+        .where("slug", "=", "test-fault-wrap" as OrgSlug)
         .executeTakeFirst();
       expect(row).toBeUndefined();
     });
@@ -405,7 +406,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
         const row = await platformDb
           .selectFrom("orgs")
           .selectAll()
-          .where("slug", "=", slug)
+          .where("slug", "=", slug as OrgSlug)
           .executeTakeFirst();
         expect(row).toBeUndefined();
       } finally {

@@ -5,7 +5,6 @@
  * an isolated test schema via createTestDb() and drops it in afterAll.
  */
 
-import crypto from "node:crypto";
 import { describe, it, expect, beforeAll, afterAll, vi } from "vitest";
 import { sql } from "kysely";
 import type { TestDb } from "../test-utils.js";
@@ -24,6 +23,8 @@ import {
   SHARE_CLEANUP_INTERVAL_MS,
   type CreateShareRow,
 } from "./share-service.js";
+import { newShareId, newFollowupId, newTicketId } from "@care-y/shared";
+import type { TicketId, UserId, OrgSchema } from "@care-y/shared";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -31,17 +32,17 @@ import {
 
 // Set in beforeAll from the ticket fixture's created user; followups.created_by
 // carries a foreign key to users, so a random UUID is rejected.
-let sharedUserId: string;
+let sharedUserId: UserId;
 
 function makeShareInput(
-  ticketId: string,
+  ticketId: TicketId,
   overrides?: Partial<CreateShareRow>,
 ): CreateShareRow {
   return {
-    shareId: crypto.randomUUID(),
+    shareId: newShareId(),
     ticketId,
     ciphertext: Buffer.from("test-share-ciphertext"),
-    followUpId: crypto.randomUUID(),
+    followUpId: newFollowupId(),
     encryptedFollowUp: Buffer.from("test-followup-ciphertext"),
     createdBy: sharedUserId,
     ...overrides,
@@ -56,7 +57,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
   "share-service (DB integration)",
   () => {
     let testDb: TestDb;
-    let ticketId: string;
+    let ticketId: TicketId;
 
     beforeAll(async () => {
       testDb = await createTestDb();
@@ -113,7 +114,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
     });
 
     it("rolls back the share row when the follow-up insert fails", async () => {
-      const shareId = crypto.randomUUID();
+      const shareId = newShareId();
       // Use the same followUpId as a prior test row to trigger a PK conflict
       // on the followups table, forcing a rollback of the share insert.
       const existingFu = await testDb.db
@@ -139,7 +140,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
     });
 
     it("throws ShareTicketNotFoundError for a nonexistent ticket", async () => {
-      const input = makeShareInput(crypto.randomUUID());
+      const input = makeShareInput(newTicketId());
       await expect(createShare(testDb.db, input)).rejects.toThrow(
         ShareTicketNotFoundError,
       );
@@ -180,7 +181,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
     });
 
     it("returns 'expired' for a row with past expires_at", async () => {
-      const shareId = crypto.randomUUID();
+      const shareId = newShareId();
       const pastExpiry = new Date(Date.now() - 1000);
 
       await testDb.db
@@ -198,7 +199,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
     });
 
     it("returns 'not_found' for an unknown id", async () => {
-      const result = await openShare(testDb.db, crypto.randomUUID());
+      const result = await openShare(testDb.db, newShareId());
       expect(result.status).toBe("not_found");
     });
 
@@ -250,7 +251,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
       const fix3 = await createTestTicketFixture(testDb.db);
 
       // Insert an expired row (past expiry)
-      const expiredId = crypto.randomUUID();
+      const expiredId = newShareId();
       await testDb.db
         .insertInto("share_links")
         .values({
@@ -262,7 +263,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
         .execute();
 
       // Insert a consumed tombstone past expiry (read_at set, ciphertext null)
-      const tombstoneId = crypto.randomUUID();
+      const tombstoneId = newShareId();
       await testDb.db
         .insertInto("share_links")
         .values({
@@ -283,7 +284,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
       registerShareCleanupHandler(
         jobQueue,
         () => testDb.db,
-        async () => [testDb.schemaName],
+        async () => [testDb.schemaName as OrgSchema],
       );
 
       const handler = handlers.get(SHARE_CLEANUP_QUEUE);

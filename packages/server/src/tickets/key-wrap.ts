@@ -5,9 +5,10 @@ import {
   toRistrettoPoint,
   type SymmetricKey,
 } from "@care-y/crypto";
+import type { TicketId, UserId, KeyGeneration } from "@care-y/shared";
 
 export interface VolunteerPublicKey {
-  readonly volunteerId: string;
+  readonly volunteerId: UserId;
   readonly volPublic: Buffer;
 }
 
@@ -17,8 +18,8 @@ export interface VolunteerPublicKey {
  */
 export async function eciesWrapAndStore(
   db: Kysely<TenantDatabase>,
-  ticketId: string,
-  keyGeneration: string,
+  ticketId: TicketId,
+  keyGeneration: KeyGeneration,
   tk: SymmetricKey,
   volunteers: readonly VolunteerPublicKey[],
 ): Promise<void> {

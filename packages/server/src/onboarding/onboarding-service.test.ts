@@ -1,7 +1,12 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import type { Kysely } from "kysely";
 import type { TenantDatabase } from "../db/types.js";
-import { RoleId } from "@care-y/shared";
+import {
+  RoleId,
+  type OrgSchema,
+  type OrgSlug,
+  type InviteTokenId,
+} from "@care-y/shared";
 import {
   createTestDb,
   createTestUser,
@@ -223,7 +228,7 @@ describe.skipIf(!HAS_DB)("OnboardingService (DB)", () => {
   // ── registerFromInvite ──────────────────────────────────────────
 
   describe("registerFromInvite", () => {
-    let inviteId: string;
+    let inviteId: InviteTokenId;
     let rawToken: string;
 
     beforeAll(async () => {
@@ -260,8 +265,8 @@ describe.skipIf(!HAS_DB)("OnboardingService (DB)", () => {
         testSealedBox,
         {
           orgId: TEST_ORG_ID,
-          orgSlug: "test-org",
-          orgSchema: testDb.schemaName,
+          orgSlug: "test-org" as OrgSlug,
+          orgSchema: testDb.schemaName as OrgSchema,
         },
       );
 

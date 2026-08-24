@@ -18,21 +18,22 @@ import type { TenantDatabase } from "../db/types.js";
 import type { TicketAccessChecker } from "../tickets/access.js";
 import { ForbiddenError, ValidationError } from "../errors.js";
 import { encode } from "@care-y/crypto";
+import type { TicketId, UserId } from "@care-y/shared";
 
 export interface ConversionTarget {
-  readonly volunteerId: string;
+  readonly volunteerId: UserId;
   readonly volPublic: string; // base64
 }
 
 export interface ConversionWrap {
-  readonly volunteerId: string;
+  readonly volunteerId: UserId;
   readonly ephemeralPoint: Buffer;
   readonly nonce: Buffer;
   readonly wrappedKey: Buffer;
 }
 
 export interface ConvertIntakeKeyWrapInput {
-  readonly ticketId: string;
+  readonly ticketId: TicketId;
   readonly wraps: readonly ConversionWrap[];
 }
 
@@ -50,8 +51,8 @@ export interface ConvertIntakeKeyWrapResult {
 export async function getConversionTargets(
   db: Kysely<TenantDatabase>,
   access: TicketAccessChecker,
-  userId: string,
-  ticketId: string,
+  userId: UserId,
+  ticketId: TicketId,
 ): Promise<ConversionTarget[]> {
   await access.assertAccess(userId, ticketId);
 
@@ -99,7 +100,7 @@ export async function getConversionTargets(
 export async function convertIntakeKeyWrap(
   db: Kysely<TenantDatabase>,
   access: TicketAccessChecker,
-  userId: string,
+  userId: UserId,
   input: ConvertIntakeKeyWrapInput,
 ): Promise<ConvertIntakeKeyWrapResult> {
   await access.assertAccess(userId, input.ticketId);

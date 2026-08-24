@@ -41,6 +41,16 @@ import {
   ErrorCode,
   type RoleIdValue,
 } from "@care-y/shared";
+import type {
+  SessionId,
+  SessionToken,
+  UserId,
+  IpToken,
+  UaToken,
+  OrgId,
+  OrgSlug,
+  OrgSchema,
+} from "@care-y/shared";
 import { encode } from "@care-y/crypto";
 import { createScryptHasher } from "../auth/password.js";
 import { createInMemoryRateLimiter } from "../ratelimit/rate-limiter.js";
@@ -68,8 +78,8 @@ describe.skipIf(!HAS_DB)("onboarding router (DB integration)", () => {
   let tenantDb: Kysely<TenantDatabase>;
   let orgSlug: string;
   const hasher = createScryptHasher();
-  const createdOrgIds: string[] = [];
-  const createdSchemas: string[] = [];
+  const createdOrgIds: OrgId[] = [];
+  const createdSchemas: OrgSchema[] = [];
 
   beforeAll(async () => {
     testDb = await createTestDb();
@@ -140,9 +150,9 @@ describe.skipIf(!HAS_DB)("onboarding router (DB integration)", () => {
   }
 
   interface AuthedOrgInfo {
-    readonly orgId: string;
-    readonly orgSlug: string;
-    readonly orgSchema: string;
+    readonly orgId: OrgId;
+    readonly orgSlug: OrgSlug;
+    readonly orgSchema: OrgSchema;
     readonly tenantDb: Kysely<TenantDatabase>;
   }
 
@@ -154,7 +164,7 @@ describe.skipIf(!HAS_DB)("onboarding router (DB integration)", () => {
    */
   function buildAuthedCaller(
     orgInfo: AuthedOrgInfo,
-    user: { id: string; roleId: string },
+    user: { id: UserId; roleId: RoleIdValue },
   ) {
     const deps = buildOnboardingDeps();
     const onboardingRouter = createOnboardingRouter(deps);
@@ -174,11 +184,11 @@ describe.skipIf(!HAS_DB)("onboarding router (DB integration)", () => {
       res,
       org: orgCtx,
       session: {
-        id: "test-session",
-        token: "test-token",
+        id: "test-session" as SessionId,
+        token: "test-token" as SessionToken,
         userId: user.id,
-        ipToken: "test-ip",
-        uaToken: "test-ua",
+        ipToken: "test-ip" as IpToken,
+        uaToken: "test-ua" as UaToken,
         expiresAt: new Date(Date.now() + 3_600_000),
         twofaVerified: true,
         webauthnChallenge: null,
@@ -366,7 +376,7 @@ describe.skipIf(!HAS_DB)("onboarding router (DB integration)", () => {
     });
 
     /** Bootstrap an admin so the org has a public key and a user with valid credentials. */
-    async function bootstrapAndGetUserId(slug: string): Promise<string> {
+    async function bootstrapAndGetUserId(slug: string): Promise<UserId> {
       const { caller } = buildCaller(slug);
       const result = await caller.onboarding.bootstrapAdmin({
         identifier: "reauth-admin",
@@ -432,7 +442,7 @@ describe.skipIf(!HAS_DB)("onboarding router (DB integration)", () => {
   describe("invites", () => {
     let freshTestDb: TestDb;
     let inviteOrg: AuthedOrgInfo;
-    let adminUserId: string;
+    let adminUserId: UserId;
     const adminIdentifier = "invite-admin";
 
     beforeAll(async () => {
@@ -448,7 +458,7 @@ describe.skipIf(!HAS_DB)("onboarding router (DB integration)", () => {
       createdSchemas.push(org.schemaName);
       inviteOrg = {
         orgId: org.id,
-        orgSlug: slug,
+        orgSlug: slug as OrgSlug,
         orgSchema: org.schemaName,
         tenantDb: makeTenantDbFactory(freshTestDb.platformDb)(org.schemaName),
       };
@@ -520,7 +530,7 @@ describe.skipIf(!HAS_DB)("onboarding router (DB integration)", () => {
 
     it("rejects invite generation without the manage-roles permission", async () => {
       const { caller } = buildAuthedCaller(inviteOrg, {
-        id: randomUUID(),
+        id: randomUUID() as UserId,
         roleId: RoleId.VOLUNTEER,
       });
 
@@ -714,7 +724,7 @@ describe.skipIf(!HAS_DB)("onboarding router (DB integration)", () => {
   describe("setup steps", () => {
     let freshTestDb: TestDb;
     let setupOrg: AuthedOrgInfo;
-    let adminUserId: string;
+    let adminUserId: UserId;
 
     beforeAll(async () => {
       freshTestDb = await createTestDb();
@@ -729,7 +739,7 @@ describe.skipIf(!HAS_DB)("onboarding router (DB integration)", () => {
       createdSchemas.push(org.schemaName);
       setupOrg = {
         orgId: org.id,
-        orgSlug: slug,
+        orgSlug: slug as OrgSlug,
         orgSchema: org.schemaName,
         tenantDb: makeTenantDbFactory(freshTestDb.platformDb)(org.schemaName),
       };

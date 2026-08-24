@@ -11,12 +11,88 @@
 //   Buffer                 - encrypted bytea column
 
 import type { ColumnType, Generated } from "kysely";
-import type { TicketStatus, TicketPriority } from "@care-y/shared";
+import type {
+  TicketStatus,
+  TicketPriority,
+  OrgId,
+  OrgSlug,
+  OrgSchema,
+  UserId,
+  RoleIdValue,
+  SessionId,
+  OrgConfigId,
+  JobId,
+  OprfAuditId,
+  TicketId,
+  TicketKeyWrapId,
+  WebauthnCredentialRowId,
+  WebauthnCredentialId,
+  TotpSecretId,
+  EmailCodeId,
+  SmsCodeId,
+  BackupCodeId,
+  TwoFactorMethodId,
+  PhoneId,
+  PhoneHash,
+  PhoneMatchHash,
+  AliasHash,
+  ClientId,
+  PhoneGreetingId,
+  SmsResponseId,
+  ConsultantId,
+  VerificationCodeHash,
+  OpsPhoneHash,
+  QueueId,
+  FollowupId,
+  NoteTypeId,
+  CallSid,
+  RecordingId,
+  AttachmentId,
+  PresetReplyId,
+  ClientMergeEventId,
+  KbCategoryId,
+  KbItemId,
+  KbVoteId,
+  KbAttachmentId,
+  PushSubscriptionId,
+  PushChallengeId,
+  SessionTokenHash,
+  AuditLogId,
+  PhoneBlocklistId,
+  FollowupReactionId,
+  InviteTokenId,
+  VoicemailQuarantineId,
+  RecordingSid,
+  NotificationPreferenceId,
+  NotificationScopeId,
+  EscalationRuleId,
+  IntakeFormId,
+  IntakeFormFieldId,
+  ChannelRowId,
+  ChannelSecret,
+  PortalMessageId,
+  ShareId,
+  ClientAccountId,
+  ClientAccountSessionId,
+  IdentifierHash,
+  PasswordHash,
+  CodeHash,
+  PhoneSid,
+  E164,
+  UsernameHash,
+  SessionToken,
+  IpToken,
+  UaToken,
+  WebauthnChallenge,
+  HashedIp,
+  KeyGeneration,
+  BlobKey,
+} from "@care-y/shared";
 
 export interface OrgsTable {
-  id: Generated<string>;
-  slug: string;
-  schema_name: string;
+  id: Generated<OrgId>;
+  slug: OrgSlug;
+  schema_name: OrgSchema;
   is_active: ColumnType<boolean, boolean | undefined, boolean>;
   setup_token_hash: Buffer | null;
 }
@@ -33,9 +109,9 @@ export interface OprfConfigTable {
 }
 
 export interface OprfAuditLogTable {
-  id: Generated<string>;
-  user_id: string;
-  hashed_ip: string;
+  id: Generated<OprfAuditId>;
+  user_id: UserId;
+  hashed_ip: HashedIp;
   reason: string;
   timestamp: Generated<Date>;
 }
@@ -43,7 +119,7 @@ export interface OprfAuditLogTable {
 // --- Job queue infrastructure ---
 
 export interface PendingJobsTable {
-  id: Generated<string>;
+  id: Generated<JobId>;
   queue: string;
   payload: Record<string, unknown>;
   status: ColumnType<string, string | undefined, string>;
@@ -62,7 +138,7 @@ export interface PendingJobsTable {
 // --- Telephony config ---
 
 export interface TelephonyConfigTable {
-  org_id: string;
+  org_id: OrgId;
   provider: string;
   config: Buffer; // encrypted JSON blob (nonce || ciphertext)
   key_version: ColumnType<number, number | undefined, number>;
@@ -81,33 +157,33 @@ export interface PlatformDatabase {
 }
 
 export interface UsersTable {
-  id: Generated<string>;
-  identifier_hash: string;
+  id: Generated<UserId>;
+  identifier_hash: IdentifierHash;
   encrypted_identifier: Buffer;
-  password_hash: string;
+  password_hash: PasswordHash;
   encrypted_display_name: Buffer;
   encrypted_notification_addr: Buffer | null;
   encrypted_preferred_locale: Buffer | null;
-  role_id: string;
+  role_id: RoleIdValue;
   is_active: ColumnType<boolean, boolean | undefined, boolean>;
   has_seen_briefing: ColumnType<boolean, boolean | undefined, boolean>;
 }
 
 export interface SessionsTable {
-  id: Generated<string>;
-  token: string;
-  user_id: string;
+  id: Generated<SessionId>;
+  token: SessionToken;
+  user_id: UserId;
   encrypted_ip_address: Buffer;
   encrypted_user_agent: Buffer;
-  ip_token: string;
-  ua_token: string;
+  ip_token: IpToken;
+  ua_token: UaToken;
   expires_at: Date;
   twofa_verified: ColumnType<boolean, boolean | undefined, boolean>;
-  webauthn_challenge: string | null;
+  webauthn_challenge: WebauthnChallenge | null;
 }
 
 export interface OrgConfigTable {
-  id: Generated<string>;
+  id: Generated<OrgConfigId>;
   encrypted_name: Buffer | null;
   encrypted_logo: Buffer | null;
   encrypted_primary_color: Buffer | null;
@@ -117,8 +193,8 @@ export interface OrgConfigTable {
   pii_retention_days: number | null;
   org_public_key: Buffer | null; // Curve25519 (32 bytes), null until first admin onboarding
   default_country_code: ColumnType<string, string | undefined, string>;
-  phone_outbound_sid: string | null;
-  phone_system_sid: string | null;
+  phone_outbound_sid: PhoneSid | null;
+  phone_system_sid: PhoneSid | null;
   recommend_close_days: number | null;
   media_retention_days: ColumnType<number, number | undefined, number>;
   media_purge_days: ColumnType<number, number | undefined, number>;
@@ -126,14 +202,14 @@ export interface OrgConfigTable {
   email_from_name: ColumnType<string, string | undefined, string>;
   email_from_address: ColumnType<string, string | undefined, string>;
   // PWA icon blob keys (ADR-024)
-  icon_192_blob_key: string | null;
-  icon_512_blob_key: string | null;
-  icon_maskable_blob_key: string | null;
+  icon_192_blob_key: BlobKey | null;
+  icon_512_blob_key: BlobKey | null;
+  icon_maskable_blob_key: BlobKey | null;
   default_language: ColumnType<string, string | undefined, string>;
   setup_telephony_config: Buffer | null; // encrypted JSON blob (nonce || ciphertext), set during wizard
   encrypted_terminology: Buffer | null; // encrypted JSON blob (nonce || ciphertext), per-language labels
-  default_note_type_id: string | null;
-  intake_queue_id: string | null;
+  default_note_type_id: NoteTypeId | null;
+  intake_queue_id: QueueId | null;
   web_intake_enabled: ColumnType<boolean, boolean | undefined, boolean>;
   getting_started_dismissed_at: ColumnType<
     Date | null,
@@ -147,7 +223,7 @@ export interface OrgConfigTable {
 // --- User keys (full interface, replaces UserKeysStubTable) ---
 // Stub created with user_id + salt, then extended via ALTER TABLE migration.
 export interface UserKeysTable {
-  user_id: string;
+  user_id: UserId;
   salt: Buffer;
   vol_public: Buffer | null; // ristretto255 point (32 bytes), null until first login
   pq_public: Buffer | null; // ML-KEM-768 (1184 bytes), null until PQ phase
@@ -158,7 +234,7 @@ export interface UserKeysTable {
 
 // --- Wrapped org keys (per-volunteer encrypted copies of org secret key) ---
 export interface WrappedOrgKeysTable {
-  user_id: string;
+  user_id: UserId;
   ephemeral_point: Buffer; // ristretto255, 32 bytes (ECIES ephemeral public point)
   wrapped_key: Buffer; // ECIES-wrapped org private key
   nonce: Buffer; // 24 bytes
@@ -168,10 +244,10 @@ export interface WrappedOrgKeysTable {
 // --- Ticket key wraps (CREATE TABLE in migration 025) ---
 // Each volunteer gets one wrap per ticket per key_generation.
 export interface TicketKeyWrapsTable {
-  id: Generated<string>;
-  ticket_id: string;
-  volunteer_id: string;
-  key_generation: string; // UUID, groups wraps by crypto-shred/reopen cycle (ADR-018)
+  id: Generated<TicketKeyWrapId>;
+  ticket_id: TicketId;
+  volunteer_id: UserId;
+  key_generation: KeyGeneration; // UUID, groups wraps by crypto-shred/reopen cycle (ADR-018)
   ephemeral_point: Buffer; // ristretto255, 32 bytes
   nonce: Buffer; // 24 bytes
   wrapped_key: Buffer; // ECIES-wrapped ticket key
@@ -180,9 +256,9 @@ export interface TicketKeyWrapsTable {
 
 // --- WebAuthn credentials ---
 export interface WebauthnCredentialsTable {
-  id: Generated<string>;
-  user_id: string;
-  credential_id: string;
+  id: Generated<WebauthnCredentialRowId>;
+  user_id: UserId;
+  credential_id: WebauthnCredentialId;
   public_key: string;
   sign_count: ColumnType<number, number | undefined, number>;
   transports: string[] | null;
@@ -194,17 +270,17 @@ export interface WebauthnCredentialsTable {
 
 // --- TOTP secrets ---
 export interface TotpSecretsTable {
-  id: Generated<string>;
-  user_id: string;
+  id: Generated<TotpSecretId>;
+  user_id: UserId;
   encrypted_secret: Buffer;
   verified: ColumnType<boolean, boolean | undefined, boolean>;
 }
 
 // --- Email verification codes ---
 export interface EmailCodesTable {
-  id: Generated<string>;
-  user_id: string;
-  code_hash: string;
+  id: Generated<EmailCodeId>;
+  user_id: UserId;
+  code_hash: CodeHash;
   expires_at: Date;
   attempts: ColumnType<number, number | undefined, number>;
   consumed: ColumnType<boolean, boolean | undefined, boolean>;
@@ -212,17 +288,17 @@ export interface EmailCodesTable {
 
 // --- Backup codes ---
 export interface BackupCodesTable {
-  id: Generated<string>;
-  user_id: string;
-  code_hash: string;
+  id: Generated<BackupCodeId>;
+  user_id: UserId;
+  code_hash: CodeHash;
   is_used: ColumnType<boolean, boolean | undefined, boolean>;
 }
 
 // --- SMS verification codes ---
 export interface SmsCodesTable {
-  id: Generated<string>;
-  user_id: string;
-  code_hash: string;
+  id: Generated<SmsCodeId>;
+  user_id: UserId;
+  code_hash: CodeHash;
   expires_at: Date;
   attempts: ColumnType<number, number | undefined, number>;
   consumed: ColumnType<boolean, boolean | undefined, boolean>;
@@ -230,21 +306,21 @@ export interface SmsCodesTable {
 
 // --- 2FA method registry ---
 export interface TwoFactorMethodsTable {
-  id: Generated<string>;
-  user_id: string;
+  id: Generated<TwoFactorMethodId>;
+  user_id: UserId;
   method_type: string;
   is_active: ColumnType<boolean, boolean | undefined, boolean>;
   encrypted_sms_phone: Buffer | null; // Only populated when method_type = 'sms'
-  sms_phone_hash: string | null; // BlindIndexer hash, only when method_type = 'sms'
+  sms_phone_hash: PhoneHash | null; // BlindIndexer hash, only when method_type = 'sms'
 }
 
 // Telephony data models
 
 export interface PhonesTable {
-  id: Generated<string>;
-  phone_hash: string;
+  id: Generated<PhoneId>;
+  phone_hash: PhoneHash;
   encrypted_number: Buffer;
-  phone_match_hash: string | null;
+  phone_match_hash: PhoneMatchHash | null;
   locale: string;
   location_city: string | null;
   location_region: string | null;
@@ -254,31 +330,31 @@ export interface PhonesTable {
 }
 
 export interface ClientsTable {
-  id: Generated<string>;
+  id: Generated<ClientId>;
   encrypted_alias: Buffer;
-  alias_hash: string | null;
-  phone_id: string | null;
-  merged_into: string | null;
+  alias_hash: AliasHash | null;
+  phone_id: PhoneId | null;
+  merged_into: ClientId | null;
   communication_tier: ColumnType<string, string | undefined, string>;
   created_at: Generated<Date>;
   updated_at: Generated<Date>;
 }
 
 export interface PhoneGreetingsTable {
-  id: Generated<string>;
-  phone_number: string;
+  id: Generated<PhoneGreetingId>;
+  phone_number: E164;
   greeting_type: string;
   locale: string;
   text: string;
   is_audio: ColumnType<boolean, boolean | undefined, boolean>;
-  audio_blob_key: string | null;
+  audio_blob_key: BlobKey | null;
   audio_content_type: string | null;
   created_at: Generated<Date>;
   updated_at: Generated<Date>;
 }
 
 export interface SmsResponsesTable {
-  id: Generated<string>;
+  id: Generated<SmsResponseId>;
   response_type: string;
   locale: string;
   text: string;
@@ -287,18 +363,18 @@ export interface SmsResponsesTable {
 }
 
 export interface ConsultantsTable {
-  id: Generated<string>;
-  user_id: string;
+  id: Generated<ConsultantId>;
+  user_id: UserId;
   encrypted_phone: ColumnType<
     Buffer | null,
     Buffer | null | undefined,
     Buffer | null
   >;
   is_verified: ColumnType<boolean, boolean | undefined, boolean>;
-  verification_code_hash: string | null;
+  verification_code_hash: VerificationCodeHash | null;
   verification_expires_at: Date | null;
   preferred_call_method: string;
-  ops_phone_hash: string | null;
+  ops_phone_hash: OpsPhoneHash | null;
   ops_encrypted_phone: Buffer | null;
   sms_pings_enabled: ColumnType<boolean, boolean | undefined, boolean>;
   verify_sends_hour_start: Date | null;
@@ -312,7 +388,7 @@ export interface ConsultantsTable {
 // --- Ticket Data Models ---
 
 export interface QueuesTable {
-  id: Generated<string>;
+  id: Generated<QueueId>;
   encrypted_name: Buffer;
   sort_order: number;
   escalate_days: ColumnType<number, number | undefined, number>;
@@ -323,9 +399,9 @@ export interface QueuesTable {
 }
 
 export interface TicketsTable {
-  id: Generated<string>;
-  client_id: string;
-  queue_id: string;
+  id: Generated<TicketId>;
+  client_id: ClientId;
+  queue_id: QueueId;
   status: ColumnType<TicketStatus, TicketStatus | undefined, TicketStatus>;
   priority: ColumnType<
     TicketPriority,
@@ -333,16 +409,16 @@ export interface TicketsTable {
     TicketPriority
   >;
   on_hold: ColumnType<boolean, boolean | undefined, boolean>;
-  assigned_to: string | null;
+  assigned_to: UserId | null;
   encrypted_title: Buffer;
   encrypted_description: Buffer;
-  key_generation: string;
+  key_generation: KeyGeneration;
   created_at: Generated<Date>;
 }
 
 export interface FollowupsTable {
-  id: Generated<string>;
-  ticket_id: string;
+  id: Generated<FollowupId>;
+  ticket_id: TicketId;
   source: string;
   type: string;
   is_private: ColumnType<boolean, boolean | undefined, boolean>;
@@ -352,14 +428,14 @@ export interface FollowupsTable {
     string | string[]
   >;
   encrypted_content: Buffer;
-  created_by: string | null;
+  created_by: UserId | null;
   deleted_at: Date | null;
   created_at: Generated<Date>;
-  note_type_id: string | null;
-  call_sid: string | null;
+  note_type_id: NoteTypeId | null;
+  call_sid: CallSid | null;
   call_status: string | null;
   call_duration_seconds: number | null;
-  key_generation: string | null;
+  key_generation: KeyGeneration | null;
   edited_at: Date | null;
   event_params: ColumnType<
     Record<string, unknown> | null,
@@ -369,10 +445,10 @@ export interface FollowupsTable {
 }
 
 export interface RecordingsTable {
-  id: Generated<string>;
-  ticket_id: string;
-  followup_id: string | null;
-  blob_key: string;
+  id: Generated<RecordingId>;
+  ticket_id: TicketId;
+  followup_id: FollowupId | null;
+  blob_key: BlobKey;
   size_bytes: number;
   duration_seconds: number | null;
   created_at: Generated<Date>;
@@ -380,10 +456,10 @@ export interface RecordingsTable {
 }
 
 export interface AttachmentsTable {
-  id: Generated<string>;
-  ticket_id: string;
-  followup_id: string | null;
-  blob_key: string;
+  id: Generated<AttachmentId>;
+  ticket_id: TicketId;
+  followup_id: FollowupId | null;
+  blob_key: BlobKey;
   size_bytes: number;
   encrypted_filename: Buffer | null;
   content_type: string | null;
@@ -392,24 +468,24 @@ export interface AttachmentsTable {
 }
 
 export interface TicketDependenciesTable {
-  ticket_id: string;
-  depends_on_ticket_id: string;
+  ticket_id: TicketId;
+  depends_on_ticket_id: TicketId;
   created_at: Generated<Date>;
 }
 
 export interface PresetRepliesTable {
-  id: Generated<string>;
+  id: Generated<PresetReplyId>;
   encrypted_title: Buffer;
   encrypted_body: Buffer;
-  queue_id: string | null;
-  created_by: string;
+  queue_id: QueueId | null;
+  created_by: UserId;
   created_at: Generated<Date>;
 }
 
 export interface ClientMergeEventsTable {
-  id: Generated<string>;
-  primary_client_id: string;
-  secondary_client_id: string;
+  id: Generated<ClientMergeEventId>;
+  primary_client_id: ClientId;
+  secondary_client_id: ClientId;
   merged_at: Generated<Date>;
   snapshot: Buffer;
   undo_locked: ColumnType<boolean, boolean | undefined, boolean>;
@@ -419,7 +495,7 @@ export interface ClientMergeEventsTable {
 // --- Knowledge Base ---
 
 export interface KBCategoriesTable {
-  id: Generated<string>;
+  id: Generated<KbCategoryId>;
   encrypted_name: Buffer;
   sort_order: number;
   encrypted_description: Buffer | null;
@@ -428,12 +504,12 @@ export interface KBCategoriesTable {
 }
 
 export interface KBItemsTable {
-  id: Generated<string>;
-  category_id: string;
+  id: Generated<KbItemId>;
+  category_id: KbCategoryId;
   encrypted_title: Buffer;
   encrypted_body: Buffer;
   encrypted_excerpt: Buffer | null;
-  created_by: string;
+  created_by: UserId;
   vote_up_count: ColumnType<number, number | undefined, number>;
   vote_down_count: ColumnType<number, number | undefined, number>;
   rating: ColumnType<number, number | undefined, number>;
@@ -442,17 +518,17 @@ export interface KBItemsTable {
 }
 
 export interface KBVotesTable {
-  id: Generated<string>;
-  kb_item_id: string;
-  voter_pseudonym: string;
+  id: Generated<KbVoteId>;
+  kb_item_id: KbItemId;
+  voter_id: UserId;
   direction: string;
   created_at: Generated<Date>;
 }
 
 export interface KBAttachmentsTable {
-  id: Generated<string>;
-  item_id: string;
-  blob_key: string;
+  id: Generated<KbAttachmentId>;
+  item_id: KbItemId;
+  blob_key: BlobKey;
   size_bytes: number;
   encrypted_filename: Buffer | null;
   content_type: string | null;
@@ -461,25 +537,25 @@ export interface KBAttachmentsTable {
 }
 
 export interface QueueAssignmentsTable {
-  queue_id: string;
-  user_id: string;
+  queue_id: QueueId;
+  user_id: UserId;
 }
 
 export interface TicketWatchersTable {
-  ticket_id: string;
-  user_id: string;
+  ticket_id: TicketId;
+  user_id: UserId;
 }
 
 export interface QueueWatchersTable {
-  queue_id: string;
-  user_id: string;
+  queue_id: QueueId;
+  user_id: UserId;
 }
 
 // --- Push notifications ---
 
 export interface PushSubscriptionsTable {
-  id: Generated<string>;
-  user_id: string;
+  id: Generated<PushSubscriptionId>;
+  user_id: UserId;
   endpoint: string;
   key_p256dh: string;
   key_auth: string;
@@ -489,9 +565,9 @@ export interface PushSubscriptionsTable {
 // --- Push 2FA challenges ---
 
 export interface PushChallengesTable {
-  id: Generated<string>;
-  user_id: string;
-  session_token_hash: string; // HMAC-SHA256 of the session token
+  id: Generated<PushChallengeId>;
+  user_id: UserId;
+  session_token_hash: SessionTokenHash; // HMAC-SHA256 of the session token
   status: string; // 'pending' | 'approved' | 'denied' | 'expired'
   expires_at: Date;
 }
@@ -499,40 +575,44 @@ export interface PushChallengesTable {
 // --- Read cursors ---
 
 export interface TicketReadCursorsTable {
-  ticket_id: string;
-  user_id: string;
+  ticket_id: TicketId;
+  user_id: UserId;
   encrypted_read_cursor: Buffer;
 }
 
 // --- Phone blocklist ---
 
 export interface PhoneBlocklistTable {
-  id: Generated<string>;
-  phone_hash: string;
+  id: Generated<PhoneBlocklistId>;
+  phone_hash: PhoneHash;
   encrypted_number: Buffer;
-  added_by: string;
+  added_by: UserId;
   created_at: ColumnType<Date, Date | undefined, never>;
 }
 
 // --- Note types (internal note categorization + escalation routing) ---
 
 export interface NoteTypesTable {
-  id: Generated<string>;
+  id: Generated<NoteTypeId>;
   encrypted_name: Buffer;
   encrypted_icon: Buffer;
   encrypted_description: Buffer | null;
   encrypted_escalation_targets: Buffer;
   is_active: ColumnType<boolean, boolean | undefined, boolean>;
   requires_on_close: ColumnType<boolean, boolean | undefined, boolean>;
-  min_view_role: ColumnType<string, string | undefined, string>;
-  min_create_role: ColumnType<string, string | undefined, string>;
+  min_view_role: ColumnType<RoleIdValue, RoleIdValue | undefined, RoleIdValue>;
+  min_create_role: ColumnType<
+    RoleIdValue,
+    RoleIdValue | undefined,
+    RoleIdValue
+  >;
   created_at: Generated<Date>;
 }
 
 export interface FollowupReactionsTable {
-  id: Generated<string>;
-  followup_id: string;
-  user_id: string;
+  id: Generated<FollowupReactionId>;
+  followup_id: FollowupId;
+  user_id: UserId;
   reaction: string;
   created_at: Generated<Date>;
 }
@@ -540,10 +620,10 @@ export interface FollowupReactionsTable {
 // --- Audit log ---
 
 export interface AuditLogTable {
-  id: Generated<string>;
+  id: Generated<AuditLogId>;
   event_type: string;
-  actor_id: string;
-  ticket_id: string | null;
+  actor_id: UserId;
+  ticket_id: TicketId | null;
   metadata: Record<string, unknown>;
   created_at: Generated<Date>;
 }
@@ -560,11 +640,11 @@ export interface VapidConfigTable {
 
 // --- Invite tokens (onboarding) ---
 export interface InviteTokensTable {
-  id: Generated<string>;
+  id: Generated<InviteTokenId>;
   token_hash: Buffer;
-  invited_by: string;
+  invited_by: UserId;
   encrypted_email: Buffer | null;
-  role_id: string;
+  role_id: RoleIdValue;
   expires_at: Date;
   consumed_at: Date | null;
   revoked_at: Date | null;
@@ -577,7 +657,7 @@ export interface InviteTokensTable {
 // stores ciphertext only; recency ordering lives inside the payload.
 // No timestamp column (metadata minimization, ADR-018).
 export interface UserRecentViewsTable {
-  user_id: string;
+  user_id: UserId;
   ephemeral_point: Buffer; // ristretto255, 32 bytes
   nonce: Buffer; // 24 bytes
   wrapped_payload: Buffer;
@@ -586,20 +666,20 @@ export interface UserRecentViewsTable {
 // --- Voicemail quarantine ---
 
 export interface VoicemailQuarantineTable {
-  id: Generated<string>;
-  recording_sid: string;
-  call_sid: string;
-  blob_key: string;
+  id: Generated<VoicemailQuarantineId>;
+  recording_sid: RecordingSid;
+  call_sid: CallSid;
+  blob_key: BlobKey;
   size_bytes: number;
   duration_seconds: number | null;
   reason: string;
   status: ColumnType<string, string | undefined, string>;
-  client_id: string | null;
+  client_id: ClientId | null;
   encrypted_caller_number: Buffer | null;
   encrypted_called_number: Buffer | null;
-  routed_ticket_id: string | null;
-  routed_followup_id: string | null;
-  resolved_by: string | null;
+  routed_ticket_id: TicketId | null;
+  routed_followup_id: FollowupId | null;
+  resolved_by: UserId | null;
   resolved_at: Date | null;
   created_at: Generated<Date>;
 }
@@ -607,21 +687,21 @@ export interface VoicemailQuarantineTable {
 // --- Tracked calls ---
 
 export interface TrackedCallsTable {
-  call_sid: string;
-  ticket_id: string | null;
-  user_id: string | null;
+  call_sid: CallSid;
+  ticket_id: TicketId | null;
+  user_id: UserId | null;
   direction: string;
-  client_id: string | null;
+  client_id: ClientId | null;
   created_at: Generated<Date>;
 }
 
 // --- Notification preferences ---
 
 export interface NotificationPreferencesTable {
-  id: Generated<string>;
-  user_id: string;
+  id: Generated<NotificationPreferenceId>;
+  user_id: UserId;
   scope_type: string;
-  scope_id: string | null;
+  scope_id: NotificationScopeId | null;
   event_type: string;
   channel: string;
   enabled: boolean;
@@ -630,8 +710,8 @@ export interface NotificationPreferencesTable {
 // --- Escalation rules ---
 
 export interface EscalationRulesTable {
-  id: Generated<string>;
-  queue_id: string;
+  id: Generated<EscalationRuleId>;
+  queue_id: QueueId;
   rule_type: string;
   threshold_minutes: number;
   action: string;
@@ -640,15 +720,15 @@ export interface EscalationRulesTable {
 }
 
 export interface EscalationRuleFiringsTable {
-  rule_id: string;
-  ticket_id: string;
+  rule_id: EscalationRuleId;
+  ticket_id: TicketId;
   fired_at: Generated<Date>;
 }
 
 // --- Role permission overrides ---
 
 export interface RolePermissionOverridesTable {
-  role_id: string;
+  role_id: RoleIdValue;
   permission: string;
   enabled: boolean;
 }
@@ -656,26 +736,26 @@ export interface RolePermissionOverridesTable {
 // --- Intake forms (dynamic form definitions + responses + interim key wraps) ---
 
 export interface IntakeFormsTable {
-  id: Generated<string>;
+  id: Generated<IntakeFormId>;
   name: string;
   slug: string | null;
   is_active: ColumnType<boolean, boolean | undefined, boolean>;
   is_default: ColumnType<boolean, boolean | undefined, boolean>;
-  destination_queue_id: string | null;
+  destination_queue_id: QueueId | null;
   created_at: Generated<Date>;
   updated_at: Generated<Date>;
 }
 
 export interface IntakeFormFieldsTable {
-  id: Generated<string>;
-  form_id: string;
+  id: Generated<IntakeFormFieldId>;
+  form_id: IntakeFormId;
   position: number;
   field_type: string;
   role: string | null;
   encrypted_label: Buffer;
   encrypted_config: Buffer;
   is_required: ColumnType<boolean, boolean | undefined, boolean>;
-  routing_queue_ids: string[] | null;
+  routing_queue_ids: QueueId[] | null;
   encrypted_escalation_recipient_ids: Buffer | null;
   created_at: Generated<Date>;
 }
@@ -689,14 +769,14 @@ export interface MergeCandidateDismissalsTable {
 }
 
 export interface IntakeFormResponsesTable {
-  ticket_id: string;
-  form_id: string;
+  ticket_id: TicketId;
+  form_id: IntakeFormId;
   encrypted_response: Buffer;
   created_at: Generated<Date>;
 }
 
 export interface IntakeKeyWrapsTable {
-  ticket_id: string;
+  ticket_id: TicketId;
   wrapped_tk: Buffer;
   algorithm: Generated<string>;
   created_at: Generated<Date>;
@@ -705,8 +785,8 @@ export interface IntakeKeyWrapsTable {
 // --- Share links (one-time encrypted content links) ---
 
 export interface ShareLinksTable {
-  id: string;
-  ticket_id: string;
+  id: ShareId;
+  ticket_id: TicketId;
   ciphertext: Buffer | null;
   created_at: Generated<Date>;
   expires_at: Date;
@@ -716,9 +796,9 @@ export interface ShareLinksTable {
 // --- Portal channels (communication tier, encrypted client copies) ---
 
 export interface PortalChannelsTable {
-  id: Generated<string>;
-  client_id: string;
-  channel_id: string;
+  id: Generated<ChannelRowId>;
+  client_id: ClientId;
+  channel_id: ChannelSecret;
   auth_hash: Buffer;
   client_public: Buffer;
   has_passphrase: ColumnType<boolean, boolean | undefined, boolean>;
@@ -735,9 +815,9 @@ export interface PortalChannelsTable {
 }
 
 export interface PortalMessagesTable {
-  id: Generated<string>;
-  channel_id: string;
-  followup_id: string;
+  id: Generated<PortalMessageId>;
+  channel_id: ChannelRowId;
+  followup_id: FollowupId;
   direction: string;
   ephemeral_point: Buffer;
   nonce: Buffer;
@@ -747,7 +827,7 @@ export interface PortalMessagesTable {
 }
 
 export interface PortalReplyKeyWrapsTable {
-  followup_id: string;
+  followup_id: FollowupId;
   wrapped_tk: Buffer;
   created_at: Generated<Date>;
 }
@@ -755,9 +835,9 @@ export interface PortalReplyKeyWrapsTable {
 // --- Client accounts (encrypted account portal) ---
 
 export interface ClientAccountsTable {
-  id: string; // client-minted UUID; OPRF runs against this before the row exists
-  client_id: string;
-  username_hash: string;
+  id: ClientAccountId; // client-minted UUID; OPRF runs against this before the row exists
+  client_id: ClientId;
+  username_hash: UsernameHash;
   salt: Buffer;
   public_key: Buffer;
   auth_hash: Buffer;
@@ -765,8 +845,8 @@ export interface ClientAccountsTable {
 }
 
 export interface ClientAccountSessionsTable {
-  id: Generated<string>;
-  account_id: string;
+  id: Generated<ClientAccountSessionId>;
+  account_id: ClientAccountId;
   token_hash: Buffer;
   expires_at: Date;
   created_at: Generated<Date>;

@@ -157,6 +157,7 @@ import {
   type EscalationServiceDeps,
 } from "./tickets/escalation-service.js";
 import { RoleId } from "@care-y/shared";
+import type { OrgId, OrgSchema, OrgSlug } from "@care-y/shared";
 
 // --- DB startup probe ---
 
@@ -492,7 +493,7 @@ const telephonyConfigService = createTelephonyConfigService({
 // --- Phone purpose resolver ---
 
 const phoneResolver = createPhoneResolver({
-  async getOrgConfig(orgSchema: string) {
+  async getOrgConfig(orgSchema: OrgSchema) {
     const tDb = tenantDb(orgSchema);
     const row = await tDb
       .selectFrom("org_config")
@@ -503,7 +504,7 @@ const phoneResolver = createPhoneResolver({
       phone_system_sid: row?.phone_system_sid ?? null,
     };
   },
-  async getProvisionedPhones(orgId: string) {
+  async getProvisionedPhones(orgId: OrgId) {
     return telephonyConfigService.lookupProvisionedPhones(orgId);
   },
 });
@@ -649,7 +650,7 @@ const appRouter = createAppRouter({
       windowMs: RATE_WINDOW_1H,
       maxRequests: RATE_PORTAL_REPLY_MAX,
     }),
-    portalGetProvider: async (orgId: string) =>
+    portalGetProvider: async (orgId: OrgId) =>
       providerFactory.getProvider(orgId),
     portalResolveCallerId: phoneResolver,
     shareLimiter: createInMemoryRateLimiter({
@@ -733,7 +734,7 @@ const trpcHandler = createHTTPHandler({
 // --- Job queue handlers ---
 
 /** Lists schema names for all active orgs. Used by cross-tenant job handlers. */
-async function listActiveOrgSchemas(): Promise<string[]> {
+async function listActiveOrgSchemas(): Promise<OrgSchema[]> {
   const orgs = await db
     .selectFrom("orgs")
     .select("schema_name")
@@ -746,7 +747,7 @@ async function listActiveOrgSchemas(): Promise<string[]> {
  *  job handlers need the id for platform tables and the schema for tenant
  *  queries, so both travel together. */
 async function listActiveOrgSchemasWithSlugs(): Promise<
-  readonly { id: string; schema: string; slug: string }[]
+  readonly { id: OrgId; schema: OrgSchema; slug: OrgSlug }[]
 > {
   const orgs = await db
     .selectFrom("orgs")
@@ -778,7 +779,7 @@ jobQueue.process("notification-email", notificationJobHandler);
 registerNotificationSmsHandler(jobQueue, {
   encryptor,
   getTenantDb: tenantDb,
-  getProvider: async (orgId: string) => providerFactory.getProvider(orgId),
+  getProvider: async (orgId: OrgId) => providerFactory.getProvider(orgId),
   resolveCallerIdByPurpose: phoneResolver,
 });
 
@@ -959,7 +960,7 @@ async function relayOrgResolver(
 // The relay handler only calls findByToken (reads), but the session
 // repo interface requires a SealedBoxEncryptor for consistency.
 async function createRelaySessionRepo(
-  orgSchema: string,
+  orgSchema: OrgSchema,
 ): Promise<ReturnType<typeof createDbSessionRepository>> {
   const tDb = tenantDb(orgSchema);
   const row = await tDb
@@ -978,7 +979,7 @@ async function createRelaySessionRepo(
 
 /** Looks up webhook config for an org. Shared by relay auth token + account SID resolution. */
 async function requireWebhookConfig(
-  orgId: string,
+  orgId: OrgId,
 ): Promise<{ accountSid: string; authToken: string }> {
   const lookup = await telephonyConfigService.lookupWebhookConfig(orgId);
   if (!lookup) {
@@ -990,7 +991,7 @@ async function requireWebhookConfig(
 /** Builds a SealedBoxEncryptor from the org's public key, or null when the
  *  org has not completed onboarding (no key set yet). */
 async function getOrgSealedBoxEncryptor(
-  orgSchema: string,
+  orgSchema: OrgSchema,
 ): Promise<SealedBoxEncryptor | null> {
   const row = await tenantDb(orgSchema)
     .selectFrom("org_config")
@@ -1002,26 +1003,25 @@ async function getOrgSealedBoxEncryptor(
 }
 
 const relayHandler = createRelayHandler({
-  getProvider: async (orgId: string) => providerFactory.getProvider(orgId),
+  getProvider: async (orgId: OrgId) => providerFactory.getProvider(orgId),
   getTenantDb: tenantDb,
   createConsultantRepo: (tDb: Kysely<TenantDatabase>) =>
     createConsultantRepository(tDb),
   resolveCallerIdByPurpose: phoneResolver,
   pendingCalls,
   webhookBaseUrl: env.WEBHOOK_BASE_URL,
-  async getAuthToken(orgId: string) {
+  async getAuthToken(orgId: OrgId) {
     const lookup = await telephonyConfigService.lookupWebhookConfig(orgId);
     return lookup?.authToken ?? null;
   },
-  async getAccountSid(orgId: string) {
+  async getAccountSid(orgId: OrgId) {
     return (await requireWebhookConfig(orgId)).accountSid;
   },
   apiKeySid: env.TWILIO_API_KEY_SID ?? "",
   apiKeySecret: env.TWILIO_API_KEY_SECRET ?? "",
   twimlAppSid: env.TWILIO_TWIML_APP_SID ?? "",
   orgResolver: relayOrgResolver,
-  createSessionRepo: async (orgSchema: string) =>
-    createRelaySessionRepo(orgSchema),
+  createSessionRepo: async (orgSchema) => createRelaySessionRepo(orgSchema),
   indexer,
   fieldEncryptor: encryptor,
   pendingClients,

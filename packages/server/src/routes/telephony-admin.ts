@@ -17,6 +17,7 @@ import {
   removeFromBlocklistInputSchema,
   setPhonePurposeInputSchema,
   changeTelephonyModeInputSchema,
+  phoneSidSchema,
 } from "@care-y/shared";
 import { ConflictError, InternalError } from "../errors.js";
 
@@ -73,7 +74,7 @@ export function createTelephonyAdminRouter(deps: TelephonyAdminRouterDeps) {
     addToBlocklist: adminProcedure.input(addToBlocklistInputSchema).mutation(
       withErrorWrapping(async ({ ctx, input }) => {
         const repo = createBlocklistRepository(ctx.org.tenantDb);
-        const phoneHash = indexer.hash(input.phoneNumber, ctx.org.orgId);
+        const phoneHash = indexer.hashPhone(input.phoneNumber, ctx.org.orgId);
 
         if (await repo.exists(phoneHash)) {
           throw new ConflictError("This number is already blocked");
@@ -122,7 +123,10 @@ export function createTelephonyAdminRouter(deps: TelephonyAdminRouterDeps) {
 
     setPhonePurpose: adminProcedure.input(setPhonePurposeInputSchema).mutation(
       withErrorWrapping(async ({ ctx, input }) => {
-        await configService.setPhonePurpose(ctx.org.tenantDb, input);
+        await configService.setPhonePurpose(ctx.org.tenantDb, {
+          outboundSid: input.outboundSid,
+          systemSid: input.systemSid,
+        });
       }),
     ),
 
@@ -155,8 +159,8 @@ export function createTelephonyAdminRouter(deps: TelephonyAdminRouterDeps) {
               );
 
               await configService.setPhonePurpose(ctx.org.tenantDb, {
-                outboundSid: devPhones[0].sid,
-                systemSid: devPhones[1].sid,
+                outboundSid: phoneSidSchema.parse(devPhones[0].sid),
+                systemSid: phoneSidSchema.parse(devPhones[1].sid),
               });
 
               return { skipped: false as const };

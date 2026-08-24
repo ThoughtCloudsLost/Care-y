@@ -19,14 +19,20 @@ import {
   ForbiddenError,
 } from "../errors.js";
 import * as crypto from "node:crypto";
+import {
+  newTicketId,
+  type UserId,
+  type TicketId,
+  type QueueId,
+} from "@care-y/shared";
 
 // Dummy user ID for tests that don't exercise access control
-const SYSTEM_USER = crypto.randomUUID();
+const SYSTEM_USER = crypto.randomUUID() as UserId;
 
 describe.skipIf(!process.env.DATABASE_URL)("DependencyService (DB)", () => {
   let testDb: TestDb;
   let svc: DependencyService;
-  let queueId: string;
+  let queueId: QueueId;
 
   beforeAll(async () => {
     testDb = await createTestDb();
@@ -42,7 +48,7 @@ describe.skipIf(!process.env.DATABASE_URL)("DependencyService (DB)", () => {
     await testDb.cleanup();
   });
 
-  async function createTicket(): Promise<string> {
+  async function createTicket(): Promise<TicketId> {
     const fix = await createTestTicketFixture(testDb.db, { queueId });
     return fix.ticketId;
   }
@@ -75,7 +81,7 @@ describe.skipIf(!process.env.DATABASE_URL)("DependencyService (DB)", () => {
   it("add throws NotFoundError for non-existent ticket", async () => {
     const t1 = await createTicket();
     await expect(
-      svc.add(SYSTEM_USER, t1, crypto.randomUUID()),
+      svc.add(SYSTEM_USER, t1, newTicketId()),
     ).rejects.toBeInstanceOf(NotFoundError);
   });
 

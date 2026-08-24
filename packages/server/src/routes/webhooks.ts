@@ -16,6 +16,8 @@ import type {
   TelephonyConfigService,
   WebhookConfigLookup,
 } from "../telephony/config-service.js";
+import type { OrgId } from "@care-y/shared";
+import { orgIdSchema } from "@care-y/shared";
 
 const MAX_BODY_SIZE = 1_048_576; // 1 MB
 const REPLAY_WINDOW_MS = 5 * 60 * 1000; // 5 minutes
@@ -41,22 +43,22 @@ export interface WebhookHandlerDeps {
 
 export interface WebhookDispatch {
   readonly onInboundSms?: (
-    orgId: string,
+    orgId: OrgId,
     body: Record<string, string>,
   ) => Promise<string | null>;
   readonly onInboundVoice?: (
-    orgId: string,
+    orgId: OrgId,
     body: Record<string, string>,
   ) => Promise<string | null>;
   readonly onStatusCallback?: (
-    orgId: string,
+    orgId: OrgId,
     body: Record<string, string>,
   ) => Promise<void>;
 }
 
 interface ParsedPath {
   readonly provider: string;
-  readonly orgId: string;
+  readonly orgId: OrgId;
   readonly endpoint: WebhookEndpoint;
   readonly timestamp: number | null;
 }
@@ -77,15 +79,20 @@ export function parseWebhookPath(url: string): ParsedPath | null {
   if (segments[0] !== "webhooks") return null;
 
   const provider = segments[1];
-  const orgId = segments[2];
+  const rawOrgId = segments[2];
   const endpointCandidate = segments[3];
   if (
     provider === undefined ||
-    orgId === undefined ||
+    rawOrgId === undefined ||
     endpointCandidate === undefined
   ) {
     return null;
   }
+
+  // Validate org UUID from URL segment. Malformed segments fail early.
+  const orgIdResult = orgIdSchema.safeParse(rawOrgId);
+  if (!orgIdResult.success) return null;
+  const orgId = orgIdResult.data;
 
   if (!isWebhookEndpoint(endpointCandidate)) return null;
 

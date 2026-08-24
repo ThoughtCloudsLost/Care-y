@@ -11,11 +11,12 @@ import type { Kysely } from "kysely";
 import type { TenantDatabase } from "../db/types.js";
 import { NotFoundError } from "../errors.js";
 import { ErrorCode, KB_MAX_ATTACHMENTS_PER_ARTICLE } from "@care-y/shared";
+import type { KbAttachmentId, KbItemId, BlobKey } from "@care-y/shared";
 
 export interface KBAttachmentRecord {
-  readonly id: string;
-  readonly itemId: string;
-  readonly blobKey: string;
+  readonly id: KbAttachmentId;
+  readonly itemId: KbItemId;
+  readonly blobKey: BlobKey;
   readonly sizeBytes: number;
   readonly encryptedFilename: Buffer | null;
   readonly contentType: string | null;
@@ -25,27 +26,27 @@ export interface KBAttachmentRecord {
 
 export interface KBMediaService {
   createAttachment(input: {
-    itemId: string;
-    blobKey: string;
+    itemId: KbItemId;
+    blobKey: BlobKey;
     sizeBytes: number;
     encryptedFilename?: Buffer;
     contentType?: string;
   }): Promise<KBAttachmentRecord>;
 
-  getAttachment(attachmentId: string): Promise<KBAttachmentRecord>;
+  getAttachment(attachmentId: KbAttachmentId): Promise<KBAttachmentRecord>;
 
   listAttachments(
-    itemId: string,
+    itemId: KbItemId,
     opts?: { includeSoftDeleted?: boolean },
   ): Promise<KBAttachmentRecord[]>;
 
-  softDeleteAttachment(attachmentId: string): Promise<void>;
+  softDeleteAttachment(attachmentId: KbAttachmentId): Promise<void>;
 }
 
 function toKBAttachmentRecord(row: {
-  id: string;
-  item_id: string;
-  blob_key: string;
+  id: KbAttachmentId;
+  item_id: KbItemId;
+  blob_key: BlobKey;
   size_bytes: number;
   encrypted_filename: Buffer | null;
   content_type: string | null;

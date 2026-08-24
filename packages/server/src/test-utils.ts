@@ -45,6 +45,23 @@ import {
   createSessionTokenizer,
   type SessionTokenizer,
 } from "./crypto/session-tokenizer.js";
+import type {
+  OrgId,
+  UserId,
+  ClientId,
+  PhoneId,
+  QueueId,
+  TicketId,
+  PhoneHash,
+  KeyGeneration,
+  IdentifierHash,
+  PasswordHash,
+  SessionToken,
+  IpToken,
+  UaToken,
+  WebauthnCredentialId,
+  E164,
+} from "@care-y/shared";
 
 // Override int8 parser (same as db.ts). Must be set before creating the Pool.
 pg.types.setTypeParser(pg.types.builtins.INT8, (val: string) =>
@@ -88,7 +105,7 @@ export const testSessionTokenizer: SessionTokenizer = createSessionTokenizer(
 
 /** Stable org ID for test factories. Used as the org-scoping salt in blind
  *  index hashes so that test hashes are deterministic across runs. */
-export const TEST_ORG_ID = "00000000-0000-0000-0000-000000000001";
+export const TEST_ORG_ID = "00000000-0000-4000-8000-000000000001" as OrgId;
 
 // ---------------------------------------------------------------------------
 // Sealed box test helpers
@@ -306,18 +323,20 @@ export interface CreateTestUserOptions {
   overrides?: Partial<Insertable<UsersTable>>;
   encryptor?: FieldEncryptor;
   indexer?: BlindIndexer;
-  orgId?: string;
+  orgId?: OrgId;
 }
 
 type SessionOverrides = Partial<Insertable<SessionsTable>> & {
-  user_id: string;
+  user_id: UserId;
 };
 
 // Fake password hash for test rows. Format matches createScryptHasher output
 // (scrypt:<32-hex-salt>:<128-hex-key>) but the key is not a real derivation.
 // Tests that need actual password verification should hash via createScryptHasher.
-const DEFAULT_PASSWORD_HASH =
-  "scrypt:" + "aa".repeat(16) + ":" + "bb".repeat(64);
+const DEFAULT_PASSWORD_HASH = ("scrypt:" +
+  "aa".repeat(16) +
+  ":" +
+  "bb".repeat(64)) as PasswordHash;
 
 /**
  * Inserts a user row with sensible defaults. Override any column via
@@ -339,7 +358,7 @@ export async function createTestUser(
   const identifier = `test-${uid}`;
 
   const defaults: Insertable<UsersTable> = {
-    identifier_hash: indexer.hash(identifier, orgId),
+    identifier_hash: indexer.hash(identifier, orgId) as IdentifierHash,
     encrypted_identifier: encryptor.encrypt(identifier),
     password_hash: DEFAULT_PASSWORD_HASH,
     encrypted_display_name: encryptor.encrypt(`Test User ${uid}`),
@@ -369,15 +388,15 @@ export async function createTestSession(
   encryptor?: FieldEncryptor,
 ): Promise<Selectable<SessionsTable>> {
   const enc = encryptor ?? noopEncryptor;
-  const uid = crypto.randomUUID();
+  const uid = crypto.randomUUID() as SessionToken;
   return db
     .insertInto("sessions")
     .values({
       token: uid,
       encrypted_ip_address: enc.encrypt("127.0.0.1"),
       encrypted_user_agent: enc.encrypt("test-agent"),
-      ip_token: testSessionTokenizer.tokenize("127.0.0.1"),
-      ua_token: testSessionTokenizer.tokenize("test-agent"),
+      ip_token: testSessionTokenizer.tokenize("127.0.0.1") as IpToken,
+      ua_token: testSessionTokenizer.tokenize("test-agent") as UaToken,
       expires_at: new Date(Date.now() + 60 * 60 * 1000), // 1 hour from now
       ...overrides,
     })
@@ -396,7 +415,7 @@ export async function createTestSession(
 export async function createTestQueue(
   db: Kysely<TenantDatabase>,
   overrides?: { label?: string; escalateDays?: number; sortOrder?: number },
-): Promise<{ id: string; sortOrder: number }> {
+): Promise<{ id: QueueId; sortOrder: number }> {
   const uid = crypto.randomUUID().slice(0, 8);
   const label = overrides?.label ?? `Q-${uid}`;
 
@@ -427,16 +446,16 @@ export async function createTestQueue(
 }
 
 export interface TestTicketFixture {
-  readonly phoneId: string;
-  readonly clientId: string;
-  readonly queueId: string;
-  readonly ticketId: string;
-  readonly userId: string | null;
+  readonly phoneId: PhoneId;
+  readonly clientId: ClientId;
+  readonly queueId: QueueId;
+  readonly ticketId: TicketId;
+  readonly userId: UserId | null;
 }
 
 export interface CreateTestTicketFixtureOptions {
   /** If provided, reuse this queue instead of creating a new one. */
-  queueId?: string;
+  queueId?: QueueId;
   /** If true, creates a user via createTestUser and returns its ID. Default false. */
   createUser?: boolean;
 }
@@ -460,7 +479,7 @@ export async function createTestTicketFixture(
   // one-way blind index, encrypted_number goes through the encryptor,
   // and phone_id is a UUID FK (none are plaintext PII).
   const phoneRow = {
-    phone_hash: `ph-${uid}`,
+    phone_hash: `ph-${uid}` as PhoneHash,
     encrypted_number: noopEncryptor.encrypt(`+1555000${uid}`),
     locale: "en-US",
   };
@@ -483,7 +502,7 @@ export async function createTestTicketFixture(
     .returning("id")
     .executeTakeFirstOrThrow();
 
-  let queueId: string;
+  let queueId: QueueId;
   if (options?.queueId) {
     queueId = options.queueId;
   } else {
@@ -498,12 +517,12 @@ export async function createTestTicketFixture(
       queue_id: queueId,
       encrypted_title: noopEncryptor.encrypt("test-title"),
       encrypted_description: noopEncryptor.encrypt("test-desc"),
-      key_generation: crypto.randomUUID(),
+      key_generation: crypto.randomUUID() as KeyGeneration,
     })
     .returning("id")
     .executeTakeFirstOrThrow();
 
-  let userId: string | null = null;
+  let userId: UserId | null = null;
   if (options?.createUser) {
     const user = await createTestUser(db);
     userId = user.id;
@@ -528,10 +547,10 @@ export async function createTestTicketFixture(
 }
 
 export interface TestClientFixture {
-  readonly phoneId: string;
-  readonly clientId: string;
-  readonly queueId: string;
-  readonly userId: string;
+  readonly phoneId: PhoneId;
+  readonly clientId: ClientId;
+  readonly queueId: QueueId;
+  readonly userId: UserId;
 }
 
 /**
@@ -540,12 +559,12 @@ export interface TestClientFixture {
  */
 export async function createTestClientFixture(
   db: Kysely<TenantDatabase>,
-  options?: { queueId?: string },
+  options?: { queueId?: QueueId },
 ): Promise<TestClientFixture> {
   const uid = crypto.randomUUID().slice(0, 8);
 
   const phoneRow = {
-    phone_hash: `ph-${uid}`,
+    phone_hash: `ph-${uid}` as PhoneHash,
     encrypted_number: noopEncryptor.encrypt(`+1555000${uid}`),
     locale: "en-US",
   };
@@ -568,7 +587,7 @@ export async function createTestClientFixture(
     .returning("id")
     .executeTakeFirstOrThrow();
 
-  let queueId: string;
+  let queueId: QueueId;
   if (options?.queueId) {
     queueId = options.queueId;
   } else {
@@ -784,7 +803,7 @@ export function createCapturingTransport(options?: {
  */
 export async function registerMethodDirectly(
   db: Kysely<TenantDatabase>,
-  userId: string,
+  userId: UserId,
   methodType: string,
 ): Promise<void> {
   await db
@@ -800,8 +819,8 @@ export async function registerMethodDirectly(
  */
 export async function insertWebauthnCredential(
   db: Kysely<TenantDatabase>,
-  userId: string,
-  credentialId: string,
+  userId: UserId,
+  credentialId: WebauthnCredentialId,
   signCount = 0,
   ordinal = 1,
 ): Promise<void> {
@@ -830,7 +849,7 @@ export async function insertWebauthnCredential(
  */
 export async function enrollTotp(
   twoFactor: TwoFactorService,
-  userId: string,
+  userId: UserId,
 ): Promise<Buffer> {
   const setup = await twoFactor.setupTotp(userId);
   const secret = base32Decode(setup.secret);
@@ -916,9 +935,10 @@ export function createMockProviderFactory(
       parseIncomingSms: vi.fn(),
       generateVoiceResponse: vi.fn(),
       getRecording: vi.fn(),
-      getCallDetails: vi
-        .fn()
-        .mockResolvedValue({ from: "+15550000000", to: "+15550000001" }),
+      getCallDetails: vi.fn().mockResolvedValue({
+        from: "+15550000000" as E164,
+        to: "+15550000001" as E164,
+      }),
       deleteRecording: vi.fn(),
       deleteCallLog: vi.fn(),
       deleteMessageLog: vi.fn(),

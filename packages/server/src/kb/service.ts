@@ -16,11 +16,13 @@ import { sql, type Kysely } from "kysely";
 import type { TenantDatabase } from "../db/types.js";
 import { NotFoundError } from "../errors.js";
 import { ErrorCode } from "@care-y/shared";
+import { kbItemIdSchema } from "@care-y/shared";
+import type { KbCategoryId, KbItemId, KbVoteId, UserId } from "@care-y/shared";
 
 // --- Category records ---
 
 export interface KBCategoryRecord {
-  readonly id: string;
+  readonly id: KbCategoryId;
   readonly encryptedName: Buffer;
   readonly sortOrder: number;
   readonly encryptedDescription: Buffer | null;
@@ -32,11 +34,11 @@ export interface KBCategoryRecord {
 
 /** Lightweight item record for list endpoints (no body). */
 export interface KBItemSummary {
-  readonly id: string;
-  readonly categoryId: string;
+  readonly id: KbItemId;
+  readonly categoryId: KbCategoryId;
   readonly encryptedTitle: Buffer;
   readonly encryptedExcerpt: Buffer | null;
-  readonly createdBy: string;
+  readonly createdBy: UserId;
   readonly voteUpCount: number;
   readonly voteDownCount: number;
   readonly rating: number;
@@ -60,16 +62,16 @@ export interface KBItemPage {
 
 /** Distinct KB article author with encrypted display name for client resolution. */
 export interface KBAuthorRecord {
-  readonly id: string;
+  readonly id: UserId;
   readonly encryptedDisplayName: Buffer;
 }
 
 // --- Vote records ---
 
 export interface KBVoteRecord {
-  readonly id: string;
-  readonly kbItemId: string;
-  readonly voterPseudonym: string;
+  readonly id: KbVoteId;
+  readonly kbItemId: KbItemId;
+  readonly voterId: UserId;
   readonly direction: string;
   readonly createdAt: Date;
 }
@@ -85,37 +87,39 @@ export interface KBCategoryService {
   list(): Promise<KBCategoryRecord[]>;
 
   update(
-    categoryId: string,
+    categoryId: KbCategoryId,
     input: {
       encryptedName?: Buffer;
       encryptedDescription?: Buffer;
     },
   ): Promise<KBCategoryRecord>;
 
-  delete(categoryId: string): Promise<void>;
+  delete(categoryId: KbCategoryId): Promise<void>;
 
-  reorder(items: { categoryId: string; sortOrder: number }[]): Promise<void>;
+  reorder(
+    items: { categoryId: KbCategoryId; sortOrder: number }[],
+  ): Promise<void>;
 }
 
 export interface KBItemService {
   create(
-    createdBy: string,
+    createdBy: UserId,
     input: {
-      categoryId: string;
+      categoryId: KbCategoryId;
       encryptedTitle: Buffer;
       encryptedBody: Buffer;
       encryptedExcerpt?: Buffer;
     },
   ): Promise<KBItemRecord>;
 
-  findById(itemId: string): Promise<KBItemRecord>;
+  findById(itemId: KbItemId): Promise<KBItemRecord>;
 
   list(input: {
-    categoryId?: string;
+    categoryId?: KbCategoryId;
     sortBy: "created_at" | "updated_at" | "rating";
     sortDirection: "asc" | "desc";
     minRating?: number;
-    createdBy?: string;
+    createdBy?: UserId;
     createdAfter?: string;
     createdBefore?: string;
     limit: number;
@@ -123,16 +127,16 @@ export interface KBItemService {
   }): Promise<KBItemPage>;
 
   update(
-    itemId: string,
+    itemId: KbItemId,
     input: {
-      categoryId?: string;
+      categoryId?: KbCategoryId;
       encryptedTitle?: Buffer;
       encryptedBody?: Buffer;
       encryptedExcerpt?: Buffer;
     },
   ): Promise<KBItemRecord>;
 
-  delete(itemId: string): Promise<void>;
+  delete(itemId: KbItemId): Promise<void>;
 
   /** Return the N most recently updated items, ordered by updated_at desc. */
   listRecentlyUpdated(limit: number): Promise<KBItemSummary[]>;
@@ -142,31 +146,28 @@ export interface KBItemService {
 
   /** Return encrypted bodies for a set of item IDs (max 200). */
   listBodies(
-    itemIds: readonly string[],
-  ): Promise<readonly { id: string; encryptedBody: Buffer }[]>;
+    itemIds: readonly KbItemId[],
+  ): Promise<readonly { id: KbItemId; encryptedBody: Buffer }[]>;
 }
 
 export interface KBVoteService {
   castVote(
-    voterPseudonym: string,
+    voterId: UserId,
     input: {
-      itemId: string;
+      itemId: KbItemId;
       direction: string;
     },
   ): Promise<void>;
 
-  removeVote(voterPseudonym: string, itemId: string): Promise<void>;
+  removeVote(voterId: UserId, itemId: KbItemId): Promise<void>;
 
-  getUserVote(
-    voterPseudonym: string,
-    itemId: string,
-  ): Promise<KBVoteRecord | null>;
+  getUserVote(voterId: UserId, itemId: KbItemId): Promise<KBVoteRecord | null>;
 }
 
 // --- Row mappers ---
 
 function toCategoryRecord(row: {
-  id: string;
+  id: KbCategoryId;
   encrypted_name: Buffer;
   sort_order: number;
   encrypted_description: Buffer | null;
@@ -184,11 +185,11 @@ function toCategoryRecord(row: {
 }
 
 function toItemSummary(row: {
-  id: string;
-  category_id: string;
+  id: KbItemId;
+  category_id: KbCategoryId;
   encrypted_title: Buffer;
   encrypted_excerpt: Buffer | null;
-  created_by: string;
+  created_by: UserId;
   vote_up_count: number;
   vote_down_count: number;
   rating: number;
@@ -211,12 +212,12 @@ function toItemSummary(row: {
 
 function toItemRecord(
   row: {
-    id: string;
-    category_id: string;
+    id: KbItemId;
+    category_id: KbCategoryId;
     encrypted_title: Buffer;
     encrypted_body: Buffer;
     encrypted_excerpt: Buffer | null;
-    created_by: string;
+    created_by: UserId;
     vote_up_count: number;
     vote_down_count: number;
     rating: number;
@@ -441,7 +442,9 @@ export function createKBItemService(db: Kysely<TenantDatabase>): KBItemService {
         const pipeIdx = input.cursor.indexOf("|");
         if (pipeIdx > 0) {
           const cursorSortRaw = input.cursor.slice(0, pipeIdx);
-          const cursorId = input.cursor.slice(pipeIdx + 1);
+          const cursorId = kbItemIdSchema.parse(
+            input.cursor.slice(pipeIdx + 1),
+          );
 
           // "desc" pages forward with <, "asc" pages forward with >
           const op = sortDir === "desc" ? ("<" as const) : (">" as const);
@@ -636,7 +639,7 @@ export function createKBItemService(db: Kysely<TenantDatabase>): KBItemService {
 export function createKBVoteService(db: Kysely<TenantDatabase>): KBVoteService {
   /** Recalculates and persists vote counts + Wilson score for an item. */
   async function updateVoteCounts(
-    itemId: string,
+    itemId: KbItemId,
     currentUp: number,
     currentDown: number,
     upDelta: number,
@@ -667,7 +670,7 @@ export function createKBVoteService(db: Kysely<TenantDatabase>): KBVoteService {
   }
 
   return {
-    async castVote(voterPseudonym, input) {
+    async castVote(voterId, input) {
       const item = await db
         .selectFrom("kb_items")
         .select(["id", "vote_up_count", "vote_down_count"])
@@ -679,7 +682,7 @@ export function createKBVoteService(db: Kysely<TenantDatabase>): KBVoteService {
         .selectFrom("kb_votes")
         .selectAll()
         .where("kb_item_id", "=", input.itemId)
-        .where("voter_pseudonym", "=", voterPseudonym)
+        .where("voter_id", "=", voterId)
         .executeTakeFirst();
 
       if (existing) {
@@ -707,7 +710,7 @@ export function createKBVoteService(db: Kysely<TenantDatabase>): KBVoteService {
           .insertInto("kb_votes")
           .values({
             kb_item_id: input.itemId,
-            voter_pseudonym: voterPseudonym,
+            voter_id: voterId,
             direction: input.direction,
           })
           .execute();
@@ -723,12 +726,12 @@ export function createKBVoteService(db: Kysely<TenantDatabase>): KBVoteService {
       }
     },
 
-    async removeVote(voterPseudonym, itemId) {
+    async removeVote(voterId, itemId) {
       const existing = await db
         .selectFrom("kb_votes")
         .selectAll()
         .where("kb_item_id", "=", itemId)
-        .where("voter_pseudonym", "=", voterPseudonym)
+        .where("voter_id", "=", voterId)
         .executeTakeFirst();
 
       if (!existing) return;
@@ -753,18 +756,18 @@ export function createKBVoteService(db: Kysely<TenantDatabase>): KBVoteService {
       }
     },
 
-    async getUserVote(voterPseudonym, itemId) {
+    async getUserVote(voterId, itemId) {
       const row = await db
         .selectFrom("kb_votes")
         .selectAll()
         .where("kb_item_id", "=", itemId)
-        .where("voter_pseudonym", "=", voterPseudonym)
+        .where("voter_id", "=", voterId)
         .executeTakeFirst();
       if (!row) return null;
       return {
         id: row.id,
         kbItemId: row.kb_item_id,
-        voterPseudonym: row.voter_pseudonym,
+        voterId: row.voter_id,
         direction: row.direction,
         createdAt: row.created_at,
       };

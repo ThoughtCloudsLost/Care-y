@@ -29,6 +29,19 @@ import {
   accountChangePasswordInputSchema,
   ErrorCode,
 } from "@care-y/shared";
+import type {
+  OrgId,
+  OrgSchema,
+  OrgSlug,
+  E164,
+  TicketId,
+  FollowupId,
+  KeyGeneration,
+  ClientAccountId,
+  PortalMessageId,
+} from "@care-y/shared";
+import { ticketIdSchema } from "@care-y/shared";
+import type { ChannelSecret } from "@care-y/shared";
 import type { IncomingMessage } from "node:http";
 import type { RateLimiter } from "../ratelimit/rate-limiter.js";
 import type { PowVerifier } from "../crypto/pow.js";
@@ -81,7 +94,7 @@ export interface ClientPortalRouterDeps {
   readonly portalChannelService?: {
     readonly resolveAuthedChannel: (
       db: Kysely<TenantDatabase>,
-      channelId: string,
+      channelId: ChannelSecret,
       auth: Buffer,
     ) => Promise<PortalChannelRow | null>;
   };
@@ -105,13 +118,13 @@ export interface ClientPortalRouterDeps {
   readonly portalReplyLimiter?: RateLimiter;
   /** Provider factory for portal nudge SMS (fire-and-forget after reply). */
   readonly portalGetProvider?: (
-    orgId: string,
+    orgId: OrgId,
   ) => Promise<TelephonyProvider | null>;
   /** Phone purpose resolver for portal nudge caller ID. */
   readonly portalResolveCallerId?: (
-    org: { readonly orgId: string; readonly orgSchema: string },
+    org: { readonly orgId: OrgId; readonly orgSchema: OrgSchema },
     purpose: "outbound" | "system",
-  ) => Promise<string | null>;
+  ) => Promise<E164 | null>;
 
   // Share link deps (appended by 8d)
   /** 10 req/min per IP on the public openShare endpoint. */
@@ -462,7 +475,7 @@ export function createClientPortalRouter(deps: ClientPortalRouterDeps) {
     ),
 
     listShares: volunteerProcedure
-      .input(z.object({ ticketId: z.uuid() }))
+      .input(z.object({ ticketId: ticketIdSchema }))
       .query(
         withErrorWrapping(async ({ ctx, input }) => {
           const rows = await listSharesByTicket(
@@ -967,7 +980,7 @@ async function requirePortalChannel(
     org: { tenantDb: Kysely<TenantDatabase>; orgSlug: string };
     req: IncomingMessage;
   },
-  input: { channelId: string; auth: string },
+  input: { channelId: ChannelSecret; auth: string },
 ): Promise<{
   channel: PortalChannelRow;
   portalMessageService: NonNullable<
@@ -1013,7 +1026,7 @@ async function requirePortalChannel(
 /** Combines startup-scoped account deps with the per-request orgId. */
 function requireAccountDeps(
   deps: ClientPortalRouterDeps,
-  orgId: string,
+  orgId: OrgId,
 ): AccountServiceDeps {
   if (!deps.accountServiceDeps) {
     throw new TRPCError({
@@ -1042,9 +1055,9 @@ function requirePortalMessageService(
  * and accountReply to avoid duplicating the decode logic.
  */
 function decodeReplyInput(input: {
-  ticketId: string;
-  followUpId: string;
-  keyGeneration: string;
+  ticketId: TicketId;
+  followUpId: FollowupId;
+  keyGeneration: KeyGeneration;
   encryptedContent: string;
   wrappedTkTemp: string;
   selfCopy: {
@@ -1073,9 +1086,9 @@ function buildPortalMessageDeps(
   ctx: {
     org: {
       tenantDb: Kysely<TenantDatabase>;
-      orgId: string;
-      orgSlug: string;
-      orgSchema: string;
+      orgId: OrgId;
+      orgSlug: OrgSlug;
+      orgSchema: OrgSchema;
     };
   },
 ): PortalMessageServiceDeps {
@@ -1100,7 +1113,7 @@ function buildPortalMessageDeps(
 
 /** Decode account registration from wire base64 to Buffers. */
 function decodeAccountRegistration(input: {
-  accountId: string;
+  accountId: ClientAccountId;
   username: string;
   salt: string;
   publicKey: string;
@@ -1128,7 +1141,7 @@ function decodeAccountRegistration(input: {
 /** Decode rewrapped message array from wire base64 to Buffers. */
 function decodeRewrappedMessages(
   messages: readonly {
-    id: string;
+    id: PortalMessageId;
     copy: {
       ephemeralPoint: string;
       nonce: string;

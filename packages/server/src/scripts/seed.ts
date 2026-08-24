@@ -31,7 +31,15 @@ try {
   throw err;
 }
 
-import { RoleId } from "@care-y/shared";
+import { RoleId, phoneSidSchema } from "@care-y/shared";
+import type {
+  OrgId,
+  OrgSchema,
+  UserId,
+  PhoneId,
+  QueueId,
+  TicketId,
+} from "@care-y/shared";
 import sodium from "sodium-native";
 import { db, tenantDb } from "../db/db.js";
 import { getEnv } from "../env.js";
@@ -117,8 +125,8 @@ async function seed(): Promise<void> {
   const orgService = createOrgService(db, tenantDb);
 
   // --- Create org ---
-  let orgId: string;
-  let schemaName: string;
+  let orgId: OrgId;
+  let schemaName: OrgSchema;
   let setupToken: string | null = null;
   try {
     const org = await orgService.createOrg({ slug: ORG_SLUG });
@@ -195,7 +203,7 @@ async function seed(): Promise<void> {
     orgId,
   );
 
-  let adminUserId: string;
+  let adminUserId: UserId;
   try {
     const user = await authService.register({
       identifier: ADMIN_IDENTIFIER,
@@ -207,7 +215,7 @@ async function seed(): Promise<void> {
     console.log(`Created admin user "${ADMIN_IDENTIFIER}" (${user.id})`);
   } catch (err) {
     if (err instanceof ConflictError) {
-      const identifierHash = indexer.hash(ADMIN_IDENTIFIER, orgId);
+      const identifierHash = indexer.hashIdentifier(ADMIN_IDENTIFIER, orgId);
       const existing = await tenantDatabase
         .selectFrom("users")
         .select("id")
@@ -235,11 +243,11 @@ async function seed(): Promise<void> {
   // (registerCrypto + loginCrypto) and server (devSeedTickets).
 
   // Phone record (encrypted via OPS_SECRETS_KEY field encryption)
-  let phoneId: string;
+  let phoneId: PhoneId;
   const existingPhone = await tenantDatabase
     .selectFrom("phones")
     .select("id")
-    .where("phone_hash", "=", indexer.hash("+15550001234", orgId))
+    .where("phone_hash", "=", indexer.hashPhone("+15550001234", orgId))
     .executeTakeFirst();
 
   if (existingPhone) {
@@ -249,14 +257,14 @@ async function seed(): Promise<void> {
     const inserted = await tenantDatabase
       .insertInto("phones")
       .values({
-        phone_hash: indexer.hash("+15550001234", orgId),
+        phone_hash: indexer.hashPhone("+15550001234", orgId),
         encrypted_number: encryptor.encrypt("+15550001234"),
         locale: "en",
       })
       .returning("id")
       .executeTakeFirstOrThrow();
     phoneId = inserted.id;
-    console.log(`Created phone record (${phoneId})`);
+    console.log("Created dev telephony seed row.");
   }
 
   // Seal a plaintext string with the org public key (crypto_box_seal).
@@ -272,7 +280,7 @@ async function seed(): Promise<void> {
     { name: "Crisis", color: "red", icon: "triangle-alert" },
     { name: "Housing", color: "green", icon: "house" },
   ];
-  const queueIds = new Map<string, string>();
+  const queueIds = new Map<string, QueueId>();
 
   for (let i = 0; i < seedQueues.length; i++) {
     const { name, color, icon } = seedQueues[i]!;
@@ -335,9 +343,7 @@ async function seed(): Promise<void> {
 
   const currentCount = Number(existingClientCount.count);
   if (currentCount >= NUM_SEED_CLIENTS) {
-    console.log(
-      `${String(currentCount)} clients already exist, skipping client seeding.`,
-    );
+    console.log("Seed records already exist, skipping seeding.");
   } else {
     const toCreate = NUM_SEED_CLIENTS - currentCount;
     for (let i = 0; i < toCreate; i++) {
@@ -452,8 +458,8 @@ async function seed(): Promise<void> {
   await tenantDatabase
     .updateTable("org_config")
     .set({
-      phone_outbound_sid: "PNdev001",
-      phone_system_sid: "PNdev002",
+      phone_outbound_sid: phoneSidSchema.parse("PNdev001"),
+      phone_system_sid: phoneSidSchema.parse("PNdev002"),
     })
     .execute();
   console.log("Seeded purpose SIDs (tenant org_config).");
@@ -475,8 +481,8 @@ async function seed(): Promise<void> {
     if (!existingAudit) {
       const events: Array<{
         event_type: string;
-        actor_id: string;
-        ticket_id: string;
+        actor_id: UserId;
+        ticket_id: TicketId;
         metadata: Record<string, unknown>;
       }> = [];
 

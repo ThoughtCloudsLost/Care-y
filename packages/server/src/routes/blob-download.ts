@@ -12,6 +12,12 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
 import type { Kysely } from "kysely";
 import { Permission } from "@care-y/shared";
+import type { OrgSchema, UserId, BlobKey } from "@care-y/shared";
+import {
+  recordingIdSchema,
+  attachmentIdSchema,
+  kbAttachmentIdSchema,
+} from "@care-y/shared";
 import { hasPermissionForOrg } from "../auth/roles.js";
 import { NotFoundError, ForbiddenError } from "../errors.js";
 import type { BlobStore } from "../storage/store.js";
@@ -42,16 +48,16 @@ export interface BlobDownloadHandlerDeps {
   readonly blobStore: BlobStore;
   readonly orgResolver: OrgResolver;
   readonly createSessionRepo: (
-    orgSchema: string,
+    orgSchema: OrgSchema,
   ) => SessionRepository | Promise<SessionRepository>;
   readonly corsHeaders: Readonly<Record<string, string>>;
-  readonly createMediaSvc: (orgSchema: string) => MediaService;
-  readonly createKBMediaSvc: (orgSchema: string) => KBMediaService;
+  readonly createMediaSvc: (orgSchema: OrgSchema) => MediaService;
+  readonly createKBMediaSvc: (orgSchema: OrgSchema) => KBMediaService;
   readonly getUserRole: (
-    orgSchema: string,
-    userId: string,
+    orgSchema: OrgSchema,
+    userId: UserId,
   ) => Promise<string | null>;
-  readonly createTenantDb: (orgSchema: string) => Kysely<TenantDatabase>;
+  readonly createTenantDb: (orgSchema: OrgSchema) => Kysely<TenantDatabase>;
 }
 
 export function createBlobDownloadHandler(
@@ -127,19 +133,22 @@ export function createBlobDownloadHandler(
     }
 
     try {
-      let blobKey: string;
+      let blobKey: BlobKey;
 
       if (category === "recordings") {
         const svc = createMediaSvc(orgSchema);
-        const record = await svc.getRecording(userId, id);
+        const recordingId = recordingIdSchema.parse(id);
+        const record = await svc.getRecording(userId, recordingId);
         blobKey = record.blobKey;
       } else if (category === "attachments") {
         const svc = createMediaSvc(orgSchema);
-        const record = await svc.getAttachment(userId, id);
+        const attachmentId = attachmentIdSchema.parse(id);
+        const record = await svc.getAttachment(userId, attachmentId);
         blobKey = record.blobKey;
       } else {
         const svc = createKBMediaSvc(orgSchema);
-        const record = await svc.getAttachment(id);
+        const kbAttachmentId = kbAttachmentIdSchema.parse(id);
+        const record = await svc.getAttachment(kbAttachmentId);
         blobKey = record.blobKey;
       }
 

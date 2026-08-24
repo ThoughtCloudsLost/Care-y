@@ -12,6 +12,7 @@
 
 import type { Kysely } from "kysely";
 import type { TenantDatabase } from "../db/types.js";
+import type { UserId } from "@care-y/shared";
 
 export interface MentionsService {
   /**
@@ -19,7 +20,7 @@ export interface MentionsService {
    * validates they exist and returns the valid subset.
    * Invalid/nonexistent IDs are silently dropped (not an error).
    */
-  resolveValidMentions(userIds: string[]): Promise<string[]>;
+  resolveValidMentions(userIds: UserId[]): Promise<UserId[]>;
 }
 
 export function createMentionsService(

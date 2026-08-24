@@ -16,7 +16,11 @@ import {
 import type { OrgContext } from "../trpc/context.js";
 import type { AuditService } from "../tickets/audit.js";
 import type { IntakeFormService } from "../portal/intake-form-service.js";
-import { Permission, saveIntakeFormInputSchema } from "@care-y/shared";
+import {
+  Permission,
+  saveIntakeFormInputSchema,
+  intakeFormIdSchema,
+} from "@care-y/shared";
 
 export interface IntakeFormRouterDeps {
   readonly createAuditSvc: (tDb: OrgContext["tenantDb"]) => AuditService;
@@ -40,11 +44,13 @@ export function createIntakeFormRouter(deps: IntakeFormRouterDeps) {
     ),
 
     /** Load a single form with its fields (for the editor). */
-    get: queueManagerProcedure.input(z.object({ formId: z.uuid() })).query(
-      withErrorWrapping(async ({ ctx, input }) => {
-        return deps.intakeFormService.getForm(ctx.org.tenantDb, input.formId);
-      }),
-    ),
+    get: queueManagerProcedure
+      .input(z.object({ formId: intakeFormIdSchema }))
+      .query(
+        withErrorWrapping(async ({ ctx, input }) => {
+          return deps.intakeFormService.getForm(ctx.org.tenantDb, input.formId);
+        }),
+      ),
 
     /** Create or update a form (whole-form save). */
     save: queueManagerProcedure.input(saveIntakeFormInputSchema).mutation(
@@ -68,7 +74,7 @@ export function createIntakeFormRouter(deps: IntakeFormRouterDeps) {
 
     /** Delete a form. Throws FORM_HAS_RESPONSES when responses exist. */
     remove: queueManagerProcedure
-      .input(z.object({ formId: z.uuid() }))
+      .input(z.object({ formId: intakeFormIdSchema }))
       .mutation(
         withErrorWrapping(async ({ ctx, input }) => {
           await deps.intakeFormService.deleteForm(
@@ -89,7 +95,7 @@ export function createIntakeFormRouter(deps: IntakeFormRouterDeps) {
 
     /** Activate or deactivate a form. */
     setActive: queueManagerProcedure
-      .input(z.object({ formId: z.uuid(), active: z.boolean() }))
+      .input(z.object({ formId: intakeFormIdSchema, active: z.boolean() }))
       .mutation(
         withErrorWrapping(async ({ ctx, input }) => {
           await deps.intakeFormService.setActive(

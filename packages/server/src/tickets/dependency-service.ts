@@ -12,31 +12,32 @@ import type { TenantDatabase } from "../db/types.js";
 import type { TicketAccessChecker } from "./access.js";
 import { TicketError, NotFoundError, ValidationError } from "../errors.js";
 import { ErrorCode } from "@care-y/shared";
+import type { TicketId, UserId } from "@care-y/shared";
 
 export interface DependencyRecord {
-  readonly ticketId: string;
-  readonly dependsOnTicketId: string;
+  readonly ticketId: TicketId;
+  readonly dependsOnTicketId: TicketId;
   readonly createdAt: Date;
 }
 
 export interface DependencyService {
   add(
-    userId: string,
-    ticketId: string,
-    dependsOnTicketId: string,
+    userId: UserId,
+    ticketId: TicketId,
+    dependsOnTicketId: TicketId,
   ): Promise<DependencyRecord>;
   remove(
-    userId: string,
-    ticketId: string,
-    dependsOnTicketId: string,
+    userId: UserId,
+    ticketId: TicketId,
+    dependsOnTicketId: TicketId,
   ): Promise<void>;
-  listForTicket(ticketId: string): Promise<DependencyRecord[]>;
-  allResolved(ticketId: string): Promise<boolean>;
+  listForTicket(ticketId: TicketId): Promise<DependencyRecord[]>;
+  allResolved(ticketId: TicketId): Promise<boolean>;
 }
 
 function toRecord(row: {
-  ticket_id: string;
-  depends_on_ticket_id: string;
+  ticket_id: TicketId;
+  depends_on_ticket_id: TicketId;
   created_at: Date;
 }): DependencyRecord {
   return {
