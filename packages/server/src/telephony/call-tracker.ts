@@ -1,19 +1,31 @@
 import type { Kysely } from "kysely";
 import type { TenantDatabase } from "../db/types.js";
+import type {
+  OrgSchema,
+  CallSid,
+  TicketId,
+  UserId,
+  ClientId,
+} from "@care-y/shared";
 
 export interface TrackedCall {
-  readonly ticketId: string;
-  readonly userId: string | null;
+  readonly ticketId: TicketId | "";
+  readonly userId: UserId | null;
   readonly direction: "inbound" | "outbound";
-  readonly orgSchema: string;
-  readonly clientId: string | null;
+  /** `""` means the tracked call carries no schema; handlers fall back to their own. */
+  readonly orgSchema: OrgSchema | "";
+  readonly clientId: ClientId | null;
   readonly createdAt: number;
 }
 
 export interface CallTracker {
-  track(orgSchema: string, callSid: string, call: TrackedCall): Promise<void>;
-  get(orgSchema: string, callSid: string): Promise<TrackedCall | undefined>;
-  remove(orgSchema: string, callSid: string): Promise<void>;
+  track(
+    orgSchema: OrgSchema,
+    callSid: CallSid,
+    call: TrackedCall,
+  ): Promise<void>;
+  get(orgSchema: OrgSchema, callSid: CallSid): Promise<TrackedCall | undefined>;
+  remove(orgSchema: OrgSchema, callSid: CallSid): Promise<void>;
   stop(): void;
 }
 
@@ -33,28 +45,28 @@ export function createCallTracker(): CallTracker {
 
   timer.unref();
 
-  function compositeKey(orgSchema: string, callSid: string): string {
+  function compositeKey(orgSchema: OrgSchema, callSid: CallSid): string {
     return orgSchema + " " + callSid;
   }
 
   return {
     // eslint-disable-next-line @typescript-eslint/require-await -- in-memory: no real I/O to await
     async track(
-      orgSchema: string,
-      callSid: string,
+      orgSchema: OrgSchema,
+      callSid: CallSid,
       call: TrackedCall,
     ): Promise<void> {
       calls.set(compositeKey(orgSchema, callSid), call);
     },
     // eslint-disable-next-line @typescript-eslint/require-await -- in-memory: no real I/O to await
     async get(
-      orgSchema: string,
-      callSid: string,
+      orgSchema: OrgSchema,
+      callSid: CallSid,
     ): Promise<TrackedCall | undefined> {
       return calls.get(compositeKey(orgSchema, callSid));
     },
     // eslint-disable-next-line @typescript-eslint/require-await -- in-memory: no real I/O to await
-    async remove(orgSchema: string, callSid: string): Promise<void> {
+    async remove(orgSchema: OrgSchema, callSid: CallSid): Promise<void> {
       calls.delete(compositeKey(orgSchema, callSid));
     },
     stop(): void {
@@ -64,8 +76,8 @@ export function createCallTracker(): CallTracker {
 }
 
 export function createDbCallTracker(
-  getTenantDb: (orgSchema: string) => Kysely<TenantDatabase>,
-  listOrgSchemas: () => Promise<string[]>,
+  getTenantDb: (orgSchema: OrgSchema) => Kysely<TenantDatabase>,
+  listOrgSchemas: () => Promise<OrgSchema[]>,
 ): CallTracker {
   const timer = setInterval(() => {
     void sweepExpired();
@@ -73,7 +85,7 @@ export function createDbCallTracker(
   timer.unref();
 
   async function sweepExpired(): Promise<void> {
-    let schemas: string[];
+    let schemas: OrgSchema[];
     try {
       schemas = await listOrgSchemas();
     } catch (err: unknown) {
@@ -104,8 +116,8 @@ export function createDbCallTracker(
 
   return {
     async track(
-      orgSchema: string,
-      callSid: string,
+      orgSchema: OrgSchema,
+      callSid: CallSid,
       call: TrackedCall,
     ): Promise<void> {
       const db = getTenantDb(orgSchema);
@@ -130,8 +142,8 @@ export function createDbCallTracker(
     },
 
     async get(
-      orgSchema: string,
-      callSid: string,
+      orgSchema: OrgSchema,
+      callSid: CallSid,
     ): Promise<TrackedCall | undefined> {
       const db = getTenantDb(orgSchema);
       const cutoff = new Date(Date.now() - TTL_MS);
@@ -157,7 +169,7 @@ export function createDbCallTracker(
       };
     },
 
-    async remove(orgSchema: string, callSid: string): Promise<void> {
+    async remove(orgSchema: OrgSchema, callSid: CallSid): Promise<void> {
       const db = getTenantDb(orgSchema);
       await db
         .deleteFrom("tracked_calls")

@@ -10,11 +10,12 @@ import {
   createBlocklistRepository,
   type BlocklistRepository,
 } from "./blocklist-repo.js";
+import type { PhoneHash, UserId } from "@care-y/shared";
 
 describe.skipIf(!process.env.DATABASE_URL)("BlocklistRepository", () => {
   let testDb: TestDb;
   let repo: BlocklistRepository;
-  let adminUserId: string;
+  let adminUserId: UserId;
 
   beforeAll(async () => {
     testDb = await createTestDb();
@@ -27,8 +28,8 @@ describe.skipIf(!process.env.DATABASE_URL)("BlocklistRepository", () => {
     await testDb.cleanup();
   });
 
-  function phoneHash(raw: string): string {
-    return testBlindIndexer.hash(raw, TEST_ORG_ID);
+  function phoneHash(raw: string): PhoneHash {
+    return testBlindIndexer.hash(raw, TEST_ORG_ID) as PhoneHash;
   }
 
   function fakeEncrypted(raw: string): Buffer {

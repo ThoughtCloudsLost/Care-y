@@ -1,10 +1,11 @@
 import { createHmac, randomUUID } from "node:crypto";
 import { DEV_MOCK_ACCOUNT_SID } from "./mock-provider.js";
+import type { OrgId } from "@care-y/shared";
 
 export interface MockWebhookConfig {
   readonly authToken: string;
   readonly baseUrl: string;
-  readonly orgId: string;
+  readonly orgId: OrgId;
   /** Provider segment for the webhook URL path (defaults to "mock"). */
   readonly provider?: string;
 }

@@ -3,6 +3,7 @@ import { describe, it, expect, vi } from "vitest";
 import { selectAutoReply } from "./sms-auto-reply.js";
 import type { SmsResponseRepository } from "./models/sms-response-repo.js";
 import type { SmsResponseRecord } from "./models/sms-response-repo.js";
+import type { SmsResponseId } from "@care-y/shared";
 
 function makeMockRepo(result: SmsResponseRecord | null): SmsResponseRepository {
   return {
@@ -20,7 +21,7 @@ function makeMockRepo(result: SmsResponseRecord | null): SmsResponseRepository {
 describe("selectAutoReply", () => {
   it("returns matching response when repo finds a result", async () => {
     const record: SmsResponseRecord = {
-      id: "resp-1",
+      id: "resp-1" as SmsResponseId,
       responseType: "intake_ack",
       locale: "es-MX",
       text: "Gracias por comunicarse.",
@@ -46,7 +47,7 @@ describe("selectAutoReply", () => {
 
   it("works with voicemail_ack responseType (not just intake_ack)", async () => {
     const record: SmsResponseRecord = {
-      id: "resp-vm",
+      id: "resp-vm" as SmsResponseId,
       responseType: "voicemail_ack",
       locale: "en-US",
       text: "We received your voicemail.",
@@ -72,7 +73,7 @@ describe("selectAutoReply", () => {
     // When findWithFallback returns the default-locale fallback row,
     // the returned locale should be the row's locale, not the client's.
     const fallbackRecord: SmsResponseRecord = {
-      id: "resp-2",
+      id: "resp-2" as SmsResponseId,
       responseType: "intake_ack",
       locale: "en-US",
       text: "Thank you for contacting us.",

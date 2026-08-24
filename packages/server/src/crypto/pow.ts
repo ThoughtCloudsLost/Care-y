@@ -1,6 +1,7 @@
 import { createHash, randomBytes } from "node:crypto";
 import { createCleanupInterval } from "../utils/intervals.js";
 import { findTier, type Tier } from "../utils/tiers.js";
+import type { UserId } from "@care-y/shared";
 
 export interface PowConfig {
   /** Number of leading zero bits required (difficulty) */
@@ -15,7 +16,7 @@ export const DEFAULT_POW_CONFIG: PowConfig = {
 };
 
 interface StoredChallenge {
-  readonly userId: string;
+  readonly userId: PowSubject;
   readonly difficulty: number;
   readonly expiresAt: number;
   used: boolean;
@@ -39,10 +40,21 @@ export function getDifficulty(failureCount: number): number {
   );
 }
 
+/**
+ * Whoever the proof-of-work is rate-limiting.
+ *
+ * Not always a user: the volunteer OPRF path passes a `UserId`, but the
+ * anonymous client portal has no user yet and passes the client IP instead.
+ * Typing this `UserId` claimed something the portal path does not satisfy, so
+ * it is its own type. The two never mix in one store because each caller
+ * constructs its own verifier.
+ */
+export type PowSubject = UserId | string;
+
 export interface PowVerifier {
-  /** Creates a new challenge for a userId. Returns nonce + difficulty + expiresAt. */
+  /** Creates a new challenge for a subject. Returns nonce + difficulty + expiresAt. */
   createChallenge(
-    userId: string,
+    subject: PowSubject,
     failureCount: number,
   ): {
     challenge: string;
@@ -50,7 +62,7 @@ export interface PowVerifier {
     expiresAt: string;
   };
   /** Verifies a PoW solution. Returns true if valid and unused. */
-  verify(userId: string, challenge: string, solution: string): boolean;
+  verify(subject: PowSubject, challenge: string, solution: string): boolean;
   /** Stop the cleanup interval (for tests). */
   dispose(): void;
 }
@@ -71,7 +83,7 @@ export function createPowVerifier(
   });
 
   return {
-    createChallenge(userId: string, failureCount: number) {
+    createChallenge(userId: PowSubject, failureCount: number) {
       const nonce = randomBytes(32).toString("hex");
       const difficulty = findTier(
         DIFFICULTY_TIERS,
@@ -94,7 +106,7 @@ export function createPowVerifier(
       };
     },
 
-    verify(userId: string, challenge: string, solution: string): boolean {
+    verify(userId: PowSubject, challenge: string, solution: string): boolean {
       const stored = challenges.get(challenge);
 
       if (stored == null) return false;

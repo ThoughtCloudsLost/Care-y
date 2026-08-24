@@ -8,11 +8,12 @@ import {
   createGreetingRepository,
   type GreetingRepository,
 } from "./greeting-repo.js";
+import { e164Schema, type E164 } from "@care-y/shared";
 
 describe.skipIf(!process.env.DATABASE_URL)("GreetingRepository", () => {
   let testDb: TestDb;
   let greetingRepo: GreetingRepository;
-  const PHONE_NUMBER = "+15550020001";
+  const PHONE_NUMBER: E164 = e164Schema.parse("+15550020001");
 
   beforeAll(async () => {
     testDb = await createTestDb();
@@ -70,7 +71,7 @@ describe.skipIf(!process.env.DATABASE_URL)("GreetingRepository", () => {
   });
 
   it("listByNumber returns all greetings for that phone number", async () => {
-    const phone2 = "+15550020002";
+    const phone2 = e164Schema.parse("+15550020002");
 
     await greetingRepo.create({
       phoneNumber: phone2,
@@ -115,14 +116,14 @@ describe.skipIf(!process.env.DATABASE_URL)("GreetingRepository", () => {
 
   it("update changes phoneNumber (reassignment)", async () => {
     const greeting = await greetingRepo.create({
-      phoneNumber: "+15550090001",
+      phoneNumber: e164Schema.parse("+15550090001"),
       greetingType: "reassign_test",
       locale: "en-US",
       text: "Reassignment test.",
     });
 
     const updated = await greetingRepo.update(greeting.id, {
-      phoneNumber: "+15550090002",
+      phoneNumber: e164Schema.parse("+15550090002"),
     });
 
     expect(updated.phoneNumber).toBe("+15550090002");
@@ -157,7 +158,7 @@ describe.skipIf(!process.env.DATABASE_URL)("GreetingRepository", () => {
   });
 
   it("duplicate (phone_number, locale, greeting_type) throws", async () => {
-    const phone3 = "+15550020003";
+    const phone3 = e164Schema.parse("+15550020003");
 
     await greetingRepo.create({
       phoneNumber: phone3,

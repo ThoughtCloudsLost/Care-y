@@ -27,18 +27,19 @@ import { handleInboundCall } from "./inbound-call.js";
 import { handleRecordingComplete } from "./recording-handler.js";
 import type { CallTracker } from "./call-tracker.js";
 import { handleCallStatus } from "./call-status-handler.js";
+import type { OrgId, OrgSchema, OrgSlug, QueueId } from "@care-y/shared";
 
 // ---------------------------------------------------------------------------
 // Org context resolution
 // ---------------------------------------------------------------------------
 
 export interface WebhookOrgContext {
-  readonly orgId: string;
-  readonly orgSchema: string;
-  readonly orgSlug: string;
+  readonly orgId: OrgId;
+  readonly orgSchema: OrgSchema;
+  readonly orgSlug: OrgSlug;
   readonly tDb: Kysely<TenantDatabase>;
   readonly sealedBox: SealedBoxEncryptor;
-  readonly intakeQueueId: string | null;
+  readonly intakeQueueId: QueueId | null;
 }
 
 /**
@@ -49,9 +50,9 @@ export interface WebhookOrgContext {
  * Returns null if the org does not exist, is inactive, or has no public key.
  */
 export async function resolveOrgForWebhook(
-  orgId: string,
+  orgId: OrgId,
   orgService: OrgService,
-  tenantDb: (schema: string) => Kysely<TenantDatabase>,
+  tenantDb: (schema: OrgSchema) => Kysely<TenantDatabase>,
 ): Promise<WebhookOrgContext | null> {
   const org = await orgService.findById(orgId);
   if (org?.isActive !== true) return null;
@@ -81,7 +82,7 @@ export async function resolveOrgForWebhook(
 
 export interface WebhookDispatchDeps {
   readonly orgService: OrgService;
-  readonly tenantDb: (schema: string) => Kysely<TenantDatabase>;
+  readonly tenantDb: (schema: OrgSchema) => Kysely<TenantDatabase>;
   readonly providerFactory: ProviderFactory;
   readonly indexer: BlindIndexer;
   readonly blobStore: BlobStore;
@@ -112,7 +113,7 @@ export function createWebhookDispatch(
 
   return {
     async onInboundSms(
-      orgId: string,
+      orgId: OrgId,
       body: Record<string, string>,
     ): Promise<string | null> {
       const org = await resolveOrgForWebhook(orgId, orgService, tenantDb);
@@ -152,7 +153,7 @@ export function createWebhookDispatch(
     },
 
     async onInboundVoice(
-      orgId: string,
+      orgId: OrgId,
       body: Record<string, string>,
     ): Promise<string | null> {
       const org = await resolveOrgForWebhook(orgId, orgService, tenantDb);
@@ -210,7 +211,7 @@ export function createWebhookDispatch(
     },
 
     async onStatusCallback(
-      orgId: string,
+      orgId: OrgId,
       body: Record<string, string>,
     ): Promise<void> {
       const org = await resolveOrgForWebhook(orgId, orgService, tenantDb);

@@ -17,6 +17,11 @@ import {
   deriveConsultantPhoneIndexKey,
   createBlindIndexer,
 } from "../../crypto/field-encryptor.js";
+import type {
+  UserId,
+  OpsPhoneHash,
+  VerificationCodeHash,
+} from "@care-y/shared";
 
 const consultantIndexKey = deriveConsultantPhoneIndexKey(TEST_OPS_KEY);
 const consultantIndexer = createBlindIndexer(consultantIndexKey);
@@ -40,12 +45,12 @@ describe.skipIf(!process.env.DATABASE_URL)("ConsultantRepository", () => {
     wantsPings: boolean,
   ): {
     orgSealedPhone: Buffer;
-    opsPhoneHash: string;
+    opsPhoneHash: OpsPhoneHash;
     opsEncryptedPhone: Buffer | null;
   } {
     return {
       orgSealedPhone: testSealedBox.sealBuffer(Buffer.from(phone)),
-      opsPhoneHash: consultantIndexer.hash(phone, TEST_ORG_ID),
+      opsPhoneHash: consultantIndexer.hash(phone, TEST_ORG_ID) as OpsPhoneHash,
       opsEncryptedPhone: wantsPings
         ? testFieldEncryptor.encryptBuffer(Buffer.from(phone))
         : null,
@@ -81,7 +86,7 @@ describe.skipIf(!process.env.DATABASE_URL)("ConsultantRepository", () => {
 
   it("findByUserId returns null for unknown user", async () => {
     const found = await repo.findByUserId(
-      "00000000-0000-0000-0000-ffffffffffff",
+      "00000000-0000-4000-8000-ffffffffffff" as UserId,
     );
     expect(found).toBeNull();
   });
@@ -98,7 +103,7 @@ describe.skipIf(!process.env.DATABASE_URL)("ConsultantRepository", () => {
       smsPingsOptIn: false,
     });
 
-    const codeHash = "sha256-test-hash-value";
+    const codeHash = "sha256-test-hash-value" as VerificationCodeHash;
     const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
     await repo.setVerificationCode(consultant.id, codeHash, expiresAt);
 
@@ -138,7 +143,7 @@ describe.skipIf(!process.env.DATABASE_URL)("ConsultantRepository", () => {
     const rows = await repo.stageVerification(
       consultant!.id,
       artifacts,
-      "code-hash-1",
+      "code-hash-1" as VerificationCodeHash,
       new Date(now.getTime() + 900_000),
       now,
       cooldownNotBefore,
@@ -175,7 +180,7 @@ describe.skipIf(!process.env.DATABASE_URL)("ConsultantRepository", () => {
     await repo.stageVerification(
       consultant!.id,
       artifacts,
-      "hash-a",
+      "hash-a" as VerificationCodeHash,
       new Date(now.getTime() + 900_000),
       now,
       new Date(now.getTime() - 60_000),
@@ -189,7 +194,7 @@ describe.skipIf(!process.env.DATABASE_URL)("ConsultantRepository", () => {
     const rows = await repo.stageVerification(
       consultant!.id,
       artifacts,
-      "hash-b",
+      "hash-b" as VerificationCodeHash,
       new Date(now.getTime() + 900_000),
       now,
       new Date(now.getTime() - 60_000),
@@ -228,7 +233,7 @@ describe.skipIf(!process.env.DATABASE_URL)("ConsultantRepository", () => {
     const rows = await repo.stageVerification(
       consultant!.id,
       artifacts,
-      "hash-c",
+      "hash-c" as VerificationCodeHash,
       new Date(now.getTime() + 900_000),
       now,
       new Date(now.getTime() - 60_000),
@@ -251,7 +256,7 @@ describe.skipIf(!process.env.DATABASE_URL)("ConsultantRepository", () => {
       smsPingsOptIn: false,
     });
 
-    const codeHash = "valid-code-hash";
+    const codeHash = "valid-code-hash" as VerificationCodeHash;
     const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
     await repo.setVerificationCode(consultant.id, codeHash, expiresAt);
 
@@ -276,13 +281,13 @@ describe.skipIf(!process.env.DATABASE_URL)("ConsultantRepository", () => {
       smsPingsOptIn: false,
     });
 
-    const codeHash = "correct-hash";
+    const codeHash = "correct-hash" as VerificationCodeHash;
     const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
     await repo.setVerificationCode(consultant.id, codeHash, expiresAt);
 
     const result = await repo.verifyAndActivate(
       consultant.id,
-      "wrong-hash",
+      "wrong-hash" as VerificationCodeHash,
       new Date(),
     );
     expect(result).toBe(false);
@@ -301,7 +306,7 @@ describe.skipIf(!process.env.DATABASE_URL)("ConsultantRepository", () => {
       smsPingsOptIn: false,
     });
 
-    const codeHash = "expired-code-hash";
+    const codeHash = "expired-code-hash" as VerificationCodeHash;
     const pastExpiry = new Date(Date.now() - 60 * 1000);
     await repo.setVerificationCode(consultant.id, codeHash, pastExpiry);
 
@@ -325,7 +330,7 @@ describe.skipIf(!process.env.DATABASE_URL)("ConsultantRepository", () => {
 
     const result = await repo.verifyAndActivate(
       consultant.id,
-      "any-hash",
+      "any-hash" as VerificationCodeHash,
       new Date(),
     );
     expect(result).toBe(false);
@@ -342,7 +347,7 @@ describe.skipIf(!process.env.DATABASE_URL)("ConsultantRepository", () => {
       smsPingsOptIn: false,
     });
 
-    const codeHash = "consume-test-hash";
+    const codeHash = "consume-test-hash" as VerificationCodeHash;
     const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
     await repo.setVerificationCode(consultant.id, codeHash, expiresAt);
 
@@ -394,7 +399,7 @@ describe.skipIf(!process.env.DATABASE_URL)("ConsultantRepository", () => {
 
     await repo.setVerificationCode(
       consultant.id,
-      "hash-to-clear",
+      "hash-to-clear" as VerificationCodeHash,
       new Date(Date.now() + 600_000),
     );
     await repo.incrementVerificationAttempts(consultant.id);
@@ -443,7 +448,7 @@ describe.skipIf(!process.env.DATABASE_URL)("ConsultantRepository", () => {
     await repo.stageVerification(
       consultant.id,
       artifacts,
-      "hash-sms",
+      "hash-sms" as VerificationCodeHash,
       new Date(now.getTime() + 900_000),
       now,
       new Date(now.getTime() - 60_000),

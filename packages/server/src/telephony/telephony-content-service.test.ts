@@ -1,12 +1,13 @@
 import { describe, it, expect, beforeAll, afterAll, vi } from "vitest";
 import { createTestDb, type TestDb, seedOrgPublicKey } from "../test-utils.js";
+import { e164Schema, type OrgSchema } from "@care-y/shared";
 import { createTelephonyContentService } from "./telephony-content-service.js";
 import type { TelephonyContentService } from "./telephony-content-service.js";
 
 describe.skipIf(!process.env.DATABASE_URL)("TelephonyContentService", () => {
   let testDb: TestDb;
   let service: TelephonyContentService;
-  const PHONE_NUMBER = "+15550040001";
+  const PHONE_NUMBER = e164Schema.parse("+15550040001");
 
   beforeAll(async () => {
     testDb = await createTestDb();
@@ -225,7 +226,7 @@ describe.skipIf(!process.env.DATABASE_URL)("TelephonyContentService", () => {
 
     const updated = await service.uploadGreetingAudio(
       mockBlobStore,
-      "org_test",
+      "org_test" as OrgSchema,
       greeting.id,
       audioBase64,
       "audio/wav",
@@ -235,7 +236,7 @@ describe.skipIf(!process.env.DATABASE_URL)("TelephonyContentService", () => {
     expect(updated.audioBlobKey).toBe("blob-key-wav-123");
     expect(updated.audioContentType).toBe("audio/wav");
     expect(mockBlobStore.put).toHaveBeenCalledWith(
-      "org_test",
+      "org_test" as OrgSchema,
       "greeting",
       expect.any(Buffer),
     );
@@ -268,7 +269,7 @@ describe.skipIf(!process.env.DATABASE_URL)("TelephonyContentService", () => {
     await expect(
       service.uploadGreetingAudio(
         mockBlobStore,
-        "org_test",
+        "org_test" as OrgSchema,
         greeting.id,
         audioBase64,
         "audio/wav",
@@ -298,7 +299,7 @@ describe.skipIf(!process.env.DATABASE_URL)("TelephonyContentService", () => {
     await expect(
       service.uploadGreetingAudio(
         mockBlobStore,
-        "org_test",
+        "org_test" as OrgSchema,
         greeting.id,
         audioBase64,
         "audio/mpeg",

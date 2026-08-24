@@ -8,24 +8,25 @@
 
 import type { Kysely, Selectable } from "kysely";
 import type { PhoneBlocklistTable, TenantDatabase } from "../../db/types.js";
+import type { PhoneBlocklistId, PhoneHash, UserId } from "@care-y/shared";
 
 export interface BlocklistEntry {
-  readonly id: string;
-  readonly phoneHash: string;
+  readonly id: PhoneBlocklistId;
+  readonly phoneHash: PhoneHash;
   readonly encryptedNumber: Buffer;
-  readonly addedBy: string;
+  readonly addedBy: UserId;
   readonly createdAt: Date;
 }
 
 export interface BlocklistRepository {
   add(
-    phoneHash: string,
+    phoneHash: PhoneHash,
     encryptedNumber: Buffer,
-    addedBy: string,
+    addedBy: UserId,
   ): Promise<BlocklistEntry>;
-  remove(id: string): Promise<void>;
+  remove(id: PhoneBlocklistId): Promise<void>;
   list(): Promise<readonly BlocklistEntry[]>;
-  exists(phoneHash: string): Promise<boolean>;
+  exists(phoneHash: PhoneHash): Promise<boolean>;
 }
 
 function mapRow(row: Selectable<PhoneBlocklistTable>): BlocklistEntry {
@@ -43,9 +44,9 @@ export function createBlocklistRepository(
 ): BlocklistRepository {
   return {
     async add(
-      phoneHash: string,
+      phoneHash: PhoneHash,
       encryptedNumber: Buffer,
-      addedBy: string,
+      addedBy: UserId,
     ): Promise<BlocklistEntry> {
       const row = await db
         .insertInto("phone_blocklist")
@@ -60,7 +61,7 @@ export function createBlocklistRepository(
       return mapRow(row);
     },
 
-    async remove(id: string): Promise<void> {
+    async remove(id: PhoneBlocklistId): Promise<void> {
       await db.deleteFrom("phone_blocklist").where("id", "=", id).execute();
     },
 
@@ -74,7 +75,7 @@ export function createBlocklistRepository(
       return rows.map(mapRow);
     },
 
-    async exists(phoneHash: string): Promise<boolean> {
+    async exists(phoneHash: PhoneHash): Promise<boolean> {
       const row = await db
         .selectFrom("phone_blocklist")
         .select("id")

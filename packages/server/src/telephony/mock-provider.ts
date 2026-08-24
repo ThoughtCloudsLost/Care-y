@@ -13,6 +13,7 @@ import {
   type VoiceInstruction,
   type MaskedTelephonyConfig,
 } from "./provider.js";
+import { type OrgId, callSidSchema, e164Schema } from "@care-y/shared";
 import { mockConfigSchema, type MockConfig } from "./schemas.js";
 import { createHmacValidator, twilioPayloadBuilder } from "./webhook-crypto.js";
 import { TelephonyConfigError } from "../errors.js";
@@ -128,9 +129,11 @@ export function createMockProvider(rawConfig: unknown): MockTelephonyProvider {
     parseIncomingCall(body: Record<string, string>): IncomingCallData {
       record(callLog, "parseIncomingCall", [body]);
       return {
-        callId: body.CallSid ?? `mock-call-${randomUUID()}`,
-        from: body.From ?? "+10000000000",
-        to: body.To ?? "+10000000001",
+        callId: callSidSchema.parse(
+          body.CallSid ?? `mock-call-${randomUUID()}`,
+        ),
+        from: e164Schema.parse(body.From ?? "+10000000000"),
+        to: e164Schema.parse(body.To ?? "+10000000001"),
         direction: "inbound",
       };
     },
@@ -145,8 +148,8 @@ export function createMockProvider(rawConfig: unknown): MockTelephonyProvider {
 
       return {
         messageId: body.MessageSid ?? `mock-msg-${randomUUID()}`,
-        from: body.From ?? "+10000000000",
-        to: body.To ?? "+10000000001",
+        from: e164Schema.parse(body.From ?? "+10000000000"),
+        to: e164Schema.parse(body.To ?? "+10000000001"),
         body: body.Body ?? "",
         numMedia,
         mediaUrls,
@@ -168,7 +171,10 @@ export function createMockProvider(rawConfig: unknown): MockTelephonyProvider {
     // eslint-disable-next-line @typescript-eslint/require-await -- mock: no real I/O to await
     async getCallDetails(callId: string): Promise<CallDetails> {
       record(callLog, "getCallDetails", [callId]);
-      return { from: "+10000000000", to: "+10000000001" };
+      return {
+        from: e164Schema.parse("+10000000000"),
+        to: e164Schema.parse("+10000000001"),
+      };
     },
 
     // eslint-disable-next-line @typescript-eslint/require-await -- mock: no real I/O to await
@@ -223,7 +229,7 @@ export const mockProviderStatic: TelephonyProviderStatic = {
   },
 
   // eslint-disable-next-line @typescript-eslint/require-await -- mock: no remote provider to call
-  async provisionWebhooks(config: unknown): Promise<unknown> {
+  async provisionWebhooks(config: unknown, _orgId: OrgId): Promise<unknown> {
     // No remote provider to configure. Return the config unchanged.
     return config;
   },

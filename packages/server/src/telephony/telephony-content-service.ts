@@ -26,33 +26,40 @@ import {
   type SmsResponseRecord,
 } from "./models/sms-response-repo.js";
 import { validateAudioMagicBytes } from "./audio-validator.js";
+import {
+  type BlobKey,
+  type PhoneGreetingId,
+  type SmsResponseId,
+  type OrgSchema,
+  type E164,
+} from "@care-y/shared";
 
 export interface TelephonyContentService {
-  listGreetings(phoneNumber?: string): Promise<readonly GreetingRecord[]>;
+  listGreetings(phoneNumber?: E164): Promise<readonly GreetingRecord[]>;
   createGreeting(input: {
-    phoneNumber: string;
+    phoneNumber: E164;
     greetingType: string;
     locale: string;
     text: string;
     isAudio?: boolean;
   }): Promise<GreetingRecord>;
   updateGreeting(
-    id: string,
-    input: { phoneNumber?: string; text?: string; isAudio?: boolean },
+    id: PhoneGreetingId,
+    input: { phoneNumber?: E164; text?: string; isAudio?: boolean },
   ): Promise<GreetingRecord>;
-  deleteGreeting(id: string): Promise<void>;
+  deleteGreeting(id: PhoneGreetingId): Promise<void>;
   uploadGreetingAudio(
     blobStore: BlobStore,
-    orgSchema: string,
-    greetingId: string,
+    orgSchema: OrgSchema,
+    greetingId: PhoneGreetingId,
     audioBase64: string,
     contentType: GreetingAudioContentType,
   ): Promise<GreetingRecord>;
   createAudioGreeting(
     blobStore: BlobStore,
-    orgSchema: string,
+    orgSchema: OrgSchema,
     input: {
-      phoneNumber: string;
+      phoneNumber: E164;
       greetingType: string;
       locale: string;
       audioBase64: string;
@@ -71,18 +78,18 @@ export interface TelephonyContentService {
     text: string;
   }): Promise<SmsResponseRecord>;
   updateSmsResponse(
-    id: string,
+    id: SmsResponseId,
     input: { text?: string },
   ): Promise<SmsResponseRecord>;
-  deleteSmsResponse(id: string): Promise<void>;
+  deleteSmsResponse(id: SmsResponseId): Promise<void>;
 }
 
 async function validateAndStoreAudio(
   blobStore: BlobStore,
-  orgSchema: string,
+  orgSchema: OrgSchema,
   audioBase64: string,
   contentType: GreetingAudioContentType,
-): Promise<{ blobKey: string; verified: GreetingAudioContentType }> {
+): Promise<{ blobKey: BlobKey; verified: GreetingAudioContentType }> {
   const audioBuf = Buffer.from(audioBase64, "base64");
 
   if (audioBuf.length > GREETING_AUDIO_MAX_BYTES) {
@@ -110,7 +117,7 @@ export function createTelephonyContentService(
 
   return {
     async listGreetings(
-      phoneNumber?: string,
+      phoneNumber?: E164,
     ): Promise<readonly GreetingRecord[]> {
       if (phoneNumber !== undefined && phoneNumber !== "") {
         return greetingRepo.listByNumber(phoneNumber);
@@ -119,7 +126,7 @@ export function createTelephonyContentService(
     },
 
     async createGreeting(input: {
-      phoneNumber: string;
+      phoneNumber: E164;
       greetingType: string;
       locale: string;
       text: string;
@@ -129,20 +136,20 @@ export function createTelephonyContentService(
     },
 
     async updateGreeting(
-      id: string,
-      input: { phoneNumber?: string; text?: string; isAudio?: boolean },
+      id: PhoneGreetingId,
+      input: { phoneNumber?: E164; text?: string; isAudio?: boolean },
     ): Promise<GreetingRecord> {
       return greetingRepo.update(id, input);
     },
 
-    async deleteGreeting(id: string): Promise<void> {
+    async deleteGreeting(id: PhoneGreetingId): Promise<void> {
       await greetingRepo.delete(id);
     },
 
     async uploadGreetingAudio(
       blobStore: BlobStore,
-      orgSchema: string,
-      greetingId: string,
+      orgSchema: OrgSchema,
+      greetingId: PhoneGreetingId,
       audioBase64: string,
       contentType: GreetingAudioContentType,
     ): Promise<GreetingRecord> {
@@ -161,9 +168,9 @@ export function createTelephonyContentService(
 
     async createAudioGreeting(
       blobStore: BlobStore,
-      orgSchema: string,
+      orgSchema: OrgSchema,
       input: {
-        phoneNumber: string;
+        phoneNumber: E164;
         greetingType: string;
         locale: string;
         audioBase64: string;
@@ -223,13 +230,13 @@ export function createTelephonyContentService(
     },
 
     async updateSmsResponse(
-      id: string,
+      id: SmsResponseId,
       input: { text?: string },
     ): Promise<SmsResponseRecord> {
       return smsResponseRepo.update(id, input);
     },
 
-    async deleteSmsResponse(id: string): Promise<void> {
+    async deleteSmsResponse(id: SmsResponseId): Promise<void> {
       await smsResponseRepo.delete(id);
     },
   };

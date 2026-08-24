@@ -2,6 +2,7 @@ import { createHmac, hkdfSync } from "node:crypto";
 import type { Kysely } from "kysely";
 import type { PlatformDatabase } from "../db/types.js";
 import { createCleanupInterval } from "../utils/intervals.js";
+import type { UserId, HashedIp } from "@care-y/shared";
 
 const AUDIT_KEY_INFO = "care-y-oprf-audit-v1";
 const RETENTION_MS = 7 * 24 * 60 * 60 * 1000;
@@ -17,7 +18,7 @@ export type OprfFailureReason =
 export interface OprfAuditLogger {
   /** Log a failed OPRF evaluation. Never call on success. */
   logFailure(
-    userId: string,
+    userId: UserId,
     ipAddress: string,
     reason: OprfFailureReason,
   ): Promise<void>;
@@ -42,8 +43,10 @@ function deriveDailyKey(opsSecretsKey: Buffer, today: string): Buffer {
   );
 }
 
-function hashIp(dailyKey: Buffer, ipAddress: string): string {
-  return createHmac("sha256", dailyKey).update(ipAddress).digest("hex");
+function hashIp(dailyKey: Buffer, ipAddress: string): HashedIp {
+  return createHmac("sha256", dailyKey)
+    .update(ipAddress)
+    .digest("hex") as HashedIp;
 }
 
 export function createOprfAuditLogger(
@@ -78,7 +81,7 @@ export function createOprfAuditLogger(
 
   return {
     async logFailure(
-      userId: string,
+      userId: UserId,
       ipAddress: string,
       reason: OprfFailureReason,
     ): Promise<void> {

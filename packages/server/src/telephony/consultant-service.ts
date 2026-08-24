@@ -24,7 +24,13 @@ import {
   RateLimitError,
   ValidationError,
 } from "../errors.js";
-import { ErrorCode } from "@care-y/shared";
+import { ErrorCode, verificationCodeHashSchema } from "@care-y/shared";
+import type {
+  ConsultantId,
+  UserId,
+  OpsPhoneHash,
+  VerificationCodeHash,
+} from "@care-y/shared";
 
 const VERIFICATION_EXPIRY_MS = 15 * 60 * 1000; // 15 minutes
 const COOLDOWN_MS = 60 * 1000; // 60 seconds between sends
@@ -38,12 +44,14 @@ const HOURLY_WINDOW_MS = 60 * 60 * 1000;
 // mirror that 2FA threshold here.
 const MAX_VERIFICATION_ATTEMPTS = 3;
 
-function hashCode(code: string): string {
-  return createHash("sha256").update(code).digest("hex");
+function hashCode(code: string): VerificationCodeHash {
+  return verificationCodeHashSchema.parse(
+    createHash("sha256").update(code).digest("hex"),
+  );
 }
 
 export interface ConsultantInfo {
-  readonly id: string;
+  readonly id: ConsultantId;
   readonly isVerified: boolean;
   readonly preferredCallMethod: string;
   readonly encryptedPhone: string | null;
@@ -52,13 +60,13 @@ export interface ConsultantInfo {
 }
 
 export interface ConsultantService {
-  getByUserId(userId: string): Promise<ConsultantInfo | null>;
+  getByUserId(userId: UserId): Promise<ConsultantInfo | null>;
   /** Metadata-only registration. No phone fields (ADR-065). */
   register(
-    userId: string,
+    userId: UserId,
     preferredCallMethod: string,
     smsPingsOptIn: boolean,
-  ): Promise<{ id: string }>;
+  ): Promise<{ id: ConsultantId }>;
   /**
    * Called by the relay verify endpoint (the ONLY phone write path, ADR-065).
    * In one transaction: stages org-tier sealed copy, ops_phone_hash, and the
@@ -67,10 +75,10 @@ export interface ConsultantService {
    * caller to send (caller owns SMS + zeroing).
    */
   prepareVerification(
-    userId: string,
+    userId: UserId,
     artifacts: {
       readonly orgSealedPhone: Buffer;
-      readonly opsPhoneHash: string;
+      readonly opsPhoneHash: OpsPhoneHash;
       readonly opsEncryptedPhone: Buffer | null;
     },
   ): Promise<{ code: string }>;
@@ -79,22 +87,22 @@ export interface ConsultantService {
    * opt-in state in one UPDATE. On repeated failure past the lockout
    * threshold, clears the code and requires a fresh send.
    */
-  verify(userId: string, code: string): Promise<void>;
-  updatePreference(userId: string, preferredCallMethod: string): Promise<void>;
+  verify(userId: UserId, code: string): Promise<void>;
+  updatePreference(userId: UserId, preferredCallMethod: string): Promise<void>;
   /** Atomically clears encrypted_phone, ops trio, and is_verified. */
-  deleteByUserId(userId: string): Promise<void>;
+  deleteByUserId(userId: UserId): Promise<void>;
   /**
    * Disabling: ops_encrypted_phone = NULL in the same statement.
    * Enabling after the fact requires re-verification (the server no longer
    * has the plaintext to encrypt): throws REVERIFICATION_REQUIRED.
    */
-  setSmsPings(userId: string, enabled: boolean): Promise<void>;
+  setSmsPings(userId: UserId, enabled: boolean): Promise<void>;
 }
 
 /** Looks up a consultant by userId, throwing NotFoundError if missing. */
 async function requireConsultantByUserId(
   repo: ConsultantRepository,
-  userId: string,
+  userId: UserId,
 ): Promise<ConsultantRecord> {
   const record = await repo.findByUserId(userId);
   if (!record) {
@@ -109,7 +117,7 @@ export function createConsultantService(
   const repo = createConsultantRepository(tenantDb);
 
   return {
-    async getByUserId(userId: string): Promise<ConsultantInfo | null> {
+    async getByUserId(userId: UserId): Promise<ConsultantInfo | null> {
       const record = await repo.findByUserId(userId);
       if (!record) return null;
       return {
@@ -125,10 +133,10 @@ export function createConsultantService(
     },
 
     async register(
-      userId: string,
+      userId: UserId,
       preferredCallMethod: string,
       smsPingsOptIn: boolean,
-    ): Promise<{ id: string }> {
+    ): Promise<{ id: ConsultantId }> {
       // Metadata-only: no phone fields, no code generation (ADR-065).
       // Code lifecycle moved entirely to prepareVerification.
       const consultant = await repo.create({
@@ -141,10 +149,10 @@ export function createConsultantService(
     },
 
     async prepareVerification(
-      userId: string,
+      userId: UserId,
       artifacts: {
         readonly orgSealedPhone: Buffer;
-        readonly opsPhoneHash: string;
+        readonly opsPhoneHash: OpsPhoneHash;
         readonly opsEncryptedPhone: Buffer | null;
       },
     ): Promise<{ code: string }> {
@@ -196,7 +204,7 @@ export function createConsultantService(
       return { code };
     },
 
-    async verify(userId: string, code: string): Promise<void> {
+    async verify(userId: UserId, code: string): Promise<void> {
       const record = await requireConsultantByUserId(repo, userId);
 
       // Check for exhausted attempts before anything else
@@ -224,19 +232,19 @@ export function createConsultantService(
     },
 
     async updatePreference(
-      userId: string,
+      userId: UserId,
       preferredCallMethod: string,
     ): Promise<void> {
       const record = await requireConsultantByUserId(repo, userId);
       await repo.updatePreferredCallMethod(record.id, preferredCallMethod);
     },
 
-    async deleteByUserId(userId: string): Promise<void> {
+    async deleteByUserId(userId: UserId): Promise<void> {
       const record = await requireConsultantByUserId(repo, userId);
       await repo.delete(record.id);
     },
 
-    async setSmsPings(userId: string, enabled: boolean): Promise<void> {
+    async setSmsPings(userId: UserId, enabled: boolean): Promise<void> {
       const record = await requireConsultantByUserId(repo, userId);
 
       if (enabled) {

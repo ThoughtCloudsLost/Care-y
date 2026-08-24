@@ -12,10 +12,7 @@ import type { SealedBoxEncryptor } from "../crypto/sealed-box.js";
 import type { BlindIndexer } from "../crypto/field-encryptor.js";
 import type { PhoneRepository } from "./models/phone-repo.js";
 import type { ClientRepository } from "./models/client-repo.js";
-import type {
-  GreetingRecord,
-  GreetingRepository,
-} from "./models/greeting-repo.js";
+import type { GreetingRepository } from "./models/greeting-repo.js";
 import type { BlocklistRepository } from "./models/blocklist-repo.js";
 import {
   buildLanguageSelectionIvr,
@@ -23,8 +20,11 @@ import {
   buildVoicemailIvr,
   resolveLocaleFromDtmf,
 } from "./ivr.js";
+import type { PlayableGreeting } from "./ivr.js";
 import { sealString } from "./crypto-helpers.js";
 import type { CallTracker } from "./call-tracker.js";
+import { blobKeySchema } from "@care-y/shared";
+import type { OrgId, OrgSchema } from "@care-y/shared";
 
 export interface InboundCallDeps {
   readonly sealedBox: SealedBoxEncryptor;
@@ -33,8 +33,8 @@ export interface InboundCallDeps {
   readonly clientRepo: ClientRepository;
   readonly greetingRepo: GreetingRepository;
   readonly blocklistRepo: BlocklistRepository;
-  readonly orgId: string;
-  readonly orgSchema: string;
+  readonly orgId: OrgId;
+  readonly orgSchema: OrgSchema;
   readonly webhookBaseUrl: string;
   readonly defaultLocale: string;
   readonly callTracker: CallTracker;
@@ -42,26 +42,23 @@ export interface InboundCallDeps {
   readonly providerId: string;
 }
 
-const FALLBACK_GREETING: GreetingRecord = {
-  id: "fallback",
-  phoneNumber: "fallback",
-  greetingType: "new_client",
-  locale: "en-US",
+const FALLBACK_GREETING: PlayableGreeting = {
   text: "Please leave a message after the beep.",
   isAudio: false,
   audioBlobKey: null,
-  audioContentType: null,
 };
 
 /** Resolves a greeting's audioBlobKey to a full serving URL for Twilio <Play>. */
 function resolveAudioUrl(
-  greeting: GreetingRecord,
+  greeting: PlayableGreeting,
   webhookBaseUrl: string,
-): GreetingRecord {
+): PlayableGreeting {
   if (!greeting.isAudio || greeting.audioBlobKey === null) return greeting;
   return {
     ...greeting,
-    audioBlobKey: `${webhookBaseUrl}/api/greetings/${greeting.audioBlobKey}`,
+    audioBlobKey: blobKeySchema.parse(
+      `${webhookBaseUrl}/api/greetings/${greeting.audioBlobKey}`,
+    ),
   };
 }
 
@@ -94,7 +91,7 @@ export async function handleInboundCall(
 
   // eslint-disable-next-line @typescript-eslint/dot-notation
   const digits = body["Digits"];
-  const phoneHash = indexer.hash(callData.from, orgId);
+  const phoneHash = indexer.hashPhone(callData.from, orgId);
 
   const isBlocked = await blocklistRepo.exists(phoneHash);
   if (isBlocked) return [{ type: "reject", attributes: { reason: "busy" } }];

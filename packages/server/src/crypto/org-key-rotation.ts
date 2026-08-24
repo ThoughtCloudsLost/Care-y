@@ -14,11 +14,12 @@
 
 import type { Kysely } from "kysely";
 import type { TenantDatabase } from "../db/types.js";
+import type { UserId } from "@care-y/shared";
 
 export interface OrgKeyRotationInput {
   readonly newOrgPublicKey: Buffer;
   readonly wrappedKeys: readonly {
-    readonly userId: string;
+    readonly userId: UserId;
     readonly ephemeralPoint: Buffer;
     readonly wrappedKey: Buffer;
     readonly nonce: Buffer;

@@ -11,6 +11,8 @@
 
 import type { IncomingMessage, ServerResponse } from "node:http";
 import type { SessionRepository } from "../auth/session-repository.js";
+import type { OrgId, OrgSchema, UserId } from "@care-y/shared";
+import { userIdSchema, sessionTokenSchema } from "@care-y/shared";
 
 /** Maximum relay request body size (64KB). */
 export const MAX_RELAY_BODY = 64 * 1024;
@@ -196,11 +198,11 @@ export function extractBooleanField(
 
 /** Session data extracted from the cookie for relay auth. */
 export interface RelaySession {
-  readonly userId: string;
+  readonly userId: UserId;
   /** Platform-table key: the raw org UUID. */
-  readonly orgId: string;
+  readonly orgId: OrgId;
   /** Tenant-schema name, of the form `org_<uuid>`. */
-  readonly orgSchema: string;
+  readonly orgSchema: OrgSchema;
   readonly sessionId: string;
 }
 
@@ -210,9 +212,9 @@ export type RelayAuthResult =
 /** Both org identifiers returned by the resolver. */
 export interface OrgResolved {
   /** Platform-table key: the raw org UUID. */
-  readonly orgId: string;
+  readonly orgId: OrgId;
   /** Tenant-schema name, of the form `org_<uuid>`. */
-  readonly orgSchema: string;
+  readonly orgSchema: OrgSchema;
 }
 
 /**
@@ -244,7 +246,7 @@ export async function authenticateRelay(
   req: IncomingMessage,
   orgResolver: OrgResolver,
   createSessionRepo: (
-    orgSchema: string,
+    orgSchema: OrgSchema,
   ) => SessionRepository | Promise<SessionRepository>,
 ): Promise<RelayAuthResult> {
   // Resolve org from Host header (same as tRPC context)
@@ -253,12 +255,15 @@ export async function authenticateRelay(
 
   // Extract session cookie from Cookie header
   const cookieHeader = req.headers.cookie ?? "";
-  const sessionToken = parseCookieValue(cookieHeader, "care_y_session");
-  if (sessionToken === null) return { ok: false, status: 401 };
+  const rawToken = parseCookieValue(cookieHeader, "care_y_session");
+  if (rawToken === null) return { ok: false, status: 401 };
+
+  const tokenResult = sessionTokenSchema.safeParse(rawToken);
+  if (!tokenResult.success) return { ok: false, status: 401 };
 
   // Look up session in the org's tenant schema
   const sessionRepo = await createSessionRepo(resolved.orgSchema);
-  const session = await sessionRepo.findByToken(sessionToken);
+  const session = await sessionRepo.findByToken(tokenResult.data);
   if (!session) return { ok: false, status: 401 };
 
   // Check expiry
@@ -270,7 +275,7 @@ export async function authenticateRelay(
   return {
     ok: true,
     session: {
-      userId: session.userId,
+      userId: userIdSchema.parse(session.userId),
       orgId: resolved.orgId,
       orgSchema: resolved.orgSchema,
       sessionId: session.id,

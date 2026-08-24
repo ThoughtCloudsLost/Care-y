@@ -13,6 +13,7 @@
 import { type Kysely, sql } from "kysely";
 import type { TenantDatabase } from "../db/types.js";
 import { OffboardingError } from "../errors.js";
+import type { UserId } from "@care-y/shared";
 
 export interface OffboardingService {
   /**
@@ -23,14 +24,14 @@ export interface OffboardingService {
    *
    * Does NOT deactivate the user or delete the users row.
    */
-  revokeVolunteerKeys(userId: string): Promise<void>;
+  revokeVolunteerKeys(userId: UserId): Promise<void>;
 }
 
 export function createOffboardingService(
   db: Kysely<TenantDatabase>,
 ): OffboardingService {
   return {
-    async revokeVolunteerKeys(userId: string): Promise<void> {
+    async revokeVolunteerKeys(userId: UserId): Promise<void> {
       await db.transaction().execute(async (tx) => {
         // ticket_key_wraps may not have a CREATE TABLE migration yet.
         // SAVEPOINT protects the outer transaction from PostgreSQL's

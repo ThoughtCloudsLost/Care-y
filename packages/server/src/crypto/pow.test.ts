@@ -6,6 +6,7 @@ import {
   createPowVerifier,
   type PowConfig,
 } from "./pow.js";
+import type { UserId } from "@care-y/shared";
 
 /**
  * Brute-force a valid PoW solution for testing.
@@ -83,6 +84,10 @@ describe("PowVerifier", () => {
     challengeTtlMs: 60_000,
   };
 
+  const USER_1 = "user-1" as UserId;
+  const USER_2 = "user-2" as UserId;
+  const USER_U = "u" as UserId;
+
   let time = 1_000_000;
   const clock = (): number => time;
 
@@ -93,8 +98,8 @@ describe("PowVerifier", () => {
   describe("createChallenge", () => {
     it("returns unique nonces", () => {
       const verifier = createPowVerifier(TEST_CONFIG, clock);
-      const c1 = verifier.createChallenge("user-1", 3);
-      const c2 = verifier.createChallenge("user-1", 3);
+      const c1 = verifier.createChallenge(USER_1, 3);
+      const c2 = verifier.createChallenge(USER_1, 3);
 
       expect(c1.challenge).not.toBe(c2.challenge);
       // Challenge nonce is 32 bytes hex-encoded. Client PoW solver depends on this format.
@@ -106,9 +111,9 @@ describe("PowVerifier", () => {
       const verifier = createPowVerifier(TEST_CONFIG, clock);
 
       // TEST_CONFIG.baseDifficulty is 8; tiers escalate at 5 and 8 failures
-      expect(verifier.createChallenge("u", 3).difficulty).toBe(8);
-      expect(verifier.createChallenge("u", 5).difficulty).toBe(20);
-      expect(verifier.createChallenge("u", 8).difficulty).toBe(22);
+      expect(verifier.createChallenge(USER_U, 3).difficulty).toBe(8);
+      expect(verifier.createChallenge(USER_U, 5).difficulty).toBe(20);
+      expect(verifier.createChallenge(USER_U, 8).difficulty).toBe(22);
       verifier.dispose();
     });
 
@@ -118,17 +123,17 @@ describe("PowVerifier", () => {
         clock,
       );
 
-      expect(verifier.createChallenge("u", 0).difficulty).toBe(18);
-      expect(verifier.createChallenge("u", 4).difficulty).toBe(18);
+      expect(verifier.createChallenge(USER_U, 0).difficulty).toBe(18);
+      expect(verifier.createChallenge(USER_U, 4).difficulty).toBe(18);
       // Tiers still escalate above baseDifficulty
-      expect(verifier.createChallenge("u", 5).difficulty).toBe(20);
-      expect(verifier.createChallenge("u", 8).difficulty).toBe(22);
+      expect(verifier.createChallenge(USER_U, 5).difficulty).toBe(20);
+      expect(verifier.createChallenge(USER_U, 8).difficulty).toBe(22);
       verifier.dispose();
     });
 
     it("returns valid ISO datetime for expiresAt", () => {
       const verifier = createPowVerifier(TEST_CONFIG, clock);
-      const c = verifier.createChallenge("user-1", 3);
+      const c = verifier.createChallenge(USER_1, 3);
 
       expect(() => new Date(c.expiresAt)).not.toThrow();
       expect(new Date(c.expiresAt).getTime()).toBe(
@@ -141,40 +146,40 @@ describe("PowVerifier", () => {
   describe("verify", () => {
     it("accepts a valid solution", () => {
       const verifier = createPowVerifier(TEST_CONFIG, clock);
-      const c = verifier.createChallenge("user-1", 0);
+      const c = verifier.createChallenge(USER_1, 0);
       const solution = solvePow(c.challenge, c.difficulty);
 
-      expect(verifier.verify("user-1", c.challenge, solution)).toBe(true);
+      expect(verifier.verify(USER_1, c.challenge, solution)).toBe(true);
       verifier.dispose();
     });
 
     it("rejects a replayed (already-used) solution", () => {
       const verifier = createPowVerifier(TEST_CONFIG, clock);
-      const c = verifier.createChallenge("user-1", 0);
+      const c = verifier.createChallenge(USER_1, 0);
       const solution = solvePow(c.challenge, c.difficulty);
 
-      expect(verifier.verify("user-1", c.challenge, solution)).toBe(true);
-      expect(verifier.verify("user-1", c.challenge, solution)).toBe(false);
+      expect(verifier.verify(USER_1, c.challenge, solution)).toBe(true);
+      expect(verifier.verify(USER_1, c.challenge, solution)).toBe(false);
       verifier.dispose();
     });
 
     it("rejects wrong userId", () => {
       const verifier = createPowVerifier(TEST_CONFIG, clock);
-      const c = verifier.createChallenge("user-1", 0);
+      const c = verifier.createChallenge(USER_1, 0);
       const solution = solvePow(c.challenge, c.difficulty);
 
-      expect(verifier.verify("user-2", c.challenge, solution)).toBe(false);
+      expect(verifier.verify(USER_2, c.challenge, solution)).toBe(false);
       verifier.dispose();
     });
 
     it("rejects expired challenge", () => {
       const verifier = createPowVerifier(TEST_CONFIG, clock);
-      const c = verifier.createChallenge("user-1", 0);
+      const c = verifier.createChallenge(USER_1, 0);
       const solution = solvePow(c.challenge, c.difficulty);
 
       time += TEST_CONFIG.challengeTtlMs + 1;
 
-      expect(verifier.verify("user-1", c.challenge, solution)).toBe(false);
+      expect(verifier.verify(USER_1, c.challenge, solution)).toBe(false);
       verifier.dispose();
     });
 
@@ -182,15 +187,15 @@ describe("PowVerifier", () => {
       const verifier = createPowVerifier(TEST_CONFIG, clock);
       const fakeNonce = randomBytes(32).toString("hex");
 
-      expect(verifier.verify("user-1", fakeNonce, "0")).toBe(false);
+      expect(verifier.verify(USER_1, fakeNonce, "0")).toBe(false);
       verifier.dispose();
     });
 
     it("rejects wrong solution (hash does not meet difficulty)", () => {
       const verifier = createPowVerifier(TEST_CONFIG, clock);
-      const c = verifier.createChallenge("user-1", 0);
+      const c = verifier.createChallenge(USER_1, 0);
 
-      expect(verifier.verify("user-1", c.challenge, "definitely-wrong")).toBe(
+      expect(verifier.verify(USER_1, c.challenge, "definitely-wrong")).toBe(
         false,
       );
       verifier.dispose();
@@ -200,12 +205,12 @@ describe("PowVerifier", () => {
   describe("cleanup", () => {
     it("expired challenges are rejected after TTL", () => {
       const verifier = createPowVerifier(TEST_CONFIG, clock);
-      const c = verifier.createChallenge("user-1", 0);
+      const c = verifier.createChallenge(USER_1, 0);
       const solution = solvePow(c.challenge, c.difficulty);
 
       time += TEST_CONFIG.challengeTtlMs + 1;
 
-      expect(verifier.verify("user-1", c.challenge, solution)).toBe(false);
+      expect(verifier.verify(USER_1, c.challenge, solution)).toBe(false);
       verifier.dispose();
     });
   });

@@ -56,6 +56,19 @@ import type { BlobStore, BlobCategory } from "../storage/store.js";
 import type { JobQueue } from "../jobs/queue.js";
 import type { OrgService } from "../org/service.js";
 import { SYSTEM_ACTOR_ID, RoleId } from "@care-y/shared";
+import {
+  orgIdSchema,
+  type OrgId,
+  type OrgSchema,
+  type OrgSlug,
+  type BlobKey,
+  type PhoneHash,
+  type IdentifierHash,
+  type PasswordHash,
+  type RecordingSid,
+  type UserId,
+  type E164,
+} from "@care-y/shared";
 
 // ---------------------------------------------------------------------------
 // Test constants
@@ -63,7 +76,9 @@ import { SYSTEM_ACTOR_ID, RoleId } from "@care-y/shared";
 
 // Distinct from WEBHOOK_INTEG_ORG_ID in test-utils to avoid unique constraint conflicts
 // with tests that insert into public.orgs concurrently.
-const WEBHOOK_INTEG_ORG_ID = "d1d1d1d1-d1d1-d1d1-d1d1-d1d1d1d1d1d1";
+const WEBHOOK_INTEG_ORG_ID = orgIdSchema.parse(
+  "d1d1d1d1-d1d1-41d1-81d1-d1d1d1d1d1d1",
+);
 const TEST_AUTH_TOKEN = "integration-test-auth-token-xyz";
 const TEST_ACCOUNT_SID = "AC_INTEGRATION_TEST";
 const WEBHOOK_BASE_URL = "https://api.care-y.app";
@@ -95,12 +110,12 @@ function createCapturingBlobStore(): CapturingBlobStore {
       return stored;
     },
     async put(
-      orgSchema: string,
+      orgSchema: OrgSchema,
       category: BlobCategory,
       blob: Buffer,
-    ): Promise<string> {
+    ): Promise<BlobKey> {
       counter++;
-      const key = `${orgSchema}/${category}/blob-${String(counter)}`;
+      const key = `${orgSchema}/${category}/blob-${String(counter)}` as BlobKey;
       // Copy the buffer: the handler may zero it after storing
       stored.push({ orgSchema, category, blob: Buffer.from(blob), key });
       return key;
@@ -351,9 +366,9 @@ describe.skipIf(!process.env.DATABASE_URL)(
       await tDb
         .insertInto("users")
         .values({
-          identifier_hash: "integ-admin-hash",
+          identifier_hash: "integ-admin-hash" as IdentifierHash,
           encrypted_identifier: Buffer.from("integ-admin"),
-          password_hash: "not-a-real-hash",
+          password_hash: "not-a-real-hash" as PasswordHash,
           encrypted_display_name: Buffer.from("Admin"),
           role_id: RoleId.ADMIN,
           is_active: true,
@@ -366,8 +381,8 @@ describe.skipIf(!process.env.DATABASE_URL)(
         .insertInto("orgs")
         .values({
           id: WEBHOOK_INTEG_ORG_ID,
-          slug: `integ-${testDb.schemaName}`,
-          schema_name: testDb.schemaName,
+          slug: `integ-${testDb.schemaName}` as OrgSlug,
+          schema_name: testDb.schemaName as OrgSchema,
         })
         .execute();
 
@@ -441,8 +456,8 @@ describe.skipIf(!process.env.DATABASE_URL)(
           );
           return {
             messageId,
-            from,
-            to,
+            from: from as E164,
+            to: to as E164,
             body: smsBody,
             numMedia,
             mediaUrls,
@@ -467,7 +482,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
           return Buffer.from("fake-audio-for-quarantine");
         },
         async getCallDetails() {
-          return { from: "+15551112222", to: "+15553334444" };
+          return { from: "+15551112222" as E164, to: "+15553334444" as E164 };
         },
         async deleteRecording() {
           // Best-effort deletion after quarantine
@@ -510,12 +525,12 @@ describe.skipIf(!process.env.DATABASE_URL)(
         async findBySlug() {
           return null;
         },
-        async findById(id: string) {
+        async findById(id: OrgId) {
           if (id === WEBHOOK_INTEG_ORG_ID) {
             return {
               id: WEBHOOK_INTEG_ORG_ID,
-              slug: `integ-${testDb.schemaName}`,
-              schemaName: testDb.schemaName,
+              slug: `integ-${testDb.schemaName}` as OrgSlug,
+              schemaName: testDb.schemaName as OrgSchema,
               isActive: true,
             };
           }
@@ -634,7 +649,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
       const expectedHash = testBlindIndexer.hash(
         senderPhone,
         WEBHOOK_INTEG_ORG_ID,
-      );
+      ) as PhoneHash;
       const phoneRow = await tDb
         .selectFrom("phones")
         .selectAll()
@@ -713,7 +728,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
       const expectedHash = testBlindIndexer.hash(
         senderPhone,
         WEBHOOK_INTEG_ORG_ID,
-      );
+      ) as PhoneHash;
       const phoneRows = await tDb
         .selectFrom("phones")
         .selectAll()
@@ -771,7 +786,10 @@ describe.skipIf(!process.env.DATABASE_URL)(
       expect(res.statusCode).toBe(403);
 
       // No phone record for this number
-      const hash = testBlindIndexer.hash("+15550000000", WEBHOOK_INTEG_ORG_ID);
+      const hash = testBlindIndexer.hash(
+        "+15550000000",
+        WEBHOOK_INTEG_ORG_ID,
+      ) as PhoneHash;
       const phoneRow = await tDb
         .selectFrom("phones")
         .selectAll()
@@ -828,7 +846,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
 
     it("quarantines a recording on tracker miss with audit row and notification job", async () => {
       const callSid = "CA_INTEG_Q_MISS";
-      const recordingSid = "RE_INTEG_Q_MISS";
+      const recordingSid = "RE_INTEG_Q_MISS" as RecordingSid;
 
       const { url, body, signature } = buildSignedVoiceRecordingRequest({
         orgId: WEBHOOK_INTEG_ORG_ID,
@@ -872,7 +890,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
         .selectFrom("audit_log")
         .selectAll()
         .where("event_type", "=", "voicemail_quarantined")
-        .where("actor_id", "=", SYSTEM_ACTOR_ID)
+        .where("actor_id", "=", SYSTEM_ACTOR_ID as UserId)
         .execute();
 
       const matchingAudit = auditRows.find(

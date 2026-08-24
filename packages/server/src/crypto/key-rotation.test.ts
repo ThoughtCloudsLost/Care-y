@@ -11,6 +11,13 @@ import { KeyRotationError } from "../errors.js";
 import { PendingIntakeWrapsError } from "../portal/intake-conversion-service.js";
 import { PendingPortalReplyWrapsError } from "../portal/portal-errors.js";
 import type { KeyRotationService } from "./key-rotation.js";
+import type {
+  UserId,
+  TicketId,
+  KeyGeneration,
+  FollowupId,
+  AliasHash,
+} from "@care-y/shared";
 
 describe.skipIf(!process.env.DATABASE_URL)("KeyRotationService", () => {
   let testDb: TestDb;
@@ -27,7 +34,7 @@ describe.skipIf(!process.env.DATABASE_URL)("KeyRotationService", () => {
 
   /** Inserts a user_keys row for the given user with a random salt. */
   async function seedUserKeys(
-    userId: string,
+    userId: UserId,
     overrides?: { vol_public?: Buffer | null; rotation_lock?: boolean },
   ): Promise<void> {
     const salt = crypto.randomBytes(32);
@@ -43,7 +50,7 @@ describe.skipIf(!process.env.DATABASE_URL)("KeyRotationService", () => {
   }
 
   /** Inserts a wrapped_org_keys row for the given user. */
-  async function seedWrappedOrgKey(userId: string): Promise<{
+  async function seedWrappedOrgKey(userId: UserId): Promise<{
     ephemeral_point: Buffer;
     nonce: Buffer;
     wrapped_key: Buffer;
@@ -113,7 +120,7 @@ describe.skipIf(!process.env.DATABASE_URL)("KeyRotationService", () => {
 
     it("returns inProgress: false for nonexistent user", async () => {
       const status = await service.getRotationStatus(
-        "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee",
+        "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee" as UserId,
       );
       expect(status.inProgress).toBe(false);
     });
@@ -147,7 +154,7 @@ describe.skipIf(!process.env.DATABASE_URL)("KeyRotationService", () => {
 
     it("throws KeyRotationError for nonexistent user (0 rows updated)", async () => {
       await expect(
-        service.acquireLock("aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"),
+        service.acquireLock("aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee" as UserId),
       ).rejects.toThrow(KeyRotationError);
     });
   });
@@ -288,8 +295,8 @@ describe.skipIf(!process.env.DATABASE_URL)("KeyRotationService", () => {
           volPublicNew: crypto.randomBytes(32),
           reWrappedKeys: [
             {
-              ticketId: crypto.randomUUID(),
-              keyGeneration: crypto.randomUUID(),
+              ticketId: crypto.randomUUID() as TicketId,
+              keyGeneration: crypto.randomUUID() as KeyGeneration,
               ephemeralPoint: crypto.randomBytes(32),
               nonce: crypto.randomBytes(24),
               wrappedKey: crypto.randomBytes(64),
@@ -408,11 +415,11 @@ describe.skipIf(!process.env.DATABASE_URL)("KeyRotationService", () => {
         .insertInto("clients")
         .values({
           encrypted_alias: Buffer.from(clientAlias),
-          alias_hash: clientAlias,
+          alias_hash: clientAlias as AliasHash,
         })
         .returning("id")
         .executeTakeFirstOrThrow();
-      const ticketId = crypto.randomUUID();
+      const ticketId = crypto.randomUUID() as TicketId;
       await testDb.db
         .insertInto("tickets")
         .values({
@@ -423,7 +430,7 @@ describe.skipIf(!process.env.DATABASE_URL)("KeyRotationService", () => {
           priority: "normal",
           encrypted_title: Buffer.from("ct-title"),
           encrypted_description: Buffer.from("ct-desc"),
-          key_generation: crypto.randomUUID(),
+          key_generation: crypto.randomUUID() as KeyGeneration,
         })
         .execute();
       await testDb.db
@@ -471,11 +478,11 @@ describe.skipIf(!process.env.DATABASE_URL)("KeyRotationService", () => {
         .insertInto("clients")
         .values({
           encrypted_alias: Buffer.from(clientAlias),
-          alias_hash: clientAlias,
+          alias_hash: clientAlias as AliasHash,
         })
         .returning("id")
         .executeTakeFirstOrThrow();
-      const ticketId = crypto.randomUUID();
+      const ticketId = crypto.randomUUID() as TicketId;
       await testDb.db
         .insertInto("tickets")
         .values({
@@ -486,10 +493,10 @@ describe.skipIf(!process.env.DATABASE_URL)("KeyRotationService", () => {
           priority: "normal",
           encrypted_title: Buffer.from("ct-title"),
           encrypted_description: Buffer.from("ct-desc"),
-          key_generation: crypto.randomUUID(),
+          key_generation: crypto.randomUUID() as KeyGeneration,
         })
         .execute();
-      const followupId = crypto.randomUUID();
+      const followupId = crypto.randomUUID() as FollowupId;
       await testDb.db
         .insertInto("followups")
         .values({
@@ -499,7 +506,7 @@ describe.skipIf(!process.env.DATABASE_URL)("KeyRotationService", () => {
           type: "message",
           encrypted_content: Buffer.from("ct-content"),
           created_by: null,
-          key_generation: crypto.randomUUID(),
+          key_generation: crypto.randomUUID() as KeyGeneration,
         })
         .execute();
       await testDb.db
@@ -544,11 +551,11 @@ describe.skipIf(!process.env.DATABASE_URL)("KeyRotationService", () => {
         .insertInto("clients")
         .values({
           encrypted_alias: Buffer.from(clientAlias),
-          alias_hash: clientAlias,
+          alias_hash: clientAlias as AliasHash,
         })
         .returning("id")
         .executeTakeFirstOrThrow();
-      const ticketId = crypto.randomUUID();
+      const ticketId = crypto.randomUUID() as TicketId;
       await testDb.db
         .insertInto("tickets")
         .values({
@@ -559,10 +566,10 @@ describe.skipIf(!process.env.DATABASE_URL)("KeyRotationService", () => {
           priority: "normal",
           encrypted_title: Buffer.from("ct-title"),
           encrypted_description: Buffer.from("ct-desc"),
-          key_generation: crypto.randomUUID(),
+          key_generation: crypto.randomUUID() as KeyGeneration,
         })
         .execute();
-      const followupId = crypto.randomUUID();
+      const followupId = crypto.randomUUID() as FollowupId;
       await testDb.db
         .insertInto("followups")
         .values({
@@ -572,7 +579,7 @@ describe.skipIf(!process.env.DATABASE_URL)("KeyRotationService", () => {
           type: "message",
           encrypted_content: Buffer.from("ct-content"),
           created_by: null,
-          key_generation: crypto.randomUUID(),
+          key_generation: crypto.randomUUID() as KeyGeneration,
         })
         .execute();
       await testDb.db

@@ -18,10 +18,11 @@ import { KeyRotationError, ConflictError } from "../errors.js";
 import { isPgUniqueViolation } from "../db/pg-errors.js";
 import { PendingIntakeWrapsError } from "../portal/intake-conversion-service.js";
 import { PendingPortalReplyWrapsError } from "../portal/portal-errors.js";
+import type { UserId, TicketId, KeyGeneration } from "@care-y/shared";
 
 export interface ReWrappedKey {
-  readonly ticketId: string;
-  readonly keyGeneration: string;
+  readonly ticketId: TicketId;
+  readonly keyGeneration: KeyGeneration;
   readonly ephemeralPoint: Buffer;
   readonly nonce: Buffer;
   readonly wrappedKey: Buffer;
@@ -34,7 +35,7 @@ export interface ReWrappedOrgKey {
 }
 
 export interface KeyRotationInput {
-  readonly userId: string;
+  readonly userId: UserId;
   readonly saltNew: Buffer;
   readonly volPublicNew: Buffer;
   readonly reWrappedKeys: readonly ReWrappedKey[];
@@ -48,22 +49,22 @@ export interface KeyRotationService {
    * Per crypto-architecture-v2.md Section 7 steps 9-10.
    */
   initCryptoKeys(
-    userId: string,
+    userId: UserId,
     salt: Buffer,
     volPublic: Buffer,
   ): Promise<void>;
 
   /** Updates volPublic on an existing user_keys row (password change flow). */
-  storeVolPublic(userId: string, volPublic: Buffer): Promise<void>;
+  storeVolPublic(userId: UserId, volPublic: Buffer): Promise<void>;
 
   /** Returns whether a rotation lock is active for this user. */
-  getRotationStatus(userId: string): Promise<{ inProgress: boolean }>;
+  getRotationStatus(userId: UserId): Promise<{ inProgress: boolean }>;
 
   /** Acquires rotation lock. Throws KeyRotationError if already locked. */
-  acquireLock(userId: string): Promise<void>;
+  acquireLock(userId: UserId): Promise<void>;
 
   /** Releases rotation lock unconditionally. */
-  releaseLock(userId: string): Promise<void>;
+  releaseLock(userId: UserId): Promise<void>;
 
   /**
    * Atomically updates user_keys (salt, vol_public, key_version++)
@@ -78,7 +79,7 @@ export function createKeyRotationService(
 ): KeyRotationService {
   return {
     async initCryptoKeys(
-      userId: string,
+      userId: UserId,
       salt: Buffer,
       volPublic: Buffer,
     ): Promise<void> {
@@ -101,7 +102,7 @@ export function createKeyRotationService(
       }
     },
 
-    async storeVolPublic(userId: string, volPublic: Buffer): Promise<void> {
+    async storeVolPublic(userId: UserId, volPublic: Buffer): Promise<void> {
       await db
         .updateTable("user_keys")
         .set({ vol_public: volPublic })
@@ -109,7 +110,7 @@ export function createKeyRotationService(
         .execute();
     },
 
-    async getRotationStatus(userId: string): Promise<{ inProgress: boolean }> {
+    async getRotationStatus(userId: UserId): Promise<{ inProgress: boolean }> {
       const row = await db
         .selectFrom("user_keys")
         .select("rotation_lock")
@@ -118,7 +119,7 @@ export function createKeyRotationService(
       return { inProgress: row?.rotation_lock ?? false };
     },
 
-    async acquireLock(userId: string): Promise<void> {
+    async acquireLock(userId: UserId): Promise<void> {
       const result = await db
         .updateTable("user_keys")
         .set({ rotation_lock: true })
@@ -133,7 +134,7 @@ export function createKeyRotationService(
       }
     },
 
-    async releaseLock(userId: string): Promise<void> {
+    async releaseLock(userId: UserId): Promise<void> {
       await db
         .updateTable("user_keys")
         .set({ rotation_lock: false })

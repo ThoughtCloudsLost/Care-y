@@ -2,6 +2,7 @@ import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { randomBytes } from "node:crypto";
 import { createTestDb, type TestDb } from "../test-utils.js";
 import { createOprfAuditLogger, type OprfAuditLogger } from "./oprf-audit.js";
+import type { UserId } from "@care-y/shared";
 
 const TEST_OPS_KEY = Buffer.from(
   "a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6a7b8c9d0e1f2a3b4c5d6a7b8c9d0e1f2",
@@ -33,7 +34,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
     });
 
     it("inserts a row with hashed IP, userId, reason, and timestamp", async () => {
-      const userId = crypto.randomUUID();
+      const userId = crypto.randomUUID() as UserId;
       await logger.logFailure(userId, "192.168.1.1", "rate_limited");
 
       const row = await testDb.platformDb
@@ -49,8 +50,8 @@ describe.skipIf(!process.env.DATABASE_URL)(
     });
 
     it("hashed IP is deterministic for same IP on same day", async () => {
-      const userId1 = crypto.randomUUID();
-      const userId2 = crypto.randomUUID();
+      const userId1 = crypto.randomUUID() as UserId;
+      const userId2 = crypto.randomUUID() as UserId;
 
       await logger.logFailure(userId1, "10.0.0.1", "pow_required");
       await logger.logFailure(userId2, "10.0.0.1", "pow_invalid");
@@ -71,8 +72,8 @@ describe.skipIf(!process.env.DATABASE_URL)(
     });
 
     it("hashed IP differs for different IPs on same day", async () => {
-      const userId1 = crypto.randomUUID();
-      const userId2 = crypto.randomUUID();
+      const userId1 = crypto.randomUUID() as UserId;
+      const userId2 = crypto.randomUUID() as UserId;
 
       await logger.logFailure(userId1, "10.0.0.1", "oprf_failed");
       await logger.logFailure(userId2, "10.0.0.2", "oprf_failed");
@@ -93,8 +94,8 @@ describe.skipIf(!process.env.DATABASE_URL)(
     });
 
     it("hashed IP differs for same IP on different days", async () => {
-      const userId1 = crypto.randomUUID();
-      const userId2 = crypto.randomUUID();
+      const userId1 = crypto.randomUUID() as UserId;
+      const userId2 = crypto.randomUUID() as UserId;
 
       // Day 1
       time = new Date("2026-03-10T12:00:00Z").getTime();
@@ -132,7 +133,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
     });
 
     it("raw IP never appears in the stored row", async () => {
-      const userId = crypto.randomUUID();
+      const userId = crypto.randomUUID() as UserId;
       const rawIp = `test-ip-${randomBytes(4).toString("hex")}`;
 
       await logger.logFailure(userId, rawIp, "session_mismatch");

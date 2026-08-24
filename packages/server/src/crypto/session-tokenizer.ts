@@ -9,10 +9,17 @@
 
 import { hkdfSync, createHmac } from "node:crypto";
 import { CryptoError } from "../errors.js";
+import type { IpToken, UaToken } from "@care-y/shared";
 
 export interface SessionTokenizer {
   /** Produces a deterministic HMAC-SHA256 hex token for comparison. */
   tokenize(value: string): string;
+
+  /** Tokenizes an IP address, returning a branded IpToken for `sessions.ip_token`. */
+  tokenizeIp(value: string): IpToken;
+
+  /** Tokenizes a user-agent string, returning a branded UaToken for `sessions.ua_token`. */
+  tokenizeUa(value: string): UaToken;
 }
 
 const SESSION_TOKEN_INFO = "care-y-session-token-v1";
@@ -41,6 +48,14 @@ export function createSessionTokenizer(hmacKey: Buffer): SessionTokenizer {
   return {
     tokenize(value: string): string {
       return createHmac("sha256", hmacKey).update(value).digest("hex");
+    },
+
+    tokenizeIp(value: string): IpToken {
+      return this.tokenize(value) as IpToken;
+    },
+
+    tokenizeUa(value: string): UaToken {
+      return this.tokenize(value) as UaToken;
     },
   };
 }
