@@ -10,6 +10,20 @@ import type { ClientRepository } from "./models/client-repo.js";
 import type { GreetingRepository } from "./models/greeting-repo.js";
 import type { BlocklistRepository } from "./models/blocklist-repo.js";
 import { createCallTracker } from "./call-tracker.js";
+import {
+  orgIdSchema,
+  orgSchemaNameSchema,
+  type OrgId,
+  type ClientId,
+  type PhoneId,
+  type PhoneHash,
+  type PhoneGreetingId,
+  type E164,
+  type CallSid,
+  type IdentifierHash,
+  type UsernameHash,
+  type OpsPhoneHash,
+} from "@care-y/shared";
 
 // ---------------------------------------------------------------------------
 // Mock factories
@@ -26,6 +40,21 @@ function createMockIndexer(): BlindIndexer {
   return {
     hash: vi.fn((_input: string, _orgId: string) => "hashed-phone"),
     hashBuffer: vi.fn((_input: Buffer, _orgId: string) => "hashed-phone"),
+    hashIdentifier: vi.fn(
+      (_input: string, _orgId: OrgId) => "hashed-id" as IdentifierHash,
+    ),
+    hashUsername: vi.fn(
+      (_input: string, _orgId: OrgId) => "hashed-user" as UsernameHash,
+    ),
+    hashPhone: vi.fn(
+      (_input: string, _orgId: OrgId) => "hashed-phone" as PhoneHash,
+    ),
+    hashPhoneBuffer: vi.fn(
+      (_input: Buffer, _orgId: OrgId) => "hashed-phone" as PhoneHash,
+    ),
+    hashConsultantPhoneBuffer: vi.fn(
+      (_input: Buffer, _orgId: OrgId) => "hashed-consultant" as OpsPhoneHash,
+    ),
   };
 }
 
@@ -42,14 +71,14 @@ function createMockClientRepo(): ClientRepository {
   return {
     findOrCreateByPhoneHash: vi.fn().mockResolvedValue({
       client: {
-        id: "client-1",
+        id: "client-1" as ClientId,
         encryptedAlias: Buffer.from("sealed:calm-pebble-7"),
         aliasHash: null,
-        phoneId: "phone-1",
+        phoneId: "phone-1" as PhoneId,
       },
       phone: {
-        id: "phone-1",
-        phoneHash: "hashed-phone",
+        id: "phone-1" as PhoneId,
+        phoneHash: "hashed-phone" as PhoneHash,
         encryptedNumber: Buffer.from("enc"),
         locale: "en-US",
         locationCity: null,
@@ -91,9 +120,9 @@ function createMockGreetingRepo(): GreetingRepository {
 
 function makeCallData(overrides?: Partial<IncomingCallData>): IncomingCallData {
   return {
-    callId: "CA123",
-    from: "+15551234567",
-    to: "+15559876543",
+    callId: "CA123" as CallSid,
+    from: "+15551234567" as E164,
+    to: "+15559876543" as E164,
     direction: "inbound" as const,
     ...overrides,
   };
@@ -107,8 +136,10 @@ function makeDeps(overrides?: Partial<InboundCallDeps>): InboundCallDeps {
     clientRepo: createMockClientRepo(),
     greetingRepo: createMockGreetingRepo(),
     blocklistRepo: createMockBlocklistRepo(),
-    orgId: "org-1",
-    orgSchema: "org_test",
+    orgId: orgIdSchema.parse("a0a0a0a0-a0a0-40a0-80a0-a0a0a0a0a0a0"),
+    orgSchema: orgSchemaNameSchema.parse(
+      "org_a0a0a0a0-a0a0-40a0-80a0-a0a0a0a0a0a0",
+    ),
     webhookBaseUrl: "https://example.com",
     defaultLocale: "en-US",
     callTracker: createCallTracker(),
@@ -206,8 +237,8 @@ describe("handleInboundCall", () => {
 
   it("returns returning caller IVR when phone hash found and greeting exists", async () => {
     const existingPhone = {
-      id: "phone-existing",
-      phoneHash: "hashed-phone",
+      id: "phone-existing" as PhoneId,
+      phoneHash: "hashed-phone" as PhoneHash,
       encryptedNumber: Buffer.from("enc"),
       locale: "es-MX",
       locationCity: null,
@@ -218,8 +249,8 @@ describe("handleInboundCall", () => {
     vi.mocked(deps.phoneRepo.findByHash).mockResolvedValueOnce(existingPhone);
 
     const existingGreeting = {
-      id: "greeting-1",
-      phoneNumber: "+15559876543",
+      id: "greeting-1" as PhoneGreetingId,
+      phoneNumber: "+15559876543" as E164,
       greetingType: "existing_client",
       locale: "es-MX",
       text: "Bienvenido de nuevo.",
@@ -250,8 +281,8 @@ describe("handleInboundCall", () => {
 
   it("returns returning caller IVR with reselection gather when language_prompt exists", async () => {
     const existingPhone = {
-      id: "phone-existing",
-      phoneHash: "hashed-phone",
+      id: "phone-existing" as PhoneId,
+      phoneHash: "hashed-phone" as PhoneHash,
       encryptedNumber: Buffer.from("enc"),
       locale: "en-US",
       locationCity: null,
@@ -262,8 +293,8 @@ describe("handleInboundCall", () => {
     vi.mocked(deps.phoneRepo.findByHash).mockResolvedValueOnce(existingPhone);
 
     const existingGreeting = {
-      id: "greeting-1",
-      phoneNumber: "+15559876543",
+      id: "greeting-1" as PhoneGreetingId,
+      phoneNumber: "+15559876543" as E164,
       greetingType: "existing_client",
       locale: "en-US",
       text: "Welcome back.",
@@ -272,8 +303,8 @@ describe("handleInboundCall", () => {
       audioContentType: null,
     };
     const reselectionGreeting = {
-      id: "greeting-2",
-      phoneNumber: "+15559876543",
+      id: "greeting-2" as PhoneGreetingId,
+      phoneNumber: "+15559876543" as E164,
       greetingType: "language_prompt",
       locale: "en-US",
       text: "Press 1 for English.",
@@ -302,8 +333,8 @@ describe("handleInboundCall", () => {
 
   it("falls through to language selection IVR when returning caller has no greeting", async () => {
     const existingPhone = {
-      id: "phone-existing",
-      phoneHash: "hashed-phone",
+      id: "phone-existing" as PhoneId,
+      phoneHash: "hashed-phone" as PhoneHash,
       encryptedNumber: Buffer.from("enc"),
       locale: "en-US",
       locationCity: null,
@@ -351,14 +382,14 @@ describe("handleInboundCall", () => {
     // findOrCreateByPhoneHash returns phone with locale "en-US"
     vi.mocked(deps.clientRepo.findOrCreateByPhoneHash).mockResolvedValueOnce({
       client: {
-        id: "client-1",
+        id: "client-1" as ClientId,
         encryptedAlias: Buffer.from("sealed:calm-pebble-7"),
         aliasHash: null,
-        phoneId: "phone-1",
+        phoneId: "phone-1" as PhoneId,
       },
       phone: {
-        id: "phone-1",
-        phoneHash: "hashed-phone",
+        id: "phone-1" as PhoneId,
+        phoneHash: "hashed-phone" as PhoneHash,
         encryptedNumber: Buffer.from("enc"),
         locale: "en-US",
         locationCity: null,
@@ -383,14 +414,14 @@ describe("handleInboundCall", () => {
   it("does not update locale when DTMF-selected locale matches phone record", async () => {
     vi.mocked(deps.clientRepo.findOrCreateByPhoneHash).mockResolvedValueOnce({
       client: {
-        id: "client-1",
+        id: "client-1" as ClientId,
         encryptedAlias: Buffer.from("sealed:calm-pebble-7"),
         aliasHash: null,
-        phoneId: "phone-1",
+        phoneId: "phone-1" as PhoneId,
       },
       phone: {
-        id: "phone-1",
-        phoneHash: "hashed-phone",
+        id: "phone-1" as PhoneId,
+        phoneHash: "hashed-phone" as PhoneHash,
         encryptedNumber: Buffer.from("enc"),
         locale: "en-US",
         locationCity: null,
@@ -443,8 +474,8 @@ describe("handleInboundCall", () => {
     vi.mocked(
       deps.greetingRepo.findByNumberAndLocaleAndType,
     ).mockResolvedValueOnce({
-      id: "greeting-1",
-      phoneNumber: "+15559876543",
+      id: "greeting-1" as PhoneGreetingId,
+      phoneNumber: "+15559876543" as E164,
       greetingType: "new_client",
       locale: "en-US",
       text: "You have reached our helpline.",
@@ -499,8 +530,8 @@ describe("handleInboundCall", () => {
     // Test returning caller path (returning caller IVR)
     const deps2 = makeDeps();
     const existingPhone = {
-      id: "phone-existing",
-      phoneHash: "hashed-phone",
+      id: "phone-existing" as PhoneId,
+      phoneHash: "hashed-phone" as PhoneHash,
       encryptedNumber: Buffer.from("enc"),
       locale: "en-US",
       locationCity: null,
@@ -511,8 +542,8 @@ describe("handleInboundCall", () => {
     vi.mocked(deps2.phoneRepo.findByHash).mockResolvedValueOnce(existingPhone);
     vi.mocked(deps2.greetingRepo.findByNumberAndLocaleAndType)
       .mockResolvedValueOnce({
-        id: "g-1",
-        phoneNumber: "+15559876543",
+        id: "g-1" as PhoneGreetingId,
+        phoneNumber: "+15559876543" as E164,
         greetingType: "existing_client",
         locale: "en-US",
         text: "Welcome back.",
@@ -537,8 +568,11 @@ describe("handleInboundCall", () => {
     const body: Record<string, string> = {};
     await handleInboundCall(callData, body, deps);
 
-    expect(deps.indexer.hash).toHaveBeenCalledOnce();
-    expect(deps.indexer.hash).toHaveBeenCalledWith("+15551234567", "org-1");
+    expect(deps.indexer.hashPhone).toHaveBeenCalledOnce();
+    expect(deps.indexer.hashPhone).toHaveBeenCalledWith(
+      "+15551234567",
+      "a0a0a0a0-a0a0-40a0-80a0-a0a0a0a0a0a0",
+    );
   });
 
   // --- Webhook URL construction ---
@@ -546,8 +580,8 @@ describe("handleInboundCall", () => {
 
   it("constructs voice webhook URL using providerId rather than hardcoded provider", async () => {
     const existingPhone = {
-      id: "phone-existing",
-      phoneHash: "hashed-phone",
+      id: "phone-existing" as PhoneId,
+      phoneHash: "hashed-phone" as PhoneHash,
       encryptedNumber: Buffer.from("enc"),
       locale: "en-US",
       locationCity: null,
@@ -558,8 +592,8 @@ describe("handleInboundCall", () => {
     vi.mocked(deps.phoneRepo.findByHash).mockResolvedValueOnce(existingPhone);
     vi.mocked(deps.greetingRepo.findByNumberAndLocaleAndType)
       .mockResolvedValueOnce({
-        id: "g-1",
-        phoneNumber: "+15559876543",
+        id: "g-1" as PhoneGreetingId,
+        phoneNumber: "+15559876543" as E164,
         greetingType: "existing_client",
         locale: "en-US",
         text: "Hello.",
@@ -576,7 +610,7 @@ describe("handleInboundCall", () => {
     const recordInstructions = findInstructions(result, "record");
     expect(recordInstructions).toHaveLength(1);
     expect(recordInstructions[0]!.attributes?.action).toBe(
-      "https://example.com/webhooks/mock/org-1/voice",
+      "https://example.com/webhooks/mock/a0a0a0a0-a0a0-40a0-80a0-a0a0a0a0a0a0/voice",
     );
   });
 
@@ -585,14 +619,14 @@ describe("handleInboundCall", () => {
   it("resolves DTMF digit 2 to es-MX and produces voicemail IVR", async () => {
     vi.mocked(deps.clientRepo.findOrCreateByPhoneHash).mockResolvedValueOnce({
       client: {
-        id: "client-1",
+        id: "client-1" as ClientId,
         encryptedAlias: Buffer.from("sealed:calm-pebble-7"),
         aliasHash: null,
-        phoneId: "phone-1",
+        phoneId: "phone-1" as PhoneId,
       },
       phone: {
-        id: "phone-1",
-        phoneHash: "hashed-phone",
+        id: "phone-1" as PhoneId,
+        phoneHash: "hashed-phone" as PhoneHash,
         encryptedNumber: Buffer.from("enc"),
         locale: "en-US", // different from es-MX, triggers updateLocale
         locationCity: null,
@@ -626,14 +660,14 @@ describe("handleInboundCall", () => {
   it("resolves DTMF digit 3 to fr-FR and produces voicemail IVR", async () => {
     vi.mocked(deps.clientRepo.findOrCreateByPhoneHash).mockResolvedValueOnce({
       client: {
-        id: "client-1",
+        id: "client-1" as ClientId,
         encryptedAlias: Buffer.from("sealed:calm-pebble-7"),
         aliasHash: null,
-        phoneId: "phone-1",
+        phoneId: "phone-1" as PhoneId,
       },
       phone: {
-        id: "phone-1",
-        phoneHash: "hashed-phone",
+        id: "phone-1" as PhoneId,
+        phoneHash: "hashed-phone" as PhoneHash,
         encryptedNumber: Buffer.from("enc"),
         locale: "en-US", // different from fr-FR, triggers updateLocale
         locationCity: null,

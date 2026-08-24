@@ -21,6 +21,7 @@ import {
   ValidationError,
 } from "../errors.js";
 import { ErrorCode } from "@care-y/shared";
+import type { UserId, OpsPhoneHash } from "@care-y/shared";
 import { createHash } from "node:crypto";
 import {
   deriveConsultantPhoneIndexKey,
@@ -39,14 +40,14 @@ function makeArtifacts(
   wantsPings: boolean,
 ): {
   orgSealedPhone: Buffer;
-  opsPhoneHash: string;
+  opsPhoneHash: OpsPhoneHash;
   opsEncryptedPhone: Buffer | null;
 } {
   const consultantIndexKey = deriveConsultantPhoneIndexKey(TEST_OPS_KEY);
   const consultantIndexer = createBlindIndexer(consultantIndexKey);
   return {
     orgSealedPhone: testSealedBox.sealBuffer(Buffer.from(phone)),
-    opsPhoneHash: consultantIndexer.hash(phone, TEST_ORG_ID),
+    opsPhoneHash: consultantIndexer.hash(phone, TEST_ORG_ID) as OpsPhoneHash,
     opsEncryptedPhone: wantsPings
       ? testFieldEncryptor.encryptBuffer(Buffer.from(phone))
       : null,
@@ -409,7 +410,7 @@ describe.skipIf(!process.env.DATABASE_URL)("ConsultantService", () => {
   it("updatePreference throws NotFoundError for unknown user", async () => {
     await expect(
       service.updatePreference(
-        "00000000-0000-0000-0000-ffffffffffff",
+        "00000000-0000-4000-8000-ffffffffffff" as UserId,
         "webrtc",
       ),
     ).rejects.toThrow(NotFoundError);
@@ -419,13 +420,16 @@ describe.skipIf(!process.env.DATABASE_URL)("ConsultantService", () => {
 
   it("deleteByUserId throws NotFoundError for unknown user", async () => {
     await expect(
-      service.deleteByUserId("00000000-0000-0000-0000-ffffffffffff"),
+      service.deleteByUserId("00000000-0000-4000-8000-ffffffffffff" as UserId),
     ).rejects.toThrow(NotFoundError);
   });
 
   it("verify throws NotFoundError for unknown user", async () => {
     await expect(
-      service.verify("00000000-0000-0000-0000-ffffffffffff", "123456"),
+      service.verify(
+        "00000000-0000-4000-8000-ffffffffffff" as UserId,
+        "123456",
+      ),
     ).rejects.toThrow(NotFoundError);
   });
 

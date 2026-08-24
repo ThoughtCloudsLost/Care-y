@@ -15,6 +15,13 @@ import { hkdfSync } from "node:crypto";
 import { createHmac } from "node:crypto";
 import sodium from "sodium-native";
 import { CryptoError } from "../errors.js";
+import type {
+  OrgId,
+  IdentifierHash,
+  UsernameHash,
+  PhoneHash,
+  OpsPhoneHash,
+} from "@care-y/shared";
 
 // --- Interfaces ---
 
@@ -30,11 +37,58 @@ export interface FieldEncryptor {
 }
 
 export interface BlindIndexer {
-  hash(input: string, orgId: string): string;
+  /**
+   * The salt is the org UUID, not the schema name. Both are strings and the
+   * two were mixed here, which silently split one org's blind index into two
+   * incompatible domains: a caller known to the telephony path looked new to
+   * the relay path, and a duplicate client was created with no error. The
+   * brand is what keeps them apart now.
+   */
+  hash(input: string, orgId: OrgId): string;
   /** Hashes a Buffer directly without string conversion. For relay-grade
    *  code paths where JS strings are prohibited. The Buffer content is
    *  treated as UTF-8 and normalized (lowercase + trim) before hashing. */
-  hashBuffer(input: Buffer, orgId: string): string;
+  hashBuffer(input: Buffer, orgId: OrgId): string;
+
+  /**
+   * Hashes a volunteer login identifier, returning a branded IdentifierHash.
+   * Delegates to the generic `hash` and casts once. Call sites that feed
+   * `users.identifier_hash` should prefer this over the generic method.
+   */
+  hashIdentifier(input: string, orgId: OrgId): IdentifierHash;
+
+  /**
+   * Hashes a client portal username, returning a branded UsernameHash.
+   * Same HMAC as hashIdentifier but a separate brand, keeping the two
+   * entity types apart at the type level.
+   */
+  hashUsername(input: string, orgId: OrgId): UsernameHash;
+
+  /**
+   * Hashes a client phone number, returning a branded PhoneHash.
+   * For `phones.phone_hash`, `phone_blocklist.phone_hash`, and
+   * `two_factor_methods.sms_phone_hash`.
+   */
+  hashPhone(input: string, orgId: OrgId): PhoneHash;
+
+  /**
+   * Buffer variant of hashPhone for relay-grade code paths where JS
+   * strings are prohibited (NEVER-Encryption: no JS strings for plaintext
+   * in relay). Returns a branded PhoneHash.
+   */
+  hashPhoneBuffer(input: Buffer, orgId: OrgId): PhoneHash;
+
+  /**
+   * Hashes a consultant (volunteer) phone number under the consultant-keyed
+   * indexer instance, returning a branded OpsPhoneHash. ADR-065 requires
+   * that consultant phone hashes and client phone hashes stay in separate
+   * key domains so volunteer numbers never surface as client merge
+   * suggestions. This method's correctness depends on being called on the
+   * consultant-keyed BlindIndexer instance (constructed with
+   * deriveConsultantPhoneIndexKey). Calling it on the client-phone indexer
+   * would produce a PhoneHash-equivalent value under the wrong brand.
+   */
+  hashConsultantPhoneBuffer(input: Buffer, orgId: OrgId): OpsPhoneHash;
 }
 
 export interface DerivedKeys {
@@ -210,14 +264,14 @@ export function createBlindIndexer(key: Buffer): BlindIndexer {
   }
 
   return {
-    hash(input: string, orgId: string): string {
+    hash(input: string, orgId: OrgId): string {
       const normalized = input.toLowerCase().trim();
       return createHmac("sha256", key)
         .update(orgId + ":" + normalized)
         .digest("hex");
     },
 
-    hashBuffer(input: Buffer, orgId: string): string {
+    hashBuffer(input: Buffer, orgId: OrgId): string {
       // Normalize by converting to lowercase + trim via a temporary Buffer.
       // The temporary is zeroed after use (relay-grade plaintext rule).
       const normalized = Buffer.from(
@@ -230,6 +284,26 @@ export function createBlindIndexer(key: Buffer): BlindIndexer {
       } finally {
         normalized.fill(0);
       }
+    },
+
+    hashIdentifier(input: string, orgId: OrgId): IdentifierHash {
+      return this.hash(input, orgId) as IdentifierHash;
+    },
+
+    hashUsername(input: string, orgId: OrgId): UsernameHash {
+      return this.hash(input, orgId) as UsernameHash;
+    },
+
+    hashPhone(input: string, orgId: OrgId): PhoneHash {
+      return this.hash(input, orgId) as PhoneHash;
+    },
+
+    hashPhoneBuffer(input: Buffer, orgId: OrgId): PhoneHash {
+      return this.hashBuffer(input, orgId) as PhoneHash;
+    },
+
+    hashConsultantPhoneBuffer(input: Buffer, orgId: OrgId): OpsPhoneHash {
+      return this.hashBuffer(input, orgId) as OpsPhoneHash;
     },
   };
 }

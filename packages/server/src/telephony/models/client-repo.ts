@@ -18,12 +18,19 @@ import type { PhoneRecord, PhoneRepository } from "./phone-repo.js";
 import { generateAlias } from "./alias-generator.js";
 import { sealString } from "../crypto-helpers.js";
 import type { SealedBoxEncryptor } from "../../crypto/sealed-box.js";
+import type {
+  ClientId,
+  PhoneId,
+  PhoneHash,
+  PhoneMatchHash,
+  AliasHash,
+} from "@care-y/shared";
 
 export interface ClientRecord {
-  readonly id: string;
+  readonly id: ClientId;
   readonly encryptedAlias: Buffer;
-  readonly aliasHash: string | null;
-  readonly phoneId: string | null;
+  readonly aliasHash: AliasHash | null;
+  readonly phoneId: PhoneId | null;
 }
 
 export interface FindOrCreateResult {
@@ -34,12 +41,12 @@ export interface FindOrCreateResult {
 
 export interface ClientRepository {
   findOrCreateByPhoneHash(
-    phoneHash: string,
+    phoneHash: PhoneHash,
     encryptedNumber: Buffer,
-    phoneMatchHash?: string | null,
+    phoneMatchHash?: PhoneMatchHash | null,
   ): Promise<FindOrCreateResult>;
-  findById(id: string): Promise<ClientRecord | null>;
-  findByPhoneId(phoneId: string): Promise<ClientRecord | null>;
+  findById(id: ClientId): Promise<ClientRecord | null>;
+  findByPhoneId(phoneId: PhoneId): Promise<ClientRecord | null>;
 }
 
 function mapClientRow(row: Selectable<ClientsTable>): ClientRecord {
@@ -58,9 +65,9 @@ export function createClientRepository(
 ): ClientRepository {
   return {
     async findOrCreateByPhoneHash(
-      phoneHash: string,
+      phoneHash: PhoneHash,
       encryptedNumber: Buffer,
-      phoneMatchHash?: string | null,
+      phoneMatchHash?: PhoneMatchHash | null,
     ): Promise<FindOrCreateResult> {
       // 1. Check for existing phone
       const existingPhone = await phoneRepo.findByHash(phoneHash);
@@ -113,7 +120,7 @@ export function createClientRepository(
       };
     },
 
-    async findById(id: string): Promise<ClientRecord | null> {
+    async findById(id: ClientId): Promise<ClientRecord | null> {
       const row = await db
         .selectFrom("clients")
         .selectAll()
@@ -124,7 +131,7 @@ export function createClientRepository(
       return mapClientRow(row);
     },
 
-    async findByPhoneId(phoneId: string): Promise<ClientRecord | null> {
+    async findByPhoneId(phoneId: PhoneId): Promise<ClientRecord | null> {
       const row = await db
         .selectFrom("clients")
         .selectAll()

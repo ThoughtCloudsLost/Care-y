@@ -22,11 +22,24 @@ import type {
   QuarantineReason,
   ListQuarantineInput,
   RouteQuarantineInput,
+  OrgId,
+  OrgSchema,
+  OrgSlug,
+  RecordingSid,
+  CallSid,
+  ClientId,
+  VoicemailQuarantineId,
+  TicketId,
+  FollowupId,
+  UserId,
+  QueueId,
 } from "@care-y/shared";
 import {
   SYSTEM_ACTOR_ID,
   RoleId,
   VOICEMAIL_QUARANTINE_MAX_BYTES,
+  newVoicemailQuarantineId,
+  userIdSchema,
 } from "@care-y/shared";
 import { sealBufferAndZero, sealString } from "./crypto-helpers.js";
 import { deleteOrEnqueue } from "./log-deletion-helpers.js";
@@ -49,9 +62,9 @@ export interface QuarantineDeps {
   readonly blobStore: BlobStore;
   readonly jobQueue: JobQueue;
   readonly sealedBox: SealedBoxEncryptor;
-  readonly orgId: string;
-  readonly orgSchema: string;
-  readonly orgSlug: string;
+  readonly orgId: OrgId;
+  readonly orgSchema: OrgSchema;
+  readonly orgSlug: OrgSlug;
   readonly notificationService: NotificationService;
 }
 
@@ -60,10 +73,10 @@ export interface QuarantineDeps {
 // ---------------------------------------------------------------------------
 
 export interface QuarantineParams {
-  readonly recordingSid: string;
-  readonly callSid: string;
+  readonly recordingSid: RecordingSid;
+  readonly callSid: CallSid;
   readonly reason: QuarantineReason;
-  readonly clientId?: string | null;
+  readonly clientId?: ClientId | null;
   readonly durationSeconds?: number;
 }
 
@@ -72,17 +85,17 @@ export interface QuarantineParams {
 // ---------------------------------------------------------------------------
 
 export interface QuarantineListRow {
-  readonly id: string;
+  readonly id: VoicemailQuarantineId;
   readonly reason: string;
   readonly status: string;
   readonly createdAt: Date;
   readonly durationSeconds: number | null;
   readonly encryptedCallerNumber: string | null;
   readonly encryptedCalledNumber: string | null;
-  readonly clientId: string | null;
-  readonly routedTicketId: string | null;
-  readonly routedFollowupId: string | null;
-  readonly resolvedBy: string | null;
+  readonly clientId: ClientId | null;
+  readonly routedTicketId: TicketId | null;
+  readonly routedFollowupId: FollowupId | null;
+  readonly resolvedBy: UserId | null;
   readonly resolvedAt: Date | null;
 }
 
@@ -98,14 +111,14 @@ export interface QuarantineBlobResult {
 export interface RouteQuarantineDeps {
   readonly tDb: Kysely<TenantDatabase>;
   readonly blobStore: BlobStore;
-  readonly orgSchema: string;
+  readonly orgSchema: OrgSchema;
   readonly pendingClients: Map<string, PendingClient>;
   readonly sealedBox: SealedBoxEncryptor;
 }
 
 export interface RouteQuarantineResult {
-  readonly ticketId: string;
-  readonly followUpId: string;
+  readonly ticketId: TicketId;
+  readonly followUpId: FollowupId;
 }
 
 export interface DismissQuarantineDeps {
@@ -173,7 +186,7 @@ export async function quarantineRecording(
   const blobKey = await blobStore.put(orgSchema, "quarantine", sealed);
 
   // (d) Insert quarantine row. ON CONFLICT DO NOTHING handles webhook retries.
-  const quarantineId = crypto.randomUUID();
+  const quarantineId = newVoicemailQuarantineId();
   const result = await tDb
     .insertInto("voicemail_quarantine")
     .values({
@@ -202,7 +215,7 @@ export async function quarantineRecording(
   const auditService = createAuditService(tDb);
   await auditService.log({
     eventType: "voicemail_quarantined",
-    actorId: SYSTEM_ACTOR_ID,
+    actorId: userIdSchema.parse(SYSTEM_ACTOR_ID),
     metadata: {
       quarantineId,
       reason,
@@ -309,7 +322,7 @@ export async function listQuarantined(
 export async function getQuarantineBlob(
   tDb: Kysely<TenantDatabase>,
   blobStore: BlobStore,
-  quarantineId: string,
+  quarantineId: VoicemailQuarantineId,
 ): Promise<QuarantineBlobResult> {
   const row = await tDb
     .selectFrom("voicemail_quarantine")
@@ -352,7 +365,7 @@ export async function getQuarantineBlob(
 export async function routeQuarantined(
   deps: RouteQuarantineDeps,
   input: RouteQuarantineInput,
-  actorId: string,
+  actorId: UserId,
 ): Promise<RouteQuarantineResult> {
   const { tDb, blobStore, orgSchema, pendingClients } = deps;
 
@@ -371,7 +384,7 @@ export async function routeQuarantined(
   }
 
   // Resolve the target ticket
-  let ticketId: string;
+  let ticketId: TicketId;
 
   switch (input.target.type) {
     case "clientId": {
@@ -443,7 +456,7 @@ export async function routeQuarantined(
     throw new ValidationError("Decoded audio exceeds maximum allowed size");
   }
 
-  let followUpId: string;
+  let followUpId: FollowupId;
   try {
     const fuResult = await createEncryptedFollowUp(
       tDb,
@@ -513,8 +526,8 @@ export async function routeQuarantined(
  */
 export async function dismissQuarantined(
   deps: DismissQuarantineDeps,
-  quarantineId: string,
-  actorId: string,
+  quarantineId: VoicemailQuarantineId,
+  actorId: UserId,
 ): Promise<void> {
   const { tDb, blobStore } = deps;
 
@@ -569,7 +582,7 @@ export async function dismissQuarantined(
  */
 async function loadIntakeQueueId(
   tDb: Kysely<TenantDatabase>,
-): Promise<string | null> {
+): Promise<QueueId | null> {
   const config = await tDb
     .selectFrom("org_config")
     .select("intake_queue_id")

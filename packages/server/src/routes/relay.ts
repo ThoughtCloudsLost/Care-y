@@ -45,14 +45,28 @@ import {
 } from "./relay-utils.js";
 import { readFormBody } from "./webhooks.js";
 import { randomUUID, timingSafeEqual } from "node:crypto";
+import type {
+  OrgId,
+  OrgSchema,
+  E164,
+  TicketId,
+  CallSid,
+  PhoneHash,
+} from "@care-y/shared";
+import {
+  phoneMatchHashSchema,
+  orgSchemaNameSchema,
+  callSidSchema,
+  ticketIdSchema,
+} from "@care-y/shared";
 
 // ---------------------------------------------------------------------------
 // Dependencies
 // ---------------------------------------------------------------------------
 
 export interface RelayHandlerDeps {
-  readonly getProvider: (orgId: string) => Promise<TelephonyProvider | null>;
-  readonly getTenantDb: (orgSchema: string) => Kysely<TenantDatabase>;
+  readonly getProvider: (orgId: OrgId) => Promise<TelephonyProvider | null>;
+  readonly getTenantDb: (orgSchema: OrgSchema) => Kysely<TenantDatabase>;
   readonly createConsultantRepo: (
     db: Kysely<TenantDatabase>,
   ) => ConsultantRepository;
@@ -65,14 +79,14 @@ export interface RelayHandlerDeps {
   readonly resolveCallerIdByPurpose: (
     org: OrgIdentifiers,
     purpose: "outbound" | "system",
-  ) => Promise<string | null>;
+  ) => Promise<E164 | null>;
   /** Map of CallSid -> pending call state for DTMF confirmation. */
   readonly pendingCalls: Map<string, PendingCall>;
   readonly webhookBaseUrl: string;
   /** Retrieve the auth token for an org's Twilio account (for HMAC validation). */
-  readonly getAuthToken: (orgId: string) => Promise<string | null>;
+  readonly getAuthToken: (orgId: OrgId) => Promise<string | null>;
   /** Retrieve the Twilio Account SID for a given org. */
-  readonly getAccountSid: (orgId: string) => Promise<string>;
+  readonly getAccountSid: (orgId: OrgId) => Promise<string>;
   /** Twilio API Key SID for signing Access Tokens. Platform-level, not per-org. */
   readonly apiKeySid: string;
   /** Twilio API Key Secret for signing Access Tokens. */
@@ -83,14 +97,14 @@ export interface RelayHandlerDeps {
   readonly orgResolver: OrgResolver;
   /** Create a tenant-scoped session repository. May be async (DB lookup for org key). */
   readonly createSessionRepo: (
-    orgSchema: string,
+    orgSchema: OrgSchema,
   ) => SessionRepository | Promise<SessionRepository>;
   readonly indexer: BlindIndexer;
   readonly fieldEncryptor: FieldEncryptor;
   readonly pendingClients: Map<string, PendingClient>;
   readonly callTracker: CallTracker;
   readonly resolveClientPhone?: (
-    ticketId: string,
+    ticketId: TicketId,
     tenantDb: Kysely<TenantDatabase>,
     fieldEncryptor: FieldEncryptor,
   ) => Promise<Buffer | null>;
@@ -98,7 +112,7 @@ export interface RelayHandlerDeps {
   readonly consultantPhoneIndexer: BlindIndexer;
   /** Factory: builds a SealedBoxEncryptor from the org's public key. */
   readonly getSealedBoxEncryptor: (
-    orgSchema: string,
+    orgSchema: OrgSchema,
   ) => Promise<SealedBoxEncryptor | null>;
   /** Factory: creates a tenant-scoped ConsultantService. */
   readonly createConsultantService: (
@@ -110,9 +124,9 @@ export interface PendingCall {
   readonly clientPhoneBuf: Buffer;
   readonly callerIdBuf: Buffer;
   /** Platform-table key: the raw org UUID. Used by getAuthToken/getProvider. */
-  readonly orgId: string;
+  readonly orgId: OrgId;
   /** Tenant-schema name. Carried for any confirm-path logic that needs it. */
-  readonly orgSchema: string;
+  readonly orgSchema: OrgSchema;
   readonly createdAt: number;
 }
 
@@ -234,7 +248,13 @@ async function handleSmsRelay(
     }
 
     const tenantDb = deps.getTenantDb(session.orgSchema);
-    const ticketId = ticketIdBuf.toString("utf-8");
+    const ticketIdRaw = ticketIdBuf.toString("utf-8");
+    const ticketIdResult = ticketIdSchema.safeParse(ticketIdRaw);
+    if (!ticketIdResult.success) {
+      sendRelayError(res, 400, "MISSING_FIELDS");
+      return;
+    }
+    const ticketId = ticketIdResult.data;
 
     const resolvePhone = deps.resolveClientPhone ?? resolveClientPhone;
     phoneBuf = await resolvePhone(ticketId, tenantDb, deps.fieldEncryptor);
@@ -286,11 +306,11 @@ async function handleSmsRelay(
 // ---------------------------------------------------------------------------
 
 interface CallContext {
-  ticketId: string;
+  ticketId: TicketId;
   clientPhoneBuf: Buffer;
   consultantPhoneBuf: Buffer;
   provider: TelephonyProvider;
-  callerIdStr: string;
+  callerIdStr: E164;
 }
 
 type CallContextResult = { ok: true; ctx: CallContext } | { ok: false };
@@ -306,8 +326,14 @@ async function resolveCallContext(
     sendRelayError(res, 400, "MISSING_FIELDS");
     return { ok: false };
   }
-  const ticketId = ticketIdBuf.toString("utf-8");
+  const ticketIdRaw = ticketIdBuf.toString("utf-8");
   ticketIdBuf.fill(0);
+  const ticketIdResult = ticketIdSchema.safeParse(ticketIdRaw);
+  if (!ticketIdResult.success) {
+    sendRelayError(res, 400, "MISSING_FIELDS");
+    return { ok: false };
+  }
+  const ticketId = ticketIdResult.data;
 
   const tenantDb = deps.getTenantDb(session.orgSchema);
   const consultantRepo = deps.createConsultantRepo(tenantDb);
@@ -358,14 +384,16 @@ async function resolveCallContext(
   // Verify the submitted number matches the consultant's verified phone.
   // Derive the hash immediately (before any subsequent await) so plaintext
   // lifetime stays minimal and the existing zeroing path is not weakened.
-  // Uses session.orgSchema as the salt, matching handleConsultantVerifyRelay.
+  // Salted with session.orgId, matching the write in handleConsultantVerifyRelay.
+  // Both sides must use the same salt or verification silently rejects every
+  // valid number; the OrgId brand is what enforces that now.
   if (consultant.opsPhoneHash === null) {
     sendRelayError(res, 403, "CONSULTANT_NOT_VERIFIED");
     return { ok: false };
   }
   const submittedHash = deps.consultantPhoneIndexer.hashBuffer(
     consultantPhoneBuf,
-    session.orgSchema,
+    session.orgId,
   );
   const storedBuf = Buffer.from(consultant.opsPhoneHash, "utf-8");
   const submittedBuf = Buffer.from(submittedHash, "utf-8");
@@ -410,9 +438,9 @@ async function handleCallRelay(
     const confirmUrl = `${deps.webhookBaseUrl}/relay/call-confirm/${session.orgSchema}`;
     const statusUrl = `${deps.webhookBaseUrl}/webhooks/${callCtx.provider.providerId}/${session.orgId}/status`;
 
-    let callSid: string;
+    let rawCallSid: string;
     try {
-      callSid = await callCtx.provider.initiateOutboundCall({
+      rawCallSid = await callCtx.provider.initiateOutboundCall({
         consultantPhone: consultantPhoneStr,
         clientPhone: clientPhoneStr,
         callerId: callCtx.callerIdStr,
@@ -423,6 +451,7 @@ async function handleCallRelay(
       sendRelayError(res, 502, "PROVIDER_ERROR");
       return;
     }
+    const callSid = callSidSchema.parse(rawCallSid);
 
     const clientPhoneClone = Buffer.from(callCtx.clientPhoneBuf);
     const callerIdBuf = Buffer.from(callCtx.callerIdStr);
@@ -467,14 +496,16 @@ async function handleCallRelay(
 // ---------------------------------------------------------------------------
 
 /**
- * Extracts the orgSchema segment from /relay/call-confirm/<orgSchema>.
- * Returns null if the path does not match.
+ * Extracts and validates the orgSchema segment from /relay/call-confirm/<orgSchema>.
+ * Returns null if the path does not match or the segment is malformed.
  */
-function parseCallConfirmPath(url: string): string | null {
+function parseCallConfirmPath(url: string): OrgSchema | null {
   const prefix = "/relay/call-confirm/";
   if (!url.startsWith(prefix)) return null;
-  const orgSchema = url.slice(prefix.length);
-  return orgSchema.length > 0 ? orgSchema : null;
+  const raw = url.slice(prefix.length);
+  if (raw.length === 0) return null;
+  const result = orgSchemaNameSchema.safeParse(raw);
+  return result.success ? result.data : null;
 }
 
 type CallConfirmValidation =
@@ -522,7 +553,7 @@ async function validateCallConfirmSignature(
   req: IncomingMessage,
   body: Record<string, string>,
   pending: PendingCall,
-  callSid: string,
+  callSid: CallSid,
   deps: RelayHandlerDeps,
 ): Promise<CallConfirmValidation> {
   const authToken = await deps.getAuthToken(pending.orgId);
@@ -590,12 +621,19 @@ async function handleCallConfirm(
     return;
   }
 
-  const callSid = body.CallSid;
-  if (callSid === undefined || callSid === "") {
+  const rawCallSid = body.CallSid;
+  if (rawCallSid === undefined || rawCallSid === "") {
     res.writeHead(400);
     res.end();
     return;
   }
+  const callSidResult = callSidSchema.safeParse(rawCallSid);
+  if (!callSidResult.success) {
+    res.writeHead(400);
+    res.end();
+    return;
+  }
+  const callSid = callSidResult.data;
 
   const pending = deps.pendingCalls.get(callSid);
   if (!pending) {
@@ -752,11 +790,11 @@ async function handlePhoneLookup(
     // reference drops before the await calls below. The string itself is
     // immutable and persists until GC (accepted residual risk, same as SMS
     // relay). Scoping minimizes the number of closures that capture it.
-    let phoneHash: string;
+    let phoneHash: PhoneHash;
     let opsEncryptedPhone: Buffer;
     {
       const phoneStr = phoneBuf.toString("utf-8");
-      phoneHash = deps.indexer.hash(phoneStr, session.orgSchema);
+      phoneHash = deps.indexer.hashPhone(phoneStr, session.orgId);
       opsEncryptedPhone = deps.fieldEncryptor.encrypt(phoneStr);
     }
 
@@ -798,7 +836,10 @@ async function handlePhoneLookup(
     deps.pendingClients.set(token, {
       phoneHash,
       opsEncryptedPhone,
-      phoneMatchHash,
+      phoneMatchHash:
+        phoneMatchHash === null
+          ? null
+          : phoneMatchHashSchema.parse(phoneMatchHash),
       orgSchema: session.orgSchema,
       createdAt: Date.now(),
     });
@@ -856,9 +897,9 @@ async function handleConsultantVerifyRelay(
     }
 
     const orgSealedPhone = sealedBox.sealBuffer(phoneBuf);
-    const opsPhoneHash = deps.consultantPhoneIndexer.hashBuffer(
+    const opsPhoneHash = deps.consultantPhoneIndexer.hashConsultantPhoneBuffer(
       phoneBuf,
-      session.orgSchema,
+      session.orgId,
     );
     const opsEncryptedPhone = wantsPings
       ? deps.fieldEncryptor.encryptBuffer(phoneBuf)
@@ -927,7 +968,7 @@ async function handleConsultantVerifyRelay(
 // ---------------------------------------------------------------------------
 
 export async function resolveClientPhone(
-  ticketId: string,
+  ticketId: TicketId,
   tenantDb: Kysely<TenantDatabase>,
   fieldEncryptor: FieldEncryptor,
 ): Promise<Buffer | null> {
@@ -961,7 +1002,7 @@ function escapeXml(str: string): string {
     .replace(/'/g, "&apos;");
 }
 
-function cleanupPendingCall(deps: RelayHandlerDeps, callSid: string): void {
+function cleanupPendingCall(deps: RelayHandlerDeps, callSid: CallSid): void {
   const pending = deps.pendingCalls.get(callSid);
   if (pending) {
     pending.clientPhoneBuf.fill(0);

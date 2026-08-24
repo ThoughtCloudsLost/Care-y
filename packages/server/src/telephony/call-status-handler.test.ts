@@ -4,13 +4,25 @@ import {
   type CallStatusDeps,
 } from "./call-status-handler.js";
 import { createCallTracker, type TrackedCall } from "./call-tracker.js";
+import type {
+  OrgSchema,
+  TicketId,
+  UserId,
+  QueueId,
+  CallSid,
+} from "@care-y/shared";
+
+const TEST_ORG_SCHEMA = "org_test" as OrgSchema;
+const TEST_TICKET_ID = "ticket-1" as TicketId;
+const TEST_USER_ID = "user-1" as UserId;
+const TEST_QUEUE_ID = "queue-intake-1" as QueueId;
 
 function makeTracked(overrides?: Partial<TrackedCall>): TrackedCall {
   return {
-    ticketId: "ticket-1",
-    userId: "user-1",
+    ticketId: TEST_TICKET_ID,
+    userId: TEST_USER_ID,
     direction: "outbound",
-    orgSchema: "test_org",
+    orgSchema: TEST_ORG_SCHEMA,
     clientId: null,
     createdAt: Date.now(),
     ...overrides,
@@ -36,7 +48,7 @@ function makeDeps(callTracker = createCallTracker()): CallStatusDeps & {
     getTenantDb: vi
       .fn()
       .mockReturnValue(mockDb) as unknown as CallStatusDeps["getTenantDb"],
-    intakeQueueId: "queue-intake-1",
+    intakeQueueId: TEST_QUEUE_ID,
   };
 }
 
@@ -44,14 +56,14 @@ describe("handleCallStatus", () => {
   it("creates a phone_call follow-up for terminal outbound call", async () => {
     const tracker = createCallTracker();
     await tracker.track(
-      "test_org",
-      "CA123",
+      TEST_ORG_SCHEMA,
+      "CA123" as CallSid,
       makeTracked({ direction: "outbound" }),
     );
     const deps = makeDeps(tracker);
 
     await handleCallStatus(
-      "test_org",
+      TEST_ORG_SCHEMA,
       {
         CallSid: "CA123",
         CallStatus: "completed",
@@ -62,28 +74,30 @@ describe("handleCallStatus", () => {
 
     expect(deps.inserts).toHaveLength(1);
     expect(deps.inserts[0]).toMatchObject({
-      ticket_id: "ticket-1",
+      ticket_id: TEST_TICKET_ID,
       source: "volunteer",
       type: "phone_call",
-      call_sid: "CA123",
+      call_sid: "CA123" as CallSid,
       call_status: "completed",
       call_duration_seconds: 120,
     });
     // Tracker entry is NOT removed (recording callback needs it, TTL handles cleanup)
-    expect(await tracker.get("test_org", "CA123")).toBeDefined();
+    expect(
+      await tracker.get(TEST_ORG_SCHEMA, "CA123" as CallSid),
+    ).toBeDefined();
   });
 
   it("creates a phone_call follow-up for inbound call", async () => {
     const tracker = createCallTracker();
     await tracker.track(
-      "test_org",
-      "CA456",
+      TEST_ORG_SCHEMA,
+      "CA456" as CallSid,
       makeTracked({ direction: "inbound", userId: null }),
     );
     const deps = makeDeps(tracker);
 
     await handleCallStatus(
-      "test_org",
+      TEST_ORG_SCHEMA,
       {
         CallSid: "CA456",
         CallStatus: "no-answer",
@@ -101,11 +115,11 @@ describe("handleCallStatus", () => {
 
   it("ignores non-terminal statuses", async () => {
     const tracker = createCallTracker();
-    await tracker.track("test_org", "CA789", makeTracked());
+    await tracker.track(TEST_ORG_SCHEMA, "CA789" as CallSid, makeTracked());
     const deps = makeDeps(tracker);
 
     await handleCallStatus(
-      "test_org",
+      TEST_ORG_SCHEMA,
       {
         CallSid: "CA789",
         CallStatus: "ringing",
@@ -114,14 +128,16 @@ describe("handleCallStatus", () => {
     );
 
     expect(deps.inserts).toHaveLength(0);
-    expect(await tracker.get("test_org", "CA789")).toBeDefined();
+    expect(
+      await tracker.get(TEST_ORG_SCHEMA, "CA789" as CallSid),
+    ).toBeDefined();
   });
 
   it("ignores unknown callSid", async () => {
     const deps = makeDeps();
 
     await handleCallStatus(
-      "test_org",
+      TEST_ORG_SCHEMA,
       {
         CallSid: "unknown",
         CallStatus: "completed",
@@ -134,17 +150,17 @@ describe("handleCallStatus", () => {
 
   it("ignores missing CallSid or CallStatus", async () => {
     const deps = makeDeps();
-    await handleCallStatus("test_org", {}, deps);
+    await handleCallStatus(TEST_ORG_SCHEMA, {}, deps);
     expect(deps.inserts).toHaveLength(0);
   });
 
   it("normalizes Twilio hyphenated status to underscored", async () => {
     const tracker = createCallTracker();
-    await tracker.track("test_org", "CA111", makeTracked());
+    await tracker.track(TEST_ORG_SCHEMA, "CA111" as CallSid, makeTracked());
     const deps = makeDeps(tracker);
 
     await handleCallStatus(
-      "test_org",
+      TEST_ORG_SCHEMA,
       {
         CallSid: "CA111",
         CallStatus: "no-answer",
@@ -157,11 +173,11 @@ describe("handleCallStatus", () => {
 
   it("handles missing duration (non-completed call)", async () => {
     const tracker = createCallTracker();
-    await tracker.track("test_org", "CA222", makeTracked());
+    await tracker.track(TEST_ORG_SCHEMA, "CA222" as CallSid, makeTracked());
     const deps = makeDeps(tracker);
 
     await handleCallStatus(
-      "test_org",
+      TEST_ORG_SCHEMA,
       {
         CallSid: "CA222",
         CallStatus: "busy",
@@ -175,14 +191,14 @@ describe("handleCallStatus", () => {
   it("skips insert when outbound call has no ticketId", async () => {
     const tracker = createCallTracker();
     await tracker.track(
-      "test_org",
-      "CA333",
-      makeTracked({ ticketId: "", direction: "outbound" }),
+      TEST_ORG_SCHEMA,
+      "CA333" as CallSid,
+      makeTracked({ ticketId: "" as TicketId, direction: "outbound" }),
     );
     const deps = makeDeps(tracker);
 
     await handleCallStatus(
-      "test_org",
+      TEST_ORG_SCHEMA,
       {
         CallSid: "CA333",
         CallStatus: "completed",
@@ -193,7 +209,9 @@ describe("handleCallStatus", () => {
 
     expect(deps.inserts).toHaveLength(0);
     // Tracker entry persists (TTL handles cleanup)
-    expect(await tracker.get("test_org", "CA333")).toBeDefined();
+    expect(
+      await tracker.get(TEST_ORG_SCHEMA, "CA333" as CallSid),
+    ).toBeDefined();
   });
 
   // Inbound resolution now uses resolveOrCreateTicket which requires a real
@@ -203,10 +221,10 @@ describe("handleCallStatus", () => {
   it("skips inbound resolution when no clientId", async () => {
     const tracker = createCallTracker();
     await tracker.track(
-      "test_org",
-      "CA555",
+      TEST_ORG_SCHEMA,
+      "CA555" as CallSid,
       makeTracked({
-        ticketId: "",
+        ticketId: "" as TicketId,
         direction: "inbound",
         clientId: null,
       }),
@@ -214,7 +232,7 @@ describe("handleCallStatus", () => {
     const deps = makeDeps(tracker);
 
     await handleCallStatus(
-      "test_org",
+      TEST_ORG_SCHEMA,
       { CallSid: "CA555", CallStatus: "completed" },
       deps,
     );

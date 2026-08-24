@@ -3,6 +3,15 @@ import { IncomingMessage, type ServerResponse } from "node:http";
 import { Socket } from "node:net";
 import type { SessionRepository } from "../auth/session-repository.js";
 import type { SessionData } from "../auth/session-repository.js";
+import type {
+  SessionId,
+  SessionToken,
+  UserId,
+  IpToken,
+  UaToken,
+  OrgId,
+  OrgSchema,
+} from "@care-y/shared";
 import {
   readRawBody,
   extractBufferField,
@@ -62,13 +71,21 @@ function createMockRes(): {
   };
 }
 
+const TEST_SESSION_ID = "00000000-0000-4000-8000-000000000010" as SessionId;
+const TEST_SESSION_TOKEN = "tok_abc123" as SessionToken;
+const TEST_USER_ID = "00000000-0000-4000-8000-000000000020" as UserId;
+const TEST_IP_TOKEN = "hmac-ip" as IpToken;
+const TEST_UA_TOKEN = "hmac-ua" as UaToken;
+const TEST_ORG_ID = "00000000-0000-4000-8000-aaaaaaaaaaaa" as OrgId;
+const TEST_ORG_SCHEMA = "org_00000000-0000-4000-8000-aaaaaaaaaaaa" as OrgSchema;
+
 function makeSessionData(overrides?: Partial<SessionData>): SessionData {
   return {
-    id: "session-001",
-    token: "tok_abc123",
-    userId: "user-001",
-    ipToken: "hmac-ip",
-    uaToken: "hmac-ua",
+    id: TEST_SESSION_ID,
+    token: TEST_SESSION_TOKEN,
+    userId: TEST_USER_ID,
+    ipToken: TEST_IP_TOKEN,
+    uaToken: TEST_UA_TOKEN,
     expiresAt: new Date(Date.now() + 3600_000),
     twofaVerified: true,
     webauthnChallenge: null,
@@ -238,14 +255,14 @@ describe("parseCookieValue", () => {
 
 describe("authenticateRelay", () => {
   const validOrgResolver = () => ({
-    orgId: "test-uuid-001",
-    orgSchema: "org_test",
+    orgId: TEST_ORG_ID,
+    orgSchema: TEST_ORG_SCHEMA,
   });
 
   function mockSessionRepo(
     session: SessionData | null,
-  ): (orgSchema: string) => SessionRepository {
-    return (_orgSchema: string) => ({
+  ): (orgSchema: OrgSchema) => SessionRepository {
+    return (_orgSchema: OrgSchema) => ({
       findByToken: vi.fn().mockResolvedValue(session),
       create: vi.fn(),
       deleteByToken: vi.fn(),
@@ -271,10 +288,10 @@ describe("authenticateRelay", () => {
     expect(result).toEqual({
       ok: true,
       session: {
-        userId: "user-001",
-        orgId: "test-uuid-001",
-        orgSchema: "org_test",
-        sessionId: "session-001",
+        userId: TEST_USER_ID,
+        orgId: TEST_ORG_ID,
+        orgSchema: TEST_ORG_SCHEMA,
+        sessionId: TEST_SESSION_ID,
       },
     });
   });

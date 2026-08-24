@@ -8,6 +8,8 @@
  * number orgs work without any admin configuration.
  */
 
+import type { OrgId, OrgSchema, PhoneSid, E164 } from "@care-y/shared";
+
 export type PhonePurpose = "outbound" | "system";
 
 /**
@@ -21,21 +23,21 @@ export type PhonePurpose = "outbound" | "system";
  */
 export interface OrgIdentifiers {
   /** Platform-table key: the org UUID. */
-  readonly orgId: string;
+  readonly orgId: OrgId;
   /** Tenant-schema name, of the form `org_<uuid>`. */
-  readonly orgSchema: string;
+  readonly orgSchema: OrgSchema;
 }
 
 export interface PhoneResolverDeps {
   /** Read org_config phone purpose SIDs from the tenant schema. */
-  readonly getOrgConfig: (orgSchema: string) => Promise<{
-    phone_outbound_sid: string | null;
-    phone_system_sid: string | null;
+  readonly getOrgConfig: (orgSchema: OrgSchema) => Promise<{
+    phone_outbound_sid: PhoneSid | null;
+    phone_system_sid: PhoneSid | null;
   }>;
   /** Get provisioned phone numbers from the provider config blob. */
   readonly getProvisionedPhones: (
-    orgId: string,
-  ) => Promise<readonly { number: string; sid: string }[]>;
+    orgId: OrgId,
+  ) => Promise<readonly { number: E164; sid: PhoneSid }[]>;
 }
 
 /**
@@ -54,18 +56,18 @@ export interface PhoneResolverDeps {
  */
 export function createPhoneResolver(
   deps: PhoneResolverDeps,
-): (org: OrgIdentifiers, purpose: PhonePurpose) => Promise<string | null> {
+): (org: OrgIdentifiers, purpose: PhonePurpose) => Promise<E164 | null> {
   return async function resolveCallerIdByPurpose(
     org: OrgIdentifiers,
     purpose: PhonePurpose,
-  ): Promise<string | null> {
+  ): Promise<E164 | null> {
     const phones = await deps.getProvisionedPhones(org.orgId);
     if (phones.length === 0) return null;
 
     const config = await deps.getOrgConfig(org.orgSchema);
 
     // Build the SID fallback chain for this purpose
-    const sidCandidates: (string | null)[] =
+    const sidCandidates: (PhoneSid | null)[] =
       purpose === "system"
         ? [config.phone_system_sid, config.phone_outbound_sid]
         : [config.phone_outbound_sid];

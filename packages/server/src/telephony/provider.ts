@@ -1,3 +1,5 @@
+import type { CallSid, E164, OrgId } from "@care-y/shared";
+
 /** Result of sending an SMS. */
 export interface SendSmsResult {
   /** Provider-assigned message identifier (e.g., Twilio MessageSid). */
@@ -30,17 +32,17 @@ export interface WebRtcCallParams {
 
 /** Structured data from an incoming call webhook. */
 export interface IncomingCallData {
-  readonly callId: string;
-  readonly from: string;
-  readonly to: string;
+  readonly callId: CallSid;
+  readonly from: E164;
+  readonly to: E164;
   readonly direction: "inbound";
 }
 
 /** Structured data from an incoming SMS webhook. */
 export interface IncomingSmsData {
   readonly messageId: string;
-  readonly from: string;
-  readonly to: string;
+  readonly from: E164;
+  readonly to: E164;
   readonly body: string;
   readonly numMedia: number;
   readonly mediaUrls: readonly string[];
@@ -88,8 +90,8 @@ export interface WebhookValidationRequest {
 
 /** Caller and callee phone numbers for a completed or in-progress call. */
 export interface CallDetails {
-  readonly from: string;
-  readonly to: string;
+  readonly from: E164;
+  readonly to: E164;
 }
 
 /**
@@ -200,7 +202,7 @@ export interface TelephonyProviderStatic {
    */
   provisionWebhooks(
     config: unknown,
-    orgId: string,
+    orgId: OrgId,
     baseUrl: string,
   ): Promise<unknown>;
 }

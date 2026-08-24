@@ -29,29 +29,43 @@ import { deleteOrEnqueue } from "./log-deletion-helpers.js";
 import { createEncryptedFollowUp } from "../tickets/server-followup-create.js";
 import { resolveInboundTicket } from "./resolve-inbound-ticket.js";
 import { quarantineRecording } from "./voicemail-quarantine.js";
+import type {
+  OrgId,
+  OrgSchema,
+  OrgSlug,
+  QueueId,
+  TicketId,
+  FollowupId,
+} from "@care-y/shared";
+import {
+  type RecordingSid,
+  type CallSid,
+  recordingSidSchema,
+  callSidSchema,
+} from "@care-y/shared";
 
 export interface RecordingHandlerDeps {
   readonly provider: TelephonyProvider;
   readonly blobStore: BlobStore;
   readonly jobQueue: JobQueue;
   readonly callTracker: CallTracker;
-  readonly getTenantDb: (orgSchema: string) => Kysely<TenantDatabase>;
-  readonly intakeQueueId: string | null;
-  readonly orgSchema: string;
-  readonly orgId: string;
+  readonly getTenantDb: (orgSchema: OrgSchema) => Kysely<TenantDatabase>;
+  readonly intakeQueueId: QueueId | null;
+  readonly orgSchema: OrgSchema;
+  readonly orgId: OrgId;
   readonly sealedBox: SealedBoxEncryptor;
-  readonly orgSlug: string;
+  readonly orgSlug: OrgSlug;
   readonly notificationService: NotificationService;
 }
 
 export interface RecordingResult {
-  readonly ticketId: string | null;
-  readonly followUpId: string | null;
+  readonly ticketId: TicketId | null;
+  readonly followUpId: FollowupId | null;
 }
 
 interface ParsedRecordingCallback {
-  readonly recordingSid: string;
-  readonly callSid: string;
+  readonly recordingSid: RecordingSid;
+  readonly callSid: CallSid;
   readonly durationSeconds: number;
 }
 
@@ -73,7 +87,11 @@ function parseRecordingCallback(
   }
 
   const durationSeconds = rawDuration !== undefined ? Number(rawDuration) : 0;
-  return { recordingSid, callSid, durationSeconds };
+  return {
+    recordingSid: recordingSidSchema.parse(recordingSid),
+    callSid: callSidSchema.parse(callSid),
+    durationSeconds,
+  };
 }
 
 export async function handleRecordingComplete(
@@ -125,7 +143,9 @@ export async function handleRecordingComplete(
     return { ticketId: null, followUpId: null };
   }
 
-  const tDb = getTenantDb(tracked.orgSchema || orgSchema);
+  const callOrgSchema =
+    tracked.orgSchema === "" ? orgSchema : tracked.orgSchema;
+  const tDb = getTenantDb(callOrgSchema);
 
   // Resolve ticket: use tracked ticketId if available, otherwise resolve
   let ticketId = tracked.ticketId;
@@ -140,7 +160,7 @@ export async function handleRecordingComplete(
           jobQueue,
           sealedBox,
           orgId,
-          orgSchema: tracked.orgSchema || orgSchema,
+          orgSchema: callOrgSchema,
           orgSlug,
           notificationService,
         },
@@ -163,7 +183,7 @@ export async function handleRecordingComplete(
     );
   }
 
-  if (!ticketId) {
+  if (ticketId === "") {
     await quarantineRecording(
       {
         tDb,
@@ -172,7 +192,7 @@ export async function handleRecordingComplete(
         jobQueue,
         sealedBox,
         orgId,
-        orgSchema: tracked.orgSchema || orgSchema,
+        orgSchema: callOrgSchema,
         orgSlug,
         notificationService,
       },

@@ -18,6 +18,8 @@ import { NotFoundError, TelephonyConfigError } from "../errors.js";
 import { providerConfigSchemas } from "./schemas.js";
 import { z } from "zod";
 import { ErrorCode } from "@care-y/shared";
+import { e164Schema, phoneSidSchema } from "@care-y/shared";
+import type { OrgId, PhoneSid, E164 } from "@care-y/shared";
 
 /** Type guard for objects with a phoneNumbers array. */
 function hasPhoneNumbers(
@@ -48,7 +50,7 @@ export interface TelephonyConfigServiceDeps {
 }
 
 export interface SaveConfigInput {
-  readonly orgId: string;
+  readonly orgId: OrgId;
   readonly provider: string;
   readonly accountId: string;
   readonly authToken: string;
@@ -71,11 +73,11 @@ export interface TelephonyConfigService {
   saveConfig(input: SaveConfigInput): Promise<{ success: true }>;
 
   /** Retrieve masked config for admin UI. Returns null if not configured. */
-  getMaskedConfig(orgId: string): Promise<MaskedTelephonyConfig | null>;
+  getMaskedConfig(orgId: OrgId): Promise<MaskedTelephonyConfig | null>;
 
   /** Provision webhook URLs on the provider's phone numbers. */
   provisionWebhooks(
-    orgId: string,
+    orgId: OrgId,
     webhookBaseUrl: string,
   ): Promise<ProvisionResult>;
 
@@ -83,7 +85,7 @@ export interface TelephonyConfigService {
    * Look up and decrypt an org's telephony config for webhook validation.
    * Returns null if no config exists for the org.
    */
-  lookupWebhookConfig(orgId: string): Promise<WebhookConfigLookup | null>;
+  lookupWebhookConfig(orgId: OrgId): Promise<WebhookConfigLookup | null>;
 
   /**
    * Look up provisioned phone numbers with their provider SIDs.
@@ -91,21 +93,21 @@ export interface TelephonyConfigService {
    * against actual provisioned numbers. Returns empty array if not configured.
    */
   lookupProvisionedPhones(
-    orgId: string,
-  ): Promise<readonly { number: string; sid: string }[]>;
+    orgId: OrgId,
+  ): Promise<readonly { number: E164; sid: PhoneSid }[]>;
 
   /** Delete BYOT config for an org. Used when switching away from BYOT mode. */
-  clearConfig(orgId: string): Promise<void>;
+  clearConfig(orgId: OrgId): Promise<void>;
 
   /** Read phone purpose assignments from tenant org_config. */
   getPhonePurpose(
     tenantDb: Kysely<TenantDatabase>,
-  ): Promise<{ outboundSid: string | null; systemSid: string | null }>;
+  ): Promise<{ outboundSid: PhoneSid | null; systemSid: PhoneSid | null }>;
 
   /** Update phone purpose assignments in tenant org_config. */
   setPhonePurpose(
     tenantDb: Kysely<TenantDatabase>,
-    input: { outboundSid: string | null; systemSid: string | null },
+    input: { outboundSid: PhoneSid | null; systemSid: PhoneSid | null },
   ): Promise<void>;
 
   /**
@@ -113,7 +115,7 @@ export interface TelephonyConfigService {
    * Skips provider validation since no real Twilio account exists.
    */
   devSeedConfigWithPhones?(
-    orgId: string,
+    orgId: OrgId,
     phones: readonly { number: string; sid: string; label?: string }[],
   ): Promise<void>;
 }
@@ -185,7 +187,7 @@ export function createTelephonyConfigService(
       return { success: true as const };
     },
 
-    async clearConfig(orgId: string): Promise<void> {
+    async clearConfig(orgId: OrgId): Promise<void> {
       await db
         .deleteFrom("telephony_config")
         .where("org_id", "=", orgId)
@@ -196,7 +198,7 @@ export function createTelephonyConfigService(
 
     async getPhonePurpose(
       tenantDb: Kysely<TenantDatabase>,
-    ): Promise<{ outboundSid: string | null; systemSid: string | null }> {
+    ): Promise<{ outboundSid: PhoneSid | null; systemSid: PhoneSid | null }> {
       const row = await tenantDb
         .selectFrom("org_config")
         .select(["phone_outbound_sid", "phone_system_sid"])
@@ -209,7 +211,7 @@ export function createTelephonyConfigService(
 
     async setPhonePurpose(
       tenantDb: Kysely<TenantDatabase>,
-      input: { outboundSid: string | null; systemSid: string | null },
+      input: { outboundSid: PhoneSid | null; systemSid: PhoneSid | null },
     ): Promise<void> {
       await tenantDb
         .updateTable("org_config")
@@ -220,9 +222,7 @@ export function createTelephonyConfigService(
         .execute();
     },
 
-    async getMaskedConfig(
-      orgId: string,
-    ): Promise<MaskedTelephonyConfig | null> {
+    async getMaskedConfig(orgId: OrgId): Promise<MaskedTelephonyConfig | null> {
       try {
         const provider = await providerFactory.getProvider(orgId);
         return provider.maskConfig();
@@ -235,7 +235,7 @@ export function createTelephonyConfigService(
     },
 
     async provisionWebhooks(
-      orgId: string,
+      orgId: OrgId,
       webhookBaseUrl: string,
     ): Promise<ProvisionResult> {
       const row = await db
@@ -285,7 +285,7 @@ export function createTelephonyConfigService(
     },
 
     async lookupWebhookConfig(
-      orgId: string,
+      orgId: OrgId,
     ): Promise<WebhookConfigLookup | null> {
       const row = await db
         .selectFrom("telephony_config")
@@ -331,8 +331,8 @@ export function createTelephonyConfigService(
     },
 
     async lookupProvisionedPhones(
-      orgId: string,
-    ): Promise<readonly { number: string; sid: string }[]> {
+      orgId: OrgId,
+    ): Promise<readonly { number: E164; sid: PhoneSid }[]> {
       const row = await db
         .selectFrom("telephony_config")
         .select(["provider", "config"])
@@ -361,16 +361,31 @@ export function createTelephonyConfigService(
 
       if (!phoneArraySchema.success) return [];
 
-      return phoneArraySchema.data.phoneNumbers.map((pn) => ({
-        number: pn.number,
-        sid: pn.sid ?? pn.id ?? pn.number,
-      }));
+      // A number is not a SID. An earlier version fell back to `pn.number`
+      // when neither key was present, which produced an entry whose "sid"
+      // could never match a stored `phone_outbound_sid`. The purpose resolver
+      // then dropped through to "first provisioned number", so a multi-number
+      // org with a deliberately configured outbound line silently used the
+      // wrong one. Single-number orgs hid it by always falling through.
+      //
+      // An entry with no provider id cannot be a caller-ID target, so it is
+      // excluded rather than given a fabricated SID.
+      return phoneArraySchema.data.phoneNumbers.flatMap((pn) => {
+        const rawSid = pn.sid ?? pn.id;
+        if (rawSid === undefined) return [];
+        return [
+          {
+            number: e164Schema.parse(pn.number),
+            sid: phoneSidSchema.parse(rawSid),
+          },
+        ];
+      });
     },
 
     ...(getEnv().NODE_ENV === "development"
       ? {
           async devSeedConfigWithPhones(
-            orgId: string,
+            orgId: OrgId,
             phones: readonly {
               number: string;
               sid: string;

@@ -6,11 +6,12 @@ import { createHmac } from "node:crypto";
 import { sendMockSmsWebhook, sendMockCallWebhook } from "./mock-webhook.js";
 import type { MockWebhookConfig } from "./mock-webhook.js";
 import { DEV_MOCK_ACCOUNT_SID } from "./mock-provider.js";
+import type { OrgId } from "@care-y/shared";
 
 const config: MockWebhookConfig = {
   authToken: "test-auth-token-for-hmac",
   baseUrl: "https://care-y.example.com",
-  orgId: "org-abc-123",
+  orgId: "org-abc-123" as OrgId,
 };
 
 function recomputeSignature(

@@ -2,7 +2,17 @@ import type { VoiceInstruction } from "./provider.js";
 import type { GreetingRecord } from "./models/greeting-repo.js";
 
 /** Convert a greeting record to a Say or Play instruction. */
-function greetingToInstruction(greeting: GreetingRecord): VoiceInstruction {
+/**
+ * The subset of a greeting the IVR builders actually play. Narrower than
+ * GreetingRecord so a synthetic fallback greeting does not have to fabricate
+ * identifier fields (id, phoneNumber) it has no real values for.
+ */
+export type PlayableGreeting = Pick<
+  GreetingRecord,
+  "text" | "isAudio" | "audioBlobKey"
+>;
+
+function greetingToInstruction(greeting: PlayableGreeting): VoiceInstruction {
   if (greeting.isAudio && greeting.audioBlobKey !== null) {
     return { type: "play", attributes: { text: greeting.audioBlobKey } };
   }
@@ -21,7 +31,7 @@ export const LOCALE_DTMF_MAP: Readonly<Record<string, string>> = {
  * On timeout (2 seconds), defaults to the org's default locale.
  */
 export function buildLanguageSelectionIvr(
-  languagePromptGreeting: GreetingRecord | null,
+  languagePromptGreeting: PlayableGreeting | null,
   statusCallbackUrl: string,
 ): readonly VoiceInstruction[] {
   const promptText =
@@ -55,8 +65,8 @@ export function buildLanguageSelectionIvr(
  * falls through to the stored-locale greeting + voicemail record.
  */
 export function buildReturningCallerIvr(
-  greeting: GreetingRecord,
-  reselectionGreeting: GreetingRecord | null,
+  greeting: PlayableGreeting,
+  reselectionGreeting: PlayableGreeting | null,
   recordingCallbackUrl: string,
   statusCallbackUrl: string,
 ): readonly VoiceInstruction[] {
@@ -113,7 +123,7 @@ export function resolveLocaleFromDtmf(digit: string): string | null {
  * Used after locale is already resolved.
  */
 export function buildVoicemailIvr(
-  greeting: GreetingRecord,
+  greeting: PlayableGreeting,
   recordingCallbackUrl: string,
 ): readonly VoiceInstruction[] {
   return [

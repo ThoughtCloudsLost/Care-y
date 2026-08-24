@@ -32,6 +32,17 @@ import {
   TestSetupError,
   type TestDb,
 } from "../test-utils.js";
+import {
+  orgIdSchema,
+  callSidSchema,
+  type OrgSchema,
+  type QueueId,
+  type TicketId,
+  type ClientId,
+  type BlobKey,
+  type E164,
+} from "@care-y/shared";
+import type { OrgSlug } from "@care-y/shared";
 
 // ---------------------------------------------------------------------------
 // Mock factories
@@ -51,9 +62,10 @@ function createMockProvider(): TelephonyProvider {
     deleteRecording: vi.fn().mockResolvedValue(undefined),
     deleteCallLog: vi.fn().mockResolvedValue(undefined),
     deleteMessageLog: vi.fn(),
-    getCallDetails: vi
-      .fn()
-      .mockResolvedValue({ from: "+15551234567", to: "+15559876543" }),
+    getCallDetails: vi.fn().mockResolvedValue({
+      from: "+15551234567" as E164,
+      to: "+15559876543" as E164,
+    }),
     maskConfig: vi.fn().mockReturnValue({
       provider: "twilio",
       mode: "byot",
@@ -183,10 +195,10 @@ function makeDeps(
       .fn<(schema: string) => Kysely<TenantDatabase>>()
       .mockReturnValue(createStubTenantDb()),
     intakeQueueId: null,
-    orgSchema: "org_test",
-    orgId: "org-1",
+    orgSchema: "org_test" as OrgSchema,
+    orgId: orgIdSchema.parse("a0a0a0a0-a0a0-40a0-80a0-a0a0a0a0a0a0"),
     sealedBox: createMockSealedBox(),
-    orgSlug: "test-org",
+    orgSlug: "test-org" as OrgSlug,
     notificationService: createMockNotificationService(),
     ...overrides,
   };
@@ -270,7 +282,7 @@ describe("handleRecordingComplete", () => {
     expect(deps.jobQueue.enqueue).toHaveBeenCalledWith(
       "log-deletion",
       expect.objectContaining({
-        orgId: "org-1",
+        orgId: "a0a0a0a0-a0a0-40a0-80a0-a0a0a0a0a0a0",
         resourceType: "recording",
         resourceId: "RE123",
       }),
@@ -287,7 +299,7 @@ describe("handleRecordingComplete", () => {
     expect(deps.jobQueue.enqueue).toHaveBeenCalledWith(
       "log-deletion",
       expect.objectContaining({
-        orgId: "org-1",
+        orgId: "a0a0a0a0-a0a0-40a0-80a0-a0a0a0a0a0a0",
         resourceType: "call",
         resourceId: "CA456",
       }),
@@ -298,11 +310,11 @@ describe("handleRecordingComplete", () => {
 
   it("quarantines when the tracked call has no ticket and no client", async () => {
     const tracker = createCallTracker();
-    await tracker.track("org_test", "CA456", {
-      ticketId: "",
+    await tracker.track("org_test" as OrgSchema, callSidSchema.parse("CA456"), {
+      ticketId: "" as TicketId,
       userId: null,
       direction: "inbound",
-      orgSchema: "org_test",
+      orgSchema: "org_test" as OrgSchema,
       clientId: null,
       createdAt: Date.now(),
     });
@@ -320,12 +332,12 @@ describe("handleRecordingComplete", () => {
 
   it("quarantines when ticket resolution needs an intake queue but none is configured", async () => {
     const tracker = createCallTracker();
-    await tracker.track("org_test", "CA456", {
-      ticketId: "",
+    await tracker.track("org_test" as OrgSchema, callSidSchema.parse("CA456"), {
+      ticketId: "" as TicketId,
       userId: null,
       direction: "inbound",
-      orgSchema: "org_test",
-      clientId: "client-1",
+      orgSchema: "org_test" as OrgSchema,
+      clientId: "client-1" as ClientId,
       createdAt: Date.now(),
     });
     // makeDeps default: intakeQueueId is null
@@ -364,11 +376,11 @@ describe("handleRecordingComplete", () => {
 
   it("propagates provider fetch errors on the happy path and leaves provider recording intact", async () => {
     const tracker = createCallTracker();
-    await tracker.track("org_test", "CA456", {
-      ticketId: "ticket-1",
+    await tracker.track("org_test" as OrgSchema, callSidSchema.parse("CA456"), {
+      ticketId: "ticket-1" as TicketId,
       userId: null,
       direction: "inbound",
-      orgSchema: "org_test",
+      orgSchema: "org_test" as OrgSchema,
       clientId: null,
       createdAt: Date.now(),
     });
@@ -404,12 +416,12 @@ function createMemoryBlobStore(): MemoryBlobStore {
       return blobs;
     },
     async put(
-      orgSchema: string,
+      orgSchema: OrgSchema,
       category: BlobCategory,
       blob: Buffer,
-    ): Promise<string> {
+    ): Promise<BlobKey> {
       counter += 1;
-      const key = `${orgSchema}/${category}/blob-${String(counter)}`;
+      const key = `${orgSchema}/${category}/blob-${String(counter)}` as BlobKey;
       blobs.set(key, Buffer.from(blob));
       return key;
     },
@@ -428,10 +440,10 @@ function createMemoryBlobStore(): MemoryBlobStore {
 describe.skipIf(!process.env.DATABASE_URL)(
   "handleRecordingComplete (DB integration)",
   () => {
-    const ORG_ID = crypto.randomUUID();
+    const ORG_ID = orgIdSchema.parse(crypto.randomUUID());
 
     let testDb: TestDb;
-    let intakeQueueId: string;
+    let intakeQueueId: QueueId;
 
     beforeAll(async () => {
       // @care-y/crypto needs WASM init before encryptContent runs inside
@@ -451,7 +463,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
     /** Tenant DB factory that only serves the test schema; any other schema
      *  name is a wiring bug and fails the test loudly. */
     function strictGetTenantDb(schema: string): Kysely<TenantDatabase> {
-      if (schema !== testDb.schemaName) {
+      if (schema !== (testDb.schemaName as OrgSchema)) {
         throw new TestSetupError(`unexpected tenant schema: ${schema}`);
       }
       return testDb.db;
@@ -468,10 +480,10 @@ describe.skipIf(!process.env.DATABASE_URL)(
         callTracker: setup.callTracker,
         getTenantDb: strictGetTenantDb,
         intakeQueueId,
-        orgSchema: testDb.schemaName,
+        orgSchema: testDb.schemaName as OrgSchema,
         orgId: ORG_ID,
         sealedBox: createMockSealedBox(),
-        orgSlug: "test-org",
+        orgSlug: "test-org" as OrgSlug,
         notificationService: createMockNotificationService(),
       };
     }
@@ -479,14 +491,18 @@ describe.skipIf(!process.env.DATABASE_URL)(
     it("fetches, encrypts, and stores the recording for a tracked ticket", async () => {
       const fixture = await createTestTicketFixture(testDb.db);
       const tracker = createCallTracker();
-      await tracker.track(testDb.schemaName, "CA_DB_HAPPY", {
-        ticketId: fixture.ticketId,
-        userId: null,
-        direction: "inbound",
-        orgSchema: testDb.schemaName,
-        clientId: fixture.clientId,
-        createdAt: Date.now(),
-      });
+      await tracker.track(
+        testDb.schemaName as OrgSchema,
+        callSidSchema.parse("CA_DB_HAPPY"),
+        {
+          ticketId: fixture.ticketId,
+          userId: null,
+          direction: "inbound",
+          orgSchema: testDb.schemaName as OrgSchema,
+          clientId: fixture.clientId,
+          createdAt: Date.now(),
+        },
+      );
 
       const rawAudio = Buffer.from("RIFF-fake-wav-audio-bytes-for-testing");
       const providerAudio = Buffer.from(rawAudio);
@@ -556,14 +572,18 @@ describe.skipIf(!process.env.DATABASE_URL)(
     it("creates a new intake ticket when the tracked call has a client but no ticket", async () => {
       const clientFixture = await createTestClientFixture(testDb.db);
       const tracker = createCallTracker();
-      await tracker.track(testDb.schemaName, "CA_DB_RESOLVE", {
-        ticketId: "",
-        userId: null,
-        direction: "inbound",
-        orgSchema: testDb.schemaName,
-        clientId: clientFixture.clientId,
-        createdAt: Date.now(),
-      });
+      await tracker.track(
+        testDb.schemaName as OrgSchema,
+        callSidSchema.parse("CA_DB_RESOLVE"),
+        {
+          ticketId: "" as TicketId,
+          userId: null,
+          direction: "inbound",
+          orgSchema: testDb.schemaName as OrgSchema,
+          clientId: clientFixture.clientId,
+          createdAt: Date.now(),
+        },
+      );
       const dbDeps = makeDbDeps({ callTracker: tracker });
 
       const result = await handleRecordingComplete(
@@ -599,14 +619,18 @@ describe.skipIf(!process.env.DATABASE_URL)(
     it("attaches the voicemail to the client's existing open ticket instead of creating a duplicate", async () => {
       const fixture = await createTestTicketFixture(testDb.db);
       const tracker = createCallTracker();
-      await tracker.track(testDb.schemaName, "CA_DB_REUSE", {
-        ticketId: "",
-        userId: null,
-        direction: "inbound",
-        orgSchema: testDb.schemaName,
-        clientId: fixture.clientId,
-        createdAt: Date.now(),
-      });
+      await tracker.track(
+        testDb.schemaName as OrgSchema,
+        callSidSchema.parse("CA_DB_REUSE"),
+        {
+          ticketId: "" as TicketId,
+          userId: null,
+          direction: "inbound",
+          orgSchema: testDb.schemaName as OrgSchema,
+          clientId: fixture.clientId,
+          createdAt: Date.now(),
+        },
+      );
       const dbDeps = makeDbDeps({ callTracker: tracker });
 
       const result = await handleRecordingComplete(
@@ -627,14 +651,18 @@ describe.skipIf(!process.env.DATABASE_URL)(
     it("falls back to the deps orgSchema when the tracked call carries none", async () => {
       const fixture = await createTestTicketFixture(testDb.db);
       const tracker = createCallTracker();
-      await tracker.track(testDb.schemaName, "CA_DB_SCHEMA_FALLBACK", {
-        ticketId: fixture.ticketId,
-        userId: null,
-        direction: "inbound",
-        orgSchema: "",
-        clientId: fixture.clientId,
-        createdAt: Date.now(),
-      });
+      await tracker.track(
+        testDb.schemaName as OrgSchema,
+        callSidSchema.parse("CA_DB_SCHEMA_FALLBACK"),
+        {
+          ticketId: fixture.ticketId,
+          userId: null,
+          direction: "inbound",
+          orgSchema: "" as OrgSchema,
+          clientId: fixture.clientId,
+          createdAt: Date.now(),
+        },
+      );
       // strictGetTenantDb throws for any schema other than the test schema,
       // so a created follow-up proves the fallback picked deps.orgSchema.
       const dbDeps = makeDbDeps({ callTracker: tracker });
@@ -650,14 +678,18 @@ describe.skipIf(!process.env.DATABASE_URL)(
     it("leaves the provider recording untouched when blob storage fails", async () => {
       const fixture = await createTestTicketFixture(testDb.db);
       const tracker = createCallTracker();
-      await tracker.track(testDb.schemaName, "CA_DB_BLOB_FAIL", {
-        ticketId: fixture.ticketId,
-        userId: null,
-        direction: "inbound",
-        orgSchema: testDb.schemaName,
-        clientId: fixture.clientId,
-        createdAt: Date.now(),
-      });
+      await tracker.track(
+        testDb.schemaName as OrgSchema,
+        callSidSchema.parse("CA_DB_BLOB_FAIL"),
+        {
+          ticketId: fixture.ticketId,
+          userId: null,
+          direction: "inbound",
+          orgSchema: testDb.schemaName as OrgSchema,
+          clientId: fixture.clientId,
+          createdAt: Date.now(),
+        },
+      );
 
       const failingBlobStore: BlobStore = {
         ...createMemoryBlobStore(),

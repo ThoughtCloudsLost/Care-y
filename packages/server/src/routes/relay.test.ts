@@ -9,14 +9,39 @@ import type {
 } from "../auth/session-repository.js";
 import type { Kysely } from "kysely";
 import type { TenantDatabase } from "../db/types.js";
+import type {
+  SessionId,
+  SessionToken,
+  UserId,
+  IpToken,
+  UaToken,
+  OrgId,
+  OrgSchema,
+  ConsultantId,
+  PhoneId,
+  ClientId,
+  TicketId,
+  E164,
+  OpsPhoneHash,
+  IdentifierHash,
+  UsernameHash,
+  PhoneHash,
+} from "@care-y/shared";
+import type { BlindIndexer } from "../crypto/field-encryptor.js";
 import {
   createRelayHandler,
   type RelayHandlerDeps,
   type PendingCall,
 } from "./relay.js";
+import type { PendingClient } from "../tickets/ticket-service.js";
 import * as relayUtils from "./relay-utils.js";
 import { createCallTracker } from "../telephony/call-tracker.js";
-import { TestSetupError, testSealedBox, testUnseal } from "../test-utils.js";
+import {
+  TestSetupError,
+  testSealedBox,
+  testUnseal,
+  testBlindIndexer,
+} from "../test-utils.js";
 import type { ConsultantService } from "../telephony/consultant-service.js";
 import { RateLimitError } from "../errors.js";
 
@@ -24,13 +49,51 @@ import { RateLimitError } from "../errors.js";
 // Test helpers
 // ---------------------------------------------------------------------------
 
+/** Creates a complete BlindIndexer mock with all domain-named methods.
+ *  Each method returns a distinguishable branded value so ADR-065 domain
+ *  separation is visible in assertions. */
+function mockBlindIndexer(
+  hashReturn = "fake-hash",
+  hashBufferReturn = "fake-hash",
+): BlindIndexer {
+  return {
+    hash: vi.fn().mockReturnValue(hashReturn),
+    hashBuffer: vi.fn().mockReturnValue(hashBufferReturn),
+    hashIdentifier: vi
+      .fn()
+      .mockReturnValue(("id-" + hashReturn) as IdentifierHash),
+    hashUsername: vi
+      .fn()
+      .mockReturnValue(("user-" + hashReturn) as UsernameHash),
+    hashPhone: vi.fn().mockReturnValue(("phone-" + hashReturn) as PhoneHash),
+    hashPhoneBuffer: vi
+      .fn()
+      .mockReturnValue(("phone-" + hashBufferReturn) as PhoneHash),
+    hashConsultantPhoneBuffer: vi
+      .fn()
+      .mockReturnValue(("cons-" + hashBufferReturn) as OpsPhoneHash),
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Branded test constants
+// ---------------------------------------------------------------------------
+
+const TEST_SESSION_ID = "00000000-0000-4000-8000-000000000010" as SessionId;
+const TEST_SESSION_TOKEN = "tok_abc123" as SessionToken;
+const TEST_USER_ID = "00000000-0000-4000-8000-000000000020" as UserId;
+const TEST_IP_TOKEN = "hmac-ip" as IpToken;
+const TEST_UA_TOKEN = "hmac-ua" as UaToken;
+const TEST_ORG_UUID = "00000000-0000-4000-8000-aaaaaaaaaaaa" as OrgId;
+const TEST_ORG_SCHEMA = "org_00000000-0000-4000-8000-aaaaaaaaaaaa" as OrgSchema;
+
 function makeSessionData(overrides?: Partial<SessionData>): SessionData {
   return {
-    id: "session-001",
-    token: "tok_abc123",
-    userId: "user-001",
-    ipToken: "hmac-ip",
-    uaToken: "hmac-ua",
+    id: TEST_SESSION_ID,
+    token: TEST_SESSION_TOKEN,
+    userId: TEST_USER_ID,
+    ipToken: TEST_IP_TOKEN,
+    uaToken: TEST_UA_TOKEN,
     expiresAt: new Date(Date.now() + 3600_000),
     twofaVerified: true,
     webauthnChallenge: null,
@@ -75,9 +138,10 @@ function mockProvider(
     parseIncomingSms: vi.fn(),
     generateVoiceResponse: vi.fn().mockReturnValue("<Response/>"),
     getRecording: vi.fn().mockResolvedValue(Buffer.alloc(44)),
-    getCallDetails: vi
-      .fn()
-      .mockResolvedValue({ from: "+15550000001", to: "+15550000002" }),
+    getCallDetails: vi.fn().mockResolvedValue({
+      from: "+15550000001" as E164,
+      to: "+15550000002" as E164,
+    }),
     deleteRecording: vi.fn(),
     deleteCallLog: vi.fn(),
     deleteMessageLog: vi.fn(),
@@ -97,12 +161,12 @@ function mockConsultantRepo(
 ): ConsultantRepository {
   const record = consultant
     ? {
-        id: "consultant-001",
-        userId: "user-001",
+        id: "consultant-001" as ConsultantId,
+        userId: "user-001" as UserId,
         encryptedPhone: Buffer.alloc(16) as Buffer | null,
         isVerified: consultant.isVerified,
         preferredCallMethod: consultant.preferredCallMethod,
-        opsPhoneHash: "consultant-phone-hash" as string | null,
+        opsPhoneHash: "consultant-phone-hash" as OpsPhoneHash | null,
         opsEncryptedPhone: null as Buffer | null,
         smsPingsEnabled: false,
         verificationCodeHash: null as string | null,
@@ -133,7 +197,9 @@ function mockConsultantService(
 ): ConsultantService {
   return {
     getByUserId: vi.fn().mockResolvedValue(null),
-    register: vi.fn().mockResolvedValue({ id: "consultant-001" }),
+    register: vi
+      .fn()
+      .mockResolvedValue({ id: "consultant-001" as ConsultantId }),
     prepareVerification: vi.fn().mockResolvedValue({ code: "123456" }),
     verify: vi.fn(),
     updatePreference: vi.fn(),
@@ -153,12 +219,9 @@ function makeDeps(overrides?: Partial<RelayHandlerDeps>): RelayHandlerDeps {
         preferredCallMethod: "phone_callback",
       }),
     ),
-    resolveCallerIdByPurpose: vi.fn().mockResolvedValue("+15559999999"),
+    resolveCallerIdByPurpose: vi.fn().mockResolvedValue("+15559999999" as E164),
     pendingCalls: new Map<string, PendingCall>(),
-    indexer: {
-      hash: vi.fn().mockReturnValue("fake-hash"),
-      hashBuffer: vi.fn().mockReturnValue("fake-hash"),
-    },
+    indexer: mockBlindIndexer(),
     fieldEncryptor: {
       encrypt: vi.fn().mockReturnValue(Buffer.from("encrypted")),
       encryptBuffer: vi.fn().mockReturnValue(Buffer.from("encrypted")),
@@ -175,15 +238,15 @@ function makeDeps(overrides?: Partial<RelayHandlerDeps>): RelayHandlerDeps {
     twimlAppSid: "APtest",
     orgResolver: vi
       .fn()
-      .mockReturnValue({ orgId: "test-uuid-001", orgSchema: "org_test" }),
+      .mockReturnValue({ orgId: TEST_ORG_UUID, orgSchema: TEST_ORG_SCHEMA }),
     createSessionRepo: vi
       .fn()
       .mockReturnValue(mockSessionRepo(makeSessionData())),
     resolveClientPhone: vi.fn().mockResolvedValue(Buffer.from("+15551234567")),
-    consultantPhoneIndexer: {
-      hash: vi.fn().mockReturnValue("consultant-phone-hash"),
-      hashBuffer: vi.fn().mockReturnValue("consultant-phone-hash"),
-    },
+    consultantPhoneIndexer: mockBlindIndexer(
+      "consultant-phone-hash",
+      "consultant-phone-hash",
+    ),
     getSealedBoxEncryptor: vi.fn().mockResolvedValue(testSealedBox),
     createConsultantService: vi.fn().mockReturnValue(mockConsultantService()),
     ...overrides,
@@ -312,7 +375,7 @@ describe("createRelayHandler", () => {
       const req = createMockReq(
         "POST",
         "/relay/sms",
-        '{"ticketId":"test-ticket-id","body":"hi"}',
+        '{"ticketId":"aaaa0000-0000-4000-8000-000000000001","body":"hi"}',
         {
           cookie: "",
         },
@@ -333,7 +396,7 @@ describe("createRelayHandler", () => {
       const req = createMockReq(
         "POST",
         "/relay/sms",
-        '{"ticketId":"test-ticket-id","body":"hi"}',
+        '{"ticketId":"aaaa0000-0000-4000-8000-000000000001","body":"hi"}',
       );
       const res = createMockRes();
       await handler(req, res as unknown as ServerResponse);
@@ -349,7 +412,7 @@ describe("createRelayHandler", () => {
       const req = createMockReq(
         "POST",
         "/relay/sms",
-        '{"ticketId":"test-ticket-id","body":"hi"}',
+        '{"ticketId":"aaaa0000-0000-4000-8000-000000000001","body":"hi"}',
       );
       const res = createMockRes();
       await handler(req, res as unknown as ServerResponse);
@@ -380,7 +443,7 @@ describe("createRelayHandler", () => {
       const req = createMockReq(
         "POST",
         "/relay/sms",
-        '{"ticketId":"test-ticket-id","body":"Hello from CARE-Y"}',
+        '{"ticketId":"aaaa0000-0000-4000-8000-000000000001","body":"Hello from CARE-Y"}',
       );
       const res = createMockRes();
       await handler(req, res as unknown as ServerResponse);
@@ -408,7 +471,7 @@ describe("createRelayHandler", () => {
       const req = createMockReq(
         "POST",
         "/relay/sms",
-        '{"ticketId":"test-ticket-id"}',
+        '{"ticketId":"aaaa0000-0000-4000-8000-000000000001"}',
       );
       const res = createMockRes();
       await handler(req, res as unknown as ServerResponse);
@@ -422,7 +485,7 @@ describe("createRelayHandler", () => {
       const req = createMockReq(
         "POST",
         "/relay/sms",
-        `{"ticketId":"test-ticket-id","body":"${longBody}"}`,
+        `{"ticketId":"aaaa0000-0000-4000-8000-000000000001","body":"${longBody}"}`,
       );
       const res = createMockRes();
       await handler(req, res as unknown as ServerResponse);
@@ -436,7 +499,7 @@ describe("createRelayHandler", () => {
       const req = createMockReq(
         "POST",
         "/relay/sms",
-        '{"ticketId":"test-ticket-id","body":"hi"}',
+        '{"ticketId":"aaaa0000-0000-4000-8000-000000000001","body":"hi"}',
       );
       const res = createMockRes();
       await handler(req, res as unknown as ServerResponse);
@@ -452,7 +515,7 @@ describe("createRelayHandler", () => {
       const req = createMockReq(
         "POST",
         "/relay/sms",
-        '{"ticketId":"test-ticket-id","body":"hi"}',
+        '{"ticketId":"aaaa0000-0000-4000-8000-000000000001","body":"hi"}',
       );
       const res = createMockRes();
       await handler(req, res as unknown as ServerResponse);
@@ -468,7 +531,7 @@ describe("createRelayHandler", () => {
       const req = createMockReq(
         "POST",
         "/relay/sms",
-        '{"ticketId":"test-ticket-id","body":"hi"}',
+        '{"ticketId":"aaaa0000-0000-4000-8000-000000000001","body":"hi"}',
       );
       const res = createMockRes();
       await handler(req, res as unknown as ServerResponse);
@@ -485,7 +548,8 @@ describe("createRelayHandler", () => {
       });
       const handler = createRelayHandler(deps);
 
-      const bodyJson = '{"ticketId":"test-ticket-id","body":"secret message"}';
+      const bodyJson =
+        '{"ticketId":"aaaa0000-0000-4000-8000-000000000001","body":"secret message"}';
       const req = createMockReq("POST", "/relay/sms", bodyJson);
       const res = createMockRes();
 
@@ -512,7 +576,7 @@ describe("createRelayHandler", () => {
       const req = createMockReq(
         "POST",
         "/relay/call",
-        '{"ticketId":"test-ticket-id","consultantPhone":"+15552222222"}',
+        '{"ticketId":"aaaa0000-0000-4000-8000-000000000001","consultantPhone":"+15552222222"}',
       );
       const res = createMockRes();
       await handler(req, res as unknown as ServerResponse);
@@ -530,8 +594,8 @@ describe("createRelayHandler", () => {
       expect(pendingCalls.size).toBe(1);
       const pending = pendingCalls.get("CA_test_456");
       expect(pending).toBeDefined();
-      expect(pending!.orgId).toBe("test-uuid-001");
-      expect(pending!.orgSchema).toBe("org_test");
+      expect(pending!.orgId).toBe(TEST_ORG_UUID);
+      expect(pending!.orgSchema).toBe(TEST_ORG_SCHEMA);
     });
 
     it("returns webrtc method when consultant prefers WebRTC", async () => {
@@ -547,7 +611,7 @@ describe("createRelayHandler", () => {
       const req = createMockReq(
         "POST",
         "/relay/call",
-        '{"ticketId":"test-ticket-id"}',
+        '{"ticketId":"aaaa0000-0000-4000-8000-000000000001"}',
       );
       const res = createMockRes();
       await handler(req, res as unknown as ServerResponse);
@@ -570,7 +634,7 @@ describe("createRelayHandler", () => {
       const req = createMockReq(
         "POST",
         "/relay/call",
-        '{"ticketId":"test-ticket-id"}',
+        '{"ticketId":"aaaa0000-0000-4000-8000-000000000001"}',
       );
       const res = createMockRes();
       await handler(req, res as unknown as ServerResponse);
@@ -585,7 +649,7 @@ describe("createRelayHandler", () => {
       const req = createMockReq(
         "POST",
         "/relay/call",
-        '{"ticketId":"test-ticket-id"}',
+        '{"ticketId":"aaaa0000-0000-4000-8000-000000000001"}',
       );
       const res = createMockRes();
       await handler(req, res as unknown as ServerResponse);
@@ -608,7 +672,7 @@ describe("createRelayHandler", () => {
       const req = createMockReq(
         "POST",
         "/relay/call",
-        '{"ticketId":"test-ticket-id","consultantPhone":"+15552222222"}',
+        '{"ticketId":"aaaa0000-0000-4000-8000-000000000001","consultantPhone":"+15552222222"}',
       );
       const res = createMockRes();
       await handler(req, res as unknown as ServerResponse);
@@ -623,7 +687,7 @@ describe("createRelayHandler", () => {
       const req = createMockReq(
         "POST",
         "/relay/call",
-        '{"ticketId":"test-ticket-id"}',
+        '{"ticketId":"aaaa0000-0000-4000-8000-000000000001"}',
       );
       const res = createMockRes();
       await handler(req, res as unknown as ServerResponse);
@@ -648,7 +712,7 @@ describe("createRelayHandler", () => {
       const req = createMockReq(
         "POST",
         "/relay/call",
-        '{"ticketId":"test-ticket-id","consultantPhone":"+15552222222"}',
+        '{"ticketId":"aaaa0000-0000-4000-8000-000000000001","consultantPhone":"+15552222222"}',
       );
       const res = createMockRes();
       await handler(req, res as unknown as ServerResponse);
@@ -672,8 +736,8 @@ describe("createRelayHandler", () => {
       (
         consultantRepoWithNullHash.findByUserId as ReturnType<typeof vi.fn>
       ).mockResolvedValue({
-        id: "consultant-001",
-        userId: "user-001",
+        id: "consultant-001" as ConsultantId,
+        userId: "user-001" as UserId,
         encryptedPhone: Buffer.alloc(16),
         isVerified: true,
         preferredCallMethod: "phone_callback",
@@ -697,7 +761,7 @@ describe("createRelayHandler", () => {
       const req = createMockReq(
         "POST",
         "/relay/call",
-        '{"ticketId":"test-ticket-id","consultantPhone":"+15552222222"}',
+        '{"ticketId":"aaaa0000-0000-4000-8000-000000000001","consultantPhone":"+15552222222"}',
       );
       const res = createMockRes();
       await handler(req, res as unknown as ServerResponse);
@@ -716,16 +780,16 @@ describe("createRelayHandler", () => {
       // from the stored opsPhoneHash
       const deps = makeDeps({
         getProvider: vi.fn().mockResolvedValue(provider),
-        consultantPhoneIndexer: {
-          hash: vi.fn().mockReturnValue("mismatched-hash"),
-          hashBuffer: vi.fn().mockReturnValue("mismatched-hash"),
-        },
+        consultantPhoneIndexer: mockBlindIndexer(
+          "mismatched-hash",
+          "mismatched-hash",
+        ),
       });
       const handler = createRelayHandler(deps);
       const req = createMockReq(
         "POST",
         "/relay/call",
-        '{"ticketId":"test-ticket-id","consultantPhone":"+15559999001"}',
+        '{"ticketId":"aaaa0000-0000-4000-8000-000000000001","consultantPhone":"+15559999001"}',
       );
       const res = createMockRes();
       await handler(req, res as unknown as ServerResponse);
@@ -750,7 +814,7 @@ describe("createRelayHandler", () => {
       const req1 = createMockReq(
         "POST",
         "/relay/call",
-        '{"ticketId":"test-ticket-id","consultantPhone":"+15552222222"}',
+        '{"ticketId":"aaaa0000-0000-4000-8000-000000000001","consultantPhone":"+15552222222"}',
       );
       const res1 = createMockRes();
       await handler1(req1, res1 as unknown as ServerResponse);
@@ -769,7 +833,7 @@ describe("createRelayHandler", () => {
       const req2 = createMockReq(
         "POST",
         "/relay/call",
-        '{"ticketId":"test-ticket-id","consultantPhone":"+15552222222"}',
+        '{"ticketId":"aaaa0000-0000-4000-8000-000000000001","consultantPhone":"+15552222222"}',
       );
       const res2 = createMockRes();
       await handler2(req2, res2 as unknown as ServerResponse);
@@ -777,16 +841,13 @@ describe("createRelayHandler", () => {
       // Case 3: hash mismatch
       const deps3 = makeDeps({
         getProvider: vi.fn().mockResolvedValue(provider),
-        consultantPhoneIndexer: {
-          hash: vi.fn().mockReturnValue("wrong-hash"),
-          hashBuffer: vi.fn().mockReturnValue("wrong-hash"),
-        },
+        consultantPhoneIndexer: mockBlindIndexer("wrong-hash", "wrong-hash"),
       });
       const handler3 = createRelayHandler(deps3);
       const req3 = createMockReq(
         "POST",
         "/relay/call",
-        '{"ticketId":"test-ticket-id","consultantPhone":"+15552222222"}',
+        '{"ticketId":"aaaa0000-0000-4000-8000-000000000001","consultantPhone":"+15552222222"}',
       );
       const res3 = createMockRes();
       await handler3(req3, res3 as unknown as ServerResponse);
@@ -815,8 +876,8 @@ describe("createRelayHandler", () => {
       return {
         clientPhoneBuf: Buffer.from("+15553333333"),
         callerIdBuf: Buffer.from("+15559999999"),
-        orgId: "test-uuid-001",
-        orgSchema: "org_test",
+        orgId: TEST_ORG_UUID,
+        orgSchema: TEST_ORG_SCHEMA,
         createdAt: Date.now(),
       };
     }
@@ -838,7 +899,7 @@ describe("createRelayHandler", () => {
       const formBody = "CallSid=CA_test_1&Digits=1&AccountSid=ACtest";
       const req = createMockReq(
         "POST",
-        "/relay/call-confirm/org_test",
+        "/relay/call-confirm/org_bbbb0000-0000-4000-8000-000000000001",
         formBody,
         {
           "content-type": "application/x-www-form-urlencoded",
@@ -873,7 +934,7 @@ describe("createRelayHandler", () => {
       const formBody = "CallSid=CA_unknown&Digits=1";
       const req = createMockReq(
         "POST",
-        "/relay/call-confirm/org_test",
+        "/relay/call-confirm/org_bbbb0000-0000-4000-8000-000000000001",
         formBody,
         {
           "content-type": "application/x-www-form-urlencoded",
@@ -894,7 +955,7 @@ describe("createRelayHandler", () => {
       const formBody = "Digits=1";
       const req = createMockReq(
         "POST",
-        "/relay/call-confirm/org_test",
+        "/relay/call-confirm/org_bbbb0000-0000-4000-8000-000000000001",
         formBody,
         {
           "content-type": "application/x-www-form-urlencoded",
@@ -925,7 +986,7 @@ describe("createRelayHandler", () => {
       const formBody = "CallSid=CA_test_1&Digits=1";
       const req = createMockReq(
         "POST",
-        "/relay/call-confirm/org_test",
+        "/relay/call-confirm/org_bbbb0000-0000-4000-8000-000000000001",
         formBody,
         {
           "content-type": "application/x-www-form-urlencoded",
@@ -956,7 +1017,7 @@ describe("createRelayHandler", () => {
       const formBody = "CallSid=CA_test_1&Digits=";
       const req = createMockReq(
         "POST",
-        "/relay/call-confirm/org_test",
+        "/relay/call-confirm/org_bbbb0000-0000-4000-8000-000000000001",
         formBody,
         {
           "content-type": "application/x-www-form-urlencoded",
@@ -977,7 +1038,11 @@ describe("createRelayHandler", () => {
     it("returns 405 for non-POST method", async () => {
       const deps = makeDeps();
       const handler = createRelayHandler(deps);
-      const req = createMockReq("GET", "/relay/call-confirm/org_test", "");
+      const req = createMockReq(
+        "GET",
+        "/relay/call-confirm/org_bbbb0000-0000-4000-8000-000000000001",
+        "",
+      );
       req.headers.cookie = "";
       const res = createMockRes();
       await handler(req, res as unknown as ServerResponse);
@@ -987,9 +1052,14 @@ describe("createRelayHandler", () => {
     it("returns 415 for wrong content type", async () => {
       const deps = makeDeps();
       const handler = createRelayHandler(deps);
-      const req = createMockReq("POST", "/relay/call-confirm/org_test", "{}", {
-        "content-type": "application/json",
-      });
+      const req = createMockReq(
+        "POST",
+        "/relay/call-confirm/org_bbbb0000-0000-4000-8000-000000000001",
+        "{}",
+        {
+          "content-type": "application/json",
+        },
+      );
       req.headers.cookie = "";
       const res = createMockRes();
       await handler(req, res as unknown as ServerResponse);
@@ -1024,7 +1094,7 @@ describe("createRelayHandler", () => {
         const formBody = "CallSid=CA_test_1&Digits=5";
         const req = createMockReq(
           "POST",
-          "/relay/call-confirm/org_test",
+          "/relay/call-confirm/org_bbbb0000-0000-4000-8000-000000000001",
           formBody,
           {
             "content-type": "application/x-www-form-urlencoded",
@@ -1130,7 +1200,7 @@ describe("createRelayHandler", () => {
       const req = createMockReq(
         "POST",
         "/relay/sms",
-        '{"ticketId":"test-ticket-id","body":"secret message"}',
+        '{"ticketId":"aaaa0000-0000-4000-8000-000000000001","body":"secret message"}',
       );
       const res = createMockRes();
 
@@ -1147,7 +1217,7 @@ describe("createRelayHandler", () => {
       const req = createMockReq(
         "POST",
         "/relay/sms",
-        '{"ticketId":"test-ticket-id"}',
+        '{"ticketId":"aaaa0000-0000-4000-8000-000000000001"}',
       );
       const res = createMockRes();
 
@@ -1166,7 +1236,7 @@ describe("createRelayHandler", () => {
       const req = createMockReq(
         "POST",
         "/relay/sms",
-        `{"ticketId":"test-ticket-id","body":"${longBody}"}`,
+        `{"ticketId":"aaaa0000-0000-4000-8000-000000000001","body":"${longBody}"}`,
       );
       const res = createMockRes();
 
@@ -1185,7 +1255,7 @@ describe("createRelayHandler", () => {
       const req = createMockReq(
         "POST",
         "/relay/sms",
-        '{"ticketId":"test-ticket-id","body":"hi"}',
+        '{"ticketId":"aaaa0000-0000-4000-8000-000000000001","body":"hi"}',
       );
       const res = createMockRes();
 
@@ -1205,7 +1275,7 @@ describe("createRelayHandler", () => {
       const req = createMockReq(
         "POST",
         "/relay/sms",
-        '{"ticketId":"test-ticket-id","body":"hi"}',
+        '{"ticketId":"aaaa0000-0000-4000-8000-000000000001","body":"hi"}',
       );
       const res = createMockRes();
 
@@ -1228,7 +1298,7 @@ describe("createRelayHandler", () => {
       const req = createMockReq(
         "POST",
         "/relay/sms",
-        '{"ticketId":"test-ticket-id","body":"hi"}',
+        '{"ticketId":"aaaa0000-0000-4000-8000-000000000001","body":"hi"}',
       );
       const res = createMockRes();
 
@@ -1247,7 +1317,7 @@ describe("createRelayHandler", () => {
       const req = createMockReq(
         "POST",
         "/relay/sms",
-        '{"ticketId":"test-ticket-id","body":"hi"}',
+        '{"ticketId":"aaaa0000-0000-4000-8000-000000000001","body":"hi"}',
       );
       const res = createMockRes();
 
@@ -1267,7 +1337,7 @@ describe("createRelayHandler", () => {
       const req = createMockReq(
         "POST",
         "/relay/call",
-        '{"ticketId":"test-ticket-id","consultantPhone":"+15552222222"}',
+        '{"ticketId":"aaaa0000-0000-4000-8000-000000000001","consultantPhone":"+15552222222"}',
       );
       const res = createMockRes();
 
@@ -1284,7 +1354,7 @@ describe("createRelayHandler", () => {
       const req = createMockReq(
         "POST",
         "/relay/call",
-        '{"ticketId":"test-ticket-id"}',
+        '{"ticketId":"aaaa0000-0000-4000-8000-000000000001"}',
       );
       const res = createMockRes();
 
@@ -1315,7 +1385,7 @@ describe("createRelayHandler", () => {
       const req = createMockReq(
         "POST",
         "/relay/call",
-        '{"ticketId":"test-ticket-id","consultantPhone":"+15552222222"}',
+        '{"ticketId":"aaaa0000-0000-4000-8000-000000000001","consultantPhone":"+15552222222"}',
       );
       const res = createMockRes();
 
@@ -1338,7 +1408,7 @@ describe("createRelayHandler", () => {
       const req = createMockReq(
         "POST",
         "/relay/call",
-        '{"ticketId":"test-ticket-id","consultantPhone":"+15552222222"}',
+        '{"ticketId":"aaaa0000-0000-4000-8000-000000000001","consultantPhone":"+15552222222"}',
       );
       const res = createMockRes();
 
@@ -1354,8 +1424,8 @@ describe("createRelayHandler", () => {
       const pending: PendingCall = {
         clientPhoneBuf: Buffer.from("+15553333333"),
         callerIdBuf: Buffer.from("+15559999999"),
-        orgId: "test-uuid-001",
-        orgSchema: "org_test",
+        orgId: TEST_ORG_UUID,
+        orgSchema: TEST_ORG_SCHEMA,
         createdAt: Date.now(),
       };
       const pendingCalls = new Map<string, PendingCall>();
@@ -1373,7 +1443,7 @@ describe("createRelayHandler", () => {
       const formBody = "CallSid=CA_test_1&Digits=1";
       const req = createMockReq(
         "POST",
-        "/relay/call-confirm/org_test",
+        "/relay/call-confirm/org_bbbb0000-0000-4000-8000-000000000001",
         formBody,
         {
           "content-type": "application/x-www-form-urlencoded",
@@ -1402,7 +1472,7 @@ describe("createRelayHandler", () => {
       vi.restoreAllMocks();
     });
 
-    const TICKET_ID = "test-ticket-id";
+    const TICKET_ID = "aaaa0000-0000-4000-8000-000000000001";
     const RESOLVED_PHONE = "+15551234567";
     const SECRET_BODY = "secret message content";
 
@@ -1595,7 +1665,7 @@ describe("createRelayHandler", () => {
       const oversizedBody = "x".repeat(65 * 1024);
       const req = createMockReq(
         "POST",
-        "/relay/call-confirm/org_test",
+        "/relay/call-confirm/org_bbbb0000-0000-4000-8000-000000000001",
         oversizedBody,
         {
           "content-type": "application/x-www-form-urlencoded",
@@ -1619,8 +1689,8 @@ describe("createRelayHandler", () => {
       const pending: PendingCall = {
         clientPhoneBuf: pendingBuf,
         callerIdBuf: callerBuf,
-        orgId: "test-uuid-001",
-        orgSchema: "org_test",
+        orgId: TEST_ORG_UUID,
+        orgSchema: TEST_ORG_SCHEMA,
         createdAt: Date.now(),
       };
       const pendingCalls = new Map<string, PendingCall>();
@@ -1636,7 +1706,7 @@ describe("createRelayHandler", () => {
       const formBody = "CallSid=CA_hangup_1&Digits=1";
       const req = createMockReq(
         "POST",
-        "/relay/call-confirm/org_test",
+        "/relay/call-confirm/org_bbbb0000-0000-4000-8000-000000000001",
         formBody,
         {
           "content-type": "application/x-www-form-urlencoded",
@@ -1665,8 +1735,8 @@ describe("createRelayHandler", () => {
       const pending: PendingCall = {
         clientPhoneBuf: pendingBuf,
         callerIdBuf: callerBuf,
-        orgId: "test-uuid-001",
-        orgSchema: "org_test",
+        orgId: TEST_ORG_UUID,
+        orgSchema: TEST_ORG_SCHEMA,
         createdAt: Date.now(),
       };
       const pendingCalls = new Map<string, PendingCall>();
@@ -1683,7 +1753,7 @@ describe("createRelayHandler", () => {
       const formBody = "CallSid=CA_hangup_2&Digits=1";
       const req = createMockReq(
         "POST",
-        "/relay/call-confirm/org_test",
+        "/relay/call-confirm/org_bbbb0000-0000-4000-8000-000000000001",
         formBody,
         {
           "content-type": "application/x-www-form-urlencoded",
@@ -1721,21 +1791,12 @@ describe("createRelayHandler", () => {
       // Write non-zero data so we can verify zeroing
       Buffer.from("ops-encrypted-ph").copy(encryptedPhone);
 
-      const pendingClients = new Map<
-        string,
-        {
-          phoneHash: string;
-          opsEncryptedPhone: Buffer;
-          phoneMatchHash: string | null;
-          orgSchema: string;
-          createdAt: number;
-        }
-      >();
+      const pendingClients = new Map<string, PendingClient>();
       pendingClients.set("token-expired", {
-        phoneHash: "hash-1",
+        phoneHash: "hash-1" as PhoneHash,
         opsEncryptedPhone: encryptedPhone,
         phoneMatchHash: null,
-        orgSchema: "org_test",
+        orgSchema: "org_bbbb0000-0000-4000-8000-000000000001" as OrgSchema,
         // Created 6 minutes ago (past the 5-minute TTL)
         createdAt: Date.now() - 6 * 60 * 1000,
       });
@@ -1765,21 +1826,12 @@ describe("createRelayHandler", () => {
       Buffer.from("fresh-encrypted!").copy(freshEncrypted);
       const freshCopy = Buffer.from(freshEncrypted);
 
-      const pendingClients = new Map<
-        string,
-        {
-          phoneHash: string;
-          opsEncryptedPhone: Buffer;
-          phoneMatchHash: string | null;
-          orgSchema: string;
-          createdAt: number;
-        }
-      >();
+      const pendingClients = new Map<string, PendingClient>();
       pendingClients.set("token-fresh", {
-        phoneHash: "hash-2",
+        phoneHash: "hash-2" as PhoneHash,
         opsEncryptedPhone: freshEncrypted,
         phoneMatchHash: null,
-        orgSchema: "org_test",
+        orgSchema: "org_bbbb0000-0000-4000-8000-000000000001" as OrgSchema,
         // Created just now (well within 5-minute TTL)
         createdAt: Date.now(),
       });
@@ -1857,7 +1909,7 @@ describe("createRelayHandler", () => {
       // 3. tickets selectFrom -> ticket row
       const mockDb = createChainableTenantDb([
         {
-          id: "phone-1",
+          id: "phone-1" as PhoneId,
           phone_hash: "fake-hash",
           encrypted_number: Buffer.alloc(16),
           locale: "en-US",
@@ -1865,8 +1917,8 @@ describe("createRelayHandler", () => {
           location_region: null,
           is_active: true,
         },
-        { id: "client-1", encrypted_alias: Buffer.from("C-001") },
-        { id: "ticket-1" },
+        { id: "client-1" as ClientId, encrypted_alias: Buffer.from("C-001") },
+        { id: "ticket-1" as TicketId },
       ]);
 
       const deps = makeDeps({
@@ -1911,7 +1963,7 @@ describe("createRelayHandler", () => {
 
       const mockDb = createChainableTenantDb([
         {
-          id: "phone-2",
+          id: "phone-2" as PhoneId,
           phone_hash: "fake-hash",
           encrypted_number: Buffer.alloc(16),
           locale: "en-US",
@@ -1962,16 +2014,7 @@ describe("createRelayHandler", () => {
       // phoneRepo.findByHash returns null (no phone record)
       const mockDb = createChainableTenantDb([undefined]);
 
-      const pendingClients = new Map<
-        string,
-        {
-          phoneHash: string;
-          opsEncryptedPhone: Buffer;
-          phoneMatchHash: string | null;
-          orgSchema: string;
-          createdAt: number;
-        }
-      >();
+      const pendingClients = new Map<string, PendingClient>();
 
       const deps = makeDeps({
         getTenantDb: vi.fn().mockReturnValue(mockDb),
@@ -2003,8 +2046,8 @@ describe("createRelayHandler", () => {
       expect(pendingClients.size).toBe(1);
       const entry = pendingClients.get(parsed.token);
       expect(entry).toBeDefined();
-      expect(entry!.phoneHash).toBe("fake-hash");
-      expect(entry!.orgSchema).toBe("org_test");
+      expect(entry!.phoneHash).toBe("phone-fake-hash");
+      expect(entry!.orgSchema).toBe(TEST_ORG_SCHEMA);
 
       expectZeroed(
         spy.getCapturedBuffer(),
@@ -2020,7 +2063,7 @@ describe("createRelayHandler", () => {
       // Phone record exists but no client references it
       const mockDb = createChainableTenantDb([
         {
-          id: "phone-orphan",
+          id: "phone-orphan" as PhoneId,
           phone_hash: "fake-hash",
           encrypted_number: Buffer.alloc(16),
           locale: "en-US",
@@ -2031,16 +2074,7 @@ describe("createRelayHandler", () => {
         undefined, // no client row
       ]);
 
-      const pendingClients = new Map<
-        string,
-        {
-          phoneHash: string;
-          opsEncryptedPhone: Buffer;
-          phoneMatchHash: string | null;
-          orgSchema: string;
-          createdAt: number;
-        }
-      >();
+      const pendingClients = new Map<string, PendingClient>();
 
       const deps = makeDeps({
         getTenantDb: vi.fn().mockReturnValue(mockDb),
@@ -2128,7 +2162,7 @@ describe("createRelayHandler", () => {
 
       const mockDb = createChainableTenantDb([
         {
-          id: "phone-3",
+          id: "phone-3" as PhoneId,
           phone_hash: "fake-hash",
           encrypted_number: Buffer.alloc(16),
           locale: "en-US",
@@ -2136,8 +2170,8 @@ describe("createRelayHandler", () => {
           location_region: null,
           is_active: true,
         },
-        { id: "client-3", encrypted_alias: Buffer.from("C-003") },
-        { id: "ticket-3" },
+        { id: "client-3" as ClientId, encrypted_alias: Buffer.from("C-003") },
+        { id: "ticket-3" as TicketId },
       ]);
 
       const deps = makeDeps({
@@ -2173,6 +2207,105 @@ describe("createRelayHandler", () => {
 
       phoneDataBuf.fill(0);
       handler.cleanup();
+    });
+
+    // Security contract: blind index salt must be orgId (UUID), not orgSchema
+    // (schema name). The telephony paths (inbound-sms, inbound-call,
+    // client-service.updatePhone) all use the raw org UUID. If the relay uses
+    // orgSchema instead, hashes diverge and phone-lookup never matches clients
+    // created by inbound telephony, producing silent duplicate clients.
+
+    it("passes orgId (not orgSchema) as the blind index salt", async () => {
+      const hashSpy = vi.fn().mockReturnValue("tracked-hash");
+      const mockDb = createChainableTenantDb([
+        // phoneRepo.findByHash returns undefined (no match)
+        undefined,
+      ]);
+
+      const pendingClients = new Map();
+      const deps = makeDeps({
+        getTenantDb: vi.fn().mockReturnValue(mockDb),
+        indexer: {
+          ...mockBlindIndexer("tracked-hash", "tracked-hash"),
+          hashPhone: hashSpy,
+        },
+        pendingClients,
+      });
+      const handler = createRelayHandler(deps);
+
+      const phoneDataBuf = Buffer.alloc(12);
+      Buffer.from("+15550009999").copy(phoneDataBuf);
+
+      const req = createMockReq(
+        "POST",
+        "/relay/phone-lookup",
+        JSON.stringify({ phone: phoneDataBuf.toString("utf-8") }),
+      );
+      const res = createMockRes();
+
+      await handler(req, res as unknown as ServerResponse);
+
+      expect(hashSpy).toHaveBeenCalledOnce();
+      // The second argument MUST be the org UUID, not the schema name.
+      // orgId = TEST_ORG_UUID, orgSchema = TEST_ORG_SCHEMA (see orgResolver mock).
+      const salt = hashSpy.mock.calls[0]?.[1] as string;
+      expect(salt).toBe(TEST_ORG_UUID as string);
+
+      phoneDataBuf.fill(0);
+    });
+
+    // Cross-path blind index regression: exercises the relay handler with a
+    // REAL BlindIndexer and verifies the stored hash matches what the
+    // telephony paths (inbound-sms, inbound-call) would produce for the
+    // same phone number and the same org. Catches the orgSchema vs orgId
+    // salt mismatch that causes silent duplicate clients.
+
+    it("produces a phone hash that matches the telephony path for the same phone and org", async () => {
+      const mockDb = createChainableTenantDb([
+        // phoneRepo.findByHash returns undefined (no match)
+        undefined,
+      ]);
+
+      const pendingClients = new Map();
+      const deps = makeDeps({
+        getTenantDb: vi.fn().mockReturnValue(mockDb),
+        // Wire a REAL blind indexer, not a mock. The handler's salt choice
+        // determines whether this hash matches the telephony-path hash.
+        indexer: testBlindIndexer,
+        pendingClients,
+      });
+      const handler = createRelayHandler(deps);
+
+      const phone = "+15550007777";
+      const phoneDataBuf = Buffer.alloc(12);
+      Buffer.from(phone).copy(phoneDataBuf);
+
+      const req = createMockReq(
+        "POST",
+        "/relay/phone-lookup",
+        JSON.stringify({ phone: phoneDataBuf.toString("utf-8") }),
+      );
+      const res = createMockRes();
+
+      await handler(req, res as unknown as ServerResponse);
+
+      expect(res.statusCode).toBe(200);
+      expect(pendingClients.size).toBe(1);
+
+      // Extract the hash the relay actually stored.
+      const [, pending] = [...pendingClients.entries()][0]!;
+      const relayHash = (pending as { phoneHash: string }).phoneHash;
+
+      // Compute the hash the telephony paths would produce. They all use
+      // the raw org UUID ("cccc0000-0000-4000-8000-000000000001"), never the schema name.
+      const telephonyHash = testBlindIndexer.hash(phone, TEST_ORG_UUID);
+
+      // These MUST match. If the relay used a different salt (e.g. the
+      // schema name "org_bbbb0000-0000-4000-8000-000000000001"), the hashes diverge and phone-lookup
+      // can never find clients created by inbound calls or SMS.
+      expect(relayHash).toBe(telephonyHash);
+
+      phoneDataBuf.fill(0);
     });
   });
 
@@ -2214,7 +2347,7 @@ describe("createRelayHandler", () => {
       const req = createMockReq(
         "POST",
         "/relay/sms",
-        '{"ticketId":"ticket-with-phone","body":"test msg"}',
+        '{"ticketId":"dddd0000-0000-4000-8000-000000000001","body":"test msg"}',
       );
       const res = createMockRes();
 
@@ -2249,7 +2382,7 @@ describe("createRelayHandler", () => {
       const req = createMockReq(
         "POST",
         "/relay/sms",
-        '{"ticketId":"ticket-no-phone","body":"test msg"}',
+        '{"ticketId":"dddd0000-0000-4000-8000-000000000002","body":"test msg"}',
       );
       const res = createMockRes();
 
@@ -2315,11 +2448,13 @@ describe("createRelayHandler", () => {
           opsEncryptedPhone: Buffer | null;
         },
       ];
-      expect(prepArgs[0]).toBe("user-001");
+      expect(prepArgs[0]).toBe(TEST_USER_ID);
       const artifacts = prepArgs[1];
       // org-sealed phone roundtrips: decrypt with test keypair
       expect(testUnseal(artifacts.orgSealedPhone)).toBe(phone);
-      expect(artifacts.opsPhoneHash).toBe("consultant-phone-hash");
+      // "cons-" prefix comes from the mock's hashConsultantPhoneBuffer,
+      // proving the OPS indexer's consultant domain method was used.
+      expect(artifacts.opsPhoneHash).toBe("cons-consultant-phone-hash");
       // OPS copy was encrypted because wantsPings=true
       expect(artifacts.opsEncryptedPhone).not.toBeNull();
 
@@ -2609,14 +2744,14 @@ describe("createRelayHandler", () => {
   // -----------------------------------------------------------------------
 
   describe("org identifier routing", () => {
-    const ORG_UUID = "test-uuid-001";
-    const ORG_SCHEMA = "org_test";
+    const ORG_UUID = TEST_ORG_UUID;
+    const ORG_SCHEMA = TEST_ORG_SCHEMA;
 
     it("SMS relay passes UUID to getProvider and OrgIdentifiers to resolveCallerIdByPurpose", async () => {
       const getProvider = vi.fn().mockResolvedValue(mockProvider());
       const resolveCallerIdByPurpose = vi
         .fn()
-        .mockResolvedValue("+15559999999");
+        .mockResolvedValue("+15559999999" as E164);
       const getTenantDb = vi.fn().mockReturnValue({} as Kysely<TenantDatabase>);
       const deps = makeDeps({
         getProvider,
@@ -2628,7 +2763,7 @@ describe("createRelayHandler", () => {
       const req = createMockReq(
         "POST",
         "/relay/sms",
-        '{"ticketId":"test-ticket-id","body":"hi"}',
+        '{"ticketId":"aaaa0000-0000-4000-8000-000000000001","body":"hi"}',
       );
       const res = createMockRes();
       await handler(req, res as unknown as ServerResponse);
@@ -2649,7 +2784,7 @@ describe("createRelayHandler", () => {
       const getProvider = vi.fn().mockResolvedValue(mockProvider());
       const resolveCallerIdByPurpose = vi
         .fn()
-        .mockResolvedValue("+15559999999");
+        .mockResolvedValue("+15559999999" as E164);
       const getTenantDb = vi.fn().mockReturnValue({} as Kysely<TenantDatabase>);
       const deps = makeDeps({
         getProvider,
@@ -2661,7 +2796,7 @@ describe("createRelayHandler", () => {
       const req = createMockReq(
         "POST",
         "/relay/call",
-        '{"ticketId":"test-ticket-id","consultantPhone":"+15552222222"}',
+        '{"ticketId":"aaaa0000-0000-4000-8000-000000000001","consultantPhone":"+15552222222"}',
       );
       const res = createMockRes();
       await handler(req, res as unknown as ServerResponse);
@@ -2696,7 +2831,7 @@ describe("createRelayHandler", () => {
       const getProvider = vi.fn().mockResolvedValue(mockProvider());
       const resolveCallerIdByPurpose = vi
         .fn()
-        .mockResolvedValue("+15559999999");
+        .mockResolvedValue("+15559999999" as E164);
       const getTenantDb = vi.fn().mockReturnValue({} as Kysely<TenantDatabase>);
       const deps = makeDeps({
         getProvider,
@@ -2730,7 +2865,7 @@ describe("createRelayHandler", () => {
       const req = createMockReq(
         "POST",
         "/relay/call",
-        '{"ticketId":"test-ticket-id","consultantPhone":"+15552222222"}',
+        '{"ticketId":"aaaa0000-0000-4000-8000-000000000001","consultantPhone":"+15552222222"}',
       );
       const res = createMockRes();
       await handler(req, res as unknown as ServerResponse);
@@ -2765,7 +2900,7 @@ describe("createRelayHandler", () => {
       const formBody = "CallSid=CA_pin_1&Digits=1";
       const req = createMockReq(
         "POST",
-        "/relay/call-confirm/org_test",
+        "/relay/call-confirm/org_bbbb0000-0000-4000-8000-000000000001",
         formBody,
         {
           "content-type": "application/x-www-form-urlencoded",
@@ -2793,7 +2928,7 @@ describe("createRelayHandler", () => {
       const req = createMockReq(
         "POST",
         "/relay/call",
-        '{"ticketId":"test-ticket-id","consultantPhone":"+15552222222"}',
+        '{"ticketId":"aaaa0000-0000-4000-8000-000000000001","consultantPhone":"+15552222222"}',
       );
       const res = createMockRes();
       await handler(req, res as unknown as ServerResponse);

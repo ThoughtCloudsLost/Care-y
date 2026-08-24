@@ -9,6 +9,7 @@ import type { MockTelephonyProvider } from "./mock-provider.js";
 import type { MockConfig } from "./schemas.js";
 import { createHmacValidator, twilioPayloadBuilder } from "./webhook-crypto.js";
 import { TelephonyConfigError } from "../errors.js";
+import type { OrgId } from "@care-y/shared";
 
 /** Minimal valid mock config for tests that do not care about phone numbers. */
 const MINIMAL_CONFIG: MockConfig = {
@@ -375,7 +376,7 @@ describe("mockProviderStatic", () => {
     it("returns the config unchanged (no remote provider)", async () => {
       const result = await mockProviderStatic.provisionWebhooks(
         MINIMAL_CONFIG,
-        "org-1",
+        "org-1" as OrgId,
         "https://hooks.example.test",
       );
       expect(result).toBe(MINIMAL_CONFIG);

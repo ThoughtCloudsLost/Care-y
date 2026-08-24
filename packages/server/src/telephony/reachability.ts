@@ -8,6 +8,7 @@
 
 import type { Kysely } from "kysely";
 import type { TenantDatabase } from "../db/types.js";
+import type { UserId } from "@care-y/shared";
 
 export type VolunteerReachability =
   | "none" // no consultant row
@@ -45,9 +46,9 @@ export function classifyReachability(
  */
 export async function getReachabilityForUsers(
   tDb: Kysely<TenantDatabase>,
-  userIds: readonly string[],
-): Promise<ReadonlyMap<string, VolunteerReachability>> {
-  const result = new Map<string, VolunteerReachability>();
+  userIds: readonly UserId[],
+): Promise<ReadonlyMap<UserId, VolunteerReachability>> {
+  const result = new Map<UserId, VolunteerReachability>();
 
   if (userIds.length === 0) return result;
 

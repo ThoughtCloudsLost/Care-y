@@ -17,6 +17,7 @@ import { twilioHmacValidator } from "./webhook-crypto.js";
 import { createProviderHttpClient } from "./provider-http.js";
 import { renderVoiceXml } from "./voice-xml.js";
 import { TelephonyConfigError, TelephonyError } from "../errors.js";
+import { type OrgId, callSidSchema, e164Schema } from "@care-y/shared";
 
 const TWILIO_API_BASE = "https://api.twilio.com/2010-04-01/Accounts" as const;
 
@@ -136,7 +137,12 @@ export function createTwilioProvider(config: unknown): TelephonyProvider {
         );
       }
 
-      return { callId, from, to, direction: "inbound" };
+      return {
+        callId: callSidSchema.parse(callId),
+        from: e164Schema.parse(from),
+        to: e164Schema.parse(to),
+        direction: "inbound",
+      };
     },
 
     parseIncomingSms(body: Record<string, string>): IncomingSmsData {
@@ -160,8 +166,8 @@ export function createTwilioProvider(config: unknown): TelephonyProvider {
 
       return {
         messageId,
-        from,
-        to,
+        from: e164Schema.parse(from),
+        to: e164Schema.parse(to),
         body: smsBody,
         numMedia,
         mediaUrls,
@@ -188,7 +194,7 @@ export function createTwilioProvider(config: unknown): TelephonyProvider {
           502,
         );
       }
-      return { from, to };
+      return { from: e164Schema.parse(from), to: e164Schema.parse(to) };
     },
 
     async deleteRecording(recordingId: string): Promise<void> {
@@ -229,7 +235,7 @@ export const twilioProviderStatic: TelephonyProviderStatic = {
 
   async provisionWebhooks(
     config: unknown,
-    orgId: string,
+    orgId: OrgId,
     baseUrl: string,
   ): Promise<TwilioConfig> {
     const parseResult = twilioConfigSchema.safeParse(config);

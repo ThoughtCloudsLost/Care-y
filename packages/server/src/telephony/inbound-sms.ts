@@ -18,6 +18,15 @@ import type { SmsResponseRepository } from "./models/sms-response-repo.js";
 import type { BlocklistRepository } from "./models/blocklist-repo.js";
 import type { TenantDatabase } from "../db/types.js";
 import { requireSodium } from "@care-y/crypto";
+import type {
+  OrgId,
+  OrgSchema,
+  QueueId,
+  ClientId,
+  PhoneId,
+  TicketId,
+  FollowupId,
+} from "@care-y/shared";
 import { selectAutoReply } from "./sms-auto-reply.js";
 import { enqueueLogDeletion } from "../jobs/log-deletion.js";
 import { TelephonyError } from "../errors.js";
@@ -30,11 +39,11 @@ import {
 import { processAttachments } from "./inbound-mms.js";
 
 export interface InboundSmsResult {
-  readonly clientId: string;
-  readonly phoneId: string;
+  readonly clientId: ClientId;
+  readonly phoneId: PhoneId;
   readonly isNewClient: boolean;
-  readonly ticketId: string;
-  readonly followUpId: string;
+  readonly ticketId: TicketId;
+  readonly followUpId: FollowupId;
 }
 
 export interface InboundSmsDeps {
@@ -47,9 +56,9 @@ export interface InboundSmsDeps {
   readonly smsResponseRepo: SmsResponseRepository;
   readonly blocklistRepo: BlocklistRepository;
   readonly tDb: Kysely<TenantDatabase>;
-  readonly intakeQueueId: string;
-  readonly orgId: string;
-  readonly orgSchema: string;
+  readonly intakeQueueId: QueueId;
+  readonly orgId: OrgId;
+  readonly orgSchema: OrgSchema;
   readonly defaultLocale: string;
 }
 
@@ -79,7 +88,7 @@ export async function handleInboundSms(
   } = deps;
 
   // 1. Compute blind index and check blocklist BEFORE any storage
-  const phoneHash = indexer.hash(smsData.from, orgId);
+  const phoneHash = indexer.hashPhone(smsData.from, orgId);
   const isBlocked = await blocklistRepo.exists(phoneHash);
   if (isBlocked) return null;
 
@@ -119,7 +128,7 @@ export async function handleInboundSms(
     }
   }
 
-  let followUpId: string;
+  let followUpId: FollowupId;
 
   if (ticketResult.isNew && ticketResult.tk) {
     // New ticket: reuse the ticket's tk (wraps already created)
