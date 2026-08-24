@@ -171,12 +171,12 @@ test.describe.serial("Encrypted Account Portal", () => {
     await startCoverage(accountPage);
 
     await accountPage.goto("/account");
-    const usernameInput = accountPage.getByLabel(/username/i);
+    const usernameInput = accountPage.getByPlaceholder(/username/i);
     await expect(usernameInput).toBeVisible({ timeout: CRYPTO_TIMEOUT });
     await auditA11y(accountPage);
 
     await usernameInput.fill(USERNAME);
-    await accountPage.getByLabel(/password/i).fill(WRONG_PASSWORD);
+    await accountPage.getByPlaceholder(/password/i).fill(WRONG_PASSWORD);
     await accountPage.getByRole("button", { name: /sign in/i }).click();
 
     const errorEl = accountPage.getByText(/did not match/i);
@@ -188,8 +188,10 @@ test.describe.serial("Encrypted Account Portal", () => {
   test("unknown username shows the identical failure", async ({}, testInfo) => {
     testInfo.setTimeout(CRYPTO_TIMEOUT * 4);
 
-    await accountPage.getByLabel(/username/i).fill(`nosuchuser ${suffix}`);
-    await accountPage.getByLabel(/password/i).fill(WRONG_PASSWORD);
+    await accountPage
+      .getByPlaceholder(/username/i)
+      .fill(`nosuchuser ${suffix}`);
+    await accountPage.getByPlaceholder(/password/i).fill(WRONG_PASSWORD);
     await accountPage.getByRole("button", { name: /sign in/i }).click();
 
     const errorEl = accountPage.getByText(/did not match/i);
@@ -203,8 +205,8 @@ test.describe.serial("Encrypted Account Portal", () => {
   test("correct login shows the seeded intake message", async ({}, testInfo) => {
     testInfo.setTimeout(CRYPTO_TIMEOUT * 4);
 
-    await accountPage.getByLabel(/username/i).fill(USERNAME);
-    await accountPage.getByLabel(/password/i).fill(PASSWORD);
+    await accountPage.getByPlaceholder(/username/i).fill(USERNAME);
+    await accountPage.getByPlaceholder(/password/i).fill(PASSWORD);
     await accountPage.getByRole("button", { name: /sign in/i }).click();
 
     // The intake opt-in seeded the thread with a self copy of the
@@ -296,8 +298,8 @@ test.describe.serial("Encrypted Account Portal", () => {
     // A reload drops the page-memory keys: the client signs in again
     // (volunteer cold-start parity) and the dual-copy reply decrypts.
     await accountPage.reload();
-    await accountPage.getByLabel(/username/i).fill(USERNAME);
-    await accountPage.getByLabel(/password/i).fill(PASSWORD);
+    await accountPage.getByPlaceholder(/username/i).fill(USERNAME);
+    await accountPage.getByPlaceholder(/password/i).fill(PASSWORD);
     await accountPage.getByRole("button", { name: /sign in/i }).click();
     await expect(accountPage.getByText(VOLUNTEER_MESSAGE)).toBeVisible({
       timeout: CRYPTO_TIMEOUT,
@@ -322,8 +324,8 @@ test.describe.serial("Encrypted Account Portal", () => {
     );
 
     await accountPage.reload();
-    await accountPage.getByLabel(/username/i).fill(USERNAME);
-    await accountPage.getByLabel(/password/i).fill(PASSWORD);
+    await accountPage.getByPlaceholder(/username/i).fill(USERNAME);
+    await accountPage.getByPlaceholder(/password/i).fill(PASSWORD);
     await accountPage.getByRole("button", { name: /sign in/i }).click();
     await expect(accountPage.getByText(VOLUNTEER_MESSAGE)).toBeVisible({
       timeout: CRYPTO_TIMEOUT,
@@ -444,8 +446,12 @@ test.describe.serial("Encrypted Account Portal", () => {
     // The account login shows the SAME history, re-encrypted.
     const upgradedAccountPage = await browser.newPage();
     await upgradedAccountPage.goto("/account");
-    await upgradedAccountPage.getByLabel(/username/i).fill(UPGRADE_USERNAME);
-    await upgradedAccountPage.getByLabel(/password/i).fill(UPGRADE_PASSWORD);
+    await upgradedAccountPage
+      .getByPlaceholder(/username/i)
+      .fill(UPGRADE_USERNAME);
+    await upgradedAccountPage
+      .getByPlaceholder(/password/i)
+      .fill(UPGRADE_PASSWORD);
     await upgradedAccountPage.getByRole("button", { name: /sign in/i }).click();
     await expect(upgradedAccountPage.getByText(UPGRADE_MESSAGE)).toBeVisible({
       timeout: CRYPTO_TIMEOUT,
@@ -495,8 +501,8 @@ test.describe.serial("Encrypted Account Portal", () => {
 
     // The login now fails with the same generic message.
     await accountPage.reload();
-    await accountPage.getByLabel(/username/i).fill(USERNAME);
-    await accountPage.getByLabel(/password/i).fill(PASSWORD);
+    await accountPage.getByPlaceholder(/username/i).fill(USERNAME);
+    await accountPage.getByPlaceholder(/password/i).fill(PASSWORD);
     await accountPage.getByRole("button", { name: /sign in/i }).click();
     await expect(accountPage.getByText(/did not match/i)).toBeVisible({
       timeout: CRYPTO_TIMEOUT,
