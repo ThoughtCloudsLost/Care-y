@@ -231,6 +231,13 @@ select {
   color: var(--brand-text);
 }
 
+/* Konsta Link renders text-primary as foreground text on the page surface.
+   The raw primary is only white-safe (fill), not surface-safe: the default
+   grey brand measures 2.98:1 on the dark surface at helper-text size. */
+.k-link.text-primary {
+  color: var(--brand-text);
+}
+
 /* Accent color overrides for Konsta components.
    Uses --brand-accent-fill so any org accent color propagates automatically.
    Components: filled filter chips, segmented-strong highlight. */
