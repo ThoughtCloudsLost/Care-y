@@ -120,7 +120,7 @@ describe("FollowUpDecryptCache", () => {
       expect(mockDecrypt).toHaveBeenCalledWith(
         TICKET_ID,
         followupSlot(FOLLOW_UP_ID),
-        FOLLOW_UP_ID,
+        TICKET_ID,
         KEY_WRAP.ephemeralPoint,
         KEY_WRAP.nonce,
         KEY_WRAP.wrappedKey,
@@ -175,7 +175,7 @@ describe("FollowUpDecryptCache", () => {
       expect(mockDecrypt).toHaveBeenCalledWith(
         TICKET_ID,
         followupSlot(FOLLOW_UP_ID),
-        FOLLOW_UP_ID,
+        TICKET_ID,
         KEY_WRAP.ephemeralPoint,
         KEY_WRAP.nonce,
         KEY_WRAP.wrappedKey,

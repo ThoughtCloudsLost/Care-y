@@ -14,6 +14,7 @@ import type { ColumnType, Generated } from "kysely";
 import type {
   TicketStatus,
   TicketPriority,
+  StoredProviderId,
   OrgId,
   OrgSlug,
   OrgSchema,
@@ -139,7 +140,7 @@ export interface PendingJobsTable {
 
 export interface TelephonyConfigTable {
   org_id: OrgId;
-  provider: string;
+  provider: StoredProviderId;
   config: Buffer; // encrypted JSON blob (nonce || ciphertext)
   key_version: ColumnType<number, number | undefined, number>;
   created_at: ColumnType<Date, Date | undefined, Date>;

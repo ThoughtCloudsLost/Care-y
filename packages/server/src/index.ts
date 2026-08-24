@@ -59,6 +59,8 @@ import { createOprfEvaluateService } from "./crypto/oprf-evaluate-service.js";
 import { createJobQueue } from "./jobs/index.js";
 import { deriveSecretsKey, createSecretsEncryptor } from "./config/secrets.js";
 import { createProviderFactory } from "./telephony/factory.js";
+import type { ProviderConstructor } from "./telephony/factory.js";
+import type { TelephonyProviderStatic } from "./telephony/provider.js";
 import {
   createTwilioProvider,
   twilioProviderStatic,
@@ -157,7 +159,12 @@ import {
   type EscalationServiceDeps,
 } from "./tickets/escalation-service.js";
 import { RoleId } from "@care-y/shared";
-import type { OrgId, OrgSchema, OrgSlug } from "@care-y/shared";
+import type {
+  OrgId,
+  OrgSchema,
+  OrgSlug,
+  StoredProviderId,
+} from "@care-y/shared";
 
 // --- DB startup probe ---
 
@@ -412,7 +419,12 @@ const {
 const secretsKey = deriveSecretsKey(Buffer.from(env.OPS_SECRETS_KEY, "hex"));
 const secretsEncryptor = createSecretsEncryptor(secretsKey);
 
-const providerConstructors = new Map([["twilio", createTwilioProvider]]);
+// Keyed by the shared stored-provider union: registering an id that is not
+// in STORED_PROVIDER_IDS is a compile error, so this map cannot drift from
+// the single registry source.
+const providerConstructors = new Map<StoredProviderId, ProviderConstructor>([
+  ["twilio", createTwilioProvider],
+]);
 
 // Register mock provider (dev/test only). Production stays fail-closed:
 // schema validation passes (mockConfigSchema is unconditional) but the
@@ -476,7 +488,9 @@ const createContext = createContextFactory({
   tokenizer,
 });
 
-const providerStatics = new Map([["twilio", twilioProviderStatic]]);
+const providerStatics = new Map<StoredProviderId, TelephonyProviderStatic>([
+  ["twilio", twilioProviderStatic],
+]);
 
 // Register mock statics (dev/test only), gated identically to the constructor.
 if (env.NODE_ENV !== "production") {

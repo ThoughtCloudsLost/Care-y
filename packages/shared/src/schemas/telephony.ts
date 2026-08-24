@@ -4,13 +4,36 @@ import { z } from "zod";
 import { phoneBlocklistIdSchema, phoneSidSchema } from "../ids.js";
 
 /**
- * Providers an admin can select when saving credentials. SignalWire is
- * deliberately absent: its config schema exists but no provider module is
- * implemented, so offering it would persist credentials whose webhooks can
- * never be verified. Reinstate the entry when the provider module lands.
+ * Single source for telephony provider identifiers. Every other layer
+ * (server config-schema registry, constructor and statics maps, webhook
+ * signature lookup, admin UI) derives from these two arrays; none may keep
+ * its own list.
+ *
+ * Selectable: providers an admin can pick when saving credentials.
+ * SignalWire is deliberately absent, its config schema exists but no
+ * provider module is implemented, so offering it would persist credentials
+ * whose webhooks can never be verified. Reinstate the entry when the
+ * provider module lands.
  */
-export const telephonyProviderSchema = z.enum(["twilio"]);
+export const TELEPHONY_PROVIDER_IDS = ["twilio"] as const;
+
+/**
+ * Stored: every provider id a `telephony_config` row may carry. Extends the
+ * selectable list with ids that reach the database through other paths:
+ * `signalwire` (historical schema, kept while its stored shape is still
+ * validated) and `mock` (dev/E2E seeds, never user-selectable).
+ */
+export const STORED_PROVIDER_IDS = [
+  ...TELEPHONY_PROVIDER_IDS,
+  "signalwire",
+  "mock",
+] as const;
+
+export const telephonyProviderSchema = z.enum(TELEPHONY_PROVIDER_IDS);
 export type TelephonyProviderType = z.infer<typeof telephonyProviderSchema>;
+
+export const storedProviderIdSchema = z.enum(STORED_PROVIDER_IDS);
+export type StoredProviderId = z.infer<typeof storedProviderIdSchema>;
 
 /** Input for saving BYOT telephony credentials. */
 export const saveTelephonyConfigInputSchema = z.object({
@@ -45,7 +68,7 @@ export const maskedPhoneNumberSchema = z.object({
 
 /** Masked telephony config output for admin UI. */
 export const maskedTelephonyConfigSchema = z.object({
-  provider: z.string(),
+  provider: storedProviderIdSchema,
   mode: z.string(),
   maskedAccountId: z.string(),
   maskedAuthToken: z.string(),

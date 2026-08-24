@@ -52,6 +52,7 @@ import type {
   TicketId,
   CallSid,
   PhoneHash,
+  StoredProviderId,
 } from "@care-y/shared";
 import {
   phoneMatchHashSchema,
@@ -528,7 +529,7 @@ type CallConfirmValidation =
  */
 function readSignatureHeader(
   req: IncomingMessage,
-  providerId: string,
+  providerId: StoredProviderId,
 ): string | null {
   switch (providerId) {
     case "twilio":
@@ -536,6 +537,10 @@ function readSignatureHeader(
       const value = req.headers["x-twilio-signature"];
       return typeof value === "string" ? value : null;
     }
+    // No provider module exists for signalwire, so there is no documented
+    // signature header to read; fail closed like any unknown provider.
+    case "signalwire":
+      return null;
     default:
       return null;
   }

@@ -105,10 +105,12 @@ export class AsyncDecryptCache {
     nonce: string,
     wrappedKey: string,
     ciphertext: string,
-    // The Worker-side unwrapped-key cache id. Defaults to the cache key;
-    // callers whose cache key varies per ciphertext (read cursors) pass a
-    // stable id so the unwrapped ticket key is reused across versions.
-    keyCacheId: string = cacheKey,
+    // The Worker-side unwrapped-key cache id. Always passed explicitly:
+    // entries sharing one ticket key must share this id (normally the
+    // ticket id) so the Worker unwraps that key once, not once per slot.
+    // An earlier default of `cacheKey` silently gave every prefixed entry
+    // its own key-cache slot and one ECIES unwrap each.
+    keyCacheId: string,
   ): string | undefined {
     const cached = this.cache.get(cacheKey);
     if (cached !== undefined) return cached;
