@@ -8,6 +8,7 @@ import {
   encryptContent,
   buildContentAad,
   followupSlot,
+  cursorSlot,
   blobSlot,
   filenameSlot,
   eciesEncrypt,
@@ -104,6 +105,13 @@ export async function seedTestTickets(
     withKeyWrap: boolean;
     createdAgo: number; // minutes ago
     followUps: FollowUpDef[];
+    /**
+     * Minutes ago the seeded volunteer last read this ticket. When set
+     * (and the ticket has a key wrap), a real encrypted read cursor is
+     * inserted, so follow-ups by others newer than this render the
+     * unread badge. Omit for never-opened tickets (no cursor row).
+     */
+    unreadSince?: number;
   }
 
   // --- Synthetic media generators ---
@@ -483,6 +491,7 @@ export async function seedTestTickets(
       onHold: false,
       withKeyWrap: true,
       createdAgo: 45, // 45 minutes ago
+      unreadSince: 45, // opened at intake; the client reply below is unread
       followUps: [
         {
           content: "Please help, I am in danger",
@@ -529,6 +538,7 @@ export async function seedTestTickets(
       onHold: false,
       withKeyWrap: true,
       createdAgo: 360, // 6 hours
+      unreadSince: 360, // opened at intake; the client reply below is unread
       followUps: [
         {
           content: "I need to move but I do not know where to go",
@@ -1046,6 +1056,31 @@ export async function seedTestTickets(
           }
         }
       }
+    }
+
+    // Seed a read cursor so the ticket reads as unread: the cursor
+    // says the volunteer last read at `unreadSince`, and any newer
+    // non-system follow-up by others counts toward the unread badge.
+    // Encrypted exactly the way the client writes it (ticket key,
+    // cursor slot AAD, JSON payload with an ISO readUpTo string), so
+    // the client's read-state decrypt path consumes it unchanged.
+    if (def.unreadSince !== undefined && def.withKeyWrap) {
+      const cursorPayload = JSON.stringify({
+        readUpTo: minutesAgo(def.unreadSince).toISOString(),
+      });
+      const encryptedCursor = encryptContent(
+        encoder.encode(cursorPayload),
+        tk,
+        buildContentAad(ticket.id, cursorSlot(me)),
+      );
+      await tDb
+        .insertInto("ticket_read_cursors")
+        .values({
+          ticket_id: ticket.id,
+          user_id: me,
+          encrypted_read_cursor: Buffer.from(encryptedCursor),
+        })
+        .execute();
     }
 
     createdIds.push(ticket.id);
