@@ -125,10 +125,20 @@ export function createFilterDispatch(
   function handleSavedFilterApply(record: SavedFilterRecord): void {
     const sf = config.savedFilters;
     if (sf == null) return;
-    const parsed: unknown = JSON.parse(record.state);
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(record.state);
+    } catch {
+      console.warn("[saved-filters] discarding unparseable record", record.id);
+      return;
+    }
     const result = sf.stateSchema.safeParse(parsed);
     if (result.success) {
       sf.applyState(result.data);
+    } else {
+      // A schema miss means a legacy or corrupt stored record; without
+      // this warning the chip is an indistinguishable dead button.
+      console.warn("[saved-filters] record failed validation", record.id);
     }
   }
 
