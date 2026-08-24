@@ -264,8 +264,8 @@ export function createAuthService(
     ipAddress: string,
     userAgent: string,
   ): Promise<SessionData> {
-    const currentIpToken = tokenizer.tokenize(ipAddress);
-    const currentUaToken = tokenizer.tokenize(userAgent);
+    const currentIpToken = tokenizer.tokenizeIp(ipAddress);
+    const currentUaToken = tokenizer.tokenizeUa(userAgent);
 
     if (
       session.ipToken !== currentIpToken ||

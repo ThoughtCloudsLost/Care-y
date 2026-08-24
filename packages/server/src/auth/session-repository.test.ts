@@ -48,8 +48,12 @@ describe.skipIf(!process.env.DATABASE_URL)("createDbSessionRepository", () => {
     expect(session.id).toBeDefined();
     expect(session.token).toBe("tok-create-test");
     expect(session.userId).toBe(user.id);
-    expect(session.ipToken).toBe(testSessionTokenizer.tokenize("192.168.1.1"));
-    expect(session.uaToken).toBe(testSessionTokenizer.tokenize("Mozilla/5.0"));
+    expect(session.ipToken).toBe(
+      testSessionTokenizer.tokenizeIp("192.168.1.1"),
+    );
+    expect(session.uaToken).toBe(
+      testSessionTokenizer.tokenizeUa("Mozilla/5.0"),
+    );
   });
 
   it("findByToken retrieves the created session", async () => {
@@ -305,10 +309,10 @@ describe.skipIf(!process.env.DATABASE_URL)("createDbSessionRepository", () => {
     expect(session).not.toBeNull();
     if (session) {
       expect(session.ipToken).toBe(
-        testSessionTokenizer.tokenize("10.20.30.40"),
+        testSessionTokenizer.tokenizeIp("10.20.30.40"),
       );
       expect(session.uaToken).toBe(
-        testSessionTokenizer.tokenize("SecretAgent/1.0"),
+        testSessionTokenizer.tokenizeUa("SecretAgent/1.0"),
       );
     }
   });

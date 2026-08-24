@@ -57,8 +57,6 @@ import type {
   IdentifierHash,
   PasswordHash,
   SessionToken,
-  IpToken,
-  UaToken,
   WebauthnCredentialId,
   E164,
 } from "@care-y/shared";
@@ -395,8 +393,8 @@ export async function createTestSession(
       token: uid,
       encrypted_ip_address: enc.encrypt("127.0.0.1"),
       encrypted_user_agent: enc.encrypt("test-agent"),
-      ip_token: testSessionTokenizer.tokenize("127.0.0.1") as IpToken,
-      ua_token: testSessionTokenizer.tokenize("test-agent") as UaToken,
+      ip_token: testSessionTokenizer.tokenizeIp("127.0.0.1"),
+      ua_token: testSessionTokenizer.tokenizeUa("test-agent"),
       expires_at: new Date(Date.now() + 60 * 60 * 1000), // 1 hour from now
       ...overrides,
     })
