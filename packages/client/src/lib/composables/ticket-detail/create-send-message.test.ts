@@ -106,6 +106,9 @@ function makeConfig(
 describe("createSendMessage", () => {
   beforeEach(() => {
     vi.restoreAllMocks();
+    // restoreAllMocks only touches vi.spyOn spies; this vi.fn keeps its
+    // call history across tests unless cleared explicitly.
+    mockEciesEncrypt.mockClear();
     vi.stubGlobal("crypto", { randomUUID: () => "uuid-1" });
   });
 
