@@ -3,6 +3,22 @@ import eslintPluginSvelte from "eslint-plugin-svelte";
 import eslintPluginSecurity from "eslint-plugin-security";
 import noHardcodedStrings from "./eslint-rules/no-hardcoded-strings.js";
 
+// Casting to a branded identifier type is the one way to launder a wrong value
+// past the brands (ADR-074). `schemaName as OrgId` reintroduces the exact defect
+// the brands exist to prevent, and reads as safe in review. Identifiers are
+// minted through the factories in packages/shared/src/ids.ts instead, and
+// values entering from outside the database are parsed with the matching Zod
+// schema, so neither path needs a cast.
+//
+// Matched by shape rather than by an explicit list so a brand added next month
+// is covered without anyone remembering to update this file.
+const BRAND_CAST_SELECTOR = {
+  selector:
+    "TSAsExpression > TSTypeReference[typeName.name=/(Id|Hash|Sid)$|^(OrgSchema|OrgSlug|ChannelSecret|E164)$/]",
+  message:
+    "Do not cast to a branded identifier type. Mint it with a factory from @care-y/shared (newTicketId, orgSchemaFor, ...) or parse it with the matching Zod schema. A cast here silently reintroduces the class of defect the brands prevent.",
+};
+
 export default tseslint.config(
   // Global ignores - must be first config object
   {
@@ -420,20 +436,57 @@ export default tseslint.config(
           message:
             "createNoopFieldEncryptor stores PII as plaintext. Call it only from test files or src/test-utils.ts.",
         },
+        // Carried here rather than in its own block: flat config resolves
+        // no-restricted-syntax as a whole, so a second block matching server
+        // files would replace the two selectors above instead of adding to them.
+        BRAND_CAST_SELECTOR,
       ],
     },
   },
 
-  // Test files and the shared server test fixtures are the intended consumers
-  // of the noop encryptor. Flat config is last-match-wins, so switching the
-  // rule off here fully clears the block above for these paths.
+  // The same brand-cast block for the packages the server config does not cover.
   {
     files: [
-      "packages/server/src/**/*.test.ts",
+      "packages/client/src/**/*.ts",
+      "packages/client/src/**/*.svelte",
+      "packages/shared/src/**/*.ts",
+      "packages/crypto/src/**/*.ts",
+    ],
+    rules: {
+      "no-restricted-syntax": ["error", BRAND_CAST_SELECTOR],
+    },
+  },
+
+  // Test files and the shared server test fixtures are the intended consumers
+  // of the noop encryptor, and fixtures legitimately mint branded ids from
+  // literals. Flat config is last-match-wins, so switching the rule off here
+  // fully clears the blocks above for these paths.
+  //
+  // ids.ts is exempt because it is the designated mint site: the factories
+  // there are the reason a cast is not needed anywhere else.
+  {
+    files: [
+      "packages/*/src/**/*.test.ts",
       "packages/server/src/test-utils.ts",
+      "packages/shared/src/ids.ts",
+      "e2e/**/*.ts",
+      // Designated mint sites for keyed digests and tokens (ADR-074).
+      // Each module wraps a generic hash/tokenize call and casts once
+      // to the branded type, keeping casts out of every call site.
+      "packages/server/src/crypto/field-encryptor.ts",
+      "packages/server/src/crypto/session-tokenizer.ts",
+      "packages/server/src/auth/password.ts",
+      "packages/server/src/auth/service.ts",
+      "packages/server/src/auth/push-challenge.ts",
+      "packages/server/src/auth/salt-defense.ts",
+      "packages/server/src/auth/webauthn/verify.ts",
+      "packages/server/src/crypto/oprf-audit.ts",
     ],
     rules: {
       "no-restricted-syntax": "off",
+      // The single internal cast each mint site performs is the one place a
+      // brand assertion is legitimate; the rule stays on everywhere else.
+      "@typescript-eslint/no-unsafe-type-assertion": "off",
     },
   },
 );

@@ -28,6 +28,14 @@ pre-commit:
         if [ -n "$lintable" ]; then
           echo "$lintable" | xargs pnpm exec eslint
         fi
+    id-brands:
+      # Identifier columns must carry branded types (ADR-074). Only runs when
+      # the type definitions are staged, since that is the only file that can
+      # introduce a violation. Typecheck cannot catch a NEW bare-string column:
+      # nothing compares it to anything yet, so there is no mismatch to find.
+      glob: "packages/server/src/db/types.ts"
+      run: node scripts/check-id-brands.mjs
+
     format:
       run: pnpm exec prettier --check --ignore-path .prettierignore --ignore-path .prettierignore.local {staged_files}
 
