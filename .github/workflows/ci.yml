@@ -48,6 +48,12 @@ jobs:
       - name: Lint (strict)
         run: pnpm run lint:strict
 
+      # Identifier columns must carry branded types (ADR-074). Type checking
+      # cannot catch a NEW column added as a bare string, since nothing yet
+      # compares it to anything.
+      - name: Identifier brands
+        run: node scripts/check-id-brands.mjs
+
       - name: Format check
         run: pnpm run format
 
