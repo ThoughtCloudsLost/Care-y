@@ -89,23 +89,24 @@ function toRecord(row: QueueRow, counts: QueueCounts = {}): QueueRecord {
   };
 }
 
+// Named parameters: both sides are QueueId, and swapping them moves every
+// ticket into the queue being deleted.
 async function reassignTickets(
   tx: Kysely<TenantDatabase>,
-  fromQueueId: QueueId,
-  toQueueId: QueueId,
+  params: { fromQueueId: QueueId; toQueueId: QueueId },
 ): Promise<void> {
   const target = await tx
     .selectFrom("queues")
     .select("id")
-    .where("id", "=", toQueueId)
+    .where("id", "=", params.toQueueId)
     .executeTakeFirst();
   if (!target) {
     throw new NotFoundError(ErrorCode.QUEUE_NOT_FOUND);
   }
   await tx
     .updateTable("tickets")
-    .set({ queue_id: toQueueId })
-    .where("queue_id", "=", fromQueueId)
+    .set({ queue_id: params.toQueueId })
+    .where("queue_id", "=", params.fromQueueId)
     .execute();
 }
 
@@ -286,7 +287,10 @@ export function createQueueService(db: Kysely<TenantDatabase>): QueueService {
           if (reassignTo === undefined) {
             throw new ValidationError(ErrorCode.QUEUE_HAS_TICKETS);
           }
-          await reassignTickets(tx, queueId, reassignTo);
+          await reassignTickets(tx, {
+            fromQueueId: queueId,
+            toQueueId: reassignTo,
+          });
         }
 
         await tx

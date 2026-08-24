@@ -147,7 +147,7 @@ export function createUserService(db: Kysely<TenantDatabase>): UserService {
         .execute();
 
       return rows
-        .filter((u) => meetsRoleThreshold(u.role_id, minRoleId))
+        .filter((u) => meetsRoleThreshold({ userRoleId: u.role_id, minRoleId }))
         .map((u) => u.id);
     },
   };

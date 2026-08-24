@@ -191,7 +191,10 @@ export function createNoteTypeService(
           );
           return {
             ...toRecord(row, buildNotificationHints(targets)),
-            canCreate: meetsRoleThreshold(userRoleId, row.min_create_role),
+            canCreate: meetsRoleThreshold({
+              userRoleId,
+              minRoleId: row.min_create_role,
+            }),
           };
         }),
         defaultNoteTypeId: config?.default_note_type_id ?? null,
