@@ -646,7 +646,7 @@
 {:else if activeMethod === "push"}
   <!-- Push notification -->
   {#if pushChallengeId !== null}
-    <div class="flex flex-col items-center gap-3 mt-4">
+    <div class="flex flex-col items-center gap-3 mt-4" role="status">
       <Preloader class="w-8 h-8" />
       <p class="text-sm opacity-70">{m.twofa_push_waiting()}</p>
     </div>
