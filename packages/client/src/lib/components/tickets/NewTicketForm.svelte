@@ -29,7 +29,11 @@
   import * as m from "$lib/paraglide/messages.js";
   import { withTerms } from "$lib/terminology/with-terms.js";
   import { getCryptoBridge } from "$lib/crypto/context.js";
-  import { ticketPrioritySchema, type TicketPriority } from "@care-y/shared";
+  import {
+    ticketPrioritySchema,
+    newTicketId,
+    type TicketPriority,
+  } from "@care-y/shared";
   import type {
     ClientSelection,
     CollisionInfo,
@@ -127,9 +131,9 @@
           });
           return;
         }
-        ticketId = target.reopenTicketId ?? crypto.randomUUID();
+        ticketId = target.reopenTicketId ?? newTicketId();
       } else {
-        ticketId = crypto.randomUUID();
+        ticketId = newTicketId();
       }
 
       const fields: readonly { name: string; plaintext: string }[] = [

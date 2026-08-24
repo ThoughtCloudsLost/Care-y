@@ -11,9 +11,10 @@
 import { wrapKey, encode, decode, toRistrettoPoint } from "@care-y/crypto";
 import type { CryptoBridge } from "$lib/workers/crypto-bridge.js";
 import { trpc } from "$lib/trpc/index.js";
+import type { UserId } from "@care-y/shared";
 
 export interface PendingWrapUser {
-  userId: string;
+  userId: UserId;
   volPublic: string;
 }
 

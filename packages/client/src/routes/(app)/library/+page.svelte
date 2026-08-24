@@ -53,6 +53,8 @@
     Permission,
     type KbSortField,
     type SavedFilterColor,
+    type KbItemId,
+    kbItemIdSchema,
   } from "@care-y/shared";
   import { resolveOrgDecrypt } from "$lib/crypto/decrypt-result.js";
   import type { PillDefinition } from "$lib/components/filters/filter-types.js";
@@ -209,9 +211,9 @@
     new Set(filteredArticles.map((a) => a.id)),
   );
 
-  const titleMatchIds = $derived.by((): string[] => {
+  const titleMatchIds = $derived.by((): KbItemId[] => {
     if (overlay.term == null) return [];
-    const ids: string[] = [];
+    const ids: KbItemId[] = [];
     const haystack: string[] = [];
     for (const article of filteredArticles) {
       const title = orgCache.decrypt(
@@ -230,7 +232,7 @@
     const matches = fuzzySearch(haystack, overlay.term);
     return matches
       .map((fm) => ids[fm.index])
-      .filter((id): id is string => id != null);
+      .filter((id): id is KbItemId => id != null);
   });
 
   const deepSearch = createDeepSearch({
@@ -244,15 +246,16 @@
     matchCount: () => titleMatchIds.length,
   });
 
-  const searchMatches = $derived.by((): string[] => {
+  const searchMatches = $derived.by((): KbItemId[] => {
     const cms = deepSearch.contentMatchIds;
     if (cms == null || cms.size === 0) return titleMatchIds;
 
-    const seen = new Set(titleMatchIds);
+    const seen = new Set<KbItemId>(titleMatchIds);
     const merged = [...titleMatchIds];
     for (const id of cms) {
-      if (!seen.has(id) && filteredArticleIds.has(id)) {
-        merged.push(id);
+      const kbId = kbItemIdSchema.parse(id);
+      if (!seen.has(kbId) && filteredArticleIds.has(kbId)) {
+        merged.push(kbId);
       }
     }
     return merged;

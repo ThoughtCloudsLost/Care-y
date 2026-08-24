@@ -39,6 +39,8 @@
   import {
     intakeFieldTypeSchema,
     intakeFieldRoleSchema,
+    newTicketId,
+    newFollowupId,
     type IntakeFieldConfig,
     type IntakeFieldType,
     type IntakeFieldRole,
@@ -541,9 +543,9 @@
     }
 
     // Mint ids for AAD binding
-    const ticketId = crypto.randomUUID();
+    const ticketId = newTicketId();
     const hasTextarea = answers.some((a) => a.fieldType === "textarea");
-    const followUpId = hasTextarea ? crypto.randomUUID() : null;
+    const followUpId = hasTextarea ? newFollowupId() : null;
 
     // Encrypt (synchronous, fail closed)
     let encrypted;

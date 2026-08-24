@@ -9,6 +9,7 @@
 
 import { describe, it, expect } from "vitest";
 import type { PreferenceRow } from "@care-y/shared";
+import { queueIdSchema, ticketIdSchema } from "@care-y/shared";
 import {
   effectiveState,
   effectiveGlobalState,
@@ -19,7 +20,7 @@ import {
   NOTIFICATION_CHANNELS,
 } from "./notification-preferences-utils.js";
 
-const QUEUE_A = "00000000-0000-0000-0000-00000000000a";
+const QUEUE_A = queueIdSchema.parse("00000000-0000-4000-8000-00000000000a");
 
 function row(
   overrides: Partial<PreferenceRow> & {
@@ -94,7 +95,9 @@ describe("effectiveQueueState", () => {
 
 describe("effectiveState cascade order", () => {
   it("global off, queue on, ticket off resolves false", () => {
-    const TICKET_X = "11111111-1111-1111-1111-111111111111";
+    const TICKET_X = ticketIdSchema.parse(
+      "11111111-1111-4111-8111-111111111111",
+    );
     const rows: PreferenceRow[] = [
       row({ eventType: "ticket_escalated", channel: "push", enabled: false }),
       row({
