@@ -393,32 +393,6 @@ describe("DemoLocationStore", () => {
     });
   });
 
-  describe("beginFollowChain (login play-through)", () => {
-    it("streams stage changes into the location while the flow plays", () => {
-      const { store, phone } = createHarness();
-      store.beginFollowChain();
-
-      phone.loginStage = "twofa-picker";
-      store.notePhoneChange();
-      expect(store.location).toEqual({
-        sectionId: "login",
-        subSlug: "two-factor",
-      });
-
-      phone.loginStage = "deriving";
-      store.notePhoneChange();
-      expect(store.location).toEqual({
-        sectionId: "login",
-        subSlug: "key-derivation",
-      });
-
-      phone.feature = "tickets";
-      phone.loginStage = null;
-      store.notePhoneChange();
-      expect(store.location).toEqual({ sectionId: "tickets", subSlug: null });
-    });
-  });
-
   describe("coming-soon (phone routeId flows through)", () => {
     it("adopts coming-soon when the phone shows an unmapped route", () => {
       const { store } = createHarness({

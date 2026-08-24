@@ -71,6 +71,8 @@
     buildActivationCandidates,
     buildSmsTitleCandidates,
     buildReplyTitleCandidates,
+    buildNoteTitleCandidates,
+    buildComposeTriggerCandidates,
     buildComposeDismissCandidates,
     buildCloseReopenCandidates,
     findClickableTarget,
@@ -231,15 +233,15 @@
       // queued decrypt) finds the worker already keyed instead of
       // paying Argon2id at navigation time. The iframe mounts eagerly
       // on page load, so the derivation spends itself against reading
-      // time on the entry page. The phone RESTS behind the splash:
-      // no navigation and no sign-in happen here. The first real
-      // navigation (section click, deep link) goes through the
-      // internalNavigate fast-forward, which awaits this same
-      // ensureKeyed promise (instant once settled), signs in, and
-      // jumps straight to the target. keyedDone only gates the
-      // splash, and flips on failure too so a broken boot degrades
-      // to a visible screen instead of an eternal splash (the
-      // fast-forward path retries derivation).
+      // time on the entry page. Once keying settles, the splash lifts
+      // and the login form is visible as the demo's ready state. No
+      // navigation or sign-in happens here. The first real navigation
+      // (section click, deep link) goes through internalNavigate's
+      // fast-forward, which awaits this same ensureKeyed promise
+      // (instant once settled), signs in, and jumps straight to the
+      // target. keyedDone must flip on failure too so a broken boot
+      // degrades to a visible screen instead of an eternal splash
+      // (the fast-forward path retries derivation).
       void ensureKeyed()
         .then(() => {
           settleBackgroundLogin();
@@ -983,14 +985,6 @@
       store.setLocation(sectionId, subSlug, origin);
     },
 
-    completeLogin(): void {
-      if (router.feature !== "login") return;
-      // Follow mode: no location pin, so the narrative streams through
-      // the stages as the phone plays the flow and lands on tickets
-      // when the phone does.
-      void runAdvance("done", store.beginFollowChain());
-    },
-
     setDark(value: boolean): void {
       dark = value;
     },
@@ -1315,54 +1309,64 @@
     if (pulseTopic === "decryption") {
       dismissOpenOverlays(null);
       replayDescramble();
-      await queryClient.resetQueries();
+      // Reset only content queries: fresh entries re-run their decrypts
+      // and the descramble replays. Read-state queries must be excluded:
+      // resetting them re-renders rows through a window where the
+      // cursor decrypt sees a null key wrap, and the decrypt cache
+      // permanently sentinels that cursor as not-unread, killing the
+      // unread pills for the rest of the session.
+      // Key families: ticketsKeys.readState*/readStateSweep in
+      // $lib/query/keys.ts carry the "readState" segment.
+      await queryClient.resetQueries({
+        predicate: (q) => !JSON.stringify(q.queryKey).includes("readState"),
+      });
 
-      // Poll for a DecryptPlaceholder's busy indicator to appear
+      // Poll for a DecryptPlaceholder's busy indicator INSIDE the
+      // viewport. The reveal stagger clears above-fold placeholders
+      // first, so the first busy element in DOM order is often a
+      // below-fold row; marking that would ring something the reader
+      // cannot see.
       const busyEl = await pollUntil<HTMLElement>({
-        probe: () =>
-          document.querySelector<HTMLElement>(
+        probe: () => {
+          const all = document.querySelectorAll<HTMLElement>(
             '[role="status"][aria-busy="true"]',
-          ),
+          );
+          for (const candidate of all) {
+            const r = candidate.getBoundingClientRect();
+            if (r.height > 0 && r.bottom > 0 && r.top < window.innerHeight) {
+              return candidate;
+            }
+          }
+          return null;
+        },
         timeoutMs: POLL_TIMEOUT_SHORT_MS,
       });
 
-      if (busyEl !== null) {
-        renderPulseMarker(busyEl);
-        markPulseTarget(pulseTopic, "selector", busyEl);
-      } else {
-        // Fast decrypt raced past the scramble; mark the first ticket card
-        const cardEl = document.querySelector<HTMLElement>(
-          '[data-testid="ticket-card"]',
+      // The placeholder can unmount between the poll and the mark
+      // (boot-warm decrypts resolve in under a frame), which would
+      // record a zero rect. Re-check liveness at mark time and fall
+      // back to the first ticket row, which persists across the swap.
+      // The row selector must cover every list view mode: only the
+      // cards view has a testid; compact/rows render Konsta list
+      // items and the table view renders plain rows.
+      const busyRect =
+        busyEl?.isConnected === true ? busyEl.getBoundingClientRect() : null;
+      const busyLive =
+        busyEl !== null &&
+        busyRect !== null &&
+        busyRect.height > 0 &&
+        busyRect.bottom > 0 &&
+        busyRect.top < window.innerHeight
+          ? busyEl
+          : null;
+      const decryptTarget =
+        busyLive ??
+        document.querySelector<HTMLElement>(
+          '[data-testid="ticket-card"], .k-list-item, tbody tr',
         );
-        if (cardEl !== null) {
-          renderPulseMarker(cardEl);
-          markPulseTarget(pulseTopic, "selector", cardEl);
-        } else {
-          markPulseTarget(pulseTopic, "missing");
-        }
-      }
-      return;
-    }
-
-    // message-actions: the label (ticket_context_menu_title) only exists
-    // while the action sheet is open, so el is typically null here. Find
-    // a conversation bubble directly and dispatch the product's
-    // accessibility keyboard shortcut (Shift+F10) to open the menu.
-    if (pulseTopic === "message-actions") {
-      const bubble = document.querySelector<HTMLElement>(".fu-wrapper");
-      if (bubble !== null) {
-        dismissOpenOverlays(bubble);
-        renderPulseMarker(bubble);
-        markPulseTarget(pulseTopic, "tapped", bubble);
-        setTimeout(() => {
-          bubble.dispatchEvent(
-            new KeyboardEvent("keydown", {
-              key: "F10",
-              shiftKey: true,
-              bubbles: true,
-            }),
-          );
-        }, 250);
+      if (decryptTarget !== null) {
+        renderPulseMarker(decryptTarget);
+        markPulseTarget(pulseTopic, "selector", decryptTarget);
       } else {
         markPulseTarget(pulseTopic, "missing");
       }
@@ -1392,6 +1396,95 @@
           if (smsClickable !== null) {
             setTimeout(() => {
               smsClickable.click();
+            }, 150);
+          }
+        }
+      }
+      return;
+    }
+
+    // message-actions: the "Message Actions" label belongs to a
+    // ShellActionSheet that only opens from a message context menu
+    // (long-press / Shift+F10), so a bare label match would resolve
+    // the closed, zero-size sheet. Attempt the product's long-press
+    // path on a visible bubble; if the sheet opens, mark it, otherwise
+    // mark the bubble the narration is about. KNOWN GAP: as of the
+    // 2026-08 walk hardening, the context menu does not open even from
+    // a trusted press in the demo; the fallback keeps the pulse honest
+    // while that is investigated product-side.
+    if (pulseTopic === "message-actions") {
+      dismissOpenOverlays(null);
+      const bubbles =
+        document.querySelectorAll<HTMLElement>("span.bubble-text");
+      let bubble: HTMLElement | null = null;
+      for (const b of bubbles) {
+        const r = b.getBoundingClientRect();
+        if (r.height > 0 && r.bottom > 0 && r.top < window.innerHeight) {
+          bubble = b;
+          break;
+        }
+      }
+      if (bubble === null) {
+        markPulseTarget(pulseTopic, "missing");
+        return;
+      }
+      bubble.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true }));
+      await new Promise<void>((r) => setTimeout(r, 700));
+      bubble.dispatchEvent(new PointerEvent("pointerup", { bubbles: true }));
+      const sheetEl = await pollUntil<HTMLElement>({
+        probe: () => {
+          const sheet = document.querySelector<HTMLElement>(
+            '[data-testid="actions-sheet"]',
+          );
+          return sheet !== null &&
+            sheet.getBoundingClientRect().height > 0 &&
+            !sheet.hasAttribute("inert")
+            ? sheet
+            : null;
+        },
+        timeoutMs: POLL_TIMEOUT_SHORT_MS,
+      });
+      const target = sheetEl ?? bubble;
+      renderPulseMarker(target);
+      markPulseTarget(
+        pulseTopic,
+        sheetEl !== null ? "selector" : "marked",
+        target,
+      );
+      return;
+    }
+
+    // notes: two-stage choreography. The Internal Note entry lives
+    // inside the compose-actions popover (ComposeActions.svelte), so a
+    // direct label match cannot reach it. Stage 1: click the compose
+    // actions trigger. Stage 2: wait for the popover's Internal Note
+    // entry and click it, which opens the real InternalNoteSheet (the
+    // effect layer asserts its body). Opening the sheet mutates
+    // nothing; the next pulse's dismissOpenOverlays closes it.
+    if (pulseTopic === "notes") {
+      const trigger = await resolveTopicElement(
+        document,
+        buildComposeTriggerCandidates(),
+      );
+      if (trigger === null) {
+        markPulseTarget(pulseTopic, "missing");
+        return;
+      }
+      dismissOpenOverlays(trigger);
+      renderPulseMarker(trigger);
+      markPulseTarget(pulseTopic, "tapped", trigger);
+      const triggerClickable = findClickableTarget(trigger);
+      if (triggerClickable !== null) {
+        triggerClickable.click();
+        const noteEl = await waitForElement(
+          document,
+          buildNoteTitleCandidates(),
+        );
+        if (noteEl !== null) {
+          const noteClickable = findClickableTarget(noteEl);
+          if (noteClickable !== null) {
+            setTimeout(() => {
+              noteClickable.click();
             }, 150);
           }
         }
@@ -1583,11 +1676,13 @@
     }
   }
 
-  // Splash covers the resting phone and lifts only when the router is
-  // actually showing a non-login screen after the background login
-  // settles, so the login screens are never visible outside the login
-  // section (whose narration lifts it early). Restart reloads the
-  // iframe, which resets keyedDone and brings the splash back.
+  // At rest (origin "init"), the splash lifts as soon as keying
+  // settles, revealing the login form as the demo's ready state.
+  // After the first navigation, the splash re-covers until the
+  // router shows a non-login screen, so login screens are never
+  // visible outside the login section (whose narration lifts it
+  // immediately). Restart reloads the iframe, which resets keyedDone
+  // and brings the splash back.
   const splashDismissed: boolean = $derived(
     !splashCovers(
       keyedDone,

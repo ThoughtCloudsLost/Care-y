@@ -10,6 +10,7 @@
 
 import { describe, it, expect, beforeAll } from "vitest";
 import _sodium from "libsodium-wrappers-sumo";
+import { savedFilterStateSchema } from "@care-y/shared";
 
 // The module uses $state internally. The Svelte vite plugin compiles
 // it for tests, but we only exercise the exported sealSeedFilterNames
@@ -67,6 +68,19 @@ describe("sealSeedFilterNames", () => {
 
     for (const filter of savedFilterStore.filters) {
       expect(filter.encryptedName).not.toBe("");
+    }
+  });
+
+  it("seed state JSON validates against savedFilterStateSchema", () => {
+    for (const filter of savedFilterStore.filters) {
+      const parsed: unknown = JSON.parse(filter.state);
+      const result = savedFilterStateSchema.safeParse(parsed);
+      expect(
+        result.success,
+        `Seed filter "${filter.id}" state fails schema: ${
+          !result.success ? JSON.stringify(result.error.issues) : ""
+        }`,
+      ).toBe(true);
     }
   });
 
