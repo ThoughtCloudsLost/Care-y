@@ -7,6 +7,12 @@
  */
 
 import { z } from "zod";
+import {
+  voicemailQuarantineIdSchema,
+  clientIdSchema,
+  ticketIdSchema,
+  queueIdSchema,
+} from "../ids.js";
 
 // --- Enum schemas ---
 
@@ -51,20 +57,20 @@ export const listQuarantineInputSchema = z.object({
 export type ListQuarantineInput = z.infer<typeof listQuarantineInputSchema>;
 
 export const downloadQuarantineInputSchema = z.object({
-  quarantineId: z.uuid(),
+  quarantineId: voicemailQuarantineIdSchema,
 });
 export type DownloadQuarantineInput = z.infer<
   typeof downloadQuarantineInputSchema
 >;
 
 const routeTargetSchema = z.discriminatedUnion("type", [
-  z.object({ type: z.literal("clientId"), clientId: z.uuid() }),
+  z.object({ type: z.literal("clientId"), clientId: clientIdSchema }),
   z.object({ type: z.literal("clientToken"), clientToken: z.string().min(1) }),
-  z.object({ type: z.literal("ticketId"), ticketId: z.uuid() }),
+  z.object({ type: z.literal("ticketId"), ticketId: ticketIdSchema }),
 ]);
 
 export const routeQuarantineInputSchema = z.object({
-  quarantineId: z.uuid(),
+  quarantineId: voicemailQuarantineIdSchema,
   target: routeTargetSchema,
   audioData: z.string().min(1).max(VOICEMAIL_QUARANTINE_MAX_BASE64_LENGTH),
   durationSeconds: z.number().int().min(0).optional(),
@@ -72,13 +78,13 @@ export const routeQuarantineInputSchema = z.object({
 export type RouteQuarantineInput = z.infer<typeof routeQuarantineInputSchema>;
 
 export const dismissQuarantineInputSchema = z.object({
-  quarantineId: z.uuid(),
+  quarantineId: voicemailQuarantineIdSchema,
 });
 export type DismissQuarantineInput = z.infer<
   typeof dismissQuarantineInputSchema
 >;
 
 export const setIntakeQueueInputSchema = z.object({
-  queueId: z.uuid().nullable(),
+  queueId: queueIdSchema.nullable(),
 });
 export type SetIntakeQueueInput = z.infer<typeof setIntakeQueueInputSchema>;

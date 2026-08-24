@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { userIdSchema } from "../ids.js";
 
 /**
  * Loose validator for base64-encoded ristretto255 points.
@@ -12,7 +13,7 @@ import { z } from "zod";
 const base64PointSchema = z.string().min(1).max(64);
 
 export const oprfEvaluateInputSchema = z.object({
-  userId: z.uuid(),
+  userId: userIdSchema,
   blindedElement: base64PointSchema,
   /** PoW solution fields, required only after 3 failures */
   powChallenge: z.string().optional(),

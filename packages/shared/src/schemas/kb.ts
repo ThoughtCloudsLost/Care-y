@@ -10,6 +10,12 @@
 import { z } from "zod";
 import { base64String } from "./validators.js";
 import { sortDirectionSchema } from "./tickets.js";
+import {
+  kbCategoryIdSchema,
+  kbItemIdSchema,
+  kbAttachmentIdSchema,
+  userIdSchema,
+} from "../ids.js";
 
 // --- Category schemas ---
 
@@ -20,7 +26,7 @@ export const createKbCategoryInputSchema = z.object({
 export type CreateKbCategoryInput = z.infer<typeof createKbCategoryInputSchema>;
 
 export const updateKbCategoryInputSchema = z.object({
-  categoryId: z.uuid(),
+  categoryId: kbCategoryIdSchema,
   encryptedName: base64String("encryptedName").optional(),
   encryptedDescription: base64String("encryptedDescription").optional(),
 });
@@ -29,7 +35,7 @@ export type UpdateKbCategoryInput = z.infer<typeof updateKbCategoryInputSchema>;
 // --- Article schemas ---
 
 export const createKbItemInputSchema = z.object({
-  categoryId: z.uuid(),
+  categoryId: kbCategoryIdSchema,
   encryptedTitle: base64String("encryptedTitle"),
   encryptedBody: base64String("encryptedBody"),
   encryptedExcerpt: base64String("encryptedExcerpt").optional(),
@@ -37,8 +43,8 @@ export const createKbItemInputSchema = z.object({
 export type CreateKbItemInput = z.infer<typeof createKbItemInputSchema>;
 
 export const updateKbItemInputSchema = z.object({
-  itemId: z.uuid(),
-  categoryId: z.uuid().optional(),
+  itemId: kbItemIdSchema,
+  categoryId: kbCategoryIdSchema.optional(),
   encryptedTitle: base64String("encryptedTitle").optional(),
   encryptedBody: base64String("encryptedBody").optional(),
   encryptedExcerpt: base64String("encryptedExcerpt").optional(),
@@ -56,11 +62,11 @@ export { sortDirectionSchema } from "./tickets.js";
 // --- Article listing (paginated) ---
 
 export const kbItemListInputSchema = z.object({
-  categoryId: z.uuid().optional(),
+  categoryId: kbCategoryIdSchema.optional(),
   sortBy: kbSortFieldSchema.default("created_at"),
   sortDirection: sortDirectionSchema.default("desc"),
   minRating: z.number().min(0).max(1).optional(),
-  createdBy: z.string().optional(),
+  createdBy: userIdSchema.optional(),
   createdAfter: z.iso.datetime().optional(),
   createdBefore: z.iso.datetime().optional(),
   limit: z.number().int().min(1).max(100).default(50),
@@ -71,7 +77,7 @@ export type KbItemListInput = z.infer<typeof kbItemListInputSchema>;
 // --- Bulk body fetch (for full search) ---
 
 export const listKbBodiesInputSchema = z.object({
-  itemIds: z.array(z.uuid()).min(1).max(200),
+  itemIds: z.array(kbItemIdSchema).min(1).max(200),
 });
 export type ListKbBodiesInput = z.infer<typeof listKbBodiesInputSchema>;
 
@@ -111,7 +117,7 @@ export type KbAllowedContentType = (typeof KB_ALLOWED_CONTENT_TYPES)[number];
 export const kbContentTypeSchema = z.enum(KB_ALLOWED_CONTENT_TYPES);
 
 export const uploadKbAttachmentInputSchema = z.object({
-  itemId: z.uuid(),
+  itemId: kbItemIdSchema,
   blob: base64String("blob"),
   sizeBytes: z.number().int().min(1).max(KB_ATTACHMENT_MAX_BYTES),
   encryptedFilename: base64String("encryptedFilename").optional(),
@@ -122,14 +128,14 @@ export type UploadKbAttachmentInput = z.infer<
 >;
 
 export const downloadKbAttachmentInputSchema = z.object({
-  attachmentId: z.uuid(),
+  attachmentId: kbAttachmentIdSchema,
 });
 export type DownloadKbAttachmentInput = z.infer<
   typeof downloadKbAttachmentInputSchema
 >;
 
 export const listKbAttachmentsInputSchema = z.object({
-  itemId: z.uuid(),
+  itemId: kbItemIdSchema,
 });
 export type ListKbAttachmentsInput = z.infer<
   typeof listKbAttachmentsInputSchema
@@ -141,12 +147,12 @@ export const voteDirectionSchema = z.enum(["up", "down"]);
 export type VoteDirection = z.infer<typeof voteDirectionSchema>;
 
 export const castVoteInputSchema = z.object({
-  itemId: z.uuid(),
+  itemId: kbItemIdSchema,
   direction: voteDirectionSchema,
 });
 export type CastVoteInput = z.infer<typeof castVoteInputSchema>;
 
 export const removeVoteInputSchema = z.object({
-  itemId: z.uuid(),
+  itemId: kbItemIdSchema,
 });
 export type RemoveVoteInput = z.infer<typeof removeVoteInputSchema>;

@@ -15,6 +15,19 @@ import {
   portalChannelKindSchema,
   eciesTripleSchema,
 } from "./client-portal.js";
+import {
+  ticketIdSchema,
+  userIdSchema,
+  queueIdSchema,
+  clientIdSchema,
+  followupIdSchema,
+  noteTypeIdSchema,
+  attachmentIdSchema,
+  recordingIdSchema,
+  keyGenerationSchema,
+  presetReplyIdSchema,
+  clientMergeEventIdSchema,
+} from "../ids.js";
 
 // --- Ticket enums ---
 
@@ -72,14 +85,14 @@ export type KeyWrap = z.infer<typeof keyWrapSchema>;
 export const createTicketInputSchema = z
   .object({
     /** Client-minted ticket id the content AAD was bound to (ADR-053). */
-    id: z.uuid(),
-    queueId: z.uuid(),
-    clientId: z.uuid().optional(),
-    clientToken: z.uuid().optional(),
+    id: ticketIdSchema,
+    queueId: queueIdSchema,
+    clientId: clientIdSchema.optional(),
+    clientToken: z.uuid().optional(), // not-an-id: correlation token for a client row that does not exist yet
     encryptedTitle: base64String("encryptedTitle"),
     encryptedDescription: base64String("encryptedDescription"),
     priority: ticketPrioritySchema.default("normal"),
-    keyGeneration: z.uuid(),
+    keyGeneration: keyGenerationSchema,
     keyWrap: keyWrapSchema,
   })
   .refine((data) => Boolean(data.clientId) !== Boolean(data.clientToken), {
@@ -89,37 +102,37 @@ export type CreateTicketInput = z.infer<typeof createTicketInputSchema>;
 
 export const createFollowUpInputSchema = z.object({
   /** Client-minted follow-up id the content AAD was bound to (ADR-053). */
-  id: z.uuid(),
-  ticketId: z.uuid(),
+  id: followupIdSchema,
+  ticketId: ticketIdSchema,
   encryptedContent: base64String("encryptedContent"),
   source: followUpSourceSchema,
   type: followUpTypeSchema,
   isPrivate: z.boolean().default(false),
   mentionedPseudonyms: z.array(z.string()).default([]),
-  noteTypeId: z.uuid().optional(),
+  noteTypeId: noteTypeIdSchema.optional(),
   /** ECIES copy for the client's portal channel (present when client is Secure Link tier). */
   portalCopy: eciesTripleSchema.optional(),
 });
 export type CreateFollowUpInput = z.infer<typeof createFollowUpInputSchema>;
 
 export const resolveCreateTargetInputSchema = z.object({
-  clientId: z.uuid(),
+  clientId: clientIdSchema,
 });
 export type ResolveCreateTargetInput = z.infer<
   typeof resolveCreateTargetInputSchema
 >;
 
 export const updateReadCursorInputSchema = z.object({
-  ticketId: z.uuid(),
+  ticketId: ticketIdSchema,
   encryptedReadCursor: base64String("encryptedReadCursor"),
 });
 export type UpdateReadCursorInput = z.infer<typeof updateReadCursorInputSchema>;
 
 export const updateTicketInputSchema = z.object({
-  ticketId: z.uuid(),
+  ticketId: ticketIdSchema,
   status: ticketStatusSchema.optional(),
   priority: ticketPrioritySchema.optional(),
-  queueId: z.uuid().optional(),
+  queueId: queueIdSchema.optional(),
   onHold: z.boolean().optional(),
 });
 export type UpdateTicketInput = z.infer<typeof updateTicketInputSchema>;
@@ -138,7 +151,7 @@ export const createQueueInputSchema = z.object({
 export type CreateQueueInput = z.infer<typeof createQueueInputSchema>;
 
 export const updateQueueInputSchema = z.object({
-  queueId: z.uuid(),
+  queueId: queueIdSchema,
   encryptedName: base64String("encryptedName").optional(),
   encryptedColor: base64String("encryptedColor").optional(),
   encryptedIcon: base64String("encryptedIcon").optional(),
@@ -148,7 +161,7 @@ export type UpdateQueueInput = z.infer<typeof updateQueueInputSchema>;
 
 export const reorderQueuesInputSchema = z.array(
   z.object({
-    queueId: z.uuid(),
+    queueId: queueIdSchema,
     sortOrder: z.number().int().min(0),
   }),
 );
@@ -156,8 +169,8 @@ export type ReorderQueuesInput = z.infer<typeof reorderQueuesInputSchema>;
 
 export const deleteQueueInputSchema = z
   .object({
-    queueId: z.uuid(),
-    reassignTo: z.uuid().optional(),
+    queueId: queueIdSchema,
+    reassignTo: queueIdSchema.optional(),
   })
   .refine((d) => d.reassignTo === undefined || d.reassignTo !== d.queueId, {
     message: "Cannot reassign tickets to the queue being deleted",
@@ -168,44 +181,44 @@ export type DeleteQueueInput = z.infer<typeof deleteQueueInputSchema>;
 export const createPresetReplyInputSchema = z.object({
   encryptedTitle: base64String("encryptedTitle"),
   encryptedBody: base64String("encryptedBody"),
-  queueId: z.uuid().nullable().default(null),
+  queueId: queueIdSchema.nullable().default(null),
 });
 export type CreatePresetReplyInput = z.infer<
   typeof createPresetReplyInputSchema
 >;
 
 export const updatePresetReplyInputSchema = z.object({
-  presetId: z.uuid(),
+  presetId: presetReplyIdSchema,
   encryptedTitle: base64String("encryptedTitle").optional(),
   encryptedBody: base64String("encryptedBody").optional(),
-  queueId: z.uuid().nullable().optional(),
+  queueId: queueIdSchema.nullable().optional(),
 });
 export type UpdatePresetReplyInput = z.infer<
   typeof updatePresetReplyInputSchema
 >;
 
 export const addDependencyInputSchema = z.object({
-  ticketId: z.uuid(),
-  dependsOnTicketId: z.uuid(),
+  ticketId: ticketIdSchema,
+  dependsOnTicketId: ticketIdSchema,
 });
 export type AddDependencyInput = z.infer<typeof addDependencyInputSchema>;
 
 export const mergeClientsInputSchema = z.object({
-  primaryClientId: z.uuid(),
-  secondaryClientId: z.uuid(),
+  primaryClientId: clientIdSchema,
+  secondaryClientId: clientIdSchema,
   encryptedSnapshot: base64String("encryptedSnapshot"),
 });
 export type MergeClientsInput = z.infer<typeof mergeClientsInputSchema>;
 
 export const undoMergeInputSchema = z.object({
-  mergeEventId: z.uuid(),
+  mergeEventId: clientMergeEventIdSchema,
   encryptedSnapshot: base64String("encryptedSnapshot"),
 });
 export type UndoMergeInput = z.infer<typeof undoMergeInputSchema>;
 
 export const uploadAttachmentInputSchema = z.object({
-  ticketId: z.uuid(),
-  followUpId: z.uuid(),
+  ticketId: ticketIdSchema,
+  followUpId: followupIdSchema,
   encryptedBlob: base64String("encryptedBlob"),
   sizeBytes: z
     .number()
@@ -231,21 +244,21 @@ export type SortDirection = z.infer<typeof sortDirectionSchema>;
 
 export const ticketListInputSchema = z.object({
   statuses: z.array(ticketStatusSchema).optional(),
-  queueIds: z.array(z.uuid()).optional(),
+  queueIds: z.array(queueIdSchema).optional(),
   priorities: z.array(ticketPrioritySchema).optional(),
   onHold: z.boolean().optional(),
-  assignedTo: z.uuid().nullable().optional(),
+  assignedTo: userIdSchema.nullable().optional(),
   createdAfter: z.iso.datetime().optional(),
   createdBefore: z.iso.datetime().optional(),
   sortBy: ticketSortFieldSchema.default("date"),
   sortDirection: sortDirectionSchema.default("desc"),
   limit: z.number().int().min(1).max(100).default(50),
-  cursor: z.uuid().optional(),
+  cursor: ticketIdSchema.optional(),
 });
 export type TicketListInput = z.infer<typeof ticketListInputSchema>;
 
 export const recentFollowUpsInputSchema = z.object({
-  ticketIds: z.array(z.uuid()).min(1).max(50),
+  ticketIds: z.array(ticketIdSchema).min(1).max(50),
   perTicket: z.number().int().min(1).max(5).default(3),
   types: z.array(followUpTypeSchema).optional(),
 });
@@ -253,7 +266,7 @@ export type RecentFollowUpsInput = z.infer<typeof recentFollowUpsInputSchema>;
 
 /** Batched read-state lookup for the tickets list (cursor + reply times). */
 export const listReadStateInputSchema = z.object({
-  ticketIds: z.array(z.uuid()).min(1).max(50),
+  ticketIds: z.array(ticketIdSchema).min(1).max(50),
 });
 export type ListReadStateInput = z.infer<typeof listReadStateInputSchema>;
 
@@ -263,7 +276,7 @@ export type ListReadStateInput = z.infer<typeof listReadStateInputSchema>;
  * derivative; the client pages this to build its global unread set.
  */
 export const sweepReadStateInputSchema = z.object({
-  cursor: z.uuid().optional(),
+  cursor: ticketIdSchema.optional(),
   limit: z.number().int().min(1).max(200).default(200),
 });
 export type SweepReadStateInput = z.infer<typeof sweepReadStateInputSchema>;
@@ -274,13 +287,13 @@ export const mediaFlagSchema = z.enum(["recording", "image", "file"]);
 export type MediaFlag = z.infer<typeof mediaFlagSchema>;
 
 export const followUpListInputSchema = z.object({
-  ticketId: z.uuid(),
+  ticketId: ticketIdSchema,
   limit: z.number().int().min(1).max(500).default(50),
-  cursor: z.uuid().optional(),
+  cursor: followupIdSchema.optional(),
   direction: followUpListDirectionSchema.default("newer"),
   types: z.array(followUpTypeSchema).optional(),
   mediaFlags: z.array(mediaFlagSchema).optional(),
-  createdBy: z.array(z.uuid()).optional(),
+  createdBy: z.array(userIdSchema).optional(),
   includeClientSource: z.boolean().optional(),
   dateFrom: z.iso.datetime({ offset: true }).optional(),
   dateTo: z.iso.datetime({ offset: true }).optional(),
@@ -289,13 +302,13 @@ export type FollowUpListInput = z.infer<typeof followUpListInputSchema>;
 
 /** Input for the timeline summary endpoint. */
 export const followUpSummaryInputSchema = z.object({
-  ticketId: z.uuid(),
+  ticketId: ticketIdSchema,
   limit: z.number().int().min(1).max(2000).default(500),
-  cursor: z.uuid().optional(),
+  cursor: followupIdSchema.optional(),
   direction: followUpListDirectionSchema.default("newer"),
   types: z.array(followUpTypeSchema).optional(),
   mediaFlags: z.array(mediaFlagSchema).optional(),
-  createdBy: z.array(z.uuid()).optional(),
+  createdBy: z.array(userIdSchema).optional(),
   includeClientSource: z.boolean().optional(),
   dateFrom: z.iso.datetime({ offset: true }).optional(),
   dateTo: z.iso.datetime({ offset: true }).optional(),
@@ -304,34 +317,34 @@ export type FollowUpSummaryInput = z.infer<typeof followUpSummaryInputSchema>;
 
 /** Fetch specific follow-ups by ID (for expanding timeline clusters). */
 export const followUpsByIdsInputSchema = z.object({
-  ticketId: z.uuid(),
-  followUpIds: z.array(z.uuid()).min(1).max(200),
+  ticketId: ticketIdSchema,
+  followUpIds: z.array(followupIdSchema).min(1).max(200),
   types: z.array(followUpTypeSchema).optional(),
 });
 export type FollowUpsByIdsInput = z.infer<typeof followUpsByIdsInputSchema>;
 
 /** List distinct volunteer participants on a ticket. */
 export const listParticipantsInputSchema = z.object({
-  ticketId: z.uuid(),
+  ticketId: ticketIdSchema,
 });
 export type ListParticipantsInput = z.infer<typeof listParticipantsInputSchema>;
 
 // --- Media list schemas ---
 
 export const recordingListInputSchema = z.object({
-  ticketId: z.uuid(),
-  followupId: z.uuid().optional(),
+  ticketId: ticketIdSchema,
+  followupId: followupIdSchema.optional(),
   limit: z.number().int().min(1).max(200).default(50),
-  cursor: z.uuid().optional(),
+  cursor: recordingIdSchema.optional(),
   direction: followUpListDirectionSchema.default("newer"),
 });
 export type RecordingListInput = z.infer<typeof recordingListInputSchema>;
 
 export const attachmentListInputSchema = z.object({
-  ticketId: z.uuid(),
-  followupId: z.uuid().optional(),
+  ticketId: ticketIdSchema,
+  followupId: followupIdSchema.optional(),
   limit: z.number().int().min(1).max(200).default(50),
-  cursor: z.uuid().optional(),
+  cursor: attachmentIdSchema.optional(),
   direction: followUpListDirectionSchema.default("newer"),
 });
 export type AttachmentListInput = z.infer<typeof attachmentListInputSchema>;
@@ -339,50 +352,50 @@ export type AttachmentListInput = z.infer<typeof attachmentListInputSchema>;
 // --- Workflow schemas ---
 
 export const assignTicketInputSchema = z.object({
-  ticketId: z.uuid(),
+  ticketId: ticketIdSchema,
 });
 export type AssignTicketInput = z.infer<typeof assignTicketInputSchema>;
 
 export const takeTicketInputSchema = z.object({
-  ticketId: z.uuid(),
+  ticketId: ticketIdSchema,
 });
 export type TakeTicketInput = z.infer<typeof takeTicketInputSchema>;
 
 export const releaseTicketInputSchema = z.object({
-  ticketId: z.uuid(),
+  ticketId: ticketIdSchema,
 });
 export type ReleaseTicketInput = z.infer<typeof releaseTicketInputSchema>;
 
 export const assignToInputSchema = z.object({
-  ticketId: z.uuid(),
-  targetUserId: z.uuid().nullable(),
+  ticketId: ticketIdSchema,
+  targetUserId: userIdSchema.nullable(),
 });
 export type AssignToInput = z.infer<typeof assignToInputSchema>;
 
 export const watchTicketInputSchema = z.object({
-  ticketId: z.uuid(),
+  ticketId: ticketIdSchema,
 });
 export type WatchTicketInput = z.infer<typeof watchTicketInputSchema>;
 
 export const queueWatcherInputSchema = z.object({
-  queueId: z.uuid(),
-  userId: z.uuid(),
+  queueId: queueIdSchema,
+  userId: userIdSchema,
 });
 export type QueueWatcherInput = z.infer<typeof queueWatcherInputSchema>;
 
 // --- Internal note edit/delete ---
 
 export const updateInternalNoteInputSchema = z.object({
-  followUpId: z.uuid(),
+  followUpId: followupIdSchema,
   encryptedContent: base64String("encryptedContent"),
-  noteTypeId: z.uuid().optional(),
+  noteTypeId: noteTypeIdSchema.optional(),
 });
 export type UpdateInternalNoteInput = z.infer<
   typeof updateInternalNoteInputSchema
 >;
 
 export const deleteInternalNoteInputSchema = z.object({
-  followUpId: z.uuid(),
+  followUpId: followupIdSchema,
 });
 export type DeleteInternalNoteInput = z.infer<
   typeof deleteInternalNoteInputSchema
@@ -394,8 +407,8 @@ export type DeleteInternalNoteInput = z.infer<
 // router, which OrgDecryptCache consumes directly.
 
 export const queueAssignmentInputSchema = z.object({
-  queueId: z.uuid(),
-  userId: z.uuid(),
+  queueId: queueIdSchema,
+  userId: userIdSchema,
 });
 export type QueueAssignmentInput = z.infer<typeof queueAssignmentInputSchema>;
 
@@ -432,7 +445,7 @@ export const savedFilterColorSchema = z.enum([
 export type SavedFilterColor = z.infer<typeof savedFilterColorSchema>;
 
 export const savedFilterRecordSchema = z.object({
-  id: z.uuid(),
+  id: z.uuid(), // not-an-id: client-side saved filter, no table behind it
   encryptedName: z.string().min(1),
   color: savedFilterColorSchema,
   icon: z.string().min(1).max(50),
@@ -463,7 +476,7 @@ export type TicketAction = z.infer<typeof ticketActionSchema>;
 export const escalationTargetSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("role"), value: z.enum(["admin", "manager"]) }),
   z.object({ type: z.literal("permission"), value: z.string().min(1) }),
-  z.object({ type: z.literal("queue"), value: z.uuid() }),
+  z.object({ type: z.literal("queue"), value: queueIdSchema }),
   z.object({ type: z.literal("ticket_access") }),
 ]);
 export type EscalationTarget = z.infer<typeof escalationTargetSchema>;
@@ -482,7 +495,7 @@ export const createNoteTypeInputSchema = z.object({
 export type CreateNoteTypeInput = z.infer<typeof createNoteTypeInputSchema>;
 
 export const updateNoteTypeInputSchema = z.object({
-  id: z.uuid(),
+  id: noteTypeIdSchema,
   encryptedName: base64String("encryptedName").optional(),
   encryptedIcon: base64String("encryptedIcon").optional(),
   encryptedDescription: base64String("encryptedDescription")
@@ -509,7 +522,7 @@ export type ReactionType = (typeof REACTION_TYPES)[number];
 export const reactionTypeSchema = z.enum(REACTION_TYPES);
 
 export const toggleReactionInputSchema = z.object({
-  followUpId: z.uuid(),
+  followUpId: followupIdSchema,
   reaction: reactionTypeSchema,
 });
 export type ToggleReactionInput = z.infer<typeof toggleReactionInputSchema>;
@@ -531,14 +544,14 @@ export type SearchClientsInput = z.infer<typeof searchClientsInputSchema>;
 
 export const updateTicketContentInputSchema = z
   .object({
-    ticketId: z.uuid(),
+    ticketId: ticketIdSchema,
     encryptedTitle: base64String("encryptedTitle")
       .refine((s) => s.length <= 4 * 1024, "encryptedTitle too large")
       .optional(),
     encryptedDescription: base64String("encryptedDescription")
       .refine((s) => s.length <= 128 * 1024, "encryptedDescription too large")
       .optional(),
-    keyGeneration: z.uuid(),
+    keyGeneration: keyGenerationSchema,
   })
   .refine(
     (d) =>
@@ -555,7 +568,7 @@ export type UpdateTicketContentInput = z.infer<
 
 /** Volunteer upgrades a client to Secure Link tier. Browser sends the auth HASH, never the raw token. */
 export const upgradeToSecureLinkInputSchema = z.object({
-  ticketId: z.uuid(),
+  ticketId: ticketIdSchema,
   channelId: portalChannelIdSchema,
   authHash: base64Bytes(32, "authHash"),
   clientPublic: base64Bytes(32, "clientPublic"),
@@ -568,7 +581,7 @@ export type UpgradeToSecureLinkInput = z.infer<
 
 /** Volunteer edits an outbound in-app message (re-encryption of both copies). */
 export const updateOutboundMessageInputSchema = z.object({
-  followUpId: z.uuid(),
+  followUpId: followupIdSchema,
   encryptedContent: base64String("encryptedContent").refine(
     (s) => s.length <= 28_000,
     "too large",
@@ -584,14 +597,14 @@ export type UpdateOutboundMessageInput = z.infer<
 
 /** Volunteer enables or disables the account upgrade offer on a Secure Link channel. */
 export const setAccountOfferInputSchema = z.object({
-  ticketId: z.uuid(),
+  ticketId: ticketIdSchema,
   enabled: z.boolean(),
 });
 export type SetAccountOfferInput = z.infer<typeof setAccountOfferInputSchema>;
 
 /** Volunteer resets (deletes) a client's encrypted account. */
 export const resetClientAccountInputSchema = z.object({
-  ticketId: z.uuid(),
+  ticketId: ticketIdSchema,
 });
 export type ResetClientAccountInput = z.infer<
   typeof resetClientAccountInputSchema

@@ -3,6 +3,7 @@ import { identifierSchema, passwordSchema, displayNameSchema } from "./auth.js";
 import { base64String, base64Bytes } from "./validators.js";
 import { ROLE_ID_VALUES_TUPLE } from "../roles.js";
 import { isValidCountryCode } from "../telephony/country-codes.js";
+import { userIdSchema, inviteTokenIdSchema } from "../ids.js";
 
 /** Bootstrap the first admin account for an org with zero active users.
  *  orgPublicKey: the client generates the Curve25519 keypair before calling
@@ -51,7 +52,7 @@ export const generateInviteInputSchema = z.object({
 
 /** Revoke a pending invite token (admin-only). */
 export const revokeInviteInputSchema = z.object({
-  tokenId: z.uuid(),
+  tokenId: inviteTokenIdSchema,
 });
 
 /** Save telephony mode choice during setup (step 5). */
@@ -67,7 +68,7 @@ export const saveTelephonyChoiceInputSchema = z.discriminatedUnion("mode", [
 
 /** Wrap the org secret key for a specific user (admin auto-wrap). */
 export const wrapOrgKeyForUserSchema = z.object({
-  userId: z.uuid(),
+  userId: userIdSchema,
   ephemeralPoint: base64Bytes(32, "ephemeralPoint (ristretto255)"),
   nonce: base64Bytes(24, "nonce"),
   wrappedKey: base64String("wrappedKey"),
@@ -75,7 +76,7 @@ export const wrapOrgKeyForUserSchema = z.object({
 
 /** Response from listUnwrappedUsers: users who need org key wrapping. */
 export const unwrappedUserSchema = z.object({
-  userId: z.uuid(),
+  userId: userIdSchema,
   volPublic: base64String("volPublic"),
 });
 

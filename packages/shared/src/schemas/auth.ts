@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { Permission } from "../roles.js";
 import { ROLE_ID_VALUES_TUPLE } from "../roles.js";
+import { userIdSchema } from "../ids.js";
 
 export const emailSchema = z
   .string()
@@ -52,11 +53,11 @@ export const getSaltInputSchema = z.object({
 
 export const getSaltOutputSchema = z.object({
   salt: z.string(),
-  userId: z.uuid(),
+  userId: userIdSchema,
 });
 
 export const assignRoleInputSchema = z.object({
-  userId: z.uuid(),
+  userId: userIdSchema,
   roleId: z.enum(ROLE_ID_VALUES_TUPLE),
 });
 
@@ -65,7 +66,7 @@ export const setPiiRetentionInputSchema = z.object({
 });
 
 export const setUserActiveInputSchema = z.object({
-  userId: z.uuid(),
+  userId: userIdSchema,
   isActive: z.boolean(),
 });
 
@@ -81,7 +82,7 @@ export type VolunteerReachabilityWire = z.infer<
 >;
 
 export const listUsersOutputItemSchema = z.object({
-  id: z.uuid(),
+  id: userIdSchema,
   identifier: z.string(),
   encryptedDisplayName: z.string(),
   roleId: z.string(),
