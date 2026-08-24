@@ -247,8 +247,14 @@ test.describe.serial("One-Time Share Link", () => {
   test("volunteer timeline shows share_link bubble with 'Opened' status", async ({}, testInfo) => {
     testInfo.setTimeout(CRYPTO_TIMEOUT * 3);
 
-    // Reload the ticket detail to trigger fresh data fetch.
-    await volunteerPage.reload();
+    // Refetch the ticket detail by navigating away and back inside the
+    // app rather than reloading: the volunteer's keys live only in
+    // memory for the session, so a reload discards them and the app
+    // returns to a blocked state with nothing decrypted.
+    await volunteerPage.keyboard.press("Escape");
+    await volunteerPage.getByRole("tab", { name: "Overview" }).click();
+    await volunteerPage.getByRole("tab", { name: "Tickets" }).click();
+    await openTicketByTitle(volunteerPage, TICKET_TITLE);
     await expect(volunteerPage.locator('[role="log"]')).toBeVisible({
       timeout: CRYPTO_TIMEOUT,
     });
