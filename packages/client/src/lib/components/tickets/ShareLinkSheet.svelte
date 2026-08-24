@@ -14,6 +14,7 @@
   import { ticketKeys } from "$lib/query/keys";
   import * as m from "$lib/paraglide/messages.js";
   import { followupSlot } from "@care-y/crypto";
+  import { newShareId, newFollowupId } from "@care-y/shared";
   import { trpc } from "$lib/trpc/index.js";
   import { getCryptoBridge } from "$lib/crypto/context.js";
   import { requireRouter } from "$lib/errors.js";
@@ -67,8 +68,8 @@
 
     sending = true;
     try {
-      const shareId = crypto.randomUUID();
-      const followUpId = crypto.randomUUID();
+      const shareId = newShareId();
+      const followUpId = newFollowupId();
 
       // Encrypt under a fresh share key (main thread, key zeroed in finally).
       const { ciphertext, fragmentKey } = encryptShare(shareId, trimmed);

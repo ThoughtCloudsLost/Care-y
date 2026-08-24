@@ -339,8 +339,7 @@
     sheetState = state;
     editDisplayName = state.userDisplayName;
     editUsername = state.userIdentifier;
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- server roleId is always a valid RoleIdValue
-    editRoleId = user.roleId as RoleIdValue;
+    editRoleId = user.roleId;
 
     memberQueueIds.clear();
     originalQueueIds.clear();

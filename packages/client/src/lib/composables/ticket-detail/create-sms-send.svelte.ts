@@ -2,6 +2,7 @@ import type { QueryClient } from "@tanstack/svelte-query";
 import type { CryptoBridge } from "$lib/workers/crypto-bridge.js";
 import { RateLimitError, RelayError } from "$lib/errors.js";
 import { followupSlot } from "@care-y/crypto";
+import { newFollowupId } from "@care-y/shared";
 import { ticketKeys } from "$lib/query/keys.js";
 import { invalidateReadState } from "$lib/query/invalidate-read-state.js";
 import { toastStore } from "$lib/stores/toast.svelte.js";
@@ -60,7 +61,7 @@ export function createSmsSend(config: SmsSendConfig): SmsSend {
       }
       if (!resp.ok) throw new RelayError("SMS_FAILED", resp.status);
 
-      const followUpId = crypto.randomUUID();
+      const followUpId = newFollowupId();
       const encryptedContent = await cryptoBridge.encrypt(
         ticketId,
         followupSlot(followUpId),

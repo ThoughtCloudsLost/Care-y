@@ -29,6 +29,7 @@
   import { portalKeys } from "$lib/query/keys.js";
   import { announceToLiveRegion } from "$lib/utils/announce.js";
   import { encode, requireSodium } from "@care-y/crypto";
+  import { newFollowupId, newKeyGeneration } from "@care-y/shared";
   import { requireRouter } from "$lib/errors.js";
   import {
     encryptReply,
@@ -282,8 +283,8 @@
       return;
     }
 
-    const followUpId = crypto.randomUUID();
-    const keyGeneration = crypto.randomUUID();
+    const followUpId = newFollowupId();
+    const keyGeneration = newKeyGeneration();
 
     const payload = encryptReply(
       text,

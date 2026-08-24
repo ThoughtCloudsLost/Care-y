@@ -1,5 +1,6 @@
 import type { TicketAction } from "$lib/tickets/types.js";
 import type { toastStore as ToastStoreType } from "$lib/stores/toast.svelte.js";
+import { newKeyGeneration } from "@care-y/shared";
 import * as m from "$lib/paraglide/messages.js";
 
 type ToastStore = typeof ToastStoreType;
@@ -70,7 +71,7 @@ export function createPanelActions(deps: PanelActionsDeps): PanelActions {
         mutateWithToast(
           deps.reopenMutate({
             ticketId,
-            newKeyGeneration: crypto.randomUUID(),
+            newKeyGeneration: newKeyGeneration(),
           }),
         );
         break;

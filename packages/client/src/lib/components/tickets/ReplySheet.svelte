@@ -10,6 +10,7 @@
 <script lang="ts">
   import * as m from "$lib/paraglide/messages.js";
   import { followupSlot } from "@care-y/crypto";
+  import { newFollowupId } from "@care-y/shared";
   import { trpc } from "$lib/trpc/index.js";
   import {
     getCryptoBridge,
@@ -248,7 +249,7 @@
     // below restores the untrimmed draft on failure.
     clearDraftForMode(ticketId, "reply");
 
-    const followUpId = crypto.randomUUID();
+    const followUpId = newFollowupId();
 
     try {
       const encryptedContent = await cryptoBridge.encrypt(
