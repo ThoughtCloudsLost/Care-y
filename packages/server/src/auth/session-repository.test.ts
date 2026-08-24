@@ -9,6 +9,10 @@ import {
   type TestDb,
 } from "../test-utils.js";
 import type { SessionRepository } from "./session-repository.js";
+import type { SessionToken, WebauthnChallenge } from "@care-y/shared";
+
+/** Shorthand cast for fabricated session token literals. */
+const tok = (s: string): SessionToken => s as SessionToken;
 
 // DB integration tests require a running PostgreSQL instance.
 // On the host (no DATABASE_URL), the entire suite is skipped.
@@ -34,7 +38,7 @@ describe.skipIf(!process.env.DATABASE_URL)("createDbSessionRepository", () => {
     const user = await createTestUser(testDb.db);
 
     const session = await repo.create({
-      token: "tok-create-test",
+      token: tok("tok-create-test"),
       userId: user.id,
       ipAddress: "192.168.1.1",
       userAgent: "Mozilla/5.0",
@@ -51,14 +55,14 @@ describe.skipIf(!process.env.DATABASE_URL)("createDbSessionRepository", () => {
   it("findByToken retrieves the created session", async () => {
     const user = await createTestUser(testDb.db);
     const created = await repo.create({
-      token: "tok-find-test",
+      token: tok("tok-find-test"),
       userId: user.id,
       ipAddress: "10.0.0.1",
       userAgent: "curl/8.0",
       expiresAt: new Date(Date.now() + 3600_000),
     });
 
-    const found = await repo.findByToken("tok-find-test");
+    const found = await repo.findByToken(tok("tok-find-test"));
 
     expect(found).not.toBeNull();
     if (found) {
@@ -69,37 +73,37 @@ describe.skipIf(!process.env.DATABASE_URL)("createDbSessionRepository", () => {
   });
 
   it("findByToken returns null for nonexistent token", async () => {
-    const found = await repo.findByToken("tok-does-not-exist");
+    const found = await repo.findByToken(tok("tok-does-not-exist"));
     expect(found).toBeNull();
   });
 
   it("deleteByToken removes the session", async () => {
     const user = await createTestUser(testDb.db);
     await repo.create({
-      token: "tok-delete-test",
+      token: tok("tok-delete-test"),
       userId: user.id,
       ipAddress: "127.0.0.1",
       userAgent: "test",
       expiresAt: new Date(Date.now() + 3600_000),
     });
 
-    await repo.deleteByToken("tok-delete-test");
+    await repo.deleteByToken(tok("tok-delete-test"));
 
-    const found = await repo.findByToken("tok-delete-test");
+    const found = await repo.findByToken(tok("tok-delete-test"));
     expect(found).toBeNull();
   });
 
   it("deleteByUserId removes all sessions for that user", async () => {
     const user = await createTestUser(testDb.db);
     await repo.create({
-      token: "tok-dbu-1",
+      token: tok("tok-dbu-1"),
       userId: user.id,
       ipAddress: "127.0.0.1",
       userAgent: "test",
       expiresAt: new Date(Date.now() + 3600_000),
     });
     await repo.create({
-      token: "tok-dbu-2",
+      token: tok("tok-dbu-2"),
       userId: user.id,
       ipAddress: "127.0.0.1",
       userAgent: "test",
@@ -108,8 +112,8 @@ describe.skipIf(!process.env.DATABASE_URL)("createDbSessionRepository", () => {
 
     await repo.deleteByUserId(user.id);
 
-    expect(await repo.findByToken("tok-dbu-1")).toBeNull();
-    expect(await repo.findByToken("tok-dbu-2")).toBeNull();
+    expect(await repo.findByToken(tok("tok-dbu-1"))).toBeNull();
+    expect(await repo.findByToken(tok("tok-dbu-2"))).toBeNull();
   });
 
   it("deleteByUserId does not affect other users' sessions", async () => {
@@ -117,14 +121,14 @@ describe.skipIf(!process.env.DATABASE_URL)("createDbSessionRepository", () => {
     const userB = await createTestUser(testDb.db);
 
     await repo.create({
-      token: "tok-user-a",
+      token: tok("tok-user-a"),
       userId: userA.id,
       ipAddress: "127.0.0.1",
       userAgent: "test",
       expiresAt: new Date(Date.now() + 3600_000),
     });
     await repo.create({
-      token: "tok-user-b",
+      token: tok("tok-user-b"),
       userId: userB.id,
       ipAddress: "127.0.0.1",
       userAgent: "test",
@@ -133,28 +137,28 @@ describe.skipIf(!process.env.DATABASE_URL)("createDbSessionRepository", () => {
 
     await repo.deleteByUserId(userA.id);
 
-    expect(await repo.findByToken("tok-user-a")).toBeNull();
-    expect(await repo.findByToken("tok-user-b")).not.toBeNull();
+    expect(await repo.findByToken(tok("tok-user-a"))).toBeNull();
+    expect(await repo.findByToken(tok("tok-user-b"))).not.toBeNull();
   });
 
   it("deleteByUserIdExceptToken keeps the specified token and deletes others", async () => {
     const user = await createTestUser(testDb.db);
     const keep = await repo.create({
-      token: "tok-keep-this",
+      token: tok("tok-keep-this"),
       userId: user.id,
       ipAddress: "127.0.0.1",
       userAgent: "test",
       expiresAt: new Date(Date.now() + 3600_000),
     });
     await repo.create({
-      token: "tok-delete-this-1",
+      token: tok("tok-delete-this-1"),
       userId: user.id,
       ipAddress: "127.0.0.1",
       userAgent: "test",
       expiresAt: new Date(Date.now() + 3600_000),
     });
     await repo.create({
-      token: "tok-delete-this-2",
+      token: tok("tok-delete-this-2"),
       userId: user.id,
       ipAddress: "127.0.0.1",
       userAgent: "test",
@@ -164,9 +168,9 @@ describe.skipIf(!process.env.DATABASE_URL)("createDbSessionRepository", () => {
     const count = await repo.deleteByUserIdExceptToken(user.id, keep.token);
 
     expect(count).toBe(2);
-    expect(await repo.findByToken("tok-keep-this")).not.toBeNull();
-    expect(await repo.findByToken("tok-delete-this-1")).toBeNull();
-    expect(await repo.findByToken("tok-delete-this-2")).toBeNull();
+    expect(await repo.findByToken(tok("tok-keep-this"))).not.toBeNull();
+    expect(await repo.findByToken(tok("tok-delete-this-1"))).toBeNull();
+    expect(await repo.findByToken(tok("tok-delete-this-2"))).toBeNull();
   });
 
   it("deleteByUserIdExceptToken does not affect other users", async () => {
@@ -174,40 +178,43 @@ describe.skipIf(!process.env.DATABASE_URL)("createDbSessionRepository", () => {
     const userB = await createTestUser(testDb.db);
 
     await repo.create({
-      token: "tok-except-a",
+      token: tok("tok-except-a"),
       userId: userA.id,
       ipAddress: "127.0.0.1",
       userAgent: "test",
       expiresAt: new Date(Date.now() + 3600_000),
     });
     await repo.create({
-      token: "tok-except-b",
+      token: tok("tok-except-b"),
       userId: userB.id,
       ipAddress: "127.0.0.1",
       userAgent: "test",
       expiresAt: new Date(Date.now() + 3600_000),
     });
 
-    await repo.deleteByUserIdExceptToken(userA.id, "tok-except-a");
+    await repo.deleteByUserIdExceptToken(userA.id, tok("tok-except-a"));
 
-    expect(await repo.findByToken("tok-except-a")).not.toBeNull();
-    expect(await repo.findByToken("tok-except-b")).not.toBeNull();
+    expect(await repo.findByToken(tok("tok-except-a"))).not.toBeNull();
+    expect(await repo.findByToken(tok("tok-except-b"))).not.toBeNull();
   });
 
   it("deleteByUserIdExceptToken returns 0 when only the excepted session exists", async () => {
     const user = await createTestUser(testDb.db);
     await repo.create({
-      token: "tok-only-one",
+      token: tok("tok-only-one"),
       userId: user.id,
       ipAddress: "127.0.0.1",
       userAgent: "test",
       expiresAt: new Date(Date.now() + 3600_000),
     });
 
-    const count = await repo.deleteByUserIdExceptToken(user.id, "tok-only-one");
+    const count = await repo.deleteByUserIdExceptToken(
+      user.id,
+      tok("tok-only-one"),
+    );
 
     expect(count).toBe(0);
-    expect(await repo.findByToken("tok-only-one")).not.toBeNull();
+    expect(await repo.findByToken(tok("tok-only-one"))).not.toBeNull();
   });
 
   it("deleteExpired removes sessions past their expires_at", async () => {
@@ -216,28 +223,28 @@ describe.skipIf(!process.env.DATABASE_URL)("createDbSessionRepository", () => {
     // so we can set expires_at in the past).
     await createTestSession(testDb.db, {
       user_id: user.id,
-      token: "tok-expired-1",
+      token: tok("tok-expired-1"),
       expires_at: new Date(Date.now() - 60_000), // 1 minute ago
     });
 
     const count = await repo.deleteExpired();
 
     expect(count).toBeGreaterThanOrEqual(1);
-    expect(await repo.findByToken("tok-expired-1")).toBeNull();
+    expect(await repo.findByToken(tok("tok-expired-1"))).toBeNull();
   });
 
   it("deleteExpired does not remove non-expired sessions", async () => {
     const user = await createTestUser(testDb.db);
     await createTestSession(testDb.db, {
       user_id: user.id,
-      token: "tok-still-valid",
+      token: tok("tok-still-valid"),
       expires_at: new Date(Date.now() + 3600_000), // 1 hour from now
     });
 
     const count = await repo.deleteExpired();
 
     // The valid session should survive.
-    expect(await repo.findByToken("tok-still-valid")).not.toBeNull();
+    expect(await repo.findByToken(tok("tok-still-valid"))).not.toBeNull();
     // Count should be 0 (assuming no other expired sessions left from prior tests).
     // We use toBeGreaterThanOrEqual(0) since prior tests may have left expired rows.
     expect(count).toBeGreaterThanOrEqual(0);
@@ -247,20 +254,20 @@ describe.skipIf(!process.env.DATABASE_URL)("createDbSessionRepository", () => {
     const user = await createTestUser(testDb.db);
     await createTestSession(testDb.db, {
       user_id: user.id,
-      token: "tok-mix-expired",
+      token: tok("tok-mix-expired"),
       expires_at: new Date(Date.now() - 30_000),
     });
     await createTestSession(testDb.db, {
       user_id: user.id,
-      token: "tok-mix-valid",
+      token: tok("tok-mix-valid"),
       expires_at: new Date(Date.now() + 3600_000),
     });
 
     const count = await repo.deleteExpired();
 
     expect(count).toBeGreaterThanOrEqual(1);
-    expect(await repo.findByToken("tok-mix-expired")).toBeNull();
-    expect(await repo.findByToken("tok-mix-valid")).not.toBeNull();
+    expect(await repo.findByToken(tok("tok-mix-expired"))).toBeNull();
+    expect(await repo.findByToken(tok("tok-mix-valid"))).not.toBeNull();
   });
 
   it("stores encrypted bytea, not plaintext", async () => {
@@ -273,7 +280,7 @@ describe.skipIf(!process.env.DATABASE_URL)("createDbSessionRepository", () => {
     const user = await createTestUser(testDb.db);
 
     await encRepo.create({
-      token: "tok-enc-verify",
+      token: tok("tok-enc-verify"),
       userId: user.id,
       ipAddress: "10.20.30.40",
       userAgent: "SecretAgent/1.0",
@@ -284,7 +291,7 @@ describe.skipIf(!process.env.DATABASE_URL)("createDbSessionRepository", () => {
     const rawRow = await testDb.db
       .selectFrom("sessions")
       .selectAll()
-      .where("token", "=", "tok-enc-verify")
+      .where("token", "=", tok("tok-enc-verify"))
       .executeTakeFirstOrThrow();
 
     // The raw bytea should not contain the plaintext strings.
@@ -294,7 +301,7 @@ describe.skipIf(!process.env.DATABASE_URL)("createDbSessionRepository", () => {
     expect(uaBytes).not.toBe("SecretAgent/1.0");
 
     // But reading through the repo should return correct HMAC tokens.
-    const session = await encRepo.findByToken("tok-enc-verify");
+    const session = await encRepo.findByToken(tok("tok-enc-verify"));
     expect(session).not.toBeNull();
     if (session) {
       expect(session.ipToken).toBe(
@@ -311,7 +318,7 @@ describe.skipIf(!process.env.DATABASE_URL)("createDbSessionRepository", () => {
   it("new sessions have twofaVerified=false and webauthnChallenge=null", async () => {
     const user = await createTestUser(testDb.db);
     const session = await repo.create({
-      token: "tok-2fa-defaults",
+      token: tok("tok-2fa-defaults"),
       userId: user.id,
       ipAddress: "127.0.0.1",
       userAgent: "test",
@@ -325,7 +332,7 @@ describe.skipIf(!process.env.DATABASE_URL)("createDbSessionRepository", () => {
   it("markTwoFactorVerified sets twofaVerified to true", async () => {
     const user = await createTestUser(testDb.db);
     const session = await repo.create({
-      token: "tok-mark-2fa",
+      token: tok("tok-mark-2fa"),
       userId: user.id,
       ipAddress: "127.0.0.1",
       userAgent: "test",
@@ -341,7 +348,7 @@ describe.skipIf(!process.env.DATABASE_URL)("createDbSessionRepository", () => {
   it("clearTwoFactorVerified sets twofaVerified to false", async () => {
     const user = await createTestUser(testDb.db);
     const session = await repo.create({
-      token: "tok-clear-2fa",
+      token: tok("tok-clear-2fa"),
       userId: user.id,
       ipAddress: "127.0.0.1",
       userAgent: "test",
@@ -358,7 +365,7 @@ describe.skipIf(!process.env.DATABASE_URL)("createDbSessionRepository", () => {
   it("setWebauthnChallenge stores and clears challenge", async () => {
     const user = await createTestUser(testDb.db);
     const session = await repo.create({
-      token: "tok-webauthn-ch",
+      token: tok("tok-webauthn-ch"),
       userId: user.id,
       ipAddress: "127.0.0.1",
       userAgent: "test",
@@ -366,7 +373,8 @@ describe.skipIf(!process.env.DATABASE_URL)("createDbSessionRepository", () => {
     });
 
     // Set challenge
-    await repo.setWebauthnChallenge(session.token, "test-challenge-abc");
+    const testChallenge = "test-challenge-abc" as WebauthnChallenge;
+    await repo.setWebauthnChallenge(session.token, testChallenge);
     let found = await repo.findByToken(session.token);
     expect(found!.webauthnChallenge).toBe("test-challenge-abc");
 

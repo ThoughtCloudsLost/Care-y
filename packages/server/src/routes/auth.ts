@@ -24,6 +24,8 @@ import {
   Permission,
   ErrorCode,
   ROLE_ID_VALUES,
+  userIdSchema,
+  type UserId,
 } from "@care-y/shared";
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
@@ -168,7 +170,7 @@ async function handleGetSalt(
   saltLimiter: RateLimiter,
   req: IncomingMessage,
   identifier: string,
-): Promise<{ salt: string; userId: string }> {
+): Promise<{ salt: string; userId: UserId }> {
   enforceRateLimit(
     saltLimiter,
     `salt:${extractClientIp(req)}`,
@@ -497,7 +499,7 @@ export function createAuthRouter(deps: AuthRouterDeps) {
           devReEncryptDisplayName: adminProcedure
             .input(
               z.object({
-                userId: z.uuid(),
+                userId: userIdSchema,
                 encryptedDisplayName: z.string().min(1),
               }),
             )

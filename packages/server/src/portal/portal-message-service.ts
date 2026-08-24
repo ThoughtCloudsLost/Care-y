@@ -30,6 +30,17 @@ import { resolveClientPhone } from "../routes/relay.js";
 import { NotFoundError } from "../errors.js";
 import { ErrorCode } from "@care-y/shared";
 import { encode } from "@care-y/crypto";
+import type {
+  TicketId,
+  FollowupId,
+  KeyGeneration,
+  ChannelRowId,
+  OrgId,
+  OrgSchema,
+  OrgSlug,
+  QueueId,
+  UserId,
+} from "@care-y/shared";
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -48,9 +59,9 @@ export interface EciesTripleBuffers {
 }
 
 export interface PortalReplyServiceInput {
-  readonly ticketId: string;
-  readonly followUpId: string;
-  readonly keyGeneration: string;
+  readonly ticketId: TicketId;
+  readonly followUpId: FollowupId;
+  readonly keyGeneration: KeyGeneration;
   readonly encryptedContent: Buffer;
   readonly wrappedTkTemp: Buffer;
   readonly selfCopy: EciesTripleBuffers;
@@ -73,7 +84,7 @@ export interface PortalBootstrapResult {
     readonly nonce: string;
     readonly ciphertext: string;
   };
-  readonly ticketId: string | null;
+  readonly ticketId: TicketId | null;
   readonly messages: readonly PortalMessageWire[];
   readonly messagesExpireDays: number;
   /** Org-configured quick-exit target; null falls back to the client default. */
@@ -83,16 +94,16 @@ export interface PortalBootstrapResult {
 }
 
 export interface PortalMessageServiceDeps {
-  readonly getProvider: (orgId: string) => Promise<TelephonyProvider | null>;
+  readonly getProvider: (orgId: OrgId) => Promise<TelephonyProvider | null>;
   readonly resolveCallerIdByPurpose: (
-    org: { readonly orgId: string; readonly orgSchema: string },
+    org: { readonly orgId: OrgId; readonly orgSchema: OrgSchema },
     purpose: "outbound" | "system",
   ) => Promise<string | null>;
   readonly fieldEncryptor: FieldEncryptor;
   readonly notificationService: NotificationService;
-  readonly orgId: string;
-  readonly orgSchema: string;
-  readonly orgSlug: string;
+  readonly orgId: OrgId;
+  readonly orgSchema: OrgSchema;
+  readonly orgSlug: OrgSlug;
 }
 
 // ---------------------------------------------------------------------------
@@ -271,8 +282,8 @@ export async function clientReply(
  */
 export async function storeClientCopy(
   trx: Kysely<TenantDatabase> | Transaction<TenantDatabase>,
-  channelRowId: string,
-  followupId: string,
+  channelRowId: ChannelRowId,
+  followupId: FollowupId,
   copy: EciesTripleBuffers,
   direction: "to_client" | "from_client" = "to_client",
 ): Promise<void> {
@@ -408,8 +419,8 @@ export async function nudgeClient(
 function dispatchClientReplyNotification(
   db: Kysely<TenantDatabase>,
   deps: PortalMessageServiceDeps,
-  queueId: string,
-  ticketId: string,
+  queueId: QueueId,
+  ticketId: TicketId,
 ): void {
   void (async () => {
     try {
@@ -432,7 +443,7 @@ function dispatchClientReplyNotification(
         .where("ticket_id", "=", ticketId)
         .execute();
 
-      const seen = new Set<string>();
+      const seen = new Set<UserId>();
       const recipients: NotificationRecipient[] = [];
 
       // Assigned owner first

@@ -36,7 +36,23 @@ import {
 } from "./telephony-admin.js";
 import { createCallerFactory } from "../trpc/trpc.js";
 import type { Context, OrgContext } from "../trpc/context.js";
-import { RoleId, ErrorCode } from "@care-y/shared";
+import { RoleId, ErrorCode, type RoleIdValue } from "@care-y/shared";
+import type {
+  SessionId,
+  SessionToken,
+  UserId,
+  IpToken,
+  UaToken,
+  OrgId,
+  OrgSlug,
+  OrgSchema,
+  PhoneSid,
+  IdentifierHash,
+  UsernameHash,
+  PhoneHash,
+  OpsPhoneHash,
+} from "@care-y/shared";
+import type { BlindIndexer } from "../crypto/field-encryptor.js";
 import { NotFoundError, TelephonyConfigError } from "../errors.js";
 import { _resetEnvCache } from "../env.js";
 import {
@@ -55,7 +71,7 @@ import {
 
 // --- Stubs and mock factories ---
 
-const TEST_ORG_ID = "org-telephony-test";
+const TEST_ORG_ID = "00000000-0000-4000-8000-000000004400" as OrgId;
 
 const MASKED_CONFIG: MaskedTelephonyConfig = {
   provider: "twilio",
@@ -88,8 +104,8 @@ function createMockConfigService(
 function createMockOrgContext(): OrgContext {
   return {
     orgId: TEST_ORG_ID,
-    orgSlug: "test-org",
-    orgSchema: "org_test",
+    orgSlug: "test-org" as OrgSlug,
+    orgSchema: "org_test" as OrgSchema,
     tenantDb: stubTenantDbDefaultRoles(),
     sealedBox: {} as OrgContext["sealedBox"],
   };
@@ -101,17 +117,17 @@ function createMockContext(): Context {
     res: {} as Context["res"],
     org: createMockOrgContext(),
     session: {
-      id: "sess-1",
-      token: "tok-1",
-      userId: "user-1",
-      ipToken: "ip-tok",
-      uaToken: "ua-tok",
+      id: "sess-1" as SessionId,
+      token: "tok-1" as SessionToken,
+      userId: "user-1" as UserId,
+      ipToken: "ip-tok" as IpToken,
+      uaToken: "ua-tok" as UaToken,
       expiresAt: new Date(Date.now() + 3_600_000),
       twofaVerified: true,
       webauthnChallenge: null,
     },
     user: {
-      id: "user-1",
+      id: "user-1" as UserId,
       encryptedIdentifier: "admin",
       encryptedDisplayName: "encrypted",
       encryptedPreferredLocale: null,
@@ -126,7 +142,7 @@ function createUnauthenticatedContext(): Context {
   return { ...createMockContext(), session: null, user: null };
 }
 
-function createContextWithRole(roleId: string): Context {
+function createContextWithRole(roleId: RoleIdValue): Context {
   const base = createMockContext();
   return {
     ...base,
@@ -156,11 +172,28 @@ describe("createTelephonyAdminRouter", () => {
     mockConfigService = createMockConfigService();
   });
 
-  const mockIndexer = {
-    hash: vi.fn((input: string, orgId: string) => `hash_${orgId}_${input}`),
+  const mockIndexer: BlindIndexer = {
+    hash: vi.fn((input: string, orgId: OrgId) => `hash_${orgId}_${input}`),
     hashBuffer: vi.fn(
-      (input: Buffer, orgId: string) =>
+      (input: Buffer, orgId: OrgId) =>
         `hash_${orgId}_${input.toString("utf-8")}`,
+    ),
+    hashIdentifier: vi.fn(
+      (input: string, orgId: OrgId) => `id_${orgId}_${input}` as IdentifierHash,
+    ),
+    hashUsername: vi.fn(
+      (input: string, orgId: OrgId) => `user_${orgId}_${input}` as UsernameHash,
+    ),
+    hashPhone: vi.fn(
+      (input: string, orgId: OrgId) => `phone_${orgId}_${input}` as PhoneHash,
+    ),
+    hashPhoneBuffer: vi.fn(
+      (input: Buffer, orgId: OrgId) =>
+        `phone_${orgId}_${input.toString("utf-8")}` as PhoneHash,
+    ),
+    hashConsultantPhoneBuffer: vi.fn(
+      (input: Buffer, orgId: OrgId) =>
+        `cons_${orgId}_${input.toString("utf-8")}` as OpsPhoneHash,
     ),
   };
 
@@ -292,7 +325,7 @@ describe("createTelephonyAdminRouter", () => {
 
   describe("getProvisionedPhones", () => {
     it("returns the provisioned numbers from configService", async () => {
-      const phones = [{ number: "+15551230001", sid: "PNunit001" }];
+      const phones = [{ number: "+15551230001", sid: "PNunit001" as PhoneSid }];
       const service = createMockConfigService({
         lookupProvisionedPhones: vi.fn().mockResolvedValue(phones),
       });
@@ -305,15 +338,16 @@ describe("createTelephonyAdminRouter", () => {
   describe("getPhonePurpose", () => {
     it("returns purpose assignments from configService", async () => {
       const service = createMockConfigService({
-        getPhonePurpose: vi
-          .fn()
-          .mockResolvedValue({ outboundSid: "PNout1", systemSid: "PNsys1" }),
+        getPhonePurpose: vi.fn().mockResolvedValue({
+          outboundSid: "PNout1" as PhoneSid,
+          systemSid: "PNsys1" as PhoneSid,
+        }),
       });
       const caller = createCaller(createMockContext(), service);
 
       expect(await caller.getPhonePurpose()).toEqual({
-        outboundSid: "PNout1",
-        systemSid: "PNsys1",
+        outboundSid: "PNout1" as PhoneSid,
+        systemSid: "PNsys1" as PhoneSid,
       });
     });
   });
@@ -326,11 +360,14 @@ describe("createTelephonyAdminRouter", () => {
       const caller = createCaller(ctx, service);
 
       await expect(
-        caller.setPhonePurpose({ outboundSid: "PNout2", systemSid: null }),
+        caller.setPhonePurpose({
+          outboundSid: "PNout2" as PhoneSid,
+          systemSid: null,
+        }),
       ).resolves.toBeUndefined();
 
       expect(setSpy).toHaveBeenCalledWith(ctx.org?.tenantDb, {
-        outboundSid: "PNout2",
+        outboundSid: "PNout2" as PhoneSid,
         systemSid: null,
       });
     });
@@ -521,7 +558,9 @@ describe("createTelephonyAdminRouter", () => {
       const caller = createCaller(createMockContext());
 
       await expectTrpcError(
-        caller.setPhonePurpose({ outboundSid: "PNonly" } as unknown as {
+        caller.setPhonePurpose({
+          outboundSid: "PNonly" as PhoneSid,
+        } as unknown as {
           outboundSid: string | null;
           systemSid: string | null;
         }),
@@ -691,40 +730,40 @@ describe.skipIf(!process.env.DATABASE_URL)(
   () => {
     let testDb: TestDb;
     let secretsEncryptor: SecretsEncryptor;
-    let adminUserId: string;
-    let dbOrgId: string;
-    let emptyOrgId: string;
-    const createdOrgIds: string[] = [];
+    let adminUserId: UserId;
+    let dbOrgId: OrgId;
+    let emptyOrgId: OrgId;
+    const createdOrgIds: OrgId[] = [];
 
     const ROUTE_PROVISIONED_PHONE = {
       number: "+15550400001",
-      sid: "PNroute001",
+      sid: "PNroute001" as PhoneSid,
     };
 
     beforeAll(async () => {
       testDb = await createTestDb();
       secretsEncryptor = createSecretsEncryptor(TEST_OPS_KEY);
 
-      dbOrgId = randomUUID();
+      dbOrgId = randomUUID() as OrgId;
       await testDb.platformDb
         .insertInto("orgs")
         .values({
           id: dbOrgId,
-          slug: `tel-admin-${dbOrgId.slice(0, 8)}`,
-          schema_name: testDb.schemaName,
+          slug: `tel-admin-${dbOrgId.slice(0, 8)}` as OrgSlug,
+          schema_name: testDb.schemaName as OrgSchema,
         })
         .execute();
       createdOrgIds.push(dbOrgId);
 
       // A second org that never gets a telephony config, for
       // not-configured contract tests.
-      emptyOrgId = randomUUID();
+      emptyOrgId = randomUUID() as OrgId;
       await testDb.platformDb
         .insertInto("orgs")
         .values({
           id: emptyOrgId,
-          slug: `tel-admin-empty-${emptyOrgId.slice(0, 8)}`,
-          schema_name: `test_tae_${emptyOrgId.slice(0, 8)}`,
+          slug: `tel-admin-empty-${emptyOrgId.slice(0, 8)}` as OrgSlug,
+          schema_name: `test_tae_${emptyOrgId.slice(0, 8)}` as OrgSchema,
         })
         .execute();
       createdOrgIds.push(emptyOrgId);
@@ -797,23 +836,23 @@ describe.skipIf(!process.env.DATABASE_URL)(
       });
     }
 
-    function dbContext(orgIdForCtx: string): Context {
+    function dbContext(orgIdForCtx: OrgId): Context {
       return {
         req: mockReq(),
         res: mockRes(),
         org: {
           orgId: orgIdForCtx,
-          orgSlug: "tel-admin-test",
-          orgSchema: testDb.schemaName,
+          orgSlug: "tel-admin-test" as OrgSlug,
+          orgSchema: testDb.schemaName as OrgSchema,
           tenantDb: testDb.db,
           sealedBox: testSealedBox,
         },
         session: {
-          id: "sess-db-1",
-          token: "tok-db-1",
+          id: "sess-db-1" as SessionId,
+          token: "tok-db-1" as SessionToken,
           userId: adminUserId,
-          ipToken: "ip-tok",
-          uaToken: "ua-tok",
+          ipToken: "ip-tok" as IpToken,
+          uaToken: "ua-tok" as UaToken,
           expiresAt: new Date(Date.now() + 3_600_000),
           twofaVerified: true,
           webauthnChallenge: null,
@@ -830,7 +869,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
       };
     }
 
-    function createDbCaller(orgIdForCtx?: string) {
+    function createDbCaller(orgIdForCtx?: OrgId) {
       return createCallerFactory(buildDbRouter())(
         dbContext(orgIdForCtx ?? dbOrgId),
       );
@@ -958,12 +997,12 @@ describe.skipIf(!process.env.DATABASE_URL)(
         });
 
         await caller.setPhonePurpose({
-          outboundSid: "PNroutep01",
-          systemSid: "PNroutep02",
+          outboundSid: "PNroutep01" as PhoneSid,
+          systemSid: "PNroutep02" as PhoneSid,
         });
         expect(await caller.getPhonePurpose()).toEqual({
-          outboundSid: "PNroutep01",
-          systemSid: "PNroutep02",
+          outboundSid: "PNroutep01" as PhoneSid,
+          systemSid: "PNroutep02" as PhoneSid,
         });
 
         await caller.setPhonePurpose({ outboundSid: null, systemSid: null });

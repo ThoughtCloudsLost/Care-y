@@ -10,14 +10,14 @@
  */
 
 import { randomBytes } from "node:crypto";
-import { createScryptHasher } from "./scrypt-hash.js";
+import { createCodeHasher } from "./password.js";
+import type { CodeHash } from "@care-y/shared";
 
 const CODE_COUNT = 8;
 const CODE_LENGTH = 8;
 const CODE_CHARSET = "abcdefghijklmnopqrstuvwxyz0123456789";
-const CODE_KEY_BYTES = 32;
 
-const codeHasher = createScryptHasher(CODE_KEY_BYTES);
+const codeHasher = createCodeHasher();
 
 /**
  * Generates a single random backup code using rejection sampling
@@ -65,8 +65,8 @@ export function generateBackupCodes(count: number = CODE_COUNT): string[] {
  * Hashes a backup code with scrypt for storage.
  * Returns "scrypt:<salt_hex>:<hash_hex>".
  */
-export async function hashBackupCode(code: string): Promise<string> {
-  return codeHasher.hash(normalizeCode(code));
+export async function hashBackupCode(code: string): Promise<CodeHash> {
+  return codeHasher.hashCode(normalizeCode(code));
 }
 
 /**

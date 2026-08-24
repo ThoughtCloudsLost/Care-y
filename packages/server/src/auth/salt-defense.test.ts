@@ -23,6 +23,7 @@ import {
   TEST_ORG_ID,
   type TestDb,
 } from "../test-utils.js";
+import type { OrgId, UserId } from "@care-y/shared";
 
 // ---------------------------------------------------------------------------
 // deriveFakeSaltKey
@@ -76,7 +77,7 @@ describe("deriveFakeSaltKey", () => {
 
 describe("computeFakeSalt", () => {
   const fakeSaltKey = Buffer.alloc(32, 0xab);
-  const orgUuid = "org-uuid-1";
+  const orgUuid = "org-uuid-1" as OrgId;
 
   it("returns a 16-byte Buffer", () => {
     const salt = computeFakeSalt(fakeSaltKey, orgUuid, "alice");
@@ -91,8 +92,8 @@ describe("computeFakeSalt", () => {
   });
 
   it("produces different salts for different org UUIDs", () => {
-    const a = computeFakeSalt(fakeSaltKey, "org-a", "alice");
-    const b = computeFakeSalt(fakeSaltKey, "org-b", "alice");
+    const a = computeFakeSalt(fakeSaltKey, "org-a" as OrgId, "alice");
+    const b = computeFakeSalt(fakeSaltKey, "org-b" as OrgId, "alice");
     expect(a.equals(b)).toBe(false);
   });
 
@@ -123,7 +124,7 @@ describe("computeFakeSalt", () => {
 
 describe("computeFakeUuid", () => {
   const fakeSaltKey = Buffer.alloc(32, 0xab);
-  const orgUuid = "org-uuid-1";
+  const orgUuid = "org-uuid-1" as OrgId;
 
   it("returns a valid UUID v4 format string", () => {
     const uuid = computeFakeUuid(fakeSaltKey, orgUuid, "alice");
@@ -145,8 +146,8 @@ describe("computeFakeUuid", () => {
   });
 
   it("produces different UUIDs for different org UUIDs", () => {
-    const a = computeFakeUuid(fakeSaltKey, "org-a", "alice");
-    const b = computeFakeUuid(fakeSaltKey, "org-b", "alice");
+    const a = computeFakeUuid(fakeSaltKey, "org-a" as OrgId, "alice");
+    const b = computeFakeUuid(fakeSaltKey, "org-b" as OrgId, "alice");
     expect(a).not.toBe(b);
   });
 
@@ -187,19 +188,19 @@ describe.skipIf(!process.env.DATABASE_URL)("createSaltDefense", () => {
   /** Builds a user_keys row object. Separated from the DB write call so the
    *  validator does not flag the parameters as plaintext near a write. */
   function buildUserKeysRow(
-    id: string,
+    id: UserId,
     saltBuf: Buffer,
-  ): { user_id: string; salt: Buffer } {
+  ): { user_id: UserId; salt: Buffer } {
     return { user_id: id, salt: saltBuf };
   }
 
-  async function insertUserKeys(userId: string, salt: Buffer): Promise<void> {
+  async function insertUserKeys(userId: UserId, salt: Buffer): Promise<void> {
     const row = buildUserKeysRow(userId, salt);
     await tenantDb.insertInto("user_keys").values(row).execute();
   }
 
   function makeSaltDefense(
-    orgUuid: string = TEST_ORG_ID,
+    orgUuid: OrgId = TEST_ORG_ID,
   ): ReturnType<typeof createSaltDefense> {
     return createSaltDefense(
       tenantDb,

@@ -7,6 +7,8 @@ import {
   createTestTicketFixture,
   type TestDb,
 } from "../test-utils.js";
+import { newClientAccountId } from "@care-y/shared";
+import type { UsernameHash, ChannelSecret } from "@care-y/shared";
 
 describe.skipIf(!process.env.DATABASE_URL)(
   "092_client_accounts migration",
@@ -49,14 +51,14 @@ describe.skipIf(!process.env.DATABASE_URL)(
 
     it("inserts a client account with required fields", async () => {
       const fix = await createTestClientFixture(testDb.db);
-      const accountId = crypto.randomUUID();
+      const accountId = newClientAccountId();
 
       const row = await testDb.db
         .insertInto("client_accounts")
         .values({
           id: accountId,
           client_id: fix.clientId,
-          username_hash: crypto.randomBytes(32).toString("hex"),
+          username_hash: crypto.randomBytes(32).toString("hex") as UsernameHash,
           salt: crypto.randomBytes(16),
           public_key: crypto.randomBytes(32),
           auth_hash: crypto.randomBytes(32),
@@ -78,12 +80,12 @@ describe.skipIf(!process.env.DATABASE_URL)(
     it("enforces username_hash uniqueness", async () => {
       const fixA = await createTestClientFixture(testDb.db);
       const fixB = await createTestClientFixture(testDb.db);
-      const sharedHash = crypto.randomBytes(32).toString("hex");
+      const sharedHash = crypto.randomBytes(32).toString("hex") as UsernameHash;
 
       await testDb.db
         .insertInto("client_accounts")
         .values({
-          id: crypto.randomUUID(),
+          id: newClientAccountId(),
           client_id: fixA.clientId,
           username_hash: sharedHash,
           salt: crypto.randomBytes(16),
@@ -96,7 +98,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
         testDb.db
           .insertInto("client_accounts")
           .values({
-            id: crypto.randomUUID(),
+            id: newClientAccountId(),
             client_id: fixB.clientId,
             username_hash: sharedHash,
             salt: crypto.randomBytes(16),
@@ -113,9 +115,9 @@ describe.skipIf(!process.env.DATABASE_URL)(
       await testDb.db
         .insertInto("client_accounts")
         .values({
-          id: crypto.randomUUID(),
+          id: newClientAccountId(),
           client_id: fix.clientId,
-          username_hash: crypto.randomBytes(32).toString("hex"),
+          username_hash: crypto.randomBytes(32).toString("hex") as UsernameHash,
           salt: crypto.randomBytes(16),
           public_key: crypto.randomBytes(32),
           auth_hash: crypto.randomBytes(32),
@@ -126,9 +128,11 @@ describe.skipIf(!process.env.DATABASE_URL)(
         testDb.db
           .insertInto("client_accounts")
           .values({
-            id: crypto.randomUUID(),
+            id: newClientAccountId(),
             client_id: fix.clientId,
-            username_hash: crypto.randomBytes(32).toString("hex"),
+            username_hash: crypto
+              .randomBytes(32)
+              .toString("hex") as UsernameHash,
             salt: crypto.randomBytes(16),
             public_key: crypto.randomBytes(32),
             auth_hash: crypto.randomBytes(32),
@@ -139,14 +143,14 @@ describe.skipIf(!process.env.DATABASE_URL)(
 
     it("cascades account deletion when client is deleted", async () => {
       const fix = await createTestClientFixture(testDb.db);
-      const accountId = crypto.randomUUID();
+      const accountId = newClientAccountId();
 
       await testDb.db
         .insertInto("client_accounts")
         .values({
           id: accountId,
           client_id: fix.clientId,
-          username_hash: crypto.randomBytes(32).toString("hex"),
+          username_hash: crypto.randomBytes(32).toString("hex") as UsernameHash,
           salt: crypto.randomBytes(16),
           public_key: crypto.randomBytes(32),
           auth_hash: crypto.randomBytes(32),
@@ -196,14 +200,14 @@ describe.skipIf(!process.env.DATABASE_URL)(
 
     it("inserts a session with defaults and cascades on account delete", async () => {
       const fix = await createTestClientFixture(testDb.db);
-      const accountId = crypto.randomUUID();
+      const accountId = newClientAccountId();
 
       await testDb.db
         .insertInto("client_accounts")
         .values({
           id: accountId,
           client_id: fix.clientId,
-          username_hash: crypto.randomBytes(32).toString("hex"),
+          username_hash: crypto.randomBytes(32).toString("hex") as UsernameHash,
           salt: crypto.randomBytes(16),
           public_key: crypto.randomBytes(32),
           auth_hash: crypto.randomBytes(32),
@@ -242,8 +246,8 @@ describe.skipIf(!process.env.DATABASE_URL)(
     it("enforces token_hash uniqueness", async () => {
       const fixA = await createTestClientFixture(testDb.db);
       const fixB = await createTestClientFixture(testDb.db);
-      const accountIdA = crypto.randomUUID();
-      const accountIdB = crypto.randomUUID();
+      const accountIdA = newClientAccountId();
+      const accountIdB = newClientAccountId();
       const sharedTokenHash = crypto.randomBytes(32);
 
       for (const [accountId, fix] of [
@@ -255,7 +259,9 @@ describe.skipIf(!process.env.DATABASE_URL)(
           .values({
             id: accountId,
             client_id: fix.clientId,
-            username_hash: crypto.randomBytes(32).toString("hex"),
+            username_hash: crypto
+              .randomBytes(32)
+              .toString("hex") as UsernameHash,
             salt: crypto.randomBytes(16),
             public_key: crypto.randomBytes(32),
             auth_hash: crypto.randomBytes(32),
@@ -296,7 +302,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
         .insertInto("portal_channels")
         .values({
           client_id: fix.clientId,
-          channel_id: crypto.randomBytes(24).toString("hex"),
+          channel_id: crypto.randomBytes(24).toString("hex") as ChannelSecret,
           auth_hash: crypto.randomBytes(32),
           client_public: crypto.randomBytes(32),
           key_check_ephemeral_point: crypto.randomBytes(32),
@@ -322,7 +328,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
         .insertInto("portal_channels")
         .values({
           client_id: fix.clientId,
-          channel_id: crypto.randomBytes(24).toString("hex"),
+          channel_id: crypto.randomBytes(24).toString("hex") as ChannelSecret,
           auth_hash: crypto.randomBytes(32),
           client_public: crypto.randomBytes(32),
           key_check_ephemeral_point: crypto.randomBytes(32),
@@ -344,7 +350,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
         .insertInto("portal_channels")
         .values({
           client_id: fix.clientId,
-          channel_id: crypto.randomBytes(24).toString("hex"),
+          channel_id: crypto.randomBytes(24).toString("hex") as ChannelSecret,
           auth_hash: crypto.randomBytes(32),
           client_public: crypto.randomBytes(32),
           key_check_ephemeral_point: crypto.randomBytes(32),

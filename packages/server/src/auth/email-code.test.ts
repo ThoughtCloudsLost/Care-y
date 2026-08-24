@@ -20,6 +20,7 @@ import {
 } from "../test-utils.js";
 import { createEmailCodeService, type EmailCodeService } from "./email-code.js";
 import { RateLimitError, ValidationError } from "../errors.js";
+import type { CodeHash } from "@care-y/shared";
 
 describe.skipIf(!process.env.DATABASE_URL)("EmailCodeService", () => {
   let testDb: TestDb;
@@ -132,7 +133,8 @@ describe.skipIf(!process.env.DATABASE_URL)("EmailCodeService", () => {
           .insertInto("email_codes")
           .values({
             user_id: user.id,
-            code_hash: `scrypt:${"aa".repeat(16)}:${"bb".repeat(32)}`,
+            code_hash:
+              `scrypt:${"aa".repeat(16)}:${"bb".repeat(32)}` as CodeHash,
             // expires_at set so that creation time (expires_at - 5min) is within the hour
             expires_at: new Date(now + 5 * 60 * 1000 - i * 60_000),
             consumed: true, // consumed so they don't interfere with cooldown

@@ -42,7 +42,11 @@ import {
   createInMemoryTotpReplayCache,
   TOTP_REPLAY_TTL_MS,
 } from "./totp-replay-cache.js";
-import { TwoFactorMethod } from "@care-y/shared";
+import {
+  TwoFactorMethod,
+  type OrgSchema,
+  type WebauthnCredentialId,
+} from "@care-y/shared";
 import { ValidationError } from "../errors.js";
 import * as webauthnVerify from "./webauthn/verify.js";
 import type {
@@ -51,6 +55,9 @@ import type {
   RegistrationResult,
   AuthenticationResult,
 } from "./webauthn/types.js";
+
+/** Shorthand cast for fabricated WebAuthn credential ID literals. */
+const cid = (s: string): WebauthnCredentialId => s as WebauthnCredentialId;
 
 describe.skipIf(!process.env.DATABASE_URL)("TwoFactorService", () => {
   let testDb: TestDb;
@@ -447,7 +454,7 @@ describe.skipIf(!process.env.DATABASE_URL)("TwoFactorService", () => {
         .insertInto("webauthn_credentials")
         .values({
           user_id: user.id,
-          credential_id: "cred-test-1",
+          credential_id: cid("cred-test-1"),
           public_key: "fake-pk-base64url",
           sign_count: 0,
           transports: ["internal"],
@@ -483,7 +490,7 @@ describe.skipIf(!process.env.DATABASE_URL)("TwoFactorService", () => {
       overrides?: Partial<RegistrationResponseJSON>,
     ): RegistrationResponseJSON {
       return {
-        id: "cred-reg-1",
+        id: cid("cred-reg-1"),
         rawId: "cred-reg-1",
         type: "public-key",
         authenticatorAttachment: "platform",
@@ -504,7 +511,7 @@ describe.skipIf(!process.env.DATABASE_URL)("TwoFactorService", () => {
     ): RegistrationResult {
       return {
         credential: {
-          id: "cred-reg-1",
+          id: "cred-reg-1" as WebauthnCredentialId,
           publicKey: "fake-pk-base64url",
           algorithm: "ES256",
           transports: ["internal"],
@@ -582,7 +589,7 @@ describe.skipIf(!process.env.DATABASE_URL)("TwoFactorService", () => {
         .mockResolvedValue(
           fakeRegistrationResult({
             credential: {
-              id: "cred-clear-test",
+              id: "cred-clear-test" as WebauthnCredentialId,
               publicKey: "pk2",
               algorithm: "ES256",
               transports: [],
@@ -592,7 +599,7 @@ describe.skipIf(!process.env.DATABASE_URL)("TwoFactorService", () => {
 
       await twoFactor.verifyWebauthnRegistration(
         session.token,
-        fakeRegistration({ id: "cred-clear-test" }),
+        fakeRegistration({ id: cid("cred-clear-test") }),
         "https://localhost",
         "localhost",
         user.id,
@@ -638,7 +645,7 @@ describe.skipIf(!process.env.DATABASE_URL)("TwoFactorService", () => {
       spy.mockResolvedValue(
         fakeRegistrationResult({
           credential: {
-            id: "cred-ord-1",
+            id: "cred-ord-1" as WebauthnCredentialId,
             publicKey: "pk-ord-1",
             algorithm: "ES256",
             transports: ["internal"],
@@ -648,7 +655,7 @@ describe.skipIf(!process.env.DATABASE_URL)("TwoFactorService", () => {
 
       await twoFactor.verifyWebauthnRegistration(
         session.token,
-        fakeRegistration({ id: "cred-ord-1" }),
+        fakeRegistration({ id: cid("cred-ord-1") }),
         "https://localhost",
         "localhost",
         user.id,
@@ -665,7 +672,7 @@ describe.skipIf(!process.env.DATABASE_URL)("TwoFactorService", () => {
       spy.mockResolvedValue(
         fakeRegistrationResult({
           credential: {
-            id: "cred-ord-2",
+            id: "cred-ord-2" as WebauthnCredentialId,
             publicKey: "pk-ord-2",
             algorithm: "ES256",
             transports: ["usb"],
@@ -676,7 +683,7 @@ describe.skipIf(!process.env.DATABASE_URL)("TwoFactorService", () => {
       await twoFactor.verifyWebauthnRegistration(
         session.token,
         fakeRegistration({
-          id: "cred-ord-2",
+          id: cid("cred-ord-2"),
           authenticatorAttachment: "cross-platform",
         }),
         "https://localhost",
@@ -706,7 +713,7 @@ describe.skipIf(!process.env.DATABASE_URL)("TwoFactorService", () => {
       credentialId: string,
     ): AuthenticationResponseJSON {
       return {
-        id: credentialId,
+        id: cid(credentialId),
         rawId: credentialId,
         type: "public-key",
         response: {
@@ -732,7 +739,7 @@ describe.skipIf(!process.env.DATABASE_URL)("TwoFactorService", () => {
       const user = await createTestUser(db);
       const session = await createTestSession(db, { user_id: user.id });
 
-      await insertWebauthnCredential(db, user.id, "cred-assert-1");
+      await insertWebauthnCredential(db, user.id, cid("cred-assert-1"));
 
       // Set challenge
       await twoFactor.getWebauthnAssertionOptions(
@@ -758,7 +765,7 @@ describe.skipIf(!process.env.DATABASE_URL)("TwoFactorService", () => {
       const cred = await db
         .selectFrom("webauthn_credentials")
         .select("sign_count")
-        .where("credential_id", "=", "cred-assert-1")
+        .where("credential_id", "=", cid("cred-assert-1"))
         .executeTakeFirstOrThrow();
 
       expect(cred.sign_count).toBe(5);
@@ -768,7 +775,7 @@ describe.skipIf(!process.env.DATABASE_URL)("TwoFactorService", () => {
       const user = await createTestUser(db);
       const session = await createTestSession(db, { user_id: user.id });
 
-      await insertWebauthnCredential(db, user.id, "cred-assert-clear");
+      await insertWebauthnCredential(db, user.id, cid("cred-assert-clear"));
 
       await twoFactor.getWebauthnAssertionOptions(
         session.token,
@@ -841,7 +848,7 @@ describe.skipIf(!process.env.DATABASE_URL)("TwoFactorService", () => {
         .insertInto("webauthn_credentials")
         .values({
           user_id: user.id,
-          credential_id: "cred-status-platform",
+          credential_id: cid("cred-status-platform"),
           public_key: "fake-pk",
           sign_count: 0,
           transports: ["internal"],
@@ -869,7 +876,7 @@ describe.skipIf(!process.env.DATABASE_URL)("TwoFactorService", () => {
         .insertInto("webauthn_credentials")
         .values({
           user_id: user.id,
-          credential_id: "cred-status-xplat",
+          credential_id: cid("cred-status-xplat"),
           public_key: "fake-pk",
           sign_count: 0,
           transports: ["usb"],
@@ -895,7 +902,7 @@ describe.skipIf(!process.env.DATABASE_URL)("TwoFactorService", () => {
         .values([
           {
             user_id: user.id,
-            credential_id: "cred-multi-1",
+            credential_id: cid("cred-multi-1"),
             public_key: "pk1",
             sign_count: 0,
             transports: ["internal"],
@@ -906,7 +913,7 @@ describe.skipIf(!process.env.DATABASE_URL)("TwoFactorService", () => {
           },
           {
             user_id: user.id,
-            credential_id: "cred-multi-2",
+            credential_id: cid("cred-multi-2"),
             public_key: "pk2",
             sign_count: 0,
             transports: ["usb"],
@@ -940,7 +947,7 @@ describe.skipIf(!process.env.DATABASE_URL)("TwoFactorService", () => {
         .values([
           {
             user_id: user.id,
-            credential_id: "cred-rm-1",
+            credential_id: cid("cred-rm-1"),
             public_key: "pk1",
             sign_count: 0,
             transports: ["internal"],
@@ -951,7 +958,7 @@ describe.skipIf(!process.env.DATABASE_URL)("TwoFactorService", () => {
           },
           {
             user_id: user.id,
-            credential_id: "cred-rm-2",
+            credential_id: cid("cred-rm-2"),
             public_key: "pk2",
             sign_count: 0,
             transports: ["usb"],
@@ -966,7 +973,7 @@ describe.skipIf(!process.env.DATABASE_URL)("TwoFactorService", () => {
       await twoFactor.removeMethod(
         user.id,
         TwoFactorMethod.WEBAUTHN,
-        "cred-rm-1",
+        cid("cred-rm-1"),
       );
 
       // One credential should remain
@@ -993,7 +1000,7 @@ describe.skipIf(!process.env.DATABASE_URL)("TwoFactorService", () => {
         .insertInto("webauthn_credentials")
         .values({
           user_id: user.id,
-          credential_id: "cred-last-1",
+          credential_id: cid("cred-last-1"),
           public_key: "pk1",
           sign_count: 0,
           transports: ["internal"],
@@ -1007,7 +1014,7 @@ describe.skipIf(!process.env.DATABASE_URL)("TwoFactorService", () => {
       await twoFactor.removeMethod(
         user.id,
         TwoFactorMethod.WEBAUTHN,
-        "cred-last-1",
+        cid("cred-last-1"),
       );
 
       // Credential should be deleted
@@ -1034,7 +1041,7 @@ describe.skipIf(!process.env.DATABASE_URL)("TwoFactorService", () => {
         .insertInto("webauthn_credentials")
         .values({
           user_id: user.id,
-          credential_id: "cred-only-1",
+          credential_id: cid("cred-only-1"),
           public_key: "pk1",
           sign_count: 0,
           transports: ["internal"],
@@ -1049,7 +1056,7 @@ describe.skipIf(!process.env.DATABASE_URL)("TwoFactorService", () => {
         twoFactor.removeMethod(
           user.id,
           TwoFactorMethod.WEBAUTHN,
-          "cred-only-1",
+          cid("cred-only-1"),
         ),
       ).rejects.toThrow(ValidationError);
     });
@@ -1065,7 +1072,7 @@ describe.skipIf(!process.env.DATABASE_URL)("TwoFactorService", () => {
         .values([
           {
             user_id: user.id,
-            credential_id: "cred-all-1",
+            credential_id: cid("cred-all-1"),
             public_key: "pk1",
             sign_count: 0,
             transports: ["internal"],
@@ -1076,7 +1083,7 @@ describe.skipIf(!process.env.DATABASE_URL)("TwoFactorService", () => {
           },
           {
             user_id: user.id,
-            credential_id: "cred-all-2",
+            credential_id: cid("cred-all-2"),
             public_key: "pk2",
             sign_count: 0,
             transports: ["usb"],
@@ -1292,7 +1299,7 @@ describe.skipIf(!process.env.DATABASE_URL)("TwoFactorService", () => {
   describe("SMS enrollment", () => {
     const TEST_ORG = {
       orgId: TEST_ORG_ID,
-      orgSchema: `org_${TEST_ORG_ID}`,
+      orgSchema: `org_${TEST_ORG_ID}` as OrgSchema,
     } as const;
 
     const smsResolver: CallerIdResolver = vi

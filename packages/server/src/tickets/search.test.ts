@@ -8,6 +8,7 @@ import {
 } from "../test-utils.js";
 import { createSearchService, type SearchService } from "./search.js";
 import { createQueuePermissionsService } from "./queue-permissions.js";
+import type { TicketId, FollowupId } from "@care-y/shared";
 
 describe.skipIf(!process.env.DATABASE_URL)("SearchService (DB)", () => {
   let testDb: TestDb;
@@ -179,10 +180,10 @@ describe.skipIf(!process.env.DATABASE_URL)("SearchService (DB)", () => {
   // -----------------------------------------------------------------------
 
   async function seedFollowup(
-    ticketId: string,
+    ticketId: TicketId,
     content: string,
     opts?: { source?: string; type?: string; deletedAt?: Date },
-  ): Promise<string> {
+  ): Promise<FollowupId> {
     const row = await testDb.db
       .insertInto("followups")
       .values({

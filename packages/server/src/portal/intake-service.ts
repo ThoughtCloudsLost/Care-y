@@ -16,7 +16,6 @@
  * configured recipients.
  */
 
-import crypto from "node:crypto";
 import type { Kysely } from "kysely";
 import type { TenantDatabase } from "../db/types.js";
 import type { NotificationService } from "../notifications/service.js";
@@ -38,8 +37,19 @@ import type {
 import { createAccount } from "./account-service.js";
 import { storeClientCopy } from "./portal-message-service.js";
 import type { EciesTripleBuffers } from "./portal-message-service.js";
+import type {
+  TicketId,
+  FollowupId,
+  QueueId,
+  OrgId,
+  OrgSchema,
+  OrgSlug,
+  IntakeFormId,
+  UserId,
+} from "@care-y/shared";
+import { userIdSchema, newKeyGeneration } from "@care-y/shared";
 
-const recipientIdsSchema = z.array(z.uuid());
+const recipientIdsSchema = z.array(userIdSchema);
 
 // ---------------------------------------------------------------------------
 // Custom errors
@@ -76,22 +86,22 @@ export interface IntakeAccountInput {
 }
 
 export interface IntakeTicketInput {
-  readonly ticketId: string;
-  readonly followUpId: string | null;
+  readonly ticketId: TicketId;
+  readonly followUpId: FollowupId | null;
   readonly encryptedTitle: Buffer;
   readonly encryptedDescription: Buffer;
   readonly encryptedMessage: Buffer | null;
   readonly encryptedFormResponse: Buffer;
-  readonly formId: string | null;
+  readonly formId: IntakeFormId | null;
   readonly wrappedTk: Buffer;
-  readonly resolvedQueueId: string | null;
+  readonly resolvedQueueId: QueueId | null;
   readonly resolvedPriority: "low" | "normal" | "high" | "urgent" | null;
   readonly resolvedEscalationLevel: string | null;
   readonly account: IntakeAccountInput | null;
 }
 
 export interface IntakeTicketResult {
-  readonly ticketId: string;
+  readonly ticketId: TicketId;
   readonly clientAlias: string;
 }
 
@@ -120,9 +130,9 @@ export async function createIntakeTicket(
     readonly notificationService: NotificationService;
     readonly sealedBox: SealedBoxEncryptor;
     readonly fieldEncryptor?: FieldEncryptor;
-    readonly orgId: string;
-    readonly orgSchema: string;
-    readonly orgSlug: string;
+    readonly orgId: OrgId;
+    readonly orgSchema: OrgSchema;
+    readonly orgSlug: OrgSlug;
     readonly accountServiceDeps?: AccountServiceDeps;
   },
   input: IntakeTicketInput,
@@ -144,7 +154,7 @@ export async function createIntakeTicket(
 
   // Resolve destination queue via routing precedence
   let destinationQueueId = orgIntakeQueueId;
-  let formDestinationQueueId: string | null = null;
+  let formDestinationQueueId: QueueId | null = null;
 
   // Load form metadata when a formId is provided
   if (input.formId !== null) {
@@ -176,7 +186,7 @@ export async function createIntakeTicket(
         .where("role", "=", "queue-routing")
         .execute();
 
-      const allowedQueueIds = new Set<string>();
+      const allowedQueueIds = new Set<QueueId>();
       for (const field of routingFields) {
         if (field.routing_queue_ids !== null) {
           for (const qid of field.routing_queue_ids) {
@@ -230,7 +240,7 @@ export async function createIntakeTicket(
         queue_id: destinationQueueId,
         encrypted_title: input.encryptedTitle,
         encrypted_description: input.encryptedDescription,
-        key_generation: crypto.randomUUID(),
+        key_generation: newKeyGeneration(),
         priority,
       })
       .executeTakeFirstOrThrow();
@@ -343,12 +353,12 @@ function dispatchTicketCreated(
   db: Kysely<TenantDatabase>,
   deps: {
     readonly notificationService: NotificationService;
-    readonly orgId: string;
-    readonly orgSchema: string;
-    readonly orgSlug: string;
+    readonly orgId: OrgId;
+    readonly orgSchema: OrgSchema;
+    readonly orgSlug: OrgSlug;
   },
-  queueId: string,
-  ticketId: string,
+  queueId: QueueId,
+  ticketId: TicketId,
 ): void {
   void (async () => {
     try {
@@ -395,13 +405,13 @@ function dispatchEscalationAlert(
   db: Kysely<TenantDatabase>,
   deps: {
     readonly notificationService: NotificationService;
-    readonly orgId: string;
-    readonly orgSchema: string;
-    readonly orgSlug: string;
+    readonly orgId: OrgId;
+    readonly orgSchema: OrgSchema;
+    readonly orgSlug: OrgSlug;
   },
-  formId: string,
-  queueId: string,
-  ticketId: string,
+  formId: IntakeFormId,
+  queueId: QueueId,
+  ticketId: TicketId,
   encryptor: FieldEncryptor | null,
 ): void {
   void (async () => {
@@ -414,7 +424,7 @@ function dispatchEscalationAlert(
         .where("role", "=", "escalation")
         .execute();
 
-      const recipientIds = new Set<string>();
+      const recipientIds = new Set<UserId>();
       for (const field of escalationFields) {
         if (
           field.encrypted_escalation_recipient_ids !== null &&

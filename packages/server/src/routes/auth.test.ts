@@ -29,6 +29,15 @@ import {
   type TestDb,
 } from "../test-utils.js";
 import { RoleId, TwoFactorMethod } from "@care-y/shared";
+import type {
+  SessionId,
+  SessionToken,
+  IpToken,
+  UaToken,
+  OrgId,
+  OrgSchema,
+} from "@care-y/shared";
+import type { UserRecord } from "../auth/service.js";
 import { createScryptHasher } from "../auth/password.js";
 import { createInMemoryRateLimiter } from "../ratelimit/rate-limiter.js";
 import { createInMemoryTotpReplayCache } from "../auth/totp-replay-cache.js";
@@ -51,7 +60,7 @@ function makeTenantDbFactory(
 /** Creates AuthService scoped to the test tenant DB. */
 function makeAuthService(
   tenantDb: Kysely<TenantDatabase>,
-  orgId: string = TEST_ORG_ID,
+  orgId: OrgId = TEST_ORG_ID,
 ): ReturnType<typeof createAuthService> {
   const sessions = createDbSessionRepository(
     tenantDb,
@@ -80,7 +89,7 @@ describe.skipIf(!HAS_DB)("auth + org routers (DB integration)", () => {
   });
 
   let orgContext: OrgContext;
-  const createdOrgIds: string[] = [];
+  const createdOrgIds: OrgId[] = [];
   const createdSchemas: string[] = [];
 
   beforeAll(async () => {
@@ -108,7 +117,7 @@ describe.skipIf(!HAS_DB)("auth + org routers (DB integration)", () => {
     orgContext = {
       orgId: org.id,
       orgSlug: org.slug,
-      orgSchema: testDb.schemaName,
+      orgSchema: testDb.schemaName as OrgSchema,
       tenantDb,
       sealedBox: testSealedBox,
     };
@@ -213,15 +222,7 @@ describe.skipIf(!HAS_DB)("auth + org routers (DB integration)", () => {
   }
 
   function createAuthedCaller(
-    user: {
-      id: string;
-      encryptedIdentifier: string;
-      encryptedDisplayName: string;
-      encryptedPreferredLocale: string | null;
-      roleId: string;
-      isActive: boolean;
-      hasSeenBriefing: boolean;
-    },
+    user: UserRecord,
     sessionToken: string,
     twofaVerified = false,
   ) {
@@ -231,11 +232,11 @@ describe.skipIf(!HAS_DB)("auth + org routers (DB integration)", () => {
       res,
       org: orgContext,
       session: {
-        id: "test-session-id",
-        token: sessionToken,
+        id: "test-session-id" as SessionId,
+        token: sessionToken as SessionToken,
         userId: user.id,
-        ipToken: "test-ip-token",
-        uaToken: "test-ua-token",
+        ipToken: "test-ip-token" as IpToken,
+        uaToken: "test-ua-token" as UaToken,
         expiresAt: new Date(Date.now() + 60 * 60 * 1000),
         twofaVerified,
         webauthnChallenge: null,
@@ -443,7 +444,7 @@ describe.skipIf(!HAS_DB)("auth + org routers (DB integration)", () => {
     );
 
     const { caller: adminCaller } = createAuthedCaller(
-      { ...loginResult.user, isActive: true },
+      { ...loginResult.user, isActive: true } as UserRecord,
       "wire-token",
       true,
     );
@@ -819,7 +820,7 @@ describe.skipIf(!HAS_DB)("auth + org routers (DB integration)", () => {
       const freshOrgCtx: OrgContext = {
         orgId: freshOrg.id,
         orgSlug: freshOrg.slug,
-        orgSchema: freshDb.schemaName,
+        orgSchema: freshDb.schemaName as OrgSchema,
         tenantDb: freshTenantDb,
         sealedBox: testSealedBox,
       };
@@ -855,11 +856,11 @@ describe.skipIf(!HAS_DB)("auth + org routers (DB integration)", () => {
         res: mockRes(),
         org: freshOrgCtx,
         session: {
-          id: `session-${callerAdmin.id}`,
-          token: `token-${callerAdmin.id}`,
+          id: `session-${callerAdmin.id}` as SessionId,
+          token: `token-${callerAdmin.id}` as SessionToken,
           userId: callerAdmin.id,
-          ipToken: "test-ip-token",
-          uaToken: "test-ua-token",
+          ipToken: "test-ip-token" as IpToken,
+          uaToken: "test-ua-token" as UaToken,
           expiresAt: new Date(Date.now() + 60 * 60 * 1000),
           twofaVerified: true,
           webauthnChallenge: null,

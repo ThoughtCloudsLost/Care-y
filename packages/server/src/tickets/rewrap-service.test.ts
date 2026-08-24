@@ -14,6 +14,13 @@ import { rewrapFollowUp, type RewrapInput } from "./rewrap-service.js";
 import { ForbiddenError } from "../errors.js";
 import * as crypto from "node:crypto";
 import type { BlobStore, BlobCategory } from "../storage/store.js";
+import {
+  newFollowupId,
+  newKeyGeneration,
+  type KeyGeneration,
+  type BlobKey,
+  type OrgSchema,
+} from "@care-y/shared";
 
 describe.skipIf(!process.env.DATABASE_URL)("rewrapFollowUp (DB)", () => {
   let testDb: TestDb;
@@ -29,9 +36,11 @@ describe.skipIf(!process.env.DATABASE_URL)("rewrapFollowUp (DB)", () => {
     await testDb.cleanup();
   });
 
-  async function createFixtureWithFollowUp(opts?: { keyGeneration?: string }) {
+  async function createFixtureWithFollowUp(opts?: {
+    keyGeneration?: KeyGeneration;
+  }) {
     const fix = await createTestTicketFixture(testDb.db, { createUser: true });
-    const keyGen = opts?.keyGeneration ?? crypto.randomUUID();
+    const keyGen = opts?.keyGeneration ?? newKeyGeneration();
 
     const fu = await testDb.db
       .insertInto("followups")
@@ -101,7 +110,7 @@ describe.skipIf(!process.env.DATABASE_URL)("rewrapFollowUp (DB)", () => {
     const fix = await createTestTicketFixture(testDb.db, { createUser: true });
 
     const result = await rewrapFollowUp(testDb.db, access, fix.userId!, {
-      followUpId: crypto.randomUUID(),
+      followUpId: newFollowupId(),
       encryptedContent: Buffer.from("x"),
     });
 
@@ -151,7 +160,7 @@ describe.skipIf(!process.env.DATABASE_URL)("rewrapFollowUp (DB)", () => {
       .values({
         ticket_id: ticketId,
         followup_id: followUpId,
-        blob_key: "old-rec-key",
+        blob_key: "old-rec-key" as BlobKey,
         size_bytes: 1024,
         duration_seconds: 10,
       })
@@ -162,7 +171,7 @@ describe.skipIf(!process.env.DATABASE_URL)("rewrapFollowUp (DB)", () => {
       .values({
         ticket_id: ticketId,
         followup_id: followUpId,
-        blob_key: "old-att-key",
+        blob_key: "old-att-key" as BlobKey,
         size_bytes: 2048,
         content_type: "image/jpeg",
       })
@@ -183,12 +192,12 @@ describe.skipIf(!process.env.DATABASE_URL)("rewrapFollowUp (DB)", () => {
       encryptedContent: Buffer.from("canonical"),
       blobUpdates: [
         {
-          oldBlobKey: "old-rec-key",
+          oldBlobKey: "old-rec-key" as BlobKey,
           encryptedData: Buffer.from("re-encrypted-rec"),
           category: "recording" as BlobCategory,
         },
         {
-          oldBlobKey: "old-att-key",
+          oldBlobKey: "old-att-key" as BlobKey,
           encryptedData: Buffer.from("re-encrypted-att"),
           category: "attachment" as BlobCategory,
         },
@@ -201,7 +210,7 @@ describe.skipIf(!process.env.DATABASE_URL)("rewrapFollowUp (DB)", () => {
       userId,
       input,
       mockBlobStore,
-      "test_schema",
+      "test_schema" as OrgSchema,
     );
 
     expect(result.rewrapped).toBe(true);
@@ -241,7 +250,7 @@ describe.skipIf(!process.env.DATABASE_URL)("rewrapFollowUp (DB)", () => {
       userId,
       { followUpId, encryptedContent: Buffer.from("canonical") },
       mockBlobStore,
-      "test_schema",
+      "test_schema" as OrgSchema,
     );
 
     expect(mockBlobStore.put).not.toHaveBeenCalled();

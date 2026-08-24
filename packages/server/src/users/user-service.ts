@@ -8,18 +8,20 @@
 
 import type { Kysely } from "kysely";
 import { meetsRoleThreshold } from "@care-y/shared";
+import type { UserId, TicketId } from "@care-y/shared";
+import type { RoleIdValue } from "@care-y/shared";
 import type { TenantDatabase } from "../db/types.js";
 
 export interface VolunteerListRecord {
-  readonly id: string;
+  readonly id: UserId;
   readonly encryptedDisplayName: Buffer;
 }
 
 export interface AdminUserListRecord {
-  readonly id: string;
+  readonly id: UserId;
   readonly encryptedIdentifier: Buffer;
   readonly encryptedDisplayName: Buffer;
-  readonly roleId: string;
+  readonly roleId: RoleIdValue;
   readonly isActive: boolean;
   readonly hasKeys: boolean;
   readonly hasOrgKeyWrap: boolean;
@@ -29,7 +31,7 @@ export interface AdminUserListRecord {
 export interface UserService {
   listActiveVolunteers(): Promise<readonly VolunteerListRecord[]>;
   listAllForAdmin(): Promise<readonly AdminUserListRecord[]>;
-  listActiveIdsByRoleId(roleId: string): Promise<readonly string[]>;
+  listActiveIdsByRoleId(roleId: RoleIdValue): Promise<readonly UserId[]>;
   /**
    * Active users holding a key wrap for a ticket.
    *
@@ -37,7 +39,7 @@ export interface UserService {
    * are still active. Used to resolve note-type escalation targets to people
    * who can actually decrypt the ticket.
    */
-  listActiveKeyWrapHolderIds(ticketId: string): Promise<readonly string[]>;
+  listActiveKeyWrapHolderIds(ticketId: TicketId): Promise<readonly UserId[]>;
   /**
    * Narrows a set of user IDs to those whose role meets `minRoleId`.
    *
@@ -45,9 +47,9 @@ export interface UserService {
    * layers agree on ordering.
    */
   filterByRoleThreshold(
-    userIds: readonly string[],
-    minRoleId: string,
-  ): Promise<readonly string[]>;
+    userIds: readonly UserId[],
+    minRoleId: RoleIdValue,
+  ): Promise<readonly UserId[]>;
 }
 
 export function createUserService(db: Kysely<TenantDatabase>): UserService {
@@ -106,7 +108,7 @@ export function createUserService(db: Kysely<TenantDatabase>): UserService {
       }));
     },
 
-    async listActiveIdsByRoleId(roleId): Promise<readonly string[]> {
+    async listActiveIdsByRoleId(roleId): Promise<readonly UserId[]> {
       const rows = await db
         .selectFrom("users")
         .select("id")
@@ -117,7 +119,7 @@ export function createUserService(db: Kysely<TenantDatabase>): UserService {
       return rows.map((r) => r.id);
     },
 
-    async listActiveKeyWrapHolderIds(ticketId): Promise<readonly string[]> {
+    async listActiveKeyWrapHolderIds(ticketId): Promise<readonly UserId[]> {
       const rows = await db
         .selectFrom("ticket_key_wraps as tkw")
         .innerJoin("users as u", "u.id", "tkw.volunteer_id")
@@ -133,7 +135,7 @@ export function createUserService(db: Kysely<TenantDatabase>): UserService {
     async filterByRoleThreshold(
       userIds,
       minRoleId,
-    ): Promise<readonly string[]> {
+    ): Promise<readonly UserId[]> {
       // An empty `in ()` list is not valid SQL, so short-circuit before
       // building the query rather than relying on the caller to check.
       if (userIds.length === 0) return [];

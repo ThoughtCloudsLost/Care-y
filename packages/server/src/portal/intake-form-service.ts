@@ -17,15 +17,22 @@ import { ErrorCode } from "@care-y/shared";
 import type { SaveIntakeFormInput } from "@care-y/shared";
 import type { FieldEncryptor } from "../crypto/field-encryptor.js";
 import { z } from "zod";
+import type {
+  IntakeFormId,
+  IntakeFormFieldId,
+  QueueId,
+  UserId,
+} from "@care-y/shared";
+import { userIdSchema } from "@care-y/shared";
 
-const recipientIdsSchema = z.array(z.uuid());
+const recipientIdsSchema = z.array(userIdSchema);
 
 // ---------------------------------------------------------------------------
 // Public read return shape
 // ---------------------------------------------------------------------------
 
 export interface PublicIntakeFormField {
-  readonly id: string;
+  readonly id: IntakeFormFieldId;
   readonly fieldType: string;
   readonly role: string | null;
   readonly encryptedLabel: string;
@@ -34,7 +41,7 @@ export interface PublicIntakeFormField {
 }
 
 export interface PublicIntakeForm {
-  readonly formId: string;
+  readonly formId: IntakeFormId;
   readonly slug: string | null;
   readonly fields: readonly PublicIntakeFormField[];
 }
@@ -44,7 +51,7 @@ export interface PublicIntakeForm {
  * Handles kill switch, slug resolution, and default fallback in one call.
  */
 export interface PublicFormResult {
-  readonly formId: string | null;
+  readonly formId: IntakeFormId | null;
   readonly slug: string | null;
   readonly fields: readonly PublicIntakeFormField[] | null;
   readonly intakeDisabled: boolean;
@@ -55,23 +62,23 @@ export interface PublicFormResult {
 // ---------------------------------------------------------------------------
 
 export interface FormDetailField {
-  readonly id: string;
+  readonly id: IntakeFormFieldId;
   readonly fieldType: string;
   readonly role: string | null;
-  readonly routingQueueIds: readonly string[] | null;
-  readonly escalationRecipientIds: readonly string[] | null;
+  readonly routingQueueIds: readonly QueueId[] | null;
+  readonly escalationRecipientIds: readonly UserId[] | null;
   readonly encryptedLabel: string;
   readonly encryptedConfig: string;
   readonly isRequired: boolean;
 }
 
 export interface FormDetail {
-  readonly formId: string;
+  readonly formId: IntakeFormId;
   readonly name: string;
   readonly slug: string | null;
   readonly isActive: boolean;
   readonly isDefault: boolean;
-  readonly destinationQueueId: string | null;
+  readonly destinationQueueId: QueueId | null;
   readonly fields: readonly FormDetailField[];
 }
 
@@ -80,12 +87,12 @@ export interface FormDetail {
 // ---------------------------------------------------------------------------
 
 export interface FormSummary {
-  readonly id: string;
+  readonly id: IntakeFormId;
   readonly name: string;
   readonly slug: string | null;
   readonly isActive: boolean;
   readonly isDefault: boolean;
-  readonly destinationQueueId: string | null;
+  readonly destinationQueueId: QueueId | null;
   readonly fieldCount: number;
 }
 
@@ -117,7 +124,10 @@ export interface IntakeFormService {
    * Ciphertext passthrough (labels/config returned as base64, never decrypted).
    * Throws NotFoundError for an unknown form id.
    */
-  getForm(db: Kysely<TenantDatabase>, formId: string): Promise<FormDetail>;
+  getForm(
+    db: Kysely<TenantDatabase>,
+    formId: IntakeFormId,
+  ): Promise<FormDetail>;
 
   /**
    * Admin whole-form save (create when formId null): replaces the field set
@@ -127,7 +137,7 @@ export interface IntakeFormService {
    */
   saveForm(
     db: Kysely<TenantDatabase>,
-    userId: string,
+    userId: UserId,
     input: SaveIntakeFormInput,
   ): Promise<{ formId: string }>;
 
@@ -138,12 +148,12 @@ export interface IntakeFormService {
    * Delete a form. Throws a ConflictError with FORM_HAS_RESPONSES code
    * when the form has intake submissions (deactivate instead).
    */
-  deleteForm(db: Kysely<TenantDatabase>, formId: string): Promise<void>;
+  deleteForm(db: Kysely<TenantDatabase>, formId: IntakeFormId): Promise<void>;
 
   /** Activate or deactivate a form. */
   setActive(
     db: Kysely<TenantDatabase>,
-    formId: string,
+    formId: IntakeFormId,
     active: boolean,
   ): Promise<void>;
 
@@ -237,7 +247,7 @@ export function createIntakeFormService(deps: {
 
     async getForm(
       db: Kysely<TenantDatabase>,
-      formId: string,
+      formId: IntakeFormId,
     ): Promise<FormDetail> {
       const form = await db
         .selectFrom("intake_forms")
@@ -282,7 +292,7 @@ export function createIntakeFormService(deps: {
         destinationQueueId: form.destination_queue_id,
         fields: fields.map((f) => {
           // Decrypt OPS-encrypted escalation recipient IDs for the admin UI.
-          let escalationRecipientIds: readonly string[] | null = null;
+          let escalationRecipientIds: readonly UserId[] | null = null;
           if (f.encrypted_escalation_recipient_ids !== null) {
             // care-y-ignore-next-line server-no-decrypt -- OPS-tier decryption: escalation recipient IDs are server-side operational data encrypted with OPS_SECRETS_KEY, same pattern as phones.encrypted_number in client-service.ts
             const json = fieldEncryptor.decrypt(
@@ -310,7 +320,7 @@ export function createIntakeFormService(deps: {
 
     async saveForm(
       db: Kysely<TenantDatabase>,
-      _userId: string,
+      _userId: UserId,
       input: SaveIntakeFormInput,
     ): Promise<{ formId: string }> {
       // Server-side one-availability re-check
@@ -335,7 +345,7 @@ export function createIntakeFormService(deps: {
       }
 
       return db.transaction().execute(async (trx) => {
-        let formId: string;
+        let formId: IntakeFormId;
 
         // Slug uniqueness check (within the transaction)
         if (input.slug != null) {
@@ -493,7 +503,7 @@ export function createIntakeFormService(deps: {
 
     async deleteForm(
       db: Kysely<TenantDatabase>,
-      formId: string,
+      formId: IntakeFormId,
     ): Promise<void> {
       // Check for responses before deleting
       const response = await db
@@ -519,7 +529,7 @@ export function createIntakeFormService(deps: {
 
     async setActive(
       db: Kysely<TenantDatabase>,
-      formId: string,
+      formId: IntakeFormId,
       active: boolean,
     ): Promise<void> {
       const result = await db

@@ -17,19 +17,19 @@ import {
   RoleId,
   ErrorCode,
 } from "@care-y/shared";
-import type { EscalationTarget } from "@care-y/shared";
+import type { EscalationTarget, NoteTypeId, RoleIdValue } from "@care-y/shared";
 import { ForbiddenError, NotFoundError } from "../errors.js";
 import { z } from "zod";
 
 export interface NoteTypeRecord {
-  readonly id: string;
+  readonly id: NoteTypeId;
   readonly encryptedName: Buffer;
   readonly encryptedIcon: Buffer;
   readonly encryptedDescription: Buffer | null;
   readonly isActive: boolean;
   readonly requiresOnClose: boolean;
-  readonly minViewRole: string;
-  readonly minCreateRole: string;
+  readonly minViewRole: RoleIdValue;
+  readonly minCreateRole: RoleIdValue;
   readonly createdAt: Date;
   readonly notificationHints: readonly string[];
 }
@@ -40,9 +40,9 @@ export interface NoteTypeAdminRecord extends NoteTypeRecord {
 
 export interface NoteTypeService {
   list(): Promise<NoteTypeAdminRecord[]>;
-  listActive(userRoleId: string): Promise<{
+  listActive(userRoleId: RoleIdValue): Promise<{
     types: (NoteTypeRecord & { readonly canCreate: boolean })[];
-    defaultNoteTypeId: string | null;
+    defaultNoteTypeId: NoteTypeId | null;
   }>;
   create(input: {
     encryptedName: Buffer;
@@ -50,39 +50,39 @@ export interface NoteTypeService {
     encryptedDescription?: Buffer;
     escalationTargets: EscalationTarget[];
     requiresOnClose?: boolean;
-    minViewRole?: string;
-    minCreateRole?: string;
+    minViewRole?: RoleIdValue;
+    minCreateRole?: RoleIdValue;
   }): Promise<NoteTypeRecord>;
   update(input: {
-    id: string;
+    id: NoteTypeId;
     encryptedName?: Buffer;
     encryptedIcon?: Buffer;
     encryptedDescription?: Buffer | null;
     escalationTargets?: EscalationTarget[];
     isActive?: boolean;
     requiresOnClose?: boolean;
-    minViewRole?: string;
-    minCreateRole?: string;
+    minViewRole?: RoleIdValue;
+    minCreateRole?: RoleIdValue;
   }): Promise<NoteTypeRecord>;
-  getDefaultTypeId(): Promise<string | null>;
-  getEscalationTargets(noteTypeId: string): Promise<EscalationTarget[]>;
-  getEscalationContext(noteTypeId: string): Promise<{
+  getDefaultTypeId(): Promise<NoteTypeId | null>;
+  getEscalationTargets(noteTypeId: NoteTypeId): Promise<EscalationTarget[]>;
+  getEscalationContext(noteTypeId: NoteTypeId): Promise<{
     targets: EscalationTarget[];
-    minViewRole: string;
+    minViewRole: RoleIdValue;
   } | null>;
-  getMinCreateRole(noteTypeId: string): Promise<string | undefined>;
+  getMinCreateRole(noteTypeId: NoteTypeId): Promise<RoleIdValue | undefined>;
 }
 
 interface NoteTypeRow {
-  id: string;
+  id: NoteTypeId;
   encrypted_name: Buffer;
   encrypted_icon: Buffer;
   encrypted_description: Buffer | null;
   encrypted_escalation_targets: Buffer;
   is_active: boolean;
   requires_on_close: boolean;
-  min_view_role: string;
-  min_create_role: string;
+  min_view_role: RoleIdValue;
+  min_create_role: RoleIdValue;
   created_at: Date;
 }
 
@@ -166,9 +166,9 @@ export function createNoteTypeService(
       );
     },
 
-    async listActive(userRoleId: string): Promise<{
+    async listActive(userRoleId: RoleIdValue): Promise<{
       types: (NoteTypeRecord & { readonly canCreate: boolean })[];
-      defaultNoteTypeId: string | null;
+      defaultNoteTypeId: NoteTypeId | null;
     }> {
       const [rows, config] = await Promise.all([
         db
@@ -289,7 +289,7 @@ export function createNoteTypeService(
       return toRecord(row);
     },
 
-    async getDefaultTypeId(): Promise<string | null> {
+    async getDefaultTypeId(): Promise<NoteTypeId | null> {
       const config = await db
         .selectFrom("org_config")
         .select("default_note_type_id")
@@ -325,7 +325,7 @@ export function createNoteTypeService(
       };
     },
 
-    async getMinCreateRole(noteTypeId): Promise<string | undefined> {
+    async getMinCreateRole(noteTypeId): Promise<RoleIdValue | undefined> {
       const row = await db
         .selectFrom("note_types")
         .select("min_create_role")
@@ -394,7 +394,7 @@ export async function seedDefaultNoteTypes(
   sealedBox: SealedBoxEncryptor,
   secretsEncryptor: SecretsEncryptor,
 ): Promise<void> {
-  let commentId: string | undefined;
+  let commentId: NoteTypeId | undefined;
 
   for (const def of DEFAULT_NOTE_TYPES) {
     const row = await db

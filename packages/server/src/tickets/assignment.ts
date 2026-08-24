@@ -15,6 +15,7 @@ import type { ShiftProvider } from "./shift-provider.js";
 import type { TicketAccessChecker } from "./access.js";
 import { ForbiddenError, NotFoundError, TicketError } from "../errors.js";
 import { ErrorCode } from "@care-y/shared";
+import type { TicketId, UserId } from "@care-y/shared";
 
 export interface AssignmentService {
   /**
@@ -23,13 +24,13 @@ export interface AssignmentService {
    * is currently on shift. Returns the assigned user ID (null if no
    * candidates available or lost a race).
    */
-  assignRoundRobin(ticketId: string): Promise<{ assignedTo: string | null }>;
+  assignRoundRobin(ticketId: TicketId): Promise<{ assignedTo: UserId | null }>;
 
   /** Self-assign: volunteer takes an unassigned ticket. */
-  take(userId: string, ticketId: string): Promise<void>;
+  take(userId: UserId, ticketId: TicketId): Promise<void>;
 
   /** Self-unassign: volunteer releases their assigned ticket. */
-  release(userId: string, ticketId: string): Promise<void>;
+  release(userId: UserId, ticketId: TicketId): Promise<void>;
 
   /**
    * Assign a ticket to a specific volunteer, or unassign if targetUserId is null.
@@ -37,9 +38,9 @@ export interface AssignmentService {
    * volunteer in the same org. Replaces the separate take/release client flows.
    */
   assignTo(
-    actorId: string,
-    ticketId: string,
-    targetUserId: string | null,
+    actorId: UserId,
+    ticketId: TicketId,
+    targetUserId: UserId | null,
   ): Promise<void>;
 }
 
@@ -49,8 +50,8 @@ export function createAssignmentService(
   shiftProvider: ShiftProvider,
 ): AssignmentService {
   async function countOpenTickets(
-    userIds: string[],
-  ): Promise<Map<string, number>> {
+    userIds: UserId[],
+  ): Promise<Map<UserId, number>> {
     if (userIds.length === 0) return new Map();
 
     const rows = await db
@@ -64,7 +65,7 @@ export function createAssignmentService(
 
     // Initialize all candidates to 0 (volunteers with no open tickets
     // won't appear in the GROUP BY result).
-    const counts = new Map<string, number>();
+    const counts = new Map<UserId, number>();
     for (const uid of userIds) counts.set(uid, 0);
     for (const row of rows) {
       if (row.assigned_to !== null) {
@@ -74,8 +75,8 @@ export function createAssignmentService(
     return counts;
   }
 
-  function pickFewest(counts: Map<string, number>): string | null {
-    let best: string | null = null;
+  function pickFewest(counts: Map<UserId, number>): UserId | null {
+    let best: UserId | null = null;
     let bestCount = Infinity;
     for (const [uid, count] of counts) {
       if (count < bestCount) {
@@ -87,7 +88,7 @@ export function createAssignmentService(
   }
 
   async function createSystemFollowUp(
-    ticketId: string,
+    ticketId: TicketId,
     type: string,
     eventParams?: Record<string, unknown>,
   ): Promise<void> {

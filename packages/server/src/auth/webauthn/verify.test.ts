@@ -14,6 +14,7 @@ import type {
   RegistrationChecks,
   AuthenticationChecks,
 } from "./types.js";
+import type { WebauthnCredentialId } from "@care-y/shared";
 
 // ---------------------------------------------------------------------------
 // Test fixture helpers
@@ -210,7 +211,7 @@ describe("WebAuthn verify", () => {
       const authenticatorData = toBase64url(authData);
 
       const registration: RegistrationResponseJSON = {
-        id: "test-cred-id",
+        id: "test-cred-id" as WebauthnCredentialId,
         rawId: "test-cred-id",
         type: "public-key",
         response: {
@@ -337,7 +338,8 @@ describe("WebAuthn verify", () => {
       // UP + UV = 5
       const flags = overrides?.flags ?? 5;
       const signCount = overrides?.signCount ?? 1;
-      const credentialId = overrides?.credentialId ?? "test-cred-id";
+      const credentialId = (overrides?.credentialId ??
+        "test-cred-id") as WebauthnCredentialId;
 
       const clientDataJSON = encodeClientData({
         type: clientType,
@@ -413,7 +415,10 @@ describe("WebAuthn verify", () => {
       const { authentication, credential, checks } =
         await buildValidAuthentication();
 
-      const wrongCredential = { ...credential, id: "different-cred-id" };
+      const wrongCredential = {
+        ...credential,
+        id: "different-cred-id" as WebauthnCredentialId,
+      };
 
       await expect(
         verifyAuthentication(authentication, wrongCredential, checks),

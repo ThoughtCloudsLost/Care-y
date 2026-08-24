@@ -15,7 +15,7 @@ import {
 import { createSecretsEncryptor } from "../config/secrets.js";
 import { deriveSecretsKey } from "../config/secrets.js";
 import type { SecretsEncryptor } from "../config/secrets.js";
-import { RoleId, type EscalationTarget } from "@care-y/shared";
+import { RoleId, type EscalationTarget, type NoteTypeId } from "@care-y/shared";
 import { NotFoundError, ForbiddenError } from "../errors.js";
 
 describe.skipIf(!process.env.DATABASE_URL)("NoteTypeService (DB)", () => {
@@ -144,7 +144,7 @@ describe.skipIf(!process.env.DATABASE_URL)("NoteTypeService (DB)", () => {
     it("throws NotFoundError for nonexistent ID", async () => {
       await expect(
         svc.update({
-          id: "00000000-0000-0000-0000-000000000000",
+          id: "00000000-0000-0000-0000-000000000000" as NoteTypeId,
           encryptedName: Buffer.from("nope"),
         }),
       ).rejects.toThrow(NotFoundError);
@@ -164,7 +164,9 @@ describe.skipIf(!process.env.DATABASE_URL)("NoteTypeService (DB)", () => {
 
     it("throws NotFoundError on no-op update for nonexistent ID", async () => {
       await expect(
-        svc.update({ id: "00000000-0000-0000-0000-000000000000" }),
+        svc.update({
+          id: "00000000-0000-0000-0000-000000000000" as NoteTypeId,
+        }),
       ).rejects.toThrow(NotFoundError);
     });
 
@@ -334,7 +336,7 @@ describe.skipIf(!process.env.DATABASE_URL)("NoteTypeService (DB)", () => {
 
     it("returns null for nonexistent type", async () => {
       const ctx = await svc.getEscalationContext(
-        "00000000-0000-0000-0000-000000000000",
+        "00000000-0000-0000-0000-000000000000" as NoteTypeId,
       );
       expect(ctx).toBeNull();
     });
@@ -343,7 +345,7 @@ describe.skipIf(!process.env.DATABASE_URL)("NoteTypeService (DB)", () => {
   describe("getEscalationTargets", () => {
     it("returns empty array for nonexistent type", async () => {
       const targets = await svc.getEscalationTargets(
-        "00000000-0000-0000-0000-000000000000",
+        "00000000-0000-0000-0000-000000000000" as NoteTypeId,
       );
       expect(targets).toEqual([]);
     });
@@ -375,7 +377,7 @@ describe.skipIf(!process.env.DATABASE_URL)("NoteTypeService (DB)", () => {
 
     it("returns undefined for nonexistent type", async () => {
       const role = await svc.getMinCreateRole(
-        "00000000-0000-0000-0000-000000000000",
+        "00000000-0000-0000-0000-000000000000" as NoteTypeId,
       );
       expect(role).toBeUndefined();
     });

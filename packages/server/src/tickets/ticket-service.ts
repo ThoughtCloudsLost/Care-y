@@ -21,6 +21,17 @@ import type {
   TicketStatus,
   TicketPriority,
   TicketSortField,
+  TicketId,
+  ClientId,
+  QueueId,
+  UserId,
+  KeyGeneration,
+  PhoneId,
+  NoteTypeId,
+  FollowupId,
+  OrgSchema,
+  PhoneHash,
+  PhoneMatchHash,
 } from "@care-y/shared";
 import type { TicketAccessChecker } from "./access.js";
 import {
@@ -36,20 +47,20 @@ import type { SealedBoxEncryptor } from "../crypto/sealed-box.js";
 import { maskPhone } from "../utils/sql.js";
 import { createDependencyService } from "./dependency-service.js";
 import { createReadCursorService } from "./read-cursor-service.js";
-import { ErrorCode } from "@care-y/shared";
+import { ErrorCode, aliasHashSchema } from "@care-y/shared";
 import { encode } from "@care-y/crypto";
 
 export interface TicketRecord {
-  readonly id: string;
-  readonly clientId: string;
-  readonly queueId: string;
+  readonly id: TicketId;
+  readonly clientId: ClientId;
+  readonly queueId: QueueId;
   readonly status: TicketStatus;
   readonly priority: TicketPriority;
   readonly onHold: boolean;
-  readonly assignedTo: string | null;
+  readonly assignedTo: UserId | null;
   readonly encryptedTitle: Buffer;
   readonly encryptedDescription: Buffer;
-  readonly keyGeneration: string;
+  readonly keyGeneration: KeyGeneration;
   readonly createdAt: Date;
 }
 
@@ -60,7 +71,7 @@ export interface TicketListRecord extends TicketRecord {
   /** OPS-encrypted phone number buffer, or null when the client has no phone. */
   readonly clientPhoneEncrypted: Buffer | null;
   /** Phone record id, or null when the client has no phone. */
-  readonly clientPhoneId: string | null;
+  readonly clientPhoneId: PhoneId | null;
   readonly encryptedQueueName: Buffer;
   readonly queueSortOrder: number;
   readonly lastActivityAt: Date | null;
@@ -102,8 +113,8 @@ export interface TicketWithKeyWrap extends TicketListRecord {
 }
 
 export interface FollowUpPreview {
-  readonly id: string;
-  readonly ticketId: string;
+  readonly id: FollowupId;
+  readonly ticketId: TicketId;
   readonly source: string;
   readonly type: string;
   readonly encryptedContent: Buffer;
@@ -112,7 +123,7 @@ export interface FollowUpPreview {
   readonly hasRecording: boolean;
   readonly hasImage: boolean;
   readonly hasFile: boolean;
-  readonly noteTypeId: string | null;
+  readonly noteTypeId: NoteTypeId | null;
   readonly eventParams: Record<string, unknown> | null;
 }
 
@@ -144,7 +155,7 @@ const READ_STATE_TIMESTAMPS_PER_TICKET = 20;
  * cursor at all.
  */
 export interface SweepReadStateEntry {
-  readonly ticketId: string;
+  readonly ticketId: TicketId;
   readonly encryptedReadCursor: Buffer;
   readonly latestActivityAt: Date | null;
   readonly keyWrap: TicketKeyWrap | null;
@@ -152,7 +163,7 @@ export interface SweepReadStateEntry {
 
 export interface SweepReadStateResult {
   readonly items: SweepReadStateEntry[];
-  readonly nextCursor: string | null;
+  readonly nextCursor: TicketId | null;
 }
 
 export interface CreateTicketKeyWrap {
@@ -163,22 +174,22 @@ export interface CreateTicketKeyWrap {
 
 export interface CreateTicketInput {
   /** Client-minted ticket id the content AAD was bound to (ADR-053). */
-  readonly id: string;
-  readonly clientId?: string;
+  readonly id: TicketId;
+  readonly clientId?: ClientId;
   readonly clientToken?: string;
-  readonly queueId: string;
+  readonly queueId: QueueId;
   readonly encryptedTitle: Buffer;
   readonly encryptedDescription: Buffer;
   readonly priority: TicketPriority;
-  readonly keyGeneration: string;
+  readonly keyGeneration: KeyGeneration;
   readonly keyWrap: CreateTicketKeyWrap;
 }
 
 export interface UpdateTicketInput {
-  readonly ticketId: string;
+  readonly ticketId: TicketId;
   readonly status?: TicketStatus;
   readonly priority?: TicketPriority;
-  readonly queueId?: string;
+  readonly queueId?: QueueId;
   readonly onHold?: boolean;
 }
 
@@ -186,58 +197,58 @@ export type TicketSortDirection = "asc" | "desc";
 
 export interface TicketListOpts {
   readonly statuses?: TicketStatus[];
-  readonly queueIds?: string[];
+  readonly queueIds?: QueueId[];
   readonly priorities?: TicketPriority[];
   readonly onHold?: boolean;
-  readonly assignedTo?: string | null;
+  readonly assignedTo?: UserId | null;
   readonly createdAfter?: string;
   readonly createdBefore?: string;
   readonly sortBy?: TicketSortField;
   readonly sortDirection?: TicketSortDirection;
   readonly limit: number;
-  readonly cursor?: string;
+  readonly cursor?: TicketId;
 }
 
 export interface CreateTarget {
-  readonly openTicketId: string | null;
-  readonly reopenTicketId: string | null;
+  readonly openTicketId: TicketId | null;
+  readonly reopenTicketId: TicketId | null;
 }
 
 export interface UpdateTicketContentServiceInput {
-  readonly ticketId: string;
+  readonly ticketId: TicketId;
   /** Audit row author; the router passes ctx.user.id. */
-  readonly actorId: string;
+  readonly actorId: UserId;
   readonly encryptedTitle?: Buffer;
   readonly encryptedDescription?: Buffer;
-  readonly keyGeneration: string;
+  readonly keyGeneration: KeyGeneration;
 }
 
 export interface TicketService {
-  create(userId: string, input: CreateTicketInput): Promise<TicketRecord>;
+  create(userId: UserId, input: CreateTicketInput): Promise<TicketRecord>;
   /** Where a create for this client lands (open blocks, closed reopens). */
-  getCreateTarget(clientId: string): Promise<CreateTarget>;
-  findById(ticketId: string, userId: string): Promise<TicketWithKeyWrap>;
-  list(userId: string, opts: TicketListOpts): Promise<TicketWithKeyWrap[]>;
-  update(userId: string, input: UpdateTicketInput): Promise<TicketRecord>;
-  close(userId: string, ticketId: string): Promise<TicketRecord>;
+  getCreateTarget(clientId: ClientId): Promise<CreateTarget>;
+  findById(ticketId: TicketId, userId: UserId): Promise<TicketWithKeyWrap>;
+  list(userId: UserId, opts: TicketListOpts): Promise<TicketWithKeyWrap[]>;
+  update(userId: UserId, input: UpdateTicketInput): Promise<TicketRecord>;
+  close(userId: UserId, ticketId: TicketId): Promise<TicketRecord>;
   reopen(
-    userId: string,
-    ticketId: string,
-    newKeyGeneration: string,
+    userId: UserId,
+    ticketId: TicketId,
+    newKeyGeneration: KeyGeneration,
   ): Promise<TicketRecord>;
   recentFollowUps(
-    userId: string,
+    userId: UserId,
     input: RecentFollowUpsInput,
   ): Promise<Record<string, FollowUpPreview[]>>;
   listReadState(
-    userId: string,
+    userId: UserId,
     input: ListReadStateInput,
   ): Promise<Record<string, TicketReadState>>;
   sweepReadState(
-    userId: string,
+    userId: UserId,
     input: SweepReadStateInput,
   ): Promise<SweepReadStateResult>;
-  counts(userId: string): Promise<TicketCounts>;
+  counts(userId: UserId): Promise<TicketCounts>;
   /**
    * Alias search over clients the caller can already reach.
    *
@@ -247,17 +258,17 @@ export interface TicketService {
   searchClients(
     query: string,
     limit: number,
-    userId: string,
+    userId: UserId,
     isAdmin: boolean,
   ): Promise<ClientSearchResult[]>;
   updateContent(
-    userId: string,
+    userId: UserId,
     input: UpdateTicketContentServiceInput,
   ): Promise<TicketRecord>;
 }
 
 export interface ClientSearchResult {
-  readonly id: string;
+  readonly id: ClientId;
   readonly encryptedAlias: Buffer;
   readonly maskedPhone: string | null;
 }
@@ -279,16 +290,16 @@ export interface TicketCounts {
 }
 
 interface BaseTicketRow {
-  id: string;
-  client_id: string;
-  queue_id: string;
+  id: TicketId;
+  client_id: ClientId;
+  queue_id: QueueId;
   status: TicketStatus;
   priority: TicketPriority;
   on_hold: boolean;
-  assigned_to: string | null;
+  assigned_to: UserId | null;
   encrypted_title: Buffer;
   encrypted_description: Buffer;
-  key_generation: string;
+  key_generation: KeyGeneration;
   created_at: Date;
 }
 
@@ -296,7 +307,7 @@ interface EnrichedTicketRow extends BaseTicketRow {
   encrypted_client_alias: Buffer;
   has_phone: boolean | 0 | 1;
   client_phone_encrypted: Buffer | null;
-  client_phone_id: string | null;
+  client_phone_id: PhoneId | null;
   encrypted_queue_name: Buffer;
   queue_sort_order: number;
   last_activity_at: Date | null;
@@ -406,10 +417,10 @@ function toRecordWithKeyWrap(
 }
 
 export interface PendingClient {
-  readonly phoneHash: string;
+  readonly phoneHash: PhoneHash;
   readonly opsEncryptedPhone: Buffer;
-  readonly phoneMatchHash: string | null;
-  readonly orgSchema: string;
+  readonly phoneMatchHash: PhoneMatchHash | null;
+  readonly orgSchema: OrgSchema;
   readonly createdAt: number;
 }
 
@@ -422,7 +433,7 @@ export interface TicketServiceDeps {
 export function createTicketService(
   db: Kysely<TenantDatabase>,
   access: TicketAccessChecker,
-  getAccessibleQueueIds: (userId: string) => Promise<readonly string[]>,
+  getAccessibleQueueIds: (userId: UserId) => Promise<readonly QueueId[]>,
   deps?: TicketServiceDeps,
 ): TicketService {
   const depService = createDependencyService(db);
@@ -430,7 +441,7 @@ export function createTicketService(
 
   async function createSystemFollowUp(
     trxOrDb: Kysely<TenantDatabase> | Transaction<TenantDatabase>,
-    ticketId: string,
+    ticketId: TicketId,
     type: string,
     eventParams?: Record<string, unknown>,
   ): Promise<void> {
@@ -448,9 +459,9 @@ export function createTicketService(
 
   async function insertKeyWrap(
     trx: Kysely<TenantDatabase> | Transaction<TenantDatabase>,
-    ticketId: string,
-    volunteerId: string,
-    keyGeneration: string,
+    ticketId: TicketId,
+    volunteerId: UserId,
+    keyGeneration: KeyGeneration,
     keyWrap: CreateTicketKeyWrap,
   ): Promise<void> {
     await trx
@@ -485,7 +496,7 @@ export function createTicketService(
     async create(userId, input) {
       return db.transaction().execute(async (trx) => {
         // Resolve clientId from token if needed
-        let clientId: string;
+        let clientId: ClientId;
 
         if (input.clientToken !== undefined) {
           if (!deps?.pendingClients) {
@@ -1286,7 +1297,7 @@ export function createTicketService(
     },
 
     async recentFollowUps(
-      userId: string,
+      userId: UserId,
       input: RecentFollowUpsInput,
     ): Promise<Record<string, FollowUpPreview[]>> {
       const accessibleQueues = await getAccessibleQueueIds(userId);
@@ -1422,7 +1433,7 @@ export function createTicketService(
     },
 
     async listReadState(
-      userId: string,
+      userId: UserId,
       input: ListReadStateInput,
     ): Promise<Record<string, TicketReadState>> {
       const accessibleQueues = await getAccessibleQueueIds(userId);
@@ -1490,7 +1501,7 @@ export function createTicketService(
     },
 
     async sweepReadState(
-      userId: string,
+      userId: UserId,
       input: SweepReadStateInput,
     ): Promise<SweepReadStateResult> {
       const accessibleQueues = await getAccessibleQueueIds(userId);
@@ -1581,7 +1592,11 @@ export function createTicketService(
         .where("c.merged_into", "is", null);
 
       if (query !== "") {
-        search = search.where("c.alias_hash", "=", query);
+        search = search.where(
+          "c.alias_hash",
+          "=",
+          aliasHashSchema.parse(query),
+        );
       }
 
       if (!isAdmin) {
@@ -1637,7 +1652,7 @@ export function createTicketService(
     },
 
     async updateContent(
-      userId: string,
+      userId: UserId,
       input: UpdateTicketContentServiceInput,
     ): Promise<TicketRecord> {
       await access.assertAccess(userId, input.ticketId);
@@ -1722,7 +1737,7 @@ export function createTicketService(
  */
 export async function setAccountOfferForClient(
   db: Kysely<TenantDatabase>,
-  clientId: string,
+  clientId: ClientId,
   enabled: boolean,
 ): Promise<boolean> {
   const result = await db
@@ -1743,7 +1758,7 @@ export async function setAccountOfferForClient(
  */
 export async function clientHasAccount(
   db: Kysely<TenantDatabase>,
-  clientId: string,
+  clientId: ClientId,
 ): Promise<boolean> {
   const row = await db
     .selectFrom("client_accounts")

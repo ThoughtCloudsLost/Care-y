@@ -15,6 +15,13 @@ import { type Kysely, sql } from "kysely";
 import type { TenantDatabase } from "../db/types.js";
 import type { JobQueue } from "../jobs/queue.js";
 import { ValidationError } from "../errors.js";
+import type {
+  ShareId,
+  TicketId,
+  FollowupId,
+  UserId,
+  OrgSchema,
+} from "@care-y/shared";
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -44,12 +51,12 @@ export class ShareTicketNotFoundError extends ValidationError {
 // ---------------------------------------------------------------------------
 
 export interface CreateShareRow {
-  readonly shareId: string;
-  readonly ticketId: string;
+  readonly shareId: ShareId;
+  readonly ticketId: TicketId;
   readonly ciphertext: Buffer;
-  readonly followUpId: string;
+  readonly followUpId: FollowupId;
   readonly encryptedFollowUp: Buffer;
-  readonly createdBy: string;
+  readonly createdBy: UserId;
 }
 
 export type OpenShareResult =
@@ -59,7 +66,7 @@ export type OpenShareResult =
   | { status: "not_found" };
 
 export interface ShareStatusRow {
-  readonly id: string;
+  readonly id: ShareId;
   readonly createdAt: Date;
   readonly expiresAt: Date;
   readonly readAt: Date | null;
@@ -127,7 +134,7 @@ export async function createShare(
  */
 export async function openShare(
   db: Kysely<TenantDatabase>,
-  shareId: string,
+  shareId: ShareId,
 ): Promise<OpenShareResult> {
   return db.transaction().execute(async (trx) => {
     // Gate: only one racing caller matches read_at IS NULL.
@@ -169,7 +176,7 @@ export async function openShare(
  */
 export async function listSharesByTicket(
   db: Kysely<TenantDatabase>,
-  ticketId: string,
+  ticketId: TicketId,
 ): Promise<ShareStatusRow[]> {
   const rows = await db
     .selectFrom("share_links")
@@ -194,8 +201,8 @@ export async function listSharesByTicket(
  */
 export function registerShareCleanupHandler(
   jobQueue: JobQueue,
-  getTenantDb: (orgSchema: string) => Kysely<TenantDatabase>,
-  listOrgSchemas: () => Promise<string[]>,
+  getTenantDb: (orgSchema: OrgSchema) => Kysely<TenantDatabase>,
+  listOrgSchemas: () => Promise<OrgSchema[]>,
 ): void {
   jobQueue.process(SHARE_CLEANUP_QUEUE, async () => {
     try {

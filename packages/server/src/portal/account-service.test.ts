@@ -10,6 +10,14 @@ import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import type { Kysely } from "kysely";
 import { getSodium, hashChannelAuth } from "@care-y/crypto";
 import type { TenantDatabase } from "../db/types.js";
+import type {
+  ClientId,
+  TicketId,
+  ChannelRowId,
+  FollowupId,
+  PortalMessageId,
+} from "@care-y/shared";
+import { channelSecretSchema, newClientAccountId } from "@care-y/shared";
 import {
   createTestDb,
   createTestClientFixture,
@@ -47,7 +55,7 @@ function makeAccountReg(
   overrides?: Partial<AccountRegistrationInput>,
 ): AccountRegistrationInput {
   return {
-    accountId: crypto.randomUUID(),
+    accountId: newClientAccountId(),
     username: `user-${crypto.randomUUID().slice(0, 8)}`,
     salt: crypto.randomBytes(16),
     publicKey: crypto.randomBytes(32),
@@ -65,7 +73,9 @@ function makeChannelReg(
   overrides?: Partial<ChannelRegistration>,
 ): ChannelRegistration {
   return {
-    channelId: crypto.randomBytes(24).toString("hex"),
+    channelId: channelSecretSchema.parse(
+      crypto.randomBytes(24).toString("hex"),
+    ),
     authHash: crypto.randomBytes(32),
     clientPublic: crypto.randomBytes(32),
     hasPassphrase: false,
@@ -78,15 +88,15 @@ function makeChannelReg(
   };
 }
 
-async function insertClient(db: Kysely<TenantDatabase>): Promise<string> {
+async function insertClient(db: Kysely<TenantDatabase>): Promise<ClientId> {
   const fixture = await createTestClientFixture(db);
   return fixture.clientId;
 }
 
 async function insertFollowup(
   db: Kysely<TenantDatabase>,
-  ticketId: string,
-): Promise<string> {
+  ticketId: TicketId,
+): Promise<FollowupId> {
   const row = await db
     .insertInto("followups")
     .values({
@@ -103,9 +113,9 @@ async function insertFollowup(
 
 async function insertPortalMessage(
   db: Kysely<TenantDatabase>,
-  channelRowId: string,
-  followupId: string,
-): Promise<string> {
+  channelRowId: ChannelRowId,
+  followupId: FollowupId,
+): Promise<PortalMessageId> {
   const row = await db
     .insertInto("portal_messages")
     .values({
@@ -443,7 +453,7 @@ describe.skipIf(!process.env.DATABASE_URL)("AccountService", () => {
     });
 
     it("unknown account id returns null", async () => {
-      const unknownId = crypto.randomUUID();
+      const unknownId = newClientAccountId();
       const result = await login(db, unknownId, crypto.randomBytes(32));
       expect(result).toBeNull();
     });
@@ -465,7 +475,7 @@ describe.skipIf(!process.env.DATABASE_URL)("AccountService", () => {
       );
       const unknownResult = await login(
         db,
-        crypto.randomUUID(),
+        newClientAccountId(),
         crypto.randomBytes(32),
       );
 

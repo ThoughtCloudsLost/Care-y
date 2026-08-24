@@ -24,6 +24,21 @@ import type {
   KBItemSummary,
 } from "../kb/service.js";
 import { RoleId, KB_ATTACHMENT_MAX_BYTES } from "@care-y/shared";
+import type {
+  SessionId,
+  SessionToken,
+  UserId,
+  IpToken,
+  UaToken,
+  OrgId,
+  OrgSlug,
+  OrgSchema,
+  KbAttachmentId,
+  KbItemId,
+  KbCategoryId,
+  KbVoteId,
+  BlobKey,
+} from "@care-y/shared";
 import { expectTrpcError, stubTenantDbDefaultRoles } from "../test-utils.js";
 
 // --- Mock services ---
@@ -61,14 +76,17 @@ function createMockVoteSvc(): KBVoteService {
 
 // --- Context helpers ---
 
-const USER_ID = "user-kb-1";
-const MANAGER_ID = "manager-kb-1";
+const USER_ID = "00000000-0000-4000-8000-000000000b01" as UserId;
+const MANAGER_ID = "00000000-0000-4000-8000-000000000b02" as UserId;
+const FIXTURE_ORG_ID = "00000000-0000-4000-8000-00000000bb00" as OrgId;
+const FIXTURE_ORG_SCHEMA =
+  "org_00000000-0000-4000-8000-00000000bb00" as OrgSchema;
 
 function createMockOrgContext(): OrgContext {
   return {
-    orgId: "org-kb-test",
-    orgSlug: "test-org",
-    orgSchema: "org_test",
+    orgId: FIXTURE_ORG_ID,
+    orgSlug: "test-org" as OrgSlug,
+    orgSchema: FIXTURE_ORG_SCHEMA,
     tenantDb: stubTenantDbDefaultRoles(),
     sealedBox: {} as OrgContext["sealedBox"],
   };
@@ -80,11 +98,11 @@ function volunteerContext(): Context {
     res: {} as Context["res"],
     org: createMockOrgContext(),
     session: {
-      id: "sess-1",
-      token: "tok-1",
+      id: "00000000-0000-4000-8000-0000000b0010" as SessionId,
+      token: "tok-1" as SessionToken,
       userId: USER_ID,
-      ipToken: "ip-tok",
-      uaToken: "ua-tok",
+      ipToken: "ip-tok" as IpToken,
+      uaToken: "ua-tok" as UaToken,
       expiresAt: new Date(Date.now() + 3_600_000),
       twofaVerified: true,
       webauthnChallenge: null,
@@ -127,8 +145,14 @@ const VALID_BASE64 = Buffer.from("test-data").toString("base64");
 
 const NOW = new Date();
 
+// KB branded id constants (distinct from ticket id family)
+const MOCK_CATEGORY_ID = VALID_UUID as KbCategoryId;
+const MOCK_ITEM_ID = VALID_UUID as KbItemId;
+const MOCK_VOTE_ID = VALID_UUID as KbVoteId;
+const MOCK_VOTER_ID = USER_ID;
+
 const MOCK_CATEGORY: KBCategoryRecord = {
-  id: VALID_UUID,
+  id: MOCK_CATEGORY_ID,
   encryptedName: Buffer.from("Protocols"),
   sortOrder: 1,
   encryptedDescription: null,
@@ -137,8 +161,8 @@ const MOCK_CATEGORY: KBCategoryRecord = {
 };
 
 const MOCK_ITEM: KBItemRecord = {
-  id: VALID_UUID,
-  categoryId: VALID_UUID,
+  id: MOCK_ITEM_ID,
+  categoryId: MOCK_CATEGORY_ID,
   encryptedTitle: Buffer.from("title"),
   encryptedBody: Buffer.from("body"),
   encryptedExcerpt: null,
@@ -158,9 +182,9 @@ const MOCK_ITEM_PAGE: KBItemPage = {
 };
 
 const MOCK_VOTE: KBVoteRecord = {
-  id: VALID_UUID,
-  kbItemId: VALID_UUID,
-  voterPseudonym: USER_ID,
+  id: MOCK_VOTE_ID,
+  kbItemId: MOCK_ITEM_ID,
+  voterId: MOCK_VOTER_ID,
   direction: "up",
   createdAt: NOW,
 };
@@ -178,9 +202,9 @@ const mockBlobStore = {
 
 const mockMediaSvc = {
   createAttachment: vi.fn().mockResolvedValue({
-    id: "att-1",
-    itemId: "item-1",
-    blobKey: "blob-key-1",
+    id: "att-1" as KbAttachmentId,
+    itemId: "item-1" as KbItemId,
+    blobKey: "blob-key-1" as BlobKey,
     sizeBytes: 1024,
     encryptedFilename: null,
     contentType: "image/png",
@@ -188,9 +212,9 @@ const mockMediaSvc = {
     deletedAt: null,
   }),
   getAttachment: vi.fn().mockResolvedValue({
-    id: "att-1",
-    itemId: "item-1",
-    blobKey: "blob-key-1",
+    id: "att-1" as KbAttachmentId,
+    itemId: "item-1" as KbItemId,
+    blobKey: "blob-key-1" as BlobKey,
     sizeBytes: 1024,
     encryptedFilename: null,
     contentType: "image/png",
@@ -371,7 +395,7 @@ describe("KB Article routes", () => {
       sortBy: "rating",
       sortDirection: "asc",
       minRating: 0.5,
-      createdBy: "user-1",
+      createdBy: USER_ID,
       createdAfter: "2026-01-01T00:00:00.000Z",
       createdBefore: "2026-12-31T23:59:59.999Z",
     });
@@ -411,7 +435,7 @@ describe("KB Article routes", () => {
   it("deleteItem removes all attachment blobs before deleting the article", async () => {
     mockMediaSvc.listAttachments.mockResolvedValueOnce([
       {
-        id: "att-a",
+        id: "att-a" as KbAttachmentId,
         itemId: VALID_UUID,
         blobKey: "blob-key-a",
         sizeBytes: 100,
@@ -421,7 +445,7 @@ describe("KB Article routes", () => {
         deletedAt: null,
       },
       {
-        id: "att-b",
+        id: "att-b" as KbAttachmentId,
         itemId: VALID_UUID,
         blobKey: "blob-key-b",
         sizeBytes: 200,
@@ -447,9 +471,11 @@ describe("KB Article routes", () => {
 
 describe("KB listAuthors route", () => {
   it("volunteer can list distinct article authors", async () => {
+    const authorId1 = "author-1" as UserId;
+    const authorId2 = "author-2" as UserId;
     const mockAuthors: KBAuthorRecord[] = [
-      { id: "author-1", encryptedDisplayName: Buffer.from("enc-name-1") },
-      { id: "author-2", encryptedDisplayName: Buffer.from("enc-name-2") },
+      { id: authorId1, encryptedDisplayName: Buffer.from("enc-name-1") },
+      { id: authorId2, encryptedDisplayName: Buffer.from("enc-name-2") },
     ];
     vi.mocked(mockItemSvc.listAuthors).mockResolvedValue(mockAuthors);
     const caller = buildVolunteerCaller();
@@ -457,8 +483,8 @@ describe("KB listAuthors route", () => {
     const result = await caller.listAuthors();
 
     expect(result).toHaveLength(2);
-    expect(result[0]!.id).toBe("author-1");
-    expect(result[1]!.id).toBe("author-2");
+    expect(result[0]!.id).toBe(authorId1);
+    expect(result[1]!.id).toBe(authorId2);
     expect(typeof result[0]!.encryptedDisplayName).toBe("string");
     expect(result[0]!.encryptedDisplayName).toBe(
       Buffer.from("enc-name-1").toString("base64url"),
@@ -473,8 +499,8 @@ describe("KB recentItems route", () => {
   it("volunteer can fetch recently updated items with default limit", async () => {
     const mockRecent: KBItemSummary[] = [
       {
-        id: VALID_UUID,
-        categoryId: VALID_UUID,
+        id: MOCK_ITEM_ID,
+        categoryId: MOCK_CATEGORY_ID,
         encryptedTitle: Buffer.from("title-1"),
         encryptedExcerpt: null,
         createdBy: USER_ID,
@@ -500,8 +526,8 @@ describe("KB recentItems route", () => {
 // --- Bulk body fetch tests ---
 
 describe("KB listBodies route", () => {
-  const ITEM_ID_1 = "550e8400-e29b-41d4-a716-446655440001";
-  const ITEM_ID_2 = "550e8400-e29b-41d4-a716-446655440002";
+  const ITEM_ID_1 = "550e8400-e29b-41d4-a716-446655440001" as KbItemId;
+  const ITEM_ID_2 = "550e8400-e29b-41d4-a716-446655440002" as KbItemId;
 
   it("volunteer can fetch bodies by item IDs", async () => {
     const mockResults = [
@@ -628,7 +654,7 @@ describe("KB Attachment routes", () => {
   it("volunteer can list attachments for an item", async () => {
     mockMediaSvc.listAttachments.mockResolvedValueOnce([
       {
-        id: "att-1",
+        id: "att-1" as KbAttachmentId,
         itemId: VALID_UUID,
         blobKey: "key-1",
         sizeBytes: 100,

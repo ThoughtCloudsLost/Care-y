@@ -31,11 +31,12 @@ import type {
 } from "./types.js";
 import * as utils from "./utils.js";
 import { ValidationError } from "../../errors.js";
+import type { WebauthnChallenge } from "@care-y/shared";
 
 /** Generates a random challenge (18 bytes, > 128 bits). */
-export function randomChallenge(): string {
+export function randomChallenge(): WebauthnChallenge {
   const buffer = crypto.getRandomValues(new Uint8Array(18));
-  return utils.toBase64url(buffer);
+  return utils.toBase64url(buffer) as WebauthnChallenge;
 }
 
 /**

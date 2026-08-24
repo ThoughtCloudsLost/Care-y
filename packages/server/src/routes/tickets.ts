@@ -62,6 +62,7 @@ import type {
   ReactionSummary,
   TicketStatus,
   TicketPriority,
+  NoteTypeId,
 } from "@care-y/shared";
 import {
   ErrorCode,
@@ -131,7 +132,19 @@ import {
   searchClientsInputSchema,
   updateTicketContentInputSchema,
   RoleId,
+  ticketIdSchema,
+  followupIdSchema,
+  recordingIdSchema,
+  attachmentIdSchema,
+  presetReplyIdSchema,
+  queueIdSchema,
+  userIdSchema,
+  clientMergeEventIdSchema,
+  keyGenerationSchema,
+  blobKeySchema,
+  channelSecretSchema,
 } from "@care-y/shared";
+import type { UserId, QueueId, TicketId } from "@care-y/shared";
 
 import { b64, b64n, b64KeyWrap } from "../utils/ciphertext-wire.js";
 
@@ -195,7 +208,7 @@ export interface TicketRouterDeps {
   readonly createTicketSvc: (
     tDb: OrgContext["tenantDb"],
     access: TicketAccessChecker,
-    getAccessibleQueueIds: (userId: string) => Promise<readonly string[]>,
+    getAccessibleQueueIds: (userId: UserId) => Promise<readonly QueueId[]>,
     deps?: TicketServiceDeps,
   ) => TicketService;
   readonly createFollowUpSvc: (
@@ -443,9 +456,9 @@ export function createTicketRouter(deps: TicketRouterDeps) {
    */
   async function resolveNoteTypeEscalation(
     tDb: OrgContext["tenantDb"],
-    noteTypeId: string | undefined,
-    ticketId?: string,
-  ): Promise<string[] | undefined> {
+    noteTypeId: NoteTypeId | undefined,
+    ticketId?: TicketId,
+  ): Promise<UserId[] | undefined> {
     if (noteTypeId === undefined || !deps.createNoteTypeSvc) return undefined;
 
     const ntSvc = deps.createNoteTypeSvc(tDb);
@@ -498,12 +511,12 @@ export function createTicketRouter(deps: TicketRouterDeps) {
    * All steps are best-effort (never blocks the response).
    */
   function auditAndNotify(
-    ctx: { org: OrgContext; user: { id: string } },
+    ctx: { org: OrgContext; user: { id: UserId } },
     eventType: NotificationEventType,
-    ticket: { id: string; queueId: string; assignedTo: string | null },
+    ticket: { id: TicketId; queueId: QueueId; assignedTo: UserId | null },
     auditEntry: AuditEntry,
     mentionedPseudonyms: string[] = [],
-    noteTypeId?: string,
+    noteTypeId?: NoteTypeId,
   ): void {
     audit(ctx.org.tenantDb, auditEntry);
     notify(ctx, eventType, ticket, mentionedPseudonyms, noteTypeId);
@@ -515,11 +528,11 @@ export function createTicketRouter(deps: TicketRouterDeps) {
   // Escalation resolution happens inside the fire-and-forget block so
   // transient errors in the escalation path cannot fail the mutation.
   function notify(
-    ctx: { org: OrgContext; user: { id: string } },
+    ctx: { org: OrgContext; user: { id: UserId } },
     eventType: NotificationEventType,
-    ticket: { id: string; queueId: string; assignedTo: string | null },
+    ticket: { id: TicketId; queueId: QueueId; assignedTo: UserId | null },
     mentionedPseudonyms: string[] = [],
-    noteTypeId?: string,
+    noteTypeId?: NoteTypeId,
   ): void {
     if (!deps.notificationService) return;
     const ns = deps.notificationService;
@@ -541,7 +554,8 @@ export function createTicketRouter(deps: TicketRouterDeps) {
               watchers.getTicketWatchers(ticketId),
             getQueueWatchers: async (queueId) =>
               watchers.getQueueWatchers(queueId),
-            resolveValidMentions: async (ids) => Promise.resolve(ids),
+            resolveValidMentions: async (ids) =>
+              Promise.resolve(ids.map((id) => userIdSchema.parse(id))),
           },
           ticket,
           mentionedPseudonyms,
@@ -665,7 +679,7 @@ export function createTicketRouter(deps: TicketRouterDeps) {
         }),
       ),
 
-    get: volunteerProcedure.input(z.object({ ticketId: z.uuid() })).query(
+    get: volunteerProcedure.input(z.object({ ticketId: ticketIdSchema })).query(
       withErrorWrapping(async ({ ctx, input }) => {
         const { svc } = ticketSvc(ctx.org.tenantDb);
         const ticket = await svc.findById(input.ticketId, ctx.user.id);
@@ -775,34 +789,36 @@ export function createTicketRouter(deps: TicketRouterDeps) {
       }),
     ),
 
-    close: volunteerProcedure.input(z.object({ ticketId: z.uuid() })).mutation(
-      withErrorWrapping(async ({ ctx, input }) => {
-        const { svc, access } = ticketSvc(ctx.org.tenantDb);
-        const ticket = await svc.close(ctx.user.id, input.ticketId);
-        // Delete read cursors for closed ticket (no post-closure read state)
-        const readCursorSvc = deps.createReadCursorSvc(
-          ctx.org.tenantDb,
-          access,
-        );
-        await readCursorSvc.deleteForTicket(input.ticketId);
-        auditAndNotify(ctx, "ticket_closed", ticket, {
-          eventType: "ticket_closed",
-          actorId: ctx.user.id,
-          ticketId: input.ticketId,
-        });
-        return {
-          ...ticket,
-          encryptedTitle: b64(ticket.encryptedTitle),
-          encryptedDescription: b64(ticket.encryptedDescription),
-        };
-      }),
-    ),
+    close: volunteerProcedure
+      .input(z.object({ ticketId: ticketIdSchema }))
+      .mutation(
+        withErrorWrapping(async ({ ctx, input }) => {
+          const { svc, access } = ticketSvc(ctx.org.tenantDb);
+          const ticket = await svc.close(ctx.user.id, input.ticketId);
+          // Delete read cursors for closed ticket (no post-closure read state)
+          const readCursorSvc = deps.createReadCursorSvc(
+            ctx.org.tenantDb,
+            access,
+          );
+          await readCursorSvc.deleteForTicket(input.ticketId);
+          auditAndNotify(ctx, "ticket_closed", ticket, {
+            eventType: "ticket_closed",
+            actorId: ctx.user.id,
+            ticketId: input.ticketId,
+          });
+          return {
+            ...ticket,
+            encryptedTitle: b64(ticket.encryptedTitle),
+            encryptedDescription: b64(ticket.encryptedDescription),
+          };
+        }),
+      ),
 
     reopen: volunteerProcedure
       .input(
         z.object({
-          ticketId: z.uuid(),
-          newKeyGeneration: z.uuid(),
+          ticketId: ticketIdSchema,
+          newKeyGeneration: keyGenerationSchema,
         }),
       )
       .mutation(
@@ -991,7 +1007,7 @@ export function createTicketRouter(deps: TicketRouterDeps) {
     // --- Read cursors ---
 
     getReadCursor: volunteerProcedure
-      .input(z.object({ ticketId: z.uuid() }))
+      .input(z.object({ ticketId: ticketIdSchema }))
       .query(
         withErrorWrapping(async ({ ctx, input }) => {
           const access = deps.createTicketAccess(ctx.org.tenantDb);
@@ -1083,7 +1099,7 @@ export function createTicketRouter(deps: TicketRouterDeps) {
       ),
 
     getReactions: volunteerProcedure
-      .input(z.object({ followUpIds: z.array(z.uuid()).max(100) }))
+      .input(z.object({ followUpIds: z.array(followupIdSchema).max(100) }))
       .query(
         withErrorWrapping(async ({ ctx, input }) => {
           const access = deps.createTicketAccess(ctx.org.tenantDb);
@@ -1112,7 +1128,7 @@ export function createTicketRouter(deps: TicketRouterDeps) {
     ),
 
     listPresets: volunteerProcedure
-      .input(z.object({ queueId: z.uuid().optional() }))
+      .input(z.object({ queueId: queueIdSchema.optional() }))
       .query(
         withErrorWrapping(async ({ ctx, input }) => {
           const svc = deps.createPresetSvc(ctx.org.tenantDb);
@@ -1151,7 +1167,7 @@ export function createTicketRouter(deps: TicketRouterDeps) {
     ),
 
     deletePreset: managerProcedure
-      .input(z.object({ presetId: z.uuid() }))
+      .input(z.object({ presetId: presetReplyIdSchema }))
       .mutation(
         withErrorWrapping(async ({ ctx, input }) => {
           const svc = deps.createPresetSvc(ctx.org.tenantDb);
@@ -1184,7 +1200,7 @@ export function createTicketRouter(deps: TicketRouterDeps) {
       ),
 
     listDependencies: volunteerProcedure
-      .input(z.object({ ticketId: z.uuid() }))
+      .input(z.object({ ticketId: ticketIdSchema }))
       .query(
         withErrorWrapping(async ({ ctx, input }) => {
           const svc = deps.createDependencySvc(ctx.org.tenantDb);
@@ -1236,7 +1252,12 @@ export function createTicketRouter(deps: TicketRouterDeps) {
     ),
 
     lockMerge: managerProcedure
-      .input(z.object({ mergeEventId: z.uuid(), locked: z.boolean() }))
+      .input(
+        z.object({
+          mergeEventId: clientMergeEventIdSchema,
+          locked: z.boolean(),
+        }),
+      )
       .mutation(
         withErrorWrapping(async ({ ctx, input }) => {
           const svc = deps.createMergeSvc(ctx.org.tenantDb);
@@ -1254,7 +1275,7 @@ export function createTicketRouter(deps: TicketRouterDeps) {
 
     // --- Media ---
     getRecording: volunteerProcedure
-      .input(z.object({ recordingId: z.uuid() }))
+      .input(z.object({ recordingId: recordingIdSchema }))
       .query(
         withErrorWrapping(async ({ ctx, input }) => {
           const svc = mediaSvc(ctx.org.tenantDb);
@@ -1263,7 +1284,7 @@ export function createTicketRouter(deps: TicketRouterDeps) {
       ),
 
     getAttachment: volunteerProcedure
-      .input(z.object({ attachmentId: z.uuid() }))
+      .input(z.object({ attachmentId: attachmentIdSchema }))
       .query(
         withErrorWrapping(async ({ ctx, input }) => {
           const svc = mediaSvc(ctx.org.tenantDb);
@@ -1516,7 +1537,7 @@ export function createTicketRouter(deps: TicketRouterDeps) {
       ),
 
     listQueueMembers: volunteerProcedure
-      .input(z.object({ queueId: z.uuid() }))
+      .input(z.object({ queueId: queueIdSchema }))
       .query(
         withErrorWrapping(async ({ ctx, input }) => {
           const svc = deps.createQueuePermissionsSvc(ctx.org.tenantDb);
@@ -1524,12 +1545,14 @@ export function createTicketRouter(deps: TicketRouterDeps) {
         }),
       ),
 
-    getUserQueues: adminProcedure.input(z.object({ userId: z.uuid() })).query(
-      withErrorWrapping(async ({ ctx, input }) => {
-        const svc = deps.createQueuePermissionsSvc(ctx.org.tenantDb);
-        return svc.getUserQueues(input.userId);
-      }),
-    ),
+    getUserQueues: adminProcedure
+      .input(z.object({ userId: userIdSchema }))
+      .query(
+        withErrorWrapping(async ({ ctx, input }) => {
+          const svc = deps.createQueuePermissionsSvc(ctx.org.tenantDb);
+          return svc.getUserQueues(input.userId);
+        }),
+      ),
 
     listAllQueueAssignments: adminProcedure.query(
       withErrorWrapping(async ({ ctx }) => {
@@ -1684,12 +1707,12 @@ export function createTicketRouter(deps: TicketRouterDeps) {
     rewrapFollowUp: volunteerProcedure
       .input(
         z.object({
-          followUpId: z.uuid(),
+          followUpId: followupIdSchema,
           encryptedContent: z.string().min(1),
           blobUpdates: z
             .array(
               z.object({
-                oldBlobKey: z.string().min(1),
+                oldBlobKey: blobKeySchema,
                 encryptedData: z.string().min(1),
                 category: z.enum(["attachment", "recording"] as const),
               }),
@@ -1721,7 +1744,7 @@ export function createTicketRouter(deps: TicketRouterDeps) {
 
     // --- Intake wrap conversion ---
     getIntakeConversionTargets: volunteerProcedure
-      .input(z.object({ ticketId: z.uuid() }))
+      .input(z.object({ ticketId: ticketIdSchema }))
       .query(
         withErrorWrapping(async ({ ctx, input }) => {
           const { getConversionTargets } =
@@ -1739,10 +1762,10 @@ export function createTicketRouter(deps: TicketRouterDeps) {
     convertIntakeKeyWrap: volunteerProcedure
       .input(
         z.object({
-          ticketId: z.uuid(),
+          ticketId: ticketIdSchema,
           wraps: z.array(
             z.object({
-              volunteerId: z.uuid(),
+              volunteerId: userIdSchema,
               ephemeralPoint: z.string().min(1),
               nonce: z.string().min(1),
               wrappedKey: z.string().min(1),
@@ -1779,7 +1802,7 @@ export function createTicketRouter(deps: TicketRouterDeps) {
           const clientId = ticket.clientId;
 
           const reg: ChannelRegistration = {
-            channelId: input.channelId,
+            channelId: channelSecretSchema.parse(input.channelId),
             authHash: Buffer.from(input.authHash, "base64"),
             clientPublic: Buffer.from(input.clientPublic, "base64"),
             hasPassphrase: input.hasPassphrase,
@@ -1813,7 +1836,7 @@ export function createTicketRouter(deps: TicketRouterDeps) {
     regenerateSecureLink: volunteerProcedure
       .input(
         z.object({
-          ticketId: z.uuid(),
+          ticketId: ticketIdSchema,
           channelId: z.string().regex(/^[0-9a-f]{48}$/),
           authHash: z.string().min(1),
           clientPublic: z.string().min(1),
@@ -1837,7 +1860,7 @@ export function createTicketRouter(deps: TicketRouterDeps) {
           }
 
           const reg: ChannelRegistration = {
-            channelId: input.channelId,
+            channelId: channelSecretSchema.parse(input.channelId),
             authHash: Buffer.from(input.authHash, "base64"),
             clientPublic: Buffer.from(input.clientPublic, "base64"),
             hasPassphrase: input.hasPassphrase,
@@ -1862,7 +1885,7 @@ export function createTicketRouter(deps: TicketRouterDeps) {
       ),
 
     revokeSecureLink: volunteerProcedure
-      .input(z.object({ ticketId: z.uuid() }))
+      .input(z.object({ ticketId: ticketIdSchema }))
       .mutation(
         withErrorWrapping(async ({ ctx, input }) => {
           const { svc } = ticketSvc(ctx.org.tenantDb);

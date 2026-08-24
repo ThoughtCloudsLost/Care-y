@@ -11,7 +11,16 @@
 import { describe, it, expect, beforeAll, afterAll, vi } from "vitest";
 import { randomUUID } from "node:crypto";
 import { sql, type Kysely } from "kysely";
-import { RoleId } from "@care-y/shared";
+import { RoleId, type RoleIdValue } from "@care-y/shared";
+import type {
+  SessionId,
+  SessionToken,
+  UserId,
+  IpToken,
+  UaToken,
+  OrgId,
+  OrgSchema,
+} from "@care-y/shared";
 import type { PlatformDatabase, TenantDatabase } from "../db/types.js";
 import {
   createTestDb,
@@ -53,7 +62,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
     let testDb: TestDb;
     let tenantDb: Kysely<TenantDatabase>;
     let orgContext: OrgContext;
-    const createdOrgIds: string[] = [];
+    const createdOrgIds: OrgId[] = [];
     const createdSchemas: string[] = [];
 
     const hasher = createScryptHasher();
@@ -100,7 +109,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
       orgContext = {
         orgId: org.id,
         orgSlug: org.slug,
-        orgSchema: testDb.schemaName,
+        orgSchema: testDb.schemaName as OrgSchema,
         tenantDb,
         sealedBox: testSealedBox,
       };
@@ -210,7 +219,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
     /** Registers a user directly via AuthService (bypasses tRPC). */
     async function registerUser(
       identifier: string,
-      roleId: string,
+      roleId: RoleIdValue,
     ): Promise<UserRecord> {
       const sessions = createDbSessionRepository(
         tenantDb,
@@ -236,13 +245,13 @@ describe.skipIf(!process.env.DATABASE_URL)(
     }
 
     /** Creates a synthetic 2FA-verified session (no DB row needed for middleware tests). */
-    function makeSession(userId: string, twofaVerified = true): SessionData {
+    function makeSession(userId: UserId, twofaVerified = true): SessionData {
       return {
-        id: randomUUID(),
-        token: randomUUID(),
+        id: randomUUID() as SessionId,
+        token: randomUUID() as SessionToken,
         userId,
-        ipToken: "test-ip-token",
-        uaToken: "test-ua-token",
+        ipToken: "test-ip-token" as IpToken,
+        uaToken: "test-ua-token" as UaToken,
         expiresAt: new Date(Date.now() + 3_600_000),
         twofaVerified,
         webauthnChallenge: null,

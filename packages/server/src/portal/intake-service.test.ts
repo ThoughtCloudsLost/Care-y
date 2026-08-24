@@ -38,6 +38,13 @@ import {
 import { ValidationError } from "../errors.js";
 import { UsernameTakenError } from "./portal-errors.js";
 import type { AccountServiceDeps } from "./account-service.js";
+import {
+  newTicketId,
+  newFollowupId,
+  newClientAccountId,
+  orgSlugIdSchema,
+} from "@care-y/shared";
+import type { QueueId, OrgSchema, OrgSlug } from "@care-y/shared";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -55,8 +62,8 @@ function createMockNotificationService(): NotificationService & {
 
 function makeInput(overrides?: Partial<IntakeTicketInput>): IntakeTicketInput {
   return {
-    ticketId: crypto.randomUUID(),
-    followUpId: crypto.randomUUID(),
+    ticketId: newTicketId(),
+    followUpId: newFollowupId(),
     encryptedTitle: Buffer.from("ct-title-bytes"),
     encryptedDescription: Buffer.from("ct-desc-bytes"),
     encryptedMessage: Buffer.from("ct-msg-bytes"),
@@ -74,7 +81,7 @@ function makeInput(overrides?: Partial<IntakeTicketInput>): IntakeTicketInput {
 function makeAccountInput(usernameOverride?: string): IntakeAccountInput {
   return {
     registration: {
-      accountId: crypto.randomUUID(),
+      accountId: newClientAccountId(),
       username:
         usernameOverride ?? `testuser-${crypto.randomUUID().slice(0, 8)}`,
       salt: crypto.randomBytes(16),
@@ -112,7 +119,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
   "createIntakeTicket (DB integration)",
   () => {
     let testDb: TestDb;
-    let intakeQueueId: string;
+    let intakeQueueId: QueueId;
 
     beforeAll(async () => {
       // Sodium is needed for sealedBox in sealString
@@ -154,8 +161,8 @@ describe.skipIf(!process.env.DATABASE_URL)(
           notificationService: ns,
           sealedBox: testSealedBox,
           orgId: TEST_ORG_ID,
-          orgSchema: testDb.schemaName,
-          orgSlug: "test-org",
+          orgSchema: testDb.schemaName as OrgSchema,
+          orgSlug: orgSlugIdSchema.parse("test-org"),
         },
         input,
       );
@@ -217,8 +224,8 @@ describe.skipIf(!process.env.DATABASE_URL)(
           notificationService: ns,
           sealedBox: testSealedBox,
           orgId: TEST_ORG_ID,
-          orgSchema: testDb.schemaName,
-          orgSlug: "test-org",
+          orgSchema: testDb.schemaName as OrgSchema,
+          orgSlug: orgSlugIdSchema.parse("test-org"),
         },
         input,
       );
@@ -255,8 +262,8 @@ describe.skipIf(!process.env.DATABASE_URL)(
           notificationService: ns,
           sealedBox: testSealedBox,
           orgId: TEST_ORG_ID,
-          orgSchema: testDb.schemaName,
-          orgSlug: "test-org",
+          orgSchema: testDb.schemaName as OrgSchema,
+          orgSlug: orgSlugIdSchema.parse("test-org"),
         },
         input,
       );
@@ -309,8 +316,8 @@ describe.skipIf(!process.env.DATABASE_URL)(
           notificationService: ns,
           sealedBox: testSealedBox,
           orgId: TEST_ORG_ID,
-          orgSchema: testDb.schemaName,
-          orgSlug: "test-org",
+          orgSchema: testDb.schemaName as OrgSchema,
+          orgSlug: orgSlugIdSchema.parse("test-org"),
         },
         input,
       );
@@ -355,7 +362,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
 
       const input = makeInput({
         formId: form.id,
-        resolvedQueueId: crypto.randomUUID(), // Not in allow-list
+        resolvedQueueId: crypto.randomUUID() as QueueId, // Not in allow-list
       });
 
       await expect(
@@ -365,8 +372,8 @@ describe.skipIf(!process.env.DATABASE_URL)(
             notificationService: ns,
             sealedBox: testSealedBox,
             orgId: TEST_ORG_ID,
-            orgSchema: testDb.schemaName,
-            orgSlug: "test-org",
+            orgSchema: testDb.schemaName as OrgSchema,
+            orgSlug: "test-org" as OrgSlug,
           },
           input,
         ),
@@ -383,8 +390,8 @@ describe.skipIf(!process.env.DATABASE_URL)(
           notificationService: ns,
           sealedBox: testSealedBox,
           orgId: TEST_ORG_ID,
-          orgSchema: testDb.schemaName,
-          orgSlug: "test-org",
+          orgSchema: testDb.schemaName as OrgSchema,
+          orgSlug: orgSlugIdSchema.parse("test-org"),
         },
         input,
       );
@@ -438,8 +445,8 @@ describe.skipIf(!process.env.DATABASE_URL)(
           sealedBox: testSealedBox,
           fieldEncryptor: noopEncryptor,
           orgId: TEST_ORG_ID,
-          orgSchema: testDb.schemaName,
-          orgSlug: "test-org",
+          orgSchema: testDb.schemaName as OrgSchema,
+          orgSlug: orgSlugIdSchema.parse("test-org"),
         },
         input,
       );
@@ -467,8 +474,8 @@ describe.skipIf(!process.env.DATABASE_URL)(
             notificationService: ns,
             sealedBox: testSealedBox,
             orgId: TEST_ORG_ID,
-            orgSchema: testDb.schemaName,
-            orgSlug: "test-org",
+            orgSchema: testDb.schemaName as OrgSchema,
+            orgSlug: "test-org" as OrgSlug,
           },
           input,
         ),
@@ -500,8 +507,8 @@ describe.skipIf(!process.env.DATABASE_URL)(
               notificationService: ns,
               sealedBox: testSealedBox,
               orgId: TEST_ORG_ID,
-              orgSchema: freshDb.schemaName,
-              orgSlug: "test-org",
+              orgSchema: freshDb.schemaName as OrgSchema,
+              orgSlug: orgSlugIdSchema.parse("test-org"),
             },
             input,
           ),
@@ -528,8 +535,8 @@ describe.skipIf(!process.env.DATABASE_URL)(
           notificationService: ns,
           sealedBox: testSealedBox,
           orgId: TEST_ORG_ID,
-          orgSchema: testDb.schemaName,
-          orgSlug: "test-org",
+          orgSchema: testDb.schemaName as OrgSchema,
+          orgSlug: orgSlugIdSchema.parse("test-org"),
         },
         input,
       );
@@ -572,8 +579,8 @@ describe.skipIf(!process.env.DATABASE_URL)(
           notificationService: ns,
           sealedBox: testSealedBox,
           orgId: TEST_ORG_ID,
-          orgSchema: testDb.schemaName,
-          orgSlug: "test-org",
+          orgSchema: testDb.schemaName as OrgSchema,
+          orgSlug: orgSlugIdSchema.parse("test-org"),
         },
         input,
       );
@@ -616,8 +623,8 @@ describe.skipIf(!process.env.DATABASE_URL)(
             notificationService: ns,
             sealedBox: testSealedBox,
             orgId: TEST_ORG_ID,
-            orgSchema: testDb.schemaName,
-            orgSlug: "test-org",
+            orgSchema: testDb.schemaName as OrgSchema,
+            orgSlug: "test-org" as OrgSlug,
             accountServiceDeps: accountDeps,
           },
           input,
@@ -663,7 +670,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
       it("stores selfCopy row with the correct followup_id", async () => {
         const ns = createMockNotificationService();
         const acct = makeAccountInputWithSelfCopy();
-        const followUpId = crypto.randomUUID();
+        const followUpId = newFollowupId();
         const input = makeInput({ account: acct, followUpId });
 
         await createIntakeTicket(
@@ -672,8 +679,8 @@ describe.skipIf(!process.env.DATABASE_URL)(
             notificationService: ns,
             sealedBox: testSealedBox,
             orgId: TEST_ORG_ID,
-            orgSchema: testDb.schemaName,
-            orgSlug: "test-org",
+            orgSchema: testDb.schemaName as OrgSchema,
+            orgSlug: "test-org" as OrgSlug,
             accountServiceDeps: accountDeps,
           },
           input,
@@ -718,8 +725,8 @@ describe.skipIf(!process.env.DATABASE_URL)(
             notificationService: ns,
             sealedBox: testSealedBox,
             orgId: TEST_ORG_ID,
-            orgSchema: testDb.schemaName,
-            orgSlug: "test-org",
+            orgSchema: testDb.schemaName as OrgSchema,
+            orgSlug: "test-org" as OrgSlug,
             accountServiceDeps: accountDeps,
           },
           input1,
@@ -736,8 +743,8 @@ describe.skipIf(!process.env.DATABASE_URL)(
               notificationService: ns,
               sealedBox: testSealedBox,
               orgId: TEST_ORG_ID,
-              orgSchema: testDb.schemaName,
-              orgSlug: "test-org",
+              orgSchema: testDb.schemaName as OrgSchema,
+              orgSlug: "test-org" as OrgSlug,
               accountServiceDeps: accountDeps,
             },
             input2,
@@ -763,8 +770,8 @@ describe.skipIf(!process.env.DATABASE_URL)(
             notificationService: ns,
             sealedBox: testSealedBox,
             orgId: TEST_ORG_ID,
-            orgSchema: testDb.schemaName,
-            orgSlug: "test-org",
+            orgSchema: testDb.schemaName as OrgSchema,
+            orgSlug: "test-org" as OrgSlug,
           },
           input,
         );

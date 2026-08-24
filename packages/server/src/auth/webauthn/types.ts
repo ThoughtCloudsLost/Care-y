@@ -8,6 +8,8 @@
  * added explicit types where the original used implicit inference.
  */
 
+import type { WebauthnCredentialId } from "@care-y/shared";
+
 export type NamedAlgo = "RS256" | "ES256";
 export type Base64URLString = string;
 
@@ -37,7 +39,7 @@ export interface AuthenticatorParsed {
 
 /** Credential info extracted during registration. */
 export interface CredentialInfo {
-  readonly id: string;
+  readonly id: WebauthnCredentialId;
   readonly publicKey: Base64URLString;
   readonly algorithm: NamedAlgo;
   readonly transports: string[];
@@ -68,7 +70,7 @@ export interface AuthenticationResult {
  * historically omits it, W3C spec allows null). See github/webauthn-json#73.
  */
 export interface RegistrationResponseJSON {
-  readonly id: Base64URLString;
+  readonly id: WebauthnCredentialId;
   readonly rawId: Base64URLString;
   readonly type: string;
   readonly authenticatorAttachment?: string | null;
@@ -88,7 +90,7 @@ export interface RegistrationResponseJSON {
  * userHandle is nullable per the WebAuthn spec (absent when no user handle).
  */
 export interface AuthenticationResponseJSON {
-  readonly id: Base64URLString;
+  readonly id: WebauthnCredentialId;
   readonly rawId: Base64URLString;
   readonly type: string;
   readonly authenticatorAttachment?: string | null;

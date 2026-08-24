@@ -25,6 +25,7 @@ import type { Kysely } from "kysely";
 import type { TenantDatabase } from "../db/types.js";
 import type { BlindIndexer } from "../crypto/field-encryptor.js";
 import { CryptoError } from "../errors.js";
+import type { OrgId, UserId } from "@care-y/shared";
 
 const hkdfAsync = promisify(hkdf);
 
@@ -69,7 +70,7 @@ export async function deriveFakeSaltKey(
  */
 export function computeFakeSalt(
   fakeSaltKey: Buffer,
-  orgUuid: string,
+  orgUuid: OrgId,
   identifier: string,
 ): Buffer {
   const hmac = createHmac("sha256", fakeSaltKey);
@@ -86,9 +87,9 @@ export function computeFakeSalt(
  */
 export function computeFakeUuid(
   fakeSaltKey: Buffer,
-  orgUuid: string,
+  orgUuid: OrgId,
   identifier: string,
-): string {
+): UserId {
   const hmac = createHmac("sha256", fakeSaltKey);
   hmac.update("fake-uuid:");
   hmac.update(orgUuid);
@@ -113,21 +114,21 @@ export function computeFakeUuid(
     hex.substring(12, 16),
     hex.substring(16, 20),
     hex.substring(20, 32),
-  ].join("-");
+  ].join("-") as UserId;
 }
 
 // --- SaltDefense interface and factory ---
 
 export interface SaltDefenseConfig {
   readonly fakeSaltKey: Buffer;
-  readonly orgUuid: string;
+  readonly orgUuid: OrgId;
 }
 
 export interface SaltLookupResult {
   /** The salt to return to the client (real or fake). Always 16 bytes. */
   readonly salt: Buffer;
   /** The user's UUID (real for existing users, deterministic fake for non-existent). */
-  readonly userId: string;
+  readonly userId: UserId;
 }
 
 export interface SaltDefense {
@@ -163,7 +164,7 @@ export function createSaltDefense(
       const normalized = identifier.toLowerCase().trim();
 
       // Compute the blind index for DB lookup (same HMAC as registration).
-      const identifierHash = indexer.hash(normalized, config.orgUuid);
+      const identifierHash = indexer.hashIdentifier(normalized, config.orgUuid);
 
       // ALWAYS execute both operations, regardless of user existence.
       // Parallel execution: both start immediately, neither is conditional.

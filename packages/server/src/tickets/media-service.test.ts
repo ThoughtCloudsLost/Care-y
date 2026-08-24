@@ -22,13 +22,23 @@ import {
 } from "./access.js";
 import { ForbiddenError, NotFoundError } from "../errors.js";
 import type { BlobStore } from "../storage/store.js";
+import {
+  newFollowupId,
+  newRecordingId,
+  type UserId,
+  type TicketId,
+  type QueueId,
+  type FollowupId,
+  type BlobKey,
+  type OrgSchema,
+} from "@care-y/shared";
 
 function createMockBlobStore(): BlobStore & { deletedKeys: string[] } {
   const deletedKeys: string[] = [];
   return {
     deletedKeys,
     async put() {
-      return "mock-key-" + crypto.randomUUID().slice(0, 8);
+      return ("mock-key-" + crypto.randomUUID().slice(0, 8)) as BlobKey;
     },
     async get() {
       return Buffer.from("mock-blob");
@@ -47,9 +57,9 @@ describe.skipIf(!process.env.DATABASE_URL)("MediaService (DB)", () => {
   let svc: MediaService;
   let access: TicketAccessChecker;
   let blobStore: ReturnType<typeof createMockBlobStore>;
-  let userId: string;
-  let outsiderId: string;
-  let queueId: string;
+  let userId: UserId;
+  let outsiderId: UserId;
+  let queueId: QueueId;
 
   beforeAll(async () => {
     testDb = await createTestDb();
@@ -80,7 +90,7 @@ describe.skipIf(!process.env.DATABASE_URL)("MediaService (DB)", () => {
     await testDb.cleanup();
   });
 
-  async function insertTicket(): Promise<string> {
+  async function insertTicket(): Promise<TicketId> {
     const fix = await createTestTicketFixture(testDb.db, { queueId });
     return fix.ticketId;
   }
@@ -93,7 +103,7 @@ describe.skipIf(!process.env.DATABASE_URL)("MediaService (DB)", () => {
     const ticketId = await insertTicket();
     const rec = await svc.createRecording({
       ticketId,
-      blobKey: "blob-rec-1",
+      blobKey: "blob-rec-1" as BlobKey,
       sizeBytes: 4096,
       durationSeconds: 120,
     });
@@ -112,7 +122,7 @@ describe.skipIf(!process.env.DATABASE_URL)("MediaService (DB)", () => {
     const ticketId = await insertTicket();
     const created = await svc.createRecording({
       ticketId,
-      blobKey: "blob-get-1",
+      blobKey: "blob-get-1" as BlobKey,
       sizeBytes: 1024,
     });
 
@@ -123,7 +133,7 @@ describe.skipIf(!process.env.DATABASE_URL)("MediaService (DB)", () => {
 
   it("getRecording throws NotFoundError for non-existent recording", async () => {
     await expect(
-      svc.getRecording(userId, crypto.randomUUID()),
+      svc.getRecording(userId, newRecordingId()),
     ).rejects.toBeInstanceOf(NotFoundError);
   });
 
@@ -136,7 +146,7 @@ describe.skipIf(!process.env.DATABASE_URL)("MediaService (DB)", () => {
     const ticketId = await insertTicket();
     const rec = await svc.createRecording({
       ticketId,
-      blobKey: "blob-denied-rec",
+      blobKey: "blob-denied-rec" as BlobKey,
       sizeBytes: 256,
     });
 
@@ -149,7 +159,7 @@ describe.skipIf(!process.env.DATABASE_URL)("MediaService (DB)", () => {
     const ticketId = await insertTicket();
     const att = await svc.createAttachment({
       ticketId,
-      blobKey: "blob-denied-att",
+      blobKey: "blob-denied-att" as BlobKey,
       sizeBytes: 256,
     });
 
@@ -162,7 +172,7 @@ describe.skipIf(!process.env.DATABASE_URL)("MediaService (DB)", () => {
     const ticketId = await insertTicket();
     const rec = await svc.createRecording({
       ticketId,
-      blobKey: "blob-soft-1",
+      blobKey: "blob-soft-1" as BlobKey,
       sizeBytes: 256,
     });
 
@@ -182,7 +192,7 @@ describe.skipIf(!process.env.DATABASE_URL)("MediaService (DB)", () => {
     const ticketId = await insertTicket();
     const rec = await svc.createRecording({
       ticketId,
-      blobKey: "blob-soft-2",
+      blobKey: "blob-soft-2" as BlobKey,
       sizeBytes: 256,
     });
 
@@ -195,7 +205,7 @@ describe.skipIf(!process.env.DATABASE_URL)("MediaService (DB)", () => {
     const ticketId = await insertTicket();
     const rec = await svc.createRecording({
       ticketId,
-      blobKey: "blob-hard-1",
+      blobKey: "blob-hard-1" as BlobKey,
       sizeBytes: 512,
     });
 
@@ -220,12 +230,12 @@ describe.skipIf(!process.env.DATABASE_URL)("MediaService (DB)", () => {
 
     const alive = await svc.createRecording({
       ticketId,
-      blobKey: "blob-list-alive",
+      blobKey: "blob-list-alive" as BlobKey,
       sizeBytes: 100,
     });
     const deleted = await svc.createRecording({
       ticketId,
-      blobKey: "blob-list-deleted",
+      blobKey: "blob-list-deleted" as BlobKey,
       sizeBytes: 200,
     });
 
@@ -245,7 +255,7 @@ describe.skipIf(!process.env.DATABASE_URL)("MediaService (DB)", () => {
     const ticketId = await insertTicket();
     const att = await svc.createAttachment({
       ticketId,
-      blobKey: "blob-att-1",
+      blobKey: "blob-att-1" as BlobKey,
       sizeBytes: 8192,
       encryptedFilename: Buffer.from("encrypted-name"),
       contentType: "image/png",
@@ -264,7 +274,7 @@ describe.skipIf(!process.env.DATABASE_URL)("MediaService (DB)", () => {
     const ticketId = await insertTicket();
     const created = await svc.createAttachment({
       ticketId,
-      blobKey: "blob-att-get",
+      blobKey: "blob-att-get" as BlobKey,
       sizeBytes: 1024,
     });
 
@@ -277,7 +287,7 @@ describe.skipIf(!process.env.DATABASE_URL)("MediaService (DB)", () => {
     const ticketId = await insertTicket();
     const att = await svc.createAttachment({
       ticketId,
-      blobKey: "blob-att-soft",
+      blobKey: "blob-att-soft" as BlobKey,
       sizeBytes: 512,
     });
 
@@ -296,7 +306,7 @@ describe.skipIf(!process.env.DATABASE_URL)("MediaService (DB)", () => {
     const ticketId = await insertTicket();
     const att = await svc.createAttachment({
       ticketId,
-      blobKey: "blob-att-hard",
+      blobKey: "blob-att-hard" as BlobKey,
       sizeBytes: 512,
     });
 
@@ -319,12 +329,12 @@ describe.skipIf(!process.env.DATABASE_URL)("MediaService (DB)", () => {
 
     const alive = await svc.createAttachment({
       ticketId,
-      blobKey: "blob-att-list-alive",
+      blobKey: "blob-att-list-alive" as BlobKey,
       sizeBytes: 100,
     });
     const deleted = await svc.createAttachment({
       ticketId,
-      blobKey: "blob-att-list-deleted",
+      blobKey: "blob-att-list-deleted" as BlobKey,
       sizeBytes: 200,
     });
 
@@ -345,7 +355,7 @@ describe.skipIf(!process.env.DATABASE_URL)("MediaService (DB)", () => {
     for (let i = 0; i < 5; i++) {
       const rec = await svc.createRecording({
         ticketId,
-        blobKey: `blob-page-${String(i)}`,
+        blobKey: `blob-page-${String(i)}` as BlobKey,
         sizeBytes: 100,
       });
       ids.push(rec.id);
@@ -384,7 +394,7 @@ describe.skipIf(!process.env.DATABASE_URL)("MediaService (DB)", () => {
     for (let i = 0; i < 3; i++) {
       await svc.createRecording({
         ticketId,
-        blobKey: `blob-dir-${String(i)}`,
+        blobKey: `blob-dir-${String(i)}` as BlobKey,
         sizeBytes: 100,
       });
     }
@@ -406,8 +416,8 @@ describe.skipIf(!process.env.DATABASE_URL)("MediaService (DB)", () => {
 
   it("listRecordings with followupId returns only that follow-up's recordings", async () => {
     const ticketId = await insertTicket();
-    const fuId1 = crypto.randomUUID();
-    const fuId2 = crypto.randomUUID();
+    const fuId1: FollowupId = newFollowupId();
+    const fuId2: FollowupId = newFollowupId();
 
     // Create follow-ups so FK constraint is satisfied
     await testDb.db
@@ -439,13 +449,13 @@ describe.skipIf(!process.env.DATABASE_URL)("MediaService (DB)", () => {
     const rec1 = await svc.createRecording({
       ticketId,
       followupId: fuId1,
-      blobKey: "blob-fu-filter-1",
+      blobKey: "blob-fu-filter-1" as BlobKey,
       sizeBytes: 100,
     });
     await svc.createRecording({
       ticketId,
       followupId: fuId2,
-      blobKey: "blob-fu-filter-2",
+      blobKey: "blob-fu-filter-2" as BlobKey,
       sizeBytes: 100,
     });
 
@@ -459,8 +469,8 @@ describe.skipIf(!process.env.DATABASE_URL)("MediaService (DB)", () => {
 
   it("listAttachments with followupId returns only that follow-up's attachments", async () => {
     const ticketId = await insertTicket();
-    const fuId1 = crypto.randomUUID();
-    const fuId2 = crypto.randomUUID();
+    const fuId1: FollowupId = newFollowupId();
+    const fuId2: FollowupId = newFollowupId();
 
     await testDb.db
       .insertInto("followups")
@@ -491,14 +501,14 @@ describe.skipIf(!process.env.DATABASE_URL)("MediaService (DB)", () => {
     const att1 = await svc.createAttachment({
       ticketId,
       followupId: fuId1,
-      blobKey: "blob-att-fu-1",
+      blobKey: "blob-att-fu-1" as BlobKey,
       sizeBytes: 100,
       contentType: "image/png",
     });
     await svc.createAttachment({
       ticketId,
       followupId: fuId2,
-      blobKey: "blob-att-fu-2",
+      blobKey: "blob-att-fu-2" as BlobKey,
       sizeBytes: 200,
       contentType: "application/pdf",
     });
@@ -518,7 +528,7 @@ describe.skipIf(!process.env.DATABASE_URL)("MediaService (DB)", () => {
     for (let i = 0; i < 4; i++) {
       const att = await svc.createAttachment({
         ticketId,
-        blobKey: `blob-att-page-${String(i)}`,
+        blobKey: `blob-att-page-${String(i)}` as BlobKey,
         sizeBytes: 100,
       });
       ids.push(att.id);
@@ -546,7 +556,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
   () => {
     let testDb: TestDb;
     let blobStore: ReturnType<typeof createMockBlobStore>;
-    let queueId: string;
+    let queueId: QueueId;
 
     beforeAll(async () => {
       testDb = await createTestDb();
@@ -561,7 +571,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
       await testDb.cleanup();
     });
 
-    async function insertTicket(): Promise<string> {
+    async function insertTicket(): Promise<TicketId> {
       const fix = await createTestTicketFixture(testDb.db, { queueId });
       return fix.ticketId;
     }
@@ -582,7 +592,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
         .values({
           ticket_id: ticketId,
           followup_id: null,
-          blob_key: "blob-cleanup-retention",
+          blob_key: "blob-cleanup-retention" as BlobKey,
           size_bytes: 1024,
           duration_seconds: 30,
           created_at: pastRetention,
@@ -597,7 +607,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
         .values({
           ticket_id: ticketId,
           followup_id: null,
-          blob_key: "blob-cleanup-purge",
+          blob_key: "blob-cleanup-purge" as BlobKey,
           size_bytes: 2048,
           duration_seconds: 60,
           deleted_at: pastPurge,
@@ -611,7 +621,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
         .values({
           ticket_id: ticketId,
           followup_id: null,
-          blob_key: "blob-cleanup-fresh",
+          blob_key: "blob-cleanup-fresh" as BlobKey,
           size_bytes: 512,
           duration_seconds: 10,
         })
@@ -625,7 +635,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
         jobQueue,
         () => testDb.db,
         blobStore,
-        async () => [testDb.schemaName],
+        async () => [testDb.schemaName as OrgSchema],
       );
 
       const capturedHandler = handlers.get(MEDIA_CLEANUP_QUEUE);

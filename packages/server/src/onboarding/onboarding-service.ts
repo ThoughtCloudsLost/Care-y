@@ -1,6 +1,16 @@
 import { randomBytes } from "node:crypto";
 import type { Kysely } from "kysely";
 import { RoleId, ErrorCode } from "@care-y/shared";
+import type {
+  OrgId,
+  OrgSlug,
+  OrgSchema,
+  InviteTokenId,
+  SessionToken,
+  UserId,
+} from "@care-y/shared";
+import { sessionTokenSchema } from "@care-y/shared";
+import type { RoleIdValue } from "@care-y/shared";
 import type { TenantDatabase } from "../db/types.js";
 import { isPgUniqueViolation } from "../db/pg-errors.js";
 import { ConflictError } from "../errors.js";
@@ -39,7 +49,7 @@ export interface BootstrapAdminInput {
   readonly orgPublicKey: Buffer;
   readonly ipAddress: string;
   readonly userAgent: string;
-  readonly orgId: string;
+  readonly orgId: OrgId;
 }
 
 export interface RegisterFromInviteInput {
@@ -50,8 +60,8 @@ export interface RegisterFromInviteInput {
   readonly ipAddress: string;
   readonly userAgent: string;
   readonly invite: {
-    readonly id: string;
-    readonly roleId: string;
+    readonly id: InviteTokenId;
+    readonly roleId: RoleIdValue;
   };
 }
 
@@ -73,13 +83,13 @@ export interface OnboardingService {
 
   bootstrapAdmin(
     input: BootstrapAdminInput,
-  ): Promise<{ userId: string; sessionToken: string }>;
+  ): Promise<{ userId: UserId; sessionToken: SessionToken }>;
 
   registerFromInvite(
     input: RegisterFromInviteInput,
     sealedBox: SealedBoxEncryptor,
-    orgCtx: { orgId: string; orgSlug: string; orgSchema: string },
-  ): Promise<{ userId: string; sessionToken: string }>;
+    orgCtx: { orgId: OrgId; orgSlug: OrgSlug; orgSchema: OrgSchema },
+  ): Promise<{ userId: UserId; sessionToken: SessionToken }>;
 
   updateOrgGeneral(input: UpdateOrgGeneralInput): Promise<void>;
 
@@ -131,11 +141,14 @@ export function createOnboardingService(
 
     async bootstrapAdmin(
       input: BootstrapAdminInput,
-    ): Promise<{ userId: string; sessionToken: string }> {
+    ): Promise<{ userId: UserId; sessionToken: SessionToken }> {
       const orgPublicKey = input.orgPublicKey;
       const sealedBox = createSealedBoxEncryptor(orgPublicKey);
 
-      const identifierHash = indexer.hash(input.identifier, input.orgId);
+      const identifierHash = indexer.hashIdentifier(
+        input.identifier,
+        input.orgId,
+      );
       // ADR-052: identifier is org-key tier (sealed box, server-blind)
       const encryptedIdentifier = sealedBox.seal(input.identifier);
       const encryptedDisplayName = sealedBox.seal(input.displayName);
@@ -143,7 +156,7 @@ export function createOnboardingService(
         input.preferredLocale !== undefined
           ? sealedBox.seal(input.preferredLocale)
           : null;
-      const passwordHash = await hasher.hash(input.password);
+      const passwordHash = await hasher.hashPassword(input.password);
 
       return db.transaction().execute(async (tx) => {
         const activeCount = await tx
@@ -183,11 +196,11 @@ export function createOnboardingService(
           throw err;
         }
 
-        const token = randomBytes(32).toString("hex");
+        const token = sessionTokenSchema.parse(randomBytes(32).toString("hex"));
         const encryptedIp = sealedBox.seal(input.ipAddress);
         const encryptedUa = sealedBox.seal(input.userAgent);
-        const ipToken = tokenizer.tokenize(input.ipAddress);
-        const uaToken = tokenizer.tokenize(input.userAgent);
+        const ipToken = tokenizer.tokenizeIp(input.ipAddress);
+        const uaToken = tokenizer.tokenizeUa(input.userAgent);
 
         await tx
           .insertInto("sessions")
@@ -210,8 +223,8 @@ export function createOnboardingService(
     async registerFromInvite(
       input: RegisterFromInviteInput,
       sealedBox: SealedBoxEncryptor,
-      orgCtx: { orgId: string; orgSlug: string; orgSchema: string },
-    ): Promise<{ userId: string; sessionToken: string }> {
+      orgCtx: { orgId: OrgId; orgSlug: OrgSlug; orgSchema: OrgSchema },
+    ): Promise<{ userId: UserId; sessionToken: SessionToken }> {
       return db.transaction().execute(async (tx) => {
         const txOrgCtx: OrgContext = {
           orgId: orgCtx.orgId,
@@ -242,7 +255,7 @@ export function createOnboardingService(
         await txInvite.consume(input.invite.id);
 
         const session = await txSessions.create({
-          token: randomBytes(32).toString("hex"),
+          token: sessionTokenSchema.parse(randomBytes(32).toString("hex")),
           userId: user.id,
           ipAddress: input.ipAddress,
           userAgent: input.userAgent,

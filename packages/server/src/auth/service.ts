@@ -29,13 +29,20 @@ import {
   NotFoundError,
 } from "../errors.js";
 import { ErrorCode, RoleId } from "@care-y/shared";
+import type {
+  UserId,
+  OrgId,
+  SessionToken,
+  IdentifierHash,
+  RoleIdValue,
+} from "@care-y/shared";
 
 export interface UserRecord {
-  readonly id: string;
+  readonly id: UserId;
   readonly encryptedIdentifier: string; // base64 sealed ciphertext, client decrypts with org key (ADR-052)
   readonly encryptedDisplayName: string; // base64 ciphertext, client decrypts with org key
   readonly encryptedPreferredLocale: string | null; // base64 ciphertext, client decrypts with org key
-  readonly roleId: string;
+  readonly roleId: RoleIdValue;
   readonly isActive: boolean;
   readonly hasSeenBriefing: boolean;
 }
@@ -47,7 +54,7 @@ export interface AuthService {
     displayName: string;
     notificationEmail?: string;
     preferredLocale?: string;
-    roleId: string;
+    roleId: RoleIdValue;
   }): Promise<UserRecord>;
 
   login(input: {
@@ -57,32 +64,32 @@ export interface AuthService {
     userAgent: string;
   }): Promise<{ user: UserRecord; session: SessionData }>;
 
-  logout(sessionToken: string): Promise<void>;
+  logout(sessionToken: SessionToken): Promise<void>;
 
   validateSession(
-    token: string,
+    token: SessionToken,
     ipAddress: string,
     userAgent: string,
   ): Promise<{ user: UserRecord; session: SessionData } | null>;
 
-  findUserById(userId: string): Promise<UserRecord | null>;
+  findUserById(userId: UserId): Promise<UserRecord | null>;
 
   /** Counts active users with the admin role. Used for last-admin demotion protection. */
   countActiveAdmins(): Promise<number>;
 
   /** Updates a user's role. Returns the updated user record. */
-  updateUserRole(userId: string, newRoleId: string): Promise<UserRecord>;
+  updateUserRole(userId: UserId, newRoleId: RoleIdValue): Promise<UserRecord>;
 
   /** Activates or deactivates a user. Deactivation kills sessions and revokes org key. */
   setUserActive(
-    actorId: string,
-    userId: string,
+    actorId: UserId,
+    userId: UserId,
     isActive: boolean,
   ): Promise<UserRecord>;
 
   /** Updates an encrypted display name (ciphertext only, client encrypts). */
   updateDisplayName(
-    userId: string,
+    userId: UserId,
     encryptedDisplayName: Buffer,
   ): Promise<void>;
 
@@ -92,7 +99,7 @@ export interface AuthService {
    * If omitted, caller is assumed to be admin (admin-service path).
    */
   updateUsername(
-    userId: string,
+    userId: UserId,
     newIdentifier: string,
     currentPassword?: string,
   ): Promise<void>;
@@ -102,8 +109,8 @@ export interface AuthService {
    * Crypto key rotation (rotateKeys) is a separate step handled by the client.
    */
   updatePasswordHash(
-    userId: string,
-    sessionToken: string,
+    userId: UserId,
+    sessionToken: SessionToken,
     currentPassword: string,
     newPassword: string,
   ): Promise<void>;
@@ -111,13 +118,13 @@ export interface AuthService {
   /** Updates the org's PII retention setting in org_config. */
   setPiiRetentionDays(days: number | null): Promise<void>;
 
-  markBriefingSeen(userId: string): Promise<void>;
+  markBriefingSeen(userId: UserId): Promise<void>;
 
   /** Mark org onboarding setup as complete. */
   markSetupCompleted(): Promise<void>;
 
   /** Checks whether a user_keys row exists for the given user. */
-  hasUserKeys(userId: string): Promise<boolean>;
+  hasUserKeys(userId: UserId): Promise<boolean>;
 
   getHubStatus(): Promise<{
     activeUserCount: number;
@@ -146,8 +153,8 @@ function toUserRecord(row: Selectable<UsersTable>): UserRecord {
   };
 }
 
-function generateSessionToken(): string {
-  return randomBytes(32).toString("hex");
+function generateSessionToken(): SessionToken {
+  return randomBytes(32).toString("hex") as SessionToken;
 }
 
 function logCleanupFailure(err: unknown): void {
@@ -159,8 +166,8 @@ function logCleanupFailure(err: unknown): void {
 
 async function validateDeactivation(
   tx: Kysely<TenantDatabase>,
-  actorId: string,
-  userId: string,
+  actorId: UserId,
+  userId: UserId,
 ): Promise<void> {
   if (userId === actorId) {
     throw new ForbiddenError(ErrorCode.CANNOT_DEACTIVATE_SELF);
@@ -197,7 +204,7 @@ export function createAuthService(
   sealedBox: SealedBoxEncryptor,
   indexer: BlindIndexer,
   tokenizer: SessionTokenizer,
-  orgId: string,
+  orgId: OrgId,
 ): AuthService {
   // Lazy-initialized dummy hash for timing side-channel prevention.
   // On the first failed-lookup login attempt, we hash a throwaway string
@@ -211,7 +218,7 @@ export function createAuthService(
   }
 
   async function findActiveUserByHash(
-    identifierHash: string,
+    identifierHash: IdentifierHash,
   ): Promise<Selectable<UsersTable> | null> {
     const row = await db
       .selectFrom("users")
@@ -224,7 +231,7 @@ export function createAuthService(
   }
 
   async function findUserRowById(
-    userId: string,
+    userId: UserId,
   ): Promise<Selectable<UsersTable> | null> {
     const row = await db
       .selectFrom("users")
@@ -236,7 +243,7 @@ export function createAuthService(
   }
 
   async function findActiveUserById(
-    userId: string,
+    userId: UserId,
   ): Promise<Selectable<UsersTable> | null> {
     const row = await findUserRowById(userId);
     if (row?.is_active !== true) return null;
@@ -296,7 +303,7 @@ export function createAuthService(
   }
 
   async function createSessionForUser(
-    userId: string,
+    userId: UserId,
     ipAddress: string,
     userAgent: string,
   ): Promise<SessionData> {
@@ -321,9 +328,9 @@ export function createAuthService(
     displayName: string;
     notificationEmail?: string;
     preferredLocale?: string;
-    roleId: string;
+    roleId: RoleIdValue;
   }): Promise<Selectable<UsersTable>> {
-    const identifierHash = indexer.hash(input.identifier, orgId);
+    const identifierHash = indexer.hashIdentifier(input.identifier, orgId);
     // ADR-052: identifier is org-key tier (sealed box, server-blind).
     // Login never reads it back; lookup goes through identifier_hash.
     const encryptedIdentifier = sealedBox.seal(input.identifier);
@@ -337,7 +344,7 @@ export function createAuthService(
       input.preferredLocale !== undefined
         ? sealedBox.seal(input.preferredLocale)
         : null;
-    const passwordHash = await hasher.hash(input.password);
+    const passwordHash = await hasher.hashPassword(input.password);
 
     try {
       return await db
@@ -372,8 +379,8 @@ export function createAuthService(
   }
 
   async function updateUserRole(
-    userId: string,
-    newRoleId: string,
+    userId: UserId,
+    newRoleId: RoleIdValue,
   ): Promise<UserRecord> {
     const row = await db
       .updateTable("users")
@@ -391,8 +398,8 @@ export function createAuthService(
   }
 
   async function setUserActive(
-    actorId: string,
-    userId: string,
+    actorId: UserId,
+    userId: UserId,
     isActive: boolean,
   ): Promise<UserRecord> {
     return db.transaction().execute(async (tx) => {
@@ -438,7 +445,7 @@ export function createAuthService(
 
     async login(input): Promise<{ user: UserRecord; session: SessionData }> {
       const row = await findActiveUserByHash(
-        indexer.hash(input.identifier, orgId),
+        indexer.hashIdentifier(input.identifier, orgId),
       );
       const verifiedRow = await verifyCredentials(input.password, row);
       const session = await createSessionForUser(
@@ -449,12 +456,12 @@ export function createAuthService(
       return { user: toUserRecord(verifiedRow), session };
     },
 
-    async logout(sessionToken: string): Promise<void> {
+    async logout(sessionToken: SessionToken): Promise<void> {
       await sessions.deleteByToken(sessionToken);
     },
 
     async validateSession(
-      token: string,
+      token: SessionToken,
       ipAddress: string,
       userAgent: string,
     ): Promise<{ user: UserRecord; session: SessionData } | null> {
@@ -483,7 +490,7 @@ export function createAuthService(
       };
     },
 
-    async findUserById(userId: string): Promise<UserRecord | null> {
+    async findUserById(userId: UserId): Promise<UserRecord | null> {
       const row = await findUserRowById(userId);
       return row ? toUserRecord(row) : null;
     },
@@ -500,7 +507,7 @@ export function createAuthService(
         .execute();
     },
 
-    async hasUserKeys(userId: string): Promise<boolean> {
+    async hasUserKeys(userId: UserId): Promise<boolean> {
       const row = await db
         .selectFrom("user_keys")
         .select("user_id")
@@ -509,7 +516,7 @@ export function createAuthService(
       return row !== undefined;
     },
 
-    async markBriefingSeen(userId: string): Promise<void> {
+    async markBriefingSeen(userId: UserId): Promise<void> {
       await db
         .updateTable("users")
         .set({ has_seen_briefing: true })
@@ -518,7 +525,7 @@ export function createAuthService(
     },
 
     async updateDisplayName(
-      userId: string,
+      userId: UserId,
       encryptedDisplayName: Buffer,
     ): Promise<void> {
       const result = await db
@@ -534,7 +541,7 @@ export function createAuthService(
     },
 
     async updateUsername(
-      userId: string,
+      userId: UserId,
       newIdentifier: string,
       currentPassword?: string,
     ): Promise<void> {
@@ -550,7 +557,7 @@ export function createAuthService(
         }
       }
 
-      const newIdentifierHash = indexer.hash(newIdentifier, orgId);
+      const newIdentifierHash = indexer.hashIdentifier(newIdentifier, orgId);
       const newEncryptedIdentifier = sealedBox.seal(newIdentifier);
 
       try {
@@ -576,8 +583,8 @@ export function createAuthService(
     },
 
     async updatePasswordHash(
-      userId: string,
-      sessionToken: string,
+      userId: UserId,
+      sessionToken: SessionToken,
       currentPassword: string,
       newPassword: string,
     ): Promise<void> {
@@ -591,7 +598,7 @@ export function createAuthService(
         throw new AuthError(ErrorCode.INVALID_CREDENTIALS);
       }
 
-      const newHash = await hasher.hash(newPassword);
+      const newHash = await hasher.hashPassword(newPassword);
 
       await db.transaction().execute(async (tx) => {
         await tx

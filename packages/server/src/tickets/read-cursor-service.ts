@@ -13,6 +13,7 @@ import { randomBytes } from "node:crypto";
 import type { Kysely } from "kysely";
 import type { TenantDatabase } from "../db/types.js";
 import type { TicketAccessChecker } from "./access.js";
+import type { TicketId, UserId } from "@care-y/shared";
 
 /**
  * Size of the dummy encrypted read cursor in bytes.
@@ -24,8 +25,8 @@ import type { TicketAccessChecker } from "./access.js";
 const DUMMY_CURSOR_SIZE = 85;
 
 export interface ReadCursorRecord {
-  readonly ticketId: string;
-  readonly userId: string;
+  readonly ticketId: TicketId;
+  readonly userId: UserId;
   readonly encryptedReadCursor: Buffer;
 }
 
@@ -34,7 +35,7 @@ export interface ReadCursorService {
    * Get the read cursor for a user on a ticket.
    * Creates a dummy row if none exists (lazy population).
    */
-  getOrCreate(userId: string, ticketId: string): Promise<ReadCursorRecord>;
+  getOrCreate(userId: UserId, ticketId: TicketId): Promise<ReadCursorRecord>;
 
   /**
    * Batch-read cursors for a user across tickets, keyed by ticket id.
@@ -45,19 +46,19 @@ export interface ReadCursorService {
    * requested ids to accessible queues before calling).
    */
   getBatch(
-    userId: string,
-    ticketIds: readonly string[],
-  ): Promise<Map<string, Buffer>>;
+    userId: UserId,
+    ticketIds: readonly TicketId[],
+  ): Promise<Map<TicketId, Buffer>>;
 
   /** Update the encrypted read cursor for a user on a ticket. */
   update(
-    userId: string,
-    ticketId: string,
+    userId: UserId,
+    ticketId: TicketId,
     encryptedReadCursor: Buffer,
   ): Promise<void>;
 
   /** Delete all read cursors for a ticket (called on ticket close). */
-  deleteForTicket(ticketId: string): Promise<void>;
+  deleteForTicket(ticketId: TicketId): Promise<void>;
 }
 
 export function createReadCursorService(
@@ -115,7 +116,7 @@ export function createReadCursorService(
     },
 
     async getBatch(userId, ticketIds) {
-      if (ticketIds.length === 0) return new Map<string, Buffer>();
+      if (ticketIds.length === 0) return new Map<TicketId, Buffer>();
 
       const rows = await db
         .selectFrom("ticket_read_cursors")

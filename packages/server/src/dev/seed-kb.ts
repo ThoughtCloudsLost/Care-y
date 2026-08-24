@@ -3,6 +3,7 @@ import type { TenantDatabase } from "../db/types.js";
 import type { SealedBoxEncryptor } from "../crypto/sealed-box.js";
 import type { BlobStore } from "../storage/store.js";
 import { wilsonScore } from "../kb/service.js";
+import type { KbCategoryId, KbItemId, UserId } from "@care-y/shared";
 
 interface PmNode {
   type: string;
@@ -340,11 +341,11 @@ function buildTextPdf(title: string, lines: readonly string[]): Buffer {
 export async function seedKbArticles(
   tDb: Kysely<TenantDatabase>,
   sealedBox: SealedBoxEncryptor,
-  userId: string,
+  userId: UserId,
   blobStore?: BlobStore,
   orgSchema?: string,
   extraVoterIds?: readonly string[],
-): Promise<{ articleIds: string[] }> {
+): Promise<{ articleIds: KbItemId[] }> {
   const existing = await tDb
     .selectFrom("kb_items")
     .select("id")
@@ -368,12 +369,12 @@ export async function seedKbArticles(
     Safety: 3,
   };
 
-  const catMap = new Map<number, string>();
+  const catMap = new Map<number, KbCategoryId>();
   for (const cat of categories) {
     catMap.set(cat.sort_order, cat.id);
   }
 
-  const articleIds: string[] = [];
+  const articleIds: KbItemId[] = [];
 
   for (const article of ARTICLES) {
     const sortOrder = categoryNameToSortOrder[article.category];

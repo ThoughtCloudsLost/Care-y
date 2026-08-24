@@ -11,10 +11,25 @@ import {
   requireSodium,
 } from "@care-y/crypto";
 import { eciesWrapAndStore } from "./key-wrap.js";
+import type {
+  TicketId,
+  FollowupId,
+  AttachmentId,
+  RecordingId,
+  KeyGeneration,
+  BlobKey,
+  OrgSchema,
+} from "@care-y/shared";
+import {
+  newFollowupId,
+  newAttachmentId,
+  newRecordingId,
+  newKeyGeneration,
+} from "@care-y/shared";
 
 export interface EncryptedFollowUpResult {
-  readonly followUpId: string;
-  readonly keyGeneration: string;
+  readonly followUpId: FollowupId;
+  readonly keyGeneration: KeyGeneration;
 }
 
 export interface FollowUpAttachment {
@@ -31,21 +46,21 @@ export interface EncryptedFollowUpOpts {
   readonly attachments?: readonly FollowUpAttachment[];
   readonly recording?: FollowUpRecording;
   readonly blobStore?: BlobStore;
-  readonly orgSchema?: string;
+  readonly orgSchema?: OrgSchema;
 }
 
 // --- Shared helpers ---
 
 interface AttachmentRecord {
-  id: string;
-  blobKey: string;
+  id: AttachmentId;
+  blobKey: BlobKey;
   contentType: string;
   sizeBytes: number;
 }
 
 interface RecordingRecord {
-  id: string;
-  blobKey: string;
+  id: RecordingId;
+  blobKey: BlobKey;
   durationSeconds: number;
 }
 
@@ -65,7 +80,7 @@ interface EncryptedMedia {
  */
 async function encryptAndStoreMedia(
   tk: SymmetricKey,
-  ticketId: string,
+  ticketId: TicketId,
   opts: EncryptedFollowUpOpts | undefined,
 ): Promise<EncryptedMedia> {
   try {
@@ -76,7 +91,7 @@ async function encryptAndStoreMedia(
       opts.orgSchema !== undefined
     ) {
       for (const att of opts.attachments) {
-        const attachmentId = crypto.randomUUID();
+        const attachmentId = newAttachmentId();
         const encrypted = encryptContent(
           new Uint8Array(att.data),
           tk,
@@ -102,7 +117,7 @@ async function encryptAndStoreMedia(
       opts.blobStore !== undefined &&
       opts.orgSchema !== undefined
     ) {
-      const recordingId = crypto.randomUUID();
+      const recordingId = newRecordingId();
       const encrypted = encryptContent(
         new Uint8Array(opts.recording.data),
         tk,
@@ -131,14 +146,14 @@ async function encryptAndStoreMedia(
 
 async function insertFollowUpWithMedia(
   db: Kysely<TenantDatabase>,
-  followUpId: string,
-  ticketId: string,
+  followUpId: FollowupId,
+  ticketId: TicketId,
   encryptedContent: Uint8Array,
   type: string,
   source: string,
-  keyGeneration: string | null,
+  keyGeneration: KeyGeneration | null,
   media: EncryptedMedia,
-): Promise<string> {
+): Promise<FollowupId> {
   const followUp = await db
     .insertInto("followups")
     .values({
@@ -195,7 +210,7 @@ async function insertFollowUpWithMedia(
  */
 export async function createEncryptedFollowUp(
   db: Kysely<TenantDatabase>,
-  ticketId: string,
+  ticketId: TicketId,
   content: Buffer,
   type: string,
   source: string,
@@ -203,8 +218,8 @@ export async function createEncryptedFollowUp(
 ): Promise<EncryptedFollowUpResult> {
   const sodium = requireSodium();
   const tkTemp = generateContentKey();
-  const keyGen = crypto.randomUUID();
-  const followUpId = crypto.randomUUID();
+  const keyGen = newKeyGeneration();
+  const followUpId = newFollowupId();
 
   try {
     const encryptedContent = encryptContent(
@@ -272,14 +287,14 @@ export async function createEncryptedFollowUp(
  */
 export async function createFollowUpWithTk(
   db: Kysely<TenantDatabase>,
-  ticketId: string,
+  ticketId: TicketId,
   tk: SymmetricKey,
   content: Buffer,
   type: string,
   source: string,
   opts?: EncryptedFollowUpOpts,
-): Promise<string> {
-  const followUpId = crypto.randomUUID();
+): Promise<FollowupId> {
+  const followUpId = newFollowupId();
   try {
     const encryptedContent = encryptContent(
       new Uint8Array(content),

@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { sql } from "kysely";
 import { createTestDb, createTestUser, type TestDb } from "../test-utils.js";
+import type { OpsPhoneHash } from "@care-y/shared";
 
 describe.skipIf(!process.env.DATABASE_URL)(
   "087_consultant_reachability migration",
@@ -60,7 +61,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
         .values({
           user_id: user.id,
           encrypted_phone: Buffer.from("org-sealed-box"),
-          ops_phone_hash: "hmac-hash-value",
+          ops_phone_hash: "hmac-hash-value" as OpsPhoneHash,
           ops_encrypted_phone: Buffer.from("ops-encrypted-value"),
           sms_pings_enabled: true,
           preferred_call_method: "phone_callback",

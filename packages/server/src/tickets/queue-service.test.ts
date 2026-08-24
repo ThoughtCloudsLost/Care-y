@@ -10,6 +10,7 @@ import {
 import { createQueueService, type QueueService } from "./queue-service.js";
 import { NotFoundError, ValidationError } from "../errors.js";
 import * as crypto from "node:crypto";
+import type { QueueId } from "@care-y/shared";
 
 /** Helper: create a Buffer from a label string (test-only, not real org-key encryption). */
 function encName(label: string): Buffer {
@@ -152,7 +153,9 @@ describe.skipIf(!process.env.DATABASE_URL)("QueueService (DB)", () => {
 
   it("update throws NotFoundError for non-existent queue", async () => {
     await expect(
-      svc.update(crypto.randomUUID(), { encryptedName: encName("x") }),
+      svc.update(crypto.randomUUID() as QueueId, {
+        encryptedName: encName("x"),
+      }),
     ).rejects.toBeInstanceOf(NotFoundError);
   });
 
@@ -302,7 +305,7 @@ describe.skipIf(!process.env.DATABASE_URL)("QueueService (DB)", () => {
     it("throws QUEUE_NOT_FOUND when reassignTo target does not exist", async () => {
       const fixture = await createTestTicketFixture(testDb.db);
       await expect(
-        svc.delete(fixture.queueId, crypto.randomUUID()),
+        svc.delete(fixture.queueId, crypto.randomUUID() as QueueId),
       ).rejects.toBeInstanceOf(NotFoundError);
     });
 
@@ -327,9 +330,9 @@ describe.skipIf(!process.env.DATABASE_URL)("QueueService (DB)", () => {
     });
 
     it("throws QUEUE_NOT_FOUND when queue does not exist", async () => {
-      await expect(svc.delete(crypto.randomUUID())).rejects.toBeInstanceOf(
-        NotFoundError,
-      );
+      await expect(
+        svc.delete(crypto.randomUUID() as QueueId),
+      ).rejects.toBeInstanceOf(NotFoundError);
     });
 
     it("cleans up queue_watchers on delete", async () => {

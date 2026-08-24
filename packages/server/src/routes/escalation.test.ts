@@ -19,6 +19,15 @@ import {
   type TestDb,
 } from "../test-utils.js";
 import { RoleId, updateEscalationRuleInputSchema } from "@care-y/shared";
+import type {
+  SessionId,
+  SessionToken,
+  IpToken,
+  UaToken,
+  OrgId,
+  OrgSlug,
+  OrgSchema,
+} from "@care-y/shared";
 import {
   createEscalationRouter,
   type EscalationRouterDeps,
@@ -47,9 +56,9 @@ describe.skipIf(!process.env.DATABASE_URL)(
       tenantDb = testDb.db;
 
       orgCtx = {
-        orgId: "org-escalation-test",
-        orgSlug: "test-escalation",
-        orgSchema: testDb.schemaName,
+        orgId: "org-escalation-test" as OrgId,
+        orgSlug: "test-escalation" as OrgSlug,
+        orgSchema: testDb.schemaName as OrgSchema,
         tenantDb,
         sealedBox: {} as OrgContext["sealedBox"],
       };
@@ -86,11 +95,11 @@ describe.skipIf(!process.env.DATABASE_URL)(
         res: mockRes(),
         org: orgCtx,
         session: {
-          id: `sess-${user.id}`,
-          token: `tok-${user.id}`,
+          id: `sess-${user.id}` as SessionId,
+          token: `tok-${user.id}` as SessionToken,
           userId: user.id,
-          ipToken: "ip-tok",
-          uaToken: "ua-tok",
+          ipToken: "ip-tok" as IpToken,
+          uaToken: "ua-tok" as UaToken,
           expiresAt: new Date(Date.now() + 3_600_000),
           twofaVerified: true,
           webauthnChallenge: null,

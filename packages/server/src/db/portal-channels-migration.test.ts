@@ -7,6 +7,13 @@ import {
   createTestTicketFixture,
   type TestDb,
 } from "../test-utils.js";
+import type {
+  ClientId,
+  ChannelSecret,
+  ChannelRowId,
+  FollowupId,
+  KeyGeneration,
+} from "@care-y/shared";
 
 describe.skipIf(!process.env.DATABASE_URL)(
   "090_portal_channels migration",
@@ -52,15 +59,16 @@ describe.skipIf(!process.env.DATABASE_URL)(
     // -----------------------------------------------------------------
 
     async function insertChannel(
-      clientId: string,
+      clientId: ClientId,
       overrides?: Partial<{
-        channel_id: string;
+        channel_id: ChannelSecret;
         status: string;
         has_passphrase: boolean;
       }>,
-    ): Promise<{ id: string; channel_id: string }> {
-      const channelId =
-        overrides?.channel_id ?? crypto.randomBytes(24).toString("hex");
+    ): Promise<{ id: ChannelRowId; channel_id: ChannelSecret }> {
+      const channelId: ChannelSecret =
+        overrides?.channel_id ??
+        (crypto.randomBytes(24).toString("hex") as ChannelSecret);
       const row = await testDb.db
         .insertInto("portal_channels")
         .values({
@@ -86,7 +94,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
         .insertInto("portal_channels")
         .values({
           client_id: fix.clientId,
-          channel_id: crypto.randomBytes(24).toString("hex"),
+          channel_id: crypto.randomBytes(24).toString("hex") as ChannelSecret,
           auth_hash: crypto.randomBytes(32),
           client_public: crypto.randomBytes(32),
           key_check_ephemeral_point: crypto.randomBytes(32),
@@ -110,7 +118,9 @@ describe.skipIf(!process.env.DATABASE_URL)(
     it("enforces unique channel_id", async () => {
       const fixA = await createTestTicketFixture(testDb.db);
       const fixB = await createTestTicketFixture(testDb.db);
-      const sharedChannelId = crypto.randomBytes(24).toString("hex");
+      const sharedChannelId = crypto
+        .randomBytes(24)
+        .toString("hex") as ChannelSecret;
 
       await insertChannel(fixA.clientId, { channel_id: sharedChannelId });
 
@@ -270,7 +280,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
           type: "message",
           encrypted_content: Buffer.from("ct-wrap-content"),
           created_by: null,
-          key_generation: crypto.randomUUID(),
+          key_generation: crypto.randomUUID() as KeyGeneration,
         })
         .returning("id")
         .executeTakeFirstOrThrow();
@@ -308,7 +318,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
         testDb.db
           .insertInto("portal_reply_key_wraps")
           .values({
-            followup_id: crypto.randomUUID(),
+            followup_id: crypto.randomUUID() as FollowupId,
             wrapped_tk: Buffer.alloc(80, 0xab),
           })
           .execute(),

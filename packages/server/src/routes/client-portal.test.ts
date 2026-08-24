@@ -44,6 +44,22 @@ import type * as IntakeServiceModule from "../portal/intake-service.js";
 import type * as ShareServiceModule from "../portal/share-service.js";
 import type { IntakeSubmissionInput } from "@care-y/shared";
 import { RoleId } from "@care-y/shared";
+import type {
+  SessionId,
+  SessionToken,
+  UserId,
+  IpToken,
+  UaToken,
+  OrgId,
+  OrgSlug,
+  OrgSchema,
+  ChannelRowId,
+  ClientId,
+  ClientAccountId,
+  ChannelSecret,
+  TicketId,
+  FollowupId,
+} from "@care-y/shared";
 import type { SessionData } from "../auth/session-repository.js";
 import type { PortalChannelRow } from "../portal/channel-service.js";
 import type {
@@ -114,9 +130,9 @@ vi.mock("../portal/share-service.js", async (importOriginal) => ({
 
 function createMockOrgContext(): OrgContext {
   return {
-    orgId: "org-portal-test",
-    orgSlug: "test-org",
-    orgSchema: "org_test",
+    orgId: "a0000000-0000-4000-8000-000000000002" as OrgId,
+    orgSlug: "test-org" as OrgSlug,
+    orgSchema: "org_a0000000-0000-4000-8000-000000000002" as OrgSchema,
     tenantDb: stubTenantDbDefaultRoles(),
     sealedBox: testSealedBox,
   };
@@ -187,11 +203,11 @@ function buildDeps(
 
 function makeVolunteerSession(): SessionData {
   return {
-    id: crypto.randomUUID(),
-    token: crypto.randomUUID(),
-    userId: "vol-user-1",
-    ipToken: "ip-tok",
-    uaToken: "ua-tok",
+    id: crypto.randomUUID() as SessionId,
+    token: crypto.randomUUID() as SessionToken,
+    userId: "vol-user-1" as UserId,
+    ipToken: "ip-tok" as IpToken,
+    uaToken: "ua-tok" as UaToken,
     expiresAt: new Date(Date.now() + 3_600_000),
     twofaVerified: true,
     webauthnChallenge: null,
@@ -205,7 +221,7 @@ function makeVolunteerContext(): Context {
     org: createMockOrgContext(),
     session: makeVolunteerSession(),
     user: {
-      id: "vol-user-1",
+      id: "vol-user-1" as UserId,
       encryptedIdentifier: "enc-id",
       encryptedDisplayName: "enc-name",
       encryptedPreferredLocale: null,
@@ -224,8 +240,8 @@ function makeSubmitInput(
   overrides?: Partial<IntakeSubmissionInput>,
 ): IntakeSubmissionInput {
   return {
-    ticketId: crypto.randomUUID(),
-    followUpId: crypto.randomUUID(),
+    ticketId: crypto.randomUUID() as TicketId,
+    followUpId: crypto.randomUUID() as FollowupId,
     formId: null,
     encryptedTitle: VALID_BASE64,
     encryptedDescription: VALID_BASE64,
@@ -512,9 +528,9 @@ describe("client-portal router", () => {
 
     function fakeChannelRow(): PortalChannelRow {
       return {
-        id: crypto.randomUUID(),
-        client_id: crypto.randomUUID(),
-        channel_id: VALID_CHANNEL_ID,
+        id: crypto.randomUUID() as ChannelRowId,
+        client_id: crypto.randomUUID() as ClientId,
+        channel_id: VALID_CHANNEL_ID as ChannelSecret,
         auth_hash: Buffer.alloc(32, 0xaa),
         client_public: Buffer.alloc(32, 0xbb),
         has_passphrase: false,
@@ -539,7 +555,7 @@ describe("client-portal router", () => {
           nonce: Buffer.alloc(24).toString("base64"),
           ciphertext: Buffer.alloc(48).toString("base64"),
         },
-        ticketId: crypto.randomUUID(),
+        ticketId: crypto.randomUUID() as TicketId,
         messages: [],
         messagesExpireDays: 30,
         safeExitUrl: null,
@@ -704,9 +720,9 @@ describe("client-portal router", () => {
 
     function fakeChannelRow(): PortalChannelRow {
       return {
-        id: crypto.randomUUID(),
-        client_id: crypto.randomUUID(),
-        channel_id: VALID_CHANNEL_ID,
+        id: crypto.randomUUID() as ChannelRowId,
+        client_id: crypto.randomUUID() as ClientId,
+        channel_id: VALID_CHANNEL_ID as ChannelSecret,
         auth_hash: Buffer.alloc(32, 0xaa),
         client_public: Buffer.alloc(32, 0xbb),
         has_passphrase: false,
@@ -732,7 +748,7 @@ describe("client-portal router", () => {
           nonce: "n",
           ciphertext: "ct",
         },
-        ticketId: crypto.randomUUID(),
+        ticketId: crypto.randomUUID() as TicketId,
         messages: [
           {
             id: crypto.randomUUID(),
@@ -784,9 +800,9 @@ describe("client-portal router", () => {
 
     function fakeChannelRow(): PortalChannelRow {
       return {
-        id: crypto.randomUUID(),
-        client_id: crypto.randomUUID(),
-        channel_id: VALID_CHANNEL_ID,
+        id: crypto.randomUUID() as ChannelRowId,
+        client_id: crypto.randomUUID() as ClientId,
+        channel_id: VALID_CHANNEL_ID as ChannelSecret,
         auth_hash: Buffer.alloc(32, 0xaa),
         client_public: Buffer.alloc(32, 0xbb),
         has_passphrase: false,
@@ -1155,7 +1171,7 @@ describe("client-portal router", () => {
         "TOO_MANY_REQUESTS",
       );
       expect(warnSpy).toHaveBeenCalledWith("Share open rate limited", {
-        orgSlug: "test-org",
+        orgSlug: "test-org" as OrgSlug,
         reason: "rate_limit",
       });
       warnSpy.mockRestore();
@@ -1342,8 +1358,8 @@ describe("client-portal router", () => {
   describe("accountBootstrap", () => {
     const SESSION_TOKEN = "valid-session-token";
     const ACCOUNT_ROW = {
-      id: crypto.randomUUID(),
-      client_id: crypto.randomUUID(),
+      id: crypto.randomUUID() as ClientAccountId,
+      client_id: crypto.randomUUID() as ClientId,
       username_hash: "hash",
       salt: Buffer.alloc(16),
       public_key: Buffer.alloc(32),
@@ -1353,9 +1369,9 @@ describe("client-portal router", () => {
 
     function fakeChannelRow(): PortalChannelRow {
       return {
-        id: crypto.randomUUID(),
+        id: crypto.randomUUID() as ChannelRowId,
         client_id: ACCOUNT_ROW.client_id,
-        channel_id: "c".repeat(48),
+        channel_id: "c".repeat(48) as ChannelSecret,
         auth_hash: Buffer.alloc(32, 0xaa),
         client_public: Buffer.alloc(32, 0xbb),
         has_passphrase: false,
@@ -1380,7 +1396,7 @@ describe("client-portal router", () => {
           nonce: Buffer.alloc(24).toString("base64"),
           ciphertext: Buffer.alloc(48).toString("base64"),
         },
-        ticketId: crypto.randomUUID(),
+        ticketId: crypto.randomUUID() as TicketId,
         messages: [],
         messagesExpireDays: 30,
         safeExitUrl: null,
@@ -1516,8 +1532,8 @@ describe("client-portal router", () => {
   describe("accountReply", () => {
     const SESSION_TOKEN = "valid-session-token";
     const ACCOUNT_ROW = {
-      id: crypto.randomUUID(),
-      client_id: crypto.randomUUID(),
+      id: crypto.randomUUID() as ClientAccountId,
+      client_id: crypto.randomUUID() as ClientId,
       username_hash: "hash",
       salt: Buffer.alloc(16),
       public_key: Buffer.alloc(32),
@@ -1527,9 +1543,9 @@ describe("client-portal router", () => {
 
     function fakeChannelRow(): PortalChannelRow {
       return {
-        id: crypto.randomUUID(),
+        id: crypto.randomUUID() as ChannelRowId,
         client_id: ACCOUNT_ROW.client_id,
-        channel_id: "c".repeat(48),
+        channel_id: "c".repeat(48) as ChannelSecret,
         auth_hash: Buffer.alloc(32, 0xaa),
         client_public: Buffer.alloc(32, 0xbb),
         has_passphrase: false,
@@ -1650,9 +1666,9 @@ describe("client-portal router", () => {
 
     function fakeChannelRow(): PortalChannelRow {
       return {
-        id: crypto.randomUUID(),
-        client_id: crypto.randomUUID(),
-        channel_id: VALID_CHANNEL_ID,
+        id: crypto.randomUUID() as ChannelRowId,
+        client_id: crypto.randomUUID() as ClientId,
+        channel_id: VALID_CHANNEL_ID as ChannelSecret,
         auth_hash: Buffer.alloc(32, 0xaa),
         client_public: Buffer.alloc(32, 0xbb),
         has_passphrase: false,
@@ -1790,8 +1806,8 @@ describe("client-portal router", () => {
   describe("accountChangePassword", () => {
     const SESSION_TOKEN = "valid-session-token";
     const ACCOUNT_ROW = {
-      id: crypto.randomUUID(),
-      client_id: crypto.randomUUID(),
+      id: crypto.randomUUID() as ClientAccountId,
+      client_id: crypto.randomUUID() as ClientId,
       username_hash: "hash",
       salt: Buffer.alloc(16),
       public_key: Buffer.alloc(32),
@@ -1801,9 +1817,9 @@ describe("client-portal router", () => {
 
     function fakeChannelRow(): PortalChannelRow {
       return {
-        id: crypto.randomUUID(),
+        id: crypto.randomUUID() as ChannelRowId,
         client_id: ACCOUNT_ROW.client_id,
-        channel_id: "c".repeat(48),
+        channel_id: "c".repeat(48) as ChannelSecret,
         auth_hash: Buffer.alloc(32, 0xaa),
         client_public: Buffer.alloc(32, 0xbb),
         has_passphrase: false,
@@ -1922,8 +1938,8 @@ describe("client-portal router", () => {
   describe("accountLogout", () => {
     const SESSION_TOKEN = "valid-session-token";
     const ACCOUNT_ROW = {
-      id: crypto.randomUUID(),
-      client_id: crypto.randomUUID(),
+      id: crypto.randomUUID() as ClientAccountId,
+      client_id: crypto.randomUUID() as ClientId,
       username_hash: "hash",
       salt: Buffer.alloc(16),
       public_key: Buffer.alloc(32),
@@ -1933,9 +1949,9 @@ describe("client-portal router", () => {
 
     function fakeChannelRow(): PortalChannelRow {
       return {
-        id: crypto.randomUUID(),
+        id: crypto.randomUUID() as ChannelRowId,
         client_id: ACCOUNT_ROW.client_id,
-        channel_id: "c".repeat(48),
+        channel_id: "c".repeat(48) as ChannelSecret,
         auth_hash: Buffer.alloc(32, 0xaa),
         client_public: Buffer.alloc(32, 0xbb),
         has_passphrase: false,

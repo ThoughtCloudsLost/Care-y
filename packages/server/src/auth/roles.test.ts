@@ -1,5 +1,10 @@
 import { describe, it, expect, beforeEach } from "vitest";
-import { RoleId, Permission, ROLE_ID_VALUES } from "@care-y/shared";
+import {
+  RoleId,
+  Permission,
+  ROLE_ID_VALUES,
+  type OrgSchema,
+} from "@care-y/shared";
 import type { Kysely } from "kysely";
 import type { TenantDatabase } from "../db/types.js";
 import {
@@ -13,6 +18,9 @@ import {
   hasPermissionForOrg,
   invalidateRolePermissionCache,
 } from "./roles.js";
+
+/** Shorthand cast for test org schema names. */
+const schema = (s: string): OrgSchema => s as OrgSchema;
 
 describe("ROLE_CONFIG", () => {
   it("has an entry for every RoleId value", () => {
@@ -235,15 +243,15 @@ describe("getEffectivePermissions + cache", () => {
   beforeEach(() => {
     queryCount = 0;
     // Clear the module-level cache between tests
-    invalidateRolePermissionCache("test_org");
-    invalidateRolePermissionCache("other_org");
+    invalidateRolePermissionCache(schema("test_org"));
+    invalidateRolePermissionCache(schema("other_org"));
   });
 
   it("returns default permissions when no override rows exist", async () => {
     const tDb = createStubTDb([]);
     const result = await getEffectivePermissions(
       tDb,
-      "test_org",
+      schema("test_org"),
       RoleId.VOLUNTEER,
     );
     const defaults = ROLE_CONFIG.get(RoleId.VOLUNTEER)!.permissions;
@@ -263,7 +271,7 @@ describe("getEffectivePermissions + cache", () => {
     ]);
     const result = await getEffectivePermissions(
       tDb,
-      "test_org",
+      schema("test_org"),
       RoleId.VOLUNTEER,
     );
     expect(result.has(Permission.VIEW_REPORTS)).toBe(true);
@@ -271,25 +279,25 @@ describe("getEffectivePermissions + cache", () => {
 
   it("caches results (second call issues no query)", async () => {
     const tDb = createStubTDb([]);
-    await getEffectivePermissions(tDb, "test_org", RoleId.VOLUNTEER);
+    await getEffectivePermissions(tDb, schema("test_org"), RoleId.VOLUNTEER);
     expect(queryCount).toBe(1);
 
-    await getEffectivePermissions(tDb, "test_org", RoleId.VOLUNTEER);
+    await getEffectivePermissions(tDb, schema("test_org"), RoleId.VOLUNTEER);
     expect(queryCount).toBe(1);
 
     // Different role in the same org also cached (filled all three roles)
-    await getEffectivePermissions(tDb, "test_org", RoleId.MANAGER);
+    await getEffectivePermissions(tDb, schema("test_org"), RoleId.MANAGER);
     expect(queryCount).toBe(1);
   });
 
   it("invalidation forces a reload on the next call", async () => {
     const tDb = createStubTDb([]);
-    await getEffectivePermissions(tDb, "test_org", RoleId.VOLUNTEER);
+    await getEffectivePermissions(tDb, schema("test_org"), RoleId.VOLUNTEER);
     expect(queryCount).toBe(1);
 
-    invalidateRolePermissionCache("test_org");
+    invalidateRolePermissionCache(schema("test_org"));
 
-    await getEffectivePermissions(tDb, "test_org", RoleId.VOLUNTEER);
+    await getEffectivePermissions(tDb, schema("test_org"), RoleId.VOLUNTEER);
     expect(queryCount).toBe(2);
   });
 
@@ -320,15 +328,15 @@ describe("getEffectivePermissions + cache", () => {
       }),
     } as unknown as Kysely<TenantDatabase>;
 
-    await getEffectivePermissions(stubA, "test_org", RoleId.VOLUNTEER);
-    await getEffectivePermissions(stubB, "other_org", RoleId.VOLUNTEER);
+    await getEffectivePermissions(stubA, schema("test_org"), RoleId.VOLUNTEER);
+    await getEffectivePermissions(stubB, schema("other_org"), RoleId.VOLUNTEER);
     expect(countA).toBe(1);
     expect(countB).toBe(1);
 
-    invalidateRolePermissionCache("test_org");
+    invalidateRolePermissionCache(schema("test_org"));
 
-    await getEffectivePermissions(stubA, "test_org", RoleId.VOLUNTEER);
-    await getEffectivePermissions(stubB, "other_org", RoleId.VOLUNTEER);
+    await getEffectivePermissions(stubA, schema("test_org"), RoleId.VOLUNTEER);
+    await getEffectivePermissions(stubB, schema("other_org"), RoleId.VOLUNTEER);
     expect(countA).toBe(2);
     expect(countB).toBe(1); // org B was not invalidated
   });
@@ -350,18 +358,26 @@ describe("getEffectivePermissions + cache", () => {
     // First call fills all roles
     const vol = await getEffectivePermissions(
       tDb,
-      "test_org",
+      schema("test_org"),
       RoleId.VOLUNTEER,
     );
     expect(queryCount).toBe(1);
     expect(vol.has(Permission.VIEW_REPORTS)).toBe(true);
 
     // Manager and Admin are already cached
-    const mgr = await getEffectivePermissions(tDb, "test_org", RoleId.MANAGER);
+    const mgr = await getEffectivePermissions(
+      tDb,
+      schema("test_org"),
+      RoleId.MANAGER,
+    );
     expect(queryCount).toBe(1);
     expect(mgr.has(Permission.VIEW_TICKETS)).toBe(false);
 
-    const admin = await getEffectivePermissions(tDb, "test_org", RoleId.ADMIN);
+    const admin = await getEffectivePermissions(
+      tDb,
+      schema("test_org"),
+      RoleId.ADMIN,
+    );
     expect(queryCount).toBe(1);
     // Admin defaults are untouched (no overrides for admin role in the stub)
     expect(admin.has(Permission.MANAGE_KEYS)).toBe(true);
@@ -382,14 +398,14 @@ describe("hasPermissionForOrg", () => {
   }
 
   beforeEach(() => {
-    invalidateRolePermissionCache("perm_test_org");
+    invalidateRolePermissionCache(schema("perm_test_org"));
   });
 
   it("returns true when role has the permission by default", async () => {
     const tDb = createStubTDb([]);
     const result = await hasPermissionForOrg(
       tDb,
-      "perm_test_org",
+      schema("perm_test_org"),
       RoleId.VOLUNTEER,
       Permission.VIEW_TICKETS,
     );
@@ -400,7 +416,7 @@ describe("hasPermissionForOrg", () => {
     const tDb = createStubTDb([]);
     const result = await hasPermissionForOrg(
       tDb,
-      "perm_test_org",
+      schema("perm_test_org"),
       RoleId.VOLUNTEER,
       Permission.MANAGE_USERS,
     );
@@ -417,7 +433,7 @@ describe("hasPermissionForOrg", () => {
     ]);
     const result = await hasPermissionForOrg(
       tDb,
-      "perm_test_org",
+      schema("perm_test_org"),
       RoleId.VOLUNTEER,
       Permission.VIEW_REPORTS,
     );
@@ -434,7 +450,7 @@ describe("hasPermissionForOrg", () => {
     ]);
     const result = await hasPermissionForOrg(
       tDb,
-      "perm_test_org",
+      schema("perm_test_org"),
       RoleId.VOLUNTEER,
       Permission.VIEW_TICKETS,
     );
@@ -445,7 +461,7 @@ describe("hasPermissionForOrg", () => {
     const tDb = createStubTDb([]);
     const result = await hasPermissionForOrg(
       tDb,
-      "perm_test_org",
+      schema("perm_test_org"),
       "invalid-role-id",
       Permission.VIEW_TICKETS,
     );
@@ -462,7 +478,7 @@ describe("hasPermissionForOrg", () => {
     ]);
     const result = await hasPermissionForOrg(
       tDb,
-      "perm_test_org",
+      schema("perm_test_org"),
       RoleId.VOLUNTEER,
       Permission.MANAGE_KEYS,
     );
@@ -479,7 +495,7 @@ describe("hasPermissionForOrg", () => {
     ]);
     const result = await hasPermissionForOrg(
       tDb,
-      "perm_test_org",
+      schema("perm_test_org"),
       RoleId.ADMIN,
       Permission.MANAGE_KEYS,
     );

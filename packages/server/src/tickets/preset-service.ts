@@ -10,13 +10,14 @@ import type { Kysely } from "kysely";
 import type { TenantDatabase } from "../db/types.js";
 import { NotFoundError } from "../errors.js";
 import { ErrorCode } from "@care-y/shared";
+import type { PresetReplyId, QueueId, UserId } from "@care-y/shared";
 
 export interface PresetReplyRecord {
-  readonly id: string;
+  readonly id: PresetReplyId;
   readonly encryptedTitle: Buffer;
   readonly encryptedBody: Buffer;
-  readonly queueId: string | null;
-  readonly createdBy: string;
+  readonly queueId: QueueId | null;
+  readonly createdBy: UserId;
   readonly createdAt: Date;
 }
 
@@ -24,30 +25,30 @@ export interface PresetService {
   create(input: {
     encryptedTitle: Buffer;
     encryptedBody: Buffer;
-    queueId: string | null;
-    createdBy: string;
+    queueId: QueueId | null;
+    createdBy: UserId;
   }): Promise<PresetReplyRecord>;
 
-  list(queueId?: string): Promise<PresetReplyRecord[]>;
+  list(queueId?: QueueId): Promise<PresetReplyRecord[]>;
 
   update(
-    presetId: string,
+    presetId: PresetReplyId,
     input: {
       encryptedTitle?: Buffer;
       encryptedBody?: Buffer;
-      queueId?: string | null;
+      queueId?: QueueId | null;
     },
   ): Promise<PresetReplyRecord>;
 
-  delete(presetId: string): Promise<void>;
+  delete(presetId: PresetReplyId): Promise<void>;
 }
 
 function toRecord(row: {
-  id: string;
+  id: PresetReplyId;
   encrypted_title: Buffer;
   encrypted_body: Buffer;
-  queue_id: string | null;
-  created_by: string;
+  queue_id: QueueId | null;
+  created_by: UserId;
   created_at: Date;
 }): PresetReplyRecord {
   return {

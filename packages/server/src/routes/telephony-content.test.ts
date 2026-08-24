@@ -14,6 +14,20 @@ import type { TelephonyContentService } from "../telephony/telephony-content-ser
 import type { GreetingRecord } from "../telephony/models/greeting-repo.js";
 import type { SmsResponseRecord } from "../telephony/models/sms-response-repo.js";
 import { RoleId } from "@care-y/shared";
+import type {
+  SessionId,
+  SessionToken,
+  UserId,
+  IpToken,
+  UaToken,
+  OrgId,
+  OrgSlug,
+  OrgSchema,
+  E164,
+  PhoneGreetingId,
+  SmsResponseId,
+  BlobKey,
+} from "@care-y/shared";
 import { expectTrpcError, stubTenantDbDefaultRoles } from "../test-utils.js";
 
 // --- Mock service ---
@@ -36,7 +50,7 @@ function createMockService(): TelephonyContentService {
 
 function createMockBlobStore() {
   return {
-    put: vi.fn().mockResolvedValue("blob-key-123"),
+    put: vi.fn().mockResolvedValue("blob-key-123" as BlobKey),
     get: vi.fn(),
     delete: vi.fn(),
     exists: vi.fn(),
@@ -45,9 +59,9 @@ function createMockBlobStore() {
 
 // --- Fixtures ---
 
-const PHONE_NUMBER = "+15551234567";
-const GREETING_ID = "00000000-0000-4000-8000-000000000010";
-const SMS_RESPONSE_ID = "00000000-0000-4000-8000-000000000020";
+const PHONE_NUMBER = "+15551234567" as E164;
+const GREETING_ID = "00000000-0000-4000-8000-000000000010" as PhoneGreetingId;
+const SMS_RESPONSE_ID = "00000000-0000-4000-8000-000000000020" as SmsResponseId;
 
 const GREETING_RECORD: GreetingRecord = {
   id: GREETING_ID,
@@ -69,11 +83,16 @@ const SMS_RESPONSE_RECORD: SmsResponseRecord = {
 
 // --- Context helpers ---
 
+const FIXTURE_USER_ID = "00000000-0000-4000-8000-000000000f01" as UserId;
+const FIXTURE_ORG_ID = "00000000-0000-4000-8000-00000000ff00" as OrgId;
+const FIXTURE_ORG_SCHEMA =
+  "org_00000000-0000-4000-8000-00000000ff00" as OrgSchema;
+
 function createMockOrgContext(): OrgContext {
   return {
-    orgId: "org-content-test",
-    orgSlug: "test-org",
-    orgSchema: "org_test",
+    orgId: FIXTURE_ORG_ID,
+    orgSlug: "test-org" as OrgSlug,
+    orgSchema: FIXTURE_ORG_SCHEMA,
     tenantDb: stubTenantDbDefaultRoles(),
     sealedBox: {} as OrgContext["sealedBox"],
   };
@@ -85,17 +104,17 @@ function createAdminContext(): Context {
     res: {} as Context["res"],
     org: createMockOrgContext(),
     session: {
-      id: "sess-1",
-      token: "tok-1",
-      userId: "user-1",
-      ipToken: "ip-tok",
-      uaToken: "ua-tok",
+      id: "00000000-0000-4000-8000-0000000f0010" as SessionId,
+      token: "tok-1" as SessionToken,
+      userId: FIXTURE_USER_ID,
+      ipToken: "ip-tok" as IpToken,
+      uaToken: "ua-tok" as UaToken,
       expiresAt: new Date(Date.now() + 3_600_000),
       twofaVerified: true,
       webauthnChallenge: null,
     },
     user: {
-      id: "user-1",
+      id: FIXTURE_USER_ID,
       encryptedIdentifier: "admin",
       encryptedDisplayName: "encrypted",
       encryptedPreferredLocale: null,
@@ -222,7 +241,7 @@ describe("createTelephonyContentRouter", () => {
     });
 
     it("updates phoneNumber (reassignment)", async () => {
-      const newNumber = "+15559999999";
+      const newNumber = "+15559999999" as E164;
       const updated = { ...GREETING_RECORD, phoneNumber: newNumber };
       vi.mocked(mockService.updateGreeting).mockResolvedValue(updated);
 
@@ -321,7 +340,7 @@ describe("createTelephonyContentRouter", () => {
       const audioResult = {
         ...GREETING_RECORD,
         isAudio: true,
-        audioBlobKey: "blob-key-abc",
+        audioBlobKey: "blob-key-abc" as BlobKey,
         audioContentType: "audio/mpeg",
       };
       vi.mocked(mockService.uploadGreetingAudio).mockResolvedValue(audioResult);
@@ -380,7 +399,7 @@ describe("createTelephonyContentRouter", () => {
       const audioResult = {
         ...GREETING_RECORD,
         isAudio: true,
-        audioBlobKey: "blob-key-allowed",
+        audioBlobKey: "blob-key-allowed" as BlobKey,
         audioContentType: "audio/mpeg",
       };
       vi.mocked(mockService.uploadGreetingAudio).mockResolvedValue(audioResult);
@@ -412,7 +431,7 @@ describe("createTelephonyContentRouter", () => {
       const audioResult = {
         ...GREETING_RECORD,
         isAudio: true,
-        audioBlobKey: "blob-key-new",
+        audioBlobKey: "blob-key-new" as BlobKey,
         audioContentType: "audio/wav",
       };
       vi.mocked(mockService.createAudioGreeting).mockResolvedValue(audioResult);
@@ -477,7 +496,7 @@ describe("createTelephonyContentRouter", () => {
       const audioResult = {
         ...GREETING_RECORD,
         isAudio: true,
-        audioBlobKey: "blob-key-allowed-audio",
+        audioBlobKey: "blob-key-allowed-audio" as BlobKey,
         audioContentType: "audio/wav",
       };
       vi.mocked(mockService.createAudioGreeting).mockResolvedValue(audioResult);

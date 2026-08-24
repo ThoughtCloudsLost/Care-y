@@ -2,6 +2,8 @@ import type { Kysely } from "kysely";
 import type { TenantDatabase } from "../db/types.js";
 import type { BlobStore } from "../storage/store.js";
 import { createSealedBoxEncryptor } from "../crypto/sealed-box.js";
+import type { OrgSchema, ClientId } from "@care-y/shared";
+import { recordingSidSchema, callSidSchema } from "@care-y/shared";
 
 interface QuarantineEntry {
   readonly recordingSid: string;
@@ -10,7 +12,7 @@ interface QuarantineEntry {
   readonly callerNumber: string;
   readonly calledNumber: string;
   readonly durationSeconds: number;
-  readonly clientId: string | null;
+  readonly clientId: ClientId | null;
   readonly minutesAgo: number;
 }
 
@@ -76,7 +78,7 @@ function generateWav(durationSec: number): Buffer {
 export async function seedQuarantineEntries(
   tDb: Kysely<TenantDatabase>,
   blobStore: BlobStore,
-  orgSchema: string,
+  orgSchema: OrgSchema,
 ): Promise<{ count: number }> {
   const orgConfig = await tDb
     .selectFrom("org_config")
@@ -95,10 +97,13 @@ export async function seedQuarantineEntries(
   let count = 0;
 
   for (const entry of SEED_ENTRIES) {
+    const parsedRecordingSid = recordingSidSchema.parse(entry.recordingSid);
+    const parsedCallSid = callSidSchema.parse(entry.callSid);
+
     const existing = await tDb
       .selectFrom("voicemail_quarantine")
       .select("id")
-      .where("recording_sid", "=", entry.recordingSid)
+      .where("recording_sid", "=", parsedRecordingSid)
       .executeTakeFirst();
 
     if (existing) continue;
@@ -115,8 +120,8 @@ export async function seedQuarantineEntries(
     await tDb
       .insertInto("voicemail_quarantine")
       .values({
-        recording_sid: entry.recordingSid,
-        call_sid: entry.callSid,
+        recording_sid: parsedRecordingSid,
+        call_sid: parsedCallSid,
         blob_key: blobKey,
         size_bytes: sealed.length,
         duration_seconds: entry.durationSeconds,

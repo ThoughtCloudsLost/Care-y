@@ -20,6 +20,14 @@ import { hashChannelAuth } from "@care-y/crypto";
 import { normalizeUsername } from "@care-y/shared";
 import { computeFakeSalt, computeFakeUuid } from "../auth/salt-defense.js";
 import { UsernameTakenError, StaleThreadError } from "./portal-errors.js";
+import type {
+  ClientId,
+  ClientAccountId,
+  OrgId,
+  PortalMessageId,
+  UsernameHash,
+} from "@care-y/shared";
+import { channelSecretSchema } from "@care-y/shared";
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -41,7 +49,7 @@ const TIMING_PAD_HASH = Buffer.alloc(AUTH_HASH_BYTES, 0);
 // ---------------------------------------------------------------------------
 
 export interface AccountRegistrationInput {
-  readonly accountId: string;
+  readonly accountId: ClientAccountId;
   readonly username: string;
   readonly salt: Buffer;
   readonly publicKey: Buffer;
@@ -56,11 +64,11 @@ export interface AccountRegistrationInput {
 export interface AccountServiceDeps {
   readonly indexer: BlindIndexer;
   readonly fakeSaltKey: Buffer;
-  readonly orgUuid: string;
+  readonly orgUuid: OrgId;
 }
 
 export interface RewrappedMessageInput {
-  readonly id: string;
+  readonly id: PortalMessageId;
   readonly copy: {
     readonly ephemeralPoint: Buffer;
     readonly nonce: Buffer;
@@ -69,9 +77,9 @@ export interface RewrappedMessageInput {
 }
 
 export interface ClientAccountRow {
-  readonly id: string;
-  readonly client_id: string;
-  readonly username_hash: string;
+  readonly id: ClientAccountId;
+  readonly client_id: ClientId;
+  readonly username_hash: UsernameHash;
   readonly salt: Buffer;
   readonly public_key: Buffer;
   readonly auth_hash: Buffer;
@@ -125,7 +133,7 @@ export async function getSaltForUsername(
   username: string,
 ): Promise<{ salt: Buffer; accountId: string }> {
   const normalized = normalizeUsername(username);
-  const usernameHash = deps.indexer.hash(normalized, deps.orgUuid);
+  const usernameHash = deps.indexer.hashUsername(normalized, deps.orgUuid);
 
   // ALWAYS execute both operations regardless of user existence.
   // Parallel execution: both start immediately, neither is conditional.
@@ -167,11 +175,11 @@ export async function getSaltForUsername(
 export async function createAccount(
   trx: Kysely<TenantDatabase> | Transaction<TenantDatabase>,
   deps: AccountServiceDeps,
-  clientId: string,
+  clientId: ClientId,
   reg: AccountRegistrationInput,
 ): Promise<void> {
   const normalized = normalizeUsername(reg.username);
-  const usernameHash = deps.indexer.hash(normalized, deps.orgUuid);
+  const usernameHash = deps.indexer.hashUsername(normalized, deps.orgUuid);
 
   try {
     // Insert account row
@@ -196,7 +204,9 @@ export async function createAccount(
   // Insert account channel with random channel_id and random auth_hash
   // (no token ever exists for account channels; the random hash fails
   // closed cryptographically via the kind clause on resolveAuthedChannel)
-  const channelId = crypto.randomBytes(CHANNEL_ID_BYTES).toString("hex");
+  const channelId = channelSecretSchema.parse(
+    crypto.randomBytes(CHANNEL_ID_BYTES).toString("hex"),
+  );
   const randomAuthHash = crypto.randomBytes(AUTH_HASH_BYTES);
 
   await trx
@@ -339,7 +349,7 @@ export async function upgradeFromSecureLink(
  */
 export async function login(
   db: Kysely<TenantDatabase>,
-  accountId: string,
+  accountId: ClientAccountId,
   authToken: Buffer,
 ): Promise<{ sessionToken: string; expiresAt: Date } | null> {
   const account = await db
@@ -583,7 +593,7 @@ export async function changePassword(
  */
 export async function resetAccount(
   db: Kysely<TenantDatabase>,
-  clientId: string,
+  clientId: ClientId,
 ): Promise<void> {
   await db.transaction().execute(async (trx) => {
     // Find the account (if any)

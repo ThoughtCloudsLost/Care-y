@@ -12,13 +12,15 @@ import {
   type KBMediaService,
 } from "./kb-media-service.js";
 import { NotFoundError } from "../errors.js";
+import type { KbItemId, KbAttachmentId, BlobKey, UserId } from "@care-y/shared";
 
 const HAS_DB = !!process.env.DATABASE_URL;
+const TEST_AUTHOR = "00000000-0000-4000-8000-000000000001" as UserId;
 
 describe.skipIf(!HAS_DB)("KBMediaService (DB integration)", () => {
   let ctx: TestDb;
   let svc: KBMediaService;
-  let itemId: string;
+  let itemId: KbItemId;
 
   beforeAll(async () => {
     ctx = await createTestDb();
@@ -39,7 +41,7 @@ describe.skipIf(!HAS_DB)("KBMediaService (DB integration)", () => {
         category_id: category.id,
         encrypted_title: Buffer.from("test-title"),
         encrypted_body: Buffer.from("test-body"),
-        created_by: "user-1",
+        created_by: TEST_AUTHOR,
       })
       .returning("id")
       .executeTakeFirstOrThrow();
@@ -53,9 +55,10 @@ describe.skipIf(!HAS_DB)("KBMediaService (DB integration)", () => {
   });
 
   it("creates an attachment and returns a record", async () => {
+    const blobKey = "blob-key-1" as BlobKey;
     const record = await svc.createAttachment({
       itemId,
-      blobKey: "blob-key-1",
+      blobKey,
       sizeBytes: 2048,
       encryptedFilename: Buffer.from("encrypted-name"),
       contentType: "image/png",
@@ -63,7 +66,7 @@ describe.skipIf(!HAS_DB)("KBMediaService (DB integration)", () => {
 
     expect(record.id).toBeDefined();
     expect(record.itemId).toBe(itemId);
-    expect(record.blobKey).toBe("blob-key-1");
+    expect(record.blobKey).toBe(blobKey);
     expect(record.sizeBytes).toBe(2048);
     expect(record.encryptedFilename).toBeInstanceOf(Buffer);
     expect(record.contentType).toBe("image/png");
@@ -73,7 +76,7 @@ describe.skipIf(!HAS_DB)("KBMediaService (DB integration)", () => {
   it("creates an attachment without optional fields", async () => {
     const record = await svc.createAttachment({
       itemId,
-      blobKey: "blob-key-2",
+      blobKey: "blob-key-2" as BlobKey,
       sizeBytes: 512,
     });
 
@@ -82,21 +85,24 @@ describe.skipIf(!HAS_DB)("KBMediaService (DB integration)", () => {
   });
 
   it("retrieves an attachment by ID", async () => {
+    const blobKey = "blob-key-get" as BlobKey;
     const created = await svc.createAttachment({
       itemId,
-      blobKey: "blob-key-get",
+      blobKey,
       sizeBytes: 100,
       contentType: "application/pdf",
     });
 
     const fetched = await svc.getAttachment(created.id);
     expect(fetched.id).toBe(created.id);
-    expect(fetched.blobKey).toBe("blob-key-get");
+    expect(fetched.blobKey).toBe(blobKey);
   });
 
   it("throws NotFoundError for non-existent attachment", async () => {
     await expect(
-      svc.getAttachment("00000000-0000-0000-0000-000000000000"),
+      svc.getAttachment(
+        "00000000-0000-0000-0000-000000000000" as KbAttachmentId,
+      ),
     ).rejects.toThrow(NotFoundError);
   });
 
@@ -117,32 +123,35 @@ describe.skipIf(!HAS_DB)("KBMediaService (DB integration)", () => {
         category_id: category.id,
         encrypted_title: Buffer.from("list-title"),
         encrypted_body: Buffer.from("list-body"),
-        created_by: "user-1",
+        created_by: TEST_AUTHOR,
       })
       .returning("id")
       .executeTakeFirstOrThrow();
 
+    const listKey1 = "list-key-1" as BlobKey;
+    const listKey2 = "list-key-2" as BlobKey;
+
     await svc.createAttachment({
       itemId: item.id,
-      blobKey: "list-key-1",
+      blobKey: listKey1,
       sizeBytes: 100,
     });
     await svc.createAttachment({
       itemId: item.id,
-      blobKey: "list-key-2",
+      blobKey: listKey2,
       sizeBytes: 200,
     });
 
     const attachments = await svc.listAttachments(item.id);
     expect(attachments).toHaveLength(2);
-    expect(attachments[0]!.blobKey).toBe("list-key-1");
-    expect(attachments[1]!.blobKey).toBe("list-key-2");
+    expect(attachments[0]!.blobKey).toBe(listKey1);
+    expect(attachments[1]!.blobKey).toBe(listKey2);
   });
 
   it("excludes soft-deleted attachments from list", async () => {
     const created = await svc.createAttachment({
       itemId,
-      blobKey: "soft-del-key",
+      blobKey: "soft-del-key" as BlobKey,
       sizeBytes: 50,
     });
 
@@ -155,7 +164,7 @@ describe.skipIf(!HAS_DB)("KBMediaService (DB integration)", () => {
   it("soft-delete is idempotent (throws on second attempt)", async () => {
     const created = await svc.createAttachment({
       itemId,
-      blobKey: "double-del-key",
+      blobKey: "double-del-key" as BlobKey,
       sizeBytes: 50,
     });
 
@@ -169,7 +178,9 @@ describe.skipIf(!HAS_DB)("KBMediaService (DB integration)", () => {
 
   it("soft-delete throws for non-existent attachment", async () => {
     await expect(
-      svc.softDeleteAttachment("00000000-0000-0000-0000-000000000000"),
+      svc.softDeleteAttachment(
+        "00000000-0000-0000-0000-000000000000" as KbAttachmentId,
+      ),
     ).rejects.toThrow(NotFoundError);
   });
 });

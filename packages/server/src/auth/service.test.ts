@@ -26,7 +26,7 @@ import {
   ForbiddenError,
   NotFoundError,
 } from "../errors.js";
-import { RoleId } from "@care-y/shared";
+import { RoleId, type UserId, type SessionToken } from "@care-y/shared";
 import { createTestSession } from "../test-utils.js";
 
 // DB integration tests. Skipped on host (no DATABASE_URL).
@@ -71,14 +71,14 @@ describe.skipIf(!process.env.DATABASE_URL)("AuthService", () => {
         identifier: "alice",
         password: "supersecretpasswd1",
         displayName: "Alice Smith",
-        roleId: "volunteer",
+        roleId: RoleId.VOLUNTEER,
       });
 
       expect(user.id).toBeDefined();
       expect(testUnseal(user.encryptedIdentifier)).toBe("alice");
       expect(user.encryptedDisplayName).toBeDefined();
       expect(user.encryptedDisplayName.length).toBeGreaterThan(0);
-      expect(user.roleId).toBe("volunteer");
+      expect(user.roleId).toBe(RoleId.VOLUNTEER);
       expect(user.isActive).toBe(true);
       // password_hash must not leak through the domain object.
       expect(user).not.toHaveProperty("passwordHash");
@@ -107,7 +107,7 @@ describe.skipIf(!process.env.DATABASE_URL)("AuthService", () => {
         identifier: "enc-check-user",
         password: "anothersecretpass1",
         displayName: "Enc Check",
-        roleId: "volunteer",
+        roleId: RoleId.VOLUNTEER,
       });
 
       // Read raw row to verify ciphertext.
@@ -117,7 +117,7 @@ describe.skipIf(!process.env.DATABASE_URL)("AuthService", () => {
         .where(
           "identifier_hash",
           "=",
-          testBlindIndexer.hash("enc-check-user", TEST_ORG_ID),
+          testBlindIndexer.hashIdentifier("enc-check-user", TEST_ORG_ID),
         )
         .executeTakeFirstOrThrow();
 
@@ -134,7 +134,7 @@ describe.skipIf(!process.env.DATABASE_URL)("AuthService", () => {
         identifier: "sealed-ident-user",
         password: "secretpassword123",
         displayName: "Sealed Ident",
-        roleId: "volunteer",
+        roleId: RoleId.VOLUNTEER,
       });
 
       const rawRow = await testDb.db
@@ -143,7 +143,7 @@ describe.skipIf(!process.env.DATABASE_URL)("AuthService", () => {
         .where(
           "identifier_hash",
           "=",
-          testBlindIndexer.hash("sealed-ident-user", TEST_ORG_ID),
+          testBlindIndexer.hashIdentifier("sealed-ident-user", TEST_ORG_ID),
         )
         .executeTakeFirstOrThrow();
 
@@ -169,10 +169,10 @@ describe.skipIf(!process.env.DATABASE_URL)("AuthService", () => {
         identifier: "blind-index-user",
         password: "yetanothersecret1",
         displayName: "Blind Index",
-        roleId: "volunteer",
+        roleId: RoleId.VOLUNTEER,
       });
 
-      const expectedHash = testBlindIndexer.hash(
+      const expectedHash = testBlindIndexer.hashIdentifier(
         "blind-index-user",
         TEST_ORG_ID,
       );
@@ -191,7 +191,7 @@ describe.skipIf(!process.env.DATABASE_URL)("AuthService", () => {
         identifier: "no-email-user",
         password: "secretpassword123",
         displayName: "No Email",
-        roleId: "volunteer",
+        roleId: RoleId.VOLUNTEER,
       });
 
       const row = await testDb.db
@@ -200,7 +200,7 @@ describe.skipIf(!process.env.DATABASE_URL)("AuthService", () => {
         .where(
           "identifier_hash",
           "=",
-          testBlindIndexer.hash("no-email-user", TEST_ORG_ID),
+          testBlindIndexer.hashIdentifier("no-email-user", TEST_ORG_ID),
         )
         .executeTakeFirstOrThrow();
 
@@ -213,7 +213,7 @@ describe.skipIf(!process.env.DATABASE_URL)("AuthService", () => {
         password: "secretpassword123",
         displayName: "Has Email",
         notificationEmail: "test@example.com",
-        roleId: "volunteer",
+        roleId: RoleId.VOLUNTEER,
       });
 
       const row = await testDb.db
@@ -222,7 +222,7 @@ describe.skipIf(!process.env.DATABASE_URL)("AuthService", () => {
         .where(
           "identifier_hash",
           "=",
-          testBlindIndexer.hash("has-email-user", TEST_ORG_ID),
+          testBlindIndexer.hashIdentifier("has-email-user", TEST_ORG_ID),
         )
         .executeTakeFirstOrThrow();
 
@@ -238,7 +238,7 @@ describe.skipIf(!process.env.DATABASE_URL)("AuthService", () => {
         identifier: "dup-user",
         password: "secretpassword123",
         displayName: "First",
-        roleId: "volunteer",
+        roleId: RoleId.VOLUNTEER,
       });
 
       await expect(
@@ -246,7 +246,7 @@ describe.skipIf(!process.env.DATABASE_URL)("AuthService", () => {
           identifier: "dup-user",
           password: "secretpassword456",
           displayName: "Second",
-          roleId: "volunteer",
+          roleId: RoleId.VOLUNTEER,
         }),
       ).rejects.toThrow(ConflictError);
     });
@@ -272,7 +272,7 @@ describe.skipIf(!process.env.DATABASE_URL)("AuthService", () => {
           identifier: "wont-insert",
           password: "irrelevantpassword1",
           displayName: "Wont Insert",
-          roleId: "volunteer",
+          roleId: RoleId.VOLUNTEER,
         }),
       ).rejects.toThrow("connection reset");
 
@@ -285,13 +285,13 @@ describe.skipIf(!process.env.DATABASE_URL)("AuthService", () => {
           identifier: "race-user",
           password: "racepassword12345",
           displayName: "Racer One",
-          roleId: "volunteer",
+          roleId: RoleId.VOLUNTEER,
         }),
         service.register({
           identifier: "race-user",
           password: "racepassword12345",
           displayName: "Racer Two",
-          roleId: "volunteer",
+          roleId: RoleId.VOLUNTEER,
         }),
       ]);
 
@@ -318,7 +318,7 @@ describe.skipIf(!process.env.DATABASE_URL)("AuthService", () => {
         identifier: LOGIN_ID,
         password: LOGIN_PWD,
         displayName: "Login User",
-        roleId: "volunteer",
+        roleId: RoleId.VOLUNTEER,
       });
     });
 
@@ -364,7 +364,7 @@ describe.skipIf(!process.env.DATABASE_URL)("AuthService", () => {
         identifier: "inactive-login",
         password: "secretpassword123",
         displayName: "Inactive",
-        roleId: "volunteer",
+        roleId: RoleId.VOLUNTEER,
       });
 
       await testDb.db
@@ -389,12 +389,12 @@ describe.skipIf(!process.env.DATABASE_URL)("AuthService", () => {
         identifier: "cleanup-test-user",
         password: "secretpassword123",
         displayName: "Cleanup",
-        roleId: "volunteer",
+        roleId: RoleId.VOLUNTEER,
       });
 
       // Insert an expired session directly.
       await sessions.create({
-        token: "expired-tok-cleanup",
+        token: "expired-tok-cleanup" as SessionToken,
         userId: user.id,
         ipAddress: "127.0.0.1",
         userAgent: "old",
@@ -413,7 +413,9 @@ describe.skipIf(!process.env.DATABASE_URL)("AuthService", () => {
       await new Promise((resolve) => setTimeout(resolve, 200));
 
       // The expired session should be gone.
-      const found = await sessions.findByToken("expired-tok-cleanup");
+      const found = await sessions.findByToken(
+        "expired-tok-cleanup" as SessionToken,
+      );
       expect(found).toBeNull();
     });
 
@@ -457,7 +459,7 @@ describe.skipIf(!process.env.DATABASE_URL)("AuthService", () => {
         identifier: "logout-user",
         password: "secretpassword123",
         displayName: "Logout",
-        roleId: "volunteer",
+        roleId: RoleId.VOLUNTEER,
       });
 
       const { session } = await service.login({
@@ -475,7 +477,7 @@ describe.skipIf(!process.env.DATABASE_URL)("AuthService", () => {
 
     it("is idempotent (no error for nonexistent token)", async () => {
       await expect(
-        service.logout("nonexistent-token-xyz"),
+        service.logout("nonexistent-token-xyz" as SessionToken),
       ).resolves.toBeUndefined();
     });
   });
@@ -490,7 +492,7 @@ describe.skipIf(!process.env.DATABASE_URL)("AuthService", () => {
         identifier: "validate-user",
         password: "secretpassword123",
         displayName: "Validate",
-        roleId: "volunteer",
+        roleId: RoleId.VOLUNTEER,
       });
 
       const { session } = await service.login({
@@ -513,7 +515,7 @@ describe.skipIf(!process.env.DATABASE_URL)("AuthService", () => {
 
     it("returns null for nonexistent token", async () => {
       const result = await service.validateSession(
-        "no-such-token",
+        "no-such-token" as SessionToken,
         "10.0.0.1",
         "TestAgent/1.0",
       );
@@ -525,12 +527,12 @@ describe.skipIf(!process.env.DATABASE_URL)("AuthService", () => {
         identifier: "expired-session-user",
         password: "secretpassword123",
         displayName: "Expired",
-        roleId: "volunteer",
+        roleId: RoleId.VOLUNTEER,
       });
 
       // Create a session that is already expired.
       const expiredSession = await sessions.create({
-        token: "expired-validate-tok",
+        token: "expired-validate-tok" as SessionToken,
         userId: user.id,
         ipAddress: "10.0.0.1",
         userAgent: "TestAgent/1.0",
@@ -554,7 +556,7 @@ describe.skipIf(!process.env.DATABASE_URL)("AuthService", () => {
         identifier: "inactive-validate-user",
         password: "secretpassword123",
         displayName: "Inactive Validate",
-        roleId: "volunteer",
+        roleId: RoleId.VOLUNTEER,
       });
 
       const { session } = await service.login({
@@ -589,7 +591,7 @@ describe.skipIf(!process.env.DATABASE_URL)("AuthService", () => {
         identifier: "ip-mismatch-user",
         password: "secretpassword123",
         displayName: "IP Mismatch",
-        roleId: "volunteer",
+        roleId: RoleId.VOLUNTEER,
       });
 
       const { session } = await service.login({
@@ -626,7 +628,7 @@ describe.skipIf(!process.env.DATABASE_URL)("AuthService", () => {
         identifier: "find-user-test",
         password: "secretpassword123",
         displayName: "Find Me",
-        roleId: "volunteer",
+        roleId: RoleId.VOLUNTEER,
       });
 
       const found = await service.findUserById(registered.id);
@@ -641,7 +643,7 @@ describe.skipIf(!process.env.DATABASE_URL)("AuthService", () => {
 
     it("returns null for nonexistent user", async () => {
       const found = await service.findUserById(
-        "00000000-0000-0000-0000-000000000000",
+        "00000000-0000-0000-0000-000000000000" as UserId,
       );
       expect(found).toBeNull();
     });
@@ -652,7 +654,7 @@ describe.skipIf(!process.env.DATABASE_URL)("AuthService", () => {
   // -----------------------------------------------------------------------
 
   describe("setUserActive", () => {
-    const ACTOR_ID = "00000000-0000-0000-0000-000000000001";
+    const ACTOR_ID = "00000000-0000-4000-8000-000000000001" as UserId;
 
     it("deactivates a user", async () => {
       const user = await service.register({
@@ -769,7 +771,7 @@ describe.skipIf(!process.env.DATABASE_URL)("AuthService", () => {
       await expect(
         service.setUserActive(
           ACTOR_ID,
-          "00000000-0000-0000-0000-000000000000",
+          "00000000-0000-0000-0000-000000000000" as UserId,
           false,
         ),
       ).rejects.toBeInstanceOf(NotFoundError);

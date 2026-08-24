@@ -19,6 +19,12 @@ import type { IntakeFormService } from "./intake-form-service.js";
 import { ConflictError, NotFoundError, ValidationError } from "../errors.js";
 import { ErrorCode } from "@care-y/shared";
 import type { IntakeFieldRole } from "@care-y/shared";
+import type {
+  IntakeFormId,
+  UserId,
+  QueueId,
+  KeyGeneration,
+} from "@care-y/shared";
 import * as crypto from "node:crypto";
 
 describe.skipIf(!process.env.DATABASE_URL)("IntakeFormService", () => {
@@ -45,14 +51,14 @@ describe.skipIf(!process.env.DATABASE_URL)("IntakeFormService", () => {
         encryptedConfig?: string;
         isRequired?: boolean;
         role?: IntakeFieldRole | null;
-        routingQueueIds?: string[] | null;
-        escalationRecipientIds?: string[] | null;
+        routingQueueIds?: QueueId[] | null;
+        escalationRecipientIds?: UserId[] | null;
       }>;
       slug?: string | null;
       isDefault?: boolean;
-      destinationQueueId?: string | null;
+      destinationQueueId?: QueueId | null;
     },
-  ): Promise<string> {
+  ): Promise<IntakeFormId> {
     const defaultFields = opts?.fields ?? [
       {
         fieldType: "text",
@@ -62,24 +68,29 @@ describe.skipIf(!process.env.DATABASE_URL)("IntakeFormService", () => {
       },
     ];
 
-    const result = await svc.saveForm(testDb.db, crypto.randomUUID(), {
-      formId: null,
-      name,
-      slug: opts?.slug ?? null,
-      isDefault: opts?.isDefault ?? false,
-      destinationQueueId: opts?.destinationQueueId ?? null,
-      fields: defaultFields.map((f) => ({
-        fieldType: f.fieldType as "text",
-        encryptedLabel: f.encryptedLabel ?? Buffer.from("l").toString("base64"),
-        encryptedConfig:
-          f.encryptedConfig ?? Buffer.from("c").toString("base64"),
-        isRequired: f.isRequired ?? false,
-        role: f.role ?? null,
-        routingQueueIds: f.routingQueueIds ?? null,
-        escalationRecipientIds: f.escalationRecipientIds ?? null,
-      })),
-    });
-    return result.formId;
+    const result = await svc.saveForm(
+      testDb.db,
+      crypto.randomUUID() as UserId,
+      {
+        formId: null,
+        name,
+        slug: opts?.slug ?? null,
+        isDefault: opts?.isDefault ?? false,
+        destinationQueueId: opts?.destinationQueueId ?? null,
+        fields: defaultFields.map((f) => ({
+          fieldType: f.fieldType as "text",
+          encryptedLabel:
+            f.encryptedLabel ?? Buffer.from("l").toString("base64"),
+          encryptedConfig:
+            f.encryptedConfig ?? Buffer.from("c").toString("base64"),
+          isRequired: f.isRequired ?? false,
+          role: f.role ?? null,
+          routingQueueIds: f.routingQueueIds ?? null,
+          escalationRecipientIds: f.escalationRecipientIds ?? null,
+        })),
+      },
+    );
+    return result.formId as IntakeFormId;
   }
 
   describe("getPublicForm", () => {
@@ -238,7 +249,7 @@ describe.skipIf(!process.env.DATABASE_URL)("IntakeFormService", () => {
     it("rejects nonexistent destination queue", async () => {
       await expect(
         createForm("Bad Queue", {
-          destinationQueueId: crypto.randomUUID(),
+          destinationQueueId: crypto.randomUUID() as QueueId,
         }),
       ).rejects.toThrow(NotFoundError);
     });
@@ -251,7 +262,7 @@ describe.skipIf(!process.env.DATABASE_URL)("IntakeFormService", () => {
       let forms = await svc.listForms(testDb.db);
       expect(forms.find((f) => f.id === formId)?.fieldCount).toBe(2);
 
-      await svc.saveForm(testDb.db, crypto.randomUUID(), {
+      await svc.saveForm(testDb.db, crypto.randomUUID() as UserId, {
         formId,
         name: "Replace Test Updated",
         fields: [
@@ -272,7 +283,7 @@ describe.skipIf(!process.env.DATABASE_URL)("IntakeFormService", () => {
 
     it("rejects more than one availability field", async () => {
       await expect(
-        svc.saveForm(testDb.db, crypto.randomUUID(), {
+        svc.saveForm(testDb.db, crypto.randomUUID() as UserId, {
           formId: null,
           name: "Too Many Availability",
           fields: [
@@ -295,8 +306,8 @@ describe.skipIf(!process.env.DATABASE_URL)("IntakeFormService", () => {
 
     it("throws NotFoundError when updating a nonexistent form", async () => {
       await expect(
-        svc.saveForm(testDb.db, crypto.randomUUID(), {
-          formId: crypto.randomUUID(),
+        svc.saveForm(testDb.db, crypto.randomUUID() as UserId, {
+          formId: crypto.randomUUID() as IntakeFormId,
           name: "Ghost",
           fields: [
             {
@@ -336,9 +347,9 @@ describe.skipIf(!process.env.DATABASE_URL)("IntakeFormService", () => {
     });
 
     it("throws NotFoundError for an unknown form id", async () => {
-      await expect(svc.getForm(testDb.db, crypto.randomUUID())).rejects.toThrow(
-        NotFoundError,
-      );
+      await expect(
+        svc.getForm(testDb.db, crypto.randomUUID() as IntakeFormId),
+      ).rejects.toThrow(NotFoundError);
     });
   });
 
@@ -371,7 +382,7 @@ describe.skipIf(!process.env.DATABASE_URL)("IntakeFormService", () => {
           client_id: client.id,
           encrypted_title: Buffer.from("t"),
           encrypted_description: Buffer.from("d"),
-          key_generation: crypto.randomUUID(),
+          key_generation: crypto.randomUUID() as KeyGeneration,
         })
         .returning("id")
         .executeTakeFirstOrThrow();
@@ -397,7 +408,7 @@ describe.skipIf(!process.env.DATABASE_URL)("IntakeFormService", () => {
 
     it("throws NotFoundError for a nonexistent form", async () => {
       await expect(
-        svc.deleteForm(testDb.db, crypto.randomUUID()),
+        svc.deleteForm(testDb.db, crypto.randomUUID() as IntakeFormId),
       ).rejects.toThrow(NotFoundError);
     });
   });
@@ -420,7 +431,7 @@ describe.skipIf(!process.env.DATABASE_URL)("IntakeFormService", () => {
 
     it("throws NotFoundError for a nonexistent form", async () => {
       await expect(
-        svc.setActive(testDb.db, crypto.randomUUID(), true),
+        svc.setActive(testDb.db, crypto.randomUUID() as IntakeFormId, true),
       ).rejects.toThrow(NotFoundError);
     });
   });
@@ -465,8 +476,8 @@ describe.skipIf(!process.env.DATABASE_URL)("IntakeFormService", () => {
 
   describe("escalation recipients round-trip", () => {
     it("encrypts on save and decrypts on read", async () => {
-      const recipientA = crypto.randomUUID();
-      const recipientB = crypto.randomUUID();
+      const recipientA = crypto.randomUUID() as UserId;
+      const recipientB = crypto.randomUUID() as UserId;
 
       const formId = await createForm("Escalation RT", {
         fields: [
@@ -507,7 +518,7 @@ describe.skipIf(!process.env.DATABASE_URL)("IntakeFormService", () => {
           {
             fieldType: "checkbox",
             role: "escalation",
-            escalationRecipientIds: [crypto.randomUUID()],
+            escalationRecipientIds: [crypto.randomUUID() as UserId],
           },
         ],
       });
@@ -524,7 +535,7 @@ describe.skipIf(!process.env.DATABASE_URL)("IntakeFormService", () => {
     });
 
     it("stores ciphertext in the database (not plaintext array)", async () => {
-      const recipientId = crypto.randomUUID();
+      const recipientId = crypto.randomUUID() as UserId;
       const formId = await createForm("Cipher Check", {
         fields: [
           {

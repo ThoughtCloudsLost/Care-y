@@ -10,11 +10,12 @@ import { createMergeService, type MergeService } from "./merge-service.js";
 import { createDependencyService } from "./dependency-service.js";
 import { MergeError, NotFoundError } from "../errors.js";
 import * as crypto from "node:crypto";
+import type { QueueId, ClientId, TicketId, UserId } from "@care-y/shared";
 
 describe.skipIf(!process.env.DATABASE_URL)("MergeService (DB)", () => {
   let testDb: TestDb;
   let svc: MergeService;
-  let queueId: string;
+  let queueId: QueueId;
 
   beforeAll(async () => {
     testDb = await createTestDb();
@@ -30,8 +31,8 @@ describe.skipIf(!process.env.DATABASE_URL)("MergeService (DB)", () => {
   });
 
   async function createClientWithTicket(): Promise<{
-    clientId: string;
-    ticketId: string;
+    clientId: ClientId;
+    ticketId: TicketId;
   }> {
     const fix = await createTestTicketFixture(testDb.db, { queueId });
     return { clientId: fix.clientId, ticketId: fix.ticketId };
@@ -130,7 +131,11 @@ describe.skipIf(!process.env.DATABASE_URL)("MergeService (DB)", () => {
 
     // Add an unresolved dependency: b's ticket depends on blocker's (still open)
     const depService = createDependencyService(testDb.db);
-    await depService.add(crypto.randomUUID(), b.ticketId, blocker.ticketId);
+    await depService.add(
+      crypto.randomUUID() as UserId,
+      b.ticketId,
+      blocker.ticketId,
+    );
 
     await expect(
       svc.merge({
@@ -154,7 +159,7 @@ describe.skipIf(!process.env.DATABASE_URL)("MergeService (DB)", () => {
     await expect(
       svc.merge({
         primaryClientId: a.clientId,
-        secondaryClientId: crypto.randomUUID(),
+        secondaryClientId: crypto.randomUUID() as ClientId,
         encryptedSnapshot: Buffer.from("snap"),
       }),
     ).rejects.toBeInstanceOf(NotFoundError);

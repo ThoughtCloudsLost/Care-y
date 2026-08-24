@@ -19,7 +19,16 @@ import {
 } from "../test-utils.js";
 import type { NotificationService } from "../notifications/service.js";
 import type { NotificationRecipientList } from "./notification-recipients.js";
-import { RoleId } from "@care-y/shared";
+import {
+  RoleId,
+  type OrgId,
+  type OrgSchema,
+  type OrgSlug,
+  type TicketId,
+  type QueueId,
+  type UserId,
+  type EscalationRuleId,
+} from "@care-y/shared";
 import {
   runEscalationCheck,
   listRules,
@@ -34,12 +43,12 @@ import {
 // ---------------------------------------------------------------------------
 
 interface DispatchCall {
-  readonly orgId: string;
-  readonly orgSchema: string;
-  readonly orgSlug: string;
+  readonly orgId: OrgId;
+  readonly orgSchema: OrgSchema;
+  readonly orgSlug: OrgSlug;
   readonly eventType: string;
-  readonly ticketId: string;
-  readonly queueId: string;
+  readonly ticketId: TicketId;
+  readonly queueId: QueueId;
   readonly recipients: NotificationRecipientList;
 }
 
@@ -76,8 +85,8 @@ function createStubNotificationService(): NotificationService & {
 }
 
 function createDeps(overrides?: {
-  managerIds?: string[];
-  watcherIds?: string[];
+  managerIds?: UserId[];
+  watcherIds?: UserId[];
 }): EscalationServiceDeps & {
   readonly notificationService: ReturnType<
     typeof createStubNotificationService
@@ -98,7 +107,7 @@ function createDeps(overrides?: {
  */
 async function backdateTicket(
   db: Kysely<TenantDatabase>,
-  ticketId: string,
+  ticketId: TicketId,
   minutesAgo: number,
 ): Promise<void> {
   await db
@@ -112,7 +121,7 @@ async function backdateTicket(
 
 async function insertFollowup(
   db: Kysely<TenantDatabase>,
-  ticketId: string,
+  ticketId: TicketId,
   minutesAgo: number,
 ): Promise<void> {
   await db
@@ -134,9 +143,9 @@ async function insertFollowup(
 describe.skipIf(!process.env.DATABASE_URL)("EscalationService", () => {
   let testDb: TestDb;
   let db: Kysely<TenantDatabase>;
-  const orgId = "a1b2c3d4-e5f6-7890-abcd-000000000002";
-  const orgSchema = "test_esc";
-  const orgSlug = "test-org";
+  const orgId = "a1b2c3d4-e5f6-7890-abcd-000000000002" as OrgId;
+  const orgSchema = "test_esc" as OrgSchema;
+  const orgSlug = "test-org" as OrgSlug;
 
   beforeAll(async () => {
     testDb = await createTestDb();
@@ -208,7 +217,7 @@ describe.skipIf(!process.env.DATABASE_URL)("EscalationService", () => {
     it("returns null when updating a nonexistent rule", async () => {
       const result = await updateRule(
         db,
-        "00000000-0000-0000-0000-000000000000",
+        "00000000-0000-0000-0000-000000000000" as EscalationRuleId,
         { thresholdMinutes: 10 },
       );
       expect(result).toBeNull();
@@ -233,7 +242,7 @@ describe.skipIf(!process.env.DATABASE_URL)("EscalationService", () => {
     it("returns false when deleting a nonexistent rule", async () => {
       const deleted = await deleteRule(
         db,
-        "00000000-0000-0000-0000-000000000000",
+        "00000000-0000-0000-0000-000000000000" as EscalationRuleId,
       );
       expect(deleted).toBe(false);
     });
@@ -344,7 +353,7 @@ describe.skipIf(!process.env.DATABASE_URL)("EscalationService", () => {
         action: "notify_managers",
       });
 
-      const deps = createDeps({ managerIds: ["some-id"] });
+      const deps = createDeps({ managerIds: ["some-id" as UserId] });
       const result = await runEscalationCheck(
         db,
         orgId,
@@ -374,7 +383,7 @@ describe.skipIf(!process.env.DATABASE_URL)("EscalationService", () => {
         action: "notify_managers",
       });
 
-      const deps = createDeps({ managerIds: ["some-id"] });
+      const deps = createDeps({ managerIds: ["some-id" as UserId] });
       const result = await runEscalationCheck(
         db,
         orgId,
@@ -398,7 +407,7 @@ describe.skipIf(!process.env.DATABASE_URL)("EscalationService", () => {
         action: "notify_managers",
       });
 
-      const deps = createDeps({ managerIds: ["some-id"] });
+      const deps = createDeps({ managerIds: ["some-id" as UserId] });
       const result = await runEscalationCheck(
         db,
         orgId,
@@ -461,7 +470,7 @@ describe.skipIf(!process.env.DATABASE_URL)("EscalationService", () => {
         action: "notify_queue_watchers",
       });
 
-      const deps = createDeps({ watcherIds: ["some-id"] });
+      const deps = createDeps({ watcherIds: ["some-id" as UserId] });
       const result = await runEscalationCheck(
         db,
         orgId,
@@ -486,7 +495,7 @@ describe.skipIf(!process.env.DATABASE_URL)("EscalationService", () => {
         action: "notify_managers",
       });
 
-      const deps = createDeps({ managerIds: ["mgr-1"] });
+      const deps = createDeps({ managerIds: ["mgr-1" as UserId] });
       const result = await runEscalationCheck(
         db,
         orgId,
@@ -516,7 +525,7 @@ describe.skipIf(!process.env.DATABASE_URL)("EscalationService", () => {
         action: "notify_managers",
       });
 
-      const deps = createDeps({ managerIds: ["mgr-1"] });
+      const deps = createDeps({ managerIds: ["mgr-1" as UserId] });
 
       const first = await runEscalationCheck(
         db,
@@ -557,7 +566,7 @@ describe.skipIf(!process.env.DATABASE_URL)("EscalationService", () => {
         .values({ rule_id: rule.id, ticket_id: fixture.ticketId })
         .execute();
 
-      const deps = createDeps({ managerIds: ["mgr-1"] });
+      const deps = createDeps({ managerIds: ["mgr-1" as UserId] });
       const result = await runEscalationCheck(
         db,
         orgId,
@@ -641,7 +650,7 @@ describe.skipIf(!process.env.DATABASE_URL)("EscalationService", () => {
         action: "notify_managers",
       });
 
-      const deps = createDeps({ managerIds: ["mgr-1"] });
+      const deps = createDeps({ managerIds: ["mgr-1" as UserId] });
       await runEscalationCheck(db, orgId, orgSchema, orgSlug, deps);
 
       const call = deps.notificationService.calls[0];
@@ -673,7 +682,7 @@ describe.skipIf(!process.env.DATABASE_URL)("EscalationService", () => {
       });
       await updateRule(db, rule.id, { isActive: false });
 
-      const deps = createDeps({ managerIds: ["mgr-1"] });
+      const deps = createDeps({ managerIds: ["mgr-1" as UserId] });
       const result = await runEscalationCheck(
         db,
         orgId,

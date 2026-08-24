@@ -4,22 +4,30 @@
 
 import type { Kysely } from "kysely";
 import type { TenantDatabase } from "../db/types.js";
-import type { AuditEventType, AuditLogQueryInput } from "@care-y/shared";
+import type {
+  AuditEventType,
+  AuditLogQueryInput,
+  AuditLogId,
+  UserId,
+  TicketId,
+  ClientId,
+  QueueId,
+} from "@care-y/shared";
 import { toCount } from "../db/query-utils.js";
 
 export interface AuditEntry {
   readonly eventType: AuditEventType;
-  readonly actorId: string;
-  readonly ticketId?: string;
+  readonly actorId: UserId;
+  readonly ticketId?: TicketId;
   readonly metadata?: Record<string, unknown>;
 }
 
 export interface AuditLogResult {
   readonly entries: readonly {
-    readonly id: string;
+    readonly id: AuditLogId;
     readonly eventType: string;
-    readonly actorId: string;
-    readonly ticketId: string | null;
+    readonly actorId: UserId;
+    readonly ticketId: TicketId | null;
     readonly metadata: Record<string, unknown>;
     readonly createdAt: Date;
   }[];
@@ -36,12 +44,12 @@ export interface AuditLogResult {
  * both via OrgDecryptCache.
  */
 export interface RecentActivityEntry {
-  readonly id: string;
+  readonly id: AuditLogId;
   readonly eventType: string;
-  readonly ticketId: string | null;
-  readonly clientId: string;
+  readonly ticketId: TicketId | null;
+  readonly clientId: ClientId;
   readonly encryptedClientAlias: Buffer;
-  readonly queueId: string;
+  readonly queueId: QueueId;
   readonly encryptedQueueName: Buffer;
   readonly createdAt: Date;
 }
@@ -60,7 +68,7 @@ export interface AuditService {
    * requesting user may see; this method applies no access control of its own.
    */
   listRecentForQueues(
-    queueIds: readonly string[],
+    queueIds: readonly QueueId[],
     limit: number,
   ): Promise<readonly RecentActivityEntry[]>;
 }

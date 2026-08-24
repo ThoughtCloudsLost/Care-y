@@ -13,6 +13,24 @@ import { createVoicemailQuarantineRouter } from "./voicemail-quarantine.js";
 import { router, createCallerFactory } from "../trpc/trpc.js";
 import type { Context, OrgContext } from "../trpc/context.js";
 import { RoleId, ErrorCode } from "@care-y/shared";
+import type {
+  SessionId,
+  SessionToken,
+  UserId,
+  IpToken,
+  UaToken,
+  OrgId,
+  OrgSlug,
+  OrgSchema,
+  PhoneId,
+  ClientId,
+  QueueId,
+  VoicemailQuarantineId,
+  TicketId,
+  RecordingSid,
+  CallSid,
+  BlobKey,
+} from "@care-y/shared";
 import type { BlobStore, BlobCategory } from "../storage/store.js";
 import type { PendingClient } from "../tickets/ticket-service.js";
 import {
@@ -39,32 +57,37 @@ function createMockBlobStore(): BlobStore {
   let counter = 0;
   return {
     async put(
-      orgSchema: string,
+      orgSchema: OrgSchema,
       category: BlobCategory,
       blob: Buffer,
-    ): Promise<string> {
+    ): Promise<BlobKey> {
       counter++;
-      const key = `${orgSchema}/${category}/blob-${String(counter)}`;
+      const key = `${orgSchema}/${category}/blob-${String(counter)}` as BlobKey;
       blobs.set(key, Buffer.from(blob));
       return key;
     },
-    async get(key: string): Promise<Buffer | null> {
+    async get(key: BlobKey): Promise<Buffer | null> {
       return blobs.get(key) ?? null;
     },
-    async delete(key: string): Promise<void> {
+    async delete(key: BlobKey): Promise<void> {
       blobs.delete(key);
     },
-    async exists(key: string): Promise<boolean> {
+    async exists(key: BlobKey): Promise<boolean> {
       return blobs.has(key);
     },
   };
 }
 
+const VQ_ADMIN_ID = "00000000-0000-4000-8000-000000002001" as UserId;
+const VQ_VOL_ID = "00000000-0000-4000-8000-000000002002" as UserId;
+const VQ_ORG_ID = "00000000-0000-4000-8000-000000002200" as OrgId;
+const VQ_ORG_SCHEMA = "org_00000000-0000-4000-8000-000000002200" as OrgSchema;
+
 function createMockOrgContext(): OrgContext {
   return {
-    orgId: "org-quarantine-test",
-    orgSlug: "quarantine-org",
-    orgSchema: "org_quarantine",
+    orgId: VQ_ORG_ID,
+    orgSlug: "quarantine-org" as OrgSlug,
+    orgSchema: VQ_ORG_SCHEMA,
     tenantDb: stubTenantDbDefaultRoles(),
     sealedBox: {} as OrgContext["sealedBox"],
   };
@@ -76,17 +99,17 @@ function createAdminContext(): Context {
     res: mockRes(),
     org: createMockOrgContext(),
     session: {
-      id: "sess-q-1",
-      token: "tok-q-1",
-      userId: "user-q-admin",
-      ipToken: "ip-tok",
-      uaToken: "ua-tok",
+      id: "00000000-0000-4000-8000-000000200010" as SessionId,
+      token: "tok-q-1" as SessionToken,
+      userId: VQ_ADMIN_ID,
+      ipToken: "ip-tok" as IpToken,
+      uaToken: "ua-tok" as UaToken,
       expiresAt: new Date(Date.now() + 3_600_000),
       twofaVerified: true,
       webauthnChallenge: null,
     },
     user: {
-      id: "user-q-admin",
+      id: VQ_ADMIN_ID,
       encryptedIdentifier: "admin-id",
       encryptedDisplayName: "encrypted-admin",
       encryptedPreferredLocale: null,
@@ -101,7 +124,7 @@ function createVolunteerContext(): Context {
   return {
     ...createAdminContext(),
     user: {
-      id: "user-q-vol",
+      id: VQ_VOL_ID,
       encryptedIdentifier: "vol-id",
       encryptedDisplayName: "encrypted-vol",
       encryptedPreferredLocale: null,
@@ -145,7 +168,7 @@ describe("createVoicemailQuarantineRouter (auth)", () => {
       const caller = buildCaller(volCtx);
       await expectTrpcError(
         caller.voicemailQuarantine.download({
-          quarantineId: crypto.randomUUID(),
+          quarantineId: crypto.randomUUID() as VoicemailQuarantineId,
         }),
         "FORBIDDEN",
         ErrorCode.INSUFFICIENT_PERMISSIONS,
@@ -158,10 +181,10 @@ describe("createVoicemailQuarantineRouter (auth)", () => {
       const caller = buildCaller(volCtx);
       await expectTrpcError(
         caller.voicemailQuarantine.route({
-          quarantineId: crypto.randomUUID(),
+          quarantineId: crypto.randomUUID() as VoicemailQuarantineId,
           target: {
             type: "ticketId",
-            ticketId: crypto.randomUUID(),
+            ticketId: crypto.randomUUID() as TicketId,
           },
           audioData: Buffer.from("test").toString("base64"),
         }),
@@ -176,7 +199,7 @@ describe("createVoicemailQuarantineRouter (auth)", () => {
       const caller = buildCaller(volCtx);
       await expectTrpcError(
         caller.voicemailQuarantine.dismiss({
-          quarantineId: crypto.randomUUID(),
+          quarantineId: crypto.randomUUID() as VoicemailQuarantineId,
         }),
         "FORBIDDEN",
         ErrorCode.INSUFFICIENT_PERMISSIONS,
@@ -195,7 +218,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
     let testDb: TestDb;
     let tDb: Kysely<TenantDatabase>;
     let blobStore: BlobStore;
-    let intakeQueue: { id: string };
+    let intakeQueue: { id: QueueId };
     let adminUser: Awaited<ReturnType<typeof createTestUser>>;
 
     beforeAll(async () => {
@@ -234,9 +257,9 @@ describe.skipIf(!process.env.DATABASE_URL)(
 
     function buildDbCaller(overrideBlobStore?: BlobStore) {
       const orgContext: OrgContext = {
-        orgId: "org-q-db",
-        orgSlug: "q-db-org",
-        orgSchema: testDb.schemaName,
+        orgId: VQ_ORG_ID,
+        orgSlug: "q-db-org" as OrgSlug,
+        orgSchema: testDb.schemaName as OrgSchema,
         tenantDb: tDb,
         sealedBox: testSealedBox,
       };
@@ -246,11 +269,11 @@ describe.skipIf(!process.env.DATABASE_URL)(
         res: mockRes(),
         org: orgContext,
         session: {
-          id: "sess-qdb-1",
-          token: "tok-qdb-1",
+          id: "00000000-0000-4000-8000-000000200030" as SessionId,
+          token: "tok-qdb-1" as SessionToken,
           userId: adminUser.id,
-          ipToken: "ip-tok",
-          uaToken: "ua-tok",
+          ipToken: "ip-tok" as IpToken,
+          uaToken: "ua-tok" as UaToken,
           expiresAt: new Date(Date.now() + 3_600_000),
           twofaVerified: true,
           webauthnChallenge: null,
@@ -279,19 +302,20 @@ describe.skipIf(!process.env.DATABASE_URL)(
     async function seedQuarantineRow(
       store: BlobStore,
       overrides?: { status?: string },
-    ): Promise<string> {
+    ): Promise<VoicemailQuarantineId> {
       const sealedData = Buffer.from("sealed-test-audio");
       const blobKey = await store.put(
-        testDb.schemaName,
+        testDb.schemaName as OrgSchema,
         "quarantine",
         sealedData,
       );
-      const recordingSid = `RE_ROUTE_${crypto.randomUUID().slice(0, 8)}`;
+      const recordingSid =
+        `RE_ROUTE_${crypto.randomUUID().slice(0, 8)}` as RecordingSid;
       const row = await tDb
         .insertInto("voicemail_quarantine")
         .values({
           recording_sid: recordingSid,
-          call_sid: `CA_ROUTE_${crypto.randomUUID().slice(0, 8)}`,
+          call_sid: `CA_ROUTE_${crypto.randomUUID().slice(0, 8)}` as CallSid,
           blob_key: blobKey,
           size_bytes: sealedData.length,
           duration_seconds: 10,
@@ -309,7 +333,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
      */
     async function seedPhoneAndClient(
       db: Kysely<TenantDatabase>,
-    ): Promise<{ phoneId: string; clientId: string }> {
+    ): Promise<{ phoneId: PhoneId; clientId: ClientId }> {
       const fixture = await createTestClientFixture(db);
       return { phoneId: fixture.phoneId, clientId: fixture.clientId };
     }
@@ -328,7 +352,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
       await tDb
         .insertInto("user_keys")
         .values({
-          user_id: fixture.userId as string,
+          user_id: fixture.userId!,
           salt: Buffer.alloc(16),
           vol_public: null,
         })
@@ -451,15 +475,16 @@ describe.skipIf(!process.env.DATABASE_URL)(
         // Insert quarantine row in separate schema
         const sealedData = Buffer.from("sealed-niq-audio");
         const blobKey = await localBlobStore.put(
-          separateDb.schemaName,
+          separateDb.schemaName as OrgSchema,
           "quarantine",
           sealedData,
         );
         const qRow = await separateDb.db
           .insertInto("voicemail_quarantine")
           .values({
-            recording_sid: `RE_NIQ_${crypto.randomUUID().slice(0, 8)}`,
-            call_sid: `CA_NIQ_${crypto.randomUUID().slice(0, 8)}`,
+            recording_sid:
+              `RE_NIQ_${crypto.randomUUID().slice(0, 8)}` as RecordingSid,
+            call_sid: `CA_NIQ_${crypto.randomUUID().slice(0, 8)}` as CallSid,
             blob_key: blobKey,
             size_bytes: sealedData.length,
             reason: "no_intake_queue",
@@ -467,10 +492,12 @@ describe.skipIf(!process.env.DATABASE_URL)(
           .returning("id")
           .executeTakeFirstOrThrow();
 
+        const niqOrgId = "00000000-0000-4000-8000-000000002300" as OrgId;
+        const niqUserId = crypto.randomUUID() as UserId;
         const orgContext: OrgContext = {
-          orgId: "org-niq",
-          orgSlug: "niq-org",
-          orgSchema: separateDb.schemaName,
+          orgId: niqOrgId,
+          orgSlug: "niq-org" as OrgSlug,
+          orgSchema: separateDb.schemaName as OrgSchema,
           tenantDb: separateDb.db,
           sealedBox: testSealedBox,
         };
@@ -480,17 +507,17 @@ describe.skipIf(!process.env.DATABASE_URL)(
           res: mockRes(),
           org: orgContext,
           session: {
-            id: "sess-niq",
-            token: "tok-niq",
-            userId: crypto.randomUUID(),
-            ipToken: "ip-tok",
-            uaToken: "ua-tok",
+            id: "00000000-0000-4000-8000-000000200040" as SessionId,
+            token: "tok-niq" as SessionToken,
+            userId: niqUserId,
+            ipToken: "ip-tok" as IpToken,
+            uaToken: "ua-tok" as UaToken,
             expiresAt: new Date(Date.now() + 3_600_000),
             twofaVerified: true,
             webauthnChallenge: null,
           },
           user: {
-            id: crypto.randomUUID(),
+            id: niqUserId,
             encryptedIdentifier: "admin-niq",
             encryptedDisplayName: "encrypted-niq",
             encryptedPreferredLocale: null,

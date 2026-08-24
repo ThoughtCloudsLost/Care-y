@@ -13,6 +13,9 @@ import type {
   RegistrationResponseJSON,
   AuthenticationResponseJSON,
 } from "./types.js";
+import type { WebauthnCredentialId } from "@care-y/shared";
+
+const cid = (s: string): WebauthnCredentialId => s as WebauthnCredentialId;
 
 // --- Helpers ---
 
@@ -253,7 +256,7 @@ describe("WebAuthn parsers", () => {
   describe("toRegistrationResult", () => {
     it("extracts credential info, authenticator metadata, and flags", () => {
       const registration: RegistrationResponseJSON = {
-        id: "cred-id-123",
+        id: cid("cred-id-123"),
         rawId: "cred-id-123",
         type: "public-key",
         response: {
@@ -296,7 +299,7 @@ describe("WebAuthn parsers", () => {
 
     it("defaults transports to empty array when absent", () => {
       const registration: RegistrationResponseJSON = {
-        id: "cred-id",
+        id: cid("cred-id"),
         rawId: "cred-id",
         type: "public-key",
         response: {
@@ -335,7 +338,7 @@ describe("WebAuthn parsers", () => {
   describe("toAuthenticationResult", () => {
     it("extracts credentialId, signCount, userVerified, and authenticatorAttachment", () => {
       const authentication: AuthenticationResponseJSON = {
-        id: "cred-456",
+        id: cid("cred-456"),
         rawId: "cred-456",
         type: "public-key",
         authenticatorAttachment: "platform",
@@ -370,7 +373,7 @@ describe("WebAuthn parsers", () => {
 
     it("handles missing authenticatorAttachment", () => {
       const authentication: AuthenticationResponseJSON = {
-        id: "cred-789",
+        id: cid("cred-789"),
         rawId: "cred-789",
         type: "public-key",
         // authenticatorAttachment omitted

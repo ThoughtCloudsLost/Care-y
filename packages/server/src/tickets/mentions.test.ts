@@ -7,11 +7,12 @@ import {
   type TestDb,
 } from "../test-utils.js";
 import { createMentionsService, type MentionsService } from "./mentions.js";
+import type { UserId } from "@care-y/shared";
 
 describe.skipIf(!process.env.DATABASE_URL)("MentionsService (DB)", () => {
   let testDb: TestDb;
   let svc: MentionsService;
-  let validUserId: string;
+  let validUserId: UserId;
 
   beforeAll(async () => {
     testDb = await createTestDb();
@@ -32,7 +33,7 @@ describe.skipIf(!process.env.DATABASE_URL)("MentionsService (DB)", () => {
   });
 
   it("silently drops nonexistent user IDs", async () => {
-    const fakeId = crypto.randomUUID();
+    const fakeId = crypto.randomUUID() as UserId;
     const result = await svc.resolveValidMentions([fakeId]);
     expect(result).toEqual([]);
   });
@@ -43,7 +44,7 @@ describe.skipIf(!process.env.DATABASE_URL)("MentionsService (DB)", () => {
   });
 
   it("returns only valid IDs from a mixed list", async () => {
-    const fakeId = crypto.randomUUID();
+    const fakeId = crypto.randomUUID() as UserId;
     const result = await svc.resolveValidMentions([validUserId, fakeId]);
     expect(result).toEqual([validUserId]);
   });

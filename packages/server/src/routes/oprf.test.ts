@@ -56,12 +56,22 @@ import {
   OprfError,
 } from "../errors.js";
 import { RoleId } from "@care-y/shared";
+import type {
+  SessionId,
+  SessionToken,
+  UserId,
+  IpToken,
+  UaToken,
+  OrgId,
+  OrgSlug,
+  OrgSchema,
+} from "@care-y/shared";
 
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 
-const TEST_USER_ID = "a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d";
+const TEST_USER_ID = "a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d" as UserId;
 const TEST_IP = "203.0.113.42";
 
 /** 32 bytes, base64-encoded. Simulates a blinded ristretto255 point. */
@@ -85,17 +95,17 @@ function createPassthroughEvaluator(): OprfEvaluator {
 
 /** Audit logger that records calls for assertion. */
 function createSpyAuditLogger(): OprfAuditLogger & {
-  calls: Array<{ userId: string; ip: string; reason: OprfFailureReason }>;
+  calls: Array<{ userId: UserId; ip: string; reason: OprfFailureReason }>;
 } {
   const calls: Array<{
-    userId: string;
+    userId: UserId;
     ip: string;
     reason: OprfFailureReason;
   }> = [];
   return {
     calls,
     async logFailure(
-      userId: string,
+      userId: UserId,
       ipAddress: string,
       reason: OprfFailureReason,
     ): Promise<void> {
@@ -251,10 +261,10 @@ describe("OprfEvaluateService", () => {
     );
 
     await service.evaluate(
-      makeRequest({ userId: "b2c3d4e5-f6a7-4b8c-9d0e-1f2a3b4c5d6e" }),
+      makeRequest({ userId: "b2c3d4e5-f6a7-4b8c-9d0e-1f2a3b4c5d6e" as UserId }),
     );
     await service.evaluate(
-      makeRequest({ userId: "c3d4e5f6-a7b8-4c9d-ae1f-2a3b4c5d6e7f" }),
+      makeRequest({ userId: "c3d4e5f6-a7b8-4c9d-ae1f-2a3b4c5d6e7f" as UserId }),
     );
 
     await expect(service.evaluate(makeRequest())).rejects.toThrow(
@@ -336,7 +346,7 @@ describe("OprfEvaluateService", () => {
     await expect(
       service.evaluate(
         makeRequest({
-          sessionUserId: "d4e5f6a7-b8c9-4d0e-af2a-3b4c5d6e7f80",
+          sessionUserId: "d4e5f6a7-b8c9-4d0e-af2a-3b4c5d6e7f80" as UserId,
         }),
       ),
     ).rejects.toThrow(ForbiddenError);
@@ -524,21 +534,21 @@ describe("OPRF tRPC route", () => {
   it("maps ForbiddenError to FORBIDDEN tRPC error for session mismatch", async () => {
     const caller = buildCaller({
       session: {
-        id: "test-session",
-        token: "test-token",
-        userId: "d4e5f6a7-b8c9-4d0e-af2a-3b4c5d6e7f80",
-        ipToken: "test-ip-token",
-        uaToken: "test-ua-token",
+        id: "test-session" as SessionId,
+        token: "test-token" as SessionToken,
+        userId: "d4e5f6a7-b8c9-4d0e-af2a-3b4c5d6e7f80" as UserId,
+        ipToken: "test-ip-token" as IpToken,
+        uaToken: "test-ua-token" as UaToken,
         expiresAt: new Date(Date.now() + 3_600_000),
         twofaVerified: false,
         webauthnChallenge: null,
       },
       user: {
-        id: "d4e5f6a7-b8c9-4d0e-af2a-3b4c5d6e7f80",
+        id: "d4e5f6a7-b8c9-4d0e-af2a-3b4c5d6e7f80" as UserId,
         encryptedIdentifier: "session-user",
         encryptedDisplayName: "Session User",
         encryptedPreferredLocale: null,
-        roleId: "volunteer",
+        roleId: RoleId.VOLUNTEER,
         isActive: true,
         hasSeenBriefing: true,
       },
@@ -624,24 +634,24 @@ describe("OPRF adminEvaluate route", () => {
       req: mockReq({ headers: { "x-forwarded-for": TEST_IP } }),
       res: mockRes(),
       org: {
-        orgId: "test-org-id",
-        orgSlug: "test-org",
-        orgSchema: "org_test",
+        orgId: "a0000000-0000-4000-8000-000000000001" as OrgId,
+        orgSlug: "test-org" as OrgSlug,
+        orgSchema: "org_a0000000-0000-4000-8000-000000000001" as OrgSchema,
         tenantDb: stubTenantDbDefaultRoles(),
         sealedBox: null as never,
       },
       session: {
-        id: "admin-session",
-        token: "admin-token",
-        userId: "admin-user-id",
-        ipToken: "admin-ip",
-        uaToken: "admin-ua",
+        id: "admin-session" as SessionId,
+        token: "admin-token" as SessionToken,
+        userId: "admin-user-id" as UserId,
+        ipToken: "admin-ip" as IpToken,
+        uaToken: "admin-ua" as UaToken,
         expiresAt: new Date(Date.now() + 3_600_000),
         twofaVerified: true,
         webauthnChallenge: null,
       },
       user: {
-        id: "admin-user-id",
+        id: "admin-user-id" as UserId,
         encryptedIdentifier: "admin-hash",
         encryptedDisplayName: "QWRtaW4=",
         encryptedPreferredLocale: null,
@@ -676,7 +686,7 @@ describe("OPRF adminEvaluate route", () => {
   it("rejects non-admin (volunteer) caller", async () => {
     const { caller } = buildAdminCaller({
       user: {
-        id: "vol-user-id",
+        id: "vol-user-id" as UserId,
         encryptedIdentifier: "vol-hash",
         encryptedDisplayName: "Vm9s",
         encryptedPreferredLocale: null,
@@ -685,11 +695,11 @@ describe("OPRF adminEvaluate route", () => {
         hasSeenBriefing: true,
       },
       session: {
-        id: "vol-session",
-        token: "vol-token",
-        userId: "vol-user-id",
-        ipToken: "vol-ip",
-        uaToken: "vol-ua",
+        id: "vol-session" as SessionId,
+        token: "vol-token" as SessionToken,
+        userId: "vol-user-id" as UserId,
+        ipToken: "vol-ip" as IpToken,
+        uaToken: "vol-ua" as UaToken,
         expiresAt: new Date(Date.now() + 3_600_000),
         twofaVerified: true,
         webauthnChallenge: null,
@@ -726,30 +736,34 @@ describe("OPRF adminEvaluate route", () => {
 // ---------------------------------------------------------------------------
 
 describe("createAttemptTracker", () => {
+  const USER_A = "user-a" as UserId;
+  const USER_B = "user-b" as UserId;
+  const UNKNOWN_USER = "unknown" as UserId;
+
   afterEach(() => {
     vi.useRealTimers();
   });
 
   it("check returns 0 for unknown user", () => {
     const tracker = createAttemptTracker();
-    expect(tracker.check("unknown")).toBe(0);
+    expect(tracker.check(UNKNOWN_USER)).toBe(0);
     tracker.dispose();
   });
 
   it("increment returns current failure count", () => {
     const tracker = createAttemptTracker();
-    expect(tracker.increment("user-a")).toBe(1);
-    expect(tracker.increment("user-a")).toBe(2);
-    expect(tracker.increment("user-a")).toBe(3);
+    expect(tracker.increment(USER_A)).toBe(1);
+    expect(tracker.increment(USER_A)).toBe(2);
+    expect(tracker.increment(USER_A)).toBe(3);
     tracker.dispose();
   });
 
   it("reset clears failures for a user", () => {
     const tracker = createAttemptTracker();
-    tracker.increment("user-a");
-    tracker.increment("user-a");
-    tracker.reset("user-a");
-    expect(tracker.check("user-a")).toBe(0);
+    tracker.increment(USER_A);
+    tracker.increment(USER_A);
+    tracker.reset(USER_A);
+    expect(tracker.check(USER_A)).toBe(0);
     tracker.dispose();
   });
 
@@ -757,13 +771,13 @@ describe("createAttemptTracker", () => {
     let time = 1000;
     const tracker = createAttemptTracker(5000, () => time);
 
-    tracker.increment("user-a");
-    tracker.increment("user-a");
-    expect(tracker.check("user-a")).toBe(2);
+    tracker.increment(USER_A);
+    tracker.increment(USER_A);
+    expect(tracker.check(USER_A)).toBe(2);
 
     // Advance past the window
     time = 7000;
-    expect(tracker.check("user-a")).toBe(0);
+    expect(tracker.check(USER_A)).toBe(0);
     tracker.dispose();
   });
 
@@ -772,8 +786,8 @@ describe("createAttemptTracker", () => {
     let time = 1000;
     const tracker = createAttemptTracker(5000, () => time);
 
-    tracker.increment("user-a");
-    tracker.increment("user-b");
+    tracker.increment(USER_A);
+    tracker.increment(USER_B);
 
     // Advance past window so all entries are expired
     time = 7000;
@@ -782,8 +796,8 @@ describe("createAttemptTracker", () => {
     vi.advanceTimersByTime(60_000);
 
     // After cleanup, check still returns 0 (entries were pruned)
-    expect(tracker.check("user-a")).toBe(0);
-    expect(tracker.check("user-b")).toBe(0);
+    expect(tracker.check(USER_A)).toBe(0);
+    expect(tracker.check(USER_B)).toBe(0);
     tracker.dispose();
   });
 
@@ -792,16 +806,16 @@ describe("createAttemptTracker", () => {
     let time = 1000;
     const tracker = createAttemptTracker(5000, () => time);
 
-    tracker.increment("user-a");
+    tracker.increment(USER_A);
     time = 3000;
-    tracker.increment("user-a");
+    tracker.increment(USER_A);
 
     // Only the first entry is expired (time=1000), second is still in window (time=3000)
     time = 6500;
     vi.advanceTimersByTime(60_000);
 
     // One failure remains (the one at time=3000, within 5s window of 6500)
-    expect(tracker.check("user-a")).toBe(1);
+    expect(tracker.check(USER_A)).toBe(1);
     tracker.dispose();
   });
 

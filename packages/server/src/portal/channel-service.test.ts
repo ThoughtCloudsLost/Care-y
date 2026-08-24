@@ -10,6 +10,13 @@ import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import type { Kysely } from "kysely";
 import { getSodium } from "@care-y/crypto";
 import type { TenantDatabase } from "../db/types.js";
+import type {
+  ClientId,
+  TicketId,
+  ChannelRowId,
+  FollowupId,
+} from "@care-y/shared";
+import { channelSecretSchema } from "@care-y/shared";
 import {
   createTestDb,
   createTestClientFixture,
@@ -39,7 +46,9 @@ function makeRegistration(
   overrides?: Partial<ChannelRegistration>,
 ): ChannelRegistration {
   return {
-    channelId: crypto.randomBytes(24).toString("hex"),
+    channelId: channelSecretSchema.parse(
+      crypto.randomBytes(24).toString("hex"),
+    ),
     authHash: crypto.randomBytes(32),
     clientPublic: crypto.randomBytes(32),
     hasPassphrase: false,
@@ -53,7 +62,7 @@ function makeRegistration(
 }
 
 /** Shorthand: create a client via the shared fixture and return its id. */
-async function insertClient(db: Kysely<TenantDatabase>): Promise<string> {
+async function insertClient(db: Kysely<TenantDatabase>): Promise<ClientId> {
   const fixture = await createTestClientFixture(db);
   return fixture.clientId;
 }
@@ -63,8 +72,8 @@ async function insertClient(db: Kysely<TenantDatabase>): Promise<string> {
  */
 async function insertFollowup(
   db: Kysely<TenantDatabase>,
-  ticketId: string,
-): Promise<string> {
+  ticketId: TicketId,
+): Promise<FollowupId> {
   const row = await db
     .insertInto("followups")
     .values({
@@ -84,8 +93,8 @@ async function insertFollowup(
  */
 async function insertPortalMessage(
   db: Kysely<TenantDatabase>,
-  channelRowId: string,
-  followupId: string,
+  channelRowId: ChannelRowId,
+  followupId: FollowupId,
 ): Promise<string> {
   const row = await db
     .insertInto("portal_messages")
@@ -413,7 +422,9 @@ describe.skipIf(!process.env.DATABASE_URL)("PortalChannelService", () => {
     });
 
     it("returns null for unknown channel_id", async () => {
-      const unknownChannelId = crypto.randomBytes(24).toString("hex");
+      const unknownChannelId = channelSecretSchema.parse(
+        crypto.randomBytes(24).toString("hex"),
+      );
       const auth = crypto.randomBytes(32);
 
       const result = await resolveAuthedChannel(db, unknownChannelId, auth);
@@ -449,7 +460,7 @@ describe.skipIf(!process.env.DATABASE_URL)("PortalChannelService", () => {
       // Three different failure modes all produce the same null
       const unknownId = await resolveAuthedChannel(
         db,
-        crypto.randomBytes(24).toString("hex"),
+        channelSecretSchema.parse(crypto.randomBytes(24).toString("hex")),
         rawAuth,
       );
       const revokedChannel = await resolveAuthedChannel(
@@ -489,7 +500,9 @@ describe.skipIf(!process.env.DATABASE_URL)("PortalChannelService", () => {
         .insertInto("portal_channels")
         .values({
           client_id: clientId,
-          channel_id: crypto.randomBytes(24).toString("hex"),
+          channel_id: channelSecretSchema.parse(
+            crypto.randomBytes(24).toString("hex"),
+          ),
           auth_hash: authHash,
           client_public: crypto.randomBytes(32),
           has_passphrase: false,
