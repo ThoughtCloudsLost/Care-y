@@ -170,8 +170,9 @@ test.describe.serial("One-Time Share Link", () => {
       timeout: CRYPTO_TIMEOUT,
     });
 
-    // The heading "A message for you" should be present.
-    const heading = clientPage.getByText("A message for you");
+    // The heading "A message for you" should be present. Scope past the
+    // aria-live region, which carries the same announced text.
+    const heading = clientPage.getByText("A message for you").first();
     await expect(heading).toBeVisible({ timeout: 5_000 });
 
     // The one-time notice should be visible.

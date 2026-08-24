@@ -118,6 +118,7 @@ export default defineConfig({
       "/relay": {
         target: "http://localhost:3000",
         changeOrigin: true,
+        headers: { "x-org-slug": orgSlug },
       },
       "/api/greetings": {
         target: "http://localhost:3000",
