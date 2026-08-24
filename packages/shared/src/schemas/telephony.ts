@@ -1,9 +1,15 @@
 // Shared: tRPC input/output shapes for telephony admin endpoints.
 
 import { z } from "zod";
+import { phoneBlocklistIdSchema, phoneSidSchema } from "../ids.js";
 
-/** Valid telephony provider identifiers. */
-export const telephonyProviderSchema = z.enum(["twilio", "signalwire"]);
+/**
+ * Providers an admin can select when saving credentials. SignalWire is
+ * deliberately absent: its config schema exists but no provider module is
+ * implemented, so offering it would persist credentials whose webhooks can
+ * never be verified. Reinstate the entry when the provider module lands.
+ */
+export const telephonyProviderSchema = z.enum(["twilio"]);
 export type TelephonyProviderType = z.infer<typeof telephonyProviderSchema>;
 
 /** Input for saving BYOT telephony credentials. */
@@ -68,7 +74,7 @@ export type AddToBlocklistInput = z.infer<typeof addToBlocklistInputSchema>;
 
 /** Input for removing a phone number from the blocklist. */
 export const removeFromBlocklistInputSchema = z.object({
-  id: z.uuid(),
+  id: phoneBlocklistIdSchema,
 });
 
 export type RemoveFromBlocklistInput = z.infer<
@@ -77,8 +83,8 @@ export type RemoveFromBlocklistInput = z.infer<
 
 /** Input for assigning phone number purposes (outbound, system). */
 export const setPhonePurposeInputSchema = z.object({
-  outboundSid: z.string().nullable(),
-  systemSid: z.string().nullable(),
+  outboundSid: phoneSidSchema.nullable(),
+  systemSid: phoneSidSchema.nullable(),
 });
 
 export type SetPhonePurposeInput = z.infer<typeof setPhonePurposeInputSchema>;

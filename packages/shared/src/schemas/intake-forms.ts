@@ -10,6 +10,7 @@
 
 import { z } from "zod";
 import { base64String } from "./validators.js";
+import { queueIdSchema, userIdSchema, intakeFormIdSchema } from "../ids.js";
 
 // ---------------------------------------------------------------------------
 // Field types
@@ -88,7 +89,7 @@ export const ROLE_WIDGET_COMPATIBILITY: Readonly<
 // ---------------------------------------------------------------------------
 
 /** Queue-routing: option label -> queue UUID. */
-export const queueRoutingMappingSchema = z.record(z.string(), z.uuid());
+export const queueRoutingMappingSchema = z.record(z.string(), queueIdSchema);
 export type QueueRoutingMapping = z.infer<typeof queueRoutingMappingSchema>;
 
 /** Urgency: option label -> ticket priority value. */
@@ -264,8 +265,8 @@ const saveIntakeFieldSchema = z.object({
   ),
   isRequired: z.boolean(),
   role: intakeFieldRoleSchema.nullable().optional(),
-  routingQueueIds: z.array(z.uuid()).max(50).nullable().optional(),
-  escalationRecipientIds: z.array(z.uuid()).max(50).nullable().optional(),
+  routingQueueIds: z.array(queueIdSchema).max(50).nullable().optional(),
+  escalationRecipientIds: z.array(userIdSchema).max(50).nullable().optional(),
 });
 
 /**
@@ -274,11 +275,11 @@ const saveIntakeFieldSchema = z.object({
  */
 export const saveIntakeFormInputSchema = z
   .object({
-    formId: z.uuid().nullable(),
+    formId: intakeFormIdSchema.nullable(),
     name: z.string().min(1).max(120),
     slug: intakeFormSlugSchema.nullable().optional(),
     isDefault: z.boolean().optional(),
-    destinationQueueId: z.uuid().nullable().optional(),
+    destinationQueueId: queueIdSchema.nullable().optional(),
     fields: z
       .array(saveIntakeFieldSchema)
       .min(1)

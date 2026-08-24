@@ -11,6 +11,7 @@
  */
 
 import { z } from "zod";
+import { ticketIdSchema, queueIdSchema, userIdSchema } from "../ids.js";
 
 // --- Notification event types (extensible by future phases) ---
 
@@ -31,8 +32,8 @@ export type NotificationEventType = z.infer<typeof notificationEventTypeSchema>;
 
 export const sseEventSchema = z.object({
   type: notificationEventTypeSchema,
-  ticketId: z.uuid(),
-  queueId: z.uuid(),
+  ticketId: ticketIdSchema,
+  queueId: queueIdSchema,
   timestamp: z.iso.datetime(),
 });
 export type SseEvent = z.infer<typeof sseEventSchema>;
@@ -68,8 +69,8 @@ export type UnsubscribePushInput = z.infer<typeof unsubscribePushInputSchema>;
 
 export const metadataSearchInputSchema = z.object({
   status: z.enum(["open", "closed"]).optional(),
-  queueId: z.uuid().optional(),
-  assignedTo: z.uuid().optional(),
+  queueId: queueIdSchema.optional(),
+  assignedTo: userIdSchema.optional(),
   dateFrom: z.iso.datetime().optional(),
   dateTo: z.iso.datetime().optional(),
   page: z.number().int().min(1).default(1),
@@ -80,9 +81,9 @@ export type MetadataSearchInput = z.infer<typeof metadataSearchInputSchema>;
 // --- Content search (paginated encrypted tickets for client-side search) ---
 
 export const contentSearchInputSchema = z.object({
-  queueId: z.uuid().optional(),
+  queueId: queueIdSchema.optional(),
   status: z.enum(["open", "closed"]).optional(),
-  ticketIds: z.array(z.uuid()).max(500).optional(),
+  ticketIds: z.array(ticketIdSchema).max(500).optional(),
   page: z.number().int().min(1).default(1),
   pageSize: z.number().int().min(1).max(50).default(50),
 });
@@ -136,8 +137,8 @@ export type AuditEventType = z.infer<typeof auditEventTypeSchema>;
 
 export const auditLogQueryInputSchema = z.object({
   eventType: auditEventTypeSchema.optional(),
-  actorId: z.uuid().optional(),
-  ticketId: z.uuid().optional(),
+  actorId: userIdSchema.optional(),
+  ticketId: ticketIdSchema.optional(),
   dateFrom: z.iso.datetime().optional(),
   dateTo: z.iso.datetime().optional(),
   page: z.number().int().min(1).default(1),
@@ -157,7 +158,7 @@ export type PreferenceScopeType = z.infer<typeof preferenceScopeTypeSchema>;
 export const setPreferenceInputSchema = z
   .object({
     scopeType: preferenceScopeTypeSchema,
-    scopeId: z.uuid().nullable(),
+    scopeId: z.union([queueIdSchema, ticketIdSchema]).nullable(),
     eventType: notificationEventTypeSchema,
     channel: notificationChannelSchema,
     enabled: z.boolean(),
@@ -170,7 +171,7 @@ export type SetPreferenceInput = z.infer<typeof setPreferenceInputSchema>;
 export const resetPreferencesInputSchema = z
   .object({
     scopeType: preferenceScopeTypeSchema.optional(),
-    scopeId: z.uuid().nullable().optional(),
+    scopeId: z.union([queueIdSchema, ticketIdSchema]).nullable().optional(),
   })
   .refine(
     (v) => {
@@ -183,7 +184,7 @@ export type ResetPreferencesInput = z.infer<typeof resetPreferencesInputSchema>;
 
 export const preferenceRowSchema = z.object({
   scopeType: preferenceScopeTypeSchema,
-  scopeId: z.uuid().nullable(),
+  scopeId: z.union([queueIdSchema, ticketIdSchema]).nullable(),
   eventType: notificationEventTypeSchema,
   channel: notificationChannelSchema,
   enabled: z.boolean(),

@@ -1,15 +1,16 @@
 import { z } from "zod";
 import { identifierSchema, passwordSchema } from "./auth.js";
 import { passwordChangeKeysSchema } from "./keys.js";
+import { userIdSchema } from "../ids.js";
 
-/** Self-service display name update. Server stores ciphertext only (Tier 1 sealed box). */
+/** Self-service display name update. Server stores ciphertext only (org-key sealed box). */
 export const updateDisplayNameSchema = z.object({
   encryptedDisplayName: z.string().min(1),
 });
 
 /** Admin updates another user's display name. Same sealed-box ciphertext. */
 export const adminUpdateDisplayNameSchema = z.object({
-  userId: z.uuid(),
+  userId: userIdSchema,
   encryptedDisplayName: z.string().min(1),
 });
 
@@ -21,7 +22,7 @@ export const updateUsernameSchema = z.object({
 
 /** Admin changes another user's username. No password required (admin authority). */
 export const adminUpdateUsernameSchema = z.object({
-  userId: z.uuid(),
+  userId: userIdSchema,
   newIdentifier: identifierSchema,
 });
 
