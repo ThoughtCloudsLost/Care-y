@@ -178,11 +178,14 @@
     e.preventDefault();
     if (panelRef === undefined) return;
 
+    // Filter out items hidden by the responsive CSS (the mode group only
+    // renders visibly on narrow screens); display:none items can't take
+    // focus and would break the roving order.
     const items = Array.from(
       panelRef.querySelectorAll<HTMLButtonElement>(
         '[role="menuitem"], [role="menuitemradio"]',
       ),
-    );
+    ).filter((el) => el.offsetParent !== null);
     if (items.length === 0) return;
 
     const current = document.activeElement;
@@ -214,6 +217,13 @@
 
   function handleRestartMenu(): void {
     onRestart();
+    closeMenus();
+  }
+
+  function handleModeSelect(target: DemoMode): void {
+    if (mode !== target) {
+      onToggleMode();
+    }
     closeMenus();
   }
 </script>
@@ -393,6 +403,38 @@
           bind:this={morePanelRef}
           onkeydown={(e) => handleMenuKeydown(e, morePanelRef)}
         >
+          <!-- On narrow screens the Read/Explore segmented control leaves
+               the bar and lives here instead (CSS-toggled). -->
+          <div class="more-mode-group" role="none">
+            <button
+              class="more-item"
+              role="menuitemradio"
+              aria-checked={mode === "read"}
+              type="button"
+              onclick={() => handleModeSelect("read")}
+            >
+              <span class="more-radio-slot">
+                {#if mode === "read"}
+                  <Check size={16} />
+                {/if}
+              </span>
+              <span>{m.demo_mode_read()}</span>
+            </button>
+            <button
+              class="more-item"
+              role="menuitemradio"
+              aria-checked={mode === "explore"}
+              type="button"
+              onclick={() => handleModeSelect("explore")}
+            >
+              <span class="more-radio-slot">
+                {#if mode === "explore"}
+                  <Check size={16} />
+                {/if}
+              </span>
+              <span>{m.demo_mode_explore()}</span>
+            </button>
+          </div>
           <button
             class="more-item"
             role="menuitem"
@@ -803,6 +845,21 @@
     outline-offset: -2px;
   }
 
+  /* Mode radio items live in the bar's segmented control on wide screens
+     and only surface in this menu below the narrow breakpoint. */
+  .more-mode-group {
+    display: none;
+  }
+
+  .more-radio-slot {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 16px;
+    flex-shrink: 0;
+    color: var(--demo-accent);
+  }
+
   /* -----------------------------------------------------------------------
      Responsive: narrow (< 900px)
      ----------------------------------------------------------------------- */
@@ -821,15 +878,49 @@
       padding: 0;
     }
 
-    /* On narrow screens the panel escapes its wrapper to span almost
-       the full viewport width. Calculated margins pull it left of the
-       trigger; the bar's 1rem padding is the visual gutter. */
+    /* On narrow screens the panel escapes its wrapper and anchors to the
+       viewport instead: the wrapper sits right of the leading buttons, so
+       any wrapper-relative full-width placement would spill off the right
+       edge. Fixed positioning works because the bar is sticky at top: 0;
+       the 1rem insets mirror the bar's padding as the visual gutter. */
     .contents-panel {
-      left: auto;
-      right: auto;
+      position: fixed;
+      top: calc(56px + 6px);
+      left: 1rem;
+      right: 1rem;
       min-width: 0;
-      width: calc(100vw - 2rem);
-      max-width: calc(100vw - 2rem);
+      width: auto;
+      max-width: none;
+    }
+  }
+
+  /* -----------------------------------------------------------------------
+     Responsive: phone (< 480px)
+
+     343px of inner width (iPhone 13 mini) can't hold seven controls.
+     Prev/next chevrons hide (the contents picker and scrolling still
+     navigate) and the mode segmented control moves into the overflow
+     menu, leaving the section title most of the row.
+     ----------------------------------------------------------------------- */
+
+  @media (max-width: 479px) {
+    .nav-btn {
+      display: none;
+    }
+
+    .mode-segments {
+      display: none;
+    }
+
+    .contents-wrapper {
+      max-width: none;
+    }
+
+    /* The explore button is the group's :last-child and drops its own
+       hairline, so the group carries the divider before Language. */
+    .more-mode-group {
+      display: block;
+      border-bottom: 1px solid var(--hair);
     }
   }
 
