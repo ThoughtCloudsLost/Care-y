@@ -214,13 +214,7 @@ export const SECTIONS: readonly Section[] = [
     descKey: "demo_section_dashboard_desc",
     routes: SECTION_ROUTES.dashboard,
     subs: [
-      {
-        slug: "view-switcher",
-        topic: "dashboard-view-switcher",
-        headingKey: "demo_narrative_dashboard_view_switcher_heading",
-        bodyKey: "demo_narrative_dashboard_view_switcher_body",
-      },
-      // The dashboard is a scroll-nav page: every sub below except the
+      // The dashboard is a scroll-nav page: every sub except the
       // view switcher and the create button narrates a `#section-<id>`
       // block (routes/(app)/+page.svelte, the .scroll-target divs).
       {
@@ -257,6 +251,12 @@ export const SECTIONS: readonly Section[] = [
         headingKey: "demo_narrative_dashboard_kb_heading",
         bodyKey: "demo_narrative_dashboard_kb_body",
         highlight: { section: "kb" },
+      },
+      {
+        slug: "view-switcher",
+        topic: "dashboard-view-switcher",
+        headingKey: "demo_narrative_dashboard_view_switcher_heading",
+        bodyKey: "demo_narrative_dashboard_view_switcher_body",
       },
       {
         slug: "needs-attention",
