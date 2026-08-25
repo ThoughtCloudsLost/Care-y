@@ -14,18 +14,12 @@ import {
   testFieldEncryptor,
   testBlindIndexer,
   testSessionTokenizer,
-  TEST_OPS_KEY,
   TEST_ORG_PUBLIC_KEY,
   TEST_ORG_ID,
   testSealedBox,
   type TestDb,
 } from "../test-utils.js";
 import { createScryptHasher } from "../auth/password.js";
-import {
-  deriveSecretsKey,
-  createSecretsEncryptor,
-  type SecretsEncryptor,
-} from "../config/secrets.js";
 import {
   createOnboardingService,
   type OnboardingService,
@@ -39,7 +33,6 @@ describe.skipIf(!HAS_DB)("OnboardingService (DB)", () => {
   let testDb: TestDb;
   let tenantDb: Kysely<TenantDatabase>;
   let svc: OnboardingService;
-  let secretsEncryptor: SecretsEncryptor;
 
   beforeAll(async () => {
     testDb = await createTestDb();
@@ -51,14 +44,11 @@ describe.skipIf(!HAS_DB)("OnboardingService (DB)", () => {
       .onConflict((oc) => oc.doNothing())
       .execute();
 
-    secretsEncryptor = createSecretsEncryptor(deriveSecretsKey(TEST_OPS_KEY));
-
     svc = createOnboardingService(tenantDb, {
       hasher: createScryptHasher(),
       encryptor: testFieldEncryptor,
       indexer: testBlindIndexer,
       tokenizer: testSessionTokenizer,
-      secretsEncryptor,
     });
   }, 30_000);
 
@@ -171,7 +161,6 @@ describe.skipIf(!HAS_DB)("OnboardingService (DB)", () => {
         encryptor: testFieldEncryptor,
         indexer: testBlindIndexer,
         tokenizer: testSessionTokenizer,
-        secretsEncryptor,
       });
 
       await freshSvc.bootstrapAdmin({
@@ -328,66 +317,6 @@ describe.skipIf(!HAS_DB)("OnboardingService (DB)", () => {
       expect(Buffer.isBuffer(config.encrypted_name)).toBe(true);
       expect(config.encrypted_name!.toString()).toBe("Encrypted Org Name");
       expect(Buffer.isBuffer(config.encrypted_terminology)).toBe(true);
-    });
-  });
-
-  // ── saveTelephonyChoice ─────────────────────────────────────────
-
-  describe("saveTelephonyChoice", () => {
-    it("stores full BYOT config with encrypted credentials", async () => {
-      const result = await svc.saveTelephonyChoice({
-        mode: "byot",
-        accountSid: "AC1234567890",
-        authToken: "secret-auth-token",
-      });
-
-      expect(result.mode).toBe("byot");
-
-      // Verify the config was encrypted and stored
-      const config = await tenantDb
-        .selectFrom("org_config")
-        .select("setup_telephony_config")
-        .executeTakeFirstOrThrow();
-      expect(config.setup_telephony_config).not.toBeNull();
-      expect(Buffer.isBuffer(config.setup_telephony_config)).toBe(true);
-
-      // care-y-ignore-next-line server-no-decrypt -- operational credentials (Twilio config), not E2EE client data. Test verifies encrypt/store round-trip.
-      const decrypted = secretsEncryptor.decrypt(
-        config.setup_telephony_config!,
-      );
-      const parsed = JSON.parse(decrypted.toString("utf8")) as Record<
-        string,
-        string
-      >;
-      expect(parsed.mode).toBe("byot");
-      expect(parsed.provider).toBe("twilio");
-      expect(parsed.accountSid).toBe("AC1234567890");
-      expect(parsed.authToken).toBe("secret-auth-token");
-    });
-
-    it("stores managed mode with mode-only config", async () => {
-      const result = await svc.saveTelephonyChoice({
-        mode: "managed",
-      });
-
-      expect(result.mode).toBe("managed");
-
-      const config = await tenantDb
-        .selectFrom("org_config")
-        .select("setup_telephony_config")
-        .executeTakeFirstOrThrow();
-
-      // care-y-ignore-next-line server-no-decrypt -- operational credentials (Twilio config), not E2EE client data. Test verifies encrypt/store round-trip.
-      const decrypted = secretsEncryptor.decrypt(
-        config.setup_telephony_config!,
-      );
-      const parsed = JSON.parse(decrypted.toString("utf8")) as Record<
-        string,
-        string
-      >;
-      expect(parsed.mode).toBe("managed");
-      expect(parsed.accountSid).toBeUndefined();
-      expect(parsed.authToken).toBeUndefined();
     });
   });
 });

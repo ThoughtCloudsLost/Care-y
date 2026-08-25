@@ -55,17 +55,6 @@ export const revokeInviteInputSchema = z.object({
   tokenId: inviteTokenIdSchema,
 });
 
-/** Save telephony mode choice during setup (step 5). */
-export const saveTelephonyChoiceInputSchema = z.discriminatedUnion("mode", [
-  z.object({
-    mode: z.literal("byot"),
-    accountSid: z.string().min(1),
-    authToken: z.string().min(1),
-  }),
-  z.object({ mode: z.literal("managed") }),
-  z.object({ mode: z.literal("skip") }),
-]);
-
 /** Wrap the org secret key for a specific user (admin auto-wrap). */
 export const wrapOrgKeyForUserSchema = z.object({
   userId: userIdSchema,
@@ -87,9 +76,6 @@ export type RegisterFromInviteInput = z.infer<
   typeof registerFromInviteInputSchema
 >;
 export type GenerateInviteInput = z.infer<typeof generateInviteInputSchema>;
-export type SaveTelephonyChoiceInput = z.infer<
-  typeof saveTelephonyChoiceInputSchema
->;
 export type RevokeInviteInput = z.infer<typeof revokeInviteInputSchema>;
 export type WrapOrgKeyForUserInput = z.infer<typeof wrapOrgKeyForUserSchema>;
 export type UnwrappedUser = z.infer<typeof unwrappedUserSchema>;

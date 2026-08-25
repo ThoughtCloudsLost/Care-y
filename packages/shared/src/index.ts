@@ -500,7 +500,6 @@ export {
   registerFromInviteInputSchema,
   generateInviteInputSchema,
   revokeInviteInputSchema,
-  saveTelephonyChoiceInputSchema,
   wrapOrgKeyForUserSchema,
   unwrappedUserSchema,
   type BootstrapAdminInput,
@@ -509,7 +508,6 @@ export {
   type RegisterFromInviteInput,
   type GenerateInviteInput,
   type RevokeInviteInput,
-  type SaveTelephonyChoiceInput,
   type WrapOrgKeyForUserInput,
   type UnwrappedUser,
 } from "./schemas/onboarding.js";
