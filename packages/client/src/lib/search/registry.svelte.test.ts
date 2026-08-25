@@ -605,6 +605,31 @@ describe("edge cases", () => {
       unregB();
     });
 
+    it("orders multiple overridden providers ahead of the rest", () => {
+      const unregA = registerSearchProvider(
+        mockProvider("tickets", [{ id: "t1" }]),
+      );
+      const unregB = registerSearchProvider(mockProvider("kb", [{ id: "k1" }]));
+      const unregC = registerSearchProvider(
+        mockProvider("conversation", [{ id: "c1" }]),
+      );
+
+      // Ticket-detail shape: conversation first, library second,
+      // tickets fall to the back despite registering first.
+      const clearOverride = setPromotedOverride("conversation", "kb");
+      const groups = searchAll("test query", "tickets");
+      expect(groups.map((g) => g.providerId)).toEqual([
+        "conversation",
+        "kb",
+        "tickets",
+      ]);
+
+      clearOverride();
+      unregA();
+      unregB();
+      unregC();
+    });
+
     it("cleanup only clears if override has not been replaced", () => {
       const unregA = registerSearchProvider(mockProvider("kb", [{ id: "k1" }]));
       const unregB = registerSearchProvider(

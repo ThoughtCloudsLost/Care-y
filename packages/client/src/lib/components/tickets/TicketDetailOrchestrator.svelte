@@ -571,7 +571,9 @@
         },
       }),
     );
-    const clearPromoted = setPromotedOverride("conversation");
+    // This ticket's conversation first, then library articles: while working
+    // a ticket, reference material is more useful than other tickets.
+    const clearPromoted = setPromotedOverride("conversation", "kb");
 
     return () => {
       unregister();
