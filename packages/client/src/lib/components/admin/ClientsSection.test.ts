@@ -408,8 +408,6 @@ describe("ClientsSection", () => {
       render(ClientsSection, {
         props: { isError: true, error: new Error("fail") },
       });
-      // The detail sheet stub is always mounted, so pick the QueryError stub
-      // by the absence of a sheet title.
       const shells = screen.getAllByTestId("passthrough-shell");
       const queryError = shells.find(
         (el) => el.getAttribute("data-title") === null,
@@ -421,17 +419,16 @@ describe("ClientsSection", () => {
       render(ClientsSection, {
         props: { clients: [] },
       });
-      // EmptyState is stubbed to PassthroughShell; look for it
-      const shells = screen.getAllByTestId("passthrough-shell");
-      expect(shells.length).toBeGreaterThanOrEqual(1);
+      expect(screen.getByText("No clients found")).toBeTruthy();
     });
 
     it("renders client rows when data is present", () => {
       const clients = [makeClient("c-1"), makeClient("c-2")];
-      const { container } = render(ClientsSection, {
+      render(ClientsSection, {
         props: { clients },
       });
-      expect(container.querySelector(".clients-section")).toBeTruthy();
+      const buttons = screen.getAllByRole("button");
+      expect(buttons.length).toBeGreaterThanOrEqual(2);
     });
 
     it("shows correct number of client items", () => {

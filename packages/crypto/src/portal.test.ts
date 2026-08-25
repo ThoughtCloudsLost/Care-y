@@ -50,6 +50,8 @@ describe("portal key derivation", () => {
     });
 
     it("matches an independent crypto_hash_sha512 slice", () => {
+      // Contract: browser and server each derive the channel id from the seed
+      // with this exact formula; changing it orphans every existing channel.
       const seed = generatePortalSeed();
       const channelId = deriveChannelId(seed);
 
@@ -405,6 +407,8 @@ describe("portal key derivation", () => {
 
   describe("HKDF_LABELS constants", () => {
     it("portal labels have the expected values", () => {
+      // Contract: every stored portal-derived key depends on these literals;
+      // changing one invalidates all previously derived keys.
       expect(HKDF_LABELS.PORTAL_AUTH).toBe("care-y-portal-auth-v1");
       expect(HKDF_LABELS.PORTAL_SALT).toBe("care-y-portal-salt-v1");
       expect(HKDF_LABELS.PORTAL_ECIES).toBe("care-y-portal-ecies-v1");

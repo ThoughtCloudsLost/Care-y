@@ -516,15 +516,18 @@ describe.skipIf(!process.env.DATABASE_URL)("089_intake_forms migration", () => {
   // -------------------------------------------------------------------
 
   it("has web_intake_enabled column defaulting to true", async () => {
+    await testDb.db
+      .insertInto("org_config")
+      .values({ pii_retention_days: null })
+      .onConflict((oc) => oc.doNothing())
+      .execute();
+
     const result = await testDb.db
       .selectFrom("org_config")
       .select("web_intake_enabled")
-      .executeTakeFirst();
+      .executeTakeFirstOrThrow();
 
-    // org_config is seeded with one row by createTestDb
-    if (result != null) {
-      expect(result.web_intake_enabled).toBe(true);
-    }
+    expect(result.web_intake_enabled).toBe(true);
   });
 
   it("web_intake_enabled column exists in information_schema", async () => {

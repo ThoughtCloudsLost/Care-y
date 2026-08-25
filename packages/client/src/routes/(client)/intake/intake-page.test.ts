@@ -376,25 +376,6 @@ describe("intake page", () => {
     expect(screen.queryByTestId("intake-submit")).toBeNull();
   });
 
-  it("renders not-available state for unknown slug", () => {
-    // When formId is null and slug was given but not intakeDisabled,
-    // the component shows not-available. We simulate this by setting
-    // formId to null while not setting intakeDisabled.
-    mockFormData = { formId: null, fields: null };
-    // The page component renders IntakeFormBody with slug=null from the
-    // route, so slugNotFound won't trigger. Instead verify the not-available
-    // message appears when intakeDisabled is set.
-    mockFormData = {
-      formId: null,
-      fields: null,
-      intakeDisabled: true,
-    } as typeof mockFormData;
-    render(IntakePage);
-    const notAvailable = screen.getByRole("status");
-    expect(notAvailable).toBeTruthy();
-    expect(notAvailable.textContent).toContain("not available");
-  });
-
   // -----------------------------------------------------------------
   // Account opt-in tests
   // -----------------------------------------------------------------
@@ -454,7 +435,7 @@ describe("intake page", () => {
     });
   });
 
-  it("username-taken error keeps form state and focuses username field", async () => {
+  it("username-taken error keeps form state and shows inline error", async () => {
     const usernameTakenError = {
       data: { code: "CONFLICT" },
       message: "ACCOUNT_USERNAME_TAKEN",

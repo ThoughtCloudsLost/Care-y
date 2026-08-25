@@ -94,7 +94,9 @@ describe("PortalThread", () => {
     const thread = getByTestId("portal-thread");
     expect(thread.getAttribute("role")).toBe("log");
 
-    const bubbles = container.querySelectorAll(".msg");
+    const bubbles = container.querySelectorAll(
+      "[data-testid='conversation-bubble']",
+    );
     expect(bubbles.length).toBe(2);
 
     const received = container.querySelector('[data-direction="received"]');
@@ -121,7 +123,9 @@ describe("PortalThread", () => {
       },
     });
 
-    const speakerLabels = container.querySelectorAll(".msg-who");
+    const speakerLabels = container.querySelectorAll(
+      "[data-testid='bubble-speaker']",
+    );
     expect(speakerLabels.length).toBe(1);
   });
 
@@ -146,7 +150,9 @@ describe("PortalThread", () => {
       },
     });
 
-    const editedMarkers = container.querySelectorAll(".msg-edited");
+    const editedMarkers = container.querySelectorAll(
+      "[data-testid='bubble-edited']",
+    );
     expect(editedMarkers.length).toBeGreaterThan(0);
   });
 

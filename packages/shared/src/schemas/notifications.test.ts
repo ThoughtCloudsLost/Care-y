@@ -150,9 +150,10 @@ describe("systemSseEventSchema", () => {
     });
     // Zod object schemas strip unknown keys by default; verify
     // that a successful parse produces only type + timestamp.
+    expect(result.success).toBe(true);
     if (result.success) {
-      const keys = Object.keys(result.data);
-      expect(keys).toEqual(["type", "timestamp"]);
+      const keys = Object.keys(result.data).sort();
+      expect(keys).toEqual(["timestamp", "type"]);
     }
   });
 });

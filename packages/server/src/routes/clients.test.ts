@@ -941,13 +941,22 @@ describe.skipIf(!process.env.DATABASE_URL)(
       });
 
       it("excludes consultant reachability rows from phoneHashes", async () => {
-        // The getPhoneHashes query joins only clients + phones, never
-        // consultant_reachability. This test verifies that a consultant
-        // reachability row with a phone hash does not leak into the merge
-        // scan phone hashes. We just verify the query does not join the
-        // consultant table by checking that only client-sourced hashes
-        // appear. (Consultant reachability rows live in a separate table
-        // with their own HKDF label per migration 087.)
+        const consultantUser = await createTestUser(tenantDb, {
+          overrides: { role_id: RoleId.VOLUNTEER },
+        });
+        const consultantPhoneHash = ("cons-sentinel-" +
+          "a".repeat(112)) as OpsPhoneHash;
+
+        // care-y-ignore-next-line no-plaintext-db-write -- ops_phone_hash is a blind index for test verification
+        await tenantDb
+          .insertInto("consultants")
+          .values({
+            user_id: consultantUser.id,
+            preferred_call_method: "phone_callback",
+            ops_phone_hash: consultantPhoneHash,
+          })
+          .execute();
+
         const manager = await createTestUser(tenantDb, {
           overrides: { role_id: RoleId.MANAGER },
         });
@@ -959,15 +968,11 @@ describe.skipIf(!process.env.DATABASE_URL)(
         });
 
         const result = await caller.clients.mergeScanData();
-        // All phoneHash entries should reference actual client IDs
-        for (const entry of result.phoneHashes) {
-          const client = await tenantDb
-            .selectFrom("clients")
-            .select("id")
-            .where("id", "=", entry.clientId as ClientId)
-            .executeTakeFirst();
-          expect(client).toBeDefined();
-        }
+        const leaked = result.phoneHashes.find(
+          (ph) =>
+            (ph.phoneMatchHash as string) === (consultantPhoneHash as string),
+        );
+        expect(leaked).toBeUndefined();
       });
     });
 

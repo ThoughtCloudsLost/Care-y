@@ -236,17 +236,32 @@ describe("IntakeFieldRenderer", () => {
       expect(screen.getByText("Test field")).toBeTruthy();
     });
 
-    it("reflects checked state from value prop", () => {
+    it("reflects checked state from value prop (true)", () => {
       const { container } = render(IntakeFieldRenderer, {
         props: makeProps({
           config: { type: "checkbox" },
           value: true,
         }),
       });
-      // Konsta Checkbox renders an input[type=checkbox] internally
-      const checkbox = container.querySelector("input[type='checkbox']");
-      // The checkbox should be checked (value=true)
+      const checkbox = container.querySelector(
+        "input[type='checkbox']",
+      ) as HTMLInputElement | null;
       expect(checkbox).not.toBeNull();
+      expect(checkbox!.checked).toBe(true);
+    });
+
+    it("reflects checked state from value prop (false)", () => {
+      const { container } = render(IntakeFieldRenderer, {
+        props: makeProps({
+          config: { type: "checkbox" },
+          value: false,
+        }),
+      });
+      const checkbox = container.querySelector(
+        "input[type='checkbox']",
+      ) as HTMLInputElement | null;
+      expect(checkbox).not.toBeNull();
+      expect(checkbox!.checked).toBe(false);
     });
 
     it("emits toggled boolean on change", async () => {

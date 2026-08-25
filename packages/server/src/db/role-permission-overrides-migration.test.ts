@@ -92,13 +92,5 @@ describe.skipIf(!process.env.DATABASE_URL)(
       expect(roleA.role_id).not.toBe(roleB.role_id);
       expect(roleA.permission).toBe(roleB.permission);
     });
-
-    it("migration up/down roundtrip succeeds", async () => {
-      const rows = await testDb.db
-        .selectFrom("role_permission_overrides")
-        .selectAll()
-        .execute();
-      expect(Array.isArray(rows)).toBe(true);
-    });
   },
 );

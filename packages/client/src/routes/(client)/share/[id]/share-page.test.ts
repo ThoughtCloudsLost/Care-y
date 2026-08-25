@@ -184,8 +184,7 @@ describe("share view page", () => {
     mockMutateFn.mockReturnValue(new Promise(() => undefined)); // never resolves
     render(SharePage);
     // Preloader should be visible during loading
-    const preloader = document.querySelector(".share-preloader-center");
-    expect(preloader).toBeTruthy();
+    expect(screen.getByTestId("share-loading")).toBeTruthy();
   });
 
   it("renders content when openShare returns ready and decryption succeeds", async () => {

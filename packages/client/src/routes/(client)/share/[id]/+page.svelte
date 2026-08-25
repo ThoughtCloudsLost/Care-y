@@ -88,7 +88,7 @@
 
 {#if viewState.kind === "loading"}
   <Block class="share-loading">
-    <div class="share-preloader-center">
+    <div class="share-preloader-center" data-testid="share-loading">
       <Preloader />
     </div>
   </Block>

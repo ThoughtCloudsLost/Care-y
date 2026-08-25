@@ -2,16 +2,11 @@
  * Tests for merge candidate detection Worker logic.
  *
  * Tests extractContactsFromResponse (pure function, no crypto) and
- * verifies the detection response shape never contains contact values.
+ * cross-channel phone normalization.
  */
 
 import { describe, it, expect } from "vitest";
 import { extractContactsFromResponse } from "./crypto-core.js";
-
-// vi.mock required: @care-y/crypto barrel triggers libsodium WASM
-// initialization via getSodium() singleton. The import is transitive
-// through crypto-core.ts. Tests here only exercise the extraction
-// helper which does not call any crypto functions.
 
 describe("extractContactsFromResponse", () => {
   describe("role-tagged fields", () => {
@@ -207,51 +202,6 @@ describe("extractContactsFromResponse", () => {
       expect(result.phones).toEqual([]);
     });
   });
-
-  describe("response shape security", () => {
-    it("never includes the matched values in the result", () => {
-      const response = JSON.stringify({
-        answers: [
-          {
-            fieldId: "f1",
-            fieldType: "text",
-            value: "+12125551234",
-          },
-          {
-            fieldId: "f2",
-            fieldType: "text",
-            value: "secret@example.com",
-          },
-        ],
-      });
-      const roles = new Map([
-        ["f1", "phone-contact"],
-        ["f2", "email-contact"],
-      ]);
-      const result = extractContactsFromResponse(response, roles);
-
-      // The phones and emails arrays contain normalized values for
-      // comparison, but they are internal to the Worker. The
-      // MergeCandidate response type contains only clientIdA,
-      // clientIdB, and matchKind. This test verifies the extraction
-      // function returns arrays (used for comparison) but the
-      // protocol type MergeCandidate has no contact value fields.
-      expect(result.phones.length).toBeGreaterThan(0);
-      expect(result.emails.length).toBeGreaterThan(0);
-
-      // Verify the type shape: MergeCandidate has no value fields
-      const candidate = {
-        clientIdA: "a",
-        clientIdB: "b",
-        matchKind: "phone" as const,
-      };
-      expect(Object.keys(candidate)).toEqual([
-        "clientIdA",
-        "clientIdB",
-        "matchKind",
-      ]);
-    });
-  });
 });
 
 describe("cross-channel phone match", () => {
@@ -284,33 +234,5 @@ describe("cross-channel phone match", () => {
     // Same comparison key means the same HMAC will be produced by the
     // Worker for both, enabling cross-channel matching via stored hashes.
     expect(normalizedTelephony).toBe(normalizedIntake);
-  });
-
-  it("no phone values or hashes appear in the MergeCandidate response shape", () => {
-    // The MergeCandidate type carries only clientIdA, clientIdB, matchKind.
-    // Verify the type shape at the value level.
-    const candidate = {
-      clientIdA: "a",
-      clientIdB: "b",
-      matchKind: "phone" as const,
-    };
-    const keys = Object.keys(candidate).sort();
-    expect(keys).toEqual(["clientIdA", "clientIdB", "matchKind"]);
-    // No phone, no hash, no email in the output.
-    expect(keys).not.toContain("phone");
-    expect(keys).not.toContain("phoneMatchHash");
-    expect(keys).not.toContain("email");
-  });
-
-  it("MergeScanClient no longer carries decryptedPhone", () => {
-    // The protocol type uses phoneMatchHash (opaque hash) instead of
-    // decryptedPhone (plaintext). Verify the shape at the value level.
-    const client = {
-      clientId: "c-1",
-      phoneMatchHash: "abcdef1234",
-      intakeResponses: [],
-    };
-    expect(Object.keys(client)).toContain("phoneMatchHash");
-    expect(Object.keys(client)).not.toContain("decryptedPhone");
   });
 });

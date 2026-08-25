@@ -167,7 +167,7 @@
         <span class="key-status {keyStatus.cls}">{keyStatus.label}</span>
         {#if reachabilityChip}
           {@const ReachIcon = reachabilityChip.icon}
-          <span class="reachability-chip">
+          <span class="reachability-chip" data-testid="reachability-chip">
             <ReachIcon size={10} aria-hidden="true" />
             {reachabilityChip.label}
           </span>

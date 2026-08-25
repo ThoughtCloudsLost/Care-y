@@ -45,6 +45,7 @@ export interface NotificationServiceDeps {
   readonly pushSender: PushNotificationSender;
   readonly jobQueue: JobQueue;
   readonly preferences: NotificationPreferencesService;
+  readonly getReachabilityForUsers?: typeof getReachabilityForUsers;
 }
 
 export interface NotificationService {
@@ -77,6 +78,8 @@ export interface NotificationService {
 export function createNotificationService(
   deps: NotificationServiceDeps,
 ): NotificationService {
+  const reachability = deps.getReachabilityForUsers ?? getReachabilityForUsers;
+
   return {
     async dispatch(
       tDb,
@@ -144,7 +147,7 @@ export function createNotificationService(
       let emailList: readonly UserId[];
 
       if (allow.smsAllowed.length > 0) {
-        const reach = await getReachabilityForUsers(tDb, allow.smsAllowed);
+        const reach = await reachability(tDb, allow.smsAllowed);
         const smsDeliverable = allow.smsAllowed.filter(
           (id) => reach.get(id) === "verified_sms",
         );
@@ -227,7 +230,7 @@ export function createNotificationService(
       let emailList: readonly UserId[];
 
       if (allow.smsAllowed.length > 0) {
-        const reach = await getReachabilityForUsers(tDb, allow.smsAllowed);
+        const reach = await reachability(tDb, allow.smsAllowed);
         const smsDeliverable = allow.smsAllowed.filter(
           (id) => reach.get(id) === "verified_sms",
         );

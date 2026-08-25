@@ -91,7 +91,7 @@ import {
 } from "./account-crypto.js";
 import { trpc } from "$lib/trpc/index.js";
 import { requireRouter } from "$lib/errors.js";
-import type { RistrettoPoint } from "@care-y/crypto";
+import type { RistrettoPoint, Salt } from "@care-y/crypto";
 import { evaluateWithPowRetry } from "$lib/auth/crypto-helpers.js";
 import type { LoginCryptoCallbacks } from "$lib/auth/login-crypto.js";
 
@@ -194,15 +194,22 @@ describe("accountLogin", () => {
     const callbacks = makeCallbacks();
     await accountLogin("user", "pass", callbacks);
 
-    expect(callbacks.onArgon2idStart).toHaveBeenCalledOnce();
-    expect(callbacks.onArgon2idDone).toHaveBeenCalledOnce();
-    expect(callbacks.onOprfStart).toHaveBeenCalledOnce();
-    expect(callbacks.onOprfDone).toHaveBeenCalledOnce();
-    expect(callbacks.onDeriveStart).toHaveBeenCalledOnce();
-    expect(callbacks.onDone).toHaveBeenCalledOnce();
+    const order = [
+      vi.mocked(callbacks.onArgon2idStart).mock.invocationCallOrder[0],
+      vi.mocked(callbacks.onArgon2idDone).mock.invocationCallOrder[0],
+      vi.mocked(callbacks.onOprfStart).mock.invocationCallOrder[0],
+      vi.mocked(callbacks.onOprfDone).mock.invocationCallOrder[0],
+      vi.mocked(callbacks.onDeriveStart).mock.invocationCallOrder[0],
+      vi.mocked(callbacks.onDone).mock.invocationCallOrder[0],
+    ];
+    for (let i = 1; i < order.length; i++) {
+      expect(order[i]).toBeGreaterThan(order[i - 1]!);
+    }
   });
 
-  it("zeroes key material via zeroAll in finally", async () => {
+  // Real zeroing behavior is verified by instrumented-backend tests
+  // in packages/crypto (client-account.security.test.ts).
+  it("invokes zeroAll in finally block", async () => {
     const { zeroAll } = await import("@care-y/crypto");
     const saltB64 = Buffer.from(new Uint8Array(16).fill(1)).toString(
       "base64url",
@@ -228,13 +235,28 @@ describe("buildAccountRegistration", () => {
 
   it("produces a fresh salt each call", async () => {
     const { generateSalt } = await import("@care-y/crypto");
+    const salt1 = new Uint8Array(16).fill(0xaa) as Salt;
+    const salt2 = new Uint8Array(16).fill(0xbb) as Salt;
+    vi.mocked(generateSalt)
+      .mockReturnValueOnce(salt1)
+      .mockReturnValueOnce(salt2);
     vi.mocked(evaluateWithPowRetry).mockResolvedValue(fakeEvaluatedB64);
 
     const callbacks = makeCallbacks();
-    await buildAccountRegistration("user1", "pass1", null, callbacks);
-    await buildAccountRegistration("user2", "pass2", null, callbacks);
+    const r1 = await buildAccountRegistration(
+      "user1",
+      "pass1",
+      null,
+      callbacks,
+    );
+    const r2 = await buildAccountRegistration(
+      "user2",
+      "pass2",
+      null,
+      callbacks,
+    );
 
-    expect(generateSalt).toHaveBeenCalledTimes(2);
+    expect(r1.payload.salt).not.toBe(r2.payload.salt);
   });
 
   it("keeps accountId when provided", async () => {

@@ -437,7 +437,6 @@ describe("createNotificationRouter", () => {
       });
 
       expect(result).toEqual({ saved: true });
-      // The route must call assertScopeAccessible before set.
       expect(assertSpy).toHaveBeenCalledWith(ctx.org?.tenantDb, ctx.user?.id, {
         scopeType: "global",
         scopeId: null,
@@ -450,6 +449,12 @@ describe("createNotificationRouter", () => {
         "push",
         false,
       );
+      // assertScopeAccessible must be called before set
+      const assertOrder = assertSpy.mock.invocationCallOrder[0];
+      const setOrder = setSpy.mock.invocationCallOrder[0];
+      expect(assertOrder).toBeDefined();
+      expect(setOrder).toBeDefined();
+      expect(assertOrder).toBeLessThan(setOrder!);
     });
 
     it("maps NotFoundError from assertScopeAccessible to NOT_FOUND", async () => {

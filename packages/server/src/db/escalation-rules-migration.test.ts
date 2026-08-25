@@ -296,22 +296,14 @@ describe.skipIf(!process.env.DATABASE_URL)(
     // Migration roundtrip
     // -----------------------------------------------------------------
 
-    it("migration up/down roundtrip succeeds", async () => {
-      // The createTestDb() call in beforeAll already ran the up migration.
-      // Verify the tables exist by selecting from them.
-      const rules = await testDb.db
-        .selectFrom("escalation_rules")
-        .selectAll()
-        .execute();
-      expect(Array.isArray(rules)).toBe(true);
+    it("tables and index exist after migration", async () => {
+      await testDb.db.selectFrom("escalation_rules").selectAll().execute();
 
-      const firings = await testDb.db
+      await testDb.db
         .selectFrom("escalation_rule_firings")
         .selectAll()
         .execute();
-      expect(Array.isArray(firings)).toBe(true);
 
-      // Verify the index exists via pg_indexes catalog (scoped to the test schema).
       const indexResult = await sql<{ indexname: string }>`
         SELECT indexname FROM pg_indexes
         WHERE schemaname = ${testDb.schemaName}

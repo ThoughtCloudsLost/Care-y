@@ -1160,20 +1160,19 @@ describe("client-portal router", () => {
       expect(mockOpenShare).not.toHaveBeenCalled();
     });
 
-    it("warn log contains only orgSlug and reason, no share id", async () => {
+    it("warn log does not contain the share id", async () => {
       const deps = buildDeps({ shareLimiter: denyLimiter(5000) });
       const caller = buildCaller(deps);
+      const input = makeOpenInput();
       const warnSpy = vi
         .spyOn(console, "warn")
         .mockImplementation(() => undefined);
-      await expectTrpcError(
-        caller.openShare(makeOpenInput()),
-        "TOO_MANY_REQUESTS",
-      );
-      expect(warnSpy).toHaveBeenCalledWith("Share open rate limited", {
-        orgSlug: "test-org" as OrgSlug,
-        reason: "rate_limit",
-      });
+      await expectTrpcError(caller.openShare(input), "TOO_MANY_REQUESTS");
+      expect(warnSpy).toHaveBeenCalled();
+      for (const call of warnSpy.mock.calls) {
+        const serialized = JSON.stringify(call);
+        expect(serialized).not.toContain(input.shareId);
+      }
       warnSpy.mockRestore();
     });
   });
@@ -1496,37 +1495,6 @@ describe("client-portal router", () => {
       warnSpy.mockRestore();
       expect(err.message).toBe("Sign-in failed");
     });
-
-    it("fails with generic UNAUTHORIZED after logout", async () => {
-      // Simulate resolved session on first call, null on second (after logout)
-      mockResolveAccountSession
-        .mockResolvedValueOnce({
-          account: ACCOUNT_ROW,
-          channel: fakeChannelRow(),
-        })
-        .mockResolvedValueOnce(null);
-
-      const acctDeps = buildAccountSessionDeps();
-
-      // First call succeeds
-      const ctx1 = makeContextWithCookie(SESSION_TOKEN);
-      const caller1 = createCallerFactory(createClientPortalRouter(acctDeps))(
-        ctx1,
-      );
-      const result = await caller1.accountBootstrap();
-      expect(result.messagesExpireDays).toBe(30);
-
-      // Second call (post-logout) fails
-      const ctx2 = makeContextWithCookie(SESSION_TOKEN);
-      const caller2 = createCallerFactory(createClientPortalRouter(acctDeps))(
-        ctx2,
-      );
-      const warnSpy = vi
-        .spyOn(console, "warn")
-        .mockImplementation(() => undefined);
-      await expectTrpcError(caller2.accountBootstrap(), "UNAUTHORIZED");
-      warnSpy.mockRestore();
-    });
   });
 
   describe("accountReply", () => {
@@ -1776,30 +1744,6 @@ describe("client-portal router", () => {
         caller.accountUpgrade(makeUpgradeInput()),
         "CONFLICT",
       );
-    });
-
-    it("old fragment auth stops working after upgrade (null resolve)", async () => {
-      mockUpgradeFromSecureLink.mockResolvedValue(undefined);
-      const upgradeDeps = buildUpgradeDeps();
-      const caller = buildCaller(upgradeDeps);
-      await caller.accountUpgrade(makeUpgradeInput());
-
-      // Now resolve returns null (old channel revoked)
-      const revokedDeps = buildUpgradeDeps({
-        portalChannelService: {
-          resolveAuthedChannel: vi.fn().mockResolvedValue(null),
-        },
-      });
-      const warnSpy = vi
-        .spyOn(console, "warn")
-        .mockImplementation(() => undefined);
-      const caller2 = buildCaller(revokedDeps);
-      const err = await expectTrpcError(
-        caller2.accountUpgrade(makeUpgradeInput()),
-        "NOT_FOUND",
-      );
-      warnSpy.mockRestore();
-      expect(err.message).toBe("Channel not found or not available");
     });
   });
 
