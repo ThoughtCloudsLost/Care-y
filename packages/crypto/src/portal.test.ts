@@ -357,6 +357,30 @@ describe("portal key derivation", () => {
       const kpB = derivePortalKeypair(seed, "hello world");
       expect(kpA.clientPrivate).toEqual(kpB.clientPrivate);
     }, 120_000);
+
+    it("collapses internal whitespace runs: double-spaced display text equals single-spaced", () => {
+      // The volunteer sheet displays words.join("  ") but derives from
+      // words.join(" "); a client typing what they see must still unlock.
+      const seed = generatePortalSeed();
+      const kpDouble = derivePortalKeypair(
+        seed,
+        "polish  naming  tilt  wrinkle",
+      );
+      const kpSingle = derivePortalKeypair(seed, "polish naming tilt wrinkle");
+      expect(kpDouble.clientPrivate).toEqual(kpSingle.clientPrivate);
+      expect(kpDouble.clientPublic).toEqual(kpSingle.clientPublic);
+    }, 120_000);
+
+    it("trims leading/trailing whitespace and normalizes newlines and tabs", () => {
+      const seed = generatePortalSeed();
+      const kpMessy = derivePortalKeypair(
+        seed,
+        "  polish\tnaming\n tilt wrinkle ",
+      );
+      const kpClean = derivePortalKeypair(seed, "polish naming tilt wrinkle");
+      expect(kpMessy.clientPrivate).toEqual(kpClean.clientPrivate);
+      expect(kpMessy.clientPublic).toEqual(kpClean.clientPublic);
+    }, 120_000);
   });
 
   describe("all outputs are distinct per seed", () => {

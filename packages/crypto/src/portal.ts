@@ -52,13 +52,19 @@ export const PORTAL_KEY_CHECK = "care-y-portal-check-v1";
 const MIN_SEED_BYTES = 18;
 
 /**
- * NFKC-normalize and lowercase a passphrase string.
- * Mirrors the normalization in shared/src/utils/normalize-alias.ts
- * (NFKC + toLowerCase) so a spoken passphrase retyped with different
- * casing or unicode form still derives the same keypair.
+ * NFKC-normalize, lowercase, trim, and collapse whitespace in a
+ * passphrase string. Mirrors the full normalization in
+ * shared/src/utils/normalize-alias.ts so a spoken passphrase retyped
+ * with different casing, unicode form, or word spacing still derives
+ * the same keypair. Whitespace carries no entropy in a diceware
+ * phrase; word identity and order are untouched.
  */
 function normalizePassphrase(passphrase: string): Uint8Array {
-  const normalized = passphrase.normalize("NFKC").toLowerCase();
+  const normalized = passphrase
+    .normalize("NFKC")
+    .toLowerCase()
+    .trim()
+    .replace(/\s+/g, " ");
   return encodeLabel(normalized);
 }
 
