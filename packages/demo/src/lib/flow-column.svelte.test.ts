@@ -63,9 +63,9 @@ describe("initColumnSlot", () => {
     expect(restingColumnRect().x).toBe(0);
   });
 
-  it("walk mode places the column in the right slot instantly", () => {
+  it("explore mode places the column in the right slot instantly", () => {
     setupWide();
-    initColumnSlot("walk");
+    initColumnSlot("explore");
     flushSync();
 
     expect(columnSlot()).toBe("right");
@@ -78,7 +78,7 @@ describe("initColumnSlot", () => {
     // measured the container. The slot must resolve against the width
     // that arrives afterwards, not the zero it was chosen under.
     setColumnWindowWidth(1200);
-    initColumnSlot("walk");
+    initColumnSlot("explore");
     setColumnContainer(WIDE_CW, 0);
     flushSync();
 
@@ -88,7 +88,7 @@ describe("initColumnSlot", () => {
 
   it("init snaps without animation (animated x equals resting x)", () => {
     setupWide();
-    initColumnSlot("walk");
+    initColumnSlot("explore");
     flushSync();
 
     // Animated and resting should match immediately (duration 0 snap)
@@ -126,7 +126,7 @@ describe("slot width", () => {
     flushSync();
     const left = restingColumnRect();
 
-    initColumnSlot("walk");
+    initColumnSlot("explore");
     flushSync();
     const right = restingColumnRect();
 
@@ -177,7 +177,7 @@ describe("evaluateColumnPressure flip depth", () => {
 
   it("flips a right column when the center passes its flip depth", () => {
     setupWide();
-    initColumnSlot("walk");
+    initColumnSlot("explore");
     flushSync();
 
     evaluateColumnPressure(holeCenteredAt(RIGHT_FLIP_X + 1));
@@ -258,7 +258,7 @@ describe("moveColumnToSlot", () => {
 
   it("is a no-op when the column already holds that slot", () => {
     setupWide();
-    initColumnSlot("walk");
+    initColumnSlot("explore");
     flushSync();
 
     moveColumnToSlot("right");
@@ -268,7 +268,7 @@ describe("moveColumnToSlot", () => {
   });
 
   it("covers a frame appearing on top of the column", () => {
-    // Entering walk spawns the frame centred in the left slot while the
+    // Entering explore spawns the frame centred in the left slot while the
     // column is still there. Its center lands at the column's midpoint,
     // short of the flip depth, so pressure alone leaves the two stacked.
     // The mode change moves the column instead.
@@ -371,7 +371,7 @@ describe("degenerate slot below 900px window", () => {
   it("resting and animated rects match in degenerate mode", () => {
     setColumnWindowWidth(800);
     setColumnContainer(760, 20);
-    initColumnSlot("walk");
+    initColumnSlot("explore");
     flushSync();
 
     expect(columnRect()).toEqual(restingColumnRect());

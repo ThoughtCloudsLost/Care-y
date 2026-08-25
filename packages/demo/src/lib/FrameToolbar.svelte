@@ -60,7 +60,7 @@
     onShrinkGrow: () => void;
     onToggleLink: () => void;
     onRoleChange: (role: RoleIdValue) => void;
-    /** Close the frame: leaves walk mode for read mode. */
+    /** Close the frame: leaves explore mode for read mode. */
     onClose: () => void;
     /** Pointer handlers wired to App.svelte's drag gesture system. */
     ondragstart: (e: PointerEvent) => void;
