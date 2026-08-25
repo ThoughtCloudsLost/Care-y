@@ -53,6 +53,21 @@ export interface SeedStructureDeps {
   readonly tokenizer: SessionTokenizer;
   /** Optional blob store. When absent, blob-backed rows (audio greetings, quarantine) are skipped. */
   readonly blobStore?: BlobStore;
+  /**
+   * Optional narrative voicemail clip for the quarantine rows. When
+   * present, quarantined voicemails carry this audio (and its duration)
+   * instead of the synthetic silence fallback, matching the clip the
+   * ticket voicemails play.
+   */
+  readonly voicemailAudio?: {
+    readonly bytes: Uint8Array;
+    readonly durationSeconds: number;
+  };
+  /**
+   * Optional English answer-greeting clip. When present, the audio
+   * greeting row plays this instead of the synthetic silence fallback.
+   */
+  readonly greetingAudioEn?: { readonly bytes: Uint8Array };
 }
 
 // Word lists for alias generation (subset of server alias-generator)
@@ -487,7 +502,7 @@ export async function seedStructure(
       phone_number: "+15550001234",
       greeting_type: "answer",
       locale: "en",
-      text: "Thank you for calling Handbook Example Org. Your call is important to us.",
+      text: "Thank you for calling Handbook Example Org. All calls are confidential.",
       is_audio: false,
       audio_blob_key: null,
       audio_content_type: null,
@@ -496,7 +511,7 @@ export async function seedStructure(
       phone_number: "+15550001234",
       greeting_type: "answer",
       locale: "es",
-      text: "Gracias por llamar a Handbook Example Org. Su llamada es importante para nosotros.",
+      text: "Gracias por llamar a Handbook Example Org. Todas las llamadas son confidenciales.",
       is_audio: false,
       audio_blob_key: null,
       audio_content_type: null,
@@ -505,7 +520,7 @@ export async function seedStructure(
       phone_number: "+15550001234",
       greeting_type: "language_prompt",
       locale: "en",
-      text: "For English, press 1. Para espanol, oprima el 2.",
+      text: "For English, press 1. Para español, oprima el 2.",
       is_audio: false,
       audio_blob_key: null,
       audio_content_type: null,
@@ -537,12 +552,13 @@ export async function seedStructure(
       audio_blob_key: null,
       audio_content_type: null,
     },
-    // Crisis line greetings
+    // Crisis line greetings. The English answer greeting is the audio
+    // row (pushed below when a blob store exists); Spanish is text.
     {
       phone_number: "+15550005678",
       greeting_type: "answer",
-      locale: "en",
-      text: "You have reached the Harbor crisis line. A trained volunteer is available to help.",
+      locale: "es",
+      text: "Ha llamado a nuestra línea de crisis. Un voluntario capacitado está disponible para ayudarle.",
       is_audio: false,
       audio_blob_key: null,
       audio_content_type: null,
@@ -566,20 +582,22 @@ export async function seedStructure(
   // Greeting audio is NOT encrypted (stored as raw audio in the blob store,
   // served via a public HTTP handler at /api/greetings/<blobKey>).
   if (deps.blobStore !== undefined) {
-    const audioWav = generateMinimalWav();
+    const greetingBytes = deps.greetingAudioEn?.bytes ?? generateMinimalWav();
+    const greetingContentType =
+      deps.greetingAudioEn !== undefined ? "audio/mp4" : "audio/wav";
     const audioBlobKey = await deps.blobStore.put(
       DEMO_ORG_SCHEMA,
       "greeting",
-      Buffer.from(audioWav),
+      Buffer.from(greetingBytes),
     );
     greetings.push({
       phone_number: "+15550005678",
       greeting_type: "answer",
-      locale: "es",
+      locale: "en",
       text: "",
       is_audio: true,
       audio_blob_key: audioBlobKey,
-      audio_content_type: "audio/wav",
+      audio_content_type: greetingContentType,
     });
   }
 
@@ -609,7 +627,7 @@ export async function seedStructure(
     {
       response_type: "auto_reply",
       locale: "es",
-      text: "Recibimos su mensaje. Un voluntario le contactara pronto.",
+      text: "Recibimos su mensaje. Un voluntario le contactará pronto.",
     },
     {
       response_type: "after_hours",
@@ -619,7 +637,7 @@ export async function seedStructure(
     {
       response_type: "after_hours",
       locale: "es",
-      text: "Nuestra linea de apoyo esta cerrada en este momento. Responderemos durante el proximo turno disponible.",
+      text: "Nuestra línea de apoyo está cerrada en este momento. Responderemos durante el próximo turno disponible.",
     },
     {
       response_type: "new_client",
@@ -694,10 +712,14 @@ export async function seedStructure(
 
     const quarantineNow = Date.now();
     for (const qr of quarantineRows) {
-      // Generate a minimal valid WAV and seal it exactly as the product does:
-      // crypto_box_seal on the raw audio bytes. QuarantinePlayer decrypts
-      // via orgKeyManager.decrypt (crypto_box_seal_open).
-      const rawAudio = Buffer.from(generateMinimalWav());
+      // Use the narrative voicemail clip when provided (same audio the
+      // ticket voicemails play); otherwise generate a minimal valid WAV.
+      // Either way, seal exactly as the product does: crypto_box_seal on
+      // the raw audio bytes. QuarantinePlayer decrypts via
+      // orgKeyManager.decrypt (crypto_box_seal_open).
+      const rawAudio = Buffer.from(
+        deps.voicemailAudio?.bytes ?? generateMinimalWav(),
+      );
       const sealedAudio = sealedBox.sealBuffer(rawAudio);
       rawAudio.fill(0);
 
@@ -714,7 +736,8 @@ export async function seedStructure(
           call_sid: qr.callSid,
           blob_key: blobKey,
           size_bytes: sealedAudio.length,
-          duration_seconds: qr.durationSeconds,
+          duration_seconds:
+            deps.voicemailAudio?.durationSeconds ?? qr.durationSeconds,
           reason: qr.reason,
           status: "pending",
           client_id: null,

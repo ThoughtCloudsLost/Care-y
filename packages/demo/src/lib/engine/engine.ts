@@ -173,6 +173,8 @@ export type { OutboxEntry } from "./outbox.js";
 /** Options for bootDemoEngine. All fields are optional for backward compat. */
 export interface BootDemoEngineOptions {
   mediaAssets?: SeedMediaAssets;
+  /** English answer-greeting clip for the admin Greetings section. */
+  greetingAudioEn?: { bytes: Uint8Array };
 }
 
 // ── Boot ────────────────────────────────────────────────────────────
@@ -285,6 +287,8 @@ export async function bootDemoEngine(
     hasher,
     tokenizer,
     blobStore,
+    voicemailAudio: opts?.mediaAssets?.voicemailAudio,
+    greetingAudioEn: opts?.greetingAudioEn,
   });
   timings.push({ label: "seed-structure", ms: timeMs() - t5 });
 

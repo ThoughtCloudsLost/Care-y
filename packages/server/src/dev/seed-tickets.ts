@@ -99,6 +99,18 @@ export async function seedTestTickets(
     callStatus?: string;
     /** Call duration in seconds, written to followups.call_duration_seconds. */
     callDurationSeconds?: number;
+    /**
+     * Reactions to seed on this follow-up (internal notes only in the
+     * UI). Reacting user is another active user when one exists, else
+     * the seeded volunteer.
+     */
+    reactions?: { reaction: string; agoMinutes: number }[];
+    /**
+     * Author for volunteer follow-ups. Defaults to the seeded volunteer.
+     * Set to another user's id so a thread can show a real handoff
+     * (earlier messages and notes belong to the previous volunteer).
+     */
+    authorId?: string;
   }
 
   interface MediaDef {
@@ -197,23 +209,45 @@ export async function seedTestTickets(
   }
 
   const me = userId;
+
+  // Reacting user for seeded note reactions: prefer another active user
+  // (roster volunteer) so the reaction reads as team feedback rather
+  // than the author reacting to their own note.
+  const otherUser = await tDb
+    .selectFrom("users")
+    .select("id")
+    .where("id", "!=", me)
+    .where("is_active", "=", true)
+    .executeTakeFirst();
+  const reactingUserId = otherUser?.id ?? me;
+
   const ticketDefs: TicketDef[] = [
     // --- MY TICKETS (assigned to me) ---
     {
       title: "Help with housing",
       description: "Client needs housing referral and support",
       queue: "Housing",
-      priority: "normal",
+      // High matches the priority_changed event in the thread below.
+      priority: "high",
+      // One unread client reply (the check-in text minutes ago). The
+      // thread's final exchange is the newest activity of any seeded
+      // ticket, so under the default recent-activity sort the story
+      // ticket stays on top even after the unread pill clears.
+      unreadSince: 15,
       assignedTo: me,
       onHold: false,
       withKeyWrap: true,
       createdAgo: 4320, // 3 days
       followUps: [
+        // Day 1: intake conversation and the shelter list. The first
+        // shift's volunteer (another roster user when available) handles
+        // this stretch; the seeded volunteer takes over at the handoff
+        // below, which is why the reassignment events name two people.
         {
-          content: "Assigned to Dev Admin",
+          content: "Volunteer assigned",
           source: "system",
           type: "volunteer_assigned",
-          eventParams: { userId: me },
+          eventParams: { userId: reactingUserId },
           agoMinutes: 4310,
         },
         {
@@ -222,15 +256,37 @@ export async function seedTestTickets(
           agoMinutes: 4300,
         },
         {
+          content:
+            "My sister said I can only stay with her through the weekend",
+          source: "client",
+          agoMinutes: 4297,
+        },
+        {
           content: "I can look into shelters in your area",
           source: "volunteer",
+          authorId: reactingUserId,
           agoMinutes: 4200,
         },
-        // SMS exchange: volunteer sends shelter list, client confirms
         {
-          content: "Sent you a list of shelters and their open hours",
+          content:
+            "Is it ok if I text you a list, or would a call work better?",
+          source: "volunteer",
+          authorId: reactingUserId,
+          agoMinutes: 4197,
+        },
+        {
+          content: "Texting is fine",
+          source: "client",
+          agoMinutes: 4190,
+        },
+        // The list itself, pasted from the library's housing referral
+        // contacts article the way a volunteer actually sends it.
+        {
+          content:
+            "Here is the list we keep: the city emergency shelter is walk-in, open 24/7. The family shelter takes families with children but needs a referral, which we can provide. The east side shelter's intake desk is open 10am to 8pm, call right at 10 for same-day beds",
           source: "volunteer",
           type: "sms_outbound",
+          authorId: reactingUserId,
           agoMinutes: 4180,
         },
         {
@@ -241,41 +297,109 @@ export async function seedTestTickets(
         },
         {
           content:
-            "Client sounds stressed but stable. Shelter list sent via SMS.",
+            "First call went well, client is safe through the weekend. Texted the shelter list, will follow up tomorrow.",
           source: "volunteer",
           type: "internal_note",
           isPrivate: true,
+          authorId: reactingUserId,
           agoMinutes: 4140,
         },
-        // Hold cycle
+        // Day 2: waitlist news. The hold starts only once the client is
+        // waiting days on the shelter's callback, not mid-conversation.
+        {
+          content:
+            "Two of them were full but the one on the east side said to call back after 10",
+          source: "client",
+          agoMinutes: 2900,
+        },
+        {
+          content:
+            "That one usually has space midweek. Call right at 10 and mention our support line referred you",
+          source: "volunteer",
+          authorId: reactingUserId,
+          agoMinutes: 2880,
+        },
+        {
+          content:
+            "I left my name with their intake office, they said it could be a day or two before they call back",
+          source: "client",
+          agoMinutes: 2500,
+        },
+        {
+          content:
+            "Sounds good. I will put the ticket on hold until you hear from them, just text us when you do",
+          source: "volunteer",
+          authorId: reactingUserId,
+          agoMinutes: 2490,
+        },
         {
           content: "Put on hold",
           source: "system",
           type: "hold_placed",
-          agoMinutes: 2400,
+          agoMinutes: 2485,
+        },
+        {
+          content: "They called back! I have an intake meeting tomorrow at 9",
+          source: "client",
+          type: "sms_inbound",
+          agoMinutes: 2100,
         },
         {
           content: "Hold removed",
           source: "system",
           type: "hold_removed",
-          agoMinutes: 2000,
+          agoMinutes: 2090,
         },
-        // Volunteer reassignment cycle
+        {
+          content:
+            "That is great news. Text me after the meeting and let me know how it went",
+          source: "volunteer",
+          authorId: reactingUserId,
+          agoMinutes: 2085,
+        },
+        // Shift change: the first volunteer hands off to the seeded
+        // volunteer, so the unassign/assign pair names two people.
         {
           content: "Volunteer unassigned",
           source: "system",
           type: "volunteer_unassigned",
-          eventParams: { userId: me },
+          eventParams: { userId: reactingUserId },
           agoMinutes: 1800,
         },
         {
-          content: "Assigned to Dev Admin",
+          content: "Volunteer assigned",
           source: "system",
           type: "volunteer_assigned",
           eventParams: { userId: me },
           agoMinutes: 1790,
         },
-        // Merge note
+        {
+          content:
+            "Hi, I am covering this shift and picking up your case. I have read through the thread, no need to repeat anything",
+          source: "volunteer",
+          agoMinutes: 1780,
+        },
+        // The client texted from a second phone, which opened a separate
+        // ticket. The two messages below precede the merge event, exactly
+        // where merged-in messages land in the timeline.
+        {
+          content: "It is me, I am on my way to the intake meeting",
+          source: "client",
+          type: "sms_inbound",
+          agoMinutes: 1700,
+        },
+        {
+          content: "Do I need to bring anything besides the letter?",
+          source: "client",
+          type: "sms_inbound",
+          agoMinutes: 1695,
+        },
+        {
+          content: "Sorry, I think I texted you from my work phone earlier",
+          source: "client",
+          type: "sms_inbound",
+          agoMinutes: 1610,
+        },
         {
           content: "",
           source: "system",
@@ -283,9 +407,26 @@ export async function seedTestTickets(
           agoMinutes: 1600,
         },
         {
+          content:
+            "No problem at all, I pulled those messages into this conversation. The letter and your ID are all you need",
+          source: "volunteer",
+          agoMinutes: 1595,
+        },
+        {
+          content: "The intake worker was really kind",
+          source: "client",
+          agoMinutes: 1445,
+        },
+        {
           content: "Thank you, any help is appreciated",
           source: "client",
           agoMinutes: 1440,
+        },
+        {
+          content:
+            "Glad it went well. I am raising the priority so the weekend shift keeps an eye on this until you are settled",
+          source: "volunteer",
+          agoMinutes: 1435,
         },
         {
           content: "Priority changed to high",
@@ -294,11 +435,25 @@ export async function seedTestTickets(
           eventParams: { to: "high" },
           agoMinutes: 1430,
         },
+        // Closed after intake looked settled, reopened when the bed fell through
+        {
+          content:
+            "Glad the intake went well. I will close this for now, text us any time",
+          source: "volunteer",
+          agoMinutes: 725,
+        },
         {
           content: "Status changed to closed",
           source: "system",
           type: "status_closed",
           agoMinutes: 720,
+        },
+        {
+          content:
+            "The bed fell through. They gave it away because I was at work and missed their call",
+          source: "client",
+          type: "sms_inbound",
+          agoMinutes: 365,
         },
         {
           content: "Status changed to open",
@@ -309,8 +464,9 @@ export async function seedTestTickets(
         // Call attempts and the media cluster stay at the recent end
         // of the thread: the conversation is virtualized and the story
         // walk highlights these elements, so they must be inside the
-        // mounted window. Narratively the missed call leads into the
-        // client's voicemail.
+        // mounted window. The narrative runs from a missed call and a
+        // text through the client's voicemail into a completed call
+        // that sorts out a held bed, confirmed by photo and checklist.
         {
           content: "",
           source: "volunteer",
@@ -319,28 +475,50 @@ export async function seedTestTickets(
           agoMinutes: 340,
         },
         {
-          content: "",
+          content: "Just tried to call you. I am on until 9 tonight",
           source: "volunteer",
-          type: "phone_call",
-          callStatus: "completed",
-          callDurationSeconds: 340,
-          agoMinutes: 330,
+          type: "sms_outbound",
+          agoMinutes: 338,
         },
         {
           content: "",
           source: "client",
           type: "voicemail",
-          agoMinutes: 300,
+          agoMinutes: 320,
           media: [{ kind: "recording" }],
         },
         {
           content: "",
+          source: "volunteer",
+          type: "phone_call",
+          callStatus: "completed",
+          callDurationSeconds: 340,
+          agoMinutes: 300,
+        },
+        {
+          content:
+            "Client sounds stressed but steadier after we spoke. The east side shelter is holding a bed until 8pm if they bring the referral letter.",
+          source: "volunteer",
+          type: "internal_note",
+          isPrivate: true,
+          agoMinutes: 290,
+          reactions: [{ reaction: "acknowledge", agoMinutes: 280 }],
+        },
+        {
+          content: "This is the letter they gave me at the desk",
           source: "client",
           agoMinutes: 240,
           media: [{ kind: "image", contentType: "image/jpeg" }],
         },
         {
-          content: "Attached the housing resource checklist",
+          content:
+            "That is the referral confirmation, you are all set for tonight",
+          source: "volunteer",
+          agoMinutes: 235,
+        },
+        {
+          content:
+            "Attached the housing checklist we went over. Bring your ID and the letter",
           source: "volunteer",
           agoMinutes: 180,
           media: [
@@ -350,6 +528,18 @@ export async function seedTestTickets(
               contentType: "text/plain",
             },
           ],
+        },
+        {
+          content:
+            "Checked in a few minutes ago. Thank you for staying on this",
+          source: "client",
+          type: "sms_inbound",
+          agoMinutes: 5,
+        },
+        {
+          content: "Really glad to hear it. I will check in with you tomorrow",
+          source: "volunteer",
+          agoMinutes: 2,
         },
       ],
     },
@@ -364,7 +554,8 @@ export async function seedTestTickets(
       createdAgo: 10080, // 7 days
       followUps: [
         {
-          content: "Referred to legal aid org",
+          content:
+            "Referred you to the legal aid clinic downtown. They do intake on Tuesdays and Thursdays",
           source: "volunteer",
           agoMinutes: 10000,
         },
@@ -372,6 +563,11 @@ export async function seedTestTickets(
           content: "They said they would call me back",
           source: "client",
           agoMinutes: 8640,
+        },
+        {
+          content: "Should I just wait or call them again?",
+          source: "client",
+          agoMinutes: 8637,
         },
         {
           content: "",
@@ -386,18 +582,25 @@ export async function seedTestTickets(
           ],
         },
         {
-          content: "Still waiting, called again",
+          content:
+            "Left them a message on your behalf. Their intake line fills up fast in the mornings",
+          source: "volunteer",
+          agoMinutes: 7100,
+        },
+        {
+          content:
+            "Called again this morning and got through. You are on their callback list for this week",
           source: "volunteer",
           agoMinutes: 5760,
         },
+        // Client MMS: no filename (Twilio does not provide one)
         {
-          content: "",
+          content: "Here is the paper you asked me to send",
           source: "client",
           agoMinutes: 4320,
           media: [
             {
               kind: "image",
-              filename: "photo.png",
               contentType: "image/png",
             },
           ],
@@ -437,6 +640,11 @@ export async function seedTestTickets(
           agoMinutes: 170,
         },
         {
+          content: "Things at home have gotten worse this week",
+          source: "client",
+          agoMinutes: 168,
+        },
+        {
           content: "",
           source: "client",
           type: "voicemail",
@@ -454,11 +662,49 @@ export async function seedTestTickets(
           agoMinutes: 160,
         },
         {
+          content: "I can not really talk right now, texting is safer",
+          source: "client",
+          type: "sms_inbound",
+          agoMinutes: 150,
+        },
+        {
+          content: "That is completely fine, we can do everything by text",
+          source: "volunteer",
+          type: "sms_outbound",
+          agoMinutes: 148,
+        },
+        {
+          content:
+            "Have you been able to put together a bag of essentials somewhere safe?",
+          source: "volunteer",
+          type: "sms_outbound",
+          agoMinutes: 140,
+        },
+        {
+          content: "Not yet, I can do that tonight",
+          source: "client",
+          type: "sms_inbound",
+          agoMinutes: 130,
+        },
+        {
+          content:
+            "Start with documents, medications, and some cash if you can. We will go through the rest of the plan step by step",
+          source: "volunteer",
+          type: "sms_outbound",
+          agoMinutes: 120,
+        },
+        {
           content: "High-risk situation. Follow up within 24h per protocol.",
           source: "volunteer",
           type: "internal_note",
           isPrivate: true,
-          agoMinutes: 155,
+          agoMinutes: 100,
+        },
+        {
+          content: "Ok. Thank you",
+          source: "client",
+          type: "sms_inbound",
+          agoMinutes: 95,
         },
       ],
     },
@@ -477,11 +723,29 @@ export async function seedTestTickets(
           source: "client",
           agoMinutes: 20100,
         },
+        {
+          content: "It is the renewal packet, I do not understand section B",
+          source: "client",
+          agoMinutes: 20095,
+        },
+        {
+          content:
+            "We can go through it together. Are you free for a call this week?",
+          source: "volunteer",
+          agoMinutes: 20000,
+        },
+        {
+          content: "Thursday afternoon works",
+          source: "client",
+          agoMinutes: 19900,
+        },
       ],
     },
+    // Locked-state demo: no key wrap, so the title and description render
+    // as the encrypted/no-access fallback in the UI.
     {
-      title: "Encrypted intake note",
-      description: "Intake note from phone call, key wrap pending",
+      title: "Callback request from overnight line",
+      description: "Caller asked for a callback during business hours",
       queue: "Intake",
       priority: "normal",
       assignedTo: me,
@@ -510,6 +774,16 @@ export async function seedTestTickets(
           agoMinutes: 7100,
         },
         {
+          content: "Any word from the shelter yet?",
+          source: "client",
+          agoMinutes: 7000,
+        },
+        {
+          content: "Not yet. I will call them again this afternoon",
+          source: "volunteer",
+          agoMinutes: 6990,
+        },
+        {
           content: "Shelter said they will call when a bed opens",
           source: "volunteer",
           agoMinutes: 5760,
@@ -524,6 +798,12 @@ export async function seedTestTickets(
           content: "Still no word from them",
           source: "client",
           agoMinutes: 2880,
+        },
+        {
+          content:
+            "I know the waiting is hard. You are still on their list, I confirmed this morning",
+          source: "volunteer",
+          agoMinutes: 2870,
         },
         {
           content:
@@ -558,7 +838,18 @@ export async function seedTestTickets(
           agoMinutes: 14300,
         },
         {
-          content: "Working on getting the documentation together",
+          content: "My lawyer says it has to be notarized too",
+          source: "client",
+          agoMinutes: 14295,
+        },
+        {
+          content:
+            "Working on getting the documentation together. I will ask about the notary",
+          source: "volunteer",
+          agoMinutes: 14200,
+        },
+        {
+          content: "The letter is drafted, waiting on a signature",
           source: "volunteer",
           agoMinutes: 10080,
         },
@@ -600,12 +891,23 @@ export async function seedTestTickets(
       onHold: false,
       withKeyWrap: true,
       createdAgo: 45, // 45 minutes ago
-      unreadSince: 45, // opened at intake; the client reply below is unread
+      // No cursor: never-opened tickets announce via their New status
+      // mark, and the story ticket stays the sole unread-pill ticket.
       followUps: [
         {
           content: "Please help, I am in danger",
           source: "client",
           agoMinutes: 40,
+        },
+        {
+          content: "I can not stay here tonight",
+          source: "client",
+          agoMinutes: 38,
+        },
+        {
+          content: "Please call me back as soon as someone is free",
+          source: "client",
+          agoMinutes: 37,
         },
       ],
     },
@@ -625,6 +927,16 @@ export async function seedTestTickets(
           source: "client",
           agoMinutes: 85,
         },
+        {
+          content: "I have to be out of the apartment by the first",
+          source: "client",
+          agoMinutes: 83,
+        },
+        {
+          content: "And I still need a lawyer for the hearing on the 12th",
+          source: "client",
+          agoMinutes: 82,
+        },
       ],
     },
     {
@@ -636,7 +948,17 @@ export async function seedTestTickets(
       onHold: false,
       withKeyWrap: true,
       createdAgo: 120, // 2 hours
-      followUps: [],
+      // A single voicemail and nothing else: the shape a brand new
+      // contact produces when they call outside a shift.
+      followUps: [
+        {
+          content: "",
+          source: "client",
+          type: "voicemail",
+          agoMinutes: 118,
+          media: [{ kind: "recording", durationSeconds: 23 }],
+        },
+      ],
     },
     {
       title: "Relocation assistance request",
@@ -647,12 +969,22 @@ export async function seedTestTickets(
       onHold: false,
       withKeyWrap: true,
       createdAgo: 360, // 6 hours
-      unreadSince: 360, // opened at intake; the client reply below is unread
+      // No cursor: announced by the New status mark (see above).
       followUps: [
         {
           content: "I need to move but I do not know where to go",
           source: "client",
           agoMinutes: 350,
+        },
+        {
+          content: "It is not safe for me to stay in this county",
+          source: "client",
+          agoMinutes: 345,
+        },
+        {
+          content: "Is anyone there?",
+          source: "client",
+          agoMinutes: 200,
         },
       ],
     },
@@ -676,6 +1008,12 @@ export async function seedTestTickets(
           source: "client",
           agoMinutes: 1440,
         },
+        {
+          content:
+            "It is on the far side of town and the buses do not run early enough",
+          source: "client",
+          agoMinutes: 1435,
+        },
       ],
     },
     {
@@ -692,6 +1030,11 @@ export async function seedTestTickets(
           content: "Where can I get groceries?",
           source: "client",
           agoMinutes: 470,
+        },
+        {
+          content: "The pantry near me moved and I do not know where it went",
+          source: "client",
+          agoMinutes: 468,
         },
       ],
     },
@@ -710,40 +1053,61 @@ export async function seedTestTickets(
     "high",
     "urgent",
   ];
-  const titlePrefixes = [
+  // Full titles (no numeric suffixes): repeats across a long list read
+  // as routine work, the way a real queue looks.
+  const titlePool = [
     "Referral request",
     "Follow-up needed",
     "New intake call",
     "Callback requested",
-    "Documentation help",
-    "Transportation need",
-    "Safety concern",
-    "Benefits question",
-    "Housing inquiry",
-    "Medical appointment",
-    "Legal consultation",
-    "Emergency contact",
-    "Resource request",
-    "Check-in call",
-    "Outreach follow-up",
+    "Help with benefits paperwork",
+    "Ride needed to medical appointment",
+    "Safety check-in",
+    "Housing waitlist question",
+    "Question about court paperwork",
+    "Prescription refill help",
+    "Utility shutoff notice",
+    "School enrollment question",
+    "Childcare resource request",
+    "Job search support",
+    "Food assistance question",
+    "ID replacement help",
+    "Counseling referral request",
+    "Interpreter needed for appointment",
+    "Insurance paperwork question",
+    "Weekly check-in call",
+    "Left voicemail after hours",
+    "Text conversation follow-up",
+    "Needs updated resource list",
+    "Rent assistance question",
+  ];
+  const descriptionPool = [
+    "Phone intake from the main line",
+    "Client texted the support line",
+    "Voicemail left after hours",
+    "Follow-up from an earlier call",
+    "Client asked about available resources",
+    "Case opened during evening shift",
+    "Transferred from the crisis line",
+    "Client asked for a callback",
   ];
   const clientMessages = [
     "I need some help please",
-    "Can someone call me back?",
+    "Can someone call me back when you get a chance?",
     "I have a question about my case",
-    "When is my next appointment?",
-    "I wanted to follow up on our last conversation",
-    "Is there anyone available to talk?",
-    "I have new information to share",
+    "When is my next appointment? I lost the paper I wrote it on",
+    "I wanted to follow up on what we talked about last time",
+    "Is there anyone available to talk today?",
+    "Something came up and I have new information to share",
     "Things have changed since we last spoke",
   ];
   const volMessages = [
-    "I will look into this for you",
-    "Checking with the team now",
-    "Left a voicemail, will try again tomorrow",
-    "Referred to partner organization",
-    "Scheduled follow-up for next week",
-    "Updated case notes with new info",
+    "I will look into this for you and get back to you tomorrow",
+    "Checking with the team now, hang tight",
+    "Left you a voicemail, will try again tomorrow morning",
+    "I passed your info along to the agency we talked about",
+    "Scheduled a follow-up call for next week, does Tuesday work?",
+    "Updated your file with the new details you sent",
   ];
 
   // Simple deterministic hash for reproducible "random" values.
@@ -763,18 +1127,26 @@ export async function seedTestTickets(
 
     const queue = queuesArr[h0 % queuesArr.length];
     const priority = priorities[h1 % priorities.length];
-    const prefix = titlePrefixes[h2 % titlePrefixes.length];
-    if (queue === undefined || priority === undefined || prefix === undefined)
+    const title = titlePool[h2 % titlePool.length];
+    const description = descriptionPool[h4 % descriptionPool.length];
+    if (
+      queue === undefined ||
+      priority === undefined ||
+      title === undefined ||
+      description === undefined
+    )
       continue;
-    const suffix = String(g + 1).padStart(3, "0");
 
     // 40% assigned to me, 60% unassigned
     const assigned = h3 % 5 < 2 ? me : null;
     // 15% on hold (only if assigned)
     const hold = assigned !== null && h4 % 7 === 0;
 
-    // Created 30 min to 30 days ago
-    const ageMinutes = 30 + (h0 % 43200);
+    // Created 30 min to 30 days ago. The 180-follow-up pagination ticket
+    // (g === 0) is pinned old: a long history reads as weeks of work, and
+    // its newest message must not outrank the story ticket's fresh
+    // activity under the default recent-activity sort.
+    const ageMinutes = g === 0 ? 20160 : 30 + (h0 % 43200);
 
     // 0-4 follow-ups (first generated ticket gets 180 for pagination/feature testing)
     const fuCount = g === 0 ? 180 : h1 % 5;
@@ -974,8 +1346,8 @@ export async function seedTestTickets(
     }
 
     ticketDefs.push({
-      title: `${prefix} #${suffix}`,
-      description: `Generated test ticket ${suffix}`,
+      title,
+      description,
       queue,
       priority,
       assignedTo: assigned,
@@ -1090,7 +1462,9 @@ export async function seedTestTickets(
           encrypted_content: Buffer.from(encryptedContent),
           event_params: fu.eventParams ?? null,
           created_at: minutesAgo(fu.agoMinutes),
-          ...(fu.source === "volunteer" ? { created_by: userId } : {}),
+          ...(fu.source === "volunteer"
+            ? { created_by: fu.authorId ?? userId }
+            : {}),
           ...(fu.callStatus !== undefined
             ? { call_status: fu.callStatus }
             : {}),
@@ -1100,6 +1474,21 @@ export async function seedTestTickets(
         })
         .returning("id")
         .executeTakeFirstOrThrow();
+
+      // Seed reactions (rendered on internal notes)
+      if (fu.reactions !== undefined) {
+        for (const r of fu.reactions) {
+          await tDb
+            .insertInto("followup_reactions")
+            .values({
+              followup_id: followUp.id,
+              user_id: reactingUserId,
+              reaction: r.reaction,
+              created_at: minutesAgo(r.agoMinutes),
+            })
+            .execute();
+        }
+      }
 
       // Create media records (encrypted blobs stored in BlobStore)
       if (fu.media && def.withKeyWrap) {

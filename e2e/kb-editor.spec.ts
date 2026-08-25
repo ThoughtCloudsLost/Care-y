@@ -279,11 +279,11 @@ test.describe.serial("KB Editor (Create/Edit, Categories, ATAG)", () => {
   test("atag: seeded article with a11y violations shows issues", async ({}, testInfo) => {
     testInfo.setTimeout(CRYPTO_TIMEOUT * 4);
 
-    // Open the "Accessibility issues example" article (seeded with violations).
+    // Open the "Try the accessibility checker" article (seeded with violations).
     // On desktop, split view uses pushState (URL stays at /library).
-    await page.getByText("Accessibility issues example").click();
+    await page.getByText("Try the accessibility checker").click();
     await expect(
-      page.locator("h1").getByText("Accessibility issues example"),
+      page.locator("h1").getByText("Try the accessibility checker"),
     ).toBeVisible({ timeout: CRYPTO_TIMEOUT });
 
     // Tap the edit button to open the editor.
@@ -308,9 +308,9 @@ test.describe.serial("KB Editor (Create/Edit, Categories, ATAG)", () => {
     // If the page navigated away (e.g., crypto timeout redirect),
     // re-enter the editor.
     if (!page.url().includes("/edit")) {
-      await page.getByText("Accessibility issues example").click();
+      await page.getByText("Try the accessibility checker").click();
       await expect(
-        page.locator("h1").getByText("Accessibility issues example"),
+        page.locator("h1").getByText("Try the accessibility checker"),
       ).toBeVisible({ timeout: CRYPTO_TIMEOUT });
       const editBtn = page.getByRole("button", { name: "Edit article" });
       await editBtn.click();
