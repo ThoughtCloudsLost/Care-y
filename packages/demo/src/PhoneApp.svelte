@@ -740,7 +740,15 @@
         await internalNavigate("tickets", null);
       }
       if (!router.searchOpen) {
-        findSearchButton()?.click();
+        // The navbar button mounts a tick after the tickets navigation
+        // settles; a one-shot lookup here raced it and left the walk
+        // narrating a closed overlay.
+        const searchBtn = await pollUntil<HTMLElement>({
+          probe: findSearchButton,
+          isStale: () => store.isStale(token),
+          timeoutMs: POLL_TIMEOUT_SHORT_MS,
+        });
+        searchBtn?.click();
         // The toggle reaches the router through Konsta's event; wait
         // for it so the convergence check sees the open overlay.
         await waitFor(() => router.searchOpen, token, POLL_TIMEOUT_SHORT_MS);
@@ -811,9 +819,11 @@
    */
   async function seedSearchQuery(token: number): Promise<void> {
     const input = await pollUntil<HTMLInputElement>({
+      // The Searchbar lives in the navbar (AppShell.svelte
+      // .search-overlay), not inside the results sheet/dropdown.
       probe: () =>
         document.querySelector<HTMLInputElement>(
-          '.search-sheet input, .search-dropdown input, input[type="search"]',
+          '.search-overlay input, .search-sheet input, .search-dropdown input, input[type="search"]',
         ),
       isStale: () => store.isStale(token),
       timeoutMs: POLL_TIMEOUT_SHORT_MS,

@@ -67,8 +67,10 @@ export const EFFECTS: EffectMap = new Map([
     {
       description: "User edit sheet opens with edit form",
       visible: [
-        // ShellSheet.svelte line 115: .shell-sheet-content
-        ".shell-sheet-content:visible",
+        // ShellSheet.svelte line 115: .shell-sheet-content. At desktop
+        // width ShellSheet renders as a ShellPopup instead
+        // (ShellSheet.svelte:96), so accept either presentation.
+        ".shell-sheet-content:visible, .popup-dialog:visible",
         // UsersSection.svelte line 689: .edit-user-content
         ".edit-user-content",
       ],
