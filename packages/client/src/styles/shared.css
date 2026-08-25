@@ -128,6 +128,20 @@
     width: 100%;
   }
 
+  /* Konsta inset lists rendered as direct children don't center:
+     their margin utilities (ml-safe-4/mr-safe-4) and the default
+     theme's input-list flatten rule (.theme-default
+     .k-list:has(.k-list-input), specificity 0,3,0, sets margin: 0)
+     both override the auto centering above. Re-center at higher
+     specificity and subtract the 1rem side inset so list edges keep
+     lining up with block padding, matching pages that wrap content
+     in a single div. */
+  .main-content > .k-list,
+  .theme-default .main-content > .k-list:has(.k-list-input) {
+    max-width: calc(var(--content-max-width, 720px) - 2rem);
+    margin-inline: auto;
+  }
+
   .section-scroll-nav {
     display: none;
   }
