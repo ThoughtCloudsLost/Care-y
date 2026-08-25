@@ -673,6 +673,14 @@
       // Sync the role rail highlight from the bridge snapshot
       activeRole = state.role;
 
+      // Adopt phone-initiated scheme changes (in-app settings row).
+      // The guard breaks the echo loop: the outer dark $effect calls
+      // bridge.setDark on change, which round-trips through this
+      // subscription with the same value.
+      if (state.dark !== dark) {
+        dark = state.dark;
+      }
+
       // The phone moved since entry was shown, so the story follows.
       // Uses the pure guard: entry dismisses only when locationSeq
       // advanced past the snapshot taken when entry was last shown,
