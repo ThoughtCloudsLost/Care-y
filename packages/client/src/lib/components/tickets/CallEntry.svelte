@@ -1,16 +1,16 @@
 <!--
-  Call attempt inline marker for the chat timeline.
+  Call attempt content for a conversation bubble.
 
-  Renders follow-ups with type="phone_call" as a centered one-liner
-  between hairline rules, the same anatomy as SystemEvent. Call rows
-  record what happened on the line (answered with duration, no answer,
-  busy, failed, canceled), not what someone said, so they read as flow
-  markers rather than bubbles. The label is derived from the call
-  status columns, never from encrypted content.
+  Calls are directional events between a client and a volunteer, so
+  they render inside a sided ConversationBubble like every other non
+  system follow-up; only system events sit centered between hairline
+  rules. This component is the bubble's content: a phone glyph plus
+  the call outcome (answered with duration, no answer, busy, failed,
+  canceled). The label is derived from the call status columns, never
+  from encrypted content, and the bubble supplies the timestamp.
 -->
 <script lang="ts">
   import { Phone } from "@lucide/svelte";
-  import { formatRelativeTime } from "$lib/utils/format-time.js";
   import { formatCallLabel } from "$lib/tickets/call-label.js";
   import type { CallLabelInput } from "$lib/tickets/call-label.js";
 
@@ -18,10 +18,9 @@
     source: string;
     callStatus: string | null;
     callDurationSeconds: number | null;
-    timestamp: string;
   }
 
-  let { source, callStatus, callDurationSeconds, timestamp }: Props = $props();
+  let { source, callStatus, callDurationSeconds }: Props = $props();
 
   const input: CallLabelInput = $derived({
     source,
@@ -29,38 +28,18 @@
     callDurationSeconds,
   });
   const label = $derived(formatCallLabel(input));
-  const timeLabel = $derived(formatRelativeTime(new Date(timestamp)));
 </script>
 
-<div class="call-entry" role="status">
-  <span class="call-line">
-    <Phone size={13} aria-hidden="true" />
-    {label} · <time datetime={timestamp}>{timeLabel}</time>
-  </span>
-</div>
+<span class="call-entry" role="status">
+  <Phone size={14} aria-hidden="true" />
+  {label}
+</span>
 
 <style>
-  /* No padding of its own: the thread gap and side padding place it. */
   .call-entry {
-    display: flex;
-    align-items: center;
-    gap: 0.625rem;
-    color: var(--muted);
-    font-size: var(--text-sm);
-  }
-
-  .call-entry::before,
-  .call-entry::after {
-    content: "";
-    flex: 1;
-    height: 1px;
-    background: var(--hair);
-  }
-
-  .call-line {
     display: inline-flex;
     align-items: center;
     gap: 0.375rem;
-    text-align: center;
+    font-size: var(--text-sm);
   }
 </style>

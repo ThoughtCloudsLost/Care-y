@@ -1192,12 +1192,18 @@
                 resolveUserName={(uid: string) => resolveVolunteerName(uid)}
               />
             {:else if rec.type === "phone_call"}
-              <CallEntry
-                source={rec.source}
-                callStatus={rec.callStatus}
-                callDurationSeconds={rec.callDurationSeconds}
+              <ConversationBubble
+                direction={rec.source === "client" ? "received" : "sent"}
+                speaker={rec.source === "client" ? clientAlias : undefined}
+                source={rec.source === "client" ? "client" : "volunteer"}
                 timestamp={rec.createdAt}
-              />
+              >
+                <CallEntry
+                  source={rec.source}
+                  callStatus={rec.callStatus}
+                  callDurationSeconds={rec.callDurationSeconds}
+                />
+              </ConversationBubble>
             {:else}
               <ConversationBubble
                 direction={rec.source === "client" ? "received" : "sent"}
@@ -1405,12 +1411,18 @@
                         resolveVolunteerName(uid)}
                     />
                   {:else if fu.type === "phone_call"}
-                    <CallEntry
-                      source={fu.source}
-                      callStatus={fu.callStatus ?? null}
-                      callDurationSeconds={fu.callDurationSeconds ?? null}
+                    <ConversationBubble
+                      direction={messageType(fu)}
+                      speaker={fu.source === "client" ? clientAlias : undefined}
+                      source={fu.source === "client" ? "client" : "volunteer"}
                       timestamp={fu.createdAt}
-                    />
+                    >
+                      <CallEntry
+                        source={fu.source}
+                        callStatus={fu.callStatus ?? null}
+                        callDurationSeconds={fu.callDurationSeconds ?? null}
+                      />
+                    </ConversationBubble>
                   {:else}
                     <ConversationBubble
                       direction={messageType(fu)}
