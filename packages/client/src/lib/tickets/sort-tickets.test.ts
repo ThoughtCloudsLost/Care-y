@@ -145,7 +145,7 @@ describe("sortTickets", () => {
 
     it("msgs sort: all-missing tickets preserve id tiebreaker", () => {
       const noA = makeTicket("z", "normal", "2026-01-01T00:00:00Z");
-      const noB = makeTicket("a", "normal", "2026-01-02T00:00:00Z");
+      const noB = makeTicket("a", "normal", "2026-01-01T00:00:00Z");
       const result = sortTickets([noA, noB], {
         field: "msgs",
         direction: "asc",
@@ -369,7 +369,7 @@ describe("sortTickets", () => {
         assigneeName: null,
       };
       const u2 = {
-        ...makeTicket("a", "normal", "2026-01-02T00:00:00Z"),
+        ...makeTicket("a", "normal", "2026-01-01T00:00:00Z"),
         assigneeName: null,
       };
 
