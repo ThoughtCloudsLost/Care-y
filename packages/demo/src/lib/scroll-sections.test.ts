@@ -651,7 +651,7 @@ describe("bridgeStateToLocation", () => {
 
   it("maps home feature to dashboard section", () => {
     const loc = bridgeStateToLocation("home", null, false, null, null);
-    expect(loc).toEqual({ sectionId: "dashboard", subSlug: "view-switcher" });
+    expect(loc).toEqual({ sectionId: "dashboard", subSlug: "getting-started" });
   });
 
   it("maps library feature to library section (browse)", () => {
