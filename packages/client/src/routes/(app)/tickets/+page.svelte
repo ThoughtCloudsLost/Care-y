@@ -45,6 +45,7 @@
   import { deriveDisplayStatus } from "$lib/tickets/display-status.js";
   import { makeSkeletonCardProps } from "$lib/tickets/skeleton-card-props.js";
   import { resolveAsyncDecrypt } from "$lib/crypto/decrypt-result.js";
+  import { hasTicketKeyMaterial } from "$lib/crypto/ticket-decrypt-scope.js";
   import {
     decryptQueueAppearance,
     type QueueAppearance,
@@ -624,7 +625,7 @@
   } {
     const titleResult = resolveAsyncDecrypt(
       titleById.get(t.id),
-      t.keyWrap !== null,
+      hasTicketKeyMaterial(t.keyWrap, t.intakeWrap),
     );
     return {
       ...t,

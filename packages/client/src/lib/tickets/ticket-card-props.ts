@@ -9,6 +9,7 @@ import {
   resolveAsyncDecrypt,
   type DecryptResult,
 } from "$lib/crypto/decrypt-result.js";
+import { hasTicketKeyMaterial } from "$lib/crypto/ticket-decrypt-scope.js";
 import { reactionsForTicket } from "./ticket-list-utils.js";
 import type { QueueAppearance } from "$lib/utils/queue-appearance.js";
 import * as m from "$lib/paraglide/messages.js";
@@ -27,6 +28,7 @@ export interface TicketLikeRecord {
   readonly priority: "low" | "normal" | "high" | "urgent";
   readonly encryptedTitle: string;
   readonly keyWrap: unknown;
+  readonly intakeWrap?: string | null;
   readonly clientId: string;
   readonly encryptedClientAlias: string;
   readonly assignedTo: string | null;
@@ -107,7 +109,7 @@ export function mapTicketDisplayFields(
     priority: t.priority,
     titleResult: resolveAsyncDecrypt(
       deps.decryptTitle(t.id, t.keyWrap, t.encryptedTitle),
-      t.keyWrap !== null,
+      hasTicketKeyMaterial(t.keyWrap, t.intakeWrap),
     ),
     clientAlias: deps.orgDecrypt(
       `client-alias:${t.clientId}`,

@@ -72,6 +72,23 @@ export interface TicketDecryptScope {
 }
 
 // ---------------------------------------------------------------------------
+// Shared predicate
+// ---------------------------------------------------------------------------
+
+/**
+ * Whether the ticket carries any key material the client can use
+ * to decrypt its PII. Intake wraps are org-sealed tk copies stored
+ * in intake_key_wraps; they count as key material because the
+ * volunteer's org key can unseal them.
+ */
+export function hasTicketKeyMaterial(
+  keyWrap: unknown,
+  intakeWrap?: string | null,
+): boolean {
+  return keyWrap !== null || (intakeWrap != null && intakeWrap !== "");
+}
+
+// ---------------------------------------------------------------------------
 // Factory
 // ---------------------------------------------------------------------------
 
@@ -87,8 +104,7 @@ export function createTicketDecryptScope(
     intakeWrap,
   } = deps;
 
-  const hasAccess =
-    keyWrap !== null || (intakeWrap != null && intakeWrap !== "");
+  const hasAccess = hasTicketKeyMaterial(keyWrap, intakeWrap);
 
   return {
     title(encryptedTitle: string): DecryptResult {
