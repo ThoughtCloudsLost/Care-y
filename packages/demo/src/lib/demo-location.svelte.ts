@@ -133,12 +133,37 @@ export class DemoLocationStore {
 
     const token = this.cancelChains();
     this.pendingToken = token;
-    const cmd = resolvePhoneCommand(
+    let cmd = resolvePhoneCommand(
       sectionId,
       subSlug,
       this.deps.getTicketDetailId(),
       this.deps.getArticleDetailId(),
     );
+    // A scroll intent must not yank the visitor off a detail screen
+    // that already satisfies the section (e.g. a manually opened
+    // ticket while scrolling the ticket-detail subs). Keep the
+    // phone's detail so ensureScreen short-circuits navigation while
+    // the highlight and pulse halves of the command still run.
+    // Clicks and deep links keep the canonical detail on purpose:
+    // an explicit selection re-aligns to the section's home screen.
+    if (origin === "page-scroll") {
+      const phone = this.deps.getPhone();
+      if (
+        cmd.detail !== null &&
+        phone.detail !== null &&
+        cmd.feature === phone.feature &&
+        sectionMatchesPhone(
+          sectionId,
+          phone.feature,
+          phone.detail,
+          phone.searchOpen,
+          phone.routeId,
+          subSlug,
+        )
+      ) {
+        cmd = { ...cmd, detail: phone.detail };
+      }
+    }
     void this.deps.ensureScreen(cmd, token).then(async () => {
       // eslint-disable-next-line security/detect-possible-timing-attacks -- monotonic staleness counter, not a secret
       if (this.pendingToken !== token) return;
@@ -206,6 +231,7 @@ export class DemoLocationStore {
   reportTopic(topic: DemoTopic): void {
     this.topic = topic;
     if (this.pendingToken !== null) return;
+    if (this.suppressBootAdoption()) return;
     this.adoptPhone();
   }
 
@@ -237,7 +263,19 @@ export class DemoLocationStore {
       }
     }
     if (this.pendingToken !== null) return;
+    if (this.suppressBootAdoption()) return;
     this.adoptPhone();
+  }
+
+  /**
+   * While the background login is still keying, the phone walks its
+   * scripted login stages behind the splash. A visitor who already
+   * chose a section must not be yanked to the login section by those
+   * stage transitions; settleBackgroundLogin re-drives the standing
+   * location once keys are warm.
+   */
+  private suppressBootAdoption(): boolean {
+    return !this.deps.isBootSettled() && this.location.sectionId !== "login";
   }
 
   /**

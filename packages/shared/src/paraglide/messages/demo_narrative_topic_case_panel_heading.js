@@ -6,17 +6,17 @@ import { getLocale, experimentalStaticLocale } from '../runtime.js';
 /** @typedef {{}} Demo_Narrative_Topic_Case_Panel_HeadingInputs */
 
 const en_demo_narrative_topic_case_panel_heading = /** @type {(inputs: Demo_Narrative_Topic_Case_Panel_HeadingInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Case panel`)
+	return /** @type {LocalizedString} */ (`The full case record`)
 };
 
 const es_demo_narrative_topic_case_panel_heading = /** @type {(inputs: Demo_Narrative_Topic_Case_Panel_HeadingInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Panel del caso`)
+	return /** @type {LocalizedString} */ (`El expediente completo`)
 };
 
 /**
 * | output |
 * | --- |
-* | "Case panel" |
+* | "The full case record" |
 *
 * @param {Demo_Narrative_Topic_Case_Panel_HeadingInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

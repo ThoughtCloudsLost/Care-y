@@ -164,10 +164,29 @@ const lookup: Record<string, () => string> = {
     m.demo_narrative_topic_list_search_body(),
 
   // Ticket detail (new subs)
-  demo_narrative_topic_thread_anatomy_heading: () =>
-    m.demo_narrative_topic_thread_anatomy_heading(),
-  demo_narrative_topic_thread_anatomy_body: () =>
-    m.demo_narrative_topic_thread_anatomy_body(),
+  demo_narrative_topic_date_separators_heading: () =>
+    m.demo_narrative_topic_date_separators_heading(),
+  demo_narrative_topic_date_separators_body: () =>
+    m.demo_narrative_topic_date_separators_body(),
+  demo_narrative_topic_system_events_heading: () =>
+    m.demo_narrative_topic_system_events_heading(),
+  demo_narrative_topic_system_events_body: () =>
+    m.demo_narrative_topic_system_events_body(),
+  demo_narrative_topic_voicemails_heading: () =>
+    m.demo_narrative_topic_voicemails_heading(),
+  demo_narrative_topic_voicemails_body: () =>
+    m.demo_narrative_topic_voicemails_body(),
+  demo_narrative_topic_media_images_heading: () =>
+    m.demo_narrative_topic_media_images_heading(),
+  demo_narrative_topic_media_images_body: () =>
+    m.demo_narrative_topic_media_images_body(),
+  demo_narrative_topic_files_heading: () =>
+    m.demo_narrative_topic_files_heading(),
+  demo_narrative_topic_files_body: () => m.demo_narrative_topic_files_body(),
+  demo_narrative_topic_call_log_heading: () =>
+    m.demo_narrative_topic_call_log_heading(),
+  demo_narrative_topic_call_log_body: () =>
+    m.demo_narrative_topic_call_log_body(),
   demo_narrative_topic_case_panel_heading: () =>
     m.demo_narrative_topic_case_panel_heading(),
   demo_narrative_topic_case_panel_body: () =>

@@ -65,6 +65,7 @@
   import QueryError from "$lib/components/QueryError.svelte";
   import DecryptPlaceholder from "$lib/components/DecryptPlaceholder.svelte";
   import SystemEvent from "$lib/components/tickets/SystemEvent.svelte";
+  import CallEntry from "$lib/components/tickets/CallEntry.svelte";
   import PrivateNote from "$lib/components/tickets/PrivateNote.svelte";
   import FollowUpMedia from "$lib/components/tickets/FollowUpMedia.svelte";
   import VirtualList from "$lib/components/tickets/VirtualList.svelte";
@@ -696,6 +697,8 @@
     hasFile: boolean;
     noteTypeId?: string | null;
     eventParams?: Record<string, unknown> | null;
+    callStatus?: string | null;
+    callDurationSeconds?: number | null;
     keyGeneration?: string | null;
     keyWrap?: ClusterRecord["keyWrap"];
   }): ClusterRecord {
@@ -712,6 +715,8 @@
       hasFile: fu.hasFile,
       noteTypeId: fu.noteTypeId ?? null,
       eventParams: fu.eventParams ?? null,
+      callStatus: fu.callStatus ?? null,
+      callDurationSeconds: fu.callDurationSeconds ?? null,
       keyGeneration: fu.keyGeneration ?? null,
       keyWrap: fu.keyWrap ?? null,
     };
@@ -758,6 +763,8 @@
         hasFile: summary?.hasFile ?? false,
         noteTypeId: summary?.noteTypeId ?? null,
         eventParams: summary?.eventParams ?? null,
+        callStatus: summary?.callStatus ?? null,
+        callDurationSeconds: summary?.callDurationSeconds ?? null,
         keyGeneration: summary?.keyGeneration ?? null,
         keyWrap: null,
       };
@@ -1184,6 +1191,13 @@
                   handleToggleReaction(rec.id, reaction)}
                 resolveUserName={(uid: string) => resolveVolunteerName(uid)}
               />
+            {:else if rec.type === "phone_call"}
+              <CallEntry
+                source={rec.source}
+                callStatus={rec.callStatus}
+                callDurationSeconds={rec.callDurationSeconds}
+                timestamp={rec.createdAt}
+              />
             {:else}
               <ConversationBubble
                 direction={rec.source === "client" ? "received" : "sent"}
@@ -1389,6 +1403,13 @@
                         handleToggleReaction(fu.id, reaction)}
                       resolveUserName={(uid: string) =>
                         resolveVolunteerName(uid)}
+                    />
+                  {:else if fu.type === "phone_call"}
+                    <CallEntry
+                      source={fu.source}
+                      callStatus={fu.callStatus ?? null}
+                      callDurationSeconds={fu.callDurationSeconds ?? null}
+                      timestamp={fu.createdAt}
                     />
                   {:else}
                     <ConversationBubble

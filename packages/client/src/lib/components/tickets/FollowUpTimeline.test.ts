@@ -256,6 +256,8 @@ function makeRecord(
     hasFile: false,
     noteTypeId: null,
     eventParams: null,
+    callStatus: null,
+    callDurationSeconds: null,
     keyGeneration: null,
     keyWrap: null,
     ...overrides,

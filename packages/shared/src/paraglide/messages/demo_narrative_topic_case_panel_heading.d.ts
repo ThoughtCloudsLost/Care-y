@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "Case panel" |
+* | "The full case record" |
 *
 * @param {Demo_Narrative_Topic_Case_Panel_HeadingInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

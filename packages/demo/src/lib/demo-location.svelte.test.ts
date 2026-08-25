@@ -108,6 +108,48 @@ describe("DemoLocationStore", () => {
       expect(store.origin).toBe("page-scroll");
     });
 
+    it("keeps the phone's ticket detail on page-scroll within a matching section", () => {
+      const { store, commands } = createHarness({
+        feature: "tickets",
+        detail: "tk-9999",
+        loginStage: null,
+        routeId: "/(app)/tickets/[id]",
+      });
+      store.setLocation("ticket-detail", "timeline", "page-scroll");
+
+      expect(commands).toHaveLength(1);
+      expect(commands.at(0)?.feature).toBe("tickets");
+      // The manually opened ticket survives the scroll intent; the
+      // canonical tk-0001 is not forced back onto the phone.
+      expect(commands.at(0)?.detail).toBe("tk-9999");
+    });
+
+    it("re-aligns to the canonical ticket detail on page-click", () => {
+      const { store, commands } = createHarness({
+        feature: "tickets",
+        detail: "tk-9999",
+        loginStage: null,
+        routeId: "/(app)/tickets/[id]",
+      });
+      store.setLocation("ticket-detail", "timeline", "page-click");
+
+      expect(commands).toHaveLength(1);
+      expect(commands.at(0)?.detail).toBe("tk-0001");
+    });
+
+    it("keeps the canonical detail on page-scroll when the phone is elsewhere", () => {
+      const { store, commands } = createHarness({
+        feature: "home",
+        detail: null,
+        loginStage: null,
+        routeId: "/(app)",
+      });
+      store.setLocation("ticket-detail", "timeline", "page-scroll");
+
+      expect(commands).toHaveLength(1);
+      expect(commands.at(0)?.detail).toBe("tk-0001");
+    });
+
     it("snaps to the phone when both the chain and force fail to converge", async () => {
       const { store, settleChain } = createHarness();
       store.setLocation("tickets", "sort", "page-click");
@@ -137,6 +179,35 @@ describe("DemoLocationStore", () => {
         subSlug: null,
       });
       expect(store.origin).toBe("deep-link");
+    });
+
+    it("ignores login stage changes while boot is unsettled and a section is chosen", async () => {
+      const { store, phone, settleChain, boot } = createHarness();
+      boot.settled = false;
+      store.setLocation("ticket-detail", null, "page-click");
+      await settleChain();
+      await settleChain();
+
+      // The scripted background login advances a stage behind the
+      // splash; adopting the phone here would yank the visitor to the
+      // login section while they wait for their chosen screen.
+      phone.loginStage = "twofa-method";
+      store.notePhoneChange();
+
+      expect(store.location).toEqual({
+        sectionId: "ticket-detail",
+        subSlug: null,
+      });
+    });
+
+    it("still adopts login stage changes while resting on the login section", async () => {
+      const { store, phone, boot } = createHarness();
+      boot.settled = false;
+
+      phone.loginStage = "twofa-picker";
+      store.notePhoneChange();
+
+      expect(store.location.sectionId).toBe("login");
     });
 
     it("corrects again once the background login settles", async () => {

@@ -19,12 +19,24 @@ export interface SeedTicketOptions {
   handcraftedOnly?: boolean;
 }
 
+/**
+ * Optional narrative media assets for the seeded story ticket. When
+ * provided, recordings use voicemailAudio bytes/duration, image
+ * attachments consume documentImages round-robin. When absent, the
+ * seeder falls back to its synthetic generators (WAV/PNG).
+ */
+export interface SeedMediaAssets {
+  voicemailAudio?: { bytes: Uint8Array; durationSeconds: number };
+  documentImages?: { bytes: Uint8Array; contentType: string }[];
+}
+
 export async function seedTestTickets(
   tDb: Kysely<TenantDatabase>,
   blobStore: BlobStore,
   userId: string,
   orgSchema: string,
   options?: SeedTicketOptions,
+  assets?: SeedMediaAssets,
 ): Promise<{ ticketIds: string[] }> {
   // 1. Look up vol_public for the current user
   const userKeys = await tDb
@@ -83,6 +95,10 @@ export async function seedTestTickets(
     agoMinutes: number;
     media?: MediaDef[];
     eventParams?: Record<string, unknown>;
+    /** Terminal call status for phone_call rows (completed/no_answer/busy/failed/canceled). */
+    callStatus?: string;
+    /** Call duration in seconds, written to followups.call_duration_seconds. */
+    callDurationSeconds?: number;
   }
 
   interface MediaDef {
@@ -210,13 +226,61 @@ export async function seedTestTickets(
           source: "volunteer",
           agoMinutes: 4200,
         },
+        // SMS exchange: volunteer sends shelter list, client confirms
+        {
+          content: "Sent you a list of shelters and their open hours",
+          source: "volunteer",
+          type: "sms_outbound",
+          agoMinutes: 4180,
+        },
+        {
+          content: "Got it, I will look through these tonight",
+          source: "client",
+          type: "sms_inbound",
+          agoMinutes: 4150,
+        },
         {
           content:
             "Client sounds stressed but stable. Shelter list sent via SMS.",
           source: "volunteer",
           type: "internal_note",
           isPrivate: true,
-          agoMinutes: 4190,
+          agoMinutes: 4140,
+        },
+        // Hold cycle
+        {
+          content: "Put on hold",
+          source: "system",
+          type: "hold_placed",
+          agoMinutes: 2400,
+        },
+        {
+          content: "Hold removed",
+          source: "system",
+          type: "hold_removed",
+          agoMinutes: 2000,
+        },
+        // Volunteer reassignment cycle
+        {
+          content: "Volunteer unassigned",
+          source: "system",
+          type: "volunteer_unassigned",
+          eventParams: { userId: me },
+          agoMinutes: 1800,
+        },
+        {
+          content: "Assigned to Dev Admin",
+          source: "system",
+          type: "volunteer_assigned",
+          eventParams: { userId: me },
+          agoMinutes: 1790,
+        },
+        // Merge note
+        {
+          content: "",
+          source: "system",
+          type: "merge_note",
+          agoMinutes: 1600,
         },
         {
           content: "Thank you, any help is appreciated",
@@ -241,6 +305,51 @@ export async function seedTestTickets(
           source: "system",
           type: "status_opened",
           agoMinutes: 360,
+        },
+        // Call attempts and the media cluster stay at the recent end
+        // of the thread: the conversation is virtualized and the story
+        // walk highlights these elements, so they must be inside the
+        // mounted window. Narratively the missed call leads into the
+        // client's voicemail.
+        {
+          content: "",
+          source: "volunteer",
+          type: "phone_call",
+          callStatus: "no_answer",
+          agoMinutes: 340,
+        },
+        {
+          content: "",
+          source: "volunteer",
+          type: "phone_call",
+          callStatus: "completed",
+          callDurationSeconds: 340,
+          agoMinutes: 330,
+        },
+        {
+          content: "",
+          source: "client",
+          type: "voicemail",
+          agoMinutes: 300,
+          media: [{ kind: "recording" }],
+        },
+        {
+          content: "",
+          source: "client",
+          agoMinutes: 240,
+          media: [{ kind: "image", contentType: "image/jpeg" }],
+        },
+        {
+          content: "Attached the housing resource checklist",
+          source: "volunteer",
+          agoMinutes: 180,
+          media: [
+            {
+              kind: "file",
+              filename: "housing-checklist.txt",
+              contentType: "text/plain",
+            },
+          ],
         },
       ],
     },
@@ -982,15 +1091,29 @@ export async function seedTestTickets(
           event_params: fu.eventParams ?? null,
           created_at: minutesAgo(fu.agoMinutes),
           ...(fu.source === "volunteer" ? { created_by: userId } : {}),
+          ...(fu.callStatus !== undefined
+            ? { call_status: fu.callStatus }
+            : {}),
+          ...(fu.callDurationSeconds !== undefined
+            ? { call_duration_seconds: fu.callDurationSeconds }
+            : {}),
         })
         .returning("id")
         .executeTakeFirstOrThrow();
 
       // Create media records (encrypted blobs stored in BlobStore)
       if (fu.media && def.withKeyWrap) {
+        let imageAssetIdx = 0;
         for (const media of fu.media) {
           if (media.kind === "recording") {
-            const raw = generateWav(media.durationSeconds ?? 5);
+            const raw =
+              assets?.voicemailAudio !== undefined
+                ? Buffer.from(assets.voicemailAudio.bytes)
+                : generateWav(media.durationSeconds ?? 5);
+            const effectiveDuration =
+              assets?.voicemailAudio !== undefined
+                ? assets.voicemailAudio.durationSeconds
+                : (media.durationSeconds ?? null);
             const recordingId = crypto.randomUUID();
             const encrypted = encryptContent(
               raw,
@@ -1010,14 +1133,31 @@ export async function seedTestTickets(
                 followup_id: followUp.id,
                 blob_key: blobKey,
                 size_bytes: encrypted.byteLength,
-                duration_seconds: media.durationSeconds ?? null,
+                duration_seconds: effectiveDuration,
                 created_at: minutesAgo(fu.agoMinutes),
               })
               .execute();
           } else {
             // image or file attachment
-            const raw =
-              media.kind === "image" ? generatePng() : generateTextFile();
+            let raw: Buffer;
+            if (
+              media.kind === "image" &&
+              assets?.documentImages !== undefined &&
+              assets.documentImages.length > 0
+            ) {
+              const imgAsset =
+                assets.documentImages[
+                  imageAssetIdx % assets.documentImages.length
+                ];
+              if (imgAsset === undefined) {
+                raw = generatePng();
+              } else {
+                raw = Buffer.from(imgAsset.bytes);
+                imageAssetIdx++;
+              }
+            } else {
+              raw = media.kind === "image" ? generatePng() : generateTextFile();
+            }
             const attachmentId = crypto.randomUUID();
             const encrypted = encryptContent(
               raw,

@@ -912,9 +912,9 @@ describe("SECTIONS taxonomy", () => {
     expect(tickets?.subs).toHaveLength(12);
   });
 
-  it("ticket-detail has 15 subs", () => {
+  it("ticket-detail has 20 subs", () => {
     const detail = SECTIONS.find((s) => s.id === "ticket-detail");
-    expect(detail?.subs).toHaveLength(15);
+    expect(detail?.subs).toHaveLength(20);
   });
 
   it("search has 3 subs", () => {
@@ -1393,6 +1393,10 @@ describe("highlight coverage", () => {
 
   it("gives the topic-less subs a selector region", () => {
     const topicless = [
+      ["ticket-detail", "voicemails"],
+      ["ticket-detail", "media-images"],
+      ["ticket-detail", "files"],
+      ["ticket-detail", "call-log"],
       ["search", "overlay"],
       ["search", "entities"],
       ["search", "how-it-works"],
