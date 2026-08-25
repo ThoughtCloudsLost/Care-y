@@ -166,18 +166,10 @@ describe("createProviderFactory", () => {
     );
   });
 
-  it("throws TelephonyConfigError for unknown provider", async () => {
-    const { db } = createMockDb({
-      org_id: "org-1",
-      provider: "unknown",
-      config: encryptConfig({ foo: "bar" }),
-      key_version: 1,
-    });
-    const factory = buildFactory(db);
-    await expect(factory.getProvider("org-1" as OrgId)).rejects.toThrow(
-      TelephonyConfigError,
-    );
-  });
+  // No unknown-provider test: the valid_provider CHECK constraint makes
+  // that row impossible through the DB, and the schema guard for it was
+  // dropped as unreachable. A mock row bypassing the constraint would
+  // test a state the schema cannot contain.
 
   it("throws TelephonyConfigError when no constructor is registered", async () => {
     const { db } = createMockDb({
