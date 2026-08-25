@@ -59,6 +59,7 @@ import type {
   BlobStore,
   BlobCategory,
 } from "../../../../server/src/storage/store.js";
+import type { DemoBlobResolver } from "../../stubs/fetch-blob.js";
 import type { RateLimiter } from "../../../../server/src/ratelimit/rate-limiter.js";
 import type {
   Context,
@@ -69,6 +70,7 @@ import type { UserRecord } from "../../../../server/src/auth/service.js";
 import type { PlatformDatabase } from "../../../../server/src/db/types.js";
 import type { SeedStructureResult } from "./server/seed-structure.js";
 import type { ProcedureProxy } from "./proc-proxy.js";
+import type { SeedMediaAssets } from "../../../../server/src/dev/seed-tickets.js";
 
 // ── Exported types ──────────────────────────────────────────────────
 
@@ -102,6 +104,8 @@ export interface DemoEngineResult {
   readonly deniedTicketId: string;
   /** Map-backed blob store (greeting audio, attachments). */
   readonly blobStore: BlobStore;
+  /** Blob resolver for the fetch-blob stub (recordings, attachments, kb-attachments). */
+  readonly resolveBlob: DemoBlobResolver;
   /**
    * Mutate the signed-in user's role_id in the tenant DB and refresh
    * the cached admin user so subsequent middleware checks (requireRole)
@@ -166,9 +170,16 @@ function createMapBlobStore(): BlobStore {
 export { appendToOutbox, onOutboxAppend } from "./outbox.js";
 export type { OutboxEntry } from "./outbox.js";
 
+/** Options for bootDemoEngine. All fields are optional for backward compat. */
+export interface BootDemoEngineOptions {
+  mediaAssets?: SeedMediaAssets;
+}
+
 // ── Boot ────────────────────────────────────────────────────────────
 
-export async function bootDemoEngine(): Promise<DemoEngineResult> {
+export async function bootDemoEngine(
+  opts?: BootDemoEngineOptions,
+): Promise<DemoEngineResult> {
   const timings: HealthTimings[] = [];
 
   // 0. Init sodium FIRST (node-crypto-shim needs it), plus the crypto
@@ -328,6 +339,8 @@ export async function bootDemoEngine(): Promise<DemoEngineResult> {
     blobStore,
     seedResult.adminUserId,
     DEMO_ORG_SCHEMA,
+    undefined,
+    opts?.mediaAssets,
   );
 
   // Delete one seeded ticket's key wrap so the locked/denied state still
@@ -549,6 +562,31 @@ export async function bootDemoEngine(): Promise<DemoEngineResult> {
     appRouter,
     deniedTicketId,
     blobStore,
+    // Demo is single-user with all-fictional data; no auth/role checks.
+    resolveBlob: {
+      async resolveBlob(category, id): Promise<Uint8Array | null> {
+        const tableName =
+          category === "recordings"
+            ? ("recordings" as const)
+            : category === "attachments"
+              ? ("attachments" as const)
+              : ("kb_attachments" as const);
+
+        const row = await tDb
+          .selectFrom(tableName)
+          .select("blob_key")
+          .where("id", "=", id)
+          .where("deleted_at", "is", null)
+          .executeTakeFirst();
+
+        if (!row) return null;
+
+        const blob = await blobStore.get(row.blob_key);
+        if (!blob) return null;
+
+        return new Uint8Array(blob.buffer, blob.byteOffset, blob.byteLength);
+      },
+    },
     async setSignedInRole(roleId: RoleIdValue): Promise<readonly Permission[]> {
       await tDb
         .updateTable("users")

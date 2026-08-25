@@ -559,7 +559,10 @@ export async function seedStructure(
   ];
 
   // Generate an audio greeting if a blob store is available.
-  // E4 precedent: compute binary content in code, never commit blobs.
+  // E4 precedent: compute binary content in code for structural fixtures.
+  // Narrative demo media (the ticket voicemail clip and document mockup
+  // images) are the exception: committed assets under src/assets with
+  // regeneration scripts in scripts/, loaded at boot in phone-main.
   // Greeting audio is NOT encrypted (stored as raw audio in the blob store,
   // served via a public HTTP handler at /api/greetings/<blobKey>).
   if (deps.blobStore !== undefined) {

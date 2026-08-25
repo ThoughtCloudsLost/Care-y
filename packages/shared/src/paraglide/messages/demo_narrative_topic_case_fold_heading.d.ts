@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "Case details panel" |
+* | "Folding details away" |
 *
 * @param {Demo_Narrative_Topic_Case_Fold_HeadingInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

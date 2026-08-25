@@ -1366,6 +1366,8 @@ export function scrollIntoViewIframeSafe(el: Element): void {
     node = node.parentElement;
   }
 
+  if (scrollable === null && revealCollapsedChrome(el)) return;
+
   scrollable ??= doc.scrollingElement ?? doc.documentElement;
 
   // Position the element's vertical center at the viewport center of
@@ -1376,6 +1378,33 @@ export function scrollIntoViewIframeSafe(el: Element): void {
   const containerCenter = containerRect.top + containerRect.height / 2;
   const offset = elCenter - containerCenter;
   scrollable.scrollTop += offset;
+}
+
+/**
+ * Reveal a control that lives in the app's collapsible chrome. The
+ * shell subnavbar is an absolutely positioned layer with overflow
+ * hidden, so its controls have NO scrollable ancestor: they slide out
+ * of view as the page scroller scrolls down and only return when it
+ * scrolls back up. When the element is above the fold and inside such
+ * chrome, scrolling the main page scroller to the top re-expands the
+ * chrome. Returns true when it handled the reveal.
+ */
+function revealCollapsedChrome(el: Element): boolean {
+  const doc = el.ownerDocument;
+  if (el.getBoundingClientRect().top >= 0) return false;
+  if (el.closest(".shell-subnavbar, .shell-sub") === null) return false;
+  // The chrome collapse tracks the page's content scroller (on the
+  // ticket detail that is .chat-container, not an ancestor of the
+  // chrome). Reset every scrolled container outside the chrome so the
+  // collapse listeners re-expand the band the control lives in.
+  let reset = false;
+  for (const node of doc.querySelectorAll("*")) {
+    if (node.scrollTop > 0 && node.closest(".shell-subnavbar") === null) {
+      node.scrollTop = 0;
+      reset = true;
+    }
+  }
+  return reset;
 }
 
 // -----------------------------------------------------------------------
@@ -1398,6 +1427,7 @@ const SCROLL_SETTLE_MS = 1500;
 export async function resolveTopicElement(
   root: Document | Element,
   candidates: Set<string>,
+  isStale?: () => boolean,
 ): Promise<Element | null> {
   // Topics with no label candidates (decryption) resolve through the
   // selector fallback; polling an empty set would only burn the full
@@ -1412,6 +1442,7 @@ export async function resolveTopicElement(
       if (loose !== null) return { el: loose, loose: true };
       return null;
     },
+    isStale,
     timeoutMs: POLL_TIMEOUT_LONG_MS,
   });
 
@@ -1505,11 +1536,68 @@ export async function resolveSelectorTarget(
   });
 
   if (found === null) return null;
-  if (!found.loose) return found.el;
 
-  scrollIntoViewIframeSafe(found.el);
+  // A strict hit that hugs the top edge sits behind the app's sticky
+  // chrome (navbar, subnavbar, case-header stack), so the ring would
+  // circle a half-hidden region. Treat it like a loose hit.
+  const topRect = found.el.getBoundingClientRect();
+  const underChrome = topRect.top < CHROME_CLEARANCE_PX;
+  if (!found.loose && !underChrome) return found.el;
+
+  scrollHighlightTargetIntoView(found.el);
   const settled = await waitForStrictVisibility(found.el);
   return settled ?? (found.el.isConnected ? found.el : null);
+}
+
+/**
+ * Vertical band, in iframe CSS pixels, considered occupied by sticky
+ * chrome when judging whether a highlight target is cleanly visible.
+ * Covers the navbar plus the tallest subnavbar/case-header stack.
+ */
+const CHROME_CLEARANCE_PX = 240;
+
+/**
+ * Fraction of the scroll container's height where a highlight target
+ * is parked. Below center on purpose: the container rect includes the
+ * band behind the sticky chrome, so a true center can still leave the
+ * target's top edge under a tall case-header stack.
+ */
+const HIGHLIGHT_PARK_FRACTION = 0.62;
+
+/**
+ * Scroll a highlight target toward the lower third of its nearest
+ * scrollable ancestor. Same ancestor walk as scrollIntoViewIframeSafe,
+ * with the park point biased below center so the region lands clear
+ * of the sticky chrome. Targets near the end of the scroll range clamp
+ * naturally and rest even lower.
+ */
+function scrollHighlightTargetIntoView(el: Element): void {
+  const doc = el.ownerDocument;
+  let scrollable: Element | null = null;
+  let node = el.parentElement;
+  while (node !== null && node !== doc.documentElement) {
+    const style = getComputedStyle(node);
+    const oy = style.overflowY;
+    if (
+      (oy === "auto" || oy === "scroll") &&
+      node.scrollHeight > node.clientHeight
+    ) {
+      scrollable = node;
+      break;
+    }
+    node = node.parentElement;
+  }
+
+  if (scrollable === null && revealCollapsedChrome(el)) return;
+
+  scrollable ??= doc.scrollingElement ?? doc.documentElement;
+
+  const elRect = el.getBoundingClientRect();
+  const containerRect = scrollable.getBoundingClientRect();
+  const elCenter = elRect.top + elRect.height / 2;
+  const park =
+    containerRect.top + containerRect.height * HIGHLIGHT_PARK_FRACTION;
+  scrollable.scrollTop += elCenter - park;
 }
 
 // -----------------------------------------------------------------------
@@ -1585,9 +1673,11 @@ export function renderPulseMarker(target: Element): void {
 export async function waitForElement(
   root: Document | Element,
   candidates: Set<string>,
+  isStale?: () => boolean,
 ): Promise<Element | null> {
   return pollUntil<Element>({
     probe: () => findTopicElement(root, candidates),
+    isStale,
     timeoutMs: POLL_TIMEOUT_STANDARD_MS,
   });
 }

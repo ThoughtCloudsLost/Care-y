@@ -27,6 +27,7 @@
   import * as m from "$lib/paraglide/messages.js";
   import type { TabId, AreaId } from "$lib/shell/types.js";
   import { splitHandoffId } from "$lib/stores/split-handoff.svelte.js";
+  import { _resetSessionShown } from "$lib/composables/ticket-detail/create-exposure-hint.svelte.js";
   import AppShell from "$lib/shell/AppShell.svelte";
   import DemoSplash from "$demo/DemoSplash.svelte";
   import LoginMount from "$demo/LoginMount.svelte";
@@ -83,6 +84,7 @@
     resolveTopicElement,
     resolveSelectorElement,
     resolveSelectorTarget,
+    scrollIntoViewIframeSafe,
     renderPulseMarker,
     TAP_TOPICS,
     MODE_TOGGLE_TOPICS,
@@ -793,7 +795,7 @@
     await runHighlight(cmd, token);
 
     if (cmd.pulseTopic !== null && !store.isStale(token)) {
-      void handlePulse(cmd.pulseTopic, cmd);
+      void handlePulse(cmd.pulseTopic, cmd, token);
     }
   }
 
@@ -878,6 +880,10 @@
       );
       if (store.isStale(token)) return;
       if (anchor !== null) {
+        // A staleness-aborted choreography can leave its popover or
+        // sheet open; highlight-only subs must clean up the same way
+        // every pulse does before pointing at their region.
+        dismissOpenOverlays(anchor);
         showHighlightRing(anchor);
         ringOwnerSub = key;
         highlightHandledSub = key;
@@ -895,6 +901,8 @@
       );
       if (store.isStale(token)) return;
       if (el !== null) {
+        // Same leftover-overlay cleanup as the section branch above.
+        dismissOpenOverlays(el);
         showHighlightRing(el);
         ringOwnerSub = key;
         highlightHandledSub = key;
@@ -1251,7 +1259,13 @@
   async function handlePulse(
     pulseTopic: DemoTopic,
     cmd: PhoneCommand,
+    token: number,
   ): Promise<void> {
+    // Every await inside this choreography re-checks staleness. The
+    // multi-stage cases poll for seconds and defer clicks; without the
+    // guard a chain begun in one sub lands its taps during the next.
+    const stale = (): boolean => store.isStale(token);
+
     // Own all synthetic clicks until the next pulse or a visitor tap:
     // the pulse's choreography clicks report this topic, never their
     // raw classification (see applyTopic).
@@ -1268,6 +1282,7 @@
       await new Promise<void>((r) => {
         requestAnimationFrame(() => r());
       });
+      if (stale()) return;
     }
 
     // Tap topics get the real interaction (the marker taps the actual
@@ -1280,7 +1295,8 @@
     // Use the two-tier resolver: strict first (in-viewport), then
     // loose (below the fold). A loose hit is scrolled into view
     // automatically before the resolver returns.
-    let el = await resolveTopicElement(document, candidates);
+    let el = await resolveTopicElement(document, candidates, stale);
+    if (stale()) return;
     if (el === null && tap) {
       // The specific control is absent (different view state); fall
       // back to marking the broader element without tapping.
@@ -1288,13 +1304,16 @@
       el = await resolveTopicElement(
         document,
         buildTopicCandidates(pulseTopic),
+        stale,
       );
+      if (stale()) return;
     }
 
     // Selector fallback: topics whose targets have no matchable label.
     // Uses the same strict-then-loose strategy with scroll.
     if (el === null) {
       const selectorEl = await resolveSelectorElement(document, pulseTopic);
+      if (stale()) return;
       if (selectorEl !== null) {
         dismissOpenOverlays(selectorEl);
         renderPulseMarker(selectorEl);
@@ -1330,6 +1349,7 @@
       await queryClient.resetQueries({
         predicate: (q) => !JSON.stringify(q.queryKey).includes("readState"),
       });
+      if (stale()) return;
 
       // Poll for a DecryptPlaceholder's busy indicator INSIDE the
       // viewport. The reveal stagger clears above-fold placeholders
@@ -1349,8 +1369,10 @@
           }
           return null;
         },
+        isStale: stale,
         timeoutMs: POLL_TIMEOUT_SHORT_MS,
       });
+      if (stale()) return;
 
       // The placeholder can unmount between the poll and the mark
       // (boot-warm decrypts resolve in under a frame), which would
@@ -1389,6 +1411,11 @@
     // (ShellToast, role=status). SMS mode activates only when the visitor
     // taps dismiss, so this mutates nothing.
     if (pulseTopic === "exposure-hints" && el !== null) {
+      // The product shows each exposure hint once per session. The
+      // demo re-arms it so the toast appears on every visit to this
+      // sub (a re-click or a reader scrolling back must not get a
+      // silent mode switch instead of the warning being narrated).
+      _resetSessionShown();
       dismissOpenOverlays(el);
       renderPulseMarker(el);
       markPulseTarget(pulseTopic, "tapped", el);
@@ -1400,12 +1427,13 @@
         // resolve the still-visible compose button before the popover
         // mounts, re-toggling the popover instead of selecting SMS.
         const smsCandidates = buildSmsTitleCandidates();
-        const smsEl = await waitForElement(document, smsCandidates);
+        const smsEl = await waitForElement(document, smsCandidates, stale);
+        if (stale()) return;
         if (smsEl !== null) {
           const smsClickable = findClickableTarget(smsEl);
           if (smsClickable !== null) {
             setTimeout(() => {
-              smsClickable.click();
+              if (!stale()) smsClickable.click();
             }, 150);
           }
         }
@@ -1441,6 +1469,7 @@
       bubble.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true }));
       await new Promise<void>((r) => setTimeout(r, 700));
       bubble.dispatchEvent(new PointerEvent("pointerup", { bubbles: true }));
+      if (stale()) return;
       const sheetEl = await pollUntil<HTMLElement>({
         probe: () => {
           const sheet = document.querySelector<HTMLElement>(
@@ -1452,9 +1481,21 @@
             ? sheet
             : null;
         },
+        isStale: stale,
         timeoutMs: POLL_TIMEOUT_SHORT_MS,
       });
+      if (stale()) return;
       const target = sheetEl ?? bubble;
+      // The long-press window plus the sheet poll gives the previous
+      // sub's mode-exit re-layout time to scroll the thread; re-center
+      // the target and let the scroll settle before marking so the
+      // recorded rect is where the reader actually looks.
+      const rect = target.getBoundingClientRect();
+      if (rect.top < 0 || rect.bottom > window.innerHeight) {
+        scrollIntoViewIframeSafe(target);
+        await new Promise<void>((r) => setTimeout(r, 250));
+        if (stale()) return;
+      }
       renderPulseMarker(target);
       markPulseTarget(
         pulseTopic,
@@ -1475,7 +1516,9 @@
       const trigger = await resolveTopicElement(
         document,
         buildComposeTriggerCandidates(),
+        stale,
       );
+      if (stale()) return;
       if (trigger === null) {
         markPulseTarget(pulseTopic, "missing");
         return;
@@ -1489,12 +1532,14 @@
         const noteEl = await waitForElement(
           document,
           buildNoteTitleCandidates(),
+          stale,
         );
+        if (stale()) return;
         if (noteEl !== null) {
           const noteClickable = findClickableTarget(noteEl);
           if (noteClickable !== null) {
             setTimeout(() => {
-              noteClickable.click();
+              if (!stale()) noteClickable.click();
             }, 150);
           }
         }
@@ -1515,16 +1560,19 @@
       if (clickable !== null) {
         clickable.click();
         const replyCandidates = buildReplyTitleCandidates();
-        const replyEl = await waitForElement(document, replyCandidates);
+        const replyEl = await waitForElement(document, replyCandidates, stale);
+        if (stale()) return;
         if (replyEl !== null) {
           const replyClickable = findClickableTarget(replyEl);
           if (replyClickable !== null) {
             await new Promise<void>((r) => setTimeout(r, 150));
+            if (stale()) return;
             replyClickable.click();
             // Wait for the messagebar textarea to mount
             // (ShellMessagebar.svelte:164-168 renders a Konsta Messagebar
             // whose textarea is inside .shell-messagebar-anchor).
             await new Promise<void>((r) => setTimeout(r, 300));
+            if (stale()) return;
             const textarea = document.querySelector<HTMLTextAreaElement>(
               ".shell-messagebar-anchor textarea",
             );
@@ -1572,7 +1620,9 @@
         const actionEl = await waitForElement(
           document,
           buildCloseReopenCandidates(),
+          stale,
         );
+        if (stale()) return;
         if (actionEl !== null) {
           // Mark the action visually but do not click it: closing or
           // reopening would mutate the ticket state.
@@ -1647,7 +1697,7 @@
       if (tap) {
         // Let the marker paint first so the response reads as its effect
         setTimeout(() => {
-          clickable?.click();
+          if (!stale()) clickable?.click();
         }, 150);
         // A tap that switches ON a persistent inline mode (in-page
         // search, selection mode) registers its exit; the effect
@@ -1675,6 +1725,7 @@
         el instanceof HTMLSelectElement ? el : el.querySelector("select");
       if (select instanceof HTMLSelectElement) {
         setTimeout(() => {
+          if (stale()) return;
           select.focus();
           try {
             select.showPicker();

@@ -6,17 +6,17 @@ import { getLocale, experimentalStaticLocale } from '../runtime.js';
 /** @typedef {{}} Demo_Narrative_Topic_Case_Fold_HeadingInputs */
 
 const en_demo_narrative_topic_case_fold_heading = /** @type {(inputs: Demo_Narrative_Topic_Case_Fold_HeadingInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Case details panel`)
+	return /** @type {LocalizedString} */ (`Folding details away`)
 };
 
 const es_demo_narrative_topic_case_fold_heading = /** @type {(inputs: Demo_Narrative_Topic_Case_Fold_HeadingInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Panel de detalles del caso`)
+	return /** @type {LocalizedString} */ (`Plegar los detalles`)
 };
 
 /**
 * | output |
 * | --- |
-* | "Case details panel" |
+* | "Folding details away" |
 *
 * @param {Demo_Narrative_Topic_Case_Fold_HeadingInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

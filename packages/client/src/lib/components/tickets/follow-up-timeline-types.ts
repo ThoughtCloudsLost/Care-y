@@ -38,6 +38,8 @@ export interface ClusterRecord {
   hasFile: boolean;
   noteTypeId: string | null;
   eventParams: Record<string, unknown> | null;
+  callStatus: string | null;
+  callDurationSeconds: number | null;
   /** Non-null when this follow-up was encrypted with tk_temp (needs re-wrap). */
   keyGeneration: string | null;
   /** ECIES key wrap for tk_temp decryption. Present only when keyGeneration is non-null. */

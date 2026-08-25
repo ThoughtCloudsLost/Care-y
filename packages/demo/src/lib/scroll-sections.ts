@@ -387,11 +387,20 @@ export const SECTIONS: readonly Section[] = [
         headingKey: "demo_narrative_topic_case_header_heading",
         bodyKey: "demo_narrative_topic_case_header_body",
       },
+      // The fold and the panel follow the header directly: all three
+      // narrate the case record itself, before the story moves into
+      // the conversation tooling.
       {
-        slug: "timeline",
-        topic: "timeline",
-        headingKey: "demo_narrative_topic_timeline_heading",
-        bodyKey: "demo_narrative_topic_timeline_body",
+        slug: "case-fold",
+        topic: "case-fold",
+        headingKey: "demo_narrative_topic_case_fold_heading",
+        bodyKey: "demo_narrative_topic_case_fold_body",
+      },
+      {
+        slug: "case-panel",
+        topic: "case-panel",
+        headingKey: "demo_narrative_topic_case_panel_heading",
+        bodyKey: "demo_narrative_topic_case_panel_body",
       },
       {
         slug: "thread-filters",
@@ -405,35 +414,79 @@ export const SECTIONS: readonly Section[] = [
         headingKey: "demo_narrative_topic_deep_search_heading",
         bodyKey: "demo_narrative_topic_deep_search_body",
       },
+      // The timeline sub sits directly before the conversation sub so
+      // the story returns to the message view naturally after showing
+      // the timeline.
+      {
+        slug: "timeline",
+        topic: "timeline",
+        headingKey: "demo_narrative_topic_timeline_heading",
+        bodyKey: "demo_narrative_topic_timeline_body",
+      },
       {
         slug: "conversation",
         topic: "conversation",
         headingKey: "demo_narrative_topic_conversation_heading",
         bodyKey: "demo_narrative_topic_conversation_body",
       },
+      // call-log and the three media subs directly follow the
+      // conversation sub: its pulse lands the thread in the message
+      // view, where the call entries and the seeded media cluster
+      // live near the newest end.
       {
-        slug: "thread-anatomy",
-        topic: "thread-anatomy",
-        headingKey: "demo_narrative_topic_thread_anatomy_heading",
-        bodyKey: "demo_narrative_topic_thread_anatomy_body",
+        slug: "call-log",
+        topic: null,
+        headingKey: "demo_narrative_topic_call_log_heading",
+        bodyKey: "demo_narrative_topic_call_log_body",
+        highlight: { selectors: [".call-entry"] },
+      },
+      {
+        slug: "voicemails",
+        topic: null,
+        headingKey: "demo_narrative_topic_voicemails_heading",
+        bodyKey: "demo_narrative_topic_voicemails_body",
+        // .audio-player is the loaded state (AudioPlayer.svelte);
+        // .voicemail-player only exists on the loading and error
+        // branches of VoicemailPlayer.svelte.
+        highlight: { selectors: [".audio-player", ".voicemail-player"] },
+      },
+      {
+        slug: "media-images",
+        topic: null,
+        headingKey: "demo_narrative_topic_media_images_heading",
+        bodyKey: "demo_narrative_topic_media_images_body",
+        highlight: { selectors: [".mms-thumbnail"] },
+      },
+      {
+        slug: "files",
+        topic: null,
+        headingKey: "demo_narrative_topic_files_heading",
+        bodyKey: "demo_narrative_topic_files_body",
+        highlight: { selectors: [".attachment-chip"] },
+      },
+      {
+        slug: "date-separators",
+        topic: null,
+        headingKey: "demo_narrative_topic_date_separators_heading",
+        bodyKey: "demo_narrative_topic_date_separators_body",
+        highlight: { selectors: [".date-separator"] },
+      },
+      {
+        slug: "system-events",
+        topic: null,
+        headingKey: "demo_narrative_topic_system_events_heading",
+        bodyKey: "demo_narrative_topic_system_events_body",
+        highlight: { selectors: [".system-event"] },
       },
       {
         slug: "notes",
-        topic: "notes",
+        // Highlight the seeded note already in the thread rather than
+        // choreographing a new one; the notes topic stays classifiable
+        // for real taps on the note sheet.
+        topic: null,
         headingKey: "demo_narrative_topic_notes_heading",
         bodyKey: "demo_narrative_topic_notes_body",
-      },
-      {
-        slug: "case-fold",
-        topic: "case-fold",
-        headingKey: "demo_narrative_topic_case_fold_heading",
-        bodyKey: "demo_narrative_topic_case_fold_body",
-      },
-      {
-        slug: "case-panel",
-        topic: "case-panel",
-        headingKey: "demo_narrative_topic_case_panel_heading",
-        bodyKey: "demo_narrative_topic_case_panel_body",
+        highlight: { selectors: [".private-note-wrapper"] },
       },
       {
         slug: "compose-actions",

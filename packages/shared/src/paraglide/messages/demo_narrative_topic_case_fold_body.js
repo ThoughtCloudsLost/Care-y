@@ -9,14 +9,14 @@ const en_demo_narrative_topic_case_fold_body = /** @type {(inputs: Demo_Narrativ
 	return /** @type {LocalizedString} */ (`The disclosure handle under the ticket header folds the case fields away to give the conversation more room and brings them back when needed.
 **What folds.** The description, the queue and assignee, and the opened date collapse behind the handle. The title, status, and priority stay visible in the header above  so volunteers always have some context about the ticket they are viewing and replying to.
 **Encryption.** The description is encrypted with the per ticket key, and the queue and assignee names with the organization key. The opened date is plaintext metadata the server uses for sorting.
-**The full record.** The complete field list, along with the role masked client phone number and the case actions, lives in the case panel described later in this section.`)
+**The full record.** The complete field list, along with the role masked client phone number and the case actions, lives in the case panel described next.`)
 };
 
 const es_demo_narrative_topic_case_fold_body = /** @type {(inputs: Demo_Narrative_Topic_Case_Fold_BodyInputs) => LocalizedString} */ () => {
 	return /** @type {LocalizedString} */ (`El asa de apertura debajo del encabezado del ticket pliega los campos del caso para dar más espacio a la conversación y los muestra de nuevo cuando se necesitan.
 **Qué se pliega.** La descripción, la cola y el asignado, y la fecha de apertura se colapsan detrás del asa. El título, el estado y la prioridad permanecen visibles en el encabezado de arriba, para que los voluntarios siempre tengan algo de contexto sobre el ticket que están viendo y respondiendo.
 **Cifrado.** La descripción está cifrada con la clave por ticket, y los nombres de la cola y del asignado con la clave de la organización. La fecha de apertura es un metadato en texto plano que el servidor usa para ordenar.
-**El registro completo.** La lista completa de campos, junto con el número de teléfono del cliente enmascarado por rol y las acciones del caso, vive en el panel del caso descrito más adelante en esta sección.`)
+**El registro completo.** La lista completa de campos, junto con el número de teléfono del cliente enmascarado por rol y las acciones del caso, vive en el panel del caso descrito a continuación.`)
 };
 
 /**

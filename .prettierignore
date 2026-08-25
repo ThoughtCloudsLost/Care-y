@@ -28,3 +28,5 @@ Dockerfile.*
 **/project.inlang/**
 *.sh
 CNAME
+*.jpg
+*.m4a
