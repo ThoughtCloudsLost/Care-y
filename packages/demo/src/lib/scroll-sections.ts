@@ -200,6 +200,11 @@ export const SECTIONS: readonly Section[] = [
         topic: "key-derivation",
         headingKey: "demo_narrative_topic_key_derivation_heading",
         bodyKey: "demo_narrative_topic_key_derivation_body",
+        // The deriving screen only exists during a completed sign-in,
+        // which the demo fast-forwards off screen (the topic pulse is
+        // allowlisted as missing). Circle the auth card instead: the
+        // derivation this sub narrates runs inside that flow.
+        highlight: { selectors: [".auth-container"] },
       },
     ],
   },
@@ -626,6 +631,10 @@ export const SECTIONS: readonly Section[] = [
         topic: "admin-client-merge",
         headingKey: "demo_narrative_admin_client_merge_heading",
         bodyKey: "demo_narrative_admin_client_merge_body",
+        // The merge tool is selection-gated inside a sheet, so its
+        // topic pulse is allowlisted as missing. Circle the clients
+        // tabpanel the merge flow operates on instead.
+        highlight: { selectors: ["#panel-clients"] },
       },
       {
         slug: "roles",
@@ -1109,9 +1118,9 @@ export function resolvePhoneCommand(
     case "login": {
       // Every sub shows its screen in the phone, but none of these
       // targets COMPLETES auth: methods open without confirming, and
-      // key-derivation only narrates (its screen exists only during
-      // completion, which the bridge's completeLogin plays outside
-      // this resolver).
+      // key-derivation only narrates (its screen exists only during a
+      // completed sign-in, which the demo fast-forwards behind the
+      // splash instead of playing on screen).
       const loginTarget =
         subSlug === null ? "form" : (LOGIN_SUB_TARGETS.get(subSlug) ?? null);
       return {

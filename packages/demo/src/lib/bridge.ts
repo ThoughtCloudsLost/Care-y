@@ -442,13 +442,6 @@ export interface DemoBridge {
     subSlug: string | null,
     origin: PageOrigin,
   ): void;
-  /**
-   * Play the login flow to completion (sign in, confirm a method, key
-   * derivation, land on tickets). The location follows the phone
-   * through each stage; the page swaps to the tickets narrative when
-   * the phone actually gets there.
-   */
-  completeLogin(): void;
   /** Apply light/dark scheme and glass classes to the phone document. */
   setDark(dark: boolean): void;
   /**

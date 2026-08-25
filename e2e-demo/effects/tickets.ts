@@ -19,11 +19,16 @@ export const EFFECTS: EffectMap = new Map([
   [
     "sort",
     {
-      description: "Sort popover opens with sort option list",
+      description: "Sort surface opens with sort option list",
       visible: [
-        // ShellPopover.svelte line 54: .shell-popover-content
-        ".shell-popover-content",
-        // SubNavbarFilterLayout.svelte line 270: .sort-toggle-item
+        // The sort control presents as a ShellPopover
+        // (.shell-popover-content) or, at phone width, as a dialog
+        // sheet; either container proves the surface opened. The
+        // closed presentation stays mounted inert, so :visible
+        // (Playwright CSS) keeps .first() off the hidden shell.
+        '.shell-popover-content:visible, [role="dialog"]:visible',
+        // SubNavbarFilterLayout.svelte: .sort-toggle-item renders the
+        // toggle row inside both presentations.
         ".sort-toggle-item",
       ],
     },
@@ -40,10 +45,12 @@ export const EFFECTS: EffectMap = new Map([
   [
     "filters",
     {
-      description: "Status filter popover opens with filter options",
+      description: "Status filter surface opens with filter options",
       visible: [
-        // ShellPopover.svelte line 54: .shell-popover-content
-        ".shell-popover-content",
+        // ShellPopover content, or the dialog-sheet presentation at
+        // phone width (same split as the sort surface above, incl.
+        // the :visible guard against the mounted-inert shell).
+        '.shell-popover-content:visible, [role="dialog"]:visible',
         // FilterPillBar.svelte line 257/267: the "All" reset list item
         ".filter-pill-all",
       ],
@@ -118,12 +125,13 @@ export const EFFECTS: EffectMap = new Map([
   [
     "new-ticket",
     {
-      description: "New ticket sheet opens",
+      description: "New ticket surface opens",
       visible: [
-        // ShellSheet.svelte line 115: .shell-sheet-content
-        ".shell-sheet-content",
-        // ShellSheet.svelte line 124: .sheet-header-title
-        ".sheet-header-title",
+        // ShellSheet renders as a bottom sheet at phone width and as a
+        // ShellPopup (.popup-dialog) at desktop; either container
+        // proves the new-ticket surface opened. Both stay mounted
+        // inert when closed, hence :visible.
+        ".shell-sheet-content:visible, .popup-dialog:visible",
       ],
     },
   ],
@@ -165,8 +173,9 @@ export const EFFECTS: EffectMap = new Map([
 
   // unread-badges: mark-only. Presence asserts the new-pill badge is
   // visible on at least one ticket. Seed dependency: seed-tickets.ts
-  // creates tickets with client follow-ups but seeds no read cursors,
-  // so every ticket with a client message shows an unread badge.
+  // seeds encrypted read cursors (unreadSince defs) older than a later
+  // client follow-up, so those tickets read as unread. Never-opened
+  // tickets (no cursor row) are NOT unread by design.
   [
     "unread-badges",
     {

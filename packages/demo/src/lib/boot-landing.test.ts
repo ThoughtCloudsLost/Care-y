@@ -3,17 +3,27 @@ import { splashCovers } from "./boot-landing.js";
 
 describe("splashCovers", () => {
   // -----------------------------------------------------------------
-  // Resting state: splash stays up, before and after keying
+  // Resting state (origin "init"): splash lifts when keying settles
   // -----------------------------------------------------------------
 
   it("covers the resting phone before the background login settles", () => {
     expect(splashCovers(false, "login", "login", "init")).toBe(true);
   });
 
-  it("keeps covering the resting phone after keying until a navigation lands", () => {
-    // keyedDone alone must not lift the splash: the router is still on
-    // the hidden login resting state and nothing was chosen.
-    expect(splashCovers(true, "login", "login", "init")).toBe(true);
+  it("lifts the splash at rest once keying settles, revealing the login form", () => {
+    // keyedDone lifts the splash at rest so the login form is the
+    // demo's ready state; no navigation needed.
+    expect(splashCovers(true, "login", "login", "init")).toBe(false);
+  });
+
+  it("covers at init when not keyed regardless of routerFeature", () => {
+    expect(splashCovers(false, "tickets", "login", "init")).toBe(true);
+    expect(splashCovers(false, "home", "tickets", "init")).toBe(true);
+  });
+
+  it("lifts at init when keyed regardless of routerFeature", () => {
+    expect(splashCovers(true, "tickets", "login", "init")).toBe(false);
+    expect(splashCovers(true, "home", "tickets", "init")).toBe(false);
   });
 
   // -----------------------------------------------------------------

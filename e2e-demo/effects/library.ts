@@ -58,8 +58,10 @@ export const EFFECTS: EffectMap = new Map([
       description: "Category management sheet opens",
       visible: [
         // CategoryManageSheet.svelte:188 - title passed to ShellSheet
-        // ShellSheet.svelte:112 - role="dialog" with aria-label from title
-        '.shell-sheet-content[role="dialog"]',
+        // ShellSheet.svelte:112 - role="dialog" with aria-label from title.
+        // At desktop width ShellSheet renders as a ShellPopup instead
+        // (ShellSheet.svelte:96), so accept either presentation.
+        '.shell-sheet-content[role="dialog"]:visible, .popup-dialog:visible',
       ],
     },
   ],

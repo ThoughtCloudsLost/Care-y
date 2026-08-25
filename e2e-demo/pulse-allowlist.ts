@@ -53,13 +53,13 @@ export function findAllowlistEntry(
 export const PULSE_ALLOWLIST: ReadonlyMap<string, AllowlistEntry> = new Map([
   // -- Login section --------------------------------------------------
 
-  // The deriving screen only appears during completeLogin; the walk
-  // visits key-derivation as a sub-section without triggering the full
-  // login completion, so no deriving UI is mounted and the pulse finds
-  // nothing to mark.
+  // The deriving screen only appears during a completed sign-in, which
+  // the demo fast-forwards behind the splash; the walk visits
+  // key-derivation as a sub-section without triggering completion, so
+  // no deriving UI is mounted and the pulse finds nothing to mark.
   [
     allowlistKey("key-derivation", null),
-    { reason: "deriving screen requires completeLogin, walk visits sub only" },
+    { reason: "deriving screen requires a completed sign-in, never on screen" },
   ],
 
   // -- Admin-people section -------------------------------------------

@@ -8,7 +8,7 @@
  * specifiers to browser-compatible shims under src/lib/engine/server/.
  * The vite.config.ts consumes them to wire resolve.alias entries.
  */
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import type { Alias, Plugin } from "vite";
@@ -301,6 +301,81 @@ export function demoSplashPlugin(): Plugin {
           `<body>\n${schemeScript}\n${styles}\n${markup}`,
         );
       },
+    },
+  };
+}
+
+// -----------------------------------------------------------------------
+// Client static assets (fonts + app icon)
+// -----------------------------------------------------------------------
+
+/**
+ * Serve the client's static fonts and app icon at their production
+ * paths. The phone iframe renders the real app CSS, whose @font-face
+ * rules point at absolute /fonts/ URLs that SvelteKit serves from
+ * packages/client/static in the product; without this the phone falls
+ * back to system fonts (and the dev server answers the .woff2 request
+ * with the SPA's index.html). Dev serves the files straight from the
+ * client package; builds emit them into dist at the same paths.
+ */
+export function clientStaticAssetsPlugin(): Plugin {
+  const staticDir = resolve("../client/static/");
+  const iconFile = "icon-192.png";
+
+  function contentTypeFor(file: string): string {
+    if (file.endsWith(".woff2")) return "font/woff2";
+    if (file.endsWith(".png")) return "image/png";
+    if (file.endsWith(".txt")) return "text/plain; charset=utf-8";
+    return "application/octet-stream";
+  }
+
+  return {
+    name: "care-y-demo-client-static",
+    configureServer(server) {
+      server.middlewares.use((req, res, next) => {
+        const url = (req.url ?? "").split("?")[0] ?? "";
+        if (!(url.startsWith("/fonts/") || url === `/${iconFile}`)) {
+          next();
+          return;
+        }
+        const file = path.resolve(staticDir, url.slice(1));
+        // Containment check: the resolved path must stay inside the
+        // client static dir (rejects traversal segments in the URL).
+        if (!file.startsWith(path.resolve(staticDir) + path.sep)) {
+          next();
+          return;
+        }
+        let body: Buffer;
+        try {
+          // eslint-disable-next-line security/detect-non-literal-fs-filename -- containment-checked above, read-only static asset
+          body = readFileSync(file);
+        } catch {
+          next();
+          return;
+        }
+        res.setHeader("Content-Type", contentTypeFor(file));
+        res.setHeader("Cache-Control", "public, max-age=3600");
+        res.end(body);
+      });
+    },
+    generateBundle() {
+      const fontsDir = path.join(staticDir, "fonts");
+      // eslint-disable-next-line security/detect-non-literal-fs-filename -- build-time constant path
+      for (const name of readdirSync(fontsDir)) {
+        if (!name.endsWith(".woff2")) continue;
+        this.emitFile({
+          type: "asset",
+          fileName: `fonts/${name}`,
+          // eslint-disable-next-line security/detect-non-literal-fs-filename -- build-time constant dir listing
+          source: readFileSync(path.join(fontsDir, name)),
+        });
+      }
+      this.emitFile({
+        type: "asset",
+        fileName: iconFile,
+        // eslint-disable-next-line security/detect-non-literal-fs-filename -- build-time constant path
+        source: readFileSync(path.join(staticDir, iconFile)),
+      });
     },
   };
 }
