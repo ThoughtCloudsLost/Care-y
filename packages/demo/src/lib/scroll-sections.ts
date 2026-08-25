@@ -1396,7 +1396,7 @@ export function bridgeStateToLocation(
   }
 
   if (feature === "home") {
-    return { sectionId: "dashboard", subSlug: "view-switcher" };
+    return { sectionId: "dashboard", subSlug: "getting-started" };
   }
 
   if (feature === "library") {
