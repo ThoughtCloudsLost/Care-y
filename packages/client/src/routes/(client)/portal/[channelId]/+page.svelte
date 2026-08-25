@@ -119,6 +119,7 @@
 
   // Optimistic messages appended after send
   interface OptimisticMsg {
+    readonly id: string;
     readonly direction: string;
     readonly ephemeralPoint: string;
     readonly nonce: string;
@@ -127,6 +128,9 @@
     readonly editedAt: string | null;
   }
   let optimisticMessages = $state<OptimisticMsg[]>([]);
+  let sendError = $state("");
+  let lastSentText = "";
+  let composerRef = $state<PortalComposer | null>(null);
 
   function destroySession(): void {
     session?.destroy();
@@ -302,13 +306,23 @@
       });
       announceToLiveRegion("polite", m.portal_send());
     },
+    onError: (_err, variables) => {
+      optimisticMessages = optimisticMessages.filter(
+        (msg) => msg.id !== variables.followUpId,
+      );
+      composerRef?.restoreDraft(lastSentText);
+      sendError = m.portal_send_failed();
+      announceToLiveRegion("polite", m.portal_send_failed());
+    },
   }));
 
   function handleSend(text: string): void {
+    sendError = "";
     const ticketId = bootstrapQuery.data?.ticketId;
     if (!session || !orgPublicKey || ticketId == null || ticketId === "") {
       return;
     }
+    lastSentText = text;
 
     const followUpId = newFollowupId();
     const keyGeneration = newKeyGeneration();
@@ -328,6 +342,7 @@
     optimisticMessages = [
       ...optimisticMessages,
       {
+        id: followUpId,
         direction: "from_client",
         ephemeralPoint: payload.selfCopy.ephemeralPoint,
         nonce: payload.selfCopy.nonce,
@@ -596,9 +611,11 @@
   />
 
   <PortalComposer
+    bind:this={composerRef}
     onsend={handleSend}
     pending={replyMutation.isPending}
     onfirstfocus={handleFirstFocus}
+    errorMessage={sendError || undefined}
   />
 
   <WebChatHint opened={hintShown} ondismiss={dismissHint} />
