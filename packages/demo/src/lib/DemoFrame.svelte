@@ -236,7 +236,9 @@
     flex-shrink: 0;
     background: #1a1a1a;
     padding: 12px;
-    overflow: hidden;
+    /* clip, not hidden: hidden leaves the box a scroll container, and
+       Chromium scrolls it when anything inside the iframe takes focus */
+    overflow: clip;
     box-shadow: 0 0 0 2px #333;
     position: relative;
   }
@@ -251,7 +253,7 @@
   }
 
   .screen {
-    overflow: hidden;
+    overflow: clip;
     position: relative;
     background: var(--surface-primary, #fff);
   }

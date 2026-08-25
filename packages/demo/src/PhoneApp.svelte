@@ -1709,7 +1709,7 @@
       if (select instanceof HTMLSelectElement) {
         setTimeout(() => {
           if (stale()) return;
-          select.focus();
+          select.focus({ preventScroll: true });
           try {
             select.showPicker();
           } catch {
