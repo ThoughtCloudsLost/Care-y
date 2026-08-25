@@ -199,15 +199,6 @@ export class DemoLocationStore {
   }
 
   /**
-   * Start a follow-mode chain (the login play-through): returns a
-   * fresh token without pinning the location, so stage changes stream
-   * into the narrative as the phone walks the flow.
-   */
-  beginFollowChain(): number {
-    return this.cancelChains();
-  }
-
-  /**
    * A classified interaction inside the phone. Trusted and synthetic
    * clicks both report here; while a page intent is reconciling, the
    * adoption is deferred to the chain-end convergence check.

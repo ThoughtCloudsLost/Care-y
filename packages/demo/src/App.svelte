@@ -10,7 +10,7 @@
     locales,
     isLocale,
   } from "$lib/paraglide/runtime.js";
-  import { ArrowRight, LoaderCircle, X } from "@lucide/svelte";
+  import { ArrowRight, X } from "@lucide/svelte";
   import { RoleId, type RoleIdValue } from "@care-y/shared";
   import TopBar from "$demo/TopBar.svelte";
   import FrameToolbar from "$demo/FrameToolbar.svelte";
@@ -21,6 +21,7 @@
   import DemoFrame from "$demo/DemoFrame.svelte";
   import PeekStill from "$demo/PeekStill.svelte";
   import { isRecordMode } from "$demo/record-mode.js";
+  import { entryAutoDismisses } from "$demo/entry-visibility.js";
   import { captureStill, type CapturedStill } from "$demo/peek-still.js";
   import {
     createPeekController,
@@ -168,9 +169,6 @@
 
   /** Active role from the bridge snapshot; admin at boot/restart. */
   let activeRole: RoleIdValue = $state(RoleId.ADMIN);
-
-  /** True while the login choreography is in flight after the user clicked the pill. */
-  let loginPending = $state(false);
 
   /** Whether the peek is in a non-idle phase (active for UI gating). */
   const peekActive: boolean = $derived(peekCtrl.phase !== "idle");
@@ -580,8 +578,14 @@
 
   // Entry page: visible until the visitor dismisses it (next pill,
   // section click, phone interaction, or deep link). A deep link
-  // skips it entirely.
+  // skips it entirely. The home button can re-show it.
   let entryVisible = $state(parseHash(window.location.hash) === null);
+
+  // Bookkeeping for the entry auto-dismiss guard. Plain vars (not
+  // $state) because they are the effect's own internal state and
+  // must not cause re-runs.
+  let lastLocationSeq = 0;
+  let entryShownAtSeq = 0;
 
   // Scroll engine (renders the shared location, sends page intents)
   // Link gate: the user's link choice, minus an in-flight drag/resize
@@ -640,6 +644,8 @@
     unsubscribeFlow?.();
     bridge = b;
     lastRestartSeq = 0;
+    lastLocationSeq = 0;
+    entryShownAtSeq = 0;
 
     // Reset progress on restart/reload
     progress.reset();
@@ -667,16 +673,21 @@
       // Sync the role rail highlight from the bridge snapshot
       activeRole = state.role;
 
-      if (loginPending && state.feature !== "login") {
-        loginPending = false;
-      }
-
-      // A non-init bridge state while the entry page is up means the
-      // phone moved (deep link, phone interaction). Dismiss entry so
-      // the story follows.
-      if (entryVisible && state.origin !== "init") {
+      // The phone moved since entry was shown, so the story follows.
+      // Uses the pure guard: entry dismisses only when locationSeq
+      // advanced past the snapshot taken when entry was last shown,
+      // so bridge echoes at the same seq (re-shown entry) survive.
+      if (
+        entryAutoDismisses(
+          entryVisible,
+          state.origin,
+          state.locationSeq,
+          entryShownAtSeq,
+        )
+      ) {
         entryVisible = false;
       }
+      lastLocationSeq = state.locationSeq;
 
       scrollEngine.handleBridgeState(state);
 
@@ -699,7 +710,7 @@
     unsubscribeFlow = undefined;
     flowBand.reset();
     bridge = undefined;
-    loginPending = false;
+    entryShownAtSeq = 0;
     history.replaceState(
       null,
       "",
@@ -756,22 +767,40 @@
   }
 
   /**
+   * Return to the entry page without touching the phone, bridge, or
+   * scroll engine. The simulator keeps its exact state; snapshot the
+   * current seq before showing so bridge echoes at the same seq
+   * cannot re-dismiss; hash cleared because the entry's canonical
+   * form is no hash; the scroll gate (`() => !entryVisible`) closes
+   * before any effect can fire a page-scroll intent.
+   *
+   * CRITICAL: do not call scrollEngine.selectSection or any bridge
+   * method here.
+   */
+  function handleShowEntry(): void {
+    if (entryVisible) return;
+    entryShownAtSeq = lastLocationSeq;
+    entryVisible = true;
+    history.replaceState(
+      null,
+      "",
+      window.location.pathname + window.location.search,
+    );
+    window.scrollTo({ top: 0, behavior: "auto" });
+  }
+
+  /**
    * The next-section button. While the entry page is visible it reads
-   * "next: sign in" and calls dismissEntry (it must NOT fall into the
-   * login -> completeLogin special case). From the login section it
-   * doubles as "complete login": the flow plays to the end in the phone
-   * (sign in, confirm a method, key derivation) and the narrative
-   * follows the phone through each stage, swapping to the tickets
-   * section when the phone actually lands there.
+   * "next: sign in" and calls dismissEntry; everywhere else it
+   * navigates exactly like a section tab, pinning the story to the
+   * next section while the phone catches up (from the login section
+   * that means the instant fast-forward sign-in behind the splash,
+   * not a stage-by-stage play-through that would drag the story back
+   * through the login subs).
    */
   function handleNextSection(id: SectionId): void {
     if (entryVisible) {
       dismissEntry();
-      return;
-    }
-    if (scrollEngine.activeSection === "login" && bridge !== undefined) {
-      loginPending = true;
-      bridge.completeLogin();
       return;
     }
     handleSectionClick(id);
@@ -1038,6 +1067,7 @@
       onLocaleChange={handleLocaleChange}
       onToggleFlowBand={handleToggleFlowBand}
       onToggleMode={handleToggleMode}
+      onHomeClick={handleShowEntry}
     />
   {/key}
   <!-- Sub navigation for viewports without the rail. Part of the top
@@ -1322,18 +1352,12 @@
       <button
         class="next-pill"
         type="button"
-        disabled={loginPending}
         onclick={() => handleNextSection(nextSectionDef.id)}
       >
-        {#if loginPending}
-          {m.auth_signing_in()}
-          <LoaderCircle size={16} class="next-pill-spinner" />
-        {:else}
-          {m.demo_section_next({
-            section: sectionTitle(nextSectionDef.id),
-          })}
-          <ArrowRight size={16} />
-        {/if}
+        {m.demo_section_next({
+          section: sectionTitle(nextSectionDef.id),
+        })}
+        <ArrowRight size={16} />
       </button>
     </div>
   {/if}
@@ -1503,33 +1527,9 @@
     outline-offset: 2px;
   }
 
-  .next-pill:disabled {
-    cursor: default;
-    opacity: 0.85;
-  }
-
-  .next-pill:disabled:hover {
-    background: color-mix(in srgb, var(--paper) 92%, transparent);
-    box-shadow: 0 2px 8px var(--glass-shadow);
-  }
-
-  :global(.next-pill-spinner) {
-    animation: pill-spin 1s linear infinite;
-  }
-
-  @keyframes pill-spin {
-    to {
-      transform: rotate(360deg);
-    }
-  }
-
   @media (prefers-reduced-motion: reduce) {
     .next-pill {
       transition: none;
-    }
-
-    :global(.next-pill-spinner) {
-      animation: none;
     }
   }
 

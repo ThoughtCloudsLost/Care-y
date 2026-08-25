@@ -1842,6 +1842,7 @@
   "demo_app_title": "Interactive Handbook",
   "demo_scene_tickets": "Tickets",
   "demo_scene_search": "Search",
+  "demo_home": "Handbook introduction",
   "demo_theme_toggle": "Toggle dark/light mode",
   "demo_restart": "Restart",
   "demo_step_of": "Step {step} of {total}",

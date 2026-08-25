@@ -377,7 +377,11 @@ export function buildTopicCandidates(topic: DemoTopic): Set<string> {
         candidates.add(m.search_deep_nav_trigger({}, opts));
         break;
       case "message-actions":
-        candidates.add(m.ticket_context_menu_title({}, opts));
+        // No label candidates: the "Message Actions" label only exists
+        // on the closed (zero-size) action sheet, so a label poll burns
+        // the full timeout matching nothing. PhoneApp handles this
+        // topic as a first-class special case (long-press choreography
+        // with a bubble fallback), same shape as "decryption".
         break;
       case "close-reopen":
         candidates.add(m.ticket_action_close({}, opts));
@@ -599,6 +603,30 @@ export function buildReplyTitleCandidates(): Set<string> {
   const terms = withTerms();
   for (const locale of locales) {
     candidates.add(m.ticket_reply_to_client(terms, { locale }));
+  }
+  return candidates;
+}
+
+/**
+ * Stage-2 candidates for the notes choreography: the compose-actions
+ * popover's "Internal Note" entry alone. The compose trigger's own
+ * label must not appear here for the same reason as the SMS helper:
+ * the aria pass would resolve the still-visible trigger before the
+ * popover item mounts.
+ */
+export function buildNoteTitleCandidates(): Set<string> {
+  const candidates = new Set<string>();
+  for (const locale of locales) {
+    candidates.add(m.ticket_add_internal_note({}, { locale }));
+  }
+  return candidates;
+}
+
+/** The compose-actions trigger label, for staged flows that open it. */
+export function buildComposeTriggerCandidates(): Set<string> {
+  const candidates = new Set<string>();
+  for (const locale of locales) {
+    candidates.add(m.ticket_compose_actions({}, { locale }));
   }
   return candidates;
 }
@@ -1146,6 +1174,20 @@ function findTopicElementWith(
   for (const el of inputs) {
     const placeholder = el.getAttribute("placeholder");
     if (placeholder !== null && candidates.has(placeholder) && check(el)) {
+      const hit = prefer(el);
+      if (hit !== null) return hit;
+    }
+  }
+
+  // Pass 5: status regions. Some narrated states are pure text with no
+  // interactive container (the push method auto-sends and rests on its
+  // role="status" waiting indicator), so match a status region whose
+  // whole text is a candidate. Last pass: only reached when nothing
+  // interactive carries the label.
+  const statuses = root.querySelectorAll('[role="status"]');
+  for (const el of statuses) {
+    const text = el.textContent.trim().slice(0, 80);
+    if (text !== "" && candidates.has(text) && check(el)) {
       const hit = prefer(el);
       if (hit !== null) return hit;
     }

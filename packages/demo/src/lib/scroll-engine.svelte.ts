@@ -600,12 +600,20 @@ export function createScrollEngine(
   }
 
   function selectSection(id: SectionId): void {
+    // Single-sub sections (admin hub, schedule) expose no rail, so the
+    // tab is the only way in and the lone sub would otherwise never be
+    // selected: the phone command for a null sub carries no highlight,
+    // and nothing after the tab click supplies one. Selecting the lone
+    // sub here mirrors bridgeStateToLocation, which already resolves
+    // these sections to that sub.
+    const subs = getSection(id)?.subs;
+    const loneSub = subs?.length === 1 ? (subs[0]?.slug ?? null) : null;
     if (!getUserLinked()) {
-      localNavigate(id, null);
+      localNavigate(id, loneSub);
       return;
     }
     if (!getLinked()) return;
-    getBridge()?.setLocation(id, null, "page-click");
+    getBridge()?.setLocation(id, loneSub, "page-click");
   }
 
   function selectSub(sectionId: SectionId, subSlug: string): void {

@@ -20,6 +20,7 @@
  */
 
 import { pollUntil } from "./poll.js";
+import { scrollIntoViewIframeSafe } from "./tap-pulse.js";
 
 /**
  * Wait budget for the scroll to settle. expandAndScroll holds for
@@ -111,8 +112,15 @@ export async function tapSectionNav(
   if (button === null) {
     // The section exists but its nav button does not (a page that
     // renders section ids without a SectionScrollNav). The anchor is
-    // still the right thing to point at; the caller scrolls it itself.
-    return anchor;
+    // still the right thing to point at, but a ring on an offscreen
+    // block is exactly the failure this layer exists to prevent, so
+    // bring it into view here (iframe-safe manual scroll, never
+    // Element.scrollIntoView) and let the scroll settle.
+    scrollIntoViewIframeSafe(anchor);
+    if (isStale?.() === true) return null;
+    const scrolled = await waitForSettle(anchor);
+    if (isStale?.() === true) return null;
+    return scrolled ?? (anchor.isConnected ? anchor : null);
   }
 
   button.click();
@@ -122,7 +130,34 @@ export async function tapSectionNav(
   const settled = await waitForSettle(anchor);
   if (isStale?.() === true) return null;
 
-  // A settle timeout still leaves a real, attached anchor. Pointing at
-  // a block that is still easing into place beats pointing at nothing.
-  return settled ?? (anchor.isConnected ? anchor : null);
+  // Settle only proves the anchor stopped moving; an anchor that never
+  // moved settles instantly. The chip click can land before the page's
+  // scroll handler is wired (queries still mounting right after a
+  // route change), leaving the block below the fold. Ring only what
+  // the reader can see: scroll it into view ourselves and re-settle.
+  const target = settled ?? (anchor.isConnected ? anchor : null);
+  if (target !== null && !isInViewport(target)) {
+    scrollIntoViewIframeSafe(target);
+    if (isStale?.() === true) return null;
+    const rescrolled = await waitForSettle(target);
+    if (isStale?.() === true) return null;
+    return rescrolled ?? (target.isConnected ? target : null);
+  }
+
+  return target;
+}
+
+/** Whether any part of the element is inside the window viewport. */
+function isInViewport(el: HTMLElement): boolean {
+  const view = el.ownerDocument.defaultView;
+  if (view === null) return false;
+  const rect = el.getBoundingClientRect();
+  return (
+    rect.width > 0 &&
+    rect.height > 0 &&
+    rect.bottom > 0 &&
+    rect.top < view.innerHeight &&
+    rect.right > 0 &&
+    rect.left < view.innerWidth
+  );
 }

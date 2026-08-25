@@ -15,8 +15,10 @@ export const EFFECTS: EffectMap = new Map([
       description: "Display name edit sheet opens",
       visible: [
         // DisplayNameSheet.svelte:78 - ariaLabel={m.settings_display_name()}
-        // ShellSheet.svelte:112 - role="dialog" with aria-label from ariaLabel
-        '.shell-sheet-content[role="dialog"]',
+        // ShellSheet.svelte:112 - role="dialog" with aria-label from
+        // ariaLabel. At desktop width ShellSheet renders as a ShellPopup
+        // instead (ShellSheet.svelte:96), so accept either presentation.
+        '.shell-sheet-content[role="dialog"]:visible, .popup-dialog:visible',
       ],
     },
   ],
@@ -26,8 +28,10 @@ export const EFFECTS: EffectMap = new Map([
       description: "Two-factor enrollment sheet opens",
       visible: [
         // TwoFactorSheet.svelte:145 - ariaLabel={m.twofa_enroll_title()}
-        // ShellSheet.svelte:112 - role="dialog" with aria-label from ariaLabel
-        '.shell-sheet-content[role="dialog"]',
+        // ShellSheet.svelte:112 - role="dialog" with aria-label from
+        // ariaLabel. At desktop width ShellSheet renders as a ShellPopup
+        // instead (ShellSheet.svelte:96), so accept either presentation.
+        '.shell-sheet-content[role="dialog"]:visible, .popup-dialog:visible',
       ],
     },
   ],
@@ -38,7 +42,7 @@ export const EFFECTS: EffectMap = new Map([
       visible: [
         // SecurityBriefingPopup.svelte:32 - ariaLabel={m.onboarding_briefing_heading()}
         // ShellPopup.svelte:46-48 - role="dialog" on .popup-dialog
-        '.popup-dialog[role="dialog"]',
+        '.popup-dialog[role="dialog"]:visible',
       ],
     },
   ],

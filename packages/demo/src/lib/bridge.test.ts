@@ -47,7 +47,6 @@ describe("DemoBridge interface", () => {
     // Type-level check: a conforming object must include setRole.
     const stub: DemoBridge = {
       setLocation: () => undefined,
-      completeLogin: () => undefined,
       setDark: () => undefined,
       setRole: () => undefined,
       setLocale: () => undefined,
@@ -60,7 +59,6 @@ describe("DemoBridge interface", () => {
   it("requires setLocale in the interface shape", () => {
     const stub: DemoBridge = {
       setLocation: () => undefined,
-      completeLogin: () => undefined,
       setDark: () => undefined,
       setRole: () => undefined,
       setLocale: () => undefined,

@@ -16,8 +16,8 @@
  * - twofa-backup: backup code entry with its unique back button.
  *
  * Allowlisted pulse gaps (see pulse-allowlist.ts):
- * - key-derivation: deriving screen requires completeLogin, walk
- *   visits sub only.
+ * - key-derivation: deriving screen requires a completed sign-in,
+ *   which the demo fast-forwards off screen; walk visits sub only.
  */
 
 import type { EffectMap } from "./types.js";
@@ -40,8 +40,10 @@ export const EFFECTS: EffectMap = new Map([
       visible: [
         // login/+page.svelte:367 - Konsta ListInput with autocomplete
         'input[autocomplete="username"]',
-        // PasswordInput.svelte:48 - native input with autocomplete
-        'input[autocomplete="current-password"]',
+        // PasswordInput.svelte - stable pw-field class. Do not match
+        // on autocomplete="current-password": LoginMount rewrites it
+        // to "off" at mount as part of the save-prompt defense.
+        "input.pw-field",
       ],
     },
   ],
@@ -60,11 +62,16 @@ export const EFFECTS: EffectMap = new Map([
   [
     "twofa-passkey",
     {
-      description: "Passkey method row is visible on the 2FA picker",
+      description: "Use-passkey button is visible on the method screen",
       visible: [
-        // TwoFactorChallenge.svelte:463 - per-method data-testid on the
-        // picker's ListItem loop; webauthn is the passkey method key
-        '[data-testid="twofa-method-webauthn"]',
+        // TwoFactorChallenge.svelte - SoftButton (full) renders
+        // button.soft-btn.soft-btn--full when activeMethod is
+        // "webauthn". The advance chain clicks the picker row, so by
+        // effect time the picker's data-testid rows are gone and the
+        // method screen owns the viewport. Shared selector with the
+        // other method screens is acceptable: the walk's convergence
+        // pins loginStage before the effect runs.
+        ".soft-btn--full",
       ],
     },
   ],
@@ -124,14 +131,15 @@ export const EFFECTS: EffectMap = new Map([
   [
     "twofa-push",
     {
-      description: "Push send button is visible on the method screen",
+      description: "Push waiting status or send button on the method screen",
       visible: [
-        // TwoFactorChallenge.svelte:654-668 - SoftButton (full) renders
-        // button.soft-btn.soft-btn--full when activeMethod === "push"
-        // and pushChallengeId === null (line 653). Same structure as
-        // email/sms initial states; shared selector acceptable since
+        // TwoFactorChallenge.svelte - selecting push auto-sends (the
+        // auto-start effect), so the screen usually rests on the
+        // role="status" waiting indicator; if the demo push times out
+        // or has not sent yet, the SoftButton (.soft-btn--full) shows
+        // instead. Either state proves the push method screen is open;
         // loginStage pins the method.
-        ".soft-btn--full",
+        '[role="status"], .soft-btn--full',
       ],
     },
   ],
