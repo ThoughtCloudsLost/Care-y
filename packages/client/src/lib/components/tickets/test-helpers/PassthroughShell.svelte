@@ -19,11 +19,19 @@
     ondismiss?: () => void;
     title?: string;
     headerRight?: Snippet;
+    button?: Snippet;
     [key: string]: unknown;
   }
 
-  let { children, opened, ondismiss, title, headerRight, ..._rest }: Props =
-    $props();
+  let {
+    children,
+    opened,
+    ondismiss,
+    title,
+    headerRight,
+    button,
+    ..._rest
+  }: Props = $props();
 </script>
 
 <div
@@ -40,5 +48,6 @@
       {@render headerRight()}
     {/if}
     {@render children?.()}
+    {@render button?.()}
   {/if}
 </div>

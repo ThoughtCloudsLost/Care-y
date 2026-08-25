@@ -32,7 +32,7 @@
   } from "./intake-crypto.js";
   import FieldError from "$lib/components/FieldError.svelte";
   import HowProtected from "$lib/components/portal/HowProtected.svelte";
-  import IntakeSubmitHint from "$lib/components/portal/IntakeSubmitHint.svelte";
+  import PortalHint from "$lib/components/portal/PortalHint.svelte";
   import IntakeFieldRenderer from "$lib/components/portal/IntakeFieldRenderer.svelte";
   import type { LoginCryptoCallbacks } from "$lib/auth/login-crypto.js";
   import { buildLoginCallbacks } from "$lib/auth/crypto-callbacks.js";
@@ -833,11 +833,14 @@
     </Block>
   {/if}
 
-  <IntakeSubmitHint
+  <PortalHint
     opened={hintShown}
     ondismiss={() => {
       hintShown = false;
     }}
+    message={m.intake_submit_hint()}
+    dismissLabel={m.intake_hint_dismiss()}
+    dismissTestid="intake-hint-dismiss"
   />
 {:else}
   <!-- Form state -->

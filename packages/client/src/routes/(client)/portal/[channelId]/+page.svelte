@@ -51,7 +51,7 @@
   import type { LoginCryptoCallbacks } from "$lib/auth/login-crypto.js";
   import { buildLoginCallbacks } from "$lib/auth/crypto-callbacks.js";
   import QuickExit from "$lib/components/portal/QuickExit.svelte";
-  import WebChatHint from "$lib/components/portal/WebChatHint.svelte";
+  import PortalHint from "$lib/components/portal/PortalHint.svelte";
   import PortalPassphraseGate from "$lib/portal/PortalPassphraseGate.svelte";
   import PortalThread from "$lib/portal/PortalThread.svelte";
   import PortalComposer from "$lib/portal/PortalComposer.svelte";
@@ -372,7 +372,7 @@
   });
 
   // ---------------------------------------------------------------------------
-  // WebChatHint (state 5, session-once)
+  // Web chat hint (state 5, session-once)
   // ---------------------------------------------------------------------------
 
   function handleFirstFocus(): void {
@@ -618,7 +618,13 @@
     errorMessage={sendError || undefined}
   />
 
-  <WebChatHint opened={hintShown} ondismiss={dismissHint} />
+  <PortalHint
+    opened={hintShown}
+    ondismiss={dismissHint}
+    message={m.portal_web_chat_hint()}
+    dismissLabel={m.portal_hint_dismiss()}
+    dismissTestid="web-chat-hint-dismiss"
+  />
 {/if}
 
 <style>
