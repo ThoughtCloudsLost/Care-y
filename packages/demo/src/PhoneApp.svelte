@@ -48,6 +48,7 @@
     replayDescramble,
   } from "$lib/crypto/context.js";
   import { isPacedLoginInFlight } from "./stubs/login-crypto.js";
+  import { themeStore } from "./stubs/theme.svelte.js";
   import { sealSeedFilterNames } from "./stubs/saved-filters.svelte.js";
   import { RoleId, type RoleIdValue } from "@care-y/shared";
   import {
@@ -288,31 +289,12 @@
   // Dark scheme
   // -----------------------------------------------------------------------
 
-  // Initialize from the scheme script's class (set by localStorage
-  // before any JS loads, or by the outer page's setDark).
-  let dark = $state(document.documentElement.classList.contains("dark"));
-
-  /**
-   * Apply dark/light scheme and glass classes to the phone document.
-   * Mirrors the product's applyScheme/applyGlassMode (theme.svelte.ts):
-   * glass styles are anchored to html-level classes, so scheme classes
-   * must live on documentElement. Inside the iframe, documentElement IS
-   * the phone document root, which is exactly what we want.
-   *
-   * Preserves existing theme-* classes (set by the blocking scheme script).
-   */
-  function applyDarkScheme(isDark: boolean): void {
-    const cl = document.documentElement.classList;
-    cl.toggle("dark", isDark);
-    cl.toggle("light", !isDark);
-    cl.toggle("glass-dark", isDark);
-    cl.toggle("glass-light", !isDark);
-    document.documentElement.style.colorScheme = isDark ? "dark" : "light";
-  }
-
-  $effect(() => {
-    applyDarkScheme(dark);
-  });
+  // The theme stub owns the scheme: it initializes from the blocking
+  // scheme script's class and applies html-level classes on change.
+  // Both the outer page (bridge.setDark) and the in-app settings row
+  // (toggleColorScheme) write through it, so the settings page and the
+  // handbook toggle can never disagree.
+  const dark = $derived(themeStore.resolvedScheme === "dark");
 
   // -----------------------------------------------------------------------
   // Pathname for RouteMount (derived from router state)
@@ -991,6 +973,7 @@
       restartSeq: router.restartSeq,
       engineReady: engineReady,
       role: currentRole,
+      dark,
     };
   }
 
@@ -1004,7 +987,7 @@
     },
 
     setDark(value: boolean): void {
-      dark = value;
+      themeStore.setColorScheme(value ? "dark" : "light");
     },
 
     setRole(role: RoleIdValue): void {
