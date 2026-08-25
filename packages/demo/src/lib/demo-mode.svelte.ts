@@ -1,9 +1,9 @@
 /**
  * Demo consumption mode: "read" (story-first, frame via peek) or
- * "walk" (frame always visible with desktop chrome).
+ * "explore" (frame always visible with desktop chrome).
  *
- * Default derives from viewport width (narrow = read, wide = walk).
- * A ?mode=read or ?mode=walk URL param overrides the default. The
+ * Default derives from viewport width (narrow = read, wide = explore).
+ * A ?mode=read or ?mode=explore URL param overrides the default. The
  * override persists across restarts (the restart path preserves
  * location.search) and is shareable as a link.
  *
@@ -16,7 +16,7 @@ import { SvelteURLSearchParams } from "svelte/reactivity";
 // Types
 // -----------------------------------------------------------------------
 
-export type DemoMode = "read" | "walk";
+export type DemoMode = "read" | "explore";
 
 // -----------------------------------------------------------------------
 // URL param helpers (pure, exported for testing)
@@ -25,7 +25,7 @@ export type DemoMode = "read" | "walk";
 /** Read the mode param from a search string. Returns null for absent or invalid. */
 export function parseModeParam(search: string): DemoMode | null {
   const value = new SvelteURLSearchParams(search).get("mode");
-  if (value === "read" || value === "walk") return value;
+  if (value === "read" || value === "explore") return value;
   return null;
 }
 
@@ -56,14 +56,16 @@ export interface DemoModeStore {
 
 /**
  * Create a reactive demo mode store. The `isNarrow` getter provides
- * the live viewport-based default (narrow = read, wide = walk).
+ * the live viewport-based default (narrow = read, wide = explore).
  */
 export function createDemoMode(isNarrow: () => boolean): DemoModeStore {
   let override: DemoMode | null = $state(
     typeof location !== "undefined" ? parseModeParam(location.search) : null,
   );
 
-  const mode: DemoMode = $derived(override ?? (isNarrow() ? "read" : "walk"));
+  const mode: DemoMode = $derived(
+    override ?? (isNarrow() ? "read" : "explore"),
+  );
 
   function set(next: DemoMode): void {
     override = next;
@@ -79,7 +81,7 @@ export function createDemoMode(isNarrow: () => boolean): DemoModeStore {
   }
 
   function toggle(): void {
-    set(mode === "read" ? "walk" : "read");
+    set(mode === "read" ? "explore" : "read");
   }
 
   return {

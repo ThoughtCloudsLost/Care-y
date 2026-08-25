@@ -5,6 +5,7 @@
 -->
 <script lang="ts">
   import { Popup, Navbar, Link } from "konsta/svelte";
+  import { X } from "@lucide/svelte";
   import * as m from "$lib/paraglide/messages.js";
   import type { ShellPopupProps } from "./types";
   import { useFocusTrap } from "./use-focus-trap.svelte";
@@ -62,9 +63,17 @@
             {#if navRight}
               {@render navRight()}
             {:else}
-              <Link role="button" onclick={trap.handleDismiss}
-                >{m.shell_close()}</Link
+              <!-- Icon-only X with a label distinct from the ticket's
+                   Close action: a text "Close" here reads as closing
+                   the ticket, not the overlay. -->
+              <Link
+                role="button"
+                iconOnly
+                aria-label={m.shell_dismiss_overlay()}
+                onclick={trap.handleDismiss}
               >
+                <X size={22} aria-hidden="true" />
+              </Link>
             {/if}
           {/snippet}
         </Navbar>

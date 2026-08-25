@@ -197,7 +197,27 @@ export const CROP_REGISTRY = {
     selector: null,
     fallbackRect: { ...DEFAULT_RECT },
   },
-  "ticket-detail/thread-anatomy": {
+  "ticket-detail/date-separators": {
+    selector: null,
+    fallbackRect: { ...DEFAULT_RECT },
+  },
+  "ticket-detail/system-events": {
+    selector: null,
+    fallbackRect: { ...DEFAULT_RECT },
+  },
+  "ticket-detail/voicemails": {
+    selector: null,
+    fallbackRect: { ...DEFAULT_RECT },
+  },
+  "ticket-detail/media-images": {
+    selector: null,
+    fallbackRect: { ...DEFAULT_RECT },
+  },
+  "ticket-detail/files": {
+    selector: null,
+    fallbackRect: { ...DEFAULT_RECT },
+  },
+  "ticket-detail/call-log": {
     selector: null,
     fallbackRect: { ...DEFAULT_RECT },
   },

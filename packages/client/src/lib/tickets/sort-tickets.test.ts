@@ -98,6 +98,30 @@ describe("sortTickets", () => {
     expect(result.map((t) => t.id)).toEqual(["a", "z"]);
   });
 
+  it("breaks id ties ascending even on descending sorts (server parity)", () => {
+    // The server pins t.id ASC in every ORDER BY regardless of the sort
+    // direction, so equal-key rows must not flip order on desc.
+    const ta = makeTicket("z", "normal", "2026-01-01T00:00:00Z");
+    const tb = makeTicket("a", "normal", "2026-01-01T00:00:00Z");
+    const result = sortTickets([ta, tb], {
+      field: "date",
+      direction: "desc",
+    });
+    expect(result.map((t) => t.id)).toEqual(["a", "z"]);
+  });
+
+  it("breaks non-date ties by createdAt in the sort direction (server parity)", () => {
+    // Same priority: the server's secondary key is created_at in the
+    // sort direction, so on desc the newer ticket wins the tie.
+    const older = makeTicket("a", "high", "2026-01-01T00:00:00Z");
+    const newer = makeTicket("b", "high", "2026-01-05T00:00:00Z");
+    const result = sortTickets([older, newer], {
+      field: "priority",
+      direction: "desc",
+    });
+    expect(result.map((t) => t.id)).toEqual(["b", "a"]);
+  });
+
   describe("missing optional fields sort last", () => {
     it("msgs sort: missing followUpCount sorts last regardless of direction", () => {
       const withCount = {
@@ -121,7 +145,7 @@ describe("sortTickets", () => {
 
     it("msgs sort: all-missing tickets preserve id tiebreaker", () => {
       const noA = makeTicket("z", "normal", "2026-01-01T00:00:00Z");
-      const noB = makeTicket("a", "normal", "2026-01-02T00:00:00Z");
+      const noB = makeTicket("a", "normal", "2026-01-01T00:00:00Z");
       const result = sortTickets([noA, noB], {
         field: "msgs",
         direction: "asc",
@@ -345,7 +369,7 @@ describe("sortTickets", () => {
         assigneeName: null,
       };
       const u2 = {
-        ...makeTicket("a", "normal", "2026-01-02T00:00:00Z"),
+        ...makeTicket("a", "normal", "2026-01-01T00:00:00Z"),
         assigneeName: null,
       };
 

@@ -325,6 +325,13 @@ export interface DemoBridgeState {
   /** The signed-in user's current role. Starts as ADMIN; tracks role
    *  switcher state. */
   readonly role: RoleIdValue;
+  /**
+   * Whether the phone document is in the dark scheme. Changes when the
+   * outer page calls setDark AND when the in-app settings row toggles
+   * the scheme; the outer page adopts phone-initiated changes so both
+   * surfaces stay in step.
+   */
+  readonly dark: boolean;
 }
 
 export type DemoBridgeListener = (state: DemoBridgeState) => void;

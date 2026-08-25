@@ -555,10 +555,19 @@ export function createTicketService(
         .select("q.sort_order as queue_sort_order")
         .select("u.encrypted_display_name as assigned_display_name")
         .select((eb) => [
+          // Creation counts as the ticket's first activity: GREATEST
+          // ignores the NULL max() of an empty follow-up set, so tickets
+          // with no messages rank by creation recency instead of
+          // carrying a NULL that needs a special sort tail. Matches the
+          // client comparator's `lastActivityAt ?? createdAt` fallback.
           eb
-            .selectFrom("followups as f")
-            .select((sb) => sb.fn.max("f.created_at").as("max_at"))
-            .whereRef("f.ticket_id", "=", "t.id")
+            .fn<Date>("greatest", [
+              eb
+                .selectFrom("followups as f")
+                .select((sb) => sb.fn.max("f.created_at").as("max_at"))
+                .whereRef("f.ticket_id", "=", "t.id"),
+              eb.ref("t.created_at"),
+            ])
             .as("last_activity_at"),
           eb
             .selectFrom("followups as f")
@@ -609,10 +618,19 @@ export function createTicketService(
         .select("q.sort_order as queue_sort_order")
         .select("u.encrypted_display_name as assigned_display_name")
         .select((eb) => [
+          // Creation counts as the ticket's first activity: GREATEST
+          // ignores the NULL max() of an empty follow-up set, so tickets
+          // with no messages rank by creation recency instead of
+          // carrying a NULL that needs a special sort tail. Matches the
+          // client comparator's `lastActivityAt ?? createdAt` fallback.
           eb
-            .selectFrom("followups as f")
-            .select((sb) => sb.fn.max("f.created_at").as("max_at"))
-            .whereRef("f.ticket_id", "=", "t.id")
+            .fn<Date>("greatest", [
+              eb
+                .selectFrom("followups as f")
+                .select((sb) => sb.fn.max("f.created_at").as("max_at"))
+                .whereRef("f.ticket_id", "=", "t.id"),
+              eb.ref("t.created_at"),
+            ])
             .as("last_activity_at"),
           eb
             .selectFrom("followups as f")
@@ -669,21 +687,23 @@ export function createTicketService(
           .where("id", "=", cursorId);
 
         if (sortBy === "priority") {
-          // Subquery: cursor row's priority sort key
+          // Subquery: cursor row's priority sort key. Higher key = more
+          // urgent, so desc puts urgent first (matching the client
+          // comparator's direction semantics).
           const cursorPriorityKey = db
             .selectFrom("tickets")
             .select((sub) =>
               sub
                 .case("priority")
                 .when("urgent")
-                .then(0)
-                .when("high")
-                .then(1)
-                .when("normal")
-                .then(2)
-                .when("low")
                 .then(3)
-                .else(4)
+                .when("high")
+                .then(2)
+                .when("normal")
+                .then(1)
+                .when("low")
+                .then(0)
+                .else(-1)
                 .end()
                 .as("sort_key"),
             )
@@ -694,14 +714,14 @@ export function createTicketService(
             const rowKey = eb
               .case("t.priority")
               .when("urgent")
-              .then(0)
-              .when("high")
-              .then(1)
-              .when("normal")
-              .then(2)
-              .when("low")
               .then(3)
-              .else(4)
+              .when("high")
+              .then(2)
+              .when("normal")
+              .then(1)
+              .when("low")
+              .then(0)
+              .else(-1)
               .end();
 
             return keysetAfter(
@@ -715,62 +735,44 @@ export function createTicketService(
             );
           });
         } else if (sortBy === "last_activity") {
-          // Subquery expressions for the cursor row and the current row
+          // Activity is never NULL (GREATEST with created_at treats
+          // creation as the first activity), so this is a plain
+          // three-column keyset: (activity, created_at, id).
           const cursorLastActivity = db
-            .selectFrom("followups")
-            .select((sb) => sb.fn.max("followups.created_at").as("max_at"))
-            .where("followups.ticket_id", "=", cursorId);
+            .selectFrom("tickets")
+            .select((sub) =>
+              sub
+                .fn<Date>("greatest", [
+                  sub
+                    .selectFrom("followups")
+                    .select((sb) =>
+                      sb.fn.max("followups.created_at").as("max_at"),
+                    )
+                    .whereRef("followups.ticket_id", "=", "tickets.id"),
+                  sub.ref("tickets.created_at"),
+                ])
+                .as("last_activity"),
+            )
+            .where("tickets.id", "=", cursorId);
 
-          // NULLS LAST keyset: NULL activity rows sort after all non-NULL rows.
-          // Three regions in sort order:
-          //   1. Non-NULL activity values (sorted by gt direction)
-          //   2. NULL activity values (sorted by created_at tiebreaker)
-          //
-          // If cursor has non-NULL activity: rows "after" are either
-          //   (a) non-NULL with activity gt cursor, or
-          //   (b) non-NULL with equal activity + later tiebreaker, or
-          //   (c) NULL activity (always after non-NULL with NULLS LAST)
-          // If cursor has NULL activity: rows "after" are other NULLs
-          //   with later tiebreaker (created_at, then id)
           query = query.where((eb) => {
-            const rowActivity = eb
-              .selectFrom("followups as f2")
-              .select((sb) => sb.fn.max("f2.created_at").as("max_at"))
-              .whereRef("f2.ticket_id", "=", "t.id");
+            const rowActivity = eb.fn<Date>("greatest", [
+              eb
+                .selectFrom("followups as f2")
+                .select((sb) => sb.fn.max("f2.created_at").as("max_at"))
+                .whereRef("f2.ticket_id", "=", "t.id"),
+              eb.ref("t.created_at"),
+            ]);
 
-            // Rows after the cursor once activity itself has tied, or when
-            // both rows sit in the NULL tail and only the tiebreak decides.
-            const afterOnTiebreak = keysetAfter(
+            return keysetAfter(
               eb,
               gt,
-              [["t.created_at", cursorCreatedAt]],
+              [
+                [rowActivity, cursorLastActivity],
+                ["t.created_at", cursorCreatedAt],
+              ],
               { column: "t.id", cursorId },
             );
-
-            // Cursor has non-NULL activity
-            const cursorNonNull = eb.and([
-              eb(cursorLastActivity, "is not", null),
-              eb.or([
-                // (a) Row has non-NULL activity that sorts after cursor
-                eb(rowActivity, gt, cursorLastActivity),
-                // (b) Same activity, later tiebreaker
-                eb.and([
-                  eb(rowActivity, "=", cursorLastActivity),
-                  afterOnTiebreak,
-                ]),
-                // (c) Row has NULL activity (NULLS LAST: after all non-NULL)
-                eb(rowActivity, "is", null),
-              ]),
-            ]);
-
-            // Cursor has NULL activity (we're in the NULL tail)
-            const cursorNull = eb.and([
-              eb(cursorLastActivity, "is", null),
-              eb(rowActivity, "is", null),
-              afterOnTiebreak,
-            ]);
-
-            return eb.or([cursorNonNull, cursorNull]);
           });
         } else if (sortBy === "queue") {
           // Subquery: cursor row's queue sort_order via JOIN
@@ -827,36 +829,35 @@ export function createTicketService(
 
       // ORDER BY: must match the keyset cursor columns above
       if (sortBy === "priority") {
+        // Higher key = more urgent: desc puts urgent first, matching the
+        // client comparator. Unknown priorities (else -1) sink on desc.
         query = query
           .orderBy(
             (eb) =>
               eb
                 .case("t.priority")
                 .when("urgent")
-                .then(0)
-                .when("high")
-                .then(1)
-                .when("normal")
-                .then(2)
-                .when("low")
                 .then(3)
-                .else(4)
+                .when("high")
+                .then(2)
+                .when("normal")
+                .then(1)
+                .when("low")
+                .then(0)
+                .else(-1)
                 .end(),
             sortDirection,
           )
           .orderBy("t.created_at", sortDirection)
           .orderBy("t.id", "asc");
       } else if (sortBy === "last_activity") {
-        // Tickets with no follow-ups (NULL last_activity_at) sort to the end
-        // regardless of direction. A volunteer sorting by "most recent activity"
-        // wants active tickets first; sorting "least recent" wants stale tickets
-        // first. Either way, tickets with zero activity belong at the bottom.
+        // last_activity_at is never NULL: creation counts as the first
+        // activity (see the GREATEST select above), so empty tickets rank
+        // by creation recency, and sorting "least recent activity" surfaces
+        // them as exactly-as-stale-as-their-age instead of hiding them in
+        // a NULL tail.
         query = query
-          .orderBy("last_activity_at", (ob) =>
-            sortDirection === "desc"
-              ? ob.desc().nullsLast()
-              : ob.asc().nullsLast(),
-          )
+          .orderBy("last_activity_at", sortDirection)
           .orderBy("t.created_at", sortDirection)
           .orderBy("t.id", "asc");
       } else if (sortBy === "queue") {

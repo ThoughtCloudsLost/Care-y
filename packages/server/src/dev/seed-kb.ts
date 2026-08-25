@@ -178,8 +178,15 @@ const ARTICLES: readonly ArticleDef[] = [
       ),
       h(2, t("Emergency shelters")),
       ul(
-        li(p(t("City Emergency Shelter: open 24/7, walk-in accepted"))),
-        li(p(t("Family Haven: families with children, referral required"))),
+        li(p(t("City emergency shelter: open 24/7, walk-in accepted"))),
+        li(p(t("Family shelter: families with children, referral required"))),
+        li(
+          p(
+            t(
+              "East side shelter: intake desk open 10am to 8pm, call at 10 for same-day beds",
+            ),
+          ),
+        ),
       ),
       h(2, t("Transitional housing")),
       p(
@@ -202,13 +209,13 @@ const ARTICLES: readonly ArticleDef[] = [
       ),
       h(2, t("Family law")),
       ul(
-        li(p(t("Legal Aid Society: protective orders, custody, divorce"))),
-        li(p(t("Pro Bono Clinic: Saturdays 10am-2pm, walk-in"))),
+        li(p(t("Legal aid clinic: protective orders, custody, divorce"))),
+        li(p(t("Pro bono clinic: Saturdays 10am-2pm, walk-in"))),
       ),
       h(2, t("Immigration")),
       p(
         t(
-          "Immigration legal help is available through the Regional Immigration Center.",
+          "Immigration legal help is available through the regional immigration legal center.",
         ),
       ),
     ),
@@ -243,22 +250,25 @@ const ARTICLES: readonly ArticleDef[] = [
       ),
     ),
   },
+  // Carries deliberate accessibility problems so the editor's checker has
+  // something real to flag. The copy invites readers to open it in the
+  // editor rather than reading as a broken page.
   {
     category: "Safety",
-    title: "Accessibility issues example",
+    title: "Try the accessibility checker",
     excerpt:
-      "Example article with intentional accessibility issues for ATAG testing.",
+      "Open this article in the editor to see how the accessibility checker flags common problems.",
     body: pmDoc(
-      h(2, t("About this article")),
+      h(2, t("How to use this article")),
       p(
         t(
-          "This article contains intentional accessibility issues for testing the editor's ATAG checks.",
+          "The sections below have problems the editor's accessibility checker catches: a skipped heading level, an empty heading, and a link with no usable text. Open this article in the editor to see each one flagged.",
         ),
       ),
       h(4, t("Skipped heading level")),
-      p(t("The heading above skips from h2 to h4.")),
+      p(t("The heading above jumps two levels instead of one.")),
       h(2),
-      p(t("The heading above is empty.")),
+      p(t("The heading above this paragraph is empty.")),
       p(
         t("Click "),
         {
@@ -271,11 +281,61 @@ const ARTICLES: readonly ArticleDef[] = [
             },
           ],
         },
-        t(" for more information."),
+        t(
+          " for more information. Screen readers announce this link only as its text.",
+        ),
       ),
     ),
   },
 ];
+
+/**
+ * Build a one-page PDF containing a title and text lines in Helvetica.
+ * Object offsets are computed while assembling, so the xref table is
+ * correct and strict viewers render the page without repair.
+ */
+function buildTextPdf(title: string, lines: readonly string[]): Buffer {
+  const esc = (s: string): string =>
+    s.replace(/\\/g, "\\\\").replace(/\(/g, "\\(").replace(/\)/g, "\\)");
+
+  const textOps = [
+    "BT",
+    "/F1 18 Tf",
+    "72 720 Td",
+    `(${esc(title)}) Tj`,
+    "/F1 12 Tf",
+    "0 -36 Td",
+    ...lines.flatMap((line) => [`(${esc(line)}) Tj`, "0 -20 Td"]),
+    "ET",
+  ].join("\n");
+
+  const objects = [
+    "<</Type/Catalog/Pages 2 0 R>>",
+    "<</Type/Pages/Kids[3 0 R]/Count 1>>",
+    "<</Type/Page/MediaBox[0 0 612 792]/Parent 2 0 R/Resources<</Font<</F1 5 0 R>>>>/Contents 4 0 R>>",
+    `<</Length ${String(Buffer.byteLength(textOps))}>>\nstream\n${textOps}\nendstream`,
+    "<</Type/Font/Subtype/Type1/BaseFont/Helvetica>>",
+  ];
+
+  let body = "%PDF-1.4\n";
+  const offsets: number[] = [];
+  for (const [idx, obj] of objects.entries()) {
+    offsets.push(Buffer.byteLength(body));
+    body += `${String(idx + 1)} 0 obj\n${obj}\nendobj\n`;
+  }
+
+  const xrefStart = Buffer.byteLength(body);
+  const xrefEntries = offsets
+    .map((off) => `${String(off).padStart(10, "0")} 00000 n `)
+    .join("\n");
+  body +=
+    `xref\n0 ${String(objects.length + 1)}\n` +
+    `0000000000 65535 f \n${xrefEntries}\n` +
+    `trailer<</Size ${String(objects.length + 1)}/Root 1 0 R>>\n` +
+    `startxref\n${String(xrefStart)}\n%%EOF`;
+
+  return Buffer.from(body);
+}
 
 export async function seedKbArticles(
   tDb: Kysely<TenantDatabase>,
@@ -447,25 +507,16 @@ export async function seedKbArticles(
     // size_bytes in the schema is ciphertext length (matches the client
     // upload which sends encrypted.length as sizeBytes).
 
-    // Minimal valid PDF (header + empty body + xref + trailer).
-    const pdfPlain = Buffer.from(
-      [
-        "%PDF-1.0",
-        "1 0 obj<</Type/Catalog/Pages 2 0 R>>endobj",
-        "2 0 obj<</Type/Pages/Kids[3 0 R]/Count 1>>endobj",
-        "3 0 obj<</Type/Page/MediaBox[0 0 612 792]/Parent 2 0 R>>endobj",
-        "xref",
-        "0 4",
-        "0000000000 65535 f ",
-        "0000000009 00000 n ",
-        "0000000058 00000 n ",
-        "0000000115 00000 n ",
-        "trailer<</Size 4/Root 1 0 R>>",
-        "startxref",
-        "190",
-        "%%EOF",
-      ].join("\n"),
-    );
+    // One-page PDF with visible text (offsets computed, so viewers that
+    // trust the xref render it too). Mirrors the escalation protocol
+    // article's handoff steps.
+    const pdfPlain = buildTextPdf("Escalation handoff", [
+      "1. Stay on the line with the caller.",
+      "2. Set the crisis flag on the ticket form.",
+      "3. Record the handoff:",
+      "   Time, transferred to, and the trigger.",
+      "4. Debrief with your supervisor afterward.",
+    ]);
 
     const txtPlain = Buffer.from(
       [

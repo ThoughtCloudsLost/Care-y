@@ -172,25 +172,6 @@ export const EFFECTS: EffectMap = new Map([
     },
   ],
 
-  // thread-anatomy: mark-only. Presence asserts at least one date
-  // separator is visible in the thread. Seed dependency: the first
-  // seed ticket (seed-tickets.ts ticketDefs[0]) has follow-ups spanning
-  // 3 days (4320, 1440, 720, 360 minutes ago), so needsDateSeparator
-  // (time.ts line 81) produces multiple separators. The .unread-divider
-  // is NOT asserted because seed-tickets.ts inserts no read cursors;
-  // TicketDetail.svelte line 883 returns null for firstUnreadId when
-  // readUpTo is null, so no unread divider renders.
-  [
-    "thread-anatomy",
-    {
-      description: "At least one date separator is visible in the thread",
-      visible: [
-        // TicketDetail.svelte line 1253: .date-separator role="separator"
-        ".date-separator",
-      ],
-    },
-  ],
-
   // ── Choreographed topics ──
   //
   // The following topics run multi-stage choreographies in handlePulse

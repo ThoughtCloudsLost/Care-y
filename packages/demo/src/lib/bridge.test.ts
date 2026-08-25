@@ -17,6 +17,7 @@ describe("DemoBridgeState type shape", () => {
       locationSeq: 0,
       restartSeq: 0,
       engineReady: false,
+      dark: true,
       role: RoleId.ADMIN,
     };
     expect(state.role).toBe(RoleId.ADMIN);
@@ -35,6 +36,7 @@ describe("DemoBridgeState type shape", () => {
       locationSeq: 0,
       restartSeq: 0,
       engineReady: true,
+      dark: false,
     };
     expect({ ...base, role: RoleId.VOLUNTEER }.role).toBe(RoleId.VOLUNTEER);
     expect({ ...base, role: RoleId.MANAGER }.role).toBe(RoleId.MANAGER);

@@ -1296,7 +1296,7 @@ describe.skipIf(!process.env.DATABASE_URL)("TicketService (DB)", () => {
 
   // --- Server-side sort ---
 
-  it("sortBy priority places urgent before low (not alphabetical)", async () => {
+  it("sortBy priority desc places urgent before low (not alphabetical)", async () => {
     const { userId, queueId } = await createClientFixture();
 
     // Create tickets with different priorities via separate clients
@@ -1322,7 +1322,7 @@ describe.skipIf(!process.env.DATABASE_URL)("TicketService (DB)", () => {
     const descResults = await svc.list(userId, {
       queueIds: [queueId],
       sortBy: "priority",
-      sortDirection: "asc",
+      sortDirection: "desc",
       limit: 100,
     });
 
@@ -1330,7 +1330,8 @@ describe.skipIf(!process.env.DATABASE_URL)("TicketService (DB)", () => {
     const ourTickets = descResults.filter((t) => ticketIds.includes(t.id));
     const returnedPriorities = ourTickets.map((t) => t.priority);
 
-    // Urgent should come first (sort key 0), then high (1), normal (2), low (3)
+    // Desc = most urgent first (higher key = more urgent, matching the
+    // client comparator): urgent, then high, normal, low
     const urgentIdx = returnedPriorities.indexOf("urgent");
     const highIdx = returnedPriorities.indexOf("high");
     const normalIdx = returnedPriorities.indexOf("normal");
@@ -1341,7 +1342,7 @@ describe.skipIf(!process.env.DATABASE_URL)("TicketService (DB)", () => {
     expect(normalIdx).toBeLessThan(lowIdx);
   });
 
-  it("sortBy priority desc places low before urgent", async () => {
+  it("sortBy priority asc places low before urgent", async () => {
     const { userId, queueId } = await createClientFixture();
 
     const priorities = ["urgent", "low"] as const;
@@ -1365,7 +1366,7 @@ describe.skipIf(!process.env.DATABASE_URL)("TicketService (DB)", () => {
     const results = await svc.list(userId, {
       queueIds: [queueId],
       sortBy: "priority",
-      sortDirection: "desc",
+      sortDirection: "asc",
       limit: 100,
     });
 
@@ -1380,7 +1381,7 @@ describe.skipIf(!process.env.DATABASE_URL)("TicketService (DB)", () => {
   it("sortBy last_activity places recently-active tickets first (desc)", async () => {
     const { userId, queueId } = await createClientFixture();
 
-    // Ticket A: created first, no follow-ups (last_activity = null)
+    // Ticket A: created first, no follow-ups (activity = its creation time)
     const clientA = await createTestClientFixture(testDb.db, { queueId });
     const ticketA = await svc.create(clientA.userId, {
       id: crypto.randomUUID(),
@@ -1555,9 +1556,10 @@ describe.skipIf(!process.env.DATABASE_URL)("TicketService (DB)", () => {
   it("sortBy last_activity pagination covers tickets with and without activity", async () => {
     const { userId, queueId } = await createClientFixture();
 
-    // 5 tickets: indices 0,2,4 have follow-ups (activity), 1,3 do not (NULL).
-    // With NULLS LAST desc, active tickets come first, then NULLs.
-    // Pagination must cross the non-NULL → NULL boundary without skips.
+    // 5 tickets: indices 0,2,4 have follow-ups, 1,3 rank by creation time
+    // (creation counts as first activity). Pagination must cross the
+    // boundary between followup-driven and creation-driven activity
+    // values without skips or duplicates.
     const ticketIds: string[] = [];
     for (let i = 0; i < 5; i++) {
       const c = await createTestClientFixture(testDb.db, { queueId });

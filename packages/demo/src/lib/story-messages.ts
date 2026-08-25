@@ -8,6 +8,7 @@
  */
 
 import * as m from "$lib/paraglide/messages.js";
+import type { Section } from "./scroll-sections.js";
 
 const lookup: Record<string, () => string> = {
   // Story chrome that reaches the flow as a block of its own
@@ -164,10 +165,29 @@ const lookup: Record<string, () => string> = {
     m.demo_narrative_topic_list_search_body(),
 
   // Ticket detail (new subs)
-  demo_narrative_topic_thread_anatomy_heading: () =>
-    m.demo_narrative_topic_thread_anatomy_heading(),
-  demo_narrative_topic_thread_anatomy_body: () =>
-    m.demo_narrative_topic_thread_anatomy_body(),
+  demo_narrative_topic_date_separators_heading: () =>
+    m.demo_narrative_topic_date_separators_heading(),
+  demo_narrative_topic_date_separators_body: () =>
+    m.demo_narrative_topic_date_separators_body(),
+  demo_narrative_topic_system_events_heading: () =>
+    m.demo_narrative_topic_system_events_heading(),
+  demo_narrative_topic_system_events_body: () =>
+    m.demo_narrative_topic_system_events_body(),
+  demo_narrative_topic_voicemails_heading: () =>
+    m.demo_narrative_topic_voicemails_heading(),
+  demo_narrative_topic_voicemails_body: () =>
+    m.demo_narrative_topic_voicemails_body(),
+  demo_narrative_topic_media_images_heading: () =>
+    m.demo_narrative_topic_media_images_heading(),
+  demo_narrative_topic_media_images_body: () =>
+    m.demo_narrative_topic_media_images_body(),
+  demo_narrative_topic_files_heading: () =>
+    m.demo_narrative_topic_files_heading(),
+  demo_narrative_topic_files_body: () => m.demo_narrative_topic_files_body(),
+  demo_narrative_topic_call_log_heading: () =>
+    m.demo_narrative_topic_call_log_heading(),
+  demo_narrative_topic_call_log_body: () =>
+    m.demo_narrative_topic_call_log_body(),
   demo_narrative_topic_case_panel_heading: () =>
     m.demo_narrative_topic_case_panel_heading(),
   demo_narrative_topic_case_panel_body: () =>
@@ -448,6 +468,41 @@ export function deriveSubState(
   return {
     isActive: activeSub === subSlug,
     isSeen: subTopic !== null && seenTopics.has(subTopic),
+  };
+}
+
+// -----------------------------------------------------------------------
+// Section-level state derivation
+//
+// Used by TopBar's contents picker to show per-section progress.
+// -----------------------------------------------------------------------
+
+export interface SectionState {
+  readonly seenCount: number;
+  readonly topicCount: number;
+  readonly complete: boolean;
+}
+
+/**
+ * Derive the progress state for an entire section by counting its
+ * topic-bearing subs against the set of seen topics.
+ */
+export function deriveSectionState(
+  section: Section,
+  seenTopics: ReadonlySet<string>,
+): SectionState {
+  let seenCount = 0;
+  let topicCount = 0;
+  for (const sub of section.subs) {
+    if (sub.topic !== null) {
+      topicCount++;
+      if (seenTopics.has(sub.topic)) seenCount++;
+    }
+  }
+  return {
+    seenCount,
+    topicCount,
+    complete: topicCount > 0 && seenCount === topicCount,
   };
 }
 

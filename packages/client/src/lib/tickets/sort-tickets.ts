@@ -123,11 +123,19 @@ export function sortTickets<T extends SortableTicket>(
       }
     }
 
-    if (cmp === 0) {
-      cmp = a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
+    // Server parity: every server sort uses created_at (in the sort
+    // direction) as the secondary key. "date" already compared it as
+    // the primary.
+    if (cmp === 0 && sort.field !== "date") {
+      cmp = toTimestamp(a.createdAt) - toTimestamp(b.createdAt);
     }
 
-    return cmp * dir;
+    const scaled = cmp * dir;
+    if (scaled !== 0) return scaled;
+
+    // Server parity: id ties always break ascending regardless of the
+    // sort direction (the server pins t.id ASC in every ORDER BY).
+    return a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
   });
 
   return sorted;
