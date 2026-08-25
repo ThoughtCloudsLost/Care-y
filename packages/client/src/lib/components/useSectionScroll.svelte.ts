@@ -60,6 +60,21 @@ export function createSectionScroll(
   let active = $state(getSections()[0]?.id ?? "");
   let programmaticScroll = false;
 
+  // Height of the sticky chrome above the content, read live so pages
+  // with tall subnavbars (or simulated safe-area insets) measure what
+  // is actually on screen. scrollTo and the scroll tracker must both
+  // use this: if they disagree, a section parked exactly under the
+  // chrome by a nav tap fails the tracker's "reached" check and the
+  // highlight snaps back to the previous section.
+  function chromeOffsetPx(container: HTMLElement): number {
+    const style = getComputedStyle(container);
+    const navbarH =
+      parseFloat(style.getPropertyValue("--navbar-h")) || offsetRem * 8;
+    const subnavbarH =
+      parseFloat(style.getPropertyValue("--subnavbar-h")) || offsetRem * 8;
+    return navbarH + subnavbarH;
+  }
+
   function scrollTo(id: string): void {
     programmaticScroll = true;
     active = id;
@@ -75,12 +90,7 @@ export function createSectionScroll(
     }
 
     const container = findScrollContainer(target);
-    const style = getComputedStyle(container);
-    const navbarH =
-      parseFloat(style.getPropertyValue("--navbar-h")) || offsetRem * 8;
-    const subnavbarH =
-      parseFloat(style.getPropertyValue("--subnavbar-h")) || offsetRem * 8;
-    const offsetPx = navbarH + subnavbarH;
+    const offsetPx = chromeOffsetPx(container);
 
     const targetY =
       target.getBoundingClientRect().top -
@@ -108,7 +118,6 @@ export function createSectionScroll(
 
   $effect(() => {
     const sections = getSections();
-    const offset = offsetRem * 16;
     const SCROLL_SLOP = 16;
 
     // Reset active if the current ID was removed from the sections array
@@ -127,6 +136,14 @@ export function createSectionScroll(
     function updateActive(): void {
       if (programmaticScroll) return;
       let current = sections[0]?.id;
+
+      // Same chrome line the tap path scrolls to; a fixed threshold
+      // here mis-highlights whenever the chrome is taller than it.
+      const anchor: HTMLElement | undefined = elCache.values().next().value;
+      const offset =
+        anchor !== undefined
+          ? chromeOffsetPx(findScrollContainer(anchor))
+          : offsetRem * 16;
 
       for (const section of sections) {
         const el = elCache.get(section.id);
