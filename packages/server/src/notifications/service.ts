@@ -70,7 +70,7 @@ export interface NotificationService {
     orgId: OrgId,
     orgSchema: OrgSchema,
     orgSlug: OrgSlug,
-    eventType: NotificationEventType,
+    eventType: SystemSseEvent["type"],
     userIds: readonly UserId[],
   ): Promise<void>;
 }
@@ -79,6 +79,55 @@ export function createNotificationService(
   deps: NotificationServiceDeps,
 ): NotificationService {
   const reachability = deps.getReachabilityForUsers ?? getReachabilityForUsers;
+
+  /**
+   * Split SMS-eligible users by reachability, enqueue SMS for verified
+   * recipients, and merge the rest into the email list. Shared by both
+   * dispatch and dispatchTicketless so queue payloads, ordering, and
+   * console output stay identical.
+   */
+  async function enqueueSmsAndEmail(
+    tDb: Kysely<TenantDatabase>,
+    allow: DispatchAllowLists,
+    orgId: OrgId,
+    orgSchema: OrgSchema,
+    orgSlug: OrgSlug,
+    eventType: NotificationEventType,
+  ): Promise<void> {
+    let emailList: readonly UserId[];
+
+    if (allow.smsAllowed.length > 0) {
+      const reach = await reachability(tDb, allow.smsAllowed);
+      const smsDeliverable = allow.smsAllowed.filter(
+        (id) => reach.get(id) === "verified_sms",
+      );
+      const smsFallback = allow.smsAllowed.filter(
+        (id) => reach.get(id) !== "verified_sms",
+      );
+      emailList = [...new Set([...allow.emailAllowed, ...smsFallback])];
+
+      if (smsDeliverable.length > 0) {
+        await deps.jobQueue.enqueue(NOTIFICATION_SMS_QUEUE, {
+          orgId,
+          orgSchema,
+          orgSlug,
+          recipientUserIds: smsDeliverable,
+          eventType,
+        });
+      }
+    } else {
+      emailList = allow.emailAllowed;
+    }
+
+    if (emailList.length > 0) {
+      await deps.jobQueue.enqueue("notification-email", {
+        orgSchema,
+        orgSlug,
+        recipientUserIds: [...emailList],
+        eventType,
+      });
+    }
+  }
 
   return {
     async dispatch(
@@ -143,40 +192,14 @@ export function createNotificationService(
       // changed preferences between enqueue and retry. This is accepted:
       // enqueue-time semantics keep the job handler simple and the payload
       // PII-free (IDs only).
-
-      let emailList: readonly UserId[];
-
-      if (allow.smsAllowed.length > 0) {
-        const reach = await reachability(tDb, allow.smsAllowed);
-        const smsDeliverable = allow.smsAllowed.filter(
-          (id) => reach.get(id) === "verified_sms",
-        );
-        const smsFallback = allow.smsAllowed.filter(
-          (id) => reach.get(id) !== "verified_sms",
-        );
-        emailList = [...new Set([...allow.emailAllowed, ...smsFallback])];
-
-        if (smsDeliverable.length > 0) {
-          await deps.jobQueue.enqueue(NOTIFICATION_SMS_QUEUE, {
-            orgId,
-            orgSchema,
-            orgSlug,
-            recipientUserIds: smsDeliverable,
-            eventType,
-          });
-        }
-      } else {
-        emailList = allow.emailAllowed;
-      }
-
-      if (emailList.length > 0) {
-        await deps.jobQueue.enqueue("notification-email", {
-          orgSchema,
-          orgSlug,
-          recipientUserIds: [...emailList],
-          eventType,
-        });
-      }
+      await enqueueSmsAndEmail(
+        tDb,
+        allow,
+        orgId,
+        orgSchema,
+        orgSlug,
+        eventType,
+      );
     },
 
     async dispatchTicketless(
@@ -205,7 +228,7 @@ export function createNotificationService(
       // 1. SSE (system event, no ticket/queue context)
       // Always delivered regardless of preferences.
       const sseEvent: SystemSseEvent = {
-        type: "voicemail_quarantined",
+        type: eventType,
         timestamp,
       };
       deps.sse.broadcast(orgSchema, userIds, sseEvent);
@@ -226,40 +249,14 @@ export function createNotificationService(
       // The fallback deliberately overrides a disabled email preference
       // because a silently dropped escalation ping is the worse failure
       // mode for a support tool serving at-risk populations.
-
-      let emailList: readonly UserId[];
-
-      if (allow.smsAllowed.length > 0) {
-        const reach = await reachability(tDb, allow.smsAllowed);
-        const smsDeliverable = allow.smsAllowed.filter(
-          (id) => reach.get(id) === "verified_sms",
-        );
-        const smsFallback = allow.smsAllowed.filter(
-          (id) => reach.get(id) !== "verified_sms",
-        );
-        emailList = [...new Set([...allow.emailAllowed, ...smsFallback])];
-
-        if (smsDeliverable.length > 0) {
-          await deps.jobQueue.enqueue(NOTIFICATION_SMS_QUEUE, {
-            orgId,
-            orgSchema,
-            orgSlug,
-            recipientUserIds: smsDeliverable,
-            eventType,
-          });
-        }
-      } else {
-        emailList = allow.emailAllowed;
-      }
-
-      if (emailList.length > 0) {
-        await deps.jobQueue.enqueue("notification-email", {
-          orgSchema,
-          orgSlug,
-          recipientUserIds: [...emailList],
-          eventType,
-        });
-      }
+      await enqueueSmsAndEmail(
+        tDb,
+        allow,
+        orgId,
+        orgSchema,
+        orgSlug,
+        eventType,
+      );
     },
   };
 }

@@ -225,9 +225,7 @@ describe("cross-channel phone match", () => {
     );
 
     const telephonyPhone = "+12125551234";
-    const { normalizeContactPhone } = (await import("@care-y/shared")) as {
-      normalizeContactPhone: (raw: string) => string | null;
-    };
+    const { normalizeContactPhone } = await import("@care-y/shared");
     const normalizedTelephony = normalizeContactPhone(telephonyPhone);
     const normalizedIntake = intakeContacts.phones[0];
 

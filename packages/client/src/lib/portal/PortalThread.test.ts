@@ -9,7 +9,11 @@ import {
   encode,
   toRistrettoPoint,
 } from "@care-y/crypto";
+import type { ComponentProps } from "svelte";
 import PortalThread from "./PortalThread.svelte";
+
+type PortalThreadProps = ComponentProps<typeof PortalThread>;
+type PortalMessageWire = PortalThreadProps["messages"][number];
 
 // IntersectionObserver stub for DecryptPlaceholder
 vi.stubGlobal(
@@ -31,17 +35,10 @@ beforeAll(async () => {
 
 function makeMessage(
   text: string,
-  direction: string,
+  direction: PortalMessageWire["direction"],
   keypairPublic: Uint8Array,
   editedAt: string | null = null,
-): {
-  direction: string;
-  ephemeralPoint: string;
-  nonce: string;
-  ciphertext: string;
-  createdAt: string;
-  editedAt: string | null;
-} {
+): PortalMessageWire {
   const encrypted = eciesEncrypt(
     new TextEncoder().encode(text),
     toRistrettoPoint(keypairPublic),

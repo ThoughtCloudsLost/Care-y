@@ -3,6 +3,11 @@
 import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
 import { render, screen, cleanup, fireEvent } from "@testing-library/svelte";
 import type * as ParaglideMessages from "$lib/paraglide/messages.js";
+import type * as IntakeCrypto from "./intake-crypto.js";
+import type * as IntakeFormCrypto from "$lib/portal/intake-form-crypto.js";
+import type * as CryptoPkg from "@care-y/crypto";
+import type * as PowSolver from "$lib/auth/pow-solver.js";
+import type * as AnnounceModule from "$lib/utils/announce.js";
 
 // --- Controllable mock state ---
 
@@ -112,28 +117,28 @@ const { mockEncryptIntake, mockBuildAccountPayload } = vi.hoisted(() => ({
 }));
 
 vi.mock("./intake-crypto.js", async (importOriginal) => ({
-  ...(await importOriginal()),
+  ...(await importOriginal<typeof IntakeCrypto>()),
   encryptIntake: mockEncryptIntake,
   buildAccountPayload: mockBuildAccountPayload,
 }));
 
 vi.mock("$lib/portal/intake-form-crypto.js", async (importOriginal) => ({
-  ...(await importOriginal()),
+  ...(await importOriginal<typeof IntakeFormCrypto>()),
   decryptFieldContent: vi.fn(),
 }));
 
 vi.mock("@care-y/crypto", async (importOriginal) => ({
-  ...(await importOriginal()),
+  ...(await importOriginal<typeof CryptoPkg>()),
   decode: (s: string) => new Uint8Array(Buffer.from(s, "base64")),
 }));
 
 vi.mock("$lib/auth/pow-solver.js", async (importOriginal) => ({
-  ...(await importOriginal()),
+  ...(await importOriginal<typeof PowSolver>()),
   solveProofOfWork: vi.fn().mockResolvedValue("solution-hex"),
 }));
 
 vi.mock("$lib/utils/announce.js", async (importOriginal) => ({
-  ...(await importOriginal()),
+  ...(await importOriginal<typeof AnnounceModule>()),
   announceToLiveRegion: vi.fn(),
 }));
 

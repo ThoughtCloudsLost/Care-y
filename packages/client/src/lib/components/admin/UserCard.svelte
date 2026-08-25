@@ -337,7 +337,12 @@
     color: var(--muted);
     flex-shrink: 0;
     -webkit-tap-highlight-color: transparent;
-    transition: background-color 150ms linear;
+  }
+
+  @media (prefers-reduced-motion: no-preference) {
+    .edit-btn {
+      transition: background-color 150ms linear;
+    }
   }
 
   .edit-btn:hover {

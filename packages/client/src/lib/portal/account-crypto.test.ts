@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import type * as CryptoPkg from "@care-y/crypto";
 
 // Mock trpc before importing the module under test
 vi.mock("$lib/trpc/index.js", async (importOriginal) => ({
@@ -52,7 +53,7 @@ const {
 }));
 
 vi.mock("@care-y/crypto", async (importOriginal) => ({
-  ...(await importOriginal()),
+  ...(await importOriginal<typeof CryptoPkg>()),
   deriveAccountKey: vi.fn().mockReturnValue(fakeStretched),
   oprfBlind: vi.fn().mockReturnValue({
     blindedElement: fakeBlindedElement,

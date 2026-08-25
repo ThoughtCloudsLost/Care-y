@@ -108,7 +108,9 @@
         queryKey: ticketKeys.followUps(ticketId),
       });
       ondismiss();
-    } catch {
+    } catch (_err: unknown) {
+      // Intentional discard: error may carry decrypted message content
+      // from the crypto bridge or ECIES pipeline.
       toastStore.show(m.error_generic(), 3000);
     } finally {
       saving = false;
@@ -157,18 +159,6 @@
 </ShellSheet>
 
 <style>
-  .sr-only {
-    position: absolute;
-    width: 1px;
-    height: 1px;
-    padding: 0;
-    margin: -1px;
-    overflow: hidden;
-    clip: rect(0, 0, 0, 0);
-    white-space: nowrap;
-    border-width: 0;
-  }
-
   :global(.edit-textarea) {
     min-height: 120px;
     resize: vertical;

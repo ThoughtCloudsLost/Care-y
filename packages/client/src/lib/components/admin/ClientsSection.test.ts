@@ -9,6 +9,17 @@ import {
   within,
 } from "@testing-library/svelte";
 import { ErrorCode } from "@care-y/shared";
+import type {
+  AliasHash,
+  ClientId,
+  ClientMergeEventId,
+  KeyGeneration,
+  PhoneHash,
+  PhoneMatchHash,
+  TicketId,
+} from "@care-y/shared";
+import type { TRPCClient } from "@trpc/client";
+import type { AppRouter } from "@care-y/server";
 import type * as ParaglideMessages from "$lib/paraglide/messages.js";
 import type * as TanstackQuery from "@tanstack/svelte-query";
 import type * as CryptoContext from "$lib/crypto/context.js";
@@ -17,6 +28,12 @@ import type * as Haptic from "$lib/utils/haptic.js";
 import type * as Announce from "$lib/utils/announce.js";
 import type * as ClientFilters from "$lib/stores/client-filters.svelte.js";
 import type * as ShellContext from "$lib/shell/context.js";
+
+type ClientsRouter = NonNullable<TRPCClient<AppRouter>["clients"]>;
+type ClientListItem = Awaited<
+  ReturnType<ClientsRouter["list"]["query"]>
+>[number];
+type ClientDetail = Awaited<ReturnType<ClientsRouter["get"]["query"]>>;
 
 const {
   mockUpdateAlias,
@@ -37,44 +54,6 @@ const {
   mockBackfillPhoneMatchHash: vi.fn().mockResolvedValue(undefined),
   mockPhoneMatchHash: vi.fn().mockResolvedValue("aabbccdd" + "00".repeat(60)),
 }));
-
-interface ClientListItem {
-  id: string;
-  encryptedAlias: string;
-  aliasHash: string | null;
-  phoneMatchHash: string | null;
-  phone: string;
-  ticketCount: number;
-  createdAt: string;
-  mergedInto: string | null;
-}
-
-interface ClientDetail {
-  id: string;
-  encryptedAlias: string;
-  aliasHash: string | null;
-  phone: string;
-  phoneHash: string;
-  ticketCount: number;
-  createdAt: string;
-  tickets: ReadonlyArray<{
-    id: string;
-    encryptedTitle: string;
-    status: string;
-    priority: string;
-    createdAt: string;
-    keyGeneration: string;
-  }>;
-  mergeHistory: ReadonlyArray<{
-    id: string;
-    primaryClientId: string;
-    secondaryClientId: string;
-    mergedAt: string;
-    snapshot: string;
-    undoLocked: boolean;
-    isUndone: boolean;
-  }>;
-}
 
 let mockDetailData: ClientDetail | undefined;
 let mockDetailLoading = false;
@@ -328,10 +307,10 @@ function makeClient(
   overrides: Partial<ClientListItem> = {},
 ): ClientListItem {
   return {
-    id,
+    id: id as ClientId,
     encryptedAlias: `enc-alias-${id}`,
-    aliasHash: `hash-${id}`,
-    phoneMatchHash: `phone-hash-${id}`,
+    aliasHash: `hash-${id}` as AliasHash,
+    phoneMatchHash: `phone-hash-${id}` as PhoneMatchHash,
     phone: "***1234",
     ticketCount: 2,
     createdAt: "2026-01-15T00:00:00.000Z",
@@ -345,21 +324,23 @@ function makeDetail(
   overrides: Partial<ClientDetail> = {},
 ): ClientDetail {
   return {
-    id,
+    id: id as ClientId,
     encryptedAlias: `enc-alias-${id}`,
-    aliasHash: `hash-${id}`,
+    aliasHash: `hash-${id}` as AliasHash,
     phone: "+1 (555) 000-1234",
-    phoneHash: "abc123",
+    phoneHash: "abc123" as PhoneHash,
     ticketCount: 1,
     createdAt: "2026-01-15T00:00:00.000Z",
     tickets: [
       {
-        id: "t-1",
+        id: "t-1" as TicketId,
         encryptedTitle: btoa("encrypted-title"),
-        status: "new",
+        status: "open",
         priority: "normal",
         createdAt: "2026-01-15T00:00:00.000Z",
-        keyGeneration: "1",
+        keyGeneration: "1" as KeyGeneration,
+        onHold: false,
+        followUpCount: 0,
       },
     ],
     mergeHistory: [],
@@ -562,9 +543,9 @@ describe("ClientsSection", () => {
       mockDetailData = makeDetail("c-1", {
         mergeHistory: [
           {
-            id: "me-1",
-            primaryClientId: "c-1",
-            secondaryClientId: "c-2",
+            id: "me-1" as ClientMergeEventId,
+            primaryClientId: "c-1" as ClientId,
+            secondaryClientId: "c-2" as ClientId,
             mergedAt: "2026-03-10T00:00:00.000Z",
             snapshot: btoa("{}"),
             undoLocked: false,
@@ -920,9 +901,9 @@ describe("ClientsSection", () => {
       mockDetailData = makeDetail("c-1", {
         mergeHistory: [
           {
-            id: "me-1",
-            primaryClientId: "c-1",
-            secondaryClientId: "c-2",
+            id: "me-1" as ClientMergeEventId,
+            primaryClientId: "c-1" as ClientId,
+            secondaryClientId: "c-2" as ClientId,
             mergedAt: "2026-03-10T00:00:00.000Z",
             snapshot: btoa("{}"),
             undoLocked: false,
@@ -954,9 +935,9 @@ describe("ClientsSection", () => {
       mockDetailData = makeDetail("c-1", {
         mergeHistory: [
           {
-            id: "me-1",
-            primaryClientId: "c-1",
-            secondaryClientId: "c-2",
+            id: "me-1" as ClientMergeEventId,
+            primaryClientId: "c-1" as ClientId,
+            secondaryClientId: "c-2" as ClientId,
             mergedAt: "2026-03-10T00:00:00.000Z",
             snapshot: btoa("{}"),
             undoLocked: false,
@@ -985,9 +966,9 @@ describe("ClientsSection", () => {
       mockDetailData = makeDetail("c-1", {
         mergeHistory: [
           {
-            id: "me-1",
-            primaryClientId: "c-1",
-            secondaryClientId: "c-2",
+            id: "me-1" as ClientMergeEventId,
+            primaryClientId: "c-1" as ClientId,
+            secondaryClientId: "c-2" as ClientId,
             mergedAt: "2026-03-10T00:00:00.000Z",
             snapshot: btoa("{}"),
             undoLocked: false,
@@ -1015,9 +996,9 @@ describe("ClientsSection", () => {
       mockDetailData = makeDetail("c-1", {
         mergeHistory: [
           {
-            id: "me-1",
-            primaryClientId: "c-1",
-            secondaryClientId: "c-2",
+            id: "me-1" as ClientMergeEventId,
+            primaryClientId: "c-1" as ClientId,
+            secondaryClientId: "c-2" as ClientId,
             mergedAt: "2026-03-10T00:00:00.000Z",
             snapshot: btoa("{}"),
             undoLocked: false,
@@ -1065,7 +1046,11 @@ describe("ClientsSection", () => {
     });
 
     it("skips backfill for a client that already has a phoneMatchHash", () => {
-      const clients = [makeClient("c-1", { phoneMatchHash: "existing-hash" })];
+      const clients = [
+        makeClient("c-1", {
+          phoneMatchHash: "existing-hash" as PhoneMatchHash,
+        }),
+      ];
       render(ClientsSection, { props: { clients } });
 
       expect(mockBackfillPhoneMatchHash).not.toHaveBeenCalled();
