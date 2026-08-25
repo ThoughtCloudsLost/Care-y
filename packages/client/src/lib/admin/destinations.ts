@@ -192,7 +192,7 @@ export const ADMIN_DESTINATIONS: readonly AdminDestination[] = [
     icon: ClipboardList,
     label: m.intake_forms_title,
     subtitle: m.hub_intake_forms_subtitle,
-    path: "/admin/forms",
+    path: "/admin/organization?tab=intake-forms",
     permission: Permission.MANAGE_QUEUES,
     implemented: true,
   },

@@ -8,6 +8,7 @@
     Palette,
     Shredder,
     ClipboardPenLine,
+    ClipboardList,
     Languages,
   } from "@lucide/svelte";
   import * as m from "$lib/paraglide/messages.js";
@@ -19,6 +20,7 @@
   import BrandingSection from "$lib/components/admin/BrandingSection.svelte";
   import RetentionSection from "$lib/components/admin/RetentionSection.svelte";
   import NoteTypesSection from "$lib/components/admin/NoteTypesSection.svelte";
+  import IntakeFormsSection from "$lib/components/admin/IntakeFormsSection.svelte";
   import TerminologySection from "$lib/components/admin/TerminologySection.svelte";
 
   const permissionsGetter = getCurrentPermissions();
@@ -66,6 +68,13 @@
       icon: ClipboardPenLine,
       permission: Permission.MANAGE_ORG_CONFIG,
       component: NoteTypesSection,
+    },
+    {
+      id: "intake-forms",
+      label: m.intake_forms_title,
+      icon: ClipboardList,
+      permission: Permission.MANAGE_QUEUES,
+      component: IntakeFormsSection,
     },
   ];
 

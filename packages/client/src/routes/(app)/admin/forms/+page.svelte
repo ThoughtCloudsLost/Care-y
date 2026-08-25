@@ -1,11 +1,14 @@
 <!--
-  Admin intake forms page. Single route with in-page view state toggling
-  between the list view and the editor view. Follows the admin destinations
-  pattern: no sub-routes, component state drives the view.
+  Intake form editor page. The forms list lives in the organization admin
+  page (Intake Forms section); this route hosts only the editor. `?id=<uuid>`
+  edits an existing form, no query param creates a new one. Back and delete
+  return to the organization section.
 -->
 <script lang="ts">
+  import { goto } from "$app/navigation";
+  import { resolve } from "$app/paths";
+  import { page } from "$app/state";
   import { Block } from "konsta/svelte";
-  import { createQuery } from "@tanstack/svelte-query";
   import {
     intakeFieldTypeSchema,
     intakeFieldRoleSchema,
@@ -16,11 +19,9 @@
   import * as m from "$lib/paraglide/messages.js";
   import { trpc } from "$lib/trpc/index.js";
   import { requireRouter } from "$lib/errors.js";
-  import { intakeFormKeys } from "$lib/query/keys.js";
   import { getOrgKeyManager } from "$lib/crypto/context.js";
   import { getNavbarOverrideCtx } from "$lib/shell/context.js";
   import { decryptFieldContent } from "$lib/portal/intake-form-crypto.js";
-  import IntakeFormsSection from "$lib/components/admin/IntakeFormsSection.svelte";
   import IntakeFormEditor from "$lib/components/admin/IntakeFormEditor.svelte";
 
   interface PlaintextField {
@@ -33,17 +34,8 @@
     escalationRecipientIds: string[] | null;
   }
 
-  /** Wire shape returned by intakeForms.list */
-  interface FormListItem {
-    readonly id: string;
-    readonly name: string;
-    readonly isActive: boolean;
-    readonly fieldCount: number;
-  }
-
   type ViewState =
-    | { kind: "list" }
-    | { kind: "loading"; formId: string }
+    | { kind: "loading" }
     | { kind: "load-error"; message: string }
     | {
         kind: "editor";
@@ -55,42 +47,24 @@
         fields: PlaintextField[];
       };
 
-  let view = $state<ViewState>({ kind: "list" });
+  let view = $state<ViewState>({ kind: "loading" });
 
   const intakeFormsRouter = requireRouter(trpc.intakeForms, "intakeForms");
   const orgKeyManager = getOrgKeyManager();
   const navbarCtx = getNavbarOverrideCtx();
 
-  const formsQuery = createQuery(() => ({
-    queryKey: intakeFormKeys.list(),
-    queryFn: async (): Promise<FormListItem[]> => {
-      const result = await intakeFormsRouter.list.query();
-      return result.forms;
-    },
-  }));
+  const formId = $derived(page.url.searchParams.get("id"));
+  const listPath = `${resolve("/admin/organization")}?tab=intake-forms`;
 
-  function openEditor(formId: string): void {
-    view = { kind: "loading", formId };
-    void loadFormForEditing(formId);
-  }
-
-  async function loadFormForEditing(formId: string): Promise<void> {
+  async function loadFormForEditing(id: string): Promise<void> {
     const orgPub = orgKeyManager.getPublicKey();
     if (!orgPub) {
       view = { kind: "load-error", message: m.error_generic() };
       return;
     }
 
-    const formSummary = (formsQuery.data ?? []).find(
-      (f: FormListItem) => f.id === formId,
-    );
-    if (!formSummary) {
-      view = { kind: "load-error", message: m.error_generic() };
-      return;
-    }
-
     try {
-      const formDetail = await intakeFormsRouter.get.query({ formId });
+      const formDetail = await intakeFormsRouter.get.query({ formId: id });
 
       const decryptedFields: PlaintextField[] = formDetail.fields.map(
         (field: {
@@ -130,7 +104,7 @@
 
       view = {
         kind: "editor",
-        formId,
+        formId: id,
         formName: formDetail.name,
         slug: formDetail.slug ?? null,
         isDefault: formDetail.isDefault,
@@ -142,28 +116,31 @@
     }
   }
 
-  function openCreateEditor(): void {
-    view = {
-      kind: "editor",
-      formId: null,
-      formName: "",
-      slug: null,
-      isDefault: false,
-      destinationQueueId: null,
-      fields: [],
-    };
-  }
-
   function backToList(): void {
-    view = { kind: "list" };
+    // eslint-disable-next-line svelte/no-navigation-without-resolve -- listPath is built from resolve() above
+    void goto(listPath);
   }
 
   $effect(() => {
-    if (view.kind === "list") {
-      navbarCtx.current = {
-        title: m.intake_forms_title(),
+    const id = formId;
+    if (id === null) {
+      view = {
+        kind: "editor",
+        formId: null,
+        formName: "",
+        slug: null,
+        isDefault: false,
+        destinationQueueId: null,
+        fields: [],
       };
-    } else if (view.kind === "loading" || view.kind === "load-error") {
+    } else {
+      view = { kind: "loading" };
+      void loadFormForEditing(id);
+    }
+  });
+
+  $effect(() => {
+    if (view.kind === "loading" || view.kind === "load-error") {
       navbarCtx.current = {
         title: m.intake_forms_edit_title(),
       };
@@ -178,9 +155,7 @@
   });
 </script>
 
-{#if view.kind === "list"}
-  <IntakeFormsSection onedit={openEditor} oncreate={openCreateEditor} />
-{:else if view.kind === "loading"}
+{#if view.kind === "loading"}
   <Block>
     <p>{m.common_loading()}</p>
   </Block>

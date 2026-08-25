@@ -11,30 +11,35 @@ const mockGoto = vi.fn();
 
 // --- Mocks ---
 
-vi.mock("$app/navigation", () => ({
+vi.mock("$app/navigation", async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
   goto: mockGoto,
   afterNavigate: vi.fn(),
 }));
 
-vi.mock("$app/paths", () => ({
+vi.mock("$app/paths", async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
   resolve: (path: string) => path,
   base: "",
   assets: "",
 }));
 
-vi.mock("$lib/crypto/context.js", () => ({
+vi.mock("$lib/crypto/context.js", async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
   getCurrentPermissions: () => () => mockPermissions,
 }));
 
 const mockNavbarCtx = { current: undefined as unknown };
 
-vi.mock("$lib/shell/context.js", () => ({
+vi.mock("$lib/shell/context.js", async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
   getNavbarOverrideCtx: () => mockNavbarCtx,
   getScrollContainer: () => () => null,
   getTabbarOverrideCtx: () => ({ current: undefined }),
 }));
 
-vi.mock("$lib/paraglide/messages.js", () => ({
+vi.mock("$lib/paraglide/messages.js", async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
   admin_tab_org_general: () => "General",
   admin_tab_branding: () => "Branding",
   admin_tab_keys: () => "Keys",
@@ -42,61 +47,126 @@ vi.mock("$lib/paraglide/messages.js", () => ({
   admin_tab_reports: () => "Reports",
   admin_tab_note_types: () => "Follow-Ups",
   admin_tab_terminology: () => "Terminology",
+  intake_forms_title: () => "Intake Forms",
   admin_org_title: () => "Organization",
   admin_org_no_access: () => "No access",
 }));
 
-vi.mock("$lib/components/SectionScrollNav.svelte", async () => ({
-  default: (
-    await import("$lib/components/tickets/test-helpers/PassthroughShell.svelte")
-  ).default,
-}));
+vi.mock("$lib/components/SectionScrollNav.svelte", async () => {
+  // Passthrough replaces the component; a surface assertion (not
+  // importOriginal, which would load the real component tree) guards
+  // the module shape.
+  const _usedExports = null! as { default: unknown };
+  return {
+    default: (
+      await import("$lib/components/tickets/test-helpers/PassthroughShell.svelte")
+    ).default,
+  } satisfies typeof _usedExports;
+});
 
-vi.mock("$lib/components/useSectionScroll.svelte.js", () => ({
-  createSectionScroll: () => ({ active: "branding", scrollTo: vi.fn() }),
-}));
+vi.mock(
+  "$lib/components/useSectionScroll.svelte.js",
+  async (importOriginal) => ({
+    ...(await importOriginal<Record<string, unknown>>()),
+    createSectionScroll: () => ({ active: "branding", scrollTo: vi.fn() }),
+  }),
+);
 
-vi.mock("$lib/components/dashboard/CollapsibleSection.svelte", async () => ({
-  default: (
-    await import("$lib/components/tickets/test-helpers/PassthroughShell.svelte")
-  ).default,
-}));
+vi.mock("$lib/components/dashboard/CollapsibleSection.svelte", async () => {
+  // Passthrough replaces the component; a surface assertion (not
+  // importOriginal, which would load the real component tree) guards
+  // the module shape.
+  const _usedExports = null! as { default: unknown };
+  return {
+    default: (
+      await import("$lib/components/tickets/test-helpers/PassthroughShell.svelte")
+    ).default,
+  } satisfies typeof _usedExports;
+});
 
-vi.mock("$lib/components/admin/BrandingSection.svelte", async () => ({
-  default: (
-    await import("$lib/components/tickets/test-helpers/PassthroughShell.svelte")
-  ).default,
-}));
+vi.mock("$lib/components/admin/BrandingSection.svelte", async () => {
+  // Passthrough replaces the component; a surface assertion (not
+  // importOriginal, which would load the real component tree) guards
+  // the module shape.
+  const _usedExports = null! as { default: unknown };
+  return {
+    default: (
+      await import("$lib/components/tickets/test-helpers/PassthroughShell.svelte")
+    ).default,
+  } satisfies typeof _usedExports;
+});
 
-vi.mock("$lib/components/admin/KeysSection.svelte", async () => ({
-  default: (
-    await import("$lib/components/tickets/test-helpers/PassthroughShell.svelte")
-  ).default,
-}));
+vi.mock("$lib/components/admin/KeysSection.svelte", async () => {
+  // Passthrough replaces the component; a surface assertion (not
+  // importOriginal, which would load the real component tree) guards
+  // the module shape.
+  const _usedExports = null! as { default: unknown };
+  return {
+    default: (
+      await import("$lib/components/tickets/test-helpers/PassthroughShell.svelte")
+    ).default,
+  } satisfies typeof _usedExports;
+});
 
-vi.mock("$lib/components/admin/RetentionSection.svelte", async () => ({
-  default: (
-    await import("$lib/components/tickets/test-helpers/PassthroughShell.svelte")
-  ).default,
-}));
+vi.mock("$lib/components/admin/RetentionSection.svelte", async () => {
+  // Passthrough replaces the component; a surface assertion (not
+  // importOriginal, which would load the real component tree) guards
+  // the module shape.
+  const _usedExports = null! as { default: unknown };
+  return {
+    default: (
+      await import("$lib/components/tickets/test-helpers/PassthroughShell.svelte")
+    ).default,
+  } satisfies typeof _usedExports;
+});
 
-vi.mock("$lib/components/admin/NoteTypesSection.svelte", async () => ({
-  default: (
-    await import("$lib/components/tickets/test-helpers/PassthroughShell.svelte")
-  ).default,
-}));
+vi.mock("$lib/components/admin/NoteTypesSection.svelte", async () => {
+  // Passthrough replaces the component; a surface assertion (not
+  // importOriginal, which would load the real component tree) guards
+  // the module shape.
+  const _usedExports = null! as { default: unknown };
+  return {
+    default: (
+      await import("$lib/components/tickets/test-helpers/PassthroughShell.svelte")
+    ).default,
+  } satisfies typeof _usedExports;
+});
 
-vi.mock("$lib/components/admin/TerminologySection.svelte", async () => ({
-  default: (
-    await import("$lib/components/tickets/test-helpers/PassthroughShell.svelte")
-  ).default,
-}));
+vi.mock("$lib/components/admin/IntakeFormsSection.svelte", async () => {
+  // Passthrough replaces the component; a surface assertion (not
+  // importOriginal, which would load the real component tree) guards
+  // the module shape.
+  const _usedExports = null! as { default: unknown };
+  return {
+    default: (
+      await import("$lib/components/tickets/test-helpers/PassthroughShell.svelte")
+    ).default,
+  } satisfies typeof _usedExports;
+});
 
-vi.mock("$lib/components/admin/OrgGeneralSection.svelte", async () => ({
-  default: (
-    await import("$lib/components/tickets/test-helpers/PassthroughShell.svelte")
-  ).default,
-}));
+vi.mock("$lib/components/admin/TerminologySection.svelte", async () => {
+  // Passthrough replaces the component; a surface assertion (not
+  // importOriginal, which would load the real component tree) guards
+  // the module shape.
+  const _usedExports = null! as { default: unknown };
+  return {
+    default: (
+      await import("$lib/components/tickets/test-helpers/PassthroughShell.svelte")
+    ).default,
+  } satisfies typeof _usedExports;
+});
+
+vi.mock("$lib/components/admin/OrgGeneralSection.svelte", async () => {
+  // Passthrough replaces the component; a surface assertion (not
+  // importOriginal, which would load the real component tree) guards
+  // the module shape.
+  const _usedExports = null! as { default: unknown };
+  return {
+    default: (
+      await import("$lib/components/tickets/test-helpers/PassthroughShell.svelte")
+    ).default,
+  } satisfies typeof _usedExports;
+});
 
 // jsdom lacks Web Animations API (used by Konsta transitions).
 if (typeof Element.prototype.animate !== "function") {
@@ -116,6 +186,7 @@ function setPermissions(...perms: string[]): void {
 const ALL_ORG_PERMISSIONS = [
   "manage_org_config",
   "manage_keys",
+  "manage_queues",
   "view_reports",
 ];
 
@@ -162,7 +233,7 @@ describe("Organization page", () => {
   });
 
   describe("section rendering", () => {
-    it("renders all 6 section anchors with full permissions", () => {
+    it("renders all 7 section anchors with full permissions", () => {
       const { container } = renderPage();
 
       expect(container.querySelector("#section-general")).toBeTruthy();
@@ -171,6 +242,7 @@ describe("Organization page", () => {
       expect(container.querySelector("#section-keys")).toBeTruthy();
       expect(container.querySelector("#section-retention")).toBeTruthy();
       expect(container.querySelector("#section-note-types")).toBeTruthy();
+      expect(container.querySelector("#section-intake-forms")).toBeTruthy();
     });
 
     it("only renders sections the user has permission for", () => {
@@ -183,6 +255,7 @@ describe("Organization page", () => {
       expect(container.querySelector("#section-terminology")).toBeNull();
       expect(container.querySelector("#section-retention")).toBeNull();
       expect(container.querySelector("#section-note-types")).toBeNull();
+      expect(container.querySelector("#section-intake-forms")).toBeNull();
     });
 
     it("branding and retention both appear with MANAGE_ORG_CONFIG", () => {
@@ -195,6 +268,7 @@ describe("Organization page", () => {
       expect(container.querySelector("#section-retention")).toBeTruthy();
       expect(container.querySelector("#section-note-types")).toBeTruthy();
       expect(container.querySelector("#section-keys")).toBeNull();
+      expect(container.querySelector("#section-intake-forms")).toBeNull();
     });
   });
 
@@ -219,7 +293,7 @@ describe("Organization page", () => {
       const { container } = renderPage();
 
       const divs = container.querySelectorAll(".csp-section");
-      expect(divs).toHaveLength(6);
+      expect(divs).toHaveLength(7);
       expect(divs[0]?.id).toBe("section-general");
       expect(divs[1]?.id).toBe("section-branding");
       expect(divs[2]?.id).toBe("section-terminology");
