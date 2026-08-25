@@ -9,18 +9,22 @@ import type {
 // provider registration/unregistration.
 const providers = new SvelteMap<string, SearchProvider>();
 
-// Route-level override for promoted provider. When set, takes precedence
+// Route-level override for promoted providers. When set, takes precedence
 // over the AppShell-derived promotedProviderId in searchAll().
-let promotedOverride = $state<string | undefined>(undefined);
+let promotedOverride = $state<readonly string[] | undefined>(undefined);
 
 /**
- * Override the promoted provider ID for the duration of a route mount.
- * Returns a cleanup function that clears the override.
+ * Override the promoted provider order for the duration of a route mount.
+ * Providers are sorted in the order given; unlisted providers follow in
+ * registration order. Returns a cleanup function that clears the override.
  */
-export function setPromotedOverride(providerId: string): () => void {
-  promotedOverride = providerId;
+export function setPromotedOverride(...providerIds: string[]): () => void {
+  const ids: readonly string[] = providerIds;
+  promotedOverride = ids;
   return () => {
-    if (promotedOverride === providerId) {
+    // Reference equality: a later setPromotedOverride call replaces the
+    // array, so a stale cleanup won't clear the newer override.
+    if (promotedOverride === ids) {
       promotedOverride = undefined;
     }
   };
@@ -105,15 +109,20 @@ export function searchAll(
     });
   }
 
-  // Stable sort: promoted provider first, others in registration order.
-  // Route-level override takes precedence over the AppShell-derived value.
-  const effectivePromoted = promotedOverride ?? promotedProviderId;
-  if (effectivePromoted !== undefined && effectivePromoted !== "") {
-    groups.sort((a, b) => {
-      if (a.providerId === effectivePromoted) return -1;
-      if (b.providerId === effectivePromoted) return 1;
-      return 0;
-    });
+  // Stable sort: promoted providers first in priority order, others in
+  // registration order. Route-level override takes precedence over the
+  // AppShell-derived value.
+  const priority =
+    promotedOverride ??
+    (promotedProviderId !== undefined && promotedProviderId !== ""
+      ? [promotedProviderId]
+      : []);
+  if (priority.length > 0) {
+    const rank = (id: string): number => {
+      const i = priority.indexOf(id);
+      return i === -1 ? priority.length : i;
+    };
+    groups.sort((a, b) => rank(a.providerId) - rank(b.providerId));
   }
 
   return groups;
