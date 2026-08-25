@@ -18,9 +18,19 @@
     pending: boolean;
     /** Called on first focus (for the WebChatHint). */
     onfirstfocus?: () => void;
+    /** Error message displayed below the composer on send failure. */
+    errorMessage?: string;
   }
 
-  let { onsend, pending, onfirstfocus }: PortalComposerProps = $props();
+  let { onsend, pending, onfirstfocus, errorMessage }: PortalComposerProps =
+    $props();
+
+  /** Refill the composer with unsent text, only when it is currently empty. */
+  export function restoreDraft(draft: string): void {
+    if (text.trim().length === 0) {
+      text = draft;
+    }
+  }
 
   let text = $state("");
   let hasFocused = $state(false);
@@ -63,6 +73,11 @@
     inline
   >
     {#snippet footer()}
+      {#if errorMessage}
+        <p class="send-error" role="alert" data-testid="send-error">
+          {errorMessage}
+        </p>
+      {/if}
       {#if overLimit}
         <p class="char-over" aria-live="polite" data-testid="char-over">
           {m.portal_composer_placeholder()}
@@ -100,6 +115,13 @@
     font-size: var(--text-xs, 0.75rem);
     color: var(--danger);
     text-align: right;
+    padding: 2px 16px 4px;
+    margin: 0;
+  }
+
+  .send-error {
+    font-size: var(--text-xs, 0.75rem);
+    color: var(--danger);
     padding: 2px 16px 4px;
     margin: 0;
   }

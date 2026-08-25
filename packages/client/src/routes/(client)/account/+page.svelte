@@ -72,6 +72,8 @@
   let changePasswordError = $state("");
   let hintShown = $state(false);
   let hintDismissed = $state(false);
+  let sendError = $state("");
+  let composerRef = $state<PortalComposer | null>(null);
 
   // Optimistic messages appended after send
   interface OptimisticMsg {
@@ -275,13 +277,25 @@
       });
       announceToLiveRegion("polite", m.portal_send());
     },
+    onError: (_err, variables) => {
+      optimisticMessages = optimisticMessages.filter(
+        (msg) => msg.id !== variables.followUpId,
+      );
+      composerRef?.restoreDraft(lastSentText);
+      sendError = m.portal_send_failed();
+      announceToLiveRegion("polite", m.portal_send_failed());
+    },
   }));
 
+  let lastSentText = "";
+
   function handleSend(text: string): void {
+    sendError = "";
     const ticketId = bootstrapQuery.data?.ticketId;
     if (!session || !orgPublicKey || ticketId == null || ticketId === "") {
       return;
     }
+    lastSentText = text;
 
     const followUpId = newFollowupId();
     const keyGeneration = newKeyGeneration();
@@ -489,9 +503,11 @@
   />
 
   <PortalComposer
+    bind:this={composerRef}
     onsend={handleSend}
     pending={replyMutation.isPending}
     onfirstfocus={handleFirstFocus}
+    errorMessage={sendError || undefined}
   />
 
   <WebChatHint opened={hintShown} ondismiss={dismissHint} />

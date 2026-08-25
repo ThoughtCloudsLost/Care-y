@@ -2635,6 +2635,7 @@
   "portal_hint_dismiss": "Entendido",
   "portal_link_sms_body": "Aquí está tu enlace privado de mensajes: {link}",
   "portal_nudge_sms_body": "Tienes un nuevo mensaje esperándote.",
+  "portal_send_failed": "Tu mensaje no se envió. Tus palabras están de vuelta en el campo de texto. Toca enviar para intentarlo de nuevo.",
 
   "account_title": "Iniciar sesión",
   "account_login_username": "Nombre de usuario",
