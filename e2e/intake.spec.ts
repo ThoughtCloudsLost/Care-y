@@ -22,10 +22,13 @@ import { countRows, queryDb } from "./db-probe";
  * via VITE_ORG_SLUG (same as all other e2e specs).
  */
 
-// Test data used for the intake form submission.
-const INTAKE_NAME = "E2E Intake Client";
-const INTAKE_MESSAGE =
-  "I need help with a housing situation, please contact me.";
+// Test data used for the intake form submission. The suffix keeps the
+// decrypted title unique across runs: web-intake tickets carry a
+// client-authored followup, so the global-setup stale-ticket sweep
+// (which keys on "no user-authored followups") never removes them.
+const suffix = String(Date.now()).slice(-6);
+const INTAKE_NAME = `E2E Intake Client ${suffix}`;
+const INTAKE_MESSAGE = `I need help with a housing situation ${suffix}, please contact me.`;
 
 test.describe.serial("Public Intake Form", () => {
   let intakePage: Page;
@@ -181,8 +184,17 @@ test.describe.serial("Public Intake Form", () => {
     });
   });
 
+  let intakeWrapCountBeforeOpen = 0;
+
   test("volunteer opens intake ticket detail and sees message content", async () => {
     const intakeTitle = `Web intake - ${INTAKE_NAME}`;
+
+    // Capture the wrap count before the detail open fires the conversion.
+    // Other specs' unconverted intake tickets may hold rows too, so the
+    // conversion assertion checks the delta, not an absolute zero.
+    intakeWrapCountBeforeOpen = countRows("intake_key_wraps");
+    expect(intakeWrapCountBeforeOpen).toBeGreaterThan(0);
+
     await openTicketByTitle(volunteerPage, intakeTitle);
 
     // The message follow-up content should be decrypted and visible in the chat log
@@ -192,19 +204,14 @@ test.describe.serial("Public Intake Form", () => {
   });
 
   test("DB: interim wrap deleted, ECIES wraps created", async () => {
-    // The ticket id is not directly available from the UI, but we can query
-    // by the encrypted_alias matching our reference code through the hash.
-    // Instead, query for tickets with intake_key_wraps (should be zero after conversion)
-    // and verify ticket_key_wraps has rows.
-
     // After opening the ticket detail, the conversion should have fired.
     // Wait a moment for the mutation to complete server-side.
     await volunteerPage.waitForTimeout(3_000);
 
-    // All intake_key_wraps for the e2e org should be empty (conversion
-    // deletes the interim wrap on first open)
+    // This ticket's interim wrap is deleted by the conversion (delta of
+    // exactly one against the pre-open count).
     const intakeWrapCount = countRows("intake_key_wraps");
-    expect(intakeWrapCount).toBe(0);
+    expect(intakeWrapCount).toBe(intakeWrapCountBeforeOpen - 1);
 
     // ticket_key_wraps should have rows for the queue volunteers.
     // The e2e org seed assigns at least one volunteer to the intake queue,

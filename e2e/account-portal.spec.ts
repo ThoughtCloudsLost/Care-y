@@ -5,10 +5,10 @@ import {
   auditA11y,
   clickComposeAction,
   CRYPTO_TIMEOUT,
-  isDesktopLayout,
   login,
   openComposeActions,
   openTicketByTitle,
+  openTicketInfoPanel,
 } from "./helpers";
 import { countRows, queryDb } from "./db-probe";
 
@@ -220,12 +220,12 @@ test.describe.serial("Encrypted Account Portal", () => {
   test("client reply request carries only ciphertext", async ({}, testInfo) => {
     testInfo.setTimeout(CRYPTO_TIMEOUT * 3);
 
-    let replyRequest: Request | null = null;
-    accountPage.on("request", (req) => {
-      if (req.url().includes("accountReply") && req.method() === "POST") {
-        replyRequest = req;
-      }
-    });
+    // Register the request predicate BEFORE the triggering action so the
+    // tRPC httpBatchLink POST is captured even if it fires on a later tick.
+    const replyRequestPromise = accountPage.waitForRequest(
+      (req) => req.url().includes("accountReply") && req.method() === "POST",
+      { timeout: CRYPTO_TIMEOUT },
+    );
 
     const composer = accountPage.getByRole("textbox").first();
     await composer.click();
@@ -236,8 +236,8 @@ test.describe.serial("Encrypted Account Portal", () => {
       timeout: CRYPTO_TIMEOUT,
     });
 
-    expect(replyRequest).not.toBeNull();
-    const body = replyRequest!.postData() ?? "";
+    const replyRequest = await replyRequestPromise;
+    const body = replyRequest.postData() ?? "";
     expect(body).not.toContain(CLIENT_REPLY);
     expect(body).toContain("wrappedTkTemp");
     expect(body).toContain("selfCopy");
@@ -340,17 +340,17 @@ test.describe.serial("Encrypted Account Portal", () => {
   test("volunteer creates a Secure Link and enables the offer", async ({}, testInfo) => {
     testInfo.setTimeout(CRYPTO_TIMEOUT * 4);
 
-    await volunteerPage.goto("/");
+    // In-app navigation, never goto: a hard load drops the volunteer's
+    // in-memory keys and bricks the session (same repair as the portal
+    // spec's convergence test).
+    await volunteerPage.keyboard.press("Escape");
+    await volunteerPage.getByRole("tab", { name: "Overview" }).click();
+    await expect(volunteerPage).toHaveURL("/");
     await openTicketByTitle(volunteerPage, UPGRADE_TICKET_TITLE);
 
-    const desktop = await isDesktopLayout(volunteerPage);
-    if (!desktop) {
-      const moreBtn = volunteerPage.getByRole("button", {
-        name: /more actions/i,
-      });
-      await expect(moreBtn).toBeVisible({ timeout: 10_000 });
-      await moreBtn.dispatchEvent("click");
-    }
+    // The tier section sits behind "More actions" in the detail overlay
+    // at every width (portal.spec.ts precedent), not just on mobile.
+    await openTicketInfoPanel(volunteerPage, "Communication");
 
     const setupBtn = volunteerPage
       .getByRole("button", { name: /set up secure link/i })
@@ -371,15 +371,25 @@ test.describe.serial("Encrypted Account Portal", () => {
     expect(upgradeLink).toMatch(/\/portal\/[0-9a-f]{48}#[A-Za-z0-9_-]{32}/);
     await sheet.getByRole("button", { name: /done/i }).dispatchEvent("click");
 
-    // Enable the in-portal account offer.
-    const offerToggle = volunteerPage.getByText(/offer account upgrade/i);
+    // Enable the in-portal account offer. The list item title is inert;
+    // the Konsta Toggle's checkbox carries the aria-label and is what
+    // actually flips the state (portal.spec.ts precedent).
+    const offerToggle = volunteerPage.getByRole("checkbox", {
+      name: /offer account upgrade/i,
+    });
     await expect(offerToggle).toBeVisible({ timeout: CRYPTO_TIMEOUT });
     await offerToggle.dispatchEvent("click");
+    await expect(offerToggle).toBeChecked({ timeout: 10_000 });
 
-    // Send a message so the upgrade has history to carry over.
+    // Send a message so the upgrade has history to carry over. Navigate
+    // away and back in-app: a reload drops the in-memory keys. The detail
+    // refetch also picks up the channel created above, which gates the
+    // "Reply to" compose action.
     await volunteerPage.keyboard.press("Escape");
     await volunteerPage.waitForTimeout(300);
-    await volunteerPage.reload();
+    await volunteerPage.getByRole("tab", { name: "Overview" }).click();
+    await expect(volunteerPage).toHaveURL("/");
+    await openTicketByTitle(volunteerPage, UPGRADE_TICKET_TITLE);
     await expect(volunteerPage.locator('[role="log"]')).toBeVisible({
       timeout: CRYPTO_TIMEOUT,
     });
@@ -415,7 +425,8 @@ test.describe.serial("Encrypted Account Portal", () => {
     });
     const card = upgradePage.getByText(/add a password to this conversation/i);
     await expect(card).toBeVisible({ timeout: CRYPTO_TIMEOUT });
-    await card.click();
+    // The card title is inert; the Set up button expands the form.
+    await upgradePage.getByTestId("upgrade-card-setup").click();
     await auditA11y(upgradePage);
 
     const usernameInput = upgradePage.getByRole("textbox", {
@@ -425,7 +436,7 @@ test.describe.serial("Encrypted Account Portal", () => {
     const passwordInputs = upgradePage.locator('input[type="password"]');
     await passwordInputs.nth(0).fill(UPGRADE_PASSWORD);
     await passwordInputs.nth(1).fill(UPGRADE_PASSWORD);
-    await upgradePage.getByRole("button", { name: /create account/i }).click();
+    await upgradePage.getByRole("button", { name: /set up account/i }).click();
 
     // Success state: username and the /account path, never the password.
     await expect(upgradePage.getByText(/your account is ready/i)).toBeVisible({
@@ -464,27 +475,37 @@ test.describe.serial("Encrypted Account Portal", () => {
   test("volunteer reset removes the account and kills the login", async ({}, testInfo) => {
     testInfo.setTimeout(CRYPTO_TIMEOUT * 4);
 
-    await volunteerPage.goto("/");
+    // In-app navigation, never goto: a hard load drops the in-memory keys.
+    await volunteerPage.keyboard.press("Escape");
+    await volunteerPage.getByRole("tab", { name: "Overview" }).click();
+    await expect(volunteerPage).toHaveURL("/");
     await openTicketByTitle(volunteerPage, INTAKE_TITLE);
 
-    const desktop = await isDesktopLayout(volunteerPage);
-    if (!desktop) {
-      const moreBtn = volunteerPage.getByRole("button", {
-        name: /more actions/i,
-      });
-      await expect(moreBtn).toBeVisible({ timeout: 10_000 });
-      await moreBtn.dispatchEvent("click");
-    }
+    // Same panel repair as the Secure Link test: the tier section sits
+    // behind "More actions" at every width.
+    await openTicketInfoPanel(volunteerPage, "Communication");
 
+    // Desktop split view renders a second, hidden tier section instance;
+    // dispatchEvent would reach the hidden copy and open its dialog
+    // inside the hidden subtree. Scope to the visible instance and use a
+    // real click so actionability checks apply.
     const resetBtn = volunteerPage
       .getByRole("button", { name: /reset account/i })
+      .filter({ visible: true })
       .first();
     await expect(resetBtn).toBeVisible({ timeout: CRYPTO_TIMEOUT });
-    await resetBtn.dispatchEvent("click");
+    await resetBtn.click();
 
-    // ShellDialog confirm carries the history-loss warning.
-    const confirmDialog = volunteerPage.getByRole("dialog").last();
-    await expect(confirmDialog).toBeVisible({ timeout: 5_000 });
+    // ShellDialog confirm carries the history-loss warning. The portaled
+    // shell-dialog-root wrapper is a zero-size div (its fixed-position
+    // children carry the visuals), so Playwright reports it hidden even
+    // while open; assert on the inner content, never the wrapper.
+    const confirmDialog = volunteerPage
+      .getByRole("dialog")
+      .filter({ hasText: /reset this account/i });
+    await expect(confirmDialog.getByText(/reset this account/i)).toBeVisible({
+      timeout: 5_000,
+    });
     const confirmBtn = confirmDialog.getByRole("button", {
       name: /reset/i,
     });

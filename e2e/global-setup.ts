@@ -79,6 +79,22 @@ export default async function globalSetup(): Promise<void> {
       "EXECUTE format('DELETE FROM %I.ticket_watchers WHERE ticket_id IN (SELECT id FROM %I.tickets t WHERE NOT EXISTS (SELECT 1 FROM %I.followups f WHERE f.ticket_id = t.id))', s, s, s);",
       "EXECUTE format('DELETE FROM %I.ticket_read_cursors WHERE ticket_id IN (SELECT id FROM %I.tickets t WHERE NOT EXISTS (SELECT 1 FROM %I.followups f WHERE f.ticket_id = t.id))', s, s, s);",
       "EXECUTE format('DELETE FROM %I.tickets t WHERE NOT EXISTS (SELECT 1 FROM %I.followups f WHERE f.ticket_id = t.id)', s, s);",
+      // Stale web-intake tickets escape the sweep above (they carry a
+      // client-authored intake followup) and their unconverted interim
+      // wraps break the intake spec's wrap-count probes. An
+      // intake_key_wraps row exactly identifies "unconverted web-intake
+      // ticket from a prior run": seed tickets never have one and this
+      // run has not submitted yet. Children first, then the tickets.
+      "EXECUTE format('DELETE FROM %I.followups WHERE ticket_id IN (SELECT ticket_id FROM %I.intake_key_wraps)', s, s);",
+      "EXECUTE format('DELETE FROM %I.ticket_watchers WHERE ticket_id IN (SELECT ticket_id FROM %I.intake_key_wraps)', s, s);",
+      "EXECUTE format('DELETE FROM %I.ticket_read_cursors WHERE ticket_id IN (SELECT ticket_id FROM %I.intake_key_wraps)', s, s);",
+      "EXECUTE format('DELETE FROM %I.tickets WHERE id IN (SELECT ticket_id FROM %I.intake_key_wraps)', s, s);",
+      // Stale pending-convergence follow-ups (non-null key_generation)
+      // from prior runs are sealed under rotated org keys and can never
+      // converge; they break the specs' wrap-count probes and render as
+      // permanent decrypt errors. Nothing is legitimately pending at
+      // setup time. portal_reply_key_wraps and portal_messages cascade.
+      "EXECUTE format('DELETE FROM %I.followups WHERE key_generation IS NOT NULL', s);",
       "END IF; END $fn$;",
     ].join("\n");
     execSync(`${COMPOSE} exec -T db psql -U care_y -d care_y`, {
