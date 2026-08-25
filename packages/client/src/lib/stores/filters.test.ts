@@ -98,9 +98,12 @@ describe("filterStore", () => {
   });
 
   describe("sort", () => {
-    it("defaults to date desc", async () => {
+    it("defaults to recent activity desc", async () => {
       const store = await getStore();
-      expect(store.sort).toEqual({ field: "date", direction: "desc" });
+      expect(store.sort).toEqual({
+        field: "last_activity",
+        direction: "desc",
+      });
     });
 
     it("setSort updates field and direction", async () => {
@@ -145,7 +148,7 @@ describe("filterStore", () => {
     it("includes sort defaults and limit when no filters active", async () => {
       const store = await getStore();
       expect(store.serverParams).toEqual({
-        sortBy: "date",
+        sortBy: "last_activity",
         sortDirection: "desc",
         limit: 50,
       });
