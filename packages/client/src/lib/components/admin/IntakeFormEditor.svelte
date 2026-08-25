@@ -98,6 +98,7 @@
   // Field config sheet state
   let configSheetOpened = $state(false);
   let configFieldIndex = $state(-1);
+  let configFieldIsNew = $state(false);
   let configFieldType = $state<IntakeFieldType>("text");
   const defaultConfigInitial: FieldConfigInitial = {
     label: "",
@@ -322,9 +323,10 @@
     fields = fields.filter((_, i) => i !== index);
   }
 
-  function openConfigSheet(index: number): void {
+  function openConfigSheet(index: number, isNew = false): void {
     const field = fields.at(index);
     if (field === undefined) return;
+    configFieldIsNew = isNew;
     configFieldIndex = index;
     configFieldType = field.fieldType;
     configFieldInitial = {
@@ -337,8 +339,19 @@
     configSheetOpened = true;
   }
 
+  function handleConfigCancel(): void {
+    configSheetOpened = false;
+    // A field canceled out of its initial configuration was never really
+    // created; drop it instead of leaving an unconfigured stub in the list.
+    if (configFieldIsNew && configFieldIndex >= 0) {
+      fields = fields.filter((_, i) => i !== configFieldIndex);
+    }
+    configFieldIsNew = false;
+  }
+
   function handleConfigDone(result: FieldConfigState): void {
     configSheetOpened = false;
+    configFieldIsNew = false;
     if (configFieldIndex >= 0 && configFieldIndex < fields.length) {
       fields = fields.map((f, i) => {
         if (i !== configFieldIndex) return f;
@@ -363,11 +376,11 @@
   function addField(type: IntakeFieldType): void {
     addFieldSheetOpened = false;
 
-    const defaultLabel = getDefaultLabel(type);
     const defaultConfig = getDefaultConfig(type);
 
+    // Label starts empty; the config sheet that opens next requires one.
     const newField: PlaintextField = {
-      label: defaultLabel,
+      label: "",
       isRequired: false,
       config: defaultConfig,
       fieldType: type,
@@ -379,24 +392,7 @@
     fields = [...fields, newField];
 
     const newIndex = fields.length - 1;
-    setTimeout(() => openConfigSheet(newIndex), 0);
-  }
-
-  function getDefaultLabel(type: IntakeFieldType): string {
-    switch (type) {
-      case "text":
-        return m.intake_forms_field_type_text();
-      case "textarea":
-        return m.intake_forms_field_type_textarea();
-      case "select":
-        return m.intake_forms_field_type_select();
-      case "multiselect":
-        return m.intake_forms_field_type_multiselect();
-      case "checkbox":
-        return m.intake_forms_field_type_checkbox();
-      case "availability":
-        return m.intake_forms_field_type_availability();
-    }
+    setTimeout(() => openConfigSheet(newIndex, true), 0);
   }
 
   function getDefaultConfig(type: IntakeFieldType): IntakeFieldConfig {
@@ -481,35 +477,25 @@
   );
 </script>
 
-<BlockTitle>{m.intake_forms_name_label()}</BlockTitle>
 <List strong inset>
   <ListInput
+    label={m.intake_forms_name_label()}
     type="text"
     placeholder={m.intake_forms_name_placeholder()}
     value={formName}
     onInput={handleNameInput}
   />
-</List>
-
-<!-- Slug -->
-<BlockTitle>{m.intake_forms_slug_label()}</BlockTitle>
-<List strong inset>
   <ListInput
+    label={m.intake_forms_slug_label()}
     type="text"
     placeholder={m.intake_forms_slug_placeholder()}
+    info={m.intake_forms_slug_hint()}
     value={formSlug}
     onInput={handleSlugInput}
   />
-</List>
-<Block>
-  <p class="slug-hint">{m.intake_forms_slug_hint()}</p>
-</Block>
-
-<!-- Destination queue -->
-{#if queuesQuery.data}
-  <BlockTitle>{m.intake_forms_destination_label()}</BlockTitle>
-  <List strong inset>
+  {#if queuesQuery.data}
     <ListInput
+      label={m.intake_forms_destination_label()}
       type="select"
       dropdown
       value={destinationQueueId ?? ""}
@@ -520,8 +506,8 @@
         <option value={queue.id}>{getQueueName(queue)}</option>
       {/each}
     </ListInput>
-  </List>
-{/if}
+  {/if}
+</List>
 
 <!-- Default toggle -->
 <List strong inset>
@@ -560,7 +546,7 @@
 <List strong inset>
   {#each fields as field, index (index)}
     <ListItem
-      title={`${String(index + 1)}. ${field.label}`}
+      title={`${String(index + 1)}. ${field.label || getFieldTypeLabel(field.fieldType)}`}
       subtitle={`${getFieldTypeLabel(field.fieldType)} - ${field.isRequired ? m.intake_forms_field_required() : m.intake_forms_field_optional()}`}
     >
       {#snippet after()}
@@ -705,7 +691,7 @@
   queues={queueOptions}
   volunteers={volunteerOptions}
   ondone={handleConfigDone}
-  ondismiss={() => (configSheetOpened = false)}
+  ondismiss={handleConfigCancel}
 />
 
 <style>
@@ -741,12 +727,6 @@
   :global(.field-type-disabled) {
     opacity: 0.5;
     pointer-events: none;
-  }
-
-  .slug-hint {
-    font-size: var(--text-xs);
-    color: var(--muted);
-    margin: 0;
   }
 
   .default-hint {

@@ -19,6 +19,8 @@ vi.mock("$lib/paraglide/messages.js", async (importOriginal) => ({
   intake_forms_config_allow_specific: () => "Specific dates",
   intake_forms_config_at_least_one: () => "At least one required.",
   intake_forms_config_required_true: () => "Must be checked",
+  intake_forms_config_label_required: () => "Enter the question text",
+  intake_forms_config_options_required: () => "Add at least one option",
   intake_forms_config_role_label: () => "Field role",
   intake_forms_config_role_none: () => "None",
   intake_forms_config_role_queue_routing: () => "Queue routing",
@@ -267,6 +269,67 @@ describe("IntakeFieldConfigSheet", () => {
     expect(capturedResult).toHaveProperty("role", null);
     expect(capturedResult).toHaveProperty("routingQueueIds", null);
     expect(capturedResult).toHaveProperty("escalationRecipientIds", null);
+  });
+
+  it("blocks done and shows an error when the question text is empty", async () => {
+    render(IntakeFieldConfigSheet, {
+      props: {
+        opened: true,
+        fieldType: "select",
+        initial: { ...baseInitial(), label: "" },
+        queues: TEST_QUEUES,
+        volunteers: TEST_VOLUNTEERS,
+        ondone,
+        ondismiss: vi.fn(),
+      },
+    });
+
+    await fireEvent.click(screen.getByText("Done"));
+
+    expect(capturedResult).toBeNull();
+    expect(screen.getByText("Enter the question text")).toBeTruthy();
+  });
+
+  it("blocks done when a choice field has no non-empty options", async () => {
+    render(IntakeFieldConfigSheet, {
+      props: {
+        opened: true,
+        fieldType: "select",
+        initial: {
+          ...baseInitial(),
+          config: { type: "select" as const, options: [""] },
+        },
+        queues: TEST_QUEUES,
+        volunteers: TEST_VOLUNTEERS,
+        ondone,
+        ondismiss: vi.fn(),
+      },
+    });
+
+    await fireEvent.click(screen.getByText("Done"));
+
+    expect(capturedResult).toBeNull();
+    expect(screen.getByText("Add at least one option")).toBeTruthy();
+  });
+
+  it("calls ondismiss from the cancel button", async () => {
+    const ondismiss = vi.fn();
+    render(IntakeFieldConfigSheet, {
+      props: {
+        opened: true,
+        fieldType: "select",
+        initial: baseInitial(),
+        queues: TEST_QUEUES,
+        volunteers: TEST_VOLUNTEERS,
+        ondone,
+        ondismiss,
+      },
+    });
+
+    await fireEvent.click(screen.getByText("Cancel"));
+
+    expect(ondismiss).toHaveBeenCalledOnce();
+    expect(capturedResult).toBeNull();
   });
 
   it("restores initial role when sheet opens with existing role data", () => {
