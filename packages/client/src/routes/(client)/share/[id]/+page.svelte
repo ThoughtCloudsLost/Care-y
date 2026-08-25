@@ -8,6 +8,7 @@
   import { getSodium } from "@care-y/crypto";
   import { decryptShare } from "$lib/portal/share-crypto.js";
   import { announceToLiveRegion } from "$lib/utils/announce.js";
+  import PortalHint from "$lib/components/portal/PortalHint.svelte";
 
   type ShareViewState =
     | { kind: "loading" }
@@ -18,6 +19,10 @@
     | { kind: "badLink" };
 
   let viewState: ShareViewState = $state({ kind: "loading" });
+
+  // Exposure hint, shown once when the decrypted content appears.
+  // The link is consumed on open, so this fires at most once per link.
+  let hintShown = $state(false);
 
   // afterNavigate, not onMount: replaceState throws if called before the
   // router initializes, which is exactly the hard-load case of a client
@@ -49,6 +54,7 @@
             await getSodium();
             const text = decryptShare(shareId, result.ciphertext, fragment);
             viewState = { kind: "content", text };
+            hintShown = true;
             announceToLiveRegion("polite", m.share_view_heading());
           } catch (err: unknown) {
             console.error("[share] decrypt failed:", err);
@@ -92,6 +98,13 @@
     <p class="share-content-text">{viewState.text}</p>
   </Block>
   <p class="share-one-time-notice">{m.share_view_one_time_notice()}</p>
+  <PortalHint
+    opened={hintShown}
+    ondismiss={() => (hintShown = false)}
+    message={m.share_view_hint()}
+    dismissLabel={m.portal_hint_dismiss()}
+    dismissTestid="share-view-hint-dismiss"
+  />
 {:else if viewState.kind === "opened"}
   <Block>
     <p class="share-terminal-text">{m.share_view_opened()}</p>

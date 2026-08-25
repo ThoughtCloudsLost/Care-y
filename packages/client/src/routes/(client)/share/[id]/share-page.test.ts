@@ -11,7 +11,7 @@
 
 import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
 import type { Mock } from "vitest";
-import { render, screen, cleanup } from "@testing-library/svelte";
+import { render, screen, cleanup, fireEvent } from "@testing-library/svelte";
 import type * as ParaglideMessages from "$lib/paraglide/messages.js";
 import type * as AppState from "$app/state";
 import type * as AppNavigation from "$app/navigation";
@@ -118,6 +118,9 @@ vi.mock("$lib/paraglide/messages.js", async (importOriginal) => ({
   share_view_bad_link: () =>
     "Check that you opened the complete link from your message.",
   share_view_loading: () => "Loading secure message...",
+  share_view_hint: () =>
+    "The link you opened carried the key that unlocked this message on your device.",
+  portal_hint_dismiss: () => "Got it",
 }));
 
 vi.mock("$lib/shell/PageShell.svelte", async (importOriginal) => ({
@@ -353,5 +356,53 @@ describe("share view page", () => {
         "This link has expired and is no longer available.",
       );
     });
+  });
+
+  it("shows the exposure hint when decrypted content renders", async () => {
+    mockMutateFn.mockResolvedValue({
+      status: "ready",
+      ciphertext: "ct",
+    });
+
+    render(SharePage);
+
+    await vi.waitFor(() => {
+      expect(
+        screen.getByText(/carried the key that unlocked this message/),
+      ).toBeTruthy();
+    });
+  });
+
+  it("hides the exposure hint on dismiss", async () => {
+    mockMutateFn.mockResolvedValue({
+      status: "ready",
+      ciphertext: "ct",
+    });
+
+    render(SharePage);
+
+    await vi.waitFor(() => {
+      expect(screen.getByTestId("share-view-hint-dismiss")).toBeTruthy();
+    });
+
+    await fireEvent.click(screen.getByTestId("share-view-hint-dismiss"));
+
+    expect(
+      screen.queryByText(/carried the key that unlocked this message/),
+    ).toBeNull();
+  });
+
+  it("does not show the exposure hint on terminal states", async () => {
+    mockMutateFn.mockResolvedValue({ status: "opened" });
+
+    render(SharePage);
+
+    await vi.waitFor(() => {
+      expect(screen.getByText(/already been opened/)).toBeTruthy();
+    });
+
+    expect(
+      screen.queryByText(/carried the key that unlocked this message/),
+    ).toBeNull();
   });
 });

@@ -2722,6 +2722,7 @@
   "share_view_expired": "Este enlace ha expirado y ya no está disponible.",
   "share_view_not_found": "No se encontró este enlace. Es posible que ya haya expirado.",
   "share_view_bad_link": "Verifica que abriste el enlace completo desde tu mensaje.",
+  "share_view_hint": "El enlace que abriste llevaba la clave que desbloqueó este mensaje en tu dispositivo. El servidor no puede leerlo. Como la clave viaja en el enlace, el enlace solo funciona una vez.",
   "share_sheet_title": "Enviar enlace seguro",
   "share_sheet_send": "Enviar por SMS",
   "share_sheet_copy": "Copiar enlace",

@@ -2709,6 +2709,7 @@ export * from "./share_view_opened.js";
 export * from "./share_view_expired.js";
 export * from "./share_view_not_found.js";
 export * from "./share_view_bad_link.js";
+export * from "./share_view_hint.js";
 export * from "./share_sheet_title.js";
 export * from "./share_sheet_send.js";
 export * from "./share_sheet_copy.js";

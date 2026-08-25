@@ -2722,6 +2722,7 @@
   "share_view_expired": "This link has expired and is no longer available.",
   "share_view_not_found": "This link was not found. It may have already expired.",
   "share_view_bad_link": "Check that you opened the complete link from your message.",
+  "share_view_hint": "The link you opened carried the key that unlocked this message on your device. The server cannot read it. Because the key travels in the link, the link only works once.",
   "share_sheet_title": "Send secure link",
   "share_sheet_send": "Send by SMS",
   "share_sheet_copy": "Copy link",
