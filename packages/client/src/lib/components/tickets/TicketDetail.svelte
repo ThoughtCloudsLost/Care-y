@@ -682,6 +682,13 @@
     if (!ticket) return;
     for (const item of summaryData ?? []) {
       if (item.encryptedContent === null) continue;
+      // Pending-convergence rows (portal client replies, tk_temp copies)
+      // are encrypted under tk_temp, not the canonical tk. Decrypting
+      // them here with the ticket wrap fails AEAD and poisons the shared
+      // cache with an error sentinel under the same key the portal-aware
+      // bubble path would use. Skip them; the bubble path supplies the
+      // sealed wrap and the row joins the summary set after convergence.
+      if (item.keyGeneration !== null) continue;
       followUpCache.decryptContent(
         item.id,
         ticketId,
@@ -861,6 +868,7 @@
     createdBy: string | null;
     encryptedContent: string | null;
     noteTypeId: string | null;
+    portalWrap?: string | null;
   }
 
   function startLongPress(fu: ContextMenuTarget): (e: PointerEvent) => void {
@@ -904,7 +912,12 @@
     );
     if (actions.length === 0 || !decrypt || fu.encryptedContent == null) return;
 
-    const result = decrypt.followUp(fu.id, fu.encryptedContent);
+    const result = decrypt.followUp(
+      fu.id,
+      fu.encryptedContent,
+      undefined,
+      fu.portalWrap,
+    );
     const plaintext = result.status === "ready" ? result.value : undefined;
 
     oncontextmenu?.({
@@ -1085,7 +1098,15 @@
       if (fu.encryptedContent === "") continue;
       if (fu.source === "system") continue;
       if (decrypt == null) return false;
-      const result = decrypt.followUp(fu.id, fu.encryptedContent);
+      // Same arguments as the bubble render below: omitting portalWrap
+      // here would decrypt a pending portal reply with the ticket key,
+      // fail AEAD, and poison the shared cache for the bubble path.
+      const result = decrypt.followUp(
+        fu.id,
+        fu.encryptedContent,
+        undefined,
+        fu.portalWrap,
+      );
       if (result.status === "loading") return false;
     }
     return true;

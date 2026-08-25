@@ -906,6 +906,53 @@ describe.skipIf(!process.env.DATABASE_URL)("TicketService (DB)", () => {
     expect(withWrap!.keyWrap!.ephemeralPoint).not.toMatch(/[+/=]/);
   });
 
+  it("recentFollowUps returns null keyWrap for a pending-convergence follow-up", async () => {
+    const { userId, ticketId } = await createTicketFixture();
+
+    // A converged row and a pending row (non-null key_generation, i.e.
+    // content encrypted under tk_temp such as a portal client reply).
+    await testDb.db
+      .insertInto("followups")
+      .values({
+        ticket_id: ticketId,
+        source: "volunteer",
+        type: "message",
+        encrypted_content: Buffer.from("converged"),
+      })
+      .execute();
+    await testDb.db
+      .insertInto("followups")
+      .values({
+        ticket_id: ticketId,
+        source: "client",
+        type: "message",
+        encrypted_content: Buffer.from("pending"),
+        key_generation: newKeyGeneration(),
+      })
+      .execute();
+
+    const ticketRow = await testDb.db
+      .selectFrom("tickets")
+      .select("key_generation")
+      .where("id", "=", ticketId)
+      .executeTakeFirstOrThrow();
+    await insertKeyWrap(ticketId, userId, ticketRow.key_generation);
+
+    const result = await svc.recentFollowUps(userId, {
+      ticketIds: [ticketId],
+      perTicket: 5,
+    });
+
+    const followUps = result[ticketId]!;
+    const pending = followUps.find((f) => f.source === "client");
+    const converged = followUps.find((f) => f.source === "volunteer");
+    // The pending row must never carry the ticket wrap: its content is
+    // under tk_temp, and the wrong wrap poisons the client decrypt cache.
+    expect(pending).toBeDefined();
+    expect(pending!.keyWrap).toBeNull();
+    expect(converged!.keyWrap).not.toBeNull();
+  });
+
   // --- listReadState ---
 
   async function insertFollowUp(
