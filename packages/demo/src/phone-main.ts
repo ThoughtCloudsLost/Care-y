@@ -6,6 +6,7 @@ import {
   DEMO_VOICEMAIL_URL,
   DEMO_VOICEMAIL_DURATION_S,
   DEMO_DOCUMENT_IMAGE_URLS,
+  DEMO_GREETING_EN_URL,
 } from "./lib/media-assets.js";
 import { setEngineTrpc } from "./stubs/trpc.js";
 import { setEngineBlobResolver } from "./stubs/fetch-blob.js";
@@ -218,11 +219,16 @@ async function loadMediaAssets(): Promise<SeedMediaAssets | undefined> {
 const enginePromise: Promise<DemoEngineResult> = afterFirstPaint.then(
   async () => {
     performance.mark("demo-engine-import-start");
-    const [mod, mediaAssets] = await Promise.all([
+    const [mod, mediaAssets, greetingBytes] = await Promise.all([
       import("./lib/engine/engine.js"),
       loadMediaAssets(),
+      fetchToBytes(DEMO_GREETING_EN_URL),
     ]);
-    return mod.bootDemoEngine({ mediaAssets });
+    return mod.bootDemoEngine({
+      mediaAssets,
+      greetingAudioEn:
+        greetingBytes !== null ? { bytes: greetingBytes } : undefined,
+    });
   },
 );
 
