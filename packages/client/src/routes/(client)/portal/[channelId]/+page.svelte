@@ -28,7 +28,12 @@
   import { trpc } from "$lib/trpc/index.js";
   import { portalKeys } from "$lib/query/keys.js";
   import { announceToLiveRegion } from "$lib/utils/announce.js";
-  import { derivePortalKeypair, decode, encode } from "@care-y/crypto";
+  import {
+    derivePortalKeypair,
+    decode,
+    encode,
+    getSodium,
+  } from "@care-y/crypto";
   import { newFollowupId, newKeyGeneration } from "@care-y/shared";
   import {
     parseFragment,
@@ -62,10 +67,44 @@
 
   // ---------------------------------------------------------------------------
   // Fragment parsing (state 1)
+  //
+  // parseFragment calls decode/derive which need initialized libsodium.
+  // CryptoProvider fires getSodium() without awaiting it, so on a cold hard
+  // load the WASM may not be ready yet. hashPresent is a synchronous check
+  // that needs no sodium and guards the template, while fragmentData is
+  // populated by a one-shot $effect after getSodium() resolves.
   // ---------------------------------------------------------------------------
 
-  const fragmentData = $derived(browser ? parseFragment(location.hash) : null);
-  const hasValidFragment = $derived(fragmentData !== null);
+  const hashPresent = $derived(
+    browser ? Boolean(location.hash && location.hash !== "#") : false,
+  );
+  let fragmentData = $state<{
+    seed: Uint8Array;
+    auth: Uint8Array;
+    channelId: string;
+  } | null>(null);
+  let fragmentResolved = $state(false);
+
+  // One-shot async init: await sodium, then parse the fragment
+  let fragmentInitStarted = false;
+  $effect(() => {
+    if (!browser || !hashPresent || fragmentInitStarted) return;
+    fragmentInitStarted = true;
+
+    void (async () => {
+      await getSodium();
+      fragmentData = parseFragment(location.hash);
+      fragmentResolved = true;
+    })();
+  });
+
+  // No hash at all: resolve immediately so the missing-info state shows
+  $effect(() => {
+    if (!browser || hashPresent || fragmentResolved) return;
+    fragmentResolved = true;
+  });
+
+  const hasValidFragment = $derived(fragmentResolved && fragmentData !== null);
 
   // ---------------------------------------------------------------------------
   // Session state (module scope, zeroed on exit)
@@ -454,7 +493,18 @@
 <!-- State 6: Quick exit (always visible, every state) -->
 <QuickExit ondestroy={destroySession} {safeUrl} />
 
-{#if !hasValidFragment}
+{#if !fragmentResolved}
+  <!-- Sodium initializing with a fragment present; show the loading state -->
+  <Block>
+    <div class="portal-loading" role="status">
+      <span
+        class="portal-spinner"
+        role="progressbar"
+        aria-label={m.portal_unlocking()}
+      ></span>
+    </div>
+  </Block>
+{:else if !hasValidFragment}
   <!-- State 1: No/bad fragment -->
   <BlockTitle>{m.portal_incomplete_link()}</BlockTitle>
   <Block>

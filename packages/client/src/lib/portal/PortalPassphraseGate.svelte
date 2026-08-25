@@ -42,10 +42,12 @@
 <Block>
   <p class="gate-hint">{m.portal_passphrase_hint()}</p>
 
+  <!-- Outside the List: a ul may only contain li children (axe "list" rule);
+       the for/id association works from anywhere in the document. -->
+  <label for="portal-passphrase" class="sr-only">
+    {m.portal_passphrase_label()}
+  </label>
   <List strong inset class="gate-list">
-    <label for="portal-passphrase" class="sr-only">
-      {m.portal_passphrase_label()}
-    </label>
     <ListInput
       type="password"
       inputId="portal-passphrase"
