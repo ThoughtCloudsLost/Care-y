@@ -83,7 +83,11 @@ function createFilterStore(): {
   let dateTo = $state<Date | null>(null);
 
   // Sort (server-side ORDER BY; also used as TanStack Query cache key)
-  let sort = $state<SortConfig>({ field: "date", direction: "desc" });
+  // Recent activity, not creation date: the ticket someone just replied
+  // to belongs above an empty ticket that happens to be newer. The server
+  // supports this as a keyset sort (NULLS LAST), so pagination stays
+  // consistent beyond the first page.
+  let sort = $state<SortConfig>({ field: "last_activity", direction: "desc" });
 
   // Client-side-only membership toggles (read state is per-viewer,
   // not a server-queryable field). Stored here so captureState/applyState
