@@ -8,6 +8,7 @@
  */
 
 import * as m from "$lib/paraglide/messages.js";
+import type { Section } from "./scroll-sections.js";
 
 const lookup: Record<string, () => string> = {
   // Story chrome that reaches the flow as a block of its own
@@ -467,6 +468,41 @@ export function deriveSubState(
   return {
     isActive: activeSub === subSlug,
     isSeen: subTopic !== null && seenTopics.has(subTopic),
+  };
+}
+
+// -----------------------------------------------------------------------
+// Section-level state derivation
+//
+// Used by TopBar's contents picker to show per-section progress.
+// -----------------------------------------------------------------------
+
+export interface SectionState {
+  readonly seenCount: number;
+  readonly topicCount: number;
+  readonly complete: boolean;
+}
+
+/**
+ * Derive the progress state for an entire section by counting its
+ * topic-bearing subs against the set of seen topics.
+ */
+export function deriveSectionState(
+  section: Section,
+  seenTopics: ReadonlySet<string>,
+): SectionState {
+  let seenCount = 0;
+  let topicCount = 0;
+  for (const sub of section.subs) {
+    if (sub.topic !== null) {
+      topicCount++;
+      if (seenTopics.has(sub.topic)) seenCount++;
+    }
+  }
+  return {
+    seenCount,
+    topicCount,
+    complete: topicCount > 0 && seenCount === topicCount,
   };
 }
 

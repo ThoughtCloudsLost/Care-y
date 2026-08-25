@@ -220,7 +220,7 @@
   /** Frame box expanded upward to cover the floating toolbar so the
    *  flow hole clears the bar + gap above the frame. No horizontal
    *  expansion: the toolbar spans the frame width, not beyond it.
-   *  In non-walk mode (read) or when chrome is hidden, falls back to
+   *  In non-explore mode (read) or when chrome is hidden, falls back to
    *  the bare rect. */
   const chromeFrameRect = $derived.by(() => {
     if (!showDesktopChrome) return frameRect;
@@ -724,7 +724,7 @@
     // Reset frame geometry and link state alongside the iframe reload.
     // The column goes back to the side the current mode starts on, so a
     // restart in read mode returns the story to the left rather than
-    // leaving it parked where a walk pushed it.
+    // leaving it parked where an explore pushed it.
     geo.reset();
     moveColumnToSlot(demoMode.mode === "read" ? "left" : "right");
     resetLinked();
@@ -741,7 +741,7 @@
     demoMode.toggle();
   }
 
-  /** Toolbar close button: leave walk mode for the reading view. */
+  /** Toolbar close button: leave explore mode for the reading view. */
   function handleCloseToRead(): void {
     demoMode.set("read");
   }
@@ -935,9 +935,9 @@
 
   const isNarrow: boolean = $derived(windowW < WIDE_BREAKPOINT);
 
-  // Explicit demo mode: "read" (story-first, frame via peek) or "walk"
+  // Explicit demo mode: "read" (story-first, frame via peek) or "explore"
   // (frame always visible with sidebar chrome). Default derives from
-  // viewport width; ?mode=read/walk overrides. The override survives
+  // viewport width; ?mode=read/explore overrides. The override survives
   // restart (search string is preserved) and is not clobbered by resizes.
   const demoMode = createDemoMode(() => isNarrow);
   initColumnSlot(demoMode.mode);
@@ -952,12 +952,12 @@
   // In read mode the floating frame is CSS-hidden when the peek
   // controller is idle, and shown during any peek phase.
   const frameVisible: boolean = $derived(
-    demoMode.mode === "walk" || peekActive,
+    demoMode.mode === "explore" || peekActive,
   );
 
   // The desktop chrome (sidebar, resize handles, bezel strips) is shown
-  // in walk mode. Read mode uses the close-and-continue button instead.
-  const showDesktopChrome: boolean = $derived(demoMode.mode === "walk");
+  // in explore mode. Read mode uses the close-and-continue button instead.
+  const showDesktopChrome: boolean = $derived(demoMode.mode === "explore");
 
   // Rect the story layout wraps around. Null while the frame is
   // CSS-hidden (read mode, peek idle) so the flow carves no hole and
@@ -975,8 +975,8 @@
     const switching = prevMode;
     prevMode = current;
 
-    if (switching === "read" && current === "walk") {
-      // Entering walk: cancel any in-flight peek, present the frame.
+    if (switching === "read" && current === "explore") {
+      // Entering explore: cancel any in-flight peek, present the frame.
       // geo.reset() spawns the frame centred in the left slot, so the
       // column takes the right one. This is a move the mode change
       // dictates, not one the frame pressured: the frame appears on top
@@ -987,7 +987,7 @@
       geo.reset();
       moveColumnToSlot("right");
     }
-    // Entering read from walk: the CSS-hide path handles visibility.
+    // Entering read from explore: the CSS-hide path handles visibility.
     // The iframe must NOT be unmounted (load-bearing invariant).
   });
 
@@ -1061,6 +1061,7 @@
       total={progress.total}
       flowBandOpen={flowBand.open}
       mode={demoMode.mode}
+      {seenTopics}
       onSectionClick={handleSectionClick}
       onToggleDark={handleToggleDark}
       onRestart={handleRestart}
