@@ -27,6 +27,8 @@ import {
   evaluateVisibility,
   isDataFieldType,
   PAGE_BREAK_TYPE,
+  proseMirrorDocSchema,
+  localizedRichTextSchema,
 } from "./intake-forms.js";
 import type {
   LocalizedText,
@@ -1888,5 +1890,246 @@ describe("pageBreak field type", () => {
       fields,
     });
     expect(result.success).toBe(true);
+  });
+});
+
+// =========================================================================
+// Rich text schemas and richText field type
+// =========================================================================
+
+describe("proseMirrorDocSchema", () => {
+  it("accepts a minimal doc with empty content", () => {
+    const result = proseMirrorDocSchema.safeParse({
+      type: "doc",
+      content: [],
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("accepts a doc with paragraph content", () => {
+    const result = proseMirrorDocSchema.safeParse({
+      type: "doc",
+      content: [
+        {
+          type: "paragraph",
+          content: [{ type: "text", text: "Hello" }],
+        },
+      ],
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("rejects a non-doc type", () => {
+    const result = proseMirrorDocSchema.safeParse({
+      type: "paragraph",
+      content: [],
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it("rejects missing content", () => {
+    const result = proseMirrorDocSchema.safeParse({ type: "doc" });
+    expect(result.success).toBe(false);
+  });
+});
+
+describe("localizedRichTextSchema", () => {
+  it("accepts a plain string value", () => {
+    const result = localizedRichTextSchema.safeParse({ en: "Hello world" });
+    expect(result.success).toBe(true);
+  });
+
+  it("accepts a ProseMirror doc value", () => {
+    const result = localizedRichTextSchema.safeParse({
+      en: {
+        type: "doc",
+        content: [
+          {
+            type: "paragraph",
+            content: [{ type: "text", text: "Hello" }],
+          },
+        ],
+      },
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("accepts mixed string and doc across locales", () => {
+    const result = localizedRichTextSchema.safeParse({
+      en: "Plain English",
+      es: {
+        type: "doc",
+        content: [
+          {
+            type: "paragraph",
+            content: [{ type: "text", text: "Hola" }],
+          },
+        ],
+      },
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("rejects a string exceeding 30,000 characters", () => {
+    const result = localizedRichTextSchema.safeParse({
+      en: "x".repeat(30_001),
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it("accepts a string at the 30,000 character boundary", () => {
+    const result = localizedRichTextSchema.safeParse({
+      en: "x".repeat(30_000),
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("accepts an empty object", () => {
+    const result = localizedRichTextSchema.safeParse({});
+    expect(result.success).toBe(true);
+  });
+
+  it("rejects unknown locale keys", () => {
+    const result = localizedRichTextSchema.safeParse({ fr: "Bonjour" });
+    expect(result.success).toBe(false);
+  });
+});
+
+describe("richText field type", () => {
+  it("intakeFieldTypeSchema accepts richText", () => {
+    expect(intakeFieldTypeSchema.safeParse("richText").success).toBe(true);
+  });
+
+  it("isDataFieldType returns false for richText", () => {
+    expect(isDataFieldType("richText")).toBe(false);
+  });
+
+  it("intakeFieldConfigSchema accepts richText config with string body", () => {
+    const result = intakeFieldConfigSchema.safeParse({
+      type: "richText",
+      body: { en: "Some text content" },
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("intakeFieldConfigSchema accepts richText config with doc body", () => {
+    const result = intakeFieldConfigSchema.safeParse({
+      type: "richText",
+      body: {
+        en: {
+          type: "doc",
+          content: [
+            {
+              type: "paragraph",
+              content: [{ type: "text", text: "Rich content" }],
+            },
+          ],
+        },
+      },
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("richText config round-trips through parse", () => {
+    const input = {
+      type: "richText" as const,
+      body: {
+        en: {
+          type: "doc" as const,
+          content: [
+            {
+              type: "paragraph",
+              content: [{ type: "text", text: "Round trip" }],
+            },
+          ],
+        },
+        es: "Texto simple",
+      },
+    };
+    const result = intakeFieldConfigSchema.safeParse(input);
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.type).toBe("richText");
+      if (result.data.type === "richText") {
+        expect(result.data.body).toBeDefined();
+        const enVal = result.data.body.en;
+        expect(typeof enVal).toBe("object");
+        const esVal = result.data.body.es;
+        expect(esVal).toBe("Texto simple");
+      }
+    }
+  });
+
+  it("saveIntakeFormInputSchema accepts richText fields", () => {
+    const result = saveIntakeFormInputSchema.safeParse({
+      ...validFormInput(),
+      fields: [
+        validField(),
+        {
+          fieldKey: crypto.randomUUID(),
+          fieldType: "richText",
+          encryptedLabel: base64OfBytes(32),
+          encryptedConfig: base64OfBytes(64),
+          isRequired: false,
+        },
+      ],
+    });
+    expect(result.success).toBe(true);
+  });
+});
+
+describe("intakeFormMetaSchema rich text fields", () => {
+  it("accepts plain string description (backwards compatible)", () => {
+    const result = intakeFormMetaSchema.safeParse({
+      description: { en: "Plain text description" },
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("accepts ProseMirror doc description", () => {
+    const result = intakeFormMetaSchema.safeParse({
+      description: {
+        en: {
+          type: "doc",
+          content: [
+            {
+              type: "paragraph",
+              content: [{ type: "text", text: "Rich description" }],
+            },
+          ],
+        },
+      },
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("accepts bannerBlobKey", () => {
+    const result = intakeFormMetaSchema.safeParse({
+      bannerBlobKey: "form-asset/some-uuid",
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("rejects bannerBlobKey exceeding 200 characters", () => {
+    const result = intakeFormMetaSchema.safeParse({
+      bannerBlobKey: "x".repeat(201),
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it("bannerBlobKey is optional", () => {
+    const result = intakeFormMetaSchema.safeParse({
+      description: { en: "test" },
+    });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.bannerBlobKey).toBeUndefined();
+    }
+  });
+});
+
+describe("ENCRYPTED_FORM_META_CAP", () => {
+  it("is 400,000", () => {
+    expect(ENCRYPTED_FORM_META_CAP).toBe(400_000);
   });
 });

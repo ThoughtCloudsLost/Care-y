@@ -111,8 +111,10 @@
             },
             orgPub,
           );
-          // Preserve full LocalizedText objects for multilingual editing
+          // Preserve full LocalizedText objects for multilingual editing.
+          // richText configs have no helpText property.
           const helpTextLocalized: LocalizedText =
+            decrypted.config.type !== "richText" &&
             decrypted.config.helpText != null
               ? { ...decrypted.config.helpText }
               : {};

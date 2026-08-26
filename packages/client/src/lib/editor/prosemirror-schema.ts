@@ -344,14 +344,14 @@ const marks: Record<string, MarkSpec> = {
   },
 };
 
-export const kbArticleSchema = new Schema({ nodes, marks });
+export const editorSchema = new Schema({ nodes, marks });
 
 /**
  * Base editor plugins: undo/redo keybindings, standard keymap, and history.
  * Custom keybindings precede baseKeymap (first-match-wins in ProseMirror).
  * History comes after keymaps (it records transactions, not keystrokes).
  */
-export const kbEditorPlugins: readonly Plugin[] = [
+export const baseEditorPlugins: readonly Plugin[] = [
   keymap({
     "Mod-z": undo,
     "Mod-Shift-z": redo,
@@ -360,3 +360,13 @@ export const kbEditorPlugins: readonly Plugin[] = [
   keymap(baseKeymap),
   history(),
 ];
+
+// ---------------------------------------------------------------------------
+// Deprecated aliases (use editorSchema / baseEditorPlugins instead)
+// ---------------------------------------------------------------------------
+
+/** @deprecated Use `editorSchema` instead. */
+export const kbArticleSchema = editorSchema;
+
+/** @deprecated Use `baseEditorPlugins` instead. */
+export const kbEditorPlugins = baseEditorPlugins;

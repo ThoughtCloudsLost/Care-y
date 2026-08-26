@@ -277,6 +277,9 @@
       case "pageBreak":
         pageBreakTitle = cfg.title != null ? { ...cfg.title } : {};
         break;
+      case "richText":
+        // Rich text config editing handled in a later task
+        break;
     }
   }
 
@@ -318,6 +321,8 @@
         return { type: "date" };
       case "pageBreak":
         return { type: "pageBreak" };
+      case "richText":
+        return { type: "richText", body: {} };
     }
   }
 

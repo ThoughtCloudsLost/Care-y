@@ -57,8 +57,9 @@
   const resolvedHelpText = $derived.by((): string | undefined => {
     // Prop-level helpText takes priority (used by the editor preview)
     if (helpText != null && helpText.length > 0) return helpText;
-    // Fall back to config-embedded helpText when present
-    if (config.helpText != null) {
+    // Fall back to config-embedded helpText when present.
+    // richText configs have no helpText property.
+    if (config.type !== "richText" && config.helpText != null) {
       return resolveLocalized(config.helpText, locale);
     }
     return undefined;
@@ -374,6 +375,9 @@
 {:else if config.type === "pageBreak"}
   <!-- Page breaks are handled at the body/editor level, not rendered as fields.
        This branch exists for exhaustiveness. -->
+{:else if config.type === "richText"}
+  <!-- Rich text blocks are structural content, not input fields.
+       Rendering handled in a later task; branch exists for exhaustiveness. -->
 {:else}
   <!-- Exhaustiveness guard: compile-time error if a field type branch is missing -->
   {assertExhaustive(config)}

@@ -25,8 +25,8 @@
   import { trpc } from "$lib/trpc/index.js";
   import { requireRouter } from "$lib/errors.js";
   import {
-    kbArticleSchema,
-    kbEditorPlugins,
+    editorSchema,
+    baseEditorPlugins,
   } from "$lib/editor/prosemirror-schema.js";
   import { useProseMirror } from "$lib/editor/use-prosemirror.svelte.js";
   import {
@@ -163,7 +163,7 @@
     const body = existingArticle?.decryptedBody;
     if (body == null) return undefined;
     try {
-      return PMNode.fromJSON(kbArticleSchema, body);
+      return PMNode.fromJSON(editorSchema, body);
     } catch {
       return undefined;
     }
@@ -177,14 +177,14 @@
   };
 
   const allPlugins = [
-    ...kbEditorPlugins,
+    ...baseEditorPlugins,
     headingHierarchyPlugin(),
     linkTextLintPlugin(),
     atagDecorationsPlugin(),
   ];
 
   const editor = useProseMirror(() => editorMountEl, {
-    schema: kbArticleSchema,
+    schema: editorSchema,
     plugins: allPlugins,
     doc: initialDoc,
     nodeViews: {
@@ -396,61 +396,61 @@
 
     switch (cmd.kind) {
       case "toggleBold":
-        if (kbArticleSchema.marks.strong)
-          toggleMark(kbArticleSchema.marks.strong)(state, dispatch);
+        if (editorSchema.marks.strong)
+          toggleMark(editorSchema.marks.strong)(state, dispatch);
         break;
       case "toggleItalic":
-        if (kbArticleSchema.marks.em)
-          toggleMark(kbArticleSchema.marks.em)(state, dispatch);
+        if (editorSchema.marks.em)
+          toggleMark(editorSchema.marks.em)(state, dispatch);
         break;
       case "toggleStrikethrough":
-        if (kbArticleSchema.marks.strikethrough)
-          toggleMark(kbArticleSchema.marks.strikethrough)(state, dispatch);
+        if (editorSchema.marks.strikethrough)
+          toggleMark(editorSchema.marks.strikethrough)(state, dispatch);
         break;
       case "toggleCode":
-        if (kbArticleSchema.marks.code)
-          toggleMark(kbArticleSchema.marks.code)(state, dispatch);
+        if (editorSchema.marks.code)
+          toggleMark(editorSchema.marks.code)(state, dispatch);
         break;
       case "toggleLink":
         openLinkSheet();
         break;
       case "wrapInBulletList":
-        if (kbArticleSchema.nodes.bullet_list) {
+        if (editorSchema.nodes.bullet_list) {
           if (
-            blockTypeActive(state, kbArticleSchema.nodes.bullet_list) &&
-            kbArticleSchema.nodes.list_item
+            blockTypeActive(state, editorSchema.nodes.bullet_list) &&
+            editorSchema.nodes.list_item
           ) {
-            liftListItem(kbArticleSchema.nodes.list_item)(state, dispatch);
+            liftListItem(editorSchema.nodes.list_item)(state, dispatch);
           } else {
-            wrapInList(kbArticleSchema.nodes.bullet_list)(state, dispatch);
+            wrapInList(editorSchema.nodes.bullet_list)(state, dispatch);
           }
         }
         break;
       case "wrapInOrderedList":
-        if (kbArticleSchema.nodes.ordered_list) {
+        if (editorSchema.nodes.ordered_list) {
           if (
-            blockTypeActive(state, kbArticleSchema.nodes.ordered_list) &&
-            kbArticleSchema.nodes.list_item
+            blockTypeActive(state, editorSchema.nodes.ordered_list) &&
+            editorSchema.nodes.list_item
           ) {
-            liftListItem(kbArticleSchema.nodes.list_item)(state, dispatch);
+            liftListItem(editorSchema.nodes.list_item)(state, dispatch);
           } else {
-            wrapInList(kbArticleSchema.nodes.ordered_list)(state, dispatch);
+            wrapInList(editorSchema.nodes.ordered_list)(state, dispatch);
           }
         }
         break;
       case "wrapInBlockquote":
-        if (kbArticleSchema.nodes.blockquote) {
-          if (blockTypeActive(state, kbArticleSchema.nodes.blockquote)) {
+        if (editorSchema.nodes.blockquote) {
+          if (blockTypeActive(state, editorSchema.nodes.blockquote)) {
             lift(state, dispatch);
           } else {
-            wrapIn(kbArticleSchema.nodes.blockquote)(state, dispatch);
+            wrapIn(editorSchema.nodes.blockquote)(state, dispatch);
           }
         }
         break;
       case "setCodeBlock":
         {
-          const codeBlock = kbArticleSchema.nodes.code_block;
-          const para = kbArticleSchema.nodes.paragraph;
+          const codeBlock = editorSchema.nodes.code_block;
+          const para = editorSchema.nodes.paragraph;
           if (codeBlock && para) {
             if (blockTypeActive(state, codeBlock)) {
               setBlockType(para)(state, dispatch);
@@ -461,12 +461,12 @@
         }
         break;
       case "setParagraph":
-        if (kbArticleSchema.nodes.paragraph)
-          setBlockType(kbArticleSchema.nodes.paragraph)(state, dispatch);
+        if (editorSchema.nodes.paragraph)
+          setBlockType(editorSchema.nodes.paragraph)(state, dispatch);
         break;
       case "setHeading":
-        if (kbArticleSchema.nodes.heading)
-          setBlockType(kbArticleSchema.nodes.heading, {
+        if (editorSchema.nodes.heading)
+          setBlockType(editorSchema.nodes.heading, {
             level: cmd.level,
           })(state, dispatch);
         break;
@@ -501,7 +501,7 @@
 
     // Pre-fill from selection if link mark is active
     const { from, to, empty } = view.state.selection;
-    const linkType = kbArticleSchema.marks.link;
+    const linkType = editorSchema.marks.link;
     if (linkType === undefined) return;
 
     if (!empty) {
@@ -528,7 +528,7 @@
     const view = editor.view;
     if (view === null || linkUrl.trim() === "") return;
 
-    const linkType = kbArticleSchema.marks.link;
+    const linkType = editorSchema.marks.link;
     if (linkType === undefined) return;
 
     const { from, to, empty } = view.state.selection;
@@ -537,7 +537,7 @@
     if (empty && linkText.trim() !== "") {
       // Insert new text with link mark
       const mark = linkType.create({ href: linkUrl });
-      const textNode = kbArticleSchema.text(linkText, [mark]);
+      const textNode = editorSchema.text(linkText, [mark]);
       tr.replaceSelectionWith(textNode, false);
     } else if (!empty) {
       // Apply link mark to selection
@@ -662,7 +662,7 @@
     const view = editor.view;
     if (view === null) return;
 
-    const imageType = kbArticleSchema.nodes.image;
+    const imageType = editorSchema.nodes.image;
     if (imageType === undefined) return;
 
     const imageNode = imageType.create({ src, alt });
@@ -735,7 +735,7 @@
     if (view === null) return;
 
     const { table, table_row, table_header, table_cell, paragraph } =
-      kbArticleSchema.nodes;
+      editorSchema.nodes;
     if (!table || !table_row || !table_header || !table_cell || !paragraph)
       return;
 
@@ -766,7 +766,7 @@
     const view = editor.view;
     if (view === null) return;
 
-    const hrType = kbArticleSchema.nodes.horizontal_rule;
+    const hrType = editorSchema.nodes.horizontal_rule;
     if (hrType === undefined) return;
 
     const tr = view.state.tr.replaceSelectionWith(hrType.create());
@@ -842,7 +842,7 @@
     if (json.content) {
       json.content = replaceInContent(json.content, urlMap);
     }
-    return PMNode.fromJSON(kbArticleSchema, json);
+    return PMNode.fromJSON(editorSchema, json);
   }
 
   function replaceInContent(

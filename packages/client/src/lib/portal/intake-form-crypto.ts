@@ -39,6 +39,7 @@ import {
   type IntakeFieldConfig,
   type IntakeFormMeta,
   type LocalizedText,
+  type LocalizedRichText,
   type VisibleWhen,
 } from "@care-y/shared";
 
@@ -203,6 +204,31 @@ export function decryptFieldContent(
 }
 
 // ---------------------------------------------------------------------------
+// Rich text content helpers
+// ---------------------------------------------------------------------------
+
+/**
+ * Check whether a single rich-text locale value has meaningful content.
+ * Strings are checked via trim().length; ProseMirror doc objects are
+ * non-empty when their content array has at least one node.
+ */
+function hasRichValue(
+  v: string | { type: "doc"; content: unknown[] },
+): boolean {
+  if (typeof v === "string") return v.trim().length > 0;
+  return Array.isArray(v.content) && v.content.length > 0;
+}
+
+/**
+ * Check whether a LocalizedRichText record has any non-empty locale value.
+ * Returns false for undefined/null inputs.
+ */
+function hasAnyRichContent(localized: LocalizedRichText | undefined): boolean {
+  if (localized == null) return false;
+  return Object.values(localized).some((v) => hasRichValue(v));
+}
+
+// ---------------------------------------------------------------------------
 // Form-level metadata encrypt/decrypt
 // ---------------------------------------------------------------------------
 
@@ -221,12 +247,10 @@ export function encryptFormMeta(
 ): string | undefined {
   // Skip encryption when no descriptive content is present
   const hasContent =
-    (meta.description != null &&
-      Object.values(meta.description).some((v) => v.length > 0)) ||
-    (meta.submitMessage != null &&
-      Object.values(meta.submitMessage).some((v) => v.length > 0)) ||
-    (meta.closedMessage != null &&
-      Object.values(meta.closedMessage).some((v) => v.length > 0));
+    hasAnyRichContent(meta.description) ||
+    hasAnyRichContent(meta.submitMessage) ||
+    hasAnyRichContent(meta.closedMessage) ||
+    (meta.bannerBlobKey != null && meta.bannerBlobKey.length > 0);
   if (!hasContent) return undefined;
 
   const key: SymmetricKey = deriveClientBrandingKey(orgPublicKey);

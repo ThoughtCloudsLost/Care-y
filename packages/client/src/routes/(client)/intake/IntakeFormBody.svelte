@@ -60,6 +60,7 @@
     type VisibleWhen,
     ErrorCode,
   } from "@care-y/shared";
+  import { resolveRichTextLocale } from "$lib/utils/localized-text.js";
 
   // ---- Props ----
 
@@ -292,17 +293,17 @@
 
   /** Custom description replaces the default intro text when present. */
   const formDescription = $derived(
-    resolveLocalized(resolvedForm.formMeta.description, BASE_LOCALE),
+    resolveRichTextLocale(resolvedForm.formMeta.description, BASE_LOCALE),
   );
 
   /** Custom submit message replaces the default success copy when present. */
   const formSubmitMessage = $derived(
-    resolveLocalized(resolvedForm.formMeta.submitMessage, BASE_LOCALE),
+    resolveRichTextLocale(resolvedForm.formMeta.submitMessage, BASE_LOCALE),
   );
 
   /** Custom closed message shown when the form's closing date has passed. */
   const formClosedMessage = $derived(
-    resolveLocalized(resolvedForm.formMeta.closedMessage, BASE_LOCALE),
+    resolveRichTextLocale(resolvedForm.formMeta.closedMessage, BASE_LOCALE),
   );
 
   // ---- Form state ----

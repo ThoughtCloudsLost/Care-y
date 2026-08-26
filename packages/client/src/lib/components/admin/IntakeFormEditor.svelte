@@ -75,6 +75,7 @@
     setLocaleText,
     hasContent,
     trimLocalized,
+    richTextToLocalizedText,
   } from "$lib/utils/localized-text.js";
   import type {
     FieldConfigState,
@@ -160,15 +161,15 @@
   let slugError = $state("");
   let isDefault = $state(initialIsDefault);
   let destinationQueueId = $state<string | null>(initialDestinationQueueId);
-  let formDescription = $state<LocalizedText>({
-    ...initialFormMeta.description,
-  });
-  let formSubmitMessage = $state<LocalizedText>({
-    ...initialFormMeta.submitMessage,
-  });
-  let formClosedMessage = $state<LocalizedText>({
-    ...initialFormMeta.closedMessage,
-  });
+  let formDescription = $state<LocalizedText>(
+    richTextToLocalizedText(initialFormMeta.description),
+  );
+  let formSubmitMessage = $state<LocalizedText>(
+    richTextToLocalizedText(initialFormMeta.submitMessage),
+  );
+  let formClosedMessage = $state<LocalizedText>(
+    richTextToLocalizedText(initialFormMeta.closedMessage),
+  );
 
   /**
    * Convert an ISO 8601 datetime string to the datetime-local input format
@@ -733,6 +734,8 @@
         return { type: "date" };
       case "pageBreak":
         return { type: "pageBreak" };
+      case "richText":
+        return { type: "richText", body: {} };
     }
   }
 

@@ -71,6 +71,34 @@ export function resolveLocalized(
 }
 
 // ---------------------------------------------------------------------------
+// Rich text (ProseMirror JSON or plain string, per-locale)
+// ---------------------------------------------------------------------------
+
+/**
+ * Minimal shape for a ProseMirror document node. Content items are typed
+ * as z.unknown() because fully typing the recursive ProseMirror node tree
+ * adds no value at the Zod boundary (the client-side ProseMirror library
+ * validates structure when deserializing via PMNode.fromJSON).
+ */
+export const proseMirrorDocSchema = z.object({
+  type: z.literal("doc"),
+  content: z.array(z.unknown()),
+});
+export type ProseMirrorDocJSON = z.infer<typeof proseMirrorDocSchema>;
+
+/**
+ * A per-locale value that is either a legacy plain-text string (max 30,000
+ * characters) or a ProseMirror document JSON object. Readers distinguish
+ * by shape: string means plain text, object with `type: "doc"` means
+ * ProseMirror JSON.
+ */
+export const localizedRichTextSchema = z.partialRecord(
+  z.enum(FORM_LOCALES),
+  z.union([z.string().max(30_000), proseMirrorDocSchema]),
+);
+export type LocalizedRichText = z.infer<typeof localizedRichTextSchema>;
+
+// ---------------------------------------------------------------------------
 // Field types
 // ---------------------------------------------------------------------------
 
@@ -83,12 +111,14 @@ export const intakeFieldTypeSchema = z.enum([
   "availability",
   "date",
   "pageBreak",
+  "richText",
 ]);
 export type IntakeFieldType = z.infer<typeof intakeFieldTypeSchema>;
 
 /**
  * Field types that are renderable data fields (not structural elements).
- * Page breaks are structural and excluded from validation/answer collection.
+ * Page breaks and rich text blocks are structural and excluded from
+ * validation/answer collection.
  */
 export const DATA_FIELD_TYPES: readonly IntakeFieldType[] = [
   "text",
@@ -100,9 +130,15 @@ export const DATA_FIELD_TYPES: readonly IntakeFieldType[] = [
   "date",
 ] as const;
 
-/** Type guard: is this a data field (not a page break)? */
+/** Structural (non-data) field types excluded from validation and answers. */
+const STRUCTURAL_FIELD_TYPES: ReadonlySet<IntakeFieldType> = new Set([
+  "pageBreak",
+  "richText",
+]);
+
+/** Type guard: is this a data field (not a structural element like page break or rich text)? */
 export function isDataFieldType(t: IntakeFieldType): boolean {
-  return t !== "pageBreak";
+  return !STRUCTURAL_FIELD_TYPES.has(t);
 }
 
 // ---------------------------------------------------------------------------
@@ -337,6 +373,10 @@ export const intakeFieldConfigSchema = z.discriminatedUnion("type", [
     title: localizedTextSchema.optional(),
     helpText: localizedTextSchema.optional(),
   }),
+  z.object({
+    type: z.literal("richText"),
+    body: localizedRichTextSchema,
+  }),
 ]);
 export type IntakeFieldConfig = z.infer<typeof intakeFieldConfigSchema>;
 
@@ -455,18 +495,19 @@ export const ENCRYPTED_LABEL_CAP = 2_800;
  * so editors can author it ahead of that feature.
  */
 export const intakeFormMetaSchema = z.object({
-  description: localizedTextSchema.optional(),
-  submitMessage: localizedTextSchema.optional(),
-  closedMessage: localizedTextSchema.optional(),
+  description: localizedRichTextSchema.optional(),
+  submitMessage: localizedRichTextSchema.optional(),
+  closedMessage: localizedRichTextSchema.optional(),
+  bannerBlobKey: z.string().max(200).optional(),
 });
 export type IntakeFormMeta = z.infer<typeof intakeFormMetaSchema>;
 
 /**
  * Maximum base64 character length for the encrypted form metadata blob.
- * Generous cap; three LocalizedText fields with 10 KB each per locale
- * plus overhead fits comfortably.
+ * Three rich-text fields at 30K per locale (two locales) plus a banner
+ * blob key and encryption overhead.
  */
-export const ENCRYPTED_FORM_META_CAP = 88_000;
+export const ENCRYPTED_FORM_META_CAP = 400_000;
 
 // ---------------------------------------------------------------------------
 // Admin save input

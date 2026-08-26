@@ -26,6 +26,9 @@ export function getFieldTypeLabel(type: IntakeFieldType): string {
       return m.intake_forms_field_type_date();
     case "pageBreak":
       return m.intake_forms_field_type_page_break();
+    case "richText":
+      // Label provided in a later task when the richText editor UI ships
+      return m.intake_forms_field_type_page_break();
   }
 }
 
@@ -47,6 +50,9 @@ export function getFieldTypeDesc(type: IntakeFieldType): string {
     case "date":
       return m.intake_forms_field_type_date_desc();
     case "pageBreak":
+      return m.intake_forms_field_type_page_break_desc();
+    case "richText":
+      // Description provided in a later task when the richText editor UI ships
       return m.intake_forms_field_type_page_break_desc();
   }
 }
