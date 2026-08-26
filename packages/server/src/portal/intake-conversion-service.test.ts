@@ -29,6 +29,7 @@ import type {
   TicketId,
   KeyGeneration,
   AliasHash,
+  OrgSchema,
 } from "@care-y/shared";
 
 // ---------------------------------------------------------------------------
@@ -85,12 +86,14 @@ describe.skipIf(!process.env.DATABASE_URL)(
   "intake conversion service (DB integration)",
   () => {
     let testDb: TestDb;
+    let orgSchema: OrgSchema;
     let queueId: QueueId;
     let userId: UserId;
     let clientId: ClientId;
 
     beforeAll(async () => {
       testDb = await createTestDb();
+      orgSchema = testDb.schemaName as OrgSchema;
 
       await testDb.db
         .insertInto("org_config")
@@ -156,6 +159,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
         access,
         userId,
         ticketId,
+        orgSchema,
       );
 
       expect(targets).toHaveLength(1);
@@ -171,10 +175,16 @@ describe.skipIf(!process.env.DATABASE_URL)(
       );
       const access = createTicketAccessChecker(testDb.db);
 
-      const result = await convertIntakeKeyWrap(testDb.db, access, userId, {
-        ticketId,
-        wraps: [makeWrap(userId)],
-      });
+      const result = await convertIntakeKeyWrap(
+        testDb.db,
+        access,
+        userId,
+        {
+          ticketId,
+          wraps: [makeWrap(userId)],
+        },
+        orgSchema,
+      );
 
       expect(result.converted).toBe(true);
 
@@ -207,16 +217,28 @@ describe.skipIf(!process.env.DATABASE_URL)(
       const access = createTicketAccessChecker(testDb.db);
 
       // First call converts
-      await convertIntakeKeyWrap(testDb.db, access, userId, {
-        ticketId,
-        wraps: [makeWrap(userId)],
-      });
+      await convertIntakeKeyWrap(
+        testDb.db,
+        access,
+        userId,
+        {
+          ticketId,
+          wraps: [makeWrap(userId)],
+        },
+        orgSchema,
+      );
 
       // Second call is a no-op
-      const result = await convertIntakeKeyWrap(testDb.db, access, userId, {
-        ticketId,
-        wraps: [makeWrap(userId)],
-      });
+      const result = await convertIntakeKeyWrap(
+        testDb.db,
+        access,
+        userId,
+        {
+          ticketId,
+          wraps: [makeWrap(userId)],
+        },
+        orgSchema,
+      );
 
       expect(result.converted).toBe(false);
     });
@@ -231,10 +253,16 @@ describe.skipIf(!process.env.DATABASE_URL)(
       const nonMemberId = crypto.randomUUID() as UserId;
 
       await expect(
-        convertIntakeKeyWrap(testDb.db, access, userId, {
-          ticketId,
-          wraps: [makeWrap(nonMemberId)],
-        }),
+        convertIntakeKeyWrap(
+          testDb.db,
+          access,
+          userId,
+          {
+            ticketId,
+            wraps: [makeWrap(nonMemberId)],
+          },
+          orgSchema,
+        ),
       ).rejects.toThrow(ForbiddenError);
 
       // Verify the interim wrap is still there (transaction rolled back)
@@ -256,10 +284,16 @@ describe.skipIf(!process.env.DATABASE_URL)(
       const unknownUserId = crypto.randomUUID() as UserId;
 
       await expect(
-        convertIntakeKeyWrap(testDb.db, access, unknownUserId, {
-          ticketId,
-          wraps: [makeWrap(userId)],
-        }),
+        convertIntakeKeyWrap(
+          testDb.db,
+          access,
+          unknownUserId,
+          {
+            ticketId,
+            wraps: [makeWrap(userId)],
+          },
+          orgSchema,
+        ),
       ).rejects.toThrow(ForbiddenError);
     });
 
@@ -271,10 +305,16 @@ describe.skipIf(!process.env.DATABASE_URL)(
       );
       const access = createTicketAccessChecker(testDb.db);
 
-      const result = await convertIntakeKeyWrap(testDb.db, access, userId, {
-        ticketId,
-        wraps: [],
-      });
+      const result = await convertIntakeKeyWrap(
+        testDb.db,
+        access,
+        userId,
+        {
+          ticketId,
+          wraps: [],
+        },
+        orgSchema,
+      );
 
       expect(result.converted).toBe(false);
 

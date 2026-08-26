@@ -138,6 +138,7 @@ import {
 import { createKBMediaService } from "./kb/kb-media-service.js";
 import { createClientService } from "./clients/client-service.js";
 import { createIntakeFormService } from "./portal/intake-form-service.js";
+import { createIntakeResponseService } from "./portal/intake-response-service.js";
 import * as portalChannelService from "./portal/channel-service.js";
 import * as portalMessageService from "./portal/portal-message-service.js";
 import {
@@ -630,6 +631,7 @@ const appRouter = createAppRouter({
   intakeFormDeps: {
     createAuditSvc: (tDb) => createAuditService(tDb),
     intakeFormService: createIntakeFormService({ fieldEncryptor: encryptor }),
+    intakeResponseService: createIntakeResponseService(),
   },
   clientPortalDeps: {
     submissionLimiter: createInMemoryRateLimiter({

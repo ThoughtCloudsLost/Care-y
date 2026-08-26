@@ -50,6 +50,7 @@ const ADMIN_PERMISSIONS: ReadonlySet<Permission> = new Set([
   Permission.MANAGE_ORG_CONFIG,
   Permission.MANAGE_KEYS,
   Permission.MANAGE_INFRASTRUCTURE,
+  Permission.VIEW_INTAKE_RESPONSES,
 ]);
 
 export const ROLE_CONFIG: ReadonlyMap<RoleIdValue, RoleConfig> = new Map([

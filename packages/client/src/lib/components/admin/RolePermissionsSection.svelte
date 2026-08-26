@@ -53,6 +53,11 @@
     Permission.MANAGE_INFRASTRUCTURE,
   ];
 
+  /** High-trust permissions (opt-in, cross-queue decrypt capability). */
+  const HIGH_TRUST_PERMISSIONS: readonly Permission[] = [
+    Permission.VIEW_INTAKE_RESPONSES,
+  ];
+
   /** Locked permissions cannot be reassigned from Admin. */
   const LOCKED_PERMISSIONS: ReadonlySet<Permission> = new Set([
     Permission.MANAGE_KEYS,
@@ -101,6 +106,10 @@
       Permission.MANAGE_INFRASTRUCTURE,
       () => m.permission_manage_infrastructure(),
     ],
+    [
+      Permission.VIEW_INTAKE_RESPONSES,
+      () => m.permission_view_intake_responses(),
+    ],
   ]);
 
   function permissionLabel(perm: Permission): string {
@@ -128,6 +137,11 @@
       key: "admin",
       title: () => m.roles_group_admin(),
       permissions: ADMIN_PERMISSIONS,
+    },
+    {
+      key: "high_trust",
+      title: () => m.roles_group_high_trust(),
+      permissions: HIGH_TRUST_PERMISSIONS,
     },
   ];
 
@@ -338,6 +352,12 @@
   {#each PERMISSION_GROUPS as group (group.key)}
     {@render permissionGroup(group)}
   {/each}
+
+  <div class="protected-register-wrapper">
+    <Register kind="careful">
+      {m.permission_view_intake_responses_hint()}
+    </Register>
+  </div>
 
   <div class="protected-register-wrapper">
     <Register kind="protected">

@@ -1762,6 +1762,7 @@ export function createTicketRouter(deps: TicketRouterDeps) {
             access,
             ctx.user.id,
             input.ticketId,
+            ctx.org.orgSchema,
           );
         }),
       ),
@@ -1785,15 +1786,21 @@ export function createTicketRouter(deps: TicketRouterDeps) {
           const { convertIntakeKeyWrap } =
             await import("../portal/intake-conversion-service.js");
           const access = deps.createTicketAccess(ctx.org.tenantDb);
-          return convertIntakeKeyWrap(ctx.org.tenantDb, access, ctx.user.id, {
-            ticketId: input.ticketId,
-            wraps: input.wraps.map((w) => ({
-              volunteerId: w.volunteerId,
-              ephemeralPoint: Buffer.from(w.ephemeralPoint, "base64"),
-              nonce: Buffer.from(w.nonce, "base64"),
-              wrappedKey: Buffer.from(w.wrappedKey, "base64"),
-            })),
-          });
+          return convertIntakeKeyWrap(
+            ctx.org.tenantDb,
+            access,
+            ctx.user.id,
+            {
+              ticketId: input.ticketId,
+              wraps: input.wraps.map((w) => ({
+                volunteerId: w.volunteerId,
+                ephemeralPoint: Buffer.from(w.ephemeralPoint, "base64"),
+                nonce: Buffer.from(w.nonce, "base64"),
+                wrappedKey: Buffer.from(w.wrappedKey, "base64"),
+              })),
+            },
+            ctx.org.orgSchema,
+          );
         }),
       ),
 

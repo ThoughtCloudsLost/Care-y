@@ -94,4 +94,7 @@ export enum Permission {
   MANAGE_ORG_CONFIG = "manage_org_config",
   MANAGE_KEYS = "manage_keys",
   MANAGE_INFRASTRUCTURE = "manage_infrastructure",
+
+  // High-trust (opt-in, grants decrypt capability across all queues)
+  VIEW_INTAKE_RESPONSES = "view_intake_responses",
 }
