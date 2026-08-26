@@ -73,6 +73,7 @@ import {
   createIntakeTicket,
   IntakeQueueNotConfiguredError,
   IntakeDisabledError,
+  IntakeFormClosedError,
 } from "../portal/intake-service.js";
 import type { IntakeAccountInput } from "../portal/intake-service.js";
 import { extractClientIp } from "../http/request-utils.js";
@@ -326,6 +327,17 @@ export function createClientPortalRouter(deps: ClientPortalRouterDeps) {
               orgSlug: ctx.org.orgSlug,
               ip,
               reason: "intake_disabled",
+            });
+            throw new TRPCError({
+              code: "FORBIDDEN",
+              message: "Web intake is not available",
+            });
+          }
+          if (err instanceof IntakeFormClosedError) {
+            console.warn("Intake submission rejected (form closed)", {
+              orgSlug: ctx.org.orgSlug,
+              ip,
+              reason: "form_closed",
             });
             throw new TRPCError({
               code: "FORBIDDEN",

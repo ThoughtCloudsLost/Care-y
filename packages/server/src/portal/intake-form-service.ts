@@ -45,12 +45,15 @@ export interface PublicIntakeForm {
   readonly formId: IntakeFormId;
   readonly slug: string | null;
   readonly encryptedFormMeta: string | null;
+  /** Raw Date for server-side comparison; not serialized to the client directly. */
+  readonly closesAt: Date | null;
   readonly fields: readonly PublicIntakeFormField[];
 }
 
 /**
  * Full result from resolvePublicForm, ready for the route to return as-is.
- * Handles kill switch, slug resolution, and default fallback in one call.
+ * Handles kill switch, slug resolution, closing date, and default fallback
+ * in one call.
  */
 export interface PublicFormResult {
   readonly formId: IntakeFormId | null;
@@ -58,6 +61,8 @@ export interface PublicFormResult {
   readonly encryptedFormMeta: string | null;
   readonly fields: readonly PublicIntakeFormField[] | null;
   readonly intakeDisabled: boolean;
+  /** True when the form's closes_at is in the past (server clock). */
+  readonly formClosed: boolean;
 }
 
 // ---------------------------------------------------------------------------
@@ -84,6 +89,8 @@ export interface FormDetail {
   readonly isDefault: boolean;
   readonly destinationQueueId: QueueId | null;
   readonly encryptedFormMeta: string | null;
+  /** ISO 8601 string or null when no closing date is set. */
+  readonly closesAt: string | null;
   readonly fields: readonly FormDetailField[];
 }
 
@@ -201,7 +208,7 @@ export function createIntakeFormService(deps: {
         // Resolve by slug: only return an active form matching the slug
         form = await db
           .selectFrom("intake_forms")
-          .select(["id", "slug", "encrypted_form_meta"])
+          .select(["id", "slug", "encrypted_form_meta", "closes_at"])
           .where("slug", "=", slug)
           .where("is_active", "=", true)
           .executeTakeFirst();
@@ -209,7 +216,7 @@ export function createIntakeFormService(deps: {
         // Resolve by is_default: find the active default form
         form = await db
           .selectFrom("intake_forms")
-          .select(["id", "slug", "encrypted_form_meta"])
+          .select(["id", "slug", "encrypted_form_meta", "closes_at"])
           .where("is_default", "=", true)
           .where("is_active", "=", true)
           .executeTakeFirst();
@@ -240,6 +247,7 @@ export function createIntakeFormService(deps: {
         slug: form.slug,
         // care-y-ignore-next-line no-standard-base64-server -- client-facing ciphertext: browser sends/receives standard base64 per the shared base64String validator
         encryptedFormMeta: form.encrypted_form_meta?.toString("base64") ?? null,
+        closesAt: form.closes_at ?? null,
         fields: fields.map((f) => ({
           id: f.id,
           fieldKey: f.field_key,
@@ -268,6 +276,7 @@ export function createIntakeFormService(deps: {
           "is_default",
           "destination_queue_id",
           "encrypted_form_meta",
+          "closes_at",
         ])
         .where("id", "=", formId)
         .executeTakeFirst();
@@ -303,6 +312,7 @@ export function createIntakeFormService(deps: {
         destinationQueueId: form.destination_queue_id,
         // care-y-ignore-next-line no-standard-base64-server -- client-facing ciphertext: browser sends/receives standard base64 per the shared base64String validator
         encryptedFormMeta: form.encrypted_form_meta?.toString("base64") ?? null,
+        closesAt: form.closes_at != null ? form.closes_at.toISOString() : null,
         fields: fields.map((f) => {
           // Decrypt OPS-encrypted escalation recipient IDs for the admin UI.
           let escalationRecipientIds: readonly UserId[] | null = null;
@@ -397,6 +407,10 @@ export function createIntakeFormService(deps: {
                 input.encryptedFormMeta != null
                   ? Buffer.from(input.encryptedFormMeta, "base64")
                   : null,
+              closes_at:
+                input.closesAt !== undefined
+                  ? (input.closesAt ?? null)
+                  : undefined,
               updated_at: new Date(),
             })
             .where("id", "=", input.formId)
@@ -422,6 +436,7 @@ export function createIntakeFormService(deps: {
                 input.encryptedFormMeta != null
                   ? Buffer.from(input.encryptedFormMeta, "base64")
                   : null,
+              closes_at: input.closesAt ?? null,
             })
             .returning("id")
             .executeTakeFirstOrThrow();
@@ -599,6 +614,7 @@ export function createIntakeFormService(deps: {
           slug: null,
           encryptedFormMeta: null,
           intakeDisabled: true,
+          formClosed: false,
         };
       }
 
@@ -612,6 +628,19 @@ export function createIntakeFormService(deps: {
           slug,
           encryptedFormMeta: null,
           intakeDisabled: false,
+          formClosed: false,
+        };
+      }
+
+      // Check closing date (server clock comparison)
+      if (form.closesAt != null && form.closesAt.getTime() <= Date.now()) {
+        return {
+          formId: form.formId,
+          slug: form.slug,
+          encryptedFormMeta: form.encryptedFormMeta,
+          fields: null,
+          intakeDisabled: false,
+          formClosed: true,
         };
       }
 
@@ -621,6 +650,7 @@ export function createIntakeFormService(deps: {
         encryptedFormMeta: form.encryptedFormMeta,
         fields: form.fields,
         intakeDisabled: false,
+        formClosed: false,
       };
     },
   };

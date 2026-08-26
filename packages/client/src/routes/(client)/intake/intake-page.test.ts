@@ -197,6 +197,8 @@ vi.mock("$lib/paraglide/messages.js", async (importOriginal) => ({
     "Please write a message so we know how to help.",
   intake_not_available: () =>
     "This form is not available. Contact the organization directly.",
+  intake_form_closed_default: () =>
+    "This form is no longer accepting submissions.",
   intake_noscript: () => "This form needs JavaScript.",
   intake_protected_title: () => "How you're protected",
   intake_protected_summary: () => "Your data is encrypted.",
@@ -482,5 +484,21 @@ describe("intake page", () => {
 
     // Form should still be rendered (not submitted/cleared)
     expect(screen.getByTestId("intake-submit")).toBeTruthy();
+  });
+
+  it("renders closed state with default message when formClosed is true", () => {
+    mockFormData = {
+      formId: "closed-form-id",
+      fields: null,
+      encryptedFormMeta: null,
+      intakeDisabled: false,
+      formClosed: true,
+    } as typeof mockFormData;
+    render(IntakePage);
+    expect(
+      screen.getByText("This form is no longer accepting submissions."),
+    ).toBeTruthy();
+    // No submit button should be visible
+    expect(screen.queryByTestId("intake-submit")).toBeNull();
   });
 });

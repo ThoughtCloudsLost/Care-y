@@ -57,6 +57,7 @@
         isDefault: boolean;
         destinationQueueId: string | null;
         formMeta: IntakeFormMeta;
+        closesAt: string | null;
         fields: PlaintextField[];
       };
 
@@ -154,6 +155,7 @@
         isDefault: formDetail.isDefault,
         destinationQueueId: formDetail.destinationQueueId ?? null,
         formMeta,
+        closesAt: formDetail.closesAt ?? null,
         fields: decryptedFields,
       };
     } catch {
@@ -178,6 +180,7 @@
         isDefault: false,
         destinationQueueId: null,
         formMeta: {},
+        closesAt: null,
         fields: [],
       };
     } else {
@@ -221,6 +224,7 @@
     initialIsDefault={view.isDefault}
     initialDestinationQueueId={view.destinationQueueId}
     initialFormMeta={view.formMeta}
+    initialClosesAt={view.closesAt}
     initialFields={view.fields}
     onback={backToList}
     ondeleted={backToList}

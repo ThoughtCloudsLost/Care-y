@@ -87,6 +87,8 @@
     readonly initialIsDefault: boolean;
     readonly initialDestinationQueueId: string | null;
     readonly initialFormMeta: IntakeFormMeta;
+    /** ISO 8601 datetime string or null when no closing date is set. */
+    readonly initialClosesAt: string | null;
     readonly initialFields: readonly PlaintextField[];
     readonly onback: () => void;
     readonly ondeleted: () => void;
@@ -100,6 +102,7 @@
     initialIsDefault,
     initialDestinationQueueId,
     initialFormMeta,
+    initialClosesAt,
     initialFields,
     onback,
     ondeleted,
@@ -141,6 +144,27 @@
   let formClosedMessage = $state<LocalizedText>({
     ...initialFormMeta.closedMessage,
   });
+
+  /**
+   * Convert an ISO 8601 datetime string to the datetime-local input format
+   * (YYYY-MM-DDThh:mm). datetime-local inputs work in the browser's local
+   * timezone, so we produce a local representation.
+   */
+  function isoToDatetimeLocal(iso: string): string {
+    const d = new Date(iso);
+    if (Number.isNaN(d.getTime())) return "";
+    const year = String(d.getFullYear()).padStart(4, "0");
+    const month = String(d.getMonth() + 1).padStart(2, "0");
+    const day = String(d.getDate()).padStart(2, "0");
+    const hours = String(d.getHours()).padStart(2, "0");
+    const minutes = String(d.getMinutes()).padStart(2, "0");
+    return `${year}-${month}-${day}T${hours}:${minutes}`;
+  }
+
+  let closesAtLocal = $state(
+    initialClosesAt != null ? isoToDatetimeLocal(initialClosesAt) : "",
+  );
+
   let fields = $state<PlaintextField[]>([...initialFields]);
 
   // ---- Slug validation (mirrors intakeFormSlugSchema from shared) ----
@@ -167,6 +191,9 @@
     if (formSlug !== (initialSlug ?? "")) return true;
     if (isDefault !== initialIsDefault) return true;
     if (destinationQueueId !== initialDestinationQueueId) return true;
+    const initialClosesAtLocal =
+      initialClosesAt != null ? isoToDatetimeLocal(initialClosesAt) : "";
+    if (closesAtLocal !== initialClosesAtLocal) return true;
     if (fields.length !== initialFields.length) return true;
     // Shallow field comparison: check fieldKeys, labels, required, and types
     for (let i = 0; i < fields.length; i++) {
@@ -391,6 +418,7 @@
       slug: string | null;
       isDefault: boolean;
       destinationQueueId: string | null;
+      closesAt: string | null;
       formMeta: IntakeFormMeta;
       fields: PlaintextField[];
     }) => {
@@ -428,6 +456,7 @@
         slug: input.slug,
         isDefault: input.isDefault,
         destinationQueueId: input.destinationQueueId,
+        closesAt: input.closesAt,
         ...(encryptedFormMeta != null ? { encryptedFormMeta } : {}),
         fields: encryptedFields,
       });
@@ -755,12 +784,17 @@
       ...(hasContent(submit) ? { submitMessage: submit } : {}),
       ...(hasContent(closed) ? { closedMessage: closed } : {}),
     };
+    // Convert datetime-local to ISO 8601 for the server, or null to clear.
+    const closesAtValue =
+      closesAtLocal.length > 0 ? new Date(closesAtLocal).toISOString() : null;
+
     saveMutation.mutate({
       formId,
       name: formName.trim(),
       slug: slugValue,
       isDefault,
       destinationQueueId,
+      closesAt: closesAtValue,
       formMeta: meta,
       fields,
     });
@@ -909,6 +943,35 @@
         );
     }}
   />
+</List>
+
+<!-- Closing date -->
+<BlockTitle>{m.intake_forms_closes_at_heading()}</BlockTitle>
+<List strong inset>
+  <ListInput
+    label={m.intake_forms_closes_at_label()}
+    type="datetime-local"
+    info={m.intake_forms_closes_at_hint()}
+    value={closesAtLocal}
+    onInput={(e: Event) => {
+      if (e.target instanceof HTMLInputElement) closesAtLocal = e.target.value;
+    }}
+  />
+  {#if closesAtLocal.length > 0}
+    <ListItem>
+      {#snippet after()}
+        <Button
+          outline
+          small
+          onclick={() => {
+            closesAtLocal = "";
+          }}
+        >
+          {m.intake_forms_closes_at_clear()}
+        </Button>
+      {/snippet}
+    </ListItem>
+  {/if}
 </List>
 
 <!-- Share link -->

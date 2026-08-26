@@ -525,6 +525,8 @@ export const saveIntakeFormInputSchema = z
         "form metadata too large",
       )
       .optional(),
+    /** ISO 8601 datetime string or null to clear. Server-enforced plaintext. */
+    closesAt: z.iso.datetime().nullable().optional(),
     fields: z
       .array(saveIntakeFieldSchema)
       .min(1)

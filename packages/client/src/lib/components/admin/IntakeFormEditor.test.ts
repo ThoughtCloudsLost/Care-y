@@ -93,6 +93,11 @@ vi.mock("$lib/paraglide/messages.js", async (importOriginal) => ({
   intake_forms_closed_message_label: () => "Closed message",
   intake_forms_closed_message_placeholder: () => "Shown when closed.",
   intake_forms_closed_message_hint: () => "When closing date has passed.",
+  intake_forms_closes_at_heading: () => "Closing date",
+  intake_forms_closes_at_label: () => "Closes at",
+  intake_forms_closes_at_hint: () =>
+    "After this date and time, the form will stop accepting submissions.",
+  intake_forms_closes_at_clear: () => "Clear closing date",
 }));
 
 vi.mock("$lib/terminology/with-terms.js", async (importOriginal) => ({
@@ -209,6 +214,7 @@ describe("IntakeFormEditor", () => {
     initialIsDefault: false,
     initialDestinationQueueId: null as string | null,
     initialFormMeta: {},
+    initialClosesAt: null as string | null,
     initialFields: [],
     onback: vi.fn(),
     ondeleted: vi.fn(),
@@ -439,5 +445,89 @@ describe("IntakeFormEditor", () => {
     expect(
       screen.getByText("Lowercase letters, digits, and single hyphens only."),
     ).toBeTruthy();
+  });
+
+  it("renders closing date section heading", () => {
+    render(IntakeFormEditor, { props: baseProps });
+
+    expect(screen.getByText("Closing date")).toBeTruthy();
+  });
+
+  it("includes closesAt in save payload when datetime-local is filled", async () => {
+    render(IntakeFormEditor, {
+      props: {
+        ...baseProps,
+        initialName: "Close Test",
+        initialFields: [
+          {
+            fieldKey: "fk-close",
+            label: { en: "Question" },
+            helpText: {},
+            isRequired: false,
+            config: { type: "text" as const },
+            fieldType: "text" as const,
+            ...NO_ROLE,
+          },
+        ],
+      },
+    });
+
+    // Find the datetime-local input by type
+    const dtInput = document.querySelector('input[type="datetime-local"]');
+    expect(dtInput).toBeTruthy();
+    if (dtInput) {
+      await fireEvent.input(dtInput, {
+        target: { value: "2026-12-31T23:59" },
+      });
+    }
+
+    const saveButton = screen.getByText("Save form").closest("button");
+    if (saveButton) {
+      await fireEvent.click(saveButton);
+    }
+
+    // The save mutation should have been called with a closesAt value
+    expect(mockSaveForm).toHaveBeenCalledWith(
+      expect.objectContaining({
+        closesAt: expect.any(String),
+      }),
+    );
+
+    // Verify the closesAt is an ISO string
+    const call = mockSaveForm.mock.calls[0] as [Record<string, unknown>];
+    const closesAt = call[0].closesAt;
+    expect(typeof closesAt).toBe("string");
+    expect(new Date(closesAt as string).toISOString()).toBe(closesAt);
+  });
+
+  it("includes null closesAt when datetime-local is empty", async () => {
+    render(IntakeFormEditor, {
+      props: {
+        ...baseProps,
+        initialName: "No Close Test",
+        initialFields: [
+          {
+            fieldKey: "fk-noclose",
+            label: { en: "Question" },
+            helpText: {},
+            isRequired: false,
+            config: { type: "text" as const },
+            fieldType: "text" as const,
+            ...NO_ROLE,
+          },
+        ],
+      },
+    });
+
+    const saveButton = screen.getByText("Save form").closest("button");
+    if (saveButton) {
+      await fireEvent.click(saveButton);
+    }
+
+    expect(mockSaveForm).toHaveBeenCalledWith(
+      expect.objectContaining({
+        closesAt: null,
+      }),
+    );
   });
 });

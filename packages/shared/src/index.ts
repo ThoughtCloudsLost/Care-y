@@ -626,6 +626,8 @@ export {
   type WireKeyWrap,
   type MissingPrincipal,
   type IntakeResponseRowWire,
+  logExportInputSchema,
+  type LogExportInput,
 } from "./schemas/client-portal.js";
 
 // --- Intake form schemas ---

@@ -76,6 +76,18 @@ export class IntakeDisabledError extends ValidationError {
   }
 }
 
+/**
+ * Thrown when a form's closes_at is in the past (server clock).
+ * The route maps this identically to the disabled/not-found shape
+ * so the client cannot distinguish a closed form from a missing one
+ * (enumeration-safe).
+ */
+export class IntakeFormClosedError extends ValidationError {
+  constructor() {
+    super(ErrorCode.INTAKE_FORM_CLOSED);
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Interfaces
 // ---------------------------------------------------------------------------
@@ -160,12 +172,20 @@ export async function createIntakeTicket(
   if (input.formId !== null) {
     const formRow = await db
       .selectFrom("intake_forms")
-      .select(["id", "is_active", "destination_queue_id"])
+      .select(["id", "is_active", "destination_queue_id", "closes_at"])
       .where("id", "=", input.formId)
       .executeTakeFirst();
 
     if (formRow?.is_active !== true) {
       throw new ValidationError("Form is not active or does not exist");
+    }
+
+    // Reject submissions for a form whose closing date has passed
+    if (
+      formRow.closes_at != null &&
+      formRow.closes_at.getTime() <= Date.now()
+    ) {
+      throw new IntakeFormClosedError();
     }
 
     formDestinationQueueId = formRow.destination_queue_id;

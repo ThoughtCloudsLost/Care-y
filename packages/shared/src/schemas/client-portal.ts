@@ -376,3 +376,11 @@ export const backfillWrapsOutputSchema = z.object({
   inserted: z.number().int(),
 });
 export type BackfillWrapsOutput = z.infer<typeof backfillWrapsOutputSchema>;
+
+/** Input for the CSV export audit log mutation. Carries counts only, never content. */
+export const logExportInputSchema = z.object({
+  formId: intakeFormIdSchema,
+  exportedCount: z.number().int().min(0),
+  skippedCount: z.number().int().min(0),
+});
+export type LogExportInput = z.infer<typeof logExportInputSchema>;

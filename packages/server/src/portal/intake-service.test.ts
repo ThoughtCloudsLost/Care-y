@@ -32,6 +32,7 @@ import {
   createIntakeTicket,
   IntakeQueueNotConfiguredError,
   IntakeDisabledError,
+  IntakeFormClosedError,
   type IntakeTicketInput,
   type IntakeAccountInput,
 } from "./intake-service.js";
@@ -804,6 +805,123 @@ describe.skipIf(!process.env.DATABASE_URL)(
           .where("kind", "=", "account")
           .executeTakeFirst();
         expect(channel).toBeUndefined();
+      });
+    });
+
+    // -----------------------------------------------------------------
+    // Closing date enforcement tests
+    // -----------------------------------------------------------------
+
+    describe("closing date enforcement", () => {
+      it("rejects submission for a form whose closes_at is in the past", async () => {
+        const ns = createMockNotificationService();
+        const form = await testDb.db
+          .insertInto("intake_forms")
+          .values({
+            // care-y-ignore-next-line ast-pii-in-db-write -- admin label, not PII
+            name: "Closed Form",
+            is_active: true,
+            closes_at: new Date(Date.now() - 60_000),
+          })
+          .returning("id")
+          .executeTakeFirstOrThrow();
+
+        const input = makeInput({ formId: form.id });
+
+        await expect(
+          createIntakeTicket(
+            testDb.db,
+            {
+              notificationService: ns,
+              sealedBox: testSealedBox,
+              orgId: TEST_ORG_ID,
+              orgSchema: testDb.schemaName as OrgSchema,
+              orgSlug: orgSlugIdSchema.parse("test-org"),
+            },
+            input,
+          ),
+        ).rejects.toThrow(IntakeFormClosedError);
+      });
+
+      it("accepts submission for a form whose closes_at is in the future", async () => {
+        const ns = createMockNotificationService();
+        const form = await testDb.db
+          .insertInto("intake_forms")
+          .values({
+            // care-y-ignore-next-line ast-pii-in-db-write -- admin label, not PII
+            name: "Future Close Form",
+            is_active: true,
+            closes_at: new Date(Date.now() + 86_400_000),
+          })
+          .returning("id")
+          .executeTakeFirstOrThrow();
+
+        const input = makeInput({ formId: form.id });
+
+        const result = await createIntakeTicket(
+          testDb.db,
+          {
+            notificationService: ns,
+            sealedBox: testSealedBox,
+            orgId: TEST_ORG_ID,
+            orgSchema: testDb.schemaName as OrgSchema,
+            orgSlug: orgSlugIdSchema.parse("test-org"),
+          },
+          input,
+        );
+
+        expect(result.ticketId).toBe(input.ticketId);
+      });
+
+      it("accepts submission when closes_at is null", async () => {
+        const ns = createMockNotificationService();
+        // Default form (formId null) has no closing date
+        const input = makeInput({ formId: null });
+
+        const result = await createIntakeTicket(
+          testDb.db,
+          {
+            notificationService: ns,
+            sealedBox: testSealedBox,
+            orgId: TEST_ORG_ID,
+            orgSchema: testDb.schemaName as OrgSchema,
+            orgSlug: orgSlugIdSchema.parse("test-org"),
+          },
+          input,
+        );
+
+        expect(result.ticketId).toBe(input.ticketId);
+      });
+
+      it("rejects submission at the boundary (closes_at equals now)", async () => {
+        const ns = createMockNotificationService();
+        // Set closes_at to a moment ago to guarantee the server clock reads it as past
+        const form = await testDb.db
+          .insertInto("intake_forms")
+          .values({
+            // care-y-ignore-next-line ast-pii-in-db-write -- admin label, not PII
+            name: "Boundary Close Form",
+            is_active: true,
+            closes_at: new Date(Date.now() - 1),
+          })
+          .returning("id")
+          .executeTakeFirstOrThrow();
+
+        const input = makeInput({ formId: form.id });
+
+        await expect(
+          createIntakeTicket(
+            testDb.db,
+            {
+              notificationService: ns,
+              sealedBox: testSealedBox,
+              orgId: TEST_ORG_ID,
+              orgSchema: testDb.schemaName as OrgSchema,
+              orgSlug: orgSlugIdSchema.parse("test-org"),
+            },
+            input,
+          ),
+        ).rejects.toThrow(IntakeFormClosedError);
       });
     });
   },

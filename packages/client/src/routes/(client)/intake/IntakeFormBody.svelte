@@ -156,6 +156,7 @@
           slug: null,
           encryptedFormMeta: null,
           intakeDisabled: false,
+          formClosed: false,
         };
       }
       const input = slug != null ? { slug } : undefined;
@@ -167,8 +168,12 @@
 
   // Not-available: intake is disabled or slug was given but not found
   const intakeDisabled = $derived(formQuery.data?.intakeDisabled === true);
+  const formClosed = $derived(formQuery.data?.formClosed === true);
   const slugNotFound = $derived(
-    slug != null && formQuery.data?.formId == null && !intakeDisabled,
+    slug != null &&
+      formQuery.data?.formId == null &&
+      !intakeDisabled &&
+      !formClosed,
   );
   const notAvailable = $derived(intakeDisabled || slugNotFound);
 
@@ -184,7 +189,29 @@
 
   const resolvedForm = $derived.by((): ResolvedForm => {
     const data = formQuery.data;
-    if (notAvailable) {
+    if (notAvailable || formClosed) {
+      // For closed forms, still try to decrypt meta so we can show
+      // the custom closed message when available.
+      if (
+        formClosed &&
+        data?.encryptedFormMeta != null &&
+        orgPublicKey !== null
+      ) {
+        try {
+          const closedMeta = decryptFormMeta(
+            data.encryptedFormMeta,
+            orgPublicKey,
+          );
+          return {
+            formId: null,
+            fields: [],
+            formMeta: closedMeta,
+            error: false,
+          };
+        } catch {
+          // Fall through to empty meta
+        }
+      }
       return { formId: null, fields: [], formMeta: EMPTY_META, error: false };
     }
     if (data?.formId == null) {
@@ -262,6 +289,11 @@
   /** Custom submit message replaces the default success copy when present. */
   const formSubmitMessage = $derived(
     resolveLocalized(resolvedForm.formMeta.submitMessage, BASE_LOCALE),
+  );
+
+  /** Custom closed message shown when the form's closing date has passed. */
+  const formClosedMessage = $derived(
+    resolveLocalized(resolvedForm.formMeta.closedMessage, BASE_LOCALE),
   );
 
   // ---- Form state ----
@@ -1057,6 +1089,13 @@
   <Block>
     <p class="intake-not-available" role="status">
       {m.intake_not_available()}
+    </p>
+  </Block>
+{:else if formClosed}
+  <!-- Closed state: form's closing date has passed -->
+  <Block>
+    <p class="intake-not-available" role="status">
+      {formClosedMessage ?? m.intake_form_closed_default()}
     </p>
   </Block>
 {:else if submitted}

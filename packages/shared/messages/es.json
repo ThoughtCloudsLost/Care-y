@@ -2284,6 +2284,8 @@
   "audit_event_intake_form_saved": "Formulario de admision guardado",
   "audit_event_intake_form_deleted": "Formulario de admision eliminado",
   "audit_event_intake_form_bound": "Asignacion del formulario de admision cambiada",
+  "audit_event_intake_responses_exported": "Respuestas de admision exportadas como CSV",
+  "audit_event_intake_responses_viewed": "Respuestas de admision consultadas",
   "audit_event_web_intake_toggled": "Recepcion en linea activada o desactivada",
   "audit_metadata_title_changed": "Titulo cambiado",
   "audit_metadata_description_changed": "Descripcion cambiada",
@@ -2707,6 +2709,13 @@
   "intake_responses_count": "{count} respuestas",
   "intake_responses_backfill_failed": "No se pudieron distribuir las claves para algunas respuestas.",
   "intake_responses_view_label": "Ver respuestas",
+  "intake_responses_export_csv": "Exportar CSV",
+  "intake_responses_export_confirm_title": "Exportar respuestas descifradas?",
+  "intake_responses_export_confirm_body": "Se descargara un archivo CSV con datos de clientes en texto plano. El archivo no esta cifrado. Se exportaran {exportedCount} respuestas.",
+  "intake_responses_export_confirm_skipped": "{skippedCount} respuestas no se pudieron descifrar y no se incluiran.",
+  "intake_responses_export_confirm_action": "Exportar",
+  "intake_responses_export_no_rows": "No hay respuestas descifradas para exportar.",
+  "intake_responses_csv_submitted_header": "Enviado",
 
   "intake_error_number_format": "Ingrese un numero valido.",
   "intake_error_number_min": "El valor debe ser al menos {min}.",
@@ -2837,5 +2846,12 @@
   "audit_event_account_offer_changed": "Oferta de cuenta cambiada",
   "error_portal_channel_exists": "Este {client} ya tiene un enlace seguro activo.",
   "error_portal_channel_not_found": "Este enlace seguro no está disponible. Es posible que haya sido revocado o que nunca haya existido.",
-  "error_account_username_taken": "Ese nombre de usuario ya está en uso. Prueba con otro."
+  "error_account_username_taken": "Ese nombre de usuario ya está en uso. Prueba con otro.",
+
+  "intake_forms_closes_at_heading": "Fecha de cierre",
+  "intake_forms_closes_at_label": "Cierra el",
+  "intake_forms_closes_at_hint": "Tras esta fecha y hora, el formulario dejará de aceptar envíos.",
+  "intake_forms_closes_at_clear": "Borrar fecha de cierre",
+  "intake_form_closed_default": "Este formulario ya no acepta envíos.",
+  "error_intake_form_closed": "Este formulario ya no acepta envíos."
 }

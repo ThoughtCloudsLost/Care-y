@@ -2284,6 +2284,8 @@
   "audit_event_intake_form_saved": "Intake form saved",
   "audit_event_intake_form_deleted": "Intake form deleted",
   "audit_event_intake_form_bound": "Intake form binding changed",
+  "audit_event_intake_responses_exported": "Intake responses exported as CSV",
+  "audit_event_intake_responses_viewed": "Intake responses viewed",
   "audit_event_web_intake_toggled": "Web intake toggled",
   "audit_metadata_title_changed": "Title changed",
   "audit_metadata_description_changed": "Description changed",
@@ -2707,6 +2709,13 @@
   "intake_responses_count": "{count} responses",
   "intake_responses_backfill_failed": "Failed to distribute key wraps for some submissions.",
   "intake_responses_view_label": "View responses",
+  "intake_responses_export_csv": "Export CSV",
+  "intake_responses_export_confirm_title": "Export decrypted responses?",
+  "intake_responses_export_confirm_body": "This will download a CSV file containing plaintext client data. The file is not encrypted. {exportedCount} responses will be exported.",
+  "intake_responses_export_confirm_skipped": "{skippedCount} responses could not be decrypted and will not be included.",
+  "intake_responses_export_confirm_action": "Export",
+  "intake_responses_export_no_rows": "No decrypted responses to export.",
+  "intake_responses_csv_submitted_header": "Submitted",
 
   "intake_error_number_format": "Enter a valid number.",
   "intake_error_number_min": "Value must be at least {min}.",
@@ -2837,5 +2846,12 @@
   "audit_event_account_offer_changed": "Account offer changed",
   "error_portal_channel_exists": "This {client} already has an active secure link.",
   "error_portal_channel_not_found": "This secure link is not available. It may have been revoked or never existed.",
-  "error_account_username_taken": "That username is already taken. Try a different one."
+  "error_account_username_taken": "That username is already taken. Try a different one.",
+
+  "intake_forms_closes_at_heading": "Closing date",
+  "intake_forms_closes_at_label": "Closes at",
+  "intake_forms_closes_at_hint": "After this date and time, the form will stop accepting submissions.",
+  "intake_forms_closes_at_clear": "Clear closing date",
+  "intake_form_closed_default": "This form is no longer accepting submissions.",
+  "error_intake_form_closed": "This form is no longer accepting submissions."
 }
