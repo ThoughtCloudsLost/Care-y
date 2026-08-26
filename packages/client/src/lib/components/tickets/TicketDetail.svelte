@@ -16,6 +16,7 @@
   import { tick } from "svelte";
   import { createQuery, useQueryClient } from "@tanstack/svelte-query";
   import { ticketKeys } from "$lib/query/keys";
+  import { hasUnacknowledgedCorrection as computeUnackedCorrection } from "$lib/tickets/correction-status.js";
   import { Checkbox, Button } from "konsta/svelte";
   import * as m from "$lib/paraglide/messages.js";
   import { trpc } from "$lib/trpc/index.js";
@@ -78,6 +79,7 @@
   import TicketPlaceholder from "$lib/components/tickets/TicketPlaceholder.svelte";
   import GapIndicator from "$lib/components/GapIndicator.svelte";
   import ShareStatusLine from "$lib/components/tickets/ShareStatusLine.svelte";
+  import CorrectionStatusLine from "$lib/components/tickets/CorrectionStatusLine.svelte";
   import {
     followUpKind,
     groupConsecutive,
@@ -167,6 +169,9 @@
     loadedFollowUpCount?: number;
     /** Two-way bindable: function to load one older page. */
     loadOlderPage?: () => Promise<void>;
+    /** Two-way bindable: true when any contact_correction follow-up
+     *  has no acknowledge reaction. Drives outbound-surface warnings. */
+    correctionPending?: boolean;
   }
 
   let {
@@ -197,6 +202,7 @@
     hasMoreMessages = $bindable(false),
     loadedFollowUpCount = $bindable(0),
     loadOlderPage: loadOlderPageProp = $bindable(undefined),
+    correctionPending = $bindable(false),
   }: TicketDetailProps = $props();
 
   const ticketCache = getTicketDecryptCache();
@@ -511,6 +517,13 @@
 
   $effect(() => {
     filteredFollowUps = displayFollowUps;
+  });
+
+  // Reactively compute whether any contact_correction follow-up lacks an
+  // acknowledge reaction. Uses the unfiltered followUps (not displayFollowUps)
+  // so a filter can't suppress the warning.
+  $effect(() => {
+    correctionPending = computeUnackedCorrection(followUps, getReactions);
   });
 
   // Expose the broadest available follow-up list for search matching.
@@ -1300,6 +1313,14 @@
                     loading={sharesQuery.isLoading}
                   />
                 {/if}
+                {#if rec.type === "contact_correction"}
+                  <CorrectionStatusLine
+                    reactions={getReactions(rec.id)}
+                    ontoggleacknowledge={() =>
+                      handleToggleReaction(rec.id, "acknowledge")}
+                    resolveUserName={(uid: string) => resolveVolunteerName(uid)}
+                  />
+                {/if}
               </ConversationBubble>
             {/if}
           </div>
@@ -1403,6 +1424,7 @@
                   id="fu-{fu.id}"
                   data-fu-id={fu.id}
                   class="fu-wrapper"
+                  class:fu-correction={fu.type === "contact_correction"}
                   class:match-active={searchActiveMatchId === fu.id}
                   class:fu-select-mode={selectModeActive}
                   class:fu-select-left={selectModeActive &&
@@ -1532,6 +1554,15 @@
                           loading={sharesQuery.isLoading}
                         />
                       {/if}
+                      {#if fu.type === "contact_correction"}
+                        <CorrectionStatusLine
+                          reactions={getReactions(fu.id)}
+                          ontoggleacknowledge={() =>
+                            handleToggleReaction(fu.id, "acknowledge")}
+                          resolveUserName={(uid: string) =>
+                            resolveVolunteerName(uid)}
+                        />
+                      {/if}
                     </ConversationBubble>
                   {/if}
                 </div>
@@ -1598,6 +1629,15 @@
      work through the wrapper without breaking the thread flex column. */
   .fu-wrapper {
     display: contents;
+  }
+
+  /* Contact correction: tinted background block per Inkwell Careful register. */
+  .fu-correction {
+    display: block;
+    background: var(--care-soft);
+    border-radius: 10px;
+    padding: 4px;
+    margin: 2px 0;
   }
 
   /* In select mode, switch to flex row for checkbox placement. */

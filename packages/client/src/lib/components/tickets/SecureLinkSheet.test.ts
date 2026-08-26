@@ -27,6 +27,8 @@ import type * as ShellSheetMod from "$lib/shell/ShellSheet.svelte";
 import type * as WithTermsMod from "$lib/terminology/with-terms.js";
 import type * as CryptoMod from "@care-y/crypto";
 import type * as EFFWordlistMod from "$lib/portal/eff-wordlist.js";
+import * as m from "$lib/paraglide/messages.js";
+import { ErrorCode } from "@care-y/shared";
 
 // ---- Hoisted spy fns ----
 
@@ -175,6 +177,7 @@ beforeEach(() => {
 
 afterEach(cleanup);
 
+const { withTerms } = await import("$lib/terminology/with-terms.js");
 const SecureLinkSheet = (await import("./SecureLinkSheet.svelte")).default;
 
 describe("SecureLinkSheet", () => {
@@ -293,6 +296,47 @@ describe("SecureLinkSheet", () => {
       screen.getByRole("button", { name: /set up secure link/i }),
     ).toBeTruthy();
     expect(baseProps.onsuccess).not.toHaveBeenCalled();
+  });
+
+  it("shows channel-exists message when mutation fails with PORTAL_CHANNEL_EXISTS", async () => {
+    mockMutate.mockRejectedValueOnce(
+      new Error(ErrorCode.PORTAL_CHANNEL_EXISTS),
+    );
+
+    render(SecureLinkSheet, { props: baseProps });
+
+    await fireEvent.click(
+      screen.getByRole("button", { name: /set up secure link/i }),
+    );
+
+    await waitFor(() => {
+      expect(mockShow).toHaveBeenCalledTimes(1);
+    });
+
+    // Should show the channel-exists message, not the generic one.
+    const calledWithMsg = mockShow.mock.calls[0]?.[0];
+    expect(calledWithMsg).toBe(m.error_portal_channel_exists(withTerms()));
+    // Setup button should reappear (step reset).
+    expect(
+      screen.getByRole("button", { name: /set up secure link/i }),
+    ).toBeTruthy();
+  });
+
+  it("shows generic error for non-channel-exists mutation failures", async () => {
+    mockMutate.mockRejectedValueOnce(new Error("network error"));
+
+    render(SecureLinkSheet, { props: baseProps });
+
+    await fireEvent.click(
+      screen.getByRole("button", { name: /set up secure link/i }),
+    );
+
+    await waitFor(() => {
+      expect(mockShow).toHaveBeenCalledTimes(1);
+    });
+
+    const calledWithMsg = mockShow.mock.calls[0]?.[0];
+    expect(calledWithMsg).toBe(m.error_generic());
   });
 
   it("sends passphrase to derivePortalKeypair when toggle is enabled", async () => {

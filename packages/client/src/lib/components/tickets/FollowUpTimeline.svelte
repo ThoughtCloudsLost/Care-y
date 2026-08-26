@@ -104,6 +104,7 @@
     if (item.type === "internal_note") return true;
     if (item.type === "phone_call") return true;
     if (item.type === "share_link") return true;
+    if (item.type === "contact_correction") return true;
     if (item.hasRecording || item.hasImage || item.hasFile) return true;
     return false;
   }
@@ -128,6 +129,10 @@
 
     if (item.type === "share_link") {
       return m.followup_type_share_link();
+    }
+
+    if (item.type === "contact_correction") {
+      return m.followup_type_contact_correction();
     }
 
     if (item.type === "internal_note") {

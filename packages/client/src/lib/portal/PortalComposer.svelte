@@ -13,7 +13,7 @@
 
   interface PortalComposerProps {
     /** Called with the message text when send is activated. */
-    onsend: (text: string) => void;
+    onsend: (text: string, kind?: "message" | "contact_correction") => void;
     /** Whether a send mutation is in flight. */
     pending: boolean;
     /** Called on first focus (for the web chat hint). */
@@ -34,6 +34,12 @@
 
   let text = $state("");
   let hasFocused = $state(false);
+  let correctionMode = $state(false);
+
+  /** Toggle correction mode on/off. */
+  export function toggleCorrectionMode(): void {
+    correctionMode = !correctionMode;
+  }
 
   const CHAR_LIMIT = 5_000;
   const COUNTER_THRESHOLD = 4_500;
@@ -46,8 +52,10 @@
   function handleSend(): void {
     if (!canSend) return;
     const msg = text.trim();
+    const kind = correctionMode ? ("contact_correction" as const) : undefined;
     text = "";
-    onsend(msg);
+    correctionMode = false;
+    onsend(msg, kind);
   }
 
   function handlePlus(_anchor: HTMLElement): void {
@@ -63,6 +71,27 @@
 </script>
 
 <div class="portal-composer" data-testid="portal-composer">
+  {#if correctionMode}
+    <div
+      class="correction-indicator"
+      role="status"
+      data-testid="correction-mode-indicator"
+    >
+      <span class="correction-indicator-label">
+        {m.portal_correction_mode_label()}
+      </span>
+      <button
+        type="button"
+        class="correction-cancel-btn"
+        onclick={() => {
+          correctionMode = false;
+        }}
+        data-testid="correction-mode-cancel"
+      >
+        {m.portal_correction_mode_cancel()}
+      </button>
+    </div>
+  {/if}
   <ShellMessagebar
     bind:value={text}
     mode="reply"
@@ -89,6 +118,20 @@
       {/if}
     {/snippet}
   </ShellMessagebar>
+  {#if !correctionMode}
+    <div class="correction-toggle-row">
+      <button
+        type="button"
+        class="correction-toggle-btn"
+        onclick={() => {
+          correctionMode = true;
+        }}
+        data-testid="correction-mode-toggle"
+      >
+        {m.portal_correction_mode_button()}
+      </button>
+    </div>
+  {/if}
 </div>
 
 <style>
@@ -124,5 +167,52 @@
     color: var(--danger);
     padding: 2px 16px 4px;
     margin: 0;
+  }
+
+  .correction-indicator {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+    padding: 8px 16px;
+    background: var(--care-soft);
+    font-size: var(--text-xs);
+    font-weight: 600;
+    color: var(--care);
+  }
+
+  .correction-indicator-label {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .correction-cancel-btn {
+    appearance: none;
+    border: none;
+    background: none;
+    font-size: var(--text-xs);
+    color: var(--muted);
+    cursor: pointer;
+    padding: 4px 8px;
+    min-height: 44px;
+    display: flex;
+    align-items: center;
+  }
+
+  .correction-toggle-row {
+    display: flex;
+    justify-content: center;
+    padding: 4px 16px 8px;
+  }
+
+  .correction-toggle-btn {
+    appearance: none;
+    border: none;
+    background: none;
+    font-size: var(--text-xs);
+    color: var(--muted);
+    cursor: pointer;
+    padding: 4px 8px;
+    min-height: 44px;
   }
 </style>

@@ -128,6 +128,15 @@ const baseSecureLinkChannel = {
   accountOffer: false,
 };
 
+const baseContinuationChannel = {
+  clientPublic: "pk-base64",
+  hasPassphrase: false,
+  createdAt: "2026-03-15T08:00:00Z",
+  lastSeenAt: "2026-03-20T12:00:00Z",
+  kind: "intake_continuation",
+  accountOffer: false,
+};
+
 const baseAccountChannel = {
   clientPublic: "pk-base64",
   hasPassphrase: false,
@@ -471,6 +480,54 @@ describe("PortalTierSection", () => {
     });
 
     expect(mockHaptic).not.toHaveBeenCalled();
+  });
+
+  // --- Continuation (intake_continuation) tier ---
+
+  it("renders continuation branch for secure_link tier with intake_continuation kind", () => {
+    render(PortalTierSection, {
+      props: {
+        ticketId: "t-1",
+        clientTier: "secure_link",
+        portalChannel: { ...baseContinuationChannel },
+        clientPhone: null,
+        isLoading: false,
+      },
+    });
+
+    expect(screen.getByText(m.ticket_tier_continuation())).toBeTruthy();
+    expect(screen.getByTestId("continuation-provenance")).toBeTruthy();
+    expect(screen.getByText(m.ticket_tier_regenerate())).toBeTruthy();
+    expect(screen.getByText(m.ticket_tier_revoke())).toBeTruthy();
+  });
+
+  it("shows offer toggle for continuation tier", () => {
+    const { container } = render(PortalTierSection, {
+      props: {
+        ticketId: "t-1",
+        clientTier: "secure_link",
+        portalChannel: { ...baseContinuationChannel },
+        clientPhone: null,
+        isLoading: false,
+      },
+    });
+
+    expect(container.querySelector(".offer-row")).toBeTruthy();
+  });
+
+  it("renders created/last-seen times for continuation channel", () => {
+    render(PortalTierSection, {
+      props: {
+        ticketId: "t-1",
+        clientTier: "secure_link",
+        portalChannel: { ...baseContinuationChannel },
+        clientPhone: null,
+        isLoading: false,
+      },
+    });
+
+    expect(screen.getByText("2026-03-15T08:00:00.000Z")).toBeTruthy();
+    expect(screen.getByText("2026-03-20T12:00:00.000Z")).toBeTruthy();
   });
 
   it("uses InlineSkeleton for account tier meta while loading", () => {

@@ -402,6 +402,25 @@ describe("MergeSheet", () => {
     expect(bothClientsProps.onmerged).not.toHaveBeenCalled();
   });
 
+  // --- Channel collision choice ---
+
+  it("does not show channel choice when query returns no channels", async () => {
+    const { container } = render(MergeSheet, { props: bothClientsProps });
+
+    const buttons = container.querySelectorAll("button");
+    const nextBtn = Array.from(buttons).find((b) =>
+      b.textContent.includes("Next"),
+    );
+    if (nextBtn) {
+      await fireEvent.click(nextBtn);
+    }
+
+    // channelInfoQuery returns undefined (mocked as createQuery returning data: undefined)
+    expect(
+      container.querySelector("[data-testid='channel-choice-heading']"),
+    ).toBeNull();
+  });
+
   it("does not render content when opened is false", () => {
     const { container } = render(MergeSheet, {
       props: { ...bothClientsProps, opened: false },

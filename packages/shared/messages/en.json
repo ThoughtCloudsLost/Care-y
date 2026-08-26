@@ -2863,5 +2863,28 @@
   "intake_continuation_copied": "Link copied.",
   "intake_continuation_copy_error": "Could not copy the link. Select it manually and copy.",
   "intake_continuation_warning": "This link is the only way back to your conversation. CARE-Y cannot recover it if lost. Anyone who has the link can read and add to this thread.",
-  "intake_continuation_hint": "The link above carries the key that unlocks your conversation. Save it before leaving this page."
+  "intake_continuation_hint": "The link above carries the key that unlocks your conversation. Save it before leaving this page.",
+
+  "ticket_tier_continuation": "Continuation Link",
+  "ticket_tier_continuation_provenance": "Created by the caller at intake",
+  "ticket_tier_regenerate_continuation_confirm": "Regenerating will replace the continuation link with a new volunteer-issued Secure Link. The caller's original link will stop working.",
+
+  "followup_type_contact_correction": "Contact correction",
+  "followup_type_contact_correction_desc": "Caller-submitted corrections to their contact information",
+  "contact_correction_flag_label": "Contact correction, verify before contacting",
+  "contact_correction_mark_handled": "Mark handled",
+  "contact_correction_handled": "Handled",
+  "contact_correction_handled_by": "Handled by {name}",
+  "contact_correction_pending_warning": "A contact correction is pending below. Verify before contacting.",
+
+  "portal_correction_mode_label": "Correcting contact info",
+  "portal_correction_mode_button": "Correct my contact info",
+  "portal_correction_mode_cancel": "Cancel correction",
+
+  "merge_channel_choice_heading": "Both callers have a portal link",
+  "merge_channel_choice_explain": "Only one link can stay active after the merge. The other link will stop working.",
+  "merge_channel_kind_secure_link": "Secure Link",
+  "merge_channel_kind_intake_continuation": "Created at intake",
+  "merge_channel_kind_account": "Account",
+  "merge_channel_created": "Created {date}"
 }

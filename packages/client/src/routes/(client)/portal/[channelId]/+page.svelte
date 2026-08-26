@@ -316,6 +316,7 @@
         nonce: string;
         ciphertext: string;
       };
+      kind?: "message" | "contact_correction";
     }) => {
       if (!trpc.clientPortal) throw new Error("Portal not available");
       return trpc.clientPortal.portalReply.mutate(input);
@@ -337,7 +338,10 @@
     },
   }));
 
-  function handleSend(text: string): void {
+  function handleSend(
+    text: string,
+    kind?: "message" | "contact_correction",
+  ): void {
     sendError = "";
     const ticketId = bootstrapQuery.data?.ticketId;
     if (!session || !orgPublicKey || ticketId == null || ticketId === "") {
@@ -382,6 +386,7 @@
       encryptedContent: payload.encryptedContent,
       wrappedTkTemp: payload.wrappedTkTemp,
       selfCopy: payload.selfCopy,
+      kind: kind ?? undefined,
     });
   }
 

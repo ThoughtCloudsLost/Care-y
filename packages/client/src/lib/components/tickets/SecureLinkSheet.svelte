@@ -33,6 +33,7 @@
     requireSodium,
     zeroAll,
   } from "@care-y/crypto";
+  import { ErrorCode } from "@care-y/shared";
   import { EFF_WORDLIST } from "$lib/portal/eff-wordlist.js";
 
   interface SecureLinkSheetProps {
@@ -151,11 +152,20 @@
       generatedLink = `${location.origin}/portal/${channelId}#${encode(seed)}`;
       step = "ready";
       onsuccess();
-    } catch (_err: unknown) {
+    } catch (err: unknown) {
       // Intentional discard: error may carry decrypted content or key
       // material from the crypto pipeline. Toast is the only safe signal.
+      // Narrow exception: surface the channel-exists message when the
+      // error code matches, without rendering the error object itself.
       step = "setup";
-      toastStore.show(m.error_generic(), 3000);
+      const isChannelExists =
+        err instanceof Error && err.message === ErrorCode.PORTAL_CHANNEL_EXISTS;
+      toastStore.show(
+        isChannelExists
+          ? m.error_portal_channel_exists(withTerms())
+          : m.error_generic(),
+        3000,
+      );
     } finally {
       generating = false;
     }

@@ -578,6 +578,7 @@
   let hasMoreMessages = $state(false);
   let loadOlderPage = $state<(() => Promise<void>) | undefined>(undefined);
   let loadedFollowUpCount = $state(0);
+  let correctionPending = $state(false);
 
   const deepSearch = createDeepSearch({
     getOverlayTerm: () => overlay.term,
@@ -984,6 +985,7 @@
     bind:hasMoreMessages
     bind:loadOlderPage
     bind:loadedFollowUpCount
+    bind:correctionPending
   />
 {/snippet}
 
@@ -995,6 +997,7 @@
       inline={desktopFull || onexpand != null}
       hidden={selectMode.active}
       sending={messenger.sending || sms.sending}
+      hasUnacknowledgedCorrection={correctionPending}
       onsendreply={() => void messenger.handleSend()}
       onsendsms={(text: string) => void sms.handleSmsSend(text)}
       onplus={openComposeActions}
@@ -1137,6 +1140,7 @@
     });
   }}
   {hasVerifiedPhone}
+  {correctionPending}
   currentAssigneeId={ticket?.assignedTo ?? null}
   {deleteConfirm}
   {noteEdit}

@@ -25,6 +25,7 @@ import {
   Image as ImageIcon,
   Paperclip,
   Phone,
+  UserPen,
   type LucideIcon,
 } from "@lucide/svelte";
 import type { Component } from "svelte";
@@ -75,6 +76,7 @@ const followUpTypeIcons = new Map<string, LucideIcon>([
   ["internal_note", StickyNote],
   ["phone_call", Phone],
   ["sms_outbound", MessagesSquare],
+  ["contact_correction", UserPen],
 ]);
 
 const mediaIcons = new Map<string, LucideIcon>([

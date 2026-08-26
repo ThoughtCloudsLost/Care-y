@@ -66,6 +66,8 @@
     clientPublic?: string | null;
     previewFollowUps: RawFollowUpPreview[] | undefined;
     followUpCount: number;
+    /** When true, a contact correction is pending for this ticket. */
+    hasUnacknowledgedCorrection?: boolean;
     ondismiss: () => void;
     onsent: (ticketId: string) => void;
   }
@@ -79,6 +81,7 @@
     clientPublic = null,
     previewFollowUps,
     followUpCount,
+    hasUnacknowledgedCorrection: correctionPending = false,
     ondismiss,
     onsent,
   }: ReplySheetProps = $props();
@@ -401,6 +404,7 @@
     {ticketId}
     inline
     sending={replySending || sms.sending}
+    hasUnacknowledgedCorrection={correctionPending}
     onsendreply={(text: string) => void handleReplySend(text)}
     onsendsms={(text: string) => void sms.handleSmsSend(text)}
     onplus={handlePlus}

@@ -22,6 +22,7 @@
   import {
     createInfiniteQuery,
     createMutation,
+    createQuery,
     useQueryClient,
   } from "@tanstack/svelte-query";
   import * as m from "$lib/paraglide/messages.js";
@@ -192,6 +193,58 @@
   }
 
   // ---------------------------------------------------------------------------
+  // Channel collision query (confirm step only)
+  // ---------------------------------------------------------------------------
+
+  const channelInfoQuery = createQuery(() => ({
+    queryKey: [
+      "merge-channel-info",
+      primaryClientId,
+      secondaryClientId,
+    ] as const,
+    queryFn: async () =>
+      ticketsRouter.getMergeChannelInfo.query({
+        primaryClientId,
+        secondaryClientId,
+      }),
+    enabled:
+      step === "confirm" && primaryClientId !== "" && secondaryClientId !== "",
+  }));
+
+  const primaryChannel = $derived(channelInfoQuery.data?.primary ?? null);
+  const secondaryChannel = $derived(channelInfoQuery.data?.secondary ?? null);
+  const bothHaveChannels = $derived(
+    primaryChannel !== null && secondaryChannel !== null,
+  );
+
+  // Default to the older channel (server default behavior)
+  let keepChannelOf = $state<"primary" | "secondary">("primary");
+
+  $effect(() => {
+    if (!bothHaveChannels) return;
+    const pDate = new Date(primaryChannel?.createdAt ?? "").getTime();
+    const sDate = new Date(secondaryChannel?.createdAt ?? "").getTime();
+    keepChannelOf = pDate <= sDate ? "primary" : "secondary";
+  });
+
+  function channelKindLabel(kind: string): string {
+    if (kind === "intake_continuation") {
+      return m.merge_channel_kind_intake_continuation();
+    }
+    if (kind === "account") return m.merge_channel_kind_account();
+    return m.merge_channel_kind_secure_link();
+  }
+
+  function formatChannelDate(iso: string): string {
+    const d = new Date(iso);
+    return d.toLocaleDateString(undefined, {
+      year: "numeric",
+      month: "short",
+      day: "numeric",
+    });
+  }
+
+  // ---------------------------------------------------------------------------
   // Step transitions
   // ---------------------------------------------------------------------------
 
@@ -251,10 +304,18 @@
 
   function handleMerge(): void {
     if (!canContinue) return;
-    mergeMutation.mutate({
+    const input: {
+      primaryClientId: string;
+      secondaryClientId: string;
+      keepChannelOf?: "primary" | "secondary";
+    } = {
       primaryClientId,
       secondaryClientId,
-    });
+    };
+    if (bothHaveChannels) {
+      input.keepChannelOf = keepChannelOf;
+    }
+    mergeMutation.mutate(input);
   }
 </script>
 
@@ -406,6 +467,59 @@
           )}
         </p>
       </Block>
+      {#if bothHaveChannels && primaryChannel && secondaryChannel}
+        <Block>
+          <p class="channel-heading" data-testid="channel-choice-heading">
+            {m.merge_channel_choice_heading()}
+          </p>
+          <p class="channel-explain">
+            {m.merge_channel_choice_explain()}
+          </p>
+          <List nested>
+            <ListItem label title={channelKindLabel(primaryChannel.kind)}>
+              {#snippet media()}
+                <Radio
+                  component="div"
+                  name="keep-channel"
+                  value="primary"
+                  checked={keepChannelOf === "primary"}
+                  onChange={() => {
+                    keepChannelOf = "primary";
+                  }}
+                />
+              {/snippet}
+              {#snippet after()}
+                <span class="channel-date">
+                  {m.merge_channel_created({
+                    date: formatChannelDate(primaryChannel.createdAt),
+                  })}
+                </span>
+              {/snippet}
+            </ListItem>
+            <ListItem label title={channelKindLabel(secondaryChannel.kind)}>
+              {#snippet media()}
+                <Radio
+                  component="div"
+                  name="keep-channel"
+                  value="secondary"
+                  checked={keepChannelOf === "secondary"}
+                  onChange={() => {
+                    keepChannelOf = "secondary";
+                  }}
+                />
+              {/snippet}
+              {#snippet after()}
+                <span class="channel-date">
+                  {m.merge_channel_created({
+                    date: formatChannelDate(secondaryChannel.createdAt),
+                  })}
+                </span>
+              {/snippet}
+            </ListItem>
+          </List>
+        </Block>
+      {/if}
+
       <Block>
         <Button
           large
@@ -506,5 +620,25 @@
     display: flex;
     justify-content: center;
     padding: var(--space-md) 0;
+  }
+
+  .channel-heading {
+    font-size: var(--text-base);
+    font-weight: 600;
+    color: var(--ink);
+    margin: 0 0 var(--space-xs) 0;
+  }
+
+  .channel-explain {
+    color: var(--muted);
+    font-size: var(--text-sm);
+    margin: 0;
+    line-height: 1.5;
+  }
+
+  .channel-date {
+    color: var(--muted);
+    font-size: var(--text-xs);
+    white-space: nowrap;
   }
 </style>

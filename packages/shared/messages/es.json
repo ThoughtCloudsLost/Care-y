@@ -2863,5 +2863,28 @@
   "intake_continuation_copied": "Enlace copiado.",
   "intake_continuation_copy_error": "No se pudo copiar el enlace. Selecciónalo manualmente y cópialo.",
   "intake_continuation_warning": "Este enlace es la única forma de volver a tu conversación. CARE-Y no puede recuperarlo si lo pierdes. Cualquier persona que tenga el enlace puede leer y agregar a este hilo.",
-  "intake_continuation_hint": "El enlace de arriba contiene la clave que desbloquea tu conversación. Guárdalo antes de salir de esta página."
+  "intake_continuation_hint": "El enlace de arriba contiene la clave que desbloquea tu conversación. Guárdalo antes de salir de esta página.",
+
+  "ticket_tier_continuation": "Enlace de continuación",
+  "ticket_tier_continuation_provenance": "Creado por la persona que llamó al momento del ingreso",
+  "ticket_tier_regenerate_continuation_confirm": "Regenerar reemplazará el enlace de continuación con un nuevo enlace seguro emitido por un voluntario. El enlace original dejará de funcionar.",
+
+  "followup_type_contact_correction": "Corrección de contacto",
+  "followup_type_contact_correction_desc": "Correcciones de información de contacto enviadas por la persona que llamó",
+  "contact_correction_flag_label": "Corrección de contacto, verifica antes de contactar",
+  "contact_correction_mark_handled": "Marcar como atendido",
+  "contact_correction_handled": "Atendido",
+  "contact_correction_handled_by": "Atendido por {name}",
+  "contact_correction_pending_warning": "Hay una corrección de contacto pendiente abajo. Verifica antes de contactar.",
+
+  "portal_correction_mode_label": "Corrigiendo información de contacto",
+  "portal_correction_mode_button": "Corregir mi información de contacto",
+  "portal_correction_mode_cancel": "Cancelar corrección",
+
+  "merge_channel_choice_heading": "Ambas personas tienen un enlace del portal",
+  "merge_channel_choice_explain": "Solo un enlace puede permanecer activo después de la combinación. El otro enlace dejará de funcionar.",
+  "merge_channel_kind_secure_link": "Enlace seguro",
+  "merge_channel_kind_intake_continuation": "Creado en el ingreso",
+  "merge_channel_kind_account": "Cuenta",
+  "merge_channel_created": "Creado el {date}"
 }

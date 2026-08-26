@@ -21,7 +21,7 @@
   from components/tickets; this component inherits that exception.
 -->
 <script lang="ts">
-  import { X } from "@lucide/svelte";
+  import { X, UserPen } from "@lucide/svelte";
   import * as m from "$lib/paraglide/messages.js";
   import { withTerms } from "$lib/terminology/with-terms.js";
   import ShellMessagebar from "$lib/shell/ShellMessagebar.svelte";
@@ -45,6 +45,9 @@
     /** Render nothing while keeping mode and draft state alive (the
      *  orchestrator hides the bar during select mode). */
     hidden?: boolean;
+    /** When true, a contact correction is pending and the SMS compose
+     *  header shows a warning. */
+    hasUnacknowledgedCorrection?: boolean;
     onsendreply: (text: string) => void;
     onsendsms: (text: string) => void;
     onplus: (anchorEl: HTMLElement) => void;
@@ -55,6 +58,7 @@
     inline = false,
     sending = false,
     hidden = false,
+    hasUnacknowledgedCorrection: correctionPending = false,
     onsendreply,
     onsendsms,
     onplus,
@@ -158,6 +162,17 @@
 </script>
 
 {#snippet composeHeader()}
+  {#if activeComposeMode === "sms" && correctionPending}
+    <div
+      class="correction-warning"
+      role="status"
+      aria-live="polite"
+      data-testid="compose-correction-warning"
+    >
+      <UserPen size={14} aria-hidden="true" />
+      <span>{m.contact_correction_pending_warning()}</span>
+    </div>
+  {/if}
   <div class="compose-mode-indicator">
     <span class="compose-mode-label">
       {activeComposeMode === "sms"
@@ -232,6 +247,22 @@
     .mention-anchor-fixed {
       transition: none;
     }
+  }
+
+  .correction-warning {
+    position: absolute;
+    bottom: calc(100% + 1.5rem);
+    left: 0;
+    right: 0;
+    display: flex;
+    align-items: center;
+    gap: 0.375rem;
+    padding: 6px 16px;
+    font-size: var(--text-xs);
+    font-weight: 600;
+    color: var(--care);
+    background: var(--care-soft);
+    border-radius: 8px 8px 0 0;
   }
 
   .compose-mode-indicator {

@@ -61,6 +61,7 @@
     onmergedismiss: () => void;
     onmerged: () => void;
     hasVerifiedPhone: boolean;
+    correctionPending?: boolean;
     currentAssigneeId: string | null;
     deleteConfirm: DeleteConfirmState;
     noteEdit: NoteEditState;
@@ -109,6 +110,7 @@
     onmergedismiss,
     onmerged,
     hasVerifiedPhone,
+    correctionPending = false,
     currentAssigneeId,
     deleteConfirm,
     noteEdit,
@@ -157,7 +159,11 @@
   ondismiss={oncalldismiss}
   ariaLabel={m.ticket_call_options()}
 >
-  <CallOptionsContent {hasVerifiedPhone} onaction={oncallaction} />
+  <CallOptionsContent
+    {hasVerifiedPhone}
+    hasUnacknowledgedCorrection={correctionPending}
+    onaction={oncallaction}
+  />
 </ShellActionSheet>
 
 <ComposeActions
