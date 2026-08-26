@@ -782,6 +782,64 @@ export class CryptoBridge {
     return resp.candidates;
   }
 
+  /**
+   * Decrypt an intake form response blob. Supports two paths:
+   *   (a) callerKeyWrap: ECIES unwrap with the Worker's volPrivate
+   *   (b) orgSealWrap: crypto_box_seal_open with orgSecret
+   * Returns the JSON-serialized answers string. The caller parses and
+   * narrows per-element types (the Worker produced the JSON, so the
+   * shape is trusted, but JSON.parse returns unknown and the bridge
+   * avoids unsafe assertions).
+   */
+  async decryptIntakeResponse(
+    ticketId: string,
+    encryptedResponse: string,
+    callerKeyWrap: {
+      ephemeralPoint: string;
+      nonce: string;
+      wrappedKey: string;
+    } | null,
+    orgSealWrap: { wrappedTk: string } | null,
+  ): Promise<string> {
+    const resp = expectResponse(
+      await this.sendRequest({
+        type: "decryptIntakeResponse",
+        ticketId,
+        encryptedResponse,
+        callerKeyWrap,
+        orgSealWrap,
+      }),
+      "decryptIntakeResponse",
+    );
+    return resp.answersJson;
+  }
+
+  /**
+   * Mint ECIES wraps for missing principals using a tk already cached
+   * in the Worker from a prior decryptIntakeResponse call.
+   */
+  async mintBackfillWraps(
+    ticketId: string,
+    targets: readonly { volunteerId: string; volPublic: string }[],
+  ): Promise<
+    readonly {
+      volunteerId: string;
+      ephemeralPoint: string;
+      nonce: string;
+      wrappedKey: string;
+    }[]
+  > {
+    const resp = expectResponse(
+      await this.sendRequest({
+        type: "mintBackfillWraps",
+        ticketId,
+        targets,
+      }),
+      "mintBackfillWraps",
+    );
+    return resp.wraps;
+  }
+
   /** Get the org public key (base64) from the Worker. */
   async getOrgPublicKey(): Promise<string> {
     const resp = expectResponse(

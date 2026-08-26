@@ -18,8 +18,16 @@
     createQuery,
     useQueryClient,
   } from "@tanstack/svelte-query";
-  import { ClipboardList, FileText, Globe, Plus, Copy } from "@lucide/svelte";
   import {
+    ClipboardList,
+    FileText,
+    Globe,
+    Plus,
+    Copy,
+    ChartColumn,
+  } from "@lucide/svelte";
+  import {
+    Permission,
     intakeFieldTypeSchema,
     intakeFieldRoleSchema,
     intakeFieldConfigSchema,
@@ -33,7 +41,11 @@
   import { toastStore } from "$lib/stores/toast.svelte.js";
   import { announceToLiveRegion } from "$lib/utils/announce.js";
   import { getErrorMessage } from "$lib/components/query-error-messages.js";
-  import { getOrgKeyManager, getOrgDecryptCache } from "$lib/crypto/context.js";
+  import {
+    getOrgKeyManager,
+    getOrgDecryptCache,
+    getCurrentPermissions,
+  } from "$lib/crypto/context.js";
   import {
     decryptFieldContent,
     decryptFormMeta,
@@ -49,6 +61,10 @@
   const queryClient = useQueryClient();
   const orgCache = getOrgDecryptCache();
   const orgKeyManager = getOrgKeyManager();
+  const permissionsGetter = getCurrentPermissions();
+  const canViewResponses = $derived(
+    permissionsGetter().has(Permission.VIEW_INTAKE_RESPONSES),
+  );
 
   let duplicatingFormId = $state<string | null>(null);
 
@@ -368,6 +384,17 @@
             </span>
           </a>
           <div class="ifs-row-actions">
+            {#if canViewResponses}
+              <a
+                class="ifs-action-btn"
+                href={resolve(
+                  `/admin/forms/responses?id=${encodeURIComponent(form.id)}`,
+                )}
+                aria-label={m.intake_responses_view_label()}
+              >
+                <ChartColumn size={14} />
+              </a>
+            {/if}
             <button
               type="button"
               class="ifs-dup-btn"
@@ -507,6 +534,7 @@
     flex-shrink: 0;
   }
 
+  .ifs-action-btn,
   .ifs-dup-btn {
     display: flex;
     align-items: center;
@@ -519,6 +547,9 @@
     cursor: pointer;
     border-radius: 50%;
     padding: 0;
+    text-decoration: none;
+    min-height: 44px;
+    min-width: 44px;
   }
 
   .ifs-dup-btn:disabled {
@@ -526,8 +557,15 @@
     cursor: default;
   }
 
+  .ifs-action-btn:active,
   .ifs-dup-btn:not(:disabled):active {
     background: color-mix(in srgb, var(--ink) 10%, transparent);
+  }
+
+  .ifs-action-btn:focus-visible,
+  .ifs-dup-btn:focus-visible {
+    outline: 2px solid var(--brand-text);
+    outline-offset: 2px;
   }
 
   :global(.ifs-cfg-icon) {

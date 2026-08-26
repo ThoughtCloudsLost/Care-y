@@ -2,14 +2,19 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, screen, cleanup } from "@testing-library/svelte";
 
-const { mockListForms, mockSetActive, mockToastShow, mockGetForm } = vi.hoisted(
-  () => ({
-    mockListForms: vi.fn(),
-    mockSetActive: vi.fn().mockResolvedValue({ ok: true }),
-    mockToastShow: vi.fn(),
-    mockGetForm: vi.fn(),
-  }),
-);
+const {
+  mockListForms,
+  mockSetActive,
+  mockToastShow,
+  mockGetForm,
+  mockPermissions,
+} = vi.hoisted(() => ({
+  mockListForms: vi.fn(),
+  mockSetActive: vi.fn().mockResolvedValue({ ok: true }),
+  mockToastShow: vi.fn(),
+  mockGetForm: vi.fn(),
+  mockPermissions: new Set<string>(),
+}));
 
 vi.mock("$lib/paraglide/messages.js", async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
@@ -22,6 +27,7 @@ vi.mock("$lib/paraglide/messages.js", async (importOriginal) => ({
   intake_forms_duplicate_label: () => "Duplicate form",
   intake_forms_duplicate_suffix: () => "(copy)",
   intake_forms_duplicated: () => "Form duplicated",
+  intake_responses_view_label: () => "View responses",
   error_generic: () => "Something went wrong",
 }));
 
@@ -78,6 +84,7 @@ vi.mock("$lib/crypto/context.js", async (importOriginal) => ({
   getOrgDecryptCache: () => ({
     decrypt: (_key: string, _value: string) => "Decrypted",
   }),
+  getCurrentPermissions: () => () => mockPermissions,
 }));
 
 vi.mock("$lib/portal/intake-form-crypto.js", async (importOriginal) => ({
@@ -147,6 +154,7 @@ import IntakeFormsSection from "./IntakeFormsSection.svelte";
 
 describe("IntakeFormsSection", () => {
   beforeEach(() => {
+    mockPermissions.clear();
     mockListForms.mockResolvedValue({
       forms: [
         {
@@ -199,5 +207,25 @@ describe("IntakeFormsSection", () => {
     const dupButtons = screen.getAllByLabelText("Duplicate form");
     // At least one per form in the list
     expect(dupButtons.length).toBeGreaterThanOrEqual(1);
+  });
+
+  it("hides the View responses link without VIEW_INTAKE_RESPONSES", () => {
+    render(IntakeFormsSection);
+
+    expect(screen.queryByLabelText("View responses")).toBeNull();
+  });
+
+  it("shows the View responses link when VIEW_INTAKE_RESPONSES is held", () => {
+    mockPermissions.add("view_intake_responses");
+    render(IntakeFormsSection);
+
+    const links = screen.getAllByLabelText("View responses");
+    expect(links).toHaveLength(2);
+    expect(links[0]?.closest("a")?.getAttribute("href")).toBe(
+      "/admin/forms/responses?id=form-1",
+    );
+    expect(links[1]?.closest("a")?.getAttribute("href")).toBe(
+      "/admin/forms/responses?id=form-2",
+    );
   });
 });

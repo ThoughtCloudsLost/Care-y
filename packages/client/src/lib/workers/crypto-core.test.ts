@@ -61,6 +61,8 @@ import type {
   RewrapTkResponse,
   RewrapBlobResponse,
   SharedWorkerState,
+  DecryptIntakeResponseResponse,
+  MintBackfillWrapsResponse,
 } from "./crypto-protocol.js";
 import {
   createDispatcher,
@@ -2274,5 +2276,314 @@ describe("crypto-core phoneMatchHash blind index", () => {
     });
 
     expect(resp.ok).toBe(false);
+  });
+});
+
+// ── Intake response viewer worker ops ──────────────────────────────
+
+describe("decryptIntakeResponse and mintBackfillWraps", () => {
+  let volPublicStr: string;
+
+  beforeEach(async () => {
+    handleZeroAll(-1, testSink);
+    sinkMessages = [];
+    dispatch = createDispatcher(testSink);
+    const sodium = requireSodium();
+    const salt = sodium.randombytes_buf(16);
+    const result = await loginFlow("intake-viewer-pw", salt);
+    volPublicStr = result.volPublic;
+    sinkMessages = [];
+  });
+
+  afterEach(() => {
+    handleZeroAll(-1, testSink);
+  });
+
+  /** Load the org key so the Worker can unseal intake wraps. */
+  async function loadOrgKeyForViewer(): Promise<string> {
+    const sodium = requireSodium();
+    const orgSecret = sodium.crypto_core_ristretto255_scalar_random();
+    const wrap = eciesEncrypt(
+      orgSecret,
+      decode(volPublicStr) as RistrettoPoint,
+    );
+
+    const resp = (await dispatchAndWait({
+      type: "unwrapOrgKey",
+      id: 2000,
+      ephemeralPoint: encode(wrap.ephemeralPoint),
+      nonce: encode(wrap.nonce),
+      wrappedOrgKey: encode(wrap.ciphertext),
+    })) as UnwrapOrgKeyResponse;
+
+    expect(resp.ok).toBe(true);
+    sodium.memzero(orgSecret);
+    return resp.orgPublicKey;
+  }
+
+  /** Build a test response blob encrypted with the given tk and ticketId. */
+  function buildEncryptedResponse(
+    tk: SymmetricKey,
+    ticketId: string,
+    answers: readonly { fieldKey: string; value: unknown }[],
+  ): string {
+    const json = JSON.stringify({ answers });
+    const plaintext = new TextEncoder().encode(json);
+    const aad = buildContentAad(ticketId, "intake-form-response");
+    const ct = encryptContent(plaintext, tk, aad);
+    return encode(ct);
+  }
+
+  it("decrypts a response via the caller's ECIES key wrap", async () => {
+    const sodium = requireSodium();
+    const tk = generateContentKey();
+    const ticketId = "t-resp-ecies";
+    const encrypted = buildEncryptedResponse(tk, ticketId, [
+      { fieldKey: "f1", value: "hello" },
+      { fieldKey: "f2", value: 42 },
+    ]);
+
+    const wrap = eciesEncrypt(tk, decode(volPublicStr) as RistrettoPoint);
+
+    const resp = (await dispatchAndWait({
+      type: "decryptIntakeResponse",
+      id: 2010,
+      ticketId,
+      encryptedResponse: encrypted,
+      callerKeyWrap: {
+        ephemeralPoint: encode(wrap.ephemeralPoint),
+        nonce: encode(wrap.nonce),
+        wrappedKey: encode(wrap.ciphertext),
+      },
+      orgSealWrap: null,
+    })) as DecryptIntakeResponseResponse;
+
+    expect(resp.ok).toBe(true);
+    const answers = JSON.parse(resp.answersJson) as {
+      fieldKey: string;
+      value: unknown;
+    }[];
+    expect(answers).toHaveLength(2);
+    expect(answers[0]?.fieldKey).toBe("f1");
+    expect(answers[0]?.value).toBe("hello");
+    expect(answers[1]?.fieldKey).toBe("f2");
+    expect(answers[1]?.value).toBe(42);
+
+    sodium.memzero(tk);
+  });
+
+  it("decrypts a response via the org-seal wrap", async () => {
+    const sodium = requireSodium();
+    const orgPub = await loadOrgKeyForViewer();
+    const orgPubBytes = decode(orgPub);
+
+    const tk = generateContentKey();
+    const ticketId = "t-resp-seal";
+    const encrypted = buildEncryptedResponse(tk, ticketId, [
+      { fieldKey: "f1", value: "sealed value" },
+    ]);
+
+    // Seal the tk under the org public key
+    const sealedWrap = sodium.crypto_box_seal(tk, orgPubBytes);
+
+    sinkMessages = [];
+    const resp = (await dispatchAndWait({
+      type: "decryptIntakeResponse",
+      id: 2020,
+      ticketId,
+      encryptedResponse: encrypted,
+      callerKeyWrap: null,
+      orgSealWrap: { wrappedTk: encode(sealedWrap) },
+    })) as DecryptIntakeResponseResponse;
+
+    expect(resp.ok).toBe(true);
+    const answers = JSON.parse(resp.answersJson) as {
+      fieldKey: string;
+      value: unknown;
+    }[];
+    expect(answers).toHaveLength(1);
+    expect(answers[0]?.value).toBe("sealed value");
+
+    sodium.memzero(tk);
+  });
+
+  it("returns DECRYPT_FAILED for wrong key wrap", async () => {
+    const sodium = requireSodium();
+    const tk = generateContentKey();
+    const ticketId = "t-resp-wrong";
+    const encrypted = buildEncryptedResponse(tk, ticketId, [
+      { fieldKey: "f1", value: "data" },
+    ]);
+
+    // Use a different key for the wrap
+    const wrongKey = generateContentKey();
+    const wrap = eciesEncrypt(wrongKey, decode(volPublicStr) as RistrettoPoint);
+
+    const resp = await dispatchAndWait({
+      type: "decryptIntakeResponse",
+      id: 2030,
+      ticketId,
+      encryptedResponse: encrypted,
+      callerKeyWrap: {
+        ephemeralPoint: encode(wrap.ephemeralPoint),
+        nonce: encode(wrap.nonce),
+        wrappedKey: encode(wrap.ciphertext),
+      },
+      orgSealWrap: null,
+    });
+
+    expect(resp.ok).toBe(false);
+    expect((resp as ErrorResponse).code).toBe("DECRYPT_FAILED");
+
+    sodium.memzero(tk);
+    sodium.memzero(wrongKey);
+  });
+
+  it("returns DECRYPT_FAILED for malformed response blob", async () => {
+    const tk = generateContentKey();
+    const ticketId = "t-resp-malformed";
+    const wrap = eciesEncrypt(tk, decode(volPublicStr) as RistrettoPoint);
+
+    const resp = await dispatchAndWait({
+      type: "decryptIntakeResponse",
+      id: 2040,
+      ticketId,
+      encryptedResponse: encode(new Uint8Array([1, 2, 3, 4])),
+      callerKeyWrap: {
+        ephemeralPoint: encode(wrap.ephemeralPoint),
+        nonce: encode(wrap.nonce),
+        wrappedKey: encode(wrap.ciphertext),
+      },
+      orgSealWrap: null,
+    });
+
+    expect(resp.ok).toBe(false);
+    expect((resp as ErrorResponse).code).toBe("DECRYPT_FAILED");
+
+    requireSodium().memzero(tk);
+  });
+
+  it("returns empty answers for valid ciphertext with invalid JSON", async () => {
+    const tk = generateContentKey();
+    const ticketId = "t-resp-badjson";
+    // Encrypt non-JSON data
+    const plaintext = new TextEncoder().encode("not json at all");
+    const aad = buildContentAad(ticketId, "intake-form-response");
+    const ct = encryptContent(plaintext, tk, aad);
+
+    const wrap = eciesEncrypt(tk, decode(volPublicStr) as RistrettoPoint);
+
+    const resp = (await dispatchAndWait({
+      type: "decryptIntakeResponse",
+      id: 2050,
+      ticketId,
+      encryptedResponse: encode(ct),
+      callerKeyWrap: {
+        ephemeralPoint: encode(wrap.ephemeralPoint),
+        nonce: encode(wrap.nonce),
+        wrappedKey: encode(wrap.ciphertext),
+      },
+      orgSealWrap: null,
+    })) as DecryptIntakeResponseResponse;
+
+    expect(resp.ok).toBe(true);
+    expect(resp.answersJson).toBe("[]");
+
+    requireSodium().memzero(tk);
+  });
+
+  it("returns DECRYPT_FAILED when neither wrap nor seal is provided", async () => {
+    const resp = await dispatchAndWait({
+      type: "decryptIntakeResponse",
+      id: 2060,
+      ticketId: "t-no-key",
+      encryptedResponse: encode(new Uint8Array(100)),
+      callerKeyWrap: null,
+      orgSealWrap: null,
+    });
+
+    expect(resp.ok).toBe(false);
+    expect((resp as ErrorResponse).code).toBe("DECRYPT_FAILED");
+  });
+
+  it("mints backfill wraps after a successful decrypt", async () => {
+    const sodium = requireSodium();
+    const tk = generateContentKey();
+    const ticketId = "t-backfill";
+    const encrypted = buildEncryptedResponse(tk, ticketId, [
+      { fieldKey: "f1", value: "test" },
+    ]);
+
+    const wrap = eciesEncrypt(tk, decode(volPublicStr) as RistrettoPoint);
+
+    // First decrypt to cache the tk
+    const decResp = (await dispatchAndWait({
+      type: "decryptIntakeResponse",
+      id: 2070,
+      ticketId,
+      encryptedResponse: encrypted,
+      callerKeyWrap: {
+        ephemeralPoint: encode(wrap.ephemeralPoint),
+        nonce: encode(wrap.nonce),
+        wrappedKey: encode(wrap.ciphertext),
+      },
+      orgSealWrap: null,
+    })) as DecryptIntakeResponseResponse;
+    expect(decResp.ok).toBe(true);
+
+    // Generate a target volunteer keypair
+    const targetPriv = sodium.crypto_core_ristretto255_scalar_random();
+    const targetPub = sodium.crypto_scalarmult_ristretto255_base(targetPriv);
+
+    sinkMessages = [];
+    const mintResp = (await dispatchAndWait({
+      type: "mintBackfillWraps",
+      id: 2071,
+      ticketId,
+      targets: [{ volunteerId: "vol-target-1", volPublic: encode(targetPub) }],
+    })) as MintBackfillWrapsResponse;
+
+    expect(mintResp.ok).toBe(true);
+    expect(mintResp.wraps).toHaveLength(1);
+    expect(mintResp.wraps[0]?.volunteerId).toBe("vol-target-1");
+
+    // Verify the wrap can be opened with the target private key
+    const wrappedTk = eciesDecrypt(
+      decode(mintResp.wraps[0]!.ephemeralPoint) as RistrettoPoint,
+      decode(mintResp.wraps[0]!.nonce) as Nonce,
+      decode(mintResp.wraps[0]!.wrappedKey),
+      targetPriv as Scalar,
+    );
+
+    // Verify the recovered tk matches (decrypt the same response)
+    const aad = buildContentAad(ticketId, "intake-form-response");
+    const plaintext = decryptContent(
+      decode(encrypted) as Ciphertext,
+      wrappedTk as SymmetricKey,
+      aad,
+    );
+    const json = new TextDecoder().decode(plaintext);
+    expect(JSON.parse(json)).toEqual({
+      answers: [{ fieldKey: "f1", value: "test" }],
+    });
+
+    sodium.memzero(tk);
+    sodium.memzero(targetPriv);
+    sodium.memzero(wrappedTk);
+    sodium.memzero(plaintext);
+  });
+
+  it("returns TK_NOT_CACHED for mintBackfillWraps without a prior decrypt", async () => {
+    const resp = await dispatchAndWait({
+      type: "mintBackfillWraps",
+      id: 2080,
+      ticketId: "t-no-cache",
+      targets: [
+        { volunteerId: "vol-1", volPublic: encode(new Uint8Array(32)) },
+      ],
+    });
+
+    expect(resp.ok).toBe(false);
+    expect((resp as ErrorResponse).code).toBe("TK_NOT_CACHED");
   });
 });

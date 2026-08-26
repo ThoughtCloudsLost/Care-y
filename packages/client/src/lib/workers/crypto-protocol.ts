@@ -369,6 +369,49 @@ export interface MergeCandidate {
   readonly matchKind: "phone" | "email";
 }
 
+// ── Intake response viewer operations ──────────────────────────────
+
+/**
+ * Decrypt an intake form response blob and return parsed answers keyed
+ * by fieldKey. Supports two decrypt paths:
+ *   (a) callerKeyWrap present: ECIES unwrap with volPrivate
+ *   (b) orgSealWrap present: crypto_box_seal_open with orgSecret
+ * The AAD binding uses the same slot as submit: "intake-form-response".
+ * Plaintext is parsed as JSON inside the Worker and returned as a
+ * serialized answer map. The raw plaintext is zeroed immediately.
+ */
+export interface DecryptIntakeResponseRequest {
+  readonly type: "decryptIntakeResponse";
+  readonly id: number;
+  readonly ticketId: string;
+  /** Base64url encrypted response blob (nonce || ciphertext). */
+  readonly encryptedResponse: string;
+  /** ECIES key wrap from ticket_key_wraps, when caller holds one. */
+  readonly callerKeyWrap: {
+    readonly ephemeralPoint: string;
+    readonly nonce: string;
+    readonly wrappedKey: string;
+  } | null;
+  /** Org-sealed wrap (crypto_box_seal of tk), when unconverted. */
+  readonly orgSealWrap: {
+    readonly wrappedTk: string;
+  } | null;
+}
+
+/**
+ * Mint ECIES wraps for missing principals using a tk the Worker already
+ * recovered from a prior decryptIntakeResponse call (cached in tkCache).
+ */
+export interface MintBackfillWrapsRequest {
+  readonly type: "mintBackfillWraps";
+  readonly id: number;
+  readonly ticketId: string;
+  readonly targets: readonly {
+    readonly volunteerId: string;
+    readonly volPublic: string;
+  }[];
+}
+
 // ── SharedWorker lifecycle requests ─────────────────────────────────
 
 /**
@@ -443,6 +486,8 @@ export type WorkerRequest =
   | UnwrapTkRequest
   | UnwrapIntakeTkRequest
   | DecryptPortalReplyRequest
+  | DecryptIntakeResponseRequest
+  | MintBackfillWrapsRequest
   | WrapWithVolPublicRequest
   | SealSelfBlobRequest
   | OpenSelfBlobRequest
@@ -676,6 +721,29 @@ export interface DetectMergeCandidatesResponse extends SuccessBase {
   readonly candidates: readonly MergeCandidate[];
 }
 
+/** A single answer in the decrypted response, keyed by fieldKey. */
+export interface DecryptedIntakeAnswer {
+  readonly fieldKey: string;
+  readonly value: unknown;
+  readonly fieldType?: string;
+}
+
+export interface DecryptIntakeResponseResponse extends SuccessBase {
+  readonly type: "decryptIntakeResponse";
+  /** JSON-serialized array of DecryptedIntakeAnswer objects. */
+  readonly answersJson: string;
+}
+
+export interface MintBackfillWrapsResponse extends SuccessBase {
+  readonly type: "mintBackfillWraps";
+  readonly wraps: readonly {
+    readonly volunteerId: string;
+    readonly ephemeralPoint: string;
+    readonly nonce: string;
+    readonly wrappedKey: string;
+  }[];
+}
+
 // ── SharedWorker lifecycle responses ────────────────────────────────
 
 export type SharedWorkerState = "READY" | "KEYED";
@@ -708,6 +776,8 @@ export type WorkerSuccessResponse =
   | UnwrapTkResponse
   | UnwrapIntakeTkResponse
   | DecryptPortalReplyResponse
+  | DecryptIntakeResponseResponse
+  | MintBackfillWrapsResponse
   | DetectMergeCandidatesResponse
   | WrapWithVolPublicResponse
   | SealSelfBlobResponse

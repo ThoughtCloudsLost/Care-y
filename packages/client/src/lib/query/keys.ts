@@ -223,6 +223,10 @@ export const intakeFormKeys = {
   list: () => [...intakeFormKeys.all, "list"] as const,
   detail: (formId: string) =>
     [...intakeFormKeys.all, "detail", formId] as const,
+  responses: (formId: string) =>
+    [...intakeFormKeys.all, "responses", formId] as const,
+  responsePage: (formId: string, cursor: string | null) =>
+    [...intakeFormKeys.responses(formId), "page", cursor] as const,
 };
 
 export const portalKeys = {

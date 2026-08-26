@@ -69,6 +69,8 @@ import type {
   UnwrapTkRequest,
   UnwrapIntakeTkRequest,
   DecryptPortalReplyRequest,
+  DecryptIntakeResponseRequest,
+  MintBackfillWrapsRequest,
   DecryptAndRewrapResponse,
   DecryptPortalReplyResponse,
   WrapWithVolPublicRequest,
@@ -1646,6 +1648,208 @@ function handleDetectMergeCandidates(
   sink(msg);
 }
 
+// ── Intake response viewer handlers ───────────────────────────────
+
+/**
+ * AAD slot for the structured form response blob. Must match the slot
+ * used by submitIntake in intake-crypto.ts on the public form page.
+ */
+const INTAKE_RESPONSE_SLOT = "intake-form-response";
+
+function handleDecryptIntakeResponse(
+  req: DecryptIntakeResponseRequest,
+  sink: Sink,
+): void {
+  // Requires either keyed (for ECIES path) or org-keyed (for seal path).
+  // Check org-keyed first since both paths may need it.
+  const hasCallerWrap = req.callerKeyWrap !== null;
+  const hasOrgSeal = req.orgSealWrap !== null;
+
+  if (!hasCallerWrap && !hasOrgSeal) {
+    postError(
+      sink,
+      req.id,
+      "decryptIntakeResponse",
+      "No key wrap or org seal provided",
+      "DECRYPT_FAILED",
+    );
+    return;
+  }
+
+  const sodium = requireSodium();
+  let tk: Uint8Array | null = null;
+
+  // Try cached tk first
+  const cached = tkCache.get(req.ticketId);
+  if (cached) {
+    tk = cached;
+  }
+
+  // Path (b): org-seal unseal
+  if (!tk && req.orgSealWrap !== null) {
+    if (!requireOrgKeyed(sink, req.id, "decryptIntakeResponse")) return;
+    const pk = assertPresent(orgPublicKey, "orgPublicKey");
+    const sk = assertPresent(orgSecret, "orgSecret");
+    try {
+      const sealedWrap = decode(req.orgSealWrap.wrappedTk);
+      tk = sodium.crypto_box_seal_open(sealedWrap, pk, sk);
+      tkCache.set(req.ticketId, tk);
+    } catch (err: unknown) {
+      postError(
+        sink,
+        req.id,
+        "decryptIntakeResponse",
+        err instanceof Error ? err.message : String(err),
+        "DECRYPT_FAILED",
+      );
+      return;
+    }
+  }
+
+  // Path (a): ECIES unwrap with volPrivate
+  if (!tk && req.callerKeyWrap !== null) {
+    if (!requireKeyed(sink, req.id, "decryptIntakeResponse")) return;
+    const vp = volPrivate;
+    if (!vp) {
+      postError(
+        sink,
+        req.id,
+        "decryptIntakeResponse",
+        "volPrivate not available",
+        "INVALID_STATE",
+      );
+      return;
+    }
+    try {
+      const ephemeralPoint = decode(req.callerKeyWrap.ephemeralPoint);
+      const nonce = decode(req.callerKeyWrap.nonce);
+      const wrappedKey = decode(req.callerKeyWrap.wrappedKey);
+      tk = eciesDecrypt(
+        ephemeralPoint as RistrettoPoint,
+        nonce as Nonce,
+        wrappedKey,
+        vp,
+      );
+      tkCache.set(req.ticketId, tk);
+    } catch (err: unknown) {
+      postError(
+        sink,
+        req.id,
+        "decryptIntakeResponse",
+        err instanceof Error ? err.message : String(err),
+        "DECRYPT_FAILED",
+      );
+      return;
+    }
+  }
+
+  if (!tk) {
+    postError(
+      sink,
+      req.id,
+      "decryptIntakeResponse",
+      "Could not recover ticket key",
+      "DECRYPT_FAILED",
+    );
+    return;
+  }
+
+  // Decrypt the response blob with the same AAD binding as submitIntake
+  try {
+    const ciphertextBuf = decode(req.encryptedResponse);
+    const aad = buildContentAad(req.ticketId, INTAKE_RESPONSE_SLOT);
+    const plaintext = decryptContent(
+      ciphertextBuf as Ciphertext,
+      tk as SymmetricKey,
+      aad,
+    );
+
+    try {
+      const responseJson = textDecoder.decode(plaintext);
+
+      // Parse the blob to extract the answers array and serialize it
+      // for the main thread. Invalid JSON or missing answers field
+      // yields an empty array (graceful degradation, not a crash).
+      let answersJson: string;
+      try {
+        const parsed = JSON.parse(responseJson) as { answers?: unknown[] };
+        if (Array.isArray(parsed.answers)) {
+          answersJson = JSON.stringify(parsed.answers);
+        } else {
+          answersJson = "[]";
+        }
+      } catch {
+        answersJson = "[]";
+      }
+
+      const msg: WorkerResponse = {
+        id: req.id,
+        ok: true,
+        type: "decryptIntakeResponse",
+        answersJson,
+      };
+      sink(msg);
+    } finally {
+      sodium.memzero(plaintext);
+    }
+  } catch (err: unknown) {
+    postError(
+      sink,
+      req.id,
+      "decryptIntakeResponse",
+      err instanceof Error ? err.message : String(err),
+      "DECRYPT_FAILED",
+    );
+  }
+}
+
+function handleMintBackfillWraps(
+  req: MintBackfillWrapsRequest,
+  sink: Sink,
+): void {
+  // The caller must have decrypted the response first (tk is cached).
+  const tk = tkCache.get(req.ticketId);
+  if (!tk) {
+    postError(
+      sink,
+      req.id,
+      "mintBackfillWraps",
+      "tk not cached for this ticket",
+      "TK_NOT_CACHED",
+    );
+    return;
+  }
+
+  try {
+    const wraps = req.targets.map((t) => {
+      const volPub = decode(t.volPublic);
+      const wrap = eciesEncrypt(tk, volPub as RistrettoPoint);
+      return {
+        volunteerId: t.volunteerId,
+        ephemeralPoint: encode(wrap.ephemeralPoint),
+        nonce: encode(wrap.nonce),
+        wrappedKey: encode(wrap.ciphertext),
+      };
+    });
+
+    const msg: WorkerResponse = {
+      id: req.id,
+      ok: true,
+      type: "mintBackfillWraps",
+      wraps,
+    };
+    sink(msg);
+  } catch (err: unknown) {
+    postError(
+      sink,
+      req.id,
+      "mintBackfillWraps",
+      err instanceof Error ? err.message : String(err),
+      "ENCRYPT_FAILED",
+    );
+  }
+}
+
 // ── Dispatcher factory ──────────────────────────────────────────────
 
 export function createDispatcher(
@@ -1745,6 +1949,12 @@ export function createDispatcher(
           break;
         case "phoneMatchHash":
           handlePhoneMatchHash(req, sink);
+          break;
+        case "decryptIntakeResponse":
+          handleDecryptIntakeResponse(req, sink);
+          break;
+        case "mintBackfillWraps":
+          handleMintBackfillWraps(req, sink);
           break;
         case "detectMergeCandidates":
           handleDetectMergeCandidates(req, sink);
