@@ -6,17 +6,17 @@ import { getLocale, experimentalStaticLocale } from '../runtime.js';
 /** @typedef {{}} Demo_Role_Manager_LabelInputs */
 
 const en_demo_role_manager_label = /** @type {(inputs: Demo_Role_Manager_LabelInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Manager user`)
+	return /** @type {LocalizedString} */ (`Manager`)
 };
 
 const es_demo_role_manager_label = /** @type {(inputs: Demo_Role_Manager_LabelInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Usuario responsable`)
+	return /** @type {LocalizedString} */ (`Responsable`)
 };
 
 /**
 * | output |
 * | --- |
-* | "Manager user" |
+* | "Manager" |
 *
 * @param {Demo_Role_Manager_LabelInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

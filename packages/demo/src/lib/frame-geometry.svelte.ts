@@ -639,6 +639,14 @@ export interface FrameGeometry {
    */
   reanchorBand(): void;
   /**
+   * Snapshot against a stated band top rather than the live one, for
+   * geometry that was authored under a chrome height that is no longer
+   * current. Pair it with rescaleForBand to map that geometry onto the
+   * chrome actually in place; anchoring alone would claim coordinates
+   * from one band belong to another.
+   */
+  reanchorBandAt(chromeH: number): void;
+  /**
    * Rescale footprint, top, and shrink memory from the band anchor to
    * the current band, then clamp on screen. No-op when the band matches
    * the anchor. Never moves the anchor: repeated calls stay exact and
@@ -719,7 +727,10 @@ export function createFrameGeometry(
   }
 
   function reanchorBand(): void {
-    const chromeH = getChromeHeight();
+    reanchorBandAt(getChromeHeight());
+  }
+
+  function reanchorBandAt(chromeH: number): void {
     anchor = {
       bandTop: chromeH,
       bandH:
@@ -845,6 +856,7 @@ export function createFrameGeometry(
     retargetShrunkTo,
     settleShrinkAfterResize,
     reanchorBand,
+    reanchorBandAt,
     rescaleForBand,
   };
 }

@@ -19,6 +19,7 @@
   import {
     BEZEL,
     deriveBezelRadius,
+    deriveZoomViewport,
     type FrameGeometry,
   } from "./frame-geometry.svelte.js";
   import { isRecordMode, forwardRecordParam } from "./record-mode.js";
@@ -29,6 +30,18 @@
     onbridgeready: (bridge: DemoBridge) => void;
     /** Whether a drag or resize gesture is active (shows pointer shield). */
     gestureActive?: boolean;
+    /** Whether fullscreen mode is active (hides bezel, zero radius, window viewport). */
+    fullscreen?: boolean;
+    /** Window width for fullscreen viewport derivation. */
+    winW?: number;
+    /** Window height for fullscreen viewport derivation. */
+    winH?: number;
+    /** When true, the device chrome (bezel, shadow, background) fades to transparent. */
+    chromeFaded?: boolean;
+    /** True while a spring animation drives the frame size. The iframe
+     *  viewport still follows the frame, just on a coarser cadence
+     *  (see LAYOUT_STEP_FRAMES). */
+    animating?: boolean;
   }
 
   let {
@@ -36,14 +49,98 @@
     geo,
     onbridgeready,
     gestureActive = false,
+    fullscreen = false,
+    winW = 0,
+    winH = 0,
+    chromeFaded = false,
+    animating = false,
   }: Props = $props();
 
   let iframeEl: HTMLIFrameElement | undefined = $state();
 
   const phoneUrl = forwardRecordParam(`${import.meta.env.BASE_URL}phone.html`);
 
-  /** Show the status bar only when viewport is phone-shaped (< 768). */
-  const showStatusBar = $derived(geo.viewport.w < 768);
+  // In fullscreen the viewport derives from the window dimensions, not geo.
+  const fsViewport = $derived(
+    fullscreen ? deriveZoomViewport(winW, winH) : null,
+  );
+  const effectiveZoom = $derived(
+    fsViewport !== null ? fsViewport.zoom : geo.zoom,
+  );
+  const effectiveVp = $derived(
+    fsViewport !== null ? fsViewport.viewport : geo.viewport,
+  );
+
+  /**
+   * Animation frames between iframe viewport commits.
+   *
+   * The app inside must re-lay out while the frame grows and shrinks,
+   * not once at settle: watching the layout cross its breakpoints under
+   * motion is the point of the resize demo. Doing it on every frame of
+   * a spring means a full app layout roughly sixty times a second,
+   * which is what made the motion choppy.
+   *
+   * So the viewport is committed every third frame (~50ms, about six
+   * layouts across a 300ms spring) and the iframe stretches to fill the
+   * moving box in between. The stretch is bounded by three frames of
+   * travel, and it is largest during the fast opening of the spring
+   * where the eye tracks detail least. Raise this to trade fidelity for
+   * smoothness, lower it for the reverse; 1 is per-frame layout.
+   */
+  const LAYOUT_STEP_FRAMES = 3;
+
+  /**
+   * Viewport committed to the iframe during a spring animation, or null
+   * when idle. Idle means the iframe tracks the live viewport exactly,
+   * so a settled frame is never stretched.
+   */
+  let steppedVp: { w: number; h: number } | null = $state(null);
+
+  // Plain locals, deliberately not $state: the effect below writes
+  // steppedVp, so anything it reads reactively would retrigger it.
+  let framesSinceStep = 0;
+  let hasStepped = false;
+
+  $effect.pre(() => {
+    const vp = effectiveVp;
+    if (!animating) {
+      steppedVp = null;
+      framesSinceStep = 0;
+      hasStepped = false;
+      return;
+    }
+    framesSinceStep += 1;
+    if (!hasStepped || framesSinceStep >= LAYOUT_STEP_FRAMES) {
+      framesSinceStep = 0;
+      hasStepped = true;
+      steppedVp = { w: vp.w, h: vp.h };
+    }
+  });
+
+  /** Viewport the iframe lays out against (stepped mid-animation). */
+  const layoutVp = $derived(steppedVp ?? effectiveVp);
+
+  /** Transform between commits: stretch the committed viewport to the
+   *  live box. Uniform scale would leave a gap on one axis. */
+  const animScaleX = $derived.by(() =>
+    steppedVp !== null ? geo.footprintW / steppedVp.w : null,
+  );
+  const animScaleY = $derived.by(() =>
+    steppedVp !== null ? geo.footprintH / steppedVp.h : null,
+  );
+
+  /**
+   * Show the status bar only when the viewport is phone-shaped (< 768)
+   * AND the frame is still pretending to be a device.
+   *
+   * Fullscreen drops the bezel and fills the window, so there is no
+   * device left to dress. On a real phone the host already supplies a
+   * status bar and home indicator, and drawing our own puts two of
+   * each on screen. On a narrow desktop window there is no device to
+   * portray either. Wide fullscreen was already covered by the 768
+   * test; this only changes the narrow case.
+   */
+  const showStatusBar = $derived(!fullscreen && layoutVp.w < 768);
 
   /** Real system time for the status bar clock, iOS style (no AM/PM). */
   function formatClock(d: Date): string {
@@ -116,51 +213,69 @@
     iframeEl?.contentWindow?.location.reload();
   }
 
-  const bezelRadius = $derived(deriveBezelRadius(geo.footprintW));
+  const bezelRadius = $derived(
+    fullscreen ? 0 : deriveBezelRadius(geo.footprintW),
+  );
 
   const screenRadius = $derived(Math.max(0, bezelRadius - BEZEL));
+
+  // Fullscreen sizes: device is 100%, screen fills the device with no bezel.
+  const deviceW = $derived(
+    fullscreen ? "100%" : `${String(geo.footprintW + BEZEL * 2)}px`,
+  );
+  const deviceH = $derived(
+    fullscreen ? "100%" : `${String(geo.footprintH + BEZEL * 2)}px`,
+  );
+  const screenW = $derived(fullscreen ? "100%" : `${String(geo.footprintW)}px`);
+  const screenH = $derived(fullscreen ? "100%" : `${String(geo.footprintH)}px`);
 </script>
 
 <div
   class="device"
-  style:width="{geo.footprintW + BEZEL * 2}px"
-  style:height="{geo.footprintH + BEZEL * 2}px"
+  class:device--fs={fullscreen}
+  class:device--chrome-faded={chromeFaded}
+  style:width={deviceW}
+  style:height={deviceH}
   style:border-radius="{bezelRadius}px"
 >
-  <!-- Bezel repaint layer: overflow clipping can bleed on composited
-       layers; the bezel border must always win visually. -->
-  <div
-    class="bezel-overlay"
-    style:border-radius="{bezelRadius}px"
-    aria-hidden="true"
-  ></div>
+  <!-- Bezel repaint layer: hidden in fullscreen (no bezel to repaint),
+       also hidden when chrome is faded (enter animation completed). -->
+  {#if !fullscreen && !chromeFaded}
+    <div
+      class="bezel-overlay"
+      style:border-radius="{bezelRadius}px"
+      aria-hidden="true"
+    ></div>
+  {/if}
 
   <div
     class="screen"
     class:dark
     class:light={!dark}
-    style:width="{geo.footprintW}px"
-    style:height="{geo.footprintH}px"
+    style:width={screenW}
+    style:height={screenH}
     style:border-radius="{screenRadius}px"
   >
     <iframe
       bind:this={iframeEl}
       src={phoneUrl}
       title={m.demo_phone_frame_title()}
-      width={geo.viewport.w}
-      height={geo.viewport.h}
+      width={layoutVp.w}
+      height={layoutVp.h}
       onload={handleLoad}
       class="phone-iframe"
-      style:width="{geo.viewport.w}px"
-      style:height="{geo.viewport.h}px"
-      style:transform="scale({geo.zoom})"
+      style:width="{layoutVp.w}px"
+      style:height="{layoutVp.h}px"
+      style:transform={animScaleX !== null && animScaleY !== null
+        ? `scale(${String(animScaleX)}, ${String(animScaleY)})`
+        : `scale(${String(effectiveZoom)})`}
       style:transform-origin="top left"
     ></iframe>
 
     <!-- Status bar: visible only at phone-shaped viewports (< 768px).
-         Fades out during resize transitions. PhoneApp keeps the
-         59px safe-area inset inside the iframe under the same condition,
-         so app content clears this overlay exactly when it is visible. -->
+         Fades out during resize transitions. PhoneApp keeps the 59px
+         safe-area inset inside the iframe under the same condition, so
+         app content clears this overlay exactly when it is visible. -->
     <div
       class="status-bar"
       class:status-bar-hidden={!showStatusBar}
@@ -241,6 +356,29 @@
     overflow: clip;
     box-shadow: 0 0 0 2px #333;
     position: relative;
+    /* Chrome fade: these properties only change during fullscreen
+       enter/exit sequences (padding, shadow, background). During
+       normal resize they are constant, so the transition is inert. */
+    transition:
+      padding 180ms ease,
+      box-shadow 180ms ease,
+      background 180ms ease;
+  }
+
+  /* Fullscreen: no bezel, no padding, no shadow. */
+  .device--fs {
+    padding: 0;
+    box-shadow: none;
+    background: transparent;
+  }
+
+  /* Chrome fade: the device shell dissolves to transparent while the
+     content stays fully visible. The base .device transition handles
+     the interpolation in both directions. */
+  .device--chrome-faded {
+    padding: 0;
+    box-shadow: none;
+    background: transparent;
   }
 
   .bezel-overlay {
@@ -351,6 +489,7 @@
   }
 
   @media (prefers-reduced-motion: reduce) {
+    .device,
     .status-bar,
     .home-indicator {
       transition: none;

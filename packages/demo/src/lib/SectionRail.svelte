@@ -3,6 +3,7 @@
   import { resolveStoryMessage, deriveSubState } from "./story-messages.js";
   import type { Section, SectionId } from "./scroll-sections.js";
   import type { DemoTopic } from "./bridge.js";
+  import { ENTRANCE_DUR_MS, entranceDelayMs } from "./flow-entrance.js";
 
   interface Props {
     section: Section;
@@ -12,6 +13,10 @@
     /** False on the entry page, whose subs preview the handbook rather
      *  than naming real routes. There it renders as a plain list. */
     interactive: boolean;
+    /** Play the fullscreen-exit entrance: item N fades in on the same
+     *  clock as subsection N in the prose (group N + 1; the page header
+     *  owns the zeroth group). */
+    entrance?: boolean;
     onSubClick: (sectionId: SectionId, subSlug: string) => void;
   }
 
@@ -21,6 +26,7 @@
     locale,
     seenTopics,
     interactive,
+    entrance = false,
     onSubClick,
   }: Props = $props();
 
@@ -50,7 +56,15 @@
       )}
       {@const isActive = state.isActive}
       {@const isSeen = state.isSeen}
-      <li>
+      <li
+        class:rail-enter={entrance}
+        style:animation-duration={entrance
+          ? `${String(ENTRANCE_DUR_MS)}ms`
+          : undefined}
+        style:animation-delay={entrance
+          ? `${String(entranceDelayMs(i + 1))}ms`
+          : undefined}
+      >
         {#if interactive}
           <button
             class="rail-item"
@@ -182,6 +196,32 @@
   @media (prefers-reduced-motion: reduce) {
     .rail-item {
       transition: none;
+    }
+  }
+
+  /* Fullscreen-exit entrance. Duration and delay are set inline from
+     the shared flow-entrance constants so item N lands with subsection
+     N in the prose on one clock. `both` keeps the item invisible
+     through its delay; once the animation has run the host drops the
+     class with no visible change. */
+  .rail-enter {
+    animation-name: rail-enter;
+    animation-timing-function: ease-out;
+    animation-fill-mode: both;
+  }
+
+  @keyframes rail-enter {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .rail-enter {
+      animation: none;
     }
   }
 </style>

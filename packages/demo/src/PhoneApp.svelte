@@ -30,6 +30,7 @@
   import { _resetSessionShown } from "$lib/composables/ticket-detail/create-exposure-hint.svelte.js";
   import AppShell from "$lib/shell/AppShell.svelte";
   import DemoSplash from "$demo/DemoSplash.svelte";
+  import { BOOT_TIP_DELAY_MS, BOOT_TIP_FADE_MS } from "$demo/boot-tip.js";
   import LoginMount from "$demo/LoginMount.svelte";
   import RouteMount from "$demo/engine/RouteMount.svelte";
   import { createDemoRouter, featureForPathname } from "$demo/router.svelte.js";
@@ -295,6 +296,13 @@
   // (toggleColorScheme) write through it, so the settings page and the
   // handbook toggle can never disagree.
   const dark = $derived(themeStore.resolvedScheme === "dark");
+
+  /**
+   * True while the frame fills the window, pushed in over the bridge.
+   * DemoFrame stops drawing its simulated status bar and home indicator
+   * then, so the shell insets that clear them come off too.
+   */
+  let frameFullscreen = $state(false);
 
   // -----------------------------------------------------------------------
   // Pathname for RouteMount (derived from router state)
@@ -988,6 +996,10 @@
 
     setDark(value: boolean): void {
       themeStore.setColorScheme(value ? "dark" : "light");
+    },
+
+    setFullscreen(value: boolean): void {
+      frameFullscreen = value;
     },
 
     setRole(role: RoleIdValue): void {
@@ -1737,7 +1749,7 @@
   );
 </script>
 
-<div class="phone-app">
+<div class="phone-app" class:phone-app--bare={frameFullscreen}>
   <QueryClientProvider client={queryClient}>
     <App theme="ios" {dark} class="app-shell">
       {#if router.feature === "login"}
@@ -1774,7 +1786,14 @@
            UNDER it and is invisible during boot). The reveal is
            CSS-delayed 600ms so a fast boot never flashes it;
            visitors who wait learn why they wait. -->
-      <div class="boot-status" role="status">
+      <!-- Reveal timing comes from boot-tip.ts, not from the stylesheet:
+           the outer page's entry splash is paced against this tip, and
+           one source keeps the two from drifting apart. -->
+      <div
+        class="boot-status"
+        role="status"
+        style="--boot-tip-delay: {BOOT_TIP_DELAY_MS}ms; --boot-tip-fade: {BOOT_TIP_FADE_MS}ms"
+      >
         <span class="boot-status-spinner" aria-hidden="true"></span>
         <span>{m.demo_preparing()}</span>
       </div>
@@ -1839,7 +1858,8 @@
     line-height: 1.4;
     color: #666;
     opacity: 0;
-    animation: fast-forward-reveal 400ms ease 600ms forwards;
+    animation: fast-forward-reveal var(--boot-tip-fade) ease
+      var(--boot-tip-delay) forwards;
   }
 
   :global(.dark) .boot-status {
@@ -1853,7 +1873,8 @@
     border-top-color: transparent;
     border-radius: 50%;
     animation:
-      fast-forward-reveal 400ms ease 600ms forwards,
+      fast-forward-reveal var(--boot-tip-fade) ease var(--boot-tip-delay)
+        forwards,
       boot-status-spin 0.9s linear infinite;
     opacity: 0;
   }
@@ -1866,7 +1887,8 @@
 
   @media (prefers-reduced-motion: reduce) {
     .boot-status-spinner {
-      animation: fast-forward-reveal 400ms ease 600ms forwards;
+      animation: fast-forward-reveal var(--boot-tip-fade) ease
+        var(--boot-tip-delay) forwards;
     }
   }
 
@@ -1886,9 +1908,15 @@
   /* Simulate device safe areas at phone-sized viewports. DemoFrame
      renders a status bar (top) and home indicator (bottom) only below
      768px; these insets match that threshold. At tablet/desktop widths
-     the overlays are hidden and insets reset to 0 (Konsta env() default). */
+     the overlays are hidden and insets reset to 0 (Konsta env() default).
+
+     Skipped in fullscreen: the frame fills the window and draws neither
+     overlay, so the insets would clear nothing. On a real phone the
+     host supplies the status bar and home indicator, and keeps the page
+     out of both regions on its own (no viewport-fit=cover here, so the
+     viewport never extends under them). */
   @media (max-width: 767px) {
-    .phone-app :global(.app-shell) {
+    .phone-app:not(.phone-app--bare) :global(.app-shell) {
       --k-safe-area-top: 59px;
       --k-safe-area-bottom: 34px;
     }

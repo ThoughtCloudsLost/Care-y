@@ -50,6 +50,7 @@ describe("DemoBridge interface", () => {
     const stub: DemoBridge = {
       setLocation: () => undefined,
       setDark: () => undefined,
+      setFullscreen: () => undefined,
       setRole: () => undefined,
       setLocale: () => undefined,
       subscribe: () => () => undefined,
@@ -62,11 +63,25 @@ describe("DemoBridge interface", () => {
     const stub: DemoBridge = {
       setLocation: () => undefined,
       setDark: () => undefined,
+      setFullscreen: () => undefined,
       setRole: () => undefined,
       setLocale: () => undefined,
       subscribe: () => () => undefined,
       subscribeFlow: () => () => undefined,
     };
     expect(typeof stub.setLocale).toBe("function");
+  });
+
+  it("requires setFullscreen in the interface shape", () => {
+    const stub: DemoBridge = {
+      setLocation: () => undefined,
+      setDark: () => undefined,
+      setFullscreen: () => undefined,
+      setRole: () => undefined,
+      setLocale: () => undefined,
+      subscribe: () => () => undefined,
+      subscribeFlow: () => () => undefined,
+    };
+    expect(typeof stub.setFullscreen).toBe("function");
   });
 });

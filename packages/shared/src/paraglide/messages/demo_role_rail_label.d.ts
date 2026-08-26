@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "User switcher" |
+* | "Role switcher" |
 *
 * @param {Demo_Role_Rail_LabelInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

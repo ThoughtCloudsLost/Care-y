@@ -19,6 +19,7 @@
   import SectionStrip from "$demo/SectionStrip.svelte";
   import SectionRail from "$demo/SectionRail.svelte";
   import DemoFrame from "$demo/DemoFrame.svelte";
+  import HandbookDrawer from "$demo/HandbookDrawer.svelte";
   import PeekStill from "$demo/PeekStill.svelte";
   import { isRecordMode } from "$demo/record-mode.js";
   import { entryAutoDismisses } from "$demo/entry-visibility.js";
@@ -57,6 +58,21 @@
     WIDE_BREAKPOINT,
   } from "$demo/frame-geometry.svelte.js";
   import {
+    createFullscreenController,
+    isFullscreenPressure,
+    defaultPillPosition,
+  } from "$demo/fullscreen.svelte.js";
+  import type { SavedGeometry } from "$demo/peek-controller.svelte.js";
+  import { chromeFade } from "$demo/chrome-fade.js";
+  import { entranceTotalMs } from "$demo/flow-entrance.js";
+  import {
+    shouldPlayIntroSplash,
+    SPLASH_HOLD_MS,
+    SPLASH_CEILING_MS,
+    SPLASH_SPRING,
+    type FrameSpringOptions,
+  } from "$demo/splash-intro.js";
+  import {
     TOP_BAR_HEIGHT,
     setTopChromeHeight,
     topChromeHeight,
@@ -67,7 +83,10 @@
     toggleLinked,
     resetLinked,
   } from "$demo/link-state.svelte.js";
-  import { createFlowBandStore } from "$demo/flow-band.svelte.js";
+  import {
+    createFlowBandStore,
+    BAND_MIN_HOST_W,
+  } from "$demo/flow-band.svelte.js";
   import { createDemoMode } from "$demo/demo-mode.svelte.js";
   import {
     initColumnSlot,
@@ -111,6 +130,13 @@
     bridge?.setDark(dark);
   });
 
+  // Same for fullscreen: the phone drops the shell insets that clear
+  // DemoFrame's simulated status bar and home indicator, since neither
+  // is drawn once the frame fills the window.
+  $effect(() => {
+    bridge?.setFullscreen(fsActive);
+  });
+
   // -----------------------------------------------------------------------
   // Data flow band + top chrome height
   //
@@ -125,6 +151,12 @@
 
   function handleToggleFlowBand(): void {
     flowBand.toggleOpen();
+    // Fullscreen draws the flow inside the handbook drawer, so opening
+    // it from a bar the drawer is not behind has to bring the drawer out
+    // too, or the toggle would light up with nothing to show for it.
+    if (flowBand.open && fsActive && !fsCtrl.drawerOpen) {
+      fsCtrl.openDrawer();
+    }
   }
 
   // Chrome height is the bar plus whatever docks under it. The band and
@@ -149,6 +181,20 @@
     bandFlowHeight = px;
   }
 
+  /**
+   * What the drawer's copies of the flow report instead.
+   *
+   * They occupy the drawer, not the page, so they have no business
+   * moving the page's chrome height. Reporting zero from them would be
+   * worse than reporting nothing: the page's own band is unmounted while
+   * fullscreen and leaves its last measurement behind, so a zero here
+   * would swing the chrome mid-fullscreen and rescale the frame against
+   * a band nobody can see.
+   */
+  function ignoreFlowHeight(_px: number): void {
+    // Intentionally empty.
+  }
+
   // -----------------------------------------------------------------------
   // Frame geometry (floating window state)
   // -----------------------------------------------------------------------
@@ -160,6 +206,25 @@
   // -----------------------------------------------------------------------
 
   const peekCtrl = createPeekController(geo, () => topChromeHeight());
+
+  // -----------------------------------------------------------------------
+  // Fullscreen controller
+  // -----------------------------------------------------------------------
+
+  const fsCtrl = createFullscreenController(
+    geo,
+    () => peekCtrl.phase === "idle",
+    () => ({ w: windowW, h: windowH }),
+  );
+
+  const fsActive: boolean = $derived(fsCtrl.active);
+
+  // Fixed pill size estimate (px): exit + drawer toggle + role badge,
+  // 44px buttons + 4px padding x2 + 2px border x2 = 52px tall. Clamping
+  // uses this estimate rather than measuring the DOM; the default dock
+  // is top-left, so only the far-right clamp edge feels any error.
+  const pillW = 220;
+  const pillH = 52;
 
   /** Still captured from the clip's current frame at peek fire time. */
   let capturedStill: CapturedStill | null = $state(null);
@@ -220,7 +285,7 @@
   /** Frame box expanded upward to cover the floating toolbar so the
    *  flow hole clears the bar + gap above the frame. No horizontal
    *  expansion: the toolbar spans the frame width, not beyond it.
-   *  In non-explore mode (read) or when chrome is hidden, falls back to
+   *  In non-simulate mode (read) or when chrome is hidden, falls back to
    *  the bare rect. */
   const chromeFrameRect = $derived.by(() => {
     if (!showDesktopChrome) return frameRect;
@@ -280,6 +345,12 @@
     if (e.button !== 0) return;
     if (!(e.currentTarget instanceof HTMLElement)) return;
     e.currentTarget.setPointerCapture(e.pointerId);
+    gestureStartSnapshot = {
+      footprintW: geo.footprintW,
+      footprintH: geo.footprintH,
+      top: geo.top,
+      left: geo.left,
+    };
     gesture = {
       pointerId: e.pointerId,
       startX: e.clientX,
@@ -300,6 +371,16 @@
   let lastPointerX = 0;
   let lastPointerY = 0;
 
+  // Snapshot of the frame geometry at the start of a resize gesture,
+  // used as the saved snapshot if the resize crosses the fullscreen
+  // pressure threshold.
+  let gestureStartSnapshot: {
+    footprintW: number;
+    footprintH: number;
+    top: number;
+    left: number;
+  } | null = null;
+
   function applyGestureFrame(): void {
     gestureRaf = 0;
     if (gesture === null) return;
@@ -307,6 +388,8 @@
     const dy = lastPointerY - gesture.startY;
 
     if (gesture.mode === "drag") {
+      // Drag-mode gestures never evaluate the fullscreen predicate
+      // (it is position-independent by design).
       geo.setPosition(gesture.startTop + dy, gesture.startLeft + dx);
       return;
     }
@@ -330,6 +413,32 @@
 
     geo.setFootprint(newW, newH);
     geo.setPosition(newTop, newLeft);
+
+    // Live-drag fullscreen evaluation: check if the new outer box
+    // exerts fullscreen pressure. Crossing in enters fullscreen
+    // mid-gesture; crossing out exits into the live resize.
+    const outerW = geo.outerW;
+    const outerH = geo.outerH;
+    const chrome = topChromeHeight();
+    const pressured = isFullscreenPressure(
+      outerW,
+      outerH,
+      windowW,
+      windowH,
+      chrome,
+    );
+
+    if (pressured && !fsActive) {
+      const snap = gestureStartSnapshot ?? {
+        footprintW: gesture.startW,
+        footprintH: gesture.startH,
+        top: gesture.startTop,
+        left: gesture.startLeft,
+      };
+      fsCtrl.enter(true, snap);
+    } else if (!pressured && fsActive && gestureActive) {
+      fsCtrl.exitIntoResize();
+    }
   }
 
   function onPointerMove(e: PointerEvent): void {
@@ -351,6 +460,23 @@
     lastPointerX = e.clientX;
     lastPointerY = e.clientY;
     applyGestureFrame();
+
+    if (fsActive) {
+      // Ended in fullscreen: skip settle/reanchor. Write the saved
+      // snapshot back into geo so it holds restorable geometry, then
+      // reanchor to the saved basis.
+      const saved = fsCtrl.saved;
+      if (saved !== null) {
+        geo.setFootprint(saved.footprintW, saved.footprintH);
+        geo.setPosition(saved.top, saved.left);
+      }
+      geo.reanchorBand();
+      gesture = null;
+      gestureStartSnapshot = null;
+      gestureActive = false;
+      return;
+    }
+
     // Settle the shrink state now that the footprint is final. Evaluated
     // on release rather than during the move: a drag sweeps back and
     // forth across the threshold, and reacting live would flip the
@@ -362,6 +488,7 @@
     // band-proportional rescale.
     geo.reanchorBand();
     gesture = null;
+    gestureStartSnapshot = null;
     gestureActive = false;
   }
 
@@ -369,9 +496,26 @@
   // Preset animation
   // -----------------------------------------------------------------------
 
-  const fpW = new Spring(geo.footprintW, { stiffness: 0.12, damping: 0.6 });
-  const fpH = new Spring(geo.footprintH, { stiffness: 0.12, damping: 0.6 });
+  /** Default tuning for every button-driven resize and fullscreen
+   *  transition: roughly a 300ms settle. The entry splash swaps in
+   *  SPLASH_SPRING for its one shrink and restores this at settle. */
+  const FRAME_SPRING: FrameSpringOptions = {
+    stiffness: 0.12,
+    damping: 0.6,
+  };
+
+  const fpW = new Spring(geo.footprintW, FRAME_SPRING);
+  const fpH = new Spring(geo.footprintH, FRAME_SPRING);
   let animating = $state(false);
+
+  /** Retune both footprint springs. Both must move together or the two
+   *  axes settle at different times and the frame skews on the way. */
+  function setFrameSpring(opts: FrameSpringOptions): void {
+    fpW.stiffness = opts.stiffness;
+    fpW.damping = opts.damping;
+    fpH.stiffness = opts.stiffness;
+    fpH.damping = opts.damping;
+  }
 
   // Toolbar-hold anchor, set for the duration of every button-driven
   // resize (presets, shrink, grow). The invariant: the clicked button
@@ -399,6 +543,53 @@
 
   let toolbarHold: ToolbarHold | null = null;
 
+  // Flow-hole rect frozen for the duration of a spring animation. The
+  // typesetter re-runs on every hole change; sixty re-typesets over a
+  // 300ms spring is the main animation cost, so the hole holds still
+  // and the text re-wraps once at settle.
+  let frozenFlowRect: {
+    left: number;
+    top: number;
+    outerW: number;
+    outerH: number;
+  } | null = $state(null);
+
+  // Explicit position tween for animations that must land at a known
+  // rect (fullscreen enter/exit). Position interpolates on the size
+  // springs' own progress so both land together on one timeline; no
+  // post-settle snap. Mutually exclusive with toolbarHold.
+  interface PosTween {
+    startTop: number;
+    startLeft: number;
+    targetTop: number;
+    targetLeft: number;
+    startW: number;
+    startH: number;
+    targetW: number;
+    targetH: number;
+  }
+
+  let posTween: PosTween | null = null;
+
+  /** Position along the tween for in-flight footprint (w, h). */
+  function tweenPosition(
+    tween: PosTween,
+    w: number,
+    h: number,
+  ): { top: number; left: number } {
+    const denomW = tween.targetW - tween.startW;
+    const denomH = tween.targetH - tween.startH;
+    const tw = denomW !== 0 ? (w - tween.startW) / denomW : 1;
+    const th = denomH !== 0 ? (h - tween.startH) / denomH : 1;
+    // Unclamped: spring overshoot carries position past the target the
+    // same way it carries size, keeping one unified motion.
+    const t = (tw + th) / 2;
+    return {
+      top: tween.startTop + (tween.targetTop - tween.startTop) * t,
+      left: tween.startLeft + (tween.targetLeft - tween.startLeft) * t,
+    };
+  }
+
   /** Where the frame should sit for a given in-flight outer width. */
   function positionFor(
     outerW: number,
@@ -420,26 +611,58 @@
     };
   }
 
+  /** Returns true when a spring animation started, false when reduced
+   *  motion applied the target instantly (callers that chain work off
+   *  the settle effect must handle the instant case themselves). */
   function animateToPreset(
     targetW: number,
     targetH: number,
     hold: ToolbarHold["mode"],
-  ): void {
-    // Capture the anchor before setFootprint moves the box.
-    toolbarHold = {
-      mode: hold,
-      x: hold === "centre" ? geo.left + geo.outerW / 2 : geo.left,
-      top: geo.top,
-    };
+    targetPos?: { top: number; left: number },
+  ): boolean {
+    if (targetPos !== undefined) {
+      // Explicit-rect mode (fullscreen enter/exit): position tweens to
+      // targetPos on the size springs' timeline; no toolbar anchor.
+      toolbarHold = null;
+      posTween = {
+        startTop: geo.top,
+        startLeft: geo.left,
+        targetTop: targetPos.top,
+        targetLeft: targetPos.left,
+        startW: geo.footprintW,
+        startH: geo.footprintH,
+        targetW,
+        targetH,
+      };
+    } else {
+      // Capture the anchor before setFootprint moves the box.
+      posTween = null;
+      toolbarHold = {
+        mode: hold,
+        x: hold === "centre" ? geo.left + geo.outerW / 2 : geo.left,
+        top: geo.top,
+      };
+    }
 
     if (prefersReducedMotion.current) {
       geo.setFootprint(targetW, targetH);
-      const pos = positionFor(targetW + BEZEL * 2, geo.top, geo.left);
-      geo.setPosition(pos.top, pos.left);
-      geo.clampToViewport();
-      toolbarHold = null;
+      if (targetPos !== undefined) {
+        geo.setPosition(targetPos.top, targetPos.left);
+        posTween = null;
+      } else {
+        const pos = positionFor(targetW + BEZEL * 2, geo.top, geo.left);
+        geo.setPosition(pos.top, pos.left);
+        geo.clampToViewport();
+        toolbarHold = null;
+      }
       geo.reanchorBand();
-      return;
+      return false;
+    }
+
+    // Freeze the flow hole for the animation (first capture wins when
+    // a retarget lands mid-flight).
+    if (!animating) {
+      frozenFlowRect = untrack(() => chromeFrameRect);
     }
 
     animating = true;
@@ -450,6 +673,7 @@
 
     void fpW.set(targetW);
     void fpH.set(targetH);
+    return true;
   }
 
   // Drive the geometry from the springs while animating.
@@ -460,19 +684,79 @@
     const h = fpH.current;
     geo.setFootprint(w, h);
 
-    // Hold the toolbar anchor as the footprint changes.
-    const live = positionFor(w + BEZEL * 2, geo.top, geo.left);
-    geo.setPosition(live.top, live.left);
+    if (posTween !== null) {
+      // Explicit-rect mode: position rides the size springs' progress.
+      const live = tweenPosition(posTween, w, h);
+      geo.setPosition(live.top, live.left);
+    } else {
+      // Hold the toolbar anchor as the footprint changes.
+      const live = positionFor(w + BEZEL * 2, geo.top, geo.left);
+      geo.setPosition(live.top, live.left);
+    }
 
     const wDone = Math.abs(w - fpW.target) < 0.5;
     const hDone = Math.abs(h - fpH.target) < 0.5;
     if (wDone && hDone) {
       animating = false;
+      frozenFlowRect = null;
       // Snap to exact target
       geo.setFootprint(fpW.target, fpH.target);
-      const final = positionFor(fpW.target + BEZEL * 2, geo.top, geo.left);
-      geo.setPosition(final.top, final.left);
+      if (posTween !== null) {
+        geo.setPosition(posTween.targetTop, posTween.targetLeft);
+        posTween = null;
+      } else {
+        const finalPos = positionFor(fpW.target + BEZEL * 2, geo.top, geo.left);
+        geo.setPosition(finalPos.top, finalPos.left);
+      }
       toolbarHold = null;
+
+      // Fullscreen phase transitions on settle
+      if (fsAnimPhase === "enter-grow") {
+        // The position tween landed at the corner with the size; this
+        // is only the exact-target guarantee.
+        geo.setPosition(0, 0);
+
+        // Engage the override. The snapshot was captured before the
+        // animation started.
+        const snap = fsEntrySnapshot ?? {
+          footprintW: fpW.target,
+          footprintH: fpH.target,
+          top: 0,
+          left: 0,
+        };
+        fsCtrl.enter(false, snap);
+        fsEntrySnapshot = null;
+        openFsDrawer();
+
+        // Start the chrome fade
+        fsAnimPhase = "enter-fade";
+        deviceChromeFaded = true;
+        clearTimeout(chromeFadeTimer);
+        chromeFadeTimer = window.setTimeout(() => {
+          fsAnimPhase = "idle";
+        }, CHROME_FADE_MS);
+        // No clamp/reanchor needed: the override owns the layout now
+        return;
+      }
+
+      if (fsAnimPhase === "exit-shrink") {
+        // The position tween landed at the saved spot with the size;
+        // this is only the exact-target guarantee.
+        if (fsExitTarget !== null) {
+          geo.setPosition(fsExitTarget.top, fsExitTarget.left);
+          fsExitTarget = null;
+        }
+        fsAnimPhase = "idle";
+        geo.clampToViewport();
+        geo.settleShrinkAfterResize();
+        refitAfterFullscreen();
+        // The splash owns the springs until its shrink lands. Restore
+        // preset timing before any toolbar resize can inherit it.
+        endSplash();
+        return;
+      }
+
+      // Normal preset settle
       geo.clampToViewport();
       // The settled preset is the new scaling basis. A band change
       // that happened mid-animation is dropped, not deferred: the user
@@ -597,7 +881,11 @@
   const scrollEngine = createScrollEngine(
     () => bridge,
     () => isLinked() && !gestureActive && !peekActive,
-    () => !entryVisible,
+    // Page scroll drives navigation only while the story is on screen
+    // and interactive. It is unmounted in fullscreen, where the app owns
+    // scrolling, so nothing the page reports there is the visitor
+    // reading the story.
+    () => !entryVisible && !fsActive,
     () => isLinked(),
   );
 
@@ -646,6 +934,10 @@
     lastRestartSeq = 0;
     lastLocationSeq = 0;
     entryShownAtSeq = 0;
+
+    // The phone is up, which means its boot tip has started counting
+    // down. No-op unless an entry splash is waiting on exactly that.
+    armSplashHold();
 
     // Reset progress on restart/reload
     progress.reset();
@@ -729,10 +1021,11 @@
     capturedStill = null;
     engineReady = false;
     activeRole = RoleId.ADMIN;
-    // Reset frame geometry and link state alongside the iframe reload.
-    // The column goes back to the side the current mode starts on, so a
-    // restart in read mode returns the story to the left rather than
-    // leaving it parked where an explore pushed it.
+    // Cancel any in-flight fullscreen animation, then reset the
+    // controller and geometry. fsCtrl before geo so the fullscreen
+    // override drops before the geometry is rewritten.
+    cancelFsAnimation();
+    fsCtrl.reset();
     geo.reset();
     moveColumnToSlot(demoMode.mode === "read" ? "left" : "right");
     resetLinked();
@@ -749,7 +1042,7 @@
     demoMode.toggle();
   }
 
-  /** Toolbar close button: leave explore mode for the reading view. */
+  /** Toolbar close button: leave simulate mode for the reading view. */
   function handleCloseToRead(): void {
     demoMode.set("read");
   }
@@ -943,9 +1236,9 @@
 
   const isNarrow: boolean = $derived(windowW < WIDE_BREAKPOINT);
 
-  // Explicit demo mode: "read" (story-first, frame via peek) or "explore"
+  // Explicit demo mode: "read" (story-first, frame via peek) or "simulate"
   // (frame always visible with sidebar chrome). Default derives from
-  // viewport width; ?mode=read/explore overrides. The override survives
+  // viewport width; ?mode=read/simulate overrides. The override survives
   // restart (search string is preserved) and is not clobbered by resizes.
   const demoMode = createDemoMode(() => isNarrow);
   initColumnSlot(demoMode.mode);
@@ -960,18 +1253,29 @@
   // In read mode the floating frame is CSS-hidden when the peek
   // controller is idle, and shown during any peek phase.
   const frameVisible: boolean = $derived(
-    demoMode.mode === "explore" || peekActive,
+    demoMode.mode === "simulate" || peekActive,
   );
 
   // The desktop chrome (sidebar, resize handles, bezel strips) is shown
-  // in explore mode. Read mode uses the close-and-continue button instead.
-  const showDesktopChrome: boolean = $derived(demoMode.mode === "explore");
+  // in simulate mode. Read mode uses the close-and-continue button instead.
+  const showDesktopChrome: boolean = $derived(demoMode.mode === "simulate");
 
   // Rect the story layout wraps around. Null while the frame is
-  // CSS-hidden (read mode, peek idle) so the flow carves no hole and
-  // the header/tip dodges relax to full width. During a peek the rect
-  // comes back and the text parts around the peeked frame as designed.
-  const flowFrameRect = $derived(frameVisible ? chromeFrameRect : null);
+  // CSS-hidden (read mode, peek idle) or fullscreen is active, so the
+  // flow carves no hole. During a peek the rect comes back and the
+  // text parts around the peeked frame as designed.
+  const flowFrameRect = $derived.by(() => {
+    if (!frameVisible || fsActive) return null;
+    // Exit-shrink: the frozen rect captured at animation start is the
+    // full window, and a hole that size pushes every line below the
+    // fold for the length of the shrink. The story lays out hole-free
+    // in its resting column instead and re-wraps once at settle, the
+    // same single re-wrap every other animation gets.
+    if (fsAnimPhase === "exit-shrink") return null;
+    // Hole held still while a spring animation runs; one re-wrap at settle.
+    if (animating && frozenFlowRect !== null) return frozenFlowRect;
+    return chromeFrameRect;
+  });
 
   // Mode transition effects: switching modes at runtime resets state
   // that belongs to the old mode.
@@ -983,21 +1287,41 @@
     const switching = prevMode;
     prevMode = current;
 
-    if (switching === "read" && current === "explore") {
-      // Entering explore: cancel any in-flight peek, present the frame.
-      // geo.reset() spawns the frame centred in the left slot, so the
-      // column takes the right one. This is a move the mode change
-      // dictates, not one the frame pressured: the frame appears on top
-      // of the column rather than travelling into it, which is exactly
-      // the case the flip depth declines to fire on.
+    if (current === "read" && (fsActive || fsAnimPhase !== "idle")) {
+      // Leaving simulate for read while fullscreen or mid-animation:
+      // cancel any animation and exit so the frame restores before the
+      // CSS-hide path takes over.
+      cancelFsAnimation();
+      fsCtrl.exit();
+    }
+
+    if (switching === "read" && current === "simulate") {
+      // Entering simulate: cancel any in-flight peek, present the frame.
       peekCtrl.resetToIdle();
       capturedStill = null;
       geo.reset();
       moveColumnToSlot("right");
+
+      // Mobile default: enter fullscreen on narrow viewports, using the
+      // fitted phone preset as the saved snapshot so pill-exit lands on
+      // a sensible framed view.
+      if (windowW < WIDE_BREAKPOINT) {
+        const phoneSnap = {
+          footprintW: fittedPhone.w,
+          footprintH: fittedPhone.h,
+          top: geo.top,
+          left: geo.left,
+        };
+        fsCtrl.enter(true, phoneSnap);
+      }
     }
-    // Entering read from explore: the CSS-hide path handles visibility.
+    // Entering read from simulate: the CSS-hide path handles visibility.
     // The iframe must NOT be unmounted (load-bearing invariant).
   });
+
+  // Initial simulate load is handled in one place further down, once the
+  // fullscreen animation state the splash writes to has been declared
+  // (see "Initial simulate entrance").
 
   // Every wide page carries the rail. Single-sub pages get one too, so
   // the text column keeps the same left edge from page to page.
@@ -1057,37 +1381,780 @@
     // The flow re-renders with new copy; re-measure the reading line
     void tick().then(() => scrollEngine.remeasure());
   }
+
+  // -----------------------------------------------------------------------
+  // Fullscreen: toolbar entry, pill self-move, exit, drawer wiring
+  // -----------------------------------------------------------------------
+
+  // Leaving fullscreen remounts the story, which comes back at scroll
+  // zero while the location it should be showing is unchanged. Realign
+  // so the visitor lands where they were reading. Watching the flag
+  // rather than hooking the exit calls covers every route out, the
+  // drag-past-threshold one included. alignToLocation does its own
+  // retrying while the remounted FlowStory publishes geometry, so no
+  // tick juggling is needed here.
+  //
+  // Plain, not $state: the effect's own bookkeeping, and making it
+  // reactive would re-run the effect it guards. The initial read is
+  // deliberately a snapshot, hence untrack.
+  let wasFsActive = untrack(() => fsActive);
+
+  /**
+   * Chrome height in force when fullscreen began, and the basis every
+   * saved snapshot inside it was measured against.
+   *
+   * It holds for the whole stay: the page's band is unmounted, and the
+   * drawer's copy of the flow claims no page chrome. What can differ is
+   * the chrome on the way out, since the visitor may have opened or
+   * closed the flow while the app had the window.
+   */
+  let fsEntryChrome = TOP_BAR_HEIGHT;
+
+  /**
+   * Land a restored snapshot in the band that is actually there.
+   *
+   * Anchoring to the entry chrome and rescaling maps the geometry from
+   * the band it was authored in to the current one, the same mapping any
+   * other band change goes through. Stamping the live chrome onto those
+   * coordinates instead would park the frame under a band that grew
+   * while it was away, and leave the anchor claiming a top above its own
+   * band top, which the next band change reads as a huge upward
+   * extrapolation.
+   */
+  function refitAfterFullscreen(): void {
+    geo.reanchorBandAt(fsEntryChrome);
+    geo.rescaleForBand();
+    geo.reanchorBand();
+  }
+
+  // -----------------------------------------------------------------------
+  // Fullscreen-exit entrance
+  //
+  // The story remounts identically on section navigation and on leaving
+  // fullscreen, and only this host knows which is which, so the exit
+  // arms a flag and FlowProse and SectionRail stagger their fade off it
+  // (one shared delay function, see flow-entrance.ts). Arming happens
+  // at the fsActive drop, and every route out of fullscreen passes
+  // through that drop, the pill exit and drag-past-threshold and splash
+  // and reduced-motion jump alike. A timer clears the flag once the
+  // sequence has run, so blocks the virtualizer mounts later render
+  // plain, and any page change or re-entry clears it too, so section
+  // navigation stays instant.
+  // -----------------------------------------------------------------------
+
+  let storyEntrance = $state(false);
+  let storyEntranceTimer = 0;
+
+  function armStoryEntrance(): void {
+    storyEntrance = true;
+    clearTimeout(storyEntranceTimer);
+    // The last group is one per sub, after the header's own leading
+    // group. A frame of margin covers a browser starting the CSS
+    // animation a paint later than the flag flip.
+    const lastGroup = untrack(() => activeSectionDef).subs.length;
+    storyEntranceTimer = window.setTimeout(
+      () => {
+        storyEntrance = false;
+      },
+      entranceTotalMs(lastGroup) + 100,
+    );
+  }
+
+  function clearStoryEntrance(): void {
+    clearTimeout(storyEntranceTimer);
+    storyEntranceTimer = 0;
+    storyEntrance = false;
+  }
+
+  // Section navigation during the entrance window remounts the story;
+  // the new page must appear instantly rather than replay the stagger.
+  // Plain var bookkeeping, same pattern as wasFsActive.
+  let entrancePageKey = untrack(() => pageKey);
+
+  $effect(() => {
+    const pk = pageKey;
+    if (pk === entrancePageKey) return;
+    entrancePageKey = pk;
+    clearStoryEntrance();
+  });
+
+  $effect(() => {
+    const active = fsActive;
+    if (active === wasFsActive) return;
+    wasFsActive = active;
+    if (active) {
+      fsEntryChrome = untrack(() => topChromeHeight());
+      // A stale entrance flag must not animate whatever mounts next.
+      clearStoryEntrance();
+      return;
+    }
+    // untracked so this effect depends on fsActive alone, not on
+    // whatever location realign reads on its way through.
+    untrack(() => {
+      armStoryEntrance();
+      scrollEngine.realign();
+    });
+  });
+
+  // -----------------------------------------------------------------------
+  // Fullscreen animation state machine
+  //
+  // The enter/exit animations reuse the existing Spring-based preset
+  // resize machinery (animateToPreset, fpW, fpH, the animating $effect).
+  // A small state machine coordinates the two-phase sequence:
+  //
+  // Enter: grow frame to window size (Spring), then engage override + fade
+  // Exit:  fade chrome in, drop override, shrink frame to snapshot (Spring)
+  //
+  // The entry splash is an exit with no enter in front of it: the page
+  // opens already overridden, waits, then runs the same exit tail on a
+  // slower spring.
+  //
+  // fsAnimPhase tracks where we are:
+  //   "idle"        - no fullscreen animation in progress
+  //   "splash-hold" - entry splash resting at window size before the exit
+  //   "enter-grow"  - Spring is animating frame up to window size
+  //   "enter-fade"  - override engaged, device chrome fading out
+  //   "exit-fade"   - device chrome fading back in at window size
+  //   "exit-shrink" - Spring is animating frame back to saved snapshot
+  //
+  // The live-drag path never touches this state machine.
+  // -----------------------------------------------------------------------
+
+  type FsAnimPhase =
+    | "idle"
+    | "splash-hold"
+    | "enter-grow"
+    | "enter-fade"
+    | "exit-fade"
+    | "exit-shrink";
+  let fsAnimPhase: FsAnimPhase = $state("idle");
+
+  /** Snapshot taken BEFORE the enter animation starts, used as the exit restore target. */
+  let fsEntrySnapshot: {
+    footprintW: number;
+    footprintH: number;
+    top: number;
+    left: number;
+  } | null = null;
+
+  /** Saved position to restore on exit-shrink settlement (the spring only
+   *  drives footprint; position needs explicit restoration). */
+  let fsExitTarget: {
+    footprintW: number;
+    footprintH: number;
+    top: number;
+    left: number;
+  } | null = null;
+
+  /** True when the device chrome (bezel/shadow/padding) should fade to transparent. */
+  let deviceChromeFaded = $state(false);
+
+  /** Timer for the chrome fade duration. */
+  let chromeFadeTimer = 0;
+
+  /** Chrome fade duration in ms. */
+  const CHROME_FADE_MS = 180;
+
+  /** The toolbar's pill state engages at fullscreen-animation start so
+   *  the bar-to-pill morph runs alongside the frame spring; fsActive
+   *  itself only flips at settle. */
+  const toolbarPill: boolean = $derived.by(
+    () => fsCtrl.active || fsAnimPhase === "enter-grow",
+  );
+
+  /** The drawer defaults to open when the USER enters fullscreen
+   *  (toolbar button or preset menu item). Automatic entries (mobile
+   *  simulate default, live-drag pressure) keep it closed. */
+  function openFsDrawer(): void {
+    if (!fsCtrl.drawerOpen) fsCtrl.toggleDrawer();
+  }
+
+  /**
+   * True for the whole entry splash, from the opening hold through the
+   * shrink that lands the frame at its spawn. The flag outlives
+   * fsAnimPhase's splash-hold because the shrink borrows the ordinary
+   * exit phases, and the settle handler still needs to know whose
+   * shrink it is closing out.
+   */
+  let splashActive = $state(false);
+
+  /** Timer for the splash's opening hold. Zero when unarmed. */
+  let splashTimer = 0;
+
+  /** Backstop timer, in case the phone never reports in. */
+  let splashCeilingTimer = 0;
+
+  /** Cancel any in-flight fullscreen animation, resetting all phase state. */
+  function cancelFsAnimation(): void {
+    clearTimeout(chromeFadeTimer);
+    clearTimeout(splashTimer);
+    splashTimer = 0;
+    clearTimeout(splashCeilingTimer);
+    splashCeilingTimer = 0;
+    fsAnimPhase = "idle";
+    fsEntrySnapshot = null;
+    fsExitTarget = null;
+    posTween = null;
+    deviceChromeFaded = false;
+    if (splashActive) {
+      splashActive = false;
+      setFrameSpring(FRAME_SPRING);
+    }
+    // If a Spring animation was mid-flight for fullscreen, the caller
+    // (restart, mode switch) will reset geo and animating anyway.
+  }
+
+  /**
+   * Whether the open drawer can seat the swimlane. Read live, so a
+   * resize drag swaps the flow between its two drawer presentations at
+   * the threshold the same way a window resize swaps the page's.
+   */
+  const drawerSeatsBand: boolean = $derived(fsCtrl.drawerW >= BAND_MIN_HOST_W);
+
+  /** Fullscreen pill position, using the controller value or a default. */
+  const fsPillPos = $derived(
+    fsCtrl.pillPos.top === 0 && fsCtrl.pillPos.left === 0
+      ? defaultPillPosition(pillW, pillH, windowW, windowH)
+      : fsCtrl.pillPos,
+  );
+
+  /**
+   * Programmatic fullscreen entry (button, menu, mobile default).
+   * Sequence: snapshot -> animate geo to window size -> engage override + fade chrome.
+   */
+  function handleFullscreenEntry(): void {
+    // Guard: no-op if already active, animating, or peek is running
+    if (fsActive || fsAnimPhase !== "idle" || animating) return;
+
+    // 1. Snapshot BEFORE animation starts
+    fsEntrySnapshot = {
+      footprintW: geo.footprintW,
+      footprintH: geo.footprintH,
+      top: geo.top,
+      left: geo.left,
+    };
+
+    if (prefersReducedMotion.current) {
+      // Jump: skip animation entirely
+      fsCtrl.enter(false, fsEntrySnapshot);
+      deviceChromeFaded = true;
+      fsEntrySnapshot = null;
+      openFsDrawer();
+      return;
+    }
+
+    // 2. Animate geo to window footprint using the preset spring machinery.
+    //    Target footprint = windowW - BEZEL*2, windowH - BEZEL*2 so the
+    //    outerW/outerH (footprint + bezel) fills the window.
+    fsAnimPhase = "enter-grow";
+    const targetW = windowW - BEZEL * 2;
+    const targetH = windowH - BEZEL * 2;
+    const snap = fsEntrySnapshot;
+    const started = animateToPreset(targetW, targetH, "centre", {
+      top: 0,
+      left: 0,
+    });
+
+    // If animateToPreset jumped (reduced motion toggled between
+    // the check above and here), the settle effect will not fire.
+    if (!started) {
+      geo.setPosition(0, 0);
+      fsCtrl.enter(false, snap);
+      fsEntrySnapshot = null;
+      deviceChromeFaded = true;
+      fsAnimPhase = "idle";
+      openFsDrawer();
+    }
+  }
+
+  /**
+   * The animated route out of fullscreen, shared by the pill button and
+   * the entry splash: fade the device chrome back in at window size,
+   * drop the override, then spring the frame down to `saved`.
+   *
+   * Callers own their own guards and their own decision about reduced
+   * motion; by the time this runs the animation is happening.
+   */
+  function runFullscreenExit(saved: SavedGeometry): void {
+    // 1. Fade the chrome back in at window size
+    fsAnimPhase = "exit-fade";
+    deviceChromeFaded = false;
+    clearTimeout(chromeFadeTimer);
+    chromeFadeTimer = window.setTimeout(() => {
+      // 2. Chrome is visible again. Drop the override.
+      //    Geo must hold window-size values so the frame does not jump.
+      geo.setFootprint(windowW - BEZEL * 2, windowH - BEZEL * 2);
+      geo.setPosition(0, 0);
+
+      // Drop override without restoring (we will animate to restore)
+      fsCtrl.exitIntoResize();
+
+      // 3. Animate geo back to the saved snapshot
+      fsAnimPhase = "exit-shrink";
+      fsExitTarget = saved;
+      const started = animateToPreset(
+        saved.footprintW,
+        saved.footprintH,
+        "centre",
+        {
+          top: saved.top,
+          left: saved.left,
+        },
+      );
+
+      // If animateToPreset jumped (reduced motion toggled mid-fade),
+      // the settle effect will not fire. Clean up here.
+      if (!started) {
+        geo.setPosition(saved.top, saved.left);
+        fsExitTarget = null;
+        fsAnimPhase = "idle";
+        refitAfterFullscreen();
+        endSplash();
+      }
+    }, CHROME_FADE_MS);
+  }
+
+  /**
+   * Programmatic fullscreen exit (pill button).
+   * Sequence: fade chrome in -> drop override -> animate geo to snapshot -> settle.
+   */
+  function handleExitFullscreen(): void {
+    // Guard: no-op if not active or already animating
+    if (!fsActive || fsAnimPhase !== "idle") return;
+
+    const saved = fsCtrl.saved;
+    if (saved === null) {
+      // No saved state; just drop the override
+      fsCtrl.exit();
+      deviceChromeFaded = false;
+      refitAfterFullscreen();
+      return;
+    }
+
+    if (prefersReducedMotion.current) {
+      // Jump: skip animation entirely
+      fsCtrl.exit();
+      deviceChromeFaded = false;
+      refitAfterFullscreen();
+      return;
+    }
+
+    runFullscreenExit(saved);
+  }
+
+  // -----------------------------------------------------------------------
+  // Entry splash
+  // -----------------------------------------------------------------------
+
+  /**
+   * Open the demo with the app already filling the window, then resolve
+   * it into the framed simulator.
+   *
+   * The override is engaged as an automatic entry so the handbook drawer
+   * stays shut, and the chrome starts faded so the opening frame paints
+   * no bezel at all. The geometry the frame will land in is whatever the
+   * spawn computed at construction, which is exactly where a load
+   * without the splash would have put it.
+   */
+  function startIntroSplash(): void {
+    const spawn: SavedGeometry = {
+      footprintW: geo.footprintW,
+      footprintH: geo.footprintH,
+      top: geo.top,
+      left: geo.left,
+    };
+
+    splashActive = true;
+    deviceChromeFaded = true;
+    fsCtrl.enter(true, spawn);
+    fsAnimPhase = "splash-hold";
+
+    // The hold itself is armed by the bridge handshake, not here: it is
+    // paced against the phone's boot tip, and that tip's clock starts
+    // when the phone mounts inside the iframe rather than when this page
+    // loads. Only the backstop is armed now.
+    clearTimeout(splashCeilingTimer);
+    splashCeilingTimer = window.setTimeout(endSplashHold, SPLASH_CEILING_MS);
+  }
+
+  /**
+   * Start the hold, called from the bridge handshake.
+   *
+   * The phone publishes its bridge during the same synchronous pass that
+   * first renders the boot tip, and the outer page picks it up within a
+   * frame or two, so this is the closest observable moment to the tip's
+   * reveal starting. Idempotent: a second bridge for the same splash
+   * (there should be none) does not restart the clock.
+   */
+  function armSplashHold(): void {
+    if (!splashActive || fsAnimPhase !== "splash-hold") return;
+    if (splashTimer !== 0) return;
+    splashTimer = window.setTimeout(endSplashHold, SPLASH_HOLD_MS);
+  }
+
+  /** Hand the splash over to the shrink. */
+  function endSplashHold(): void {
+    clearTimeout(splashTimer);
+    splashTimer = 0;
+    clearTimeout(splashCeilingTimer);
+    splashCeilingTimer = 0;
+
+    // A restart, mode switch, or the visitor reaching fullscreen some
+    // other way during the hold has already taken this over.
+    if (!splashActive || fsAnimPhase !== "splash-hold") return;
+
+    const saved = fsCtrl.saved;
+    if (saved === null) {
+      endSplash();
+      return;
+    }
+    setFrameSpring(SPLASH_SPRING);
+    runFullscreenExit(saved);
+  }
+
+  /** Close out the splash, handing the springs back to preset timing. */
+  function endSplash(): void {
+    if (!splashActive) return;
+    splashActive = false;
+    setFrameSpring(FRAME_SPRING);
+  }
+
+  // -----------------------------------------------------------------------
+  // Initial simulate entrance
+  //
+  // Narrow viewports enter fullscreen and stay there; wide ones open on
+  // the splash, which starts fullscreen and resolves into the framed
+  // simulator. The mode transition effect only fires on transitions, so
+  // a load that is already in simulate mode (viewport default or ?mode=)
+  // is handled here.
+  //
+  // Placed after the fullscreen animation state rather than beside the
+  // mode transition effect: startIntroSplash writes fsAnimPhase,
+  // splashActive, and the timers, all declared above this point.
+  //
+  // untrack: a one-time init snapshot of reactive values (windowW,
+  // fittedPhone, geo, the motion preference); no subscription wanted.
+  // -----------------------------------------------------------------------
+
+  untrack(() => {
+    if (demoMode.mode !== "simulate") return;
+
+    if (windowW < WIDE_BREAKPOINT) {
+      // Fitted phone preset as the saved snapshot, so a pill exit lands
+      // on a sensible framed view.
+      fsCtrl.enter(true, {
+        footprintW: fittedPhone.w,
+        footprintH: fittedPhone.h,
+        top: geo.top,
+        left: geo.left,
+      });
+      return;
+    }
+
+    if (
+      shouldPlayIntroSplash({
+        mode: demoMode.mode,
+        recordMode: isRecordMode(),
+        windowW,
+        wideBreakpoint: WIDE_BREAKPOINT,
+        reducedMotion: prefersReducedMotion.current,
+        // The entry page and the splash answer the same question: did
+        // this load name a destination? entryVisible already holds that
+        // answer (it is false exactly when the hash parsed), so read it
+        // rather than parsing the hash a second time.
+        deepLinked: !entryVisible,
+      })
+    ) {
+      startIntroSplash();
+    }
+  });
+
+  function handleFsToolbarMove(top: number, left: number): void {
+    fsCtrl.setPillPos(top, left, pillW, pillH);
+  }
+
+  function handleFsToggleDrawer(): void {
+    fsCtrl.toggleDrawer();
+  }
+
+  function handleFsDrawerResize(width: number): void {
+    fsCtrl.setDrawerW(width);
+  }
+
+  function handleFsDrawerClose(): void {
+    fsCtrl.closeDrawer();
+  }
+
+  function handleFsDrawerOpen(): void {
+    fsCtrl.openDrawer();
+  }
+
+  function handleFsDrawerSettle(): void {
+    fsCtrl.settleDrawer();
+  }
+
+  /** Drawer-hosted strip sub click: navigate the phone/story the same
+   *  way a main-page strip click does, then scroll the drawer's prose
+   *  to that sub so the reader lands on the right paragraph. */
+  function handleFsDrawerSubClick(sectionId: SectionId, subSlug: string): void {
+    handleSubClick(sectionId, subSlug);
+    drawerRef?.scrollToSub(subSlug);
+  }
+
+  let drawerRef: HandbookDrawer | undefined = $state();
+
+  // Drawer follow: when the active sub changes from any source (phone
+  // bridge, TopBar section click, scroll-engine convergence) while the
+  // drawer is open in fullscreen, scroll the drawer prose to that sub.
+  // The drawer's own scroll-driven detection already guards against
+  // echoing back via armDrawerSuppression inside scrollToSub.
+  let prevDrawerSub: string | null = null;
+  let prevDrawerSection: SectionId | null = null;
+
+  /** Drawer-originated sub detection: pre-mark the target so the follow
+   *  effect sees no change and never nudges the drawer against the
+   *  user's own in-flight scroll at a sub boundary. */
+  function handleDrawerScrollSub(sectionId: SectionId, subSlug: string): void {
+    prevDrawerSection = sectionId;
+    prevDrawerSub = subSlug;
+    handleSubClick(sectionId, subSlug);
+  }
+
+  let prevDrawerVisible = false;
+
+  $effect(() => {
+    const sub = scrollEngine.activeSub;
+    const section = scrollEngine.activeSection;
+    if (!fsActive || !fsCtrl.drawerOpen) {
+      // Track position while not visible so opening the drawer later
+      // does not treat the standing selection as a change.
+      prevDrawerVisible = false;
+      prevDrawerSub = sub;
+      prevDrawerSection = section;
+      return;
+    }
+
+    if (!prevDrawerVisible) {
+      // The drawer just opened: bring the story's current sub into
+      // view so the reader lands where they left off.
+      prevDrawerVisible = true;
+      prevDrawerSub = sub;
+      prevDrawerSection = section;
+      if (sub !== null) {
+        void tick().then(() => {
+          drawerRef?.scrollToSub(sub);
+        });
+      }
+      return;
+    }
+
+    const sectionChanged = section !== prevDrawerSection;
+    const subChanged = sub !== prevDrawerSub;
+    prevDrawerSection = section;
+    prevDrawerSub = sub;
+
+    if (!subChanged && !sectionChanged) return;
+
+    if (sectionChanged) {
+      // Section change re-typesets the drawer. The section-change reset
+      // effect inside the drawer scrolls to top. If a specific sub was
+      // selected, wait a tick for the new blocks to render, then scroll.
+      if (sub !== null) {
+        void tick().then(() => {
+          drawerRef?.scrollToSub(sub);
+        });
+      }
+      return;
+    }
+
+    if (sub !== null) {
+      drawerRef?.scrollToSub(sub);
+    }
+  });
+
+  // Window-resize effect: re-clamp pill position and drawer width when
+  // the window changes size. No auto-exit on grow (design decision).
+  $effect(() => {
+    void windowW;
+    void windowH;
+    if (!fsActive) return;
+    untrack(() => {
+      fsCtrl.setPillPos(fsCtrl.pillPos.top, fsCtrl.pillPos.left, pillW, pillH);
+      fsCtrl.setDrawerW(fsCtrl.drawerW);
+    });
+  });
+
+  // -----------------------------------------------------------------------
+  // TopBar edge reveal in fullscreen
+  // -----------------------------------------------------------------------
+
+  let topBarRevealed = $state(false);
+  let topBarHideTimer = 0;
+
+  function scheduleTopBarHide(): void {
+    clearTimeout(topBarHideTimer);
+    topBarHideTimer = window.setTimeout(() => {
+      // Pin if pointer is still within the bar container
+      topBarRevealed = false;
+    }, 3000);
+  }
+
+  function cancelTopBarHide(): void {
+    clearTimeout(topBarHideTimer);
+  }
+
+  function handleTopBarEnter(): void {
+    cancelTopBarHide();
+  }
+
+  function handleTopBarLeave(): void {
+    scheduleTopBarHide();
+  }
+
+  // Dismiss TopBar via Escape, but only when the drawer is not open
+  // (the drawer owns Escape when it is visible).
+  $effect(() => {
+    if (!topBarRevealed || !fsActive) return;
+
+    function onKeydown(e: KeyboardEvent): void {
+      if (e.key === "Escape" && !fsCtrl.drawerOpen) {
+        topBarRevealed = false;
+      }
+    }
+
+    window.addEventListener("keydown", onKeydown);
+    return () => window.removeEventListener("keydown", onKeydown);
+  });
+
+  // Auto-hide TopBar when fullscreen deactivates
+  $effect(() => {
+    if (!fsActive) {
+      topBarRevealed = false;
+      cancelTopBarHide();
+    }
+  });
+
+  // Hot strip reveal state
+  let topStripTouchStart = 0;
+
+  function handleTopStripPointerEnter(e: PointerEvent): void {
+    // Mouse: reveal immediately, but not during an active resize gesture
+    // (the synthetic top-edge resize should not trigger the TopBar).
+    if (e.pointerType === "mouse" && !gestureActive) {
+      topBarRevealed = true;
+      cancelTopBarHide();
+    }
+  }
+
+  function handleTopStripPointerDown(e: PointerEvent): void {
+    if (e.pointerType === "touch") {
+      topStripTouchStart = e.clientY;
+    }
+  }
+
+  function handleTopStripPointerMove(e: PointerEvent): void {
+    if (e.pointerType === "touch" && topStripTouchStart > 0 && !gestureActive) {
+      const dy = e.clientY - topStripTouchStart;
+      if (dy > 24) {
+        topBarRevealed = true;
+        cancelTopBarHide();
+        topStripTouchStart = 0;
+      }
+    }
+  }
+
+  function handleTopStripPointerUp(): void {
+    topStripTouchStart = 0;
+  }
 </script>
 
 {#if !recordMode}
-  {#key uiLocale}
-    <TopBar
-      activeSection={entryVisible ? null : scrollEngine.activeSection}
-      {dark}
-      locale={uiLocale}
-      seen={progress.count}
-      total={progress.total}
-      flowBandOpen={flowBand.open}
-      mode={demoMode.mode}
-      {seenTopics}
-      onSectionClick={handleSectionClick}
-      onToggleDark={handleToggleDark}
-      onRestart={handleRestart}
-      onLocaleChange={handleLocaleChange}
-      onToggleFlowBand={handleToggleFlowBand}
-      onToggleMode={handleToggleMode}
-      onHomeClick={handleShowEntry}
-    />
-  {/key}
+  <!-- TopBar rendering: three locations depending on state.
+       1. Fullscreen + drawer open: TopBar renders inside the drawer
+          via snippet (see HandbookDrawer below). The edge-reveal wrapper
+          and hot strip are suppressed.
+       2. Fullscreen + drawer closed: edge-reveal wrapper with hot strip.
+       3. Not fullscreen: normal sticky position.
+       The splash suppresses the strip: a pointer crossing the top of
+       the window during the opening should not pull a bar down over an
+       app that has not finished arriving. -->
+  {#if fsActive && !fsCtrl.drawerOpen && !splashActive}
+    <!-- 8px hot strip at top edge: pointerenter (mouse) or
+         pointerdown + dy>24 (touch) reveals the TopBar. -->
+    <!-- svelte-ignore a11y_no_static_element_interactions -->
+    <div
+      class="fs-top-hot-strip"
+      onpointerenter={handleTopStripPointerEnter}
+      onpointerdown={handleTopStripPointerDown}
+      onpointermove={handleTopStripPointerMove}
+      onpointerup={handleTopStripPointerUp}
+      onpointercancel={handleTopStripPointerUp}
+    ></div>
+    <div
+      class="fs-topbar-container"
+      class:fs-topbar-container--revealed={topBarRevealed}
+      aria-hidden={topBarRevealed ? undefined : "true"}
+      inert={topBarRevealed ? undefined : true}
+      onpointerenter={handleTopBarEnter}
+      onpointerleave={handleTopBarLeave}
+    >
+      {#key uiLocale}
+        <TopBar
+          activeSection={entryVisible ? null : scrollEngine.activeSection}
+          {dark}
+          locale={uiLocale}
+          seen={progress.count}
+          total={progress.total}
+          flowBandOpen={flowBand.open}
+          mode={demoMode.mode}
+          {seenTopics}
+          onSectionClick={handleSectionClick}
+          onToggleDark={handleToggleDark}
+          onRestart={handleRestart}
+          onLocaleChange={handleLocaleChange}
+          onToggleFlowBand={handleToggleFlowBand}
+          onToggleMode={handleToggleMode}
+          linked={isLinked()}
+          onToggleLink={toggleLinked}
+          onHomeClick={handleShowEntry}
+        />
+      {/key}
+    </div>
+  {:else if !fsActive}
+    {#key uiLocale}
+      <TopBar
+        activeSection={entryVisible ? null : scrollEngine.activeSection}
+        {dark}
+        locale={uiLocale}
+        seen={progress.count}
+        total={progress.total}
+        flowBandOpen={flowBand.open}
+        mode={demoMode.mode}
+        {seenTopics}
+        onSectionClick={handleSectionClick}
+        onToggleDark={handleToggleDark}
+        onRestart={handleRestart}
+        onLocaleChange={handleLocaleChange}
+        onToggleFlowBand={handleToggleFlowBand}
+        onToggleMode={handleToggleMode}
+        linked={isLinked()}
+        onToggleLink={toggleLinked}
+        exiting={fsAnimPhase === "enter-grow" || fsAnimPhase === "exit-shrink"}
+        onHomeClick={handleShowEntry}
+      />
+    {/key}
+  {/if}
   <!-- Sub navigation for viewports without the rail. Part of the top
        chrome rather than the story: it docks under the bar and reports
        its height, so everything that parks below the chrome (the story,
        the frame's spawn band) accounts for it. -->
-  {#if !entryVisible && !showRail}
+  {#if !entryVisible && !showRail && !fsActive}
     <div
       class="strip-dock"
       style="--wrapper-pad-left: {WRAPPER_PAD_LEFT}px; --wrapper-pad-right: {WRAPPER_PAD_RIGHT}px"
       bind:offsetHeight={stripHeight}
+      transition:chromeFade
     >
       <SectionStrip
         section={activeSectionDef}
@@ -1100,54 +2167,101 @@
   {/if}
   <!-- Data flow band: normal flow directly after the sticky top bar, so
        opening it moves the story down rather than covering it. The
-       floating frame (z:50) passes under it. -->
-  <FlowBand
-    store={flowBand}
-    narrow={isNarrow}
-    locale={uiLocale}
-    onFlowHeight={handleBandFlowHeight}
-  />
+       floating frame (z:50) passes under it. Fullscreen renders it in
+       the drawer instead (see the takeover below). -->
+  {#if !fsActive}
+    <FlowBand
+      store={flowBand}
+      presentation={isNarrow ? "overlay" : "band"}
+      locale={uiLocale}
+      onFlowHeight={handleBandFlowHeight}
+    />
+  {/if}
 {/if}
 
-<!-- Floating frame layer: fixed, between story content (z:1) and TopBar (z:100) -->
+<!-- The flow inside the fullscreen drawer, in the drawer's own two
+     presentations. A drawer wide enough for the swimlane docks it under
+     the strip, where it pushes the prose down exactly as the page's band
+     pushes the story down. A narrower one has no room for lanes beside
+     cards, so the list takes the drawer over instead. Both are passed to
+     HandbookDrawer only while the flow is open. -->
+{#snippet flowDock()}
+  <FlowBand
+    store={flowBand}
+    presentation="dock"
+    locale={uiLocale}
+    onFlowHeight={ignoreFlowHeight}
+  />
+{/snippet}
+
+{#snippet flowPanel()}
+  <FlowBand
+    store={flowBand}
+    presentation="panel"
+    locale={uiLocale}
+    onFlowHeight={ignoreFlowHeight}
+  />
+{/snippet}
+
+<!-- Z-order (single source):
+     story 1, frame 50, fullscreen edge strips + top hot strip 60,
+     TopBar 100, popovers 110, drawer 120, toolbar-pill 130. -->
+
+<!-- Floating frame layer: fixed, between story content (z:1) and TopBar (z:100).
+     In fullscreen: top:0 left:0 width:100vw height:100vh. -->
 <div
   class="floating-frame"
   class:floating-frame--hidden={!frameVisible}
-  style:top="{geo.top}px"
-  style:left="{geo.left}px"
-  style:width="{geo.outerW}px"
-  style:height="{geo.outerH}px"
+  class:floating-frame--fs={fsActive}
+  style:top="{fsActive ? 0 : geo.top}px"
+  style:left="{fsActive ? 0 : geo.left}px"
+  style:width="{fsActive ? windowW : geo.outerW}px"
+  style:height="{fsActive ? windowH : geo.outerH}px"
 >
-  <!-- Floating toolbar: rounded bar above the frame, spanning its width.
-       Close + shrink/grow + link on the left, presets centered, user
-       badge with role dropdown on the right. The bar's background is
-       the drag surface (pointer handlers passed through). -->
-  {#if showDesktopChrome}
-    <!-- phoneActive/desktopActive are exact-dimension compares: a
-         band-proportional rescale legitimately deactivates them. -->
+  <!-- Single FrameToolbar instance: always rendered in simulate mode.
+       Props switch with toolbarPill, which turns on at animation START
+       (enter-grow) rather than at settle, so the bar-to-pill morph runs
+       alongside the frame spring and both land together. The element
+       survives the mode change, enabling the FLIP morph inside the
+       component.
+
+       Absent for the whole entry splash, hold and shrink both: the
+       splash is the app arriving, and controls for resizing it are not
+       part of that. It mounts once the frame has settled at its spawn
+       and fades itself in (see FrameToolbar's root). -->
+  {#if (showDesktopChrome || fsActive) && !splashActive}
     <FrameToolbar
-      shrunk={geo.shrunk}
-      phoneActive={geo.footprintW === fittedPhone.w &&
-        geo.footprintH === fittedPhone.h}
-      desktopActive={geo.footprintW === fittedDesktop.w &&
-        geo.footprintH === fittedDesktop.h}
-      linked={isLinked()}
+      shrunk={toolbarPill ? false : geo.shrunk}
+      phoneActive={toolbarPill
+        ? false
+        : geo.footprintW === fittedPhone.w && geo.footprintH === fittedPhone.h}
+      desktopActive={toolbarPill
+        ? false
+        : geo.footprintW === fittedDesktop.w &&
+          geo.footprintH === fittedDesktop.h}
       {activeRole}
-      footprintW={geo.footprintW}
+      footprintW={toolbarPill ? 0 : geo.footprintW}
       onPhonePreset={handlePhonePreset}
       onDesktopPreset={handleDesktopPreset}
       onShrinkGrow={handleShrinkGrow}
-      onToggleLink={toggleLinked}
       onRoleChange={handleRoleChange}
       onClose={handleCloseToRead}
+      onFullscreen={handleFullscreenEntry}
       ondragstart={startDrag}
       ondragmove={onPointerMove}
       ondragend={onPointerUp}
+      fullscreen={toolbarPill}
+      pos={toolbarPill ? fsPillPos : null}
+      drawerOpen={toolbarPill ? fsCtrl.drawerOpen : false}
+      windowW={toolbarPill ? windowW : 0}
+      onSelfMove={handleFsToolbarMove}
+      onExitFullscreen={handleExitFullscreen}
+      onToggleDrawer={handleFsToggleDrawer}
     />
   {/if}
 
   <!-- Resize handles: 4 edges + 4 corners -->
-  {#if showDesktopChrome}
+  {#if showDesktopChrome && !fsActive}
     <!-- svelte-ignore a11y_no_static_element_interactions -->
     <div
       class="resize-handle resize-n"
@@ -1257,6 +2371,11 @@
     {geo}
     onbridgeready={handleBridgeReady}
     gestureActive={gestureActive || peekActive}
+    fullscreen={fsActive}
+    winW={windowW}
+    winH={windowH}
+    chromeFaded={deviceChromeFaded}
+    {animating}
     bind:this={frameRef}
   />
 
@@ -1284,7 +2403,7 @@
        bottom for thumb reach. Labels the destination section name
        rather than a generic "Close". -->
   {#if peekCtrl.phase === "committed"}
-    <div class="peek-close-bar">
+    <div class="peek-close-bar" transition:chromeFade>
       <button
         class="peek-close-btn"
         type="button"
@@ -1304,10 +2423,32 @@
   {/if}
 </div>
 
-{#if !recordMode}
-  <!-- --top-chrome-offset is where sticky story chrome parks: below the
+{#if !recordMode && (!fsActive || fsAnimPhase === "exit-fade")}
+  <!-- Unmounted in fullscreen rather than hidden. The app fills the
+       window there and owns scrolling; leaving the story mounted below
+       it gives the page a second scroll container competing for the
+       same wheel and keyboard input. Unmounting also clears FlowStory's
+       geometry source on the way out, so nothing stale can drive the
+       selection while the story is gone.
+
+       The exit-fade phase is the one exception: the frame still fills
+       the window for that beat, so the remounted story typesets behind
+       it and the text is already painted when the shrink starts
+       revealing the page. Nothing competes during it either, since the
+       covering frame owns pointer and wheel input and the scroll
+       engine's page gate stays closed until fsActive drops.
+
+       --top-chrome-offset is where sticky story chrome parks: below the
        top bar, and below the flow band when it is open. Published as a
-       custom property so the sticky rules stay declarative. -->
+       custom property so the sticky rules stay declarative.
+
+       No mount fade here. Coming back from fullscreen the entrance is
+       the staggered per-block fade (storyEntrance), and every other way
+       this block appears should be instant. Going the other way it is
+       covered by a window-filling frame before it leaves, so an out
+       transition would buy nothing visible while keeping a second
+       scroll container alive for the length of the fade, which is the
+       exact thing the unmount above exists to prevent. -->
   <div
     class="scroll-story"
     style="--top-chrome-offset: {stickyTopOffset()}px; --rail-w: {RAIL_WIDTH}px; --rail-gap: {RAIL_GAP}px; --wrapper-pad-left: {WRAPPER_PAD_LEFT}px; --wrapper-pad-right: {WRAPPER_PAD_RIGHT}px"
@@ -1322,6 +2463,7 @@
                 locale={uiLocale}
                 {seenTopics}
                 interactive={!entryVisible}
+                entrance={storyEntrance}
                 onSubClick={handleSubClick}
               />
             {/if}
@@ -1339,6 +2481,7 @@
                 activeSub={scrollEngine.activeSub}
                 {seenTopics}
                 frameRect={flowFrameRect}
+                entrance={storyEntrance}
                 onSelectSection={handleSectionClick}
                 onSelectSub={handleSubClick}
                 onpeekfire={handlePeekFire}
@@ -1355,9 +2498,14 @@
   </div>
 
   <!-- Next-section pill: fixed at bottom center, hidden during gestures
-     and when there is no next section. -->
+     and when there is no next section. Fullscreen has no page to pin it
+     over, so it moves into the drawer footer instead (below). -->
   {#if nextSectionDef !== null && !gestureActive && !peekActive}
-    <div class="next-pill-container" style="left: {pillCenterX}px">
+    <div
+      class="next-pill-container"
+      style="left: {pillCenterX}px"
+      transition:chromeFade
+    >
       <button
         class="next-pill"
         type="button"
@@ -1370,6 +2518,89 @@
       </button>
     </div>
   {/if}
+{/if}
+
+<!-- Handbook drawer: slide-over panel on the right, rendered when
+     fullscreen is active. Section-level navigation happens through the
+     TopBar's contents picker (docked inside the drawer while open).
+     Sub navigation uses the same SectionStrip the narrow-mode page shows,
+     and the same prose component the page renders, so clicking a heading
+     in the drawer navigates exactly as clicking one in the story does.
+     Scrolling the drawer's prose drives the active sub the same way
+     main-story scrolling does, through handleSubClick. -->
+{#if fsActive}
+  <HandbookDrawer
+    open={fsCtrl.drawerOpen}
+    width={fsCtrl.drawerW}
+    section={activeSectionDef}
+    activeSub={scrollEngine.activeSub}
+    locale={uiLocale}
+    {seenTopics}
+    onSelectSection={handleSectionClick}
+    onSelectSub={handleFsDrawerSubClick}
+    onClose={handleFsDrawerClose}
+    onOpen={handleFsDrawerOpen}
+    onResize={handleFsDrawerResize}
+    onSettle={handleFsDrawerSettle}
+    onScrollSub={handleDrawerScrollSub}
+    band={flowBand.open && drawerSeatsBand ? flowDock : undefined}
+    takeover={flowBand.open && !drawerSeatsBand ? flowPanel : undefined}
+    bind:this={drawerRef}
+  >
+    {#snippet topbar()}
+      {#key uiLocale}
+        <TopBar
+          activeSection={entryVisible ? null : scrollEngine.activeSection}
+          {dark}
+          locale={uiLocale}
+          seen={progress.count}
+          total={progress.total}
+          flowBandOpen={flowBand.open}
+          mode={demoMode.mode}
+          {seenTopics}
+          onSectionClick={handleSectionClick}
+          onToggleDark={handleToggleDark}
+          onRestart={handleRestart}
+          onLocaleChange={handleLocaleChange}
+          onToggleFlowBand={handleToggleFlowBand}
+          onToggleMode={handleToggleMode}
+          linked={isLinked()}
+          onToggleLink={toggleLinked}
+          layoutWidth={fsCtrl.drawerW}
+          onHomeClick={handleShowEntry}
+        />
+      {/key}
+    {/snippet}
+    {#snippet strip()}
+      <SectionStrip
+        section={activeSectionDef}
+        activeSub={scrollEngine.activeSub}
+        locale={uiLocale}
+        {seenTopics}
+        onSubClick={handleFsDrawerSubClick}
+      />
+    {/snippet}
+    {#snippet footer()}
+      <!-- Same control and handler as the page's fixed pill, docked
+           rather than floating: fullscreen has no page under it to pin
+           against. The rule lives here, not on the dock, so no next
+           section means no empty bar. -->
+      {#if nextSectionDef !== null}
+        <div class="drawer-next-pill">
+          <button
+            class="next-pill"
+            type="button"
+            onclick={() => handleNextSection(nextSectionDef.id)}
+          >
+            {m.demo_section_next({
+              section: sectionTitle(nextSectionDef.id),
+            })}
+            <ArrowRight size={16} />
+          </button>
+        </div>
+      {/if}
+    {/snippet}
+  </HandbookDrawer>
 {/if}
 
 <style>
@@ -1503,6 +2734,17 @@
     pointer-events: none;
   }
 
+  /* Drawer-footer placement of the same pill. Sits on paper with a rule
+     above it rather than floating over the story, so it reads as part
+     of the drawer's anatomy instead of chrome laid on top. */
+  .drawer-next-pill {
+    display: flex;
+    justify-content: center;
+    padding: 0.75rem 1rem;
+    border-top: 1px solid var(--hair);
+    background: var(--paper);
+  }
+
   .next-pill {
     display: inline-flex;
     align-items: center;
@@ -1558,6 +2800,44 @@
   .floating-frame--hidden {
     visibility: hidden;
     pointer-events: none;
+  }
+
+  /* Fullscreen override: no extra rules needed because the style bindings
+     already produce 0/0/windowW/windowH when fsActive is true. The class
+     remains as a semantic hook for child selectors. */
+
+  /* -----------------------------------------------------------------------
+     TopBar edge reveal
+     ----------------------------------------------------------------------- */
+
+  .fs-top-hot-strip {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 8px;
+    z-index: 60;
+    touch-action: none;
+  }
+
+  .fs-topbar-container {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    z-index: 100;
+    transform: translateY(-100%);
+    transition: transform 0.2s ease;
+  }
+
+  .fs-topbar-container--revealed {
+    transform: translateY(0);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .fs-topbar-container {
+      transition: none;
+    }
   }
 
   /* Bezel drag strips: four edges that cover only the 12px bezel ring,

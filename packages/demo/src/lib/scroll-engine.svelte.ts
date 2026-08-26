@@ -63,6 +63,17 @@ export interface ScrollEngine {
   /** Returns the reading line position (viewport px from the top) */
   remeasure(): number;
   /**
+   * Scroll the story back to the location it already holds, without
+   * involving the phone.
+   *
+   * For remounts: the story unmounts in fullscreen, so it comes back at
+   * scroll zero against freshly computed geometry while the location is
+   * unchanged. Suppression is armed first, so the frames before the
+   * scroll lands cannot read as the visitor having scrolled to the top
+   * and fire an intent at the phone.
+   */
+  realign(): void;
+  /**
    * Mute selection for the frames a top-chrome change takes to reflow.
    * Opening or closing the data flow band moves every block on the page
    * at once, and a half-applied reflow must not read as the visitor
@@ -693,6 +704,24 @@ export function createScrollEngine(
     return readingLineY();
   }
 
+  function realign(): void {
+    const sectionId = activeSection;
+    const subSlug = activeSub;
+
+    // Same target resolution the local path uses: the derived selection
+    // always names a sub-heading, so a null sub could never match and
+    // the disarm would fall to the timed backstop.
+    armSuppression({
+      section: sectionId,
+      sub: subSlug ?? getSection(sectionId)?.subs[0]?.slug ?? null,
+    });
+
+    // "page-click" origin, not "phone": this is the page catching up
+    // with a location it already holds, so it must not be skipped by
+    // the scroll-grace gate and must not echo anything phone-ward.
+    void alignToLocation(sectionId, subSlug, "page-click");
+  }
+
   // Handle for the settle timer below, so a second toggle replaces the
   // first rather than disarming early.
   let layoutShiftTimeout: ReturnType<typeof setTimeout> | undefined;
@@ -733,6 +762,7 @@ export function createScrollEngine(
     handleBridgeState,
     initFromHash,
     remeasure,
+    realign,
     suppressLayoutShift,
     destroy,
   };

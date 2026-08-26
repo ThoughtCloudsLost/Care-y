@@ -12,6 +12,10 @@
    * once, so the same slices render as a dismissible overlay list.
    * Cards keep their lane icon and color there, which is the whole
    * reason lane identity does not depend on row position.
+   *
+   * Fullscreen has no top chrome to sit in and no page to cover, so the
+   * same list takes over the handbook drawer, which is already the place
+   * everything that reads alongside the running app lives.
    */
 
   import { prefersReducedMotion } from "svelte/motion";
@@ -22,6 +26,7 @@
   import FlowBandSlice from "./FlowBandSlice.svelte";
   import FlowBandLaneIcon from "./FlowBandLaneIcon.svelte";
   import FlowBandKindIcon from "./FlowBandKindIcon.svelte";
+  import { chromeFade } from "./chrome-fade.js";
   import {
     FLOW_LANES,
     SLICE_HEADER_HEIGHT,
@@ -30,6 +35,7 @@
     laneColorVar,
     truncatePreview,
     groupSliceEvents,
+    type FlowBandPresentation,
     type FlowBandStore,
     type FlowCell,
     type FlowSlice,
@@ -44,26 +50,34 @@
 
   interface Props {
     store: FlowBandStore;
-    /** True below the wide breakpoint, where the band becomes an overlay. */
-    narrow: boolean;
+    /** Where the flow is being drawn. */
+    presentation: FlowBandPresentation;
     /** Read so message calls re-run when the page locale changes. */
     locale: string;
     /**
      * Reports how much page flow the band occupies, measured rather than
      * summed: an expanded card's detail strip has no fixed height. Zero
-     * while closed, and zero as an overlay, which is out of flow.
+     * while closed, and zero in every presentation but the band, none of
+     * which are in page flow.
      */
     onFlowHeight: (px: number) => void;
   }
 
-  let { store, narrow, locale, onFlowHeight }: Props = $props();
+  let { store, presentation, locale, onFlowHeight }: Props = $props();
+
+  /** Swimlane anatomy, whether it sits in the page or in a host. */
+  const isSwimlane: boolean = $derived(
+    presentation === "band" || presentation === "dock",
+  );
 
   // Bound to the band element's own box. bind:offsetHeight includes the
   // bottom border, which the sticky story content sits below.
   let bandHeight = $state(0);
 
+  // Only the page's own band is in page flow. The drawer dock displaces
+  // the drawer's prose, which the drawer's flex column handles itself.
   $effect(() => {
-    onFlowHeight(store.open && !narrow ? bandHeight : 0);
+    onFlowHeight(store.open && presentation === "band" ? bandHeight : 0);
   });
 
   const rowHeight: number = $derived(
@@ -291,8 +305,10 @@
   // Overlay dismissal (small viewports only, where the panel is modal)
   // -----------------------------------------------------------------------
 
+  // Only the overlay claims Escape. The band is not modal, and the
+  // drawer panel's host owns the key while it is up.
   function handleWindowKeydown(e: KeyboardEvent): void {
-    if (e.key === "Escape" && narrow && store.open) {
+    if (e.key === "Escape" && presentation === "overlay" && store.open) {
       store.setOpen(false);
     }
   }
@@ -469,13 +485,25 @@
 {/snippet}
 
 {#if store.open}
-  {#if narrow}
+  {#if !isSwimlane}
     <!-- Small viewports: band and phone cannot share the width, so the
-         flow becomes a dismissible overlay list. -->
-    <div class="overlay-scrim" role="presentation" onclick={close}></div>
+         flow becomes a dismissible overlay list. Fullscreen renders the
+         same list docked in the handbook drawer, where the host owns the
+         box and there is nothing to dismiss it off of. -->
+    {#if presentation === "overlay"}
+      <div
+        class="overlay-scrim"
+        role="presentation"
+        onclick={close}
+        transition:chromeFade
+      ></div>
+    {/if}
     <section
-      class="flow-band-root overlay"
+      class="flow-band-root list-view"
+      class:overlay={presentation === "overlay"}
+      class:panel={presentation === "panel"}
       aria-label={m.demo_flow_band_title()}
+      transition:chromeFade
     >
       <div class="band-header">
         <Waypoints size={14} />
@@ -554,6 +582,7 @@
   {:else}
     <section
       class="flow-band-root band"
+      class:docked={presentation === "dock"}
       aria-label={m.demo_flow_band_title()}
       bind:offsetHeight={bandHeight}
     >
@@ -683,6 +712,19 @@
     backdrop-filter: blur(12px);
     -webkit-backdrop-filter: blur(12px);
     border-bottom: 1px solid var(--hair);
+  }
+
+  /* Docked in a host's flow (the fullscreen drawer). The host is an
+     opaque panel with its own stacking, so the sticky offset, the
+     translucency, and the blur all come off: there is nothing behind it
+     to show through and nothing to stay pinned over. */
+  .band.docked {
+    position: static;
+    z-index: auto;
+    flex: 0 0 auto;
+    background: var(--paper);
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
   }
 
   .band-header {
@@ -1085,14 +1127,26 @@
     background: rgba(0, 0, 0, 0.35);
   }
 
+  /* Shared by both list presentations: a header row over a scrolling
+     list, filling whatever box the presentation gives it. */
+  .list-view {
+    display: flex;
+    flex-direction: column;
+    background: var(--paper);
+    min-height: 0;
+  }
+
   .overlay {
     position: fixed;
     inset: 56px 0 0;
     z-index: 90;
-    display: flex;
-    flex-direction: column;
-    background: var(--paper);
     border-top: 1px solid var(--hair);
+  }
+
+  /* Docked in the handbook drawer: the host is a flex column and already
+     draws the panel's edges, so this only claims the remaining height. */
+  .panel {
+    flex: 1 1 auto;
   }
 
   .overlay-list {

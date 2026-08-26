@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "Volunteer user" |
+* | "Volunteer" |
 *
 * @param {Demo_Role_Volunteer_LabelInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

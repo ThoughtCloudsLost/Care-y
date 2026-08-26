@@ -6,17 +6,17 @@ import { getLocale, experimentalStaticLocale } from '../runtime.js';
 /** @typedef {{}} Demo_Role_Volunteer_LabelInputs */
 
 const en_demo_role_volunteer_label = /** @type {(inputs: Demo_Role_Volunteer_LabelInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Volunteer user`)
+	return /** @type {LocalizedString} */ (`Volunteer`)
 };
 
 const es_demo_role_volunteer_label = /** @type {(inputs: Demo_Role_Volunteer_LabelInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Usuario voluntario`)
+	return /** @type {LocalizedString} */ (`Voluntariado`)
 };
 
 /**
 * | output |
 * | --- |
-* | "Volunteer user" |
+* | "Volunteer" |
 *
 * @param {Demo_Role_Volunteer_LabelInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

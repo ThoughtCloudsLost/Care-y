@@ -11,9 +11,13 @@
     ChevronRight,
     Check,
     Ellipsis,
+    Link2,
+    Link2Off,
   } from "@lucide/svelte";
   import * as m from "$lib/paraglide/messages.js";
   import { SECTIONS, type Section, type SectionId } from "./scroll-sections.js";
+  import { DRAWER_DEFAULT_W } from "./fullscreen.svelte.js";
+  import { chromeFade } from "./chrome-fade.js";
   import { resolveStoryMessage, deriveSectionState } from "./story-messages.js";
   import type { DemoMode } from "./demo-mode.svelte.js";
   import type { DemoTopic } from "./bridge.js";
@@ -29,6 +33,19 @@
     flowBandOpen: boolean;
     /** Current effective demo mode. */
     mode: DemoMode;
+    /** Whether the simulator follows handbook navigation. */
+    linked: boolean;
+    /**
+     * Width the bar should lay out against instead of the viewport
+     * (e.g. the handbook drawer's width). null follows the viewport
+     * media queries as usual.
+     */
+    layoutWidth?: number | null;
+    /**
+     * Slides the bar up and out (fullscreen entry transition). The
+     * bar stays mounted; only the transform changes.
+     */
+    exiting?: boolean;
     seenTopics: ReadonlySet<DemoTopic>;
     onSectionClick: (id: SectionId) => void;
     onToggleDark: () => void;
@@ -36,6 +53,7 @@
     onLocaleChange: () => void;
     onToggleFlowBand: () => void;
     onToggleMode: () => void;
+    onToggleLink: () => void;
     /** Return to the handbook introduction page. */
     onHomeClick: () => void;
   }
@@ -48,6 +66,9 @@
     total,
     flowBandOpen,
     mode,
+    linked,
+    layoutWidth = null,
+    exiting = false,
     seenTopics,
     onSectionClick,
     onToggleDark,
@@ -55,6 +76,7 @@
     onLocaleChange,
     onToggleFlowBand,
     onToggleMode,
+    onToggleLink,
     onHomeClick,
   }: Props = $props();
 
@@ -183,7 +205,7 @@
     // focus and would break the roving order.
     const items = Array.from(
       panelRef.querySelectorAll<HTMLButtonElement>(
-        '[role="menuitem"], [role="menuitemradio"]',
+        '[role="menuitem"], [role="menuitemradio"], [role="menuitemcheckbox"]',
       ),
     ).filter((el) => el.offsetParent !== null);
     if (items.length === 0) return;
@@ -215,6 +237,11 @@
     closeMenus();
   }
 
+  function handleLink(): void {
+    onToggleLink();
+    closeMenus();
+  }
+
   function handleRestartMenu(): void {
     onRestart();
     closeMenus();
@@ -226,9 +253,38 @@
     }
     closeMenus();
   }
+
+  function handleFlowMenu(): void {
+    onToggleFlowBand();
+    closeMenus();
+  }
+
+  // Width-driven layout override: when layoutWidth is provided the bar
+  // collapses at the same breakpoints the viewport media queries use,
+  // but measured against that width (the drawer). The media queries
+  // stay active alongside; both only ever push toward the narrow
+  // layout, never fight.
+  const forceNarrow: boolean = $derived(
+    layoutWidth !== null && layoutWidth < 900,
+  );
+  const forcePhone: boolean = $derived(
+    layoutWidth !== null && layoutWidth < 480,
+  );
+  // Below the drawer's own default width the flow toggle leaves the row
+  // for the overflow menu. layoutWidth is the drawer width, so this
+  // reads as "the drawer has been dragged narrower than it opens at".
+  const forceTight: boolean = $derived(
+    layoutWidth !== null && layoutWidth < DRAWER_DEFAULT_W,
+  );
 </script>
 
-<header class="top-bar">
+<header
+  class="top-bar"
+  class:top-bar--narrow={forceNarrow}
+  class:top-bar--phone={forcePhone}
+  class:top-bar--tight={forceTight}
+  class:top-bar--exiting={exiting}
+>
   <div class="top-bar-inner">
     <div class="top-bar-left">
       <span class="top-bar-brand">{m.demo_app_brand()}</span>
@@ -302,6 +358,7 @@
           class="contents-panel"
           role="menu"
           tabindex="-1"
+          transition:chromeFade
           bind:this={contentsPanelRef}
           onkeydown={(e) => handleMenuKeydown(e, contentsPanelRef)}
         >
@@ -356,13 +413,13 @@
       </button>
       <button
         class="mode-seg"
-        class:mode-seg-active={mode === "explore"}
+        class:mode-seg-active={mode === "simulate"}
         role="radio"
-        aria-checked={mode === "explore"}
+        aria-checked={mode === "simulate"}
         type="button"
-        onclick={mode !== "explore" ? onToggleMode : undefined}
+        onclick={mode !== "simulate" ? onToggleMode : undefined}
       >
-        {m.demo_mode_explore()}
+        {m.demo_mode_simulate()}
       </button>
     </div>
 
@@ -400,10 +457,11 @@
           class="more-panel"
           role="menu"
           tabindex="-1"
+          transition:chromeFade
           bind:this={morePanelRef}
           onkeydown={(e) => handleMenuKeydown(e, morePanelRef)}
         >
-          <!-- On narrow screens the Read/Explore segmented control leaves
+          <!-- On narrow screens the Read/Simulate segmented control leaves
                the bar and lives here instead (CSS-toggled). -->
           <div class="more-mode-group" role="none">
             <button
@@ -423,18 +481,45 @@
             <button
               class="more-item"
               role="menuitemradio"
-              aria-checked={mode === "explore"}
+              aria-checked={mode === "simulate"}
               type="button"
-              onclick={() => handleModeSelect("explore")}
+              onclick={() => handleModeSelect("simulate")}
             >
               <span class="more-radio-slot">
-                {#if mode === "explore"}
+                {#if mode === "simulate"}
                   <Check size={16} />
                 {/if}
               </span>
-              <span>{m.demo_mode_explore()}</span>
+              <span>{m.demo_mode_simulate()}</span>
             </button>
           </div>
+          <!-- Folds out of the row once the drawer is narrower than it
+               opens at (CSS-toggled), same as the mode control above. -->
+          <button
+            class="more-item more-flow-item"
+            role="menuitemcheckbox"
+            aria-checked={flowBandOpen}
+            type="button"
+            onclick={handleFlowMenu}
+          >
+            <Waypoints size={16} />
+            <span>{m.demo_flow_toggle_label()}</span>
+          </button>
+          <button
+            class="more-item"
+            role="menuitem"
+            type="button"
+            onclick={handleLink}
+          >
+            {#if linked}
+              <Link2Off size={16} />
+            {:else}
+              <Link2 size={16} />
+            {/if}
+            <span>
+              {linked ? m.demo_more_link_linked() : m.demo_more_link_unlinked()}
+            </span>
+          </button>
           <button
             class="more-item"
             role="menuitem"
@@ -477,6 +562,7 @@
     position: sticky;
     top: 0;
     z-index: 100;
+    transition: transform 150ms ease;
     background: color-mix(in srgb, var(--paper) 92%, transparent);
     backdrop-filter: blur(12px);
     -webkit-backdrop-filter: blur(12px);
@@ -484,7 +570,17 @@
     padding: 0 1rem;
   }
 
+  /* Quick slide-up exit while fullscreen entry animates. */
+  .top-bar--exiting {
+    transform: translateY(-100%);
+  }
+
+  /* Positioned so the contents panel can anchor to the row rather than
+     to its trigger once the bar goes narrow (see the responsive block).
+     z-index stays auto, so this does not create a stacking context and
+     the panel's z-index still resolves against the sticky bar. */
   .top-bar-inner {
+    position: relative;
     display: flex;
     align-items: center;
     gap: 0.5rem;
@@ -616,7 +712,11 @@
 
   /* Panels take the Inkwell card anatomy: raised paper, hair-2 edge,
      no shadow. Items rule off with hairlines rather than floating as
-     rounded chips. */
+     rounded chips.
+
+     The panel is trigger-anchored only while the trigger is wide enough
+     to host it. Below the narrow breakpoint it detaches and spans the
+     bar row instead; min-width is the wide-layout floor. */
   .contents-panel {
     position: absolute;
     top: calc(100% + 6px);
@@ -846,8 +946,10 @@
   }
 
   /* Mode radio items live in the bar's segmented control on wide screens
-     and only surface in this menu below the narrow breakpoint. */
-  .more-mode-group {
+     and only surface in this menu below the narrow breakpoint. The flow
+     toggle does the same one tier further down. */
+  .more-mode-group,
+  .more-flow-item {
     display: none;
   }
 
@@ -878,16 +980,30 @@
       padding: 0;
     }
 
-    /* On narrow screens the panel escapes its wrapper and anchors to the
-       viewport instead: the wrapper sits right of the leading buttons, so
-       any wrapper-relative full-width placement would spill off the right
-       edge. Fixed positioning works because the bar is sticky at top: 0;
-       the 1rem insets mirror the bar's padding as the visual gutter. */
+    /* The picker keeps shrinking as the bar narrows, and a panel pinned
+       to left: 0 / right: 0 of that wrapper shrinks with it: at a 320px
+       drawer the trigger is ~122px, and every section title wraps three
+       lines inside a panel that narrow.
+
+       So the panel stops taking its width from the trigger. Dropping the
+       wrapper to position: static hands the panel's containing block to
+       .top-bar-inner, and it spans the whole row instead. top: 100% now
+       resolves against the 56px row, hanging the panel off the bar's
+       bottom edge rather than the trigger's.
+
+       Row-relative rather than viewport-relative, so this holds inside
+       the handbook drawer too, where the row is the drawer's width.
+
+       --contents-panel-inset lets a host that reserves part of the row
+       for its own chrome hand that space back to the panel, which sits
+       below the row and does not compete with it. */
+    .contents-wrapper {
+      position: static;
+    }
+
     .contents-panel {
-      position: fixed;
-      top: calc(56px + 6px);
-      left: 1rem;
-      right: 1rem;
+      left: 0;
+      right: var(--contents-panel-inset, 0px);
       min-width: 0;
       width: auto;
       max-width: none;
@@ -916,7 +1032,7 @@
       max-width: none;
     }
 
-    /* The explore button is the group's :last-child and drops its own
+    /* The simulate button is the group's :last-child and drops its own
        hairline, so the group carries the divider before Language. */
     .more-mode-group {
       display: block;
@@ -924,7 +1040,87 @@
     }
   }
 
+  /* -----------------------------------------------------------------------
+     Responsive: tight (< 320px)
+
+     Matches the handbook drawer's default width: dragged narrower than
+     it opens at, the row gives up the data flow toggle to the overflow
+     menu so the contents picker keeps a readable title.
+     ----------------------------------------------------------------------- */
+
+  @media (max-width: 319px) {
+    .flow-btn {
+      display: none;
+    }
+
+    .more-flow-item {
+      display: flex;
+    }
+  }
+
+  /* -----------------------------------------------------------------------
+     Width-driven overrides (.top-bar--narrow / --phone / --tight)
+
+     Class twins of the three media-query blocks above, applied when the
+     layoutWidth prop crosses the same breakpoints. Used when the bar is
+     docked inside the handbook drawer, whose width is independent of
+     the viewport. The panel escape is mirrored along with the rest:
+     anchoring to .top-bar-inner keeps it inside the drawer, which is
+     what the drawer's own override used to have to force.
+     ----------------------------------------------------------------------- */
+
+  .top-bar--narrow .top-bar-left {
+    display: none;
+  }
+
+  .top-bar--narrow .contents-wrapper {
+    position: static;
+  }
+
+  .top-bar--narrow .contents-panel {
+    left: 0;
+    right: var(--contents-panel-inset, 0px);
+    min-width: 0;
+    width: auto;
+    max-width: none;
+  }
+
+  .top-bar--narrow .flow-label {
+    display: none;
+  }
+
+  .top-bar--narrow .flow-btn {
+    width: 34px;
+    padding: 0;
+  }
+
+  .top-bar--phone .nav-btn {
+    display: none;
+  }
+
+  .top-bar--phone .mode-segments {
+    display: none;
+  }
+
+  .top-bar--phone .contents-wrapper {
+    max-width: none;
+  }
+
+  .top-bar--phone .more-mode-group {
+    display: block;
+    border-bottom: 1px solid var(--hair);
+  }
+
+  .top-bar--tight .flow-btn {
+    display: none;
+  }
+
+  .top-bar--tight .more-flow-item {
+    display: flex;
+  }
+
   @media (prefers-reduced-motion: reduce) {
+    .top-bar,
     .contents-item,
     .mode-seg,
     .more-item {
