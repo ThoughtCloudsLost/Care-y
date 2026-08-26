@@ -16,6 +16,7 @@
 import { z } from "zod";
 import { base64String } from "./validators.js";
 import { queueIdSchema, userIdSchema, intakeFormIdSchema } from "../ids.js";
+import { KB_ATTACHMENT_MAX_BYTES } from "./kb.js";
 
 // ---------------------------------------------------------------------------
 // Supported form content locales (tracks the app's paraglide locales)
@@ -508,6 +509,30 @@ export type IntakeFormMeta = z.infer<typeof intakeFormMetaSchema>;
  * blob key and encryption overhead.
  */
 export const ENCRYPTED_FORM_META_CAP = 400_000;
+
+// ---------------------------------------------------------------------------
+// Form asset upload (images embedded in rich-text fields and banner)
+// ---------------------------------------------------------------------------
+
+/** Content types accepted for form asset images. */
+export const FORM_ASSET_CONTENT_TYPES = [
+  "image/png",
+  "image/jpeg",
+  "image/webp",
+] as const;
+export type FormAssetContentType = (typeof FORM_ASSET_CONTENT_TYPES)[number];
+
+export const formAssetContentTypeSchema = z.enum(FORM_ASSET_CONTENT_TYPES);
+
+export const uploadFormAssetInputSchema = z.object({
+  /** Client-side-encrypted blob (base64). */
+  blob: base64String("blob"),
+  /** Actual byte length of the encrypted blob (server validates match). */
+  sizeBytes: z.number().int().min(1).max(KB_ATTACHMENT_MAX_BYTES),
+  /** Declared image content type from the allowed set. */
+  contentType: formAssetContentTypeSchema,
+});
+export type UploadFormAssetInput = z.infer<typeof uploadFormAssetInputSchema>;
 
 // ---------------------------------------------------------------------------
 // Admin save input

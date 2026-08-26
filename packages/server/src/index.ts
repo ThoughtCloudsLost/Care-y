@@ -69,6 +69,7 @@ import { createWebhookHandler } from "./routes/webhooks.js";
 import { createTelephonyContentService } from "./telephony/telephony-content-service.js";
 import { createGreetingAudioHandler } from "./routes/greeting-audio.js";
 import { createBrandingIconHandler } from "./routes/branding-icons.js";
+import { createFormAssetHandler } from "./routes/form-assets.js";
 import { createBlobDownloadHandler } from "./routes/blob-download.js";
 import { createManifestHandler } from "./routes/manifest.js";
 import { createRelayHandler, type PendingCall } from "./routes/relay.js";
@@ -301,6 +302,7 @@ const RATE_PASSWORD_CHANGE_MAX = 5;
 const RATE_UPLOAD_MAX = 3;
 const RATE_KB_UPLOAD_MAX = 5;
 const RATE_BRANDING_UPLOAD_MAX = 3;
+const RATE_FORM_ASSET_UPLOAD_MAX = 5;
 const RATE_BOOTSTRAP_MAX = getEnv().NODE_ENV === "production" ? 2 : 20;
 
 // Portal read: 60 req/hour per IP. A 5-minute polling interval uses 12/hr.
@@ -632,6 +634,11 @@ const appRouter = createAppRouter({
     createAuditSvc: (tDb) => createAuditService(tDb),
     intakeFormService: createIntakeFormService({ fieldEncryptor: encryptor }),
     intakeResponseService: createIntakeResponseService(),
+    blobStore,
+    uploadLimiter: createInMemoryRateLimiter({
+      windowMs: RATE_WINDOW_1M,
+      maxRequests: RATE_FORM_ASSET_UPLOAD_MAX,
+    }),
   },
   clientPortalDeps: {
     submissionLimiter: createInMemoryRateLimiter({
@@ -1099,6 +1106,13 @@ const brandingIconHandler = createBrandingIconHandler({
   corsHeaders: cors.base,
 });
 
+const formAssetHandler = createFormAssetHandler({
+  blobStore,
+  orgService,
+  corsHeaders: cors.base,
+  createTenantDb: (orgSchema) => tenantDb(orgSchema),
+});
+
 const blobDownloadHandler = createBlobDownloadHandler({
   blobStore,
   orgResolver: relayOrgResolver,
@@ -1129,6 +1143,7 @@ const server = createHttpServer(trpcHandler, cors.preflight, [
   { prefix: "/notifications/stream", handler: handleSse },
   { prefix: "/api/greetings/", handler: greetingAudioHandler },
   { prefix: "/api/blobs/", handler: blobDownloadHandler },
+  { prefix: "/api/forms/", handler: formAssetHandler },
   { prefix: "/api/branding/", handler: brandingIconHandler },
   { prefix: "/manifest.webmanifest", handler: manifestHandler },
 ]);

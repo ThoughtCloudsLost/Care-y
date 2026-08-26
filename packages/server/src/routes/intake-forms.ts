@@ -21,6 +21,8 @@ import type { OrgContext } from "../trpc/context.js";
 import type { AuditService } from "../tickets/audit.js";
 import type { IntakeFormService } from "../portal/intake-form-service.js";
 import type { IntakeResponseService } from "../portal/intake-response-service.js";
+import type { BlobStore } from "../storage/store.js";
+import type { RateLimiter } from "../ratelimit/rate-limiter.js";
 import {
   Permission,
   saveIntakeFormInputSchema,
@@ -28,13 +30,18 @@ import {
   listIntakeResponsesInputSchema,
   backfillWrapsInputSchema,
   logExportInputSchema,
+  uploadFormAssetInputSchema,
 } from "@care-y/shared";
 import { b64 } from "../utils/ciphertext-wire.js";
+import { uploadFormAsset } from "../portal/form-asset-service.js";
+import { TRPCError } from "@trpc/server";
 
 export interface IntakeFormRouterDeps {
   readonly createAuditSvc: (tDb: OrgContext["tenantDb"]) => AuditService;
   readonly intakeFormService: IntakeFormService;
   readonly intakeResponseService: IntakeResponseService;
+  readonly blobStore: BlobStore;
+  readonly uploadLimiter: RateLimiter;
 }
 
 const queueManagerProcedure = authed2faProcedure.use(
@@ -282,5 +289,43 @@ export function createIntakeFormRouter(deps: IntakeFormRouterDeps) {
         return { ok: true };
       }),
     ),
+
+    /**
+     * Upload an encrypted form asset image (banner or inline rich-text image).
+     * Stores the blob under the form-asset/ namespace in BlobStore and records
+     * metadata for the serving handler.
+     */
+    uploadFormAsset: queueManagerProcedure
+      .input(uploadFormAssetInputSchema)
+      .mutation(
+        withErrorWrapping(async ({ ctx, input }) => {
+          const rateResult = deps.uploadLimiter.check(ctx.user.id);
+          if (!rateResult.allowed) {
+            throw new TRPCError({
+              code: "TOO_MANY_REQUESTS",
+              message: `Upload rate limited. Retry after ${String(Math.ceil(rateResult.retryAfterMs / 1000))}s`,
+            });
+          }
+
+          const blobBuffer = Buffer.from(input.blob, "base64");
+          const result = await uploadFormAsset(
+            ctx.org.tenantDb,
+            deps.blobStore,
+            ctx.org.orgSchema,
+            blobBuffer,
+            input.sizeBytes,
+            input.contentType,
+          );
+
+          const audit = deps.createAuditSvc(ctx.org.tenantDb);
+          void audit.log({
+            eventType: "form_asset_uploaded",
+            actorId: ctx.user.id,
+            metadata: { blobId: result.blobId },
+          });
+
+          return { blobKey: result.blobKey, blobId: result.blobId };
+        }),
+      ),
   });
 }

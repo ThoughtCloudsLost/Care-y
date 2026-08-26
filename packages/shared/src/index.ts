@@ -691,6 +691,11 @@ export {
   type VisibleWhen,
   type VisibilityRule,
   type VisibilityOperator,
+  FORM_ASSET_CONTENT_TYPES,
+  formAssetContentTypeSchema,
+  uploadFormAssetInputSchema,
+  type FormAssetContentType,
+  type UploadFormAssetInput,
 } from "./schemas/intake-forms.js";
 
 // --- Branded identifier types (ADR-074) ---
@@ -799,8 +804,11 @@ export {
   // Intake forms
   intakeFormIdSchema,
   intakeFormFieldIdSchema,
+  formAssetIdSchema,
+  newFormAssetId,
   type IntakeFormId,
   type IntakeFormFieldId,
+  type FormAssetId,
   // Client portal
   channelRowIdSchema,
   channelSecretSchema,

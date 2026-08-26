@@ -7,7 +7,7 @@
  */
 
 import crypto from "node:crypto";
-import { describe, it, expect, beforeAll, afterAll } from "vitest";
+import { describe, it, expect, vi, beforeAll, afterAll } from "vitest";
 import type { Kysely, Selectable } from "kysely";
 import type { TenantDatabase, UsersTable } from "../db/types.js";
 import {
@@ -33,6 +33,7 @@ import type {
   IntakeFormId,
   AliasHash,
   ClientId,
+  BlobKey,
 } from "@care-y/shared";
 import {
   createIntakeFormRouter,
@@ -194,6 +195,16 @@ describe.skipIf(!process.env.DATABASE_URL)(
           fieldEncryptor: createNoopFieldEncryptor(),
         }),
         intakeResponseService: createIntakeResponseService(),
+        blobStore: {
+          put: vi.fn(async () => "key" as BlobKey),
+          get: vi.fn(async () => null),
+          delete: vi.fn(async () => undefined),
+          exists: vi.fn(async () => false),
+        },
+        uploadLimiter: {
+          check: () => ({ allowed: true, remaining: 5, retryAfterMs: 0 }),
+          reset: vi.fn(),
+        },
       };
     }
 

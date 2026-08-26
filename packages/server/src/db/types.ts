@@ -69,6 +69,7 @@ import type {
   EscalationRuleId,
   IntakeFormId,
   IntakeFormFieldId,
+  FormAssetId,
   ChannelRowId,
   ChannelSecret,
   PortalMessageId,
@@ -790,6 +791,15 @@ export interface IntakeKeyWrapsTable {
   created_at: Generated<Date>;
 }
 
+// --- Form assets (blob metadata for rich-text images and banners) ---
+
+export interface FormAssetsTable {
+  blob_id: FormAssetId;
+  blob_key: BlobKey;
+  content_type: string;
+  created_at: Generated<Date>;
+}
+
 // --- Share links (one-time encrypted content links) ---
 
 export interface ShareLinksTable {
@@ -929,6 +939,8 @@ export interface TenantDatabase {
   intake_key_wraps: IntakeKeyWrapsTable;
   // Merge candidate dismissals
   merge_candidate_dismissals: MergeCandidateDismissalsTable;
+  // Form assets (rich-text images and banners)
+  form_assets: FormAssetsTable;
   // Client portal
   portal_channels: PortalChannelsTable;
   portal_messages: PortalMessagesTable;

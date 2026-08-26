@@ -135,6 +135,7 @@ export const auditEventTypeSchema = z.enum([
   "intake_responses_viewed",
   "intake_responses_exported",
   "builtin_default_toggled",
+  "form_asset_uploaded",
 ]);
 export type AuditEventType = z.infer<typeof auditEventTypeSchema>;
 

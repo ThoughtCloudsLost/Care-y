@@ -331,6 +331,10 @@ export type IntakeFormId = z.infer<typeof intakeFormIdSchema>;
 export const intakeFormFieldIdSchema = z.uuid().brand<"IntakeFormFieldId">();
 export type IntakeFormFieldId = z.infer<typeof intakeFormFieldIdSchema>;
 
+/** `form_assets.blob_id`. */
+export const formAssetIdSchema = z.uuid().brand<"FormAssetId">();
+export type FormAssetId = z.infer<typeof formAssetIdSchema>;
+
 // `intake_forms.slug` is deliberately not branded here. A validated
 // `intakeFormSlugSchema` already exists in `./schemas/intake-forms.js` with the
 // real kebab-case rules, and duplicating it weaker would be worse than leaving
@@ -613,6 +617,11 @@ export function newShareId(): ShareId {
 /** Mint a client account id. */
 export function newClientAccountId(): ClientAccountId {
   return randomId() as ClientAccountId;
+}
+
+/** Mint a form asset id. */
+export function newFormAssetId(): FormAssetId {
+  return randomId() as FormAssetId;
 }
 
 /**
