@@ -22,8 +22,8 @@ describe("parseModeParam", () => {
     expect(parseModeParam("?mode=read")).toBe("read");
   });
 
-  it("returns 'explore' for ?mode=explore", () => {
-    expect(parseModeParam("?mode=explore")).toBe("explore");
+  it("returns 'simulate' for ?mode=simulate", () => {
+    expect(parseModeParam("?mode=simulate")).toBe("simulate");
   });
 
   it("returns null for legacy ?mode=walk", () => {
@@ -42,7 +42,7 @@ describe("parseModeParam", () => {
   });
 
   it("preserves other params while reading", () => {
-    expect(parseModeParam("?record=1&mode=explore")).toBe("explore");
+    expect(parseModeParam("?record=1&mode=simulate")).toBe("simulate");
   });
 });
 
@@ -58,16 +58,16 @@ describe("writeModeParam", () => {
   });
 
   it("overwrites existing mode param", () => {
-    const result = writeModeParam("?mode=read", "explore");
-    expect(result).toContain("mode=explore");
+    const result = writeModeParam("?mode=read", "simulate");
+    expect(result).toContain("mode=simulate");
     expect(result).not.toContain("mode=read");
   });
 
   it("preserves other params", () => {
-    const result = writeModeParam("?record=1&foo=bar", "explore");
+    const result = writeModeParam("?record=1&foo=bar", "simulate");
     expect(result).toContain("record=1");
     expect(result).toContain("foo=bar");
-    expect(result).toContain("mode=explore");
+    expect(result).toContain("mode=simulate");
   });
 });
 
@@ -92,9 +92,9 @@ describe("createDemoMode", () => {
     });
   });
 
-  it("defaults to explore when isNarrow returns false", () => {
+  it("defaults to simulate when isNarrow returns false", () => {
     const store = createDemoMode(() => false);
-    expect(store.mode).toBe("explore");
+    expect(store.mode).toBe("simulate");
     expect(store.override).toBeNull();
   });
 
@@ -106,29 +106,29 @@ describe("createDemoMode", () => {
 
   it("reads override from location.search at creation", () => {
     Object.defineProperty(window, "location", {
-      value: { ...window.location, search: "?mode=explore" },
+      value: { ...window.location, search: "?mode=simulate" },
       writable: true,
       configurable: true,
     });
     const store = createDemoMode(() => true);
-    expect(store.mode).toBe("explore");
-    expect(store.override).toBe("explore");
+    expect(store.mode).toBe("simulate");
+    expect(store.override).toBe("simulate");
   });
 
-  it("toggle flips from default explore to read", () => {
+  it("toggle flips from default simulate to read", () => {
     const store = createDemoMode(() => false);
-    expect(store.mode).toBe("explore");
+    expect(store.mode).toBe("simulate");
     store.toggle();
     expect(store.mode).toBe("read");
     expect(store.override).toBe("read");
   });
 
-  it("toggle flips from default read to explore", () => {
+  it("toggle flips from default read to simulate", () => {
     const store = createDemoMode(() => true);
     expect(store.mode).toBe("read");
     store.toggle();
-    expect(store.mode).toBe("explore");
-    expect(store.override).toBe("explore");
+    expect(store.mode).toBe("simulate");
+    expect(store.override).toBe("simulate");
   });
 
   it("toggle writes URL param via replaceState", () => {
@@ -154,8 +154,8 @@ describe("createDemoMode", () => {
   it("override is not clobbered by viewport default change", () => {
     let narrow = false;
     const store = createDemoMode(() => narrow);
-    // Default: explore (not narrow)
-    expect(store.mode).toBe("explore");
+    // Default: simulate (not narrow)
+    expect(store.mode).toBe("simulate");
     // User toggles to read
     store.toggle();
     expect(store.mode).toBe("read");
@@ -175,21 +175,21 @@ describe("createDemoMode", () => {
       configurable: true,
     });
     const store = createDemoMode(() => false);
-    expect(store.mode).toBe("explore");
+    expect(store.mode).toBe("simulate");
     expect(store.override).toBeNull();
   });
 
   it("double toggle returns to the opposite of the original default", () => {
     const store = createDemoMode(() => false);
-    store.toggle(); // explore -> read
-    store.toggle(); // read -> explore
-    expect(store.mode).toBe("explore");
-    expect(store.override).toBe("explore");
+    store.toggle(); // simulate -> read
+    store.toggle(); // read -> simulate
+    expect(store.mode).toBe("simulate");
+    expect(store.override).toBe("simulate");
   });
 
-  it("set('read') overrides the explore default (toolbar close button)", () => {
+  it("set('read') overrides the simulate default (toolbar close button)", () => {
     const store = createDemoMode(() => false);
-    expect(store.mode).toBe("explore");
+    expect(store.mode).toBe("simulate");
     store.set("read");
     expect(store.mode).toBe("read");
     expect(store.override).toBe("read");

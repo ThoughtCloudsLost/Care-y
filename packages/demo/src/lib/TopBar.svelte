@@ -413,13 +413,13 @@
       </button>
       <button
         class="mode-seg"
-        class:mode-seg-active={mode === "explore"}
+        class:mode-seg-active={mode === "simulate"}
         role="radio"
-        aria-checked={mode === "explore"}
+        aria-checked={mode === "simulate"}
         type="button"
-        onclick={mode !== "explore" ? onToggleMode : undefined}
+        onclick={mode !== "simulate" ? onToggleMode : undefined}
       >
-        {m.demo_mode_explore()}
+        {m.demo_mode_simulate()}
       </button>
     </div>
 
@@ -481,16 +481,16 @@
             <button
               class="more-item"
               role="menuitemradio"
-              aria-checked={mode === "explore"}
+              aria-checked={mode === "simulate"}
               type="button"
-              onclick={() => handleModeSelect("explore")}
+              onclick={() => handleModeSelect("simulate")}
             >
               <span class="more-radio-slot">
-                {#if mode === "explore"}
+                {#if mode === "simulate"}
                   <Check size={16} />
                 {/if}
               </span>
-              <span>{m.demo_mode_explore()}</span>
+              <span>{m.demo_mode_simulate()}</span>
             </button>
           </div>
           <!-- Folds out of the row once the drawer is narrower than it
@@ -1032,7 +1032,7 @@
       max-width: none;
     }
 
-    /* The explore button is the group's :last-child and drops its own
+    /* The simulate button is the group's :last-child and drops its own
        hairline, so the group carries the divider before Language. */
     .more-mode-group {
       display: block;

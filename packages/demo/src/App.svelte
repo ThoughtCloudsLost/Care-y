@@ -284,7 +284,7 @@
   /** Frame box expanded upward to cover the floating toolbar so the
    *  flow hole clears the bar + gap above the frame. No horizontal
    *  expansion: the toolbar spans the frame width, not beyond it.
-   *  In non-explore mode (read) or when chrome is hidden, falls back to
+   *  In non-simulate mode (read) or when chrome is hidden, falls back to
    *  the bare rect. */
   const chromeFrameRect = $derived.by(() => {
     if (!showDesktopChrome) return frameRect;
@@ -1041,7 +1041,7 @@
     demoMode.toggle();
   }
 
-  /** Toolbar close button: leave explore mode for the reading view. */
+  /** Toolbar close button: leave simulate mode for the reading view. */
   function handleCloseToRead(): void {
     demoMode.set("read");
   }
@@ -1235,9 +1235,9 @@
 
   const isNarrow: boolean = $derived(windowW < WIDE_BREAKPOINT);
 
-  // Explicit demo mode: "read" (story-first, frame via peek) or "explore"
+  // Explicit demo mode: "read" (story-first, frame via peek) or "simulate"
   // (frame always visible with sidebar chrome). Default derives from
-  // viewport width; ?mode=read/explore overrides. The override survives
+  // viewport width; ?mode=read/simulate overrides. The override survives
   // restart (search string is preserved) and is not clobbered by resizes.
   const demoMode = createDemoMode(() => isNarrow);
   initColumnSlot(demoMode.mode);
@@ -1252,12 +1252,12 @@
   // In read mode the floating frame is CSS-hidden when the peek
   // controller is idle, and shown during any peek phase.
   const frameVisible: boolean = $derived(
-    demoMode.mode === "explore" || peekActive,
+    demoMode.mode === "simulate" || peekActive,
   );
 
   // The desktop chrome (sidebar, resize handles, bezel strips) is shown
-  // in explore mode. Read mode uses the close-and-continue button instead.
-  const showDesktopChrome: boolean = $derived(demoMode.mode === "explore");
+  // in simulate mode. Read mode uses the close-and-continue button instead.
+  const showDesktopChrome: boolean = $derived(demoMode.mode === "simulate");
 
   // Rect the story layout wraps around. Null while the frame is
   // CSS-hidden (read mode, peek idle) or fullscreen is active, so the
@@ -1281,15 +1281,15 @@
     prevMode = current;
 
     if (current === "read" && (fsActive || fsAnimPhase !== "idle")) {
-      // Leaving explore for read while fullscreen or mid-animation:
+      // Leaving simulate for read while fullscreen or mid-animation:
       // cancel any animation and exit so the frame restores before the
       // CSS-hide path takes over.
       cancelFsAnimation();
       fsCtrl.exit();
     }
 
-    if (switching === "read" && current === "explore") {
-      // Entering explore: cancel any in-flight peek, present the frame.
+    if (switching === "read" && current === "simulate") {
+      // Entering simulate: cancel any in-flight peek, present the frame.
       peekCtrl.resetToIdle();
       capturedStill = null;
       geo.reset();
@@ -1308,13 +1308,13 @@
         fsCtrl.enter(true, phoneSnap);
       }
     }
-    // Entering read from explore: the CSS-hide path handles visibility.
+    // Entering read from simulate: the CSS-hide path handles visibility.
     // The iframe must NOT be unmounted (load-bearing invariant).
   });
 
-  // Initial explore load is handled in one place further down, once the
+  // Initial simulate load is handled in one place further down, once the
   // fullscreen animation state the splash writes to has been declared
-  // (see "Initial explore entrance").
+  // (see "Initial simulate entrance").
 
   // Every wide page carries the rail. Single-sub pages get one too, so
   // the text column keeps the same left edge from page to page.
@@ -1502,7 +1502,7 @@
 
   /** The drawer defaults to open when the USER enters fullscreen
    *  (toolbar button or preset menu item). Automatic entries (mobile
-   *  explore default, live-drag pressure) keep it closed. */
+   *  simulate default, live-drag pressure) keep it closed. */
   function openFsDrawer(): void {
     if (!fsCtrl.drawerOpen) fsCtrl.toggleDrawer();
   }
@@ -1758,12 +1758,12 @@
   }
 
   // -----------------------------------------------------------------------
-  // Initial explore entrance
+  // Initial simulate entrance
   //
   // Narrow viewports enter fullscreen and stay there; wide ones open on
   // the splash, which starts fullscreen and resolves into the framed
   // simulator. The mode transition effect only fires on transitions, so
-  // a load that is already in explore mode (viewport default or ?mode=)
+  // a load that is already in simulate mode (viewport default or ?mode=)
   // is handled here.
   //
   // Placed after the fullscreen animation state rather than beside the
@@ -1775,7 +1775,7 @@
   // -----------------------------------------------------------------------
 
   untrack(() => {
-    if (demoMode.mode !== "explore") return;
+    if (demoMode.mode !== "simulate") return;
 
     if (windowW < WIDE_BREAKPOINT) {
       // Fitted phone preset as the saved snapshot, so a pill exit lands
@@ -2155,7 +2155,7 @@
   style:width="{fsActive ? windowW : geo.outerW}px"
   style:height="{fsActive ? windowH : geo.outerH}px"
 >
-  <!-- Single FrameToolbar instance: always rendered in explore mode.
+  <!-- Single FrameToolbar instance: always rendered in simulate mode.
        Props switch with toolbarPill, which turns on at animation START
        (enter-grow) rather than at settle, so the bar-to-pill morph runs
        alongside the frame spring and both land together. The element
@@ -2451,7 +2451,9 @@
 <!-- Handbook drawer: slide-over panel on the right, rendered when
      fullscreen is active. Section-level navigation happens through the
      TopBar's contents picker (docked inside the drawer while open).
-     Sub navigation uses the same SectionStrip the narrow-mode page shows.
+     Sub navigation uses the same SectionStrip the narrow-mode page shows,
+     and the same prose component the page renders, so clicking a heading
+     in the drawer navigates exactly as clicking one in the story does.
      Scrolling the drawer's prose drives the active sub the same way
      main-story scrolling does, through handleSubClick. -->
 {#if fsActive}
@@ -2461,6 +2463,9 @@
     activeSection={scrollEngine.activeSection}
     activeSub={scrollEngine.activeSub}
     locale={uiLocale}
+    {seenTopics}
+    onSelectSection={handleSectionClick}
+    onSelectSub={handleFsDrawerSubClick}
     onClose={handleFsDrawerClose}
     onOpen={handleFsDrawerOpen}
     onResize={handleFsDrawerResize}

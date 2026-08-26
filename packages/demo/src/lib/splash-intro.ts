@@ -126,7 +126,7 @@ export interface IntroSplashConditions {
  *                  named destination contradicts the same intent.
  */
 export function shouldPlayIntroSplash(c: IntroSplashConditions): boolean {
-  if (c.mode !== "explore") return false;
+  if (c.mode !== "simulate") return false;
   if (c.recordMode) return false;
   if (c.reducedMotion) return false;
   if (c.deepLinked) return false;

@@ -1,62 +1,35 @@
 <script lang="ts">
-  import { Check, MousePointerClick } from "@lucide/svelte";
-  import {
-    prepareWithSegments,
-    layoutNextLineRange,
-    materializeLineRange,
-    type PreparedTextWithSegments,
-    type LayoutCursor,
-  } from "@chenglou/pretext";
-  import {
-    prepareRichInline,
-    layoutNextRichInlineLineRange,
-    materializeRichInlineLineRange,
-    type PreparedRichInline,
-    type RichInlineCursor,
-  } from "@chenglou/pretext/rich-inline";
   import type { Section, SectionId } from "./scroll-sections.js";
-  import { getSection } from "./scroll-sections.js";
   import type { DemoTopic } from "./bridge.js";
   import {
     resolveStoryMessage,
     resolveParameterizedMessage,
   } from "./story-messages.js";
-  import { buildSubTopicLookup } from "./story-maps.js";
   import {
     type FlowBlock,
-    type FlowTextBlock,
     type FlowFigureBlock,
-    type FlowTextKind,
     type FlowHole,
     type FlowLayoutResult,
     type FlowColumn,
     type FlowFigureGeometry,
-    type FlowLine,
-    type FlowLineFragment,
-    type LineFiller,
-    type LineFillerResult,
-    type LineCursor,
-    LIST_INDENT,
     DEFAULT_METRICS,
     FRAME_PAD_TOP,
     FRAME_PAD_BOTTOM,
     FRAME_PAD_X,
     computeFlowLayout,
-    computeColumnSegments,
     extendHoleForFullBleed,
-    hitTestBlock,
   } from "./flow-layout.js";
-  import { type PeekFirePayload } from "./clip-registry.js";
   import {
-    FONT_STRINGS,
-    FONT_SUB_BODY_BOLD,
-    fontVarsStyle,
-    applyPretextLocale,
-    buildBlocks,
-  } from "./story-blocks.js";
+    type PreparedState,
+    prepareBlockHandles,
+    createFiller,
+    loadFlowFonts,
+  } from "./flow-prepare.js";
+  import { type PeekFirePayload } from "./clip-registry.js";
+  import { buildBlocks } from "./story-blocks.js";
   import { createFigureHysteresis } from "./figure-hysteresis.js";
-  import { plainMap } from "./non-reactive.js";
   import ClipFigure from "./ClipFigure.svelte";
+  import FlowProse from "./FlowProse.svelte";
   import {
     setFlowGeometrySource,
     stickyTopOffset,
@@ -126,27 +99,6 @@
   // Pretext preparation (font loading + prepare)
   // -----------------------------------------------------------------------
 
-  /** Plain block: measured as one segment run with the kind's font. */
-  interface PlainHandle {
-    readonly type: "plain";
-    readonly handle: PreparedTextWithSegments;
-  }
-
-  /** Block with bold runs: measured via rich-inline, one item per run. */
-  interface RichHandle {
-    readonly type: "rich";
-    readonly handle: PreparedRichInline;
-    /** Bold flag per rich-inline item, indexed by fragment itemIndex. */
-    readonly bold: readonly boolean[];
-  }
-
-  type BlockHandle = PlainHandle | RichHandle;
-
-  interface PreparedState {
-    forBlocks: readonly FlowBlock[];
-    handles: Map<number, BlockHandle>;
-  }
-
   // $state.raw, not $state: the value is swapped wholesale and never
   // mutated, and runLayout compares forBlocks by identity against the
   // blocks derived. A deep $state proxy would give forBlocks a different
@@ -166,55 +118,11 @@
     // follow, so a plain `let cancelled = false` reads as always falsy.
     const run = new AbortController();
 
-    /** Measure every block with the faces available right now. */
-    function prepareBlocks(): void {
-      applyPretextLocale(capturedLocale);
-
-      const handles = plainMap<number, BlockHandle>();
-      for (let i = 0; i < capturedBlocks.length; i++) {
-        const block = capturedBlocks.at(i);
-        if (block === undefined) continue;
-        // Figure blocks have no text to measure.
-        if (block.kind === "figure") continue;
-        const fontStr = FONT_STRINGS[block.kind];
-        if (block.runs !== undefined) {
-          // Bold markup: one rich-inline item per run, each measured
-          // with its own weight so line breaks account for the wider
-          // bold glyphs.
-          handles.set(i, {
-            type: "rich",
-            handle: prepareRichInline(
-              block.runs.map((r) => ({
-                text: r.text,
-                font: r.bold ? FONT_SUB_BODY_BOLD : fontStr,
-              })),
-            ),
-            bold: block.runs.map((r) => r.bold),
-          });
-        } else {
-          handles.set(i, {
-            type: "plain",
-            handle: prepareWithSegments(block.text, fontStr),
-          });
-        }
-      }
-      prepared = { forBlocks: capturedBlocks, handles };
-    }
-
     async function prepareAfterFonts(): Promise<void> {
-      // allSettled because the font set includes the client app's
-      // absolute-URL @font-face declarations, which do not resolve under
-      // the demo's serving root. load() rejects when ANY matched face
-      // fails, even though the hashed faces we actually render with load
-      // fine. allSettled lets those settle as rejected without blocking.
-      const fontLoadPromises = [
-        ...Object.values(FONT_STRINGS),
-        FONT_SUB_BODY_BOLD,
-      ].map(async (f) => document.fonts.load(f));
-      await Promise.allSettled(fontLoadPromises);
+      await loadFlowFonts();
       if (run.signal.aborted) return;
 
-      prepareBlocks();
+      prepared = prepareBlockHandles(capturedBlocks, capturedLocale);
     }
 
     void prepareAfterFonts();
@@ -223,97 +131,6 @@
       run.abort();
     };
   });
-
-  // -----------------------------------------------------------------------
-  // LineFiller implementation backed by pretext
-  // -----------------------------------------------------------------------
-
-  /** Runtime check that a LineCursor has the LayoutCursor shape. */
-  function isLayoutCursor(c: LineCursor): c is LayoutCursor {
-    if (typeof c !== "object" || c === null) return false;
-    return (
-      "segmentIndex" in c &&
-      typeof c.segmentIndex === "number" &&
-      "graphemeIndex" in c &&
-      typeof c.graphemeIndex === "number"
-    );
-  }
-
-  /** Runtime check for the rich-inline cursor shape (adds itemIndex). */
-  function isRichCursor(c: LineCursor): c is RichInlineCursor {
-    return (
-      isLayoutCursor(c) && "itemIndex" in c && typeof c.itemIndex === "number"
-    );
-  }
-
-  /** Fill one rich-inline line and flatten it into a filler result. */
-  function fillRichLine(
-    entry: RichHandle,
-    cursor: RichInlineCursor,
-    maxWidth: number,
-  ): LineFillerResult | null {
-    const range = layoutNextRichInlineLineRange(entry.handle, maxWidth, cursor);
-    if (range === null) return null;
-
-    const line = materializeRichInlineLineRange(entry.handle, range);
-    // Fragment offsets are relative to the line start: each fragment
-    // advances by its gapBefore (inter-item spacing pretext collapsed)
-    // plus its occupied width.
-    const fragments: FlowLineFragment[] = [];
-    let dx = 0;
-    let text = "";
-    for (const frag of line.fragments) {
-      dx += frag.gapBefore;
-      fragments.push({
-        text: frag.text,
-        bold: entry.bold.at(frag.itemIndex) ?? false,
-        dx,
-        width: frag.occupiedWidth,
-      });
-      dx += frag.occupiedWidth;
-      text += frag.text;
-    }
-    return { text, width: line.width, nextCursor: range.end, fragments };
-  }
-
-  function createFiller(handles: ReadonlyMap<number, BlockHandle>): LineFiller {
-    return {
-      startCursor(blockIndex: number): LineCursor {
-        if (handles.get(blockIndex)?.type === "rich") {
-          return {
-            itemIndex: 0,
-            segmentIndex: 0,
-            graphemeIndex: 0,
-          } satisfies RichInlineCursor;
-        }
-        return { segmentIndex: 0, graphemeIndex: 0 } satisfies LayoutCursor;
-      },
-      fillLine(
-        blockIndex: number,
-        cursor: LineCursor,
-        maxWidth: number,
-      ): LineFillerResult | null {
-        const entry = handles.get(blockIndex);
-        if (entry === undefined) return null;
-
-        if (entry.type === "rich") {
-          if (!isRichCursor(cursor)) return null;
-          return fillRichLine(entry, cursor, maxWidth);
-        }
-
-        if (!isLayoutCursor(cursor)) return null;
-        const range = layoutNextLineRange(entry.handle, cursor, maxWidth);
-        if (range === null) return null;
-
-        const materialized = materializeLineRange(entry.handle, range);
-        return {
-          text: materialized.text,
-          width: materialized.width,
-          nextCursor: range.end,
-        };
-      },
-    };
-  }
 
   // -----------------------------------------------------------------------
   // Container and layout state
@@ -796,58 +613,19 @@
     );
   }
 
-  interface VisibleBlock {
-    blockIndex: number;
-    block: FlowTextBlock;
-    geo: {
-      topY: number;
-      bottomY: number;
-      firstLineIndex: number;
-      lineCount: number;
-    };
-    /** This block's own lines, resolved once so the markup iterates a
-     *  concrete list instead of indexing into the shared line array. */
-    lines: FlowLine[];
-  }
-
-  // Reactive virtualization: reads only reactive $state/$derived values,
-  // never window.* or getBoundingClientRect() directly.
-  let visibleBlocks: VisibleBlock[] = $derived.by(() => {
-    if (layoutResult === null) return [];
-    // Layout geometry pairs with blocks by index, so a length mismatch
-    // means this layout belongs to a different blocks array and cannot be
-    // read safely. Rendering must never throw: a throw aborts the flush
-    // and freezes the DOM while the rAF loop keeps computing.
-    if (layoutResult.blocks.length !== blocks.length) return [];
-
-    const vpTop = scrollY;
-    const vpBottom = vpTop + viewportH;
-    const buffer = viewportH;
-
-    const result: VisibleBlock[] = [];
-    for (let bi = 0; bi < layoutResult.blocks.length; bi++) {
-      const geo = layoutResult.blocks.at(bi);
-      const block = blocks.at(bi);
-      if (geo === undefined || block === undefined) continue;
-      // Figure blocks are rendered from the figures array, not here.
-      if (block.kind === "figure") continue;
-      if (!isBlockVisible(geo, containerTop, vpTop, vpBottom, buffer)) continue;
-
-      const lines: FlowLine[] = [];
-      const end = geo.firstLineIndex + geo.lineCount;
-      for (let li = geo.firstLineIndex; li < end; li++) {
-        const line = layoutResult.lines.at(li);
-        if (line !== undefined) lines.push(line);
-      }
-      // The figure guard above narrows block to FlowTextBlock.
-      result.push({
-        blockIndex: bi,
-        block,
-        geo,
-        lines,
-      });
-    }
-    return result;
+  /**
+   * The band of prose worth rendering, in container space, one viewport
+   * of buffer either side of the visible window. Reads only reactive
+   * $state/$derived values, never window.* or getBoundingClientRect().
+   *
+   * Container space rather than document space because that is what the
+   * renderer positions in: subtracting containerTop here means it never
+   * needs to know where in the document it sits, or that it sits in a
+   * document at all.
+   */
+  let proseRange: { top: number; bottom: number } = $derived({
+    top: scrollY - containerTop - viewportH,
+    bottom: scrollY - containerTop + viewportH * 2,
   });
 
   // -----------------------------------------------------------------------
@@ -907,504 +685,30 @@
     figureHysteresis.commit();
     return result;
   });
-
-  // -----------------------------------------------------------------------
-  // Active sub highlight geometry
-  // -----------------------------------------------------------------------
-
-  interface HighlightRect {
-    x: number;
-    y: number;
-    width: number;
-    height: number;
-  }
-
-  const HIGHLIGHT_PAD_X = 8;
-
-  let highlightRects: HighlightRect[] = $derived.by(() => {
-    if (layoutResult === null || activeSub === null) return [];
-    if (layoutResult.blocks.length !== blocks.length) return [];
-
-    const rects: HighlightRect[] = [];
-    for (let bi = 0; bi < blocks.length; bi++) {
-      const block = blocks.at(bi);
-      if (block === undefined) continue;
-      if (block.sectionId !== activeSection || block.subSlug !== activeSub) {
-        continue;
-      }
-
-      const geo = layoutResult.blocks.at(bi);
-      if (geo === undefined || geo.lineCount === 0) continue;
-
-      const km = DEFAULT_METRICS[block.kind];
-
-      for (
-        let li = geo.firstLineIndex;
-        li < geo.firstLineIndex + geo.lineCount;
-        li++
-      ) {
-        const line = layoutResult.lines.at(li);
-        if (line === undefined) continue;
-        // Exactly the line box, no vertical padding: consecutive lines
-        // sit one lineHeight apart, so anything taller makes neighbours
-        // overlap and the translucent wash doubles up into a band along
-        // every seam. Horizontal padding is safe, lines do not abut.
-        rects.push({
-          x: line.x - HIGHLIGHT_PAD_X,
-          y: line.y,
-          width: line.width + HIGHLIGHT_PAD_X * 2,
-          height: km.lineHeight,
-        });
-      }
-    }
-    return rects;
-  });
-
-  // -----------------------------------------------------------------------
-  // Seen-topic check marks: positioned at the left of each seen sub's
-  // heading first line.
-  // -----------------------------------------------------------------------
-
-  interface SeenMark {
-    x: number;
-    y: number;
-    blockIndex: number;
-  }
-
-  // Pre-built lookup so seenMarks avoids O(n) array scans per heading
-  // block on every layout pass. Keyed by "sectionId--subSlug", maps to
-  // the sub's DemoTopic (null-topic subs are excluded).
-  let subTopicLookup: ReadonlyMap<string, DemoTopic> = $derived.by(() => {
-    return buildSubTopicLookup(sections);
-  });
-
-  let seenMarks: SeenMark[] = $derived.by(() => {
-    if (layoutResult === null) return [];
-    if (layoutResult.blocks.length !== blocks.length) return [];
-
-    const marks: SeenMark[] = [];
-    for (let bi = 0; bi < blocks.length; bi++) {
-      const block = blocks.at(bi);
-      if (block?.kind !== "sub-heading") continue;
-
-      const topic = subTopicLookup.get(
-        `${block.sectionId}--${block.subSlug ?? ""}`,
-      );
-      if (topic === undefined) continue;
-      if (!seenTopics.has(topic)) continue;
-
-      const geo = layoutResult.blocks.at(bi);
-      if (geo === undefined || geo.lineCount === 0) continue;
-
-      const firstLine = layoutResult.lines.at(geo.firstLineIndex);
-      if (firstLine === undefined) continue;
-      marks.push({
-        x: firstLine.x - 20,
-        y: firstLine.y + 2,
-        blockIndex: bi,
-      });
-    }
-    return marks;
-  });
-
-  // -----------------------------------------------------------------------
-  // Header panel: the tint that used to be the section header's card,
-  // drawn behind the title, description and tip. Sized from the pass's
-  // column rather than from the lines themselves, so it stays a panel
-  // instead of tracking every wrap the frame causes. The frame paints
-  // over it, the way it paints over the text it displaces.
-  // -----------------------------------------------------------------------
-
-  const PANEL_PAD_X = 16;
-  const PANEL_PAD_TOP = 16;
-  const PANEL_PAD_BOTTOM = 16;
-
-  interface PanelRect {
-    x: number;
-    y: number;
-    width: number;
-    height: number;
-  }
-
-  let headerPanel: PanelRect | null = $derived.by(() => {
-    if (layoutResult === null || layoutColumn === null) return null;
-    if (layoutResult.blocks.length !== blocks.length) return null;
-
-    let top = Infinity;
-    let bottom = -Infinity;
-    for (let bi = 0; bi < blocks.length; bi++) {
-      const block = blocks.at(bi);
-      if (block === undefined) continue;
-      if (
-        block.kind !== "section-title" &&
-        block.kind !== "section-desc" &&
-        block.kind !== "story-tip"
-      ) {
-        continue;
-      }
-      const geo = layoutResult.blocks.at(bi);
-      if (geo === undefined || geo.lineCount === 0) continue;
-      top = Math.min(top, geo.topY);
-      // bottomY carries the kind's bottom margin, which belongs to the
-      // gap below the panel rather than to the panel itself.
-      bottom = Math.max(
-        bottom,
-        geo.bottomY - DEFAULT_METRICS[block.kind].marginBottom,
-      );
-    }
-    if (top === Infinity) return null;
-
-    return {
-      x: layoutColumn.x - PANEL_PAD_X,
-      y: top - PANEL_PAD_TOP,
-      width: layoutColumn.width + PANEL_PAD_X * 2,
-      height: bottom - top + PANEL_PAD_TOP + PANEL_PAD_BOTTOM,
-    };
-  });
-
-  // -----------------------------------------------------------------------
-  // Tip icon: drawn in the gutter the tip block's indent reserves,
-  // beside its first line, the way the seen marks sit beside a heading.
-  // -----------------------------------------------------------------------
-
-  let tipMark: { x: number; y: number } | null = $derived.by(() => {
-    if (layoutResult === null) return null;
-    if (layoutResult.blocks.length !== blocks.length) return null;
-
-    for (let bi = 0; bi < blocks.length; bi++) {
-      if (blocks.at(bi)?.kind !== "story-tip") continue;
-      const geo = layoutResult.blocks.at(bi);
-      if (geo === undefined || geo.lineCount === 0) continue;
-      const firstLine = layoutResult.lines.at(geo.firstLineIndex);
-      if (firstLine === undefined) continue;
-      return { x: firstLine.x - LIST_INDENT, y: firstLine.y + 3 };
-    }
-    return null;
-  });
-
-  // -----------------------------------------------------------------------
-  // Heading rules
-  //
-  // A hairline under each sub heading, drawn through the same segment
-  // function the text uses. When the frame overlaps the rule's row the
-  // segments come back split, so the rule renders as two short strokes
-  // flanking the frame rather than one line running behind it.
-  // -----------------------------------------------------------------------
-
-  /** Gap between a heading's baseline row and its rule, in px. */
-  const RULE_OFFSET = 7;
-  const RULE_THICKNESS = 1;
-
-  interface RuleRect {
-    x: number;
-    y: number;
-    width: number;
-    /** Stable across relayout: block index plus position within the row. */
-    key: string;
-    active: boolean;
-  }
-
-  let headingRules: RuleRect[] = $derived.by(() => {
-    if (layoutResult === null) return [];
-    if (layoutResult.blocks.length !== blocks.length) return [];
-
-    // Use the column captured from the same pass that produced layoutResult
-    // so rules clip against the same inputs the text used (no one-frame
-    // disagreement between the rule and the text it decorates).
-    const col = layoutColumn;
-
-    const rects: RuleRect[] = [];
-    for (let bi = 0; bi < blocks.length; bi++) {
-      const block = blocks.at(bi);
-      if (block?.kind !== "sub-heading") continue;
-
-      const geo = layoutResult.blocks.at(bi);
-      if (geo === undefined || geo.lineCount === 0) continue;
-
-      const lastLine = layoutResult.lines.at(
-        geo.firstLineIndex + geo.lineCount - 1,
-      );
-      if (lastLine === undefined) continue;
-
-      const km = DEFAULT_METRICS[block.kind];
-      const ruleY = lastLine.y + km.lineHeight + RULE_OFFSET;
-      const active =
-        block.sectionId === activeSection && block.subSlug === activeSub;
-
-      const segments =
-        col !== null
-          ? computeColumnSegments(
-              ruleY,
-              RULE_THICKNESS,
-              containerWidth,
-              col,
-              layoutHole,
-            )
-          : [{ x: 0, width: containerWidth }];
-      for (let si = 0; si < segments.length; si++) {
-        const seg = segments.at(si);
-        if (seg === undefined) continue;
-        rects.push({
-          x: seg.x,
-          y: ruleY,
-          width: seg.width,
-          key: `${String(bi)}:${String(si)}`,
-          active,
-        });
-      }
-    }
-    return rects;
-  });
-
-  // -----------------------------------------------------------------------
-  // Click handling
-  // -----------------------------------------------------------------------
-
-  function handleClick(ev: MouseEvent): void {
-    if (layoutResult === null || containerEl === undefined) return;
-
-    const rect = containerEl.getBoundingClientRect();
-    const x = ev.clientX - rect.left;
-    const y = ev.clientY - rect.top;
-
-    // Convert to container-relative document-space coordinates
-    // The lines are positioned relative to the container's content, not scroll
-    const bi = hitTestBlock(x, y, layoutResult, DEFAULT_METRICS, blocks);
-    if (bi === null) return;
-
-    const block = blocks.at(bi);
-    if (block === undefined) return;
-    if (block.subSlug !== null) {
-      onSelectSub(block.sectionId, block.subSlug);
-    } else {
-      onSelectSection(block.sectionId);
-    }
-  }
-
-  function handleKeydown(ev: KeyboardEvent): void {
-    if (ev.key !== "Enter" && ev.key !== " ") return;
-    const target = ev.target;
-    if (!(target instanceof HTMLElement)) return;
-    const rawId = target.dataset.sectionId;
-    const subSlug = target.dataset.subSlug;
-    if (rawId === undefined) return;
-
-    // Validate the dataset value against the real section taxonomy
-    const section = getSection(rawId);
-    if (section === undefined) return;
-
-    ev.preventDefault();
-    if (subSlug !== undefined && subSlug !== "") {
-      onSelectSub(section.id, subSlug);
-    } else {
-      onSelectSection(section.id);
-    }
-  }
-
-  // -----------------------------------------------------------------------
-  // CSS class helpers per block kind
-  // -----------------------------------------------------------------------
-
-  /** Semantic tag for a text block. Only called for text blocks. */
-  function blockTag(kind: FlowTextKind): string {
-    switch (kind) {
-      case "section-title":
-        return "h2";
-      case "sub-heading":
-        return "h3";
-      case "section-desc":
-      case "story-tip":
-      case "sub-body":
-        return "p";
-    }
-  }
-
-  function lineColorClass(
-    block: FlowTextBlock,
-    activeSection_: SectionId,
-    activeSub_: string | null,
-  ): string {
-    // Active sub heading gets accent color
-    if (
-      block.kind === "sub-heading" &&
-      block.sectionId === activeSection_ &&
-      block.subSlug === activeSub_
-    ) {
-      return "flow-line--active-heading";
-    }
-    // Style classes per kind
-    switch (block.kind) {
-      case "section-title":
-        return "flow-line--title";
-      case "section-desc":
-        return "flow-line--desc";
-      case "story-tip":
-        return "flow-line--tip";
-      case "sub-heading":
-        return "flow-line--sub-heading";
-      case "sub-body":
-        return "flow-line--sub-body";
-    }
-  }
 </script>
 
-<!-- svelte-ignore a11y_click_events_have_key_events -->
-<!-- svelte-ignore a11y_no_static_element_interactions -->
-<div
-  class="flow-story"
-  bind:this={containerEl}
-  onclick={handleClick}
-  style="height: {layoutResult !== null
-    ? layoutResult.totalHeight
-    : 0}px; position: relative; {fontVarsStyle}"
+<FlowProse
+  {blocks}
+  {layoutResult}
+  {layoutColumn}
+  {layoutHole}
+  {containerWidth}
+  {activeSection}
+  {activeSub}
+  {seenTopics}
+  {sections}
+  visibleRange={proseRange}
+  {onSelectSection}
+  {onSelectSub}
+  oncontainer={(el: HTMLDivElement) => {
+    containerEl = el;
+  }}
 >
-  {#if layoutResult !== null}
-    <!-- Header tint, first so every line paints over it -->
-    {#if headerPanel !== null}
-      <div
-        class="flow-header-panel"
-        style="
-          left: {headerPanel.x}px;
-          top: {headerPanel.y}px;
-          width: {headerPanel.width}px;
-          height: {headerPanel.height}px;
-        "
-      ></div>
-    {/if}
-
-    <!-- Highlight rects behind active sub lines (unkeyed: stateless decoration) -->
-    {#each highlightRects as hr, i (i)}
-      <div
-        class="flow-highlight"
-        style="
-          left: {hr.x}px;
-          top: {hr.y}px;
-          width: {hr.width}px;
-          height: {hr.height}px;
-        "
-      ></div>
-    {/each}
-
-    <!-- Hairline rules under each sub heading -->
-    {#each headingRules as rule (rule.key)}
-      <div
-        class="flow-rule"
-        class:flow-rule--active={rule.active}
-        style="left: {rule.x}px; top: {rule.y}px; width: {rule.width}px;"
-      ></div>
-    {/each}
-
-    <!-- Tip icon in the gutter beside its first line -->
-    {#if tipMark !== null}
-      <div
-        class="flow-tip-mark"
-        style="left: {tipMark.x}px; top: {tipMark.y}px;"
-      >
-        <MousePointerClick size={16} />
-      </div>
-    {/if}
-
-    <!-- Seen-topic check marks -->
-    {#each seenMarks as mark (mark.blockIndex)}
-      <div class="flow-seen-mark" style="left: {mark.x}px; top: {mark.y}px;">
-        <Check size={14} />
-      </div>
-    {/each}
-
-    <!-- Visible blocks with their line spans -->
-    {#each visibleBlocks as vb (vb.block.id)}
-      {@const isFocusable = vb.block.kind === "sub-heading"}
-      {@const tag = blockTag(vb.block.kind)}
-
-      {#if tag === "h2"}
-        <h2 class="flow-block" style:top="{vb.geo.topY}px">
-          {#each vb.lines as line, li (li)}
-            <span
-              class="flow-line {lineColorClass(
-                vb.block,
-                activeSection,
-                activeSub,
-              )}"
-              style:left="{line.x}px"
-              style:top="{line.y - vb.geo.topY}px"
-              style:width="{line.width}px">{line.text}</span
-            >
-          {/each}
-        </h2>
-      {:else if tag === "h3"}
-        <!-- svelte-ignore a11y_no_noninteractive_tabindex -->
-        <h3
-          class="flow-block"
-          class:flow-block--focusable={isFocusable}
-          style:top="{vb.geo.topY}px"
-          role={isFocusable ? "button" : undefined}
-          tabindex={isFocusable ? 0 : undefined}
-          data-section-id={vb.block.sectionId}
-          data-sub-slug={vb.block.subSlug}
-          onkeydown={isFocusable ? handleKeydown : undefined}
-        >
-          {#each vb.lines as line, li (li)}
-            <span
-              class="flow-line {lineColorClass(
-                vb.block,
-                activeSection,
-                activeSub,
-              )}"
-              style:left="{line.x}px"
-              style:top="{line.y - vb.geo.topY}px"
-              style:width="{line.width}px">{line.text}</span
-            >
-          {/each}
-        </h3>
-      {:else}
-        {@const firstLine = vb.lines.at(0)}
-        <p class="flow-block" style:top="{vb.geo.topY}px">
-          <!-- List marker in the gutter the item's indent reserved -->
-          {#if vb.block.marker !== undefined && firstLine !== undefined}
-            <span
-              class="flow-line {lineColorClass(
-                vb.block,
-                activeSection,
-                activeSub,
-              )}"
-              style:left="{firstLine.x - (vb.block.indent ?? 0)}px"
-              style:top="{firstLine.y - vb.geo.topY}px">{vb.block.marker}</span
-            >
-          {/if}
-          {#each vb.lines as line, li (li)}
-            {#if line.fragments !== undefined}
-              <!-- Rich line: one span per styled fragment -->
-              {#each line.fragments as frag, fi (fi)}
-                <span
-                  class="flow-line {lineColorClass(
-                    vb.block,
-                    activeSection,
-                    activeSub,
-                  )}"
-                  class:flow-line--bold={frag.bold}
-                  style:left="{line.x + frag.dx}px"
-                  style:top="{line.y - vb.geo.topY}px"
-                  style:width="{frag.width}px">{frag.text}</span
-                >
-              {/each}
-            {:else}
-              <span
-                class="flow-line {lineColorClass(
-                  vb.block,
-                  activeSection,
-                  activeSub,
-                )}"
-                style:left="{line.x}px"
-                style:top="{line.y - vb.geo.topY}px"
-                style:width="{line.width}px">{line.text}</span
-              >
-            {/if}
-          {/each}
-        </p>
-      {/if}
-    {/each}
-
-    <!-- Visible figures: absolutely positioned clip elements -->
+  <!-- Figures are the page's alone: the drawer has the live app behind
+       it and needs no clip of the same screens. They render here rather
+       than inside FlowProse so their peek handlers stay with the host
+       that owns them. -->
+  {#snippet figures()}
     {#each visibleFigures as vf (vf.block.id)}
       <div
         class="flow-figure"
@@ -1434,161 +738,13 @@
         />
       </div>
     {/each}
-  {/if}
-</div>
+  {/snippet}
+</FlowProse>
 
 <style>
-  .flow-story {
-    position: relative;
-    width: 100%;
-  }
-
-  .flow-block {
-    position: absolute;
-    left: 0;
-    right: 0;
-    margin: 0;
-    pointer-events: auto;
-  }
-
-  .flow-block--focusable {
-    cursor: pointer;
-  }
-
-  .flow-block--focusable:focus-visible {
-    outline: 2px solid var(--demo-accent);
-    outline-offset: 2px;
-    border-radius: 4px;
-  }
-
-  .flow-line {
-    position: absolute;
-    white-space: pre;
-    pointer-events: auto;
-    display: block;
-  }
-
-  /* Section title: primary text, weight 700 */
-  .flow-line--title {
-    font: var(--flow-font-title);
-    line-height: var(--flow-lh-title);
-    color: var(--ink);
-  }
-
-  /* Section description: muted text */
-  .flow-line--desc {
-    font: var(--flow-font-desc);
-    line-height: var(--flow-lh-desc);
-    color: var(--muted);
-  }
-
-  /* Story tip: muted, same measure as body copy */
-  .flow-line--tip {
-    font: var(--flow-font-tip);
-    line-height: var(--flow-lh-tip);
-    color: var(--muted);
-  }
-
-  /* Sub heading: primary text */
-  .flow-line--sub-heading {
-    font: var(--flow-font-sub-heading);
-    line-height: var(--flow-lh-sub-heading);
-    color: var(--ink);
-  }
-
-  /* Active sub heading: the yellow wash behind it is what marks it, so
-     the text keeps the ordinary heading colour and stays readable
-     through the highlight. */
-  .flow-line--active-heading {
-    font: var(--flow-font-sub-heading);
-    line-height: var(--flow-lh-sub-heading);
-    color: var(--ink);
-  }
-
-  /* Sub body: slightly muted text */
-  .flow-line--sub-body {
-    font: var(--flow-font-sub-body);
-    line-height: var(--flow-lh-sub-body);
-    color: var(--ink-2);
-  }
-
-  /* Bold markup runs: same metrics as sub-body, weight 700. Declared
-     after the kind classes so the font override wins on shared spans. */
-  .flow-line--bold {
-    font: var(--flow-font-sub-body-bold);
-  }
-
-  /* Tint behind the page title and description */
-  .flow-header-panel {
-    position: absolute;
-    border-radius: 8px;
-    background: color-mix(in srgb, var(--demo-accent) 5%, transparent);
-    pointer-events: none;
-  }
-
-  /* Highlight rects behind active sub lines. Yellow rather than the
-     interface blue: this marks passages the way a highlighter does,
-     and it should not read as another selectable control. */
-  .flow-highlight {
-    position: absolute;
-    /* One rect per line, stacked edge to edge, so a wider radius would
-       scallop the seam between every pair of lines. */
-    border-radius: 2px;
-    background: rgba(255, 214, 10, 0.38);
-    pointer-events: none;
-    transition: opacity 0.2s ease;
-  }
-
-  :global(html.dark) .flow-highlight {
-    background: rgba(255, 214, 10, 0.24);
-  }
-
-  @media (prefers-reduced-motion: reduce) {
-    .flow-highlight {
-      transition: none;
-    }
-  }
-
-  /* Hairline rule under each sub heading */
-  .flow-rule {
-    position: absolute;
-    height: 1px;
-    background: var(--hair-2);
-    pointer-events: none;
-    transition:
-      background 0.2s ease,
-      opacity 0.2s ease;
-  }
-
-  .flow-rule--active {
-    background: color-mix(in srgb, var(--demo-accent) 45%, transparent);
-  }
-
-  @media (prefers-reduced-motion: reduce) {
-    .flow-rule {
-      transition: none;
-    }
-  }
-
-  /* Tip icon */
-  .flow-tip-mark {
-    position: absolute;
-    color: var(--muted);
-    pointer-events: none;
-    display: flex;
-  }
-
-  /* Seen-topic check marks */
-  .flow-seen-mark {
-    position: absolute;
-    color: var(--meter-strong);
-    pointer-events: none;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-  }
-
-  /* Inline clip figures */
+  /* Inline clip figures. Declared here rather than in FlowProse because
+     the snippet above is compiled into this component, so this is the
+     scope its class resolves in. */
   .flow-figure {
     position: absolute;
     pointer-events: auto;

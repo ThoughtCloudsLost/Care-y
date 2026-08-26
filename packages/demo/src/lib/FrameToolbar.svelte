@@ -64,7 +64,7 @@
     onDesktopPreset: () => void;
     onShrinkGrow: () => void;
     onRoleChange: (role: RoleIdValue) => void;
-    /** Close the frame: leaves explore mode for read mode. */
+    /** Close the frame: leaves simulate mode for read mode. */
     onClose: () => void;
     /** Enter fullscreen mode from the toolbar button. */
     onFullscreen: () => void;
@@ -614,7 +614,7 @@
      frame (normal) or the bar itself (fullscreen).
 
      The fade covers the mounts the parent drives: arriving after the
-     entry splash sets the frame down, and the explore/read mode
+     entry splash sets the frame down, and the simulate/read mode
      toggle. It does not fire on a plain load (Svelte skips intros on
      the first render) and never fires for the fullscreen bar-to-pill
      change, which keeps this element alive and morphs it via FLIP. -->

@@ -1,47 +1,30 @@
 <script lang="ts">
   import type { Snippet } from "svelte";
+  import { prefersReducedMotion } from "svelte/motion";
   import { X } from "@lucide/svelte";
-  import {
-    prepareWithSegments,
-    layoutNextLineRange,
-    materializeLineRange,
-    type PreparedTextWithSegments,
-    type LayoutCursor,
-  } from "@chenglou/pretext";
-  import {
-    prepareRichInline,
-    layoutNextRichInlineLineRange,
-    materializeRichInlineLineRange,
-    type PreparedRichInline,
-    type RichInlineCursor,
-  } from "@chenglou/pretext/rich-inline";
   import * as m from "$lib/paraglide/messages.js";
   import { SECTIONS, type Section, type SectionId } from "./scroll-sections.js";
-  import {
-    FONT_STRINGS,
-    FONT_SUB_BODY_BOLD,
-    fontVarsStyle,
-    applyPretextLocale,
-    buildBlocks,
-  } from "./story-blocks.js";
+  import type { DemoTopic } from "./bridge.js";
+  import { buildBlocks } from "./story-blocks.js";
   import {
     type FlowBlock,
-    type FlowTextBlock,
-    type FlowLine,
-    type FlowLineFragment,
+    type FlowColumn,
     type FlowLayoutResult,
-    type LineFiller,
-    type LineFillerResult,
-    type LineCursor,
     DEFAULT_METRICS,
     computeFlowLayout,
   } from "./flow-layout.js";
+  import {
+    type PreparedState,
+    prepareBlockHandles,
+    createFiller,
+    loadFlowFonts,
+  } from "./flow-prepare.js";
+  import FlowProse from "./FlowProse.svelte";
   import {
     DRAWER_MAX_MEASURE,
     DRAWER_SNAP_CLOSE_W,
   } from "./fullscreen.svelte.js";
   import { READING_LINE_RATIO } from "./flow-geometry.svelte.js";
-  import { plainMap } from "./non-reactive.js";
 
   // -----------------------------------------------------------------------
   // Props
@@ -53,6 +36,10 @@
     activeSection: SectionId | null;
     activeSub: string | null;
     locale: string;
+    seenTopics: ReadonlySet<DemoTopic>;
+    /** Prose navigation, the same handlers the page's story uses. */
+    onSelectSection: (id: SectionId) => void;
+    onSelectSub: (sectionId: SectionId, subSlug: string) => void;
     onClose: () => void;
     /** Reopen from the parked grip: click, drag, or ArrowLeft on it. */
     onOpen: () => void;
@@ -91,6 +78,9 @@
     activeSection,
     activeSub,
     locale,
+    seenTopics,
+    onSelectSection,
+    onSelectSub,
     onClose,
     onOpen,
     onResize,
@@ -102,6 +92,46 @@
     takeover,
     footer,
   }: Props = $props();
+
+  // -----------------------------------------------------------------------
+  // Entry slide
+  //
+  // Fullscreen entry engages the override and opens the drawer in one
+  // synchronous block, so the aside is created with its open transform
+  // already applied. A CSS transition has nothing to run from when the
+  // open state is the element's FIRST computed style, which is why the
+  // drawer used to appear rather than arrive.
+  //
+  // Holding the parked transform for a paint gives the transition its
+  // starting point, and entry then uses the same slide the grip does
+  // instead of a second animation that could drift from it.
+  // -----------------------------------------------------------------------
+
+  let entered = $state(false);
+
+  $effect(() => {
+    // Nothing to ease into, and a parked frame or two would read as a
+    // flicker to exactly the people who asked not to see motion.
+    if (prefersReducedMotion.current) {
+      entered = true;
+      return;
+    }
+
+    // Two frames, not one: the first paints the parked transform, the
+    // second changes it. Flipping within the first frame would be
+    // coalesced into the initial style and land back where we started.
+    let second = 0;
+    const first = requestAnimationFrame(() => {
+      second = requestAnimationFrame(() => {
+        entered = true;
+      });
+    });
+
+    return () => {
+      cancelAnimationFrame(first);
+      if (second !== 0) cancelAnimationFrame(second);
+    };
+  });
 
   // -----------------------------------------------------------------------
   // Escape closes
@@ -124,6 +154,13 @@
     activeSection !== null
       ? (SECTIONS.find((s) => s.id === activeSection) ?? null)
       : null,
+  );
+
+  // Kept as a derived rather than built inline in the markup: a fresh
+  // array on every render would re-key the prose's sub-to-topic lookup
+  // each pass, for a value that only changes with the section.
+  const activeSections: Section[] = $derived(
+    activeEntry !== null ? [activeEntry] : [],
   );
 
   // -----------------------------------------------------------------------
@@ -272,6 +309,13 @@
     Math.min(contentWidth, DRAWER_MAX_MEASURE),
   );
 
+  // Horizontal offset that centres the prose column when the drawer is
+  // wider than the measure. Past the cap proseWidth stops changing while
+  // this keeps moving, so it is a layout input in its own right.
+  const proseOffsetX: number = $derived(
+    contentWidth > proseWidth ? Math.floor((contentWidth - proseWidth) / 2) : 0,
+  );
+
   // Build blocks for the active section only, filtering out figures
   let proseBlocks: FlowBlock[] = $derived.by(() => {
     if (activeEntry === null) return [];
@@ -280,72 +324,26 @@
   });
 
   // -----------------------------------------------------------------------
-  // Pretext preparation (mirrors FlowStory's pattern)
+  // Pretext preparation
   // -----------------------------------------------------------------------
 
-  interface PlainHandle {
-    readonly type: "plain";
-    readonly handle: PreparedTextWithSegments;
-  }
-
-  interface RichHandle {
-    readonly type: "rich";
-    readonly handle: PreparedRichInline;
-    readonly bold: readonly boolean[];
-  }
-
-  type BlockHandle = PlainHandle | RichHandle;
-
-  interface PreparedState {
-    forBlocks: readonly FlowBlock[];
-    handles: Map<number, BlockHandle>;
-  }
-
+  // $state.raw for the same reason FlowStory uses it: the value is
+  // swapped wholesale, and runProseLayout compares forBlocks by identity
+  // against the proseBlocks derived. A deep proxy would give forBlocks a
+  // different identity from the array it wraps.
   let prepared: PreparedState | null = $state.raw(null);
 
   $effect(() => {
+    // Read synchronously BEFORE the await so the effect tracks them.
     const capturedBlocks = proseBlocks;
     const capturedLocale = locale;
     const run = new AbortController();
 
-    function prepareBlocks(): void {
-      applyPretextLocale(capturedLocale);
-
-      const handles = plainMap<number, BlockHandle>();
-      for (let i = 0; i < capturedBlocks.length; i++) {
-        const block = capturedBlocks.at(i);
-        if (block === undefined) continue;
-        if (block.kind === "figure") continue;
-        const fontStr = FONT_STRINGS[block.kind];
-        if ("runs" in block && block.runs !== undefined) {
-          handles.set(i, {
-            type: "rich",
-            handle: prepareRichInline(
-              block.runs.map((r) => ({
-                text: r.text,
-                font: r.bold ? FONT_SUB_BODY_BOLD : fontStr,
-              })),
-            ),
-            bold: block.runs.map((r) => r.bold),
-          });
-        } else {
-          handles.set(i, {
-            type: "plain",
-            handle: prepareWithSegments(block.text, fontStr),
-          });
-        }
-      }
-      prepared = { forBlocks: capturedBlocks, handles };
-    }
-
     async function prepareAfterFonts(): Promise<void> {
-      const fontLoadPromises = [
-        ...Object.values(FONT_STRINGS),
-        FONT_SUB_BODY_BOLD,
-      ].map(async (f) => document.fonts.load(f));
-      await Promise.allSettled(fontLoadPromises);
+      await loadFlowFonts();
       if (run.signal.aborted) return;
-      prepareBlocks();
+
+      prepared = prepareBlockHandles(capturedBlocks, capturedLocale);
     }
 
     void prepareAfterFonts();
@@ -356,95 +354,14 @@
   });
 
   // -----------------------------------------------------------------------
-  // LineFiller backed by pretext (same as FlowStory)
-  // -----------------------------------------------------------------------
-
-  function isLayoutCursor(c: LineCursor): c is LayoutCursor {
-    if (typeof c !== "object" || c === null) return false;
-    return (
-      "segmentIndex" in c &&
-      typeof c.segmentIndex === "number" &&
-      "graphemeIndex" in c &&
-      typeof c.graphemeIndex === "number"
-    );
-  }
-
-  function isRichCursor(c: LineCursor): c is RichInlineCursor {
-    return (
-      isLayoutCursor(c) && "itemIndex" in c && typeof c.itemIndex === "number"
-    );
-  }
-
-  function fillRichLine(
-    entry: RichHandle,
-    cursor: RichInlineCursor,
-    maxWidth: number,
-  ): LineFillerResult | null {
-    const range = layoutNextRichInlineLineRange(entry.handle, maxWidth, cursor);
-    if (range === null) return null;
-
-    const line = materializeRichInlineLineRange(entry.handle, range);
-    const fragments: FlowLineFragment[] = [];
-    let dx = 0;
-    let text = "";
-    for (const frag of line.fragments) {
-      dx += frag.gapBefore;
-      fragments.push({
-        text: frag.text,
-        bold: entry.bold.at(frag.itemIndex) ?? false,
-        dx,
-        width: frag.occupiedWidth,
-      });
-      dx += frag.occupiedWidth;
-      text += frag.text;
-    }
-    return { text, width: line.width, nextCursor: range.end, fragments };
-  }
-
-  function createFiller(handles: ReadonlyMap<number, BlockHandle>): LineFiller {
-    return {
-      startCursor(blockIndex: number): LineCursor {
-        if (handles.get(blockIndex)?.type === "rich") {
-          return {
-            itemIndex: 0,
-            segmentIndex: 0,
-            graphemeIndex: 0,
-          } satisfies RichInlineCursor;
-        }
-        return { segmentIndex: 0, graphemeIndex: 0 } satisfies LayoutCursor;
-      },
-      fillLine(
-        blockIndex: number,
-        cursor: LineCursor,
-        maxWidth: number,
-      ): LineFillerResult | null {
-        const entry = handles.get(blockIndex);
-        if (entry === undefined) return null;
-
-        if (entry.type === "rich") {
-          if (!isRichCursor(cursor)) return null;
-          return fillRichLine(entry, cursor, maxWidth);
-        }
-
-        if (!isLayoutCursor(cursor)) return null;
-        const range = layoutNextLineRange(entry.handle, cursor, maxWidth);
-        if (range === null) return null;
-
-        const materialized = materializeLineRange(entry.handle, range);
-        return {
-          text: materialized.text,
-          width: materialized.width,
-          nextCursor: range.end,
-        };
-      },
-    };
-  }
-
-  // -----------------------------------------------------------------------
   // Layout computation (rAF-coalesced)
   // -----------------------------------------------------------------------
 
   let layoutResult: FlowLayoutResult | null = $state.raw(null);
+  // The column the current layoutResult was computed against, kept for
+  // the same reason FlowStory keeps its own: the decorations clip against
+  // the same rectangle the text did, with no one-frame disagreement.
+  let layoutColumn: FlowColumn | null = $state.raw(null);
   let layoutRafId = 0;
 
   function scheduleProseLayout(): void {
@@ -462,25 +379,32 @@
       proseWidth <= 0
     ) {
       layoutResult = null;
+      layoutColumn = null;
       return;
     }
 
     const filler = createFiller(prepared.handles);
-    const column = { x: 0, width: proseWidth };
+    // The centring offset goes into the column, not onto rendered
+    // positions: line x then already carries it, and everything measured
+    // from the column (the header tint, the heading rules) lands on the
+    // prose instead of at the drawer's left edge.
+    const column: FlowColumn = { x: proseOffsetX, width: proseWidth };
     layoutResult = computeFlowLayout(
       proseBlocks,
       filler,
-      proseWidth,
+      contentWidth,
       null,
       DEFAULT_METRICS,
       column,
     );
+    layoutColumn = column;
   }
 
   // Trigger relayout when inputs change
   $effect(() => {
     void prepared;
     void proseWidth;
+    void proseOffsetX;
     scheduleProseLayout();
   });
 
@@ -645,145 +569,11 @@
       clearTimeout(suppressDrawerTimer);
     };
   });
-
-  // -----------------------------------------------------------------------
-  // Visible lines derived from layout (no virtualization needed here,
-  // the content div handles scrolling)
-  // -----------------------------------------------------------------------
-
-  interface VisibleBlock {
-    blockIndex: number;
-    block: FlowTextBlock;
-    geo: {
-      topY: number;
-      bottomY: number;
-      firstLineIndex: number;
-      lineCount: number;
-    };
-    lines: FlowLine[];
-  }
-
-  let visibleBlocks: VisibleBlock[] = $derived.by(() => {
-    if (layoutResult === null) return [];
-    if (layoutResult.blocks.length !== proseBlocks.length) return [];
-
-    const result: VisibleBlock[] = [];
-    for (let bi = 0; bi < layoutResult.blocks.length; bi++) {
-      const geo = layoutResult.blocks.at(bi);
-      const block = proseBlocks.at(bi);
-      if (geo === undefined || block === undefined) continue;
-      if (block.kind === "figure") continue;
-
-      const lines: FlowLine[] = [];
-      const end = geo.firstLineIndex + geo.lineCount;
-      for (let li = geo.firstLineIndex; li < end; li++) {
-        const line = layoutResult.lines.at(li);
-        if (line !== undefined) lines.push(line);
-      }
-      result.push({
-        blockIndex: bi,
-        block,
-        geo,
-        lines,
-      });
-    }
-    return result;
-  });
-
-  // -----------------------------------------------------------------------
-  // Active sub highlight geometry (mirrors FlowStory's HighlightRect)
-  //
-  // Yellow wash behind every line of the active sub's blocks, matching
-  // the main story's highlight treatment. Driven by activeSub prop.
-  // -----------------------------------------------------------------------
-
-  interface HighlightRect {
-    x: number;
-    y: number;
-    width: number;
-    height: number;
-  }
-
-  const HIGHLIGHT_PAD_X = 8;
-
-  let highlightRects: HighlightRect[] = $derived.by(() => {
-    if (layoutResult === null || activeSub === null || activeSection === null) {
-      return [];
-    }
-    if (layoutResult.blocks.length !== proseBlocks.length) return [];
-
-    const rects: HighlightRect[] = [];
-    for (let bi = 0; bi < proseBlocks.length; bi++) {
-      const block = proseBlocks.at(bi);
-      if (block === undefined) continue;
-      if (block.sectionId !== activeSection || block.subSlug !== activeSub) {
-        continue;
-      }
-
-      const geo = layoutResult.blocks.at(bi);
-      if (geo === undefined || geo.lineCount === 0) continue;
-
-      const km = DEFAULT_METRICS[block.kind];
-
-      for (
-        let li = geo.firstLineIndex;
-        li < geo.firstLineIndex + geo.lineCount;
-        li++
-      ) {
-        const line = layoutResult.lines.at(li);
-        if (line === undefined) continue;
-        rects.push({
-          x: line.x - HIGHLIGHT_PAD_X,
-          y: line.y,
-          width: line.width + HIGHLIGHT_PAD_X * 2,
-          height: km.lineHeight,
-        });
-      }
-    }
-    return rects;
-  });
-
-  // -----------------------------------------------------------------------
-  // CSS class helpers (themed ink colors matching FlowStory)
-  // -----------------------------------------------------------------------
-
-  function lineColorClass(
-    block: FlowTextBlock,
-    section: SectionId | null,
-    sub: string | null,
-  ): string {
-    // Active sub heading gets accent color (matches FlowStory)
-    if (
-      block.kind === "sub-heading" &&
-      block.sectionId === section &&
-      block.subSlug === sub
-    ) {
-      return "drawer-line--active-heading";
-    }
-    switch (block.kind) {
-      case "section-title":
-        return "drawer-line--title";
-      case "section-desc":
-        return "drawer-line--desc";
-      case "story-tip":
-        return "drawer-line--tip";
-      case "sub-heading":
-        return "drawer-line--sub-heading";
-      case "sub-body":
-        return "drawer-line--sub-body";
-    }
-  }
-
-  // Horizontal offset to center the prose column when it is narrower
-  // than the content div.
-  const proseOffsetX: number = $derived(
-    contentWidth > proseWidth ? Math.floor((contentWidth - proseWidth) / 2) : 0,
-  );
 </script>
 
 <aside
   class="handbook-drawer"
-  class:handbook-drawer--open={open}
+  class:handbook-drawer--open={open && entered}
   style="width: {width}px;"
   aria-label={m.demo_fs_drawer_close()}
 >
@@ -851,76 +641,25 @@
         </div>
       {/if}
 
-      <!-- Prose content -->
-      <div class="drawer-content" bind:this={contentEl} style={fontVarsStyle}>
-        {#if layoutResult !== null}
-          <div
-            class="drawer-prose"
-            style="height: {layoutResult.totalHeight}px; position: relative;"
-          >
-            <!-- Highlight rects behind active sub lines (unkeyed decoration) -->
-            {#each highlightRects as hr, i (i)}
-              <div
-                class="drawer-highlight"
-                style="
-              left: {proseOffsetX + hr.x}px;
-              top: {hr.y}px;
-              width: {hr.width}px;
-              height: {hr.height}px;
-            "
-              ></div>
-            {/each}
-
-            {#each visibleBlocks as vb (vb.block.id)}
-              {@const firstLine = vb.lines.at(0)}
-              <div class="drawer-block" style:top="{vb.geo.topY}px">
-                <!-- List marker in the gutter -->
-                {#if "marker" in vb.block && vb.block.marker !== undefined && firstLine !== undefined}
-                  <span
-                    class="drawer-line {lineColorClass(
-                      vb.block,
-                      activeSection,
-                      activeSub,
-                    )}"
-                    style:left="{proseOffsetX +
-                      firstLine.x -
-                      (vb.block.indent ?? 0)}px"
-                    style:top="{firstLine.y - vb.geo.topY}px"
-                    >{vb.block.marker}</span
-                  >
-                {/if}
-                {#each vb.lines as line, li (li)}
-                  {#if line.fragments !== undefined}
-                    {#each line.fragments as frag, fi (fi)}
-                      <span
-                        class="drawer-line {lineColorClass(
-                          vb.block,
-                          activeSection,
-                          activeSub,
-                        )}"
-                        class:drawer-line--bold={frag.bold}
-                        style:left="{proseOffsetX + line.x + frag.dx}px"
-                        style:top="{line.y - vb.geo.topY}px"
-                        style:width="{frag.width}px">{frag.text}</span
-                      >
-                    {/each}
-                  {:else}
-                    <span
-                      class="drawer-line {lineColorClass(
-                        vb.block,
-                        activeSection,
-                        activeSub,
-                      )}"
-                      style:left="{proseOffsetX + line.x}px"
-                      style:top="{line.y - vb.geo.topY}px"
-                      style:width="{line.width}px">{line.text}</span
-                    >
-                  {/if}
-                {/each}
-              </div>
-            {/each}
-          </div>
-        {/if}
+      <!-- Prose content. The same component the page's story renders,
+           handed a narrower column and no frame hole. The rules, the
+           header tint, the tip icon, the seen marks and the headings
+           that navigate on click all come with it. -->
+      <div class="drawer-content" bind:this={contentEl}>
+        <FlowProse
+          blocks={proseBlocks}
+          {layoutResult}
+          {layoutColumn}
+          layoutHole={null}
+          containerWidth={contentWidth}
+          {activeSection}
+          {activeSub}
+          {seenTopics}
+          sections={activeSections}
+          visibleRange={null}
+          {onSelectSection}
+          {onSelectSub}
+        />
       </div>
 
       <!-- Pinned below the prose, outside its scroll. The dock carries no
@@ -1198,90 +937,5 @@
   .handbook-drawer:not(.handbook-drawer--open) .drawer-topbar-dock,
   .handbook-drawer:not(.handbook-drawer--open) .drawer-strip-dock {
     overflow: hidden;
-  }
-
-  .drawer-prose {
-    position: relative;
-    width: 100%;
-  }
-
-  .drawer-block {
-    position: absolute;
-    left: 0;
-    right: 0;
-    margin: 0;
-    pointer-events: none;
-  }
-
-  .drawer-line {
-    position: absolute;
-    white-space: pre;
-    display: block;
-  }
-
-  /* Themed ink colors matching FlowStory's line color classes */
-  .drawer-line--title {
-    font: var(--flow-font-title);
-    line-height: var(--flow-lh-title);
-    color: var(--ink);
-  }
-
-  .drawer-line--desc {
-    font: var(--flow-font-desc);
-    line-height: var(--flow-lh-desc);
-    color: var(--muted);
-  }
-
-  .drawer-line--tip {
-    font: var(--flow-font-tip);
-    line-height: var(--flow-lh-tip);
-    color: var(--muted);
-  }
-
-  .drawer-line--sub-heading {
-    font: var(--flow-font-sub-heading);
-    line-height: var(--flow-lh-sub-heading);
-    color: var(--ink);
-  }
-
-  /* Active sub heading: keeps ordinary heading colour, readable through
-     the yellow wash behind it (same treatment as FlowStory). */
-  .drawer-line--active-heading {
-    font: var(--flow-font-sub-heading);
-    line-height: var(--flow-lh-sub-heading);
-    color: var(--ink);
-  }
-
-  /* -----------------------------------------------------------------------
-     Highlight rects: yellow wash behind active sub lines, matching
-     FlowStory's highlight treatment.
-     ----------------------------------------------------------------------- */
-
-  .drawer-highlight {
-    position: absolute;
-    border-radius: 2px;
-    background: rgba(255, 214, 10, 0.38);
-    pointer-events: none;
-    transition: opacity 0.2s ease;
-  }
-
-  :global(html.dark) .drawer-highlight {
-    background: rgba(255, 214, 10, 0.24);
-  }
-
-  @media (prefers-reduced-motion: reduce) {
-    .drawer-highlight {
-      transition: none;
-    }
-  }
-
-  .drawer-line--sub-body {
-    font: var(--flow-font-sub-body);
-    line-height: var(--flow-lh-sub-body);
-    color: var(--ink-2);
-  }
-
-  .drawer-line--bold {
-    font: var(--flow-font-sub-body-bold);
   }
 </style>

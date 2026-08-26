@@ -9,11 +9,11 @@ import {
 } from "./splash-intro.js";
 import { BOOT_TIP_SHOWN_MS } from "./boot-tip.js";
 
-/** A desktop explore load at the demo's front door, the one case that
+/** A desktop simulate load at the demo's front door, the one case that
  *  plays the splash. */
 function base(): IntroSplashConditions {
   return {
-    mode: "explore",
+    mode: "simulate",
     recordMode: false,
     windowW: 1280,
     wideBreakpoint: 900,
@@ -23,7 +23,7 @@ function base(): IntroSplashConditions {
 }
 
 describe("shouldPlayIntroSplash", () => {
-  it("plays on a wide explore load", () => {
+  it("plays on a wide simulate load", () => {
     expect(shouldPlayIntroSplash(base())).toBe(true);
   });
 
@@ -47,7 +47,7 @@ describe("shouldPlayIntroSplash", () => {
     expect(shouldPlayIntroSplash({ ...base(), recordMode: true })).toBe(false);
   });
 
-  it("does not play in record mode even on a wide explore load", () => {
+  it("does not play in record mode even on a wide simulate load", () => {
     expect(
       shouldPlayIntroSplash({ ...base(), recordMode: true, windowW: 1920 }),
     ).toBe(false);
@@ -73,7 +73,7 @@ describe("shouldPlayIntroSplash", () => {
     expect(shouldPlayIntroSplash({ ...base(), deepLinked: true })).toBe(false);
   });
 
-  it("does not play for a deep link on a wide explore load", () => {
+  it("does not play for a deep link on a wide simulate load", () => {
     expect(
       shouldPlayIntroSplash({ ...base(), deepLinked: true, windowW: 1920 }),
     ).toBe(false);
@@ -89,7 +89,7 @@ describe("shouldPlayIntroSplash", () => {
     );
   });
 
-  it("does not play under reduced motion on a wide explore load", () => {
+  it("does not play under reduced motion on a wide simulate load", () => {
     expect(
       shouldPlayIntroSplash({ ...base(), reducedMotion: true, windowW: 1920 }),
     ).toBe(false);

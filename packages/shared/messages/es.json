@@ -2206,7 +2206,7 @@
   "demo_role_volunteer_tooltip": "Voluntario con acceso a sus propios tickets. Las pantallas de administración están bloqueadas por el middleware real del servidor.",
   "demo_contents": "Contenido",
   "demo_mode_read": "Lectura",
-  "demo_mode_explore": "Simular",
+  "demo_mode_simulate": "Simular",
   "demo_mode_label": "Modo de vista",
   "demo_section_prev": "Volver a {section}",
   "demo_more_menu": "Más opciones",

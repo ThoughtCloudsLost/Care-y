@@ -2205,7 +2205,7 @@ export * from "./demo_role_volunteer_label.js";
 export * from "./demo_role_volunteer_tooltip.js";
 export * from "./demo_contents.js";
 export * from "./demo_mode_read.js";
-export * from "./demo_mode_explore.js";
+export * from "./demo_mode_simulate.js";
 export * from "./demo_mode_label.js";
 export * from "./demo_section_prev.js";
 export * from "./demo_more_menu.js";
