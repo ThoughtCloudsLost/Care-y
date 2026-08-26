@@ -6,17 +6,17 @@ import { getLocale, experimentalStaticLocale } from '../runtime.js';
 /** @typedef {{}} Demo_Role_Rail_LabelInputs */
 
 const en_demo_role_rail_label = /** @type {(inputs: Demo_Role_Rail_LabelInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`User switcher`)
+	return /** @type {LocalizedString} */ (`Role switcher`)
 };
 
 const es_demo_role_rail_label = /** @type {(inputs: Demo_Role_Rail_LabelInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Selector de usuario`)
+	return /** @type {LocalizedString} */ (`Selector de rol`)
 };
 
 /**
 * | output |
 * | --- |
-* | "User switcher" |
+* | "Role switcher" |
 *
 * @param {Demo_Role_Rail_LabelInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

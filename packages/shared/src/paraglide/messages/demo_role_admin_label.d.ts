@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "Admin user" |
+* | "Admin" |
 *
 * @param {Demo_Role_Admin_LabelInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

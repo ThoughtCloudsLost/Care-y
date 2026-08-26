@@ -11,6 +11,8 @@
     ChevronRight,
     Check,
     Ellipsis,
+    Link2,
+    Link2Off,
   } from "@lucide/svelte";
   import * as m from "$lib/paraglide/messages.js";
   import { SECTIONS, type Section, type SectionId } from "./scroll-sections.js";
@@ -29,6 +31,19 @@
     flowBandOpen: boolean;
     /** Current effective demo mode. */
     mode: DemoMode;
+    /** Whether the simulator follows handbook navigation. */
+    linked: boolean;
+    /**
+     * Width the bar should lay out against instead of the viewport
+     * (e.g. the handbook drawer's width). null follows the viewport
+     * media queries as usual.
+     */
+    layoutWidth?: number | null;
+    /**
+     * Slides the bar up and out (fullscreen entry transition). The
+     * bar stays mounted; only the transform changes.
+     */
+    exiting?: boolean;
     seenTopics: ReadonlySet<DemoTopic>;
     onSectionClick: (id: SectionId) => void;
     onToggleDark: () => void;
@@ -36,6 +51,7 @@
     onLocaleChange: () => void;
     onToggleFlowBand: () => void;
     onToggleMode: () => void;
+    onToggleLink: () => void;
     /** Return to the handbook introduction page. */
     onHomeClick: () => void;
   }
@@ -48,6 +64,9 @@
     total,
     flowBandOpen,
     mode,
+    linked,
+    layoutWidth = null,
+    exiting = false,
     seenTopics,
     onSectionClick,
     onToggleDark,
@@ -55,6 +74,7 @@
     onLocaleChange,
     onToggleFlowBand,
     onToggleMode,
+    onToggleLink,
     onHomeClick,
   }: Props = $props();
 
@@ -215,6 +235,11 @@
     closeMenus();
   }
 
+  function handleLink(): void {
+    onToggleLink();
+    closeMenus();
+  }
+
   function handleRestartMenu(): void {
     onRestart();
     closeMenus();
@@ -226,9 +251,26 @@
     }
     closeMenus();
   }
+
+  // Width-driven layout override: when layoutWidth is provided the bar
+  // collapses at the same breakpoints the viewport media queries use,
+  // but measured against that width (the drawer). The media queries
+  // stay active alongside; both only ever push toward the narrow
+  // layout, never fight.
+  const forceNarrow: boolean = $derived(
+    layoutWidth !== null && layoutWidth < 900,
+  );
+  const forcePhone: boolean = $derived(
+    layoutWidth !== null && layoutWidth < 480,
+  );
 </script>
 
-<header class="top-bar">
+<header
+  class="top-bar"
+  class:top-bar--narrow={forceNarrow}
+  class:top-bar--phone={forcePhone}
+  class:top-bar--exiting={exiting}
+>
   <div class="top-bar-inner">
     <div class="top-bar-left">
       <span class="top-bar-brand">{m.demo_app_brand()}</span>
@@ -439,6 +481,21 @@
             class="more-item"
             role="menuitem"
             type="button"
+            onclick={handleLink}
+          >
+            {#if linked}
+              <Link2Off size={16} />
+            {:else}
+              <Link2 size={16} />
+            {/if}
+            <span>
+              {linked ? m.demo_more_link_linked() : m.demo_more_link_unlinked()}
+            </span>
+          </button>
+          <button
+            class="more-item"
+            role="menuitem"
+            type="button"
             onclick={handleLocale}
           >
             <Globe size={16} />
@@ -477,11 +534,17 @@
     position: sticky;
     top: 0;
     z-index: 100;
+    transition: transform 150ms ease;
     background: color-mix(in srgb, var(--paper) 92%, transparent);
     backdrop-filter: blur(12px);
     -webkit-backdrop-filter: blur(12px);
     border-bottom: 1px solid var(--hair);
     padding: 0 1rem;
+  }
+
+  /* Quick slide-up exit while fullscreen entry animates. */
+  .top-bar--exiting {
+    transform: translateY(-100%);
   }
 
   .top-bar-inner {
@@ -924,7 +987,49 @@
     }
   }
 
+  /* -----------------------------------------------------------------------
+     Width-driven overrides (.top-bar--narrow / .top-bar--phone)
+
+     Class twins of the two media-query blocks above, applied when the
+     layoutWidth prop crosses the same breakpoints. Used when the bar is
+     docked inside the handbook drawer, whose width is independent of
+     the viewport. The contents-panel fixed-position escape is NOT
+     mirrored here: inside the drawer the dock's own override anchors
+     the panel, and fixed positioning would escape the drawer bounds.
+     ----------------------------------------------------------------------- */
+
+  .top-bar--narrow .top-bar-left {
+    display: none;
+  }
+
+  .top-bar--narrow .flow-label {
+    display: none;
+  }
+
+  .top-bar--narrow .flow-btn {
+    width: 34px;
+    padding: 0;
+  }
+
+  .top-bar--phone .nav-btn {
+    display: none;
+  }
+
+  .top-bar--phone .mode-segments {
+    display: none;
+  }
+
+  .top-bar--phone .contents-wrapper {
+    max-width: none;
+  }
+
+  .top-bar--phone .more-mode-group {
+    display: block;
+    border-bottom: 1px solid var(--hair);
+  }
+
   @media (prefers-reduced-motion: reduce) {
+    .top-bar,
     .contents-item,
     .mode-seg,
     .more-item {

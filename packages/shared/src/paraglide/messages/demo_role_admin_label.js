@@ -6,17 +6,17 @@ import { getLocale, experimentalStaticLocale } from '../runtime.js';
 /** @typedef {{}} Demo_Role_Admin_LabelInputs */
 
 const en_demo_role_admin_label = /** @type {(inputs: Demo_Role_Admin_LabelInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Admin user`)
+	return /** @type {LocalizedString} */ (`Admin`)
 };
 
 const es_demo_role_admin_label = /** @type {(inputs: Demo_Role_Admin_LabelInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Usuario administrador`)
+	return /** @type {LocalizedString} */ (`Administración`)
 };
 
 /**
 * | output |
 * | --- |
-* | "Admin user" |
+* | "Admin" |
 *
 * @param {Demo_Role_Admin_LabelInputs} inputs
 * @param {{ locale?: "en" | "es" }} options
