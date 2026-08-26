@@ -27,6 +27,7 @@ import {
   intakeFormIdSchema,
   listIntakeResponsesInputSchema,
   backfillWrapsInputSchema,
+  logExportInputSchema,
 } from "@care-y/shared";
 import { b64 } from "../utils/ciphertext-wire.js";
 
@@ -228,5 +229,27 @@ export function createIntakeFormRouter(deps: IntakeFormRouterDeps) {
           return result;
         }),
       ),
+
+    /**
+     * Record a CSV export audit event. Called by the client before
+     * the browser download fires. Carries counts and formId only,
+     * never exported content.
+     */
+    logExport: responseViewerProcedure.input(logExportInputSchema).mutation(
+      withErrorWrapping(async ({ ctx, input }) => {
+        const audit = deps.createAuditSvc(ctx.org.tenantDb);
+        await audit.log({
+          eventType: "intake_responses_exported",
+          actorId: ctx.user.id,
+          metadata: {
+            formId: input.formId,
+            exportedCount: input.exportedCount,
+            skippedCount: input.skippedCount,
+          },
+        });
+
+        return { ok: true };
+      }),
+    ),
   });
 }

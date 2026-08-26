@@ -133,6 +133,7 @@ export const auditEventTypeSchema = z.enum([
   "client_account_reset",
   "account_offer_changed",
   "intake_responses_viewed",
+  "intake_responses_exported",
 ]);
 export type AuditEventType = z.infer<typeof auditEventTypeSchema>;
 

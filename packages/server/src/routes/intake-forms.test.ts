@@ -357,6 +357,29 @@ describe.skipIf(!process.env.DATABASE_URL)(
 
         expect(auditRows.length).toBeGreaterThan(0);
       });
+
+      it("creates an audit entry when responses are exported", async () => {
+        const caller = createAuthedCaller(adminUser);
+        await caller.logExport({
+          formId,
+          exportedCount: 5,
+          skippedCount: 1,
+        });
+
+        const auditRows = await tenantDb
+          .selectFrom("audit_log")
+          .select(["event_type", "actor_id", "metadata"])
+          .where("event_type", "=", "intake_responses_exported")
+          .where("actor_id", "=", adminUser.id)
+          .execute();
+
+        expect(auditRows.length).toBeGreaterThan(0);
+        const entry = auditRows[0]!;
+        const meta = entry.metadata as Record<string, unknown>;
+        expect(meta.formId).toBe(formId);
+        expect(meta.exportedCount).toBe(5);
+        expect(meta.skippedCount).toBe(1);
+      });
     });
   },
 );

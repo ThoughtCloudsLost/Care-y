@@ -9,6 +9,8 @@ const {
   mockDecryptIntakeResponse,
   mockMintBackfillWraps,
   mockToastShow,
+  mockLogExport,
+  mockTriggerBlobDownload,
 } = vi.hoisted(() => ({
   mockListResponses: vi.fn(),
   mockBackfillWraps: vi.fn().mockResolvedValue({ inserted: 0 }),
@@ -16,6 +18,8 @@ const {
   mockDecryptIntakeResponse: vi.fn(),
   mockMintBackfillWraps: vi.fn(),
   mockToastShow: vi.fn(),
+  mockLogExport: vi.fn().mockResolvedValue({ ok: true }),
+  mockTriggerBlobDownload: vi.fn(),
 }));
 
 vi.mock("$lib/paraglide/messages.js", async (importOriginal) => ({
@@ -35,6 +39,22 @@ vi.mock("$lib/paraglide/messages.js", async (importOriginal) => ({
   intake_responses_count: ({ count }: { count: string }) =>
     `${count} responses`,
   intake_responses_backfill_failed: () => "Backfill failed",
+  intake_responses_export_csv: () => "Export CSV",
+  intake_responses_export_confirm_title: () => "Export decrypted responses?",
+  intake_responses_export_confirm_body: ({
+    exportedCount,
+  }: {
+    exportedCount: string;
+  }) => `${exportedCount} responses will be exported.`,
+  intake_responses_export_confirm_skipped: ({
+    skippedCount,
+  }: {
+    skippedCount: string;
+  }) => `${skippedCount} could not be decrypted.`,
+  intake_responses_export_confirm_action: () => "Export",
+  intake_responses_export_no_rows: () => "No decrypted responses to export.",
+  intake_responses_csv_submitted_header: () => "Submitted",
+  common_cancel: () => "Cancel",
   error_generic: () => "Something went wrong",
 }));
 
@@ -50,8 +70,27 @@ vi.mock("$lib/trpc/index.js", async (importOriginal) => ({
       get: { query: mockGetForm },
       listResponses: { query: mockListResponses },
       backfillWraps: { mutate: mockBackfillWraps },
+      logExport: { mutate: mockLogExport },
     },
   },
+}));
+
+vi.mock("$lib/paraglide/runtime.js", async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  getLocale: () => "en",
+}));
+
+vi.mock(
+  "$lib/components/shared/attachment-download.js",
+  async (importOriginal) => ({
+    ...(await importOriginal<Record<string, unknown>>()),
+    triggerBlobDownload: mockTriggerBlobDownload,
+  }),
+);
+
+vi.mock("$lib/shell/ShellDialog.svelte", async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  default: (await import("./test-helpers/StubShellDialog.svelte")).default,
 }));
 
 vi.mock("$lib/errors.js", async (importOriginal) => ({
@@ -167,6 +206,8 @@ describe("IntakeResponsesViewer", () => {
     mockDecryptIntakeResponse.mockReset();
     mockMintBackfillWraps.mockReset();
     mockBackfillWraps.mockReset();
+    mockLogExport.mockReset().mockResolvedValue({ ok: true });
+    mockTriggerBlobDownload.mockReset();
   });
 
   afterEach(() => {
@@ -366,5 +407,86 @@ describe("IntakeResponsesViewer", () => {
       props: { formId: "form-1" },
     });
     expect(screen.getByText("Custom forms only.")).toBeTruthy();
+  });
+
+  // ── CSV export tests ────────────────────────────────────────────
+
+  it("shows export button when entries exist", async () => {
+    mockDecryptIntakeResponse.mockResolvedValue(
+      JSON.stringify([{ fieldKey: "fk-1", value: "val" }]),
+    );
+
+    responsesData = {
+      rows: [
+        {
+          ticketId: "t-export-1",
+          submittedAt: "2026-08-25T10:00:00Z",
+          encryptedResponse: "data",
+          callerKeyWrap: {
+            volunteerId: "v-1",
+            ephemeralPoint: "ep",
+            nonce: "nc",
+            wrappedKey: "wk",
+          },
+          orgSealWrap: null,
+          missingPrincipals: [],
+        },
+      ],
+      nextCursor: null,
+      total: 1,
+    };
+
+    render(IntakeResponsesViewer, {
+      props: { formId: "form-1" },
+    });
+    await new Promise((r) => setTimeout(r, 100));
+
+    const btn = screen.getByTestId("export-csv-btn");
+    expect(btn).toBeTruthy();
+    expect(btn.textContent).toContain("Export CSV");
+  });
+
+  it("disables export button while rows are pending", async () => {
+    // Keep decryption hanging
+    mockDecryptIntakeResponse.mockReturnValue(new Promise(() => undefined));
+
+    responsesData = {
+      rows: [
+        {
+          ticketId: "t-pending-export",
+          submittedAt: "2026-08-25T10:00:00Z",
+          encryptedResponse: "data",
+          callerKeyWrap: {
+            volunteerId: "v-1",
+            ephemeralPoint: "ep",
+            nonce: "nc",
+            wrappedKey: "wk",
+          },
+          orgSealWrap: null,
+          missingPrincipals: [],
+        },
+      ],
+      nextCursor: null,
+      total: 1,
+    };
+
+    render(IntakeResponsesViewer, {
+      props: { formId: "form-1" },
+    });
+    await new Promise((r) => setTimeout(r, 50));
+
+    const btn = screen.getByTestId("export-csv-btn");
+    expect(btn.hasAttribute("disabled")).toBe(true);
+  });
+
+  it("does not show export button when no entries", async () => {
+    responsesData = { rows: [], nextCursor: null, total: 0 };
+
+    render(IntakeResponsesViewer, {
+      props: { formId: "form-1" },
+    });
+    await new Promise((r) => setTimeout(r, 50));
+
+    expect(screen.queryByTestId("export-csv-btn")).toBeNull();
   });
 });

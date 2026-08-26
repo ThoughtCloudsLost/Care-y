@@ -8,16 +8,27 @@
   wraps are minted in the Worker and submitted silently in the background
   when rows arrive with missingPrincipals.
 
+  CSV export: assembles a CSV from decrypted rows client-side, records
+  an audit event via logExport before offering the file for download.
+  The confirmation dialog warns that the file contains plaintext PII
+  and reports how many rows are skipped (key-not-held or failed).
+
   Props:
     formId - the intake form whose responses to list
 -->
 <script lang="ts">
   import { SvelteMap, SvelteSet } from "svelte/reactivity";
-  import { Card, Preloader } from "konsta/svelte";
+  import { Card, DialogButton, Preloader } from "konsta/svelte";
   import { createQuery, createMutation } from "@tanstack/svelte-query";
-  import { Lock, TriangleAlert, CircleQuestionMark } from "@lucide/svelte";
+  import {
+    Lock,
+    TriangleAlert,
+    CircleQuestionMark,
+    Download,
+  } from "@lucide/svelte";
   import { resolveLocalized, type LocalizedText } from "@care-y/shared";
   import * as m from "$lib/paraglide/messages.js";
+  import { getLocale } from "$lib/paraglide/runtime.js";
   import { trpc } from "$lib/trpc/index.js";
   import { requireRouter } from "$lib/errors.js";
   import { intakeFormKeys } from "$lib/query/keys.js";
@@ -25,6 +36,9 @@
   import { getCryptoBridge, getOrgKeyManager } from "$lib/crypto/context.js";
   import { decryptFieldContent } from "$lib/portal/intake-form-crypto.js";
   import type { DecryptedIntakeAnswer } from "$lib/workers/crypto-protocol.js";
+  import { assembleIntakeCsv } from "$lib/export/intake-csv.js";
+  import { triggerBlobDownload } from "$lib/components/shared/attachment-download.js";
+  import ShellDialog from "$lib/shell/ShellDialog.svelte";
   import QueryError from "$lib/components/QueryError.svelte";
 
   let { formId }: { formId: string } = $props();
@@ -250,6 +264,95 @@
     }
   }
 
+  // ── CSV export ─────────────────────────────────────────────────
+
+  let exportDialogOpen = $state(false);
+
+  /** True while any row is still pending decryption. */
+  const hasPendingRows = $derived.by((): boolean => {
+    for (const [, state] of rowStates) {
+      if (state.status === "pending") return true;
+    }
+    return false;
+  });
+
+  /** Counts of exportable vs skipped rows. */
+  const exportCounts = $derived.by(
+    (): {
+      exportable: number;
+      skipped: number;
+    } => {
+      let exportable = 0;
+      let skipped = 0;
+      for (const [, state] of rowStates) {
+        if (state.status === "decrypted") {
+          exportable++;
+        } else if (
+          state.status === "key-not-held" ||
+          state.status === "failed"
+        ) {
+          skipped++;
+        }
+      }
+      return { exportable, skipped };
+    },
+  );
+
+  function openExportDialog(): void {
+    if (exportCounts.exportable === 0) {
+      toastStore.show(m.intake_responses_export_no_rows());
+      return;
+    }
+    exportDialogOpen = true;
+  }
+
+  function dismissExportDialog(): void {
+    exportDialogOpen = false;
+  }
+
+  async function confirmExport(): Promise<void> {
+    exportDialogOpen = false;
+
+    const locale = getLocale();
+    const decryptedRows: {
+      submittedAt: string;
+      answers: readonly DecryptedIntakeAnswer[];
+    }[] = [];
+
+    for (const entry of allEntries) {
+      const state = rowStates.get(entry.ticketId);
+      if (state?.status === "decrypted") {
+        decryptedRows.push({
+          submittedAt: entry.submittedAt,
+          answers: state.answers,
+        });
+      }
+    }
+
+    const result = assembleIntakeCsv(
+      fieldDefs,
+      decryptedRows,
+      locale,
+      m.intake_responses_csv_submitted_header(),
+    );
+
+    // Record audit event before offering the file (best-effort;
+    // the download proceeds even if the mutation fails)
+    try {
+      await intakeFormsRouter.logExport.mutate({
+        formId,
+        exportedCount: result.exportedCount,
+        skippedCount: exportCounts.skipped,
+      });
+    } catch {
+      // Audit is best-effort; do not block the download
+    }
+
+    const encoder = new TextEncoder();
+    const bytes = encoder.encode(result.csv);
+    triggerBlobDownload(bytes, `intake-responses-${formId}.csv`);
+  }
+
   // ── Parsing ─────────────────────────────────────────────────────
 
   /** Type guard for a single answer element from the Worker JSON. */
@@ -330,6 +433,21 @@
 
   <!-- Default form note -->
   <p class="irv-note">{m.intake_responses_default_form_note()}</p>
+
+  <!-- Export CSV button -->
+  {#if allEntries.length > 0}
+    <button
+      type="button"
+      class="irv-export-btn"
+      data-testid="export-csv-btn"
+      disabled={hasPendingRows}
+      onclick={openExportDialog}
+      aria-label={m.intake_responses_export_csv()}
+    >
+      <Download size={16} aria-hidden="true" />
+      {m.intake_responses_export_csv()}
+    </button>
+  {/if}
 
   {#if responsesQuery.isLoading && allEntries.length === 0}
     <div class="irv-loading" aria-busy="true">
@@ -433,6 +551,36 @@
     {/if}
   {/if}
 </div>
+
+<!-- Export confirmation dialog -->
+<ShellDialog
+  opened={exportDialogOpen}
+  ondismiss={dismissExportDialog}
+  title={m.intake_responses_export_confirm_title()}
+>
+  {#snippet content()}
+    <p class="irv-dialog-text">
+      {m.intake_responses_export_confirm_body({
+        exportedCount: String(exportCounts.exportable),
+      })}
+    </p>
+    {#if exportCounts.skipped > 0}
+      <p class="irv-dialog-text irv-dialog-skipped">
+        {m.intake_responses_export_confirm_skipped({
+          skippedCount: String(exportCounts.skipped),
+        })}
+      </p>
+    {/if}
+  {/snippet}
+  {#snippet buttons()}
+    <DialogButton onclick={dismissExportDialog}>
+      {m.common_cancel()}
+    </DialogButton>
+    <DialogButton strong onclick={() => void confirmExport()}>
+      {m.intake_responses_export_confirm_action()}
+    </DialogButton>
+  {/snippet}
+</ShellDialog>
 
 <style>
   .irv-root {
@@ -609,5 +757,48 @@
   .irv-load-more:focus-visible {
     outline: 2px solid var(--brand-text);
     outline-offset: 2px;
+  }
+
+  .irv-export-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--space-sm);
+    align-self: center;
+    padding: 0.5rem 1rem;
+    border-radius: 0.75rem;
+    border: none;
+    background: color-mix(in srgb, var(--ink) 8%, transparent);
+    color: var(--ink);
+    font-size: var(--text-sm);
+    font-weight: 500;
+    cursor: pointer;
+    min-height: 44px;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  .irv-export-btn:active {
+    background: color-mix(in srgb, var(--ink) 15%, transparent);
+  }
+
+  .irv-export-btn:disabled {
+    opacity: 0.5;
+    cursor: default;
+  }
+
+  .irv-export-btn:focus-visible {
+    outline: 2px solid var(--brand-text);
+    outline-offset: 2px;
+  }
+
+  .irv-dialog-text {
+    font-size: var(--text-sm);
+    color: var(--muted);
+    line-height: 1.5;
+  }
+
+  .irv-dialog-skipped {
+    margin-top: var(--space-sm);
+    font-weight: 500;
   }
 </style>
