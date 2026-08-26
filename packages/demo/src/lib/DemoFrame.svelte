@@ -14,7 +14,6 @@
   active gestures to prevent event leaks.
 -->
 <script lang="ts">
-  import { untrack } from "svelte";
   import type { DemoBridge } from "./bridge.js";
   import * as m from "$lib/paraglide/messages.js";
   import {
@@ -40,8 +39,8 @@
     /** When true, the device chrome (bezel, shadow, background) fades to transparent. */
     chromeFaded?: boolean;
     /** True while a spring animation drives the frame size. The iframe
-     *  viewport freezes and scales visually so the app does not re-lay
-     *  itself out on every animation frame. */
+     *  viewport still follows the frame, just on a coarser cadence
+     *  (see LAYOUT_STEP_FRAMES). */
     animating?: boolean;
   }
 
@@ -72,30 +71,62 @@
     fsViewport !== null ? fsViewport.viewport : geo.viewport,
   );
 
-  // While a spring animation runs, the iframe keeps the viewport it had
-  // at animation start and stretches visually (compositor-only scale)
-  // to fill the moving box. Re-laying out the whole app inside the
-  // iframe on every animation frame is what made the motion choppy;
-  // the real viewport applies once at settle.
-  let frozenVp: { w: number; h: number } | null = $state(null);
+  /**
+   * Animation frames between iframe viewport commits.
+   *
+   * The app inside must re-lay out while the frame grows and shrinks,
+   * not once at settle: watching the layout cross its breakpoints under
+   * motion is the point of the resize demo. Doing it on every frame of
+   * a spring means a full app layout roughly sixty times a second,
+   * which is what made the motion choppy.
+   *
+   * So the viewport is committed every third frame (~50ms, about six
+   * layouts across a 300ms spring) and the iframe stretches to fill the
+   * moving box in between. The stretch is bounded by three frames of
+   * travel, and it is largest during the fast opening of the spring
+   * where the eye tracks detail least. Raise this to trade fidelity for
+   * smoothness, lower it for the reverse; 1 is per-frame layout.
+   */
+  const LAYOUT_STEP_FRAMES = 3;
+
+  /**
+   * Viewport committed to the iframe during a spring animation, or null
+   * when idle. Idle means the iframe tracks the live viewport exactly,
+   * so a settled frame is never stretched.
+   */
+  let steppedVp: { w: number; h: number } | null = $state(null);
+
+  // Plain locals, deliberately not $state: the effect below writes
+  // steppedVp, so anything it reads reactively would retrigger it.
+  let framesSinceStep = 0;
+  let hasStepped = false;
 
   $effect.pre(() => {
-    if (animating) {
-      frozenVp ??= untrack(() => effectiveVp);
-    } else {
-      frozenVp = null;
+    const vp = effectiveVp;
+    if (!animating) {
+      steppedVp = null;
+      framesSinceStep = 0;
+      hasStepped = false;
+      return;
+    }
+    framesSinceStep += 1;
+    if (!hasStepped || framesSinceStep >= LAYOUT_STEP_FRAMES) {
+      framesSinceStep = 0;
+      hasStepped = true;
+      steppedVp = { w: vp.w, h: vp.h };
     }
   });
 
-  /** Viewport the iframe lays out against (frozen mid-animation). */
-  const layoutVp = $derived.by(() => frozenVp ?? effectiveVp);
+  /** Viewport the iframe lays out against (stepped mid-animation). */
+  const layoutVp = $derived(steppedVp ?? effectiveVp);
 
-  /** Transform while frozen: stretch the frozen viewport to the live box. */
+  /** Transform between commits: stretch the committed viewport to the
+   *  live box. Uniform scale would leave a gap on one axis. */
   const animScaleX = $derived.by(() =>
-    frozenVp !== null ? geo.footprintW / frozenVp.w : null,
+    steppedVp !== null ? geo.footprintW / steppedVp.w : null,
   );
   const animScaleY = $derived.by(() =>
-    frozenVp !== null ? geo.footprintH / frozenVp.h : null,
+    steppedVp !== null ? geo.footprintH / steppedVp.h : null,
   );
 
   /**
@@ -242,9 +273,9 @@
     ></iframe>
 
     <!-- Status bar: visible only at phone-shaped viewports (< 768px).
-         Fades out during resize transitions. PhoneApp keeps the
-         59px safe-area inset inside the iframe under the same condition,
-         so app content clears this overlay exactly when it is visible. -->
+         Fades out during resize transitions. PhoneApp keeps the 59px
+         safe-area inset inside the iframe under the same condition, so
+         app content clears this overlay exactly when it is visible. -->
     <div
       class="status-bar"
       class:status-bar-hidden={!showStatusBar}
