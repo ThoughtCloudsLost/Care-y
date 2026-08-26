@@ -94,7 +94,11 @@ vi.mock("@tanstack/svelte-query", async (importOriginal) => {
   };
 });
 
-const { mockEncryptIntake, mockBuildAccountPayload } = vi.hoisted(() => ({
+const {
+  mockEncryptIntake,
+  mockBuildAccountPayload,
+  mockBuildContinuationPayload,
+} = vi.hoisted(() => ({
   mockEncryptIntake: vi.fn().mockReturnValue({
     encryptedTitle: "enc-title",
     encryptedDescription: "enc-desc",
@@ -114,12 +118,27 @@ const { mockEncryptIntake, mockBuildAccountPayload } = vi.hoisted(() => ({
       ciphertext: "ct",
     },
   }),
+  mockBuildContinuationPayload: vi.fn().mockReturnValue({
+    payload: {
+      channelId: "abc123def456abc123def456abc123def456abc123def456",
+      authHash: "bW9jay1hdXRoLWhhc2g",
+      clientPublic: "bW9jay1wdWJsaWMta2V5",
+      keyCheck: {
+        ephemeralPoint: "ep-cont",
+        nonce: "nc-cont",
+        ciphertext: "ct-cont",
+      },
+    },
+    channelId: "abc123def456abc123def456abc123def456abc123def456",
+    encodedSeed: "bW9jay1lbmNvZGVkLXNlZWQ",
+  }),
 }));
 
 vi.mock("./intake-crypto.js", async (importOriginal) => ({
   ...(await importOriginal<typeof IntakeCrypto>()),
   encryptIntake: mockEncryptIntake,
   buildAccountPayload: mockBuildAccountPayload,
+  buildContinuationPayload: mockBuildContinuationPayload,
 }));
 
 vi.mock("$lib/portal/intake-form-crypto.js", async (importOriginal) => ({
@@ -224,6 +243,23 @@ vi.mock("$lib/paraglide/messages.js", async (importOriginal) => ({
   account_username_taken: () => "That username is already taken.",
   account_intake_confirm_reminder: ({ username }: { username: string }) =>
     `Your username is ${username}. Sign in at /account.`,
+  intake_continuation_toggle_title: () =>
+    "Save a link to add more later (optional)",
+  intake_continuation_toggle_body: () =>
+    "Get a link you can reopen to add information or read replies.",
+  intake_continuation_expanded_text: () =>
+    "After you submit, you will receive a link.",
+  intake_continuation_expanded_warning: () =>
+    "If you lose this link, there is no way to recover it.",
+  intake_continuation_link_label: () => "Your continuation link:",
+  intake_continuation_copy_button: () => "Copy link",
+  intake_continuation_copied: () => "Link copied.",
+  intake_continuation_copy_error: () =>
+    "Could not copy the link. Select it manually and copy.",
+  intake_continuation_warning: () =>
+    "This link is the only way back to your conversation.",
+  intake_continuation_hint: () =>
+    "The link above carries the key that unlocks your conversation.",
 }));
 
 vi.mock("$lib/shell/PageShell.svelte", async (importOriginal) => ({
@@ -500,5 +536,188 @@ describe("intake page", () => {
     ).toBeTruthy();
     // No submit button should be visible
     expect(screen.queryByTestId("intake-submit")).toBeNull();
+  });
+
+  // -----------------------------------------------------------------
+  // Continuation link tests
+  // -----------------------------------------------------------------
+
+  it("continuation toggle is collapsed by default", () => {
+    render(IntakePage);
+    const toggle = screen.getByTestId("intake-continuation-toggle");
+    expect(toggle).toBeTruthy();
+    expect(toggle.getAttribute("aria-expanded")).toBe("false");
+  });
+
+  it("expanding continuation collapses account", async () => {
+    render(IntakePage);
+
+    // Expand account first
+    const accountToggle = screen.getByTestId("intake-account-toggle");
+    await fireEvent.click(accountToggle);
+    expect(accountToggle.getAttribute("aria-expanded")).toBe("true");
+
+    // Expand continuation
+    const contToggle = screen.getByTestId("intake-continuation-toggle");
+    await fireEvent.click(contToggle);
+    expect(contToggle.getAttribute("aria-expanded")).toBe("true");
+    expect(accountToggle.getAttribute("aria-expanded")).toBe("false");
+  });
+
+  it("expanding account collapses continuation", async () => {
+    render(IntakePage);
+
+    // Expand continuation first
+    const contToggle = screen.getByTestId("intake-continuation-toggle");
+    await fireEvent.click(contToggle);
+    expect(contToggle.getAttribute("aria-expanded")).toBe("true");
+
+    // Expand account
+    const accountToggle = screen.getByTestId("intake-account-toggle");
+    await fireEvent.click(accountToggle);
+    expect(accountToggle.getAttribute("aria-expanded")).toBe("true");
+    expect(contToggle.getAttribute("aria-expanded")).toBe("false");
+  });
+
+  it("submit with continuation shows link block on success", async () => {
+    mockMutateAsync.mockResolvedValue({ reference: "calm-pebble-7" });
+
+    render(IntakePage);
+    fillDefaultFormRequiredFields();
+
+    // Expand continuation
+    const contToggle = screen.getByTestId("intake-continuation-toggle");
+    await fireEvent.click(contToggle);
+
+    const submitBtn = screen.getByTestId("intake-submit");
+    await fireEvent.click(submitBtn);
+
+    await vi.waitFor(() => {
+      expect(screen.getByText("Your message was sent")).toBeTruthy();
+    });
+
+    const linkEl = screen.getByTestId("intake-continuation-link");
+    expect(linkEl).toBeTruthy();
+    expect(linkEl.textContent).toContain(
+      "/portal/abc123def456abc123def456abc123def456abc123def456#bW9jay1lbmNvZGVkLXNlZWQ",
+    );
+    expect(mockBuildContinuationPayload).toHaveBeenCalled();
+  });
+
+  it("submit without continuation renders no link block", async () => {
+    mockMutateAsync.mockResolvedValue({ reference: "calm-pebble-7" });
+
+    render(IntakePage);
+    fillDefaultFormRequiredFields();
+
+    const submitBtn = screen.getByTestId("intake-submit");
+    await fireEvent.click(submitBtn);
+
+    await vi.waitFor(() => {
+      expect(screen.getByText("Your message was sent")).toBeTruthy();
+    });
+
+    expect(screen.queryByTestId("intake-continuation-link")).toBeNull();
+    expect(mockBuildContinuationPayload).not.toHaveBeenCalled();
+  });
+
+  it("account+continuation both expanded results in account only", async () => {
+    mockMutateAsync.mockResolvedValue({ reference: "calm-pebble-7" });
+
+    render(IntakePage);
+    fillDefaultFormRequiredFields();
+
+    // Expand continuation (this will be overridden by account)
+    const contToggle = screen.getByTestId("intake-continuation-toggle");
+    await fireEvent.click(contToggle);
+
+    // Expand account (collapses continuation)
+    const accountToggle = screen.getByTestId("intake-account-toggle");
+    await fireEvent.click(accountToggle);
+
+    // Fill account fields to trigger the account branch
+    const usernameInput = screen
+      .getByTestId("account-create-username")
+      .querySelector("input");
+    const passwordInput = screen
+      .getByTestId("account-create-password")
+      .querySelector("input");
+    const confirmInput = screen
+      .getByTestId("account-create-confirm")
+      .querySelector("input");
+    if (usernameInput)
+      setInputValue(usernameInput as HTMLInputElement, "testuser");
+    if (passwordInput)
+      setInputValue(passwordInput as HTMLInputElement, "password123");
+    if (confirmInput)
+      setInputValue(confirmInput as HTMLInputElement, "password123");
+
+    const submitBtn = screen.getByTestId("intake-submit");
+    await fireEvent.click(submitBtn);
+
+    await vi.waitFor(() => {
+      expect(screen.getByText("Your message was sent")).toBeTruthy();
+    });
+
+    expect(mockBuildAccountPayload).toHaveBeenCalled();
+    expect(mockBuildContinuationPayload).not.toHaveBeenCalled();
+    expect(screen.queryByTestId("intake-continuation-link")).toBeNull();
+  });
+
+  it("copy button writes to clipboard", async () => {
+    mockMutateAsync.mockResolvedValue({ reference: "calm-pebble-7" });
+
+    const savedClipboard = navigator.clipboard;
+    const mockWriteText = vi.fn().mockResolvedValue(undefined);
+    Object.assign(navigator, {
+      clipboard: { writeText: mockWriteText },
+    });
+
+    try {
+      render(IntakePage);
+      fillDefaultFormRequiredFields();
+
+      const contToggle = screen.getByTestId("intake-continuation-toggle");
+      await fireEvent.click(contToggle);
+
+      const submitBtn = screen.getByTestId("intake-submit");
+      await fireEvent.click(submitBtn);
+
+      await vi.waitFor(() => {
+        expect(screen.getByTestId("intake-continuation-copy")).toBeTruthy();
+      });
+
+      const copyBtn = screen.getByTestId("intake-continuation-copy");
+      await fireEvent.click(copyBtn);
+
+      await vi.waitFor(() => {
+        expect(mockWriteText).toHaveBeenCalledTimes(1);
+      });
+
+      const writtenUrl = mockWriteText.mock.calls[0]?.[0] as string;
+      expect(writtenUrl).toContain("/portal/");
+      expect(writtenUrl).toContain("#bW9jay1lbmNvZGVkLXNlZWQ");
+    } finally {
+      Object.assign(navigator, { clipboard: savedClipboard });
+    }
+  });
+
+  it("failed submit reveals no link", async () => {
+    mockMutateAsync.mockRejectedValue(new Error("server error"));
+
+    render(IntakePage);
+    fillDefaultFormRequiredFields();
+
+    const contToggle = screen.getByTestId("intake-continuation-toggle");
+    await fireEvent.click(contToggle);
+
+    const submitBtn = screen.getByTestId("intake-submit");
+    await fireEvent.click(submitBtn);
+
+    await vi.waitFor(() => {
+      expect(screen.getByText(/didn't go through/)).toBeTruthy();
+    });
+
+    expect(screen.queryByTestId("intake-continuation-link")).toBeNull();
   });
 });

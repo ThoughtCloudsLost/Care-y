@@ -17,6 +17,12 @@ import {
   buildContentAad,
   followupSlot,
   eciesEncrypt,
+  generatePortalSeed,
+  deriveChannelId,
+  deriveChannelAuth,
+  hashChannelAuth,
+  derivePortalKeypair,
+  PORTAL_KEY_CHECK,
   type SymmetricKey,
   type Ciphertext,
   type EciesOutput,
@@ -419,5 +425,92 @@ export async function buildAccountPayload(
   } finally {
     const sodium = requireSodium();
     sodium.memzero(keypair.clientPrivate);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Continuation-link payload assembly for intake opt-in
+// ---------------------------------------------------------------------------
+
+/** Wire-ready continuation branch for the intake submission payload. */
+export interface IntakeContinuationPayload {
+  readonly channelId: string;
+  readonly authHash: string;
+  readonly clientPublic: string;
+  readonly keyCheck: {
+    readonly ephemeralPoint: string;
+    readonly nonce: string;
+    readonly ciphertext: string;
+  };
+  readonly selfCopy?: {
+    readonly ephemeralPoint: string;
+    readonly nonce: string;
+    readonly ciphertext: string;
+  };
+}
+
+/**
+ * Mint a portal channel for the continuation-link flow.
+ *
+ * Generates a fresh seed, derives all channel material, and builds the
+ * wire payload. The raw seed and private key are zeroed in the finally
+ * block after the base64url-encoded seed string is captured. The
+ * encoded seed and channel id are returned so the caller can assemble
+ * the one-time URL on successful submission.
+ */
+export function buildContinuationPayload(message: string | null): {
+  payload: IntakeContinuationPayload;
+  channelId: string;
+  encodedSeed: string;
+} {
+  const sodium = requireSodium();
+  const seed = generatePortalSeed();
+  const channelId = deriveChannelId(seed);
+  const auth = deriveChannelAuth(seed);
+  const keypair = derivePortalKeypair(seed);
+  const encodedSeed = encode(seed);
+
+  try {
+    const authHash = encode(hashChannelAuth(auth));
+    const clientPublicEncoded = encode(keypair.clientPublic);
+
+    const checkPlaintext = textEncoder.encode(PORTAL_KEY_CHECK);
+    const keyCheckTriple: EciesOutput = eciesEncrypt(
+      checkPlaintext,
+      keypair.clientPublic,
+    );
+    const keyCheck = {
+      ephemeralPoint: encode(keyCheckTriple.ephemeralPoint),
+      nonce: encode(keyCheckTriple.nonce),
+      ciphertext: encode(keyCheckTriple.ciphertext),
+    };
+
+    let selfCopy: IntakeContinuationPayload["selfCopy"] | undefined;
+    if (message !== null && message.length > 0) {
+      const messageBytes = textEncoder.encode(message);
+      const triple: EciesOutput = eciesEncrypt(
+        messageBytes,
+        keypair.clientPublic,
+      );
+      selfCopy = {
+        ephemeralPoint: encode(triple.ephemeralPoint),
+        nonce: encode(triple.nonce),
+        ciphertext: encode(triple.ciphertext),
+      };
+    }
+
+    const payload: IntakeContinuationPayload = {
+      channelId,
+      authHash,
+      clientPublic: clientPublicEncoded,
+      keyCheck,
+      ...(selfCopy != null ? { selfCopy } : {}),
+    };
+
+    return { payload, channelId, encodedSeed };
+  } finally {
+    sodium.memzero(keypair.clientPrivate);
+    sodium.memzero(auth);
+    sodium.memzero(seed);
   }
 }

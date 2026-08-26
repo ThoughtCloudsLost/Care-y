@@ -2853,5 +2853,15 @@
   "intake_forms_closes_at_hint": "After this date and time, the form will stop accepting submissions.",
   "intake_forms_closes_at_clear": "Clear closing date",
   "intake_form_closed_default": "This form is no longer accepting submissions.",
-  "error_intake_form_closed": "This form is no longer accepting submissions."
+  "error_intake_form_closed": "This form is no longer accepting submissions.",
+  "intake_continuation_toggle_title": "Save a link to add more later (optional)",
+  "intake_continuation_toggle_body": "Get a link you can reopen to add information or read replies.",
+  "intake_continuation_expanded_text": "After you submit, you will receive a link. Open it any time to read replies or add more information. Anyone who has the link can read and add to this conversation.",
+  "intake_continuation_expanded_warning": "If you lose this link, there is no way to recover it. Save it somewhere safe.",
+  "intake_continuation_link_label": "Your continuation link:",
+  "intake_continuation_copy_button": "Copy link",
+  "intake_continuation_copied": "Link copied.",
+  "intake_continuation_copy_error": "Could not copy the link. Select it manually and copy.",
+  "intake_continuation_warning": "This link is the only way back to your conversation. CARE-Y cannot recover it if lost. Anyone who has the link can read and add to this thread.",
+  "intake_continuation_hint": "The link above carries the key that unlocks your conversation. Save it before leaving this page."
 }

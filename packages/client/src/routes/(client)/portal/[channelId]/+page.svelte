@@ -17,6 +17,7 @@
 <script lang="ts">
   import { page } from "$app/state";
   import { browser } from "$app/environment";
+  import { afterNavigate, replaceState } from "$app/navigation";
   import { resolve } from "$app/paths";
   import { Block, BlockTitle, Card } from "konsta/svelte";
   import {
@@ -105,6 +106,26 @@
   });
 
   const hasValidFragment = $derived(fragmentResolved && fragmentData !== null);
+
+  // Strip the fragment from the address bar after the one-shot parse captures
+  // it into state. Two concerns are separated:
+  //   1. replaceState throws before router init, so afterNavigate marks
+  //      router readiness (it fires post-init on mount).
+  //   2. hasValidFragment becomes true asynchronously (after sodium loads
+  //      and the parse effect runs). An $effect watches both conditions so
+  //      the strip fires regardless of which resolves first.
+  let routerReady = $state(false);
+  let fragmentStripped = $state(false);
+
+  afterNavigate(() => {
+    routerReady = true;
+  });
+
+  $effect(() => {
+    if (!routerReady || !hasValidFragment || fragmentStripped) return;
+    fragmentStripped = true;
+    replaceState(resolve(`/portal/${routeChannelId}`), {});
+  });
 
   // ---------------------------------------------------------------------------
   // Session state (module scope, zeroed on exit)

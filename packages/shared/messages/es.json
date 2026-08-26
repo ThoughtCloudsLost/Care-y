@@ -2853,5 +2853,15 @@
   "intake_forms_closes_at_hint": "Tras esta fecha y hora, el formulario dejará de aceptar envíos.",
   "intake_forms_closes_at_clear": "Borrar fecha de cierre",
   "intake_form_closed_default": "Este formulario ya no acepta envíos.",
-  "error_intake_form_closed": "Este formulario ya no acepta envíos."
+  "error_intake_form_closed": "Este formulario ya no acepta envíos.",
+  "intake_continuation_toggle_title": "Guardar un enlace para agregar más tarde (opcional)",
+  "intake_continuation_toggle_body": "Recibe un enlace que puedes abrir para agregar información o leer respuestas.",
+  "intake_continuation_expanded_text": "Después de enviar, recibirás un enlace. Ábrelo en cualquier momento para leer respuestas o agregar más información. Cualquier persona que tenga el enlace puede leer y agregar a esta conversación.",
+  "intake_continuation_expanded_warning": "Si pierdes este enlace, no hay forma de recuperarlo. Guárdalo en un lugar seguro.",
+  "intake_continuation_link_label": "Tu enlace de continuación:",
+  "intake_continuation_copy_button": "Copiar enlace",
+  "intake_continuation_copied": "Enlace copiado.",
+  "intake_continuation_copy_error": "No se pudo copiar el enlace. Selecciónalo manualmente y cópialo.",
+  "intake_continuation_warning": "Este enlace es la única forma de volver a tu conversación. CARE-Y no puede recuperarlo si lo pierdes. Cualquier persona que tenga el enlace puede leer y agregar a este hilo.",
+  "intake_continuation_hint": "El enlace de arriba contiene la clave que desbloquea tu conversación. Guárdalo antes de salir de esta página."
 }

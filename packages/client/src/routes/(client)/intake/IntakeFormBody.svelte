@@ -30,8 +30,10 @@
     encryptIntake,
     resolveSubmitMetadata,
     buildAccountPayload,
+    buildContinuationPayload,
     type IntakeAnswer,
     type IntakeAccountPayload,
+    type IntakeContinuationPayload,
   } from "./intake-crypto.js";
   import FieldError from "$lib/components/FieldError.svelte";
   import HowProtected from "$lib/components/portal/HowProtected.svelte";
@@ -497,6 +499,15 @@
   let accountUsername = $state("");
   let accountPassword = $state("");
   let accountConfirmPassword = $state("");
+  // ---- Continuation link state ----
+
+  let continuationExpanded = $state(false);
+  let continuationLink = $state<string | null>(null);
+  let linkCopied = $state(false);
+  let linkCopyError = $state(false);
+
+  const wantsContinuation = $derived(continuationExpanded && !accountExpanded);
+
   let accountPending = $state(false);
   let accountError = $state<string | undefined>(undefined);
 
@@ -528,6 +539,7 @@
       resolvedPriority?: TicketPriority;
       resolvedEscalationLevel?: string;
       account?: IntakeAccountPayload;
+      continuation?: IntakeContinuationPayload;
     }) => {
       if (!trpc.clientPortal) {
         throw new Error("Client portal not available");
@@ -869,6 +881,7 @@
       resolvedPriority?: TicketPriority;
       resolvedEscalationLevel?: string;
       account?: IntakeAccountPayload;
+      continuation?: IntakeContinuationPayload;
     } = {
       ticketId,
       followUpId,
@@ -944,11 +957,46 @@
       }
     }
 
+    // Continuation link: derive channel material before the mutation.
+    // Hold the channel id and encoded seed in locals; the URL is assembled
+    // only after a successful submit so a failed attempt reveals nothing.
+    let continuationChannelId: string | undefined;
+    let continuationEncodedSeed: string | undefined;
+
+    if (wantsContinuation && !wantsAccount) {
+      const messageForCopy = answers.find(
+        (a) => a.fieldType === "textarea" && typeof a.value === "string",
+      );
+      const messageText =
+        messageForCopy !== undefined && typeof messageForCopy.value === "string"
+          ? messageForCopy.value
+          : null;
+
+      try {
+        const result = buildContinuationPayload(messageText);
+        payload.continuation = result.payload;
+        continuationChannelId = result.channelId;
+        continuationEncodedSeed = result.encodedSeed;
+      } catch {
+        submitError = m.intake_error_generic();
+        return;
+      }
+    }
+
     try {
       const result = await submitMutation.mutateAsync(payload);
       reference = result.reference;
       submitted = true;
       hintShown = true;
+
+      // Assemble the continuation URL only after successful submission
+      if (
+        continuationChannelId !== undefined &&
+        continuationEncodedSeed !== undefined
+      ) {
+        continuationLink = `${location.origin}/portal/${continuationChannelId}#${continuationEncodedSeed}`;
+      }
+
       announceToLiveRegion("polite", m.intake_success_heading());
 
       // Focus the success heading after render
@@ -1121,6 +1169,53 @@
     <p class="intake-reference-save">{m.intake_reference_save()}</p>
   </Block>
 
+  {#if continuationLink !== null}
+    <Block>
+      <p class="intake-continuation-label">
+        {m.intake_continuation_link_label()}
+      </p>
+      <code
+        class="intake-continuation-link"
+        data-testid="intake-continuation-link">{continuationLink}</code
+      >
+      <button
+        class="intake-continuation-copy"
+        type="button"
+        data-testid="intake-continuation-copy"
+        onclick={async () => {
+          if (continuationLink === null) return;
+          try {
+            await navigator.clipboard.writeText(continuationLink);
+            linkCopied = true;
+            linkCopyError = false;
+            announceToLiveRegion("polite", m.intake_continuation_copied());
+            setTimeout(() => {
+              linkCopied = false;
+            }, 3000);
+          } catch {
+            linkCopyError = true;
+            linkCopied = false;
+          }
+        }}
+      >
+        {m.intake_continuation_copy_button()}
+      </button>
+      {#if linkCopied}
+        <p class="intake-continuation-copied" role="status">
+          {m.intake_continuation_copied()}
+        </p>
+      {/if}
+      {#if linkCopyError}
+        <p class="intake-continuation-copy-error" role="alert">
+          {m.intake_continuation_copy_error()}
+        </p>
+      {/if}
+      <p class="intake-continuation-warning">
+        {m.intake_continuation_warning()}
+      </p>
+    </Block>
+  {/if}
+
   {#if accountExpanded && accountUsername.trim().length > 0}
     <Block>
       <div
@@ -1139,7 +1234,9 @@
     ondismiss={() => {
       hintShown = false;
     }}
-    message={m.intake_submit_hint()}
+    message={continuationLink !== null
+      ? m.intake_continuation_hint()
+      : m.intake_submit_hint()}
     dismissLabel={m.intake_hint_dismiss()}
     dismissTestid="intake-hint-dismiss"
   />
@@ -1322,6 +1419,7 @@
         aria-expanded={accountExpanded}
         onclick={() => {
           accountExpanded = !accountExpanded;
+          if (accountExpanded) continuationExpanded = false;
         }}
         disabled={isSubmitting || accountPending}
         data-testid="intake-account-toggle"
@@ -1422,6 +1520,46 @@
           </p>
           <p class="intake-account-warning" data-testid="warning-reset">
             {m.account_create_warning_reset()}
+          </p>
+        </div>
+      </Block>
+    {/if}
+
+    <!-- Continuation link opt-in disclosure (collapsed by default) -->
+    <Block>
+      <button
+        class="intake-account-toggle"
+        type="button"
+        aria-expanded={continuationExpanded}
+        onclick={() => {
+          continuationExpanded = !continuationExpanded;
+          if (continuationExpanded) accountExpanded = false;
+        }}
+        disabled={isSubmitting || accountPending}
+        data-testid="intake-continuation-toggle"
+      >
+        <span class="intake-account-toggle-arrow"
+          >{continuationExpanded ? "▾" : "▸"}</span
+        >
+        <span class="intake-account-toggle-content">
+          <span class="intake-account-toggle-title"
+            >{m.intake_continuation_toggle_title()}</span
+          >
+          <span class="intake-account-toggle-body"
+            >{m.intake_continuation_toggle_body()}</span
+          >
+        </span>
+      </button>
+    </Block>
+
+    {#if continuationExpanded}
+      <Block>
+        <p class="intake-continuation-text">
+          {m.intake_continuation_expanded_text()}
+        </p>
+        <div class="intake-account-warnings">
+          <p class="intake-account-warning">
+            {m.intake_continuation_expanded_warning()}
           </p>
         </div>
       </Block>
@@ -1688,6 +1826,68 @@
     display: flex;
     justify-content: space-between;
     gap: var(--space-sm);
+  }
+
+  .intake-continuation-text {
+    font-size: var(--text-sm);
+    color: var(--muted);
+    line-height: 1.5;
+    margin: 0 0 var(--space-sm);
+  }
+
+  .intake-continuation-label {
+    font-size: var(--text-sm);
+    color: var(--ink);
+    margin: 0 0 var(--space-xs);
+  }
+
+  .intake-continuation-link {
+    display: block;
+    font-size: var(--text-sm);
+    padding: var(--space-sm) var(--space-md);
+    background: var(--raised);
+    border-radius: 8px;
+    word-break: break-all;
+    user-select: all;
+    -webkit-user-select: all;
+    margin: 0 0 var(--space-sm);
+  }
+
+  .intake-continuation-copy {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-xs);
+    padding: var(--space-xs) var(--space-sm);
+    font-size: var(--text-sm);
+    background: var(--raised);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    cursor: pointer;
+    color: var(--ink);
+    min-height: 44px;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  .intake-continuation-copied {
+    font-size: var(--text-sm);
+    color: var(--success, #16a34a);
+    margin: var(--space-xs) 0 0;
+  }
+
+  .intake-continuation-copy-error {
+    font-size: var(--text-sm);
+    color: var(--danger);
+    margin: var(--space-xs) 0 0;
+  }
+
+  .intake-continuation-warning {
+    font-size: var(--text-sm);
+    color: var(--careful-text, var(--ink));
+    background: var(--careful-bg, rgba(234, 179, 8, 0.08));
+    padding: var(--space-sm) var(--space-md);
+    border-radius: 8px;
+    line-height: 1.5;
+    margin: var(--space-sm) 0 0;
   }
 
   .sr-only {

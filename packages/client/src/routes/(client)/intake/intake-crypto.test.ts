@@ -6,12 +6,24 @@ import {
   buildContentAad,
   followupSlot,
   getSodium,
+  deriveChannelId,
+  deriveChannelAuth,
+  hashChannelAuth,
+  derivePortalKeypair,
+  eciesDecrypt,
+  PORTAL_KEY_CHECK,
   type SodiumBackend,
   type SymmetricKey,
   type Ciphertext,
+  type Nonce,
+  type RistrettoPoint,
   decode,
 } from "@care-y/crypto";
-import { encryptIntake, type IntakeAnswer } from "./intake-crypto.js";
+import {
+  encryptIntake,
+  buildContinuationPayload,
+  type IntakeAnswer,
+} from "./intake-crypto.js";
 
 describe("intake-crypto", () => {
   let sodium: SodiumBackend;
@@ -456,6 +468,88 @@ describe("intake-crypto", () => {
 
       const sealedBytes = decode(result.wrappedTk);
       expect(sealedBytes).toHaveLength(80);
+    });
+  });
+
+  describe("buildContinuationPayload", () => {
+    it("produces a channelId matching deriveChannelId of the decoded seed", () => {
+      const { payload, channelId, encodedSeed } =
+        buildContinuationPayload("Test message");
+      const decodedSeed = decode(encodedSeed);
+      expect(channelId).toBe(deriveChannelId(decodedSeed));
+      expect(payload.channelId).toBe(channelId);
+    });
+
+    it("produces an authHash matching hashChannelAuth(deriveChannelAuth(seed))", () => {
+      const { payload, encodedSeed } = buildContinuationPayload("Test message");
+      const decodedSeed = decode(encodedSeed);
+      const expectedAuth = hashChannelAuth(deriveChannelAuth(decodedSeed));
+      expect(decode(payload.authHash)).toEqual(expectedAuth);
+    });
+
+    it("keyCheck decrypts to PORTAL_KEY_CHECK with derivePortalKeypair(seed)", () => {
+      const { payload, encodedSeed } = buildContinuationPayload("Test message");
+      const decodedSeed = decode(encodedSeed);
+      const keypair = derivePortalKeypair(decodedSeed);
+
+      try {
+        const plaintext = eciesDecrypt(
+          decode(payload.keyCheck.ephemeralPoint) as RistrettoPoint,
+          decode(payload.keyCheck.nonce) as Nonce,
+          decode(payload.keyCheck.ciphertext),
+          keypair.clientPrivate,
+        );
+        expect(new TextDecoder().decode(plaintext)).toBe(PORTAL_KEY_CHECK);
+      } finally {
+        sodium.memzero(keypair.clientPrivate);
+      }
+    });
+
+    it("selfCopy decrypts to the message text", () => {
+      const message = "I need to correct my phone number.";
+      const { payload, encodedSeed } = buildContinuationPayload(message);
+      const decodedSeed = decode(encodedSeed);
+      const keypair = derivePortalKeypair(decodedSeed);
+
+      try {
+        expect(payload.selfCopy).toBeDefined();
+        const plaintext = eciesDecrypt(
+          decode(payload.selfCopy!.ephemeralPoint) as RistrettoPoint,
+          decode(payload.selfCopy!.nonce) as Nonce,
+          decode(payload.selfCopy!.ciphertext),
+          keypair.clientPrivate,
+        );
+        expect(new TextDecoder().decode(plaintext)).toBe(message);
+      } finally {
+        sodium.memzero(keypair.clientPrivate);
+      }
+    });
+
+    it("selfCopy is absent when message is null", () => {
+      const { payload } = buildContinuationPayload(null);
+      expect(payload.selfCopy).toBeUndefined();
+    });
+
+    it("selfCopy is absent when message is empty", () => {
+      const { payload } = buildContinuationPayload("");
+      expect(payload.selfCopy).toBeUndefined();
+    });
+
+    it("channelId is 48 lowercase hex chars", () => {
+      const { channelId } = buildContinuationPayload(null);
+      expect(channelId).toMatch(/^[0-9a-f]{48}$/);
+    });
+
+    it("authHash is base64url of 32 bytes", () => {
+      const { payload } = buildContinuationPayload(null);
+      const decoded = decode(payload.authHash);
+      expect(decoded).toHaveLength(32);
+    });
+
+    it("clientPublic is base64url of 32 bytes", () => {
+      const { payload } = buildContinuationPayload(null);
+      const decoded = decode(payload.clientPublic);
+      expect(decoded).toHaveLength(32);
     });
   });
 });
