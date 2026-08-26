@@ -58,6 +58,7 @@ export const followUpTypeSchema = z.enum([
   "priority_changed",
   "merge_note",
   "share_link",
+  "contact_correction",
 ]);
 export type FollowUpType = z.infer<typeof followUpTypeSchema>;
 
@@ -207,6 +208,7 @@ export const mergeClientsInputSchema = z.object({
   primaryClientId: clientIdSchema,
   secondaryClientId: clientIdSchema,
   encryptedSnapshot: base64String("encryptedSnapshot"),
+  keepChannelOf: z.enum(["primary", "secondary"]).optional(),
 });
 export type MergeClientsInput = z.infer<typeof mergeClientsInputSchema>;
 

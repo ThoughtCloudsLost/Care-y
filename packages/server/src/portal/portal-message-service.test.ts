@@ -427,6 +427,59 @@ describe.skipIf(!process.env.DATABASE_URL)(
         expect(Number(fuCount.cnt)).toBe(0);
       });
 
+      it("inserts a contact_correction followup when kind is contact_correction", async () => {
+        const fixture = await createTestTicketFixture(testDb.db);
+        const channel = await insertChannel(testDb.db, fixture.clientId);
+        const deps = makeDeps();
+
+        const followUpId = newFollowupId();
+        const input: PortalReplyServiceInput = {
+          ticketId: fixture.ticketId,
+          followUpId,
+          keyGeneration: newKeyGeneration(),
+          encryptedContent: Buffer.from("corrected-phone"),
+          wrappedTkTemp: Buffer.alloc(80, 0xef),
+          selfCopy: fakeTriple(),
+          kind: "contact_correction",
+        };
+
+        await clientReply(testDb.db, deps, channel, input);
+
+        const fu = await testDb.db
+          .selectFrom("followups")
+          .select(["type", "source"])
+          .where("id", "=", followUpId)
+          .executeTakeFirstOrThrow();
+        expect(fu.type).toBe("contact_correction");
+        expect(fu.source).toBe("client");
+      });
+
+      it("defaults followup type to message when kind is omitted", async () => {
+        const fixture = await createTestTicketFixture(testDb.db);
+        const channel = await insertChannel(testDb.db, fixture.clientId);
+        const deps = makeDeps();
+
+        const followUpId = newFollowupId();
+        const input: PortalReplyServiceInput = {
+          ticketId: fixture.ticketId,
+          followUpId,
+          keyGeneration: newKeyGeneration(),
+          encryptedContent: Buffer.from("regular-reply"),
+          wrappedTkTemp: Buffer.alloc(80, 0xef),
+          selfCopy: fakeTriple(),
+          // kind intentionally omitted
+        };
+
+        await clientReply(testDb.db, deps, channel, input);
+
+        const fu = await testDb.db
+          .selectFrom("followups")
+          .select("type")
+          .where("id", "=", followUpId)
+          .executeTakeFirstOrThrow();
+        expect(fu.type).toBe("message");
+      });
+
       it("rolls back on wrap-insert failure (no orphan follow-up)", async () => {
         const fixture = await createTestTicketFixture(testDb.db);
         const channel = await insertChannel(testDb.db, fixture.clientId);

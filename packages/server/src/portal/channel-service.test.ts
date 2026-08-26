@@ -29,6 +29,7 @@ import {
   regenerateChannel,
   revokeChannel,
   resolveAuthedChannel,
+  getActiveChannelSummary,
   type ChannelRegistration,
 } from "./channel-service.js";
 import { ChannelAlreadyActiveError } from "./portal-errors.js";
@@ -619,6 +620,68 @@ describe.skipIf(!process.env.DATABASE_URL)("PortalChannelService", () => {
       );
       expect(newResult).not.toBeNull();
       expect(newResult!.channel_id).toBe(reg2.channelId);
+    });
+  });
+
+  // -----------------------------------------------------------------------
+  // getActiveChannelSummary
+  // -----------------------------------------------------------------------
+
+  describe("getActiveChannelSummary", () => {
+    it("returns metadata for an active channel", async () => {
+      const clientId = await insertClient(db);
+      const reg = makeRegistration({ hasPassphrase: true });
+      await createChannel(db, clientId, reg);
+
+      const summary = await getActiveChannelSummary(db, clientId);
+      expect(summary).not.toBeNull();
+      expect(summary!.kind).toBe("secure_link");
+      expect(summary!.hasPassphrase).toBe(true);
+      expect(summary!.createdAt).toBeInstanceOf(Date);
+    });
+
+    it("returns null when no active channel exists", async () => {
+      const clientId = await insertClient(db);
+
+      const summary = await getActiveChannelSummary(db, clientId);
+      expect(summary).toBeNull();
+    });
+
+    it("returns null for a revoked channel", async () => {
+      const clientId = await insertClient(db);
+      const reg = makeRegistration();
+      await createChannel(db, clientId, reg);
+      await revokeChannel(db, clientId);
+
+      const summary = await getActiveChannelSummary(db, clientId);
+      expect(summary).toBeNull();
+    });
+
+    it("returns the correct kind for intake_continuation channels", async () => {
+      const clientId = await insertClient(db);
+      const channelId = channelSecretSchema.parse(
+        crypto.randomBytes(24).toString("hex"),
+      );
+
+      await db
+        .insertInto("portal_channels")
+        .values({
+          client_id: clientId,
+          channel_id: channelId,
+          auth_hash: crypto.randomBytes(32),
+          client_public: crypto.randomBytes(32),
+          has_passphrase: false,
+          key_check_ephemeral_point: crypto.randomBytes(32),
+          key_check_nonce: crypto.randomBytes(24),
+          key_check_ciphertext: crypto.randomBytes(48),
+          status: "active",
+          kind: "intake_continuation",
+        })
+        .execute();
+
+      const summary = await getActiveChannelSummary(db, clientId);
+      expect(summary).not.toBeNull();
+      expect(summary!.kind).toBe("intake_continuation");
     });
   });
 });

@@ -245,6 +245,8 @@ export const portalReplyInputSchema = z.object({
   ),
   wrappedTkTemp: base64Bytes(80, "wrappedTkTemp (sealed box)"),
   selfCopy: eciesTripleSchema,
+  /** Optional followup kind: "message" (default) or "contact_correction". */
+  kind: z.enum(["message", "contact_correction"]).optional(),
 });
 export type PortalReplyInput = z.infer<typeof portalReplyInputSchema>;
 

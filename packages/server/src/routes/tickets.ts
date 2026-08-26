@@ -77,6 +77,7 @@ import {
   createChannel,
   regenerateChannel,
   revokeChannel,
+  getActiveChannelSummary,
   type ChannelRegistration,
 } from "../portal/channel-service.js";
 import { ChannelAlreadyActiveError } from "../portal/portal-errors.js";
@@ -143,6 +144,7 @@ import {
   keyGenerationSchema,
   blobKeySchema,
   channelSecretSchema,
+  clientIdSchema,
 } from "@care-y/shared";
 import type { UserId, QueueId, TicketId } from "@care-y/shared";
 
@@ -1223,6 +1225,7 @@ export function createTicketRouter(deps: TicketRouterDeps) {
           primaryClientId: input.primaryClientId,
           secondaryClientId: input.secondaryClientId,
           encryptedSnapshot: Buffer.from(input.encryptedSnapshot, "base64"),
+          keepChannelOf: input.keepChannelOf,
         });
         audit(ctx.org.tenantDb, {
           eventType: "ticket_merged",
@@ -1277,6 +1280,38 @@ export function createTicketRouter(deps: TicketRouterDeps) {
               locked: input.locked,
             },
           });
+        }),
+      ),
+
+    getMergeChannelInfo: managerProcedure
+      .input(
+        z.object({
+          primaryClientId: clientIdSchema,
+          secondaryClientId: clientIdSchema,
+        }),
+      )
+      .query(
+        withErrorWrapping(async ({ ctx, input }) => {
+          const [primary, secondary] = await Promise.all([
+            getActiveChannelSummary(ctx.org.tenantDb, input.primaryClientId),
+            getActiveChannelSummary(ctx.org.tenantDb, input.secondaryClientId),
+          ]);
+          return {
+            primary: primary
+              ? {
+                  kind: primary.kind,
+                  createdAt: primary.createdAt.toISOString(),
+                  hasPassphrase: primary.hasPassphrase,
+                }
+              : null,
+            secondary: secondary
+              ? {
+                  kind: secondary.kind,
+                  createdAt: secondary.createdAt.toISOString(),
+                  hasPassphrase: secondary.hasPassphrase,
+                }
+              : null,
+          };
         }),
       ),
 

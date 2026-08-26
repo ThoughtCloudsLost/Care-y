@@ -1123,6 +1123,7 @@ function decodeReplyInput(input: {
     nonce: string;
     ciphertext: string;
   };
+  kind?: "message" | "contact_correction";
 }): PortalReplyServiceInput {
   return {
     ticketId: input.ticketId,
@@ -1135,6 +1136,7 @@ function decodeReplyInput(input: {
       nonce: Buffer.from(input.selfCopy.nonce, "base64"),
       ciphertext: Buffer.from(input.selfCopy.ciphertext, "base64"),
     },
+    kind: input.kind,
   };
 }
 

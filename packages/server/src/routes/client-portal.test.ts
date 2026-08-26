@@ -1075,6 +1075,42 @@ describe("client-portal router", () => {
       );
       warnSpy.mockRestore();
     });
+
+    it("passes kind through decodeReplyInput to the service", async () => {
+      const mockClientReply = vi.fn().mockResolvedValue(undefined);
+      const replyDeps = buildReplyDeps({
+        portalMessageService: {
+          bootstrap: vi.fn(),
+          clientReply: mockClientReply,
+        },
+      });
+      const caller = buildCaller(replyDeps);
+      const input = {
+        ...makeReplyInput(),
+        kind: "contact_correction" as const,
+      };
+      await caller.portalReply(input);
+
+      const serviceInput = mockClientReply.mock
+        .calls[0]?.[3] as PortalReplyServiceInput;
+      expect(serviceInput.kind).toBe("contact_correction");
+    });
+
+    it("passes undefined kind when omitted", async () => {
+      const mockClientReply = vi.fn().mockResolvedValue(undefined);
+      const replyDeps = buildReplyDeps({
+        portalMessageService: {
+          bootstrap: vi.fn(),
+          clientReply: mockClientReply,
+        },
+      });
+      const caller = buildCaller(replyDeps);
+      await caller.portalReply(makeReplyInput());
+
+      const serviceInput = mockClientReply.mock
+        .calls[0]?.[3] as PortalReplyServiceInput;
+      expect(serviceInput.kind).toBeUndefined();
+    });
   });
 
   // -----------------------------------------------------------------

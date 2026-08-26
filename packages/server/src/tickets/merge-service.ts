@@ -7,12 +7,16 @@
  * not in plaintext columns.
  */
 
-import type { Kysely } from "kysely";
+import type { Kysely, Transaction } from "kysely";
 import type { TenantDatabase } from "../db/types.js";
 import { MergeError, NotFoundError } from "../errors.js";
 import { createDependencyService } from "./dependency-service.js";
 import { ErrorCode } from "@care-y/shared";
-import type { ClientId, ClientMergeEventId } from "@care-y/shared";
+import type {
+  ClientId,
+  ClientMergeEventId,
+  ChannelRowId,
+} from "@care-y/shared";
 
 export interface MergeEventRecord {
   readonly id: ClientMergeEventId;
@@ -29,6 +33,7 @@ export interface MergeService {
     primaryClientId: ClientId;
     secondaryClientId: ClientId;
     encryptedSnapshot: Buffer;
+    keepChannelOf?: "primary" | "secondary";
   }): Promise<MergeEventRecord>;
 
   undoMerge(input: {
@@ -59,6 +64,174 @@ function toRecord(row: {
     undoLocked: row.undo_locked,
     isUndone: row.is_undone,
   };
+}
+
+// ---------------------------------------------------------------------------
+// Channel collision helpers (called inside the merge transaction)
+// ---------------------------------------------------------------------------
+
+/**
+ * Derive the communication tier string from a channel kind.
+ * "account" -> "account"; "secure_link" / "intake_continuation" -> "secure_link".
+ */
+function tierForKind(kind: string): string {
+  if (kind === "account") return "account";
+  return "secure_link";
+}
+
+/**
+ * Revoke a channel inside a transaction: delete its portal_messages,
+ * set status='revoked' and revoked_at. Mirrors the steps in
+ * channel-service.ts revokeChannel but operates on a single channel id
+ * within an existing transaction.
+ */
+async function revokeChannelInTrx(
+  trx: Transaction<TenantDatabase>,
+  channelRowId: ChannelRowId,
+): Promise<void> {
+  await trx
+    .deleteFrom("portal_messages")
+    .where("channel_id", "=", channelRowId)
+    .execute();
+
+  await trx
+    .updateTable("portal_channels")
+    .set({ status: "revoked", revoked_at: new Date() })
+    .where("id", "=", channelRowId)
+    .execute();
+}
+
+/**
+ * Re-point a channel from its current client to the primary client and
+ * set the primary's communication tier to match the channel kind.
+ * Also resets the secondary (merged-away) client's tier to sms_email.
+ */
+async function repointChannel(
+  trx: Transaction<TenantDatabase>,
+  channelRowId: ChannelRowId,
+  primaryClientId: ClientId,
+  secondaryClientId: ClientId,
+  channelKind: string,
+): Promise<void> {
+  await trx
+    .updateTable("portal_channels")
+    .set({ client_id: primaryClientId })
+    .where("id", "=", channelRowId)
+    .execute();
+
+  await trx
+    .updateTable("clients")
+    .set({ communication_tier: tierForKind(channelKind) })
+    .where("id", "=", primaryClientId)
+    .execute();
+
+  await trx
+    .updateTable("clients")
+    .set({ communication_tier: "sms_email" })
+    .where("id", "=", secondaryClientId)
+    .execute();
+}
+
+/**
+ * Handle portal channel collision during merge.
+ *
+ * Cases:
+ * - Neither client has an active channel: no-op.
+ * - Only one has an active channel: if it belongs to the secondary,
+ *   re-point it to the primary and fix tiers.
+ * - Both have active channels: honor keepChannelOf (default: keep the
+ *   older by created_at), revoke the loser, re-point the winner if needed.
+ */
+async function reconcileChannels(
+  trx: Transaction<TenantDatabase>,
+  primaryClientId: ClientId,
+  secondaryClientId: ClientId,
+  keepChannelOf?: "primary" | "secondary",
+): Promise<void> {
+  const channels = await trx
+    .selectFrom("portal_channels")
+    .select(["id", "client_id", "kind", "created_at"])
+    .where("client_id", "in", [primaryClientId, secondaryClientId])
+    .where("status", "=", "active")
+    .execute();
+
+  const primaryChannel = channels.find((c) => c.client_id === primaryClientId);
+  const secondaryChannel = channels.find(
+    (c) => c.client_id === secondaryClientId,
+  );
+
+  // Neither has a channel: nothing to do
+  if (!primaryChannel && !secondaryChannel) {
+    return;
+  }
+
+  // Only primary has a channel: already correct ownership, no repoint needed
+  if (!secondaryChannel) {
+    return;
+  }
+
+  // Only secondary has a channel: re-point it to primary
+  if (!primaryChannel) {
+    await repointChannel(
+      trx,
+      secondaryChannel.id,
+      primaryClientId,
+      secondaryClientId,
+      secondaryChannel.kind,
+    );
+    return;
+  }
+
+  // Both have active channels: pick a winner.
+  // After the early returns above, TS narrows both to non-null.
+  type ChannelRow = typeof primaryChannel;
+
+  let winner: ChannelRow;
+  let loser: ChannelRow;
+
+  if (keepChannelOf === "primary") {
+    winner = primaryChannel;
+    loser = secondaryChannel;
+  } else if (keepChannelOf === "secondary") {
+    winner = secondaryChannel;
+    loser = primaryChannel;
+  } else {
+    // Default: keep the older channel (by created_at)
+    if (primaryChannel.created_at <= secondaryChannel.created_at) {
+      winner = primaryChannel;
+      loser = secondaryChannel;
+    } else {
+      winner = secondaryChannel;
+      loser = primaryChannel;
+    }
+  }
+
+  // Revoke the loser
+  await revokeChannelInTrx(trx, loser.id);
+
+  // If the winner belongs to the secondary, re-point it to the primary
+  if (winner.client_id === secondaryClientId) {
+    await repointChannel(
+      trx,
+      winner.id,
+      primaryClientId,
+      secondaryClientId,
+      winner.kind,
+    );
+  } else {
+    // Winner already belongs to primary; normalize primary's tier and reset secondary's
+    await trx
+      .updateTable("clients")
+      .set({ communication_tier: tierForKind(winner.kind) })
+      .where("id", "=", primaryClientId)
+      .execute();
+
+    await trx
+      .updateTable("clients")
+      .set({ communication_tier: "sms_email" })
+      .where("id", "=", secondaryClientId)
+      .execute();
+  }
 }
 
 export function createMergeService(db: Kysely<TenantDatabase>): MergeService {
@@ -142,6 +315,14 @@ export function createMergeService(db: Kysely<TenantDatabase>): MergeService {
             })
             .execute();
         }
+
+        // 4. Reconcile portal channels (re-point, revoke collisions)
+        await reconcileChannels(
+          trx,
+          input.primaryClientId,
+          input.secondaryClientId,
+          input.keepChannelOf,
+        );
 
         return toRecord(event);
       });

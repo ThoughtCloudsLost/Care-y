@@ -30,7 +30,12 @@ import {
   expectTrpcError,
   type TestDb,
 } from "../test-utils.js";
-import { RoleId, ErrorCode, type RoleIdValue } from "@care-y/shared";
+import {
+  RoleId,
+  ErrorCode,
+  channelSecretSchema,
+  type RoleIdValue,
+} from "@care-y/shared";
 import type {
   SessionId,
   SessionToken,
@@ -847,6 +852,96 @@ describe.skipIf(!process.env.DATABASE_URL)(
           .where("secondary_client_id", "=", secondary.clientId)
           .execute();
         expect(events).toHaveLength(0);
+      });
+
+      it("passes keepChannelOf through to the merge service", async () => {
+        const manager = await createTestUser(tenantDb, {
+          overrides: { role_id: RoleId.MANAGER },
+        });
+        const caller = createAuthedCaller(manager);
+
+        const fixture1 = await createTestTicketFixture(tenantDb);
+        const fixture2 = await createTestClientFixture(tenantDb, {
+          queueId: fixture1.queueId,
+        });
+
+        await tenantDb
+          .insertInto("queue_assignments")
+          .values({ queue_id: fixture1.queueId, user_id: manager.id })
+          .onConflict((oc) => oc.columns(["queue_id", "user_id"]).doNothing())
+          .execute();
+
+        // The call should succeed with keepChannelOf set
+        const result = await caller.tickets.mergeClients({
+          primaryClientId: fixture1.clientId,
+          secondaryClientId: fixture2.clientId,
+          encryptedSnapshot: testEncryptedContent(0x89),
+          keepChannelOf: "primary",
+        });
+
+        expect(result.id).toBeDefined();
+      });
+    });
+
+    // -----------------------------------------------------------------------
+    // getMergeChannelInfo
+    // -----------------------------------------------------------------------
+
+    describe("getMergeChannelInfo", () => {
+      it("returns channel summaries for both clients (manager)", async () => {
+        const manager = await createTestUser(tenantDb, {
+          overrides: { role_id: RoleId.MANAGER },
+        });
+        const caller = createAuthedCaller(manager);
+
+        const fixture1 = await createTestTicketFixture(tenantDb);
+        const fixture2 = await createTestClientFixture(tenantDb, {
+          queueId: fixture1.queueId,
+        });
+
+        // Give the primary client a channel (raw insert; createChannel is not wired through route deps)
+        await tenantDb
+          .insertInto("portal_channels")
+          .values({
+            client_id: fixture1.clientId,
+            channel_id: channelSecretSchema.parse(
+              randomUUID().replace(/-/g, "").padEnd(48, "0"),
+            ),
+            auth_hash: Buffer.alloc(32, 0xaa),
+            client_public: Buffer.alloc(32, 0xbb),
+            has_passphrase: true,
+            key_check_ephemeral_point: Buffer.alloc(32, 0xcc),
+            key_check_nonce: Buffer.alloc(24, 0xdd),
+            key_check_ciphertext: Buffer.alloc(48, 0xee),
+            status: "active",
+            kind: "secure_link",
+          })
+          .execute();
+
+        const result = await caller.tickets.getMergeChannelInfo({
+          primaryClientId: fixture1.clientId,
+          secondaryClientId: fixture2.clientId,
+        });
+
+        expect(result.primary).not.toBeNull();
+        expect(result.primary!.kind).toBe("secure_link");
+        expect(result.primary!.hasPassphrase).toBe(true);
+        expect(typeof result.primary!.createdAt).toBe("string");
+        expect(result.secondary).toBeNull();
+      });
+
+      it("rejects non-manager callers", async () => {
+        const { user, clientId } = await setupUserWithTicket();
+        const fixture2 = await createTestClientFixture(tenantDb);
+        const caller = createAuthedCaller(user);
+
+        await expectTrpcError(
+          caller.tickets.getMergeChannelInfo({
+            primaryClientId: clientId,
+            secondaryClientId: fixture2.clientId,
+          }),
+          "FORBIDDEN",
+        );
       });
     });
 

@@ -65,6 +65,8 @@ export interface PortalReplyServiceInput {
   readonly encryptedContent: Buffer;
   readonly wrappedTkTemp: Buffer;
   readonly selfCopy: EciesTripleBuffers;
+  /** Followup type: "message" (default) or "contact_correction". */
+  readonly kind?: "message" | "contact_correction";
 }
 
 export interface PortalMessageWire {
@@ -235,14 +237,14 @@ export async function clientReply(
       await reopenClosedTicket(trx, ticket.id);
     }
 
-    // Insert follow-up (source: client, type: message)
+    // Insert follow-up (source: client, type from input or default "message")
     await trx
       .insertInto("followups")
       .values({
         id: input.followUpId,
         ticket_id: input.ticketId,
         source: "client",
-        type: "message",
+        type: input.kind ?? "message",
         encrypted_content: input.encryptedContent,
         created_by: null,
         key_generation: input.keyGeneration,

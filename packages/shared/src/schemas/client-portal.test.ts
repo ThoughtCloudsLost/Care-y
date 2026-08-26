@@ -626,6 +626,30 @@ describe("portalReplyInputSchema", () => {
     delete input.selfCopy;
     expect(portalReplyInputSchema.safeParse(input).success).toBe(false);
   });
+
+  it("accepts kind 'message'", () => {
+    const input = { ...validReply(), kind: "message" };
+    expect(portalReplyInputSchema.safeParse(input).success).toBe(true);
+  });
+
+  it("accepts kind 'contact_correction'", () => {
+    const input = { ...validReply(), kind: "contact_correction" };
+    expect(portalReplyInputSchema.safeParse(input).success).toBe(true);
+  });
+
+  it("accepts omitted kind (optional, defaults to undefined)", () => {
+    const input = validReply();
+    const result = portalReplyInputSchema.safeParse(input);
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.kind).toBeUndefined();
+    }
+  });
+
+  it("rejects invalid kind value", () => {
+    const input = { ...validReply(), kind: "unknown_type" };
+    expect(portalReplyInputSchema.safeParse(input).success).toBe(false);
+  });
 });
 
 // ---------------------------------------------------------------------------

@@ -245,3 +245,38 @@ export async function resolveAuthedChannel(
 
   return row;
 }
+
+// ---------------------------------------------------------------------------
+// Active channel summary (used by merge UI)
+// ---------------------------------------------------------------------------
+
+export interface ActiveChannelSummary {
+  readonly kind: string;
+  readonly createdAt: Date;
+  readonly hasPassphrase: boolean;
+}
+
+/**
+ * Returns metadata for the client's active portal channel, or null when
+ * no active channel exists. Used by the merge confirmation UI to surface
+ * channel collision info.
+ */
+export async function getActiveChannelSummary(
+  db: Kysely<TenantDatabase>,
+  clientId: ClientId,
+): Promise<ActiveChannelSummary | null> {
+  const row = await db
+    .selectFrom("portal_channels")
+    .select(["kind", "created_at", "has_passphrase"])
+    .where("client_id", "=", clientId)
+    .where("status", "=", "active")
+    .executeTakeFirst();
+
+  if (!row) return null;
+
+  return {
+    kind: row.kind,
+    createdAt: row.created_at,
+    hasPassphrase: row.has_passphrase,
+  };
+}

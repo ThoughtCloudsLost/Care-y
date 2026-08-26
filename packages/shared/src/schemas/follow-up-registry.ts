@@ -147,4 +147,12 @@ export const CONTENT_TYPE_REGISTRY: Record<FollowUpType, ContentTypeMeta> = {
     hasEventParams: true,
     groupable: false,
   },
+  contact_correction: {
+    category: "message",
+    allowedSources: ["client"],
+    encryption: "ticket-key",
+    hasEncryptedContent: true,
+    hasEventParams: false,
+    groupable: false,
+  },
 } as const;
