@@ -28,6 +28,7 @@
     intakeFieldRoleSchema,
     ticketPrioritySchema,
     textSubtypeSchema,
+    visibilityOperatorSchema,
     resolveLocalized,
     BASE_LOCALE,
     FORM_LOCALES,
@@ -54,7 +55,9 @@
     FieldConfigInitial,
     QueueOption,
     VolunteerOption,
+    EarlierFieldOption,
   } from "./intake-field-config-types.js";
+  import type { VisibleWhen, VisibilityRule } from "@care-y/shared";
 
   interface IntakeFieldConfigSheetProps {
     readonly opened: boolean;
@@ -63,6 +66,7 @@
     readonly queues: readonly QueueOption[];
     readonly volunteers: readonly VolunteerOption[];
     readonly editingLocale: FormLocale;
+    readonly earlierFields: readonly EarlierFieldOption[];
     readonly ondone: (result: FieldConfigState) => void;
     readonly ondismiss: () => void;
   }
@@ -74,6 +78,7 @@
     queues,
     volunteers,
     editingLocale: parentLocale,
+    earlierFields,
     ondone,
     ondismiss,
   }: IntakeFieldConfigSheetProps = $props();
@@ -108,6 +113,21 @@
   let escalationRecipientIds = $state<string[]>([]);
 
   let atLeastOneError = $state("");
+
+  // Conditional visibility state
+  let conditionEnabled = $state(false);
+  let conditionMode = $state<"all" | "any">("all");
+  let conditionRules = $state<
+    {
+      fieldKey: string;
+      operator: "equals" | "includes" | "checked";
+      optionKey: string;
+      boolValue: boolean;
+    }[]
+  >([]);
+
+  // Page break state
+  let pageBreakTitle = $state<LocalizedText>({});
 
   /** Native locale name for display. */
   function localeName(loc: FormLocale): string {
@@ -162,6 +182,22 @@
           ? [...initial.escalationRecipientIds]
           : [];
 
+      // Restore conditional visibility
+      if (initial.visibleWhen != null) {
+        conditionEnabled = true;
+        conditionMode = initial.visibleWhen.mode;
+        conditionRules = initial.visibleWhen.rules.map((r) => ({
+          fieldKey: r.fieldKey,
+          operator: r.operator,
+          optionKey: r.optionKey ?? "",
+          boolValue: r.boolValue ?? true,
+        }));
+      } else {
+        conditionEnabled = false;
+        conditionMode = "all";
+        conditionRules = [];
+      }
+
       const cfg = initial.config;
 
       // Reset subtype/number range (only populated for text)
@@ -169,6 +205,7 @@
       numberMin = undefined;
       numberMax = undefined;
       placeholder = {};
+      pageBreakTitle = {};
 
       switch (cfg.type) {
         case "text":
@@ -217,6 +254,9 @@
           break;
         case "date":
           // Date has no additional config to restore
+          break;
+        case "pageBreak":
+          pageBreakTitle = cfg.title != null ? { ...cfg.title } : {};
           break;
       }
       atLeastOneError = "";
@@ -579,6 +619,15 @@
         ...(ht != null ? { helpText: ht } : {}),
       };
     }
+    if (fieldType === "pageBreak") {
+      const pt = hasContent(pageBreakTitle)
+        ? trimLocalized(pageBreakTitle)
+        : undefined;
+      return {
+        type: "pageBreak",
+        ...(pt != null ? { title: pt } : {}),
+      };
+    }
     return {
       type: "availability",
       allowRecurring,
@@ -597,7 +646,110 @@
     return ids.size > 0 ? [...ids] : null;
   }
 
+  /** Build visibleWhen from the condition editor state. */
+  function buildVisibleWhen(): VisibleWhen | undefined {
+    if (!conditionEnabled || conditionRules.length === 0) return undefined;
+    const rules: VisibilityRule[] = conditionRules
+      .filter((r) => r.fieldKey !== "")
+      .map((r) => {
+        const base: VisibilityRule = {
+          fieldKey: r.fieldKey,
+          operator: r.operator,
+        };
+        if (r.operator === "equals" || r.operator === "includes") {
+          return { ...base, optionKey: r.optionKey };
+        }
+        return { ...base, boolValue: r.boolValue };
+      });
+    if (rules.length === 0) return undefined;
+    return { mode: conditionMode, rules };
+  }
+
+  /** Add a new empty condition rule. */
+  function addConditionRule(): void {
+    conditionRules = [
+      ...conditionRules,
+      { fieldKey: "", operator: "equals", optionKey: "", boolValue: true },
+    ];
+  }
+
+  /** Remove a condition rule by index. */
+  function removeConditionRule(index: number): void {
+    conditionRules = conditionRules.filter((_, i) => i !== index);
+  }
+
+  /** Update a condition rule field selection. */
+  function handleConditionFieldChange(index: number, e: Event): void {
+    const target = e.target;
+    if (target instanceof HTMLSelectElement) {
+      const fk = target.value;
+      const ef = earlierFields.find((f) => f.fieldKey === fk);
+      // Auto-select operator based on field type
+      const op =
+        ef?.fieldType === "checkbox"
+          ? "checked"
+          : ef?.fieldType === "multiselect"
+            ? "includes"
+            : "equals";
+      conditionRules = conditionRules.map((r, i) =>
+        i === index
+          ? { ...r, fieldKey: fk, operator: op, optionKey: "", boolValue: true }
+          : r,
+      );
+    }
+  }
+
+  /** Update a condition rule operator. */
+  function handleConditionOperatorChange(index: number, e: Event): void {
+    const target = e.target;
+    if (!(target instanceof HTMLSelectElement)) return;
+    const parsed = visibilityOperatorSchema.safeParse(target.value);
+    if (!parsed.success) return;
+    conditionRules = conditionRules.map((r, i) =>
+      i === index ? { ...r, operator: parsed.data } : r,
+    );
+  }
+
+  /** Update a condition rule option key value. */
+  function handleConditionValueChange(index: number, e: Event): void {
+    const target = e.target;
+    if (target instanceof HTMLSelectElement) {
+      conditionRules = conditionRules.map((r, i) =>
+        i === index ? { ...r, optionKey: target.value } : r,
+      );
+    }
+  }
+
+  /** Get options for a referenced earlier field. */
+  function getFieldOptions(
+    fieldKey: string,
+  ): readonly { key: string; label: string }[] {
+    const ef = earlierFields.find((f) => f.fieldKey === fieldKey);
+    return ef?.options ?? [];
+  }
+
+  /** Get the field type of a referenced earlier field. */
+  function getFieldType(fieldKey: string): IntakeFieldType | undefined {
+    return earlierFields.find((f) => f.fieldKey === fieldKey)?.fieldType;
+  }
+
   function handleDone(): void {
+    // Page break does not require label validation
+    if (fieldType === "pageBreak") {
+      const result: FieldConfigState = {
+        label: trimLocalized(pageBreakTitle),
+        helpText: {},
+        isRequired: false,
+        config: buildConfig(),
+        role: null,
+        routingQueueIds: null,
+        escalationRecipientIds: null,
+        visibleWhen: buildVisibleWhen(),
+      };
+      ondone(result);
+      return;
+    }
+
     // Base locale label is required
     const baseLabelVal = readLocale(label, BASE_LOCALE);
     if (baseLabelVal.trim().length === 0) {
@@ -622,6 +774,7 @@
         selectedRole === "escalation" && escalationRecipientIds.length > 0
           ? escalationRecipientIds
           : null,
+      visibleWhen: buildVisibleWhen(),
     };
     ondone(result);
   }
@@ -665,35 +818,57 @@
     </Segmented>
   </div>
 
-  <List strong inset>
-    <ListInput
-      label={m.intake_forms_config_label()}
-      type="text"
-      placeholder={m.intake_forms_config_label_placeholder()}
-      error={labelError}
-      value={readLocale(label, sheetLocale)}
-      onInput={handleLabelInput}
-    />
-    <ListInput
-      label={m.intake_forms_config_help_text()}
-      type="text"
-      placeholder={m.intake_forms_config_help_text_placeholder()}
-      info={m.intake_forms_config_help_text_hint()}
-      value={readLocale(helpText, sheetLocale)}
-      onInput={handleHelpTextInput}
-    />
-  </List>
+  {#if fieldType === "pageBreak"}
+    <!-- Page break config: just a localized title -->
+    <List strong inset>
+      <ListInput
+        label={m.intake_forms_page_break_title_label()}
+        type="text"
+        placeholder={m.intake_forms_page_break_title_placeholder()}
+        value={readLocale(pageBreakTitle, sheetLocale)}
+        onInput={(e: Event) => {
+          const target = e.target;
+          if (target instanceof HTMLInputElement) {
+            pageBreakTitle = setLocaleText(
+              pageBreakTitle,
+              sheetLocale,
+              target.value,
+            );
+          }
+        }}
+      />
+    </List>
+  {:else}
+    <List strong inset>
+      <ListInput
+        label={m.intake_forms_config_label()}
+        type="text"
+        placeholder={m.intake_forms_config_label_placeholder()}
+        error={labelError}
+        value={readLocale(label, sheetLocale)}
+        onInput={handleLabelInput}
+      />
+      <ListInput
+        label={m.intake_forms_config_help_text()}
+        type="text"
+        placeholder={m.intake_forms_config_help_text_placeholder()}
+        info={m.intake_forms_config_help_text_hint()}
+        value={readLocale(helpText, sheetLocale)}
+        onInput={handleHelpTextInput}
+      />
+    </List>
 
-  <List strong inset>
-    <ListItem title={m.intake_forms_config_required()}>
-      {#snippet after()}
-        <Toggle
-          checked={isRequired}
-          onChange={() => (isRequired = !isRequired)}
-        />
-      {/snippet}
-    </ListItem>
-  </List>
+    <List strong inset>
+      <ListItem title={m.intake_forms_config_required()}>
+        {#snippet after()}
+          <Toggle
+            checked={isRequired}
+            onChange={() => (isRequired = !isRequired)}
+          />
+        {/snippet}
+      </ListItem>
+    </List>
+  {/if}
 
   <!-- Role picker (ADR-068) -->
   {#if compatibleRoles.length > 0}
@@ -912,6 +1087,123 @@
     <p class="mapping-hint">
       {m.intake_forms_config_escalation_recipients_hint()}
     </p>
+  {/if}
+
+  <!-- Conditional visibility builder -->
+  {#if earlierFields.length > 0}
+    <BlockTitle>{m.intake_forms_config_condition_heading()}</BlockTitle>
+    <List strong inset>
+      <ListItem title={m.intake_forms_config_condition_heading()}>
+        {#snippet after()}
+          <Toggle
+            checked={conditionEnabled}
+            onChange={() => {
+              conditionEnabled = !conditionEnabled;
+              if (conditionEnabled && conditionRules.length === 0) {
+                addConditionRule();
+              }
+            }}
+          />
+        {/snippet}
+      </ListItem>
+    </List>
+    <p class="mapping-hint">{m.intake_forms_config_condition_hint()}</p>
+
+    {#if conditionEnabled}
+      <List strong inset>
+        <ListInput
+          label={m.intake_forms_config_condition_operator_label()}
+          type="select"
+          dropdown
+          value={conditionMode}
+          onChange={(e: Event) => {
+            const target = e.target;
+            if (target instanceof HTMLSelectElement) {
+              conditionMode = target.value === "any" ? "any" : "all";
+            }
+          }}
+        >
+          <option value="all"
+            >{m.intake_forms_config_condition_mode_all()}</option
+          >
+          <option value="any"
+            >{m.intake_forms_config_condition_mode_any()}</option
+          >
+        </ListInput>
+      </List>
+
+      {#each conditionRules as rule, ruleIndex (ruleIndex)}
+        <List strong inset>
+          <ListInput
+            label={m.intake_forms_config_condition_field_label()}
+            type="select"
+            dropdown
+            value={rule.fieldKey}
+            onChange={(e: Event) => handleConditionFieldChange(ruleIndex, e)}
+          >
+            <option value="">---</option>
+            {#each earlierFields as ef (ef.fieldKey)}
+              <option value={ef.fieldKey}>{ef.label}</option>
+            {/each}
+          </ListInput>
+
+          {#if rule.fieldKey !== ""}
+            {#if getFieldType(rule.fieldKey) !== "checkbox"}
+              <ListInput
+                label={m.intake_forms_config_condition_operator_label()}
+                type="select"
+                dropdown
+                value={rule.operator}
+                onChange={(e: Event) =>
+                  handleConditionOperatorChange(ruleIndex, e)}
+              >
+                <option value="equals"
+                  >{m.intake_forms_config_condition_op_equals()}</option
+                >
+                <option value="includes"
+                  >{m.intake_forms_config_condition_op_includes()}</option
+                >
+              </ListInput>
+            {/if}
+
+            {#if rule.operator === "equals" || rule.operator === "includes"}
+              <ListInput
+                label={m.intake_forms_config_condition_value_label()}
+                type="select"
+                dropdown
+                value={rule.optionKey}
+                onChange={(e: Event) =>
+                  handleConditionValueChange(ruleIndex, e)}
+              >
+                <option value="">---</option>
+                {#each getFieldOptions(rule.fieldKey) as opt (opt.key)}
+                  <option value={opt.key}>{opt.label}</option>
+                {/each}
+              </ListInput>
+            {/if}
+          {/if}
+        </List>
+        {#if conditionRules.length > 1}
+          <div class="config-action">
+            <Button
+              small
+              clear
+              onclick={() => removeConditionRule(ruleIndex)}
+              aria-label={m.intake_forms_config_condition_remove_rule()}
+            >
+              {m.intake_forms_config_condition_remove_rule()}
+            </Button>
+          </div>
+        {/if}
+      {/each}
+      <div class="config-action">
+        <Button small outline onclick={addConditionRule}>
+          {m.intake_forms_config_condition_add_rule()}
+        </Button>
+      </div>
+    {/if}
+  {:else if fieldType !== "pageBreak"}
+    <p class="mapping-hint">{m.intake_forms_config_condition_no_fields()}</p>
   {/if}
 </ShellSheet>
 

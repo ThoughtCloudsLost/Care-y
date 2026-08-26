@@ -315,6 +315,9 @@
       hasMetadataSignal={SERVER_METADATA_ROLES.has(role)}
     />
   {/if}
+{:else if config.type === "pageBreak"}
+  <!-- Page breaks are handled at the body/editor level, not rendered as fields.
+       This branch exists for exhaustiveness. -->
 {:else}
   <!-- Exhaustiveness guard: compile-time error if a field type branch is missing -->
   {assertExhaustive(config)}

@@ -22,8 +22,17 @@ import {
   intakeFormMetaSchema,
   textSubtypeSchema,
   ENCRYPTED_FORM_META_CAP,
+  visibleWhenSchema,
+  visibilityRuleSchema,
+  evaluateVisibility,
+  isDataFieldType,
+  PAGE_BREAK_TYPE,
 } from "./intake-forms.js";
-import type { LocalizedText, IntakeFieldConfig } from "./intake-forms.js";
+import type {
+  LocalizedText,
+  IntakeFieldConfig,
+  VisibleWhen,
+} from "./intake-forms.js";
 
 /** Generate a base64 string that decodes to exactly `n` bytes. */
 function base64OfBytes(n: number): string {
@@ -453,6 +462,8 @@ describe("intakeFieldTypeSchema", () => {
       "multiselect",
       "checkbox",
       "availability",
+      "date",
+      "pageBreak",
     ]) {
       expect(intakeFieldTypeSchema.safeParse(t).success).toBe(true);
     }
@@ -1586,5 +1597,296 @@ describe("helpText in field config", () => {
     const serialized = JSON.stringify(config);
     const base64Estimate = Math.ceil((serialized.length * 4) / 3);
     expect(base64Estimate).toBeLessThan(ENCRYPTED_CONFIG_CAP);
+  });
+});
+
+// =========================================================================
+// T2.1: Conditional visibility (visibleWhen)
+// =========================================================================
+
+describe("visibleWhenSchema", () => {
+  it("accepts a valid all-mode condition with equals operator", () => {
+    const result = visibleWhenSchema.safeParse({
+      mode: "all",
+      rules: [{ fieldKey: "fk-1", operator: "equals", optionKey: "opt-a" }],
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("accepts a valid any-mode condition with includes operator", () => {
+    const result = visibleWhenSchema.safeParse({
+      mode: "any",
+      rules: [{ fieldKey: "fk-1", operator: "includes", optionKey: "opt-b" }],
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("accepts a checked operator with boolValue", () => {
+    const result = visibleWhenSchema.safeParse({
+      mode: "all",
+      rules: [{ fieldKey: "fk-1", operator: "checked", boolValue: true }],
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("accepts multiple rules", () => {
+    const result = visibleWhenSchema.safeParse({
+      mode: "all",
+      rules: [
+        { fieldKey: "fk-1", operator: "equals", optionKey: "opt-a" },
+        { fieldKey: "fk-2", operator: "checked", boolValue: true },
+      ],
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("rejects empty rules array", () => {
+    const result = visibleWhenSchema.safeParse({
+      mode: "all",
+      rules: [],
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it("rejects more than 20 rules", () => {
+    const rules = Array.from({ length: 21 }, (_, i) => ({
+      fieldKey: `fk-${String(i)}`,
+      operator: "equals" as const,
+      optionKey: `opt-${String(i)}`,
+    }));
+    const result = visibleWhenSchema.safeParse({ mode: "all", rules });
+    expect(result.success).toBe(false);
+  });
+
+  it("rejects invalid mode", () => {
+    const result = visibleWhenSchema.safeParse({
+      mode: "none",
+      rules: [{ fieldKey: "fk-1", operator: "equals", optionKey: "opt-a" }],
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it("rejects invalid operator", () => {
+    const result = visibilityRuleSchema.safeParse({
+      fieldKey: "fk-1",
+      operator: "contains",
+    });
+    expect(result.success).toBe(false);
+  });
+});
+
+describe("evaluateVisibility", () => {
+  it("returns true when visibleWhen is undefined", () => {
+    expect(evaluateVisibility(undefined, {})).toBe(true);
+  });
+
+  it("evaluates equals operator correctly", () => {
+    const vw: VisibleWhen = {
+      mode: "all",
+      rules: [{ fieldKey: "fk-1", operator: "equals", optionKey: "opt-a" }],
+    };
+    expect(evaluateVisibility(vw, { "fk-1": "opt-a" })).toBe(true);
+    expect(evaluateVisibility(vw, { "fk-1": "opt-b" })).toBe(false);
+    expect(evaluateVisibility(vw, {})).toBe(false);
+  });
+
+  it("evaluates includes operator for multiselect", () => {
+    const vw: VisibleWhen = {
+      mode: "all",
+      rules: [{ fieldKey: "fk-1", operator: "includes", optionKey: "opt-b" }],
+    };
+    expect(evaluateVisibility(vw, { "fk-1": ["opt-a", "opt-b"] })).toBe(true);
+    expect(evaluateVisibility(vw, { "fk-1": ["opt-a"] })).toBe(false);
+    expect(evaluateVisibility(vw, { "fk-1": "opt-b" })).toBe(false);
+  });
+
+  it("evaluates checked operator for checkbox", () => {
+    const vw: VisibleWhen = {
+      mode: "all",
+      rules: [{ fieldKey: "fk-1", operator: "checked", boolValue: true }],
+    };
+    expect(evaluateVisibility(vw, { "fk-1": true })).toBe(true);
+    expect(evaluateVisibility(vw, { "fk-1": false })).toBe(false);
+    expect(evaluateVisibility(vw, {})).toBe(false);
+  });
+
+  it("all-mode requires every rule to match", () => {
+    const vw: VisibleWhen = {
+      mode: "all",
+      rules: [
+        { fieldKey: "fk-1", operator: "equals", optionKey: "opt-a" },
+        { fieldKey: "fk-2", operator: "checked", boolValue: true },
+      ],
+    };
+    expect(evaluateVisibility(vw, { "fk-1": "opt-a", "fk-2": true })).toBe(
+      true,
+    );
+    expect(evaluateVisibility(vw, { "fk-1": "opt-a", "fk-2": false })).toBe(
+      false,
+    );
+    expect(evaluateVisibility(vw, { "fk-1": "opt-b", "fk-2": true })).toBe(
+      false,
+    );
+  });
+
+  it("any-mode requires at least one rule to match", () => {
+    const vw: VisibleWhen = {
+      mode: "any",
+      rules: [
+        { fieldKey: "fk-1", operator: "equals", optionKey: "opt-a" },
+        { fieldKey: "fk-2", operator: "equals", optionKey: "opt-b" },
+      ],
+    };
+    expect(evaluateVisibility(vw, { "fk-1": "opt-a" })).toBe(true);
+    expect(evaluateVisibility(vw, { "fk-2": "opt-b" })).toBe(true);
+    expect(evaluateVisibility(vw, { "fk-1": "opt-c", "fk-2": "opt-c" })).toBe(
+      false,
+    );
+  });
+
+  it("checked operator defaults boolValue to true", () => {
+    const vw: VisibleWhen = {
+      mode: "all",
+      rules: [{ fieldKey: "fk-1", operator: "checked" }],
+    };
+    expect(evaluateVisibility(vw, { "fk-1": true })).toBe(true);
+    expect(evaluateVisibility(vw, { "fk-1": false })).toBe(false);
+  });
+
+  it("unresolved fieldKey evaluates as not-met (equals)", () => {
+    const vw: VisibleWhen = {
+      mode: "all",
+      rules: [{ fieldKey: "missing", operator: "equals", optionKey: "opt-a" }],
+    };
+    // The referenced field has no value in the answers record, so the
+    // rule cannot be satisfied. The element defaults to hidden.
+    expect(evaluateVisibility(vw, {})).toBe(false);
+  });
+
+  it("unresolved fieldKey evaluates as not-met (includes)", () => {
+    const vw: VisibleWhen = {
+      mode: "all",
+      rules: [
+        { fieldKey: "missing", operator: "includes", optionKey: "opt-a" },
+      ],
+    };
+    expect(evaluateVisibility(vw, {})).toBe(false);
+  });
+
+  it("unresolved fieldKey evaluates as not-met (checked)", () => {
+    const vw: VisibleWhen = {
+      mode: "all",
+      rules: [{ fieldKey: "missing", operator: "checked", boolValue: true }],
+    };
+    expect(evaluateVisibility(vw, {})).toBe(false);
+  });
+
+  it("unresolved fieldKey in any-mode still hidden when no other rule matches", () => {
+    const vw: VisibleWhen = {
+      mode: "any",
+      rules: [
+        { fieldKey: "missing-1", operator: "equals", optionKey: "opt-a" },
+        { fieldKey: "missing-2", operator: "checked", boolValue: true },
+      ],
+    };
+    expect(evaluateVisibility(vw, {})).toBe(false);
+  });
+
+  it("unresolved fieldKey in any-mode can still show if another rule matches", () => {
+    const vw: VisibleWhen = {
+      mode: "any",
+      rules: [
+        { fieldKey: "missing", operator: "equals", optionKey: "opt-a" },
+        { fieldKey: "present", operator: "equals", optionKey: "opt-b" },
+      ],
+    };
+    // "missing" is unresolved (not-met), but "present" matches
+    expect(evaluateVisibility(vw, { present: "opt-b" })).toBe(true);
+  });
+});
+
+// =========================================================================
+// T2.2: Page break field type
+// =========================================================================
+
+describe("pageBreak field type", () => {
+  it("intakeFieldTypeSchema accepts pageBreak", () => {
+    expect(intakeFieldTypeSchema.safeParse("pageBreak").success).toBe(true);
+  });
+
+  it("PAGE_BREAK_TYPE constant is pageBreak", () => {
+    expect(PAGE_BREAK_TYPE).toBe("pageBreak");
+  });
+
+  it("isDataFieldType returns false for pageBreak", () => {
+    expect(isDataFieldType("pageBreak")).toBe(false);
+  });
+
+  it("isDataFieldType returns true for data field types", () => {
+    for (const t of [
+      "text",
+      "textarea",
+      "select",
+      "multiselect",
+      "checkbox",
+      "availability",
+      "date",
+    ]) {
+      expect(isDataFieldType(t as "text")).toBe(true);
+    }
+  });
+
+  it("intakeFieldConfigSchema accepts pageBreak config", () => {
+    const result = intakeFieldConfigSchema.safeParse({ type: "pageBreak" });
+    expect(result.success).toBe(true);
+  });
+
+  it("pageBreak config accepts a localized title", () => {
+    const result = intakeFieldConfigSchema.safeParse({
+      type: "pageBreak",
+      title: { en: "Contact Information", es: "Informacion de contacto" },
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("pageBreak config title is optional", () => {
+    const result = intakeFieldConfigSchema.safeParse({ type: "pageBreak" });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      const data = result.data;
+      expect(data.type).toBe("pageBreak");
+    }
+  });
+
+  it("saveIntakeFormInputSchema accepts page break fields", () => {
+    const result = saveIntakeFormInputSchema.safeParse({
+      ...validFormInput(),
+      fields: [
+        validField(),
+        {
+          fieldKey: crypto.randomUUID(),
+          fieldType: "pageBreak",
+          encryptedLabel: base64OfBytes(32),
+          encryptedConfig: base64OfBytes(64),
+          isRequired: false,
+        },
+        validField(),
+      ],
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("page breaks compose with the 100-field cap", () => {
+    const fields = Array.from({ length: 98 }, () => validField());
+    fields.push({
+      ...validField(),
+      fieldType: "pageBreak",
+    } as Record<string, unknown>);
+    fields.push(validField());
+    const result = saveIntakeFormInputSchema.safeParse({
+      ...validFormInput(),
+      fields,
+    });
+    expect(result.success).toBe(true);
   });
 });

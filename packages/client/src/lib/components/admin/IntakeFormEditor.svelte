@@ -64,6 +64,9 @@
   } from "./intake-field-config-types.js";
   import IntakeFieldRenderer from "$lib/components/portal/IntakeFieldRenderer.svelte";
 
+  import type { VisibleWhen, IntakeOption } from "@care-y/shared";
+  import type { EarlierFieldOption } from "./intake-field-config-types.js";
+
   export interface PlaintextField {
     fieldKey: string;
     label: LocalizedText;
@@ -74,6 +77,7 @@
     role: IntakeFieldRole | null;
     routingQueueIds: string[] | null;
     escalationRecipientIds: string[] | null;
+    visibleWhen?: VisibleWhen;
   }
 
   interface IntakeFormEditorProps {
@@ -397,7 +401,11 @@
 
       const encryptedFields = input.fields.map((f) => {
         const encrypted = encryptFieldContent(
-          { label: f.label, config: f.config },
+          {
+            label: f.label,
+            config: f.config,
+            visibleWhen: f.visibleWhen,
+          },
           orgPub,
         );
         return {
@@ -525,12 +533,50 @@
     fields = fields.filter((_, i) => i !== index);
   }
 
+  /**
+   * Build the list of earlier fields eligible for conditional visibility rules.
+   * Only select, multiselect, and checkbox fields appearing before the given
+   * index qualify.
+   */
+  function buildEarlierFields(beforeIndex: number): EarlierFieldOption[] {
+    const result: EarlierFieldOption[] = [];
+    for (let i = 0; i < beforeIndex && i < fields.length; i++) {
+      const f = fields.at(i);
+      if (f === undefined) continue;
+      if (
+        f.fieldType !== "select" &&
+        f.fieldType !== "multiselect" &&
+        f.fieldType !== "checkbox"
+      )
+        continue;
+      const label = resolveLocalized(f.label, BASE_LOCALE) ?? f.fieldKey;
+      const cfg = f.config;
+      let fieldOptions: { key: string; label: string }[] | undefined;
+      if (cfg.type === "select" || cfg.type === "multiselect") {
+        fieldOptions = cfg.options.map((o: IntakeOption) => ({
+          key: o.key,
+          label: resolveLocalized(o.label, BASE_LOCALE) ?? o.key,
+        }));
+      }
+      result.push({
+        fieldKey: f.fieldKey,
+        label,
+        fieldType: f.fieldType,
+        options: fieldOptions,
+      });
+    }
+    return result;
+  }
+
+  let configEarlierFields = $state<EarlierFieldOption[]>([]);
+
   function openConfigSheet(index: number, isNew = false): void {
     const field = fields.at(index);
     if (field === undefined) return;
     configFieldIsNew = isNew;
     configFieldIndex = index;
     configFieldType = field.fieldType;
+    configEarlierFields = buildEarlierFields(index);
     configFieldInitial = {
       label: { ...field.label },
       helpText: { ...field.helpText },
@@ -538,6 +584,7 @@
       config: field.config,
       role: field.role,
       escalationRecipientIds: field.escalationRecipientIds,
+      visibleWhen: field.visibleWhen,
     };
     configSheetOpened = true;
   }
@@ -568,6 +615,7 @@
           role: result.role,
           routingQueueIds: result.routingQueueIds,
           escalationRecipientIds: result.escalationRecipientIds,
+          visibleWhen: result.visibleWhen,
         };
         return updated;
       });
@@ -628,6 +676,8 @@
         };
       case "date":
         return { type: "date" };
+      case "pageBreak":
+        return { type: "pageBreak" };
     }
   }
 
@@ -647,6 +697,8 @@
         return m.intake_forms_field_type_availability();
       case "date":
         return m.intake_forms_field_type_date();
+      case "pageBreak":
+        return m.intake_forms_field_type_page_break();
     }
   }
 
@@ -666,12 +718,21 @@
         return m.intake_forms_field_type_availability_desc();
       case "date":
         return m.intake_forms_field_type_date_desc();
+      case "pageBreak":
+        return m.intake_forms_field_type_page_break_desc();
     }
   }
 
   /** Resolve a field label in the base locale for display in the field list. */
   function fieldDisplayLabel(field: PlaintextField): string {
     return resolveLocalized(field.label, BASE_LOCALE) ?? "";
+  }
+
+  /** Resolve a page break label in the preview locale, with a fallback. */
+  function pageBreakLabel(field: PlaintextField): string {
+    const resolved = resolveLocalized(field.label, previewLocale);
+    if (resolved != null && resolved.length > 0) return resolved;
+    return m.intake_forms_page_break_divider();
   }
 
   function handleSave(): void {
@@ -713,6 +774,7 @@
     "checkbox",
     "date",
     "availability",
+    "pageBreak",
   ];
 
   const canSave = $derived(
@@ -941,16 +1003,26 @@
       </Segmented>
     </div>
     {#each fields as field, index (field.fieldKey)}
-      <IntakeFieldRenderer
-        fieldId={`preview-${String(index)}`}
-        label={resolveLocalized(field.label, previewLocale) ?? ""}
-        helpText={resolveLocalized(field.helpText, previewLocale)}
-        config={field.config}
-        isRequired={field.isRequired}
-        locale={previewLocale}
-        value={undefined}
-        onchange={previewNoop}
-      />
+      {#if field.fieldType === "pageBreak"}
+        <div class="preview-page-break" role="separator">
+          <hr class="preview-page-break-line" />
+          <span class="preview-page-break-label">
+            {pageBreakLabel(field)}
+          </span>
+          <hr class="preview-page-break-line" />
+        </div>
+      {:else}
+        <IntakeFieldRenderer
+          fieldId={`preview-${String(index)}`}
+          label={resolveLocalized(field.label, previewLocale) ?? ""}
+          helpText={resolveLocalized(field.helpText, previewLocale)}
+          config={field.config}
+          isRequired={field.isRequired}
+          locale={previewLocale}
+          value={undefined}
+          onchange={previewNoop}
+        />
+      {/if}
     {/each}
   </Block>
 {/if}
@@ -1033,6 +1105,7 @@
   queues={queueOptions}
   volunteers={volunteerOptions}
   {editingLocale}
+  earlierFields={configEarlierFields}
   ondone={handleConfigDone}
   ondismiss={handleConfigCancel}
 />
@@ -1110,5 +1183,26 @@
 
   .preview-locale-switcher {
     margin-bottom: var(--space-md);
+  }
+
+  .preview-page-break {
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+    padding: var(--space-md) 0;
+  }
+
+  .preview-page-break-line {
+    flex: 1;
+    border: none;
+    border-top: 1px dashed var(--hair);
+  }
+
+  .preview-page-break-label {
+    flex-shrink: 0;
+    font-size: var(--text-xs);
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
   }
 </style>

@@ -43,6 +43,8 @@
     intakeFieldTypeSchema,
     intakeFieldRoleSchema,
     resolveLocalized,
+    evaluateVisibility,
+    isDataFieldType,
     BASE_LOCALE,
     newTicketId,
     newFollowupId,
@@ -53,6 +55,7 @@
     type IntakeFormMeta,
     type AvailabilityData,
     type TicketPriority,
+    type VisibleWhen,
     ErrorCode,
   } from "@care-y/shared";
 
@@ -74,6 +77,7 @@
     readonly label: LocalizedText;
     readonly config: IntakeFieldConfig;
     readonly isRequired: boolean;
+    readonly visibleWhen?: VisibleWhen;
   }
 
   type ContactMethod = "phone" | "email" | "none";
@@ -221,6 +225,7 @@
           label: content.label,
           config: content.config,
           isRequired: field.isRequired,
+          visibleWhen: content.visibleWhen,
         });
       }
 
@@ -273,6 +278,110 @@
   // Validation errors keyed by field id
   let fieldErrors = $state<Record<string, string | undefined>>({});
   let contactDetailError = $state<string | undefined>(undefined);
+
+  // ---- Visibility evaluation ----
+
+  /**
+   * Determine whether a field is currently visible. Hidden fields are
+   * excluded from validation, the response blob, and ticket text.
+   */
+  function isFieldVisible(field: PlaintextField): boolean {
+    return evaluateVisibility(field.visibleWhen, fieldValues);
+  }
+
+  // ---- Page break pagination ----
+
+  /**
+   * Split form fields into pages. A page break element starts a new page.
+   * The first page starts at the first field. Page breaks carry an optional
+   * localized title.
+   */
+  interface FormPage {
+    /** Localized page title from the page break, undefined for the first page. */
+    readonly title?: LocalizedText;
+    /** Fields belonging to this page (data fields only, no page breaks). */
+    readonly fields: readonly PlaintextField[];
+  }
+
+  const formPages = $derived.by((): readonly FormPage[] => {
+    const pages: FormPage[] = [];
+    let currentFields: PlaintextField[] = [];
+    let currentTitle: LocalizedText | undefined = undefined;
+
+    for (const field of formFields) {
+      if (field.fieldType === "pageBreak") {
+        // Push current page (even if empty, it may have visible fields from a visibility change)
+        pages.push({ title: currentTitle, fields: currentFields });
+        currentFields = [];
+        currentTitle = field.label;
+      } else {
+        currentFields.push(field);
+      }
+    }
+    // Push the last page
+    pages.push({ title: currentTitle, fields: currentFields });
+    return pages;
+  });
+
+  const hasPages = $derived(formPages.length > 1);
+  let currentPageIndex = $state(0);
+
+  /**
+   * Visible pages: pages where at least one field is visible.
+   * Returns indices into formPages.
+   */
+  const visiblePageIndices = $derived.by((): readonly number[] => {
+    const indices: number[] = [];
+    for (let i = 0; i < formPages.length; i++) {
+      const page = formPages.at(i);
+      if (page === undefined) continue;
+      const hasVisibleField = page.fields.some((f) => isFieldVisible(f));
+      // Always include the first page (it has the intro content)
+      if (i === 0 || hasVisibleField) {
+        indices.push(i);
+      }
+    }
+    return indices;
+  });
+
+  /** The page currently being displayed (when multi-page). */
+  const currentPage = $derived(formPages.at(currentPageIndex));
+
+  /** Position of current page among visible pages (for progress display). */
+  const currentVisibleStep = $derived(
+    visiblePageIndices.indexOf(currentPageIndex) + 1,
+  );
+  const totalVisibleSteps = $derived(visiblePageIndices.length);
+
+  /**
+   * Navigate to the next visible page. Returns false if already on the last page.
+   * Validates the current page's visible fields before advancing.
+   */
+  function goNextPage(): boolean {
+    const currentVisIdx = visiblePageIndices.indexOf(currentPageIndex);
+    if (currentVisIdx < 0 || currentVisIdx >= visiblePageIndices.length - 1)
+      return false;
+    const nextIdx = visiblePageIndices.at(currentVisIdx + 1);
+    if (nextIdx === undefined) return false;
+    currentPageIndex = nextIdx;
+    return true;
+  }
+
+  /** Navigate to the previous visible page. */
+  function goPrevPage(): boolean {
+    const currentVisIdx = visiblePageIndices.indexOf(currentPageIndex);
+    if (currentVisIdx <= 0) return false;
+    const prevIdx = visiblePageIndices.at(currentVisIdx - 1);
+    if (prevIdx === undefined) return false;
+    currentPageIndex = prevIdx;
+    return true;
+  }
+
+  /** Whether we are on the last visible page. */
+  const isLastPage = $derived(
+    visiblePageIndices.indexOf(currentPageIndex) ===
+      visiblePageIndices.length - 1,
+  );
 
   // ---- PoW state ----
 
@@ -410,12 +519,24 @@
     return /^\d{7,15}$/.test(digits);
   }
 
-  function validate(): boolean {
+  /**
+   * Validate a subset of fields. When fieldsToValidate is provided, only
+   * those fields are checked. Otherwise all visible form fields are checked.
+   */
+  function validate(fieldsToValidate?: readonly PlaintextField[]): boolean {
     const errors: Record<string, string | undefined> = {};
     let valid = true;
 
+    const fieldsToCheck = fieldsToValidate ?? formFields;
+
     // Validate dynamic fields
-    for (const field of formFields) {
+    for (const field of fieldsToCheck) {
+      // Skip page breaks (structural, not data)
+      if (!isDataFieldType(field.fieldType)) continue;
+
+      // Skip hidden fields (conditional visibility)
+      if (!isFieldVisible(field)) continue;
+
       const val = fieldValues[field.fieldKey];
 
       // Required check per field type
@@ -561,6 +682,8 @@
   function focusFirstError(): void {
     if (!browser) return;
     for (const field of formFields) {
+      // Skip hidden fields
+      if (!isFieldVisible(field)) continue;
       const fieldErr = fieldErrors[field.fieldKey];
       if (fieldErr !== undefined && fieldErr !== "") {
         const el = document.getElementById(`intake-field-${field.fieldKey}`);
@@ -657,10 +780,16 @@
         });
       }
     } else {
-      // Custom form: all fields in order.
+      // Custom form: all visible data fields in order.
       // Labels resolve to the org base locale (D2) so queue-facing ticket
       // text stays uniform regardless of the language the form was filled in.
+      // Hidden fields (conditional visibility) are excluded from the response
+      // blob and ticket text.
       for (const field of formFields) {
+        // Skip page breaks and hidden fields
+        if (!isDataFieldType(field.fieldType)) continue;
+        if (!isFieldVisible(field)) continue;
+
         const val = fieldValues[field.fieldKey];
         if (val === undefined) continue;
         answers.push({
@@ -1000,20 +1129,64 @@
       </p>
     </Block>
   {:else}
+    <!-- Progress indicator for multi-page forms -->
+    {#if hasPages && !isDefaultForm}
+      <Block>
+        <p class="intake-page-progress" role="status" aria-live="polite">
+          {m.intake_page_progress({
+            current: String(currentVisibleStep),
+            total: String(totalVisibleSteps),
+          })}
+        </p>
+      </Block>
+
+      <!-- Page title when present -->
+      {#if currentPage?.title}
+        {@const pageTitle = resolveLocalized(currentPage.title, BASE_LOCALE)}
+        {#if pageTitle}
+          <BlockTitle>{pageTitle}</BlockTitle>
+        {/if}
+      {/if}
+    {/if}
+
     <!-- Dynamic form fields -->
-    {#each formFields as field (field.fieldKey)}
-      <IntakeFieldRenderer
-        fieldId={field.fieldKey}
-        label={resolveLocalized(field.label, BASE_LOCALE) ?? ""}
-        config={field.config}
-        isRequired={field.isRequired}
-        role={field.role}
-        value={fieldValues[field.fieldKey]}
-        error={fieldErrors[field.fieldKey]}
-        onchange={(val: string | string[] | AvailabilityData | boolean) =>
-          handleFieldChange(field.fieldKey, val)}
-      />
-    {/each}
+    {#if hasPages && !isDefaultForm}
+      <!-- Multi-page: render only the current page's visible data fields -->
+      {#if currentPage}
+        {#each currentPage.fields as field (field.fieldKey)}
+          {#if isFieldVisible(field) && isDataFieldType(field.fieldType)}
+            <IntakeFieldRenderer
+              fieldId={field.fieldKey}
+              label={resolveLocalized(field.label, BASE_LOCALE) ?? ""}
+              config={field.config}
+              isRequired={field.isRequired}
+              role={field.role}
+              value={fieldValues[field.fieldKey]}
+              error={fieldErrors[field.fieldKey]}
+              onchange={(val: string | string[] | AvailabilityData | boolean) =>
+                handleFieldChange(field.fieldKey, val)}
+            />
+          {/if}
+        {/each}
+      {/if}
+    {:else}
+      <!-- Single-page: render all visible data fields flat -->
+      {#each formFields as field (field.fieldKey)}
+        {#if isFieldVisible(field) && isDataFieldType(field.fieldType)}
+          <IntakeFieldRenderer
+            fieldId={field.fieldKey}
+            label={resolveLocalized(field.label, BASE_LOCALE) ?? ""}
+            config={field.config}
+            isRequired={field.isRequired}
+            role={field.role}
+            value={fieldValues[field.fieldKey]}
+            error={fieldErrors[field.fieldKey]}
+            onchange={(val: string | string[] | AvailabilityData | boolean) =>
+              handleFieldChange(field.fieldKey, val)}
+          />
+        {/if}
+      {/each}
+    {/if}
 
     <!-- Default form: contact method radio group + conditional detail field -->
     {#if isDefaultForm}
@@ -1229,31 +1402,67 @@
       </Block>
     {/if}
 
-    <!-- Submit button -->
-    <Block>
-      <Button
-        large
-        disabled={submitDisabled}
-        onclick={() => void handleSubmit()}
-        data-testid="intake-submit"
-      >
-        {#if isSubmitting || accountPending || (powRequired && powSolving && !submitted)}
-          <span
-            role="progressbar"
-            aria-label={accountPending
-              ? m.account_unlocking()
-              : m.intake_solving_challenge()}
-            class="intake-progress"
-          >
-            {accountPending
-              ? m.account_unlocking()
-              : m.intake_solving_challenge()}
-          </span>
-        {:else}
-          {m.intake_submit()}
-        {/if}
-      </Button>
-    </Block>
+    <!-- Page navigation for multi-page forms -->
+    {#if hasPages && !isDefaultForm}
+      <Block>
+        <div class="intake-page-nav">
+          {#if currentVisibleStep > 1}
+            <Button outline onclick={goPrevPage} data-testid="intake-page-back">
+              {m.intake_page_back()}
+            </Button>
+          {:else}
+            <span></span>
+          {/if}
+          {#if !isLastPage}
+            <Button
+              onclick={() => {
+                // Validate current page before advancing
+                if (currentPage && validate(currentPage.fields)) {
+                  goNextPage();
+                } else {
+                  announceToLiveRegion(
+                    "polite",
+                    m.intake_error_field_required(),
+                  );
+                  focusFirstError();
+                }
+              }}
+              data-testid="intake-page-next"
+            >
+              {m.intake_page_next()}
+            </Button>
+          {/if}
+        </div>
+      </Block>
+    {/if}
+
+    <!-- Submit button (shown on last page or single-page forms) -->
+    {#if !hasPages || isDefaultForm || isLastPage}
+      <Block>
+        <Button
+          large
+          disabled={submitDisabled}
+          onclick={() => void handleSubmit()}
+          data-testid="intake-submit"
+        >
+          {#if isSubmitting || accountPending || (powRequired && powSolving && !submitted)}
+            <span
+              role="progressbar"
+              aria-label={accountPending
+                ? m.account_unlocking()
+                : m.intake_solving_challenge()}
+              class="intake-progress"
+            >
+              {accountPending
+                ? m.account_unlocking()
+                : m.intake_solving_challenge()}
+            </span>
+          {:else}
+            {m.intake_submit()}
+          {/if}
+        </Button>
+      </Block>
+    {/if}
   {/if}
 {/if}
 
@@ -1427,6 +1636,19 @@
 
   .intake-account-warning + .intake-account-warning {
     margin-top: var(--space-xs);
+  }
+
+  .intake-page-progress {
+    font-size: var(--text-sm);
+    color: var(--muted);
+    text-align: center;
+    margin: 0;
+  }
+
+  .intake-page-nav {
+    display: flex;
+    justify-content: space-between;
+    gap: var(--space-sm);
   }
 
   .sr-only {

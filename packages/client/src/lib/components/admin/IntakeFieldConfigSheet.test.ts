@@ -55,6 +55,29 @@ vi.mock("$lib/paraglide/messages.js", async (importOriginal) => ({
   intake_forms_config_help_text: () => "Help text",
   intake_forms_config_help_text_placeholder: () => "Help text placeholder",
   intake_forms_config_help_text_hint: () => "Shown below the field.",
+  intake_forms_config_condition_heading: () => "Visibility condition",
+  intake_forms_config_condition_hint: () =>
+    "When set, this field only appears if conditions are met.",
+  intake_forms_config_condition_mode_all: () => "All conditions must match",
+  intake_forms_config_condition_mode_any: () => "Any condition matches",
+  intake_forms_config_condition_add_rule: () => "Add condition",
+  intake_forms_config_condition_remove_rule: () => "Remove condition",
+  intake_forms_config_condition_field_label: () => "When field",
+  intake_forms_config_condition_operator_label: () => "is",
+  intake_forms_config_condition_value_label: () => "value",
+  intake_forms_config_condition_op_equals: () => "equals",
+  intake_forms_config_condition_op_includes: () => "includes",
+  intake_forms_config_condition_op_checked: () => "is checked",
+  intake_forms_config_condition_no_fields: () => "No earlier fields available.",
+  intake_forms_page_break_title_label: () => "Page title (optional)",
+  intake_forms_page_break_title_placeholder: () => "e.g. Contact information",
+  intake_forms_config_subtype: () => "Input type",
+  intake_forms_config_subtype_none: () => "Plain text",
+  intake_forms_config_subtype_email: () => "Email address",
+  intake_forms_config_subtype_phone: () => "Phone number",
+  intake_forms_config_subtype_number: () => "Number",
+  intake_forms_config_number_min: () => "Minimum value",
+  intake_forms_config_number_max: () => "Maximum value",
 }));
 
 vi.mock("$lib/terminology/with-terms.js", async (importOriginal) => ({
@@ -96,6 +119,7 @@ function baseInitial(): {
   };
   role: null;
   escalationRecipientIds: null;
+  visibleWhen: undefined;
 } {
   return {
     label: { en: "Test question" },
@@ -110,6 +134,7 @@ function baseInitial(): {
     },
     role: null,
     escalationRecipientIds: null,
+    visibleWhen: undefined,
   };
 }
 
@@ -133,6 +158,7 @@ describe("IntakeFieldConfigSheet", () => {
         queues: TEST_QUEUES,
         volunteers: TEST_VOLUNTEERS,
         editingLocale: "en",
+        earlierFields: [],
         ondone,
         ondismiss: vi.fn(),
       },
@@ -152,6 +178,7 @@ describe("IntakeFieldConfigSheet", () => {
         queues: TEST_QUEUES,
         volunteers: TEST_VOLUNTEERS,
         editingLocale: "en",
+        earlierFields: [],
         ondone,
         ondismiss: vi.fn(),
       },
@@ -179,6 +206,7 @@ describe("IntakeFieldConfigSheet", () => {
         queues: TEST_QUEUES,
         volunteers: TEST_VOLUNTEERS,
         editingLocale: "en",
+        earlierFields: [],
         ondone,
         ondismiss: vi.fn(),
       },
@@ -218,6 +246,7 @@ describe("IntakeFieldConfigSheet", () => {
         queues: TEST_QUEUES,
         volunteers: TEST_VOLUNTEERS,
         editingLocale: "en",
+        earlierFields: [],
         ondone,
         ondismiss: vi.fn(),
       },
@@ -260,6 +289,7 @@ describe("IntakeFieldConfigSheet", () => {
         queues: TEST_QUEUES,
         volunteers: TEST_VOLUNTEERS,
         editingLocale: "en",
+        earlierFields: [],
         ondone,
         ondismiss: vi.fn(),
       },
@@ -276,6 +306,7 @@ describe("IntakeFieldConfigSheet", () => {
         queues: TEST_QUEUES,
         volunteers: TEST_VOLUNTEERS,
         editingLocale: "en",
+        earlierFields: [],
         ondone,
         ondismiss: vi.fn(),
       },
@@ -302,6 +333,7 @@ describe("IntakeFieldConfigSheet", () => {
         queues: TEST_QUEUES,
         volunteers: TEST_VOLUNTEERS,
         editingLocale: "en",
+        earlierFields: [],
         ondone,
         ondismiss: vi.fn(),
       },
@@ -328,6 +360,7 @@ describe("IntakeFieldConfigSheet", () => {
         queues: TEST_QUEUES,
         volunteers: TEST_VOLUNTEERS,
         editingLocale: "en",
+        earlierFields: [],
         ondone,
         ondismiss: vi.fn(),
       },
@@ -349,6 +382,7 @@ describe("IntakeFieldConfigSheet", () => {
         queues: TEST_QUEUES,
         volunteers: TEST_VOLUNTEERS,
         editingLocale: "en",
+        earlierFields: [],
         ondone,
         ondismiss,
       },
@@ -372,6 +406,7 @@ describe("IntakeFieldConfigSheet", () => {
         queues: TEST_QUEUES,
         volunteers: TEST_VOLUNTEERS,
         editingLocale: "en",
+        earlierFields: [],
         ondone,
         ondismiss: vi.fn(),
       },
@@ -392,6 +427,7 @@ describe("IntakeFieldConfigSheet", () => {
         queues: TEST_QUEUES,
         volunteers: TEST_VOLUNTEERS,
         editingLocale: "en",
+        earlierFields: [],
         ondone,
         ondismiss: vi.fn(),
       },

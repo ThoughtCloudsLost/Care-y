@@ -35,9 +35,11 @@ import {
   intakeFieldConfigSchema,
   intakeFormMetaSchema,
   localizedTextSchema,
+  visibleWhenSchema,
   type IntakeFieldConfig,
   type IntakeFormMeta,
   type LocalizedText,
+  type VisibleWhen,
 } from "@care-y/shared";
 
 const textEncoder = new TextEncoder();
@@ -58,6 +60,7 @@ export interface EncryptedFieldContent {
 export interface DecryptedFieldContent {
   label: LocalizedText;
   config: IntakeFieldConfig;
+  visibleWhen?: VisibleWhen;
 }
 
 /**
@@ -72,13 +75,24 @@ export interface DecryptedFieldContent {
  * @returns Base64url-encoded encrypted label and config strings
  */
 export function encryptFieldContent(
-  plain: { label: LocalizedText; config: IntakeFieldConfig },
+  plain: {
+    label: LocalizedText;
+    config: IntakeFieldConfig;
+    visibleWhen?: VisibleWhen;
+  },
   orgPublicKey: Uint8Array,
 ): EncryptedFieldContent {
   const key: SymmetricKey = deriveClientBrandingKey(orgPublicKey);
   try {
     const labelBytes = textEncoder.encode(JSON.stringify(plain.label));
-    const configBytes = textEncoder.encode(JSON.stringify(plain.config));
+    // The config blob carries the field config and optional visibleWhen
+    // rules. VisibleWhen is encrypted alongside the config so the server
+    // never sees conditional visibility rules.
+    const configPayload: Record<string, unknown> = { ...plain.config };
+    if (plain.visibleWhen != null) {
+      configPayload.visibleWhen = plain.visibleWhen;
+    }
+    const configBytes = textEncoder.encode(JSON.stringify(configPayload));
 
     const encryptedLabelBlob = encryptContent(labelBytes, key, INTAKE_FORM_AAD);
     const encryptedConfigBlob = encryptContent(
@@ -151,8 +165,23 @@ export function decryptFieldContent(
       );
     }
 
+    let visibleWhen: VisibleWhen | undefined;
+
     try {
       const configJson: unknown = JSON.parse(textDecoder.decode(configPlain));
+      // The config blob may contain a visibleWhen property alongside the
+      // config discriminated union fields. Extract it before schema parsing.
+      if (
+        typeof configJson === "object" &&
+        configJson !== null &&
+        "visibleWhen" in configJson
+      ) {
+        const vw = (configJson as Record<string, unknown>).visibleWhen;
+        const vwParsed = visibleWhenSchema.safeParse(vw);
+        if (vwParsed.success) {
+          visibleWhen = vwParsed.data;
+        }
+      }
       const parsed = intakeFieldConfigSchema.safeParse(configJson);
       if (!parsed.success) {
         throw new DecryptionError(
@@ -167,7 +196,7 @@ export function decryptFieldContent(
       );
     }
 
-    return { label, config };
+    return { label, config, visibleWhen };
   } finally {
     requireSodium().memzero(key);
   }

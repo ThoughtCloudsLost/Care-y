@@ -655,6 +655,13 @@ export {
   intakeFormMetaSchema,
   ENCRYPTED_FORM_META_CAP,
   saveIntakeFormInputSchema,
+  visibleWhenSchema,
+  visibilityRuleSchema,
+  visibilityOperatorSchema,
+  evaluateVisibility,
+  isDataFieldType,
+  DATA_FIELD_TYPES,
+  PAGE_BREAK_TYPE,
   type FormLocale,
   type LocalizedText,
   type IntakeFieldType,
@@ -670,6 +677,9 @@ export {
   type AvailabilityData,
   type IntakeFormResponse,
   type SaveIntakeFormInput,
+  type VisibleWhen,
+  type VisibilityRule,
+  type VisibilityOperator,
 } from "./schemas/intake-forms.js";
 
 // --- Branded identifier types (ADR-074) ---

@@ -82,8 +82,28 @@ export const intakeFieldTypeSchema = z.enum([
   "checkbox",
   "availability",
   "date",
+  "pageBreak",
 ]);
 export type IntakeFieldType = z.infer<typeof intakeFieldTypeSchema>;
+
+/**
+ * Field types that are renderable data fields (not structural elements).
+ * Page breaks are structural and excluded from validation/answer collection.
+ */
+export const DATA_FIELD_TYPES: readonly IntakeFieldType[] = [
+  "text",
+  "textarea",
+  "select",
+  "multiselect",
+  "checkbox",
+  "availability",
+  "date",
+] as const;
+
+/** Type guard: is this a data field (not a page break)? */
+export function isDataFieldType(t: IntakeFieldType): boolean {
+  return t !== "pageBreak";
+}
 
 // ---------------------------------------------------------------------------
 // Semantic field roles (ADR-068)
@@ -142,6 +162,61 @@ export const ROLE_WIDGET_COMPATIBILITY: Readonly<
   consent: ["checkbox"],
   "language-preference": ["select"],
 } as const;
+
+// ---------------------------------------------------------------------------
+// Conditional visibility (T2.1)
+// ---------------------------------------------------------------------------
+
+/**
+ * Operators for conditional visibility rules.
+ * - equals: the referenced field's selected option key matches optionKey
+ * - includes: the referenced field's selected options array includes optionKey
+ *   (multiselect)
+ * - checked: the referenced checkbox field is true (uses boolValue)
+ */
+export const visibilityOperatorSchema = z.enum([
+  "equals",
+  "includes",
+  "checked",
+]);
+export type VisibilityOperator = z.infer<typeof visibilityOperatorSchema>;
+
+/**
+ * A single condition rule: "field X (operator) value Y".
+ * For equals/includes operators, optionKey is required.
+ * For checked operator, boolValue is required.
+ */
+export const visibilityRuleSchema = z.object({
+  fieldKey: z.string().min(1).max(200),
+  operator: visibilityOperatorSchema,
+  optionKey: z.string().min(1).max(200).optional(),
+  boolValue: z.boolean().optional(),
+});
+export type VisibilityRule = z.infer<typeof visibilityRuleSchema>;
+
+/**
+ * Conditional visibility for a field or page break. When present,
+ * the element is visible only when the rules are satisfied.
+ * - "all": every rule must match (logical AND)
+ * - "any": at least one rule must match (logical OR)
+ */
+export const visibleWhenSchema = z.object({
+  mode: z.enum(["all", "any"]),
+  rules: z.array(visibilityRuleSchema).min(1).max(20),
+});
+export type VisibleWhen = z.infer<typeof visibleWhenSchema>;
+
+// ---------------------------------------------------------------------------
+// Page break element (T2.2)
+// ---------------------------------------------------------------------------
+
+/**
+ * Sentinel field type for page breaks. Page breaks are lightweight
+ * elements in the field list carrying an optional localized title.
+ * They compose with fieldKey uniqueness, the 100-field cap, and
+ * reorder like regular fields.
+ */
+export const PAGE_BREAK_TYPE = "pageBreak" as const;
 
 // ---------------------------------------------------------------------------
 // Text subtypes (T1.2: input validation)
@@ -255,6 +330,11 @@ export const intakeFieldConfigSchema = z.discriminatedUnion("type", [
   }),
   z.object({
     type: z.literal("date"),
+    helpText: localizedTextSchema.optional(),
+  }),
+  z.object({
+    type: z.literal("pageBreak"),
+    title: localizedTextSchema.optional(),
     helpText: localizedTextSchema.optional(),
   }),
 ]);
@@ -486,3 +566,45 @@ export const saveIntakeFormInputSchema = z
     return true;
   }, "one or more fields have a role incompatible with their widget type");
 export type SaveIntakeFormInput = z.infer<typeof saveIntakeFormInputSchema>;
+
+// ---------------------------------------------------------------------------
+// Visibility evaluation (client-side only, shared for renderer + body)
+// ---------------------------------------------------------------------------
+
+/**
+ * Evaluate a visibleWhen condition against current field values.
+ * Returns true when the element should be visible, false when hidden.
+ *
+ * When visibleWhen is undefined, the element is always visible.
+ * Values is a record keyed by fieldKey.
+ */
+export function evaluateVisibility(
+  visibleWhen: VisibleWhen | undefined,
+  values: Readonly<
+    Record<string, string | string[] | AvailabilityData | boolean | undefined>
+  >,
+): boolean {
+  if (visibleWhen == null) return true;
+
+  const check = (rule: VisibilityRule): boolean => {
+    const val = values[rule.fieldKey];
+
+    switch (rule.operator) {
+      case "equals":
+        return typeof val === "string" && val === rule.optionKey;
+      case "includes":
+        return (
+          Array.isArray(val) &&
+          rule.optionKey !== undefined &&
+          val.includes(rule.optionKey)
+        );
+      case "checked":
+        return val === (rule.boolValue ?? true);
+    }
+  };
+
+  if (visibleWhen.mode === "all") {
+    return visibleWhen.rules.every(check);
+  }
+  return visibleWhen.rules.some(check);
+}

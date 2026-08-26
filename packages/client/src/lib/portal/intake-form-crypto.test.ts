@@ -15,7 +15,11 @@ import {
   deriveClientBrandingKey,
   encryptContent,
 } from "@care-y/crypto";
-import type { IntakeFieldConfig, LocalizedText } from "@care-y/shared";
+import type {
+  IntakeFieldConfig,
+  LocalizedText,
+  VisibleWhen,
+} from "@care-y/shared";
 import {
   encryptFieldContent,
   decryptFieldContent,
@@ -332,6 +336,208 @@ describe("intake-form-crypto", () => {
         expect(() => decryptFieldContent(enc, orgPubKey())).toThrow(
           DecryptionError,
         );
+      } finally {
+        requireSodium().memzero(key);
+      }
+    });
+  });
+
+  describe("visibleWhen roundtrip through encrypt/decrypt", () => {
+    it("roundtrips an all-mode condition with an equals rule", () => {
+      const config: IntakeFieldConfig = { type: "text" };
+      const label: LocalizedText = { en: "Conditional field" };
+      const visibleWhen: VisibleWhen = {
+        mode: "all",
+        rules: [
+          { fieldKey: "fk-trigger", operator: "equals", optionKey: "opt-a" },
+        ],
+      };
+
+      const encrypted = encryptFieldContent(
+        { label, config, visibleWhen },
+        orgPubKey(),
+      );
+      const decrypted = decryptFieldContent(encrypted, orgPubKey());
+
+      expect(decrypted.visibleWhen).toEqual(visibleWhen);
+      expect(decrypted.config).toEqual(config);
+      expect(decrypted.label).toEqual(label);
+    });
+
+    it("roundtrips an any-mode condition with an includes rule", () => {
+      const config: IntakeFieldConfig = {
+        type: "multiselect",
+        options: [
+          { key: "k1", label: { en: "A" } },
+          { key: "k2", label: { en: "B" } },
+        ],
+      };
+      const visibleWhen: VisibleWhen = {
+        mode: "any",
+        rules: [
+          { fieldKey: "fk-multi", operator: "includes", optionKey: "k1" },
+        ],
+      };
+
+      const encrypted = encryptFieldContent(
+        { label: { en: "Dependent" }, config, visibleWhen },
+        orgPubKey(),
+      );
+      const decrypted = decryptFieldContent(encrypted, orgPubKey());
+
+      expect(decrypted.visibleWhen).toEqual(visibleWhen);
+    });
+
+    it("roundtrips a checked-operator rule with boolValue", () => {
+      const config: IntakeFieldConfig = { type: "text" };
+      const visibleWhen: VisibleWhen = {
+        mode: "all",
+        rules: [{ fieldKey: "fk-cb", operator: "checked", boolValue: true }],
+      };
+
+      const encrypted = encryptFieldContent(
+        { label: { en: "After checkbox" }, config, visibleWhen },
+        orgPubKey(),
+      );
+      const decrypted = decryptFieldContent(encrypted, orgPubKey());
+
+      expect(decrypted.visibleWhen).toEqual(visibleWhen);
+    });
+
+    it("roundtrips multiple rules with mixed operators", () => {
+      const config: IntakeFieldConfig = { type: "textarea" };
+      const visibleWhen: VisibleWhen = {
+        mode: "all",
+        rules: [
+          { fieldKey: "fk-sel", operator: "equals", optionKey: "opt-x" },
+          { fieldKey: "fk-cb", operator: "checked", boolValue: true },
+          { fieldKey: "fk-multi", operator: "includes", optionKey: "opt-y" },
+        ],
+      };
+
+      const encrypted = encryptFieldContent(
+        { label: { en: "Complex condition" }, config, visibleWhen },
+        orgPubKey(),
+      );
+      const decrypted = decryptFieldContent(encrypted, orgPubKey());
+
+      expect(decrypted.visibleWhen).toEqual(visibleWhen);
+      expect(decrypted.visibleWhen?.rules).toHaveLength(3);
+    });
+
+    it("returns undefined visibleWhen when none was provided", () => {
+      const config: IntakeFieldConfig = { type: "text" };
+      const encrypted = encryptFieldContent(
+        { label: { en: "No condition" }, config },
+        orgPubKey(),
+      );
+      const decrypted = decryptFieldContent(encrypted, orgPubKey());
+
+      expect(decrypted.visibleWhen).toBeUndefined();
+    });
+  });
+
+  describe("malformed visibleWhen in config blob", () => {
+    it("omits visibleWhen when it fails schema validation (does not crash)", () => {
+      // Hand-craft an encrypted config blob with a valid field config but
+      // a malformed visibleWhen (missing required "rules" array).
+      const key = deriveClientBrandingKey(orgPubKey());
+      const aad = new TextEncoder().encode("care-y-intake-form-aad-v1");
+
+      try {
+        const configWithBadVw = JSON.stringify({
+          type: "text",
+          visibleWhen: { mode: "all" },
+        });
+        const labelBlob = encryptContent(
+          new TextEncoder().encode(JSON.stringify({ en: "Label" })),
+          key,
+          aad,
+        );
+        const configBlob = encryptContent(
+          new TextEncoder().encode(configWithBadVw),
+          key,
+          aad,
+        );
+
+        const enc = {
+          encryptedLabel: encode(labelBlob),
+          encryptedConfig: encode(configBlob),
+        };
+
+        // Should not throw; the config is valid, only visibleWhen is bad
+        const decrypted = decryptFieldContent(enc, orgPubKey());
+        expect(decrypted.config.type).toBe("text");
+        expect(decrypted.visibleWhen).toBeUndefined();
+      } finally {
+        requireSodium().memzero(key);
+      }
+    });
+
+    it("omits visibleWhen when rules have an invalid operator", () => {
+      const key = deriveClientBrandingKey(orgPubKey());
+      const aad = new TextEncoder().encode("care-y-intake-form-aad-v1");
+
+      try {
+        const configWithBadOp = JSON.stringify({
+          type: "checkbox",
+          visibleWhen: {
+            mode: "all",
+            rules: [{ fieldKey: "fk-1", operator: "contains", optionKey: "x" }],
+          },
+        });
+        const labelBlob = encryptContent(
+          new TextEncoder().encode(JSON.stringify({ en: "CB" })),
+          key,
+          aad,
+        );
+        const configBlob = encryptContent(
+          new TextEncoder().encode(configWithBadOp),
+          key,
+          aad,
+        );
+
+        const enc = {
+          encryptedLabel: encode(labelBlob),
+          encryptedConfig: encode(configBlob),
+        };
+
+        const decrypted = decryptFieldContent(enc, orgPubKey());
+        expect(decrypted.config.type).toBe("checkbox");
+        expect(decrypted.visibleWhen).toBeUndefined();
+      } finally {
+        requireSodium().memzero(key);
+      }
+    });
+
+    it("omits visibleWhen when the value is not an object", () => {
+      const key = deriveClientBrandingKey(orgPubKey());
+      const aad = new TextEncoder().encode("care-y-intake-form-aad-v1");
+
+      try {
+        const configWithStringVw = JSON.stringify({
+          type: "text",
+          visibleWhen: "not-an-object",
+        });
+        const labelBlob = encryptContent(
+          new TextEncoder().encode(JSON.stringify({ en: "Label" })),
+          key,
+          aad,
+        );
+        const configBlob = encryptContent(
+          new TextEncoder().encode(configWithStringVw),
+          key,
+          aad,
+        );
+
+        const enc = {
+          encryptedLabel: encode(labelBlob),
+          encryptedConfig: encode(configBlob),
+        };
+
+        const decrypted = decryptFieldContent(enc, orgPubKey());
+        expect(decrypted.config.type).toBe("text");
+        expect(decrypted.visibleWhen).toBeUndefined();
       } finally {
         requireSodium().memzero(key);
       }
