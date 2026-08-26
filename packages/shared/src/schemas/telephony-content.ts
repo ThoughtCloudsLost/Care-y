@@ -83,7 +83,7 @@ export type CreateAudioGreetingInput = z.infer<
 >;
 
 export const getGreetingAudioInputSchema = z.object({
-  greetingId: z.uuid(),
+  greetingId: phoneGreetingIdSchema,
 });
 export type GetGreetingAudioInput = z.infer<typeof getGreetingAudioInputSchema>;
 

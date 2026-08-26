@@ -3,7 +3,7 @@ import type { TenantDatabase } from "../db/types.js";
 import type { SealedBoxEncryptor } from "../crypto/sealed-box.js";
 import type { BlobStore } from "../storage/store.js";
 import { wilsonScore } from "../kb/service.js";
-import type { KbCategoryId, KbItemId, UserId } from "@care-y/shared";
+import type { KbCategoryId, KbItemId, UserId, OrgSchema } from "@care-y/shared";
 
 interface PmNode {
   type: string;
@@ -343,8 +343,8 @@ export async function seedKbArticles(
   sealedBox: SealedBoxEncryptor,
   userId: UserId,
   blobStore?: BlobStore,
-  orgSchema?: string,
-  extraVoterIds?: readonly string[],
+  orgSchema?: OrgSchema,
+  extraVoterIds?: readonly UserId[],
 ): Promise<{ articleIds: KbItemId[] }> {
   const existing = await tDb
     .selectFrom("kb_items")
@@ -409,8 +409,8 @@ export async function seedKbArticles(
   ];
 
   // Track cumulative counts per article for the final denormalized update
-  const upCounts = new Map<string, number>();
-  const downCounts = new Map<string, number>();
+  const upCounts = new Map<KbItemId, number>();
+  const downCounts = new Map<KbItemId, number>();
 
   for (const spec of voteSpec) {
     const itemId = articleIds[spec.index];
@@ -420,7 +420,7 @@ export async function seedKbArticles(
       .insertInto("kb_votes")
       .values({
         kb_item_id: itemId,
-        voter_pseudonym: userId,
+        voter_id: userId,
         direction: spec.direction,
       })
       .execute();
@@ -467,7 +467,7 @@ export async function seedKbArticles(
         .insertInto("kb_votes")
         .values({
           kb_item_id: itemId,
-          voter_pseudonym: voterId,
+          voter_id: voterId,
           direction: ev.direction,
         })
         .execute();

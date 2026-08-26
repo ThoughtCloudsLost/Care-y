@@ -69,7 +69,7 @@ export interface TelephonyContentService {
   /** Fetch audio blob bytes for a greeting by its ID. */
   getGreetingAudio(
     blobStore: BlobStore,
-    greetingId: string,
+    greetingId: PhoneGreetingId,
   ): Promise<{ audioBase64: string; contentType: string }>;
   listSmsResponses(locale?: string): Promise<readonly SmsResponseRecord[]>;
   createSmsResponse(input: {
@@ -196,7 +196,7 @@ export function createTelephonyContentService(
 
     async getGreetingAudio(
       blobStore: BlobStore,
-      greetingId: string,
+      greetingId: PhoneGreetingId,
     ): Promise<{ audioBase64: string; contentType: string }> {
       const greeting = await greetingRepo.findById(greetingId);
       if (!greeting) {

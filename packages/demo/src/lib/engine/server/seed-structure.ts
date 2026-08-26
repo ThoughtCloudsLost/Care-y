@@ -16,6 +16,23 @@ import _sodium from "libsodium-wrappers-sumo";
 import type { Kysely } from "kysely";
 import { RoleId } from "@care-y/shared";
 import type {
+  OrgId,
+  OrgSlug,
+  OrgSchema,
+  UserId,
+  PhoneId,
+  QueueId,
+  IdentifierHash,
+  PasswordHash,
+  PhoneHash,
+  WebauthnCredentialId,
+  PhoneSid,
+  E164,
+  BlobKey,
+  RecordingSid,
+  CallSid,
+} from "@care-y/shared";
+import type {
   TenantDatabase,
   PlatformDatabase,
 } from "../../../../../server/src/db/types.js";
@@ -26,21 +43,21 @@ import type { BlobStore } from "../../../../../server/src/storage/store.js";
 import { createSealedBoxEncryptor } from "./sealed-box-shim.js";
 import { randomInt } from "./node-crypto-shim.js";
 
-export const DEMO_ORG_SLUG = "demo-org";
-export const DEMO_ORG_SCHEMA = "demo_org";
+export const DEMO_ORG_SLUG = "demo-org" as OrgSlug;
+export const DEMO_ORG_SCHEMA = "demo_org" as OrgSchema;
 export const DEMO_ADMIN_IDENTIFIER = "jdoe";
 export const DEMO_ADMIN_PASSWORD = "DemoPassword2026";
 export const DEMO_ADMIN_DISPLAY_NAME = "Demo User";
 export const NUM_SEED_CLIENTS = 30; // Fewer than prod seed (120) for speed
 
 export interface SeedStructureResult {
-  readonly orgId: string;
-  readonly adminUserId: string;
+  readonly orgId: OrgId;
+  readonly adminUserId: UserId;
   readonly orgPublicKey: Buffer;
   readonly orgSecretKey: Buffer;
-  readonly queueIds: Map<string, string>;
+  readonly queueIds: Map<string, QueueId>;
   /** User IDs for seeded roster volunteers (excludes admin). */
-  readonly rosterUserIds: readonly string[];
+  readonly rosterUserIds: readonly UserId[];
 }
 
 export interface SeedStructureDeps {
@@ -130,7 +147,7 @@ export async function seedStructure(
     deps;
 
   // 1. Insert org into platform table
-  const orgId = globalThis.crypto.randomUUID();
+  const orgId = globalThis.crypto.randomUUID() as OrgId;
   await platformDb
     .insertInto("orgs")
     .values({
@@ -186,9 +203,12 @@ export async function seedStructure(
     .execute();
 
   // 4. Create admin user
-  const passwordHash = await hasher.hash(DEMO_ADMIN_PASSWORD);
-  const identifierHash = indexer.hash(DEMO_ADMIN_IDENTIFIER, orgId);
-  const adminUserId = globalThis.crypto.randomUUID();
+  const passwordHash = (await hasher.hash(DEMO_ADMIN_PASSWORD)) as PasswordHash;
+  const identifierHash = indexer.hash(
+    DEMO_ADMIN_IDENTIFIER,
+    orgId,
+  ) as IdentifierHash;
+  const adminUserId = globalThis.crypto.randomUUID() as UserId;
 
   await tenantDb
     .insertInto("users")
@@ -239,7 +259,9 @@ export async function seedStructure(
     .insertInto("webauthn_credentials")
     .values({
       user_id: adminUserId,
-      credential_id: Buffer.from("demo-webauthn-credential").toString("base64"),
+      credential_id: Buffer.from("demo-webauthn-credential").toString(
+        "base64",
+      ) as WebauthnCredentialId,
       public_key: Buffer.from("demo-webauthn-public-key").toString("base64"),
       transports: ["internal"],
       device_type: "platform",
@@ -250,12 +272,12 @@ export async function seedStructure(
     .execute();
 
   // 6. Phone record
-  const phoneId = globalThis.crypto.randomUUID();
+  const phoneId = globalThis.crypto.randomUUID() as PhoneId;
   await tenantDb
     .insertInto("phones")
     .values({
       id: phoneId,
-      phone_hash: indexer.hash("+15550001234", orgId),
+      phone_hash: indexer.hash("+15550001234", orgId) as PhoneHash,
       encrypted_number: encryptor.encrypt("+15550001234"),
       locale: "en",
     })
@@ -267,7 +289,7 @@ export async function seedStructure(
     { name: "Crisis", color: "red", icon: "triangle-alert" },
     { name: "Housing", color: "green", icon: "house" },
   ];
-  const queueIds = new Map<string, string>();
+  const queueIds = new Map<string, QueueId>();
 
   for (let i = 0; i < seedQueues.length; i++) {
     const entry = seedQueues.at(i);
@@ -294,7 +316,10 @@ export async function seedStructure(
   for (const [, qId] of queueIds) {
     await tenantDb
       .insertInto("queue_assignments")
-      .values({ queue_id: qId, user_id: adminUserId })
+      .values({
+        queue_id: qId,
+        user_id: adminUserId,
+      })
       .execute();
   }
 
@@ -332,14 +357,14 @@ export async function seedStructure(
     },
   ] as const;
 
-  const rosterUserIds: string[] = [];
+  const rosterUserIds: UserId[] = [];
 
   for (let i = 0; i < rosterDefs.length; i++) {
     const def = rosterDefs.at(i);
     if (def === undefined) {
       throw new DemoEngineError(`rosterDefs missing index ${String(i)}`);
     }
-    const userId = globalThis.crypto.randomUUID();
+    const userId = globalThis.crypto.randomUUID() as UserId;
 
     // UsersTable exposes no created_at column (the DB default applies),
     // so roster rows cannot carry varied creation dates.
@@ -347,7 +372,7 @@ export async function seedStructure(
       .insertInto("users")
       .values({
         id: userId,
-        identifier_hash: indexer.hash(def.identifier, orgId),
+        identifier_hash: indexer.hash(def.identifier, orgId) as IdentifierHash,
         encrypted_identifier: sealedBox.seal(def.identifier),
         encrypted_display_name: sealedBox.seal(def.displayName),
         role_id: def.role,
@@ -394,7 +419,10 @@ export async function seedStructure(
       }
       await tenantDb
         .insertInto("queue_assignments")
-        .values({ queue_id: qId, user_id: userId })
+        .values({
+          queue_id: qId,
+          user_id: userId,
+        })
         .execute();
     }
   }
@@ -407,7 +435,10 @@ export async function seedStructure(
     const alias = generateAlias();
     await tenantDb
       .insertInto("clients")
-      .values({ encrypted_alias: sealedBox.seal(alias), phone_id: phoneId })
+      .values({
+        encrypted_alias: sealedBox.seal(alias),
+        phone_id: phoneId,
+      })
       .execute();
   }
 
@@ -480,8 +511,8 @@ export async function seedStructure(
   await tenantDb
     .updateTable("org_config")
     .set({
-      phone_outbound_sid: DEMO_PHONES[0].sid,
-      phone_system_sid: DEMO_PHONES[1].sid,
+      phone_outbound_sid: DEMO_PHONES[0].sid as PhoneSid,
+      phone_system_sid: DEMO_PHONES[1].sid as PhoneSid,
     })
     .execute();
 
@@ -605,12 +636,13 @@ export async function seedStructure(
     await tenantDb
       .insertInto("phone_greetings")
       .values({
-        phone_number: g.phone_number,
+        phone_number: g.phone_number as E164,
         greeting_type: g.greeting_type,
         locale: g.locale,
         text: g.text,
         is_audio: g.is_audio,
-        audio_blob_key: g.audio_blob_key,
+        audio_blob_key: (g.audio_blob_key ?? undefined) as
+          BlobKey | null | undefined,
         audio_content_type: g.audio_content_type,
       })
       .execute();
@@ -665,7 +697,7 @@ export async function seedStructure(
   await tenantDb
     .insertInto("phone_blocklist")
     .values({
-      phone_hash: indexer.hash("+15559990000", orgId),
+      phone_hash: indexer.hash("+15559990000", orgId) as PhoneHash,
       encrypted_number: encryptor.encrypt("+15559990000"),
       added_by: adminUserId,
     })
@@ -732,8 +764,8 @@ export async function seedStructure(
       await tenantDb
         .insertInto("voicemail_quarantine")
         .values({
-          recording_sid: qr.recordingSid,
-          call_sid: qr.callSid,
+          recording_sid: qr.recordingSid as RecordingSid,
+          call_sid: qr.callSid as CallSid,
           blob_key: blobKey,
           size_bytes: sealedAudio.length,
           duration_seconds:

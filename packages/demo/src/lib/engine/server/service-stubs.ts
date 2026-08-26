@@ -20,6 +20,8 @@ import { hkdfSync } from "./node-crypto-shim.js";
 import { appendToOutbox } from "../outbox.js";
 import type { FieldEncryptor, BlindIndexer } from "./field-encryptor-shim.js";
 import type { SecretsEncryptor } from "./secrets-shim.js";
+import type { OrgId, UserId } from "@care-y/shared";
+import type { OrgRecord } from "../../../../../server/src/org/service.js";
 
 import type { TenantDatabase } from "../../../../../server/src/db/types.js";
 import type { BlobStore } from "../../../../../server/src/storage/store.js";
@@ -36,6 +38,9 @@ import {
 import { createDemoOprfService } from "./demo-keys.js";
 import type { SessionTokenizer } from "../../../../../server/src/crypto/session-tokenizer.js";
 import type { ScryptHasher } from "../../../../../server/src/auth/scrypt-hash.js";
+import type { PasswordHasher } from "../../../../../server/src/auth/password.js";
+import type { PasswordHash } from "@care-y/shared";
+import type { PendingClient } from "../../../../../server/src/tickets/ticket-service.js";
 
 // ── Types ──────────────────────────────────────────────────────────
 
@@ -60,15 +65,18 @@ export type DemoAppRouter = ReturnType<typeof createAppRouterFn>;
 
 export interface ServiceStubResult {
   readonly appRouter: DemoAppRouter;
-  readonly pendingClients: Map<
-    string,
-    {
-      phoneHash: string;
-      opsEncryptedPhone: Buffer;
-      orgSchema: string;
-      createdAt: number;
-    }
-  >;
+  readonly pendingClients: Map<string, PendingClient>;
+}
+
+/** Wraps a ScryptHasher with the branded hashPassword method PasswordHasher requires. */
+function wrapAsPasswordHasher(base: ScryptHasher): PasswordHasher {
+  return {
+    hash: base.hash.bind(base),
+    verify: base.verify.bind(base),
+    async hashPassword(password: string): Promise<PasswordHash> {
+      return (await base.hash(password)) as PasswordHash;
+    },
+  };
 }
 
 // ── Builder ────────────────────────────────────────────────────────
@@ -99,7 +107,7 @@ export async function buildServiceStubs(
         new DemoEngineError("createOrg not available in browser demo"),
       );
     },
-    async findBySlug(slug: string) {
+    async findBySlug(slug: string): Promise<OrgRecord | null> {
       if (slug === DEMO_ORG_SLUG) {
         return Promise.resolve({
           id: seedResult.orgId,
@@ -110,7 +118,7 @@ export async function buildServiceStubs(
       }
       return Promise.resolve(null);
     },
-    async findById(id: string) {
+    async findById(id: OrgId): Promise<OrgRecord | null> {
       if (id === seedResult.orgId) {
         return Promise.resolve({
           id: seedResult.orgId,
@@ -255,15 +263,7 @@ export async function buildServiceStubs(
   };
 
   // Pending clients map
-  const pendingClients = new Map<
-    string,
-    {
-      phoneHash: string;
-      opsEncryptedPhone: Buffer;
-      orgSchema: string;
-      createdAt: number;
-    }
-  >();
+  const pendingClients = new Map<string, PendingClient>();
 
   // Import createAppRouter
   const { createAppRouter } =
@@ -332,9 +332,15 @@ export async function buildServiceStubs(
     providerStatics: new Map([["twilio", twilioProviderStatic]]),
   });
 
+  const passwordHasher = wrapAsPasswordHasher(hasher);
+
+  // Import notification preferences service for notificationDeps
+  const { createNotificationPreferencesService } =
+    await import("../../../../../server/src/notifications/preferences.js");
+
   const appRouter = createAppRouter({
     authDeps: {
-      hasher,
+      hasher: passwordHasher,
       loginLimiter: noopLimiter,
       saltLimiter: noopLimiter,
       fakeSaltKey,
@@ -348,7 +354,7 @@ export async function buildServiceStubs(
       totpReplayCache: totpReplayCacheStub,
     },
     profileDeps: {
-      hasher,
+      hasher: passwordHasher,
       encryptor,
       indexer,
       tokenizer,
@@ -396,7 +402,7 @@ export async function buildServiceStubs(
       createWatchersSvc: createWatchersService,
       createQueuePermissionsSvc: createQueuePermissionsService,
       createSearchSvc: (svcTDb: Kysely<TenantDatabase>) =>
-        createSearchService(svcTDb, async (userId: string) => {
+        createSearchService(svcTDb, async (userId: UserId) => {
           const qps = createQueuePermissionsService(svcTDb);
           return qps.getUserQueues(userId);
         }),
@@ -420,6 +426,7 @@ export async function buildServiceStubs(
       createPushSubSvc: (svcTDb: Kysely<TenantDatabase>) =>
         createPushSubscriptionService(svcTDb),
       vapidPublicKey: "demo-vapid-public-key-placeholder",
+      preferencesService: createNotificationPreferencesService(),
     },
     brandingDeps: {
       blobStore,
@@ -427,14 +434,13 @@ export async function buildServiceStubs(
     },
     onboardingDeps: {
       orgService: orgServiceStub,
-      hasher,
+      hasher: passwordHasher,
       encryptor,
       indexer,
       tokenizer,
       bootstrapLimiter: noopLimiter,
       isSecureCookie: false,
       tenantDbFactory: tenantDb,
-      secretsEncryptor,
     },
     voicemailQuarantineDeps: {
       blobStore,

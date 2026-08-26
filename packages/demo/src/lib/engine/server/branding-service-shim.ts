@@ -15,6 +15,7 @@ import type {
   TenantDatabase,
 } from "../../../../../server/src/db/types.js";
 import type { BlobStore } from "../../../../../server/src/storage/store.js";
+import type { OrgSchema } from "@care-y/shared";
 import type {
   BrandingData,
   SaveBrandingFieldInput,
@@ -160,7 +161,7 @@ export function createBrandingService(
 
     async uploadIcons(
       store: BlobStore,
-      orgSchema: string,
+      orgSchema: OrgSchema,
       input: UploadIconsInput,
     ): Promise<void> {
       const buf192 = Buffer.from(input.icon192, "base64");
