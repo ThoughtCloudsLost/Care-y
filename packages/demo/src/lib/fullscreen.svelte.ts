@@ -18,14 +18,22 @@ import type { SavedGeometry } from "./peek-controller.svelte.js";
 // Constants
 // -----------------------------------------------------------------------
 
-/** Thinnest readable prose column for the handbook drawer. */
-export const DRAWER_MIN_W = 240;
-
-/** Sliver of the app that must remain visible when the drawer is open. */
-export const MIN_APP_STRIP = 64;
-
 /** Maximum prose measure inside the drawer (MAX_MEASURE precedent). */
 export const DRAWER_MAX_MEASURE = 620;
+
+/** Width the drawer opens at, and returns to after a snap close. */
+export const DRAWER_DEFAULT_W = 320;
+
+/**
+ * Resizing below this closes the drawer instead.
+ *
+ * Set where the drawer stops being able to show anything: the docked
+ * top bar keeps 128px of controls in a row inset by 70px, so under
+ * roughly 200px the bar itself overflows and the contents picker is
+ * already down to nothing. A drag past that reads as "close" rather
+ * than "make it tiny".
+ */
+export const DRAWER_SNAP_CLOSE_W = 200;
 
 /** Duration (ms) for the frame box and toolbar FLIP animations. */
 export const FULLSCREEN_ANIM_MS = 300;
@@ -37,6 +45,20 @@ export const FULLSCREEN_EASE = "cubic-bezier(0.25, 1, 0.5, 1)";
 
 /** Inset kept around the pill on every edge. */
 const PILL_MARGIN = 8;
+
+/**
+ * Height of the TopBar reveal strip (.fs-top-hot-strip), the invisible
+ * band along the window's top edge that slides the hidden TopBar into
+ * view on hover. The pill rests clear of it, so reaching for the pill
+ * does not pull the TopBar down on the way.
+ */
+const TOP_HOT_STRIP = 8;
+
+/** Gap left between that strip and the pill's resting top. */
+const PILL_TOP_CLEARANCE = 2;
+
+/** Resting inset from the left edge. */
+const PILL_REST_LEFT = 40;
 
 // -----------------------------------------------------------------------
 // Pure functions
@@ -98,24 +120,20 @@ export function clampPillPosition(
 }
 
 /**
- * Clamp a desired drawer width to the allowed range.
+ * Clamp a desired drawer width to the window.
  *
- * The drawer may grow up to windowW - MIN_APP_STRIP (leaving a sliver
- * of the app visible) but never wider than the window or narrower than
- * DRAWER_MIN_W. On tiny windows where DRAWER_MIN_W would exceed the
- * available space, MIN_APP_STRIP wins.
+ * The drawer sizes freely: it may cover the window edge to edge or
+ * close down to nothing. Only the physical bounds apply, so a drag
+ * that runs past either side of the window stops there instead of
+ * producing a negative or larger-than-window width.
  */
 export function clampDrawerWidth(desired: number, windowW: number): number {
-  const maxW = windowW - MIN_APP_STRIP;
-  return Math.min(
-    Math.max(desired, DRAWER_MIN_W),
-    Math.max(maxW, DRAWER_MIN_W),
-  );
+  return Math.min(Math.max(desired, 0), Math.max(windowW, 0));
 }
 
 /**
- * Default pill position: top-left of the window, below the 8px
- * top-edge hot strip so resting there never triggers the reveal.
+ * Default pill position: near the top-left of the window, just clear of
+ * the TopBar reveal strip.
  */
 export function defaultPillPosition(
   pillW: number,
@@ -124,8 +142,8 @@ export function defaultPillPosition(
   windowH: number,
 ): { top: number; left: number } {
   return clampPillPosition(
-    PILL_MARGIN * 3,
-    PILL_MARGIN,
+    TOP_HOT_STRIP + PILL_TOP_CLEARANCE,
+    PILL_REST_LEFT,
     pillW,
     pillH,
     windowW,
@@ -176,11 +194,21 @@ export interface FullscreenController {
   /** Toggle the handbook drawer open/closed. */
   toggleDrawer(): void;
 
+  /** Open the handbook drawer. */
+  openDrawer(): void;
+
   /** Close the handbook drawer. */
   closeDrawer(): void;
 
-  /** Set drawer width (clamped). */
+  /** Set drawer width (clamped). Never closes; see settleDrawer. */
   setDrawerW(w: number): void;
+
+  /**
+   * End a resize gesture. Closes the drawer when it came to rest under
+   * DRAWER_SNAP_CLOSE_W, so a drag can cross the threshold and come
+   * back out without the drawer shutting mid-gesture.
+   */
+  settleDrawer(): void;
 
   /** Full reset (restart path). Clears all state. */
   reset(): void;
@@ -210,7 +238,7 @@ export function createFullscreenController(
   let saved: SavedGeometry | null = $state(null);
   let pillPos = $state({ top: 0, left: 0 });
   let drawerOpen = $state(false);
-  let drawerW = $state(320);
+  let drawerW = $state(DRAWER_DEFAULT_W);
 
   function enter(auto: boolean, snapshot: SavedGeometry): void {
     if (!isPeekIdle()) return;
@@ -262,6 +290,16 @@ export function createFullscreenController(
     drawerOpen = !drawerOpen;
   }
 
+  function openDrawer(): void {
+    // A gesture that settled shut leaves its sliver width behind.
+    // Restore a usable one here, while the drawer is still off screen:
+    // doing it at close time would play the resize out in full view.
+    if (drawerW < DRAWER_SNAP_CLOSE_W) {
+      drawerW = DRAWER_DEFAULT_W;
+    }
+    drawerOpen = true;
+  }
+
   function closeDrawer(): void {
     drawerOpen = false;
   }
@@ -271,13 +309,22 @@ export function createFullscreenController(
     drawerW = clampDrawerWidth(w, win.w);
   }
 
+  function settleDrawer(): void {
+    // The snap decision belongs to the release, not to the drag: a
+    // gesture that crosses the threshold and comes back out again
+    // should leave the drawer open. Only where it comes to rest counts.
+    if (drawerW < DRAWER_SNAP_CLOSE_W) {
+      drawerOpen = false;
+    }
+  }
+
   function reset(): void {
     active = false;
     autoEntered = false;
     saved = null;
     pillPos = { top: 0, left: 0 };
     drawerOpen = false;
-    drawerW = 320;
+    drawerW = DRAWER_DEFAULT_W;
   }
 
   return {
@@ -304,8 +351,10 @@ export function createFullscreenController(
     exitIntoResize,
     setPillPos,
     toggleDrawer,
+    openDrawer,
     closeDrawer,
     setDrawerW,
+    settleDrawer,
     reset,
   };
 }

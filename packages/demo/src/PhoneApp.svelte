@@ -296,6 +296,13 @@
   // handbook toggle can never disagree.
   const dark = $derived(themeStore.resolvedScheme === "dark");
 
+  /**
+   * True while the frame fills the window, pushed in over the bridge.
+   * DemoFrame stops drawing its simulated status bar and home indicator
+   * then, so the shell insets that clear them come off too.
+   */
+  let frameFullscreen = $state(false);
+
   // -----------------------------------------------------------------------
   // Pathname for RouteMount (derived from router state)
   // -----------------------------------------------------------------------
@@ -988,6 +995,10 @@
 
     setDark(value: boolean): void {
       themeStore.setColorScheme(value ? "dark" : "light");
+    },
+
+    setFullscreen(value: boolean): void {
+      frameFullscreen = value;
     },
 
     setRole(role: RoleIdValue): void {
@@ -1737,7 +1748,7 @@
   );
 </script>
 
-<div class="phone-app">
+<div class="phone-app" class:phone-app--bare={frameFullscreen}>
   <QueryClientProvider client={queryClient}>
     <App theme="ios" {dark} class="app-shell">
       {#if router.feature === "login"}
@@ -1886,9 +1897,15 @@
   /* Simulate device safe areas at phone-sized viewports. DemoFrame
      renders a status bar (top) and home indicator (bottom) only below
      768px; these insets match that threshold. At tablet/desktop widths
-     the overlays are hidden and insets reset to 0 (Konsta env() default). */
+     the overlays are hidden and insets reset to 0 (Konsta env() default).
+
+     Skipped in fullscreen: the frame fills the window and draws neither
+     overlay, so the insets would clear nothing. On a real phone the
+     host supplies the status bar and home indicator, and keeps the page
+     out of both regions on its own (no viewport-fit=cover here, so the
+     viewport never extends under them). */
   @media (max-width: 767px) {
-    .phone-app :global(.app-shell) {
+    .phone-app:not(.phone-app--bare) :global(.app-shell) {
       --k-safe-area-top: 59px;
       --k-safe-area-bottom: 34px;
     }

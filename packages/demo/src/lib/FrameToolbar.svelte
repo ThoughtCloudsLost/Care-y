@@ -503,7 +503,7 @@
   // FLIP morph animation: bar <-> pill transition
   //
   // When the fullscreen prop flips, the root element changes positioning
-  // (absolute docked vs. fixed floating), border-radius, and content.
+  // (absolute docked vs. fixed floating) and content.
   // A FLIP animation smooths the spatial transition:
   //   1. $effect.pre captures the rect BEFORE Svelte updates the DOM
   //   2. $effect runs AFTER the DOM settles, reads the new rect
@@ -583,8 +583,10 @@
     void barRef.offsetHeight;
 
     // Transition to identity. Uses the shared fullscreen timing so the
-    // toolbar morph and frame box animation run in sync.
-    barRef.style.transition = `transform ${String(FULLSCREEN_ANIM_MS)}ms ${FULLSCREEN_EASE}, border-radius ${String(FULLSCREEN_ANIM_MS)}ms ease`;
+    // toolbar morph and frame box animation run in sync. Transform
+    // only: the radius is the same either side of the morph now, so
+    // there is nothing for a border-radius transition to animate.
+    barRef.style.transition = `transform ${String(FULLSCREEN_ANIM_MS)}ms ${FULLSCREEN_EASE}`;
     barRef.style.transform = "";
 
     function onEnd(): void {
@@ -1373,19 +1375,17 @@
      exit + drawer + role. z-index 130 places it above the
      drawer (120). */
 
+  /* Radius is deliberately not overridden: the floating toolbar keeps
+     the docked bar's 10px corners (and its buttons their 6px), so the
+     morph changes where the toolbar is, not what it is. */
   .frame-toolbar--fs {
     position: absolute;
     bottom: auto;
     left: auto;
     right: auto;
     width: auto;
-    border-radius: 999px;
     z-index: 130;
     user-select: none;
-  }
-
-  .frame-toolbar--fs .toolbar-btn {
-    border-radius: 999px;
   }
 
   /* Divider between button groups in pill mode */

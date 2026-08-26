@@ -6,17 +6,17 @@ import { getLocale, experimentalStaticLocale } from '../runtime.js';
 /** @typedef {{}} Demo_Mode_ExploreInputs */
 
 const en_demo_mode_explore = /** @type {(inputs: Demo_Mode_ExploreInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Explore`)
+	return /** @type {LocalizedString} */ (`Simulate`)
 };
 
 const es_demo_mode_explore = /** @type {(inputs: Demo_Mode_ExploreInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Explorar`)
+	return /** @type {LocalizedString} */ (`Simular`)
 };
 
 /**
 * | output |
 * | --- |
-* | "Explore" |
+* | "Simulate" |
 *
 * @param {Demo_Mode_ExploreInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

@@ -36,7 +36,10 @@
     DEFAULT_METRICS,
     computeFlowLayout,
   } from "./flow-layout.js";
-  import { DRAWER_MAX_MEASURE } from "./fullscreen.svelte.js";
+  import {
+    DRAWER_MAX_MEASURE,
+    DRAWER_SNAP_CLOSE_W,
+  } from "./fullscreen.svelte.js";
   import { READING_LINE_RATIO } from "./flow-geometry.svelte.js";
   import { plainMap } from "./non-reactive.js";
 
@@ -51,11 +54,20 @@
     activeSub: string | null;
     locale: string;
     onClose: () => void;
+    /** Reopen from the parked grip: click, drag, or ArrowLeft on it. */
+    onOpen: () => void;
     onResize: (width: number) => void;
+    /** End of a resize gesture, where the snap-close decision is made. */
+    onSettle: () => void;
     /** Called when the drawer's scroll position crosses a sub-heading. */
     onScrollSub: (sectionId: SectionId, subSlug: string) => void;
     topbar?: Snippet;
     strip?: Snippet;
+    /**
+     * Pinned below the prose, outside its scroll. Carries the
+     * next-section pill, which has no fixed-position home in fullscreen.
+     */
+    footer?: Snippet;
   }
 
   let {
@@ -65,10 +77,13 @@
     activeSub,
     locale,
     onClose,
+    onOpen,
     onResize,
+    onSettle,
     onScrollSub,
     topbar,
     strip,
+    footer,
   }: Props = $props();
 
   // -----------------------------------------------------------------------
@@ -98,13 +113,34 @@
   // Resize handle (pointer-captured drag, rAF-coalesced)
   // -----------------------------------------------------------------------
 
+  /** Pointer travel below this still counts as a click, not a drag. */
+  const CLICK_SLOP_PX = 3;
+
   let resizing = $state(false);
   let resizeRafId = 0;
   let pendingResizeX = 0;
+  let gestureStartX = 0;
+  let gestureMoved = false;
 
   function flushResize(): void {
     resizeRafId = 0;
-    onResize(window.innerWidth - pendingResizeX);
+    const next = window.innerWidth - pendingResizeX;
+
+    // A gesture off the parked grip starts at roughly zero width. Hold
+    // the drawer back until the drag clears the threshold, so it never
+    // appears at a width that releasing would immediately close. Width
+    // first, then open: onOpen only restores a default when the stored
+    // width is unusable, and by then it is the dragged one.
+    if (!open) {
+      if (next < DRAWER_SNAP_CLOSE_W) return;
+      onResize(next);
+      onOpen();
+      return;
+    }
+
+    // Open, the drag is unconstrained. It may cross below the
+    // threshold and come back out; onSettle decides on release.
+    onResize(next);
   }
 
   function onResizePointerDown(e: PointerEvent): void {
@@ -113,10 +149,15 @@
     if (!(target instanceof HTMLElement)) return;
     target.setPointerCapture(e.pointerId);
     resizing = true;
+    gestureStartX = e.clientX;
+    gestureMoved = false;
   }
 
   function onResizePointerMove(e: PointerEvent): void {
     if (!resizing) return;
+    if (Math.abs(e.clientX - gestureStartX) > CLICK_SLOP_PX) {
+      gestureMoved = true;
+    }
     pendingResizeX = e.clientX;
     if (resizeRafId === 0) {
       resizeRafId = requestAnimationFrame(flushResize);
@@ -124,21 +165,68 @@
   }
 
   function onResizePointerUp(): void {
+    // pointerup, pointercancel and lostpointercapture all land here for
+    // one release; only the first should settle.
+    if (!resizing) return;
     resizing = false;
+
+    // A pending frame still holds the final pointer position. Apply it
+    // rather than dropping it, so the settle judges where the drag
+    // actually ended instead of one frame behind.
     if (resizeRafId !== 0) {
       cancelAnimationFrame(resizeRafId);
-      resizeRafId = 0;
+      flushResize();
     }
+
+    // Still parked once the gesture is over: nothing pulled the drawer
+    // past the threshold, so read the release as a tap and open.
+    // Deciding here rather than on the click means a tap works however
+    // far the finger rolled, which a click-with-slop test would fail.
+    if (!open) {
+      onOpen();
+      return;
+    }
+
+    if (gestureMoved) onSettle();
+  }
+
+  /**
+   * Activation that never went through a pointer gesture: assistive
+   * tech firing click on the parked grip's button role. Pointer taps
+   * have already opened it by the time this runs, so it no-ops there.
+   *
+   * The guard stays because pointerup fires click even after a drag,
+   * and a gesture that pulled the drawer shut would otherwise land
+   * here and immediately reopen it.
+   */
+  function onResizeClick(): void {
+    if (gestureMoved) return;
+    if (!open) onOpen();
   }
 
   function onResizeKeydown(e: KeyboardEvent): void {
     const step = 24;
+
+    // Parked: the grip is an open control, so widening or activating it
+    // reopens rather than resizing a drawer nobody can see.
+    if (!open) {
+      if (e.key === "ArrowLeft" || e.key === "Enter" || e.key === " ") {
+        e.preventDefault();
+        onOpen();
+      }
+      return;
+    }
+
+    // Each keypress is a complete gesture, so it settles immediately:
+    // there is no release to wait for.
     if (e.key === "ArrowLeft") {
       e.preventDefault();
       onResize(width + step);
+      onSettle();
     } else if (e.key === "ArrowRight") {
       e.preventDefault();
       onResize(width - step);
+      onSettle();
     }
   }
 
@@ -682,20 +770,22 @@
   style="width: {width}px;"
   aria-label={m.demo_fs_drawer_close()}
 >
-  <!-- Resize handle (left edge) with visible grip affordance -->
+  <!-- Resize handle (left edge) with visible grip affordance. The
+       closed drawer parks with this handle still on screen, where it
+       doubles as the reopen control. -->
   <!-- svelte-ignore a11y_no_noninteractive_tabindex -->
-  <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
   <div
     class="drawer-resize-handle"
-    role="separator"
-    aria-orientation="vertical"
-    aria-label={m.demo_fs_drawer_resize()}
+    role={open ? "separator" : "button"}
+    aria-orientation={open ? "vertical" : undefined}
+    aria-label={open ? m.demo_fs_drawer_resize() : m.demo_fs_drawer_open()}
     tabindex={0}
     onpointerdown={onResizePointerDown}
     onpointermove={onResizePointerMove}
     onpointerup={onResizePointerUp}
     onpointercancel={onResizePointerUp}
     onlostpointercapture={onResizePointerUp}
+    onclick={onResizeClick}
     onkeydown={onResizeKeydown}
   >
     <span class="drawer-grip" aria-hidden="true"></span>
@@ -796,24 +886,50 @@
       </div>
     {/if}
   </div>
+
+  <!-- Pinned below the prose, outside its scroll. The dock carries no
+       rule of its own: the footer may render nothing (no next section),
+       and an empty bordered bar would read as a mistake. -->
+  {#if footer}
+    <div class="drawer-footer-dock">
+      {@render footer()}
+    </div>
+  {/if}
 </aside>
 
 <style>
+  /* Closed, the drawer parks with its 8px resize handle still on screen
+     rather than sliding fully away: a quiet rule down the window's right
+     edge that reopens on click and pulls the drawer back out on drag.
+     The shadow lightens to match, so a parked drawer reads as an edge
+     instead of a panel someone forgot to close. */
   .handbook-drawer {
     position: fixed;
     inset: 0 0 0 auto;
     z-index: 120;
     background: var(--paper);
     border-left: 1px solid var(--hair);
-    box-shadow: -12px 0 32px color-mix(in srgb, var(--ink) 14%, transparent);
+    box-shadow: -4px 0 12px color-mix(in srgb, var(--ink) 7%, transparent);
     display: flex;
     flex-direction: column;
-    transform: translateX(100%);
-    transition: transform 0.25s ease;
+    transform: translateX(calc(100% - 8px));
+    transition:
+      transform 0.25s ease,
+      box-shadow 0.25s ease;
   }
 
   .handbook-drawer--open {
     transform: translateX(0);
+    box-shadow: -12px 0 32px color-mix(in srgb, var(--ink) 14%, transparent);
+  }
+
+  /* A drag can settle the drawer shut from any width, down to nothing,
+     and it keeps that width while parked. The floor holds the visible
+     strip at the same 8px however narrow it was left: the parked
+     transform is relative to the used width, so a floored drawer still
+     lands with exactly its handle on screen. */
+  .handbook-drawer:not(.handbook-drawer--open) {
+    min-width: 8px;
   }
 
   @media (prefers-reduced-motion: reduce) {
@@ -868,6 +984,25 @@
     background: color-mix(in srgb, var(--ink) 38%, transparent);
   }
 
+  /* Parked: the handle is the only part of the drawer on screen, so it
+     takes a hit area wider than its 8px strip (the extra reaches left
+     over the app and stays transparent) and a taller grip to be worth
+     finding. Click is the advertised way back in, hence the cursor. */
+  .handbook-drawer:not(.handbook-drawer--open) .drawer-resize-handle {
+    left: -12px;
+    width: 20px;
+    cursor: pointer;
+  }
+
+  /* Pinned to the handle's right edge instead of its centre, so the
+     grip stays centred in the 8px that is actually visible. */
+  .handbook-drawer:not(.handbook-drawer--open) .drawer-grip {
+    left: auto;
+    right: 2px;
+    height: 56px;
+    transform: translateY(-50%);
+  }
+
   @media (prefers-reduced-motion: reduce) {
     .drawer-grip {
       transition: none;
@@ -884,6 +1019,11 @@
     position: relative;
     flex-shrink: 0;
     border-bottom: 1px solid var(--hair);
+    /* The bar reserves 54px of its row below for the close button. The
+       contents panel hangs beneath that button rather than beside it,
+       so hand the reservation back (minus the bar's own 1rem gutter)
+       and let the panel rest on the drawer's edge like the row does. */
+    --contents-panel-inset: -38px;
   }
 
   .drawer-topbar-dock :global(.top-bar) {
@@ -894,22 +1034,23 @@
   }
 
   /* Close button integrated into the docked TopBar row, vertically
-     centred in the 56px bar. */
+     centred in the 56px bar. The bar keeps its z-index: 100 in the dock
+     (only position and top are overridden above), so the button needs
+     to sit above it or the bar's translucent backdrop paints over it.
+     Stays under the popover tier at 110. */
   .drawer-close-btn--docked {
     position: absolute;
     top: 11px;
     right: 0.75rem;
+    z-index: 101;
   }
 
-  /* Keep the contents panel anchored inside the drawer at narrow widths.
-     TopBar's own @media(max-width:899px) switches it to position:fixed
-     spanning the viewport, which would render behind the drawer's z-120
-     stacking context. Force absolute positioning so it stays contained. */
-  .drawer-topbar-dock :global(.contents-panel) {
-    position: absolute;
-    left: 0;
-    right: 0;
-    min-width: 0;
+  /* Gone while parked. Clipping the dock alone would still let a sliver
+     of the button paint inside the 8px strip at some settled widths, and
+     a close button on an already-closed drawer is nothing to preserve.
+     Dropping it also takes it out of the parked tab order. */
+  .handbook-drawer:not(.handbook-drawer--open) .drawer-close-btn--docked {
+    display: none;
   }
 
   /* -----------------------------------------------------------------------
@@ -958,6 +1099,27 @@
     overflow-y: auto;
     padding: 24px;
     min-height: 0;
+  }
+
+  /* Clipped at every width. The pill inside is nowrap, so its
+     min-content width outlives any narrow drawer, and centred overflow
+     would put half of it to the LEFT of the drawer box: on screen,
+     since the parked drawer's left edge is the window's right edge.
+     Nothing in this dock opens a popover, so clipping costs nothing.
+     .drawer-content needs no equivalent, its overflow-y: auto already
+     forces overflow-x to compute to auto. */
+  .drawer-footer-dock {
+    flex-shrink: 0;
+    overflow: hidden;
+  }
+
+  /* The same spill is possible from the two upper docks once the drawer
+     is narrower than the top bar's controls. Clipped only while parked:
+     open, the topbar dock has to let the contents panel hang out of it.
+     Parked, no menu can be open, so there is nothing to preserve. */
+  .handbook-drawer:not(.handbook-drawer--open) .drawer-topbar-dock,
+  .handbook-drawer:not(.handbook-drawer--open) .drawer-strip-dock {
+    overflow: hidden;
   }
 
   .drawer-prose {

@@ -6,9 +6,9 @@ import {
   clampDrawerWidth,
   defaultPillPosition,
   createFullscreenController,
-  DRAWER_MIN_W,
-  MIN_APP_STRIP,
   DRAWER_MAX_MEASURE,
+  DRAWER_DEFAULT_W,
+  DRAWER_SNAP_CLOSE_W,
   type FullscreenController,
 } from "./fullscreen.svelte.js";
 import {
@@ -144,32 +144,32 @@ describe("clampPillPosition", () => {
 // ---------------------------------------------------------------------------
 
 describe("clampDrawerWidth", () => {
-  it("returns the desired width when within range", () => {
+  it("returns the desired width untouched", () => {
     expect(clampDrawerWidth(400, 1280)).toBe(400);
   });
 
-  it("clamps to DRAWER_MIN_W when desired is too narrow", () => {
-    expect(clampDrawerWidth(100, 1280)).toBe(DRAWER_MIN_W);
+  it("allows a drawer narrower than any prose measure", () => {
+    expect(clampDrawerWidth(100, 1280)).toBe(100);
   });
 
-  it("clamps to windowW - MIN_APP_STRIP when desired is too wide", () => {
-    expect(clampDrawerWidth(2000, 1280)).toBe(1280 - MIN_APP_STRIP);
+  it("allows the drawer to cover the window edge to edge", () => {
+    expect(clampDrawerWidth(1280, 1280)).toBe(1280);
   });
 
-  it("on a tiny window, MIN_APP_STRIP wins over DRAWER_MIN_W", () => {
-    // windowW = 200, maxW = 200 - 64 = 136 < DRAWER_MIN_W (240)
-    // DRAWER_MIN_W wins as the floor, but max(maxW, DRAWER_MIN_W) = 240
-    const result = clampDrawerWidth(300, 200);
-    expect(result).toBe(DRAWER_MIN_W);
+  it("allows the drawer to close down to nothing", () => {
+    expect(clampDrawerWidth(0, 1280)).toBe(0);
   });
 
-  it("returns DRAWER_MIN_W when desired equals it exactly", () => {
-    expect(clampDrawerWidth(DRAWER_MIN_W, 1280)).toBe(DRAWER_MIN_W);
+  it("stops a drag past the left window edge at full width", () => {
+    expect(clampDrawerWidth(2000, 1280)).toBe(1280);
   });
 
-  it("returns max when desired equals windowW - MIN_APP_STRIP exactly", () => {
-    const maxW = 1280 - MIN_APP_STRIP;
-    expect(clampDrawerWidth(maxW, 1280)).toBe(maxW);
+  it("stops a drag past the right window edge at zero", () => {
+    expect(clampDrawerWidth(-200, 1280)).toBe(0);
+  });
+
+  it("never returns a negative width on a zero-width window", () => {
+    expect(clampDrawerWidth(-50, 0)).toBe(0);
   });
 });
 
@@ -178,12 +178,13 @@ describe("clampDrawerWidth", () => {
 // ---------------------------------------------------------------------------
 
 describe("defaultPillPosition", () => {
-  it("places the pill at the top left of the window", () => {
+  it("rests near the top left, clear of the TopBar reveal strip", () => {
     const pos = defaultPillPosition(160, 40, 1280, 900);
-    // Flush left at the pill margin
-    expect(pos.left).toBe(8);
-    // Near the top, below the 8px hot strip
-    expect(pos.top).toBe(24);
+    expect(pos.left).toBe(40);
+    // Below the 8px reveal strip, so resting there never pulls the
+    // TopBar down
+    expect(pos.top).toBeGreaterThan(8);
+    expect(pos.top).toBe(10);
   });
 
   it("stays within bounds on a small window", () => {
@@ -200,14 +201,6 @@ describe("defaultPillPosition", () => {
 // ---------------------------------------------------------------------------
 
 describe("fullscreen constants", () => {
-  it("DRAWER_MIN_W is a positive integer", () => {
-    expect(DRAWER_MIN_W).toBe(240);
-  });
-
-  it("MIN_APP_STRIP is a positive integer", () => {
-    expect(MIN_APP_STRIP).toBe(64);
-  });
-
   it("DRAWER_MAX_MEASURE matches the flow-layout precedent", () => {
     expect(DRAWER_MAX_MEASURE).toBe(620);
   });
@@ -536,7 +529,55 @@ describe("createFullscreenController", () => {
     teardown();
   });
 
-  it("setDrawerW clamps to the allowed range", () => {
+  it("openDrawer reopens a snapped-closed drawer", () => {
+    const { ctrl, geo, teardown } = setup();
+
+    const snapshot: SavedGeometry = {
+      footprintW: geo.footprintW,
+      footprintH: geo.footprintH,
+      top: geo.top,
+      left: geo.left,
+    };
+
+    ctrl.enter(false, snapshot);
+    ctrl.toggleDrawer();
+    ctrl.setDrawerW(0);
+    ctrl.settleDrawer();
+    flushSync();
+    expect(ctrl.drawerOpen).toBe(false);
+
+    ctrl.openDrawer();
+    flushSync();
+    expect(ctrl.drawerOpen).toBe(true);
+    // The sliver it settled at would be unusable, so opening restores
+    // a default. Off screen, where the resize cannot be seen.
+    expect(ctrl.drawerW).toBe(DRAWER_DEFAULT_W);
+    teardown();
+  });
+
+  it("openDrawer keeps a width that was already usable", () => {
+    const { ctrl, geo, teardown } = setup();
+
+    const snapshot: SavedGeometry = {
+      footprintW: geo.footprintW,
+      footprintH: geo.footprintH,
+      top: geo.top,
+      left: geo.left,
+    };
+
+    ctrl.enter(false, snapshot);
+    ctrl.toggleDrawer();
+    ctrl.setDrawerW(500);
+    ctrl.closeDrawer();
+    flushSync();
+
+    ctrl.openDrawer();
+    flushSync();
+    expect(ctrl.drawerW).toBe(500);
+    teardown();
+  });
+
+  it("however narrow a gesture settles, reopening lands somewhere usable", () => {
     const { ctrl, geo, teardown } = setup();
 
     const snapshot: SavedGeometry = {
@@ -549,20 +590,139 @@ describe("createFullscreenController", () => {
     ctrl.enter(false, snapshot);
     flushSync();
 
-    // Too narrow
-    ctrl.setDrawerW(50);
-    flushSync();
-    expect(ctrl.drawerW).toBe(DRAWER_MIN_W);
+    for (const w of [-500, 0, 1, DRAWER_SNAP_CLOSE_W - 1]) {
+      ctrl.openDrawer();
+      ctrl.setDrawerW(w);
+      ctrl.settleDrawer();
+      flushSync();
+      expect(ctrl.drawerOpen).toBe(false);
 
-    // Too wide
+      ctrl.openDrawer();
+      flushSync();
+      expect(ctrl.drawerW).toBeGreaterThanOrEqual(DRAWER_SNAP_CLOSE_W);
+    }
+    teardown();
+  });
+
+  it("openDrawer is idempotent", () => {
+    const { ctrl, geo, teardown } = setup();
+
+    const snapshot: SavedGeometry = {
+      footprintW: geo.footprintW,
+      footprintH: geo.footprintH,
+      top: geo.top,
+      left: geo.left,
+    };
+
+    ctrl.enter(false, snapshot);
+    ctrl.openDrawer();
+    ctrl.openDrawer();
+    flushSync();
+    expect(ctrl.drawerOpen).toBe(true);
+    teardown();
+  });
+
+  it("setDrawerW resizes freely inside the window", () => {
+    const { ctrl, geo, teardown } = setup();
+
+    const snapshot: SavedGeometry = {
+      footprintW: geo.footprintW,
+      footprintH: geo.footprintH,
+      top: geo.top,
+      left: geo.left,
+    };
+
+    ctrl.enter(false, snapshot);
+    flushSync();
+
+    // No floor at all: the width follows the drag anywhere
+    ctrl.setDrawerW(1);
+    flushSync();
+    expect(ctrl.drawerW).toBe(1);
+
+    // Past the left window edge stops at full width
     ctrl.setDrawerW(9999);
     flushSync();
-    expect(ctrl.drawerW).toBe(winSize.w - MIN_APP_STRIP);
+    expect(ctrl.drawerW).toBe(winSize.w);
 
-    // Within range
+    // Ordinary widths are untouched
     ctrl.setDrawerW(400);
     flushSync();
     expect(ctrl.drawerW).toBe(400);
+    teardown();
+  });
+
+  it("setDrawerW never closes the drawer mid-drag", () => {
+    const { ctrl, geo, teardown } = setup();
+
+    const snapshot: SavedGeometry = {
+      footprintW: geo.footprintW,
+      footprintH: geo.footprintH,
+      top: geo.top,
+      left: geo.left,
+    };
+
+    ctrl.enter(false, snapshot);
+    ctrl.toggleDrawer();
+    flushSync();
+
+    // Well under the threshold, and still open: the drawer follows the
+    // pointer wherever it goes.
+    ctrl.setDrawerW(10);
+    flushSync();
+    expect(ctrl.drawerOpen).toBe(true);
+    expect(ctrl.drawerW).toBe(10);
+
+    // Dragged back out without ever releasing: nothing was decided.
+    ctrl.setDrawerW(420);
+    ctrl.settleDrawer();
+    flushSync();
+    expect(ctrl.drawerOpen).toBe(true);
+    expect(ctrl.drawerW).toBe(420);
+    teardown();
+  });
+
+  it("settleDrawer closes when the gesture came to rest under the threshold", () => {
+    const { ctrl, geo, teardown } = setup();
+
+    const snapshot: SavedGeometry = {
+      footprintW: geo.footprintW,
+      footprintH: geo.footprintH,
+      top: geo.top,
+      left: geo.left,
+    };
+
+    ctrl.enter(false, snapshot);
+    ctrl.toggleDrawer();
+    flushSync();
+
+    ctrl.setDrawerW(DRAWER_SNAP_CLOSE_W - 1);
+    ctrl.settleDrawer();
+    flushSync();
+    expect(ctrl.drawerOpen).toBe(false);
+
+    // The width is left where the drag ended, so the close animates
+    // from the size on screen instead of lurching on its way out.
+    expect(ctrl.drawerW).toBe(DRAWER_SNAP_CLOSE_W - 1);
+    teardown();
+  });
+
+  it("settleDrawer leaves a drawer that rests above the threshold alone", () => {
+    const { ctrl, geo, teardown } = setup();
+
+    const snapshot: SavedGeometry = {
+      footprintW: geo.footprintW,
+      footprintH: geo.footprintH,
+      top: geo.top,
+      left: geo.left,
+    };
+
+    ctrl.enter(false, snapshot);
+    ctrl.toggleDrawer();
+    ctrl.setDrawerW(DRAWER_SNAP_CLOSE_W);
+    ctrl.settleDrawer();
+    flushSync();
+    expect(ctrl.drawerOpen).toBe(true);
     teardown();
   });
 
@@ -606,9 +766,12 @@ describe("createFullscreenController", () => {
     ctrl.enter(false, snapshot);
     flushSync();
 
-    // Pill should be near the top left, below the hot strip
-    expect(ctrl.pillPos.top).toBe(24);
-    expect(ctrl.pillPos.left).toBe(8);
+    // Entry seeds the same resting place defaultPillPosition computes:
+    // near the top left, below the TopBar reveal strip.
+    expect(ctrl.pillPos).toEqual(
+      defaultPillPosition(160, 40, winSize.w, winSize.h),
+    );
+    expect(ctrl.pillPos.top).toBeGreaterThan(8);
     teardown();
   });
 });

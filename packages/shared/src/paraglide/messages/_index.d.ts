@@ -2127,6 +2127,7 @@ export * from "./demo_toolbar_fullscreen_tooltip.js";
 export * from "./demo_fs_exit.js";
 export * from "./demo_fs_handbook_toggle.js";
 export * from "./demo_fs_drawer_close.js";
+export * from "./demo_fs_drawer_open.js";
 export * from "./demo_fs_drawer_resize.js";
 export * from "./demo_fs_pill_label.js";
 export * from "./demo_flow_toggle_label.js";

@@ -98,8 +98,18 @@
     frozenVp !== null ? geo.footprintH / frozenVp.h : null,
   );
 
-  /** Show the status bar only when viewport is phone-shaped (< 768). */
-  const showStatusBar = $derived(layoutVp.w < 768);
+  /**
+   * Show the status bar only when the viewport is phone-shaped (< 768)
+   * AND the frame is still pretending to be a device.
+   *
+   * Fullscreen drops the bezel and fills the window, so there is no
+   * device left to dress. On a real phone the host already supplies a
+   * status bar and home indicator, and drawing our own puts two of
+   * each on screen. On a narrow desktop window there is no device to
+   * portray either. Wide fullscreen was already covered by the 768
+   * test; this only changes the narrow case.
+   */
+  const showStatusBar = $derived(!fullscreen && layoutVp.w < 768);
 
   /** Real system time for the status bar clock, iOS style (no AM/PM). */
   function formatClock(d: Date): string {

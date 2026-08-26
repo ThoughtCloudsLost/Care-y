@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "Explore" |
+* | "Simulate" |
 *
 * @param {Demo_Mode_ExploreInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

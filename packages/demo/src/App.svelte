@@ -117,6 +117,13 @@
     bridge?.setDark(dark);
   });
 
+  // Same for fullscreen: the phone drops the shell insets that clear
+  // DemoFrame's simulated status bar and home indicator, since neither
+  // is drawn once the frame fills the window.
+  $effect(() => {
+    bridge?.setFullscreen(fsActive);
+  });
+
   // -----------------------------------------------------------------------
   // Data flow band + top chrome height
   //
@@ -821,7 +828,11 @@
   const scrollEngine = createScrollEngine(
     () => bridge,
     () => isLinked() && !gestureActive && !peekActive,
-    () => !entryVisible,
+    // Page scroll drives navigation only while the story is on screen
+    // and interactive. It is unmounted in fullscreen, where the app owns
+    // scrolling, so nothing the page reports there is the visitor
+    // reading the story.
+    () => !entryVisible && !fsActive,
     () => isLinked(),
   );
 
@@ -1325,6 +1336,29 @@
   // Fullscreen: toolbar entry, pill self-move, exit, drawer wiring
   // -----------------------------------------------------------------------
 
+  // Leaving fullscreen remounts the story, which comes back at scroll
+  // zero while the location it should be showing is unchanged. Realign
+  // so the visitor lands where they were reading. Watching the flag
+  // rather than hooking the exit calls covers every route out, the
+  // drag-past-threshold one included. alignToLocation does its own
+  // retrying while the remounted FlowStory publishes geometry, so no
+  // tick juggling is needed here.
+  //
+  // Plain, not $state: the effect's own bookkeeping, and making it
+  // reactive would re-run the effect it guards. The initial read is
+  // deliberately a snapshot, hence untrack.
+  let wasFsActive = untrack(() => fsActive);
+
+  $effect(() => {
+    const active = fsActive;
+    if (active === wasFsActive) return;
+    wasFsActive = active;
+    if (active) return;
+    // untracked so this effect depends on fsActive alone, not on
+    // whatever location realign reads on its way through.
+    untrack(() => scrollEngine.realign());
+  });
+
   // -----------------------------------------------------------------------
   // Fullscreen animation state machine
   //
@@ -1532,6 +1566,14 @@
     fsCtrl.closeDrawer();
   }
 
+  function handleFsDrawerOpen(): void {
+    fsCtrl.openDrawer();
+  }
+
+  function handleFsDrawerSettle(): void {
+    fsCtrl.settleDrawer();
+  }
+
   /** Drawer-hosted strip sub click: navigate the phone/story the same
    *  way a main-page strip click does, then scroll the drawer's prose
    *  to that sub so the reader lands on the right paragraph. */
@@ -1705,65 +1747,6 @@
   function handleTopStripPointerUp(): void {
     topStripTouchStart = 0;
   }
-
-  // -----------------------------------------------------------------------
-  // Fullscreen edge strips: four fixed 12px strips for resize-out.
-  // Top strip doubles as TopBar reveal (hover reveals, >4px vertical
-  // drag promotes to resize).
-  // -----------------------------------------------------------------------
-
-  /** Start a synthetic resize gesture from a fullscreen edge strip. */
-  function startEdgeResize(e: PointerEvent, edges: number): void {
-    if (e.button !== 0) return;
-    if (!(e.currentTarget instanceof HTMLElement)) return;
-    e.currentTarget.setPointerCapture(e.pointerId);
-
-    // Seed the gesture with window-sized footprint and positioned at
-    // -BEZEL so the frame-geometry coordinates match the fullscreen
-    // override's visual position.
-    gesture = {
-      pointerId: e.pointerId,
-      startX: e.clientX,
-      startY: e.clientY,
-      startTop: -BEZEL,
-      startLeft: -BEZEL,
-      startW: windowW,
-      startH: windowH,
-      mode: "resize",
-      edges,
-    };
-    gestureActive = true;
-  }
-
-  // Top strip vertical drag threshold for resize promotion
-  let topEdgeDragStartY = 0;
-  let topEdgePromoted = false;
-
-  function handleTopEdgePointerDown(e: PointerEvent): void {
-    topEdgeDragStartY = e.clientY;
-    topEdgePromoted = false;
-    // Mouse hover already sets topBarRevealed; touch needs threshold
-    if (e.pointerType === "mouse") {
-      topBarRevealed = true;
-      cancelTopBarHide();
-    }
-  }
-
-  function handleTopEdgePointerMove(e: PointerEvent): void {
-    if (topEdgePromoted) return;
-    const dy = e.clientY - topEdgeDragStartY;
-    if (Math.abs(dy) > 4 && topEdgeDragStartY > 0) {
-      // Promote to resize
-      topEdgePromoted = true;
-      topBarRevealed = false;
-      startEdgeResize(e, 1); // top edge
-    }
-  }
-
-  function handleTopEdgePointerUp(): void {
-    topEdgeDragStartY = 0;
-    topEdgePromoted = false;
-  }
 </script>
 
 {#if !recordMode}
@@ -1921,44 +1904,6 @@
       onExitFullscreen={handleExitFullscreen}
       onToggleDrawer={handleFsToggleDrawer}
     />
-  {/if}
-
-  {#if fsActive}
-    <!-- Fullscreen edge strips: four fixed 12px strips along the window
-         edges for resize-out. pointerdown seeds a synthetic resize gesture
-         and the existing pointermove path takes over. -->
-    <!-- svelte-ignore a11y_no_static_element_interactions -->
-    <div
-      class="fs-edge-strip fs-edge-strip--top"
-      onpointerdown={handleTopEdgePointerDown}
-      onpointermove={handleTopEdgePointerMove}
-      onpointerup={handleTopEdgePointerUp}
-      onpointercancel={handleTopEdgePointerUp}
-    ></div>
-    <!-- svelte-ignore a11y_no_static_element_interactions -->
-    <div
-      class="fs-edge-strip fs-edge-strip--right"
-      onpointerdown={(e) => startEdgeResize(e, 2)}
-      onpointermove={onPointerMove}
-      onpointerup={onPointerUp}
-      onpointercancel={onPointerUp}
-    ></div>
-    <!-- svelte-ignore a11y_no_static_element_interactions -->
-    <div
-      class="fs-edge-strip fs-edge-strip--bottom"
-      onpointerdown={(e) => startEdgeResize(e, 4)}
-      onpointermove={onPointerMove}
-      onpointerup={onPointerUp}
-      onpointercancel={onPointerUp}
-    ></div>
-    <!-- svelte-ignore a11y_no_static_element_interactions -->
-    <div
-      class="fs-edge-strip fs-edge-strip--left"
-      onpointerdown={(e) => startEdgeResize(e, 8)}
-      onpointermove={onPointerMove}
-      onpointerup={onPointerUp}
-      onpointercancel={onPointerUp}
-    ></div>
   {/if}
 
   <!-- Resize handles: 4 edges + 4 corners -->
@@ -2124,8 +2069,15 @@
   {/if}
 </div>
 
-{#if !recordMode}
-  <!-- --top-chrome-offset is where sticky story chrome parks: below the
+{#if !recordMode && !fsActive}
+  <!-- Unmounted in fullscreen rather than hidden. The app fills the
+       window there and owns scrolling; leaving the story mounted below
+       it gives the page a second scroll container competing for the
+       same wheel and keyboard input. Unmounting also clears FlowStory's
+       geometry source on the way out, so nothing stale can drive the
+       selection while the story is gone.
+
+       --top-chrome-offset is where sticky story chrome parks: below the
        top bar, and below the flow band when it is open. Published as a
        custom property so the sticky rules stay declarative. -->
   <div
@@ -2175,8 +2127,9 @@
   </div>
 
   <!-- Next-section pill: fixed at bottom center, hidden during gestures
-     and when there is no next section. -->
-  {#if nextSectionDef !== null && !gestureActive && !peekActive && !fsActive}
+     and when there is no next section. Fullscreen has no page to pin it
+     over, so it moves into the drawer footer instead (below). -->
+  {#if nextSectionDef !== null && !gestureActive && !peekActive}
     <div class="next-pill-container" style="left: {pillCenterX}px">
       <button
         class="next-pill"
@@ -2206,7 +2159,9 @@
     activeSub={scrollEngine.activeSub}
     locale={uiLocale}
     onClose={handleFsDrawerClose}
+    onOpen={handleFsDrawerOpen}
     onResize={handleFsDrawerResize}
+    onSettle={handleFsDrawerSettle}
     onScrollSub={handleDrawerScrollSub}
     bind:this={drawerRef}
   >
@@ -2242,6 +2197,26 @@
         {seenTopics}
         onSubClick={handleFsDrawerSubClick}
       />
+    {/snippet}
+    {#snippet footer()}
+      <!-- Same control and handler as the page's fixed pill, docked
+           rather than floating: fullscreen has no page under it to pin
+           against. The rule lives here, not on the dock, so no next
+           section means no empty bar. -->
+      {#if nextSectionDef !== null}
+        <div class="drawer-next-pill">
+          <button
+            class="next-pill"
+            type="button"
+            onclick={() => handleNextSection(nextSectionDef.id)}
+          >
+            {m.demo_section_next({
+              section: sectionTitle(nextSectionDef.id),
+            })}
+            <ArrowRight size={16} />
+          </button>
+        </div>
+      {/if}
     {/snippet}
   </HandbookDrawer>
 {/if}
@@ -2377,6 +2352,17 @@
     pointer-events: none;
   }
 
+  /* Drawer-footer placement of the same pill. Sits on paper with a rule
+     above it rather than floating over the story, so it reads as part
+     of the drawer's anatomy instead of chrome laid on top. */
+  .drawer-next-pill {
+    display: flex;
+    justify-content: center;
+    padding: 0.75rem 1rem;
+    border-top: 1px solid var(--hair);
+    background: var(--paper);
+  }
+
   .next-pill {
     display: inline-flex;
     align-items: center;
@@ -2437,50 +2423,6 @@
   /* Fullscreen override: no extra rules needed because the style bindings
      already produce 0/0/windowW/windowH when fsActive is true. The class
      remains as a semantic hook for child selectors. */
-
-  /* -----------------------------------------------------------------------
-     Fullscreen edge strips: four fixed 12px strips along the window
-     edges for resize-out. z-index 60 sits above the frame (50) but
-     below the TopBar (100) and drawer (120).
-     ----------------------------------------------------------------------- */
-
-  .fs-edge-strip {
-    position: absolute;
-    z-index: 60;
-    touch-action: none;
-  }
-
-  .fs-edge-strip--top {
-    top: 0;
-    left: 0;
-    right: 0;
-    height: 12px;
-    cursor: n-resize;
-  }
-
-  .fs-edge-strip--right {
-    top: 12px;
-    right: 0;
-    bottom: 12px;
-    width: 12px;
-    cursor: e-resize;
-  }
-
-  .fs-edge-strip--bottom {
-    bottom: 0;
-    left: 0;
-    right: 0;
-    height: 12px;
-    cursor: s-resize;
-  }
-
-  .fs-edge-strip--left {
-    top: 12px;
-    left: 0;
-    bottom: 12px;
-    width: 12px;
-    cursor: w-resize;
-  }
 
   /* -----------------------------------------------------------------------
      TopBar edge reveal

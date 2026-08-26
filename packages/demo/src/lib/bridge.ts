@@ -452,6 +452,15 @@ export interface DemoBridge {
   /** Apply light/dark scheme and glass classes to the phone document. */
   setDark(dark: boolean): void;
   /**
+   * Tell the phone whether the frame is filling the window.
+   *
+   * The phone pads its shell to clear the simulated status bar and home
+   * indicator DemoFrame draws over it. Fullscreen drops those overlays,
+   * so the padding has to go with them or the app sits inset from
+   * nothing. On a real device the host's own chrome takes over.
+   */
+  setFullscreen(fullscreen: boolean): void;
+  /**
    * Switch the signed-in demo user's role. Mutates the DB row, updates
    * server middleware enforcement, refreshes client permission gates, and
    * invalidates role-scoped query caches. No-op before engine boot or
