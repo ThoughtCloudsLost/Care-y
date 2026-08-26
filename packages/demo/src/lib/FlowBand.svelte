@@ -22,6 +22,7 @@
   import FlowBandSlice from "./FlowBandSlice.svelte";
   import FlowBandLaneIcon from "./FlowBandLaneIcon.svelte";
   import FlowBandKindIcon from "./FlowBandKindIcon.svelte";
+  import { chromeFade } from "./chrome-fade.js";
   import {
     FLOW_LANES,
     SLICE_HEADER_HEIGHT,
@@ -472,10 +473,16 @@
   {#if narrow}
     <!-- Small viewports: band and phone cannot share the width, so the
          flow becomes a dismissible overlay list. -->
-    <div class="overlay-scrim" role="presentation" onclick={close}></div>
+    <div
+      class="overlay-scrim"
+      role="presentation"
+      onclick={close}
+      transition:chromeFade
+    ></div>
     <section
       class="flow-band-root overlay"
       aria-label={m.demo_flow_band_title()}
+      transition:chromeFade
     >
       <div class="band-header">
         <Waypoints size={14} />

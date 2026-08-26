@@ -17,6 +17,7 @@
   import * as m from "$lib/paraglide/messages.js";
   import { SECTIONS, type Section, type SectionId } from "./scroll-sections.js";
   import { DRAWER_DEFAULT_W } from "./fullscreen.svelte.js";
+  import { chromeFade } from "./chrome-fade.js";
   import { resolveStoryMessage, deriveSectionState } from "./story-messages.js";
   import type { DemoMode } from "./demo-mode.svelte.js";
   import type { DemoTopic } from "./bridge.js";
@@ -357,6 +358,7 @@
           class="contents-panel"
           role="menu"
           tabindex="-1"
+          transition:chromeFade
           bind:this={contentsPanelRef}
           onkeydown={(e) => handleMenuKeydown(e, contentsPanelRef)}
         >
@@ -455,6 +457,7 @@
           class="more-panel"
           role="menu"
           tabindex="-1"
+          transition:chromeFade
           bind:this={morePanelRef}
           onkeydown={(e) => handleMenuKeydown(e, morePanelRef)}
         >

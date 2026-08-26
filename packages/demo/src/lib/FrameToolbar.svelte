@@ -34,6 +34,7 @@
     FULLSCREEN_ANIM_MS,
     FULLSCREEN_EASE,
   } from "$demo/fullscreen.svelte.js";
+  import { chromeFade } from "$demo/chrome-fade.js";
   import * as m from "$lib/paraglide/messages.js";
   import {
     Maximize2,
@@ -610,12 +611,19 @@
      .frame-toolbar's absolute placement. In fullscreen mode it floats
      as a pill-shaped fixed element at pos. The entire background is a
      drag surface so the user can grab anywhere on the bar to move the
-     frame (normal) or the bar itself (fullscreen). -->
+     frame (normal) or the bar itself (fullscreen).
+
+     The fade covers the mounts the parent drives: arriving after the
+     entry splash sets the frame down, and the explore/read mode
+     toggle. It does not fire on a plain load (Svelte skips intros on
+     the first render) and never fires for the fullscreen bar-to-pill
+     change, which keeps this element alive and morphs it via FLIP. -->
 <div
   class="frame-toolbar"
   class:frame-toolbar--fs={fullscreen}
   class:frame-toolbar--armed={pendingPress !== null}
   class:frame-toolbar--dragging={dragging}
+  transition:chromeFade
   use:captureBar
   role="presentation"
   style:top={fullscreen && pos !== null ? `${String(pos.top)}px` : undefined}
@@ -775,6 +783,7 @@
             class="preset-menu"
             role="menu"
             tabindex="-1"
+            transition:chromeFade
             aria-label={m.demo_toolbar_phone_preset()}
             bind:this={presetMenuRef}
             onkeydown={handlePresetMenuKeydown}
@@ -844,6 +853,7 @@
             class="preset-menu"
             role="menu"
             tabindex="-1"
+            transition:chromeFade
             aria-label={m.demo_toolbar_phone_preset()}
             bind:this={presetMenuRef}
             onkeydown={handlePresetMenuKeydown}
@@ -915,6 +925,7 @@
         class:role-menu--up={menuOpensUp}
         role="menu"
         tabindex="-1"
+        transition:chromeFade
         aria-label={m.demo_role_rail_label()}
         bind:this={menuRef}
         onkeydown={handleMenuKeydown}
