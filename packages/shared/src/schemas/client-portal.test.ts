@@ -1097,3 +1097,179 @@ describe("intakeSubmissionInputSchema account branch", () => {
     expect(result.success).toBe(false);
   });
 });
+
+// ---------------------------------------------------------------------------
+// Continuation branch schemas
+// ---------------------------------------------------------------------------
+
+function validContinuation(): Record<string, unknown> {
+  return {
+    channelId: "a".repeat(48),
+    authHash: base64OfBytes(32),
+    clientPublic: base64OfBytes(32),
+    keyCheck: {
+      ephemeralPoint: base64OfBytes(32),
+      nonce: base64OfBytes(24),
+      ciphertext: base64Chars(100),
+    },
+  };
+}
+
+describe("intakeSubmissionInputSchema continuation branch", () => {
+  it("accepts intake without continuation (optional)", () => {
+    const result = intakeSubmissionInputSchema.safeParse(validSubmission());
+    expect(result.success).toBe(true);
+  });
+
+  it("accepts intake with continuation branch (no selfCopy)", () => {
+    const input = {
+      ...validSubmission(),
+      continuation: validContinuation(),
+    };
+    const result = intakeSubmissionInputSchema.safeParse(input);
+    expect(result.success).toBe(true);
+  });
+
+  it("accepts intake with continuation branch including selfCopy", () => {
+    const input = {
+      ...validSubmission(),
+      continuation: {
+        ...validContinuation(),
+        selfCopy: {
+          ephemeralPoint: base64OfBytes(32),
+          nonce: base64OfBytes(24),
+          ciphertext: base64Chars(100),
+        },
+      },
+    };
+    const result = intakeSubmissionInputSchema.safeParse(input);
+    expect(result.success).toBe(true);
+  });
+
+  it("rejects continuation with invalid channelId (wrong length)", () => {
+    const input = {
+      ...validSubmission(),
+      continuation: {
+        ...validContinuation(),
+        channelId: "a".repeat(47),
+      },
+    };
+    const result = intakeSubmissionInputSchema.safeParse(input);
+    expect(result.success).toBe(false);
+  });
+
+  it("rejects continuation with uppercase hex channelId", () => {
+    const input = {
+      ...validSubmission(),
+      continuation: {
+        ...validContinuation(),
+        channelId: "A".repeat(48),
+      },
+    };
+    const result = intakeSubmissionInputSchema.safeParse(input);
+    expect(result.success).toBe(false);
+  });
+
+  it("rejects continuation with wrong-length authHash (31 bytes)", () => {
+    const input = {
+      ...validSubmission(),
+      continuation: {
+        ...validContinuation(),
+        authHash: base64OfBytes(31),
+      },
+    };
+    const result = intakeSubmissionInputSchema.safeParse(input);
+    expect(result.success).toBe(false);
+  });
+
+  it("rejects continuation with wrong-length clientPublic (33 bytes)", () => {
+    const input = {
+      ...validSubmission(),
+      continuation: {
+        ...validContinuation(),
+        clientPublic: base64OfBytes(33),
+      },
+    };
+    const result = intakeSubmissionInputSchema.safeParse(input);
+    expect(result.success).toBe(false);
+  });
+
+  it("rejects continuation with wrong-length keyCheck.ephemeralPoint (31 bytes)", () => {
+    const input = {
+      ...validSubmission(),
+      continuation: {
+        ...validContinuation(),
+        keyCheck: {
+          ephemeralPoint: base64OfBytes(31),
+          nonce: base64OfBytes(24),
+          ciphertext: base64Chars(100),
+        },
+      },
+    };
+    const result = intakeSubmissionInputSchema.safeParse(input);
+    expect(result.success).toBe(false);
+  });
+
+  it("rejects continuation with oversized keyCheck.ciphertext", () => {
+    const input = {
+      ...validSubmission(),
+      continuation: {
+        ...validContinuation(),
+        keyCheck: {
+          ephemeralPoint: base64OfBytes(32),
+          nonce: base64OfBytes(24),
+          ciphertext: base64Chars(28_001),
+        },
+      },
+    };
+    const result = intakeSubmissionInputSchema.safeParse(input);
+    expect(result.success).toBe(false);
+  });
+});
+
+describe("intakeSubmissionInputSchema account-wins precedence", () => {
+  it("strips continuation when both account and continuation are present", () => {
+    const input = {
+      ...validSubmission(),
+      account: {
+        accountId: crypto.randomUUID(),
+        username: "testuser",
+        salt: base64OfBytes(16),
+        publicKey: base64OfBytes(32),
+        authHash: base64OfBytes(32),
+        keyCheck: {
+          ephemeralPoint: base64OfBytes(32),
+          nonce: base64OfBytes(24),
+          ciphertext: base64Chars(100),
+        },
+      },
+      continuation: validContinuation(),
+    };
+    const result = intakeSubmissionInputSchema.safeParse(input);
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.account).toBeDefined();
+      expect(result.data.continuation).toBeUndefined();
+    }
+  });
+
+  it("preserves continuation when account is absent", () => {
+    const input = {
+      ...validSubmission(),
+      continuation: validContinuation(),
+    };
+    const result = intakeSubmissionInputSchema.safeParse(input);
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.continuation).toBeDefined();
+    }
+  });
+});
+
+describe("portalChannelKindSchema (intake_continuation)", () => {
+  it("accepts 'intake_continuation'", () => {
+    expect(
+      portalChannelKindSchema.safeParse("intake_continuation").success,
+    ).toBe(true);
+  });
+});

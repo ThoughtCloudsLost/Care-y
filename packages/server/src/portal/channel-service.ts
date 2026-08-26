@@ -217,7 +217,7 @@ export async function resolveAuthedChannel(
     .selectAll()
     .where("channel_id", "=", channelId)
     .where("status", "=", "active")
-    .where("kind", "=", "secure_link")
+    .where("kind", "in", ["secure_link", "intake_continuation"])
     .executeTakeFirst();
 
   if (!row) {

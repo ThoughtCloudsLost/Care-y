@@ -1752,7 +1752,7 @@ export async function setAccountOfferForClient(
     .set({ account_offer: enabled })
     .where("client_id", "=", clientId)
     .where("status", "=", "active")
-    .where("kind", "=", "secure_link")
+    .where("kind", "in", ["secure_link", "intake_continuation"])
     .executeTakeFirst();
 
   return result.numUpdatedRows > 0n;

@@ -35,6 +35,7 @@ import {
   IntakeFormClosedError,
   type IntakeTicketInput,
   type IntakeAccountInput,
+  type IntakeContinuationInput,
 } from "./intake-service.js";
 import { ValidationError } from "../errors.js";
 import { UsernameTakenError } from "./portal-errors.js";
@@ -44,8 +45,10 @@ import {
   newFollowupId,
   newClientAccountId,
   orgSlugIdSchema,
+  channelSecretSchema,
 } from "@care-y/shared";
 import type { QueueId, OrgSchema, OrgSlug } from "@care-y/shared";
+import { resolveAuthedChannel, revokeChannel } from "./channel-service.js";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -75,6 +78,7 @@ function makeInput(overrides?: Partial<IntakeTicketInput>): IntakeTicketInput {
     resolvedPriority: null,
     resolvedEscalationLevel: null,
     account: null,
+    continuation: null,
     ...overrides,
   };
 }
@@ -108,6 +112,34 @@ function makeAccountInputWithSelfCopy(
       ephemeralPoint: crypto.randomBytes(32),
       nonce: crypto.randomBytes(24),
       ciphertext: Buffer.from("selfcopy-ciphertext"),
+    },
+  };
+}
+
+function makeContinuationInput(): IntakeContinuationInput {
+  return {
+    channelId: channelSecretSchema.parse(
+      crypto.randomBytes(24).toString("hex"),
+    ),
+    authHash: crypto.randomBytes(32),
+    clientPublic: crypto.randomBytes(32),
+    keyCheck: {
+      ephemeralPoint: crypto.randomBytes(32),
+      nonce: crypto.randomBytes(24),
+      ciphertext: Buffer.from("keycheck-ciphertext"),
+    },
+    selfCopy: null,
+  };
+}
+
+function makeContinuationInputWithSelfCopy(): IntakeContinuationInput {
+  const base = makeContinuationInput();
+  return {
+    ...base,
+    selfCopy: {
+      ephemeralPoint: crypto.randomBytes(32),
+      nonce: crypto.randomBytes(24),
+      ciphertext: Buffer.from("cont-selfcopy-ciphertext"),
     },
   };
 }
@@ -922,6 +954,237 @@ describe.skipIf(!process.env.DATABASE_URL)(
             input,
           ),
         ).rejects.toThrow(IntakeFormClosedError);
+      });
+    });
+
+    // -----------------------------------------------------------------
+    // Continuation branch integration tests
+    // -----------------------------------------------------------------
+
+    describe("continuation branch", () => {
+      it("creates client + ticket + intake_continuation channel + tier atomically", async () => {
+        const ns = createMockNotificationService();
+        const cont = makeContinuationInput();
+        const input = makeInput({ continuation: cont });
+
+        const result = await createIntakeTicket(
+          testDb.db,
+          {
+            notificationService: ns,
+            sealedBox: testSealedBox,
+            orgId: TEST_ORG_ID,
+            orgSchema: testDb.schemaName as OrgSchema,
+            orgSlug: "test-org" as OrgSlug,
+          },
+          input,
+        );
+
+        expect(result.ticketId).toBe(input.ticketId);
+
+        // Verify ticket
+        const ticket = await testDb.db
+          .selectFrom("tickets")
+          .select("client_id")
+          .where("id", "=", input.ticketId)
+          .executeTakeFirstOrThrow();
+
+        // Verify channel with kind='intake_continuation'
+        const channel = await testDb.db
+          .selectFrom("portal_channels")
+          .selectAll()
+          .where("client_id", "=", ticket.client_id)
+          .where("status", "=", "active")
+          .where("kind", "=", "intake_continuation")
+          .executeTakeFirst();
+        expect(channel).toBeDefined();
+        expect(channel!.channel_id).toBe(cont.channelId);
+        expect(channel!.has_passphrase).toBe(false);
+
+        // Verify tier is secure_link (continuation behaves identically)
+        const client = await testDb.db
+          .selectFrom("clients")
+          .select("communication_tier")
+          .where("id", "=", ticket.client_id)
+          .executeTakeFirstOrThrow();
+        expect(client.communication_tier).toBe("secure_link");
+      });
+
+      it("stores selfCopy row with the correct followup_id and direction", async () => {
+        const ns = createMockNotificationService();
+        const cont = makeContinuationInputWithSelfCopy();
+        const followUpId = newFollowupId();
+        const input = makeInput({ continuation: cont, followUpId });
+
+        await createIntakeTicket(
+          testDb.db,
+          {
+            notificationService: ns,
+            sealedBox: testSealedBox,
+            orgId: TEST_ORG_ID,
+            orgSchema: testDb.schemaName as OrgSchema,
+            orgSlug: "test-org" as OrgSlug,
+          },
+          input,
+        );
+
+        // Get the continuation channel
+        const ticket = await testDb.db
+          .selectFrom("tickets")
+          .select("client_id")
+          .where("id", "=", input.ticketId)
+          .executeTakeFirstOrThrow();
+
+        const channel = await testDb.db
+          .selectFrom("portal_channels")
+          .select("id")
+          .where("client_id", "=", ticket.client_id)
+          .where("kind", "=", "intake_continuation")
+          .executeTakeFirstOrThrow();
+
+        // Verify portal_messages row
+        const messages = await testDb.db
+          .selectFrom("portal_messages")
+          .selectAll()
+          .where("channel_id", "=", channel.id)
+          .execute();
+
+        expect(messages).toHaveLength(1);
+        expect(messages[0]!.followup_id).toBe(followUpId);
+        expect(messages[0]!.direction).toBe("from_client");
+      });
+
+      it("resolves the continuation channel via resolveAuthedChannel", async () => {
+        const { hashChannelAuth: hash } = await import("@care-y/crypto");
+
+        const ns = createMockNotificationService();
+        const rawAuth = crypto.randomBytes(32);
+        const authHash = Buffer.from(hash(rawAuth));
+
+        const cont = makeContinuationInput();
+        // Override with a real hash so resolveAuthedChannel can verify
+        const contWithRealHash: IntakeContinuationInput = {
+          ...cont,
+          authHash,
+        };
+        const input = makeInput({ continuation: contWithRealHash });
+
+        await createIntakeTicket(
+          testDb.db,
+          {
+            notificationService: ns,
+            sealedBox: testSealedBox,
+            orgId: TEST_ORG_ID,
+            orgSchema: testDb.schemaName as OrgSchema,
+            orgSlug: "test-org" as OrgSlug,
+          },
+          input,
+        );
+
+        // resolveAuthedChannel should resolve this intake_continuation row
+        const resolved = await resolveAuthedChannel(
+          testDb.db,
+          contWithRealHash.channelId,
+          rawAuth,
+        );
+        expect(resolved).not.toBeNull();
+        expect(resolved!.kind).toBe("intake_continuation");
+        expect(resolved!.channel_id).toBe(contWithRealHash.channelId);
+      });
+
+      it("continuation channel returns null from resolveAuthedChannel after revocation", async () => {
+        const { hashChannelAuth: hash } = await import("@care-y/crypto");
+
+        const ns = createMockNotificationService();
+        const rawAuth = crypto.randomBytes(32);
+        const authHash = Buffer.from(hash(rawAuth));
+
+        const cont: IntakeContinuationInput = {
+          ...makeContinuationInput(),
+          authHash,
+        };
+        const input = makeInput({ continuation: cont });
+
+        await createIntakeTicket(
+          testDb.db,
+          {
+            notificationService: ns,
+            sealedBox: testSealedBox,
+            orgId: TEST_ORG_ID,
+            orgSchema: testDb.schemaName as OrgSchema,
+            orgSlug: "test-org" as OrgSlug,
+          },
+          input,
+        );
+
+        // Get client id for revocation
+        const ticket = await testDb.db
+          .selectFrom("tickets")
+          .select("client_id")
+          .where("id", "=", input.ticketId)
+          .executeTakeFirstOrThrow();
+
+        await revokeChannel(testDb.db, ticket.client_id);
+
+        const resolved = await resolveAuthedChannel(
+          testDb.db,
+          cont.channelId,
+          rawAuth,
+        );
+        expect(resolved).toBeNull();
+      });
+
+      it("account wins when both branches are present: account artifacts created, no continuation channel", async () => {
+        const ns = createMockNotificationService();
+        const { deriveFakeSaltKey } = await import("../auth/salt-defense.js");
+        const opsHex =
+          "cafebabecafebabecafebabecafebabecafebabecafebabecafebabecafebabe";
+        const fakeSaltKey = await deriveFakeSaltKey(opsHex);
+        const accountDeps = {
+          indexer: testBlindIndexer,
+          fakeSaltKey,
+          orgUuid: TEST_ORG_ID,
+        };
+
+        const acct = makeAccountInput();
+        const cont = makeContinuationInput();
+        const input = makeInput({ account: acct, continuation: cont });
+
+        const result = await createIntakeTicket(
+          testDb.db,
+          {
+            notificationService: ns,
+            sealedBox: testSealedBox,
+            orgId: TEST_ORG_ID,
+            orgSchema: testDb.schemaName as OrgSchema,
+            orgSlug: "test-org" as OrgSlug,
+            accountServiceDeps: accountDeps,
+          },
+          input,
+        );
+
+        const ticket = await testDb.db
+          .selectFrom("tickets")
+          .select("client_id")
+          .where("id", "=", result.ticketId)
+          .executeTakeFirstOrThrow();
+
+        // Account channel should exist
+        const accountChannel = await testDb.db
+          .selectFrom("portal_channels")
+          .select(["id", "kind"])
+          .where("client_id", "=", ticket.client_id)
+          .where("kind", "=", "account")
+          .executeTakeFirst();
+        expect(accountChannel).toBeDefined();
+
+        // Continuation channel should NOT exist
+        const contChannel = await testDb.db
+          .selectFrom("portal_channels")
+          .select("id")
+          .where("client_id", "=", ticket.client_id)
+          .where("kind", "=", "intake_continuation")
+          .executeTakeFirst();
+        expect(contChannel).toBeUndefined();
       });
     });
   },

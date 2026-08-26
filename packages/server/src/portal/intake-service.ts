@@ -46,6 +46,7 @@ import type {
   OrgSlug,
   IntakeFormId,
   UserId,
+  ChannelSecret,
 } from "@care-y/shared";
 import { userIdSchema, newKeyGeneration } from "@care-y/shared";
 
@@ -97,6 +98,18 @@ export interface IntakeAccountInput {
   readonly selfCopy: EciesTripleBuffers | null;
 }
 
+export interface IntakeContinuationInput {
+  readonly channelId: ChannelSecret;
+  readonly authHash: Buffer;
+  readonly clientPublic: Buffer;
+  readonly keyCheck: {
+    readonly ephemeralPoint: Buffer;
+    readonly nonce: Buffer;
+    readonly ciphertext: Buffer;
+  };
+  readonly selfCopy: EciesTripleBuffers | null;
+}
+
 export interface IntakeTicketInput {
   readonly ticketId: TicketId;
   readonly followUpId: FollowupId | null;
@@ -110,6 +123,7 @@ export interface IntakeTicketInput {
   readonly resolvedPriority: "low" | "normal" | "high" | "urgent" | null;
   readonly resolvedEscalationLevel: string | null;
   readonly account: IntakeAccountInput | null;
+  readonly continuation: IntakeContinuationInput | null;
 }
 
 export interface IntakeTicketResult {
@@ -338,7 +352,44 @@ export async function createIntakeTicket(
       }
     }
 
-    // 7. Return result
+    // 7. Continuation channel (opt-in at intake, mutually exclusive with account)
+    if (input.continuation !== null && input.account === null) {
+      const contChannelRow = await trx
+        .insertInto("portal_channels")
+        .values({
+          client_id: client.id,
+          channel_id: input.continuation.channelId,
+          auth_hash: input.continuation.authHash,
+          client_public: input.continuation.clientPublic,
+          has_passphrase: false,
+          key_check_ephemeral_point: input.continuation.keyCheck.ephemeralPoint,
+          key_check_nonce: input.continuation.keyCheck.nonce,
+          key_check_ciphertext: input.continuation.keyCheck.ciphertext,
+          kind: "intake_continuation",
+        })
+        .returning("id")
+        .executeTakeFirstOrThrow();
+
+      // Continuation channels behave identically to secure_link on the portal surface
+      await trx
+        .updateTable("clients")
+        .set({ communication_tier: "secure_link" })
+        .where("id", "=", client.id)
+        .execute();
+
+      // Store the self copy when a follow-up exists to bind to
+      if (input.continuation.selfCopy !== null && input.followUpId !== null) {
+        await storeClientCopy(
+          trx,
+          contChannelRow.id,
+          input.followUpId,
+          input.continuation.selfCopy,
+          "from_client",
+        );
+      }
+    }
+
+    // 8. Return result
     return { ticketId: input.ticketId, clientAlias: alias };
   });
 

@@ -523,6 +523,39 @@ describe.skipIf(!process.env.DATABASE_URL)("PortalChannelService", () => {
         });
     });
 
+    it("resolves a kind='intake_continuation' row with correct auth", async () => {
+      const { hashChannelAuth: hash } = await import("@care-y/crypto");
+
+      const clientId = await insertClient(db);
+      const rawAuth = crypto.randomBytes(32);
+      const authHash = Buffer.from(hash(rawAuth));
+
+      const channelId = channelSecretSchema.parse(
+        crypto.randomBytes(24).toString("hex"),
+      );
+
+      await db
+        .insertInto("portal_channels")
+        .values({
+          client_id: clientId,
+          channel_id: channelId,
+          auth_hash: authHash,
+          client_public: crypto.randomBytes(32),
+          has_passphrase: false,
+          key_check_ephemeral_point: crypto.randomBytes(32),
+          key_check_nonce: crypto.randomBytes(24),
+          key_check_ciphertext: crypto.randomBytes(48),
+          status: "active",
+          kind: "intake_continuation",
+        })
+        .execute();
+
+      const result = await resolveAuthedChannel(db, channelId, rawAuth);
+      expect(result).not.toBeNull();
+      expect(result!.channel_id).toBe(channelId);
+      expect(result!.kind).toBe("intake_continuation");
+    });
+
     it("still resolves kind='secure_link' rows (default behavior preserved)", async () => {
       const { hashChannelAuth: hash } = await import("@care-y/crypto");
 

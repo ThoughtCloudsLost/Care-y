@@ -40,63 +40,101 @@ export const intakeWrappedTkSchema = base64Bytes(80, "wrappedTk (sealed box)");
  * server-minted id could never match the AAD the browser baked in, and
  * volunteer-side decrypt would fail with a context mismatch.
  */
-export const intakeSubmissionInputSchema = z.object({
-  ticketId: ticketIdSchema,
-  followUpId: followupIdSchema.nullable(),
-  formId: intakeFormIdSchema.nullable(),
-  encryptedTitle: base64String("encryptedTitle").refine(
-    (s) => s.length <= 1_400,
-    "encryptedTitle too large",
-  ),
-  encryptedDescription: base64String("encryptedDescription").refine(
-    (s) => s.length <= 88_000,
-    "encryptedDescription too large",
-  ),
-  encryptedMessage: base64String("encryptedMessage")
-    .refine((s) => s.length <= 28_000, "encryptedMessage too large")
-    .optional(),
-  encryptedFormResponse: base64String("encryptedFormResponse").refine(
-    (s) => s.length <= 88_000,
-    "encryptedFormResponse too large",
-  ),
-  wrappedTk: intakeWrappedTkSchema,
-  pow: z
-    .object({ challenge: z.string().max(128), solution: z.string().max(128) })
-    .optional(),
-  // Submit-time plaintext metadata resolved from encrypted field config
-  // by the submitter's browser (ADR-068 server-metadata roles).
-  resolvedQueueId: queueIdSchema.nullable().optional(),
-  resolvedPriority: z.enum(["low", "normal", "high", "urgent"]).optional(),
-  resolvedEscalationLevel: z.string().min(1).max(50).optional(),
-  /** Optional account registration branch (client opts into Encrypted Account at intake). */
-  account: z
-    .object({
-      accountId: clientAccountIdSchema,
-      username: z.string().min(3).max(64),
-      salt: base64Bytes(16, "argon2Salt"),
-      publicKey: base64Bytes(32, "accountPublicKey"),
-      authHash: base64Bytes(32, "authHash"),
-      keyCheck: z.object({
-        ephemeralPoint: base64Bytes(32, "ephemeralPoint"),
-        nonce: base64Bytes(24, "nonce"),
-        ciphertext: base64String("ciphertext").refine(
-          (s) => s.length <= 28_000,
-          "ciphertext too large",
-        ),
-      }),
-      selfCopy: z
-        .object({
+export const intakeSubmissionInputSchema = z
+  .object({
+    ticketId: ticketIdSchema,
+    followUpId: followupIdSchema.nullable(),
+    formId: intakeFormIdSchema.nullable(),
+    encryptedTitle: base64String("encryptedTitle").refine(
+      (s) => s.length <= 1_400,
+      "encryptedTitle too large",
+    ),
+    encryptedDescription: base64String("encryptedDescription").refine(
+      (s) => s.length <= 88_000,
+      "encryptedDescription too large",
+    ),
+    encryptedMessage: base64String("encryptedMessage")
+      .refine((s) => s.length <= 28_000, "encryptedMessage too large")
+      .optional(),
+    encryptedFormResponse: base64String("encryptedFormResponse").refine(
+      (s) => s.length <= 88_000,
+      "encryptedFormResponse too large",
+    ),
+    wrappedTk: intakeWrappedTkSchema,
+    pow: z
+      .object({ challenge: z.string().max(128), solution: z.string().max(128) })
+      .optional(),
+    // Submit-time plaintext metadata resolved from encrypted field config
+    // by the submitter's browser (ADR-068 server-metadata roles).
+    resolvedQueueId: queueIdSchema.nullable().optional(),
+    resolvedPriority: z.enum(["low", "normal", "high", "urgent"]).optional(),
+    resolvedEscalationLevel: z.string().min(1).max(50).optional(),
+    /** Optional account registration branch (client opts into Encrypted Account at intake). */
+    account: z
+      .object({
+        accountId: clientAccountIdSchema,
+        username: z.string().min(3).max(64),
+        salt: base64Bytes(16, "argon2Salt"),
+        publicKey: base64Bytes(32, "accountPublicKey"),
+        authHash: base64Bytes(32, "authHash"),
+        keyCheck: z.object({
           ephemeralPoint: base64Bytes(32, "ephemeralPoint"),
           nonce: base64Bytes(24, "nonce"),
           ciphertext: base64String("ciphertext").refine(
             (s) => s.length <= 28_000,
             "ciphertext too large",
           ),
-        })
-        .optional(),
-    })
-    .optional(),
-});
+        }),
+        selfCopy: z
+          .object({
+            ephemeralPoint: base64Bytes(32, "ephemeralPoint"),
+            nonce: base64Bytes(24, "nonce"),
+            ciphertext: base64String("ciphertext").refine(
+              (s) => s.length <= 28_000,
+              "ciphertext too large",
+            ),
+          })
+          .optional(),
+      })
+      .optional(),
+    /** Optional continuation link branch (client opts into a portal channel for resubmission). */
+    continuation: z
+      .object({
+        channelId: z
+          .string()
+          .regex(/^[0-9a-f]{48}$/)
+          .brand<"ChannelSecret">(),
+        authHash: base64Bytes(32, "authHash"),
+        clientPublic: base64Bytes(32, "clientPublic"),
+        keyCheck: z.object({
+          ephemeralPoint: base64Bytes(32, "ephemeralPoint"),
+          nonce: base64Bytes(24, "nonce"),
+          ciphertext: base64String("ciphertext").refine(
+            (s) => s.length <= 28_000,
+            "ciphertext too large",
+          ),
+        }),
+        selfCopy: z
+          .object({
+            ephemeralPoint: base64Bytes(32, "ephemeralPoint"),
+            nonce: base64Bytes(24, "nonce"),
+            ciphertext: base64String("ciphertext").refine(
+              (s) => s.length <= 28_000,
+              "ciphertext too large",
+            ),
+          })
+          .optional(),
+      })
+      .optional(),
+  })
+  // Account strictly dominates continuation: when both are present the
+  // continuation branch is nullified (no error). The UI prevents co-selection,
+  // but the schema enforces it server-side as a defense-in-depth measure.
+  .transform((val) =>
+    val.account != null && val.continuation != null
+      ? { ...val, continuation: undefined }
+      : val,
+  );
 export type IntakeSubmissionInput = z.infer<typeof intakeSubmissionInputSchema>;
 
 export const intakeChallengeResponseSchema = z.object({
@@ -156,7 +194,11 @@ export const communicationTierSchema = z.enum([
 export type CommunicationTier = z.infer<typeof communicationTierSchema>;
 
 /** Portal channel kind discriminator. */
-export const portalChannelKindSchema = z.enum(["secure_link", "account"]);
+export const portalChannelKindSchema = z.enum([
+  "secure_link",
+  "account",
+  "intake_continuation",
+]);
 export type PortalChannelKind = z.infer<typeof portalChannelKindSchema>;
 
 /** 48 lowercase hex chars: hex(sha512(seed)[0:24]). */

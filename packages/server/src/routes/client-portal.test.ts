@@ -43,7 +43,7 @@ import { IntakeQueueNotConfiguredError } from "../portal/intake-service.js";
 import type * as IntakeServiceModule from "../portal/intake-service.js";
 import type * as ShareServiceModule from "../portal/share-service.js";
 import type { IntakeSubmissionInput } from "@care-y/shared";
-import { RoleId } from "@care-y/shared";
+import { RoleId, clientAccountIdSchema } from "@care-y/shared";
 import type {
   SessionId,
   SessionToken,
@@ -515,6 +515,100 @@ describe("client-portal router", () => {
       const result = await caller.submitIntake(makeSubmitInput());
       expect(Object.keys(result)).toEqual(["reference"]);
       expect(typeof result.reference).toBe("string");
+    });
+
+    it("passes decoded continuation branch to the service", async () => {
+      const caller = buildCaller();
+      const VALID_CHANNEL_ID = "a".repeat(48);
+      const contInput = makeSubmitInput({
+        continuation: {
+          channelId: VALID_CHANNEL_ID,
+          authHash: Buffer.alloc(32, 0x01).toString("base64"),
+          clientPublic: Buffer.alloc(32, 0x02).toString("base64"),
+          keyCheck: {
+            ephemeralPoint: Buffer.alloc(32, 0x03).toString("base64"),
+            nonce: Buffer.alloc(24, 0x04).toString("base64"),
+            ciphertext: Buffer.from("kc-ct").toString("base64"),
+          },
+        },
+      } as Partial<IntakeSubmissionInput>);
+
+      await caller.submitIntake(contInput);
+
+      expect(mockCreateIntakeTicket).toHaveBeenCalledOnce();
+      const serviceInput = mockCreateIntakeTicket.mock.calls[0]![2] as Record<
+        string,
+        unknown
+      >;
+      expect(serviceInput.continuation).not.toBeNull();
+      const cont = serviceInput.continuation as {
+        channelId: string;
+        authHash: Buffer;
+        clientPublic: Buffer;
+        selfCopy: unknown;
+      };
+      expect(cont.channelId).toBe(VALID_CHANNEL_ID);
+      expect(Buffer.isBuffer(cont.authHash)).toBe(true);
+      expect(Buffer.isBuffer(cont.clientPublic)).toBe(true);
+      expect(cont.selfCopy).toBeNull();
+    });
+
+    it("passes null continuation when the branch is absent", async () => {
+      const caller = buildCaller();
+      await caller.submitIntake(makeSubmitInput());
+
+      const serviceInput = mockCreateIntakeTicket.mock.calls[0]![2] as Record<
+        string,
+        unknown
+      >;
+      expect(serviceInput.continuation).toBeNull();
+    });
+
+    it("strips continuation at schema level when both account and continuation are present", async () => {
+      const caller = buildCaller(
+        buildDeps({
+          accountServiceDeps: {
+            indexer: {
+              hash: vi.fn().mockReturnValue("hashed"),
+            } as unknown as BlindIndexer,
+            fakeSaltKey: Buffer.alloc(32, 0xab),
+          },
+        }),
+      );
+      const bothInput = makeSubmitInput({
+        account: {
+          accountId: clientAccountIdSchema.parse(crypto.randomUUID()),
+          username: "testuser",
+          salt: Buffer.alloc(16, 0x01).toString("base64"),
+          publicKey: Buffer.alloc(32, 0x02).toString("base64"),
+          authHash: Buffer.alloc(32, 0x03).toString("base64"),
+          keyCheck: {
+            ephemeralPoint: Buffer.alloc(32, 0x04).toString("base64"),
+            nonce: Buffer.alloc(24, 0x05).toString("base64"),
+            ciphertext: Buffer.from("kc-ct").toString("base64"),
+          },
+        },
+        continuation: {
+          channelId: "b".repeat(48),
+          authHash: Buffer.alloc(32, 0x06).toString("base64"),
+          clientPublic: Buffer.alloc(32, 0x07).toString("base64"),
+          keyCheck: {
+            ephemeralPoint: Buffer.alloc(32, 0x08).toString("base64"),
+            nonce: Buffer.alloc(24, 0x09).toString("base64"),
+            ciphertext: Buffer.from("kc-ct2").toString("base64"),
+          },
+        },
+      } as Partial<IntakeSubmissionInput>);
+
+      await caller.submitIntake(bothInput);
+
+      const serviceInput = mockCreateIntakeTicket.mock.calls[0]![2] as Record<
+        string,
+        unknown
+      >;
+      // Schema transform strips continuation when account is present
+      expect(serviceInput.continuation).toBeNull();
+      expect(serviceInput.account).not.toBeNull();
     });
   });
 

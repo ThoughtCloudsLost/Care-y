@@ -75,7 +75,10 @@ import {
   IntakeDisabledError,
   IntakeFormClosedError,
 } from "../portal/intake-service.js";
-import type { IntakeAccountInput } from "../portal/intake-service.js";
+import type {
+  IntakeAccountInput,
+  IntakeContinuationInput,
+} from "../portal/intake-service.js";
 import { extractClientIp } from "../http/request-utils.js";
 import {
   createShare,
@@ -275,7 +278,49 @@ export function createClientPortalRouter(deps: ClientPortalRouterDeps) {
           accountInput = { registration: reg, selfCopy };
         }
 
-        // 6. Delegate to service
+        // 6. Decode optional continuation branch
+        let continuationInput: IntakeContinuationInput | null = null;
+        if (input.continuation != null) {
+          const contSelfCopy =
+            input.continuation.selfCopy != null
+              ? {
+                  ephemeralPoint: Buffer.from(
+                    input.continuation.selfCopy.ephemeralPoint,
+                    "base64",
+                  ),
+                  nonce: Buffer.from(
+                    input.continuation.selfCopy.nonce,
+                    "base64",
+                  ),
+                  ciphertext: Buffer.from(
+                    input.continuation.selfCopy.ciphertext,
+                    "base64",
+                  ),
+                }
+              : null;
+          continuationInput = {
+            channelId: input.continuation.channelId,
+            authHash: Buffer.from(input.continuation.authHash, "base64"),
+            clientPublic: Buffer.from(
+              input.continuation.clientPublic,
+              "base64",
+            ),
+            keyCheck: {
+              ephemeralPoint: Buffer.from(
+                input.continuation.keyCheck.ephemeralPoint,
+                "base64",
+              ),
+              nonce: Buffer.from(input.continuation.keyCheck.nonce, "base64"),
+              ciphertext: Buffer.from(
+                input.continuation.keyCheck.ciphertext,
+                "base64",
+              ),
+            },
+            selfCopy: contSelfCopy,
+          };
+        }
+
+        // 7. Delegate to service
         try {
           const acctDeps =
             input.account != null
@@ -306,6 +351,7 @@ export function createClientPortalRouter(deps: ClientPortalRouterDeps) {
               resolvedPriority: input.resolvedPriority ?? null,
               resolvedEscalationLevel: input.resolvedEscalationLevel ?? null,
               account: accountInput,
+              continuation: continuationInput,
             },
           );
 

@@ -190,7 +190,10 @@ export async function bootstrap(
     messages,
     messagesExpireDays: EXPIRY_DAYS,
     safeExitUrl: orgConfig?.portal_safe_exit_url ?? null,
-    accountOffer: channel.kind === "secure_link" && channel.account_offer,
+    accountOffer:
+      (channel.kind === "secure_link" ||
+        channel.kind === "intake_continuation") &&
+      channel.account_offer,
   };
 }
 

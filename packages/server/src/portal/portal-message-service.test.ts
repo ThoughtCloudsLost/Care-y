@@ -280,6 +280,28 @@ describe.skipIf(!process.env.DATABASE_URL)(
 
         expect(result.ticketId).toBeNull();
       });
+
+      it("returns accountOffer true for an intake_continuation channel with account_offer set", async () => {
+        const fixture = await createTestTicketFixture(testDb.db);
+        const channel = await insertChannel(testDb.db, fixture.clientId, {
+          kind: "intake_continuation",
+          account_offer: true,
+        });
+
+        const result = await bootstrap(testDb.db, channel);
+        expect(result.accountOffer).toBe(true);
+      });
+
+      it("returns accountOffer false for an intake_continuation channel without account_offer", async () => {
+        const fixture = await createTestTicketFixture(testDb.db);
+        const channel = await insertChannel(testDb.db, fixture.clientId, {
+          kind: "intake_continuation",
+          account_offer: false,
+        });
+
+        const result = await bootstrap(testDb.db, channel);
+        expect(result.accountOffer).toBe(false);
+      });
     });
 
     // -----------------------------------------------------------------------
