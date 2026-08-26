@@ -2886,5 +2886,18 @@
   "merge_channel_kind_secure_link": "Enlace seguro",
   "merge_channel_kind_intake_continuation": "Creado en el ingreso",
   "merge_channel_kind_account": "Cuenta",
-  "merge_channel_created": "Creado el {date}"
+  "merge_channel_created": "Creado el {date}",
+
+  "intake_forms_destination_default_named": "Cola de recepcion predeterminada ({name})",
+  "intake_forms_closes_at_hint_with_message": "Tras esta fecha, el formulario muestra el mensaje de cierre en vez de aceptar envios.",
+  "intake_forms_config_field_type_label": "Tipo de campo",
+  "intake_forms_field_row_subtype": "{type}: {subtype}",
+  "intake_forms_field_row_role": "Rol: {role}",
+  "intake_forms_field_row_conditional": "Condicional en: {field}",
+  "intake_forms_field_row_options_count": "{count} opciones",
+  "intake_forms_field_row_min_max": "Rango: {min} a {max}",
+  "intake_forms_field_row_min_only": "Min: {min}",
+  "intake_forms_field_row_max_only": "Max: {max}",
+  "intake_forms_field_row_max_length": "Largo maximo: {max}",
+  "intake_forms_field_row_page_number": "Pagina {page}"
 }

@@ -13,6 +13,7 @@ import type {
 } from "@care-y/shared";
 
 export interface FieldConfigState {
+  readonly fieldType: IntakeFieldType;
   readonly label: LocalizedText;
   readonly helpText: LocalizedText;
   readonly isRequired: boolean;

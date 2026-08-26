@@ -12,7 +12,7 @@
 -->
 <script lang="ts">
   import { resolve } from "$app/paths";
-  import { Card, Toggle } from "konsta/svelte";
+  import { Card, Toggle, DialogButton } from "konsta/svelte";
   import {
     createMutation,
     createQuery,
@@ -25,6 +25,7 @@
     Plus,
     Copy,
     ChartColumn,
+    Trash2,
   } from "@lucide/svelte";
   import {
     Permission,
@@ -53,8 +54,10 @@
     encryptFormMeta,
   } from "$lib/portal/intake-form-crypto.js";
   import { haptic } from "$lib/utils/haptic.js";
+  import { DIALOG_DESTRUCTIVE_CLASS } from "$lib/components/shared/konsta-classes.js";
   import DecryptPlaceholder from "$lib/components/DecryptPlaceholder.svelte";
   import QueryError from "$lib/components/QueryError.svelte";
+  import ShellDialog from "$lib/shell/ShellDialog.svelte";
 
   const intakeFormsRouter = requireRouter(trpc.intakeForms, "intakeForms");
   const ticketRouter = requireRouter(trpc.tickets, "tickets");
@@ -67,6 +70,48 @@
   );
 
   let duplicatingFormId = $state<string | null>(null);
+
+  // Delete state (reuses the confirmation dialog pattern from IntakeFormEditor)
+  let deleteTargetId = $state<string | null>(null);
+  let deleteDialogOpened = $state(false);
+  let deleteError = $state("");
+
+  const deleteMutation = createMutation(() => ({
+    mutationFn: async (deleteFormId: string) =>
+      intakeFormsRouter.remove.mutate({ formId: deleteFormId }),
+    onSuccess: () => {
+      haptic();
+      toastStore.show(m.intake_forms_deleted());
+      announceToLiveRegion("polite", m.intake_forms_deleted());
+      deleteDialogOpened = false;
+      deleteError = "";
+      deleteTargetId = null;
+      void queryClient.invalidateQueries({
+        queryKey: intakeFormKeys.all,
+      });
+    },
+    onError: (err: unknown) => {
+      deleteError = getErrorMessage(err);
+    },
+  }));
+
+  function openDeleteDialog(formId: string): void {
+    deleteTargetId = formId;
+    deleteError = "";
+    deleteDialogOpened = true;
+  }
+
+  function confirmDelete(): void {
+    if (deleteTargetId !== null) {
+      deleteMutation.mutate(deleteTargetId);
+    }
+  }
+
+  function cancelDelete(): void {
+    deleteDialogOpened = false;
+    deleteError = "";
+    deleteTargetId = null;
+  }
 
   const formsQuery = createQuery(() => ({
     queryKey: intakeFormKeys.list(),
@@ -404,6 +449,14 @@
             >
               <Copy size={14} />
             </button>
+            <button
+              type="button"
+              class="ifs-del-btn"
+              onclick={() => openDeleteDialog(form.id)}
+              aria-label={m.intake_forms_delete()}
+            >
+              <Trash2 size={14} />
+            </button>
             <Toggle
               checked={form.isActive}
               onChange={() =>
@@ -440,6 +493,36 @@
     </a>
   </div>
 </Card>
+
+<!-- Delete confirmation dialog (mirrors IntakeFormEditor pattern) -->
+<ShellDialog
+  opened={deleteDialogOpened}
+  ondismiss={cancelDelete}
+  title={m.intake_forms_delete_title()}
+>
+  {#snippet content()}
+    {#if deleteError}
+      <p>{deleteError}</p>
+    {:else}
+      <p>{m.intake_forms_delete_confirm()}</p>
+    {/if}
+  {/snippet}
+  {#snippet buttons()}
+    <DialogButton onclick={cancelDelete}>
+      {m.common_cancel()}
+    </DialogButton>
+    {#if !deleteError}
+      <DialogButton
+        class={DIALOG_DESTRUCTIVE_CLASS}
+        strong
+        disabled={deleteMutation.isPending}
+        onclick={confirmDelete}
+      >
+        {m.intake_forms_delete()}
+      </DialogButton>
+    {/if}
+  {/snippet}
+</ShellDialog>
 
 <style>
   :global(.ifs-card) {
@@ -535,7 +618,8 @@
   }
 
   .ifs-action-btn,
-  .ifs-dup-btn {
+  .ifs-dup-btn,
+  .ifs-del-btn {
     display: flex;
     align-items: center;
     justify-content: center;
@@ -552,18 +636,25 @@
     min-width: 44px;
   }
 
-  .ifs-dup-btn:disabled {
+  .ifs-dup-btn:disabled,
+  .ifs-del-btn:disabled {
     opacity: 0.3;
     cursor: default;
   }
 
+  .ifs-del-btn {
+    color: var(--danger, var(--muted));
+  }
+
   .ifs-action-btn:active,
-  .ifs-dup-btn:not(:disabled):active {
+  .ifs-dup-btn:not(:disabled):active,
+  .ifs-del-btn:not(:disabled):active {
     background: color-mix(in srgb, var(--ink) 10%, transparent);
   }
 
   .ifs-action-btn:focus-visible,
-  .ifs-dup-btn:focus-visible {
+  .ifs-dup-btn:focus-visible,
+  .ifs-del-btn:focus-visible {
     outline: 2px solid var(--brand-text);
     outline-offset: 2px;
   }

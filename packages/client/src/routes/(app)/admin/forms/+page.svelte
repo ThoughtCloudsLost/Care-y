@@ -11,7 +11,8 @@
   import { goto } from "$app/navigation";
   import { resolve } from "$app/paths";
   import { page } from "$app/state";
-  import { Block, DialogButton } from "konsta/svelte";
+  import { Block, DialogButton, Link } from "konsta/svelte";
+  import { ChevronLeft } from "@lucide/svelte";
   import {
     intakeFieldTypeSchema,
     intakeFieldRoleSchema,
@@ -31,6 +32,7 @@
     decryptFormMeta,
   } from "$lib/portal/intake-form-crypto.js";
   import { useNavigationGuard } from "$lib/editor/use-navigation-guard.svelte.js";
+  import { shellBack } from "$lib/shell/navigation.js";
   import ShellDialog from "$lib/shell/ShellDialog.svelte";
   import IntakeFormEditor from "$lib/components/admin/IntakeFormEditor.svelte";
 
@@ -169,6 +171,16 @@
     void goto(listPath);
   }
 
+  /**
+   * Cancel control: routes through shellBack so the navigation guard
+   * intercepts when the editor is dirty (shows the discard dialog) and
+   * navigates immediately when clean. Mirrors the library article
+   * editor's Cancel pattern.
+   */
+  function handleCancel(): void {
+    shellBack("/admin/organization");
+  }
+
   $effect(() => {
     const id = formId;
     if (id === null) {
@@ -192,10 +204,12 @@
   $effect(() => {
     if (view.kind === "loading" || view.kind === "load-error") {
       navbarCtx.current = {
+        left: navLeft,
         title: m.intake_forms_edit_title(),
       };
     } else {
       navbarCtx.current = {
+        left: navLeft,
         title:
           view.formId !== null
             ? m.intake_forms_edit_title()
@@ -204,6 +218,17 @@
     }
   });
 </script>
+
+{#snippet navLeft()}
+  <Link
+    iconOnly
+    onclick={handleCancel}
+    role="button"
+    aria-label={m.common_cancel()}
+  >
+    <ChevronLeft size={22} aria-hidden="true" />
+  </Link>
+{/snippet}
 
 {#if view.kind === "loading"}
   <Block>

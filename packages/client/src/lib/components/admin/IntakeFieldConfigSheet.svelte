@@ -26,6 +26,7 @@
   import {
     ROLE_WIDGET_COMPATIBILITY,
     intakeFieldRoleSchema,
+    intakeFieldTypeSchema,
     ticketPrioritySchema,
     textSubtypeSchema,
     visibilityOperatorSchema,
@@ -47,6 +48,13 @@
   import * as m from "$lib/paraglide/messages.js";
   import ShellSheet from "$lib/shell/ShellSheet.svelte";
   import FieldError from "$lib/components/FieldError.svelte";
+  import { getFieldTypeLabel, getRoleLabel } from "./intake-field-labels.js";
+  import {
+    readLocale,
+    setLocaleText,
+    hasContent,
+    trimLocalized,
+  } from "$lib/utils/localized-text.js";
 
   // ---- Types ----
 
@@ -86,6 +94,9 @@
   // Local locale state (initialized from parent, can be switched in the sheet)
   let sheetLocale = $state<FormLocale>(BASE_LOCALE);
 
+  // Local mutable field type (F-004: type is changeable inside the sheet)
+  let currentFieldType = $state<IntakeFieldType>("text");
+
   let label = $state<LocalizedText>({});
   let labelError = $state("");
   let optionsError = $state("");
@@ -105,6 +116,15 @@
 
   // Role state (ADR-068)
   let selectedRole = $state<IntakeFieldRole | null>(null);
+
+  /**
+   * Preserved type-specific config snapshots (F-004).
+   * When the user switches type, the discarded config is stashed here
+   * so switching back restores it. Dropped on save.
+   */
+  let preservedConfigs = $state<
+    Partial<Record<IntakeFieldType, IntakeFieldConfig>>
+  >({});
 
   // Role mapping state
   let queueRoutingMapping = $state<Record<string, QueueId>>({});
@@ -139,29 +159,13 @@
     }
   }
 
-  /** Read a locale key from a LocalizedText. */
-  function readLocale(text: LocalizedText, loc: FormLocale): string {
-    if (loc === "en") return text.en ?? "";
-    return text.es ?? "";
-  }
-
-  /** Return a new LocalizedText with one locale key set. */
-  function setLocaleText(
-    text: LocalizedText,
-    loc: FormLocale,
-    value: string,
-  ): LocalizedText {
-    if (loc === "en") return { ...text, en: value };
-    return { ...text, es: value };
-  }
-
-  // Compute compatible roles for the current field type
+  // Compute compatible roles for the current (local) field type
   const compatibleRoles = $derived.by((): IntakeFieldRole[] => {
     const roles: IntakeFieldRole[] = [];
     for (const role of intakeFieldRoleSchema.options) {
       // eslint-disable-next-line security/detect-object-injection -- role is from the intakeFieldRoleSchema enum values
       const allowed = ROLE_WIDGET_COMPATIBILITY[role];
-      if (allowed.includes(fieldType)) {
+      if (allowed.includes(currentFieldType)) {
         roles.push(role);
       }
     }
@@ -172,6 +176,8 @@
   let wasOpened = $state(false);
   $effect(() => {
     if (opened && !wasOpened) {
+      currentFieldType = fieldType;
+      preservedConfigs = {};
       label = { ...initial.label };
       helpText = { ...initial.helpText };
       isRequired = initial.isRequired;
@@ -198,71 +204,153 @@
         conditionRules = [];
       }
 
-      const cfg = initial.config;
-
-      // Reset subtype/number range (only populated for text)
-      subtype = "";
-      numberMin = undefined;
-      numberMax = undefined;
-      placeholder = {};
-      pageBreakTitle = {};
-
-      switch (cfg.type) {
-        case "text":
-          placeholder = cfg.placeholder != null ? { ...cfg.placeholder } : {};
-          maxLength = cfg.maxLength;
-          subtype = cfg.subtype ?? "";
-          if (cfg.numberRange != null) {
-            numberMin = cfg.numberRange.min;
-            numberMax = cfg.numberRange.max;
-          }
-          break;
-        case "textarea":
-          placeholder = cfg.placeholder != null ? { ...cfg.placeholder } : {};
-          maxLength = cfg.maxLength;
-          break;
-        case "select":
-          options = cfg.options.map((o) => ({
-            key: o.key,
-            label: { ...o.label },
-          }));
-          queueRoutingMapping =
-            cfg.queueRoutingMapping != null
-              ? { ...cfg.queueRoutingMapping }
-              : {};
-          urgencyMapping =
-            cfg.urgencyMapping != null ? { ...cfg.urgencyMapping } : {};
-          escalationMapping =
-            cfg.escalationMapping != null ? { ...cfg.escalationMapping } : {};
-          break;
-        case "multiselect":
-          options = cfg.options.map((o) => ({
-            key: o.key,
-            label: { ...o.label },
-          }));
-          queueRoutingMapping =
-            cfg.queueRoutingMapping != null
-              ? { ...cfg.queueRoutingMapping }
-              : {};
-          break;
-        case "checkbox":
-          requiredTrue = cfg.requiredTrue === true;
-          break;
-        case "availability":
-          allowRecurring = cfg.allowRecurring;
-          allowSpecific = cfg.allowSpecific;
-          break;
-        case "date":
-          // Date has no additional config to restore
-          break;
-        case "pageBreak":
-          pageBreakTitle = cfg.title != null ? { ...cfg.title } : {};
-          break;
-      }
+      restoreConfigState(initial.config);
       atLeastOneError = "";
     }
     wasOpened = opened;
   });
+
+  /**
+   * Apply a config's values to the local editor state fields.
+   * Used both when the sheet opens and when switching type restores
+   * a previously preserved config.
+   */
+  function restoreConfigState(cfg: IntakeFieldConfig): void {
+    // Reset all type-specific fields to defaults first
+    subtype = "";
+    numberMin = undefined;
+    numberMax = undefined;
+    placeholder = {};
+    maxLength = undefined;
+    options = [];
+    requiredTrue = false;
+    allowRecurring = true;
+    allowSpecific = true;
+    pageBreakTitle = {};
+    queueRoutingMapping = {};
+    urgencyMapping = {};
+    escalationMapping = {};
+
+    switch (cfg.type) {
+      case "text":
+        placeholder = cfg.placeholder != null ? { ...cfg.placeholder } : {};
+        maxLength = cfg.maxLength;
+        subtype = cfg.subtype ?? "";
+        if (cfg.numberRange != null) {
+          numberMin = cfg.numberRange.min;
+          numberMax = cfg.numberRange.max;
+        }
+        break;
+      case "textarea":
+        placeholder = cfg.placeholder != null ? { ...cfg.placeholder } : {};
+        maxLength = cfg.maxLength;
+        break;
+      case "select":
+        options = cfg.options.map((o) => ({
+          key: o.key,
+          label: { ...o.label },
+        }));
+        if (cfg.queueRoutingMapping != null)
+          queueRoutingMapping = { ...cfg.queueRoutingMapping };
+        if (cfg.urgencyMapping != null)
+          urgencyMapping = { ...cfg.urgencyMapping };
+        if (cfg.escalationMapping != null)
+          escalationMapping = { ...cfg.escalationMapping };
+        break;
+      case "multiselect":
+        options = cfg.options.map((o) => ({
+          key: o.key,
+          label: { ...o.label },
+        }));
+        if (cfg.queueRoutingMapping != null)
+          queueRoutingMapping = { ...cfg.queueRoutingMapping };
+        break;
+      case "checkbox":
+        requiredTrue = cfg.requiredTrue === true;
+        break;
+      case "availability":
+        allowRecurring = cfg.allowRecurring;
+        allowSpecific = cfg.allowSpecific;
+        break;
+      case "date":
+        break;
+      case "pageBreak":
+        pageBreakTitle = cfg.title != null ? { ...cfg.title } : {};
+        break;
+    }
+  }
+
+  /**
+   * Sensible defaults for each field type (F-004). Seeded when the user
+   * switches to a type that has no preserved config.
+   */
+  function getTypeDefaults(type: IntakeFieldType): IntakeFieldConfig {
+    switch (type) {
+      case "text":
+        return { type: "text", maxLength: 200 };
+      case "textarea":
+        return { type: "textarea", maxLength: 2000 };
+      case "select":
+        return {
+          type: "select",
+          options: [
+            { key: crypto.randomUUID(), label: { en: "" } },
+            { key: crypto.randomUUID(), label: { en: "" } },
+          ],
+        };
+      case "multiselect":
+        return {
+          type: "multiselect",
+          options: [
+            { key: crypto.randomUUID(), label: { en: "" } },
+            { key: crypto.randomUUID(), label: { en: "" } },
+          ],
+        };
+      case "checkbox":
+        return { type: "checkbox" };
+      case "availability":
+        return {
+          type: "availability",
+          allowRecurring: true,
+          allowSpecific: true,
+        };
+      case "date":
+        return { type: "date" };
+      case "pageBreak":
+        return { type: "pageBreak" };
+    }
+  }
+
+  /** Switch the field type, preserving the outgoing config and restoring any previously preserved config. */
+  function switchFieldType(newType: IntakeFieldType): void {
+    if (newType === currentFieldType) return;
+
+    // Stash the current type's config so switching back restores it
+    preservedConfigs = {
+      ...preservedConfigs,
+      [currentFieldType]: buildConfig(),
+    };
+
+    currentFieldType = newType;
+
+    // Clear role if it is not compatible with the new type
+    if (selectedRole != null) {
+      // eslint-disable-next-line security/detect-object-injection -- selectedRole is from IntakeFieldRole enum
+      const allowed = ROLE_WIDGET_COMPATIBILITY[selectedRole];
+      if (!allowed.includes(newType)) {
+        selectedRole = null;
+      }
+    }
+
+    // Restore preserved config or seed defaults
+    // eslint-disable-next-line security/detect-object-injection -- newType is from IntakeFieldType enum
+    const preserved = preservedConfigs[newType];
+    if (preserved != null) {
+      restoreConfigState(preserved);
+    } else {
+      restoreConfigState(getTypeDefaults(newType));
+    }
+  }
 
   function handleLabelInput(e: Event): void {
     const target = e.target;
@@ -467,33 +555,6 @@
       : "";
   }
 
-  // ---- Role label helper ----
-
-  function getRoleLabel(role: IntakeFieldRole): string {
-    switch (role) {
-      case "queue-routing":
-        return m.intake_forms_config_role_queue_routing();
-      case "urgency":
-        return m.intake_forms_config_role_urgency();
-      case "escalation":
-        return m.intake_forms_config_role_escalation();
-      case "phone-contact":
-        return m.intake_forms_config_role_phone_contact();
-      case "email-contact":
-        return m.intake_forms_config_role_email_contact();
-      case "real-name":
-        return m.intake_forms_config_role_real_name();
-      case "pronouns":
-        return m.intake_forms_config_role_pronouns();
-      case "contact-safety":
-        return m.intake_forms_config_role_contact_safety();
-      case "consent":
-        return m.intake_forms_config_role_consent();
-      case "language-preference":
-        return m.intake_forms_config_role_language_preference();
-    }
-  }
-
   // ---- Build config ----
 
   /** Resolve the base-locale display text for an option. */
@@ -506,29 +567,9 @@
     return readLocale(opt.label, sheetLocale);
   }
 
-  /** Strip empty-string locale entries from a LocalizedText. */
-  function trimLocalized(text: LocalizedText): LocalizedText {
-    const result: LocalizedText = {};
-    const en = text.en;
-    const es = text.es;
-    if (en != null && en.trim().length > 0) result.en = en.trim();
-    if (es != null && es.trim().length > 0) result.es = es.trim();
-    return result;
-  }
-
-  /** True if a LocalizedText has content in any locale. */
-  function hasContent(text: LocalizedText): boolean {
-    const en = text.en;
-    const es = text.es;
-    return (
-      (en != null && en.trim().length > 0) ||
-      (es != null && es.trim().length > 0)
-    );
-  }
-
   function buildConfig(): IntakeFieldConfig {
     const ht = hasContent(helpText) ? trimLocalized(helpText) : undefined;
-    if (fieldType === "text") {
+    if (currentFieldType === "text") {
       const pl = hasContent(placeholder)
         ? trimLocalized(placeholder)
         : undefined;
@@ -549,7 +590,7 @@
           : {}),
       };
     }
-    if (fieldType === "textarea") {
+    if (currentFieldType === "textarea") {
       const pl = hasContent(placeholder)
         ? trimLocalized(placeholder)
         : undefined;
@@ -560,7 +601,7 @@
         ...(ht != null ? { helpText: ht } : {}),
       };
     }
-    if (fieldType === "select") {
+    if (currentFieldType === "select") {
       const filteredOptions = options.filter(
         (o) => optionDisplayText(o).length > 0,
       );
@@ -589,7 +630,7 @@
       }
       return cfg;
     }
-    if (fieldType === "multiselect") {
+    if (currentFieldType === "multiselect") {
       const filteredOptions = options.filter(
         (o) => optionDisplayText(o).length > 0,
       );
@@ -606,20 +647,20 @@
       }
       return cfg;
     }
-    if (fieldType === "checkbox") {
+    if (currentFieldType === "checkbox") {
       return {
         type: "checkbox",
         ...(requiredTrue ? { requiredTrue: true } : {}),
         ...(ht != null ? { helpText: ht } : {}),
       };
     }
-    if (fieldType === "date") {
+    if (currentFieldType === "date") {
       return {
         type: "date",
         ...(ht != null ? { helpText: ht } : {}),
       };
     }
-    if (fieldType === "pageBreak") {
+    if (currentFieldType === "pageBreak") {
       const pt = hasContent(pageBreakTitle)
         ? trimLocalized(pageBreakTitle)
         : undefined;
@@ -735,8 +776,9 @@
 
   function handleDone(): void {
     // Page break does not require label validation
-    if (fieldType === "pageBreak") {
+    if (currentFieldType === "pageBreak") {
       const result: FieldConfigState = {
+        fieldType: currentFieldType,
         label: trimLocalized(pageBreakTitle),
         helpText: {},
         isRequired: false,
@@ -757,13 +799,14 @@
       return;
     }
     if (
-      (fieldType === "select" || fieldType === "multiselect") &&
+      (currentFieldType === "select" || currentFieldType === "multiselect") &&
       !options.some((o) => optionDisplayText(o).trim().length > 0)
     ) {
       optionsError = m.intake_forms_config_options_required();
       return;
     }
     const result: FieldConfigState = {
+      fieldType: currentFieldType,
       label: trimLocalized(label),
       helpText: trimLocalized(helpText),
       isRequired,
@@ -818,7 +861,28 @@
     </Segmented>
   </div>
 
-  {#if fieldType === "pageBreak"}
+  <!-- Field type selector (F-004: type at the top, changeable in place) -->
+  <List strong inset>
+    <ListInput
+      label={m.intake_forms_config_field_type_label()}
+      type="select"
+      dropdown
+      value={currentFieldType}
+      onChange={(e: Event) => {
+        const target = e.target;
+        if (target instanceof HTMLSelectElement) {
+          const parsed = intakeFieldTypeSchema.safeParse(target.value);
+          if (parsed.success) switchFieldType(parsed.data);
+        }
+      }}
+    >
+      {#each intakeFieldTypeSchema.options as ft (ft)}
+        <option value={ft}>{getFieldTypeLabel(ft)}</option>
+      {/each}
+    </ListInput>
+  </List>
+
+  {#if currentFieldType === "pageBreak"}
     <!-- Page break config: just a localized title -->
     <List strong inset>
       <ListInput
@@ -839,6 +903,25 @@
       />
     </List>
   {:else}
+    <!-- Role picker (ADR-068), positioned after type per F-004 -->
+    {#if compatibleRoles.length > 0}
+      <List strong inset>
+        <ListInput
+          label={m.intake_forms_config_role_label()}
+          info={m.intake_forms_config_role_hint()}
+          type="select"
+          dropdown
+          value={selectedRole ?? ""}
+          onChange={handleRoleChange}
+        >
+          <option value="">{m.intake_forms_config_role_none()}</option>
+          {#each compatibleRoles as role (role)}
+            <option value={role}>{getRoleLabel(role)}</option>
+          {/each}
+        </ListInput>
+      </List>
+    {/if}
+
     <List strong inset>
       <ListInput
         label={m.intake_forms_config_label()}
@@ -870,26 +953,7 @@
     </List>
   {/if}
 
-  <!-- Role picker (ADR-068) -->
-  {#if compatibleRoles.length > 0}
-    <List strong inset>
-      <ListInput
-        label={m.intake_forms_config_role_label()}
-        info={m.intake_forms_config_role_hint()}
-        type="select"
-        dropdown
-        value={selectedRole ?? ""}
-        onChange={handleRoleChange}
-      >
-        <option value="">{m.intake_forms_config_role_none()}</option>
-        {#each compatibleRoles as role (role)}
-          <option value={role}>{getRoleLabel(role)}</option>
-        {/each}
-      </ListInput>
-    </List>
-  {/if}
-
-  {#if fieldType === "text" || fieldType === "textarea"}
+  {#if currentFieldType === "text" || currentFieldType === "textarea"}
     <List strong inset>
       <ListInput
         label={m.intake_forms_config_placeholder()}
@@ -903,7 +967,7 @@
         value={maxLength !== undefined ? String(maxLength) : ""}
         onInput={handleMaxLengthInput}
       />
-      {#if fieldType === "text"}
+      {#if currentFieldType === "text"}
         <ListInput
           label={m.intake_forms_config_subtype()}
           type="select"
@@ -936,7 +1000,7 @@
     </List>
   {/if}
 
-  {#if fieldType === "select" || fieldType === "multiselect"}
+  {#if currentFieldType === "select" || currentFieldType === "multiselect"}
     <List strong inset>
       {#each options as option, index (option.key)}
         <ListInput
@@ -965,7 +1029,7 @@
     </div>
   {/if}
 
-  {#if fieldType === "checkbox"}
+  {#if currentFieldType === "checkbox"}
     <List strong inset>
       <ListItem title={m.intake_forms_config_required_true()}>
         {#snippet after()}
@@ -978,7 +1042,7 @@
     </List>
   {/if}
 
-  {#if fieldType === "availability"}
+  {#if currentFieldType === "availability"}
     <List strong inset>
       <ListItem title={m.intake_forms_config_allow_recurring()}>
         {#snippet after()}
@@ -995,7 +1059,7 @@
   {/if}
 
   <!-- Queue routing mapping editor -->
-  {#if selectedRole === "queue-routing" && (fieldType === "select" || fieldType === "multiselect")}
+  {#if selectedRole === "queue-routing" && (currentFieldType === "select" || currentFieldType === "multiselect")}
     <BlockTitle>{m.intake_forms_config_queue_mapping_title()}</BlockTitle>
     <List strong inset>
       {#each options.filter((o) => optionDisplayText(o).length > 0) as opt (opt.key)}
@@ -1017,7 +1081,7 @@
   {/if}
 
   <!-- Urgency mapping editor -->
-  {#if selectedRole === "urgency" && fieldType === "select"}
+  {#if selectedRole === "urgency" && currentFieldType === "select"}
     <BlockTitle>{m.intake_forms_config_urgency_mapping_title()}</BlockTitle>
     <List strong inset>
       {#each options.filter((o) => optionDisplayText(o).length > 0) as opt (opt.key)}
@@ -1039,7 +1103,7 @@
   {/if}
 
   <!-- Escalation mapping editor (select type) -->
-  {#if selectedRole === "escalation" && fieldType === "select"}
+  {#if selectedRole === "escalation" && currentFieldType === "select"}
     <BlockTitle>{m.intake_forms_config_escalation_mapping_title()}</BlockTitle>
     <List strong inset>
       {#each options.filter((o) => optionDisplayText(o).length > 0) as opt (opt.key)}
@@ -1058,7 +1122,7 @@
   {/if}
 
   <!-- Escalation hint for checkbox type -->
-  {#if selectedRole === "escalation" && fieldType === "checkbox"}
+  {#if selectedRole === "escalation" && currentFieldType === "checkbox"}
     <p class="mapping-hint">
       {m.intake_forms_config_escalation_checkbox_hint()}
     </p>
@@ -1202,7 +1266,7 @@
         </Button>
       </div>
     {/if}
-  {:else if fieldType !== "pageBreak"}
+  {:else if currentFieldType !== "pageBreak"}
     <p class="mapping-hint">{m.intake_forms_config_condition_no_fields()}</p>
   {/if}
 </ShellSheet>

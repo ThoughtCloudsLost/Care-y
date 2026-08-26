@@ -97,7 +97,54 @@ vi.mock("$lib/paraglide/messages.js", async (importOriginal) => ({
   intake_forms_closes_at_label: () => "Closes at",
   intake_forms_closes_at_hint: () =>
     "After this date and time, the form will stop accepting submissions.",
+  intake_forms_closes_at_hint_with_message: () =>
+    "After this date, the form shows the closed message.",
   intake_forms_closes_at_clear: () => "Clear closing date",
+  intake_forms_destination_default_named: ({ name }: { name: string }) =>
+    `Default intake queue (${name})`,
+  intake_forms_config_field_type_label: () => "Field type",
+  intake_forms_field_row_subtype: ({
+    type,
+    subtype,
+  }: {
+    type: string;
+    subtype: string;
+  }) => `${type}: ${subtype}`,
+  intake_forms_field_row_role: ({ role }: { role: string }) => `Role: ${role}`,
+  intake_forms_field_row_conditional: ({ field }: { field: string }) =>
+    `Conditional on: ${field}`,
+  intake_forms_field_row_options_count: ({ count }: { count: string }) =>
+    `${count} options`,
+  intake_forms_field_row_min_max: ({
+    min,
+    max,
+  }: {
+    min: string;
+    max: string;
+  }) => `Range: ${min} to ${max}`,
+  intake_forms_field_row_min_only: ({ min }: { min: string }) => `Min: ${min}`,
+  intake_forms_field_row_max_only: ({ max }: { max: string }) => `Max: ${max}`,
+  intake_forms_field_row_max_length: ({ max }: { max: string }) =>
+    `Max length: ${max}`,
+  intake_forms_field_row_page_number: ({ page }: { page: string }) =>
+    `Page ${page}`,
+  intake_forms_config_role_queue_routing: () => "Queue routing",
+  intake_forms_config_role_urgency: () => "Urgency",
+  intake_forms_config_role_escalation: () => "Escalation",
+  intake_forms_config_role_phone_contact: () => "Phone contact",
+  intake_forms_config_role_email_contact: () => "Email contact",
+  intake_forms_config_role_real_name: () => "Real name",
+  intake_forms_config_role_pronouns: () => "Pronouns",
+  intake_forms_config_role_contact_safety: () => "Contact safety",
+  intake_forms_config_role_consent: () => "Consent",
+  intake_forms_config_role_language_preference: () => "Language preference",
+  intake_forms_config_subtype_email: () => "Email address",
+  intake_forms_config_subtype_phone: () => "Phone number",
+  intake_forms_config_subtype_number: () => "Number",
+  intake_forms_field_type_date: () => "Date",
+  intake_forms_field_type_date_desc: () => "Date picker",
+  intake_forms_field_type_page_break: () => "Page break",
+  intake_forms_field_type_page_break_desc: () => "Split the form into pages",
 }));
 
 vi.mock("$lib/terminology/with-terms.js", async (importOriginal) => ({
@@ -116,6 +163,9 @@ vi.mock("$lib/trpc/index.js", async (importOriginal) => ({
     tickets: {
       listQueues: { query: vi.fn().mockResolvedValue([]) },
       listVolunteers: { query: vi.fn().mockResolvedValue([]) },
+    },
+    org: {
+      getIntakeQueue: { query: vi.fn().mockResolvedValue({ queueId: null }) },
     },
   },
 }));
@@ -428,6 +478,88 @@ describe("IntakeFormEditor", () => {
     }
 
     expect(ondirtychange).toHaveBeenCalledWith(true);
+  });
+
+  it("auto-suggests slug from name until slug is manually edited (F-002)", async () => {
+    render(IntakeFormEditor, { props: baseProps });
+
+    const inputs = document.querySelectorAll('input[type="text"]');
+    const nameInput = inputs[0];
+    const slugInput = inputs[1];
+
+    // Type multiple characters into name
+    if (nameInput) {
+      await fireEvent.input(nameInput, { target: { value: "Contact" } });
+    }
+
+    // Slug should follow the full name, not just the first character
+    expect((slugInput as HTMLInputElement | undefined)?.value).toBe("contact");
+
+    // Continue typing
+    if (nameInput) {
+      await fireEvent.input(nameInput, {
+        target: { value: "Contact Form" },
+      });
+    }
+    expect((slugInput as HTMLInputElement | undefined)?.value).toBe(
+      "contact-form",
+    );
+
+    // Manually edit the slug
+    if (slugInput) {
+      await fireEvent.input(slugInput, {
+        target: { value: "custom-slug" },
+      });
+    }
+
+    // Further name changes should not overwrite the slug
+    if (nameInput) {
+      await fireEvent.input(nameInput, {
+        target: { value: "Updated Name" },
+      });
+    }
+    expect((slugInput as HTMLInputElement | undefined)?.value).toBe(
+      "custom-slug",
+    );
+  });
+
+  it("shows required asterisk in field row title (F-009)", () => {
+    render(IntakeFormEditor, {
+      props: {
+        ...baseProps,
+        initialFields: [
+          {
+            fieldKey: "fk-req",
+            label: { en: "Full name" },
+            helpText: {},
+            isRequired: true,
+            config: { type: "text" as const },
+            fieldType: "text" as const,
+            ...NO_ROLE,
+          },
+          {
+            fieldKey: "fk-opt",
+            label: { en: "Nickname" },
+            helpText: {},
+            isRequired: false,
+            config: { type: "text" as const },
+            fieldType: "text" as const,
+            ...NO_ROLE,
+          },
+        ],
+      },
+    });
+
+    // Required field has asterisk in the title
+    expect(screen.getAllByText(/Full name \*/).length).toBeGreaterThanOrEqual(
+      1,
+    );
+    // Optional field has no asterisk
+    const nicknameTexts = screen.getAllByText(/Nickname/);
+    const hasAsterisk = nicknameTexts.some((el) =>
+      el.textContent.includes("*"),
+    );
+    expect(hasAsterisk).toBe(false);
   });
 
   it("shows slug validation error for invalid format", async () => {

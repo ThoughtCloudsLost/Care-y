@@ -2886,5 +2886,18 @@
   "merge_channel_kind_secure_link": "Secure Link",
   "merge_channel_kind_intake_continuation": "Created at intake",
   "merge_channel_kind_account": "Account",
-  "merge_channel_created": "Created {date}"
+  "merge_channel_created": "Created {date}",
+
+  "intake_forms_destination_default_named": "Default intake queue ({name})",
+  "intake_forms_closes_at_hint_with_message": "After this date, the form shows the closed message instead of accepting submissions.",
+  "intake_forms_config_field_type_label": "Field type",
+  "intake_forms_field_row_subtype": "{type}: {subtype}",
+  "intake_forms_field_row_role": "Role: {role}",
+  "intake_forms_field_row_conditional": "Conditional on: {field}",
+  "intake_forms_field_row_options_count": "{count} options",
+  "intake_forms_field_row_min_max": "Range: {min} to {max}",
+  "intake_forms_field_row_min_only": "Min: {min}",
+  "intake_forms_field_row_max_only": "Max: {max}",
+  "intake_forms_field_row_max_length": "Max length: {max}",
+  "intake_forms_field_row_page_number": "Page {page}"
 }

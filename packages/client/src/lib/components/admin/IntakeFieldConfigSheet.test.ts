@@ -78,6 +78,17 @@ vi.mock("$lib/paraglide/messages.js", async (importOriginal) => ({
   intake_forms_config_subtype_number: () => "Number",
   intake_forms_config_number_min: () => "Minimum value",
   intake_forms_config_number_max: () => "Maximum value",
+  intake_forms_config_field_type_label: () => "Field type",
+  intake_forms_config_role_hint: () =>
+    "Controls how the system treats the answer.",
+  intake_forms_field_type_text: () => "Text",
+  intake_forms_field_type_textarea: () => "Text area",
+  intake_forms_field_type_select: () => "Dropdown",
+  intake_forms_field_type_multiselect: () => "Checkboxes",
+  intake_forms_field_type_checkbox: () => "Checkbox",
+  intake_forms_field_type_availability: () => "Availability",
+  intake_forms_field_type_date: () => "Date",
+  intake_forms_field_type_page_break: () => "Page break",
 }));
 
 vi.mock("$lib/terminology/with-terms.js", async (importOriginal) => ({
@@ -110,6 +121,7 @@ const TEST_VOLUNTEERS = [
 ];
 
 function baseInitial(): {
+  fieldType: "select";
   label: { en: string };
   helpText: Record<string, never>;
   isRequired: boolean;
@@ -122,6 +134,7 @@ function baseInitial(): {
   visibleWhen: undefined;
 } {
   return {
+    fieldType: "select" as const,
     label: { en: "Test question" },
     helpText: {},
     isRequired: false,
@@ -149,6 +162,27 @@ describe("IntakeFieldConfigSheet", () => {
     };
   });
 
+  it("shows field type selector at the top of the sheet (F-004)", () => {
+    render(IntakeFieldConfigSheet, {
+      props: {
+        opened: true,
+        fieldType: "text",
+        initial: {
+          ...baseInitial(),
+          fieldType: "text" as const,
+          config: { type: "text" as const },
+        },
+        queues: TEST_QUEUES,
+        volunteers: TEST_VOLUNTEERS,
+        editingLocale: "en",
+        earlierFields: [],
+        ondone,
+        ondismiss: vi.fn(),
+      },
+    });
+    expect(screen.getByText("Field type")).toBeTruthy();
+  });
+
   it("shows role picker for select field type", () => {
     render(IntakeFieldConfigSheet, {
       props: {
@@ -173,6 +207,7 @@ describe("IntakeFieldConfigSheet", () => {
         fieldType: "text",
         initial: {
           ...baseInitial(),
+          fieldType: "text" as const,
           config: { type: "text" as const },
         },
         queues: TEST_QUEUES,
@@ -241,6 +276,7 @@ describe("IntakeFieldConfigSheet", () => {
         fieldType: "checkbox",
         initial: {
           ...baseInitial(),
+          fieldType: "checkbox" as const,
           config: { type: "checkbox" as const },
         },
         queues: TEST_QUEUES,
@@ -280,6 +316,7 @@ describe("IntakeFieldConfigSheet", () => {
         fieldType: "availability",
         initial: {
           ...baseInitial(),
+          fieldType: "availability" as const,
           config: {
             type: "availability" as const,
             allowRecurring: true,
@@ -317,6 +354,7 @@ describe("IntakeFieldConfigSheet", () => {
     await fireEvent.click(doneBtn);
 
     expect(capturedResult).not.toBeNull();
+    expect(capturedResult).toHaveProperty("fieldType", "select");
     expect(capturedResult).toHaveProperty("role", null);
     expect(capturedResult).toHaveProperty("routingQueueIds", null);
     expect(capturedResult).toHaveProperty("escalationRecipientIds", null);
@@ -422,6 +460,7 @@ describe("IntakeFieldConfigSheet", () => {
         fieldType: "text",
         initial: {
           ...baseInitial(),
+          fieldType: "text" as const,
           config: { type: "text" as const },
         },
         queues: TEST_QUEUES,

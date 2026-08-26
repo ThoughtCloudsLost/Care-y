@@ -58,9 +58,11 @@ const recipientIdsSchema = z.array(userIdSchema);
 // ---------------------------------------------------------------------------
 
 /**
- * Thrown when org_config.intake_queue_id is null, meaning the org has
- * not configured an intake queue. The route logs a warning and returns
- * a generic INTERNAL error to the client (no org internals leaked).
+ * Thrown when queue resolution produces null after exhausting the full
+ * precedence chain (resolved routing queue, form destination queue,
+ * org intake queue). For the built-in default form (formId null) this
+ * means org_config.intake_queue_id is unset; for custom forms it means
+ * neither the form nor the org configured a destination.
  */
 export class IntakeQueueNotConfiguredError extends ValidationError {
   constructor() {
@@ -151,13 +153,14 @@ export interface IntakeTicketResult {
 /**
  * Creates an intake ticket from ciphertext input.
  *
- * Resolves intake_queue_id from org_config (service-layer resolution,
- * same pattern as telephony/webhook-dispatch.ts). Throws
- * IntakeQueueNotConfiguredError when null. Throws IntakeDisabledError
- * when web_intake_enabled is false.
+ * Queue routing precedence: resolvedQueueId (validated against field
+ * allow-list) > form destination_queue_id > org_config.intake_queue_id.
+ * IntakeQueueNotConfiguredError is raised only when the final resolved
+ * queue is null (no level in the precedence chain produced a queue).
+ * Forms with their own destination queue succeed even when the org-wide
+ * intake queue is unset.
  *
- * Routing: resolvedQueueId (validated against field allow-list) >
- * form destination_queue_id > org_config.intake_queue_id.
+ * Throws IntakeDisabledError when web_intake_enabled is false.
  *
  * All DB writes run inside one transaction. After commit, a best-effort
  * ticket_created notification dispatches to queue volunteers. Escalation
@@ -187,12 +190,12 @@ export async function createIntakeTicket(
   }
 
   const orgIntakeQueueId = orgConfig?.intake_queue_id ?? null;
-  if (orgIntakeQueueId === null) {
-    throw new IntakeQueueNotConfiguredError();
-  }
 
-  // Resolve destination queue via routing precedence
-  let destinationQueueId = orgIntakeQueueId;
+  // Resolve destination queue via routing precedence:
+  //   resolvedQueueId > form destination_queue_id > org intake_queue_id
+  // The org intake queue is a fallback, not a prerequisite. Only raise
+  // IntakeQueueNotConfiguredError when resolution produces null.
+  let destinationQueueId: QueueId | null = orgIntakeQueueId;
   let formDestinationQueueId: QueueId | null = null;
 
   // Load form metadata when a formId is provided
@@ -255,6 +258,12 @@ export async function createIntakeTicket(
     }
 
     destinationQueueId = input.resolvedQueueId;
+  }
+
+  // After all resolution steps, a null destination means no queue was
+  // configured anywhere in the precedence chain.
+  if (destinationQueueId === null) {
+    throw new IntakeQueueNotConfiguredError();
   }
 
   // Resolve priority

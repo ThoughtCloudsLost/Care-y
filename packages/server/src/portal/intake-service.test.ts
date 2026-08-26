@@ -555,6 +555,89 @@ describe.skipIf(!process.env.DATABASE_URL)(
       }
     }, 30_000);
 
+    it("succeeds for a form with its own destination queue when org intake queue is null", async () => {
+      const freshDb = await createTestDb();
+      try {
+        await freshDb.db
+          .insertInto("org_config")
+          .values({ pii_retention_days: null, intake_queue_id: null })
+          .onConflict((oc) => oc.doNothing())
+          .execute();
+        await seedOrgPublicKey(freshDb.db);
+
+        const destQueue = await createTestQueue(freshDb.db, {
+          label: "FormQueue",
+        });
+
+        const form = await freshDb.db
+          .insertInto("intake_forms")
+          .values({
+            // care-y-ignore-next-line ast-pii-in-db-write -- admin label, not PII
+            name: "Own Queue Form",
+            is_active: true,
+            destination_queue_id: destQueue.id,
+          })
+          .returning("id")
+          .executeTakeFirstOrThrow();
+
+        const ns = createMockNotificationService();
+        const input = makeInput({ formId: form.id });
+
+        const result = await createIntakeTicket(
+          freshDb.db,
+          {
+            notificationService: ns,
+            sealedBox: testSealedBox,
+            orgId: TEST_ORG_ID,
+            orgSchema: freshDb.schemaName as OrgSchema,
+            orgSlug: orgSlugIdSchema.parse("test-org"),
+          },
+          input,
+        );
+
+        expect(result.ticketId).toBe(input.ticketId);
+
+        const ticket = await freshDb.db
+          .selectFrom("tickets")
+          .select("queue_id")
+          .where("id", "=", result.ticketId)
+          .executeTakeFirstOrThrow();
+        expect(ticket.queue_id).toBe(destQueue.id);
+      } finally {
+        await freshDb.cleanup();
+      }
+    }, 30_000);
+
+    it("throws IntakeQueueNotConfiguredError for default form path when org intake queue is null", async () => {
+      const freshDb = await createTestDb();
+      try {
+        await freshDb.db
+          .insertInto("org_config")
+          .values({ pii_retention_days: null, intake_queue_id: null })
+          .onConflict((oc) => oc.doNothing())
+          .execute();
+
+        const ns = createMockNotificationService();
+        const input = makeInput({ formId: null });
+
+        await expect(
+          createIntakeTicket(
+            freshDb.db,
+            {
+              notificationService: ns,
+              sealedBox: testSealedBox,
+              orgId: TEST_ORG_ID,
+              orgSchema: freshDb.schemaName as OrgSchema,
+              orgSlug: orgSlugIdSchema.parse("test-org"),
+            },
+            input,
+          ),
+        ).rejects.toThrow(IntakeQueueNotConfiguredError);
+      } finally {
+        await freshDb.cleanup();
+      }
+    }, 30_000);
+
     it("dispatches ticket_created to queue watchers after commit", async () => {
       const ns = createMockNotificationService();
 

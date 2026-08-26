@@ -71,6 +71,7 @@
 
   const inputId = $derived(`intake-field-${fieldId}`);
   const labelId = $derived(`intake-label-${fieldId}`);
+  const helpTextId = $derived(`intake-help-${fieldId}`);
 
   const requiredMarker = $derived(isRequired ? " *" : "");
   const displayLabel = $derived(`${label}${requiredMarker}`);
@@ -158,17 +159,27 @@
       maxlength={config.maxLength}
       autocomplete="off"
       required={isRequired}
+      aria-describedby={resolvedHelpText != null && resolvedHelpText.length > 0
+        ? helpTextId
+        : undefined}
       onInput={handleTextInput}
-    />
+    >
+      {#snippet info()}
+        {#if resolvedHelpText}
+          <span id={helpTextId} class="field-help-text">{resolvedHelpText}</span
+          >
+        {/if}
+        {#if charCount}
+          <span class="char-count" aria-hidden="true">
+            {m.intake_char_count({
+              count: charCount.current,
+              max: charCount.max,
+            })}
+          </span>
+        {/if}
+      {/snippet}
+    </ListInput>
   </List>
-  {#if charCount}
-    <p class="char-count" aria-hidden="true">
-      {m.intake_char_count({ count: charCount.current, max: charCount.max })}
-    </p>
-  {/if}
-  {#if resolvedHelpText}
-    <p class="field-help-text">{resolvedHelpText}</p>
-  {/if}
   <FieldError message={error} />
   {#if role}
     <IntakePrivacyIndicator
@@ -187,17 +198,27 @@
       maxlength={config.maxLength}
       autocomplete="off"
       required={isRequired}
+      aria-describedby={resolvedHelpText != null && resolvedHelpText.length > 0
+        ? helpTextId
+        : undefined}
       onInput={handleTextInput}
-    />
+    >
+      {#snippet info()}
+        {#if resolvedHelpText}
+          <span id={helpTextId} class="field-help-text">{resolvedHelpText}</span
+          >
+        {/if}
+        {#if charCount}
+          <span class="char-count" aria-hidden="true">
+            {m.intake_char_count({
+              count: charCount.current,
+              max: charCount.max,
+            })}
+          </span>
+        {/if}
+      {/snippet}
+    </ListInput>
   </List>
-  {#if charCount}
-    <p class="char-count" aria-hidden="true">
-      {m.intake_char_count({ count: charCount.current, max: charCount.max })}
-    </p>
-  {/if}
-  {#if resolvedHelpText}
-    <p class="field-help-text">{resolvedHelpText}</p>
-  {/if}
   <FieldError message={error} />
   {#if role}
     <IntakePrivacyIndicator
@@ -215,17 +236,23 @@
       value={typeof value === "string" ? value : ""}
       autocomplete="off"
       required={isRequired}
+      aria-describedby={resolvedHelpText != null && resolvedHelpText.length > 0
+        ? helpTextId
+        : undefined}
       onChange={handleSelectChange}
     >
       <option value="" disabled selected>{label}</option>
       {#each config.options as option (option.key)}
         <option value={option.key}>{optionText(option)}</option>
       {/each}
+      {#snippet info()}
+        {#if resolvedHelpText}
+          <span id={helpTextId} class="field-help-text">{resolvedHelpText}</span
+          >
+        {/if}
+      {/snippet}
     </ListInput>
   </List>
-  {#if resolvedHelpText}
-    <p class="field-help-text">{resolvedHelpText}</p>
-  {/if}
   <FieldError message={error} />
   {#if role}
     <IntakePrivacyIndicator
@@ -234,7 +261,18 @@
   {/if}
 {:else if config.type === "multiselect"}
   <BlockTitle id={labelId}>{displayLabel}</BlockTitle>
-  <List strong inset role="group" aria-labelledby={labelId}>
+  {#if resolvedHelpText}
+    <p id={helpTextId} class="field-help-text">{resolvedHelpText}</p>
+  {/if}
+  <List
+    strong
+    inset
+    role="group"
+    aria-labelledby={labelId}
+    aria-describedby={resolvedHelpText != null && resolvedHelpText.length > 0
+      ? helpTextId
+      : undefined}
+  >
     {#each config.options as option (option.key)}
       <ListItem label title={optionText(option)}>
         {#snippet media()}
@@ -247,9 +285,6 @@
       </ListItem>
     {/each}
   </List>
-  {#if resolvedHelpText}
-    <p class="field-help-text">{resolvedHelpText}</p>
-  {/if}
   <FieldError message={error} />
   {#if role}
     <IntakePrivacyIndicator
@@ -257,8 +292,17 @@
     />
   {/if}
 {:else if config.type === "checkbox"}
+  {#if resolvedHelpText}
+    <p id={helpTextId} class="field-help-text">{resolvedHelpText}</p>
+  {/if}
   <List strong inset>
-    <ListItem label title={displayLabel}>
+    <ListItem
+      label
+      title={displayLabel}
+      aria-describedby={resolvedHelpText != null && resolvedHelpText.length > 0
+        ? helpTextId
+        : undefined}
+    >
       {#snippet media()}
         <Checkbox
           component="div"
@@ -268,9 +312,6 @@
       {/snippet}
     </ListItem>
   </List>
-  {#if resolvedHelpText}
-    <p class="field-help-text">{resolvedHelpText}</p>
-  {/if}
   <FieldError message={error} />
   {#if role}
     <IntakePrivacyIndicator
@@ -280,19 +321,27 @@
 {:else if config.type === "availability"}
   <BlockTitle id={labelId}>{displayLabel}</BlockTitle>
   {#if resolvedHelpText}
-    <p class="field-help-text">{resolvedHelpText}</p>
+    <p id={helpTextId} class="field-help-text">{resolvedHelpText}</p>
   {/if}
-  <AvailabilityField
-    allowRecurring={config.allowRecurring}
-    allowSpecific={config.allowSpecific}
-    value={value !== undefined &&
-    typeof value === "object" &&
-    !Array.isArray(value)
-      ? value
+  <div
+    role="group"
+    aria-labelledby={labelId}
+    aria-describedby={resolvedHelpText != null && resolvedHelpText.length > 0
+      ? helpTextId
       : undefined}
-    {error}
-    onchange={handleAvailabilityChange}
-  />
+  >
+    <AvailabilityField
+      allowRecurring={config.allowRecurring}
+      allowSpecific={config.allowSpecific}
+      value={value !== undefined &&
+      typeof value === "object" &&
+      !Array.isArray(value)
+        ? value
+        : undefined}
+      {error}
+      onchange={handleAvailabilityChange}
+    />
+  </div>
 {:else if config.type === "date"}
   <label for={inputId} class="sr-only">{displayLabel}</label>
   <BlockTitle id={labelId}>{displayLabel}</BlockTitle>
@@ -303,12 +352,19 @@
       value={typeof value === "string" ? value : ""}
       autocomplete="off"
       required={isRequired}
+      aria-describedby={resolvedHelpText != null && resolvedHelpText.length > 0
+        ? helpTextId
+        : undefined}
       onInput={handleDateInput}
-    />
+    >
+      {#snippet info()}
+        {#if resolvedHelpText}
+          <span id={helpTextId} class="field-help-text">{resolvedHelpText}</span
+          >
+        {/if}
+      {/snippet}
+    </ListInput>
   </List>
-  {#if resolvedHelpText}
-    <p class="field-help-text">{resolvedHelpText}</p>
-  {/if}
   <FieldError message={error} />
   {#if role}
     <IntakePrivacyIndicator
@@ -332,17 +388,24 @@
     font-size: var(--text-xs);
     color: var(--muted);
     text-align: right;
-    padding: 0 var(--space-lg);
-    margin: calc(-1 * var(--space-xs)) 0 0;
+    display: block;
+    margin-top: 2px;
   }
 
   .field-help-text {
     font-size: var(--text-xs);
     color: var(--muted);
-    padding: 0 var(--space-lg);
-    margin: var(--space-xs) 0 0;
+    display: block;
     line-height: 1.4;
     white-space: pre-line;
+  }
+
+  /* Help text outside a ListInput (multiselect, checkbox, availability)
+     needs horizontal padding to align with inset list cards. Inside the
+     info slot, Konsta handles the layout. */
+  p.field-help-text {
+    padding: 0 var(--space-lg);
+    margin: var(--space-xs) 0 0;
   }
 
   .field-unknown-type {
