@@ -25,6 +25,7 @@
     computeSeenMarks,
   } from "./flow-decorations.js";
   import { fontVarsStyle } from "./story-blocks.js";
+  import { ENTRANCE_DUR_MS, entranceDelayMs } from "./flow-entrance.js";
 
   // -----------------------------------------------------------------------
   // Props
@@ -60,6 +61,15 @@
     visibleRange: { top: number; bottom: number } | null;
     onSelectSection: (id: SectionId) => void;
     onSelectSub: (sectionId: SectionId, subSlug: string) => void;
+    /**
+     * Play the staggered fullscreen-exit entrance while true: blocks
+     * fade in by group (header first, then each subsection in reading
+     * order) and decorations wait for the last group. The host clears
+     * the flag once the sequence has run, after which newly mounted
+     * blocks (virtualization scrolling them in) render plain. Defaults
+     * off, which is the drawer's and section navigation's path.
+     */
+    entrance?: boolean;
     /** The container element, for hosts that measure or observe it. */
     oncontainer?: (el: HTMLDivElement) => void;
     /** Rendered inside the container, above the prose in stacking order. */
@@ -77,11 +87,41 @@
     seenTopics,
     sections,
     visibleRange,
+    entrance = false,
     onSelectSection,
     onSelectSub,
     oncontainer,
     figures,
   }: Props = $props();
+
+  // -----------------------------------------------------------------------
+  // Entrance groups
+  //
+  // The zeroth group is everything before the first sub heading (title,
+  // desc, tip); each sub heading starts the next group and carries its
+  // body with it. Index-aligned with blocks so the markup can look a
+  // block's group up by position.
+  // -----------------------------------------------------------------------
+
+  let blockGroups: readonly number[] = $derived.by(() => {
+    const groups: number[] = [];
+    let g = 0;
+    for (const b of blocks) {
+      if (b.kind === "sub-heading") g += 1;
+      groups.push(g);
+    }
+    return groups;
+  });
+
+  function groupFor(blockIndex: number): number {
+    return blockGroups.at(blockIndex) ?? 0;
+  }
+
+  /** Delay of the last group, which decorations wait for so no
+   *  highlight or rule sits over text that has not arrived yet. */
+  let lastGroupDelay: number = $derived(
+    entranceDelayMs(blockGroups.at(-1) ?? 0),
+  );
 
   let containerEl = $state<HTMLDivElement | undefined>(undefined);
 
@@ -286,11 +326,12 @@
 <!-- svelte-ignore a11y_no_static_element_interactions -->
 <div
   class="flow-story"
+  class:flow-story--entering={entrance}
   bind:this={containerEl}
   onclick={handleClick}
   style="height: {layoutResult !== null
     ? layoutResult.totalHeight
-    : 0}px; position: relative; {fontVarsStyle}"
+    : 0}px; position: relative; --enter-dur: {ENTRANCE_DUR_MS}ms; --enter-last: {lastGroupDelay}ms; {fontVarsStyle}"
 >
   {#if layoutResult !== null}
     <!-- Header tint, first so every line paints over it -->
@@ -349,9 +390,16 @@
     {#each visibleBlocks as vb (vb.block.id)}
       {@const isFocusable = vb.block.kind === "sub-heading"}
       {@const tag = blockTag(vb.block.kind)}
+      {@const enterDelay = entrance
+        ? `${String(entranceDelayMs(groupFor(vb.blockIndex)))}ms`
+        : undefined}
 
       {#if tag === "h2"}
-        <h2 class="flow-block" style:top="{vb.geo.topY}px">
+        <h2
+          class="flow-block"
+          style:top="{vb.geo.topY}px"
+          style:--enter-delay={enterDelay}
+        >
           {#each vb.lines as line, li (li)}
             <span
               class="flow-line {lineColorClass(
@@ -371,6 +419,7 @@
           class="flow-block"
           class:flow-block--focusable={isFocusable}
           style:top="{vb.geo.topY}px"
+          style:--enter-delay={enterDelay}
           role={isFocusable ? "button" : undefined}
           tabindex={isFocusable ? 0 : undefined}
           data-section-id={vb.block.sectionId}
@@ -392,7 +441,11 @@
         </h3>
       {:else}
         {@const firstLine = vb.lines.at(0)}
-        <p class="flow-block" style:top="{vb.geo.topY}px">
+        <p
+          class="flow-block"
+          style:top="{vb.geo.topY}px"
+          style:--enter-delay={enterDelay}
+        >
           <!-- List marker in the gutter the item's indent reserved -->
           {#if vb.block.marker !== undefined && firstLine !== undefined}
             <span
@@ -591,5 +644,58 @@
     display: flex;
     align-items: center;
     justify-content: center;
+  }
+
+  /* -----------------------------------------------------------------------
+     Fullscreen-exit entrance
+
+     A gated CSS animation rather than a transition: directive. The prose
+     virtualizes, so blocks mount and unmount as the reader scrolls, and
+     a mount-time transition would replay the fade on every scroll-in.
+     The animation only exists while the host holds the entering class;
+     once the host clears it (the sequence has run), blocks render plain
+     and later mounts get nothing. `both` keeps a block invisible through
+     its group's delay and settled at full opacity after, so removing the
+     class after completion changes nothing visually.
+     ----------------------------------------------------------------------- */
+
+  .flow-story--entering .flow-block {
+    animation: flow-enter var(--enter-dur) ease-out both;
+    animation-delay: var(--enter-delay, 0ms);
+  }
+
+  /* The header tint arrives with the title, never before it. */
+  .flow-story--entering .flow-header-panel {
+    animation: flow-enter var(--enter-dur) ease-out both;
+  }
+
+  /* Decorations wait for the last group: a highlight or rule over a
+     passage that has not appeared yet reads as broken. */
+  .flow-story--entering .flow-highlight,
+  .flow-story--entering .flow-rule,
+  .flow-story--entering .flow-tip-mark,
+  .flow-story--entering .flow-seen-mark {
+    animation: flow-enter var(--enter-dur) ease-out both;
+    animation-delay: var(--enter-last, 0ms);
+  }
+
+  @keyframes flow-enter {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .flow-story--entering .flow-block,
+    .flow-story--entering .flow-header-panel,
+    .flow-story--entering .flow-highlight,
+    .flow-story--entering .flow-rule,
+    .flow-story--entering .flow-tip-mark,
+    .flow-story--entering .flow-seen-mark {
+      animation: none;
+    }
   }
 </style>

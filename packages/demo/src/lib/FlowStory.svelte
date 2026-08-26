@@ -60,6 +60,9 @@
       outerW: number;
       outerH: number;
     } | null;
+    /** Play the fullscreen-exit entrance (see FlowProse). Figures are
+     *  the host's own layer and stay out of it. */
+    entrance?: boolean;
     onSelectSection: (id: SectionId) => void;
     onSelectSub: (sectionId: SectionId, subSlug: string) => void;
     /** Peek hold completed on a figure. */
@@ -83,6 +86,7 @@
     activeSub,
     seenTopics,
     frameRect,
+    entrance = false,
     onSelectSection,
     onSelectSub,
     onpeekfire,
@@ -698,6 +702,7 @@
   {seenTopics}
   {sections}
   visibleRange={proseRange}
+  {entrance}
   {onSelectSection}
   {onSelectSub}
   oncontainer={(el: HTMLDivElement) => {

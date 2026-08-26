@@ -64,6 +64,7 @@
   } from "$demo/fullscreen.svelte.js";
   import type { SavedGeometry } from "$demo/peek-controller.svelte.js";
   import { chromeFade } from "$demo/chrome-fade.js";
+  import { entranceTotalMs } from "$demo/flow-entrance.js";
   import {
     shouldPlayIntroSplash,
     SPLASH_HOLD_MS,
@@ -1265,6 +1266,12 @@
   // text parts around the peeked frame as designed.
   const flowFrameRect = $derived.by(() => {
     if (!frameVisible || fsActive) return null;
+    // Exit-shrink: the frozen rect captured at animation start is the
+    // full window, and a hole that size pushes every line below the
+    // fold for the length of the shrink. The story lays out hole-free
+    // in its resting column instead and re-wraps once at settle, the
+    // same single re-wrap every other animation gets.
+    if (fsAnimPhase === "exit-shrink") return null;
     // Hole held still while a spring animation runs; one re-wrap at settle.
     if (animating && frozenFlowRect !== null) return frozenFlowRect;
     return chromeFrameRect;
@@ -1420,17 +1427,73 @@
     geo.reanchorBand();
   }
 
+  // -----------------------------------------------------------------------
+  // Fullscreen-exit entrance
+  //
+  // The story remounts identically on section navigation and on leaving
+  // fullscreen, and only this host knows which is which, so the exit
+  // arms a flag and FlowProse and SectionRail stagger their fade off it
+  // (one shared delay function, see flow-entrance.ts). Arming happens
+  // at the fsActive drop, and every route out of fullscreen passes
+  // through that drop, the pill exit and drag-past-threshold and splash
+  // and reduced-motion jump alike. A timer clears the flag once the
+  // sequence has run, so blocks the virtualizer mounts later render
+  // plain, and any page change or re-entry clears it too, so section
+  // navigation stays instant.
+  // -----------------------------------------------------------------------
+
+  let storyEntrance = $state(false);
+  let storyEntranceTimer = 0;
+
+  function armStoryEntrance(): void {
+    storyEntrance = true;
+    clearTimeout(storyEntranceTimer);
+    // The last group is one per sub, after the header's own leading
+    // group. A frame of margin covers a browser starting the CSS
+    // animation a paint later than the flag flip.
+    const lastGroup = untrack(() => activeSectionDef).subs.length;
+    storyEntranceTimer = window.setTimeout(
+      () => {
+        storyEntrance = false;
+      },
+      entranceTotalMs(lastGroup) + 100,
+    );
+  }
+
+  function clearStoryEntrance(): void {
+    clearTimeout(storyEntranceTimer);
+    storyEntranceTimer = 0;
+    storyEntrance = false;
+  }
+
+  // Section navigation during the entrance window remounts the story;
+  // the new page must appear instantly rather than replay the stagger.
+  // Plain var bookkeeping, same pattern as wasFsActive.
+  let entrancePageKey = untrack(() => pageKey);
+
+  $effect(() => {
+    const pk = pageKey;
+    if (pk === entrancePageKey) return;
+    entrancePageKey = pk;
+    clearStoryEntrance();
+  });
+
   $effect(() => {
     const active = fsActive;
     if (active === wasFsActive) return;
     wasFsActive = active;
     if (active) {
       fsEntryChrome = untrack(() => topChromeHeight());
+      // A stale entrance flag must not animate whatever mounts next.
+      clearStoryEntrance();
       return;
     }
     // untracked so this effect depends on fsActive alone, not on
     // whatever location realign reads on its way through.
-    untrack(() => scrollEngine.realign());
+    untrack(() => {
+      armStoryEntrance();
+      scrollEngine.realign();
+    });
   });
 
   // -----------------------------------------------------------------------
@@ -2360,7 +2423,7 @@
   {/if}
 </div>
 
-{#if !recordMode && !fsActive}
+{#if !recordMode && (!fsActive || fsAnimPhase === "exit-fade")}
   <!-- Unmounted in fullscreen rather than hidden. The app fills the
        window there and owns scrolling; leaving the story mounted below
        it gives the page a second scroll container competing for the
@@ -2368,20 +2431,27 @@
        geometry source on the way out, so nothing stale can drive the
        selection while the story is gone.
 
+       The exit-fade phase is the one exception: the frame still fills
+       the window for that beat, so the remounted story typesets behind
+       it and the text is already painted when the shrink starts
+       revealing the page. Nothing competes during it either, since the
+       covering frame owns pointer and wheel input and the scroll
+       engine's page gate stays closed until fsActive drops.
+
        --top-chrome-offset is where sticky story chrome parks: below the
        top bar, and below the flow band when it is open. Published as a
        custom property so the sticky rules stay declarative.
 
-       in: only. Coming back from fullscreen the story appears around a
-       frame that is still shrinking, so it fades. Going the other way
-       it is covered by a window-filling frame before it leaves, so an
-       out transition would buy nothing visible while keeping a second
+       No mount fade here. Coming back from fullscreen the entrance is
+       the staggered per-block fade (storyEntrance), and every other way
+       this block appears should be instant. Going the other way it is
+       covered by a window-filling frame before it leaves, so an out
+       transition would buy nothing visible while keeping a second
        scroll container alive for the length of the fade, which is the
        exact thing the unmount above exists to prevent. -->
   <div
     class="scroll-story"
     style="--top-chrome-offset: {stickyTopOffset()}px; --rail-w: {RAIL_WIDTH}px; --rail-gap: {RAIL_GAP}px; --wrapper-pad-left: {WRAPPER_PAD_LEFT}px; --wrapper-pad-right: {WRAPPER_PAD_RIGHT}px"
-    in:chromeFade
   >
     <div class="flow-story-wrapper">
       {#key uiLocale}{#key pageKey}
@@ -2393,6 +2463,7 @@
                 locale={uiLocale}
                 {seenTopics}
                 interactive={!entryVisible}
+                entrance={storyEntrance}
                 onSubClick={handleSubClick}
               />
             {/if}
@@ -2410,6 +2481,7 @@
                 activeSub={scrollEngine.activeSub}
                 {seenTopics}
                 frameRect={flowFrameRect}
+                entrance={storyEntrance}
                 onSelectSection={handleSectionClick}
                 onSelectSub={handleSubClick}
                 onpeekfire={handlePeekFire}
