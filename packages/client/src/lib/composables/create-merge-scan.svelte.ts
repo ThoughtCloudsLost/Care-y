@@ -98,7 +98,7 @@ export function createMergeScan(getDeps: () => MergeScanDeps): MergeScanResult {
     if (!serverData) return [];
 
     // Build field role maps keyed by formId.
-    // The server returns fieldKey (stable across saves, D1) so the
+    // The server returns fieldKey (client-minted, stable across saves) so the
     // Worker can match roles against response blob answer keys.
     const formRoles = new SvelteMap<string, SvelteMap<string, string>>();
     for (const fr of serverData.fieldRoles) {

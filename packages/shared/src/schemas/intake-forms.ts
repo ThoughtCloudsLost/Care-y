@@ -7,10 +7,10 @@
  * availability-matching Worker consumes. Do not change its JSON shape without
  * coordinating with that consumer.
  *
- * D1 (stable field keys): every field carries a client-minted fieldKey (UUID),
- * stable across saves. D2 (stable option keys): options are { key, label }
- * pairs; mappings reference option keys, not labels. D3 (localized content):
- * all human-readable strings are LocalizedText with base-locale fallback.
+ * Field keys are client-minted UUIDs, stable across saves. Options are
+ * { key, label } pairs; mappings and stored answers reference the immutable
+ * key, not the label. All human-readable strings are LocalizedText records
+ * with base-locale fallback.
  */
 
 import { z } from "zod";
@@ -29,7 +29,7 @@ export type FormLocale = (typeof FORM_LOCALES)[number];
 export const BASE_LOCALE: FormLocale = "en";
 
 // ---------------------------------------------------------------------------
-// Localized text (D3)
+// Localized text (base-locale fallback)
 // ---------------------------------------------------------------------------
 
 /**
@@ -239,7 +239,7 @@ export const numberRangeSchema = z.object({
 });
 
 // ---------------------------------------------------------------------------
-// Option schema (D2: stable option keys)
+// Option schema (stable option keys)
 // ---------------------------------------------------------------------------
 
 /**
@@ -255,7 +255,7 @@ export type IntakeOption = z.infer<typeof intakeOptionSchema>;
 
 // ---------------------------------------------------------------------------
 // Role mapping schemas (live inside encrypted config, client-side only)
-// Re-keyed from option label to option key (D2).
+// Re-keyed from option label to option key (mappings reference immutable keys).
 // ---------------------------------------------------------------------------
 
 /** Queue-routing: option key -> queue UUID. */
@@ -285,8 +285,8 @@ export type EscalationMapping = z.infer<typeof escalationMappingSchema>;
  * encrypt, renderer after decrypt). The wire/DB shape carries encryptedLabel/
  * encryptedConfig as base64; the server never validates plaintext labels.
  *
- * D2: select/multiselect options are now { key, label } pairs.
- * D3: placeholder is now LocalizedText.
+ * Select/multiselect options are { key, label } pairs (keys are immutable,
+ * labels resolve at display time). Placeholder is LocalizedText.
  */
 export const intakeFieldConfigSchema = z.discriminatedUnion("type", [
   z.object({
@@ -386,8 +386,8 @@ export type AvailabilityData = z.infer<typeof availabilityDataSchema>;
  * Structured form response plaintext shape (encrypted into encryptedFormResponse).
  * The availability-matching Worker decodes this exact shape.
  *
- * D1: answers reference fieldKey (stable across saves) rather than a transient
- * row id. D2: select/multiselect answers record option keys, not labels.
+ * Answers reference fieldKey (client-minted, stable across saves) rather than
+ * a transient row id. Select/multiselect answers record option keys, not labels.
  */
 export const intakeFormResponseSchema = z.object({
   formId: z.string().nullable(),
@@ -537,7 +537,7 @@ export const saveIntakeFormInputSchema = z
       ),
   })
   .refine((input) => {
-    // Field keys must be unique within a form (D1)
+    // Field keys must be unique within a form
     const keys = new Set<string>();
     for (const f of input.fields) {
       if (keys.has(f.fieldKey)) return false;

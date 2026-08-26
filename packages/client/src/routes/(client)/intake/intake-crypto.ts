@@ -48,7 +48,7 @@ const textEncoder = new TextEncoder();
  * Labels are included for human-readable description composition only;
  * they are NOT stored in the structured response blob.
  * Config is included optionally for resolving option keys to display
- * labels in the description (D2).
+ * labels in the description (options are key+label pairs; labels resolve at display time).
  */
 export interface IntakeAnswer {
   readonly fieldKey: string;
@@ -119,7 +119,7 @@ function resolveOptionKey(
 /**
  * Format a single answer value as a string for the description.
  * When config is provided and the field is select/multiselect, option keys
- * are resolved to base-locale labels per D2.
+ * are resolved to base-locale labels (option keys are immutable; labels resolve at display time).
  * Date values pass through as-is (YYYY-MM-DD).
  */
 function formatValue(
@@ -193,7 +193,7 @@ export function encryptIntake(
       nameValue !== null ? `Web intake - ${nameValue}` : "Web intake";
 
     // Description: one line per answered field, "<label>: <value>".
-    // Option keys are resolved to base-locale labels per D2.
+    // Option keys are resolved to base-locale labels for queue-facing text.
     const descriptionLines: string[] = [];
     for (const answer of answers) {
       const formatted = formatValue(answer.value, answer.config);
@@ -213,7 +213,7 @@ export function encryptIntake(
       : null;
 
     // Structured response blob (availability-matching Worker seam).
-    // Uses fieldKey for stable identity across saves (D1).
+    // Uses fieldKey (client-minted, stable across saves) for response identity.
     const responsePayload: IntakeFormResponse = {
       formId,
       answers: answers.map((a) => ({

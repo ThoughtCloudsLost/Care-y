@@ -87,7 +87,7 @@ function opt(
 }
 
 // =========================================================================
-// D3: Localized text and resolveLocalized
+// Localized text and resolveLocalized
 // =========================================================================
 
 describe("LocalizedText and resolveLocalized", () => {
@@ -190,7 +190,7 @@ describe("LocalizedText and resolveLocalized", () => {
 });
 
 // =========================================================================
-// D2: Stable option keys
+// Stable option keys
 // =========================================================================
 
 describe("intakeOptionSchema", () => {
@@ -224,7 +224,7 @@ describe("intakeOptionSchema", () => {
 });
 
 // =========================================================================
-// D1: Stable field keys (invariant tests)
+// Stable field keys (invariant tests)
 // =========================================================================
 
 describe("field key stability invariants", () => {
@@ -298,7 +298,7 @@ describe("field key stability invariants", () => {
 });
 
 // =========================================================================
-// D2: Mapping survival across option rename
+// Mapping survival across option rename
 // =========================================================================
 
 describe("mapping survival across option rename", () => {
@@ -354,7 +354,7 @@ describe("mapping survival across option rename", () => {
 });
 
 // =========================================================================
-// D3: Locale fallback in field config
+// Locale fallback in field config
 // =========================================================================
 
 describe("localized field config", () => {

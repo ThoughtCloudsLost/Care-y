@@ -19,7 +19,7 @@ import { withTerms } from "$lib/terminology/with-terms.js";
 import type { DemoFeature, DemoTopic } from "./bridge.js";
 
 // -----------------------------------------------------------------------
-// Locale type (re-exported for D4 consumers)
+// Locale type (re-exported for downstream consumers)
 // -----------------------------------------------------------------------
 
 /** A locale value from the paraglide runtime. */
@@ -37,7 +37,7 @@ export interface ClassifierContext {
 }
 
 // -----------------------------------------------------------------------
-// matchesAnyLocale (D4: shared locale-sweep label matching)
+// matchesAnyLocale (shared locale-sweep label matching)
 // -----------------------------------------------------------------------
 
 /**

@@ -825,7 +825,7 @@
       }
     } else {
       // Custom form: all visible data fields in order.
-      // Labels resolve to the org base locale (D2) so queue-facing ticket
+      // Labels resolve to the org base locale so queue-facing ticket
       // text stays uniform regardless of the language the form was filled in.
       // Hidden fields (conditional visibility) are excluded from the response
       // blob and ticket text.
