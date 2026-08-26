@@ -3,7 +3,7 @@
   import { prefersReducedMotion } from "svelte/motion";
   import { X } from "@lucide/svelte";
   import * as m from "$lib/paraglide/messages.js";
-  import { SECTIONS, type Section, type SectionId } from "./scroll-sections.js";
+  import type { Section, SectionId } from "./scroll-sections.js";
   import type { DemoTopic } from "./bridge.js";
   import { buildBlocks } from "./story-blocks.js";
   import {
@@ -33,7 +33,14 @@
   interface Props {
     open: boolean;
     width: number;
-    activeSection: SectionId | null;
+    /**
+     * The resolved section definition to render, handed down rather
+     * than re-resolved from SECTIONS here. The page shows sections that
+     * list does not carry (the entry page, the synthesized coming-soon
+     * placeholder), and the drawer must show the same page the story
+     * would, so the host's resolution is the only one.
+     */
+    section: Section;
     activeSub: string | null;
     locale: string;
     seenTopics: ReadonlySet<DemoTopic>;
@@ -75,7 +82,7 @@
   let {
     open,
     width,
-    activeSection,
+    section,
     activeSub,
     locale,
     seenTopics,
@@ -150,18 +157,10 @@
     return () => window.removeEventListener("keydown", onKeydown);
   });
 
-  const activeEntry: Section | null = $derived(
-    activeSection !== null
-      ? (SECTIONS.find((s) => s.id === activeSection) ?? null)
-      : null,
-  );
-
   // Kept as a derived rather than built inline in the markup: a fresh
   // array on every render would re-key the prose's sub-to-topic lookup
   // each pass, for a value that only changes with the section.
-  const activeSections: Section[] = $derived(
-    activeEntry !== null ? [activeEntry] : [],
-  );
+  const activeSections: Section[] = $derived([section]);
 
   // -----------------------------------------------------------------------
   // Resize handle (pointer-captured drag, rAF-coalesced)
@@ -318,8 +317,7 @@
 
   // Build blocks for the active section only, filtering out figures
   let proseBlocks: FlowBlock[] = $derived.by(() => {
-    if (activeEntry === null) return [];
-    const all = buildBlocks([activeEntry], locale);
+    const all = buildBlocks([section], locale);
     return all.filter((b) => b.kind !== "figure");
   });
 
@@ -470,7 +468,6 @@
     scrollRafId = 0;
     if (suppressDrawerScroll) return;
     if (layoutResult === null || contentEl === undefined) return;
-    if (activeSection === null) return;
 
     const scrollTop = contentEl.scrollTop;
     const readingLine = contentEl.clientHeight * READING_LINE_RATIO;
@@ -492,7 +489,7 @@
     }
 
     if (lastSlug !== null && lastSlug !== activeSub) {
-      onScrollSub(activeSection, lastSlug);
+      onScrollSub(section.id, lastSlug);
     }
   }
 
@@ -548,13 +545,17 @@
   // emitting a spurious scroll-driven navigation.
   // -----------------------------------------------------------------------
 
-  let prevSection: SectionId | null = null;
+  // Compared by object identity, not id. The entry page deliberately
+  // reuses the login id, so an id comparison would miss the entry
+  // page swapping for the real login section and leave the drawer
+  // scrolled partway into the wrong prose.
+  let prevSection: Section | null = null;
 
   $effect(() => {
-    const section = activeSection;
-    if (section === prevSection) return;
+    const next = section;
+    if (next === prevSection) return;
     const isInit = prevSection === null;
-    prevSection = section;
+    prevSection = next;
     if (isInit) return;
 
     armDrawerSuppression();
@@ -652,7 +653,7 @@
           {layoutColumn}
           layoutHole={null}
           containerWidth={contentWidth}
-          {activeSection}
+          activeSection={section.id}
           {activeSub}
           {seenTopics}
           sections={activeSections}

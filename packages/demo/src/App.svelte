@@ -2532,7 +2532,7 @@
   <HandbookDrawer
     open={fsCtrl.drawerOpen}
     width={fsCtrl.drawerW}
-    activeSection={scrollEngine.activeSection}
+    section={activeSectionDef}
     activeSub={scrollEngine.activeSub}
     locale={uiLocale}
     {seenTopics}
