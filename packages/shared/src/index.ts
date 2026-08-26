@@ -376,6 +376,7 @@ export {
   priorityEventParamsSchema,
   type ContentCategory,
   type ContentTypeMeta,
+  type RenderVariant,
   type AssignmentEventParams,
   type PriorityEventParams,
 } from "./schemas/follow-up-registry.js";
@@ -590,6 +591,7 @@ export {
   openShareResponseSchema,
   shareStatusSchema,
   portalChannelKindSchema,
+  PORTAL_SURFACE_KINDS,
   accountUsernameSchema,
   accountRegistrationSchema,
   getAccountSaltInputSchema,
@@ -609,6 +611,7 @@ export {
   type RewrappedMessage,
   type RewrappedMessages,
   type AccountUpgradeInput,
+  type AccountUpgradeWireInput,
   type AccountChangePasswordInput,
   listIntakeResponsesInputSchema,
   listIntakeResponsesOutputSchema,

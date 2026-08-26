@@ -28,6 +28,17 @@ import {
 /** crypto_box_seal(32-byte tk) = 32 + 48 = 80 bytes (variant-agnostic exact-byte check). */
 export const intakeWrappedTkSchema = base64Bytes(80, "wrappedTk (sealed box)");
 
+/** EciesOutput on the wire: 32-byte point, 24-byte nonce, capped ciphertext. */
+export const eciesTripleSchema = z.object({
+  ephemeralPoint: base64Bytes(32, "ephemeralPoint"),
+  nonce: base64Bytes(24, "nonce"),
+  ciphertext: base64String("ciphertext").refine(
+    (s) => s.length <= 28_000,
+    "ciphertext too large",
+  ),
+});
+export type EciesTriple = z.infer<typeof eciesTripleSchema>;
+
 /**
  * Intake form submission from the anonymous client browser.
  *
@@ -77,24 +88,8 @@ export const intakeSubmissionInputSchema = z
         salt: base64Bytes(16, "argon2Salt"),
         publicKey: base64Bytes(32, "accountPublicKey"),
         authHash: base64Bytes(32, "authHash"),
-        keyCheck: z.object({
-          ephemeralPoint: base64Bytes(32, "ephemeralPoint"),
-          nonce: base64Bytes(24, "nonce"),
-          ciphertext: base64String("ciphertext").refine(
-            (s) => s.length <= 28_000,
-            "ciphertext too large",
-          ),
-        }),
-        selfCopy: z
-          .object({
-            ephemeralPoint: base64Bytes(32, "ephemeralPoint"),
-            nonce: base64Bytes(24, "nonce"),
-            ciphertext: base64String("ciphertext").refine(
-              (s) => s.length <= 28_000,
-              "ciphertext too large",
-            ),
-          })
-          .optional(),
+        keyCheck: eciesTripleSchema,
+        selfCopy: eciesTripleSchema.optional(),
       })
       .optional(),
     /** Optional continuation link branch (client opts into a portal channel for resubmission). */
@@ -106,24 +101,8 @@ export const intakeSubmissionInputSchema = z
           .brand<"ChannelSecret">(),
         authHash: base64Bytes(32, "authHash"),
         clientPublic: base64Bytes(32, "clientPublic"),
-        keyCheck: z.object({
-          ephemeralPoint: base64Bytes(32, "ephemeralPoint"),
-          nonce: base64Bytes(24, "nonce"),
-          ciphertext: base64String("ciphertext").refine(
-            (s) => s.length <= 28_000,
-            "ciphertext too large",
-          ),
-        }),
-        selfCopy: z
-          .object({
-            ephemeralPoint: base64Bytes(32, "ephemeralPoint"),
-            nonce: base64Bytes(24, "nonce"),
-            ciphertext: base64String("ciphertext").refine(
-              (s) => s.length <= 28_000,
-              "ciphertext too large",
-            ),
-          })
-          .optional(),
+        keyCheck: eciesTripleSchema,
+        selfCopy: eciesTripleSchema.optional(),
       })
       .optional(),
   })
@@ -201,6 +180,17 @@ export const portalChannelKindSchema = z.enum([
 ]);
 export type PortalChannelKind = z.infer<typeof portalChannelKindSchema>;
 
+/**
+ * Channel kinds that participate in the portal surface (bearer-token auth,
+ * bootstrap/reply, account-offer gate). Derived from portalChannelKindSchema
+ * by excluding "account" (session-cookie auth) so the set stays correct if
+ * new kinds are added or the enum is reordered.
+ */
+export const PORTAL_SURFACE_KINDS: readonly Exclude<
+  PortalChannelKind,
+  "account"
+>[] = portalChannelKindSchema.exclude(["account"]).options;
+
 /** 48 lowercase hex chars: hex(sha512(seed)[0:24]). */
 // The brand makes this the bearer secret rather than a row key. The codebase
 // already knew the difference and encoded it as this regex; branding moves that
@@ -213,17 +203,6 @@ export const portalChannelIdSchema = z
 
 /** 32-byte bearer auth token, base64-encoded. */
 export const portalAuthSchema = base64Bytes(32, "channelAuth");
-
-/** EciesOutput on the wire: 32-byte point, 24-byte nonce, capped ciphertext. */
-export const eciesTripleSchema = z.object({
-  ephemeralPoint: base64Bytes(32, "ephemeralPoint"),
-  nonce: base64Bytes(24, "nonce"),
-  ciphertext: base64String("ciphertext").refine(
-    (s) => s.length <= 28_000,
-    "ciphertext too large",
-  ),
-});
-export type EciesTriple = z.infer<typeof eciesTripleSchema>;
 
 /** Bootstrap request: resolve channel by id + auth, return key check and messages. */
 export const portalBootstrapInputSchema = z.object({
@@ -334,6 +313,7 @@ export const accountUpgradeInputSchema = z.object({
   rewrappedMessages: rewrappedMessagesSchema,
 });
 export type AccountUpgradeInput = z.infer<typeof accountUpgradeInputSchema>;
+export type AccountUpgradeWireInput = z.input<typeof accountUpgradeInputSchema>;
 
 export const accountChangePasswordInputSchema = z.object({
   currentAuthToken: base64Bytes(32, "currentAuthToken"),

@@ -47,7 +47,11 @@ import type { SealedBoxEncryptor } from "../crypto/sealed-box.js";
 import { maskPhone } from "../utils/sql.js";
 import { createDependencyService } from "./dependency-service.js";
 import { createReadCursorService } from "./read-cursor-service.js";
-import { ErrorCode, aliasHashSchema } from "@care-y/shared";
+import {
+  ErrorCode,
+  aliasHashSchema,
+  PORTAL_SURFACE_KINDS,
+} from "@care-y/shared";
 import { encode } from "@care-y/crypto";
 
 export interface TicketRecord {
@@ -638,6 +642,7 @@ export function createTicketService(
             eb(eb.cast("t.assigned_to", "uuid"), "=", eb.ref("u.id")),
           ),
         )
+        // Kind-agnostic: ticket detail surfaces any active channel for the client
         .leftJoin("portal_channels as pc", (join) =>
           join
             .onRef("pc.client_id", "=", "c.id")
@@ -1752,7 +1757,7 @@ export async function setAccountOfferForClient(
     .set({ account_offer: enabled })
     .where("client_id", "=", clientId)
     .where("status", "=", "active")
-    .where("kind", "in", ["secure_link", "intake_continuation"])
+    .where("kind", "in", [...PORTAL_SURFACE_KINDS])
     .executeTakeFirst();
 
   return result.numUpdatedRows > 0n;

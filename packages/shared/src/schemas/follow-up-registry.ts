@@ -6,6 +6,8 @@ import { userIdSchema } from "../ids.js";
 
 export type ContentCategory = "message" | "system" | "note" | "article";
 
+export type RenderVariant = "call" | "share" | "correction";
+
 export interface ContentTypeMeta {
   readonly category: ContentCategory;
   readonly allowedSources: readonly FollowUpSource[];
@@ -13,6 +15,7 @@ export interface ContentTypeMeta {
   readonly hasEncryptedContent: boolean;
   readonly hasEventParams: boolean;
   readonly groupable: boolean;
+  readonly renderVariant?: RenderVariant;
 }
 
 export const assignmentEventParamsSchema = z.object({
@@ -66,6 +69,7 @@ export const CONTENT_TYPE_REGISTRY: Record<FollowUpType, ContentTypeMeta> = {
     hasEncryptedContent: false,
     hasEventParams: false,
     groupable: false,
+    renderVariant: "call",
   },
   voicemail: {
     category: "message",
@@ -146,6 +150,7 @@ export const CONTENT_TYPE_REGISTRY: Record<FollowUpType, ContentTypeMeta> = {
     hasEncryptedContent: true,
     hasEventParams: true,
     groupable: false,
+    renderVariant: "share",
   },
   contact_correction: {
     category: "message",
@@ -154,5 +159,6 @@ export const CONTENT_TYPE_REGISTRY: Record<FollowUpType, ContentTypeMeta> = {
     hasEncryptedContent: true,
     hasEventParams: false,
     groupable: false,
+    renderVariant: "correction",
   },
 } as const;

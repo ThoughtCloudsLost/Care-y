@@ -26,6 +26,10 @@
   import { computeGaps } from "$lib/tickets/gap-indicators.js";
   import { systemEventLabel } from "$lib/tickets/system-event-label.js";
   import { formatCallLabel } from "$lib/tickets/call-label.js";
+  import {
+    followUpKind,
+    followUpRenderVariant,
+  } from "$lib/tickets/follow-up-utils.js";
   import type {
     TimelineItem,
     ClusterRecord,
@@ -101,21 +105,22 @@
 
   function isLandmark(item: TimelineItem): boolean {
     if (item.source === "system") return true;
-    if (item.type === "internal_note") return true;
-    if (item.type === "phone_call") return true;
-    if (item.type === "share_link") return true;
-    if (item.type === "contact_correction") return true;
+    const kind = followUpKind(item);
+    if (kind === "note") return true;
+    const variant = followUpRenderVariant(item);
+    if (variant !== undefined) return true;
     if (item.hasRecording || item.hasImage || item.hasFile) return true;
     return false;
   }
 
   function landmarkIcon(item: TimelineItem): Component {
-    if (item.type === "share_link") return Link2;
+    const variant = followUpRenderVariant(item);
+    if (variant === "share") return Link2;
     if (item.hasRecording)
       return resolveFollowUpTypeIcon(item.type, "recording");
     if (item.hasImage) return resolveFollowUpTypeIcon(item.type, "image");
     if (item.hasFile) return resolveFollowUpTypeIcon(item.type, "file");
-    if (item.type === "internal_note" && resolveNoteIcon !== undefined) {
+    if (followUpKind(item) === "note" && resolveNoteIcon !== undefined) {
       const icon = resolveNoteIcon(item.noteTypeId);
       if (icon !== undefined) return icon;
     }
@@ -127,15 +132,17 @@
       return systemEventLabel(item.type, item.eventParams, resolveUserName);
     }
 
-    if (item.type === "share_link") {
+    const variant = followUpRenderVariant(item);
+
+    if (variant === "share") {
       return m.followup_type_share_link();
     }
 
-    if (item.type === "contact_correction") {
+    if (variant === "correction") {
       return m.followup_type_contact_correction();
     }
 
-    if (item.type === "internal_note") {
+    if (followUpKind(item) === "note") {
       const decrypted = resolveDecrypted(item.id);
       if (decrypted !== undefined && decrypted !== "") {
         return decrypted.length > 40
@@ -157,7 +164,7 @@
     if (item.hasImage) return "Photo";
     if (item.hasFile) return "File";
 
-    if (item.type === "phone_call") {
+    if (variant === "call") {
       return formatCallLabel(item);
     }
 

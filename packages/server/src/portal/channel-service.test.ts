@@ -373,6 +373,50 @@ describe.skipIf(!process.env.DATABASE_URL)("PortalChannelService", () => {
         .executeTakeFirstOrThrow();
       expect(client.communication_tier).toBe("sms_email");
     });
+
+    it("leaves tier untouched when no active channel existed", async () => {
+      const clientId = await insertClient(db);
+      const reg = makeRegistration();
+
+      // Create and revoke a channel (sets tier back to sms_email)
+      await createChannel(db, clientId, reg);
+
+      // Manually set tier to secure_link to simulate a state where
+      // the channel was already revoked but the tier was re-set
+      await db
+        .updateTable("clients")
+        .set({ communication_tier: "secure_link" })
+        .where("id", "=", clientId)
+        .execute();
+
+      // Revoke the active channel
+      await revokeChannel(db, clientId);
+
+      // After revoking the real channel, tier is sms_email
+      const afterFirst = await db
+        .selectFrom("clients")
+        .select("communication_tier")
+        .where("id", "=", clientId)
+        .executeTakeFirstOrThrow();
+      expect(afterFirst.communication_tier).toBe("sms_email");
+
+      // Now set tier to secure_link again (simulating external state)
+      await db
+        .updateTable("clients")
+        .set({ communication_tier: "secure_link" })
+        .where("id", "=", clientId)
+        .execute();
+
+      // Call revokeChannel again with no active channel: tier must stay
+      await revokeChannel(db, clientId);
+
+      const afterSecond = await db
+        .selectFrom("clients")
+        .select("communication_tier")
+        .where("id", "=", clientId)
+        .executeTakeFirstOrThrow();
+      expect(afterSecond.communication_tier).toBe("secure_link");
+    });
   });
 
   // -----------------------------------------------------------------------

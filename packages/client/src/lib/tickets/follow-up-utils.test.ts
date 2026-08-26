@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
   followUpKind,
+  followUpRenderVariant,
   groupConsecutive,
   type FollowUpGroup,
 } from "./follow-up-utils.js";
@@ -35,6 +36,32 @@ describe("followUpKind", () => {
 
   it("falls back to message for unknown types", () => {
     expect(followUpKind({ type: "some_future_type" })).toBe("message");
+  });
+});
+
+describe("followUpRenderVariant", () => {
+  it("returns 'call' for phone_call", () => {
+    expect(followUpRenderVariant({ type: "phone_call" })).toBe("call");
+  });
+
+  it("returns 'share' for share_link", () => {
+    expect(followUpRenderVariant({ type: "share_link" })).toBe("share");
+  });
+
+  it("returns 'correction' for contact_correction", () => {
+    expect(followUpRenderVariant({ type: "contact_correction" })).toBe(
+      "correction",
+    );
+  });
+
+  it("returns undefined for types without a render variant", () => {
+    expect(followUpRenderVariant({ type: "message" })).toBeUndefined();
+    expect(followUpRenderVariant({ type: "internal_note" })).toBeUndefined();
+    expect(followUpRenderVariant({ type: "hold_placed" })).toBeUndefined();
+  });
+
+  it("returns undefined for unknown types", () => {
+    expect(followUpRenderVariant({ type: "some_future_type" })).toBeUndefined();
   });
 });
 

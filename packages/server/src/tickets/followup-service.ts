@@ -462,6 +462,8 @@ export function createFollowUpService(
 
           // When portalCopy is present, resolve the client's ACTIVE channel
           // inside the transaction and store the client copy atomically.
+          // Kind-agnostic: volunteer reply copies must reach secure_link,
+          // intake_continuation, and account channels alike.
           if (input.portalCopy) {
             const activeChannel = await trx
               .selectFrom("portal_channels")

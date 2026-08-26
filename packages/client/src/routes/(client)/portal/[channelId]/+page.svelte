@@ -3,7 +3,7 @@
 
   This page is session-free. It imports neither CryptoBridge nor any
   session composable, and it touches no browser storage.
-  All key material lives in module-scope state, zeroed on quick exit
+  All key material lives in composable-scope state, zeroed on quick exit
   and pagehide. The fragment never reaches any server (RFC 3986).
 
   Six orchestration states (in order):
@@ -29,28 +29,9 @@
   import { trpc } from "$lib/trpc/index.js";
   import { portalKeys } from "$lib/query/keys.js";
   import { announceToLiveRegion } from "$lib/utils/announce.js";
-  import {
-    derivePortalKeypair,
-    decode,
-    encode,
-    getSodium,
-  } from "@care-y/crypto";
+  import { decode, encode } from "@care-y/crypto";
   import { newFollowupId, newKeyGeneration } from "@care-y/shared";
-  import {
-    parseFragment,
-    verifyKeyCheck,
-    encryptReply,
-    createPortalSession,
-    decodeEciesTriple,
-    decryptPortalMessage,
-    type PortalSession,
-  } from "$lib/portal/portal-crypto.js";
-  import {
-    buildAccountRegistration,
-    rewrapMessages,
-  } from "$lib/portal/account-crypto.js";
-  import type { LoginCryptoCallbacks } from "$lib/auth/login-crypto.js";
-  import { buildLoginCallbacks } from "$lib/auth/crypto-callbacks.js";
+  import { encryptReply } from "$lib/portal/portal-crypto.js";
   import QuickExit from "$lib/components/portal/QuickExit.svelte";
   import PortalHint from "$lib/components/portal/PortalHint.svelte";
   import PortalPassphraseGate from "$lib/portal/PortalPassphraseGate.svelte";
@@ -58,6 +39,10 @@
   import PortalComposer from "$lib/portal/PortalComposer.svelte";
   import AccountCreateForm from "$lib/portal/AccountCreateForm.svelte";
   import { X } from "@lucide/svelte";
+  import { createPortalFragment } from "$lib/composables/portal/create-portal-fragment.svelte.js";
+  import { createPortalSessionState } from "$lib/composables/portal/create-portal-session.svelte.js";
+  // care-y-ignore-next-line route-no-db-import -- client composable, no database access; validator heuristic misreads the module
+  import { createPortalUpgrade } from "$lib/composables/portal/create-portal-upgrade.svelte.js";
 
   // Default safe URL when the org has not configured one
   const DEFAULT_SAFE_URL = "https://weather.gov";
@@ -68,73 +53,35 @@
 
   // ---------------------------------------------------------------------------
   // Fragment parsing (state 1)
-  //
-  // parseFragment calls decode/derive which need initialized libsodium.
-  // CryptoProvider fires getSodium() without awaiting it, so on a cold hard
-  // load the WASM may not be ready yet. hashPresent is a synchronous check
-  // that needs no sodium and guards the template, while fragmentData is
-  // populated by a one-shot $effect after getSodium() resolves.
   // ---------------------------------------------------------------------------
 
-  const hashPresent = $derived(
-    browser ? Boolean(location.hash && location.hash !== "#") : false,
+  const fragment = createPortalFragment(
+    browser,
+    () => location.hash,
+    () => routeChannelId,
   );
-  let fragmentData = $state<{
-    seed: Uint8Array;
-    auth: Uint8Array;
-    channelId: string;
-  } | null>(null);
-  let fragmentResolved = $state(false);
 
-  // One-shot async init: await sodium, then parse the fragment
-  let fragmentInitStarted = false;
-  $effect(() => {
-    if (!browser || !hashPresent || fragmentInitStarted) return;
-    fragmentInitStarted = true;
-
-    void (async () => {
-      await getSodium();
-      fragmentData = parseFragment(location.hash);
-      fragmentResolved = true;
-    })();
-  });
-
-  // No hash at all: resolve immediately so the missing-info state shows
-  $effect(() => {
-    if (!browser || hashPresent || fragmentResolved) return;
-    fragmentResolved = true;
-  });
-
-  const hasValidFragment = $derived(fragmentResolved && fragmentData !== null);
-
-  // Strip the fragment from the address bar after the one-shot parse captures
-  // it into state. Two concerns are separated:
-  //   1. replaceState throws before router init, so afterNavigate marks
-  //      router readiness (it fires post-init on mount).
-  //   2. hasValidFragment becomes true asynchronously (after sodium loads
-  //      and the parse effect runs). An $effect watches both conditions so
-  //      the strip fires regardless of which resolves first.
-  let routerReady = $state(false);
-  let fragmentStripped = $state(false);
-
+  // Wire afterNavigate to mark router readiness (replaceState throws
+  // before router init; afterNavigate fires post-init on mount).
   afterNavigate(() => {
-    routerReady = true;
+    fragment.markRouterReady();
   });
 
+  // Strip the fragment from the address bar once both router and parse are ready.
+  // strippablePath is a readiness gate; the template literal satisfies
+  // SvelteKit's typed resolve() overload.
   $effect(() => {
-    if (!routerReady || !hasValidFragment || fragmentStripped) return;
-    fragmentStripped = true;
+    if (fragment.strippablePath === null) return;
+    fragment.markStripped();
     replaceState(resolve(`/portal/${routeChannelId}`), {});
   });
 
   // ---------------------------------------------------------------------------
-  // Session state (module scope, zeroed on exit)
+  // Session state (composable scope, zeroed on exit)
   // ---------------------------------------------------------------------------
 
-  let session = $state<PortalSession | null>(null);
-  let passphraseError = $state(false);
-  let passphraseDerivePending = $state(false);
-  let keyCheckPassed = $state(false);
+  const portalSession = createPortalSessionState();
+
   let hintShown = $state(false);
   let hintDismissed = $state(false);
 
@@ -153,11 +100,6 @@
   let lastSentText = "";
   let composerRef = $state<PortalComposer | null>(null);
 
-  function destroySession(): void {
-    session?.destroy();
-    session = null;
-  }
-
   // Safe URL: org-configured exit target from bootstrap, else the default
   const safeUrl = $derived.by((): string => {
     return bootstrapQuery.data?.safeExitUrl ?? DEFAULT_SAFE_URL;
@@ -170,15 +112,15 @@
   const bootstrapQuery = createQuery(() => ({
     queryKey: portalKeys.bootstrap(routeChannelId),
     queryFn: async () => {
-      if (!trpc.clientPortal || !fragmentData) {
+      if (!trpc.clientPortal || !fragment.fragmentData) {
         throw new Error("Portal not available");
       }
       return trpc.clientPortal.portalBootstrap.query({
-        channelId: fragmentData.channelId,
-        auth: encode(fragmentData.auth),
+        channelId: fragment.fragmentData.channelId,
+        auth: encode(fragment.fragmentData.auth),
       });
     },
-    enabled: hasValidFragment,
+    enabled: fragment.hasValidFragment,
     retry: false,
     staleTime: 5 * 60 * 1000,
   }));
@@ -204,15 +146,15 @@
   const messagesQuery = createQuery(() => ({
     queryKey: portalKeys.messages(routeChannelId),
     queryFn: async () => {
-      if (!trpc.clientPortal || !fragmentData) {
+      if (!trpc.clientPortal || !fragment.fragmentData) {
         throw new Error("Portal not available");
       }
       return trpc.clientPortal.portalMessages.query({
-        channelId: fragmentData.channelId,
-        auth: encode(fragmentData.auth),
+        channelId: fragment.fragmentData.channelId,
+        auth: encode(fragment.fragmentData.auth),
       });
     },
-    enabled: keyCheckPassed,
+    enabled: portalSession.keyCheckPassed,
     refetchInterval: 5 * 60 * 1000,
     refetchOnWindowFocus: true,
     retry: false,
@@ -229,7 +171,8 @@
 
   // Bootstrap succeeded but needs passphrase
   const needsPassphrase = $derived(
-    bootstrapQuery.data?.hasPassphrase === true && !keyCheckPassed,
+    bootstrapQuery.data?.hasPassphrase === true &&
+      !portalSession.keyCheckPassed,
   );
 
   // No-passphrase immediate derive
@@ -238,28 +181,16 @@
       !browser ||
       !bootstrapQuery.data ||
       bootstrapQuery.data.hasPassphrase ||
-      keyCheckPassed ||
-      !fragmentData
+      portalSession.keyCheckPassed ||
+      !fragment.fragmentData
     ) {
       return;
     }
 
-    // No passphrase: derive immediately and verify key check
-    try {
-      const keypair = derivePortalKeypair(fragmentData.seed);
-      const keyCheck = decodeEciesTriple(bootstrapQuery.data.keyCheck);
-      if (verifyKeyCheck(keypair, keyCheck)) {
-        session = createPortalSession(
-          fragmentData.channelId,
-          fragmentData.auth,
-          keypair,
-          fragmentData.seed,
-        );
-        keyCheckPassed = true;
-      }
-    } catch {
-      // Corrupt fragment or derivation failure; treat as dead link
-    }
+    portalSession.tryNoPassphraseDerive(
+      fragment.fragmentData,
+      bootstrapQuery.data.keyCheck,
+    );
   });
 
   // ---------------------------------------------------------------------------
@@ -268,34 +199,9 @@
 
   function handlePassphraseSubmit(passphrase: string): void {
     const data = bootstrapQuery.data;
-    const frag = fragmentData;
+    const frag = fragment.fragmentData;
     if (!data || !frag) return;
-    passphraseDerivePending = true;
-    passphraseError = false;
-
-    // Run Argon2id asynchronously (setTimeout to let the UI update first)
-    setTimeout(() => {
-      try {
-        const keypair = derivePortalKeypair(frag.seed, passphrase);
-        const keyCheck = decodeEciesTriple(data.keyCheck);
-        if (verifyKeyCheck(keypair, keyCheck)) {
-          session = createPortalSession(
-            frag.channelId,
-            frag.auth,
-            keypair,
-            frag.seed,
-          );
-          keyCheckPassed = true;
-          passphraseError = false;
-        } else {
-          passphraseError = true;
-        }
-      } catch {
-        passphraseError = true;
-      } finally {
-        passphraseDerivePending = false;
-      }
-    }, 0);
+    portalSession.submitPassphrase(passphrase, frag, data.keyCheck);
   }
 
   // ---------------------------------------------------------------------------
@@ -322,7 +228,6 @@
       return trpc.clientPortal.portalReply.mutate(input);
     },
     onSuccess: () => {
-      // Refetch messages after successful send
       void queryClient.invalidateQueries({
         queryKey: portalKeys.messages(routeChannelId),
       });
@@ -343,8 +248,9 @@
     kind?: "message" | "contact_correction",
   ): void {
     sendError = "";
+    const sess = portalSession.session;
     const ticketId = bootstrapQuery.data?.ticketId;
-    if (!session || !orgPublicKey || ticketId == null || ticketId === "") {
+    if (!sess || !orgPublicKey || ticketId == null || ticketId === "") {
       return;
     }
     lastSentText = text;
@@ -355,15 +261,10 @@
     const payload = encryptReply(
       text,
       orgPublicKey,
-      session.keypair.clientPublic,
-      {
-        ticketId,
-        followUpId,
-        keyGeneration,
-      },
+      sess.keypair.clientPublic,
+      { ticketId, followUpId, keyGeneration },
     );
 
-    // Optimistic append: add self-copy for immediate display
     optimisticMessages = [
       ...optimisticMessages,
       {
@@ -378,8 +279,8 @@
     ];
 
     replyMutation.mutate({
-      channelId: session.channelId,
-      auth: encode(session.auth),
+      channelId: sess.channelId,
+      auth: encode(sess.auth),
       ticketId,
       followUpId,
       keyGeneration,
@@ -416,114 +317,31 @@
   // Upgrade card (shows when bootstrap.accountOffer is true)
   // ---------------------------------------------------------------------------
 
-  let upgradeCardDismissed = $state(false);
-  let upgradeCardExpanded = $state(false);
-  let upgradePending = $state(false);
-  let upgradeError = $state("");
-  let upgradeSuccess = $state(false);
-  let upgradeUsername = $state("");
+  const upgrade = createPortalUpgrade();
 
   const showAccountOffer = $derived(
-    bootstrapQuery.data?.accountOffer === true && !upgradeSuccess,
+    bootstrapQuery.data?.accountOffer === true && !upgrade.success,
   );
 
-  function dismissUpgradeCard(): void {
-    upgradeCardDismissed = true;
-  }
-
-  function expandUpgradeCard(): void {
-    upgradeCardExpanded = true;
-  }
-
-  function makeCryptoCallbacks(): LoginCryptoCallbacks {
-    // Single indeterminate progressbar; phases are not surfaced separately.
-    return buildLoginCallbacks(() => undefined);
-  }
-
   function handleUpgradeSubmit(username: string, password: string): void {
-    if (upgradePending || !session || !fragmentData) return;
-    upgradePending = true;
-    upgradeError = "";
+    const sess = portalSession.session;
+    const frag = fragment.fragmentData;
+    if (!sess || !frag) return;
+    if (!trpc.clientPortal) return;
 
-    const callbacks = makeCryptoCallbacks();
-
-    void (async () => {
-      try {
-        const { payload, keypair: newKeypair } = await buildAccountRegistration(
-          username,
-          password,
-          null,
-          callbacks,
-        );
-
-        // Re-encrypt already-decrypted thread messages to the new key
-        const decryptedMsgs = collectDecryptedMessagesForUpgrade();
-        const rewrapped = rewrapMessages(
-          decryptedMsgs,
-          newKeypair.clientPublic,
-        );
-
-        // Submit the upgrade mutation
-        if (!trpc.clientPortal) return;
-        await trpc.clientPortal.accountUpgrade.mutate({
-          channelId: fragmentData.channelId,
-          auth: encode(fragmentData.auth),
-          account: payload,
-          rewrappedMessages: rewrapped,
-        });
-
-        // Clean up new keypair (upgrade page shows success, not a session)
-        const { requireSodium } = await import("@care-y/crypto");
-        requireSodium().memzero(newKeypair.clientPrivate);
-
-        // Destroy the old session (channel is revoked server-side)
-        destroySession();
-
-        upgradeUsername = username;
-        upgradeSuccess = true;
-      } catch (err: unknown) {
-        // Check for CONFLICT (stale thread)
-        if (
-          typeof err === "object" &&
-          err !== null &&
-          "data" in err &&
-          typeof (err as Record<string, unknown>).data === "object"
-        ) {
-          upgradeError = m.account_stale_thread();
-          // Refetch messages so the client can try again
-          void queryClient.invalidateQueries({
-            queryKey: portalKeys.messages(routeChannelId),
-          });
-        } else {
-          upgradeError = m.account_login_failed();
-        }
-      } finally {
-        upgradePending = false;
-      }
-    })();
-  }
-
-  function collectDecryptedMessagesForUpgrade(): readonly {
-    id: string;
-    text: string;
-  }[] {
-    const msgs = messagesQuery.data?.messages ?? [];
-    if (!session) return [];
-    const result: { id: string; text: string }[] = [];
-    for (const msg of msgs) {
-      if (!("id" in msg) || typeof msg.id !== "string") continue;
-      try {
-        const triple = decodeEciesTriple(msg);
-        const text = decryptPortalMessage(
-          triple,
-          session.keypair.clientPrivate,
-        );
-        result.push({ id: msg.id, text });
-      } catch {
-        // Skip messages that fail to decrypt
-      }
-    }
-    return result;
+    upgrade.submit(
+      username,
+      password,
+      sess,
+      frag.channelId,
+      frag.auth,
+      messagesQuery.data?.messages ?? [],
+      trpc.clientPortal,
+      queryClient,
+      portalKeys.messages(routeChannelId),
+      m.account_stale_thread(),
+      m.account_login_failed(),
+    );
   }
 </script>
 
@@ -532,9 +350,9 @@
 </svelte:head>
 
 <!-- State 6: Quick exit (always visible, every state) -->
-<QuickExit ondestroy={destroySession} {safeUrl} />
+<QuickExit ondestroy={() => portalSession.destroySession()} {safeUrl} />
 
-{#if !fragmentResolved}
+{#if !fragment.fragmentResolved}
   <!-- Sodium initializing with a fragment present; show the loading state -->
   <Block>
     <div class="portal-loading" role="status">
@@ -545,7 +363,7 @@
       ></span>
     </div>
   </Block>
-{:else if !hasValidFragment}
+{:else if !fragment.hasValidFragment}
   <!-- State 1: No/bad fragment -->
   <BlockTitle>{m.portal_incomplete_link()}</BlockTitle>
   <Block>
@@ -572,16 +390,16 @@
   <!-- State 3: Passphrase gate -->
   <PortalPassphraseGate
     onsubmit={handlePassphraseSubmit}
-    pending={passphraseDerivePending}
-    error={passphraseError}
+    pending={portalSession.passphraseDerivePending}
+    error={portalSession.passphraseError}
   />
-{:else if upgradeSuccess}
+{:else if upgrade.success}
   <!-- Upgrade success state -->
   <Block>
     <BlockTitle>{m.account_upgrade_success_title()}</BlockTitle>
     <p class="portal-body-text">{m.account_upgrade_success_body()}</p>
     <p class="portal-body-text upgrade-username">
-      {m.account_login_username()}: {upgradeUsername}
+      {m.account_login_username()}: {upgrade.username}
     </p>
     <a
       href={resolve("/account")}
@@ -591,10 +409,10 @@
       {m.account_login_submit()}
     </a>
   </Block>
-{:else if keyCheckPassed && session}
+{:else if portalSession.keyCheckPassed && portalSession.session}
   <!-- Upgrade offer card (above thread when offered, dismissible) -->
-  {#if showAccountOffer && !upgradeCardDismissed}
-    {#if !upgradeCardExpanded}
+  {#if showAccountOffer && !upgrade.dismissed}
+    {#if !upgrade.expanded}
       <Card data-testid="upgrade-card" class="upgrade-card">
         <div class="upgrade-card-header">
           <p class="upgrade-card-title">{m.account_upgrade_card_title()}</p>
@@ -602,7 +420,7 @@
             type="button"
             class="upgrade-card-dismiss"
             aria-label={m.account_upgrade_card_dismiss()}
-            onclick={dismissUpgradeCard}
+            onclick={() => upgrade.dismiss()}
             data-testid="upgrade-card-dismiss"
           >
             <X size={16} aria-hidden="true" />
@@ -612,7 +430,7 @@
         <button
           type="button"
           class="upgrade-card-action"
-          onclick={expandUpgradeCard}
+          onclick={() => upgrade.expand()}
           data-testid="upgrade-card-setup"
         >
           {m.account_upgrade_setup()}
@@ -621,8 +439,8 @@
     {:else}
       <AccountCreateForm
         onsubmit={handleUpgradeSubmit}
-        pending={upgradePending}
-        errorMessage={upgradeError || undefined}
+        pending={upgrade.pending}
+        errorMessage={upgrade.error || undefined}
         showLinkNote={true}
         submitLabel={m.account_upgrade_setup()}
       />
@@ -632,7 +450,7 @@
   <!-- State 4 + 5: Thread + Composer -->
   <PortalThread
     messages={allMessages}
-    clientPrivate={session.keypair.clientPrivate}
+    clientPrivate={portalSession.session.keypair.clientPrivate}
     loading={messagesQuery.isLoading}
   />
 

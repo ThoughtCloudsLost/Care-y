@@ -15,6 +15,7 @@ import type { Kysely, Selectable } from "kysely";
 import type { TenantDatabase, PortalChannelsTable } from "../db/types.js";
 import { hashChannelAuth } from "@care-y/crypto";
 import { ChannelAlreadyActiveError } from "./portal-errors.js";
+import { PORTAL_SURFACE_KINDS } from "@care-y/shared";
 import type { ClientId, ChannelSecret } from "@care-y/shared";
 
 // ---------------------------------------------------------------------------
@@ -122,7 +123,7 @@ export async function regenerateChannel(
   reg: ChannelRegistration,
 ): Promise<void> {
   await db.transaction().execute(async (trx) => {
-    // Find the current active channel (if any).
+    // Kind-agnostic: regeneration replaces any active channel regardless of kind
     const active = await trx
       .selectFrom("portal_channels")
       .select("id")
@@ -165,6 +166,7 @@ export async function revokeChannel(
   clientId: ClientId,
 ): Promise<void> {
   await db.transaction().execute(async (trx) => {
+    // Kind-agnostic: revocation applies to any active channel regardless of kind
     const active = await trx
       .selectFrom("portal_channels")
       .select("id")
@@ -183,13 +185,14 @@ export async function revokeChannel(
         .set({ status: "revoked", revoked_at: new Date() })
         .where("id", "=", active.id)
         .execute();
-    }
 
-    await trx
-      .updateTable("clients")
-      .set({ communication_tier: "sms_email" })
-      .where("id", "=", clientId)
-      .execute();
+      // Only reset tier when a channel was actually revoked
+      await trx
+        .updateTable("clients")
+        .set({ communication_tier: "sms_email" })
+        .where("id", "=", clientId)
+        .execute();
+    }
   });
 }
 
@@ -217,7 +220,7 @@ export async function resolveAuthedChannel(
     .selectAll()
     .where("channel_id", "=", channelId)
     .where("status", "=", "active")
-    .where("kind", "in", ["secure_link", "intake_continuation"])
+    .where("kind", "in", [...PORTAL_SURFACE_KINDS])
     .executeTakeFirst();
 
   if (!row) {

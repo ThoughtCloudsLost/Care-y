@@ -41,6 +41,7 @@ import type {
   TicketId,
   FollowupId,
   QueueId,
+  ClientId,
   OrgId,
   OrgSchema,
   OrgSlug,
@@ -86,6 +87,18 @@ export class IntakeDisabledError extends ValidationError {
 export class IntakeFormClosedError extends ValidationError {
   constructor() {
     super(ErrorCode.INTAKE_FORM_CLOSED);
+  }
+}
+
+/**
+ * Thrown when the account branch is requested but AccountServiceDeps
+ * were not provided. Defense-in-depth: the route builds deps via
+ * requireAccountDeps when input.account is present, so this error
+ * should never be reached in normal operation.
+ */
+export class IntakeAccountUnavailableError extends ValidationError {
+  constructor() {
+    super("Account registration is not available");
   }
 }
 
@@ -317,77 +330,10 @@ export async function createIntakeTicket(
     }
 
     // 6. Account creation (opt-in at intake, inside the same transaction)
-    if (input.account !== null && deps.accountServiceDeps != null) {
-      await createAccount(
-        trx,
-        deps.accountServiceDeps,
-        client.id,
-        input.account.registration,
-      );
-
-      // Seed the account thread with the intake message when selfCopy is present
-      if (input.account.selfCopy !== null) {
-        // Resolve the follow-up id for the self copy: the intake message
-        // follow-up when one exists (the client wrote a message),
-        // otherwise no selfCopy (no follow-up to bind to).
-        const selfCopyFollowUpId = input.followUpId;
-        if (selfCopyFollowUpId !== null) {
-          // Fetch the new account channel row id (just created by createAccount)
-          const accountChannel = await trx
-            .selectFrom("portal_channels")
-            .select("id")
-            .where("client_id", "=", client.id)
-            .where("status", "=", "active")
-            .where("kind", "=", "account")
-            .executeTakeFirstOrThrow();
-
-          await storeClientCopy(
-            trx,
-            accountChannel.id,
-            selfCopyFollowUpId,
-            input.account.selfCopy,
-            "from_client",
-          );
-        }
-      }
-    }
+    await handleAccountStep(trx, deps, input, client.id);
 
     // 7. Continuation channel (opt-in at intake, mutually exclusive with account)
-    if (input.continuation !== null && input.account === null) {
-      const contChannelRow = await trx
-        .insertInto("portal_channels")
-        .values({
-          client_id: client.id,
-          channel_id: input.continuation.channelId,
-          auth_hash: input.continuation.authHash,
-          client_public: input.continuation.clientPublic,
-          has_passphrase: false,
-          key_check_ephemeral_point: input.continuation.keyCheck.ephemeralPoint,
-          key_check_nonce: input.continuation.keyCheck.nonce,
-          key_check_ciphertext: input.continuation.keyCheck.ciphertext,
-          kind: "intake_continuation",
-        })
-        .returning("id")
-        .executeTakeFirstOrThrow();
-
-      // Continuation channels behave identically to secure_link on the portal surface
-      await trx
-        .updateTable("clients")
-        .set({ communication_tier: "secure_link" })
-        .where("id", "=", client.id)
-        .execute();
-
-      // Store the self copy when a follow-up exists to bind to
-      if (input.continuation.selfCopy !== null && input.followUpId !== null) {
-        await storeClientCopy(
-          trx,
-          contChannelRow.id,
-          input.followUpId,
-          input.continuation.selfCopy,
-          "from_client",
-        );
-      }
-    }
+    await handleContinuationStep(trx, input, client.id);
 
     // 8. Return result
     return { ticketId: input.ticketId, clientAlias: alias };
@@ -409,6 +355,113 @@ export async function createIntakeTicket(
   }
 
   return result;
+}
+
+// ---------------------------------------------------------------------------
+// Transaction step: account creation
+// ---------------------------------------------------------------------------
+
+/**
+ * Handles the optional account registration inside the intake transaction.
+ * Fail-loud: when account input is present but deps are missing, throws
+ * IntakeAccountUnavailableError (defense-in-depth; the route prevents this).
+ */
+async function handleAccountStep(
+  trx: Kysely<TenantDatabase>,
+  deps: {
+    readonly accountServiceDeps?: AccountServiceDeps;
+  },
+  input: IntakeTicketInput,
+  clientId: ClientId,
+): Promise<void> {
+  if (input.account === null) return;
+
+  if (deps.accountServiceDeps == null) {
+    throw new IntakeAccountUnavailableError();
+  }
+
+  await createAccount(
+    trx,
+    deps.accountServiceDeps,
+    clientId,
+    input.account.registration,
+  );
+
+  // Seed the account thread with the intake message when selfCopy is present
+  if (input.account.selfCopy !== null) {
+    // Resolve the follow-up id for the self copy: the intake message
+    // follow-up when one exists (the client wrote a message),
+    // otherwise no selfCopy (no follow-up to bind to).
+    const selfCopyFollowUpId = input.followUpId;
+    if (selfCopyFollowUpId !== null) {
+      // Fetch the new account channel row id (just created by createAccount)
+      const accountChannel = await trx
+        .selectFrom("portal_channels")
+        .select("id")
+        .where("client_id", "=", clientId)
+        .where("status", "=", "active")
+        .where("kind", "=", "account")
+        .executeTakeFirstOrThrow();
+
+      await storeClientCopy(
+        trx,
+        accountChannel.id,
+        selfCopyFollowUpId,
+        input.account.selfCopy,
+        "from_client",
+      );
+    }
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Transaction step: continuation channel
+// ---------------------------------------------------------------------------
+
+/**
+ * Handles the optional continuation channel inside the intake transaction.
+ * Only executes when account is null (account strictly dominates continuation).
+ */
+async function handleContinuationStep(
+  trx: Kysely<TenantDatabase>,
+  input: IntakeTicketInput,
+  clientId: ClientId,
+): Promise<void> {
+  if (input.continuation === null || input.account !== null) return;
+
+  const contChannelRow = await trx
+    .insertInto("portal_channels")
+    .values({
+      client_id: clientId,
+      channel_id: input.continuation.channelId,
+      auth_hash: input.continuation.authHash,
+      client_public: input.continuation.clientPublic,
+      has_passphrase: false,
+      key_check_ephemeral_point: input.continuation.keyCheck.ephemeralPoint,
+      key_check_nonce: input.continuation.keyCheck.nonce,
+      key_check_ciphertext: input.continuation.keyCheck.ciphertext,
+      kind: "intake_continuation",
+    })
+    .returning("id")
+    .executeTakeFirstOrThrow();
+
+  // Continuation channels behave identically to secure_link on the portal surface
+  await trx
+    .updateTable("clients")
+    .set({ communication_tier: "secure_link" })
+    .where("id", "=", clientId)
+    .execute();
+
+  // Store the self copy when a follow-up exists to bind to
+  if (input.continuation.selfCopy !== null && input.followUpId !== null) {
+    await storeClientCopy(
+      trx,
+      contChannelRow.id,
+      input.followUpId,
+      input.continuation.selfCopy,
+      "from_client",
+    );
+  }
 }
 
 // ---------------------------------------------------------------------------

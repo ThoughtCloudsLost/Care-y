@@ -33,6 +33,7 @@ export const DEFAULT_PORTAL_EXPIRY_INTERVAL_MS = 24 * 60 * 60 * 1000; // daily
 export async function expirePortalMessages(
   db: Kysely<TenantDatabase>,
 ): Promise<number> {
+  // Kind-agnostic: expiry applies to all channel kinds uniformly
   const result = await db
     .deleteFrom("portal_messages")
     .where(

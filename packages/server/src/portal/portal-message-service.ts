@@ -30,6 +30,7 @@ import { resolveClientPhone } from "../routes/relay.js";
 import { NotFoundError } from "../errors.js";
 import { ErrorCode } from "@care-y/shared";
 import { encode } from "@care-y/crypto";
+import { PORTAL_SURFACE_KINDS } from "@care-y/shared";
 import type {
   TicketId,
   FollowupId,
@@ -193,8 +194,7 @@ export async function bootstrap(
     messagesExpireDays: EXPIRY_DAYS,
     safeExitUrl: orgConfig?.portal_safe_exit_url ?? null,
     accountOffer:
-      (channel.kind === "secure_link" ||
-        channel.kind === "intake_continuation") &&
+      (PORTAL_SURFACE_KINDS as readonly string[]).includes(channel.kind) &&
       channel.account_offer,
   };
 }

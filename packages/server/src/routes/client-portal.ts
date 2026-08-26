@@ -74,6 +74,7 @@ import {
   IntakeQueueNotConfiguredError,
   IntakeDisabledError,
   IntakeFormClosedError,
+  IntakeAccountUnavailableError,
 } from "../portal/intake-service.js";
 import type {
   IntakeAccountInput,
@@ -388,6 +389,17 @@ export function createClientPortalRouter(deps: ClientPortalRouterDeps) {
             throw new TRPCError({
               code: "FORBIDDEN",
               message: "Web intake is not available",
+            });
+          }
+          if (err instanceof IntakeAccountUnavailableError) {
+            console.warn("Intake account branch unavailable", {
+              orgSlug: ctx.org.orgSlug,
+              ip,
+              reason: "account_deps_missing",
+            });
+            throw new TRPCError({
+              code: "INTERNAL_SERVER_ERROR",
+              message: "Service temporarily unavailable",
             });
           }
           if (err instanceof UsernameTakenError) {

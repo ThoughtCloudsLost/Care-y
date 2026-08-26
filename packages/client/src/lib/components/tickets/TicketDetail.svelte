@@ -82,6 +82,7 @@
   import CorrectionStatusLine from "$lib/components/tickets/CorrectionStatusLine.svelte";
   import {
     followUpKind,
+    followUpRenderVariant,
     groupConsecutive,
     isFollowUpGroup,
     followUpGroupKey,
@@ -1221,6 +1222,7 @@
         })}
           {@const recResult = resolveExpandedDecrypt(rec)}
           {@const kind = followUpKind(rec)}
+          {@const variant = followUpRenderVariant(rec)}
           <div
             id="tl-fu-{rec.id}"
             class="cluster-bubble-tap"
@@ -1261,7 +1263,7 @@
                   handleToggleReaction(rec.id, reaction)}
                 resolveUserName={(uid: string) => resolveVolunteerName(uid)}
               />
-            {:else if rec.type === "phone_call"}
+            {:else if variant === "call"}
               <ConversationBubble
                 direction={rec.source === "client" ? "received" : "sent"}
                 speaker={rec.source === "client" ? clientAlias : undefined}
@@ -1307,13 +1309,13 @@
                     onlightbox={(url: string) => onlightbox?.(url)}
                   />
                 {/if}
-                {#if rec.type === "share_link"}
+                {#if variant === "share"}
                   <ShareStatusLine
                     share={findShareForFollowUp(rec.eventParams)}
                     loading={sharesQuery.isLoading}
                   />
                 {/if}
-                {#if rec.type === "contact_correction"}
+                {#if variant === "correction"}
                   <CorrectionStatusLine
                     reactions={getReactions(rec.id)}
                     ontoggleacknowledge={() =>
@@ -1375,6 +1377,7 @@
               {:else}
                 {@const fu = item}
                 {@const kind = followUpKind(fu)}
+                {@const variant = followUpRenderVariant(fu)}
                 {@const contentResult =
                   decrypt != null
                     ? decrypt.followUp(
@@ -1424,7 +1427,7 @@
                   id="fu-{fu.id}"
                   data-fu-id={fu.id}
                   class="fu-wrapper"
-                  class:fu-correction={fu.type === "contact_correction"}
+                  class:fu-correction={variant === "correction"}
                   class:match-active={searchActiveMatchId === fu.id}
                   class:fu-select-mode={selectModeActive}
                   class:fu-select-left={selectModeActive &&
@@ -1500,7 +1503,7 @@
                       resolveUserName={(uid: string) =>
                         resolveVolunteerName(uid)}
                     />
-                  {:else if fu.type === "phone_call"}
+                  {:else if variant === "call"}
                     <ConversationBubble
                       direction={messageType(fu)}
                       speaker={fu.source === "client" ? clientAlias : undefined}
@@ -1548,13 +1551,13 @@
                           onlightbox={(url: string) => onlightbox?.(url)}
                         />
                       {/if}
-                      {#if fu.type === "share_link"}
+                      {#if variant === "share"}
                         <ShareStatusLine
                           share={findShareForFollowUp(fu.eventParams)}
                           loading={sharesQuery.isLoading}
                         />
                       {/if}
-                      {#if fu.type === "contact_correction"}
+                      {#if variant === "correction"}
                         <CorrectionStatusLine
                           reactions={getReactions(fu.id)}
                           ontoggleacknowledge={() =>

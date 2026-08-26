@@ -15,8 +15,8 @@ export class PendingPortalReplyWrapsError extends ValidationError {
 
 /**
  * Thrown when createChannel detects a second active channel for the same
- * client via the partial unique index constraint. The caller (route)
- * maps this to a tRPC CONFLICT response.
+ * client via the partial unique index constraint. The route maps this
+ * to FORBIDDEN with ErrorCode.PORTAL_CHANNEL_EXISTS.
  */
 export class ChannelAlreadyActiveError extends ConflictError {
   constructor() {

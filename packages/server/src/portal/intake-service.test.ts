@@ -33,6 +33,7 @@ import {
   IntakeQueueNotConfiguredError,
   IntakeDisabledError,
   IntakeFormClosedError,
+  IntakeAccountUnavailableError,
   type IntakeTicketInput,
   type IntakeAccountInput,
   type IntakeContinuationInput,
@@ -792,6 +793,35 @@ describe.skipIf(!process.env.DATABASE_URL)(
           .selectFrom("tickets")
           .select("id")
           .where("id", "=", input2.ticketId)
+          .executeTakeFirst();
+        expect(ticket).toBeUndefined();
+      });
+
+      it("rejects with IntakeAccountUnavailableError when account input present but deps missing", async () => {
+        const ns = createMockNotificationService();
+        const acct = makeAccountInput();
+        const input = makeInput({ account: acct });
+
+        // Omit accountServiceDeps to trigger the fail-loud guard
+        await expect(
+          createIntakeTicket(
+            testDb.db,
+            {
+              notificationService: ns,
+              sealedBox: testSealedBox,
+              orgId: TEST_ORG_ID,
+              orgSchema: testDb.schemaName as OrgSchema,
+              orgSlug: "test-org" as OrgSlug,
+            },
+            input,
+          ),
+        ).rejects.toThrow(IntakeAccountUnavailableError);
+
+        // Verify transaction rolled back: no ticket or client rows created
+        const ticket = await testDb.db
+          .selectFrom("tickets")
+          .select("id")
+          .where("id", "=", input.ticketId)
           .executeTakeFirst();
         expect(ticket).toBeUndefined();
       });
