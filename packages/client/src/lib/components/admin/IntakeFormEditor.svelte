@@ -1,7 +1,9 @@
 <!--
   Admin intake form editor. Renders the ordered field list, add/reorder/remove
   controls, slug, destination queue, default toggle, share link, read-only
-  preview, and save/delete actions.
+  preview, and save/delete actions. Supports multilingual authoring for all
+  localized content (labels, help text, options, form-level meta) via locale
+  tabs, and tracks unsaved changes for navigation guarding.
 
   Edits plaintext in component-local state only. Nothing plaintext persists.
   On save, every field's label and config are encrypted via encryptFieldContent
@@ -17,6 +19,8 @@
     Block,
     Toggle,
     DialogButton,
+    Segmented,
+    SegmentedButton,
   } from "konsta/svelte";
   import { ArrowUp, ArrowDown, Settings, X, Copy } from "@lucide/svelte";
   import {
@@ -24,18 +28,26 @@
     createQuery,
     useQueryClient,
   } from "@tanstack/svelte-query";
-  import type {
-    IntakeFieldConfig,
-    IntakeFieldType,
-    IntakeFieldRole,
-    LocalizedText,
+  import {
+    resolveLocalized,
+    BASE_LOCALE,
+    FORM_LOCALES,
+    type IntakeFieldConfig,
+    type IntakeFieldType,
+    type IntakeFieldRole,
+    type IntakeFormMeta,
+    type LocalizedText,
+    type FormLocale,
   } from "@care-y/shared";
   import * as m from "$lib/paraglide/messages.js";
   import { trpc } from "$lib/trpc/index.js";
   import { requireRouter } from "$lib/errors.js";
   import { intakeFormKeys, queueKeys, volunteerKeys } from "$lib/query/keys.js";
   import { getOrgKeyManager, getOrgDecryptCache } from "$lib/crypto/context.js";
-  import { encryptFieldContent } from "$lib/portal/intake-form-crypto.js";
+  import {
+    encryptFieldContent,
+    encryptFormMeta,
+  } from "$lib/portal/intake-form-crypto.js";
   import { haptic } from "$lib/utils/haptic.js";
   import { toastStore } from "$lib/stores/toast.svelte.js";
   import { announceToLiveRegion } from "$lib/utils/announce.js";
@@ -52,9 +64,10 @@
   } from "./intake-field-config-types.js";
   import IntakeFieldRenderer from "$lib/components/portal/IntakeFieldRenderer.svelte";
 
-  interface PlaintextField {
+  export interface PlaintextField {
     fieldKey: string;
-    label: string;
+    label: LocalizedText;
+    helpText: LocalizedText;
     isRequired: boolean;
     config: IntakeFieldConfig;
     fieldType: IntakeFieldType;
@@ -69,9 +82,11 @@
     readonly initialSlug: string | null;
     readonly initialIsDefault: boolean;
     readonly initialDestinationQueueId: string | null;
+    readonly initialFormMeta: IntakeFormMeta;
     readonly initialFields: readonly PlaintextField[];
     readonly onback: () => void;
     readonly ondeleted: () => void;
+    readonly ondirtychange?: (dirty: boolean) => void;
   }
 
   let {
@@ -80,9 +95,11 @@
     initialSlug,
     initialIsDefault,
     initialDestinationQueueId,
+    initialFormMeta,
     initialFields,
     onback,
     ondeleted,
+    ondirtychange,
   }: IntakeFormEditorProps = $props();
 
   const intakeFormsRouter = requireRouter(trpc.intakeForms, "intakeForms");
@@ -91,19 +108,158 @@
   const orgKeyManager = getOrgKeyManager();
   const orgCache = getOrgDecryptCache();
 
+  // ---- Locale authoring state ----
+  let editingLocale = $state<FormLocale>(BASE_LOCALE);
+  let previewLocale = $state<FormLocale>(BASE_LOCALE);
+
+  /** Native locale name for display in the segmented control. */
+  function localeName(loc: FormLocale): string {
+    switch (loc) {
+      case "en":
+        return "EN";
+      case "es":
+        return "ES";
+    }
+  }
+
+  // ---- Form-level state ----
   let formName = $state(initialName);
   let formSlug = $state(initialSlug ?? "");
+  let slugError = $state("");
   let isDefault = $state(initialIsDefault);
   let destinationQueueId = $state<string | null>(initialDestinationQueueId);
+  let formDescription = $state<LocalizedText>({
+    ...initialFormMeta.description,
+  });
+  let formSubmitMessage = $state<LocalizedText>({
+    ...initialFormMeta.submitMessage,
+  });
+  let formClosedMessage = $state<LocalizedText>({
+    ...initialFormMeta.closedMessage,
+  });
   let fields = $state<PlaintextField[]>([...initialFields]);
 
-  // Field config sheet state
+  // ---- Slug validation (mirrors intakeFormSlugSchema from shared) ----
+
+  /** Validate slug format inline. Returns an error string or empty. */
+  function validateSlug(slug: string): string {
+    if (slug.length === 0) return "";
+    if (slug.length < 2) return m.intake_forms_slug_error_length();
+    if (slug.length > 80) return m.intake_forms_slug_error_length();
+    if (!/^[a-z0-9]/.test(slug) || !/[a-z0-9]$/.test(slug)) {
+      return m.intake_forms_slug_error_format();
+    }
+    if (!/^[a-z0-9-]+$/.test(slug)) {
+      return m.intake_forms_slug_error_format();
+    }
+    if (slug.includes("--")) return m.intake_forms_slug_error_format();
+    return "";
+  }
+
+  // ---- Dirty tracking ----
+
+  const isDirty = $derived.by((): boolean => {
+    if (formName !== initialName) return true;
+    if (formSlug !== (initialSlug ?? "")) return true;
+    if (isDefault !== initialIsDefault) return true;
+    if (destinationQueueId !== initialDestinationQueueId) return true;
+    if (fields.length !== initialFields.length) return true;
+    // Shallow field comparison: check fieldKeys, labels, required, and types
+    for (let i = 0; i < fields.length; i++) {
+      const cur = fields.at(i);
+      const ini = initialFields.at(i);
+      if (cur === undefined || ini === undefined) return true;
+      if (cur.fieldKey !== ini.fieldKey) return true;
+      if (JSON.stringify(cur.label) !== JSON.stringify(ini.label)) return true;
+      if (JSON.stringify(cur.helpText) !== JSON.stringify(ini.helpText))
+        return true;
+      if (cur.isRequired !== ini.isRequired) return true;
+      if (JSON.stringify(cur.config) !== JSON.stringify(ini.config))
+        return true;
+    }
+    // Compare form-level meta
+    if (
+      JSON.stringify(formDescription) !==
+      JSON.stringify(initialFormMeta.description ?? {})
+    )
+      return true;
+    if (
+      JSON.stringify(formSubmitMessage) !==
+      JSON.stringify(initialFormMeta.submitMessage ?? {})
+    )
+      return true;
+    if (
+      JSON.stringify(formClosedMessage) !==
+      JSON.stringify(initialFormMeta.closedMessage ?? {})
+    )
+      return true;
+    return false;
+  });
+
+  // Notify parent of dirty changes
+  $effect(() => {
+    ondirtychange?.(isDirty);
+  });
+
+  // ---- Per-locale completeness indicator ----
+
+  /** Count how many locales have all field labels, option labels, and meta filled. */
+  function localeCompleteness(loc: FormLocale): {
+    filled: number;
+    total: number;
+  } {
+    let total = 0;
+    let filled = 0;
+
+    // Form-level meta strings (use readLocale to avoid computed key access)
+    const descVal = readLocale(formDescription, loc);
+    const submitVal = readLocale(formSubmitMessage, loc);
+    const closedVal = readLocale(formClosedMessage, loc);
+
+    if (descVal.length > 0) filled++;
+    if (submitVal.length > 0) filled++;
+    if (closedVal.length > 0) filled++;
+
+    // Only count meta strings that have content in at least one locale
+    if (resolveLocalized(formDescription, BASE_LOCALE) != null) total++;
+    if (resolveLocalized(formSubmitMessage, BASE_LOCALE) != null) total++;
+    if (resolveLocalized(formClosedMessage, BASE_LOCALE) != null) total++;
+
+    // Field labels and help text
+    for (const field of fields) {
+      total++; // label is always required
+      const labelVal = readLocale(field.label, loc);
+      if (labelVal.length > 0) filled++;
+
+      // Help text: only count if it exists in any locale
+      if (resolveLocalized(field.helpText, BASE_LOCALE) != null) {
+        total++;
+        const ht = readLocale(field.helpText, loc);
+        if (ht.length > 0) filled++;
+      }
+
+      // Option labels
+      const cfg = field.config;
+      if (cfg.type === "select" || cfg.type === "multiselect") {
+        for (const opt of cfg.options) {
+          total++;
+          const label = resolveLocalized(opt.label, loc);
+          if (label != null && label.length > 0) filled++;
+        }
+      }
+    }
+
+    return { filled, total };
+  }
+
+  // ---- Field config sheet state ----
   let configSheetOpened = $state(false);
   let configFieldIndex = $state(-1);
   let configFieldIsNew = $state(false);
   let configFieldType = $state<IntakeFieldType>("text");
   const defaultConfigInitial: FieldConfigInitial = {
-    label: "",
+    label: {},
+    helpText: {},
     isRequired: false,
     config: { type: "text" },
     role: null,
@@ -185,6 +341,44 @@
     }
   }
 
+  // ---- Localized text helpers ----
+
+  /** Read a locale key from a LocalizedText object. */
+  function readLocale(text: LocalizedText, loc: FormLocale): string {
+    if (loc === "en") return text.en ?? "";
+    return text.es ?? "";
+  }
+
+  /** Return a new LocalizedText with one locale key set. */
+  function setLocaleText(
+    text: LocalizedText,
+    loc: FormLocale,
+    value: string,
+  ): LocalizedText {
+    if (loc === "en") return { ...text, en: value };
+    return { ...text, es: value };
+  }
+
+  /** True if a LocalizedText has content in any locale. */
+  function hasContent(text: LocalizedText): boolean {
+    const en = text.en;
+    const es = text.es;
+    return (
+      (en != null && en.trim().length > 0) ||
+      (es != null && es.trim().length > 0)
+    );
+  }
+
+  /** Strip empty-string locale entries from a LocalizedText for storage. */
+  function trimLocalized(text: LocalizedText): LocalizedText {
+    const result: LocalizedText = {};
+    const en = text.en;
+    const es = text.es;
+    if (en != null && en.trim().length > 0) result.en = en.trim();
+    if (es != null && es.trim().length > 0) result.es = es.trim();
+    return result;
+  }
+
   // Save mutation
   const saveMutation = createMutation(() => ({
     mutationFn: async (input: {
@@ -193,6 +387,7 @@
       slug: string | null;
       isDefault: boolean;
       destinationQueueId: string | null;
+      formMeta: IntakeFormMeta;
       fields: PlaintextField[];
     }) => {
       const orgPub = orgKeyManager.getPublicKey();
@@ -201,9 +396,8 @@
       }
 
       const encryptedFields = input.fields.map((f) => {
-        const label: LocalizedText = { en: f.label };
         const encrypted = encryptFieldContent(
-          { label, config: f.config },
+          { label: f.label, config: f.config },
           orgPub,
         );
         return {
@@ -218,12 +412,15 @@
         };
       });
 
+      const encryptedFormMeta = encryptFormMeta(input.formMeta, orgPub);
+
       return intakeFormsRouter.save.mutate({
         formId: input.formId,
         name: input.name,
         slug: input.slug,
         isDefault: input.isDefault,
         destinationQueueId: input.destinationQueueId,
+        ...(encryptedFormMeta != null ? { encryptedFormMeta } : {}),
         fields: encryptedFields,
       });
     },
@@ -300,6 +497,7 @@
     const target = e.target;
     if (target instanceof HTMLInputElement) {
       formSlug = target.value;
+      slugError = validateSlug(target.value);
     }
   }
 
@@ -334,7 +532,8 @@
     configFieldIndex = index;
     configFieldType = field.fieldType;
     configFieldInitial = {
-      label: field.label,
+      label: { ...field.label },
+      helpText: { ...field.helpText },
       isRequired: field.isRequired,
       config: field.config,
       role: field.role,
@@ -363,6 +562,7 @@
           fieldKey: f.fieldKey,
           fieldType: f.fieldType,
           label: result.label,
+          helpText: result.helpText,
           isRequired: result.isRequired,
           config: result.config,
           role: result.role,
@@ -383,10 +583,11 @@
 
     const defaultConfig = getDefaultConfig(type);
 
-    // Mint a stable UUID for this field (D1: preserved across saves).
+    // Mint a stable UUID for this field (preserved across saves).
     const newField: PlaintextField = {
       fieldKey: crypto.randomUUID(),
-      label: "",
+      label: {},
+      helpText: {},
       isRequired: false,
       config: defaultConfig,
       fieldType: type,
@@ -425,6 +626,8 @@
           allowRecurring: true,
           allowSpecific: true,
         };
+      case "date":
+        return { type: "date" };
     }
   }
 
@@ -442,6 +645,8 @@
         return m.intake_forms_field_type_checkbox();
       case "availability":
         return m.intake_forms_field_type_availability();
+      case "date":
+        return m.intake_forms_field_type_date();
     }
   }
 
@@ -459,18 +664,43 @@
         return m.intake_forms_field_type_checkbox_desc();
       case "availability":
         return m.intake_forms_field_type_availability_desc();
+      case "date":
+        return m.intake_forms_field_type_date_desc();
     }
+  }
+
+  /** Resolve a field label in the base locale for display in the field list. */
+  function fieldDisplayLabel(field: PlaintextField): string {
+    return resolveLocalized(field.label, BASE_LOCALE) ?? "";
   }
 
   function handleSave(): void {
     if (!formName.trim() || fields.length === 0) return;
-    const slugValue = formSlug.trim() || null;
+    // Check slug validity before saving
+    const sv = formSlug.trim();
+    if (sv.length > 0) {
+      const err = validateSlug(sv);
+      if (err.length > 0) {
+        slugError = err;
+        return;
+      }
+    }
+    const slugValue = sv || null;
+    const desc = trimLocalized(formDescription);
+    const submit = trimLocalized(formSubmitMessage);
+    const closed = trimLocalized(formClosedMessage);
+    const meta: IntakeFormMeta = {
+      ...(hasContent(desc) ? { description: desc } : {}),
+      ...(hasContent(submit) ? { submitMessage: submit } : {}),
+      ...(hasContent(closed) ? { closedMessage: closed } : {}),
+    };
     saveMutation.mutate({
       formId,
       name: formName.trim(),
       slug: slugValue,
       isDefault,
       destinationQueueId,
+      formMeta: meta,
       fields,
     });
   }
@@ -481,11 +711,15 @@
     "select",
     "multiselect",
     "checkbox",
+    "date",
     "availability",
   ];
 
   const canSave = $derived(
-    formName.trim().length > 0 && fields.length > 0 && !saveMutation.isPending,
+    formName.trim().length > 0 &&
+      fields.length > 0 &&
+      !saveMutation.isPending &&
+      slugError.length === 0,
   );
 </script>
 
@@ -501,7 +735,8 @@
     label={m.intake_forms_slug_label()}
     type="text"
     placeholder={m.intake_forms_slug_placeholder()}
-    info={m.intake_forms_slug_hint()}
+    info={slugError || m.intake_forms_slug_hint()}
+    error={slugError}
     value={formSlug}
     onInput={handleSlugInput}
   />
@@ -533,6 +768,87 @@
   </ListItem>
 </List>
 
+<!-- Locale selector for authoring -->
+<BlockTitle>{m.intake_forms_locale_heading()}</BlockTitle>
+<Block>
+  <Segmented strong>
+    {#each FORM_LOCALES as loc (loc)}
+      {@const comp = localeCompleteness(loc)}
+      <SegmentedButton
+        active={editingLocale === loc}
+        onclick={() => (editingLocale = loc)}
+      >
+        {localeName(loc)}
+        {#if comp.total > 0}
+          <span class="locale-badge">{comp.filled}/{comp.total}</span>
+        {/if}
+      </SegmentedButton>
+    {/each}
+  </Segmented>
+  {#if editingLocale !== BASE_LOCALE}
+    <p class="locale-hint">{m.intake_forms_locale_optional_hint()}</p>
+  {/if}
+</Block>
+
+<!-- Form-level descriptive content -->
+<BlockTitle>{m.intake_forms_content_heading()}</BlockTitle>
+<List strong inset>
+  <ListInput
+    label={m.intake_forms_description_label()}
+    type="textarea"
+    placeholder={m.intake_forms_description_placeholder()}
+    info={m.intake_forms_description_hint()}
+    value={readLocale(formDescription, editingLocale)}
+    onInput={(e: Event) => {
+      if (
+        e.target instanceof HTMLInputElement ||
+        e.target instanceof HTMLTextAreaElement
+      )
+        formDescription = setLocaleText(
+          formDescription,
+          editingLocale,
+          e.target.value,
+        );
+    }}
+  />
+  <ListInput
+    label={m.intake_forms_submit_message_label()}
+    type="textarea"
+    placeholder={m.intake_forms_submit_message_placeholder()}
+    info={m.intake_forms_submit_message_hint()}
+    value={readLocale(formSubmitMessage, editingLocale)}
+    onInput={(e: Event) => {
+      if (
+        e.target instanceof HTMLInputElement ||
+        e.target instanceof HTMLTextAreaElement
+      )
+        formSubmitMessage = setLocaleText(
+          formSubmitMessage,
+          editingLocale,
+          e.target.value,
+        );
+    }}
+  />
+  <ListInput
+    label={m.intake_forms_closed_message_label()}
+    type="textarea"
+    placeholder={m.intake_forms_closed_message_placeholder()}
+    info={m.intake_forms_closed_message_hint()}
+    value={readLocale(formClosedMessage, editingLocale)}
+    onInput={(e: Event) => {
+      if (
+        e.target instanceof HTMLInputElement ||
+        e.target instanceof HTMLTextAreaElement
+      )
+        formClosedMessage = setLocaleText(
+          formClosedMessage,
+          editingLocale,
+          e.target.value,
+        );
+    }}
+  />
+</List>
+
 <!-- Share link -->
 {#if shareLink}
   <BlockTitle>{m.intake_forms_share_link()}</BlockTitle>
@@ -558,7 +874,7 @@
 <List strong inset>
   {#each fields as field, index (field.fieldKey)}
     <ListItem
-      title={`${String(index + 1)}. ${field.label || getFieldTypeLabel(field.fieldType)}`}
+      title={`${String(index + 1)}. ${fieldDisplayLabel(field) || getFieldTypeLabel(field.fieldType)}`}
       subtitle={`${getFieldTypeLabel(field.fieldType)} - ${field.isRequired ? m.intake_forms_field_required() : m.intake_forms_field_optional()}`}
     >
       {#snippet after()}
@@ -612,12 +928,26 @@
 {#if fields.length > 0}
   <BlockTitle>{m.intake_forms_preview()}</BlockTitle>
   <Block>
+    <div class="preview-locale-switcher">
+      <Segmented strong>
+        {#each FORM_LOCALES as loc (loc)}
+          <SegmentedButton
+            active={previewLocale === loc}
+            onclick={() => (previewLocale = loc)}
+          >
+            {localeName(loc)}
+          </SegmentedButton>
+        {/each}
+      </Segmented>
+    </div>
     {#each fields as field, index (field.fieldKey)}
       <IntakeFieldRenderer
         fieldId={`preview-${String(index)}`}
-        label={field.label}
+        label={resolveLocalized(field.label, previewLocale) ?? ""}
+        helpText={resolveLocalized(field.helpText, previewLocale)}
         config={field.config}
         isRequired={field.isRequired}
+        locale={previewLocale}
         value={undefined}
         onchange={previewNoop}
       />
@@ -702,6 +1032,7 @@
   initial={configFieldInitial}
   queues={queueOptions}
   volunteers={volunteerOptions}
+  {editingLocale}
   ondone={handleConfigDone}
   ondismiss={handleConfigCancel}
 />
@@ -762,5 +1093,22 @@
 
   .copy-btn:active {
     background: color-mix(in srgb, var(--ink) 10%, transparent);
+  }
+
+  .locale-badge {
+    font-size: var(--text-xs);
+    margin-left: 4px;
+    opacity: 0.7;
+  }
+
+  .locale-hint {
+    font-size: var(--text-xs);
+    color: var(--muted);
+    margin-top: var(--space-xs);
+    text-align: center;
+  }
+
+  .preview-locale-switcher {
+    margin-bottom: var(--space-md);
   }
 </style>

@@ -81,6 +81,7 @@ export const intakeFieldTypeSchema = z.enum([
   "multiselect",
   "checkbox",
   "availability",
+  "date",
 ]);
 export type IntakeFieldType = z.infer<typeof intakeFieldTypeSchema>;
 
@@ -143,6 +144,26 @@ export const ROLE_WIDGET_COMPATIBILITY: Readonly<
 } as const;
 
 // ---------------------------------------------------------------------------
+// Text subtypes (T1.2: input validation)
+// ---------------------------------------------------------------------------
+
+/**
+ * Subtypes for text fields that enable client-side validation.
+ * `email-contact` and `phone-contact` roles default their subtype
+ * to `email` and `phone` respectively.
+ */
+export const textSubtypeSchema = z.enum(["email", "phone", "number"]);
+export type TextSubtype = z.infer<typeof textSubtypeSchema>;
+
+/**
+ * Number range constraints for text fields with the "number" subtype.
+ */
+export const numberRangeSchema = z.object({
+  min: z.number().optional(),
+  max: z.number().optional(),
+});
+
+// ---------------------------------------------------------------------------
 // Option schema (D2: stable option keys)
 // ---------------------------------------------------------------------------
 
@@ -197,15 +218,20 @@ export const intakeFieldConfigSchema = z.discriminatedUnion("type", [
     type: z.literal("text"),
     maxLength: z.number().int().min(1).max(1_000).optional(),
     placeholder: localizedTextSchema.optional(),
+    helpText: localizedTextSchema.optional(),
+    subtype: textSubtypeSchema.optional(),
+    numberRange: numberRangeSchema.optional(),
   }),
   z.object({
     type: z.literal("textarea"),
     maxLength: z.number().int().min(1).max(10_000).optional(),
     placeholder: localizedTextSchema.optional(),
+    helpText: localizedTextSchema.optional(),
   }),
   z.object({
     type: z.literal("select"),
     options: z.array(intakeOptionSchema).min(1).max(50),
+    helpText: localizedTextSchema.optional(),
     queueRoutingMapping: queueRoutingMappingSchema.optional(),
     urgencyMapping: urgencyMappingSchema.optional(),
     escalationMapping: escalationMappingSchema.optional(),
@@ -213,16 +239,23 @@ export const intakeFieldConfigSchema = z.discriminatedUnion("type", [
   z.object({
     type: z.literal("multiselect"),
     options: z.array(intakeOptionSchema).min(1).max(50),
+    helpText: localizedTextSchema.optional(),
     queueRoutingMapping: queueRoutingMappingSchema.optional(),
   }),
   z.object({
     type: z.literal("checkbox"),
     requiredTrue: z.boolean().optional(),
+    helpText: localizedTextSchema.optional(),
   }),
   z.object({
     type: z.literal("availability"),
     allowRecurring: z.boolean(),
     allowSpecific: z.boolean(),
+    helpText: localizedTextSchema.optional(),
+  }),
+  z.object({
+    type: z.literal("date"),
+    helpText: localizedTextSchema.optional(),
   }),
 ]);
 export type IntakeFieldConfig = z.infer<typeof intakeFieldConfigSchema>;
@@ -332,6 +365,30 @@ export const ENCRYPTED_CONFIG_CAP = 28_000;
 export const ENCRYPTED_LABEL_CAP = 2_800;
 
 // ---------------------------------------------------------------------------
+// Form-level metadata (encrypted, inside the definition)
+// ---------------------------------------------------------------------------
+
+/**
+ * Plaintext shape for form-level descriptive content. Encrypted under the
+ * client-branding key alongside field definitions. The closed message is
+ * consumed once a form has a closing date; the schema stores it now
+ * so editors can author it ahead of that feature.
+ */
+export const intakeFormMetaSchema = z.object({
+  description: localizedTextSchema.optional(),
+  submitMessage: localizedTextSchema.optional(),
+  closedMessage: localizedTextSchema.optional(),
+});
+export type IntakeFormMeta = z.infer<typeof intakeFormMetaSchema>;
+
+/**
+ * Maximum base64 character length for the encrypted form metadata blob.
+ * Generous cap; three LocalizedText fields with 10 KB each per locale
+ * plus overhead fits comfortably.
+ */
+export const ENCRYPTED_FORM_META_CAP = 88_000;
+
+// ---------------------------------------------------------------------------
 // Admin save input
 // ---------------------------------------------------------------------------
 
@@ -382,6 +439,12 @@ export const saveIntakeFormInputSchema = z
     slug: intakeFormSlugSchema.nullable().optional(),
     isDefault: z.boolean().optional(),
     destinationQueueId: queueIdSchema.nullable().optional(),
+    encryptedFormMeta: base64String("encryptedFormMeta")
+      .refine(
+        (s) => s.length <= ENCRYPTED_FORM_META_CAP,
+        "form metadata too large",
+      )
+      .optional(),
     fields: z
       .array(saveIntakeFieldSchema)
       .min(1)

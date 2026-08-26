@@ -44,6 +44,7 @@ export interface PublicIntakeFormField {
 export interface PublicIntakeForm {
   readonly formId: IntakeFormId;
   readonly slug: string | null;
+  readonly encryptedFormMeta: string | null;
   readonly fields: readonly PublicIntakeFormField[];
 }
 
@@ -54,6 +55,7 @@ export interface PublicIntakeForm {
 export interface PublicFormResult {
   readonly formId: IntakeFormId | null;
   readonly slug: string | null;
+  readonly encryptedFormMeta: string | null;
   readonly fields: readonly PublicIntakeFormField[] | null;
   readonly intakeDisabled: boolean;
 }
@@ -81,6 +83,7 @@ export interface FormDetail {
   readonly isActive: boolean;
   readonly isDefault: boolean;
   readonly destinationQueueId: QueueId | null;
+  readonly encryptedFormMeta: string | null;
   readonly fields: readonly FormDetailField[];
 }
 
@@ -198,7 +201,7 @@ export function createIntakeFormService(deps: {
         // Resolve by slug: only return an active form matching the slug
         form = await db
           .selectFrom("intake_forms")
-          .select(["id", "slug"])
+          .select(["id", "slug", "encrypted_form_meta"])
           .where("slug", "=", slug)
           .where("is_active", "=", true)
           .executeTakeFirst();
@@ -206,7 +209,7 @@ export function createIntakeFormService(deps: {
         // Resolve by is_default: find the active default form
         form = await db
           .selectFrom("intake_forms")
-          .select(["id", "slug"])
+          .select(["id", "slug", "encrypted_form_meta"])
           .where("is_default", "=", true)
           .where("is_active", "=", true)
           .executeTakeFirst();
@@ -235,6 +238,8 @@ export function createIntakeFormService(deps: {
       return {
         formId: form.id,
         slug: form.slug,
+        // care-y-ignore-next-line no-standard-base64-server -- client-facing ciphertext: browser sends/receives standard base64 per the shared base64String validator
+        encryptedFormMeta: form.encrypted_form_meta?.toString("base64") ?? null,
         fields: fields.map((f) => ({
           id: f.id,
           fieldKey: f.field_key,
@@ -262,6 +267,7 @@ export function createIntakeFormService(deps: {
           "is_active",
           "is_default",
           "destination_queue_id",
+          "encrypted_form_meta",
         ])
         .where("id", "=", formId)
         .executeTakeFirst();
@@ -295,6 +301,8 @@ export function createIntakeFormService(deps: {
         isActive: form.is_active,
         isDefault: form.is_default,
         destinationQueueId: form.destination_queue_id,
+        // care-y-ignore-next-line no-standard-base64-server -- client-facing ciphertext: browser sends/receives standard base64 per the shared base64String validator
+        encryptedFormMeta: form.encrypted_form_meta?.toString("base64") ?? null,
         fields: fields.map((f) => {
           // Decrypt OPS-encrypted escalation recipient IDs for the admin UI.
           let escalationRecipientIds: readonly UserId[] | null = null;
@@ -385,6 +393,10 @@ export function createIntakeFormService(deps: {
               name: input.name,
               slug: input.slug ?? null,
               destination_queue_id: input.destinationQueueId ?? null,
+              encrypted_form_meta:
+                input.encryptedFormMeta != null
+                  ? Buffer.from(input.encryptedFormMeta, "base64")
+                  : null,
               updated_at: new Date(),
             })
             .where("id", "=", input.formId)
@@ -406,6 +418,10 @@ export function createIntakeFormService(deps: {
               name: input.name,
               slug: input.slug ?? null,
               destination_queue_id: input.destinationQueueId ?? null,
+              encrypted_form_meta:
+                input.encryptedFormMeta != null
+                  ? Buffer.from(input.encryptedFormMeta, "base64")
+                  : null,
             })
             .returning("id")
             .executeTakeFirstOrThrow();
@@ -577,7 +593,13 @@ export function createIntakeFormService(deps: {
       // Kill switch
       const enabled = await this.isWebIntakeEnabled(db);
       if (!enabled) {
-        return { formId: null, fields: null, slug: null, intakeDisabled: true };
+        return {
+          formId: null,
+          fields: null,
+          slug: null,
+          encryptedFormMeta: null,
+          intakeDisabled: true,
+        };
       }
 
       const form = await this.getPublicForm(db, slug);
@@ -588,6 +610,7 @@ export function createIntakeFormService(deps: {
           formId: null,
           fields: null,
           slug,
+          encryptedFormMeta: null,
           intakeDisabled: false,
         };
       }
@@ -595,6 +618,7 @@ export function createIntakeFormService(deps: {
       return {
         formId: form.formId,
         slug: form.slug,
+        encryptedFormMeta: form.encryptedFormMeta,
         fields: form.fields,
         intakeDisabled: false,
       };

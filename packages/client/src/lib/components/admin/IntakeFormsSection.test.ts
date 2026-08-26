@@ -2,11 +2,14 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, screen, cleanup } from "@testing-library/svelte";
 
-const { mockListForms, mockSetActive, mockToastShow } = vi.hoisted(() => ({
-  mockListForms: vi.fn(),
-  mockSetActive: vi.fn().mockResolvedValue({ ok: true }),
-  mockToastShow: vi.fn(),
-}));
+const { mockListForms, mockSetActive, mockToastShow, mockGetForm } = vi.hoisted(
+  () => ({
+    mockListForms: vi.fn(),
+    mockSetActive: vi.fn().mockResolvedValue({ ok: true }),
+    mockToastShow: vi.fn(),
+    mockGetForm: vi.fn(),
+  }),
+);
 
 vi.mock("$lib/paraglide/messages.js", async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
@@ -16,6 +19,9 @@ vi.mock("$lib/paraglide/messages.js", async (importOriginal) => ({
   intake_forms_field_count: ({ count }: { count: string }) => `${count} fields`,
   intake_forms_active: () => "Active",
   intake_forms_inactive: () => "Inactive",
+  intake_forms_duplicate_label: () => "Duplicate form",
+  intake_forms_duplicate_suffix: () => "(copy)",
+  intake_forms_duplicated: () => "Form duplicated",
   error_generic: () => "Something went wrong",
 }));
 
@@ -30,6 +36,15 @@ vi.mock("$lib/trpc/index.js", async (importOriginal) => ({
     intakeForms: {
       list: { query: mockListForms },
       setActive: { mutate: mockSetActive },
+      get: { query: mockGetForm },
+      save: { mutate: vi.fn().mockResolvedValue({ formId: "dup-id" }) },
+      getWebIntakeEnabled: {
+        query: vi.fn().mockResolvedValue({ enabled: true }),
+      },
+      setWebIntakeEnabled: { mutate: vi.fn().mockResolvedValue({ ok: true }) },
+    },
+    tickets: {
+      listQueues: { query: vi.fn().mockResolvedValue([]) },
     },
   },
 }));
@@ -42,6 +57,41 @@ vi.mock("$lib/errors.js", async (importOriginal) => ({
 vi.mock("$lib/stores/toast.svelte.js", async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   toastStore: { show: mockToastShow },
+}));
+
+vi.mock("$lib/utils/announce.js", async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  announceToLiveRegion: vi.fn(),
+}));
+
+vi.mock("$lib/utils/haptic.js", async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  haptic: vi.fn(),
+}));
+
+vi.mock("$lib/crypto/context.js", async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  getOrgKeyManager: () => ({
+    getPublicKey: () => new Uint8Array(32),
+    isLoaded: true,
+  }),
+  getOrgDecryptCache: () => ({
+    decrypt: (_key: string, _value: string) => "Decrypted",
+  }),
+}));
+
+vi.mock("$lib/portal/intake-form-crypto.js", async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  decryptFieldContent: () => ({
+    label: { en: "Field" },
+    config: { type: "text" },
+  }),
+  encryptFieldContent: () => ({
+    encryptedLabel: "enc-label",
+    encryptedConfig: "enc-config",
+  }),
+  decryptFormMeta: () => ({}),
+  encryptFormMeta: () => "enc-meta",
 }));
 
 vi.mock("@tanstack/svelte-query", async (importOriginal) => ({
@@ -141,5 +191,13 @@ describe("IntakeFormsSection", () => {
     render(IntakeFormsSection);
 
     expect(screen.getByText(/5 fields/)).toBeTruthy();
+  });
+
+  it("renders a duplicate button for each form row", () => {
+    render(IntakeFormsSection);
+
+    const dupButtons = screen.getAllByLabelText("Duplicate form");
+    // At least one per form in the list
+    expect(dupButtons.length).toBeGreaterThanOrEqual(1);
   });
 });

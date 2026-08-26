@@ -67,6 +67,9 @@ vi.mock("$lib/paraglide/messages.js", async (importOriginal) => ({
   intake_forms_slug_label: () => "Slug",
   intake_forms_slug_placeholder: () => "form-slug",
   intake_forms_slug_hint: () => "URL-safe slug",
+  intake_forms_slug_error_length: () => "Slug must be 2 to 80 characters.",
+  intake_forms_slug_error_format: () =>
+    "Lowercase letters, digits, and single hyphens only.",
   intake_forms_destination_label: () => "Destination queue",
   intake_forms_destination_none: () => "Default",
   intake_forms_default_toggle: () => "Default form",
@@ -78,6 +81,18 @@ vi.mock("$lib/paraglide/messages.js", async (importOriginal) => ({
   intake_forms_field_type_checkbox_desc: () => "Yes/no toggle",
   intake_forms_edit_title: () => "Edit form",
   intake_forms_create_title: () => "Create form",
+  intake_forms_locale_heading: () => "Authoring language",
+  intake_forms_locale_optional_hint: () => "Translations are optional.",
+  intake_forms_content_heading: () => "Form content",
+  intake_forms_description_label: () => "Description",
+  intake_forms_description_placeholder: () => "Shown above the form.",
+  intake_forms_description_hint: () => "Plain text.",
+  intake_forms_submit_message_label: () => "Success message",
+  intake_forms_submit_message_placeholder: () => "Shown after submit.",
+  intake_forms_submit_message_hint: () => "Replaces default.",
+  intake_forms_closed_message_label: () => "Closed message",
+  intake_forms_closed_message_placeholder: () => "Shown when closed.",
+  intake_forms_closed_message_hint: () => "When closing date has passed.",
 }));
 
 vi.mock("$lib/terminology/with-terms.js", async (importOriginal) => ({
@@ -119,6 +134,7 @@ vi.mock("$lib/crypto/context.js", async (importOriginal) => ({
 vi.mock("$lib/portal/intake-form-crypto.js", async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   encryptFieldContent: mockEncryptFieldContent,
+  encryptFormMeta: vi.fn().mockReturnValue("enc-form-meta"),
 }));
 
 vi.mock("$lib/utils/haptic.js", async (importOriginal) => ({
@@ -192,6 +208,7 @@ describe("IntakeFormEditor", () => {
     initialSlug: null as string | null,
     initialIsDefault: false,
     initialDestinationQueueId: null as string | null,
+    initialFormMeta: {},
     initialFields: [],
     onback: vi.fn(),
     ondeleted: vi.fn(),
@@ -222,7 +239,8 @@ describe("IntakeFormEditor", () => {
         initialFields: [
           {
             fieldKey: "fk-1",
-            label: "Your name",
+            label: { en: "Your name" },
+            helpText: {},
             isRequired: false,
             config: { type: "text" as const },
             fieldType: "text" as const,
@@ -230,7 +248,8 @@ describe("IntakeFormEditor", () => {
           },
           {
             fieldKey: "fk-2",
-            label: "Message",
+            label: { en: "Message" },
+            helpText: {},
             isRequired: true,
             config: { type: "textarea" as const },
             fieldType: "textarea" as const,
@@ -269,7 +288,8 @@ describe("IntakeFormEditor", () => {
         initialFields: [
           {
             fieldKey: "fk-save",
-            label: "Name",
+            label: { en: "Name" },
+            helpText: {},
             isRequired: false,
             config: { type: "text" as const },
             fieldType: "text" as const,
@@ -299,7 +319,8 @@ describe("IntakeFormEditor", () => {
         initialFields: [
           {
             fieldKey: "fk-pop-1",
-            label: "Full name",
+            label: { en: "Full name" },
+            helpText: {},
             isRequired: true,
             config: { type: "text" as const },
             fieldType: "text" as const,
@@ -307,7 +328,8 @@ describe("IntakeFormEditor", () => {
           },
           {
             fieldKey: "fk-pop-2",
-            label: "Your situation",
+            label: { en: "Your situation" },
+            helpText: {},
             isRequired: true,
             config: { type: "textarea" as const, maxLength: 5000 },
             fieldType: "textarea" as const,
@@ -315,7 +337,8 @@ describe("IntakeFormEditor", () => {
           },
           {
             fieldKey: "fk-pop-3",
-            label: "Services needed",
+            label: { en: "Services needed" },
+            helpText: {},
             isRequired: false,
             config: {
               type: "multiselect" as const,
@@ -354,7 +377,8 @@ describe("IntakeFormEditor", () => {
         initialFields: [
           {
             fieldKey: "fk-del",
-            label: "Name",
+            label: { en: "Name" },
+            helpText: {},
             isRequired: false,
             config: { type: "text" as const },
             fieldType: "text" as const,
@@ -371,5 +395,49 @@ describe("IntakeFormEditor", () => {
     render(IntakeFormEditor, { props: baseProps });
 
     expect(screen.queryByText("Delete form")).toBeNull();
+  });
+
+  it("renders locale authoring segmented control", () => {
+    render(IntakeFormEditor, { props: baseProps });
+
+    expect(screen.getByText("Authoring language")).toBeTruthy();
+    expect(screen.getByText("EN")).toBeTruthy();
+    expect(screen.getByText("ES")).toBeTruthy();
+  });
+
+  it("notifies parent of dirty state on name change", async () => {
+    const ondirtychange = vi.fn();
+    render(IntakeFormEditor, {
+      props: { ...baseProps, ondirtychange },
+    });
+
+    // Initial render fires ondirtychange(false)
+    expect(ondirtychange).toHaveBeenLastCalledWith(false);
+
+    // Change the name
+    const nameInputs = document.querySelectorAll('input[type="text"]');
+    const nameInput = nameInputs[0];
+    if (nameInput) {
+      await fireEvent.input(nameInput, { target: { value: "Changed" } });
+    }
+
+    expect(ondirtychange).toHaveBeenCalledWith(true);
+  });
+
+  it("shows slug validation error for invalid format", async () => {
+    render(IntakeFormEditor, { props: baseProps });
+
+    const inputs = document.querySelectorAll('input[type="text"]');
+    // Slug is the second text input
+    const slugInput = inputs[1];
+    if (slugInput) {
+      await fireEvent.input(slugInput, {
+        target: { value: "INVALID--slug" },
+      });
+    }
+
+    expect(
+      screen.getByText("Lowercase letters, digits, and single hyphens only."),
+    ).toBeTruthy();
   });
 });

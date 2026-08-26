@@ -539,6 +539,153 @@ describe.skipIf(!process.env.DATABASE_URL)("IntakeFormService", () => {
     });
   });
 
+  describe("encryptedFormMeta round-trip", () => {
+    it("saves with meta and reads it back on getForm", async () => {
+      const metaBlob = Buffer.from('{"description":"test"}').toString("base64");
+      const formId = await createForm("Meta RT", {
+        slug: "meta-rt",
+      });
+
+      // Re-save with encryptedFormMeta
+      await svc.saveForm(testDb.db, crypto.randomUUID() as UserId, {
+        formId,
+        name: "Meta RT",
+        slug: "meta-rt",
+        encryptedFormMeta: metaBlob,
+        fields: [
+          {
+            fieldKey: crypto.randomUUID(),
+            fieldType: "text",
+            encryptedLabel: Buffer.from("l").toString("base64"),
+            encryptedConfig: Buffer.from("c").toString("base64"),
+            isRequired: false,
+          },
+        ],
+      });
+
+      const detail = await svc.getForm(testDb.db, formId);
+      expect(detail.encryptedFormMeta).toBe(metaBlob);
+    });
+
+    it("saves with meta and reads it back on getPublicForm", async () => {
+      const metaBlob = Buffer.from('{"submitMessage":"thanks"}').toString(
+        "base64",
+      );
+      const formId = await createForm("Meta Public", {
+        slug: "meta-public",
+      });
+
+      await svc.saveForm(testDb.db, crypto.randomUUID() as UserId, {
+        formId,
+        name: "Meta Public",
+        slug: "meta-public",
+        encryptedFormMeta: metaBlob,
+        fields: [
+          {
+            fieldKey: crypto.randomUUID(),
+            fieldType: "text",
+            encryptedLabel: Buffer.from("l").toString("base64"),
+            encryptedConfig: Buffer.from("c").toString("base64"),
+            isRequired: false,
+          },
+        ],
+      });
+
+      await svc.setActive(testDb.db, formId, true);
+      const publicForm = await svc.getPublicForm(testDb.db, "meta-public");
+      expect(publicForm).not.toBeNull();
+      expect(publicForm?.encryptedFormMeta).toBe(metaBlob);
+
+      await svc.setActive(testDb.db, formId, false);
+    });
+
+    it("saves with meta and reads it back on resolvePublicForm", async () => {
+      const metaBlob = Buffer.from('{"closedMessage":"closed"}').toString(
+        "base64",
+      );
+      const formId = await createForm("Meta Resolve", {
+        slug: "meta-resolve",
+      });
+
+      await svc.saveForm(testDb.db, crypto.randomUUID() as UserId, {
+        formId,
+        name: "Meta Resolve",
+        slug: "meta-resolve",
+        encryptedFormMeta: metaBlob,
+        fields: [
+          {
+            fieldKey: crypto.randomUUID(),
+            fieldType: "text",
+            encryptedLabel: Buffer.from("l").toString("base64"),
+            encryptedConfig: Buffer.from("c").toString("base64"),
+            isRequired: false,
+          },
+        ],
+      });
+
+      await svc.setActive(testDb.db, formId, true);
+      const result = await svc.resolvePublicForm(testDb.db, "meta-resolve");
+      expect(result.encryptedFormMeta).toBe(metaBlob);
+
+      await svc.setActive(testDb.db, formId, false);
+    });
+
+    it("returns null when no meta is saved", async () => {
+      const formId = await createForm("No Meta");
+
+      const detail = await svc.getForm(testDb.db, formId);
+      expect(detail.encryptedFormMeta).toBeNull();
+    });
+
+    it("clears meta when saved without encryptedFormMeta", async () => {
+      const metaBlob = Buffer.from('{"description":"will clear"}').toString(
+        "base64",
+      );
+      const formId = await createForm("Clear Meta", {
+        slug: "clear-meta",
+      });
+
+      // Save with meta
+      await svc.saveForm(testDb.db, crypto.randomUUID() as UserId, {
+        formId,
+        name: "Clear Meta",
+        slug: "clear-meta",
+        encryptedFormMeta: metaBlob,
+        fields: [
+          {
+            fieldKey: crypto.randomUUID(),
+            fieldType: "text",
+            encryptedLabel: Buffer.from("l").toString("base64"),
+            encryptedConfig: Buffer.from("c").toString("base64"),
+            isRequired: false,
+          },
+        ],
+      });
+
+      let detail = await svc.getForm(testDb.db, formId);
+      expect(detail.encryptedFormMeta).toBe(metaBlob);
+
+      // Re-save without meta (omit encryptedFormMeta entirely)
+      await svc.saveForm(testDb.db, crypto.randomUUID() as UserId, {
+        formId,
+        name: "Clear Meta",
+        slug: "clear-meta",
+        fields: [
+          {
+            fieldKey: crypto.randomUUID(),
+            fieldType: "text",
+            encryptedLabel: Buffer.from("l").toString("base64"),
+            encryptedConfig: Buffer.from("c").toString("base64"),
+            isRequired: false,
+          },
+        ],
+      });
+
+      detail = await svc.getForm(testDb.db, formId);
+      expect(detail.encryptedFormMeta).toBeNull();
+    });
+  });
+
   describe("escalation recipients round-trip", () => {
     it("encrypts on save and decrypts on read", async () => {
       const recipientA = crypto.randomUUID() as UserId;

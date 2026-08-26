@@ -52,6 +52,9 @@ vi.mock("$lib/paraglide/messages.js", async (importOriginal) => ({
   intake_forms_config_priority_high: () => "High",
   intake_forms_config_priority_urgent: () => "Urgent",
   intake_forms_config_priority_default: () => "Default (normal)",
+  intake_forms_config_help_text: () => "Help text",
+  intake_forms_config_help_text_placeholder: () => "Help text placeholder",
+  intake_forms_config_help_text_hint: () => "Shown below the field.",
 }));
 
 vi.mock("$lib/terminology/with-terms.js", async (importOriginal) => ({
@@ -84,7 +87,8 @@ const TEST_VOLUNTEERS = [
 ];
 
 function baseInitial(): {
-  label: string;
+  label: { en: string };
+  helpText: Record<string, never>;
   isRequired: boolean;
   config: {
     type: "select";
@@ -94,7 +98,8 @@ function baseInitial(): {
   escalationRecipientIds: null;
 } {
   return {
-    label: "Test question",
+    label: { en: "Test question" },
+    helpText: {},
     isRequired: false,
     config: {
       type: "select" as const,
@@ -127,6 +132,7 @@ describe("IntakeFieldConfigSheet", () => {
         initial: baseInitial(),
         queues: TEST_QUEUES,
         volunteers: TEST_VOLUNTEERS,
+        editingLocale: "en",
         ondone,
         ondismiss: vi.fn(),
       },
@@ -145,6 +151,7 @@ describe("IntakeFieldConfigSheet", () => {
         },
         queues: TEST_QUEUES,
         volunteers: TEST_VOLUNTEERS,
+        editingLocale: "en",
         ondone,
         ondismiss: vi.fn(),
       },
@@ -171,6 +178,7 @@ describe("IntakeFieldConfigSheet", () => {
         initial: baseInitial(),
         queues: TEST_QUEUES,
         volunteers: TEST_VOLUNTEERS,
+        editingLocale: "en",
         ondone,
         ondismiss: vi.fn(),
       },
@@ -209,6 +217,7 @@ describe("IntakeFieldConfigSheet", () => {
         },
         queues: TEST_QUEUES,
         volunteers: TEST_VOLUNTEERS,
+        editingLocale: "en",
         ondone,
         ondismiss: vi.fn(),
       },
@@ -250,6 +259,7 @@ describe("IntakeFieldConfigSheet", () => {
         },
         queues: TEST_QUEUES,
         volunteers: TEST_VOLUNTEERS,
+        editingLocale: "en",
         ondone,
         ondismiss: vi.fn(),
       },
@@ -257,7 +267,7 @@ describe("IntakeFieldConfigSheet", () => {
     expect(screen.queryByText("Field role")).toBeNull();
   });
 
-  it("emits role and config on done", async () => {
+  it("emits role and config on done with LocalizedText label", async () => {
     render(IntakeFieldConfigSheet, {
       props: {
         opened: true,
@@ -265,6 +275,7 @@ describe("IntakeFieldConfigSheet", () => {
         initial: baseInitial(),
         queues: TEST_QUEUES,
         volunteers: TEST_VOLUNTEERS,
+        editingLocale: "en",
         ondone,
         ondismiss: vi.fn(),
       },
@@ -278,16 +289,19 @@ describe("IntakeFieldConfigSheet", () => {
     expect(capturedResult).toHaveProperty("role", null);
     expect(capturedResult).toHaveProperty("routingQueueIds", null);
     expect(capturedResult).toHaveProperty("escalationRecipientIds", null);
+    // Label should be a LocalizedText object
+    expect(capturedResult?.label).toEqual({ en: "Test question" });
   });
 
-  it("blocks done and shows an error when the question text is empty", async () => {
+  it("blocks done and shows an error when the base-locale label is empty", async () => {
     render(IntakeFieldConfigSheet, {
       props: {
         opened: true,
         fieldType: "select",
-        initial: { ...baseInitial(), label: "" },
+        initial: { ...baseInitial(), label: {} },
         queues: TEST_QUEUES,
         volunteers: TEST_VOLUNTEERS,
+        editingLocale: "en",
         ondone,
         ondismiss: vi.fn(),
       },
@@ -313,6 +327,7 @@ describe("IntakeFieldConfigSheet", () => {
         },
         queues: TEST_QUEUES,
         volunteers: TEST_VOLUNTEERS,
+        editingLocale: "en",
         ondone,
         ondismiss: vi.fn(),
       },
@@ -333,6 +348,7 @@ describe("IntakeFieldConfigSheet", () => {
         initial: baseInitial(),
         queues: TEST_QUEUES,
         volunteers: TEST_VOLUNTEERS,
+        editingLocale: "en",
         ondone,
         ondismiss,
       },
@@ -355,11 +371,33 @@ describe("IntakeFieldConfigSheet", () => {
         },
         queues: TEST_QUEUES,
         volunteers: TEST_VOLUNTEERS,
+        editingLocale: "en",
         ondone,
         ondismiss: vi.fn(),
       },
     });
     // The urgency mapping title should be visible since urgency is selected
     expect(screen.getByText("Priority mapping")).toBeTruthy();
+  });
+
+  it("renders locale switcher within the config sheet", () => {
+    render(IntakeFieldConfigSheet, {
+      props: {
+        opened: true,
+        fieldType: "text",
+        initial: {
+          ...baseInitial(),
+          config: { type: "text" as const },
+        },
+        queues: TEST_QUEUES,
+        volunteers: TEST_VOLUNTEERS,
+        editingLocale: "en",
+        ondone,
+        ondismiss: vi.fn(),
+      },
+    });
+    // Should have EN and ES buttons for locale switching
+    expect(screen.getAllByText("EN").length).toBeGreaterThanOrEqual(1);
+    expect(screen.getAllByText("ES").length).toBeGreaterThanOrEqual(1);
   });
 });

@@ -114,6 +114,7 @@ function resolveOptionKey(
  * Format a single answer value as a string for the description.
  * When config is provided and the field is select/multiselect, option keys
  * are resolved to base-locale labels per D2.
+ * Date values pass through as-is (YYYY-MM-DD).
  */
 function formatValue(
   value: string | readonly string[] | AvailabilityData | boolean,
@@ -125,6 +126,7 @@ function formatValue(
     if (config?.type === "select") {
       return resolveOptionKey(value, config.options);
     }
+    // Date and plain text values pass through unchanged
     return value;
   }
   if (isAvailabilityData(value)) return formatAvailability(value);

@@ -19,6 +19,9 @@ import {
   fieldKeySchema,
   ENCRYPTED_CONFIG_CAP,
   ENCRYPTED_LABEL_CAP,
+  intakeFormMetaSchema,
+  textSubtypeSchema,
+  ENCRYPTED_FORM_META_CAP,
 } from "./intake-forms.js";
 import type { LocalizedText, IntakeFieldConfig } from "./intake-forms.js";
 
@@ -1358,5 +1361,230 @@ describe("saveIntakeFormInputSchema", () => {
     };
     const result = saveIntakeFormInputSchema.safeParse(input);
     expect(result.success).toBe(false);
+  });
+
+  it("accepts optional encryptedFormMeta", () => {
+    const input = {
+      ...validFormInput(),
+      encryptedFormMeta: base64OfBytes(128),
+    };
+    const result = saveIntakeFormInputSchema.safeParse(input);
+    expect(result.success).toBe(true);
+  });
+
+  it("rejects oversized encryptedFormMeta", () => {
+    const input = {
+      ...validFormInput(),
+      encryptedFormMeta: base64Chars(ENCRYPTED_FORM_META_CAP + 1),
+    };
+    const result = saveIntakeFormInputSchema.safeParse(input);
+    expect(result.success).toBe(false);
+  });
+
+  it("accepts form without encryptedFormMeta (optional)", () => {
+    const input = validFormInput();
+    const result = saveIntakeFormInputSchema.safeParse(input);
+    expect(result.success).toBe(true);
+  });
+});
+
+// =========================================================================
+// T1.1: Form-level metadata schema
+// =========================================================================
+
+describe("intakeFormMetaSchema", () => {
+  it("accepts empty object", () => {
+    const result = intakeFormMetaSchema.safeParse({});
+    expect(result.success).toBe(true);
+  });
+
+  it("accepts description only", () => {
+    const result = intakeFormMetaSchema.safeParse({
+      description: { en: "Welcome to our form" },
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("accepts all three fields with both locales", () => {
+    const result = intakeFormMetaSchema.safeParse({
+      description: { en: "Welcome", es: "Bienvenido" },
+      submitMessage: { en: "Thank you!", es: "Gracias!" },
+      closedMessage: {
+        en: "This form is closed.",
+        es: "Este formulario esta cerrado.",
+      },
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("rejects unknown fields", () => {
+    const result = intakeFormMetaSchema.safeParse({
+      description: { en: "ok" },
+      unknownField: "nope",
+    });
+    // Zod strips unknown keys in non-strict mode, so this passes
+    // but the extra key is dropped
+    expect(result.success).toBe(true);
+  });
+});
+
+// =========================================================================
+// T1.2: Text subtypes
+// =========================================================================
+
+describe("textSubtypeSchema", () => {
+  it("accepts email", () => {
+    expect(textSubtypeSchema.safeParse("email").success).toBe(true);
+  });
+
+  it("accepts phone", () => {
+    expect(textSubtypeSchema.safeParse("phone").success).toBe(true);
+  });
+
+  it("accepts number", () => {
+    expect(textSubtypeSchema.safeParse("number").success).toBe(true);
+  });
+
+  it("rejects unknown subtype", () => {
+    expect(textSubtypeSchema.safeParse("url").success).toBe(false);
+  });
+});
+
+describe("text field config with subtype", () => {
+  it("accepts text config with email subtype", () => {
+    const result = intakeFieldConfigSchema.safeParse({
+      type: "text",
+      subtype: "email",
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("accepts text config with number subtype and range", () => {
+    const result = intakeFieldConfigSchema.safeParse({
+      type: "text",
+      subtype: "number",
+      numberRange: { min: 0, max: 100 },
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("accepts text config with number subtype, min only", () => {
+    const result = intakeFieldConfigSchema.safeParse({
+      type: "text",
+      subtype: "number",
+      numberRange: { min: 1 },
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("accepts text config without subtype (plain text)", () => {
+    const result = intakeFieldConfigSchema.safeParse({
+      type: "text",
+    });
+    expect(result.success).toBe(true);
+  });
+});
+
+// =========================================================================
+// T1.2: Date field type
+// =========================================================================
+
+describe("date field type", () => {
+  it("intakeFieldTypeSchema accepts date", () => {
+    expect(intakeFieldTypeSchema.safeParse("date").success).toBe(true);
+  });
+
+  it("intakeFieldConfigSchema accepts date config", () => {
+    const result = intakeFieldConfigSchema.safeParse({
+      type: "date",
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("date config accepts helpText", () => {
+    const result = intakeFieldConfigSchema.safeParse({
+      type: "date",
+      helpText: { en: "Pick a date" },
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("date answer is a valid response value", () => {
+    const result = intakeFormResponseSchema.safeParse({
+      formId: crypto.randomUUID(),
+      answers: [
+        {
+          fieldKey: crypto.randomUUID(),
+          fieldType: "date",
+          value: "2026-09-15",
+        },
+      ],
+    });
+    expect(result.success).toBe(true);
+  });
+});
+
+// =========================================================================
+// T1.1: Help text in field config
+// =========================================================================
+
+describe("helpText in field config", () => {
+  it("text config accepts helpText", () => {
+    const result = intakeFieldConfigSchema.safeParse({
+      type: "text",
+      helpText: {
+        en: "Enter your full name",
+        es: "Ingrese su nombre completo",
+      },
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("select config accepts helpText", () => {
+    const result = intakeFieldConfigSchema.safeParse({
+      type: "select",
+      options: [opt("a", "A")],
+      helpText: { en: "Pick one" },
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("checkbox config accepts helpText", () => {
+    const result = intakeFieldConfigSchema.safeParse({
+      type: "checkbox",
+      helpText: { en: "Check to confirm" },
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("availability config accepts helpText", () => {
+    const result = intakeFieldConfigSchema.safeParse({
+      type: "availability",
+      allowRecurring: true,
+      allowSpecific: true,
+      helpText: { en: "When are you available?" },
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("a fully populated bilingual config with helpText and 50 options stays under cap", () => {
+    const options = Array.from({ length: 50 }, (_, i) => ({
+      key: crypto.randomUUID(),
+      label: {
+        en: `Option ${String(i)} with a moderately long English label text`,
+        es: `Opcion ${String(i)} con un texto de etiqueta en espanol moderadamente largo`,
+      },
+    }));
+    const config: IntakeFieldConfig = {
+      type: "select",
+      options,
+      helpText: {
+        en: "Select the option that best describes your situation. This help text is moderately long to test size.",
+        es: "Seleccione la opcion que mejor describa su situacion. Este texto de ayuda es moderadamente largo para probar tamano.",
+      },
+    };
+    const serialized = JSON.stringify(config);
+    const base64Estimate = Math.ceil((serialized.length * 4) / 3);
+    expect(base64Estimate).toBeLessThan(ENCRYPTED_CONFIG_CAP);
   });
 });

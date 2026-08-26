@@ -4,10 +4,15 @@
  * import them; mirrors the collapsible-section-types.ts precedent.
  */
 
-import type { IntakeFieldConfig, IntakeFieldRole } from "@care-y/shared";
+import type {
+  IntakeFieldConfig,
+  IntakeFieldRole,
+  LocalizedText,
+} from "@care-y/shared";
 
 export interface FieldConfigState {
-  readonly label: string;
+  readonly label: LocalizedText;
+  readonly helpText: LocalizedText;
   readonly isRequired: boolean;
   readonly config: IntakeFieldConfig;
   readonly role: IntakeFieldRole | null;

@@ -28,6 +28,7 @@
   interface IntakeFieldRendererProps {
     readonly fieldId: string;
     readonly label: string;
+    readonly helpText?: string;
     readonly config: IntakeFieldConfig;
     readonly isRequired: boolean;
     readonly role?: IntakeFieldRole | null;
@@ -42,6 +43,7 @@
   let {
     fieldId,
     label,
+    helpText,
     config,
     isRequired,
     role = null,
@@ -50,6 +52,17 @@
     error,
     onchange,
   }: IntakeFieldRendererProps = $props();
+
+  /** Resolve help text from config or prop, respecting locale. */
+  const resolvedHelpText = $derived.by((): string | undefined => {
+    // Prop-level helpText takes priority (used by the editor preview)
+    if (helpText != null && helpText.length > 0) return helpText;
+    // Fall back to config-embedded helpText when present
+    if (config.helpText != null) {
+      return resolveLocalized(config.helpText, locale);
+    }
+    return undefined;
+  });
 
   /** Resolve display text for a localized option. */
   function optionText(opt: IntakeOption): string {
@@ -108,6 +121,23 @@
     const current = typeof value === "string" ? value.length : 0;
     return { current, max: config.maxLength };
   });
+
+  function handleDateInput(e: Event): void {
+    const target = e.target;
+    if (target instanceof HTMLInputElement) {
+      onchange(target.value);
+    }
+  }
+
+  /**
+   * Compile-time exhaustiveness check. If a new field type is added to the
+   * IntakeFieldType union without a corresponding renderer branch, this
+   * function call produces a type error (string not assignable to never).
+   */
+  function assertExhaustive(_type: never): void {
+    // Runtime fallback handled in the template; this exists only for
+    // the type-level check.
+  }
 </script>
 
 {#if config.type === "text"}
@@ -116,7 +146,13 @@
   <List strong inset>
     <ListInput
       {inputId}
-      type="text"
+      type={config.subtype === "email"
+        ? "email"
+        : config.subtype === "phone"
+          ? "tel"
+          : config.subtype === "number"
+            ? "number"
+            : "text"}
       placeholder={resolveLocalized(config.placeholder, locale) ?? ""}
       value={typeof value === "string" ? value : ""}
       maxlength={config.maxLength}
@@ -129,6 +165,9 @@
     <p class="char-count" aria-hidden="true">
       {m.intake_char_count({ count: charCount.current, max: charCount.max })}
     </p>
+  {/if}
+  {#if resolvedHelpText}
+    <p class="field-help-text">{resolvedHelpText}</p>
   {/if}
   <FieldError message={error} />
   {#if role}
@@ -156,6 +195,9 @@
       {m.intake_char_count({ count: charCount.current, max: charCount.max })}
     </p>
   {/if}
+  {#if resolvedHelpText}
+    <p class="field-help-text">{resolvedHelpText}</p>
+  {/if}
   <FieldError message={error} />
   {#if role}
     <IntakePrivacyIndicator
@@ -181,6 +223,9 @@
       {/each}
     </ListInput>
   </List>
+  {#if resolvedHelpText}
+    <p class="field-help-text">{resolvedHelpText}</p>
+  {/if}
   <FieldError message={error} />
   {#if role}
     <IntakePrivacyIndicator
@@ -202,6 +247,9 @@
       </ListItem>
     {/each}
   </List>
+  {#if resolvedHelpText}
+    <p class="field-help-text">{resolvedHelpText}</p>
+  {/if}
   <FieldError message={error} />
   {#if role}
     <IntakePrivacyIndicator
@@ -220,6 +268,9 @@
       {/snippet}
     </ListItem>
   </List>
+  {#if resolvedHelpText}
+    <p class="field-help-text">{resolvedHelpText}</p>
+  {/if}
   <FieldError message={error} />
   {#if role}
     <IntakePrivacyIndicator
@@ -228,6 +279,9 @@
   {/if}
 {:else if config.type === "availability"}
   <BlockTitle id={labelId}>{displayLabel}</BlockTitle>
+  {#if resolvedHelpText}
+    <p class="field-help-text">{resolvedHelpText}</p>
+  {/if}
   <AvailabilityField
     allowRecurring={config.allowRecurring}
     allowSpecific={config.allowSpecific}
@@ -239,6 +293,35 @@
     {error}
     onchange={handleAvailabilityChange}
   />
+{:else if config.type === "date"}
+  <label for={inputId} class="sr-only">{displayLabel}</label>
+  <BlockTitle id={labelId}>{displayLabel}</BlockTitle>
+  <List strong inset>
+    <ListInput
+      {inputId}
+      type="date"
+      value={typeof value === "string" ? value : ""}
+      autocomplete="off"
+      required={isRequired}
+      onInput={handleDateInput}
+    />
+  </List>
+  {#if resolvedHelpText}
+    <p class="field-help-text">{resolvedHelpText}</p>
+  {/if}
+  <FieldError message={error} />
+  {#if role}
+    <IntakePrivacyIndicator
+      hasMetadataSignal={SERVER_METADATA_ROLES.has(role)}
+    />
+  {/if}
+{:else}
+  <!-- Exhaustiveness guard: compile-time error if a field type branch is missing -->
+  {assertExhaustive(config)}
+  <BlockTitle>{displayLabel}</BlockTitle>
+  <p class="field-unknown-type" role="alert">
+    {m.intake_field_unknown_type()}
+  </p>
 {/if}
 
 <style>
@@ -248,5 +331,21 @@
     text-align: right;
     padding: 0 var(--space-lg);
     margin: calc(-1 * var(--space-xs)) 0 0;
+  }
+
+  .field-help-text {
+    font-size: var(--text-xs);
+    color: var(--muted);
+    padding: 0 var(--space-lg);
+    margin: var(--space-xs) 0 0;
+    line-height: 1.4;
+    white-space: pre-line;
+  }
+
+  .field-unknown-type {
+    font-size: var(--text-sm);
+    color: var(--muted);
+    padding: 0 var(--space-lg);
+    font-style: italic;
   }
 </style>

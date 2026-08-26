@@ -6,6 +6,9 @@
   independently operable. When web intake is enabled and no active custom
   form is marked default, a read-only row surfaces the built-in default form
   that /intake serves.
+
+  Supports duplication: loads an existing form, mints fresh field and option
+  keys, suffixes the name, clears the slug, and saves as a new form.
 -->
 <script lang="ts">
   import { resolve } from "$app/paths";
@@ -15,14 +18,29 @@
     createQuery,
     useQueryClient,
   } from "@tanstack/svelte-query";
-  import { ClipboardList, FileText, Globe, Plus } from "@lucide/svelte";
+  import { ClipboardList, FileText, Globe, Plus, Copy } from "@lucide/svelte";
+  import {
+    intakeFieldTypeSchema,
+    intakeFieldRoleSchema,
+    intakeFieldConfigSchema,
+    type IntakeFieldConfig,
+    type IntakeOption,
+  } from "@care-y/shared";
   import * as m from "$lib/paraglide/messages.js";
   import { trpc } from "$lib/trpc/index.js";
   import { requireRouter } from "$lib/errors.js";
   import { intakeFormKeys } from "$lib/query/keys.js";
   import { toastStore } from "$lib/stores/toast.svelte.js";
+  import { announceToLiveRegion } from "$lib/utils/announce.js";
   import { getErrorMessage } from "$lib/components/query-error-messages.js";
-  import { getOrgDecryptCache } from "$lib/crypto/context.js";
+  import { getOrgKeyManager, getOrgDecryptCache } from "$lib/crypto/context.js";
+  import {
+    decryptFieldContent,
+    decryptFormMeta,
+    encryptFieldContent,
+    encryptFormMeta,
+  } from "$lib/portal/intake-form-crypto.js";
+  import { haptic } from "$lib/utils/haptic.js";
   import DecryptPlaceholder from "$lib/components/DecryptPlaceholder.svelte";
   import QueryError from "$lib/components/QueryError.svelte";
 
@@ -30,6 +48,9 @@
   const ticketRouter = requireRouter(trpc.tickets, "tickets");
   const queryClient = useQueryClient();
   const orgCache = getOrgDecryptCache();
+  const orgKeyManager = getOrgKeyManager();
+
+  let duplicatingFormId = $state<string | null>(null);
 
   const formsQuery = createQuery(() => ({
     queryKey: intakeFormKeys.list(),
@@ -113,6 +134,182 @@
       parts.push(getQueueName(form.destinationQueueId));
     return parts.join(" · ");
   }
+
+  /**
+   * Mint fresh option keys for a config, preserving labels and remapping
+   * any role mappings to the new keys. The result is validated through
+   * intakeFieldConfigSchema so branded types (QueueId, TicketPriority)
+   * are preserved rather than widened to plain strings.
+   */
+  function freshOptionKeys(config: IntakeFieldConfig): IntakeFieldConfig {
+    if (config.type !== "select" && config.type !== "multiselect") {
+      return config;
+    }
+
+    // Pair each old option key with its replacement UUID.
+    const keyPairs: [string, string][] = [];
+    const newOptions: IntakeOption[] = config.options.map((o) => {
+      const newKey = crypto.randomUUID();
+      keyPairs.push([o.key, newKey]);
+      return { key: newKey, label: { ...o.label } };
+    });
+
+    // Remap mapping record keys from old option keys to new ones.
+    // Values pass through unchanged, preserving branded types from
+    // the parsed source config. Object.fromEntries avoids computed-key
+    // assignment.
+    function remapKeys<V>(rec: Record<string, V>): Record<string, V> {
+      const entries: [string, V][] = [];
+      for (const [oldKey, value] of Object.entries(rec)) {
+        const pair = keyPairs.find(([k]) => k === oldKey);
+        if (pair != null) {
+          entries.push([pair[1], value]);
+        }
+      }
+      return Object.fromEntries(entries);
+    }
+
+    // Build the raw remapped config, then parse through the schema
+    // to validate branded mapping value types (QueueId, TicketPriority).
+    let raw: Record<string, unknown>;
+    if (config.type === "select") {
+      raw = {
+        ...config,
+        options: newOptions,
+        ...(config.queueRoutingMapping != null
+          ? { queueRoutingMapping: remapKeys(config.queueRoutingMapping) }
+          : {}),
+        ...(config.urgencyMapping != null
+          ? { urgencyMapping: remapKeys(config.urgencyMapping) }
+          : {}),
+        ...(config.escalationMapping != null
+          ? { escalationMapping: remapKeys(config.escalationMapping) }
+          : {}),
+      };
+    } else {
+      raw = {
+        ...config,
+        options: newOptions,
+        ...(config.queueRoutingMapping != null
+          ? { queueRoutingMapping: remapKeys(config.queueRoutingMapping) }
+          : {}),
+      };
+    }
+
+    // Parse recovers branded types. On validation failure (should not
+    // happen with well-formed source data), return the original config
+    // unchanged and let the save mutation surface the error.
+    const parsed = intakeFieldConfigSchema.safeParse(raw);
+    if (!parsed.success) return config;
+    return parsed.data;
+  }
+
+  /**
+   * Duplicate a form: load, decrypt, mint fresh keys, re-encrypt, save as new.
+   * Name is suffixed with " (copy)", slug is cleared, isDefault set to false.
+   */
+  async function duplicateForm(sourceFormId: string): Promise<void> {
+    const orgPub = orgKeyManager.getPublicKey();
+    if (!orgPub) {
+      toastStore.show(m.error_generic());
+      return;
+    }
+
+    duplicatingFormId = sourceFormId;
+
+    try {
+      const formDetail = await intakeFormsRouter.get.query({
+        formId: sourceFormId,
+      });
+
+      // Decrypt and rebuild fields with fresh keys
+      const encryptedFields = formDetail.fields.map(
+        (field: {
+          fieldKey: string;
+          encryptedLabel: string;
+          encryptedConfig: string;
+          isRequired: boolean;
+          fieldType: string;
+          role: string | null;
+          routingQueueIds: readonly string[] | null;
+          escalationRecipientIds: readonly string[] | null;
+        }) => {
+          const decrypted = decryptFieldContent(
+            {
+              encryptedLabel: field.encryptedLabel,
+              encryptedConfig: field.encryptedConfig,
+            },
+            orgPub,
+          );
+
+          // Mint fresh config with new option keys
+          const freshConfig = freshOptionKeys(decrypted.config);
+          // Re-encrypt with fresh field key
+          const encrypted = encryptFieldContent(
+            { label: decrypted.label, config: freshConfig },
+            orgPub,
+          );
+
+          return {
+            fieldKey: crypto.randomUUID(),
+            fieldType: intakeFieldTypeSchema.parse(field.fieldType),
+            encryptedLabel: encrypted.encryptedLabel,
+            encryptedConfig: encrypted.encryptedConfig,
+            isRequired: field.isRequired,
+            role:
+              field.role != null
+                ? intakeFieldRoleSchema.parse(field.role)
+                : undefined,
+            routingQueueIds:
+              field.routingQueueIds != null
+                ? [...field.routingQueueIds]
+                : undefined,
+            escalationRecipientIds:
+              field.escalationRecipientIds != null
+                ? [...field.escalationRecipientIds]
+                : undefined,
+          };
+        },
+      );
+
+      // Decrypt and re-encrypt form meta (preserving all locale content)
+      let encryptedFormMeta: string | undefined;
+      if (
+        "encryptedFormMeta" in formDetail &&
+        typeof formDetail.encryptedFormMeta === "string"
+      ) {
+        try {
+          const meta = decryptFormMeta(formDetail.encryptedFormMeta, orgPub);
+          encryptedFormMeta = encryptFormMeta(meta, orgPub) ?? undefined;
+        } catch {
+          // Non-fatal: duplicate works without metadata
+        }
+      }
+
+      const newName = `${formDetail.name} ${m.intake_forms_duplicate_suffix()}`;
+
+      await intakeFormsRouter.save.mutate({
+        formId: null,
+        name: newName,
+        slug: null,
+        isDefault: false,
+        destinationQueueId: formDetail.destinationQueueId ?? null,
+        ...(encryptedFormMeta != null ? { encryptedFormMeta } : {}),
+        fields: encryptedFields,
+      });
+
+      haptic();
+      toastStore.show(m.intake_forms_duplicated());
+      announceToLiveRegion("polite", m.intake_forms_duplicated());
+      void queryClient.invalidateQueries({
+        queryKey: intakeFormKeys.all,
+      });
+    } catch (err: unknown) {
+      toastStore.show(getErrorMessage(err));
+    } finally {
+      duplicatingFormId = null;
+    }
+  }
 </script>
 
 <Card raised contentWrap={false} class="ifs-card">
@@ -170,15 +367,26 @@
               <span class="ifs-row-sub">{formSubtitle(form)}</span>
             </span>
           </a>
-          <Toggle
-            checked={form.isActive}
-            onChange={() =>
-              setActiveMutation.mutate({
-                formId: form.id,
-                active: !form.isActive,
-              })}
-            aria-label={`${form.name} ${form.isActive ? m.intake_forms_active() : m.intake_forms_inactive()}`}
-          />
+          <div class="ifs-row-actions">
+            <button
+              type="button"
+              class="ifs-dup-btn"
+              disabled={duplicatingFormId === form.id}
+              onclick={() => void duplicateForm(form.id)}
+              aria-label={m.intake_forms_duplicate_label()}
+            >
+              <Copy size={14} />
+            </button>
+            <Toggle
+              checked={form.isActive}
+              onChange={() =>
+                setActiveMutation.mutate({
+                  formId: form.id,
+                  active: !form.isActive,
+                })}
+              aria-label={`${form.name} ${form.isActive ? m.intake_forms_active() : m.intake_forms_inactive()}`}
+            />
+          </div>
         </div>
       {/each}
 
@@ -290,6 +498,36 @@
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+  }
+
+  .ifs-row-actions {
+    display: flex;
+    align-items: center;
+    gap: var(--space-xs, 4px);
+    flex-shrink: 0;
+  }
+
+  .ifs-dup-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    border: none;
+    background: none;
+    color: var(--muted);
+    cursor: pointer;
+    border-radius: 50%;
+    padding: 0;
+  }
+
+  .ifs-dup-btn:disabled {
+    opacity: 0.3;
+    cursor: default;
+  }
+
+  .ifs-dup-btn:not(:disabled):active {
+    background: color-mix(in srgb, var(--ink) 10%, transparent);
   }
 
   :global(.ifs-cfg-icon) {

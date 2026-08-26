@@ -742,6 +742,7 @@ export interface IntakeFormsTable {
   is_active: ColumnType<boolean, boolean | undefined, boolean>;
   is_default: ColumnType<boolean, boolean | undefined, boolean>;
   destination_queue_id: QueueId | null;
+  encrypted_form_meta: Buffer | null;
   created_at: Generated<Date>;
   updated_at: Generated<Date>;
 }

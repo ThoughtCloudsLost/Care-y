@@ -33,8 +33,10 @@ import {
 } from "@care-y/crypto";
 import {
   intakeFieldConfigSchema,
+  intakeFormMetaSchema,
   localizedTextSchema,
   type IntakeFieldConfig,
+  type IntakeFormMeta,
   type LocalizedText,
 } from "@care-y/shared";
 
@@ -166,6 +168,85 @@ export function decryptFieldContent(
     }
 
     return { label, config };
+  } finally {
+    requireSodium().memzero(key);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Form-level metadata encrypt/decrypt
+// ---------------------------------------------------------------------------
+
+/**
+ * Encrypt form-level metadata (description, submit message, closed message)
+ * under the client-branding key. Returns base64url-encoded ciphertext, or
+ * undefined when all fields are empty (no blob needed).
+ *
+ * @param meta - Plaintext form metadata
+ * @param orgPublicKey - Org Curve25519 public key (32 bytes)
+ * @returns Base64url-encoded ciphertext, or undefined if meta is empty
+ */
+export function encryptFormMeta(
+  meta: IntakeFormMeta,
+  orgPublicKey: Uint8Array,
+): string | undefined {
+  // Skip encryption when no descriptive content is present
+  const hasContent =
+    (meta.description != null &&
+      Object.values(meta.description).some((v) => v.length > 0)) ||
+    (meta.submitMessage != null &&
+      Object.values(meta.submitMessage).some((v) => v.length > 0)) ||
+    (meta.closedMessage != null &&
+      Object.values(meta.closedMessage).some((v) => v.length > 0));
+  if (!hasContent) return undefined;
+
+  const key: SymmetricKey = deriveClientBrandingKey(orgPublicKey);
+  try {
+    const metaBytes = textEncoder.encode(JSON.stringify(meta));
+    const encrypted = encryptContent(metaBytes, key, INTAKE_FORM_AAD);
+    return encode(encrypted);
+  } finally {
+    requireSodium().memzero(key);
+  }
+}
+
+/**
+ * Decrypt form-level metadata from a base64url-encoded ciphertext blob.
+ *
+ * @param encryptedMeta - Base64url ciphertext
+ * @param orgPublicKey - Org Curve25519 public key (32 bytes)
+ * @returns Validated IntakeFormMeta
+ * @throws DecryptionError on decrypt failure or schema mismatch
+ */
+export function decryptFormMeta(
+  encryptedMeta: string,
+  orgPublicKey: Uint8Array,
+): IntakeFormMeta {
+  const key: SymmetricKey = deriveClientBrandingKey(orgPublicKey);
+  try {
+    /* eslint-disable @typescript-eslint/no-unsafe-type-assertion -- Ciphertext is a branded Uint8Array; see encryptFieldContent comment */
+    const plain = decryptContent(
+      decode(encryptedMeta) as Ciphertext,
+      key,
+      INTAKE_FORM_AAD,
+    );
+    /* eslint-enable @typescript-eslint/no-unsafe-type-assertion */
+
+    try {
+      const json: unknown = JSON.parse(textDecoder.decode(plain));
+      const parsed = intakeFormMetaSchema.safeParse(json);
+      if (!parsed.success) {
+        throw new DecryptionError(
+          "Decrypted form metadata does not match expected schema",
+        );
+      }
+      return parsed.data;
+    } catch (err: unknown) {
+      if (err instanceof DecryptionError) throw err;
+      throw new DecryptionError(
+        "Decrypted form metadata is not valid serialized content",
+      );
+    }
   } finally {
     requireSodium().memzero(key);
   }

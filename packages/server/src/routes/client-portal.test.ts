@@ -175,6 +175,7 @@ function mockIntakeFormService(): IntakeFormService {
     resolvePublicForm: vi.fn().mockResolvedValue({
       formId: null,
       slug: null,
+      encryptedFormMeta: null,
       fields: null,
       intakeDisabled: false,
     }),
@@ -303,6 +304,7 @@ describe("client-portal router", () => {
       expect(result).toEqual({
         formId: null,
         slug: null,
+        encryptedFormMeta: null,
         fields: null,
         intakeDisabled: false,
       });
@@ -313,6 +315,7 @@ describe("client-portal router", () => {
       const formData = {
         formId: "f-1",
         slug: "general-help",
+        encryptedFormMeta: VALID_BASE64,
         fields: [
           {
             id: "field-1",

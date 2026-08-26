@@ -1,6 +1,7 @@
 <script lang="ts">
   import { browser } from "$app/environment";
   import { Navbar, Link } from "konsta/svelte";
+  import { getLocale, setLocale, type Locale } from "$lib/paraglide/runtime.js";
   import * as m from "$lib/paraglide/messages.js";
   import { createPublicBrandingQuery } from "$lib/branding/public-branding.js";
   import { applyKonstaPalette } from "$lib/branding/konsta-palette.js";
@@ -10,6 +11,7 @@
   } from "$lib/branding/title.svelte.js";
   import PageShell from "$lib/shell/PageShell.svelte";
   import InlineSkeleton from "$lib/components/InlineSkeleton.svelte";
+  import LanguagePicker from "$lib/components/inputs/LanguagePicker.svelte";
 
   let { children } = $props();
 
@@ -22,6 +24,13 @@
       ? branding.orgName
       : getBrandingTitle(),
   );
+
+  let currentLocale = $state(getLocale());
+
+  function handleLocaleChange(locale: Locale): void {
+    currentLocale = locale;
+    void setLocale(locale);
+  }
 
   $effect(() => {
     if (!browser || branding === null) return;
@@ -60,6 +69,7 @@
   {@render children()}
 
   <footer class="client-footer">
+    <LanguagePicker value={currentLocale} onchange={handleLocaleChange} />
     <Link href="/intake/privacy">
       {m.intake_footer_privacy()}
     </Link>
@@ -83,5 +93,9 @@
     text-align: center;
     font-size: var(--text-sm);
     color: var(--muted);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: var(--space-sm);
   }
 </style>

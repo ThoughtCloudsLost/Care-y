@@ -20,7 +20,10 @@
   import { trpc } from "$lib/trpc/index.js";
   import { portalKeys } from "$lib/query/keys.js";
   import { decode } from "@care-y/crypto";
-  import { decryptFieldContent } from "$lib/portal/intake-form-crypto.js";
+  import {
+    decryptFieldContent,
+    decryptFormMeta,
+  } from "$lib/portal/intake-form-crypto.js";
   import { solveProofOfWork } from "$lib/auth/pow-solver.js";
   import { announceToLiveRegion } from "$lib/utils/announce.js";
   import {
@@ -47,6 +50,7 @@
     type IntakeFieldType,
     type IntakeFieldRole,
     type LocalizedText,
+    type IntakeFormMeta,
     type AvailabilityData,
     type TicketPriority,
     ErrorCode,
@@ -146,6 +150,7 @@
           formId: null,
           fields: null,
           slug: null,
+          encryptedFormMeta: null,
           intakeDisabled: false,
         };
       }
@@ -167,20 +172,33 @@
   interface ResolvedForm {
     formId: string | null;
     fields: readonly PlaintextField[];
+    formMeta: IntakeFormMeta;
     error: boolean;
   }
+
+  const EMPTY_META: IntakeFormMeta = {};
 
   const resolvedForm = $derived.by((): ResolvedForm => {
     const data = formQuery.data;
     if (notAvailable) {
-      return { formId: null, fields: [], error: false };
+      return { formId: null, fields: [], formMeta: EMPTY_META, error: false };
     }
     if (data?.formId == null) {
-      return { formId: null, fields: DEFAULT_INTAKE_FORM, error: false };
+      return {
+        formId: null,
+        fields: DEFAULT_INTAKE_FORM,
+        formMeta: EMPTY_META,
+        error: false,
+      };
     }
 
     if (orgPublicKey === null) {
-      return { formId: null, fields: DEFAULT_INTAKE_FORM, error: false };
+      return {
+        formId: null,
+        fields: DEFAULT_INTAKE_FORM,
+        formMeta: EMPTY_META,
+        error: false,
+      };
     }
 
     try {
@@ -205,9 +223,24 @@
           isRequired: field.isRequired,
         });
       }
-      return { formId: data.formId, fields: decrypted, error: false };
+
+      // Decrypt form-level metadata when the server returns a non-null blob.
+      // The field is string | null on the wire (nullable column). When null
+      // or when decryption fails, fall back to empty meta so the form
+      // renders with default i18n strings for description/submit/closed.
+      let formMeta: IntakeFormMeta = EMPTY_META;
+      const metaBlob = data.encryptedFormMeta;
+      if (metaBlob != null && metaBlob.length > 0) {
+        try {
+          formMeta = decryptFormMeta(metaBlob, orgPublicKey);
+        } catch {
+          // Non-fatal: form renders with default text
+        }
+      }
+
+      return { formId: data.formId, fields: decrypted, formMeta, error: false };
     } catch {
-      return { formId: null, fields: [], error: true };
+      return { formId: null, fields: [], formMeta: EMPTY_META, error: true };
     }
   });
 
@@ -215,6 +248,16 @@
     resolvedForm.formId === null && !resolvedForm.error && !notAvailable,
   );
   const formFields = $derived(resolvedForm.fields);
+
+  /** Custom description replaces the default intro text when present. */
+  const formDescription = $derived(
+    resolveLocalized(resolvedForm.formMeta.description, BASE_LOCALE),
+  );
+
+  /** Custom submit message replaces the default success copy when present. */
+  const formSubmitMessage = $derived(
+    resolveLocalized(resolvedForm.formMeta.submitMessage, BASE_LOCALE),
+  );
 
   // ---- Form state ----
 
@@ -356,57 +399,135 @@
 
   // ---- Validation ----
 
+  /** Loose email check for client-side validation (not a full RFC 5322 check). */
+  function isValidEmail(s: string): boolean {
+    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(s);
+  }
+
+  /** Loose phone check: at least 7 digits, optional leading +, spaces/dashes allowed. */
+  function isValidPhone(s: string): boolean {
+    const digits = s.replace(/[\s\-().+]/g, "");
+    return /^\d{7,15}$/.test(digits);
+  }
+
   function validate(): boolean {
     const errors: Record<string, string | undefined> = {};
     let valid = true;
 
     // Validate dynamic fields
     for (const field of formFields) {
-      if (!field.isRequired) continue;
       const val = fieldValues[field.fieldKey];
 
-      if (field.fieldType === "text" || field.fieldType === "textarea") {
-        if (typeof val !== "string" || val.trim() === "") {
-          errors[field.fieldKey] =
-            field.fieldType === "textarea"
-              ? m.intake_error_message_required()
-              : m.intake_error_field_required();
-          valid = false;
+      // Required check per field type
+      if (field.isRequired) {
+        if (field.fieldType === "text" || field.fieldType === "textarea") {
+          if (typeof val !== "string" || val.trim() === "") {
+            errors[field.fieldKey] =
+              field.fieldType === "textarea"
+                ? m.intake_error_message_required()
+                : m.intake_error_field_required();
+            valid = false;
+            continue;
+          }
+        } else if (field.fieldType === "select") {
+          if (typeof val !== "string" || val === "") {
+            errors[field.fieldKey] = m.intake_error_field_required();
+            valid = false;
+            continue;
+          }
+        } else if (field.fieldType === "multiselect") {
+          if (!Array.isArray(val) || val.length === 0) {
+            errors[field.fieldKey] = m.intake_error_field_required();
+            valid = false;
+            continue;
+          }
+        } else if (field.fieldType === "checkbox") {
+          if (
+            field.config.type === "checkbox" &&
+            field.config.requiredTrue === true &&
+            val !== true
+          ) {
+            errors[field.fieldKey] = m.intake_error_field_required();
+            valid = false;
+            continue;
+          }
+        } else if (field.fieldType === "date") {
+          if (typeof val !== "string" || val === "") {
+            errors[field.fieldKey] = m.intake_error_field_required();
+            valid = false;
+            continue;
+          }
+        } else {
+          // field.fieldType === "availability" (only remaining type)
+          if (
+            val === undefined ||
+            typeof val !== "object" ||
+            Array.isArray(val) ||
+            typeof val === "boolean"
+          ) {
+            errors[field.fieldKey] = m.intake_error_field_required();
+            valid = false;
+            continue;
+          } else if (val.recurring.length === 0 && val.specific.length === 0) {
+            errors[field.fieldKey] = m.intake_error_field_required();
+            valid = false;
+            continue;
+          }
         }
-      } else if (field.fieldType === "select") {
-        if (typeof val !== "string" || val === "") {
-          errors[field.fieldKey] = m.intake_error_field_required();
+      }
+
+      // Subtype format validation for text fields (runs even on optional fields when a value is present)
+      if (
+        field.fieldType === "text" &&
+        field.config.type === "text" &&
+        typeof val === "string" &&
+        val.trim() !== ""
+      ) {
+        const sub = field.config.subtype;
+        if (sub === "email" && !isValidEmail(val)) {
+          errors[field.fieldKey] = m.intake_error_email_format();
           valid = false;
+          continue;
         }
-      } else if (field.fieldType === "multiselect") {
-        if (!Array.isArray(val) || val.length === 0) {
-          errors[field.fieldKey] = m.intake_error_field_required();
+        if (sub === "phone" && !isValidPhone(val)) {
+          errors[field.fieldKey] = m.intake_error_phone_format();
           valid = false;
+          continue;
         }
-      } else if (field.fieldType === "checkbox") {
-        // Consent-type checkbox with requiredTrue: must be checked
-        if (
-          field.config.type === "checkbox" &&
-          field.config.requiredTrue === true &&
-          val !== true
-        ) {
-          errors[field.fieldKey] = m.intake_error_field_required();
-          valid = false;
+        if (sub === "number") {
+          const num = Number(val);
+          if (Number.isNaN(num)) {
+            errors[field.fieldKey] = m.intake_error_number_format();
+            valid = false;
+            continue;
+          }
+          const range = field.config.numberRange;
+          if (range?.min !== undefined && num < range.min) {
+            errors[field.fieldKey] = m.intake_error_number_min({
+              min: String(range.min),
+            });
+            valid = false;
+            continue;
+          }
+          if (range?.max !== undefined && num > range.max) {
+            errors[field.fieldKey] = m.intake_error_number_max({
+              max: String(range.max),
+            });
+            valid = false;
+            continue;
+          }
         }
-      } else {
-        // field.fieldType === "availability"
-        if (
-          val === undefined ||
-          typeof val !== "object" ||
-          Array.isArray(val) ||
-          typeof val === "boolean"
-        ) {
-          errors[field.fieldKey] = m.intake_error_field_required();
-          valid = false;
-        } else if (val.recurring.length === 0 && val.specific.length === 0) {
-          errors[field.fieldKey] = m.intake_error_field_required();
-          valid = false;
-        }
+      }
+
+      // Date format validation (YYYY-MM-DD)
+      if (
+        field.fieldType === "date" &&
+        typeof val === "string" &&
+        val !== "" &&
+        !/^\d{4}-\d{2}-\d{2}$/.test(val)
+      ) {
+        errors[field.fieldKey] = m.intake_error_date_format();
+        valid = false;
       }
     }
 
@@ -819,7 +940,9 @@
     >
       {m.intake_success_heading()}
     </h2>
-    <p class="intake-success-body">{m.intake_success_body()}</p>
+    <p class="intake-success-body">
+      {formSubmitMessage ?? m.intake_success_body()}
+    </p>
   </Block>
 
   <Block>
@@ -855,7 +978,11 @@
 {:else}
   <!-- Form state -->
   <Block>
-    <p class="intake-intro">{m.intake_intro()}</p>
+    {#if formDescription}
+      <p class="intake-intro intake-description">{formDescription}</p>
+    {:else}
+      <p class="intake-intro">{m.intake_intro()}</p>
+    {/if}
   </Block>
 
   <HowProtected />
@@ -1135,6 +1262,10 @@
     color: var(--muted);
     font-size: var(--text-sm);
     line-height: 1.5;
+  }
+
+  .intake-description {
+    white-space: pre-line;
   }
 
   .intake-not-available {

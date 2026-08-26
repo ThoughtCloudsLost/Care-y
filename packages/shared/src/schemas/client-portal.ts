@@ -22,6 +22,7 @@ import {
   intakeFormIdSchema,
   intakeFormFieldIdSchema,
   portalMessageIdSchema,
+  userIdSchema,
 } from "../ids.js";
 
 /** crypto_box_seal(32-byte tk) = 32 + 48 = 80 bytes (variant-agnostic exact-byte check). */
@@ -137,6 +138,7 @@ export type PublicIntakeField = z.infer<typeof publicIntakeFieldSchema>;
 export const publicIntakeFormSchema = z.object({
   id: intakeFormIdSchema,
   slug: z.string().nullable(),
+  encryptedFormMeta: z.string().nullable().optional(),
   fields: z.array(publicIntakeFieldSchema),
 });
 export type PublicIntakeForm = z.infer<typeof publicIntakeFormSchema>;
@@ -297,3 +299,80 @@ export const accountChangePasswordInputSchema = z.object({
 export type AccountChangePasswordInput = z.infer<
   typeof accountChangePasswordInputSchema
 >;
+
+// ---------------------------------------------------------------------------
+// Intake response listing schemas (T3.0)
+// ---------------------------------------------------------------------------
+
+/** Input for paginated response listing. */
+export const listIntakeResponsesInputSchema = z.object({
+  formId: intakeFormIdSchema,
+  cursor: ticketIdSchema.nullable().default(null),
+  pageSize: z.number().int().min(1).max(100).default(25),
+});
+export type ListIntakeResponsesInput = z.infer<
+  typeof listIntakeResponsesInputSchema
+>;
+
+/** ECIES key wrap triple on the wire (base64url strings). */
+export const wireKeyWrapSchema = z.object({
+  ephemeralPoint: z.string(),
+  nonce: z.string(),
+  wrappedKey: z.string(),
+});
+export type WireKeyWrap = z.infer<typeof wireKeyWrapSchema>;
+
+/** Missing principal reported for lazy backfill. */
+export const missingPrincipalSchema = z.object({
+  volunteerId: userIdSchema,
+  volPublic: z.string(),
+});
+export type MissingPrincipal = z.infer<typeof missingPrincipalSchema>;
+
+/** A single response row in the listing. */
+export const intakeResponseRowSchema = z.object({
+  ticketId: ticketIdSchema,
+  submittedAt: z.string(),
+  encryptedResponse: z.string(),
+  callerKeyWrap: wireKeyWrapSchema
+    .extend({ volunteerId: userIdSchema })
+    .nullable(),
+  orgSealWrap: z.object({ wrappedTk: z.string() }).nullable(),
+  missingPrincipals: z.array(missingPrincipalSchema),
+});
+export type IntakeResponseRowWire = z.infer<typeof intakeResponseRowSchema>;
+
+/** Paginated response listing output. */
+export const listIntakeResponsesOutputSchema = z.object({
+  rows: z.array(intakeResponseRowSchema),
+  nextCursor: ticketIdSchema.nullable(),
+  total: z.number().int(),
+});
+export type ListIntakeResponsesOutput = z.infer<
+  typeof listIntakeResponsesOutputSchema
+>;
+
+/** A single backfill wrap from the client. */
+export const backfillWrapInputSchema = z.object({
+  volunteerId: userIdSchema,
+  ephemeralPoint: base64Bytes(32, "ephemeralPoint"),
+  nonce: base64Bytes(24, "nonce"),
+  wrappedKey: base64String("wrappedKey").refine(
+    (s) => s.length <= 256,
+    "wrappedKey too large",
+  ),
+});
+export type BackfillWrapInput = z.infer<typeof backfillWrapInputSchema>;
+
+/** Input for the lazy wrap backfill mutation. */
+export const backfillWrapsInputSchema = z.object({
+  ticketId: ticketIdSchema,
+  wraps: z.array(backfillWrapInputSchema).min(1).max(200),
+});
+export type BackfillWrapsInput = z.infer<typeof backfillWrapsInputSchema>;
+
+/** Output of the backfill mutation. */
+export const backfillWrapsOutputSchema = z.object({
+  inserted: z.number().int(),
+});
+export type BackfillWrapsOutput = z.infer<typeof backfillWrapsOutputSchema>;

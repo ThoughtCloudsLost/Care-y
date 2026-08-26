@@ -3,32 +3,41 @@
   page (Intake Forms section); this route hosts only the editor. `?id=<uuid>`
   edits an existing form, no query param creates a new one. Back and delete
   return to the organization section.
+
+  Wires the unsaved-changes navigation guard. The editor emits dirty state;
+  the route page owns the discard dialog and beforeNavigate interception.
 -->
 <script lang="ts">
   import { goto } from "$app/navigation";
   import { resolve } from "$app/paths";
   import { page } from "$app/state";
-  import { Block } from "konsta/svelte";
+  import { Block, DialogButton } from "konsta/svelte";
   import {
     intakeFieldTypeSchema,
     intakeFieldRoleSchema,
-    resolveLocalized,
-    BASE_LOCALE,
     type IntakeFieldConfig,
     type IntakeFieldType,
     type IntakeFieldRole,
+    type IntakeFormMeta,
+    type LocalizedText,
   } from "@care-y/shared";
   import * as m from "$lib/paraglide/messages.js";
   import { trpc } from "$lib/trpc/index.js";
   import { requireRouter } from "$lib/errors.js";
   import { getOrgKeyManager } from "$lib/crypto/context.js";
   import { getNavbarOverrideCtx } from "$lib/shell/context.js";
-  import { decryptFieldContent } from "$lib/portal/intake-form-crypto.js";
+  import {
+    decryptFieldContent,
+    decryptFormMeta,
+  } from "$lib/portal/intake-form-crypto.js";
+  import { useNavigationGuard } from "$lib/editor/use-navigation-guard.svelte.js";
+  import ShellDialog from "$lib/shell/ShellDialog.svelte";
   import IntakeFormEditor from "$lib/components/admin/IntakeFormEditor.svelte";
 
   interface PlaintextField {
     fieldKey: string;
-    label: string;
+    label: LocalizedText;
+    helpText: LocalizedText;
     isRequired: boolean;
     config: IntakeFieldConfig;
     fieldType: IntakeFieldType;
@@ -47,10 +56,12 @@
         slug: string | null;
         isDefault: boolean;
         destinationQueueId: string | null;
+        formMeta: IntakeFormMeta;
         fields: PlaintextField[];
       };
 
   let view = $state<ViewState>({ kind: "loading" });
+  let editorDirty = $state(false);
 
   const intakeFormsRouter = requireRouter(trpc.intakeForms, "intakeForms");
   const orgKeyManager = getOrgKeyManager();
@@ -58,6 +69,16 @@
 
   const formId = $derived(page.url.searchParams.get("id"));
   const listPath = `${resolve("/admin/organization")}?tab=intake-forms`;
+
+  // Navigation guard for unsaved changes
+  const guard = useNavigationGuard({
+    isDirty: () => editorDirty,
+    fallbackUrl: listPath,
+  });
+
+  function handleDirtyChange(dirty: boolean): void {
+    editorDirty = dirty;
+  }
 
   async function loadFormForEditing(id: string): Promise<void> {
     const orgPub = orgKeyManager.getPublicKey();
@@ -87,9 +108,15 @@
             },
             orgPub,
           );
+          // Preserve full LocalizedText objects for multilingual editing
+          const helpTextLocalized: LocalizedText =
+            decrypted.config.helpText != null
+              ? { ...decrypted.config.helpText }
+              : {};
           return {
             fieldKey: field.fieldKey,
-            label: resolveLocalized(decrypted.label, BASE_LOCALE) ?? "",
+            label: { ...decrypted.label },
+            helpText: helpTextLocalized,
             isRequired: field.isRequired,
             config: decrypted.config,
             fieldType: intakeFieldTypeSchema.parse(field.fieldType),
@@ -107,6 +134,18 @@
         },
       );
 
+      // Decrypt form-level metadata (string | null from the server).
+      // Null means no metadata was saved; fall back to empty meta.
+      let formMeta: IntakeFormMeta = {};
+      const metaBlob = formDetail.encryptedFormMeta;
+      if (metaBlob != null && metaBlob.length > 0) {
+        try {
+          formMeta = decryptFormMeta(metaBlob, orgPub);
+        } catch {
+          // Non-fatal: editor works without metadata
+        }
+      }
+
       view = {
         kind: "editor",
         formId: id,
@@ -114,6 +153,7 @@
         slug: formDetail.slug ?? null,
         isDefault: formDetail.isDefault,
         destinationQueueId: formDetail.destinationQueueId ?? null,
+        formMeta,
         fields: decryptedFields,
       };
     } catch {
@@ -122,6 +162,7 @@
   }
 
   function backToList(): void {
+    guard.allowNavigation();
     // eslint-disable-next-line svelte/no-navigation-without-resolve -- listPath is built from resolve() above
     void goto(listPath);
   }
@@ -136,6 +177,7 @@
         slug: null,
         isDefault: false,
         destinationQueueId: null,
+        formMeta: {},
         fields: [],
       };
     } else {
@@ -178,11 +220,32 @@
     initialSlug={view.slug}
     initialIsDefault={view.isDefault}
     initialDestinationQueueId={view.destinationQueueId}
+    initialFormMeta={view.formMeta}
     initialFields={view.fields}
     onback={backToList}
     ondeleted={backToList}
+    ondirtychange={handleDirtyChange}
   />
 {/if}
+
+<!-- Discard unsaved changes dialog -->
+<ShellDialog
+  opened={guard.discardDialogOpen}
+  ondismiss={() => guard.dismiss()}
+  title={m.intake_forms_discard_title()}
+>
+  {#snippet content()}
+    <p>{m.intake_forms_discard_confirm()}</p>
+  {/snippet}
+  {#snippet buttons()}
+    <DialogButton onclick={() => guard.dismiss()}>
+      {m.common_cancel()}
+    </DialogButton>
+    <DialogButton strong onclick={() => guard.confirmDiscard()}>
+      {m.intake_forms_discard_action()}
+    </DialogButton>
+  {/snippet}
+</ShellDialog>
 
 <style>
   .load-error {

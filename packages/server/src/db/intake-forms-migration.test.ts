@@ -691,6 +691,61 @@ describe.skipIf(!process.env.DATABASE_URL)("089_intake_forms migration", () => {
       .execute();
   });
 
+  // -------------------------------------------------------------------
+  // 096_intake_form_meta: encrypted_form_meta column
+  // -------------------------------------------------------------------
+
+  it("intake_forms has nullable encrypted_form_meta column", async () => {
+    const result = await sql<{
+      column_name: string;
+      data_type: string;
+      is_nullable: string;
+    }>`
+        SELECT column_name, data_type, is_nullable
+        FROM information_schema.columns
+        WHERE table_schema = ${testDb.schemaName}
+          AND table_name = 'intake_forms'
+          AND column_name = 'encrypted_form_meta'
+      `.execute(testDb.platformDb);
+
+    expect(result.rows).toHaveLength(1);
+    expect(result.rows[0]?.data_type).toBe("bytea");
+    expect(result.rows[0]?.is_nullable).toBe("YES");
+  });
+
+  it("inserts a form with encrypted_form_meta", async () => {
+    const metaBlob = Buffer.from("encrypted-form-meta-blob");
+
+    const row = await testDb.db
+      .insertInto("intake_forms")
+      .values({
+        // care-y-ignore-next-line ast-pii-in-db-write -- admin-internal form label, not PII
+        name: "Form With Meta",
+        encrypted_form_meta: metaBlob,
+      })
+      .returningAll()
+      .executeTakeFirstOrThrow();
+
+    expect(Buffer.isBuffer(row.encrypted_form_meta)).toBe(true);
+    expect(row.encrypted_form_meta!.toString()).toBe(
+      "encrypted-form-meta-blob",
+    );
+  });
+
+  it("inserts a form with null encrypted_form_meta", async () => {
+    const row = await testDb.db
+      .insertInto("intake_forms")
+      .values({
+        // care-y-ignore-next-line ast-pii-in-db-write -- admin-internal form label, not PII
+        name: "Form Without Meta",
+        encrypted_form_meta: null,
+      })
+      .returningAll()
+      .executeTakeFirstOrThrow();
+
+    expect(row.encrypted_form_meta).toBeNull();
+  });
+
   it("has index on intake_form_responses.form_id", async () => {
     const result = await sql<{ indexname: string }>`
         SELECT indexname FROM pg_indexes

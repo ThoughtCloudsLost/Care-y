@@ -4,6 +4,11 @@
   Configures label, required state, type-specific options, semantic role
   (ADR-068), and role-specific mapping editors (queue routing, urgency,
   escalation with recipient picker).
+
+  Supports multilingual authoring: label, help text, placeholder, and option
+  labels are LocalizedText objects. The parent editor passes the current
+  editingLocale; locale tabs on each localized input let the author switch
+  within the sheet as well.
 -->
 <script lang="ts">
   import {
@@ -15,19 +20,26 @@
     BlockTitle,
     Checkbox,
     Link,
+    Segmented,
+    SegmentedButton,
   } from "konsta/svelte";
   import {
     ROLE_WIDGET_COMPATIBILITY,
     intakeFieldRoleSchema,
     ticketPrioritySchema,
+    textSubtypeSchema,
     resolveLocalized,
     BASE_LOCALE,
+    FORM_LOCALES,
     type IntakeFieldConfig,
     type IntakeFieldType,
     type IntakeFieldRole,
     type IntakeOption,
+    type TextSubtype,
     type TicketPriority,
     type QueueId,
+    type LocalizedText,
+    type FormLocale,
     queueIdSchema,
   } from "@care-y/shared";
   import { SvelteSet } from "svelte/reactivity";
@@ -50,6 +62,7 @@
     readonly initial: FieldConfigInitial;
     readonly queues: readonly QueueOption[];
     readonly volunteers: readonly VolunteerOption[];
+    readonly editingLocale: FormLocale;
     readonly ondone: (result: FieldConfigState) => void;
     readonly ondismiss: () => void;
   }
@@ -60,22 +73,30 @@
     initial,
     queues,
     volunteers,
+    editingLocale: parentLocale,
     ondone,
     ondismiss,
   }: IntakeFieldConfigSheetProps = $props();
 
-  let label = $state("");
+  // Local locale state (initialized from parent, can be switched in the sheet)
+  let sheetLocale = $state<FormLocale>(BASE_LOCALE);
+
+  let label = $state<LocalizedText>({});
   let labelError = $state("");
   let optionsError = $state("");
   let isRequired = $state(false);
+  let helpText = $state<LocalizedText>({});
 
   // Type-specific config state
-  let placeholder = $state("");
+  let placeholder = $state<LocalizedText>({});
   let maxLength = $state<number | undefined>(undefined);
   let options = $state<IntakeOption[]>([]);
   let allowRecurring = $state(true);
   let allowSpecific = $state(true);
   let requiredTrue = $state(false);
+  let subtype = $state<TextSubtype | "">("");
+  let numberMin = $state<number | undefined>(undefined);
+  let numberMax = $state<number | undefined>(undefined);
 
   // Role state (ADR-068)
   let selectedRole = $state<IntakeFieldRole | null>(null);
@@ -87,6 +108,32 @@
   let escalationRecipientIds = $state<string[]>([]);
 
   let atLeastOneError = $state("");
+
+  /** Native locale name for display. */
+  function localeName(loc: FormLocale): string {
+    switch (loc) {
+      case "en":
+        return "EN";
+      case "es":
+        return "ES";
+    }
+  }
+
+  /** Read a locale key from a LocalizedText. */
+  function readLocale(text: LocalizedText, loc: FormLocale): string {
+    if (loc === "en") return text.en ?? "";
+    return text.es ?? "";
+  }
+
+  /** Return a new LocalizedText with one locale key set. */
+  function setLocaleText(
+    text: LocalizedText,
+    loc: FormLocale,
+    value: string,
+  ): LocalizedText {
+    if (loc === "en") return { ...text, en: value };
+    return { ...text, es: value };
+  }
 
   // Compute compatible roles for the current field type
   const compatibleRoles = $derived.by((): IntakeFieldRole[] => {
@@ -105,19 +152,36 @@
   let wasOpened = $state(false);
   $effect(() => {
     if (opened && !wasOpened) {
-      label = initial.label;
+      label = { ...initial.label };
+      helpText = { ...initial.helpText };
       isRequired = initial.isRequired;
       selectedRole = initial.role;
+      sheetLocale = parentLocale;
       escalationRecipientIds =
         initial.escalationRecipientIds != null
           ? [...initial.escalationRecipientIds]
           : [];
 
       const cfg = initial.config;
+
+      // Reset subtype/number range (only populated for text)
+      subtype = "";
+      numberMin = undefined;
+      numberMax = undefined;
+      placeholder = {};
+
       switch (cfg.type) {
         case "text":
+          placeholder = cfg.placeholder != null ? { ...cfg.placeholder } : {};
+          maxLength = cfg.maxLength;
+          subtype = cfg.subtype ?? "";
+          if (cfg.numberRange != null) {
+            numberMin = cfg.numberRange.min;
+            numberMax = cfg.numberRange.max;
+          }
+          break;
         case "textarea":
-          placeholder = resolveLocalized(cfg.placeholder, BASE_LOCALE) ?? "";
+          placeholder = cfg.placeholder != null ? { ...cfg.placeholder } : {};
           maxLength = cfg.maxLength;
           break;
         case "select":
@@ -151,6 +215,9 @@
           allowRecurring = cfg.allowRecurring;
           allowSpecific = cfg.allowSpecific;
           break;
+        case "date":
+          // Date has no additional config to restore
+          break;
       }
       atLeastOneError = "";
     }
@@ -164,14 +231,49 @@
       target instanceof HTMLTextAreaElement
     ) {
       labelError = "";
-      label = target.value;
+      label = setLocaleText(label, sheetLocale, target.value);
+    }
+  }
+
+  function handleHelpTextInput(e: Event): void {
+    const target = e.target;
+    if (
+      target instanceof HTMLInputElement ||
+      target instanceof HTMLTextAreaElement
+    ) {
+      helpText = setLocaleText(helpText, sheetLocale, target.value);
     }
   }
 
   function handlePlaceholderInput(e: Event): void {
     const target = e.target;
     if (target instanceof HTMLInputElement) {
-      placeholder = target.value;
+      placeholder = setLocaleText(placeholder, sheetLocale, target.value);
+    }
+  }
+
+  function handleSubtypeChange(e: Event): void {
+    const target = e.target;
+    if (target instanceof HTMLSelectElement) {
+      const val = target.value;
+      const parsed = textSubtypeSchema.safeParse(val);
+      subtype = parsed.success ? parsed.data : "";
+    }
+  }
+
+  function handleNumberMinInput(e: Event): void {
+    const target = e.target;
+    if (target instanceof HTMLInputElement) {
+      const val = target.value;
+      numberMin = val === "" ? undefined : Number(val);
+    }
+  }
+
+  function handleNumberMaxInput(e: Event): void {
+    const target = e.target;
+    if (target instanceof HTMLInputElement) {
+      const val = target.value;
+      numberMax = val === "" ? undefined : Number(val);
     }
   }
 
@@ -188,7 +290,12 @@
     if (target instanceof HTMLInputElement) {
       optionsError = "";
       options = options.map((o, i) =>
-        i === index ? { key: o.key, label: { en: target.value } } : o,
+        i === index
+          ? {
+              key: o.key,
+              label: setLocaleText(o.label, sheetLocale, target.value),
+            }
+          : o,
       );
     }
   }
@@ -354,19 +461,63 @@
     return resolveLocalized(opt.label, BASE_LOCALE) ?? "";
   }
 
+  /** Read an option label in the current sheet locale. */
+  function optionLocaleText(opt: IntakeOption): string {
+    return readLocale(opt.label, sheetLocale);
+  }
+
+  /** Strip empty-string locale entries from a LocalizedText. */
+  function trimLocalized(text: LocalizedText): LocalizedText {
+    const result: LocalizedText = {};
+    const en = text.en;
+    const es = text.es;
+    if (en != null && en.trim().length > 0) result.en = en.trim();
+    if (es != null && es.trim().length > 0) result.es = es.trim();
+    return result;
+  }
+
+  /** True if a LocalizedText has content in any locale. */
+  function hasContent(text: LocalizedText): boolean {
+    const en = text.en;
+    const es = text.es;
+    return (
+      (en != null && en.trim().length > 0) ||
+      (es != null && es.trim().length > 0)
+    );
+  }
+
   function buildConfig(): IntakeFieldConfig {
+    const ht = hasContent(helpText) ? trimLocalized(helpText) : undefined;
     if (fieldType === "text") {
+      const pl = hasContent(placeholder)
+        ? trimLocalized(placeholder)
+        : undefined;
       return {
         type: "text",
-        ...(placeholder ? { placeholder: { en: placeholder } } : {}),
+        ...(pl != null ? { placeholder: pl } : {}),
         ...(maxLength !== undefined ? { maxLength } : {}),
+        ...(ht != null ? { helpText: ht } : {}),
+        ...(subtype !== "" ? { subtype } : {}),
+        ...(subtype === "number" &&
+        (numberMin !== undefined || numberMax !== undefined)
+          ? {
+              numberRange: {
+                ...(numberMin !== undefined ? { min: numberMin } : {}),
+                ...(numberMax !== undefined ? { max: numberMax } : {}),
+              },
+            }
+          : {}),
       };
     }
     if (fieldType === "textarea") {
+      const pl = hasContent(placeholder)
+        ? trimLocalized(placeholder)
+        : undefined;
       return {
         type: "textarea",
-        ...(placeholder ? { placeholder: { en: placeholder } } : {}),
+        ...(pl != null ? { placeholder: pl } : {}),
         ...(maxLength !== undefined ? { maxLength } : {}),
+        ...(ht != null ? { helpText: ht } : {}),
       };
     }
     if (fieldType === "select") {
@@ -376,6 +527,7 @@
       const cfg: IntakeFieldConfig = {
         type: "select",
         options: filteredOptions,
+        ...(ht != null ? { helpText: ht } : {}),
       };
       if (
         selectedRole === "queue-routing" &&
@@ -404,6 +556,7 @@
       const cfg: IntakeFieldConfig = {
         type: "multiselect",
         options: filteredOptions,
+        ...(ht != null ? { helpText: ht } : {}),
       };
       if (
         selectedRole === "queue-routing" &&
@@ -417,9 +570,21 @@
       return {
         type: "checkbox",
         ...(requiredTrue ? { requiredTrue: true } : {}),
+        ...(ht != null ? { helpText: ht } : {}),
       };
     }
-    return { type: "availability", allowRecurring, allowSpecific };
+    if (fieldType === "date") {
+      return {
+        type: "date",
+        ...(ht != null ? { helpText: ht } : {}),
+      };
+    }
+    return {
+      type: "availability",
+      allowRecurring,
+      allowSpecific,
+      ...(ht != null ? { helpText: ht } : {}),
+    };
   }
 
   /** Derive routingQueueIds from the queue routing mapping values. */
@@ -433,7 +598,9 @@
   }
 
   function handleDone(): void {
-    if (label.trim().length === 0) {
+    // Base locale label is required
+    const baseLabelVal = readLocale(label, BASE_LOCALE);
+    if (baseLabelVal.trim().length === 0) {
       labelError = m.intake_forms_config_label_required();
       return;
     }
@@ -445,7 +612,8 @@
       return;
     }
     const result: FieldConfigState = {
-      label,
+      label: trimLocalized(label),
+      helpText: trimLocalized(helpText),
       isRequired,
       config: buildConfig(),
       role: selectedRole,
@@ -483,14 +651,36 @@
     </Link>
   {/snippet}
 
+  <!-- Locale switcher within the config sheet -->
+  <div class="sheet-locale-switcher">
+    <Segmented strong>
+      {#each FORM_LOCALES as loc (loc)}
+        <SegmentedButton
+          active={sheetLocale === loc}
+          onclick={() => (sheetLocale = loc)}
+        >
+          {localeName(loc)}
+        </SegmentedButton>
+      {/each}
+    </Segmented>
+  </div>
+
   <List strong inset>
     <ListInput
       label={m.intake_forms_config_label()}
       type="text"
       placeholder={m.intake_forms_config_label_placeholder()}
       error={labelError}
-      value={label}
+      value={readLocale(label, sheetLocale)}
       onInput={handleLabelInput}
+    />
+    <ListInput
+      label={m.intake_forms_config_help_text()}
+      type="text"
+      placeholder={m.intake_forms_config_help_text_placeholder()}
+      info={m.intake_forms_config_help_text_hint()}
+      value={readLocale(helpText, sheetLocale)}
+      onInput={handleHelpTextInput}
     />
   </List>
 
@@ -529,7 +719,7 @@
       <ListInput
         label={m.intake_forms_config_placeholder()}
         type="text"
-        value={placeholder}
+        value={readLocale(placeholder, sheetLocale)}
         onInput={handlePlaceholderInput}
       />
       <ListInput
@@ -538,6 +728,36 @@
         value={maxLength !== undefined ? String(maxLength) : ""}
         onInput={handleMaxLengthInput}
       />
+      {#if fieldType === "text"}
+        <ListInput
+          label={m.intake_forms_config_subtype()}
+          type="select"
+          dropdown
+          value={subtype}
+          onChange={handleSubtypeChange}
+        >
+          <option value="">{m.intake_forms_config_subtype_none()}</option>
+          <option value="email">{m.intake_forms_config_subtype_email()}</option>
+          <option value="phone">{m.intake_forms_config_subtype_phone()}</option>
+          <option value="number"
+            >{m.intake_forms_config_subtype_number()}</option
+          >
+        </ListInput>
+        {#if subtype === "number"}
+          <ListInput
+            label={m.intake_forms_config_number_min()}
+            type="number"
+            value={numberMin !== undefined ? String(numberMin) : ""}
+            onInput={handleNumberMinInput}
+          />
+          <ListInput
+            label={m.intake_forms_config_number_max()}
+            type="number"
+            value={numberMax !== undefined ? String(numberMax) : ""}
+            onInput={handleNumberMaxInput}
+          />
+        {/if}
+      {/if}
     </List>
   {/if}
 
@@ -547,7 +767,7 @@
         <ListInput
           label={m.intake_forms_config_option_label({ n: String(index + 1) })}
           type="text"
-          value={optionDisplayText(option)}
+          value={optionLocaleText(option)}
           onInput={(e: Event) => handleOptionInput(index, e)}
         >
           <Button
@@ -707,5 +927,9 @@
     padding: 0 var(--space-lg);
     margin: var(--space-xs) 0 var(--space-md);
     line-height: 1.4;
+  }
+
+  .sheet-locale-switcher {
+    padding: var(--space-sm) var(--space-lg) 0;
   }
 </style>
