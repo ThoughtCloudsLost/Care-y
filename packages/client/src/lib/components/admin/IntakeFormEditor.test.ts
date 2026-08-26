@@ -221,6 +221,7 @@ describe("IntakeFormEditor", () => {
         ...baseProps,
         initialFields: [
           {
+            fieldKey: "fk-1",
             label: "Your name",
             isRequired: false,
             config: { type: "text" as const },
@@ -228,6 +229,7 @@ describe("IntakeFormEditor", () => {
             ...NO_ROLE,
           },
           {
+            fieldKey: "fk-2",
             label: "Message",
             isRequired: true,
             config: { type: "textarea" as const },
@@ -259,13 +261,14 @@ describe("IntakeFormEditor", () => {
     expect(saveButton?.disabled).toBe(true);
   });
 
-  it("calls encryptFieldContent on save", async () => {
+  it("calls encryptFieldContent on save with LocalizedText label", async () => {
     render(IntakeFormEditor, {
       props: {
         ...baseProps,
         initialName: "Test Form",
         initialFields: [
           {
+            fieldKey: "fk-save",
             label: "Name",
             isRequired: false,
             config: { type: "text" as const },
@@ -282,7 +285,7 @@ describe("IntakeFormEditor", () => {
     }
 
     expect(mockEncryptFieldContent).toHaveBeenCalledWith(
-      { label: "Name", config: { type: "text" } },
+      { label: { en: "Name" }, config: { type: "text" } },
       expect.any(Uint8Array),
     );
   });
@@ -295,6 +298,7 @@ describe("IntakeFormEditor", () => {
         initialName: "Main Intake",
         initialFields: [
           {
+            fieldKey: "fk-pop-1",
             label: "Full name",
             isRequired: true,
             config: { type: "text" as const },
@@ -302,6 +306,7 @@ describe("IntakeFormEditor", () => {
             ...NO_ROLE,
           },
           {
+            fieldKey: "fk-pop-2",
             label: "Your situation",
             isRequired: true,
             config: { type: "textarea" as const, maxLength: 5000 },
@@ -309,11 +314,15 @@ describe("IntakeFormEditor", () => {
             ...NO_ROLE,
           },
           {
+            fieldKey: "fk-pop-3",
             label: "Services needed",
             isRequired: false,
             config: {
               type: "multiselect" as const,
-              options: ["Housing", "Legal"],
+              options: [
+                { key: "housing", label: { en: "Housing" } },
+                { key: "legal", label: { en: "Legal" } },
+              ],
             },
             fieldType: "multiselect" as const,
             ...NO_ROLE,
@@ -344,6 +353,7 @@ describe("IntakeFormEditor", () => {
         initialName: "Main Intake",
         initialFields: [
           {
+            fieldKey: "fk-del",
             label: "Name",
             isRequired: false,
             config: { type: "text" as const },

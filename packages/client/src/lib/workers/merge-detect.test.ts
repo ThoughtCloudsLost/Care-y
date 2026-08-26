@@ -13,7 +13,7 @@ describe("extractContactsFromResponse", () => {
     it("extracts phone-contact role field", () => {
       const response = JSON.stringify({
         answers: [
-          { fieldId: "f1", fieldType: "text", value: "(212) 555-1234" },
+          { fieldKey: "f1", fieldType: "text", value: "(212) 555-1234" },
         ],
       });
       const roles = new Map([["f1", "phone-contact"]]);
@@ -27,7 +27,7 @@ describe("extractContactsFromResponse", () => {
       const response = JSON.stringify({
         answers: [
           {
-            fieldId: "f1",
+            fieldKey: "f1",
             fieldType: "text",
             value: "  User@Example.COM  ",
           },
@@ -43,9 +43,9 @@ describe("extractContactsFromResponse", () => {
     it("prioritizes role tags over pattern matching", () => {
       const response = JSON.stringify({
         answers: [
-          { fieldId: "f1", fieldType: "text", value: "+12125551234" },
+          { fieldKey: "f1", fieldType: "text", value: "+12125551234" },
           {
-            fieldId: "f2",
+            fieldKey: "f2",
             fieldType: "text",
             value: "My phone is (212) 555-1234",
           },
@@ -62,7 +62,7 @@ describe("extractContactsFromResponse", () => {
 
     it("skips non-contact roles", () => {
       const response = JSON.stringify({
-        answers: [{ fieldId: "f1", fieldType: "text", value: "+12125551234" }],
+        answers: [{ fieldKey: "f1", fieldType: "text", value: "+12125551234" }],
       });
       // Tagged as real-name, not phone-contact
       const roles = new Map([["f1", "real-name"]]);
@@ -77,7 +77,7 @@ describe("extractContactsFromResponse", () => {
     it("extracts default:phone field", () => {
       const response = JSON.stringify({
         answers: [
-          { fieldId: "default:phone", fieldType: "text", value: "2125551234" },
+          { fieldKey: "default:phone", fieldType: "text", value: "2125551234" },
         ],
       });
       const roles = new Map<string, string>();
@@ -90,7 +90,7 @@ describe("extractContactsFromResponse", () => {
       const response = JSON.stringify({
         answers: [
           {
-            fieldId: "default:email",
+            fieldKey: "default:email",
             fieldType: "text",
             value: "user@example.com",
           },
@@ -106,7 +106,7 @@ describe("extractContactsFromResponse", () => {
   describe("pattern-match fallback", () => {
     it("detects E.164 phone in untagged text field", () => {
       const response = JSON.stringify({
-        answers: [{ fieldId: "q1", fieldType: "text", value: "+12125551234" }],
+        answers: [{ fieldKey: "q1", fieldType: "text", value: "+12125551234" }],
       });
       const roles = new Map<string, string>();
       const result = extractContactsFromResponse(response, roles);
@@ -117,7 +117,7 @@ describe("extractContactsFromResponse", () => {
     it("detects email in untagged text field", () => {
       const response = JSON.stringify({
         answers: [
-          { fieldId: "q1", fieldType: "text", value: "user@example.com" },
+          { fieldKey: "q1", fieldType: "text", value: "user@example.com" },
         ],
       });
       const roles = new Map<string, string>();
@@ -128,7 +128,7 @@ describe("extractContactsFromResponse", () => {
 
     it("does not pattern-match on role-tagged fields with non-contact role", () => {
       const response = JSON.stringify({
-        answers: [{ fieldId: "q1", fieldType: "text", value: "+12125551234" }],
+        answers: [{ fieldKey: "q1", fieldType: "text", value: "+12125551234" }],
       });
       // Tagged with a non-contact role
       const roles = new Map([["q1", "consent"]]);
@@ -160,9 +160,9 @@ describe("extractContactsFromResponse", () => {
     it("skips non-string values", () => {
       const response = JSON.stringify({
         answers: [
-          { fieldId: "f1", fieldType: "checkbox", value: true },
+          { fieldKey: "f1", fieldType: "checkbox", value: true },
           {
-            fieldId: "f2",
+            fieldKey: "f2",
             fieldType: "multiselect",
             value: ["option1", "option2"],
           },
@@ -179,7 +179,7 @@ describe("extractContactsFromResponse", () => {
       const response = JSON.stringify({
         answers: [
           {
-            fieldId: "f1",
+            fieldKey: "f1",
             fieldType: "text",
             value: "(212) 555-1234",
           },
@@ -194,7 +194,7 @@ describe("extractContactsFromResponse", () => {
 
     it("rejects too-short phone values", () => {
       const response = JSON.stringify({
-        answers: [{ fieldId: "f1", fieldType: "text", value: "12345" }],
+        answers: [{ fieldKey: "f1", fieldType: "text", value: "12345" }],
       });
       const roles = new Map([["f1", "phone-contact"]]);
       const result = extractContactsFromResponse(response, roles);
@@ -212,7 +212,7 @@ describe("cross-channel phone match", () => {
     const intakeResponse = JSON.stringify({
       answers: [
         {
-          fieldId: "default:phone",
+          fieldKey: "default:phone",
           fieldType: "text",
           value: "(212) 555-1234",
         },

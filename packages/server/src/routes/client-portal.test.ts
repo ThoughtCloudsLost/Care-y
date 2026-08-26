@@ -316,6 +316,7 @@ describe("client-portal router", () => {
         fields: [
           {
             id: "field-1",
+            fieldKey: crypto.randomUUID(),
             fieldType: "text",
             role: null,
             encryptedLabel: VALID_BASE64,

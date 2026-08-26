@@ -15,7 +15,7 @@ import {
   deriveClientBrandingKey,
   encryptContent,
 } from "@care-y/crypto";
-import type { IntakeFieldConfig } from "@care-y/shared";
+import type { IntakeFieldConfig, LocalizedText } from "@care-y/shared";
 import {
   encryptFieldContent,
   decryptFieldContent,
@@ -43,31 +43,29 @@ describe("intake-form-crypto", () => {
   })();
 
   describe("encryptFieldContent / decryptFieldContent roundtrip", () => {
-    it("roundtrips a text field config", () => {
+    it("roundtrips a text field config with LocalizedText label", () => {
       const config: IntakeFieldConfig = {
         type: "text",
         maxLength: 200,
-        placeholder: "Your name",
+        placeholder: { en: "Your name" },
       };
-      const encrypted = encryptFieldContent(
-        { label: "Full Name", config },
-        orgPubKey(),
-      );
+      const label: LocalizedText = { en: "Full Name" };
+      const encrypted = encryptFieldContent({ label, config }, orgPubKey());
       const decrypted = decryptFieldContent(encrypted, orgPubKey());
 
-      expect(decrypted.label).toBe("Full Name");
+      expect(decrypted.label).toEqual({ en: "Full Name" });
       expect(decrypted.config).toEqual(config);
     });
 
     it("roundtrips a text field config with optional fields omitted", () => {
       const config: IntakeFieldConfig = { type: "text" };
       const encrypted = encryptFieldContent(
-        { label: "Simple", config },
+        { label: { en: "Simple" }, config },
         orgPubKey(),
       );
       const decrypted = decryptFieldContent(encrypted, orgPubKey());
 
-      expect(decrypted.label).toBe("Simple");
+      expect(decrypted.label).toEqual({ en: "Simple" });
       expect(decrypted.config).toEqual({ type: "text" });
     });
 
@@ -75,45 +73,54 @@ describe("intake-form-crypto", () => {
       const config: IntakeFieldConfig = {
         type: "textarea",
         maxLength: 5000,
-        placeholder: "Describe your situation",
+        placeholder: { en: "Describe your situation" },
       };
       const encrypted = encryptFieldContent(
-        { label: "Message", config },
+        { label: { en: "Message" }, config },
         orgPubKey(),
       );
       const decrypted = decryptFieldContent(encrypted, orgPubKey());
 
-      expect(decrypted.label).toBe("Message");
+      expect(decrypted.label).toEqual({ en: "Message" });
       expect(decrypted.config).toEqual(config);
     });
 
-    it("roundtrips a select field config", () => {
+    it("roundtrips a select field config with keyed options", () => {
       const config: IntakeFieldConfig = {
         type: "select",
-        options: ["Phone", "Email", "Signal"],
+        options: [
+          { key: "k1", label: { en: "Phone" } },
+          { key: "k2", label: { en: "Email" } },
+          { key: "k3", label: { en: "Signal" } },
+        ],
       };
       const encrypted = encryptFieldContent(
-        { label: "Contact Method", config },
+        { label: { en: "Contact Method" }, config },
         orgPubKey(),
       );
       const decrypted = decryptFieldContent(encrypted, orgPubKey());
 
-      expect(decrypted.label).toBe("Contact Method");
+      expect(decrypted.label).toEqual({ en: "Contact Method" });
       expect(decrypted.config).toEqual(config);
     });
 
-    it("roundtrips a multiselect field config", () => {
+    it("roundtrips a multiselect field config with keyed options", () => {
       const config: IntakeFieldConfig = {
         type: "multiselect",
-        options: ["Legal aid", "Housing", "Medical", "Counseling"],
+        options: [
+          { key: "k1", label: { en: "Legal aid" } },
+          { key: "k2", label: { en: "Housing" } },
+          { key: "k3", label: { en: "Medical" } },
+          { key: "k4", label: { en: "Counseling" } },
+        ],
       };
       const encrypted = encryptFieldContent(
-        { label: "Services Needed", config },
+        { label: { en: "Services Needed" }, config },
         orgPubKey(),
       );
       const decrypted = decryptFieldContent(encrypted, orgPubKey());
 
-      expect(decrypted.label).toBe("Services Needed");
+      expect(decrypted.label).toEqual({ en: "Services Needed" });
       expect(decrypted.config).toEqual(config);
     });
 
@@ -124,12 +131,12 @@ describe("intake-form-crypto", () => {
         allowSpecific: false,
       };
       const encrypted = encryptFieldContent(
-        { label: "When can we reach you?", config },
+        { label: { en: "When can we reach you?" }, config },
         orgPubKey(),
       );
       const decrypted = decryptFieldContent(encrypted, orgPubKey());
 
-      expect(decrypted.label).toBe("When can we reach you?");
+      expect(decrypted.label).toEqual({ en: "When can we reach you?" });
       expect(decrypted.config).toEqual(config);
     });
 
@@ -140,7 +147,7 @@ describe("intake-form-crypto", () => {
         allowSpecific: true,
       };
       const encrypted = encryptFieldContent(
-        { label: "Availability", config },
+        { label: { en: "Availability" }, config },
         orgPubKey(),
       );
       const decrypted = decryptFieldContent(encrypted, orgPubKey());
@@ -150,19 +157,24 @@ describe("intake-form-crypto", () => {
 
     it("preserves Unicode in labels", () => {
       const config: IntakeFieldConfig = { type: "text" };
-      const encrypted = encryptFieldContent(
-        { label: "Nombre completo ¿Cómo te llamas?", config },
-        orgPubKey(),
-      );
+      const label: LocalizedText = {
+        en: "Full Name",
+        es: "Nombre completo",
+      };
+      const encrypted = encryptFieldContent({ label, config }, orgPubKey());
       const decrypted = decryptFieldContent(encrypted, orgPubKey());
 
-      expect(decrypted.label).toBe("Nombre completo ¿Cómo te llamas?");
+      expect(decrypted.label).toEqual({
+        en: "Full Name",
+        es: "Nombre completo",
+      });
     });
 
     it("produces different ciphertext on each call (random nonce)", () => {
       const config: IntakeFieldConfig = { type: "text" };
-      const a = encryptFieldContent({ label: "Same", config }, orgPubKey());
-      const b = encryptFieldContent({ label: "Same", config }, orgPubKey());
+      const label: LocalizedText = { en: "Same" };
+      const a = encryptFieldContent({ label, config }, orgPubKey());
+      const b = encryptFieldContent({ label, config }, orgPubKey());
 
       expect(a.encryptedLabel).not.toBe(b.encryptedLabel);
       expect(a.encryptedConfig).not.toBe(b.encryptedConfig);
@@ -173,7 +185,7 @@ describe("intake-form-crypto", () => {
     it("throws DecryptionError when label ciphertext is tampered", () => {
       const config: IntakeFieldConfig = { type: "text" };
       const encrypted = encryptFieldContent(
-        { label: "Name", config },
+        { label: { en: "Name" }, config },
         orgPubKey(),
       );
 
@@ -194,10 +206,13 @@ describe("intake-form-crypto", () => {
     it("throws DecryptionError when config ciphertext is tampered", () => {
       const config: IntakeFieldConfig = {
         type: "select",
-        options: ["A", "B"],
+        options: [
+          { key: "a", label: { en: "A" } },
+          { key: "b", label: { en: "B" } },
+        ],
       };
       const encrypted = encryptFieldContent(
-        { label: "Pick", config },
+        { label: { en: "Pick" }, config },
         orgPubKey(),
       );
 
@@ -217,7 +232,7 @@ describe("intake-form-crypto", () => {
     it("throws DecryptionError with wrong org public key", () => {
       const config: IntakeFieldConfig = { type: "text" };
       const encrypted = encryptFieldContent(
-        { label: "Name", config },
+        { label: { en: "Name" }, config },
         orgPubKey(),
       );
 

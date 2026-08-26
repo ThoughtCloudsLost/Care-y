@@ -33,6 +33,7 @@ const recipientIdsSchema = z.array(userIdSchema);
 
 export interface PublicIntakeFormField {
   readonly id: IntakeFormFieldId;
+  readonly fieldKey: string;
   readonly fieldType: string;
   readonly role: string | null;
   readonly encryptedLabel: string;
@@ -63,6 +64,7 @@ export interface PublicFormResult {
 
 export interface FormDetailField {
   readonly id: IntakeFormFieldId;
+  readonly fieldKey: string;
   readonly fieldType: string;
   readonly role: string | null;
   readonly routingQueueIds: readonly QueueId[] | null;
@@ -219,6 +221,7 @@ export function createIntakeFormService(deps: {
         .selectFrom("intake_form_fields")
         .select([
           "id",
+          "field_key",
           "field_type",
           "role",
           "encrypted_label",
@@ -234,6 +237,7 @@ export function createIntakeFormService(deps: {
         slug: form.slug,
         fields: fields.map((f) => ({
           id: f.id,
+          fieldKey: f.field_key,
           fieldType: f.field_type,
           role: f.role,
           // care-y-ignore-next-line no-standard-base64-server -- client-facing ciphertext: browser sends/receives standard base64 per the shared base64String validator
@@ -270,6 +274,7 @@ export function createIntakeFormService(deps: {
         .selectFrom("intake_form_fields")
         .select([
           "id",
+          "field_key",
           "field_type",
           "role",
           "routing_queue_ids",
@@ -304,6 +309,7 @@ export function createIntakeFormService(deps: {
 
           return {
             id: f.id,
+            fieldKey: f.field_key,
             fieldType: f.field_type,
             role: f.role,
             routingQueueIds: f.routing_queue_ids,
@@ -437,6 +443,7 @@ export function createIntakeFormService(deps: {
               input.fields.map((f, idx) => ({
                 form_id: formId,
                 position: idx,
+                field_key: f.fieldKey,
                 field_type: f.fieldType,
                 role: f.role ?? null,
                 routing_queue_ids: f.routingQueueIds ?? null,

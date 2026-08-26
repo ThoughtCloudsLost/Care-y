@@ -39,11 +39,14 @@
   import {
     intakeFieldTypeSchema,
     intakeFieldRoleSchema,
+    resolveLocalized,
+    BASE_LOCALE,
     newTicketId,
     newFollowupId,
     type IntakeFieldConfig,
     type IntakeFieldType,
     type IntakeFieldRole,
+    type LocalizedText,
     type AvailabilityData,
     type TicketPriority,
     ErrorCode,
@@ -61,10 +64,10 @@
   // ---- Types ----
 
   interface PlaintextField {
-    readonly id: string;
+    readonly fieldKey: string;
     readonly fieldType: IntakeFieldType;
     readonly role: IntakeFieldRole | null;
-    readonly label: string;
+    readonly label: LocalizedText;
     readonly config: IntakeFieldConfig;
     readonly isRequired: boolean;
   }
@@ -75,22 +78,26 @@
 
   const DEFAULT_INTAKE_FORM: readonly PlaintextField[] = [
     {
-      id: "default:name",
+      fieldKey: "default:name",
       fieldType: "text",
       role: null,
-      label: m.intake_field_name_label(),
-      config: { type: "text", maxLength: 200, placeholder: undefined },
+      label: { en: m.intake_field_name_label() },
+      config: {
+        type: "text",
+        maxLength: 200,
+        placeholder: { en: m.intake_field_name_label() },
+      },
       isRequired: false,
     },
     {
-      id: "default:message",
+      fieldKey: "default:message",
       fieldType: "textarea",
       role: null,
-      label: m.intake_field_message_label(),
+      label: { en: m.intake_field_message_label() },
       config: {
         type: "textarea",
         maxLength: 5_000,
-        placeholder: m.intake_field_message_placeholder(),
+        placeholder: { en: m.intake_field_message_placeholder() },
       },
       isRequired: true,
     },
@@ -190,7 +197,7 @@
           orgPublicKey,
         );
         decrypted.push({
-          id: field.id,
+          fieldKey: field.fieldKey,
           fieldType: parsedType,
           role: parsedRole,
           label: content.label,
@@ -356,11 +363,11 @@
     // Validate dynamic fields
     for (const field of formFields) {
       if (!field.isRequired) continue;
-      const val = fieldValues[field.id];
+      const val = fieldValues[field.fieldKey];
 
       if (field.fieldType === "text" || field.fieldType === "textarea") {
         if (typeof val !== "string" || val.trim() === "") {
-          errors[field.id] =
+          errors[field.fieldKey] =
             field.fieldType === "textarea"
               ? m.intake_error_message_required()
               : m.intake_error_field_required();
@@ -368,12 +375,12 @@
         }
       } else if (field.fieldType === "select") {
         if (typeof val !== "string" || val === "") {
-          errors[field.id] = m.intake_error_field_required();
+          errors[field.fieldKey] = m.intake_error_field_required();
           valid = false;
         }
       } else if (field.fieldType === "multiselect") {
         if (!Array.isArray(val) || val.length === 0) {
-          errors[field.id] = m.intake_error_field_required();
+          errors[field.fieldKey] = m.intake_error_field_required();
           valid = false;
         }
       } else if (field.fieldType === "checkbox") {
@@ -383,7 +390,7 @@
           field.config.requiredTrue === true &&
           val !== true
         ) {
-          errors[field.id] = m.intake_error_field_required();
+          errors[field.fieldKey] = m.intake_error_field_required();
           valid = false;
         }
       } else {
@@ -394,10 +401,10 @@
           Array.isArray(val) ||
           typeof val === "boolean"
         ) {
-          errors[field.id] = m.intake_error_field_required();
+          errors[field.fieldKey] = m.intake_error_field_required();
           valid = false;
         } else if (val.recurring.length === 0 && val.specific.length === 0) {
-          errors[field.id] = m.intake_error_field_required();
+          errors[field.fieldKey] = m.intake_error_field_required();
           valid = false;
         }
       }
@@ -433,9 +440,9 @@
   function focusFirstError(): void {
     if (!browser) return;
     for (const field of formFields) {
-      const fieldErr = fieldErrors[field.id];
+      const fieldErr = fieldErrors[field.fieldKey];
       if (fieldErr !== undefined && fieldErr !== "") {
-        const el = document.getElementById(`intake-field-${field.id}`);
+        const el = document.getElementById(`intake-field-${field.fieldKey}`);
         if (el) {
           el.focus();
           return;
@@ -478,7 +485,7 @@
       const nameVal = fieldValues["default:name"];
       if (typeof nameVal === "string" && nameVal.trim() !== "") {
         answers.push({
-          fieldId: "default:name",
+          fieldKey: "default:name",
           fieldType: "text",
           label: m.intake_field_name_label(),
           value: nameVal,
@@ -499,7 +506,7 @@
           break;
       }
       answers.push({
-        fieldId: "default:contact-method",
+        fieldKey: "default:contact-method",
         fieldType: "text",
         label: m.intake_contact_method_label(),
         value: contactMethodLabel,
@@ -508,7 +515,7 @@
       // Contact detail (when applicable)
       if (contactMethod !== "none" && contactDetail.trim() !== "") {
         answers.push({
-          fieldId: "default:contact-detail",
+          fieldKey: "default:contact-detail",
           fieldType: "text",
           label:
             contactMethod === "phone"
@@ -522,22 +529,25 @@
       const msgVal = fieldValues["default:message"];
       if (typeof msgVal === "string") {
         answers.push({
-          fieldId: "default:message",
+          fieldKey: "default:message",
           fieldType: "textarea",
           label: m.intake_field_message_label(),
           value: msgVal,
         });
       }
     } else {
-      // Custom form: all fields in order
+      // Custom form: all fields in order.
+      // Labels resolve to the org base locale (D2) so queue-facing ticket
+      // text stays uniform regardless of the language the form was filled in.
       for (const field of formFields) {
-        const val = fieldValues[field.id];
+        const val = fieldValues[field.fieldKey];
         if (val === undefined) continue;
         answers.push({
-          fieldId: field.id,
+          fieldKey: field.fieldKey,
           fieldType: field.fieldType,
-          label: field.label,
+          label: resolveLocalized(field.label, BASE_LOCALE) ?? "",
           value: val,
+          config: field.config,
         });
       }
     }
@@ -864,17 +874,17 @@
     </Block>
   {:else}
     <!-- Dynamic form fields -->
-    {#each formFields as field (field.id)}
+    {#each formFields as field (field.fieldKey)}
       <IntakeFieldRenderer
-        fieldId={field.id}
-        label={field.label}
+        fieldId={field.fieldKey}
+        label={resolveLocalized(field.label, BASE_LOCALE) ?? ""}
         config={field.config}
         isRequired={field.isRequired}
         role={field.role}
-        value={fieldValues[field.id]}
-        error={fieldErrors[field.id]}
+        value={fieldValues[field.fieldKey]}
+        error={fieldErrors[field.fieldKey]}
         onchange={(val: string | string[] | AvailabilityData | boolean) =>
-          handleFieldChange(field.id, val)}
+          handleFieldChange(field.fieldKey, val)}
       />
     {/each}
 

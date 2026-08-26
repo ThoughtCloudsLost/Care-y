@@ -6,11 +6,69 @@
  * The structured response shape (intakeFormResponseSchema) is the seam the
  * availability-matching Worker consumes. Do not change its JSON shape without
  * coordinating with that consumer.
+ *
+ * D1 (stable field keys): every field carries a client-minted fieldKey (UUID),
+ * stable across saves. D2 (stable option keys): options are { key, label }
+ * pairs; mappings reference option keys, not labels. D3 (localized content):
+ * all human-readable strings are LocalizedText with base-locale fallback.
  */
 
 import { z } from "zod";
 import { base64String } from "./validators.js";
 import { queueIdSchema, userIdSchema, intakeFormIdSchema } from "../ids.js";
+
+// ---------------------------------------------------------------------------
+// Supported form content locales (tracks the app's paraglide locales)
+// ---------------------------------------------------------------------------
+
+/** ISO locale codes supported by the form builder. */
+export const FORM_LOCALES = ["en", "es"] as const;
+export type FormLocale = (typeof FORM_LOCALES)[number];
+
+/** The locale used as fallback when a requested locale has no translation. */
+export const BASE_LOCALE: FormLocale = "en";
+
+// ---------------------------------------------------------------------------
+// Localized text (D3)
+// ---------------------------------------------------------------------------
+
+/**
+ * A string that may carry translations for each supported locale. The base
+ * locale ("en") is required by a refinement at the definition level, not by
+ * the schema itself, so partial objects round-trip through Zod without
+ * friction. Use resolveLocalized() to read a value with fallback.
+ *
+ * z.partialRecord (not z.record) so Zod v4 infers partial keys rather than
+ * requiring every locale to be present.
+ */
+export const localizedTextSchema = z.partialRecord(
+  z.enum(FORM_LOCALES),
+  z.string().max(10_000),
+);
+export type LocalizedText = z.infer<typeof localizedTextSchema>;
+
+/**
+ * Resolve a localized string with base-locale fallback.
+ *
+ * Returns the value for the requested locale when present, otherwise the
+ * base locale value, otherwise undefined (caller decides whether that is
+ * an error or an empty display).
+ */
+export function resolveLocalized(
+  text: LocalizedText | undefined,
+  locale: FormLocale,
+): string | undefined {
+  if (text == null) return undefined;
+  // eslint-disable-next-line security/detect-object-injection -- locale is from the FormLocale enum
+  const direct = text[locale];
+  if (direct != null && direct.length > 0) return direct;
+  if (locale !== BASE_LOCALE) {
+    // eslint-disable-next-line security/detect-object-injection -- BASE_LOCALE is a compile-time constant
+    const fallback = text[BASE_LOCALE];
+    if (fallback != null && fallback.length > 0) return fallback;
+  }
+  return undefined;
+}
 
 // ---------------------------------------------------------------------------
 // Field types
@@ -85,21 +143,37 @@ export const ROLE_WIDGET_COMPATIBILITY: Readonly<
 } as const;
 
 // ---------------------------------------------------------------------------
-// Role mapping schemas (live inside encrypted config, client-side only)
+// Option schema (D2: stable option keys)
 // ---------------------------------------------------------------------------
 
-/** Queue-routing: option label -> queue UUID. */
+/**
+ * A single option in a select/multiselect field. The key is editor-minted
+ * (UUID) and immutable across saves. The label is localized text displayed
+ * to the user.
+ */
+export const intakeOptionSchema = z.object({
+  key: z.string().min(1).max(200),
+  label: localizedTextSchema,
+});
+export type IntakeOption = z.infer<typeof intakeOptionSchema>;
+
+// ---------------------------------------------------------------------------
+// Role mapping schemas (live inside encrypted config, client-side only)
+// Re-keyed from option label to option key (D2).
+// ---------------------------------------------------------------------------
+
+/** Queue-routing: option key -> queue UUID. */
 export const queueRoutingMappingSchema = z.record(z.string(), queueIdSchema);
 export type QueueRoutingMapping = z.infer<typeof queueRoutingMappingSchema>;
 
-/** Urgency: option label -> ticket priority value. */
+/** Urgency: option key -> ticket priority value. */
 export const urgencyMappingSchema = z.record(
   z.string(),
   z.enum(["low", "normal", "high", "urgent"]),
 );
 export type UrgencyMapping = z.infer<typeof urgencyMappingSchema>;
 
-/** Escalation: option label -> alert level string. */
+/** Escalation: option key -> alert level string. */
 export const escalationMappingSchema = z.record(
   z.string(),
   z.string().min(1).max(50),
@@ -114,28 +188,31 @@ export type EscalationMapping = z.infer<typeof escalationMappingSchema>;
  * Plaintext field-definition shape. Exists CLIENT-SIDE only (builder before
  * encrypt, renderer after decrypt). The wire/DB shape carries encryptedLabel/
  * encryptedConfig as base64; the server never validates plaintext labels.
+ *
+ * D2: select/multiselect options are now { key, label } pairs.
+ * D3: placeholder is now LocalizedText.
  */
 export const intakeFieldConfigSchema = z.discriminatedUnion("type", [
   z.object({
     type: z.literal("text"),
     maxLength: z.number().int().min(1).max(1_000).optional(),
-    placeholder: z.string().max(200).optional(),
+    placeholder: localizedTextSchema.optional(),
   }),
   z.object({
     type: z.literal("textarea"),
     maxLength: z.number().int().min(1).max(10_000).optional(),
-    placeholder: z.string().max(200).optional(),
+    placeholder: localizedTextSchema.optional(),
   }),
   z.object({
     type: z.literal("select"),
-    options: z.array(z.string().min(1).max(200)).min(1).max(50),
+    options: z.array(intakeOptionSchema).min(1).max(50),
     queueRoutingMapping: queueRoutingMappingSchema.optional(),
     urgencyMapping: urgencyMappingSchema.optional(),
     escalationMapping: escalationMappingSchema.optional(),
   }),
   z.object({
     type: z.literal("multiselect"),
-    options: z.array(z.string().min(1).max(200)).min(1).max(50),
+    options: z.array(intakeOptionSchema).min(1).max(50),
     queueRoutingMapping: queueRoutingMappingSchema.optional(),
   }),
   z.object({
@@ -195,13 +272,16 @@ export type AvailabilityData = z.infer<typeof availabilityDataSchema>;
 /**
  * Structured form response plaintext shape (encrypted into encryptedFormResponse).
  * The availability-matching Worker decodes this exact shape.
+ *
+ * D1: answers reference fieldKey (stable across saves) rather than a transient
+ * row id. D2: select/multiselect answers record option keys, not labels.
  */
 export const intakeFormResponseSchema = z.object({
   formId: z.string().nullable(),
   answers: z
     .array(
       z.object({
-        fieldId: z.string().max(200),
+        fieldKey: z.string().max(200),
         fieldType: intakeFieldTypeSchema,
         value: z.union([
           z.string().max(10_000),
@@ -237,6 +317,21 @@ export const intakeFormSlugSchema = z
   );
 
 // ---------------------------------------------------------------------------
+// Encrypted config size cap
+// ---------------------------------------------------------------------------
+
+/**
+ * Maximum base64 character length for a single encryptedConfig field.
+ * 28 KB accommodates a fully localized config (en + es) with 50 options.
+ */
+export const ENCRYPTED_CONFIG_CAP = 28_000;
+
+/**
+ * Maximum base64 character length for a single encryptedLabel field.
+ */
+export const ENCRYPTED_LABEL_CAP = 2_800;
+
+// ---------------------------------------------------------------------------
 // Admin save input
 // ---------------------------------------------------------------------------
 
@@ -252,15 +347,22 @@ function isRoleCompatible(
   return allowed.includes(fieldType);
 }
 
+/**
+ * Field key schema. UUIDs minted by the editor for custom fields, or
+ * sentinel pseudo-keys for the default form's built-in fields.
+ */
+export const fieldKeySchema = z.string().min(1).max(200);
+
 /** Field shape within the admin save mutation. */
 const saveIntakeFieldSchema = z.object({
+  fieldKey: fieldKeySchema,
   fieldType: intakeFieldTypeSchema,
   encryptedLabel: base64String("encryptedLabel").refine(
-    (s) => s.length <= 2_800,
+    (s) => s.length <= ENCRYPTED_LABEL_CAP,
     "label too large",
   ),
   encryptedConfig: base64String("encryptedConfig").refine(
-    (s) => s.length <= 28_000,
+    (s) => s.length <= ENCRYPTED_CONFIG_CAP,
     "config too large",
   ),
   isRequired: z.boolean(),
@@ -289,6 +391,15 @@ export const saveIntakeFormInputSchema = z
         "one availability field per form",
       ),
   })
+  .refine((input) => {
+    // Field keys must be unique within a form (D1)
+    const keys = new Set<string>();
+    for (const f of input.fields) {
+      if (keys.has(f.fieldKey)) return false;
+      keys.add(f.fieldKey);
+    }
+    return true;
+  }, "field keys must be unique within a form")
   .refine((input) => {
     // Validate unique-per-form roles
     const roleCounts = new Map<string, number>();

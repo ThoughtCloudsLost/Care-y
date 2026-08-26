@@ -20,9 +20,12 @@
     ROLE_WIDGET_COMPATIBILITY,
     intakeFieldRoleSchema,
     ticketPrioritySchema,
+    resolveLocalized,
+    BASE_LOCALE,
     type IntakeFieldConfig,
     type IntakeFieldType,
     type IntakeFieldRole,
+    type IntakeOption,
     type TicketPriority,
     type QueueId,
     queueIdSchema,
@@ -69,7 +72,7 @@
   // Type-specific config state
   let placeholder = $state("");
   let maxLength = $state<number | undefined>(undefined);
-  let options = $state<string[]>([]);
+  let options = $state<IntakeOption[]>([]);
   let allowRecurring = $state(true);
   let allowSpecific = $state(true);
   let requiredTrue = $state(false);
@@ -114,11 +117,14 @@
       switch (cfg.type) {
         case "text":
         case "textarea":
-          placeholder = cfg.placeholder ?? "";
+          placeholder = resolveLocalized(cfg.placeholder, BASE_LOCALE) ?? "";
           maxLength = cfg.maxLength;
           break;
         case "select":
-          options = [...cfg.options];
+          options = cfg.options.map((o) => ({
+            key: o.key,
+            label: { ...o.label },
+          }));
           queueRoutingMapping =
             cfg.queueRoutingMapping != null
               ? { ...cfg.queueRoutingMapping }
@@ -129,7 +135,10 @@
             cfg.escalationMapping != null ? { ...cfg.escalationMapping } : {};
           break;
         case "multiselect":
-          options = [...cfg.options];
+          options = cfg.options.map((o) => ({
+            key: o.key,
+            label: { ...o.label },
+          }));
           queueRoutingMapping =
             cfg.queueRoutingMapping != null
               ? { ...cfg.queueRoutingMapping }
@@ -178,12 +187,14 @@
     const target = e.target;
     if (target instanceof HTMLInputElement) {
       optionsError = "";
-      options = options.map((o, i) => (i === index ? target.value : o));
+      options = options.map((o, i) =>
+        i === index ? { key: o.key, label: { en: target.value } } : o,
+      );
     }
   }
 
   function addOption(): void {
-    options = [...options, ""];
+    options = [...options, { key: crypto.randomUUID(), label: { en: "" } }];
   }
 
   function removeOption(index: number): void {
@@ -231,51 +242,50 @@
     }
   }
 
-  function handleQueueMappingChange(optionLabel: string, e: Event): void {
+  function handleQueueMappingChange(optionKey: string, e: Event): void {
     const target = e.target;
     if (target instanceof HTMLSelectElement) {
       const val = target.value;
       if (val === "") {
-        // Remove mapping for this option via destructure-rest
-        const { [optionLabel]: _removed, ...rest } = queueRoutingMapping;
+        const { [optionKey]: _removed, ...rest } = queueRoutingMapping;
         queueRoutingMapping = rest;
       } else {
         queueRoutingMapping = {
           ...queueRoutingMapping,
-          [optionLabel]: queueIdSchema.parse(val),
+          [optionKey]: queueIdSchema.parse(val),
         };
       }
     }
   }
 
-  function handleUrgencyMappingChange(optionLabel: string, e: Event): void {
+  function handleUrgencyMappingChange(optionKey: string, e: Event): void {
     const target = e.target;
     if (target instanceof HTMLSelectElement) {
       const val = target.value;
       if (val === "") {
-        const { [optionLabel]: _removed, ...rest } = urgencyMapping;
+        const { [optionKey]: _removed, ...rest } = urgencyMapping;
         urgencyMapping = rest;
       } else {
         const parsed = ticketPrioritySchema.safeParse(val);
         if (parsed.success) {
           urgencyMapping = {
             ...urgencyMapping,
-            [optionLabel]: parsed.data,
+            [optionKey]: parsed.data,
           };
         }
       }
     }
   }
 
-  function handleEscalationMappingChange(optionLabel: string, e: Event): void {
+  function handleEscalationMappingChange(optionKey: string, e: Event): void {
     const target = e.target;
     if (target instanceof HTMLInputElement) {
       const val = target.value;
       if (val === "") {
-        const { [optionLabel]: _removed, ...rest } = escalationMapping;
+        const { [optionKey]: _removed, ...rest } = escalationMapping;
         escalationMapping = rest;
       } else {
-        escalationMapping = { ...escalationMapping, [optionLabel]: val };
+        escalationMapping = { ...escalationMapping, [optionKey]: val };
       }
     }
   }
@@ -339,23 +349,30 @@
 
   // ---- Build config ----
 
+  /** Resolve the base-locale display text for an option. */
+  function optionDisplayText(opt: IntakeOption): string {
+    return resolveLocalized(opt.label, BASE_LOCALE) ?? "";
+  }
+
   function buildConfig(): IntakeFieldConfig {
     if (fieldType === "text") {
       return {
         type: "text",
-        ...(placeholder ? { placeholder } : {}),
+        ...(placeholder ? { placeholder: { en: placeholder } } : {}),
         ...(maxLength !== undefined ? { maxLength } : {}),
       };
     }
     if (fieldType === "textarea") {
       return {
         type: "textarea",
-        ...(placeholder ? { placeholder } : {}),
+        ...(placeholder ? { placeholder: { en: placeholder } } : {}),
         ...(maxLength !== undefined ? { maxLength } : {}),
       };
     }
     if (fieldType === "select") {
-      const filteredOptions = options.filter((o) => o.length > 0);
+      const filteredOptions = options.filter(
+        (o) => optionDisplayText(o).length > 0,
+      );
       const cfg: IntakeFieldConfig = {
         type: "select",
         options: filteredOptions,
@@ -381,7 +398,9 @@
       return cfg;
     }
     if (fieldType === "multiselect") {
-      const filteredOptions = options.filter((o) => o.length > 0);
+      const filteredOptions = options.filter(
+        (o) => optionDisplayText(o).length > 0,
+      );
       const cfg: IntakeFieldConfig = {
         type: "multiselect",
         options: filteredOptions,
@@ -420,7 +439,7 @@
     }
     if (
       (fieldType === "select" || fieldType === "multiselect") &&
-      !options.some((o) => o.trim().length > 0)
+      !options.some((o) => optionDisplayText(o).trim().length > 0)
     ) {
       optionsError = m.intake_forms_config_options_required();
       return;
@@ -524,11 +543,11 @@
 
   {#if fieldType === "select" || fieldType === "multiselect"}
     <List strong inset>
-      {#each options as option, index (index)}
+      {#each options as option, index (option.key)}
         <ListInput
           label={m.intake_forms_config_option_label({ n: String(index + 1) })}
           type="text"
-          value={option}
+          value={optionDisplayText(option)}
           onInput={(e: Event) => handleOptionInput(index, e)}
         >
           <Button
@@ -584,13 +603,13 @@
   {#if selectedRole === "queue-routing" && (fieldType === "select" || fieldType === "multiselect")}
     <BlockTitle>{m.intake_forms_config_queue_mapping_title()}</BlockTitle>
     <List strong inset>
-      {#each options.filter((o) => o.length > 0) as optionLabel (optionLabel)}
+      {#each options.filter((o) => optionDisplayText(o).length > 0) as opt (opt.key)}
         <ListInput
-          label={optionLabel}
+          label={optionDisplayText(opt)}
           type="select"
           dropdown
-          value={getQueueMapping(optionLabel)}
-          onChange={(e: Event) => handleQueueMappingChange(optionLabel, e)}
+          value={getQueueMapping(opt.key)}
+          onChange={(e: Event) => handleQueueMappingChange(opt.key, e)}
         >
           <option value="">{m.intake_forms_config_queue_default()}</option>
           {#each queues as queue (queue.id)}
@@ -606,13 +625,13 @@
   {#if selectedRole === "urgency" && fieldType === "select"}
     <BlockTitle>{m.intake_forms_config_urgency_mapping_title()}</BlockTitle>
     <List strong inset>
-      {#each options.filter((o) => o.length > 0) as optionLabel (optionLabel)}
+      {#each options.filter((o) => optionDisplayText(o).length > 0) as opt (opt.key)}
         <ListInput
-          label={optionLabel}
+          label={optionDisplayText(opt)}
           type="select"
           dropdown
-          value={getUrgencyMapping(optionLabel)}
-          onChange={(e: Event) => handleUrgencyMappingChange(optionLabel, e)}
+          value={getUrgencyMapping(opt.key)}
+          onChange={(e: Event) => handleUrgencyMappingChange(opt.key, e)}
         >
           <option value="">{m.intake_forms_config_priority_default()}</option>
           {#each PRIORITY_OPTIONS as prio (prio.value)}
@@ -628,13 +647,13 @@
   {#if selectedRole === "escalation" && fieldType === "select"}
     <BlockTitle>{m.intake_forms_config_escalation_mapping_title()}</BlockTitle>
     <List strong inset>
-      {#each options.filter((o) => o.length > 0) as optionLabel (optionLabel)}
+      {#each options.filter((o) => optionDisplayText(o).length > 0) as opt (opt.key)}
         <ListInput
-          label={optionLabel}
+          label={optionDisplayText(opt)}
           type="text"
           placeholder={m.intake_forms_config_escalation_alert_label()}
-          value={getEscalationMapping(optionLabel)}
-          onInput={(e: Event) => handleEscalationMappingChange(optionLabel, e)}
+          value={getEscalationMapping(opt.key)}
+          onInput={(e: Event) => handleEscalationMappingChange(opt.key, e)}
         />
       {/each}
     </List>

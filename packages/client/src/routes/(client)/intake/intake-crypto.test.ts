@@ -64,25 +64,25 @@ describe("intake-crypto", () => {
       const ids = makeIds();
       const answers: IntakeAnswer[] = [
         {
-          fieldId: "default:name",
+          fieldKey: "default:name",
           fieldType: "text",
           label: "Your name",
           value: "Alice",
         },
         {
-          fieldId: "default:contact-method",
+          fieldKey: "default:contact-method",
           fieldType: "text",
           label: "How should we reach you?",
           value: "Text or call my phone",
         },
         {
-          fieldId: "default:contact-detail",
+          fieldKey: "default:contact-detail",
           fieldType: "text",
           label: "Phone number",
           value: "+1-555-0123",
         },
         {
-          fieldId: "default:message",
+          fieldKey: "default:message",
           fieldType: "textarea",
           label: "Your message",
           value: "I need help with housing.",
@@ -134,19 +134,19 @@ describe("intake-crypto", () => {
       expect(response).toEqual({
         formId: null,
         answers: [
-          { fieldId: "default:name", fieldType: "text", value: "Alice" },
+          { fieldKey: "default:name", fieldType: "text", value: "Alice" },
           {
-            fieldId: "default:contact-method",
+            fieldKey: "default:contact-method",
             fieldType: "text",
             value: "Text or call my phone",
           },
           {
-            fieldId: "default:contact-detail",
+            fieldKey: "default:contact-detail",
             fieldType: "text",
             value: "+1-555-0123",
           },
           {
-            fieldId: "default:message",
+            fieldKey: "default:message",
             fieldType: "textarea",
             value: "I need help with housing.",
           },
@@ -158,13 +158,13 @@ describe("intake-crypto", () => {
       const ids = makeIds();
       const answers: IntakeAnswer[] = [
         {
-          fieldId: "default:name",
+          fieldKey: "default:name",
           fieldType: "text",
           label: "Your name",
           value: "",
         },
         {
-          fieldId: "default:message",
+          fieldKey: "default:message",
           fieldType: "textarea",
           label: "Your message",
           value: "Help.",
@@ -189,7 +189,7 @@ describe("intake-crypto", () => {
       const ids = makeIds();
       const answers: IntakeAnswer[] = [
         {
-          fieldId: "custom-1",
+          fieldKey: "custom-1",
           fieldType: "textarea",
           label: "Situation",
           value: "Need assistance.",
@@ -214,13 +214,13 @@ describe("intake-crypto", () => {
       const ids = makeIds();
       const answers: IntakeAnswer[] = [
         {
-          fieldId: "field-1",
+          fieldKey: "field-1",
           fieldType: "text",
           label: "Full name",
           value: "Bob",
         },
         {
-          fieldId: "field-2",
+          fieldKey: "field-2",
           fieldType: "select",
           label: "Service",
           value: "housing",
@@ -239,7 +239,7 @@ describe("intake-crypto", () => {
       const ids = makeIds();
       const answers: IntakeAnswer[] = [
         {
-          fieldId: "field-ms",
+          fieldKey: "field-ms",
           fieldType: "multiselect",
           label: "Services",
           value: ["Housing", "Legal", "Medical"],
@@ -278,7 +278,7 @@ describe("intake-crypto", () => {
       const ids = makeIds();
       const answers: IntakeAnswer[] = [
         {
-          fieldId: "field-av",
+          fieldKey: "field-av",
           fieldType: "availability",
           label: "When available",
           value: {
@@ -324,7 +324,7 @@ describe("intake-crypto", () => {
       const ids = makeIds();
       const answers: IntakeAnswer[] = [
         {
-          fieldId: "default:message",
+          fieldKey: "default:message",
           fieldType: "textarea",
           label: "Message",
           value: "Hello",
@@ -356,7 +356,7 @@ describe("intake-crypto", () => {
       const ids = makeIds();
       const answers: IntakeAnswer[] = [
         {
-          fieldId: "default:message",
+          fieldKey: "default:message",
           fieldType: "textarea",
           label: "Message",
           value: "Hello",
@@ -391,13 +391,13 @@ describe("intake-crypto", () => {
             const ids = makeIds();
             const answers: IntakeAnswer[] = [
               {
-                fieldId: "default:name",
+                fieldKey: "default:name",
                 fieldType: "text",
                 label: "Name",
                 value: name,
               },
               {
-                fieldId: "default:message",
+                fieldKey: "default:message",
                 fieldType: "textarea",
                 label: "Message",
                 value: message,
@@ -442,7 +442,7 @@ describe("intake-crypto", () => {
       const ids = makeIds();
       const answers: IntakeAnswer[] = [
         {
-          fieldId: "default:message",
+          fieldKey: "default:message",
           fieldType: "textarea",
           label: "Message",
           value: "test",

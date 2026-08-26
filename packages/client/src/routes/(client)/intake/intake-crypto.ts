@@ -21,13 +21,16 @@ import {
   type Ciphertext,
   type EciesOutput,
 } from "@care-y/crypto";
-import type {
-  IntakeFieldType,
-  IntakeFieldRole,
-  IntakeFieldConfig,
-  AvailabilityData,
-  IntakeFormResponse,
-  TicketPriority,
+import {
+  resolveLocalized,
+  BASE_LOCALE,
+  type IntakeFieldType,
+  type IntakeFieldRole,
+  type IntakeFieldConfig,
+  type IntakeOption,
+  type AvailabilityData,
+  type IntakeFormResponse,
+  type TicketPriority,
 } from "@care-y/shared";
 import { buildAccountRegistration } from "$lib/portal/account-crypto.js";
 import type { LoginCryptoCallbacks } from "$lib/auth/login-crypto.js";
@@ -38,12 +41,15 @@ const textEncoder = new TextEncoder();
  * A single answered field, ready for encryption.
  * Labels are included for human-readable description composition only;
  * they are NOT stored in the structured response blob.
+ * Config is included optionally for resolving option keys to display
+ * labels in the description (D2).
  */
 export interface IntakeAnswer {
-  readonly fieldId: string;
+  readonly fieldKey: string;
   readonly fieldType: IntakeFieldType;
   readonly label: string;
   readonly value: string | readonly string[] | AvailabilityData | boolean;
+  readonly config?: IntakeFieldConfig;
 }
 
 export interface EncryptedIntake {
@@ -88,14 +94,44 @@ function isAvailabilityData(
 }
 
 /**
+ * Resolve an option key to its base-locale display label using the field
+ * config's options array. Returns the key unchanged when no match is found
+ * (graceful fallback for stale or default-form answers).
+ */
+function resolveOptionKey(
+  key: string,
+  options: readonly IntakeOption[],
+): string {
+  for (const opt of options) {
+    if (opt.key === key) {
+      return resolveLocalized(opt.label, BASE_LOCALE) ?? key;
+    }
+  }
+  return key;
+}
+
+/**
  * Format a single answer value as a string for the description.
+ * When config is provided and the field is select/multiselect, option keys
+ * are resolved to base-locale labels per D2.
  */
 function formatValue(
   value: string | readonly string[] | AvailabilityData | boolean,
+  config?: IntakeFieldConfig,
 ): string {
   if (typeof value === "boolean") return value ? "Yes" : "No";
-  if (typeof value === "string") return value;
+  if (typeof value === "string") {
+    // For select fields, resolve the option key to a label
+    if (config?.type === "select") {
+      return resolveOptionKey(value, config.options);
+    }
+    return value;
+  }
   if (isAvailabilityData(value)) return formatAvailability(value);
+  // For multiselect fields, resolve each option key to a label
+  if (config?.type === "multiselect") {
+    return value.map((key) => resolveOptionKey(key, config.options)).join(", ");
+  }
   return value.join(", ");
 }
 
@@ -137,7 +173,7 @@ export function encryptIntake(
     // default form when a name answer is present and non-empty
     const nameAnswer = answers.find(
       (a) =>
-        a.fieldId === "default:name" &&
+        a.fieldKey === "default:name" &&
         typeof a.value === "string" &&
         a.value !== "",
     );
@@ -148,10 +184,11 @@ export function encryptIntake(
     const title =
       nameValue !== null ? `Web intake - ${nameValue}` : "Web intake";
 
-    // Description: one line per answered field, "<label>: <value>"
+    // Description: one line per answered field, "<label>: <value>".
+    // Option keys are resolved to base-locale labels per D2.
     const descriptionLines: string[] = [];
     for (const answer of answers) {
-      const formatted = formatValue(answer.value);
+      const formatted = formatValue(answer.value, answer.config);
       if (formatted !== "") {
         descriptionLines.push(`${answer.label}: ${formatted}`);
       }
@@ -167,11 +204,12 @@ export function encryptIntake(
         : ""
       : null;
 
-    // Structured response blob (availability-matching Worker seam)
+    // Structured response blob (availability-matching Worker seam).
+    // Uses fieldKey for stable identity across saves (D1).
     const responsePayload: IntakeFormResponse = {
       formId,
       answers: answers.map((a) => ({
-        fieldId: a.fieldId,
+        fieldKey: a.fieldKey,
         fieldType: a.fieldType,
         value: toResponseValue(a.value),
       })),
@@ -237,7 +275,7 @@ export interface SubmitMetadata {
 interface FieldWithRole {
   readonly role: IntakeFieldRole | null;
   readonly config: IntakeFieldConfig;
-  readonly id: string;
+  readonly fieldKey: string;
 }
 
 /**
@@ -258,7 +296,7 @@ export function resolveSubmitMetadata(
 
   for (const field of fields) {
     if (field.role === null) continue;
-    const val = values[field.id];
+    const val = values[field.fieldKey];
 
     if (field.role === "queue-routing" && typeof val === "string") {
       const cfg = field.config;

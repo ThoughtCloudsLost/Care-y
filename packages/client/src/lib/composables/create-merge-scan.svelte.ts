@@ -97,7 +97,9 @@ export function createMergeScan(getDeps: () => MergeScanDeps): MergeScanResult {
     const serverData = mergeScanDataQuery.data;
     if (!serverData) return [];
 
-    // Build field role maps keyed by formId
+    // Build field role maps keyed by formId.
+    // The server returns fieldKey (stable across saves, D1) so the
+    // Worker can match roles against response blob answer keys.
     const formRoles = new SvelteMap<string, SvelteMap<string, string>>();
     for (const fr of serverData.fieldRoles) {
       let roleMap = formRoles.get(fr.formId);
@@ -105,7 +107,7 @@ export function createMergeScan(getDeps: () => MergeScanDeps): MergeScanResult {
         roleMap = new SvelteMap();
         formRoles.set(fr.formId, roleMap);
       }
-      roleMap.set(fr.fieldId, fr.role);
+      roleMap.set(fr.fieldKey, fr.role);
     }
 
     // Build ticket key wrap map from dashboard tickets

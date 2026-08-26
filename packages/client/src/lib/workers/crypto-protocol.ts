@@ -324,7 +324,7 @@ export interface CreateTicketKeyRequest {
  * normalizes contact values, and returns ONLY candidate pairs (client
  * ids + match kind). Matched contact values never leave the Worker.
  *
- * fieldRoleMap maps fieldId -> role so the Worker can extract
+ * fieldRoleMap maps fieldKey -> role so the Worker can extract
  * phone-contact / email-contact answers from custom-form responses
  * without pattern matching.
  */
@@ -359,7 +359,7 @@ export interface MergeScanIntakeResponse {
   readonly intakeWrap: string | null;
   /** Encrypted form response blob (nonce || ciphertext), base64. */
   readonly encryptedResponse: string;
-  /** Field-id-to-role map from the form definition. */
+  /** Field-key-to-role map from the form definition. */
   readonly fieldRoles: ReadonlyMap<string, string>;
 }
 

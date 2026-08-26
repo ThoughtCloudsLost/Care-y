@@ -344,9 +344,23 @@ describe("intakeConfigResponseSchema", () => {
 });
 
 describe("publicIntakeFieldSchema", () => {
-  it("accepts a valid public field", () => {
+  it("accepts a valid public field with fieldKey", () => {
     const result = publicIntakeFieldSchema.safeParse({
       id: crypto.randomUUID(),
+      fieldKey: crypto.randomUUID(),
+      fieldType: "text",
+      role: "phone-contact",
+      encryptedLabel: "abc123",
+      encryptedConfig: "def456",
+      isRequired: true,
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("accepts sentinel pseudo-key as fieldKey", () => {
+    const result = publicIntakeFieldSchema.safeParse({
+      id: crypto.randomUUID(),
+      fieldKey: "default:phone",
       fieldType: "text",
       role: "phone-contact",
       encryptedLabel: "abc123",
@@ -359,6 +373,7 @@ describe("publicIntakeFieldSchema", () => {
   it("accepts null role", () => {
     const result = publicIntakeFieldSchema.safeParse({
       id: crypto.randomUUID(),
+      fieldKey: crypto.randomUUID(),
       fieldType: "select",
       role: null,
       encryptedLabel: "abc",
@@ -371,6 +386,7 @@ describe("publicIntakeFieldSchema", () => {
   it("rejects unknown role", () => {
     const result = publicIntakeFieldSchema.safeParse({
       id: crypto.randomUUID(),
+      fieldKey: crypto.randomUUID(),
       fieldType: "text",
       role: "unknown-role",
       encryptedLabel: "abc",
@@ -379,16 +395,29 @@ describe("publicIntakeFieldSchema", () => {
     });
     expect(result.success).toBe(false);
   });
+
+  it("rejects missing fieldKey", () => {
+    const result = publicIntakeFieldSchema.safeParse({
+      id: crypto.randomUUID(),
+      fieldType: "text",
+      role: null,
+      encryptedLabel: "abc",
+      encryptedConfig: "def",
+      isRequired: true,
+    });
+    expect(result.success).toBe(false);
+  });
 });
 
 describe("publicIntakeFormSchema", () => {
-  it("accepts a valid public form with fields", () => {
+  it("accepts a valid public form with fields including fieldKey", () => {
     const result = publicIntakeFormSchema.safeParse({
       id: crypto.randomUUID(),
       slug: "general-help",
       fields: [
         {
           id: crypto.randomUUID(),
+          fieldKey: crypto.randomUUID(),
           fieldType: "text",
           role: null,
           encryptedLabel: "abc",

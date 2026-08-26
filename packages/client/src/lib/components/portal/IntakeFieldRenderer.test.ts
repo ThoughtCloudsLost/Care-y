@@ -103,10 +103,10 @@ describe("IntakeFieldRenderer", () => {
       expect(screen.getByText("2 / 100")).toBeTruthy();
     });
 
-    it("respects placeholder from config", () => {
+    it("respects placeholder from config (LocalizedText)", () => {
       render(IntakeFieldRenderer, {
         props: makeProps({
-          config: { type: "text", placeholder: "Enter name" },
+          config: { type: "text", placeholder: { en: "Enter name" } },
         }),
       });
       const input = document.querySelector("input[placeholder='Enter name']");
@@ -138,7 +138,11 @@ describe("IntakeFieldRenderer", () => {
   describe("select type", () => {
     const selectConfig: IntakeFieldConfig = {
       type: "select",
-      options: ["Phone", "Email", "None"],
+      options: [
+        { key: "phone", label: { en: "Phone" } },
+        { key: "email", label: { en: "Email" } },
+        { key: "none", label: { en: "None" } },
+      ],
     };
 
     it("renders a select with options", () => {
@@ -152,15 +156,15 @@ describe("IntakeFieldRenderer", () => {
       expect(options.length).toBe(4);
     });
 
-    it("emits value on change", async () => {
+    it("emits option key on change", async () => {
       const onchange = vi.fn();
       render(IntakeFieldRenderer, {
         props: makeProps({ config: selectConfig, onchange }),
       });
       const select = document.querySelector("select");
       expect(select).not.toBeNull();
-      await fireEvent.change(select!, { target: { value: "Email" } });
-      expect(onchange).toHaveBeenCalledWith("Email");
+      await fireEvent.change(select!, { target: { value: "email" } });
+      expect(onchange).toHaveBeenCalledWith("email");
     });
 
     it("has a disabled prompt option with the label text", () => {
@@ -179,7 +183,11 @@ describe("IntakeFieldRenderer", () => {
   describe("multiselect type", () => {
     const multiConfig: IntakeFieldConfig = {
       type: "multiselect",
-      options: ["Housing", "Legal", "Medical"],
+      options: [
+        { key: "housing", label: { en: "Housing" } },
+        { key: "legal", label: { en: "Legal" } },
+        { key: "medical", label: { en: "Medical" } },
+      ],
     };
 
     it("renders checkbox list items with role group and aria-labelledby", () => {
@@ -296,7 +304,13 @@ describe("IntakeFieldRenderer", () => {
     it("shows metadata indicator for server-metadata role", () => {
       render(IntakeFieldRenderer, {
         props: makeProps({
-          config: { type: "select", options: ["A", "B"] },
+          config: {
+            type: "select",
+            options: [
+              { key: "a", label: { en: "A" } },
+              { key: "b", label: { en: "B" } },
+            ],
+          },
           role: "queue-routing",
         }),
       });

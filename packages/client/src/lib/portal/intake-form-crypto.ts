@@ -33,7 +33,9 @@ import {
 } from "@care-y/crypto";
 import {
   intakeFieldConfigSchema,
+  localizedTextSchema,
   type IntakeFieldConfig,
+  type LocalizedText,
 } from "@care-y/shared";
 
 const textEncoder = new TextEncoder();
@@ -52,7 +54,7 @@ export interface EncryptedFieldContent {
 }
 
 export interface DecryptedFieldContent {
-  label: string;
+  label: LocalizedText;
   config: IntakeFieldConfig;
 }
 
@@ -63,17 +65,17 @@ export interface DecryptedFieldContent {
  * (one BLAKE2b hash) rather than caching it in module state, so key material
  * does not outlive its use.
  *
- * @param plain - Plaintext label and config to encrypt
+ * @param plain - Localized label and config to encrypt
  * @param orgPublicKey - The org's Curve25519 public key (32 bytes)
  * @returns Base64url-encoded encrypted label and config strings
  */
 export function encryptFieldContent(
-  plain: { label: string; config: IntakeFieldConfig },
+  plain: { label: LocalizedText; config: IntakeFieldConfig },
   orgPublicKey: Uint8Array,
 ): EncryptedFieldContent {
   const key: SymmetricKey = deriveClientBrandingKey(orgPublicKey);
   try {
-    const labelBytes = textEncoder.encode(plain.label);
+    const labelBytes = textEncoder.encode(JSON.stringify(plain.label));
     const configBytes = textEncoder.encode(JSON.stringify(plain.config));
 
     const encryptedLabelBlob = encryptContent(labelBytes, key, INTAKE_FORM_AAD);
@@ -124,17 +126,46 @@ export function decryptFieldContent(
     );
     /* eslint-enable @typescript-eslint/no-unsafe-type-assertion */
 
-    const label = textDecoder.decode(labelPlain);
-    const configJson: unknown = JSON.parse(textDecoder.decode(configPlain));
-    const parsed = intakeFieldConfigSchema.safeParse(configJson);
+    // Parse and validate both blobs inside a catch-all so that neither
+    // a JSON.parse SyntaxError nor an unexpected runtime error can leak
+    // decrypted plaintext fragments in an error message. Only typed
+    // DecryptionError with a content-free message escapes.
+    let label: LocalizedText;
+    let config: IntakeFieldConfig;
 
-    if (!parsed.success) {
+    try {
+      const labelJson: unknown = JSON.parse(textDecoder.decode(labelPlain));
+      const labelParsed = localizedTextSchema.safeParse(labelJson);
+      if (!labelParsed.success) {
+        throw new DecryptionError(
+          "Decrypted field label does not match LocalizedText schema",
+        );
+      }
+      label = labelParsed.data;
+    } catch (err: unknown) {
+      if (err instanceof DecryptionError) throw err;
       throw new DecryptionError(
-        "Decrypted field config does not match expected schema",
+        "Decrypted field label is not valid serialized content",
       );
     }
 
-    return { label, config: parsed.data };
+    try {
+      const configJson: unknown = JSON.parse(textDecoder.decode(configPlain));
+      const parsed = intakeFieldConfigSchema.safeParse(configJson);
+      if (!parsed.success) {
+        throw new DecryptionError(
+          "Decrypted field config does not match expected schema",
+        );
+      }
+      config = parsed.data;
+    } catch (err: unknown) {
+      if (err instanceof DecryptionError) throw err;
+      throw new DecryptionError(
+        "Decrypted field config is not valid serialized content",
+      );
+    }
+
+    return { label, config };
   } finally {
     requireSodium().memzero(key);
   }

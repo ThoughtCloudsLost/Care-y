@@ -11,10 +11,14 @@
     Checkbox,
     BlockTitle,
   } from "konsta/svelte";
-  import type {
-    IntakeFieldConfig,
-    IntakeFieldRole,
-    AvailabilityData,
+  import {
+    resolveLocalized,
+    BASE_LOCALE,
+    type IntakeFieldConfig,
+    type IntakeFieldRole,
+    type IntakeOption,
+    type AvailabilityData,
+    type FormLocale,
   } from "@care-y/shared";
   import * as m from "$lib/paraglide/messages.js";
   import FieldError from "$lib/components/FieldError.svelte";
@@ -27,6 +31,7 @@
     readonly config: IntakeFieldConfig;
     readonly isRequired: boolean;
     readonly role?: IntakeFieldRole | null;
+    readonly locale?: FormLocale;
     readonly value: string | string[] | AvailabilityData | boolean | undefined;
     readonly error?: string;
     readonly onchange: (
@@ -40,10 +45,16 @@
     config,
     isRequired,
     role = null,
+    locale = BASE_LOCALE,
     value,
     error,
     onchange,
   }: IntakeFieldRendererProps = $props();
+
+  /** Resolve display text for a localized option. */
+  function optionText(opt: IntakeOption): string {
+    return resolveLocalized(opt.label, locale) ?? opt.key;
+  }
 
   const inputId = $derived(`intake-field-${fieldId}`);
   const labelId = $derived(`intake-label-${fieldId}`);
@@ -106,7 +117,7 @@
     <ListInput
       {inputId}
       type="text"
-      placeholder={config.placeholder ?? ""}
+      placeholder={resolveLocalized(config.placeholder, locale) ?? ""}
       value={typeof value === "string" ? value : ""}
       maxlength={config.maxLength}
       autocomplete="off"
@@ -132,7 +143,7 @@
     <ListInput
       {inputId}
       type="textarea"
-      placeholder={config.placeholder ?? ""}
+      placeholder={resolveLocalized(config.placeholder, locale) ?? ""}
       value={typeof value === "string" ? value : ""}
       maxlength={config.maxLength}
       autocomplete="off"
@@ -165,8 +176,8 @@
       onChange={handleSelectChange}
     >
       <option value="" disabled selected>{label}</option>
-      {#each config.options as option (option)}
-        <option value={option}>{option}</option>
+      {#each config.options as option (option.key)}
+        <option value={option.key}>{optionText(option)}</option>
       {/each}
     </ListInput>
   </List>
@@ -179,13 +190,13 @@
 {:else if config.type === "multiselect"}
   <BlockTitle id={labelId}>{displayLabel}</BlockTitle>
   <List strong inset role="group" aria-labelledby={labelId}>
-    {#each config.options as option (option)}
-      <ListItem label title={option}>
+    {#each config.options as option (option.key)}
+      <ListItem label title={optionText(option)}>
         {#snippet media()}
           <Checkbox
             component="div"
-            checked={Array.isArray(value) && value.includes(option)}
-            onChange={() => handleCheckboxToggle(option)}
+            checked={Array.isArray(value) && value.includes(option.key)}
+            onChange={() => handleCheckboxToggle(option.key)}
           />
         {/snippet}
       </ListItem>

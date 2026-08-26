@@ -86,14 +86,23 @@ const TEST_VOLUNTEERS = [
 function baseInitial(): {
   label: string;
   isRequired: boolean;
-  config: { type: "select"; options: string[] };
+  config: {
+    type: "select";
+    options: { key: string; label: { en: string } }[];
+  };
   role: null;
   escalationRecipientIds: null;
 } {
   return {
     label: "Test question",
     isRequired: false,
-    config: { type: "select" as const, options: ["Opt A", "Opt B"] },
+    config: {
+      type: "select" as const,
+      options: [
+        { key: "opt-a", label: { en: "Opt A" } },
+        { key: "opt-b", label: { en: "Opt B" } },
+      ],
+    },
     role: null,
     escalationRecipientIds: null,
   };
@@ -297,7 +306,10 @@ describe("IntakeFieldConfigSheet", () => {
         fieldType: "select",
         initial: {
           ...baseInitial(),
-          config: { type: "select" as const, options: [""] },
+          config: {
+            type: "select" as const,
+            options: [{ key: "empty", label: { en: "" } }],
+          },
         },
         queues: TEST_QUEUES,
         volunteers: TEST_VOLUNTEERS,

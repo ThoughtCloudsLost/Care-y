@@ -296,6 +296,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
         .values({
           form_id: form.id,
           position: 0,
+          field_key: crypto.randomUUID(),
           field_type: "select",
           role: "queue-routing",
           routing_queue_ids: [routeQueue.id],
@@ -351,6 +352,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
         .values({
           form_id: form.id,
           position: 0,
+          field_key: crypto.randomUUID(),
           field_type: "select",
           role: "queue-routing",
           routing_queue_ids: [allowedQueue.id],
@@ -422,6 +424,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
         .values({
           form_id: form.id,
           position: 0,
+          field_key: crypto.randomUUID(),
           field_type: "checkbox",
           role: "escalation",
           encrypted_escalation_recipient_ids: noopEncryptor.encrypt(

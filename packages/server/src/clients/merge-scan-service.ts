@@ -13,7 +13,6 @@ import type {
   ClientId,
   TicketId,
   IntakeFormId,
-  IntakeFormFieldId,
   PhoneMatchHash,
   UserId,
 } from "@care-y/shared";
@@ -35,7 +34,7 @@ export interface MergeScanResponseRecord {
 
 export interface MergeScanFieldRoleRecord {
   readonly formId: IntakeFormId;
-  readonly fieldId: IntakeFormFieldId;
+  readonly fieldKey: string;
   readonly role: string;
 }
 
@@ -140,12 +139,12 @@ export function createMergeScanService(
       const rows = await db
         .selectFrom("intake_form_fields")
         .where("role", "is not", null)
-        .select(["form_id as formId", "id as fieldId", "role"])
+        .select(["form_id as formId", "field_key as fieldKey", "role"])
         .execute();
 
       return rows.map((r) => ({
         formId: r.formId,
-        fieldId: r.fieldId,
+        fieldKey: r.fieldKey,
         role: typeof r.role === "string" ? r.role : String(r.role),
       }));
     },

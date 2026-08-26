@@ -175,11 +175,13 @@ describe.skipIf(!process.env.DATABASE_URL)("089_intake_forms migration", () => {
       .returning("id")
       .executeTakeFirstOrThrow();
 
+    const fieldKey = crypto.randomUUID();
     const field = await testDb.db
       .insertInto("intake_form_fields")
       .values({
         form_id: form.id,
         position: 0,
+        field_key: fieldKey,
         field_type: "text",
         encrypted_label: Buffer.from("encrypted-label-data"),
         encrypted_config: Buffer.from("encrypted-config-data"),
@@ -189,6 +191,7 @@ describe.skipIf(!process.env.DATABASE_URL)("089_intake_forms migration", () => {
       .executeTakeFirstOrThrow();
 
     expect(field.field_type).toBe("text");
+    expect(field.field_key).toBe(fieldKey);
     expect(field.position).toBe(0);
     expect(field.is_required).toBe(true);
     expect(field.role).toBeNull();
@@ -214,6 +217,7 @@ describe.skipIf(!process.env.DATABASE_URL)("089_intake_forms migration", () => {
       .values({
         form_id: form.id,
         position: 0,
+        field_key: crypto.randomUUID(),
         field_type: "select",
         role: "queue-routing",
         encrypted_label: Buffer.from("label"),
@@ -244,6 +248,7 @@ describe.skipIf(!process.env.DATABASE_URL)("089_intake_forms migration", () => {
       .values({
         form_id: form.id,
         position: 0,
+        field_key: crypto.randomUUID(),
         field_type: "select",
         role: "escalation",
         encrypted_label: Buffer.from("label"),
@@ -272,6 +277,7 @@ describe.skipIf(!process.env.DATABASE_URL)("089_intake_forms migration", () => {
       .values({
         form_id: form.id,
         position: 0,
+        field_key: crypto.randomUUID(),
         field_type: "text",
         encrypted_label: Buffer.from("label"),
         encrypted_config: Buffer.from("config"),
@@ -295,6 +301,7 @@ describe.skipIf(!process.env.DATABASE_URL)("089_intake_forms migration", () => {
       .values({
         form_id: form.id,
         position: 0,
+        field_key: crypto.randomUUID(),
         field_type: "text",
         encrypted_label: Buffer.from("label-a"),
         encrypted_config: Buffer.from("config-a"),
@@ -307,6 +314,7 @@ describe.skipIf(!process.env.DATABASE_URL)("089_intake_forms migration", () => {
         .values({
           form_id: form.id,
           position: 0,
+          field_key: crypto.randomUUID(),
           field_type: "textarea",
           encrypted_label: Buffer.from("label-b"),
           encrypted_config: Buffer.from("config-b"),
@@ -328,6 +336,7 @@ describe.skipIf(!process.env.DATABASE_URL)("089_intake_forms migration", () => {
       .values({
         form_id: form.id,
         position: 0,
+        field_key: crypto.randomUUID(),
         field_type: "select",
         encrypted_label: Buffer.from("label"),
         encrypted_config: Buffer.from("config"),
@@ -578,5 +587,118 @@ describe.skipIf(!process.env.DATABASE_URL)("089_intake_forms migration", () => {
       `.execute(testDb.platformDb);
 
     expect(result.rows[0]?.is_nullable).toBe("YES");
+  });
+
+  // -------------------------------------------------------------------
+  // 095_intake_field_keys: field_key column and response form_id index
+  // -------------------------------------------------------------------
+
+  it("intake_form_fields has field_key column", async () => {
+    const result = await sql<{
+      column_name: string;
+      data_type: string;
+      is_nullable: string;
+    }>`
+        SELECT column_name, data_type, is_nullable
+        FROM information_schema.columns
+        WHERE table_schema = ${testDb.schemaName}
+          AND table_name = 'intake_form_fields'
+          AND column_name = 'field_key'
+      `.execute(testDb.platformDb);
+
+    expect(result.rows).toHaveLength(1);
+    expect(result.rows[0]?.data_type).toBe("text");
+    expect(result.rows[0]?.is_nullable).toBe("NO");
+  });
+
+  it("enforces (form_id, field_key) uniqueness", async () => {
+    const form = await testDb.db
+      .insertInto("intake_forms")
+      // care-y-ignore-next-line ast-pii-in-db-write -- admin-internal form label, not PII
+      .values({ name: "Field Key Unique Form" })
+      .returning("id")
+      .executeTakeFirstOrThrow();
+
+    const duplicateKey = crypto.randomUUID();
+
+    await testDb.db
+      .insertInto("intake_form_fields")
+      .values({
+        form_id: form.id,
+        position: 0,
+        field_key: duplicateKey,
+        field_type: "text",
+        encrypted_label: Buffer.from("label-a"),
+        encrypted_config: Buffer.from("config-a"),
+      })
+      .execute();
+
+    await expect(
+      testDb.db
+        .insertInto("intake_form_fields")
+        .values({
+          form_id: form.id,
+          position: 1,
+          field_key: duplicateKey,
+          field_type: "textarea",
+          encrypted_label: Buffer.from("label-b"),
+          encrypted_config: Buffer.from("config-b"),
+        })
+        .execute(),
+    ).rejects.toThrow();
+  });
+
+  it("allows the same field_key across different forms", async () => {
+    const formA = await testDb.db
+      .insertInto("intake_forms")
+      // care-y-ignore-next-line ast-pii-in-db-write -- admin-internal form label, not PII
+      .values({ name: "Cross Form Key A" })
+      .returning("id")
+      .executeTakeFirstOrThrow();
+
+    const formB = await testDb.db
+      .insertInto("intake_forms")
+      // care-y-ignore-next-line ast-pii-in-db-write -- admin-internal form label, not PII
+      .values({ name: "Cross Form Key B" })
+      .returning("id")
+      .executeTakeFirstOrThrow();
+
+    const sharedKey = crypto.randomUUID();
+
+    await testDb.db
+      .insertInto("intake_form_fields")
+      .values({
+        form_id: formA.id,
+        position: 0,
+        field_key: sharedKey,
+        field_type: "text",
+        encrypted_label: Buffer.from("la"),
+        encrypted_config: Buffer.from("ca"),
+      })
+      .execute();
+
+    // Same key in a different form should succeed
+    await testDb.db
+      .insertInto("intake_form_fields")
+      .values({
+        form_id: formB.id,
+        position: 0,
+        field_key: sharedKey,
+        field_type: "text",
+        encrypted_label: Buffer.from("lb"),
+        encrypted_config: Buffer.from("cb"),
+      })
+      .execute();
+  });
+
+  it("has index on intake_form_responses.form_id", async () => {
+    const result = await sql<{ indexname: string }>`
+        SELECT indexname FROM pg_indexes
+        WHERE schemaname = ${testDb.schemaName}
+          AND tablename = 'intake_form_responses'
+          AND indexname = 'idx_intake_form_responses_form_id'
+      `.execute(testDb.platformDb);
+
+    expect(result.rows).toHaveLength(1);
   });
 });

@@ -12,6 +12,8 @@
   import {
     intakeFieldTypeSchema,
     intakeFieldRoleSchema,
+    resolveLocalized,
+    BASE_LOCALE,
     type IntakeFieldConfig,
     type IntakeFieldType,
     type IntakeFieldRole,
@@ -25,6 +27,7 @@
   import IntakeFormEditor from "$lib/components/admin/IntakeFormEditor.svelte";
 
   interface PlaintextField {
+    fieldKey: string;
     label: string;
     isRequired: boolean;
     config: IntakeFieldConfig;
@@ -68,6 +71,7 @@
 
       const decryptedFields: PlaintextField[] = formDetail.fields.map(
         (field: {
+          fieldKey: string;
           encryptedLabel: string;
           encryptedConfig: string;
           isRequired: boolean;
@@ -84,7 +88,8 @@
             orgPub,
           );
           return {
-            label: decrypted.label,
+            fieldKey: field.fieldKey,
+            label: resolveLocalized(decrypted.label, BASE_LOCALE) ?? "",
             isRequired: field.isRequired,
             config: decrypted.config,
             fieldType: intakeFieldTypeSchema.parse(field.fieldType),

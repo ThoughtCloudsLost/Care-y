@@ -28,6 +28,7 @@
     IntakeFieldConfig,
     IntakeFieldType,
     IntakeFieldRole,
+    LocalizedText,
   } from "@care-y/shared";
   import * as m from "$lib/paraglide/messages.js";
   import { trpc } from "$lib/trpc/index.js";
@@ -52,6 +53,7 @@
   import IntakeFieldRenderer from "$lib/components/portal/IntakeFieldRenderer.svelte";
 
   interface PlaintextField {
+    fieldKey: string;
     label: string;
     isRequired: boolean;
     config: IntakeFieldConfig;
@@ -199,11 +201,13 @@
       }
 
       const encryptedFields = input.fields.map((f) => {
+        const label: LocalizedText = { en: f.label };
         const encrypted = encryptFieldContent(
-          { label: f.label, config: f.config },
+          { label, config: f.config },
           orgPub,
         );
         return {
+          fieldKey: f.fieldKey,
           fieldType: f.fieldType,
           encryptedLabel: encrypted.encryptedLabel,
           encryptedConfig: encrypted.encryptedConfig,
@@ -356,6 +360,7 @@
       fields = fields.map((f, i) => {
         if (i !== configFieldIndex) return f;
         const updated: PlaintextField = {
+          fieldKey: f.fieldKey,
           fieldType: f.fieldType,
           label: result.label,
           isRequired: result.isRequired,
@@ -378,8 +383,9 @@
 
     const defaultConfig = getDefaultConfig(type);
 
-    // Label starts empty; the config sheet that opens next requires one.
+    // Mint a stable UUID for this field (D1: preserved across saves).
     const newField: PlaintextField = {
+      fieldKey: crypto.randomUUID(),
       label: "",
       isRequired: false,
       config: defaultConfig,
@@ -402,9 +408,15 @@
       case "textarea":
         return { type: "textarea" };
       case "select":
-        return { type: "select", options: [""] };
+        return {
+          type: "select",
+          options: [{ key: crypto.randomUUID(), label: { en: "" } }],
+        };
       case "multiselect":
-        return { type: "multiselect", options: [""] };
+        return {
+          type: "multiselect",
+          options: [{ key: crypto.randomUUID(), label: { en: "" } }],
+        };
       case "checkbox":
         return { type: "checkbox" };
       case "availability":
@@ -544,7 +556,7 @@
   {m.intake_forms_fields_heading({ count: String(fields.length) })}
 </BlockTitle>
 <List strong inset>
-  {#each fields as field, index (index)}
+  {#each fields as field, index (field.fieldKey)}
     <ListItem
       title={`${String(index + 1)}. ${field.label || getFieldTypeLabel(field.fieldType)}`}
       subtitle={`${getFieldTypeLabel(field.fieldType)} - ${field.isRequired ? m.intake_forms_field_required() : m.intake_forms_field_optional()}`}
@@ -600,7 +612,7 @@
 {#if fields.length > 0}
   <BlockTitle>{m.intake_forms_preview()}</BlockTitle>
   <Block>
-    {#each fields as field, index (index)}
+    {#each fields as field, index (field.fieldKey)}
       <IntakeFieldRenderer
         fieldId={`preview-${String(index)}`}
         label={field.label}

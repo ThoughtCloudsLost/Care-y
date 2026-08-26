@@ -357,7 +357,10 @@ test.describe.serial("Multi-form Intake Routing", () => {
         const cryptoBarrelUrl = "/@id/@care-y/crypto";
         const { encryptFieldContent } = (await import(formCryptoUrl)) as {
           encryptFieldContent: (
-            plain: { label: string; config: { type: string } },
+            plain: {
+              label: Record<string, string>;
+              config: { type: string };
+            },
             orgPub: Uint8Array,
           ) => { encryptedLabel: string; encryptedConfig: string };
         };
@@ -382,14 +385,19 @@ test.describe.serial("Multi-form Intake Routing", () => {
         const orgPub = decode(orgPubB64);
 
         // Encrypt a single textarea field for each form.
+        // Labels are LocalizedText (D3); config carries the full type shape.
         const encA = encryptFieldContent(
-          { label: "Message", config: { type: "textarea" } },
+          { label: { en: "Message" }, config: { type: "textarea" } },
           orgPub,
         );
         const encB = encryptFieldContent(
-          { label: "Details", config: { type: "textarea" } },
+          { label: { en: "Details" }, config: { type: "textarea" } },
           orgPub,
         );
+
+        // Stable field keys (D1): client-minted UUIDs, one per field.
+        const fieldKeyA = crypto.randomUUID();
+        const fieldKeyB = crypto.randomUUID();
 
         // Save form A via the admin tRPC mutation.
         const saveA = await fetch("/trpc/intakeForms.save", {
@@ -404,6 +412,7 @@ test.describe.serial("Multi-form Intake Routing", () => {
             destinationQueueId: args.queueA,
             fields: [
               {
+                fieldKey: fieldKeyA,
                 fieldType: "textarea",
                 encryptedLabel: encA.encryptedLabel,
                 encryptedConfig: encA.encryptedConfig,
@@ -433,6 +442,7 @@ test.describe.serial("Multi-form Intake Routing", () => {
             destinationQueueId: args.queueB,
             fields: [
               {
+                fieldKey: fieldKeyB,
                 fieldType: "textarea",
                 encryptedLabel: encB.encryptedLabel,
                 encryptedConfig: encB.encryptedConfig,

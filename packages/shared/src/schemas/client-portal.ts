@@ -11,7 +11,7 @@
 
 import { z } from "zod";
 import { base64Bytes, base64String } from "./validators.js";
-import { intakeFieldRoleSchema } from "./intake-forms.js";
+import { intakeFieldRoleSchema, fieldKeySchema } from "./intake-forms.js";
 import {
   ticketIdSchema,
   followupIdSchema,
@@ -124,6 +124,7 @@ export type IntakeConfigResponse = z.infer<typeof intakeConfigResponseSchema>;
 /** Wire shape for a single field as seen by the public renderer. */
 export const publicIntakeFieldSchema = z.object({
   id: intakeFormFieldIdSchema,
+  fieldKey: fieldKeySchema,
   fieldType: z.string(),
   role: intakeFieldRoleSchema.nullable(),
   encryptedLabel: z.string(),

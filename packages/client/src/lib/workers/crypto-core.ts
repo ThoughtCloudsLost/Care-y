@@ -1427,15 +1427,19 @@ export function extractContactsFromResponse(
     if (
       typeof answer !== "object" ||
       answer === null ||
-      !("fieldId" in answer) ||
+      !("fieldKey" in answer) ||
       !("value" in answer)
     ) {
       continue;
     }
-    const a = answer as { fieldId: string; value: unknown; fieldType?: string };
+    const a = answer as {
+      fieldKey: string;
+      value: unknown;
+      fieldType?: string;
+    };
     if (typeof a.value !== "string") continue;
 
-    const role = fieldRoles.get(a.fieldId);
+    const role = fieldRoles.get(a.fieldKey);
 
     // Role-tagged extraction (priority)
     if (role === "phone-contact") {
@@ -1449,13 +1453,13 @@ export function extractContactsFromResponse(
       continue;
     }
 
-    // Default-form stable ids: "default:phone" / "default:email"
-    if (a.fieldId === "default:phone") {
+    // Default-form sentinel pseudo-keys: "default:phone" / "default:email"
+    if (a.fieldKey === "default:phone") {
       const norm = normalizeContactPhone(a.value);
       if (norm != null) phones.push(norm);
       continue;
     }
-    if (a.fieldId === "default:email") {
+    if (a.fieldKey === "default:email") {
       const norm = normalizeContactEmail(a.value);
       if (norm != null) emails.push(norm);
       continue;

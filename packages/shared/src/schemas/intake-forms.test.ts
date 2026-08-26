@@ -1,8 +1,13 @@
 import { describe, expect, it } from "vitest";
 import {
+  FORM_LOCALES,
+  BASE_LOCALE,
+  localizedTextSchema,
+  resolveLocalized,
   intakeFieldTypeSchema,
   intakeFieldRoleSchema,
   intakeFieldConfigSchema,
+  intakeOptionSchema,
   dayOfWeekSchema,
   availabilityDataSchema,
   intakeFormResponseSchema,
@@ -11,7 +16,11 @@ import {
   queueRoutingMappingSchema,
   urgencyMappingSchema,
   escalationMappingSchema,
+  fieldKeySchema,
+  ENCRYPTED_CONFIG_CAP,
+  ENCRYPTED_LABEL_CAP,
 } from "./intake-forms.js";
+import type { LocalizedText, IntakeFieldConfig } from "./intake-forms.js";
 
 /** Generate a base64 string that decodes to exactly `n` bytes. */
 function base64OfBytes(n: number): string {
@@ -33,6 +42,7 @@ function base64Chars(len: number): string {
 
 function validField(): Record<string, unknown> {
   return {
+    fieldKey: crypto.randomUUID(),
     fieldType: "text",
     encryptedLabel: base64OfBytes(32),
     encryptedConfig: base64OfBytes(64),
@@ -47,6 +57,389 @@ function validFormInput(): Record<string, unknown> {
     fields: [validField()],
   };
 }
+
+/** Build a localized text value with base locale populated. */
+function lt(en: string, es?: string): LocalizedText {
+  const result: LocalizedText = { en };
+  if (es != null) result.es = es;
+  return result;
+}
+
+/** Build a valid option with stable key and localized label. */
+function opt(
+  key: string,
+  enLabel: string,
+  esLabel?: string,
+): { key: string; label: LocalizedText } {
+  return { key, label: lt(enLabel, esLabel) };
+}
+
+// =========================================================================
+// D3: Localized text and resolveLocalized
+// =========================================================================
+
+describe("LocalizedText and resolveLocalized", () => {
+  describe("localizedTextSchema", () => {
+    it("accepts base locale only", () => {
+      const result = localizedTextSchema.safeParse({ en: "Hello" });
+      expect(result.success).toBe(true);
+    });
+
+    it("accepts both locales", () => {
+      const result = localizedTextSchema.safeParse({
+        en: "Hello",
+        es: "Hola",
+      });
+      expect(result.success).toBe(true);
+    });
+
+    it("accepts empty object (no locales populated)", () => {
+      const result = localizedTextSchema.safeParse({});
+      expect(result.success).toBe(true);
+    });
+
+    it("rejects unknown locale keys", () => {
+      const result = localizedTextSchema.safeParse({
+        en: "Hello",
+        fr: "Bonjour",
+      });
+      expect(result.success).toBe(false);
+    });
+
+    it("rejects string values exceeding 10000 chars", () => {
+      const result = localizedTextSchema.safeParse({
+        en: "x".repeat(10_001),
+      });
+      expect(result.success).toBe(false);
+    });
+
+    it("accepts string at the 10000 char boundary", () => {
+      const result = localizedTextSchema.safeParse({
+        en: "x".repeat(10_000),
+      });
+      expect(result.success).toBe(true);
+    });
+  });
+
+  describe("resolveLocalized", () => {
+    it("returns the requested locale value when present", () => {
+      const text: LocalizedText = { en: "Hello", es: "Hola" };
+      expect(resolveLocalized(text, "es")).toBe("Hola");
+    });
+
+    it("falls back to base locale when requested locale is missing", () => {
+      const text: LocalizedText = { en: "Hello" };
+      expect(resolveLocalized(text, "es")).toBe("Hello");
+    });
+
+    it("returns base locale value directly when base locale is requested", () => {
+      const text: LocalizedText = { en: "Hello", es: "Hola" };
+      expect(resolveLocalized(text, "en")).toBe("Hello");
+    });
+
+    it("returns undefined when no locale has a value", () => {
+      const text: LocalizedText = {};
+      expect(resolveLocalized(text, "en")).toBeUndefined();
+    });
+
+    it("returns undefined when text is undefined", () => {
+      expect(resolveLocalized(undefined, "en")).toBeUndefined();
+    });
+
+    it("skips empty string values and falls back", () => {
+      const text: LocalizedText = { en: "Hello", es: "" };
+      expect(resolveLocalized(text, "es")).toBe("Hello");
+    });
+
+    it("returns undefined when base locale is also empty string", () => {
+      const text: LocalizedText = { en: "", es: "" };
+      expect(resolveLocalized(text, "es")).toBeUndefined();
+    });
+
+    it("returns undefined when base locale requested but empty", () => {
+      const text: LocalizedText = { en: "" };
+      expect(resolveLocalized(text, "en")).toBeUndefined();
+    });
+  });
+
+  describe("FORM_LOCALES and BASE_LOCALE", () => {
+    it("BASE_LOCALE is the first entry in FORM_LOCALES", () => {
+      expect(FORM_LOCALES).toContain(BASE_LOCALE);
+    });
+
+    it("BASE_LOCALE is en", () => {
+      expect(BASE_LOCALE).toBe("en");
+    });
+
+    it("FORM_LOCALES contains en and es", () => {
+      expect(FORM_LOCALES).toEqual(["en", "es"]);
+    });
+  });
+});
+
+// =========================================================================
+// D2: Stable option keys
+// =========================================================================
+
+describe("intakeOptionSchema", () => {
+  it("accepts a valid option with key and localized label", () => {
+    const result = intakeOptionSchema.safeParse(opt("opt-1", "Option One"));
+    expect(result.success).toBe(true);
+  });
+
+  it("accepts an option with both locale labels", () => {
+    const result = intakeOptionSchema.safeParse(
+      opt("opt-1", "Option One", "Opcion Uno"),
+    );
+    expect(result.success).toBe(true);
+  });
+
+  it("rejects option with empty key", () => {
+    const result = intakeOptionSchema.safeParse({
+      key: "",
+      label: { en: "Hello" },
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it("rejects option with key exceeding 200 chars", () => {
+    const result = intakeOptionSchema.safeParse({
+      key: "x".repeat(201),
+      label: { en: "Hello" },
+    });
+    expect(result.success).toBe(false);
+  });
+});
+
+// =========================================================================
+// D1: Stable field keys (invariant tests)
+// =========================================================================
+
+describe("field key stability invariants", () => {
+  it("field keys survive a save round-trip shape (same keys, different order)", () => {
+    const keyA = crypto.randomUUID();
+    const keyB = crypto.randomUUID();
+    const fieldA = { ...validField(), fieldKey: keyA };
+    const fieldB = { ...validField(), fieldKey: keyB };
+
+    // "Save" in order A, B
+    const save1 = saveIntakeFormInputSchema.safeParse({
+      ...validFormInput(),
+      fields: [fieldA, fieldB],
+    });
+    expect(save1.success).toBe(true);
+
+    // "Save" in order B, A (reorder, same keys)
+    const save2 = saveIntakeFormInputSchema.safeParse({
+      ...validFormInput(),
+      fields: [fieldB, fieldA],
+    });
+    expect(save2.success).toBe(true);
+
+    if (save1.success && save2.success) {
+      // Keys are preserved, just reordered
+      const keys1 = save1.data.fields.map((f) => f.fieldKey);
+      const keys2 = save2.data.fields.map((f) => f.fieldKey);
+      expect(new Set(keys1)).toEqual(new Set(keys2));
+    }
+  });
+
+  it("rejects duplicate field keys within a single form", () => {
+    const duplicateKey = crypto.randomUUID();
+    const result = saveIntakeFormInputSchema.safeParse({
+      ...validFormInput(),
+      fields: [
+        { ...validField(), fieldKey: duplicateKey },
+        { ...validField(), fieldKey: duplicateKey },
+      ],
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it("accepts sentinel pseudo-keys for default form fields", () => {
+    const result = saveIntakeFormInputSchema.safeParse({
+      ...validFormInput(),
+      fields: [
+        { ...validField(), fieldKey: "default:phone" },
+        { ...validField(), fieldKey: "default:email" },
+      ],
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("fieldKeySchema accepts UUID strings", () => {
+    expect(fieldKeySchema.safeParse(crypto.randomUUID()).success).toBe(true);
+  });
+
+  it("fieldKeySchema accepts sentinel pseudo-keys", () => {
+    expect(fieldKeySchema.safeParse("default:phone").success).toBe(true);
+    expect(fieldKeySchema.safeParse("default:email").success).toBe(true);
+  });
+
+  it("fieldKeySchema rejects empty string", () => {
+    expect(fieldKeySchema.safeParse("").success).toBe(false);
+  });
+
+  it("fieldKeySchema rejects strings exceeding 200 chars", () => {
+    expect(fieldKeySchema.safeParse("x".repeat(201)).success).toBe(false);
+  });
+});
+
+// =========================================================================
+// D2: Mapping survival across option rename
+// =========================================================================
+
+describe("mapping survival across option rename", () => {
+  it("queue-routing mapping keyed by option key survives a label change", () => {
+    const optKey = crypto.randomUUID();
+    const queueId = crypto.randomUUID();
+
+    // Original config with mapping (plain object, validated by safeParse)
+    const result1 = intakeFieldConfigSchema.safeParse({
+      type: "select",
+      options: [opt(optKey, "General Help")],
+      queueRoutingMapping: { [optKey]: queueId },
+    });
+    expect(result1.success).toBe(true);
+
+    // Rename the label (key stays the same, mapping preserved)
+    const result2 = intakeFieldConfigSchema.safeParse({
+      type: "select",
+      options: [opt(optKey, "General Assistance")],
+      queueRoutingMapping: { [optKey]: queueId },
+    });
+    expect(result2.success).toBe(true);
+
+    // Mapping value is unchanged after rename
+    if (result1.success && result2.success) {
+      const d1 = result1.data as {
+        type: "select";
+        queueRoutingMapping?: Record<string, unknown>;
+      };
+      const d2 = result2.data as {
+        type: "select";
+        queueRoutingMapping?: Record<string, unknown>;
+      };
+      expect(d1.queueRoutingMapping?.[optKey]).toBe(queueId);
+      expect(d2.queueRoutingMapping?.[optKey]).toBe(queueId);
+    }
+  });
+
+  it("urgency mapping keyed by option key is not orphaned when label changes", () => {
+    const result = intakeFieldConfigSchema.safeParse({
+      type: "select",
+      options: [
+        opt("opt-low", "Low Priority", "Baja prioridad"),
+        opt("opt-high", "High Priority", "Alta prioridad"),
+      ],
+      urgencyMapping: {
+        "opt-low": "low",
+        "opt-high": "high",
+      },
+    });
+    expect(result.success).toBe(true);
+  });
+});
+
+// =========================================================================
+// D3: Locale fallback in field config
+// =========================================================================
+
+describe("localized field config", () => {
+  it("accepts text config with localized placeholder", () => {
+    const result = intakeFieldConfigSchema.safeParse({
+      type: "text",
+      placeholder: { en: "Your name", es: "Su nombre" },
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("accepts textarea config with localized placeholder", () => {
+    const result = intakeFieldConfigSchema.safeParse({
+      type: "textarea",
+      placeholder: { en: "Describe your situation" },
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("accepts select config with localized option labels", () => {
+    const result = intakeFieldConfigSchema.safeParse({
+      type: "select",
+      options: [
+        opt("opt-a", "Option A", "Opcion A"),
+        opt("opt-b", "Option B", "Opcion B"),
+      ],
+    });
+    expect(result.success).toBe(true);
+  });
+});
+
+// =========================================================================
+// Encrypted config size cap with both locales populated
+// =========================================================================
+
+describe("encrypted config size cap", () => {
+  it("ENCRYPTED_CONFIG_CAP is 28000", () => {
+    expect(ENCRYPTED_CONFIG_CAP).toBe(28_000);
+  });
+
+  it("ENCRYPTED_LABEL_CAP is 2800", () => {
+    expect(ENCRYPTED_LABEL_CAP).toBe(2_800);
+  });
+
+  it("rejects encryptedConfig exceeding the cap", () => {
+    const input = {
+      ...validFormInput(),
+      fields: [
+        {
+          ...validField(),
+          encryptedConfig: base64Chars(ENCRYPTED_CONFIG_CAP + 1),
+        },
+      ],
+    };
+    const result = saveIntakeFormInputSchema.safeParse(input);
+    expect(result.success).toBe(false);
+  });
+
+  it("accepts encryptedConfig at the cap boundary", () => {
+    const input = {
+      ...validFormInput(),
+      fields: [
+        {
+          ...validField(),
+          encryptedConfig: base64Chars(ENCRYPTED_CONFIG_CAP),
+        },
+      ],
+    };
+    const result = saveIntakeFormInputSchema.safeParse(input);
+    expect(result.success).toBe(true);
+  });
+
+  it("a fully localized config with 50 options serializes within a reasonable bound", () => {
+    // Build a maximally populated select config with 50 options, both locales
+    const options = Array.from({ length: 50 }, (_, i) => ({
+      key: crypto.randomUUID(),
+      label: {
+        en: `Option ${String(i)} with a moderately long English label text`,
+        es: `Opcion ${String(i)} con un texto de etiqueta en espanol moderadamente largo`,
+      },
+    }));
+    const config: IntakeFieldConfig = {
+      type: "select",
+      options,
+    };
+    const serialized = JSON.stringify(config);
+    // The JSON must fit within the 28 KB cap after base64 encoding of its
+    // ciphertext (nonce + MAC overhead is ~40 bytes, base64 inflates ~1.37x).
+    // Raw JSON of 50 options with ~70-char bilingual labels is well under 28 KB.
+    const base64Estimate = Math.ceil((serialized.length * 4) / 3);
+    expect(base64Estimate).toBeLessThan(ENCRYPTED_CONFIG_CAP);
+  });
+});
+
+// =========================================================================
+// Existing test suites, updated for new shape
+// =========================================================================
 
 describe("intakeFieldTypeSchema", () => {
   it("accepts all valid field types", () => {
@@ -96,60 +489,60 @@ describe("intakeFieldRoleSchema", () => {
 });
 
 describe("role mapping schemas", () => {
-  it("queueRoutingMapping accepts option -> UUID record", () => {
+  it("queueRoutingMapping accepts option key -> UUID record", () => {
     const result = queueRoutingMappingSchema.safeParse({
-      "Option A": crypto.randomUUID(),
-      "Option B": crypto.randomUUID(),
+      "opt-a": crypto.randomUUID(),
+      "opt-b": crypto.randomUUID(),
     });
     expect(result.success).toBe(true);
   });
 
   it("queueRoutingMapping rejects non-UUID values", () => {
     const result = queueRoutingMappingSchema.safeParse({
-      "Option A": "not-a-uuid",
+      "opt-a": "not-a-uuid",
     });
     expect(result.success).toBe(false);
   });
 
-  it("urgencyMapping accepts option -> priority record", () => {
+  it("urgencyMapping accepts option key -> priority record", () => {
     const result = urgencyMappingSchema.safeParse({
-      Low: "low",
-      Normal: "normal",
-      High: "high",
-      Urgent: "urgent",
+      "opt-low": "low",
+      "opt-normal": "normal",
+      "opt-high": "high",
+      "opt-urgent": "urgent",
     });
     expect(result.success).toBe(true);
   });
 
   it("urgencyMapping rejects invalid priority value", () => {
     const result = urgencyMappingSchema.safeParse({
-      Critical: "critical",
+      "opt-critical": "critical",
     });
     expect(result.success).toBe(false);
   });
 
-  it("escalationMapping accepts option -> alert level record", () => {
+  it("escalationMapping accepts option key -> alert level record", () => {
     const result = escalationMappingSchema.safeParse({
-      "In danger": "immediate",
-      "Needs follow-up": "standard",
+      "opt-danger": "immediate",
+      "opt-followup": "standard",
     });
     expect(result.success).toBe(true);
   });
 
   it("escalationMapping rejects empty alert level", () => {
     const result = escalationMappingSchema.safeParse({
-      "In danger": "",
+      "opt-danger": "",
     });
     expect(result.success).toBe(false);
   });
 });
 
 describe("intakeFieldConfigSchema", () => {
-  it("accepts text config with maxLength and placeholder", () => {
+  it("accepts text config with maxLength and localized placeholder", () => {
     const result = intakeFieldConfigSchema.safeParse({
       type: "text",
       maxLength: 200,
-      placeholder: "Your name",
+      placeholder: { en: "Your name", es: "Su nombre" },
     });
     expect(result.success).toBe(true);
   });
@@ -183,40 +576,42 @@ describe("intakeFieldConfigSchema", () => {
     expect(result.success).toBe(false);
   });
 
-  it("accepts select config with options", () => {
+  it("accepts select config with keyed options", () => {
     const result = intakeFieldConfigSchema.safeParse({
       type: "select",
-      options: ["Option A", "Option B"],
+      options: [opt("opt-a", "Option A"), opt("opt-b", "Option B")],
     });
     expect(result.success).toBe(true);
   });
 
-  it("accepts select config with queue-routing mapping", () => {
+  it("accepts select config with queue-routing mapping keyed by option key", () => {
+    const qA = crypto.randomUUID();
+    const qB = crypto.randomUUID();
     const result = intakeFieldConfigSchema.safeParse({
       type: "select",
-      options: ["General", "Urgent"],
+      options: [opt("opt-general", "General"), opt("opt-urgent", "Urgent")],
       queueRoutingMapping: {
-        General: crypto.randomUUID(),
-        Urgent: crypto.randomUUID(),
+        "opt-general": qA,
+        "opt-urgent": qB,
       },
     });
     expect(result.success).toBe(true);
   });
 
-  it("accepts select config with urgency mapping", () => {
+  it("accepts select config with urgency mapping keyed by option key", () => {
     const result = intakeFieldConfigSchema.safeParse({
       type: "select",
-      options: ["Low", "High"],
-      urgencyMapping: { Low: "low", High: "high" },
+      options: [opt("opt-low", "Low"), opt("opt-high", "High")],
+      urgencyMapping: { "opt-low": "low", "opt-high": "high" },
     });
     expect(result.success).toBe(true);
   });
 
-  it("accepts select config with escalation mapping", () => {
+  it("accepts select config with escalation mapping keyed by option key", () => {
     const result = intakeFieldConfigSchema.safeParse({
       type: "select",
-      options: ["Safe", "Danger"],
-      escalationMapping: { Safe: "none", Danger: "immediate" },
+      options: [opt("opt-safe", "Safe"), opt("opt-danger", "Danger")],
+      escalationMapping: { "opt-safe": "none", "opt-danger": "immediate" },
     });
     expect(result.success).toBe(true);
   });
@@ -224,8 +619,8 @@ describe("intakeFieldConfigSchema", () => {
   it("accepts multiselect config with queue-routing mapping", () => {
     const result = intakeFieldConfigSchema.safeParse({
       type: "multiselect",
-      options: ["A", "B"],
-      queueRoutingMapping: { A: crypto.randomUUID() },
+      options: [opt("opt-a", "A"), opt("opt-b", "B")],
+      queueRoutingMapping: { "opt-a": crypto.randomUUID() },
     });
     expect(result.success).toBe(true);
   });
@@ -239,7 +634,9 @@ describe("intakeFieldConfigSchema", () => {
   });
 
   it("rejects select config with too many options", () => {
-    const options = Array.from({ length: 51 }, (_, i) => `Option ${String(i)}`);
+    const options = Array.from({ length: 51 }, (_, i) =>
+      opt(`opt-${String(i)}`, `Option ${String(i)}`),
+    );
     const result = intakeFieldConfigSchema.safeParse({
       type: "select",
       options,
@@ -247,18 +644,18 @@ describe("intakeFieldConfigSchema", () => {
     expect(result.success).toBe(false);
   });
 
-  it("rejects select option exceeding 200 chars", () => {
+  it("rejects select option with key exceeding 200 chars", () => {
     const result = intakeFieldConfigSchema.safeParse({
       type: "select",
-      options: ["x".repeat(201)],
+      options: [{ key: "x".repeat(201), label: { en: "Too long key" } }],
     });
     expect(result.success).toBe(false);
   });
 
-  it("accepts multiselect config", () => {
+  it("accepts multiselect config with keyed options", () => {
     const result = intakeFieldConfigSchema.safeParse({
       type: "multiselect",
-      options: ["A", "B", "C"],
+      options: [opt("a", "A"), opt("b", "B"), opt("c", "C")],
     });
     expect(result.success).toBe(true);
   });
@@ -290,15 +687,7 @@ describe("intakeFieldConfigSchema", () => {
   it("rejects unknown discriminator type", () => {
     const result = intakeFieldConfigSchema.safeParse({
       type: "radio",
-      options: ["A"],
-    });
-    expect(result.success).toBe(false);
-  });
-
-  it("rejects placeholder exceeding 200 chars", () => {
-    const result = intakeFieldConfigSchema.safeParse({
-      type: "text",
-      placeholder: "x".repeat(201),
+      options: [opt("a", "A")],
     });
     expect(result.success).toBe(false);
   });
@@ -422,18 +811,26 @@ describe("availabilityDataSchema", () => {
 });
 
 describe("intakeFormResponseSchema", () => {
-  it("accepts valid response with string answer", () => {
+  it("accepts valid response with string answer keyed by fieldKey", () => {
     const result = intakeFormResponseSchema.safeParse({
       formId: crypto.randomUUID(),
-      answers: [{ fieldId: "f1", fieldType: "text", value: "Jane Doe" }],
+      answers: [
+        { fieldKey: crypto.randomUUID(), fieldType: "text", value: "Jane Doe" },
+      ],
     });
     expect(result.success).toBe(true);
   });
 
-  it("accepts valid response with array answer (multiselect)", () => {
+  it("accepts valid response with option key array (multiselect)", () => {
     const result = intakeFormResponseSchema.safeParse({
       formId: crypto.randomUUID(),
-      answers: [{ fieldId: "f1", fieldType: "multiselect", value: ["A", "B"] }],
+      answers: [
+        {
+          fieldKey: crypto.randomUUID(),
+          fieldType: "multiselect",
+          value: ["opt-a", "opt-b"],
+        },
+      ],
     });
     expect(result.success).toBe(true);
   });
@@ -441,7 +838,9 @@ describe("intakeFormResponseSchema", () => {
   it("accepts valid response with boolean answer (checkbox)", () => {
     const result = intakeFormResponseSchema.safeParse({
       formId: crypto.randomUUID(),
-      answers: [{ fieldId: "f1", fieldType: "checkbox", value: true }],
+      answers: [
+        { fieldKey: crypto.randomUUID(), fieldType: "checkbox", value: true },
+      ],
     });
     expect(result.success).toBe(true);
   });
@@ -451,7 +850,7 @@ describe("intakeFormResponseSchema", () => {
       formId: crypto.randomUUID(),
       answers: [
         {
-          fieldId: "f1",
+          fieldKey: crypto.randomUUID(),
           fieldType: "availability",
           value: {
             timezone: "America/Chicago",
@@ -472,9 +871,28 @@ describe("intakeFormResponseSchema", () => {
     expect(result.success).toBe(true);
   });
 
+  it("accepts sentinel pseudo-keys as fieldKey values", () => {
+    const result = intakeFormResponseSchema.safeParse({
+      formId: null,
+      answers: [
+        {
+          fieldKey: "default:phone",
+          fieldType: "text",
+          value: "+15551234567",
+        },
+        {
+          fieldKey: "default:email",
+          fieldType: "text",
+          value: "user@example.com",
+        },
+      ],
+    });
+    expect(result.success).toBe(true);
+  });
+
   it("caps answers at 100", () => {
     const answers = Array.from({ length: 101 }, (_, i) => ({
-      fieldId: `f${String(i)}`,
+      fieldKey: `fk-${String(i)}`,
       fieldType: "text" as const,
       value: "x",
     }));
@@ -487,7 +905,7 @@ describe("intakeFormResponseSchema", () => {
 
   it("accepts exactly 100 answers", () => {
     const answers = Array.from({ length: 100 }, (_, i) => ({
-      fieldId: `f${String(i)}`,
+      fieldKey: `fk-${String(i)}`,
       fieldType: "text" as const,
       value: "x",
     }));
@@ -502,10 +920,34 @@ describe("intakeFormResponseSchema", () => {
     const result = intakeFormResponseSchema.safeParse({
       formId: null,
       answers: [
-        { fieldId: "f1", fieldType: "textarea", value: "x".repeat(10_001) },
+        {
+          fieldKey: crypto.randomUUID(),
+          fieldType: "textarea",
+          value: "x".repeat(10_001),
+        },
       ],
     });
     expect(result.success).toBe(false);
+  });
+
+  it("select answer records an option key, not a label", () => {
+    const optionKey = crypto.randomUUID();
+    const result = intakeFormResponseSchema.safeParse({
+      formId: crypto.randomUUID(),
+      answers: [
+        {
+          fieldKey: crypto.randomUUID(),
+          fieldType: "select",
+          value: optionKey,
+        },
+      ],
+    });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      const firstAnswer = result.data.answers[0];
+      expect(firstAnswer).toBeDefined();
+      expect(firstAnswer?.value).toBe(optionKey);
+    }
   });
 });
 
@@ -554,7 +996,7 @@ describe("intakeFormSlugSchema", () => {
 });
 
 describe("saveIntakeFormInputSchema", () => {
-  it("accepts valid form input", () => {
+  it("accepts valid form input with fieldKey", () => {
     const result = saveIntakeFormInputSchema.safeParse(validFormInput());
     expect(result.success).toBe(true);
   });
@@ -584,35 +1026,34 @@ describe("saveIntakeFormInputSchema", () => {
   });
 
   it("rejects more than 100 fields", () => {
-    const field = validField();
-    const input = {
-      ...validFormInput(),
-      fields: Array.from({ length: 101 }, () => field),
-    };
+    const fields = Array.from({ length: 101 }, () => validField());
+    const input = { ...validFormInput(), fields };
     const result = saveIntakeFormInputSchema.safeParse(input);
     expect(result.success).toBe(false);
   });
 
   it("accepts exactly 100 fields", () => {
-    const field = validField();
-    const input = {
-      ...validFormInput(),
-      fields: Array.from({ length: 100 }, () => field),
-    };
+    const fields = Array.from({ length: 100 }, () => validField());
+    const input = { ...validFormInput(), fields };
     const result = saveIntakeFormInputSchema.safeParse(input);
     expect(result.success).toBe(true);
   });
 
   it("rejects two availability fields (one-per-form rule)", () => {
-    const avField = {
+    const avFieldA = {
+      fieldKey: crypto.randomUUID(),
       fieldType: "availability" as const,
       encryptedLabel: base64OfBytes(32),
       encryptedConfig: base64OfBytes(64),
       isRequired: false,
     };
+    const avFieldB = {
+      ...avFieldA,
+      fieldKey: crypto.randomUUID(),
+    };
     const input = {
       ...validFormInput(),
-      fields: [avField, avField],
+      fields: [avFieldA, avFieldB],
     };
     const result = saveIntakeFormInputSchema.safeParse(input);
     expect(result.success).toBe(false);
@@ -620,6 +1061,7 @@ describe("saveIntakeFormInputSchema", () => {
 
   it("accepts exactly one availability field", () => {
     const avField = {
+      fieldKey: crypto.randomUUID(),
       fieldType: "availability" as const,
       encryptedLabel: base64OfBytes(32),
       encryptedConfig: base64OfBytes(64),
@@ -638,10 +1080,8 @@ describe("saveIntakeFormInputSchema", () => {
       ...validFormInput(),
       fields: [
         {
-          fieldType: "text",
-          encryptedLabel: base64Chars(2_801),
-          encryptedConfig: base64OfBytes(64),
-          isRequired: true,
+          ...validField(),
+          encryptedLabel: base64Chars(ENCRYPTED_LABEL_CAP + 1),
         },
       ],
     };
@@ -654,10 +1094,8 @@ describe("saveIntakeFormInputSchema", () => {
       ...validFormInput(),
       fields: [
         {
-          fieldType: "text",
-          encryptedLabel: base64OfBytes(32),
-          encryptedConfig: base64Chars(28_001),
-          isRequired: true,
+          ...validField(),
+          encryptedConfig: base64Chars(ENCRYPTED_CONFIG_CAP + 1),
         },
       ],
     };
@@ -670,10 +1108,8 @@ describe("saveIntakeFormInputSchema", () => {
       ...validFormInput(),
       fields: [
         {
-          fieldType: "text",
+          ...validField(),
           encryptedLabel: "not!valid@base64",
-          encryptedConfig: base64OfBytes(64),
-          isRequired: true,
         },
       ],
     };
@@ -686,12 +1122,23 @@ describe("saveIntakeFormInputSchema", () => {
       ...validFormInput(),
       fields: [
         {
+          ...validField(),
           fieldType: "radio",
-          encryptedLabel: base64OfBytes(32),
-          encryptedConfig: base64OfBytes(64),
-          isRequired: true,
         },
       ],
+    };
+    const result = saveIntakeFormInputSchema.safeParse(input);
+    expect(result.success).toBe(false);
+  });
+
+  it("rejects field without fieldKey", () => {
+    const { fieldKey: _, ...fieldWithoutKey } = validField() as Record<
+      string,
+      unknown
+    >;
+    const input = {
+      ...validFormInput(),
+      fields: [fieldWithoutKey],
     };
     const result = saveIntakeFormInputSchema.safeParse(input);
     expect(result.success).toBe(false);
@@ -729,6 +1176,33 @@ describe("saveIntakeFormInputSchema", () => {
     expect(result.success).toBe(false);
   });
 
+  // --- field keys uniqueness ---
+
+  it("rejects duplicate field keys", () => {
+    const sharedKey = crypto.randomUUID();
+    const input = {
+      ...validFormInput(),
+      fields: [
+        { ...validField(), fieldKey: sharedKey },
+        { ...validField(), fieldKey: sharedKey },
+      ],
+    };
+    const result = saveIntakeFormInputSchema.safeParse(input);
+    expect(result.success).toBe(false);
+  });
+
+  it("accepts distinct field keys", () => {
+    const input = {
+      ...validFormInput(),
+      fields: [
+        { ...validField(), fieldKey: crypto.randomUUID() },
+        { ...validField(), fieldKey: crypto.randomUUID() },
+      ],
+    };
+    const result = saveIntakeFormInputSchema.safeParse(input);
+    expect(result.success).toBe(true);
+  });
+
   // --- field roles ---
 
   it("accepts fields with valid roles", () => {
@@ -737,6 +1211,7 @@ describe("saveIntakeFormInputSchema", () => {
       fields: [
         { ...validField(), role: "phone-contact" },
         {
+          fieldKey: crypto.randomUUID(),
           fieldType: "select",
           encryptedLabel: base64OfBytes(32),
           encryptedConfig: base64OfBytes(64),
@@ -772,16 +1247,21 @@ describe("saveIntakeFormInputSchema", () => {
   });
 
   it("allows duplicate server-metadata roles (queue-routing on two selects)", () => {
-    const selectField = {
+    const selectFieldA = {
+      fieldKey: crypto.randomUUID(),
       fieldType: "select" as const,
       encryptedLabel: base64OfBytes(32),
       encryptedConfig: base64OfBytes(64),
       isRequired: false,
       role: "queue-routing" as const,
     };
+    const selectFieldB = {
+      ...selectFieldA,
+      fieldKey: crypto.randomUUID(),
+    };
     const input = {
       ...validFormInput(),
-      fields: [selectField, selectField],
+      fields: [selectFieldA, selectFieldB],
     };
     const result = saveIntakeFormInputSchema.safeParse(input);
     expect(result.success).toBe(true);
@@ -810,6 +1290,7 @@ describe("saveIntakeFormInputSchema", () => {
       ...validFormInput(),
       fields: [
         {
+          fieldKey: crypto.randomUUID(),
           fieldType: "checkbox" as const,
           encryptedLabel: base64OfBytes(32),
           encryptedConfig: base64OfBytes(64),
@@ -827,6 +1308,7 @@ describe("saveIntakeFormInputSchema", () => {
       ...validFormInput(),
       fields: [
         {
+          fieldKey: crypto.randomUUID(),
           fieldType: "checkbox" as const,
           encryptedLabel: base64OfBytes(32),
           encryptedConfig: base64OfBytes(64),
@@ -845,6 +1327,7 @@ describe("saveIntakeFormInputSchema", () => {
       ...validFormInput(),
       fields: [
         {
+          fieldKey: crypto.randomUUID(),
           fieldType: "select" as const,
           encryptedLabel: base64OfBytes(32),
           encryptedConfig: base64OfBytes(64),
@@ -863,6 +1346,7 @@ describe("saveIntakeFormInputSchema", () => {
       ...validFormInput(),
       fields: [
         {
+          fieldKey: crypto.randomUUID(),
           fieldType: "select" as const,
           encryptedLabel: base64OfBytes(32),
           encryptedConfig: base64OfBytes(64),

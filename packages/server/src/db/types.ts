@@ -750,6 +750,7 @@ export interface IntakeFormFieldsTable {
   id: Generated<IntakeFormFieldId>;
   form_id: IntakeFormId;
   position: number;
+  field_key: string;
   field_type: string;
   role: string | null;
   encrypted_label: Buffer;

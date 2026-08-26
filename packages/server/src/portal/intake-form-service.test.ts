@@ -46,6 +46,7 @@ describe.skipIf(!process.env.DATABASE_URL)("IntakeFormService", () => {
     name: string,
     opts?: {
       fields?: Array<{
+        fieldKey?: string;
         fieldType: string;
         encryptedLabel?: string;
         encryptedConfig?: string;
@@ -78,6 +79,7 @@ describe.skipIf(!process.env.DATABASE_URL)("IntakeFormService", () => {
         isDefault: opts?.isDefault ?? false,
         destinationQueueId: opts?.destinationQueueId ?? null,
         fields: defaultFields.map((f) => ({
+          fieldKey: f.fieldKey ?? crypto.randomUUID(),
           fieldType: f.fieldType as "text",
           encryptedLabel:
             f.encryptedLabel ?? Buffer.from("l").toString("base64"),
@@ -267,6 +269,7 @@ describe.skipIf(!process.env.DATABASE_URL)("IntakeFormService", () => {
         name: "Replace Test Updated",
         fields: [
           {
+            fieldKey: crypto.randomUUID(),
             fieldType: "select",
             encryptedLabel: Buffer.from("l").toString("base64"),
             encryptedConfig: Buffer.from("c").toString("base64"),
@@ -288,12 +291,14 @@ describe.skipIf(!process.env.DATABASE_URL)("IntakeFormService", () => {
           name: "Too Many Availability",
           fields: [
             {
+              fieldKey: crypto.randomUUID(),
               fieldType: "availability",
               encryptedLabel: Buffer.from("a1").toString("base64"),
               encryptedConfig: Buffer.from("c1").toString("base64"),
               isRequired: false,
             },
             {
+              fieldKey: crypto.randomUUID(),
               fieldType: "availability",
               encryptedLabel: Buffer.from("a2").toString("base64"),
               encryptedConfig: Buffer.from("c2").toString("base64"),
@@ -311,6 +316,7 @@ describe.skipIf(!process.env.DATABASE_URL)("IntakeFormService", () => {
           name: "Ghost",
           fields: [
             {
+              fieldKey: crypto.randomUUID(),
               fieldType: "text",
               encryptedLabel: Buffer.from("l").toString("base64"),
               encryptedConfig: Buffer.from("c").toString("base64"),
@@ -319,6 +325,65 @@ describe.skipIf(!process.env.DATABASE_URL)("IntakeFormService", () => {
           ],
         }),
       ).rejects.toThrow(NotFoundError);
+    });
+  });
+
+  describe("fieldKey round-trip", () => {
+    it("persists and returns fieldKey on getForm", async () => {
+      const keyA = crypto.randomUUID();
+      const keyB = crypto.randomUUID();
+      const formId = await createForm("FieldKey RT", {
+        fields: [
+          { fieldKey: keyA, fieldType: "text" },
+          { fieldKey: keyB, fieldType: "textarea" },
+        ],
+      });
+
+      const detail = await svc.getForm(testDb.db, formId);
+      expect(detail.fields).toHaveLength(2);
+      expect(detail.fields[0]?.fieldKey).toBe(keyA);
+      expect(detail.fields[1]?.fieldKey).toBe(keyB);
+    });
+
+    it("persists and returns fieldKey on getPublicForm", async () => {
+      const keyA = crypto.randomUUID();
+      const formId = await createForm("FieldKey Public", {
+        slug: "fk-public",
+        fields: [{ fieldKey: keyA, fieldType: "text" }],
+      });
+      await svc.setActive(testDb.db, formId, true);
+
+      const result = await svc.getPublicForm(testDb.db, "fk-public");
+      expect(result).not.toBeNull();
+      expect(result?.fields[0]?.fieldKey).toBe(keyA);
+
+      await svc.setActive(testDb.db, formId, false);
+    });
+
+    it("preserves fieldKey across delete+insert save", async () => {
+      const stableKey = crypto.randomUUID();
+      const formId = await createForm("Stable Key", {
+        fields: [{ fieldKey: stableKey, fieldType: "text" }],
+      });
+
+      // Re-save with the same key but a different label
+      await svc.saveForm(testDb.db, crypto.randomUUID() as UserId, {
+        formId,
+        name: "Stable Key Updated",
+        fields: [
+          {
+            fieldKey: stableKey,
+            fieldType: "text",
+            encryptedLabel: Buffer.from("new-label").toString("base64"),
+            encryptedConfig: Buffer.from("c").toString("base64"),
+            isRequired: true,
+          },
+        ],
+      });
+
+      const detail = await svc.getForm(testDb.db, formId);
+      expect(detail.fields[0]?.fieldKey).toBe(stableKey);
+      expect(detail.fields[0]?.isRequired).toBe(true);
     });
   });
 
