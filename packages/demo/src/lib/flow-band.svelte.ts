@@ -470,6 +470,25 @@ export function findSpanPartner(
 // Reactive store
 // -----------------------------------------------------------------------
 
+/**
+ * Where the flow is drawn.
+ *
+ * "band"    - swimlane in the page's top chrome, sticky under the bar
+ * "dock"    - the same swimlane in a host's flow (the fullscreen drawer)
+ * "overlay" - dismissible list over the page, for narrow viewports
+ * "panel"   - list filling a host container, for hosts too narrow to
+ *             seat the swimlane
+ */
+export type FlowBandPresentation = "band" | "dock" | "overlay" | "panel";
+
+/**
+ * Host width (px) the swimlane needs: the 8.5rem lane column, the 0.75rem
+ * gutters either side, and one full card column, with enough left over
+ * that the first card is not flush against the lane names. Below this a
+ * host shows the list instead.
+ */
+export const BAND_MIN_HOST_W = 360;
+
 export interface FlowBandStore {
   /** True while the band (or, on small viewports, the overlay) is shown. */
   readonly open: boolean;

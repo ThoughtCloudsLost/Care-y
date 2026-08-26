@@ -64,6 +64,21 @@
     topbar?: Snippet;
     strip?: Snippet;
     /**
+     * Docked under the strip and above the prose, the same place and the
+     * same order the page gives it. In flow, so it pushes the prose down
+     * rather than covering it.
+     */
+    band?: Snippet;
+    /**
+     * Covers the strip, prose, and footer when present, leaving the
+     * docked TopBar (and the control that raised it) in place.
+     *
+     * A cover rather than a swap: the prose keeps its box, so nothing
+     * re-typesets on the way in or out, and the reader comes back to the
+     * scroll position and line breaks they left.
+     */
+    takeover?: Snippet;
+    /**
      * Pinned below the prose, outside its scroll. Carries the
      * next-section pill, which has no fixed-position home in fullscreen.
      */
@@ -83,6 +98,8 @@
     onScrollSub,
     topbar,
     strip,
+    band,
+    takeover,
     footer,
   }: Props = $props();
 
@@ -808,93 +825,120 @@
     </div>
   {/if}
 
-  <!-- Sub-section strip: horizontal nav for the active section's subs -->
-  {#if strip}
-    <div class="drawer-strip-dock">
-      {@render strip()}
-    </div>
-  {/if}
+  <!-- Handbook body. The takeover, when present, is layered over this
+       whole region rather than replacing it: inert and hidden from
+       assistive tech while covered, but still laid out, so the prose
+       needs no second pass when it comes back. -->
+  <div class="drawer-body">
+    <div
+      class="drawer-body-stack"
+      inert={takeover !== undefined ? true : undefined}
+      aria-hidden={takeover !== undefined ? "true" : undefined}
+    >
+      <!-- Sub-section strip: horizontal nav for the active section's subs -->
+      {#if strip}
+        <div class="drawer-strip-dock">
+          {@render strip()}
+        </div>
+      {/if}
 
-  <!-- Prose content -->
-  <div class="drawer-content" bind:this={contentEl} style={fontVarsStyle}>
-    {#if layoutResult !== null}
-      <div
-        class="drawer-prose"
-        style="height: {layoutResult.totalHeight}px; position: relative;"
-      >
-        <!-- Highlight rects behind active sub lines (unkeyed decoration) -->
-        {#each highlightRects as hr, i (i)}
+      <!-- Data flow, docked as a sub bar when the drawer is wide enough
+           to seat the swimlane. Same order as the page: under the strip,
+           over the prose. -->
+      {#if band}
+        <div class="drawer-band-dock">
+          {@render band()}
+        </div>
+      {/if}
+
+      <!-- Prose content -->
+      <div class="drawer-content" bind:this={contentEl} style={fontVarsStyle}>
+        {#if layoutResult !== null}
           <div
-            class="drawer-highlight"
-            style="
+            class="drawer-prose"
+            style="height: {layoutResult.totalHeight}px; position: relative;"
+          >
+            <!-- Highlight rects behind active sub lines (unkeyed decoration) -->
+            {#each highlightRects as hr, i (i)}
+              <div
+                class="drawer-highlight"
+                style="
               left: {proseOffsetX + hr.x}px;
               top: {hr.y}px;
               width: {hr.width}px;
               height: {hr.height}px;
             "
-          ></div>
-        {/each}
+              ></div>
+            {/each}
 
-        {#each visibleBlocks as vb (vb.block.id)}
-          {@const firstLine = vb.lines.at(0)}
-          <div class="drawer-block" style:top="{vb.geo.topY}px">
-            <!-- List marker in the gutter -->
-            {#if "marker" in vb.block && vb.block.marker !== undefined && firstLine !== undefined}
-              <span
-                class="drawer-line {lineColorClass(
-                  vb.block,
-                  activeSection,
-                  activeSub,
-                )}"
-                style:left="{proseOffsetX +
-                  firstLine.x -
-                  (vb.block.indent ?? 0)}px"
-                style:top="{firstLine.y - vb.geo.topY}px"
-                >{vb.block.marker}</span
-              >
-            {/if}
-            {#each vb.lines as line, li (li)}
-              {#if line.fragments !== undefined}
-                {#each line.fragments as frag, fi (fi)}
+            {#each visibleBlocks as vb (vb.block.id)}
+              {@const firstLine = vb.lines.at(0)}
+              <div class="drawer-block" style:top="{vb.geo.topY}px">
+                <!-- List marker in the gutter -->
+                {#if "marker" in vb.block && vb.block.marker !== undefined && firstLine !== undefined}
                   <span
                     class="drawer-line {lineColorClass(
                       vb.block,
                       activeSection,
                       activeSub,
                     )}"
-                    class:drawer-line--bold={frag.bold}
-                    style:left="{proseOffsetX + line.x + frag.dx}px"
-                    style:top="{line.y - vb.geo.topY}px"
-                    style:width="{frag.width}px">{frag.text}</span
+                    style:left="{proseOffsetX +
+                      firstLine.x -
+                      (vb.block.indent ?? 0)}px"
+                    style:top="{firstLine.y - vb.geo.topY}px"
+                    >{vb.block.marker}</span
                   >
+                {/if}
+                {#each vb.lines as line, li (li)}
+                  {#if line.fragments !== undefined}
+                    {#each line.fragments as frag, fi (fi)}
+                      <span
+                        class="drawer-line {lineColorClass(
+                          vb.block,
+                          activeSection,
+                          activeSub,
+                        )}"
+                        class:drawer-line--bold={frag.bold}
+                        style:left="{proseOffsetX + line.x + frag.dx}px"
+                        style:top="{line.y - vb.geo.topY}px"
+                        style:width="{frag.width}px">{frag.text}</span
+                      >
+                    {/each}
+                  {:else}
+                    <span
+                      class="drawer-line {lineColorClass(
+                        vb.block,
+                        activeSection,
+                        activeSub,
+                      )}"
+                      style:left="{proseOffsetX + line.x}px"
+                      style:top="{line.y - vb.geo.topY}px"
+                      style:width="{line.width}px">{line.text}</span
+                    >
+                  {/if}
                 {/each}
-              {:else}
-                <span
-                  class="drawer-line {lineColorClass(
-                    vb.block,
-                    activeSection,
-                    activeSub,
-                  )}"
-                  style:left="{proseOffsetX + line.x}px"
-                  style:top="{line.y - vb.geo.topY}px"
-                  style:width="{line.width}px">{line.text}</span
-                >
-              {/if}
+              </div>
             {/each}
           </div>
-        {/each}
+        {/if}
+      </div>
+
+      <!-- Pinned below the prose, outside its scroll. The dock carries no
+       rule of its own: the footer may render nothing (no next section),
+       and an empty bordered bar would read as a mistake. -->
+      {#if footer}
+        <div class="drawer-footer-dock">
+          {@render footer()}
+        </div>
+      {/if}
+    </div>
+
+    {#if takeover}
+      <div class="drawer-takeover">
+        {@render takeover()}
       </div>
     {/if}
   </div>
-
-  <!-- Pinned below the prose, outside its scroll. The dock carries no
-       rule of its own: the footer may render nothing (no next section),
-       and an empty bordered bar would read as a mistake. -->
-  {#if footer}
-    <div class="drawer-footer-dock">
-      {@render footer()}
-    </div>
-  {/if}
 </aside>
 
 <style>
@@ -1088,6 +1132,40 @@
     flex-shrink: 0;
     padding: 0 1rem;
     border-bottom: 1px solid var(--hair);
+  }
+
+  /* -----------------------------------------------------------------------
+     Body and takeover
+     ----------------------------------------------------------------------- */
+
+  .drawer-body {
+    position: relative;
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .drawer-body-stack {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* The band brings its own bottom rule and background. */
+  .drawer-band-dock {
+    flex-shrink: 0;
+  }
+
+  /* Opaque and edge to edge over the body: the prose underneath is still
+     laid out, and must not read through. */
+  .drawer-takeover {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    background: var(--paper);
   }
 
   /* -----------------------------------------------------------------------

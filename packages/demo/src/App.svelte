@@ -82,7 +82,10 @@
     toggleLinked,
     resetLinked,
   } from "$demo/link-state.svelte.js";
-  import { createFlowBandStore } from "$demo/flow-band.svelte.js";
+  import {
+    createFlowBandStore,
+    BAND_MIN_HOST_W,
+  } from "$demo/flow-band.svelte.js";
   import { createDemoMode } from "$demo/demo-mode.svelte.js";
   import {
     initColumnSlot,
@@ -147,6 +150,12 @@
 
   function handleToggleFlowBand(): void {
     flowBand.toggleOpen();
+    // Fullscreen draws the flow inside the handbook drawer, so opening
+    // it from a bar the drawer is not behind has to bring the drawer out
+    // too, or the toggle would light up with nothing to show for it.
+    if (flowBand.open && fsActive && !fsCtrl.drawerOpen) {
+      fsCtrl.openDrawer();
+    }
   }
 
   // Chrome height is the bar plus whatever docks under it. The band and
@@ -169,6 +178,20 @@
 
   function handleBandFlowHeight(px: number): void {
     bandFlowHeight = px;
+  }
+
+  /**
+   * What the drawer's copies of the flow report instead.
+   *
+   * They occupy the drawer, not the page, so they have no business
+   * moving the page's chrome height. Reporting zero from them would be
+   * worse than reporting nothing: the page's own band is unmounted while
+   * fullscreen and leaves its last measurement behind, so a zero here
+   * would swing the chrome mid-fullscreen and rescale the frame against
+   * a band nobody can see.
+   */
+  function ignoreFlowHeight(_px: number): void {
+    // Intentionally empty.
   }
 
   // -----------------------------------------------------------------------
@@ -725,7 +748,7 @@
         fsAnimPhase = "idle";
         geo.clampToViewport();
         geo.settleShrinkAfterResize();
-        geo.reanchorBand();
+        refitAfterFullscreen();
         // The splash owns the springs until its shrink lands. Restore
         // preset timing before any toolbar resize can inherit it.
         endSplash();
@@ -1369,11 +1392,42 @@
   // deliberately a snapshot, hence untrack.
   let wasFsActive = untrack(() => fsActive);
 
+  /**
+   * Chrome height in force when fullscreen began, and the basis every
+   * saved snapshot inside it was measured against.
+   *
+   * It holds for the whole stay: the page's band is unmounted, and the
+   * drawer's copy of the flow claims no page chrome. What can differ is
+   * the chrome on the way out, since the visitor may have opened or
+   * closed the flow while the app had the window.
+   */
+  let fsEntryChrome = TOP_BAR_HEIGHT;
+
+  /**
+   * Land a restored snapshot in the band that is actually there.
+   *
+   * Anchoring to the entry chrome and rescaling maps the geometry from
+   * the band it was authored in to the current one, the same mapping any
+   * other band change goes through. Stamping the live chrome onto those
+   * coordinates instead would park the frame under a band that grew
+   * while it was away, and leave the anchor claiming a top above its own
+   * band top, which the next band change reads as a huge upward
+   * extrapolation.
+   */
+  function refitAfterFullscreen(): void {
+    geo.reanchorBandAt(fsEntryChrome);
+    geo.rescaleForBand();
+    geo.reanchorBand();
+  }
+
   $effect(() => {
     const active = fsActive;
     if (active === wasFsActive) return;
     wasFsActive = active;
-    if (active) return;
+    if (active) {
+      fsEntryChrome = untrack(() => topChromeHeight());
+      return;
+    }
     // untracked so this effect depends on fsActive alone, not on
     // whatever location realign reads on its way through.
     untrack(() => scrollEngine.realign());
@@ -1488,6 +1542,13 @@
     // (restart, mode switch) will reset geo and animating anyway.
   }
 
+  /**
+   * Whether the open drawer can seat the swimlane. Read live, so a
+   * resize drag swaps the flow between its two drawer presentations at
+   * the threshold the same way a window resize swaps the page's.
+   */
+  const drawerSeatsBand: boolean = $derived(fsCtrl.drawerW >= BAND_MIN_HOST_W);
+
   /** Fullscreen pill position, using the controller value or a default. */
   const fsPillPos = $derived(
     fsCtrl.pillPos.top === 0 && fsCtrl.pillPos.left === 0
@@ -1585,6 +1646,7 @@
         geo.setPosition(saved.top, saved.left);
         fsExitTarget = null;
         fsAnimPhase = "idle";
+        refitAfterFullscreen();
         endSplash();
       }
     }, CHROME_FADE_MS);
@@ -1603,6 +1665,7 @@
       // No saved state; just drop the override
       fsCtrl.exit();
       deviceChromeFaded = false;
+      refitAfterFullscreen();
       return;
     }
 
@@ -1610,6 +1673,7 @@
       // Jump: skip animation entirely
       fsCtrl.exit();
       deviceChromeFaded = false;
+      refitAfterFullscreen();
       return;
     }
 
@@ -2040,16 +2104,41 @@
   {/if}
   <!-- Data flow band: normal flow directly after the sticky top bar, so
        opening it moves the story down rather than covering it. The
-       floating frame (z:50) passes under it. Hidden in fullscreen. -->
+       floating frame (z:50) passes under it. Fullscreen renders it in
+       the drawer instead (see the takeover below). -->
   {#if !fsActive}
     <FlowBand
       store={flowBand}
-      narrow={isNarrow}
+      presentation={isNarrow ? "overlay" : "band"}
       locale={uiLocale}
       onFlowHeight={handleBandFlowHeight}
     />
   {/if}
 {/if}
+
+<!-- The flow inside the fullscreen drawer, in the drawer's own two
+     presentations. A drawer wide enough for the swimlane docks it under
+     the strip, where it pushes the prose down exactly as the page's band
+     pushes the story down. A narrower one has no room for lanes beside
+     cards, so the list takes the drawer over instead. Both are passed to
+     HandbookDrawer only while the flow is open. -->
+{#snippet flowDock()}
+  <FlowBand
+    store={flowBand}
+    presentation="dock"
+    locale={uiLocale}
+    onFlowHeight={ignoreFlowHeight}
+  />
+{/snippet}
+
+{#snippet flowPanel()}
+  <FlowBand
+    store={flowBand}
+    presentation="panel"
+    locale={uiLocale}
+    onFlowHeight={ignoreFlowHeight}
+  />
+{/snippet}
 
 <!-- Z-order (single source):
      story 1, frame 50, fullscreen edge strips + top hot strip 60,
@@ -2377,6 +2466,8 @@
     onResize={handleFsDrawerResize}
     onSettle={handleFsDrawerSettle}
     onScrollSub={handleDrawerScrollSub}
+    band={flowBand.open && drawerSeatsBand ? flowDock : undefined}
+    takeover={flowBand.open && !drawerSeatsBand ? flowPanel : undefined}
     bind:this={drawerRef}
   >
     {#snippet topbar()}
