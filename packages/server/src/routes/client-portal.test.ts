@@ -172,12 +172,16 @@ function mockIntakeFormService(): IntakeFormService {
     setActive: vi.fn(),
     isWebIntakeEnabled: vi.fn().mockResolvedValue(true),
     setWebIntakeEnabled: vi.fn(),
+    isBuiltinDefaultEnabled: vi.fn().mockResolvedValue(true),
+    setBuiltinDefaultEnabled: vi.fn(),
     resolvePublicForm: vi.fn().mockResolvedValue({
       formId: null,
       slug: null,
       encryptedFormMeta: null,
       fields: null,
       intakeDisabled: false,
+      formClosed: false,
+      builtinFormDisabled: false,
     }),
   };
 }

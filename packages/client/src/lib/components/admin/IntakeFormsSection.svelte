@@ -4,8 +4,8 @@
   name/sub lines, divider, tonal add action). Rows link to the intake form
   editor page; the active toggle sits outside the link so both stay
   independently operable. When web intake is enabled and no active custom
-  form is marked default, a read-only row surfaces the built-in default form
-  that /intake serves.
+  form is marked default, a row surfaces the built-in default form with a
+  disable toggle (org_config.builtin_default_enabled).
 
   Supports duplication: loads an existing form, mints fresh field and option
   keys, suffixes the name, clears the slug, and saves as a new form.
@@ -149,6 +149,30 @@
 
   const webIntakeEnabled = $derived(webIntakeQuery.data ?? true);
 
+  // Built-in default form toggle
+  const builtinDefaultQuery = createQuery(() => ({
+    queryKey: [...intakeFormKeys.all, "builtinDefaultEnabled"] as const,
+    queryFn: async () => {
+      const result = await intakeFormsRouter.getBuiltinDefaultEnabled.query();
+      return result.enabled;
+    },
+  }));
+
+  const builtinDefaultEnabled = $derived(builtinDefaultQuery.data ?? true);
+
+  const builtinDefaultToggleMutation = createMutation(() => ({
+    mutationFn: async (enabled: boolean) =>
+      intakeFormsRouter.setBuiltinDefaultEnabled.mutate({ enabled }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({
+        queryKey: intakeFormKeys.all,
+      });
+    },
+    onError: (err: unknown) => {
+      toastStore.show(getErrorMessage(err));
+    },
+  }));
+
   const webIntakeToggleMutation = createMutation(() => ({
     mutationFn: async (enabled: boolean) =>
       intakeFormsRouter.setWebIntakeEnabled.mutate({ enabled }),
@@ -175,7 +199,7 @@
     },
   }));
 
-  /** The built-in form serves /intake only while no active custom form is default. */
+  /** Show the built-in default row when web intake is on and no active custom form is default. */
   const showBuiltinDefault = $derived(
     webIntakeEnabled &&
       !(formsQuery.data ?? []).some((f) => f.isDefault && f.isActive),
@@ -471,14 +495,26 @@
       {/each}
 
       {#if showBuiltinDefault}
-        <div class="ifs-row">
+        <div class="ifs-row" class:ifs-row-inactive={!builtinDefaultEnabled}>
           <span class="ifs-row-label">
             <FileText size={16} aria-hidden="true" class="ifs-sys-icon" />
             <span class="ifs-row-text">
-              <span>{m.intake_forms_default_toggle()}</span>
-              <span class="ifs-row-sub">{m.intake_forms_default_hint()}</span>
+              <span>{m.intake_forms_builtin_default_enabled()}</span>
+              <span class="ifs-row-sub">
+                {#if builtinDefaultEnabled}
+                  {m.intake_forms_default_hint()}
+                {:else}
+                  {m.intake_forms_builtin_default_disabled_hint()}
+                {/if}
+              </span>
             </span>
           </span>
+          <Toggle
+            checked={builtinDefaultEnabled}
+            onChange={() =>
+              builtinDefaultToggleMutation.mutate(!builtinDefaultEnabled)}
+            aria-label={m.intake_forms_builtin_default_enabled()}
+          />
         </div>
       {/if}
 

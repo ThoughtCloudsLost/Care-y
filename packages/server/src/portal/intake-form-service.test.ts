@@ -208,6 +208,88 @@ describe.skipIf(!process.env.DATABASE_URL)("IntakeFormService", () => {
 
       await svc.setActive(testDb.db, formId, false);
     });
+
+    it("returns builtinFormDisabled=false when no default DB form and builtin is enabled", async () => {
+      // Default state: builtin_default_enabled is true (migration default)
+      await testDb.db
+        .updateTable("org_config")
+        .set({ builtin_default_enabled: true })
+        .execute();
+
+      const result = await svc.resolvePublicForm(testDb.db, null);
+      expect(result.formId).toBeNull();
+      expect(result.builtinFormDisabled).toBe(false);
+      expect(result.intakeDisabled).toBe(false);
+    });
+
+    it("returns builtinFormDisabled=true when no default DB form and builtin is disabled", async () => {
+      await testDb.db
+        .updateTable("org_config")
+        .set({ builtin_default_enabled: false })
+        .execute();
+
+      const result = await svc.resolvePublicForm(testDb.db, null);
+      expect(result.formId).toBeNull();
+      expect(result.builtinFormDisabled).toBe(true);
+      expect(result.intakeDisabled).toBe(false);
+
+      // Cleanup
+      await testDb.db
+        .updateTable("org_config")
+        .set({ builtin_default_enabled: true })
+        .execute();
+    });
+
+    it("returns builtinFormDisabled=false when an active default DB form exists (setting irrelevant)", async () => {
+      const formId = await createForm("Default DB Form", {
+        isDefault: true,
+        slug: "builtin-test-default",
+      });
+      await svc.setActive(testDb.db, formId, true);
+
+      // Even when builtin is disabled, the DB form takes precedence
+      await testDb.db
+        .updateTable("org_config")
+        .set({ builtin_default_enabled: false })
+        .execute();
+
+      const result = await svc.resolvePublicForm(testDb.db, null);
+      expect(result.formId).toBe(formId);
+      expect(result.builtinFormDisabled).toBe(false);
+
+      // Cleanup
+      await svc.setActive(testDb.db, formId, false);
+      await testDb.db
+        .updateTable("intake_forms")
+        .set({ is_default: false })
+        .where("id", "=", formId)
+        .execute();
+      await testDb.db
+        .updateTable("org_config")
+        .set({ builtin_default_enabled: true })
+        .execute();
+    });
+
+    it("does not set builtinFormDisabled for slug-based resolution", async () => {
+      // Builtin toggle should not affect slug routes
+      await testDb.db
+        .updateTable("org_config")
+        .set({ builtin_default_enabled: false })
+        .execute();
+
+      const result = await svc.resolvePublicForm(
+        testDb.db,
+        "nonexistent-slug-builtin",
+      );
+      expect(result.formId).toBeNull();
+      expect(result.builtinFormDisabled).toBe(false);
+
+      // Cleanup
+      await testDb.db
+        .updateTable("org_config")
+        .set({ builtin_default_enabled: true })
+        .execute();
+    });
   });
 
   describe("saveForm", () => {

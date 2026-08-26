@@ -145,6 +145,19 @@ vi.mock("$lib/paraglide/messages.js", async (importOriginal) => ({
   intake_forms_field_type_date_desc: () => "Date picker",
   intake_forms_field_type_page_break: () => "Page break",
   intake_forms_field_type_page_break_desc: () => "Split the form into pages",
+  intake_forms_preview_state_form: () => "Form",
+  intake_forms_preview_state_submitted: () => "Submitted",
+  intake_forms_preview_state_closed: () => "Closed",
+  intake_forms_preview_empty_title: () => "No fields yet",
+  intake_forms_preview_empty_subtitle: () =>
+    "Add fields to see how the form will look to clients.",
+  intake_forms_preview_reference_placeholder: () => "XXXX-XXXX",
+  intake_success_heading: () => "Your message was sent",
+  intake_success_body: () => "A volunteer will read it as soon as possible.",
+  intake_reference_label: () => "Your reference code:",
+  intake_reference_save: () => "Save it if you want to follow up by phone.",
+  intake_form_closed_default: () =>
+    "This form is no longer accepting submissions.",
 }));
 
 vi.mock("$lib/terminology/with-terms.js", async (importOriginal) => ({
@@ -205,6 +218,18 @@ vi.mock("$lib/stores/toast.svelte.js", async (importOriginal) => ({
 vi.mock("$lib/utils/announce.js", async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   announceToLiveRegion: vi.fn(),
+}));
+
+vi.mock("$lib/stores/layout-mode.svelte", async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  layoutMode: {
+    get isDesktop() {
+      return false;
+    },
+    get isTablet() {
+      return false;
+    },
+  },
 }));
 
 vi.mock("$lib/components/shared/konsta-classes.js", async (importOriginal) => ({
@@ -661,5 +686,92 @@ describe("IntakeFormEditor", () => {
         closesAt: null,
       }),
     );
+  });
+
+  it("shows empty state when no fields are present (F-014)", () => {
+    render(IntakeFormEditor, { props: baseProps });
+
+    expect(screen.getByText("No fields yet")).toBeTruthy();
+    expect(
+      screen.getByText("Add fields to see how the form will look to clients."),
+    ).toBeTruthy();
+  });
+
+  it("renders preview state selector with three states (F-014)", () => {
+    render(IntakeFormEditor, {
+      props: {
+        ...baseProps,
+        initialFields: [
+          {
+            fieldKey: "fk-state",
+            label: { en: "Name" },
+            helpText: {},
+            isRequired: false,
+            config: { type: "text" as const },
+            fieldType: "text" as const,
+            ...NO_ROLE,
+          },
+        ],
+      },
+    });
+
+    expect(screen.getByText("Form")).toBeTruthy();
+    expect(screen.getByText("Submitted")).toBeTruthy();
+    expect(screen.getByText("Closed")).toBeTruthy();
+  });
+
+  it("shows submitted state when Submitted button is clicked (F-014)", async () => {
+    render(IntakeFormEditor, {
+      props: {
+        ...baseProps,
+        initialFields: [
+          {
+            fieldKey: "fk-submit-state",
+            label: { en: "Question" },
+            helpText: {},
+            isRequired: false,
+            config: { type: "text" as const },
+            fieldType: "text" as const,
+            ...NO_ROLE,
+          },
+        ],
+      },
+    });
+
+    const submittedButton = screen.getByText("Submitted").closest("button");
+    if (submittedButton) {
+      await fireEvent.click(submittedButton);
+    }
+
+    expect(screen.getByText("Your message was sent")).toBeTruthy();
+    expect(screen.getByText("XXXX-XXXX")).toBeTruthy();
+  });
+
+  it("shows closed state when Closed button is clicked (F-014)", async () => {
+    render(IntakeFormEditor, {
+      props: {
+        ...baseProps,
+        initialFields: [
+          {
+            fieldKey: "fk-closed-state",
+            label: { en: "Question" },
+            helpText: {},
+            isRequired: false,
+            config: { type: "text" as const },
+            fieldType: "text" as const,
+            ...NO_ROLE,
+          },
+        ],
+      },
+    });
+
+    const closedButton = screen.getByText("Closed").closest("button");
+    if (closedButton) {
+      await fireEvent.click(closedButton);
+    }
+
+    expect(
+      screen.getByText("This form is no longer accepting submissions."),
+    ).toBeTruthy();
   });
 });

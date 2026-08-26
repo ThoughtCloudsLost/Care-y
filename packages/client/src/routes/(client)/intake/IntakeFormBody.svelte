@@ -159,6 +159,7 @@
           encryptedFormMeta: null,
           intakeDisabled: false,
           formClosed: false,
+          builtinFormDisabled: false,
         };
       }
       const input = slug != null ? { slug } : undefined;
@@ -168,16 +169,22 @@
     retry: false,
   }));
 
-  // Not-available: intake is disabled or slug was given but not found
+  // Disabled intake, an unknown slug, and a disabled builtin form all
+  // render the not-available state below.
   const intakeDisabled = $derived(formQuery.data?.intakeDisabled === true);
   const formClosed = $derived(formQuery.data?.formClosed === true);
+  const builtinFormDisabled = $derived(
+    formQuery.data?.builtinFormDisabled === true,
+  );
   const slugNotFound = $derived(
     slug != null &&
       formQuery.data?.formId == null &&
       !intakeDisabled &&
       !formClosed,
   );
-  const notAvailable = $derived(intakeDisabled || slugNotFound);
+  const notAvailable = $derived(
+    intakeDisabled || slugNotFound || builtinFormDisabled,
+  );
 
   // Decrypt form fields when a custom form is returned
   interface ResolvedForm {

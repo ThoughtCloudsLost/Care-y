@@ -2554,6 +2554,12 @@
   "intake_forms_bind": "Bind",
   "intake_forms_unbind": "Unbind",
   "intake_forms_preview": "Preview",
+  "intake_forms_preview_state_form": "Form",
+  "intake_forms_preview_state_submitted": "Submitted",
+  "intake_forms_preview_state_closed": "Closed",
+  "intake_forms_preview_empty_title": "No fields yet",
+  "intake_forms_preview_empty_subtitle": "Add fields to see how the form will look to clients.",
+  "intake_forms_preview_reference_placeholder": "XXXX-XXXX",
   "intake_forms_field_type_text": "Text",
   "intake_forms_field_type_text_desc": "Single-line answer",
   "intake_forms_field_type_textarea": "Text area",
@@ -2854,6 +2860,7 @@
   "intake_forms_closes_at_clear": "Clear closing date",
   "intake_form_closed_default": "This form is no longer accepting submissions.",
   "error_intake_form_closed": "This form is no longer accepting submissions.",
+  "error_builtin_form_disabled": "The default intake form is not available.",
   "intake_continuation_toggle_title": "Save a link to add more later (optional)",
   "intake_continuation_toggle_body": "Get a link you can reopen to add information or read replies.",
   "intake_continuation_expanded_text": "After you submit, you will receive a link. Open it any time to read replies or add more information. Anyone who has the link can read and add to this conversation.",
@@ -2899,5 +2906,10 @@
   "intake_forms_field_row_min_only": "Min: {min}",
   "intake_forms_field_row_max_only": "Max: {max}",
   "intake_forms_field_row_max_length": "Max length: {max}",
-  "intake_forms_field_row_page_number": "Page {page}"
+  "intake_forms_field_row_page_number": "Page {page}",
+  "intake_forms_builtin_default_enabled": "Built-in default form",
+  "intake_forms_builtin_default_disabled_hint": "When off, /intake shows a not-available message unless a custom default form is active.",
+  "intake_forms_builtin_default_toggled": "Built-in default form setting updated",
+  "section_rail_label": "Page sections",
+  "section_rail_hover_label": "Sections for {page}"
 }

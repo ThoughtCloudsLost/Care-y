@@ -134,6 +134,7 @@ export const auditEventTypeSchema = z.enum([
   "account_offer_changed",
   "intake_responses_viewed",
   "intake_responses_exported",
+  "builtin_default_toggled",
 ]);
 export type AuditEventType = z.infer<typeof auditEventTypeSchema>;
 

@@ -19,11 +19,6 @@
     FolderPlus,
     UserPlus,
     Plus,
-    CalendarDays,
-    Activity,
-    BookOpen,
-    Layers,
-    Rocket,
   } from "@lucide/svelte";
   import TicketIcon from "$lib/components/icons/Ticket.svelte";
   import TicketMinus from "$lib/components/icons/TicketMinus.svelte";
@@ -58,14 +53,15 @@
     type QueueAppearance,
   } from "$lib/utils/queue-appearance.js";
   import ShellPopover from "$lib/shell/ShellPopover.svelte";
-  import { getNavbarOverrideCtx } from "$lib/shell/context.js";
+  import {
+    getNavbarOverrideCtx,
+    getSectionRailCtx,
+  } from "$lib/shell/context.js";
   import type { NavbarAction } from "$lib/shell/types";
   import { bucketTickets } from "$lib/components/dashboard/filters.js";
-  import {
-    createSectionScroll,
-    type ScrollSection,
-  } from "$lib/components/useSectionScroll.svelte.js";
+  import { createSectionScroll } from "$lib/components/useSectionScroll.svelte.js";
   import SectionScrollNav from "$lib/components/SectionScrollNav.svelte";
+  import { buildDashboardSections } from "$lib/shell/section-registry.js";
   import { dashboardViewModeStore } from "$lib/stores/view-mode.svelte.js";
   import type { ViewMode } from "$lib/stores/view-mode.svelte.js";
   import { createCardPropsMapper } from "$lib/tickets/ticket-card-props.js";
@@ -76,7 +72,6 @@
   } from "$lib/tickets/create-list-read-state.svelte.js";
   import { isCryptoKeyed } from "$lib/crypto/crypto-keyed.svelte.js";
   import { createMergeScan } from "$lib/composables/create-merge-scan.svelte.js";
-  import { GitMerge } from "@lucide/svelte";
   import type { TicketQuickAction } from "$lib/components/tickets/ticket-types.js";
   import { createHoldAction } from "$lib/composables/ticket-list/create-hold-action.svelte.js";
   import { createAssignFlow } from "$lib/composables/ticket-list/create-assign-flow.svelte.js";
@@ -98,6 +93,7 @@
   const permissionsGetter = getCurrentPermissions();
   const permissions = $derived(permissionsGetter());
   const navbarCtx = getNavbarOverrideCtx();
+  const sectionRailCtx = getSectionRailCtx();
   const queryClient = useQueryClient();
   const ticketRouter = requireRouter(trpc.tickets, "tickets");
 
@@ -196,8 +192,15 @@
       actions: [createAction],
       subnavbar: dashboardSubnavbar,
     };
+    sectionRailCtx.current = {
+      sections: dashboardSections,
+      active: scroll.active,
+      scrollTo: (id: string) =>
+        void scroll.expandAndScroll(id, () => collapsedSections.delete(id)),
+    };
     return () => {
       navbarCtx.current = undefined;
+      sectionRailCtx.current = undefined;
     };
   });
 
@@ -392,68 +395,17 @@
   );
 
   // Work-first order: the day's tickets lead, ambient/meta sections follow.
-  const dashboardSections = $derived.by((): readonly ScrollSection[] => {
-    const sections: ScrollSection[] = [];
-    if (showGettingStarted) {
-      sections.push({
-        id: "getting-started",
-        label: m.getting_started_heading,
-        icon: Rocket,
-      });
-    }
-    sections.push({
-      id: "shift",
-      label: m.dashboard_shift_heading,
-      icon: CalendarDays,
-    });
-    sections.push({
-      id: "queues",
-      label: () => m.dashboard_queues_heading(withTerms()),
-      icon: Layers,
-    });
-    sections.push({
-      id: "activity",
-      label: m.dashboard_activity_heading,
-      icon: Activity,
-    });
-    sections.push({
-      id: "kb",
-      label: () => m.dashboard_kb_heading(withTerms()),
-      icon: BookOpen,
-    });
-    if (showMergeCandidates) {
-      sections.push({
-        id: "merge-candidates",
-        label: m.mergeCandidates_heading,
-        icon: GitMerge,
-      });
-    }
-    if (showNeedsAttention) {
-      sections.push({
-        id: "needs-attention",
-        label: m.dashboard_section_needs_attention,
-        icon: TicketAlert,
-      });
-    }
-    sections.push({
-      id: "my-tickets",
-      label: () => m.dashboard_section_my_tickets(withTerms()),
-      icon: TicketIcon,
-    });
-    sections.push({
-      id: "unassigned",
-      label: m.dashboard_section_unassigned,
-      icon: TicketMinus,
-    });
-    if (showOnHold) {
-      sections.push({
-        id: "on-hold",
-        label: m.dashboard_section_on_hold,
-        icon: TicketPause,
-      });
-    }
-    return sections;
-  });
+  // buildDashboardSections is the single derivation for section ids, labels,
+  // icons, and conditional inclusion. Both this page and the hover-reveal
+  // registry call it.
+  const dashboardSections = $derived(
+    buildDashboardSections({
+      showGettingStarted,
+      showMergeCandidates,
+      showNeedsAttention,
+      showOnHold,
+    }),
+  );
 
   const scroll = createSectionScroll(() => dashboardSections);
 

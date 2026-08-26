@@ -218,6 +218,7 @@ export interface OrgConfigTable {
   >;
   setup_completed: ColumnType<boolean, boolean | undefined, boolean>;
   portal_safe_exit_url: string | null;
+  builtin_default_enabled: ColumnType<boolean, boolean | undefined, boolean>;
 }
 
 // --- User keys (full interface, replaces UserKeysStubTable) ---

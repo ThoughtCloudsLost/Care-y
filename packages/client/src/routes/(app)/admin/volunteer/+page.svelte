@@ -15,7 +15,10 @@
     CircleCheck,
   } from "@lucide/svelte";
   import * as m from "$lib/paraglide/messages.js";
-  import { getNavbarOverrideCtx } from "$lib/shell/context.js";
+  import {
+    getNavbarOverrideCtx,
+    getSectionRailCtx,
+  } from "$lib/shell/context.js";
   import { getOrgDecryptCache } from "$lib/crypto/context.js";
   import { trpc } from "$lib/trpc/index.js";
   import { toastStore } from "$lib/stores/toast.svelte.js";
@@ -60,14 +63,21 @@
   const scroll = createSectionScroll(() => SECTIONS);
 
   const navbarCtx = getNavbarOverrideCtx();
+  const sectionRailCtx = getSectionRailCtx();
 
   $effect(() => {
     navbarCtx.current = {
       title: m.vol_page_title(),
       subnavbar: volSubnavbar,
     };
+    sectionRailCtx.current = {
+      sections: SECTIONS,
+      active: scroll.active,
+      scrollTo: (id: string) => scroll.scrollTo(id),
+    };
     return () => {
       navbarCtx.current = undefined;
+      sectionRailCtx.current = undefined;
     };
   });
 </script>

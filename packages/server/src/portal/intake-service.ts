@@ -104,6 +104,18 @@ export class IntakeAccountUnavailableError extends ValidationError {
   }
 }
 
+/**
+ * Thrown when a builtin-path submission (formId null, no active default
+ * DB form) arrives while the org's builtin_default_enabled setting is
+ * off. Trust boundary enforcement: the UI hides the form, but the
+ * server must reject independently.
+ */
+export class BuiltinFormDisabledError extends ValidationError {
+  constructor() {
+    super(ErrorCode.BUILTIN_FORM_DISABLED);
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Interfaces
 // ---------------------------------------------------------------------------
@@ -179,10 +191,14 @@ export async function createIntakeTicket(
   },
   input: IntakeTicketInput,
 ): Promise<IntakeTicketResult> {
-  // Check kill switch
+  // Check kill switch and builtin default toggle
   const orgConfig = await db
     .selectFrom("org_config")
-    .select(["intake_queue_id", "web_intake_enabled"])
+    .select([
+      "intake_queue_id",
+      "web_intake_enabled",
+      "builtin_default_enabled",
+    ])
     .executeTakeFirst();
 
   if (orgConfig?.web_intake_enabled === false) {
@@ -190,6 +206,18 @@ export async function createIntakeTicket(
   }
 
   const orgIntakeQueueId = orgConfig?.intake_queue_id ?? null;
+
+  // Trust boundary: reject builtin-path submissions when the built-in
+  // default form is disabled. A builtin-path submission has formId null
+  // and no active default DB form. We check the toggle first; the
+  // absence of a default DB form is implied by formId being null (the
+  // client resolves formId from the server response before submitting).
+  if (input.formId === null) {
+    const builtinEnabled = orgConfig?.builtin_default_enabled ?? true;
+    if (!builtinEnabled) {
+      throw new BuiltinFormDisabledError();
+    }
+  }
 
   // Resolve destination queue via routing precedence:
   //   resolvedQueueId > form destination_queue_id > org intake_queue_id

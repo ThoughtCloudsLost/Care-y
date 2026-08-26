@@ -5,7 +5,33 @@
   import { getOrgLogoUrl } from "$lib/branding/logo-url.svelte.js";
   import { getRoleInfo } from "$lib/admin/role-info.js";
   import { allTabs } from "./tabs";
-  import type { TabId, DesktopSidebarProps, SidebarSubItem } from "./types";
+  import type {
+    TabId,
+    DesktopSidebarProps,
+    SidebarSubItem,
+    HoverRevealData,
+  } from "./types";
+  import HoverRail from "./HoverRail.svelte";
+
+  function tabRoute(tab: TabId): string {
+    switch (tab) {
+      case "home":
+        return "/";
+      case "tickets":
+        return "/tickets";
+      case "library":
+        return "/library";
+    }
+  }
+
+  function isTabId(value: string): value is TabId {
+    return value === "home" || value === "tickets" || value === "library";
+  }
+
+  const ADMIN_SUBITEM_ROUTES: Record<string, string> = {
+    "admin:org": "/admin/organization",
+    "admin:comms": "/admin/communications",
+  };
 
   let {
     activeTab,
@@ -21,6 +47,8 @@
     onLogout,
     roleId,
     onNavigate,
+    getHoverSections,
+    onHoverNavigate,
   }: DesktopSidebarProps = $props();
 
   const navLogoUrl = $derived(getOrgLogoUrl());
@@ -67,6 +95,85 @@
   // Admin section is only rendered if subItems contain an "admin" section
   const hasAdmin = $derived(subItems.some((s) => s.tabId === "admin"));
 
+  // ── Hover-reveal state machine ─────────────────────────────────────
+  // 400ms enter delay, 200ms leave grace, Escape dismisses.
+  let hoverRevealData = $state<HoverRevealData | undefined>(undefined);
+  let hoverRevealRoute = $state<string | undefined>(undefined);
+  let hoverEnterTimer = $state<ReturnType<typeof setTimeout> | undefined>(
+    undefined,
+  );
+  let hoverLeaveTimer = $state<ReturnType<typeof setTimeout> | undefined>(
+    undefined,
+  );
+
+  function clearHoverTimers(): void {
+    if (hoverEnterTimer != null) {
+      clearTimeout(hoverEnterTimer);
+      hoverEnterTimer = undefined;
+    }
+    if (hoverLeaveTimer != null) {
+      clearTimeout(hoverLeaveTimer);
+      hoverLeaveTimer = undefined;
+    }
+  }
+
+  function handleTabHoverEnter(route: string): void {
+    if (getHoverSections == null) return;
+    clearHoverTimers();
+
+    // If the rail is already showing for this route, cancel any pending leave
+    if (hoverRevealRoute === route && hoverRevealData != null) return;
+
+    hoverEnterTimer = setTimeout(() => {
+      const data = getHoverSections(route);
+      if (data != null && data.sections.length > 0) {
+        hoverRevealData = data;
+        hoverRevealRoute = route;
+      }
+    }, 400);
+  }
+
+  function handleTabHoverLeave(): void {
+    if (hoverEnterTimer != null) {
+      clearTimeout(hoverEnterTimer);
+      hoverEnterTimer = undefined;
+    }
+    if (hoverRevealData == null) return;
+
+    hoverLeaveTimer = setTimeout(() => {
+      hoverRevealData = undefined;
+      hoverRevealRoute = undefined;
+    }, 200);
+  }
+
+  function handleRailMouseEnter(): void {
+    // Cancel the leave timer when the mouse enters the rail
+    if (hoverLeaveTimer != null) {
+      clearTimeout(hoverLeaveTimer);
+      hoverLeaveTimer = undefined;
+    }
+  }
+
+  function handleRailMouseLeave(): void {
+    hoverLeaveTimer = setTimeout(() => {
+      hoverRevealData = undefined;
+      hoverRevealRoute = undefined;
+    }, 200);
+  }
+
+  function dismissHoverReveal(): void {
+    clearHoverTimers();
+    hoverRevealData = undefined;
+    hoverRevealRoute = undefined;
+  }
+
+  function handleHoverNavigate(sectionId: string): void {
+    if (hoverRevealRoute != null && onHoverNavigate != null) {
+      onHoverNavigate(hoverRevealRoute, sectionId);
+    }
+    dismissHoverReveal();
+  }
+
   // ── Keyboard navigation ────────────────────────────────────────────
   let focusedIndex = $state(0);
   const focusableIds = $derived([
@@ -104,9 +211,42 @@
         focusTarget(focusedIndex);
         break;
       }
+      case "ArrowRight": {
+        // Open hover rail for the focused tab/admin entry
+        if (getHoverSections != null) {
+          const id = focusableIds.at(focusedIndex);
+          let route: string | undefined;
+          if (id === "admin") {
+            route = "/admin";
+          } else if (id != null) {
+            route = isTabId(id) ? tabRoute(id) : undefined;
+          }
+          if (route != null) {
+            const data = getHoverSections(route);
+            if (data != null && data.sections.length > 0) {
+              e.preventDefault();
+              hoverRevealData = data;
+              hoverRevealRoute = route;
+              // Focus the first item in the hover rail on next tick.
+              // The rail renders as a sibling of the nav, not inside it,
+              // so we search from the parent layout container.
+              requestAnimationFrame(() => {
+                navEl?.parentElement
+                  ?.querySelector<HTMLElement>(".hover-rail-item")
+                  ?.focus();
+              });
+            }
+          }
+        }
+        break;
+      }
       case "Escape": {
         e.preventDefault();
-        hoverExpanded = false;
+        if (hoverRevealData != null) {
+          dismissHoverReveal();
+        } else {
+          hoverExpanded = false;
+        }
         break;
       }
     }
@@ -163,6 +303,8 @@
         <div class="sidebar-tab-row">
           <button
             onclick={() => ontabchange(tab.id)}
+            onmouseenter={() => handleTabHoverEnter(tabRoute(tab.id))}
+            onmouseleave={handleTabHoverLeave}
             type="button"
             role="tab"
             class="sidebar-tab"
@@ -229,6 +371,8 @@
             onAdmin();
             toggleSection("admin");
           }}
+          onmouseenter={() => handleTabHoverEnter("/admin")}
+          onmouseleave={handleTabHoverLeave}
           type="button"
           class="sidebar-tab"
           class:active={activeArea?.startsWith("admin") ?? false}
@@ -264,7 +408,16 @@
       {#if isExpanded && adminOpen && adminSubItems.length > 0}
         <div class="sidebar-sub-items" role="group">
           {#each adminSubItems as item (item.id)}
-            <button type="button" class="sidebar-sub-item" onclick={item.ontap}>
+            <button
+              type="button"
+              class="sidebar-sub-item"
+              onclick={item.ontap}
+              onmouseenter={() => {
+                const route = ADMIN_SUBITEM_ROUTES[item.id];
+                if (route != null) handleTabHoverEnter(route);
+              }}
+              onmouseleave={handleTabHoverLeave}
+            >
               <span class="sub-item-label">{item.label}</span>
             </button>
           {/each}
@@ -334,6 +487,25 @@
   </div>
 </nav>
 
+<!-- Hover-reveal rail: positioned next to the sidebar via the
+     shared .app-shell-layout flex context. Rendered outside the nav
+     so the sidebar's overflow:hidden does not clip it. -->
+{#if hoverRevealData != null}
+  <!-- svelte-ignore a11y_no_static_element_interactions -->
+  <div
+    class="hover-rail-anchor"
+    onmouseenter={handleRailMouseEnter}
+    onmouseleave={handleRailMouseLeave}
+  >
+    <HoverRail
+      sections={hoverRevealData.sections}
+      pageLabel={hoverRevealData.pageLabel}
+      onnavigate={handleHoverNavigate}
+      ondismiss={dismissHoverReveal}
+    />
+  </div>
+{/if}
+
 <style>
   .desktop-sidebar {
     display: flex;
@@ -350,6 +522,18 @@
     overflow: hidden;
     flex-shrink: 0;
     z-index: 10;
+  }
+
+  /* The hover-rail-anchor is a sibling of the nav in the flex layout.
+     It does not consume flex space (width: 0, overflow: visible) and
+     simply positions the HoverRail next to the sidebar edge. */
+  .hover-rail-anchor {
+    width: 0;
+    flex-shrink: 0;
+    position: relative;
+    overflow: visible;
+    z-index: 11;
+    height: 100%;
   }
 
   .desktop-sidebar.expanded {

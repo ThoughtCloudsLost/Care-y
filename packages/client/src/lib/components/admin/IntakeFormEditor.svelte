@@ -23,7 +23,7 @@
     SegmentedButton,
   } from "konsta/svelte";
   import { untrack } from "svelte";
-  import { ArrowUp, ArrowDown, Settings, X, Copy } from "@lucide/svelte";
+  import { ArrowUp, ArrowDown, Settings, X, Copy, Eye } from "@lucide/svelte";
   import {
     createMutation,
     createQuery,
@@ -59,6 +59,9 @@
   import { announceToLiveRegion } from "$lib/utils/announce.js";
   import { getErrorMessage } from "$lib/components/query-error-messages.js";
   import { DIALOG_DESTRUCTIVE_CLASS } from "$lib/components/shared/konsta-classes.js";
+  import SplitView from "$lib/shell/SplitView.svelte";
+  import { layoutMode } from "$lib/stores/layout-mode.svelte";
+  import EmptyState from "$lib/components/EmptyState.svelte";
   import ShellSheet from "$lib/shell/ShellSheet.svelte";
   import ShellDialog from "$lib/shell/ShellDialog.svelte";
   import IntakeFieldConfigSheet from "./IntakeFieldConfigSheet.svelte";
@@ -135,6 +138,11 @@
   // ---- Locale authoring state ----
   let editingLocale = $state<FormLocale>(BASE_LOCALE);
   let previewLocale = $state<FormLocale>(BASE_LOCALE);
+
+  type PreviewState = "form" | "submitted" | "closed";
+  let previewState = $state<PreviewState>("form");
+
+  const isDesktop = $derived(layoutMode.isDesktop);
 
   /** Native locale name for display in the segmented control. */
   function localeName(loc: FormLocale): string {
@@ -896,6 +904,17 @@
     fields.some((f) => f.fieldType === "pageBreak"),
   );
 
+  /** Preview-locale-resolved form meta for the preview pane. */
+  const previewDescription = $derived(
+    resolveLocalized(formDescription, previewLocale),
+  );
+  const previewSubmitMsg = $derived(
+    resolveLocalized(formSubmitMessage, previewLocale),
+  );
+  const previewClosedMsg = $derived(
+    resolveLocalized(formClosedMessage, previewLocale),
+  );
+
   /** Resolve a page break label in the preview locale, with a fallback. */
   function pageBreakLabel(field: PlaintextField): string {
     const resolved = resolveLocalized(field.label, previewLocale);
@@ -958,356 +977,437 @@
   );
 </script>
 
-<List strong inset>
-  <ListInput
-    label={m.intake_forms_name_label()}
-    type="text"
-    placeholder={m.intake_forms_name_placeholder()}
-    value={formName}
-    onInput={handleNameInput}
-  />
-  <ListInput
-    label={m.intake_forms_slug_label()}
-    type="text"
-    placeholder={m.intake_forms_slug_placeholder()}
-    info={slugError || m.intake_forms_slug_hint()}
-    error={slugError}
-    value={formSlug}
-    onInput={handleSlugInput}
-  />
-  {#if queuesQuery.data}
-    <ListInput
-      label={m.intake_forms_destination_label()}
-      type="select"
-      dropdown
-      value={destinationQueueId ?? ""}
-      onChange={handleDestinationChange}
-    >
-      <option value="">{defaultQueueLabel}</option>
-      {#each queuesQuery.data as queue (queue.id)}
-        <option value={queue.id}>{getQueueName(queue)}</option>
-      {/each}
-    </ListInput>
-  {/if}
-</List>
-
-<!-- Default toggle -->
-<List strong inset>
-  <ListItem title={m.intake_forms_default_toggle()}>
-    {#snippet subtitle()}
-      <span class="default-hint">{m.intake_forms_default_hint()}</span>
-    {/snippet}
-    {#snippet after()}
-      <Toggle checked={isDefault} onChange={() => (isDefault = !isDefault)} />
-    {/snippet}
-  </ListItem>
-</List>
-
-<!-- Closing date (locale-independent, sits above locale switcher per F-006) -->
-<BlockTitle>{m.intake_forms_closes_at_heading()}</BlockTitle>
-<List strong inset>
-  <ListInput
-    label={m.intake_forms_closes_at_label()}
-    type="datetime-local"
-    info={m.intake_forms_closes_at_hint_with_message()}
-    value={closesAtLocal}
-    onInput={(e: Event) => {
-      if (e.target instanceof HTMLInputElement) closesAtLocal = e.target.value;
-    }}
-  />
-  {#if closesAtLocal.length > 0}
-    <ListItem>
-      {#snippet after()}
-        <Button
-          outline
-          small
-          onclick={() => {
-            closesAtLocal = "";
-          }}
-        >
-          {m.intake_forms_closes_at_clear()}
-        </Button>
-      {/snippet}
-    </ListItem>
-  {/if}
-</List>
-
-<!-- Share link (locale-independent, sits above locale switcher per F-006) -->
-{#if shareLink}
-  <BlockTitle>{m.intake_forms_share_link()}</BlockTitle>
+{#snippet editorContent()}
   <List strong inset>
-    <ListItem title={shareLink}>
+    <ListInput
+      label={m.intake_forms_name_label()}
+      type="text"
+      placeholder={m.intake_forms_name_placeholder()}
+      value={formName}
+      onInput={handleNameInput}
+    />
+    <ListInput
+      label={m.intake_forms_slug_label()}
+      type="text"
+      placeholder={m.intake_forms_slug_placeholder()}
+      info={slugError || m.intake_forms_slug_hint()}
+      error={slugError}
+      value={formSlug}
+      onInput={handleSlugInput}
+    />
+    {#if queuesQuery.data}
+      <ListInput
+        label={m.intake_forms_destination_label()}
+        type="select"
+        dropdown
+        value={destinationQueueId ?? ""}
+        onChange={handleDestinationChange}
+      >
+        <option value="">{defaultQueueLabel}</option>
+        {#each queuesQuery.data as queue (queue.id)}
+          <option value={queue.id}>{getQueueName(queue)}</option>
+        {/each}
+      </ListInput>
+    {/if}
+  </List>
+
+  <!-- Default toggle -->
+  <List strong inset>
+    <ListItem title={m.intake_forms_default_toggle()}>
+      {#snippet subtitle()}
+        <span class="default-hint">{m.intake_forms_default_hint()}</span>
+      {/snippet}
       {#snippet after()}
-        <button
-          type="button"
-          class="copy-btn"
-          onclick={() => void copyShareLink()}
-          aria-label={m.intake_forms_link_copied()}
-        >
-          <Copy size={18} />
-        </button>
+        <Toggle checked={isDefault} onChange={() => (isDefault = !isDefault)} />
       {/snippet}
     </ListItem>
   </List>
-{/if}
 
-<!-- Locale selector for authoring -->
-<BlockTitle>{m.intake_forms_locale_heading()}</BlockTitle>
-<Block>
-  <Segmented strong>
-    {#each FORM_LOCALES as loc (loc)}
-      {@const comp = localeCompleteness(loc)}
-      <SegmentedButton
-        active={editingLocale === loc}
-        onclick={() => (editingLocale = loc)}
-      >
-        {localeName(loc)}
-        {#if comp.total > 0}
-          <span class="locale-badge">{comp.filled}/{comp.total}</span>
-        {/if}
-      </SegmentedButton>
-    {/each}
-  </Segmented>
-  {#if editingLocale !== BASE_LOCALE}
-    <p class="locale-hint">{m.intake_forms_locale_optional_hint()}</p>
-  {/if}
-</Block>
-
-<!-- Form-level descriptive content (locale-dependent) -->
-<BlockTitle>{m.intake_forms_content_heading()}</BlockTitle>
-<List strong inset>
-  <ListInput
-    label={m.intake_forms_description_label()}
-    type="textarea"
-    placeholder={m.intake_forms_description_placeholder()}
-    info={m.intake_forms_description_hint()}
-    value={readLocale(formDescription, editingLocale)}
-    onInput={(e: Event) => {
-      if (
-        e.target instanceof HTMLInputElement ||
-        e.target instanceof HTMLTextAreaElement
-      )
-        formDescription = setLocaleText(
-          formDescription,
-          editingLocale,
-          e.target.value,
-        );
-    }}
-  />
-  <ListInput
-    label={m.intake_forms_submit_message_label()}
-    type="textarea"
-    placeholder={m.intake_forms_submit_message_placeholder()}
-    info={m.intake_forms_submit_message_hint()}
-    value={readLocale(formSubmitMessage, editingLocale)}
-    onInput={(e: Event) => {
-      if (
-        e.target instanceof HTMLInputElement ||
-        e.target instanceof HTMLTextAreaElement
-      )
-        formSubmitMessage = setLocaleText(
-          formSubmitMessage,
-          editingLocale,
-          e.target.value,
-        );
-    }}
-  />
-  <ListInput
-    label={m.intake_forms_closed_message_label()}
-    type="textarea"
-    placeholder={m.intake_forms_closed_message_placeholder()}
-    info={m.intake_forms_closed_message_hint()}
-    value={readLocale(formClosedMessage, editingLocale)}
-    onInput={(e: Event) => {
-      if (
-        e.target instanceof HTMLInputElement ||
-        e.target instanceof HTMLTextAreaElement
-      )
-        formClosedMessage = setLocaleText(
-          formClosedMessage,
-          editingLocale,
-          e.target.value,
-        );
-    }}
-  />
-</List>
-
-<!-- Field list (F-009: enriched rows, per-page numbering, page break separators) -->
-<BlockTitle>
-  {m.intake_forms_fields_heading({ count: String(fields.length) })}
-</BlockTitle>
-<List strong inset>
-  {#each fields as field, index (field.fieldKey)}
-    {@const numbering = fieldNumbering.at(index)}
-    {#if field.fieldType === "pageBreak"}
-      <!-- Page break rendered as a separator row, not a numbered field -->
-      <ListItem
-        title={fieldDisplayLabel(field) ||
-          m.intake_forms_field_type_page_break()}
-      >
-        {#snippet subtitle()}
-          {#if hasPageBreaks && numbering != null}
-            <span class="page-break-subtitle">
-              {m.intake_forms_field_row_page_number({
-                page: String(numbering.page + 1),
-              })}
-            </span>
-          {/if}
-        {/snippet}
+  <!-- Closing date (locale-independent, sits above locale switcher per F-006) -->
+  <BlockTitle>{m.intake_forms_closes_at_heading()}</BlockTitle>
+  <List strong inset>
+    <ListInput
+      label={m.intake_forms_closes_at_label()}
+      type="datetime-local"
+      info={m.intake_forms_closes_at_hint_with_message()}
+      value={closesAtLocal}
+      onInput={(e: Event) => {
+        if (e.target instanceof HTMLInputElement)
+          closesAtLocal = e.target.value;
+      }}
+    />
+    {#if closesAtLocal.length > 0}
+      <ListItem>
         {#snippet after()}
-          <div class="field-actions">
-            <button
-              type="button"
-              class="field-action-btn"
-              disabled={index === 0}
-              onclick={() => moveField(index, -1)}
-              aria-label={m.intake_forms_move_up()}
-            >
-              <ArrowUp size={18} />
-            </button>
-            <button
-              type="button"
-              class="field-action-btn"
-              disabled={index === fields.length - 1}
-              onclick={() => moveField(index, 1)}
-              aria-label={m.intake_forms_move_down()}
-            >
-              <ArrowDown size={18} />
-            </button>
-            <button
-              type="button"
-              class="field-action-btn"
-              onclick={() => openConfigSheet(index)}
-              aria-label={m.intake_forms_configure()}
-            >
-              <Settings size={18} />
-            </button>
-            <button
-              type="button"
-              class="field-action-btn field-action-btn-remove"
-              onclick={() => removeField(index)}
-              aria-label={m.intake_forms_remove_field()}
-            >
-              <X size={18} />
-            </button>
-          </div>
-        {/snippet}
-      </ListItem>
-    {:else}
-      {@const fieldNum = numbering?.number ?? index + 1}
-      {@const title = buildFieldTitle(field, fieldNum)}
-      {@const subtitle = buildFieldSubtitle(field)}
-      <ListItem
-        {title}
-        {subtitle}
-        aria-label={title +
-          (field.isRequired ? `, ${m.intake_forms_field_required()}` : "")}
-      >
-        {#snippet after()}
-          <div class="field-actions">
-            <button
-              type="button"
-              class="field-action-btn"
-              disabled={index === 0}
-              onclick={() => moveField(index, -1)}
-              aria-label={m.intake_forms_move_up()}
-            >
-              <ArrowUp size={18} />
-            </button>
-            <button
-              type="button"
-              class="field-action-btn"
-              disabled={index === fields.length - 1}
-              onclick={() => moveField(index, 1)}
-              aria-label={m.intake_forms_move_down()}
-            >
-              <ArrowDown size={18} />
-            </button>
-            <button
-              type="button"
-              class="field-action-btn"
-              onclick={() => openConfigSheet(index)}
-              aria-label={m.intake_forms_configure()}
-            >
-              <Settings size={18} />
-            </button>
-            <button
-              type="button"
-              class="field-action-btn field-action-btn-remove"
-              onclick={() => removeField(index)}
-              aria-label={m.intake_forms_remove_field()}
-            >
-              <X size={18} />
-            </button>
-          </div>
+          <Button
+            outline
+            small
+            onclick={() => {
+              closesAtLocal = "";
+            }}
+          >
+            {m.intake_forms_closes_at_clear()}
+          </Button>
         {/snippet}
       </ListItem>
     {/if}
-  {/each}
-</List>
+  </List>
 
-<Block>
-  <Button outline onclick={openAddFieldSheet}>
-    {m.intake_forms_add_field()}
-  </Button>
-</Block>
-
-{#if fields.length > 0}
-  <BlockTitle>{m.intake_forms_preview()}</BlockTitle>
-  <Block>
-    <div class="preview-locale-switcher">
-      <Segmented strong>
-        {#each FORM_LOCALES as loc (loc)}
-          <SegmentedButton
-            active={previewLocale === loc}
-            onclick={() => (previewLocale = loc)}
+  <!-- Share link (locale-independent, sits above locale switcher per F-006) -->
+  {#if shareLink}
+    <BlockTitle>{m.intake_forms_share_link()}</BlockTitle>
+    <List strong inset>
+      <ListItem title={shareLink}>
+        {#snippet after()}
+          <button
+            type="button"
+            class="copy-btn"
+            onclick={() => void copyShareLink()}
+            aria-label={m.intake_forms_link_copied()}
           >
-            {localeName(loc)}
-          </SegmentedButton>
-        {/each}
-      </Segmented>
-    </div>
+            <Copy size={18} />
+          </button>
+        {/snippet}
+      </ListItem>
+    </List>
+  {/if}
+
+  <!-- Locale selector for authoring -->
+  <BlockTitle>{m.intake_forms_locale_heading()}</BlockTitle>
+  <Block>
+    <Segmented strong>
+      {#each FORM_LOCALES as loc (loc)}
+        {@const comp = localeCompleteness(loc)}
+        <SegmentedButton
+          active={editingLocale === loc}
+          onclick={() => (editingLocale = loc)}
+        >
+          {localeName(loc)}
+          {#if comp.total > 0}
+            <span class="locale-badge">{comp.filled}/{comp.total}</span>
+          {/if}
+        </SegmentedButton>
+      {/each}
+    </Segmented>
+    {#if editingLocale !== BASE_LOCALE}
+      <p class="locale-hint">{m.intake_forms_locale_optional_hint()}</p>
+    {/if}
+  </Block>
+
+  <!-- Form-level descriptive content (locale-dependent) -->
+  <BlockTitle>{m.intake_forms_content_heading()}</BlockTitle>
+  <List strong inset>
+    <ListInput
+      label={m.intake_forms_description_label()}
+      type="textarea"
+      placeholder={m.intake_forms_description_placeholder()}
+      info={m.intake_forms_description_hint()}
+      value={readLocale(formDescription, editingLocale)}
+      onInput={(e: Event) => {
+        if (
+          e.target instanceof HTMLInputElement ||
+          e.target instanceof HTMLTextAreaElement
+        )
+          formDescription = setLocaleText(
+            formDescription,
+            editingLocale,
+            e.target.value,
+          );
+      }}
+    />
+    <ListInput
+      label={m.intake_forms_submit_message_label()}
+      type="textarea"
+      placeholder={m.intake_forms_submit_message_placeholder()}
+      info={m.intake_forms_submit_message_hint()}
+      value={readLocale(formSubmitMessage, editingLocale)}
+      onInput={(e: Event) => {
+        if (
+          e.target instanceof HTMLInputElement ||
+          e.target instanceof HTMLTextAreaElement
+        )
+          formSubmitMessage = setLocaleText(
+            formSubmitMessage,
+            editingLocale,
+            e.target.value,
+          );
+      }}
+    />
+    <ListInput
+      label={m.intake_forms_closed_message_label()}
+      type="textarea"
+      placeholder={m.intake_forms_closed_message_placeholder()}
+      info={m.intake_forms_closed_message_hint()}
+      value={readLocale(formClosedMessage, editingLocale)}
+      onInput={(e: Event) => {
+        if (
+          e.target instanceof HTMLInputElement ||
+          e.target instanceof HTMLTextAreaElement
+        )
+          formClosedMessage = setLocaleText(
+            formClosedMessage,
+            editingLocale,
+            e.target.value,
+          );
+      }}
+    />
+  </List>
+
+  <!-- Field list (F-009: enriched rows, per-page numbering, page break separators) -->
+  <BlockTitle>
+    {m.intake_forms_fields_heading({ count: String(fields.length) })}
+  </BlockTitle>
+  <List strong inset>
     {#each fields as field, index (field.fieldKey)}
+      {@const numbering = fieldNumbering.at(index)}
       {#if field.fieldType === "pageBreak"}
-        <div class="preview-page-break" role="separator">
-          <hr class="preview-page-break-line" />
-          <span class="preview-page-break-label">
-            {pageBreakLabel(field)}
-          </span>
-          <hr class="preview-page-break-line" />
-        </div>
+        <!-- Page break rendered as a separator row, not a numbered field -->
+        <ListItem
+          title={fieldDisplayLabel(field) ||
+            m.intake_forms_field_type_page_break()}
+        >
+          {#snippet subtitle()}
+            {#if hasPageBreaks && numbering != null}
+              <span class="page-break-subtitle">
+                {m.intake_forms_field_row_page_number({
+                  page: String(numbering.page + 1),
+                })}
+              </span>
+            {/if}
+          {/snippet}
+          {#snippet after()}
+            <div class="field-actions">
+              <button
+                type="button"
+                class="field-action-btn"
+                disabled={index === 0}
+                onclick={() => moveField(index, -1)}
+                aria-label={m.intake_forms_move_up()}
+              >
+                <ArrowUp size={18} />
+              </button>
+              <button
+                type="button"
+                class="field-action-btn"
+                disabled={index === fields.length - 1}
+                onclick={() => moveField(index, 1)}
+                aria-label={m.intake_forms_move_down()}
+              >
+                <ArrowDown size={18} />
+              </button>
+              <button
+                type="button"
+                class="field-action-btn"
+                onclick={() => openConfigSheet(index)}
+                aria-label={m.intake_forms_configure()}
+              >
+                <Settings size={18} />
+              </button>
+              <button
+                type="button"
+                class="field-action-btn field-action-btn-remove"
+                onclick={() => removeField(index)}
+                aria-label={m.intake_forms_remove_field()}
+              >
+                <X size={18} />
+              </button>
+            </div>
+          {/snippet}
+        </ListItem>
       {:else}
-        <IntakeFieldRenderer
-          fieldId={`preview-${String(index)}`}
-          label={resolveLocalized(field.label, previewLocale) ?? ""}
-          helpText={resolveLocalized(field.helpText, previewLocale)}
-          config={field.config}
-          isRequired={field.isRequired}
-          locale={previewLocale}
-          value={undefined}
-          onchange={previewNoop}
-        />
+        {@const fieldNum = numbering?.number ?? index + 1}
+        {@const title = buildFieldTitle(field, fieldNum)}
+        {@const subtitle = buildFieldSubtitle(field)}
+        <ListItem
+          {title}
+          {subtitle}
+          aria-label={title +
+            (field.isRequired ? `, ${m.intake_forms_field_required()}` : "")}
+        >
+          {#snippet after()}
+            <div class="field-actions">
+              <button
+                type="button"
+                class="field-action-btn"
+                disabled={index === 0}
+                onclick={() => moveField(index, -1)}
+                aria-label={m.intake_forms_move_up()}
+              >
+                <ArrowUp size={18} />
+              </button>
+              <button
+                type="button"
+                class="field-action-btn"
+                disabled={index === fields.length - 1}
+                onclick={() => moveField(index, 1)}
+                aria-label={m.intake_forms_move_down()}
+              >
+                <ArrowDown size={18} />
+              </button>
+              <button
+                type="button"
+                class="field-action-btn"
+                onclick={() => openConfigSheet(index)}
+                aria-label={m.intake_forms_configure()}
+              >
+                <Settings size={18} />
+              </button>
+              <button
+                type="button"
+                class="field-action-btn field-action-btn-remove"
+                onclick={() => removeField(index)}
+                aria-label={m.intake_forms_remove_field()}
+              >
+                <X size={18} />
+              </button>
+            </div>
+          {/snippet}
+        </ListItem>
       {/if}
     {/each}
-  </Block>
-{/if}
+  </List>
 
-<Block>
-  <Button large disabled={!canSave} onclick={handleSave}>
-    {#if saveMutation.isPending}
-      {m.common_loading()}
-    {:else}
-      {m.intake_forms_save()}
-    {/if}
-  </Button>
-</Block>
-
-{#if formId !== null}
   <Block>
-    <Button large outline class="delete-form-btn" onclick={openDeleteDialog}>
-      {m.intake_forms_delete()}
+    <Button outline onclick={openAddFieldSheet}>
+      {m.intake_forms_add_field()}
     </Button>
   </Block>
+
+  <Block>
+    <Button large disabled={!canSave} onclick={handleSave}>
+      {#if saveMutation.isPending}
+        {m.common_loading()}
+      {:else}
+        {m.intake_forms_save()}
+      {/if}
+    </Button>
+  </Block>
+
+  {#if formId !== null}
+    <Block>
+      <Button large outline class="delete-form-btn" onclick={openDeleteDialog}>
+        {m.intake_forms_delete()}
+      </Button>
+    </Block>
+  {/if}
+{/snippet}
+
+{#snippet previewContent()}
+  {#if fields.length === 0}
+    <div class="preview-empty-wrapper" data-testid="preview-empty-state">
+      <EmptyState
+        icon={Eye}
+        title={m.intake_forms_preview_empty_title()}
+        subtitle={m.intake_forms_preview_empty_subtitle()}
+      />
+    </div>
+  {:else}
+    <BlockTitle>{m.intake_forms_preview()}</BlockTitle>
+    <Block>
+      <div class="preview-state-switcher" data-testid="preview-state-switcher">
+        <Segmented strong>
+          <SegmentedButton
+            active={previewState === "form"}
+            onclick={() => (previewState = "form")}
+          >
+            {m.intake_forms_preview_state_form()}
+          </SegmentedButton>
+          <SegmentedButton
+            active={previewState === "submitted"}
+            onclick={() => (previewState = "submitted")}
+          >
+            {m.intake_forms_preview_state_submitted()}
+          </SegmentedButton>
+          <SegmentedButton
+            active={previewState === "closed"}
+            onclick={() => (previewState = "closed")}
+          >
+            {m.intake_forms_preview_state_closed()}
+          </SegmentedButton>
+        </Segmented>
+      </div>
+      <div class="preview-locale-switcher">
+        <Segmented strong>
+          {#each FORM_LOCALES as loc (loc)}
+            <SegmentedButton
+              active={previewLocale === loc}
+              onclick={() => (previewLocale = loc)}
+            >
+              {localeName(loc)}
+            </SegmentedButton>
+          {/each}
+        </Segmented>
+      </div>
+
+      {#if previewState === "form"}
+        <!-- Description above fields, mirroring public page placement -->
+        {#if previewDescription}
+          <p class="preview-description">{previewDescription}</p>
+        {/if}
+        {#each fields as field, index (field.fieldKey)}
+          {#if field.fieldType === "pageBreak"}
+            <div class="preview-page-break" role="separator">
+              <hr class="preview-page-break-line" />
+              <span class="preview-page-break-label">
+                {pageBreakLabel(field)}
+              </span>
+              <hr class="preview-page-break-line" />
+            </div>
+          {:else}
+            <IntakeFieldRenderer
+              fieldId={`preview-${String(index)}`}
+              label={resolveLocalized(field.label, previewLocale) ?? ""}
+              helpText={resolveLocalized(field.helpText, previewLocale)}
+              config={field.config}
+              isRequired={field.isRequired}
+              locale={previewLocale}
+              value={undefined}
+              onchange={previewNoop}
+            />
+          {/if}
+        {/each}
+      {:else if previewState === "submitted"}
+        <!-- Success state, mirrors IntakeFormBody submitted layout -->
+        <h2 class="intake-preview-success-heading">
+          {m.intake_success_heading()}
+        </h2>
+        <p class="intake-preview-success-body">
+          {previewSubmitMsg ?? m.intake_success_body()}
+        </p>
+        <p class="intake-preview-reference-label">
+          {m.intake_reference_label()}
+        </p>
+        <code class="intake-preview-reference-code"
+          >{m.intake_forms_preview_reference_placeholder()}</code
+        >
+        <p class="intake-preview-reference-save">{m.intake_reference_save()}</p>
+      {:else}
+        <!-- Closed state, mirrors IntakeFormBody closed layout -->
+        <p class="intake-preview-closed" role="status">
+          {previewClosedMsg ?? m.intake_form_closed_default()}
+        </p>
+      {/if}
+    </Block>
+  {/if}
+{/snippet}
+
+{#if isDesktop}
+  <SplitView>
+    {#snippet left()}
+      <div class="editor-pane-inner">
+        {@render editorContent()}
+      </div>
+    {/snippet}
+    {#snippet right()}
+      <div class="preview-pane-inner">
+        {@render previewContent()}
+      </div>
+    {/snippet}
+  </SplitView>
+{:else}
+  <!-- Mobile stacked layout: editor then preview stacked -->
+  {@render editorContent()}
+  {@render previewContent()}
 {/if}
 
 <!-- Delete confirmation dialog -->
@@ -1446,8 +1546,83 @@
     text-align: center;
   }
 
+  .editor-pane-inner {
+    padding: var(--space-sm);
+    overflow-y: auto;
+    height: 100%;
+  }
+
+  .preview-pane-inner {
+    padding: var(--space-sm);
+    overflow-y: auto;
+    height: 100%;
+  }
+
+  .preview-empty-wrapper {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 200px;
+    height: 100%;
+  }
+
+  .preview-state-switcher {
+    margin-bottom: var(--space-sm);
+  }
+
   .preview-locale-switcher {
     margin-bottom: var(--space-md);
+  }
+
+  .preview-description {
+    color: var(--muted);
+    font-size: var(--text-sm);
+    line-height: 1.5;
+    white-space: pre-line;
+    margin-bottom: var(--space-md);
+  }
+
+  .intake-preview-success-heading {
+    font-size: var(--text-md);
+    font-weight: 600;
+    color: var(--ink);
+    margin: 0 0 var(--space-sm);
+  }
+
+  .intake-preview-success-body {
+    font-size: var(--text-sm);
+    color: var(--muted);
+    line-height: 1.5;
+  }
+
+  .intake-preview-reference-label {
+    font-size: var(--text-sm);
+    color: var(--ink);
+    margin: var(--space-md) 0 var(--space-xs);
+  }
+
+  .intake-preview-reference-code {
+    display: block;
+    font-size: var(--text-base);
+    font-weight: 600;
+    padding: var(--space-sm) var(--space-md);
+    background: var(--raised);
+    border-radius: 8px;
+    text-align: center;
+    margin: 0 0 var(--space-sm);
+  }
+
+  .intake-preview-reference-save {
+    font-size: var(--text-sm);
+    color: var(--muted);
+  }
+
+  .intake-preview-closed {
+    color: var(--muted);
+    font-size: var(--text-sm);
+    line-height: 1.5;
+    text-align: center;
+    padding: var(--space-xl) 0;
   }
 
   .preview-page-break {

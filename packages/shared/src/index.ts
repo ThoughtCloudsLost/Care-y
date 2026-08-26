@@ -631,6 +631,8 @@ export {
   type IntakeResponseRowWire,
   logExportInputSchema,
   type LogExportInput,
+  publicFormResultSchema,
+  type PublicFormResult,
 } from "./schemas/client-portal.js";
 
 // --- Intake form schemas ---

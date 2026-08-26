@@ -15,6 +15,7 @@ import type {
   PillDefinition,
   FilterToggleConfig,
 } from "$lib/components/filters/filter-types.js";
+import type { ScrollSection } from "$lib/components/useSectionScroll.svelte.js";
 
 // ── Tab identifiers ──────────────────────────────────────────────────
 
@@ -385,4 +386,15 @@ export interface DesktopSidebarProps {
   readonly roleId: string;
   /** Called with the role's admin hub path when the role badge is activated. */
   readonly onNavigate: (path: `/${string}`) => void;
+  /** Hover-reveal: called when the mouse enters a tab/admin button that
+   *  has sections in the registry. Returns sections to display in the
+   *  hover rail, or undefined to suppress the rail. */
+  readonly getHoverSections?: (route: string) => HoverRevealData | undefined;
+  /** Called when the user clicks a section in the hover rail. */
+  readonly onHoverNavigate?: (route: string, sectionId: string) => void;
+}
+
+export interface HoverRevealData {
+  readonly sections: readonly ScrollSection[];
+  readonly pageLabel: string;
 }

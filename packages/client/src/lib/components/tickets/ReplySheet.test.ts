@@ -286,6 +286,8 @@ vi.mock(
       setTabbarHiddenCtx: passthrough,
       getNavbarOverrideCtx: () => ({ current: undefined }),
       setNavbarOverrideCtx: passthrough,
+      getSectionRailCtx: () => ({ current: undefined }),
+      setSectionRailCtx: passthrough,
     }) satisfies typeof ShellCtxModule,
 );
 

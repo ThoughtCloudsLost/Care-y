@@ -1,7 +1,10 @@
 <script lang="ts">
   import { SvelteSet } from "svelte/reactivity";
   import { afterNavigate } from "$app/navigation";
-  import { getNavbarOverrideCtx } from "$lib/shell/context.js";
+  import {
+    getNavbarOverrideCtx,
+    getSectionRailCtx,
+  } from "$lib/shell/context.js";
   import { getCurrentPermissions } from "$lib/crypto/context.js";
   import { createSectionScroll } from "$lib/components/useSectionScroll.svelte.js";
   import SectionScrollNav from "$lib/components/SectionScrollNav.svelte";
@@ -42,14 +45,21 @@
   }
 
   const navbarCtx = getNavbarOverrideCtx();
+  const sectionRailCtx = getSectionRailCtx();
 
   $effect(() => {
     navbarCtx.current = {
       title,
       subnavbar: subnavbarSnippet,
     };
+    sectionRailCtx.current = {
+      sections: visibleSections,
+      active: scroll.active,
+      scrollTo: (id: string) => expandAndScroll(id),
+    };
     return () => {
       navbarCtx.current = undefined;
+      sectionRailCtx.current = undefined;
     };
   });
 </script>

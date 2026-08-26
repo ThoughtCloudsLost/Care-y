@@ -166,6 +166,7 @@ export const errorCodeMap: Record<ErrorCodeType, () => string> = {
   [ErrorCode.INTAKE_SLUG_TAKEN]: () => m.error_intake_slug_taken(),
   [ErrorCode.INTAKE_DISABLED]: () => m.error_intake_disabled(),
   [ErrorCode.INTAKE_FORM_CLOSED]: () => m.error_intake_form_closed(),
+  [ErrorCode.BUILTIN_FORM_DISABLED]: () => m.error_builtin_form_disabled(),
 
   // Portal channels
   [ErrorCode.PORTAL_CHANNEL_EXISTS]: () =>

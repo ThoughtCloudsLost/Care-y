@@ -152,6 +152,37 @@ export function createIntakeFormRouter(deps: IntakeFormRouterDeps) {
         }),
       ),
 
+    /** Read the org-level built-in default form enabled flag. */
+    getBuiltinDefaultEnabled: queueManagerProcedure.query(
+      withErrorWrapping(async ({ ctx }) => {
+        const enabled = await deps.intakeFormService.isBuiltinDefaultEnabled(
+          ctx.org.tenantDb,
+        );
+        return { enabled };
+      }),
+    ),
+
+    /** Toggle the org-level built-in default form enabled flag. */
+    setBuiltinDefaultEnabled: queueManagerProcedure
+      .input(z.object({ enabled: z.boolean() }))
+      .mutation(
+        withErrorWrapping(async ({ ctx, input }) => {
+          await deps.intakeFormService.setBuiltinDefaultEnabled(
+            ctx.org.tenantDb,
+            input.enabled,
+          );
+
+          const audit = deps.createAuditSvc(ctx.org.tenantDb);
+          void audit.log({
+            eventType: "builtin_default_toggled",
+            actorId: ctx.user.id,
+            metadata: { enabled: input.enabled },
+          });
+
+          return { ok: true };
+        }),
+      ),
+
     /**
      * Paginated listing of intake form responses.
      * Returns ciphertext + wraps only; the server never sees plaintext.

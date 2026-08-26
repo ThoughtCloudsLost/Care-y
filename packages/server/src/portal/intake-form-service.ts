@@ -63,6 +63,13 @@ export interface PublicFormResult {
   readonly intakeDisabled: boolean;
   /** True when the form's closes_at is in the past (server clock). */
   readonly formClosed: boolean;
+  /**
+   * True when the built-in default form is disabled via org_config.
+   * Only meaningful when formId is null and intakeDisabled is false
+   * (no active default DB form, builtin toggle is off). The client
+   * uses this to render not-available instead of the fallback form.
+   */
+  readonly builtinFormDisabled: boolean;
 }
 
 // ---------------------------------------------------------------------------
@@ -174,6 +181,15 @@ export interface IntakeFormService {
 
   /** Sets the org-wide web intake enabled flag (kill switch toggle). */
   setWebIntakeEnabled(
+    db: Kysely<TenantDatabase>,
+    enabled: boolean,
+  ): Promise<void>;
+
+  /** Returns the org-level toggle for the built-in default form. */
+  isBuiltinDefaultEnabled(db: Kysely<TenantDatabase>): Promise<boolean>;
+
+  /** Sets the org-level toggle for the built-in default form. */
+  setBuiltinDefaultEnabled(
     db: Kysely<TenantDatabase>,
     enabled: boolean,
   ): Promise<void>;
@@ -601,6 +617,28 @@ export function createIntakeFormService(deps: {
         .execute();
     },
 
+    async isBuiltinDefaultEnabled(
+      db: Kysely<TenantDatabase>,
+    ): Promise<boolean> {
+      const config = await db
+        .selectFrom("org_config")
+        .select("builtin_default_enabled")
+        .executeTakeFirst();
+
+      // Default to true when no row exists (pre-migration orgs)
+      return config?.builtin_default_enabled !== false;
+    },
+
+    async setBuiltinDefaultEnabled(
+      db: Kysely<TenantDatabase>,
+      enabled: boolean,
+    ): Promise<void> {
+      await db
+        .updateTable("org_config")
+        .set({ builtin_default_enabled: enabled })
+        .execute();
+    },
+
     async resolvePublicForm(
       db: Kysely<TenantDatabase>,
       slug: string | null,
@@ -615,13 +653,19 @@ export function createIntakeFormService(deps: {
           encryptedFormMeta: null,
           intakeDisabled: true,
           formClosed: false,
+          builtinFormDisabled: false,
         };
       }
 
       const form = await this.getPublicForm(db, slug);
 
       if (form === null) {
-        // Slug was given but no active form matched, or no default form
+        // No active DB form matched. When a slug was given, this is
+        // slug-not-found regardless of the builtin toggle. When no slug
+        // was given (bare /intake), check the builtin default toggle.
+        const builtinOff =
+          slug === null ? !(await this.isBuiltinDefaultEnabled(db)) : false;
+
         return {
           formId: null,
           fields: null,
@@ -629,6 +673,7 @@ export function createIntakeFormService(deps: {
           encryptedFormMeta: null,
           intakeDisabled: false,
           formClosed: false,
+          builtinFormDisabled: builtinOff,
         };
       }
 
@@ -641,6 +686,7 @@ export function createIntakeFormService(deps: {
           fields: null,
           intakeDisabled: false,
           formClosed: true,
+          builtinFormDisabled: false,
         };
       }
 
@@ -651,6 +697,7 @@ export function createIntakeFormService(deps: {
         fields: form.fields,
         intakeDisabled: false,
         formClosed: false,
+        builtinFormDisabled: false,
       };
     },
   };

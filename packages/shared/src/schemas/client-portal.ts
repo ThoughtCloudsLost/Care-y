@@ -160,6 +160,18 @@ export const publicIntakeFormSchema = z.object({
 });
 export type PublicIntakeForm = z.infer<typeof publicIntakeFormSchema>;
 
+/** Full resolution result from getIntakeForm (resolvePublicForm). */
+export const publicFormResultSchema = z.object({
+  formId: intakeFormIdSchema.nullable(),
+  slug: z.string().nullable(),
+  encryptedFormMeta: z.string().nullable(),
+  fields: z.array(publicIntakeFieldSchema).nullable(),
+  intakeDisabled: z.boolean(),
+  formClosed: z.boolean(),
+  builtinFormDisabled: z.boolean(),
+});
+export type PublicFormResult = z.infer<typeof publicFormResultSchema>;
+
 // ---------------------------------------------------------------------------
 // Secure Link portal schemas (8b)
 // ---------------------------------------------------------------------------

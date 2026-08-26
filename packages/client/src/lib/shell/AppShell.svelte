@@ -72,10 +72,15 @@
     setTabbarOverrideCtx,
     setTabbarHiddenCtx,
     setNavbarOverrideCtx,
+    setSectionRailCtx,
     type TabbarOverrideContainer,
     type TabbarHiddenContainer,
     type NavbarOverrideContainer,
+    type SectionRailContainer,
   } from "./context";
+  import SectionRail from "./SectionRail.svelte";
+  import { getHoverSections, findRegistryEntry } from "./section-registry.js";
+  import type { HoverRevealData } from "./types";
   import { markNavigated } from "./navigation.js";
   import ShellSheet from "./ShellSheet.svelte";
   import ShellPanel from "./ShellPanel.svelte";
@@ -177,6 +182,14 @@
   });
   setNavbarOverrideCtx(navbarOverrideContainer);
   const navbarOverride = $derived(navbarOverrideContainer.current);
+
+  // Section rail: pages with scroll sections publish their state here.
+  // AppShell reads it reactively to render the desktop SectionRail.
+  const sectionRailContainer: SectionRailContainer = $state({
+    current: undefined,
+  });
+  setSectionRailCtx(sectionRailContainer);
+  const sectionRailState = $derived(sectionRailContainer.current);
 
   // ── Split navbar (segmented desktop view) ──
   const splitNavbarCfg = $derived(splitNavbar.config);
@@ -863,6 +876,22 @@
 
   const queryClient = useQueryClient();
 
+  // ── Hover-reveal section helpers ────────────────────────────────────
+
+  function buildHoverData(route: string): HoverRevealData | undefined {
+    const sections = getHoverSections(route, currentPermissions, queryClient);
+    if (sections.length === 0) return undefined;
+    const entry = findRegistryEntry(route);
+    if (entry == null) return undefined;
+    return { sections, pageLabel: entry.pageLabel() };
+  }
+
+  function handleHoverNavigate(route: string, sectionId: string): void {
+    const separator = route.includes("?") ? "&" : "?";
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- route is a known internal path from the registry
+    void goto(resolve(`${route}${separator}tab=${sectionId}` as `/${string}`));
+  }
+
   const ptr = providePTR(true);
 
   const PTR_THRESHOLD = 72; // px of overscroll to trigger refresh
@@ -1177,7 +1206,16 @@
       onSettings={() => void goto(resolve("/more/settings"))}
       onLogout={() => void goto(resolve("/logout"))}
       onNavigate={(path: `/${string}`) => navigateToPath(path)}
+      getHoverSections={buildHoverData}
+      onHoverNavigate={handleHoverNavigate}
     />
+    {#if sectionRailState != null}
+      <SectionRail
+        sections={sectionRailState.sections}
+        active={sectionRailState.active}
+        onscroll={sectionRailState.scrollTo}
+      />
+    {/if}
   {/if}
   <PageShell
     scrollTag="main"

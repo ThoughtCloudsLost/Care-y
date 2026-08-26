@@ -34,6 +34,7 @@ import {
   IntakeDisabledError,
   IntakeFormClosedError,
   IntakeAccountUnavailableError,
+  BuiltinFormDisabledError,
   type IntakeTicketInput,
   type IntakeAccountInput,
   type IntakeContinuationInput,
@@ -523,6 +524,66 @@ describe.skipIf(!process.env.DATABASE_URL)(
         .updateTable("org_config")
         .set({ web_intake_enabled: true })
         .execute();
+    });
+
+    it("throws BuiltinFormDisabledError when builtin_default_enabled is false and formId is null", async () => {
+      await testDb.db
+        .updateTable("org_config")
+        .set({ builtin_default_enabled: false })
+        .execute();
+
+      const ns = createMockNotificationService();
+      const input = makeInput({ formId: null });
+
+      await expect(
+        createIntakeTicket(
+          testDb.db,
+          {
+            notificationService: ns,
+            sealedBox: testSealedBox,
+            orgId: TEST_ORG_ID,
+            orgSchema: testDb.schemaName as OrgSchema,
+            orgSlug: "test-org" as OrgSlug,
+          },
+          input,
+        ),
+      ).rejects.toThrow(BuiltinFormDisabledError);
+
+      // Cleanup
+      await testDb.db
+        .updateTable("org_config")
+        .set({ builtin_default_enabled: true })
+        .execute();
+    });
+
+    it("allows builtin submission when builtin_default_enabled is true and formId is null", async () => {
+      await testDb.db
+        .updateTable("org_config")
+        .set({ builtin_default_enabled: true })
+        .execute();
+
+      const ns = createMockNotificationService();
+      const input = makeInput({ formId: null });
+
+      // This should not throw BuiltinFormDisabledError (may throw
+      // IntakeQueueNotConfiguredError if no queue is set, which is fine;
+      // the point is the builtin check passes)
+      try {
+        await createIntakeTicket(
+          testDb.db,
+          {
+            notificationService: ns,
+            sealedBox: testSealedBox,
+            orgId: TEST_ORG_ID,
+            orgSchema: testDb.schemaName as OrgSchema,
+            orgSlug: "test-org" as OrgSlug,
+          },
+          input,
+        );
+      } catch (err: unknown) {
+        // IntakeQueueNotConfiguredError is acceptable; BuiltinFormDisabledError is not
+        expect(err).not.toBeInstanceOf(BuiltinFormDisabledError);
+      }
     });
 
     it("throws IntakeQueueNotConfiguredError when intake_queue_id is null", async () => {
