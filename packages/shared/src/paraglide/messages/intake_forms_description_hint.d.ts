@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "Plain text with line breaks. Shown on the public form page." |
+* | "Shown on the public form page." |
 *
 * @param {Intake_Forms_Description_HintInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

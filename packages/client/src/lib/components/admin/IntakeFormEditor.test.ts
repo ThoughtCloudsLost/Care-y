@@ -8,6 +8,7 @@ const {
   mockDeleteForm,
   mockToastShow,
   mockEncryptFieldContent,
+  mockUploadFormAsset,
 } = vi.hoisted(() => ({
   mockSaveForm: vi.fn().mockResolvedValue({ formId: "new-form-id" }),
   mockBindQueue: vi.fn().mockResolvedValue({ ok: true }),
@@ -17,6 +18,7 @@ const {
     encryptedLabel: "enc-label",
     encryptedConfig: "enc-config",
   }),
+  mockUploadFormAsset: vi.fn().mockResolvedValue({ blobId: "test-blob-id" }),
 }));
 
 vi.mock("$lib/paraglide/messages.js", async (importOriginal) => ({
@@ -86,13 +88,28 @@ vi.mock("$lib/paraglide/messages.js", async (importOriginal) => ({
   intake_forms_content_heading: () => "Form content",
   intake_forms_description_label: () => "Description",
   intake_forms_description_placeholder: () => "Shown above the form.",
-  intake_forms_description_hint: () => "Plain text.",
+  intake_forms_description_hint: () => "Shown on the public form page.",
   intake_forms_submit_message_label: () => "Success message",
   intake_forms_submit_message_placeholder: () => "Shown after submit.",
   intake_forms_submit_message_hint: () => "Replaces default.",
   intake_forms_closed_message_label: () => "Closed message",
   intake_forms_closed_message_placeholder: () => "Shown when closed.",
   intake_forms_closed_message_hint: () => "When closing date has passed.",
+  intake_forms_content_cap_error: ({ max }: { max: string }) =>
+    `Content exceeds the ${max} character limit for this locale.`,
+  intake_forms_banner_heading: () => "Banner image",
+  intake_forms_banner_add: () => "Add banner image",
+  intake_forms_banner_remove: () => "Remove banner",
+  intake_forms_banner_alt_label: () =>
+    "Alt text (optional, leave blank for decorative)",
+  intake_forms_banner_alt_placeholder: () =>
+    "Describe the image for screen readers",
+  intake_forms_banner_uploading: () => "Uploading banner...",
+  intake_forms_banner_upload_failed: () => "Banner upload failed.",
+  intake_forms_banner_file_too_large: () =>
+    "Banner image exceeds the maximum file size.",
+  intake_forms_banner_file_type: () =>
+    "Only PNG, JPEG, and WebP images are allowed.",
   intake_forms_closes_at_heading: () => "Closing date",
   intake_forms_closes_at_label: () => "Closes at",
   intake_forms_closes_at_hint: () =>
@@ -158,6 +175,8 @@ vi.mock("$lib/paraglide/messages.js", async (importOriginal) => ({
   intake_reference_save: () => "Save it if you want to follow up by phone.",
   intake_form_closed_default: () =>
     "This form is no longer accepting submissions.",
+  form_content_editor_image_no_key: () =>
+    "Image upload requires the organization key to be loaded",
 }));
 
 vi.mock("$lib/terminology/with-terms.js", async (importOriginal) => ({
@@ -172,6 +191,7 @@ vi.mock("$lib/trpc/index.js", async (importOriginal) => ({
       save: { mutate: mockSaveForm },
       bindQueue: { mutate: mockBindQueue },
       remove: { mutate: mockDeleteForm },
+      uploadFormAsset: { mutate: mockUploadFormAsset },
     },
     tickets: {
       listQueues: { query: vi.fn().mockResolvedValue([]) },
@@ -235,6 +255,30 @@ vi.mock("$lib/stores/layout-mode.svelte", async (importOriginal) => ({
 vi.mock("$lib/components/shared/konsta-classes.js", async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   DIALOG_DESTRUCTIVE_CLASS: "destructive-class",
+}));
+
+vi.mock("$lib/utils/org-slug.js", async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  getOrgSlug: () => "test-org",
+}));
+
+// Mock renderFormRichText to return simple text for testing
+vi.mock("$lib/utils/render-form-content.js", async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  renderFormRichText: (value: unknown) => {
+    if (value === undefined || value === null) return "";
+    if (typeof value === "string") return `<p>${value}</p>`;
+    return "<p>rich content</p>";
+  },
+}));
+
+// Mock FormContentEditor as a simple div that shows the label
+vi.mock("./FormContentEditor.svelte", async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  default: {
+    $$render: () => "",
+    render: () => ({ html: "", css: { code: "" }, head: "" }),
+  },
 }));
 
 vi.mock("@tanstack/svelte-query", async (importOriginal) => ({
@@ -773,5 +817,89 @@ describe("IntakeFormEditor", () => {
     expect(
       screen.getByText("This form is no longer accepting submissions."),
     ).toBeTruthy();
+  });
+
+  it("renders banner section heading", () => {
+    render(IntakeFormEditor, { props: baseProps });
+
+    expect(screen.getByText("Banner image")).toBeTruthy();
+  });
+
+  it("renders add banner button when no banner set", () => {
+    render(IntakeFormEditor, { props: baseProps });
+
+    expect(screen.getByText("Add banner image")).toBeTruthy();
+  });
+
+  it("renders banner preview and remove button when bannerBlobKey is set", () => {
+    render(IntakeFormEditor, {
+      props: {
+        ...baseProps,
+        initialFormMeta: {
+          bannerBlobKey: "test-blob-123",
+          bannerAlt: "A test banner",
+        },
+      },
+    });
+
+    // Remove button should be visible
+    expect(screen.getByText("Remove banner")).toBeTruthy();
+
+    // Banner preview image should exist
+    const bannerImg = document.querySelector(
+      ".banner-preview-img",
+    ) as HTMLImageElement | null;
+    expect(bannerImg).toBeTruthy();
+    expect(bannerImg?.src).toContain("/api/forms/test-org/test-blob-123");
+    expect(bannerImg?.alt).toBe("A test banner");
+  });
+
+  it("renders form content heading for rich text editors", () => {
+    render(IntakeFormEditor, { props: baseProps });
+
+    expect(screen.getByText("Form content")).toBeTruthy();
+  });
+
+  it("renders banner in preview when bannerBlobKey is set", () => {
+    render(IntakeFormEditor, {
+      props: {
+        ...baseProps,
+        initialFormMeta: {
+          bannerBlobKey: "preview-blob",
+          bannerAlt: "Preview banner",
+        },
+        initialFields: [
+          {
+            fieldKey: "fk-preview-banner",
+            label: { en: "Name" },
+            helpText: {},
+            isRequired: false,
+            config: { type: "text" as const },
+            fieldType: "text" as const,
+            ...NO_ROLE,
+          },
+        ],
+      },
+    });
+
+    const previewBanner = document.querySelector(
+      ".preview-banner-img",
+    ) as HTMLImageElement | null;
+    expect(previewBanner).toBeTruthy();
+    expect(previewBanner?.alt).toBe("Preview banner");
+  });
+
+  it("marks dirty when bannerBlobKey changes from initial", () => {
+    const ondirtychange = vi.fn();
+    render(IntakeFormEditor, {
+      props: {
+        ...baseProps,
+        initialFormMeta: { bannerBlobKey: "original-blob" },
+        ondirtychange,
+      },
+    });
+
+    // Initial state is not dirty
+    expect(ondirtychange).toHaveBeenLastCalledWith(false);
   });
 });

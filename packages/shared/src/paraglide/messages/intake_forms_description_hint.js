@@ -6,17 +6,17 @@ import { getLocale, experimentalStaticLocale } from '../runtime.js';
 /** @typedef {{}} Intake_Forms_Description_HintInputs */
 
 const en_intake_forms_description_hint = /** @type {(inputs: Intake_Forms_Description_HintInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Plain text with line breaks. Shown on the public form page.`)
+	return /** @type {LocalizedString} */ (`Shown on the public form page.`)
 };
 
 const es_intake_forms_description_hint = /** @type {(inputs: Intake_Forms_Description_HintInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Texto simple con saltos de linea. Se muestra en la pagina publica del formulario.`)
+	return /** @type {LocalizedString} */ (`Se muestra en la pagina publica del formulario.`)
 };
 
 /**
 * | output |
 * | --- |
-* | "Plain text with line breaks. Shown on the public form page." |
+* | "Shown on the public form page." |
 *
 * @param {Intake_Forms_Description_HintInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

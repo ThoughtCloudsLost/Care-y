@@ -21,9 +21,19 @@
     DialogButton,
     Segmented,
     SegmentedButton,
+    Preloader,
   } from "konsta/svelte";
   import { untrack } from "svelte";
-  import { ArrowUp, ArrowDown, Settings, X, Copy, Eye } from "@lucide/svelte";
+  import {
+    ArrowUp,
+    ArrowDown,
+    Settings,
+    X,
+    Copy,
+    Eye,
+    ImagePlus,
+    Trash2,
+  } from "@lucide/svelte";
   import {
     createMutation,
     createQuery,
@@ -33,13 +43,17 @@
     resolveLocalized,
     BASE_LOCALE,
     FORM_LOCALES,
+    KB_ATTACHMENT_MAX_BYTES,
+    FORM_ASSET_CONTENT_TYPES,
     type IntakeFieldConfig,
     type IntakeFieldType,
     type IntakeFieldRole,
     type IntakeFormMeta,
     type LocalizedText,
+    type LocalizedRichText,
     type FormLocale,
   } from "@care-y/shared";
+  import { encryptClientBranding, encode } from "@care-y/crypto";
   import * as m from "$lib/paraglide/messages.js";
   import { trpc } from "$lib/trpc/index.js";
   import { requireRouter } from "$lib/errors.js";
@@ -65,6 +79,7 @@
   import ShellSheet from "$lib/shell/ShellSheet.svelte";
   import ShellDialog from "$lib/shell/ShellDialog.svelte";
   import IntakeFieldConfigSheet from "./IntakeFieldConfigSheet.svelte";
+  import FormContentEditor from "./FormContentEditor.svelte";
   import {
     getFieldTypeLabel,
     getFieldTypeDesc,
@@ -72,11 +87,13 @@
   } from "./intake-field-labels.js";
   import {
     readLocale,
-    setLocaleText,
-    hasContent,
-    trimLocalized,
-    richTextToLocalizedText,
+    hasRichValue,
+    hasAnyRichContent,
+    trimLocalizedRichText,
+    richValueJsonSize,
   } from "$lib/utils/localized-text.js";
+  import { renderFormRichText } from "$lib/utils/render-form-content.js";
+  import { getOrgSlug } from "$lib/utils/org-slug.js";
   import type {
     FieldConfigState,
     FieldConfigInitial,
@@ -161,15 +178,38 @@
   let slugError = $state("");
   let isDefault = $state(initialIsDefault);
   let destinationQueueId = $state<string | null>(initialDestinationQueueId);
-  let formDescription = $state<LocalizedText>(
-    richTextToLocalizedText(initialFormMeta.description),
+  let formDescription = $state<LocalizedRichText>(
+    initialFormMeta.description ?? {},
   );
-  let formSubmitMessage = $state<LocalizedText>(
-    richTextToLocalizedText(initialFormMeta.submitMessage),
+  let formSubmitMessage = $state<LocalizedRichText>(
+    initialFormMeta.submitMessage ?? {},
   );
-  let formClosedMessage = $state<LocalizedText>(
-    richTextToLocalizedText(initialFormMeta.closedMessage),
+  let formClosedMessage = $state<LocalizedRichText>(
+    initialFormMeta.closedMessage ?? {},
   );
+
+  // ---- Banner state ----
+  let bannerBlobKey = $state<string | null>(
+    initialFormMeta.bannerBlobKey ?? null,
+  );
+  let bannerAlt = $state(initialFormMeta.bannerAlt ?? "");
+  let bannerUploading = $state(false);
+
+  const orgSlug = getOrgSlug();
+
+  /** Per-locale 30K cap. */
+  const RICH_TEXT_LOCALE_CAP = 30_000;
+
+  type ContentCapField = "description" | "submitMessage" | "closedMessage";
+
+  interface ContentCapErrors {
+    description?: string;
+    submitMessage?: string;
+    closedMessage?: string;
+  }
+
+  /** Validation errors for the three rich text fields. */
+  let contentCapErrors = $state<ContentCapErrors>({});
 
   /**
    * Convert an ISO 8601 datetime string to the datetime-local input format
@@ -241,7 +281,7 @@
       if (JSON.stringify(cur.config) !== JSON.stringify(ini.config))
         return true;
     }
-    // Compare form-level meta
+    // Compare form-level meta (rich text maps via JSON serialization)
     if (
       JSON.stringify(formDescription) !==
       JSON.stringify(initialFormMeta.description ?? {})
@@ -257,6 +297,9 @@
       JSON.stringify(initialFormMeta.closedMessage ?? {})
     )
       return true;
+    // Banner
+    if (bannerBlobKey !== (initialFormMeta.bannerBlobKey ?? null)) return true;
+    if (bannerAlt !== (initialFormMeta.bannerAlt ?? "")) return true;
     return false;
   });
 
@@ -275,19 +318,22 @@
     let total = 0;
     let filled = 0;
 
-    // Form-level meta strings (use readLocale to avoid computed key access)
-    const descVal = readLocale(formDescription, loc);
-    const submitVal = readLocale(formSubmitMessage, loc);
-    const closedVal = readLocale(formClosedMessage, loc);
+    // Form-level rich text meta (rich-aware emptiness check)
+    // eslint-disable-next-line security/detect-object-injection -- loc is from FormLocale enum
+    const descVal = formDescription[loc];
+    // eslint-disable-next-line security/detect-object-injection -- loc is from FormLocale enum
+    const submitVal = formSubmitMessage[loc];
+    // eslint-disable-next-line security/detect-object-injection -- loc is from FormLocale enum
+    const closedVal = formClosedMessage[loc];
 
-    if (descVal.length > 0) filled++;
-    if (submitVal.length > 0) filled++;
-    if (closedVal.length > 0) filled++;
+    if (descVal !== undefined && hasRichValue(descVal)) filled++;
+    if (submitVal !== undefined && hasRichValue(submitVal)) filled++;
+    if (closedVal !== undefined && hasRichValue(closedVal)) filled++;
 
-    // Only count meta strings that have content in at least one locale
-    if (resolveLocalized(formDescription, BASE_LOCALE) != null) total++;
-    if (resolveLocalized(formSubmitMessage, BASE_LOCALE) != null) total++;
-    if (resolveLocalized(formClosedMessage, BASE_LOCALE) != null) total++;
+    // Only count meta fields that have content in at least one locale
+    if (hasAnyRichContent(formDescription)) total++;
+    if (hasAnyRichContent(formSubmitMessage)) total++;
+    if (hasAnyRichContent(formClosedMessage)) total++;
 
     // Field labels and help text
     for (const field of fields) {
@@ -907,22 +953,86 @@
     fields.some((f) => f.fieldType === "pageBreak"),
   );
 
-  /** Preview-locale-resolved form meta for the preview pane. */
-  const previewDescription = $derived(
-    resolveLocalized(formDescription, previewLocale),
+  /**
+   * Resolve the preview-locale value from a LocalizedRichText map.
+   * Falls back to the base locale. Returns the raw value (string or doc JSON)
+   * for renderFormRichText, or undefined if no content.
+   */
+  function resolveRichPreview(
+    richText: LocalizedRichText,
+    loc: FormLocale,
+  ): string | { type: "doc"; content: unknown[] } | undefined {
+    // eslint-disable-next-line security/detect-object-injection -- loc is from FormLocale enum
+    const direct = richText[loc];
+    if (direct !== undefined && hasRichValue(direct)) return direct;
+    if (loc !== BASE_LOCALE) {
+      const fallback = richText.en;
+      if (fallback !== undefined && hasRichValue(fallback)) return fallback;
+    }
+    return undefined;
+  }
+
+  /** Preview-locale-resolved form meta rendered to sanitized HTML. */
+  const previewDescriptionHtml: string = $derived(
+    renderFormRichText(resolveRichPreview(formDescription, previewLocale)),
   );
-  const previewSubmitMsg = $derived(
-    resolveLocalized(formSubmitMessage, previewLocale),
+  const previewSubmitMsgHtml: string = $derived(
+    renderFormRichText(resolveRichPreview(formSubmitMessage, previewLocale)),
   );
-  const previewClosedMsg = $derived(
-    resolveLocalized(formClosedMessage, previewLocale),
+  const previewClosedMsgHtml: string = $derived(
+    renderFormRichText(resolveRichPreview(formClosedMessage, previewLocale)),
   );
+
+  /** Banner preview URL (same-origin, via the form-asset serving endpoint). */
+  const bannerPreviewUrl = $derived.by((): string | null => {
+    if (bannerBlobKey == null || orgSlug == null) return null;
+    return `/api/forms/${orgSlug}/${bannerBlobKey}`;
+  });
 
   /** Resolve a page break label in the preview locale, with a fallback. */
   function pageBreakLabel(field: PlaintextField): string {
     const resolved = resolveLocalized(field.label, previewLocale);
     if (resolved != null && resolved.length > 0) return resolved;
     return m.intake_forms_page_break_divider();
+  }
+
+  /**
+   * Validate per-locale 30K cap on a named rich text field.
+   * Returns true if all locales pass. Sets contentCapErrors on failure.
+   */
+  function validateRichTextCap(
+    field: ContentCapField,
+    value: LocalizedRichText,
+  ): boolean {
+    const capMsg = m.intake_forms_content_cap_error({
+      max: String(RICH_TEXT_LOCALE_CAP),
+    });
+    for (const loc of FORM_LOCALES) {
+      // eslint-disable-next-line security/detect-object-injection -- loc is from the FORM_LOCALES const tuple
+      const v = value[loc];
+      if (v !== undefined && richValueJsonSize(v) > RICH_TEXT_LOCALE_CAP) {
+        contentCapErrors = setCapError(contentCapErrors, field, capMsg);
+        return false;
+      }
+    }
+    contentCapErrors = setCapError(contentCapErrors, field, undefined);
+    return true;
+  }
+
+  /** Set or clear a single cap-error field without bracket writes or delete. */
+  function setCapError(
+    prev: ContentCapErrors,
+    field: ContentCapField,
+    msg: string | undefined,
+  ): ContentCapErrors {
+    switch (field) {
+      case "description":
+        return { ...prev, description: msg };
+      case "submitMessage":
+        return { ...prev, submitMessage: msg };
+      case "closedMessage":
+        return { ...prev, closedMessage: msg };
+    }
   }
 
   function handleSave(): void {
@@ -936,14 +1046,23 @@
         return;
       }
     }
+
+    // Validate rich text caps
+    const descOk = validateRichTextCap("description", formDescription);
+    const submitOk = validateRichTextCap("submitMessage", formSubmitMessage);
+    const closedOk = validateRichTextCap("closedMessage", formClosedMessage);
+    if (!descOk || !submitOk || !closedOk) return;
+
     const slugValue = sv || null;
-    const desc = trimLocalized(formDescription);
-    const submit = trimLocalized(formSubmitMessage);
-    const closed = trimLocalized(formClosedMessage);
+    const desc = trimLocalizedRichText(formDescription);
+    const submit = trimLocalizedRichText(formSubmitMessage);
+    const closed = trimLocalizedRichText(formClosedMessage);
     const meta: IntakeFormMeta = {
-      ...(hasContent(desc) ? { description: desc } : {}),
-      ...(hasContent(submit) ? { submitMessage: submit } : {}),
-      ...(hasContent(closed) ? { closedMessage: closed } : {}),
+      ...(hasAnyRichContent(desc) ? { description: desc } : {}),
+      ...(hasAnyRichContent(submit) ? { submitMessage: submit } : {}),
+      ...(hasAnyRichContent(closed) ? { closedMessage: closed } : {}),
+      ...(bannerBlobKey != null ? { bannerBlobKey } : {}),
+      ...(bannerAlt.trim().length > 0 ? { bannerAlt: bannerAlt.trim() } : {}),
     };
     // Convert datetime-local to ISO 8601 for the server, or null to clear.
     const closesAtValue =
@@ -972,11 +1091,91 @@
     "pageBreak",
   ];
 
+  // ---- Banner upload ----
+
+  let bannerInputEl: HTMLInputElement | undefined;
+
+  /** Type guard for form asset content types. */
+  function isFormAssetType(
+    type: string,
+  ): type is (typeof FORM_ASSET_CONTENT_TYPES)[number] {
+    return (FORM_ASSET_CONTENT_TYPES as readonly string[]).includes(type);
+  }
+
+  function triggerBannerUpload(): void {
+    const pub = orgKeyManager.getPublicKey();
+    if (pub == null) {
+      toastStore.show(m.form_content_editor_image_no_key(), 3000);
+      return;
+    }
+    bannerInputEl?.click();
+  }
+
+  function handleBannerSelected(e: Event): void {
+    if (!(e.target instanceof HTMLInputElement)) return;
+    const input = e.target;
+    const file = input.files?.[0];
+    input.value = "";
+    if (file == null) return;
+
+    if (file.size > KB_ATTACHMENT_MAX_BYTES) {
+      toastStore.show(m.intake_forms_banner_file_too_large(), 3000);
+      return;
+    }
+    if (!isFormAssetType(file.type)) {
+      toastStore.show(m.intake_forms_banner_file_type(), 3000);
+      return;
+    }
+
+    void uploadBanner(file);
+  }
+
+  async function uploadBanner(file: File): Promise<void> {
+    const pub = orgKeyManager.getPublicKey();
+    if (bannerUploading || pub == null) return;
+    bannerUploading = true;
+
+    try {
+      const arrayBuf = await file.arrayBuffer();
+      const plainBytes = new Uint8Array(arrayBuf);
+      const encrypted = encryptClientBranding(plainBytes, pub);
+      const blob = encode(encrypted);
+
+      const result = await intakeFormsRouter.uploadFormAsset.mutate({
+        blob,
+        sizeBytes: encrypted.length,
+        contentType: isFormAssetType(file.type) ? file.type : "image/png",
+      });
+
+      bannerBlobKey = result.blobId;
+      haptic();
+    } catch (err: unknown) {
+      console.error("[IntakeFormEditor] Banner upload failed", err);
+      toastStore.show(m.intake_forms_banner_upload_failed(), 3000);
+    } finally {
+      bannerUploading = false;
+    }
+  }
+
+  function removeBanner(): void {
+    bannerBlobKey = null;
+    bannerAlt = "";
+  }
+
+  const BANNER_ACCEPT = FORM_ASSET_CONTENT_TYPES.join(",");
+
+  const hasContentCapErrors = $derived(
+    contentCapErrors.description !== undefined ||
+      contentCapErrors.submitMessage !== undefined ||
+      contentCapErrors.closedMessage !== undefined,
+  );
+
   const canSave = $derived(
     formName.trim().length > 0 &&
       fields.length > 0 &&
       !saveMutation.isPending &&
-      slugError.length === 0,
+      slugError.length === 0 &&
+      !hasContentCapErrors,
   );
 </script>
 
@@ -1097,64 +1296,110 @@
     {/if}
   </Block>
 
-  <!-- Form-level descriptive content (locale-dependent) -->
+  <!-- Banner image (locale-independent, sits above content editors) -->
+  <BlockTitle>{m.intake_forms_banner_heading()}</BlockTitle>
+  <Block>
+    <!-- Hidden file input for banner upload -->
+    <input
+      bind:this={bannerInputEl}
+      type="file"
+      accept={BANNER_ACCEPT}
+      class="sr-only"
+      tabindex={-1}
+      aria-label={m.intake_forms_banner_add()}
+      onchange={(e) => handleBannerSelected(e)}
+    />
+
+    {#if bannerPreviewUrl != null}
+      <div class="banner-preview">
+        <img
+          src={bannerPreviewUrl}
+          alt={bannerAlt || ""}
+          class="banner-preview-img"
+        />
+        <div class="banner-actions">
+          <ListInput
+            label={m.intake_forms_banner_alt_label()}
+            type="text"
+            placeholder={m.intake_forms_banner_alt_placeholder()}
+            value={bannerAlt}
+            onInput={(e: Event) => {
+              if (e.target instanceof HTMLInputElement)
+                bannerAlt = e.target.value;
+            }}
+          />
+          <Button outline small onclick={removeBanner}>
+            <Trash2 size={16} />
+            {m.intake_forms_banner_remove()}
+          </Button>
+        </div>
+      </div>
+    {:else if bannerUploading}
+      <div class="banner-uploading" role="status">
+        <Preloader />
+        <span>{m.intake_forms_banner_uploading()}</span>
+      </div>
+    {:else}
+      <Button outline onclick={triggerBannerUpload}>
+        <ImagePlus size={18} />
+        {m.intake_forms_banner_add()}
+      </Button>
+    {/if}
+  </Block>
+
+  <!-- Form-level descriptive content (locale-dependent, rich text editors) -->
   <BlockTitle>{m.intake_forms_content_heading()}</BlockTitle>
-  <List strong inset>
-    <ListInput
+  <Block>
+    <FormContentEditor
+      value={formDescription}
+      locale={editingLocale}
+      onchange={(updated: LocalizedRichText) => {
+        formDescription = updated;
+      }}
       label={m.intake_forms_description_label()}
-      type="textarea"
-      placeholder={m.intake_forms_description_placeholder()}
-      info={m.intake_forms_description_hint()}
-      value={readLocale(formDescription, editingLocale)}
-      onInput={(e: Event) => {
-        if (
-          e.target instanceof HTMLInputElement ||
-          e.target instanceof HTMLTextAreaElement
-        )
-          formDescription = setLocaleText(
-            formDescription,
-            editingLocale,
-            e.target.value,
-          );
-      }}
+      hint={m.intake_forms_description_hint()}
+      orgPublicKey={orgKeyManager.getPublicKey()}
     />
-    <ListInput
+    {#if contentCapErrors.description}
+      <p class="content-cap-error" role="alert">
+        {contentCapErrors.description}
+      </p>
+    {/if}
+  </Block>
+  <Block>
+    <FormContentEditor
+      value={formSubmitMessage}
+      locale={editingLocale}
+      onchange={(updated: LocalizedRichText) => {
+        formSubmitMessage = updated;
+      }}
       label={m.intake_forms_submit_message_label()}
-      type="textarea"
-      placeholder={m.intake_forms_submit_message_placeholder()}
-      info={m.intake_forms_submit_message_hint()}
-      value={readLocale(formSubmitMessage, editingLocale)}
-      onInput={(e: Event) => {
-        if (
-          e.target instanceof HTMLInputElement ||
-          e.target instanceof HTMLTextAreaElement
-        )
-          formSubmitMessage = setLocaleText(
-            formSubmitMessage,
-            editingLocale,
-            e.target.value,
-          );
-      }}
+      hint={m.intake_forms_submit_message_hint()}
+      orgPublicKey={orgKeyManager.getPublicKey()}
     />
-    <ListInput
+    {#if contentCapErrors.submitMessage}
+      <p class="content-cap-error" role="alert">
+        {contentCapErrors.submitMessage}
+      </p>
+    {/if}
+  </Block>
+  <Block>
+    <FormContentEditor
+      value={formClosedMessage}
+      locale={editingLocale}
+      onchange={(updated: LocalizedRichText) => {
+        formClosedMessage = updated;
+      }}
       label={m.intake_forms_closed_message_label()}
-      type="textarea"
-      placeholder={m.intake_forms_closed_message_placeholder()}
-      info={m.intake_forms_closed_message_hint()}
-      value={readLocale(formClosedMessage, editingLocale)}
-      onInput={(e: Event) => {
-        if (
-          e.target instanceof HTMLInputElement ||
-          e.target instanceof HTMLTextAreaElement
-        )
-          formClosedMessage = setLocaleText(
-            formClosedMessage,
-            editingLocale,
-            e.target.value,
-          );
-      }}
+      hint={m.intake_forms_closed_message_hint()}
+      orgPublicKey={orgKeyManager.getPublicKey()}
     />
-  </List>
+    {#if contentCapErrors.closedMessage}
+      <p class="content-cap-error" role="alert">
+        {contentCapErrors.closedMessage}
+      </p>
+    {/if}
+  </Block>
 
   <!-- Field list (F-009: enriched rows, per-page numbering, page break separators) -->
   <BlockTitle>
@@ -1342,10 +1587,22 @@
         </Segmented>
       </div>
 
+      <!-- Banner renders above content in all preview states -->
+      {#if bannerPreviewUrl != null}
+        <img
+          src={bannerPreviewUrl}
+          alt={bannerAlt || ""}
+          class="preview-banner-img"
+        />
+      {/if}
+
       {#if previewState === "form"}
         <!-- Description above fields, mirroring public page placement -->
-        {#if previewDescription}
-          <p class="preview-description">{previewDescription}</p>
+        {#if previewDescriptionHtml.length > 0}
+          <div class="preview-description preview-rich-content">
+            <!-- eslint-disable-next-line svelte/no-at-html-tags -- sanitized by renderFormRichText (DOMPurify with PURIFY_CONFIG allowlist) -->
+            {@html previewDescriptionHtml}
+          </div>
         {/if}
         {#each fields as field, index (field.fieldKey)}
           {#if field.fieldType === "pageBreak"}
@@ -1374,9 +1631,16 @@
         <h2 class="intake-preview-success-heading">
           {m.intake_success_heading()}
         </h2>
-        <p class="intake-preview-success-body">
-          {previewSubmitMsg ?? m.intake_success_body()}
-        </p>
+        {#if previewSubmitMsgHtml.length > 0}
+          <div class="intake-preview-success-body preview-rich-content">
+            <!-- eslint-disable-next-line svelte/no-at-html-tags -- sanitized by renderFormRichText (DOMPurify with PURIFY_CONFIG allowlist) -->
+            {@html previewSubmitMsgHtml}
+          </div>
+        {:else}
+          <p class="intake-preview-success-body">
+            {m.intake_success_body()}
+          </p>
+        {/if}
         <p class="intake-preview-reference-label">
           {m.intake_reference_label()}
         </p>
@@ -1386,9 +1650,16 @@
         <p class="intake-preview-reference-save">{m.intake_reference_save()}</p>
       {:else}
         <!-- Closed state, mirrors IntakeFormBody closed layout -->
-        <p class="intake-preview-closed" role="status">
-          {previewClosedMsg ?? m.intake_form_closed_default()}
-        </p>
+        {#if previewClosedMsgHtml.length > 0}
+          <div class="intake-preview-closed preview-rich-content" role="status">
+            <!-- eslint-disable-next-line svelte/no-at-html-tags -- sanitized by renderFormRichText (DOMPurify with PURIFY_CONFIG allowlist) -->
+            {@html previewClosedMsgHtml}
+          </div>
+        {:else}
+          <p class="intake-preview-closed" role="status">
+            {m.intake_form_closed_default()}
+          </p>
+        {/if}
       {/if}
     </Block>
   {/if}
@@ -1653,5 +1924,95 @@
     font-size: var(--text-xs);
     color: var(--muted);
     font-style: italic;
+  }
+
+  /* Banner */
+  .banner-preview {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-sm);
+  }
+
+  .banner-preview-img {
+    max-width: 100%;
+    max-height: 200px;
+    object-fit: cover;
+    border-radius: var(--card-radius);
+  }
+
+  .banner-actions {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-sm);
+  }
+
+  .banner-uploading {
+    display: flex;
+    align-items: center;
+    gap: var(--space-sm);
+    font-size: var(--text-sm);
+    color: var(--muted);
+    padding: var(--space-sm) 0;
+  }
+
+  /* Rich content preview */
+  .preview-rich-content {
+    font-size: var(--text-sm);
+    line-height: 1.5;
+    color: var(--muted);
+  }
+
+  .preview-rich-content :global(p) {
+    margin-bottom: 0.5em;
+  }
+
+  .preview-rich-content :global(a) {
+    color: var(--brand-text);
+    text-decoration: underline;
+  }
+
+  .preview-rich-content :global(ul) {
+    list-style-type: disc;
+    padding-left: 1.5em;
+    margin-bottom: 0.5em;
+  }
+
+  .preview-rich-content :global(ol) {
+    list-style-type: decimal;
+    padding-left: 1.5em;
+    margin-bottom: 0.5em;
+  }
+
+  .preview-rich-content :global(img) {
+    max-width: 100%;
+    height: auto;
+    border-radius: var(--card-radius);
+  }
+
+  .preview-banner-img {
+    max-width: 100%;
+    border-radius: var(--card-radius);
+    margin-bottom: var(--space-md);
+  }
+
+  /* Content cap validation error */
+  .content-cap-error {
+    font-size: var(--text-xs);
+    color: var(--k-ios-red, #ff3b30);
+    padding: var(--space-xs) var(--space-md);
+    margin: 0;
+  }
+
+  /* Screen-reader only (hidden file inputs) */
+  .sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border-width: 0;
   }
 </style>

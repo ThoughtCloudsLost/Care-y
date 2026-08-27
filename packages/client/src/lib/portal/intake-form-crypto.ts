@@ -39,9 +39,9 @@ import {
   type IntakeFieldConfig,
   type IntakeFormMeta,
   type LocalizedText,
-  type LocalizedRichText,
   type VisibleWhen,
 } from "@care-y/shared";
+import { hasAnyRichContent } from "$lib/utils/localized-text.js";
 
 const textEncoder = new TextEncoder();
 const textDecoder = new TextDecoder();
@@ -201,31 +201,6 @@ export function decryptFieldContent(
   } finally {
     requireSodium().memzero(key);
   }
-}
-
-// ---------------------------------------------------------------------------
-// Rich text content helpers
-// ---------------------------------------------------------------------------
-
-/**
- * Check whether a single rich-text locale value has meaningful content.
- * Strings are checked via trim().length; ProseMirror doc objects are
- * non-empty when their content array has at least one node.
- */
-function hasRichValue(
-  v: string | { type: "doc"; content: unknown[] },
-): boolean {
-  if (typeof v === "string") return v.trim().length > 0;
-  return Array.isArray(v.content) && v.content.length > 0;
-}
-
-/**
- * Check whether a LocalizedRichText record has any non-empty locale value.
- * Returns false for undefined/null inputs.
- */
-function hasAnyRichContent(localized: LocalizedRichText | undefined): boolean {
-  if (localized == null) return false;
-  return Object.values(localized).some((v) => hasRichValue(v));
 }
 
 // ---------------------------------------------------------------------------

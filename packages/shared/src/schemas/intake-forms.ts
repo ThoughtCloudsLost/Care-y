@@ -500,6 +500,8 @@ export const intakeFormMetaSchema = z.object({
   submitMessage: localizedRichTextSchema.optional(),
   closedMessage: localizedRichTextSchema.optional(),
   bannerBlobKey: z.string().max(200).optional(),
+  /** Alt text for the banner image. Empty or absent means decorative. */
+  bannerAlt: z.string().max(500).optional(),
 });
 export type IntakeFormMeta = z.infer<typeof intakeFormMetaSchema>;
 

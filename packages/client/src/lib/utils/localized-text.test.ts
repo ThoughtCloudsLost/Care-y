@@ -4,8 +4,12 @@ import {
   setLocaleText,
   hasContent,
   trimLocalized,
+  hasRichValue,
+  hasAnyRichContent,
+  trimLocalizedRichText,
+  richValueJsonSize,
 } from "./localized-text.js";
-import type { LocalizedText } from "@care-y/shared";
+import type { LocalizedText, LocalizedRichText } from "@care-y/shared";
 
 describe("readLocale", () => {
   it("returns English value for 'en' locale", () => {
@@ -109,5 +113,109 @@ describe("trimLocalized", () => {
   it("handles undefined values", () => {
     const text: LocalizedText = { en: undefined, es: "hola" };
     expect(trimLocalized(text)).toEqual({ es: "hola" });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Rich-text-aware helpers
+// ---------------------------------------------------------------------------
+
+describe("hasRichValue", () => {
+  it("returns false for empty string", () => {
+    expect(hasRichValue("")).toBe(false);
+  });
+
+  it("returns false for whitespace-only string", () => {
+    expect(hasRichValue("   ")).toBe(false);
+  });
+
+  it("returns true for non-empty string", () => {
+    expect(hasRichValue("hello")).toBe(true);
+  });
+
+  it("returns false for doc with empty content array", () => {
+    expect(hasRichValue({ type: "doc", content: [] })).toBe(false);
+  });
+
+  it("returns true for doc with at least one content node", () => {
+    expect(
+      hasRichValue({
+        type: "doc",
+        content: [
+          { type: "paragraph", content: [{ type: "text", text: "hi" }] },
+        ],
+      }),
+    ).toBe(true);
+  });
+});
+
+describe("hasAnyRichContent", () => {
+  it("returns false for undefined", () => {
+    expect(hasAnyRichContent(undefined)).toBe(false);
+  });
+
+  it("returns false for empty object", () => {
+    expect(hasAnyRichContent({})).toBe(false);
+  });
+
+  it("returns false when all locales are empty strings", () => {
+    expect(hasAnyRichContent({ en: "", es: "" })).toBe(false);
+  });
+
+  it("returns true when one locale has a non-empty string", () => {
+    expect(hasAnyRichContent({ en: "hello" })).toBe(true);
+  });
+
+  it("returns true when one locale has a doc with content", () => {
+    const richText: LocalizedRichText = {
+      en: { type: "doc", content: [{ type: "paragraph" }] },
+    };
+    expect(hasAnyRichContent(richText)).toBe(true);
+  });
+});
+
+describe("trimLocalizedRichText", () => {
+  it("returns empty object for undefined", () => {
+    expect(trimLocalizedRichText(undefined)).toEqual({});
+  });
+
+  it("drops empty string locales", () => {
+    expect(trimLocalizedRichText({ en: "", es: "hola" })).toEqual({
+      es: "hola",
+    });
+  });
+
+  it("trims string values", () => {
+    expect(trimLocalizedRichText({ en: "  hello  " })).toEqual({
+      en: "hello",
+    });
+  });
+
+  it("drops doc objects with empty content arrays", () => {
+    expect(trimLocalizedRichText({ en: { type: "doc", content: [] } })).toEqual(
+      {},
+    );
+  });
+
+  it("preserves doc objects with content", () => {
+    const doc = { type: "doc" as const, content: [{ type: "paragraph" }] };
+    expect(trimLocalizedRichText({ en: doc })).toEqual({ en: doc });
+  });
+
+  it("drops whitespace-only strings", () => {
+    expect(trimLocalizedRichText({ en: "   ", es: "real" })).toEqual({
+      es: "real",
+    });
+  });
+});
+
+describe("richValueJsonSize", () => {
+  it("returns string length for strings", () => {
+    expect(richValueJsonSize("hello")).toBe(5);
+  });
+
+  it("returns JSON.stringify length for doc objects", () => {
+    const doc = { type: "doc" as const, content: [] };
+    expect(richValueJsonSize(doc)).toBe(JSON.stringify(doc).length);
   });
 });
