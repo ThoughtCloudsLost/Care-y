@@ -18,7 +18,8 @@ import {
 import type {
   IntakeFieldConfig,
   LocalizedText,
-  VisibleWhen,
+  VisibleWhenV1,
+  VisibleWhenV2,
 } from "@care-y/shared";
 import {
   encryptFieldContent,
@@ -343,10 +344,10 @@ describe("intake-form-crypto", () => {
   });
 
   describe("visibleWhen roundtrip through encrypt/decrypt", () => {
-    it("roundtrips an all-mode condition with an equals rule", () => {
+    it("v1 all-mode encrypts as v2 and decrypts to v2 (single group)", () => {
       const config: IntakeFieldConfig = { type: "text" };
       const label: LocalizedText = { en: "Conditional field" };
-      const visibleWhen: VisibleWhen = {
+      const v1Input: VisibleWhenV1 = {
         mode: "all",
         rules: [
           { fieldKey: "fk-trigger", operator: "equals", optionKey: "opt-a" },
@@ -354,17 +355,22 @@ describe("intake-form-crypto", () => {
       };
 
       const encrypted = encryptFieldContent(
-        { label, config, visibleWhen },
+        { label, config, visibleWhen: v1Input },
         orgPubKey(),
       );
       const decrypted = decryptFieldContent(encrypted, orgPubKey());
 
-      expect(decrypted.visibleWhen).toEqual(visibleWhen);
+      // Decrypted output is always v2
+      const expectedV2: VisibleWhenV2 = {
+        version: 2,
+        groups: [v1Input.rules],
+      };
+      expect(decrypted.visibleWhen).toEqual(expectedV2);
       expect(decrypted.config).toEqual(config);
       expect(decrypted.label).toEqual(label);
     });
 
-    it("roundtrips an any-mode condition with an includes rule", () => {
+    it("v1 any-mode encrypts as v2 (one group per rule)", () => {
       const config: IntakeFieldConfig = {
         type: "multiselect",
         options: [
@@ -372,57 +378,85 @@ describe("intake-form-crypto", () => {
           { key: "k2", label: { en: "B" } },
         ],
       };
-      const visibleWhen: VisibleWhen = {
+      const v1Input: VisibleWhenV1 = {
         mode: "any",
         rules: [
           { fieldKey: "fk-multi", operator: "includes", optionKey: "k1" },
-        ],
-      };
-
-      const encrypted = encryptFieldContent(
-        { label: { en: "Dependent" }, config, visibleWhen },
-        orgPubKey(),
-      );
-      const decrypted = decryptFieldContent(encrypted, orgPubKey());
-
-      expect(decrypted.visibleWhen).toEqual(visibleWhen);
-    });
-
-    it("roundtrips a checked-operator rule with boolValue", () => {
-      const config: IntakeFieldConfig = { type: "text" };
-      const visibleWhen: VisibleWhen = {
-        mode: "all",
-        rules: [{ fieldKey: "fk-cb", operator: "checked", boolValue: true }],
-      };
-
-      const encrypted = encryptFieldContent(
-        { label: { en: "After checkbox" }, config, visibleWhen },
-        orgPubKey(),
-      );
-      const decrypted = decryptFieldContent(encrypted, orgPubKey());
-
-      expect(decrypted.visibleWhen).toEqual(visibleWhen);
-    });
-
-    it("roundtrips multiple rules with mixed operators", () => {
-      const config: IntakeFieldConfig = { type: "textarea" };
-      const visibleWhen: VisibleWhen = {
-        mode: "all",
-        rules: [
-          { fieldKey: "fk-sel", operator: "equals", optionKey: "opt-x" },
           { fieldKey: "fk-cb", operator: "checked", boolValue: true },
-          { fieldKey: "fk-multi", operator: "includes", optionKey: "opt-y" },
         ],
       };
 
       const encrypted = encryptFieldContent(
-        { label: { en: "Complex condition" }, config, visibleWhen },
+        { label: { en: "Dependent" }, config, visibleWhen: v1Input },
         orgPubKey(),
       );
       const decrypted = decryptFieldContent(encrypted, orgPubKey());
 
-      expect(decrypted.visibleWhen).toEqual(visibleWhen);
-      expect(decrypted.visibleWhen?.rules).toHaveLength(3);
+      const expectedV2: VisibleWhenV2 = {
+        version: 2,
+        groups: v1Input.rules.map((r) => [r]),
+      };
+      expect(decrypted.visibleWhen).toEqual(expectedV2);
+    });
+
+    it("v2 shape round-trips unchanged", () => {
+      const config: IntakeFieldConfig = { type: "text" };
+      const v2Input: VisibleWhenV2 = {
+        version: 2,
+        groups: [
+          [
+            { fieldKey: "fk-sel", operator: "equals", optionKey: "opt-x" },
+            { fieldKey: "fk-cb", operator: "checked", boolValue: true },
+          ],
+          [{ fieldKey: "fk-multi", operator: "includes", optionKey: "opt-y" }],
+        ],
+      };
+
+      const encrypted = encryptFieldContent(
+        { label: { en: "V2 condition" }, config, visibleWhen: v2Input },
+        orgPubKey(),
+      );
+      const decrypted = decryptFieldContent(encrypted, orgPubKey());
+
+      expect(decrypted.visibleWhen).toEqual(v2Input);
+    });
+
+    it("v2 with negated operators round-trips correctly", () => {
+      const config: IntakeFieldConfig = { type: "textarea" };
+      const v2Input: VisibleWhenV2 = {
+        version: 2,
+        groups: [
+          [{ fieldKey: "fk-1", operator: "notEquals", optionKey: "opt-a" }],
+          [{ fieldKey: "fk-2", operator: "notIncludes", optionKey: "opt-b" }],
+        ],
+      };
+
+      const encrypted = encryptFieldContent(
+        { label: { en: "Negated" }, config, visibleWhen: v2Input },
+        orgPubKey(),
+      );
+      const decrypted = decryptFieldContent(encrypted, orgPubKey());
+
+      expect(decrypted.visibleWhen).toEqual(v2Input);
+    });
+
+    it("v2 with isEmpty/isNotEmpty operators round-trips correctly", () => {
+      const config: IntakeFieldConfig = { type: "text" };
+      const v2Input: VisibleWhenV2 = {
+        version: 2,
+        groups: [
+          [{ fieldKey: "fk-text", operator: "isEmpty" }],
+          [{ fieldKey: "fk-date", operator: "isNotEmpty" }],
+        ],
+      };
+
+      const encrypted = encryptFieldContent(
+        { label: { en: "Empty check" }, config, visibleWhen: v2Input },
+        orgPubKey(),
+      );
+      const decrypted = decryptFieldContent(encrypted, orgPubKey());
+
+      expect(decrypted.visibleWhen).toEqual(v2Input);
     });
 
     it("returns undefined visibleWhen when none was provided", () => {
@@ -434,6 +468,36 @@ describe("intake-form-crypto", () => {
       const decrypted = decryptFieldContent(encrypted, orgPubKey());
 
       expect(decrypted.visibleWhen).toBeUndefined();
+    });
+
+    it("v1 blob decrypts to v2 in memory and re-encrypts as v2", () => {
+      const config: IntakeFieldConfig = { type: "text" };
+      const label: LocalizedText = { en: "Re-encrypt test" };
+      const v1Input: VisibleWhenV1 = {
+        mode: "all",
+        rules: [
+          { fieldKey: "fk-a", operator: "equals", optionKey: "opt-x" },
+          { fieldKey: "fk-b", operator: "checked", boolValue: true },
+        ],
+      };
+
+      // First encrypt with v1 input
+      const firstEncrypted = encryptFieldContent(
+        { label, config, visibleWhen: v1Input },
+        orgPubKey(),
+      );
+      // Decrypt: should be v2
+      const decrypted = decryptFieldContent(firstEncrypted, orgPubKey());
+      expect(decrypted.visibleWhen?.version).toBe(2);
+
+      // Re-encrypt the decrypted v2 shape
+      const reEncrypted = encryptFieldContent(
+        { label, config, visibleWhen: decrypted.visibleWhen },
+        orgPubKey(),
+      );
+      // Decrypt again: still v2, structurally identical
+      const reDecrypted = decryptFieldContent(reEncrypted, orgPubKey());
+      expect(reDecrypted.visibleWhen).toEqual(decrypted.visibleWhen);
     });
   });
 

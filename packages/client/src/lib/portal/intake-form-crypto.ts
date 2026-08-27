@@ -36,10 +36,12 @@ import {
   intakeFormMetaSchema,
   localizedTextSchema,
   visibleWhenSchema,
+  normalizeVisibleWhen,
   type IntakeFieldConfig,
   type IntakeFormMeta,
   type LocalizedText,
   type VisibleWhen,
+  type VisibleWhenV2,
 } from "@care-y/shared";
 import { hasAnyRichContent } from "$lib/utils/localized-text.js";
 
@@ -61,7 +63,7 @@ export interface EncryptedFieldContent {
 export interface DecryptedFieldContent {
   label: LocalizedText;
   config: IntakeFieldConfig;
-  visibleWhen?: VisibleWhen;
+  visibleWhen?: VisibleWhenV2;
 }
 
 /**
@@ -88,10 +90,10 @@ export function encryptFieldContent(
     const labelBytes = textEncoder.encode(JSON.stringify(plain.label));
     // The config blob carries the field config and optional visibleWhen
     // rules. VisibleWhen is encrypted alongside the config so the server
-    // never sees conditional visibility rules.
+    // never sees conditional visibility rules. Always serialize as v2.
     const configPayload: Record<string, unknown> = { ...plain.config };
     if (plain.visibleWhen != null) {
-      configPayload.visibleWhen = plain.visibleWhen;
+      configPayload.visibleWhen = normalizeVisibleWhen(plain.visibleWhen);
     }
     const configBytes = textEncoder.encode(JSON.stringify(configPayload));
 
@@ -166,12 +168,14 @@ export function decryptFieldContent(
       );
     }
 
-    let visibleWhen: VisibleWhen | undefined;
+    let visibleWhen: VisibleWhenV2 | undefined;
 
     try {
       const configJson: unknown = JSON.parse(textDecoder.decode(configPlain));
       // The config blob may contain a visibleWhen property alongside the
       // config discriminated union fields. Extract it before schema parsing.
+      // On decrypt, normalize any v1 shape to v2 so downstream consumers
+      // always see the canonical groups-based structure.
       if (
         typeof configJson === "object" &&
         configJson !== null &&
@@ -180,7 +184,7 @@ export function decryptFieldContent(
         const vw = (configJson as Record<string, unknown>).visibleWhen;
         const vwParsed = visibleWhenSchema.safeParse(vw);
         if (vwParsed.success) {
-          visibleWhen = vwParsed.data;
+          visibleWhen = normalizeVisibleWhen(vwParsed.data);
         }
       }
       const parsed = intakeFieldConfigSchema.safeParse(configJson);

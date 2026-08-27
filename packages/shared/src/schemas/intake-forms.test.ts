@@ -23,8 +23,10 @@ import {
   textSubtypeSchema,
   ENCRYPTED_FORM_META_CAP,
   visibleWhenSchema,
+  visibleWhenV2Schema,
   visibilityRuleSchema,
   evaluateVisibility,
+  normalizeVisibleWhen,
   isDataFieldType,
   PAGE_BREAK_TYPE,
   proseMirrorDocSchema,
@@ -34,6 +36,8 @@ import type {
   LocalizedText,
   IntakeFieldConfig,
   VisibleWhen,
+  VisibleWhenV1,
+  VisibleWhenV2,
 } from "./intake-forms.js";
 
 /** Generate a base64 string that decodes to exactly `n` bytes. */
@@ -2131,5 +2135,536 @@ describe("intakeFormMetaSchema rich text fields", () => {
 describe("ENCRYPTED_FORM_META_CAP", () => {
   it("is 400,000", () => {
     expect(ENCRYPTED_FORM_META_CAP).toBe(400_000);
+  });
+});
+
+// =========================================================================
+// V2 conditional visibility schema
+// =========================================================================
+
+describe("visibleWhenV2Schema", () => {
+  it("accepts a valid v2 shape with one group", () => {
+    const result = visibleWhenV2Schema.safeParse({
+      version: 2,
+      groups: [[{ fieldKey: "fk-1", operator: "equals", optionKey: "opt-a" }]],
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("accepts multiple groups (OR of ANDs)", () => {
+    const result = visibleWhenV2Schema.safeParse({
+      version: 2,
+      groups: [
+        [
+          { fieldKey: "fk-1", operator: "equals", optionKey: "opt-a" },
+          { fieldKey: "fk-2", operator: "checked", boolValue: true },
+        ],
+        [{ fieldKey: "fk-3", operator: "includes", optionKey: "opt-b" }],
+      ],
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("accepts negated operators (notEquals, notIncludes)", () => {
+    const result = visibleWhenV2Schema.safeParse({
+      version: 2,
+      groups: [
+        [{ fieldKey: "fk-1", operator: "notEquals", optionKey: "opt-a" }],
+        [{ fieldKey: "fk-2", operator: "notIncludes", optionKey: "opt-b" }],
+      ],
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("accepts isEmpty and isNotEmpty operators", () => {
+    const result = visibleWhenV2Schema.safeParse({
+      version: 2,
+      groups: [
+        [{ fieldKey: "fk-text", operator: "isEmpty" }],
+        [{ fieldKey: "fk-date", operator: "isNotEmpty" }],
+      ],
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("rejects empty groups array", () => {
+    const result = visibleWhenV2Schema.safeParse({
+      version: 2,
+      groups: [],
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it("rejects a group with zero rules", () => {
+    const result = visibleWhenV2Schema.safeParse({
+      version: 2,
+      groups: [[]],
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it("rejects more than 10 groups", () => {
+    const groups = Array.from({ length: 11 }, () => [
+      { fieldKey: "fk-1", operator: "equals" as const, optionKey: "opt-a" },
+    ]);
+    const result = visibleWhenV2Schema.safeParse({ version: 2, groups });
+    expect(result.success).toBe(false);
+  });
+
+  it("accepts exactly 10 groups", () => {
+    const groups = Array.from({ length: 10 }, () => [
+      { fieldKey: "fk-1", operator: "equals" as const, optionKey: "opt-a" },
+    ]);
+    const result = visibleWhenV2Schema.safeParse({ version: 2, groups });
+    expect(result.success).toBe(true);
+  });
+
+  it("rejects a group with more than 20 rules", () => {
+    const rules = Array.from({ length: 21 }, (_, i) => ({
+      fieldKey: `fk-${String(i)}`,
+      operator: "equals" as const,
+      optionKey: `opt-${String(i)}`,
+    }));
+    const result = visibleWhenV2Schema.safeParse({
+      version: 2,
+      groups: [rules],
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it("accepts a group with exactly 20 rules", () => {
+    const rules = Array.from({ length: 20 }, (_, i) => ({
+      fieldKey: `fk-${String(i)}`,
+      operator: "equals" as const,
+      optionKey: `opt-${String(i)}`,
+    }));
+    const result = visibleWhenV2Schema.safeParse({
+      version: 2,
+      groups: [rules],
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("rejects version other than 2", () => {
+    const result = visibleWhenV2Schema.safeParse({
+      version: 1,
+      groups: [[{ fieldKey: "fk-1", operator: "equals", optionKey: "opt-a" }]],
+    });
+    expect(result.success).toBe(false);
+  });
+});
+
+describe("visibleWhenSchema (v1/v2 union)", () => {
+  it("accepts v1 shape (all mode)", () => {
+    const result = visibleWhenSchema.safeParse({
+      mode: "all",
+      rules: [{ fieldKey: "fk-1", operator: "equals", optionKey: "opt-a" }],
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("accepts v1 shape (any mode)", () => {
+    const result = visibleWhenSchema.safeParse({
+      mode: "any",
+      rules: [{ fieldKey: "fk-1", operator: "checked", boolValue: true }],
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("accepts v2 shape", () => {
+    const result = visibleWhenSchema.safeParse({
+      version: 2,
+      groups: [[{ fieldKey: "fk-1", operator: "equals", optionKey: "opt-a" }]],
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("rejects a shape that matches neither v1 nor v2", () => {
+    const result = visibleWhenSchema.safeParse({
+      mode: "custom",
+      rules: [],
+    });
+    expect(result.success).toBe(false);
+  });
+});
+
+// =========================================================================
+// normalizeVisibleWhen
+// =========================================================================
+
+describe("normalizeVisibleWhen", () => {
+  it("converts v1 all-mode to a single group containing all rules", () => {
+    const v1: VisibleWhenV1 = {
+      mode: "all",
+      rules: [
+        { fieldKey: "fk-1", operator: "equals", optionKey: "opt-a" },
+        { fieldKey: "fk-2", operator: "checked", boolValue: true },
+      ],
+    };
+    const v2 = normalizeVisibleWhen(v1);
+    expect(v2.version).toBe(2);
+    expect(v2.groups).toHaveLength(1);
+    expect(v2.groups[0]).toEqual(v1.rules);
+  });
+
+  it("converts v1 any-mode to one group per rule", () => {
+    const v1: VisibleWhenV1 = {
+      mode: "any",
+      rules: [
+        { fieldKey: "fk-1", operator: "equals", optionKey: "opt-a" },
+        { fieldKey: "fk-2", operator: "equals", optionKey: "opt-b" },
+        { fieldKey: "fk-3", operator: "checked", boolValue: true },
+      ],
+    };
+    const v2 = normalizeVisibleWhen(v1);
+    expect(v2.version).toBe(2);
+    expect(v2.groups).toHaveLength(3);
+    expect(v2.groups[0]).toEqual([v1.rules[0]]);
+    expect(v2.groups[1]).toEqual([v1.rules[1]]);
+    expect(v2.groups[2]).toEqual([v1.rules[2]]);
+  });
+
+  it("passes v2 through unchanged", () => {
+    const v2: VisibleWhenV2 = {
+      version: 2,
+      groups: [
+        [
+          { fieldKey: "fk-1", operator: "equals", optionKey: "opt-a" },
+          { fieldKey: "fk-2", operator: "checked", boolValue: true },
+        ],
+        [{ fieldKey: "fk-3", operator: "includes", optionKey: "opt-b" }],
+      ],
+    };
+    const result = normalizeVisibleWhen(v2);
+    expect(result).toEqual(v2);
+  });
+
+  it("normalizes v1 all-mode with a single rule", () => {
+    const v1: VisibleWhenV1 = {
+      mode: "all",
+      rules: [{ fieldKey: "fk-1", operator: "equals", optionKey: "opt-a" }],
+    };
+    const v2 = normalizeVisibleWhen(v1);
+    expect(v2.version).toBe(2);
+    expect(v2.groups).toHaveLength(1);
+    expect(v2.groups[0]).toHaveLength(1);
+  });
+
+  it("normalizes v1 any-mode with a single rule (same as all-mode)", () => {
+    const v1: VisibleWhenV1 = {
+      mode: "any",
+      rules: [{ fieldKey: "fk-1", operator: "checked", boolValue: true }],
+    };
+    const v2 = normalizeVisibleWhen(v1);
+    expect(v2.version).toBe(2);
+    expect(v2.groups).toHaveLength(1);
+    expect(v2.groups[0]).toHaveLength(1);
+  });
+});
+
+// =========================================================================
+// V2 evaluateVisibility (groups, negation, isEmpty/isNotEmpty)
+// =========================================================================
+
+describe("evaluateVisibility (v2 groups)", () => {
+  it("returns true when visibleWhen is undefined", () => {
+    expect(evaluateVisibility(undefined, {})).toBe(true);
+  });
+
+  it("evaluates a single v2 group (AND semantics within the group)", () => {
+    const vw: VisibleWhenV2 = {
+      version: 2,
+      groups: [
+        [
+          { fieldKey: "fk-1", operator: "equals", optionKey: "opt-a" },
+          { fieldKey: "fk-2", operator: "checked", boolValue: true },
+        ],
+      ],
+    };
+    expect(evaluateVisibility(vw, { "fk-1": "opt-a", "fk-2": true })).toBe(
+      true,
+    );
+    expect(evaluateVisibility(vw, { "fk-1": "opt-a", "fk-2": false })).toBe(
+      false,
+    );
+  });
+
+  it("evaluates multiple v2 groups (OR semantics across groups)", () => {
+    const vw: VisibleWhenV2 = {
+      version: 2,
+      groups: [
+        [{ fieldKey: "fk-1", operator: "equals", optionKey: "opt-a" }],
+        [{ fieldKey: "fk-2", operator: "equals", optionKey: "opt-b" }],
+      ],
+    };
+    // First group matches
+    expect(evaluateVisibility(vw, { "fk-1": "opt-a" })).toBe(true);
+    // Second group matches
+    expect(evaluateVisibility(vw, { "fk-2": "opt-b" })).toBe(true);
+    // Neither group matches
+    expect(evaluateVisibility(vw, { "fk-1": "opt-c", "fk-2": "opt-c" })).toBe(
+      false,
+    );
+  });
+
+  it("evaluates v1 shapes through the normalizer (all mode)", () => {
+    const vw: VisibleWhenV1 = {
+      mode: "all",
+      rules: [
+        { fieldKey: "fk-1", operator: "equals", optionKey: "opt-a" },
+        { fieldKey: "fk-2", operator: "checked", boolValue: true },
+      ],
+    };
+    expect(evaluateVisibility(vw, { "fk-1": "opt-a", "fk-2": true })).toBe(
+      true,
+    );
+    expect(evaluateVisibility(vw, { "fk-1": "opt-a" })).toBe(false);
+  });
+
+  it("evaluates v1 shapes through the normalizer (any mode)", () => {
+    const vw: VisibleWhenV1 = {
+      mode: "any",
+      rules: [
+        { fieldKey: "fk-1", operator: "equals", optionKey: "opt-a" },
+        { fieldKey: "fk-2", operator: "equals", optionKey: "opt-b" },
+      ],
+    };
+    expect(evaluateVisibility(vw, { "fk-1": "opt-a" })).toBe(true);
+    expect(evaluateVisibility(vw, { "fk-2": "opt-b" })).toBe(true);
+    expect(evaluateVisibility(vw, {})).toBe(false);
+  });
+});
+
+describe("evaluateVisibility (negated operators)", () => {
+  it("notEquals returns true when value differs from optionKey", () => {
+    const vw: VisibleWhenV2 = {
+      version: 2,
+      groups: [
+        [{ fieldKey: "fk-1", operator: "notEquals", optionKey: "opt-a" }],
+      ],
+    };
+    expect(evaluateVisibility(vw, { "fk-1": "opt-b" })).toBe(true);
+  });
+
+  it("notEquals returns false when value matches optionKey", () => {
+    const vw: VisibleWhenV2 = {
+      version: 2,
+      groups: [
+        [{ fieldKey: "fk-1", operator: "notEquals", optionKey: "opt-a" }],
+      ],
+    };
+    expect(evaluateVisibility(vw, { "fk-1": "opt-a" })).toBe(false);
+  });
+
+  it("notEquals satisfies when field is unanswered (decision 5)", () => {
+    const vw: VisibleWhenV2 = {
+      version: 2,
+      groups: [
+        [{ fieldKey: "fk-1", operator: "notEquals", optionKey: "opt-a" }],
+      ],
+    };
+    expect(evaluateVisibility(vw, {})).toBe(true);
+  });
+
+  it("notIncludes returns true when array does not contain optionKey", () => {
+    const vw: VisibleWhenV2 = {
+      version: 2,
+      groups: [
+        [{ fieldKey: "fk-1", operator: "notIncludes", optionKey: "opt-a" }],
+      ],
+    };
+    expect(evaluateVisibility(vw, { "fk-1": ["opt-b", "opt-c"] })).toBe(true);
+  });
+
+  it("notIncludes returns false when array contains optionKey", () => {
+    const vw: VisibleWhenV2 = {
+      version: 2,
+      groups: [
+        [{ fieldKey: "fk-1", operator: "notIncludes", optionKey: "opt-a" }],
+      ],
+    };
+    expect(evaluateVisibility(vw, { "fk-1": ["opt-a", "opt-b"] })).toBe(false);
+  });
+
+  it("notIncludes satisfies when field is unanswered (decision 5)", () => {
+    const vw: VisibleWhenV2 = {
+      version: 2,
+      groups: [
+        [{ fieldKey: "fk-1", operator: "notIncludes", optionKey: "opt-a" }],
+      ],
+    };
+    expect(evaluateVisibility(vw, {})).toBe(true);
+  });
+
+  it("notIncludes satisfies when value is not an array", () => {
+    const vw: VisibleWhenV2 = {
+      version: 2,
+      groups: [
+        [{ fieldKey: "fk-1", operator: "notIncludes", optionKey: "opt-a" }],
+      ],
+    };
+    expect(evaluateVisibility(vw, { "fk-1": "opt-a" })).toBe(true);
+  });
+});
+
+describe("evaluateVisibility (isEmpty / isNotEmpty)", () => {
+  it("isEmpty returns true when field is missing", () => {
+    const vw: VisibleWhenV2 = {
+      version: 2,
+      groups: [[{ fieldKey: "fk-text", operator: "isEmpty" }]],
+    };
+    expect(evaluateVisibility(vw, {})).toBe(true);
+  });
+
+  it("isEmpty returns true for empty string", () => {
+    const vw: VisibleWhenV2 = {
+      version: 2,
+      groups: [[{ fieldKey: "fk-text", operator: "isEmpty" }]],
+    };
+    expect(evaluateVisibility(vw, { "fk-text": "" })).toBe(true);
+  });
+
+  it("isEmpty returns true for whitespace-only string", () => {
+    const vw: VisibleWhenV2 = {
+      version: 2,
+      groups: [[{ fieldKey: "fk-text", operator: "isEmpty" }]],
+    };
+    expect(evaluateVisibility(vw, { "fk-text": "   " })).toBe(true);
+  });
+
+  it("isEmpty returns true for tab/newline whitespace", () => {
+    const vw: VisibleWhenV2 = {
+      version: 2,
+      groups: [[{ fieldKey: "fk-text", operator: "isEmpty" }]],
+    };
+    expect(evaluateVisibility(vw, { "fk-text": "\t\n " })).toBe(true);
+  });
+
+  it("isEmpty returns false for non-empty string", () => {
+    const vw: VisibleWhenV2 = {
+      version: 2,
+      groups: [[{ fieldKey: "fk-text", operator: "isEmpty" }]],
+    };
+    expect(evaluateVisibility(vw, { "fk-text": "hello" })).toBe(false);
+  });
+
+  it("isEmpty returns true for non-string value (boolean)", () => {
+    const vw: VisibleWhenV2 = {
+      version: 2,
+      groups: [[{ fieldKey: "fk-cb", operator: "isEmpty" }]],
+    };
+    expect(evaluateVisibility(vw, { "fk-cb": true })).toBe(true);
+  });
+
+  it("isEmpty returns true for array value (not a string)", () => {
+    const vw: VisibleWhenV2 = {
+      version: 2,
+      groups: [[{ fieldKey: "fk-ms", operator: "isEmpty" }]],
+    };
+    expect(evaluateVisibility(vw, { "fk-ms": ["opt-a"] })).toBe(true);
+  });
+
+  it("isNotEmpty returns true for non-empty string", () => {
+    const vw: VisibleWhenV2 = {
+      version: 2,
+      groups: [[{ fieldKey: "fk-text", operator: "isNotEmpty" }]],
+    };
+    expect(evaluateVisibility(vw, { "fk-text": "hello" })).toBe(true);
+  });
+
+  it("isNotEmpty returns false when field is missing", () => {
+    const vw: VisibleWhenV2 = {
+      version: 2,
+      groups: [[{ fieldKey: "fk-text", operator: "isNotEmpty" }]],
+    };
+    expect(evaluateVisibility(vw, {})).toBe(false);
+  });
+
+  it("isNotEmpty returns false for empty string", () => {
+    const vw: VisibleWhenV2 = {
+      version: 2,
+      groups: [[{ fieldKey: "fk-text", operator: "isNotEmpty" }]],
+    };
+    expect(evaluateVisibility(vw, { "fk-text": "" })).toBe(false);
+  });
+
+  it("isNotEmpty returns false for whitespace-only string", () => {
+    const vw: VisibleWhenV2 = {
+      version: 2,
+      groups: [[{ fieldKey: "fk-text", operator: "isNotEmpty" }]],
+    };
+    expect(evaluateVisibility(vw, { "fk-text": "   " })).toBe(false);
+  });
+});
+
+describe("evaluateVisibility (operator + type matrix edge cases)", () => {
+  it("equals returns false for undefined value", () => {
+    const vw: VisibleWhenV2 = {
+      version: 2,
+      groups: [[{ fieldKey: "fk-1", operator: "equals", optionKey: "opt-a" }]],
+    };
+    expect(evaluateVisibility(vw, {})).toBe(false);
+  });
+
+  it("includes returns false for undefined value", () => {
+    const vw: VisibleWhenV2 = {
+      version: 2,
+      groups: [
+        [{ fieldKey: "fk-1", operator: "includes", optionKey: "opt-a" }],
+      ],
+    };
+    expect(evaluateVisibility(vw, {})).toBe(false);
+  });
+
+  it("checked returns false for undefined value", () => {
+    const vw: VisibleWhenV2 = {
+      version: 2,
+      groups: [[{ fieldKey: "fk-1", operator: "checked", boolValue: true }]],
+    };
+    expect(evaluateVisibility(vw, {})).toBe(false);
+  });
+
+  it("checked with boolValue false matches unchecked checkbox", () => {
+    const vw: VisibleWhenV2 = {
+      version: 2,
+      groups: [[{ fieldKey: "fk-1", operator: "checked", boolValue: false }]],
+    };
+    expect(evaluateVisibility(vw, { "fk-1": false })).toBe(true);
+    expect(evaluateVisibility(vw, { "fk-1": true })).toBe(false);
+  });
+
+  it("checked defaults boolValue to true when omitted", () => {
+    const vw: VisibleWhenV2 = {
+      version: 2,
+      groups: [[{ fieldKey: "fk-1", operator: "checked" }]],
+    };
+    expect(evaluateVisibility(vw, { "fk-1": true })).toBe(true);
+    expect(evaluateVisibility(vw, { "fk-1": false })).toBe(false);
+  });
+
+  it("complex: two AND-groups ORed together", () => {
+    const vw: VisibleWhenV2 = {
+      version: 2,
+      groups: [
+        [
+          { fieldKey: "fk-1", operator: "equals", optionKey: "opt-a" },
+          { fieldKey: "fk-2", operator: "checked", boolValue: true },
+        ],
+        [
+          { fieldKey: "fk-3", operator: "notEquals", optionKey: "opt-c" },
+          { fieldKey: "fk-4", operator: "isNotEmpty" },
+        ],
+      ],
+    };
+    // First group satisfied
+    expect(evaluateVisibility(vw, { "fk-1": "opt-a", "fk-2": true })).toBe(
+      true,
+    );
+    // Second group satisfied (fk-3 unanswered satisfies notEquals, fk-4 has text)
+    expect(evaluateVisibility(vw, { "fk-4": "some text" })).toBe(true);
+    // Neither group satisfied (fk-1 wrong, fk-3 matches opt-c)
+    expect(
+      evaluateVisibility(vw, { "fk-1": "opt-b", "fk-3": "opt-c", "fk-4": "" }),
+    ).toBe(false);
   });
 });

@@ -206,22 +206,31 @@ export const ROLE_WIDGET_COMPATIBILITY: Readonly<
 
 /**
  * Operators for conditional visibility rules.
- * - equals: the referenced field's selected option key matches optionKey
- * - includes: the referenced field's selected options array includes optionKey
- *   (multiselect)
- * - checked: the referenced checkbox field is true (uses boolValue)
+ * - equals / notEquals: the referenced select field's value matches (or does
+ *   not match) optionKey
+ * - includes / notIncludes: the referenced multiselect field's value array
+ *   includes (or does not include) optionKey
+ * - checked: the referenced checkbox field matches boolValue (polarity flag)
+ * - isEmpty / isNotEmpty: whether the referenced text-like field
+ *   (text/textarea/date) has a meaningful value. Missing answers and
+ *   whitespace-only strings count as empty.
  */
 export const visibilityOperatorSchema = z.enum([
   "equals",
+  "notEquals",
   "includes",
+  "notIncludes",
   "checked",
+  "isEmpty",
+  "isNotEmpty",
 ]);
 export type VisibilityOperator = z.infer<typeof visibilityOperatorSchema>;
 
 /**
  * A single condition rule: "field X (operator) value Y".
- * For equals/includes operators, optionKey is required.
+ * For equals/notEquals/includes/notIncludes operators, optionKey is required.
  * For checked operator, boolValue is required.
+ * For isEmpty/isNotEmpty operators, neither optionKey nor boolValue is used.
  */
 export const visibilityRuleSchema = z.object({
   fieldKey: z.string().min(1).max(200),
@@ -232,16 +241,56 @@ export const visibilityRuleSchema = z.object({
 export type VisibilityRule = z.infer<typeof visibilityRuleSchema>;
 
 /**
- * Conditional visibility for a field or page break. When present,
- * the element is visible only when the rules are satisfied.
- * - "all": every rule must match (logical AND)
- * - "any": at least one rule must match (logical OR)
+ * V1 conditional visibility shape (flat all/any mode with a single rule list).
+ * Kept indefinitely for backwards compatibility with existing encrypted blobs.
  */
-export const visibleWhenSchema = z.object({
+export const visibleWhenV1Schema = z.object({
   mode: z.enum(["all", "any"]),
   rules: z.array(visibilityRuleSchema).min(1).max(20),
 });
+export type VisibleWhenV1 = z.infer<typeof visibleWhenV1Schema>;
+
+/**
+ * V2 conditional visibility shape. Uses OR-of-AND groups (two-level nesting,
+ * matching CryptPad's model): visible when ANY group has ALL rules true.
+ */
+export const visibleWhenV2Schema = z.object({
+  version: z.literal(2),
+  groups: z.array(z.array(visibilityRuleSchema).min(1).max(20)).min(1).max(10),
+});
+export type VisibleWhenV2 = z.infer<typeof visibleWhenV2Schema>;
+
+/**
+ * Union of v1 and v2 conditional visibility shapes. The v1 branch stays
+ * indefinitely so existing encrypted config blobs remain parseable.
+ */
+export const visibleWhenSchema = z.union([
+  visibleWhenV2Schema,
+  visibleWhenV1Schema,
+]);
 export type VisibleWhen = z.infer<typeof visibleWhenSchema>;
+
+/**
+ * Normalize a v1 or v2 VisibleWhen to the canonical v2 shape.
+ *
+ * v1 `mode: "all"` becomes one group containing all rules.
+ * v1 `mode: "any"` becomes one group per rule.
+ * v2 passes through unchanged.
+ *
+ * The conversion is lossless: the v2 output evaluates identically to the
+ * v1 input under the groups.some(g => g.every(check)) semantics.
+ */
+export function normalizeVisibleWhen(v: VisibleWhen): VisibleWhenV2 {
+  // Only the v2 shape carries a version property, so this narrows the union.
+  if ("version" in v) {
+    return v;
+  }
+  if (v.mode === "all") {
+    return { version: 2, groups: [v.rules] };
+  }
+  // mode === "any": each rule becomes its own group
+  return { version: 2, groups: v.rules.map((rule) => [rule]) };
+}
 
 // ---------------------------------------------------------------------------
 // Page break element (T2.2)
@@ -642,11 +691,67 @@ export type SaveIntakeFormInput = z.infer<typeof saveIntakeFormInputSchema>;
 // ---------------------------------------------------------------------------
 
 /**
+ * Check whether a text/textarea/date value is "empty" for isEmpty/isNotEmpty
+ * evaluation. A value is empty when it is undefined, not a string, an empty
+ * string, or a whitespace-only string.
+ */
+function isValueEmpty(
+  val: string | string[] | AvailabilityData | boolean | undefined,
+): boolean {
+  if (val == null) return true;
+  if (typeof val !== "string") return true;
+  return val.trim().length === 0;
+}
+
+/**
+ * Evaluate a single visibility rule against the current field value.
+ *
+ * Negated operators (notEquals, notIncludes): an unanswered field satisfies
+ * the condition (matching CryptPad's behavior where `res !== rule.v` is true
+ * when res is undefined).
+ *
+ * isEmpty is satisfied when the answer is missing or contains only
+ * whitespace. An empty string counts as missing. isNotEmpty is the inverse.
+ */
+function checkRule(
+  rule: VisibilityRule,
+  val: string | string[] | AvailabilityData | boolean | undefined,
+): boolean {
+  switch (rule.operator) {
+    case "equals":
+      return typeof val === "string" && val === rule.optionKey;
+    case "notEquals":
+      return typeof val !== "string" || val !== rule.optionKey;
+    case "includes":
+      return (
+        Array.isArray(val) &&
+        rule.optionKey !== undefined &&
+        val.includes(rule.optionKey)
+      );
+    case "notIncludes":
+      return (
+        !Array.isArray(val) ||
+        rule.optionKey === undefined ||
+        !val.includes(rule.optionKey)
+      );
+    case "checked":
+      return val === (rule.boolValue ?? true);
+    case "isEmpty":
+      return isValueEmpty(val);
+    case "isNotEmpty":
+      return !isValueEmpty(val);
+  }
+}
+
+/**
  * Evaluate a visibleWhen condition against current field values.
  * Returns true when the element should be visible, false when hidden.
  *
  * When visibleWhen is undefined, the element is always visible.
  * Values is a record keyed by fieldKey.
+ *
+ * Accepts both v1 and v2 shapes. The input is normalized to v2 internally,
+ * then evaluated as: visible when ANY group has ALL rules true.
  */
 export function evaluateVisibility(
   visibleWhen: VisibleWhen | undefined,
@@ -656,25 +761,8 @@ export function evaluateVisibility(
 ): boolean {
   if (visibleWhen == null) return true;
 
-  const check = (rule: VisibilityRule): boolean => {
-    const val = values[rule.fieldKey];
-
-    switch (rule.operator) {
-      case "equals":
-        return typeof val === "string" && val === rule.optionKey;
-      case "includes":
-        return (
-          Array.isArray(val) &&
-          rule.optionKey !== undefined &&
-          val.includes(rule.optionKey)
-        );
-      case "checked":
-        return val === (rule.boolValue ?? true);
-    }
-  };
-
-  if (visibleWhen.mode === "all") {
-    return visibleWhen.rules.every(check);
-  }
-  return visibleWhen.rules.some(check);
+  const normalized = normalizeVisibleWhen(visibleWhen);
+  return normalized.groups.some((group) =>
+    group.every((rule) => checkRule(rule, values[rule.fieldKey])),
+  );
 }
