@@ -11,9 +11,6 @@
 <script lang="ts">
   import { Node as PMNode } from "prosemirror-model";
   import { EditorState } from "prosemirror-state";
-  import { setBlockType, toggleMark, wrapIn, lift } from "prosemirror-commands";
-  import { wrapInList, liftListItem } from "prosemirror-schema-list";
-  import { undo, redo } from "prosemirror-history";
   import { Button as KButton, Preloader, ListInput } from "konsta/svelte";
   import Register from "$lib/components/Register.svelte";
   import * as m from "$lib/paraglide/messages.js";
@@ -26,10 +23,13 @@
   import { useProseMirror } from "$lib/editor/use-prosemirror.svelte.js";
   import {
     deriveToolbarState,
-    blockTypeActive,
     type ToolbarCommand,
     type ToolbarState,
   } from "$lib/editor/toolbar-state.js";
+  import {
+    dispatchToolbarCommand,
+    type EditorAction,
+  } from "$lib/editor/toolbar-commands.js";
   import { createFormAssetImageView } from "$lib/editor/node-views/form-asset-image-view.js";
   import { isGenericLinkText } from "$lib/editor/atag-checks.js";
   import { getOrgSlug } from "$lib/utils/org-slug.js";
@@ -237,87 +237,10 @@
   // Toolbar command dispatch
   // ---------------------------------------------------------------------------
 
-  function handleToolbarCommand(cmd: ToolbarCommand): void {
-    const view = editor.view;
-    if (view === null) return;
-
-    const { state, dispatch } = view;
-
-    switch (cmd.kind) {
-      case "toggleBold":
-        if (editorSchema.marks.strong)
-          toggleMark(editorSchema.marks.strong)(state, dispatch);
-        break;
-      case "toggleItalic":
-        if (editorSchema.marks.em)
-          toggleMark(editorSchema.marks.em)(state, dispatch);
-        break;
-      case "toggleStrikethrough":
-        if (editorSchema.marks.strikethrough)
-          toggleMark(editorSchema.marks.strikethrough)(state, dispatch);
-        break;
-      case "toggleCode":
-        if (editorSchema.marks.code)
-          toggleMark(editorSchema.marks.code)(state, dispatch);
-        break;
+  function handleEditorAction(action: EditorAction): void {
+    switch (action.action) {
       case "toggleLink":
         openLinkSheet();
-        break;
-      case "wrapInBulletList":
-        if (editorSchema.nodes.bullet_list) {
-          if (
-            blockTypeActive(state, editorSchema.nodes.bullet_list) &&
-            editorSchema.nodes.list_item
-          ) {
-            liftListItem(editorSchema.nodes.list_item)(state, dispatch);
-          } else {
-            wrapInList(editorSchema.nodes.bullet_list)(state, dispatch);
-          }
-        }
-        break;
-      case "wrapInOrderedList":
-        if (editorSchema.nodes.ordered_list) {
-          if (
-            blockTypeActive(state, editorSchema.nodes.ordered_list) &&
-            editorSchema.nodes.list_item
-          ) {
-            liftListItem(editorSchema.nodes.list_item)(state, dispatch);
-          } else {
-            wrapInList(editorSchema.nodes.ordered_list)(state, dispatch);
-          }
-        }
-        break;
-      case "wrapInBlockquote":
-        if (editorSchema.nodes.blockquote) {
-          if (blockTypeActive(state, editorSchema.nodes.blockquote)) {
-            lift(state, dispatch);
-          } else {
-            wrapIn(editorSchema.nodes.blockquote)(state, dispatch);
-          }
-        }
-        break;
-      case "setCodeBlock":
-        {
-          const codeBlock = editorSchema.nodes.code_block;
-          const para = editorSchema.nodes.paragraph;
-          if (codeBlock && para) {
-            if (blockTypeActive(state, codeBlock)) {
-              setBlockType(para)(state, dispatch);
-            } else {
-              setBlockType(codeBlock)(state, dispatch);
-            }
-          }
-        }
-        break;
-      case "setParagraph":
-        if (editorSchema.nodes.paragraph)
-          setBlockType(editorSchema.nodes.paragraph)(state, dispatch);
-        break;
-      case "setHeading":
-        if (editorSchema.nodes.heading)
-          setBlockType(editorSchema.nodes.heading, {
-            level: cmd.level,
-          })(state, dispatch);
         break;
       case "insertImage":
         triggerImageUpload();
@@ -326,19 +249,16 @@
         insertHorizontalRule();
         break;
       case "insertTable":
-        // Table insertion not supported in form content
-        break;
       case "attachFile":
-        // File attachments not supported in form content
-        break;
-      case "undo":
-        undo(state, dispatch);
-        break;
-      case "redo":
-        redo(state, dispatch);
+        // Not supported in form content editors
         break;
     }
+  }
 
+  function handleToolbarCommand(cmd: ToolbarCommand): void {
+    const view = editor.view;
+    if (view === null) return;
+    dispatchToolbarCommand(view, cmd, handleEditorAction);
     view.focus();
   }
 

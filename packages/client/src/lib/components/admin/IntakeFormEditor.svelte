@@ -24,6 +24,7 @@
     Preloader,
   } from "konsta/svelte";
   import { untrack } from "svelte";
+  import { SvelteMap } from "svelte/reactivity";
   import {
     ArrowUp,
     ArrowDown,
@@ -47,9 +48,7 @@
     FORM_ASSET_CONTENT_TYPES,
     type IntakeFieldConfig,
     type IntakeFieldType,
-    type IntakeFieldRole,
     type IntakeFormMeta,
-    type LocalizedText,
     type LocalizedRichText,
     type FormLocale,
   } from "@care-y/shared";
@@ -86,17 +85,25 @@
     getRoleLabel,
   } from "./intake-field-labels.js";
   import {
-    readLocale,
-    hasRichValue,
     hasAnyRichContent,
     trimLocalizedRichText,
-    richValueJsonSize,
   } from "$lib/utils/localized-text.js";
   import {
     renderFormRichText,
     rewriteFormAssetUrls,
   } from "$lib/utils/render-form-content.js";
   import { getOrgSlug } from "$lib/utils/org-slug.js";
+  import {
+    computeLocaleCompleteness,
+    validateRichTextCap as validateRichTextCapPure,
+    validateFieldBodyCap as validateFieldBodyCapPure,
+    richTextBodyPreview as richTextBodyPreviewPure,
+    resolveRichPreview,
+    RICH_TEXT_LOCALE_CAP,
+    type ContentCapErrors,
+    type ContentCapField,
+    type PlaintextField,
+  } from "./intake-form-editor-logic.js";
   import type {
     FieldConfigState,
     FieldConfigInitial,
@@ -105,21 +112,8 @@
   } from "./intake-field-config-types.js";
   import IntakeFieldRenderer from "$lib/components/portal/IntakeFieldRenderer.svelte";
 
-  import type { VisibleWhen, IntakeOption } from "@care-y/shared";
+  import type { IntakeOption } from "@care-y/shared";
   import type { EarlierFieldOption } from "./intake-field-config-types.js";
-
-  export interface PlaintextField {
-    fieldKey: string;
-    label: LocalizedText;
-    helpText: LocalizedText;
-    isRequired: boolean;
-    config: IntakeFieldConfig;
-    fieldType: IntakeFieldType;
-    role: IntakeFieldRole | null;
-    routingQueueIds: string[] | null;
-    escalationRecipientIds: string[] | null;
-    visibleWhen?: VisibleWhen;
-  }
 
   interface IntakeFormEditorProps {
     readonly formId: string | null;
@@ -199,17 +193,6 @@
   let bannerUploading = $state(false);
 
   const orgSlug = getOrgSlug();
-
-  /** Per-locale 30K cap. */
-  const RICH_TEXT_LOCALE_CAP = 30_000;
-
-  type ContentCapField = "description" | "submitMessage" | "closedMessage";
-
-  interface ContentCapErrors {
-    description?: string;
-    submitMessage?: string;
-    closedMessage?: string;
-  }
 
   /** Validation errors for the three rich text fields. */
   let contentCapErrors = $state<ContentCapErrors>({});
@@ -313,68 +296,17 @@
 
   // ---- Per-locale completeness indicator ----
 
-  /** Count how many locales have all field labels, option labels, and meta filled. */
   function localeCompleteness(loc: FormLocale): {
     filled: number;
     total: number;
   } {
-    let total = 0;
-    let filled = 0;
-
-    // Form-level rich text meta (rich-aware emptiness check)
-    // eslint-disable-next-line security/detect-object-injection -- loc is from FormLocale enum
-    const descVal = formDescription[loc];
-    // eslint-disable-next-line security/detect-object-injection -- loc is from FormLocale enum
-    const submitVal = formSubmitMessage[loc];
-    // eslint-disable-next-line security/detect-object-injection -- loc is from FormLocale enum
-    const closedVal = formClosedMessage[loc];
-
-    if (descVal !== undefined && hasRichValue(descVal)) filled++;
-    if (submitVal !== undefined && hasRichValue(submitVal)) filled++;
-    if (closedVal !== undefined && hasRichValue(closedVal)) filled++;
-
-    // Only count meta fields that have content in at least one locale
-    if (hasAnyRichContent(formDescription)) total++;
-    if (hasAnyRichContent(formSubmitMessage)) total++;
-    if (hasAnyRichContent(formClosedMessage)) total++;
-
-    // Field labels, help text, and rich text bodies
-    for (const field of fields) {
-      // Rich text blocks have body content instead of a label
-      if (field.fieldType === "richText") {
-        const cfg = field.config;
-        if (cfg.type === "richText" && hasAnyRichContent(cfg.body)) {
-          total++;
-          // eslint-disable-next-line security/detect-object-injection -- loc is from FormLocale enum
-          const bodyVal = cfg.body[loc];
-          if (bodyVal !== undefined && hasRichValue(bodyVal)) filled++;
-        }
-        continue;
-      }
-
-      total++; // label is always required
-      const labelVal = readLocale(field.label, loc);
-      if (labelVal.length > 0) filled++;
-
-      // Help text: only count if it exists in any locale
-      if (resolveLocalized(field.helpText, BASE_LOCALE) != null) {
-        total++;
-        const ht = readLocale(field.helpText, loc);
-        if (ht.length > 0) filled++;
-      }
-
-      // Option labels
-      const cfg = field.config;
-      if (cfg.type === "select" || cfg.type === "multiselect") {
-        for (const opt of cfg.options) {
-          total++;
-          const label = resolveLocalized(opt.label, loc);
-          if (label != null && label.length > 0) filled++;
-        }
-      }
-    }
-
-    return { filled, total };
+    return computeLocaleCompleteness(
+      loc,
+      formDescription,
+      formSubmitMessage,
+      formClosedMessage,
+      fields,
+    );
   }
 
   // ---- Field config sheet state ----
@@ -974,25 +906,6 @@
     fields.some((f) => f.fieldType === "pageBreak"),
   );
 
-  /**
-   * Resolve the preview-locale value from a LocalizedRichText map.
-   * Falls back to the base locale. Returns the raw value (string or doc JSON)
-   * for renderFormRichText, or undefined if no content.
-   */
-  function resolveRichPreview(
-    richText: LocalizedRichText,
-    loc: FormLocale,
-  ): string | { type: "doc"; content: unknown[] } | undefined {
-    // eslint-disable-next-line security/detect-object-injection -- loc is from FormLocale enum
-    const direct = richText[loc];
-    if (direct !== undefined && hasRichValue(direct)) return direct;
-    if (loc !== BASE_LOCALE) {
-      const fallback = richText.en;
-      if (fallback !== undefined && hasRichValue(fallback)) return fallback;
-    }
-    return undefined;
-  }
-
   /** Render to sanitized HTML with form-asset image URLs resolved. */
   function renderPreviewHtml(
     value: string | { type: "doc"; content: unknown[] } | undefined,
@@ -1019,98 +932,39 @@
     return `/api/forms/${orgSlug}/${bannerBlobKey}`;
   });
 
-  /**
-   * Extract a short plain-text preview from a richText field body for the
-   * field list row. Tries the base locale first. Returns up to 60 chars
-   * with an ellipsis if truncated.
-   */
   function richTextBodyPreview(field: PlaintextField): string {
-    if (field.config.type !== "richText") return "";
-    const body = field.config.body;
-
-    // Try base locale first, then any locale
-    const value = body.en ?? body.es;
-    if (value === undefined) return m.intake_forms_rich_text_preview_empty();
-
-    let plain: string;
-    if (typeof value === "string") {
-      plain = value;
-    } else if (
-      typeof value === "object" &&
-      "content" in value &&
-      Array.isArray(value.content)
-    ) {
-      // Walk the doc tree to extract text nodes
-      plain = extractDocText(value.content);
-    } else {
-      return m.intake_forms_rich_text_preview_empty();
-    }
-
-    const trimmed = plain.trim();
-    if (trimmed.length === 0) return m.intake_forms_rich_text_preview_empty();
-    if (trimmed.length > 60) return trimmed.slice(0, 60) + "...";
-    return trimmed;
-  }
-
-  /** Type guard for unknown arrays, keeps eslint unsafe-argument quiet. */
-  function isUnknownArray(candidate: unknown): candidate is readonly unknown[] {
-    return Array.isArray(candidate);
-  }
-
-  /** Recursively extract text from ProseMirror doc content nodes. */
-  function extractDocText(content: readonly unknown[]): string {
-    const parts: string[] = [];
-    for (const node of content) {
-      if (typeof node !== "object" || node === null) continue;
-      if ("text" in node && typeof node.text === "string") {
-        parts.push(node.text);
-      }
-      if ("content" in node && isUnknownArray(node.content)) {
-        parts.push(extractDocText(node.content));
-      }
-    }
-    return parts.join(" ");
+    return richTextBodyPreviewPure(
+      field,
+      m.intake_forms_rich_text_preview_empty(),
+    );
   }
 
   // ---- Field-level rich text body cap validation ----
 
   /**
-   * Track per-field body cap errors by fieldKey. Cleared on successful
-   * validation, set when a field's body exceeds the locale cap.
+   * Track per-field body cap errors by fieldKey. SvelteMap provides
+   * reactive add/delete without full-object spread rebuilds.
    */
-  let fieldBodyCapErrors = $state<Record<string, string | undefined>>({});
+  let fieldBodyCapErrors = new SvelteMap<string, string>();
 
   /**
    * Validate per-locale 30K cap on a richText field's body.
    * Returns true if all locales pass.
    */
   function validateFieldBodyCap(field: PlaintextField): boolean {
-    if (field.config.type !== "richText") return true;
     const capMsg = m.intake_forms_content_cap_error({
       max: String(RICH_TEXT_LOCALE_CAP),
     });
-    for (const loc of FORM_LOCALES) {
-      // eslint-disable-next-line security/detect-object-injection -- loc is from the FORM_LOCALES const tuple
-      const v = field.config.body[loc];
-      if (v !== undefined && richValueJsonSize(v) > RICH_TEXT_LOCALE_CAP) {
-        fieldBodyCapErrors = {
-          ...fieldBodyCapErrors,
-          [field.fieldKey]: capMsg,
-        };
-        return false;
-      }
+    const result = validateFieldBodyCapPure(field, capMsg);
+    if (!result.valid && result.error !== undefined) {
+      fieldBodyCapErrors.set(field.fieldKey, result.error);
+      return false;
     }
-    // Clear any previous error for this field
-    if (Object.hasOwn(fieldBodyCapErrors, field.fieldKey)) {
-      const { [field.fieldKey]: _removed, ...rest } = fieldBodyCapErrors;
-      fieldBodyCapErrors = rest;
-    }
+    fieldBodyCapErrors.delete(field.fieldKey);
     return true;
   }
 
-  const hasFieldBodyCapErrors = $derived(
-    Object.entries(fieldBodyCapErrors).some(([, e]) => e !== undefined),
-  );
+  const hasFieldBodyCapErrors = $derived(fieldBodyCapErrors.size > 0);
 
   /** Resolve a page break label in the preview locale, with a fallback. */
   function pageBreakLabel(field: PlaintextField): string {
@@ -1130,32 +984,14 @@
     const capMsg = m.intake_forms_content_cap_error({
       max: String(RICH_TEXT_LOCALE_CAP),
     });
-    for (const loc of FORM_LOCALES) {
-      // eslint-disable-next-line security/detect-object-injection -- loc is from the FORM_LOCALES const tuple
-      const v = value[loc];
-      if (v !== undefined && richValueJsonSize(v) > RICH_TEXT_LOCALE_CAP) {
-        contentCapErrors = setCapError(contentCapErrors, field, capMsg);
-        return false;
-      }
-    }
-    contentCapErrors = setCapError(contentCapErrors, field, undefined);
-    return true;
-  }
-
-  /** Set or clear a single cap-error field without bracket writes or delete. */
-  function setCapError(
-    prev: ContentCapErrors,
-    field: ContentCapField,
-    msg: string | undefined,
-  ): ContentCapErrors {
-    switch (field) {
-      case "description":
-        return { ...prev, description: msg };
-      case "submitMessage":
-        return { ...prev, submitMessage: msg };
-      case "closedMessage":
-        return { ...prev, closedMessage: msg };
-    }
+    const result = validateRichTextCapPure(
+      field,
+      value,
+      capMsg,
+      contentCapErrors,
+    );
+    contentCapErrors = result.errors;
+    return result.valid;
   }
 
   function handleSave(): void {
@@ -1595,9 +1431,7 @@
         </ListItem>
       {:else if field.fieldType === "richText"}
         <!-- Rich text block rendered as a structural row with content preview -->
-        {@const bodyCapError = Object.hasOwn(fieldBodyCapErrors, field.fieldKey)
-          ? fieldBodyCapErrors[field.fieldKey]
-          : undefined}
+        {@const bodyCapError = fieldBodyCapErrors.get(field.fieldKey)}
         <ListItem
           title={m.intake_forms_field_type_rich_text()}
           subtitle={richTextBodyPreview(field)}
