@@ -331,7 +331,6 @@ export function createClientPortalRouter(deps: ClientPortalRouterDeps) {
           const result = await createIntakeTicket(
             ctx.org.tenantDb,
             {
-              notificationService: deps.notificationService,
               sealedBox: ctx.org.sealedBox,
               fieldEncryptor: deps.fieldEncryptor,
               orgId: ctx.org.orgId,

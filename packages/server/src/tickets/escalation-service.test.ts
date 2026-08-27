@@ -3,6 +3,11 @@
  *
  * Tests run inside Docker via `pnpm test:server:db`. Each suite gets
  * an isolated test schema with all tenant migrations applied.
+ *
+ * Since the outbox conversion, runEscalationCheck enqueues into the
+ * notification_outbox table rather than dispatching directly.
+ * Assertions verify outbox rows (event_type, ticket_id, queue_id,
+ * escalation_rule_id) rather than notification dispatch calls.
  */
 
 import { describe, it, expect, beforeAll, afterAll, vi } from "vitest";
@@ -17,15 +22,12 @@ import {
   noopEncryptor,
   type TestDb,
 } from "../test-utils.js";
-import type { NotificationService } from "../notifications/service.js";
-import type { NotificationRecipientList } from "./notification-recipients.js";
 import {
   RoleId,
   type OrgId,
   type OrgSchema,
   type OrgSlug,
   type TicketId,
-  type QueueId,
   type UserId,
   type EscalationRuleId,
 } from "@care-y/shared";
@@ -42,59 +44,11 @@ import {
 // Test helpers
 // ---------------------------------------------------------------------------
 
-interface DispatchCall {
-  readonly orgId: OrgId;
-  readonly orgSchema: OrgSchema;
-  readonly orgSlug: OrgSlug;
-  readonly eventType: string;
-  readonly ticketId: TicketId;
-  readonly queueId: QueueId;
-  readonly recipients: NotificationRecipientList;
-}
-
-function createStubNotificationService(): NotificationService & {
-  readonly calls: DispatchCall[];
-} {
-  const calls: DispatchCall[] = [];
-  return {
-    calls,
-    async dispatch(
-      _tDb,
-      orgId,
-      orgSchema,
-      orgSlug,
-      eventType,
-      ticketId,
-      queueId,
-      recipients,
-    ) {
-      calls.push({
-        orgId,
-        orgSchema,
-        orgSlug,
-        eventType,
-        ticketId,
-        queueId,
-        recipients,
-      });
-    },
-    async dispatchTicketless() {
-      // not used by escalation service
-    },
-  };
-}
-
 function createDeps(overrides?: {
   managerIds?: UserId[];
   watcherIds?: UserId[];
-}): EscalationServiceDeps & {
-  readonly notificationService: ReturnType<
-    typeof createStubNotificationService
-  >;
-} {
-  const notificationService = createStubNotificationService();
+}): EscalationServiceDeps {
   return {
-    notificationService,
     getManagerIds: vi.fn(async () => overrides?.managerIds ?? []),
     getQueueWatcherIds: vi.fn(async () => overrides?.watcherIds ?? []),
   };
@@ -133,6 +87,25 @@ async function insertFollowup(
       encrypted_content: noopEncryptor.encrypt("test content"),
       created_at: sql<Date>`now() - interval '1 minute' * ${sql.lit(minutesAgo)}`,
     })
+    .execute();
+}
+
+/** Count outbox rows matching a ticket, optionally with escalation_rule_id. */
+async function getOutboxRows(
+  db: Kysely<TenantDatabase>,
+  ticketId: TicketId,
+): Promise<
+  readonly {
+    event_type: string;
+    ticket_id: string;
+    queue_id: string;
+    escalation_rule_id: string | null;
+  }[]
+> {
+  return db
+    .selectFrom("notification_outbox")
+    .select(["event_type", "ticket_id", "queue_id", "escalation_rule_id"])
+    .where("ticket_id", "=", ticketId)
     .execute();
 }
 
@@ -267,12 +240,12 @@ describe.skipIf(!process.env.DATABASE_URL)("EscalationService", () => {
   // -------------------------------------------------------------------------
 
   describe("unassigned_duration rule", () => {
-    it("fires for an old unassigned ticket", async () => {
+    it("fires for an old unassigned ticket and enqueues to outbox", async () => {
       const queue = await createTestQueue(db);
       const fixture = await createTestTicketFixture(db, { queueId: queue.id });
       await backdateTicket(db, fixture.ticketId, 35);
 
-      await createRule(db, {
+      const rule = await createRule(db, {
         queueId: queue.id,
         ruleType: "unassigned_duration",
         thresholdMinutes: 30,
@@ -295,11 +268,15 @@ describe.skipIf(!process.env.DATABASE_URL)("EscalationService", () => {
       );
 
       expect(result.firings).toBe(1);
-      expect(deps.notificationService.calls).toHaveLength(1);
-      const call = deps.notificationService.calls[0];
-      expect(call?.eventType).toBe("ticket_escalated");
-      expect(call?.ticketId).toBe(fixture.ticketId);
-      expect(call?.queueId).toBe(queue.id);
+
+      // Verify outbox row was created with the rule ID
+      const rows = await getOutboxRows(db, fixture.ticketId);
+      const escalationRow = rows.find(
+        (r) => r.event_type === "ticket_escalated",
+      );
+      expect(escalationRow).toBeDefined();
+      expect(escalationRow?.queue_id).toBe(queue.id);
+      expect(escalationRow?.escalation_rule_id).toBe(rule.id);
     });
 
     it("does not fire for an assigned ticket", async () => {
@@ -332,7 +309,6 @@ describe.skipIf(!process.env.DATABASE_URL)("EscalationService", () => {
       );
 
       expect(result.firings).toBe(0);
-      expect(deps.notificationService.calls).toHaveLength(0);
     });
 
     it("does not fire for a ticket on hold", async () => {
@@ -432,7 +408,7 @@ describe.skipIf(!process.env.DATABASE_URL)("EscalationService", () => {
       // Followup from 65 minutes ago (threshold = 60)
       await insertFollowup(db, fixture.ticketId, 65);
 
-      await createRule(db, {
+      const rule = await createRule(db, {
         queueId: queue.id,
         ruleType: "inactive_duration",
         thresholdMinutes: 60,
@@ -451,9 +427,12 @@ describe.skipIf(!process.env.DATABASE_URL)("EscalationService", () => {
       );
 
       expect(result.firings).toBe(1);
-      const call = deps.notificationService.calls[0];
-      expect(call?.eventType).toBe("ticket_escalated");
-      expect(call?.recipients.recipients[0]?.source).toBe("queue_watcher");
+      const rows = await getOutboxRows(db, fixture.ticketId);
+      const escalationRow = rows.find(
+        (r) => r.event_type === "ticket_escalated",
+      );
+      expect(escalationRow).toBeDefined();
+      expect(escalationRow?.escalation_rule_id).toBe(rule.id);
     });
 
     it("does not fire when a recent followup exists on an old ticket", async () => {
@@ -544,8 +523,13 @@ describe.skipIf(!process.env.DATABASE_URL)("EscalationService", () => {
         deps,
       );
       expect(second.firings).toBe(0);
-      // Only the first run dispatched
-      expect(deps.notificationService.calls).toHaveLength(1);
+
+      // Only the first run produced an outbox row
+      const rows = await getOutboxRows(db, fixture.ticketId);
+      const escalationRows = rows.filter(
+        (r) => r.event_type === "ticket_escalated",
+      );
+      expect(escalationRows).toHaveLength(1);
     });
 
     it("handles concurrent inserts via onConflict doNothing", async () => {
@@ -576,74 +560,20 @@ describe.skipIf(!process.env.DATABASE_URL)("EscalationService", () => {
       );
 
       expect(result.firings).toBe(0);
-      expect(deps.notificationService.calls).toHaveLength(0);
     });
   });
 
   // -------------------------------------------------------------------------
-  // Recipient routing
+  // Outbox row content
   // -------------------------------------------------------------------------
 
-  describe("recipient routing", () => {
-    it("notify_managers dispatches with note_escalation source", async () => {
+  describe("outbox enqueue content", () => {
+    it("stores escalation_rule_id in the outbox row", async () => {
       const queue = await createTestQueue(db);
       const fixture = await createTestTicketFixture(db, { queueId: queue.id });
       await backdateTicket(db, fixture.ticketId, 35);
 
-      await createRule(db, {
-        queueId: queue.id,
-        ruleType: "unassigned_duration",
-        thresholdMinutes: 30,
-        action: "notify_managers",
-      });
-
-      const mgr = await createTestUser(db, {
-        overrides: { role_id: RoleId.MANAGER },
-      });
-      const admin = await createTestUser(db, {
-        overrides: { role_id: RoleId.ADMIN },
-      });
-      const deps = createDeps({ managerIds: [mgr.id, admin.id] });
-
-      await runEscalationCheck(db, orgId, orgSchema, orgSlug, deps);
-
-      expect(deps.notificationService.calls).toHaveLength(1);
-      const call = deps.notificationService.calls[0];
-      expect(call?.recipients.recipients).toHaveLength(2);
-      for (const r of call?.recipients.recipients ?? []) {
-        expect(r.source).toBe("note_escalation");
-      }
-    });
-
-    it("notify_queue_watchers dispatches with queue_watcher source", async () => {
-      const queue = await createTestQueue(db);
-      const fixture = await createTestTicketFixture(db, { queueId: queue.id });
-      await backdateTicket(db, fixture.ticketId, 35);
-
-      await createRule(db, {
-        queueId: queue.id,
-        ruleType: "unassigned_duration",
-        thresholdMinutes: 30,
-        action: "notify_queue_watchers",
-      });
-
-      const watcher = await createTestUser(db);
-      const deps = createDeps({ watcherIds: [watcher.id] });
-
-      await runEscalationCheck(db, orgId, orgSchema, orgSlug, deps);
-
-      expect(deps.notificationService.calls).toHaveLength(1);
-      const call = deps.notificationService.calls[0];
-      expect(call?.recipients.recipients).toHaveLength(1);
-      expect(call?.recipients.recipients[0]?.source).toBe("queue_watcher");
-    });
-
-    it("passes correct orgId, orgSchema, and orgSlug to dispatch", async () => {
-      const queue = await createTestQueue(db);
-      const fixture = await createTestTicketFixture(db, { queueId: queue.id });
-      await backdateTicket(db, fixture.ticketId, 35);
-
-      await createRule(db, {
+      const rule = await createRule(db, {
         queueId: queue.id,
         ruleType: "unassigned_duration",
         thresholdMinutes: 30,
@@ -653,10 +583,13 @@ describe.skipIf(!process.env.DATABASE_URL)("EscalationService", () => {
       const deps = createDeps({ managerIds: ["mgr-1" as UserId] });
       await runEscalationCheck(db, orgId, orgSchema, orgSlug, deps);
 
-      const call = deps.notificationService.calls[0];
-      expect(call?.orgId).toBe(orgId);
-      expect(call?.orgSchema).toBe(orgSchema);
-      expect(call?.orgSlug).toBe(orgSlug);
+      const rows = await getOutboxRows(db, fixture.ticketId);
+      const escalationRow = rows.find(
+        (r) => r.event_type === "ticket_escalated",
+      );
+      expect(escalationRow).toBeDefined();
+      expect(escalationRow?.escalation_rule_id).toBe(rule.id);
+      expect(escalationRow?.queue_id).toBe(queue.id);
     });
   });
 

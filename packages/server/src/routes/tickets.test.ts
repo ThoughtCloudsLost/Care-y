@@ -2333,7 +2333,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
         });
 
         // Update with a different noteTypeId: typeChanged = true,
-        // which exercises the notify() call inside the true branch.
+        // which exercises the outbox enqueue inside the true branch.
         const updated = await caller.tickets.updateInternalNote({
           followUpId: note.id,
           encryptedContent: testEncryptedContent(0xda),

@@ -521,11 +521,10 @@ describe.skipIf(!process.env.DATABASE_URL)(
         expect(fuRows.length).toBe(1);
       });
 
-      it("passes orgId to notification dispatch for SMS payload correctness", async () => {
+      it("enqueues a followup_added notification into the outbox after client reply", async () => {
         const fixture = await createTestTicketFixture(testDb.db);
         const channel = await insertChannel(testDb.db, fixture.clientId);
-        const notificationService = createMockNotificationService();
-        const deps = makeDeps({ notificationService });
+        const deps = makeDeps();
 
         const input: PortalReplyServiceInput = {
           ticketId: fixture.ticketId,
@@ -538,19 +537,19 @@ describe.skipIf(!process.env.DATABASE_URL)(
 
         await clientReply(testDb.db, deps, channel, input);
 
-        // The notification block runs several awaited queries before it
-        // dispatches, and nothing awaits it, so a single tick is not enough.
-        await vi.waitFor(() => {
-          expect(notificationService.dispatch).toHaveBeenCalledTimes(1);
+        // The outbox enqueue is fire-and-forget (void promise with
+        // catch), so wait for the microtask queue to flush.
+        await vi.waitFor(async () => {
+          const row = await testDb.db
+            .selectFrom("notification_outbox")
+            .selectAll()
+            .where("ticket_id", "=", fixture.ticketId)
+            .where("event_type", "=", "followup_added")
+            .executeTakeFirst();
+          expect(row).toBeDefined();
+          expect(row!.queue_id).toBe(fixture.queueId);
+          expect(row!.actor_user_id).toBeNull();
         });
-
-        // dispatch is called with orgId as the second positional argument
-        // (after tDb). This is the only compile-time-invisible contract
-        // that prevents a Zod rejection when the SMS job dequeues.
-        const dispatchArgs = notificationService.dispatch.mock
-          .calls[0] as unknown[];
-        // arg[0] = tDb, arg[1] = orgId
-        expect(dispatchArgs[1]).toBe(TEST_ORG_ID);
       });
     });
 

@@ -827,6 +827,9 @@ export {
   type ClientAccountId,
   type ClientAccountSessionId,
   type ShareId,
+  // Notification outbox
+  notificationOutboxIdSchema,
+  type NotificationOutboxId,
   // Telephony
   voicemailQuarantineIdSchema,
   consultantIdSchema,

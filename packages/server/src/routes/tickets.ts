@@ -58,7 +58,6 @@ import type { AuditEntry } from "../tickets/audit.js";
 import type { NoteTypeService } from "../tickets/note-type-service.js";
 import type { FieldEncryptor } from "../crypto/field-encryptor.js";
 import type {
-  NotificationEventType,
   ReactionSummary,
   TicketStatus,
   TicketPriority,
@@ -82,9 +81,10 @@ import {
 } from "../portal/channel-service.js";
 import { ChannelAlreadyActiveError } from "../portal/portal-errors.js";
 import {
-  buildRecipientList,
-  resolveEscalationTargets,
-} from "../tickets/notification-recipients.js";
+  enqueueNotificationDurable,
+  encryptMentionedPseudonyms,
+} from "../notifications/outbox.js";
+import type { OutboxEventType } from "../notifications/outbox.js";
 import type { ShiftProvider } from "../tickets/shift-provider.js";
 import { createStubShiftProvider } from "../tickets/shift-provider.js";
 import { createUserService } from "../users/user-service.js";
@@ -254,7 +254,7 @@ export interface TicketRouterDeps {
   // Search + audit (optional, injected by 5d wiring)
   readonly createSearchSvc?: (tDb: OrgContext["tenantDb"]) => SearchService;
   readonly createAuditSvc?: (tDb: OrgContext["tenantDb"]) => AuditService;
-  // Notification dispatch (optional, injected by 5d wiring)
+  // Notification dispatch (unused since outbox conversion; retained for wiring compatibility)
   readonly notificationService?: NotificationService;
   // Shared pending clients map for clientToken consumption (injected by relay)
   readonly pendingClients?: Map<string, PendingClient>;
@@ -450,55 +450,6 @@ export function createTicketRouter(deps: TicketRouterDeps) {
     return deps.createMediaSvc(tDb, deps.blobStore, access);
   }
 
-  /**
-   * Resolve escalation target user IDs for a note type.
-   * Always fetches and decrypts the note type regardless of whether
-   * targets are empty, to avoid timing side channels between note types
-   * with and without escalation.
-   */
-  async function resolveNoteTypeEscalation(
-    tDb: OrgContext["tenantDb"],
-    noteTypeId: NoteTypeId | undefined,
-    ticketId?: TicketId,
-  ): Promise<UserId[] | undefined> {
-    if (noteTypeId === undefined || !deps.createNoteTypeSvc) return undefined;
-
-    const ntSvc = deps.createNoteTypeSvc(tDb);
-    const ctx = await ntSvc.getEscalationContext(noteTypeId);
-    if (!ctx) return undefined;
-
-    const qp = deps.createQueuePermissionsSvc(tDb);
-    const userSvc = createUserService(tDb);
-
-    const userIds = await resolveEscalationTargets(
-      ctx.targets,
-      {
-        getUsersByRole: async (role) => {
-          const roleId = role === "admin" ? RoleId.ADMIN : RoleId.MANAGER;
-          return [...(await userSvc.listActiveIdsByRoleId(roleId))];
-        },
-        // eslint-disable-next-line @typescript-eslint/require-await -- stub for future permission-based targeting
-        getUsersByPermission: async () => [],
-        getQueueMembers: async (queueId) => qp.getQueueMembers(queueId),
-        getTicketKeyWrapHolders: async (tid) => [
-          ...(await userSvc.listActiveKeyWrapHolderIds(tid)),
-        ],
-      },
-      ticketId,
-    );
-
-    if (userIds.length === 0) return undefined;
-
-    if (ctx.minViewRole === RoleId.VOLUNTEER) return userIds;
-
-    const filtered = await userSvc.filterByRoleThreshold(
-      userIds,
-      ctx.minViewRole,
-    );
-
-    return filtered.length > 0 ? [...filtered] : undefined;
-  }
-
   // Audit helper: best-effort, never blocks. No-op when audit service not injected.
   function audit(tDb: OrgContext["tenantDb"], entry: AuditEntry): void {
     if (!deps.createAuditSvc) return;
@@ -507,80 +458,71 @@ export function createTicketRouter(deps: TicketRouterDeps) {
   }
 
   /**
-   * Combined audit + notification for ticket lifecycle events.
-   * Logs the audit entry, dispatches notification with queueId (not name,
-   * since queue names are encrypted per ADR-030).
-   * All steps are best-effort (never blocks the response).
+   * Combined audit + outbox enqueue for ticket lifecycle events.
+   * Logs the audit entry, enqueues a notification into the outbox.
+   * The drainer re-resolves recipients at dispatch time (never stored).
+   *
+   * Enqueue is durable-only (not atomic with the mutation) because the
+   * route handler calls this after the service method returns, outside
+   * any transaction the route controls. There is a residual window where
+   * the mutation commits and the enqueue does not.
    */
   function auditAndNotify(
     ctx: { org: OrgContext; user: { id: UserId } },
-    eventType: NotificationEventType,
+    // The ticket router only raises lifecycle events. Quarantine and merge
+    // notifications are dispatched from their own services, so keeping this
+    // narrow means a new event type has to be handled rather than coerced.
+    eventType: OutboxEventType,
     ticket: { id: TicketId; queueId: QueueId; assignedTo: UserId | null },
     auditEntry: AuditEntry,
     mentionedPseudonyms: string[] = [],
     noteTypeId?: NoteTypeId,
   ): void {
     audit(ctx.org.tenantDb, auditEntry);
-    notify(ctx, eventType, ticket, mentionedPseudonyms, noteTypeId);
+    enqueueLifecycleNotification(
+      ctx,
+      eventType,
+      ticket,
+      mentionedPseudonyms,
+      noteTypeId,
+    );
   }
 
-  // Notification dispatch helper: best-effort, never blocks.
-  // Builds recipient list and dispatches across all channels.
-  // Passes queueId (not queue name) since names are encrypted (ADR-030).
-  // Escalation resolution happens inside the fire-and-forget block so
-  // transient errors in the escalation path cannot fail the mutation.
-  function notify(
+  /**
+   * Enqueue a lifecycle notification into the outbox. Durable-only
+   * (not inside a transaction). Mentioned pseudonyms are OPS-encrypted
+   * before storage to avoid persisting a volunteer interaction graph
+   * in plaintext.
+   */
+  function enqueueLifecycleNotification(
     ctx: { org: OrgContext; user: { id: UserId } },
-    eventType: NotificationEventType,
+    // Narrowed to the events the outbox handles, so an unsupported event
+    // is a compile error at the call site rather than a cast here.
+    eventType: OutboxEventType,
     ticket: { id: TicketId; queueId: QueueId; assignedTo: UserId | null },
     mentionedPseudonyms: string[] = [],
     noteTypeId?: NoteTypeId,
   ): void {
-    if (!deps.notificationService) return;
-    const ns = deps.notificationService;
-    const tDb = ctx.org.tenantDb;
-    const access = deps.createTicketAccess(tDb);
-    const watchers = deps.createWatchersSvc(tDb, access);
+    const encryptor = deps.fieldEncryptor;
+    const encryptedMentions =
+      encryptor !== undefined
+        ? encryptMentionedPseudonyms(mentionedPseudonyms, encryptor)
+        : undefined;
 
-    void (async () => {
-      try {
-        const escalationUserIds = await resolveNoteTypeEscalation(
-          tDb,
-          noteTypeId,
-          ticket.id,
-        );
-
-        const recipients = await buildRecipientList(
-          {
-            getTicketWatchers: async (ticketId) =>
-              watchers.getTicketWatchers(ticketId),
-            getQueueWatchers: async (queueId) =>
-              watchers.getQueueWatchers(queueId),
-            resolveValidMentions: async (ids) =>
-              Promise.resolve(ids.map((id) => userIdSchema.parse(id))),
-          },
-          ticket,
-          mentionedPseudonyms,
-          ctx.user.id,
-          escalationUserIds,
-        );
-        await ns.dispatch(
-          tDb,
-          ctx.org.orgId,
-          ctx.org.orgSchema,
-          ctx.org.orgSlug,
-          eventType,
-          ticket.id,
-          ticket.queueId,
-          recipients,
-        );
-      } catch (err: unknown) {
-        console.error(
-          "Notification dispatch failed:",
-          err instanceof Error ? err.message : String(err),
-        );
-      }
-    })();
+    void enqueueNotificationDurable(ctx.org.tenantDb, {
+      eventType,
+      ticketId: ticket.id,
+      queueId: ticket.queueId,
+      formId: null,
+      actorUserId: ctx.user.id,
+      noteTypeId,
+      encryptedMentionedPseudonyms: encryptedMentions,
+    }).catch((err: unknown) => {
+      console.error(
+        "Outbox enqueue failed:",
+        err instanceof Error ? err.message : String(err),
+      );
+    });
   }
 
   /**
@@ -1062,7 +1004,13 @@ export function createTicketRouter(deps: TicketRouterDeps) {
           if (typeChanged) {
             const { svc: tSvc } = ticketSvc(ctx.org.tenantDb);
             const ticket = await tSvc.findById(record.ticketId, ctx.user.id);
-            notify(ctx, "followup_added", ticket, [], input.noteTypeId);
+            enqueueLifecycleNotification(
+              ctx,
+              "followup_added",
+              ticket,
+              [],
+              input.noteTypeId,
+            );
           }
 
           return {

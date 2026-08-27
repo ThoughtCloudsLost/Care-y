@@ -91,7 +91,9 @@ export async function buildRecipientList(
   deps: RecipientBuilderDeps,
   ticket: { assignedTo: UserId | null; queueId: QueueId; id: TicketId },
   mentionedPseudonyms: string[],
-  actingUserId: UserId,
+  // Null where there is no authenticated actor to exclude, as on the
+  // intake and portal paths where the writer is a client, not a user.
+  actingUserId: UserId | null,
   escalationUserIds?: UserId[],
 ): Promise<NotificationRecipientList> {
   const seen = new Set<UserId>();

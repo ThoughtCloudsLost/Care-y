@@ -391,6 +391,16 @@ export const shareIdSchema = z.uuid().brand<"ShareId">();
 export type ShareId = z.infer<typeof shareIdSchema>;
 
 // ---------------------------------------------------------------------------
+// Notification outbox
+// ---------------------------------------------------------------------------
+
+/** `notification_outbox.id`. */
+export const notificationOutboxIdSchema = z
+  .uuid()
+  .brand<"NotificationOutboxId">();
+export type NotificationOutboxId = z.infer<typeof notificationOutboxIdSchema>;
+
+// ---------------------------------------------------------------------------
 // Telephony
 // ---------------------------------------------------------------------------
 

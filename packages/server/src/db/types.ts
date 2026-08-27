@@ -70,6 +70,7 @@ import type {
   IntakeFormId,
   IntakeFormFieldId,
   FormAssetId,
+  NotificationOutboxId,
   ChannelRowId,
   ChannelSecret,
   PortalMessageId,
@@ -220,6 +221,7 @@ export interface OrgConfigTable {
   setup_completed: ColumnType<boolean, boolean | undefined, boolean>;
   portal_safe_exit_url: string | null;
   builtin_default_enabled: ColumnType<boolean, boolean | undefined, boolean>;
+  next_alias_suffix: ColumnType<number, number | undefined, number>;
 }
 
 // --- User keys (full interface, replaces UserKeysStubTable) ---
@@ -870,6 +872,29 @@ export interface ClientAccountSessionsTable {
   created_at: Generated<Date>;
 }
 
+// --- Notification outbox (transactional outbox for durable dispatch) ---
+
+export interface NotificationOutboxTable {
+  id: Generated<NotificationOutboxId>;
+  event_type: string;
+  ticket_id: TicketId;
+  queue_id: QueueId;
+  form_id: IntakeFormId | null;
+  actor_user_id: UserId | null;
+  status: ColumnType<string, string | undefined, string>;
+  attempt_count: ColumnType<number, number | undefined, number>;
+  max_attempts: ColumnType<number, number | undefined, number>;
+  next_attempt_at: ColumnType<Date, Date | undefined, Date>;
+  created_at: ColumnType<Date, Date | undefined, Date>;
+  completed_at: Date | null;
+  failed_at: Date | null;
+  last_error: string | null;
+  // Migration 101: lifecycle event columns
+  note_type_id: NoteTypeId | null;
+  encrypted_mentioned_pseudonyms: Buffer | null;
+  escalation_rule_id: EscalationRuleId | null;
+}
+
 export interface TenantDatabase {
   users: UsersTable;
   sessions: SessionsTable;
@@ -950,4 +975,6 @@ export interface TenantDatabase {
   // Client accounts (encrypted account portal)
   client_accounts: ClientAccountsTable;
   client_account_sessions: ClientAccountSessionsTable;
+  // Notification outbox (transactional outbox for durable dispatch)
+  notification_outbox: NotificationOutboxTable;
 }

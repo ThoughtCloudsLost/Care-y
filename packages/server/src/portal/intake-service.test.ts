@@ -6,28 +6,18 @@
  */
 
 import crypto from "node:crypto";
-import {
-  describe,
-  it,
-  expect,
-  beforeAll,
-  afterAll,
-  vi,
-  type Mock,
-} from "vitest";
+import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import type { TestDb } from "../test-utils.js";
 import {
   createTestDb,
   seedOrgPublicKey,
   createTestQueue,
-  createTestUser,
   testSealedBox,
   testUnseal,
   noopEncryptor,
   testBlindIndexer,
   TEST_ORG_ID,
 } from "../test-utils.js";
-import type { NotificationService } from "../notifications/service.js";
 import {
   createIntakeTicket,
   IntakeQueueNotConfiguredError,
@@ -55,16 +45,6 @@ import { resolveAuthedChannel, revokeChannel } from "./channel-service.js";
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
-
-function createMockNotificationService(): NotificationService & {
-  dispatch: Mock;
-  dispatchTicketless: Mock;
-} {
-  return {
-    dispatch: vi.fn().mockResolvedValue(undefined),
-    dispatchTicketless: vi.fn().mockResolvedValue(undefined),
-  };
-}
 
 function makeInput(overrides?: Partial<IntakeTicketInput>): IntakeTicketInput {
   return {
@@ -187,13 +167,11 @@ describe.skipIf(!process.env.DATABASE_URL)(
     });
 
     it("creates client + ticket + follow-up + interim wrap in one transaction", async () => {
-      const ns = createMockNotificationService();
       const input = makeInput();
 
       const result = await createIntakeTicket(
         testDb.db,
         {
-          notificationService: ns,
           sealedBox: testSealedBox,
           orgId: TEST_ORG_ID,
           orgSchema: testDb.schemaName as OrgSchema,
@@ -247,7 +225,6 @@ describe.skipIf(!process.env.DATABASE_URL)(
     });
 
     it("skips follow-up when encryptedMessage is null", async () => {
-      const ns = createMockNotificationService();
       const input = makeInput({
         encryptedMessage: null,
         followUpId: null,
@@ -256,7 +233,6 @@ describe.skipIf(!process.env.DATABASE_URL)(
       const result = await createIntakeTicket(
         testDb.db,
         {
-          notificationService: ns,
           sealedBox: testSealedBox,
           orgId: TEST_ORG_ID,
           orgSchema: testDb.schemaName as OrgSchema,
@@ -274,7 +250,6 @@ describe.skipIf(!process.env.DATABASE_URL)(
     });
 
     it("routes to form destination queue when resolvedQueueId is null", async () => {
-      const ns = createMockNotificationService();
       const destQueue = await createTestQueue(testDb.db, { label: "Dest" });
 
       // Create a form with destination_queue_id
@@ -294,7 +269,6 @@ describe.skipIf(!process.env.DATABASE_URL)(
       const result = await createIntakeTicket(
         testDb.db,
         {
-          notificationService: ns,
           sealedBox: testSealedBox,
           orgId: TEST_ORG_ID,
           orgSchema: testDb.schemaName as OrgSchema,
@@ -312,7 +286,6 @@ describe.skipIf(!process.env.DATABASE_URL)(
     });
 
     it("routes to resolvedQueueId when in the field allow-list", async () => {
-      const ns = createMockNotificationService();
       const routeQueue = await createTestQueue(testDb.db, { label: "Route" });
 
       // Create a form with a queue-routing field
@@ -349,7 +322,6 @@ describe.skipIf(!process.env.DATABASE_URL)(
       const result = await createIntakeTicket(
         testDb.db,
         {
-          notificationService: ns,
           sealedBox: testSealedBox,
           orgId: TEST_ORG_ID,
           orgSchema: testDb.schemaName as OrgSchema,
@@ -367,7 +339,6 @@ describe.skipIf(!process.env.DATABASE_URL)(
     });
 
     it("rejects resolvedQueueId not in allow-list", async () => {
-      const ns = createMockNotificationService();
       const allowedQueue = await createTestQueue(testDb.db, {
         label: "Allowed",
       });
@@ -406,7 +377,6 @@ describe.skipIf(!process.env.DATABASE_URL)(
         createIntakeTicket(
           testDb.db,
           {
-            notificationService: ns,
             sealedBox: testSealedBox,
             orgId: TEST_ORG_ID,
             orgSchema: testDb.schemaName as OrgSchema,
@@ -418,13 +388,11 @@ describe.skipIf(!process.env.DATABASE_URL)(
     });
 
     it("applies resolvedPriority to the ticket", async () => {
-      const ns = createMockNotificationService();
       const input = makeInput({ resolvedPriority: "urgent" });
 
       const result = await createIntakeTicket(
         testDb.db,
         {
-          notificationService: ns,
           sealedBox: testSealedBox,
           orgId: TEST_ORG_ID,
           orgSchema: testDb.schemaName as OrgSchema,
@@ -441,9 +409,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
       expect(ticket.priority).toBe("urgent");
     });
 
-    it("dispatches escalation notification when resolvedEscalationLevel present", async () => {
-      const ns = createMockNotificationService();
-      const user = await createTestUser(testDb.db);
+    it("enqueues both ticket_created and ticket_escalated outbox rows when escalation present", async () => {
       const form = await testDb.db
         .insertInto("intake_forms")
         .values({
@@ -463,7 +429,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
           field_type: "checkbox",
           role: "escalation",
           encrypted_escalation_recipient_ids: noopEncryptor.encrypt(
-            JSON.stringify([user.id]),
+            JSON.stringify([crypto.randomUUID()]),
           ),
           encrypted_label: Buffer.from("l"),
           encrypted_config: Buffer.from("c"),
@@ -476,10 +442,9 @@ describe.skipIf(!process.env.DATABASE_URL)(
         resolvedEscalationLevel: "triggered",
       });
 
-      await createIntakeTicket(
+      const result = await createIntakeTicket(
         testDb.db,
         {
-          notificationService: ns,
           sealedBox: testSealedBox,
           fieldEncryptor: noopEncryptor,
           orgId: TEST_ORG_ID,
@@ -489,11 +454,24 @@ describe.skipIf(!process.env.DATABASE_URL)(
         input,
       );
 
-      // Give fire-and-forget dispatches a tick
-      await new Promise((resolve) => setTimeout(resolve, 50));
+      // Two outbox rows: ticket_created + ticket_escalated
+      const outboxRows = await testDb.db
+        .selectFrom("notification_outbox")
+        .selectAll()
+        .where("ticket_id", "=", result.ticketId)
+        .execute();
+      expect(outboxRows).toHaveLength(2);
 
-      // Two dispatches: ticket_created + ticket_escalated
-      expect(ns.dispatch).toHaveBeenCalledTimes(2);
+      const eventTypes = outboxRows.map((r) => r.event_type).sort();
+      expect(eventTypes).toEqual(["ticket_created", "ticket_escalated"]);
+
+      // Verify rows are pending with correct metadata
+      for (const row of outboxRows) {
+        expect(row.status).toBe("pending");
+        expect(row.queue_id).toBe(intakeQueueId);
+        expect(row.form_id).toBe(form.id);
+        expect(row.actor_user_id).toBeNull();
+      }
     });
 
     it("throws IntakeDisabledError when web_intake_enabled is false", async () => {
@@ -502,14 +480,12 @@ describe.skipIf(!process.env.DATABASE_URL)(
         .set({ web_intake_enabled: false })
         .execute();
 
-      const ns = createMockNotificationService();
       const input = makeInput();
 
       await expect(
         createIntakeTicket(
           testDb.db,
           {
-            notificationService: ns,
             sealedBox: testSealedBox,
             orgId: TEST_ORG_ID,
             orgSchema: testDb.schemaName as OrgSchema,
@@ -532,14 +508,12 @@ describe.skipIf(!process.env.DATABASE_URL)(
         .set({ builtin_default_enabled: false })
         .execute();
 
-      const ns = createMockNotificationService();
       const input = makeInput({ formId: null });
 
       await expect(
         createIntakeTicket(
           testDb.db,
           {
-            notificationService: ns,
             sealedBox: testSealedBox,
             orgId: TEST_ORG_ID,
             orgSchema: testDb.schemaName as OrgSchema,
@@ -562,7 +536,6 @@ describe.skipIf(!process.env.DATABASE_URL)(
         .set({ builtin_default_enabled: true })
         .execute();
 
-      const ns = createMockNotificationService();
       const input = makeInput({ formId: null });
 
       // This should not throw BuiltinFormDisabledError (may throw
@@ -572,7 +545,6 @@ describe.skipIf(!process.env.DATABASE_URL)(
         await createIntakeTicket(
           testDb.db,
           {
-            notificationService: ns,
             sealedBox: testSealedBox,
             orgId: TEST_ORG_ID,
             orgSchema: testDb.schemaName as OrgSchema,
@@ -595,14 +567,12 @@ describe.skipIf(!process.env.DATABASE_URL)(
           .onConflict((oc) => oc.doNothing())
           .execute();
 
-        const ns = createMockNotificationService();
         const input = makeInput();
 
         await expect(
           createIntakeTicket(
             freshDb.db,
             {
-              notificationService: ns,
               sealedBox: testSealedBox,
               orgId: TEST_ORG_ID,
               orgSchema: freshDb.schemaName as OrgSchema,
@@ -641,13 +611,11 @@ describe.skipIf(!process.env.DATABASE_URL)(
           .returning("id")
           .executeTakeFirstOrThrow();
 
-        const ns = createMockNotificationService();
         const input = makeInput({ formId: form.id });
 
         const result = await createIntakeTicket(
           freshDb.db,
           {
-            notificationService: ns,
             sealedBox: testSealedBox,
             orgId: TEST_ORG_ID,
             orgSchema: freshDb.schemaName as OrgSchema,
@@ -678,14 +646,12 @@ describe.skipIf(!process.env.DATABASE_URL)(
           .onConflict((oc) => oc.doNothing())
           .execute();
 
-        const ns = createMockNotificationService();
         const input = makeInput({ formId: null });
 
         await expect(
           createIntakeTicket(
             freshDb.db,
             {
-              notificationService: ns,
               sealedBox: testSealedBox,
               orgId: TEST_ORG_ID,
               orgSchema: freshDb.schemaName as OrgSchema,
@@ -699,21 +665,11 @@ describe.skipIf(!process.env.DATABASE_URL)(
       }
     }, 30_000);
 
-    it("dispatches ticket_created to queue watchers after commit", async () => {
-      const ns = createMockNotificationService();
-
-      const user = await createTestUser(testDb.db);
-      await testDb.db
-        .insertInto("queue_watchers")
-        .values({ queue_id: intakeQueueId, user_id: user.id })
-        .onConflict((oc) => oc.columns(["queue_id", "user_id"]).doNothing())
-        .execute();
-
+    it("enqueues ticket_created outbox row with correct queue_id", async () => {
       const input = makeInput();
-      await createIntakeTicket(
+      const result = await createIntakeTicket(
         testDb.db,
         {
-          notificationService: ns,
           sealedBox: testSealedBox,
           orgId: TEST_ORG_ID,
           orgSchema: testDb.schemaName as OrgSchema,
@@ -722,42 +678,26 @@ describe.skipIf(!process.env.DATABASE_URL)(
         input,
       );
 
-      await new Promise((resolve) => setTimeout(resolve, 50));
+      const outboxRow = await testDb.db
+        .selectFrom("notification_outbox")
+        .selectAll()
+        .where("ticket_id", "=", result.ticketId)
+        .where("event_type", "=", "ticket_created")
+        .executeTakeFirst();
 
-      expect(ns.dispatch).toHaveBeenCalledOnce();
-      expect(ns.dispatch).toHaveBeenCalledWith(
-        testDb.db,
-        TEST_ORG_ID,
-        testDb.schemaName,
-        "test-org",
-        "ticket_created",
-        input.ticketId,
-        intakeQueueId,
-        expect.objectContaining({
-          recipients: expect.arrayContaining([
-            expect.objectContaining({
-              userId: user.id,
-              source: "queue_watcher",
-            }),
-          ]),
-        }),
-      );
-
-      await testDb.db
-        .deleteFrom("queue_watchers")
-        .where("queue_id", "=", intakeQueueId)
-        .where("user_id", "=", user.id)
-        .execute();
+      expect(outboxRow).toBeDefined();
+      expect(outboxRow!.status).toBe("pending");
+      expect(outboxRow!.queue_id).toBe(intakeQueueId);
+      expect(outboxRow!.actor_user_id).toBeNull();
+      expect(outboxRow!.form_id).toBeNull();
     });
 
     it("default-form submissions (formId null) store no response row", async () => {
-      const ns = createMockNotificationService();
       const input = makeInput({ formId: null });
 
       const result = await createIntakeTicket(
         testDb.db,
         {
-          notificationService: ns,
           sealedBox: testSealedBox,
           orgId: TEST_ORG_ID,
           orgSchema: testDb.schemaName as OrgSchema,
@@ -794,14 +734,12 @@ describe.skipIf(!process.env.DATABASE_URL)(
       });
 
       it("creates client + ticket + account + kind-account channel + tier atomically", async () => {
-        const ns = createMockNotificationService();
         const acct = makeAccountInput();
         const input = makeInput({ account: acct });
 
         const result = await createIntakeTicket(
           testDb.db,
           {
-            notificationService: ns,
             sealedBox: testSealedBox,
             orgId: TEST_ORG_ID,
             orgSchema: testDb.schemaName as OrgSchema,
@@ -849,7 +787,6 @@ describe.skipIf(!process.env.DATABASE_URL)(
       });
 
       it("stores selfCopy row with the correct followup_id", async () => {
-        const ns = createMockNotificationService();
         const acct = makeAccountInputWithSelfCopy();
         const followUpId = newFollowupId();
         const input = makeInput({ account: acct, followUpId });
@@ -857,7 +794,6 @@ describe.skipIf(!process.env.DATABASE_URL)(
         await createIntakeTicket(
           testDb.db,
           {
-            notificationService: ns,
             sealedBox: testSealedBox,
             orgId: TEST_ORG_ID,
             orgSchema: testDb.schemaName as OrgSchema,
@@ -894,7 +830,6 @@ describe.skipIf(!process.env.DATABASE_URL)(
       });
 
       it("rolls back everything on duplicate username", async () => {
-        const ns = createMockNotificationService();
         const sharedUsername = `dup-${crypto.randomUUID().slice(0, 8)}`;
 
         // First submission with this username should succeed
@@ -903,7 +838,6 @@ describe.skipIf(!process.env.DATABASE_URL)(
         await createIntakeTicket(
           testDb.db,
           {
-            notificationService: ns,
             sealedBox: testSealedBox,
             orgId: TEST_ORG_ID,
             orgSchema: testDb.schemaName as OrgSchema,
@@ -921,7 +855,6 @@ describe.skipIf(!process.env.DATABASE_URL)(
           createIntakeTicket(
             testDb.db,
             {
-              notificationService: ns,
               sealedBox: testSealedBox,
               orgId: TEST_ORG_ID,
               orgSchema: testDb.schemaName as OrgSchema,
@@ -942,7 +875,6 @@ describe.skipIf(!process.env.DATABASE_URL)(
       });
 
       it("rejects with IntakeAccountUnavailableError when account input present but deps missing", async () => {
-        const ns = createMockNotificationService();
         const acct = makeAccountInput();
         const input = makeInput({ account: acct });
 
@@ -951,7 +883,6 @@ describe.skipIf(!process.env.DATABASE_URL)(
           createIntakeTicket(
             testDb.db,
             {
-              notificationService: ns,
               sealedBox: testSealedBox,
               orgId: TEST_ORG_ID,
               orgSchema: testDb.schemaName as OrgSchema,
@@ -971,13 +902,11 @@ describe.skipIf(!process.env.DATABASE_URL)(
       });
 
       it("without account branch is byte-identical to prior behavior", async () => {
-        const ns = createMockNotificationService();
         const input = makeInput({ account: null });
 
         const result = await createIntakeTicket(
           testDb.db,
           {
-            notificationService: ns,
             sealedBox: testSealedBox,
             orgId: TEST_ORG_ID,
             orgSchema: testDb.schemaName as OrgSchema,
@@ -1020,7 +949,6 @@ describe.skipIf(!process.env.DATABASE_URL)(
 
     describe("closing date enforcement", () => {
       it("rejects submission for a form whose closes_at is in the past", async () => {
-        const ns = createMockNotificationService();
         const form = await testDb.db
           .insertInto("intake_forms")
           .values({
@@ -1038,7 +966,6 @@ describe.skipIf(!process.env.DATABASE_URL)(
           createIntakeTicket(
             testDb.db,
             {
-              notificationService: ns,
               sealedBox: testSealedBox,
               orgId: TEST_ORG_ID,
               orgSchema: testDb.schemaName as OrgSchema,
@@ -1050,7 +977,6 @@ describe.skipIf(!process.env.DATABASE_URL)(
       });
 
       it("accepts submission for a form whose closes_at is in the future", async () => {
-        const ns = createMockNotificationService();
         const form = await testDb.db
           .insertInto("intake_forms")
           .values({
@@ -1067,7 +993,6 @@ describe.skipIf(!process.env.DATABASE_URL)(
         const result = await createIntakeTicket(
           testDb.db,
           {
-            notificationService: ns,
             sealedBox: testSealedBox,
             orgId: TEST_ORG_ID,
             orgSchema: testDb.schemaName as OrgSchema,
@@ -1080,14 +1005,12 @@ describe.skipIf(!process.env.DATABASE_URL)(
       });
 
       it("accepts submission when closes_at is null", async () => {
-        const ns = createMockNotificationService();
         // Default form (formId null) has no closing date
         const input = makeInput({ formId: null });
 
         const result = await createIntakeTicket(
           testDb.db,
           {
-            notificationService: ns,
             sealedBox: testSealedBox,
             orgId: TEST_ORG_ID,
             orgSchema: testDb.schemaName as OrgSchema,
@@ -1100,7 +1023,6 @@ describe.skipIf(!process.env.DATABASE_URL)(
       });
 
       it("rejects submission at the boundary (closes_at equals now)", async () => {
-        const ns = createMockNotificationService();
         // Set closes_at to a moment ago to guarantee the server clock reads it as past
         const form = await testDb.db
           .insertInto("intake_forms")
@@ -1119,7 +1041,6 @@ describe.skipIf(!process.env.DATABASE_URL)(
           createIntakeTicket(
             testDb.db,
             {
-              notificationService: ns,
               sealedBox: testSealedBox,
               orgId: TEST_ORG_ID,
               orgSchema: testDb.schemaName as OrgSchema,
@@ -1137,14 +1058,12 @@ describe.skipIf(!process.env.DATABASE_URL)(
 
     describe("continuation branch", () => {
       it("creates client + ticket + intake_continuation channel + tier atomically", async () => {
-        const ns = createMockNotificationService();
         const cont = makeContinuationInput();
         const input = makeInput({ continuation: cont });
 
         const result = await createIntakeTicket(
           testDb.db,
           {
-            notificationService: ns,
             sealedBox: testSealedBox,
             orgId: TEST_ORG_ID,
             orgSchema: testDb.schemaName as OrgSchema,
@@ -1184,7 +1103,6 @@ describe.skipIf(!process.env.DATABASE_URL)(
       });
 
       it("stores selfCopy row with the correct followup_id and direction", async () => {
-        const ns = createMockNotificationService();
         const cont = makeContinuationInputWithSelfCopy();
         const followUpId = newFollowupId();
         const input = makeInput({ continuation: cont, followUpId });
@@ -1192,7 +1110,6 @@ describe.skipIf(!process.env.DATABASE_URL)(
         await createIntakeTicket(
           testDb.db,
           {
-            notificationService: ns,
             sealedBox: testSealedBox,
             orgId: TEST_ORG_ID,
             orgSchema: testDb.schemaName as OrgSchema,
@@ -1230,7 +1147,6 @@ describe.skipIf(!process.env.DATABASE_URL)(
       it("resolves the continuation channel via resolveAuthedChannel", async () => {
         const { hashChannelAuth: hash } = await import("@care-y/crypto");
 
-        const ns = createMockNotificationService();
         const rawAuth = crypto.randomBytes(32);
         const authHash = Buffer.from(hash(rawAuth));
 
@@ -1245,7 +1161,6 @@ describe.skipIf(!process.env.DATABASE_URL)(
         await createIntakeTicket(
           testDb.db,
           {
-            notificationService: ns,
             sealedBox: testSealedBox,
             orgId: TEST_ORG_ID,
             orgSchema: testDb.schemaName as OrgSchema,
@@ -1268,7 +1183,6 @@ describe.skipIf(!process.env.DATABASE_URL)(
       it("continuation channel returns null from resolveAuthedChannel after revocation", async () => {
         const { hashChannelAuth: hash } = await import("@care-y/crypto");
 
-        const ns = createMockNotificationService();
         const rawAuth = crypto.randomBytes(32);
         const authHash = Buffer.from(hash(rawAuth));
 
@@ -1281,7 +1195,6 @@ describe.skipIf(!process.env.DATABASE_URL)(
         await createIntakeTicket(
           testDb.db,
           {
-            notificationService: ns,
             sealedBox: testSealedBox,
             orgId: TEST_ORG_ID,
             orgSchema: testDb.schemaName as OrgSchema,
@@ -1308,7 +1221,6 @@ describe.skipIf(!process.env.DATABASE_URL)(
       });
 
       it("account wins when both branches are present: account artifacts created, no continuation channel", async () => {
-        const ns = createMockNotificationService();
         const { deriveFakeSaltKey } = await import("../auth/salt-defense.js");
         const opsHex =
           "cafebabecafebabecafebabecafebabecafebabecafebabecafebabecafebabe";
@@ -1326,7 +1238,6 @@ describe.skipIf(!process.env.DATABASE_URL)(
         const result = await createIntakeTicket(
           testDb.db,
           {
-            notificationService: ns,
             sealedBox: testSealedBox,
             orgId: TEST_ORG_ID,
             orgSchema: testDb.schemaName as OrgSchema,

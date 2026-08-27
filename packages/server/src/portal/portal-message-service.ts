@@ -19,10 +19,7 @@ import type { PortalChannelRow } from "./channel-service.js";
 import type { TelephonyProvider } from "../telephony/provider.js";
 import type { FieldEncryptor } from "../crypto/field-encryptor.js";
 import type { NotificationService } from "../notifications/service.js";
-import type {
-  NotificationRecipient,
-  NotificationRecipientList,
-} from "../tickets/notification-recipients.js";
+import { enqueueNotification } from "../notifications/outbox.js";
 import { reopenClosedTicket } from "../tickets/ticket-reopen.js";
 import { portal_nudge_sms_body } from "@care-y/shared/paraglide/messages.js";
 import type { Locale } from "@care-y/shared/paraglide/runtime.js";
@@ -39,8 +36,6 @@ import type {
   OrgId,
   OrgSchema,
   OrgSlug,
-  QueueId,
-  UserId,
 } from "@care-y/shared";
 
 // ---------------------------------------------------------------------------
@@ -206,8 +201,9 @@ export async function bootstrap(
 /**
  * Client reply: validates ticket ownership, reopens closed tickets,
  * inserts follow-up + portal_reply_key_wraps + from_client self copy
- * in one transaction. After commit, dispatches the volunteer
- * ticket_updated notification (best-effort, fire-and-forget).
+ * in one transaction, and enqueues the volunteer notification in that
+ * same transaction so the reply and the notification intent commit
+ * together. Delivery happens later in the outbox drainer.
  *
  * Never creates a ticket. If the ticket is gone (deleted), rejects
  * with the generic error.
@@ -268,10 +264,17 @@ export async function clientReply(
       input.selfCopy,
       "from_client",
     );
+    // Volunteer notification intent, written in the same transaction as
+    // the reply so the two commit together. The drainer resolves
+    // recipients and sends later, so nothing here waits on delivery.
+    await enqueueNotification(trx, {
+      eventType: "followup_added",
+      ticketId: input.ticketId,
+      queueId,
+      formId: null,
+      actorUserId: null,
+    });
   });
-
-  // Post-commit: best-effort volunteer notification (fire-and-forget)
-  dispatchClientReplyNotification(db, deps, queueId, input.ticketId);
 }
 
 // ---------------------------------------------------------------------------
@@ -410,89 +413,4 @@ export async function nudgeClient(
   } finally {
     phoneBuf?.fill(0);
   }
-}
-
-// ---------------------------------------------------------------------------
-// Notification helper (fire-and-forget, best-effort)
-// ---------------------------------------------------------------------------
-
-/**
- * Dispatches followup_added to queue volunteers after a client reply.
- * Best-effort: logs on failure, never throws. No actor to exclude
- * (client has no user id).
- */
-function dispatchClientReplyNotification(
-  db: Kysely<TenantDatabase>,
-  deps: PortalMessageServiceDeps,
-  queueId: QueueId,
-  ticketId: TicketId,
-): void {
-  void (async () => {
-    try {
-      const watchers = await db
-        .selectFrom("queue_watchers")
-        .select("user_id")
-        .where("queue_id", "=", queueId)
-        .execute();
-
-      // Also include ticket watchers and the assigned volunteer
-      const ticketRow = await db
-        .selectFrom("tickets")
-        .select(["assigned_to"])
-        .where("id", "=", ticketId)
-        .executeTakeFirst();
-
-      const ticketWatchers = await db
-        .selectFrom("ticket_watchers")
-        .select("user_id")
-        .where("ticket_id", "=", ticketId)
-        .execute();
-
-      const seen = new Set<UserId>();
-      const recipients: NotificationRecipient[] = [];
-
-      // Assigned owner first
-      if (ticketRow?.assigned_to != null && ticketRow.assigned_to !== "") {
-        seen.add(ticketRow.assigned_to);
-        recipients.push({
-          userId: ticketRow.assigned_to,
-          source: "owner",
-        });
-      }
-
-      // Ticket watchers
-      for (const tw of ticketWatchers) {
-        if (!seen.has(tw.user_id)) {
-          seen.add(tw.user_id);
-          recipients.push({ userId: tw.user_id, source: "cc" });
-        }
-      }
-
-      // Queue watchers
-      for (const qw of watchers) {
-        if (!seen.has(qw.user_id)) {
-          seen.add(qw.user_id);
-          recipients.push({ userId: qw.user_id, source: "queue_watcher" });
-        }
-      }
-
-      const recipientList: NotificationRecipientList = { recipients };
-
-      await deps.notificationService.dispatch(
-        db,
-        deps.orgId,
-        deps.orgSchema,
-        deps.orgSlug,
-        "followup_added",
-        ticketId,
-        queueId,
-        recipientList,
-      );
-    } catch (err: unknown) {
-      console.error(
-        "Portal reply notification dispatch failed:",
-        err instanceof Error ? err.message : String(err),
-      );
-    }
-  })();
 }

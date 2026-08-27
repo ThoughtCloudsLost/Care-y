@@ -158,6 +158,10 @@ import {
 } from "./jobs/escalation-checker.js";
 import { ensureRecurringJob } from "./jobs/ensure-recurring.js";
 import {
+  registerOutboxDrainHandler,
+  OUTBOX_DRAIN_QUEUE,
+} from "./jobs/notification-outbox-drain.js";
+import {
   runEscalationCheck,
   type EscalationServiceDeps,
 } from "./tickets/escalation-service.js";
@@ -881,11 +885,28 @@ registerPortalExpiryHandler(jobQueue, async () => {
 
 registerShareCleanupHandler(jobQueue, tenantDb, listActiveOrgSchemas);
 
+// Notification outbox drain: polls tenant outbox tables for durable
+// intake notification dispatch (~5 second interval).
+registerOutboxDrainHandler(jobQueue, {
+  listActiveOrgs: listActiveOrgSchemasWithSlugs,
+  getTenantDb: tenantDb,
+  buildDrainDeps: (org) => ({
+    notificationService,
+    fieldEncryptor: encryptor,
+    orgId: org.id,
+    orgSchema: org.schema,
+    orgSlug: org.slug,
+    createTicketAccess: (tDb) => createTicketAccessChecker(tDb),
+    createWatchersSvc: (tDb, access) => createWatchersService(tDb, access),
+  }),
+});
+
 await ensureRecurringJob(db, jobQueue, ESCALATION_RULES_QUEUE);
 await ensureRecurringJob(db, jobQueue, ESCALATION_QUEUE);
 await ensureRecurringJob(db, jobQueue, MEDIA_CLEANUP_QUEUE);
 await ensureRecurringJob(db, jobQueue, PORTAL_EXPIRY_QUEUE);
 await ensureRecurringJob(db, jobQueue, SHARE_CLEANUP_QUEUE);
+await ensureRecurringJob(db, jobQueue, OUTBOX_DRAIN_QUEUE);
 jobQueue.start();
 console.log("Job queue started");
 

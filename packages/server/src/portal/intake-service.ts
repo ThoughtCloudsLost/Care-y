@@ -10,26 +10,20 @@
  *   form destination_queue_id >
  *   org_config.intake_queue_id
  *
- * Post-commit: dispatches ticket_created notifications to queue
- * volunteers (best-effort, same as the telephony path). When escalation
- * metadata is present, dispatches immediate escalation notifications to
- * configured recipients.
+ * Notification intent is written to the notification_outbox table inside
+ * the same transaction as the ticket insert. A recurring drainer picks up
+ * the rows and dispatches to queue volunteers. When escalation metadata
+ * is present, an additional escalation outbox row is written.
  */
 
 import type { Kysely } from "kysely";
 import type { TenantDatabase } from "../db/types.js";
-import type { NotificationService } from "../notifications/service.js";
-import type {
-  NotificationRecipient,
-  NotificationRecipientList,
-} from "../tickets/notification-recipients.js";
 import { generateAlias } from "../telephony/models/alias-generator.js";
 import { sealString } from "../telephony/crypto-helpers.js";
 import type { SealedBoxEncryptor } from "../crypto/sealed-box.js";
 import { ValidationError } from "../errors.js";
 import { ErrorCode } from "@care-y/shared";
 import type { FieldEncryptor } from "../crypto/field-encryptor.js";
-import { z } from "zod";
 import type {
   AccountRegistrationInput,
   AccountServiceDeps,
@@ -37,6 +31,7 @@ import type {
 import { createAccount } from "./account-service.js";
 import { storeClientCopy } from "./portal-message-service.js";
 import type { EciesTripleBuffers } from "./portal-message-service.js";
+import { enqueueNotification } from "../notifications/outbox.js";
 import type {
   TicketId,
   FollowupId,
@@ -46,12 +41,9 @@ import type {
   OrgSchema,
   OrgSlug,
   IntakeFormId,
-  UserId,
   ChannelSecret,
 } from "@care-y/shared";
-import { userIdSchema, newKeyGeneration } from "@care-y/shared";
-
-const recipientIdsSchema = z.array(userIdSchema);
+import { newKeyGeneration } from "@care-y/shared";
 
 // ---------------------------------------------------------------------------
 // Custom errors
@@ -174,14 +166,13 @@ export interface IntakeTicketResult {
  *
  * Throws IntakeDisabledError when web_intake_enabled is false.
  *
- * All DB writes run inside one transaction. After commit, a best-effort
- * ticket_created notification dispatches to queue volunteers. Escalation
- * notifications dispatch when resolvedEscalationLevel is present.
+ * All DB writes (including outbox notification intents) run inside one
+ * transaction. The drainer picks up committed outbox rows and dispatches
+ * to queue volunteers and escalation recipients.
  */
 export async function createIntakeTicket(
   db: Kysely<TenantDatabase>,
   deps: {
-    readonly notificationService: NotificationService;
     readonly sealedBox: SealedBoxEncryptor;
     readonly fieldEncryptor?: FieldEncryptor;
     readonly orgId: OrgId;
@@ -372,24 +363,32 @@ export async function createIntakeTicket(
     // 7. Continuation channel (opt-in at intake, mutually exclusive with account)
     await handleContinuationStep(trx, input, client.id);
 
-    // 8. Return result
+    // 8. Outbox: enqueue notification intent inside this transaction.
+    //    The drainer re-resolves recipients at dispatch time; no recipient
+    //    list is stored. Atomic with the ticket insert: if the transaction
+    //    rolls back, the notification intent is discarded with it.
+    await enqueueNotification(trx, {
+      eventType: "ticket_created",
+      ticketId: input.ticketId,
+      queueId: destinationQueueId,
+      formId: input.formId,
+      actorUserId: null,
+    });
+
+    // 9. Escalation outbox entry when escalation metadata is present
+    if (input.resolvedEscalationLevel !== null && input.formId !== null) {
+      await enqueueNotification(trx, {
+        eventType: "ticket_escalated",
+        ticketId: input.ticketId,
+        queueId: destinationQueueId,
+        formId: input.formId,
+        actorUserId: null,
+      });
+    }
+
+    // 10. Return result
     return { ticketId: input.ticketId, clientAlias: alias };
   });
-
-  // Post-commit: best-effort notification dispatch (no actor, same as telephony)
-  dispatchTicketCreated(db, deps, destinationQueueId, result.ticketId);
-
-  // Post-commit: escalation dispatch when escalation metadata is present
-  if (input.resolvedEscalationLevel !== null && input.formId !== null) {
-    dispatchEscalationAlert(
-      db,
-      deps,
-      input.formId,
-      destinationQueueId,
-      result.ticketId,
-      deps.fieldEncryptor ?? null,
-    );
-  }
 
   return result;
 }
@@ -499,151 +498,4 @@ async function handleContinuationStep(
       "from_client",
     );
   }
-}
-
-// ---------------------------------------------------------------------------
-// Notification helper (fire-and-forget, best-effort)
-// ---------------------------------------------------------------------------
-
-/**
- * Dispatches ticket_created to queue volunteers. Best-effort: logs on
- * failure, never throws. There is no authenticated actor, so the
- * recipient list includes all queue watchers with no exclusion.
- */
-function dispatchTicketCreated(
-  db: Kysely<TenantDatabase>,
-  deps: {
-    readonly notificationService: NotificationService;
-    readonly orgId: OrgId;
-    readonly orgSchema: OrgSchema;
-    readonly orgSlug: OrgSlug;
-  },
-  queueId: QueueId,
-  ticketId: TicketId,
-): void {
-  void (async () => {
-    try {
-      // Build a minimal recipient list from queue watchers.
-      // No actor to exclude; all queue watchers are notified.
-      const watchers = await db
-        .selectFrom("queue_watchers")
-        .select("user_id")
-        .where("queue_id", "=", queueId)
-        .execute();
-
-      const recipients: NotificationRecipientList = {
-        recipients: watchers.map((w): NotificationRecipient => ({
-          userId: w.user_id,
-          source: "queue_watcher",
-        })),
-      };
-
-      await deps.notificationService.dispatch(
-        db,
-        deps.orgId,
-        deps.orgSchema,
-        deps.orgSlug,
-        "ticket_created",
-        ticketId,
-        queueId,
-        recipients,
-      );
-    } catch (err: unknown) {
-      console.error(
-        "Intake notification dispatch failed:",
-        err instanceof Error ? err.message : String(err),
-      );
-    }
-  })();
-}
-
-/**
- * Dispatches escalation alert to configured recipients or destination queue
- * watchers. Best-effort: logs on failure, never throws. No PII in the
- * notification body (server never holds plaintext content).
- */
-function dispatchEscalationAlert(
-  db: Kysely<TenantDatabase>,
-  deps: {
-    readonly notificationService: NotificationService;
-    readonly orgId: OrgId;
-    readonly orgSchema: OrgSchema;
-    readonly orgSlug: OrgSlug;
-  },
-  formId: IntakeFormId,
-  queueId: QueueId,
-  ticketId: TicketId,
-  encryptor: FieldEncryptor | null,
-): void {
-  void (async () => {
-    try {
-      // Find escalation-role fields and decrypt their OPS-encrypted recipient ids
-      const escalationFields = await db
-        .selectFrom("intake_form_fields")
-        .select("encrypted_escalation_recipient_ids")
-        .where("form_id", "=", formId)
-        .where("role", "=", "escalation")
-        .execute();
-
-      const recipientIds = new Set<UserId>();
-      for (const field of escalationFields) {
-        if (
-          field.encrypted_escalation_recipient_ids !== null &&
-          encryptor !== null
-        ) {
-          // care-y-ignore-next-line server-no-decrypt -- OPS-tier decryption: escalation recipient IDs are server-side operational data encrypted with OPS_SECRETS_KEY
-          const json = encryptor.decrypt(
-            field.encrypted_escalation_recipient_ids,
-          );
-          const parsed: unknown = JSON.parse(json);
-          const ids = recipientIdsSchema.parse(parsed);
-          for (const rid of ids) {
-            recipientIds.add(rid);
-          }
-        }
-      }
-
-      let recipients: NotificationRecipientList;
-
-      if (recipientIds.size > 0) {
-        // Use configured escalation recipients
-        recipients = {
-          recipients: [...recipientIds].map((uid): NotificationRecipient => ({
-            userId: uid,
-            source: "escalation_recipient",
-          })),
-        };
-      } else {
-        // Fallback: destination queue's watchers
-        const watchers = await db
-          .selectFrom("queue_watchers")
-          .select("user_id")
-          .where("queue_id", "=", queueId)
-          .execute();
-
-        recipients = {
-          recipients: watchers.map((w): NotificationRecipient => ({
-            userId: w.user_id,
-            source: "queue_watcher",
-          })),
-        };
-      }
-
-      await deps.notificationService.dispatch(
-        db,
-        deps.orgId,
-        deps.orgSchema,
-        deps.orgSlug,
-        "ticket_escalated",
-        ticketId,
-        queueId,
-        recipients,
-      );
-    } catch (err: unknown) {
-      console.error(
-        "Intake escalation dispatch failed:",
-        err instanceof Error ? err.message : String(err),
-      );
-    }
-  })();
 }
