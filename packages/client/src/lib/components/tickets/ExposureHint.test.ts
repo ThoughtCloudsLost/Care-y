@@ -12,6 +12,7 @@ vi.mock("$lib/paraglide/messages.js", () => ({
 }));
 
 vi.mock("$lib/shell/context.js", () => ({
+  getSectionRailCtx: () => ({ current: undefined }),
   getScrollContainer: () => () => undefined,
   getTabbarOverrideCtx: () => ({ current: undefined }),
   getTabbarHiddenCtx: () => ({ current: false }),

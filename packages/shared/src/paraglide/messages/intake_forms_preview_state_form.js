@@ -9,8 +9,9 @@ const en_intake_forms_preview_state_form = /** @type {(inputs: Intake_Forms_Prev
 	return /** @type {LocalizedString} */ (`Form`)
 };
 
-/** @type {(inputs: Intake_Forms_Preview_State_FormInputs) => LocalizedString} */
-const es_intake_forms_preview_state_form = en_intake_forms_preview_state_form;
+const es_intake_forms_preview_state_form = /** @type {(inputs: Intake_Forms_Preview_State_FormInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`Formulario`)
+};
 
 /**
 * | output |

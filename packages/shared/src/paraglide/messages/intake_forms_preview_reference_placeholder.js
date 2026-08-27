@@ -9,8 +9,9 @@ const en_intake_forms_preview_reference_placeholder = /** @type {(inputs: Intake
 	return /** @type {LocalizedString} */ (`XXXX-XXXX`)
 };
 
-/** @type {(inputs: Intake_Forms_Preview_Reference_PlaceholderInputs) => LocalizedString} */
-const es_intake_forms_preview_reference_placeholder = en_intake_forms_preview_reference_placeholder;
+const es_intake_forms_preview_reference_placeholder = /** @type {(inputs: Intake_Forms_Preview_Reference_PlaceholderInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`XXXX-XXXX`)
+};
 
 /**
 * | output |

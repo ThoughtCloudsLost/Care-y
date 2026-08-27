@@ -10,7 +10,7 @@ const en_intake_forms_field_row_page_number = /** @type {(inputs: Intake_Forms_F
 };
 
 const es_intake_forms_field_row_page_number = /** @type {(inputs: Intake_Forms_Field_Row_Page_NumberInputs) => LocalizedString} */ (i) => {
-	return /** @type {LocalizedString} */ (`Pagina ${i?.page}`)
+	return /** @type {LocalizedString} */ (`Página ${i?.page}`)
 };
 
 /**

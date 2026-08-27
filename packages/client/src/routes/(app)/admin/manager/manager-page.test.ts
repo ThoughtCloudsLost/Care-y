@@ -50,6 +50,7 @@ let mockPermissions = new Set([
 ]);
 
 vi.mock("$lib/shell/context.js", () => ({
+  getSectionRailCtx: () => ({ current: undefined }),
   getNavbarOverrideCtx: () => mockNavbarCtx,
   getScrollContainer: () => () => null,
   getTabbarOverrideCtx: () => ({ current: undefined }),

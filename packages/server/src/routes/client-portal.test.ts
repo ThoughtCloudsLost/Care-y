@@ -311,6 +311,8 @@ describe("client-portal router", () => {
         encryptedFormMeta: null,
         fields: null,
         intakeDisabled: false,
+        formClosed: false,
+        builtinFormDisabled: false,
       });
     });
 

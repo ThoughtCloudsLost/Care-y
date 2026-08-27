@@ -193,6 +193,7 @@ vi.mock("$lib/utils/a11y.js", () => ({
 
 // --- Mock shell context ---
 vi.mock("$lib/shell/context.js", () => ({
+  getSectionRailCtx: () => ({ current: undefined }),
   getScrollContainer: () => () => undefined,
   getTabbarOverrideCtx: () => ({ current: undefined }),
   getTabbarHiddenCtx: () => ({ current: false }),

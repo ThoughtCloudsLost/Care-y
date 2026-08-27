@@ -9,8 +9,9 @@ const en_intake_forms_preview_state_closed = /** @type {(inputs: Intake_Forms_Pr
 	return /** @type {LocalizedString} */ (`Closed`)
 };
 
-/** @type {(inputs: Intake_Forms_Preview_State_ClosedInputs) => LocalizedString} */
-const es_intake_forms_preview_state_closed = en_intake_forms_preview_state_closed;
+const es_intake_forms_preview_state_closed = /** @type {(inputs: Intake_Forms_Preview_State_ClosedInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`Cerrado`)
+};
 
 /**
 * | output |

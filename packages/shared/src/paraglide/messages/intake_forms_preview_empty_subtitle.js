@@ -9,8 +9,9 @@ const en_intake_forms_preview_empty_subtitle = /** @type {(inputs: Intake_Forms_
 	return /** @type {LocalizedString} */ (`Add fields to see how the form will look to clients.`)
 };
 
-/** @type {(inputs: Intake_Forms_Preview_Empty_SubtitleInputs) => LocalizedString} */
-const es_intake_forms_preview_empty_subtitle = en_intake_forms_preview_empty_subtitle;
+const es_intake_forms_preview_empty_subtitle = /** @type {(inputs: Intake_Forms_Preview_Empty_SubtitleInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`Agrega campos para ver cómo se verá el formulario para los clientes.`)
+};
 
 /**
 * | output |

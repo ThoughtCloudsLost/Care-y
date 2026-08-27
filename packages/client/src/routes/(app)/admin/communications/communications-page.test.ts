@@ -29,6 +29,7 @@ vi.mock("$lib/crypto/context.js", () => ({
 const mockNavbarCtx = { current: undefined as unknown };
 
 vi.mock("$lib/shell/context.js", () => ({
+  getSectionRailCtx: () => ({ current: undefined }),
   getNavbarOverrideCtx: () => mockNavbarCtx,
   getScrollContainer: () => () => null,
   getTabbarOverrideCtx: () => ({ current: undefined }),

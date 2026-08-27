@@ -278,14 +278,15 @@ vi.mock("$lib/utils/render-form-content.js", async (importOriginal) => ({
   },
 }));
 
-// Mock FormContentEditor as a simple div that shows the label
-vi.mock("./FormContentEditor.svelte", async (importOriginal) => ({
-  ...(await importOriginal<Record<string, unknown>>()),
-  default: {
-    $$render: () => "",
-    render: () => ({ html: "", css: { code: "" }, head: "" }),
-  },
-}));
+// Stub FormContentEditor: ProseMirror needs a real DOM range API
+vi.mock("./FormContentEditor.svelte", async (importOriginal) => {
+  const { default: Passthrough } =
+    await import("$lib/components/tickets/test-helpers/PassthroughShell.svelte");
+  return {
+    ...(await importOriginal<Record<string, unknown>>()),
+    default: Passthrough,
+  };
+});
 
 vi.mock("@tanstack/svelte-query", async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),

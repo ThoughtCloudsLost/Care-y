@@ -249,7 +249,18 @@ describe("IntakeFieldConfigSheet", () => {
     });
     // Text fields should show browser-side roles (phone-contact, email-contact,
     // real-name, etc.) but NOT server-metadata roles like queue-routing
-    const roleSelect = document.querySelector("select");
+    // The field type picker renders first, so find the role select by content.
+    const selects = document.querySelectorAll("select");
+    let roleSelect: HTMLSelectElement | null = null;
+    for (const sel of selects) {
+      const optTexts = Array.from(sel.querySelectorAll("option")).map(
+        (o) => o.textContent,
+      );
+      if (optTexts.includes("Phone contact")) {
+        roleSelect = sel;
+        break;
+      }
+    }
     expect(roleSelect).not.toBeNull();
     const optionTexts = Array.from(roleSelect!.querySelectorAll("option")).map(
       (o) => o.textContent,

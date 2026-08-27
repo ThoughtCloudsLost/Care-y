@@ -9,8 +9,9 @@ const en_intake_forms_preview_empty_title = /** @type {(inputs: Intake_Forms_Pre
 	return /** @type {LocalizedString} */ (`No fields yet`)
 };
 
-/** @type {(inputs: Intake_Forms_Preview_Empty_TitleInputs) => LocalizedString} */
-const es_intake_forms_preview_empty_title = en_intake_forms_preview_empty_title;
+const es_intake_forms_preview_empty_title = /** @type {(inputs: Intake_Forms_Preview_Empty_TitleInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`Aún no hay campos`)
+};
 
 /**
 * | output |

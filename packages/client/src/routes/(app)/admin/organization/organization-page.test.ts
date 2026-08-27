@@ -33,6 +33,7 @@ const mockNavbarCtx = { current: undefined as unknown };
 
 vi.mock("$lib/shell/context.js", async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
+  getSectionRailCtx: () => ({ current: undefined }),
   getNavbarOverrideCtx: () => mockNavbarCtx,
   getScrollContainer: () => () => null,
   getTabbarOverrideCtx: () => ({ current: undefined }),

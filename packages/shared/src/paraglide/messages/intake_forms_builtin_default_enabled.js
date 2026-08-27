@@ -9,8 +9,9 @@ const en_intake_forms_builtin_default_enabled = /** @type {(inputs: Intake_Forms
 	return /** @type {LocalizedString} */ (`Built-in default form`)
 };
 
-/** @type {(inputs: Intake_Forms_Builtin_Default_EnabledInputs) => LocalizedString} */
-const es_intake_forms_builtin_default_enabled = en_intake_forms_builtin_default_enabled;
+const es_intake_forms_builtin_default_enabled = /** @type {(inputs: Intake_Forms_Builtin_Default_EnabledInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`Formulario predeterminado integrado`)
+};
 
 /**
 * | output |

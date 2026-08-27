@@ -1,5 +1,6 @@
-import { describe, it, expect, vi } from "vitest";
-import { render, screen, fireEvent } from "@testing-library/svelte";
+// @vitest-environment jsdom
+import { describe, it, expect, vi, afterEach } from "vitest";
+import { render, screen, fireEvent, cleanup } from "@testing-library/svelte";
 import SectionRail from "./SectionRail.svelte";
 import { Activity, BookOpen, Layers } from "@lucide/svelte";
 import type { ScrollSection } from "$lib/components/useSectionScroll.svelte.js";
@@ -11,6 +12,8 @@ function makeSections(): readonly ScrollSection[] {
     { id: "gamma", label: () => "Gamma", icon: Layers },
   ];
 }
+
+afterEach(cleanup);
 
 describe("SectionRail", () => {
   it("renders all sections with labels", () => {

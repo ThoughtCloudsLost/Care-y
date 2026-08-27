@@ -449,9 +449,11 @@ function setInputValue(
   el.dispatchEvent(new Event("input", { bubbles: true }));
 }
 
-function setSelectValue(el: HTMLSelectElement, val: string): void {
-  Object.defineProperty(el, "value", { writable: true, value: val });
-  el.dispatchEvent(new Event("change", { bubbles: true }));
+async function setSelectValue(
+  el: HTMLSelectElement,
+  val: string,
+): Promise<void> {
+  await fireEvent.change(el, { target: { value: val } });
 }
 
 /**
@@ -511,14 +513,14 @@ describe("dynamic form conditional visibility", () => {
 
     // Select "yes" on A so B becomes visible
     const selectA = findSelectA();
-    setSelectValue(selectA, "yes");
+    await setSelectValue(selectA, "yes");
 
     // Type into B
     const inputB = findTextInput(FIELD_B_KEY);
     setInputValue(inputB, "user typed this");
 
     // Now switch A to "no" so B hides
-    setSelectValue(selectA, "no");
+    await setSelectValue(selectA, "no");
 
     // Submit
     const submitBtn = screen.getByTestId("intake-submit");
@@ -558,20 +560,20 @@ describe("dynamic form conditional visibility", () => {
 
     // Select "yes" on A, field B becomes visible
     const selectA = findSelectA();
-    setSelectValue(selectA, "yes");
+    await setSelectValue(selectA, "yes");
 
     // Type into B
     const inputB = findTextInput(FIELD_B_KEY);
     setInputValue(inputB, "remember me");
 
     // Hide B by switching A to "no"
-    setSelectValue(selectA, "no");
+    await setSelectValue(selectA, "no");
 
     // B should not be in the DOM (hidden by conditional visibility)
     expect(document.getElementById(`intake-field-${FIELD_B_KEY}`)).toBeNull();
 
     // Show B again by switching A back to "yes"
-    setSelectValue(selectA, "yes");
+    await setSelectValue(selectA, "yes");
 
     // B should be visible again with its typed value intact
     const restoredB = findTextInput(FIELD_B_KEY);
@@ -597,7 +599,7 @@ describe("dynamic form conditional visibility", () => {
 
     // Select "no" on A so field B (required) is hidden
     const selectA = findSelectA();
-    setSelectValue(selectA, "no");
+    await setSelectValue(selectA, "no");
 
     // Submit without filling B (it is hidden so validation should skip it)
     const submitBtn = screen.getByTestId("intake-submit");
@@ -645,7 +647,7 @@ describe("dynamic form conditional visibility", () => {
     // A is required, so we need to answer it. Select "no" (C stays visible
     // because notEquals "yes" is still true when A is "no").
     const selectA = findSelectA();
-    setSelectValue(selectA, "no");
+    await setSelectValue(selectA, "no");
 
     // Submit
     const submitBtn = screen.getByTestId("intake-submit");
@@ -686,7 +688,7 @@ describe("dynamic form conditional visibility", () => {
 
     // Select "yes" on A. Now notEquals "yes" is false, so C is hidden.
     const selectA = findSelectA();
-    setSelectValue(selectA, "yes");
+    await setSelectValue(selectA, "yes");
 
     // C should not be visible
     expect(document.getElementById(`intake-field-${FIELD_C_KEY}`)).toBeNull();

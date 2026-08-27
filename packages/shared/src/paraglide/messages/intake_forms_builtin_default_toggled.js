@@ -9,8 +9,9 @@ const en_intake_forms_builtin_default_toggled = /** @type {(inputs: Intake_Forms
 	return /** @type {LocalizedString} */ (`Built-in default form setting updated`)
 };
 
-/** @type {(inputs: Intake_Forms_Builtin_Default_ToggledInputs) => LocalizedString} */
-const es_intake_forms_builtin_default_toggled = en_intake_forms_builtin_default_toggled;
+const es_intake_forms_builtin_default_toggled = /** @type {(inputs: Intake_Forms_Builtin_Default_ToggledInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`Configuración del formulario predeterminado integrado actualizada`)
+};
 
 /**
 * | output |

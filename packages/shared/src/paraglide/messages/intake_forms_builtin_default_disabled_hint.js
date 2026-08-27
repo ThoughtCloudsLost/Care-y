@@ -9,8 +9,9 @@ const en_intake_forms_builtin_default_disabled_hint = /** @type {(inputs: Intake
 	return /** @type {LocalizedString} */ (`When off, /intake shows a not-available message unless a custom default form is active.`)
 };
 
-/** @type {(inputs: Intake_Forms_Builtin_Default_Disabled_HintInputs) => LocalizedString} */
-const es_intake_forms_builtin_default_disabled_hint = en_intake_forms_builtin_default_disabled_hint;
+const es_intake_forms_builtin_default_disabled_hint = /** @type {(inputs: Intake_Forms_Builtin_Default_Disabled_HintInputs) => LocalizedString} */ () => {
+	return /** @type {LocalizedString} */ (`Cuando está desactivado, /intake muestra un mensaje de no disponible a menos que haya un formulario predeterminado personalizado activo.`)
+};
 
 /**
 * | output |

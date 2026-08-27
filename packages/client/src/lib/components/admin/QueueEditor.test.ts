@@ -129,6 +129,7 @@ vi.mock("$lib/shell/ShellSheet.svelte", async () => ({
 }));
 
 vi.mock("$lib/shell/context.js", () => ({
+  getSectionRailCtx: () => ({ current: undefined }),
   getScrollContainer: () => () => undefined,
   getTabbarOverrideCtx: () => ({ current: undefined }),
   getTabbarHiddenCtx: () => ({ current: false }),
