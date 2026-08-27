@@ -17,7 +17,6 @@
  */
 
 import type { Kysely } from "kysely";
-import { Buffer } from "node:buffer";
 
 import {
   buildContentAad,
@@ -837,10 +836,13 @@ async function seedForms(
       destinationQueueId: routingQueueIds[0] ?? null,
       encryptedFormMeta: encryptFormMeta(
         {
-          title: { en: "Ask for help", es: "Pedir ayuda" },
-          intro: {
+          description: {
             en: "Nothing here is stored in the clear, and you can stop at any point.",
             es: "Nada de esto se guarda sin cifrar, y puede detenerse en cualquier momento.",
+          },
+          submitMessage: {
+            en: "Your answers are on their way to someone who can help. Nobody outside the team can read them.",
+            es: "Sus respuestas van camino a alguien que puede ayudar. Nadie fuera del equipo puede leerlas.",
           },
         },
         deps.orgPublicKey,
@@ -869,11 +871,17 @@ async function seedForms(
       isDefault: false,
       destinationQueueId: routingQueueIds[0] ?? null,
       closesAt: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString(),
+      // closedMessage is the whole point of this form: it is what a
+      // visitor arriving on a stale link actually sees.
       encryptedFormMeta: encryptFormMeta(
         {
-          title: {
-            en: "Winter shelter intake",
-            es: "Admision refugio invierno",
+          description: {
+            en: "Winter shelter intake ran from November through March.",
+            es: "La admision al refugio de invierno estuvo abierta de noviembre a marzo.",
+          },
+          closedMessage: {
+            en: "This form has closed for the season. The main intake form is still open, and the phone line answers year round.",
+            es: "Este formulario cerro por la temporada. El formulario principal sigue abierto y la linea telefonica atiende todo el ano.",
           },
         },
         deps.orgPublicKey,

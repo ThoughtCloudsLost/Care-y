@@ -146,6 +146,22 @@ export const serverHealthAliases: readonly HealthAlias[] = [
     find: "node:fs",
     replacement: resolve(`${shimDir}/node-fs-shim.ts`),
   },
+
+  // node:buffer - server code overwhelmingly uses the Buffer global that
+  // globals-init installs, so nothing needs this today. It is here because
+  // the failure mode when something does is bad out of proportion to the
+  // mistake: Vite externalizes the module, the build still succeeds with
+  // only a warning, and the first sign of trouble is the engine failing to
+  // boot in a browser.
+  //
+  // Points at a shim rather than straight at "buffer/": Vite resolves an
+  // alias replacement relative to the importing file, and the npm package
+  // is a dependency of this package, not of packages/server, so a bare
+  // specifier fails for every server-side importer.
+  {
+    find: "node:buffer",
+    replacement: resolve(`${shimDir}/node-buffer-shim.ts`),
+  },
 ] as const;
 
 // -----------------------------------------------------------------------
