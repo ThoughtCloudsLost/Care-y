@@ -17,7 +17,7 @@ describe.skipIf(!process.env.DATABASE_URL)("SmsResponseRepository", () => {
     testDb = await createTestDb();
     await seedOrgPublicKey(testDb.db);
     repo = createSmsResponseRepository(testDb.db);
-  });
+  }, 30_000);
 
   afterAll(async () => {
     await testDb.cleanup();

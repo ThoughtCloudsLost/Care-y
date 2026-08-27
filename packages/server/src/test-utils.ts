@@ -22,8 +22,11 @@ import {
   Kysely,
   PostgresDialect,
   sql,
+  type DatabaseIntrospector,
   type Insertable,
+  type PostgresDialectConfig,
   type Selectable,
+  type TableMetadata,
 } from "kysely";
 import { FileMigrationProvider, Migrator } from "kysely/migration";
 import type {
@@ -227,6 +230,76 @@ export class TestSetupError extends Error {
   }
 }
 
+/**
+ * Postgres dialect whose introspector survives a concurrent `DROP SCHEMA`.
+ *
+ * Kysely's Migrator decides whether its bookkeeping tables already exist by
+ * listing every table in the database and filtering the result in JavaScript.
+ * That listing calls two functions per row that re-resolve a name against the
+ * live catalog rather than the query snapshot: `has_schema_privilege()` in the
+ * where clause and `pg_get_serial_sequence()` in the select list. Both raise
+ * `schema "<name>" does not exist` when the schema is gone, so a `DROP SCHEMA`
+ * committed by a concurrently running test file fails an unrelated file's
+ * migration before its first migration runs.
+ *
+ * This introspector reads `pg_class` and `pg_namespace` directly and calls
+ * neither function, so a dropped schema simply drops out of the result. Pass a
+ * schema to narrow it further, which also takes the cost from every column in
+ * the database down to every table in one schema.
+ *
+ * The Migrator reads only `name` and `schema` from each entry, so the narrowed
+ * result carries everything its one caller uses. Nothing else in the codebase
+ * reads `db.introspection`.
+ */
+export class SafeIntrospectionPostgresDialect extends PostgresDialect {
+  readonly #schema: string | undefined;
+
+  constructor(config: PostgresDialectConfig, schema?: string) {
+    super(config);
+    this.#schema = schema;
+  }
+
+  override createIntrospector(
+    db: Kysely<PlatformDatabase>,
+  ): DatabaseIntrospector {
+    const schema = this.#schema;
+    const inner = super.createIntrospector(db);
+
+    async function getTables(): Promise<TableMetadata[]> {
+      // Catalog query, every object schema-qualified. Same system-schema
+      // exclusions as Kysely's own introspector, minus the two calls that
+      // resolve names outside the snapshot.
+      const schemaFilter =
+        schema === undefined
+          ? sql`ns.nspname !~ '^pg_' and ns.nspname <> 'information_schema' and ns.nspname <> 'crdb_internal'`
+          : sql`ns.nspname = ${schema}`;
+
+      const result = await sql<{
+        name: string;
+        kind: string;
+        schema: string;
+      }>`select c.relname as name, c.relkind as kind, ns.nspname as schema
+         from pg_catalog.pg_class as c
+         join pg_catalog.pg_namespace as ns on c.relnamespace = ns.oid
+         where ${schemaFilter}
+           and c.relkind in ('r', 'v', 'p', 'f')`.execute(db);
+
+      return result.rows.map((row) => ({
+        name: row.name,
+        isView: row.kind === "v",
+        isForeign: row.kind === "f",
+        schema: row.schema,
+        columns: [],
+      }));
+    }
+
+    return {
+      getSchemas: () => inner.getSchemas(),
+      getTables,
+    };
+  }
+}
+
 export interface TestDb {
   /** Kysely instance scoped to the test schema (tenant tables). */
   readonly db: Kysely<TenantDatabase>;
@@ -254,12 +327,12 @@ export async function createTestDb(): Promise<TestDb> {
     );
   }
 
-  const pool = new pg.Pool({ connectionString, max: 5 });
-  const dialect = new PostgresDialect({ pool });
-  const platformDb = new Kysely<PlatformDatabase>({ dialect });
-
   const suffix = crypto.randomUUID().slice(0, 8);
   const schemaName = `test_${suffix}`;
+
+  const pool = new pg.Pool({ connectionString, max: 5 });
+  const dialect = new SafeIntrospectionPostgresDialect({ pool }, schemaName);
+  const platformDb = new Kysely<PlatformDatabase>({ dialect });
 
   // Create the test schema.
   await sql`CREATE SCHEMA ${sql.id(schemaName)}`.execute(platformDb);
@@ -306,7 +379,12 @@ export async function createTestDb(): Promise<TestDb> {
   });
 
   async function cleanup(): Promise<void> {
-    await sql`DROP SCHEMA ${sql.id(schemaName)} CASCADE`.execute(platformDb);
+    // IF EXISTS so cleanup stays idempotent: a test that drops its own
+    // schema to exercise a rollback path would otherwise fail here, and
+    // the connection pool below would never be closed.
+    await sql`DROP SCHEMA IF EXISTS ${sql.id(schemaName)} CASCADE`.execute(
+      platformDb,
+    );
     await platformDb.destroy();
   }
 
