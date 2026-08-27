@@ -221,6 +221,37 @@ describe("createFormAssetHandler", () => {
     void handler(mockReq("GET", "/api/forms/test/abc-123?v=1"), res);
     expect(deps.orgService.findBySlug).toHaveBeenCalledWith("test");
   });
+
+  // -----------------------------------------------------------------------
+  // Response body reflection: error responses must never echo request input
+  // -----------------------------------------------------------------------
+
+  it("does not reflect request path in 404 response body", async () => {
+    const res = mockRes();
+    await handler(
+      mockReq("GET", "/api/forms/evil-slug/<script>alert(1)</script>"),
+      res,
+    );
+    expect(res.statusCode).toBe(404);
+    expect(res.body).toBeNull();
+  });
+
+  it("does not reflect request path in 405 response body", async () => {
+    const res = mockRes();
+    await handler(mockReq("DELETE", "/api/forms/test/abc-123"), res);
+    expect(res.statusCode).toBe(405);
+    expect(res.body).toBeNull();
+  });
+
+  it("does not reflect path-traversal attempts in response body", async () => {
+    const res = mockRes();
+    await handler(
+      mockReq("GET", "/api/forms/test/..%2F..%2Fetc%2Fpasswd"),
+      res,
+    );
+    expect(res.statusCode).toBe(404);
+    expect(res.body).toBeNull();
+  });
 });
 
 describe.skipIf(!process.env.DATABASE_URL)(
