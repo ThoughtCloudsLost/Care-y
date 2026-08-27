@@ -48,6 +48,31 @@ export function renderFormRichText(
   }
 }
 
+const FORM_ASSET_SCHEME = "form-asset://";
+
+/**
+ * Rewrite `form-asset://{blobId}` image src attributes in sanitized HTML
+ * to the public serving endpoint `/api/forms/{orgSlug}/{blobId}`.
+ *
+ * Operates on already-sanitized HTML. Only touches img src attributes
+ * whose value starts with the `form-asset://` scheme. All other src
+ * values (https, data, blob, etc.) pass through unchanged.
+ *
+ * This is a pure function: no DOM access, no side effects.
+ */
+export function rewriteFormAssetUrls(html: string, orgSlug: string): string {
+  if (html.length === 0 || !html.includes(FORM_ASSET_SCHEME)) return html;
+
+  // The sanitized HTML contains img tags with src="form-asset://blobId".
+  // Blob ids are UUIDs; anything outside that charset stays unrewritten so
+  // a malformed reference can never become a path-traversing URL.
+  return html.replace(
+    /(<img\b[^>]*\bsrc=")form-asset:\/\/([A-Za-z0-9-]+)(")/g,
+    (_match: string, prefix: string, blobId: string, suffix: string) =>
+      `${prefix}/api/forms/${orgSlug}/${blobId}${suffix}`,
+  );
+}
+
 /** Escape HTML special characters in plain text. */
 function escapeHtml(text: string): string {
   return text

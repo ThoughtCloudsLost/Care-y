@@ -49,43 +49,6 @@ export function readRichLocale(
   return value.es ?? value.en;
 }
 
-/**
- * Narrow a LocalizedRichText value to LocalizedText by passing strings
- * through and converting ProseMirror doc objects to empty strings.
- *
- * The form editor currently authors plain strings only. Once the
- * rich content editor ships, this function should convert doc JSON
- * to a rendered plain-text extract instead of returning "".
- */
-export function richTextToLocalizedText(
-  value: LocalizedRichText | undefined,
-): LocalizedText {
-  if (value == null) return {};
-  const result: LocalizedText = {};
-  const en = value.en;
-  if (typeof en === "string") result.en = en;
-  const es = value.es;
-  if (typeof es === "string") result.es = es;
-  // Doc objects are dropped (empty string) until the rich editor ships
-  return result;
-}
-
-/**
- * Resolve a single locale value from a LocalizedRichText. Returns the
- * string for that locale when present, or undefined. Doc objects resolve
- * to undefined until the rich render task ships.
- */
-export function resolveRichTextLocale(
-  value: LocalizedRichText | undefined,
-  locale: FormLocale,
-): string | undefined {
-  if (value == null) return undefined;
-  // eslint-disable-next-line security/detect-object-injection -- locale is from the FormLocale enum
-  const v = value[locale];
-  if (typeof v === "string" && v.length > 0) return v;
-  return undefined;
-}
-
 /** Strip empty-string locale entries from a LocalizedText for storage. */
 export function trimLocalized(text: LocalizedText): LocalizedText {
   const result: LocalizedText = {};

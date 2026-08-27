@@ -58,9 +58,15 @@
     type AvailabilityData,
     type TicketPriority,
     type VisibleWhen,
+    type ProseMirrorDocJSON,
     ErrorCode,
   } from "@care-y/shared";
-  import { resolveRichTextLocale } from "$lib/utils/localized-text.js";
+  import { readRichLocale } from "$lib/utils/localized-text.js";
+  import {
+    renderFormRichText,
+    rewriteFormAssetUrls,
+  } from "$lib/utils/render-form-content.js";
+  import { getOrgSlug } from "$lib/utils/org-slug.js";
 
   // ---- Props ----
 
@@ -291,19 +297,46 @@
   );
   const formFields = $derived(resolvedForm.fields);
 
+  // Org slug for resolving form-asset:// image URLs
+  const orgSlug = $derived(getOrgSlug());
+
+  /** Render sanitized HTML then rewrite form-asset image URLs. */
+  function renderAndRewrite(
+    value: string | ProseMirrorDocJSON | undefined,
+  ): string {
+    const html = renderFormRichText(value);
+    if (html.length === 0 || orgSlug === null) return html;
+    return rewriteFormAssetUrls(html, orgSlug);
+  }
+
   /** Custom description replaces the default intro text when present. */
-  const formDescription = $derived(
-    resolveRichTextLocale(resolvedForm.formMeta.description, BASE_LOCALE),
+  const formDescriptionHtml = $derived(
+    renderAndRewrite(
+      readRichLocale(resolvedForm.formMeta.description, BASE_LOCALE),
+    ),
   );
 
   /** Custom submit message replaces the default success copy when present. */
-  const formSubmitMessage = $derived(
-    resolveRichTextLocale(resolvedForm.formMeta.submitMessage, BASE_LOCALE),
+  const formSubmitMsgHtml = $derived(
+    renderAndRewrite(
+      readRichLocale(resolvedForm.formMeta.submitMessage, BASE_LOCALE),
+    ),
   );
 
   /** Custom closed message shown when the form's closing date has passed. */
-  const formClosedMessage = $derived(
-    resolveRichTextLocale(resolvedForm.formMeta.closedMessage, BASE_LOCALE),
+  const formClosedMsgHtml = $derived(
+    renderAndRewrite(
+      readRichLocale(resolvedForm.formMeta.closedMessage, BASE_LOCALE),
+    ),
+  );
+
+  /** Banner image blob key from form meta, when present. */
+  const bannerBlobKey = $derived(resolvedForm.formMeta.bannerBlobKey);
+  const bannerAlt = $derived(resolvedForm.formMeta.bannerAlt ?? "");
+  const bannerUrl = $derived(
+    bannerBlobKey != null && orgSlug !== null
+      ? `/api/forms/${orgSlug}/${bannerBlobKey}`
+      : null,
   );
 
   // ---- Form state ----
@@ -1149,13 +1182,30 @@
   </Block>
 {:else if formClosed}
   <!-- Closed state: form's closing date has passed -->
+  {#if bannerUrl !== null}
+    <Block>
+      <img src={bannerUrl} alt={bannerAlt} class="intake-banner-img" />
+    </Block>
+  {/if}
   <Block>
-    <p class="intake-not-available" role="status">
-      {formClosedMessage ?? m.intake_form_closed_default()}
-    </p>
+    {#if formClosedMsgHtml.length > 0}
+      <div class="intake-rich-content prose-quotes" role="status">
+        <!-- eslint-disable-next-line svelte/no-at-html-tags -- sanitized by renderFormRichText (DOMPurify with PURIFY_CONFIG allowlist) -->
+        {@html formClosedMsgHtml}
+      </div>
+    {:else}
+      <p class="intake-not-available" role="status">
+        {m.intake_form_closed_default()}
+      </p>
+    {/if}
   </Block>
 {:else if submitted}
   <!-- Success state -->
+  {#if bannerUrl !== null}
+    <Block>
+      <img src={bannerUrl} alt={bannerAlt} class="intake-banner-img" />
+    </Block>
+  {/if}
   <Block>
     <h2
       id="intake-success-heading"
@@ -1164,9 +1214,16 @@
     >
       {m.intake_success_heading()}
     </h2>
-    <p class="intake-success-body">
-      {formSubmitMessage ?? m.intake_success_body()}
-    </p>
+    {#if formSubmitMsgHtml.length > 0}
+      <div class="intake-rich-content prose-quotes">
+        <!-- eslint-disable-next-line svelte/no-at-html-tags -- sanitized by renderFormRichText (DOMPurify with PURIFY_CONFIG allowlist) -->
+        {@html formSubmitMsgHtml}
+      </div>
+    {:else}
+      <p class="intake-success-body">
+        {m.intake_success_body()}
+      </p>
+    {/if}
   </Block>
 
   <Block>
@@ -1250,9 +1307,17 @@
   />
 {:else}
   <!-- Form state -->
+  {#if bannerUrl !== null}
+    <Block>
+      <img src={bannerUrl} alt={bannerAlt} class="intake-banner-img" />
+    </Block>
+  {/if}
   <Block>
-    {#if formDescription}
-      <p class="intake-intro intake-description">{formDescription}</p>
+    {#if formDescriptionHtml.length > 0}
+      <div class="intake-intro intake-rich-content prose-quotes">
+        <!-- eslint-disable-next-line svelte/no-at-html-tags -- sanitized by renderFormRichText (DOMPurify with PURIFY_CONFIG allowlist) -->
+        {@html formDescriptionHtml}
+      </div>
     {:else}
       <p class="intake-intro">{m.intake_intro()}</p>
     {/if}
@@ -1666,8 +1731,57 @@
     line-height: 1.5;
   }
 
-  .intake-description {
-    white-space: pre-line;
+  .intake-banner-img {
+    max-width: 100%;
+    height: auto;
+    border-radius: var(--card-radius);
+  }
+
+  /* Rich content prose styling for rendered ProseMirror HTML.
+     Scoped to .intake-rich-content containers. Mirrors the
+     preview-rich-content styles from the admin editor and stays
+     consistent with ArticleDetailView's article-body styles. */
+  .intake-rich-content {
+    font-size: var(--text-sm);
+    line-height: 1.5;
+    color: var(--muted);
+  }
+
+  .intake-rich-content :global(p) {
+    margin-bottom: 0.5em;
+  }
+
+  .intake-rich-content :global(h1),
+  .intake-rich-content :global(h2),
+  .intake-rich-content :global(h3),
+  .intake-rich-content :global(h4) {
+    font-weight: 600;
+    color: var(--ink);
+    margin-top: 1em;
+    margin-bottom: 0.5em;
+  }
+
+  .intake-rich-content :global(a) {
+    color: var(--brand-text);
+    text-decoration: underline;
+  }
+
+  .intake-rich-content :global(ul) {
+    list-style-type: disc;
+    padding-left: 1.5em;
+    margin-bottom: 0.5em;
+  }
+
+  .intake-rich-content :global(ol) {
+    list-style-type: decimal;
+    padding-left: 1.5em;
+    margin-bottom: 0.5em;
+  }
+
+  .intake-rich-content :global(img) {
+    max-width: 100%;
+    height: auto;
+    border-radius: var(--card-radius);
   }
 
   .intake-not-available {
