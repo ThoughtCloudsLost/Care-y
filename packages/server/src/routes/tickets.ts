@@ -2493,13 +2493,20 @@ export function createTicketRouter(deps: TicketRouterDeps) {
               withErrorWrapping(async ({ ctx, input }) => {
                 const { seedTestTickets } =
                   await import("../dev/seed-tickets.js");
-                return seedTestTickets(
+                // Destructure rather than forward the result: the seeder
+                // also returns the content key of every ticket it created,
+                // for in-process seeders that need to add follow-ups. That
+                // must never leave the process. The default JSON
+                // serializer would flatten the Map to {} today, which is
+                // luck, not a guarantee.
+                const { ticketIds } = await seedTestTickets(
                   ctx.org.tenantDb,
                   deps.blobStore,
                   ctx.user.id,
                   ctx.org.orgSchema,
                   { handcraftedOnly: input?.handcraftedOnly },
                 );
+                return { ticketIds };
               }),
             ),
         }

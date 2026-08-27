@@ -62,6 +62,8 @@ import {
   DEMO_ORG_SCHEMA,
   DEMO_ORG_SLUG,
   DEMO_ADMIN_PASSWORD,
+  DEMO_CLIENT_USERNAME,
+  DEMO_CLIENT_PASSWORD,
 } from "./server/seed-structure.js";
 import {
   deriveDemoOprfScalar,
@@ -87,6 +89,7 @@ import type { PlatformDatabase } from "../../../../server/src/db/types.js";
 import type { SeedStructureResult } from "./server/seed-structure.js";
 import type { ProcedureProxy } from "./proc-proxy.js";
 import type { SeedMediaAssets } from "../../../../server/src/dev/seed-tickets.js";
+import type { SeedPortalResult } from "../../../../server/src/dev/seed-portal.js";
 
 // ── Exported types ──────────────────────────────────────────────────
 
@@ -118,6 +121,8 @@ export interface DemoEngineResult {
   readonly appRouter: unknown;
   /** Ticket ID whose key wrap was deleted (decrypt-denied demo). */
   readonly deniedTicketId: string;
+  /** Seeded client-portal surfaces: channel and share ids, their fragments, account credentials. */
+  readonly portal: SeedPortalResult;
   /** Map-backed blob store (greeting audio, attachments). */
   readonly blobStore: BlobStore;
   /** Blob resolver for the fetch-blob stub (recordings, attachments, kb-attachments). */
@@ -228,6 +233,7 @@ export async function bootDemoEngine(
     scryptHashMod,
     seedTicketsMod,
     seedKbMod,
+    seedPortalMod,
     serviceStubsMod,
     trpcMod,
     callerAdapterMod,
@@ -235,6 +241,7 @@ export async function bootDemoEngine(
     import("../../../../server/src/auth/scrypt-hash.js"),
     import("../../../../server/src/dev/seed-tickets.js"),
     import("../../../../server/src/dev/seed-kb.js"),
+    import("../../../../server/src/dev/seed-portal.js"),
     import("./server/service-stubs.js"),
     import("../../../../server/src/trpc/trpc.js"),
     import("./caller-adapter.js"),
@@ -436,7 +443,12 @@ export async function bootDemoEngine(
 
   // 7. Build router (service stubs, provider factories, createAppRouter)
   const t7 = timeMs();
-  const { appRouter } = await serviceStubsMod.buildServiceStubs({
+  const {
+    appRouter,
+    intakeFormService,
+    accountServiceDeps,
+    notificationService,
+  } = await serviceStubsMod.buildServiceStubs({
     opsKey,
     seedResult,
     encryptor,
@@ -448,6 +460,45 @@ export async function bootDemoEngine(
     demoVolScalar,
     noopLimiter,
   });
+  timings.push({ label: "router-build", ms: timeMs() - t7 });
+
+  // 7b. Portal content seed. Runs after the router build because it needs
+  // the same IntakeFormService the two portal routers hold, and it has to
+  // come last regardless: the account tier attaches to a client one of its
+  // own intake submissions creates.
+  const t7b = timeMs();
+  const anchorTicketId = ticketResult.ticketIds[0];
+  if (anchorTicketId === undefined) {
+    throw new DemoEngineError("No seeded tickets to anchor the portal seed");
+  }
+  const anchorTicketKey = ticketResult.ticketKeys.get(anchorTicketId);
+  if (anchorTicketKey === undefined) {
+    throw new DemoEngineError(
+      `Ticket seed returned no content key for ${anchorTicketId}`,
+    );
+  }
+  const portalResult = await seedPortalMod.seedPortal({
+    tDb,
+    sealedBox,
+    orgPublicKey,
+    fieldEncryptor: encryptor,
+    intakeFormService,
+    notificationService,
+    accountServiceDeps,
+    orgId: seedResult.orgId,
+    orgSchema: DEMO_ORG_SCHEMA,
+    orgSlug: DEMO_ORG_SLUG,
+    adminUserId: seedResult.adminUserId,
+    anchorTicketId: anchorTicketId as TicketId,
+    anchorTicketKey,
+    // Same scalar the demo OPRF service evaluates under, so the published
+    // password re-derives these keys when the visitor signs in for real.
+    evaluateOprf: (blindedElement: Uint8Array): Uint8Array =>
+      _sodium.crypto_scalarmult_ristretto255(demoVolScalar, blindedElement),
+    accountUsername: DEMO_CLIENT_USERNAME,
+    accountPassword: DEMO_CLIENT_PASSWORD,
+  });
+  timings.push({ label: "seed-portal", ms: timeMs() - t7b });
 
   // Create caller factory
   const { createCallerFactory } = trpcMod;
@@ -519,18 +570,79 @@ export async function bootDemoEngine(
     adminUserDirty = true;
   }
 
+  // Cookie jar. The client-portal account procedures are the only ones
+  // that need a real round-trip: accountLogin writes a Set-Cookie header
+  // and accountBootstrap/accountMessages/accountLogout read it back off
+  // req.headers.cookie. Everything else on that router is orgProcedure
+  // and reads nothing from the request.
+  //
+  // Reset point: the jar is local to this boot. A demo restart reloads
+  // the iframe, which reboots the engine and builds a fresh jar, so a
+  // signed-out account cannot survive into the next run.
+  const cookieJar = new Map<string, string>();
+
+  const requestHeaders: Record<string, string> = {};
+
+  function syncCookieHeader(): void {
+    if (cookieJar.size === 0) {
+      delete requestHeaders.cookie;
+      return;
+    }
+    requestHeaders.cookie = Array.from(
+      cookieJar,
+      ([name, value]) => `${name}=${value}`,
+    ).join("; ");
+  }
+
+  /**
+   * Parse one Set-Cookie value back into the jar, which is what a browser
+   * would do before the next request carries it in the Cookie header.
+   * Only the pieces the portal actually uses are honoured: the name-value
+   * pair and Max-Age=0 as the delete signal (buildExpiredClientSessionCookie
+   * in client-portal.ts logs out that way). Expires, Domain, Path, Secure,
+   * HttpOnly, and SameSite have no meaning against a fabricated request
+   * that never leaves the page.
+   */
+  function acceptSetCookie(value: string): void {
+    const [pair, ...attrs] = value.split(";");
+    if (pair === undefined) return;
+    const eq = pair.indexOf("=");
+    if (eq === -1) return;
+    const name = pair.slice(0, eq).trim();
+    if (name === "") return;
+    const cookieValue = pair.slice(eq + 1).trim();
+
+    const expired = attrs.some((attr) => {
+      const [attrName, attrValue] = attr.split("=");
+      return (
+        attrName?.trim().toLowerCase() === "max-age" &&
+        Number(attrValue?.trim()) <= 0
+      );
+    });
+
+    if (expired || cookieValue === "") {
+      cookieJar.delete(name);
+    } else {
+      cookieJar.set(name, cookieValue);
+    }
+    syncCookieHeader();
+  }
+
   const adminCtx: Context = {
     // auth.login reads req.socket.remoteAddress (request-utils getClientIp)
     // for its rate-limit and ip-token inputs, so the fabricated request
     // needs a socket with a stable placeholder address.
     req: {
-      headers: {},
+      headers: requestHeaders,
       socket: { remoteAddress: "127.0.0.1" },
     } as unknown as Context["req"],
     res: {
-      // No-op: the embedded engine has no HTTP transport to receive headers.
-      setHeader(_name: string, _value: string): void {
-        // intentional no-op
+      setHeader(name: string, value: string): void {
+        // Set-Cookie is the one header the embedded engine has to honour;
+        // there is no HTTP transport for the rest.
+        if (name.toLowerCase() === "set-cookie") {
+          acceptSetCookie(value);
+        }
       },
     } as unknown as Context["res"],
     org: orgCtx,
@@ -568,8 +680,6 @@ export async function bootDemoEngine(
     isDirty: () => adminUserDirty,
   });
 
-  timings.push({ label: "router-build", ms: timeMs() - t7 });
-
   // Snapshot: dumpDataDir is not feasible without COOP/COEP headers
   // (GitHub Pages restriction). Record -1 as a sentinel.
   timings.push({ label: "snapshot-bytes", ms: -1 });
@@ -588,6 +698,7 @@ export async function bootDemoEngine(
     volunteerCtx,
     appRouter,
     deniedTicketId,
+    portal: portalResult,
     blobStore,
     // Demo is single-user with all-fictional data; no auth/role checks.
     resolveBlob: {

@@ -1,0 +1,1195 @@
+/**
+ * Client-portal content seeder: a Secure Link channel with a live thread,
+ * an Encrypted Account with known credentials, a one-time share link, a
+ * custom intake form exercising the form-builder feature set, and intake
+ * responses including one row whose key nobody holds.
+ *
+ * Sits alongside seed-tickets and seed-kb as content seeding. Structural
+ * seeding (org, users, queues) is the caller's job and must already have
+ * run: every step here attaches to an existing seeded ticket.
+ *
+ * Everything goes through the real portal services, so the crypto path is
+ * the production one. Where the browser normally performs a step (the
+ * client's own key derivation, field-content encryption under the
+ * public-branding key), this module reproduces that step with the same
+ * @care-y/crypto primitives rather than writing rows the product cannot
+ * produce.
+ */
+
+import type { Kysely } from "kysely";
+import { Buffer } from "node:buffer";
+
+import {
+  buildContentAad,
+  deriveAccountKey,
+  deriveChannelAuth,
+  deriveChannelId,
+  deriveClientAccountKeys,
+  deriveClientBrandingKey,
+  derivePortalKeypair,
+  eciesEncrypt,
+  encode,
+  encryptContent,
+  followupSlot,
+  generateContentKey,
+  generatePortalSeed,
+  hashChannelAuth,
+  oprfBlind,
+  oprfFinalize,
+  PORTAL_KEY_CHECK,
+  requireSodium,
+  sealForOrgKey,
+  toRistrettoPoint,
+  toSalt,
+  type EciesOutput,
+  type RistrettoPoint,
+  type Salt,
+  type SymmetricKey,
+} from "@care-y/crypto";
+import {
+  channelSecretSchema,
+  intakeFormIdSchema,
+  newClientAccountId,
+  newFollowupId,
+  newKeyGeneration,
+  newShareId,
+  newTicketId,
+  type ClientAccountId,
+  type ClientId,
+  type FollowupId,
+  type IntakeFieldConfig,
+  type IntakeFieldRole,
+  type IntakeFieldType,
+  type IntakeFormId,
+  type IntakeFormResponse,
+  type LocalizedText,
+  type OrgId,
+  type OrgSchema,
+  type OrgSlug,
+  type QueueId,
+  type ShareId,
+  type TicketId,
+  type UserId,
+  type VisibleWhenV2,
+} from "@care-y/shared";
+
+import { InternalError } from "../errors.js";
+import type { TenantDatabase } from "../db/types.js";
+import type { FieldEncryptor } from "../crypto/field-encryptor.js";
+import type { SealedBoxEncryptor } from "../crypto/sealed-box.js";
+import type { NotificationService } from "../notifications/service.js";
+import type { AccountServiceDeps } from "../portal/account-service.js";
+import * as accountService from "../portal/account-service.js";
+import { createChannel } from "../portal/channel-service.js";
+import { createShare } from "../portal/share-service.js";
+import { createIntakeTicket } from "../portal/intake-service.js";
+import type { IntakeFormService } from "../portal/intake-form-service.js";
+import {
+  clientReply,
+  storeClientCopy,
+  type PortalMessageServiceDeps,
+} from "../portal/portal-message-service.js";
+import type { PortalChannelRow } from "../portal/channel-service.js";
+
+// ---------------------------------------------------------------------------
+// Constants
+// ---------------------------------------------------------------------------
+
+/**
+ * AAD for intake form field ciphertext. Must stay byte-identical to
+ * INTAKE_FORM_AAD in the client's intake-form-crypto module, which is the
+ * only code that decrypts these blobs. There is no shared export to import
+ * (the client owns both halves in production), so a seeded form that the
+ * real client can decrypt is the contract, and the caller's smoke test is
+ * what holds it.
+ */
+const INTAKE_FORM_AAD = new TextEncoder().encode("care-y-intake-form-aad-v1");
+
+/** AAD slot for the structured intake response blob. */
+const FORM_RESPONSE_SLOT = "intake-form-response";
+
+const textEncoder = new TextEncoder();
+
+// ---------------------------------------------------------------------------
+// Input / output types
+// ---------------------------------------------------------------------------
+
+export interface SeedPortalDeps {
+  readonly tDb: Kysely<TenantDatabase>;
+  readonly sealedBox: SealedBoxEncryptor;
+  /** The org's Curve25519 public key. Seals ticket keys and derives the public-branding key. */
+  readonly orgPublicKey: Uint8Array;
+  readonly fieldEncryptor: FieldEncryptor;
+  readonly intakeFormService: IntakeFormService;
+  readonly notificationService: NotificationService;
+  /** Account service deps minus orgUuid, which this module fills from orgId. */
+  readonly accountServiceDeps: Omit<AccountServiceDeps, "orgUuid">;
+  readonly orgId: OrgId;
+  readonly orgSchema: OrgSchema;
+  readonly orgSlug: OrgSlug;
+  /** Volunteer who authors the outbound portal message and the share link. */
+  readonly adminUserId: UserId;
+  /**
+   * Seeded ticket the Secure Link channel and the share link attach to.
+   * Use the ticket the narration deep-links into, so the portal tier and
+   * share status render on a page the story already visits.
+   */
+  readonly anchorTicketId: TicketId;
+  /**
+   * Content key of the anchor ticket, handed over by the seeder that
+   * minted it. Nothing on a running server can recover this: the org wrap
+   * opens only with the org secret key, which lives on the client. The
+   * outbound portal message and the share follow-up both need it, because
+   * both are ticket content.
+   */
+  readonly anchorTicketKey: SymmetricKey;
+  /**
+   * Evaluate a blinded ristretto255 point through the org's OPRF, standing
+   * in for the two-server hop the browser makes. Returns the evaluated
+   * point. The account's keys are only reproducible at login if this
+   * evaluates under the same scalar the running server uses.
+   */
+  readonly evaluateOprf: (blindedElement: Uint8Array) => Uint8Array;
+  /** Credentials the demo publishes for the seeded account. */
+  readonly accountUsername: string;
+  readonly accountPassword: string;
+}
+
+export interface SeedPortalResult {
+  /** Channel id for /portal/[channelId]. */
+  readonly portalChannelId: string;
+  /** Base64url portal seed for the URL fragment. Never leaves the address bar. */
+  readonly portalFragment: string;
+  /** Share id for /share/[id]. */
+  readonly shareId: ShareId;
+  /** Base64url symmetric key for the share URL fragment. */
+  readonly shareFragment: string;
+  readonly accountId: ClientAccountId;
+  readonly accountUsername: string;
+  readonly accountPassword: string;
+  /** Custom form exercising the builder feature set. */
+  readonly customFormId: IntakeFormId;
+  /** Sibling form whose closes_at has passed. */
+  readonly closedFormId: IntakeFormId;
+  /** Tickets created by the seeded intake submissions, newest last. */
+  readonly responseTicketIds: readonly TicketId[];
+  /** The response whose key wrap was removed, so the viewer's denied state has an example. */
+  readonly keyNotHeldTicketId: TicketId;
+}
+
+// ---------------------------------------------------------------------------
+// Field content encryption (browser-side in production)
+// ---------------------------------------------------------------------------
+
+interface SeedField {
+  readonly fieldKey: string;
+  readonly fieldType: IntakeFieldType;
+  readonly label: LocalizedText;
+  readonly config: IntakeFieldConfig;
+  readonly isRequired: boolean;
+  readonly role?: IntakeFieldRole | null;
+  readonly routingQueueIds?: readonly QueueId[] | null;
+  readonly visibleWhen?: VisibleWhenV2;
+}
+
+/** A single seeded answer, in the shape the submit path consumes. */
+interface SeedAnswer {
+  readonly fieldKey: string;
+  readonly fieldType: IntakeFieldType;
+  readonly label: string;
+  readonly value: string | string[] | boolean;
+}
+
+/**
+ * Encrypt a field's label and config under the public-branding key, the
+ * same derivation the intake page runs before it can render anything.
+ * visibleWhen rides inside the config blob so the server never sees the
+ * conditional rules.
+ */
+function encryptFieldContent(
+  field: SeedField,
+  orgPublicKey: Uint8Array,
+): { encryptedLabel: string; encryptedConfig: string } {
+  const key: SymmetricKey = deriveClientBrandingKey(orgPublicKey);
+  try {
+    const configPayload: Record<string, unknown> = { ...field.config };
+    if (field.visibleWhen !== undefined) {
+      configPayload.visibleWhen = field.visibleWhen;
+    }
+    return {
+      encryptedLabel: encode(
+        encryptContent(
+          textEncoder.encode(JSON.stringify(field.label)),
+          key,
+          INTAKE_FORM_AAD,
+        ),
+      ),
+      encryptedConfig: encode(
+        encryptContent(
+          textEncoder.encode(JSON.stringify(configPayload)),
+          key,
+          INTAKE_FORM_AAD,
+        ),
+      ),
+    };
+  } finally {
+    requireSodium().memzero(key);
+  }
+}
+
+/** Encrypt the form-level metadata blob (title, intro, closing copy). */
+function encryptFormMeta(
+  meta: Record<string, unknown>,
+  orgPublicKey: Uint8Array,
+): string {
+  const key: SymmetricKey = deriveClientBrandingKey(orgPublicKey);
+  try {
+    return encode(
+      encryptContent(
+        textEncoder.encode(JSON.stringify(meta)),
+        key,
+        INTAKE_FORM_AAD,
+      ),
+    );
+  } finally {
+    requireSodium().memzero(key);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Form definitions
+// ---------------------------------------------------------------------------
+
+/**
+ * The custom form. Covers what the builder can express: both locales on
+ * every string, a rich-text block, help text, a page break, a select that
+ * routes to a queue, a select that sets priority, and two fields gated on
+ * a grouped visibility condition.
+ */
+function buildCustomFormFields(routingQueueIds: readonly QueueId[]): {
+  fields: readonly SeedField[];
+  queueOptionKeys: readonly string[];
+} {
+  const housingQueue = routingQueueIds[0];
+  const crisisQueue = routingQueueIds[1] ?? routingQueueIds[0];
+  if (housingQueue === undefined || crisisQueue === undefined) {
+    throw new InternalError("seedPortal needs at least one queue to route to");
+  }
+
+  const topicHousing = "opt-topic-housing";
+  const topicCrisis = "opt-topic-crisis";
+
+  const fields: SeedField[] = [
+    {
+      fieldKey: "intro-block",
+      fieldType: "richText",
+      label: { en: "Before you start", es: "Antes de empezar" },
+      isRequired: false,
+      config: {
+        type: "richText",
+        body: {
+          en: {
+            type: "doc",
+            content: [
+              {
+                type: "paragraph",
+                content: [
+                  {
+                    type: "text",
+                    text: "Answer only what you feel safe answering. Every field on this page is optional unless it is marked required, and nothing you type is readable by anyone outside the team that answers this form.",
+                  },
+                ],
+              },
+            ],
+          },
+          es: {
+            type: "doc",
+            content: [
+              {
+                type: "paragraph",
+                content: [
+                  {
+                    type: "text",
+                    text: "Responda solo lo que le resulte seguro responder. Todos los campos de esta pagina son opcionales salvo los marcados como obligatorios, y nadie fuera del equipo que atiende este formulario puede leer lo que escriba.",
+                  },
+                ],
+              },
+            ],
+          },
+        },
+      },
+    },
+    {
+      fieldKey: "preferred-name",
+      fieldType: "text",
+      label: { en: "What should we call you?", es: "Como le llamamos?" },
+      isRequired: false,
+      role: "real-name",
+      config: {
+        type: "text",
+        maxLength: 80,
+        placeholder: { en: "Any name works", es: "Cualquier nombre sirve" },
+        helpText: {
+          en: "A nickname is fine. We never ask for a legal name.",
+          es: "Un apodo esta bien. Nunca pedimos un nombre legal.",
+        },
+      },
+    },
+    {
+      fieldKey: "topic",
+      fieldType: "select",
+      label: {
+        en: "What brings you here today?",
+        es: "Que le trae aqui hoy?",
+      },
+      isRequired: true,
+      role: "queue-routing",
+      routingQueueIds: [housingQueue, crisisQueue],
+      config: {
+        type: "select",
+        options: [
+          {
+            key: topicHousing,
+            label: { en: "Somewhere to stay", es: "Un lugar donde quedarse" },
+          },
+          {
+            key: topicCrisis,
+            label: {
+              en: "I am in immediate danger",
+              es: "Estoy en peligro inmediato",
+            },
+          },
+        ],
+        helpText: {
+          en: "This decides who reads your answers first.",
+          es: "Esto decide quien lee sus respuestas primero.",
+        },
+        queueRoutingMapping: {
+          [topicHousing]: housingQueue,
+          [topicCrisis]: crisisQueue,
+        },
+      },
+    },
+    {
+      fieldKey: "page-break-details",
+      fieldType: "pageBreak",
+      label: { en: "Your situation", es: "Su situacion" },
+      isRequired: false,
+      config: {
+        type: "pageBreak",
+        title: { en: "Your situation", es: "Su situacion" },
+      },
+    },
+    {
+      fieldKey: "situation",
+      fieldType: "textarea",
+      label: {
+        en: "Tell us what is going on",
+        es: "Cuentenos que esta pasando",
+      },
+      isRequired: true,
+      config: {
+        type: "textarea",
+        maxLength: 4_000,
+        helpText: {
+          en: "As much or as little as you want. This becomes the first message in your case.",
+          es: "Tanto o tan poco como quiera. Esto se convierte en el primer mensaje de su caso.",
+        },
+      },
+    },
+    {
+      fieldKey: "urgency",
+      fieldType: "select",
+      label: {
+        en: "How soon do you need an answer?",
+        es: "Que tan pronto necesita una respuesta?",
+      },
+      isRequired: false,
+      role: "urgency",
+      config: {
+        type: "select",
+        options: [
+          {
+            key: "opt-urgency-days",
+            label: { en: "Within a few days", es: "En unos dias" },
+          },
+          {
+            key: "opt-urgency-today",
+            label: { en: "Today if possible", es: "Hoy si es posible" },
+          },
+        ],
+        urgencyMapping: {
+          "opt-urgency-days": "normal",
+          "opt-urgency-today": "high",
+        },
+      },
+    },
+    {
+      fieldKey: "text-ok",
+      fieldType: "checkbox",
+      label: {
+        en: "It is safe to text this number",
+        es: "Es seguro enviar mensajes a este numero",
+      },
+      isRequired: false,
+      config: {
+        type: "checkbox",
+        helpText: {
+          en: "Leave this unchecked if someone else can see your messages.",
+          es: "Deje esto sin marcar si otra persona puede ver sus mensajes.",
+        },
+      },
+    },
+    {
+      // Two fields deep on the same answer: the phone number only appears
+      // once the visitor says a text is safe to receive.
+      fieldKey: "phone",
+      fieldType: "text",
+      label: { en: "Phone number", es: "Numero de telefono" },
+      isRequired: false,
+      role: "phone-contact",
+      visibleWhen: {
+        version: 2,
+        groups: [
+          [{ fieldKey: "text-ok", operator: "checked", boolValue: true }],
+        ],
+      },
+      config: {
+        type: "text",
+        subtype: "phone",
+        maxLength: 20,
+      },
+    },
+    {
+      fieldKey: "quiet-hours",
+      fieldType: "text",
+      label: {
+        en: "Hours when a text would not be safe",
+        es: "Horas en las que un mensaje no seria seguro",
+      },
+      isRequired: false,
+      role: "contact-safety",
+      visibleWhen: {
+        version: 2,
+        groups: [
+          [
+            { fieldKey: "text-ok", operator: "checked", boolValue: true },
+            { fieldKey: "phone", operator: "isNotEmpty" },
+          ],
+        ],
+      },
+      config: {
+        type: "text",
+        maxLength: 120,
+        placeholder: {
+          en: "For example, 9am to 5pm",
+          es: "Por ejemplo, 9am a 5pm",
+        },
+      },
+    },
+  ];
+
+  return { fields, queueOptionKeys: [topicHousing, topicCrisis] };
+}
+
+/** The sibling form, identical in shape but past its closing date. */
+function buildClosedFormFields(): readonly SeedField[] {
+  return [
+    {
+      fieldKey: "winter-notice",
+      fieldType: "richText",
+      label: { en: "This form has closed", es: "Este formulario ya cerro" },
+      isRequired: false,
+      config: {
+        type: "richText",
+        body: {
+          en: "The winter shelter intake ran from November through March. The main intake form is still open.",
+          es: "La admision al refugio de invierno estuvo abierta de noviembre a marzo. El formulario principal sigue abierto.",
+        },
+      },
+    },
+    {
+      fieldKey: "winter-name",
+      fieldType: "text",
+      label: { en: "What should we call you?", es: "Como le llamamos?" },
+      isRequired: false,
+      role: "real-name",
+      config: { type: "text", maxLength: 80 },
+    },
+  ];
+}
+
+// ---------------------------------------------------------------------------
+// Seed steps
+// ---------------------------------------------------------------------------
+
+/** Resolve the client behind a ticket. */
+async function resolveTicketClient(
+  tDb: Kysely<TenantDatabase>,
+  ticketId: TicketId,
+): Promise<ClientId> {
+  const row = await tDb
+    .selectFrom("tickets")
+    .select("client_id")
+    .where("id", "=", ticketId)
+    .executeTakeFirst();
+  if (!row) {
+    throw new InternalError(`seedPortal anchor ticket ${ticketId} not found`);
+  }
+  return row.client_id;
+}
+
+/**
+ * Set up the Secure Link tier. Mints a portal seed, registers the channel
+ * against it, and gives the channel a thread with one message each way.
+ * Returns the fragment the URL carries, which is the only place the seed
+ * exists in production.
+ */
+async function seedSecureLink(
+  deps: SeedPortalDeps,
+  clientId: ClientId,
+): Promise<{ channelId: string; fragment: string; channel: PortalChannelRow }> {
+  const { tDb, orgPublicKey, adminUserId, anchorTicketId } = deps;
+
+  const seed = generatePortalSeed();
+  const channelId = deriveChannelId(seed);
+  const auth = deriveChannelAuth(seed);
+  const keypair = derivePortalKeypair(seed);
+  const keyCheck = eciesEncrypt(
+    textEncoder.encode(PORTAL_KEY_CHECK),
+    keypair.clientPublic,
+  );
+
+  await createChannel(tDb, clientId, {
+    channelId: channelSecretSchema.parse(channelId),
+    authHash: Buffer.from(hashChannelAuth(auth)),
+    clientPublic: Buffer.from(keypair.clientPublic),
+    hasPassphrase: false,
+    keyCheck: {
+      ephemeralPoint: Buffer.from(keyCheck.ephemeralPoint),
+      nonce: Buffer.from(keyCheck.nonce),
+      ciphertext: Buffer.from(keyCheck.ciphertext),
+    },
+  });
+
+  const channel = await tDb
+    .selectFrom("portal_channels")
+    .selectAll()
+    .where("channel_id", "=", channelSecretSchema.parse(channelId))
+    .executeTakeFirstOrThrow();
+
+  // Outbound: a volunteer message with its client copy, the pair the
+  // follow-up service writes when a ticket has an active channel.
+  const outboundId = newFollowupId();
+  const outboundText =
+    "We have a bed held for tonight and someone can meet you at the door. Reply here if the timing does not work.";
+  await insertVolunteerPortalMessage(deps, {
+    channel,
+    ticketId: anchorTicketId,
+    followUpId: outboundId,
+    text: outboundText,
+    authorId: adminUserId,
+    clientPublic: keypair.clientPublic,
+  });
+
+  // Inbound: the real client reply path, which also writes the sealed
+  // tk_temp the volunteer side later converges.
+  await clientReply(tDb, portalMessageDeps(deps), channel, {
+    ticketId: anchorTicketId,
+    keyGeneration: newKeyGeneration(),
+    ...encryptClientMessage(
+      "Tonight works. I can be there after eight.",
+      orgPublicKey,
+      keypair.clientPublic,
+      anchorTicketId,
+    ),
+  });
+
+  return { channelId, fragment: encode(seed), channel };
+}
+
+/**
+ * Encrypt a client-authored portal message the way the portal composer
+ * does: content under a fresh tk_temp sealed to the org key, plus an ECIES
+ * self copy so the sender can still read it.
+ */
+function encryptClientMessage(
+  text: string,
+  orgPublicKey: Uint8Array,
+  clientPublic: RistrettoPoint,
+  ticketId: TicketId,
+): {
+  encryptedContent: Buffer;
+  wrappedTkTemp: Buffer;
+  selfCopy: {
+    ephemeralPoint: Buffer;
+    nonce: Buffer;
+    ciphertext: Buffer;
+  };
+  followUpId: FollowupId;
+} {
+  const followUpId = newFollowupId();
+  const tkTemp: SymmetricKey = generateContentKey();
+  try {
+    const aad = buildContentAad(ticketId, followupSlot(followUpId));
+    const encrypted = encryptContent(textEncoder.encode(text), tkTemp, aad);
+    const wrapped = sealForOrgKey(tkTemp, orgPublicKey);
+    const selfCopy: EciesOutput = eciesEncrypt(
+      textEncoder.encode(text),
+      clientPublic,
+    );
+    return {
+      followUpId,
+      encryptedContent: Buffer.from(encrypted),
+      wrappedTkTemp: Buffer.from(wrapped),
+      selfCopy: {
+        ephemeralPoint: Buffer.from(selfCopy.ephemeralPoint),
+        nonce: Buffer.from(selfCopy.nonce),
+        ciphertext: Buffer.from(selfCopy.ciphertext),
+      },
+    };
+  } finally {
+    requireSodium().memzero(tkTemp);
+  }
+}
+
+/**
+ * Volunteer-authored message plus its portal copy. Written directly rather
+ * than through the follow-up service, which would need a ticket access
+ * checker and a notification fan-out for two rows; storeClientCopy is the
+ * same function that service calls for the copy half.
+ */
+async function insertVolunteerPortalMessage(
+  deps: SeedPortalDeps,
+  args: {
+    channel: PortalChannelRow;
+    ticketId: TicketId;
+    followUpId: FollowupId;
+    text: string;
+    authorId: UserId;
+    clientPublic: RistrettoPoint;
+  },
+): Promise<void> {
+  const { tDb, anchorTicketKey } = deps;
+  const aad = buildContentAad(args.ticketId, followupSlot(args.followUpId));
+  const encrypted = encryptContent(
+    textEncoder.encode(args.text),
+    anchorTicketKey,
+    aad,
+  );
+  const copy = eciesEncrypt(textEncoder.encode(args.text), args.clientPublic);
+
+  await tDb.transaction().execute(async (trx) => {
+    await trx
+      .insertInto("followups")
+      .values({
+        id: args.followUpId,
+        ticket_id: args.ticketId,
+        source: "volunteer",
+        type: "message",
+        encrypted_content: Buffer.from(encrypted),
+        created_by: args.authorId,
+        key_generation: null,
+      })
+      .execute();
+
+    await storeClientCopy(
+      trx,
+      args.channel.id,
+      args.followUpId,
+      {
+        ephemeralPoint: Buffer.from(copy.ephemeralPoint),
+        nonce: Buffer.from(copy.nonce),
+        ciphertext: Buffer.from(copy.ciphertext),
+      },
+      "to_client",
+    );
+  });
+}
+
+/**
+ * Encrypted Account: run the browser's registration pipeline against the
+ * org's OPRF so the published password re-derives the same keys at login.
+ */
+async function seedAccount(
+  deps: SeedPortalDeps,
+  clientId: ClientId,
+): Promise<ClientAccountId> {
+  const sodium = requireSodium();
+  const accountId = newClientAccountId();
+  const salt: Salt = toSalt(sodium.randombytes_buf(16));
+
+  const stretched = deriveAccountKey(
+    textEncoder.encode(deps.accountPassword),
+    salt,
+  );
+  const { blindedElement, blindState } = oprfBlind(stretched);
+  const evaluated = deps.evaluateOprf(blindedElement);
+  const oprfOutput = oprfFinalize(
+    blindState,
+    toRistrettoPoint(evaluated),
+    stretched,
+  );
+  const keys = deriveClientAccountKeys(oprfOutput);
+
+  try {
+    const keyCheck = eciesEncrypt(
+      textEncoder.encode(PORTAL_KEY_CHECK),
+      keys.keypair.clientPublic,
+    );
+
+    await accountService.createAccount(
+      deps.tDb,
+      { ...deps.accountServiceDeps, orgUuid: deps.orgId },
+      clientId,
+      {
+        accountId,
+        username: deps.accountUsername,
+        salt: Buffer.from(salt),
+        publicKey: Buffer.from(keys.keypair.clientPublic),
+        authHash: Buffer.from(hashChannelAuth(keys.authToken)),
+        keyCheck: {
+          ephemeralPoint: Buffer.from(keyCheck.ephemeralPoint),
+          nonce: Buffer.from(keyCheck.nonce),
+          ciphertext: Buffer.from(keyCheck.ciphertext),
+        },
+      },
+    );
+  } finally {
+    sodium.memzero(stretched);
+    sodium.memzero(oprfOutput);
+    sodium.memzero(keys.authToken);
+    sodium.memzero(keys.keypair.clientPrivate);
+  }
+
+  return accountId;
+}
+
+/** One-time share link, encrypted under a key that only the fragment carries. */
+async function seedShareLink(
+  deps: SeedPortalDeps,
+): Promise<{ shareId: ShareId; fragment: string }> {
+  const shareId = newShareId();
+  const text =
+    "Intake summary for the shelter coordinator: bed needed tonight, arriving after eight, no follow-up contact by phone.";
+
+  const key: SymmetricKey = generateContentKey();
+  let ciphertext: Buffer;
+  let fragment: string;
+  try {
+    ciphertext = Buffer.from(
+      encryptContent(
+        textEncoder.encode(text),
+        key,
+        buildContentAad(shareId, "share-content"),
+      ),
+    );
+    // Encode before zeroing: once the key bytes are gone the fragment is
+    // the only copy left, exactly as it is after the compose sheet closes.
+    fragment = encode(key);
+  } finally {
+    requireSodium().memzero(key);
+  }
+
+  // The follow-up copy keeps the case record complete after the link
+  // expires, so it rides the ticket key rather than the share key.
+  const followUpId = newFollowupId();
+  const encryptedFollowUp = Buffer.from(
+    encryptContent(
+      textEncoder.encode(text),
+      deps.anchorTicketKey,
+      buildContentAad(deps.anchorTicketId, followupSlot(followUpId)),
+    ),
+  );
+
+  await createShare(deps.tDb, {
+    shareId,
+    ticketId: deps.anchorTicketId,
+    ciphertext,
+    followUpId,
+    encryptedFollowUp,
+    createdBy: deps.adminUserId,
+  });
+
+  return { shareId, fragment };
+}
+
+/** Save both intake forms and return their ids. */
+async function seedForms(
+  deps: SeedPortalDeps,
+  routingQueueIds: readonly QueueId[],
+): Promise<{
+  customFormId: IntakeFormId;
+  closedFormId: IntakeFormId;
+  fields: readonly SeedField[];
+  queueOptionKeys: readonly string[];
+}> {
+  const { fields, queueOptionKeys } = buildCustomFormFields(routingQueueIds);
+
+  const custom = await deps.intakeFormService.saveForm(
+    deps.tDb,
+    deps.adminUserId,
+    {
+      formId: null,
+      name: "Ask for help",
+      slug: "ask-for-help",
+      isDefault: false,
+      destinationQueueId: routingQueueIds[0] ?? null,
+      encryptedFormMeta: encryptFormMeta(
+        {
+          title: { en: "Ask for help", es: "Pedir ayuda" },
+          intro: {
+            en: "Nothing here is stored in the clear, and you can stop at any point.",
+            es: "Nada de esto se guarda sin cifrar, y puede detenerse en cualquier momento.",
+          },
+        },
+        deps.orgPublicKey,
+      ),
+      fields: fields.map((f) => ({
+        fieldKey: f.fieldKey,
+        fieldType: f.fieldType,
+        isRequired: f.isRequired,
+        role: f.role ?? null,
+        routingQueueIds:
+          f.routingQueueIds != null ? [...f.routingQueueIds] : null,
+        escalationRecipientIds: null,
+        ...encryptFieldContent(f, deps.orgPublicKey),
+      })),
+    },
+  );
+
+  const closedFields = buildClosedFormFields();
+  const closed = await deps.intakeFormService.saveForm(
+    deps.tDb,
+    deps.adminUserId,
+    {
+      formId: null,
+      name: "Winter shelter intake",
+      slug: "winter-shelter",
+      isDefault: false,
+      destinationQueueId: routingQueueIds[0] ?? null,
+      closesAt: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString(),
+      encryptedFormMeta: encryptFormMeta(
+        {
+          title: {
+            en: "Winter shelter intake",
+            es: "Admision refugio invierno",
+          },
+        },
+        deps.orgPublicKey,
+      ),
+      fields: closedFields.map((f) => ({
+        fieldKey: f.fieldKey,
+        fieldType: f.fieldType,
+        isRequired: f.isRequired,
+        role: f.role ?? null,
+        routingQueueIds: null,
+        escalationRecipientIds: null,
+        ...encryptFieldContent(f, deps.orgPublicKey),
+      })),
+    },
+  );
+
+  const customFormId = intakeFormIdSchema.parse(custom.formId);
+  const closedFormId = intakeFormIdSchema.parse(closed.formId);
+
+  // saveForm creates a draft: intake_forms.is_active defaults to false and
+  // publishing is a separate admin action. Both forms need it, including
+  // the closed one, because the public resolver filters on is_active
+  // before it ever looks at closes_at.
+  await deps.intakeFormService.setActive(deps.tDb, customFormId, true);
+  await deps.intakeFormService.setActive(deps.tDb, closedFormId, true);
+
+  return { customFormId, closedFormId, fields, queueOptionKeys };
+}
+
+/** One submission through the real intake path. */
+async function submitSeedResponse(
+  deps: SeedPortalDeps,
+  formId: IntakeFormId,
+  answers: readonly SeedAnswer[],
+  routing: {
+    resolvedQueueId: QueueId | null;
+    resolvedPriority: "low" | "normal" | "high" | "urgent" | null;
+  },
+): Promise<TicketId> {
+  const ticketId = newTicketId();
+  const followUpId = newFollowupId();
+  const tk: SymmetricKey = generateContentKey();
+
+  try {
+    const nameAnswer = answers.find((a) => a.fieldKey === "preferred-name");
+    const title =
+      typeof nameAnswer?.value === "string" && nameAnswer.value !== ""
+        ? `Web intake - ${nameAnswer.value}`
+        : "Web intake";
+
+    const description = answers
+      .map((a) => `${a.label}: ${formatSeedValue(a.value)}`)
+      .filter((line) => !line.endsWith(": "))
+      .join("\n");
+
+    const messageAnswer = answers.find((a) => a.fieldType === "textarea");
+    const messageText =
+      typeof messageAnswer?.value === "string" ? messageAnswer.value : null;
+
+    const responsePayload: IntakeFormResponse = {
+      formId,
+      answers: answers.map((a) => ({
+        fieldKey: a.fieldKey,
+        fieldType: a.fieldType,
+        value: a.value,
+      })),
+    };
+
+    const encryptedMessage =
+      messageText !== null
+        ? Buffer.from(
+            encryptContent(
+              textEncoder.encode(messageText),
+              tk,
+              buildContentAad(ticketId, followupSlot(followUpId)),
+            ),
+          )
+        : null;
+
+    await createIntakeTicket(
+      deps.tDb,
+      {
+        notificationService: deps.notificationService,
+        sealedBox: deps.sealedBox,
+        fieldEncryptor: deps.fieldEncryptor,
+        orgId: deps.orgId,
+        orgSchema: deps.orgSchema,
+        orgSlug: deps.orgSlug,
+      },
+      {
+        ticketId,
+        followUpId: encryptedMessage !== null ? followUpId : null,
+        encryptedTitle: Buffer.from(
+          encryptContent(
+            textEncoder.encode(title),
+            tk,
+            buildContentAad(ticketId, "title"),
+          ),
+        ),
+        encryptedDescription: Buffer.from(
+          encryptContent(
+            textEncoder.encode(description),
+            tk,
+            buildContentAad(ticketId, "description"),
+          ),
+        ),
+        encryptedMessage,
+        encryptedFormResponse: Buffer.from(
+          encryptContent(
+            textEncoder.encode(JSON.stringify(responsePayload)),
+            tk,
+            buildContentAad(ticketId, FORM_RESPONSE_SLOT),
+          ),
+        ),
+        formId,
+        wrappedTk: Buffer.from(sealForOrgKey(tk, deps.orgPublicKey)),
+        resolvedQueueId: routing.resolvedQueueId,
+        resolvedPriority: routing.resolvedPriority,
+        resolvedEscalationLevel: null,
+        account: null,
+        continuation: null,
+      },
+    );
+  } finally {
+    requireSodium().memzero(tk);
+  }
+
+  return ticketId;
+}
+
+function formatSeedValue(value: string | string[] | boolean): string {
+  if (typeof value === "boolean") return value ? "Yes" : "No";
+  if (Array.isArray(value)) return value.join(", ");
+  return value;
+}
+
+// ---------------------------------------------------------------------------
+// Shared dep shaping
+// ---------------------------------------------------------------------------
+
+function portalMessageDeps(deps: SeedPortalDeps): PortalMessageServiceDeps {
+  return {
+    // The seeder never sends: nudges are a live-traffic concern and a
+    // seeded thread has no one to notify.
+    getProvider: async () => Promise.resolve(null),
+    resolveCallerIdByPurpose: async () => Promise.resolve(null),
+    fieldEncryptor: deps.fieldEncryptor,
+    notificationService: deps.notificationService,
+    orgId: deps.orgId,
+    orgSchema: deps.orgSchema,
+    orgSlug: deps.orgSlug,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Entry point
+// ---------------------------------------------------------------------------
+
+export async function seedPortal(
+  deps: SeedPortalDeps,
+): Promise<SeedPortalResult> {
+  const { tDb } = deps;
+
+  const queues = await tDb
+    .selectFrom("queues")
+    .select("id")
+    .where("is_active", "=", true)
+    .orderBy("sort_order", "asc")
+    .execute();
+  const routingQueueIds = queues.map((q) => q.id);
+
+  const anchorClientId = await resolveTicketClient(tDb, deps.anchorTicketId);
+
+  // Secure Link and the account are mutually exclusive tiers on one client
+  // (the partial unique index rejects two active channels), so the account
+  // attaches to its own client, created by its own intake submission.
+  const secureLink = await seedSecureLink(deps, anchorClientId);
+  const share = await seedShareLink(deps);
+
+  const forms = await seedForms(deps, routingQueueIds);
+  const housingQueue = routingQueueIds[0] ?? null;
+  const crisisQueue = routingQueueIds[1] ?? housingQueue;
+  const [housingOption, crisisOption] = forms.queueOptionKeys;
+
+  const responseTicketIds: TicketId[] = [];
+
+  responseTicketIds.push(
+    await submitSeedResponse(
+      deps,
+      forms.customFormId,
+      [
+        {
+          fieldKey: "preferred-name",
+          fieldType: "text",
+          label: "What should we call you?",
+          value: "Rowan",
+        },
+        {
+          fieldKey: "topic",
+          fieldType: "select",
+          label: "What brings you here today?",
+          value: housingOption ?? "",
+        },
+        {
+          fieldKey: "situation",
+          fieldType: "textarea",
+          label: "Tell us what is going on",
+          value:
+            "I lost my place last week and have been staying on a friend's floor. I need somewhere for the next few nights.",
+        },
+        {
+          fieldKey: "text-ok",
+          fieldType: "checkbox",
+          label: "It is safe to text this number",
+          value: false,
+        },
+      ],
+      { resolvedQueueId: housingQueue, resolvedPriority: "normal" },
+    ),
+  );
+
+  responseTicketIds.push(
+    await submitSeedResponse(
+      deps,
+      forms.customFormId,
+      [
+        {
+          fieldKey: "topic",
+          fieldType: "select",
+          label: "What brings you here today?",
+          value: crisisOption ?? "",
+        },
+        {
+          fieldKey: "situation",
+          fieldType: "textarea",
+          label: "Tell us what is going on",
+          value:
+            "Someone is watching the house. I do not want to say more here.",
+        },
+        {
+          fieldKey: "text-ok",
+          fieldType: "checkbox",
+          label: "It is safe to text this number",
+          value: true,
+        },
+        {
+          fieldKey: "phone",
+          fieldType: "text",
+          label: "Phone number",
+          value: "+15550142",
+        },
+        {
+          fieldKey: "quiet-hours",
+          fieldType: "text",
+          label: "Hours when a text would not be safe",
+          value: "6pm to 11pm",
+        },
+      ],
+      { resolvedQueueId: crisisQueue, resolvedPriority: "high" },
+    ),
+  );
+
+  const keyNotHeldTicketId = await submitSeedResponse(
+    deps,
+    forms.customFormId,
+    [
+      {
+        fieldKey: "topic",
+        fieldType: "select",
+        label: "What brings you here today?",
+        value: housingOption ?? "",
+      },
+      {
+        fieldKey: "situation",
+        fieldType: "textarea",
+        label: "Tell us what is going on",
+        value: "Asking on behalf of my sister, she cannot use a phone safely.",
+      },
+    ],
+    { resolvedQueueId: housingQueue, resolvedPriority: "normal" },
+  );
+  responseTicketIds.push(keyNotHeldTicketId);
+
+  // Drop every wrap on the last response so the viewer has a real
+  // key-not-held row. This is the shape the product reaches when a
+  // response converts to per-volunteer wraps and the reader is not one of
+  // them: the interim org seal is gone and no personal wrap replaced it.
+  await tDb
+    .deleteFrom("intake_key_wraps")
+    .where("ticket_id", "=", keyNotHeldTicketId)
+    .execute();
+  await tDb
+    .deleteFrom("ticket_key_wraps")
+    .where("ticket_id", "=", keyNotHeldTicketId)
+    .execute();
+
+  // The account rides the client created by the first seeded submission,
+  // which has a thread of its own and no competing active channel.
+  const accountTicketId = responseTicketIds[0];
+  if (accountTicketId === undefined) {
+    throw new InternalError("seedPortal produced no intake responses");
+  }
+  const accountClientId = await resolveTicketClient(tDb, accountTicketId);
+  const accountId = await seedAccount(deps, accountClientId);
+
+  return {
+    portalChannelId: secureLink.channelId,
+    portalFragment: secureLink.fragment,
+    shareId: share.shareId,
+    shareFragment: share.fragment,
+    accountId,
+    accountUsername: deps.accountUsername,
+    accountPassword: deps.accountPassword,
+    customFormId: forms.customFormId,
+    closedFormId: forms.closedFormId,
+    responseTicketIds,
+    keyNotHeldTicketId,
+  };
+}

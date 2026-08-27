@@ -1,6 +1,33 @@
 import { describe, it, expect } from "vitest";
 import { RoleId } from "@care-y/shared";
 import type { DemoBridgeState, DemoBridge } from "./bridge.js";
+import { DEMO_PORTAL_CHANNEL_ID, DEMO_SHARE_ID } from "./bridge.js";
+import { matchRoute } from "./engine/route-manifest.js";
+
+describe("client portal sentinels", () => {
+  // A client feature's detail IS the URL path, so these sentinels have to
+  // carry the route prefix, not just a placeholder id. Shortening either
+  // to a bare id would route the phone to the 404 catch-all instead of
+  // the portal, and only at story runtime.
+  it("routes the portal sentinel to the parameterized portal route", () => {
+    const match = matchRoute(`/${DEMO_PORTAL_CHANNEL_ID}`);
+    expect(match?.routeId).toBe("/(client)/portal/[channelId]");
+  });
+
+  it("routes the share sentinel to the parameterized share route", () => {
+    const match = matchRoute(`/${DEMO_SHARE_ID}`);
+    expect(match?.routeId).toBe("/(client)/share/[id]");
+  });
+
+  it("keeps the sentinels distinguishable from a resolved detail", () => {
+    // sentinelToReal compares by equality, so a sentinel that could also
+    // be a real seeded path would never translate.
+    expect(DEMO_PORTAL_CHANNEL_ID).not.toBe(DEMO_SHARE_ID);
+    for (const sentinel of [DEMO_PORTAL_CHANNEL_ID, DEMO_SHARE_ID]) {
+      expect(sentinel).toMatch(/^(portal|share)\/demo-/);
+    }
+  });
+});
 
 describe("DemoBridgeState type shape", () => {
   it("carries a role field typed as RoleIdValue", () => {
