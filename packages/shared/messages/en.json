@@ -2691,6 +2691,11 @@
 
   "intake_forms_field_type_page_break": "Page break",
   "intake_forms_field_type_page_break_desc": "Split the form into pages",
+  "intake_forms_field_type_rich_text": "Text block",
+  "intake_forms_field_type_rich_text_desc": "Static formatted content between fields",
+  "intake_forms_add_field_structure_heading": "Structure",
+  "intake_forms_add_field_fields_heading": "Fields",
+  "intake_forms_rich_text_preview_empty": "No content",
   "intake_forms_page_break_title_label": "Page title (optional)",
   "intake_forms_page_break_title_placeholder": "e.g. Contact information",
   "intake_forms_page_break_divider": "Page break",

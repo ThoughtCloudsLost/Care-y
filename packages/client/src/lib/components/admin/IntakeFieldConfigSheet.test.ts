@@ -89,11 +89,32 @@ vi.mock("$lib/paraglide/messages.js", async (importOriginal) => ({
   intake_forms_field_type_availability: () => "Availability",
   intake_forms_field_type_date: () => "Date",
   intake_forms_field_type_page_break: () => "Page break",
+  intake_forms_field_type_rich_text: () => "Text block",
+  intake_forms_field_type_rich_text_desc: () =>
+    "Static formatted content between fields",
 }));
 
 vi.mock("$lib/terminology/with-terms.js", async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   withTerms: () => ({}),
+}));
+
+// FormContentEditor has deep ProseMirror/crypto dependencies; stub it out.
+vi.mock("./FormContentEditor.svelte", async (importOriginal) => {
+  const { default: Passthrough } =
+    await import("$lib/components/tickets/test-helpers/PassthroughShell.svelte");
+  return {
+    ...(await importOriginal<Record<string, unknown>>()),
+    default: Passthrough,
+  };
+});
+
+// getOrgKeyManager requires Svelte context; stub with a minimal shape.
+vi.mock("$lib/crypto/context.js", async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  getOrgKeyManager: () => ({
+    getPublicKey: (): null => null,
+  }),
 }));
 
 // jsdom lacks Web Animations API (used by Konsta transitions).
@@ -474,5 +495,72 @@ describe("IntakeFieldConfigSheet", () => {
     // Should have EN and ES buttons for locale switching
     expect(screen.getAllByText("EN").length).toBeGreaterThanOrEqual(1);
     expect(screen.getAllByText("ES").length).toBeGreaterThanOrEqual(1);
+  });
+
+  it("shows FormContentEditor (stubbed) for richText type", () => {
+    const richTextDone = vi.fn();
+    render(IntakeFieldConfigSheet, {
+      props: {
+        opened: true,
+        fieldType: "richText",
+        initial: {
+          fieldType: "richText" as const,
+          label: {},
+          helpText: {},
+          isRequired: false,
+          config: { type: "richText" as const, body: {} },
+          role: null,
+          escalationRecipientIds: null,
+          visibleWhen: undefined,
+        },
+        queues: TEST_QUEUES,
+        volunteers: TEST_VOLUNTEERS,
+        editingLocale: "en",
+        earlierFields: [],
+        ondone: richTextDone,
+        ondismiss: vi.fn(),
+      },
+    });
+    // The FormContentEditor is stubbed as PassthroughShell
+    const stub = document.querySelector("[data-testid='passthrough-shell']");
+    expect(stub).not.toBeNull();
+    // No label, required, or role inputs should be visible for richText
+    expect(screen.queryByText("Question text")).toBeNull();
+    expect(screen.queryByText("Required")).toBeNull();
+  });
+
+  it("submits richText config with empty label, isRequired false, role null", async () => {
+    const richTextDone = vi.fn();
+    render(IntakeFieldConfigSheet, {
+      props: {
+        opened: true,
+        fieldType: "richText",
+        initial: {
+          fieldType: "richText" as const,
+          label: {},
+          helpText: {},
+          isRequired: false,
+          config: { type: "richText" as const, body: {} },
+          role: null,
+          escalationRecipientIds: null,
+          visibleWhen: undefined,
+        },
+        queues: TEST_QUEUES,
+        volunteers: TEST_VOLUNTEERS,
+        editingLocale: "en",
+        earlierFields: [],
+        ondone: richTextDone,
+        ondismiss: vi.fn(),
+      },
+    });
+    const doneBtn = screen.getByText("Done");
+    await fireEvent.click(doneBtn);
+    expect(richTextDone).toHaveBeenCalledTimes(1);
+    const result = richTextDone.mock.lastCall?.[0] as FieldConfigState;
+    expect(result.fieldType).toBe("richText");
+    expect(result.label).toEqual({});
+    expect(result.isRequired).toBe(false);
+    expect(result.role).toBeNull();
+    expect(result.config.type).toBe("richText");
   });
 });

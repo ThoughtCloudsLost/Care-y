@@ -41,6 +41,7 @@
     type TicketPriority,
     type QueueId,
     type LocalizedText,
+    type LocalizedRichText,
     type FormLocale,
     queueIdSchema,
   } from "@care-y/shared";
@@ -48,13 +49,17 @@
   import * as m from "$lib/paraglide/messages.js";
   import ShellSheet from "$lib/shell/ShellSheet.svelte";
   import FieldError from "$lib/components/FieldError.svelte";
+  import FormContentEditor from "./FormContentEditor.svelte";
   import { getFieldTypeLabel, getRoleLabel } from "./intake-field-labels.js";
   import {
     readLocale,
     setLocaleText,
     hasContent,
     trimLocalized,
+    trimLocalizedRichText,
+    hasAnyRichContent,
   } from "$lib/utils/localized-text.js";
+  import { getOrgKeyManager } from "$lib/crypto/context.js";
 
   // ---- Types ----
 
@@ -149,6 +154,11 @@
   // Page break state
   let pageBreakTitle = $state<LocalizedText>({});
 
+  // Rich text block state
+  let richTextBody = $state<LocalizedRichText>({});
+
+  const orgKeyManager = getOrgKeyManager();
+
   /** Native locale name for display. */
   function localeName(loc: FormLocale): string {
     switch (loc) {
@@ -227,6 +237,7 @@
     allowRecurring = true;
     allowSpecific = true;
     pageBreakTitle = {};
+    richTextBody = {};
     queueRoutingMapping = {};
     urgencyMapping = {};
     escalationMapping = {};
@@ -278,7 +289,7 @@
         pageBreakTitle = cfg.title != null ? { ...cfg.title } : {};
         break;
       case "richText":
-        // Rich text config editing handled in a later task
+        richTextBody = { ...cfg.body };
         break;
     }
   }
@@ -674,6 +685,13 @@
         ...(pt != null ? { title: pt } : {}),
       };
     }
+    if (currentFieldType === "richText") {
+      const trimmed = trimLocalizedRichText(richTextBody);
+      return {
+        type: "richText",
+        body: hasAnyRichContent(trimmed) ? trimmed : {},
+      };
+    }
     return {
       type: "availability",
       allowRecurring,
@@ -797,6 +815,23 @@
       return;
     }
 
+    // Rich text blocks carry only body content and an optional condition
+    if (currentFieldType === "richText") {
+      const result: FieldConfigState = {
+        fieldType: currentFieldType,
+        label: {},
+        helpText: {},
+        isRequired: false,
+        config: buildConfig(),
+        role: null,
+        routingQueueIds: null,
+        escalationRecipientIds: null,
+        visibleWhen: buildVisibleWhen(),
+      };
+      ondone(result);
+      return;
+    }
+
     // Base locale label is required
     const baseLabelVal = readLocale(label, BASE_LOCALE);
     if (baseLabelVal.trim().length === 0) {
@@ -907,6 +942,19 @@
         }}
       />
     </List>
+  {:else if currentFieldType === "richText"}
+    <!-- Rich text block config: FormContentEditor for the body -->
+    <div class="rich-text-editor-wrapper">
+      <FormContentEditor
+        value={richTextBody}
+        locale={sheetLocale}
+        onchange={(updated: LocalizedRichText) => {
+          richTextBody = updated;
+        }}
+        label={m.intake_forms_field_type_rich_text()}
+        orgPublicKey={orgKeyManager.getPublicKey()}
+      />
+    </div>
   {:else}
     <!-- Role picker (ADR-068), positioned after type per F-004 -->
     {#if compatibleRoles.length > 0}
@@ -1292,5 +1340,10 @@
 
   .sheet-locale-switcher {
     padding: var(--space-sm) var(--space-lg) 0;
+  }
+
+  .rich-text-editor-wrapper {
+    padding: 0 var(--space-lg);
+    margin-top: var(--space-sm);
   }
 </style>

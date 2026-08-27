@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
   readLocale,
+  readRichLocale,
   setLocaleText,
   hasContent,
   trimLocalized,
@@ -206,6 +207,33 @@ describe("trimLocalizedRichText", () => {
     expect(trimLocalizedRichText({ en: "   ", es: "real" })).toEqual({
       es: "real",
     });
+  });
+});
+
+describe("readRichLocale", () => {
+  it("returns undefined for undefined input", () => {
+    expect(readRichLocale(undefined, "en")).toBeUndefined();
+  });
+
+  it("returns the English value for 'en'", () => {
+    expect(readRichLocale({ en: "hello", es: "hola" }, "en")).toBe("hello");
+  });
+
+  it("returns the Spanish value for 'es' when present", () => {
+    expect(readRichLocale({ en: "hello", es: "hola" }, "es")).toBe("hola");
+  });
+
+  it("falls back to English for 'es' when Spanish is unset", () => {
+    expect(readRichLocale({ en: "hello" }, "es")).toBe("hello");
+  });
+
+  it("returns undefined for 'en' when English is unset", () => {
+    expect(readRichLocale({ es: "hola" }, "en")).toBeUndefined();
+  });
+
+  it("returns doc objects unchanged", () => {
+    const doc = { type: "doc" as const, content: [{ type: "paragraph" }] };
+    expect(readRichLocale({ en: doc }, "en")).toBe(doc);
   });
 });
 

@@ -162,6 +162,12 @@ vi.mock("$lib/paraglide/messages.js", async (importOriginal) => ({
   intake_forms_field_type_date_desc: () => "Date picker",
   intake_forms_field_type_page_break: () => "Page break",
   intake_forms_field_type_page_break_desc: () => "Split the form into pages",
+  intake_forms_field_type_rich_text: () => "Text block",
+  intake_forms_field_type_rich_text_desc: () =>
+    "Static formatted content between fields",
+  intake_forms_add_field_structure_heading: () => "Structure",
+  intake_forms_add_field_fields_heading: () => "Fields",
+  intake_forms_rich_text_preview_empty: () => "No content",
   intake_forms_preview_state_form: () => "Form",
   intake_forms_preview_state_submitted: () => "Submitted",
   intake_forms_preview_state_closed: () => "Closed",

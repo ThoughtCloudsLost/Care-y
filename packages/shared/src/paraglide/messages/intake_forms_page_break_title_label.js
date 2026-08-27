@@ -10,7 +10,7 @@ const en_intake_forms_page_break_title_label = /** @type {(inputs: Intake_Forms_
 };
 
 const es_intake_forms_page_break_title_label = /** @type {(inputs: Intake_Forms_Page_Break_Title_LabelInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Titulo de pagina (opcional)`)
+	return /** @type {LocalizedString} */ (`Título de página (opcional)`)
 };
 
 /**

@@ -1295,18 +1295,22 @@
 
     <!-- Dynamic form fields -->
     {#if hasPages && !isDefaultForm}
-      <!-- Multi-page: render only the current page's visible data fields -->
+      <!-- Multi-page: render only the current page's visible fields -->
       {#if currentPage}
         {#each currentPage.fields as field (field.fieldKey)}
-          {#if isFieldVisible(field) && isDataFieldType(field.fieldType)}
+          {#if isFieldVisible(field) && (isDataFieldType(field.fieldType) || field.fieldType === "richText")}
             <IntakeFieldRenderer
               fieldId={field.fieldKey}
               label={resolveLocalized(field.label, BASE_LOCALE) ?? ""}
               config={field.config}
               isRequired={field.isRequired}
               role={field.role}
-              value={fieldValues[field.fieldKey]}
-              error={fieldErrors[field.fieldKey]}
+              value={isDataFieldType(field.fieldType)
+                ? fieldValues[field.fieldKey]
+                : undefined}
+              error={isDataFieldType(field.fieldType)
+                ? fieldErrors[field.fieldKey]
+                : undefined}
               onchange={(val: string | string[] | AvailabilityData | boolean) =>
                 handleFieldChange(field.fieldKey, val)}
             />
@@ -1314,17 +1318,21 @@
         {/each}
       {/if}
     {:else}
-      <!-- Single-page: render all visible data fields flat -->
+      <!-- Single-page: render all visible fields flat -->
       {#each formFields as field (field.fieldKey)}
-        {#if isFieldVisible(field) && isDataFieldType(field.fieldType)}
+        {#if isFieldVisible(field) && (isDataFieldType(field.fieldType) || field.fieldType === "richText")}
           <IntakeFieldRenderer
             fieldId={field.fieldKey}
             label={resolveLocalized(field.label, BASE_LOCALE) ?? ""}
             config={field.config}
             isRequired={field.isRequired}
             role={field.role}
-            value={fieldValues[field.fieldKey]}
-            error={fieldErrors[field.fieldKey]}
+            value={isDataFieldType(field.fieldType)
+              ? fieldValues[field.fieldKey]
+              : undefined}
+            error={isDataFieldType(field.fieldType)
+              ? fieldErrors[field.fieldKey]
+              : undefined}
             onchange={(val: string | string[] | AvailabilityData | boolean) =>
               handleFieldChange(field.fieldKey, val)}
           />

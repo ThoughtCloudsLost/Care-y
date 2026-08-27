@@ -2685,7 +2685,12 @@
 
   "intake_forms_field_type_page_break": "Salto de pagina",
   "intake_forms_field_type_page_break_desc": "Divide el formulario en paginas",
-  "intake_forms_page_break_title_label": "Titulo de pagina (opcional)",
+  "intake_forms_field_type_rich_text": "Bloque de texto",
+  "intake_forms_field_type_rich_text_desc": "Contenido formateado entre campos",
+  "intake_forms_add_field_structure_heading": "Estructura",
+  "intake_forms_add_field_fields_heading": "Campos",
+  "intake_forms_rich_text_preview_empty": "Sin contenido",
+  "intake_forms_page_break_title_label": "Título de página (opcional)",
   "intake_forms_page_break_title_placeholder": "ej. Informacion de contacto",
   "intake_forms_page_break_divider": "Salto de pagina",
   "intake_page_next": "Siguiente",

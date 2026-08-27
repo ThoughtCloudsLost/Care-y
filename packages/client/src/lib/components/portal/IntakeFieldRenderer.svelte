@@ -24,6 +24,8 @@
   import FieldError from "$lib/components/FieldError.svelte";
   import AvailabilityField from "./AvailabilityField.svelte";
   import IntakePrivacyIndicator from "./IntakePrivacyIndicator.svelte";
+  import { renderFormRichText } from "$lib/utils/render-form-content.js";
+  import { readRichLocale } from "$lib/utils/localized-text.js";
 
   interface IntakeFieldRendererProps {
     readonly fieldId: string;
@@ -376,8 +378,14 @@
   <!-- Page breaks are handled at the body/editor level, not rendered as fields.
        This branch exists for exhaustiveness. -->
 {:else if config.type === "richText"}
-  <!-- Rich text blocks are structural content, not input fields.
-       Rendering handled in a later task; branch exists for exhaustiveness. -->
+  <!-- Rich text blocks are structural content, not input fields. -->
+  {@const bodyHtml = renderFormRichText(readRichLocale(config.body, locale))}
+  {#if bodyHtml.length > 0}
+    <div class="rich-text-block">
+      <!-- eslint-disable-next-line svelte/no-at-html-tags -- sanitized by renderFormRichText (DOMPurify with PURIFY_CONFIG allowlist) -->
+      {@html bodyHtml}
+    </div>
+  {/if}
 {:else}
   <!-- Exhaustiveness guard: compile-time error if a field type branch is missing -->
   {assertExhaustive(config)}
@@ -417,5 +425,40 @@
     color: var(--muted);
     padding: 0 var(--space-lg);
     font-style: italic;
+  }
+
+  .rich-text-block {
+    font-size: var(--text-sm);
+    line-height: 1.5;
+    color: var(--ink);
+    padding: 0 var(--space-lg);
+    margin-bottom: var(--space-md);
+  }
+
+  .rich-text-block :global(p) {
+    margin-bottom: 0.5em;
+  }
+
+  .rich-text-block :global(a) {
+    color: var(--brand-text);
+    text-decoration: underline;
+  }
+
+  .rich-text-block :global(ul) {
+    list-style-type: disc;
+    padding-left: 1.5em;
+    margin-bottom: 0.5em;
+  }
+
+  .rich-text-block :global(ol) {
+    list-style-type: decimal;
+    padding-left: 1.5em;
+    margin-bottom: 0.5em;
+  }
+
+  .rich-text-block :global(img) {
+    max-width: 100%;
+    height: auto;
+    border-radius: var(--card-radius);
   }
 </style>

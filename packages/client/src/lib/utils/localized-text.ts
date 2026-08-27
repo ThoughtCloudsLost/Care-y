@@ -37,6 +37,19 @@ export function hasContent(text: LocalizedText): boolean {
 }
 
 /**
+ * Read one locale's rich value with English fallback. Spanish falls back
+ * to English when unset; English has no fallback.
+ */
+export function readRichLocale(
+  value: LocalizedRichText | undefined,
+  loc: FormLocale,
+): string | ProseMirrorDocJSON | undefined {
+  if (value == null) return undefined;
+  if (loc === "en") return value.en;
+  return value.es ?? value.en;
+}
+
+/**
  * Narrow a LocalizedRichText value to LocalizedText by passing strings
  * through and converting ProseMirror doc objects to empty strings.
  *

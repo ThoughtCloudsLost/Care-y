@@ -335,8 +335,20 @@
     if (hasAnyRichContent(formSubmitMessage)) total++;
     if (hasAnyRichContent(formClosedMessage)) total++;
 
-    // Field labels and help text
+    // Field labels, help text, and rich text bodies
     for (const field of fields) {
+      // Rich text blocks have body content instead of a label
+      if (field.fieldType === "richText") {
+        const cfg = field.config;
+        if (cfg.type === "richText" && hasAnyRichContent(cfg.body)) {
+          total++;
+          // eslint-disable-next-line security/detect-object-injection -- loc is from FormLocale enum
+          const bodyVal = cfg.body[loc];
+          if (bodyVal !== undefined && hasRichValue(bodyVal)) filled++;
+        }
+        continue;
+      }
+
       total++; // label is always required
       const labelVal = readLocale(field.label, loc);
       if (labelVal.length > 0) filled++;
@@ -926,9 +938,13 @@
    * { kind: 'pageBreak', page }.
    */
   const fieldNumbering = $derived.by(
-    (): { kind: "field" | "pageBreak"; number: number; page: number }[] => {
+    (): {
+      kind: "field" | "pageBreak" | "richText";
+      number: number;
+      page: number;
+    }[] => {
       const result: {
-        kind: "field" | "pageBreak";
+        kind: "field" | "pageBreak" | "richText";
         number: number;
         page: number;
       }[] = [];
@@ -939,6 +955,8 @@
           result.push({ kind: "pageBreak", number: 0, page });
           page++;
           fieldNum = 1;
+        } else if (field.fieldType === "richText") {
+          result.push({ kind: "richText", number: 0, page });
         } else {
           result.push({ kind: "field", number: fieldNum, page });
           fieldNum++;
@@ -988,6 +1006,99 @@
     if (bannerBlobKey == null || orgSlug == null) return null;
     return `/api/forms/${orgSlug}/${bannerBlobKey}`;
   });
+
+  /**
+   * Extract a short plain-text preview from a richText field body for the
+   * field list row. Tries the base locale first. Returns up to 60 chars
+   * with an ellipsis if truncated.
+   */
+  function richTextBodyPreview(field: PlaintextField): string {
+    if (field.config.type !== "richText") return "";
+    const body = field.config.body;
+
+    // Try base locale first, then any locale
+    const value = body.en ?? body.es;
+    if (value === undefined) return m.intake_forms_rich_text_preview_empty();
+
+    let plain: string;
+    if (typeof value === "string") {
+      plain = value;
+    } else if (
+      typeof value === "object" &&
+      "content" in value &&
+      Array.isArray(value.content)
+    ) {
+      // Walk the doc tree to extract text nodes
+      plain = extractDocText(value.content);
+    } else {
+      return m.intake_forms_rich_text_preview_empty();
+    }
+
+    const trimmed = plain.trim();
+    if (trimmed.length === 0) return m.intake_forms_rich_text_preview_empty();
+    if (trimmed.length > 60) return trimmed.slice(0, 60) + "...";
+    return trimmed;
+  }
+
+  /** Type guard for unknown arrays, keeps eslint unsafe-argument quiet. */
+  function isUnknownArray(candidate: unknown): candidate is readonly unknown[] {
+    return Array.isArray(candidate);
+  }
+
+  /** Recursively extract text from ProseMirror doc content nodes. */
+  function extractDocText(content: readonly unknown[]): string {
+    const parts: string[] = [];
+    for (const node of content) {
+      if (typeof node !== "object" || node === null) continue;
+      if ("text" in node && typeof node.text === "string") {
+        parts.push(node.text);
+      }
+      if ("content" in node && isUnknownArray(node.content)) {
+        parts.push(extractDocText(node.content));
+      }
+    }
+    return parts.join(" ");
+  }
+
+  // ---- Field-level rich text body cap validation ----
+
+  /**
+   * Track per-field body cap errors by fieldKey. Cleared on successful
+   * validation, set when a field's body exceeds the locale cap.
+   */
+  let fieldBodyCapErrors = $state<Record<string, string | undefined>>({});
+
+  /**
+   * Validate per-locale 30K cap on a richText field's body.
+   * Returns true if all locales pass.
+   */
+  function validateFieldBodyCap(field: PlaintextField): boolean {
+    if (field.config.type !== "richText") return true;
+    const capMsg = m.intake_forms_content_cap_error({
+      max: String(RICH_TEXT_LOCALE_CAP),
+    });
+    for (const loc of FORM_LOCALES) {
+      // eslint-disable-next-line security/detect-object-injection -- loc is from the FORM_LOCALES const tuple
+      const v = field.config.body[loc];
+      if (v !== undefined && richValueJsonSize(v) > RICH_TEXT_LOCALE_CAP) {
+        fieldBodyCapErrors = {
+          ...fieldBodyCapErrors,
+          [field.fieldKey]: capMsg,
+        };
+        return false;
+      }
+    }
+    // Clear any previous error for this field
+    if (Object.hasOwn(fieldBodyCapErrors, field.fieldKey)) {
+      const { [field.fieldKey]: _removed, ...rest } = fieldBodyCapErrors;
+      fieldBodyCapErrors = rest;
+    }
+    return true;
+  }
+
+  const hasFieldBodyCapErrors = $derived(
+    Object.entries(fieldBodyCapErrors).some(([, e]) => e !== undefined),
+  );
 
   /** Resolve a page break label in the preview locale, with a fallback. */
   function pageBreakLabel(field: PlaintextField): string {
@@ -1047,11 +1158,15 @@
       }
     }
 
-    // Validate rich text caps
+    // Validate rich text caps (form-level meta and per-field bodies)
     const descOk = validateRichTextCap("description", formDescription);
     const submitOk = validateRichTextCap("submitMessage", formSubmitMessage);
     const closedOk = validateRichTextCap("closedMessage", formClosedMessage);
-    if (!descOk || !submitOk || !closedOk) return;
+    let fieldBodiesOk = true;
+    for (const field of fields) {
+      if (!validateFieldBodyCap(field)) fieldBodiesOk = false;
+    }
+    if (!descOk || !submitOk || !closedOk || !fieldBodiesOk) return;
 
     const slugValue = sv || null;
     const desc = trimLocalizedRichText(formDescription);
@@ -1080,7 +1195,8 @@
     });
   }
 
-  const fieldTypes: IntakeFieldType[] = [
+  /** Data field types shown in the "Fields" group of the add-field sheet. */
+  const dataFieldTypes: IntakeFieldType[] = [
     "text",
     "textarea",
     "select",
@@ -1088,8 +1204,10 @@
     "checkbox",
     "date",
     "availability",
-    "pageBreak",
   ];
+
+  /** Structural field types shown in the "Structure" group of the add-field sheet. */
+  const structuralFieldTypes: IntakeFieldType[] = ["pageBreak", "richText"];
 
   // ---- Banner upload ----
 
@@ -1175,7 +1293,8 @@
       fields.length > 0 &&
       !saveMutation.isPending &&
       slugError.length === 0 &&
-      !hasContentCapErrors,
+      !hasContentCapErrors &&
+      !hasFieldBodyCapErrors,
   );
 </script>
 
@@ -1462,6 +1581,57 @@
             </div>
           {/snippet}
         </ListItem>
+      {:else if field.fieldType === "richText"}
+        <!-- Rich text block rendered as a structural row with content preview -->
+        {@const bodyCapError = Object.hasOwn(fieldBodyCapErrors, field.fieldKey)
+          ? fieldBodyCapErrors[field.fieldKey]
+          : undefined}
+        <ListItem
+          title={m.intake_forms_field_type_rich_text()}
+          subtitle={richTextBodyPreview(field)}
+        >
+          {#snippet after()}
+            <div class="field-actions">
+              <button
+                type="button"
+                class="field-action-btn"
+                disabled={index === 0}
+                onclick={() => moveField(index, -1)}
+                aria-label={m.intake_forms_move_up()}
+              >
+                <ArrowUp size={18} />
+              </button>
+              <button
+                type="button"
+                class="field-action-btn"
+                disabled={index === fields.length - 1}
+                onclick={() => moveField(index, 1)}
+                aria-label={m.intake_forms_move_down()}
+              >
+                <ArrowDown size={18} />
+              </button>
+              <button
+                type="button"
+                class="field-action-btn"
+                onclick={() => openConfigSheet(index)}
+                aria-label={m.intake_forms_configure()}
+              >
+                <Settings size={18} />
+              </button>
+              <button
+                type="button"
+                class="field-action-btn field-action-btn-remove"
+                onclick={() => removeField(index)}
+                aria-label={m.intake_forms_remove_field()}
+              >
+                <X size={18} />
+              </button>
+            </div>
+          {/snippet}
+        </ListItem>
+        {#if bodyCapError}
+          <p class="content-cap-error" role="alert">{bodyCapError}</p>
+        {/if}
       {:else}
         {@const fieldNum = numbering?.number ?? index + 1}
         {@const title = buildFieldTitle(field, fieldNum)}
@@ -1613,6 +1783,19 @@
               </span>
               <hr class="preview-page-break-line" />
             </div>
+          {:else if field.fieldType === "richText"}
+            {@const richHtml = renderFormRichText(
+              resolveRichPreview(
+                field.config.type === "richText" ? field.config.body : {},
+                previewLocale,
+              ),
+            )}
+            {#if richHtml.length > 0}
+              <div class="preview-rich-text-block preview-rich-content">
+                <!-- eslint-disable-next-line svelte/no-at-html-tags -- sanitized by renderFormRichText (DOMPurify with PURIFY_CONFIG allowlist) -->
+                {@html richHtml}
+              </div>
+            {/if}
           {:else}
             <IntakeFieldRenderer
               fieldId={`preview-${String(index)}`}
@@ -1720,8 +1903,9 @@
   ondismiss={() => (addFieldSheetOpened = false)}
   title={m.intake_forms_add_field()}
 >
+  <BlockTitle>{m.intake_forms_add_field_fields_heading()}</BlockTitle>
   <List strong inset>
-    {#each fieldTypes as type (type)}
+    {#each dataFieldTypes as type (type)}
       {@const disabled = type === "availability" && hasAvailability}
       <ListItem
         title={getFieldTypeLabel(type)}
@@ -1731,6 +1915,16 @@
         onclick={disabled ? undefined : () => addField(type)}
         aria-disabled={disabled ? "true" : undefined}
         class={disabled ? "field-type-disabled" : ""}
+      />
+    {/each}
+  </List>
+  <BlockTitle>{m.intake_forms_add_field_structure_heading()}</BlockTitle>
+  <List strong inset>
+    {#each structuralFieldTypes as type (type)}
+      <ListItem
+        title={getFieldTypeLabel(type)}
+        subtitle={getFieldTypeDesc(type)}
+        onclick={() => addField(type)}
       />
     {/each}
   </List>
@@ -1924,6 +2118,11 @@
     font-size: var(--text-xs);
     color: var(--muted);
     font-style: italic;
+  }
+
+  /* Rich text block preview */
+  .preview-rich-text-block {
+    margin-bottom: var(--space-md);
   }
 
   /* Banner */

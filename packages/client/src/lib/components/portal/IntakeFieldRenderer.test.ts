@@ -30,6 +30,18 @@ vi.mock("./AvailabilityField.svelte", async (importOriginal) => {
   };
 });
 
+// vi.mock required: renderFormRichText has deep ProseMirror/DOMPurify dependencies.
+vi.mock("$lib/utils/render-form-content.js", async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  renderFormRichText: (value: unknown): string => {
+    if (value === undefined) return "";
+    if (typeof value === "string") return `<p>${value}</p>`;
+    if (typeof value === "object" && value !== null && "type" in value)
+      return "<p>Rich content</p>";
+    return "";
+  },
+}));
+
 const { default: IntakeFieldRenderer } =
   await import("./IntakeFieldRenderer.svelte");
 
@@ -343,6 +355,49 @@ describe("IntakeFieldRenderer", () => {
       // The stub (PassthroughShell) renders a div with data-testid
       const stub = document.querySelector("[data-testid='passthrough-shell']");
       expect(stub).not.toBeNull();
+    });
+  });
+
+  describe("richText type", () => {
+    it("renders sanitized HTML from a string body value", () => {
+      render(IntakeFieldRenderer, {
+        props: makeProps({
+          config: { type: "richText", body: { en: "Hello world" } },
+          isRequired: false,
+          value: undefined,
+        }),
+      });
+      const block = document.querySelector(".rich-text-block");
+      expect(block).not.toBeNull();
+      expect(block!.innerHTML).toContain("Hello world");
+    });
+
+    it("renders nothing when body is empty", () => {
+      render(IntakeFieldRenderer, {
+        props: makeProps({
+          config: { type: "richText", body: {} },
+          isRequired: false,
+          value: undefined,
+        }),
+      });
+      const block = document.querySelector(".rich-text-block");
+      expect(block).toBeNull();
+    });
+
+    it("does not render label, required marker, or privacy indicator", () => {
+      render(IntakeFieldRenderer, {
+        props: makeProps({
+          label: "Should not appear as heading",
+          config: { type: "richText", body: { en: "Content" } },
+          isRequired: true,
+          value: undefined,
+        }),
+      });
+      // No BlockTitle or label rendered for richText
+      const heading = document.getElementById("intake-label-f-1");
+      expect(heading).toBeNull();
+      // No privacy indicator
+      expect(screen.queryByText("Fully encrypted.")).toBeNull();
     });
   });
 });
