@@ -25,6 +25,7 @@ import {
   filenameSlot,
   eciesEncrypt,
   toRistrettoPoint,
+  type SymmetricKey,
 } from "@care-y/crypto";
 
 export interface SeedTicketOptions {
@@ -49,7 +50,19 @@ export async function seedTestTickets(
   orgSchema: OrgSchema,
   options?: SeedTicketOptions,
   assets?: SeedMediaAssets,
-): Promise<{ ticketIds: string[] }> {
+): Promise<{
+  ticketIds: string[];
+  /**
+   * Content key per ticket created by this run, keyed by ticket id, for
+   * in-process seeders that need to add follow-ups to the same tickets.
+   *
+   * IN-PROCESS ONLY. Never return this from a procedure, log it, or
+   * persist it. Nothing on a running server can recover these keys by any
+   * other route (the org wrap opens with the org secret key, which lives
+   * on the client), and that property is the point.
+   */
+  ticketKeys: ReadonlyMap<string, SymmetricKey>;
+}> {
   // 1. Look up vol_public for the current user
   const userKeys = await tDb
     .selectFrom("user_keys")
@@ -1384,6 +1397,12 @@ export async function seedTestTickets(
   }
 
   const createdIds: string[] = [];
+  // Content key per ticket this run created, so a later seeder can add
+  // follow-ups to the same ticket. Nothing on a running server can
+  // recover these: the org wrap opens only with the org secret key, which
+  // lives on the client. Skipped for tickets that already existed, whose
+  // keys this run never held.
+  const ticketKeys = new Map<string, SymmetricKey>();
   const encoder = new TextEncoder();
 
   for (let i = 0; i < ticketDefs.length; i++) {
@@ -1638,7 +1657,8 @@ export async function seedTestTickets(
     }
 
     createdIds.push(ticket.id);
+    ticketKeys.set(ticket.id, tk);
   }
 
-  return { ticketIds: createdIds };
+  return { ticketIds: createdIds, ticketKeys };
 }

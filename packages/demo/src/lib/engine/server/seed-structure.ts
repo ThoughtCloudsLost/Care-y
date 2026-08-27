@@ -48,6 +48,14 @@ export const DEMO_ORG_SCHEMA = "demo_org" as OrgSchema;
 export const DEMO_ADMIN_IDENTIFIER = "jdoe";
 export const DEMO_ADMIN_PASSWORD = "DemoPassword2026";
 export const DEMO_ADMIN_DISPLAY_NAME = "Demo User";
+
+// Credentials for the seeded client portal account. These ship in the
+// published bundle the same way the admin pair does, which is acceptable
+// only because the data is synthetic and the database is per-visitor and
+// in-browser. They must never match a credential used by a real org.
+export const DEMO_CLIENT_USERNAME = "riverbend";
+export const DEMO_CLIENT_PASSWORD = "DemoPortal2026";
+
 export const NUM_SEED_CLIENTS = 30; // Fewer than prod seed (120) for speed
 
 export interface SeedStructureResult {

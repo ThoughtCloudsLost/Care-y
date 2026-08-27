@@ -106,6 +106,8 @@
   import {
     DEMO_DETAIL_TICKET_ID,
     DEMO_DETAIL_ARTICLE_ID,
+    DEMO_PORTAL_CHANNEL_ID,
+    DEMO_SHARE_ID,
   } from "$demo/bridge.js";
   import {
     activateSettingsDriver,
@@ -208,7 +210,74 @@
       if (resolvedArticleId !== null) return resolvedArticleId;
       return unresolved === "null" ? null : detail;
     }
+    if (detail === DEMO_PORTAL_CHANNEL_ID) {
+      const portal = resolvedEngine?.portal;
+      if (portal !== undefined) return `portal/${portal.portalChannelId}`;
+      return unresolved === "null" ? null : detail;
+    }
+    if (detail === DEMO_SHARE_ID) {
+      const portal = resolvedEngine?.portal;
+      if (portal !== undefined) return `share/${portal.shareId}`;
+      return unresolved === "null" ? null : detail;
+    }
     return detail;
+  }
+
+  /**
+   * Put the URL fragment the client portal pages expect on the real
+   * location. DEMO CODE ONLY, NEVER PRODUCT.
+   *
+   * /portal/[channelId] and /share/[id] read location.hash directly
+   * (portal/[channelId]/+page.svelte, share/[id]/+page.svelte) rather
+   * than through $app/state, so the demo's stubbed page URL never reaches
+   * them. The router carries a pathname and a search string and has no
+   * hash, which would leave both pages parsing an absent credential and
+   * rendering their not-found state.
+   *
+   * Assigning location.hash on the same document is a fragment
+   * navigation. It issues no request and does not reload, so the mounted
+   * component tree survives. The fragment itself is seeded material, so
+   * it is no more secret here than the published admin password.
+   *
+   * Clearing it on every other route matters as much as setting it: a
+   * stale fragment left on the address bar would be read by whichever
+   * portal page the story visits next.
+   *
+   * One divergence the client narration must not overstate: in production
+   * both pages strip the fragment from the address bar after parsing it
+   * (replaceState in each page's mount effect), so the credential does not
+   * linger in the URL or in history. The demo's $app/navigation stub
+   * routes replaceState to demo page state and never touches the real
+   * location, so the strip is inert here and the fragment stays visible.
+   * Prose describing that protection is describing the product, not what
+   * the demo phone is doing on screen.
+   */
+  function applyClientFragment(detail: DemoDetail): void {
+    const portal = resolvedEngine?.portal;
+    let fragment = "";
+    if (portal !== undefined && typeof detail === "string") {
+      if (detail === `portal/${portal.portalChannelId}`) {
+        fragment = portal.portalFragment;
+      } else if (detail === `share/${portal.shareId}`) {
+        fragment = portal.shareFragment;
+      }
+    }
+
+    // Compare before assigning: writing an unchanged hash still pushes a
+    // history entry, and the story navigates on every scroll tick.
+    const next = fragment === "" ? "" : `#${fragment}`;
+    if (globalThis.location.hash === next) return;
+    if (next === "") {
+      // Assigning "" leaves a bare "#" behind; replaceState drops it
+      // without adding to history.
+      globalThis.history.replaceState(
+        null,
+        "",
+        globalThis.location.pathname + globalThis.location.search,
+      );
+      return;
+    }
+    globalThis.location.hash = next;
   }
 
   // Seed crypto-context and resolve the detail IDs once the engine
@@ -704,7 +773,12 @@
     if (feature === "login" && router.feature !== "login") {
       resetLoginFlow();
     }
-    router.navigate(feature, sentinelToReal(detail));
+    const realDetail = sentinelToReal(detail);
+    // Before the navigation, not after: the portal and share pages read
+    // location.hash during their own mount, so a fragment applied
+    // afterwards arrives too late for the page that needed it.
+    applyClientFragment(realDetail);
+    router.navigate(feature, realDetail);
   }
 
   /**

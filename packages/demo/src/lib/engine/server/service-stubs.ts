@@ -42,6 +42,8 @@ import type { ScryptHasher } from "../../../../../server/src/auth/scrypt-hash.js
 import type { PasswordHasher } from "../../../../../server/src/auth/password.js";
 import type { PasswordHash } from "@care-y/shared";
 import type { PendingClient } from "../../../../../server/src/tickets/ticket-service.js";
+import type { IntakeFormService } from "../../../../../server/src/portal/intake-form-service.js";
+import type { AccountServiceDeps } from "../../../../../server/src/portal/account-service.js";
 
 // ── Types ──────────────────────────────────────────────────────────
 
@@ -67,6 +69,15 @@ export type DemoAppRouter = ReturnType<typeof createAppRouterFn>;
 export interface ServiceStubResult {
   readonly appRouter: DemoAppRouter;
   readonly pendingClients: Map<string, PendingClient>;
+  /**
+   * The same instance the two portal routers hold. The portal seed writes
+   * forms through it, so a second instance here would be a second source
+   * of truth for how field ciphertext is shaped.
+   */
+  readonly intakeFormService: IntakeFormService;
+  /** Account service deps minus orgUuid, which callers fill per request. */
+  readonly accountServiceDeps: Omit<AccountServiceDeps, "orgUuid">;
+  readonly notificationService: NotificationService;
 }
 
 /** Wraps a ScryptHasher with the branded hashPassword method PasswordHasher requires. */
@@ -528,5 +539,11 @@ export async function buildServiceStubs(
     devDeps: undefined,
   });
 
-  return { appRouter, pendingClients };
+  return {
+    appRouter,
+    pendingClients,
+    intakeFormService,
+    accountServiceDeps: { indexer, fakeSaltKey },
+    notificationService: notificationServiceStub,
+  };
 }

@@ -279,6 +279,21 @@ export const DEMO_DETAIL_TICKET_ID = "tk-0001";
 export const DEMO_DETAIL_ARTICLE_ID = "kb-0001";
 
 /**
+ * Client detail paths for the two parameterized portal routes.
+ *
+ * Both carry a placeholder id resolved to the seeded one at the PhoneApp
+ * boundary, the same translation DEMO_DETAIL_TICKET_ID gets. Unlike the
+ * ticket sentinels these are whole path prefixes, because a client
+ * feature's detail IS the URL path (router.svelte.ts featureToPathname).
+ *
+ * Both pages also need a URL fragment, which they read from the real
+ * location rather than from any router state. PhoneApp applies it
+ * alongside the id swap; see applyClientFragment there.
+ */
+export const DEMO_PORTAL_CHANNEL_ID = "portal/demo-channel";
+export const DEMO_SHARE_ID = "share/demo-share";
+
+/**
  * Query the search section seeds into the overlay. The overlay renders
  * its entity groups and deep-search panel only past two characters
  * (SearchResults.svelte:90-158), so without a query those sub-sections
