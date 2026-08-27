@@ -2902,5 +2902,7 @@
   "intake_forms_field_row_max_length": "Largo maximo: {max}",
   "intake_forms_field_row_page_number": "Pagina {page}",
   "section_rail_label": "Secciones de la página",
-  "section_rail_hover_label": "Secciones de {page}"
+  "section_rail_hover_label": "Secciones de {page}",
+  "form_content_editor_image_no_key": "La carga de imágenes requiere que la clave de la organización esté cargada",
+  "library_editor_ordered_list_symbol": "1."
 }

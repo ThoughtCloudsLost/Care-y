@@ -2884,4 +2884,6 @@ export * from "./intake_forms_builtin_default_disabled_hint.js";
 export * from "./intake_forms_builtin_default_toggled.js";
 export * from "./section_rail_label.js";
 export * from "./section_rail_hover_label.js";
+export * from "./form_content_editor_image_no_key.js";
+export * from "./library_editor_ordered_list_symbol.js";
 export type LocalizedString = import("../runtime.js").LocalizedString;

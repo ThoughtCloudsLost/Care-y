@@ -26,7 +26,7 @@
   import { requireRouter } from "$lib/errors.js";
   import {
     editorSchema,
-    baseEditorPlugins,
+    composeEditorPlugins,
   } from "$lib/editor/prosemirror-schema.js";
   import { useProseMirror } from "$lib/editor/use-prosemirror.svelte.js";
   import {
@@ -34,10 +34,7 @@
     blockTypeActive,
     type ToolbarCommand,
   } from "$lib/editor/toolbar-state.js";
-  import { headingHierarchyPlugin } from "$lib/editor/plugins/heading-hierarchy.js";
-  import { linkTextLintPlugin } from "$lib/editor/plugins/link-text-lint.js";
   import {
-    atagDecorationsPlugin,
     atagDecorationsKey,
     setAtagActive,
   } from "$lib/editor/plugins/atag-decorations.js";
@@ -176,12 +173,7 @@
     orgKeyManager,
   };
 
-  const allPlugins = [
-    ...baseEditorPlugins,
-    headingHierarchyPlugin(),
-    linkTextLintPlugin(),
-    atagDecorationsPlugin(),
-  ];
+  const allPlugins = composeEditorPlugins();
 
   const editor = useProseMirror(() => editorMountEl, {
     schema: editorSchema,

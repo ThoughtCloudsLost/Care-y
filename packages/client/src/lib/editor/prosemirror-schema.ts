@@ -8,6 +8,14 @@ import type { Plugin } from "prosemirror-state";
 import { history, undo, redo } from "prosemirror-history";
 import { keymap } from "prosemirror-keymap";
 import { baseKeymap } from "prosemirror-commands";
+import {
+  splitListItem,
+  liftListItem,
+  sinkListItem,
+} from "prosemirror-schema-list";
+import { headingHierarchyPlugin } from "./plugins/heading-hierarchy.js";
+import { linkTextLintPlugin } from "./plugins/link-text-lint.js";
+import { atagDecorationsPlugin } from "./plugins/atag-decorations.js";
 
 // ---------------------------------------------------------------------------
 // Shared helpers (used by image, figure_image, table_cell, table_header)
@@ -360,6 +368,43 @@ export const baseEditorPlugins: readonly Plugin[] = [
   keymap(baseKeymap),
   history(),
 ];
+
+// ---------------------------------------------------------------------------
+// Full editor plugin composition (shared by ArticleEditor + FormContentEditor)
+// ---------------------------------------------------------------------------
+
+/**
+ * Build the complete plugin array for a ProseMirror editor that uses
+ * editorSchema. Combines base plugins (undo/redo, baseKeymap, history),
+ * list keybindings (Enter splits, Tab/Shift-Tab indents/outdents), and
+ * the ATAG accessibility plugins (heading hierarchy, link text lint,
+ * decoration overlay).
+ *
+ * Both ArticleEditor and FormContentEditor call this so plugin
+ * composition cannot drift between them.
+ */
+export function composeEditorPlugins(): readonly Plugin[] {
+  const listItemType = editorSchema.nodes.list_item;
+
+  const listKeybindings: Record<
+    string,
+    ReturnType<typeof splitListItem>
+  > = listItemType !== undefined
+    ? {
+        Enter: splitListItem(listItemType),
+        Tab: sinkListItem(listItemType),
+        "Shift-Tab": liftListItem(listItemType),
+      }
+    : {};
+
+  return [
+    keymap(listKeybindings),
+    ...baseEditorPlugins,
+    headingHierarchyPlugin(),
+    linkTextLintPlugin(),
+    atagDecorationsPlugin(),
+  ];
+}
 
 // ---------------------------------------------------------------------------
 // Deprecated aliases (use editorSchema / baseEditorPlugins instead)

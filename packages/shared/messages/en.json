@@ -2911,5 +2911,7 @@
   "intake_forms_builtin_default_disabled_hint": "When off, /intake shows a not-available message unless a custom default form is active.",
   "intake_forms_builtin_default_toggled": "Built-in default form setting updated",
   "section_rail_label": "Page sections",
-  "section_rail_hover_label": "Sections for {page}"
+  "section_rail_hover_label": "Sections for {page}",
+  "form_content_editor_image_no_key": "Image upload requires the organization key to be loaded",
+  "library_editor_ordered_list_symbol": "1."
 }
