@@ -17,6 +17,7 @@
     BlockTitle,
   } from "konsta/svelte";
   import * as m from "$lib/paraglide/messages.js";
+  import { getLocale } from "$lib/paraglide/runtime.js";
   import { trpc } from "$lib/trpc/index.js";
   import { portalKeys } from "$lib/query/keys.js";
   import { decode } from "@care-y/crypto";
@@ -48,12 +49,14 @@
     evaluateVisibility,
     isDataFieldType,
     BASE_LOCALE,
+    FORM_LOCALES,
     newTicketId,
     newFollowupId,
     type IntakeFieldConfig,
     type IntakeFieldType,
     type IntakeFieldRole,
     type LocalizedText,
+    type FormLocale,
     type IntakeFormMeta,
     type AvailabilityData,
     type TicketPriority,
@@ -91,18 +94,58 @@
 
   type ContactMethod = "phone" | "email" | "none";
 
+  // ---- Visitor locale ----
+
+  /**
+   * The visitor's current locale, narrowed from Paraglide's Locale type to
+   * FormLocale for use with resolveLocalized and readRichLocale. Falls back
+   * to BASE_LOCALE when the runtime returns a locale not in FORM_LOCALES
+   * (should not happen given both sets are ["en", "es"], but the type
+   * narrowing is explicit rather than a cast).
+   *
+   * Wrapped in $derived so the value stays reactive across locale switches.
+   * In practice, setLocale triggers a page reload, so the component
+   * re-mounts with the new locale. The $derived is a safety net.
+   */
+  const visitorLocale: FormLocale = $derived.by((): FormLocale => {
+    const raw = getLocale();
+    return FORM_LOCALES.includes(raw) ? raw : BASE_LOCALE;
+  });
+
   // ---- Default form definition ----
+
+  /**
+   * Build a LocalizedText record by evaluating a Paraglide message function
+   * in each supported locale. Paraglide message functions accept an options
+   * object with an explicit locale override, so this produces the correct
+   * translation for every key rather than storing a single resolved string
+   * under one locale.
+   */
+  function localizeMsg(
+    fn: (
+      params?: Record<string, never>,
+      opts?: { locale?: FormLocale },
+    ) => string,
+  ): LocalizedText {
+    // Locales are written out rather than looped so that adding one to
+    // LocalizedText becomes a compile error here instead of a silently
+    // missing translation.
+    return {
+      en: fn(undefined, { locale: "en" }),
+      es: fn(undefined, { locale: "es" }),
+    };
+  }
 
   const DEFAULT_INTAKE_FORM: readonly PlaintextField[] = [
     {
       fieldKey: "default:name",
       fieldType: "text",
       role: null,
-      label: { en: m.intake_field_name_label() },
+      label: localizeMsg(m.intake_field_name_label),
       config: {
         type: "text",
         maxLength: 200,
-        placeholder: { en: m.intake_field_name_label() },
+        placeholder: localizeMsg(m.intake_field_name_placeholder),
       },
       isRequired: false,
     },
@@ -110,11 +153,11 @@
       fieldKey: "default:message",
       fieldType: "textarea",
       role: null,
-      label: { en: m.intake_field_message_label() },
+      label: localizeMsg(m.intake_field_message_label),
       config: {
         type: "textarea",
         maxLength: 5_000,
-        placeholder: { en: m.intake_field_message_placeholder() },
+        placeholder: localizeMsg(m.intake_field_message_placeholder),
       },
       isRequired: true,
     },
@@ -312,21 +355,21 @@
   /** Custom description replaces the default intro text when present. */
   const formDescriptionHtml = $derived(
     renderAndRewrite(
-      readRichLocale(resolvedForm.formMeta.description, BASE_LOCALE),
+      readRichLocale(resolvedForm.formMeta.description, visitorLocale),
     ),
   );
 
   /** Custom submit message replaces the default success copy when present. */
   const formSubmitMsgHtml = $derived(
     renderAndRewrite(
-      readRichLocale(resolvedForm.formMeta.submitMessage, BASE_LOCALE),
+      readRichLocale(resolvedForm.formMeta.submitMessage, visitorLocale),
     ),
   );
 
   /** Custom closed message shown when the form's closing date has passed. */
   const formClosedMsgHtml = $derived(
     renderAndRewrite(
-      readRichLocale(resolvedForm.formMeta.closedMessage, BASE_LOCALE),
+      readRichLocale(resolvedForm.formMeta.closedMessage, visitorLocale),
     ),
   );
 
@@ -810,13 +853,17 @@
     const answers: IntakeAnswer[] = [];
 
     if (isDefaultForm) {
-      // Default form: name, contact method, contact detail, message
+      // Default form: name, contact method, contact detail, message.
+      // Labels pin to BASE_LOCALE so queue-facing ticket text stays
+      // uniform regardless of the visitor's language (same rationale
+      // as the custom form path below).
+      const baseLoc = { locale: BASE_LOCALE };
       const nameVal = fieldValues["default:name"];
       if (typeof nameVal === "string" && nameVal.trim() !== "") {
         answers.push({
           fieldKey: "default:name",
           fieldType: "text",
-          label: m.intake_field_name_label(),
+          label: m.intake_field_name_label({}, baseLoc),
           value: nameVal,
         });
       }
@@ -825,19 +872,19 @@
       let contactMethodLabel: string;
       switch (contactMethod) {
         case "phone":
-          contactMethodLabel = m.intake_contact_phone();
+          contactMethodLabel = m.intake_contact_phone({}, baseLoc);
           break;
         case "email":
-          contactMethodLabel = m.intake_contact_email();
+          contactMethodLabel = m.intake_contact_email({}, baseLoc);
           break;
         case "none":
-          contactMethodLabel = m.intake_contact_none();
+          contactMethodLabel = m.intake_contact_none({}, baseLoc);
           break;
       }
       answers.push({
         fieldKey: "default:contact-method",
         fieldType: "text",
-        label: m.intake_contact_method_label(),
+        label: m.intake_contact_method_label({}, baseLoc),
         value: contactMethodLabel,
       });
 
@@ -848,8 +895,8 @@
           fieldType: "text",
           label:
             contactMethod === "phone"
-              ? m.intake_field_contact_detail_phone_label()
-              : m.intake_field_contact_detail_email_label(),
+              ? m.intake_field_contact_detail_phone_label({}, baseLoc)
+              : m.intake_field_contact_detail_email_label({}, baseLoc),
           value: contactDetail,
         });
       }
@@ -860,7 +907,7 @@
         answers.push({
           fieldKey: "default:message",
           fieldType: "textarea",
-          label: m.intake_field_message_label(),
+          label: m.intake_field_message_label({}, baseLoc),
           value: msgVal,
         });
       }
@@ -1351,7 +1398,7 @@
 
       <!-- Page title when present -->
       {#if currentPage?.title}
-        {@const pageTitle = resolveLocalized(currentPage.title, BASE_LOCALE)}
+        {@const pageTitle = resolveLocalized(currentPage.title, visitorLocale)}
         {#if pageTitle}
           <BlockTitle>{pageTitle}</BlockTitle>
         {/if}
@@ -1366,7 +1413,8 @@
           {#if isFieldVisible(field) && (isDataFieldType(field.fieldType) || field.fieldType === "richText")}
             <IntakeFieldRenderer
               fieldId={field.fieldKey}
-              label={resolveLocalized(field.label, BASE_LOCALE) ?? ""}
+              label={resolveLocalized(field.label, visitorLocale) ?? ""}
+              locale={visitorLocale}
               config={field.config}
               isRequired={field.isRequired}
               role={field.role}
@@ -1388,7 +1436,8 @@
         {#if isFieldVisible(field) && (isDataFieldType(field.fieldType) || field.fieldType === "richText")}
           <IntakeFieldRenderer
             fieldId={field.fieldKey}
-            label={resolveLocalized(field.label, BASE_LOCALE) ?? ""}
+            label={resolveLocalized(field.label, visitorLocale) ?? ""}
+            locale={visitorLocale}
             config={field.config}
             isRequired={field.isRequired}
             role={field.role}

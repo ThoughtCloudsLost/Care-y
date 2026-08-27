@@ -2437,6 +2437,7 @@
   "intake_title": "Get help",
   "intake_intro": "We're here to help. What you write is encrypted on your device before it is sent.",
   "intake_field_name_label": "Your name",
+  "intake_field_name_placeholder": "First name or alias",
   "intake_field_name_hint": "optional",
   "intake_contact_method_label": "How should we reach you?",
   "intake_contact_phone": "Text or call my phone",

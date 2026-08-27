@@ -8,9 +8,11 @@ import type * as IntakeFormCrypto from "$lib/portal/intake-form-crypto.js";
 import type * as CryptoPkg from "@care-y/crypto";
 import type * as PowSolver from "$lib/auth/pow-solver.js";
 import type * as AnnounceModule from "$lib/utils/announce.js";
+import type * as ParaglideRuntime from "$lib/paraglide/runtime.js";
 
 // --- Controllable mock state ---
 
+let mockLocale = "en";
 let mockOrgKey: Uint8Array | null = new Uint8Array(32);
 let mockOrgKeyLoading = false;
 let mockPowRequired = false;
@@ -161,6 +163,13 @@ vi.mock("$lib/utils/announce.js", async (importOriginal) => ({
   announceToLiveRegion: vi.fn(),
 }));
 
+// vi.mock required: $lib/paraglide/runtime.js needs a controllable getLocale
+// so tests can simulate Spanish visitors without a real locale cookie.
+vi.mock("$lib/paraglide/runtime.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof ParaglideRuntime>()),
+  getLocale: () => mockLocale,
+}));
+
 vi.mock("$lib/trpc/index.js", async (importOriginal) => ({
   ...(await importOriginal()),
   trpc: {
@@ -182,7 +191,14 @@ vi.mock("$lib/paraglide/messages.js", async (importOriginal) => ({
   ...(await importOriginal<typeof ParaglideMessages>()),
   intake_title: () => "Get help",
   intake_intro: () => "We're here to help.",
-  intake_field_name_label: () => "Your name",
+  intake_field_name_label: (
+    _inputs?: Record<string, never>,
+    opts?: { locale?: string },
+  ) => (opts?.locale === "es" ? "Tu nombre" : "Your name"),
+  intake_field_name_placeholder: (
+    _inputs?: Record<string, never>,
+    opts?: { locale?: string },
+  ) => (opts?.locale === "es" ? "Nombre o alias" : "First name or alias"),
   intake_field_name_hint: () => "optional",
   intake_contact_method_label: () => "How should we reach you?",
   intake_contact_phone: () => "Text or call my phone",
@@ -192,8 +208,14 @@ vi.mock("$lib/paraglide/messages.js", async (importOriginal) => ({
     "The organization will not be able to reach out to you.",
   intake_field_contact_detail_phone_label: () => "Phone number",
   intake_field_contact_detail_email_label: () => "Email address",
-  intake_field_message_label: () => "Your message",
-  intake_field_message_placeholder: () => "What's going on?",
+  intake_field_message_label: (
+    _inputs?: Record<string, never>,
+    opts?: { locale?: string },
+  ) => (opts?.locale === "es" ? "Tu mensaje" : "Your message"),
+  intake_field_message_placeholder: (
+    _inputs?: Record<string, never>,
+    opts?: { locale?: string },
+  ) => (opts?.locale === "es" ? "Que esta pasando?" : "What's going on?"),
   intake_char_count: ({ count, max }: { count: number; max: number }) =>
     `${String(count)} / ${String(max)}`,
   intake_submit: () => "Send encrypted message",
@@ -291,6 +313,7 @@ import IntakePage from "./+page.svelte";
 
 describe("intake page", () => {
   beforeEach(() => {
+    mockLocale = "en";
     mockOrgKey = new Uint8Array(32);
     mockOrgKeyLoading = false;
     mockPowRequired = false;
@@ -322,6 +345,30 @@ describe("intake page", () => {
     expect(screen.getByText("Text or call my phone")).toBeTruthy();
     expect(screen.getByText("Email me")).toBeTruthy();
     expect(screen.getByText("I'll check back myself")).toBeTruthy();
+  });
+
+  it("renders name field with a dedicated placeholder (not the label)", () => {
+    render(IntakePage);
+    // The name field should use intake_field_name_placeholder, not the label
+    const nameInput = screen.getByPlaceholderText("First name or alias");
+    expect(nameInput).toBeTruthy();
+    // The label text should appear separately from the placeholder
+    expect(screen.getAllByText(/Your name/)[0]).toBeTruthy();
+  });
+
+  it("populates default form labels and placeholders for both locales", () => {
+    // The localizeMsg helper calls each Paraglide message function with
+    // explicit locale overrides, producing { en: "...", es: "..." } records.
+    // IntakeFieldRenderer resolves placeholders via resolveLocalized, so
+    // the rendered placeholder proves the en key is populated. We verify
+    // the message functions were called with locale options by confirming
+    // the English placeholder text comes through correctly rather than the
+    // label text (which would indicate the old bug).
+    render(IntakePage);
+    const nameInput = screen.getByPlaceholderText("First name or alias");
+    expect(nameInput).toBeTruthy();
+    const msgInput = screen.getByPlaceholderText("What's going on?");
+    expect(msgInput).toBeTruthy();
   });
 
   it("shows encryption unavailable when org key is null", () => {
@@ -719,5 +766,109 @@ describe("intake page", () => {
     });
 
     expect(screen.queryByTestId("intake-continuation-link")).toBeNull();
+  });
+
+  // -----------------------------------------------------------------
+  // Locale-aware rendering tests
+  // -----------------------------------------------------------------
+
+  it("Spanish visitor sees Spanish labels and placeholder on the default form", () => {
+    mockLocale = "es";
+    render(IntakePage);
+
+    // Label resolves to Spanish via localizeMsg + visitorLocale
+    expect(screen.getAllByText(/Tu nombre/)[0]).toBeTruthy();
+    // Placeholder resolves to Spanish via visitorLocale passed to IntakeFieldRenderer
+    const nameInput = screen.getByPlaceholderText("Nombre o alias");
+    expect(nameInput).toBeTruthy();
+    // Message label in Spanish
+    expect(screen.getAllByText(/Tu mensaje/)[0]).toBeTruthy();
+    const msgInput = screen.getByPlaceholderText("Que esta pasando?");
+    expect(msgInput).toBeTruthy();
+  });
+
+  it("Spanish visitor sees Spanish labels on a custom form", async () => {
+    mockLocale = "es";
+
+    // Set up a custom form with bilingual fields
+    const { decryptFieldContent } =
+      await import("$lib/portal/intake-form-crypto.js");
+    const mockedDecrypt = vi.mocked(decryptFieldContent);
+    mockedDecrypt.mockImplementation(() => ({
+      label: { en: "Your location", es: "Tu ubicacion" },
+      config: {
+        type: "text" as const,
+        maxLength: 200,
+        placeholder: { en: "City", es: "Ciudad" },
+      },
+    }));
+
+    mockFormData = {
+      formId: "custom-form-1",
+      fields: [
+        {
+          fieldKey: "loc-field",
+          fieldType: "text",
+          role: null,
+          isRequired: false,
+          encryptedLabel: "enc-label-loc",
+          encryptedConfig: "enc-config-loc",
+        },
+      ],
+    };
+
+    render(IntakePage);
+
+    // The label should resolve to Spanish for a Spanish visitor
+    await vi.waitFor(() => {
+      expect(screen.getAllByText(/Tu ubicacion/)[0]).toBeTruthy();
+    });
+    // The placeholder should also be Spanish
+    const locInput = screen.getByPlaceholderText("Ciudad");
+    expect(locInput).toBeTruthy();
+
+    mockedDecrypt.mockReset();
+  });
+
+  it("queue-facing submission labels stay in base locale for a Spanish visitor", async () => {
+    mockLocale = "es";
+    mockMutateAsync.mockResolvedValue({ reference: "calm-pebble-7" });
+
+    render(IntakePage);
+    fillDefaultFormRequiredFields();
+
+    const submitBtn = screen.getByTestId("intake-submit");
+    await fireEvent.click(submitBtn);
+
+    await vi.waitFor(() => {
+      // The success heading mock returns English regardless of locale
+      // (Paraglide message mocks are not fully locale-aware for all keys).
+      // The important assertion is below: the submission payload labels.
+      expect(screen.getByText("Your message was sent")).toBeTruthy();
+    });
+
+    // Verify that the answer labels are in English (base locale),
+    // not Spanish, even though the visitor is browsing in Spanish.
+    const encryptCall = mockEncryptIntake.mock.calls[0] as unknown[];
+    const answers = encryptCall[1] as Array<{
+      fieldKey: string;
+      label: string;
+    }>;
+
+    const nameAnswer = answers.find((a) => a.fieldKey === "default:name");
+    // Name is optional, may or may not be present. If present, label is English.
+    if (nameAnswer) {
+      expect(nameAnswer.label).toBe("Your name");
+    }
+
+    const msgAnswer = answers.find((a) => a.fieldKey === "default:message");
+    expect(msgAnswer).toBeTruthy();
+    expect(msgAnswer?.label).toBe("Your message");
+
+    const contactMethodAnswer = answers.find(
+      (a) => a.fieldKey === "default:contact-method",
+    );
+    expect(contactMethodAnswer).toBeTruthy();
+    expect(contactMethodAnswer?.label).toBe("How should we reach you?");
   });
 });

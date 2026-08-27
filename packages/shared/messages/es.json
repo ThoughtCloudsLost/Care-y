@@ -2437,6 +2437,7 @@
   "intake_title": "Pedir ayuda",
   "intake_intro": "Estamos aqui para ayudarte. Lo que escribas se cifra en tu dispositivo antes de enviarse.",
   "intake_field_name_label": "Tu nombre",
+  "intake_field_name_placeholder": "Nombre o alias",
   "intake_field_name_hint": "opcional",
   "intake_contact_method_label": "Como quieres que te contactemos?",
   "intake_contact_phone": "Llamada o mensaje de texto",

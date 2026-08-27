@@ -20,6 +20,7 @@ import type * as IntakeFormCrypto from "$lib/portal/intake-form-crypto.js";
 import type * as CryptoPkg from "@care-y/crypto";
 import type * as PowSolver from "$lib/auth/pow-solver.js";
 import type * as AnnounceModule from "$lib/utils/announce.js";
+import type * as ParaglideRuntime from "$lib/paraglide/runtime.js";
 import type { DecryptedFieldContent } from "$lib/portal/intake-form-crypto.js";
 import type { IntakeFieldConfig, VisibleWhenV2 } from "@care-y/shared";
 
@@ -307,6 +308,13 @@ vi.mock("$lib/utils/announce.js", async (importOriginal) => ({
   announceToLiveRegion: vi.fn(),
 }));
 
+// vi.mock required: $lib/paraglide/runtime.js needs a controllable getLocale
+// so the component can derive visitorLocale without a real locale cookie.
+vi.mock("$lib/paraglide/runtime.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof ParaglideRuntime>()),
+  getLocale: () => "en",
+}));
+
 // vi.mock required: trpc/index.js creates a live HTTP client on import.
 vi.mock("$lib/trpc/index.js", async (importOriginal) => ({
   ...(await importOriginal()),
@@ -329,7 +337,14 @@ vi.mock("$lib/paraglide/messages.js", async (importOriginal) => ({
   ...(await importOriginal<typeof ParaglideMessages>()),
   intake_title: () => "Get help",
   intake_intro: () => "We're here to help.",
-  intake_field_name_label: () => "Your name",
+  intake_field_name_label: (
+    _inputs?: Record<string, never>,
+    opts?: { locale?: string },
+  ) => (opts?.locale === "es" ? "Tu nombre" : "Your name"),
+  intake_field_name_placeholder: (
+    _inputs?: Record<string, never>,
+    opts?: { locale?: string },
+  ) => (opts?.locale === "es" ? "Nombre o alias" : "First name or alias"),
   intake_field_name_hint: () => "optional",
   intake_contact_method_label: () => "How should we reach you?",
   intake_contact_phone: () => "Text or call my phone",
@@ -339,8 +354,14 @@ vi.mock("$lib/paraglide/messages.js", async (importOriginal) => ({
     "The organization will not be able to reach out to you.",
   intake_field_contact_detail_phone_label: () => "Phone number",
   intake_field_contact_detail_email_label: () => "Email address",
-  intake_field_message_label: () => "Your message",
-  intake_field_message_placeholder: () => "What's going on?",
+  intake_field_message_label: (
+    _inputs?: Record<string, never>,
+    opts?: { locale?: string },
+  ) => (opts?.locale === "es" ? "Tu mensaje" : "Your message"),
+  intake_field_message_placeholder: (
+    _inputs?: Record<string, never>,
+    opts?: { locale?: string },
+  ) => (opts?.locale === "es" ? "Que esta pasando?" : "What's going on?"),
   intake_char_count: ({ count, max }: { count: number; max: number }) =>
     `${String(count)} / ${String(max)}`,
   intake_submit: () => "Send encrypted message",
