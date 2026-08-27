@@ -84,7 +84,7 @@
       expanded={!collapsedSections.has(section.id)}
       ontoggle={() => toggleSection(section.id)}
     >
-      <Content />
+      <Content {...section.props ?? {}} />
     </CollapsibleSection>
   </div>
 {/each}

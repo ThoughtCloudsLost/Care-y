@@ -1,18 +1,20 @@
 <!--
   Admin intake forms list section (Organization page). Mirrors the follow-up
   types card anatomy (raised card, section description, icon rows with
-  name/sub lines, divider, tonal add action). Rows link to the intake form
-  editor page; the active toggle sits outside the link so both stay
-  independently operable. When web intake is enabled and no active custom
-  form is marked default, a row surfaces the built-in default form with a
-  disable toggle (org_config.builtin_default_enabled).
+  name/sub lines, divider, tonal add action). Rows request the intake form
+  editor through callback props rather than navigating themselves, so the
+  route owns routing and this section stays mountable outside a router; the
+  active toggle sits outside the row button so both stay independently
+  operable. When web intake is enabled and no active custom form is marked
+  default, a row surfaces the built-in default form with a disable toggle
+  (org_config.builtin_default_enabled).
 
   Supports duplication: loads an existing form, mints fresh field and option
   keys, suffixes the name, clears the slug, and saves as a new form.
 -->
 <script lang="ts">
-  import { resolve } from "$app/paths";
   import { Card, Toggle, DialogButton } from "konsta/svelte";
+  import type { SectionProps } from "./collapsible-section-types.js";
   import {
     createMutation,
     createQuery,
@@ -58,6 +60,8 @@
   import DecryptPlaceholder from "$lib/components/DecryptPlaceholder.svelte";
   import QueryError from "$lib/components/QueryError.svelte";
   import ShellDialog from "$lib/shell/ShellDialog.svelte";
+
+  let { onopenform, onopenresponses, oncreateform }: SectionProps = $props();
 
   const intakeFormsRouter = requireRouter(trpc.intakeForms, "intakeForms");
   const ticketRouter = requireRouter(trpc.tickets, "tickets");
@@ -436,9 +440,10 @@
     {:else if formsQuery.data}
       {#each formsQuery.data as form (form.id)}
         <div class="ifs-row" class:ifs-row-inactive={!form.isActive}>
-          <a
+          <button
+            type="button"
             class="ifs-row-link touch-feedback"
-            href={resolve(`/admin/forms?id=${encodeURIComponent(form.id)}`)}
+            onclick={() => onopenform?.(form.id)}
           >
             <ClipboardList size={16} aria-hidden="true" class="ifs-cfg-icon" />
             <span class="ifs-row-text">
@@ -451,18 +456,17 @@
               </span>
               <span class="ifs-row-sub">{formSubtitle(form)}</span>
             </span>
-          </a>
+          </button>
           <div class="ifs-row-actions">
             {#if canViewResponses}
-              <a
+              <button
+                type="button"
                 class="ifs-action-btn"
-                href={resolve(
-                  `/admin/forms/responses?id=${encodeURIComponent(form.id)}`,
-                )}
+                onclick={() => onopenresponses?.(form.id)}
                 aria-label={m.intake_responses_view_label()}
               >
                 <ChartColumn size={14} />
-              </a>
+              </button>
             {/if}
             <button
               type="button"
@@ -523,10 +527,14 @@
       {/if}
     {/if}
 
-    <a class="ifs-add-btn touch-feedback" href={resolve("/admin/forms")}>
+    <button
+      type="button"
+      class="ifs-add-btn touch-feedback"
+      onclick={() => oncreateform?.()}
+    >
       <Plus size={16} aria-hidden="true" />
       {m.intake_forms_create()}
-    </a>
+    </button>
   </div>
 </Card>
 
@@ -605,10 +613,24 @@
     min-width: 0;
     flex: 1;
     color: inherit;
-    text-decoration: none;
+    background: none;
+    border: none;
+    font: inherit;
+    cursor: pointer;
+    text-align: start;
     border-radius: 0.375rem;
     padding: 0.5rem 0.25rem;
     margin: 0 -0.25rem;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  .ifs-row-link:focus-visible {
+    outline: 2px solid var(--brand-text);
+    outline-offset: 2px;
+  }
+
+  .ifs-row-link:active {
+    background: color-mix(in srgb, var(--ink) 8%, transparent);
   }
 
   .ifs-row-label {
@@ -712,8 +734,7 @@
     padding: var(--space-md) 0;
   }
 
-  /* Link twin of SoftButton's tonal anatomy (SoftButton is button-only;
-     navigation from a content component stays declarative). */
+  /* Tonal anatomy matching SoftButton. */
   .ifs-add-btn {
     display: flex;
     align-items: center;
@@ -723,11 +744,13 @@
     margin-top: var(--space-sm);
     padding: 0.625rem 1.25rem;
     border-radius: 0.75rem;
+    border: none;
     background: color-mix(in srgb, var(--ink) 8%, transparent);
     color: var(--ink);
     font-size: var(--text-sm, 0.875rem);
     font-weight: 500;
-    text-decoration: none;
+    font-family: inherit;
+    cursor: pointer;
     -webkit-tap-highlight-color: transparent;
     min-height: 44px;
   }

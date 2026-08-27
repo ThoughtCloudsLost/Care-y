@@ -17,7 +17,7 @@
 <script lang="ts">
   import { page } from "$app/state";
   import { browser } from "$app/environment";
-  import { afterNavigate, replaceState } from "$app/navigation";
+  import { afterNavigate, goto, replaceState } from "$app/navigation";
   import { resolve } from "$app/paths";
   import { Block, BlockTitle, Card } from "konsta/svelte";
   import {
@@ -401,13 +401,14 @@
     <p class="portal-body-text upgrade-username">
       {m.account_login_username()}: {upgrade.username}
     </p>
-    <a
-      href={resolve("/account")}
+    <button
+      type="button"
       class="upgrade-go-link"
       data-testid="upgrade-go-to-login"
+      onclick={() => void goto(resolve("/account"))}
     >
       {m.account_login_submit()}
-    </a>
+    </button>
   </Block>
 {:else if portalSession.keyCheckPassed && portalSession.session}
   <!-- Upgrade offer card (above thread when offered, dismissible) -->
@@ -571,6 +572,18 @@
     margin-top: var(--space-md);
     color: var(--brand-text);
     font-weight: 600;
-    text-decoration: none;
+    font-family: inherit;
+    font-size: inherit;
+    background: none;
+    border: none;
+    padding: 0;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+    min-height: 44px;
+  }
+
+  .upgrade-go-link:focus-visible {
+    outline: 2px solid var(--brand-text);
+    outline-offset: 2px;
   }
 </style>

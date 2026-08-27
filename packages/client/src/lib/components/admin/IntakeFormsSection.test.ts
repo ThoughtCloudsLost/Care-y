@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { render, screen, cleanup } from "@testing-library/svelte";
+import { render, screen, cleanup, fireEvent } from "@testing-library/svelte";
 
 const {
   mockListForms,
@@ -152,9 +152,24 @@ vi.mock("@tanstack/svelte-query", async (importOriginal) => ({
 
 import IntakeFormsSection from "./IntakeFormsSection.svelte";
 
+// The section requests navigation through callback props; the route owns the
+// goto. Spying on the props is the whole navigation contract for this file.
+const nav = {
+  onopenform: vi.fn(),
+  onopenresponses: vi.fn(),
+  oncreateform: vi.fn(),
+};
+
+function renderSection(): ReturnType<typeof render> {
+  return render(IntakeFormsSection, { props: nav });
+}
+
 describe("IntakeFormsSection", () => {
   beforeEach(() => {
     mockPermissions.clear();
+    nav.onopenform.mockClear();
+    nav.onopenresponses.mockClear();
+    nav.oncreateform.mockClear();
     mockListForms.mockResolvedValue({
       forms: [
         {
@@ -176,56 +191,91 @@ describe("IntakeFormsSection", () => {
   });
 
   it("renders form list items", () => {
-    render(IntakeFormsSection);
+    renderSection();
 
     expect(screen.getByText("Main Intake")).toBeTruthy();
   });
 
-  it("renders the create link to the editor page", () => {
-    render(IntakeFormsSection);
+  it("requests a new form on create button click", async () => {
+    renderSection();
 
     const create = screen.getByText("Create new form");
-    expect(create.closest("a")?.getAttribute("href")).toBe("/admin/forms");
+    const btn = create.closest("button");
+    expect(btn).not.toBeNull();
+
+    await fireEvent.click(btn!);
+    expect(nav.oncreateform).toHaveBeenCalledTimes(1);
   });
 
-  it("links each form row to its editor page", () => {
-    render(IntakeFormsSection);
+  it("requests the form editor on row click", async () => {
+    renderSection();
 
-    const row = screen.getByText("Main Intake").closest("a");
-    expect(row?.getAttribute("href")).toBe("/admin/forms?id=form-1");
+    const row = screen.getByText("Main Intake").closest("button");
+    expect(row).not.toBeNull();
+
+    await fireEvent.click(row!);
+    expect(nav.onopenform).toHaveBeenCalledWith("form-1");
+  });
+
+  it("renders no anchor elements for navigation controls", () => {
+    mockPermissions.add("view_intake_responses");
+    renderSection();
+
+    // All navigation controls are buttons, not anchors
+    const formRow = screen.getByText("Main Intake").closest("button");
+    expect(formRow).not.toBeNull();
+
+    const createBtn = screen.getByText("Create new form").closest("button");
+    expect(createBtn).not.toBeNull();
+
+    const responsesLinks = screen.getAllByLabelText("View responses");
+    for (const link of responsesLinks) {
+      expect(link.tagName).toBe("BUTTON");
+    }
   });
 
   it("shows field count in the row subtitle", () => {
-    render(IntakeFormsSection);
+    renderSection();
 
     expect(screen.getByText(/5 fields/)).toBeTruthy();
   });
 
   it("renders a duplicate button for each form row", () => {
-    render(IntakeFormsSection);
+    renderSection();
 
     const dupButtons = screen.getAllByLabelText("Duplicate form");
     // At least one per form in the list
     expect(dupButtons.length).toBeGreaterThanOrEqual(1);
   });
 
-  it("hides the View responses link without VIEW_INTAKE_RESPONSES", () => {
-    render(IntakeFormsSection);
+  it("hides the View responses button without VIEW_INTAKE_RESPONSES", () => {
+    renderSection();
 
     expect(screen.queryByLabelText("View responses")).toBeNull();
   });
 
-  it("shows the View responses link when VIEW_INTAKE_RESPONSES is held", () => {
+  it("requests the responses viewer when VIEW_INTAKE_RESPONSES is held", async () => {
     mockPermissions.add("view_intake_responses");
-    render(IntakeFormsSection);
+    renderSection();
 
-    const links = screen.getAllByLabelText("View responses");
-    expect(links).toHaveLength(2);
-    expect(links[0]?.closest("a")?.getAttribute("href")).toBe(
-      "/admin/forms/responses?id=form-1",
-    );
-    expect(links[1]?.closest("a")?.getAttribute("href")).toBe(
-      "/admin/forms/responses?id=form-2",
-    );
+    const buttons = screen.getAllByLabelText("View responses");
+    expect(buttons).toHaveLength(2);
+
+    // Each responses button is a <button>, not an <a>
+    expect(buttons[0]!.tagName).toBe("BUTTON");
+    expect(buttons[1]!.tagName).toBe("BUTTON");
+
+    await fireEvent.click(buttons[0]!);
+    expect(nav.onopenresponses).toHaveBeenCalledWith("form-1");
+  });
+
+  it("preserves aria-label on the responses action button", () => {
+    mockPermissions.add("view_intake_responses");
+    renderSection();
+
+    const buttons = screen.getAllByLabelText("View responses");
+    expect(buttons.length).toBeGreaterThanOrEqual(1);
+    // The aria-label is the only accessible name for this control
+    expect(buttons[0]!.getAttribute("aria-label")).toBe("View responses");
   });
 });
