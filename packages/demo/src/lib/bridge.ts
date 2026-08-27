@@ -21,7 +21,14 @@ import type { Locale } from "$lib/paraglide/runtime.js";
 // Feature and detail types
 // -----------------------------------------------------------------------
 
-/** Features that have a built demo scene. */
+/**
+ * Features that have a built demo scene.
+ *
+ * "client" covers every route in the (client) group rather than naming
+ * one per page. The group shares a single shell and a single viewer
+ * identity, so the distinction the phone acts on is which shell to mount;
+ * which client page is showing is carried by DemoDetail.
+ */
 export type DemoFeature =
   | "login"
   | "home"
@@ -30,6 +37,7 @@ export type DemoFeature =
   | "admin"
   | "schedule"
   | "settings"
+  | "client"
   | "other";
 
 /** Sub-state within a feature (e.g. ticket detail, conversation view). */

@@ -28,7 +28,11 @@ import {
   type NavContext,
 } from "$lib/shell/nav-context.js";
 import { endSplitHandoff } from "$lib/stores/split-handoff.svelte.js";
-import { matchRoute, type RouteMatch } from "$demo/engine/route-manifest.js";
+import {
+  matchRoute,
+  routeGroupOf,
+  type RouteMatch,
+} from "$demo/engine/route-manifest.js";
 import type { TabId, AreaId } from "$lib/shell/types";
 import type { DemoFeature, DemoDetail } from "./bridge.js";
 import { fireBeforeNavigate, fireAfterNavigate } from "$app/navigation";
@@ -64,6 +68,21 @@ const TAB_TO_FEATURE: ReadonlyMap<TabId, DemoFeature> = new Map([
 ]);
 
 /**
+ * Where a bare "client" navigation lands: the public front door.
+ * The only client path this module names, and only as a fallback for a
+ * navigate("client") with no detail.
+ */
+const CLIENT_ENTRY_PATH = "/intake";
+
+/** Route-group name for the client portal, as it appears in route IDs. */
+const CLIENT_GROUP = "client";
+
+/** True when this feature renders outside AppShell, in the client shell. */
+export function isClientFeature(feature: DemoFeature | null): boolean {
+  return feature === "client";
+}
+
+/**
  * Map a DemoFeature and optional detail back to a pathname.
  * Used by navigate() (outer-page entry point) to set the
  * canonical pathname from feature+detail.
@@ -97,6 +116,11 @@ function featureToPathname(
       return "/more/schedule";
     case "settings":
       return "/more/settings";
+    case "client":
+      // The detail IS the client URL path ("intake", "intake/privacy",
+      // "account"). Kept generic rather than a case per page so a route
+      // added to the (client) group needs no edit here.
+      return detail !== null ? `/${detail}` : CLIENT_ENTRY_PATH;
     case "other":
       return currentPathname;
   }
@@ -181,6 +205,20 @@ function resolveFeature(pathname: string): {
       return { feature: "library", detail: sub ?? articleId, ctx };
     }
     return { feature: "library", detail: null, ctx };
+  }
+
+  // Nothing in the (app) nav tree claimed this path. Before calling it
+  // unknown, ask the manifest which group owns it: the (client) group
+  // renders outside AppShell and has no nav area, so resolveNavContext
+  // returns the same {null, null} it returns for the 404 catch-all.
+  //
+  // Classify by route group rather than by pathname so a route added to
+  // the (client) group is picked up without editing this function. The
+  // ctx stays as resolved (both null); the client shell has no tab or
+  // area for syncShellProps to set.
+  const match = matchRoute(pathname);
+  if (match !== null && routeGroupOf(match.routeId) === CLIENT_GROUP) {
+    return { feature: "client", detail: pathname.replace(/^\//, ""), ctx };
   }
 
   return { feature: null, detail: null, ctx };

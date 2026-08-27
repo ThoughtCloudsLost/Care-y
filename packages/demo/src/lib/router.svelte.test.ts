@@ -4,7 +4,11 @@ import {
   endSplitHandoff,
   splitHandoffId,
 } from "$lib/stores/split-handoff.svelte.js";
-import { DemoRouter } from "./router.svelte.js";
+import {
+  DemoRouter,
+  featureForPathname,
+  isClientFeature,
+} from "./router.svelte.js";
 import type * as RouteManifestNS from "$demo/engine/route-manifest.js";
 import type * as NavigationNS from "$app/navigation";
 import type * as AppStateNS from "$app/state";
@@ -91,81 +95,135 @@ vi.mock("$app/navigation", async (importOriginal) => ({
   goto: vi.fn(),
 }));
 
-// Mock route-manifest: router uses matchRoute in buildEndpoint
-vi.mock("$demo/engine/route-manifest.js", async (importOriginal) => ({
-  ...(await importOriginal<typeof RouteManifestNS>()),
-  matchRoute(pathname: string): {
-    params: Record<string, string>;
-    routeId: string;
-  } | null {
-    const ticketDetailMatch = /^\/tickets\/([^/]+)$/.exec(pathname);
-    if (ticketDetailMatch?.[1] !== undefined) {
-      return {
-        params: { id: ticketDetailMatch[1] },
-        routeId: "/(app)/tickets/[id]",
-      };
-    }
-    if (pathname === "/tickets") {
-      return { params: {}, routeId: "/(app)/tickets" };
-    }
-    if (pathname === "/") {
-      return { params: {}, routeId: "/(app)" };
-    }
-    if (pathname === "/admin") {
-      return { params: {}, routeId: "/(app)/admin" };
-    }
-    if (pathname === "/admin/people") {
-      return { params: {}, routeId: "/(app)/admin/people" };
-    }
-    if (pathname === "/admin/volunteer") {
-      return { params: {}, routeId: "/(app)/admin/volunteer" };
-    }
-    if (pathname === "/admin/manager") {
-      return { params: {}, routeId: "/(app)/admin/manager" };
-    }
-    if (pathname === "/admin/organization") {
-      return { params: {}, routeId: "/(app)/admin/organization" };
-    }
-    if (pathname === "/admin/communications") {
-      return { params: {}, routeId: "/(app)/admin/communications" };
-    }
-    if (pathname === "/more/settings") {
-      return { params: {}, routeId: "/(app)/more/settings" };
-    }
-    if (pathname === "/more/schedule") {
-      return { params: {}, routeId: "/(app)/more/schedule" };
-    }
-    if (pathname === "/library") {
-      return { params: {}, routeId: "/(app)/library" };
-    }
-    const libraryDetailMatch = /^\/library\/([^/]+)$/.exec(pathname);
-    if (libraryDetailMatch?.[1] !== undefined) {
-      return {
-        params: { articleId: libraryDetailMatch[1] },
-        routeId: "/(app)/library/[articleId]",
-      };
-    }
-    if (pathname === "/library/new") {
-      return { params: {}, routeId: "/(app)/library/new" };
-    }
-    const libraryEditMatch = /^\/library\/([^/]+)\/edit$/.exec(pathname);
-    if (libraryEditMatch?.[1] !== undefined) {
-      return {
-        params: { articleId: libraryEditMatch[1] },
-        routeId: "/(app)/library/[articleId]/edit",
-      };
-    }
-    // Simulate a manifest-known route that resolveFeature does not map.
-    // Used to test the "other" feature fallback for unmapped routes.
-    if (pathname === "/reports") {
-      return { params: {}, routeId: "/(app)/reports" };
-    }
-    return null;
-  },
-  listRouteIds(): string[] {
-    return ["/(app)/tickets", "/(app)/tickets/[id]", "/(app)/reports"];
-  },
-}));
+// Mock route-manifest: router uses matchRoute in buildEndpoint.
+//
+// Only the two glob-backed lookups are replaced, so the route table under
+// test stays a fixed list rather than whatever the filesystem holds. The
+// rest of the module comes through untouched: routeGroupOf is a pure
+// string parse the router calls on every unmapped path, and a hand-copied
+// version of it here would be free to drift from the real one.
+vi.mock("$demo/engine/route-manifest.js", async (importOriginal) => {
+  const actual = await importOriginal<typeof RouteManifestNS>();
+  return {
+    ...actual,
+    matchRoute,
+    listRouteIds,
+  };
+});
+
+function matchRoute(pathname: string): {
+  params: Record<string, string>;
+  routeId: string;
+} | null {
+  const ticketDetailMatch = /^\/tickets\/([^/]+)$/.exec(pathname);
+  if (ticketDetailMatch?.[1] !== undefined) {
+    return {
+      params: { id: ticketDetailMatch[1] },
+      routeId: "/(app)/tickets/[id]",
+    };
+  }
+  if (pathname === "/tickets") {
+    return { params: {}, routeId: "/(app)/tickets" };
+  }
+  if (pathname === "/") {
+    return { params: {}, routeId: "/(app)" };
+  }
+  if (pathname === "/admin") {
+    return { params: {}, routeId: "/(app)/admin" };
+  }
+  if (pathname === "/admin/people") {
+    return { params: {}, routeId: "/(app)/admin/people" };
+  }
+  if (pathname === "/admin/volunteer") {
+    return { params: {}, routeId: "/(app)/admin/volunteer" };
+  }
+  if (pathname === "/admin/manager") {
+    return { params: {}, routeId: "/(app)/admin/manager" };
+  }
+  if (pathname === "/admin/organization") {
+    return { params: {}, routeId: "/(app)/admin/organization" };
+  }
+  if (pathname === "/admin/communications") {
+    return { params: {}, routeId: "/(app)/admin/communications" };
+  }
+  if (pathname === "/more/settings") {
+    return { params: {}, routeId: "/(app)/more/settings" };
+  }
+  if (pathname === "/more/schedule") {
+    return { params: {}, routeId: "/(app)/more/schedule" };
+  }
+  if (pathname === "/library") {
+    return { params: {}, routeId: "/(app)/library" };
+  }
+  const libraryDetailMatch = /^\/library\/([^/]+)$/.exec(pathname);
+  if (libraryDetailMatch?.[1] !== undefined) {
+    return {
+      params: { articleId: libraryDetailMatch[1] },
+      routeId: "/(app)/library/[articleId]",
+    };
+  }
+  if (pathname === "/library/new") {
+    return { params: {}, routeId: "/(app)/library/new" };
+  }
+  const libraryEditMatch = /^\/library\/([^/]+)\/edit$/.exec(pathname);
+  if (libraryEditMatch?.[1] !== undefined) {
+    return {
+      params: { articleId: libraryEditMatch[1] },
+      routeId: "/(app)/library/[articleId]/edit",
+    };
+  }
+  // Simulate a manifest-known route that resolveFeature does not map.
+  // Used to test the "other" feature fallback for unmapped routes.
+  if (pathname === "/reports") {
+    return { params: {}, routeId: "/(app)/reports" };
+  }
+
+  // Client group. Nothing in the (app) nav tree claims these, so they are
+  // what exercises the route-group branch in resolveFeature: an (app)
+  // route that resolveFeature does not map falls to "other", a (client)
+  // one must reach "client" instead.
+  if (pathname === "/intake") {
+    return { params: {}, routeId: "/(client)/intake" };
+  }
+  if (pathname === "/intake/privacy") {
+    return { params: {}, routeId: "/(client)/intake/privacy" };
+  }
+  const intakeSlugMatch = /^\/intake\/([^/]+)$/.exec(pathname);
+  if (intakeSlugMatch?.[1] !== undefined) {
+    return {
+      params: { slug: intakeSlugMatch[1] },
+      routeId: "/(client)/intake/[slug]",
+    };
+  }
+  if (pathname === "/account") {
+    return { params: {}, routeId: "/(client)/account" };
+  }
+  const portalMatch = /^\/portal\/([^/]+)$/.exec(pathname);
+  if (portalMatch?.[1] !== undefined) {
+    return {
+      params: { channelId: portalMatch[1] },
+      routeId: "/(client)/portal/[channelId]",
+    };
+  }
+  const shareMatch = /^\/share\/([^/]+)$/.exec(pathname);
+  if (shareMatch?.[1] !== undefined) {
+    return {
+      params: { id: shareMatch[1] },
+      routeId: "/(client)/share/[id]",
+    };
+  }
+  return null;
+}
+
+function listRouteIds(): string[] {
+  return [
+    "/(app)/tickets",
+    "/(app)/tickets/[id]",
+    "/(app)/reports",
+    "/(client)/intake",
+    "/(client)/account",
+  ];
+}
 
 describe("DemoRouter", () => {
   let router: DemoRouter;
@@ -689,5 +747,64 @@ describe("DemoRouter", () => {
       router.reset();
       expect(router.routeId).toBeNull();
     });
+  });
+
+  describe("client group routing", () => {
+    it("resolves an intake path to the client feature", () => {
+      router.handleGoto("/intake");
+      expect(router.feature).toBe("client");
+      expect(router.detail).toBe("intake");
+      expect(router.routeId).toBe("/(client)/intake");
+    });
+
+    it("carries a nested client path through as the detail", () => {
+      router.handleGoto("/intake/privacy");
+      expect(router.feature).toBe("client");
+      expect(router.detail).toBe("intake/privacy");
+    });
+
+    it("resolves a parameterized portal path to the client feature", () => {
+      router.handleGoto("/portal/ch-abc123");
+      expect(router.feature).toBe("client");
+      expect(router.routeId).toBe("/(client)/portal/[channelId]");
+    });
+
+    it("does not fall through to the coming-soon other feature", () => {
+      // Before the (client) glob existed these paths matched nothing and
+      // landed on "other". Regressing to that would silently drop every
+      // client route back into the placeholder.
+      router.handleGoto("/account");
+      expect(router.feature).not.toBe("other");
+    });
+
+    it("leaves tab and area inert, since the client shell has neither", () => {
+      router.handleGoto("/intake");
+      expect(router.activeArea).toBeNull();
+    });
+
+    it("navigates to a client path built from the detail", () => {
+      router.navigate("client", "account");
+      expect(router.pathname).toBe("/account");
+    });
+
+    it("navigates to the public front door with no detail", () => {
+      router.navigate("client");
+      expect(router.pathname).toBe("/intake");
+    });
+
+    it("classifies client pathnames without a router instance", () => {
+      expect(featureForPathname("/intake")).toBe("client");
+      expect(featureForPathname("/share/sh-1")).toBe("client");
+      expect(featureForPathname("/tickets")).toBe("tickets");
+    });
+  });
+});
+
+describe("isClientFeature", () => {
+  it("is true only for the client feature", () => {
+    expect(isClientFeature("client")).toBe(true);
+    expect(isClientFeature("tickets")).toBe(false);
+    expect(isClientFeature("other")).toBe(false);
+    expect(isClientFeature(null)).toBe(false);
   });
 });
