@@ -16,7 +16,7 @@
 import { z } from "zod";
 import { base64String } from "./validators.js";
 import { queueIdSchema, userIdSchema, intakeFormIdSchema } from "../ids.js";
-import { KB_ATTACHMENT_MAX_BYTES } from "./kb.js";
+import { KB_ATTACHMENT_MAX_BYTES } from "./limits.js";
 
 // ---------------------------------------------------------------------------
 // Supported form content locales (tracks the app's paraglide locales)
