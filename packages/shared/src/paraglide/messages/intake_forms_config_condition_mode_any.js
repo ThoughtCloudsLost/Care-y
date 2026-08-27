@@ -10,7 +10,7 @@ const en_intake_forms_config_condition_mode_any = /** @type {(inputs: Intake_For
 };
 
 const es_intake_forms_config_condition_mode_any = /** @type {(inputs: Intake_Forms_Config_Condition_Mode_AnyInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Cualquier condicion se cumple`)
+	return /** @type {LocalizedString} */ (`Cualquier condición se cumple`)
 };
 
 /**

@@ -60,14 +60,22 @@ vi.mock("$lib/paraglide/messages.js", async (importOriginal) => ({
     "When set, this field only appears if conditions are met.",
   intake_forms_config_condition_mode_all: () => "All conditions must match",
   intake_forms_config_condition_mode_any: () => "Any condition matches",
+  intake_forms_config_condition_add_and: () => "Add AND condition",
+  intake_forms_config_condition_add_or: () => "Add OR condition",
   intake_forms_config_condition_add_rule: () => "Add condition",
   intake_forms_config_condition_remove_rule: () => "Remove condition",
+  intake_forms_config_condition_or_separator: () => "or",
   intake_forms_config_condition_field_label: () => "When field",
   intake_forms_config_condition_operator_label: () => "is",
   intake_forms_config_condition_value_label: () => "value",
   intake_forms_config_condition_op_equals: () => "equals",
+  intake_forms_config_condition_op_not_equals: () => "does not equal",
   intake_forms_config_condition_op_includes: () => "includes",
+  intake_forms_config_condition_op_not_includes: () => "does not include",
   intake_forms_config_condition_op_checked: () => "is checked",
+  intake_forms_config_condition_op_unchecked: () => "is unchecked",
+  intake_forms_config_condition_op_is_empty: () => "is empty",
+  intake_forms_config_condition_op_is_not_empty: () => "is not empty",
   intake_forms_config_condition_no_fields: () => "No earlier fields available.",
   intake_forms_page_break_title_label: () => "Page title (optional)",
   intake_forms_page_break_title_placeholder: () => "e.g. Contact information",
@@ -562,5 +570,229 @@ describe("IntakeFieldConfigSheet", () => {
     expect(result.isRequired).toBe(false);
     expect(result.role).toBeNull();
     expect(result.config.type).toBe("richText");
+  });
+
+  describe("conditional visibility v2", () => {
+    const selectEarlier = [
+      {
+        fieldKey: "sel-1",
+        label: "Dropdown",
+        fieldType: "select" as const,
+        options: [
+          { key: "a", label: "Alpha" },
+          { key: "b", label: "Beta" },
+        ],
+      },
+    ];
+
+    it("restores v2 visibleWhen into grouped state and emits v2 on done", async () => {
+      render(IntakeFieldConfigSheet, {
+        props: {
+          opened: true,
+          fieldType: "text",
+          initial: {
+            fieldType: "text" as const,
+            label: { en: "Name" },
+            helpText: {},
+            isRequired: false,
+            config: { type: "text" as const },
+            role: null,
+            escalationRecipientIds: null,
+            visibleWhen: {
+              version: 2 as const,
+              groups: [
+                [
+                  {
+                    fieldKey: "sel-1",
+                    operator: "equals" as const,
+                    optionKey: "a",
+                  },
+                ],
+              ],
+            },
+          },
+          queues: TEST_QUEUES,
+          volunteers: TEST_VOLUNTEERS,
+          editingLocale: "en",
+          earlierFields: selectEarlier,
+          ondone,
+          ondismiss: vi.fn(),
+        },
+      });
+
+      // The condition toggle should be on (condition restored)
+      const doneBtn = screen.getByText("Done");
+      await fireEvent.click(doneBtn);
+
+      expect(capturedResult).not.toBeNull();
+      const vw = capturedResult?.visibleWhen;
+      expect(vw).toBeDefined();
+      // Must emit v2 shape (has version and groups, never mode/rules)
+      expect(vw).toHaveProperty("version", 2);
+      expect(vw).toHaveProperty("groups");
+      expect(vw).not.toHaveProperty("mode");
+      expect(vw).not.toHaveProperty("rules");
+    });
+
+    it("normalizes v1 all-mode into a single v2 group on restore", async () => {
+      render(IntakeFieldConfigSheet, {
+        props: {
+          opened: true,
+          fieldType: "text",
+          initial: {
+            fieldType: "text" as const,
+            label: { en: "Name" },
+            helpText: {},
+            isRequired: false,
+            config: { type: "text" as const },
+            role: null,
+            escalationRecipientIds: null,
+            visibleWhen: {
+              mode: "all" as const,
+              rules: [
+                {
+                  fieldKey: "sel-1",
+                  operator: "equals" as const,
+                  optionKey: "a",
+                },
+                {
+                  fieldKey: "sel-1",
+                  operator: "equals" as const,
+                  optionKey: "b",
+                },
+              ],
+            },
+          },
+          queues: TEST_QUEUES,
+          volunteers: TEST_VOLUNTEERS,
+          editingLocale: "en",
+          earlierFields: selectEarlier,
+          ondone,
+          ondismiss: vi.fn(),
+        },
+      });
+
+      await fireEvent.click(screen.getByText("Done"));
+
+      expect(capturedResult).not.toBeNull();
+      const vw = capturedResult?.visibleWhen;
+      expect(vw).toHaveProperty("version", 2);
+      // v1 all-mode: all rules in one group
+      if (vw != null && "groups" in vw) {
+        expect(vw.groups).toHaveLength(1);
+        expect(vw.groups[0]).toHaveLength(2);
+      }
+    });
+
+    it("normalizes v1 any-mode into one group per rule on restore", async () => {
+      render(IntakeFieldConfigSheet, {
+        props: {
+          opened: true,
+          fieldType: "text",
+          initial: {
+            fieldType: "text" as const,
+            label: { en: "Name" },
+            helpText: {},
+            isRequired: false,
+            config: { type: "text" as const },
+            role: null,
+            escalationRecipientIds: null,
+            visibleWhen: {
+              mode: "any" as const,
+              rules: [
+                {
+                  fieldKey: "sel-1",
+                  operator: "equals" as const,
+                  optionKey: "a",
+                },
+                {
+                  fieldKey: "sel-1",
+                  operator: "equals" as const,
+                  optionKey: "b",
+                },
+              ],
+            },
+          },
+          queues: TEST_QUEUES,
+          volunteers: TEST_VOLUNTEERS,
+          editingLocale: "en",
+          earlierFields: selectEarlier,
+          ondone,
+          ondismiss: vi.fn(),
+        },
+      });
+
+      await fireEvent.click(screen.getByText("Done"));
+
+      expect(capturedResult).not.toBeNull();
+      const vw = capturedResult?.visibleWhen;
+      expect(vw).toHaveProperty("version", 2);
+      // v1 any-mode: each rule becomes its own group
+      if (vw != null && "groups" in vw) {
+        expect(vw.groups).toHaveLength(2);
+        expect(vw.groups[0]).toHaveLength(1);
+        expect(vw.groups[1]).toHaveLength(1);
+      }
+    });
+
+    it("emits undefined visibleWhen when condition is not enabled", async () => {
+      render(IntakeFieldConfigSheet, {
+        props: {
+          opened: true,
+          fieldType: "select",
+          initial: baseInitial(),
+          queues: TEST_QUEUES,
+          volunteers: TEST_VOLUNTEERS,
+          editingLocale: "en",
+          earlierFields: selectEarlier,
+          ondone,
+          ondismiss: vi.fn(),
+        },
+      });
+
+      await fireEvent.click(screen.getByText("Done"));
+
+      expect(capturedResult).not.toBeNull();
+      expect(capturedResult?.visibleWhen).toBeUndefined();
+    });
+
+    it("shows AND and OR buttons when conditions are enabled", async () => {
+      render(IntakeFieldConfigSheet, {
+        props: {
+          opened: true,
+          fieldType: "text",
+          initial: {
+            fieldType: "text" as const,
+            label: { en: "Name" },
+            helpText: {},
+            isRequired: false,
+            config: { type: "text" as const },
+            role: null,
+            escalationRecipientIds: null,
+            visibleWhen: {
+              version: 2 as const,
+              groups: [
+                [
+                  {
+                    fieldKey: "sel-1",
+                    operator: "equals" as const,
+                    optionKey: "a",
+                  },
+                ],
+              ],
+            },
+          },
+          queues: TEST_QUEUES,
+          volunteers: TEST_VOLUNTEERS,
+          editingLocale: "en",
+          earlierFields: selectEarlier,
+          ondone,
+          ondismiss: vi.fn(),
+        },
+      });
+
+      expect(screen.getByText("Add AND condition")).toBeTruthy();
+      expect(screen.getByText("Add OR condition")).toBeTruthy();
+    });
   });
 });

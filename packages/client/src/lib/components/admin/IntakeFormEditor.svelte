@@ -42,6 +42,7 @@
   } from "@tanstack/svelte-query";
   import {
     resolveLocalized,
+    normalizeVisibleWhen,
     BASE_LOCALE,
     FORM_LOCALES,
     KB_ATTACHMENT_MAX_BYTES,
@@ -99,6 +100,8 @@
     validateFieldBodyCap as validateFieldBodyCapPure,
     richTextBodyPreview as richTextBodyPreviewPure,
     resolveRichPreview,
+    cleanStaleVisibilityRules,
+    CONDITION_DRIVER_TYPES,
     RICH_TEXT_LOCALE_CAP,
     type ContentCapErrors,
     type ContentCapField,
@@ -564,39 +567,50 @@
     }
   }
 
+  /**
+   * Sweep all fields and clean stale visibility rules. After reorder or
+   * delete, a rule may reference a field that is no longer eligible
+   * (removed, moved after the dependent field, or changed type).
+   */
+  function sweepStaleConditions(fieldList: PlaintextField[]): PlaintextField[] {
+    return fieldList.map((f, i) => {
+      if (f.visibleWhen == null) return f;
+      const cleaned = cleanStaleVisibilityRules(f.visibleWhen, i, fieldList);
+      if (cleaned === f.visibleWhen) return f;
+      return { ...f, visibleWhen: cleaned };
+    });
+  }
+
   function moveField(index: number, direction: -1 | 1): void {
     const swapTarget = index + direction;
     if (swapTarget < 0 || swapTarget >= fields.length) return;
     const src = fields.at(index);
     const dst = fields.at(swapTarget);
     if (src === undefined || dst === undefined) return;
-    fields = fields.map((f, i) => {
+    const swapped = fields.map((f, i) => {
       if (i === index) return dst;
       if (i === swapTarget) return src;
       return f;
     });
+    fields = sweepStaleConditions(swapped);
   }
 
   function removeField(index: number): void {
-    fields = fields.filter((_, i) => i !== index);
+    const remaining = fields.filter((_, i) => i !== index);
+    fields = sweepStaleConditions(remaining);
   }
 
   /**
    * Build the list of earlier fields eligible for conditional visibility rules.
-   * Only select, multiselect, and checkbox fields appearing before the given
-   * index qualify.
+   * Only fields whose type is in CONDITION_DRIVER_TYPES appearing before the
+   * given index qualify.
    */
   function buildEarlierFields(beforeIndex: number): EarlierFieldOption[] {
     const result: EarlierFieldOption[] = [];
     for (let i = 0; i < beforeIndex && i < fields.length; i++) {
       const f = fields.at(i);
       if (f === undefined) continue;
-      if (
-        f.fieldType !== "select" &&
-        f.fieldType !== "multiselect" &&
-        f.fieldType !== "checkbox"
-      )
-        continue;
+      if (!CONDITION_DRIVER_TYPES.has(f.fieldType)) continue;
       const label = resolveLocalized(f.label, BASE_LOCALE) ?? f.fieldKey;
       const cfg = f.config;
       let fieldOptions: { key: string; label: string }[] | undefined;
@@ -616,7 +630,11 @@
     return result;
   }
 
-  let configEarlierFields = $state<EarlierFieldOption[]>([]);
+  /** Reactively derived from fields + the open sheet's index so mid-session
+   *  reorders and renames are reflected without the snapshot staleness bug. */
+  const configEarlierFields = $derived(
+    configFieldIndex >= 0 ? buildEarlierFields(configFieldIndex) : [],
+  );
 
   function openConfigSheet(index: number, isNew = false): void {
     const field = fields.at(index);
@@ -624,7 +642,6 @@
     configFieldIsNew = isNew;
     configFieldIndex = index;
     configFieldType = field.fieldType;
-    configEarlierFields = buildEarlierFields(index);
     configFieldInitial = {
       fieldType: field.fieldType,
       label: { ...field.label },
@@ -652,9 +669,9 @@
     configSheetOpened = false;
     configFieldIsNew = false;
     if (configFieldIndex >= 0 && configFieldIndex < fields.length) {
-      fields = fields.map((f, i) => {
+      const updated = fields.map((f, i) => {
         if (i !== configFieldIndex) return f;
-        const updated: PlaintextField = {
+        const patched: PlaintextField = {
           fieldKey: f.fieldKey,
           fieldType: result.fieldType,
           label: result.label,
@@ -666,8 +683,10 @@
           escalationRecipientIds: result.escalationRecipientIds,
           visibleWhen: result.visibleWhen,
         };
-        return updated;
+        return patched;
       });
+      // Type change on the saved field may invalidate rules on later fields.
+      fields = sweepStaleConditions(updated);
     }
   }
 
@@ -789,19 +808,21 @@
       );
     }
 
-    // Condition dependency
-    const firstRule =
-      field.visibleWhen != null && field.visibleWhen.rules.length > 0
-        ? field.visibleWhen.rules.at(0)
-        : undefined;
-    if (firstRule != null) {
-      const depKey = firstRule.fieldKey;
-      const depField = fields.find((f) => f.fieldKey === depKey);
-      const depLabel =
-        depField != null
-          ? (resolveLocalized(depField.label, BASE_LOCALE) ?? depField.fieldKey)
-          : depKey;
-      parts.push(m.intake_forms_field_row_conditional({ field: depLabel }));
+    // Condition dependency (v2 shape: groups of rules)
+    if (field.visibleWhen != null) {
+      const v2 = normalizeVisibleWhen(field.visibleWhen);
+      const firstGroup = v2.groups.at(0);
+      const firstRule = firstGroup?.at(0);
+      if (firstRule != null) {
+        const depKey = firstRule.fieldKey;
+        const depField = fields.find((f) => f.fieldKey === depKey);
+        const depLabel =
+          depField != null
+            ? (resolveLocalized(depField.label, BASE_LOCALE) ??
+              depField.fieldKey)
+            : depKey;
+        parts.push(m.intake_forms_field_row_conditional({ field: depLabel }));
+      }
     }
 
     // Type-specific config

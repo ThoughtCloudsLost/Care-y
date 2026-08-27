@@ -31,6 +31,7 @@
     textSubtypeSchema,
     visibilityOperatorSchema,
     resolveLocalized,
+    normalizeVisibleWhen,
     BASE_LOCALE,
     FORM_LOCALES,
     type IntakeFieldConfig,
@@ -70,7 +71,11 @@
     VolunteerOption,
     EarlierFieldOption,
   } from "./intake-field-config-types.js";
-  import type { VisibleWhen, VisibilityRule } from "@care-y/shared";
+  import type {
+    VisibleWhenV2,
+    VisibilityRule,
+    VisibilityOperator,
+  } from "@care-y/shared";
 
   interface IntakeFieldConfigSheetProps {
     readonly opened: boolean;
@@ -139,17 +144,22 @@
 
   let atLeastOneError = $state("");
 
-  // Conditional visibility state
+  // Conditional visibility state (v2: OR-of-AND groups)
   let conditionEnabled = $state(false);
-  let conditionMode = $state<"all" | "any">("all");
-  let conditionRules = $state<
-    {
-      fieldKey: string;
-      operator: "equals" | "includes" | "checked";
-      optionKey: string;
-      boolValue: boolean;
-    }[]
-  >([]);
+
+  /** Local mutable rule shape used in the condition editor. */
+  interface ConditionRule {
+    fieldKey: string;
+    operator: VisibilityOperator;
+    optionKey: string;
+    boolValue: boolean;
+  }
+
+  /** Max 10 OR-groups, max 20 AND-rules per group (schema caps). */
+  const MAX_GROUPS = 10;
+  const MAX_RULES_PER_GROUP = 20;
+
+  let conditionGroups = $state<ConditionRule[][]>([]);
 
   // Page break state
   let pageBreakTitle = $state<LocalizedText>({});
@@ -198,20 +208,21 @@
           ? [...initial.escalationRecipientIds]
           : [];
 
-      // Restore conditional visibility
+      // Restore conditional visibility (normalize v1 to v2 defensively)
       if (initial.visibleWhen != null) {
+        const v2 = normalizeVisibleWhen(initial.visibleWhen);
         conditionEnabled = true;
-        conditionMode = initial.visibleWhen.mode;
-        conditionRules = initial.visibleWhen.rules.map((r) => ({
-          fieldKey: r.fieldKey,
-          operator: r.operator,
-          optionKey: r.optionKey ?? "",
-          boolValue: r.boolValue ?? true,
-        }));
+        conditionGroups = v2.groups.map((group) =>
+          group.map((r) => ({
+            fieldKey: r.fieldKey,
+            operator: r.operator,
+            optionKey: r.optionKey ?? "",
+            boolValue: r.boolValue ?? true,
+          })),
+        );
       } else {
         conditionEnabled = false;
-        conditionMode = "all";
-        conditionRules = [];
+        conditionGroups = [];
       }
 
       restoreConfigState(initial.config);
@@ -710,78 +721,166 @@
     return ids.size > 0 ? [...ids] : null;
   }
 
-  /** Build visibleWhen from the condition editor state. */
-  function buildVisibleWhen(): VisibleWhen | undefined {
-    if (!conditionEnabled || conditionRules.length === 0) return undefined;
-    const rules: VisibilityRule[] = conditionRules
-      .filter((r) => r.fieldKey !== "")
-      .map((r) => {
-        const base: VisibilityRule = {
-          fieldKey: r.fieldKey,
-          operator: r.operator,
-        };
-        if (r.operator === "equals" || r.operator === "includes") {
-          return { ...base, optionKey: r.optionKey };
-        }
-        return { ...base, boolValue: r.boolValue };
-      });
-    if (rules.length === 0) return undefined;
-    return { mode: conditionMode, rules };
+  /** Build a v2 visibleWhen from the condition editor groups. */
+  function buildVisibleWhen(): VisibleWhenV2 | undefined {
+    if (!conditionEnabled || conditionGroups.length === 0) return undefined;
+
+    const groups: VisibilityRule[][] = [];
+    for (const group of conditionGroups) {
+      const rules: VisibilityRule[] = group
+        .filter((r) => r.fieldKey !== "")
+        .map((r): VisibilityRule => {
+          const base: Pick<VisibilityRule, "fieldKey" | "operator"> = {
+            fieldKey: r.fieldKey,
+            operator: r.operator,
+          };
+          if (
+            r.operator === "equals" ||
+            r.operator === "notEquals" ||
+            r.operator === "includes" ||
+            r.operator === "notIncludes"
+          ) {
+            return { ...base, optionKey: r.optionKey };
+          }
+          if (r.operator === "checked") {
+            return { ...base, boolValue: r.boolValue };
+          }
+          // isEmpty / isNotEmpty carry neither optionKey nor boolValue
+          return base;
+        });
+      if (rules.length > 0) {
+        groups.push(rules);
+      }
+    }
+
+    if (groups.length === 0) return undefined;
+    return { version: 2, groups };
   }
 
-  /** Add a new empty condition rule. */
-  function addConditionRule(): void {
-    conditionRules = [
-      ...conditionRules,
-      { fieldKey: "", operator: "equals", optionKey: "", boolValue: true },
-    ];
+  /** Default empty rule for new conditions. */
+  function emptyRule(): ConditionRule {
+    return { fieldKey: "", operator: "equals", optionKey: "", boolValue: true };
   }
 
-  /** Remove a condition rule by index. */
-  function removeConditionRule(index: number): void {
-    conditionRules = conditionRules.filter((_, i) => i !== index);
-  }
-
-  /** Update a condition rule field selection. */
-  function handleConditionFieldChange(index: number, e: Event): void {
-    const target = e.target;
-    if (target instanceof HTMLSelectElement) {
-      const fk = target.value;
-      const ef = earlierFields.find((f) => f.fieldKey === fk);
-      // Auto-select operator based on field type
-      const op =
-        ef?.fieldType === "checkbox"
-          ? "checked"
-          : ef?.fieldType === "multiselect"
-            ? "includes"
-            : "equals";
-      conditionRules = conditionRules.map((r, i) =>
-        i === index
-          ? { ...r, fieldKey: fk, operator: op, optionKey: "", boolValue: true }
-          : r,
-      );
+  /** Auto-select the default operator for a field type. */
+  function defaultOperatorForType(
+    ft: IntakeFieldType | undefined,
+  ): VisibilityOperator {
+    switch (ft) {
+      case "checkbox":
+        return "checked";
+      case "multiselect":
+        return "includes";
+      case "text":
+      case "textarea":
+      case "date":
+        return "isNotEmpty";
+      case "select":
+      case "availability":
+      case "pageBreak":
+      case "richText":
+      case undefined:
+        return "equals";
     }
   }
 
+  /** Add an AND-rule to the last group (or create the first group). */
+  function addAndCondition(): void {
+    if (conditionGroups.length === 0) {
+      conditionGroups = [[emptyRule()]];
+      return;
+    }
+    const lastIdx = conditionGroups.length - 1;
+    const lastGroup = conditionGroups.at(lastIdx);
+    if (lastGroup === undefined) return;
+    if (lastGroup.length >= MAX_RULES_PER_GROUP) return;
+    conditionGroups = conditionGroups.map((g, i) =>
+      i === lastIdx ? [...g, emptyRule()] : g,
+    );
+  }
+
+  /** Start a new OR-group with one empty rule. */
+  function addOrCondition(): void {
+    if (conditionGroups.length >= MAX_GROUPS) return;
+    conditionGroups = [...conditionGroups, [emptyRule()]];
+  }
+
+  /** Remove a rule from a group. Drops the group when empty. */
+  function removeConditionRule(groupIdx: number, ruleIdx: number): void {
+    const updated = conditionGroups
+      .map((g, gi) => {
+        if (gi !== groupIdx) return g;
+        return g.filter((_, ri) => ri !== ruleIdx);
+      })
+      .filter((g) => g.length > 0);
+    conditionGroups = updated;
+  }
+
+  /** Total rule count across all groups. */
+  const totalRuleCount = $derived(
+    conditionGroups.reduce((sum, g) => sum + g.length, 0),
+  );
+
+  /** Whether the last group has hit its per-group cap. */
+  const lastGroupAtCap = $derived.by((): boolean => {
+    if (conditionGroups.length === 0) return false;
+    const last = conditionGroups.at(conditionGroups.length - 1);
+    return last !== undefined && last.length >= MAX_RULES_PER_GROUP;
+  });
+
+  /** Update a condition rule field selection. */
+  function handleConditionFieldChange(
+    groupIdx: number,
+    ruleIdx: number,
+    e: Event,
+  ): void {
+    const target = e.target;
+    if (!(target instanceof HTMLSelectElement)) return;
+    const fk = target.value;
+    const ef = earlierFields.find((f) => f.fieldKey === fk);
+    const op = defaultOperatorForType(ef?.fieldType);
+    conditionGroups = conditionGroups.map((g, gi) => {
+      if (gi !== groupIdx) return g;
+      return g.map((r, ri) =>
+        ri === ruleIdx
+          ? { ...r, fieldKey: fk, operator: op, optionKey: "", boolValue: true }
+          : r,
+      );
+    });
+  }
+
   /** Update a condition rule operator. */
-  function handleConditionOperatorChange(index: number, e: Event): void {
+  function handleConditionOperatorChange(
+    groupIdx: number,
+    ruleIdx: number,
+    e: Event,
+  ): void {
     const target = e.target;
     if (!(target instanceof HTMLSelectElement)) return;
     const parsed = visibilityOperatorSchema.safeParse(target.value);
     if (!parsed.success) return;
-    conditionRules = conditionRules.map((r, i) =>
-      i === index ? { ...r, operator: parsed.data } : r,
-    );
+    conditionGroups = conditionGroups.map((g, gi) => {
+      if (gi !== groupIdx) return g;
+      return g.map((r, ri) =>
+        ri === ruleIdx ? { ...r, operator: parsed.data } : r,
+      );
+    });
   }
 
   /** Update a condition rule option key value. */
-  function handleConditionValueChange(index: number, e: Event): void {
+  function handleConditionValueChange(
+    groupIdx: number,
+    ruleIdx: number,
+    e: Event,
+  ): void {
     const target = e.target;
-    if (target instanceof HTMLSelectElement) {
-      conditionRules = conditionRules.map((r, i) =>
-        i === index ? { ...r, optionKey: target.value } : r,
+    if (!(target instanceof HTMLSelectElement)) return;
+    conditionGroups = conditionGroups.map((g, gi) => {
+      if (gi !== groupIdx) return g;
+      return g.map((r, ri) =>
+        ri === ruleIdx ? { ...r, optionKey: target.value } : r,
       );
-    }
+    });
   }
 
   /** Get options for a referenced earlier field. */
@@ -1206,7 +1305,7 @@
     </p>
   {/if}
 
-  <!-- Conditional visibility builder -->
+  <!-- Conditional visibility builder (v2: OR-of-AND groups) -->
   {#if earlierFields.length > 0}
     <BlockTitle>{m.intake_forms_config_condition_heading()}</BlockTitle>
     <List strong inset>
@@ -1216,8 +1315,8 @@
             checked={conditionEnabled}
             onChange={() => {
               conditionEnabled = !conditionEnabled;
-              if (conditionEnabled && conditionRules.length === 0) {
-                addConditionRule();
+              if (conditionEnabled && conditionGroups.length === 0) {
+                addAndCondition();
               }
             }}
           />
@@ -1227,95 +1326,155 @@
     <p class="mapping-hint">{m.intake_forms_config_condition_hint()}</p>
 
     {#if conditionEnabled}
-      <List strong inset>
-        <ListInput
-          label={m.intake_forms_config_condition_operator_label()}
-          type="select"
-          dropdown
-          value={conditionMode}
-          onChange={(e: Event) => {
-            const target = e.target;
-            if (target instanceof HTMLSelectElement) {
-              conditionMode = target.value === "any" ? "any" : "all";
-            }
-          }}
-        >
-          <option value="all"
-            >{m.intake_forms_config_condition_mode_all()}</option
-          >
-          <option value="any"
-            >{m.intake_forms_config_condition_mode_any()}</option
-          >
-        </ListInput>
-      </List>
-
-      {#each conditionRules as rule, ruleIndex (ruleIndex)}
-        <List strong inset>
-          <ListInput
-            label={m.intake_forms_config_condition_field_label()}
-            type="select"
-            dropdown
-            value={rule.fieldKey}
-            onChange={(e: Event) => handleConditionFieldChange(ruleIndex, e)}
-          >
-            <option value="">---</option>
-            {#each earlierFields as ef (ef.fieldKey)}
-              <option value={ef.fieldKey}>{ef.label}</option>
-            {/each}
-          </ListInput>
-
-          {#if rule.fieldKey !== ""}
-            {#if getFieldType(rule.fieldKey) !== "checkbox"}
-              <ListInput
-                label={m.intake_forms_config_condition_operator_label()}
-                type="select"
-                dropdown
-                value={rule.operator}
-                onChange={(e: Event) =>
-                  handleConditionOperatorChange(ruleIndex, e)}
-              >
-                <option value="equals"
-                  >{m.intake_forms_config_condition_op_equals()}</option
-                >
-                <option value="includes"
-                  >{m.intake_forms_config_condition_op_includes()}</option
-                >
-              </ListInput>
-            {/if}
-
-            {#if rule.operator === "equals" || rule.operator === "includes"}
-              <ListInput
-                label={m.intake_forms_config_condition_value_label()}
-                type="select"
-                dropdown
-                value={rule.optionKey}
-                onChange={(e: Event) =>
-                  handleConditionValueChange(ruleIndex, e)}
-              >
-                <option value="">---</option>
-                {#each getFieldOptions(rule.fieldKey) as opt (opt.key)}
-                  <option value={opt.key}>{opt.label}</option>
-                {/each}
-              </ListInput>
-            {/if}
-          {/if}
-        </List>
-        {#if conditionRules.length > 1}
-          <div class="config-action">
-            <Button
-              small
-              clear
-              onclick={() => removeConditionRule(ruleIndex)}
-              aria-label={m.intake_forms_config_condition_remove_rule()}
-            >
-              {m.intake_forms_config_condition_remove_rule()}
-            </Button>
-          </div>
+      {#each conditionGroups as group, groupIdx (groupIdx)}
+        {#if groupIdx > 0}
+          <p class="condition-or-separator">
+            {m.intake_forms_config_condition_or_separator()}
+          </p>
         {/if}
+        <List strong inset>
+          {#each group as rule, ruleIdx (ruleIdx)}
+            <ListInput
+              label={m.intake_forms_config_condition_field_label()}
+              type="select"
+              dropdown
+              value={rule.fieldKey}
+              onChange={(e: Event) =>
+                handleConditionFieldChange(groupIdx, ruleIdx, e)}
+            >
+              <option value="">---</option>
+              {#each earlierFields as ef (ef.fieldKey)}
+                <option value={ef.fieldKey}>{ef.label}</option>
+              {/each}
+            </ListInput>
+
+            {#if rule.fieldKey !== ""}
+              {@const driverType = getFieldType(rule.fieldKey)}
+              {#if driverType === "select"}
+                <ListInput
+                  label={m.intake_forms_config_condition_operator_label()}
+                  type="select"
+                  dropdown
+                  value={rule.operator}
+                  onChange={(e: Event) =>
+                    handleConditionOperatorChange(groupIdx, ruleIdx, e)}
+                >
+                  <option value="equals"
+                    >{m.intake_forms_config_condition_op_equals()}</option
+                  >
+                  <option value="notEquals"
+                    >{m.intake_forms_config_condition_op_not_equals()}</option
+                  >
+                </ListInput>
+              {:else if driverType === "multiselect"}
+                <ListInput
+                  label={m.intake_forms_config_condition_operator_label()}
+                  type="select"
+                  dropdown
+                  value={rule.operator}
+                  onChange={(e: Event) =>
+                    handleConditionOperatorChange(groupIdx, ruleIdx, e)}
+                >
+                  <option value="includes"
+                    >{m.intake_forms_config_condition_op_includes()}</option
+                  >
+                  <option value="notIncludes"
+                    >{m.intake_forms_config_condition_op_not_includes()}</option
+                  >
+                </ListInput>
+              {:else if driverType === "text" || driverType === "textarea" || driverType === "date"}
+                <ListInput
+                  label={m.intake_forms_config_condition_operator_label()}
+                  type="select"
+                  dropdown
+                  value={rule.operator}
+                  onChange={(e: Event) =>
+                    handleConditionOperatorChange(groupIdx, ruleIdx, e)}
+                >
+                  <option value="isEmpty"
+                    >{m.intake_forms_config_condition_op_is_empty()}</option
+                  >
+                  <option value="isNotEmpty"
+                    >{m.intake_forms_config_condition_op_is_not_empty()}</option
+                  >
+                </ListInput>
+              {/if}
+              <!-- checkbox: no operator picker (toggle polarity below) -->
+
+              {#if rule.operator === "equals" || rule.operator === "notEquals" || rule.operator === "includes" || rule.operator === "notIncludes"}
+                <ListInput
+                  label={m.intake_forms_config_condition_value_label()}
+                  type="select"
+                  dropdown
+                  value={rule.optionKey}
+                  onChange={(e: Event) =>
+                    handleConditionValueChange(groupIdx, ruleIdx, e)}
+                >
+                  <option value="">---</option>
+                  {#each getFieldOptions(rule.fieldKey) as opt (opt.key)}
+                    <option value={opt.key}>{opt.label}</option>
+                  {/each}
+                </ListInput>
+              {/if}
+
+              {#if driverType === "checkbox"}
+                <ListItem
+                  title={rule.boolValue
+                    ? m.intake_forms_config_condition_op_checked()
+                    : m.intake_forms_config_condition_op_unchecked()}
+                >
+                  {#snippet after()}
+                    <Toggle
+                      checked={rule.boolValue}
+                      onChange={() => {
+                        conditionGroups = conditionGroups.map((g, gi) => {
+                          if (gi !== groupIdx) return g;
+                          return g.map((r, ri) =>
+                            ri === ruleIdx
+                              ? { ...r, boolValue: !r.boolValue }
+                              : r,
+                          );
+                        });
+                      }}
+                    />
+                  {/snippet}
+                </ListItem>
+              {/if}
+            {/if}
+
+            {#if totalRuleCount > 1}
+              <ListItem>
+                {#snippet inner()}
+                  <Button
+                    small
+                    clear
+                    onclick={() => removeConditionRule(groupIdx, ruleIdx)}
+                    aria-label={m.intake_forms_config_condition_remove_rule()}
+                  >
+                    {m.intake_forms_config_condition_remove_rule()}
+                  </Button>
+                {/snippet}
+              </ListItem>
+            {/if}
+          {/each}
+        </List>
       {/each}
-      <div class="config-action">
-        <Button small outline onclick={addConditionRule}>
-          {m.intake_forms_config_condition_add_rule()}
+      <div class="config-action condition-buttons">
+        <Button
+          small
+          outline
+          onclick={addAndCondition}
+          disabled={lastGroupAtCap}
+        >
+          {m.intake_forms_config_condition_add_and()}
+        </Button>
+        <Button
+          small
+          outline
+          onclick={addOrCondition}
+          disabled={conditionGroups.length >= MAX_GROUPS}
+        >
+          {m.intake_forms_config_condition_add_or()}
         </Button>
       </div>
     {/if}
@@ -1345,5 +1504,21 @@
   .rich-text-editor-wrapper {
     padding: 0 var(--space-lg);
     margin-top: var(--space-sm);
+  }
+
+  .condition-or-separator {
+    text-align: center;
+    font-size: var(--text-sm);
+    font-weight: 600;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin: var(--space-sm) 0;
+  }
+
+  .condition-buttons {
+    display: flex;
+    gap: var(--space-sm);
+    margin-bottom: var(--space-md);
   }
 </style>

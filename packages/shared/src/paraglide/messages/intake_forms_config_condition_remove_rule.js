@@ -10,7 +10,7 @@ const en_intake_forms_config_condition_remove_rule = /** @type {(inputs: Intake_
 };
 
 const es_intake_forms_config_condition_remove_rule = /** @type {(inputs: Intake_Forms_Config_Condition_Remove_RuleInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Eliminar condicion`)
+	return /** @type {LocalizedString} */ (`Eliminar condición`)
 };
 
 /**

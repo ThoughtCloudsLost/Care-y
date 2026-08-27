@@ -10,7 +10,7 @@ const en_intake_forms_config_condition_heading = /** @type {(inputs: Intake_Form
 };
 
 const es_intake_forms_config_condition_heading = /** @type {(inputs: Intake_Forms_Config_Condition_HeadingInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Condicion de visibilidad`)
+	return /** @type {LocalizedString} */ (`Condición de visibilidad`)
 };
 
 /**

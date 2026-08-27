@@ -10,6 +10,7 @@ import {
   richTextBodyPreview,
   resolveRichPreview,
   isUnknownArray,
+  cleanStaleVisibilityRules,
   RICH_TEXT_LOCALE_CAP,
   type ContentCapErrors,
 } from "./intake-form-editor-logic.js";
@@ -460,5 +461,149 @@ describe("isUnknownArray", () => {
     expect(isUnknownArray("string")).toBe(false);
     expect(isUnknownArray(null)).toBe(false);
     expect(isUnknownArray({})).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// cleanStaleVisibilityRules
+// ---------------------------------------------------------------------------
+
+describe("cleanStaleVisibilityRules", () => {
+  function selectField(key: string): PlaintextField {
+    return {
+      fieldKey: key,
+      label: { en: key },
+      helpText: {},
+      isRequired: false,
+      config: {
+        type: "select",
+        options: [{ key: "a", label: { en: "A" } }],
+      },
+      fieldType: "select",
+      role: null,
+      routingQueueIds: null,
+      escalationRecipientIds: null,
+    };
+  }
+
+  function textField(key: string): PlaintextField {
+    return {
+      fieldKey: key,
+      label: { en: key },
+      helpText: {},
+      isRequired: false,
+      config: { type: "text" },
+      fieldType: "text",
+      role: null,
+      routingQueueIds: null,
+      escalationRecipientIds: null,
+    };
+  }
+
+  it("returns undefined for undefined input", () => {
+    expect(
+      cleanStaleVisibilityRules(undefined, 1, [selectField("f1")]),
+    ).toBeUndefined();
+  });
+
+  it("keeps rules referencing eligible earlier fields", () => {
+    const fields = [selectField("f1"), selectField("f2")];
+    const vw = {
+      version: 2 as const,
+      groups: [
+        [{ fieldKey: "f1", operator: "equals" as const, optionKey: "a" }],
+      ],
+    };
+    const result = cleanStaleVisibilityRules(vw, 1, fields);
+    expect(result).toEqual(vw);
+  });
+
+  it("drops rules whose fieldKey is not in an earlier position", () => {
+    const fields = [selectField("f1"), selectField("f2")];
+    const vw = {
+      version: 2 as const,
+      groups: [
+        [{ fieldKey: "f2", operator: "equals" as const, optionKey: "a" }],
+      ],
+    };
+    // f2 is at index 1, so when cleaning for index 1, f2 is NOT earlier
+    const result = cleanStaleVisibilityRules(vw, 1, fields);
+    expect(result).toBeUndefined();
+  });
+
+  it("drops rules whose fieldKey references a removed field", () => {
+    const fields = [selectField("f1")];
+    const vw = {
+      version: 2 as const,
+      groups: [
+        [{ fieldKey: "gone", operator: "equals" as const, optionKey: "x" }],
+      ],
+    };
+    const result = cleanStaleVisibilityRules(vw, 1, fields);
+    expect(result).toBeUndefined();
+  });
+
+  it("drops empty groups but keeps non-empty ones", () => {
+    const fields = [selectField("f1"), selectField("f2"), selectField("f3")];
+    const vw = {
+      version: 2 as const,
+      groups: [
+        [{ fieldKey: "f1", operator: "equals" as const, optionKey: "a" }],
+        [{ fieldKey: "gone", operator: "equals" as const, optionKey: "x" }],
+      ],
+    };
+    const result = cleanStaleVisibilityRules(vw, 2, fields);
+    expect(result).not.toBeUndefined();
+    expect(result?.groups).toHaveLength(1);
+    expect(result?.groups.at(0)?.at(0)?.fieldKey).toBe("f1");
+  });
+
+  it("normalizes v1 all-mode input before cleaning", () => {
+    const fields = [selectField("f1"), selectField("f2")];
+    const vw = {
+      mode: "all" as const,
+      rules: [
+        { fieldKey: "f1", operator: "equals" as const, optionKey: "a" },
+        { fieldKey: "gone", operator: "equals" as const, optionKey: "x" },
+      ],
+    };
+    const result = cleanStaleVisibilityRules(vw, 1, fields);
+    expect(result).not.toBeUndefined();
+    expect(result).toHaveProperty("version", 2);
+    expect(result?.groups).toHaveLength(1);
+    expect(result?.groups.at(0)).toHaveLength(1);
+    expect(result?.groups.at(0)?.at(0)?.fieldKey).toBe("f1");
+  });
+
+  it("includes text/textarea/date fields as eligible drivers", () => {
+    const fields = [textField("t1"), selectField("f2")];
+    const vw = {
+      version: 2 as const,
+      groups: [[{ fieldKey: "t1", operator: "isNotEmpty" as const }]],
+    };
+    const result = cleanStaleVisibilityRules(vw, 1, fields);
+    expect(result).not.toBeUndefined();
+    expect(result?.groups.at(0)?.at(0)?.fieldKey).toBe("t1");
+  });
+
+  it("excludes non-driver types (pageBreak, availability, richText)", () => {
+    const pbField: PlaintextField = {
+      fieldKey: "pb1",
+      label: {},
+      helpText: {},
+      isRequired: false,
+      config: { type: "pageBreak" },
+      fieldType: "pageBreak",
+      role: null,
+      routingQueueIds: null,
+      escalationRecipientIds: null,
+    };
+    const fields = [pbField, selectField("f2")];
+    const vw = {
+      version: 2 as const,
+      groups: [[{ fieldKey: "pb1", operator: "isEmpty" as const }]],
+    };
+    const result = cleanStaleVisibilityRules(vw, 1, fields);
+    expect(result).toBeUndefined();
   });
 });

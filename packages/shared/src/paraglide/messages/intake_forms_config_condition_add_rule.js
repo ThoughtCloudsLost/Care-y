@@ -10,7 +10,7 @@ const en_intake_forms_config_condition_add_rule = /** @type {(inputs: Intake_For
 };
 
 const es_intake_forms_config_condition_add_rule = /** @type {(inputs: Intake_Forms_Config_Condition_Add_RuleInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Agregar condicion`)
+	return /** @type {LocalizedString} */ (`Agregar condición`)
 };
 
 /**

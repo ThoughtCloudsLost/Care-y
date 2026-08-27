@@ -10,7 +10,7 @@ const en_intake_forms_config_condition_op_checked = /** @type {(inputs: Intake_F
 };
 
 const es_intake_forms_config_condition_op_checked = /** @type {(inputs: Intake_Forms_Config_Condition_Op_CheckedInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`esta marcado`)
+	return /** @type {LocalizedString} */ (`está marcado`)
 };
 
 /**

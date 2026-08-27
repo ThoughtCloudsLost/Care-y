@@ -5,6 +5,7 @@
 
 import {
   resolveLocalized,
+  normalizeVisibleWhen,
   BASE_LOCALE,
   FORM_LOCALES,
   type LocalizedRichText,
@@ -14,6 +15,7 @@ import {
   type IntakeFieldType,
   type IntakeFieldRole,
   type VisibleWhen,
+  type VisibleWhenV2,
 } from "@care-y/shared";
 import {
   readLocale,
@@ -268,4 +270,66 @@ export function resolveRichPreview(
     if (fallback !== undefined && hasRichValue(fallback)) return fallback;
   }
   return undefined;
+}
+
+// ---------------------------------------------------------------------------
+// Condition driver eligibility
+// ---------------------------------------------------------------------------
+
+/** Field types eligible to drive conditional visibility rules. */
+export const CONDITION_DRIVER_TYPES: ReadonlySet<IntakeFieldType> = new Set([
+  "select",
+  "multiselect",
+  "checkbox",
+  "text",
+  "textarea",
+  "date",
+]);
+
+// ---------------------------------------------------------------------------
+// Stale-rule cleanup
+// ---------------------------------------------------------------------------
+
+/**
+ * Remove visibility rules whose fieldKey no longer resolves to an eligible
+ * earlier field. Also drops empty groups and clears the visibleWhen entirely
+ * when no groups remain.
+ *
+ * The eligible set is the subset of `allFields` that:
+ *   1. Appears before `fieldIndex` in the list.
+ *   2. Has a type in CONDITION_DRIVER_TYPES.
+ *
+ * Returns undefined if no valid groups survive. Always returns v2 shape
+ * when groups remain.
+ *
+ * Pure function: does not mutate the input.
+ */
+export function cleanStaleVisibilityRules(
+  visibleWhen: VisibleWhen | undefined,
+  fieldIndex: number,
+  allFields: readonly PlaintextField[],
+): VisibleWhenV2 | undefined {
+  if (visibleWhen == null) return undefined;
+
+  // Build the set of eligible fieldKeys before this field's position.
+  const eligible = new Set<string>();
+  for (let i = 0; i < fieldIndex && i < allFields.length; i++) {
+    const f = allFields.at(i);
+    if (f === undefined) continue;
+    if (CONDITION_DRIVER_TYPES.has(f.fieldType)) {
+      eligible.add(f.fieldKey);
+    }
+  }
+
+  const normalized = normalizeVisibleWhen(visibleWhen);
+  const cleanedGroups: VisibleWhenV2["groups"] = [];
+  for (const group of normalized.groups) {
+    const cleanedRules = group.filter((rule) => eligible.has(rule.fieldKey));
+    if (cleanedRules.length > 0) {
+      cleanedGroups.push(cleanedRules);
+    }
+  }
+
+  if (cleanedGroups.length === 0) return undefined;
+  return { version: 2, groups: cleanedGroups };
 }
