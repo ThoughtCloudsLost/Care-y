@@ -90,7 +90,14 @@
     left: 0;
     width: 200px;
     height: 100dvh;
-    background: var(--glass-surface);
+    /* Opaque paper base under the glass tint. The rail overlays the pinned
+       SectionRail when one is on screen; translucency would let it bleed
+       through. */
+    background-color: var(--paper);
+    background-image: linear-gradient(
+      var(--glass-surface),
+      var(--glass-surface)
+    );
     color: var(--glass-text);
     border-inline-end: 1px solid var(--hair, var(--glass-highlight));
     overflow-y: auto;

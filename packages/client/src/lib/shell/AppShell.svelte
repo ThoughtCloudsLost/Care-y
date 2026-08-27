@@ -879,6 +879,10 @@
   // ── Hover-reveal section helpers ────────────────────────────────────
 
   function buildHoverData(route: string): HoverRevealData | undefined {
+    // The current page's sections are already pinned in its SectionRail,
+    // so a hover copy would just cover it with the same content.
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- route is a known internal path from the registry
+    if (page.url.pathname === resolve(route as `/${string}`)) return undefined;
     const sections = getHoverSections(route, currentPermissions, queryClient);
     if (sections.length === 0) return undefined;
     const entry = findRegistryEntry(route);
