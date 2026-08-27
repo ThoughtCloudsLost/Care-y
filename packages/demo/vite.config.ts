@@ -77,6 +77,15 @@ function buildAliases(): Alias[] {
   ];
 }
 
+// Note for anyone tempted to add an onwarn handler here to catch Node
+// builtins reaching the browser bundle: Vite already fails the build on
+// that, for first-party source. Verified by importing node:os into a
+// server file with no handler installed, which errors with
+// `"tmpdir" is not exported by "__vite-browser-external"` and exits 1.
+// PGlite's identical warnings survive a successful build only because
+// they come from node_modules, which Rollup treats as warnings. A handler
+// here would never run.
+
 export default defineConfig({
   plugins: [
     serverRedirectPlugin(),

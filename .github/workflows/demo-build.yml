@@ -3,8 +3,11 @@ name: Demo build
 # The path list is repeated rather than shared through a YAML anchor,
 # because the workflow parser does not expand anchors.
 on:
+  # No branch filter. The demo bundles packages/server and packages/client
+  # source, so a change anywhere in the paths below can break it, and stacked
+  # feature branches are where that happens most. Restricting this to PRs
+  # into main meant a branch based on another feature branch never ran it.
   pull_request:
-    branches: [main]
     paths:
       - packages/demo/**
       - packages/client/src/**

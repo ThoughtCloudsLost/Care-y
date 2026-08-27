@@ -729,6 +729,18 @@
     return () => unregisterDemoNavigationHandler(handler);
   });
 
+  // Deliberately NOT intercepted: raw <a href> clicks.
+  //
+  // The demo mounts route components directly through RouteMount and never
+  // starts SvelteKit's client router, so a real link performs a
+  // cross-document navigation and the phone goes blank. Adding an
+  // interceptor here would fix the symptom and hide the cause, and the
+  // cause is worth seeing: in-app navigation goes through goto() at 91
+  // call sites, so a raw link is a departure from the pattern rather than
+  // a considered choice. The demo is the surface where that departure
+  // becomes visible, and eslint (svelte/no-raw-internal-anchor) catches it
+  // at the point it is written.
+
   // -----------------------------------------------------------------------
   // Screen driving (the store's ensureScreen driver)
   // -----------------------------------------------------------------------
