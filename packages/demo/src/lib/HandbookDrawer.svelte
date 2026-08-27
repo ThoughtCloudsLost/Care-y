@@ -292,7 +292,7 @@
 
   // Track content area width via ResizeObserver
   $effect(() => {
-    if (contentEl === undefined) return;
+    if (contentEl == null) return;
     const ro = new ResizeObserver((entries) => {
       for (const entry of entries) {
         contentWidth = entry.contentRect.width;
@@ -467,7 +467,7 @@
   function flushScrollDetection(): void {
     scrollRafId = 0;
     if (suppressDrawerScroll) return;
-    if (layoutResult === null || contentEl === undefined) return;
+    if (layoutResult === null || contentEl == null) return;
 
     const scrollTop = contentEl.scrollTop;
     const readingLine = contentEl.clientHeight * READING_LINE_RATIO;
@@ -495,7 +495,7 @@
 
   // Attach/detach the scroll listener when the content element mounts
   $effect(() => {
-    if (contentEl === undefined) return;
+    if (contentEl == null) return;
     const el = contentEl;
     el.addEventListener("scroll", handleContentScroll, {
       passive: true,
@@ -520,7 +520,7 @@
    * listener does not re-fire onScrollSub for the programmatic move.
    */
   export function scrollToSub(subSlug: string): void {
-    if (layoutResult === null || contentEl === undefined) return;
+    if (layoutResult === null || contentEl == null) return;
 
     const readingLine = contentEl.clientHeight * READING_LINE_RATIO;
 

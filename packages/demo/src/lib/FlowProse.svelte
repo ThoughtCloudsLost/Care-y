@@ -126,7 +126,7 @@
   let containerEl = $state<HTMLDivElement | undefined>(undefined);
 
   $effect(() => {
-    if (containerEl === undefined) return;
+    if (containerEl == null) return;
     oncontainer?.(containerEl);
   });
 
@@ -235,7 +235,7 @@
   // -----------------------------------------------------------------------
 
   function handleClick(ev: MouseEvent): void {
-    if (layoutResult === null || containerEl === undefined) return;
+    if (layoutResult === null || containerEl == null) return;
 
     // getBoundingClientRect already accounts for whatever scrolled the
     // container, so this works the same in a page and in a drawer.
