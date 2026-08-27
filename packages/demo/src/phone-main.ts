@@ -141,6 +141,79 @@ try {
 }
 
 // -----------------------------------------------------------------------
+// Quick-exit interception (demo code only, never product)
+// -----------------------------------------------------------------------
+// QuickExit.svelte scrubs document.title, zeroes the session, then calls
+// location.replace(safeUrl). In the demo that navigates the phone iframe
+// off the site mid-story.
+//
+// location.replace cannot be replaced the way navigator.credentials can:
+// every member of the Location interface is [LegacyUnforgeable] in the
+// HTML spec, installed as a non-configurable own property precisely so
+// scripts cannot redirect it, and defineProperty throws.
+//
+// So intercept the trigger instead. A capture-phase listener runs before
+// Svelte's delegated root handler, so stopping propagation there means
+// exit() never runs and the real control stays mounted and rendered.
+//
+// If this ever stops working the failure is loud, not silent: the phone
+// navigates to the safe URL and the demo visibly ends.
+
+/** Selectors for the product's quick-exit control, most stable first. */
+const QUICK_EXIT_SELECTOR = '[data-testid="quick-exit"], button.quick-exit';
+
+function reportQuickExit(): void {
+  void traceFlowLocal(
+    {
+      lane: "ui",
+      label: "quick exit",
+      resultDetail: () =>
+        buildFlowDetail({
+          result: [
+            {
+              name: "outcome",
+              value: "held (demo)",
+              kind: "metadata",
+            },
+          ],
+        }),
+    },
+    async () => {
+      // The span exists to mark the moment, not to time work.
+    },
+  );
+}
+
+document.addEventListener(
+  "click",
+  (ev: MouseEvent): void => {
+    const target = ev.target;
+    if (!(target instanceof Element)) return;
+    if (target.closest(QUICK_EXIT_SELECTOR) === null) return;
+    ev.preventDefault();
+    ev.stopPropagation();
+    reportQuickExit();
+  },
+  { capture: true },
+);
+
+// Escape triggers the same exit from anywhere on a portal page. Suppress
+// it only while the control is actually mounted, so Escape keeps closing
+// sheets and dialogs everywhere else. This listener registers before the
+// component's own, and capture precedes the bubble phase it listens in.
+window.addEventListener(
+  "keydown",
+  (ev: KeyboardEvent): void => {
+    if (ev.key !== "Escape") return;
+    if (document.querySelector(QUICK_EXIT_SELECTOR) === null) return;
+    ev.preventDefault();
+    ev.stopPropagation();
+    reportQuickExit();
+  },
+  { capture: true },
+);
+
+// -----------------------------------------------------------------------
 // Engine boot (starts after the first frame commits)
 // -----------------------------------------------------------------------
 

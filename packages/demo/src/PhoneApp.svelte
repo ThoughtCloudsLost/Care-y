@@ -33,7 +33,11 @@
   import { BOOT_TIP_DELAY_MS, BOOT_TIP_FADE_MS } from "$demo/boot-tip.js";
   import LoginMount from "$demo/LoginMount.svelte";
   import RouteMount from "$demo/engine/RouteMount.svelte";
-  import { createDemoRouter, featureForPathname } from "$demo/router.svelte.js";
+  import {
+    createDemoRouter,
+    featureForPathname,
+    isClientFeature,
+  } from "$demo/router.svelte.js";
   import { page as demoPage } from "./stubs/app-state.svelte.js";
   import { createDemoQueryClient } from "$demo/demo-query-client.js";
   import { createDemoLocationStore } from "$demo/demo-location.svelte.js";
@@ -1762,6 +1766,14 @@
         {#key loginEpoch}
           <LoginMount />
         {/key}
+      {:else if isClientFeature(router.feature)}
+        <!--
+          Client-group routes render with no AppShell. Their chrome is
+          (client)/+layout.svelte, which RouteMount pulls from the
+          manifest's layout chain, so the demo holds no copy of the
+          client shell and inherits whatever the product does to it.
+        -->
+        <RouteMount pathname={routeMountPathname} />
       {:else}
         <AppShell
           activeTab={router.activeTab}

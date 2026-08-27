@@ -2,15 +2,20 @@
  * Glob-derived route manifest for the demo engine.
  *
  * Uses import.meta.glob to discover all +page.svelte and +layout.svelte
- * files under the client's (app) routes. Derives URL patterns, layout
- * chains, and route IDs generically from the filesystem paths, with no
- * per-route hand-writing.
+ * files under the client's (app) and (client) routes. Derives URL
+ * patterns, layout chains, and route IDs generically from the filesystem
+ * paths, with no per-route hand-writing.
  *
  * Bracket segments ([param]) become named params.
  * [...rest] segments match any remaining path.
  * (group) segments are stripped from URL patterns but kept in route IDs.
- * The root (app)/+layout.svelte is excluded (the demo mounts AppShell
- * separately; only nested layouts are chained).
+ *
+ * The two groups differ in one way, and only one. The root
+ * (app)/+layout.svelte is excluded because the demo mounts AppShell
+ * itself; the root (client)/+layout.svelte is chained like any other
+ * layout, because it IS the client shell and the demo has no substitute
+ * for it. Keeping it here rather than reimplementing it means a product
+ * change to the client shell reaches the demo on the next build.
  */
 
 import type { Component } from "svelte";
@@ -48,22 +53,46 @@ export interface RouteMatch {
 // Glob imports (lazy, not eager)
 // -----------------------------------------------------------------------
 
-// The (app) group directory's parentheses are extglob syntax to the
-// glob matcher and must be escaped to match literally.
-const pageModules = import.meta.glob<{ default: Component }>(
+// The group directories' parentheses are extglob syntax to the glob
+// matcher and must be escaped to match literally. Patterns must stay
+// literal: import.meta.glob is resolved at build time and cannot read
+// a computed string.
+//
+// (auth) and (onboarding) are deliberately absent. Login is hand-mounted
+// by LoginMount so it can prefill credentials, and onboarding is not part
+// of the story.
+const pageModules = import.meta.glob<{ default: Component }>([
   "../../../../client/src/routes/\\(app\\)/**/+page.svelte",
-);
+  "../../../../client/src/routes/\\(client\\)/**/+page.svelte",
+]);
 
-const layoutModules = import.meta.glob<{ default: Component }>(
+const layoutModules = import.meta.glob<{ default: Component }>([
   "../../../../client/src/routes/\\(app\\)/**/+layout.svelte",
-);
+  "../../../../client/src/routes/\\(client\\)/**/+layout.svelte",
+]);
 
 // -----------------------------------------------------------------------
 // Path helpers
 // -----------------------------------------------------------------------
 
-/** Prefix to strip from glob keys to get the (app)-relative path. */
+/** Prefix to strip from glob keys to get the routes-relative path. */
 const ROUTES_PREFIX = "../../../../client/src/routes";
+
+/**
+ * The route group a route ID belongs to ("app", "client"), or null when
+ * the ID has no leading (group) segment.
+ *
+ * Read the group from the ID rather than matching pathnames: the ID comes
+ * from the filesystem, so a route added to a group is classified without
+ * touching this file or its callers.
+ */
+export function routeGroupOf(routeId: string): string | null {
+  const first = routeId.split("/").find((s) => s.length > 0);
+  if (first === undefined) return null;
+  return first.startsWith("(") && first.endsWith(")")
+    ? first.slice(1, -1)
+    : null;
+}
 
 /**
  * Strip the routes prefix from a glob key, yielding a path like
@@ -220,7 +249,11 @@ export function compileSegmentMatcher(urlPattern: string): PatternMatcher {
 // Build the manifest
 // -----------------------------------------------------------------------
 
-/** The root (app) layout is excluded; the demo mounts AppShell separately. */
+/**
+ * The root (app) layout is excluded; the demo mounts AppShell separately.
+ * Scoped to (app) on purpose: (client)/+layout.svelte is the client shell
+ * and must stay in the chain.
+ */
 const ROOT_LAYOUT_ROUTE_PATH = "/(app)/+layout.svelte";
 
 function buildManifest(): readonly RouteEntry[] {
@@ -259,7 +292,8 @@ function buildManifest(): readonly RouteEntry[] {
     // building progressively deeper paths
     for (let depth = 1; depth <= dirParts.length; depth++) {
       const ancestorDir = "/" + dirParts.slice(0, depth).join("/");
-      // Skip the root (app) layout
+      // Skip the root (app) layout. Not "/(client)": that layout is the
+      // client shell and belongs in the chain.
       if (ancestorDir === "/(app)") continue;
       const layoutLoader = layoutByDir.get(ancestorDir);
       if (layoutLoader !== undefined) {

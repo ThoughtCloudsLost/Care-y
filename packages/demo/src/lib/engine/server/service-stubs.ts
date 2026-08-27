@@ -342,6 +342,28 @@ export async function buildServiceStubs(
   const { createNotificationPreferencesService } =
     await import("../../../../../server/src/notifications/preferences.js");
 
+  // Client portal and intake forms.
+  //
+  // createAppRouter mounts both of these routers only when their deps are
+  // present, so omitting a dep group removes the whole API surface without
+  // any error: the pages still mount and render, and the first procedure
+  // call is where it surfaces. The intake page in particular falls back to
+  // its built-in default form when the definition query fails, so it looks
+  // correct with no API behind it at all.
+  const { createIntakeFormService } =
+    await import("../../../../../server/src/portal/intake-form-service.js");
+  const { createIntakeResponseService } =
+    await import("../../../../../server/src/portal/intake-response-service.js");
+  const { resolveAuthedChannel } =
+    await import("../../../../../server/src/portal/channel-service.js");
+  const portalMessages =
+    await import("../../../../../server/src/portal/portal-message-service.js");
+
+  const intakeFormService = createIntakeFormService({
+    fieldEncryptor: encryptor,
+  });
+  const intakeResponseService = createIntakeResponseService();
+
   const appRouter = createAppRouter({
     authDeps: {
       hasher: passwordHasher,
@@ -450,17 +472,60 @@ export async function buildServiceStubs(
       blobStore,
       pendingClients,
     },
-    // Declined here, not forgotten: the client portal and the intake-forms
-    // admin API are wired on the demo track's own branch, and this branch
-    // predates that. Until it lands, the portal pages in the phone render
-    // against no API, which is exactly the failure that made these keys
-    // required rather than optional.
-    clientPortalDeps: null,
-    intakeFormDeps: null,
+    intakeFormDeps: {
+      createAuditSvc: createAuditService,
+      intakeFormService,
+      intakeResponseService,
+      blobStore,
+      uploadLimiter: noopLimiter,
+    },
+    clientPortalDeps: {
+      submissionLimiter: noopLimiter,
+      challengeLimiter: noopLimiter,
+      portalReadLimiter: noopLimiter,
+      portalReplyLimiter: noopLimiter,
+      shareLimiter: noopLimiter,
+      accountSaltLimiter: noopLimiter,
+      accountLoginLimiter: noopLimiter,
+
+      // Null rather than a permissive stub. The router publishes
+      // powRequired: deps.powVerifier !== null to the client, so declining
+      // here tells the intake page the truth and it skips the challenge. A
+      // stub that accepted anything would leave powRequired true and have
+      // the page solve a puzzle that no longer guards anything.
+      powVerifier: null,
+
+      intakeFormService,
+      notificationService: notificationServiceStub,
+      fieldEncryptor: encryptor,
+
+      // Secure link tier.
+      portalChannelService: { resolveAuthedChannel },
+      portalMessageService: {
+        bootstrap: portalMessages.bootstrap,
+        clientReply: portalMessages.clientReply,
+      },
+
+      // The nudge SMS after a client reply, routed to the outbox by the
+      // same sms-capable factory twoFactorDeps uses. Modelling it beats
+      // omitting it: the nudge carries neither content nor key material,
+      // which is a property worth showing in the flow band rather than
+      // asserting in prose.
+      // portalResolveCallerId is typed tighter than the auth router's
+      // resolver, which takes a bare string: it wants a branded E164.
+      // Brand at the boundary, the way the structural seed does.
+      portalGetProvider: async (orgId: OrgId) =>
+        smsCapableProviderFactory.getProvider(orgId),
+      portalResolveCallerId: async (): Promise<E164 | null> =>
+        (await phoneResolverStub()) as E164 | null,
+
+      // Account tier. orgUuid is resolved per request by the router.
+      accountServiceDeps: { indexer, fakeSaltKey },
+    },
     clientDeps: null,
     escalationDeps: null,
-    // HARD CONSTRAINT: devDeps is null (NODE_ENV=production)
-    devDeps: null,
+    // HARD CONSTRAINT: devDeps is undefined (NODE_ENV=production)
+    devDeps: undefined,
   });
 
   return { appRouter, pendingClients };

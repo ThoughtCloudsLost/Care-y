@@ -10,6 +10,7 @@ import { describe, it, expect } from "vitest";
 import {
   matchRoute,
   listRouteIds,
+  routeGroupOf,
   compileSegmentMatcher,
   dirToUrlPattern,
 } from "./route-manifest.js";
@@ -72,6 +73,76 @@ describe("route-manifest", () => {
       expect(match?.routeId).toBe("/(app)/library/[articleId]");
       expect(match?.params).toEqual({ articleId: "art-456" });
     });
+  });
+});
+
+describe("route-manifest client group", () => {
+  it("discovers client-group routes from the glob", () => {
+    const ids = listRouteIds();
+    expect(ids).toContain("/(client)/intake");
+    expect(ids).toContain("/(client)/portal/[channelId]");
+    expect(ids).toContain("/(client)/account");
+  });
+
+  it("matches /intake to the client intake page, not the app catch-all", () => {
+    // The (app) catch-all compiles to "/*" and would swallow every
+    // client path if specificity ordering did not sort rest routes last.
+    const match = matchRoute("/intake");
+    expect(match?.routeId).toBe("/(client)/intake");
+  });
+
+  it("prefers the static privacy page over the [slug] form route", () => {
+    const match = matchRoute("/intake/privacy");
+    expect(match?.routeId).toBe("/(client)/intake/privacy");
+  });
+
+  it("extracts slug for a named intake form", () => {
+    const match = matchRoute("/intake/housing-2026");
+    expect(match?.routeId).toBe("/(client)/intake/[slug]");
+    expect(match?.params).toEqual({ slug: "housing-2026" });
+  });
+
+  it("extracts channelId for the secure link portal", () => {
+    const match = matchRoute("/portal/ch-abc123");
+    expect(match?.routeId).toBe("/(client)/portal/[channelId]");
+    expect(match?.params).toEqual({ channelId: "ch-abc123" });
+  });
+
+  it("chains the client root layout, which is the client shell", () => {
+    // /account has no layout of its own, so the only layout it can carry
+    // is (client)/+layout.svelte. Exactly one proves the root is chained.
+    // The demo keeps no copy of the client shell; it mounts the product's.
+    const match = matchRoute("/account");
+    expect(match?.layouts).toHaveLength(1);
+  });
+
+  it("still excludes the app root layout, which AppShell replaces", () => {
+    // /admin has no layout of its own either. Zero proves (app)/+layout
+    // stays out of the chain, so the two groups are treated differently
+    // in exactly one way.
+    const match = matchRoute("/admin");
+    expect(match?.layouts).toHaveLength(0);
+  });
+});
+
+describe("routeGroupOf", () => {
+  it("reads the group from a route ID", () => {
+    expect(routeGroupOf("/(app)/tickets/[id]")).toBe("app");
+    expect(routeGroupOf("/(client)/intake")).toBe("client");
+  });
+
+  it("returns null when the ID has no leading group segment", () => {
+    expect(routeGroupOf("/login")).toBeNull();
+    expect(routeGroupOf("/")).toBeNull();
+    expect(routeGroupOf("")).toBeNull();
+  });
+
+  it("classifies every manifest route into a known group", () => {
+    // A route landing outside both groups means a glob was widened
+    // without teaching the router which shell the route belongs in.
+    const groups = [...new Set(listRouteIds().map((id) => routeGroupOf(id)))];
+    groups.sort((a, b) => String(a).localeCompare(String(b)));
+    expect(groups).toEqual(["app", "client"]);
   });
 });
 
