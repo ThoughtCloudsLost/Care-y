@@ -347,8 +347,8 @@ async function seed(): Promise<void> {
   } else {
     const toCreate = NUM_SEED_CLIENTS - currentCount;
     for (let i = 0; i < toCreate; i++) {
-      // Generated aliases draw their suffix from a per-org sequence, so they
-      // are unique by construction and need no collision retry. alias_hash is
+      // Generated aliases draw their suffix from a per-org counter on
+      // org_config, so they are unique by construction. alias_hash is
       // null because the blind index key lives in the browser; the first
       // session to decrypt the row backfills it.
       const alias = await generateAlias(tenantDatabase);

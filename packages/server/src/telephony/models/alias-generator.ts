@@ -3,7 +3,8 @@
  * like "calm-pebble-40217" or "bright-cedar-3".
  *
  * Word lists are positive/neutral adjectives and nature-themed nouns.
- * The numeric suffix is drawn from a per-org PostgreSQL sequence so
+ * The numeric suffix is drawn from a per-org counter column on
+ * org_config, atomically incremented via UPDATE ... RETURNING, so
  * generated aliases cannot repeat within an org. Blocked adjective-noun
  * pairs trigger a re-roll of the word pair only; the suffix is always
  * unique.
@@ -13,7 +14,6 @@ import { randomInt } from "node:crypto";
 import { InternalError } from "../../errors.js";
 import type { Kysely } from "kysely";
 import type { TenantDatabase } from "../../db/types.js";
-import { sql } from "kysely";
 
 export const ADJECTIVES = [
   "bright",
@@ -213,25 +213,33 @@ export function isBlockedPair(adjective: string, noun: string): boolean {
 }
 
 /**
- * Draws the next value from the per-org client_alias_seq sequence.
- * The sequence lives in the tenant schema, so withSchema's search_path
- * resolves it to the correct org.
+ * Atomically increments the per-org alias suffix counter on org_config
+ * and returns the new value. Uses UPDATE ... RETURNING through the
+ * query builder, so WithSchemaPlugin qualifies it to the tenant schema.
+ * The row lock from UPDATE prevents concurrent intake from drawing the
+ * same suffix.
  */
 async function nextAliasSuffix(db: Kysely<TenantDatabase>): Promise<number> {
-  const result = await sql<{
-    nextval: string;
-  }>`SELECT nextval('client_alias_seq')`.execute(db);
-  const row = result.rows[0];
+  const row = await db
+    .updateTable("org_config")
+    .set((eb) => ({
+      next_alias_suffix: eb("next_alias_suffix", "+", 1),
+    }))
+    .returning("next_alias_suffix")
+    .executeTakeFirst();
+
   if (!row) {
-    throw new InternalError("client_alias_seq returned no rows");
+    throw new InternalError(
+      "org_config row missing; cannot generate alias suffix",
+    );
   }
-  return Number(row.nextval);
+  return row.next_alias_suffix;
 }
 
 /**
- * Generate a unique alias using the per-org sequence.
- * The suffix is drawn from a PostgreSQL sequence so no two generated
- * aliases can collide within an org.
+ * Generate a unique alias using the per-org counter on org_config.
+ * The suffix is drawn from an atomically incremented counter so no
+ * two generated aliases can collide within an org.
  */
 export async function generateAlias(
   db: Kysely<TenantDatabase>,

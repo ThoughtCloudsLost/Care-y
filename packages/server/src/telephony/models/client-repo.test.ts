@@ -93,7 +93,7 @@ describe.skipIf(!process.env.DATABASE_URL)("ClientRepository", () => {
     expect(result.client.aliasHash).toBeNull();
   });
 
-  it("generated aliases have unique suffixes (from per-org sequence)", async () => {
+  it("generated aliases have unique suffixes (from per-org counter)", async () => {
     const rawA = "+15550010010";
     const rawB = "+15550010011";
 
