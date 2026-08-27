@@ -24,8 +24,12 @@
   import FieldError from "$lib/components/FieldError.svelte";
   import AvailabilityField from "./AvailabilityField.svelte";
   import IntakePrivacyIndicator from "./IntakePrivacyIndicator.svelte";
-  import { renderFormRichText } from "$lib/utils/render-form-content.js";
+  import {
+    renderFormRichText,
+    rewriteFormAssetUrls,
+  } from "$lib/utils/render-form-content.js";
   import { readRichLocale } from "$lib/utils/localized-text.js";
+  import { getOrgSlug } from "$lib/utils/org-slug.js";
 
   interface IntakeFieldRendererProps {
     readonly fieldId: string;
@@ -379,7 +383,12 @@
        This branch exists for exhaustiveness. -->
 {:else if config.type === "richText"}
   <!-- Rich text blocks are structural content, not input fields. -->
-  {@const bodyHtml = renderFormRichText(readRichLocale(config.body, locale))}
+  {@const rawBodyHtml = renderFormRichText(readRichLocale(config.body, locale))}
+  {@const fieldOrgSlug = getOrgSlug()}
+  {@const bodyHtml =
+    rawBodyHtml.length > 0 && fieldOrgSlug !== null
+      ? rewriteFormAssetUrls(rawBodyHtml, fieldOrgSlug)
+      : rawBodyHtml}
   {#if bodyHtml.length > 0}
     <div class="rich-text-block">
       <!-- eslint-disable-next-line svelte/no-at-html-tags -- sanitized by renderFormRichText (DOMPurify with PURIFY_CONFIG allowlist) -->

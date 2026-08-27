@@ -92,7 +92,10 @@
     trimLocalizedRichText,
     richValueJsonSize,
   } from "$lib/utils/localized-text.js";
-  import { renderFormRichText } from "$lib/utils/render-form-content.js";
+  import {
+    renderFormRichText,
+    rewriteFormAssetUrls,
+  } from "$lib/utils/render-form-content.js";
   import { getOrgSlug } from "$lib/utils/org-slug.js";
   import type {
     FieldConfigState,
@@ -990,15 +993,24 @@
     return undefined;
   }
 
+  /** Render to sanitized HTML with form-asset image URLs resolved. */
+  function renderPreviewHtml(
+    value: string | { type: "doc"; content: unknown[] } | undefined,
+  ): string {
+    const html = renderFormRichText(value);
+    if (html.length === 0 || orgSlug == null) return html;
+    return rewriteFormAssetUrls(html, orgSlug);
+  }
+
   /** Preview-locale-resolved form meta rendered to sanitized HTML. */
   const previewDescriptionHtml: string = $derived(
-    renderFormRichText(resolveRichPreview(formDescription, previewLocale)),
+    renderPreviewHtml(resolveRichPreview(formDescription, previewLocale)),
   );
   const previewSubmitMsgHtml: string = $derived(
-    renderFormRichText(resolveRichPreview(formSubmitMessage, previewLocale)),
+    renderPreviewHtml(resolveRichPreview(formSubmitMessage, previewLocale)),
   );
   const previewClosedMsgHtml: string = $derived(
-    renderFormRichText(resolveRichPreview(formClosedMessage, previewLocale)),
+    renderPreviewHtml(resolveRichPreview(formClosedMessage, previewLocale)),
   );
 
   /** Banner preview URL (same-origin, via the form-asset serving endpoint). */
@@ -1784,7 +1796,7 @@
               <hr class="preview-page-break-line" />
             </div>
           {:else if field.fieldType === "richText"}
-            {@const richHtml = renderFormRichText(
+            {@const richHtml = renderPreviewHtml(
               resolveRichPreview(
                 field.config.type === "richText" ? field.config.body : {},
                 previewLocale,
