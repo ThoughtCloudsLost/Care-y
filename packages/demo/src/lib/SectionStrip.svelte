@@ -26,7 +26,7 @@
     // Read activeSub so a selection change re-runs this. Effects run
     // after the DOM settles, so the class is already on the new item.
     void activeSub;
-    if (strip === undefined) return;
+    if (strip == null) return;
     const el = strip.querySelector<HTMLButtonElement>(".strip-item-active");
     if (el === null) return;
     const target = el.offsetLeft - (strip.clientWidth - el.offsetWidth) / 2;

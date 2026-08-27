@@ -63,10 +63,10 @@
 
   $effect(() => {
     const container = containerEl;
-    if (container === undefined) return;
+    if (container == null) return;
 
     function scan(): void {
-      if (container === undefined) return;
+      if (container == null) return;
 
       // Credentials form: unique username field. Present only while the
       // page is at the sign-in phase (initial, locale switch, or back
@@ -132,7 +132,7 @@
   // the value. The form unmounts right after submit (phase change).
   $effect(() => {
     const container = containerEl;
-    if (container === undefined) return;
+    if (container == null) return;
 
     function clearPasswordControl(ev: SubmitEvent): void {
       const target = ev.target;
