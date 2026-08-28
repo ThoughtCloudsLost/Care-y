@@ -61,6 +61,7 @@
     orgCache.delete("branding:color");
     orgCache.delete("branding:accent");
     orgCache.delete("branding:text");
+    orgCache.delete("branding:support_label");
     await queryClient.invalidateQueries({ queryKey: adminKeys.branding() });
     await brandingQuery.refetch();
 
@@ -70,17 +71,25 @@
     void decryptedColor;
     void decryptedAccent;
     void decryptedText;
+    void decryptedSupportLabel;
     await orgCache.whenSettled();
 
     const name = decryptedName ?? "";
     const color = currentColor();
     const accent = currentAccent();
     const text = decryptedText ?? "";
+    const supportLabel = decryptedSupportLabel ?? "";
 
     let clientBlob: string;
     try {
       clientBlob = buildClientBrandingBlob(
-        { name, primaryColor: color, accentColor: accent, clientText: text },
+        {
+          name,
+          primaryColor: color,
+          accentColor: accent,
+          clientText: text,
+          supportLabel,
+        },
         orgKeyManager,
       );
     } catch {
@@ -144,6 +153,13 @@
     ),
   );
 
+  const decryptedSupportLabel = $derived(
+    orgCache.decrypt(
+      "branding:support_label",
+      brandingQuery.data?.encryptedClientSupportLabel ?? null,
+    ),
+  );
+
   // Logo decrypted as binary, displayed via blob URL
   let logoBlobUrl = $state<string | null>(null);
 
@@ -188,6 +204,7 @@
   let editColor = $state(DEFAULT_PRIMARY);
   let editAccent = $state(DEFAULT_ACCENT);
   let editText = $state("");
+  let editSupportLabel = $state("");
   let editLogoFile = $state<File | null>(null);
   let editLogoPreviewUrl = $state<string | null>(null);
   let logoError = $state<string | null>(null);
@@ -212,6 +229,7 @@
     editColor = currentColor();
     editAccent = currentAccent();
     editText = decryptedText ?? "";
+    editSupportLabel = decryptedSupportLabel ?? "";
     editLogoFile = null;
     editLogoPreviewUrl = null;
     logoError = null;
@@ -238,9 +256,16 @@
   const colorChanged = $derived(editColor !== currentColor());
   const accentChanged = $derived(editAccent !== currentAccent());
   const textChanged = $derived(editText !== (decryptedText ?? ""));
+  const supportLabelChanged = $derived(
+    editSupportLabel !== (decryptedSupportLabel ?? ""),
+  );
   const logoChanged = $derived(editLogoFile !== null);
   const hasChanges = $derived(
-    colorChanged || accentChanged || textChanged || logoChanged,
+    colorChanged ||
+      accentChanged ||
+      textChanged ||
+      supportLabelChanged ||
+      logoChanged,
   );
 
   // ── Semantic-hue proximity (the OKLCH nudge) ──
@@ -369,6 +394,7 @@
       orgCache.delete("branding:color");
       orgCache.delete("branding:accent");
       orgCache.delete("branding:text");
+      orgCache.delete("branding:support_label");
       toastStore.show(m.admin_branding_saved());
       announceToLiveRegion("polite", m.admin_branding_saved());
       closeSheet(false);
@@ -392,6 +418,9 @@
         ? editAccent
         : currentAccent();
     const finalText = textChanged ? editText : (decryptedText ?? "");
+    const finalSupportLabel = supportLabelChanged
+      ? editSupportLabel
+      : (decryptedSupportLabel ?? "");
 
     // Build the client branding blob with all current values
     let clientBlob: string;
@@ -402,6 +431,7 @@
           primaryColor: finalColor,
           accentColor: finalAccent,
           clientText: finalText,
+          supportLabel: finalSupportLabel,
         },
         orgKeyManager,
       );
@@ -436,6 +466,14 @@
       fields.push({
         field: "client_text",
         encryptedValue: await orgKeyManager.encryptText(editText),
+        clientEncryptedBranding: clientBlob,
+      });
+    }
+
+    if (supportLabelChanged) {
+      fields.push({
+        field: "support_label",
+        encryptedValue: await orgKeyManager.encryptText(editSupportLabel),
         clientEncryptedBranding: clientBlob,
       });
     }
@@ -573,6 +611,22 @@
 
         <div class="section-divider"></div>
 
+        <!-- Support label -->
+        <div class="card-section-label">
+          {m.admin_branding_support_label_label()}
+        </div>
+        {#if brandingQuery.data?.encryptedClientSupportLabel}
+          <DecryptPlaceholder content={decryptedSupportLabel}>
+            <span class="field-value text-truncate"
+              >{decryptedSupportLabel}</span
+            >
+          </DecryptPlaceholder>
+        {:else}
+          <span class="text-[--muted] text-sm">{m.portal_support_team()}</span>
+        {/if}
+
+        <div class="section-divider"></div>
+
         <!-- Colors -->
         <div class="card-section-label">
           {m.admin_branding_card_color_label()}
@@ -698,6 +752,24 @@
             editText = e.target.value;
         }}
         info={m.admin_branding_text_hint(withTerms())}
+      />
+    </div>
+
+    <div class="section-divider"></div>
+
+    <!-- Support label: what clients see above messages from the org -->
+    <div class="sheet-field">
+      <ListInput
+        label={m.admin_branding_support_label_label()}
+        type="text"
+        placeholder={m.portal_support_team()}
+        value={editSupportLabel}
+        onInput={(e: Event) => {
+          if (e.target instanceof HTMLInputElement)
+            editSupportLabel = e.target.value;
+        }}
+        info={m.admin_branding_support_label_hint()}
+        data-testid="branding-support-label-input"
       />
     </div>
 

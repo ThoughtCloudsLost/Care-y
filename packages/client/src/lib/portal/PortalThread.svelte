@@ -37,13 +37,25 @@
     clientPrivate: Scalar;
     /** Whether messages are still loading from the server. */
     loading?: boolean;
+    /**
+     * Org-set name shown above messages from the organization. Org-level
+     * only: never a volunteer pseudonym or any per-person identity, which
+     * is why the thread still renders no speaker for sent messages. Empty
+     * falls back to the built-in wording.
+     */
+    supportLabel?: string;
   }
 
   let {
     messages,
     clientPrivate,
     loading = false,
+    supportLabel = "",
   }: PortalThreadProps = $props();
+
+  const speakerName = $derived(
+    supportLabel.trim() !== "" ? supportLabel : m.portal_support_team(),
+  );
 
   interface DecryptedMessage {
     readonly direction: string;
@@ -81,7 +93,7 @@
 
   function bubbleAriaLabel(msg: DecryptedMessage): string {
     const isSent = msg.direction === "from_client";
-    const label = isSent ? m.portal_you() : m.portal_support_team();
+    const label = isSent ? m.portal_you() : speakerName;
     const time = formatRelativeTime(new Date(msg.createdAt));
     return `${label}, ${time}`;
   }
@@ -120,7 +132,7 @@
         >
           <ConversationBubble
             direction={bubbleDirection(msg.direction)}
-            speaker={isSent ? undefined : m.portal_support_team()}
+            speaker={isSent ? undefined : speakerName}
             timestamp={msg.createdAt}
             editedAt={msg.editedAt}
           >
@@ -137,10 +149,17 @@
 </div>
 
 <style>
+  /* Grows to fill the scroll region so the empty state centers in the
+     available space. Scrolling belongs to the PageLayout region above,
+     not here; a second scroller would swallow it.
+
+     There is no message-bar reservation: PortalComposer renders inline,
+     in normal flow below this element, so padding for an overlaid bar
+     would only add a gap. */
   .portal-thread {
     flex: 1;
-    overflow-y: auto;
-    padding-bottom: calc(var(--messagebar-height, 60px) + 16px);
+    display: flex;
+    flex-direction: column;
   }
 
   .portal-messages {
@@ -158,6 +177,7 @@
 
   .empty-state {
     display: flex;
+    flex: 1;
     align-items: center;
     justify-content: center;
     min-height: 200px;

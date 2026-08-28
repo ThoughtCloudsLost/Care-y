@@ -19,12 +19,18 @@ export interface PublicBranding {
   accentColor: string | null;
   iconUrl: string | null;
   orgSlug: string;
+  /**
+   * Name clients see above messages from the org. Empty when the org has
+   * set nothing, in which case the portal keeps its built-in wording.
+   */
+  supportLabel: string;
 }
 
 interface ClientBrandingPayload {
   name?: string;
   primaryColor?: string;
   accentColor?: string;
+  supportLabel?: string;
 }
 
 async function fetchPublicBranding(): Promise<PublicBranding | null> {
@@ -57,6 +63,9 @@ async function fetchPublicBranding(): Promise<PublicBranding | null> {
     accentColor: payload.accentColor ?? null,
     iconUrl,
     orgSlug: data.orgSlug,
+    // Same untrusted-text treatment as the org name: this is admin-authored
+    // content decrypted in the browser and rendered into the page.
+    supportLabel: sanitizeOrgName(payload.supportLabel ?? ""),
   };
 }
 

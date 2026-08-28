@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
-import { render, screen, cleanup } from "@testing-library/svelte";
+import { render, screen, cleanup, fireEvent } from "@testing-library/svelte";
 import { createRawSnippet } from "svelte";
 import type * as ParaglideMessages from "$lib/paraglide/messages.js";
 
@@ -139,16 +139,81 @@ describe("(client) layout", () => {
     expect(skeleton).toBeTruthy();
   });
 
-  it("renders footer with privacy link and correct href", () => {
-    render(Layout, { props: { children: childSnippet } });
+  it("puts the drawer trigger and quick exit in the navbar", () => {
+    const { container } = render(Layout, { props: { children: childSnippet } });
 
-    const footer = document.querySelector("footer");
-    expect(footer).toBeTruthy();
-    expect(footer?.textContent).toContain("Privacy notice");
+    const navbar = container.querySelector(
+      "[data-testid='page-shell-navbar']",
+    ) as HTMLElement;
+    expect(
+      navbar.querySelector("[data-testid='client-drawer-trigger']"),
+    ).toBeTruthy();
+    expect(navbar.querySelector("[data-testid='quick-exit']")).toBeTruthy();
+  });
 
-    const link = footer?.querySelector("a");
-    expect(link).toBeTruthy();
-    expect(link?.getAttribute("href")).toBe("/intake/privacy");
+  it("opens the drawer from the navbar trigger", async () => {
+    const { container } = render(Layout, { props: { children: childSnippet } });
+
+    expect(
+      container.querySelector("[data-testid='drawer-privacy']"),
+    ).toBeNull();
+
+    const trigger = container.querySelector(
+      "[data-testid='client-drawer-trigger']",
+    ) as HTMLElement;
+    await fireEvent.click(trigger);
+
+    expect(
+      container.querySelector("[data-testid='drawer-privacy']"),
+    ).toBeTruthy();
+  });
+
+  // The privacy notice and language picker used to sit in a page footer,
+  // where they scrolled away below the composer. They live in the drawer now.
+  it("renders no page footer", () => {
+    const { container } = render(Layout, { props: { children: childSnippet } });
+    expect(container.querySelector("footer")).toBeNull();
+  });
+
+  // Safety contract: the drawer traps focus and also closes on Escape, but
+  // exiting takes precedence over closing a panel. A client one tap from
+  // needing to leave must not have to close a menu first.
+  it("still quick-exits on Escape while the drawer is open", async () => {
+    Object.defineProperty(window, "location", {
+      value: { replace: vi.fn() },
+      writable: true,
+    });
+
+    const { container } = render(Layout, { props: { children: childSnippet } });
+
+    const trigger = container.querySelector(
+      "[data-testid='client-drawer-trigger']",
+    ) as HTMLElement;
+    await fireEvent.click(trigger);
+    expect(
+      container.querySelector("[data-testid='drawer-privacy']"),
+    ).toBeTruthy();
+
+    await fireEvent.keyDown(window, { key: "Escape" });
+
+    expect(window.location.replace).toHaveBeenCalledWith("https://weather.gov");
+  });
+
+  // No page has registered a session on a bare layout render, so quick exit
+  // must still navigate rather than throwing on a missing callback.
+  it("quick-exits with the default safe URL when no page has registered", async () => {
+    Object.defineProperty(window, "location", {
+      value: { replace: vi.fn() },
+      writable: true,
+    });
+
+    const { container } = render(Layout, { props: { children: childSnippet } });
+
+    await fireEvent.click(
+      container.querySelector("[data-testid='quick-exit']") as HTMLElement,
+    );
+
+    expect(window.location.replace).toHaveBeenCalledWith("https://weather.gov");
   });
 
   it("renders org logo when iconUrl is present", () => {

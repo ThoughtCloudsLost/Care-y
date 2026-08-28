@@ -54,6 +54,14 @@ vi.mock("$lib/terminology/with-terms.js", async (importOriginal) => ({
   withTerms: () => ({}),
 }));
 
+// vi.mock required: Svelte 5 createContext throws missing_context when the
+// consumer renders without its provider, and this spec renders the page on
+// its own rather than inside the (client) layout that sets the container.
+vi.mock("$lib/client-shell/context.js", async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  getClientShellCtx: () => ({ current: undefined }),
+}));
+
 // vi.mock required: $lib/trpc/index.js creates a live HTTP client at
 // import time.
 vi.mock("$lib/trpc/index.js", async (importOriginal) => ({

@@ -10,6 +10,7 @@ import {
   toRistrettoPoint,
 } from "@care-y/crypto";
 import type { ComponentProps } from "svelte";
+import * as m from "$lib/paraglide/messages.js";
 import PortalThread from "./PortalThread.svelte";
 
 type PortalThreadProps = ComponentProps<typeof PortalThread>;
@@ -124,6 +125,64 @@ describe("PortalThread", () => {
       "[data-testid='bubble-speaker']",
     );
     expect(speakerLabels.length).toBe(1);
+  });
+
+  it("uses the org's support label on received bubbles when set", () => {
+    const seed = generatePortalSeed();
+    const keypair = derivePortalKeypair(seed);
+
+    const { container } = render(PortalThread, {
+      props: {
+        messages: [
+          makeMessage("Hello from support", "to_client", keypair.clientPublic),
+        ],
+        clientPrivate: keypair.clientPrivate,
+        loading: false,
+        supportLabel: "The night team",
+      },
+    });
+
+    const speaker = container.querySelector("[data-testid='bubble-speaker']");
+    expect(speaker?.textContent.trim()).toBe("The night team");
+  });
+
+  it("falls back to the built-in wording when the org set no label", () => {
+    const seed = generatePortalSeed();
+    const keypair = derivePortalKeypair(seed);
+
+    const { container } = render(PortalThread, {
+      props: {
+        messages: [
+          makeMessage("Hello from support", "to_client", keypair.clientPublic),
+        ],
+        clientPrivate: keypair.clientPrivate,
+        loading: false,
+        supportLabel: "   ",
+      },
+    });
+
+    const speaker = container.querySelector("[data-testid='bubble-speaker']");
+    expect(speaker?.textContent.trim()).toBe(m.portal_support_team());
+  });
+
+  // Org-level by construction: the sent side never carries a speaker, so the
+  // label cannot become a per-person identity on the client's own messages.
+  it("never labels the client's own messages", () => {
+    const seed = generatePortalSeed();
+    const keypair = derivePortalKeypair(seed);
+
+    const { container } = render(PortalThread, {
+      props: {
+        messages: [makeMessage("Thanks", "from_client", keypair.clientPublic)],
+        clientPrivate: keypair.clientPrivate,
+        loading: false,
+        supportLabel: "The night team",
+      },
+    });
+
+    expect(
+      container.querySelector("[data-testid='bubble-speaker']"),
+    ).toBeNull();
   });
 
   it("shows edited marker when editedAt is present", () => {

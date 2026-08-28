@@ -37,6 +37,7 @@
     type IntakeContinuationPayload,
   } from "./intake-crypto.js";
   import FieldError from "$lib/components/FieldError.svelte";
+  import PasswordConfirmPair from "$lib/components/inputs/PasswordConfirmPair.svelte";
   import HowProtected from "$lib/components/portal/HowProtected.svelte";
   import PortalHint from "$lib/components/portal/PortalHint.svelte";
   import IntakeFieldRenderer from "$lib/components/portal/IntakeFieldRenderer.svelte";
@@ -594,12 +595,6 @@
 
   let accountPending = $state(false);
   let accountError = $state<string | undefined>(undefined);
-
-  const accountShowMismatch = $derived(
-    accountConfirmPassword.length > 0 &&
-      accountPassword.length > 0 &&
-      accountPassword !== accountConfirmPassword,
-  );
 
   // ---- Submission ----
 
@@ -1572,6 +1567,7 @@
       <Block>
         <List strong inset class="intake-account-fields">
           <ListInput
+            label={m.account_login_username()}
             type="text"
             inputId="account-create-username"
             placeholder={m.account_login_username()}
@@ -1584,51 +1580,23 @@
             }}
             disabled={isSubmitting || accountPending}
             autocomplete="off"
+            autocapitalize="none"
             data-testid="account-create-username"
-          >
-            {#snippet label()}
-              <span class="sr-only">{m.account_login_username()}</span>
-            {/snippet}
-          </ListInput>
-          <ListInput
-            type="password"
-            inputId="account-create-password"
-            placeholder={m.account_login_password()}
-            value={accountPassword}
-            onInput={(e: Event) => {
-              if (e.target instanceof HTMLInputElement)
-                accountPassword = e.target.value;
-            }}
-            disabled={isSubmitting || accountPending}
-            data-testid="account-create-password"
-          >
-            {#snippet label()}
-              <span class="sr-only">{m.account_login_password()}</span>
-            {/snippet}
-          </ListInput>
-          <ListInput
-            type="password"
-            inputId="account-create-confirm"
-            placeholder={m.account_create_confirm()}
-            value={accountConfirmPassword}
-            onInput={(e: Event) => {
-              if (e.target instanceof HTMLInputElement)
-                accountConfirmPassword = e.target.value;
-            }}
-            disabled={isSubmitting || accountPending}
-            data-testid="account-create-confirm"
-          >
-            {#snippet label()}
-              <span class="sr-only">{m.account_create_confirm()}</span>
-            {/snippet}
-          </ListInput>
+          />
         </List>
-
-        {#if accountShowMismatch}
-          <p class="intake-account-mismatch" data-testid="account-mismatch">
-            {m.account_create_mismatch()}
-          </p>
-        {/if}
+        <PasswordConfirmPair
+          bind:password={accountPassword}
+          bind:confirm={accountConfirmPassword}
+          passwordLabel={m.account_login_password()}
+          passwordPlaceholder={m.account_login_password()}
+          confirmLabel={m.account_create_confirm()}
+          confirmPlaceholder={m.account_create_confirm()}
+          mismatchError={m.account_create_mismatch()}
+          passwordInfo={m.account_create_password_hint()}
+          autocomplete="new-password"
+          minLength={8}
+          disabled={isSubmitting || accountPending}
+        />
 
         {#if accountError}
           <p
@@ -1642,7 +1610,6 @@
         {/if}
 
         <p class="intake-account-hint">{m.account_create_username_hint()}</p>
-        <p class="intake-account-hint">{m.account_create_password_hint()}</p>
 
         <div class="intake-account-warnings">
           <p class="intake-account-warning" data-testid="warning-password">
@@ -1968,12 +1935,6 @@
     color: var(--muted);
     margin-top: var(--space-sm);
     line-height: 1.5;
-  }
-
-  .intake-account-mismatch {
-    font-size: var(--text-sm);
-    color: var(--danger);
-    margin-top: var(--space-xs);
   }
 
   .intake-account-warnings {

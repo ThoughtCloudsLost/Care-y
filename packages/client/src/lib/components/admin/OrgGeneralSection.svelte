@@ -108,6 +108,10 @@
     orgCache.decrypt("branding:color", branding.encryptedPrimaryColor);
     orgCache.decrypt("branding:accent", branding.encryptedAccentColor);
     orgCache.decrypt("branding:text", branding.encryptedClientText ?? null);
+    orgCache.decrypt(
+      "branding:support_label",
+      branding.encryptedClientSupportLabel ?? null,
+    );
     await orgCache.whenSettled();
 
     // Re-read after settlement.
@@ -119,6 +123,13 @@
     const text =
       orgCache.decrypt("branding:text", branding.encryptedClientText ?? null) ??
       "";
+    // Carried through unchanged: a rename must not silently clear the name
+    // clients see above messages from the org.
+    const supportLabel =
+      orgCache.decrypt(
+        "branding:support_label",
+        branding.encryptedClientSupportLabel ?? null,
+      ) ?? "";
 
     const clientBlob = buildClientBrandingBlob(
       {
@@ -126,6 +137,7 @@
         primaryColor: color,
         accentColor: accent,
         clientText: text,
+        supportLabel,
       },
       orgKeyManager,
     );

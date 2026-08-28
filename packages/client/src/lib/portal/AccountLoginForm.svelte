@@ -1,13 +1,28 @@
 <!--
   Account login form.
-  Username + password with visually-hidden labels (sr-only snippet technique),
-  paste allowed (WCAG 3.3.8), one generic failure message for every cause.
-  Progressbar with role="progressbar" and i18n label during Argon2id/OPRF.
-  QuickExit stays enabled throughout derivation.
+
+  Built on the same anatomy as the volunteer login: centered AuthCard, org
+  icon and name above the fields, visible field labels, a real form element
+  so Enter submits, and KeyDerivation phase progress during the Argon2id
+  and OPRF work.
+
+  One generic failure message for every cause (wrong username, wrong
+  password, unknown account) so the page cannot be used to test whether an
+  account exists. Paste is allowed (WCAG 3.3.8).
+
+  Quick exit stays enabled throughout derivation; it lives in the navbar,
+  not here.
 -->
 <script lang="ts">
-  import { Block, BlockTitle, Button, List, ListInput } from "konsta/svelte";
+  import { Block, Button, List, ListInput } from "konsta/svelte";
   import * as m from "$lib/paraglide/messages.js";
+  import AuthCard from "$lib/components/auth/AuthCard.svelte";
+  import PasswordInput from "$lib/components/inputs/PasswordInput.svelte";
+  import KeyDerivation from "$lib/components/onboarding/KeyDerivation.svelte";
+  import type { LoginPhaseId } from "$lib/components/onboarding/login-phase.js";
+  import { getLoginPhaseLabel } from "$lib/auth/login-phase-label.js";
+  import { createPublicBrandingQuery } from "$lib/branding/public-branding.js";
+  import { getBrandingTitle } from "$lib/branding/title.svelte.js";
 
   interface AccountLoginFormProps {
     /** Called with username + password when the user submits. */
@@ -18,10 +33,17 @@
     error: boolean;
     /** Optional signed-out message (idle timeout, pagehide). */
     signedOutMessage?: string;
+    /** Current key-derivation phase, when the page reports one. */
+    phase?: LoginPhaseId;
   }
 
-  let { onsubmit, pending, error, signedOutMessage }: AccountLoginFormProps =
-    $props();
+  let {
+    onsubmit,
+    pending,
+    error,
+    signedOutMessage,
+    phase = "idle",
+  }: AccountLoginFormProps = $props();
 
   let username = $state("");
   let password = $state("");
@@ -30,7 +52,22 @@
     username.trim().length > 0 && password.length > 0 && !pending,
   );
 
-  function handleSubmit(): void {
+  // The page may not report phases; fall back to the derive label so the
+  // progress area is never an unlabeled spinner.
+  const shownPhase = $derived<LoginPhaseId>(
+    pending && phase === "idle" ? "derive" : phase,
+  );
+
+  const brandingQuery = createPublicBrandingQuery();
+  const branding = $derived(brandingQuery.data ?? null);
+  const orgName = $derived(
+    branding?.orgName !== undefined && branding.orgName !== ""
+      ? branding.orgName
+      : getBrandingTitle(),
+  );
+
+  function handleSubmit(e: SubmitEvent): void {
+    e.preventDefault();
     if (!canSubmit) return;
     onsubmit(username, password);
   }
@@ -44,87 +81,115 @@
   });
 </script>
 
-<BlockTitle>{m.account_title()}</BlockTitle>
+<AuthCard>
+  <div class="login-header">
+    {#if branding?.iconUrl}
+      <img
+        src={branding.iconUrl}
+        alt=""
+        class="login-logo"
+        width="48"
+        height="48"
+      />
+    {/if}
+    <h1 class="login-org-name heading-display">{orgName}</h1>
+    <p class="login-subtitle">{m.account_title()}</p>
+  </div>
 
-<Block>
   {#if signedOutMessage}
-    <p class="signed-out-note" role="status" data-testid="signed-out-note">
-      {signedOutMessage}
-    </p>
+    <Block role="status">
+      <p class="signed-out-note" data-testid="signed-out-note">
+        {signedOutMessage}
+      </p>
+    </Block>
   {/if}
-
-  <List strong inset class="login-list">
-    <ListInput
-      type="text"
-      inputId="account-username"
-      placeholder={m.account_login_username()}
-      value={username}
-      onInput={(e: Event) => {
-        if (e.target instanceof HTMLInputElement) username = e.target.value;
-      }}
-      disabled={pending}
-      autocomplete="off"
-      data-testid="account-username"
-    >
-      {#snippet label()}
-        <span class="sr-only">{m.account_login_username()}</span>
-      {/snippet}
-    </ListInput>
-    <ListInput
-      type="password"
-      inputId="account-password"
-      placeholder={m.account_login_password()}
-      value={password}
-      onInput={(e: Event) => {
-        if (e.target instanceof HTMLInputElement) password = e.target.value;
-      }}
-      disabled={pending}
-      data-testid="account-password"
-    >
-      {#snippet label()}
-        <span class="sr-only">{m.account_login_password()}</span>
-      {/snippet}
-    </ListInput>
-  </List>
 
   {#if error}
-    <p
-      id="account-login-error"
-      class="login-error"
-      tabindex="-1"
-      data-testid="account-login-error"
-    >
-      {m.account_login_failed()}
-    </p>
+    <Block role="alert">
+      <p
+        id="account-login-error"
+        class="login-error"
+        tabindex="-1"
+        data-testid="account-login-error"
+      >
+        {m.account_login_failed()}
+      </p>
+    </Block>
   {/if}
 
-  <div class="login-action">
-    <Button
-      large
-      disabled={!canSubmit}
-      onclick={handleSubmit}
-      data-testid="account-login-submit"
-    >
-      {#if pending}
-        <span
-          role="progressbar"
-          aria-label={m.account_unlocking()}
-          class="login-progress"
-        ></span>
-        {m.account_unlocking()}
-      {:else}
+  <form onsubmit={handleSubmit}>
+    <List strong inset class="login-list">
+      <ListInput
+        label={m.account_login_username()}
+        type="text"
+        inputId="account-username"
+        placeholder={m.account_login_username()}
+        value={username}
+        onInput={(e: Event) => {
+          if (e.target instanceof HTMLInputElement) username = e.target.value;
+        }}
+        disabled={pending}
+        autocomplete="off"
+        autocapitalize="none"
+        data-testid="account-username"
+      />
+      <PasswordInput
+        label={m.account_login_password()}
+        placeholder={m.account_login_password()}
+        bind:value={password}
+        autocomplete="current-password"
+        disabled={pending}
+      />
+    </List>
+
+    <div class="login-action">
+      <Button
+        large
+        type="submit"
+        disabled={!canSubmit}
+        data-testid="account-login-submit"
+      >
         {m.account_login_submit()}
-      {/if}
-    </Button>
-  </div>
-</Block>
+      </Button>
+    </div>
+  </form>
+
+  <KeyDerivation
+    phase={shownPhase}
+    phaseLabel={getLoginPhaseLabel(shownPhase)}
+  />
+</AuthCard>
 
 <style>
+  .login-header {
+    text-align: center;
+    margin-bottom: var(--space-lg);
+  }
+
+  .login-logo {
+    margin: 0 auto var(--space-sm);
+    border-radius: 8px;
+    display: block;
+  }
+
+  .login-org-name {
+    font-size: var(--text-xl, 1.5rem);
+    font-weight: 700;
+    color: var(--ink);
+    margin: 0;
+  }
+
+  .login-subtitle {
+    margin-top: var(--space-xs);
+    font-size: var(--text-sm);
+    color: var(--muted);
+  }
+
   .signed-out-note {
     font-size: var(--text-sm);
     color: var(--muted);
-    margin-bottom: var(--space-md);
     line-height: 1.5;
+    margin: 0;
   }
 
   :global(.login-list) {
@@ -134,36 +199,11 @@
   .login-error {
     font-size: var(--text-sm);
     color: var(--danger);
-    margin-top: var(--space-sm);
+    margin: 0;
     outline: none;
   }
 
   .login-action {
     margin-top: var(--space-lg);
-  }
-
-  .login-progress {
-    display: inline-block;
-    width: 16px;
-    height: 16px;
-    border: 2px solid currentColor;
-    border-top-color: transparent;
-    border-radius: 50%;
-    animation: spin 0.8s linear infinite;
-    margin-right: 8px;
-    vertical-align: middle;
-  }
-
-  @keyframes spin {
-    to {
-      transform: rotate(360deg);
-    }
-  }
-
-  @media (prefers-reduced-motion: reduce) {
-    .login-progress {
-      animation: none;
-      opacity: 0.5;
-    }
   }
 </style>

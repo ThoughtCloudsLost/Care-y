@@ -6,11 +6,14 @@
   All key material lives in module-scope state, zeroed on quick exit,
   logout, idle timeout, and pagehide.
 
-  Four states (in order):
+  Three states (in order):
     1. Login (default): AccountLoginForm
     2. Thread: PortalThread + PortalComposer reused unchanged
-    3. Settings: AccountSettings collapsible section
-    4. Quick exit: always visible, every state
+    3. Settings: AccountSettings in a sheet, opened from the drawer
+
+  Quick exit and the drawer belong to the (client) layout. This page
+  publishes its session-zeroing callback, safe URL, and drawer entries
+  through the client shell context.
 
   4-branch data pattern: isLoading -> placeholders, isError -> fall
   back to login with generic message, empty -> empty-thread text,
@@ -47,15 +50,22 @@
   } from "$lib/portal/account-crypto.js";
   import type { LoginCryptoCallbacks } from "$lib/auth/login-crypto.js";
   import { buildLoginCallbacks } from "$lib/auth/crypto-callbacks.js";
+  import type { LoginPhaseId } from "$lib/components/onboarding/login-phase.js";
   import { IdleTimer } from "$lib/auth/idle-timer.js";
-  import QuickExit from "$lib/components/portal/QuickExit.svelte";
   import PortalHint from "$lib/components/portal/PortalHint.svelte";
+  import { createPublicBrandingQuery } from "$lib/branding/public-branding.js";
   import PortalThread from "$lib/portal/PortalThread.svelte";
   import PortalComposer from "$lib/portal/PortalComposer.svelte";
   import AccountLoginForm from "$lib/portal/AccountLoginForm.svelte";
   import AccountSettings from "$lib/portal/AccountSettings.svelte";
-
-  const DEFAULT_SAFE_URL = "https://weather.gov";
+  import PageLayout from "$lib/shell/PageLayout.svelte";
+  import ShellSheet from "$lib/shell/ShellSheet.svelte";
+  import { Settings as Cog, LogOut } from "@lucide/svelte";
+  import {
+    getClientShellCtx,
+    DEFAULT_SAFE_URL,
+    type ClientDrawerAction,
+  } from "$lib/client-shell/context.js";
 
   // ---------------------------------------------------------------------------
   // Session state (module scope, zeroed on exit)
@@ -67,6 +77,7 @@
   let loginUsername = $state<string | null>(null);
   let loginPending = $state(false);
   let loginError = $state(false);
+  let loginPhase = $state<LoginPhaseId>("idle");
   let signedOutMessage = $state("");
   let changePasswordPending = $state(false);
   let changePasswordError = $state("");
@@ -148,9 +159,13 @@
   // Crypto phase callbacks (reused across login, create, change-password)
   // ---------------------------------------------------------------------------
 
-  function makeCryptoCallbacks(): LoginCryptoCallbacks {
-    // Single indeterminate progressbar; phases are not surfaced separately.
-    return buildLoginCallbacks(() => undefined);
+  // Login reports phases so the form can label the Argon2id and OPRF wait.
+  // Change-password runs the same pipeline behind its own pending flag and
+  // has no phase display, so it passes a no-op setter.
+  function makeCryptoCallbacks(
+    setPhase: (phase: LoginPhaseId) => void = () => undefined,
+  ): LoginCryptoCallbacks {
+    return buildLoginCallbacks(setPhase);
   }
 
   // ---------------------------------------------------------------------------
@@ -162,8 +177,11 @@
     loginPending = true;
     loginError = false;
     signedOutMessage = "";
+    loginPhase = "auth";
 
-    const callbacks = makeCryptoCallbacks();
+    const callbacks = makeCryptoCallbacks((p: LoginPhaseId) => {
+      loginPhase = p;
+    });
 
     void doAccountLogin(username, password, callbacks)
       .then((newSession: AccountSession) => {
@@ -177,6 +195,7 @@
       })
       .finally(() => {
         loginPending = false;
+        loginPhase = "idle";
       });
   }
 
@@ -228,6 +247,11 @@
   }));
 
   const orgPublicKey = $derived(orgKeyQuery.data ?? null);
+
+  // Org-set name shown above messages from the organization, inherited from
+  // the same public branding blob the portal reads.
+  const brandingQuery = createPublicBrandingQuery();
+  const supportLabel = $derived(brandingQuery.data?.supportLabel ?? "");
 
   // 4-branch: failed cookie session falls back to login
   $effect(() => {
@@ -471,14 +495,53 @@
     hintShown = false;
     hintDismissed = true;
   }
+
+  // ---------------------------------------------------------------------------
+  // Client shell registration
+  // ---------------------------------------------------------------------------
+
+  // The layout owns quick exit and the drawer; this page owns the session.
+  // Only the zeroing callback crosses the boundary, never key material.
+  const shellContainer = getClientShellCtx();
+
+  let settingsOpen = $state(false);
+
+  const drawerActions = $derived.by((): readonly ClientDrawerAction[] => {
+    if (!session) return [];
+    return [
+      {
+        id: "settings",
+        label: m.account_settings_title(),
+        icon: Cog,
+        onclick: () => (settingsOpen = true),
+      },
+      {
+        id: "logout",
+        label: m.account_logout(),
+        icon: LogOut,
+        destructive: true,
+        onclick: handleLogout,
+      },
+    ];
+  });
+
+  $effect(() => {
+    shellContainer.current = {
+      ondestroy: destroySession,
+      safeUrl,
+      actions: drawerActions,
+      // Chat shape only once signed in; the login screen scrolls normally.
+      lockScroll: session !== null,
+    };
+    return () => {
+      shellContainer.current = undefined;
+    };
+  });
 </script>
 
 <svelte:head>
   <title>{m.account_title()}</title>
 </svelte:head>
-
-<!-- Quick exit (always visible, every state) -->
-<QuickExit ondestroy={destroySession} {safeUrl} />
 
 {#if !session}
   <!-- State 1: Login -->
@@ -486,6 +549,7 @@
     onsubmit={handleLogin}
     pending={loginPending}
     error={loginError}
+    phase={loginPhase}
     {signedOutMessage}
   />
 {:else if bootstrapQuery.isLoading || messagesQuery.isLoading}
@@ -500,20 +564,25 @@
     </div>
   </Block>
 {:else if session}
-  <!-- State 2 + 3: Thread + Settings -->
-  <PortalThread
-    messages={allMessages}
-    clientPrivate={session.keypair.clientPrivate}
-    loading={messagesQuery.isLoading}
-  />
+  <!-- State 2: Thread scrolls, composer pins to the bottom -->
+  <PageLayout lockScroll>
+    {#snippet bottomBar()}
+      <PortalComposer
+        bind:this={composerRef}
+        onsend={handleSend}
+        pending={replyMutation.isPending}
+        onfirstfocus={handleFirstFocus}
+        errorMessage={sendError || undefined}
+      />
+    {/snippet}
 
-  <PortalComposer
-    bind:this={composerRef}
-    onsend={handleSend}
-    pending={replyMutation.isPending}
-    onfirstfocus={handleFirstFocus}
-    errorMessage={sendError || undefined}
-  />
+    <PortalThread
+      messages={allMessages}
+      clientPrivate={session.keypair.clientPrivate}
+      loading={messagesQuery.isLoading}
+      {supportLabel}
+    />
+  </PageLayout>
 
   <PortalHint
     opened={hintShown}
@@ -523,13 +592,19 @@
     dismissTestid="web-chat-hint-dismiss"
   />
 
-  <AccountSettings
-    onchangepassword={(current: string, newPw: string) =>
-      void handleChangePassword(current, newPw)}
-    onlogout={handleLogout}
-    pending={changePasswordPending}
-    errorMessage={changePasswordError || undefined}
-  />
+  <!-- State 3: Settings, opened from the drawer -->
+  <ShellSheet
+    opened={settingsOpen}
+    ondismiss={() => (settingsOpen = false)}
+    title={m.account_settings_title()}
+  >
+    <AccountSettings
+      onchangepassword={(current: string, newPw: string) =>
+        void handleChangePassword(current, newPw)}
+      pending={changePasswordPending}
+      errorMessage={changePasswordError || undefined}
+    />
+  </ShellSheet>
 {/if}
 
 <style>

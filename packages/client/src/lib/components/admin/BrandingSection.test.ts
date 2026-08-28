@@ -367,6 +367,7 @@ const LOADED_DATA: BrandingData = {
   encryptedPrimaryColor: btoa(DEFAULT_PRIMARY),
   encryptedAccentColor: btoa(DEFAULT_ACCENT),
   encryptedClientText: btoa("We provide confidential support."),
+  encryptedClientSupportLabel: null,
   clientEncryptedBranding: null,
   encryptedTerminology: null,
   hasIcons: false,
@@ -427,6 +428,7 @@ describe("BrandingSection", () => {
       encryptedName: null,
       encryptedLogo: null,
       encryptedPrimaryColor: null,
+      encryptedClientSupportLabel: null,
       encryptedClientText: null,
     });
     expect(screen.getByText("No logo uploaded")).toBeTruthy();

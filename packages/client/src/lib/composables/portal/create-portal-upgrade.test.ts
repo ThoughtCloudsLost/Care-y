@@ -29,7 +29,7 @@ describe("createPortalUpgrade", () => {
     expect(upgrade.expanded).toBe(true);
   });
 
-  it("dismiss and expand are independent", () => {
+  it("dismissing after expanding leaves the form expanded", () => {
     const upgrade = createPortalUpgrade();
 
     upgrade.expand();
@@ -38,6 +38,20 @@ describe("createPortalUpgrade", () => {
 
     upgrade.dismiss();
     expect(upgrade.dismissed).toBe(true);
+    expect(upgrade.expanded).toBe(true);
+  });
+
+  // The drawer offers this flow permanently, so reaching it there has to
+  // work after the in-thread card was dismissed.
+  it("expand clears a previous dismissal", () => {
+    const upgrade = createPortalUpgrade();
+
+    upgrade.dismiss();
+    expect(upgrade.dismissed).toBe(true);
+
+    upgrade.expand();
+
+    expect(upgrade.dismissed).toBe(false);
     expect(upgrade.expanded).toBe(true);
   });
 });

@@ -192,6 +192,8 @@ export interface OrgConfigTable {
   encrypted_primary_color: Buffer | null;
   encrypted_accent_color: Buffer | null;
   encrypted_client_text: Buffer | null;
+  // Name clients see above messages from the org. Ciphertext to the server.
+  encrypted_client_support_label: Buffer | null;
   client_encrypted_branding: Buffer | null;
   pii_retention_days: number | null;
   org_public_key: Buffer | null; // Curve25519 (32 bytes), null until first admin onboarding

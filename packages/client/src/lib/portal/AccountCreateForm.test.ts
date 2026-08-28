@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { render, fireEvent, cleanup } from "@testing-library/svelte";
+import * as m from "$lib/paraglide/messages.js";
 import AccountCreateForm from "./AccountCreateForm.svelte";
 
 if (typeof Element.prototype.animate !== "function") {
@@ -27,6 +28,17 @@ function getInput(container: HTMLElement, testId: string): HTMLInputElement {
   return input as HTMLInputElement;
 }
 
+// PasswordConfirmPair renders through ListInput's input snippet and carries
+// no testid, so its fields are addressed by their accessible name.
+function getPasswordInput(
+  container: HTMLElement,
+  label: string,
+): HTMLInputElement {
+  return container.querySelector(
+    `input[aria-label="${label}"]`,
+  ) as HTMLInputElement;
+}
+
 describe("AccountCreateForm", () => {
   afterEach(cleanup);
 
@@ -36,10 +48,10 @@ describe("AccountCreateForm", () => {
     const username = getInput(container, "account-create-username");
     await fireEvent.input(username, { target: { value: "ab" } });
 
-    const password = getInput(container, "account-create-password");
+    const password = getPasswordInput(container, m.account_login_password());
     await fireEvent.input(password, { target: { value: "longpassword" } });
 
-    const confirm = getInput(container, "account-create-confirm");
+    const confirm = getPasswordInput(container, m.account_create_confirm());
     await fireEvent.input(confirm, { target: { value: "longpassword" } });
 
     const btn = container.querySelector(
@@ -57,10 +69,10 @@ describe("AccountCreateForm", () => {
     const username = getInput(container, "account-create-username");
     await fireEvent.input(username, { target: { value: "validuser" } });
 
-    const password = getInput(container, "account-create-password");
+    const password = getPasswordInput(container, m.account_login_password());
     await fireEvent.input(password, { target: { value: "short" } });
 
-    const confirm = getInput(container, "account-create-confirm");
+    const confirm = getPasswordInput(container, m.account_create_confirm());
     await fireEvent.input(confirm, { target: { value: "short" } });
 
     const btn = container.querySelector(
@@ -78,10 +90,10 @@ describe("AccountCreateForm", () => {
     const username = getInput(container, "account-create-username");
     await fireEvent.input(username, { target: { value: "validuser" } });
 
-    const password = getInput(container, "account-create-password");
+    const password = getPasswordInput(container, m.account_login_password());
     await fireEvent.input(password, { target: { value: "longpassword" } });
 
-    const confirm = getInput(container, "account-create-confirm");
+    const confirm = getPasswordInput(container, m.account_create_confirm());
     await fireEvent.input(confirm, { target: { value: "differentpw" } });
 
     const btn = container.querySelector(
@@ -100,10 +112,10 @@ describe("AccountCreateForm", () => {
     const username = getInput(container, "account-create-username");
     await fireEvent.input(username, { target: { value: "validuser" } });
 
-    const password = getInput(container, "account-create-password");
+    const password = getPasswordInput(container, m.account_login_password());
     await fireEvent.input(password, { target: { value: "longpassword" } });
 
-    const confirm = getInput(container, "account-create-confirm");
+    const confirm = getPasswordInput(container, m.account_create_confirm());
     await fireEvent.input(confirm, { target: { value: "longpassword" } });
 
     const btn = container.querySelector(
@@ -118,19 +130,21 @@ describe("AccountCreateForm", () => {
   it("shows mismatch only when both passwords have content and differ", async () => {
     const { container } = renderForm();
 
-    const mismatch = (): Element | null =>
-      container.querySelector("[data-testid='account-mismatch']");
-    const password = getInput(container, "account-create-password");
-    const confirm = getInput(container, "account-create-confirm");
+    // The mismatch is the confirm field's error line now, not a standalone
+    // element, so assert on the message the user actually reads.
+    const mismatch = (): boolean =>
+      container.textContent.includes(m.account_create_mismatch());
+    const password = getPasswordInput(container, m.account_login_password());
+    const confirm = getPasswordInput(container, m.account_create_confirm());
 
     await fireEvent.input(password, { target: { value: "longpassword" } });
-    expect(mismatch()).toBeNull();
+    expect(mismatch()).toBe(false);
 
     await fireEvent.input(confirm, { target: { value: "different" } });
-    expect(mismatch()).toBeTruthy();
+    expect(mismatch()).toBe(true);
 
     await fireEvent.input(confirm, { target: { value: "longpassword" } });
-    expect(mismatch()).toBeNull();
+    expect(mismatch()).toBe(false);
   });
 
   it("renders both warning messages", () => {
@@ -141,5 +155,21 @@ describe("AccountCreateForm", () => {
     expect(
       container.querySelector("[data-testid='warning-reset']"),
     ).toBeTruthy();
+  });
+
+  // Shared-device threat: the reveal toggle must be a deliberate tap, never
+  // the starting state.
+  it("starts with both passwords hidden", () => {
+    const { container } = renderForm();
+    expect(
+      getPasswordInput(container, m.account_login_password()).getAttribute(
+        "type",
+      ),
+    ).toBe("password");
+    expect(
+      getPasswordInput(container, m.account_create_confirm()).getAttribute(
+        "type",
+      ),
+    ).toBe("password");
   });
 });

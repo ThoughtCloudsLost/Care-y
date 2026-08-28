@@ -1121,6 +1121,8 @@
   "admin_branding_preview_badges": "Insignias",
   "admin_branding_color_contrast_note": "Los colores finales pueden variar ligeramente. La aplicacion los ajusta automaticamente para legibilidad y contraste.",
   "admin_branding_name_hint": "Mostrado a {volunteers} y {clients}.",
+  "admin_branding_support_label_label": "Nombre que los clientes ven en tus mensajes",
+  "admin_branding_support_label_hint": "Se muestra encima de cada mensaje que envías en el portal del cliente. Usa las palabras de tu organización. Déjalo vacío para conservar el valor predeterminado. Nunca pongas aquí el nombre de una persona voluntaria: los clientes lo ven y es el mismo para todo tu equipo.",
   "admin_branding_text_hint": "Mostrado en el formulario de admision de {clients}.",
   "admin_branding_save": "Guardar cambios",
   "admin_branding_saved": "Marca actualizada",
@@ -2229,7 +2231,6 @@
   "demo_role_manager_initial": "R",
   "demo_role_volunteer_initial": "V",
   "demo_compose_sample": "Gracias por comunicarse. Permítame revisar esto por usted.",
-
   "logs_page_title": "Registros",
   "logs_tab_calls": "Llamadas",
   "logs_tab_audit": "Auditoria",
@@ -2392,7 +2393,6 @@
   "roles_perm_reset_success": "Permisos de roles restablecidos",
   "error_permission_locked": "Este permiso está protegido y no se puede modificar.",
   "error_form_has_responses": "Este formulario tiene respuestas y no se puede eliminar. Desactivalo en su lugar.",
-
   "consultant_phone_title": "Mi telefono",
   "consultant_phone_status_none": "Sin configurar",
   "consultant_phone_status_unverified": "Sin verificar",
@@ -2433,7 +2433,6 @@
   "admin_reachability_callable": "Contactable",
   "admin_reachability_callable_sms": "Contactable + SMS",
   "admin_reachability_phone_unverified": "Telefono sin verificar",
-
   "intake_title": "Pedir ayuda",
   "intake_intro": "Estamos aqui para ayudarte. Lo que escribas se cifra en tu dispositivo antes de enviarse.",
   "intake_field_name_label": "Tu nombre",
@@ -2467,7 +2466,6 @@
   "intake_error_phone_format": "Ingresa un numero de telefono como +1 555 000 1234.",
   "intake_error_email_format": "Ingresa un correo electronico valido.",
   "intake_noscript": "Este formulario necesita JavaScript para cifrar tu informacion antes de enviarla. Por favor activa JavaScript, o llamanos en su lugar.",
-
   "intake_protected_title": "Como te protegemos",
   "intake_protected_summary": "Lo que escribas aqui se cifra antes de salir de tu dispositivo. Solo los voluntarios asignados pueden leerlo. Aunque alguien acceda a este servidor, no podra leer tus mensajes.",
   "intake_protected_encrypted_what": "Tu informacion se cifra en tu navegador antes de enviarse. El servidor solo recibe datos codificados que no puede leer.",
@@ -2476,9 +2474,7 @@
   "intake_protected_volunteers_why": "Otras personas que usan este sistema no pueden verla. El servidor tampoco puede verla. El acceso esta limitado a las personas que te estan ayudando.",
   "intake_protected_server_what": "El servidor almacena tu informacion como datos codificados que no puede descifrar.",
   "intake_protected_server_why": "Si alguien accede a este servidor, solo ve texto cifrado. Descifrarlo requiere la contrasena de un voluntario y la verificacion de dos servidores separados en paises diferentes. Ningun servidor tiene suficiente informacion por si solo para leer tus datos.",
-
   "intake_footer_privacy": "Aviso de privacidad",
-
   "intake_privacy_title": "Aviso de privacidad",
   "intake_privacy_who_title": "Quien recopila tus datos",
   "intake_privacy_who_body": "Tus datos son recopilados por {orgName}, con el apoyo del operador de la plataforma CARE-Y.",
@@ -2501,7 +2497,6 @@
   "intake_privacy_voluntary_body": "Proporcionar tu informacion es voluntario. Si decides no compartir datos de contacto, la organizacion no podra comunicarse contigo, pero puedes volver a consultar por tu cuenta.",
   "intake_privacy_cookies_title": "Cookies",
   "intake_privacy_cookies_body": "Este sitio solo usa cookies de sesion y seguridad necesarias para que el formulario funcione. Estas cookies no te rastrean y no requieren tu consentimiento.",
-
   "intake_avail_timezone_label": "Zona horaria: {timezone}",
   "intake_avail_timezone_change": "Cambiar",
   "intake_avail_timezone_search": "Buscar zonas horarias...",
@@ -2526,7 +2521,6 @@
   "intake_avail_day_friday": "Viernes",
   "intake_avail_day_saturday": "Sabado",
   "intake_avail_day_sunday": "Domingo",
-
   "intake_forms_title": "Formularios de admision",
   "intake_forms_empty": "No hay formularios. Crea uno para personalizar la pagina de admision.",
   "intake_forms_create": "Crear nuevo formulario",
@@ -2641,7 +2635,6 @@
   "intake_forms_config_priority_high": "Alta",
   "intake_forms_config_priority_urgent": "Urgente",
   "intake_forms_config_priority_default": "Predeterminada (normal)",
-
   "intake_forms_config_help_text": "Texto de ayuda",
   "intake_forms_config_help_text_placeholder": "p. ej. Solo usaremos esto para contactarte.",
   "intake_forms_config_help_text_hint": "Se muestra debajo del campo en el formulario publico.",
@@ -2652,7 +2645,6 @@
   "intake_forms_config_subtype_number": "Numero",
   "intake_forms_config_number_min": "Valor minimo",
   "intake_forms_config_number_max": "Valor maximo",
-
   "intake_forms_content_heading": "Contenido del formulario",
   "intake_forms_description_label": "Descripcion",
   "intake_forms_description_placeholder": "Se muestra sobre el formulario en lugar del texto introductorio predeterminado.",
@@ -2673,12 +2665,9 @@
   "intake_forms_banner_upload_failed": "Error al subir la portada.",
   "intake_forms_banner_file_too_large": "La imagen de portada excede el tamano maximo de archivo.",
   "intake_forms_banner_file_type": "Solo se permiten imagenes PNG, JPEG y WebP.",
-
   "intake_forms_field_type_date": "Fecha",
   "intake_forms_field_type_date_desc": "Selector de fecha",
-
   "intake_field_unknown_type": "Este tipo de campo no es compatible con su version del formulario.",
-
   "intake_forms_locale_heading": "Idioma de edicion",
   "intake_forms_locale_optional_hint": "Las traducciones son opcionales. Los campos sin traduccion muestran el texto en ingles.",
   "intake_forms_slug_error_length": "El enlace debe tener entre 2 y 80 caracteres.",
@@ -2689,7 +2678,6 @@
   "intake_forms_duplicate_label": "Duplicar formulario",
   "intake_forms_duplicate_suffix": "(copia)",
   "intake_forms_duplicated": "Formulario duplicado",
-
   "intake_forms_field_type_page_break": "Salto de pagina",
   "intake_forms_field_type_page_break_desc": "Divide el formulario en paginas",
   "intake_forms_field_type_rich_text": "Bloque de texto",
@@ -2724,7 +2712,6 @@
   "intake_forms_config_condition_op_is_empty": "está vacío",
   "intake_forms_config_condition_op_is_not_empty": "no está vacío",
   "intake_forms_config_condition_no_fields": "No hay campos anteriores disponibles para condiciones.",
-
   "intake_responses_title": "Respuestas",
   "intake_responses_empty": "No se han enviado respuestas para este formulario.",
   "intake_responses_default_form_note": "Las respuestas del formulario predeterminado no generan filas de respuesta. Este visor cubre solo formularios personalizados.",
@@ -2746,12 +2733,10 @@
   "intake_responses_export_confirm_action": "Exportar",
   "intake_responses_export_no_rows": "No hay respuestas descifradas para exportar.",
   "intake_responses_csv_submitted_header": "Enviado",
-
   "intake_error_number_format": "Ingrese un numero valido.",
   "intake_error_number_min": "El valor debe ser al menos {min}.",
   "intake_error_number_max": "El valor debe ser como maximo {max}.",
   "intake_error_date_format": "Ingrese una fecha valida.",
-
   "portal_title": "Mensajes",
   "portal_incomplete_link": "A este enlace le falta información. Si lo recibiste por mensaje de texto, abre el enlace completo desde tu mensaje.",
   "portal_dead_link": "Este enlace ya no está activo. Si necesitas ayuda, contacta a tu equipo de apoyo para obtener uno nuevo.",
@@ -2766,13 +2751,13 @@
   "portal_message_edited": "(editado)",
   "portal_you": "Tú",
   "portal_support_team": "Equipo de apoyo",
+  "portal_menu_label": "Menú",
   "portal_quick_exit_label": "Salir de esta página",
   "portal_web_chat_hint": "Tus mensajes se cifran antes de salir de tu dispositivo. Solo los voluntarios asignados pueden leerlos.",
   "portal_hint_dismiss": "Entendido",
   "portal_link_sms_body": "Aquí está tu enlace privado de mensajes: {link}",
   "portal_nudge_sms_body": "Tienes un nuevo mensaje esperándote.",
   "portal_send_failed": "Tu mensaje no se envió. Tus palabras están de vuelta en el campo de texto. Toca enviar para intentarlo de nuevo.",
-
   "account_title": "Iniciar sesión",
   "account_login_username": "Nombre de usuario",
   "account_login_password": "Contraseña",
@@ -2808,7 +2793,6 @@
   "account_change_reset_warning": "Si alguna vez olvidas tu contraseña y se restablece, tu historial de mensajes se pierde. Cambiarla aquí conserva todo.",
   "account_create_submit": "Crear cuenta",
   "account_upgrade_card_dismiss": "Cerrar",
-
   "ticket_tier_label": "Comunicación",
   "ticket_tier_sms_email": "SMS / Correo",
   "ticket_tier_secure_link": "Enlace seguro",
@@ -2841,7 +2825,6 @@
   "ticket_toast_account_reset": "Cuenta restablecida",
   "ticket_edit_message_counter": "{count} / {max}",
   "ticket_edit_message_too_long": "Este mensaje es muy largo.",
-
   "share_view_title": "Mensaje seguro",
   "share_view_heading": "Un mensaje para ti",
   "share_view_one_time_notice": "Este enlace ya se usó y no se puede abrir de nuevo. Guarda lo que necesites antes de cerrar esta página.",
@@ -2866,7 +2849,6 @@
   "share_status_waiting": "Pendiente",
   "share_status_opened": "Abierto",
   "share_status_expired": "Expirado",
-
   "audit_event_client_tier_changed": "Nivel de comunicación de {client} cambiado",
   "audit_event_portal_channel_regenerated": "Enlace seguro regenerado",
   "audit_event_portal_channel_revoked": "Enlace seguro eliminado",
@@ -2877,7 +2859,6 @@
   "error_portal_channel_exists": "Este {client} ya tiene un enlace seguro activo.",
   "error_portal_channel_not_found": "Este enlace seguro no está disponible. Es posible que haya sido revocado o que nunca haya existido.",
   "error_account_username_taken": "Ese nombre de usuario ya está en uso. Prueba con otro.",
-
   "intake_forms_closes_at_heading": "Fecha de cierre",
   "intake_forms_closes_at_label": "Cierra el",
   "intake_forms_closes_at_hint": "Tras esta fecha y hora, el formulario dejará de aceptar envíos.",
@@ -2895,11 +2876,9 @@
   "intake_continuation_copy_error": "No se pudo copiar el enlace. Selecciónalo manualmente y cópialo.",
   "intake_continuation_warning": "Este enlace es la única forma de volver a tu conversación. CARE-Y no puede recuperarlo si lo pierdes. Cualquier persona que tenga el enlace puede leer y agregar a este hilo.",
   "intake_continuation_hint": "El enlace de arriba contiene la clave que desbloquea tu conversación. Guárdalo antes de salir de esta página.",
-
   "ticket_tier_continuation": "Enlace de continuación",
   "ticket_tier_continuation_provenance": "Creado por la persona que llamó al momento del ingreso",
   "ticket_tier_regenerate_continuation_confirm": "Regenerar reemplazará el enlace de continuación con un nuevo enlace seguro emitido por un voluntario. El enlace original dejará de funcionar.",
-
   "followup_type_contact_correction": "Corrección de contacto",
   "followup_type_contact_correction_desc": "Correcciones de información de contacto enviadas por la persona que llamó",
   "contact_correction_flag_label": "Corrección de contacto, verifica antes de contactar",
@@ -2907,18 +2886,15 @@
   "contact_correction_handled": "Atendido",
   "contact_correction_handled_by": "Atendido por {name}",
   "contact_correction_pending_warning": "Hay una corrección de contacto pendiente abajo. Verifica antes de contactar.",
-
   "portal_correction_mode_label": "Corrigiendo información de contacto",
   "portal_correction_mode_button": "Corregir mi información de contacto",
   "portal_correction_mode_cancel": "Cancelar corrección",
-
   "merge_channel_choice_heading": "Ambas personas tienen un enlace del portal",
   "merge_channel_choice_explain": "Solo un enlace puede permanecer activo después de la combinación. El otro enlace dejará de funcionar.",
   "merge_channel_kind_secure_link": "Enlace seguro",
   "merge_channel_kind_intake_continuation": "Creado en el ingreso",
   "merge_channel_kind_account": "Cuenta",
   "merge_channel_created": "Creado el {date}",
-
   "intake_forms_destination_default_named": "Cola de recepcion predeterminada ({name})",
   "intake_forms_closes_at_hint_with_message": "Tras esta fecha, el formulario muestra el mensaje de cierre en vez de aceptar envios.",
   "intake_forms_config_field_type_label": "Tipo de campo",

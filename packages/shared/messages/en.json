@@ -1121,6 +1121,8 @@
   "admin_branding_preview_badges": "Badges",
   "admin_branding_color_contrast_note": "Final colors may differ slightly. The app adjusts them automatically for readability and contrast.",
   "admin_branding_name_hint": "Shown to {volunteers} and {clients}.",
+  "admin_branding_support_label_label": "Name clients see on your messages",
+  "admin_branding_support_label_hint": "Shown above every message you send in the client portal. Use your organization's own words. Leave it empty to keep the default. Never put a volunteer's name here: clients see this, and it is the same for everyone on your team.",
   "admin_branding_text_hint": "Shown on the {client} intake form.",
   "admin_branding_save": "Save changes",
   "admin_branding_saved": "Branding updated",
@@ -2229,7 +2231,6 @@
   "demo_role_manager_initial": "M",
   "demo_role_volunteer_initial": "V",
   "demo_compose_sample": "Thank you for reaching out. Let me look into this for you.",
-
   "logs_page_title": "Logs",
   "logs_tab_calls": "Calls",
   "logs_tab_audit": "Audit",
@@ -2392,7 +2393,6 @@
   "roles_perm_reset_success": "Role permissions reset to defaults",
   "error_permission_locked": "This permission is protected and cannot be changed.",
   "error_form_has_responses": "This form has submissions and cannot be deleted. Deactivate it instead.",
-
   "consultant_phone_title": "My phone",
   "consultant_phone_status_none": "Not set",
   "consultant_phone_status_unverified": "Unverified",
@@ -2433,7 +2433,6 @@
   "admin_reachability_callable": "Callable",
   "admin_reachability_callable_sms": "Callable + SMS",
   "admin_reachability_phone_unverified": "Phone unverified",
-
   "intake_title": "Get help",
   "intake_intro": "We're here to help. What you write is encrypted on your device before it is sent.",
   "intake_field_name_label": "Your name",
@@ -2467,7 +2466,6 @@
   "intake_error_phone_format": "Enter a phone number like +1 555 000 1234.",
   "intake_error_email_format": "Enter a valid email address.",
   "intake_noscript": "This form needs JavaScript to encrypt your information before sending it. Please enable JavaScript, or call us instead.",
-
   "intake_protected_title": "How you're protected",
   "intake_protected_summary": "What you write here is encrypted before it leaves your device. Only assigned volunteers can read it. Even if someone breaks into this server, they cannot read your messages.",
   "intake_protected_encrypted_what": "Your information is encrypted in your browser before it is sent. The server receives only scrambled data it cannot read.",
@@ -2476,9 +2474,7 @@
   "intake_protected_volunteers_why": "Other people who use this system cannot see it. The server itself cannot see it. Access is limited to the specific people helping you.",
   "intake_protected_server_what": "The server stores your information as scrambled data it cannot decode.",
   "intake_protected_server_why": "If someone gains access to this server, they see only encrypted text. Decrypting it requires a volunteer's password plus verification from two separate servers in different countries. No single server holds enough to read your information.",
-
   "intake_footer_privacy": "Privacy notice",
-
   "intake_privacy_title": "Privacy notice",
   "intake_privacy_who_title": "Who is collecting your data",
   "intake_privacy_who_body": "Your data is collected by {orgName}, supported by the CARE-Y platform operator.",
@@ -2501,7 +2497,6 @@
   "intake_privacy_voluntary_body": "Providing your information is voluntary. If you choose not to share contact details, the organization will not be able to reach out to you, but you can check back on your own.",
   "intake_privacy_cookies_title": "Cookies",
   "intake_privacy_cookies_body": "This site uses only session and security cookies that are needed for the form to work. These cookies do not track you and do not require your consent.",
-
   "intake_avail_timezone_label": "Timezone: {timezone}",
   "intake_avail_timezone_change": "Change",
   "intake_avail_timezone_search": "Search timezones...",
@@ -2526,7 +2521,6 @@
   "intake_avail_day_friday": "Friday",
   "intake_avail_day_saturday": "Saturday",
   "intake_avail_day_sunday": "Sunday",
-
   "intake_forms_title": "Intake Forms",
   "intake_forms_empty": "No forms yet. Create one to customize the intake page.",
   "intake_forms_create": "Create new form",
@@ -2641,7 +2635,6 @@
   "intake_forms_config_priority_high": "High",
   "intake_forms_config_priority_urgent": "Urgent",
   "intake_forms_config_priority_default": "Default (normal)",
-
   "intake_forms_config_help_text": "Help text",
   "intake_forms_config_help_text_placeholder": "e.g. We will only use this to contact you.",
   "intake_forms_config_help_text_hint": "Shown below the field on the public form.",
@@ -2652,7 +2645,6 @@
   "intake_forms_config_subtype_number": "Number",
   "intake_forms_config_number_min": "Minimum value",
   "intake_forms_config_number_max": "Maximum value",
-
   "intake_forms_content_heading": "Form content",
   "intake_forms_description_label": "Description",
   "intake_forms_description_placeholder": "Shown above the form instead of the default intro text.",
@@ -2673,12 +2665,9 @@
   "intake_forms_banner_upload_failed": "Banner upload failed.",
   "intake_forms_banner_file_too_large": "Banner image exceeds the maximum file size.",
   "intake_forms_banner_file_type": "Only PNG, JPEG, and WebP images are allowed.",
-
   "intake_forms_field_type_date": "Date",
   "intake_forms_field_type_date_desc": "Date picker",
-
   "intake_field_unknown_type": "This field type is not supported by your version of the form.",
-
   "intake_forms_locale_heading": "Authoring language",
   "intake_forms_locale_optional_hint": "Translations are optional. Fields without a translation fall back to the English text.",
   "intake_forms_slug_error_length": "Slug must be 2 to 80 characters.",
@@ -2689,7 +2678,6 @@
   "intake_forms_duplicate_label": "Duplicate form",
   "intake_forms_duplicate_suffix": "(copy)",
   "intake_forms_duplicated": "Form duplicated",
-
   "intake_forms_field_type_page_break": "Page break",
   "intake_forms_field_type_page_break_desc": "Split the form into pages",
   "intake_forms_field_type_rich_text": "Text block",
@@ -2724,7 +2712,6 @@
   "intake_forms_config_condition_op_is_empty": "is empty",
   "intake_forms_config_condition_op_is_not_empty": "is not empty",
   "intake_forms_config_condition_no_fields": "No earlier fields available for conditions.",
-
   "intake_responses_title": "Responses",
   "intake_responses_empty": "No responses have been submitted for this form.",
   "intake_responses_default_form_note": "Default form submissions do not produce response rows. This viewer covers custom forms only.",
@@ -2746,12 +2733,10 @@
   "intake_responses_export_confirm_action": "Export",
   "intake_responses_export_no_rows": "No decrypted responses to export.",
   "intake_responses_csv_submitted_header": "Submitted",
-
   "intake_error_number_format": "Enter a valid number.",
   "intake_error_number_min": "Value must be at least {min}.",
   "intake_error_number_max": "Value must be at most {max}.",
   "intake_error_date_format": "Enter a valid date.",
-
   "portal_title": "Messages",
   "portal_incomplete_link": "This link is missing information. If you received it by text, open the full link from your message.",
   "portal_dead_link": "This link is no longer active. If you need help, contact your support team for a new one.",
@@ -2766,13 +2751,13 @@
   "portal_message_edited": "(edited)",
   "portal_you": "You",
   "portal_support_team": "Support team",
+  "portal_menu_label": "Menu",
   "portal_quick_exit_label": "Leave this page",
   "portal_web_chat_hint": "Your messages are encrypted before they leave your device. Only assigned volunteers can read them.",
   "portal_hint_dismiss": "Got it",
   "portal_link_sms_body": "Here is your private message link: {link}",
   "portal_nudge_sms_body": "You have a new message waiting for you.",
   "portal_send_failed": "Your message did not send. Your words are back in the box. Tap send to try again.",
-
   "account_title": "Sign in",
   "account_login_username": "Username",
   "account_login_password": "Password",
@@ -2808,7 +2793,6 @@
   "account_change_reset_warning": "If you ever forget your password and it gets reset, your message history is lost. Changing it here keeps everything.",
   "account_create_submit": "Create account",
   "account_upgrade_card_dismiss": "Dismiss",
-
   "ticket_tier_label": "Communication",
   "ticket_tier_sms_email": "SMS / Email",
   "ticket_tier_secure_link": "Secure Link",
@@ -2841,7 +2825,6 @@
   "ticket_toast_account_reset": "Account reset",
   "ticket_edit_message_counter": "{count} / {max}",
   "ticket_edit_message_too_long": "This message is too long.",
-
   "share_view_title": "Secure message",
   "share_view_heading": "A message for you",
   "share_view_one_time_notice": "This link has now been used and cannot be opened again. Save what you need before closing this page.",
@@ -2866,7 +2849,6 @@
   "share_status_waiting": "Waiting",
   "share_status_opened": "Opened",
   "share_status_expired": "Expired",
-
   "audit_event_client_tier_changed": "{Client} communication tier changed",
   "audit_event_portal_channel_regenerated": "Secure link regenerated",
   "audit_event_portal_channel_revoked": "Secure link removed",
@@ -2877,7 +2859,6 @@
   "error_portal_channel_exists": "This {client} already has an active secure link.",
   "error_portal_channel_not_found": "This secure link is not available. It may have been revoked or never existed.",
   "error_account_username_taken": "That username is already taken. Try a different one.",
-
   "intake_forms_closes_at_heading": "Closing date",
   "intake_forms_closes_at_label": "Closes at",
   "intake_forms_closes_at_hint": "After this date and time, the form will stop accepting submissions.",
@@ -2895,11 +2876,9 @@
   "intake_continuation_copy_error": "Could not copy the link. Select it manually and copy.",
   "intake_continuation_warning": "This link is the only way back to your conversation. CARE-Y cannot recover it if lost. Anyone who has the link can read and add to this thread.",
   "intake_continuation_hint": "The link above carries the key that unlocks your conversation. Save it before leaving this page.",
-
   "ticket_tier_continuation": "Continuation Link",
   "ticket_tier_continuation_provenance": "Created by the caller at intake",
   "ticket_tier_regenerate_continuation_confirm": "Regenerating will replace the continuation link with a new volunteer-issued Secure Link. The caller's original link will stop working.",
-
   "followup_type_contact_correction": "Contact correction",
   "followup_type_contact_correction_desc": "Caller-submitted corrections to their contact information",
   "contact_correction_flag_label": "Contact correction, verify before contacting",
@@ -2907,18 +2886,15 @@
   "contact_correction_handled": "Handled",
   "contact_correction_handled_by": "Handled by {name}",
   "contact_correction_pending_warning": "A contact correction is pending below. Verify before contacting.",
-
   "portal_correction_mode_label": "Correcting contact info",
   "portal_correction_mode_button": "Correct my contact info",
   "portal_correction_mode_cancel": "Cancel correction",
-
   "merge_channel_choice_heading": "Both callers have a portal link",
   "merge_channel_choice_explain": "Only one link can stay active after the merge. The other link will stop working.",
   "merge_channel_kind_secure_link": "Secure Link",
   "merge_channel_kind_intake_continuation": "Created at intake",
   "merge_channel_kind_account": "Account",
   "merge_channel_created": "Created {date}",
-
   "intake_forms_destination_default_named": "Default intake queue ({name})",
   "intake_forms_closes_at_hint_with_message": "After this date, the form shows the closed message instead of accepting submissions.",
   "intake_forms_config_field_type_label": "Field type",

@@ -68,6 +68,9 @@ export function createPortalUpgrade(): PortalUpgradeState {
   }
 
   function expand(): void {
+    // Clears dismissal too: the drawer offers this flow permanently, so
+    // reaching it there has to work after the in-thread card was dismissed.
+    dismissed = false;
     expanded = true;
   }
 

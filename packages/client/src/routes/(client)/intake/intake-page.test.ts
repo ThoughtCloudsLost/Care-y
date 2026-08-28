@@ -307,6 +307,7 @@ if (typeof Element.prototype.animate !== "function") {
   }) as unknown as Element["animate"];
 }
 
+import * as m from "$lib/paraglide/messages.js";
 import IntakePage from "./+page.svelte";
 
 // --- Tests ---
@@ -394,6 +395,16 @@ describe("intake page", () => {
    * event so Konsta's onInput handler fires with the correct e.target.value.
    * jsdom's fireEvent.input does not set the element's .value property.
    */
+  /**
+   * Helper: PasswordConfirmPair renders through ListInput's input snippet
+   * and carries no testid, so its fields are addressed by accessible name.
+   */
+  function getPasswordField(label: string): HTMLInputElement | null {
+    return document.querySelector<HTMLInputElement>(
+      `input[aria-label="${label}"]`,
+    );
+  }
+
   function setInputValue(
     el: HTMLInputElement | HTMLTextAreaElement,
     val: string,
@@ -486,8 +497,8 @@ describe("intake page", () => {
 
     expect(toggle.getAttribute("aria-expanded")).toBe("true");
     expect(screen.getByTestId("account-create-username")).toBeTruthy();
-    expect(screen.getByTestId("account-create-password")).toBeTruthy();
-    expect(screen.getByTestId("account-create-confirm")).toBeTruthy();
+    expect(getPasswordField(m.account_login_password())).toBeTruthy();
+    expect(getPasswordField(m.account_create_confirm())).toBeTruthy();
     expect(screen.getByTestId("warning-password")).toBeTruthy();
     expect(screen.getByTestId("warning-reset")).toBeTruthy();
   });
@@ -508,20 +519,14 @@ describe("intake page", () => {
       setInputValue(usernameInput as HTMLInputElement, "testuser");
 
     // Fill mismatched passwords
-    const passwordInput = screen
-      .getByTestId("account-create-password")
-      .querySelector("input");
-    const confirmInput = screen
-      .getByTestId("account-create-confirm")
-      .querySelector("input");
-    if (passwordInput)
-      setInputValue(passwordInput as HTMLInputElement, "password123");
-    if (confirmInput)
-      setInputValue(confirmInput as HTMLInputElement, "mismatch456");
+    const passwordInput = getPasswordField(m.account_login_password());
+    const confirmInput = getPasswordField(m.account_create_confirm());
+    if (passwordInput) setInputValue(passwordInput, "password123");
+    if (confirmInput) setInputValue(confirmInput, "mismatch456");
 
     // The mismatch error should appear
     await vi.waitFor(() => {
-      expect(screen.getByTestId("account-mismatch")).toBeTruthy();
+      expect(document.body.textContent).toContain(m.account_create_mismatch());
     });
   });
 
@@ -542,18 +547,12 @@ describe("intake page", () => {
     const usernameInput = screen
       .getByTestId("account-create-username")
       .querySelector("input");
-    const passwordInput = screen
-      .getByTestId("account-create-password")
-      .querySelector("input");
-    const confirmInput = screen
-      .getByTestId("account-create-confirm")
-      .querySelector("input");
+    const passwordInput = getPasswordField(m.account_login_password());
+    const confirmInput = getPasswordField(m.account_create_confirm());
     if (usernameInput)
       setInputValue(usernameInput as HTMLInputElement, "takenuser");
-    if (passwordInput)
-      setInputValue(passwordInput as HTMLInputElement, "password123");
-    if (confirmInput)
-      setInputValue(confirmInput as HTMLInputElement, "password123");
+    if (passwordInput) setInputValue(passwordInput, "password123");
+    if (confirmInput) setInputValue(confirmInput, "password123");
 
     const submitBtn = screen.getByTestId("intake-submit");
     await fireEvent.click(submitBtn);
@@ -686,18 +685,12 @@ describe("intake page", () => {
     const usernameInput = screen
       .getByTestId("account-create-username")
       .querySelector("input");
-    const passwordInput = screen
-      .getByTestId("account-create-password")
-      .querySelector("input");
-    const confirmInput = screen
-      .getByTestId("account-create-confirm")
-      .querySelector("input");
+    const passwordInput = getPasswordField(m.account_login_password());
+    const confirmInput = getPasswordField(m.account_create_confirm());
     if (usernameInput)
       setInputValue(usernameInput as HTMLInputElement, "testuser");
-    if (passwordInput)
-      setInputValue(passwordInput as HTMLInputElement, "password123");
-    if (confirmInput)
-      setInputValue(confirmInput as HTMLInputElement, "password123");
+    if (passwordInput) setInputValue(passwordInput, "password123");
+    if (confirmInput) setInputValue(confirmInput, "password123");
 
     const submitBtn = screen.getByTestId("intake-submit");
     await fireEvent.click(submitBtn);

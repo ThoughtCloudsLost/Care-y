@@ -6,13 +6,16 @@
   All key material lives in composable-scope state, zeroed on quick exit
   and pagehide. The fragment never reaches any server (RFC 3986).
 
-  Six orchestration states (in order):
+  Five orchestration states (in order):
     1. No/bad fragment: static explanation, no server call
     2. Bootstrap: TanStack Query with dead-link state on generic error
     3. Passphrase gate: when hasPassphrase, derive with Argon2id
     4. Thread: decrypted messages via Konsta Messages/Message
     5. Composer: ShellMessagebar via PortalComposer
-    6. Quick exit: always visible, every state
+
+  Quick exit and the drawer belong to the (client) layout. This page
+  publishes its session-zeroing callback, safe URL, and drawer entries
+  through the client shell context.
 -->
 <script lang="ts">
   import { page } from "$app/state";
@@ -32,8 +35,15 @@
   import { decode, encode } from "@care-y/crypto";
   import { newFollowupId, newKeyGeneration } from "@care-y/shared";
   import { encryptReply } from "$lib/portal/portal-crypto.js";
-  import QuickExit from "$lib/components/portal/QuickExit.svelte";
   import PortalHint from "$lib/components/portal/PortalHint.svelte";
+  import { createPublicBrandingQuery } from "$lib/branding/public-branding.js";
+  import PageLayout from "$lib/shell/PageLayout.svelte";
+  import { KeyRound } from "@lucide/svelte";
+  import {
+    getClientShellCtx,
+    DEFAULT_SAFE_URL,
+    type ClientDrawerAction,
+  } from "$lib/client-shell/context.js";
   import PortalPassphraseGate from "$lib/portal/PortalPassphraseGate.svelte";
   import PortalThread from "$lib/portal/PortalThread.svelte";
   import PortalComposer from "$lib/portal/PortalComposer.svelte";
@@ -43,9 +53,6 @@
   import { createPortalSessionState } from "$lib/composables/portal/create-portal-session.svelte.js";
   // care-y-ignore-next-line route-no-db-import -- client composable, no database access; validator heuristic misreads the module
   import { createPortalUpgrade } from "$lib/composables/portal/create-portal-upgrade.svelte.js";
-
-  // Default safe URL when the org has not configured one
-  const DEFAULT_SAFE_URL = "https://weather.gov";
 
   // Route param; the fragment-derived channel id is the crypto authority,
   // this one only keys the queries.
@@ -139,6 +146,11 @@
   }));
 
   const orgPublicKey = $derived(orgKeyQuery.data ?? null);
+
+  // Org-set name shown above messages from the organization. Rides the
+  // public branding blob so it is available before any account exists.
+  const brandingQuery = createPublicBrandingQuery();
+  const supportLabel = $derived(brandingQuery.data?.supportLabel ?? "");
 
   // Polling query for new messages (5-minute interval + focus refetch)
   const queryClient = useQueryClient();
@@ -343,14 +355,53 @@
       m.account_login_failed(),
     );
   }
+
+  // ---------------------------------------------------------------------------
+  // Client shell registration
+  // ---------------------------------------------------------------------------
+
+  // The layout owns quick exit and the drawer; this page owns the session.
+  // Only the zeroing callback crosses the boundary, never key material.
+  const shellContainer = getClientShellCtx();
+
+  // True once the thread is showing. Chat shape only: the other states are
+  // ordinary content that should scroll normally.
+  const threadShowing = $derived(
+    !upgrade.success &&
+      portalSession.keyCheckPassed &&
+      portalSession.session !== null,
+  );
+
+  // The in-thread card can be dismissed; the drawer entry cannot, which is
+  // the point. Both drive the same upgrade composable.
+  const drawerActions = $derived.by((): readonly ClientDrawerAction[] => {
+    if (!showAccountOffer) return [];
+    return [
+      {
+        id: "upgrade",
+        label: m.account_upgrade_card_title(),
+        icon: KeyRound,
+        onclick: () => upgrade.expand(),
+      },
+    ];
+  });
+
+  $effect(() => {
+    shellContainer.current = {
+      ondestroy: () => portalSession.destroySession(),
+      safeUrl,
+      actions: drawerActions,
+      lockScroll: threadShowing,
+    };
+    return () => {
+      shellContainer.current = undefined;
+    };
+  });
 </script>
 
 <svelte:head>
   <title>{m.portal_title()}</title>
 </svelte:head>
-
-<!-- State 6: Quick exit (always visible, every state) -->
-<QuickExit ondestroy={() => portalSession.destroySession()} {safeUrl} />
 
 {#if !fragment.fragmentResolved}
   <!-- Sodium initializing with a fragment present; show the loading state -->
@@ -411,57 +462,64 @@
     </button>
   </Block>
 {:else if portalSession.keyCheckPassed && portalSession.session}
-  <!-- Upgrade offer card (above thread when offered, dismissible) -->
-  {#if showAccountOffer && !upgrade.dismissed}
-    {#if !upgrade.expanded}
-      <Card data-testid="upgrade-card" class="upgrade-card">
-        <div class="upgrade-card-header">
-          <p class="upgrade-card-title">{m.account_upgrade_card_title()}</p>
+  <!-- State 4 + 5: Thread scrolls, composer pins to the bottom -->
+  <PageLayout lockScroll>
+    {#snippet bottomBar()}
+      <PortalComposer
+        bind:this={composerRef}
+        onsend={handleSend}
+        pending={replyMutation.isPending}
+        onfirstfocus={handleFirstFocus}
+        errorMessage={sendError || undefined}
+      />
+    {/snippet}
+
+    <!-- Upgrade offer card (above thread when offered, dismissible).
+         Dismissing it does not remove the offer: the drawer keeps a
+         permanent entry to the same flow. -->
+    {#if showAccountOffer && !upgrade.dismissed}
+      {#if !upgrade.expanded}
+        <Card data-testid="upgrade-card" class="upgrade-card">
+          <div class="upgrade-card-header">
+            <p class="upgrade-card-title">{m.account_upgrade_card_title()}</p>
+            <button
+              type="button"
+              class="upgrade-card-dismiss"
+              aria-label={m.account_upgrade_card_dismiss()}
+              onclick={() => upgrade.dismiss()}
+              data-testid="upgrade-card-dismiss"
+            >
+              <X size={16} aria-hidden="true" />
+            </button>
+          </div>
+          <p class="upgrade-card-body">{m.account_upgrade_card_body()}</p>
           <button
             type="button"
-            class="upgrade-card-dismiss"
-            aria-label={m.account_upgrade_card_dismiss()}
-            onclick={() => upgrade.dismiss()}
-            data-testid="upgrade-card-dismiss"
+            class="upgrade-card-action"
+            onclick={() => upgrade.expand()}
+            data-testid="upgrade-card-setup"
           >
-            <X size={16} aria-hidden="true" />
+            {m.account_upgrade_setup()}
           </button>
-        </div>
-        <p class="upgrade-card-body">{m.account_upgrade_card_body()}</p>
-        <button
-          type="button"
-          class="upgrade-card-action"
-          onclick={() => upgrade.expand()}
-          data-testid="upgrade-card-setup"
-        >
-          {m.account_upgrade_setup()}
-        </button>
-      </Card>
-    {:else}
-      <AccountCreateForm
-        onsubmit={handleUpgradeSubmit}
-        pending={upgrade.pending}
-        errorMessage={upgrade.error || undefined}
-        showLinkNote={true}
-        submitLabel={m.account_upgrade_setup()}
-      />
+        </Card>
+      {:else}
+        <AccountCreateForm
+          onsubmit={handleUpgradeSubmit}
+          pending={upgrade.pending}
+          errorMessage={upgrade.error || undefined}
+          showLinkNote={true}
+          submitLabel={m.account_upgrade_setup()}
+        />
+      {/if}
     {/if}
-  {/if}
 
-  <!-- State 4 + 5: Thread + Composer -->
-  <PortalThread
-    messages={allMessages}
-    clientPrivate={portalSession.session.keypair.clientPrivate}
-    loading={messagesQuery.isLoading}
-  />
-
-  <PortalComposer
-    bind:this={composerRef}
-    onsend={handleSend}
-    pending={replyMutation.isPending}
-    onfirstfocus={handleFirstFocus}
-    errorMessage={sendError || undefined}
-  />
+    <PortalThread
+      messages={allMessages}
+      clientPrivate={portalSession.session.keypair.clientPrivate}
+      loading={messagesQuery.isLoading}
+      {supportLabel}
+    />
+  </PageLayout>
 
   <PortalHint
     opened={hintShown}

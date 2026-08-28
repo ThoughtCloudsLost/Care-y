@@ -6,6 +6,7 @@ const brandingFieldSchema = z.enum([
   "primary_color",
   "accent_color",
   "client_text",
+  "support_label",
   "terminology",
 ]);
 
@@ -36,6 +37,8 @@ export interface BrandingData {
   readonly encryptedPrimaryColor: string | null;
   readonly encryptedAccentColor: string | null;
   readonly encryptedClientText: string | null;
+  /** Name clients see above messages from the org. Org-level, never a person. */
+  readonly encryptedClientSupportLabel: string | null;
   readonly clientEncryptedBranding: string | null;
   readonly encryptedTerminology: string | null;
   readonly hasIcons: boolean;
