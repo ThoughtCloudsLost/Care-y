@@ -76,6 +76,15 @@ export interface SubSection {
   readonly highlight?: SubHighlight;
 }
 
+/**
+ * Which arc a section belongs to. The two groups are two different
+ * readers: "org" is a volunteer signed in to the app, "client" is a
+ * help-seeker who is not a member of the org at all. They render under
+ * different shells and under different viewer identities, so the
+ * contents menu labels them separately rather than running one flat list.
+ */
+export type SectionGroup = "org" | "client";
+
 export interface Section {
   readonly id: SectionId;
   /** Message key suffix for the section title */
@@ -83,8 +92,10 @@ export interface Section {
   /** Message key suffix for the section description */
   readonly descKey: string;
   readonly subs: readonly SubSection[];
-  /** All (app) route IDs this section narrates. */
+  /** All route IDs this section narrates, in either mounted group. */
   readonly routes: readonly string[];
+  /** Arc this section belongs to. Consumed by the contents menu. */
+  readonly group: SectionGroup;
 }
 
 // -----------------------------------------------------------------------
@@ -104,6 +115,7 @@ export const ENTRY_SECTION: Section = {
   titleKey: "demo_entry_title",
   descKey: "demo_entry_desc",
   routes: [],
+  group: "org",
   subs: [
     {
       slug: "navigation",
@@ -138,6 +150,7 @@ export const SECTIONS: readonly Section[] = [
     titleKey: "demo_section_login_title",
     descKey: "demo_section_login_desc",
     routes: SECTION_ROUTES.login,
+    group: "org",
     subs: [
       {
         slug: "language",
@@ -213,6 +226,7 @@ export const SECTIONS: readonly Section[] = [
     titleKey: "demo_section_dashboard_title",
     descKey: "demo_section_dashboard_desc",
     routes: SECTION_ROUTES.dashboard,
+    group: "org",
     subs: [
       // The dashboard is a scroll-nav page: every sub except the
       // view switcher and the create button narrates a `#section-<id>`
@@ -287,6 +301,16 @@ export const SECTIONS: readonly Section[] = [
         highlight: { section: "on-hold" },
       },
       {
+        slug: "merge-candidates",
+        topic: "dashboard-merge-candidates",
+        headingKey: "demo_narrative_dashboard_merge_candidates_heading",
+        bodyKey: "demo_narrative_dashboard_merge_candidates_body",
+        // Another scroll-target block on the same page ((app)/+page.svelte,
+        // #section-merge-candidates). Rendered only when the scan finds
+        // candidates, which the seeded clients do produce.
+        highlight: { section: "merge-candidates" },
+      },
+      {
         slug: "create",
         topic: "dashboard-create",
         headingKey: "demo_narrative_dashboard_create_heading",
@@ -299,6 +323,7 @@ export const SECTIONS: readonly Section[] = [
     titleKey: "demo_section_tickets_title",
     descKey: "demo_section_tickets_desc",
     routes: SECTION_ROUTES.tickets,
+    group: "org",
     subs: [
       {
         slug: "decryption",
@@ -380,6 +405,7 @@ export const SECTIONS: readonly Section[] = [
     titleKey: "demo_section_ticket_detail_title",
     descKey: "demo_section_ticket_detail_desc",
     routes: SECTION_ROUTES["ticket-detail"],
+    group: "org",
     subs: [
       {
         slug: "case-header",
@@ -401,6 +427,42 @@ export const SECTIONS: readonly Section[] = [
         topic: "case-panel",
         headingKey: "demo_narrative_topic_case_panel_heading",
         bodyKey: "demo_narrative_topic_case_panel_body",
+      },
+      // The three portal-tier subs follow case-panel directly, because
+      // every one of them narrates something PortalTierSection renders
+      // inside the case panel (TicketPanelContent.svelte:244) and the
+      // case-panel sub above is what opens it.
+      //
+      // Each selector list therefore reads "the real target, then the
+      // region that is reachable whether or not the panel opened". That
+      // degradation is deliberate and follows the voicemails sub: an
+      // ordered selector list is how this taxonomy expresses a target
+      // that may not have mounted. Circling the case header is honest
+      // when the panel is shut; showing nothing is not.
+      {
+        slug: "portal-tier",
+        topic: "ticket-portal-tier",
+        headingKey: "demo_narrative_topic_portal_tier_heading",
+        bodyKey: "demo_narrative_topic_portal_tier_body",
+        highlight: { selectors: [".tier-name", ".case-header"] },
+      },
+      {
+        slug: "secure-link",
+        topic: "ticket-secure-link",
+        headingKey: "demo_narrative_topic_secure_link_heading",
+        bodyKey: "demo_narrative_topic_secure_link_body",
+        // .offer-row is the tier upgrade control (PortalTierSection.svelte:195);
+        // .intro-text is SecureLinkSheet's own body once it opens.
+        highlight: { selectors: [".intro-text", ".offer-row", ".case-header"] },
+      },
+      {
+        slug: "share-link",
+        topic: "ticket-share-link",
+        headingKey: "demo_narrative_topic_share_link_heading",
+        bodyKey: "demo_narrative_topic_share_link_body",
+        // ShareLinkSheet lives in TicketDetailOverlays, opened from the
+        // panel's actions rather than from the thread.
+        highlight: { selectors: [".share-sheet-body", ".case-header"] },
       },
       {
         slug: "thread-filters",
@@ -428,6 +490,24 @@ export const SECTIONS: readonly Section[] = [
         topic: "conversation",
         headingKey: "demo_narrative_topic_conversation_heading",
         bodyKey: "demo_narrative_topic_conversation_body",
+      },
+      // These two need no fallback: both render inline in the thread
+      // (TicketDetail.svelte:1313 and :1319) and carry their own
+      // testids, so the conversation sub above has already put them on
+      // screen.
+      {
+        slug: "share-status",
+        topic: "ticket-share-status",
+        headingKey: "demo_narrative_topic_share_status_heading",
+        bodyKey: "demo_narrative_topic_share_status_body",
+        highlight: { selectors: ['[data-testid="share-status-line"]'] },
+      },
+      {
+        slug: "correction-status",
+        topic: "ticket-correction-status",
+        headingKey: "demo_narrative_topic_correction_status_heading",
+        bodyKey: "demo_narrative_topic_correction_status_body",
+        highlight: { selectors: ['[data-testid="correction-status-line"]'] },
       },
       // call-log and the three media subs directly follow the
       // conversation sub: its pulse lands the thread in the message
@@ -495,6 +575,16 @@ export const SECTIONS: readonly Section[] = [
         bodyKey: "demo_narrative_topic_compose_actions_body",
       },
       {
+        slug: "outbound-edit",
+        topic: "ticket-outbound-edit",
+        headingKey: "demo_narrative_topic_outbound_edit_heading",
+        bodyKey: "demo_narrative_topic_outbound_edit_body",
+        // OutboundMessageEditSheet mounts in TicketDetailOrchestrator and
+        // opens from a sent message's own actions, so the message bubble
+        // is the region that is on screen either way.
+        highlight: { selectors: [".char-counter", ".msg-body"] },
+      },
+      {
         slug: "reply",
         topic: "reply",
         headingKey: "demo_narrative_topic_reply_heading",
@@ -531,6 +621,7 @@ export const SECTIONS: readonly Section[] = [
     titleKey: "demo_section_search_title",
     descKey: "demo_section_search_desc",
     routes: SECTION_ROUTES.search,
+    group: "org",
     subs: [
       // The search overlay renders its entity groups and deep-search
       // panel only once the query passes two characters
@@ -570,6 +661,7 @@ export const SECTIONS: readonly Section[] = [
     titleKey: "demo_section_library_title",
     descKey: "demo_section_library_desc",
     routes: SECTION_ROUTES.library,
+    group: "org",
     subs: [
       {
         slug: "browse",
@@ -636,6 +728,7 @@ export const SECTIONS: readonly Section[] = [
     titleKey: "demo_section_admin_title",
     descKey: "demo_section_admin_desc",
     routes: SECTION_ROUTES.admin,
+    group: "org",
     subs: [
       {
         slug: "hub",
@@ -654,6 +747,7 @@ export const SECTIONS: readonly Section[] = [
     titleKey: "demo_section_admin_people_title",
     descKey: "demo_section_admin_people_desc",
     routes: SECTION_ROUTES["admin-people"],
+    group: "org",
     subs: [
       {
         slug: "people",
@@ -698,6 +792,18 @@ export const SECTIONS: readonly Section[] = [
         // section (admin/manager/+page.svelte:82).
         highlight: { section: "role" },
       },
+      {
+        slug: "role-permissions",
+        topic: "admin-role-permissions",
+        headingKey: "demo_narrative_admin_role_permissions_heading",
+        bodyKey: "demo_narrative_admin_role_permissions_body",
+        // The permission matrix is the roles tabpanel on the people page
+        // (admin/people/+page.svelte:837), a different surface from the
+        // manager page the roles sub above narrates. Same shape as the
+        // client-merge sub: the tabpanel is the region, and reaching it
+        // depends on the roles tab being the active one.
+        highlight: { selectors: ["#panel-roles", ".matrix"] },
+      },
     ],
   },
   {
@@ -705,6 +811,7 @@ export const SECTIONS: readonly Section[] = [
     titleKey: "demo_section_admin_comms_title",
     descKey: "demo_section_admin_comms_desc",
     routes: SECTION_ROUTES["admin-comms"],
+    group: "org",
     // Scroll-nav page (CollapsibleSectionPage). Section ids come from
     // admin/communications/+page.svelte:21-49; two subs share the
     // telephony section and sms-templates maps to "templates".
@@ -758,6 +865,7 @@ export const SECTIONS: readonly Section[] = [
     titleKey: "demo_section_admin_org_title",
     descKey: "demo_section_admin_org_desc",
     routes: SECTION_ROUTES["admin-org"],
+    group: "org",
     // Scroll-nav page (CollapsibleSectionPage). Every sub slug matches
     // its section id 1:1 (admin/organization/+page.svelte:27-67).
     subs: [
@@ -803,6 +911,108 @@ export const SECTIONS: readonly Section[] = [
         bodyKey: "demo_narrative_admin_note_types_body",
         highlight: { section: "note-types" },
       },
+      {
+        slug: "intake-forms",
+        topic: "admin-intake-forms",
+        headingKey: "demo_narrative_admin_intake_forms_heading",
+        bodyKey: "demo_narrative_admin_intake_forms_body",
+        // One more section on the same scroll-nav page
+        // (admin/organization/+page.svelte:73). It is the list the two
+        // form sections below open their detail from.
+        highlight: { section: "intake-forms" },
+      },
+    ],
+  },
+  {
+    id: "admin-forms",
+    titleKey: "demo_section_admin_forms_title",
+    descKey: "demo_section_admin_forms_desc",
+    routes: SECTION_ROUTES["admin-forms"],
+    group: "org",
+    // The editor has no root element of its own: it renders two snippets
+    // that SplitView wraps at desktop width and that stack bare at phone
+    // width (IntakeFormEditor.svelte:1718-1734). So both subs point at
+    // markup inside the snippets, which exists at either width.
+    subs: [
+      {
+        slug: "builder",
+        topic: "admin-form-builder",
+        headingKey: "demo_narrative_admin_form_builder_heading",
+        bodyKey: "demo_narrative_admin_form_builder_body",
+        // Per-field row controls (IntakeFormEditor.svelte:1415).
+        highlight: { selectors: [".field-actions", ".default-hint"] },
+      },
+      {
+        slug: "preview",
+        topic: "admin-form-preview",
+        headingKey: "demo_narrative_admin_form_preview_heading",
+        bodyKey: "demo_narrative_admin_form_preview_body",
+        // The preview pane switches between form, success, and closed
+        // states; the switcher renders only once the form has fields,
+        // and the empty state stands in when it has none.
+        highlight: {
+          selectors: [
+            '[data-testid="preview-state-switcher"]',
+            '[data-testid="preview-empty-state"]',
+          ],
+        },
+      },
+    ],
+  },
+  {
+    id: "admin-responses",
+    titleKey: "demo_section_admin_responses_title",
+    descKey: "demo_section_admin_responses_desc",
+    routes: SECTION_ROUTES["admin-responses"],
+    group: "org",
+    subs: [
+      {
+        slug: "responses",
+        topic: "admin-form-responses",
+        headingKey: "demo_narrative_admin_form_responses_heading",
+        bodyKey: "demo_narrative_admin_form_responses_body",
+        // Viewer root (IntakeResponsesViewer.svelte:426).
+        highlight: { selectors: [".irv-root"] },
+      },
+      {
+        slug: "key-not-held",
+        topic: "admin-response-key-not-held",
+        headingKey: "demo_narrative_admin_response_key_not_held_heading",
+        bodyKey: "demo_narrative_admin_response_key_not_held_body",
+        // .irv-state-row is shared by the key-not-held and the decrypt-
+        // failed branches (IntakeResponsesViewer.svelte:481 and :493).
+        // The seed deliberately produces one key-not-held row and no
+        // failed ones, so the first match is the intended example; a
+        // failed row appearing here would mean the seed broke, which is
+        // worth seeing rather than hiding behind a narrower selector.
+        highlight: { selectors: [".irv-state-row", ".irv-card"] },
+      },
+    ],
+  },
+  {
+    id: "admin-logs",
+    titleKey: "demo_section_admin_logs_title",
+    descKey: "demo_section_admin_logs_desc",
+    routes: SECTION_ROUTES["admin-logs"],
+    group: "org",
+    // Two tabpanels behind a segmented control (admin/logs/+page.svelte).
+    // The tab is carried in the URL, so each sub navigates rather than
+    // taps: see the admin-logs case in resolvePhoneCommand.
+    subs: [
+      {
+        slug: "calls",
+        topic: "admin-call-log",
+        headingKey: "demo_narrative_admin_call_log_heading",
+        bodyKey: "demo_narrative_admin_call_log_body",
+        highlight: { selectors: ["#panel-calls"] },
+      },
+      {
+        slug: "audit",
+        topic: "admin-audit-log",
+        headingKey: "demo_narrative_admin_audit_log_heading",
+        bodyKey: "demo_narrative_admin_audit_log_body",
+        highlight: { selectors: ["#panel-audit"] },
+      },
     ],
   },
   {
@@ -810,6 +1020,7 @@ export const SECTIONS: readonly Section[] = [
     titleKey: "demo_section_schedule_title",
     descKey: "demo_section_schedule_desc",
     routes: SECTION_ROUTES.schedule,
+    group: "org",
     subs: [
       {
         slug: "intro",
@@ -827,6 +1038,7 @@ export const SECTIONS: readonly Section[] = [
     titleKey: "demo_section_settings_title",
     descKey: "demo_section_settings_desc",
     routes: SECTION_ROUTES.settings,
+    group: "org",
     subs: [
       {
         slug: "identity",
@@ -857,6 +1069,199 @@ export const SECTIONS: readonly Section[] = [
         topic: "settings-security",
         headingKey: "demo_narrative_settings_security_heading",
         bodyKey: "demo_narrative_settings_security_body",
+      },
+      {
+        slug: "notifications",
+        topic: "settings-notifications",
+        headingKey: "demo_narrative_settings_notifications_heading",
+        bodyKey: "demo_narrative_settings_notifications_body",
+        // NotificationPreferencesSection renders inline on the settings
+        // page (more/settings/+page.svelte:234), so its matrix is on
+        // screen without opening anything.
+        highlight: { selectors: [".matrix"] },
+      },
+      {
+        slug: "consultant-phone",
+        topic: "settings-consultant-phone",
+        headingKey: "demo_narrative_settings_consultant_phone_heading",
+        bodyKey: "demo_narrative_settings_consultant_phone_body",
+        // ConsultantPhoneSheet is a sheet opened from a settings row, so
+        // its own body only exists once opened. The settings list is the
+        // region that is always there.
+        highlight: { selectors: [".sheet-content", ".settings-page"] },
+      },
+    ],
+  },
+  // ---------------------------------------------------------------------
+  // Client group
+  // ---------------------------------------------------------------------
+  {
+    id: "client-intake",
+    titleKey: "demo_section_client_intake_title",
+    descKey: "demo_section_client_intake_desc",
+    routes: SECTION_ROUTES["client-intake"],
+    group: "client",
+    subs: [
+      {
+        slug: "form",
+        topic: "client-intake-form",
+        headingKey: "demo_narrative_client_intake_form_heading",
+        bodyKey: "demo_narrative_client_intake_form_body",
+        // The intro paragraph, or the org's own rich description when
+        // one is set (IntakeFormBody.svelte:1315-1322).
+        highlight: { selectors: [".intake-intro"] },
+      },
+      {
+        slug: "how-protected",
+        topic: "client-intake-protection",
+        headingKey: "demo_narrative_client_intake_protection_heading",
+        bodyKey: "demo_narrative_client_intake_protection_body",
+        // HowProtected renders a <details> disclosure (HowProtected.svelte:19).
+        highlight: { selectors: [".how-protected"] },
+      },
+      {
+        slug: "fields",
+        topic: "client-intake-fields",
+        headingKey: "demo_narrative_client_intake_fields_heading",
+        bodyKey: "demo_narrative_client_intake_fields_body",
+        // This sub is where the seeded custom form is narrated, so it
+        // carries the by-slug route rather than the default one.
+        routes: SUB_ROUTES["client-intake/fields"],
+        // The contact-method radiogroup is the built-in form's own
+        // grouping (IntakeFormBody.svelte:1404-1410); a custom form's
+        // fields render as IntakeFieldRenderer blocks above it.
+        highlight: { selectors: ['[role="radiogroup"]', ".intake-intro"] },
+      },
+      {
+        slug: "submit",
+        topic: "client-intake-submit",
+        headingKey: "demo_narrative_client_intake_submit_heading",
+        bodyKey: "demo_narrative_client_intake_submit_body",
+        // Multi-page forms show a next button instead of submit until
+        // the last page (IntakeFormBody.svelte:1688, :1704).
+        highlight: {
+          selectors: [
+            '[data-testid="intake-submit"]',
+            '[data-testid="intake-page-next"]',
+          ],
+        },
+      },
+    ],
+  },
+  {
+    id: "client-privacy",
+    titleKey: "demo_section_client_privacy_title",
+    descKey: "demo_section_client_privacy_desc",
+    routes: SECTION_ROUTES["client-privacy"],
+    group: "client",
+    subs: [
+      {
+        slug: "notice",
+        topic: "client-privacy-notice",
+        headingKey: "demo_narrative_client_privacy_notice_heading",
+        bodyKey: "demo_narrative_client_privacy_notice_body",
+        // intake/privacy/+page.svelte:45.
+        highlight: { selectors: [".retention-disclosure"] },
+      },
+    ],
+  },
+  {
+    id: "client-portal",
+    titleKey: "demo_section_client_portal_title",
+    descKey: "demo_section_client_portal_desc",
+    routes: SECTION_ROUTES["client-portal"],
+    group: "client",
+    subs: [
+      {
+        slug: "thread",
+        topic: "client-portal-thread",
+        headingKey: "demo_narrative_client_portal_thread_heading",
+        bodyKey: "demo_narrative_client_portal_thread_body",
+        highlight: { selectors: ['[data-testid="portal-thread"]'] },
+      },
+      {
+        slug: "composer",
+        topic: "client-portal-composer",
+        headingKey: "demo_narrative_client_portal_composer_heading",
+        bodyKey: "demo_narrative_client_portal_composer_body",
+        highlight: { selectors: ['[data-testid="portal-composer"]'] },
+      },
+      {
+        slug: "quick-exit",
+        topic: "client-quick-exit",
+        headingKey: "demo_narrative_client_quick_exit_heading",
+        bodyKey: "demo_narrative_client_quick_exit_body",
+        // QuickExit mounts on every state of this page and the account
+        // page (portal/[channelId]/+page.svelte:353). The control is
+        // real and stays mounted; phone-main.ts intercepts its trigger
+        // so narrating it cannot navigate the iframe off-site.
+        highlight: { selectors: ['[data-testid="quick-exit"]'] },
+      },
+    ],
+  },
+  {
+    id: "client-account",
+    titleKey: "demo_section_client_account_title",
+    descKey: "demo_section_client_account_desc",
+    routes: SECTION_ROUTES["client-account"],
+    group: "client",
+    subs: [
+      {
+        slug: "sign-in",
+        topic: "client-account-sign-in",
+        headingKey: "demo_narrative_client_account_sign_in_heading",
+        bodyKey: "demo_narrative_client_account_sign_in_body",
+        // AccountLoginForm renders when there is no session, which is
+        // where the story arrives (account/+page.svelte:484).
+        highlight: {
+          selectors: ['[data-testid="account-username"]', ".login-list"],
+        },
+      },
+      {
+        slug: "thread",
+        topic: "client-account-thread",
+        headingKey: "demo_narrative_client_account_thread_heading",
+        bodyKey: "demo_narrative_client_account_thread_body",
+        // Same PortalThread component as the secure-link tier, reached
+        // through a durable account instead of a URL fragment.
+        highlight: { selectors: ['[data-testid="portal-thread"]'] },
+      },
+      {
+        slug: "settings",
+        topic: "client-account-settings",
+        headingKey: "demo_narrative_client_account_settings_heading",
+        bodyKey: "demo_narrative_client_account_settings_body",
+        highlight: {
+          selectors: ['[data-testid="account-settings-toggle"]'],
+        },
+      },
+    ],
+  },
+  {
+    id: "client-share",
+    titleKey: "demo_section_client_share_title",
+    descKey: "demo_section_client_share_desc",
+    routes: SECTION_ROUTES["client-share"],
+    group: "client",
+    subs: [
+      {
+        slug: "view",
+        topic: "client-share-view",
+        headingKey: "demo_narrative_client_share_view_heading",
+        bodyKey: "demo_narrative_client_share_view_body",
+        // share/[id]/+page.svelte:97. The terminal states (opened,
+        // expired, not found) replace this block entirely, so the
+        // heading stands in when the seeded link has been consumed.
+        highlight: { selectors: [".share-content-block", ".share-heading"] },
+      },
+      {
+        slug: "one-time",
+        topic: "client-share-one-time",
+        headingKey: "demo_narrative_client_share_one_time_heading",
+        bodyKey: "demo_narrative_client_share_one_time_body",
+        highlight: {
+          selectors: [".share-one-time-notice", ".share-terminal-text"],
+        },
       },
     ],
   },
@@ -1141,18 +1546,56 @@ export interface PhoneCommand {
 }
 
 /**
+ * Detail values the client and form sections need, which the two
+ * positional ids above have no room for.
+ *
+ * Grouped rather than appended as four more parameters because
+ * resolvePhoneCommand has thirty-odd call sites and all but a handful
+ * care about none of these. Every field defaults to the sentinel, so an
+ * existing caller keeps compiling and gets the same placeholder the
+ * ticket and article ids already use before the engine resolves.
+ */
+export interface ClientDetailIds {
+  /** Seeded intake form, for both /admin/forms routes. */
+  readonly intakeFormId: string;
+  /** That form's public slug, for /(client)/intake/[slug]. */
+  readonly intakeFormSlug: string;
+  /** Whole path prefix for /(client)/portal/[channelId]. */
+  readonly portalChannelPath: string;
+  /** Whole path prefix for /(client)/share/[id]. */
+  readonly sharePath: string;
+}
+
+/**
+ * Sentinel defaults, restated as literals for the same reason the two
+ * positional ids are passed in rather than imported: this module stays
+ * free of value-level imports from bridge.ts. A test asserts these
+ * equal the bridge constants, so the restatement cannot drift silently.
+ */
+export const DEFAULT_CLIENT_DETAIL_IDS: ClientDetailIds = {
+  intakeFormId: "demo-intake-form",
+  intakeFormSlug: "demo-intake-form",
+  portalChannelPath: "portal/demo-channel",
+  sharePath: "share/demo-share",
+};
+
+/**
  * Given a section and optional sub-section, compute what bridge commands
  * to send to the phone. The DEMO_DETAIL_TICKET_ID constant must be
  * passed in since this module cannot import it from bridge.ts at the
  * value level (it may not exist yet). The articleDetailId serves the
- * same role for the library section's vote sub.
+ * same role for the library section's vote sub, and clientIds does for
+ * the client arc and the two intake-form routes.
  */
 export function resolvePhoneCommand(
   sectionId: SectionId,
   subSlug: string | null,
   ticketDetailId: string,
   articleDetailId: string,
+  clientIds: ClientDetailIds = DEFAULT_CLIENT_DETAIL_IDS,
 ): PhoneCommand {
+  const { intakeFormId, intakeFormSlug, portalChannelPath, sharePath } =
+    clientIds;
   // Find the topic, desktopOnly flag, and highlight region for this
   // sub-section
   let pulseTopic: DemoTopic | null = null;
@@ -1297,6 +1740,46 @@ export function resolvePhoneCommand(
         routeSlug: null,
         highlight,
       };
+    // The two form sections carry their id in a query string rather than
+    // a path segment, because that is where both routes read it from
+    // (admin/forms/+page.svelte:73, .../responses/+page.svelte:26). The
+    // router splits a detail on "?" before routing, so the query rides
+    // along without either page having to be reached by a real click.
+    case "admin-forms":
+      return {
+        feature: "admin",
+        detail: `forms?id=${intakeFormId}`,
+        loginTarget: null,
+        openSearch: false,
+        pulseTopic,
+        pulseDesktopOnly,
+        routeSlug: null,
+        highlight,
+      };
+    case "admin-responses":
+      return {
+        feature: "admin",
+        detail: `forms/responses?id=${intakeFormId}`,
+        loginTarget: null,
+        openSearch: false,
+        pulseTopic,
+        pulseDesktopOnly,
+        routeSlug: null,
+        highlight,
+      };
+    case "admin-logs":
+      // The tab is URL state (switchTab writes ?tab=<id> through
+      // replaceState), so each sub selects its panel by navigating.
+      return {
+        feature: "admin",
+        detail: subSlug === "audit" ? "logs?tab=audit" : "logs?tab=calls",
+        loginTarget: null,
+        openSearch: false,
+        pulseTopic,
+        pulseDesktopOnly,
+        routeSlug: null,
+        highlight,
+      };
     case "schedule":
       return {
         feature: "schedule",
@@ -1312,6 +1795,66 @@ export function resolvePhoneCommand(
       return {
         feature: "settings",
         detail: null,
+        loginTarget: null,
+        openSearch: false,
+        pulseTopic,
+        pulseDesktopOnly,
+        routeSlug: null,
+        highlight,
+      };
+    // Every client section resolves to feature "client" with the URL
+    // path as the detail, which is the shape router.featureToPathname
+    // already expects. The two parameterized pages pass a sentinel path
+    // that PhoneApp swaps for the seeded one, and whose URL fragment it
+    // applies at the same boundary.
+    case "client-intake":
+      return {
+        feature: "client",
+        detail: subSlug === "fields" ? `intake/${intakeFormSlug}` : "intake",
+        loginTarget: null,
+        openSearch: false,
+        pulseTopic,
+        pulseDesktopOnly,
+        routeSlug: null,
+        highlight,
+      };
+    case "client-privacy":
+      return {
+        feature: "client",
+        detail: "intake/privacy",
+        loginTarget: null,
+        openSearch: false,
+        pulseTopic,
+        pulseDesktopOnly,
+        routeSlug: null,
+        highlight,
+      };
+    case "client-portal":
+      return {
+        feature: "client",
+        detail: portalChannelPath,
+        loginTarget: null,
+        openSearch: false,
+        pulseTopic,
+        pulseDesktopOnly,
+        routeSlug: null,
+        highlight,
+      };
+    case "client-account":
+      return {
+        feature: "client",
+        detail: "account",
+        loginTarget: null,
+        openSearch: false,
+        pulseTopic,
+        pulseDesktopOnly,
+        routeSlug: null,
+        highlight,
+      };
+    case "client-share":
+      return {
+        feature: "client",
+        detail: sharePath,
         loginTarget: null,
         openSearch: false,
         pulseTopic,
@@ -1383,10 +1926,37 @@ export function sectionMatchesPhone(
       return feature === "admin" && detail === "communications";
     case "admin-org":
       return feature === "admin" && detail === "organization";
+    // The router strips the query before storing detail, so these match
+    // on the path portion alone. Without that strip the story could
+    // never converge here: the command carries "forms?id=..." while the
+    // phone reports whichever id it actually landed on.
+    case "admin-forms":
+      return feature === "admin" && detail === "forms";
+    case "admin-responses":
+      return feature === "admin" && detail === "forms/responses";
+    case "admin-logs":
+      return feature === "admin" && detail === "logs";
     case "schedule":
       return feature === "schedule";
     case "settings":
       return feature === "settings";
+    // A client feature's detail IS its URL path, so each section matches
+    // the path its routes cover. The two parameterized pages match on
+    // their prefix because the id is seeded and unknown here.
+    case "client-intake":
+      return (
+        feature === "client" &&
+        detail?.startsWith("intake") === true &&
+        detail !== "intake/privacy"
+      );
+    case "client-privacy":
+      return feature === "client" && detail === "intake/privacy";
+    case "client-portal":
+      return feature === "client" && detail?.startsWith("portal/") === true;
+    case "client-account":
+      return feature === "client" && detail === "account";
+    case "client-share":
+      return feature === "client" && detail?.startsWith("share/") === true;
     case "coming-soon":
       return (
         routeId !== null &&
@@ -1478,7 +2048,42 @@ export function bridgeStateToLocation(
     if (detail === "communications") {
       return { sectionId: "admin-comms", subSlug: "provider" };
     }
+    // Checked before the bare "forms" so the deeper path wins; the
+    // router stores these query-free.
+    if (detail === "forms/responses") {
+      return { sectionId: "admin-responses", subSlug: "responses" };
+    }
+    if (detail === "forms") {
+      return { sectionId: "admin-forms", subSlug: "builder" };
+    }
+    if (detail === "logs") {
+      return { sectionId: "admin-logs", subSlug: "calls" };
+    }
     return { sectionId: "admin", subSlug: "hub" };
+  }
+
+  // Client group. Ordered longest-path-first for the same reason as the
+  // admin details above: "intake/privacy" is its own section and must
+  // not be swallowed by the "intake" prefix.
+  if (feature === "client") {
+    if (detail === "intake/privacy") {
+      return { sectionId: "client-privacy", subSlug: "notice" };
+    }
+    if (detail?.startsWith("portal/") === true) {
+      return { sectionId: "client-portal", subSlug: "thread" };
+    }
+    if (detail?.startsWith("share/") === true) {
+      return { sectionId: "client-share", subSlug: "view" };
+    }
+    if (detail === "account") {
+      return { sectionId: "client-account", subSlug: "sign-in" };
+    }
+    // Both /intake and /intake/[slug] land on the same section; the
+    // by-slug form is what the fields sub narrates.
+    if (detail?.startsWith("intake/") === true) {
+      return { sectionId: "client-intake", subSlug: "fields" };
+    }
+    return { sectionId: "client-intake", subSlug: "form" };
   }
 
   if (feature === "schedule") {

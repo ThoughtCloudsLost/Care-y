@@ -79,9 +79,34 @@ export type SectionId =
   | "admin-people"
   | "admin-comms"
   | "admin-org"
+  | "admin-forms"
+  | "admin-responses"
+  | "admin-logs"
   | "schedule"
   | "settings"
+  // Client group. Ordered as a help-seeker meets the portal: the public
+  // form, what it promises, the thread that follows, the account that
+  // outlives the link, and a one-time share.
+  | "client-intake"
+  | "client-privacy"
+  | "client-portal"
+  | "client-account"
+  | "client-share"
   | "coming-soon";
+
+/**
+ * Who the phone is showing the product as.
+ *
+ * A superset of the product's roles, because the client portal has no
+ * role at all: a help-seeker is not a member of the org and holds no
+ * permission set. "client" names that absence so the toolbar and the
+ * mounted shell have one field to read.
+ *
+ * DEMO ONLY. This type must not travel into @care-y/shared. RoleIdValue
+ * is a product concept with server-side enforcement behind it; "client"
+ * has neither and would be a lie anywhere outside the demo.
+ */
+export type ViewerId = RoleIdValue | "client";
 
 /** The one place the demo "is": a section and optional sub-section. */
 export interface DemoLocation {
@@ -190,7 +215,41 @@ export type DemoTopic =
   | "settings-password"
   | "settings-appearance"
   | "settings-2fa"
-  | "settings-security";
+  | "settings-security"
+  | "settings-notifications"
+  | "settings-consultant-phone"
+  | "dashboard-merge-candidates"
+  | "ticket-portal-tier"
+  | "ticket-secure-link"
+  | "ticket-share-link"
+  | "ticket-share-status"
+  | "ticket-outbound-edit"
+  | "ticket-correction-status"
+  | "admin-role-permissions"
+  | "admin-intake-forms"
+  | "admin-form-builder"
+  | "admin-form-preview"
+  | "admin-form-responses"
+  | "admin-response-key-not-held"
+  | "admin-call-log"
+  | "admin-audit-log"
+  // Client-portal topics. Every one of these resolves through
+  // TOPIC_SELECTORS rather than through label candidates: the client
+  // shell's targets are form regions and page sections, not controls
+  // carrying a translatable label the classifier could match.
+  | "client-intake-form"
+  | "client-intake-protection"
+  | "client-intake-fields"
+  | "client-intake-submit"
+  | "client-privacy-notice"
+  | "client-portal-thread"
+  | "client-portal-composer"
+  | "client-quick-exit"
+  | "client-account-sign-in"
+  | "client-account-thread"
+  | "client-account-settings"
+  | "client-share-view"
+  | "client-share-one-time";
 
 /** All topics in display order (matches taxonomy section ordering). */
 export const DEMO_TOPICS: readonly DemoTopic[] = [
@@ -215,6 +274,7 @@ export const DEMO_TOPICS: readonly DemoTopic[] = [
   "dashboard-unassigned",
   "dashboard-on-hold",
   "dashboard-create",
+  "dashboard-merge-candidates",
   "decryption",
   "view-modes",
   "list-stats",
@@ -236,7 +296,13 @@ export const DEMO_TOPICS: readonly DemoTopic[] = [
   "notes",
   "case-fold",
   "case-panel",
+  "ticket-portal-tier",
+  "ticket-secure-link",
+  "ticket-share-link",
+  "ticket-share-status",
+  "ticket-correction-status",
   "compose-actions",
+  "ticket-outbound-edit",
   "reply",
   "message-select",
   "message-actions",
@@ -253,6 +319,7 @@ export const DEMO_TOPICS: readonly DemoTopic[] = [
   "admin-clients",
   "admin-client-merge",
   "admin-roles",
+  "admin-role-permissions",
   "admin-telephony-provider",
   "admin-phone-lines",
   "admin-greetings",
@@ -265,11 +332,34 @@ export const DEMO_TOPICS: readonly DemoTopic[] = [
   "admin-keys",
   "admin-retention",
   "admin-note-types",
+  "admin-intake-forms",
+  "admin-form-builder",
+  "admin-form-preview",
+  "admin-form-responses",
+  "admin-response-key-not-held",
+  "admin-call-log",
+  "admin-audit-log",
   "settings-profile",
   "settings-password",
   "settings-appearance",
   "settings-2fa",
   "settings-security",
+  "settings-notifications",
+  "settings-consultant-phone",
+  // Client arc last, matching the section order.
+  "client-intake-form",
+  "client-intake-protection",
+  "client-intake-fields",
+  "client-intake-submit",
+  "client-privacy-notice",
+  "client-portal-thread",
+  "client-portal-composer",
+  "client-quick-exit",
+  "client-account-sign-in",
+  "client-account-thread",
+  "client-account-settings",
+  "client-share-view",
+  "client-share-one-time",
 ] as const;
 
 /** Ticket the ticket-detail section navigates to. tk-0001 has the richest thread. */
@@ -292,6 +382,25 @@ export const DEMO_DETAIL_ARTICLE_ID = "kb-0001";
  */
 export const DEMO_PORTAL_CHANNEL_ID = "portal/demo-channel";
 export const DEMO_SHARE_ID = "share/demo-share";
+
+/**
+ * Intake form the two form-detail sections open, resolved to the seeded
+ * custom form at the PhoneApp boundary like the sentinels above.
+ *
+ * Both routes read the id from `?id=` rather than from a path segment
+ * (admin/forms/+page.svelte, admin/forms/responses/+page.svelte), and
+ * without it they render a load error rather than a form. So this
+ * sentinel travels inside a detail that carries its own query string,
+ * which is why the router splits a detail on "?" before routing it.
+ */
+export const DEMO_INTAKE_FORM_ID = "demo-intake-form";
+
+/**
+ * Public slug of that same form, for /(client)/intake/[slug]. Separate
+ * from the id because the two routes address the form differently: the
+ * admin side by id, the public side by slug (getPublicForm).
+ */
+export const DEMO_INTAKE_FORM_SLUG = "demo-intake-form";
 
 /**
  * Query the search section seeds into the overlay. The overlay renders

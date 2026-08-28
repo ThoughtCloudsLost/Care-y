@@ -20,7 +20,11 @@ import {
   MODE_TOGGLE_TOPICS,
   closeModeToggle,
 } from "./tap-pulse.js";
-import { DEMO_DETAIL_TICKET_ID, DEMO_DETAIL_ARTICLE_ID } from "./bridge.js";
+import {
+  DEMO_DETAIL_TICKET_ID,
+  DEMO_DETAIL_ARTICLE_ID,
+  DEMO_TOPICS,
+} from "./bridge.js";
 import type { DemoTopic } from "./bridge.js";
 
 // Topics handled by PhoneApp special cases (selector fallback or
@@ -30,6 +34,31 @@ const PHONEAPP_SPECIAL_CASE_TOPICS: ReadonlySet<DemoTopic> = new Set([
   "message-actions",
   "exposure-hints",
 ]);
+
+/**
+ * Topics that exist to classify a real tap, not to be narrated.
+ *
+ * The story never selects these, so they carry no sub-section, but the
+ * classifier still needs them: a visitor who taps the control lands
+ * somewhere sensible instead of nowhere. Both entries are deliberate.
+ * The notes sub narrates the seeded note through a selector and leaves
+ * its topic null on purpose (scroll-sections.ts), and thread-anatomy
+ * names the date separators that the date-separators sub highlights
+ * without claiming the topic.
+ */
+const CLASSIFY_ONLY_TOPICS: ReadonlySet<DemoTopic> = new Set([
+  "notes",
+  "thread-anatomy",
+]);
+
+/** Topics reachable by selecting a sub-section in the story. */
+function taxonomyTopics(): ReadonlySet<DemoTopic> {
+  return new Set(
+    SECTIONS.flatMap((s) => s.subs.map((sub) => sub.topic)).filter(
+      (t): t is DemoTopic => t !== null,
+    ),
+  );
+}
 
 describe("tap-pulse contract", () => {
   // -----------------------------------------------------------------------
@@ -104,6 +133,61 @@ describe("tap-pulse contract", () => {
         `TAP_TOPICS member "${topic}" has empty activation candidates`,
       ).toBe(true);
     }
+  });
+
+  // -----------------------------------------------------------------------
+  // 4. DEMO_TOPICS and the taxonomy describe the same topic set
+  // -----------------------------------------------------------------------
+
+  // The three checks above all start from SECTIONS, so a topic that
+  // reaches DEMO_TOPICS without ever being attached to a sub is invisible
+  // to every one of them. That topic still costs something: DEMO_TOPICS
+  // drives progress counting, so an orphan permanently inflates the
+  // denominator and the story can never read as complete.
+  //
+  // The reverse direction matters for the opposite reason. Widening the
+  // DemoTopic union is the only step the compiler enforces; the
+  // candidate builders and topicFeatureTarget all fall through silently
+  // for an unhandled member. A sub whose topic never reached DEMO_TOPICS
+  // would pulse but never count.
+
+  it("every DEMO_TOPICS member has a sub-section or is classify-only", () => {
+    const orphans = DEMO_TOPICS.filter(
+      (t) => !taxonomyTopics().has(t) && !CLASSIFY_ONLY_TOPICS.has(t),
+    );
+    expect(
+      orphans,
+      `DEMO_TOPICS members with neither a sub-section nor a classify-only entry: ${orphans.join(", ")}`,
+    ).toEqual([]);
+  });
+
+  it("classify-only topics really do lack a sub-section", () => {
+    // Without this the allowlist becomes a place stale names collect:
+    // once a topic gains a sub, its entry above has to go, and nothing
+    // else would say so.
+    const stale = [...CLASSIFY_ONLY_TOPICS].filter((t) =>
+      taxonomyTopics().has(t),
+    );
+    expect(
+      stale,
+      `classify-only topics that now have a sub-section: ${stale.join(", ")}`,
+    ).toEqual([]);
+  });
+
+  it("every sub-section topic appears in DEMO_TOPICS", () => {
+    const ordered = new Set(DEMO_TOPICS);
+    const missing: string[] = [];
+    for (const section of SECTIONS) {
+      for (const sub of section.subs) {
+        if (sub.topic !== null && !ordered.has(sub.topic)) {
+          missing.push(`${section.id}/${sub.slug} -> ${sub.topic}`);
+        }
+      }
+    }
+    expect(
+      missing,
+      `subs whose topic is absent from DEMO_TOPICS: ${missing.join(", ")}`,
+    ).toEqual([]);
   });
 });
 

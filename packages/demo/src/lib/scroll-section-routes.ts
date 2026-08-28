@@ -12,10 +12,14 @@
 import type { SectionId } from "./bridge.js";
 
 /**
- * Maps each story section to the (app) route IDs it narrates. Every
- * route ID uses the exact SvelteKit-style path that route-manifest
- * derives from the filesystem (group segments included, filename
- * stripped).
+ * Maps each story section to the route IDs it narrates, across both
+ * mounted groups. Every route ID uses the exact SvelteKit-style path
+ * that route-manifest derives from the filesystem (group segments
+ * included, filename stripped).
+ *
+ * The (client) entries carry their group segment for the same reason
+ * the (app) ones do, and the guard script that scans this file as text
+ * keys off that leading "/(" either way.
  */
 export const SECTION_ROUTES: Record<
   Exclude<SectionId, "coming-soon">,
@@ -40,8 +44,16 @@ export const SECTION_ROUTES: Record<
   ],
   "admin-comms": ["/(app)/admin/communications"],
   "admin-org": ["/(app)/admin/organization"],
+  "admin-forms": ["/(app)/admin/forms"],
+  "admin-responses": ["/(app)/admin/forms/responses"],
+  "admin-logs": ["/(app)/admin/logs"],
   schedule: ["/(app)/more/schedule"],
   settings: ["/(app)/more/settings"],
+  "client-intake": ["/(client)/intake", "/(client)/intake/[slug]"],
+  "client-privacy": ["/(client)/intake/privacy"],
+  "client-portal": ["/(client)/portal/[channelId]"],
+  "client-account": ["/(client)/account"],
+  "client-share": ["/(client)/share/[id]"],
 };
 
 /**
@@ -53,6 +65,7 @@ export const SECTION_ROUTES: Record<
 export const SUB_ROUTES: Readonly<Record<string, readonly string[]>> = {
   "library/vote": ["/(app)/library/[articleId]"],
   "library/editor": ["/(app)/library/new", "/(app)/library/[articleId]/edit"],
+  "client-intake/fields": ["/(client)/intake/[slug]"],
 };
 
 /**
