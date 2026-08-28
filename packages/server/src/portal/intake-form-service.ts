@@ -152,13 +152,23 @@ export interface IntakeFormService {
    * Admin whole-form save (create when formId null): replaces the field set
    * in one transaction (DELETE + INSERT with positions 0..n-1), enforcing
    * the one-availability rule server-side. Handles slug uniqueness,
-   * is_default atomicity, and destination queue validation. Returns the form id.
+   * is_default atomicity, and destination queue validation.
+   *
+   * Saving never publishes. A form is built as a draft and switched on
+   * separately through `setActive`, so an admin can work on one across
+   * several sittings without a half-finished version being reachable, and so
+   * editing a live form can never take it off the public site by accident.
+   * A created form is therefore always inactive, and an edited form keeps
+   * whatever state it already had.
+   *
+   * Returns the form id and the state the form is in afterwards. A caller
+   * that wants the form reachable must follow with `setActive`.
    */
   saveForm(
     db: Kysely<TenantDatabase>,
     userId: UserId,
     input: SaveIntakeFormInput,
-  ): Promise<{ formId: string }>;
+  ): Promise<{ formId: string; isActive: boolean }>;
 
   /** List all forms with summary info (id, name, slug, active, default, destination, field count). */
   listForms(db: Kysely<TenantDatabase>): Promise<FormSummary[]>;
@@ -169,7 +179,10 @@ export interface IntakeFormService {
    */
   deleteForm(db: Kysely<TenantDatabase>, formId: IntakeFormId): Promise<void>;
 
-  /** Activate or deactivate a form. */
+  /**
+   * Activate or deactivate a form. The only writer of `is_active`: `saveForm`
+   * leaves it alone on both the create and the edit path.
+   */
   setActive(
     db: Kysely<TenantDatabase>,
     formId: IntakeFormId,
@@ -362,7 +375,7 @@ export function createIntakeFormService(deps: {
       db: Kysely<TenantDatabase>,
       _userId: UserId,
       input: SaveIntakeFormInput,
-    ): Promise<{ formId: string }> {
+    ): Promise<{ formId: string; isActive: boolean }> {
       // Server-side one-availability re-check
       const availabilityCount = input.fields.filter(
         (f) => f.fieldType === "availability",
@@ -386,6 +399,9 @@ export function createIntakeFormService(deps: {
 
       return db.transaction().execute(async (trx) => {
         let formId: IntakeFormId;
+        // Neither branch writes is_active. A new form starts off (the column
+        // default), an edited one keeps the state setActive last gave it.
+        let isActive: boolean;
 
         // Slug uniqueness check (within the transaction)
         if (input.slug != null) {
@@ -404,13 +420,15 @@ export function createIntakeFormService(deps: {
           // Update existing form
           const existing = await trx
             .selectFrom("intake_forms")
-            .select("id")
+            .select(["id", "is_active"])
             .where("id", "=", input.formId)
             .executeTakeFirst();
 
           if (!existing) {
             throw new NotFoundError("Form not found");
           }
+
+          isActive = existing.is_active;
 
           await trx
             .updateTable("intake_forms")
@@ -454,10 +472,11 @@ export function createIntakeFormService(deps: {
                   : null,
               closes_at: input.closesAt ?? null,
             })
-            .returning("id")
+            .returning(["id", "is_active"])
             .executeTakeFirstOrThrow();
 
           formId = row.id;
+          isActive = row.is_active;
         }
 
         // Atomically clear any existing default if this form is becoming default
@@ -508,7 +527,7 @@ export function createIntakeFormService(deps: {
             .execute();
         }
 
-        return { formId };
+        return { formId, isActive };
       });
     },
 

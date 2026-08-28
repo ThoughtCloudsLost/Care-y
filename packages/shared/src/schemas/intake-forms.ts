@@ -649,6 +649,13 @@ const saveIntakeFieldSchema = z.object({
 /**
  * Admin wire shape for whole-form saves. The editor saves the full ordered
  * field list in one mutation (create-or-replace), not per-field CRUD.
+ *
+ * Deliberately carries no `isActive`. Whether a form is reachable by the
+ * public is changed only through `intakeForms.setActive`, so a form can be
+ * built over several sittings without going live half-finished and an edit to
+ * a live form cannot take it down. A form created here starts switched off;
+ * the mutation returns the resulting state, and a caller that wants it
+ * reachable follows with `setActive`.
  */
 export const saveIntakeFormInputSchema = z
   .object({

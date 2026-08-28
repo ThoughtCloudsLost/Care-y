@@ -73,7 +73,10 @@ export function createIntakeFormRouter(deps: IntakeFormRouterDeps) {
         }),
       ),
 
-    /** Create or update a form (whole-form save). */
+    /**
+     * Create or update a form (whole-form save). Returns `{ formId, isActive }`.
+     * A created form is not reachable by the public until `setActive` runs.
+     */
     save: queueManagerProcedure.input(saveIntakeFormInputSchema).mutation(
       withErrorWrapping(async ({ ctx, input }) => {
         const result = await deps.intakeFormService.saveForm(

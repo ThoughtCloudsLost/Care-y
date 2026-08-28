@@ -391,6 +391,61 @@ describe.skipIf(!process.env.DATABASE_URL)("IntakeFormService", () => {
       ).rejects.toThrow(ValidationError);
     });
 
+    it("reports isActive false for a created form (saving never publishes)", async () => {
+      const result = await svc.saveForm(
+        testDb.db,
+        crypto.randomUUID() as UserId,
+        {
+          formId: null,
+          name: "Fresh Draft",
+          slug: "fresh-draft",
+          fields: [
+            {
+              fieldKey: crypto.randomUUID(),
+              fieldType: "text",
+              encryptedLabel: Buffer.from("l").toString("base64"),
+              encryptedConfig: Buffer.from("c").toString("base64"),
+              isRequired: false,
+            },
+          ],
+        },
+      );
+
+      expect(result.isActive).toBe(false);
+      // The state the caller is told about is the state the public sees.
+      expect(await svc.getPublicForm(testDb.db, "fresh-draft")).toBeNull();
+    });
+
+    it("reports isActive true when editing a live form, leaving it live", async () => {
+      const formId = await createForm("Live Edit", { slug: "live-edit" });
+      await svc.setActive(testDb.db, formId, true);
+
+      const result = await svc.saveForm(
+        testDb.db,
+        crypto.randomUUID() as UserId,
+        {
+          formId,
+          name: "Live Edit Renamed",
+          slug: "live-edit",
+          fields: [
+            {
+              fieldKey: crypto.randomUUID(),
+              fieldType: "text",
+              encryptedLabel: Buffer.from("l").toString("base64"),
+              encryptedConfig: Buffer.from("c").toString("base64"),
+              isRequired: false,
+            },
+          ],
+        },
+      );
+
+      expect(result.isActive).toBe(true);
+      // An edit must never take a public form down.
+      expect(await svc.getPublicForm(testDb.db, "live-edit")).not.toBeNull();
+
+      await svc.setActive(testDb.db, formId, false);
+    });
+
     it("throws NotFoundError when updating a nonexistent form", async () => {
       await expect(
         svc.saveForm(testDb.db, crypto.randomUUID() as UserId, {
