@@ -1183,6 +1183,25 @@ export function classifyDemoLabel(
     }
   }
 
+  // The client shell takes no ungated fallback.
+  //
+  // Matching is on the rendered string, so the two shells collide wherever
+  // they use the same word. The portal's account form renders "Password"
+  // and "Sign in", which the org app registers ungated for
+  // "settings-password" and "credentials". A help-seeker filling in the
+  // portal would move the story to an org section, in the wrong shell and
+  // under the wrong viewer.
+  //
+  // Gating those labels one at a time would be endless: every ungated
+  // registration is a potential collision, and the portal's vocabulary is
+  // ordinary words. The two shells share no controls, and every client
+  // topic resolves through TOPIC_SELECTORS rather than through a label, so
+  // there is nothing here for the fallback to legitimately find.
+  //
+  // Rules above still apply. A registration deliberately gated to include
+  // "client" keeps working; only the untargeted fallback is refused.
+  if (ctx.feature === "client") return null;
+
   // No rule matched: fall back to the ungated registration, if any.
   // A label with only gated registrations yields null outside its
   // gates rather than leaking into a foreign context.
