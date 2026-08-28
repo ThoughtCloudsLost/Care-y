@@ -705,6 +705,20 @@ export {
   type UploadFormAssetInput,
 } from "./schemas/intake-forms.js";
 
+// --- Intake ticket composition (title/description shaping) ---
+export {
+  formatAvailability,
+  isAvailabilityData,
+  resolveOptionKey,
+  formatValue,
+  toResponseValue,
+  composeIntakeTicketContent,
+  extractMessageText,
+  buildIntakeFormResponse,
+  type IntakeAnswer,
+  type IntakeTicketContent,
+} from "./schemas/intake-ticket-composition.js";
+
 // --- Branded identifier types (ADR-074) ---
 // Schemas are exported for wire boundaries so tRPC inputs arrive branded.
 // Types are consumed by `db/types.ts` so column types and wire types share

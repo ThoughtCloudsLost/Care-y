@@ -28,35 +28,23 @@ import {
   type EciesOutput,
 } from "@care-y/crypto";
 import {
-  resolveLocalized,
-  BASE_LOCALE,
-  type IntakeFieldType,
+  composeIntakeTicketContent,
+  extractMessageText,
+  buildIntakeFormResponse,
+  type IntakeAnswer,
+  type AvailabilityData,
   type IntakeFieldRole,
   type IntakeFieldConfig,
-  type IntakeOption,
-  type AvailabilityData,
-  type IntakeFormResponse,
   type TicketPriority,
 } from "@care-y/shared";
 import { buildAccountRegistration } from "$lib/portal/account-crypto.js";
 import type { LoginCryptoCallbacks } from "$lib/auth/login-crypto.js";
 
-const textEncoder = new TextEncoder();
+// Re-export IntakeAnswer so existing consumer imports from this module
+// continue to resolve without changes.
+export type { IntakeAnswer } from "@care-y/shared";
 
-/**
- * A single answered field, ready for encryption.
- * Labels are included for human-readable description composition only;
- * they are NOT stored in the structured response blob.
- * Config is included optionally for resolving option keys to display
- * labels in the description (options are key+label pairs; labels resolve at display time).
- */
-export interface IntakeAnswer {
-  readonly fieldKey: string;
-  readonly fieldType: IntakeFieldType;
-  readonly label: string;
-  readonly value: string | readonly string[] | AvailabilityData | boolean;
-  readonly config?: IntakeFieldConfig;
-}
+const textEncoder = new TextEncoder();
 
 export interface EncryptedIntake {
   readonly encryptedTitle: string;
@@ -71,90 +59,6 @@ export interface EncryptedIntake {
  * The Worker reconstructs the same slot string to verify the binding.
  */
 const FORM_RESPONSE_SLOT = "intake-form-response";
-
-/**
- * Format an availability value as human-readable text lines for the
- * description composition. The IANA timezone name is included.
- */
-function formatAvailability(data: AvailabilityData): string {
-  const parts: string[] = [];
-  for (const r of data.recurring) {
-    parts.push(`${r.day} ${r.start}-${r.end}`);
-  }
-  for (const s of data.specific) {
-    parts.push(`${s.date} ${s.start}-${s.end}`);
-  }
-  if (parts.length === 0) return `(${data.timezone})`;
-  return `${parts.join(", ")} (${data.timezone})`;
-}
-
-/**
- * Check whether a value is an AvailabilityData object (has the timezone +
- * recurring + specific shape). Used to narrow the answer value union without
- * an unsafe type assertion.
- */
-function isAvailabilityData(
-  v: string | readonly string[] | AvailabilityData | boolean,
-): v is AvailabilityData {
-  return typeof v === "object" && !Array.isArray(v) && "timezone" in v;
-}
-
-/**
- * Resolve an option key to its base-locale display label using the field
- * config's options array. Returns the key unchanged when no match is found
- * (graceful fallback for stale or default-form answers).
- */
-function resolveOptionKey(
-  key: string,
-  options: readonly IntakeOption[],
-): string {
-  for (const opt of options) {
-    if (opt.key === key) {
-      return resolveLocalized(opt.label, BASE_LOCALE) ?? key;
-    }
-  }
-  return key;
-}
-
-/**
- * Format a single answer value as a string for the description.
- * When config is provided and the field is select/multiselect, option keys
- * are resolved to base-locale labels (option keys are immutable; labels resolve at display time).
- * Date values pass through as-is (YYYY-MM-DD).
- */
-function formatValue(
-  value: string | readonly string[] | AvailabilityData | boolean,
-  config?: IntakeFieldConfig,
-): string {
-  if (typeof value === "boolean") return value ? "Yes" : "No";
-  if (typeof value === "string") {
-    // For select fields, resolve the option key to a label
-    if (config?.type === "select") {
-      return resolveOptionKey(value, config.options);
-    }
-    // Date and plain text values pass through unchanged
-    return value;
-  }
-  if (isAvailabilityData(value)) return formatAvailability(value);
-  // For multiselect fields, resolve each option key to a label
-  if (config?.type === "multiselect") {
-    return value.map((key) => resolveOptionKey(key, config.options)).join(", ");
-  }
-  return value.join(", ");
-}
-
-/**
- * Strip the label from the value for the structured response blob.
- * Availability is stored as-is; arrays and strings pass through.
- */
-function toResponseValue(
-  value: string | readonly string[] | AvailabilityData | boolean,
-): string | string[] | AvailabilityData | boolean {
-  if (typeof value === "boolean") return value;
-  if (typeof value === "string") return value;
-  if (isAvailabilityData(value)) return value;
-  return [...value];
-}
 
 /**
  * Encrypt an intake form submission. All four ciphertexts are AAD-bound
@@ -177,51 +81,9 @@ export function encryptIntake(
 ): EncryptedIntake {
   const tk: SymmetricKey = generateContentKey();
   try {
-    // Title: "Web intake" for custom forms; "Web intake - <name>" for the
-    // default form when a name answer is present and non-empty
-    const nameAnswer = answers.find(
-      (a) =>
-        a.fieldKey === "default:name" &&
-        typeof a.value === "string" &&
-        a.value !== "",
-    );
-    const nameValue =
-      nameAnswer !== undefined && typeof nameAnswer.value === "string"
-        ? nameAnswer.value
-        : null;
-    const title =
-      nameValue !== null ? `Web intake - ${nameValue}` : "Web intake";
-
-    // Description: one line per answered field, "<label>: <value>".
-    // Option keys are resolved to base-locale labels for queue-facing text.
-    const descriptionLines: string[] = [];
-    for (const answer of answers) {
-      const formatted = formatValue(answer.value, answer.config);
-      if (formatted !== "") {
-        descriptionLines.push(`${answer.label}: ${formatted}`);
-      }
-    }
-    const description = descriptionLines.join("\n");
-
-    // Message: first textarea answer becomes the follow-up content.
-    // Custom forms without a textarea skip the follow-up entirely.
-    const textareaAnswer = answers.find((a) => a.fieldType === "textarea");
-    const messageText = textareaAnswer
-      ? typeof textareaAnswer.value === "string"
-        ? textareaAnswer.value
-        : ""
-      : null;
-
-    // Structured response blob (availability-matching Worker seam).
-    // Uses fieldKey (client-minted, stable across saves) for response identity.
-    const responsePayload: IntakeFormResponse = {
-      formId,
-      answers: answers.map((a) => ({
-        fieldKey: a.fieldKey,
-        fieldType: a.fieldType,
-        value: toResponseValue(a.value),
-      })),
-    };
+    const { title, description } = composeIntakeTicketContent(answers);
+    const messageText = extractMessageText(answers);
+    const responsePayload = buildIntakeFormResponse(formId, answers);
 
     // AAD bindings
     const titleAad = buildContentAad(ids.ticketId, "title");
