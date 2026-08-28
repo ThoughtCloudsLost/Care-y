@@ -16,8 +16,15 @@ import {
   orgSchemaNameSchema,
   orgSlugIdSchema,
   userIdSchema,
+  e164Schema,
   type E164,
 } from "@care-y/shared";
+
+/**
+ * Caller ID the resolver stub returns. Parsed rather than cast so the stub
+ * carries the same format guarantee the real resolver does.
+ */
+const TEST_CALLER_ID = e164Schema.parse("+15559990000");
 
 // --- Stubs ---
 
@@ -149,7 +156,7 @@ function buildDeps(
     getTenantDb: overrides?.getTenantDb ?? vi.fn(() => tDb),
     getProvider: overrides?.getProvider ?? vi.fn(async () => actualProvider),
     resolveCallerIdByPurpose:
-      overrides?.resolveCallerIdByPurpose ?? vi.fn(async () => "+15559990000"),
+      overrides?.resolveCallerIdByPurpose ?? vi.fn(async () => TEST_CALLER_ID),
   };
 }
 
@@ -178,7 +185,7 @@ describe("notification-sms job handler", () => {
         sms_pings_enabled: true,
       },
     ]);
-    const callerFrom = "+15559990000";
+    const callerFrom = TEST_CALLER_ID;
 
     const deps: NotificationSmsJobDeps = {
       encryptor: enc,
@@ -208,7 +215,7 @@ describe("notification-sms job handler", () => {
       encryptor: stubEncryptor("+15551234567"),
       getTenantDb: vi.fn(() => tDb),
       getProvider: vi.fn(async () => provider),
-      resolveCallerIdByPurpose: vi.fn(async () => "+15559990000"),
+      resolveCallerIdByPurpose: vi.fn(async () => TEST_CALLER_ID),
     };
 
     const handler = createNotificationSmsJobHandler(deps);
@@ -232,7 +239,7 @@ describe("notification-sms job handler", () => {
       encryptor: stubEncryptor("+15551234567"),
       getTenantDb: vi.fn(() => tDb),
       getProvider: vi.fn(async () => provider),
-      resolveCallerIdByPurpose: vi.fn(async () => "+15559990000"),
+      resolveCallerIdByPurpose: vi.fn(async () => TEST_CALLER_ID),
     };
 
     const handler = createNotificationSmsJobHandler(deps);
@@ -293,7 +300,7 @@ describe("notification-sms job handler", () => {
       encryptor,
       getTenantDb: vi.fn(() => tDb),
       getProvider: vi.fn(async () => failingProvider),
-      resolveCallerIdByPurpose: vi.fn(async () => "+15559990000"),
+      resolveCallerIdByPurpose: vi.fn(async () => TEST_CALLER_ID),
     };
 
     const handler = createNotificationSmsJobHandler(deps);
@@ -346,7 +353,7 @@ describe("notification-sms job handler", () => {
       encryptor: stubEncryptor("+15551234567"),
       getTenantDb,
       getProvider: vi.fn(async () => stubProvider()),
-      resolveCallerIdByPurpose: vi.fn(async () => "+15559990000"),
+      resolveCallerIdByPurpose: vi.fn(async () => TEST_CALLER_ID),
     };
 
     const handler = createNotificationSmsJobHandler(deps);
@@ -368,7 +375,7 @@ describe("notification-sms job handler", () => {
     ]);
 
     const getProvider = vi.fn(async () => provider);
-    const resolveCallerIdByPurpose = vi.fn(async () => "+15559990000");
+    const resolveCallerIdByPurpose = vi.fn(async () => TEST_CALLER_ID);
 
     const deps: NotificationSmsJobDeps = {
       encryptor: enc,

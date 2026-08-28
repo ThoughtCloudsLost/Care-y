@@ -72,7 +72,7 @@ import type { OrgContext } from "../trpc/context.js";
 import type { EmailSender } from "../email/email-sender.js";
 import { createScopedTwoFactorServices } from "./two-factor.js";
 import type { ProviderFactory } from "../telephony/factory.js";
-import type { CallerIdResolver } from "../auth/sms-code.js";
+import type { CallerIdResolver } from "../telephony/phone-resolver.js";
 import { getReachabilityForUsers } from "../telephony/reachability.js";
 import type { TotpReplayCache } from "../auth/totp-replay-cache.js";
 

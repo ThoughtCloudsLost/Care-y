@@ -26,7 +26,7 @@ import type { ConsultantService } from "../telephony/consultant-service.js";
 import type { PendingClient } from "../tickets/ticket-service.js";
 import type { CallTracker } from "../telephony/call-tracker.js";
 import { generateTwilioAccessToken } from "../telephony/twilio-token.js";
-import type { OrgIdentifiers } from "../telephony/phone-resolver.js";
+import type { CallerIdResolver } from "../telephony/phone-resolver.js";
 import { createPhoneRepository } from "../telephony/models/phone-repo.js";
 import { isE164Buffer } from "../telephony/phone-utils.js";
 import { getStrings } from "../notifications/i18n.js";
@@ -77,10 +77,7 @@ export interface RelayHandlerDeps {
    * Takes both org identifiers so it can query both the tenant schema
    * (for purpose SIDs) and the platform table (for provisioned numbers).
    */
-  readonly resolveCallerIdByPurpose: (
-    org: OrgIdentifiers,
-    purpose: "outbound" | "system",
-  ) => Promise<E164 | null>;
+  readonly resolveCallerIdByPurpose: CallerIdResolver;
   /** Map of CallSid -> pending call state for DTMF confirmation. */
   readonly pendingCalls: Map<string, PendingCall>;
   readonly webhookBaseUrl: string;

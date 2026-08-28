@@ -20,7 +20,8 @@ import { hkdfSync } from "./node-crypto-shim.js";
 import { appendToOutbox } from "../outbox.js";
 import type { FieldEncryptor, BlindIndexer } from "./field-encryptor-shim.js";
 import type { SecretsEncryptor } from "./secrets-shim.js";
-import type { OrgId, UserId } from "@care-y/shared";
+import type { OrgId, UserId, E164 } from "@care-y/shared";
+import { e164Schema } from "@care-y/shared";
 import type { OrgRecord } from "../../../../../server/src/org/service.js";
 
 import type { TenantDatabase } from "../../../../../server/src/db/types.js";
@@ -250,9 +251,12 @@ export async function buildServiceStubs(
     },
   };
 
-  // Phone resolver stub (returns a demo caller ID for SMS delivery)
-  const phoneResolverStub = async (): Promise<string | null> =>
-    Promise.resolve("+15550001234");
+  // Phone resolver stub (returns a demo caller ID for SMS delivery).
+  // Parsed through e164Schema rather than cast, so the stub proves the same
+  // format the real resolver reads off provisioned numbers.
+  const DEMO_CALLER_ID = e164Schema.parse("+15550001234");
+  const phoneResolverStub = async (): Promise<E164 | null> =>
+    Promise.resolve(DEMO_CALLER_ID);
 
   // TOTP replay cache stub
   const totpReplayCacheStub = {

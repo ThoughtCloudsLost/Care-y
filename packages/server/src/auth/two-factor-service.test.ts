@@ -36,7 +36,8 @@ import {
   createTwoFactorService,
   type TwoFactorService,
 } from "./two-factor-service.js";
-import { createSmsCodeService, type CallerIdResolver } from "./sms-code.js";
+import { createSmsCodeService } from "./sms-code.js";
+import type { CallerIdResolver } from "../telephony/phone-resolver.js";
 import { generateTotpCode, base32Decode } from "./totp.js";
 import {
   createInMemoryTotpReplayCache,
@@ -44,6 +45,7 @@ import {
 } from "./totp-replay-cache.js";
 import {
   TwoFactorMethod,
+  e164Schema,
   type OrgSchema,
   type WebauthnCredentialId,
 } from "@care-y/shared";
@@ -1304,7 +1306,7 @@ describe.skipIf(!process.env.DATABASE_URL)("TwoFactorService", () => {
 
     const smsResolver: CallerIdResolver = vi
       .fn<CallerIdResolver>()
-      .mockResolvedValue("+15551234567");
+      .mockResolvedValue(e164Schema.parse("+15551234567"));
 
     /**
      * Creates a TwoFactorService with SMS deps wired in.

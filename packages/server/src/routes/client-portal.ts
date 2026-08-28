@@ -33,7 +33,6 @@ import type {
   OrgId,
   OrgSchema,
   OrgSlug,
-  E164,
   TicketId,
   FollowupId,
   KeyGeneration,
@@ -49,6 +48,7 @@ import type { IntakeFormService } from "../portal/intake-form-service.js";
 import type { NotificationService } from "../notifications/service.js";
 import type { FieldEncryptor } from "../crypto/field-encryptor.js";
 import type { TelephonyProvider } from "../telephony/provider.js";
+import type { CallerIdResolver } from "../telephony/phone-resolver.js";
 import type { Kysely } from "kysely";
 import type { TenantDatabase } from "../db/types.js";
 import type { PortalChannelRow } from "../portal/channel-service.js";
@@ -126,10 +126,7 @@ export interface ClientPortalRouterDeps {
     orgId: OrgId,
   ) => Promise<TelephonyProvider | null>;
   /** Phone purpose resolver for portal nudge caller ID. */
-  readonly portalResolveCallerId?: (
-    org: { readonly orgId: OrgId; readonly orgSchema: OrgSchema },
-    purpose: "outbound" | "system",
-  ) => Promise<E164 | null>;
+  readonly portalResolveCallerId?: CallerIdResolver;
 
   // Share link deps (appended by 8d)
   /** 10 req/min per IP on the public openShare endpoint. */

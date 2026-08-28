@@ -17,6 +17,7 @@ import type { Kysely, Transaction } from "kysely";
 import type { TenantDatabase } from "../db/types.js";
 import type { PortalChannelRow } from "./channel-service.js";
 import type { TelephonyProvider } from "../telephony/provider.js";
+import type { CallerIdResolver } from "../telephony/phone-resolver.js";
 import type { FieldEncryptor } from "../crypto/field-encryptor.js";
 import type { NotificationService } from "../notifications/service.js";
 import { enqueueNotification } from "../notifications/outbox.js";
@@ -93,10 +94,7 @@ export interface PortalBootstrapResult {
 
 export interface PortalMessageServiceDeps {
   readonly getProvider: (orgId: OrgId) => Promise<TelephonyProvider | null>;
-  readonly resolveCallerIdByPurpose: (
-    org: { readonly orgId: OrgId; readonly orgSchema: OrgSchema },
-    purpose: "outbound" | "system",
-  ) => Promise<string | null>;
+  readonly resolveCallerIdByPurpose: CallerIdResolver;
   readonly fieldEncryptor: FieldEncryptor;
   readonly notificationService: NotificationService;
   readonly orgId: OrgId;
@@ -369,7 +367,9 @@ export async function nudgeClient(
       { orgId: deps.orgId, orgSchema: deps.orgSchema },
       "system",
     );
-    if (callerId == null || callerId === "") return;
+    // No empty-string guard: E164 is regex-validated at its parse boundary,
+    // so the only non-null value that reaches here is a dialable number.
+    if (callerId === null) return;
 
     // Static localized body (no content, no link, no key material).
     // Localized to the org default language: the server knows no
