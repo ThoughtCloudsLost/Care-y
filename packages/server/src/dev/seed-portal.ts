@@ -964,7 +964,9 @@ async function submitSeedResponse(
     await createIntakeTicket(
       deps.tDb,
       {
-        notificationService: deps.notificationService,
+        // No notificationService: createIntakeTicket writes its notification
+        // intent to the outbox inside its own transaction and the drainer
+        // dispatches from there, so the caller supplies no dispatcher.
         sealedBox: deps.sealedBox,
         fieldEncryptor: deps.fieldEncryptor,
         orgId: deps.orgId,
