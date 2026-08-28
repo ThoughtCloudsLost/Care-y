@@ -429,6 +429,139 @@ export const CROP_REGISTRY = {
     selector: null,
     fallbackRect: { ...DEFAULT_RECT },
   },
+  // -- dashboard (added with the client-portal taxonomy) --
+  "dashboard/merge-candidates": {
+    selector: null,
+    fallbackRect: { ...DEFAULT_RECT },
+  },
+  // -- ticket-detail (added with the client-portal taxonomy) --
+  "ticket-detail/portal-tier": {
+    selector: null,
+    fallbackRect: { ...DEFAULT_RECT },
+  },
+  "ticket-detail/secure-link": {
+    selector: null,
+    fallbackRect: { ...DEFAULT_RECT },
+  },
+  "ticket-detail/share-link": {
+    selector: null,
+    fallbackRect: { ...DEFAULT_RECT },
+  },
+  "ticket-detail/share-status": {
+    selector: null,
+    fallbackRect: { ...DEFAULT_RECT },
+  },
+  "ticket-detail/correction-status": {
+    selector: null,
+    fallbackRect: { ...DEFAULT_RECT },
+  },
+  "ticket-detail/outbound-edit": {
+    selector: null,
+    fallbackRect: { ...DEFAULT_RECT },
+  },
+  // -- admin-people (added with the client-portal taxonomy) --
+  "admin-people/role-permissions": {
+    selector: null,
+    fallbackRect: { ...DEFAULT_RECT },
+  },
+  // -- admin-org (added with the client-portal taxonomy) --
+  "admin-org/intake-forms": {
+    selector: null,
+    fallbackRect: { ...DEFAULT_RECT },
+  },
+  // -- admin-forms (added with the client-portal taxonomy) --
+  "admin-forms/builder": {
+    selector: null,
+    fallbackRect: { ...DEFAULT_RECT },
+  },
+  "admin-forms/preview": {
+    selector: null,
+    fallbackRect: { ...DEFAULT_RECT },
+  },
+  // -- admin-responses (added with the client-portal taxonomy) --
+  "admin-responses/responses": {
+    selector: null,
+    fallbackRect: { ...DEFAULT_RECT },
+  },
+  "admin-responses/key-not-held": {
+    selector: null,
+    fallbackRect: { ...DEFAULT_RECT },
+  },
+  // -- admin-logs (added with the client-portal taxonomy) --
+  "admin-logs/calls": {
+    selector: null,
+    fallbackRect: { ...DEFAULT_RECT },
+  },
+  "admin-logs/audit": {
+    selector: null,
+    fallbackRect: { ...DEFAULT_RECT },
+  },
+  // -- settings (added with the client-portal taxonomy) --
+  "settings/notifications": {
+    selector: null,
+    fallbackRect: { ...DEFAULT_RECT },
+  },
+  "settings/consultant-phone": {
+    selector: null,
+    fallbackRect: { ...DEFAULT_RECT },
+  },
+  // -- client-intake (added with the client-portal taxonomy) --
+  "client-intake/form": {
+    selector: null,
+    fallbackRect: { ...DEFAULT_RECT },
+  },
+  "client-intake/how-protected": {
+    selector: null,
+    fallbackRect: { ...DEFAULT_RECT },
+  },
+  "client-intake/fields": {
+    selector: null,
+    fallbackRect: { ...DEFAULT_RECT },
+  },
+  "client-intake/submit": {
+    selector: null,
+    fallbackRect: { ...DEFAULT_RECT },
+  },
+  // -- client-privacy (added with the client-portal taxonomy) --
+  "client-privacy/notice": {
+    selector: null,
+    fallbackRect: { ...DEFAULT_RECT },
+  },
+  // -- client-portal (added with the client-portal taxonomy) --
+  "client-portal/thread": {
+    selector: null,
+    fallbackRect: { ...DEFAULT_RECT },
+  },
+  "client-portal/composer": {
+    selector: null,
+    fallbackRect: { ...DEFAULT_RECT },
+  },
+  "client-portal/quick-exit": {
+    selector: null,
+    fallbackRect: { ...DEFAULT_RECT },
+  },
+  // -- client-account (added with the client-portal taxonomy) --
+  "client-account/sign-in": {
+    selector: null,
+    fallbackRect: { ...DEFAULT_RECT },
+  },
+  "client-account/thread": {
+    selector: null,
+    fallbackRect: { ...DEFAULT_RECT },
+  },
+  "client-account/settings": {
+    selector: null,
+    fallbackRect: { ...DEFAULT_RECT },
+  },
+  // -- client-share (added with the client-portal taxonomy) --
+  "client-share/view": {
+    selector: null,
+    fallbackRect: { ...DEFAULT_RECT },
+  },
+  "client-share/one-time": {
+    selector: null,
+    fallbackRect: { ...DEFAULT_RECT },
+  },
 };
 
 /**

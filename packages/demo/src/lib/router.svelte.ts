@@ -77,6 +77,67 @@ const CLIENT_ENTRY_PATH = "/intake";
 /** Route-group name for the client portal, as it appears in route IDs. */
 const CLIENT_GROUP = "client";
 
+/**
+ * Admin sub-paths that are not one of the five areas the product's nav
+ * tree knows. An explicit set rather than a pattern: the value is
+ * interpolated into a pathname, and a closed list cannot be talked into
+ * accepting a traversal segment however the detail was built.
+ */
+const ADMIN_SUB_PATHS: ReadonlySet<string> = new Set([
+  "forms",
+  "forms/responses",
+  "logs",
+]);
+
+/**
+ * Whether a query string is one this router is willing to put in a URL.
+ * Single `key=value` pair, unreserved characters only.
+ */
+function isSafeDetailQuery(search: string): boolean {
+  if (search === "") return true;
+  const pair = search.slice(1);
+  if (!search.startsWith("?") || pair.includes("&")) return false;
+  const eq = pair.indexOf("=");
+  if (eq <= 0) return false;
+  const key = pair.slice(0, eq);
+  const value = pair.slice(eq + 1);
+  return isUnreserved(key) && value.length > 0 && isUnreserved(value);
+}
+
+/** Letters, digits, dash and underscore only. No pattern backtracking. */
+function isUnreserved(s: string): boolean {
+  for (const ch of s) {
+    const ok =
+      (ch >= "a" && ch <= "z") ||
+      (ch >= "A" && ch <= "Z") ||
+      (ch >= "0" && ch <= "9") ||
+      ch === "-" ||
+      ch === "_";
+    if (!ok) return false;
+  }
+  return true;
+}
+
+/**
+ * Split a detail into the path part and its query string.
+ *
+ * Details are normally bare path fragments, but the intake-form and log
+ * surfaces address themselves with a query (see featureToPathname). The
+ * router stores the query-free part as `detail` so both directions of
+ * the location contract compare the same value: a command carries
+ * "forms?id=<seeded>", while the phone would otherwise report whichever
+ * id it actually landed on, and the two could never converge.
+ */
+function splitDetailQuery(detail: DemoDetail): {
+  detail: DemoDetail;
+  search: string;
+} {
+  if (typeof detail !== "string") return { detail, search: "" };
+  const q = detail.indexOf("?");
+  if (q === -1) return { detail, search: "" };
+  return { detail: detail.slice(0, q), search: detail.slice(q) };
+}
+
 /** True when this feature renders outside AppShell, in the client shell. */
 export function isClientFeature(feature: DemoFeature | null): boolean {
   return feature === "client";
@@ -111,6 +172,21 @@ function featureToPathname(
       if (detail === "people") return "/admin/people";
       if (detail === "organization") return "/admin/organization";
       if (detail === "communications") return "/admin/communications";
+      // The remaining admin surfaces address themselves with a query
+      // rather than a path segment: /admin/forms and its responses view
+      // read `?id=`, /admin/logs reads `?tab=`. Passing the detail
+      // through keeps that query attached, and navigate() splits it off
+      // before matching. Anything unrecognized still lands on the hub.
+      if (detail !== null) {
+        const { detail: path, search } = splitDetailQuery(detail);
+        if (
+          typeof path === "string" &&
+          ADMIN_SUB_PATHS.has(path) &&
+          isSafeDetailQuery(search)
+        ) {
+          return `/admin/${path}${search}`;
+        }
+      }
       return "/admin";
     case "schedule":
       return "/more/schedule";
@@ -175,7 +251,18 @@ function resolveFeature(pathname: string): {
   // Area-based features
   if (ctx.area !== null) {
     // Admin areas
-    if (ctx.area === "admin") return { feature: "admin", detail: null, ctx };
+    if (ctx.area === "admin") {
+      // The product's nav map has entries for the five admin areas only
+      // (shell/nav-context.ts), so /admin/forms, its responses view and
+      // /admin/logs all resolve to the bare "admin" area and would be
+      // indistinguishable from the hub. Recover the sub-path here rather
+      // than adding demo-only entries to the product's map.
+      const sub = pathname.replace(/^\/admin\/?/, "").replace(/\/$/, "");
+      if (sub === "forms" || sub === "forms/responses" || sub === "logs") {
+        return { feature: "admin", detail: sub, ctx };
+      }
+      return { feature: "admin", detail: null, ctx };
+    }
     if (ctx.area === "admin-volunteer")
       return { feature: "admin", detail: "volunteer", ctx };
     if (ctx.area === "admin-manager")
@@ -349,15 +436,21 @@ export class DemoRouter {
   navigate(feature: DemoFeature, detail?: DemoDetail): void {
     const fromUrl = this.currentUrl();
     const resolvedDetail = detail ?? null;
-    const pathname = featureToPathname(feature, resolvedDetail, this.pathname);
+    const target = featureToPathname(feature, resolvedDetail, this.pathname);
+    // featureToPathname may hand back a path carrying its own query.
+    // Split it here rather than in every caller: the URL needs the
+    // query, and the stored detail must not have it.
+    const q = target.indexOf("?");
+    const pathname = q === -1 ? target : target.slice(0, q);
+    const search = q === -1 ? "" : target.slice(q);
     const match = feature === "login" ? null : matchRoute(pathname);
 
     this.resetShallowState(pathname);
     this.pathname = pathname;
-    this.search = "";
+    this.search = search;
     this.searchOpen = false;
     this.feature = feature;
-    this.detail = resolvedDetail;
+    this.detail = splitDetailQuery(resolvedDetail).detail;
     this.routeId = match?.routeId ?? null;
     this.syncShellProps(resolveNavContext(pathname));
 

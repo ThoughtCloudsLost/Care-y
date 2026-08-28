@@ -93,6 +93,7 @@ describe("deriveSectionState", () => {
       titleKey: "demo_section_login_title",
       descKey: "demo_section_login_desc",
       routes: [],
+      group: "org" as const,
       subs: [{ slug: "intro", topic: null, headingKey: "h", bodyKey: "b" }],
     };
     const state = deriveSectionState(noTopicSection, new Set());

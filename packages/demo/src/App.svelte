@@ -1137,6 +1137,10 @@
       titleKey: "demo_coming_soon_title",
       descKey: "demo_coming_soon_desc",
       routes: [],
+      // The placeholder stands in for an unnarrated (app) route, and it
+      // is never rendered in the contents menu, so the group is the
+      // org arc by construction rather than by choice.
+      group: "org",
       subs: [
         {
           slug,

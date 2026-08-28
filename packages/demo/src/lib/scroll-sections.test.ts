@@ -21,7 +21,14 @@ import {
   SECTION_ROUTES,
   SUB_ROUTES,
   UNNARRATED_ROUTES,
+  DEFAULT_CLIENT_DETAIL_IDS,
 } from "./scroll-sections.js";
+import {
+  DEMO_INTAKE_FORM_ID,
+  DEMO_INTAKE_FORM_SLUG,
+  DEMO_PORTAL_CHANNEL_ID,
+  DEMO_SHARE_ID,
+} from "./bridge.js";
 import { listRouteIds } from "./engine/route-manifest.js";
 
 describe("parseHash", () => {
@@ -876,8 +883,8 @@ describe("loginStageTopics", () => {
 });
 
 describe("SECTIONS taxonomy", () => {
-  it("has twelve sections", () => {
-    expect(SECTIONS).toHaveLength(12);
+  it("has twenty sections", () => {
+    expect(SECTIONS).toHaveLength(20);
   });
 
   it("section IDs are in visitor-journey order", () => {
@@ -892,9 +899,25 @@ describe("SECTIONS taxonomy", () => {
       "admin-people",
       "admin-comms",
       "admin-org",
+      "admin-forms",
+      "admin-responses",
+      "admin-logs",
       "schedule",
       "settings",
+      "client-intake",
+      "client-privacy",
+      "client-portal",
+      "client-account",
+      "client-share",
     ]);
+  });
+
+  it("the client arc runs last, after every org section", () => {
+    const groups = SECTIONS.map((s) => s.group);
+    const firstClient = groups.indexOf("client");
+    expect(firstClient).toBeGreaterThan(-1);
+    expect(groups.slice(firstClient).every((g) => g === "client")).toBe(true);
+    expect(groups.slice(0, firstClient).every((g) => g === "org")).toBe(true);
   });
 
   it("login has 10 subs", () => {
@@ -902,9 +925,9 @@ describe("SECTIONS taxonomy", () => {
     expect(login?.subs).toHaveLength(10);
   });
 
-  it("dashboard has 11 subs", () => {
+  it("dashboard has 12 subs", () => {
     const dashboard = SECTIONS.find((s) => s.id === "dashboard");
-    expect(dashboard?.subs).toHaveLength(11);
+    expect(dashboard?.subs).toHaveLength(12);
   });
 
   it("tickets has 12 subs", () => {
@@ -912,9 +935,9 @@ describe("SECTIONS taxonomy", () => {
     expect(tickets?.subs).toHaveLength(12);
   });
 
-  it("ticket-detail has 20 subs", () => {
+  it("ticket-detail has 26 subs", () => {
     const detail = SECTIONS.find((s) => s.id === "ticket-detail");
-    expect(detail?.subs).toHaveLength(20);
+    expect(detail?.subs).toHaveLength(26);
   });
 
   it("search has 3 subs", () => {
@@ -932,9 +955,9 @@ describe("SECTIONS taxonomy", () => {
     expect(admin?.subs).toHaveLength(1);
   });
 
-  it("admin-people has 6 subs", () => {
+  it("admin-people has 7 subs", () => {
     const people = SECTIONS.find((s) => s.id === "admin-people");
-    expect(people?.subs).toHaveLength(6);
+    expect(people?.subs).toHaveLength(7);
   });
 
   it("admin-comms has 6 subs", () => {
@@ -942,9 +965,24 @@ describe("SECTIONS taxonomy", () => {
     expect(comms?.subs).toHaveLength(6);
   });
 
-  it("admin-org has 6 subs", () => {
+  it("admin-org has 7 subs", () => {
     const org = SECTIONS.find((s) => s.id === "admin-org");
-    expect(org?.subs).toHaveLength(6);
+    expect(org?.subs).toHaveLength(7);
+  });
+
+  it("admin-forms has 2 subs", () => {
+    const forms = SECTIONS.find((s) => s.id === "admin-forms");
+    expect(forms?.subs).toHaveLength(2);
+  });
+
+  it("admin-responses has 2 subs", () => {
+    const responses = SECTIONS.find((s) => s.id === "admin-responses");
+    expect(responses?.subs).toHaveLength(2);
+  });
+
+  it("admin-logs has 2 subs", () => {
+    const logs = SECTIONS.find((s) => s.id === "admin-logs");
+    expect(logs?.subs).toHaveLength(2);
   });
 
   it("schedule has 1 sub", () => {
@@ -952,9 +990,54 @@ describe("SECTIONS taxonomy", () => {
     expect(schedule?.subs).toHaveLength(1);
   });
 
-  it("settings has 5 subs", () => {
+  it("settings has 7 subs", () => {
     const settings = SECTIONS.find((s) => s.id === "settings");
-    expect(settings?.subs).toHaveLength(5);
+    expect(settings?.subs).toHaveLength(7);
+  });
+
+  it("client-intake has 4 subs", () => {
+    const intake = SECTIONS.find((s) => s.id === "client-intake");
+    expect(intake?.subs).toHaveLength(4);
+  });
+
+  it("client-privacy has 1 sub", () => {
+    const privacy = SECTIONS.find((s) => s.id === "client-privacy");
+    expect(privacy?.subs).toHaveLength(1);
+  });
+
+  it("client-portal has 3 subs", () => {
+    const portal = SECTIONS.find((s) => s.id === "client-portal");
+    expect(portal?.subs).toHaveLength(3);
+  });
+
+  it("client-account has 3 subs", () => {
+    const account = SECTIONS.find((s) => s.id === "client-account");
+    expect(account?.subs).toHaveLength(3);
+  });
+
+  it("client-share has 2 subs", () => {
+    const share = SECTIONS.find((s) => s.id === "client-share");
+    expect(share?.subs).toHaveLength(2);
+  });
+});
+
+// -----------------------------------------------------------------------
+// Sentinel restatement
+// -----------------------------------------------------------------------
+
+describe("DEFAULT_CLIENT_DETAIL_IDS", () => {
+  // scroll-sections.ts deliberately keeps no value-level import from
+  // bridge.ts, which is why the two positional detail ids are passed in
+  // as parameters. The client defaults follow that rule by restating the
+  // sentinels as literals. That restatement is only safe while something
+  // compares the two, which is this.
+  it("restates the bridge sentinels exactly", () => {
+    expect(DEFAULT_CLIENT_DETAIL_IDS).toEqual({
+      intakeFormId: DEMO_INTAKE_FORM_ID,
+      intakeFormSlug: DEMO_INTAKE_FORM_SLUG,
+      portalChannelPath: DEMO_PORTAL_CHANNEL_ID,
+      sharePath: DEMO_SHARE_ID,
+    });
   });
 });
 

@@ -14,7 +14,13 @@ import * as m from "$lib/paraglide/messages.js";
 import { locales } from "$lib/paraglide/runtime.js";
 import { withTerms } from "$lib/terminology/with-terms.js";
 import type { DemoTopic, DemoFeature } from "./bridge.js";
-import { DEMO_DETAIL_TICKET_ID, DEMO_DETAIL_ARTICLE_ID } from "./bridge.js";
+import {
+  DEMO_DETAIL_TICKET_ID,
+  DEMO_DETAIL_ARTICLE_ID,
+  DEMO_INTAKE_FORM_ID,
+  DEMO_PORTAL_CHANNEL_ID,
+  DEMO_SHARE_ID,
+} from "./bridge.js";
 import {
   pollUntil,
   POLL_TIMEOUT_STANDARD_MS,
@@ -69,6 +75,12 @@ const DETAIL_TOPICS: ReadonlySet<DemoTopic> = new Set([
   "message-actions",
   "close-reopen",
   "exposure-hints",
+  "ticket-portal-tier",
+  "ticket-secure-link",
+  "ticket-share-link",
+  "ticket-share-status",
+  "ticket-correction-status",
+  "ticket-outbound-edit",
 ]);
 
 const DASHBOARD_TOPICS: ReadonlySet<DemoTopic> = new Set([
@@ -83,6 +95,7 @@ const DASHBOARD_TOPICS: ReadonlySet<DemoTopic> = new Set([
   "dashboard-unassigned",
   "dashboard-on-hold",
   "dashboard-create",
+  "dashboard-merge-candidates",
 ]);
 
 const SETTINGS_TOPICS: ReadonlySet<DemoTopic> = new Set([
@@ -91,6 +104,50 @@ const SETTINGS_TOPICS: ReadonlySet<DemoTopic> = new Set([
   "settings-2fa",
   "settings-appearance",
   "settings-security",
+  "settings-notifications",
+  "settings-consultant-phone",
+]);
+
+/**
+ * Client-portal topics and the URL path each one's element lives on.
+ *
+ * A client feature's detail is its path, so these are paths rather than
+ * the short names the admin details use. The two parameterized pages
+ * carry the sentinel prefix, which PhoneApp swaps for the seeded id at
+ * the navigation boundary.
+ */
+const CLIENT_TOPIC_TARGETS: ReadonlyMap<DemoTopic, string> = new Map([
+  ["client-intake-form", "intake"],
+  ["client-intake-protection", "intake"],
+  ["client-intake-fields", "intake"],
+  ["client-intake-submit", "intake"],
+  ["client-privacy-notice", "intake/privacy"],
+  ["client-portal-thread", DEMO_PORTAL_CHANNEL_ID],
+  ["client-portal-composer", DEMO_PORTAL_CHANNEL_ID],
+  // QuickExit mounts on both the portal and the account page. The portal
+  // is the one the story reaches first, so a stray tap resolves there.
+  ["client-quick-exit", DEMO_PORTAL_CHANNEL_ID],
+  ["client-account-sign-in", "account"],
+  ["client-account-thread", "account"],
+  ["client-account-settings", "account"],
+  ["client-share-view", DEMO_SHARE_ID],
+  ["client-share-one-time", DEMO_SHARE_ID],
+]);
+
+/**
+ * Admin topics whose element lives on a route the bare "admin" detail
+ * does not reach. The query string rides along in the detail, which the
+ * router splits off before matching (see DemoRouter.navigate).
+ */
+const ADMIN_DETAIL_TOPIC_TARGETS: ReadonlyMap<DemoTopic, string> = new Map([
+  ["admin-intake-forms", "organization"],
+  ["admin-form-builder", `forms?id=${DEMO_INTAKE_FORM_ID}`],
+  ["admin-form-preview", `forms?id=${DEMO_INTAKE_FORM_ID}`],
+  ["admin-form-responses", `forms/responses?id=${DEMO_INTAKE_FORM_ID}`],
+  ["admin-response-key-not-held", `forms/responses?id=${DEMO_INTAKE_FORM_ID}`],
+  ["admin-call-log", "logs?tab=calls"],
+  ["admin-audit-log", "logs?tab=audit"],
+  ["admin-role-permissions", "people"],
 ]);
 
 /** Resolve the feature + detail a topic's element lives on. */
@@ -159,6 +216,14 @@ export function topicFeatureTarget(topic: DemoTopic): {
   }
   if (SETTINGS_TOPICS.has(topic)) {
     return { feature: "settings", detail: null };
+  }
+  const clientTarget = CLIENT_TOPIC_TARGETS.get(topic);
+  if (clientTarget !== undefined) {
+    return { feature: "client", detail: clientTarget };
+  }
+  const adminTarget = ADMIN_DETAIL_TOPIC_TARGETS.get(topic);
+  if (adminTarget !== undefined) {
+    return { feature: "admin", detail: adminTarget };
   }
   return { feature: "tickets", detail: null };
 }
@@ -568,6 +633,52 @@ export function buildTopicCandidates(topic: DemoTopic): Set<string> {
       case "settings-security":
         candidates.add(m.settings_review_briefing({}, opts));
         break;
+      // Tab and section labels: these open the surface the sub narrates,
+      // so the label is a real control the classifier can also match.
+      case "admin-intake-forms":
+        // Section label on the organization page (its `label` field).
+        candidates.add(m.intake_forms_title({}, opts));
+        break;
+      case "admin-call-log":
+        candidates.add(m.logs_tab_calls({}, opts));
+        break;
+      case "admin-audit-log":
+        candidates.add(m.logs_tab_audit({}, opts));
+        break;
+      // Region topics. Their targets are matrices, threads, cards and
+      // form blocks, none of which carry a label that names the topic,
+      // so they resolve through TOPIC_SELECTORS instead. Listed
+      // explicitly rather than left to a default because the switch is
+      // exhaustiveness-checked: a new topic has to make this choice
+      // rather than fall into an empty candidate set unnoticed.
+      case "settings-notifications":
+      case "settings-consultant-phone":
+      case "dashboard-merge-candidates":
+      case "ticket-portal-tier":
+      case "ticket-secure-link":
+      case "ticket-share-link":
+      case "ticket-share-status":
+      case "ticket-outbound-edit":
+      case "ticket-correction-status":
+      case "admin-role-permissions":
+      case "admin-form-builder":
+      case "admin-form-preview":
+      case "admin-form-responses":
+      case "admin-response-key-not-held":
+      case "client-intake-form":
+      case "client-intake-protection":
+      case "client-intake-fields":
+      case "client-intake-submit":
+      case "client-privacy-notice":
+      case "client-portal-thread":
+      case "client-portal-composer":
+      case "client-quick-exit":
+      case "client-account-sign-in":
+      case "client-account-thread":
+      case "client-account-settings":
+      case "client-share-view":
+      case "client-share-one-time":
+        break;
     }
   }
 
@@ -930,6 +1041,40 @@ export function buildActivationCandidates(topic: DemoTopic): Set<string> {
       case "settings-password":
       case "dashboard-shift":
       case "dashboard-getting-started":
+      // None of the new topics are in TAP_TOPICS, so none is activated
+      // by a real tap. The client arc is the deliberate part: a scripted
+      // click in the portal would submit a help-seeker's form or send a
+      // message, which the story must narrate without performing.
+      case "settings-notifications":
+      case "settings-consultant-phone":
+      case "dashboard-merge-candidates":
+      case "ticket-portal-tier":
+      case "ticket-secure-link":
+      case "ticket-share-link":
+      case "ticket-share-status":
+      case "ticket-outbound-edit":
+      case "ticket-correction-status":
+      case "admin-role-permissions":
+      case "admin-intake-forms":
+      case "admin-form-builder":
+      case "admin-form-preview":
+      case "admin-form-responses":
+      case "admin-response-key-not-held":
+      case "admin-call-log":
+      case "admin-audit-log":
+      case "client-intake-form":
+      case "client-intake-protection":
+      case "client-intake-fields":
+      case "client-intake-submit":
+      case "client-privacy-notice":
+      case "client-portal-thread":
+      case "client-portal-composer":
+      case "client-quick-exit":
+      case "client-account-sign-in":
+      case "client-account-thread":
+      case "client-account-settings":
+      case "client-share-view":
+      case "client-share-one-time":
         break;
     }
   }
@@ -1292,6 +1437,65 @@ export const TOPIC_SELECTORS: ReadonlyMap<DemoTopic, readonly string[]> =
     ["case-header", [".case-header"]],
     // Date separator line in the thread (TicketDetail.svelte line 1253)
     ["thread-anatomy", [".date-separator", ".unread-divider"]],
+    // Every client-portal topic resolves here rather than through label
+    // candidates. The client shell's targets are form regions, threads
+    // and disclosures, none of which carry a control label the
+    // classifier could match, so a candidate set would be empty and the
+    // pulse would report "missing" for the whole arc.
+    //
+    // Each selector list mirrors the matching sub's highlight in
+    // scroll-sections.ts, and every entry is traceable to product source.
+    ["client-intake-form", [".intake-intro"]],
+    ["client-intake-protection", [".how-protected"]],
+    ["client-intake-fields", ['[role="radiogroup"]', ".intake-intro"]],
+    [
+      "client-intake-submit",
+      ['[data-testid="intake-submit"]', '[data-testid="intake-page-next"]'],
+    ],
+    ["client-privacy-notice", [".retention-disclosure"]],
+    ["client-portal-thread", ['[data-testid="portal-thread"]']],
+    ["client-portal-composer", ['[data-testid="portal-composer"]']],
+    ["client-quick-exit", ['[data-testid="quick-exit"]']],
+    [
+      "client-account-sign-in",
+      ['[data-testid="account-username"]', ".login-list"],
+    ],
+    ["client-account-thread", ['[data-testid="portal-thread"]']],
+    ["client-account-settings", ['[data-testid="account-settings-toggle"]']],
+    ["client-share-view", [".share-content-block", ".share-heading"]],
+    [
+      "client-share-one-time",
+      [".share-one-time-notice", ".share-terminal-text"],
+    ],
+    // Org-side additions whose target is a region rather than a labelled
+    // control. The rest of the new admin and settings topics resolve
+    // through their tab or section labels in buildTopicCandidates.
+    ["ticket-portal-tier", [".tier-name", ".case-header"]],
+    ["ticket-secure-link", [".intro-text", ".offer-row", ".case-header"]],
+    ["ticket-share-link", [".share-sheet-body", ".case-header"]],
+    ["ticket-share-status", ['[data-testid="share-status-line"]']],
+    ["ticket-correction-status", ['[data-testid="correction-status-line"]']],
+    ["ticket-outbound-edit", [".char-counter", ".msg-body"]],
+    ["admin-role-permissions", ["#panel-roles", ".matrix"]],
+    ["admin-form-builder", [".field-actions", ".default-hint"]],
+    [
+      "admin-form-preview",
+      [
+        '[data-testid="preview-state-switcher"]',
+        '[data-testid="preview-empty-state"]',
+      ],
+    ],
+    ["admin-form-responses", [".irv-root"]],
+    ["admin-response-key-not-held", [".irv-state-row", ".irv-card"]],
+    ["admin-call-log", ["#panel-calls"]],
+    ["admin-audit-log", ["#panel-audit"]],
+    ["settings-notifications", [".matrix"]],
+    ["settings-consultant-phone", [".sheet-content", ".settings-page"]],
+    [
+      "dashboard-merge-candidates",
+      [".merge-candidates-notice", ".notice-text"],
+    ],
+    ["admin-intake-forms", [".ifs-card-inner", ".section-desc"]],
     // GettingStartedCard collapse toggle (CollapsibleSection.svelte line 55)
     ["dashboard-getting-started", [".collapsible-section .section-toggle"]],
   ]);
