@@ -2,8 +2,11 @@
   App shell: persistent navigation chrome across all routes.
 
   PageShell owns the Konsta Page, Navbar height measurement, and the
-  blur-through scroll container. AppShell layers authenticated features
-  on top: complex Navbar, subnavbar, pull-to-refresh, tabbar, panels.
+  blur-through scroll container. ShellNavbar owns the Navbar itself, its
+  glass layers, and the subnavbar row, which is why the client shell can
+  put those in the same place without copying them. AppShell layers the
+  authenticated features on top, meaning pull-to-refresh, the tab bar,
+  the desktop sidebar, global search, and the account panel.
 
   Navbar sits at the top of the Page flex column. Bottom bar uses a
   Toolbar with two ToolbarPane children (Safari-style split glass
@@ -24,8 +27,9 @@
   - Any child route can suppress PTR via usePTR().setEnabled(false) during init.
 -->
 <script lang="ts">
-  import { Navbar, Link, Searchbar, Toolbar, ToolbarPane } from "konsta/svelte";
+  import { Link, Searchbar, Toolbar, ToolbarPane } from "konsta/svelte";
   import PageShell from "./PageShell.svelte";
+  import ShellNavbar from "./ShellNavbar.svelte";
   import { Search, User } from "@lucide/svelte";
   import { getOrgLogoUrl } from "$lib/branding/logo-url.svelte.js";
   import CallIndicator from "./CallIndicator.svelte";
@@ -108,9 +112,7 @@
   } from "$lib/crypto/context.js";
   import { initRecentViews } from "$lib/search/recent-views.js";
   import type { TicketKeyWrap } from "$lib/crypto/ticket-decrypt-cache.js";
-  import LanguagePicker from "$lib/components/inputs/LanguagePicker.svelte";
   import { getLocale, setLocale, type Locale } from "$lib/paraglide/runtime.js";
-  import { chromeIntensity, flashOpaqueChrome } from "./chrome-glass.svelte.js";
 
   // Scroll container element, provided by PageShell via bindScrollEl.
   let mainEl = $state<HTMLElement | undefined>();
@@ -175,8 +177,8 @@
 
   // Navbar override: child routes can replace the default Navbar slot
   // content (avatar + org name + search/new) with custom left/title/right
-  // snippets. The real Konsta Navbar stays in AppShell for Glass blur +
-  // safe-area + theme adaptation.
+  // snippets. AppShell forwards them to ShellNavbar, which keeps the Konsta
+  // Navbar and its Glass blur, safe-area, and theme adaptation in one place.
   const navbarOverrideContainer: NavbarOverrideContainer = $state({
     current: undefined,
   });
@@ -330,52 +332,11 @@
     return sections;
   });
 
-  // ── Subnavbar + Navbar height measurement.
-  // ResizeObserver tracks the inner content height so we can set
-  // padding-top on <main> and position the subnavbar correctly.
-  let subnavbarInnerEl = $state<HTMLElement | undefined>();
-  let splitSubnavbarRightEl = $state<HTMLElement | undefined>();
+  // ShellNavbar measures the subnavbar and reports its height back here,
+  // because the scroll container reserves that space with padding-top and
+  // the subnavbar itself is absolutely positioned.
   let subnavbarHeight = $state(0);
   let navbarHeight = $state(0);
-
-  $effect(() => {
-    const el = subnavbarInnerEl;
-    if (el == null) return;
-    const ro = new ResizeObserver((entries) => {
-      const entry = entries[0];
-      if (entry != null) {
-        subnavbarHeight = entry.borderBoxSize[0]?.blockSize ?? el.offsetHeight;
-      }
-    });
-    ro.observe(el, { box: "border-box" });
-    return () => ro.disconnect();
-  });
-
-  $effect(() => {
-    const el = splitSubnavbarRightEl;
-    if (el == null) {
-      splitNavbar.setRightHeight(0);
-      return;
-    }
-    const ro = new ResizeObserver((entries) => {
-      const entry = entries[0];
-      if (entry != null) {
-        splitNavbar.setRightHeight(
-          entry.borderBoxSize[0]?.blockSize ?? el.offsetHeight,
-        );
-      }
-    });
-    ro.observe(el, { box: "border-box" });
-    return () => {
-      ro.disconnect();
-      splitNavbar.setRightHeight(0);
-    };
-  });
-
-  // Navbar DOM ref, resolved from the scroll container's parent Page.
-  // PageShell measures the height via ResizeObserver; we just need the
-  // element reference for the subnavbar chrome extension effect below.
-  let navbarDomEl = $state<HTMLElement | undefined>();
 
   function handleNavbarHeight(h: number): void {
     navbarHeight = h;
@@ -386,199 +347,6 @@
     if (pageEl instanceof HTMLElement && navbarHeight > 0) {
       pageEl.style.setProperty("--navbar-h", `${String(navbarHeight)}px`);
     }
-  });
-
-  $effect(() => {
-    const pageEl = mainEl?.closest(".k-page");
-    if (pageEl == null) return;
-    const navbar = pageEl.querySelector<HTMLElement>(":scope > .k-navbar");
-    navbarDomEl = navbar ?? undefined;
-  });
-
-  // Extend the Navbar's blur/bg layers to cover the subnavbar region.
-  // --k-navbar-chrome-h controls the height of both iOS layers (bgBlur
-  // for backdrop-filter, bgLayer for the paper-tinted background). In
-  // split mode the right subnavbar can be taller than the left, so the
-  // mask is split into two side-by-side gradients that fade each half
-  // at its own subnavbar height. --split-right-w tracks the divider.
-  function setMaskProp(el: HTMLElement, prop: string, val: string): void {
-    el.style.setProperty(`-webkit-${prop}`, val);
-    el.style.setProperty(prop, val);
-  }
-
-  function removeMaskProp(el: HTMLElement, prop: string): void {
-    el.style.removeProperty(`-webkit-${prop}`);
-    el.style.removeProperty(prop);
-  }
-
-  function applyMask(
-    layers: HTMLElement[],
-    maskImage: string,
-    sized: { size: string; position: string; repeat: string } | null,
-  ): void {
-    for (const layer of layers) {
-      setMaskProp(layer, "mask-image", maskImage);
-      if (sized != null) {
-        setMaskProp(layer, "mask-size", sized.size);
-        setMaskProp(layer, "mask-position", sized.position);
-        setMaskProp(layer, "mask-repeat", sized.repeat);
-        layer.style.setProperty("-webkit-mask-composite", "source-over");
-        layer.style.setProperty("mask-composite", "add");
-      } else {
-        removeMaskProp(layer, "mask-size");
-        removeMaskProp(layer, "mask-position");
-        removeMaskProp(layer, "mask-repeat");
-        removeMaskProp(layer, "mask-composite");
-      }
-    }
-  }
-
-  function clearMask(layers: HTMLElement[]): void {
-    for (const layer of layers) {
-      for (const prop of [
-        "mask-image",
-        "mask-size",
-        "mask-position",
-        "mask-repeat",
-        "mask-composite",
-      ]) {
-        removeMaskProp(layer, prop);
-      }
-    }
-  }
-
-  $effect(() => {
-    const el = navbarDomEl;
-    if (el == null) return;
-
-    const hasRightSub = layoutMode.isDesktop && splitRight?.subnavbar != null;
-    const hasSubnavbar = navbarOverride?.subnavbar != null || hasRightSub;
-    const isHidden =
-      !layoutMode.isDesktop && navbarOverride?.subnavbarHidden?.() === true;
-    const effectiveSubnavH = hasRightSub
-      ? Math.max(subnavbarHeight, splitNavbar.rightSubnavbarHeight)
-      : subnavbarHeight;
-
-    const layers = [el.firstElementChild, el.children[1]].filter(
-      (c): c is HTMLElement => c instanceof HTMLElement,
-    );
-
-    if (
-      !hasSubnavbar ||
-      isHidden ||
-      effectiveSubnavH <= 0 ||
-      navbarHeight <= 0
-    ) {
-      el.style.removeProperty("--k-navbar-chrome-h");
-      clearMask(layers);
-      return;
-    }
-
-    const chromeH = navbarHeight + effectiveSubnavH + 16;
-    el.style.setProperty("--k-navbar-chrome-h", `${String(chromeH)}px`);
-
-    const rightTaller =
-      hasRightSub && splitNavbar.rightSubnavbarHeight > subnavbarHeight;
-
-    if (rightTaller) {
-      const leftH = navbarHeight + subnavbarHeight + 16;
-      const splitW = "var(--split-right-w,var(--split-detail-width,480px))";
-      applyMask(
-        layers,
-        [
-          `linear-gradient(to bottom,black ${String(Math.round(leftH * 0.9))}px,transparent ${String(leftH)}px)`,
-          `linear-gradient(to bottom,black ${String(Math.round(chromeH * 0.9))}px,transparent ${String(chromeH)}px)`,
-        ].join(","),
-        {
-          size: `calc(100% - ${splitW}) 100%,${splitW} 100%`,
-          position: "left top,right top",
-          repeat: "no-repeat",
-        },
-      );
-    } else {
-      applyMask(
-        layers,
-        "linear-gradient(to bottom, black 90%, transparent)",
-        null,
-      );
-    }
-  });
-
-  // Animate the navbar glass layers to match chrome intensity (0-1).
-  // Interpolates saturate, blur, and background opacity continuously so
-  // the drag gesture can drive the glass state frame-by-frame.
-  let chromeTransitionReady = false;
-  $effect(() => {
-    const el = navbarDomEl;
-    if (el == null) return;
-    const t = chromeIntensity();
-    const bgBlur =
-      el.firstElementChild instanceof HTMLElement ? el.firstElementChild : null;
-    const bgLayer =
-      el.children[1] instanceof HTMLElement ? el.children[1] : null;
-
-    if (!chromeTransitionReady) {
-      chromeTransitionReady = true;
-      if (bgBlur != null) {
-        bgBlur.style.setProperty(
-          "transition",
-          "backdrop-filter 300ms ease, -webkit-backdrop-filter 300ms ease",
-        );
-        bgBlur.style.setProperty(
-          "-webkit-backdrop-filter",
-          "saturate(100%) blur(2px)",
-        );
-        bgBlur.style.setProperty("backdrop-filter", "saturate(100%) blur(2px)");
-      }
-      if (bgLayer != null) {
-        bgLayer.style.setProperty("transition", "background 300ms ease");
-      }
-    }
-
-    const saturate = Math.round(100 + t * 80);
-    const blur = Math.round(2 + t * 38);
-    const filterVal = `saturate(${String(saturate)}%) blur(${String(blur)}px)`;
-
-    if (bgBlur != null) {
-      bgBlur.style.setProperty("-webkit-backdrop-filter", filterVal);
-      bgBlur.style.setProperty("backdrop-filter", filterVal);
-    }
-
-    if (t > 0) {
-      const bgOpacity = Math.round(t * 85);
-      if (bgLayer != null) {
-        bgLayer.style.setProperty(
-          "background",
-          `linear-gradient(to bottom, color-mix(in srgb, var(--paper) ${String(bgOpacity)}%, transparent) 85%, transparent)`,
-        );
-      }
-    } else {
-      if (bgLayer != null) {
-        bgLayer.style.removeProperty("background");
-      }
-    }
-  });
-
-  // Flash enhanced glass on interactive subnavbar clicks (filter pills,
-  // tabs). Excludes: CaseHeader (manages own chrome), scrollbar clicks
-  // (land outside clientWidth/clientHeight), navbar action slots.
-  $effect(() => {
-    const el = subnavbarInnerEl;
-    if (el == null) return;
-
-    const handler = (e: MouseEvent): void => {
-      if (!(e.target instanceof Element)) return;
-      if (e.target.closest(".case-header, .section-scroll-nav") != null) return;
-      const interactive = e.target.closest(
-        "button, a, [role='button'], [role='tab']",
-      );
-      if (interactive == null) return;
-      flashOpaqueChrome();
-    };
-    el.addEventListener("click", handler);
-    return (): void => {
-      el.removeEventListener("click", handler);
-    };
   });
 
   let {
@@ -1194,6 +962,52 @@
   );
 </script>
 
+<!-- Identity falls back to the volunteer's initials, then a user icon.
+     ShellNavbar renders it inside the avatar when the org has no logo. -->
+{#snippet orgIdentityFallback()}
+  {#if userInitials}
+    {userInitials}
+  {:else}
+    <User size={18} />
+  {/if}
+{/snippet}
+
+<!-- Navbar right slot. The search overlay covers the navbar when open, so
+     everything here steps aside for it. -->
+{#snippet navbarActions()}
+  {#if !searchOpen}
+    <CallIndicator />
+  {/if}
+  {#if !searchOpen && navbarOverride?.searchHidden !== true}
+    <Link
+      iconOnly
+      role="button"
+      aria-label={m.nav_search()}
+      onclick={openSearch}
+    >
+      <Search size={22} aria-hidden="true" />
+    </Link>
+  {/if}
+  {#if !searchOpen && navbarOverride?.actions}
+    {#each navbarOverride.actions as action (action.label)}
+      <Link
+        iconOnly={!layoutMode.isDesktop}
+        role="button"
+        aria-label={action.label}
+        onclick={action.onclick}
+      >
+        {@const Icon = action.icon}
+        <Icon size={22} aria-hidden="true" />
+        {#if layoutMode.isDesktop}
+          <span class="navbar-action-label">{action.label}</span>
+        {/if}
+      </Link>
+    {/each}
+  {:else if navbarOverride?.right && !searchOpen}
+    {@render navbarOverride.right()}
+  {/if}
+{/snippet}
+
 <div class="app-shell-layout">
   {#if layoutMode.isDesktop}
     <DesktopSidebar
@@ -1235,81 +1049,38 @@
     bindScrollEl={handleScrollEl}
   >
     {#snippet navbar()}
-      <Navbar role="banner" class="">
-        {#snippet left()}
-          {#if navbarOverride?.left}
-            {@render navbarOverride.left()}
-          {:else if !layoutMode.isDesktop}
-            <Link
-              iconOnly
-              role="button"
-              aria-label={m.nav_account()}
-              onclick={() => (panelOpen = true)}
-            >
-              <span class="navbar-avatar" aria-hidden="true">
-                {#if navLogoUrl}
-                  <img
-                    src={navLogoUrl}
-                    alt=""
-                    class="navbar-avatar-logo"
-                    loading="eager"
-                  />
-                {:else if userInitials}
-                  {userInitials}
-                {:else}
-                  <User size={18} />
-                {/if}
-              </span>
-            </Link>
-          {/if}
-        {/snippet}
-        {#snippet title()}
-          {#if navbarOverride?.title}
-            {#if typeof navbarOverride.title === "string"}
-              <span class="heading-compact">{navbarOverride.title}</span>
-            {:else}
-              {@render navbarOverride.title()}
-            {/if}
-          {:else}
-            <div class="navbar-title-group" class:heading-hidden={searchOpen}>
-              <span class="heading-compact">{orgName}</span>
-              <LanguagePicker value={uiLocale} onchange={handleLocaleChange} />
-            </div>
-          {/if}
-        {/snippet}
-        {#snippet right()}
-          {#if !searchOpen}
-            <CallIndicator />
-          {/if}
-          {#if !searchOpen && navbarOverride?.searchHidden !== true}
-            <Link
-              iconOnly
-              role="button"
-              aria-label={m.nav_search()}
-              onclick={openSearch}
-            >
-              <Search size={22} aria-hidden="true" />
-            </Link>
-          {/if}
-          {#if !searchOpen && navbarOverride?.actions}
-            {#each navbarOverride.actions as action (action.label)}
-              <Link
-                iconOnly={!layoutMode.isDesktop}
-                role="button"
-                aria-label={action.label}
-                onclick={action.onclick}
-              >
-                {@const Icon = action.icon}
-                <Icon size={22} aria-hidden="true" />
-                {#if layoutMode.isDesktop}
-                  <span class="navbar-action-label">{action.label}</span>
-                {/if}
-              </Link>
-            {/each}
-          {:else if navbarOverride?.right && !searchOpen}
-            {@render navbarOverride.right()}
-          {/if}
-        {/snippet}
+      <ShellNavbar
+        identity={{
+          logoUrl: navLogoUrl,
+          orgName,
+          label: m.nav_account(),
+          onIdentityTap: () => (panelOpen = true),
+        }}
+        identityFallback={orgIdentityFallback}
+        identityHidden={layoutMode.isDesktop}
+        locale={uiLocale}
+        onlocalechange={handleLocaleChange}
+        {navbarHeight}
+        leading={navbarOverride?.left}
+        title={navbarOverride?.title}
+        titleHidden={searchOpen}
+        actions={navbarActions}
+        subnavbar={navbarOverride?.subnavbar}
+        subnavbarHidden={() =>
+          !layoutMode.isDesktop && navbarOverride?.subnavbarHidden?.() === true}
+        onsubnavbarheight={(h: number) => {
+          subnavbarHeight = h;
+        }}
+        subnavbarTrailing={layoutMode.isDesktop
+          ? splitRight?.subnavbar
+          : undefined}
+        trailingWidth={layoutMode.isDesktop
+          ? splitNavbarCfg?.rightWidth
+          : undefined}
+        ontrailingheight={(h: number) => {
+          splitNavbar.setRightHeight(h);
+        }}
+      >
         {#if searchOpen}
           <div
             bind:this={searchContainerEl}
@@ -1325,37 +1096,10 @@
         {/if}
         <!-- Split-view detail header rendered inside the detail pane
              (SplitDetailPane), not in the shared navbar. -->
-      </Navbar>
+      </ShellNavbar>
     {/snippet}
 
     {#snippet beforeScroll()}
-      {#if navbarOverride?.subnavbar != null || (layoutMode.isDesktop && splitRight?.subnavbar != null)}
-        <div
-          class="shell-subnavbar"
-          class:shell-subnavbar--hidden={!layoutMode.isDesktop &&
-            navbarOverride?.subnavbarHidden?.() === true}
-          class:shell-subnavbar--split={layoutMode.isDesktop &&
-            splitNavbarCfg != null}
-          style:--subnavbar-h="{subnavbarHeight}px"
-          style:--navbar-h="{navbarHeight}px"
-        >
-          <div class="shell-subnavbar-inner" bind:this={subnavbarInnerEl}>
-            {#if navbarOverride?.subnavbar}
-              {@render navbarOverride.subnavbar()}
-            {/if}
-          </div>
-          {#if layoutMode.isDesktop && splitNavbarCfg && splitRight?.subnavbar}
-            <div
-              bind:this={splitSubnavbarRightEl}
-              class="split-subnavbar-right"
-              style:width="var(--split-right-w, {splitNavbarCfg.rightWidth})"
-            >
-              {@render splitRight.subnavbar()}
-            </div>
-          {/if}
-        </div>
-      {/if}
-
       <!-- Pull-to-refresh indicator -->
       {#if ptrPhase !== "idle"}
         <div
@@ -1604,24 +1348,7 @@
     pointer-events: auto;
   }
 
-  /* Navbar keeps Konsta's default sticky + z-20. */
-
   @media (prefers-contrast: more) {
-    :global(.k-navbar) {
-      background: Canvas !important;
-      color: CanvasText !important;
-    }
-
-    /* Remove the blur and gradient layers inside the Navbar */
-    :global(.k-navbar) > :first-child,
-    :global(.k-navbar) > :nth-child(2) {
-      backdrop-filter: none !important;
-      -webkit-backdrop-filter: none !important;
-      background: none !important;
-      mask-image: none !important;
-      -webkit-mask-image: none !important;
-    }
-
     /* Tabbar override blur overlay: solid opaque instead of blur */
     .tabbar-override-blur {
       -webkit-backdrop-filter: none !important;
@@ -1679,45 +1406,10 @@
     z-index: 1;
   }
 
-  .navbar-avatar {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 1.75rem;
-    height: 1.75rem;
-    border-radius: 50%;
-    background: var(--brand-fill, var(--brand-primary));
-    /* Text sits ON the brand fill, so it needs the fill-safe on-color.
-       --brand-text is surface-safe and can vanish against its own fill. */
-    color: var(--brand-on);
-    font-size: 0.625rem;
-    font-weight: 600;
-    letter-spacing: 0.02em;
-    overflow: hidden;
-  }
-
-  .navbar-avatar-logo {
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-  }
-
   .navbar-action-label {
     font-size: var(--text-sm);
     margin-inline-start: 0.25rem;
     white-space: nowrap;
-  }
-
-  .navbar-title-group {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 2px;
-  }
-
-  .heading-hidden {
-    opacity: 0;
-    transition: opacity 150ms ease;
   }
 
   .search-overlay {
@@ -1756,80 +1448,11 @@
     }
   }
 
-  /* ── Subnavbar (collapsible region below Navbar) ────────────────── */
-  /* Absolutely positioned so it does NOT participate in flex layout.
-     <main> reserves space via padding-top instead. This prevents iOS
-     Safari scroll-position jumps caused by flex siblings resizing
-     mid-scroll (WebKit lacks scroll anchoring in stable Safari 26). */
-
-  .shell-subnavbar {
-    position: absolute;
-    top: var(--navbar-h);
-    left: 0;
-    right: 0;
-    z-index: 21; /* above Navbar's blur/bg layers (z-20) */
-  }
-
-  /* Only clip overflow during collapse animation. When visible,
-     overflow must be visible so popovers inside the subnavbar
-     (e.g., filter pill dropdowns) can render outside the bounds. */
-  .shell-subnavbar--hidden {
-    overflow: hidden;
-    pointer-events: none;
-  }
-
-  /* No background on the subnavbar itself. The Navbar's bg/blur layers
-     are extended via --k-navbar-chrome-h to cover this region, creating
-     one continuous glass surface regardless of theme. */
-
-  .shell-subnavbar-inner {
-    will-change: transform, opacity;
-    transition:
-      transform 300ms cubic-bezier(0.4, 0, 0.2, 1),
-      opacity 200ms ease;
-  }
-
-  /* Konsta's --shadow-ios-light-glass includes a heavy 25px outer shadow
-     designed for navbar-scale surfaces. Inside the subnavbar it creates a
-     visible dark blob beneath the segmented control in light themes.
-     Strip the outer shadow, keep only the inset highlights. */
-  .shell-subnavbar-inner :global(.glass) {
-    box-shadow:
-      inset 0 1px 0 rgba(255, 255, 255, 0.5),
-      inset 0 0 0 0.5px rgba(255, 255, 255, 0.15) !important;
-  }
-
-  /* Material: solid elevated surface instead of iOS glass blur. */
-  :global(.k-material) .shell-subnavbar-inner {
-    background: var(--paper);
-    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
-  }
-
-  .shell-subnavbar--hidden .shell-subnavbar-inner {
-    transform: translateY(calc(-1 * var(--subnavbar-h)));
-    opacity: 0;
-    pointer-events: none;
-  }
-
+  /* ShellNavbar owns the subnavbar row itself. The scroll container
+     reserves its height here, because the row is absolutely positioned
+     and does not push content down on its own. */
   :global(.main-content.has-subnavbar) {
     padding-top: calc(var(--navbar-h, 0px) + var(--subnavbar-h));
-  }
-
-  @media (prefers-contrast: more) {
-    .shell-subnavbar-inner {
-      backdrop-filter: none !important;
-      -webkit-backdrop-filter: none !important;
-      mask-image: none !important;
-      -webkit-mask-image: none !important;
-      background: Canvas !important;
-      color: CanvasText !important;
-    }
-  }
-
-  @media (prefers-reduced-motion: reduce) {
-    .shell-subnavbar-inner {
-      transition: none;
-    }
   }
 
   /* ── Pull-to-refresh indicator ──────────────────────────────────── */
@@ -1908,6 +1531,26 @@
     }
   }
 
+  /* The blanket rule in shared.css zeroes every duration under reduced
+     motion. Stating it for the chrome this file owns keeps the intent
+     readable here and survives a change to that blanket. The refresh
+     indicator still appears, it just holds still. */
+  @media (prefers-reduced-motion: reduce) {
+    .search-overlay,
+    .ptr-indicator.ptr-releasing,
+    .ptr-arc-fill,
+    .ptr-spinner {
+      transition: none;
+    }
+
+    .ptr-refreshing .ptr-arc,
+    .ptr-releasing .ptr-arc,
+    .ptr-refreshing .ptr-spinner,
+    .ptr-releasing .ptr-spinner {
+      animation: none;
+    }
+  }
+
   /* Search sheet: fill from bottom up to the Navbar */
   :global(.search-sheet) {
     height: calc(100dvh - var(--navbar-h, 64px) - 8px);
@@ -1938,23 +1581,5 @@
     border-radius: 0 0 var(--card-radius, 0.75rem) var(--card-radius, 0.75rem);
     box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
     padding-bottom: var(--space-md, 0.75rem);
-  }
-
-  /* ── Split subnavbar overlay (segmented desktop view) ── */
-
-  .shell-subnavbar--split > .shell-subnavbar-inner {
-    padding-inline-end: var(--split-right-w, var(--split-detail-width, 480px));
-  }
-
-  .shell-subnavbar-inner {
-    padding-inline-end: var(--split-right-w, 0px);
-  }
-
-  .split-subnavbar-right {
-    position: absolute;
-    top: 0;
-    right: 0;
-    z-index: 1;
-    border-inline-start: 1px solid var(--hair, var(--divider));
   }
 </style>

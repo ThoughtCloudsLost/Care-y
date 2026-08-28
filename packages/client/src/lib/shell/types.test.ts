@@ -32,9 +32,11 @@ describe("shell types", () => {
     expectTypeOf<AppShellProps>().toHaveProperty("children");
   });
 
-  it("ShellNavbarProps has optional title and backLink", () => {
-    expectTypeOf<ShellNavbarProps>().toHaveProperty("title");
-    expectTypeOf<ShellNavbarProps>().toHaveProperty("backLink");
+  it("ShellNavbarProps carries identity, its fallback, and the locale pair", () => {
+    expectTypeOf<ShellNavbarProps>().toHaveProperty("identity");
+    expectTypeOf<ShellNavbarProps>().toHaveProperty("identityFallback");
+    expectTypeOf<ShellNavbarProps>().toHaveProperty("locale");
+    expectTypeOf<ShellNavbarProps>().toHaveProperty("onlocalechange");
   });
 
   it("PageLayoutProps has optional lockScroll and touchAction", () => {

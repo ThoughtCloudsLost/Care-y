@@ -16,6 +16,7 @@ import type {
   FilterToggleConfig,
 } from "$lib/components/filters/filter-types.js";
 import type { ScrollSection } from "$lib/components/useSectionScroll.svelte.js";
+import type { Locale } from "$lib/paraglide/runtime.js";
 
 // ── Tab identifiers ──────────────────────────────────────────────────
 
@@ -64,19 +65,6 @@ export interface TabbarNavProps {
   ontabchange: (tabId: TabId) => void;
   /** Callback when the area indicator pill is tapped. */
   onareatap: (areaId: AreaId) => void;
-}
-
-export interface ShellNavbarProps {
-  /** Page title shown in the center (iOS) or left-aligned (Material). */
-  title?: string;
-  /** Show a back arrow that calls onback. */
-  backLink?: boolean;
-  /** Callback when the back arrow is tapped. */
-  onback?: () => void;
-  /** Snippet rendered in the left slot (after back arrow if present). */
-  left?: Snippet;
-  /** Snippet rendered in the right slot. */
-  right?: Snippet;
 }
 
 export interface PageLayoutProps {
@@ -397,4 +385,57 @@ export interface DesktopSidebarProps {
 export interface HoverRevealData {
   readonly sections: readonly ScrollSection[];
   readonly pageLabel: string;
+}
+
+// ── Shared navbar chrome ─────────────────────────────────────────────
+// ShellNavbar owns the Konsta Navbar, its glass layers, and the row that
+// can sit below it. Both shells compose it, so identity, the language
+// picker, and a subnavbar land in the same slot on each surface.
+
+export interface ShellNavbarIdentity {
+  /** Org logo URL, or null when the org has set none. */
+  readonly logoUrl: string | null;
+  /** Org name, rendered in the navbar center beside the language picker. */
+  readonly orgName: string;
+  /** Accessible name for the identity control. */
+  readonly label: string;
+  /** Opens whatever this shell puts behind identity: a panel or a drawer. */
+  readonly onIdentityTap: () => void;
+}
+
+export interface ShellNavbarProps {
+  readonly identity: ShellNavbarIdentity;
+  /** Rendered inside the identity avatar when the org has set no logo. */
+  readonly identityFallback: Snippet;
+  /** Drops the identity control while keeping the org name in the center.
+   *  The org app sets it on desktop, where the sidebar carries identity. */
+  readonly identityHidden?: boolean;
+  readonly locale: Locale;
+  readonly onlocalechange: (locale: Locale) => void;
+  /** Measured Navbar height. The chrome mask extends the glass by it. */
+  readonly navbarHeight?: number;
+  /** Replaces the identity control in the left slot. */
+  readonly leading?: Snippet;
+  /** Replaces the org name and language picker in the center. */
+  readonly title?: string | Snippet;
+  /** Fades the org name group out, as when a search overlay covers it. */
+  readonly titleHidden?: boolean;
+  /** Right slot content. */
+  readonly actions?: Snippet;
+  /** Overlay rendered inside the Navbar, above its slots. */
+  readonly children?: Snippet;
+  /** Row below the Navbar. The navbar glass extends over it. */
+  readonly subnavbar?: Snippet;
+  /** Reactive getter: true while the subnavbar row should be collapsed. */
+  readonly subnavbarHidden?: () => boolean;
+  /** Reports the measured subnavbar height back to the shell. */
+  readonly onsubnavbarheight?: (height: number) => void;
+  /** Second subnavbar pane pinned to the trailing edge, for split view. */
+  readonly subnavbarTrailing?: Snippet;
+  /** CSS width reserved at the trailing edge of the subnavbar row. Set it
+   *  whenever a detail pane overlaps the row, with or without a pane of
+   *  its own to render there. */
+  readonly trailingWidth?: string;
+  /** Reports the measured trailing pane height back to the shell. */
+  readonly ontrailingheight?: (height: number) => void;
 }
