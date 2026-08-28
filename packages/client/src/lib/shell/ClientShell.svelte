@@ -73,6 +73,7 @@
 
   const brandingQuery = createPublicBrandingQuery();
   const branding = $derived(brandingQuery.data ?? null);
+  const brandingPending = $derived(brandingQuery.isLoading);
 
   const orgName = $derived(
     branding?.orgName !== undefined && branding.orgName !== ""
@@ -117,6 +118,7 @@
         onIdentityTap: () => (drawerOpen = true),
       }}
       identityFallback={menuIcon}
+      orgNamePending={brandingPending}
       locale={currentLocale}
       onlocalechange={handleLocaleChange}
       {navbarHeight}
@@ -131,8 +133,9 @@
       opened={drawerOpen}
       ondismiss={() => (drawerOpen = false)}
       actions={drawerActions}
-      locale={currentLocale}
-      onlocalechange={handleLocaleChange}
+      logoUrl={branding?.iconUrl ?? null}
+      {orgName}
+      orgNamePending={brandingPending}
     />
     <ToastRenderer />
   {/snippet}

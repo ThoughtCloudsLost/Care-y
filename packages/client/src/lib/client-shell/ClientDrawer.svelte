@@ -13,17 +13,22 @@
 
   Quick exit is deliberately NOT in here. It stays in the navbar so it is
   never behind a tap. That holds while this panel is open too.
+
+  The drawer opens with the same identity header the org panel uses, so a
+  client who wants to confirm who they are talking to can do it from either
+  place. The language picker is NOT in here: it sits in the navbar beside
+  the org name, which is where the org app, the onboarding layout, and the
+  login page all put it.
 -->
 <script lang="ts">
   import { List, ListItem } from "konsta/svelte";
-  import { FileText } from "@lucide/svelte";
+  import { Building2, FileText } from "@lucide/svelte";
   import * as m from "$lib/paraglide/messages.js";
   import { resolve } from "$app/paths";
   import { goto } from "$app/navigation";
   import { page } from "$app/state";
-  import type { Locale } from "$lib/paraglide/runtime.js";
   import ShellPanel from "$lib/shell/ShellPanel.svelte";
-  import LanguagePicker from "$lib/components/inputs/LanguagePicker.svelte";
+  import InlineSkeleton from "$lib/components/InlineSkeleton.svelte";
   import type { ClientDrawerAction } from "./context.js";
 
   interface ClientDrawerProps {
@@ -31,17 +36,34 @@
     readonly ondismiss: () => void;
     /** Entries published by the current page. May be empty. */
     readonly actions: readonly ClientDrawerAction[];
-    readonly locale: Locale;
-    readonly onlocalechange: (locale: Locale) => void;
+    /** Org logo, or null when the org has set none. */
+    readonly logoUrl: string | null;
+    /** Org name. Empty while branding is still resolving. */
+    readonly orgName: string;
+    /** True while the org name is still being fetched. */
+    readonly orgNamePending?: boolean;
   }
 
   let {
     opened,
     ondismiss,
     actions,
-    locale,
-    onlocalechange,
+    logoUrl,
+    orgName,
+    orgNamePending = false,
   }: ClientDrawerProps = $props();
+
+  // The identity here is the org, not a person, so the fallback initials
+  // come from the org name. A client has no user identity to show.
+  const initials = $derived(
+    orgName === ""
+      ? null
+      : orgName
+          .split(/\s+/)
+          .slice(0, 2)
+          .map((w) => w.charAt(0).toUpperCase())
+          .join(""),
+  );
 
   function runAction(action: ClientDrawerAction): void {
     ondismiss();
@@ -63,6 +85,28 @@
 <ShellPanel {opened} {ondismiss} side="left" ariaLabel={m.portal_menu_label()}>
   <div class="client-drawer">
     <div class="drawer-scroll">
+      <div class="panel-profile">
+        <span class="panel-avatar" aria-hidden="true">
+          {#if logoUrl}
+            <img
+              src={logoUrl}
+              alt=""
+              class="panel-avatar-logo"
+              loading="eager"
+            />
+          {:else if initials}
+            {initials}
+          {:else}
+            <Building2 size={22} />
+          {/if}
+        </span>
+        <span class="panel-name">
+          <InlineSkeleton loading={orgNamePending} width="10ch">
+            {orgName}
+          </InlineSkeleton>
+        </span>
+      </div>
+
       {#if actions.length > 0}
         <List nested>
           {#each actions as action (action.id)}
@@ -100,9 +144,6 @@
           {m.intake_footer_privacy()}
         </button>
       {/if}
-      <div class="footer-language">
-        <LanguagePicker value={locale} onchange={onlocalechange} />
-      </div>
     </div>
   </div>
 </ShellPanel>
@@ -152,11 +193,41 @@
     opacity: 0.7;
   }
 
-  .footer-language {
+  /* Same anatomy as the org app's panel header, so the two read as one
+     product from either side. No role chip: the identity here is the org,
+     and a client has no role in it. */
+  .panel-profile {
     display: flex;
-    justify-content: center;
-    min-height: 44px;
+    flex-direction: column;
     align-items: center;
+    gap: 4px;
+    padding: 24px 16px 16px;
+  }
+
+  .panel-avatar {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 48px;
+    height: 48px;
+    border-radius: 50%;
+    overflow: hidden;
+    background: var(--brand-fill, var(--brand-primary));
+    color: var(--brand-on, #fff);
+    font-size: 18px;
+    font-weight: 600;
+  }
+
+  .panel-avatar-logo {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+
+  .panel-name {
+    font-size: 16px;
+    font-weight: 600;
+    text-align: center;
   }
 
   .drawer-icon {

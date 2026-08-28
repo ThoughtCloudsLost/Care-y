@@ -410,6 +410,9 @@ export interface ShellNavbarProps {
   /** Drops the identity control while keeping the org name in the center.
    *  The org app sets it on desktop, where the sidebar carries identity. */
   readonly identityHidden?: boolean;
+  /** True while the org name is still being fetched. The center holds a
+   *  skeleton in its place, never a stand-in name. */
+  readonly orgNamePending?: boolean;
   readonly locale: Locale;
   readonly onlocalechange: (locale: Locale) => void;
   /** Measured Navbar height. The chrome mask extends the glass by it. */

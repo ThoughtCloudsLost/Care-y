@@ -14,7 +14,12 @@
 </script>
 
 {#if callStore.active}
-  <Link iconOnly onclick={navigateToCall} aria-label={m.call_indicator_label()}>
+  <Link
+    iconOnly
+    onclick={navigateToCall}
+    aria-label={m.call_indicator_label()}
+    data-testid="shell-call-indicator"
+  >
     <Phone size={20} class="call-pulse" />
   </Link>
 {/if}

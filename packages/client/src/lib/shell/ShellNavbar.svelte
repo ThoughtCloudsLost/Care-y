@@ -28,6 +28,7 @@
 <script lang="ts">
   import { Navbar, Link } from "konsta/svelte";
   import LanguagePicker from "$lib/components/inputs/LanguagePicker.svelte";
+  import InlineSkeleton from "$lib/components/InlineSkeleton.svelte";
   import { chromeIntensity, flashOpaqueChrome } from "./chrome-glass.svelte.js";
   import type { ShellNavbarProps } from "./types.js";
 
@@ -35,6 +36,7 @@
     identity,
     identityFallback,
     identityHidden = false,
+    orgNamePending = false,
     locale,
     onlocalechange,
     navbarHeight = 0,
@@ -340,7 +342,11 @@
       {/if}
     {:else}
       <div class="navbar-title-group" class:heading-hidden={titleHidden}>
-        <span class="heading-compact">{identity.orgName}</span>
+        <span class="heading-compact">
+          <InlineSkeleton loading={orgNamePending} width="10ch">
+            {identity.orgName}
+          </InlineSkeleton>
+        </span>
         <LanguagePicker value={locale} onchange={onlocalechange} />
       </div>
     {/if}

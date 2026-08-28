@@ -16,17 +16,19 @@
   >
 {/snippet}
 
-<ShellToast
-  opened={toastStore.current !== null}
-  position="center"
-  button={dismissButton}
->
-  {#if toastStore.current !== null}
-    <div class="toast-content" role="status" aria-live="polite">
-      {toastStore.current.message}
-    </div>
-  {/if}
-</ShellToast>
+<div data-testid="shell-toasts">
+  <ShellToast
+    opened={toastStore.current !== null}
+    position="center"
+    button={dismissButton}
+  >
+    {#if toastStore.current !== null}
+      <div class="toast-content" role="status" aria-live="polite">
+        {toastStore.current.message}
+      </div>
+    {/if}
+  </ShellToast>
+</div>
 
 <style>
   .toast-content {

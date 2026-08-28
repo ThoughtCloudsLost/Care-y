@@ -264,6 +264,7 @@
 
 <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
 <nav
+  data-testid="shell-desktop-rail"
   bind:this={navEl}
   class="desktop-sidebar"
   class:expanded={isExpanded}

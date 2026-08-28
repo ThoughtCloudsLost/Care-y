@@ -38,6 +38,7 @@
 </script>
 
 <nav
+  data-testid="shell-tabbar"
   aria-label={m.nav_main()}
   class="tabbar-nav native-tabbar left-0 bottom-0 fixed"
   class:no-active-tab={noActiveTab}

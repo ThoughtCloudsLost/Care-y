@@ -16,7 +16,7 @@
   ]);
 </script>
 
-<div class="language-picker">
+<div class="language-picker" data-testid="shell-language">
   <Globe size={16} aria-hidden="true" />
   <select
     {value}

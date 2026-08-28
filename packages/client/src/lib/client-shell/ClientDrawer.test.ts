@@ -35,8 +35,8 @@ function renderDrawer(overrides: Record<string, unknown> = {}) {
       opened: true,
       ondismiss: vi.fn(),
       actions: [] as readonly ClientDrawerAction[],
-      locale: "en",
-      onlocalechange: vi.fn(),
+      logoUrl: null,
+      orgName: "Safe Harbor",
       ...overrides,
     },
   });
@@ -94,14 +94,49 @@ describe("ClientDrawer", () => {
     expect(ondismiss).toHaveBeenCalledOnce();
   });
 
-  it("reports the chosen locale through onlocalechange", async () => {
-    const onlocalechange = vi.fn();
-    const { container } = renderDrawer({ onlocalechange });
+  // The picker used to sit in this footer while the org app, the
+  // onboarding layout, and the login page all put it in the navbar. It
+  // lives in the navbar now, so it must not be here.
+  it("holds no language picker", () => {
+    const { container } = renderDrawer();
+    expect(container.querySelector("select")).toBeNull();
+  });
 
-    const select = container.querySelector("select") as HTMLSelectElement;
-    await fireEvent.change(select, { target: { value: "es" } });
+  describe("identity header", () => {
+    it("renders the org logo when the org has one", () => {
+      const { container } = renderDrawer({
+        logoUrl: "/api/branding/safe-harbor/icon.png",
+      });
 
-    expect(onlocalechange).toHaveBeenCalledWith("es");
+      const logo = container.querySelector(".panel-avatar-logo");
+      expect(logo?.getAttribute("src")).toBe(
+        "/api/branding/safe-harbor/icon.png",
+      );
+      expect(logo?.getAttribute("alt")).toBe("");
+    });
+
+    it("falls back to the org's initials when it has no logo", () => {
+      const { container } = renderDrawer({ orgName: "Safe Harbor" });
+
+      const avatar = container.querySelector(".panel-avatar");
+      expect(avatar?.querySelector("img")).toBeNull();
+      expect(avatar?.textContent.trim()).toBe("SH");
+    });
+
+    it("falls back to an icon before the org name arrives", () => {
+      const { container } = renderDrawer({ orgName: "", orgNamePending: true });
+
+      const avatar = container.querySelector(".panel-avatar");
+      expect(avatar?.textContent.trim()).toBe("");
+      expect(avatar?.querySelector("svg")).toBeTruthy();
+    });
+
+    it("names the org so a client can confirm who they are talking to", () => {
+      const { container } = renderDrawer({ orgName: "Harbor Line" });
+      expect(container.querySelector(".panel-name")?.textContent).toContain(
+        "Harbor Line",
+      );
+    });
   });
 
   it("gives a destructive action the danger treatment", () => {

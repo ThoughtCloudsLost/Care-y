@@ -984,6 +984,7 @@
       role="button"
       aria-label={m.nav_search()}
       onclick={openSearch}
+      data-testid="shell-global-search"
     >
       <Search size={22} aria-hidden="true" />
     </Link>
@@ -1104,6 +1105,7 @@
       {#if ptrPhase !== "idle"}
         <div
           class="ptr-indicator"
+          data-testid="shell-ptr"
           class:ptr-indicator-ios={themeStore.uiTheme === "ios"}
           class:ptr-indicator-material={themeStore.uiTheme === "material"}
           class:ptr-refreshing={ptrPhase === "refreshing"}

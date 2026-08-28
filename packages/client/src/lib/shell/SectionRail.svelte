@@ -50,7 +50,12 @@
 </script>
 
 <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
-<nav class="section-rail" aria-label={ariaLabel} onkeydown={handleKeyDown}>
+<nav
+  class="section-rail"
+  data-testid="shell-section-rail"
+  aria-label={ariaLabel}
+  onkeydown={handleKeyDown}
+>
   <div class="section-rail-items">
     {#each sections as section (section.id)}
       {@const isActive = active === section.id}
