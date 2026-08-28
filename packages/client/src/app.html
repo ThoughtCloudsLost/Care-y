@@ -1,5 +1,18 @@
 <!doctype html>
-<html lang="%paraglide.lang%" dir="%paraglide.dir%">
+<!--
+  The %carey.* placeholders are substituted server-side, per org, before
+  the document reaches the browser. Org identity therefore paints on the
+  first frame without anything being written to the device, which matters
+  on a surface whose whole design assumes the device may be looked at by
+  someone the person is hiding from.
+-->
+<html
+  lang="%paraglide.lang%"
+  dir="%paraglide.dir%"
+  style="%carey.brandStyle%"
+  data-org-name="%carey.orgName%"
+  data-safe-exit-url="%carey.safeExitUrl%"
+>
   <head>
     <meta charset="utf-8" />
     <title>CARE-Y</title>
@@ -27,6 +40,11 @@
       type="font/woff2"
       crossorigin
     />
+    <!-- Whole-element placeholder rather than a bare href: an empty
+         href would make the browser request this page as an icon. It sits
+         above the script below, which checks for it before appending its
+         own. -->
+    %carey.touchIcon%
     <script nonce="%sveltekit.nonce%">
       // Blocking theme init: reads class preferences from localStorage
       // and applies them to <html> before first paint. CSS theme files
@@ -69,7 +87,18 @@
         if (m) m.setAttribute("content", cs);
         // Hydrate brand colors from localStorage (instant, no FOUC).
         // The branding module writes these on save; app.html reads them before paint.
-        var bp = s.getItem("care-y-brand-primary");
+        //
+        // An injected value always wins, so a stale cache on an org
+        // device cannot override a fresh server value. Only an
+        // authenticated org session ever writes these keys, so on a
+        // client device every read below is null and the injected values
+        // are the only source.
+        var injectedColor = d.style.getPropertyValue("--brand-primary");
+        var injectedName = d.getAttribute("data-org-name") || "";
+        var injectedIcon = !!document.querySelector(
+          'link[rel="apple-touch-icon"]',
+        );
+        var bp = injectedColor ? null : s.getItem("care-y-brand-primary");
         if (bp) {
           d.style.setProperty("--brand-primary", bp);
           // Konsta uses rgb() format for --k-color-primary
@@ -85,18 +114,29 @@
               "rgb(" + r + " " + g + " " + b + ")",
             );
         }
-        var ba = s.getItem("care-y-brand-accent");
+        var ba = injectedColor ? null : s.getItem("care-y-brand-accent");
         if (ba) d.style.setProperty("--brand-accent", ba);
         var bts = Number(s.getItem("care-y-brand-ts") || "0");
         var fresh = Date.now() - bts < 300000;
-        var bn = fresh ? s.getItem("care-y-brand-name") : null;
-        if (bn) document.title = bn;
-        var bslug = fresh ? s.getItem("care-y-brand-slug") : null;
-        var bicons = fresh ? s.getItem("care-y-brand-has-icons") : null;
-        var biv = fresh ? s.getItem("care-y-brand-icon-v") : null;
+        var bn = fresh && !injectedName ? s.getItem("care-y-brand-name") : null;
+        if (injectedName) document.title = injectedName;
+        else if (bn) document.title = bn;
+        var useCachedIcon = fresh && !injectedIcon;
+        var bslug = useCachedIcon ? s.getItem("care-y-brand-slug") : null;
+        var bicons = useCachedIcon ? s.getItem("care-y-brand-has-icons") : null;
+        var biv = useCachedIcon ? s.getItem("care-y-brand-icon-v") : null;
         function iconUrl(slug, size) {
           var u = "/api/branding/" + slug + "/icon-" + size + ".png";
           return biv ? u + "?v=" + biv : u;
+        }
+        function revealLogo(el) {
+          if (el.complete && el.naturalWidth > 0) {
+            el.classList.add("visible");
+            return;
+          }
+          el.onload = function () {
+            el.classList.add("visible");
+          };
         }
         // rAF fires after DOM is built but before first paint
         requestAnimationFrame(function () {
@@ -105,7 +145,12 @@
             if (nameEl) nameEl.textContent = bn;
           }
           var logoEl = document.getElementById("splash-logo");
-          if (logoEl && bslug && bicons) {
+          if (!logoEl) return;
+          // A server-injected src starts loading during parse, so it can
+          // already be decoded by this frame and never fire onload.
+          if (logoEl.getAttribute("src")) {
+            revealLogo(logoEl);
+          } else if (bslug && bicons) {
             logoEl.onload = function () {
               logoEl.classList.add("visible");
             };
@@ -380,8 +425,16 @@
       }
     </style>
     <div id="splash" aria-hidden="true">
-      <img id="splash-logo" alt="" width="96" height="96" />
-      <span id="splash-name">CARE-Y</span>
+      <!-- Whole-attribute placeholder: an empty src would make the browser
+           request this page as an image. -->
+      <img
+        id="splash-logo"
+        alt=""
+        width="96"
+        height="96"
+        %carey.splashLogoSrc%
+      />
+      <span id="splash-name">%carey.splashName%</span>
     </div>
     <div style="display: contents">%sveltekit.body%</div>
   </body>

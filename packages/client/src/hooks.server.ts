@@ -7,6 +7,12 @@ import {
   extractSubdomain,
   readDevSlugHeader,
 } from "$lib/server/org-resolution";
+import {
+  applyBrandingToHtml,
+  loadInjectedBranding,
+  resolveInjectionSlug,
+} from "$lib/server/branding-inject";
+import { DEV_ORG_SLUG } from "$lib/utils/org-slug.js";
 
 /**
  * Security headers handle.
@@ -53,7 +59,7 @@ const securityHeaders: Handle = async ({ event, resolve }) => {
 /**
  * Org resolution handle.
  *
- * Dev: reads X-Org-Slug header (SOG-07 fallback), then falls back to Host.
+ * Dev: reads the X-Org-Slug header, then falls back to Host.
  * Prod: extracts subdomain from Host header (slug.care-y.app -> slug).
  * Sets event.locals.orgSlug for downstream load functions.
  */
@@ -63,6 +69,39 @@ const orgResolution: Handle = async ({ event, resolve }) => {
 
   event.locals.orgSlug = devSlug ?? hostSlug;
   return resolve(event);
+};
+
+/**
+ * Org branding injection handle.
+ *
+ * Substitutes the org's name, colors, icon, and safe exit URL into the
+ * HTML template so identity paints on the first frame. The pre-paint path
+ * in app.html otherwise reads localStorage keys that only an authenticated
+ * org session writes, so a client saw the product's own name on the splash
+ * and a default palette until the branding query resolved.
+ *
+ * Runs after orgResolution because it needs the resolved slug, and adds no
+ * CSP surface: every value lands in existing markup or an existing
+ * attribute, and svelte.config.js already allows style attributes through
+ * style-src-attr.
+ *
+ * Failure degrades to no injection. Branding must never block a client
+ * from reaching the intake form.
+ */
+const brandingInjection: Handle = async ({ event, resolve }) => {
+  const slug = resolveInjectionSlug(event.locals.orgSlug, dev, DEV_ORG_SLUG);
+  const branding =
+    slug === null
+      ? null
+      : await loadInjectedBranding({
+          slug,
+          origin: event.url.origin,
+          isDev: dev,
+        });
+
+  return resolve(event, {
+    transformPageChunk: ({ html }) => applyBrandingToHtml(html, branding),
+  });
 };
 
 /**
@@ -86,7 +125,12 @@ const i18n: Handle = async ({ event, resolve }) =>
     },
   );
 
-export const handle: Handle = sequence(securityHeaders, orgResolution, i18n);
+export const handle: Handle = sequence(
+  securityHeaders,
+  orgResolution,
+  brandingInjection,
+  i18n,
+);
 
 /**
  * Global error handler.

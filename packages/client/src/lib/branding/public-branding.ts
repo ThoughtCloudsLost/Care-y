@@ -85,6 +85,11 @@ export function createPublicBrandingQuery() {
     queryKey: brandingKeys.public(),
     queryFn: fetchPublicBranding,
     staleTime: 5 * 60 * 1000,
-    retry: false,
+    // A single no-retry attempt meant one dropped request left a client
+    // page without the org's name, colors, or exit URL for the rest of
+    // the session. Server injection covers the common case now, and the
+    // backoff covers the case where injection had nothing cached either.
+    retry: 3,
+    retryDelay: (attempt: number) => Math.min(500 * 2 ** attempt, 8_000),
   }));
 }

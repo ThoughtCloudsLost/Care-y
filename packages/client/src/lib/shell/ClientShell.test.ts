@@ -24,6 +24,7 @@ import type * as PublicBranding from "$lib/branding/public-branding.js";
 // --- Controllable mock state ---
 
 let mockBranding: PublicBranding.PublicBranding | null = null;
+let mockBrandingError = false;
 
 function branding(
   overrides: Partial<PublicBranding.PublicBranding> = {},
@@ -35,8 +36,22 @@ function branding(
     iconUrl: null,
     orgSlug: "safe-harbor",
     supportLabel: "",
+    safeExitUrl: null,
     ...overrides,
   };
+}
+
+/** Stand in for what the server substituted into the document. */
+function inject(attrs: { orgName?: string; safeExitUrl?: string }): void {
+  if (attrs.orgName !== undefined) {
+    document.documentElement.setAttribute("data-org-name", attrs.orgName);
+  }
+  if (attrs.safeExitUrl !== undefined) {
+    document.documentElement.setAttribute(
+      "data-safe-exit-url",
+      attrs.safeExitUrl,
+    );
+  }
 }
 
 // --- Mocks ---
@@ -69,7 +84,9 @@ vi.mock("$lib/branding/public-branding.js", async (importOriginal) => ({
       return mockBranding;
     },
     isLoading: false,
-    isError: false,
+    get isError() {
+      return mockBrandingError;
+    },
     error: null,
   }),
 }));
@@ -136,6 +153,9 @@ function navbar(container: HTMLElement): HTMLElement {
 describe("ClientShell", () => {
   beforeEach(() => {
     mockBranding = branding();
+    mockBrandingError = false;
+    document.documentElement.removeAttribute("data-org-name");
+    document.documentElement.removeAttribute("data-safe-exit-url");
   });
 
   afterEach(cleanup);
@@ -206,6 +226,55 @@ describe("ClientShell", () => {
 
       expect(navbar(container).textContent).toContain("Harbor Line");
     });
+
+    it("names the org from the injected value before the query resolves", () => {
+      mockBranding = null;
+      inject({ orgName: "Harbor House" });
+
+      const { container } = renderShell();
+
+      expect(navbar(container).textContent).toContain("Harbor House");
+    });
+
+    it("prefers the query result over the injected value once it lands", () => {
+      mockBranding = branding({ orgName: "Harbor Line" });
+      inject({ orgName: "Stale Name" });
+
+      const { container } = renderShell();
+
+      expect(navbar(container).textContent).toContain("Harbor Line");
+      expect(navbar(container).textContent).not.toContain("Stale Name");
+    });
+
+    // The product name is not the organization a client contacted, so
+    // showing it would tell them they are talking to the wrong people.
+    it("never falls back to the product name", () => {
+      mockBranding = null;
+      mockBrandingError = true;
+
+      const { container } = renderShell();
+
+      expect(navbar(container).textContent).not.toContain("CARE-Y");
+    });
+
+    it("holds a skeleton while a name is still possible", () => {
+      mockBranding = null;
+
+      const { container } = renderShell();
+
+      const group = navbar(container).querySelector(".navbar-title-group");
+      expect(group?.querySelector("[data-skeleton]")).toBeTruthy();
+    });
+
+    it("empties the slot rather than shimmering on once the query gives up", () => {
+      mockBranding = null;
+      mockBrandingError = true;
+
+      const { container } = renderShell();
+
+      const group = navbar(container).querySelector(".navbar-title-group");
+      expect(group?.querySelector("[data-skeleton]")).toBeNull();
+    });
   });
 
   describe("quick exit", () => {
@@ -256,6 +325,47 @@ describe("ClientShell", () => {
 
       expect(window.location.replace).toHaveBeenCalledWith(
         "https://weather.gov",
+      );
+    });
+
+    // Intake and share links reach no portal bootstrap, so the injected
+    // copy is the only way they know the org's configured destination
+    // before the branding query resolves, or at all if it never does.
+    it("exits to the injected URL when the query has not resolved", async () => {
+      mockBranding = null;
+      inject({ safeExitUrl: "https://weather.example.org/" });
+      Object.defineProperty(window, "location", {
+        value: { replace: vi.fn() },
+        writable: true,
+      });
+
+      const { container } = renderShell();
+
+      await fireEvent.click(
+        container.querySelector("[data-testid='quick-exit']") as HTMLElement,
+      );
+
+      expect(window.location.replace).toHaveBeenCalledWith(
+        "https://weather.example.org/",
+      );
+    });
+
+    it("prefers the query's exit URL over the injected copy", async () => {
+      mockBranding = branding({ safeExitUrl: "https://fresh.example.org/" });
+      inject({ safeExitUrl: "https://stale.example.org/" });
+      Object.defineProperty(window, "location", {
+        value: { replace: vi.fn() },
+        writable: true,
+      });
+
+      const { container } = renderShell();
+
+      await fireEvent.click(
+        container.querySelector("[data-testid='quick-exit']") as HTMLElement,
+      );
+
+      expect(window.location.replace).toHaveBeenCalledWith(
+        "https://fresh.example.org/",
       );
     });
   });

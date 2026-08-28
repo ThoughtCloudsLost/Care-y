@@ -32,10 +32,11 @@
   import * as m from "$lib/paraglide/messages.js";
   import { createPublicBrandingQuery } from "$lib/branding/public-branding.js";
   import { applyKonstaPalette } from "$lib/branding/konsta-palette.js";
+  import { setBrandingTitle } from "$lib/branding/title.svelte.js";
   import {
-    setBrandingTitle,
-    getBrandingTitle,
-  } from "$lib/branding/title.svelte.js";
+    readInjectedOrgName,
+    readInjectedSafeExitUrl,
+  } from "$lib/branding/injected-branding.js";
   import PageShell from "./PageShell.svelte";
   import ShellNavbar from "./ShellNavbar.svelte";
   import ToastRenderer from "./ToastRenderer.svelte";
@@ -72,21 +73,38 @@
 
   const brandingQuery = createPublicBrandingQuery();
   const branding = $derived(brandingQuery.data ?? null);
-  const brandingPending = $derived(brandingQuery.isLoading);
+
+  // Substituted into the document per org before the browser parsed it,
+  // so both are known on the first frame. They read once because the
+  // document is not rewritten after load.
+  const injectedOrgName = readInjectedOrgName();
+  const injectedSafeExitUrl = readInjectedSafeExitUrl();
 
   // A page's own value wins, then the org's configured URL, then the
-  // default. Intake and share links reach no bootstrap, so before the
-  // branding payload carried this they went to the default no matter what
-  // the org had chosen.
+  // injected copy of it, then the default. Intake and share links reach
+  // no bootstrap, so before the branding payload carried this they went
+  // to the default no matter what the org had chosen, and the injected
+  // copy keeps that true even when the query never resolves.
   const safeUrl = $derived(
-    shell?.safeUrl ?? branding?.safeExitUrl ?? DEFAULT_SAFE_URL,
+    shell?.safeUrl ??
+      branding?.safeExitUrl ??
+      injectedSafeExitUrl ??
+      DEFAULT_SAFE_URL,
   );
 
+  // The query result, then the injected value, and never the product
+  // name. CARE-Y is not the organization a client contacted, so showing
+  // it here would misidentify who they are talking to.
   const orgName = $derived(
     branding?.orgName !== undefined && branding.orgName !== ""
       ? branding.orgName
-      : getBrandingTitle(),
+      : (injectedOrgName ?? ""),
   );
+
+  // A skeleton holds the slot while a name is still possible. Once the
+  // query has given up, the slot goes empty rather than shimmering
+  // forever at someone who is waiting on it.
+  const orgNamePending = $derived(orgName === "" && !brandingQuery.isError);
 
   let currentLocale = $state(getLocale());
 
@@ -125,7 +143,7 @@
         onIdentityTap: () => (drawerOpen = true),
       }}
       identityFallback={menuIcon}
-      orgNamePending={brandingPending}
+      {orgNamePending}
       locale={currentLocale}
       onlocalechange={handleLocaleChange}
       {navbarHeight}
@@ -142,7 +160,7 @@
       actions={drawerActions}
       logoUrl={branding?.iconUrl ?? null}
       {orgName}
-      orgNamePending={brandingPending}
+      {orgNamePending}
     />
     <ToastRenderer />
   {/snippet}

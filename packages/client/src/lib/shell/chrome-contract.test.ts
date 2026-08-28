@@ -162,6 +162,7 @@ vi.mock("$lib/branding/public-branding.js", async (importOriginal) => ({
         iconUrl: null,
         orgSlug: "safe-harbor",
         supportLabel: "",
+        safeExitUrl: null,
       };
     },
     isLoading: false,

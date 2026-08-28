@@ -191,7 +191,10 @@ vi.mock("$lib/crypto/crypto-keyed.svelte", () => ({
 //
 // This reimplementation chains handles the same way: each handler's resolve
 // calls the next handler in the sequence, with the last handler receiving
-// the original resolve. Behaviorally identical for unit testing purposes.
+// the original resolve. It also merges resolve options along the chain,
+// which the earlier version did not: a handler that was not last had its
+// transformPageChunk dropped, so its work vanished with nothing failing to
+// say so.
 
 // ---------------------------------------------------------------------------
 // $service-worker
@@ -216,21 +219,60 @@ vi.mock("$service-worker", () => ({
 // @sveltejs/kit/hooks
 // ---------------------------------------------------------------------------
 
+interface MockResolveOptions {
+  transformPageChunk?: (input: { html: string }) => string | undefined;
+}
+
+type MockResolve = (
+  event: unknown,
+  opts?: MockResolveOptions,
+) => Promise<unknown>;
+
+type MockHandle = (input: {
+  event: unknown;
+  resolve: MockResolve;
+}) => Promise<unknown>;
+
+/**
+ * Merge two handlers' resolve options the way the real `sequence` does.
+ *
+ * `transformPageChunk` is applied in reverse order, so the inner handler
+ * (the one nearer the real resolve) transforms first and the outer one
+ * sees its output. Forwarding only one handler's options would drop every
+ * transform but the innermost, which reads in a test as a handle that
+ * silently did nothing.
+ */
+function mergeResolveOptions(
+  outer: MockResolveOptions | undefined,
+  inner: MockResolveOptions | undefined,
+): MockResolveOptions | undefined {
+  const outerTransform = outer?.transformPageChunk;
+  const innerTransform = inner?.transformPageChunk;
+
+  if (outerTransform === undefined) return inner;
+  if (innerTransform === undefined) return outer;
+
+  return {
+    transformPageChunk: ({ html }) =>
+      outerTransform({ html: innerTransform({ html }) ?? html }),
+  };
+}
+
 vi.mock("@sveltejs/kit/hooks", () => ({
   sequence:
-    (
-      ...handlers: Array<
-        (input: { event: unknown; resolve: unknown }) => Promise<unknown>
-      >
-    ) =>
-    (input: { event: unknown; resolve: unknown }): Promise<unknown> => {
-      let chain = input.resolve as (event: unknown) => Promise<unknown>;
+    (...handlers: MockHandle[]) =>
+    (input: { event: unknown; resolve: MockResolve }): Promise<unknown> => {
+      let chain: MockResolve = input.resolve;
       for (let i = handlers.length - 1; i >= 0; i--) {
         const handler = handlers[i]!;
         const next = chain;
-        chain = (event: unknown) =>
-          handler({ event, resolve: next }) as Promise<unknown>;
+        chain = (event, outerOpts) =>
+          handler({
+            event,
+            resolve: (innerEvent, innerOpts) =>
+              next(innerEvent, mergeResolveOptions(outerOpts, innerOpts)),
+          });
       }
-      return chain(input.event);
+      return chain(input.event, undefined);
     },
 }));

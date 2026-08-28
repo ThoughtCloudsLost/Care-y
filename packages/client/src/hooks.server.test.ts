@@ -1,9 +1,10 @@
 /**
  * Unit tests for SvelteKit server hooks.
  *
- * Tests the composed `handle` (security headers + org resolution) and
- * `handleError` exports. Verifies security header presence, HSTS
- * dev-skipping, org slug extraction, and opaque error responses.
+ * Tests the composed `handle` (security headers, org resolution, branding
+ * injection) and `handleError` exports. Verifies security header presence,
+ * HSTS dev-skipping, org slug extraction, template substitution, and
+ * opaque error responses.
  *
  * SvelteKit virtual modules ($app/environment, @sveltejs/kit/hooks) are
  * mocked in test-setup.ts (loaded via vitest.config.ts setupFiles).
@@ -11,6 +12,21 @@
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { mockDev } from "./test-setup.js";
+import type * as BrandingInject from "$lib/server/branding-inject";
+
+const { mockLoadInjectedBranding } = vi.hoisted(() => ({
+  mockLoadInjectedBranding: vi.fn<typeof BrandingInject.loadInjectedBranding>(),
+}));
+
+// vi.mock required: the real loader issues an HTTP request to the API on a
+// cache miss. The dev-mode cases below resolve a slug and would otherwise
+// reach the network. The pure functions stay real via importOriginal, so
+// the transform assertions exercise the actual substitution.
+vi.mock("$lib/server/branding-inject", async (importOriginal) => ({
+  ...(await importOriginal<typeof BrandingInject>()),
+  loadInjectedBranding: mockLoadInjectedBranding,
+}));
+
 import { handle, handleError } from "./hooks.server.js";
 
 // --- Test helpers ---
@@ -61,6 +77,25 @@ function createMockEvent(
 function createMockResolve(): (event: MockEvent) => Promise<Response> {
   return async () => new Response("ok", { status: 200 });
 }
+
+/**
+ * Resolve mock that actually applies transformPageChunk, so the branding
+ * handle's substitution can be asserted on the rendered body.
+ */
+function createTransformingResolve(
+  html: string,
+): (
+  event: MockEvent,
+  opts?: { transformPageChunk?: (input: { html: string }) => string },
+) => Promise<Response> {
+  return async (_event, opts) =>
+    new Response(opts?.transformPageChunk?.({ html }) ?? html, { status: 200 });
+}
+
+beforeEach(() => {
+  mockLoadInjectedBranding.mockReset();
+  mockLoadInjectedBranding.mockResolvedValue(null);
+});
 
 // --- Security Headers ---
 
@@ -230,6 +265,77 @@ describe("handle (org resolution)", () => {
       resolve: createMockResolve() as never,
     });
     expect(event.locals.orgSlug).toBe("fallback");
+  });
+});
+
+// --- Branding Injection ---
+
+describe("handle (branding injection)", () => {
+  const TEMPLATE = [
+    '<html style="%carey.brandStyle%" data-org-name="%carey.orgName%"',
+    ' data-safe-exit-url="%carey.safeExitUrl%">%carey.touchIcon%',
+    "<img %carey.splashLogoSrc% /><span>%carey.splashName%</span></html>",
+  ].join("");
+
+  beforeEach(() => {
+    mockDev.mockReturnValue(false);
+  });
+
+  it("substitutes the org's identity into the template", async () => {
+    mockLoadInjectedBranding.mockResolvedValue({
+      orgName: "Harbor House",
+      primaryColor: "#1f6f5c",
+      accentColor: null,
+      iconUrl: "/api/branding/harbor/icon-192.png",
+      safeExitUrl: "https://weather.example.org/",
+    });
+
+    const event = createMockEvent({ host: "harbor.care-y.app" });
+    const response = await handle({
+      event: event as never,
+      resolve: createTransformingResolve(TEMPLATE) as never,
+    });
+    const body = await response.text();
+
+    expect(body).toContain('data-org-name="Harbor House"');
+    expect(body).toContain("--brand-primary:#1f6f5c");
+    expect(body).toContain('src="/api/branding/harbor/icon-192.png"');
+    expect(body).toContain('data-safe-exit-url="https://weather.example.org/"');
+    expect(body).toContain("<span>Harbor House</span>");
+  });
+
+  it("passes the resolved slug to the loader", async () => {
+    const event = createMockEvent({ host: "harbor.care-y.app" });
+    await handle({
+      event: event as never,
+      resolve: createMockResolve() as never,
+    });
+
+    expect(mockLoadInjectedBranding).toHaveBeenCalledWith(
+      expect.objectContaining({ slug: "harbor" }),
+    );
+  });
+
+  it("skips the loader entirely when no org resolves", async () => {
+    const event = createMockEvent({ host: "care-y.app" });
+    await handle({
+      event: event as never,
+      resolve: createMockResolve() as never,
+    });
+
+    expect(mockLoadInjectedBranding).not.toHaveBeenCalled();
+  });
+
+  it("leaves no placeholder behind when nothing is injected", async () => {
+    const event = createMockEvent({ host: "care-y.app" });
+    const response = await handle({
+      event: event as never,
+      resolve: createTransformingResolve(TEMPLATE) as never,
+    });
+    const body = await response.text();
+
+    // A literal token would ship to the browser and render as text.
+    expect(body).not.toContain("%carey.");
   });
 });
 
