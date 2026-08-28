@@ -595,16 +595,17 @@ describe("KB Voting routes", () => {
 // --- Attachment tests ---
 
 describe("KB Attachment routes", () => {
-  // PNG magic bytes prefix so validateMagicBytes accepts it as image/png
-  const pngHeader = Buffer.from([
-    0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a,
-  ]);
-  const SMALL_BLOB = Buffer.concat([
-    pngHeader,
-    Buffer.from("test-payload"),
-  ]).toString("base64");
+  // Twenty bytes carrying no file signature, which is what a sealed-box
+  // blob looks like. The browser encrypts with the org key before calling
+  // this route, so a fixture holding a real PNG header would model a wire
+  // format no client sends, and it did: the route ran a magic byte check
+  // that every real upload failed while this suite stayed green.
+  const SMALL_BLOB = Buffer.from(
+    "7d1f0ac93e5b8a24f60d19b7e4c8a35fa1b2c3d4",
+    "hex",
+  ).toString("base64");
 
-  it("volunteer can upload an attachment", async () => {
+  it("volunteer can upload an attachment declared as an image", async () => {
     const caller = buildVolunteerCaller();
 
     const result = await caller.uploadAttachment({

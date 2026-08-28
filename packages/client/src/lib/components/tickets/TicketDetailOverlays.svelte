@@ -84,6 +84,7 @@
     oncomposedismiss: () => void;
     onreply?: () => void;
     ontextclient?: () => void;
+    onattach?: (file: File) => void;
     ondraftset: (body: string) => void;
   }
 
@@ -133,6 +134,7 @@
     oncomposedismiss,
     onreply,
     ontextclient,
+    onattach,
     ondraftset,
   }: Props = $props();
 </script>
@@ -174,6 +176,7 @@
   onpresetselect={ondraftset}
   {onreply}
   {ontextclient}
+  {onattach}
 />
 
 <ShellPopover

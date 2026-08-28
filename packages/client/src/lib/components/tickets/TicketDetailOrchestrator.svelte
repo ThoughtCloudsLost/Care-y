@@ -16,7 +16,7 @@
     setDraftForMode,
     clearDraftForMode,
   } from "$lib/tickets/draft-store.svelte.js";
-  import { Link, Button } from "konsta/svelte";
+  import { Link, Button, Chip } from "konsta/svelte";
   import {
     ChevronLeft,
     MessageSquareText,
@@ -94,6 +94,7 @@
   import { requireRouter } from "$lib/errors.js";
   import { toastStore } from "$lib/stores/toast.svelte.js";
   import { createSendMessage } from "$lib/composables/ticket-detail/create-send-message.svelte.js";
+  import { createAttachmentUpload } from "$lib/composables/ticket-detail/create-attachment-upload.svelte.js";
   import { createSmsSend } from "$lib/composables/ticket-detail/create-sms-send.svelte.js";
   import { createCallDispatch } from "$lib/composables/ticket-detail/create-call-dispatch.svelte.js";
   import { haptic } from "$lib/utils/haptic.js";
@@ -471,6 +472,15 @@
     },
   });
 
+  // --- Attachment upload (composable) ---
+
+  const attachmentUpload = createAttachmentUpload({
+    getTicketId: () => ticketId,
+    getClientPublic: () => ticket?.portalChannel?.clientPublic ?? null,
+    cryptoBridge,
+    uploadMutate: async (args) => ticketRouter.uploadAttachment.mutate(args),
+  });
+
   // --- Send message (composable) ---
 
   const messenger = createSendMessage<FollowUpList[number]>({
@@ -513,8 +523,13 @@
         eventParams: null,
       }) satisfies FollowUpList[number],
     getClientPublic: () => ticket?.portalChannel?.clientPublic ?? null,
-    createFollowUpMutate: async (args) =>
-      ticketRouter.createFollowUp.mutate(args),
+    getAttachmentLinks: () => attachmentUpload.links(),
+    createFollowUpMutate: async (args) => {
+      const result = await ticketRouter.createFollowUp.mutate(args);
+      // Clear pending attachments only after the mutation resolves.
+      attachmentUpload.clear();
+      return result;
+    },
   });
 
   // --- SMS send (composable) ---
@@ -1006,12 +1021,46 @@
       visible={!chatNearBottom && !selectMode.active}
       onclick={jumpToLatest}
     />
+    {#if attachmentUpload.pending.length > 0}
+      <div
+        class="pending-attachments"
+        role="list"
+        aria-label={m.attachment_pending_list()}
+      >
+        {#each attachmentUpload.pending as entry (entry.attachmentId)}
+          <Chip
+            class="attachment-chip"
+            outline={entry.status === "failed"}
+            role="listitem"
+          >
+            <span class="attachment-chip-name">{entry.filename}</span>
+            {#if entry.status === "encrypting" || entry.status === "uploading"}
+              <span class="attachment-chip-status">
+                {m.attachment_uploading()}
+              </span>
+            {:else if entry.status === "failed"}
+              <span class="attachment-chip-status attachment-chip-failed">
+                {m.attachment_failed()}
+              </span>
+            {/if}
+          </Chip>
+          <button
+            type="button"
+            class="attachment-remove-btn"
+            onclick={() => attachmentUpload.remove(entry.attachmentId)}
+            aria-label={m.attachment_remove({ name: entry.filename })}
+          >
+            <X size={14} aria-hidden="true" />
+          </button>
+        {/each}
+      </div>
+    {/if}
     <TicketCompose
       bind:this={compose}
       {ticketId}
       inline={desktopFull || onexpand != null}
       hidden={selectMode.active}
-      sending={messenger.sending || sms.sending}
+      sending={messenger.sending || sms.sending || attachmentUpload.busy}
       hasUnacknowledgedCorrection={correctionPending}
       onsendreply={() => void messenger.handleSend()}
       onsendsms={(text: string) => void sms.handleSmsSend(text)}
@@ -1200,6 +1249,12 @@
   ontextclient={ticket?.hasPhone === true
     ? () => exposureHint.show("sms", () => compose?.activateSms())
     : undefined}
+  onattach={(file: File) => {
+    // Activate reply mode so the volunteer sees the compose bar with
+    // the pending attachment chip.
+    compose?.activateReply();
+    void attachmentUpload.attach(file);
+  }}
   ondraftset={(body: string) => {
     setDraftForMode(ticketId, "reply", body);
     compose?.activateReply();
@@ -1258,5 +1313,45 @@
       -webkit-backdrop-filter: none !important;
       background: Canvas !important;
     }
+  }
+
+  .pending-attachments {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    padding: 6px 16px;
+    align-items: center;
+  }
+
+  .attachment-chip-name {
+    max-width: 120px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .attachment-chip-status {
+    font-size: var(--text-xs);
+    color: var(--muted);
+    margin-left: 4px;
+  }
+
+  .attachment-chip-failed {
+    color: var(--danger);
+  }
+
+  .attachment-remove-btn {
+    appearance: none;
+    border: none;
+    background: none;
+    padding: 6px;
+    margin: -6px 0 -6px -2px;
+    color: var(--muted);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 44px;
+    min-height: 44px;
   }
 </style>

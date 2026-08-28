@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 import { describe, it, expect, beforeAll, afterEach, vi } from "vitest";
+import type * as CryptoContext from "$lib/crypto/context.js";
 import { render, cleanup } from "@testing-library/svelte";
 import {
   getSodium,
@@ -8,10 +9,13 @@ import {
   eciesEncrypt,
   encode,
   toRistrettoPoint,
+  encodeFileKeyPayload,
+  generateContentKey,
 } from "@care-y/crypto";
 import type { ComponentProps } from "svelte";
 import * as m from "$lib/paraglide/messages.js";
 import PortalThread from "./PortalThread.svelte";
+import type { PortalAttachmentWire } from "./portal-attachment-types.js";
 
 type PortalThreadProps = ComponentProps<typeof PortalThread>;
 type PortalMessageWire = PortalThreadProps["messages"][number];
@@ -29,6 +33,18 @@ vi.stubGlobal(
     this.unobserve = vi.fn();
   }),
 );
+
+// vi.mock required: getCryptoBridge uses Svelte 5 createContext which
+// throws "missing_context" outside a component tree with CryptoProvider.
+// MmsImage imports it at the top level even when the portal passes a
+// decrypt callback (the conditional init skips the call, but the import
+// triggers the module).
+vi.mock("$lib/crypto/context.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof CryptoContext>()),
+  getCryptoBridge: () => ({
+    decryptBlob: vi.fn().mockRejectedValue(new Error("mock: no bridge")),
+  }),
+}));
 
 beforeAll(async () => {
   await getSodium();
@@ -323,5 +339,200 @@ describe("PortalThread", () => {
     for (const article of articles) {
       expect(article.getAttribute("aria-label")).toBeTruthy();
     }
+  });
+
+  // ── Attachments ──────────────────────────────────────────────────
+
+  function makeAttachment(
+    followupId: string,
+    keypairPublic: Uint8Array,
+    opts: {
+      contentType?: string;
+      filename?: string;
+      attachmentId?: string;
+    } = {},
+  ): PortalAttachmentWire {
+    const fileKey = generateContentKey();
+    const fname = opts.filename ?? "photo.png";
+    const payload = encodeFileKeyPayload(fileKey, fname);
+    const sealed = eciesEncrypt(payload, toRistrettoPoint(keypairPublic));
+
+    return {
+      attachmentId: opts.attachmentId ?? `att-${String(++messageSeq)}`,
+      followupId,
+      direction: "to_client",
+      sizeBytes: 1024,
+      contentType: opts.contentType ?? "image/png",
+      ephemeralPoint: encode(sealed.ephemeralPoint),
+      nonce: encode(sealed.nonce),
+      ciphertext: encode(sealed.ciphertext),
+      createdAt: new Date().toISOString(),
+    };
+  }
+
+  function makeMessageWithFollowup(
+    text: string,
+    direction: PortalMessageWire["direction"],
+    keypairPublic: Uint8Array,
+    followupId: string,
+  ): PortalMessageWire {
+    const encrypted = eciesEncrypt(
+      new TextEncoder().encode(text),
+      toRistrettoPoint(keypairPublic),
+    );
+    return {
+      id: `msg-${String(++messageSeq)}`,
+      followupId,
+      direction,
+      ephemeralPoint: encode(encrypted.ephemeralPoint),
+      nonce: encode(encrypted.nonce),
+      ciphertext: encode(encrypted.ciphertext),
+      createdAt: new Date().toISOString(),
+      editedAt: null,
+    };
+  }
+
+  describe("attachments", () => {
+    it("renders a document attachment as a chip under its message", () => {
+      const keypair = derivePortalKeypair(generatePortalSeed());
+      const followupId = "fu-doc-1";
+
+      const msg = makeMessageWithFollowup(
+        "Here is the file",
+        "to_client",
+        keypair.clientPublic,
+        followupId,
+      );
+
+      const att = makeAttachment(followupId, keypair.clientPublic, {
+        contentType: "application/pdf",
+        filename: "report.pdf",
+      });
+
+      const { container } = render(PortalThread, {
+        props: {
+          messages: [msg],
+          clientPrivate: keypair.clientPrivate,
+          loading: false,
+          attachments: [att],
+          ticketId: "ticket-att-1",
+        },
+      });
+
+      const chips = container.querySelectorAll(
+        "[data-testid='portal-attachments']",
+      );
+      expect(chips.length).toBe(1);
+
+      // The chip shows the decrypted filename
+      const chipEl = container.querySelector(".attachment-chip");
+      expect(chipEl).not.toBeNull();
+    });
+
+    it("renders an image attachment as a thumbnail under its message", () => {
+      const keypair = derivePortalKeypair(generatePortalSeed());
+      const followupId = "fu-img-1";
+
+      const msg = makeMessageWithFollowup(
+        "Sent you a photo",
+        "to_client",
+        keypair.clientPublic,
+        followupId,
+      );
+
+      const att = makeAttachment(followupId, keypair.clientPublic, {
+        contentType: "image/jpeg",
+        filename: "sunset.jpg",
+      });
+
+      const { container } = render(PortalThread, {
+        props: {
+          messages: [msg],
+          clientPrivate: keypair.clientPrivate,
+          loading: false,
+          attachments: [att],
+          ticketId: "ticket-img-1",
+        },
+      });
+
+      // MmsImage renders a placeholder initially (fetch has not resolved)
+      const attachmentArea = container.querySelector(
+        "[data-testid='portal-attachments']",
+      );
+      expect(attachmentArea).not.toBeNull();
+    });
+
+    it("does not render attachments under unrelated messages", () => {
+      const keypair = derivePortalKeypair(generatePortalSeed());
+
+      const msg1 = makeMessageWithFollowup(
+        "No files here",
+        "to_client",
+        keypair.clientPublic,
+        "fu-no-att",
+      );
+
+      const msg2 = makeMessageWithFollowup(
+        "This one has files",
+        "to_client",
+        keypair.clientPublic,
+        "fu-has-att",
+      );
+
+      const att = makeAttachment("fu-has-att", keypair.clientPublic, {
+        contentType: "application/pdf",
+        filename: "doc.pdf",
+      });
+
+      const { container } = render(PortalThread, {
+        props: {
+          messages: [msg1, msg2],
+          clientPrivate: keypair.clientPrivate,
+          loading: false,
+          attachments: [att],
+          ticketId: "ticket-group-1",
+        },
+      });
+
+      // Only one message should have the attachments area
+      const areas = container.querySelectorAll(
+        "[data-testid='portal-attachments']",
+      );
+      expect(areas.length).toBe(1);
+    });
+
+    it("shows error placeholder when attachment decrypt fails", () => {
+      const keypair = derivePortalKeypair(generatePortalSeed());
+      // Create a different keypair to simulate wrong key
+      const wrongKeypair = derivePortalKeypair(generatePortalSeed());
+      const followupId = "fu-bad-att";
+
+      const msg = makeMessageWithFollowup(
+        "Bad attachment",
+        "to_client",
+        keypair.clientPublic,
+        followupId,
+      );
+
+      // Encrypt attachment with wrong keypair so decrypt fails
+      const att = makeAttachment(followupId, wrongKeypair.clientPublic, {
+        contentType: "application/pdf",
+        filename: "secret.pdf",
+      });
+
+      const { container } = render(PortalThread, {
+        props: {
+          messages: [msg],
+          clientPrivate: keypair.clientPrivate,
+          loading: false,
+          attachments: [att],
+          ticketId: "ticket-bad-1",
+        },
+      });
+
+      // The error placeholder should render, not the chip
+      const errorEl = container.querySelector(".att-error");
+      expect(errorEl).not.toBeNull();
+    });
   });
 });

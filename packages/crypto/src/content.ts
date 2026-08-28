@@ -44,6 +44,7 @@ const CONTENT_AAD_DOMAIN = encodeLabel("care-y-content-aad-v1");
  *   `followup:<followupId>`     follow-up content
  *   `blob:<rowId>`              attachment / recording binary (row id)
  *   `filename:<attachmentId>`   attachment filename
+ *   `filekey:<attachmentId>`    wrap of a per-file key (row id)
  *   `cursor:<userId>`           per-user read cursor payload
  *   `field:<name>`              any other named ticket field
  *
@@ -96,6 +97,18 @@ export function blobSlot(blobRowId: string): string {
 /** Slot for an attachment's encrypted filename, bound to the row id. */
 export function filenameSlot(attachmentId: string): string {
   return `filename:${attachmentId}`;
+}
+
+/**
+ * Slot for the wrap of a file key, bound to the attachments row id.
+ *
+ * A portal-tier attachment is encrypted under a key of its own and that
+ * key is wrapped for each reader (ADR-089). The wrap gets a slot distinct
+ * from `blob:` so a wrap and the blob it opens can never be swapped for
+ * one another under the same ticket.
+ */
+export function fileKeySlot(attachmentId: string): string {
+  return `filekey:${attachmentId}`;
 }
 
 /** Slot for a per-user read cursor payload. */

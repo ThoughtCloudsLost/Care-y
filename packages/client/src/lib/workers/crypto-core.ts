@@ -42,6 +42,9 @@ import {
   followupSlot,
   blobSlot,
   fieldSlot,
+  fileKeySlot,
+  filenameSlot,
+  encodeFileKeyPayload,
   encode,
   decode,
   hkdfDerive32,
@@ -62,8 +65,11 @@ import type {
   DecryptContentRequest,
   DecryptAndRewrapRequest,
   RewrapBlobRequest,
+  RewrapFileKeyRequest,
   DecryptBlobRequest,
   EncryptContentRequest,
+  EncryptAttachmentRequest,
+  DecryptAttachmentRequest,
   EvictTkRequest,
   UnwrapOrgKeyRequest,
   UnwrapTkRequest,
@@ -697,6 +703,79 @@ function handleRewrapBlob(req: RewrapBlobRequest, sink: Sink): void {
   }
 }
 
+/**
+ * Converge one attachment's file key from tk_temp to the canonical tk.
+ *
+ * The blob stays exactly as it was written. Only the wrap moves, because
+ * the file is encrypted under its own key and that key is what tk_temp
+ * holds (ADR-089). The AAD binds the attachments row id under the
+ * `filekey:` slot at both ends, so a wrap cannot be re-pointed at another
+ * attachment on the way through.
+ */
+function handleRewrapFileKey(req: RewrapFileKeyRequest, sink: Sink): void {
+  if (!requireKeyed(sink, req.id, "rewrapFileKey")) return;
+
+  const sodium = requireSodium();
+  const tkTemp = rewrapTkTempCache.get(req.followUpId);
+  if (!tkTemp) {
+    postError(
+      sink,
+      req.id,
+      "rewrapFileKey",
+      `No cached tk_temp for follow-up ${req.followUpId}`,
+      "TK_NOT_CACHED",
+    );
+    return;
+  }
+
+  const canonicalTk = tkCache.get(req.ticketId);
+  if (!canonicalTk) {
+    postError(
+      sink,
+      req.id,
+      "rewrapFileKey",
+      `No cached tk for ticket ${req.ticketId}`,
+      "TK_NOT_CACHED",
+    );
+    return;
+  }
+
+  const aad = buildContentAad(req.ticketId, fileKeySlot(req.attachmentId));
+
+  try {
+    const fileKey = decryptContent(
+      decode(req.fileKeyWrap) as Ciphertext,
+      tkTemp as SymmetricKey,
+      aad,
+    );
+    try {
+      const rewrapped = encryptContent(
+        fileKey,
+        canonicalTk as SymmetricKey,
+        aad,
+      );
+      const msg: WorkerResponse = {
+        id: req.id,
+        ok: true,
+        type: "rewrapFileKey",
+        attachmentId: req.attachmentId,
+        fileKeyWrap: encode(rewrapped),
+      };
+      sink(msg);
+    } finally {
+      sodium.memzero(fileKey);
+    }
+  } catch (err: unknown) {
+    postError(
+      sink,
+      req.id,
+      "rewrapFileKey",
+      err instanceof Error ? err.message : String(err),
+      "REWRAP_FAILED",
+    );
+  }
+}
+
 export function handleRewrapResult(event: RewrapResultEvent): void {
   pendingRewraps.delete(event.followUpId);
   const tkTemp = rewrapTkTempCache.get(event.followUpId);
@@ -782,6 +861,185 @@ function handleEncryptContent(req: EncryptContentRequest, sink: Sink): void {
       err instanceof Error ? err.message : String(err),
       "ENCRYPT_FAILED",
     );
+  }
+}
+
+// ── Attachment envelope handlers (ADR-089) ────────────────────────
+
+/**
+ * Resolves a tk for attachment operations that use the keyCacheId /
+ * ticketId convention rather than a full key-wrap request shape. Falls
+ * back to the tk cache if keyCacheId is present, otherwise uses ticketId.
+ */
+function resolveTkForAttachment(
+  ticketId: string,
+  keyCacheId: string | undefined,
+  sink: Sink,
+  id: number,
+  type: WorkerRequestType,
+): Uint8Array | null {
+  const cacheId = keyCacheId ?? ticketId;
+  const cached = tkCache.get(cacheId);
+  if (cached) return cached;
+
+  postError(
+    sink,
+    id,
+    type,
+    `No cached tk for ticket ${cacheId}`,
+    "TK_NOT_CACHED",
+  );
+  return null;
+}
+
+function handleEncryptAttachment(
+  req: EncryptAttachmentRequest,
+  sink: Sink,
+): void {
+  if (!requireKeyed(sink, req.id, "encryptAttachment")) return;
+
+  const sodium = requireSodium();
+  const tk = resolveTkForAttachment(
+    req.ticketId,
+    req.keyCacheId,
+    sink,
+    req.id,
+    "encryptAttachment",
+  );
+  if (!tk) return;
+
+  const fileKey = generateContentKey();
+  const plaintextBuf = new Uint8Array(req.data);
+
+  try {
+    // Encrypt the blob under the file key with blob-slot AAD
+    const blobCt = encryptContent(
+      plaintextBuf,
+      fileKey,
+      buildContentAad(req.ticketId, blobSlot(req.attachmentId)),
+    );
+
+    // Wrap the file key under tk with filekey-slot AAD (raw key, not payload;
+    // the org already has the filename in attachments.encrypted_filename)
+    const fileKeyWrapCt = encryptContent(
+      fileKey,
+      tk as SymmetricKey,
+      buildContentAad(req.ticketId, fileKeySlot(req.attachmentId)),
+    );
+
+    // Encrypt the filename under tk with filename-slot AAD
+    const filenameBuf = textEncoder.encode(req.filename);
+    const encryptedFilenameCt = encryptContent(
+      filenameBuf,
+      tk as SymmetricKey,
+      buildContentAad(req.ticketId, filenameSlot(req.attachmentId)),
+    );
+
+    // Build the portal copy when a client public key is provided
+    let portalCopy:
+      { ephemeralPoint: string; nonce: string; ciphertext: string } | undefined;
+    if (req.clientPublic !== undefined && req.clientPublic !== "") {
+      const clientPub = decode(req.clientPublic);
+      const payload = encodeFileKeyPayload(fileKey, req.filename);
+      try {
+        const wrap = eciesEncrypt(payload, clientPub as RistrettoPoint);
+        portalCopy = {
+          ephemeralPoint: encode(wrap.ephemeralPoint),
+          nonce: encode(wrap.nonce),
+          ciphertext: encode(wrap.ciphertext),
+        };
+      } finally {
+        sodium.memzero(payload);
+      }
+    }
+
+    // Copy blob ciphertext into a transferable ArrayBuffer
+    const blobAb = new ArrayBuffer(blobCt.byteLength);
+    new Uint8Array(blobAb).set(blobCt);
+
+    const msg: WorkerResponse = {
+      id: req.id,
+      ok: true,
+      type: "encryptAttachment",
+      blob: blobAb,
+      fileKeyWrap: encode(fileKeyWrapCt),
+      encryptedFilename: encode(encryptedFilenameCt),
+      portalCopy,
+    };
+    sink(msg, [blobAb]);
+  } catch (err: unknown) {
+    postError(
+      sink,
+      req.id,
+      "encryptAttachment",
+      err instanceof Error ? err.message : String(err),
+      "ENCRYPT_FAILED",
+    );
+  } finally {
+    sodium.memzero(fileKey);
+    sodium.memzero(plaintextBuf);
+  }
+}
+
+function handleDecryptAttachment(
+  req: DecryptAttachmentRequest,
+  sink: Sink,
+): void {
+  if (!requireKeyed(sink, req.id, "decryptAttachment")) return;
+
+  const sodium = requireSodium();
+  const tk = resolveTkForAttachment(
+    req.ticketId,
+    req.keyCacheId,
+    sink,
+    req.id,
+    "decryptAttachment",
+  );
+  if (!tk) return;
+
+  let fileKey: Uint8Array | null = null;
+  const ciphertextBuf = new Uint8Array(req.ciphertext);
+
+  try {
+    // Unwrap the file key from tk (raw key, not the JSON payload; the org's
+    // wrap holds the key alone because the filename is in the attachments
+    // row and does not need to travel with the key)
+    const fileKeyWrapBuf = decode(req.fileKeyWrap);
+    fileKey = decryptContent(
+      fileKeyWrapBuf as Ciphertext,
+      tk as SymmetricKey,
+      buildContentAad(req.ticketId, fileKeySlot(req.attachmentId)),
+    );
+
+    // Decrypt the blob under the file key
+    const plainBytes = decryptContent(
+      ciphertextBuf as Ciphertext,
+      fileKey as SymmetricKey,
+      buildContentAad(req.ticketId, blobSlot(req.attachmentId)),
+    );
+
+    const abuf = new ArrayBuffer(plainBytes.byteLength);
+    new Uint8Array(abuf).set(plainBytes);
+    sodium.memzero(plainBytes);
+
+    const msg: WorkerResponse = {
+      id: req.id,
+      ok: true,
+      type: "decryptAttachment",
+      data: abuf,
+    };
+    sink(msg, [abuf]);
+  } catch (err: unknown) {
+    postError(
+      sink,
+      req.id,
+      "decryptAttachment",
+      err instanceof Error ? err.message : String(err),
+      "DECRYPT_FAILED",
+    );
+  } finally {
+    if (fileKey) sodium.memzero(fileKey);
+    sodium.memzero(ciphertextBuf);
   }
 }
 
@@ -1887,11 +2145,20 @@ export function createDispatcher(
         case "rewrapBlob":
           handleRewrapBlob(req, sink);
           break;
+        case "rewrapFileKey":
+          handleRewrapFileKey(req, sink);
+          break;
         case "encryptContent":
           handleEncryptContent(req, sink);
           break;
+        case "encryptAttachment":
+          handleEncryptAttachment(req, sink);
+          break;
         case "decryptBlob":
           handleDecryptBlob(req, sink);
+          break;
+        case "decryptAttachment":
+          handleDecryptAttachment(req, sink);
           break;
         case "evictTk":
           handleEvictTk(req, sink);

@@ -421,6 +421,36 @@ export class CryptoBridge {
   }
 
   /**
+   * Converge one attachment's file key from tk_temp to the canonical tk.
+   *
+   * Nothing is downloaded and nothing is re-uploaded: the file stays as it
+   * was written and only its 32-byte key moves (ADR-089). Attachments with
+   * no file key wrap, the ones MMS ingest writes, go through rewrapBlob
+   * instead.
+   */
+  async rewrapFileKey(
+    followUpId: string,
+    ticketId: string,
+    attachmentId: string,
+    fileKeyWrap: string,
+  ): Promise<{ attachmentId: string; fileKeyWrap: string }> {
+    const resp = expectResponse(
+      await this.sendRequest({
+        type: "rewrapFileKey",
+        followUpId,
+        ticketId,
+        attachmentId,
+        fileKeyWrap,
+      }),
+      "rewrapFileKey",
+    );
+    return {
+      attachmentId: resp.attachmentId,
+      fileKeyWrap: resp.fileKeyWrap,
+    };
+  }
+
+  /**
    * Encrypt plaintext with the cached tk for this ticket.
    * Returns base64 ciphertext. The tk must have been cached by a prior decrypt.
    */
@@ -469,6 +499,81 @@ export class CryptoBridge {
         [ciphertext],
       ),
       "decryptBlob",
+    );
+    return resp.data;
+  }
+
+  /**
+   * Encrypt a file attachment under a fresh file key (ADR-089). Returns
+   * the blob ciphertext, the file key wrap (under tk), the encrypted
+   * filename, and optionally a portal copy sealed to clientPublic.
+   *
+   * The data ArrayBuffer is transferred to the Worker and neutered on
+   * the main thread.
+   */
+  async encryptAttachment(
+    ticketId: string,
+    attachmentId: string,
+    filename: string,
+    data: ArrayBuffer,
+    clientPublic?: string,
+  ): Promise<{
+    blob: ArrayBuffer;
+    fileKeyWrap: string;
+    encryptedFilename: string;
+    portalCopy?: {
+      ephemeralPoint: string;
+      nonce: string;
+      ciphertext: string;
+    };
+  }> {
+    const resp = expectResponse(
+      await this.sendRequest(
+        {
+          type: "encryptAttachment",
+          ticketId,
+          attachmentId,
+          filename,
+          data,
+          clientPublic,
+        },
+        [data],
+      ),
+      "encryptAttachment",
+    );
+    return {
+      blob: resp.blob,
+      fileKeyWrap: resp.fileKeyWrap,
+      encryptedFilename: resp.encryptedFilename,
+      portalCopy: resp.portalCopy,
+    };
+  }
+
+  /**
+   * Decrypt a file attachment using a wrapped file key (ADR-089). Returns
+   * the decrypted file bytes as an ArrayBuffer (transferred from Worker).
+   *
+   * The ciphertext ArrayBuffer is transferred to the Worker and neutered
+   * on the main thread.
+   */
+  async decryptAttachment(
+    ticketId: string,
+    attachmentId: string,
+    fileKeyWrap: string,
+    ciphertext: ArrayBuffer,
+  ): Promise<ArrayBuffer> {
+    const resp = expectResponse(
+      await this.sendRequest(
+        {
+          type: "decryptAttachment",
+          ticketId,
+          attachmentId,
+          fileKeyWrap,
+          ciphertext,
+        },
+        [ciphertext],
+      ),
+      "decryptAttachment",
     );
     return resp.data;
   }

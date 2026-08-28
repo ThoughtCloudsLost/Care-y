@@ -103,7 +103,7 @@
     async function processRewrapEvent(event: RewrapEvent): Promise<void> {
       let success = false;
       try {
-        const blobUpdates = await rewrapBlobsForFollowUp(
+        const { blobUpdates, fileKeyUpdates } = await rewrapBlobsForFollowUp(
           event.ticketId,
           event.followUpId,
           bridge,
@@ -114,7 +114,9 @@
         await ticketRouter.rewrapFollowUp.mutate({
           followUpId: event.followUpId,
           encryptedContent: event.encryptedContent,
-          blobUpdates: blobUpdates.length > 0 ? blobUpdates : undefined,
+          blobUpdates: blobUpdates.length > 0 ? [...blobUpdates] : undefined,
+          fileKeyUpdates:
+            fileKeyUpdates.length > 0 ? [...fileKeyUpdates] : undefined,
         });
         success = true;
         void queryClient.invalidateQueries({

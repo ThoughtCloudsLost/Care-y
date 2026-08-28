@@ -39,6 +39,7 @@ import type {
   KeyGeneration,
   ClientAccountId,
   PortalMessageId,
+  AttachmentId,
 } from "@care-y/shared";
 import { ticketIdSchema } from "@care-y/shared";
 import type { ChannelSecret } from "@care-y/shared";
@@ -58,7 +59,9 @@ import type {
   PortalReplyServiceInput,
   PortalMessageServiceDeps,
   PortalMessageListResult,
+  ReplyAttachmentInput,
 } from "../portal/portal-message-service.js";
+import type { BlobStore } from "../storage/store.js";
 import type {
   AccountServiceDeps,
   AccountRegistrationInput,
@@ -71,6 +74,10 @@ import {
   StaleThreadError,
 } from "../portal/portal-errors.js";
 import { hashChannelAuth } from "@care-y/crypto";
+import {
+  CLIENT_SESSION_COOKIE,
+  parseClientCookies,
+} from "../portal/portal-blob-auth.js";
 import {
   createIntakeTicket,
   IntakeQueueNotConfiguredError,
@@ -98,6 +105,12 @@ import {
  * the same defect one level down from `OptionalRouterDeps` in `router.ts`.
  */
 export interface ClientPortalRouterDeps {
+  /**
+   * Blob storage for portal attachments. Not nullable like the tier deps
+   * below: a portal that cannot store a file still has to say so at the
+   * request, and an omitted store would make that a silent no-op.
+   */
+  readonly blobStore: BlobStore;
   readonly submissionLimiter: RateLimiter;
   readonly challengeLimiter: RateLimiter;
   readonly powVerifier: PowVerifier | null;
@@ -941,7 +954,9 @@ export function createClientPortalRouter(deps: ClientPortalRouterDeps) {
 // Constants
 // ---------------------------------------------------------------------------
 
-const CLIENT_SESSION_COOKIE = "care_y_client_session";
+// Cookie name and parser live beside the portal blob auth that also needs
+// them. One definition, so the download path and the tRPC path can never
+// disagree about which cookie carries a client session.
 
 /** The ONE generic error message for unknown, revoked, or bad-auth channels.
  *  All three paths return this identical shape (enumeration resistance). */
@@ -967,31 +982,6 @@ const accountReplyInputSchema = portalReplyInputSchema.omit({
 // SESSION_COOKIE_NAME from auth/service.js, which pulls volunteer
 // session code transitively, violating the isolation anti-pattern)
 // ---------------------------------------------------------------------------
-
-/**
- * Parses a raw Cookie header string into a Map of name-value pairs.
- * Local duplicate of auth/cookies.ts parseCookies to avoid importing
- * volunteer session code.
- */
-function parseClientCookies(
-  header: string | null | undefined,
-): Map<string, string> {
-  const cookies = new Map<string, string>();
-  if (header == null || header === "") return cookies;
-
-  for (const pair of header.split(";")) {
-    const eqIndex = pair.indexOf("=");
-    if (eqIndex === -1) continue;
-
-    const name = pair.slice(0, eqIndex).trim();
-    const value = pair.slice(eqIndex + 1).trim();
-    if (name) {
-      cookies.set(name, value);
-    }
-  }
-
-  return cookies;
-}
 
 /**
  * Builds a Set-Cookie header for the client session cookie.
@@ -1187,6 +1177,15 @@ function decodeReplyInput(input: {
     ciphertext: string;
   };
   kind?: "message" | "contact_correction";
+  attachments?: readonly {
+    attachmentId: AttachmentId;
+    blob: string;
+    sizeBytes: number;
+    contentType: string;
+    fileKeyWrap: string;
+    encryptedFilename: string;
+    selfCopy: { ephemeralPoint: string; nonce: string; ciphertext: string };
+  }[];
 }): PortalReplyServiceInput {
   return {
     ticketId: input.ticketId,
@@ -1200,6 +1199,10 @@ function decodeReplyInput(input: {
       ciphertext: Buffer.from(input.selfCopy.ciphertext, "base64"),
     },
     kind: input.kind,
+    attachments: decodeReplyAttachments(
+      input.ticketId,
+      input.attachments ?? [],
+    ),
   };
 }
 
@@ -1231,7 +1234,42 @@ function buildPortalMessageDeps(
     orgId: ctx.org.orgId,
     orgSchema: ctx.org.orgSchema,
     orgSlug: ctx.org.orgSlug,
+    blobStore: deps.blobStore,
   };
+}
+
+/**
+ * Decode the files riding a reply into service inputs.
+ *
+ * The self copy travels with its own attachment rather than in a second
+ * list, so the pairing cannot drift on the way through the route.
+ */
+function decodeReplyAttachments(
+  ticketId: TicketId,
+  attachments: readonly {
+    attachmentId: AttachmentId;
+    blob: string;
+    sizeBytes: number;
+    contentType: string;
+    fileKeyWrap: string;
+    encryptedFilename: string;
+    selfCopy: { ephemeralPoint: string; nonce: string; ciphertext: string };
+  }[],
+): ReplyAttachmentInput[] {
+  return attachments.map((att) => ({
+    attachmentId: att.attachmentId,
+    ticketId,
+    blob: Buffer.from(att.blob, "base64"),
+    declaredSize: att.sizeBytes,
+    contentType: att.contentType,
+    fileKeyWrap: Buffer.from(att.fileKeyWrap, "base64"),
+    encryptedFilename: Buffer.from(att.encryptedFilename, "base64"),
+    selfCopy: {
+      ephemeralPoint: Buffer.from(att.selfCopy.ephemeralPoint, "base64"),
+      nonce: Buffer.from(att.selfCopy.nonce, "base64"),
+      ciphertext: Buffer.from(att.selfCopy.ciphertext, "base64"),
+    },
+  }));
 }
 
 /** Decode account registration from wire base64 to Buffers. */

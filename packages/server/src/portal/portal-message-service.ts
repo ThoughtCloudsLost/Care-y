@@ -20,6 +20,7 @@ import type { TelephonyProvider } from "../telephony/provider.js";
 import type { CallerIdResolver } from "../telephony/phone-resolver.js";
 import type { FieldEncryptor } from "../crypto/field-encryptor.js";
 import type { NotificationService } from "../notifications/service.js";
+import type { BlobStore } from "../storage/store.js";
 import { enqueueNotification } from "../notifications/outbox.js";
 import { reopenClosedTicket } from "../tickets/ticket-reopen.js";
 import { portal_nudge_sms_body } from "@care-y/shared/paraglide/messages.js";
@@ -39,6 +40,16 @@ import type {
   OrgSlug,
   PortalMessageId,
 } from "@care-y/shared";
+import {
+  prepareAttachment,
+  insertAttachmentRow,
+  insertClientWrap,
+  listChannelAttachments,
+  purgeChannelAttachments,
+  type AttachmentInput,
+  type PortalAttachmentWire,
+  type PreparedAttachment,
+} from "./portal-attachment-service.js";
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -65,10 +76,26 @@ export interface PortalReplyServiceInput {
   readonly selfCopy: EciesTripleBuffers;
   /** Followup type: "message" (default) or "contact_correction". */
   readonly kind?: "message" | "contact_correction";
+  /** Attachments riding the reply, each already encrypted under its own file key. */
+  readonly attachments?: readonly ReplyAttachmentInput[];
+}
+
+/**
+ * One attachment on a client reply, with the wrap that keeps it readable
+ * to the sender.
+ *
+ * The self copy sits on the attachment rather than in a second array
+ * beside it. Two arrays walked by index can fall out of step, and the
+ * failure is quiet. The file is stored, the wrap is missing, and the
+ * person who sent it finds a file they cannot open with nothing logged.
+ */
+export interface ReplyAttachmentInput extends AttachmentInput {
+  readonly selfCopy: EciesTripleBuffers;
 }
 
 export interface PortalMessageWire {
   readonly id: string;
+  readonly followupId: string;
   readonly direction: string;
   readonly ephemeralPoint: string;
   readonly nonce: string;
@@ -86,6 +113,7 @@ export interface PortalBootstrapResult {
   };
   readonly ticketId: TicketId | null;
   readonly messages: readonly PortalMessageWire[];
+  readonly attachments: readonly PortalAttachmentWire[];
   readonly messagesExpireDays: number;
   /** Org-configured quick-exit target; null falls back to the client default. */
   readonly safeExitUrl: string | null;
@@ -98,6 +126,7 @@ export interface PortalMessageServiceDeps {
   readonly resolveCallerIdByPurpose: CallerIdResolver;
   readonly fieldEncryptor: FieldEncryptor;
   readonly notificationService: NotificationService;
+  readonly blobStore: BlobStore;
   readonly orgId: OrgId;
   readonly orgSchema: OrgSchema;
   readonly orgSlug: OrgSlug;
@@ -109,6 +138,7 @@ export interface PortalMessageServiceDeps {
 
 interface PortalMessageRow {
   readonly id: string;
+  readonly followup_id: string;
   readonly direction: string;
   readonly ephemeral_point: Buffer;
   readonly nonce: Buffer;
@@ -121,6 +151,7 @@ interface PortalMessageRow {
 function rowToWire(r: PortalMessageRow): PortalMessageWire {
   return {
     id: r.id,
+    followupId: r.followup_id,
     direction: r.direction,
     ephemeralPoint: encode(new Uint8Array(r.ephemeral_point)),
     nonce: encode(new Uint8Array(r.nonce)),
@@ -139,11 +170,6 @@ export interface PortalMessageListResult {
 // bootstrap
 // ---------------------------------------------------------------------------
 
-/**
- * Stamps last_seen_at, lazily deletes expired client copies, resolves
- * the client's current ticket (open, else most recent; never creates),
- * and returns the channel's portal_messages ordered by created_at.
- */
 /**
  * Mark the channel seen and drop copies past the inactivity boundary.
  *
@@ -167,10 +193,15 @@ async function touchChannel(
   const lastActivity = channel.last_seen_at ?? channel.created_at;
   const boundaryMs = EXPIRY_DAYS * 24 * 60 * 60 * 1000;
   if (Date.now() - lastActivity.getTime() > boundaryMs) {
-    await db
-      .deleteFrom("portal_messages")
-      .where("channel_id", "=", channel.id)
-      .execute();
+    // Drop both message copies and attachment wraps in one transaction
+    // so the expired thread's files stop opening for the client atomically.
+    await db.transaction().execute(async (trx) => {
+      await trx
+        .deleteFrom("portal_messages")
+        .where("channel_id", "=", channel.id)
+        .execute();
+      await purgeChannelAttachments(trx, channel.id);
+    });
   }
 }
 
@@ -197,6 +228,7 @@ export async function bootstrap(
     .selectFrom("portal_messages")
     .select([
       "id",
+      "followup_id",
       "direction",
       "ephemeral_point",
       "nonce",
@@ -209,6 +241,7 @@ export async function bootstrap(
     .execute();
 
   const messages: PortalMessageWire[] = rows.map(rowToWire);
+  const attachments = await listChannelAttachments(db, channel.id);
 
   const orgConfig = await db
     .selectFrom("org_config")
@@ -224,6 +257,7 @@ export async function bootstrap(
     },
     ticketId: ticket?.id ?? null,
     messages,
+    attachments,
     messagesExpireDays: EXPIRY_DAYS,
     safeExitUrl: orgConfig?.portal_safe_exit_url ?? null,
     accountOffer:
@@ -265,54 +299,93 @@ export async function clientReply(
 
   const queueId = ticket.queue_id;
 
-  await db.transaction().execute(async (trx) => {
-    // Reopen closed ticket via the shared helper
-    if (ticket.status === "closed") {
-      await reopenClosedTicket(trx, ticket.id);
-    }
-
-    // Insert follow-up (source: client, type from input or default "message")
-    await trx
-      .insertInto("followups")
-      .values({
-        id: input.followUpId,
-        ticket_id: input.ticketId,
-        source: "client",
-        type: input.kind ?? "message",
-        encrypted_content: input.encryptedContent,
-        created_by: null,
-        key_generation: input.keyGeneration,
-      })
-      .execute();
-
-    // Insert portal_reply_key_wraps row (sealed tk_temp)
-    await trx
-      .insertInto("portal_reply_key_wraps")
-      .values({
-        followup_id: input.followUpId,
-        wrapped_tk: input.wrappedTkTemp,
-      })
-      .execute();
-
-    // Insert from_client self copy in portal_messages
-    await storeClientCopy(
-      trx,
-      channel.id,
-      input.followUpId,
-      input.selfCopy,
-      "from_client",
-    );
-    // Volunteer notification intent, written in the same transaction as
-    // the reply so the two commit together. The drainer resolves
-    // recipients and sends later, so nothing here waits on delivery.
-    await enqueueNotification(trx, {
-      eventType: "followup_added",
-      ticketId: input.ticketId,
-      queueId,
-      formId: null,
-      actorUserId: null,
+  // Prepare attachments BEFORE opening the transaction. The blob store is
+  // external storage (disk / object store) and must not be held inside a
+  // database transaction, the same pattern as kb.ts uploads.
+  const attachmentInputs = input.attachments ?? [];
+  const prepared: {
+    row: PreparedAttachment;
+    selfCopy: EciesTripleBuffers;
+  }[] = [];
+  for (const att of attachmentInputs) {
+    prepared.push({
+      row: await prepareAttachment(deps.blobStore, deps.orgSchema, att),
+      selfCopy: att.selfCopy,
     });
-  });
+  }
+
+  try {
+    await db.transaction().execute(async (trx) => {
+      // Reopen closed ticket via the shared helper
+      if (ticket.status === "closed") {
+        await reopenClosedTicket(trx, ticket.id);
+      }
+
+      // Insert follow-up (source: client, type from input or default "message")
+      await trx
+        .insertInto("followups")
+        .values({
+          id: input.followUpId,
+          ticket_id: input.ticketId,
+          source: "client",
+          type: input.kind ?? "message",
+          encrypted_content: input.encryptedContent,
+          created_by: null,
+          key_generation: input.keyGeneration,
+        })
+        .execute();
+
+      // Insert portal_reply_key_wraps row (sealed tk_temp)
+      await trx
+        .insertInto("portal_reply_key_wraps")
+        .values({
+          followup_id: input.followUpId,
+          wrapped_tk: input.wrappedTkTemp,
+        })
+        .execute();
+
+      // Insert from_client self copy in portal_messages
+      await storeClientCopy(
+        trx,
+        channel.id,
+        input.followUpId,
+        input.selfCopy,
+        "from_client",
+      );
+
+      // Insert attachment rows and client wraps inside the same transaction
+      for (const { row, selfCopy } of prepared) {
+        await insertAttachmentRow(trx, row, input.followUpId);
+        await insertClientWrap(trx, {
+          attachmentId: row.attachmentId,
+          channelRowId: channel.id,
+          followupId: input.followUpId,
+          direction: "from_client",
+          copy: selfCopy,
+        });
+      }
+
+      // Volunteer notification intent, written in the same transaction as
+      // the reply so the two commit together. The drainer resolves
+      // recipients and sends later, so nothing here waits on delivery.
+      await enqueueNotification(trx, {
+        eventType: "followup_added",
+        ticketId: input.ticketId,
+        queueId,
+        formId: null,
+        actorUserId: null,
+      });
+    });
+  } catch (err: unknown) {
+    // Best-effort cleanup: remove orphaned blobs if the DB transaction fails.
+    // Failure here is harmless (orphaned blob on disk, no DB reference).
+    for (const p of prepared) {
+      await deps.blobStore.delete(p.row.blobKey).catch((_: unknown) => {
+        // Intentional: blob orphan is harmless, swallow delete failure
+      });
+    }
+    throw err;
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -375,6 +448,7 @@ export async function listMessages(
     .selectFrom("portal_messages")
     .select([
       "id",
+      "followup_id",
       "direction",
       "ephemeral_point",
       "nonce",

@@ -26,6 +26,7 @@ import type {
   NoteTypeId,
   KeyGeneration,
   CallSid,
+  AttachmentId,
 } from "@care-y/shared";
 import { encode } from "@care-y/crypto";
 import {
@@ -33,6 +34,10 @@ import {
   nudgeClient,
   type PortalMessageServiceDeps,
 } from "../portal/portal-message-service.js";
+import {
+  attachToFollowUp,
+  insertClientWrap,
+} from "../portal/portal-attachment-service.js";
 import type { PortalChannelRow } from "../portal/channel-service.js";
 
 export interface FollowUpKeyWrap {
@@ -93,6 +98,17 @@ export interface CreateFollowUpInput {
   readonly callDurationSeconds?: number;
   /** ECIES copy for the client's active portal channel. */
   readonly portalCopy?: PortalCopyInput;
+  /**
+   * Files already uploaded for this ticket, tied to the follow-up here.
+   *
+   * `portalCopy` on an entry is the file key sealed to the client's public
+   * key (ADR-089). Present, the client can open the file; absent, it stays
+   * readable by the org alone.
+   */
+  readonly attachments?: readonly {
+    readonly attachmentId: AttachmentId;
+    readonly portalCopy?: PortalCopyInput;
+  }[];
 }
 
 /** Lightweight follow-up for timeline rendering. Plain messages omit encryptedContent. */
@@ -464,7 +480,14 @@ export function createFollowUpService(
           // inside the transaction and store the client copy atomically.
           // Kind-agnostic: volunteer reply copies must reach secure_link,
           // intake_continuation, and account channels alike.
-          if (input.portalCopy) {
+          const attachments = input.attachments ?? [];
+          // A message may carry a client copy of its text, of its files, or
+          // of both, and any of the three needs the channel resolved.
+          const wantsClientCopy =
+            input.portalCopy !== undefined ||
+            attachments.some((a) => a.portalCopy !== undefined);
+
+          if (wantsClientCopy) {
             const activeChannel = await trx
               .selectFrom("portal_channels")
               .selectAll()
@@ -474,16 +497,42 @@ export function createFollowUpService(
 
             if (activeChannel) {
               channel = activeChannel;
-              await storeClientCopy(
-                trx,
-                activeChannel.id,
-                input.id,
-                input.portalCopy,
-              );
+              if (input.portalCopy) {
+                await storeClientCopy(
+                  trx,
+                  activeChannel.id,
+                  input.id,
+                  input.portalCopy,
+                );
+              }
             } else {
               // Channel revoked between page load and send; silent drop with warn log.
               // The org copy (follow-up) is the truth.
               console.warn("Portal copy dropped: no active channel for client");
+            }
+          }
+
+          // Tie uploads to this follow-up. An id that matches no pending
+          // upload on this ticket fails the whole write rather than
+          // producing a message that silently lost its file.
+          for (const att of attachments) {
+            const linked = await attachToFollowUp(
+              trx,
+              att.attachmentId,
+              input.ticketId,
+              input.id,
+            );
+            if (!linked) {
+              throw new NotFoundError(ErrorCode.ATTACHMENT_NOT_FOUND);
+            }
+            if (att.portalCopy && channel !== null) {
+              await insertClientWrap(trx, {
+                attachmentId: att.attachmentId,
+                channelRowId: channel.id,
+                followupId: input.id,
+                direction: "to_client",
+                copy: att.portalCopy,
+              });
             }
           }
 

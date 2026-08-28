@@ -43,10 +43,17 @@ import {
   orgSchemaNameSchema,
   orgSlugIdSchema,
   newFollowupId,
+  newAttachmentId,
   newKeyGeneration,
   channelSecretSchema,
 } from "@care-y/shared";
-import type { ClientId, PortalMessageId } from "@care-y/shared";
+import type {
+  ClientId,
+  PortalMessageId,
+  OrgSchema,
+  BlobKey,
+} from "@care-y/shared";
+import type { BlobStore } from "../storage/store.js";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -77,6 +84,30 @@ const TEST_ORG_SCHEMA = orgSchemaNameSchema.parse(
 );
 const TEST_ORG_SLUG = orgSlugIdSchema.parse("test-org");
 
+/** Map-backed in-memory BlobStore for tests. */
+function createMapBlobStore(): BlobStore & {
+  readonly blobs: Map<string, Buffer>;
+} {
+  const blobs = new Map<string, Buffer>();
+  return {
+    blobs,
+    async put(orgSchema: OrgSchema, category: string, blob: Buffer) {
+      const key = `${orgSchema}/${category}/${crypto.randomUUID()}` as BlobKey;
+      blobs.set(key, Buffer.from(blob));
+      return key;
+    },
+    async get(key: string) {
+      return blobs.get(key) ?? null;
+    },
+    async delete(key: string) {
+      blobs.delete(key);
+    },
+    async exists(key: string) {
+      return blobs.has(key);
+    },
+  };
+}
+
 function makeDeps(
   overrides?: Partial<PortalMessageServiceDeps>,
 ): PortalMessageServiceDeps {
@@ -86,6 +117,7 @@ function makeDeps(
     resolveCallerIdByPurpose: vi.fn().mockResolvedValue("+15550001234"),
     fieldEncryptor: noopEncryptor,
     notificationService: createMockNotificationService(),
+    blobStore: createMapBlobStore(),
     orgId: TEST_ORG_ID,
     orgSchema: TEST_ORG_SCHEMA,
     orgSlug: TEST_ORG_SLUG,
@@ -912,6 +944,262 @@ describe.skipIf(!process.env.DATABASE_URL)(
         });
         expect(page.messages.length).toBe(3);
         expect(page.totalCount).toBe(5);
+      });
+    });
+
+    // -----------------------------------------------------------------------
+    // bootstrap attachments
+    // -----------------------------------------------------------------------
+
+    describe("bootstrap attachments", () => {
+      it("includes attachments for the channel in the bootstrap result", async () => {
+        const fixture = await createTestTicketFixture(testDb.db);
+        const channel = await insertChannel(testDb.db, fixture.clientId);
+
+        // Create a follow-up and an attachment with a client wrap
+        const fuId = newFollowupId();
+        await testDb.db
+          .insertInto("followups")
+          .values({
+            id: fuId,
+            ticket_id: fixture.ticketId,
+            source: "client",
+            type: "message",
+            encrypted_content: Buffer.from("ct-att"),
+            key_generation: newKeyGeneration(),
+          })
+          .execute();
+
+        const attId = newAttachmentId();
+        await testDb.db
+          .insertInto("attachments")
+          .values({
+            id: attId,
+            ticket_id: fixture.ticketId,
+            followup_id: fuId,
+            blob_key: "test/attachment/fake-key" as never,
+            size_bytes: 256,
+            content_type: "image/png",
+            encrypted_filename: Buffer.from("enc-fn"),
+            file_key_wrap: Buffer.alloc(72, 0xab),
+          })
+          .execute();
+
+        const triple = fakeTriple();
+        await testDb.db
+          .insertInto("portal_attachments")
+          .values({
+            attachment_id: attId,
+            channel_id: channel.id,
+            followup_id: fuId,
+            direction: "from_client",
+            ephemeral_point: triple.ephemeralPoint,
+            nonce: triple.nonce,
+            ciphertext: triple.ciphertext,
+          })
+          .execute();
+
+        const result = await bootstrap(testDb.db, channel);
+
+        expect(result.attachments.length).toBe(1);
+        expect(result.attachments[0]!.attachmentId).toBe(attId);
+        expect(result.attachments[0]!.sizeBytes).toBe(256);
+        expect(result.attachments[0]!.direction).toBe("from_client");
+      });
+    });
+
+    // -----------------------------------------------------------------------
+    // clientReply with attachments
+    // -----------------------------------------------------------------------
+
+    describe("clientReply with attachments", () => {
+      it("writes attachment rows and client wraps in one transaction", async () => {
+        const fixture = await createTestTicketFixture(testDb.db);
+        const channel = await insertChannel(testDb.db, fixture.clientId);
+        const blobStore = createMapBlobStore();
+        const deps = makeDeps({ blobStore });
+
+        const followUpId = newFollowupId();
+        const attId = newAttachmentId();
+        const attBlob = Buffer.alloc(64, 0xcc);
+
+        const input: PortalReplyServiceInput = {
+          ticketId: fixture.ticketId,
+          followUpId,
+          keyGeneration: newKeyGeneration(),
+          encryptedContent: Buffer.from("msg-with-file"),
+          wrappedTkTemp: Buffer.alloc(80, 0xef),
+          selfCopy: fakeTriple(),
+          attachments: [
+            {
+              attachmentId: attId,
+              ticketId: fixture.ticketId,
+              blob: attBlob,
+              declaredSize: attBlob.byteLength,
+              contentType: "application/pdf",
+              fileKeyWrap: Buffer.alloc(72, 0xab),
+              encryptedFilename: Buffer.from("enc-fn"),
+              selfCopy: fakeTriple(),
+            },
+          ],
+        };
+
+        await clientReply(testDb.db, deps, channel, input);
+
+        // Verify attachment row
+        const attRow = await testDb.db
+          .selectFrom("attachments")
+          .selectAll()
+          .where("id", "=", attId)
+          .executeTakeFirstOrThrow();
+        expect(attRow.followup_id).toBe(followUpId);
+        expect(attRow.file_key_wrap).not.toBeNull();
+
+        // Verify portal_attachments wrap
+        const wrapRow = await testDb.db
+          .selectFrom("portal_attachments")
+          .selectAll()
+          .where("attachment_id", "=", attId)
+          .where("channel_id", "=", channel.id)
+          .executeTakeFirstOrThrow();
+        expect(wrapRow.direction).toBe("from_client");
+        expect(wrapRow.followup_id).toBe(followUpId);
+
+        // Blob stored
+        expect(blobStore.blobs.size).toBe(1);
+      });
+
+      it("cleans up blobs when the transaction fails", async () => {
+        const fixture = await createTestTicketFixture(testDb.db);
+        const channel = await insertChannel(testDb.db, fixture.clientId);
+        const blobStore = createMapBlobStore();
+        const deps = makeDeps({ blobStore });
+
+        // First reply consumes the followUpId
+        const followUpId = newFollowupId();
+        const input1: PortalReplyServiceInput = {
+          ticketId: fixture.ticketId,
+          followUpId,
+          keyGeneration: newKeyGeneration(),
+          encryptedContent: Buffer.from("first"),
+          wrappedTkTemp: Buffer.alloc(80, 0xef),
+          selfCopy: fakeTriple(),
+        };
+        await clientReply(testDb.db, deps, channel, input1);
+
+        // Second reply with the same followUpId forces a PK collision
+        const attBlob = Buffer.alloc(64, 0xdd);
+        const input2: PortalReplyServiceInput = {
+          ticketId: fixture.ticketId,
+          followUpId, // duplicate, causes unique violation
+          keyGeneration: newKeyGeneration(),
+          encryptedContent: Buffer.from("second"),
+          wrappedTkTemp: Buffer.alloc(80, 0xab),
+          selfCopy: fakeTriple(),
+          attachments: [
+            {
+              attachmentId: newAttachmentId(),
+              ticketId: fixture.ticketId,
+              blob: attBlob,
+              declaredSize: attBlob.byteLength,
+              contentType: "image/png",
+              fileKeyWrap: Buffer.alloc(72, 0xab),
+              encryptedFilename: Buffer.from("enc-fn"),
+              selfCopy: fakeTriple(),
+            },
+          ],
+        };
+
+        await expect(
+          clientReply(testDb.db, deps, channel, input2),
+        ).rejects.toThrow();
+
+        // The blob from the second attempt was cleaned up
+        // (only the first reply's blob, if any, should remain)
+        expect(blobStore.blobs.size).toBe(0);
+      });
+    });
+
+    // -----------------------------------------------------------------------
+    // channel expiry drops wraps
+    // -----------------------------------------------------------------------
+
+    describe("channel expiry drops attachment wraps", () => {
+      it("lazily deletes attachment wraps on an expired channel", async () => {
+        const fixture = await createTestTicketFixture(testDb.db);
+        const oldDate = new Date(Date.now() - 31 * 24 * 60 * 60 * 1000);
+        const channel = await insertChannel(testDb.db, fixture.clientId, {
+          last_seen_at: oldDate,
+        });
+
+        // Seed an attachment with a wrap
+        const fuId = newFollowupId();
+        await testDb.db
+          .insertInto("followups")
+          .values({
+            id: fuId,
+            ticket_id: fixture.ticketId,
+            source: "client",
+            type: "message",
+            encrypted_content: Buffer.from("ct"),
+            key_generation: newKeyGeneration(),
+          })
+          .execute();
+
+        const attId = newAttachmentId();
+        await testDb.db
+          .insertInto("attachments")
+          .values({
+            id: attId,
+            ticket_id: fixture.ticketId,
+            followup_id: fuId,
+            blob_key: "test/attachment/exp-key" as never,
+            size_bytes: 100,
+            content_type: "image/png",
+            encrypted_filename: Buffer.from("enc"),
+            file_key_wrap: Buffer.alloc(72, 0xab),
+          })
+          .execute();
+
+        await testDb.db
+          .insertInto("portal_attachments")
+          .values({
+            attachment_id: attId,
+            channel_id: channel.id,
+            followup_id: fuId,
+            direction: "from_client",
+            ephemeral_point: Buffer.alloc(32, 0x01),
+            nonce: Buffer.alloc(24, 0x02),
+            ciphertext: Buffer.from("wrap-ct"),
+          })
+          .execute();
+
+        // Verify wrap exists
+        const before = await testDb.db
+          .selectFrom("portal_attachments")
+          .select("id")
+          .where("channel_id", "=", channel.id)
+          .execute();
+        expect(before.length).toBe(1);
+
+        // Bootstrap triggers touchChannel, which purges for expired channels
+        await bootstrap(testDb.db, channel);
+
+        // Wraps gone
+        const after = await testDb.db
+          .selectFrom("portal_attachments")
+          .select("id")
+          .where("channel_id", "=", channel.id)
+          .execute();
+        expect(after.length).toBe(0);
+
+        // Attachment row itself stays
+        const attRow = await testDb.db
+          .selectFrom("attachments")
+          .select("id")
+          .where("id", "=", attId)
+          .executeTakeFirst();
+        expect(attRow).toBeDefined();
       });
     });
   },

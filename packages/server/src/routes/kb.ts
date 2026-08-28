@@ -29,7 +29,6 @@ import type { BlobStore } from "../storage/store.js";
 import type { RateLimiter } from "../ratelimit/rate-limiter.js";
 import { ValidationError, AttachmentValidationError } from "../errors.js";
 import { TRPCError } from "@trpc/server";
-import { validateMagicBytes } from "../telephony/attachment-validator.js";
 
 const KB_ALLOWED_CONTENT_TYPES: ReadonlySet<string> = new Set([
   "image/jpeg",
@@ -355,10 +354,15 @@ export function createKbRouter(deps: KBRouterDeps) {
             );
           }
 
-          // Magic byte verification (prevents content-type spoofing)
-          if (normalizedType.length > 0) {
-            validateMagicBytes(blobBuffer, normalizedType);
-          }
+          // No magic byte check: the browser seals the file with the org key
+          // before upload (ArticleEditor.svelte), so what arrives here is
+          // ciphertext and carries no file signature. Running the check
+          // rejected every real upload while the suite passed on a fixture
+          // that sent a plaintext PNG header. The declared content type is
+          // the only claim the server can filter, matching what
+          // uploadFormAsset already does with the same constraint. Nothing
+          // renders these bytes as script: the reader decrypts and shows the
+          // result through an <img>, so a spoofed type is a broken image.
 
           // care-y-ignore-next-line route-delegates-to-service -- blobStore.put is infrastructure (wire format), not business logic
           const blobKey = await deps.blobStore.put(

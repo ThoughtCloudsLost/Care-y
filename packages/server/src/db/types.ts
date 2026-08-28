@@ -74,6 +74,7 @@ import type {
   ChannelRowId,
   ChannelSecret,
   PortalMessageId,
+  PortalAttachmentId,
   ShareId,
   ClientAccountId,
   ClientAccountSessionId,
@@ -471,6 +472,12 @@ export interface AttachmentsTable {
   content_type: string | null;
   created_at: Generated<Date>;
   deleted_at: Date | null;
+  /**
+   * The file key encrypted under the follow-up's key. Null means the blob
+   * is encrypted directly under that key instead, the envelope MMS ingest
+   * writes (ADR-089). Readers branch on this rather than on origin.
+   */
+  file_key_wrap: Buffer | null;
 }
 
 export interface TicketDependenciesTable {
@@ -854,6 +861,25 @@ export interface PortalReplyKeyWrapsTable {
   created_at: Generated<Date>;
 }
 
+/**
+ * The client's wrap of a file key, sealed to portal_channels.client_public.
+ *
+ * The ciphertext holds the key and the filename together, so a name never
+ * sits in plaintext beside the file it describes. The file lives once in
+ * the blob store, referenced through attachment_id.
+ */
+export interface PortalAttachmentsTable {
+  id: Generated<PortalAttachmentId>;
+  attachment_id: AttachmentId;
+  channel_id: ChannelRowId;
+  followup_id: FollowupId;
+  direction: string;
+  ephemeral_point: Buffer;
+  nonce: Buffer;
+  ciphertext: Buffer;
+  created_at: Generated<Date>;
+}
+
 // --- Client accounts (encrypted account portal) ---
 
 export interface ClientAccountsTable {
@@ -971,6 +997,7 @@ export interface TenantDatabase {
   // Client portal
   portal_channels: PortalChannelsTable;
   portal_messages: PortalMessagesTable;
+  portal_attachments: PortalAttachmentsTable;
   portal_reply_key_wraps: PortalReplyKeyWrapsTable;
   // Client portal (share links)
   share_links: ShareLinksTable;

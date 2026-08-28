@@ -9,6 +9,7 @@ import {
   createSendMessage,
   type SendMessageConfig,
 } from "./create-send-message.svelte.js";
+import { newAttachmentId, type AttachmentLink } from "@care-y/shared";
 import { CryptoWorkerError } from "$lib/workers/crypto-bridge-errors.js";
 
 // vi.mock required: eciesEncrypt needs initialized libsodium (WASM via the
@@ -280,6 +281,53 @@ describe("createSendMessage", () => {
     await msg.handleSend();
 
     expect(toastStore.show).toHaveBeenCalledWith("encrypt-error", 3000);
+  });
+
+  it("passes attachment links when getAttachmentLinks returns entries", async () => {
+    // Branded rather than bare strings: the blob AAD is built from this
+    // id, so a plain string is a value nothing can decrypt.
+    const attachments: AttachmentLink[] = [
+      { attachmentId: newAttachmentId() },
+      {
+        attachmentId: newAttachmentId(),
+        portalCopy: {
+          ephemeralPoint: "ep2",
+          nonce: "n2",
+          ciphertext: "ct2",
+        },
+      },
+    ];
+    const config = makeConfig({
+      getAttachmentLinks: () => attachments,
+    });
+    const msg = createSendMessage(config);
+    await msg.handleSend();
+
+    expect(config.createFollowUpMutate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        attachments,
+      }),
+    );
+  });
+
+  it("omits attachments field when getAttachmentLinks returns an empty array", async () => {
+    const config = makeConfig({
+      getAttachmentLinks: () => [],
+    });
+    const msg = createSendMessage(config);
+    await msg.handleSend();
+
+    const mutate = config.createFollowUpMutate as ReturnType<typeof vi.fn>;
+    expect(mutate.mock.calls[0]?.[0]?.attachments).toBeUndefined();
+  });
+
+  it("omits attachments field when getAttachmentLinks is not provided", async () => {
+    const config = makeConfig();
+    const msg = createSendMessage(config);
+    await msg.handleSend();
+
+    const mutate = config.createFollowUpMutate as ReturnType<typeof vi.fn>;
+    expect(mutate.mock.calls[0]?.[0]?.attachments).toBeUndefined();
   });
 
   it("toggles sending flag during operation", async () => {

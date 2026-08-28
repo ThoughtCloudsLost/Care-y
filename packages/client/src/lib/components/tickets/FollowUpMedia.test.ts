@@ -1,12 +1,18 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, afterEach } from "vitest";
+import type * as SvelteQuery from "@tanstack/svelte-query";
+import type * as TrpcClient from "$lib/trpc/index.js";
+import type * as CryptoContext from "$lib/crypto/context.js";
 import { render, cleanup } from "@testing-library/svelte";
 import FollowUpMedia from "./FollowUpMedia.svelte";
 
 // Mock TanStack Query - capture the options passed to createQuery
 const createQueryCalls: Array<{ queryKey: string[]; enabled: boolean }> = [];
 
-vi.mock("@tanstack/svelte-query", () => ({
+// vi.mock required: @tanstack/svelte-query uses Svelte context
+// internals that fail outside a real component tree.
+vi.mock("@tanstack/svelte-query", async (importOriginal) => ({
+  ...(await importOriginal<typeof SvelteQuery>()),
   createQuery: (optsFn: () => { queryKey: string[]; enabled: boolean }) => {
     const opts = optsFn();
     createQueryCalls.push({ queryKey: opts.queryKey, enabled: opts.enabled });
@@ -14,7 +20,10 @@ vi.mock("@tanstack/svelte-query", () => ({
   },
 }));
 
-vi.mock("$lib/trpc/index.js", () => ({
+// vi.mock required: tRPC client module creates a live HTTP connection
+// on import via httpBatchLink.
+vi.mock("$lib/trpc/index.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof TrpcClient>()),
   trpc: {
     tickets: {
       listRecordings: { query: vi.fn() },
@@ -23,8 +32,14 @@ vi.mock("$lib/trpc/index.js", () => ({
   },
 }));
 
-vi.mock("$lib/crypto/context.js", () => ({
-  getCryptoBridge: () => ({}),
+// vi.mock required: getCryptoBridge uses Svelte 5 createContext which
+// throws "missing_context" outside a component tree with CryptoProvider.
+vi.mock("$lib/crypto/context.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof CryptoContext>()),
+  getCryptoBridge: () => ({
+    decryptBlob: vi.fn(),
+    decryptAttachment: vi.fn(),
+  }),
 }));
 
 afterEach(() => {

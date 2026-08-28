@@ -30,6 +30,7 @@ export {
   toSymmetricKey,
   toSalt,
   toNonce,
+  toCiphertext,
 } from "./types.js";
 
 // --- Errors ---
@@ -85,12 +86,18 @@ export {
   followupSlot,
   blobSlot,
   filenameSlot,
+  fileKeySlot,
   cursorSlot,
   fieldSlot,
 } from "./content.js";
 
 // --- Blob Encryption ---
 export { encryptBlob, decryptBlob } from "./blob.js";
+export {
+  encodeFileKeyPayload,
+  decodeFileKeyPayload,
+  type FileKeyPayload,
+} from "./attachment.js";
 
 // --- Org Key Wrapping ---
 export { wrapKey, unwrapKey } from "./keywrap.js";

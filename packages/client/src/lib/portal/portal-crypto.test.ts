@@ -10,9 +10,16 @@ import {
   decode,
   buildContentAad,
   followupSlot,
+  blobSlot,
+  fileKeySlot,
+  filenameSlot,
+  decryptContent,
+  toSymmetricKey,
   generateOrgKeypair,
   requireSodium,
   toNonce,
+  type Ciphertext,
+  type SymmetricKey,
 } from "@care-y/crypto";
 import { getSodium } from "@care-y/crypto";
 import {
@@ -22,6 +29,8 @@ import {
   encryptReply,
   createPortalSession,
   decodeEciesTriple,
+  decryptAttachmentKey,
+  decryptAttachmentBlob,
 } from "./portal-crypto.js";
 
 beforeAll(async () => {
@@ -244,5 +253,278 @@ describe("decodeEciesTriple", () => {
     expect(decoded.ephemeralPoint).toEqual(bytes);
     expect(decoded.nonce).toEqual(nonce);
     expect(decoded.ciphertext).toEqual(ct);
+  });
+});
+
+describe("reply attachments", () => {
+  function setup(): {
+    keypair: ReturnType<typeof derivePortalKeypair>;
+    orgKeypair: ReturnType<typeof generateOrgKeypair>;
+    ids: { ticketId: string; followUpId: string; keyGeneration: string };
+    file: Uint8Array;
+    attachmentId: string;
+  } {
+    const seed = generatePortalSeed();
+    return {
+      keypair: derivePortalKeypair(seed),
+      orgKeypair: generateOrgKeypair(),
+      ids: {
+        ticketId: crypto.randomUUID(),
+        followUpId: crypto.randomUUID(),
+        keyGeneration: crypto.randomUUID(),
+      },
+      file: new Uint8Array([0x25, 0x50, 0x44, 0x46, 1, 2, 3, 4, 5]),
+      attachmentId: crypto.randomUUID(),
+    };
+  }
+
+  function unsealTkTemp(
+    payload: { wrappedTkTemp: string },
+    orgKeypair: ReturnType<typeof generateOrgKeypair>,
+  ): SymmetricKey {
+    return toSymmetricKey(
+      requireSodium().crypto_box_seal_open(
+        decode(payload.wrappedTkTemp),
+        orgKeypair.publicKey,
+        orgKeypair.secretKey,
+      ),
+    );
+  }
+
+  it("carries no attachments when none are sent", () => {
+    const { keypair, orgKeypair, ids } = setup();
+    const payload = encryptReply(
+      "text only",
+      orgKeypair.publicKey,
+      keypair.clientPublic,
+      ids,
+    );
+
+    expect(payload.attachments).toEqual([]);
+  });
+
+  it("lets the org open the file through the reply's tk_temp", () => {
+    const { keypair, orgKeypair, ids, file, attachmentId } = setup();
+
+    const payload = encryptReply(
+      "here is the document",
+      orgKeypair.publicKey,
+      keypair.clientPublic,
+      ids,
+      [
+        {
+          attachmentId,
+          filename: "letter.pdf",
+          contentType: "application/pdf",
+          data: file,
+        },
+      ],
+    );
+
+    const att = payload.attachments[0]!;
+    const tkTemp = unsealTkTemp(payload, orgKeypair);
+
+    // The org unwraps the file key with the same tk_temp the message text
+    // uses, which is the whole point of the files riding the reply.
+    const fileKey = toSymmetricKey(
+      decryptContent(
+        decode(att.fileKeyWrap) as Ciphertext,
+        tkTemp,
+        buildContentAad(ids.ticketId, fileKeySlot(attachmentId)),
+      ),
+    );
+    const opened = decryptContent(
+      decode(att.blob) as Ciphertext,
+      fileKey,
+      buildContentAad(ids.ticketId, blobSlot(attachmentId)),
+    );
+
+    expect(opened).toEqual(file);
+  });
+
+  it("gives the org the filename under the same key", () => {
+    const { keypair, orgKeypair, ids, file, attachmentId } = setup();
+    const payload = encryptReply(
+      "doc",
+      orgKeypair.publicKey,
+      keypair.clientPublic,
+      ids,
+      [
+        {
+          attachmentId,
+          filename: "eviction notice.pdf",
+          contentType: "application/pdf",
+          data: file,
+        },
+      ],
+    );
+
+    const att = payload.attachments[0]!;
+    const name = decryptContent(
+      decode(att.encryptedFilename) as Ciphertext,
+      unsealTkTemp(payload, orgKeypair),
+      buildContentAad(ids.ticketId, filenameSlot(attachmentId)),
+    );
+
+    expect(new TextDecoder().decode(name)).toBe("eviction notice.pdf");
+  });
+
+  it("lets the sender reopen their own file after tk_temp is gone", () => {
+    const { keypair, orgKeypair, ids, file, attachmentId } = setup();
+    const payload = encryptReply(
+      "doc",
+      orgKeypair.publicKey,
+      keypair.clientPublic,
+      ids,
+      [
+        {
+          attachmentId,
+          filename: "letter.pdf",
+          contentType: "application/pdf",
+          data: file,
+        },
+      ],
+    );
+
+    const att = payload.attachments[0]!;
+    const { fileKey, filename } = decryptAttachmentKey(
+      decodeEciesTriple(att.selfCopy),
+      keypair.clientPrivate,
+    );
+
+    expect(filename).toBe("letter.pdf");
+    expect(
+      decryptAttachmentBlob(
+        decode(att.blob),
+        fileKey,
+        ids.ticketId,
+        attachmentId,
+      ),
+    ).toEqual(file);
+  });
+
+  it("reports the ciphertext size, which is what the server measures", () => {
+    const { keypair, orgKeypair, ids, file, attachmentId } = setup();
+    const payload = encryptReply(
+      "doc",
+      orgKeypair.publicKey,
+      keypair.clientPublic,
+      ids,
+      [
+        {
+          attachmentId,
+          filename: "f.pdf",
+          contentType: "application/pdf",
+          data: file,
+        },
+      ],
+    );
+
+    const att = payload.attachments[0]!;
+    expect(att.sizeBytes).toBe(decode(att.blob).length);
+    // Nonce and tag: a declared plaintext size would fail the server check.
+    expect(att.sizeBytes).toBe(file.length + 40);
+  });
+
+  it("will not open a file under another attachment's id", () => {
+    const { keypair, orgKeypair, ids, file, attachmentId } = setup();
+    const payload = encryptReply(
+      "doc",
+      orgKeypair.publicKey,
+      keypair.clientPublic,
+      ids,
+      [
+        {
+          attachmentId,
+          filename: "f.pdf",
+          contentType: "application/pdf",
+          data: file,
+        },
+      ],
+    );
+
+    const att = payload.attachments[0]!;
+    const { fileKey } = decryptAttachmentKey(
+      decodeEciesTriple(att.selfCopy),
+      keypair.clientPrivate,
+    );
+
+    expect(() =>
+      decryptAttachmentBlob(
+        decode(att.blob),
+        fileKey,
+        ids.ticketId,
+        crypto.randomUUID(),
+      ),
+    ).toThrow();
+  });
+
+  it("will not open a tampered file", () => {
+    const { keypair, orgKeypair, ids, file, attachmentId } = setup();
+    const payload = encryptReply(
+      "doc",
+      orgKeypair.publicKey,
+      keypair.clientPublic,
+      ids,
+      [
+        {
+          attachmentId,
+          filename: "f.pdf",
+          contentType: "application/pdf",
+          data: file,
+        },
+      ],
+    );
+
+    const att = payload.attachments[0]!;
+    const { fileKey } = decryptAttachmentKey(
+      decodeEciesTriple(att.selfCopy),
+      keypair.clientPrivate,
+    );
+    const tampered = decode(att.blob);
+    const last = tampered.length - 1;
+    tampered[last] = (tampered[last] ?? 0) ^ 0xff;
+
+    expect(() =>
+      decryptAttachmentBlob(tampered, fileKey, ids.ticketId, attachmentId),
+    ).toThrow();
+  });
+
+  it("gives every file on one message its own key", () => {
+    const { keypair, orgKeypair, ids, file } = setup();
+    const first = crypto.randomUUID();
+    const second = crypto.randomUUID();
+
+    const payload = encryptReply(
+      "two files",
+      orgKeypair.publicKey,
+      keypair.clientPublic,
+      ids,
+      [
+        {
+          attachmentId: first,
+          filename: "a.pdf",
+          contentType: "application/pdf",
+          data: file,
+        },
+        {
+          attachmentId: second,
+          filename: "b.pdf",
+          contentType: "application/pdf",
+          data: file,
+        },
+      ],
+    );
+
+    const keys = payload.attachments.map(
+      (att) =>
+        decryptAttachmentKey(
+          decodeEciesTriple(att.selfCopy),
+          keypair.clientPrivate,
+        ).fileKey,
+    );
+
+    expect(payload.attachments).toHaveLength(2);
+    expect(encode(keys[0]!)).not.toBe(encode(keys[1]!));
   });
 });

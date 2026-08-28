@@ -9,6 +9,7 @@ import {
   followupSlot,
   blobSlot,
   filenameSlot,
+  fileKeySlot,
   cursorSlot,
   fieldSlot,
 } from "./content.js";
@@ -77,8 +78,17 @@ describe("content encryption", () => {
       expect(followupSlot("fu-1")).toBe("followup:fu-1");
       expect(blobSlot("att-1")).toBe("blob:att-1");
       expect(filenameSlot("att-1")).toBe("filename:att-1");
+      expect(fileKeySlot("att-1")).toBe("filekey:att-1");
       expect(cursorSlot("u-1")).toBe("cursor:u-1");
       expect(fieldSlot("summary")).toBe("field:summary");
+    });
+
+    it("separates a file key wrap from the blob it opens", () => {
+      // Same ticket, same row: only the slot keeps the wrap and the blob
+      // from authenticating against one another (ADR-089).
+      expect(buildContentAad("t-1", fileKeySlot("att-1"))).not.toEqual(
+        buildContentAad("t-1", blobSlot("att-1")),
+      );
     });
   });
 

@@ -490,6 +490,156 @@ describe("CryptoBridge", () => {
     });
   });
 
+  describe("encryptAttachment", () => {
+    it("sends data as Transferable and returns structured result", async () => {
+      const bridge = await createReadyBridge();
+
+      const data = new ArrayBuffer(64);
+      const promise = bridge.encryptAttachment(
+        "ticket-att-1",
+        "att-id-1",
+        "report.pdf",
+        data,
+      );
+
+      const calls = mockWorkerInstance?.postMessage.mock.calls;
+      const encCall = await vi.waitFor(() => {
+        const found = calls?.find(
+          (c: unknown[]) =>
+            (c[0] as { type: string }).type === "encryptAttachment",
+        ) as
+          | [
+              {
+                type: string;
+                id: number;
+                ticketId: string;
+                attachmentId: string;
+                filename: string;
+              },
+              { transfer: Transferable[] },
+            ]
+          | undefined;
+        expect(found).toBeDefined();
+        return found;
+      });
+
+      expect(encCall?.[0].ticketId).toBe("ticket-att-1");
+      expect(encCall?.[0].attachmentId).toBe("att-id-1");
+      expect(encCall?.[0].filename).toBe("report.pdf");
+      expect(encCall?.[1]).toEqual({ transfer: [data] });
+
+      const blobBuf = new ArrayBuffer(32);
+      respondFromWorker({
+        id: encCall?.[0].id ?? 0,
+        ok: true,
+        type: "encryptAttachment",
+        blob: blobBuf,
+        fileKeyWrap: "d3JhcA",
+        encryptedFilename: "ZmlsZW5hbWU",
+      });
+
+      const result = await promise;
+      expect(result.blob).toBe(blobBuf);
+      expect(result.fileKeyWrap).toBe("d3JhcA");
+      expect(result.encryptedFilename).toBe("ZmlsZW5hbWU");
+      expect(result.portalCopy).toBeUndefined();
+    });
+
+    it("passes through portal copy when present in response", async () => {
+      const bridge = await createReadyBridge();
+
+      const data = new ArrayBuffer(16);
+      const promise = bridge.encryptAttachment(
+        "ticket-att-2",
+        "att-id-2",
+        "doc.txt",
+        data,
+        "Y2xpZW50UHVibGlj",
+      );
+
+      const calls = mockWorkerInstance?.postMessage.mock.calls;
+      const encCall = await vi.waitFor(() => {
+        const found = calls?.find(
+          (c: unknown[]) =>
+            (c[0] as { type: string }).type === "encryptAttachment",
+        ) as [{ type: string; id: number }] | undefined;
+        expect(found).toBeDefined();
+        return found;
+      });
+
+      respondFromWorker({
+        id: encCall?.[0].id ?? 0,
+        ok: true,
+        type: "encryptAttachment",
+        blob: new ArrayBuffer(32),
+        fileKeyWrap: "d3JhcA",
+        encryptedFilename: "ZmlsZW5hbWU",
+        portalCopy: {
+          ephemeralPoint: "ZXBoZW1lcmFs",
+          nonce: "bm9uY2U",
+          ciphertext: "Y2lwaGVydGV4dA",
+        },
+      });
+
+      const result = await promise;
+      expect(result.portalCopy).toBeDefined();
+      expect(result.portalCopy?.ephemeralPoint).toBe("ZXBoZW1lcmFs");
+      expect(result.portalCopy?.nonce).toBe("bm9uY2U");
+      expect(result.portalCopy?.ciphertext).toBe("Y2lwaGVydGV4dA");
+    });
+  });
+
+  describe("decryptAttachment", () => {
+    it("sends ciphertext as Transferable and returns ArrayBuffer", async () => {
+      const bridge = await createReadyBridge();
+
+      const ciphertext = new ArrayBuffer(128);
+      const promise = bridge.decryptAttachment(
+        "ticket-att-3",
+        "att-id-3",
+        "d3JhcHBlZEZpbGVLZXk",
+        ciphertext,
+      );
+
+      const calls = mockWorkerInstance?.postMessage.mock.calls;
+      const decCall = await vi.waitFor(() => {
+        const found = calls?.find(
+          (c: unknown[]) =>
+            (c[0] as { type: string }).type === "decryptAttachment",
+        ) as
+          | [
+              {
+                type: string;
+                id: number;
+                ticketId: string;
+                attachmentId: string;
+                fileKeyWrap: string;
+              },
+              { transfer: Transferable[] },
+            ]
+          | undefined;
+        expect(found).toBeDefined();
+        return found;
+      });
+
+      expect(decCall?.[0].ticketId).toBe("ticket-att-3");
+      expect(decCall?.[0].attachmentId).toBe("att-id-3");
+      expect(decCall?.[0].fileKeyWrap).toBe("d3JhcHBlZEZpbGVLZXk");
+      expect(decCall?.[1]).toEqual({ transfer: [ciphertext] });
+
+      const resultBuf = new ArrayBuffer(64);
+      respondFromWorker({
+        id: decCall?.[0].id ?? 0,
+        ok: true,
+        type: "decryptAttachment",
+        data: resultBuf,
+      });
+
+      const result = await promise;
+      expect(result).toBe(resultBuf);
+    });
+  });
+
   describe("request queuing", () => {
     it("queues argon2id until init completes", async () => {
       const { CryptoBridge } = await import("./crypto-bridge.js");

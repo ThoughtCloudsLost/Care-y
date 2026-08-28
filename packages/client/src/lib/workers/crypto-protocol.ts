@@ -141,6 +141,25 @@ export interface RewrapBlobRequest {
   readonly category: "attachment" | "recording";
 }
 
+/**
+ * Converge one attachment's file key from tk_temp to the ticket's tk.
+ *
+ * An attachment sent from the portal is encrypted under a key of its own,
+ * and only that key is wrapped with the reply's tk_temp (ADR-089). So
+ * convergence re-wraps 32 bytes and never touches the file, which is why
+ * this carries strings where rewrapBlob carries the whole blob.
+ */
+export interface RewrapFileKeyRequest {
+  readonly type: "rewrapFileKey";
+  readonly id: number;
+  readonly followUpId: string;
+  readonly ticketId: string;
+  /** Attachments row id: the AAD component that survives the rewrap. */
+  readonly attachmentId: string;
+  /** The file key wrapped under tk_temp, base64. */
+  readonly fileKeyWrap: string;
+}
+
 export interface EncryptContentRequest {
   readonly type: "encryptContent";
   readonly id: number;
@@ -241,6 +260,49 @@ export interface DecryptBlobRequest {
   readonly ciphertext: ArrayBuffer;
   /** Content slot, normally "blob:<rowId>" (ADR-053). */
   readonly slot: string;
+}
+
+/**
+ * Encrypt a file attachment under a fresh file key (ADR-089). The Worker
+ * mints, uses, and zeroes the file key. The main thread never holds it.
+ *
+ * The blob is encrypted under the file key, the file key is wrapped under
+ * the cached tk, and optionally the file key + filename payload is
+ * ECIES-sealed to a portal client's public key.
+ */
+export interface EncryptAttachmentRequest {
+  readonly type: "encryptAttachment";
+  readonly id: number;
+  readonly ticketId: string;
+  /** Key-cache identity (same convention decryptBlob uses). */
+  readonly keyCacheId?: string;
+  /** Browser-minted attachment row id, bound into the AAD. */
+  readonly attachmentId: string;
+  /** Original filename, encrypted under tk for the org side. */
+  readonly filename: string;
+  /** Plaintext file bytes. Transferable: neutered on main thread after send. */
+  readonly data: ArrayBuffer;
+  /** Base64url ristretto point. When present, produce a portal copy. */
+  readonly clientPublic?: string;
+}
+
+/**
+ * Decrypt a file attachment using a wrapped file key (ADR-089). The org's
+ * wrap holds the raw file key (not the JSON payload), because the org
+ * already has the filename in attachments.encrypted_filename.
+ */
+export interface DecryptAttachmentRequest {
+  readonly type: "decryptAttachment";
+  readonly id: number;
+  readonly ticketId: string;
+  /** Key-cache identity (same convention decryptBlob uses). */
+  readonly keyCacheId?: string;
+  /** Wrapped file key, base64url (encrypted under tk with fileKeySlot AAD). */
+  readonly fileKeyWrap: string;
+  /** Encrypted blob (nonce || ciphertext), raw bytes. Transferable. */
+  readonly ciphertext: ArrayBuffer;
+  /** Attachment row id, bound into the AAD. */
+  readonly attachmentId: string;
 }
 
 export interface UnwrapTkRequest {
@@ -477,8 +539,11 @@ export type WorkerRequest =
   | DecryptContentRequest
   | DecryptAndRewrapRequest
   | RewrapBlobRequest
+  | RewrapFileKeyRequest
   | EncryptContentRequest
+  | EncryptAttachmentRequest
   | DecryptBlobRequest
+  | DecryptAttachmentRequest
   | EvictTkRequest
   | ZeroAllRequest
   | GetVolPublicRequest
@@ -564,6 +629,13 @@ export interface RewrapBlobResponse extends SuccessBase {
   readonly category: "attachment" | "recording";
 }
 
+export interface RewrapFileKeyResponse extends SuccessBase {
+  readonly type: "rewrapFileKey";
+  readonly attachmentId: string;
+  /** The same file key, now wrapped under the canonical tk, base64. */
+  readonly fileKeyWrap: string;
+}
+
 export interface EncryptContentResponse extends SuccessBase {
   readonly type: "encryptContent";
   /** Encrypted content (nonce || ciphertext), base64. */
@@ -585,6 +657,32 @@ export interface UnwrapOrgKeyResponse extends SuccessBase {
 export interface DecryptBlobResponse extends SuccessBase {
   readonly type: "decryptBlob";
   /** Decrypted binary data. Transferable: neutered in Worker after send. */
+  readonly data: ArrayBuffer;
+}
+
+export interface EncryptAttachmentResponse extends SuccessBase {
+  readonly type: "encryptAttachment";
+  /** Encrypted blob (nonce || ciphertext). Transferable. */
+  readonly blob: ArrayBuffer;
+  /** File key wrapped under tk (fileKeySlot AAD), base64url. */
+  readonly fileKeyWrap: string;
+  /** Filename encrypted under tk (filenameSlot AAD), base64url. */
+  readonly encryptedFilename: string;
+  /**
+   * Present only when clientPublic was supplied. The sealed payload carries
+   * both the file key and the filename (encodeFileKeyPayload) so the
+   * client gets both from one unwrap.
+   */
+  readonly portalCopy?: {
+    readonly ephemeralPoint: string;
+    readonly nonce: string;
+    readonly ciphertext: string;
+  };
+}
+
+export interface DecryptAttachmentResponse extends SuccessBase {
+  readonly type: "decryptAttachment";
+  /** Decrypted file bytes. Transferable: neutered in Worker after send. */
   readonly data: ArrayBuffer;
 }
 
@@ -769,8 +867,11 @@ export type WorkerSuccessResponse =
   | DecryptContentResponse
   | DecryptAndRewrapResponse
   | RewrapBlobResponse
+  | RewrapFileKeyResponse
   | EncryptContentResponse
+  | EncryptAttachmentResponse
   | DecryptBlobResponse
+  | DecryptAttachmentResponse
   | GetVolPublicResponse
   | UnwrapOrgKeyResponse
   | UnwrapTkResponse

@@ -370,6 +370,14 @@ export type ChannelSecret = z.infer<typeof channelSecretSchema>;
 export const portalMessageIdSchema = z.uuid().brand<"PortalMessageId">();
 export type PortalMessageId = z.infer<typeof portalMessageIdSchema>;
 
+/**
+ * `portal_attachments.id`. Distinct from `portal_attachments.attachment_id`,
+ * which is an AttachmentId referencing the shared blob row: one file has one
+ * AttachmentId and one client-copy row per channel that can read it.
+ */
+export const portalAttachmentIdSchema = z.uuid().brand<"PortalAttachmentId">();
+export type PortalAttachmentId = z.infer<typeof portalAttachmentIdSchema>;
+
 /** `client_accounts.id`, `client_account_sessions.account_id`. */
 export const clientAccountIdSchema = z.uuid().brand<"ClientAccountId">();
 export type ClientAccountId = z.infer<typeof clientAccountIdSchema>;

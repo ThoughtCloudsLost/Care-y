@@ -14,6 +14,7 @@ import type { TicketAccessChecker } from "./access.js";
 import type { JobQueue } from "../jobs/queue.js";
 import { NotFoundError } from "../errors.js";
 import { ErrorCode } from "@care-y/shared";
+import { purgeUnlinkedAttachments } from "../portal/portal-attachment-service.js";
 import type {
   TicketId,
   FollowupId,
@@ -45,6 +46,12 @@ export interface AttachmentRecord {
   readonly contentType: string | null;
   readonly createdAt: Date;
   readonly deletedAt: Date | null;
+  /**
+   * The file key wrapped under the follow-up's key, or null when the blob
+   * is encrypted directly under that key (ADR-089). Readers branch on this
+   * to know which envelope they are holding.
+   */
+  readonly fileKeyWrap: Buffer | null;
 }
 
 export interface MediaService {
@@ -63,6 +70,8 @@ export interface MediaService {
     sizeBytes: number;
     encryptedFilename?: Buffer;
     contentType?: string;
+    /** Omitted for a blob encrypted directly under the follow-up key. */
+    fileKeyWrap?: Buffer;
   }): Promise<AttachmentRecord>;
 
   getRecording(
@@ -134,6 +143,7 @@ function toAttachmentRecord(row: {
   content_type: string | null;
   created_at: Date;
   deleted_at: Date | null;
+  file_key_wrap: Buffer | null;
 }): AttachmentRecord {
   return {
     id: row.id,
@@ -145,6 +155,7 @@ function toAttachmentRecord(row: {
     contentType: row.content_type,
     createdAt: row.created_at,
     deletedAt: row.deleted_at,
+    fileKeyWrap: row.file_key_wrap,
   };
 }
 
@@ -180,6 +191,7 @@ export function createMediaService(
           size_bytes: input.sizeBytes,
           encrypted_filename: input.encryptedFilename ?? null,
           content_type: input.contentType ?? null,
+          file_key_wrap: input.fileKeyWrap ?? null,
         })
         .returningAll()
         .executeTakeFirstOrThrow();
@@ -395,6 +407,15 @@ async function purgeDeletedMedia(
 export const MEDIA_CLEANUP_QUEUE = "media-cleanup";
 export const MEDIA_CLEANUP_INTERVAL_MS = 24 * 60 * 60 * 1000; // daily
 
+/**
+ * How long an uploaded file may sit with no message before it is swept.
+ *
+ * Long enough that a volunteer who attaches something, gets pulled into a
+ * call, and comes back still has their file. Short enough that abandoned
+ * uploads do not accumulate.
+ */
+const UNLINKED_ATTACHMENT_GRACE_MS = 24 * 60 * 60 * 1000;
+
 export function registerMediaCleanupHandler(
   jobQueue: JobQueue,
   getTenantDb: (orgSchema: OrgSchema) => Kysely<TenantDatabase>,
@@ -420,6 +441,16 @@ export function registerMediaCleanupHandler(
         );
         const purgeCutoff = new Date(
           Date.now() - config.media_purge_days * 24 * 60 * 60 * 1000,
+        );
+
+        // Uploads nobody sent. An attachment carries no follow-up between
+        // the upload and the message that claims it, so anything still
+        // unclaimed after the grace window was abandoned and its bytes
+        // would otherwise sit there for good.
+        await purgeUnlinkedAttachments(
+          tDb,
+          blobStore,
+          new Date(Date.now() - UNLINKED_ATTACHMENT_GRACE_MS),
         );
 
         await softDeleteExpiredMedia(tDb, "recordings", retentionCutoff);

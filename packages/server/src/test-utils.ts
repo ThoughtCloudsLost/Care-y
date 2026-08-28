@@ -35,6 +35,8 @@ import type {
   UsersTable,
   SessionsTable,
 } from "./db/types.js";
+import type { BlobStore, BlobCategory } from "./storage/store.js";
+import type { OrgSchema, BlobKey } from "@care-y/shared";
 import {
   deriveKeys,
   createFieldEncryptor,
@@ -1238,4 +1240,36 @@ export function createMockJobQueue(): MockJobQueue {
   };
 
   return { jobQueue, handlers };
+}
+
+/**
+ * Map-backed BlobStore for tests.
+ *
+ * Enough to exercise DB-level and transactional behavior without a
+ * filesystem or a network. `blobs` is exposed so a test can assert what
+ * was stored and what was cleaned up, which is how the attachment paths
+ * check that a failed insert does not leave bytes behind.
+ */
+export function createMemoryBlobStore(): BlobStore & {
+  readonly blobs: Map<string, Buffer>;
+} {
+  const blobs = new Map<string, Buffer>();
+  return {
+    blobs,
+    put(orgSchema: OrgSchema, category: BlobCategory, blob: Buffer) {
+      const key = `${orgSchema}/${category}/${crypto.randomUUID()}` as BlobKey;
+      blobs.set(key, Buffer.from(blob));
+      return Promise.resolve(key);
+    },
+    get(key: BlobKey) {
+      return Promise.resolve(blobs.get(key) ?? null);
+    },
+    delete(key: BlobKey) {
+      blobs.delete(key);
+      return Promise.resolve();
+    },
+    exists(key: BlobKey) {
+      return Promise.resolve(blobs.has(key));
+    },
+  };
 }

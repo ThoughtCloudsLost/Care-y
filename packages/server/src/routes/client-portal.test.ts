@@ -31,6 +31,7 @@ import {
   stubTenantDbDefaultRoles,
   expectTrpcError,
   testSealedBox,
+  createMemoryBlobStore,
 } from "../test-utils.js";
 import type { Context, OrgContext } from "../trpc/context.js";
 import type { RateLimiter } from "../ratelimit/rate-limiter.js";
@@ -196,6 +197,7 @@ function buildDeps(
   overrides?: Partial<ClientPortalRouterDeps>,
 ): ClientPortalRouterDeps {
   return {
+    blobStore: createMemoryBlobStore(),
     submissionLimiter: allowLimiter(),
     challengeLimiter: allowLimiter(),
     powVerifier: null,
@@ -672,6 +674,7 @@ describe("client-portal router", () => {
         },
         ticketId: crypto.randomUUID() as TicketId,
         messages: [],
+        attachments: [],
         messagesExpireDays: 30,
         safeExitUrl: null,
         accountOffer: false,
@@ -870,6 +873,7 @@ describe("client-portal router", () => {
         messages: [
           {
             id: crypto.randomUUID(),
+            followupId: crypto.randomUUID(),
             direction: "to_client",
             ephemeralPoint: "ep1",
             nonce: "n1",
@@ -878,6 +882,7 @@ describe("client-portal router", () => {
             editedAt: null,
           },
         ],
+        attachments: [],
         messagesExpireDays: 30,
         safeExitUrl: null,
         accountOffer: false,
@@ -1566,6 +1571,7 @@ describe("client-portal router", () => {
         },
         ticketId: crypto.randomUUID() as TicketId,
         messages: [],
+        attachments: [],
         messagesExpireDays: 30,
         safeExitUrl: null,
         accountOffer: false,

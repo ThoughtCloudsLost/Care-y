@@ -10,7 +10,7 @@ import {
   encode,
 } from "@care-y/crypto";
 import { newFollowupId, newPendingFollowupId } from "@care-y/shared";
-import type { FollowupId } from "@care-y/shared";
+import type { FollowupId, AttachmentLink } from "@care-y/shared";
 import { ticketKeys } from "$lib/query/keys.js";
 import { invalidateReadState } from "$lib/query/invalidate-read-state.js";
 import { toastStore } from "$lib/stores/toast.svelte.js";
@@ -40,6 +40,12 @@ export interface SendMessageConfig<TFollowUp> {
    * client can read the reply in the portal (dual-copy write).
    */
   readonly getClientPublic: () => string | null;
+  /**
+   * Already-uploaded attachment links to include in the follow-up.
+   * Defaults to an empty-array getter so callers without attachments
+   * keep working unchanged.
+   */
+  readonly getAttachmentLinks?: () => AttachmentLink[];
   readonly createFollowUpMutate: (args: {
     id: string;
     ticketId: string;
@@ -53,6 +59,7 @@ export interface SendMessageConfig<TFollowUp> {
       nonce: string;
       ciphertext: string;
     };
+    attachments?: AttachmentLink[];
   }) => Promise<unknown>;
 }
 
@@ -74,6 +81,7 @@ export function createSendMessage<TFollowUp extends { id: string }>(
     queryClient,
     buildPendingEntry,
     getClientPublic,
+    getAttachmentLinks,
     createFollowUpMutate,
   } = config;
 
@@ -133,6 +141,8 @@ export function createSendMessage<TFollowUp extends { id: string }>(
         };
       }
 
+      const attachments = getAttachmentLinks?.() ?? [];
+
       await createFollowUpMutate({
         id: followUpId,
         ticketId,
@@ -142,6 +152,7 @@ export function createSendMessage<TFollowUp extends { id: string }>(
         isPrivate: false,
         mentionedPseudonyms: mentions,
         portalCopy,
+        attachments: attachments.length > 0 ? attachments : undefined,
       });
 
       await queryClient.invalidateQueries({

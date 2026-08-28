@@ -14,7 +14,9 @@ import {
   portalChannelIdSchema,
   portalChannelKindSchema,
   eciesTripleSchema,
+  attachmentLinkSchema,
 } from "./client-portal.js";
+import { PORTAL_ATTACHMENTS_PER_MESSAGE } from "./limits.js";
 import {
   ticketIdSchema,
   userIdSchema,
@@ -113,6 +115,15 @@ export const createFollowUpInputSchema = z.object({
   noteTypeId: noteTypeIdSchema.optional(),
   /** ECIES copy for the client's portal channel (present when client is Secure Link tier). */
   portalCopy: eciesTripleSchema.optional(),
+  /**
+   * Already-uploaded attachments this follow-up carries. Upload happens
+   * first so a large file has its own progress and its own retry, and the
+   * follow-up ties the results together on send.
+   */
+  attachments: z
+    .array(attachmentLinkSchema)
+    .max(PORTAL_ATTACHMENTS_PER_MESSAGE)
+    .default([]),
 });
 export type CreateFollowUpInput = z.infer<typeof createFollowUpInputSchema>;
 

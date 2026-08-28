@@ -28,6 +28,7 @@
     useQueryClient,
   } from "@tanstack/svelte-query";
   import * as m from "$lib/paraglide/messages.js";
+  import { SvelteSet } from "svelte/reactivity";
   import { trpc } from "$lib/trpc/index.js";
   import { portalKeys } from "$lib/query/keys.js";
   import { announceToLiveRegion } from "$lib/utils/announce.js";
@@ -95,6 +96,8 @@
   // Optimistic messages appended after send
   interface OptimisticMsg {
     readonly id: string;
+    /** Groups any files sent with this message under the same bubble. */
+    readonly followupId: string;
     readonly direction: string;
     readonly ephemeralPoint: string;
     readonly nonce: string;
@@ -345,6 +348,10 @@
       ...optimisticMessages,
       {
         id: followUpId,
+        // The optimistic bubble stands in for a row the server has not
+        // written yet, and the thread groups files by follow-up, so it
+        // carries the same id the reply was minted with.
+        followupId: followUpId,
         direction: "from_client",
         ephemeralPoint: payload.selfCopy.ephemeralPoint,
         nonce: payload.selfCopy.nonce,
@@ -589,10 +596,96 @@
     searchActive = false;
   }
 
-  const noop = (): void => {
-    /* Filter pills are wired and empty until the thread can carry
-       attachments; there is nothing to filter a text-only channel by. */
-  };
+  // --- Attachments ---
+
+  const accountAttachments = $derived(bootstrapQuery.data?.attachments ?? []);
+
+  // --- Filter pills (images / files) ---
+
+  type AttachmentFilter = "images" | "files" | null;
+  let activeFilter = $state<AttachmentFilter>(null);
+
+  const imageFollowupIds = $derived.by((): ReadonlySet<string> => {
+    const ids = new SvelteSet<string>();
+    for (const att of accountAttachments) {
+      if (att.contentType?.startsWith("image/") === true) {
+        ids.add(att.followupId);
+      }
+    }
+    return ids;
+  });
+
+  const fileFollowupIds = $derived.by((): ReadonlySet<string> => {
+    const ids = new SvelteSet<string>();
+    for (const att of accountAttachments) {
+      if (att.contentType !== null && !att.contentType.startsWith("image/")) {
+        ids.add(att.followupId);
+      }
+    }
+    return ids;
+  });
+
+  const filteredMessages = $derived.by(() => {
+    if (activeFilter === null) return allMessages;
+    const targetIds =
+      activeFilter === "images" ? imageFollowupIds : fileFollowupIds;
+    return allMessages.filter(
+      (msg) =>
+        "followupId" in msg &&
+        typeof msg.followupId === "string" &&
+        targetIds.has(msg.followupId),
+    );
+  });
+
+  function handleFilterToggle(pillId: string): void {
+    // The layout hands back the id of a pill this page defined, so anything
+    // else is a wiring mistake rather than a filter nobody selected.
+    const next: AttachmentFilter =
+      pillId === "images" || pillId === "files" ? pillId : null;
+    activeFilter = activeFilter === next ? null : next;
+  }
+
+  const filterPillDefs = $derived.by(() => {
+    if (accountAttachments.length === 0) return [];
+
+    const pills: {
+      id: string;
+      label: string;
+      mode: "multi" | "single" | "date";
+      options: { value: string; label: string }[];
+      selected: ReadonlySet<string> | string | null;
+    }[] = [];
+
+    if (imageFollowupIds.size > 0) {
+      pills.push({
+        id: "images",
+        label: m.portal_filter_images(),
+        mode: "single",
+        options: [{ value: "images", label: m.portal_filter_images() }],
+        selected: activeFilter === "images" ? "images" : null,
+      });
+    }
+
+    if (fileFollowupIds.size > 0) {
+      pills.push({
+        id: "files",
+        label: m.portal_filter_files(),
+        mode: "single",
+        options: [{ value: "files", label: m.portal_filter_files() }],
+        selected: activeFilter === "files" ? "files" : null,
+      });
+    }
+
+    return pills;
+  });
+
+  const filterActiveCount = $derived(activeFilter !== null ? 1 : 0);
+
+  function clearFilters(): void {
+    activeFilter = null;
+  }
+
+  const noop = (): void => undefined;
 
   $effect(() => {
     shellContainer.current = {
@@ -632,12 +725,12 @@
     title={m.account_title()}
     hideTitle
     filterPills={{
-      pills: [],
-      activeCount: 0,
-      ontoggle: noop,
-      onselect: noop,
+      pills: filterPillDefs,
+      activeCount: filterActiveCount,
+      ontoggle: handleFilterToggle,
+      onselect: handleFilterToggle,
       ondatechange: noop,
-      onclearall: noop,
+      onclearall: clearFilters,
     }}
     searchNavigator={overlay.active ? searchNavigatorRow : undefined}
     onsearch={searchActive ? undefined : openSearch}
@@ -684,9 +777,11 @@
     {/snippet}
 
     <PortalThread
-      messages={allMessages}
+      messages={filteredMessages}
       clientPrivate={session.keypair.clientPrivate}
       loading={messagesQuery.isLoading}
+      attachments={accountAttachments}
+      ticketId={bootstrapQuery.data?.ticketId ?? undefined}
       {supportLabel}
       searchTerm={overlay.term ?? undefined}
       activeMatchId={overlay.activeId ?? undefined}

@@ -30,6 +30,25 @@ interface BlobUpdate {
   category: "attachment" | "recording";
 }
 
+interface FileKeyUpdate {
+  attachmentId: string;
+  fileKeyWrap: string;
+}
+
+/**
+ * What the follow-up's media needs from the convergence pass.
+ *
+ * Two shapes, because there are two envelopes. An attachment carrying a
+ * file key wrap is re-wrapped in place: nothing is downloaded and nothing
+ * is re-uploaded (ADR-089). Everything else, MMS images and voicemail
+ * recordings among them, still travels through the browser to be
+ * re-encrypted whole.
+ */
+export interface RewrapMediaUpdates {
+  readonly blobUpdates: readonly BlobUpdate[];
+  readonly fileKeyUpdates: readonly FileKeyUpdate[];
+}
+
 interface FollowUpCacheEntry {
   readonly id?: string;
   readonly hasRecording?: boolean;
@@ -70,9 +89,9 @@ export async function rewrapBlobsForFollowUp(
   bridge: CryptoBridge,
   ticketRouter: TicketRouter,
   queryClient: QueryClient,
-): Promise<BlobUpdate[]> {
+): Promise<RewrapMediaUpdates> {
   if (!followUpHasBlobs(ticketId, followUpId, queryClient)) {
-    return [];
+    return { blobUpdates: [], fileKeyUpdates: [] };
   }
 
   const [recordings, attachments] = await Promise.all([
@@ -88,7 +107,8 @@ export async function rewrapBlobsForFollowUp(
     }),
   ]);
 
-  const updates: BlobUpdate[] = [];
+  const blobUpdates: BlobUpdate[] = [];
+  const fileKeyUpdates: FileKeyUpdate[] = [];
 
   async function rewrapItems(
     items: readonly { id: string; blobKey: string }[],
@@ -105,7 +125,7 @@ export async function rewrapBlobsForFollowUp(
         item.id,
         category,
       );
-      updates.push({
+      blobUpdates.push({
         oldBlobKey: result.blobKey,
         encryptedData: result.encryptedData,
         category: result.category,
@@ -118,11 +138,35 @@ export async function rewrapBlobsForFollowUp(
     async (id) => fetchBlob(`/api/blobs/recordings/${id}`),
     "recording",
   );
+
+  // An attachment carrying a file key wrap is converged by re-wrapping 32
+  // bytes. Downloading the file to re-encrypt it would move the same bytes
+  // twice across the network to arrive at ciphertext nobody needed to
+  // change (ADR-089).
+  const wrapped = attachments.filter((a) => a.fileKeyWrap !== null);
+  const direct = attachments.filter((a) => a.fileKeyWrap === null);
+
+  for (const att of wrapped) {
+    // Non-null by construction of `wrapped`, and narrowing does not survive
+    // the filter callback.
+    const wrap = att.fileKeyWrap ?? "";
+    const result = await bridge.rewrapFileKey(
+      followUpId,
+      ticketId,
+      att.id,
+      wrap,
+    );
+    fileKeyUpdates.push({
+      attachmentId: result.attachmentId,
+      fileKeyWrap: result.fileKeyWrap,
+    });
+  }
+
   await rewrapItems(
-    attachments,
+    direct,
     async (id) => fetchBlob(`/api/blobs/attachments/${id}`),
     "attachment",
   );
 
-  return updates;
+  return { blobUpdates, fileKeyUpdates };
 }

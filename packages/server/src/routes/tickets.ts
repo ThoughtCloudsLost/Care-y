@@ -23,6 +23,7 @@ import {
   withErrorWrapping,
 } from "../trpc/trpc.js";
 import type { BlobStore } from "../storage/store.js";
+import { storeAttachment } from "../portal/portal-attachment-service.js";
 import type { OrgContext } from "../trpc/context.js";
 import type { TicketAccessChecker } from "../tickets/access.js";
 import type {
@@ -127,6 +128,7 @@ import {
   listParticipantsInputSchema,
   recordingListInputSchema,
   attachmentListInputSchema,
+  uploadTicketAttachmentInputSchema,
   createNoteTypeInputSchema,
   updateNoteTypeInputSchema,
   toggleReactionInputSchema,
@@ -834,6 +836,22 @@ export function createTicketRouter(deps: TicketRouterDeps) {
             mentionedPseudonyms: input.mentionedPseudonyms,
             noteTypeId: input.noteTypeId,
             portalCopy,
+            attachments: input.attachments.map((att) => ({
+              attachmentId: att.attachmentId,
+              portalCopy: att.portalCopy
+                ? {
+                    ephemeralPoint: Buffer.from(
+                      att.portalCopy.ephemeralPoint,
+                      "base64",
+                    ),
+                    nonce: Buffer.from(att.portalCopy.nonce, "base64"),
+                    ciphertext: Buffer.from(
+                      att.portalCopy.ciphertext,
+                      "base64",
+                    ),
+                  }
+                : undefined,
+            })),
           });
           // Look up ticket for notification context
           const { svc: tSvc } = ticketSvc(ctx.org.tenantDb);
@@ -1279,7 +1297,11 @@ export function createTicketRouter(deps: TicketRouterDeps) {
         withErrorWrapping(async ({ ctx, input }) => {
           const svc = mediaSvc(ctx.org.tenantDb);
           const att = await svc.getAttachment(ctx.user.id, input.attachmentId);
-          return { ...att, encryptedFilename: b64n(att.encryptedFilename) };
+          return {
+            ...att,
+            encryptedFilename: b64n(att.encryptedFilename),
+            fileKeyWrap: b64n(att.fileKeyWrap),
+          };
         }),
       ),
 
@@ -1295,6 +1317,41 @@ export function createTicketRouter(deps: TicketRouterDeps) {
       }),
     ),
 
+    /**
+     * Store one encrypted file for a ticket, before the message that
+     * carries it exists.
+     *
+     * Upload precedes the follow-up so a large file gets its own progress
+     * and its own retry, and a failed send does not cost the upload again.
+     * The row is left with no follow-up until `createFollowUp` links it,
+     * and media cleanup sweeps anything never linked.
+     */
+    uploadAttachment: volunteerProcedure
+      .input(uploadTicketAttachmentInputSchema)
+      .mutation(
+        withErrorWrapping(async ({ ctx, input }) => {
+          const access = deps.createTicketAccess(ctx.org.tenantDb);
+          await access.assertAccess(ctx.user.id, input.ticketId);
+
+          const attachmentId = await storeAttachment(
+            ctx.org.tenantDb,
+            deps.blobStore,
+            ctx.org.orgSchema,
+            {
+              attachmentId: input.attachmentId,
+              ticketId: input.ticketId,
+              blob: Buffer.from(input.blob, "base64"),
+              declaredSize: input.sizeBytes,
+              contentType: input.contentType,
+              fileKeyWrap: Buffer.from(input.fileKeyWrap, "base64"),
+              encryptedFilename: Buffer.from(input.encryptedFilename, "base64"),
+            },
+          );
+
+          return { attachmentId };
+        }),
+      ),
+
     listAttachments: volunteerProcedure.input(attachmentListInputSchema).query(
       withErrorWrapping(async ({ ctx, input }) => {
         const svc = mediaSvc(ctx.org.tenantDb);
@@ -1307,6 +1364,7 @@ export function createTicketRouter(deps: TicketRouterDeps) {
         return atts.map((a) => ({
           ...a,
           encryptedFilename: b64n(a.encryptedFilename),
+          fileKeyWrap: b64n(a.fileKeyWrap),
         }));
       }),
     ),
@@ -1708,6 +1766,16 @@ export function createTicketRouter(deps: TicketRouterDeps) {
               }),
             )
             .optional(),
+          // Attachments encrypted under a file key: convergence moves the
+          // wrap and leaves the blob where it is (ADR-089).
+          fileKeyUpdates: z
+            .array(
+              z.object({
+                attachmentId: attachmentIdSchema,
+                fileKeyWrap: z.string().min(1),
+              }),
+            )
+            .optional(),
         }),
       )
       .mutation(
@@ -1724,6 +1792,10 @@ export function createTicketRouter(deps: TicketRouterDeps) {
                 oldBlobKey: b.oldBlobKey,
                 encryptedData: Buffer.from(b.encryptedData, "base64"),
                 category: b.category,
+              })),
+              fileKeyUpdates: input.fileKeyUpdates?.map((f) => ({
+                attachmentId: f.attachmentId,
+                fileKeyWrap: Buffer.from(f.fileKeyWrap, "base64"),
               })),
             },
             deps.blobStore,

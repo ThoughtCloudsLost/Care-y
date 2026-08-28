@@ -10,11 +10,25 @@
  */
 
 import { z } from "zod";
-import { base64Bytes, base64String } from "./validators.js";
+import { base64Bytes, base64String, base64ByteLength } from "./validators.js";
 import { intakeFieldRoleSchema, fieldKeySchema } from "./intake-forms.js";
+import {
+  PORTAL_ATTACHMENT_MAX_BYTES,
+  PORTAL_ATTACHMENTS_PER_MESSAGE,
+} from "./limits.js";
+
+// Re-exported so consumers reach the caps through the portal schema module
+// they already import, the way schemas/kb.ts re-exports its own cap. The
+// definitions stay in the leaf module that breaks the import cycle.
+export {
+  PORTAL_ATTACHMENT_MAX_BYTES,
+  PORTAL_ATTACHMENT_MAX_PLAINTEXT_BYTES,
+  PORTAL_ATTACHMENTS_PER_MESSAGE,
+} from "./limits.js";
 import {
   ticketIdSchema,
   followupIdSchema,
+  attachmentIdSchema,
   clientAccountIdSchema,
   shareIdSchema,
   keyGenerationSchema,
@@ -223,6 +237,107 @@ export const portalBootstrapInputSchema = z.object({
 });
 export type PortalBootstrapInput = z.infer<typeof portalBootstrapInputSchema>;
 
+// ---------------------------------------------------------------------------
+// Attachment schemas
+//
+// One file is stored once, encrypted under a key of its own, and that key
+// is wrapped per reader (ADR-089). Every schema here therefore carries a
+// wrap rather than a second copy of the file. They sit above the reply
+// schema because the reply carries them.
+// ---------------------------------------------------------------------------
+
+/**
+ * Content types an attachment may declare.
+ *
+ * The server holds ciphertext and cannot check what a file actually is, so
+ * this bounds the claim rather than the bytes. It is still worth enforcing:
+ * the reader picks how to render from the declared type, and nothing here
+ * renders as script. SVG is deliberately absent, since an SVG opened
+ * directly rather than through an `<img>` executes.
+ */
+export const PORTAL_ALLOWED_CONTENT_TYPES = [
+  "image/png",
+  "image/jpeg",
+  "image/gif",
+  "image/webp",
+  "application/pdf",
+  "application/msword",
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+] as const;
+
+export type PortalAllowedContentType =
+  (typeof PORTAL_ALLOWED_CONTENT_TYPES)[number];
+
+export const portalContentTypeSchema = z.enum(PORTAL_ALLOWED_CONTENT_TYPES);
+
+/**
+ * `encryptContent` of a 32-byte key: 24-byte nonce, 32 bytes, 16-byte tag.
+ * Exact rather than capped, because a wrap is one fixed shape and anything
+ * else is a caller bug.
+ */
+const fileKeyWrapSchema = base64Bytes(72, "fileKeyWrap");
+
+/** Ciphertext of one attachment, capped on decoded bytes. */
+const attachmentBlobSchema = base64String("blob").refine(
+  (s) => base64ByteLength(s) <= PORTAL_ATTACHMENT_MAX_BYTES,
+  "blob exceeds the attachment size limit",
+);
+
+/**
+ * What an upload carries, whichever side sends it.
+ *
+ * `attachmentId` is minted by the browser because the blob's AAD binds it
+ * (ADR-053): a server-minted id could never match what the encryptor baked
+ * in, and every later read would fail authentication.
+ */
+export const attachmentUploadSchema = z.object({
+  attachmentId: attachmentIdSchema,
+  blob: attachmentBlobSchema,
+  sizeBytes: z.number().int().min(1).max(PORTAL_ATTACHMENT_MAX_BYTES),
+  contentType: portalContentTypeSchema,
+  fileKeyWrap: fileKeyWrapSchema,
+  encryptedFilename: base64String("encryptedFilename").refine(
+    (s) => s.length <= 1_400,
+    "encryptedFilename too large",
+  ),
+});
+export type AttachmentUpload = z.infer<typeof attachmentUploadSchema>;
+
+/**
+ * An attachment sent from the portal, riding its reply.
+ *
+ * The client has no key until it composes: the reply mints `tk_temp`, which
+ * wraps both the message text and the file key, so the file cannot be
+ * uploaded ahead of the message it belongs to. `selfCopy` seals the same
+ * file key to the sender's own public key, because `tk_temp` is zeroed on
+ * send and without it they could not reopen what they sent.
+ */
+export const portalReplyAttachmentSchema = attachmentUploadSchema.extend({
+  selfCopy: eciesTripleSchema,
+});
+export type PortalReplyAttachment = z.infer<typeof portalReplyAttachmentSchema>;
+
+/**
+ * An already-uploaded attachment being tied to a follow-up.
+ *
+ * `portalCopy` is present when the client has an active channel, and seals
+ * the file key to `portal_channels.client_public`. Absent, the file stays
+ * readable by the org alone, which is correct for a ticket with no portal.
+ */
+export const attachmentLinkSchema = z.object({
+  attachmentId: attachmentIdSchema,
+  portalCopy: eciesTripleSchema.optional(),
+});
+export type AttachmentLink = z.infer<typeof attachmentLinkSchema>;
+
+/** Volunteer upload. Precedes the follow-up, so it names its ticket. */
+export const uploadTicketAttachmentInputSchema = attachmentUploadSchema.extend({
+  ticketId: ticketIdSchema,
+});
+export type UploadTicketAttachmentInput = z.infer<
+  typeof uploadTicketAttachmentInputSchema
+>;
+
 /** Client reply: encrypted content + sealed tk_temp wrap + self copy. */
 export const portalReplyInputSchema = z.object({
   channelId: portalChannelIdSchema,
@@ -238,6 +353,15 @@ export const portalReplyInputSchema = z.object({
   selfCopy: eciesTripleSchema,
   /** Optional followup kind: "message" (default) or "contact_correction". */
   kind: z.enum(["message", "contact_correction"]).optional(),
+  /**
+   * Files sent with this message. They ride the reply rather than a prior
+   * upload because the key that wraps them is this reply's `tk_temp`, which
+   * does not exist until the message is composed.
+   */
+  attachments: z
+    .array(portalReplyAttachmentSchema)
+    .max(PORTAL_ATTACHMENTS_PER_MESSAGE)
+    .default([]),
 });
 export type PortalReplyInput = z.infer<typeof portalReplyInputSchema>;
 

@@ -35,8 +35,11 @@
     writeReactionToCache,
   } from "$lib/tickets/create-reactions-query.svelte.js";
   import { createSmsSend } from "$lib/composables/ticket-detail/create-sms-send.svelte.js";
+  import { createAttachmentUpload } from "$lib/composables/ticket-detail/create-attachment-upload.svelte.js";
   import { createExposureHint } from "$lib/composables/ticket-detail/create-exposure-hint.svelte.js";
   import { useQueryClient } from "@tanstack/svelte-query";
+  import { Chip } from "konsta/svelte";
+  import { X } from "@lucide/svelte";
   import ShellSheet from "$lib/shell/ShellSheet.svelte";
   import FollowUpBubble from "$lib/components/tickets/FollowUpBubble.svelte";
   import TicketCompose from "$lib/components/tickets/TicketCompose.svelte";
@@ -99,6 +102,15 @@
   let compose = $state<TicketComposeHandle>();
   let replySending = $state(false);
   let dismissTimer: ReturnType<typeof setTimeout> | null = null;
+
+  // ── Attachment upload ──
+
+  const attachmentUpload = createAttachmentUpload({
+    getTicketId: () => ticketId,
+    getClientPublic: () => clientPublic ?? null,
+    cryptoBridge,
+    uploadMutate: async (args) => ticketRouter.uploadAttachment.mutate(args),
+  });
 
   // ── Exposure hint ──
 
@@ -295,6 +307,8 @@
         createdAt: new Date().toISOString(),
       };
 
+      const attachments = attachmentUpload.links();
+
       await ticketRouter.createFollowUp.mutate({
         id: followUpId,
         ticketId,
@@ -303,8 +317,10 @@
         type: "message",
         isPrivate: false,
         portalCopy,
+        attachments: attachments.length > 0 ? attachments : undefined,
       });
 
+      attachmentUpload.clear();
       haptic();
       toastStore.show(m.ticket_toast_message_sent());
 
@@ -399,11 +415,45 @@
     </div>
   </div>
 
+  {#if attachmentUpload.pending.length > 0}
+    <div
+      class="pending-attachments"
+      role="list"
+      aria-label={m.attachment_pending_list()}
+    >
+      {#each attachmentUpload.pending as entry (entry.attachmentId)}
+        <Chip
+          class="attachment-chip"
+          outline={entry.status === "failed"}
+          role="listitem"
+        >
+          <span class="attachment-chip-name">{entry.filename}</span>
+          {#if entry.status === "encrypting" || entry.status === "uploading"}
+            <span class="attachment-chip-status">
+              {m.attachment_uploading()}
+            </span>
+          {:else if entry.status === "failed"}
+            <span class="attachment-chip-status attachment-chip-failed">
+              {m.attachment_failed()}
+            </span>
+          {/if}
+        </Chip>
+        <button
+          type="button"
+          class="attachment-remove-btn"
+          onclick={() => attachmentUpload.remove(entry.attachmentId)}
+          aria-label={m.attachment_remove({ name: entry.filename })}
+        >
+          <X size={14} aria-hidden="true" />
+        </button>
+      {/each}
+    </div>
+  {/if}
   <TicketCompose
     bind:this={compose}
     {ticketId}
     inline
-    sending={replySending || sms.sending}
+    sending={replySending || sms.sending || attachmentUpload.busy}
     hasUnacknowledgedCorrection={correctionPending}
     onsendreply={(text: string) => void handleReplySend(text)}
     onsendsms={(text: string) => void sms.handleSmsSend(text)}
@@ -426,6 +476,10 @@
   ontextclient={hasPhone
     ? () => exposureHint.show("sms", () => compose?.activateSms())
     : undefined}
+  onattach={(file: File) => {
+    compose?.activateReply();
+    void attachmentUpload.attach(file);
+  }}
 />
 
 {#if exposureHint.type}
@@ -464,5 +518,45 @@
     font-size: var(--text-xs);
     color: var(--muted);
     margin: 0;
+  }
+
+  .pending-attachments {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    padding: 6px 16px;
+    align-items: center;
+  }
+
+  .attachment-chip-name {
+    max-width: 120px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .attachment-chip-status {
+    font-size: var(--text-xs);
+    color: var(--muted);
+    margin-left: 4px;
+  }
+
+  .attachment-chip-failed {
+    color: var(--danger);
+  }
+
+  .attachment-remove-btn {
+    appearance: none;
+    border: none;
+    background: none;
+    padding: 6px;
+    margin: -6px 0 -6px -2px;
+    color: var(--muted);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 44px;
+    min-height: 44px;
   }
 </style>

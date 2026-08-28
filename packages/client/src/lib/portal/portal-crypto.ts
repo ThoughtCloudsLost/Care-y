@@ -16,9 +16,15 @@ import {
   eciesDecrypt,
   generateContentKey,
   encryptContent,
+  decryptContent,
   sealForOrgKey,
   buildContentAad,
   followupSlot,
+  blobSlot,
+  fileKeySlot,
+  filenameSlot,
+  encodeFileKeyPayload,
+  decodeFileKeyPayload,
   encode,
   decode,
   requireSodium,
@@ -26,6 +32,8 @@ import {
   type PortalKeypair,
   type EciesOutput,
   type SymmetricKey,
+  toCiphertext,
+  type FileKeyPayload,
   toNonce,
   toRistrettoPoint,
   type Scalar,
@@ -43,15 +51,39 @@ export interface EciesTripleDecoded {
   readonly ciphertext: Uint8Array;
 }
 
+/** ECIES triple in the base64url form the wire uses. */
+export interface EciesTripleWire {
+  readonly ephemeralPoint: string;
+  readonly nonce: string;
+  readonly ciphertext: string;
+}
+
+/** A file the client is sending, before encryption. */
+export interface OutgoingAttachment {
+  /** Browser-minted; the blob's AAD binds it (ADR-053). */
+  readonly attachmentId: string;
+  readonly filename: string;
+  readonly contentType: string;
+  readonly data: Uint8Array;
+}
+
+/** One encrypted attachment, ready to ride the portalReply mutation. */
+export interface PortalAttachmentPayload {
+  readonly attachmentId: string;
+  readonly blob: string;
+  readonly sizeBytes: number;
+  readonly contentType: string;
+  readonly fileKeyWrap: string;
+  readonly encryptedFilename: string;
+  readonly selfCopy: EciesTripleWire;
+}
+
 /** Payload produced by encryptReply, ready for the portalReply mutation. */
 export interface PortalReplyPayload {
   readonly encryptedContent: string;
   readonly wrappedTkTemp: string;
-  readonly selfCopy: {
-    readonly ephemeralPoint: string;
-    readonly nonce: string;
-    readonly ciphertext: string;
-  };
+  readonly selfCopy: EciesTripleWire;
+  readonly attachments: readonly PortalAttachmentPayload[];
 }
 
 /** Mutable session state. The page holds one of these in module scope. */
@@ -160,11 +192,17 @@ export function decryptPortalMessage(
 const textEncoder = new TextEncoder();
 
 /**
- * Encrypt a client reply:
+ * Encrypt a client reply, and any files it carries:
  *   1. Generate tk_temp, encrypt content with AAD binding
  *   2. Seal tk_temp to org public key
  *   3. ECIES self-copy to clientPublic
- *   4. Zero tk_temp in finally
+ *   4. Encrypt each attachment under a file key wrapped by that same tk_temp
+ *   5. Zero tk_temp in finally
+ *
+ * Files ride the reply rather than a prior upload because tk_temp is what
+ * wraps their keys and it does not exist until the message is composed. One
+ * tk_temp covers the text and every file on the message, so the volunteer's
+ * single convergence pass reaches all of it.
  *
  * @returns Base64url-encoded payload ready for the portalReply mutation
  */
@@ -173,6 +211,7 @@ export function encryptReply(
   orgPublicKey: Uint8Array,
   clientPublic: RistrettoPoint,
   ids: { ticketId: string; followUpId: string; keyGeneration: string },
+  attachments: readonly OutgoingAttachment[] = [],
 ): PortalReplyPayload {
   const tkTemp: SymmetricKey = generateContentKey();
   try {
@@ -187,14 +226,124 @@ export function encryptReply(
     return {
       encryptedContent: encode(encrypted),
       wrappedTkTemp: encode(wrapped),
-      selfCopy: {
-        ephemeralPoint: encode(selfCopy.ephemeralPoint),
-        nonce: encode(selfCopy.nonce),
-        ciphertext: encode(selfCopy.ciphertext),
-      },
+      selfCopy: toWire(selfCopy),
+      attachments: attachments.map((att) =>
+        encryptAttachment(att, tkTemp, clientPublic, ids.ticketId),
+      ),
     };
   } finally {
     requireSodium().memzero(tkTemp);
+  }
+}
+
+/** ECIES output to its base64url wire form. */
+function toWire(out: EciesOutput): EciesTripleWire {
+  return {
+    ephemeralPoint: encode(out.ephemeralPoint),
+    nonce: encode(out.nonce),
+    ciphertext: encode(out.ciphertext),
+  };
+}
+
+/**
+ * Encrypt one file under a key of its own and wrap that key twice.
+ *
+ * The org's wrap is under the reply's tk_temp, which is already sealed to
+ * the org key, so a volunteer opening the reply can reach the file with no
+ * second mechanism. The self copy is sealed to the sender's own public key
+ * because tk_temp is zeroed on send, and without it they could not reopen
+ * what they just sent (ADR-089).
+ *
+ * The file key is zeroed before returning, whatever happens.
+ */
+function encryptAttachment(
+  att: OutgoingAttachment,
+  tkTemp: SymmetricKey,
+  clientPublic: RistrettoPoint,
+  ticketId: string,
+): PortalAttachmentPayload {
+  const fileKey: SymmetricKey = generateContentKey();
+  try {
+    const blob = encryptContent(
+      att.data,
+      fileKey,
+      buildContentAad(ticketId, blobSlot(att.attachmentId)),
+    );
+    const fileKeyWrap = encryptContent(
+      fileKey,
+      tkTemp,
+      buildContentAad(ticketId, fileKeySlot(att.attachmentId)),
+    );
+    const encryptedFilename = encryptContent(
+      textEncoder.encode(att.filename),
+      tkTemp,
+      buildContentAad(ticketId, filenameSlot(att.attachmentId)),
+    );
+    const selfCopy = eciesEncrypt(
+      encodeFileKeyPayload(fileKey, att.filename),
+      clientPublic,
+    );
+
+    return {
+      attachmentId: att.attachmentId,
+      blob: encode(blob),
+      sizeBytes: blob.length,
+      contentType: att.contentType,
+      fileKeyWrap: encode(fileKeyWrap),
+      encryptedFilename: encode(encryptedFilename),
+      selfCopy: toWire(selfCopy),
+    };
+  } finally {
+    requireSodium().memzero(fileKey);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Attachment decryption
+// ---------------------------------------------------------------------------
+
+/**
+ * Recover a file key and its filename from the client's wrap.
+ *
+ * @throws DecryptionError on a tampered or wrong-key triple
+ * @throws InvalidInputError when the wrap holds something other than a payload
+ */
+export function decryptAttachmentKey(
+  wrap: EciesTripleDecoded,
+  clientPrivate: Scalar,
+): FileKeyPayload {
+  const plaintext = eciesDecrypt(
+    wrap.ephemeralPoint,
+    toNonce(wrap.nonce),
+    wrap.ciphertext,
+    clientPrivate,
+  );
+  return decodeFileKeyPayload(plaintext);
+}
+
+/**
+ * Decrypt an attachment blob with a file key already recovered from a wrap.
+ *
+ * The key is zeroed here, so a caller gets one file per unwrap rather than
+ * a key it has to remember to dispose of.
+ *
+ * @throws DecryptionError if the blob was tampered with, or if the id does
+ *         not match the one the AAD was built from
+ */
+export function decryptAttachmentBlob(
+  ciphertext: Uint8Array,
+  fileKey: SymmetricKey,
+  ticketId: string,
+  attachmentId: string,
+): Uint8Array {
+  try {
+    return decryptContent(
+      toCiphertext(ciphertext),
+      fileKey,
+      buildContentAad(ticketId, blobSlot(attachmentId)),
+    );
+  } finally {
+    requireSodium().memzero(fileKey);
   }
 }
 

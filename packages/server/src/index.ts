@@ -649,6 +649,7 @@ const appRouter = createAppRouter({
     }),
   },
   clientPortalDeps: {
+    blobStore,
     submissionLimiter: createInMemoryRateLimiter({
       windowMs: RATE_WINDOW_1H,
       maxRequests: env.INTAKE_SUBMISSION_LIMIT,
