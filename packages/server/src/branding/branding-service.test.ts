@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeAll, afterAll } from "vitest";
-import { createBrandingService } from "./branding-service.js";
+import { createBrandingService, readSafeExitUrl } from "./branding-service.js";
 import type { BlobStore } from "../storage/store.js";
 import {
   createTestDb,
@@ -164,6 +164,75 @@ describe.skipIf(!process.env.DATABASE_URL)("createBrandingService", () => {
       expect(result.hasIcons).toBe(false);
       expect(result.iconVersion).toBeNull();
     });
+
+    it("returns no exit URL when the org has configured none", async () => {
+      const svc = createBrandingService(db);
+      const result = await svc.getPublicBranding();
+      expect(result.safeExitUrl).toBeNull();
+    });
+
+    // Intake and share links reach no portal bootstrap, so this payload is
+    // the only way the org's configured URL gets to them.
+    it("returns the org's configured exit URL", async () => {
+      await db
+        .updateTable("org_config")
+        .set({ portal_safe_exit_url: "https://weather.gov" })
+        .execute();
+
+      const svc = createBrandingService(db);
+      const result = await svc.getPublicBranding();
+
+      expect(result.safeExitUrl).toBe("https://weather.gov");
+      await db
+        .updateTable("org_config")
+        .set({ portal_safe_exit_url: null })
+        .execute();
+    });
+
+    // The write boundary rejects these, so a stored one predates the rule
+    // or arrived by a path that skipped it. Either way it must not reach
+    // location.replace().
+    it("drops a stored exit URL that is no longer valid", async () => {
+      await db
+        .updateTable("org_config")
+        .set({ portal_safe_exit_url: "javascript:alert(1)" })
+        .execute();
+
+      const svc = createBrandingService(db);
+      const result = await svc.getPublicBranding();
+
+      expect(result.safeExitUrl).toBeNull();
+      await db
+        .updateTable("org_config")
+        .set({ portal_safe_exit_url: null })
+        .execute();
+    });
+  });
+
+  describe("readSafeExitUrl", () => {
+    it("passes an absolute https URL through", () => {
+      expect(readSafeExitUrl("https://weather.gov")).toBe(
+        "https://weather.gov",
+      );
+    });
+
+    it("returns null for no configured URL", () => {
+      expect(readSafeExitUrl(null)).toBeNull();
+    });
+
+    const rejected = [
+      "javascript:alert(1)",
+      "data:text/html,<script>alert(1)</script>",
+      "http://weather.gov",
+      "/weather",
+      "not a url",
+    ];
+
+    for (const stored of rejected) {
+      it(`returns null for ${stored}`, () => {
+        expect(readSafeExitUrl(stored)).toBeNull();
+      });
+    }
   });
 
   describe("saveBrandingField", () => {

@@ -10,6 +10,7 @@ export {
   orgSlugSchema,
   createOrgInputSchema,
   updateOrgGeneralAdminInputSchema,
+  safeExitUrlSchema,
 } from "./schemas/org.js";
 
 // --- Utilities ---

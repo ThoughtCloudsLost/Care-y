@@ -24,6 +24,15 @@ export interface PublicBranding {
    * set nothing, in which case the portal keeps its built-in wording.
    */
   supportLabel: string;
+  /**
+   * Where quick exit sends a client, or null when the org has configured
+   * nothing. Validated as an absolute https URL server-side, so a page can
+   * hand it straight to the shell.
+   *
+   * It arrives here rather than only through the portal bootstrap, which
+   * needs a channel and therefore never reached intake or share links.
+   */
+  safeExitUrl: string | null;
 }
 
 interface ClientBrandingPayload {
@@ -66,6 +75,7 @@ async function fetchPublicBranding(): Promise<PublicBranding | null> {
     // Same untrusted-text treatment as the org name: this is admin-authored
     // content decrypted in the browser and rendered into the page.
     supportLabel: sanitizeOrgName(payload.supportLabel ?? ""),
+    safeExitUrl: data.safeExitUrl,
   };
 }
 

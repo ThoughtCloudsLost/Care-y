@@ -9,6 +9,7 @@
   import { decryptShare } from "$lib/portal/share-crypto.js";
   import { announceToLiveRegion } from "$lib/utils/announce.js";
   import PortalHint from "$lib/components/portal/PortalHint.svelte";
+  import { getClientShellCtx } from "$lib/client-shell/context.js";
 
   type ShareViewState =
     | { kind: "loading" }
@@ -79,6 +80,27 @@
         viewState = { kind: "badLink" };
         announceToLiveRegion("polite", m.share_view_bad_link());
       });
+  });
+
+  // Publishing is what gives a share link quick exit and the drawer; it had
+  // neither. The shell supplies the org's exit URL, which a share link
+  // could never reach before, since it carries no portal bootstrap.
+  //
+  // The decrypted text lives in a JS string, which cannot be zeroed, so
+  // exiting drops the reference instead. The navigation tears the page down
+  // anyway; this makes the intent explicit and covers the pagehide path.
+  const shellContainer = getClientShellCtx();
+
+  $effect(() => {
+    shellContainer.current = {
+      ondestroy: () => {
+        viewState = { kind: "opened" };
+      },
+      actions: [],
+    };
+    return () => {
+      shellContainer.current = undefined;
+    };
   });
 </script>
 

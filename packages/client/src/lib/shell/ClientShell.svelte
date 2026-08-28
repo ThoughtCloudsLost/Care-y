@@ -62,7 +62,6 @@
   let drawerOpen = $state(false);
   let navbarHeight = $state(0);
 
-  const safeUrl = $derived(shell?.safeUrl ?? DEFAULT_SAFE_URL);
   const drawerActions = $derived(shell?.actions ?? []);
   const lockScroll = $derived(shell?.lockScroll === true);
 
@@ -74,6 +73,14 @@
   const brandingQuery = createPublicBrandingQuery();
   const branding = $derived(brandingQuery.data ?? null);
   const brandingPending = $derived(brandingQuery.isLoading);
+
+  // A page's own value wins, then the org's configured URL, then the
+  // default. Intake and share links reach no bootstrap, so before the
+  // branding payload carried this they went to the default no matter what
+  // the org had chosen.
+  const safeUrl = $derived(
+    shell?.safeUrl ?? branding?.safeExitUrl ?? DEFAULT_SAFE_URL,
+  );
 
   const orgName = $derived(
     branding?.orgName !== undefined && branding.orgName !== ""

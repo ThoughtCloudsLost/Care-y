@@ -71,6 +71,7 @@
     rewriteFormAssetUrls,
   } from "$lib/utils/render-form-content.js";
   import { getOrgSlug } from "$lib/utils/org-slug.js";
+  import { getClientShellCtx } from "$lib/client-shell/context.js";
 
   // ---- Props ----
 
@@ -1207,6 +1208,23 @@
       resolvedForm.error ||
       (powRequired && powSolving && powSolution === null),
   );
+  // ---- Client shell ----
+
+  // Publishing is what gives this page quick exit and the drawer. The
+  // destroy callback is a genuine no-op: intake-crypto zeroes every key it
+  // touches synchronously inside the call that made it, so by the time
+  // anyone could tap exit there is nothing left holding key material.
+  const shellContainer = getClientShellCtx();
+
+  $effect(() => {
+    shellContainer.current = {
+      ondestroy: () => undefined,
+      actions: [],
+    };
+    return () => {
+      shellContainer.current = undefined;
+    };
+  });
 </script>
 
 <noscript>

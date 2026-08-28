@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { RESERVED_SLUGS, orgSlugSchema, createOrgInputSchema } from "./org.js";
+import {
+  RESERVED_SLUGS,
+  orgSlugSchema,
+  createOrgInputSchema,
+  safeExitUrlSchema,
+  updateOrgGeneralAdminInputSchema,
+} from "./org.js";
 
 describe("orgSlugSchema", () => {
   const valid = [
@@ -86,6 +92,82 @@ describe("createOrgInputSchema", () => {
 
   it("rejects invalid slug within object", () => {
     const result = createOrgInputSchema.safeParse({ slug: "admin" });
+    expect(result.success).toBe(false);
+  });
+});
+
+describe("safeExitUrlSchema", () => {
+  it("accepts an absolute https URL", () => {
+    expect(safeExitUrlSchema.safeParse("https://weather.gov").success).toBe(
+      true,
+    );
+    expect(
+      safeExitUrlSchema.safeParse("https://www.bbc.co.uk/weather").success,
+    ).toBe(true);
+  });
+
+  // The value becomes the argument to location.replace() on the client
+  // portal. z.url() alone would accept every one of these, because it
+  // validates through new URL(), which parses any scheme.
+  const dangerous = [
+    "javascript:alert(1)",
+    "JavaScript:alert(1)",
+    "data:text/html,<script>alert(1)</script>",
+    "vbscript:msgbox(1)",
+    "file:///etc/passwd",
+  ];
+
+  for (const url of dangerous) {
+    it(`rejects ${url.split(":")[0]!} scheme`, () => {
+      expect(safeExitUrlSchema.safeParse(url).success).toBe(false);
+    });
+  }
+
+  it("rejects plain http, which downgrades the exit hop", () => {
+    expect(safeExitUrlSchema.safeParse("http://weather.gov").success).toBe(
+      false,
+    );
+  });
+
+  it("rejects a relative path, which would keep the client on this origin", () => {
+    expect(safeExitUrlSchema.safeParse("/weather").success).toBe(false);
+  });
+
+  it("rejects a URL longer than the column allows", () => {
+    const long = `https://example.com/${"a".repeat(2048)}`;
+    expect(safeExitUrlSchema.safeParse(long).success).toBe(false);
+  });
+});
+
+describe("updateOrgGeneralAdminInputSchema", () => {
+  // countryCode is an E.164 dialing code, not an ISO country code.
+  const base = {
+    encryptedOrgName: "ciphertext",
+    defaultLanguage: "en",
+    countryCode: "+1",
+  };
+
+  it("accepts an https exit URL", () => {
+    const result = updateOrgGeneralAdminInputSchema.safeParse({
+      ...base,
+      portalSafeExitUrl: "https://weather.gov",
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("accepts no exit URL, leaving the client default in place", () => {
+    const result = updateOrgGeneralAdminInputSchema.safeParse({
+      ...base,
+      portalSafeExitUrl: null,
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("rejects a script-scheme exit URL at the write boundary", () => {
+    const result = updateOrgGeneralAdminInputSchema.safeParse({
+      ...base,
+      portalSafeExitUrl: "javascript:alert(1)",
+    });
     expect(result.success).toBe(false);
   });
 });

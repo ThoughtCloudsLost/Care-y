@@ -35,8 +35,17 @@ export interface ClientShellState {
    * away, and the pagehide fallback calls it on unload.
    */
   readonly ondestroy: () => void;
-  /** Org-configured safe exit URL. */
-  readonly safeUrl: string;
+  /**
+   * Exit target for this page, when it knows one the shell does not. The
+   * portal bootstrap carries its own copy, so a channel page supplies it.
+   *
+   * Optional on purpose. The shell reads the org's configured URL from the
+   * branding payload, so a page that publishes nothing here still exits
+   * where the org chose. Making every page re-supply it would put the
+   * safety property back behind something a new page can forget, which is
+   * the reason quick exit itself is rendered once by the shell.
+   */
+  readonly safeUrl?: string;
   /** Page-specific drawer entries, listed above the standing items. */
   readonly actions: readonly ClientDrawerAction[];
   /**

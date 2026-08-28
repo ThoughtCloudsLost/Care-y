@@ -8,8 +8,21 @@
   import { Block, BlockTitle } from "konsta/svelte";
   import * as m from "$lib/paraglide/messages.js";
   import { getBrandingTitle } from "$lib/branding/title.svelte.js";
+  import { getClientShellCtx } from "$lib/client-shell/context.js";
 
   const orgName = $derived(getBrandingTitle());
+
+  // A static notice holds no key material, but it still publishes: that is
+  // what gives it quick exit and the drawer, and the shell supplies the
+  // org's exit URL so this page does not have to know it.
+  const shellContainer = getClientShellCtx();
+
+  $effect(() => {
+    shellContainer.current = { ondestroy: () => undefined, actions: [] };
+    return () => {
+      shellContainer.current = undefined;
+    };
+  });
 </script>
 
 <BlockTitle large>{m.intake_privacy_title()}</BlockTitle>

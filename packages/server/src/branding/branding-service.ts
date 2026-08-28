@@ -8,6 +8,7 @@ import type {
   UploadIconsInput,
   OrgSchema,
 } from "@care-y/shared";
+import { safeExitUrlSchema } from "@care-y/shared";
 import { validateMagicBytes } from "../telephony/attachment-validator.js";
 import { ValidationError } from "../errors.js";
 import { deriveBrandingKey, decryptBrandingBlob } from "./branding-crypto.js";
@@ -60,6 +61,29 @@ export interface PublicBrandingData {
   readonly clientEncryptedBranding: string | null;
   readonly hasIcons: boolean;
   readonly iconVersion: string | null;
+  /**
+   * Where quick exit sends a client. Reaches the browser here rather than
+   * only through the portal bootstrap, which needs a channel and therefore
+   * never covered intake or share links.
+   *
+   * Not secret and not PII, so it rides beside the slug as a plain field
+   * rather than inside the encrypted blob.
+   */
+  readonly safeExitUrl: string | null;
+}
+
+/**
+ * Re-check the stored exit URL on the way out.
+ *
+ * The write boundary already pins the scheme, and this pins it again,
+ * because the value becomes the argument to `location.replace()` on a page
+ * whose whole purpose is leaving quickly. A row that predates the tighter
+ * write rule, or arrives by any path that skips it, degrades to the
+ * client's default rather than to script execution.
+ */
+export function readSafeExitUrl(stored: string | null): string | null {
+  if (stored === null) return null;
+  return safeExitUrlSchema.safeParse(stored).success ? stored : null;
 }
 
 export interface BrandingService {
@@ -118,6 +142,7 @@ export function createBrandingService(
           "org_public_key",
           "client_encrypted_branding",
           "icon_192_blob_key",
+          "portal_safe_exit_url",
         ])
         .executeTakeFirst();
 
@@ -128,6 +153,7 @@ export function createBrandingService(
         ),
         hasIcons: config?.icon_192_blob_key != null,
         iconVersion: config?.icon_192_blob_key?.slice(0, 8) ?? null,
+        safeExitUrl: readSafeExitUrl(config?.portal_safe_exit_url ?? null),
       };
     },
 
