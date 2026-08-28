@@ -551,3 +551,42 @@ describe("matchesAnyLocale", () => {
     );
   });
 });
+
+// ---------------------------------------------------------------------------
+// Client shell isolation
+// ---------------------------------------------------------------------------
+
+// The classifier matches on the rendered string, not the message key, and
+// the client portal renders several of the same words the org login does
+// ("Password", "Sign in"). PhoneApp classifies every trusted click
+// document-wide with the current feature, so once the (client) group is
+// mounted a help-seeker's tap reaches this function with feature "client".
+//
+// Nothing in the client shell should classify to an org topic. The story
+// would jump to the login section, in the wrong shell, under the wrong
+// viewer, in response to someone filling in a portal form.
+describe("client shell does not classify org topics", () => {
+  const clientCtx: ClassifierContext = { inDetail: false, feature: "client" };
+
+  // Rendered strings from the (client) group, taken from the messages the
+  // portal pages actually use rather than invented.
+  const CLIENT_LABELS = [
+    "Username", // account_login_username
+    "Password", // account_login_password
+    "Sign in", // account_login_submit
+    "Current password", // account_change_current
+  ];
+
+  for (const label of CLIENT_LABELS) {
+    it(`does not classify "${label}" inside the client shell`, () => {
+      expect(classifyDemoLabel(label, clientCtx)).toBeNull();
+    });
+  }
+
+  it("still classifies the same words on the org login screen", () => {
+    // The gate must exclude the client shell without disarming the login
+    // screen these labels exist for.
+    expect(classifyDemoLabel("Sign in", loginCtx)).toBe("credentials");
+    expect(classifyDemoLabel("Password", loginCtx)).toBe("credentials");
+  });
+});
