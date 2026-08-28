@@ -6,75 +6,69 @@
  */
 
 import { describe, it, expect, beforeAll } from "vitest";
+import { encryptFieldContent, decryptFieldContent } from "./intake-form.js";
+import { deriveClientBrandingKey } from "./branding.js";
+import { encryptContent } from "./content.js";
+import { encode, decode } from "./serialize.js";
 import {
   getSodium,
-  requireSodium,
-  DecryptionError,
-  decode,
-  encode,
-  deriveClientBrandingKey,
-  encryptContent,
-} from "@care-y/crypto";
+  _resetSodiumForTesting,
+  type SodiumBackend,
+} from "./sodium.js";
+import { DecryptionError } from "./errors.js";
 import type {
   IntakeFieldConfig,
   LocalizedText,
   VisibleWhenV1,
   VisibleWhenV2,
 } from "@care-y/shared";
-import {
-  encryptFieldContent,
-  decryptFieldContent,
-} from "./intake-form-crypto.js";
 
-beforeAll(async () => {
-  await getSodium();
-});
-
-function generateOrgPublicKey(): Uint8Array {
-  const sodium = requireSodium();
-  const sk = sodium.randombytes_buf(sodium.crypto_box_SECRETKEYBYTES);
-  return sodium.crypto_scalarmult_base(sk);
+function generateOrgPublicKey(sodium: SodiumBackend): Uint8Array {
+  const kp = sodium.crypto_box_keypair();
+  return kp.publicKey;
 }
 
-describe("intake-form-crypto", () => {
-  const orgPubKey = (() => {
-    // Deferred: sodium must be ready before calling generateOrgPublicKey.
-    // The variable is assigned in beforeAll via a second init or lazily.
-    let key: Uint8Array | undefined;
-    return (): Uint8Array => {
-      key ??= generateOrgPublicKey();
-      return key;
-    };
-  })();
+describe("intake-form", () => {
+  let sodium: SodiumBackend;
+
+  beforeAll(async () => {
+    _resetSodiumForTesting();
+    sodium = await getSodium();
+  });
+
+  const orgPubKey = (): Uint8Array => generateOrgPublicKey(sodium);
 
   describe("encryptFieldContent / decryptFieldContent roundtrip", () => {
     it("roundtrips a text field config with LocalizedText label", () => {
+      const pk = orgPubKey();
       const config: IntakeFieldConfig = {
         type: "text",
         maxLength: 200,
         placeholder: { en: "Your name" },
       };
       const label: LocalizedText = { en: "Full Name" };
-      const encrypted = encryptFieldContent({ label, config }, orgPubKey());
-      const decrypted = decryptFieldContent(encrypted, orgPubKey());
+      const encrypted = encryptFieldContent({ label, config }, pk);
+      const decrypted = decryptFieldContent(encrypted, pk);
 
       expect(decrypted.label).toEqual({ en: "Full Name" });
       expect(decrypted.config).toEqual(config);
     });
 
     it("roundtrips a text field config with optional fields omitted", () => {
+      const pk = orgPubKey();
       const config: IntakeFieldConfig = { type: "text" };
       const encrypted = encryptFieldContent(
         { label: { en: "Simple" }, config },
-        orgPubKey(),
+        pk,
       );
-      const decrypted = decryptFieldContent(encrypted, orgPubKey());
+      const decrypted = decryptFieldContent(encrypted, pk);
 
       expect(decrypted.label).toEqual({ en: "Simple" });
       expect(decrypted.config).toEqual({ type: "text" });
     });
 
     it("roundtrips a textarea field config", () => {
+      const pk = orgPubKey();
       const config: IntakeFieldConfig = {
         type: "textarea",
         maxLength: 5000,
@@ -82,15 +76,16 @@ describe("intake-form-crypto", () => {
       };
       const encrypted = encryptFieldContent(
         { label: { en: "Message" }, config },
-        orgPubKey(),
+        pk,
       );
-      const decrypted = decryptFieldContent(encrypted, orgPubKey());
+      const decrypted = decryptFieldContent(encrypted, pk);
 
       expect(decrypted.label).toEqual({ en: "Message" });
       expect(decrypted.config).toEqual(config);
     });
 
     it("roundtrips a select field config with keyed options", () => {
+      const pk = orgPubKey();
       const config: IntakeFieldConfig = {
         type: "select",
         options: [
@@ -101,15 +96,16 @@ describe("intake-form-crypto", () => {
       };
       const encrypted = encryptFieldContent(
         { label: { en: "Contact Method" }, config },
-        orgPubKey(),
+        pk,
       );
-      const decrypted = decryptFieldContent(encrypted, orgPubKey());
+      const decrypted = decryptFieldContent(encrypted, pk);
 
       expect(decrypted.label).toEqual({ en: "Contact Method" });
       expect(decrypted.config).toEqual(config);
     });
 
     it("roundtrips a multiselect field config with keyed options", () => {
+      const pk = orgPubKey();
       const config: IntakeFieldConfig = {
         type: "multiselect",
         options: [
@@ -121,15 +117,16 @@ describe("intake-form-crypto", () => {
       };
       const encrypted = encryptFieldContent(
         { label: { en: "Services Needed" }, config },
-        orgPubKey(),
+        pk,
       );
-      const decrypted = decryptFieldContent(encrypted, orgPubKey());
+      const decrypted = decryptFieldContent(encrypted, pk);
 
       expect(decrypted.label).toEqual({ en: "Services Needed" });
       expect(decrypted.config).toEqual(config);
     });
 
     it("roundtrips an availability field config", () => {
+      const pk = orgPubKey();
       const config: IntakeFieldConfig = {
         type: "availability",
         allowRecurring: true,
@@ -137,15 +134,16 @@ describe("intake-form-crypto", () => {
       };
       const encrypted = encryptFieldContent(
         { label: { en: "When can we reach you?" }, config },
-        orgPubKey(),
+        pk,
       );
-      const decrypted = decryptFieldContent(encrypted, orgPubKey());
+      const decrypted = decryptFieldContent(encrypted, pk);
 
       expect(decrypted.label).toEqual({ en: "When can we reach you?" });
       expect(decrypted.config).toEqual(config);
     });
 
     it("roundtrips an availability field with both windows enabled", () => {
+      const pk = orgPubKey();
       const config: IntakeFieldConfig = {
         type: "availability",
         allowRecurring: true,
@@ -153,21 +151,22 @@ describe("intake-form-crypto", () => {
       };
       const encrypted = encryptFieldContent(
         { label: { en: "Availability" }, config },
-        orgPubKey(),
+        pk,
       );
-      const decrypted = decryptFieldContent(encrypted, orgPubKey());
+      const decrypted = decryptFieldContent(encrypted, pk);
 
       expect(decrypted.config).toEqual(config);
     });
 
     it("preserves Unicode in labels", () => {
+      const pk = orgPubKey();
       const config: IntakeFieldConfig = { type: "text" };
       const label: LocalizedText = {
         en: "Full Name",
         es: "Nombre completo",
       };
-      const encrypted = encryptFieldContent({ label, config }, orgPubKey());
-      const decrypted = decryptFieldContent(encrypted, orgPubKey());
+      const encrypted = encryptFieldContent({ label, config }, pk);
+      const decrypted = decryptFieldContent(encrypted, pk);
 
       expect(decrypted.label).toEqual({
         en: "Full Name",
@@ -176,10 +175,11 @@ describe("intake-form-crypto", () => {
     });
 
     it("produces different ciphertext on each call (random nonce)", () => {
+      const pk = orgPubKey();
       const config: IntakeFieldConfig = { type: "text" };
       const label: LocalizedText = { en: "Same" };
-      const a = encryptFieldContent({ label, config }, orgPubKey());
-      const b = encryptFieldContent({ label, config }, orgPubKey());
+      const a = encryptFieldContent({ label, config }, pk);
+      const b = encryptFieldContent({ label, config }, pk);
 
       expect(a.encryptedLabel).not.toBe(b.encryptedLabel);
       expect(a.encryptedConfig).not.toBe(b.encryptedConfig);
@@ -188,10 +188,11 @@ describe("intake-form-crypto", () => {
 
   describe("tampered ciphertext", () => {
     it("throws DecryptionError when label ciphertext is tampered", () => {
+      const pk = orgPubKey();
       const config: IntakeFieldConfig = { type: "text" };
       const encrypted = encryptFieldContent(
         { label: { en: "Name" }, config },
-        orgPubKey(),
+        pk,
       );
 
       const labelBytes = decode(encrypted.encryptedLabel);
@@ -203,12 +204,11 @@ describe("intake-form-crypto", () => {
         encryptedLabel: encode(labelBytes),
       };
 
-      expect(() => decryptFieldContent(tampered, orgPubKey())).toThrow(
-        DecryptionError,
-      );
+      expect(() => decryptFieldContent(tampered, pk)).toThrow(DecryptionError);
     });
 
     it("throws DecryptionError when config ciphertext is tampered", () => {
+      const pk = orgPubKey();
       const config: IntakeFieldConfig = {
         type: "select",
         options: [
@@ -218,7 +218,7 @@ describe("intake-form-crypto", () => {
       };
       const encrypted = encryptFieldContent(
         { label: { en: "Pick" }, config },
-        orgPubKey(),
+        pk,
       );
 
       const configBytes = decode(encrypted.encryptedConfig);
@@ -229,19 +229,18 @@ describe("intake-form-crypto", () => {
         encryptedConfig: encode(configBytes),
       };
 
-      expect(() => decryptFieldContent(tampered, orgPubKey())).toThrow(
-        DecryptionError,
-      );
+      expect(() => decryptFieldContent(tampered, pk)).toThrow(DecryptionError);
     });
 
     it("throws DecryptionError with wrong org public key", () => {
+      const pk = orgPubKey();
       const config: IntakeFieldConfig = { type: "text" };
       const encrypted = encryptFieldContent(
         { label: { en: "Name" }, config },
-        orgPubKey(),
+        pk,
       );
 
-      const otherKey = generateOrgPublicKey();
+      const otherKey = orgPubKey();
 
       expect(() => decryptFieldContent(encrypted, otherKey)).toThrow(
         DecryptionError,
@@ -251,9 +250,10 @@ describe("intake-form-crypto", () => {
 
   describe("schema validation on decrypt", () => {
     it("throws DecryptionError when config fails schema (not silent default)", () => {
+      const pk = orgPubKey();
       // Manually encrypt a config blob with an invalid shape: missing
       // the discriminator "type" field entirely.
-      const key = deriveClientBrandingKey(orgPubKey());
+      const key = deriveClientBrandingKey(pk);
       const aad = new TextEncoder().encode("care-y-intake-form-aad-v1");
 
       try {
@@ -274,16 +274,15 @@ describe("intake-form-crypto", () => {
           encryptedConfig: encode(configBlob),
         };
 
-        expect(() => decryptFieldContent(enc, orgPubKey())).toThrow(
-          DecryptionError,
-        );
+        expect(() => decryptFieldContent(enc, pk)).toThrow(DecryptionError);
       } finally {
-        requireSodium().memzero(key);
+        sodium.memzero(key);
       }
     });
 
     it("throws DecryptionError when config has wrong type variant", () => {
-      const key = deriveClientBrandingKey(orgPubKey());
+      const pk = orgPubKey();
+      const key = deriveClientBrandingKey(pk);
       const aad = new TextEncoder().encode("care-y-intake-form-aad-v1");
 
       try {
@@ -305,16 +304,15 @@ describe("intake-form-crypto", () => {
           encryptedConfig: encode(configBlob),
         };
 
-        expect(() => decryptFieldContent(enc, orgPubKey())).toThrow(
-          DecryptionError,
-        );
+        expect(() => decryptFieldContent(enc, pk)).toThrow(DecryptionError);
       } finally {
-        requireSodium().memzero(key);
+        sodium.memzero(key);
       }
     });
 
     it("throws DecryptionError when config JSON is not an object", () => {
-      const key = deriveClientBrandingKey(orgPubKey());
+      const pk = orgPubKey();
+      const key = deriveClientBrandingKey(pk);
       const aad = new TextEncoder().encode("care-y-intake-form-aad-v1");
 
       try {
@@ -334,17 +332,16 @@ describe("intake-form-crypto", () => {
           encryptedConfig: encode(configBlob),
         };
 
-        expect(() => decryptFieldContent(enc, orgPubKey())).toThrow(
-          DecryptionError,
-        );
+        expect(() => decryptFieldContent(enc, pk)).toThrow(DecryptionError);
       } finally {
-        requireSodium().memzero(key);
+        sodium.memzero(key);
       }
     });
   });
 
   describe("visibleWhen roundtrip through encrypt/decrypt", () => {
     it("v1 all-mode encrypts as v2 and decrypts to v2 (single group)", () => {
+      const pk = orgPubKey();
       const config: IntakeFieldConfig = { type: "text" };
       const label: LocalizedText = { en: "Conditional field" };
       const v1Input: VisibleWhenV1 = {
@@ -356,9 +353,9 @@ describe("intake-form-crypto", () => {
 
       const encrypted = encryptFieldContent(
         { label, config, visibleWhen: v1Input },
-        orgPubKey(),
+        pk,
       );
-      const decrypted = decryptFieldContent(encrypted, orgPubKey());
+      const decrypted = decryptFieldContent(encrypted, pk);
 
       // Decrypted output is always v2
       const expectedV2: VisibleWhenV2 = {
@@ -371,6 +368,7 @@ describe("intake-form-crypto", () => {
     });
 
     it("v1 any-mode encrypts as v2 (one group per rule)", () => {
+      const pk = orgPubKey();
       const config: IntakeFieldConfig = {
         type: "multiselect",
         options: [
@@ -388,9 +386,9 @@ describe("intake-form-crypto", () => {
 
       const encrypted = encryptFieldContent(
         { label: { en: "Dependent" }, config, visibleWhen: v1Input },
-        orgPubKey(),
+        pk,
       );
-      const decrypted = decryptFieldContent(encrypted, orgPubKey());
+      const decrypted = decryptFieldContent(encrypted, pk);
 
       const expectedV2: VisibleWhenV2 = {
         version: 2,
@@ -400,6 +398,7 @@ describe("intake-form-crypto", () => {
     });
 
     it("v2 shape round-trips unchanged", () => {
+      const pk = orgPubKey();
       const config: IntakeFieldConfig = { type: "text" };
       const v2Input: VisibleWhenV2 = {
         version: 2,
@@ -414,14 +413,15 @@ describe("intake-form-crypto", () => {
 
       const encrypted = encryptFieldContent(
         { label: { en: "V2 condition" }, config, visibleWhen: v2Input },
-        orgPubKey(),
+        pk,
       );
-      const decrypted = decryptFieldContent(encrypted, orgPubKey());
+      const decrypted = decryptFieldContent(encrypted, pk);
 
       expect(decrypted.visibleWhen).toEqual(v2Input);
     });
 
     it("v2 with negated operators round-trips correctly", () => {
+      const pk = orgPubKey();
       const config: IntakeFieldConfig = { type: "textarea" };
       const v2Input: VisibleWhenV2 = {
         version: 2,
@@ -433,14 +433,15 @@ describe("intake-form-crypto", () => {
 
       const encrypted = encryptFieldContent(
         { label: { en: "Negated" }, config, visibleWhen: v2Input },
-        orgPubKey(),
+        pk,
       );
-      const decrypted = decryptFieldContent(encrypted, orgPubKey());
+      const decrypted = decryptFieldContent(encrypted, pk);
 
       expect(decrypted.visibleWhen).toEqual(v2Input);
     });
 
     it("v2 with isEmpty/isNotEmpty operators round-trips correctly", () => {
+      const pk = orgPubKey();
       const config: IntakeFieldConfig = { type: "text" };
       const v2Input: VisibleWhenV2 = {
         version: 2,
@@ -452,25 +453,27 @@ describe("intake-form-crypto", () => {
 
       const encrypted = encryptFieldContent(
         { label: { en: "Empty check" }, config, visibleWhen: v2Input },
-        orgPubKey(),
+        pk,
       );
-      const decrypted = decryptFieldContent(encrypted, orgPubKey());
+      const decrypted = decryptFieldContent(encrypted, pk);
 
       expect(decrypted.visibleWhen).toEqual(v2Input);
     });
 
     it("returns undefined visibleWhen when none was provided", () => {
+      const pk = orgPubKey();
       const config: IntakeFieldConfig = { type: "text" };
       const encrypted = encryptFieldContent(
         { label: { en: "No condition" }, config },
-        orgPubKey(),
+        pk,
       );
-      const decrypted = decryptFieldContent(encrypted, orgPubKey());
+      const decrypted = decryptFieldContent(encrypted, pk);
 
       expect(decrypted.visibleWhen).toBeUndefined();
     });
 
     it("v1 blob decrypts to v2 in memory and re-encrypts as v2", () => {
+      const pk = orgPubKey();
       const config: IntakeFieldConfig = { type: "text" };
       const label: LocalizedText = { en: "Re-encrypt test" };
       const v1Input: VisibleWhenV1 = {
@@ -484,28 +487,29 @@ describe("intake-form-crypto", () => {
       // First encrypt with v1 input
       const firstEncrypted = encryptFieldContent(
         { label, config, visibleWhen: v1Input },
-        orgPubKey(),
+        pk,
       );
       // Decrypt: should be v2
-      const decrypted = decryptFieldContent(firstEncrypted, orgPubKey());
+      const decrypted = decryptFieldContent(firstEncrypted, pk);
       expect(decrypted.visibleWhen?.version).toBe(2);
 
       // Re-encrypt the decrypted v2 shape
       const reEncrypted = encryptFieldContent(
         { label, config, visibleWhen: decrypted.visibleWhen },
-        orgPubKey(),
+        pk,
       );
       // Decrypt again: still v2, structurally identical
-      const reDecrypted = decryptFieldContent(reEncrypted, orgPubKey());
+      const reDecrypted = decryptFieldContent(reEncrypted, pk);
       expect(reDecrypted.visibleWhen).toEqual(decrypted.visibleWhen);
     });
   });
 
   describe("malformed visibleWhen in config blob", () => {
     it("omits visibleWhen when it fails schema validation (does not crash)", () => {
+      const pk = orgPubKey();
       // Hand-craft an encrypted config blob with a valid field config but
       // a malformed visibleWhen (missing required "rules" array).
-      const key = deriveClientBrandingKey(orgPubKey());
+      const key = deriveClientBrandingKey(pk);
       const aad = new TextEncoder().encode("care-y-intake-form-aad-v1");
 
       try {
@@ -530,16 +534,17 @@ describe("intake-form-crypto", () => {
         };
 
         // Should not throw; the config is valid, only visibleWhen is bad
-        const decrypted = decryptFieldContent(enc, orgPubKey());
+        const decrypted = decryptFieldContent(enc, pk);
         expect(decrypted.config.type).toBe("text");
         expect(decrypted.visibleWhen).toBeUndefined();
       } finally {
-        requireSodium().memzero(key);
+        sodium.memzero(key);
       }
     });
 
     it("omits visibleWhen when rules have an invalid operator", () => {
-      const key = deriveClientBrandingKey(orgPubKey());
+      const pk = orgPubKey();
+      const key = deriveClientBrandingKey(pk);
       const aad = new TextEncoder().encode("care-y-intake-form-aad-v1");
 
       try {
@@ -566,16 +571,17 @@ describe("intake-form-crypto", () => {
           encryptedConfig: encode(configBlob),
         };
 
-        const decrypted = decryptFieldContent(enc, orgPubKey());
+        const decrypted = decryptFieldContent(enc, pk);
         expect(decrypted.config.type).toBe("checkbox");
         expect(decrypted.visibleWhen).toBeUndefined();
       } finally {
-        requireSodium().memzero(key);
+        sodium.memzero(key);
       }
     });
 
     it("omits visibleWhen when the value is not an object", () => {
-      const key = deriveClientBrandingKey(orgPubKey());
+      const pk = orgPubKey();
+      const key = deriveClientBrandingKey(pk);
       const aad = new TextEncoder().encode("care-y-intake-form-aad-v1");
 
       try {
@@ -599,11 +605,11 @@ describe("intake-form-crypto", () => {
           encryptedConfig: encode(configBlob),
         };
 
-        const decrypted = decryptFieldContent(enc, orgPubKey());
+        const decrypted = decryptFieldContent(enc, pk);
         expect(decrypted.config.type).toBe("text");
         expect(decrypted.visibleWhen).toBeUndefined();
       } finally {
-        requireSodium().memzero(key);
+        sodium.memzero(key);
       }
     });
   });

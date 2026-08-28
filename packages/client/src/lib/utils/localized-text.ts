@@ -63,30 +63,9 @@ export function trimLocalized(text: LocalizedText): LocalizedText {
 // Rich-text-aware helpers (LocalizedRichText)
 // ---------------------------------------------------------------------------
 
-/**
- * Check whether a single rich-text locale value has meaningful content.
- * Strings are checked via trim().length; ProseMirror doc objects are
- * non-empty when their content array has at least one node.
- *
- * Exported so both IntakeFormEditor (completeness checks) and
- * intake-form-crypto (encryptFormMeta emptiness check) can share it
- * without duplication.
- */
-export function hasRichValue(v: string | ProseMirrorDocJSON): boolean {
-  if (typeof v === "string") return v.trim().length > 0;
-  return Array.isArray(v.content) && v.content.length > 0;
-}
-
-/**
- * Check whether a LocalizedRichText record has any non-empty locale value.
- * Returns false for undefined/null inputs.
- */
-export function hasAnyRichContent(
-  localized: LocalizedRichText | undefined,
-): boolean {
-  if (localized == null) return false;
-  return Object.values(localized).some((v) => hasRichValue(v));
-}
+// Canonical definitions live in @care-y/shared (packages/shared/src/schemas/intake-forms.ts).
+// Re-exported here so existing client-side callers do not need import changes.
+export { hasRichValue, hasAnyRichContent } from "@care-y/shared";
 
 /**
  * Strip empty locale entries from a LocalizedRichText for storage.

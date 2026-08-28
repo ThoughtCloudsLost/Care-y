@@ -105,6 +105,16 @@ export {
   decryptClientBranding,
 } from "./branding.js";
 
+// --- Intake Form ---
+export {
+  encryptFieldContent,
+  decryptFieldContent,
+  encryptFormMeta,
+  decryptFormMeta,
+  type EncryptedFieldContent,
+  type DecryptedFieldContent,
+} from "./intake-form.js";
+
 // --- Escrow ---
 export {
   encryptWithPassphrase,

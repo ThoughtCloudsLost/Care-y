@@ -643,6 +643,8 @@ export {
   resolveLocalized,
   proseMirrorDocSchema,
   localizedRichTextSchema,
+  hasRichValue,
+  hasAnyRichContent,
   intakeFieldTypeSchema,
   intakeFieldRoleSchema,
   UNIQUE_ROLES_PER_FORM,

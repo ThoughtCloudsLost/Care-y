@@ -99,6 +99,27 @@ export const localizedRichTextSchema = z.partialRecord(
 );
 export type LocalizedRichText = z.infer<typeof localizedRichTextSchema>;
 
+/**
+ * Check whether a single rich-text locale value has meaningful content.
+ * Strings are checked via trim().length; ProseMirror doc objects are
+ * non-empty when their content array has at least one node.
+ */
+export function hasRichValue(v: string | ProseMirrorDocJSON): boolean {
+  if (typeof v === "string") return v.trim().length > 0;
+  return Array.isArray(v.content) && v.content.length > 0;
+}
+
+/**
+ * Check whether a LocalizedRichText record has any non-empty locale value.
+ * Returns false for undefined/null inputs.
+ */
+export function hasAnyRichContent(
+  localized: LocalizedRichText | undefined,
+): boolean {
+  if (localized == null) return false;
+  return Object.values(localized).some((v) => hasRichValue(v));
+}
+
 // ---------------------------------------------------------------------------
 // Field types
 // ---------------------------------------------------------------------------
