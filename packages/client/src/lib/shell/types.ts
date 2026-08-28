@@ -74,6 +74,16 @@ export interface PageLayoutProps {
   bottomBar?: Snippet;
   /** CSS touch-action value for the scroll container. Default: 'auto'. */
   touchAction?: string;
+  /**
+   * Bindable handle on the scroll region, when lockScroll owns the scroll.
+   *
+   * A chat page needs the scrolling element to anchor position on prepend
+   * and to know whether the reader is at the bottom. The org thread owns
+   * its own scroller and binds it directly; a page whose scroll lives here
+   * has no other way to reach it, and a second scroller inside the content
+   * would swallow this one.
+   */
+  scrollEl?: HTMLDivElement | undefined;
   /** Page content. */
   children: Snippet;
 }

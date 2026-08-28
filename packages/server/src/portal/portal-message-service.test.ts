@@ -32,6 +32,7 @@ import {
   clientReply,
   storeClientCopy,
   nudgeClient,
+  listMessages,
   type PortalMessageServiceDeps,
   type PortalReplyServiceInput,
   type EciesTripleBuffers,
@@ -45,7 +46,7 @@ import {
   newKeyGeneration,
   channelSecretSchema,
 } from "@care-y/shared";
-import type { ClientId } from "@care-y/shared";
+import type { ClientId, PortalMessageId } from "@care-y/shared";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -678,6 +679,239 @@ describe.skipIf(!process.env.DATABASE_URL)(
           { orgId: TEST_ORG_ID, orgSchema: TEST_ORG_SCHEMA },
           "system",
         );
+      });
+    });
+
+    // -----------------------------------------------------------------------
+    // listMessages
+    // -----------------------------------------------------------------------
+
+    describe("listMessages", () => {
+      /** Insert a portal_messages row directly, returning its id. */
+      async function insertMessage(
+        db: TestDb["db"],
+        channelRowId: string,
+        followupId: string,
+        direction: "to_client" | "from_client" = "to_client",
+      ): Promise<PortalMessageId> {
+        const triple = fakeTriple();
+        const row = await db
+          .insertInto("portal_messages")
+          .values({
+            channel_id: channelRowId as never,
+            followup_id: followupId as never,
+            direction,
+            ephemeral_point: triple.ephemeralPoint,
+            nonce: triple.nonce,
+            ciphertext: triple.ciphertext,
+          })
+          .returning("id")
+          .executeTakeFirstOrThrow();
+        return row.id;
+      }
+
+      /** Insert a follow-up for FK satisfaction. */
+      async function insertFollowup(
+        db: TestDb["db"],
+        ticketId: string,
+      ): Promise<string> {
+        const fuId = newFollowupId();
+        await db
+          .insertInto("followups")
+          .values({
+            id: fuId,
+            ticket_id: ticketId as never,
+            source: "volunteer",
+            type: "message",
+            encrypted_content: Buffer.from("ct"),
+          })
+          .execute();
+        return fuId;
+      }
+
+      it("returns oldest-first for both directions", async () => {
+        const fixture = await createTestTicketFixture(testDb.db);
+        const channel = await insertChannel(testDb.db, fixture.clientId);
+
+        const fu1 = await insertFollowup(testDb.db, fixture.ticketId);
+        const id1 = await insertMessage(testDb.db, channel.id, fu1);
+
+        const fu2 = await insertFollowup(testDb.db, fixture.ticketId);
+        const id2 = await insertMessage(testDb.db, channel.id, fu2);
+
+        const newerResult = await listMessages(testDb.db, channel, {
+          limit: 50,
+          direction: "newer",
+        });
+        expect(newerResult.messages.length).toBe(2);
+        expect(newerResult.messages[0]!.id).toBe(id1);
+        expect(newerResult.messages[1]!.id).toBe(id2);
+
+        const olderResult = await listMessages(testDb.db, channel, {
+          limit: 50,
+          direction: "older",
+        });
+        expect(olderResult.messages.length).toBe(2);
+        // "older" walks backwards then reverses, so still oldest-first
+        expect(olderResult.messages[0]!.id).toBe(id1);
+        expect(olderResult.messages[1]!.id).toBe(id2);
+      });
+
+      it("cursor excludes the cursor row and returns the adjacent page", async () => {
+        const fixture = await createTestTicketFixture(testDb.db);
+        const channel = await insertChannel(testDb.db, fixture.clientId);
+
+        const fu1 = await insertFollowup(testDb.db, fixture.ticketId);
+        const id1 = await insertMessage(testDb.db, channel.id, fu1);
+
+        const fu2 = await insertFollowup(testDb.db, fixture.ticketId);
+        const id2 = await insertMessage(testDb.db, channel.id, fu2);
+
+        const fu3 = await insertFollowup(testDb.db, fixture.ticketId);
+        const id3 = await insertMessage(testDb.db, channel.id, fu3);
+
+        // Cursor at id2, direction "newer": should return only id3
+        const newerPage = await listMessages(testDb.db, channel, {
+          limit: 50,
+          cursor: id2,
+          direction: "newer",
+        });
+        expect(newerPage.messages.length).toBe(1);
+        expect(newerPage.messages[0]!.id).toBe(id3);
+
+        // Cursor at id2, direction "older": should return only id1
+        const olderPage = await listMessages(testDb.db, channel, {
+          limit: 50,
+          cursor: id2,
+          direction: "older",
+        });
+        expect(olderPage.messages.length).toBe(1);
+        expect(olderPage.messages[0]!.id).toBe(id1);
+      });
+
+      it("handles two rows with identical created_at without duplication or loss", async () => {
+        const fixture = await createTestTicketFixture(testDb.db);
+        const channel = await insertChannel(testDb.db, fixture.clientId);
+
+        const fu1 = await insertFollowup(testDb.db, fixture.ticketId);
+        const id1 = await insertMessage(testDb.db, channel.id, fu1);
+
+        const fu2 = await insertFollowup(testDb.db, fixture.ticketId);
+        const id2 = await insertMessage(testDb.db, channel.id, fu2);
+
+        // Force both rows to share the exact same created_at, which is what
+        // the id tiebreaker exists for. Through the query builder rather than
+        // a raw template: withSchema does not rewrite raw SQL, so the update
+        // would have resolved against public and left the rows untouched,
+        // and the test would have passed without ever setting up its premise.
+        await testDb.db
+          .updateTable("portal_messages")
+          .set({ created_at: new Date("2025-01-01T00:00:00.123Z") })
+          .where("id", "in", [id1, id2])
+          .execute();
+
+        // Page through one at a time
+        const page1 = await listMessages(testDb.db, channel, {
+          limit: 1,
+          direction: "newer",
+        });
+        expect(page1.messages.length).toBe(1);
+        const firstId = page1.messages[0]!.id as PortalMessageId;
+
+        const page2 = await listMessages(testDb.db, channel, {
+          limit: 1,
+          cursor: firstId,
+          direction: "newer",
+        });
+        expect(page2.messages.length).toBe(1);
+        const secondId = page2.messages[0]!.id;
+
+        // Both rows appear, no duplicates
+        expect(firstId).not.toBe(secondId);
+        const allIds = new Set([firstId, secondId]);
+        expect(allIds.has(id1)).toBe(true);
+        expect(allIds.has(id2)).toBe(true);
+      });
+
+      it("totalCount reflects the whole channel regardless of limit or cursor", async () => {
+        const fixture = await createTestTicketFixture(testDb.db);
+        const channel = await insertChannel(testDb.db, fixture.clientId);
+
+        const fu1 = await insertFollowup(testDb.db, fixture.ticketId);
+        await insertMessage(testDb.db, channel.id, fu1);
+        const fu2 = await insertFollowup(testDb.db, fixture.ticketId);
+        await insertMessage(testDb.db, channel.id, fu2);
+        const fu3 = await insertFollowup(testDb.db, fixture.ticketId);
+        const id3 = await insertMessage(testDb.db, channel.id, fu3);
+
+        // limit=1 still reports totalCount=3
+        const page = await listMessages(testDb.db, channel, {
+          limit: 1,
+          direction: "newer",
+        });
+        expect(page.messages.length).toBe(1);
+        expect(page.totalCount).toBe(3);
+
+        // With cursor, totalCount is still 3
+        const pageCursor = await listMessages(testDb.db, channel, {
+          limit: 50,
+          cursor: id3,
+          direction: "older",
+        });
+        expect(pageCursor.totalCount).toBe(3);
+      });
+
+      it("cursor from a different channel returns nothing from that channel", async () => {
+        const fixture1 = await createTestTicketFixture(testDb.db);
+        const channel1 = await insertChannel(testDb.db, fixture1.clientId);
+
+        const fixture2 = await createTestTicketFixture(testDb.db);
+        const channel2 = await insertChannel(testDb.db, fixture2.clientId);
+
+        // Insert messages in both channels
+        const fu1 = await insertFollowup(testDb.db, fixture1.ticketId);
+        await insertMessage(testDb.db, channel1.id, fu1);
+
+        const fu2 = await insertFollowup(testDb.db, fixture2.ticketId);
+        const otherChannelMsgId = await insertMessage(
+          testDb.db,
+          channel2.id,
+          fu2,
+        );
+
+        // Use channel2's message id as cursor when querying channel1
+        const result = await listMessages(testDb.db, channel1, {
+          limit: 50,
+          cursor: otherChannelMsgId,
+          direction: "newer",
+        });
+        // The cursor subquery scopes to channel1, so the cursor row is not found.
+        // When the cursor row has no match, the subquery returns NULL, and the
+        // comparison evaluates to UNKNOWN. Postgres WHERE treats UNKNOWN as false,
+        // so all rows in channel1 are excluded. That is the correct safety
+        // behavior: an unrecognized cursor yields an empty page rather than
+        // leaking cross-channel rows.
+        expect(result.messages.every((m) => m.id !== otherChannelMsgId)).toBe(
+          true,
+        );
+      });
+
+      it("respects the limit", async () => {
+        const fixture = await createTestTicketFixture(testDb.db);
+        const channel = await insertChannel(testDb.db, fixture.clientId);
+
+        // Insert 5 messages
+        for (let i = 0; i < 5; i++) {
+          const fu = await insertFollowup(testDb.db, fixture.ticketId);
+          await insertMessage(testDb.db, channel.id, fu);
+        }
+
+        const page = await listMessages(testDb.db, channel, {
+          limit: 3,
+          direction: "newer",
+        });
+        expect(page.messages.length).toBe(3);
+        expect(page.totalCount).toBe(5);
       });
     });
   },

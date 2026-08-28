@@ -2747,6 +2747,8 @@ export * from "./portal_empty_thread.js";
 export * from "./portal_expiry_note.js";
 export * from "./portal_composer_placeholder.js";
 export * from "./portal_send.js";
+export * from "./thread_jump_to_latest.js";
+export * from "./portal_search_label.js";
 export * from "./portal_message_edited.js";
 export * from "./portal_you.js";
 export * from "./portal_support_team.js";

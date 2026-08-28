@@ -2748,6 +2748,8 @@
   "portal_expiry_note": "Los mensajes se eliminan después de 30 días de inactividad.",
   "portal_composer_placeholder": "Escribe una respuesta...",
   "portal_send": "Enviar",
+  "thread_jump_to_latest": "Ir a lo más reciente",
+  "portal_search_label": "Buscar en esta conversación",
   "portal_message_edited": "(editado)",
   "portal_you": "Tú",
   "portal_support_team": "Equipo de apoyo",

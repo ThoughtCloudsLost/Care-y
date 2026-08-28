@@ -634,6 +634,8 @@ export {
   type LogExportInput,
   publicFormResultSchema,
   type PublicFormResult,
+  portalMessagePageInputSchema,
+  type PortalMessagePageInput,
 } from "./schemas/client-portal.js";
 
 // --- Intake form schemas ---

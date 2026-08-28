@@ -236,6 +236,9 @@ export const portalKeys = {
     [...portalKeys.all, "bootstrap", channelId] as const,
   messages: (channelId: string) =>
     [...portalKeys.all, "messages", channelId] as const,
+  /** One older page of a channel's thread, keyed by the cursor it starts at. */
+  messagePage: (channelId: string, cursor: string) =>
+    [...portalKeys.all, "messagePage", channelId, cursor] as const,
   accountBootstrap: () => [...portalKeys.all, "accountBootstrap"] as const,
   accountMessages: () => [...portalKeys.all, "accountMessages"] as const,
 };

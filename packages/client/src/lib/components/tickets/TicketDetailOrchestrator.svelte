@@ -65,6 +65,7 @@
     lookupCachedFollowUpCount,
   } from "$lib/tickets/ticket-detail-utils.js";
   import TicketCompose from "$lib/components/tickets/TicketCompose.svelte";
+  import JumpToLatest from "$lib/components/tickets/JumpToLatest.svelte";
   import type { TicketComposeHandle } from "$lib/components/tickets/ticket-compose-types.js";
   import type { TicketAction } from "$lib/tickets/types.js";
   import type { CallAction } from "$lib/components/tickets/CallOptionsContent.svelte";
@@ -307,6 +308,15 @@
 
   // Scroll container ref from TicketDetail (for scroll-direction tracking).
   let chatScrollEl = $state<HTMLElement | undefined>();
+  let chatNearBottom = $state(true);
+
+  /** Return to the newest message, matching the client threads. */
+  function jumpToLatest(): void {
+    chatScrollEl?.scrollTo({
+      top: chatScrollEl.scrollHeight,
+      behavior: "smooth",
+    });
+  }
   let chatScrollReady = $state(false);
 
   const scrollDir = useScrollDirection({
@@ -978,6 +988,7 @@
     bind:searchableFollowUps
     bind:scrollContainerEl={chatScrollEl}
     bind:scrollReady={chatScrollReady}
+    bind:isNearBottom={chatNearBottom}
     searchTerm={overlay.term}
     searchActiveMatchId={overlay.activeId}
     searchScrollRequested={overlay.scrollRequested}
@@ -991,6 +1002,10 @@
 
 {#snippet ticketCompose()}
   <div class="detail-compose">
+    <JumpToLatest
+      visible={!chatNearBottom && !selectMode.active}
+      onclick={jumpToLatest}
+    />
     <TicketCompose
       bind:this={compose}
       {ticketId}

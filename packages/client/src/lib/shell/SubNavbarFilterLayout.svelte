@@ -33,8 +33,14 @@
     headerRight?: Snippet;
     stats?: Snippet;
     sort?: SortConfig;
-    selectLabel: string;
-    onselect: () => void;
+    /**
+     * Multi-select entry. Both are optional together: a surface with a
+     * single conversation has nothing to select across, and it reuses
+     * this row for search rather than carrying a control that would do
+     * nothing. Absent means the button is not rendered.
+     */
+    selectLabel?: string;
+    onselect?: () => void;
     savedFilters?: SavedFiltersConfig;
     filterPills: FilterPillsConfig;
     manage?: ManageConfig;
@@ -145,17 +151,19 @@
             </Button>
           </span>
         {/if}
-        <Button
-          tonal
-          rounded
-          small
-          inline
-          class="select-btn"
-          aria-label={selectLabel}
-          onclick={onselect}
-        >
-          <SquareCheckBig size={16} aria-hidden="true" />
-        </Button>
+        {#if onselect}
+          <Button
+            tonal
+            rounded
+            small
+            inline
+            class="select-btn"
+            aria-label={selectLabel}
+            onclick={onselect}
+          >
+            <SquareCheckBig size={16} aria-hidden="true" />
+          </Button>
+        {/if}
         {#if manage}
           {@const ManageIcon = manage.icon ?? Settings}
           <Button
@@ -172,7 +180,7 @@
         {/if}
       </div>
     </div>
-  {:else}
+  {:else if onselect}
     <div class="view-controls standalone-controls">
       <Button
         tonal

@@ -34,22 +34,27 @@ beforeAll(async () => {
   await getSodium();
 });
 
+let messageSeq = 0;
+
 function makeMessage(
   text: string,
   direction: PortalMessageWire["direction"],
   keypairPublic: Uint8Array,
   editedAt: string | null = null,
+  createdAt: string = new Date().toISOString(),
 ): PortalMessageWire {
   const encrypted = eciesEncrypt(
     new TextEncoder().encode(text),
     toRistrettoPoint(keypairPublic),
   );
+  messageSeq += 1;
   return {
+    id: `msg-${String(messageSeq)}`,
     direction,
     ephemeralPoint: encode(encrypted.ephemeralPoint),
     nonce: encode(encrypted.nonce),
     ciphertext: encode(encrypted.ciphertext),
-    createdAt: new Date().toISOString(),
+    createdAt,
     editedAt,
   };
 }
@@ -183,6 +188,74 @@ describe("PortalThread", () => {
     expect(
       container.querySelector("[data-testid='bubble-speaker']"),
     ).toBeNull();
+  });
+
+  // Thread mechanics with no concept for a client to learn, and the org
+  // side has had them all along.
+  describe("datelines", () => {
+    const DAY_ONE_MORNING = "2026-08-20T10:00:00.000Z";
+    const DAY_ONE_LATER = "2026-08-20T18:30:00.000Z";
+    const DAY_TWO = "2026-08-21T09:00:00.000Z";
+
+    function separatorCount(container: HTMLElement): number {
+      return container.querySelectorAll("[role='separator']").length;
+    }
+
+    it("opens the thread with a dateline", () => {
+      const keypair = derivePortalKeypair(generatePortalSeed());
+      const { container } = render(PortalThread, {
+        props: {
+          messages: [
+            makeMessage(
+              "Hello",
+              "to_client",
+              keypair.clientPublic,
+              null,
+              DAY_ONE_MORNING,
+            ),
+          ],
+          clientPrivate: keypair.clientPrivate,
+          loading: false,
+        },
+      });
+
+      expect(separatorCount(container)).toBe(1);
+    });
+
+    it("draws one dateline per day, not per message", () => {
+      const keypair = derivePortalKeypair(generatePortalSeed());
+      const pub = keypair.clientPublic;
+      const { container } = render(PortalThread, {
+        props: {
+          messages: [
+            makeMessage("a", "to_client", pub, null, DAY_ONE_MORNING),
+            makeMessage("b", "to_client", pub, null, DAY_ONE_LATER),
+            makeMessage("c", "to_client", pub, null, DAY_TWO),
+          ],
+          clientPrivate: keypair.clientPrivate,
+          loading: false,
+        },
+      });
+
+      expect(separatorCount(container)).toBe(2);
+    });
+
+    it("draws none between messages on the same day", () => {
+      const keypair = derivePortalKeypair(generatePortalSeed());
+      const pub = keypair.clientPublic;
+      const { container } = render(PortalThread, {
+        props: {
+          messages: [
+            makeMessage("a", "to_client", pub, null, DAY_ONE_MORNING),
+            makeMessage("b", "to_client", pub, null, DAY_ONE_LATER),
+          ],
+          clientPrivate: keypair.clientPrivate,
+          loading: false,
+        },
+      });
+
+      expect(separatorCount(container)).toBe(1);
+    });
   });
 
   it("shows edited marker when editedAt is present", () => {

@@ -37,6 +37,7 @@ import type {
   OrgId,
   OrgSchema,
   OrgSlug,
+  PortalMessageId,
 } from "@care-y/shared";
 
 // ---------------------------------------------------------------------------
@@ -103,6 +104,38 @@ export interface PortalMessageServiceDeps {
 }
 
 // ---------------------------------------------------------------------------
+// Row-to-wire mapping (shared by bootstrap and listMessages)
+// ---------------------------------------------------------------------------
+
+interface PortalMessageRow {
+  readonly id: string;
+  readonly direction: string;
+  readonly ephemeral_point: Buffer;
+  readonly nonce: Buffer;
+  readonly ciphertext: Buffer;
+  readonly created_at: Date;
+  readonly edited_at: Date | null;
+}
+
+/** Maps a raw portal_messages row to the base64-encoded wire shape. */
+function rowToWire(r: PortalMessageRow): PortalMessageWire {
+  return {
+    id: r.id,
+    direction: r.direction,
+    ephemeralPoint: encode(new Uint8Array(r.ephemeral_point)),
+    nonce: encode(new Uint8Array(r.nonce)),
+    ciphertext: encode(new Uint8Array(r.ciphertext)),
+    createdAt: r.created_at.toISOString(),
+    editedAt: r.edited_at ? r.edited_at.toISOString() : null,
+  };
+}
+
+export interface PortalMessageListResult {
+  readonly messages: PortalMessageWire[];
+  readonly totalCount: number;
+}
+
+// ---------------------------------------------------------------------------
 // bootstrap
 // ---------------------------------------------------------------------------
 
@@ -111,10 +144,19 @@ export interface PortalMessageServiceDeps {
  * the client's current ticket (open, else most recent; never creates),
  * and returns the channel's portal_messages ordered by created_at.
  */
-export async function bootstrap(
+/**
+ * Mark the channel seen and drop copies past the inactivity boundary.
+ *
+ * Every read path runs this before returning messages, because the expiry
+ * is lazy: a channel that went quiet past the boundary must not hand back
+ * copies that were supposed to be gone. Kept separate from `bootstrap` so
+ * a paging read can carry the same session semantics without also loading
+ * the whole conversation and resolving a ticket it does not use.
+ */
+async function touchChannel(
   db: Kysely<TenantDatabase>,
   channel: PortalChannelRow,
-): Promise<PortalBootstrapResult> {
+): Promise<void> {
   // Stamp last_seen_at (justified server timestamp: autonomous nudge dedup)
   await db
     .updateTable("portal_channels")
@@ -122,7 +164,6 @@ export async function bootstrap(
     .where("id", "=", channel.id)
     .execute();
 
-  // Lazy expiry: delete copies whose channel has been inactive past the boundary
   const lastActivity = channel.last_seen_at ?? channel.created_at;
   const boundaryMs = EXPIRY_DAYS * 24 * 60 * 60 * 1000;
   if (Date.now() - lastActivity.getTime() > boundaryMs) {
@@ -131,6 +172,13 @@ export async function bootstrap(
       .where("channel_id", "=", channel.id)
       .execute();
   }
+}
+
+export async function bootstrap(
+  db: Kysely<TenantDatabase>,
+  channel: PortalChannelRow,
+): Promise<PortalBootstrapResult> {
+  await touchChannel(db, channel);
 
   // Resolve current ticket: open first, else most recent
   const ticket = await db
@@ -160,15 +208,7 @@ export async function bootstrap(
     .orderBy("created_at", "asc")
     .execute();
 
-  const messages: PortalMessageWire[] = rows.map((r) => ({
-    id: r.id,
-    direction: r.direction,
-    ephemeralPoint: encode(new Uint8Array(r.ephemeral_point)),
-    nonce: encode(new Uint8Array(r.nonce)),
-    ciphertext: encode(new Uint8Array(r.ciphertext)),
-    createdAt: r.created_at.toISOString(),
-    editedAt: r.edited_at ? r.edited_at.toISOString() : null,
-  }));
+  const messages: PortalMessageWire[] = rows.map(rowToWire);
 
   const orgConfig = await db
     .selectFrom("org_config")
@@ -304,6 +344,92 @@ export async function storeClientCopy(
       ciphertext: copy.ciphertext,
     })
     .execute();
+}
+
+// ---------------------------------------------------------------------------
+// listMessages
+// ---------------------------------------------------------------------------
+
+/**
+ * Cursor-paged portal message listing.
+ *
+ * Keyset on (created_at, id) with a subquery for the cursor row's
+ * timestamp so microsecond precision stays in Postgres. The "older"
+ * direction walks backwards and reverses the result so callers always
+ * receive oldest-first order.
+ */
+export async function listMessages(
+  db: Kysely<TenantDatabase>,
+  channel: PortalChannelRow,
+  opts: {
+    limit: number;
+    cursor?: PortalMessageId;
+    direction: "older" | "newer";
+  },
+): Promise<PortalMessageListResult> {
+  await touchChannel(db, channel);
+
+  const isOlder = opts.direction === "older";
+
+  let query = db
+    .selectFrom("portal_messages")
+    .select([
+      "id",
+      "direction",
+      "ephemeral_point",
+      "nonce",
+      "ciphertext",
+      "created_at",
+      "edited_at",
+    ])
+    .where("channel_id", "=", channel.id);
+
+  if (opts.cursor !== undefined) {
+    const cursorId = opts.cursor;
+    const cursorCreatedAt = db
+      .selectFrom("portal_messages")
+      .select("created_at")
+      .where("id", "=", cursorId)
+      .where("channel_id", "=", channel.id);
+
+    const timeOp = isOlder ? "<" : ">";
+    const tieOp = isOlder ? "<" : ">";
+
+    query = query.where((eb) =>
+      eb.or([
+        eb("created_at", timeOp, cursorCreatedAt),
+        eb.and([
+          eb("created_at", "=", cursorCreatedAt),
+          eb("id", tieOp, cursorId),
+        ]),
+      ]),
+    );
+  }
+
+  const sortDir = isOlder ? "desc" : "asc";
+  const rows = await query
+    .orderBy("created_at", sortDir)
+    .orderBy("id", sortDir)
+    .limit(opts.limit)
+    .execute();
+
+  const messages = isOlder
+    ? rows.reverse().map(rowToWire)
+    : rows.map(rowToWire);
+
+  const countResult = await db
+    .selectFrom("portal_messages")
+    .select((eb) => eb.fn.countAll<number>().as("cnt"))
+    .where("channel_id", "=", channel.id)
+    .executeTakeFirstOrThrow();
+
+  return {
+    messages,
+    // countAll<number>() plus the INT8 type parser in db.ts means this
+    // arrives as a real number rather than the string node-postgres would
+    // otherwise hand back for a bigint.
+    totalCount: countResult.cnt,
+  };
 }
 
 // ---------------------------------------------------------------------------

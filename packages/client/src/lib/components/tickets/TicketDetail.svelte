@@ -157,6 +157,13 @@
     scrollContainerEl?: HTMLElement | undefined;
     /** Two-way bindable: true after scroll-to-unread initialization is complete. */
     scrollReady?: boolean;
+    /**
+     * Two-way bindable: whether the reader is within reach of the newest
+     * message. The compose bar lives outside this component and renders the
+     * jump control, so the state has to travel out the same way the scroll
+     * container does.
+     */
+    isNearBottom?: boolean;
     /** Active search term for match highlighting (null = no search overlay). */
     searchTerm?: string | null;
     /** ID of the currently navigated search match (gets glow animation). */
@@ -196,6 +203,7 @@
     searchableFollowUps = $bindable(undefined),
     scrollContainerEl = $bindable(undefined),
     scrollReady = $bindable(false),
+    isNearBottom = $bindable(true),
     searchTerm = null,
     searchActiveMatchId = null,
     searchScrollRequested = false,
@@ -362,7 +370,8 @@
   const paginator = createChatPaginator({
     pageSize: PAGE_SIZE,
     queryClient,
-    getTicketId: () => ticketId,
+    getPageQueryKey: (cursor: string) =>
+      ticketKeys.followUpsPage(ticketId, cursor),
     fetchPage: async (cursor) =>
       fetchFollowUps({
         ticketId,
@@ -1040,6 +1049,10 @@
   // Expose internal scroll container to the route page for scroll-direction tracking.
   $effect(() => {
     scrollContainerEl = scroll.scrollContainerEl;
+  });
+
+  $effect(() => {
+    isNearBottom = scroll.isNearBottom;
   });
 
   // Auto-scroll when new follow-ups arrive via SSE and user was near bottom.

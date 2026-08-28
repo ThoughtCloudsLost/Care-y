@@ -63,6 +63,10 @@
   let drawerOpen = $state(false);
   let navbarHeight = $state(0);
 
+  // ShellNavbar measures the row and reports back, because the row is
+  // absolutely positioned and the scroll container reserves its space.
+  let subnavbarHeight = $state(0);
+
   const drawerActions = $derived(shell?.actions ?? []);
   const lockScroll = $derived(shell?.lockScroll === true);
 
@@ -125,10 +129,13 @@
 
 <PageShell
   scrollTag="main"
-  scrollClass="client-scroll{lockScroll ? ' client-scroll--locked' : ''}"
+  scrollClass="client-scroll{lockScroll
+    ? ' client-scroll--locked'
+    : ''}{shell?.subnavbar != null ? ' has-subnavbar' : ''}"
   scrollAttrs={{
     id: "main-content",
     "aria-label": m.shell_main_content(),
+    style: `--subnavbar-h:${String(subnavbarHeight)}px`,
   }}
   onNavbarHeight={(h: number) => {
     navbarHeight = h;
@@ -148,6 +155,10 @@
       onlocalechange={handleLocaleChange}
       {navbarHeight}
       actions={quickExit}
+      subnavbar={shell?.subnavbar}
+      onsubnavbarheight={(h: number) => {
+        subnavbarHeight = h;
+      }}
     />
   {/snippet}
 
@@ -193,6 +204,14 @@
   /* Chat pages: the PageLayout region inside owns the scroll instead. */
   :global(.client-scroll--locked) {
     overflow: hidden;
+  }
+
+  /* ShellNavbar positions the row absolutely so resizing it mid-scroll
+     cannot move the scroll position, which means the space it occupies has
+     to be reserved here instead. The navbar itself needs no reservation:
+     PageShell makes it a flex row rather than an overlay. */
+  :global(.client-scroll.has-subnavbar) {
+    padding-top: var(--subnavbar-h, 0px);
   }
 
   /* Reading measure, reusing the org app's token and breakpoint so the

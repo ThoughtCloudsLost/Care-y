@@ -10,13 +10,18 @@
     lockScroll = false,
     bottomBar,
     touchAction = "auto",
+    scrollEl = $bindable(undefined),
     children,
   }: PageLayoutProps = $props();
 </script>
 
 <div class="page-layout" class:lock-scroll={lockScroll}>
   {#if lockScroll}
-    <div class="scroll-region" style:touch-action={touchAction}>
+    <div
+      class="scroll-region"
+      style:touch-action={touchAction}
+      bind:this={scrollEl}
+    >
       {@render children()}
     </div>
   {:else}

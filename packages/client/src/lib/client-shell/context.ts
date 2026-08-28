@@ -14,7 +14,7 @@
  * container.current in an $effect, and clear it on cleanup.
  */
 
-import { createContext, type Component } from "svelte";
+import { createContext, type Component, type Snippet } from "svelte";
 
 /** Exit target when the org has not configured one. */
 export const DEFAULT_SAFE_URL = "https://weather.gov";
@@ -48,6 +48,15 @@ export interface ClientShellState {
   readonly safeUrl?: string;
   /** Page-specific drawer entries, listed above the standing items. */
   readonly actions: readonly ClientDrawerAction[];
+  /**
+   * Row rendered below the navbar while this page is showing.
+   *
+   * The shell owns the navbar, so a page that needs a row under it hands
+   * one over rather than rendering chrome itself. In-thread search arrives
+   * this way, in the same slot and through the same components four org
+   * surfaces already use.
+   */
+  readonly subnavbar?: Snippet;
   /**
    * True for chat-shaped pages. The layout's scroll container stops
    * scrolling so a PageLayout lockScroll region inside can own the scroll

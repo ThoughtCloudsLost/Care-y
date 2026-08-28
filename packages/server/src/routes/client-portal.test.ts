@@ -689,6 +689,9 @@ describe("client-portal router", () => {
         portalMessageService: {
           bootstrap: vi.fn().mockResolvedValue(fakeBootstrapResult()),
           clientReply: vi.fn().mockResolvedValue(undefined),
+          listMessages: vi
+            .fn()
+            .mockResolvedValue({ messages: [], totalCount: 0 }),
         },
         portalReadLimiter: allowLimiter(),
         portalReplyLimiter: allowLimiter(),
@@ -887,6 +890,9 @@ describe("client-portal router", () => {
         portalMessageService: {
           bootstrap: vi.fn().mockResolvedValue(bootstrapResult),
           clientReply: vi.fn(),
+          listMessages: vi
+            .fn()
+            .mockResolvedValue({ messages: [], totalCount: 0 }),
         },
         portalReadLimiter: allowLimiter(),
         portalReplyLimiter: allowLimiter(),
@@ -975,6 +981,9 @@ describe("client-portal router", () => {
         portalMessageService: {
           bootstrap: vi.fn(),
           clientReply: vi.fn().mockResolvedValue(undefined),
+          listMessages: vi
+            .fn()
+            .mockResolvedValue({ messages: [], totalCount: 0 }),
         },
         portalReadLimiter: allowLimiter(),
         portalReplyLimiter: allowLimiter(),
@@ -1002,6 +1011,9 @@ describe("client-portal router", () => {
         portalMessageService: {
           bootstrap: vi.fn(),
           clientReply: mockClientReply,
+          listMessages: vi
+            .fn()
+            .mockResolvedValue({ messages: [], totalCount: 0 }),
         },
       });
       const caller = buildCaller(replyDeps);
@@ -1099,6 +1111,9 @@ describe("client-portal router", () => {
         portalMessageService: {
           bootstrap: vi.fn(),
           clientReply: mockClientReply,
+          listMessages: vi
+            .fn()
+            .mockResolvedValue({ messages: [], totalCount: 0 }),
         },
       });
       const caller = buildCaller(replyDeps);
@@ -1119,6 +1134,9 @@ describe("client-portal router", () => {
         portalMessageService: {
           bootstrap: vi.fn(),
           clientReply: mockClientReply,
+          listMessages: vi
+            .fn()
+            .mockResolvedValue({ messages: [], totalCount: 0 }),
         },
       });
       const caller = buildCaller(replyDeps);
@@ -1569,6 +1587,9 @@ describe("client-portal router", () => {
         portalMessageService: {
           bootstrap: vi.fn().mockResolvedValue(fakeBootstrapResult()),
           clientReply: vi.fn().mockResolvedValue(undefined),
+          listMessages: vi
+            .fn()
+            .mockResolvedValue({ messages: [], totalCount: 0 }),
         },
         portalReplyLimiter: allowLimiter(),
         fieldEncryptor: {
@@ -1733,6 +1754,9 @@ describe("client-portal router", () => {
         portalMessageService: {
           bootstrap: vi.fn(),
           clientReply: vi.fn().mockResolvedValue(undefined),
+          listMessages: vi
+            .fn()
+            .mockResolvedValue({ messages: [], totalCount: 0 }),
         },
         portalReplyLimiter: allowLimiter(),
         fieldEncryptor: {
@@ -1814,6 +1838,9 @@ describe("client-portal router", () => {
         portalMessageService: {
           bootstrap: vi.fn(),
           clientReply: vi.fn(),
+          listMessages: vi
+            .fn()
+            .mockResolvedValue({ messages: [], totalCount: 0 }),
         },
         portalReplyLimiter: allowLimiter(),
         accountServiceDeps: {
@@ -1987,6 +2014,9 @@ describe("client-portal router", () => {
         portalMessageService: {
           bootstrap: vi.fn(),
           clientReply: vi.fn(),
+          listMessages: vi
+            .fn()
+            .mockResolvedValue({ messages: [], totalCount: 0 }),
         },
         portalReplyLimiter: allowLimiter(),
       });
@@ -2089,6 +2119,9 @@ describe("client-portal router", () => {
         portalMessageService: {
           bootstrap: vi.fn(),
           clientReply: vi.fn(),
+          listMessages: vi
+            .fn()
+            .mockResolvedValue({ messages: [], totalCount: 0 }),
         },
       });
     }

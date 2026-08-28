@@ -674,6 +674,7 @@ const appRouter = createAppRouter({
     portalMessageService: {
       bootstrap: portalMessageService.bootstrap,
       clientReply: portalMessageService.clientReply,
+      listMessages: portalMessageService.listMessages,
     },
     portalReadLimiter: createInMemoryRateLimiter({
       windowMs: RATE_WINDOW_1H,

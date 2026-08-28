@@ -21,6 +21,7 @@ import {
   intakeSubmissionInputSchema,
   portalBootstrapInputSchema,
   portalReplyInputSchema,
+  portalMessagePageInputSchema,
   createShareInputSchema,
   openShareInputSchema,
   getAccountSaltInputSchema,
@@ -56,6 +57,7 @@ import type {
   PortalBootstrapResult,
   PortalReplyServiceInput,
   PortalMessageServiceDeps,
+  PortalMessageListResult,
 } from "../portal/portal-message-service.js";
 import type {
   AccountServiceDeps,
@@ -122,6 +124,15 @@ export interface ClientPortalRouterDeps {
       channel: PortalChannelRow,
       input: PortalReplyServiceInput,
     ) => Promise<void>;
+    readonly listMessages: (
+      db: Kysely<TenantDatabase>,
+      channel: PortalChannelRow,
+      opts: {
+        limit: number;
+        cursor?: PortalMessageId;
+        direction: "older" | "newer";
+      },
+    ) => Promise<PortalMessageListResult>;
   } | null;
   /** 60 req/hour per IP. Budget: 5-minute polling interval (12/hr) plus
    *  refetchOnWindowFocus headroom, leaving margin for CGNAT-shared IPs
@@ -489,6 +500,41 @@ export function createClientPortalRouter(deps: ClientPortalRouterDeps) {
           messages: result.messages,
           messagesExpireDays: result.messagesExpireDays,
         };
+      }),
+    ),
+
+    portalMessagePage: orgProcedure.input(portalMessagePageInputSchema).query(
+      withErrorWrapping(async ({ ctx, input }) => {
+        const ip = extractClientIp(ctx.req);
+
+        if (deps.portalReadLimiter !== null) {
+          const limitResult = deps.portalReadLimiter.check(ip);
+          if (!limitResult.allowed) {
+            console.warn("Portal read rate limited", {
+              orgSlug: ctx.org.orgSlug,
+              ip,
+              reason: "rate_limit",
+            });
+            throw new TRPCError({
+              code: "TOO_MANY_REQUESTS",
+              message: `Rate limited. Retry after ${String(Math.ceil(limitResult.retryAfterMs / 1000))}s`,
+            });
+          }
+        }
+
+        const { channel, portalMessageService } = await requirePortalChannel(
+          deps,
+          ctx,
+          input,
+        );
+
+        // listMessages carries the same stamp and lazy expiry the
+        // bootstrap path does, without loading the whole conversation.
+        return portalMessageService.listMessages(ctx.org.tenantDb, channel, {
+          limit: input.limit,
+          cursor: input.cursor,
+          direction: input.direction,
+        });
       }),
     ),
 

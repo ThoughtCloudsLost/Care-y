@@ -22,8 +22,12 @@ export const clientShellChrome: ShellChromeSlots = {
   },
 
   threadSearch: {
-    omitted:
-      "Decided in, and lands with the client thread capabilities. Until that row exists a client has no search of any kind.",
+    fill: {
+      position: "navbar-subrow",
+      rendersByDefault: false,
+      gatedBy:
+        "The thread page publishes the row to the shell, so it exists only once a channel is open and unlocked.",
+    },
   },
 
   quickExit: { fill: { position: "navbar-trailing", rendersByDefault: true } },

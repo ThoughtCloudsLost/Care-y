@@ -420,3 +420,19 @@ export const logExportInputSchema = z.object({
   skippedCount: z.number().int().min(0),
 });
 export type LogExportInput = z.infer<typeof logExportInputSchema>;
+
+// ---------------------------------------------------------------------------
+// Portal message pagination schemas
+// ---------------------------------------------------------------------------
+
+/** Input for cursor-paged portal message listing. */
+export const portalMessagePageInputSchema = z.object({
+  channelId: portalChannelIdSchema,
+  auth: portalAuthSchema,
+  limit: z.number().int().min(1).max(200).default(50),
+  cursor: portalMessageIdSchema.optional(),
+  direction: z.enum(["older", "newer"]).default("newer"),
+});
+export type PortalMessagePageInput = z.infer<
+  typeof portalMessagePageInputSchema
+>;

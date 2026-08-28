@@ -9,9 +9,12 @@
   loading/error/ready states.
 -->
 <script lang="ts">
+  import { portalMessageElementId } from "$lib/portal/portal-message-ids.js";
   import * as m from "$lib/paraglide/messages.js";
   import ConversationBubble from "$lib/components/tickets/ConversationBubble.svelte";
+  import DateSeparator from "$lib/components/tickets/DateSeparator.svelte";
   import DecryptPlaceholder from "$lib/components/DecryptPlaceholder.svelte";
+  import { needsDateSeparator, formatDateSeparator } from "$lib/utils/time.js";
   import type { DecryptResult } from "$lib/crypto/decrypt-result.js";
   import { LOADING, ERROR } from "$lib/crypto/decrypt-result.js";
   import { formatRelativeTime } from "$lib/utils/format-time.js";
@@ -20,8 +23,10 @@
     decodeEciesTriple,
   } from "$lib/portal/portal-crypto.js";
   import type { Scalar } from "@care-y/crypto";
+  import { splitByTerm, isHighlightable } from "$lib/search/highlight.js";
 
   interface PortalMessageWire {
+    readonly id: string;
     readonly direction: string;
     readonly ephemeralPoint: string;
     readonly nonce: string;
@@ -44,6 +49,17 @@
      * falls back to the built-in wording.
      */
     supportLabel?: string;
+    /** Term to highlight, when in-thread search is open. */
+    searchTerm?: string;
+    /** Message currently stepped to, drawn as the standing match. */
+    activeMatchId?: string;
+    /**
+     * Reports which messages contain the term, in display order.
+     *
+     * Matching happens here because this is where the plaintext exists:
+     * the page holds ciphertext and could not find a match if it tried.
+     */
+    onmatches?: (ids: readonly string[]) => void;
   }
 
   let {
@@ -51,13 +67,19 @@
     clientPrivate,
     loading = false,
     supportLabel = "",
+    searchTerm,
+    activeMatchId,
+    onmatches,
   }: PortalThreadProps = $props();
+
+  const highlighting = $derived(isHighlightable(searchTerm ?? ""));
 
   const speakerName = $derived(
     supportLabel.trim() !== "" ? supportLabel : m.portal_support_team(),
   );
 
   interface DecryptedMessage {
+    readonly id: string;
     readonly direction: string;
     readonly result: DecryptResult;
     readonly createdAt: string;
@@ -71,6 +93,7 @@
         const triple = decodeEciesTriple(msg);
         const text = decryptPortalMessage(triple, clientPrivate);
         return {
+          id: msg.id,
           direction: msg.direction,
           result: { status: "ready" as const, value: text },
           createdAt: msg.createdAt,
@@ -78,6 +101,7 @@
         };
       } catch {
         return {
+          id: msg.id,
           direction: msg.direction,
           result: ERROR,
           createdAt: msg.createdAt,
@@ -85,6 +109,22 @@
         };
       }
     });
+  });
+
+  const matchIds = $derived.by((): readonly string[] => {
+    if (!highlighting) return [];
+    const term = (searchTerm ?? "").toLowerCase();
+    return decryptedMessages
+      .filter(
+        (msg) =>
+          msg.result.status === "ready" &&
+          msg.result.value.toLowerCase().includes(term),
+      )
+      .map((msg) => msg.id);
+  });
+
+  $effect(() => {
+    onmatches?.(matchIds);
   });
 
   function bubbleDirection(dir: string): "sent" | "received" {
@@ -123,10 +163,20 @@
   {:else}
     <p class="expiry-note">{m.portal_expiry_note()}</p>
     <div class="portal-messages">
-      {#each decryptedMessages as msg, idx (idx)}
+      <!-- Keyed by id, not index: prepending an older page renumbers every
+           index, which would re-render the whole thread and lose the scroll
+           anchor the paginator just measured. -->
+      {#each decryptedMessages as msg, idx (msg.id)}
         {@const isSent = msg.direction === "from_client"}
+        {@const prevAt =
+          idx > 0 ? decryptedMessages[idx - 1]?.createdAt : undefined}
+        {#if needsDateSeparator(msg.createdAt, prevAt)}
+          <DateSeparator label={formatDateSeparator(msg.createdAt)} />
+        {/if}
         <div
+          id={portalMessageElementId(msg.id)}
           class="portal-bubble-wrapper"
+          class:portal-bubble-active={msg.id === activeMatchId}
           role="article"
           aria-label={bubbleAriaLabel(msg)}
         >
@@ -137,7 +187,14 @@
             editedAt={msg.editedAt}
           >
             {#if msg.result.status === "ready"}
-              {msg.result.value}
+              {#if highlighting}
+                {#each splitByTerm(msg.result.value, searchTerm ?? "") as seg, i (i)}
+                  {#if seg.highlight}<mark>{seg.text}</mark
+                    >{:else}{seg.text}{/if}
+                {/each}
+              {:else}
+                {msg.result.value}
+              {/if}
             {:else}
               <DecryptPlaceholder result={msg.result} length={30} />
             {/if}
@@ -173,6 +230,25 @@
 
   .portal-bubble-wrapper {
     display: contents;
+  }
+
+  /* The wrapper is display:contents, so the standing match is marked on
+     the bubble inside it rather than on the wrapper itself. */
+  .portal-bubble-active :global(.msg) {
+    outline: 2px solid var(--brand-text);
+    outline-offset: 2px;
+  }
+
+  .portal-bubble-wrapper :global(mark) {
+    background: var(--brand-soft);
+    color: inherit;
+    border-radius: 2px;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .portal-bubble-active :global(.msg) {
+      transition: none;
+    }
   }
 
   .empty-state {

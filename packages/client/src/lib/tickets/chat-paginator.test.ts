@@ -28,13 +28,17 @@ describe("createChatPaginator", () => {
     queryClient = makeMockQueryClient();
   });
 
-  function makePaginator(opts?: { pageSize?: number }) {
+  function makePaginator(opts?: {
+    pageSize?: number;
+    totalCount?: () => number | undefined;
+  }) {
     return createChatPaginator<TestRecord>({
       pageSize: opts?.pageSize ?? 3,
       queryClient,
-      getTicketId: () => "t-1",
+      getPageQueryKey: (cursor: string) => ["test", "page", cursor],
       fetchPage,
       getScrollContainer: () => undefined,
+      ...(opts?.totalCount ? { getTotalCount: opts.totalCount } : {}),
     });
   }
 
@@ -106,6 +110,59 @@ describe("createChatPaginator", () => {
       await p.loadOlderPage();
       expect(p.items).toHaveLength(4);
       expect(p.items[0]!.id).toBe("1");
+    });
+
+    it("caches the page under the key the caller supplied", async () => {
+      const p = makePaginator({ pageSize: 2 });
+      p.seed([
+        makeRecord("3", "2026-01-03T12:00:00Z"),
+        makeRecord("4", "2026-01-04T12:00:00Z"),
+      ]);
+      (
+        queryClient.fetchQuery as ReturnType<typeof vi.fn>
+      ).mockResolvedValueOnce([]);
+
+      await p.loadOlderPage();
+
+      expect(queryClient.fetchQuery).toHaveBeenCalledWith(
+        expect.objectContaining({ queryKey: ["test", "page", "3"] }),
+      );
+    });
+
+    // A page can come back short for reasons other than reaching the start,
+    // so a transport that reports a total gets to say so directly.
+    it("ends history when the total says everything is loaded", async () => {
+      const p = makePaginator({ pageSize: 2, totalCount: () => 4 });
+      p.seed([
+        makeRecord("3", "2026-01-03T12:00:00Z"),
+        makeRecord("4", "2026-01-04T12:00:00Z"),
+      ]);
+      (
+        queryClient.fetchQuery as ReturnType<typeof vi.fn>
+      ).mockResolvedValueOnce([
+        makeRecord("1", "2026-01-01T12:00:00Z"),
+        makeRecord("2", "2026-01-02T12:00:00Z"),
+      ]);
+
+      await p.loadOlderPage();
+      expect(p.hasMore).toBe(false);
+    });
+
+    it("keeps paging on a full page when the total says more remains", async () => {
+      const p = makePaginator({ pageSize: 2, totalCount: () => 10 });
+      p.seed([
+        makeRecord("3", "2026-01-03T12:00:00Z"),
+        makeRecord("4", "2026-01-04T12:00:00Z"),
+      ]);
+      (
+        queryClient.fetchQuery as ReturnType<typeof vi.fn>
+      ).mockResolvedValueOnce([
+        makeRecord("1", "2026-01-01T12:00:00Z"),
+        makeRecord("2", "2026-01-02T12:00:00Z"),
+      ]);
+
+      await p.loadOlderPage();
+      expect(p.hasMore).toBe(true);
     });
 
     it("sets hasMore to false on a short page", async () => {

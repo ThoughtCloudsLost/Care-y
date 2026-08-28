@@ -55,7 +55,13 @@
   import PortalHint from "$lib/components/portal/PortalHint.svelte";
   import { createPublicBrandingQuery } from "$lib/branding/public-branding.js";
   import PortalThread from "$lib/portal/PortalThread.svelte";
+  import { portalMessageElementId } from "$lib/portal/portal-message-ids.js";
   import PortalComposer from "$lib/portal/PortalComposer.svelte";
+  import { createSearchOverlay } from "$lib/search/search-overlay.svelte.js";
+  import { createScrollManager } from "$lib/tickets/scroll-manager.svelte.js";
+  import JumpToLatest from "$lib/components/tickets/JumpToLatest.svelte";
+  import SearchNavigator from "$lib/components/search/SearchNavigator.svelte";
+  import SubNavbarFilterLayout from "$lib/shell/SubNavbarFilterLayout.svelte";
   import AccountLoginForm from "$lib/portal/AccountLoginForm.svelte";
   import AccountSettings from "$lib/portal/AccountSettings.svelte";
   import PageLayout from "$lib/shell/PageLayout.svelte";
@@ -525,6 +531,69 @@
     ];
   });
 
+  // --- In-thread search ---
+  // Same overlay, navigator, and subnavbar row as the secure-link thread, so
+  // the two client surfaces put search in one place and one shape.
+
+  /** One account holds one conversation, so one draft slot. */
+  const ACCOUNT_DRAFT_KEY = "client-account";
+
+  const scroll = createScrollManager();
+
+  // PageLayout binds a plain state variable; the manager exposes its
+  // container through a getter/setter pair, which bind: cannot target.
+  let threadScrollEl = $state<HTMLDivElement | undefined>(undefined);
+  $effect(() => {
+    scroll.scrollContainerEl = threadScrollEl;
+  });
+
+  let searchActive = $state(false);
+  let matchIds = $state<readonly string[]>([]);
+
+  const overlay = createSearchOverlay({
+    matches: () => matchIds,
+    getElementId: portalMessageElementId,
+    scrollContainer: () => scroll.scrollContainerEl,
+  });
+
+  // Near-bottom tracking is the only thing the manager is doing here. The
+  // account thread has no cursor endpoint yet, so there is no older page to
+  // pull in at the top.
+  $effect(() => {
+    const el = scroll.scrollContainerEl;
+    if (el == null) return;
+    const handleScroll = (): void => {
+      scroll.onScroll([], undefined);
+    };
+    el.addEventListener("scroll", handleScroll, { passive: true });
+    return () => {
+      el.removeEventListener("scroll", handleScroll);
+    };
+  });
+
+  $effect(() => scroll.cleanup);
+
+  function jumpToLatest(): void {
+    const el = scroll.scrollContainerEl;
+    if (el == null) return;
+    el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
+  }
+
+  function openSearch(): void {
+    searchActive = true;
+    overlay.enter("");
+  }
+
+  function closeSearch(): void {
+    overlay.exit();
+    searchActive = false;
+  }
+
+  const noop = (): void => {
+    /* Filter pills are wired and empty until the thread can carry
+       attachments; there is nothing to filter a text-only channel by. */
+  };
+
   $effect(() => {
     shellContainer.current = {
       ondestroy: destroySession,
@@ -532,6 +601,7 @@
       actions: drawerActions,
       // Chat shape only once signed in; the login screen scrolls normally.
       lockScroll: session !== null,
+      ...(session !== null ? { subnavbar: threadSubnavbar } : {}),
     };
     return () => {
       shellContainer.current = undefined;
@@ -542,6 +612,38 @@
 <svelte:head>
   <title>{m.account_title()}</title>
 </svelte:head>
+
+<!-- The shell owns the navbar, so the row reaches it through the context
+     rather than being rendered here. -->
+{#snippet searchNavigatorRow()}
+  <SearchNavigator
+    term={overlay.term ?? ""}
+    position={overlay.position}
+    total={overlay.matchCount}
+    onup={overlay.up}
+    ondown={overlay.down}
+    onexit={closeSearch}
+    ontermchange={overlay.setTerm}
+  />
+{/snippet}
+
+{#snippet threadSubnavbar()}
+  <SubNavbarFilterLayout
+    title={m.account_title()}
+    hideTitle
+    filterPills={{
+      pills: [],
+      activeCount: 0,
+      ontoggle: noop,
+      onselect: noop,
+      ondatechange: noop,
+      onclearall: noop,
+    }}
+    searchNavigator={overlay.active ? searchNavigatorRow : undefined}
+    onsearch={searchActive ? undefined : openSearch}
+    searchLabel={m.portal_search_label()}
+  />
+{/snippet}
 
 {#if !session}
   <!-- State 1: Login -->
@@ -565,14 +667,19 @@
   </Block>
 {:else if session}
   <!-- State 2: Thread scrolls, composer pins to the bottom -->
-  <PageLayout lockScroll>
+  <PageLayout lockScroll bind:scrollEl={threadScrollEl}>
     {#snippet bottomBar()}
+      <JumpToLatest
+        visible={!scroll.isNearBottom && allMessages.length > 0}
+        onclick={jumpToLatest}
+      />
       <PortalComposer
         bind:this={composerRef}
         onsend={handleSend}
         pending={replyMutation.isPending}
         onfirstfocus={handleFirstFocus}
         errorMessage={sendError || undefined}
+        draftKey={ACCOUNT_DRAFT_KEY}
       />
     {/snippet}
 
@@ -581,6 +688,11 @@
       clientPrivate={session.keypair.clientPrivate}
       loading={messagesQuery.isLoading}
       {supportLabel}
+      searchTerm={overlay.term ?? undefined}
+      activeMatchId={overlay.activeId ?? undefined}
+      onmatches={(ids: readonly string[]) => {
+        matchIds = ids;
+      }}
     />
   </PageLayout>
 

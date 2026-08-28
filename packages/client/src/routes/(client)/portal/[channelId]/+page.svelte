@@ -46,9 +46,16 @@
   } from "$lib/client-shell/context.js";
   import PortalPassphraseGate from "$lib/portal/PortalPassphraseGate.svelte";
   import PortalThread from "$lib/portal/PortalThread.svelte";
+  import { portalMessageElementId } from "$lib/portal/portal-message-ids.js";
+  import { createSearchOverlay } from "$lib/search/search-overlay.svelte.js";
+  import SearchNavigator from "$lib/components/search/SearchNavigator.svelte";
+  import SubNavbarFilterLayout from "$lib/shell/SubNavbarFilterLayout.svelte";
   import PortalComposer from "$lib/portal/PortalComposer.svelte";
+  import { createChatPaginator } from "$lib/tickets/chat-paginator.svelte.js";
+  import { createScrollManager } from "$lib/tickets/scroll-manager.svelte.js";
   import AccountCreateForm from "$lib/portal/AccountCreateForm.svelte";
   import { X } from "@lucide/svelte";
+  import JumpToLatest from "$lib/components/tickets/JumpToLatest.svelte";
   import { createPortalFragment } from "$lib/composables/portal/create-portal-fragment.svelte.js";
   import { createPortalSessionState } from "$lib/composables/portal/create-portal-session.svelte.js";
   // care-y-ignore-next-line route-no-db-import -- client composable, no database access; validator heuristic misreads the module
@@ -92,17 +99,15 @@
   let hintShown = $state(false);
   let hintDismissed = $state(false);
 
+  // Anchored to what the procedure returns rather than mirrored by hand,
+  // so a change to the wire shape is a compile error here.
+  type ClientPortalRouter = NonNullable<typeof trpc.clientPortal>;
+  type PortalMessageWire = Awaited<
+    ReturnType<ClientPortalRouter["portalMessagePage"]["query"]>
+  >["messages"][number];
+
   // Optimistic messages appended after send
-  interface OptimisticMsg {
-    readonly id: string;
-    readonly direction: string;
-    readonly ephemeralPoint: string;
-    readonly nonce: string;
-    readonly ciphertext: string;
-    readonly createdAt: string;
-    readonly editedAt: string | null;
-  }
-  let optimisticMessages = $state<OptimisticMsg[]>([]);
+  let optimisticMessages = $state<PortalMessageWire[]>([]);
   let sendError = $state("");
   let lastSentText = "";
   let composerRef = $state<PortalComposer | null>(null);
@@ -155,28 +160,146 @@
   // Polling query for new messages (5-minute interval + focus refetch)
   const queryClient = useQueryClient();
 
+  const PAGE_SIZE = 50;
+
+  /** One page of the thread, newest-first from the server, oldest-first out. */
+  async function fetchMessagePage(
+    cursor?: string,
+  ): Promise<{ messages: PortalMessageWire[]; totalCount: number }> {
+    if (!trpc.clientPortal || !fragment.fragmentData) {
+      throw new Error("Portal not available");
+    }
+    return trpc.clientPortal.portalMessagePage.query({
+      channelId: fragment.fragmentData.channelId,
+      auth: encode(fragment.fragmentData.auth),
+      limit: PAGE_SIZE,
+      direction: "older",
+      ...(cursor === undefined ? {} : { cursor }),
+    });
+  }
+
   const messagesQuery = createQuery(() => ({
     queryKey: portalKeys.messages(routeChannelId),
-    queryFn: async () => {
-      if (!trpc.clientPortal || !fragment.fragmentData) {
-        throw new Error("Portal not available");
-      }
-      return trpc.clientPortal.portalMessages.query({
-        channelId: fragment.fragmentData.channelId,
-        auth: encode(fragment.fragmentData.auth),
-      });
-    },
+    queryFn: async () => fetchMessagePage(),
     enabled: portalSession.keyCheckPassed,
     refetchInterval: 5 * 60 * 1000,
     refetchOnWindowFocus: true,
     retry: false,
   }));
 
-  // Combined messages: server messages + optimistic appends
-  const allMessages = $derived.by(() => {
-    const serverMsgs = messagesQuery.data?.messages ?? [];
-    return [...serverMsgs, ...optimisticMessages];
+  const scroll = createScrollManager();
+
+  // PageLayout binds a plain state variable; the manager exposes its
+  // container through a getter/setter pair, which bind: cannot target.
+  let threadScrollEl = $state<HTMLDivElement | undefined>(undefined);
+  $effect(() => {
+    scroll.scrollContainerEl = threadScrollEl;
   });
+
+  // The same paginator the volunteer thread runs on. It reads its cache key
+  // and its end-of-history total from here rather than assuming a ticket.
+  const paginator = createChatPaginator<PortalMessageWire>({
+    pageSize: PAGE_SIZE,
+    queryClient,
+    getPageQueryKey: (cursor: string) =>
+      portalKeys.messagePage(routeChannelId, cursor),
+    fetchPage: async (cursor: string) =>
+      (await fetchMessagePage(cursor)).messages,
+    getScrollContainer: () => scroll.scrollContainerEl,
+    getTotalCount: () => messagesQuery.data?.totalCount,
+  });
+
+  // Reaching the top pulls the previous page in. The paginator anchors
+  // scroll position across the prepend, so the message being read stays
+  // where it is instead of jumping.
+  const LOAD_OLDER_PX = 200;
+
+  $effect(() => {
+    const el = scroll.scrollContainerEl;
+    if (el == null) return;
+
+    const handleScroll = (): void => {
+      scroll.onScroll([], undefined);
+      if (
+        el.scrollTop < LOAD_OLDER_PX &&
+        paginator.hasMore &&
+        !paginator.loadingOlder
+      ) {
+        void paginator.loadOlderPage();
+      }
+    };
+
+    el.addEventListener("scroll", handleScroll, { passive: true });
+    return () => {
+      el.removeEventListener("scroll", handleScroll);
+    };
+  });
+
+  $effect(() => scroll.cleanup);
+
+  // Follow the conversation only when the reader is already at the bottom.
+  $effect(() => {
+    scroll.autoScrollOnNew(allMessages.length, false);
+  });
+
+  // --- In-thread search ---
+  // The same overlay and navigator four org surfaces use, scoped to the one
+  // thread a client has. Matches come from PortalThread, which is where the
+  // decrypted text lives.
+
+  let searchActive = $state(false);
+  let matchIds = $state<readonly string[]>([]);
+
+  const overlay = createSearchOverlay({
+    matches: () => matchIds,
+    getElementId: portalMessageElementId,
+    scrollContainer: () => scroll.scrollContainerEl,
+  });
+
+  function openSearch(): void {
+    searchActive = true;
+    overlay.enter("");
+  }
+
+  function closeSearch(): void {
+    overlay.exit();
+    searchActive = false;
+  }
+
+  function jumpToLatest(): void {
+    const el = scroll.scrollContainerEl;
+    if (el == null) return;
+    el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
+  }
+
+  // Open on the newest message. The thread used to render every message at
+  // once and start at the oldest; now that it opens on a page, starting at
+  // the top would show the middle of a conversation with no way to tell.
+  let didInitialScroll = false;
+
+  $effect(() => {
+    if (didInitialScroll || paginator.items.length === 0) return;
+    const el = scroll.scrollContainerEl;
+    if (el == null) return;
+    didInitialScroll = true;
+    requestAnimationFrame(() => {
+      el.scrollTop = el.scrollHeight;
+      scroll.markScrolledInitially();
+    });
+  });
+
+  $effect(() => {
+    const data = messagesQuery.data;
+    if (!data) return;
+    paginator.seed(data.messages);
+    paginator.syncInitialPage(data.messages);
+  });
+
+  // Combined messages: paged server messages + optimistic appends
+  const allMessages = $derived.by(() => [
+    ...paginator.items,
+    ...optimisticMessages,
+  ]);
 
   // Dead-link detection: bootstrap error means revoked/unknown/bad auth
   const isDeadLink = $derived(bootstrapQuery.isError);
@@ -386,12 +509,18 @@
     ];
   });
 
+  const noop = (): void => {
+    /* Filter pills are wired and empty until the thread can carry
+       attachments; there is nothing to filter a text-only channel by. */
+  };
+
   $effect(() => {
     shellContainer.current = {
       ondestroy: () => portalSession.destroySession(),
       safeUrl,
       actions: drawerActions,
       lockScroll: threadShowing,
+      ...(threadShowing ? { subnavbar: threadSubnavbar } : {}),
     };
     return () => {
       shellContainer.current = undefined;
@@ -402,6 +531,39 @@
 <svelte:head>
   <title>{m.portal_title()}</title>
 </svelte:head>
+
+<!-- The shell owns the navbar, so the row lands there through the context
+     rather than being rendered by this page. Same components, same slot,
+     and the same position the org app puts them in. -->
+{#snippet searchNavigatorRow()}
+  <SearchNavigator
+    term={overlay.term ?? ""}
+    position={overlay.position}
+    total={overlay.matchCount}
+    onup={overlay.up}
+    ondown={overlay.down}
+    onexit={closeSearch}
+    ontermchange={overlay.setTerm}
+  />
+{/snippet}
+
+{#snippet threadSubnavbar()}
+  <SubNavbarFilterLayout
+    title={m.portal_title()}
+    hideTitle
+    filterPills={{
+      pills: [],
+      activeCount: 0,
+      ontoggle: noop,
+      onselect: noop,
+      ondatechange: noop,
+      onclearall: noop,
+    }}
+    searchNavigator={overlay.active ? searchNavigatorRow : undefined}
+    onsearch={searchActive ? undefined : openSearch}
+    searchLabel={m.portal_search_label()}
+  />
+{/snippet}
 
 {#if !fragment.fragmentResolved}
   <!-- Sodium initializing with a fragment present; show the loading state -->
@@ -463,14 +625,19 @@
   </Block>
 {:else if portalSession.keyCheckPassed && portalSession.session}
   <!-- State 4 + 5: Thread scrolls, composer pins to the bottom -->
-  <PageLayout lockScroll>
+  <PageLayout lockScroll bind:scrollEl={threadScrollEl}>
     {#snippet bottomBar()}
+      <JumpToLatest
+        visible={!scroll.isNearBottom && allMessages.length > 0}
+        onclick={jumpToLatest}
+      />
       <PortalComposer
         bind:this={composerRef}
         onsend={handleSend}
         pending={replyMutation.isPending}
         onfirstfocus={handleFirstFocus}
         errorMessage={sendError || undefined}
+        draftKey={routeChannelId}
       />
     {/snippet}
 
@@ -518,6 +685,11 @@
       clientPrivate={portalSession.session.keypair.clientPrivate}
       loading={messagesQuery.isLoading}
       {supportLabel}
+      searchTerm={overlay.term ?? undefined}
+      activeMatchId={overlay.activeId ?? undefined}
+      onmatches={(ids: readonly string[]) => {
+        matchIds = ids;
+      }}
     />
   </PageLayout>
 
