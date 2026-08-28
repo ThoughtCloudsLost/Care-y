@@ -24,11 +24,12 @@ import {
   deriveChannelAuth,
   deriveChannelId,
   deriveClientAccountKeys,
-  deriveClientBrandingKey,
   derivePortalKeypair,
   eciesEncrypt,
   encode,
   encryptContent,
+  encryptFieldContent,
+  encryptFormMeta,
   followupSlot,
   generateContentKey,
   generatePortalSeed,
@@ -41,12 +42,16 @@ import {
   toRistrettoPoint,
   toSalt,
   type EciesOutput,
+  type EncryptedFieldContent,
   type RistrettoPoint,
   type Salt,
   type SymmetricKey,
 } from "@care-y/crypto";
 import {
+  buildIntakeFormResponse,
   channelSecretSchema,
+  composeIntakeTicketContent,
+  extractMessageText,
   intakeFormIdSchema,
   newClientAccountId,
   newFollowupId,
@@ -93,16 +98,6 @@ import type { PortalChannelRow } from "../portal/channel-service.js";
 // ---------------------------------------------------------------------------
 // Constants
 // ---------------------------------------------------------------------------
-
-/**
- * AAD for intake form field ciphertext. Must stay byte-identical to
- * INTAKE_FORM_AAD in the client's intake-form-crypto module, which is the
- * only code that decrypts these blobs. There is no shared export to import
- * (the client owns both halves in production), so a seeded form that the
- * real client can decrypt is the contract, and the caller's smoke test is
- * what holds it.
- */
-const INTAKE_FORM_AAD = new TextEncoder().encode("care-y-intake-form-aad-v1");
 
 /** AAD slot for the structured intake response blob. */
 const FORM_RESPONSE_SLOT = "intake-form-response";
@@ -200,59 +195,24 @@ interface SeedAnswer {
 }
 
 /**
- * Encrypt a field's label and config under the public-branding key, the
- * same derivation the intake page runs before it can render anything.
- * visibleWhen rides inside the config blob so the server never sees the
- * conditional rules.
+ * Adapt a SeedField to the shape the shared encryptor takes.
+ *
+ * The encryption itself now lives in @care-y/crypto beside the branding
+ * pair, with the AAD private inside it, so this seeder is no longer a
+ * second place those bytes are written down.
  */
-function encryptFieldContent(
+function encryptSeedField(
   field: SeedField,
   orgPublicKey: Uint8Array,
-): { encryptedLabel: string; encryptedConfig: string } {
-  const key: SymmetricKey = deriveClientBrandingKey(orgPublicKey);
-  try {
-    const configPayload: Record<string, unknown> = { ...field.config };
-    if (field.visibleWhen !== undefined) {
-      configPayload.visibleWhen = field.visibleWhen;
-    }
-    return {
-      encryptedLabel: encode(
-        encryptContent(
-          textEncoder.encode(JSON.stringify(field.label)),
-          key,
-          INTAKE_FORM_AAD,
-        ),
-      ),
-      encryptedConfig: encode(
-        encryptContent(
-          textEncoder.encode(JSON.stringify(configPayload)),
-          key,
-          INTAKE_FORM_AAD,
-        ),
-      ),
-    };
-  } finally {
-    requireSodium().memzero(key);
-  }
-}
-
-/** Encrypt the form-level metadata blob (title, intro, closing copy). */
-function encryptFormMeta(
-  meta: Record<string, unknown>,
-  orgPublicKey: Uint8Array,
-): string {
-  const key: SymmetricKey = deriveClientBrandingKey(orgPublicKey);
-  try {
-    return encode(
-      encryptContent(
-        textEncoder.encode(JSON.stringify(meta)),
-        key,
-        INTAKE_FORM_AAD,
-      ),
-    );
-  } finally {
-    requireSodium().memzero(key);
-  }
+): EncryptedFieldContent {
+  return encryptFieldContent(
+    {
+      label: field.label,
+      config: field.config,
+      visibleWhen: field.visibleWhen,
+    },
+    orgPublicKey,
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -855,7 +815,7 @@ async function seedForms(
         routingQueueIds:
           f.routingQueueIds != null ? [...f.routingQueueIds] : null,
         escalationRecipientIds: null,
-        ...encryptFieldContent(f, deps.orgPublicKey),
+        ...encryptSeedField(f, deps.orgPublicKey),
       })),
     },
   );
@@ -893,7 +853,7 @@ async function seedForms(
         role: f.role ?? null,
         routingQueueIds: null,
         escalationRecipientIds: null,
-        ...encryptFieldContent(f, deps.orgPublicKey),
+        ...encryptSeedField(f, deps.orgPublicKey),
       })),
     },
   );
@@ -926,29 +886,24 @@ async function submitSeedResponse(
   const tk: SymmetricKey = generateContentKey();
 
   try {
-    const nameAnswer = answers.find((a) => a.fieldKey === "preferred-name");
-    const title =
-      typeof nameAnswer?.value === "string" && nameAnswer.value !== ""
-        ? `Web intake - ${nameAnswer.value}`
-        : "Web intake";
-
-    const description = answers
-      .map((a) => `${a.label}: ${formatSeedValue(a.value)}`)
-      .filter((line) => !line.endsWith(": "))
-      .join("\n");
-
-    const messageAnswer = answers.find((a) => a.fieldType === "textarea");
-    const messageText =
-      typeof messageAnswer?.value === "string" ? messageAnswer.value : null;
-
-    const responsePayload: IntakeFormResponse = {
+    // Composition is the product's, not this seeder's. It shapes the
+    // title, the description lines and the structured payload exactly as
+    // a real web intake does, so a volunteer reading a seeded ticket
+    // sees the format the product produces.
+    //
+    // One visible consequence, and it is the correct one: the title
+    // carries a name only for a "default:name" answer, which the built-in
+    // form supplies and this custom form does not. Seeded tickets from
+    // the custom form therefore read "Web intake" with no name, which is
+    // what real intake through that form would produce. The earlier copy
+    // here keyed off "preferred-name" and produced a title the product
+    // never would.
+    const { title, description } = composeIntakeTicketContent(answers);
+    const messageText = extractMessageText(answers);
+    const responsePayload: IntakeFormResponse = buildIntakeFormResponse(
       formId,
-      answers: answers.map((a) => ({
-        fieldKey: a.fieldKey,
-        fieldType: a.fieldType,
-        value: a.value,
-      })),
-    };
+      answers,
+    );
 
     const encryptedMessage =
       messageText !== null
@@ -1012,12 +967,6 @@ async function submitSeedResponse(
   }
 
   return ticketId;
-}
-
-function formatSeedValue(value: string | string[] | boolean): string {
-  if (typeof value === "boolean") return value ? "Yes" : "No";
-  if (Array.isArray(value)) return value.join(", ");
-  return value;
 }
 
 // ---------------------------------------------------------------------------
