@@ -41,6 +41,7 @@ import {
   expectTrpcError,
   createMockEmailSender,
   createThrowingProviderFactory,
+  NO_OPTIONAL_ROUTERS,
   testFieldEncryptor,
   testBlindIndexer,
   testSessionTokenizer,
@@ -459,6 +460,7 @@ describe("OPRF tRPC route", () => {
   function buildCaller(ctxOverrides?: Partial<Context>) {
     const service = createOprfEvaluateService(makeServiceDeps());
     const appRouter = createAppRouter({
+      ...NO_OPTIONAL_ROUTERS,
       authDeps: {
         hasher: createScryptHasher(),
         loginLimiter: createInMemoryRateLimiter({
@@ -579,6 +581,7 @@ describe("OPRF adminEvaluate route", () => {
       adminEvaluate: mockAdminEvaluate,
     };
     const appRouter = createAppRouter({
+      ...NO_OPTIONAL_ROUTERS,
       authDeps: {
         hasher: createScryptHasher(),
         loginLimiter: createInMemoryRateLimiter({
@@ -844,6 +847,7 @@ describe.skipIf(!DOCKER_OPRF_AVAILABLE)(
 
       const service = createOprfEvaluateService(makeServiceDeps({ evaluator }));
       const appRouter = createAppRouter({
+        ...NO_OPTIONAL_ROUTERS,
         authDeps: {
           hasher: createScryptHasher(),
           loginLimiter: createInMemoryRateLimiter({

@@ -87,23 +87,31 @@ import {
   listSharesByTicket,
 } from "../portal/share-service.js";
 
+/**
+ * Deps for the client-facing portal.
+ *
+ * The tier deps below are required and nullable, matching `powVerifier`
+ * above them: `null` declines a tier, and omitting a key is a type error.
+ * Leaving one out used to remove that tier's procedures silently, which is
+ * the same defect one level down from `OptionalRouterDeps` in `router.ts`.
+ */
 export interface ClientPortalRouterDeps {
   readonly submissionLimiter: RateLimiter;
   readonly challengeLimiter: RateLimiter;
   readonly powVerifier: PowVerifier | null;
   readonly intakeFormService: IntakeFormService;
   readonly notificationService: NotificationService;
-  readonly fieldEncryptor?: FieldEncryptor;
+  readonly fieldEncryptor: FieldEncryptor | null;
 
   // Secure Link portal deps (appended by 8b)
-  readonly portalChannelService?: {
+  readonly portalChannelService: {
     readonly resolveAuthedChannel: (
       db: Kysely<TenantDatabase>,
       channelId: ChannelSecret,
       auth: Buffer,
     ) => Promise<PortalChannelRow | null>;
-  };
-  readonly portalMessageService?: {
+  } | null;
+  readonly portalMessageService: {
     readonly bootstrap: (
       db: Kysely<TenantDatabase>,
       channel: PortalChannelRow,
@@ -114,31 +122,30 @@ export interface ClientPortalRouterDeps {
       channel: PortalChannelRow,
       input: PortalReplyServiceInput,
     ) => Promise<void>;
-  };
+  } | null;
   /** 60 req/hour per IP. Budget: 5-minute polling interval (12/hr) plus
    *  refetchOnWindowFocus headroom, leaving margin for CGNAT-shared IPs
    *  where multiple clients behind the same NAT share one public IP. */
-  readonly portalReadLimiter?: RateLimiter;
+  readonly portalReadLimiter: RateLimiter | null;
   /** 30 req/hour per IP. Reply is a heavier operation (3 DB rows per call). */
-  readonly portalReplyLimiter?: RateLimiter;
+  readonly portalReplyLimiter: RateLimiter | null;
   /** Provider factory for portal nudge SMS (fire-and-forget after reply). */
-  readonly portalGetProvider?: (
-    orgId: OrgId,
-  ) => Promise<TelephonyProvider | null>;
+  readonly portalGetProvider:
+    ((orgId: OrgId) => Promise<TelephonyProvider | null>) | null;
   /** Phone purpose resolver for portal nudge caller ID. */
-  readonly portalResolveCallerId?: CallerIdResolver;
+  readonly portalResolveCallerId: CallerIdResolver | null;
 
   // Share link deps (appended by 8d)
   /** 10 req/min per IP on the public openShare endpoint. */
-  readonly shareLimiter?: RateLimiter;
+  readonly shareLimiter: RateLimiter | null;
 
   // Encrypted Account deps (appended by 8c)
   /** Startup-scoped deps (indexer + fakeSaltKey); orgUuid resolved per-request. */
-  readonly accountServiceDeps?: Omit<AccountServiceDeps, "orgUuid">;
+  readonly accountServiceDeps: Omit<AccountServiceDeps, "orgUuid"> | null;
   /** 10 req/hour per IP on getAccountSalt. Bounds salt-endpoint scraping. */
-  readonly accountSaltLimiter?: RateLimiter;
+  readonly accountSaltLimiter: RateLimiter | null;
   /** 10 req/hour per IP on accountLogin. Bounds login spam. */
-  readonly accountLoginLimiter?: RateLimiter;
+  readonly accountLoginLimiter: RateLimiter | null;
 }
 
 // care-y-ignore-next-line missing-return-type -- tRPC router() returns a deeply generic type that cannot be written explicitly
@@ -329,7 +336,9 @@ export function createClientPortalRouter(deps: ClientPortalRouterDeps) {
             ctx.org.tenantDb,
             {
               sealedBox: ctx.org.sealedBox,
-              fieldEncryptor: deps.fieldEncryptor,
+              // createIntakeTicket declares this optional, so a declined
+              // encryptor crosses the boundary as undefined, not null.
+              fieldEncryptor: deps.fieldEncryptor ?? undefined,
               orgId: ctx.org.orgId,
               orgSchema: ctx.org.orgSchema,
               orgSlug: ctx.org.orgSlug,
@@ -417,7 +426,7 @@ export function createClientPortalRouter(deps: ClientPortalRouterDeps) {
       withErrorWrapping(async ({ ctx, input }) => {
         const ip = extractClientIp(ctx.req);
 
-        if (deps.portalReadLimiter) {
+        if (deps.portalReadLimiter !== null) {
           const limitResult = deps.portalReadLimiter.check(ip);
           if (!limitResult.allowed) {
             console.warn("Portal read rate limited", {
@@ -446,7 +455,7 @@ export function createClientPortalRouter(deps: ClientPortalRouterDeps) {
       withErrorWrapping(async ({ ctx, input }) => {
         const ip = extractClientIp(ctx.req);
 
-        if (deps.portalReadLimiter) {
+        if (deps.portalReadLimiter !== null) {
           const limitResult = deps.portalReadLimiter.check(ip);
           if (!limitResult.allowed) {
             console.warn("Portal read rate limited", {
@@ -487,7 +496,7 @@ export function createClientPortalRouter(deps: ClientPortalRouterDeps) {
       withErrorWrapping(async ({ ctx, input }) => {
         const ip = extractClientIp(ctx.req);
 
-        if (deps.portalReplyLimiter) {
+        if (deps.portalReplyLimiter !== null) {
           const limitResult = deps.portalReplyLimiter.check(ip);
           if (!limitResult.allowed) {
             console.warn("Portal reply rate limited", {
@@ -559,7 +568,7 @@ export function createClientPortalRouter(deps: ClientPortalRouterDeps) {
 
     openShare: orgProcedure.input(openShareInputSchema).mutation(
       withErrorWrapping(async ({ ctx, input }) => {
-        if (deps.shareLimiter) {
+        if (deps.shareLimiter !== null) {
           const ip = extractClientIp(ctx.req);
           const limit = deps.shareLimiter.check(ip);
           if (!limit.allowed) {
@@ -593,7 +602,7 @@ export function createClientPortalRouter(deps: ClientPortalRouterDeps) {
       withErrorWrapping(async ({ ctx, input }) => {
         const ip = extractClientIp(ctx.req);
 
-        if (deps.accountSaltLimiter) {
+        if (deps.accountSaltLimiter !== null) {
           const limitResult = deps.accountSaltLimiter.check(ip);
           if (!limitResult.allowed) {
             console.warn("Account salt rate limited", {
@@ -626,7 +635,7 @@ export function createClientPortalRouter(deps: ClientPortalRouterDeps) {
       withErrorWrapping(async ({ ctx, input }) => {
         const ip = extractClientIp(ctx.req);
 
-        if (deps.accountLoginLimiter) {
+        if (deps.accountLoginLimiter !== null) {
           const limitResult = deps.accountLoginLimiter.check(ip);
           if (!limitResult.allowed) {
             console.warn("Account login rate limited", {
@@ -713,7 +722,7 @@ export function createClientPortalRouter(deps: ClientPortalRouterDeps) {
       withErrorWrapping(async ({ ctx, input }) => {
         const ip = extractClientIp(ctx.req);
 
-        if (deps.portalReplyLimiter) {
+        if (deps.portalReplyLimiter !== null) {
           const limitResult = deps.portalReplyLimiter.check(ip);
           if (!limitResult.allowed) {
             console.warn("Account reply rate limited", {
@@ -749,7 +758,7 @@ export function createClientPortalRouter(deps: ClientPortalRouterDeps) {
       withErrorWrapping(async ({ ctx, input }) => {
         const ip = extractClientIp(ctx.req);
 
-        if (deps.portalReplyLimiter) {
+        if (deps.portalReplyLimiter !== null) {
           const limitResult = deps.portalReplyLimiter.check(ip);
           if (!limitResult.allowed) {
             console.warn("Account upgrade rate limited", {
@@ -1054,7 +1063,7 @@ async function requirePortalChannel(
   >;
 }> {
   const { portalChannelService, portalMessageService } = deps;
-  if (!portalChannelService || !portalMessageService) {
+  if (portalChannelService === null || portalMessageService === null) {
     throw new TRPCError({
       code: "NOT_FOUND",
       message: PORTAL_NOT_FOUND_MSG,
@@ -1094,7 +1103,7 @@ function requireAccountDeps(
   deps: ClientPortalRouterDeps,
   orgId: OrgId,
 ): AccountServiceDeps {
-  if (!deps.accountServiceDeps) {
+  if (deps.accountServiceDeps === null) {
     throw new TRPCError({
       code: "NOT_FOUND",
       message: ACCOUNT_AUTH_FAILED_MSG,
@@ -1107,7 +1116,7 @@ function requireAccountDeps(
 function requirePortalMessageService(
   deps: ClientPortalRouterDeps,
 ): NonNullable<ClientPortalRouterDeps["portalMessageService"]> {
-  if (!deps.portalMessageService) {
+  if (deps.portalMessageService === null) {
     throw new TRPCError({
       code: "NOT_FOUND",
       message: PORTAL_NOT_FOUND_MSG,
@@ -1161,7 +1170,7 @@ function buildPortalMessageDeps(
   },
 ): PortalMessageServiceDeps {
   const fieldEncryptor = deps.fieldEncryptor;
-  if (!fieldEncryptor) {
+  if (fieldEncryptor === null) {
     throw new TRPCError({
       code: "NOT_FOUND",
       message: PORTAL_NOT_FOUND_MSG,

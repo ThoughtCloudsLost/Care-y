@@ -577,6 +577,10 @@ const appRouter = createAppRouter({
   oprfDeps: { oprfService },
   orgService,
   providerFactory,
+  // Both take no deps. Previously mounted by omission; stated now so the
+  // full set of mounted routers is readable from this one call.
+  consultant: true,
+  reports: true,
   telephonyAdminDeps: {
     configService: telephonyConfigService,
     webhookBaseUrl: env.WEBHOOK_BASE_URL,
@@ -745,10 +749,18 @@ const appRouter = createAppRouter({
       return (row?.cnt ?? 0) > 0;
     },
   },
-  devDeps: env.NODE_ENV !== "production" ? { blobStore } : undefined,
+  devDeps: env.NODE_ENV !== "production" ? { blobStore } : null,
 });
 
 export type AppRouter = typeof appRouter;
+
+// Which API surfaces this process actually serves. The deps type makes an
+// omitted router a compile error, but a router wired behind a runtime
+// condition (devDeps below) compiles either way, so state the result.
+// Router names only: nothing here is tenant-scoped or request-derived.
+console.log(
+  `Routers mounted: ${Object.keys(appRouter._def.record).sort().join(", ")}`,
+);
 
 const cors = buildCorsHeaders(env.CORS_ORIGIN);
 const trpcHandler = createHTTPHandler({

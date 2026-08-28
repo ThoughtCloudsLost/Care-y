@@ -963,6 +963,7 @@ export const DOCKER_SOCKET_B = "/run/oprf/oprf-b.sock";
 // ---------------------------------------------------------------------------
 
 import type { OprfRouterDeps } from "./routes/oprf.js";
+import type { OptionalRouterDeps } from "./routes/router.js";
 import type { ProviderFactory } from "./telephony/factory.js";
 import type {
   TelephonyProvider,
@@ -1140,6 +1141,35 @@ export function createMockOprfDeps(): OprfRouterDeps {
     },
   };
 }
+
+/**
+ * Every optional router declined, for tests that only exercise the routers
+ * built from the required deps. Spread it, then override the one group the
+ * test needs.
+ *
+ * This lives in test-utils on purpose. `index.ts` and the demo engine cannot
+ * import it, so they keep enumerating every group by hand and a newly added
+ * router breaks both of them at compile time. Tests are spared that churn
+ * because a test declining a router it never calls is not a deployment
+ * serving an API it was supposed to serve.
+ */
+export const NO_OPTIONAL_ROUTERS: OptionalRouterDeps = {
+  telephonyAdminDeps: null,
+  telephonyContentDeps: null,
+  consultant: false,
+  reports: false,
+  ticketDeps: null,
+  kbDeps: null,
+  notificationDeps: null,
+  brandingDeps: null,
+  onboardingDeps: null,
+  voicemailQuarantineDeps: null,
+  clientDeps: null,
+  escalationDeps: null,
+  intakeFormDeps: null,
+  clientPortalDeps: null,
+  devDeps: null,
+};
 
 /**
  * Tenant DB stub for route contract tests that never touch the DB directly

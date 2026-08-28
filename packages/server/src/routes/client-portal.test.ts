@@ -202,6 +202,17 @@ function buildDeps(
     intakeFormService: mockIntakeFormService(),
     notificationService: mockNotificationService(),
     shareLimiter: allowLimiter(),
+    // Tiers off by default; a test that exercises one overrides it.
+    fieldEncryptor: null,
+    portalChannelService: null,
+    portalMessageService: null,
+    portalReadLimiter: null,
+    portalReplyLimiter: null,
+    portalGetProvider: null,
+    portalResolveCallerId: null,
+    accountServiceDeps: null,
+    accountSaltLimiter: null,
+    accountLoginLimiter: null,
     ...overrides,
   };
 }

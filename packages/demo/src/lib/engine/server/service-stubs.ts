@@ -378,9 +378,8 @@ export async function buildServiceStubs(
     oprfDeps: { oprfService },
     orgService: orgServiceStub,
     providerFactory: rejectingProviderFactory,
-    includeReports: true,
-    includeConsultant: true,
-    includeTelephonyContent: true,
+    reports: true,
+    consultant: true,
     telephonyContentDeps: {
       createService: createTelephonyContentService,
       blobStore,
@@ -450,8 +449,17 @@ export async function buildServiceStubs(
       blobStore,
       pendingClients,
     },
-    // HARD CONSTRAINT: devDeps is undefined (NODE_ENV=production)
-    devDeps: undefined,
+    // Declined here, not forgotten: the client portal and the intake-forms
+    // admin API are wired on the demo track's own branch, and this branch
+    // predates that. Until it lands, the portal pages in the phone render
+    // against no API, which is exactly the failure that made these keys
+    // required rather than optional.
+    clientPortalDeps: null,
+    intakeFormDeps: null,
+    clientDeps: null,
+    escalationDeps: null,
+    // HARD CONSTRAINT: devDeps is null (NODE_ENV=production)
+    devDeps: null,
   });
 
   return { appRouter, pendingClients };
