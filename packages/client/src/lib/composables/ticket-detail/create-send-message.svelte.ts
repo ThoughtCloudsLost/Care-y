@@ -2,13 +2,11 @@ import type { QueryClient } from "@tanstack/svelte-query";
 import type { CryptoBridge } from "$lib/workers/crypto-bridge.js";
 import type { AsyncDecryptCache } from "$lib/crypto/async-decrypt-cache.js";
 import { CryptoWorkerError } from "$lib/workers/crypto-bridge-errors.js";
+import { followupSlot } from "@care-y/crypto";
 import {
-  followupSlot,
-  eciesEncrypt,
-  toRistrettoPoint,
-  decode,
-  encode,
-} from "@care-y/crypto";
+  sealPortalCopy,
+  type PortalCopy,
+} from "$lib/crypto/seal-portal-copy.js";
 import { newFollowupId, newPendingFollowupId } from "@care-y/shared";
 import type { FollowupId, AttachmentLink } from "@care-y/shared";
 import { ticketKeys } from "$lib/query/keys.js";
@@ -54,11 +52,7 @@ export interface SendMessageConfig<TFollowUp> {
     type: "message";
     isPrivate: false;
     mentionedPseudonyms: string[];
-    portalCopy?: {
-      ephemeralPoint: string;
-      nonce: string;
-      ciphertext: string;
-    };
+    portalCopy?: PortalCopy;
     attachments?: AttachmentLink[];
   }) => Promise<unknown>;
 }
@@ -122,24 +116,9 @@ export function createSendMessage<TFollowUp extends { id: string }>(
 
       followUpCache.seed(pendingId, text);
 
-      // Dual-copy write: when the client has an active portal channel,
-      // the same text is also sealed to the client's public key so the
-      // reply is readable in the portal. Without it the server writes
-      // only the org copy and the client never sees the message.
-      const clientPublic = getClientPublic();
-      let portalCopy:
-        | { ephemeralPoint: string; nonce: string; ciphertext: string }
-        | undefined;
-      if (clientPublic != null && clientPublic !== "") {
-        const pubBytes = toRistrettoPoint(decode(clientPublic));
-        const textBytes = new TextEncoder().encode(text);
-        const ecies = eciesEncrypt(textBytes, pubBytes);
-        portalCopy = {
-          ephemeralPoint: encode(ecies.ephemeralPoint),
-          nonce: encode(ecies.nonce),
-          ciphertext: encode(ecies.ciphertext),
-        };
-      }
+      // Dual-copy write: seal to the client's portal key so the reply
+      // is readable in the portal thread, not only on the org side.
+      const portalCopy = sealPortalCopy(getClientPublic(), text);
 
       const attachments = getAttachmentLinks?.() ?? [];
 

@@ -1,10 +1,10 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import type * as CryptoPkg from "@care-y/crypto";
 import type * as ToastStore from "$lib/stores/toast.svelte.js";
 import type * as Mentions from "$lib/utils/mentions.js";
 import type * as QueryKeys from "$lib/query/keys.js";
 import type * as BridgeErrors from "$lib/workers/crypto-bridge-errors.js";
 import type * as Paraglide from "$lib/paraglide/messages.js";
+import type * as SealModule from "$lib/crypto/seal-portal-copy.js";
 import {
   createSendMessage,
   type SendMessageConfig,
@@ -12,24 +12,23 @@ import {
 import { newAttachmentId, type AttachmentLink } from "@care-y/shared";
 import { CryptoWorkerError } from "$lib/workers/crypto-bridge-errors.js";
 
-// vi.mock required: eciesEncrypt needs initialized libsodium (WASM via the
-// getSodium() singleton), unavailable in the node test environment without
-// the slow JS fallback. Stubs also make the portal-copy triple deterministic.
-// Creation-time implementation: the suite's restoreAllMocks would wipe a
-// mockReturnValue, but the original implementation survives restore.
-const { mockEciesEncrypt } = vi.hoisted(() => ({
-  mockEciesEncrypt: vi.fn(() => ({
-    ephemeralPoint: new Uint8Array([1]),
-    nonce: new Uint8Array([2]),
-    ciphertext: new Uint8Array([3]),
-  })),
+// vi.mock required: sealPortalCopy imports from @care-y/crypto barrel which
+// triggers libsodium WASM initialization via getSodium(). Stubbing the module
+// keeps the sealed triple deterministic and avoids the WASM penalty.
+const { mockSealPortalCopy } = vi.hoisted(() => ({
+  mockSealPortalCopy: vi.fn((clientPublic: string | null, _text: string) =>
+    clientPublic != null && clientPublic !== ""
+      ? {
+          ephemeralPoint: "ep-sealed",
+          nonce: "n-sealed",
+          ciphertext: "ct-sealed",
+        }
+      : undefined,
+  ),
 }));
-vi.mock("@care-y/crypto", async (importOriginal) => ({
-  ...(await importOriginal<typeof CryptoPkg>()),
-  eciesEncrypt: mockEciesEncrypt,
-  toRistrettoPoint: (b: Uint8Array) => b,
-  decode: () => new Uint8Array([9]),
-  encode: (b: Uint8Array) => `b64:${String(b[0] ?? "")}`,
+vi.mock("$lib/crypto/seal-portal-copy.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof SealModule>()),
+  sealPortalCopy: mockSealPortalCopy,
 }));
 
 vi.mock("$lib/stores/toast.svelte.js", async (importOriginal) => ({
@@ -107,9 +106,7 @@ function makeConfig(
 describe("createSendMessage", () => {
   beforeEach(() => {
     vi.restoreAllMocks();
-    // restoreAllMocks only touches vi.spyOn spies; this vi.fn keeps its
-    // call history across tests unless cleared explicitly.
-    mockEciesEncrypt.mockClear();
+    mockSealPortalCopy.mockClear();
     vi.stubGlobal("crypto", { randomUUID: () => "uuid-1" });
   });
 
@@ -171,13 +168,16 @@ describe("createSendMessage", () => {
     const msg = createSendMessage(config);
     await msg.handleSend();
 
-    expect(mockEciesEncrypt).toHaveBeenCalledTimes(1);
+    expect(mockSealPortalCopy).toHaveBeenCalledWith(
+      "client-pub-b64",
+      "hello world",
+    );
     expect(config.createFollowUpMutate).toHaveBeenCalledWith(
       expect.objectContaining({
         portalCopy: {
-          ephemeralPoint: "b64:1",
-          nonce: "b64:2",
-          ciphertext: "b64:3",
+          ephemeralPoint: "ep-sealed",
+          nonce: "n-sealed",
+          ciphertext: "ct-sealed",
         },
       }),
     );
@@ -188,7 +188,7 @@ describe("createSendMessage", () => {
     const msg = createSendMessage(config);
     await msg.handleSend();
 
-    expect(mockEciesEncrypt).not.toHaveBeenCalled();
+    expect(mockSealPortalCopy).toHaveBeenCalledWith(null, "hello world");
     const mutate = config.createFollowUpMutate as ReturnType<typeof vi.fn>;
     expect(mutate.mock.calls[0]?.[0]?.portalCopy).toBeUndefined();
   });

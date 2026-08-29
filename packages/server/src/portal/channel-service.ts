@@ -11,7 +11,7 @@
  */
 
 import { timingSafeEqual } from "node:crypto";
-import type { Kysely, Selectable } from "kysely";
+import type { Kysely, Selectable, Transaction } from "kysely";
 import type { TenantDatabase, PortalChannelsTable } from "../db/types.js";
 import { hashChannelAuth } from "@care-y/crypto";
 import { ChannelAlreadyActiveError } from "./portal-errors.js";
@@ -247,6 +247,31 @@ export async function resolveAuthedChannel(
   }
 
   return row;
+}
+
+// ---------------------------------------------------------------------------
+// Active channel lookup (shared by inbound-sms, followup-service, etc.)
+// ---------------------------------------------------------------------------
+
+/**
+ * Returns the client's active portal channel, or undefined when none exists.
+ *
+ * The partial unique index uq_portal_channels_active_client guarantees at
+ * most one row matches, so executeTakeFirst is correct.
+ *
+ * Accepts a plain Kysely handle or a transaction so callers inside a
+ * transaction can reuse the same DB session.
+ */
+export async function findActiveChannel(
+  db: Kysely<TenantDatabase> | Transaction<TenantDatabase>,
+  clientId: ClientId,
+): Promise<PortalChannelRow | undefined> {
+  return db
+    .selectFrom("portal_channels")
+    .selectAll()
+    .where("client_id", "=", clientId)
+    .where("status", "=", "active")
+    .executeTakeFirst();
 }
 
 // ---------------------------------------------------------------------------

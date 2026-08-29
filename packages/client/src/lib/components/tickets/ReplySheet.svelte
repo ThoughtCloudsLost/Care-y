@@ -9,13 +9,8 @@
 -->
 <script lang="ts">
   import * as m from "$lib/paraglide/messages.js";
-  import {
-    followupSlot,
-    eciesEncrypt,
-    encode,
-    decode,
-    toRistrettoPoint,
-  } from "@care-y/crypto";
+  import { followupSlot } from "@care-y/crypto";
+  import { sealPortalCopy } from "$lib/crypto/seal-portal-copy.js";
   import { newFollowupId } from "@care-y/shared";
   import { trpc } from "$lib/trpc/index.js";
   import {
@@ -122,6 +117,7 @@
     getTicketId: () => ticketId,
     cryptoBridge,
     queryClient,
+    getClientPublic: () => clientPublic ?? null,
     createFollowUpMutate: async (args) =>
       ticketRouter.createFollowUp.mutate(args),
     onSuccess: () => {
@@ -282,23 +278,9 @@
         text,
       );
 
-      // Build portal copy so the client can read this reply in their
-      // portal view. Only when the ticket has an active portal channel
-      // with a known client public key.
-      let portalCopy:
-        | { ephemeralPoint: string; nonce: string; ciphertext: string }
-        | undefined;
-
-      if (clientPublic != null && clientPublic !== "") {
-        const pubBytes = toRistrettoPoint(decode(clientPublic));
-        const textBytes = new TextEncoder().encode(text);
-        const ecies = eciesEncrypt(textBytes, pubBytes);
-        portalCopy = {
-          ephemeralPoint: encode(ecies.ephemeralPoint),
-          nonce: encode(ecies.nonce),
-          ciphertext: encode(ecies.ciphertext),
-        };
-      }
+      // Portal copy so the client can read this reply in their portal
+      // view, present only when the ticket has an active portal channel.
+      const portalCopy = sealPortalCopy(clientPublic ?? null, text);
 
       optimisticMessage = {
         id: `optimistic-${String(Date.now())}`,

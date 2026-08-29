@@ -538,6 +538,7 @@
     getTicketId: () => ticketId,
     cryptoBridge,
     queryClient,
+    getClientPublic: () => ticket?.portalChannel?.clientPublic ?? null,
     createFollowUpMutate: async (args) =>
       ticketRouter.createFollowUp.mutate(args),
     onSuccess: () => {

@@ -38,7 +38,10 @@ import {
   attachToFollowUp,
   insertClientWrap,
 } from "../portal/portal-attachment-service.js";
-import type { PortalChannelRow } from "../portal/channel-service.js";
+import {
+  findActiveChannel,
+  type PortalChannelRow,
+} from "../portal/channel-service.js";
 
 export interface FollowUpKeyWrap {
   readonly ephemeralPoint: Buffer;
@@ -488,12 +491,10 @@ export function createFollowUpService(
             attachments.some((a) => a.portalCopy !== undefined);
 
           if (wantsClientCopy) {
-            const activeChannel = await trx
-              .selectFrom("portal_channels")
-              .selectAll()
-              .where("client_id", "=", ticket.client_id)
-              .where("status", "=", "active")
-              .executeTakeFirst();
+            const activeChannel = await findActiveChannel(
+              trx,
+              ticket.client_id,
+            );
 
             if (activeChannel) {
               channel = activeChannel;
