@@ -107,6 +107,7 @@
         attachmentId={att.id}
         {ticketId}
         {keyWrap}
+        {bridge}
         alt={m.ticket_mms_image()}
         onopen={(url: string) => onlightbox?.(url)}
       />

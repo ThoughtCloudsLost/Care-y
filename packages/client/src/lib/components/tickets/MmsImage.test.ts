@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, afterEach } from "vitest";
 import type * as TrpcClient from "$lib/trpc/index.js";
-import type * as CryptoContext from "$lib/crypto/context.js";
+import type { CryptoBridge } from "$lib/workers/crypto-bridge.js";
 import { render, cleanup } from "@testing-library/svelte";
 import MmsImage from "./MmsImage.svelte";
 
@@ -18,15 +18,6 @@ vi.stubGlobal(
     this.unobserve = vi.fn();
   }),
 );
-
-// vi.mock required: getCryptoBridge uses Svelte 5 createContext which
-// throws "missing_context" outside a component tree with CryptoProvider.
-vi.mock("$lib/crypto/context.js", async (importOriginal) => ({
-  ...(await importOriginal<typeof CryptoContext>()),
-  getCryptoBridge: () => ({
-    decryptBlob: vi.fn().mockRejectedValue(new Error("mock: no decrypt")),
-  }),
-}));
 
 // vi.mock required: tRPC client module creates a live HTTP connection
 // on import via httpBatchLink.
@@ -54,6 +45,11 @@ describe("MmsImage", () => {
       nonce: "nonce-base64",
       wrappedKey: "wk-base64",
     },
+    // Bridge mode takes the bridge as a prop from the org-side caller;
+    // the component reads no context (it also mounts on portal pages).
+    bridge: {
+      decryptBlob: vi.fn().mockRejectedValue(new Error("mock: no decrypt")),
+    } as unknown as CryptoBridge,
     alt: "Photo from client",
     onopen: vi.fn(),
   };
@@ -70,6 +66,15 @@ describe("MmsImage", () => {
   it("renders error state when keyWrap is null", async () => {
     const { container } = render(MmsImage, {
       props: { ...baseProps, keyWrap: null },
+    });
+    await vi.waitFor(() => {
+      expect(container.textContent).toContain("Could not unlock this content.");
+    });
+  });
+
+  it("renders error state when neither a bridge nor a decrypt callback is provided", async () => {
+    const { container } = render(MmsImage, {
+      props: { ...baseProps, bridge: null },
     });
     await vi.waitFor(() => {
       expect(container.textContent).toContain("Could not unlock this content.");

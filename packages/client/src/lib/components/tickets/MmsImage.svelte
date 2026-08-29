@@ -21,8 +21,8 @@
   import { blobSlot } from "@care-y/crypto";
   import * as m from "$lib/paraglide/messages.js";
   import DecryptPlaceholder from "$lib/components/DecryptPlaceholder.svelte";
-  import { getCryptoBridge } from "$lib/crypto/context.js";
   import { fetchBlob } from "$lib/utils/fetch-blob.js";
+  import type { CryptoBridge } from "$lib/workers/crypto-bridge.js";
   import type { TicketKeyWrap } from "$lib/crypto/ticket-decrypt-cache.js";
 
   interface Props {
@@ -32,6 +32,13 @@
     ticketId: string;
     /** ECIES key wrap for this ticket's tk (bridge mode). */
     keyWrap?: TicketKeyWrap | null;
+    /**
+     * CryptoBridge for bridge mode, resolved by the org-side caller
+     * (FollowUpMedia, PanelMediaSection), which already holds it. The
+     * component reads no context itself, so it mounts on the portal
+     * surface unchanged. Same injection pattern as FileKeyMmsImage.
+     */
+    bridge?: CryptoBridge | null;
     /** Alt text for the image. */
     alt: string;
     /** Called when the thumbnail is tapped. Route file opens lightbox. */
@@ -57,6 +64,7 @@
     attachmentId,
     ticketId,
     keyWrap = null,
+    bridge = null,
     alt,
     onopen,
     decrypt,
@@ -64,17 +72,6 @@
     contentType,
     fetchHeaders,
   }: Props = $props();
-
-  // Resolve the bridge at init only when no decrypt callback was
-  // provided. Portal pages have no CryptoBridge context, so calling
-  // getCryptoBridge() there would throw during init.
-  //
-  // Svelte warns that this captures the initial value of `decrypt`, and
-  // the initial value is the one that matters: a mount either sits inside
-  // the app layout or on a portal page and never crosses over. Reading it
-  // inside the effect instead would not work anyway, since getCryptoBridge
-  // reads context and context is only readable during init.
-  const bridge = decrypt === undefined ? getCryptoBridge() : null;
 
   let thumbnailUrl: string | null = $state(null);
   let hasError = $state(false);
@@ -89,7 +86,7 @@
   function resolveDecrypt():
     ((ciphertext: ArrayBuffer) => ArrayBuffer | Promise<ArrayBuffer>) | null {
     if (decrypt !== undefined) return decrypt;
-    if (bridge === null || keyWrap === null) return null;
+    if (bridge == null || keyWrap === null) return null;
     const wrap = keyWrap;
     const b = bridge;
     // Annotated with the same union the prop declares. The bridge branch
