@@ -92,8 +92,10 @@ async function encryptAndStoreMedia(
     ) {
       for (const att of opts.attachments) {
         const attachmentId = newAttachmentId();
+        // att.data is passed uncopied so the finally-block fill(0)
+        // reaches the only plaintext buffer that exists.
         const encrypted = encryptContent(
-          new Uint8Array(att.data),
+          att.data,
           tk,
           buildContentAad(ticketId, blobSlot(attachmentId)),
         );
@@ -119,7 +121,7 @@ async function encryptAndStoreMedia(
     ) {
       const recordingId = newRecordingId();
       const encrypted = encryptContent(
-        new Uint8Array(opts.recording.data),
+        opts.recording.data,
         tk,
         buildContentAad(ticketId, blobSlot(recordingId)),
       );
@@ -222,8 +224,10 @@ export async function createEncryptedFollowUp(
   const followUpId = newFollowupId();
 
   try {
+    // content is passed uncopied so the finally-block fill(0) reaches
+    // the only plaintext buffer that exists.
     const encryptedContent = encryptContent(
-      new Uint8Array(content),
+      content,
       tkTemp,
       buildContentAad(ticketId, followupSlot(followUpId)),
     );
@@ -297,7 +301,7 @@ export async function createFollowUpWithTk(
   const followUpId = newFollowupId();
   try {
     const encryptedContent = encryptContent(
-      new Uint8Array(content),
+      content,
       tk,
       buildContentAad(ticketId, followupSlot(followUpId)),
     );

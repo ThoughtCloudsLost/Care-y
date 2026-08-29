@@ -94,13 +94,15 @@ export async function resolveOrCreateTicket(
       const keyGeneration = newKeyGeneration();
       const ticketId = newTicketId();
 
+      // Buffers are passed uncopied: a new Uint8Array(...) here would
+      // duplicate the plaintext into memory the fill(0) below never reaches.
       const encryptedTitle = encryptContent(
-        new Uint8Array(title),
+        title,
         tk,
         buildContentAad(ticketId, "title"),
       );
       const encryptedDescription = encryptContent(
-        new Uint8Array(description),
+        description,
         tk,
         buildContentAad(ticketId, "description"),
       );
