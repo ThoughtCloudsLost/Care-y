@@ -173,26 +173,30 @@
   }
 
   // ---- Form-level state ----
-  let formName = $state(initialName);
-  let formSlug = $state(initialSlug ?? "");
+  // untrack: intentionally captures each initial prop value once; the
+  // component owns a local editing copy that diverges from the prop.
+  let formName = $state(untrack(() => initialName));
+  let formSlug = $state(untrack(() => initialSlug ?? ""));
   let slugError = $state("");
-  let isDefault = $state(initialIsDefault);
-  let destinationQueueId = $state<string | null>(initialDestinationQueueId);
+  let isDefault = $state(untrack(() => initialIsDefault));
+  let destinationQueueId = $state<string | null>(
+    untrack(() => initialDestinationQueueId),
+  );
   let formDescription = $state<LocalizedRichText>(
-    initialFormMeta.description ?? {},
+    untrack(() => initialFormMeta.description ?? {}),
   );
   let formSubmitMessage = $state<LocalizedRichText>(
-    initialFormMeta.submitMessage ?? {},
+    untrack(() => initialFormMeta.submitMessage ?? {}),
   );
   let formClosedMessage = $state<LocalizedRichText>(
-    initialFormMeta.closedMessage ?? {},
+    untrack(() => initialFormMeta.closedMessage ?? {}),
   );
 
   // ---- Banner state ----
   let bannerBlobKey = $state<string | null>(
-    initialFormMeta.bannerBlobKey ?? null,
+    untrack(() => initialFormMeta.bannerBlobKey ?? null),
   );
-  let bannerAlt = $state(initialFormMeta.bannerAlt ?? "");
+  let bannerAlt = $state(untrack(() => initialFormMeta.bannerAlt ?? ""));
   let bannerUploading = $state(false);
 
   const orgSlug = getOrgSlug();
@@ -217,10 +221,12 @@
   }
 
   let closesAtLocal = $state(
-    initialClosesAt != null ? isoToDatetimeLocal(initialClosesAt) : "",
+    untrack(() =>
+      initialClosesAt != null ? isoToDatetimeLocal(initialClosesAt) : "",
+    ),
   );
 
-  let fields = $state<PlaintextField[]>([...initialFields]);
+  let fields = $state<PlaintextField[]>(untrack(() => [...initialFields]));
 
   // F-002: Track whether the user has manually edited the slug field.
   // When false, typing in the name field auto-generates the slug.

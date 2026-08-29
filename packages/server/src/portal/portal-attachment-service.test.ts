@@ -476,16 +476,22 @@ describe.skipIf(!process.env.DATABASE_URL)(
 
       it("returns null for a channel that has no wrap, even when another channel does", async () => {
         const fixture = await createTestTicketFixture(testDb.db);
+        // Old revoked channel holds the wrap; only one channel per client
+        // may be active (uq_portal_channels_active_client).
         const channelWithWrap = await insertChannel(
           testDb.db,
           fixture.clientId,
+          {
+            status: "revoked",
+            revoked_at: new Date(),
+          },
         );
         const { attachmentId } = await seedAttachmentWithWrap(
           fixture,
           channelWithWrap,
         );
 
-        // Second channel for the same client, no wrap inserted
+        // Active replacement channel for the same client, no wrap inserted
         const channelWithout = await insertChannel(testDb.db, fixture.clientId);
 
         const resolved = await resolveChannelBlobKey(
@@ -525,7 +531,12 @@ describe.skipIf(!process.env.DATABASE_URL)(
       it("returns only this channel's files, skips soft-deleted, and is ordered", async () => {
         const fixture = await createTestTicketFixture(testDb.db);
         const channel1 = await insertChannel(testDb.db, fixture.clientId);
-        const channel2 = await insertChannel(testDb.db, fixture.clientId);
+        // Revoked: only one active channel per client is allowed
+        // (uq_portal_channels_active_client).
+        const channel2 = await insertChannel(testDb.db, fixture.clientId, {
+          status: "revoked",
+          revoked_at: new Date(),
+        });
 
         const blobStore = createMapBlobStore();
 

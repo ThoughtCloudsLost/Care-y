@@ -15,7 +15,7 @@ vi.mock("@care-y/crypto", async (importOriginal) => ({
   encode: (b: Uint8Array) => `b64:${String(b.length)}`,
 }));
 
-const mockToastShow = vi.fn();
+const { mockToastShow } = vi.hoisted(() => ({ mockToastShow: vi.fn() }));
 vi.mock("$lib/stores/toast.svelte.js", async (importOriginal) => ({
   ...(await importOriginal<typeof ToastMod>()),
   toastStore: { show: mockToastShow },
@@ -113,6 +113,11 @@ describe("createAttachmentUpload", () => {
     // Second attach while first is in flight.
     const second = uploader.attach(f2);
 
+    // attach awaits file.arrayBuffer() before encrypting, so the resolver
+    // is only assigned once the encrypt mock has actually been invoked.
+    await vi.waitFor(() => {
+      expect(config.cryptoBridge.encryptAttachment).toHaveBeenCalledTimes(1);
+    });
     resolveEncrypt({
       blob: new ArrayBuffer(64),
       fileKeyWrap: "w",

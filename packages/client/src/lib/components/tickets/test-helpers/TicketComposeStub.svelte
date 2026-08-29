@@ -4,6 +4,8 @@
   to exercise the reply send pipeline without the full compose component.
 -->
 <script lang="ts">
+  import * as m from "$lib/paraglide/messages.js";
+
   interface Props {
     ticketId: string;
     inline?: boolean;
@@ -21,7 +23,9 @@
 
 <div data-testid="compose-stub">
   <textarea data-testid="compose-textarea" bind:value={text}></textarea>
-  <!-- Located by test id only; a label would need an i18n key this
-       test-only stub has no business adding. -->
-  <button data-testid="compose-send" onclick={() => onsendreply(text)}></button>
+  <button
+    data-testid="compose-send"
+    aria-label={m.ticket_send()}
+    onclick={() => onsendreply(text)}
+  ></button>
 </div>

@@ -143,6 +143,10 @@ vi.mock("@tanstack/svelte-query", async (importOriginal) => ({
       safeExitUrl: "https://weather.gov",
       accountOffer: false,
       keyCheck: "",
+      // messagesQuery reads data.messages in a paginator seed $effect;
+      // without this the seed call crashes on undefined.length.
+      messages: [],
+      totalCount: 0,
     },
   }),
   createMutation: () => ({
