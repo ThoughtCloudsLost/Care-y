@@ -112,11 +112,16 @@
         onopen={(url: string) => onlightbox?.(url)}
       />
     {:else}
+      <!-- MMS ingest receives only content type and bytes from the
+           provider, so these rows have no stored filename to decrypt;
+           the label names the origin instead. -->
       <AttachmentChip
         attachmentId={att.id}
         {ticketId}
         {keyWrap}
-        filename={att.encryptedFilename !== null ? "..." : "file"}
+        filename={att.encryptedFilename !== null
+          ? "..."
+          : m.attachment_sms_unnamed()}
         sizeBytes={att.sizeBytes}
       />
     {/if}

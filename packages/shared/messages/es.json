@@ -674,6 +674,7 @@
   "attachment_uploading": "Subiendo",
   "attachment_failed": "No se subió",
   "attachment_remove": "Quitar {name}",
+  "attachment_sms_unnamed": "Archivo del mensaje de texto",
   "portal_filter_images": "Imágenes",
   "portal_filter_files": "Archivos",
   "portal_attachment_image": "Imagen adjunta",

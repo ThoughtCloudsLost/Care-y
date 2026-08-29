@@ -674,6 +674,7 @@
   "attachment_uploading": "Uploading",
   "attachment_failed": "Did not upload",
   "attachment_remove": "Remove {name}",
+  "attachment_sms_unnamed": "File from text message",
   "portal_filter_images": "Images",
   "portal_filter_files": "Files",
   "portal_attachment_image": "Attached image",
