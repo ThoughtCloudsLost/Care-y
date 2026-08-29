@@ -146,6 +146,56 @@ describe("createSendMessage", () => {
     });
   });
 
+  it("passes the trimmed text to buildPendingEntry", async () => {
+    const buildPendingEntry = vi.fn(({ pendingId, ticketId }) => ({
+      id: pendingId,
+      ticketId,
+    }));
+    const config = makeConfig({
+      getDraftText: () => "  hello world  ",
+      buildPendingEntry,
+    });
+    const msg = createSendMessage(config);
+    await msg.handleSend();
+
+    expect(buildPendingEntry).toHaveBeenCalledWith(
+      expect.objectContaining({ text: "hello world" }),
+    );
+  });
+
+  it("calls onSuccess after a successful send and never onError", async () => {
+    const onSuccess = vi.fn();
+    const onError = vi.fn();
+    const config = makeConfig({ onSuccess, onError });
+    const msg = createSendMessage(config);
+    await msg.handleSend();
+
+    expect(onSuccess).toHaveBeenCalledTimes(1);
+    expect(onError).not.toHaveBeenCalled();
+    // Invalidation precedes the success hook so callers observing the
+    // cache in onSuccess see post-send state.
+    const invalidate = config.queryClient
+      .invalidateQueries as unknown as ReturnType<typeof vi.fn>;
+    expect(invalidate.mock.invocationCallOrder[0]).toBeLessThan(
+      onSuccess.mock.invocationCallOrder[0]!,
+    );
+  });
+
+  it("calls onError after a failed send and never onSuccess", async () => {
+    const onSuccess = vi.fn();
+    const onError = vi.fn();
+    const config = makeConfig({
+      onSuccess,
+      onError,
+      createFollowUpMutate: vi.fn().mockRejectedValue(new Error("net")),
+    });
+    const msg = createSendMessage(config);
+    await msg.handleSend();
+
+    expect(onError).toHaveBeenCalledTimes(1);
+    expect(onSuccess).not.toHaveBeenCalled();
+  });
+
   it("passes computed mentions to buildPendingEntry", async () => {
     const buildPendingEntry = vi.fn(({ pendingId, ticketId }) => ({
       id: pendingId,

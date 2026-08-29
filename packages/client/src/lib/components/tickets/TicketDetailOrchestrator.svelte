@@ -110,7 +110,7 @@
   import SearchNavigator from "$lib/components/search/SearchNavigator.svelte";
   import { untrack } from "svelte";
   import { recentViews } from "$lib/search/recent-views.js";
-  import { ticketIdSchema, userIdSchema } from "@care-y/shared";
+  import { buildPendingFollowUpEntry } from "$lib/composables/ticket-detail/pending-follow-up.js";
 
   let {
     ticketId,
@@ -493,35 +493,7 @@
     cryptoBridge,
     followUpCache,
     queryClient,
-    buildPendingEntry: ({
-      pendingId,
-      ticketId: tid,
-      mentionedPseudonyms,
-      currentUserId: uid,
-    }) =>
-      ({
-        id: pendingId,
-        ticketId: ticketIdSchema.parse(tid),
-        source: "volunteer",
-        type: "message",
-        isPrivate: false,
-        mentionedPseudonyms,
-        encryptedContent: "",
-        createdBy: uid == null ? null : userIdSchema.parse(uid),
-        createdAt: new Date().toISOString(),
-        hasRecording: false,
-        hasImage: false,
-        hasFile: false,
-        noteTypeId: null,
-        callSid: null,
-        callStatus: null,
-        callDurationSeconds: null,
-        keyGeneration: null,
-        keyWrap: null,
-        portalWrap: null,
-        editedAt: null,
-        eventParams: null,
-      }) satisfies FollowUpList[number],
+    buildPendingEntry: buildPendingFollowUpEntry,
     getClientPublic: () => ticket?.portalChannel?.clientPublic ?? null,
     getAttachmentLinks: () => attachmentUpload.links(),
     createFollowUpMutate: async (args) => {

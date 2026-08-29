@@ -21,6 +21,8 @@ export interface PendingEntryOpts {
   readonly ticketId: string;
   readonly mentionedPseudonyms: string[];
   readonly currentUserId: string | null;
+  /** Trimmed plaintext being sent, for callers rendering their own optimistic bubble. */
+  readonly text: string;
 }
 
 export interface SendMessageConfig<TFollowUp> {
@@ -55,6 +57,10 @@ export interface SendMessageConfig<TFollowUp> {
     portalCopy?: PortalCopy;
     attachments?: AttachmentLink[];
   }) => Promise<unknown>;
+  /** Runs after a successful send and cache invalidation (haptics, toasts, dismissal). */
+  readonly onSuccess?: () => void;
+  /** Runs after a failed send, once rollback and the error toast are done. */
+  readonly onError?: () => void;
 }
 
 export interface SendMessage {
@@ -77,6 +83,8 @@ export function createSendMessage<TFollowUp extends { id: string }>(
     getClientPublic,
     getAttachmentLinks,
     createFollowUpMutate,
+    onSuccess,
+    onError,
   } = config;
 
   let sending = $state(false);
@@ -108,6 +116,7 @@ export function createSendMessage<TFollowUp extends { id: string }>(
         ticketId,
         mentionedPseudonyms: mentions,
         currentUserId: getCurrentUserId(),
+        text,
       });
 
       queryClient.setQueryData<TFollowUp[]>(followUpsKey, (old) =>
@@ -138,6 +147,7 @@ export function createSendMessage<TFollowUp extends { id: string }>(
         queryKey: ticketKeys.followUps(ticketId),
       });
       invalidateReadState(queryClient);
+      onSuccess?.();
     } catch (err: unknown) {
       followUpCache.deleteByPrefix(pendingId);
       queryClient.setQueryData<TFollowUp[]>(followUpsKey, (old) =>
@@ -150,6 +160,7 @@ export function createSendMessage<TFollowUp extends { id: string }>(
           ? m.ticket_reply_error_encrypt()
           : m.ticket_reply_error_send();
       toastStore.show(msg, 3000);
+      onError?.();
     } finally {
       sending = false;
     }
