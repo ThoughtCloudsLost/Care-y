@@ -158,6 +158,12 @@ export interface RewrapFileKeyRequest {
   readonly attachmentId: string;
   /** The file key wrapped under tk_temp, base64. */
   readonly fileKeyWrap: string;
+  /**
+   * The filename encrypted under tk_temp, base64, when the row has one.
+   * Converged alongside the key so the name stays readable after the
+   * temp wraps are deleted.
+   */
+  readonly encryptedFilename?: string;
 }
 
 export interface EncryptContentRequest {
@@ -634,6 +640,8 @@ export interface RewrapFileKeyResponse extends SuccessBase {
   readonly attachmentId: string;
   /** The same file key, now wrapped under the canonical tk, base64. */
   readonly fileKeyWrap: string;
+  /** The same filename, now encrypted under the canonical tk, base64. */
+  readonly encryptedFilename?: string;
 }
 
 export interface EncryptContentResponse extends SuccessBase {

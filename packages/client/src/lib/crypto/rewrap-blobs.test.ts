@@ -639,10 +639,54 @@ describe("rewrapBlobsForFollowUp with file key attachments", () => {
       TICKET_ID,
       "att-wrapped",
       "wrap-under-tk-temp",
+      undefined,
     );
     // The whole point of the envelope: the bytes stay where they are.
     expect(mockFetchBlob).not.toHaveBeenCalled();
     expect(bridge.rewrapBlob).not.toHaveBeenCalled();
+  });
+
+  it("passes the encrypted filename through so the name converges with the key", async () => {
+    const qc = createMockQueryClient([{ id: FOLLOW_UP_ID, hasFile: true }]);
+
+    router.listRecordings.query.mockResolvedValue([]);
+    router.listAttachments.query.mockResolvedValue([
+      {
+        id: "att-named",
+        blobKey: "blob-named",
+        followupId: FOLLOW_UP_ID,
+        fileKeyWrap: "wrap-under-tk-temp",
+        encryptedFilename: "name-under-tk-temp",
+      },
+    ]);
+    (bridge.rewrapFileKey as ReturnType<typeof vi.fn>).mockResolvedValue({
+      attachmentId: "att-named",
+      fileKeyWrap: "re-wrapped-key",
+      encryptedFilename: "name-under-tk",
+    });
+
+    const result = await rewrapBlobsForFollowUp(
+      TICKET_ID,
+      FOLLOW_UP_ID,
+      bridge,
+      router as never,
+      qc,
+    );
+
+    expect(bridge.rewrapFileKey).toHaveBeenCalledWith(
+      FOLLOW_UP_ID,
+      TICKET_ID,
+      "att-named",
+      "wrap-under-tk-temp",
+      "name-under-tk-temp",
+    );
+    expect(result.fileKeyUpdates).toEqual([
+      {
+        attachmentId: "att-named",
+        fileKeyWrap: "re-wrapped-key",
+        encryptedFilename: "name-under-tk",
+      },
+    ]);
   });
 
   it("sends each attachment down the path its own envelope needs", async () => {

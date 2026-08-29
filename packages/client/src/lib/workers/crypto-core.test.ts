@@ -32,6 +32,8 @@ import {
   buildContentAad,
   followupSlot,
   blobSlot,
+  fileKeySlot,
+  filenameSlot,
   type Ciphertext,
   type Nonce,
   type RistrettoPoint,
@@ -62,6 +64,7 @@ import type {
   PhoneMatchHashResponse,
   RewrapTkResponse,
   RewrapBlobResponse,
+  RewrapFileKeyResponse,
   SharedWorkerState,
   DecryptIntakeResponseResponse,
   MintBackfillWrapsResponse,
@@ -1859,6 +1862,148 @@ describe("crypto-core rewrapBlob success", () => {
     });
     sodium.memzero(canonicalTk);
     sodium.memzero(tkTemp);
+  });
+});
+
+describe("crypto-core rewrapFileKey success", () => {
+  let volPublicStr: string;
+
+  beforeEach(async () => {
+    handleZeroAll(-1, testSink);
+    sinkMessages = [];
+    dispatch = createDispatcher(testSink);
+    const sodium = requireSodium();
+    const salt = sodium.randombytes_buf(16);
+    const result = await loginFlow("rewrapfilekey-ok-pw", salt);
+    volPublicStr = result.volPublic;
+    sinkMessages = [];
+  });
+
+  async function primeKeys(
+    ticketId: string,
+    followUpId: string,
+    baseId: number,
+  ): Promise<{ canonicalTk: SymmetricKey; tkTemp: SymmetricKey }> {
+    const volPub = decode(volPublicStr) as RistrettoPoint;
+
+    const canonicalTk = generateContentKey();
+    const wrapCanonical = eciesEncrypt(canonicalTk, volPub);
+    await dispatchAndWait({
+      type: "unwrapTk",
+      id: baseId,
+      ticketId,
+      keyCacheId: ticketId,
+      ephemeralPoint: encode(wrapCanonical.ephemeralPoint),
+      nonce: encode(wrapCanonical.nonce),
+      wrappedKey: encode(wrapCanonical.ciphertext),
+    });
+
+    const tkTemp = generateContentKey();
+    const wrapTemp = eciesEncrypt(tkTemp, volPub);
+    const tempCt = encryptContent(
+      new TextEncoder().encode("portal reply"),
+      tkTemp,
+      buildContentAad(ticketId, followupSlot(followUpId)),
+    );
+    await dispatchAndWait({
+      type: "decryptAndRewrap",
+      id: baseId + 1,
+      ticketId,
+      followUpId,
+      ephemeralPoint: encode(wrapTemp.ephemeralPoint),
+      nonce: encode(wrapTemp.nonce),
+      wrappedKey: encode(wrapTemp.ciphertext),
+      ciphertext: encode(tempCt),
+    });
+
+    return { canonicalTk: canonicalTk as SymmetricKey, tkTemp };
+  }
+
+  it("re-wraps the file key and re-encrypts the filename under the canonical tk", async () => {
+    const sodium = requireSodium();
+    const ticketId = "t-refk";
+    const followUpId = "fu-filekey-1";
+    const attachmentId = "att-fk-1";
+    const { canonicalTk, tkTemp } = await primeKeys(ticketId, followUpId, 1300);
+
+    const fileKey = generateContentKey();
+    const fileKeyWrapCt = encryptContent(
+      fileKey,
+      tkTemp,
+      buildContentAad(ticketId, fileKeySlot(attachmentId)),
+    );
+    const filenameCt = encryptContent(
+      new TextEncoder().encode("statement.pdf"),
+      tkTemp,
+      buildContentAad(ticketId, filenameSlot(attachmentId)),
+    );
+
+    sinkMessages = [];
+    const resp = (await dispatchAndWait({
+      type: "rewrapFileKey",
+      id: 1302,
+      followUpId,
+      ticketId,
+      attachmentId,
+      fileKeyWrap: encode(fileKeyWrapCt),
+      encryptedFilename: encode(filenameCt),
+    })) as RewrapFileKeyResponse;
+
+    expect(resp.ok).toBe(true);
+    expect(resp.attachmentId).toBe(attachmentId);
+
+    const keyAgain = decryptContent(
+      decode(resp.fileKeyWrap) as Ciphertext,
+      canonicalTk,
+      buildContentAad(ticketId, fileKeySlot(attachmentId)),
+    );
+    expect(keyAgain).toEqual(fileKey);
+
+    expect(resp.encryptedFilename).toBeDefined();
+    const nameAgain = decryptContent(
+      decode(resp.encryptedFilename!) as Ciphertext,
+      canonicalTk,
+      buildContentAad(ticketId, filenameSlot(attachmentId)),
+    );
+    expect(new TextDecoder().decode(nameAgain)).toBe("statement.pdf");
+
+    handleRewrapResult({ kind: "rewrap-result", followUpId, success: true });
+    sodium.memzero(canonicalTk);
+    sodium.memzero(tkTemp);
+    sodium.memzero(fileKey);
+  });
+
+  it("omits the filename from the response when the request carries none", async () => {
+    const sodium = requireSodium();
+    const ticketId = "t-refk-noname";
+    const followUpId = "fu-filekey-2";
+    const attachmentId = "att-fk-2";
+    const { canonicalTk, tkTemp } = await primeKeys(ticketId, followUpId, 1310);
+
+    const fileKey = generateContentKey();
+    const fileKeyWrapCt = encryptContent(
+      fileKey,
+      tkTemp,
+      buildContentAad(ticketId, fileKeySlot(attachmentId)),
+    );
+
+    sinkMessages = [];
+    const resp = (await dispatchAndWait({
+      type: "rewrapFileKey",
+      id: 1312,
+      followUpId,
+      ticketId,
+      attachmentId,
+      fileKeyWrap: encode(fileKeyWrapCt),
+    })) as RewrapFileKeyResponse;
+
+    expect(resp.ok).toBe(true);
+    expect(resp.encryptedFilename).toBeUndefined();
+
+    handleRewrapResult({ kind: "rewrap-result", followUpId, success: true });
+    sodium.memzero(canonicalTk);
+    sodium.memzero(tkTemp);
+    sodium.memzero(fileKey);
   });
 });
 

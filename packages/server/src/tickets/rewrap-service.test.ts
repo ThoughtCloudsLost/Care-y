@@ -16,6 +16,7 @@ import * as crypto from "node:crypto";
 import type { BlobStore, BlobCategory } from "../storage/store.js";
 import {
   newFollowupId,
+  newAttachmentId,
   newKeyGeneration,
   type KeyGeneration,
   type BlobKey,
@@ -232,6 +233,73 @@ describe.skipIf(!process.env.DATABASE_URL)("rewrapFollowUp (DB)", () => {
 
     expect(mockBlobStore.delete).toHaveBeenCalledWith("old-rec-key");
     expect(mockBlobStore.delete).toHaveBeenCalledWith("old-att-key");
+  });
+
+  it("converges the file key wrap and the encrypted filename in place", async () => {
+    const { userId, followUpId, ticketId } = await createFixtureWithFollowUp();
+
+    const namedId = newAttachmentId();
+    const namelessId = newAttachmentId();
+    await testDb.db
+      .insertInto("attachments")
+      .values([
+        {
+          id: namedId,
+          ticket_id: ticketId,
+          followup_id: followUpId,
+          blob_key: "fk-att-blob-1" as BlobKey,
+          size_bytes: 64,
+          content_type: "application/pdf",
+          file_key_wrap: Buffer.from("wrap-under-tk-temp"),
+          encrypted_filename: Buffer.from("name-under-tk-temp"),
+        },
+        {
+          id: namelessId,
+          ticket_id: ticketId,
+          followup_id: followUpId,
+          blob_key: "fk-att-blob-2" as BlobKey,
+          size_bytes: 64,
+          content_type: "application/pdf",
+          file_key_wrap: Buffer.from("wrap-under-tk-temp-2"),
+          encrypted_filename: Buffer.from("untouched-name"),
+        },
+      ])
+      .execute();
+
+    const result = await rewrapFollowUp(testDb.db, access, userId, {
+      followUpId,
+      encryptedContent: Buffer.from("canonical"),
+      fileKeyUpdates: [
+        {
+          attachmentId: namedId,
+          fileKeyWrap: Buffer.from("wrap-under-tk"),
+          encryptedFilename: Buffer.from("name-under-tk"),
+        },
+        {
+          attachmentId: namelessId,
+          fileKeyWrap: Buffer.from("wrap-under-tk-2"),
+        },
+      ],
+    });
+    expect(result.rewrapped).toBe(true);
+
+    const named = await testDb.db
+      .selectFrom("attachments")
+      .select(["file_key_wrap", "encrypted_filename"])
+      .where("id", "=", namedId)
+      .executeTakeFirstOrThrow();
+    expect(named.file_key_wrap?.toString()).toBe("wrap-under-tk");
+    expect(named.encrypted_filename?.toString()).toBe("name-under-tk");
+
+    // An update without a filename replaces the wrap and leaves the
+    // stored name alone.
+    const nameless = await testDb.db
+      .selectFrom("attachments")
+      .select(["file_key_wrap", "encrypted_filename"])
+      .where("id", "=", namelessId)
+      .executeTakeFirstOrThrow();
+    expect(nameless.file_key_wrap?.toString()).toBe("wrap-under-tk-2");
+    expect(nameless.encrypted_filename?.toString()).toBe("untouched-name");
   });
 
   it("skips blob processing when no blobUpdates provided", async () => {

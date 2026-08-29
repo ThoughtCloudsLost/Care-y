@@ -16,8 +16,12 @@
     ticketId: string;
     /** Base64url file key wrap from the attachment record. */
     fileKeyWrap: string;
-    /** Base64url encrypted filename, or null for MMS-origin rows. */
-    encryptedFilename: string | null;
+    /**
+     * Decrypted filename, resolved by the caller through the follow-up
+     * decrypt cache, or null while the decrypt is pending or the key is
+     * unavailable.
+     */
+    filename: string | null;
     sizeBytes: number;
     bridge: CryptoBridge;
   }
@@ -26,14 +30,12 @@
     attachmentId,
     ticketId,
     fileKeyWrap,
-    encryptedFilename,
+    filename,
     sizeBytes,
     bridge,
   }: Props = $props();
 
-  // The encrypted filename is opaque until the file is opened. Show a
-  // generic placeholder in the chip until then.
-  const displayName = $derived(encryptedFilename !== null ? "..." : "file");
+  const displayName = $derived(filename ?? "...");
 
   async function handleDownload(aid: string): Promise<void> {
     const ciphertext = await fetchBlob(`/api/blobs/attachments/${aid}`);
@@ -44,10 +46,7 @@
       ciphertext,
     );
 
-    // The Worker returns plaintext bytes; the filename rides the wrap
-    // and is recovered there. The decryptAttachment protocol does not
-    // surface the filename separately, so fall back to a generic name.
-    triggerBlobDownload(decryptedBuf, "attachment");
+    triggerBlobDownload(decryptedBuf, filename ?? "attachment");
   }
 </script>
 

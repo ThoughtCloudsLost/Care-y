@@ -1773,6 +1773,7 @@ export function createTicketRouter(deps: TicketRouterDeps) {
               z.object({
                 attachmentId: attachmentIdSchema,
                 fileKeyWrap: z.string().min(1),
+                encryptedFilename: z.string().min(1).optional(),
               }),
             )
             .optional(),
@@ -1796,6 +1797,10 @@ export function createTicketRouter(deps: TicketRouterDeps) {
               fileKeyUpdates: input.fileKeyUpdates?.map((f) => ({
                 attachmentId: f.attachmentId,
                 fileKeyWrap: Buffer.from(f.fileKeyWrap, "base64"),
+                encryptedFilename:
+                  f.encryptedFilename !== undefined
+                    ? Buffer.from(f.encryptedFilename, "base64")
+                    : undefined,
               })),
             },
             deps.blobStore,

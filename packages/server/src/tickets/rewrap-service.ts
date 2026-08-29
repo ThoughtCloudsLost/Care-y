@@ -28,6 +28,12 @@ export interface RewrapInput {
   readonly fileKeyUpdates?: readonly {
     readonly attachmentId: AttachmentId;
     readonly fileKeyWrap: Buffer;
+    /**
+     * Filename re-encrypted under the canonical tk. Present for portal
+     * uploads, whose name was encrypted under tk_temp at upload time and
+     * would become unreadable once the temp wraps are deleted.
+     */
+    readonly encryptedFilename?: Buffer;
   }[];
 }
 
@@ -117,7 +123,12 @@ export async function rewrapFollowUp(
     for (const update of input.fileKeyUpdates ?? []) {
       await trx
         .updateTable("attachments")
-        .set({ file_key_wrap: update.fileKeyWrap })
+        .set({
+          file_key_wrap: update.fileKeyWrap,
+          ...(update.encryptedFilename !== undefined
+            ? { encrypted_filename: update.encryptedFilename }
+            : {}),
+        })
         .where("id", "=", update.attachmentId)
         .where("followup_id", "=", input.followUpId)
         .execute();

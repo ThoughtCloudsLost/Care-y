@@ -15,7 +15,15 @@
   import * as m from "$lib/paraglide/messages.js";
   import { trpc } from "$lib/trpc/index.js";
   import { requireRouter } from "$lib/errors.js";
-  import { getCryptoBridge } from "$lib/crypto/context.js";
+  import { filenameSlot } from "@care-y/crypto";
+  import {
+    getCryptoBridge,
+    getFollowUpDecryptCache,
+  } from "$lib/crypto/context.js";
+  import {
+    resolveAsyncDecrypt,
+    isDecryptReady,
+  } from "$lib/crypto/decrypt-result.js";
   import VoicemailPlayer from "./VoicemailPlayer.svelte";
   import MmsImage from "./MmsImage.svelte";
   import AttachmentChip from "./AttachmentChip.svelte";
@@ -45,6 +53,7 @@
 
   const ticketRouter = requireRouter(trpc.tickets, "tickets");
   const bridge = getCryptoBridge();
+  const followUpCache = getFollowUpDecryptCache();
 
   const recordingsQuery = createQuery(() => ({
     queryKey: ticketKeys.recordings(ticketId),
@@ -78,6 +87,25 @@
 {/each}
 
 {#each attachments as att (att.id)}
+  <!-- Same filename resolution PanelMediaSection uses: encrypted under
+       the ticket key at the filename slot, cached per attachment. -->
+  {@const filenameResult =
+    att.encryptedFilename != null
+      ? resolveAsyncDecrypt(
+          followUpCache.decryptContent(
+            `filename:${att.id}`,
+            ticketId,
+            filenameSlot(att.id),
+            keyWrap,
+            att.encryptedFilename,
+          ),
+          keyWrap !== null,
+        )
+      : undefined}
+  {@const resolvedFilename =
+    filenameResult != null && isDecryptReady(filenameResult)
+      ? filenameResult.value
+      : null}
   {#if att.fileKeyWrap !== null}
     <!-- File-key envelope (ADR-089): unwrap the file key, then decrypt. -->
     {#if att.contentType?.startsWith("image/")}
@@ -95,7 +123,7 @@
         attachmentId={att.id}
         {ticketId}
         fileKeyWrap={att.fileKeyWrap}
-        encryptedFilename={att.encryptedFilename}
+        filename={resolvedFilename}
         sizeBytes={att.sizeBytes}
         {bridge}
       />
@@ -120,7 +148,7 @@
         {ticketId}
         {keyWrap}
         filename={att.encryptedFilename !== null
-          ? "..."
+          ? (resolvedFilename ?? "...")
           : m.attachment_sms_unnamed()}
         sizeBytes={att.sizeBytes}
       />

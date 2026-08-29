@@ -433,7 +433,12 @@ export class CryptoBridge {
     ticketId: string,
     attachmentId: string,
     fileKeyWrap: string,
-  ): Promise<{ attachmentId: string; fileKeyWrap: string }> {
+    encryptedFilename?: string,
+  ): Promise<{
+    attachmentId: string;
+    fileKeyWrap: string;
+    encryptedFilename?: string;
+  }> {
     const resp = expectResponse(
       await this.sendRequest({
         type: "rewrapFileKey",
@@ -441,12 +446,14 @@ export class CryptoBridge {
         ticketId,
         attachmentId,
         fileKeyWrap,
+        encryptedFilename,
       }),
       "rewrapFileKey",
     );
     return {
       attachmentId: resp.attachmentId,
       fileKeyWrap: resp.fileKeyWrap,
+      encryptedFilename: resp.encryptedFilename,
     };
   }
 

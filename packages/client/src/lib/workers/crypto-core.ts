@@ -754,12 +754,41 @@ function handleRewrapFileKey(req: RewrapFileKeyRequest, sink: Sink): void {
         canonicalTk as SymmetricKey,
         aad,
       );
+
+      // The filename converges with the key: it was encrypted under
+      // tk_temp at upload time, and the temp wraps are deleted after
+      // convergence, so a name left behind would be unreadable forever.
+      let rewrappedFilename: string | undefined;
+      if (req.encryptedFilename !== undefined) {
+        const filenameAad = buildContentAad(
+          req.ticketId,
+          filenameSlot(req.attachmentId),
+        );
+        const filenameBuf = decryptContent(
+          decode(req.encryptedFilename) as Ciphertext,
+          tkTemp as SymmetricKey,
+          filenameAad,
+        );
+        try {
+          rewrappedFilename = encode(
+            encryptContent(
+              filenameBuf,
+              canonicalTk as SymmetricKey,
+              filenameAad,
+            ),
+          );
+        } finally {
+          sodium.memzero(filenameBuf);
+        }
+      }
+
       const msg: WorkerResponse = {
         id: req.id,
         ok: true,
         type: "rewrapFileKey",
         attachmentId: req.attachmentId,
         fileKeyWrap: encode(rewrapped),
+        encryptedFilename: rewrappedFilename,
       };
       sink(msg);
     } finally {

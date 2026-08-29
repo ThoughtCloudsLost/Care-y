@@ -33,6 +33,8 @@ interface BlobUpdate {
 interface FileKeyUpdate {
   attachmentId: string;
   fileKeyWrap: string;
+  /** Filename re-encrypted under the canonical tk, when the row has one. */
+  encryptedFilename?: string;
 }
 
 /**
@@ -155,10 +157,12 @@ export async function rewrapBlobsForFollowUp(
       ticketId,
       att.id,
       wrap,
+      att.encryptedFilename ?? undefined,
     );
     fileKeyUpdates.push({
       attachmentId: result.attachmentId,
       fileKeyWrap: result.fileKeyWrap,
+      encryptedFilename: result.encryptedFilename,
     });
   }
 
