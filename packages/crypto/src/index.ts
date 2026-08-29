@@ -129,6 +129,8 @@ export {
   decryptWithPassphrase,
   serializeEscrowBlob,
   deserializeEscrowBlob,
+  serializeOprfShares,
+  deserializeOprfShares,
 } from "./escrow.js";
 
 // --- Portal Key Derivation ---
