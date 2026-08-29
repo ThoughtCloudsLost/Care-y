@@ -65,6 +65,7 @@
   import QueryError from "$lib/components/QueryError.svelte";
   import DecryptPlaceholder from "$lib/components/DecryptPlaceholder.svelte";
   import SystemEvent from "$lib/components/tickets/SystemEvent.svelte";
+  import DateSeparator from "$lib/components/tickets/DateSeparator.svelte";
   import CallEntry from "$lib/components/tickets/CallEntry.svelte";
   import PrivateNote from "$lib/components/tickets/PrivateNote.svelte";
   import FollowUpMedia from "$lib/components/tickets/FollowUpMedia.svelte";
@@ -1369,11 +1370,9 @@
                   : undefined}
 
                 {#if needsDateSeparator(grp.firstTimestamp, prevTimestamp)}
-                  <div class="date-separator" role="separator">
-                    <span class="date-separator-label"
-                      >{formatDateSeparator(grp.firstTimestamp)}</span
-                    >
-                  </div>
+                  <DateSeparator
+                    label={formatDateSeparator(grp.firstTimestamp)}
+                  />
                 {/if}
 
                 <div class="fu-wrapper">
@@ -1415,11 +1414,7 @@
                 <GapIndicator count={gapBefore} />
 
                 {#if needsDateSeparator(fu.createdAt, prevTimestamp)}
-                  <div class="date-separator" role="separator">
-                    <span class="date-separator-label"
-                      >{formatDateSeparator(fu.createdAt)}</span
-                    >
-                  </div>
+                  <DateSeparator label={formatDateSeparator(fu.createdAt)} />
                 {/if}
 
                 {#if fu.id === firstUnreadId}
@@ -1692,32 +1687,6 @@
     color: var(--muted);
     font-size: var(--text-base);
     padding: 2rem;
-  }
-
-  /* --- Date separators (dateline anatomy) --- */
-
-  /* No padding of its own: the .thread gap and side padding place it. */
-  .date-separator {
-    display: flex;
-    align-items: center;
-    gap: 0.625rem;
-  }
-
-  .date-separator::before,
-  .date-separator::after {
-    content: "";
-    flex: 1;
-    height: 1px;
-    background: var(--hair);
-  }
-
-  .date-separator-label {
-    font-size: 0.6875rem;
-    font-weight: 700;
-    color: var(--muted);
-    white-space: nowrap;
-    text-transform: uppercase;
-    letter-spacing: 0.14em;
   }
 
   /* --- Loading older messages --- */

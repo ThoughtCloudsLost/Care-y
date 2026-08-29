@@ -3,8 +3,8 @@
 
   One implementation so a client and a volunteer looking at the same
   conversation see the same rule, in the same weight, in the same place.
-  The org ticket thread still carries its own copy of this markup and CSS;
-  converging it belongs to the phase that owns that file.
+  Both threads render it: the portal thread and, since the parity
+  close-out, the org ticket thread.
 
   Callers decide when a line is needed with `needsDateSeparator` and pass
   the already-formatted label, because the grouping logic differs per
