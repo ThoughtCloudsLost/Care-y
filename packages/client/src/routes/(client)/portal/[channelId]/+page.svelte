@@ -35,12 +35,9 @@
   import { announceToLiveRegion } from "$lib/utils/announce.js";
   import { decode, encode } from "@care-y/crypto";
   import { newFollowupId, newKeyGeneration } from "@care-y/shared";
-  import {
-    encryptReply,
-    type ChannelEvaluateCallback,
-  } from "$lib/portal/portal-crypto.js";
   import { solveProofOfWork } from "$lib/auth/pow-solver.js";
   import { requireRouter } from "$lib/errors.js";
+  import type { ChannelEvaluateCallback } from "$lib/composables/portal/create-portal-session.svelte.js";
   import PortalHint from "$lib/components/portal/PortalHint.svelte";
   import { createPublicBrandingQuery } from "$lib/branding/public-branding.js";
   import PageLayout from "$lib/shell/PageLayout.svelte";
@@ -421,41 +418,49 @@
     const followUpId = newFollowupId();
     const keyGeneration = newKeyGeneration();
 
-    const payload = encryptReply(
-      text,
-      orgPublicKey,
-      sess.keypair.clientPublic,
-      { ticketId, followUpId, keyGeneration },
-    );
+    void sess
+      .encryptReply(
+        text,
+        encode(orgPublicKey),
+        ticketId,
+        followUpId,
+        keyGeneration,
+      )
+      .then((payload) => {
+        optimisticMessages = [
+          ...optimisticMessages,
+          {
+            id: followUpId,
+            // The optimistic bubble stands in for a row the server has not
+            // written yet, and the thread groups files by follow-up, so it
+            // carries the same id the reply was minted with.
+            followupId: followUpId,
+            direction: "from_client",
+            ephemeralPoint: payload.selfCopy.ephemeralPoint,
+            nonce: payload.selfCopy.nonce,
+            ciphertext: payload.selfCopy.ciphertext,
+            createdAt: new Date().toISOString(),
+            editedAt: null,
+          },
+        ];
 
-    optimisticMessages = [
-      ...optimisticMessages,
-      {
-        id: followUpId,
-        // The optimistic bubble stands in for a row the server has not
-        // written yet, and the thread groups files by follow-up, so it
-        // carries the same id the reply was minted with.
-        followupId: followUpId,
-        direction: "from_client",
-        ephemeralPoint: payload.selfCopy.ephemeralPoint,
-        nonce: payload.selfCopy.nonce,
-        ciphertext: payload.selfCopy.ciphertext,
-        createdAt: new Date().toISOString(),
-        editedAt: null,
-      },
-    ];
-
-    replyMutation.mutate({
-      channelId: sess.channelId,
-      auth: encode(sess.auth),
-      ticketId,
-      followUpId,
-      keyGeneration,
-      encryptedContent: payload.encryptedContent,
-      wrappedTkTemp: payload.wrappedTkTemp,
-      selfCopy: payload.selfCopy,
-      kind: kind ?? undefined,
-    });
+        replyMutation.mutate({
+          channelId: sess.channelId,
+          auth: encode(sess.auth),
+          ticketId,
+          followUpId,
+          keyGeneration,
+          encryptedContent: payload.encryptedContent,
+          wrappedTkTemp: payload.wrappedTkTemp,
+          selfCopy: payload.selfCopy,
+          kind: kind ?? undefined,
+        });
+      })
+      .catch(() => {
+        composerRef?.restoreDraft(lastSentText);
+        sendError = m.portal_send_failed();
+        announceToLiveRegion("polite", m.portal_send_failed());
+      });
   }
 
   // Clear optimistic messages when server data refreshes
@@ -748,6 +753,7 @@
     </button>
   </Block>
 {:else if portalSession.keyCheckPassed && portalSession.session}
+  {@const activeSession = portalSession.session}
   <!-- State 4 + 5: Thread scrolls, composer pins to the bottom -->
   <PageLayout lockScroll bind:scrollEl={threadScrollEl}>
     {#snippet bottomBar()}
@@ -806,7 +812,16 @@
 
     <PortalThread
       messages={filteredMessages}
-      clientPrivate={portalSession.session.keypair.clientPrivate}
+      decryptMessage={async (ep: string, n: string, ct: string) =>
+        activeSession.decryptMessage(ep, n, ct)}
+      decryptAttachmentKey={async (ep: string, n: string, ct: string) =>
+        activeSession.decryptAttachmentKey(ep, n, ct)}
+      decryptAttachmentBlob={async (
+        ct: ArrayBuffer,
+        fk: string,
+        tid: string,
+        aid: string,
+      ) => activeSession.decryptAttachmentBlob(ct, fk, tid, aid)}
       loading={messagesQuery.isLoading}
       attachments={portalAttachments}
       channelId={fragment.fragmentData?.channelId}

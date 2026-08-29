@@ -1,22 +1,38 @@
 /**
- * Composable: portal keypair derivation through the channel OPRF
- * round (ADR-091), key-check verification, passphrase gate,
- * session create/destroy with zeroing.
+ * Composable: portal session lifecycle backed by the portal Worker (ADR-091).
+ *
+ * Constructs a PortalBridge (one per session, torn down with it) and drives
+ * channelSessionStart / channelSessionFinish through the existing tRPC
+ * evaluate callback and PoW solver, which stay on the main thread. The seed
+ * is posted into the worker as a transferred ArrayBuffer immediately after
+ * fragment parse, and the main-thread copy is zeroed right after posting.
+ *
+ * Key-check verification, message decryption, reply encryption, and
+ * attachment ops go through the bridge. destroySession calls bridge.zeroAll
+ * and terminates the worker. No key material crosses the shell context
+ * boundary (callbacks only).
+ *
+ * The composable's public API to pages stays close to what
+ * createPortalSessionState exposed before the migration, keeping page churn
+ * small.
  */
 
-import { encode } from "@care-y/crypto";
-import {
-  performChannelOprf,
-  verifyKeyCheck,
-  createPortalSession,
-  decodeEciesTriple,
-  type ChannelEvaluateCallback,
-  type PortalSession,
-} from "$lib/portal/portal-crypto.js";
+import { PortalBridge } from "$lib/workers/portal-bridge.js";
+import type {
+  EciesTripleWireResponse,
+  PortalAttachmentPayloadResponse,
+  PortalAttachmentInput,
+} from "$lib/workers/portal-protocol.js";
 import type { FragmentData } from "./create-portal-fragment.svelte.js";
 
+export type ChannelEvaluateCallback = (
+  channelId: string,
+  blindedElementB64: string,
+  auth?: string,
+) => Promise<{ evaluated: string }>;
+
 export interface PortalSessionState {
-  readonly session: PortalSession | null;
+  readonly session: PortalSessionHandle | null;
   readonly keyCheckPassed: boolean;
   readonly passphraseError: boolean;
   readonly passphraseDerivePending: boolean;
@@ -38,8 +54,111 @@ export interface PortalSessionState {
   ): Promise<void>;
 }
 
+/**
+ * Handle exposed by a successfully established channel session.
+ *
+ * The page uses this to drive decrypt/encrypt through the bridge and to
+ * zero key material on exit. No private key or seed is accessible from
+ * the main thread; only the channelId, auth (for tRPC calls), and the
+ * clientPublic (for optimistic self-copy rendering) cross back.
+ */
+export interface PortalSessionHandle {
+  readonly channelId: string;
+  readonly auth: Uint8Array;
+  /** Base64url client public key (returned from the worker, read-only). */
+  readonly clientPublic: string;
+  /** Zero the worker's key material and terminate it. */
+  destroy(): void;
+  /** Decrypt a single portal message via the bridge. */
+  decryptMessage(
+    ephemeralPoint: string,
+    nonce: string,
+    ciphertext: string,
+  ): Promise<string>;
+  /** Verify a key-check triple via the bridge. */
+  verifyKeyCheck(
+    ephemeralPoint: string,
+    nonce: string,
+    ciphertext: string,
+  ): Promise<boolean>;
+  /** Encrypt a reply with optional attachments via the bridge. */
+  encryptReply(
+    text: string,
+    orgPublicKey: string,
+    ticketId: string,
+    followUpId: string,
+    keyGeneration: string,
+    attachments?: readonly PortalAttachmentInput[],
+  ): Promise<{
+    encryptedContent: string;
+    wrappedTkTemp: string;
+    selfCopy: EciesTripleWireResponse;
+    attachments: readonly PortalAttachmentPayloadResponse[];
+  }>;
+  /** Decrypt an attachment key from the client's self-copy ECIES wrap. */
+  decryptAttachmentKey(
+    ephemeralPoint: string,
+    nonce: string,
+    ciphertext: string,
+  ): Promise<{ fileKey: string; filename: string }>;
+  /** Decrypt an attachment blob with a file key. */
+  decryptAttachmentBlob(
+    ciphertext: ArrayBuffer,
+    fileKey: string,
+    ticketId: string,
+    attachmentId: string,
+  ): Promise<ArrayBuffer>;
+}
+
+/**
+ * Type guard for tRPC errors carrying a PoW challenge. Mirrors the guard
+ * in portal-crypto.ts for the channel evaluate path.
+ */
+function isChannelPowRequired(
+  err: unknown,
+): err is { data: { code: string; challenge: string; difficulty: number } } {
+  if (typeof err !== "object" || err === null || !("data" in err)) {
+    return false;
+  }
+  const { data } = err;
+  if (typeof data !== "object" || data === null) {
+    return false;
+  }
+  return (
+    "code" in data &&
+    data.code === "POW_REQUIRED" &&
+    "challenge" in data &&
+    typeof data.challenge === "string" &&
+    "difficulty" in data &&
+    typeof data.difficulty === "number"
+  );
+}
+
+/**
+ * Channel evaluate with PoW retry. The bridge returns the blinded element;
+ * the main thread sends it to the server through tRPC, then posts the
+ * evaluated result back to the worker for finalization.
+ */
+async function evaluateChannelWithPowRetry(
+  channelId: string,
+  blindedElementB64: string,
+  auth: string | undefined,
+  evaluate: ChannelEvaluateCallback,
+  onPowRequired: (challenge: string, difficulty: number) => Promise<string>,
+): Promise<string> {
+  try {
+    const result = await evaluate(channelId, blindedElementB64, auth);
+    return result.evaluated;
+  } catch (err: unknown) {
+    if (!isChannelPowRequired(err)) throw err;
+    await onPowRequired(err.data.challenge, err.data.difficulty);
+    const result = await evaluate(channelId, blindedElementB64, auth);
+    return result.evaluated;
+  }
+}
+
 export function createPortalSessionState(): PortalSessionState {
-  let session = $state<PortalSession | null>(null);
+  let session = $state<PortalSessionHandle | null>(null);
   let keyCheckPassed = $state(false);
   let passphraseError = $state(false);
   let passphraseDerivePending = $state(false);
@@ -47,6 +166,86 @@ export function createPortalSessionState(): PortalSessionState {
   function destroySession(): void {
     session?.destroy();
     session = null;
+  }
+
+  /**
+   * Common channel derive flow: post seed to bridge, evaluate via tRPC,
+   * finalize in the worker, verify the key check. Returns the session
+   * handle on success, or null on failure.
+   */
+  async function deriveChannelSession(
+    fragmentData: FragmentData,
+    keyCheckWire: { ephemeralPoint: string; nonce: string; ciphertext: string },
+    evaluate: ChannelEvaluateCallback,
+    onPowRequired: (challenge: string, difficulty: number) => Promise<string>,
+    passphrase?: string,
+  ): Promise<PortalSessionHandle | null> {
+    const bridge = new PortalBridge();
+
+    try {
+      await bridge.waitReady();
+
+      // Copy the seed into an ArrayBuffer for transfer. After the bridge
+      // call the ArrayBuffer is neutered (zero-length), closing the
+      // main-thread exposure window.
+      const seedBuf = new ArrayBuffer(fragmentData.seed.byteLength);
+      new Uint8Array(seedBuf).set(fragmentData.seed);
+      // Zero the composable's seed copy immediately after the transfer
+      // copy is made. The bridge takes ownership via Transferable.
+      const { requireSodium } = await import("@care-y/crypto");
+      const sodium = requireSodium();
+
+      const startResult = await bridge.channelSessionStart(seedBuf, passphrase);
+      // seedBuf is neutered after transfer; zero the fragment's copy
+      sodium.memzero(fragmentData.seed);
+
+      // Evaluate via tRPC (main thread)
+      const evaluated = await evaluateChannelWithPowRetry(
+        startResult.channelId,
+        startResult.blindedElement,
+        startResult.auth,
+        evaluate,
+        onPowRequired,
+      );
+
+      // Finalize in the worker
+      const finishResult = await bridge.channelSessionFinish(evaluated);
+
+      // Verify the key check
+      const passed = await bridge.verifyKeyCheck(
+        keyCheckWire.ephemeralPoint,
+        keyCheckWire.nonce,
+        keyCheckWire.ciphertext,
+      );
+
+      if (!passed) {
+        bridge.destroy();
+        return null;
+      }
+
+      // Build the session handle
+      const handle: PortalSessionHandle = {
+        channelId: startResult.channelId,
+        auth: fragmentData.auth,
+        clientPublic: finishResult.clientPublic,
+        destroy(): void {
+          bridge.destroy();
+        },
+        decryptMessage: async (ep, n, ct) => bridge.decryptMessage(ep, n, ct),
+        verifyKeyCheck: async (ep, n, ct) => bridge.verifyKeyCheck(ep, n, ct),
+        encryptReply: async (text, orgPub, tid, fid, kg, atts) =>
+          bridge.encryptReply(text, orgPub, tid, fid, kg, atts),
+        decryptAttachmentKey: async (ep, n, ct) =>
+          bridge.decryptAttachmentKey(ep, n, ct),
+        decryptAttachmentBlob: async (ct, fk, tid, aid) =>
+          bridge.decryptAttachmentBlob(ct, fk, tid, aid),
+      };
+
+      return handle;
+    } catch {
+      bridge.destroy();
+      return null;
+    }
   }
 
   async function tryNoPassphraseDerive(
@@ -59,29 +258,16 @@ export function createPortalSessionState(): PortalSessionState {
     evaluate: ChannelEvaluateCallback,
     onPowRequired: (challenge: string, difficulty: number) => Promise<string>,
   ): Promise<boolean> {
-    try {
-      const keypair = await performChannelOprf(
-        fragmentData.seed,
-        fragmentData.channelId,
-        {
-          auth: encode(fragmentData.auth),
-          evaluate,
-          onPowRequired,
-        },
-      );
-      const keyCheck = decodeEciesTriple(keyCheckWire);
-      if (verifyKeyCheck(keypair, keyCheck)) {
-        session = createPortalSession(
-          fragmentData.channelId,
-          fragmentData.auth,
-          keypair,
-          fragmentData.seed,
-        );
-        keyCheckPassed = true;
-        return true;
-      }
-    } catch {
-      // Corrupt fragment, OPRF failure, or derivation failure
+    const handle = await deriveChannelSession(
+      fragmentData,
+      keyCheckWire,
+      evaluate,
+      onPowRequired,
+    );
+    if (handle !== null) {
+      session = handle;
+      keyCheckPassed = true;
+      return true;
     }
     return false;
   }
@@ -101,24 +287,15 @@ export function createPortalSessionState(): PortalSessionState {
     passphraseError = false;
 
     try {
-      const keypair = await performChannelOprf(
-        fragmentData.seed,
-        fragmentData.channelId,
-        {
-          passphrase,
-          auth: encode(fragmentData.auth),
-          evaluate,
-          onPowRequired,
-        },
+      const handle = await deriveChannelSession(
+        fragmentData,
+        keyCheckWire,
+        evaluate,
+        onPowRequired,
+        passphrase,
       );
-      const keyCheck = decodeEciesTriple(keyCheckWire);
-      if (verifyKeyCheck(keypair, keyCheck)) {
-        session = createPortalSession(
-          fragmentData.channelId,
-          fragmentData.auth,
-          keypair,
-          fragmentData.seed,
-        );
+      if (handle !== null) {
+        session = handle;
         keyCheckPassed = true;
         passphraseError = false;
       } else {
@@ -132,7 +309,7 @@ export function createPortalSessionState(): PortalSessionState {
   }
 
   return {
-    get session(): PortalSession | null {
+    get session(): PortalSessionHandle | null {
       return session;
     },
     get keyCheckPassed(): boolean {

@@ -11,11 +11,7 @@ import {
   rewrapMessages,
 } from "$lib/portal/account-crypto.js";
 import { buildLoginCallbacks } from "$lib/auth/crypto-callbacks.js";
-import {
-  decodeEciesTriple,
-  decryptPortalMessage,
-  type PortalSession,
-} from "$lib/portal/portal-crypto.js";
+import type { PortalSessionHandle } from "$lib/composables/portal/create-portal-session.svelte.js";
 import type { QueryClient } from "@tanstack/svelte-query";
 import type { AccountUpgradeWireInput } from "@care-y/shared";
 
@@ -39,7 +35,7 @@ export interface PortalUpgradeState {
   submit(
     username: string,
     password: string,
-    session: PortalSession,
+    session: PortalSessionHandle,
     fragmentChannelId: string,
     fragmentAuth: Uint8Array,
     serverMessages: readonly PortalMessageWire[],
@@ -77,7 +73,7 @@ export function createPortalUpgrade(): PortalUpgradeState {
   function submit(
     username: string,
     password: string,
-    session: PortalSession,
+    session: PortalSessionHandle,
     fragmentChannelId: string,
     fragmentAuth: Uint8Array,
     serverMessages: readonly PortalMessageWire[],
@@ -107,7 +103,7 @@ export function createPortalUpgrade(): PortalUpgradeState {
         );
 
         // Re-encrypt already-decrypted thread messages to the new key
-        const decryptedMsgs = collectDecrypted(serverMessages, session);
+        const decryptedMsgs = await collectDecrypted(serverMessages, session);
         const rewrapped = rewrapMessages(
           decryptedMsgs,
           newKeypair.clientPublic,
@@ -174,15 +170,18 @@ export function createPortalUpgrade(): PortalUpgradeState {
   };
 }
 
-function collectDecrypted(
+async function collectDecrypted(
   serverMessages: readonly PortalMessageWire[],
-  session: PortalSession,
-): readonly { id: string; text: string }[] {
+  session: PortalSessionHandle,
+): Promise<readonly { id: string; text: string }[]> {
   const result: { id: string; text: string }[] = [];
   for (const msg of serverMessages) {
     try {
-      const triple = decodeEciesTriple(msg);
-      const text = decryptPortalMessage(triple, session.keypair.clientPrivate);
+      const text = await session.decryptMessage(
+        msg.ephemeralPoint,
+        msg.nonce,
+        msg.ciphertext,
+      );
       result.push({ id: msg.id, text });
     } catch {
       // Skip messages that fail to decrypt

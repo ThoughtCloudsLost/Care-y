@@ -4,9 +4,9 @@
   bubble the volunteer ticket thread uses). Direction mapping:
   from_client = sent (right, brand-soft), to_client = received (left, raised).
 
-  Decryption: each message is ECIES-decrypted in the main thread.
-  DecryptPlaceholder with locally built DecryptResult provides the
-  loading/error/ready states.
+  ADR-091: decryption runs in the portal Worker via the bridge. The page
+  passes decrypt/attachment callbacks rather than a private key. Plaintext
+  rendering behavior is unchanged.
 
   Attachments: each message may carry zero or more attachments, grouped
   by followupId. Images render as thumbnails via MmsImage (injected-decrypt
@@ -28,14 +28,7 @@
   import type { DecryptResult } from "$lib/crypto/decrypt-result.js";
   import { LOADING, ERROR } from "$lib/crypto/decrypt-result.js";
   import { formatRelativeTime } from "$lib/utils/format-time.js";
-  import {
-    decryptPortalMessage,
-    decryptAttachmentKey,
-    decryptAttachmentBlob,
-    decodeEciesTriple,
-  } from "$lib/portal/portal-crypto.js";
-  import type { Scalar } from "@care-y/crypto";
-  import { SvelteMap } from "svelte/reactivity";
+  import { SvelteMap, SvelteSet } from "svelte/reactivity";
   import { splitByTerm, isHighlightable } from "$lib/search/highlight.js";
   import type { PortalAttachmentWire } from "$lib/portal/portal-attachment-types.js";
 
@@ -50,11 +43,44 @@
     readonly editedAt: string | null;
   }
 
+  /**
+   * Bridge-backed decrypt callback. The page wires this to
+   * session.decryptMessage, keeping the thread free of worker imports.
+   */
+  type DecryptMessageFn = (
+    ephemeralPoint: string,
+    nonce: string,
+    ciphertext: string,
+  ) => Promise<string>;
+
+  /**
+   * Bridge-backed attachment key decrypt callback.
+   */
+  type DecryptAttachmentKeyFn = (
+    ephemeralPoint: string,
+    nonce: string,
+    ciphertext: string,
+  ) => Promise<{ fileKey: string; filename: string }>;
+
+  /**
+   * Bridge-backed attachment blob decrypt callback.
+   */
+  type DecryptAttachmentBlobFn = (
+    ciphertext: ArrayBuffer,
+    fileKey: string,
+    ticketId: string,
+    attachmentId: string,
+  ) => Promise<ArrayBuffer>;
+
   interface PortalThreadProps {
     /** Messages from the bootstrap/polling response. */
     messages: readonly PortalMessageWire[];
-    /** Client private key for ECIES decryption. */
-    clientPrivate: Scalar;
+    /** Decrypt a message ECIES triple via the portal Worker bridge. */
+    decryptMessage: DecryptMessageFn;
+    /** Decrypt an attachment key via the portal Worker bridge. */
+    decryptAttachmentKey: DecryptAttachmentKeyFn;
+    /** Decrypt an attachment blob via the portal Worker bridge. */
+    decryptAttachmentBlob: DecryptAttachmentBlobFn;
     /** Whether messages are still loading from the server. */
     loading?: boolean;
     /** Flat list of attachments from the bootstrap response. */
@@ -87,7 +113,9 @@
 
   let {
     messages,
-    clientPrivate,
+    decryptMessage,
+    decryptAttachmentKey,
+    decryptAttachmentBlob,
     loading = false,
     attachments = [],
     channelId,
@@ -114,31 +142,43 @@
     readonly editedAt: string | null;
   }
 
+  // Async decrypt cache: messages are decrypted via the worker bridge.
+  // The SvelteMap holds results that update reactively as decryption
+  // completes. Each message is decrypted at most once per identity.
+  const decryptCache = new SvelteMap<string, DecryptResult>();
+
+  // Track in-flight decrypt promises to avoid double-dispatching.
+  const pendingDecrypts = new SvelteSet<string>();
+
+  $effect(() => {
+    if (loading) return;
+    for (const msg of messages) {
+      if (decryptCache.has(msg.id) || pendingDecrypts.has(msg.id)) continue;
+      pendingDecrypts.add(msg.id);
+      decryptCache.set(msg.id, LOADING);
+      void decryptMessage(msg.ephemeralPoint, msg.nonce, msg.ciphertext)
+        .then((text: string) => {
+          decryptCache.set(msg.id, { status: "ready" as const, value: text });
+        })
+        .catch(() => {
+          decryptCache.set(msg.id, ERROR);
+        })
+        .finally(() => {
+          pendingDecrypts.delete(msg.id);
+        });
+    }
+  });
+
   const decryptedMessages = $derived.by((): readonly DecryptedMessage[] => {
     if (loading) return [];
-    return messages.map((msg): DecryptedMessage => {
-      try {
-        const triple = decodeEciesTriple(msg);
-        const text = decryptPortalMessage(triple, clientPrivate);
-        return {
-          id: msg.id,
-          followupId: msg.followupId,
-          direction: msg.direction,
-          result: { status: "ready" as const, value: text },
-          createdAt: msg.createdAt,
-          editedAt: msg.editedAt,
-        };
-      } catch {
-        return {
-          id: msg.id,
-          followupId: msg.followupId,
-          direction: msg.direction,
-          result: ERROR,
-          createdAt: msg.createdAt,
-          editedAt: msg.editedAt,
-        };
-      }
-    });
+    return messages.map((msg): DecryptedMessage => ({
+      id: msg.id,
+      followupId: msg.followupId,
+      direction: msg.direction,
+      result: decryptCache.get(msg.id) ?? LOADING,
+      createdAt: msg.createdAt,
+      editedAt: msg.editedAt,
+    }));
   });
 
   /** Index attachments by followupId for O(1) lookup per message. */
@@ -169,35 +209,31 @@
 
   /**
    * Build a decrypt callback for a portal image attachment.
-   * Unwraps the file key from the ECIES triple, then decrypts the blob.
-   * The key is zeroed after one use by decryptAttachmentBlob.
+   * Unwraps the file key from the ECIES triple via the bridge, then
+   * decrypts the blob. Both operations run in the portal Worker.
    */
   function makeImageDecrypt(
     att: PortalAttachmentWire,
-  ): (ciphertext: ArrayBuffer) => ArrayBuffer {
-    // Not async: portal decryption is synchronous on the main thread, so
-    // this resolves an already-computed value. The bytes are copied into a
-    // fresh buffer rather than handing out the view's backing store, which
-    // may be larger than the plaintext.
-    return (ciphertext: ArrayBuffer): ArrayBuffer => {
-      const wrapTriple = decodeEciesTriple(att);
-      const { fileKey } = decryptAttachmentKey(wrapTriple, clientPrivate);
-      const plaintext = decryptAttachmentBlob(
-        new Uint8Array(ciphertext),
+  ): (ciphertext: ArrayBuffer) => Promise<ArrayBuffer> {
+    return async (ciphertext: ArrayBuffer): Promise<ArrayBuffer> => {
+      const { fileKey } = await decryptAttachmentKey(
+        att.ephemeralPoint,
+        att.nonce,
+        att.ciphertext,
+      );
+      return decryptAttachmentBlob(
+        ciphertext,
         fileKey,
         ticketId ?? "",
         att.attachmentId,
       );
-      const out = new ArrayBuffer(plaintext.byteLength);
-      // care-y-ignore-next-line no-plaintext-db-write -- TypedArray.set copying decrypted bytes into a fresh buffer for a blob URL; this component has no database access
-      new Uint8Array(out).set(plaintext);
-      return out;
     };
   }
 
   /**
    * Download handler for non-image attachments. Fetches the blob,
-   * unwraps the file key, decrypts, and triggers a browser save.
+   * unwraps the file key via the bridge, decrypts via the bridge,
+   * and triggers a browser save.
    */
   async function handleAttachmentDownload(
     att: PortalAttachmentWire,
@@ -206,19 +242,19 @@
     const blobPath = `/api/blobs/portal-attachments/${att.attachmentId}`;
     const ciphertext = await fetchBlob(blobPath, undefined, headers);
 
-    const wrapTriple = decodeEciesTriple(att);
-    const { fileKey, filename } = decryptAttachmentKey(
-      wrapTriple,
-      clientPrivate,
+    const { fileKey, filename } = await decryptAttachmentKey(
+      att.ephemeralPoint,
+      att.nonce,
+      att.ciphertext,
     );
-    const plaintext = decryptAttachmentBlob(
-      new Uint8Array(ciphertext),
+    const plaintext = await decryptAttachmentBlob(
+      ciphertext,
       fileKey,
       ticketId ?? "",
       att.attachmentId,
     );
 
-    triggerBlobDownload(plaintext, filename);
+    triggerBlobDownload(new Uint8Array(plaintext), filename);
   }
 
   const matchIds = $derived.by((): readonly string[] => {
@@ -249,19 +285,57 @@
   }
 
   /**
-   * Eagerly decrypt the filename from the ECIES wrap so the chip
-   * can display it. Returns an error flag when decryption fails.
+   * Async attachment-name cache. Eagerly decrypt each attachment's
+   * filename from the ECIES wrap via the bridge so the chip can
+   * display it. The SvelteMap is reactive, so the template re-reads
+   * as results arrive.
    */
-  function decryptAttachmentName(
-    att: PortalAttachmentWire,
+  type AttNameResult =
+    | { status: "loading" }
+    | { status: "ready"; filename: string }
+    | { status: "error" };
+
+  const attNameCache = new SvelteMap<string, AttNameResult>();
+  const pendingAttNames = new SvelteSet<string>();
+
+  $effect(() => {
+    for (const att of attachments) {
+      if (
+        att.contentType !== null &&
+        !att.contentType.startsWith("image/") &&
+        !attNameCache.has(att.attachmentId) &&
+        !pendingAttNames.has(att.attachmentId)
+      ) {
+        pendingAttNames.add(att.attachmentId);
+        attNameCache.set(att.attachmentId, { status: "loading" });
+        void decryptAttachmentKey(att.ephemeralPoint, att.nonce, att.ciphertext)
+          .then(({ filename }) => {
+            attNameCache.set(att.attachmentId, {
+              status: "ready",
+              filename,
+            });
+          })
+          .catch(() => {
+            attNameCache.set(att.attachmentId, { status: "error" });
+          })
+          .finally(() => {
+            pendingAttNames.delete(att.attachmentId);
+          });
+      }
+    }
+  });
+
+  function getAttachmentName(
+    attId: string,
   ): { filename: string; error: false } | { filename: string; error: true } {
-    try {
-      const wrapTriple = decodeEciesTriple(att);
-      const { filename } = decryptAttachmentKey(wrapTriple, clientPrivate);
-      return { filename, error: false };
-    } catch {
+    const cached = attNameCache.get(attId);
+    if (cached === undefined || cached.status === "loading") {
+      return { filename: "", error: false };
+    }
+    if (cached.status === "error") {
       return { filename: "", error: true };
     }
+    return { filename: cached.filename, error: false };
   }
 </script>
 
@@ -347,7 +421,7 @@
                       fetchHeaders={portalHeaders}
                     />
                   {:else}
-                    {@const chipState = decryptAttachmentName(att)}
+                    {@const chipState = getAttachmentName(att.attachmentId)}
                     {#if chipState.error}
                       <div class="att-error" role="status">
                         <span class="att-error-text"

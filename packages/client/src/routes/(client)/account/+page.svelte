@@ -32,26 +32,18 @@
   import { trpc } from "$lib/trpc/index.js";
   import { portalKeys } from "$lib/query/keys.js";
   import { announceToLiveRegion } from "$lib/utils/announce.js";
-  import { encode, requireSodium } from "@care-y/crypto";
+  import { encode } from "@care-y/crypto";
   import { newFollowupId, newKeyGeneration } from "@care-y/shared";
   import { requireRouter } from "$lib/errors.js";
   import {
-    encryptReply,
-    decodeEciesTriple,
-    verifyKeyCheck,
-    decryptPortalMessage,
-  } from "$lib/portal/portal-crypto.js";
-  import {
-    accountLogin as doAccountLogin,
     buildAccountRegistration,
-    deriveAuthProof,
     rewrapMessages,
-    type AccountSession,
-    type AccountAuthProof,
   } from "$lib/portal/account-crypto.js";
-  import type { LoginCryptoCallbacks } from "$lib/auth/login-crypto.js";
   import { buildLoginCallbacks } from "$lib/auth/crypto-callbacks.js";
   import type { LoginPhaseId } from "$lib/components/onboarding/login-phase.js";
+  import { PortalBridge } from "$lib/workers/portal-bridge.js";
+  import type { DerivationPhase } from "$lib/workers/portal-protocol.js";
+  import { evaluateWithPowRetry } from "$lib/auth/crypto-helpers.js";
   import { IdleTimer } from "$lib/auth/idle-timer.js";
   import PortalHint from "$lib/components/portal/PortalHint.svelte";
   import { createPublicBrandingQuery } from "$lib/branding/public-branding.js";
@@ -75,10 +67,48 @@
   } from "$lib/client-shell/context.js";
 
   // ---------------------------------------------------------------------------
+  // Account session handle (ADR-091: bridge-backed, key material in the worker)
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Live account session. The bridge owns key material in the worker.
+   * The main thread holds only the public key (for optimistic self-copy
+   * rendering) and bridge-backed async crypto methods.
+   */
+  interface AccountSessionHandle {
+    readonly clientPublic: string;
+    readonly bridge: PortalBridge;
+    destroy(): void;
+    decryptMessage(ep: string, n: string, ct: string): Promise<string>;
+    decryptAttachmentKey(
+      ep: string,
+      n: string,
+      ct: string,
+    ): Promise<{ fileKey: string; filename: string }>;
+    decryptAttachmentBlob(
+      ct: ArrayBuffer,
+      fk: string,
+      tid: string,
+      aid: string,
+    ): Promise<ArrayBuffer>;
+    encryptReply(
+      text: string,
+      orgPub: string,
+      tid: string,
+      fid: string,
+      kg: string,
+    ): Promise<{
+      encryptedContent: string;
+      wrappedTkTemp: string;
+      selfCopy: { ephemeralPoint: string; nonce: string; ciphertext: string };
+    }>;
+  }
+
+  // ---------------------------------------------------------------------------
   // Session state (module scope, zeroed on exit)
   // ---------------------------------------------------------------------------
 
-  let session = $state<AccountSession | null>(null);
+  let session = $state<AccountSessionHandle | null>(null);
   // Held in page memory only for the life of the session (change-password
   // re-runs the salt lookup); never persisted or auto-filled.
   let loginUsername = $state<string | null>(null);
@@ -165,20 +195,28 @@
   });
 
   // ---------------------------------------------------------------------------
-  // Crypto phase callbacks (reused across login, create, change-password)
+  // Derivation phase mapping: bridge events -> LoginPhaseId
   // ---------------------------------------------------------------------------
 
-  // Login reports phases so the form can label the Argon2id and OPRF wait.
-  // Change-password runs the same pipeline behind its own pending flag and
-  // has no phase display, so it passes a no-op setter.
-  function makeCryptoCallbacks(
-    setPhase: (phase: LoginPhaseId) => void = () => undefined,
-  ): LoginCryptoCallbacks {
-    return buildLoginCallbacks(setPhase);
+  function derivationPhaseToLoginPhase(phase: DerivationPhase): LoginPhaseId {
+    switch (phase) {
+      case "argon2id-start":
+        return "argon2id";
+      case "argon2id-done":
+        return "oprf";
+      case "oprf-start":
+        return "oprf";
+      case "oprf-done":
+        return "derive";
+      case "derive-start":
+        return "derive";
+      case "derive-done":
+        return "done";
+    }
   }
 
   // ---------------------------------------------------------------------------
-  // Login handler
+  // Login handler (ADR-091: bridge-backed)
   // ---------------------------------------------------------------------------
 
   function handleLogin(username: string, password: string): void {
@@ -188,24 +226,75 @@
     signedOutMessage = "";
     loginPhase = "auth";
 
-    const callbacks = makeCryptoCallbacks((p: LoginPhaseId) => {
-      loginPhase = p;
-    });
+    void (async () => {
+      const bridge = new PortalBridge();
+      try {
+        await bridge.waitReady();
 
-    void doAccountLogin(username, password, callbacks)
-      .then((newSession: AccountSession) => {
-        session = newSession;
+        // Wire derivation progress events to the phase display
+        bridge.onDerivationProgress((event) => {
+          loginPhase = derivationPhaseToLoginPhase(event.phase);
+        });
+
+        // 1. Get salt + accountId from server (fake-salt defense for unknowns)
+        const portalRouter = requireRouter(trpc.clientPortal, "clientPortal");
+        const { salt: saltB64, accountId } =
+          await portalRouter.getAccountSalt.query({ username });
+
+        // 2. Post password to bridge (Argon2id + blind happen in the worker)
+        const passwordBuf = new TextEncoder().encode(password).buffer;
+        const { blindedElement } = await bridge.accountSessionStart(
+          passwordBuf,
+          saltB64,
+        );
+
+        // 3. OPRF evaluate via tRPC (main thread)
+        const callbacks = buildLoginCallbacks(() => undefined);
+        const evaluatedB64 = await evaluateWithPowRetry(
+          "account",
+          accountId,
+          blindedElement,
+          callbacks.onPowRequired,
+        );
+
+        // 4. Finalize in the worker
+        const { clientPublic, authToken } =
+          await bridge.accountSessionFinish(evaluatedB64);
+
+        // 5. Login mutation (cookie arrives via Set-Cookie)
+        await portalRouter.accountLogin.mutate({
+          accountId,
+          authToken,
+        });
+
+        // Build the session handle
+        const handle: AccountSessionHandle = {
+          clientPublic,
+          bridge,
+          destroy(): void {
+            bridge.destroy();
+          },
+          decryptMessage: async (ep, n, ct) => bridge.decryptMessage(ep, n, ct),
+          decryptAttachmentKey: async (ep, n, ct) =>
+            bridge.decryptAttachmentKey(ep, n, ct),
+          decryptAttachmentBlob: async (ct, fk, tid, aid) =>
+            bridge.decryptAttachmentBlob(ct, fk, tid, aid),
+          encryptReply: async (text, orgPub, tid, fid, kg) =>
+            bridge.encryptReply(text, orgPub, tid, fid, kg),
+        };
+
+        session = handle;
         loginUsername = username;
         loginError = false;
         startIdleTimer();
-      })
-      .catch(() => {
+      } catch {
+        bridge.destroy();
         loginError = true;
-      })
-      .finally(() => {
+      } finally {
         loginPending = false;
         loginPhase = "idle";
-      });
+      }
+    })();
   }
 
   // ---------------------------------------------------------------------------
@@ -337,39 +426,47 @@
     const followUpId = newFollowupId();
     const keyGeneration = newKeyGeneration();
 
-    const payload = encryptReply(
-      text,
-      orgPublicKey,
-      session.keypair.clientPublic,
-      { ticketId, followUpId, keyGeneration },
-    );
+    void session
+      .encryptReply(
+        text,
+        encode(orgPublicKey),
+        ticketId,
+        followUpId,
+        keyGeneration,
+      )
+      .then((payload) => {
+        optimisticMessages = [
+          ...optimisticMessages,
+          {
+            id: followUpId,
+            // The optimistic bubble stands in for a row the server has not
+            // written yet, and the thread groups files by follow-up, so it
+            // carries the same id the reply was minted with.
+            followupId: followUpId,
+            direction: "from_client",
+            ephemeralPoint: payload.selfCopy.ephemeralPoint,
+            nonce: payload.selfCopy.nonce,
+            ciphertext: payload.selfCopy.ciphertext,
+            createdAt: new Date().toISOString(),
+            editedAt: null,
+          },
+        ];
 
-    optimisticMessages = [
-      ...optimisticMessages,
-      {
-        id: followUpId,
-        // The optimistic bubble stands in for a row the server has not
-        // written yet, and the thread groups files by follow-up, so it
-        // carries the same id the reply was minted with.
-        followupId: followUpId,
-        direction: "from_client",
-        ephemeralPoint: payload.selfCopy.ephemeralPoint,
-        nonce: payload.selfCopy.nonce,
-        ciphertext: payload.selfCopy.ciphertext,
-        createdAt: new Date().toISOString(),
-        editedAt: null,
-      },
-    ];
-
-    replyMutation.mutate({
-      ticketId,
-      followUpId,
-      keyGeneration,
-      encryptedContent: payload.encryptedContent,
-      wrappedTkTemp: payload.wrappedTkTemp,
-      selfCopy: payload.selfCopy,
-      kind: kind ?? undefined,
-    });
+        replyMutation.mutate({
+          ticketId,
+          followUpId,
+          keyGeneration,
+          encryptedContent: payload.encryptedContent,
+          wrappedTkTemp: payload.wrappedTkTemp,
+          selfCopy: payload.selfCopy,
+          kind: kind ?? undefined,
+        });
+      })
+      .catch(() => {
+        composerRef?.restoreDraft(lastSentText);
+        sendError = m.portal_send_failed();
+        announceToLiveRegion("polite", m.portal_send_failed());
+      });
   }
 
   // ---------------------------------------------------------------------------
@@ -384,19 +481,50 @@
     changePasswordPending = true;
     changePasswordError = "";
 
-    const callbacks = makeCryptoCallbacks();
-    let proof: AccountAuthProof | null = null;
+    // Change-password runs the full derivation pipeline for the current
+    // password (proof of knowledge) and the new password (re-keying).
+    // Both use buildAccountRegistration's main-thread pipeline (mint
+    // path, stays main-thread by design). The bridge is used only for
+    // key-check verification and message re-decryption.
+    const callbacks = buildLoginCallbacks(() => undefined);
+
+    // Proof bridge: a temporary worker for the current-password proof
+    const proofBridge = new PortalBridge();
 
     try {
-      // 1. Prove knowledge of the current password: same pipeline as
-      //    login, minus the login mutation
-      proof = await deriveAuthProof(loginUsername, currentPassword, callbacks);
+      await proofBridge.waitReady();
 
-      // Verify the key check with the current keys before touching anything
+      // 1. Prove knowledge of the current password via bridge
+      const portalRouter = requireRouter(trpc.clientPortal, "clientPortal");
+      const { salt: saltB64, accountId } =
+        await portalRouter.getAccountSalt.query({ username: loginUsername });
+
+      const passwordBuf = new TextEncoder().encode(currentPassword).buffer;
+      const { blindedElement } = await proofBridge.accountSessionStart(
+        passwordBuf,
+        saltB64,
+      );
+
+      const evaluatedB64 = await evaluateWithPowRetry(
+        "account",
+        accountId,
+        blindedElement,
+        callbacks.onPowRequired,
+      );
+
+      const { authToken } =
+        await proofBridge.accountSessionFinish(evaluatedB64);
+
+      // Verify the key check with the derived keys
       const bootstrapData = bootstrapQuery.data;
       if (bootstrapData) {
-        const keyCheck = decodeEciesTriple(bootstrapData.keyCheck);
-        if (!verifyKeyCheck(proof.keypair, keyCheck)) {
+        const kc = bootstrapData.keyCheck;
+        const passed = await proofBridge.verifyKeyCheck(
+          kc.ephemeralPoint,
+          kc.nonce,
+          kc.ciphertext,
+        );
+        if (!passed) {
           changePasswordError = m.account_login_failed();
           return;
         }
@@ -404,21 +532,17 @@
 
       // 2. Build new registration material (fresh salt, same accountId)
       const { payload: newPayload, keypair: newKeypair } =
-        await buildAccountRegistration(
-          null,
-          newPassword,
-          proof.accountId,
-          callbacks,
-        );
+        await buildAccountRegistration(null, newPassword, accountId, callbacks);
 
-      // 3. Re-encrypt existing messages to the new key
-      const decryptedMsgs = collectDecryptedMessages();
+      // 3. Re-encrypt existing messages to the new key. Decrypt each
+      //    message through the current session's bridge, then re-encrypt
+      //    to the new public key using rewrapMessages (main-thread, mint path).
+      const decryptedMsgs = await collectDecryptedMessages();
       const rewrapped = rewrapMessages(decryptedMsgs, newKeypair.clientPublic);
 
       // 4. Submit change-password mutation
-      const portalRouter = requireRouter(trpc.clientPortal, "clientPortal");
       await portalRouter.accountChangePassword.mutate({
-        currentAuthToken: encode(proof.authToken),
+        currentAuthToken: authToken,
         account: {
           salt: newPayload.salt,
           publicKey: newPayload.publicKey,
@@ -428,16 +552,46 @@
         rewrappedMessages: rewrapped,
       });
 
-      // Zero the old session keypair, install the new one
+      // Zero the old session, install a new bridge-backed session
       session.destroy();
-      let destroyed = false;
+      proofBridge.destroy();
+
+      // Log back in with the new password to establish a new bridge session
+      // with the new keys. This is the cleanest path: the new keypair lives
+      // in the new bridge's worker memory, not on the main thread.
+      const { requireSodium } = await import("@care-y/crypto");
+      requireSodium().memzero(newKeypair.clientPrivate);
+
+      // The new session is established by re-logging in (the cookie is
+      // still valid from the change-password mutation). Build a new bridge.
+      const newBridge = new PortalBridge();
+      await newBridge.waitReady();
+
+      const newPwBuf = new TextEncoder().encode(newPassword).buffer;
+      const { blindedElement: newBlinded } =
+        await newBridge.accountSessionStart(newPwBuf, newPayload.salt);
+      const newEval = await evaluateWithPowRetry(
+        "account",
+        accountId,
+        newBlinded,
+        callbacks.onPowRequired,
+      );
+      const newFinish = await newBridge.accountSessionFinish(newEval);
+
       session = {
-        keypair: newKeypair,
+        clientPublic: newFinish.clientPublic,
+        bridge: newBridge,
         destroy(): void {
-          if (destroyed) return;
-          destroyed = true;
-          requireSodium().memzero(newKeypair.clientPrivate);
+          newBridge.destroy();
         },
+        decryptMessage: async (ep, n, ct) =>
+          newBridge.decryptMessage(ep, n, ct),
+        decryptAttachmentKey: async (ep, n, ct) =>
+          newBridge.decryptAttachmentKey(ep, n, ct),
+        decryptAttachmentBlob: async (ct, fk, tid, aid) =>
+          newBridge.decryptAttachmentBlob(ct, fk, tid, aid),
+        encryptReply: async (text, orgPub, tid, fid, kg) =>
+          newBridge.encryptReply(text, orgPub, tid, fid, kg),
       };
 
       // Invalidate and refetch messages
@@ -452,17 +606,19 @@
     } catch {
       changePasswordError = m.account_login_failed();
     } finally {
-      proof?.destroy();
+      proofBridge.destroy();
       changePasswordPending = false;
     }
   }
 
   /**
    * Collect decrypted messages from the thread for re-encryption.
-   * Reads from messagesQuery.data and the PortalThread's decryption cache.
-   * This operates on already-decrypted plaintexts, never re-fetches.
+   * Decrypts each message through the current session's bridge.
+   * Operates on ciphertext from the server, never re-fetches.
    */
-  function collectDecryptedMessages(): readonly { id: string; text: string }[] {
+  async function collectDecryptedMessages(): Promise<
+    readonly { id: string; text: string }[]
+  > {
     const msgs = messagesQuery.data?.messages ?? [];
     if (!session) return [];
 
@@ -470,10 +626,10 @@
     for (const msg of msgs) {
       if (!("id" in msg) || typeof msg.id !== "string") continue;
       try {
-        const triple = decodeEciesTriple(msg);
-        const text = decryptPortalMessage(
-          triple,
-          session.keypair.clientPrivate,
+        const text = await session.decryptMessage(
+          msg.ephemeralPoint,
+          msg.nonce,
+          msg.ciphertext,
         );
         result.push({ id: msg.id, text });
       } catch {
@@ -759,6 +915,7 @@
     </div>
   </Block>
 {:else if session}
+  {@const activeSession = session}
   <!-- State 2: Thread scrolls, composer pins to the bottom -->
   <PageLayout lockScroll bind:scrollEl={threadScrollEl}>
     {#snippet bottomBar()}
@@ -778,7 +935,16 @@
 
     <PortalThread
       messages={filteredMessages}
-      clientPrivate={session.keypair.clientPrivate}
+      decryptMessage={async (ep: string, n: string, ct: string) =>
+        activeSession.decryptMessage(ep, n, ct)}
+      decryptAttachmentKey={async (ep: string, n: string, ct: string) =>
+        activeSession.decryptAttachmentKey(ep, n, ct)}
+      decryptAttachmentBlob={async (
+        ct: ArrayBuffer,
+        fk: string,
+        tid: string,
+        aid: string,
+      ) => activeSession.decryptAttachmentBlob(ct, fk, tid, aid)}
       loading={messagesQuery.isLoading}
       attachments={accountAttachments}
       ticketId={bootstrapQuery.data?.ticketId ?? undefined}
