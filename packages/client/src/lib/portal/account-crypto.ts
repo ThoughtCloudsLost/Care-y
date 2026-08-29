@@ -203,6 +203,7 @@ async function runDerivationPipeline(
 
     // 4. OPRF evaluate via tRPC (with automatic PoW retry)
     const evaluatedB64 = await evaluateWithPowRetry(
+      "account",
       accountId,
       encode(blindedElement),
       callbacks.onPowRequired,
@@ -268,6 +269,7 @@ export async function buildAccountRegistration(
 
     // 3. OPRF evaluate
     const evaluatedB64 = await evaluateWithPowRetry(
+      "account",
       resolvedAccountId,
       encode(blindedElement),
       callbacks.onPowRequired,

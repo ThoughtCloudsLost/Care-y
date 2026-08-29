@@ -2,7 +2,7 @@ import { createHmac, hkdfSync } from "node:crypto";
 import type { Kysely } from "kysely";
 import type { PlatformDatabase } from "../db/types.js";
 import { createCleanupInterval } from "../utils/intervals.js";
-import type { UserId, HashedIp } from "@care-y/shared";
+import type { HashedIp } from "@care-y/shared";
 
 const AUDIT_KEY_INFO = "care-y-oprf-audit-v1";
 const RETENTION_MS = 7 * 24 * 60 * 60 * 1000;
@@ -16,9 +16,14 @@ export type OprfFailureReason =
   | "session_mismatch";
 
 export interface OprfAuditLogger {
-  /** Log a failed OPRF evaluation. Never call on success. */
+  /**
+   * Log a failed OPRF evaluation. Never call on success.
+   * The subject is the evaluation's audit key: a bare user uuid for
+   * volunteer and account evaluations, or a tag string for channel
+   * evaluations (ADR-091). Migration platform/009 widened the column.
+   */
   logFailure(
-    userId: UserId,
+    subject: string,
     ipAddress: string,
     reason: OprfFailureReason,
   ): Promise<void>;
@@ -81,7 +86,7 @@ export function createOprfAuditLogger(
 
   return {
     async logFailure(
-      userId: UserId,
+      subject: string,
       ipAddress: string,
       reason: OprfFailureReason,
     ): Promise<void> {
@@ -90,7 +95,7 @@ export function createOprfAuditLogger(
       await db
         .insertInto("oprf_audit_log")
         .values({
-          user_id: userId,
+          user_id: subject,
           hashed_ip: hashedIp,
           reason,
         })

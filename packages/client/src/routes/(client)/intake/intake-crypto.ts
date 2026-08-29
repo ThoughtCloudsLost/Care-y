@@ -21,12 +21,15 @@ import {
   deriveChannelId,
   deriveChannelAuth,
   hashChannelAuth,
-  derivePortalKeypair,
   PORTAL_KEY_CHECK,
   type SymmetricKey,
   type Ciphertext,
   type EciesOutput,
 } from "@care-y/crypto";
+import {
+  performChannelOprf,
+  type ChannelEvaluateCallback,
+} from "$lib/portal/portal-crypto.js";
 import {
   composeIntakeTicketContent,
   extractMessageText,
@@ -314,23 +317,37 @@ export interface IntakeContinuationPayload {
 /**
  * Mint a portal channel for the continuation-link flow.
  *
- * Generates a fresh seed, derives all channel material, and builds the
- * wire payload. The raw seed and private key are zeroed in the finally
- * block after the base64url-encoded seed string is captured. The
- * encoded seed and channel id are returned so the caller can assemble
- * the one-time URL on successful submission.
+ * Generates a fresh seed, derives all channel material through the
+ * OPRF pipeline (ADR-091), and builds the wire payload. The raw seed
+ * and private key are zeroed in the finally block after the
+ * base64url-encoded seed string is captured. The encoded seed and
+ * channel id are returned so the caller can assemble the one-time
+ * URL on successful submission.
+ *
+ * @param message - Optional message text for the self-copy
+ * @param evaluate - Channel OPRF evaluate callback (tRPC wiring)
+ * @param onPowRequired - PoW solver callback
  */
-export function buildContinuationPayload(message: string | null): {
+export async function buildContinuationPayload(
+  message: string | null,
+  evaluate: ChannelEvaluateCallback,
+  onPowRequired: (challenge: string, difficulty: number) => Promise<string>,
+): Promise<{
   payload: IntakeContinuationPayload;
   channelId: string;
   encodedSeed: string;
-} {
+}> {
   const sodium = requireSodium();
   const seed = generatePortalSeed();
   const channelId = deriveChannelId(seed);
   const auth = deriveChannelAuth(seed);
-  const keypair = derivePortalKeypair(seed);
   const encodedSeed = encode(seed);
+
+  // ADR-091: derive through OPRF round (no auth for mint path)
+  const keypair = await performChannelOprf(seed, channelId, {
+    evaluate,
+    onPowRequired,
+  });
 
   try {
     const authHash = encode(hashChannelAuth(auth));

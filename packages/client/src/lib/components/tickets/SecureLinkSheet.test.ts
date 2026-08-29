@@ -78,10 +78,6 @@ vi.mock("@care-y/crypto", async (importOriginal) => ({
   deriveChannelId: vi.fn(() => mockChannelId),
   deriveChannelAuth: vi.fn(() => mockAuth),
   hashChannelAuth: vi.fn(() => mockAuthHash),
-  derivePortalKeypair: vi.fn(() => ({
-    clientPublic: mockKeypair.clientPublic,
-    clientPrivate: mockKeypair.clientPrivate,
-  })),
   eciesEncrypt: vi.fn(() => ({
     ephemeralPoint: mockKeyCheck.ephemeralPoint,
     nonce: mockKeyCheck.nonce,
@@ -103,6 +99,21 @@ vi.mock("@care-y/crypto", async (importOriginal) => ({
   zeroAll: vi.fn(),
 }));
 
+// Mock performChannelOprf (async OPRF round replaces derivePortalKeypair)
+vi.mock("$lib/portal/portal-crypto.js", async (importOriginal) => ({
+  ...(await importOriginal()),
+  performChannelOprf: vi.fn().mockResolvedValue({
+    clientPublic: mockKeypair.clientPublic,
+    clientPrivate: mockKeypair.clientPrivate,
+  }),
+}));
+
+// Mock solveProofOfWork (imported by SecureLinkSheet for the PoW callback)
+vi.mock("$lib/auth/pow-solver.js", async (importOriginal) => ({
+  ...(await importOriginal()),
+  solveProofOfWork: vi.fn().mockResolvedValue("test-solution"),
+}));
+
 // ---- Mock EFF wordlist ----
 
 vi.mock("$lib/portal/eff-wordlist.js", async (importOriginal) => ({
@@ -121,6 +132,11 @@ vi.mock("$lib/trpc/index.js", async (importOriginal) => ({
       },
       regenerateSecureLink: {
         mutate: (input: UpgradeMutationPayload) => mockMutate(input),
+      },
+    },
+    clientPortal: {
+      evaluateChannelOprf: {
+        mutate: vi.fn().mockResolvedValue({ evaluated: "eval-b64" }),
       },
     },
   },
@@ -339,8 +355,8 @@ describe("SecureLinkSheet", () => {
     expect(calledWithMsg).toBe(m.error_generic());
   });
 
-  it("sends passphrase to derivePortalKeypair when toggle is enabled", async () => {
-    const { derivePortalKeypair } = await import("@care-y/crypto");
+  it("sends passphrase to performChannelOprf when toggle is enabled", async () => {
+    const { performChannelOprf } = await import("$lib/portal/portal-crypto.js");
 
     render(SecureLinkSheet, { props: baseProps });
 
@@ -369,13 +385,14 @@ describe("SecureLinkSheet", () => {
       expect(mockMutate).toHaveBeenCalledTimes(1);
     });
 
-    // derivePortalKeypair should have been called with a passphrase string.
-    const keypairCalls = vi.mocked(derivePortalKeypair).mock.calls;
-    const lastCall = keypairCalls[keypairCalls.length - 1];
+    // performChannelOprf should have been called with a passphrase in opts.
+    const oprfCalls = vi.mocked(performChannelOprf).mock.calls;
+    const lastCall = oprfCalls[oprfCalls.length - 1];
     expect(lastCall).toBeDefined();
-    // Second arg should be a non-empty string (the joined words).
-    expect(typeof lastCall?.[1]).toBe("string");
-    expect((lastCall?.[1] as string).length).toBeGreaterThan(0);
+    // Third arg is the options object containing passphrase.
+    const opts = lastCall?.[2] as Record<string, unknown> | undefined;
+    expect(typeof opts?.passphrase).toBe("string");
+    expect((opts?.passphrase as string).length).toBeGreaterThan(0);
 
     // Mutation payload records hasPassphrase = true.
     expect(mockMutate.mock.calls[0]?.[0]?.hasPassphrase).toBe(true);

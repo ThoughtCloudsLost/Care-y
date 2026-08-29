@@ -4,21 +4,23 @@
    exists at runtime; length is validated at each function boundary. */
 
 /**
- * Portal key derivation for Secure Link channels.
+ * Portal key derivation for Secure Link channels (ADR-091).
  *
- * Derives a channel identifier, bearer auth token, and ristretto255
- * keypair from a single 24-byte seed that lives only in the URL
- * fragment (RFC 3986: never sent to the server).
+ * Derives a channel identifier, bearer auth token, and the OPRF
+ * pre-blind input from a 24-byte seed that lives only in the URL
+ * fragment (RFC 3986: never sent to the server). The keypair is
+ * derived from the OPRF finalize output, not from the seed directly.
  *
  * Derivation tree:
  *   seed (24 bytes, volunteer browser)
  *     |- channel_id  = hex(crypto_hash_sha512(seed)[0:24])
  *     |- auth        = hkdf(seed, "care-y-portal-auth-v1", 32)
  *     |- argonSalt   = hkdf(seed, "care-y-portal-salt-v1", 16)
- *     |- keypair ikm = seed (no passphrase)
- *     |             or seed || Argon2id(passphrase, argonSalt) (with passphrase)
+ *     |- oprf input  = seed (no passphrase)
+ *     |             or seed || Argon2id(passphrase, argonSalt)
+ *     |- (blind, evaluate under channel tag, finalize) -> 64-byte oprf output
  *     |- clientPrivate = ristretto255 scalar_reduce(
- *     |                    hkdf(ikm, "care-y-portal-ecies-v1", 64))
+ *     |                    hkdf(oprfOutput, "care-y-portal-ecies-v1", 64))
  *     |- clientPublic  = clientPrivate * G
  *
  * References:
@@ -151,47 +153,93 @@ export interface PortalKeypair {
 }
 
 /**
- * Derive a ristretto255 keypair from a portal seed and optional passphrase.
+ * Stretch a passphrase using Argon2id with a seed-derived salt.
  *
- * Without passphrase: ikm = seed.
- * With passphrase: ikm = seed || Argon2id(normalizedPassphrase, argonSalt)
- * where argonSalt = toSalt(hkdf(seed, "care-y-portal-salt-v1", 16)).
+ * Used by portalOprfInput to fold the passphrase into the OPRF
+ * pre-blind input (ADR-091).
  *
- * The scalar is derived via the HashToScalar construction (RFC 9497
- * Section 4.1): expand to 64 bytes via HKDF, then reduce modulo the
- * group order. The 64-byte expansion prevents modular reduction bias.
+ * @param seed - Portal seed (>= 18 bytes, already validated by caller)
+ * @param passphrase - Non-empty passphrase string
+ * @returns Argon2id output (32 bytes). Caller must zero when done.
+ */
+function stretchPassphrase(seed: Uint8Array, passphrase: string): Uint8Array {
+  const passphraseBytes = normalizePassphrase(passphrase);
+  const saltRaw = hkdf(seed, encodeLabel(HKDF_LABELS.PORTAL_SALT), 16);
+  const salt = toSalt(saltRaw);
+  return deriveAccountKey(passphraseBytes, salt);
+}
+
+// --- ADR-091: OPRF-routed portal derivation ---
+
+const OPRF_OUTPUT_BYTES = 64;
+
+/**
+ * Build the OPRF pre-blind input for a portal channel.
  *
- * Intermediate key material (ikm, Argon2id output, 64-byte expansion)
- * is zeroed in a finally block. The CALLER zeroes seed and clientPrivate.
+ * For plain links: returns a copy of the seed.
+ * For passphrase links: returns seed || Argon2id(normalized passphrase, argonSalt),
+ * using the same salt derivation, normalization, and Argon2id stretch as
+ * stretchPassphrase.
+ *
+ * The returned buffer is owned by the caller, who must zero it after
+ * passing it to oprfBlind. The Argon2id intermediate (if any) is zeroed
+ * in a finally block.
  *
  * @param seed - Portal seed (>= 18 bytes)
  * @param passphrase - Optional passphrase spoken on the verification call
- * @returns ristretto255 keypair (clientPrivate, clientPublic)
+ * @returns Pre-blind input buffer. Caller zeroes after use.
  * @throws InvalidInputError if seed is too short
  */
-export function derivePortalKeypair(
+export function portalOprfInput(
   seed: Uint8Array,
   passphrase?: string,
-): PortalKeypair {
+): Uint8Array {
   assertSeedLength(seed);
-  const sodium = requireSodium();
 
-  let ikm: Uint8Array | null = null;
-  let argon2Output: Uint8Array | null = null;
-  let expanded: Uint8Array | null = null;
+  let stretched: Uint8Array | null = null;
 
   try {
     if (passphrase !== undefined && passphrase.length > 0) {
-      const passphraseBytes = normalizePassphrase(passphrase);
-      const saltRaw = hkdf(seed, encodeLabel(HKDF_LABELS.PORTAL_SALT), 16);
-      const salt = toSalt(saltRaw);
-      argon2Output = deriveAccountKey(passphraseBytes, salt);
-      ikm = concatBytes(seed, argon2Output);
-    } else {
-      ikm = seed.slice();
+      stretched = stretchPassphrase(seed, passphrase);
+      return concatBytes(seed, stretched);
     }
+    return seed.slice();
+  } finally {
+    zeroAll(stretched);
+  }
+}
 
-    expanded = hkdf(ikm, encodeLabel(HKDF_LABELS.PORTAL_ECIES), 64);
+/**
+ * Derive a ristretto255 keypair from a 64-byte OPRF finalize output.
+ *
+ * Mirrors deriveClientAccountKeys in client-account.ts: requires exactly
+ * 64 bytes, expands via HKDF under the portal ECIES label, reduces to a
+ * scalar, and derives the public point. The same "care-y-portal-ecies-v1"
+ * label is reused so that the OPRF pipeline and the legacy offline path
+ * produce the same keypair when given the same 64-byte IKM (which they
+ * will not in practice, since the OPRF output differs from the raw seed).
+ *
+ * The 64-byte HKDF expansion is zeroed in a finally block. The CALLER
+ * zeroes oprfOutput and clientPrivate when done.
+ *
+ * @param oprfOutput - 64-byte OPRF finalize output (SHA-512 per RFC 9497)
+ * @returns ristretto255 keypair (clientPrivate, clientPublic)
+ * @throws InvalidInputError if oprfOutput is not exactly 64 bytes
+ */
+export function derivePortalKeypairFromOprf(
+  oprfOutput: Uint8Array,
+): PortalKeypair {
+  if (oprfOutput.length !== OPRF_OUTPUT_BYTES) {
+    throw new InvalidInputError(
+      `OPRF output must be ${String(OPRF_OUTPUT_BYTES)} bytes, got ${String(oprfOutput.length)}`,
+    );
+  }
+
+  const sodium = requireSodium();
+  let expanded: Uint8Array | null = null;
+
+  try {
+    expanded = hkdf(oprfOutput, encodeLabel(HKDF_LABELS.PORTAL_ECIES), 64);
     const clientPrivate = sodium.crypto_core_ristretto255_scalar_reduce(
       expanded,
     ) as Scalar;
@@ -201,6 +249,6 @@ export function derivePortalKeypair(
 
     return { clientPrivate, clientPublic };
   } finally {
-    zeroAll(ikm, argon2Output, expanded);
+    zeroAll(expanded);
   }
 }

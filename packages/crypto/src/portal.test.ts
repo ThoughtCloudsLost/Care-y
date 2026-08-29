@@ -8,7 +8,8 @@ import {
   deriveChannelId,
   deriveChannelAuth,
   hashChannelAuth,
-  derivePortalKeypair,
+  portalOprfInput,
+  derivePortalKeypairFromOprf,
 } from "./portal.js";
 import { eciesEncrypt, eciesDecrypt } from "./ecies.js";
 import { encodeLabel } from "./bytes.js";
@@ -180,217 +181,52 @@ describe("portal key derivation", () => {
     });
   });
 
-  describe("derivePortalKeypair (no passphrase)", () => {
-    it("returns a 32-byte scalar and a 32-byte point", () => {
-      const seed = generatePortalSeed();
-      const kp = derivePortalKeypair(seed);
-      expect(kp.clientPrivate.length).toBe(32);
-      expect(kp.clientPublic.length).toBe(32);
-    });
-
-    it("is deterministic for the same seed", () => {
-      const seed = generatePortalSeed();
-      const kp1 = derivePortalKeypair(seed);
-      const kp2 = derivePortalKeypair(seed);
-      expect(kp1.clientPrivate).toEqual(kp2.clientPrivate);
-      expect(kp1.clientPublic).toEqual(kp2.clientPublic);
-    });
-
-    it("different seeds produce different keypairs", () => {
-      const seed1 = generatePortalSeed();
-      const seed2 = generatePortalSeed();
-      const kp1 = derivePortalKeypair(seed1);
-      const kp2 = derivePortalKeypair(seed2);
-      expect(kp1.clientPrivate).not.toEqual(kp2.clientPrivate);
-      expect(kp1.clientPublic).not.toEqual(kp2.clientPublic);
-    });
-
-    it("keypair roundtrips through eciesEncrypt/eciesDecrypt", () => {
-      const seed = generatePortalSeed();
-      const kp = derivePortalKeypair(seed);
-      const plaintext = new TextEncoder().encode("portal message content");
-
-      const encrypted = eciesEncrypt(plaintext, kp.clientPublic);
-      const decrypted = eciesDecrypt(
-        encrypted.ephemeralPoint,
-        encrypted.nonce,
-        encrypted.ciphertext,
-        kp.clientPrivate,
-      );
-
-      expect(decrypted).toEqual(plaintext);
-    });
-
-    it("the PORTAL_KEY_CHECK constant roundtrips through ECIES", () => {
-      const seed = generatePortalSeed();
-      const kp = derivePortalKeypair(seed);
-      const checkBytes = encodeLabel(PORTAL_KEY_CHECK);
-
-      const encrypted = eciesEncrypt(checkBytes, kp.clientPublic);
-      const decrypted = eciesDecrypt(
-        encrypted.ephemeralPoint,
-        encrypted.nonce,
-        encrypted.ciphertext,
-        kp.clientPrivate,
-      );
-
-      expect(decrypted).toEqual(checkBytes);
-    });
-
-    it("throws InvalidInputError for short seed", () => {
-      expect(() => derivePortalKeypair(new Uint8Array(5))).toThrow(
-        InvalidInputError,
-      );
-    });
-
-    it("accepts 18-byte seed (minimum)", () => {
-      const minSeed = new Uint8Array(18);
-      minSeed.fill(0xab);
-      const kp = derivePortalKeypair(minSeed);
-      expect(kp.clientPrivate.length).toBe(32);
-      expect(kp.clientPublic.length).toBe(32);
-    });
-
-    it("undefined passphrase produces the same keypair as no passphrase", () => {
-      const seed = generatePortalSeed();
-      const kpNone = derivePortalKeypair(seed);
-      const kpUndefined = derivePortalKeypair(seed, undefined);
-      expect(kpNone.clientPrivate).toEqual(kpUndefined.clientPrivate);
-      expect(kpNone.clientPublic).toEqual(kpUndefined.clientPublic);
-    });
-
-    it("empty string passphrase produces the same keypair as no passphrase", () => {
-      const seed = generatePortalSeed();
-      const kpNone = derivePortalKeypair(seed);
-      const kpEmpty = derivePortalKeypair(seed, "");
-      expect(kpNone.clientPrivate).toEqual(kpEmpty.clientPrivate);
-      expect(kpNone.clientPublic).toEqual(kpEmpty.clientPublic);
-    });
-  });
-
-  describe("derivePortalKeypair (with passphrase)", () => {
-    // Argon2id takes seconds per call; explicit timeouts match derive.test.ts convention
-    it("passphrase changes the keypair", () => {
-      const seed = generatePortalSeed();
-      const kpPlain = derivePortalKeypair(seed);
-      const kpPass = derivePortalKeypair(
-        seed,
-        "correct horse battery staple glove",
-      );
-
-      expect(kpPass.clientPrivate).not.toEqual(kpPlain.clientPrivate);
-      expect(kpPass.clientPublic).not.toEqual(kpPlain.clientPublic);
-    }, 60_000);
-
-    it("is deterministic with the same passphrase", () => {
-      const seed = generatePortalSeed();
-      const kp1 = derivePortalKeypair(seed, "same passphrase");
-      const kp2 = derivePortalKeypair(seed, "same passphrase");
-      expect(kp1.clientPrivate).toEqual(kp2.clientPrivate);
-      expect(kp1.clientPublic).toEqual(kp2.clientPublic);
-    }, 120_000);
-
-    it("wrong passphrase fails the key-check decrypt with DecryptionError", () => {
-      const seed = generatePortalSeed();
-      const kpCorrect = derivePortalKeypair(seed, "right words here now five");
-      const checkBytes = encodeLabel(PORTAL_KEY_CHECK);
-
-      const encrypted = eciesEncrypt(checkBytes, kpCorrect.clientPublic);
-
-      const kpWrong = derivePortalKeypair(seed, "wrong words here now five");
-      expect(() =>
-        eciesDecrypt(
-          encrypted.ephemeralPoint,
-          encrypted.nonce,
-          encrypted.ciphertext,
-          kpWrong.clientPrivate,
-        ),
-      ).toThrow(DecryptionError);
-    }, 120_000);
-
-    it("passphrase-derived keypair roundtrips through ECIES", () => {
-      const seed = generatePortalSeed();
-      const kp = derivePortalKeypair(seed, "test passphrase words");
-      const plaintext = new TextEncoder().encode("encrypted for portal client");
-
-      const encrypted = eciesEncrypt(plaintext, kp.clientPublic);
-      const decrypted = eciesDecrypt(
-        encrypted.ephemeralPoint,
-        encrypted.nonce,
-        encrypted.ciphertext,
-        kp.clientPrivate,
-      );
-
-      expect(decrypted).toEqual(plaintext);
-    }, 60_000);
-
-    it("different passphrases produce different keypairs from the same seed", () => {
-      const seed = generatePortalSeed();
-      const kpA = derivePortalKeypair(seed, "alpha bravo charlie delta echo");
-      const kpB = derivePortalKeypair(seed, "foxtrot golf hotel india juliet");
-      expect(kpA.clientPrivate).not.toEqual(kpB.clientPrivate);
-      expect(kpA.clientPublic).not.toEqual(kpB.clientPublic);
-    }, 120_000);
-  });
-
-  describe("passphrase normalization", () => {
-    // Normalization must produce identical keypairs for equivalent inputs.
-    // Argon2id timeout applies.
+  describe("passphrase normalization (via portalOprfInput)", () => {
+    // Normalization must produce identical pre-blind inputs for equivalent
+    // passphrase strings. stretchPassphrase coverage flows through here.
     it("case-insensitive: 'Word One' equals 'word one'", () => {
       const seed = generatePortalSeed();
-      const kpUpper = derivePortalKeypair(seed, "Word One Two Three Four");
-      const kpLower = derivePortalKeypair(seed, "word one two three four");
-      expect(kpUpper.clientPrivate).toEqual(kpLower.clientPrivate);
-      expect(kpUpper.clientPublic).toEqual(kpLower.clientPublic);
+      const a = portalOprfInput(seed, "Word One Two Three Four");
+      const b = portalOprfInput(seed, "word one two three four");
+      expect(a).toEqual(b);
     }, 120_000);
 
     it("NFKC normalization: compatibility forms equal", () => {
       const seed = generatePortalSeed();
       // U+FB01 (fi ligature) NFKC-normalizes to "fi"
-      const kpLigature = derivePortalKeypair(seed, "ﬁve words here now test");
-      const kpPlain = derivePortalKeypair(seed, "five words here now test");
-      expect(kpLigature.clientPrivate).toEqual(kpPlain.clientPrivate);
-      expect(kpLigature.clientPublic).toEqual(kpPlain.clientPublic);
+      const a = portalOprfInput(seed, "ﬁve words here now test");
+      const b = portalOprfInput(seed, "five words here now test");
+      expect(a).toEqual(b);
     }, 120_000);
 
     it("mixed case and NFKC together", () => {
       const seed = generatePortalSeed();
-      const kpA = derivePortalKeypair(seed, "HELLO WORLD");
-      const kpB = derivePortalKeypair(seed, "hello world");
-      expect(kpA.clientPrivate).toEqual(kpB.clientPrivate);
+      const a = portalOprfInput(seed, "HELLO WORLD");
+      const b = portalOprfInput(seed, "hello world");
+      expect(a).toEqual(b);
     }, 120_000);
 
     it("collapses internal whitespace runs: double-spaced display text equals single-spaced", () => {
-      // The volunteer sheet displays words.join("  ") but derives from
-      // words.join(" "); a client typing what they see must still unlock.
       const seed = generatePortalSeed();
-      const kpDouble = derivePortalKeypair(
-        seed,
-        "polish  naming  tilt  wrinkle",
-      );
-      const kpSingle = derivePortalKeypair(seed, "polish naming tilt wrinkle");
-      expect(kpDouble.clientPrivate).toEqual(kpSingle.clientPrivate);
-      expect(kpDouble.clientPublic).toEqual(kpSingle.clientPublic);
+      const a = portalOprfInput(seed, "polish  naming  tilt  wrinkle");
+      const b = portalOprfInput(seed, "polish naming tilt wrinkle");
+      expect(a).toEqual(b);
     }, 120_000);
 
     it("trims leading/trailing whitespace and normalizes newlines and tabs", () => {
       const seed = generatePortalSeed();
-      const kpMessy = derivePortalKeypair(
-        seed,
-        "  polish\tnaming\n tilt wrinkle ",
-      );
-      const kpClean = derivePortalKeypair(seed, "polish naming tilt wrinkle");
-      expect(kpMessy.clientPrivate).toEqual(kpClean.clientPrivate);
-      expect(kpMessy.clientPublic).toEqual(kpClean.clientPublic);
+      const a = portalOprfInput(seed, "  polish\tnaming\n tilt wrinkle ");
+      const b = portalOprfInput(seed, "polish naming tilt wrinkle");
+      expect(a).toEqual(b);
     }, 120_000);
   });
 
   describe("all outputs are distinct per seed", () => {
-    it("channel_id, auth, and keypair are all derived from distinct domains", () => {
+    it("channel_id, auth, and oprf input are all derived from distinct domains", () => {
       const seed = generatePortalSeed();
       const channelId = deriveChannelId(seed);
       const auth = deriveChannelAuth(seed);
-      const kp = derivePortalKeypair(seed);
+      const input = portalOprfInput(seed);
 
       // Convert channelId to bytes for comparison
       const cidBytes = new Uint8Array(24);
@@ -398,10 +234,11 @@ describe("portal key derivation", () => {
         cidBytes[i] = parseInt(channelId.substring(i * 2, i * 2 + 2), 16);
       }
 
-      // All pairwise distinct (auth is 32 bytes, scalar is 32 bytes)
-      expect(auth).not.toEqual(kp.clientPrivate);
-      expect(auth).not.toEqual(kp.clientPublic);
-      expect(kp.clientPrivate).not.toEqual(kp.clientPublic);
+      // auth is 32 bytes via HKDF, input is seed copy (24 bytes)
+      // All pairwise distinct by domain separation.
+      const authPrefix = auth.subarray(0, 24);
+      expect(authPrefix).not.toEqual(cidBytes);
+      expect(auth).not.toEqual(input);
     });
   });
 
@@ -416,13 +253,13 @@ describe("portal key derivation", () => {
   });
 
   describe("property-based", () => {
-    it("for random seeds and passphrases, eciesDecrypt(eciesEncrypt(x, pub), priv) === x", () => {
+    it("for random 64-byte OPRF outputs, eciesDecrypt(eciesEncrypt(x, pub), priv) === x", () => {
       fc.assert(
         fc.property(
-          fc.uint8Array({ minLength: 24, maxLength: 24 }),
+          fc.uint8Array({ minLength: 64, maxLength: 64 }),
           fc.uint8Array({ minLength: 1, maxLength: 256 }),
-          (seed, plaintext) => {
-            const kp = derivePortalKeypair(seed);
+          (oprfOut, plaintext) => {
+            const kp = derivePortalKeypairFromOprf(oprfOut);
             const encrypted = eciesEncrypt(plaintext, kp.clientPublic);
             const decrypted = eciesDecrypt(
               encrypted.ephemeralPoint,
@@ -463,6 +300,197 @@ describe("portal key derivation", () => {
           const auth = deriveChannelAuth(seed);
           const hash = hashChannelAuth(auth);
           expect(hash.length).toBe(32);
+        }),
+        { numRuns: FC_MEDIUM },
+      );
+    });
+  });
+
+  // --- ADR-091: portalOprfInput ---
+
+  describe("portalOprfInput (no passphrase)", () => {
+    it("returns a copy of the seed (not the same reference)", () => {
+      const seed = generatePortalSeed();
+      const input = portalOprfInput(seed);
+      expect(input).toEqual(seed);
+      // Must be a distinct buffer so zeroing the returned value does not
+      // clobber the caller's seed.
+      expect(input.buffer).not.toBe(seed.buffer);
+    });
+
+    it("is deterministic for the same seed", () => {
+      const seed = generatePortalSeed();
+      const a = portalOprfInput(seed);
+      const b = portalOprfInput(seed);
+      expect(a).toEqual(b);
+    });
+
+    it("undefined passphrase matches no passphrase", () => {
+      const seed = generatePortalSeed();
+      const a = portalOprfInput(seed);
+      const b = portalOprfInput(seed, undefined);
+      expect(a).toEqual(b);
+    });
+
+    it("empty string passphrase matches no passphrase", () => {
+      const seed = generatePortalSeed();
+      const a = portalOprfInput(seed);
+      const b = portalOprfInput(seed, "");
+      expect(a).toEqual(b);
+    });
+
+    it("throws InvalidInputError for short seed", () => {
+      expect(() => portalOprfInput(new Uint8Array(5))).toThrow(
+        InvalidInputError,
+      );
+    });
+  });
+
+  describe("portalOprfInput (with passphrase)", () => {
+    it("returns seed || stretched passphrase (longer than seed alone)", () => {
+      const seed = generatePortalSeed();
+      const input = portalOprfInput(seed, "test phrase here now five");
+      // seed is 24 bytes, Argon2id output is 32 bytes, so total is 56.
+      expect(input.length).toBe(PORTAL_SEED_BYTES + 32);
+    }, 60_000);
+
+    it("the seed prefix is preserved byte for byte", () => {
+      const seed = generatePortalSeed();
+      const input = portalOprfInput(seed, "alpha bravo charlie delta echo");
+      const prefix = input.subarray(0, PORTAL_SEED_BYTES);
+      expect(prefix).toEqual(seed);
+    }, 60_000);
+
+    it("stretched suffix is deterministic and 32 bytes (Argon2id output)", () => {
+      const seed = generatePortalSeed();
+      const passphrase = "foxtrot golf hotel india juliet";
+
+      const oprfIn = portalOprfInput(seed, passphrase);
+      const stretchedFromOprfIn = oprfIn.subarray(PORTAL_SEED_BYTES);
+
+      // Call portalOprfInput again with the same inputs to confirm
+      // determinism of the stretched portion (Argon2id via stretchPassphrase).
+      const oprfIn2 = portalOprfInput(seed, passphrase);
+      const stretchedAgain = oprfIn2.subarray(PORTAL_SEED_BYTES);
+      expect(stretchedFromOprfIn).toEqual(stretchedAgain);
+      expect(stretchedFromOprfIn.length).toBe(32);
+    }, 120_000);
+
+    it("passphrase normalization applies (case, NFKC, whitespace)", () => {
+      const seed = generatePortalSeed();
+      const a = portalOprfInput(seed, "  HELLO  World ");
+      const b = portalOprfInput(seed, "hello world");
+      expect(a).toEqual(b);
+    }, 120_000);
+  });
+
+  // --- ADR-091: derivePortalKeypairFromOprf ---
+
+  describe("derivePortalKeypairFromOprf", () => {
+    it("returns a 32-byte scalar and a 32-byte point", () => {
+      // Use 64 random bytes as a stand-in for an OPRF output.
+      const fakeOprf = sodium.randombytes_buf(64);
+      const kp = derivePortalKeypairFromOprf(fakeOprf);
+      expect(kp.clientPrivate.length).toBe(32);
+      expect(kp.clientPublic.length).toBe(32);
+    });
+
+    it("is deterministic for the same input", () => {
+      const fakeOprf = sodium.randombytes_buf(64);
+      const a = derivePortalKeypairFromOprf(fakeOprf);
+      const b = derivePortalKeypairFromOprf(fakeOprf);
+      expect(a.clientPrivate).toEqual(b.clientPrivate);
+      expect(a.clientPublic).toEqual(b.clientPublic);
+    });
+
+    it("different inputs produce different keypairs", () => {
+      const a = derivePortalKeypairFromOprf(sodium.randombytes_buf(64));
+      const b = derivePortalKeypairFromOprf(sodium.randombytes_buf(64));
+      expect(a.clientPrivate).not.toEqual(b.clientPrivate);
+    });
+
+    it("throws InvalidInputError for input shorter than 64 bytes", () => {
+      expect(() => derivePortalKeypairFromOprf(new Uint8Array(32))).toThrow(
+        InvalidInputError,
+      );
+    });
+
+    it("throws InvalidInputError for input longer than 64 bytes", () => {
+      expect(() => derivePortalKeypairFromOprf(new Uint8Array(65))).toThrow(
+        InvalidInputError,
+      );
+    });
+
+    it("throws InvalidInputError for empty input", () => {
+      expect(() => derivePortalKeypairFromOprf(new Uint8Array(0))).toThrow(
+        InvalidInputError,
+      );
+    });
+
+    it("keypair roundtrips through eciesEncrypt/eciesDecrypt", () => {
+      const fakeOprf = sodium.randombytes_buf(64);
+      const kp = derivePortalKeypairFromOprf(fakeOprf);
+      const plaintext = new TextEncoder().encode("oprf-portal-content");
+
+      const encrypted = eciesEncrypt(plaintext, kp.clientPublic);
+      const decrypted = eciesDecrypt(
+        encrypted.ephemeralPoint,
+        encrypted.nonce,
+        encrypted.ciphertext,
+        kp.clientPrivate,
+      );
+      expect(decrypted).toEqual(plaintext);
+    });
+
+    it("wrong OPRF output fails key-check decrypt with DecryptionError", () => {
+      const oprf1 = sodium.randombytes_buf(64);
+      const oprf2 = sodium.randombytes_buf(64);
+      const kpCorrect = derivePortalKeypairFromOprf(oprf1);
+      const kpWrong = derivePortalKeypairFromOprf(oprf2);
+
+      const checkBytes = encodeLabel(PORTAL_KEY_CHECK);
+      const encrypted = eciesEncrypt(checkBytes, kpCorrect.clientPublic);
+
+      expect(() =>
+        eciesDecrypt(
+          encrypted.ephemeralPoint,
+          encrypted.nonce,
+          encrypted.ciphertext,
+          kpWrong.clientPrivate,
+        ),
+      ).toThrow(DecryptionError);
+    });
+  });
+
+  describe("portalOprfInput + derivePortalKeypairFromOprf property-based", () => {
+    it("portalOprfInput (no passphrase) always equals seed copy for valid seeds", () => {
+      fc.assert(
+        fc.property(fc.uint8Array({ minLength: 18, maxLength: 64 }), (seed) => {
+          const input = portalOprfInput(seed);
+          expect(input).toEqual(seed);
+          expect(input.buffer).not.toBe(seed.buffer);
+        }),
+        { numRuns: FC_MEDIUM },
+      );
+    });
+
+    it("derivePortalKeypairFromOprf always produces a valid ECIES keypair", () => {
+      fc.assert(
+        fc.property(fc.uint8Array({ minLength: 64, maxLength: 64 }), (oprf) => {
+          const kp = derivePortalKeypairFromOprf(oprf);
+          expect(kp.clientPrivate.length).toBe(32);
+          expect(kp.clientPublic.length).toBe(32);
+
+          // Roundtrip
+          const msg = new TextEncoder().encode("prop-test");
+          const enc = eciesEncrypt(msg, kp.clientPublic);
+          const dec = eciesDecrypt(
+            enc.ephemeralPoint,
+            enc.nonce,
+            enc.ciphertext,
+            kp.clientPrivate,
+          );
+          expect(dec).toEqual(msg);
         }),
         { numRuns: FC_MEDIUM },
       );

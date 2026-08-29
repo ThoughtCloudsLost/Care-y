@@ -1,8 +1,9 @@
-import { describe, it, expect, beforeAll } from "vitest";
+import { describe, it, expect, vi, beforeAll } from "vitest";
 import {
   generatePortalSeed,
   deriveChannelId,
-  derivePortalKeypair,
+  deriveChannelAuth,
+  derivePortalKeypairFromOprf,
   eciesEncrypt,
   eciesDecrypt,
   PORTAL_KEY_CHECK,
@@ -17,13 +18,18 @@ import {
   toSymmetricKey,
   generateOrgKeypair,
   requireSodium,
+  oprfBlind,
+  oprfFinalize,
+  portalOprfInput,
   toNonce,
+  toRistrettoPoint,
   type Ciphertext,
   type SymmetricKey,
 } from "@care-y/crypto";
 import { getSodium } from "@care-y/crypto";
 import {
   parseFragment,
+  performChannelOprf,
   verifyKeyCheck,
   decryptPortalMessage,
   encryptReply,
@@ -31,7 +37,60 @@ import {
   decodeEciesTriple,
   decryptAttachmentKey,
   decryptAttachmentBlob,
+  type ChannelEvaluateCallback,
 } from "./portal-crypto.js";
+
+/**
+ * Test helper: simulate a local OPRF evaluation with a fixed "server key"
+ * scalar. This bypasses the real threshold OPRF service but exercises the
+ * same blind/evaluate/finalize/derive pipeline as performChannelOprf.
+ */
+const TEST_SERVER_KEY = new Uint8Array(32).fill(0xaa);
+
+function localEvaluate(blindedB64: string): string {
+  const sodium = requireSodium();
+  const blinded = decode(blindedB64);
+  // Simulate server: evaluated = serverKey * blindedElement
+  const evaluated = sodium.crypto_scalarmult_ristretto255(
+    TEST_SERVER_KEY,
+    blinded,
+  );
+  return encode(evaluated);
+}
+
+/** Derive a keypair through the local OPRF simulation (for test assertions). */
+function deriveViaLocalOprf(
+  seed: Uint8Array,
+  passphrase?: string,
+): ReturnType<typeof derivePortalKeypairFromOprf> {
+  const input = portalOprfInput(seed, passphrase);
+  const { blindedElement, blindState } = oprfBlind(input);
+  const evaluatedB64 = localEvaluate(encode(blindedElement));
+  const evaluatedBytes = decode(evaluatedB64);
+  const oprfOutput = oprfFinalize(
+    blindState,
+    toRistrettoPoint(evaluatedBytes),
+    input,
+  );
+  const kp = derivePortalKeypairFromOprf(oprfOutput);
+  requireSodium().memzero(input);
+  requireSodium().memzero(oprfOutput);
+  return kp;
+}
+
+/** Stub evaluate callback that uses the local server key. */
+function makeStubEvaluate(): ChannelEvaluateCallback {
+  return vi.fn(
+    (
+      _channelId: string,
+      blindedB64: string,
+      _auth?: string,
+    ): Promise<{ evaluated: string }> =>
+      Promise.resolve({ evaluated: localEvaluate(blindedB64) }),
+  );
+}
+
+const noopPow = vi.fn().mockResolvedValue("noop");
 
 beforeAll(async () => {
   await getSodium();
@@ -77,7 +136,7 @@ describe("parseFragment", () => {
 describe("verifyKeyCheck", () => {
   it("returns true for correct keypair", () => {
     const seed = generatePortalSeed();
-    const keypair = derivePortalKeypair(seed);
+    const keypair = deriveViaLocalOprf(seed);
     const keyCheck = eciesEncrypt(
       new TextEncoder().encode(PORTAL_KEY_CHECK),
       keypair.clientPublic,
@@ -92,8 +151,8 @@ describe("verifyKeyCheck", () => {
 
   it("returns false for wrong keypair (wrong passphrase)", () => {
     const seed = generatePortalSeed();
-    const correctKeypair = derivePortalKeypair(seed, "correct words here");
-    const wrongKeypair = derivePortalKeypair(seed, "wrong words here");
+    const correctKeypair = deriveViaLocalOprf(seed, "correct words here");
+    const wrongKeypair = deriveViaLocalOprf(seed, "wrong words here");
     const keyCheck = eciesEncrypt(
       new TextEncoder().encode(PORTAL_KEY_CHECK),
       correctKeypair.clientPublic,
@@ -110,7 +169,7 @@ describe("verifyKeyCheck", () => {
 describe("decryptPortalMessage", () => {
   it("decrypts an ECIES-encrypted message", () => {
     const seed = generatePortalSeed();
-    const keypair = derivePortalKeypair(seed);
+    const keypair = deriveViaLocalOprf(seed);
     const msg = "Hello from a volunteer";
     const encrypted = eciesEncrypt(
       new TextEncoder().encode(msg),
@@ -128,7 +187,7 @@ describe("decryptPortalMessage", () => {
 describe("encryptReply", () => {
   it("produces a payload that server can unseal and volunteer can decrypt", () => {
     const seed = generatePortalSeed();
-    const keypair = derivePortalKeypair(seed);
+    const keypair = deriveViaLocalOprf(seed);
     const orgKeypair = generateOrgKeypair();
     const ids = {
       ticketId: crypto.randomUUID(),
@@ -183,7 +242,7 @@ describe("encryptReply", () => {
     // subsequent calls produce different wrappedTkTemp values
     // (fresh tk_temp each time).
     const seed = generatePortalSeed();
-    const keypair = derivePortalKeypair(seed);
+    const keypair = deriveViaLocalOprf(seed);
     const orgKeypair = generateOrgKeypair();
     const ids = {
       ticketId: crypto.randomUUID(),
@@ -212,7 +271,7 @@ describe("createPortalSession", () => {
     const seed = generatePortalSeed();
     const auth = new Uint8Array(32);
     crypto.getRandomValues(auth);
-    const keypair = derivePortalKeypair(seed);
+    const keypair = deriveViaLocalOprf(seed);
 
     const seedCopy = seed.slice();
     const session = createPortalSession("abc123", auth, keypair, seedCopy);
@@ -228,7 +287,7 @@ describe("createPortalSession", () => {
   it("destroy is idempotent", () => {
     const seed = generatePortalSeed();
     const auth = new Uint8Array(32);
-    const keypair = derivePortalKeypair(seed);
+    const keypair = deriveViaLocalOprf(seed);
     const session = createPortalSession("x", auth, keypair, null);
     session.destroy();
     session.destroy(); // should not throw
@@ -258,7 +317,7 @@ describe("decodeEciesTriple", () => {
 
 describe("reply attachments", () => {
   function setup(): {
-    keypair: ReturnType<typeof derivePortalKeypair>;
+    keypair: ReturnType<typeof deriveViaLocalOprf>;
     orgKeypair: ReturnType<typeof generateOrgKeypair>;
     ids: { ticketId: string; followUpId: string; keyGeneration: string };
     file: Uint8Array;
@@ -266,7 +325,7 @@ describe("reply attachments", () => {
   } {
     const seed = generatePortalSeed();
     return {
-      keypair: derivePortalKeypair(seed),
+      keypair: deriveViaLocalOprf(seed),
       orgKeypair: generateOrgKeypair(),
       ids: {
         ticketId: crypto.randomUUID(),
@@ -526,5 +585,122 @@ describe("reply attachments", () => {
 
     expect(payload.attachments).toHaveLength(2);
     expect(encode(keys[0]!)).not.toBe(encode(keys[1]!));
+  });
+});
+
+// ---------------------------------------------------------------------------
+// performChannelOprf (ADR-091)
+// ---------------------------------------------------------------------------
+
+describe("performChannelOprf", () => {
+  it("returns a deterministic keypair for a fixed evaluator", async () => {
+    const seed = generatePortalSeed();
+    const channelId = deriveChannelId(seed);
+    const evaluate = makeStubEvaluate();
+
+    const kp = await performChannelOprf(seed, channelId, {
+      evaluate,
+      onPowRequired: noopPow,
+    });
+
+    expect(kp.clientPrivate.length).toBe(32);
+    expect(kp.clientPublic.length).toBe(32);
+
+    // The keypair should match what deriveViaLocalOprf produces
+    const expected = deriveViaLocalOprf(seed);
+    expect(kp.clientPrivate).toEqual(expected.clientPrivate);
+    expect(kp.clientPublic).toEqual(expected.clientPublic);
+  });
+
+  it("passes channelId and auth to the evaluate callback", async () => {
+    const seed = generatePortalSeed();
+    const channelId = deriveChannelId(seed);
+    const auth = deriveChannelAuth(seed);
+    const evaluate = makeStubEvaluate();
+
+    await performChannelOprf(seed, channelId, {
+      auth: encode(auth),
+      evaluate,
+      onPowRequired: noopPow,
+    });
+
+    expect(evaluate).toHaveBeenCalledTimes(1);
+    const call = vi.mocked(evaluate).mock.calls[0];
+    expect(call?.[0]).toBe(channelId);
+    expect(call?.[2]).toBe(encode(auth));
+  });
+
+  it("produces different keypairs for different seeds", async () => {
+    const seed1 = generatePortalSeed();
+    const seed2 = generatePortalSeed();
+    const evaluate = makeStubEvaluate();
+
+    const kp1 = await performChannelOprf(seed1, deriveChannelId(seed1), {
+      evaluate,
+      onPowRequired: noopPow,
+    });
+    const kp2 = await performChannelOprf(seed2, deriveChannelId(seed2), {
+      evaluate,
+      onPowRequired: noopPow,
+    });
+
+    expect(kp1.clientPrivate).not.toEqual(kp2.clientPrivate);
+  });
+
+  it("roundtrips through ECIES", async () => {
+    const seed = generatePortalSeed();
+    const kp = await performChannelOprf(seed, deriveChannelId(seed), {
+      evaluate: makeStubEvaluate(),
+      onPowRequired: noopPow,
+    });
+
+    const plaintext = new TextEncoder().encode("oprf channel message");
+    const encrypted = eciesEncrypt(plaintext, kp.clientPublic);
+    const decrypted = eciesDecrypt(
+      encrypted.ephemeralPoint,
+      encrypted.nonce,
+      encrypted.ciphertext,
+      kp.clientPrivate,
+    );
+    expect(decrypted).toEqual(plaintext);
+  });
+
+  it("calls onPowRequired when evaluate throws POW_REQUIRED", async () => {
+    const seed = generatePortalSeed();
+    const channelId = deriveChannelId(seed);
+
+    const powError = {
+      data: { code: "POW_REQUIRED", challenge: "ch-test", difficulty: 8 },
+    };
+    const evaluate = vi
+      .fn<ChannelEvaluateCallback>()
+      .mockRejectedValueOnce(powError)
+      .mockImplementation((_cid, blindedB64) =>
+        Promise.resolve({ evaluated: localEvaluate(blindedB64) }),
+      );
+    const onPow = vi.fn().mockResolvedValue("solved");
+
+    const kp = await performChannelOprf(seed, channelId, {
+      evaluate,
+      onPowRequired: onPow,
+    });
+
+    expect(onPow).toHaveBeenCalledWith("ch-test", 8);
+    expect(evaluate).toHaveBeenCalledTimes(2);
+    expect(kp.clientPrivate.length).toBe(32);
+  });
+
+  it("rethrows non-PoW errors", async () => {
+    const seed = generatePortalSeed();
+    const evaluate = vi
+      .fn<ChannelEvaluateCallback>()
+      .mockRejectedValue(new Error("network failure"));
+
+    await expect(
+      performChannelOprf(seed, deriveChannelId(seed), {
+        evaluate,
+        onPowRequired: noopPow,
+      }),
+    ).rejects.toThrow("network failure");
   });
 });

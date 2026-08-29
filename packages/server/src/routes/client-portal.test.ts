@@ -215,6 +215,7 @@ function buildDeps(
     accountServiceDeps: null,
     accountSaltLimiter: null,
     accountLoginLimiter: null,
+    oprfService: null,
     ...overrides,
   };
 }

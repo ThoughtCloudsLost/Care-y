@@ -705,6 +705,8 @@ const appRouter = createAppRouter({
       windowMs: RATE_WINDOW_1H,
       maxRequests: RATE_ACCOUNT_LOGIN_MAX,
     }),
+    // Channel OPRF deps (ADR-091)
+    oprfService,
   },
   brandingDeps: {
     blobStore,

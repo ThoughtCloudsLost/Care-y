@@ -35,6 +35,9 @@ function isPowRequired(
   );
 }
 
+/** Tag discriminant passed through to the OPRF evaluate mutation. */
+export type OprfKind = "volunteer" | "account";
+
 /**
  * OPRF evaluate via tRPC with automatic PoW retry.
  *
@@ -42,12 +45,17 @@ function isPowRequired(
  * of the evaluated element. This function handles the retry transparently.
  */
 export async function evaluateWithPowRetry(
+  kind: OprfKind,
   userId: string,
   blindedElement: string,
   onPowRequired: (challenge: string, difficulty: number) => Promise<string>,
 ): Promise<string> {
   try {
-    const result = await trpc.oprf.evaluate.mutate({ userId, blindedElement });
+    const result = await trpc.oprf.evaluate.mutate({
+      kind,
+      userId,
+      blindedElement,
+    });
     return result.evaluated;
   } catch (err: unknown) {
     if (!isPowRequired(err)) throw err;
@@ -57,6 +65,7 @@ export async function evaluateWithPowRetry(
       err.data.difficulty,
     );
     const result = await trpc.oprf.evaluate.mutate({
+      kind,
       userId,
       blindedElement,
       powChallenge: err.data.challenge,

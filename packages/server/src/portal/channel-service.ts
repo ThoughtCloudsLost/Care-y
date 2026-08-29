@@ -250,6 +250,48 @@ export async function resolveAuthedChannel(
 }
 
 // ---------------------------------------------------------------------------
+// Channel status lookup for OPRF gating (ADR-091)
+// ---------------------------------------------------------------------------
+
+/**
+ * Minimal row returned by lookupChannelForOprf: status and auth_hash
+ * regardless of channel status. The OPRF evaluate path uses this to
+ * decide whether to allow, require auth, or refuse evaluation.
+ */
+export interface ChannelOprfLookup {
+  readonly status: string;
+  readonly auth_hash: Buffer;
+}
+
+/**
+ * Look up a channel row by channel_id, returning status and auth_hash
+ * regardless of channel status. Returns null when no row exists for
+ * the given channelId (the mint path, where evaluation is allowed).
+ *
+ * This is intentionally status-agnostic: the caller (OPRF evaluate
+ * service) decides the gating rules per status.
+ */
+export async function lookupChannelForOprf(
+  db: Kysely<TenantDatabase>,
+  channelId: ChannelSecret,
+): Promise<ChannelOprfLookup | null> {
+  const row = await db
+    .selectFrom("portal_channels")
+    .select(["status", "auth_hash"])
+    .where("channel_id", "=", channelId)
+    .executeTakeFirst();
+
+  if (!row) return null;
+
+  return {
+    status: row.status,
+    auth_hash: Buffer.isBuffer(row.auth_hash)
+      ? row.auth_hash
+      : Buffer.from(row.auth_hash),
+  };
+}
+
+// ---------------------------------------------------------------------------
 // Active channel lookup (shared by inbound-sms, followup-service, etc.)
 // ---------------------------------------------------------------------------
 

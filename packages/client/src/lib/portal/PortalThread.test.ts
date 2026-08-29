@@ -4,13 +4,13 @@ import type * as CryptoContext from "$lib/crypto/context.js";
 import { render, cleanup } from "@testing-library/svelte";
 import {
   getSodium,
-  generatePortalSeed,
-  derivePortalKeypair,
+  derivePortalKeypairFromOprf,
   eciesEncrypt,
   encode,
   toRistrettoPoint,
   encodeFileKeyPayload,
   generateContentKey,
+  requireSodium,
 } from "@care-y/crypto";
 import type { ComponentProps } from "svelte";
 import * as m from "$lib/paraglide/messages.js";
@@ -79,8 +79,9 @@ describe("PortalThread", () => {
   afterEach(cleanup);
 
   it("renders empty state when no messages", () => {
-    const seed = generatePortalSeed();
-    const keypair = derivePortalKeypair(seed);
+    const keypair = derivePortalKeypairFromOprf(
+      requireSodium().randombytes_buf(64),
+    );
 
     const { getByTestId } = render(PortalThread, {
       props: {
@@ -94,8 +95,9 @@ describe("PortalThread", () => {
   });
 
   it("renders messages with correct direction via ConversationBubble", () => {
-    const seed = generatePortalSeed();
-    const keypair = derivePortalKeypair(seed);
+    const keypair = derivePortalKeypairFromOprf(
+      requireSodium().randombytes_buf(64),
+    );
 
     const messages = [
       makeMessage("Hello from support", "to_client", keypair.clientPublic),
@@ -126,8 +128,9 @@ describe("PortalThread", () => {
   });
 
   it("shows speaker eyebrow on received bubbles only", () => {
-    const seed = generatePortalSeed();
-    const keypair = derivePortalKeypair(seed);
+    const keypair = derivePortalKeypairFromOprf(
+      requireSodium().randombytes_buf(64),
+    );
 
     const messages = [
       makeMessage("Hello from support", "to_client", keypair.clientPublic),
@@ -149,8 +152,9 @@ describe("PortalThread", () => {
   });
 
   it("uses the org's support label on received bubbles when set", () => {
-    const seed = generatePortalSeed();
-    const keypair = derivePortalKeypair(seed);
+    const keypair = derivePortalKeypairFromOprf(
+      requireSodium().randombytes_buf(64),
+    );
 
     const { container } = render(PortalThread, {
       props: {
@@ -168,8 +172,9 @@ describe("PortalThread", () => {
   });
 
   it("falls back to the built-in wording when the org set no label", () => {
-    const seed = generatePortalSeed();
-    const keypair = derivePortalKeypair(seed);
+    const keypair = derivePortalKeypairFromOprf(
+      requireSodium().randombytes_buf(64),
+    );
 
     const { container } = render(PortalThread, {
       props: {
@@ -189,8 +194,9 @@ describe("PortalThread", () => {
   // Org-level by construction: the sent side never carries a speaker, so the
   // label cannot become a per-person identity on the client's own messages.
   it("never labels the client's own messages", () => {
-    const seed = generatePortalSeed();
-    const keypair = derivePortalKeypair(seed);
+    const keypair = derivePortalKeypairFromOprf(
+      requireSodium().randombytes_buf(64),
+    );
 
     const { container } = render(PortalThread, {
       props: {
@@ -218,7 +224,9 @@ describe("PortalThread", () => {
     }
 
     it("opens the thread with a dateline", () => {
-      const keypair = derivePortalKeypair(generatePortalSeed());
+      const keypair = derivePortalKeypairFromOprf(
+        requireSodium().randombytes_buf(64),
+      );
       const { container } = render(PortalThread, {
         props: {
           messages: [
@@ -239,7 +247,9 @@ describe("PortalThread", () => {
     });
 
     it("draws one dateline per day, not per message", () => {
-      const keypair = derivePortalKeypair(generatePortalSeed());
+      const keypair = derivePortalKeypairFromOprf(
+        requireSodium().randombytes_buf(64),
+      );
       const pub = keypair.clientPublic;
       const { container } = render(PortalThread, {
         props: {
@@ -257,7 +267,9 @@ describe("PortalThread", () => {
     });
 
     it("draws none between messages on the same day", () => {
-      const keypair = derivePortalKeypair(generatePortalSeed());
+      const keypair = derivePortalKeypairFromOprf(
+        requireSodium().randombytes_buf(64),
+      );
       const pub = keypair.clientPublic;
       const { container } = render(PortalThread, {
         props: {
@@ -275,8 +287,9 @@ describe("PortalThread", () => {
   });
 
   it("shows edited marker when editedAt is present", () => {
-    const seed = generatePortalSeed();
-    const keypair = derivePortalKeypair(seed);
+    const keypair = derivePortalKeypairFromOprf(
+      requireSodium().randombytes_buf(64),
+    );
 
     const messages = [
       makeMessage(
@@ -302,8 +315,9 @@ describe("PortalThread", () => {
   });
 
   it("renders loading placeholders when loading", () => {
-    const seed = generatePortalSeed();
-    const keypair = derivePortalKeypair(seed);
+    const keypair = derivePortalKeypairFromOprf(
+      requireSodium().randombytes_buf(64),
+    );
 
     const { queryByTestId } = render(PortalThread, {
       props: {
@@ -318,8 +332,9 @@ describe("PortalThread", () => {
   });
 
   it("provides accessible names on bubble wrappers", () => {
-    const seed = generatePortalSeed();
-    const keypair = derivePortalKeypair(seed);
+    const keypair = derivePortalKeypairFromOprf(
+      requireSodium().randombytes_buf(64),
+    );
 
     const messages = [
       makeMessage("Hello", "to_client", keypair.clientPublic),
@@ -394,7 +409,9 @@ describe("PortalThread", () => {
 
   describe("attachments", () => {
     it("renders a document attachment as a chip under its message", () => {
-      const keypair = derivePortalKeypair(generatePortalSeed());
+      const keypair = derivePortalKeypairFromOprf(
+        requireSodium().randombytes_buf(64),
+      );
       const followupId = "fu-doc-1";
 
       const msg = makeMessageWithFollowup(
@@ -430,7 +447,9 @@ describe("PortalThread", () => {
     });
 
     it("renders an image attachment as a thumbnail under its message", () => {
-      const keypair = derivePortalKeypair(generatePortalSeed());
+      const keypair = derivePortalKeypairFromOprf(
+        requireSodium().randombytes_buf(64),
+      );
       const followupId = "fu-img-1";
 
       const msg = makeMessageWithFollowup(
@@ -463,7 +482,9 @@ describe("PortalThread", () => {
     });
 
     it("does not render attachments under unrelated messages", () => {
-      const keypair = derivePortalKeypair(generatePortalSeed());
+      const keypair = derivePortalKeypairFromOprf(
+        requireSodium().randombytes_buf(64),
+      );
 
       const msg1 = makeMessageWithFollowup(
         "No files here",
@@ -502,9 +523,13 @@ describe("PortalThread", () => {
     });
 
     it("shows error placeholder when attachment decrypt fails", () => {
-      const keypair = derivePortalKeypair(generatePortalSeed());
+      const keypair = derivePortalKeypairFromOprf(
+        requireSodium().randombytes_buf(64),
+      );
       // Create a different keypair to simulate wrong key
-      const wrongKeypair = derivePortalKeypair(generatePortalSeed());
+      const wrongKeypair = derivePortalKeypairFromOprf(
+        requireSodium().randombytes_buf(64),
+      );
       const followupId = "fu-bad-att";
 
       const msg = makeMessageWithFollowup(

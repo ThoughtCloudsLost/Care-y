@@ -88,6 +88,7 @@ export async function registerCrypto(
     //    The OPRF endpoint is a publicProcedure (no auth required).
     //    userId is used for rate-limiting, not DB lookup.
     const { evaluated: evaluatedB64 } = await trpc.oprf.evaluate.mutate({
+      kind: "volunteer",
       userId,
       blindedElement: encode(blind.blindedElement),
     });

@@ -208,6 +208,28 @@ describe("accountLogin", () => {
     }
   });
 
+  it("passes kind='account' to evaluateWithPowRetry", async () => {
+    const saltB64 = Buffer.from(new Uint8Array(16).fill(1)).toString(
+      "base64url",
+    );
+    vi.mocked(portalRouter.getAccountSalt.query).mockResolvedValue({
+      salt: saltB64,
+      accountId: "acct-123",
+    });
+    vi.mocked(evaluateWithPowRetry).mockResolvedValue(fakeEvaluatedB64);
+    vi.mocked(portalRouter.accountLogin.mutate).mockResolvedValue({});
+
+    const callbacks = makeCallbacks();
+    await accountLogin("user", "pass", callbacks);
+
+    expect(evaluateWithPowRetry).toHaveBeenCalledWith(
+      "account",
+      "acct-123",
+      expect.any(String),
+      callbacks.onPowRequired,
+    );
+  });
+
   // Real zeroing behavior is verified by instrumented-backend tests
   // in packages/crypto (client-account.security.test.ts).
   it("invokes zeroAll in finally block", async () => {

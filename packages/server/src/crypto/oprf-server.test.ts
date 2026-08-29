@@ -2,13 +2,14 @@ import { describe, it, expect, beforeAll } from "vitest";
 import {
   getSodium,
   lagrangeInterpolate,
+  deriveTaggedShare,
   oprfBlind,
   oprfFinalize,
   type SodiumBackend,
   type RistrettoPoint,
   type EvaluatedElement,
 } from "@care-y/crypto";
-import { blindEvaluate } from "./oprf-server.js";
+import { blindEvaluate, taggedBlindEvaluate } from "./oprf-server.js";
 import { CryptoError } from "../errors.js";
 
 let sodium: SodiumBackend;
@@ -208,6 +209,181 @@ describe("blindEvaluate", () => {
       const badPoint = new Uint8Array(48);
 
       expect(() => blindEvaluate(share, badPoint)).toThrow(/got 48/);
+    });
+  });
+});
+
+describe("taggedBlindEvaluate", () => {
+  it("returns a valid 32-byte ristretto255 point", () => {
+    const masterShare = sodium.crypto_core_ristretto255_scalar_random();
+    const point = sodium.crypto_scalarmult_ristretto255_base(
+      sodium.crypto_core_ristretto255_scalar_random(),
+    );
+
+    const result = taggedBlindEvaluate(
+      masterShare,
+      "volunteer:test-user",
+      point,
+    );
+
+    expect(result).toBeInstanceOf(Uint8Array);
+    expect(result.length).toBe(32);
+  });
+
+  it("produces different results for different tags", () => {
+    const masterShare = sodium.crypto_core_ristretto255_scalar_random();
+    const point = sodium.crypto_scalarmult_ristretto255_base(
+      sodium.crypto_core_ristretto255_scalar_random(),
+    );
+
+    const resultA = taggedBlindEvaluate(masterShare, "volunteer:user-a", point);
+    const resultB = taggedBlindEvaluate(masterShare, "volunteer:user-b", point);
+
+    expect(resultA).not.toEqual(resultB);
+  });
+
+  it("produces the same result for the same tag and inputs", () => {
+    const masterShare = sodium.crypto_core_ristretto255_scalar_random();
+    const point = sodium.crypto_scalarmult_ristretto255_base(
+      sodium.crypto_core_ristretto255_scalar_random(),
+    );
+
+    const result1 = taggedBlindEvaluate(masterShare, "account:acct-1", point);
+    const result2 = taggedBlindEvaluate(masterShare, "account:acct-1", point);
+
+    expect(result1).toEqual(result2);
+  });
+
+  it("equals blindEvaluate with the derived scalar", () => {
+    const masterShare = sodium.crypto_core_ristretto255_scalar_random();
+    const tag = "volunteer:direct-compare";
+    const point = sodium.crypto_scalarmult_ristretto255_base(
+      sodium.crypto_core_ristretto255_scalar_random(),
+    );
+
+    const taggedResult = taggedBlindEvaluate(masterShare, tag, point);
+
+    // Reproduce the derivation manually
+    const derivedScalar = deriveTaggedShare(masterShare, tag);
+    const directResult = blindEvaluate(derivedScalar, point);
+
+    expect(taggedResult).toEqual(directResult);
+  });
+
+  describe("threshold parity with tagged shares", () => {
+    it("two tagged partials combined equals scalarmult by the combined tagged key", () => {
+      const fullKey = sodium.crypto_core_ristretto255_scalar_random();
+      const { shareA, shareB } = shamirSplit(fullKey);
+      const tag = "volunteer:threshold-tagged-test";
+
+      const input = new TextEncoder().encode("tagged-threshold-parity");
+      const { blindedElement, blindState } = oprfBlind(input);
+
+      // Tagged partials from each share
+      const partialA = taggedBlindEvaluate(shareA, tag, blindedElement);
+      const partialB = taggedBlindEvaluate(shareB, tag, blindedElement);
+
+      // Combine via Lagrange interpolation
+      const combined = lagrangeInterpolate(
+        partialA as RistrettoPoint,
+        partialB as RistrettoPoint,
+      );
+
+      // The combined tagged key is defined by the Lagrange combination
+      // of the tagged shares (2*kA(tag) - kB(tag)), NOT by tagging the
+      // full key: HKDF is nonlinear, so deriveTaggedShare(fullKey, tag)
+      // is a different scalar by design (ADR-091). Compute the true
+      // combined scalar and use it as the single-key reference.
+      const kATagged = deriveTaggedShare(shareA, tag);
+      const kBTagged = deriveTaggedShare(shareB, tag);
+      const twoKA = sodium.crypto_core_ristretto255_scalar_add(
+        kATagged,
+        kATagged,
+      );
+      const combinedTaggedKey = sodium.crypto_core_ristretto255_scalar_sub(
+        twoKA,
+        kBTagged,
+      );
+      const directResult = blindEvaluate(combinedTaggedKey, blindedElement);
+
+      // Threshold tagged evaluation matches single-key tagged evaluation
+      expect(combined).toEqual(directResult);
+
+      // Finalize produces identical output from both paths
+      const outputThreshold = oprfFinalize(
+        blindState,
+        combined as EvaluatedElement,
+        input,
+      );
+      const outputDirect = oprfFinalize(
+        blindState,
+        directResult as EvaluatedElement,
+        input,
+      );
+      expect(outputThreshold).toEqual(outputDirect);
+      expect(outputThreshold.length).toBe(64);
+    });
+
+    it("different tags produce different OPRF outputs from the same key", () => {
+      const fullKey = sodium.crypto_core_ristretto255_scalar_random();
+      const { shareA, shareB } = shamirSplit(fullKey);
+
+      const input = new TextEncoder().encode("tag-isolation-test");
+      const { blindedElement } = oprfBlind(input);
+
+      const partialA1 = taggedBlindEvaluate(
+        shareA,
+        "volunteer:user-1",
+        blindedElement,
+      );
+      const partialB1 = taggedBlindEvaluate(
+        shareB,
+        "volunteer:user-1",
+        blindedElement,
+      );
+      const combined1 = lagrangeInterpolate(
+        partialA1 as RistrettoPoint,
+        partialB1 as RistrettoPoint,
+      );
+
+      const partialA2 = taggedBlindEvaluate(
+        shareA,
+        "volunteer:user-2",
+        blindedElement,
+      );
+      const partialB2 = taggedBlindEvaluate(
+        shareB,
+        "volunteer:user-2",
+        blindedElement,
+      );
+      const combined2 = lagrangeInterpolate(
+        partialA2 as RistrettoPoint,
+        partialB2 as RistrettoPoint,
+      );
+
+      expect(combined1).not.toEqual(combined2);
+    });
+  });
+
+  describe("input validation", () => {
+    it("rejects master share with wrong length", () => {
+      const badShare = new Uint8Array(16);
+      const point = sodium.crypto_scalarmult_ristretto255_base(
+        sodium.crypto_core_ristretto255_scalar_random(),
+      );
+
+      expect(() =>
+        taggedBlindEvaluate(badShare, "volunteer:test", point),
+      ).toThrow(CryptoError);
+    });
+
+    it("rejects blinded element with wrong length", () => {
+      const share = sodium.crypto_core_ristretto255_scalar_random();
+      const badPoint = new Uint8Array(16);
+
+      expect(() =>
+        taggedBlindEvaluate(share, "volunteer:test", badPoint),
+      ).toThrow(CryptoError);
     });
   });
 });

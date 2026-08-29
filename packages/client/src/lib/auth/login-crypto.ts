@@ -82,6 +82,7 @@ export async function loginCrypto(
 
   // 4. OPRF evaluate via tRPC (with automatic PoW retry).
   const evaluatedB64 = await evaluateWithPowRetry(
+    "volunteer",
     userId,
     blindedElement,
     callbacks.onPowRequired,

@@ -61,6 +61,7 @@ export async function adminBootstrapUserCrypto(
     const blind: BlindResult = oprfBlind(stretched);
 
     const { evaluated: evaluatedB64 } = await trpc.oprf.adminEvaluate.mutate({
+      kind: "volunteer",
       userId,
       blindedElement: encode(blind.blindedElement),
     });

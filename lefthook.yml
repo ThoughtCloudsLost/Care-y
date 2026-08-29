@@ -26,7 +26,9 @@ pre-commit:
         fi
         lintable=$(git diff --cached --name-only --diff-filter=ACMR | grep -E '\.(ts|js|mjs|svelte)$' || true)
         if [ -n "$lintable" ]; then
-          echo "$lintable" | xargs pnpm exec eslint
+          # Same heap limit the root lint:strict script uses: typed eslint
+          # on a large staged batch exceeds the Node default on this box.
+          echo "$lintable" | NODE_OPTIONS=--max-old-space-size=4096 xargs pnpm exec eslint
         fi
     id-brands:
       # Identifier columns must carry branded types (ADR-074). Only runs when

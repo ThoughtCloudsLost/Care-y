@@ -19,6 +19,7 @@
   import * as m from "$lib/paraglide/messages.js";
   import { getLocale } from "$lib/paraglide/runtime.js";
   import { trpc } from "$lib/trpc/index.js";
+  import { requireRouter } from "$lib/errors.js";
   import { portalKeys } from "$lib/query/keys.js";
   import { decode } from "@care-y/crypto";
   import {
@@ -1057,7 +1058,24 @@
           : null;
 
       try {
-        const result = buildContinuationPayload(messageText);
+        const evaluateCb = async (
+          chanId: string,
+          blindedB64: string,
+          chanAuth?: string,
+        ): Promise<{ evaluated: string }> => {
+          const portalRouter = requireRouter(trpc.clientPortal, "clientPortal");
+          return portalRouter.evaluateChannelOprf.mutate({
+            channelId: chanId,
+            blindedElement: blindedB64,
+            ...(chanAuth !== undefined ? { auth: chanAuth } : {}),
+          });
+        };
+
+        const result = await buildContinuationPayload(
+          messageText,
+          evaluateCb,
+          solveProofOfWork,
+        );
         payload.continuation = result.payload;
         continuationChannelId = result.channelId;
         continuationEncodedSeed = result.encodedSeed;

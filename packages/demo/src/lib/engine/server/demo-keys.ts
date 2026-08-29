@@ -199,8 +199,16 @@ export function createDemoOprfService(
     );
   }
 
+  async function evaluateChannel(): Promise<{ evaluated: string }> {
+    await Promise.resolve();
+    throw new DemoEngineError(
+      "Channel OPRF evaluation is not part of the demo surface",
+    );
+  }
+
   return {
     evaluate,
     adminEvaluate: evaluate,
+    evaluateChannel,
   };
 }

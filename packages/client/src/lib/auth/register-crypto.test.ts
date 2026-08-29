@@ -152,6 +152,7 @@ describe("registerCrypto", () => {
       await registerCrypto(TEST_USER_ID, TEST_PASSWORD, callbacks);
 
       expect(mockOprfEvaluate).toHaveBeenCalledWith({
+        kind: "volunteer",
         userId: TEST_USER_ID,
         blindedElement: "b64-bb",
       });

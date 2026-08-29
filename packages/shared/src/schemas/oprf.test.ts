@@ -7,13 +7,36 @@ import {
 
 describe("oprfEvaluateInputSchema", () => {
   const validInput = {
+    kind: "volunteer" as const,
     userId: "550e8400-e29b-41d4-a716-446655440000",
     blindedElement: "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
   };
 
-  it("accepts valid userId and blindedElement", () => {
+  it("accepts valid kind, userId and blindedElement", () => {
     const result = oprfEvaluateInputSchema.safeParse(validInput);
     expect(result.success).toBe(true);
+  });
+
+  it("accepts account kind", () => {
+    const result = oprfEvaluateInputSchema.safeParse({
+      ...validInput,
+      kind: "account",
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("rejects invalid kind", () => {
+    const result = oprfEvaluateInputSchema.safeParse({
+      ...validInput,
+      kind: "channel",
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it("rejects missing kind", () => {
+    const { kind: _, ...rest } = validInput;
+    const result = oprfEvaluateInputSchema.safeParse(rest);
+    expect(result.success).toBe(false);
   });
 
   it("accepts PoW fields when present", () => {
@@ -36,6 +59,7 @@ describe("oprfEvaluateInputSchema", () => {
 
   it("rejects missing userId", () => {
     const result = oprfEvaluateInputSchema.safeParse({
+      kind: validInput.kind,
       blindedElement: validInput.blindedElement,
     });
     expect(result.success).toBe(false);
@@ -43,6 +67,7 @@ describe("oprfEvaluateInputSchema", () => {
 
   it("rejects missing blindedElement", () => {
     const result = oprfEvaluateInputSchema.safeParse({
+      kind: validInput.kind,
       userId: validInput.userId,
     });
     expect(result.success).toBe(false);

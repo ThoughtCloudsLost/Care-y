@@ -26,13 +26,14 @@
     deriveChannelId,
     deriveChannelAuth,
     hashChannelAuth,
-    derivePortalKeypair,
     PORTAL_KEY_CHECK,
     eciesEncrypt,
     encode,
     requireSodium,
     zeroAll,
   } from "@care-y/crypto";
+  import { performChannelOprf } from "$lib/portal/portal-crypto.js";
+  import { solveProofOfWork } from "$lib/auth/pow-solver.js";
   import { ErrorCode } from "@care-y/shared";
   import { EFF_WORDLIST } from "$lib/portal/eff-wordlist.js";
 
@@ -108,6 +109,20 @@
 
   // --- Generate link ---
 
+  /** Wire the channel evaluate callback to the clientPortal tRPC mutation. */
+  async function channelEvaluate(
+    chanId: string,
+    blindedElementB64: string,
+    chanAuth?: string,
+  ): Promise<{ evaluated: string }> {
+    const portalRouter = requireRouter(trpc.clientPortal, "clientPortal");
+    return portalRouter.evaluateChannelOprf.mutate({
+      channelId: chanId,
+      blindedElement: blindedElementB64,
+      ...(chanAuth !== undefined ? { auth: chanAuth } : {}),
+    });
+  }
+
   async function handleGenerate(): Promise<void> {
     if (generating) return;
     generating = true;
@@ -123,7 +138,13 @@
       heldAuth = auth;
 
       const passphrase = passphraseEnabled ? words.join(" ") : undefined;
-      const keypair = derivePortalKeypair(seed, passphrase);
+
+      // ADR-091: derive through OPRF round (no auth for mint path)
+      const keypair = await performChannelOprf(seed, channelId, {
+        passphrase,
+        evaluate: channelEvaluate,
+        onPowRequired: solveProofOfWork,
+      });
       heldPrivate = keypair.clientPrivate;
 
       const checkPlaintext = new TextEncoder().encode(PORTAL_KEY_CHECK);

@@ -114,7 +114,8 @@ export interface OprfConfigTable {
 
 export interface OprfAuditLogTable {
   id: Generated<OprfAuditId>;
-  user_id: UserId;
+  /** Evaluation audit subject: user uuid or tag string (ADR-091, migration platform/009). */
+  user_id: string;
   hashed_ip: HashedIp;
   reason: string;
   timestamp: Generated<Date>;

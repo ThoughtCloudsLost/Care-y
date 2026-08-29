@@ -13,6 +13,7 @@ import { userIdSchema } from "../ids.js";
 const base64PointSchema = z.string().min(1).max(64);
 
 export const oprfEvaluateInputSchema = z.object({
+  kind: z.enum(["volunteer", "account"]),
   userId: userIdSchema,
   blindedElement: base64PointSchema,
   /** PoW solution fields, required only after 3 failures */

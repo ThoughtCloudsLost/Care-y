@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeAll } from "vitest";
+import { describe, it, expect, vi, beforeAll } from "vitest";
 import fc from "fast-check";
 import {
   generateOrgKeypair,
@@ -9,9 +9,15 @@ import {
   deriveChannelId,
   deriveChannelAuth,
   hashChannelAuth,
-  derivePortalKeypair,
   eciesDecrypt,
   PORTAL_KEY_CHECK,
+  encode,
+  requireSodium,
+  oprfBlind,
+  oprfFinalize,
+  portalOprfInput,
+  derivePortalKeypairFromOprf,
+  toRistrettoPoint,
   type SodiumBackend,
   type SymmetricKey,
   type Ciphertext,
@@ -19,11 +25,57 @@ import {
   type RistrettoPoint,
   decode,
 } from "@care-y/crypto";
+import type { ChannelEvaluateCallback } from "$lib/portal/portal-crypto.js";
 import {
   encryptIntake,
   buildContinuationPayload,
   type IntakeAnswer,
 } from "./intake-crypto.js";
+
+/** Fixed test "server key" for local OPRF evaluation. */
+const TEST_SERVER_KEY = new Uint8Array(32).fill(0xaa);
+
+function localEvaluate(blindedB64: string): string {
+  const sodium = requireSodium();
+  const blinded = decode(blindedB64);
+  const evaluated = sodium.crypto_scalarmult_ristretto255(
+    TEST_SERVER_KEY,
+    blinded,
+  );
+  return encode(evaluated);
+}
+
+/** Derive a keypair through local OPRF simulation (for test assertions). */
+function deriveViaLocalOprf(
+  seed: Uint8Array,
+): ReturnType<typeof derivePortalKeypairFromOprf> {
+  const input = portalOprfInput(seed);
+  const { blindedElement, blindState } = oprfBlind(input);
+  const evaluatedB64 = localEvaluate(encode(blindedElement));
+  const evaluatedBytes = decode(evaluatedB64);
+  const oprfOutput = oprfFinalize(
+    blindState,
+    toRistrettoPoint(evaluatedBytes),
+    input,
+  );
+  const kp = derivePortalKeypairFromOprf(oprfOutput);
+  requireSodium().memzero(input);
+  requireSodium().memzero(oprfOutput);
+  return kp;
+}
+
+function makeStubEvaluate(): ChannelEvaluateCallback {
+  return vi.fn(
+    (
+      _channelId: string,
+      blindedB64: string,
+      _auth?: string,
+    ): Promise<{ evaluated: string }> =>
+      Promise.resolve({ evaluated: localEvaluate(blindedB64) }),
+  );
+}
+
+const noopPow = vi.fn().mockResolvedValue("noop");
 
 describe("intake-crypto", () => {
   let sodium: SodiumBackend;
@@ -472,25 +524,37 @@ describe("intake-crypto", () => {
   });
 
   describe("buildContinuationPayload", () => {
-    it("produces a channelId matching deriveChannelId of the decoded seed", () => {
+    it("produces a channelId matching deriveChannelId of the decoded seed", async () => {
       const { payload, channelId, encodedSeed } =
-        buildContinuationPayload("Test message");
+        await buildContinuationPayload(
+          "Test message",
+          makeStubEvaluate(),
+          noopPow,
+        );
       const decodedSeed = decode(encodedSeed);
       expect(channelId).toBe(deriveChannelId(decodedSeed));
       expect(payload.channelId).toBe(channelId);
     });
 
-    it("produces an authHash matching hashChannelAuth(deriveChannelAuth(seed))", () => {
-      const { payload, encodedSeed } = buildContinuationPayload("Test message");
+    it("produces an authHash matching hashChannelAuth(deriveChannelAuth(seed))", async () => {
+      const { payload, encodedSeed } = await buildContinuationPayload(
+        "Test message",
+        makeStubEvaluate(),
+        noopPow,
+      );
       const decodedSeed = decode(encodedSeed);
       const expectedAuth = hashChannelAuth(deriveChannelAuth(decodedSeed));
       expect(decode(payload.authHash)).toEqual(expectedAuth);
     });
 
-    it("keyCheck decrypts to PORTAL_KEY_CHECK with derivePortalKeypair(seed)", () => {
-      const { payload, encodedSeed } = buildContinuationPayload("Test message");
+    it("keyCheck decrypts to PORTAL_KEY_CHECK with the OPRF-derived keypair", async () => {
+      const { payload, encodedSeed } = await buildContinuationPayload(
+        "Test message",
+        makeStubEvaluate(),
+        noopPow,
+      );
       const decodedSeed = decode(encodedSeed);
-      const keypair = derivePortalKeypair(decodedSeed);
+      const keypair = deriveViaLocalOprf(decodedSeed);
 
       try {
         const plaintext = eciesDecrypt(
@@ -505,11 +569,15 @@ describe("intake-crypto", () => {
       }
     });
 
-    it("selfCopy decrypts to the message text", () => {
+    it("selfCopy decrypts to the message text", async () => {
       const message = "I need to correct my phone number.";
-      const { payload, encodedSeed } = buildContinuationPayload(message);
+      const { payload, encodedSeed } = await buildContinuationPayload(
+        message,
+        makeStubEvaluate(),
+        noopPow,
+      );
       const decodedSeed = decode(encodedSeed);
-      const keypair = derivePortalKeypair(decodedSeed);
+      const keypair = deriveViaLocalOprf(decodedSeed);
 
       try {
         expect(payload.selfCopy).toBeDefined();
@@ -525,29 +593,49 @@ describe("intake-crypto", () => {
       }
     });
 
-    it("selfCopy is absent when message is null", () => {
-      const { payload } = buildContinuationPayload(null);
+    it("selfCopy is absent when message is null", async () => {
+      const { payload } = await buildContinuationPayload(
+        null,
+        makeStubEvaluate(),
+        noopPow,
+      );
       expect(payload.selfCopy).toBeUndefined();
     });
 
-    it("selfCopy is absent when message is empty", () => {
-      const { payload } = buildContinuationPayload("");
+    it("selfCopy is absent when message is empty", async () => {
+      const { payload } = await buildContinuationPayload(
+        "",
+        makeStubEvaluate(),
+        noopPow,
+      );
       expect(payload.selfCopy).toBeUndefined();
     });
 
-    it("channelId is 48 lowercase hex chars", () => {
-      const { channelId } = buildContinuationPayload(null);
+    it("channelId is 48 lowercase hex chars", async () => {
+      const { channelId } = await buildContinuationPayload(
+        null,
+        makeStubEvaluate(),
+        noopPow,
+      );
       expect(channelId).toMatch(/^[0-9a-f]{48}$/);
     });
 
-    it("authHash is base64url of 32 bytes", () => {
-      const { payload } = buildContinuationPayload(null);
+    it("authHash is base64url of 32 bytes", async () => {
+      const { payload } = await buildContinuationPayload(
+        null,
+        makeStubEvaluate(),
+        noopPow,
+      );
       const decoded = decode(payload.authHash);
       expect(decoded).toHaveLength(32);
     });
 
-    it("clientPublic is base64url of 32 bytes", () => {
-      const { payload } = buildContinuationPayload(null);
+    it("clientPublic is base64url of 32 bytes", async () => {
+      const { payload } = await buildContinuationPayload(
+        null,
+        makeStubEvaluate(),
+        noopPow,
+      );
       const decoded = decode(payload.clientPublic);
       expect(decoded).toHaveLength(32);
     });

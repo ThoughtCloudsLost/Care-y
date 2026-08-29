@@ -59,6 +59,7 @@ export {
   oprfBlind,
   oprfFinalize,
   lagrangeInterpolate,
+  deriveTaggedShare,
   generateRefreshScalar,
   computeRefreshDelta,
   applyRefresh,
@@ -138,7 +139,8 @@ export {
   deriveChannelId,
   deriveChannelAuth,
   hashChannelAuth,
-  derivePortalKeypair,
+  portalOprfInput,
+  derivePortalKeypairFromOprf,
   type PortalKeypair,
 } from "./portal.js";
 

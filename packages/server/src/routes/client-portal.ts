@@ -43,6 +43,7 @@ import type {
 } from "@care-y/shared";
 import { ticketIdSchema } from "@care-y/shared";
 import type { ChannelSecret } from "@care-y/shared";
+import { channelSecretSchema } from "@care-y/shared";
 import type { IncomingMessage } from "node:http";
 import type { RateLimiter } from "../ratelimit/rate-limiter.js";
 import type { PowVerifier } from "../crypto/pow.js";
@@ -95,6 +96,7 @@ import {
   openShare,
   listSharesByTicket,
 } from "../portal/share-service.js";
+import type { OprfEvaluateService } from "../crypto/oprf-evaluate-service.js";
 
 /**
  * Deps for the client-facing portal.
@@ -170,6 +172,10 @@ export interface ClientPortalRouterDeps {
   readonly accountSaltLimiter: RateLimiter | null;
   /** 10 req/hour per IP on accountLogin. Bounds login spam. */
   readonly accountLoginLimiter: RateLimiter | null;
+
+  // Channel OPRF deps (appended by ADR-091)
+  /** OPRF evaluate service for channel-scoped evaluations. */
+  readonly oprfService: OprfEvaluateService | null;
 }
 
 // care-y-ignore-next-line missing-return-type -- tRPC router() returns a deeply generic type that cannot be written explicitly
@@ -947,6 +953,39 @@ export function createClientPortalRouter(deps: ClientPortalRouterDeps) {
         return {};
       }),
     ),
+
+    // -----------------------------------------------------------------
+    // Channel OPRF evaluation (ADR-091)
+    // -----------------------------------------------------------------
+
+    evaluateChannelOprf: orgProcedure
+      .input(
+        z.object({
+          channelId: channelSecretSchema,
+          blindedElement: z.string().min(1).max(64),
+          auth: z.string().min(1).max(128).optional(),
+        }),
+      )
+      .mutation(
+        withErrorWrapping(async ({ ctx, input }) => {
+          if (deps.oprfService === null) {
+            throw new TRPCError({
+              code: "NOT_FOUND",
+              message: "OPRF service not available",
+            });
+          }
+
+          const ip = extractClientIp(ctx.req);
+
+          return deps.oprfService.evaluateChannel(ctx.org.tenantDb, {
+            channelId: input.channelId,
+            blindedElement: input.blindedElement,
+            auth: input.auth,
+            ip,
+            orgUuid: ctx.org.orgId,
+          });
+        }),
+      ),
   });
 }
 

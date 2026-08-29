@@ -35,7 +35,12 @@
   import { announceToLiveRegion } from "$lib/utils/announce.js";
   import { decode, encode } from "@care-y/crypto";
   import { newFollowupId, newKeyGeneration } from "@care-y/shared";
-  import { encryptReply } from "$lib/portal/portal-crypto.js";
+  import {
+    encryptReply,
+    type ChannelEvaluateCallback,
+  } from "$lib/portal/portal-crypto.js";
+  import { solveProofOfWork } from "$lib/auth/pow-solver.js";
+  import { requireRouter } from "$lib/errors.js";
   import PortalHint from "$lib/components/portal/PortalHint.svelte";
   import { createPublicBrandingQuery } from "$lib/branding/public-branding.js";
   import PageLayout from "$lib/shell/PageLayout.svelte";
@@ -96,6 +101,20 @@
   // ---------------------------------------------------------------------------
 
   const portalSession = createPortalSessionState();
+
+  /** Channel OPRF evaluate wired to the clientPortal tRPC mutation. */
+  const channelEvaluate: ChannelEvaluateCallback = async (
+    chanId: string,
+    blindedB64: string,
+    chanAuth?: string,
+  ): Promise<{ evaluated: string }> => {
+    const portalRouter = requireRouter(trpc.clientPortal, "clientPortal");
+    return portalRouter.evaluateChannelOprf.mutate({
+      channelId: chanId,
+      blindedElement: blindedB64,
+      ...(chanAuth !== undefined ? { auth: chanAuth } : {}),
+    });
+  };
 
   let hintShown = $state(false);
   let hintDismissed = $state(false);
@@ -323,9 +342,11 @@
       return;
     }
 
-    portalSession.tryNoPassphraseDerive(
+    void portalSession.tryNoPassphraseDerive(
       fragment.fragmentData,
       bootstrapQuery.data.keyCheck,
+      channelEvaluate,
+      solveProofOfWork,
     );
   });
 
@@ -337,7 +358,13 @@
     const data = bootstrapQuery.data;
     const frag = fragment.fragmentData;
     if (!data || !frag) return;
-    portalSession.submitPassphrase(passphrase, frag, data.keyCheck);
+    void portalSession.submitPassphrase(
+      passphrase,
+      frag,
+      data.keyCheck,
+      channelEvaluate,
+      solveProofOfWork,
+    );
   }
 
   // ---------------------------------------------------------------------------
