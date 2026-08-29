@@ -673,6 +673,7 @@ export * from "./attachment_pending_list.js";
 export * from "./attachment_uploading.js";
 export * from "./attachment_failed.js";
 export * from "./attachment_remove.js";
+export * from "./attachment_sms_unnamed.js";
 export * from "./portal_filter_images.js";
 export * from "./portal_filter_files.js";
 export * from "./portal_attachment_image.js";
