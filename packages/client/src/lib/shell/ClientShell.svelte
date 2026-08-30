@@ -28,8 +28,13 @@
   import { browser } from "$app/environment";
   import { Menu } from "@lucide/svelte";
   import type { Snippet } from "svelte";
-  import { getLocale, setLocale, type Locale } from "$lib/paraglide/runtime.js";
+  import {
+    setLocale,
+    getTextDirection,
+    type Locale,
+  } from "$lib/paraglide/runtime.js";
   import * as m from "$lib/paraglide/messages.js";
+  import { uiLocaleStore } from "$lib/stores/ui-locale.svelte.js";
   import { createPublicBrandingQuery } from "$lib/branding/public-branding.js";
   import { applyKonstaPalette } from "$lib/branding/konsta-palette.js";
   import { setBrandingTitle } from "$lib/branding/title.svelte.js";
@@ -106,15 +111,22 @@
   );
 
   // A skeleton holds the slot while a name is still possible. Once the
-  // query has given up, the slot goes empty rather than shimmering
-  // forever at someone who is waiting on it.
-  const orgNamePending = $derived(orgName === "" && !brandingQuery.isError);
+  // query has settled, either way, the slot goes empty rather than
+  // shimmering forever at someone who is waiting on it. A success whose
+  // payload carries no name is settled: the org genuinely has no
+  // client-facing name right now, and a permanent shimmer would promise
+  // one that is not coming.
+  const orgNamePending = $derived(
+    orgName === "" && !brandingQuery.isError && !brandingQuery.isSuccess,
+  );
 
-  let currentLocale = $state(getLocale());
+  const currentLocale = $derived(uiLocaleStore.locale);
 
   function handleLocaleChange(locale: Locale): void {
-    currentLocale = locale;
-    void setLocale(locale);
+    void setLocale(locale, { reload: false });
+    document.documentElement.lang = locale;
+    document.documentElement.dir = getTextDirection(locale);
+    uiLocaleStore.set(locale);
   }
 
   $effect(() => {
@@ -142,37 +154,41 @@
   }}
 >
   {#snippet navbar()}
-    <ShellNavbar
-      identity={{
-        logoUrl: branding?.iconUrl ?? null,
-        orgName,
-        label: m.portal_menu_label(),
-        onIdentityTap: () => (drawerOpen = true),
-      }}
-      identityFallback={menuIcon}
-      {orgNamePending}
-      locale={currentLocale}
-      onlocalechange={handleLocaleChange}
-      {navbarHeight}
-      actions={quickExit}
-      subnavbar={shell?.subnavbar}
-      onsubnavbarheight={(h: number) => {
-        subnavbarHeight = h;
-      }}
-    />
+    {#key currentLocale}
+      <ShellNavbar
+        identity={{
+          logoUrl: branding?.iconUrl ?? null,
+          orgName,
+          label: m.portal_menu_label(),
+          onIdentityTap: () => (drawerOpen = true),
+        }}
+        identityFallback={menuIcon}
+        {orgNamePending}
+        locale={currentLocale}
+        onlocalechange={handleLocaleChange}
+        {navbarHeight}
+        actions={quickExit}
+        subnavbar={shell?.subnavbar}
+        onsubnavbarheight={(h: number) => {
+          subnavbarHeight = h;
+        }}
+      />
+    {/key}
   {/snippet}
 
   {@render children()}
 
   {#snippet afterScroll()}
-    <ClientDrawer
-      opened={drawerOpen}
-      ondismiss={() => (drawerOpen = false)}
-      actions={drawerActions}
-      logoUrl={branding?.iconUrl ?? null}
-      {orgName}
-      {orgNamePending}
-    />
+    {#key currentLocale}
+      <ClientDrawer
+        opened={drawerOpen}
+        ondismiss={() => (drawerOpen = false)}
+        actions={drawerActions}
+        logoUrl={branding?.iconUrl ?? null}
+        {orgName}
+        {orgNamePending}
+      />
+    {/key}
     <ToastRenderer />
   {/snippet}
 </PageShell>
@@ -208,10 +224,14 @@
 
   /* ShellNavbar positions the row absolutely so resizing it mid-scroll
      cannot move the scroll position, which means the space it occupies has
-     to be reserved here instead. The navbar itself needs no reservation:
-     PageShell makes it a flex row rather than an overlay. */
+     to be reserved here instead. The navbar's own reservation must be
+     restated too: PageShell pulls the scroll container up behind the
+     navbar glass and compensates with padding-top: var(--navbar-h), and
+     this higher-specificity rule replaces that padding rather than adding
+     to it. Subnavbar height alone left the top of the thread sitting under
+     the navbar glass with no way to scroll it into view. */
   :global(.client-scroll.has-subnavbar) {
-    padding-top: var(--subnavbar-h, 0px);
+    padding-top: calc(var(--navbar-h, 0px) + var(--subnavbar-h, 0px));
   }
 
   /* Reading measure, reusing the org app's token and breakpoint so the

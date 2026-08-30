@@ -174,4 +174,59 @@ describe("createPortalFragment", () => {
     expect(h.frag.fragmentResolved).toBe(false);
     expect(h.frag.fragmentData).toBeNull();
   });
+
+  it("recovers when a hashchange brings a new valid fragment after no-hash resolve", async () => {
+    // Start with no hash: composable resolves with null data
+    const seed = generatePortalSeed();
+    const validHash = `#${encode(seed)}`;
+    let currentHash = "";
+
+    const h = createHarness(
+      true,
+      () => currentHash,
+      () => "ch1",
+    );
+    destroy = h.destroy;
+
+    expect(h.frag.fragmentResolved).toBe(true);
+    expect(h.frag.fragmentData).toBeNull();
+
+    // Simulate the client re-pasting the full link: the hash changes
+    currentHash = validHash;
+    window.dispatchEvent(new HashChangeEvent("hashchange"));
+    flushSync();
+
+    // The composable should have reset and be parsing again
+    await vi.waitFor(() => {
+      expect(h.frag.fragmentResolved).toBe(true);
+    });
+
+    expect(h.frag.fragmentData).not.toBeNull();
+    expect(h.frag.fragmentData!.seed).toEqual(seed);
+    expect(h.frag.hasValidFragment).toBe(true);
+  });
+
+  it("does not reset on hashchange when a valid fragment is already present", async () => {
+    const seed = generatePortalSeed();
+    const hash = `#${encode(seed)}`;
+    const h = createHarness(
+      true,
+      () => hash,
+      () => "ch1",
+    );
+    destroy = h.destroy;
+
+    await vi.waitFor(() => {
+      expect(h.frag.hasValidFragment).toBe(true);
+    });
+
+    const originalData = h.frag.fragmentData;
+
+    // Fire hashchange; the composable should ignore it because it
+    // already has valid data
+    window.dispatchEvent(new HashChangeEvent("hashchange"));
+    flushSync();
+
+    expect(h.frag.fragmentData).toBe(originalData);
+  });
 });

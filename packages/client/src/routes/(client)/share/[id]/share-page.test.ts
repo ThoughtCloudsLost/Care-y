@@ -11,7 +11,7 @@
 
 import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
 import type { Mock } from "vitest";
-import { render, screen, cleanup, fireEvent } from "@testing-library/svelte";
+import { render, screen, cleanup } from "@testing-library/svelte";
 import type * as ParaglideMessages from "$lib/paraglide/messages.js";
 import type * as AppState from "$app/state";
 import type * as AppNavigation from "$app/navigation";
@@ -380,23 +380,30 @@ describe("share view page", () => {
     });
   });
 
-  it("hides the exposure hint on dismiss", async () => {
-    mockMutateFn.mockResolvedValue({
-      status: "ready",
-      ciphertext: "ct",
-    });
+  it("auto-dismisses the exposure hint after six seconds", async () => {
+    vi.useFakeTimers();
+    try {
+      mockMutateFn.mockResolvedValue({
+        status: "ready",
+        ciphertext: "ct",
+      });
 
-    render(SharePage);
+      render(SharePage);
 
-    await vi.waitFor(() => {
-      expect(screen.getByTestId("share-view-hint-dismiss")).toBeTruthy();
-    });
+      await vi.waitFor(() => {
+        expect(
+          screen.getByText(/carried the key that unlocked this message/),
+        ).toBeTruthy();
+      });
 
-    await fireEvent.click(screen.getByTestId("share-view-hint-dismiss"));
+      await vi.advanceTimersByTimeAsync(6000);
 
-    expect(
-      screen.queryByText(/carried the key that unlocked this message/),
-    ).toBeNull();
+      expect(
+        screen.queryByText(/carried the key that unlocked this message/),
+      ).toBeNull();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("does not show the exposure hint on terminal states", async () => {

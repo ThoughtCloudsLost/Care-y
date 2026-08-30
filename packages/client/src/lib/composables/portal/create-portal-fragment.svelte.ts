@@ -3,6 +3,12 @@
  *
  * Handles the async sodium init, one-shot parse of location.hash,
  * and exposes state + seams for the page to wire navigation (strip).
+ *
+ * When the page loads without a fragment (or after the fragment was
+ * stripped), a hashchange event carrying a new non-empty hash resets
+ * the composable and re-runs the parse path. This lets a client
+ * re-paste a link into the address bar after a locale switch or
+ * other non-reloading navigation that previously left the page dead.
  */
 
 import { getSodium } from "@care-y/crypto";
@@ -44,9 +50,9 @@ export function createPortalFragment(
   readHash: () => string,
   routeChannelId: () => string,
 ): PortalFragmentState {
-  const hashPresent = isBrowser
-    ? Boolean(readHash() && readHash() !== "#")
-    : false;
+  let hashPresent = $state(
+    isBrowser ? Boolean(readHash() && readHash() !== "#") : false,
+  );
 
   let fragmentData = $state<FragmentData | null>(null);
   let fragmentResolved = $state(false);
@@ -70,6 +76,34 @@ export function createPortalFragment(
   $effect(() => {
     if (!isBrowser || hashPresent || fragmentResolved) return;
     fragmentResolved = true;
+  });
+
+  // Recovery: when a new non-empty hash arrives after the composable
+  // resolved with no valid fragment, reset and re-run the parse path.
+  // Our own strip never sets a hash (it replaces with a bare path),
+  // so empty-to-non-empty is unambiguous and cannot be our strip.
+  $effect(() => {
+    if (!isBrowser) return;
+
+    function onHashChange(): void {
+      const raw = readHash();
+      const hasHash = Boolean(raw && raw !== "#");
+      if (!hasHash) return;
+
+      // Only recover when we previously resolved with no valid data
+      if (fragmentData !== null) return;
+
+      // Reset internal state and re-run
+      initStarted = false;
+      fragmentResolved = false;
+      stripped = false;
+      hashPresent = true;
+    }
+
+    window.addEventListener("hashchange", onHashChange);
+    return () => {
+      window.removeEventListener("hashchange", onHashChange);
+    };
   });
 
   const hasValidFragment = $derived(fragmentResolved && fragmentData !== null);

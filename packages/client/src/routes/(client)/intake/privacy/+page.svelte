@@ -9,6 +9,7 @@
   import * as m from "$lib/paraglide/messages.js";
   import { getBrandingTitle } from "$lib/branding/title.svelte.js";
   import { getClientShellCtx } from "$lib/client-shell/context.js";
+  import { uiLocaleStore } from "$lib/stores/ui-locale.svelte.js";
 
   const orgName = $derived(getBrandingTitle());
 
@@ -25,60 +26,62 @@
   });
 </script>
 
-<BlockTitle large>{m.intake_privacy_title()}</BlockTitle>
+{#key uiLocaleStore.locale}
+  <BlockTitle large>{m.intake_privacy_title()}</BlockTitle>
 
-<BlockTitle>{m.intake_privacy_who_title()}</BlockTitle>
-<Block>
-  <p>{m.intake_privacy_who_body({ orgName })}</p>
-</Block>
+  <BlockTitle>{m.intake_privacy_who_title()}</BlockTitle>
+  <Block>
+    <p>{m.intake_privacy_who_body({ orgName })}</p>
+  </Block>
 
-<BlockTitle>{m.intake_privacy_what_title()}</BlockTitle>
-<Block>
-  <p>{m.intake_privacy_what_body()}</p>
-</Block>
+  <BlockTitle>{m.intake_privacy_what_title()}</BlockTitle>
+  <Block>
+    <p>{m.intake_privacy_what_body()}</p>
+  </Block>
 
-<BlockTitle>{m.intake_privacy_basis_title()}</BlockTitle>
-<Block>
-  <p>{m.intake_privacy_basis_body()}</p>
-</Block>
+  <BlockTitle>{m.intake_privacy_basis_title()}</BlockTitle>
+  <Block>
+    <p>{m.intake_privacy_basis_body()}</p>
+  </Block>
 
-<BlockTitle>{m.intake_privacy_sharing_title()}</BlockTitle>
-<Block>
-  <p>{m.intake_privacy_sharing_body()}</p>
-</Block>
+  <BlockTitle>{m.intake_privacy_sharing_title()}</BlockTitle>
+  <Block>
+    <p>{m.intake_privacy_sharing_body()}</p>
+  </Block>
 
-<BlockTitle>{m.intake_privacy_transfer_title()}</BlockTitle>
-<Block>
-  <p>{m.intake_privacy_transfer_body()}</p>
-</Block>
+  <BlockTitle>{m.intake_privacy_transfer_title()}</BlockTitle>
+  <Block>
+    <p>{m.intake_privacy_transfer_body()}</p>
+  </Block>
 
-<BlockTitle>{m.intake_privacy_retention_title()}</BlockTitle>
-<Block>
-  <p>{m.intake_privacy_retention_body()}</p>
-  <p class="retention-disclosure">
-    {m.intake_retention_disclosure()}
-  </p>
-</Block>
+  <BlockTitle>{m.intake_privacy_retention_title()}</BlockTitle>
+  <Block>
+    <p>{m.intake_privacy_retention_body()}</p>
+    <p class="retention-disclosure">
+      {m.intake_retention_disclosure()}
+    </p>
+  </Block>
 
-<BlockTitle>{m.intake_privacy_rights_title()}</BlockTitle>
-<Block>
-  <p>{m.intake_privacy_rights_body()}</p>
-</Block>
+  <BlockTitle>{m.intake_privacy_rights_title()}</BlockTitle>
+  <Block>
+    <p>{m.intake_privacy_rights_body()}</p>
+  </Block>
 
-<BlockTitle>{m.intake_privacy_complaint_title()}</BlockTitle>
-<Block>
-  <p>{m.intake_privacy_complaint_body()}</p>
-</Block>
+  <BlockTitle>{m.intake_privacy_complaint_title()}</BlockTitle>
+  <Block>
+    <p>{m.intake_privacy_complaint_body()}</p>
+  </Block>
 
-<BlockTitle>{m.intake_privacy_voluntary_title()}</BlockTitle>
-<Block>
-  <p>{m.intake_privacy_voluntary_body()}</p>
-</Block>
+  <BlockTitle>{m.intake_privacy_voluntary_title()}</BlockTitle>
+  <Block>
+    <p>{m.intake_privacy_voluntary_body()}</p>
+  </Block>
 
-<BlockTitle>{m.intake_privacy_cookies_title()}</BlockTitle>
-<Block>
-  <p>{m.intake_privacy_cookies_body()}</p>
-</Block>
+  <BlockTitle>{m.intake_privacy_cookies_title()}</BlockTitle>
+  <Block>
+    <p>{m.intake_privacy_cookies_body()}</p>
+  </Block>
+{/key}
 
 <style>
   p {
