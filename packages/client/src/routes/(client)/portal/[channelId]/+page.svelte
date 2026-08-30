@@ -53,6 +53,7 @@
   import SearchNavigator from "$lib/components/search/SearchNavigator.svelte";
   import SubNavbarFilterLayout from "$lib/shell/SubNavbarFilterLayout.svelte";
   import PortalComposer from "$lib/portal/PortalComposer.svelte";
+  import ContactCorrectionSheet from "$lib/portal/ContactCorrectionSheet.svelte";
   import { createChatPaginator } from "$lib/tickets/chat-paginator.svelte.js";
   import { createScrollManager } from "$lib/tickets/scroll-manager.svelte.js";
   import AccountCreateForm from "$lib/portal/AccountCreateForm.svelte";
@@ -65,6 +66,7 @@
   import { createPortalUpgrade } from "$lib/composables/portal/create-portal-upgrade.svelte.js";
   import { createPortalFilters } from "$lib/composables/portal/create-portal-filters.svelte.js";
   import { uiLocaleStore } from "$lib/stores/ui-locale.svelte.js";
+  import { useThreadChrome } from "$lib/shell/use-thread-chrome.svelte.js";
 
   // Route param; the fragment-derived channel id is the crypto authority,
   // this one only keys the queries.
@@ -130,6 +132,7 @@
   let sendError = $state("");
   let lastSentText = "";
   let composerRef = $state<PortalComposer | null>(null);
+  let correctionSheetOpen = $state(false);
 
   // Safe URL: org-configured exit target from bootstrap, else the default
   const safeUrl = $derived.by((): string => {
@@ -275,6 +278,18 @@
     scrollContainer: () => scroll.scrollContainerEl,
   });
 
+  const threadChrome = useThreadChrome({
+    get scrollEl() {
+      return scroll.scrollContainerEl;
+    },
+    get ready() {
+      return threadScrollReady;
+    },
+    get pinned() {
+      return searchActive;
+    },
+  });
+
   function openSearch(): void {
     searchActive = true;
     overlay.enter("");
@@ -295,6 +310,7 @@
   // once and start at the oldest; now that it opens on a page, starting at
   // the top would show the middle of a conversation with no way to tell.
   let didInitialScroll = false;
+  let threadScrollReady = $state(false);
 
   $effect(() => {
     if (didInitialScroll || paginator.items.length === 0) return;
@@ -304,6 +320,7 @@
     requestAnimationFrame(() => {
       el.scrollTop = el.scrollHeight;
       scroll.markScrolledInitially();
+      threadScrollReady = true;
     });
   });
 
@@ -465,6 +482,11 @@
       });
   }
 
+  function handleCorrectionSubmit(phone: string): void {
+    handleSend(m.portal_correction_message({ phone }), "contact_correction");
+    correctionSheetOpen = false;
+  }
+
   // Clear optimistic messages when server data refreshes
   $effect(() => {
     if (messagesQuery.data) {
@@ -569,7 +591,7 @@
         label: m.portal_correction_mode_button(),
         icon: UserPen,
         onclick: () => {
-          composerRef?.enterCorrectionMode();
+          correctionSheetOpen = true;
         },
       });
     }
@@ -589,16 +611,23 @@
 
   // --- Filter composable (Type / Author / Date) ---
 
+  // A getter rather than a plain object: this script scope survives the
+  // locale {#key} teardown below, so labels captured once would keep the
+  // first locale forever. The locale read inside makes the composable's
+  // deriveds recompute on switch.
   const portalFilters = createPortalFilters({
-    labels: {
-      filterType: m.ticket_filter_type(),
-      filterAuthor: m.ticket_filter_author(),
-      filterDate: m.ticket_filter_date(),
-      typeMessages: m.ticket_filter_type_messages(),
-      typeImages: m.ticket_filter_type_images(),
-      typeFiles: m.ticket_filter_type_files(),
-      authorYou: m.portal_you(),
-      authorSupport: m.portal_support_team(),
+    get labels() {
+      void uiLocaleStore.locale;
+      return {
+        filterType: m.ticket_filter_type(),
+        filterAuthor: m.ticket_filter_author(),
+        filterDate: m.ticket_filter_date(),
+        typeMessages: m.ticket_filter_type_messages(),
+        typeImages: m.ticket_filter_type_images(),
+        typeFiles: m.ticket_filter_type_files(),
+        authorYou: m.portal_you(),
+        authorSupport: m.portal_support_team(),
+      };
     },
   });
 
@@ -608,7 +637,12 @@
       safeUrl,
       actions: drawerActions,
       lockScroll: threadShowing,
-      ...(threadShowing ? { subnavbar: threadSubnavbar } : {}),
+      ...(threadShowing
+        ? {
+            subnavbar: threadSubnavbar,
+            subnavbarHidden: () => threadChrome.subnavbarHidden,
+          }
+        : {}),
     };
     return () => {
       shellContainer.current = undefined;
@@ -723,7 +757,12 @@
   {:else if portalSession.keyCheckPassed && portalSession.session}
     {@const activeSession = portalSession.session}
     <!-- State 4 + 5: Thread scrolls, composer pins to the bottom -->
-    <PageLayout lockScroll overlayBottomBar bind:scrollEl={threadScrollEl}>
+    <PageLayout
+      lockScroll
+      overlayBottomBar
+      underChrome
+      bind:scrollEl={threadScrollEl}
+    >
       {#snippet bottomBar()}
         <JumpToLatest
           visible={!scroll.isNearBottom && allMessages.length > 0}
@@ -812,6 +851,13 @@
       opened={hintShown}
       ondismiss={dismissHint}
       message={m.portal_web_chat_hint()}
+    />
+
+    <ContactCorrectionSheet
+      opened={correctionSheetOpen}
+      ondismiss={() => (correctionSheetOpen = false)}
+      pending={replyMutation.isPending}
+      onsubmit={handleCorrectionSubmit}
     />
   {/if}
 {/key}
