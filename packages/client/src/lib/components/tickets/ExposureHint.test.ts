@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, afterEach } from "vitest";
-import { render, cleanup } from "@testing-library/svelte";
+import { render, cleanup, fireEvent } from "@testing-library/svelte";
 import ExposureHint from "./ExposureHint.svelte";
 import type * as MessagesMod from "$lib/paraglide/messages.js";
 import type * as ShellContextMod from "$lib/shell/context.js";
@@ -11,6 +11,7 @@ vi.mock("$lib/paraglide/messages.js", async (importOriginal) => ({
     "SMS is not encrypted. Your phone provider can read it.",
   exposure_hint_call: () =>
     "This call routes through your phone provider. They can hear the call.",
+  exposure_hint_dismiss: () => "Got it",
 }));
 
 vi.mock("$lib/shell/context.js", async (importOriginal) => ({
@@ -60,13 +61,60 @@ describe("ExposureHint", () => {
       expect(container.textContent).not.toContain("SMS is not encrypted.");
     });
 
-    it("does not render a dismiss button", () => {
+    it("renders an OK dismiss button when opened", () => {
       const { container } = render(ExposureHint, {
         props: { type: "sms", opened: true, ondismiss: vi.fn() },
       });
 
-      const buttons = container.querySelectorAll("button");
-      expect(buttons.length).toBe(0);
+      const btn = container.querySelector("[data-testid='exposure-hint-ok']");
+      expect(btn).not.toBeNull();
+      expect(btn?.textContent).toContain("Got it");
+    });
+
+    it("OK button meets 44px touch target", () => {
+      const { container } = render(ExposureHint, {
+        props: { type: "sms", opened: true, ondismiss: vi.fn() },
+      });
+
+      const btn = container.querySelector(
+        "[data-testid='exposure-hint-ok']",
+      ) as HTMLElement;
+      expect(btn).not.toBeNull();
+      // The min-height/min-width is set via global class; verify the
+      // class is present (jsdom does not compute applied CSS from <style>).
+      expect(btn.className).toContain("hint-ok-btn");
+    });
+  });
+
+  describe("OK button dismiss", () => {
+    it("calls ondismiss immediately when OK is clicked", async () => {
+      const ondismiss = vi.fn();
+      const { container } = render(ExposureHint, {
+        props: { type: "sms", opened: true, ondismiss },
+      });
+
+      const btn = container.querySelector(
+        "[data-testid='exposure-hint-ok']",
+      ) as HTMLElement;
+      await fireEvent.click(btn);
+
+      expect(ondismiss).toHaveBeenCalledOnce();
+    });
+
+    it("OK dismiss fires before the auto-dismiss timer", async () => {
+      vi.useFakeTimers();
+      const ondismiss = vi.fn();
+      const { container } = render(ExposureHint, {
+        props: { type: "sms", opened: true, ondismiss },
+      });
+
+      vi.advanceTimersByTime(1_000);
+      const btn = container.querySelector(
+        "[data-testid='exposure-hint-ok']",
+      ) as HTMLElement;
+      await fireEvent.click(btn);
+
+      expect(ondismiss).toHaveBeenCalledOnce();
     });
   });
 

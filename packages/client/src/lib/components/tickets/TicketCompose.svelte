@@ -258,10 +258,6 @@
   }
 
   .correction-warning {
-    position: absolute;
-    bottom: calc(100% + 1.5rem);
-    left: 0;
-    right: 0;
     display: flex;
     align-items: center;
     gap: 0.375rem;
@@ -270,14 +266,9 @@
     font-weight: 600;
     color: var(--care);
     background: var(--care-soft);
-    border-radius: 8px 8px 0 0;
   }
 
   .compose-mode-indicator {
-    position: absolute;
-    bottom: 100%;
-    left: 0;
-    right: 0;
     display: flex;
     align-items: center;
     justify-content: space-between;

@@ -109,6 +109,16 @@
      * the page holds ciphertext and could not find a match if it tried.
      */
     onmatches?: (ids: readonly string[]) => void;
+    /** Active type filter values (mirrors org thread filter contract). */
+    filterTypes?: readonly string[];
+    /** Active author filter values ("__client__" or "__support__"). */
+    filterAuthors?: readonly string[];
+    /** Date range start for message filtering. */
+    filterDateFrom?: Date | null;
+    /** Date range end for message filtering. */
+    filterDateTo?: Date | null;
+    /** Called when the user clears all filters (for the empty-filter-state). */
+    onclearfilters?: () => void;
   }
 
   let {
@@ -125,6 +135,11 @@
     searchTerm,
     activeMatchId,
     onmatches,
+    filterTypes = [],
+    filterAuthors = [],
+    filterDateFrom = null,
+    filterDateTo = null,
+    onclearfilters,
   }: PortalThreadProps = $props();
 
   const highlighting = $derived(isHighlightable(searchTerm ?? ""));
@@ -179,6 +194,94 @@
       createdAt: msg.createdAt,
       editedAt: msg.editedAt,
     }));
+  });
+
+  // ── Filtering ──
+
+  /** followupIds that carry at least one image attachment. */
+  const imageFollowupIds = $derived.by((): ReadonlySet<string> => {
+    const ids = new SvelteSet<string>();
+    for (const att of attachments) {
+      if (att.contentType?.startsWith("image/") === true) {
+        ids.add(att.followupId);
+      }
+    }
+    return ids;
+  });
+
+  /** followupIds that carry at least one non-image attachment. */
+  const fileFollowupIds = $derived.by((): ReadonlySet<string> => {
+    const ids = new SvelteSet<string>();
+    for (const att of attachments) {
+      if (att.contentType !== null && !att.contentType.startsWith("image/")) {
+        ids.add(att.followupId);
+      }
+    }
+    return ids;
+  });
+
+  const hasActiveFilters = $derived(
+    filterTypes.length > 0 ||
+      filterAuthors.length > 0 ||
+      filterDateFrom !== null ||
+      filterDateTo !== null,
+  );
+
+  /** Apply type, author, and date filters to decrypted messages. */
+  const filteredMessages = $derived.by((): readonly DecryptedMessage[] => {
+    if (!hasActiveFilters) return decryptedMessages;
+
+    return decryptedMessages.filter((msg): boolean => {
+      // Author filter
+      if (filterAuthors.length > 0) {
+        const authorKey =
+          msg.direction === "from_client" ? "__client__" : "__support__";
+        if (!filterAuthors.includes(authorKey)) return false;
+      }
+
+      // Date filter
+      if (filterDateFrom !== null || filterDateTo !== null) {
+        const msgDate = new Date(msg.createdAt);
+        if (filterDateFrom !== null && msgDate < filterDateFrom) return false;
+        if (filterDateTo !== null) {
+          // Exclusive next-midnight bound instead of a mutated 23:59:59
+          // Date (svelte/prefer-svelte-reactivity forbids Date mutation).
+          const nextMidnight = new Date(
+            filterDateTo.getFullYear(),
+            filterDateTo.getMonth(),
+            filterDateTo.getDate() + 1,
+          );
+          if (msgDate >= nextMidnight) return false;
+        }
+      }
+
+      // Type filter
+      if (filterTypes.length > 0) {
+        const hasImage =
+          msg.followupId !== undefined && imageFollowupIds.has(msg.followupId);
+        const hasFile =
+          msg.followupId !== undefined && fileFollowupIds.has(msg.followupId);
+
+        let typeMatch = false;
+        for (const ft of filterTypes) {
+          if (ft === "message") {
+            typeMatch = true;
+            break;
+          }
+          if (ft === "__images__" && hasImage) {
+            typeMatch = true;
+            break;
+          }
+          if (ft === "__files__" && hasFile) {
+            typeMatch = true;
+            break;
+          }
+        }
+        if (!typeMatch) return false;
+      }
+
+      return true;
+    });
   });
 
   /** Index attachments by followupId for O(1) lookup per message. */
@@ -360,16 +463,30 @@
     <div class="empty-state" data-testid="portal-empty-state">
       <p>{m.portal_empty_thread()}</p>
     </div>
+  {:else if hasActiveFilters && filteredMessages.length === 0}
+    <div class="empty-state" data-testid="portal-filter-empty">
+      <p>{m.portal_filter_empty()}</p>
+      {#if onclearfilters}
+        <button
+          type="button"
+          class="clear-filter-link"
+          onclick={onclearfilters}
+          data-testid="portal-filter-clear"
+        >
+          {m.portal_filter_clear()}
+        </button>
+      {/if}
+    </div>
   {:else}
     <p class="expiry-note">{m.portal_expiry_note()}</p>
     <div class="portal-messages">
       <!-- Keyed by id, not index: prepending an older page renumbers every
            index, which would re-render the whole thread and lose the scroll
            anchor the paginator just measured. -->
-      {#each decryptedMessages as msg, idx (msg.id)}
+      {#each filteredMessages as msg, idx (msg.id)}
         {@const isSent = msg.direction === "from_client"}
         {@const prevAt =
-          idx > 0 ? decryptedMessages[idx - 1]?.createdAt : undefined}
+          idx > 0 ? filteredMessages[idx - 1]?.createdAt : undefined}
         {@const msgAttachments =
           msg.followupId !== undefined
             ? (attachmentsByFollowup.get(msg.followupId) ?? [])
@@ -495,15 +612,31 @@
 
   .empty-state {
     display: flex;
+    flex-direction: column;
     flex: 1;
     align-items: center;
     justify-content: center;
+    gap: var(--space-sm);
     min-height: 200px;
     padding: var(--space-xl);
     text-align: center;
     color: var(--muted);
     font-size: var(--text-sm);
     line-height: 1.6;
+  }
+
+  .clear-filter-link {
+    appearance: none;
+    border: none;
+    background: none;
+    color: var(--brand-text);
+    font-weight: 600;
+    font-size: var(--text-sm);
+    cursor: pointer;
+    padding: 4px 8px;
+    min-height: 44px;
+    display: flex;
+    align-items: center;
   }
 
   .expiry-note {

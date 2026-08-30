@@ -1,6 +1,7 @@
 <script lang="ts">
   import ShellToast from "$lib/shell/ShellToast.svelte";
   import * as m from "$lib/paraglide/messages.js";
+  import { Button } from "konsta/svelte";
 
   type HintType = "sms" | "call";
 
@@ -39,6 +40,18 @@
 {#if opened}
   <div class:no-transition={reducedMotion}>
     <ShellToast opened position="center">
+      {#snippet button()}
+        <Button
+          clear
+          small
+          inline
+          onclick={ondismiss}
+          class="hint-ok-btn"
+          data-testid="exposure-hint-ok"
+        >
+          {m.exposure_hint_dismiss()}
+        </Button>
+      {/snippet}
       <div class="exposure-content" role="status" aria-live="polite">
         {getMessage(type)}
       </div>
@@ -56,5 +69,10 @@
     font-size: 0.875rem;
     text-align: center;
     padding: 0.25rem 0;
+  }
+
+  :global(.hint-ok-btn) {
+    min-width: 44px;
+    min-height: 44px;
   }
 </style>

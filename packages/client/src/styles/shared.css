@@ -651,14 +651,31 @@ html.glass-dark.light
   display: none !important;
 }
 
-/* 16px floor: iOS zooms focused controls styled smaller.
-   Konsta ListInput uses Tailwind's text-base utility, which resolves
-   to var(--text-base) (13px in this project's scale). Override to
-   16px so iOS Safari does not zoom on focus. */
-.k-list-input input,
-.k-list-input textarea,
-.k-list-input select {
-  font-size: 16px !important;
+/* iOS 16px focus-zoom floor.
+   iOS Safari zooms any focused control whose computed font-size is
+   below 16px. This project's --text-base token (0.8125rem) resolves
+   to ~13.9px under Dynamic Type, which triggers the zoom. A narrow
+   selector in unlayered CSS proved unreliable against Tailwind v4's
+   cascade-layer ordering, so this rule lives in @layer base where
+   its !important beats any utility in @layer utilities.
+
+   max(1em, 16px) preserves the inherited size when it is already
+   >= 16px (Messagebar textarea, Searchbar input) and only lifts
+   undersized controls (ListInput, form-input, raw search inputs)
+   to the 16px floor. Scoped to iOS via -webkit-touch-callout so
+   Android and desktop are unaffected.
+
+   Covers: Konsta ListInput (text-base utility), Konsta Searchbar,
+   .form-input primitives, SearchNavigator raw <input>, TOTP/2FA
+   code inputs, and intake form fields. */
+@layer base {
+  @supports (-webkit-touch-callout: none) {
+    input,
+    textarea,
+    select {
+      font-size: max(1em, 16px) !important;
+    }
+  }
 }
 
 /* ── Form primitives ──

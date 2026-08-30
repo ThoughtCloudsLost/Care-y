@@ -29,7 +29,6 @@
     useQueryClient,
   } from "@tanstack/svelte-query";
   import * as m from "$lib/paraglide/messages.js";
-  import { SvelteSet } from "svelte/reactivity";
   import { trpc } from "$lib/trpc/index.js";
   import { portalKeys } from "$lib/query/keys.js";
   import { announceToLiveRegion } from "$lib/utils/announce.js";
@@ -58,11 +57,13 @@
   import { createScrollManager } from "$lib/tickets/scroll-manager.svelte.js";
   import AccountCreateForm from "$lib/portal/AccountCreateForm.svelte";
   import { X } from "@lucide/svelte";
+  import LinkErrorState from "$lib/portal/LinkErrorState.svelte";
   import JumpToLatest from "$lib/components/tickets/JumpToLatest.svelte";
   import { createPortalFragment } from "$lib/composables/portal/create-portal-fragment.svelte.js";
   import { createPortalSessionState } from "$lib/composables/portal/create-portal-session.svelte.js";
   // care-y-ignore-next-line route-no-db-import -- client composable, no database access; validator heuristic misreads the module
   import { createPortalUpgrade } from "$lib/composables/portal/create-portal-upgrade.svelte.js";
+  import { createPortalFilters } from "$lib/composables/portal/create-portal-filters.svelte.js";
   import { uiLocaleStore } from "$lib/stores/ui-locale.svelte.js";
 
   // Route param; the fragment-derived channel id is the crypto authority,
@@ -475,11 +476,14 @@
   // Web chat hint (state 5, session-once)
   // ---------------------------------------------------------------------------
 
-  function handleFirstFocus(): void {
-    if (!hintDismissed) {
-      hintShown = true;
-    }
-  }
+  // Show on thread entry (when the session is ready and thread renders),
+  // once per SPA session. The previous implementation only triggered on
+  // first composer input, which meant the hint never appeared if the user
+  // did not type. The spec calls for thread-entry appearance.
+  $effect(() => {
+    if (!threadShowing || hintDismissed) return;
+    hintShown = true;
+  });
 
   function dismissHint(): void {
     hintShown = false;
@@ -583,91 +587,20 @@
     return encode(frag.auth);
   });
 
-  // --- Filter pills (images / files) ---
+  // --- Filter composable (Type / Author / Date) ---
 
-  type AttachmentFilter = "images" | "files" | null;
-  let activeFilter = $state<AttachmentFilter>(null);
-
-  /** followupIds that carry at least one image attachment. */
-  const imageFollowupIds = $derived.by((): ReadonlySet<string> => {
-    const ids = new SvelteSet<string>();
-    for (const att of portalAttachments) {
-      if (att.contentType?.startsWith("image/") === true) {
-        ids.add(att.followupId);
-      }
-    }
-    return ids;
+  const portalFilters = createPortalFilters({
+    labels: {
+      filterType: m.ticket_filter_type(),
+      filterAuthor: m.ticket_filter_author(),
+      filterDate: m.ticket_filter_date(),
+      typeMessages: m.ticket_filter_type_messages(),
+      typeImages: m.ticket_filter_type_images(),
+      typeFiles: m.ticket_filter_type_files(),
+      authorYou: m.portal_you(),
+      authorSupport: m.portal_support_team(),
+    },
   });
-
-  /** followupIds that carry at least one non-image attachment. */
-  const fileFollowupIds = $derived.by((): ReadonlySet<string> => {
-    const ids = new SvelteSet<string>();
-    for (const att of portalAttachments) {
-      if (att.contentType !== null && !att.contentType.startsWith("image/")) {
-        ids.add(att.followupId);
-      }
-    }
-    return ids;
-  });
-
-  /** Messages filtered by the active pill. Null filter shows all. */
-  const filteredMessages = $derived.by(() => {
-    if (activeFilter === null) return allMessages;
-    const targetIds =
-      activeFilter === "images" ? imageFollowupIds : fileFollowupIds;
-    return allMessages.filter((msg) => targetIds.has(msg.followupId));
-  });
-
-  function handleFilterToggle(pillId: string): void {
-    // The layout hands back the id of a pill this page defined, so anything
-    // else is a wiring mistake rather than a filter nobody selected.
-    const next: AttachmentFilter =
-      pillId === "images" || pillId === "files" ? pillId : null;
-    activeFilter = activeFilter === next ? null : next;
-  }
-
-  const filterPillDefs = $derived.by(() => {
-    // Only show pills when there are attachments to filter
-    if (portalAttachments.length === 0) return [];
-
-    const pills: {
-      id: string;
-      label: string;
-      mode: "multi" | "single" | "date";
-      options: { value: string; label: string }[];
-      selected: ReadonlySet<string> | string | null;
-    }[] = [];
-
-    if (imageFollowupIds.size > 0) {
-      pills.push({
-        id: "images",
-        label: m.portal_filter_images(),
-        mode: "single",
-        options: [{ value: "images", label: m.portal_filter_images() }],
-        selected: activeFilter === "images" ? "images" : null,
-      });
-    }
-
-    if (fileFollowupIds.size > 0) {
-      pills.push({
-        id: "files",
-        label: m.portal_filter_files(),
-        mode: "single",
-        options: [{ value: "files", label: m.portal_filter_files() }],
-        selected: activeFilter === "files" ? "files" : null,
-      });
-    }
-
-    return pills;
-  });
-
-  const filterActiveCount = $derived(activeFilter !== null ? 1 : 0);
-
-  function clearFilters(): void {
-    activeFilter = null;
-  }
-
-  const noop = (): void => undefined;
 
   $effect(() => {
     shellContainer.current = {
@@ -706,18 +639,22 @@
   />
 {/snippet}
 
+{#snippet portalStats()}
+  <span>
+    {allMessages.length === 1
+      ? m.ticket_detail_one_message_stat()
+      : m.ticket_detail_messages_stat({
+          count: String(allMessages.length),
+        })}
+  </span>
+{/snippet}
+
 {#snippet threadSubnavbar()}
   <SubNavbarFilterLayout
     title={m.portal_title()}
     hideTitle
-    filterPills={{
-      pills: filterPillDefs,
-      activeCount: filterActiveCount,
-      ontoggle: handleFilterToggle,
-      onselect: handleFilterToggle,
-      ondatechange: noop,
-      onclearall: clearFilters,
-    }}
+    stats={portalStats}
+    filterPills={portalFilters.pills}
     searchNavigator={overlay.active ? searchNavigatorRow : undefined}
     onsearch={searchActive ? undefined : openSearch}
     searchLabel={m.portal_search_label()}
@@ -738,10 +675,10 @@
     </Block>
   {:else if !fragment.hasValidFragment}
     <!-- State 1: No/bad fragment -->
-    <BlockTitle>{m.portal_incomplete_link_title()}</BlockTitle>
-    <Block>
-      <p class="portal-body-text">{m.portal_incomplete_link()}</p>
-    </Block>
+    <LinkErrorState
+      title={m.portal_incomplete_link_title()}
+      body={m.portal_incomplete_link()}
+    />
   {:else if bootstrapQuery.isLoading}
     <!-- Loading bootstrap -->
     <Block>
@@ -755,10 +692,10 @@
     </Block>
   {:else if isDeadLink}
     <!-- State 2 error: Dead link -->
-    <BlockTitle>{m.portal_dead_link_title()}</BlockTitle>
-    <Block>
-      <p class="portal-body-text">{m.portal_dead_link()}</p>
-    </Block>
+    <LinkErrorState
+      title={m.portal_dead_link_title()}
+      body={m.portal_dead_link()}
+    />
   {:else if needsPassphrase}
     <!-- State 3: Passphrase gate -->
     <PortalPassphraseGate
@@ -796,7 +733,6 @@
           bind:this={composerRef}
           onsend={handleSend}
           pending={replyMutation.isPending}
-          onfirstfocus={handleFirstFocus}
           errorMessage={sendError || undefined}
           draftKey={routeChannelId}
         />
@@ -842,7 +778,7 @@
       {/if}
 
       <PortalThread
-        messages={filteredMessages}
+        messages={allMessages}
         decryptMessage={async (ep: string, n: string, ct: string) =>
           activeSession.decryptMessage(ep, n, ct)}
         decryptAttachmentKey={async (ep: string, n: string, ct: string) =>
@@ -864,6 +800,11 @@
         onmatches={(ids: readonly string[]) => {
           matchIds = ids;
         }}
+        filterTypes={portalFilters.filterTypesArr}
+        filterAuthors={portalFilters.filterAuthorsArr}
+        filterDateFrom={portalFilters.filterDateFrom}
+        filterDateTo={portalFilters.filterDateTo}
+        onclearfilters={() => portalFilters.clearAll()}
       />
     </PageLayout>
 

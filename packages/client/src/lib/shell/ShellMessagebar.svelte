@@ -265,8 +265,20 @@
       color-mix(in srgb, var(--paper) 85%, transparent) 60%,
       transparent
     );
-    mask-image: linear-gradient(to top, black 60%, transparent);
-    -webkit-mask-image: linear-gradient(to top, black 60%, transparent);
+    mask-image: linear-gradient(
+      to top,
+      transparent,
+      black 4px,
+      black 60%,
+      transparent
+    );
+    -webkit-mask-image: linear-gradient(
+      to top,
+      transparent,
+      black 4px,
+      black 60%,
+      transparent
+    );
     pointer-events: none;
     z-index: -1;
   }

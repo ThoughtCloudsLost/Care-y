@@ -13,6 +13,7 @@ import type { IncomingMessage, ServerResponse } from "node:http";
 import type { SessionRepository } from "../auth/session-repository.js";
 import type { OrgId, OrgSchema, UserId } from "@care-y/shared";
 import { userIdSchema, sessionTokenSchema } from "@care-y/shared";
+import { withNoStore } from "../http/response-headers.js";
 
 /** Maximum relay request body size (64KB). */
 export const MAX_RELAY_BODY = 64 * 1024;
@@ -303,7 +304,7 @@ export function sendJsonResponse(
   body: Record<string, unknown>,
 ): void {
   const json = JSON.stringify(body);
-  res.writeHead(status, { "Content-Type": "application/json" });
+  res.writeHead(status, withNoStore({ "Content-Type": "application/json" }));
   res.end(json);
 }
 

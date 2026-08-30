@@ -12,7 +12,7 @@
 
   const NATIVE_NAMES = new Map<string, string>([
     ["en", "English"],
-    ["es", "Espanol"],
+    ["es", "Español"],
   ]);
 </script>
 

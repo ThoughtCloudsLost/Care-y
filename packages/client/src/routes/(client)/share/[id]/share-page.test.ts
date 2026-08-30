@@ -110,11 +110,15 @@ vi.mock("$lib/paraglide/messages.js", async (importOriginal) => ({
   share_view_heading: () => "A message for you",
   share_view_one_time_notice: () =>
     "This link has now been used and cannot be opened again. Save what you need before closing this page.",
+  share_view_opened_title: () => "Already opened",
   share_view_opened: () =>
     "This link has already been opened and cannot be viewed again.",
+  share_view_expired_title: () => "Expired link",
   share_view_expired: () => "This link has expired and is no longer available.",
+  share_view_not_found_title: () => "Link not found",
   share_view_not_found: () =>
     "This link was not found. It may have already expired.",
+  share_view_bad_link_title: () => "Incomplete link",
   share_view_bad_link: () =>
     "Check that you opened the complete link from your message.",
   share_view_loading: () => "Loading secure message...",
@@ -246,41 +250,49 @@ describe("share view page", () => {
     });
   });
 
-  it("renders opened state", async () => {
+  it("renders opened state with title and body", async () => {
     mockMutateFn.mockResolvedValue({ status: "opened" });
 
     render(SharePage);
 
     await vi.waitFor(() => {
+      expect(screen.getByText("Already opened")).toBeTruthy();
       expect(screen.getByText(/already been opened/)).toBeTruthy();
     });
   });
 
-  it("renders expired state", async () => {
+  it("renders expired state with title and body", async () => {
     mockMutateFn.mockResolvedValue({ status: "expired" });
 
     render(SharePage);
 
     await vi.waitFor(() => {
+      expect(screen.getByText("Expired link")).toBeTruthy();
       expect(screen.getByText(/expired/)).toBeTruthy();
     });
   });
 
-  it("renders not-found state", async () => {
+  it("renders not-found state with title and body", async () => {
     mockMutateFn.mockResolvedValue({ status: "not_found" });
 
     render(SharePage);
 
     await vi.waitFor(() => {
-      expect(screen.getByText(/not found/i)).toBeTruthy();
+      expect(screen.getByText("Link not found")).toBeTruthy();
+      expect(
+        screen.getByText(
+          "This link was not found. It may have already expired.",
+        ),
+      ).toBeTruthy();
     });
   });
 
-  it("renders bad-link state when fragment is missing", async () => {
+  it("renders bad-link state with title when fragment is missing", async () => {
     setLocationHash("");
     render(SharePage);
 
     await vi.waitFor(() => {
+      expect(screen.getByText("Incomplete link")).toBeTruthy();
       expect(
         screen.getByText(/Check that you opened the complete link/),
       ).toBeTruthy();

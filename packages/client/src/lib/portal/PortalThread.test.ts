@@ -376,4 +376,114 @@ describe("PortalThread", () => {
       });
     });
   });
+
+  // ── Filtering ──────────────────────────────────────────────────────
+
+  describe("filtering", () => {
+    it("filters messages by author direction", async () => {
+      const ctx = buildDecryptContext();
+
+      const messages = [
+        makeMessage("From support", "to_client", ctx.keypairPublic),
+        makeMessage("From client", "from_client", ctx.keypairPublic),
+      ];
+
+      const { container, rerender } = render(PortalThread, {
+        props: {
+          messages,
+          decryptMessage: ctx.decryptMessage,
+          decryptAttachmentKey: ctx.decryptAttachmentKey,
+          decryptAttachmentBlob: ctx.decryptAttachmentBlob,
+          loading: false,
+          filterAuthors: ["__client__"],
+        },
+      });
+
+      await vi.waitFor(() => {
+        const bubbles = container.querySelectorAll(
+          "[data-testid='conversation-bubble']",
+        );
+        expect(bubbles.length).toBe(1);
+      });
+
+      // Only the sent (from_client) message should render
+      expect(container.querySelector('[data-direction="sent"]')).toBeTruthy();
+      expect(container.querySelector('[data-direction="received"]')).toBeNull();
+
+      // Clear filters to see both again
+      await rerender({
+        messages,
+        decryptMessage: ctx.decryptMessage,
+        decryptAttachmentKey: ctx.decryptAttachmentKey,
+        decryptAttachmentBlob: ctx.decryptAttachmentBlob,
+        loading: false,
+        filterAuthors: [],
+      });
+
+      await vi.waitFor(() => {
+        const bubbles = container.querySelectorAll(
+          "[data-testid='conversation-bubble']",
+        );
+        expect(bubbles.length).toBe(2);
+      });
+    });
+
+    it("shows empty-filter state when all messages are filtered out", async () => {
+      const ctx = buildDecryptContext();
+
+      const messages = [
+        makeMessage("From support only", "to_client", ctx.keypairPublic),
+      ];
+
+      const { queryByTestId } = render(PortalThread, {
+        props: {
+          messages,
+          decryptMessage: ctx.decryptMessage,
+          decryptAttachmentKey: ctx.decryptAttachmentKey,
+          decryptAttachmentBlob: ctx.decryptAttachmentBlob,
+          loading: false,
+          filterAuthors: ["__client__"],
+        },
+      });
+
+      await vi.waitFor(() => {
+        expect(queryByTestId("portal-filter-empty")).toBeTruthy();
+      });
+    });
+
+    it("filters messages by date range", async () => {
+      const ctx = buildDecryptContext();
+      const old = "2024-01-01T12:00:00.000Z";
+      const recent = "2024-06-15T12:00:00.000Z";
+
+      const messages = [
+        makeMessage("Old msg", "to_client", ctx.keypairPublic, null, old),
+        makeMessage(
+          "Recent msg",
+          "from_client",
+          ctx.keypairPublic,
+          null,
+          recent,
+        ),
+      ];
+
+      const { container } = render(PortalThread, {
+        props: {
+          messages,
+          decryptMessage: ctx.decryptMessage,
+          decryptAttachmentKey: ctx.decryptAttachmentKey,
+          decryptAttachmentBlob: ctx.decryptAttachmentBlob,
+          loading: false,
+          filterDateFrom: new Date("2024-06-01"),
+        },
+      });
+
+      await vi.waitFor(() => {
+        const bubbles = container.querySelectorAll(
+          "[data-testid='conversation-bubble']",
+        );
+        expect(bubbles.length).toBe(1);
+      });
+    });
+  });
 });

@@ -401,6 +401,19 @@
     overflow: visible !important;
   }
 
+  /* Invisible 44px touch hit area (WCAG 2.5.8 / Apple HIG 44pt).
+     Vertical expansion is -8px each side (28px + 16px = 44px).
+     Horizontal expansion is capped at -4px per side so the 6px
+     inter-button gap keeps at least 2px of effective separation. */
+  :global(.sort-btn)::after,
+  :global(.select-btn)::after,
+  :global(.manage-btn)::after,
+  :global(.filter-search-btn)::after {
+    content: "";
+    position: absolute;
+    inset: -8px -4px;
+  }
+
   :global(.sort-btn svg),
   :global(.select-btn svg),
   :global(.manage-btn svg) {

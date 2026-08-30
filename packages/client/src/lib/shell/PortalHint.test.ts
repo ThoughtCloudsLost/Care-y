@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, afterEach } from "vitest";
-import { render, cleanup } from "@testing-library/svelte";
+import { render, cleanup, fireEvent } from "@testing-library/svelte";
 import PortalHint from "./PortalHint.svelte";
 
 // jsdom lacks Web Animations API (used by Konsta transitions).
@@ -44,10 +44,16 @@ describe("PortalHint", () => {
       );
     });
 
-    it("does not render a dismiss button", () => {
-      const { container } = render(PortalHint, { props: { ...baseProps } });
-      const buttons = container.querySelectorAll("button");
-      expect(buttons.length).toBe(0);
+    it("renders an OK dismiss button that calls ondismiss", async () => {
+      const ondismiss = vi.fn();
+      const { container } = render(PortalHint, {
+        props: { ...baseProps, ondismiss },
+      });
+      const btn = container.querySelector("[data-testid='portal-hint-ok']");
+      expect(btn).not.toBeNull();
+      expect(btn?.textContent).toContain("Got it");
+      await fireEvent.click(btn as HTMLElement);
+      expect(ondismiss).toHaveBeenCalled();
     });
   });
 

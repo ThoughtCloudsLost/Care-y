@@ -6,12 +6,13 @@
  */
 
 import * as m from "$lib/paraglide/messages.js";
+import { getLocale } from "$lib/paraglide/runtime.js";
 
 /**
  * Returns a date separator label for the chat timeline.
- * Uses Paraglide i18n for "Today" and "Yesterday", browser locale for
- * month names. Shows "Month Day" or "Month Day, Year" if the year
- * differs from the current year.
+ * Uses Paraglide i18n for "Today" and "Yesterday", and the active
+ * Paraglide locale tag for absolute month names. Shows "Month Day"
+ * or "Month Day, Year" if the year differs from the current year.
  */
 export function formatDateSeparator(dateStr: string): string {
   const date = new Date(dateStr);
@@ -32,24 +33,31 @@ export function formatDateSeparator(dateStr: string): string {
     ? { month: "long", day: "numeric" }
     : { month: "long", day: "numeric", year: "numeric" };
 
-  return date.toLocaleDateString(undefined, options);
+  return date.toLocaleDateString(getLocale(), options);
 }
 
 /**
  * Formats an ISO timestamp as a short calendar date (e.g., Jan 15, 2026).
  * Used for record metadata such as created dates on list rows.
  *
- * The formatter is constructed once at module scope. Intl.DateTimeFormat is
- * expensive to build, and list surfaces call this once per rendered row.
+ * Intl.DateTimeFormat is expensive to build and list surfaces call this
+ * once per rendered row, so formatters are cached per locale rather than
+ * built at module scope (which would freeze the locale at import time).
  */
-const shortDateFormatter = new Intl.DateTimeFormat(undefined, {
-  year: "numeric",
-  month: "short",
-  day: "numeric",
-});
+const shortDateFormatters = new Map<string, Intl.DateTimeFormat>();
 
 export function formatShortDate(iso: string): string {
-  return shortDateFormatter.format(new Date(iso));
+  const locale = getLocale();
+  let formatter = shortDateFormatters.get(locale);
+  if (formatter === undefined) {
+    formatter = new Intl.DateTimeFormat(locale, {
+      year: "numeric",
+      month: "short",
+      day: "numeric",
+    });
+    shortDateFormatters.set(locale, formatter);
+  }
+  return formatter.format(new Date(iso));
 }
 
 /**

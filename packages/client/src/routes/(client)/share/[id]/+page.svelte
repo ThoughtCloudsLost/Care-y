@@ -9,6 +9,7 @@
   import { decryptShare } from "$lib/portal/share-crypto.js";
   import { announceToLiveRegion } from "$lib/utils/announce.js";
   import PortalHint from "$lib/shell/PortalHint.svelte";
+  import LinkErrorState from "$lib/portal/LinkErrorState.svelte";
   import { getClientShellCtx } from "$lib/client-shell/context.js";
   import { uiLocaleStore } from "$lib/stores/ui-locale.svelte.js";
 
@@ -134,21 +135,29 @@
       message={m.share_view_hint()}
     />
   {:else if viewState.kind === "opened"}
-    <Block>
-      <p class="share-terminal-text">{m.share_view_opened()}</p>
-    </Block>
+    <LinkErrorState
+      title={m.share_view_opened_title()}
+      body={m.share_view_opened()}
+      testId="share-opened"
+    />
   {:else if viewState.kind === "expired"}
-    <Block>
-      <p class="share-terminal-text">{m.share_view_expired()}</p>
-    </Block>
+    <LinkErrorState
+      title={m.share_view_expired_title()}
+      body={m.share_view_expired()}
+      testId="share-expired"
+    />
   {:else if viewState.kind === "notFound"}
-    <Block>
-      <p class="share-terminal-text">{m.share_view_not_found()}</p>
-    </Block>
+    <LinkErrorState
+      title={m.share_view_not_found_title()}
+      body={m.share_view_not_found()}
+      testId="share-not-found"
+    />
   {:else if viewState.kind === "badLink"}
-    <Block>
-      <p class="share-terminal-text">{m.share_view_bad_link()}</p>
-    </Block>
+    <LinkErrorState
+      title={m.share_view_bad_link_title()}
+      body={m.share_view_bad_link()}
+      testId="share-bad-link"
+    />
   {/if}
 {/key}
 
@@ -178,9 +187,5 @@
     font-size: var(--text-sm);
     padding: 0 var(--page-pad-x);
     margin-top: var(--space-md);
-  }
-
-  .share-terminal-text {
-    color: var(--ink);
   }
 </style>

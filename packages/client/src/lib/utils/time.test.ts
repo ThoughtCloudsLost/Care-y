@@ -1,12 +1,20 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
 import type * as ParaglideMessages from "$lib/paraglide/messages.js";
+import type * as ParaglideRuntime from "$lib/paraglide/runtime.js";
 
 // vi.mock required: tests pin deterministic message strings for assertions.
 vi.mock("$lib/paraglide/messages.js", async (importOriginal) => ({
   ...(await importOriginal<typeof ParaglideMessages>()),
   ticket_date_today: () => "Today",
   ticket_date_yesterday: () => "Yesterday",
+}));
+
+// Mock getLocale so tests can control which locale the formatter uses.
+let mockLocale = "en";
+vi.mock("$lib/paraglide/runtime.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof ParaglideRuntime>()),
+  getLocale: () => mockLocale,
 }));
 
 import {
@@ -20,6 +28,7 @@ import {
 const NOW = new Date("2026-04-01T12:00:00Z");
 
 beforeEach(() => {
+  mockLocale = "en";
   vi.useFakeTimers();
   vi.setSystemTime(NOW);
 });
@@ -48,6 +57,20 @@ describe("formatDateSeparator", () => {
     expect(result).toContain("20");
     expect(result).toContain("2025");
   });
+
+  it("formats month names in Spanish when locale is es", () => {
+    mockLocale = "es";
+    // January 15 in Spanish should contain "enero", not "January".
+    const result = formatDateSeparator("2026-01-15T12:00:00Z");
+    expect(result.toLowerCase()).toContain("enero");
+    expect(result).not.toContain("January");
+  });
+
+  it("formats month names in English when locale is en", () => {
+    mockLocale = "en";
+    const result = formatDateSeparator("2026-01-15T12:00:00Z");
+    expect(result).toContain("January");
+  });
 });
 
 describe("formatShortDate", () => {
@@ -74,6 +97,15 @@ describe("formatShortDate", () => {
     expect(formatShortDate(MIDDAY)).not.toBe(
       formatShortDate("2026-02-20T12:00:00.000Z"),
     );
+  });
+
+  it("uses the active locale for the month abbreviation", () => {
+    mockLocale = "es";
+    // Spanish short month for January is "ene", English is "Jan".
+    expect(formatShortDate(MIDDAY).toLowerCase()).toContain("ene");
+    expect(formatShortDate(MIDDAY)).not.toContain("Jan");
+    mockLocale = "en";
+    expect(formatShortDate(MIDDAY)).toContain("Jan");
   });
 });
 

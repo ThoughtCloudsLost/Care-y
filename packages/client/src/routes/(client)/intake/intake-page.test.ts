@@ -12,7 +12,9 @@ import type * as ParaglideRuntime from "$lib/paraglide/runtime.js";
 
 // --- Controllable mock state ---
 
-let mockLocale = "en";
+// vi.hoisted: the ui-locale store calls getLocale() at module scope, so
+// the mock factory runs before top-level let declarations initialize.
+const localeState = vi.hoisted(() => ({ current: "en" }));
 let mockOrgKey: Uint8Array | null = new Uint8Array(32);
 let mockOrgKeyLoading = false;
 let mockPowRequired = false;
@@ -167,7 +169,7 @@ vi.mock("$lib/utils/announce.js", async (importOriginal) => ({
 // so tests can simulate Spanish visitors without a real locale cookie.
 vi.mock("$lib/paraglide/runtime.js", async (importOriginal) => ({
   ...(await importOriginal<typeof ParaglideRuntime>()),
-  getLocale: () => mockLocale,
+  getLocale: () => localeState.current,
 }));
 
 vi.mock("$lib/trpc/index.js", async (importOriginal) => ({
@@ -322,7 +324,7 @@ import IntakePage from "./+page.svelte";
 
 describe("intake page", () => {
   beforeEach(() => {
-    mockLocale = "en";
+    localeState.current = "en";
     mockOrgKey = new Uint8Array(32);
     mockOrgKeyLoading = false;
     mockPowRequired = false;
@@ -774,7 +776,7 @@ describe("intake page", () => {
   // -----------------------------------------------------------------
 
   it("Spanish visitor sees Spanish labels and placeholder on the default form", () => {
-    mockLocale = "es";
+    localeState.current = "es";
     render(IntakePage);
 
     // Label resolves to Spanish via localizeMsg + visitorLocale
@@ -789,7 +791,7 @@ describe("intake page", () => {
   });
 
   it("Spanish visitor sees Spanish labels on a custom form", async () => {
-    mockLocale = "es";
+    localeState.current = "es";
 
     // Set up a custom form with bilingual fields
     const { decryptFieldContent } =
@@ -832,7 +834,7 @@ describe("intake page", () => {
   });
 
   it("queue-facing submission labels stay in base locale for a Spanish visitor", async () => {
-    mockLocale = "es";
+    localeState.current = "es";
     mockMutateAsync.mockResolvedValue({ reference: "calm-pebble-7" });
 
     render(IntakePage);

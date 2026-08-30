@@ -594,9 +594,6 @@
 
     <!-- Support label (not language-specific, part of branding blob) -->
     <div class="sheet-group">
-      <span class="group-label">
-        {m.admin_terminology_support_label_label()}
-      </span>
       <List nested class="term-list">
         <ListInput
           label={m.admin_terminology_support_label_label()}

@@ -371,6 +371,7 @@ describe("sendJsonResponse", () => {
     });
     expect(res.writeHead).toHaveBeenCalledWith(200, {
       "Content-Type": "application/json",
+      "Cache-Control": "private, no-store",
     });
     expect(res.end).toHaveBeenCalledWith('{"messageId":"SM_123"}');
   });
@@ -382,6 +383,7 @@ describe("sendRelayError", () => {
     sendRelayError(res as unknown as ServerResponse, 400, "MISSING_FIELDS");
     expect(res.writeHead).toHaveBeenCalledWith(400, {
       "Content-Type": "application/json",
+      "Cache-Control": "private, no-store",
     });
     expect(res.end).toHaveBeenCalledWith('{"error":"MISSING_FIELDS"}');
   });
