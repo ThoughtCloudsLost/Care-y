@@ -443,7 +443,10 @@
   }}
   onreply={portalCapable ? () => compose?.activateReply() : undefined}
   ontextclient={hasPhone
-    ? () => exposureHint.show("sms", () => compose?.activateSms())
+    ? () => {
+        exposureHint.show("sms");
+        compose?.activateSms();
+      }
     : undefined}
   onattach={(file: File) => {
     compose?.activateReply();

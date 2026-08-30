@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, afterEach } from "vitest";
-import { render, cleanup, fireEvent } from "@testing-library/svelte";
+import { render, cleanup } from "@testing-library/svelte";
 import PortalHint from "./PortalHint.svelte";
 
 // jsdom lacks Web Animations API (used by Konsta transitions).
@@ -12,17 +12,18 @@ if (typeof Element.prototype.animate !== "function") {
   }) as unknown as Element["animate"];
 }
 
+vi.useFakeTimers();
+
 afterEach(() => {
   cleanup();
   vi.clearAllMocks();
+  vi.useRealTimers();
 });
 
 const baseProps = {
   opened: true,
   ondismiss: vi.fn(),
   message: "What you wrote has been encrypted.",
-  dismissLabel: "Got it",
-  dismissTestid: "intake-hint-dismiss",
 };
 
 describe("PortalHint", () => {
@@ -43,13 +44,10 @@ describe("PortalHint", () => {
       );
     });
 
-    it("renders the dismiss button with the given label and testid", () => {
+    it("does not render a dismiss button", () => {
       const { container } = render(PortalHint, { props: { ...baseProps } });
-      const dismissBtn = container.querySelector(
-        '[data-testid="intake-hint-dismiss"]',
-      );
-      expect(dismissBtn).not.toBeNull();
-      expect(dismissBtn!.textContent!.trim()).toBe("Got it");
+      const buttons = container.querySelectorAll("button");
+      expect(buttons.length).toBe(0);
     });
   });
 
@@ -62,19 +60,46 @@ describe("PortalHint", () => {
     });
   });
 
-  describe("interactions", () => {
-    it("calls ondismiss when the dismiss button is clicked", async () => {
+  describe("auto-dismiss", () => {
+    it("calls ondismiss after 6 seconds", () => {
+      vi.useFakeTimers();
       const ondismiss = vi.fn();
-      const { container } = render(PortalHint, {
+      render(PortalHint, {
         props: { ...baseProps, ondismiss },
       });
 
-      const dismissBtn = container.querySelector(
-        '[data-testid="intake-hint-dismiss"]',
-      )!;
-      await fireEvent.click(dismissBtn);
+      expect(ondismiss).not.toHaveBeenCalled();
 
+      vi.advanceTimersByTime(5_999);
+      expect(ondismiss).not.toHaveBeenCalled();
+
+      vi.advanceTimersByTime(1);
       expect(ondismiss).toHaveBeenCalledOnce();
+    });
+
+    it("does not start a timer when opened is false", () => {
+      vi.useFakeTimers();
+      const ondismiss = vi.fn();
+      render(PortalHint, {
+        props: { ...baseProps, opened: false, ondismiss },
+      });
+
+      vi.advanceTimersByTime(10_000);
+      expect(ondismiss).not.toHaveBeenCalled();
+    });
+
+    it("cleans up timer on unmount before firing", () => {
+      vi.useFakeTimers();
+      const ondismiss = vi.fn();
+      const { unmount } = render(PortalHint, {
+        props: { ...baseProps, ondismiss },
+      });
+
+      vi.advanceTimersByTime(3_000);
+      unmount();
+      vi.advanceTimersByTime(10_000);
+
+      expect(ondismiss).not.toHaveBeenCalled();
     });
   });
 });

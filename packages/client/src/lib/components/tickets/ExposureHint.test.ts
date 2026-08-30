@@ -1,17 +1,20 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, afterEach } from "vitest";
-import { render, cleanup, fireEvent } from "@testing-library/svelte";
+import { render, cleanup } from "@testing-library/svelte";
 import ExposureHint from "./ExposureHint.svelte";
+import type * as MessagesMod from "$lib/paraglide/messages.js";
+import type * as ShellContextMod from "$lib/shell/context.js";
 
-vi.mock("$lib/paraglide/messages.js", () => ({
+vi.mock("$lib/paraglide/messages.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof MessagesMod>()),
   exposure_hint_sms: () =>
     "SMS is not encrypted. Your phone provider can read it.",
   exposure_hint_call: () =>
     "This call routes through your phone provider. They can hear the call.",
-  exposure_hint_dismiss: () => "Got it",
 }));
 
-vi.mock("$lib/shell/context.js", () => ({
+vi.mock("$lib/shell/context.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof ShellContextMod>()),
   getSectionRailCtx: () => ({ current: undefined }),
   getScrollContainer: () => () => undefined,
   getTabbarOverrideCtx: () => ({ current: undefined }),
@@ -19,9 +22,12 @@ vi.mock("$lib/shell/context.js", () => ({
   getNavbarOverrideCtx: () => ({ current: undefined }),
 }));
 
+vi.useFakeTimers();
+
 afterEach(() => {
   cleanup();
   vi.clearAllMocks();
+  vi.useRealTimers();
 });
 
 describe("ExposureHint", () => {
@@ -54,16 +60,13 @@ describe("ExposureHint", () => {
       expect(container.textContent).not.toContain("SMS is not encrypted.");
     });
 
-    it("renders dismiss button with correct text", () => {
+    it("does not render a dismiss button", () => {
       const { container } = render(ExposureHint, {
         props: { type: "sms", opened: true, ondismiss: vi.fn() },
       });
 
-      const dismissBtn = container.querySelector(
-        '[data-testid="exposure-dismiss"]',
-      );
-      expect(dismissBtn).not.toBeNull();
-      expect(dismissBtn!.textContent!.trim()).toBe("Got it");
+      const buttons = container.querySelectorAll("button");
+      expect(buttons.length).toBe(0);
     });
   });
 
@@ -87,19 +90,46 @@ describe("ExposureHint", () => {
     });
   });
 
-  describe("interactions", () => {
-    it("calls ondismiss when dismiss button is clicked", async () => {
+  describe("auto-dismiss", () => {
+    it("calls ondismiss after 6 seconds", () => {
+      vi.useFakeTimers();
       const ondismiss = vi.fn();
-      const { container } = render(ExposureHint, {
+      render(ExposureHint, {
         props: { type: "sms", opened: true, ondismiss },
       });
 
-      const dismissBtn = container.querySelector(
-        '[data-testid="exposure-dismiss"]',
-      )!;
-      await fireEvent.click(dismissBtn);
+      expect(ondismiss).not.toHaveBeenCalled();
 
+      vi.advanceTimersByTime(5_999);
+      expect(ondismiss).not.toHaveBeenCalled();
+
+      vi.advanceTimersByTime(1);
       expect(ondismiss).toHaveBeenCalledOnce();
+    });
+
+    it("does not start a timer when opened is false", () => {
+      vi.useFakeTimers();
+      const ondismiss = vi.fn();
+      render(ExposureHint, {
+        props: { type: "sms", opened: false, ondismiss },
+      });
+
+      vi.advanceTimersByTime(10_000);
+      expect(ondismiss).not.toHaveBeenCalled();
+    });
+
+    it("cleans up timer on unmount before firing", () => {
+      vi.useFakeTimers();
+      const ondismiss = vi.fn();
+      const { unmount } = render(ExposureHint, {
+        props: { type: "call", opened: true, ondismiss },
+      });
+
+      vi.advanceTimersByTime(3_000);
+      unmount();
+      vi.advanceTimersByTime(10_000);
+
+      expect(ondismiss).not.toHaveBeenCalled();
     });
   });
 });

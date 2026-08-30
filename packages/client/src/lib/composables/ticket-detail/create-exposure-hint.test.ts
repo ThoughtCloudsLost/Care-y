@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { beforeEach, describe, it, expect, vi } from "vitest";
+import { beforeEach, describe, it, expect } from "vitest";
 import {
   createExposureHint,
   _resetSessionShown,
@@ -13,74 +13,53 @@ describe("createExposureHint", () => {
   describe("show", () => {
     it("opens the hint on first invocation for a type", () => {
       const hint = createExposureHint();
-      const callback = vi.fn();
 
-      hint.show("sms", callback);
+      hint.show("sms");
 
       expect(hint.open).toBe(true);
       expect(hint.type).toBe("sms");
-      expect(callback).not.toHaveBeenCalled();
     });
 
-    it("skips the hint and calls callback directly on second invocation", () => {
+    it("skips the hint on second invocation (once per session)", () => {
       const hint = createExposureHint();
-      const first = vi.fn();
-      const second = vi.fn();
 
-      hint.show("sms", first);
+      hint.show("sms");
       hint.dismiss();
 
-      hint.show("sms", second);
+      hint.show("sms");
 
       expect(hint.open).toBe(false);
-      expect(second).toHaveBeenCalledOnce();
     });
 
     it("tracks sms and call types independently", () => {
       const hint = createExposureHint();
-      const smsCallback = vi.fn();
-      const callCallback = vi.fn();
 
-      hint.show("sms", smsCallback);
+      hint.show("sms");
       expect(hint.open).toBe(true);
       expect(hint.type).toBe("sms");
       hint.dismiss();
 
-      hint.show("call", callCallback);
+      hint.show("call");
       expect(hint.open).toBe(true);
       expect(hint.type).toBe("call");
-      expect(callCallback).not.toHaveBeenCalled();
     });
   });
 
   describe("dismiss", () => {
-    it("closes the hint and invokes the pending callback", () => {
+    it("closes the hint", () => {
       const hint = createExposureHint();
-      const callback = vi.fn();
 
-      hint.show("call", callback);
+      hint.show("call");
       hint.dismiss();
 
       expect(hint.open).toBe(false);
-      expect(callback).toHaveBeenCalledOnce();
     });
 
-    it("is safe to call when no action is pending", () => {
+    it("is safe to call when no hint is showing", () => {
       const hint = createExposureHint();
       expect(() => {
         hint.dismiss();
       }).not.toThrow();
-    });
-
-    it("clears the pending action after firing it", () => {
-      const hint = createExposureHint();
-      const callback = vi.fn();
-
-      hint.show("call", callback);
-      hint.dismiss();
-      hint.dismiss();
-
-      expect(callback).toHaveBeenCalledOnce();
     });
   });
 });

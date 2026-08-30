@@ -1380,8 +1380,6 @@
     message={continuationLink !== null
       ? m.intake_continuation_hint()
       : m.intake_submit_hint()}
-    dismissLabel={m.intake_hint_dismiss()}
-    dismissTestid="intake-hint-dismiss"
   />
 {:else}
   <!-- Form state -->
