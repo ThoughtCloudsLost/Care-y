@@ -45,7 +45,7 @@
   import type { DerivationPhase } from "$lib/workers/portal-protocol.js";
   import { evaluateWithPowRetry } from "$lib/auth/crypto-helpers.js";
   import { IdleTimer } from "$lib/auth/idle-timer.js";
-  import PortalHint from "$lib/components/portal/PortalHint.svelte";
+  import PortalHint from "$lib/shell/PortalHint.svelte";
   import { createPublicBrandingQuery } from "$lib/branding/public-branding.js";
   import PortalThread from "$lib/portal/PortalThread.svelte";
   import { portalMessageElementId } from "$lib/portal/portal-message-ids.js";

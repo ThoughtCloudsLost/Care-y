@@ -36,14 +36,23 @@
 {/snippet}
 
 {#if opened}
-  <ShellToast opened position="center" button={dismissButton}>
-    <div class="hint-content" role="status" aria-live="polite">
-      {message}
-    </div>
-  </ShellToast>
+  <div class="portal-hint-anchor">
+    <ShellToast opened position="center" button={dismissButton}>
+      <div class="hint-content" role="status" aria-live="polite">
+        {message}
+      </div>
+    </ShellToast>
+  </div>
 {/if}
 
 <style>
+  /* Konsta pins toasts to the viewport bottom, which is where these
+     surfaces pin their composer; an undismissed hint would sit on top
+     of the send button and swallow its taps. Lift it clear. */
+  .portal-hint-anchor :global(.k-toast) {
+    bottom: calc(var(--k-safe-area-bottom, 0px) + 6.5rem);
+  }
+
   .hint-content {
     font-size: 0.875rem;
     text-align: center;

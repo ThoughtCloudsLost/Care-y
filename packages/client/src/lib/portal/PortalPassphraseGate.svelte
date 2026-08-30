@@ -56,6 +56,9 @@
       onInput={(e: Event) => {
         if (e.target instanceof HTMLInputElement) passphrase = e.target.value;
       }}
+      onkeydown={(e: KeyboardEvent) => {
+        if (e.key === "Enter") handleSubmit();
+      }}
       disabled={pending}
       data-testid="passphrase-input"
     />

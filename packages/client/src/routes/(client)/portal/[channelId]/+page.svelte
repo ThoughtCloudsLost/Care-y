@@ -38,7 +38,7 @@
   import { solveProofOfWork } from "$lib/auth/pow-solver.js";
   import { requireRouter } from "$lib/errors.js";
   import type { ChannelEvaluateCallback } from "$lib/composables/portal/create-portal-session.svelte.js";
-  import PortalHint from "$lib/components/portal/PortalHint.svelte";
+  import PortalHint from "$lib/shell/PortalHint.svelte";
   import { createPublicBrandingQuery } from "$lib/branding/public-branding.js";
   import PageLayout from "$lib/shell/PageLayout.svelte";
   import { KeyRound } from "@lucide/svelte";

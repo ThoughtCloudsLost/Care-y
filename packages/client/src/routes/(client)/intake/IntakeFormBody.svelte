@@ -40,7 +40,7 @@
   import FieldError from "$lib/components/FieldError.svelte";
   import PasswordConfirmPair from "$lib/components/inputs/PasswordConfirmPair.svelte";
   import HowProtected from "$lib/components/portal/HowProtected.svelte";
-  import PortalHint from "$lib/components/portal/PortalHint.svelte";
+  import PortalHint from "$lib/shell/PortalHint.svelte";
   import IntakeFieldRenderer from "$lib/components/portal/IntakeFieldRenderer.svelte";
   import type { LoginCryptoCallbacks } from "$lib/auth/login-crypto.js";
   import { buildLoginCallbacks } from "$lib/auth/crypto-callbacks.js";

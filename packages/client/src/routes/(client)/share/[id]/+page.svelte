@@ -8,7 +8,7 @@
   import { getSodium } from "@care-y/crypto";
   import { decryptShare } from "$lib/portal/share-crypto.js";
   import { announceToLiveRegion } from "$lib/utils/announce.js";
-  import PortalHint from "$lib/components/portal/PortalHint.svelte";
+  import PortalHint from "$lib/shell/PortalHint.svelte";
   import { getClientShellCtx } from "$lib/client-shell/context.js";
 
   type ShareViewState =
