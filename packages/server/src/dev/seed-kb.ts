@@ -401,10 +401,15 @@ export async function seedKbArticles(
   // Spread upvotes across articles so vote counts are non-zero and varied.
   // The primary user always votes per the base spec. When extraVoterIds are
   // provided, additional voters are spread across articles for richer counts.
+  //
+  // The primary user must NOT vote on index 0 ("Intake call checklist"):
+  // the e2e voting flow (kb.spec.ts) opens that article as this user and
+  // asserts a fresh thumbs-up applies. A pre-seeded vote there makes the
+  // spec's tap a vote REMOVAL, so aria-pressed never becomes true.
   const voteSpec: { index: number; direction: string }[] = [
-    { index: 0, direction: "up" },
     { index: 1, direction: "down" },
     { index: 2, direction: "up" },
+    { index: 3, direction: "up" },
     { index: 4, direction: "up" },
   ];
 
