@@ -591,7 +591,8 @@
   .merge-search-input {
     width: 100%;
     padding: 0.5rem 0.75rem;
-    font-size: var(--text-sm);
+    /* 16px floor: iOS zooms focused controls styled smaller. */
+    font-size: 16px;
     border: 1px solid var(--hair);
     border-radius: 0.5rem;
     background: var(--paper);

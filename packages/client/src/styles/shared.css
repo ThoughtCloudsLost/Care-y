@@ -651,6 +651,16 @@ html.glass-dark.light
   display: none !important;
 }
 
+/* 16px floor: iOS zooms focused controls styled smaller.
+   Konsta ListInput uses Tailwind's text-base utility, which resolves
+   to var(--text-base) (13px in this project's scale). Override to
+   16px so iOS Safari does not zoom on focus. */
+.k-list-input input,
+.k-list-input textarea,
+.k-list-input select {
+  font-size: 16px !important;
+}
+
 /* ── Form primitives ──
    One anatomy for fields that cannot be Konsta ListInput (Bits UI
    comboboxes, number rows, color rows): eyebrow label, bordered box,

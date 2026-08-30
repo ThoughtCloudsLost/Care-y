@@ -858,7 +858,8 @@
     border-radius: 4px;
     background: transparent;
     color: var(--ink);
-    font-size: var(--text-xs);
+    /* 16px floor: iOS zooms focused controls styled smaller. */
+    font-size: 16px;
     cursor: pointer;
   }
 

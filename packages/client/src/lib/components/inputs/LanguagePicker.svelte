@@ -48,10 +48,11 @@
     background: transparent;
     border: none;
     color: inherit;
-    font-size: var(--text-sm);
+    /* 16px floor: iOS zooms focused controls styled smaller. */
+    font-size: 16px;
     font-family: inherit;
     cursor: pointer;
-    padding: 4px 0;
+    padding: 2px 0;
     text-decoration: underline;
     text-underline-offset: 2px;
   }
