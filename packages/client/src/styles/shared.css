@@ -276,6 +276,36 @@ select {
   color: var(--brand-accent-on) !important;
 }
 
+/* Konsta glass shadow tokens, minus the outer glow.
+   Konsta v5's glass.css ends both tokens with a large drop shadow
+   (0 0 25px rgba(0,0,0,.2) light / .15 dark) that reads as a muddy
+   halo on Inkwell's cream paper: a visible dark band under the
+   floating tabbar pill and every other glass pane. These overrides
+   keep the inset rim/frost layers verbatim and drop only that outer
+   glow. Defined on :root after Konsta's @theme so they win on
+   cascade order (same trick as the --font-ios override above). */
+:root {
+  /* prettier-ignore */
+  --shadow-ios-light-glass:
+    inset -1px -1px 0px -0.5px rgba(255, 255, 255, 1),
+    inset 1px 1px 0px -0.5px rgba(255, 255, 255, 1),
+    inset 3px 3px 10px -3px #ddd,
+    inset -3px -3px 10px -3px #ddd,
+    inset 0 0 5px 1px #fff,
+    inset 0 0 0 0.5px rgba(0, 0, 0, 0.25),
+    inset 0 0 24px 0 rgba(0, 0, 0, 0.1);
+  /* prettier-ignore */
+  --shadow-ios-dark-glass:
+    inset -2px -2px 0.5px -2.5px rgba(255, 255, 255, 0.4),
+    inset 3px 3px 0.5px -3.5px rgba(255, 255, 255, 0.4),
+    inset 2px 2px 0.5px -2px #262626,
+    inset -2px -2px 0.5px -2px #262626,
+    inset 0 0 5px 1px #141414,
+    inset 0 0 0 1px rgba(255, 255, 255, 0.15),
+    inset 0 0 10px 0 rgba(255, 255, 255, 0.075),
+    inset 0 0 24px 0 rgba(255, 255, 255, 0.05);
+}
+
 /* Glass mode override: force dark or light glass on navbar/tabbar surfaces
    independent of color scheme. Targets Konsta's Glass component (uses
    backdrop-blur-lg) using Konsta's own tokens. Each theme controls its
