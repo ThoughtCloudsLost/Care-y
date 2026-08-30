@@ -33,6 +33,9 @@
   import { cacheTerminology, normalizeLabels } from "$lib/terminology/index.js";
   import { capitalize } from "$lib/terminology/with-terms.js";
   import { requireRouter } from "$lib/errors.js";
+  import { isValidHexColor } from "$lib/branding/color-utils.js";
+  import { buildClientBrandingBlob } from "$lib/branding/encrypt.js";
+  import { DEFAULT_PRIMARY, DEFAULT_ACCENT } from "$lib/branding/index.js";
   import type { BrandingField } from "@care-y/shared";
   import QueryError from "$lib/components/QueryError.svelte";
   import DecryptPlaceholder from "$lib/components/DecryptPlaceholder.svelte";
@@ -127,6 +130,45 @@
     queryFn: async () => brandingRouter.getBranding.query(),
   }));
 
+  // ── Branding blob fields (read-only, needed for client blob rebuild) ──
+
+  const decryptedName = $derived(
+    orgCache.decrypt(
+      "branding:name",
+      brandingQuery.data?.encryptedName ?? null,
+    ),
+  );
+
+  const decryptedColor = $derived(
+    orgCache.decrypt(
+      "branding:color",
+      brandingQuery.data?.encryptedPrimaryColor ?? null,
+    ),
+  );
+
+  const decryptedAccent = $derived(
+    orgCache.decrypt(
+      "branding:accent",
+      brandingQuery.data?.encryptedAccentColor ?? null,
+    ),
+  );
+
+  const decryptedText = $derived(
+    orgCache.decrypt(
+      "branding:text",
+      brandingQuery.data?.encryptedClientText ?? null,
+    ),
+  );
+
+  const decryptedSupportLabel = $derived(
+    orgCache.decrypt(
+      "branding:support_label",
+      brandingQuery.data?.encryptedClientSupportLabel ?? null,
+    ),
+  );
+
+  // ── Terminology config ──
+
   const decryptedTerminologyJson = $derived(
     orgCache.decrypt(
       "branding:terminology",
@@ -184,6 +226,7 @@
 
   let sheetOpened = $state(false);
   let activeLang = $state<LangCode>("en");
+  let editSupportLabel = $state("");
 
   type EditState = Record<LangCode, TerminologyLabels>;
 
@@ -195,6 +238,7 @@
 
   function openSheet(): void {
     pluralTouched.clear();
+    editSupportLabel = decryptedSupportLabel ?? "";
     for (const lang of LANGS) {
       if (serverConfig?.[lang]) {
         editState[lang] = { ...serverConfig[lang] };
@@ -223,7 +267,11 @@
 
   // ── Change detection ──
 
-  const hasChanges = $derived.by(() => {
+  const supportLabelChanged = $derived(
+    editSupportLabel !== (decryptedSupportLabel ?? ""),
+  );
+
+  const terminologyLabelsChanged = $derived.by(() => {
     for (const lang of LANGS) {
       const current =
         serverConfig?.[lang] ??
@@ -243,6 +291,8 @@
     return false;
   });
 
+  const hasChanges = $derived(terminologyLabelsChanged || supportLabelChanged);
+
   function suggestionsHint(
     key: keyof typeof TERMINOLOGY_SUGGESTIONS,
   ): string | undefined {
@@ -258,18 +308,23 @@
       fields: {
         field: BrandingField;
         encryptedValue: string;
+        clientEncryptedBranding?: string;
       }[],
     ) => {
       for (const f of fields) {
         await brandingRouter.saveBrandingField.mutate({
           field: f.field,
           encryptedValue: f.encryptedValue,
+          ...(f.clientEncryptedBranding !== undefined
+            ? { clientEncryptedBranding: f.clientEncryptedBranding }
+            : {}),
         });
       }
     },
     onSuccess: () => {
       haptic();
       orgCache.delete("branding:terminology");
+      orgCache.delete("branding:support_label");
       toastStore.show(m.admin_terminology_saved());
       announceToLiveRegion("polite", m.admin_terminology_saved());
 
@@ -287,18 +342,72 @@
     },
   }));
 
+  function currentColor(): string {
+    return decryptedColor !== null &&
+      decryptedColor !== "" &&
+      isValidHexColor(decryptedColor)
+      ? decryptedColor
+      : DEFAULT_PRIMARY;
+  }
+
+  function currentAccent(): string {
+    return decryptedAccent !== null &&
+      decryptedAccent !== "" &&
+      isValidHexColor(decryptedAccent)
+      ? decryptedAccent
+      : DEFAULT_ACCENT;
+  }
+
   async function handleSave(): Promise<void> {
     if (!hasChanges) return;
 
-    const config: TerminologyConfig = {};
-    for (const lang of LANGS) {
-      config[lang] = normalizeLabels(editState[lang]);
+    const fields: {
+      field: BrandingField;
+      encryptedValue: string;
+      clientEncryptedBranding?: string;
+    }[] = [];
+
+    // Terminology config (language labels)
+    if (terminologyLabelsChanged) {
+      const config: TerminologyConfig = {};
+      for (const lang of LANGS) {
+        config[lang] = normalizeLabels(editState[lang]);
+      }
+      const json = JSON.stringify(config);
+      fields.push({
+        field: "terminology",
+        encryptedValue: await orgKeyManager.encryptText(json),
+      });
     }
 
-    const json = JSON.stringify(config);
-    const encryptedValue = await orgKeyManager.encryptText(json);
+    // Support label: part of the client branding blob, needs read-modify-write
+    if (supportLabelChanged) {
+      // Whole-value rewrite: every carried-through field must have finished
+      // its fire-and-forget decrypt, or this save wipes it from the blob.
+      // Same settlement contract as BrandingSection and OrgGeneralSection.
+      void decryptedName;
+      void decryptedText;
+      await orgCache.whenSettled();
 
-    saveMutation.mutate([{ field: "terminology", encryptedValue }]);
+      const clientBlob = buildClientBrandingBlob(
+        {
+          name: decryptedName ?? "",
+          primaryColor: currentColor(),
+          accentColor: currentAccent(),
+          clientText: decryptedText ?? "",
+          supportLabel: editSupportLabel,
+        },
+        orgKeyManager,
+      );
+
+      fields.push({
+        field: "support_label",
+        encryptedValue: await orgKeyManager.encryptText(editSupportLabel),
+        clientEncryptedBranding: clientBlob,
+      });
+    }
+
+    saveMutation.mutate(fields);
   }
 
   function handleResetLang(): void {
@@ -323,6 +432,13 @@
             <DecryptPlaceholder length={12} />
           </div>
         {/each}
+        <div class="section-divider"></div>
+        <div class="term-row">
+          <span class="term-label">
+            {m.admin_terminology_support_label_label()}
+          </span>
+          <DecryptPlaceholder length={16} />
+        </div>
       </div>
     </Card>
   {:else if brandingQuery.isError}
@@ -350,6 +466,24 @@
             </span>
           </div>
         {/each}
+
+        <div class="section-divider"></div>
+
+        <!-- Support label -->
+        <div class="term-row">
+          <span class="term-label">
+            {m.admin_terminology_support_label_label()}
+          </span>
+          <span class="term-value">
+            {#if brandingQuery.data?.encryptedClientSupportLabel}
+              <DecryptPlaceholder content={decryptedSupportLabel}>
+                {decryptedSupportLabel}
+              </DecryptPlaceholder>
+            {:else}
+              <span class="text-[--muted]">{m.portal_support_team()}</span>
+            {/if}
+          </span>
+        </div>
 
         <div class="edit-action">
           <SoftButton onclick={openSheet} full>
@@ -457,6 +591,28 @@
         {/if}
       </div>
     {/each}
+
+    <!-- Support label (not language-specific, part of branding blob) -->
+    <div class="sheet-group">
+      <span class="group-label">
+        {m.admin_terminology_support_label_label()}
+      </span>
+      <List nested class="term-list">
+        <ListInput
+          label={m.admin_terminology_support_label_label()}
+          type="text"
+          placeholder={m.portal_support_team()}
+          value={editSupportLabel}
+          onInput={(e: Event) => {
+            if (e.target instanceof HTMLInputElement)
+              editSupportLabel = e.target.value;
+          }}
+          info={m.admin_terminology_support_label_hint()}
+          disabled={saveMutation.isPending}
+          data-testid="terminology-support-label-input"
+        />
+      </List>
+    </div>
   </div>
 </ShellSheet>
 
@@ -504,6 +660,11 @@
   .term-value {
     font-size: var(--text-sm);
     color: var(--ink);
+  }
+
+  .section-divider {
+    border-top: 1px solid color-mix(in srgb, var(--ink) 8%, transparent);
+    margin: var(--space-xs) 0;
   }
 
   .edit-action {
