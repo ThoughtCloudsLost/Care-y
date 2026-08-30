@@ -324,11 +324,18 @@ const RATE_PORTAL_REPLY_MAX = 30;
 // the limiter caps probe volume and log noise.
 const RATE_SHARE_OPEN_MAX = 10;
 
-// Account salt + login: 10 req/hour per IP each. Online guessing is
-// already throttled at the OPRF step; these bound salt-endpoint
-// scraping and login spam independently.
-const RATE_ACCOUNT_SALT_MAX = 10;
-const RATE_ACCOUNT_LOGIN_MAX = 10;
+// Account salt + login: 10 req/hour per IP each in production. Online
+// guessing is already throttled at the OPRF step; these bound
+// salt-endpoint scraping and login spam independently. Outside
+// production the caps are raised (same reasoning as RATE_BOOTSTRAP_MAX):
+// e2e browser projects share one IP and burn through 10/hour in one
+// suite pass.
+const RATE_ACCOUNT_SALT_MAX = getEnv().NODE_ENV === "production" ? 10 : 200;
+const RATE_ACCOUNT_LOGIN_MAX = getEnv().NODE_ENV === "production" ? 10 : 200;
+
+// Intake challenge: 10 req/hour per IP in production, raised in dev for
+// the same shared-IP reason (each intake submission fetches a challenge).
+const RATE_INTAKE_CHALLENGE_MAX = getEnv().NODE_ENV === "production" ? 10 : 200;
 
 // --- Rate limiters ---
 
@@ -656,7 +663,7 @@ const appRouter = createAppRouter({
     }),
     challengeLimiter: createInMemoryRateLimiter({
       windowMs: RATE_WINDOW_1H,
-      maxRequests: 10,
+      maxRequests: RATE_INTAKE_CHALLENGE_MAX,
     }),
     powVerifier:
       env.INTAKE_POW_DIFFICULTY > 0
