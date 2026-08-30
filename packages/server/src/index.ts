@@ -71,6 +71,7 @@ import { createGreetingAudioHandler } from "./routes/greeting-audio.js";
 import { createBrandingIconHandler } from "./routes/branding-icons.js";
 import { createFormAssetHandler } from "./routes/form-assets.js";
 import { createBlobDownloadHandler } from "./routes/blob-download.js";
+import { withNoStore } from "./http/response-headers.js";
 import { createManifestHandler } from "./routes/manifest.js";
 import { createRelayHandler, type PendingCall } from "./routes/relay.js";
 import { authenticateRelay, type OrgResolved } from "./routes/relay-utils.js";
@@ -777,8 +778,12 @@ const cors = buildCorsHeaders(env.CORS_ORIGIN);
 const trpcHandler = createHTTPHandler({
   router: appRouter,
   createContext,
+  // Every tRPC response is uncacheable: without an explicit Cache-Control,
+  // browsers apply heuristic caching (RFC 9111 4.2.2, SEC-228), which
+  // both serves stale threads and leaves ciphertext in disk caches.
+  // See http/response-headers.ts.
   responseMeta() {
-    return { headers: cors.base };
+    return { headers: withNoStore(cors.base) };
   },
 });
 
