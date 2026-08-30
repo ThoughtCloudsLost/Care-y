@@ -24,10 +24,13 @@ test.describe.serial("Dashboard (Overview Tab)", () => {
   // ── Section count badges (real data) ──────────────────────────────
 
   test("section badges show correct counts from seeded tickets", async () => {
-    // My Tickets: 5 assigned non-hold tickets
+    // My Tickets: at least the 5 seeded assigned non-hold tickets (may be
+    // higher when an earlier browser project's lifecycle specs assigned
+    // more in the shared DB).
     const myTickets = page.locator("#section-my-tickets [data-count]");
     await expect(myTickets).toBeVisible({ timeout: CRYPTO_TIMEOUT });
-    await expect(myTickets).toHaveAttribute("data-count", "5");
+    const myCount = Number(await myTickets.getAttribute("data-count"));
+    expect(myCount).toBeGreaterThanOrEqual(5);
 
     // Unassigned: at least 6 tickets with no assignee (may be higher if
     // prior test runs created additional tickets in the shared DB).
@@ -36,10 +39,12 @@ test.describe.serial("Dashboard (Overview Tab)", () => {
     const unassignedCount = Number(await unassigned.getAttribute("data-count"));
     expect(unassignedCount).toBeGreaterThanOrEqual(6);
 
-    // On Hold: 2 tickets (shelter callback, court date)
+    // On Hold: at least the 2 seeded tickets (shelter callback, court
+    // date); lifecycle specs in an earlier browser project may add one.
     const onHold = page.locator("#section-on-hold [data-count]");
     await expect(onHold).toBeVisible();
-    await expect(onHold).toHaveAttribute("data-count", "2");
+    const holdCount = Number(await onHold.getAttribute("data-count"));
+    expect(holdCount).toBeGreaterThanOrEqual(2);
   });
 
   // ── Decryption (full pipeline) ────────────────────────────────────
@@ -47,7 +52,9 @@ test.describe.serial("Dashboard (Overview Tab)", () => {
   test("decrypted ticket title is visible", async () => {
     // Already verified in beforeAll, but this is the explicit assertion.
     // Proves: OPRF -> deriveKeys -> ECIES unwrap -> secretbox decrypt.
-    await expect(page.getByText("Help with housing")).toBeVisible();
+    // .first(): the same ticket legitimately renders in both the
+    // needs-attention and my-tickets dashboard regions.
+    await expect(page.getByText("Help with housing").first()).toBeVisible();
   });
 
   test("ticket without key wrap shows encrypted placeholder", async () => {

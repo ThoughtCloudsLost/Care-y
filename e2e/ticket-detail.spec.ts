@@ -267,17 +267,19 @@ test.describe.serial("Ticket Detail (Chat View)", () => {
     ).not.toBeVisible();
 
     // Compose actions (+) button visible in collapsed state.
-    // Expand compose: tap +, then "Reply to client" to activate reply mode.
+    // Expand compose: tap +, then "Text Client" to activate SMS mode.
+    // "Reply to Client" only renders when the ticket has an active
+    // portal channel, which this seeded SMS ticket does not.
     // The send button and textarea only appear when compose mode is active.
     const dialog = await openComposeActions(page);
-    await clickComposeAction(dialog, /reply to/i);
+    await clickComposeAction(dialog, /text client/i);
 
     // Send button.
     const sendBtn = page.getByRole("button", { name: /send/i });
     await expect(sendBtn).toBeVisible({ timeout: 3_000 });
 
-    // Compose textarea (reply mode).
-    const textarea = page.getByRole("textbox", { name: /type a reply/i });
+    // Compose textarea (SMS mode).
+    const textarea = page.getByRole("textbox", { name: /type a message/i });
     await expect(textarea).toBeVisible();
 
     // Dismiss compose mode for subsequent tests.

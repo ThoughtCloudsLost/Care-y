@@ -21,9 +21,15 @@ import {
 
 test.describe.serial("ticket lifecycle (production UI)", () => {
   let page: Page;
+  // Suffixed with the project name: all browser projects share one org,
+  // so a fixed title would match the ticket an earlier project created.
+  let assignTitle: string;
+  let holdTitle: string;
 
   test.beforeAll(async ({ browser }, testInfo) => {
     testInfo.setTimeout(CRYPTO_TIMEOUT * 4);
+    assignTitle = `Lifecycle: assign test (${testInfo.project.name})`;
+    holdTitle = `Lifecycle: hold test (${testInfo.project.name})`;
     page = await browser.newPage();
     await startCoverage(page);
     await login(page);
@@ -38,14 +44,14 @@ test.describe.serial("ticket lifecycle (production UI)", () => {
 
   test("create a ticket to assign", async () => {
     await createTicket(page, {
-      title: "Lifecycle: assign test",
+      title: assignTitle,
       queue: "Intake",
     });
   });
 
   test("create a ticket to put on hold", async () => {
     await createTicket(page, {
-      title: "Lifecycle: hold test",
+      title: holdTitle,
       queue: "Housing",
     });
   });
@@ -53,12 +59,12 @@ test.describe.serial("ticket lifecycle (production UI)", () => {
   // ── Assign flow ─────────────────────────────────────────────────
 
   test("assign ticket to self via card action button", async () => {
-    await assignTicketToSelf(page, "Lifecycle: assign test");
+    await assignTicketToSelf(page, assignTitle);
   });
 
   test("assigned ticket shows in detail with assignment event", async () => {
     test.setTimeout(CRYPTO_TIMEOUT * 12);
-    await openTicketByTitle(page, "Lifecycle: assign test");
+    await openTicketByTitle(page, assignTitle);
 
     // The system event from take() appears as a follow-up with type
     // "assignment_change". Scope to the chat log to avoid matching the
@@ -97,13 +103,13 @@ test.describe.serial("ticket lifecycle (production UI)", () => {
   // ── Hold flow ───────────────────────────────────────────────────
 
   test("put ticket on hold via card action button", async () => {
-    await assignTicketToSelf(page, "Lifecycle: hold test");
-    await putTicketOnHold(page, "Lifecycle: hold test");
+    await assignTicketToSelf(page, holdTitle);
+    await putTicketOnHold(page, holdTitle);
   });
 
   test("held ticket shows hold event in timeline", async () => {
     test.setTimeout(CRYPTO_TIMEOUT * 12);
-    await openTicketByTitle(page, "Lifecycle: hold test");
+    await openTicketByTitle(page, holdTitle);
 
     const chatLog = page.locator('[role="log"]');
     await expect(

@@ -38,8 +38,8 @@ test.describe.serial("Ticket content edit", () => {
     const desktop = await isDesktopLayout(page);
     if (desktop) {
       // Desktop: the panel content is inline in the sidebar. Look for
-      // the "Edit case" item directly.
-      await expect(page.getByText(/edit case/i)).toBeVisible({
+      // the "Edit ticket" item directly.
+      await expect(page.getByText(/edit ticket/i)).toBeVisible({
         timeout: CRYPTO_TIMEOUT,
       });
     } else {
@@ -49,14 +49,14 @@ test.describe.serial("Ticket content edit", () => {
         name: /more actions/i,
       });
       await moreActions.click();
-      await expect(page.getByText(/edit case/i)).toBeVisible({
+      await expect(page.getByText(/edit ticket/i)).toBeVisible({
         timeout: 5_000,
       });
     }
   });
 
-  test("tap 'Edit case' opens the edit sheet with prefilled content", async () => {
-    const editItem = page.getByText(/edit case/i).first();
+  test("tap 'Edit ticket' opens the edit sheet with prefilled content", async () => {
+    const editItem = page.getByText(/edit ticket/i).first();
     await editItem.click();
 
     // Wait for the edit sheet to appear with the title input prefilled.
@@ -120,7 +120,7 @@ test.describe.serial("Ticket content edit", () => {
       await moreActions.click();
     }
 
-    const editItem = page.getByText(/edit case/i).first();
+    const editItem = page.getByText(/edit ticket/i).first();
     await expect(editItem).toBeVisible({ timeout: 5_000 });
     await editItem.click();
 

@@ -65,7 +65,16 @@ test.describe.serial("Ticket Reply (Encrypted Message Send)", () => {
 
     // Grant the client portal capability so "Reply to client" renders,
     // then reload so the detail payload picks up the new flag.
-    const ticketId = /\/tickets\/([0-9a-f-]{36})/.exec(page.url())?.[1];
+    // On desktop the split pane keeps the URL at /tickets, so step into
+    // the full view to get the ticket id into the URL.
+    let ticketId = /\/tickets\/([0-9a-f-]{36})/.exec(page.url())?.[1];
+    if (ticketId === undefined) {
+      await page.getByRole("button", { name: "Open full view" }).click();
+      await expect(page).toHaveURL(/\/tickets\/[0-9a-f-]{36}/, {
+        timeout: 10_000,
+      });
+      ticketId = /\/tickets\/([0-9a-f-]{36})/.exec(page.url())?.[1];
+    }
     expect(ticketId).toBeTruthy();
     makeClientPortalCapable(ticketId!);
     await page.reload();

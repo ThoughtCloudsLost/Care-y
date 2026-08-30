@@ -253,8 +253,9 @@ test.describe.serial("KB Editor (Create/Edit, Categories, ATAG)", () => {
     // The save already landed on the article detail: the full-page route
     // below the desktop breakpoint, the restored split pane above it. Both
     // render the article body, so the appended text must be present without
-    // any further navigation.
-    await expect(page.getByText("Added during edit.")).toBeVisible({
+    // any further navigation. .first(): on desktop the list card's excerpt
+    // can also carry the appended text, which is a second legitimate match.
+    await expect(page.getByText("Added during edit.").first()).toBeVisible({
       timeout: CRYPTO_TIMEOUT,
     });
 
@@ -296,7 +297,7 @@ test.describe.serial("KB Editor (Create/Edit, Categories, ATAG)", () => {
     // creates a .ProseMirror child only after onMount + doc parsing.
     const pmContent = page.locator(".ProseMirror");
     await expect(pmContent).toBeVisible({ timeout: CRYPTO_TIMEOUT });
-    await expect(pmContent).toContainText("About this article", {
+    await expect(pmContent).toContainText("How to use this article", {
       timeout: CRYPTO_TIMEOUT * 2,
     });
   });
