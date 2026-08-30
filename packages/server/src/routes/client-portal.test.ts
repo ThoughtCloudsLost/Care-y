@@ -41,6 +41,7 @@ import type { IntakeFormService } from "../portal/intake-form-service.js";
 import type { NotificationService } from "../notifications/service.js";
 import type { FieldEncryptor } from "../crypto/field-encryptor.js";
 import { IntakeQueueNotConfiguredError } from "../portal/intake-service.js";
+import { RateLimitError } from "../errors.js";
 import type * as IntakeServiceModule from "../portal/intake-service.js";
 import type * as ShareServiceModule from "../portal/share-service.js";
 import type { IntakeSubmissionInput } from "@care-y/shared";
@@ -815,11 +816,17 @@ describe("client-portal router", () => {
       const warnSpy = vi
         .spyOn(console, "warn")
         .mockImplementation(() => undefined);
-      await expectTrpcError(
+      const limitErr = await expectTrpcError(
         caller.portalBootstrap(makeBootstrapInput()),
         "TOO_MANY_REQUESTS",
       );
       warnSpy.mockRestore();
+
+      // The cause is the AppError whose retryAfterSeconds the errorFormatter
+      // forwards to the client (portal schedules its auto-retry from it).
+      expect(limitErr.cause).toBeInstanceOf(RateLimitError);
+      const rle = limitErr.cause as RateLimitError;
+      expect(rle.retryAfterSeconds).toBe(1800);
     });
 
     it("returns NOT_FOUND when portal deps are not configured", async () => {

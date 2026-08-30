@@ -74,6 +74,7 @@ import {
   UsernameTakenError,
   StaleThreadError,
 } from "../portal/portal-errors.js";
+import { RateLimitError } from "../errors.js";
 import { hashChannelAuth } from "@care-y/crypto";
 import {
   CLIENT_SESSION_COOKIE,
@@ -464,10 +465,16 @@ export function createClientPortalRouter(deps: ClientPortalRouterDeps) {
               ip,
               reason: "rate_limit",
             });
-            throw new TRPCError({
-              code: "TOO_MANY_REQUESTS",
-              message: `Rate limited. Retry after ${String(Math.ceil(limitResult.retryAfterMs / 1000))}s`,
-            });
+            const retryAfterSeconds = Math.ceil(
+              limitResult.retryAfterMs / 1000,
+            );
+            // AppError instead of raw TRPCError: withErrorWrapping maps it to
+            // TOO_MANY_REQUESTS and the errorFormatter forwards
+            // retryAfterSeconds so the portal can schedule its retry.
+            throw new RateLimitError(
+              `Rate limited. Retry after ${String(retryAfterSeconds)}s`,
+              retryAfterSeconds,
+            );
           }
         }
 
@@ -493,10 +500,16 @@ export function createClientPortalRouter(deps: ClientPortalRouterDeps) {
               ip,
               reason: "rate_limit",
             });
-            throw new TRPCError({
-              code: "TOO_MANY_REQUESTS",
-              message: `Rate limited. Retry after ${String(Math.ceil(limitResult.retryAfterMs / 1000))}s`,
-            });
+            const retryAfterSeconds = Math.ceil(
+              limitResult.retryAfterMs / 1000,
+            );
+            // AppError instead of raw TRPCError: withErrorWrapping maps it to
+            // TOO_MANY_REQUESTS and the errorFormatter forwards
+            // retryAfterSeconds so the portal can schedule its retry.
+            throw new RateLimitError(
+              `Rate limited. Retry after ${String(retryAfterSeconds)}s`,
+              retryAfterSeconds,
+            );
           }
         }
 
@@ -534,10 +547,16 @@ export function createClientPortalRouter(deps: ClientPortalRouterDeps) {
               ip,
               reason: "rate_limit",
             });
-            throw new TRPCError({
-              code: "TOO_MANY_REQUESTS",
-              message: `Rate limited. Retry after ${String(Math.ceil(limitResult.retryAfterMs / 1000))}s`,
-            });
+            const retryAfterSeconds = Math.ceil(
+              limitResult.retryAfterMs / 1000,
+            );
+            // AppError instead of raw TRPCError: withErrorWrapping maps it to
+            // TOO_MANY_REQUESTS and the errorFormatter forwards
+            // retryAfterSeconds so the portal can schedule its retry.
+            throw new RateLimitError(
+              `Rate limited. Retry after ${String(retryAfterSeconds)}s`,
+              retryAfterSeconds,
+            );
           }
         }
 

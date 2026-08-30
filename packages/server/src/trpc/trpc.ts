@@ -44,6 +44,11 @@ const t = initTRPC.context<Context>().create({
           ...(cause instanceof PowRequiredError
             ? { challenge: cause.challenge, difficulty: cause.difficulty }
             : {}),
+          // Retry hint forwarded so the client can schedule a retry
+          // instead of parsing it out of the message string.
+          ...(cause instanceof RateLimitError
+            ? { retryAfterSeconds: cause.retryAfterSeconds }
+            : {}),
         },
       };
     }

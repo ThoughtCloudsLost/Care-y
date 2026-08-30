@@ -165,6 +165,83 @@ describe("PortalThread", () => {
     expect(getByTestId("portal-empty-state")).toBeTruthy();
   });
 
+  it("renders load-error state instead of empty state when the query failed", () => {
+    const ctx = buildDecryptContext();
+
+    const { getByTestId, queryByTestId } = render(PortalThread, {
+      props: {
+        messages: [],
+        decryptMessage: ctx.decryptMessage,
+        decryptAttachmentKey: ctx.decryptAttachmentKey,
+        decryptAttachmentBlob: ctx.decryptAttachmentBlob,
+        loading: false,
+        loadError: "generic" as const,
+      },
+    });
+
+    expect(getByTestId("portal-load-error")).toBeTruthy();
+    expect(queryByTestId("portal-empty-state")).toBeNull();
+  });
+
+  it("renders rate-limit wording distinct from the generic load error", () => {
+    const ctx = buildDecryptContext();
+
+    const generic = render(PortalThread, {
+      props: {
+        messages: [],
+        decryptMessage: ctx.decryptMessage,
+        decryptAttachmentKey: ctx.decryptAttachmentKey,
+        decryptAttachmentBlob: ctx.decryptAttachmentBlob,
+        loading: false,
+        loadError: "generic" as const,
+      },
+    });
+    const genericText = generic.getByTestId("portal-load-error").textContent;
+    cleanup();
+
+    const limited = render(PortalThread, {
+      props: {
+        messages: [],
+        decryptMessage: ctx.decryptMessage,
+        decryptAttachmentKey: ctx.decryptAttachmentKey,
+        decryptAttachmentBlob: ctx.decryptAttachmentBlob,
+        loading: false,
+        loadError: "rate_limited" as const,
+      },
+    });
+    const limitedText = limited.getByTestId("portal-load-error").textContent;
+
+    expect(limitedText).not.toBe(genericText);
+    expect(limitedText.length).toBeGreaterThan(0);
+  });
+
+  it("keeps rendering cached messages when a refetch fails", async () => {
+    const ctx = buildDecryptContext();
+
+    const messages = [
+      makeMessage("Still here", "to_client", ctx.keypairPublic),
+    ];
+
+    const { container, queryByTestId } = render(PortalThread, {
+      props: {
+        messages,
+        decryptMessage: ctx.decryptMessage,
+        decryptAttachmentKey: ctx.decryptAttachmentKey,
+        decryptAttachmentBlob: ctx.decryptAttachmentBlob,
+        loading: false,
+        loadError: "rate_limited" as const,
+      },
+    });
+
+    await vi.waitFor(() => {
+      const bubbles = container.querySelectorAll(
+        "[data-testid='conversation-bubble']",
+      );
+      expect(bubbles.length).toBe(1);
+    });
+    expect(queryByTestId("portal-load-error")).toBeNull();
+  });
+
   it("renders messages with correct direction via ConversationBubble", async () => {
     const ctx = buildDecryptContext();
 

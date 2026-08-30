@@ -59,6 +59,7 @@
   import AccountCreateForm from "$lib/portal/AccountCreateForm.svelte";
   import { X } from "@lucide/svelte";
   import LinkErrorState from "$lib/portal/LinkErrorState.svelte";
+  import { readRateLimitError } from "$lib/portal/rate-limit-error.js";
   import JumpToLatest from "$lib/components/tickets/JumpToLatest.svelte";
   import { createPortalFragment } from "$lib/composables/portal/create-portal-fragment.svelte.js";
   import { createPortalSessionState } from "$lib/composables/portal/create-portal-session.svelte.js";
@@ -337,8 +338,54 @@
     ...optimisticMessages,
   ]);
 
-  // Dead-link detection: bootstrap error means revoked/unknown/bad auth
-  const isDeadLink = $derived(bootstrapQuery.isError);
+  // Rate limits get their own states: "Expired link" for a transient 429
+  // could make a client discard a working link.
+  const bootstrapRateLimit = $derived(
+    bootstrapQuery.isError ? readRateLimitError(bootstrapQuery.error) : null,
+  );
+
+  // Dead-link detection: any other bootstrap error means revoked/unknown/bad auth
+  const isDeadLink = $derived(
+    bootstrapQuery.isError && bootstrapRateLimit === null,
+  );
+
+  const messagesRateLimit = $derived(
+    messagesQuery.isError ? readRateLimitError(messagesQuery.error) : null,
+  );
+
+  // What the thread shows in place of the empty state when the query failed
+  const messagesLoadError = $derived.by(
+    (): "rate_limited" | "generic" | null => {
+      if (!messagesQuery.isError) return null;
+      return messagesRateLimit !== null ? "rate_limited" : "generic";
+    },
+  );
+
+  // Auto-retry on the server's hint. Without a hint, 60s is a guess that
+  // errs short: a failed retry just re-arms this timer with a fresh hint.
+  const RETRY_FALLBACK_SECONDS = 60;
+
+  $effect(() => {
+    if (bootstrapRateLimit === null) return;
+    const seconds =
+      bootstrapRateLimit.retryAfterSeconds ?? RETRY_FALLBACK_SECONDS;
+    const timer = setTimeout(() => {
+      void bootstrapQuery.refetch();
+    }, seconds * 1000);
+    return () => clearTimeout(timer);
+  });
+
+  // Rate-limited message fetches retry on the hint too; other errors are
+  // covered by the 5-minute refetch interval and the focus refetch.
+  $effect(() => {
+    if (messagesRateLimit === null) return;
+    const seconds =
+      messagesRateLimit.retryAfterSeconds ?? RETRY_FALLBACK_SECONDS;
+    const timer = setTimeout(() => {
+      void messagesQuery.refetch();
+    }, seconds * 1000);
+    return () => clearTimeout(timer);
+  });
 
   // Bootstrap succeeded but needs passphrase
   const needsPassphrase = $derived(
@@ -674,13 +721,16 @@
 {/snippet}
 
 {#snippet portalStats()}
-  <span>
-    {allMessages.length === 1
-      ? m.ticket_detail_one_message_stat()
-      : m.ticket_detail_messages_stat({
-          count: String(allMessages.length),
-        })}
-  </span>
+  <!-- A failed fetch with nothing loaded must not read as "0 messages" -->
+  {#if messagesLoadError === null || allMessages.length > 0}
+    <span>
+      {allMessages.length === 1
+        ? m.ticket_detail_one_message_stat()
+        : m.ticket_detail_messages_stat({
+            count: String(allMessages.length),
+          })}
+    </span>
+  {/if}
 {/snippet}
 
 {#snippet threadSubnavbar()}
@@ -724,6 +774,14 @@
         ></span>
       </div>
     </Block>
+  {:else if bootstrapRateLimit !== null}
+    <!-- State 2 rate limit: transient, the link still works. Auto-retries
+         on the server hint (effect above); never worded as expiry. -->
+    <LinkErrorState
+      title={m.portal_rate_limited_title()}
+      body={m.portal_rate_limited_body()}
+      testId="portal-rate-limited"
+    />
   {:else if isDeadLink}
     <!-- State 2 error: Dead link -->
     <LinkErrorState
@@ -829,6 +887,7 @@
           aid: string,
         ) => activeSession.decryptAttachmentBlob(ct, fk, tid, aid)}
         loading={messagesQuery.isLoading}
+        loadError={messagesLoadError}
         attachments={portalAttachments}
         channelId={fragment.fragmentData?.channelId}
         channelAuth={channelAuthHeader}

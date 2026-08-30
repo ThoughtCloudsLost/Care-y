@@ -83,6 +83,13 @@
     decryptAttachmentBlob: DecryptAttachmentBlobFn;
     /** Whether messages are still loading from the server. */
     loading?: boolean;
+    /**
+     * Why the message query failed, when it did. Renders a distinct state
+     * in the empty-thread slot so a failed load never reads as "no
+     * messages yet". "rate_limited" names the wait explicitly; the page
+     * schedules the retry, this component only explains the pause.
+     */
+    loadError?: "rate_limited" | "generic" | null;
     /** Flat list of attachments from the bootstrap response. */
     attachments?: readonly PortalAttachmentWire[];
     /** Channel credential for portal blob downloads. */
@@ -127,6 +134,7 @@
     decryptAttachmentKey,
     decryptAttachmentBlob,
     loading = false,
+    loadError = null,
     attachments = [],
     channelId,
     channelAuth,
@@ -458,6 +466,16 @@
           <DecryptPlaceholder result={LOADING} length={40} />
         </ConversationBubble>
       {/each}
+    </div>
+  {:else if loadError !== null && decryptedMessages.length === 0}
+    <!-- Failed load with nothing cached: never fall through to the empty
+         state, which would read as "no messages yet" for a full thread. -->
+    <div class="empty-state" data-testid="portal-load-error" role="status">
+      <p>
+        {loadError === "rate_limited"
+          ? m.portal_thread_rate_limited()
+          : m.portal_thread_load_error()}
+      </p>
     </div>
   {:else if decryptedMessages.length === 0}
     <div class="empty-state" data-testid="portal-empty-state">
