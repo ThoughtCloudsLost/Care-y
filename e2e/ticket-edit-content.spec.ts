@@ -3,9 +3,9 @@ import { startCoverage, stopAndWriteCoverage } from "./coverage-fixture";
 import type { Page } from "@playwright/test";
 import {
   CRYPTO_TIMEOUT,
-  isDesktopLayout,
   login,
   openTicketByTitle,
+  openTicketInfoPanel,
 } from "./helpers";
 
 test.describe.serial("Ticket content edit", () => {
@@ -34,25 +34,13 @@ test.describe.serial("Ticket content edit", () => {
   test("open ticket and navigate to case panel", async () => {
     await openTicketByTitle(page, SEEDED_TITLE);
 
-    // Open the case panel (client info popup).
-    const desktop = await isDesktopLayout(page);
-    if (desktop) {
-      // Desktop: the panel content is inline in the sidebar. Look for
-      // the "Edit ticket" item directly.
-      await expect(page.getByText(/edit ticket/i)).toBeVisible({
-        timeout: CRYPTO_TIMEOUT,
-      });
-    } else {
-      // Mobile: open the panel via the navbar client alias button or
-      // the BookUser icon.
-      const moreActions = page.getByRole("button", {
-        name: /more actions/i,
-      });
-      await moreActions.click();
-      await expect(page.getByText(/edit ticket/i)).toBeVisible({
-        timeout: 5_000,
-      });
-    }
+    // "Edit ticket" lives in the ticket info dialog at every width; the
+    // helper opens it via "View info" / "More actions" and is a no-op
+    // when the marker is already visible.
+    await openTicketInfoPanel(page, /edit ticket/i);
+    await expect(page.getByText(/edit ticket/i)).toBeVisible({
+      timeout: CRYPTO_TIMEOUT,
+    });
   });
 
   test("tap 'Edit ticket' opens the edit sheet with prefilled content", async () => {
@@ -79,8 +67,12 @@ test.describe.serial("Ticket content edit", () => {
     await expect(saveButton).toBeEnabled({ timeout: 3_000 });
     await saveButton.click();
 
-    // Toast confirms the save.
-    await expect(page.getByText(/content saved/i)).toBeVisible({
+    // Toast confirms the save. The same string also lands in the a11y
+    // live region, so scope to the toast container to stay strict-mode
+    // clean.
+    await expect(
+      page.getByTestId("shell-toasts").getByText(/content saved/i),
+    ).toBeVisible({
       timeout: 5_000,
     });
   });
@@ -88,37 +80,29 @@ test.describe.serial("Ticket content edit", () => {
   test("case header shows updated title after save", async () => {
     // The case header (or wherever the title renders) should show the
     // updated title. The decrypt cache was seeded, so this is immediate.
-    await expect(page.getByText(UPDATED_TITLE)).toBeVisible({
+    // .first(): the split view shows the title in the pane heading AND
+    // the list row.
+    await expect(page.getByText(UPDATED_TITLE).first()).toBeVisible({
       timeout: CRYPTO_TIMEOUT,
     });
   });
 
   test("updated title persists after full reload", async () => {
+    // A reload drops the volunteer's in-memory keys; sign in again so
+    // the fresh decrypt pipeline proves the edit persisted server-side.
     await page.reload();
-
-    // Wait for crypto pipeline to complete and ticket to re-decrypt.
-    await expect(page.getByText(UPDATED_TITLE)).toBeVisible({
+    await login(page);
+    await expect(page.getByText(UPDATED_TITLE).first()).toBeVisible({
       timeout: CRYPTO_TIMEOUT,
     });
   });
 
   test("restore original title for test idempotency", async () => {
-    // Re-open the ticket if needed after reload.
-    const ticketVisible = await page
-      .getByText(UPDATED_TITLE)
-      .isVisible()
-      .catch(() => false);
-    if (!ticketVisible) {
-      await openTicketByTitle(page, UPDATED_TITLE);
-    }
+    // Re-open the ticket after the reload + re-login landed on the
+    // dashboard.
+    await openTicketByTitle(page, UPDATED_TITLE);
 
-    const desktop = await isDesktopLayout(page);
-    if (!desktop) {
-      const moreActions = page.getByRole("button", {
-        name: /more actions/i,
-      });
-      await moreActions.click();
-    }
+    await openTicketInfoPanel(page, /edit ticket/i);
 
     const editItem = page.getByText(/edit ticket/i).first();
     await expect(editItem).toBeVisible({ timeout: 5_000 });
@@ -132,10 +116,12 @@ test.describe.serial("Ticket content edit", () => {
     await expect(saveButton).toBeEnabled({ timeout: 3_000 });
     await saveButton.click();
 
-    await expect(page.getByText(/content saved/i)).toBeVisible({
+    await expect(
+      page.getByTestId("shell-toasts").getByText(/content saved/i),
+    ).toBeVisible({
       timeout: 5_000,
     });
-    await expect(page.getByText(SEEDED_TITLE)).toBeVisible({
+    await expect(page.getByText(SEEDED_TITLE).first()).toBeVisible({
       timeout: CRYPTO_TIMEOUT,
     });
   });

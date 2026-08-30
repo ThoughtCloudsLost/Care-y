@@ -481,7 +481,7 @@ test.describe.serial("Desktop Responsive Layout", () => {
   test("desktop layout passes axe accessibility audit on dashboard", async () => {
     await sidebar.locator('[data-sidebar-id="home"]').click();
     await expect(page).toHaveURL("/");
-    await expect(page.getByText("Help with housing")).toBeVisible({
+    await expect(page.getByText("Help with housing").first()).toBeVisible({
       timeout: CRYPTO_TIMEOUT,
     });
 

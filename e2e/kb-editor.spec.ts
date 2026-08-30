@@ -52,7 +52,7 @@ test.describe.serial("KB Editor (Create/Edit, Categories, ATAG)", () => {
     // WebKit's navigation events can linger longer than Chromium after
     // the 2FA redirect, blocking locator resolution. Waiting for a
     // known decrypted element proves the page is interactive.
-    await expect(page.getByText("Help with housing")).toBeVisible({
+    await expect(page.getByText("Help with housing").first()).toBeVisible({
       timeout: CRYPTO_TIMEOUT,
     });
   });

@@ -12,7 +12,7 @@ test.describe.serial("Mobile Layout Preserved (regression)", () => {
     await startCoverage(page);
     await login(page);
 
-    await expect(page.getByText("Help with housing")).toBeVisible({
+    await expect(page.getByText("Help with housing").first()).toBeVisible({
       timeout: CRYPTO_TIMEOUT,
     });
   });

@@ -11,7 +11,7 @@ test.describe.serial("Dashboard (Overview Tab)", () => {
     page = await browser.newPage();
     await startCoverage(page);
     await login(page);
-    await expect(page.getByText("Help with housing")).toBeVisible({
+    await expect(page.getByText("Help with housing").first()).toBeVisible({
       timeout: CRYPTO_TIMEOUT,
     });
   });
@@ -156,7 +156,7 @@ test.describe.serial("Dashboard (Overview Tab)", () => {
     // Use SPA navigation to preserve crypto Worker state.
     await page.getByRole("tab", { name: "Overview" }).click();
     await expect(page).toHaveURL("/");
-    await expect(page.getByText("Help with housing")).toBeVisible({
+    await expect(page.getByText("Help with housing").first()).toBeVisible({
       timeout: CRYPTO_TIMEOUT,
     });
 

@@ -48,7 +48,7 @@ test.describe.serial("Ticket Reply (Encrypted Message Send)", () => {
     page = await browser.newPage();
     await startCoverage(page);
     await login(page);
-    await expect(page.getByText("Help with housing")).toBeVisible({
+    await expect(page.getByText("Help with housing").first()).toBeVisible({
       timeout: CRYPTO_TIMEOUT,
     });
   });
@@ -77,7 +77,15 @@ test.describe.serial("Ticket Reply (Encrypted Message Send)", () => {
     }
     expect(ticketId).toBeTruthy();
     makeClientPortalCapable(ticketId!);
+
+    // The channel was inserted via SQL behind the app's back, so no
+    // query invalidation carries the portalCapable flag into the cached
+    // detail payload (portal.spec's navigate-away-and-back works only
+    // because the real upgrade mutation invalidates). Reload for a cold
+    // cache and sign in again, since a reload drops the in-memory keys.
     await page.reload();
+    await login(page);
+    await openTicketByTitle(page, "Help with housing");
     await expect(page.locator('[role="log"]')).toBeVisible({
       timeout: CRYPTO_TIMEOUT,
     });

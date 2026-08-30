@@ -62,3 +62,25 @@ export function countRows(table: string, where?: string): number {
   const result = queryDb(`SELECT count(*) FROM ${table}${clause};`);
   return Number(result);
 }
+
+/**
+ * Reset every client to the SMS/Email tier and drop all portal state.
+ *
+ * Mirrors the global-setup tier reset so a spec that upgrades clients
+ * (portal.spec, account-portal.spec) starts fresh even when an earlier
+ * spec or another browser project already ran an upgrade flow against
+ * the shared org. Ticket titles are encrypted, so a per-client reset
+ * cannot be targeted from SQL; the org-wide reset is safe because every
+ * spec that needs a channel creates its own.
+ */
+export function resetCommunicationTiers(): void {
+  queryDb(
+    [
+      "DELETE FROM portal_messages;",
+      "DELETE FROM portal_channels;",
+      "DELETE FROM client_accounts;",
+      "UPDATE clients SET communication_tier = 'sms_email'",
+      "  WHERE communication_tier <> 'sms_email';",
+    ].join("\n"),
+  );
+}

@@ -21,7 +21,7 @@ test.describe.serial("Ticket Detail (Chat View)", () => {
     page = await browser.newPage();
     await startCoverage(page);
     await login(page);
-    await expect(page.getByText("Help with housing")).toBeVisible({
+    await expect(page.getByText("Help with housing").first()).toBeVisible({
       timeout: CRYPTO_TIMEOUT,
     });
   });
@@ -274,6 +274,13 @@ test.describe.serial("Ticket Detail (Chat View)", () => {
     const dialog = await openComposeActions(page);
     await clickComposeAction(dialog, /text client/i);
 
+    // First SMS activation in a page session shows the exposure hint;
+    // compose activates on dismissal (same flow ticket-actions.spec
+    // walks step by step).
+    const exposureDismiss = page.locator('[data-testid="exposure-dismiss"]');
+    await expect(exposureDismiss).toBeVisible({ timeout: 3_000 });
+    await exposureDismiss.click();
+
     // Send button.
     const sendBtn = page.getByRole("button", { name: /send/i });
     await expect(sendBtn).toBeVisible({ timeout: 3_000 });
@@ -459,11 +466,18 @@ test.describe.serial("Ticket Detail (Chat View)", () => {
       await page.waitForTimeout(300);
     }
 
-    // Activate reply compose mode (collapsed bar only shows + button).
+    // Activate SMS compose mode (the seeded ticket has no portal
+    // channel, so "Reply to" is absent; drafts are mode-keyed in the
+    // same in-memory store). The exposure hint was dismissed earlier in
+    // this session; clear it defensively if it reappears.
     const dialog = await openComposeActions(page);
-    await clickComposeAction(dialog, /reply to/i);
+    await clickComposeAction(dialog, /text client/i);
+    const hintDismiss = page.locator('[data-testid="exposure-dismiss"]');
+    if (await hintDismiss.isVisible({ timeout: 1_000 }).catch(() => false)) {
+      await hintDismiss.click();
+    }
 
-    const textarea = page.getByRole("textbox");
+    const textarea = page.getByRole("textbox", { name: /type a message/i });
     await expect(textarea).toBeVisible({ timeout: 3_000 });
     await textarea.fill("Snapshot test draft");
 
@@ -483,9 +497,14 @@ test.describe.serial("Ticket Detail (Chat View)", () => {
 
     // Reopen compose mode to check if the draft was preserved.
     const dialog2 = await openComposeActions(page);
-    await clickComposeAction(dialog2, /reply to/i);
+    await clickComposeAction(dialog2, /text client/i);
+    if (await hintDismiss.isVisible({ timeout: 1_000 }).catch(() => false)) {
+      await hintDismiss.click();
+    }
 
-    const restoredTextarea = page.getByRole("textbox");
+    const restoredTextarea = page.getByRole("textbox", {
+      name: /type a message/i,
+    });
     await expect(restoredTextarea).toBeVisible({ timeout: 3_000 });
     const restored = await restoredTextarea.inputValue();
     expect(restored).toBe("Snapshot test draft");
