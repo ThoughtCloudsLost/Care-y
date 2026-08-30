@@ -271,6 +271,9 @@ describe("decryptBrandingPayload", () => {
   });
 
   it("returns null when decryptClientBranding throws", () => {
+    const warnSpy = vi
+      .spyOn(console, "warn")
+      .mockImplementation(() => undefined);
     vi.mocked(decryptClientBranding).mockImplementationOnce(() => {
       throw new Error("decrypt failed");
     });
@@ -283,6 +286,32 @@ describe("decryptBrandingPayload", () => {
       safeExitUrl: null,
     });
     expect(result).toBeNull();
+    warnSpy.mockRestore();
+  });
+
+  it("logs a warning with slug and error constructor on decrypt failure", () => {
+    const warnSpy = vi
+      .spyOn(console, "warn")
+      .mockImplementation(() => undefined);
+    vi.mocked(decryptClientBranding).mockImplementationOnce(() => {
+      throw new TypeError("bad key");
+    });
+
+    decryptBrandingPayload(
+      {
+        orgPublicKey: "abc",
+        clientEncryptedBranding: "xyz",
+        hasIcons: false,
+        iconVersion: null,
+        safeExitUrl: null,
+      },
+      "harbor-org",
+    );
+
+    expect(warnSpy).toHaveBeenCalledWith(
+      "[branding-inject] decrypt failed for harbor-org: TypeError",
+    );
+    warnSpy.mockRestore();
   });
 
   it("returns null when plaintext is not a JSON object", () => {
@@ -439,8 +468,38 @@ describe("applyBrandingToHtml", () => {
   it("replaces every placeholder when values is null", () => {
     const html = applyBrandingToHtml(template, null);
     expect(html).not.toContain("%carey.");
-    expect(html).toContain(">CARE-Y</span>");
+    // Null branding leaves an empty splash name, not the product name.
+    // A client surface should not advertise "CARE-Y" when the org is unknown.
+    expect(html).toContain("></span>");
+    expect(html).not.toContain(">CARE-Y</span>");
     expect(html).toContain('data-org-name=""');
+  });
+
+  it("uses the org name for splashName when orgName is present", () => {
+    const values: InjectedBranding = {
+      orgName: "Harbor House",
+      primaryColor: null,
+      accentColor: null,
+      iconUrl: null,
+      safeExitUrl: null,
+    };
+
+    const html = applyBrandingToHtml(template, values);
+    expect(html).toContain(">Harbor House</span>");
+  });
+
+  it("leaves splashName empty when orgName is null (not the product name)", () => {
+    const values: InjectedBranding = {
+      orgName: null,
+      primaryColor: null,
+      accentColor: null,
+      iconUrl: null,
+      safeExitUrl: null,
+    };
+
+    const html = applyBrandingToHtml(template, values);
+    expect(html).toContain("></span>");
+    expect(html).not.toContain("CARE-Y");
   });
 
   it("escapes script tags and quotes in the org name", () => {

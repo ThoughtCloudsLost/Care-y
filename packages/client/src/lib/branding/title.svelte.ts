@@ -1,9 +1,14 @@
 import { browser } from "$app/environment";
+import { readInjectedOrgName } from "$lib/branding/injected-branding.js";
 
 function getInitialTitle(): string {
   if (!browser) return "CARE-Y";
   try {
-    return localStorage.getItem("care-y-brand-name") ?? "CARE-Y";
+    return (
+      localStorage.getItem("care-y-brand-name") ??
+      readInjectedOrgName() ??
+      "CARE-Y"
+    );
   } catch {
     return "CARE-Y";
   }

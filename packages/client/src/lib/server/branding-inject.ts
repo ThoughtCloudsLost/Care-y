@@ -232,6 +232,7 @@ export function parseBrandingEnvelope(
  */
 export function decryptBrandingPayload(
   response: PublicBrandingResponse,
+  slug?: string,
 ): ClientBrandingPayload | null {
   if (
     response.orgPublicKey === null ||
@@ -260,7 +261,11 @@ export function decryptBrandingPayload(
       accentColor: asString(readProp(parsed, "accentColor")) ?? undefined,
       supportLabel: asString(readProp(parsed, "supportLabel")) ?? undefined,
     };
-  } catch {
+  } catch (err: unknown) {
+    const ctor = err instanceof Error ? err.constructor.name : "unknown";
+    console.warn(
+      `[branding-inject] decrypt failed for ${slug ?? "unknown"}: ${ctor}`,
+    );
     return null;
   }
 }
@@ -350,7 +355,7 @@ export function applyBrandingToHtml(
       "%carey.splashLogoSrc%",
       escapedIcon === null ? "" : `src="${escapedIcon}"`,
     ],
-    ["%carey.splashName%", orgName === null ? "CARE-Y" : escapeHtml(orgName)],
+    ["%carey.splashName%", orgName === null ? "" : escapeHtml(orgName)],
   ]);
 
   return html.replace(
@@ -410,7 +415,7 @@ async function fetchBranding(
 
     await getSodium();
 
-    const payload = decryptBrandingPayload(envelope);
+    const payload = decryptBrandingPayload(envelope, slug);
     return { ok: true, value: buildInjectedBranding(envelope, payload, slug) };
   } catch {
     console.warn("[branding-inject] fetch failed");

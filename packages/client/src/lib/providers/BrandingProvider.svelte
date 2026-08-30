@@ -94,6 +94,7 @@
       } else {
         localStorage.removeItem("care-y-brand-icon-v");
       }
+      localStorage.setItem("care-y-brand-ts", String(Date.now()));
     } catch {
       // localStorage unavailable
     }

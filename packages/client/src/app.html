@@ -118,7 +118,10 @@
         if (ba) d.style.setProperty("--brand-accent", ba);
         var bts = Number(s.getItem("care-y-brand-ts") || "0");
         var fresh = Date.now() - bts < 300000;
-        var bn = fresh && !injectedName ? s.getItem("care-y-brand-name") : null;
+        // Name is read without a freshness gate: a stale org name is better
+        // than the product name, and logout clears the key so staleness is
+        // bounded by the session. Icons remain gated below.
+        var bn = !injectedName ? s.getItem("care-y-brand-name") : null;
         if (injectedName) document.title = injectedName;
         else if (bn) document.title = bn;
         var useCachedIcon = fresh && !injectedIcon;
