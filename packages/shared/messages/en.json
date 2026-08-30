@@ -2771,6 +2771,8 @@
   "portal_you": "You",
   "portal_support_team": "Support team",
   "portal_menu_label": "Menu",
+  "portal_theme_to_dark": "Switch to dark mode",
+  "portal_theme_to_light": "Switch to light mode",
   "portal_quick_exit_label": "Leave this page",
   "portal_web_chat_hint": "Your messages are encrypted before they leave your device. Only assigned volunteers can read them.",
   "portal_hint_dismiss": "Got it",

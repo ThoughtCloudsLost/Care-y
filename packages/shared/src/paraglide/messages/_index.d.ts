@@ -2770,6 +2770,8 @@ export * from "./portal_message_edited.js";
 export * from "./portal_you.js";
 export * from "./portal_support_team.js";
 export * from "./portal_menu_label.js";
+export * from "./portal_theme_to_dark.js";
+export * from "./portal_theme_to_light.js";
 export * from "./portal_quick_exit_label.js";
 export * from "./portal_web_chat_hint.js";
 export * from "./portal_hint_dismiss.js";

@@ -22,13 +22,14 @@
 -->
 <script lang="ts">
   import { List, ListItem } from "konsta/svelte";
-  import { Building2, FileText } from "@lucide/svelte";
+  import { Building2, FileText, Moon, Sun } from "@lucide/svelte";
   import * as m from "$lib/paraglide/messages.js";
   import { resolve } from "$app/paths";
   import { goto } from "$app/navigation";
   import { page } from "$app/state";
   import ShellPanel from "$lib/shell/ShellPanel.svelte";
   import InlineSkeleton from "$lib/components/InlineSkeleton.svelte";
+  import { themeStore } from "$lib/stores/theme.svelte.js";
   import type { ClientDrawerAction } from "./context.js";
 
   interface ClientDrawerProps {
@@ -130,6 +131,31 @@
           {/each}
         </List>
       {/if}
+
+      <!-- Standing appearance toggle. Deliberately does not dismiss: the
+           scheme change is its own feedback, and the label flips in place.
+           Persists via the same store and localStorage key the org app
+           uses, so the whole origin follows. -->
+      <List nested>
+        <ListItem
+          title={themeStore.resolvedScheme === "dark"
+            ? m.portal_theme_to_light()
+            : m.portal_theme_to_dark()}
+          chevron={false}
+          onclick={() => themeStore.toggleColorScheme()}
+          data-testid="drawer-theme-toggle"
+        >
+          {#snippet media()}
+            <span class="drawer-icon">
+              {#if themeStore.resolvedScheme === "dark"}
+                <Sun size={20} aria-hidden="true" />
+              {:else}
+                <Moon size={20} aria-hidden="true" />
+              {/if}
+            </span>
+          {/snippet}
+        </ListItem>
+      </List>
     </div>
 
     <div class="drawer-footer">

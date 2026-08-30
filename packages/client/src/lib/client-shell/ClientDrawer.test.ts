@@ -182,6 +182,28 @@ describe("ClientDrawer", () => {
     }
   });
 
+  describe("appearance toggle", () => {
+    it("switches the color scheme in place without closing the drawer", async () => {
+      const ondismiss = vi.fn();
+      const { container } = renderDrawer({ ondismiss });
+
+      const toggle = container.querySelector(
+        "[data-testid='drawer-theme-toggle']",
+      ) as HTMLElement;
+      expect(toggle).toBeTruthy();
+
+      const before = document.documentElement.classList.contains("dark");
+      await fireEvent.click(toggle);
+
+      expect(document.documentElement.classList.contains("dark")).toBe(!before);
+      expect(ondismiss).not.toHaveBeenCalled();
+
+      // Restore so the singleton store does not leak scheme state.
+      await fireEvent.click(toggle);
+      expect(document.documentElement.classList.contains("dark")).toBe(before);
+    });
+  });
+
   it("does not render its contents while closed", () => {
     const { container } = renderDrawer({
       opened: false,

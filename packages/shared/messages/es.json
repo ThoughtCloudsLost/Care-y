@@ -2771,6 +2771,8 @@
   "portal_you": "Tú",
   "portal_support_team": "Equipo de apoyo",
   "portal_menu_label": "Menú",
+  "portal_theme_to_dark": "Cambiar a modo oscuro",
+  "portal_theme_to_light": "Cambiar a modo claro",
   "portal_quick_exit_label": "Salir de esta página",
   "portal_web_chat_hint": "Tus mensajes se cifran antes de salir de tu dispositivo. Solo los voluntarios asignados pueden leerlos.",
   "portal_hint_dismiss": "Entendido",
