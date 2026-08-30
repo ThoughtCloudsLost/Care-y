@@ -130,27 +130,6 @@
   }
   const pendingUploads = new SvelteMap<string, PendingUpload>();
 
-  // ── Suppress iOS Safari auto-zoom on contenteditable focus ──
-  // Temporarily sets maximum-scale=1 while the editor is mounted.
-  // Restored on unmount so pinch-to-zoom works on other pages.
-  // Disabling meta-viewport zoom conflicts with WCAG 1.4.4 (resize text),
-  // but is accepted here because iOS Safari's auto-zoom on contenteditable
-  // is disorienting and breaks the keyboard-docked toolbar positioning.
-  $effect(() => {
-    const meta = document.querySelector<HTMLMetaElement>(
-      'meta[name="viewport"]',
-    );
-    if (meta === null) return;
-    const original = meta.getAttribute("content") ?? "";
-    meta.setAttribute(
-      "content",
-      original.replace(/maximum-scale=\d+/, "maximum-scale=1"),
-    );
-    return () => {
-      meta.setAttribute("content", original);
-    };
-  });
-
   // ── Editor mount ──
 
   let editorMountEl = $state<HTMLElement | null>(null);
