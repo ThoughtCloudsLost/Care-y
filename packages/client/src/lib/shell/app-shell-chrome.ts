@@ -9,7 +9,10 @@
  * declaration until each surface says what it does with it.
  */
 
-import type { ShellChromeSlots } from "./chrome-contract.js";
+import type {
+  ShellChromeSlots,
+  ShellChromeBehaviors,
+} from "./chrome-contract.js";
 
 export const appShellChrome: ShellChromeSlots = {
   identity: {
@@ -80,6 +83,30 @@ export const appShellChrome: ShellChromeSlots = {
       position: "side-rail",
       rendersByDefault: false,
       gatedBy: "Desktop, and only once a page publishes scroll sections.",
+    },
+  },
+};
+
+export const appShellChromeBehaviors: ShellChromeBehaviors = {
+  contentUnderGlass: {
+    fill: {
+      mechanism: ".chrome-underlap on the thread scroll region",
+      note: "TicketDetail chat container.",
+    },
+  },
+  subnavbarHideOnScroll: {
+    fill: {
+      mechanism: "useThreadChrome -> ShellNavbar subnavbarHidden",
+    },
+  },
+  interactionFlash: {
+    fill: {
+      mechanism: "ShellNavbar flashOpaqueChrome on subnavbar interaction",
+    },
+  },
+  glassIntensity: {
+    fill: {
+      mechanism: "ShellNavbar chromeIntensity interpolation",
     },
   },
 };

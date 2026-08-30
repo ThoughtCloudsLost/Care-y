@@ -1169,7 +1169,7 @@
 
 {#if ticketQuery.isLoading}
   <div
-    class="chat-container"
+    class="chat-container chrome-underlap"
     role="log"
     aria-label={m.shell_loading()}
     use:scroll.scrollToBottom
@@ -1182,7 +1182,7 @@
   </div>
 {:else if ticket}
   <div
-    class="chat-container"
+    class="chat-container chrome-underlap"
     bind:this={scroll.scrollContainerEl}
     use:scroll.scrollToBottom
     onscroll={() => scroll.onScroll(followUps, onreadprogress)}
@@ -1592,9 +1592,15 @@
     padding: 1rem var(--page-pad-x);
   }
 
-  /* Pull the container up behind the glass chrome so messages scroll
-     under the frosted blur. CaseHeader is in the subnavbar chrome;
-     this container's negative margin + padding restores the overlap. */
+  /* The container scrolls under the glass chrome via the shared
+     .chrome-underlap class (shared.css), keeping the pull-up in one
+     place for both the org and client threads.
+     KEEP IN SYNC with the client portal's assembly (PageLayout
+     underChrome): the two surfaces consume the same class through
+     different DOM shapes, so a structural change here (an ancestor
+     gaining overflow clipping, padding moving off this element)
+     must be checked against the clip-chain constraint documented on
+     .chrome-underlap in shared.css and mirrored in PageLayout. */
   .chat-container {
     flex: 1;
     min-height: 0;
@@ -1603,8 +1609,6 @@
     overscroll-behavior: contain;
     display: flex;
     flex-direction: column;
-    margin-top: calc(-1 * (var(--navbar-h, 0px) + var(--subnavbar-h, 0px)));
-    padding-top: calc(var(--navbar-h, 0px) + var(--subnavbar-h, 0px));
   }
 
   /* The conversation thread: a plain flex column in place of Konsta

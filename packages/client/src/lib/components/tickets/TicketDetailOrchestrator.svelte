@@ -34,7 +34,7 @@
     getTabbarHiddenCtx,
     getNavbarOverrideCtx,
   } from "$lib/shell/context.js";
-  import { useScrollDirection } from "$lib/shell/use-scroll-direction.svelte.js";
+  import { useThreadChrome } from "$lib/shell/use-thread-chrome.svelte.js";
   import { layoutMode } from "$lib/stores/layout-mode.svelte";
   import SplitView from "$lib/shell/SplitView.svelte";
   import SubNavbarFilterLayout from "$lib/shell/SubNavbarFilterLayout.svelte";
@@ -320,11 +320,16 @@
   }
   let chatScrollReady = $state(false);
 
-  const scrollDir = useScrollDirection({
+  const threadChrome = useThreadChrome({
     get scrollEl() {
       return chatScrollEl;
     },
-    invert: true,
+    get ready() {
+      return chatScrollReady;
+    },
+    get pinned() {
+      return overlay.active;
+    },
   });
 
   // Tabbar: hidden (the compose bar occupies the bottom area).
@@ -349,9 +354,7 @@
           title: navTitle,
           right: navRight,
           subnavbar: ticketSubnavbar,
-          subnavbarHidden: () =>
-            // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- $state/$derived values read lazily inside callback
-            chatScrollReady && scrollDir.hidden && !overlay.active,
+          subnavbarHidden: () => threadChrome.subnavbarHidden,
         };
     return () => {
       navbarCtx.current = undefined;

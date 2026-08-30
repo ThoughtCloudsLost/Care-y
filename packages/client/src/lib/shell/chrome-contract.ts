@@ -100,3 +100,41 @@ export function isFilled(
 ): slot is { readonly fill: ChromeSlotFill } {
   return "fill" in slot;
 }
+
+// ── Chrome behaviors ────────────────────────────────────────────────────
+// Placement (above) stops controls drifting between surfaces. Behaviors
+// stop the chrome acting differently on each. Adding a behavior here
+// fails to compile in both shells until each says what it does with it.
+
+export const CHROME_BEHAVIORS = [
+  "contentUnderGlass",
+  "subnavbarHideOnScroll",
+  "interactionFlash",
+  "glassIntensity",
+] as const;
+
+export type ChromeBehaviorName = (typeof CHROME_BEHAVIORS)[number];
+
+export interface ChromeBehaviorFill {
+  /**
+   * The one shared mechanism implementing it. Two shells that both fill
+   * a behavior must name the identical string, which the contract test
+   * compares.
+   */
+  readonly mechanism: string;
+  readonly note?: string;
+}
+
+export type ChromeBehavior =
+  { readonly fill: ChromeBehaviorFill } | { readonly omitted: string };
+
+export type ShellChromeBehaviors = Readonly<
+  Record<ChromeBehaviorName, ChromeBehavior>
+>;
+
+/** Narrowing helper for behavior entries. */
+export function isBehaviorFilled(
+  b: ChromeBehavior,
+): b is { readonly fill: ChromeBehaviorFill } {
+  return "fill" in b;
+}

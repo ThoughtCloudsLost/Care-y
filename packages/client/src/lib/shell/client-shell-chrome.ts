@@ -9,7 +9,10 @@
  * Lives beside ClientShell for the same reason its org counterpart does.
  */
 
-import type { ShellChromeSlots } from "./chrome-contract.js";
+import type {
+  ShellChromeSlots,
+  ShellChromeBehaviors,
+} from "./chrome-contract.js";
 
 export const clientShellChrome: ShellChromeSlots = {
   identity: { fill: { position: "navbar-leading", rendersByDefault: true } },
@@ -62,5 +65,29 @@ export const clientShellChrome: ShellChromeSlots = {
   sectionRail: {
     omitted:
       "Client pages are one flow rather than a page of sections, and the 720px reading measure leaves no gutter for a rail to sit in.",
+  },
+};
+
+export const clientShellChromeBehaviors: ShellChromeBehaviors = {
+  contentUnderGlass: {
+    fill: {
+      mechanism: ".chrome-underlap on the thread scroll region",
+      note: "PageLayout underChrome on the portal thread.",
+    },
+  },
+  subnavbarHideOnScroll: {
+    fill: {
+      mechanism: "useThreadChrome -> ShellNavbar subnavbarHidden",
+    },
+  },
+  interactionFlash: {
+    fill: {
+      mechanism: "ShellNavbar flashOpaqueChrome on subnavbar interaction",
+    },
+  },
+  glassIntensity: {
+    fill: {
+      mechanism: "ShellNavbar chromeIntensity interpolation",
+    },
   },
 };

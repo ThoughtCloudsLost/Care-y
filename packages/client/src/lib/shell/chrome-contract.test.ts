@@ -21,12 +21,18 @@ import { render, cleanup } from "@testing-library/svelte";
 import {
   CHROME_SLOTS,
   CHROME_SLOT_TEST_IDS,
+  CHROME_BEHAVIORS,
   isFilled,
+  isBehaviorFilled,
   type ChromeSlotName,
   type ShellChromeSlots,
+  type ShellChromeBehaviors,
 } from "./chrome-contract.js";
-import { appShellChrome } from "./app-shell-chrome.js";
-import { clientShellChrome } from "./client-shell-chrome.js";
+import { appShellChrome, appShellChromeBehaviors } from "./app-shell-chrome.js";
+import {
+  clientShellChrome,
+  clientShellChromeBehaviors,
+} from "./client-shell-chrome.js";
 import type * as TrpcModule from "$lib/trpc/index.js";
 import type * as LogoUrlModule from "$lib/branding/logo-url.svelte.js";
 import type * as LayoutModeModule from "$lib/stores/layout-mode.svelte.js";
@@ -221,6 +227,7 @@ const { default: ClientShellHarness } =
 interface ShellUnderTest {
   readonly name: string;
   readonly slots: ShellChromeSlots;
+  readonly behaviors: ShellChromeBehaviors;
   readonly render: () => HTMLElement;
 }
 
@@ -228,11 +235,13 @@ const SHELLS: readonly ShellUnderTest[] = [
   {
     name: "AppShell",
     slots: appShellChrome,
+    behaviors: appShellChromeBehaviors,
     render: () => render(AppShellHarness).container,
   },
   {
     name: "ClientShell",
     slots: clientShellChrome,
+    behaviors: clientShellChromeBehaviors,
     render: () => render(ClientShellHarness).container,
   },
 ];
@@ -313,6 +322,32 @@ describe("chrome contract", () => {
       const client = clientShellChrome[slot];
       if (!isFilled(org) || !isFilled(client)) continue;
       expect(client.fill.position, `${slot} placement`).toBe(org.fill.position);
+    }
+  });
+
+  // ── Behavior contract ──────────────────────────────────────────────
+
+  for (const shell of SHELLS) {
+    describe(`${shell.name} behaviors`, () => {
+      it("declares every behavior", () => {
+        for (const behavior of CHROME_BEHAVIORS) {
+          expect(
+            Object.keys(shell.behaviors),
+            `${behavior} must be declared`,
+          ).toContain(behavior);
+        }
+      });
+    });
+  }
+
+  it("uses the same mechanism string for behaviors both shells fill", () => {
+    for (const behavior of CHROME_BEHAVIORS) {
+      const org = appShellChromeBehaviors[behavior];
+      const client = clientShellChromeBehaviors[behavior];
+      if (!isBehaviorFilled(org) || !isBehaviorFilled(client)) continue;
+      expect(client.fill.mechanism, `${behavior} mechanism`).toBe(
+        org.fill.mechanism,
+      );
     }
   });
 });

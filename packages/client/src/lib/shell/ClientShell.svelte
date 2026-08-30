@@ -169,6 +169,7 @@
         {navbarHeight}
         actions={quickExit}
         subnavbar={shell?.subnavbar}
+        subnavbarHidden={() => shell?.subnavbarHidden?.() === true}
         onsubnavbarheight={(h: number) => {
           subnavbarHeight = h;
         }}

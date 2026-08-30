@@ -84,6 +84,12 @@ export interface PageLayoutProps {
   /** CSS touch-action value for the scroll container. Default: 'auto'. */
   touchAction?: string;
   /**
+   * Requires lockScroll. Applies the shared `.chrome-underlap` class to
+   * the scroll region so a chat thread scrolls behind the navbar/subnavbar
+   * glass.
+   */
+  underChrome?: boolean;
+  /**
    * Bindable handle on the scroll region, when lockScroll owns the scroll.
    *
    * A chat page needs the scrolling element to anchor position on prepend

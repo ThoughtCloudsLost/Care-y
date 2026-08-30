@@ -15,6 +15,7 @@
     lockScroll = false,
     bottomBar,
     overlayBottomBar = false,
+    underChrome = false,
     touchAction = "auto",
     scrollEl = $bindable(undefined),
     children,
@@ -57,11 +58,13 @@
   class="page-layout"
   class:lock-scroll={lockScroll}
   class:overlay-mode={overlayBottomBar}
+  class:under-chrome={underChrome}
 >
   {#if lockScroll}
     <div
       class="scroll-region"
       class:scroll-region-overlay={overlayBottomBar}
+      class:chrome-underlap={underChrome}
       style:touch-action={touchAction}
       bind:this={scrollEl}
     >
@@ -96,6 +99,23 @@
 
   .page-layout.overlay-mode {
     position: relative;
+  }
+
+  /* chrome-underlap pulls the scroll region above this box, into the
+     chrome padding the SHELL scroll container reserves. overflow: hidden
+     here would clip that overhang at the bottom edge of the subnavbar
+     (an element's own padding box is never clipped, but an intermediate
+     ancestor's box is). The org chat container avoids the problem by
+     carrying padding and overflow on one element; this override gives
+     the portal the same clip chain. Sizing does not need the hidden
+     overflow: min-height: 0 plus the region's own overflow-y do that.
+     KEEP IN SYNC with the org thread's assembly (TicketDetail
+     .chat-container): both consume .chrome-underlap through different
+     DOM shapes; the clip-chain constraint is documented on the class
+     in shared.css and a structural change on either surface must be
+     mirrored on the other. */
+  .page-layout.lock-scroll.under-chrome {
+    overflow: visible;
   }
 
   .scroll-region {

@@ -63,6 +63,11 @@ export interface ClientShellState {
    * and pin the composer, matching how the org ticket detail works.
    */
   readonly lockScroll?: boolean;
+  /**
+   * Reactive getter: true while the subnavbar row should collapse.
+   * The shell forwards it to ShellNavbar.
+   */
+  readonly subnavbarHidden?: () => boolean;
 }
 
 export interface ClientShellContainer {

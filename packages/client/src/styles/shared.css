@@ -1036,3 +1036,26 @@ html.glass-dark.light
     display: none;
   }
 }
+
+/* ── Chrome underlap ──────────────────────────────────────────
+   Single definition of "a thread scroll region slides under the
+   shell chrome." The shell scroll containers reserve chrome height
+   with padding, and this class cancels that reservation for the
+   inner scroll region so content passes behind the glass. Both the
+   org chat container and PageLayout's underChrome mode must use
+   this class, never a private copy.
+
+   KEEP IN SYNC: the class has exactly two consumers, assembled
+   differently, and a change to either side's arrangement must be
+   mirrored on the other. Org: TicketDetail .chat-container, where
+   padding and overflow live on one element. Client: PageLayout
+   underChrome, where an intermediate box must not clip (see the
+   under-chrome overflow override there). The clip-chain constraint
+   for any consumer: every ancestor between the element carrying this
+   class and the shell scroll container that reserves the chrome
+   padding must not clip overflow, or paint stops at an opaque line
+   under the subnavbar. */
+.chrome-underlap {
+  margin-top: calc(-1 * (var(--navbar-h, 0px) + var(--subnavbar-h, 0px)));
+  padding-top: calc(var(--navbar-h, 0px) + var(--subnavbar-h, 0px));
+}
