@@ -7,8 +7,9 @@
 
   let { count }: Props = $props();
 
-  // Unread is its own channel, not a status: ink on paper at maximum quiet
-  // contrast, deliberately not brand and not red. Zero unread means no pill.
+  // Unread is its own channel in the approved blue (--unread), mixed 78/22
+  // toward --ink so the count text (--paper) keeps 4.5:1 contrast in both
+  // light and dark schemes. Zero unread means no pill.
   const label = $derived(
     count === 1
       ? m.new_pill_count_one({ count })
@@ -28,7 +29,7 @@
     letter-spacing: 0.06em;
     padding: 2px 8px;
     border-radius: 999px;
-    background: var(--ink);
+    background: color-mix(in srgb, var(--unread) 78%, var(--ink) 22%);
     color: var(--paper);
     font-variant-numeric: tabular-nums;
     white-space: nowrap;
