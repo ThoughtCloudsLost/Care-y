@@ -101,6 +101,13 @@ export default defineConfig({
   ],
   server: {
     ...("https" in mkcert ? { https: mkcert.https } : {}),
+    // Vite validates the Host header on the HMR WebSocket upgrade even over
+    // HTTPS (the plain-HTTP page check is skipped when https is on), so the
+    // dev hostname must be allowlisted or the handshake 400s and browsers
+    // keep serving stale modules. Explicit hostname, not `true`: the Vite
+    // docs warn the wildcard reopens the DNS-rebinding protection this
+    // check exists for.
+    allowedHosts: ["dev.care-y.local"],
     proxy: {
       "/trpc": {
         target: "http://localhost:3000",
