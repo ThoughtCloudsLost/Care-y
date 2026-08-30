@@ -133,6 +133,45 @@ describe("PortalBridge", () => {
     });
   });
 
+  describe("channelSessionRestart", () => {
+    it("sends the passphrase only and returns channelId + auth + blindedElement", async () => {
+      const bridge = await createReadyBridge();
+
+      const promise = bridge.channelSessionRestart("retry words");
+
+      const restartCall = await vi.waitFor(() => {
+        const calls = mockWorkerInstance?.postMessage.mock.calls;
+        const found = calls?.find(
+          (c: unknown[]) =>
+            (c[0] as { type: string }).type === "channelSessionRestart",
+        ) as
+          | [{ type: string; id: number; passphrase?: string; seed?: unknown }]
+          | undefined;
+        expect(found).toBeDefined();
+        return found!;
+      });
+
+      // The retry never carries the seed; the Worker re-derives from
+      // its held copy.
+      expect(restartCall[0].seed).toBeUndefined();
+      expect(restartCall[0].passphrase).toBe("retry words");
+
+      respondFromWorker({
+        id: restartCall[0].id,
+        ok: true,
+        type: "channelSessionRestart",
+        channelId: "abc123",
+        auth: "dGVzdC1hdXRo",
+        blindedElement: "dGVzdC1ibGluZA",
+      });
+
+      const result = await promise;
+      expect(result.channelId).toBe("abc123");
+      expect(result.auth).toBe("dGVzdC1hdXRo");
+      expect(result.blindedElement).toBe("dGVzdC1ibGluZA");
+    });
+  });
+
   describe("channelSessionFinish", () => {
     it("returns clientPublic", async () => {
       const bridge = await createReadyBridge();

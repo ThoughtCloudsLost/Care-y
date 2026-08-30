@@ -15,6 +15,7 @@ import type {
   PortalResponseForRequest,
   PortalInitResponse,
   ChannelSessionStartResponse,
+  ChannelSessionRestartResponse,
   ChannelSessionFinishResponse,
   VerifyKeyCheckResponse,
   DecryptMessageResponse,
@@ -31,6 +32,7 @@ describe("portal-protocol types", () => {
     const allTypes: PortalWorkerRequestType[] = [
       "init",
       "channelSessionStart",
+      "channelSessionRestart",
       "channelSessionFinish",
       "verifyKeyCheck",
       "decryptMessage",
@@ -41,7 +43,7 @@ describe("portal-protocol types", () => {
       "accountSessionFinish",
       "zeroAll",
     ];
-    expect(allTypes).toHaveLength(11);
+    expect(allTypes).toHaveLength(12);
   });
 
   it("PortalResponseForRequest maps each type correctly (compile-time)", () => {
@@ -50,6 +52,8 @@ describe("portal-protocol types", () => {
     const _init: PortalResponseForRequest<"init"> = {} as PortalInitResponse;
     const _channelStart: PortalResponseForRequest<"channelSessionStart"> =
       {} as ChannelSessionStartResponse;
+    const _channelRestart: PortalResponseForRequest<"channelSessionRestart"> =
+      {} as ChannelSessionRestartResponse;
     const _channelFinish: PortalResponseForRequest<"channelSessionFinish"> =
       {} as ChannelSessionFinishResponse;
     const _keyCheck: PortalResponseForRequest<"verifyKeyCheck"> =
@@ -73,6 +77,7 @@ describe("portal-protocol types", () => {
     void [
       _init,
       _channelStart,
+      _channelRestart,
       _channelFinish,
       _keyCheck,
       _decrypt,

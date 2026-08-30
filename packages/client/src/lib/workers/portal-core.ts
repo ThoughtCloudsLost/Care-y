@@ -13,12 +13,19 @@
  *   UNINITIALIZED -> READY (after libsodium init)
  *   READY -> CHANNEL_BLINDED (after channelSessionStart)
  *   CHANNEL_BLINDED -> CHANNEL_KEYED (after channelSessionFinish)
+ *   CHANNEL_BLINDED | CHANNEL_KEYED -> CHANNEL_BLINDED
+ *     (after channelSessionRestart: passphrase retry from the held seed)
  *   CHANNEL_KEYED -> READY (after zeroAll)
  *
  *   READY -> ACCOUNT_STRETCHED (after accountSessionStart, Argon2id phase)
  *   ACCOUNT_STRETCHED -> ACCOUNT_BLINDED (after accountSessionStart, blind phase)
  *   ACCOUNT_BLINDED -> ACCOUNT_KEYED (after accountSessionFinish)
  *   ACCOUNT_KEYED -> READY (after zeroAll)
+ *
+ * Crypto ops (decryptMessage, encryptReply, decryptAttachmentKey,
+ * decryptAttachmentBlob) run in either KEYED state under that session's
+ * keypair. verifyKeyCheck is channel-only: it backs the passphrase gate,
+ * which account sessions do not have.
  *
  * ADR-091: channel keypairs derive through a threshold OPRF round under
  * a per-channel tag; the main thread drives the tRPC evaluate call
@@ -79,6 +86,7 @@ import type {
   PortalErrorResponse,
   PortalWorkerErrorCode,
   ChannelSessionStartRequest,
+  ChannelSessionRestartRequest,
   ChannelSessionFinishRequest,
   VerifyKeyCheckRequest,
   DecryptMessageRequest,
@@ -180,6 +188,30 @@ function requireChannelKeyed(
   return true;
 }
 
+/**
+ * Gate for ops that work in either session kind. Message decrypt, reply
+ * encrypt, and attachment ops are session-agnostic: the account thread
+ * uses the same ECIES construction under the account keypair.
+ */
+function requireKeyed(
+  sink: PortalSink,
+  id: number,
+  type: PortalWorkerRequestType,
+): boolean {
+  if (state !== "CHANNEL_KEYED" && state !== "ACCOUNT_KEYED") {
+    postError(sink, id, type, "No session established", "NOT_READY");
+    return false;
+  }
+  return true;
+}
+
+/** The keypair belonging to whichever session kind is active. */
+function activeKeypair(): PortalKeypair {
+  return state === "ACCOUNT_KEYED"
+    ? assertPresent(accountKeypair, "accountKeypair")
+    : assertPresent(channelKeypair, "channelKeypair");
+}
+
 function assertPresent<T>(value: T | null, name: string): T {
   if (value === null) {
     throw new PortalInvalidStateError(
@@ -264,6 +296,67 @@ function handleChannelSessionStart(
   } finally {
     // Zero the transferred seed copy
     sodium.memzero(seedBytes);
+  }
+}
+
+function handleChannelSessionRestart(
+  req: ChannelSessionRestartRequest,
+  sink: PortalSink,
+): void {
+  // Valid after a completed round whose key check failed (CHANNEL_KEYED)
+  // or after an evaluate that never finished (CHANNEL_BLINDED). The seed
+  // stays Worker-held across attempts; the main thread zeroed its copy at
+  // channelSessionStart, so a mistyped passphrase retries through here.
+  if (state !== "CHANNEL_BLINDED" && state !== "CHANNEL_KEYED") {
+    postError(
+      sink,
+      req.id,
+      "channelSessionRestart",
+      `Invalid state: expected CHANNEL_BLINDED or CHANNEL_KEYED, got ${state}`,
+      "INVALID_STATE",
+    );
+    return;
+  }
+
+  const sodium = requireSodium();
+
+  try {
+    const seed = assertPresent(channelSeed, "channelSeed");
+
+    // Zero the spent round's material before deriving the new round
+    channelBlindInput = zeroAndClear(sodium, channelBlindInput);
+    channelBlindState = zeroAndClear(sodium, channelBlindState);
+    if (channelKeypair) {
+      sodium.memzero(channelKeypair.clientPrivate);
+      channelKeypair = null;
+    }
+
+    const derivedChannelId = deriveChannelId(seed);
+    const auth = deriveChannelAuth(seed);
+    const input = portalOprfInput(seed, req.passphrase);
+    const { blindedElement, blindState } = oprfBlind(input);
+
+    channelBlindState = blindState;
+    channelBlindInput = input;
+    state = "CHANNEL_BLINDED";
+
+    const msg: PortalWorkerResponse = {
+      id: req.id,
+      ok: true,
+      type: "channelSessionRestart",
+      channelId: derivedChannelId,
+      auth: encode(auth),
+      blindedElement: encode(blindedElement),
+    };
+    sink(msg);
+  } catch (err: unknown) {
+    postError(
+      sink,
+      req.id,
+      "channelSessionRestart",
+      err instanceof Error ? err.message : String(err),
+      "WORKER_ERROR",
+    );
   }
 }
 
@@ -365,9 +458,9 @@ function handleDecryptMessage(
   req: DecryptMessageRequest,
   sink: PortalSink,
 ): void {
-  if (!requireChannelKeyed(sink, req.id, "decryptMessage")) return;
+  if (!requireKeyed(sink, req.id, "decryptMessage")) return;
 
-  const kp = assertPresent(channelKeypair, "channelKeypair");
+  const kp = activeKeypair();
   const ephemeralPoint = toRistrettoPoint(decode(req.ephemeralPoint));
   const nonce = decode(req.nonce);
   const ciphertext = decode(req.ciphertext);
@@ -453,10 +546,10 @@ function encryptSingleAttachment(
 }
 
 function handleEncryptReply(req: EncryptReplyRequest, sink: PortalSink): void {
-  if (!requireChannelKeyed(sink, req.id, "encryptReply")) return;
+  if (!requireKeyed(sink, req.id, "encryptReply")) return;
 
   const sodium = requireSodium();
-  const kp = assertPresent(channelKeypair, "channelKeypair");
+  const kp = activeKeypair();
   const orgPubBytes = decode(req.orgPublicKey);
   const tkTemp: SymmetricKey = generateContentKey();
 
@@ -500,9 +593,9 @@ function handleDecryptAttachmentKey(
   req: DecryptAttachmentKeyRequest,
   sink: PortalSink,
 ): void {
-  if (!requireChannelKeyed(sink, req.id, "decryptAttachmentKey")) return;
+  if (!requireKeyed(sink, req.id, "decryptAttachmentKey")) return;
 
-  const kp = assertPresent(channelKeypair, "channelKeypair");
+  const kp = activeKeypair();
   const ephemeralPoint = toRistrettoPoint(decode(req.ephemeralPoint));
   const nonce = decode(req.nonce);
   const ciphertext = decode(req.ciphertext);
@@ -538,17 +631,7 @@ function handleDecryptAttachmentBlob(
   req: DecryptAttachmentBlobRequest,
   sink: PortalSink,
 ): void {
-  // Both CHANNEL_KEYED and ACCOUNT_KEYED can decrypt attachments
-  if (state !== "CHANNEL_KEYED" && state !== "ACCOUNT_KEYED") {
-    postError(
-      sink,
-      req.id,
-      "decryptAttachmentBlob",
-      "No session established",
-      "NOT_READY",
-    );
-    return;
-  }
+  if (!requireKeyed(sink, req.id, "decryptAttachmentBlob")) return;
 
   const sodium = requireSodium();
   const fileKeyBytes = decode(req.fileKey);
@@ -744,6 +827,9 @@ export function createPortalDispatcher(
           break;
         case "channelSessionStart":
           handleChannelSessionStart(req, sink);
+          break;
+        case "channelSessionRestart":
+          handleChannelSessionRestart(req, sink);
           break;
         case "channelSessionFinish":
           handleChannelSessionFinish(req, sink);

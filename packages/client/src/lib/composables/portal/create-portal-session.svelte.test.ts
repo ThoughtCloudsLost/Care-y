@@ -68,11 +68,13 @@ function makeStubEvaluate(): ChannelEvaluateCallback {
 
 /**
  * Helper: auto-respond to the bridge's init, channelSessionStart,
- * channelSessionFinish, and verifyKeyCheck requests as they arrive.
- * Mimics a worker that succeeds on all operations.
+ * channelSessionRestart, channelSessionFinish, and verifyKeyCheck
+ * requests as they arrive. Mimics a worker that succeeds on all
+ * operations. `passed` may be a function so a test can flip the key
+ * check result between attempts.
  */
 function autoRespondSuccess(
-  opts: { passed: boolean } = { passed: true },
+  opts: { passed: boolean | (() => boolean) } = { passed: true },
 ): void {
   // Install an interceptor that responds automatically
   if (mockWorkerInstance) {
@@ -99,6 +101,16 @@ function autoRespondSuccess(
               blindedElement: "dGVzdC1ibGluZA",
             });
             break;
+          case "channelSessionRestart":
+            respondFromWorker({
+              id,
+              ok: true,
+              type: "channelSessionRestart",
+              channelId: "test-channel-id",
+              auth: "dGVzdC1hdXRo",
+              blindedElement: "dGVzdC1ibGluZA",
+            });
+            break;
           case "channelSessionFinish":
             respondFromWorker({
               id,
@@ -112,7 +124,8 @@ function autoRespondSuccess(
               id,
               ok: true,
               type: "verifyKeyCheck",
-              passed: opts.passed,
+              passed:
+                typeof opts.passed === "function" ? opts.passed() : opts.passed,
             });
             break;
           case "zeroAll":
@@ -265,6 +278,72 @@ describe("createPortalSessionState (bridge-backed)", () => {
       expect(state.session).not.toBeNull();
       expect(state.passphraseError).toBe(false);
       expect(state.passphraseDerivePending).toBe(false);
+    });
+
+    it("retries through channelSessionRestart on the same worker after a failed key check", async () => {
+      // Regression: the fragment seed is zeroed after the first
+      // channelSessionStart, so a second attempt must reuse the
+      // Worker-held seed instead of constructing a fresh bridge from
+      // the zeroed main-thread copy.
+      const state = createPortalSessionState();
+      const fragData = buildFragmentData();
+      const keyCheckWire = {
+        ephemeralPoint: "ep",
+        nonce: "n",
+        ciphertext: "ct",
+      };
+
+      // Attempt 1: wrong passphrase. The key check passes only once a
+      // channelSessionRestart has been seen (i.e., on the retry).
+      const first = state.submitPassphrase(
+        "wrong passphrase",
+        fragData,
+        keyCheckWire,
+        makeStubEvaluate(),
+        noopPow,
+      );
+
+      autoRespondSuccess({
+        passed: () =>
+          mockWorkerInstance?.postMessage.mock.calls.some(
+            (c: unknown[]) =>
+              (c[0] as { type: string }).type === "channelSessionRestart",
+          ) ?? false,
+      });
+      const initCall = mockWorkerInstance?.postMessage.mock.calls.find(
+        (c: unknown[]) => (c[0] as { type: string }).type === "init",
+      ) as [{ type: string; id: number }] | undefined;
+      if (initCall) {
+        respondFromWorker({ id: initCall[0].id, ok: true, type: "init" });
+      }
+
+      await first;
+      expect(state.passphraseError).toBe(true);
+      expect(state.session).toBeNull();
+
+      const workerAfterFirst = mockWorkerInstance;
+
+      // Attempt 2: correct passphrase retries on the SAME worker.
+      await state.submitPassphrase(
+        "correct passphrase",
+        fragData,
+        keyCheckWire,
+        makeStubEvaluate(),
+        noopPow,
+      );
+
+      expect(state.keyCheckPassed).toBe(true);
+      expect(state.session).not.toBeNull();
+      expect(state.passphraseError).toBe(false);
+      expect(mockWorkerInstance).toBe(workerAfterFirst);
+
+      const sentTypes = workerAfterFirst!.postMessage.mock.calls.map(
+        (c: unknown[]) => (c[0] as { type: string }).type,
+      );
+      expect(sentTypes.filter((t) => t === "channelSessionStart")).toHaveLength(
+        1,
+      );
+      expect(sentTypes).toContain("channelSessionRestart");
     });
 
     it("sets passphraseError when key check fails", async () => {

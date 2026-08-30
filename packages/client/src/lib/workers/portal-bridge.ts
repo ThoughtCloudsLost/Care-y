@@ -197,6 +197,25 @@ export class PortalBridge {
   }
 
   /**
+   * Re-run the channel derivation from the Worker-held seed with a new
+   * passphrase. Valid after a failed key check or an unfinished round;
+   * the seed never returns to the main thread.
+   */
+  async channelSessionRestart(
+    passphrase?: string,
+  ): Promise<{ channelId: string; auth: string; blindedElement: string }> {
+    const resp = expectResponse(
+      await this.sendRequest({ type: "channelSessionRestart", passphrase }),
+      "channelSessionRestart",
+    );
+    return {
+      channelId: resp.channelId,
+      auth: resp.auth,
+      blindedElement: resp.blindedElement,
+    };
+  }
+
+  /**
    * Finish a channel session: OPRF finalize + derive keypair.
    * Returns the client public key (base64url).
    */

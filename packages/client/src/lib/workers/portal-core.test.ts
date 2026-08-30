@@ -28,6 +28,7 @@ import type {
   PortalWorkerEvent,
   PortalErrorResponse,
   ChannelSessionStartResponse,
+  ChannelSessionRestartResponse,
   ChannelSessionFinishResponse,
   VerifyKeyCheckResponse,
   DecryptMessageResponse,
@@ -124,6 +125,43 @@ async function fullChannelSessionFlow(
     clientPublic: finishResp.clientPublic,
     channelId: startResp.channelId,
   };
+}
+
+/**
+ * Run the full account session flow: init -> accountSessionStart ->
+ * (simulate OPRF) -> accountSessionFinish. Leaves the core ACCOUNT_KEYED.
+ */
+async function fullAccountSessionFlow(
+  password: string,
+  oprfKey: Uint8Array,
+): Promise<{ clientPublic: string }> {
+  await dispatchAndWait({ type: "init", id: 110 });
+
+  const salt = generateSalt();
+  const passwordBytes = new TextEncoder().encode(password);
+  const pwBuf = new ArrayBuffer(passwordBytes.byteLength);
+  new Uint8Array(pwBuf).set(passwordBytes);
+
+  const startResp = (await dispatchAndWait({
+    type: "accountSessionStart",
+    id: 111,
+    password: pwBuf,
+    salt: encode(new Uint8Array(salt)),
+  })) as AccountSessionStartResponse;
+
+  expect(startResp.ok).toBe(true);
+
+  const evaluatedB64 = simulateOprfEvaluate(startResp.blindedElement, oprfKey);
+
+  const finishResp = (await dispatchAndWait({
+    type: "accountSessionFinish",
+    id: 112,
+    evaluated: evaluatedB64,
+  })) as AccountSessionFinishResponse;
+
+  expect(finishResp.ok).toBe(true);
+
+  return { clientPublic: finishResp.clientPublic };
 }
 
 // -- Test suite ---------------------------------------------------------------
@@ -492,6 +530,123 @@ describe("portal-core", () => {
     });
   });
 
+  describe("channelSessionRestart", () => {
+    it("recovers from a wrong passphrase without re-posting the seed", async () => {
+      // Regression: the main thread zeroes its seed copy after
+      // channelSessionStart, so a passphrase retry must re-derive from
+      // the Worker-held seed. Before the restart op existed, a failed
+      // attempt discarded the Worker and the retry derived from zeroes.
+      handleZeroAll(-1, testSink);
+      sinkMessages = [];
+
+      const sodium = requireSodium();
+      const seed = generatePortalSeed();
+      const oprfKey = sodium.crypto_core_ristretto255_scalar_random();
+      const passphrase = "correct horse battery staple five";
+
+      // Mint side: derive the real keypair and build the key check.
+      const { clientPublic } = await fullChannelSessionFlow(
+        seed,
+        oprfKey,
+        passphrase,
+      );
+      const keyCheck = eciesEncrypt(
+        new TextEncoder().encode(PORTAL_KEY_CHECK),
+        toRistrettoPoint(decode(clientPublic)),
+      );
+
+      // Gate side, attempt 1: wrong passphrase fails the key check.
+      handleZeroAll(-1, testSink);
+      await fullChannelSessionFlow(seed, oprfKey, "wrong words entirely");
+      const failResp = (await dispatchAndWait({
+        type: "verifyKeyCheck",
+        id: 120,
+        ephemeralPoint: encode(keyCheck.ephemeralPoint),
+        nonce: encode(keyCheck.nonce),
+        ciphertext: encode(keyCheck.ciphertext),
+      })) as VerifyKeyCheckResponse;
+      expect(failResp.passed).toBe(false);
+
+      // Gate side, attempt 2: restart from the held seed with the
+      // correct passphrase. No seed crosses the boundary.
+      const restartResp = (await dispatchAndWait({
+        type: "channelSessionRestart",
+        id: 121,
+        passphrase,
+      })) as ChannelSessionRestartResponse;
+      expect(restartResp.ok).toBe(true);
+      expect(restartResp.channelId).toBe(deriveChannelId(seed));
+
+      const evaluatedB64 = simulateOprfEvaluate(
+        restartResp.blindedElement,
+        oprfKey,
+      );
+      const finishResp = (await dispatchAndWait({
+        type: "channelSessionFinish",
+        id: 122,
+        evaluated: evaluatedB64,
+      })) as ChannelSessionFinishResponse;
+      expect(finishResp.ok).toBe(true);
+      expect(finishResp.clientPublic).toBe(clientPublic);
+
+      const passResp = (await dispatchAndWait({
+        type: "verifyKeyCheck",
+        id: 123,
+        ephemeralPoint: encode(keyCheck.ephemeralPoint),
+        nonce: encode(keyCheck.nonce),
+        ciphertext: encode(keyCheck.ciphertext),
+      })) as VerifyKeyCheckResponse;
+      expect(passResp.passed).toBe(true);
+
+      sodium.memzero(oprfKey);
+    });
+
+    it("restarts from CHANNEL_BLINDED after an abandoned round", async () => {
+      // An evaluate that never finished leaves the round half-open; a
+      // retry must still work.
+      handleZeroAll(-1, testSink);
+      sinkMessages = [];
+
+      const sodium = requireSodium();
+      const seed = generatePortalSeed();
+      await dispatchAndWait({ type: "init", id: 130 });
+
+      const seedBuf = new ArrayBuffer(seed.byteLength);
+      new Uint8Array(seedBuf).set(seed);
+      await dispatchAndWait({
+        type: "channelSessionStart",
+        id: 131,
+        seed: seedBuf,
+        passphrase: "first try words",
+      });
+
+      // No finish: state is CHANNEL_BLINDED. Restart directly.
+      const restartResp = (await dispatchAndWait({
+        type: "channelSessionRestart",
+        id: 132,
+        passphrase: "second try words",
+      })) as ChannelSessionRestartResponse;
+      expect(restartResp.ok).toBe(true);
+      expect(restartResp.channelId).toBe(deriveChannelId(seed));
+
+      sodium.memzero(seed);
+    });
+
+    it("rejects channelSessionRestart when no channel round exists", async () => {
+      handleZeroAll(-1, testSink);
+      sinkMessages = [];
+      await dispatchAndWait({ type: "init", id: 140 });
+
+      const resp = await dispatchAndWait({
+        type: "channelSessionRestart",
+        id: 141,
+        passphrase: "any words at all",
+      });
+      expect(resp.ok).toBe(false);
+      expect((resp as PortalErrorResponse).code).toBe("INVALID_STATE");
+    });
+  });
+
   describe("account session", () => {
     it("completes the account derivation pipeline", async () => {
       handleZeroAll(-1, testSink);
@@ -566,6 +721,135 @@ describe("portal-core", () => {
       });
       expect(resp.ok).toBe(false);
       expect((resp as PortalErrorResponse).code).toBe("INVALID_STATE");
+    });
+
+    it("decrypts a message sealed to the account public key", async () => {
+      // Regression: the intake opt-in self copy is sealed to the account
+      // keypair and decrypted in an ACCOUNT_KEYED session, which the
+      // channel-only gate used to reject with NOT_READY.
+      handleZeroAll(-1, testSink);
+      sinkMessages = [];
+
+      const sodium = requireSodium();
+      const oprfKey = sodium.crypto_core_ristretto255_scalar_random();
+      const { clientPublic } = await fullAccountSessionFlow(
+        "account-op-password",
+        oprfKey,
+      );
+
+      const accountPub = toRistrettoPoint(decode(clientPublic));
+      const triple = eciesEncrypt(
+        new TextEncoder().encode("Intake self copy"),
+        accountPub,
+      );
+
+      const resp = (await dispatchAndWait({
+        type: "decryptMessage",
+        id: 84,
+        ephemeralPoint: encode(triple.ephemeralPoint),
+        nonce: encode(triple.nonce),
+        ciphertext: encode(triple.ciphertext),
+      })) as DecryptMessageResponse;
+
+      expect(resp.ok).toBe(true);
+      expect(resp.plaintext).toBe("Intake self copy");
+
+      sodium.memzero(oprfKey);
+    });
+
+    it("encrypts a reply whose self-copy decrypts under the account key", async () => {
+      // Worker is still ACCOUNT_KEYED from the previous test
+      const sodium = requireSodium();
+      const orgSecret = sodium.randombytes_buf(32);
+      const orgPublic = sodium.crypto_scalarmult_base(orgSecret);
+
+      const encResp = (await dispatchAndWait({
+        type: "encryptReply",
+        id: 85,
+        text: "Account reply text",
+        orgPublicKey: encode(orgPublic),
+        ticketId: "ticket-acct",
+        followUpId: "fu-acct",
+        keyGeneration: "gen-acct",
+        attachments: [],
+      })) as EncryptReplyResponse;
+
+      expect(encResp.ok).toBe(true);
+      expect(encResp.wrappedTkTemp.length).toBeGreaterThan(0);
+
+      // The self copy round-trips through the account keypair held in
+      // the worker.
+      const selfResp = (await dispatchAndWait({
+        type: "decryptMessage",
+        id: 86,
+        ephemeralPoint: encResp.selfCopy.ephemeralPoint,
+        nonce: encResp.selfCopy.nonce,
+        ciphertext: encResp.selfCopy.ciphertext,
+      })) as DecryptMessageResponse;
+
+      expect(selfResp.ok).toBe(true);
+      expect(selfResp.plaintext).toBe("Account reply text");
+
+      sodium.memzero(orgSecret);
+    });
+
+    it("round-trips an attachment key in an account session", async () => {
+      // Worker is still ACCOUNT_KEYED
+      const sodium = requireSodium();
+      const orgSecret = sodium.randombytes_buf(32);
+      const orgPublic = sodium.crypto_scalarmult_base(orgSecret);
+
+      const fileContent = new TextEncoder().encode("account attachment");
+      const fileBuffer = new ArrayBuffer(fileContent.byteLength);
+      new Uint8Array(fileBuffer).set(fileContent);
+
+      const encResp = (await dispatchAndWait({
+        type: "encryptReply",
+        id: 87,
+        text: "With account attachment",
+        orgPublicKey: encode(orgPublic),
+        ticketId: "ticket-acct-2",
+        followUpId: "fu-acct-2",
+        keyGeneration: "gen-acct-2",
+        attachments: [
+          {
+            attachmentId: "att-acct",
+            filename: "account.txt",
+            contentType: "text/plain",
+            data: fileBuffer,
+          },
+        ],
+      })) as EncryptReplyResponse;
+
+      expect(encResp.ok).toBe(true);
+      const att = encResp.attachments[0]!;
+
+      const keyResp = (await dispatchAndWait({
+        type: "decryptAttachmentKey",
+        id: 88,
+        ephemeralPoint: att.selfCopy.ephemeralPoint,
+        nonce: att.selfCopy.nonce,
+        ciphertext: att.selfCopy.ciphertext,
+      })) as DecryptAttachmentKeyResponse;
+
+      expect(keyResp.ok).toBe(true);
+      expect(keyResp.filename).toBe("account.txt");
+
+      sodium.memzero(orgSecret);
+    });
+
+    it("keeps verifyKeyCheck channel-only in an account session", async () => {
+      // Worker is still ACCOUNT_KEYED. The passphrase gate has no account
+      // counterpart, so the op stays gated on CHANNEL_KEYED.
+      const resp = await dispatchAndWait({
+        type: "verifyKeyCheck",
+        id: 89,
+        ephemeralPoint: encode(new Uint8Array(32)),
+        nonce: encode(new Uint8Array(24)),
+        ciphertext: encode(new Uint8Array(48)),
+      });
+      expect(resp.ok).toBe(false);
+      expect((resp as PortalErrorResponse).code).toBe("NOT_READY");
     });
   });
 

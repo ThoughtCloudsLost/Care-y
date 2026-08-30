@@ -54,6 +54,19 @@ export interface ChannelSessionStartRequest {
 }
 
 /**
+ * Re-run the channel derivation from the Worker-held seed with a new
+ * passphrase. Valid after a completed round whose key check failed, or
+ * after an evaluate that never finished. The seed never returns to the
+ * main thread; retrying a mistyped passphrase flows through here.
+ */
+export interface ChannelSessionRestartRequest {
+  readonly type: "channelSessionRestart";
+  readonly id: number;
+  /** Spoken passphrase (omit for plain links). */
+  readonly passphrase?: string;
+}
+
+/**
  * Finalize the OPRF round and derive the portal keypair.
  * The tRPC evaluate hop runs on the main thread between start and finish.
  */
@@ -192,6 +205,7 @@ export interface PortalZeroAllRequest {
 export type PortalWorkerRequest =
   | PortalInitRequest
   | ChannelSessionStartRequest
+  | ChannelSessionRestartRequest
   | ChannelSessionFinishRequest
   | VerifyKeyCheckRequest
   | DecryptMessageRequest
@@ -227,6 +241,16 @@ export interface PortalInitResponse extends PortalSuccessBase {
 export interface ChannelSessionStartResponse extends PortalSuccessBase {
   readonly type: "channelSessionStart";
   /** Hex channel identifier derived from the seed. */
+  readonly channelId: string;
+  /** Base64url channel auth token. */
+  readonly auth: string;
+  /** Base64url blinded element for the OPRF server. */
+  readonly blindedElement: string;
+}
+
+export interface ChannelSessionRestartResponse extends PortalSuccessBase {
+  readonly type: "channelSessionRestart";
+  /** Hex channel identifier derived from the held seed. */
   readonly channelId: string;
   /** Base64url channel auth token. */
   readonly auth: string;
@@ -319,6 +343,7 @@ export interface PortalZeroAllResponse extends PortalSuccessBase {
 export type PortalWorkerSuccessResponse =
   | PortalInitResponse
   | ChannelSessionStartResponse
+  | ChannelSessionRestartResponse
   | ChannelSessionFinishResponse
   | VerifyKeyCheckResponse
   | DecryptMessageResponse
