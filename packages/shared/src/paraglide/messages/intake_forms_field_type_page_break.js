@@ -10,7 +10,7 @@ const en_intake_forms_field_type_page_break = /** @type {(inputs: Intake_Forms_F
 };
 
 const es_intake_forms_field_type_page_break = /** @type {(inputs: Intake_Forms_Field_Type_Page_BreakInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Salto de pagina`)
+	return /** @type {LocalizedString} */ (`Salto de página`)
 };
 
 /**

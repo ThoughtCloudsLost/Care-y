@@ -10,7 +10,7 @@ const en_admin_escrow_browser_safety_extensions = /** @type {(inputs: Admin_Escr
 };
 
 const es_admin_escrow_browser_safety_extensions = /** @type {(inputs: Admin_Escrow_Browser_Safety_ExtensionsInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Desactive las extensiones del navegador, o use una ventana privada/incognito (la mayoria de las extensiones estan desactivadas por defecto en incognito)`)
+	return /** @type {LocalizedString} */ (`Desactive las extensiones del navegador, o use una ventana privada/incógnito (la mayoria de las extensiones estan desactivadas por defecto en incógnito)`)
 };
 
 /**

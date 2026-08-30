@@ -10,7 +10,7 @@ const en_admin_invite_password_too_short = /** @type {(inputs: Admin_Invite_Pass
 };
 
 const es_admin_invite_password_too_short = /** @type {(inputs: Admin_Invite_Password_Too_ShortInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`La contrasena debe tener al menos 16 caracteres`)
+	return /** @type {LocalizedString} */ (`La contraseña debe tener al menos 16 caracteres`)
 };
 
 /**

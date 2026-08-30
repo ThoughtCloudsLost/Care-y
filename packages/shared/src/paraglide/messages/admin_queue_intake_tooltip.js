@@ -10,7 +10,7 @@ const en_admin_queue_intake_tooltip = /** @type {(inputs: Admin_Queue_Intake_Too
 };
 
 const es_admin_queue_intake_tooltip = /** @type {(inputs: Admin_Queue_Intake_TooltipInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Los mensajes de voz de nuevos llamantes se envian a la cola de recepcion`)
+	return /** @type {LocalizedString} */ (`Los mensajes de voz de nuevos llamantes se envian a la cola de recepción`)
 };
 
 /**

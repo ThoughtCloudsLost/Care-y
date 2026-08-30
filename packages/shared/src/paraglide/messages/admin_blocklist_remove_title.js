@@ -10,7 +10,7 @@ const en_admin_blocklist_remove_title = /** @type {(inputs: Admin_Blocklist_Remo
 };
 
 const es_admin_blocklist_remove_title = /** @type {(inputs: Admin_Blocklist_Remove_TitleInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Eliminar numero bloqueado`)
+	return /** @type {LocalizedString} */ (`Eliminar número bloqueado`)
 };
 
 /**

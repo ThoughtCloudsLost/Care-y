@@ -10,7 +10,7 @@ const en_intake_forms_page_break_divider = /** @type {(inputs: Intake_Forms_Page
 };
 
 const es_intake_forms_page_break_divider = /** @type {(inputs: Intake_Forms_Page_Break_DividerInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Salto de pagina`)
+	return /** @type {LocalizedString} */ (`Salto de página`)
 };
 
 /**

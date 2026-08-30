@@ -10,7 +10,7 @@ const en_intake_responses_export_confirm_title = /** @type {(inputs: Intake_Resp
 };
 
 const es_intake_responses_export_confirm_title = /** @type {(inputs: Intake_Responses_Export_Confirm_TitleInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Exportar respuestas descifradas?`)
+	return /** @type {LocalizedString} */ (`¿Exportar respuestas descifradas?`)
 };
 
 /**

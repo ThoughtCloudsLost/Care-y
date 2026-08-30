@@ -10,7 +10,7 @@ const en_getting_started_greetings_desc = /** @type {(inputs: Getting_Started_Gr
 };
 
 const es_getting_started_greetings_desc = /** @type {(inputs: Getting_Started_Greetings_DescInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Graba lo que escuchan las personas que llaman, incluyendo musica de espera.`)
+	return /** @type {LocalizedString} */ (`Graba lo que escuchan las personas que llaman, incluyendo música de espera.`)
 };
 
 /**

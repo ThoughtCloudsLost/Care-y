@@ -10,7 +10,7 @@ const en_admin_greetings_filter_all = /** @type {(inputs: Admin_Greetings_Filter
 };
 
 const es_admin_greetings_filter_all = /** @type {(inputs: Admin_Greetings_Filter_AllInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Todos los telefonos`)
+	return /** @type {LocalizedString} */ (`Todos los teléfonos`)
 };
 
 /**

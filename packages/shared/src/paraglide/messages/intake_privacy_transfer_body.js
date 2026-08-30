@@ -10,7 +10,7 @@ const en_intake_privacy_transfer_body = /** @type {(inputs: Intake_Privacy_Trans
 };
 
 const es_intake_privacy_transfer_body = /** @type {(inputs: Intake_Privacy_Transfer_BodyInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Si usas el servicio telefonico, tu numero de telefono es procesado por Twilio, que opera en Estados Unidos. Esta transferencia esta cubierta por Clausulas Contractuales Tipo. Tus envios cifrados por la web permanecen en el servidor europeo y nunca se envian a terceros.`)
+	return /** @type {LocalizedString} */ (`Si usas el servicio telefónico, tu número de teléfono es procesado por Twilio, que opera en Estados Unidos. Esta transferencia esta cubierta por Clausulas Contractuales Tipo. Tus envíos cifrados por la web permanecen en el servidor europeo y nunca se envian a terceros.`)
 };
 
 /**

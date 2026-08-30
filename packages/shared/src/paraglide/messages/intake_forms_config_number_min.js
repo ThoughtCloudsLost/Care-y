@@ -10,7 +10,7 @@ const en_intake_forms_config_number_min = /** @type {(inputs: Intake_Forms_Confi
 };
 
 const es_intake_forms_config_number_min = /** @type {(inputs: Intake_Forms_Config_Number_MinInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Valor minimo`)
+	return /** @type {LocalizedString} */ (`Valor mínimo`)
 };
 
 /**

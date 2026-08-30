@@ -10,7 +10,7 @@ const en_admin_templates_empty = /** @type {(inputs: Admin_Templates_EmptyInputs
 };
 
 const es_admin_templates_empty = /** @type {(inputs: Admin_Templates_EmptyInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Aun no hay plantillas.`)
+	return /** @type {LocalizedString} */ (`Aún no hay plantillas.`)
 };
 
 /**

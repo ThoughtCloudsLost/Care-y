@@ -10,7 +10,7 @@ const en_admin_escrow_storage_separate = /** @type {(inputs: Admin_Escrow_Storag
 };
 
 const es_admin_escrow_storage_separate = /** @type {(inputs: Admin_Escrow_Storage_SeparateInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Escriba la frase de contrasena por separado de la USB`)
+	return /** @type {LocalizedString} */ (`Escriba la frase de contraseña por separado de la USB`)
 };
 
 /**

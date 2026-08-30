@@ -10,7 +10,7 @@ const en_intake_forms_submit_message_placeholder = /** @type {(inputs: Intake_Fo
 };
 
 const es_intake_forms_submit_message_placeholder = /** @type {(inputs: Intake_Forms_Submit_Message_PlaceholderInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Se muestra despues de un envio exitoso.`)
+	return /** @type {LocalizedString} */ (`Se muestra después de un envío exitoso.`)
 };
 
 /**

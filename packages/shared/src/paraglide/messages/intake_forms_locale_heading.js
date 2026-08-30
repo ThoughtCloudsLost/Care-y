@@ -10,7 +10,7 @@ const en_intake_forms_locale_heading = /** @type {(inputs: Intake_Forms_Locale_H
 };
 
 const es_intake_forms_locale_heading = /** @type {(inputs: Intake_Forms_Locale_HeadingInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Idioma de edicion`)
+	return /** @type {LocalizedString} */ (`Idioma de edición`)
 };
 
 /**

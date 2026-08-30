@@ -10,7 +10,7 @@ const en_admin_telephony_status_ready = /** @type {(inputs: Admin_Telephony_Stat
 };
 
 const es_admin_telephony_status_ready = /** @type {(inputs: Admin_Telephony_Status_ReadyInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Servicio telefonico activo`)
+	return /** @type {LocalizedString} */ (`Servicio telefónico activo`)
 };
 
 /**

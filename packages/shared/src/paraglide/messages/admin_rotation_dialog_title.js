@@ -10,7 +10,7 @@ const en_admin_rotation_dialog_title = /** @type {(inputs: Admin_Rotation_Dialog
 };
 
 const es_admin_rotation_dialog_title = /** @type {(inputs: Admin_Rotation_Dialog_TitleInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Rotar clave de la organizacion`)
+	return /** @type {LocalizedString} */ (`Rotar clave de la organización`)
 };
 
 /**

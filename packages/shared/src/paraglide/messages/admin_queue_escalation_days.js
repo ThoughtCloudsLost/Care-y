@@ -10,7 +10,7 @@ const en_admin_queue_escalation_days = /** @type {(inputs: Admin_Queue_Escalatio
 };
 
 const es_admin_queue_escalation_days = /** @type {(inputs: Admin_Queue_Escalation_DaysInputs) => LocalizedString} */ (i) => {
-	return /** @type {LocalizedString} */ (`${i?.count} dias`)
+	return /** @type {LocalizedString} */ (`${i?.count} días`)
 };
 
 /**

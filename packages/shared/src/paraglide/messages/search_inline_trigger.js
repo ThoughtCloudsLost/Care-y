@@ -10,7 +10,7 @@ const en_search_inline_trigger = /** @type {(inputs: Search_Inline_TriggerInputs
 };
 
 const es_search_inline_trigger = /** @type {(inputs: Search_Inline_TriggerInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Buscar en esta pagina`)
+	return /** @type {LocalizedString} */ (`Buscar en esta página`)
 };
 
 /**

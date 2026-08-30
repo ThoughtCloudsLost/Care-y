@@ -10,7 +10,7 @@ const en_hub_general_subtitle = /** @type {(inputs: Hub_General_SubtitleInputs) 
 };
 
 const es_hub_general_subtitle = /** @type {(inputs: Hub_General_SubtitleInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Nombre de la organizacion, idioma y codigo de pais`)
+	return /** @type {LocalizedString} */ (`Nombre de la organización, idioma y código de país`)
 };
 
 /**

@@ -10,7 +10,7 @@ const en_onboarding_telephony_submit = /** @type {(inputs: Onboarding_Telephony_
 };
 
 const es_onboarding_telephony_submit = /** @type {(inputs: Onboarding_Telephony_SubmitInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Guardar configuracion de telefonia`)
+	return /** @type {LocalizedString} */ (`Guardar configuración de telefonía`)
 };
 
 /**

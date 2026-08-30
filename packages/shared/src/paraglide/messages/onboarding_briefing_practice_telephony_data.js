@@ -10,7 +10,7 @@ const en_onboarding_briefing_practice_telephony_data = /** @type {(inputs: Onboa
 };
 
 const es_onboarding_briefing_practice_telephony_data = /** @type {(inputs: Onboarding_Briefing_Practice_Telephony_DataInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Credenciales del sistema telefonico`)
+	return /** @type {LocalizedString} */ (`Credenciales del sistema telefónico`)
 };
 
 /**

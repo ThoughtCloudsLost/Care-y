@@ -10,7 +10,7 @@ const en_hub_quarantine_subtitle = /** @type {(inputs: Hub_Quarantine_SubtitleIn
 };
 
 const es_hub_quarantine_subtitle = /** @type {(inputs: Hub_Quarantine_SubtitleInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Mensajes de voz que no se pudieron enrutar automaticamente`)
+	return /** @type {LocalizedString} */ (`Mensajes de voz que no se pudieron enrutar automáticamente`)
 };
 
 /**

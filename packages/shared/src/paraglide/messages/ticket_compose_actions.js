@@ -10,7 +10,7 @@ const en_ticket_compose_actions = /** @type {(inputs: Ticket_Compose_ActionsInpu
 };
 
 const es_ticket_compose_actions = /** @type {(inputs: Ticket_Compose_ActionsInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Acciones de composicion`)
+	return /** @type {LocalizedString} */ (`Acciones de composición`)
 };
 
 /**

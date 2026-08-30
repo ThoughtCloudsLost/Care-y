@@ -10,7 +10,7 @@ const en_admin_queue_editor_escalation_range = /** @type {(inputs: Admin_Queue_E
 };
 
 const es_admin_queue_editor_escalation_range = /** @type {(inputs: Admin_Queue_Editor_Escalation_RangeInputs) => LocalizedString} */ (i) => {
-	return /** @type {LocalizedString} */ (`Los dias de escalacion deben estar entre ${i?.min} y 365.`)
+	return /** @type {LocalizedString} */ (`Los días de escalación deben estar entre ${i?.min} y 365.`)
 };
 
 /**

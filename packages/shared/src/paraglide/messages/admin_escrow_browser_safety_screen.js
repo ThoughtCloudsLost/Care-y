@@ -10,7 +10,7 @@ const en_admin_escrow_browser_safety_screen = /** @type {(inputs: Admin_Escrow_B
 };
 
 const es_admin_escrow_browser_safety_screen = /** @type {(inputs: Admin_Escrow_Browser_Safety_ScreenInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Asegurese de que no haya comparticion o grabacion de pantalla activa`)
+	return /** @type {LocalizedString} */ (`Asegúrese de que no haya compartición o grabación de pantalla activa`)
 };
 
 /**

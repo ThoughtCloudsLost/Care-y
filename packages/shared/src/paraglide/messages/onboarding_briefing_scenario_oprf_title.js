@@ -10,7 +10,7 @@ const en_onboarding_briefing_scenario_oprf_title = /** @type {(inputs: Onboardin
 };
 
 const es_onboarding_briefing_scenario_oprf_title = /** @type {(inputs: Onboarding_Briefing_Scenario_Oprf_TitleInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Alguien compromete uno de los dos servidores de verificacion`)
+	return /** @type {LocalizedString} */ (`Alguien compromete uno de los dos servidores de verificación`)
 };
 
 /**

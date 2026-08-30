@@ -10,7 +10,7 @@ const en_onboarding_briefing_scenario_network_body = /** @type {(inputs: Onboard
 };
 
 const es_onboarding_briefing_scenario_network_body = /** @type {(inputs: Onboarding_Briefing_Scenario_Network_BodyInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Alguien monitoreando el trafico de internet puede ver que una persona se conecta a tu servidor y determinar su ubicacion por direccion IP. No pueden leer lo que se envia, pero saber que alguien se conecta a tu servicio ya puede ser peligroso. Una VPN oculta esta conexion de tu red local y proveedor de internet al enrutar el trafico a traves de un servidor separado. Para mayor proteccion, Tor oculta la conexion de todos. Ni siquiera tu proveedor de VPN puede ver a donde va el trafico. Tu organizacion puede recomendar o requerir cualquiera de las dos opciones segun el nivel de amenaza.`)
+	return /** @type {LocalizedString} */ (`Alguien monitoreando el tráfico de internet puede ver que una persona se conecta a tu servidor y determinar su ubicación por dirección IP. No pueden leer lo que se envia, pero saber que alguien se conecta a tu servicio ya puede ser peligroso. Una VPN oculta esta conexión de tu red local y proveedor de internet al enrutar el tráfico a traves de un servidor separado. Para mayor protección, Tor oculta la conexión de todos. Ni siquiera tu proveedor de VPN puede ver a donde va el tráfico. Tu organización puede recomendar o requerir cualquiera de las dos opciones según el nivel de amenaza.`)
 };
 
 /**

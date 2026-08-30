@@ -10,7 +10,7 @@ const en_admin_invite_crypto_error = /** @type {(inputs: Admin_Invite_Crypto_Err
 };
 
 const es_admin_invite_crypto_error = /** @type {(inputs: Admin_Invite_Crypto_ErrorInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`La cuenta fue creada, pero la distribucion de claves fallo. La clave de la organizacion se distribuira automaticamente cuando un administrador inicie sesion.`)
+	return /** @type {LocalizedString} */ (`La cuenta fue creada, pero la distribución de claves fallo. La clave de la organización se distribuira automáticamente cuando un administrador inicie sesión.`)
 };
 
 /**

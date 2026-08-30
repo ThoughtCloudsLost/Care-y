@@ -10,7 +10,7 @@ const en_admin_branding_logo_too_large = /** @type {(inputs: Admin_Branding_Logo
 };
 
 const es_admin_branding_logo_too_large = /** @type {(inputs: Admin_Branding_Logo_Too_LargeInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`No se pudo comprimir la imagen. Prueba con una imagen mas simple.`)
+	return /** @type {LocalizedString} */ (`No se pudo comprimir la imagen. Prueba con una imagen más simple.`)
 };
 
 /**

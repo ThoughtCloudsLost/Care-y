@@ -10,7 +10,7 @@ const en_onboarding_briefing_choice_tor_why = /** @type {(inputs: Onboarding_Bri
 };
 
 const es_onboarding_briefing_choice_tor_why = /** @type {(inputs: Onboarding_Briefing_Choice_Tor_WhyInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Sin Tor, tu proveedor de internet (y cualquiera que acceda a sus registros) puede ver que alguien visito tu sitio CARE-Y. Cada conexion incluye una direccion IP, que revela la ubicacion fisica del usuario. No pueden leer el contenido cifrado, pero la conexion misma revela la participacion y el paradero.`)
+	return /** @type {LocalizedString} */ (`Sin Tor, tu proveedor de internet (y cualquiera que acceda a sus registros) puede ver que alguien visito tu sitio CARE-Y. Cada conexión incluye una dirección IP, que revela la ubicación fisica del usuario. No pueden leer el contenido cifrado, pero la conexión misma revela la participación y el paradero.`)
 };
 
 /**

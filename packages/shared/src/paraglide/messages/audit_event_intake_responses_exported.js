@@ -10,7 +10,7 @@ const en_audit_event_intake_responses_exported = /** @type {(inputs: Audit_Event
 };
 
 const es_audit_event_intake_responses_exported = /** @type {(inputs: Audit_Event_Intake_Responses_ExportedInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Respuestas de admision exportadas como CSV`)
+	return /** @type {LocalizedString} */ (`Respuestas de admisión exportadas como CSV`)
 };
 
 /**

@@ -10,7 +10,7 @@ const en_intake_protected_encrypted_why = /** @type {(inputs: Intake_Protected_E
 };
 
 const es_intake_protected_encrypted_why = /** @type {(inputs: Intake_Protected_Encrypted_WhyInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Aunque alguien acceda a este servidor o lo confisque, no podra leer lo que escribiste. Tu informacion esta bloqueada y solo se desbloquea para los voluntarios asignados.`)
+	return /** @type {LocalizedString} */ (`Aunque alguien acceda a este servidor o lo confisque, no podrá leer lo que escribiste. Tu información está bloqueada y solo se desbloquea para los voluntarios asignados.`)
 };
 
 /**

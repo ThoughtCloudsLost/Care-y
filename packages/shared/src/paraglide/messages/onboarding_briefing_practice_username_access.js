@@ -10,7 +10,7 @@ const en_onboarding_briefing_practice_username_access = /** @type {(inputs: Onbo
 };
 
 const es_onboarding_briefing_practice_username_access = /** @type {(inputs: Onboarding_Briefing_Practice_Username_AccessInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`El servidor (para verificar inicio de sesion)`)
+	return /** @type {LocalizedString} */ (`El servidor (para verificar inicio de sesión)`)
 };
 
 /**

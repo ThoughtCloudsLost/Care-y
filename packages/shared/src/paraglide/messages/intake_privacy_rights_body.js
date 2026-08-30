@@ -10,7 +10,7 @@ const en_intake_privacy_rights_body = /** @type {(inputs: Intake_Privacy_Rights_
 };
 
 const es_intake_privacy_rights_body = /** @type {(inputs: Intake_Privacy_Rights_BodyInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Puedes pedir ver, corregir o eliminar tu informacion. Contacta a la organizacion y proporciona tu codigo de referencia (que se muestra despues de enviar este formulario) para que puedan localizar tus registros. Tambien tienes derecho a restringir el uso de tus datos o a recibir una copia de los datos que proporcionaste.`)
+	return /** @type {LocalizedString} */ (`Puedes pedir ver, corregir o eliminar tu información. Contacta a la organización y proporciona tu código de referencia (que se muestra después de enviar este formulario) para que puedan localizar tus registros. También tienes derecho a restringir el uso de tus datos o a recibir una copia de los datos que proporcionaste.`)
 };
 
 /**

@@ -10,7 +10,7 @@ const en_intake_forms_config_role_phone_contact = /** @type {(inputs: Intake_For
 };
 
 const es_intake_forms_config_role_phone_contact = /** @type {(inputs: Intake_Forms_Config_Role_Phone_ContactInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Contacto telefonico`)
+	return /** @type {LocalizedString} */ (`Contacto telefónico`)
 };
 
 /**

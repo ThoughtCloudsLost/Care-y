@@ -10,7 +10,7 @@ const en_admin_telephony_go_to_setup = /** @type {(inputs: Admin_Telephony_Go_To
 };
 
 const es_admin_telephony_go_to_setup = /** @type {(inputs: Admin_Telephony_Go_To_SetupInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Configurar telefonia`)
+	return /** @type {LocalizedString} */ (`Configurar telefonía`)
 };
 
 /**

@@ -10,7 +10,7 @@ const en_onboarding_briefing_practice_heading = /** @type {(inputs: Onboarding_B
 };
 
 const es_onboarding_briefing_practice_heading = /** @type {(inputs: Onboarding_Briefing_Practice_HeadingInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Que significa esto en la practica`)
+	return /** @type {LocalizedString} */ (`Que significa esto en la práctica`)
 };
 
 /**

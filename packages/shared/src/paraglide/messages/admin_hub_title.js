@@ -10,7 +10,7 @@ const en_admin_hub_title = /** @type {(inputs: Admin_Hub_TitleInputs) => Localiz
 };
 
 const es_admin_hub_title = /** @type {(inputs: Admin_Hub_TitleInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Administracion`)
+	return /** @type {LocalizedString} */ (`Administración`)
 };
 
 /**

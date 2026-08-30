@@ -10,7 +10,7 @@ const en_intake_forms_field_type_multiselect_desc = /** @type {(inputs: Intake_F
 };
 
 const es_intake_forms_field_type_multiselect_desc = /** @type {(inputs: Intake_Forms_Field_Type_Multiselect_DescInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Elegir una o mas opciones`)
+	return /** @type {LocalizedString} */ (`Elegir una o más opciones`)
 };
 
 /**

@@ -10,7 +10,7 @@ const en_panel_logout = /** @type {(inputs: Panel_LogoutInputs) => LocalizedStri
 };
 
 const es_panel_logout = /** @type {(inputs: Panel_LogoutInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Cerrar sesion`)
+	return /** @type {LocalizedString} */ (`Cerrar sesión`)
 };
 
 /**

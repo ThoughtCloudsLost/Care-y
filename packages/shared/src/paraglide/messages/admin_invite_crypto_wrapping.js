@@ -10,7 +10,7 @@ const en_admin_invite_crypto_wrapping = /** @type {(inputs: Admin_Invite_Crypto_
 };
 
 const es_admin_invite_crypto_wrapping = /** @type {(inputs: Admin_Invite_Crypto_WrappingInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Distribuyendo clave de la organizacion...`)
+	return /** @type {LocalizedString} */ (`Distribuyendo clave de la organización...`)
 };
 
 /**

@@ -10,7 +10,7 @@ const en_admin_org_title = /** @type {(inputs: Admin_Org_TitleInputs) => Localiz
 };
 
 const es_admin_org_title = /** @type {(inputs: Admin_Org_TitleInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Organizacion`)
+	return /** @type {LocalizedString} */ (`Organización`)
 };
 
 /**

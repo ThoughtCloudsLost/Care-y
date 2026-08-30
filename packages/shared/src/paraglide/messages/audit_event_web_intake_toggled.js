@@ -10,7 +10,7 @@ const en_audit_event_web_intake_toggled = /** @type {(inputs: Audit_Event_Web_In
 };
 
 const es_audit_event_web_intake_toggled = /** @type {(inputs: Audit_Event_Web_Intake_ToggledInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Recepcion en linea activada o desactivada`)
+	return /** @type {LocalizedString} */ (`Recepción en línea activada o desactivada`)
 };
 
 /**

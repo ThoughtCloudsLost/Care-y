@@ -10,7 +10,7 @@ const en_common_load_more = /** @type {(inputs: Common_Load_MoreInputs) => Local
 };
 
 const es_common_load_more = /** @type {(inputs: Common_Load_MoreInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Cargar mas`)
+	return /** @type {LocalizedString} */ (`Cargar más`)
 };
 
 /**

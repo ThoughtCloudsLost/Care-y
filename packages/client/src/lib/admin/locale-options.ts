@@ -1,8 +1,8 @@
 export const LOCALE_OPTIONS = [
   { value: "en", label: "English" },
-  { value: "es", label: "Espanol" },
+  { value: "es", label: "Español" },
   { value: "de", label: "Deutsch" },
-  { value: "fr", label: "Francais" },
+  { value: "fr", label: "Français" },
   { value: "it", label: "Italiano" },
   { value: "pl", label: "Polski" },
   { value: "ru", label: "Russkiy" },

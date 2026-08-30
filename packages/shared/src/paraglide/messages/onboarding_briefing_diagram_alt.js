@@ -10,7 +10,7 @@ const en_onboarding_briefing_diagram_alt = /** @type {(inputs: Onboarding_Briefi
 };
 
 const es_onboarding_briefing_diagram_alt = /** @type {(inputs: Onboarding_Briefing_Diagram_AltInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Diagrama simplificado mostrando como CARE-Y deriva claves de cifrado a partir de contrasenas usando dos servidores de verificacion`)
+	return /** @type {LocalizedString} */ (`Diagrama simplificado mostrando como CARE-Y deriva claves de cifrado a partir de contraseñas usando dos servidores de verificación`)
 };
 
 /**

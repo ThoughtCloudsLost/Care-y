@@ -10,7 +10,7 @@ const en_onboarding_firstlogin_error_invalid_token = /** @type {(inputs: Onboard
 };
 
 const es_onboarding_firstlogin_error_invalid_token = /** @type {(inputs: Onboarding_Firstlogin_Error_Invalid_TokenInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Este enlace de invitacion no es valido o ha expirado.`)
+	return /** @type {LocalizedString} */ (`Este enlace de invitación no es válido o ha expirado.`)
 };
 
 /**

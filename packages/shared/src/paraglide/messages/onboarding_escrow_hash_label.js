@@ -10,7 +10,7 @@ const en_onboarding_escrow_hash_label = /** @type {(inputs: Onboarding_Escrow_Ha
 };
 
 const es_onboarding_escrow_hash_label = /** @type {(inputs: Onboarding_Escrow_Hash_LabelInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Codigo de verificacion`)
+	return /** @type {LocalizedString} */ (`Código de verificación`)
 };
 
 /**

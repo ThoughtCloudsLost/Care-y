@@ -10,7 +10,7 @@ const en_audit_event_intake_responses_viewed = /** @type {(inputs: Audit_Event_I
 };
 
 const es_audit_event_intake_responses_viewed = /** @type {(inputs: Audit_Event_Intake_Responses_ViewedInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Respuestas de admision consultadas`)
+	return /** @type {LocalizedString} */ (`Respuestas de admisión consultadas`)
 };
 
 /**

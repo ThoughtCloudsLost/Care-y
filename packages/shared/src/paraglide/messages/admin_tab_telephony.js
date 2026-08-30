@@ -10,7 +10,7 @@ const en_admin_tab_telephony = /** @type {(inputs: Admin_Tab_TelephonyInputs) =>
 };
 
 const es_admin_tab_telephony = /** @type {(inputs: Admin_Tab_TelephonyInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Telefonia`)
+	return /** @type {LocalizedString} */ (`Telefonía`)
 };
 
 /**

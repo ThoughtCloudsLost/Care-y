@@ -10,7 +10,7 @@ const en_intake_forms_discard_confirm = /** @type {(inputs: Intake_Forms_Discard
 };
 
 const es_intake_forms_discard_confirm = /** @type {(inputs: Intake_Forms_Discard_ConfirmInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Tiene cambios sin guardar. Desea salir sin guardar?`)
+	return /** @type {LocalizedString} */ (`¿Tiene cambios sin guardar. Desea salir sin guardar?`)
 };
 
 /**

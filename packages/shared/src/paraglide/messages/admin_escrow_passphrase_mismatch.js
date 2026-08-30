@@ -10,7 +10,7 @@ const en_admin_escrow_passphrase_mismatch = /** @type {(inputs: Admin_Escrow_Pas
 };
 
 const es_admin_escrow_passphrase_mismatch = /** @type {(inputs: Admin_Escrow_Passphrase_MismatchInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Las frases de contrasena no coinciden`)
+	return /** @type {LocalizedString} */ (`Las frases de contraseña no coinciden`)
 };
 
 /**

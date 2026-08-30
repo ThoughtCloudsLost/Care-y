@@ -10,7 +10,7 @@ const en_ticket_compose_dismiss_mode = /** @type {(inputs: Ticket_Compose_Dismis
 };
 
 const es_ticket_compose_dismiss_mode = /** @type {(inputs: Ticket_Compose_Dismiss_ModeInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Cerrar composicion`)
+	return /** @type {LocalizedString} */ (`Cerrar composición`)
 };
 
 /**

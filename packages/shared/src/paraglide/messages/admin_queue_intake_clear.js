@@ -10,7 +10,7 @@ const en_admin_queue_intake_clear = /** @type {(inputs: Admin_Queue_Intake_Clear
 };
 
 const es_admin_queue_intake_clear = /** @type {(inputs: Admin_Queue_Intake_ClearInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Quitar designacion de recepcion`)
+	return /** @type {LocalizedString} */ (`Quitar designación de recepción`)
 };
 
 /**

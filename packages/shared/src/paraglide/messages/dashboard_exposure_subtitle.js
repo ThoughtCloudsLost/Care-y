@@ -10,7 +10,7 @@ const en_dashboard_exposure_subtitle = /** @type {(inputs: Dashboard_Exposure_Su
 };
 
 const es_dashboard_exposure_subtitle = /** @type {(inputs: Dashboard_Exposure_SubtitleInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Verificando tu estado de proteccion...`)
+	return /** @type {LocalizedString} */ (`Verificando tu estado de protección...`)
 };
 
 /**

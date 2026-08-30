@@ -10,7 +10,7 @@ const en_intake_responses_load_more = /** @type {(inputs: Intake_Responses_Load_
 };
 
 const es_intake_responses_load_more = /** @type {(inputs: Intake_Responses_Load_MoreInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Cargar mas`)
+	return /** @type {LocalizedString} */ (`Cargar más`)
 };
 
 /**

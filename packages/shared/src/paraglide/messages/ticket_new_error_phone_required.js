@@ -10,7 +10,7 @@ const en_ticket_new_error_phone_required = /** @type {(inputs: Ticket_New_Error_
 };
 
 const es_ticket_new_error_phone_required = /** @type {(inputs: Ticket_New_Error_Phone_RequiredInputs) => LocalizedString} */ (i) => {
-	return /** @type {LocalizedString} */ (`El numero de telefono es obligatorio para nuevos ${i?.clients}`)
+	return /** @type {LocalizedString} */ (`El número de teléfono es obligatorio para nuevos ${i?.clients}`)
 };
 
 /**

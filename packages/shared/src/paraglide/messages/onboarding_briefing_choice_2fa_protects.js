@@ -10,7 +10,7 @@ const en_onboarding_briefing_choice_2fa_protects = /** @type {(inputs: Onboardin
 };
 
 const es_onboarding_briefing_choice_2fa_protects = /** @type {(inputs: Onboarding_Briefing_Choice_2fa_ProtectsInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Contrasenas robadas usadas para acceder a cuentas de voluntarios.`)
+	return /** @type {LocalizedString} */ (`Contraseñas robadas usadas para acceder a cuentas de voluntarios.`)
 };
 
 /**

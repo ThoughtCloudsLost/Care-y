@@ -10,7 +10,7 @@ const en_admin_branding_logo_accept = /** @type {(inputs: Admin_Branding_Logo_Ac
 };
 
 const es_admin_branding_logo_accept = /** @type {(inputs: Admin_Branding_Logo_AcceptInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`PNG, JPEG o SVG. Se redimensiona a 512px automaticamente.`)
+	return /** @type {LocalizedString} */ (`PNG, JPEG o SVG. Se redimensiona a 512px automáticamente.`)
 };
 
 /**

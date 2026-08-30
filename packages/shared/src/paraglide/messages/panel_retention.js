@@ -10,7 +10,7 @@ const en_panel_retention = /** @type {(inputs: Panel_RetentionInputs) => Localiz
 };
 
 const es_panel_retention = /** @type {(inputs: Panel_RetentionInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Retencion`)
+	return /** @type {LocalizedString} */ (`Retención`)
 };
 
 /**

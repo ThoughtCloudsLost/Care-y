@@ -10,7 +10,7 @@ const en_client_merge_unlock = /** @type {(inputs: Client_Merge_UnlockInputs) =>
 };
 
 const es_client_merge_unlock = /** @type {(inputs: Client_Merge_UnlockInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Desbloquear fusion`)
+	return /** @type {LocalizedString} */ (`Desbloquear fusión`)
 };
 
 /**

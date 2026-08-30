@@ -10,7 +10,7 @@ const en_settings_title = /** @type {(inputs: Settings_TitleInputs) => Localized
 };
 
 const es_settings_title = /** @type {(inputs: Settings_TitleInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Configuracion`)
+	return /** @type {LocalizedString} */ (`Configuración`)
 };
 
 /**

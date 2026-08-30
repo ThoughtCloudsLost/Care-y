@@ -10,7 +10,7 @@ const en_intake_forms_field_row_max_length = /** @type {(inputs: Intake_Forms_Fi
 };
 
 const es_intake_forms_field_row_max_length = /** @type {(inputs: Intake_Forms_Field_Row_Max_LengthInputs) => LocalizedString} */ (i) => {
-	return /** @type {LocalizedString} */ (`Largo maximo: ${i?.max}`)
+	return /** @type {LocalizedString} */ (`Largo máximo: ${i?.max}`)
 };
 
 /**

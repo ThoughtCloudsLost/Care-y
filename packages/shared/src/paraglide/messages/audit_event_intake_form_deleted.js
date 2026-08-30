@@ -10,7 +10,7 @@ const en_audit_event_intake_form_deleted = /** @type {(inputs: Audit_Event_Intak
 };
 
 const es_audit_event_intake_form_deleted = /** @type {(inputs: Audit_Event_Intake_Form_DeletedInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Formulario de admision eliminado`)
+	return /** @type {LocalizedString} */ (`Formulario de admisión eliminado`)
 };
 
 /**

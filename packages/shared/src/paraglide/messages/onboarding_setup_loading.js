@@ -10,7 +10,7 @@ const en_onboarding_setup_loading = /** @type {(inputs: Onboarding_Setup_Loading
 };
 
 const es_onboarding_setup_loading = /** @type {(inputs: Onboarding_Setup_LoadingInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Verificando estado de configuracion...`)
+	return /** @type {LocalizedString} */ (`Verificando estado de configuración...`)
 };
 
 /**

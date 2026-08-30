@@ -10,7 +10,7 @@ const en_admin_greetings_type_language_prompt = /** @type {(inputs: Admin_Greeti
 };
 
 const es_admin_greetings_type_language_prompt = /** @type {(inputs: Admin_Greetings_Type_Language_PromptInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Seleccion de idioma`)
+	return /** @type {LocalizedString} */ (`Selección de idioma`)
 };
 
 /**

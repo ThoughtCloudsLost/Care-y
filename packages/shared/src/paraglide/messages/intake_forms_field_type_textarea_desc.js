@@ -10,7 +10,7 @@ const en_intake_forms_field_type_textarea_desc = /** @type {(inputs: Intake_Form
 };
 
 const es_intake_forms_field_type_textarea_desc = /** @type {(inputs: Intake_Forms_Field_Type_Textarea_DescInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Respuesta de varias lineas`)
+	return /** @type {LocalizedString} */ (`Respuesta de varias líneas`)
 };
 
 /**

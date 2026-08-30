@@ -10,7 +10,7 @@ const en_ticket_new_field_title_placeholder = /** @type {(inputs: Ticket_New_Fie
 };
 
 const es_ticket_new_field_title_placeholder = /** @type {(inputs: Ticket_New_Field_Title_PlaceholderInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Breve descripcion del problema`)
+	return /** @type {LocalizedString} */ (`Breve descripción del problema`)
 };
 
 /**

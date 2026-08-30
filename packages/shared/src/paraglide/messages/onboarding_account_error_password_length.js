@@ -10,7 +10,7 @@ const en_onboarding_account_error_password_length = /** @type {(inputs: Onboardi
 };
 
 const es_onboarding_account_error_password_length = /** @type {(inputs: Onboarding_Account_Error_Password_LengthInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`La contrasena debe tener al menos 16 caracteres.`)
+	return /** @type {LocalizedString} */ (`La contraseña debe tener al menos 16 caracteres.`)
 };
 
 /**

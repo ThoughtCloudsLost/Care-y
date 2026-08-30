@@ -10,7 +10,7 @@ const en_client_merge_event = /** @type {(inputs: Client_Merge_EventInputs) => L
 };
 
 const es_client_merge_event = /** @type {(inputs: Client_Merge_EventInputs) => LocalizedString} */ (i) => {
-	return /** @type {LocalizedString} */ (`${i?.alias} fusionado aqui`)
+	return /** @type {LocalizedString} */ (`${i?.alias} fusionado aquí`)
 };
 
 /**

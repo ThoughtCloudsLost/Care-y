@@ -10,7 +10,7 @@ const en_onboarding_org_subtext = /** @type {(inputs: Onboarding_Org_SubtextInpu
 };
 
 const es_onboarding_org_subtext = /** @type {(inputs: Onboarding_Org_SubtextInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Informacion basica sobre su organizacion.`)
+	return /** @type {LocalizedString} */ (`Información básica sobre su organización.`)
 };
 
 /**

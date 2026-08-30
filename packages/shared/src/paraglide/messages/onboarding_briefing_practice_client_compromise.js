@@ -10,7 +10,7 @@ const en_onboarding_briefing_practice_client_compromise = /** @type {(inputs: On
 };
 
 const es_onboarding_briefing_practice_client_compromise = /** @type {(inputs: Onboarding_Briefing_Practice_Client_CompromiseInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Nada utilizable. Descifrar requiere la contrasena del voluntario y la cooperacion de ambos servidores de verificacion.`)
+	return /** @type {LocalizedString} */ (`Nada utilizable. Descifrar requiere la contraseña del voluntario y la cooperación de ambos servidores de verificación.`)
 };
 
 /**

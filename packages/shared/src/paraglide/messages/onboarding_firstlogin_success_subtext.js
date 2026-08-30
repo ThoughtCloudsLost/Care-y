@@ -10,7 +10,7 @@ const en_onboarding_firstlogin_success_subtext = /** @type {(inputs: Onboarding_
 };
 
 const es_onboarding_firstlogin_success_subtext = /** @type {(inputs: Onboarding_Firstlogin_Success_SubtextInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Inicia sesion para comenzar.`)
+	return /** @type {LocalizedString} */ (`Inicia sesión para comenzar.`)
 };
 
 /**

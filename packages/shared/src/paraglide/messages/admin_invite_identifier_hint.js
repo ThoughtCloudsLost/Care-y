@@ -10,7 +10,7 @@ const en_admin_invite_identifier_hint = /** @type {(inputs: Admin_Invite_Identif
 };
 
 const es_admin_invite_identifier_hint = /** @type {(inputs: Admin_Invite_Identifier_HintInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Generado automaticamente. Cambie solo si es necesario.`)
+	return /** @type {LocalizedString} */ (`Generado automáticamente. Cambie solo si es necesario.`)
 };
 
 /**

@@ -10,7 +10,7 @@ const en_admin_invite_pending_revoke_title = /** @type {(inputs: Admin_Invite_Pe
 };
 
 const es_admin_invite_pending_revoke_title = /** @type {(inputs: Admin_Invite_Pending_Revoke_TitleInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Revocar invitacion`)
+	return /** @type {LocalizedString} */ (`Revocar invitación`)
 };
 
 /**

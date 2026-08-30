@@ -10,7 +10,7 @@ const en_admin_retention_toggle_label = /** @type {(inputs: Admin_Retention_Togg
 };
 
 const es_admin_retention_toggle_label = /** @type {(inputs: Admin_Retention_Toggle_LabelInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Eliminacion automatica de datos`)
+	return /** @type {LocalizedString} */ (`Eliminación automática de datos`)
 };
 
 /**

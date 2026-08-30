@@ -10,7 +10,7 @@ const en_admin_telephony_status_pending = /** @type {(inputs: Admin_Telephony_St
 };
 
 const es_admin_telephony_status_pending = /** @type {(inputs: Admin_Telephony_Status_PendingInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Servicio telefonico no configurado`)
+	return /** @type {LocalizedString} */ (`Servicio telefónico no configurado`)
 };
 
 /**

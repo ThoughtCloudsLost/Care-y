@@ -10,7 +10,7 @@ const en_onboarding_branding_subtext = /** @type {(inputs: Onboarding_Branding_S
 };
 
 const es_onboarding_branding_subtext = /** @type {(inputs: Onboarding_Branding_SubtextInputs) => LocalizedString} */ (i) => {
-	return /** @type {LocalizedString} */ (`Personalice como aparece su organizacion ante ${i?.volunteers} y ${i?.clients}. Puede cambiarlo despues.`)
+	return /** @type {LocalizedString} */ (`Personalice cómo aparece su organización ante ${i?.volunteers} y ${i?.clients}. Puede cambiarlo después.`)
 };
 
 /**

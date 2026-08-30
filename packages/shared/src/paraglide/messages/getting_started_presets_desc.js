@@ -10,7 +10,7 @@ const en_getting_started_presets_desc = /** @type {(inputs: Getting_Started_Pres
 };
 
 const es_getting_started_presets_desc = /** @type {(inputs: Getting_Started_Presets_DescInputs) => LocalizedString} */ (i) => {
-	return /** @type {LocalizedString} */ (`Crea plantillas de respuesta rapida que los ${i?.volunteers} pueden enviar en ${i?.tickets}.`)
+	return /** @type {LocalizedString} */ (`Crea plantillas de respuesta rápida que los ${i?.volunteers} pueden enviar en ${i?.tickets}.`)
 };
 
 /**

@@ -10,7 +10,7 @@ const en_intake_forms_title = /** @type {(inputs: Intake_Forms_TitleInputs) => L
 };
 
 const es_intake_forms_title = /** @type {(inputs: Intake_Forms_TitleInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Formularios de admision`)
+	return /** @type {LocalizedString} */ (`Formularios de admisión`)
 };
 
 /**

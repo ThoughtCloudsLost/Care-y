@@ -10,7 +10,7 @@ const en_intake_forms_config_subtype_phone = /** @type {(inputs: Intake_Forms_Co
 };
 
 const es_intake_forms_config_subtype_phone = /** @type {(inputs: Intake_Forms_Config_Subtype_PhoneInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Numero de telefono`)
+	return /** @type {LocalizedString} */ (`Número de teléfono`)
 };
 
 /**

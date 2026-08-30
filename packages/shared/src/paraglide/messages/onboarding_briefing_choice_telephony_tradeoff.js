@@ -10,7 +10,7 @@ const en_onboarding_briefing_choice_telephony_tradeoff = /** @type {(inputs: Onb
 };
 
 const es_onboarding_briefing_choice_telephony_tradeoff = /** @type {(inputs: Onboarding_Briefing_Choice_Telephony_TradeoffInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Auto-alojado te da mas control, pero las llamadas a numeros regulares aun pasan por un operador. El chat cifrado de CARE-Y siempre es mas privado que cualquier llamada telefonica.`)
+	return /** @type {LocalizedString} */ (`Auto-alojado te da más control, pero las llamadas a números regulares aún pasan por un operador. El chat cifrado de CARE-Y siempre es más privado que cualquier llamada telefonica.`)
 };
 
 /**

@@ -10,7 +10,7 @@ const en_settings_username = /** @type {(inputs: Settings_UsernameInputs) => Loc
 };
 
 const es_settings_username = /** @type {(inputs: Settings_UsernameInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Usuario de inicio de sesion`)
+	return /** @type {LocalizedString} */ (`Usuario de inicio de sesión`)
 };
 
 /**

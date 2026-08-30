@@ -10,7 +10,7 @@ const en_settings_password_step_rotate = /** @type {(inputs: Settings_Password_S
 };
 
 const es_settings_password_step_rotate = /** @type {(inputs: Settings_Password_Step_RotateInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Finalizando rotacion de claves`)
+	return /** @type {LocalizedString} */ (`Finalizando rotación de claves`)
 };
 
 /**

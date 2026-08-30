@@ -10,7 +10,7 @@ const en_onboarding_briefing_scenario_oprf_body = /** @type {(inputs: Onboarding
 };
 
 const es_onboarding_briefing_scenario_oprf_body = /** @type {(inputs: Onboarding_Briefing_Scenario_Oprf_BodyInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Un atacante obtiene la mitad del proceso de verificacion, que es inutil por si sola. La otra mitad esta en un servidor en otro pais bajo otra jurisdiccion legal. Ni siquiera con una mitad pueden derivar las claves de cifrado de ningun voluntario. Las partes de verificacion se renuevan regularmente.`)
+	return /** @type {LocalizedString} */ (`Un atacante obtiene la mitad del proceso de verificación, que es inútil por sí sola. La otra mitad esta en un servidor en otro país bajo otra jurisdicción legal. Ni siquiera con una mitad pueden derivar las claves de cifrado de ningún voluntario. Las partes de verificación se renuevan regularmente.`)
 };
 
 /**

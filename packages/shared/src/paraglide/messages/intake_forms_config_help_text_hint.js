@@ -10,7 +10,7 @@ const en_intake_forms_config_help_text_hint = /** @type {(inputs: Intake_Forms_C
 };
 
 const es_intake_forms_config_help_text_hint = /** @type {(inputs: Intake_Forms_Config_Help_Text_HintInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Se muestra debajo del campo en el formulario publico.`)
+	return /** @type {LocalizedString} */ (`Se muestra debajo del campo en el formulario público.`)
 };
 
 /**

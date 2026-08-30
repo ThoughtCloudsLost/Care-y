@@ -10,7 +10,7 @@ const en_onboarding_briefing_practice_username_data = /** @type {(inputs: Onboar
 };
 
 const es_onboarding_briefing_practice_username_data = /** @type {(inputs: Onboarding_Briefing_Practice_Username_DataInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Usuarios de inicio de sesion de voluntarios`)
+	return /** @type {LocalizedString} */ (`Usuarios de inicio de sesión de voluntarios`)
 };
 
 /**

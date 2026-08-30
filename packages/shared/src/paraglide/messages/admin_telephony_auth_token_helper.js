@@ -10,7 +10,7 @@ const en_admin_telephony_auth_token_helper = /** @type {(inputs: Admin_Telephony
 };
 
 const es_admin_telephony_auth_token_helper = /** @type {(inputs: Admin_Telephony_Auth_Token_HelperInputs) => LocalizedString} */ (i) => {
-	return /** @type {LocalizedString} */ (`Tambien en la configuracion de su cuenta de ${i?.provider}`)
+	return /** @type {LocalizedString} */ (`También en la configuración de su cuenta de ${i?.provider}`)
 };
 
 /**

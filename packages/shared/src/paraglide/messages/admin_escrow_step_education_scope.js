@@ -10,7 +10,7 @@ const en_admin_escrow_step_education_scope = /** @type {(inputs: Admin_Escrow_St
 };
 
 const es_admin_escrow_step_education_scope = /** @type {(inputs: Admin_Escrow_Step_Education_ScopeInputs) => LocalizedString} */ (i) => {
-	return /** @type {LocalizedString} */ (`Sin el, los articulos de la base de conocimientos, los nombres de ${i?.volunteers}, los nombres de ${i?.queues} y los datos de marca de su organizacion no podran recuperarse. Las conversaciones de ${i?.tickets} y la informacion de ${i?.clients} usan claves separadas y no estan cubiertas por este archivo.`)
+	return /** @type {LocalizedString} */ (`Sin el, los artículos de la base de conocimientos, los nombres de ${i?.volunteers}, los nombres de ${i?.queues} y los datos de marca de su organización no podran recuperarse. Las conversaciones de ${i?.tickets} y la información de ${i?.clients} usan claves separadas y no estan cubiertas por este archivo.`)
 };
 
 /**

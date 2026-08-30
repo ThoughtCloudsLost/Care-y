@@ -10,7 +10,7 @@ const en_intake_forms_submit_message_hint = /** @type {(inputs: Intake_Forms_Sub
 };
 
 const es_intake_forms_submit_message_hint = /** @type {(inputs: Intake_Forms_Submit_Message_HintInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Reemplaza el texto de confirmacion predeterminado despues del envio.`)
+	return /** @type {LocalizedString} */ (`Reemplaza el texto de confirmación predeterminado después del envío.`)
 };
 
 /**

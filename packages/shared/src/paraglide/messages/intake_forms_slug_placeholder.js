@@ -10,7 +10,7 @@ const en_intake_forms_slug_placeholder = /** @type {(inputs: Intake_Forms_Slug_P
 };
 
 const es_intake_forms_slug_placeholder = /** @type {(inputs: Intake_Forms_Slug_PlaceholderInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`ej. linea-de-crisis`)
+	return /** @type {LocalizedString} */ (`ej. línea-de-crisis`)
 };
 
 /**

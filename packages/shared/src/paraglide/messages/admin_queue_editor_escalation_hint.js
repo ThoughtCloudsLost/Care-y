@@ -10,7 +10,7 @@ const en_admin_queue_editor_escalation_hint = /** @type {(inputs: Admin_Queue_Ed
 };
 
 const es_admin_queue_editor_escalation_hint = /** @type {(inputs: Admin_Queue_Editor_Escalation_HintInputs) => LocalizedString} */ (i) => {
-	return /** @type {LocalizedString} */ (`Dias antes de que un ${i?.ticket} se escale automaticamente. Dejar vacio para desactivar.`)
+	return /** @type {LocalizedString} */ (`Días antes de que un ${i?.ticket} se escale automáticamente. Dejar vacio para desactivar.`)
 };
 
 /**

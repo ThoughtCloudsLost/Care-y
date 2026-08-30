@@ -10,7 +10,7 @@ const en_admin_telephony_mode_changed = /** @type {(inputs: Admin_Telephony_Mode
 };
 
 const es_admin_telephony_mode_changed = /** @type {(inputs: Admin_Telephony_Mode_ChangedInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Modo de telefonia actualizado`)
+	return /** @type {LocalizedString} */ (`Modo de telefonía actualizado`)
 };
 
 /**

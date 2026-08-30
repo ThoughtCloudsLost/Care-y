@@ -10,7 +10,7 @@ const en_ticket_action_timeline = /** @type {(inputs: Ticket_Action_TimelineInpu
 };
 
 const es_ticket_action_timeline = /** @type {(inputs: Ticket_Action_TimelineInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Ver cronologia`)
+	return /** @type {LocalizedString} */ (`Ver cronología`)
 };
 
 /**

@@ -10,7 +10,7 @@ const en_client_merge_lock = /** @type {(inputs: Client_Merge_LockInputs) => Loc
 };
 
 const es_client_merge_lock = /** @type {(inputs: Client_Merge_LockInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Bloquear fusion`)
+	return /** @type {LocalizedString} */ (`Bloquear fusión`)
 };
 
 /**

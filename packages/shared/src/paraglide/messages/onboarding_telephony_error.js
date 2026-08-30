@@ -10,7 +10,7 @@ const en_onboarding_telephony_error = /** @type {(inputs: Onboarding_Telephony_E
 };
 
 const es_onboarding_telephony_error = /** @type {(inputs: Onboarding_Telephony_ErrorInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`No se pudo guardar la configuracion de telefonia.`)
+	return /** @type {LocalizedString} */ (`No se pudo guardar la configuración de telefonía.`)
 };
 
 /**

@@ -10,7 +10,7 @@ const en_client_phone_conflict_body = /** @type {(inputs: Client_Phone_Conflict_
 };
 
 const es_client_phone_conflict_body = /** @type {(inputs: Client_Phone_Conflict_BodyInputs) => LocalizedString} */ (i) => {
-	return /** @type {LocalizedString} */ (`Este numero pertenece a ${i?.alias}. Fusionar en su lugar?`)
+	return /** @type {LocalizedString} */ (`¿Este número pertenece a ${i?.alias}. Fusionar en su lugar?`)
 };
 
 /**

@@ -10,7 +10,7 @@ const en_consultant_phone_title = /** @type {(inputs: Consultant_Phone_TitleInpu
 };
 
 const es_consultant_phone_title = /** @type {(inputs: Consultant_Phone_TitleInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Mi telefono`)
+	return /** @type {LocalizedString} */ (`Mi teléfono`)
 };
 
 /**

@@ -10,7 +10,7 @@ const en_admin_rotation_dialog_body = /** @type {(inputs: Admin_Rotation_Dialog_
 };
 
 const es_admin_rotation_dialog_body = /** @type {(inputs: Admin_Rotation_Dialog_BodyInputs) => LocalizedString} */ (i) => {
-	return /** @type {LocalizedString} */ (`Esto crea una nueva clave de cifrado para los datos compartidos de tu organizacion: nombres de voluntarios, articulos de la base de conocimiento, nombres de colas y marca de la organizacion. Los ${i?.count} voluntarios activos recibiran la clave actualizada en su proximo inicio de sesion. Las conversaciones de tickets y la informacion de clientes usan cifrado separado y mas fuerte, y no se ven afectadas por este cambio.`)
+	return /** @type {LocalizedString} */ (`Esto crea una nueva clave de cifrado para los datos compartidos de tu organización: nombres de voluntarios, artículos de la base de conocimiento, nombres de colas y marca de la organización. Los ${i?.count} voluntarios activos recibiran la clave actualizada en su proximo inicio de sesión. Las conversaciones de tickets y la información de clientes usan cifrado separado y más fuerte, y no se ven afectadas por este cambio.`)
 };
 
 /**

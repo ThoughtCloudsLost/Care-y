@@ -10,7 +10,7 @@ const en_onboarding_firstlogin_success_heading = /** @type {(inputs: Onboarding_
 };
 
 const es_onboarding_firstlogin_success_heading = /** @type {(inputs: Onboarding_Firstlogin_Success_HeadingInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Tu cuenta esta lista.`)
+	return /** @type {LocalizedString} */ (`Tu cuenta está lista.`)
 };
 
 /**

@@ -10,7 +10,7 @@ const en_intake_privacy_cookies_body = /** @type {(inputs: Intake_Privacy_Cookie
 };
 
 const es_intake_privacy_cookies_body = /** @type {(inputs: Intake_Privacy_Cookies_BodyInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Este sitio solo usa cookies de sesion y seguridad necesarias para que el formulario funcione. Estas cookies no te rastrean y no requieren tu consentimiento.`)
+	return /** @type {LocalizedString} */ (`Este sitio solo usa cookies de sesión y seguridad necesarias para que el formulario funcione. Estas cookies no te rastrean y no requieren tu consentimiento.`)
 };
 
 /**

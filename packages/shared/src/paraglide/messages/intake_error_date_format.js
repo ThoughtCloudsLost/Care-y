@@ -10,7 +10,7 @@ const en_intake_error_date_format = /** @type {(inputs: Intake_Error_Date_Format
 };
 
 const es_intake_error_date_format = /** @type {(inputs: Intake_Error_Date_FormatInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Ingrese una fecha valida.`)
+	return /** @type {LocalizedString} */ (`Ingrese una fecha válida.`)
 };
 
 /**

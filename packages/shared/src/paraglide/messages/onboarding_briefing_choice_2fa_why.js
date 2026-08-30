@@ -10,7 +10,7 @@ const en_onboarding_briefing_choice_2fa_why = /** @type {(inputs: Onboarding_Bri
 };
 
 const es_onboarding_briefing_choice_2fa_why = /** @type {(inputs: Onboarding_Briefing_Choice_2fa_WhyInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Una contrasena sola puede ser adivinada, filtrada o robada a traves de una pagina de inicio de sesion falsa. La autenticacion de dos factores agrega una segunda verificacion que hace inutil una contrasena robada por si sola.`)
+	return /** @type {LocalizedString} */ (`Una contraseña sola puede ser adivinada, filtrada o robada a traves de una página de inicio de sesión falsa. La autenticación de dos factores agrega una segunda verificación que hace inútil una contraseña robada por sí sola.`)
 };
 
 /**

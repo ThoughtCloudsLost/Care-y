@@ -10,7 +10,7 @@ const en_onboarding_organization_subtext = /** @type {(inputs: Onboarding_Organi
 };
 
 const es_onboarding_organization_subtext = /** @type {(inputs: Onboarding_Organization_SubtextInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Configure la identidad, marca, terminologia y politicas de su organizacion. Solo el nombre es obligatorio. Todo lo demas se puede configurar despues.`)
+	return /** @type {LocalizedString} */ (`Configure la identidad, marca, terminología y políticas de su organización. Solo el nombre es obligatorio. Todo lo demas se puede configurar después.`)
 };
 
 /**

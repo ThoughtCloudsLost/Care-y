@@ -10,7 +10,7 @@ const en_panel_settings = /** @type {(inputs: Panel_SettingsInputs) => Localized
 };
 
 const es_panel_settings = /** @type {(inputs: Panel_SettingsInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Configuracion`)
+	return /** @type {LocalizedString} */ (`Configuración`)
 };
 
 /**

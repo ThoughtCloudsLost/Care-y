@@ -10,7 +10,7 @@ const en_onboarding_briefing_practice_vol_data = /** @type {(inputs: Onboarding_
 };
 
 const es_onboarding_briefing_practice_vol_data = /** @type {(inputs: Onboarding_Briefing_Practice_Vol_DataInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Nombres de voluntarios, direcciones IP, detalles de sesion`)
+	return /** @type {LocalizedString} */ (`Nombres de voluntarios, direcciones IP, detalles de sesión`)
 };
 
 /**

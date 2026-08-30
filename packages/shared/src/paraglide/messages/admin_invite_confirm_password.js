@@ -10,7 +10,7 @@ const en_admin_invite_confirm_password = /** @type {(inputs: Admin_Invite_Confir
 };
 
 const es_admin_invite_confirm_password = /** @type {(inputs: Admin_Invite_Confirm_PasswordInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Confirmar contrasena`)
+	return /** @type {LocalizedString} */ (`Confirmar contraseña`)
 };
 
 /**

@@ -10,7 +10,7 @@ const en_client_phone_conflict_title = /** @type {(inputs: Client_Phone_Conflict
 };
 
 const es_client_phone_conflict_title = /** @type {(inputs: Client_Phone_Conflict_TitleInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Conflicto de telefono`)
+	return /** @type {LocalizedString} */ (`Conflicto de teléfono`)
 };
 
 /**

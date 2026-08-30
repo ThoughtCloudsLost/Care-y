@@ -10,7 +10,7 @@ const en_onboarding_briefing_practice_vol_access = /** @type {(inputs: Onboardin
 };
 
 const es_onboarding_briefing_practice_vol_access = /** @type {(inputs: Onboarding_Briefing_Practice_Vol_AccessInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Solo voluntarios autenticados en tu organizacion (cifrado)`)
+	return /** @type {LocalizedString} */ (`Solo voluntarios autenticados en tu organización (cifrado)`)
 };
 
 /**

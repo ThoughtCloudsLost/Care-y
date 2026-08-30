@@ -10,7 +10,7 @@ const en_ticket_panel_media = /** @type {(inputs: Ticket_Panel_MediaInputs) => L
 };
 
 const es_ticket_panel_media = /** @type {(inputs: Ticket_Panel_MediaInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Imagenes`)
+	return /** @type {LocalizedString} */ (`Imágenes`)
 };
 
 /**

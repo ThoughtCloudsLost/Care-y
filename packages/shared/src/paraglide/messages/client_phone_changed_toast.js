@@ -10,7 +10,7 @@ const en_client_phone_changed_toast = /** @type {(inputs: Client_Phone_Changed_T
 };
 
 const es_client_phone_changed_toast = /** @type {(inputs: Client_Phone_Changed_ToastInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Numero de telefono actualizado`)
+	return /** @type {LocalizedString} */ (`Número de teléfono actualizado`)
 };
 
 /**

@@ -10,7 +10,7 @@ const en_onboarding_telephony_skip_label = /** @type {(inputs: Onboarding_Teleph
 };
 
 const es_onboarding_telephony_skip_label = /** @type {(inputs: Onboarding_Telephony_Skip_LabelInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Configurar despues`)
+	return /** @type {LocalizedString} */ (`Configurar después`)
 };
 
 /**

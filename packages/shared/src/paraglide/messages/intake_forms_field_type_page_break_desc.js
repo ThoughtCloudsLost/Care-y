@@ -10,7 +10,7 @@ const en_intake_forms_field_type_page_break_desc = /** @type {(inputs: Intake_Fo
 };
 
 const es_intake_forms_field_type_page_break_desc = /** @type {(inputs: Intake_Forms_Field_Type_Page_Break_DescInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Divide el formulario en paginas`)
+	return /** @type {LocalizedString} */ (`Divide el formulario en páginas`)
 };
 
 /**

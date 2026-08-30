@@ -10,7 +10,7 @@ const en_onboarding_twofa_at_least_one = /** @type {(inputs: Onboarding_Twofa_At
 };
 
 const es_onboarding_twofa_at_least_one = /** @type {(inputs: Onboarding_Twofa_At_Least_OneInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Registra al menos un metodo para continuar.`)
+	return /** @type {LocalizedString} */ (`Registra al menos un método para continuar.`)
 };
 
 /**

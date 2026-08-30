@@ -10,7 +10,7 @@ const en_admin_greetings_audio_hint = /** @type {(inputs: Admin_Greetings_Audio_
 };
 
 const es_admin_greetings_audio_hint = /** @type {(inputs: Admin_Greetings_Audio_HintInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Suba un archivo WAV, MP3, OGG o M4A (max 5 MB). Esta grabacion se reproducira para las personas que llamen.`)
+	return /** @type {LocalizedString} */ (`Suba un archivo WAV, MP3, OGG o M4A (max 5 MB). Esta grabación se reproducirá para las personas que llamen.`)
 };
 
 /**

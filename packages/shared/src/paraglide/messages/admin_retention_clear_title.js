@@ -10,7 +10,7 @@ const en_admin_retention_clear_title = /** @type {(inputs: Admin_Retention_Clear
 };
 
 const es_admin_retention_clear_title = /** @type {(inputs: Admin_Retention_Clear_TitleInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Desactivar la eliminacion automatica de datos?`)
+	return /** @type {LocalizedString} */ (`¿Desactivar la eliminación automática de datos?`)
 };
 
 /**

@@ -10,7 +10,7 @@ const en_audit_event_intake_form_saved = /** @type {(inputs: Audit_Event_Intake_
 };
 
 const es_audit_event_intake_form_saved = /** @type {(inputs: Audit_Event_Intake_Form_SavedInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Formulario de admision guardado`)
+	return /** @type {LocalizedString} */ (`Formulario de admisión guardado`)
 };
 
 /**

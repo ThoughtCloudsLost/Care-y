@@ -10,7 +10,7 @@ const en_onboarding_invite_skip = /** @type {(inputs: Onboarding_Invite_SkipInpu
 };
 
 const es_onboarding_invite_skip = /** @type {(inputs: Onboarding_Invite_SkipInputs) => LocalizedString} */ (i) => {
-	return /** @type {LocalizedString} */ (`Invitare ${i?.volunteers} despues`)
+	return /** @type {LocalizedString} */ (`Invitaré ${i?.volunteers} después`)
 };
 
 /**

@@ -10,7 +10,7 @@ const en_admin_telephony_account_id_helper = /** @type {(inputs: Admin_Telephony
 };
 
 const es_admin_telephony_account_id_helper = /** @type {(inputs: Admin_Telephony_Account_Id_HelperInputs) => LocalizedString} */ (i) => {
-	return /** @type {LocalizedString} */ (`Encuentre esto en la configuracion de su cuenta de ${i?.provider}`)
+	return /** @type {LocalizedString} */ (`Encuentre esto en la configuración de su cuenta de ${i?.provider}`)
 };
 
 /**

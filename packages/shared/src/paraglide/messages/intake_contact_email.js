@@ -10,7 +10,7 @@ const en_intake_contact_email = /** @type {(inputs: Intake_Contact_EmailInputs) 
 };
 
 const es_intake_contact_email = /** @type {(inputs: Intake_Contact_EmailInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Correo electronico`)
+	return /** @type {LocalizedString} */ (`Correo electrónico`)
 };
 
 /**

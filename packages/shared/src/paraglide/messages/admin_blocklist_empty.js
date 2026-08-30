@@ -10,7 +10,7 @@ const en_admin_blocklist_empty = /** @type {(inputs: Admin_Blocklist_EmptyInputs
 };
 
 const es_admin_blocklist_empty = /** @type {(inputs: Admin_Blocklist_EmptyInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`No hay numeros bloqueados.`)
+	return /** @type {LocalizedString} */ (`No hay números bloqueados.`)
 };
 
 /**

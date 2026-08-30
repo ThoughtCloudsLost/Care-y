@@ -10,7 +10,7 @@ const en_error_account_already_exists = /** @type {(inputs: Error_Account_Alread
 };
 
 const es_error_account_already_exists = /** @type {(inputs: Error_Account_Already_ExistsInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Ya existe una cuenta con este usuario de inicio de sesion.`)
+	return /** @type {LocalizedString} */ (`Ya existe una cuenta con este usuario de inicio de sesión.`)
 };
 
 /**

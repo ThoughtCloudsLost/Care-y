@@ -10,7 +10,7 @@ const en_admin_queue_editor_no_org_key = /** @type {(inputs: Admin_Queue_Editor_
 };
 
 const es_admin_queue_editor_no_org_key = /** @type {(inputs: Admin_Queue_Editor_No_Org_KeyInputs) => LocalizedString} */ (i) => {
-	return /** @type {LocalizedString} */ (`Clave de la organizacion no cargada. No se pueden crear ni editar ${i?.queues}.`)
+	return /** @type {LocalizedString} */ (`Clave de la organización no cargada. No se pueden crear ni editar ${i?.queues}.`)
 };
 
 /**

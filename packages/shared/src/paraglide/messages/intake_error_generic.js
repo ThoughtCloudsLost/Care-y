@@ -10,7 +10,7 @@ const en_intake_error_generic = /** @type {(inputs: Intake_Error_GenericInputs) 
 };
 
 const es_intake_error_generic = /** @type {(inputs: Intake_Error_GenericInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Tu mensaje no se envio. No se envio nada. Intenta de nuevo.`)
+	return /** @type {LocalizedString} */ (`Tu mensaje no se envío. No se envío nada. Intenta de nuevo.`)
 };
 
 /**

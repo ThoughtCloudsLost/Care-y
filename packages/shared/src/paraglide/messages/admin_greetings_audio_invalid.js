@@ -10,7 +10,7 @@ const en_admin_greetings_audio_invalid = /** @type {(inputs: Admin_Greetings_Aud
 };
 
 const es_admin_greetings_audio_invalid = /** @type {(inputs: Admin_Greetings_Audio_InvalidInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`El archivo no es un formato de audio valido. Use WAV, MP3, OGG o M4A.`)
+	return /** @type {LocalizedString} */ (`El archivo no es un formato de audio válido. Use WAV, MP3, OGG o M4A.`)
 };
 
 /**

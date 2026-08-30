@@ -10,7 +10,7 @@ const en_onboarding_escrow_hash_hint = /** @type {(inputs: Onboarding_Escrow_Has
 };
 
 const es_onboarding_escrow_hash_hint = /** @type {(inputs: Onboarding_Escrow_Hash_HintInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Este codigo es unico para el archivo que acaba de descargar. Anotelo y guardelo por separado del archivo de respaldo. Para comprobar que el archivo no ha sido corrompido o alterado, ejecute "shasum -a 256 archivo.json" en Mac/Linux o "certutil -hashfile archivo.json SHA256" en Windows y confirme que la salida coincida. Si descarga de nuevo, se generara un archivo nuevo con un codigo diferente.`)
+	return /** @type {LocalizedString} */ (`Este código es único para el archivo que acaba de descargar. Anotelo y guardelo por separado del archivo de respaldo. Para comprobar que el archivo no ha sido corrompido o alterado, ejecute "shasum -a 256 archivo.json" en Mac/Linux o "certutil -hashfile archivo.json SHA256" en Windows y confirme que la salida coincida. Si descarga de nuevo, se generara un archivo nuevo con un código diferente.`)
 };
 
 /**

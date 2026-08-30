@@ -10,7 +10,7 @@ const en_consultant_phone_remove_confirm = /** @type {(inputs: Consultant_Phone_
 };
 
 const es_consultant_phone_remove_confirm = /** @type {(inputs: Consultant_Phone_Remove_ConfirmInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Tu telefono verificado sera eliminado. No podras recibir llamadas de devolucion ni notificaciones SMS hasta que registres y verifiques un nuevo numero.`)
+	return /** @type {LocalizedString} */ (`Tu teléfono verificado será eliminado. No podras recibir llamadas de devolución ni notificaciones SMS hasta que registres y verifiques un nuevo número.`)
 };
 
 /**

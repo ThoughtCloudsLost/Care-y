@@ -10,7 +10,7 @@ const en_intake_forms_destination_default_named = /** @type {(inputs: Intake_For
 };
 
 const es_intake_forms_destination_default_named = /** @type {(inputs: Intake_Forms_Destination_Default_NamedInputs) => LocalizedString} */ (i) => {
-	return /** @type {LocalizedString} */ (`Cola de recepcion predeterminada (${i?.name})`)
+	return /** @type {LocalizedString} */ (`Cola de recepción predeterminada (${i?.name})`)
 };
 
 /**

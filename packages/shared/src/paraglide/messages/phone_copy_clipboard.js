@@ -10,7 +10,7 @@ const en_phone_copy_clipboard = /** @type {(inputs: Phone_Copy_ClipboardInputs) 
 };
 
 const es_phone_copy_clipboard = /** @type {(inputs: Phone_Copy_ClipboardInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Copiar numero de telefono`)
+	return /** @type {LocalizedString} */ (`Copiar número de teléfono`)
 };
 
 /**

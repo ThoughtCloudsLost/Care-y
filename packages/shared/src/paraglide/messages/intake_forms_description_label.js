@@ -10,7 +10,7 @@ const en_intake_forms_description_label = /** @type {(inputs: Intake_Forms_Descr
 };
 
 const es_intake_forms_description_label = /** @type {(inputs: Intake_Forms_Description_LabelInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Descripcion`)
+	return /** @type {LocalizedString} */ (`Descripción`)
 };
 
 /**

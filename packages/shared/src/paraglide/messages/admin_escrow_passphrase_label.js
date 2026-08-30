@@ -10,7 +10,7 @@ const en_admin_escrow_passphrase_label = /** @type {(inputs: Admin_Escrow_Passph
 };
 
 const es_admin_escrow_passphrase_label = /** @type {(inputs: Admin_Escrow_Passphrase_LabelInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Frase de contrasena`)
+	return /** @type {LocalizedString} */ (`Frase de contraseña`)
 };
 
 /**

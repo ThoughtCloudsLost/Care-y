@@ -10,7 +10,7 @@ const en_onboarding_briefing_choice_telephony_title = /** @type {(inputs: Onboar
 };
 
 const es_onboarding_briefing_choice_telephony_title = /** @type {(inputs: Onboarding_Briefing_Choice_Telephony_TitleInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Proveedor de telefonia`)
+	return /** @type {LocalizedString} */ (`Proveedor de telefonía`)
 };
 
 /**

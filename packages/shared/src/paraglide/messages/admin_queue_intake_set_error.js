@@ -10,7 +10,7 @@ const en_admin_queue_intake_set_error = /** @type {(inputs: Admin_Queue_Intake_S
 };
 
 const es_admin_queue_intake_set_error = /** @type {(inputs: Admin_Queue_Intake_Set_ErrorInputs) => LocalizedString} */ (i) => {
-	return /** @type {LocalizedString} */ (`No se pudo actualizar la ${i?.queue} de recepcion`)
+	return /** @type {LocalizedString} */ (`No se pudo actualizar la ${i?.queue} de recepción`)
 };
 
 /**

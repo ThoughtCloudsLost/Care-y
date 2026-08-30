@@ -10,7 +10,7 @@ const en_onboarding_escrow_https_warning = /** @type {(inputs: Onboarding_Escrow
 };
 
 const es_onboarding_escrow_https_warning = /** @type {(inputs: Onboarding_Escrow_Https_WarningInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`La exportacion de custodia requiere una conexion segura. Acceda a esta pagina a traves de HTTPS.`)
+	return /** @type {LocalizedString} */ (`La exportación de custodia requiere una conexión segura. Acceda a esta página a traves de HTTPS.`)
 };
 
 /**

@@ -10,7 +10,7 @@ const en_intake_responses_key_not_held_hint = /** @type {(inputs: Intake_Respons
 };
 
 const es_intake_responses_key_not_held_hint = /** @type {(inputs: Intake_Responses_Key_Not_Held_HintInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`No tiene una clave para esta respuesta. Otro titular de clave puede desbloquearla al ver esta pagina.`)
+	return /** @type {LocalizedString} */ (`No tiene una clave para esta respuesta. Otro titular de clave puede desbloquearla al ver esta página.`)
 };
 
 /**

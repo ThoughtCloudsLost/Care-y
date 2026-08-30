@@ -10,7 +10,7 @@ const en_clients_filter_date_created = /** @type {(inputs: Clients_Filter_Date_C
 };
 
 const es_clients_filter_date_created = /** @type {(inputs: Clients_Filter_Date_CreatedInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Fecha de creacion`)
+	return /** @type {LocalizedString} */ (`Fecha de creación`)
 };
 
 /**

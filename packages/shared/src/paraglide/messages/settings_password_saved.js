@@ -10,7 +10,7 @@ const en_settings_password_saved = /** @type {(inputs: Settings_Password_SavedIn
 };
 
 const es_settings_password_saved = /** @type {(inputs: Settings_Password_SavedInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Contrasena cambiada`)
+	return /** @type {LocalizedString} */ (`Contraseña cambiada`)
 };
 
 /**

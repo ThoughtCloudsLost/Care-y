@@ -10,7 +10,7 @@ const en_settings_password_step_refresh = /** @type {(inputs: Settings_Password_
 };
 
 const es_settings_password_step_refresh = /** @type {(inputs: Settings_Password_Step_RefreshInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Actualizando sesion`)
+	return /** @type {LocalizedString} */ (`Actualizando sesión`)
 };
 
 /**

@@ -10,7 +10,7 @@ const en_onboarding_briefing_choice_vpn_tradeoff = /** @type {(inputs: Onboardin
 };
 
 const es_onboarding_briefing_choice_vpn_tradeoff = /** @type {(inputs: Onboarding_Briefing_Choice_Vpn_TradeoffInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Una VPN es mas rapida y sencilla que Tor, lo que la convierte en una buena opcion para el uso diario. Los voluntarios pueden instalar una aplicacion de VPN en su telefono o computadora en minutos. La desventaja es que confias en que el proveedor de VPN no registre ni comparta tu trafico. Para la maxima proteccion, Tor oculta tu conexion de todos. Ni siquiera el proveedor de VPN puede ver tu destino, pero Tor es mas lento. Muchas organizaciones recomiendan una VPN para el uso diario y Tor para las situaciones mas sensibles.`)
+	return /** @type {LocalizedString} */ (`Una VPN es más rápida y sencilla que Tor, lo que la convierte en una buena opción para el uso diario. Los voluntarios pueden instalar una aplicación de VPN en su teléfono o computadora en minutos. La desventaja es que confias en que el proveedor de VPN no registre ni comparta tu tráfico. Para la máxima protección, Tor oculta tu conexión de todos. Ni siquiera el proveedor de VPN puede ver tu destino, pero Tor es más lento. Muchas organizaciones recomiendan una VPN para el uso diario y Tor para las situaciones más sensibles.`)
 };
 
 /**

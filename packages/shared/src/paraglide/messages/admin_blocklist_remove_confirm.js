@@ -10,7 +10,7 @@ const en_admin_blocklist_remove_confirm = /** @type {(inputs: Admin_Blocklist_Re
 };
 
 const es_admin_blocklist_remove_confirm = /** @type {(inputs: Admin_Blocklist_Remove_ConfirmInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Este numero ya no estara bloqueado. Esta seguro?`)
+	return /** @type {LocalizedString} */ (`¿Este número ya no estará bloqueado. Está seguro?`)
 };
 
 /**

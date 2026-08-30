@@ -10,7 +10,7 @@ const en_getting_started_kb_desc = /** @type {(inputs: Getting_Started_Kb_DescIn
 };
 
 const es_getting_started_kb_desc = /** @type {(inputs: Getting_Started_Kb_DescInputs) => LocalizedString} */ (i) => {
-	return /** @type {LocalizedString} */ (`Proporciona guias de referencia rapida y protocolos a los ${i?.volunteers}.`)
+	return /** @type {LocalizedString} */ (`Proporciona guías de referencia rápida y protocolos a los ${i?.volunteers}.`)
 };
 
 /**

@@ -10,7 +10,7 @@ const en_onboarding_escrow_download_again_body = /** @type {(inputs: Onboarding_
 };
 
 const es_onboarding_escrow_download_again_body = /** @type {(inputs: Onboarding_Escrow_Download_Again_BodyInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`El archivo de custodia anterior sigue siendo valido. Si continua, elimine de forma segura la copia anterior para minimizar la exposicion de su clave de respaldo.`)
+	return /** @type {LocalizedString} */ (`El archivo de custodia anterior sigue siendo válido. Si continúa, elimine de forma segura la copia anterior para minimizar la exposición de su clave de respaldo.`)
 };
 
 /**

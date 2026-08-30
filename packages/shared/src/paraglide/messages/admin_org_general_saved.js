@@ -10,7 +10,7 @@ const en_admin_org_general_saved = /** @type {(inputs: Admin_Org_General_SavedIn
 };
 
 const es_admin_org_general_saved = /** @type {(inputs: Admin_Org_General_SavedInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Datos de la organizacion guardados`)
+	return /** @type {LocalizedString} */ (`Datos de la organización guardados`)
 };
 
 /**

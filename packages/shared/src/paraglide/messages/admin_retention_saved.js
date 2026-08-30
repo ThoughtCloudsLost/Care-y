@@ -10,7 +10,7 @@ const en_admin_retention_saved = /** @type {(inputs: Admin_Retention_SavedInputs
 };
 
 const es_admin_retention_saved = /** @type {(inputs: Admin_Retention_SavedInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Configuracion de retencion guardada`)
+	return /** @type {LocalizedString} */ (`Configuración de retención guardada`)
 };
 
 /**

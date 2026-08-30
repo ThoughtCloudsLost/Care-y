@@ -10,7 +10,7 @@ const en_intake_forms_slug_error_format = /** @type {(inputs: Intake_Forms_Slug_
 };
 
 const es_intake_forms_slug_error_format = /** @type {(inputs: Intake_Forms_Slug_Error_FormatInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Solo letras minusculas, digitos y guiones simples. Debe comenzar y terminar con una letra o digito.`)
+	return /** @type {LocalizedString} */ (`Solo letras minúsculas, dígitos y guiones simples. Debe comenzar y terminar con una letra o digito.`)
 };
 
 /**

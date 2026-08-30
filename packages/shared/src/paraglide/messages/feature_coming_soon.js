@@ -10,7 +10,7 @@ const en_feature_coming_soon = /** @type {(inputs: Feature_Coming_SoonInputs) =>
 };
 
 const es_feature_coming_soon = /** @type {(inputs: Feature_Coming_SoonInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Funcion disponible pronto`)
+	return /** @type {LocalizedString} */ (`Función disponible pronto`)
 };
 
 /**

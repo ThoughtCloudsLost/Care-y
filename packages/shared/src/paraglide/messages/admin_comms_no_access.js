@@ -10,7 +10,7 @@ const en_admin_comms_no_access = /** @type {(inputs: Admin_Comms_No_AccessInputs
 };
 
 const es_admin_comms_no_access = /** @type {(inputs: Admin_Comms_No_AccessInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`No tienes permiso para acceder a la configuracion de comunicaciones.`)
+	return /** @type {LocalizedString} */ (`No tienes permiso para acceder a la configuración de comunicaciones.`)
 };
 
 /**

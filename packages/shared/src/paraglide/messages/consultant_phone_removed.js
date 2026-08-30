@@ -10,7 +10,7 @@ const en_consultant_phone_removed = /** @type {(inputs: Consultant_Phone_Removed
 };
 
 const es_consultant_phone_removed = /** @type {(inputs: Consultant_Phone_RemovedInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Telefono eliminado`)
+	return /** @type {LocalizedString} */ (`Teléfono eliminado`)
 };
 
 /**

@@ -10,7 +10,7 @@ const en_onboarding_reauth_heading = /** @type {(inputs: Onboarding_Reauth_Headi
 };
 
 const es_onboarding_reauth_heading = /** @type {(inputs: Onboarding_Reauth_HeadingInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Volver a iniciar sesion`)
+	return /** @type {LocalizedString} */ (`Volver a iniciar sesión`)
 };
 
 /**

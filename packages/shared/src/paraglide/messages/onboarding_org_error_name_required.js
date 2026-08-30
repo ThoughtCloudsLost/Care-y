@@ -10,7 +10,7 @@ const en_onboarding_org_error_name_required = /** @type {(inputs: Onboarding_Org
 };
 
 const es_onboarding_org_error_name_required = /** @type {(inputs: Onboarding_Org_Error_Name_RequiredInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`El nombre de la organizacion es obligatorio.`)
+	return /** @type {LocalizedString} */ (`El nombre de la organización es obligatorio.`)
 };
 
 /**

@@ -10,7 +10,7 @@ const en_intake_forms_banner_file_too_large = /** @type {(inputs: Intake_Forms_B
 };
 
 const es_intake_forms_banner_file_too_large = /** @type {(inputs: Intake_Forms_Banner_File_Too_LargeInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`La imagen de portada excede el tamano maximo de archivo.`)
+	return /** @type {LocalizedString} */ (`La imagen de portada excede el tamaño máximo de archivo.`)
 };
 
 /**

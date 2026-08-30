@@ -10,7 +10,7 @@ const en_consultant_phone_reverify_explainer = /** @type {(inputs: Consultant_Ph
 };
 
 const es_consultant_phone_reverify_explainer = /** @type {(inputs: Consultant_Phone_Reverify_ExplainerInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Activar las notificaciones SMS de nuevo requiere re-verificacion porque el servidor ya no tiene tu numero.`)
+	return /** @type {LocalizedString} */ (`Activar las notificaciones SMS de nuevo requiere re-verificación porque el servidor ya no tiene tu número.`)
 };
 
 /**

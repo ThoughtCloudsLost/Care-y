@@ -10,7 +10,7 @@ const en_audit_event_client_phone_changed = /** @type {(inputs: Audit_Event_Clie
 };
 
 const es_audit_event_client_phone_changed = /** @type {(inputs: Audit_Event_Client_Phone_ChangedInputs) => LocalizedString} */ (i) => {
-	return /** @type {LocalizedString} */ (`Telefono de ${i?.client} cambiado`)
+	return /** @type {LocalizedString} */ (`Teléfono de ${i?.client} cambiado`)
 };
 
 /**

@@ -10,7 +10,7 @@ const en_audit_event_merge_lock_changed = /** @type {(inputs: Audit_Event_Merge_
 };
 
 const es_audit_event_merge_lock_changed = /** @type {(inputs: Audit_Event_Merge_Lock_ChangedInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Bloqueo de fusion cambiado`)
+	return /** @type {LocalizedString} */ (`Bloqueo de fusión cambiado`)
 };
 
 /**

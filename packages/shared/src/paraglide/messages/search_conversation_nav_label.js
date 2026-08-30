@@ -10,7 +10,7 @@ const en_search_conversation_nav_label = /** @type {(inputs: Search_Conversation
 };
 
 const es_search_conversation_nav_label = /** @type {(inputs: Search_Conversation_Nav_LabelInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Navegacion de busqueda`)
+	return /** @type {LocalizedString} */ (`Navegación de búsqueda`)
 };
 
 /**

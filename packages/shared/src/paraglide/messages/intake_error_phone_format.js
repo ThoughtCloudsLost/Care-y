@@ -10,7 +10,7 @@ const en_intake_error_phone_format = /** @type {(inputs: Intake_Error_Phone_Form
 };
 
 const es_intake_error_phone_format = /** @type {(inputs: Intake_Error_Phone_FormatInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Ingresa un numero de telefono como +1 555 000 1234.`)
+	return /** @type {LocalizedString} */ (`Ingresa un número de teléfono como +1 555 000 1234.`)
 };
 
 /**

@@ -10,7 +10,7 @@ const en_dashboard_activity_mention = /** @type {(inputs: Dashboard_Activity_Men
 };
 
 const es_dashboard_activity_mention = /** @type {(inputs: Dashboard_Activity_MentionInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Mencion`)
+	return /** @type {LocalizedString} */ (`Mención`)
 };
 
 /**

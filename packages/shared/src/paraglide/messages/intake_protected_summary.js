@@ -10,7 +10,7 @@ const en_intake_protected_summary = /** @type {(inputs: Intake_Protected_Summary
 };
 
 const es_intake_protected_summary = /** @type {(inputs: Intake_Protected_SummaryInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Lo que escribas aqui se cifra antes de salir de tu dispositivo. Solo los voluntarios asignados pueden leerlo. Aunque alguien acceda a este servidor, no podra leer tus mensajes.`)
+	return /** @type {LocalizedString} */ (`Lo que escribas aquí se cifra antes de salir de tu dispositivo. Solo los voluntarios asignados pueden leerlo. Aunque alguien acceda a este servidor, no podrá leer tus mensajes.`)
 };
 
 /**

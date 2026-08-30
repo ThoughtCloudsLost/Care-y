@@ -10,7 +10,7 @@ const en_intake_forms_config_subtype_email = /** @type {(inputs: Intake_Forms_Co
 };
 
 const es_intake_forms_config_subtype_email = /** @type {(inputs: Intake_Forms_Config_Subtype_EmailInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Correo electronico`)
+	return /** @type {LocalizedString} */ (`Correo electrónico`)
 };
 
 /**

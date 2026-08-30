@@ -10,7 +10,7 @@ const en_onboarding_briefing_scenario_seizure_body = /** @type {(inputs: Onboard
 };
 
 const es_onboarding_briefing_scenario_seizure_body = /** @type {(inputs: Onboarding_Briefing_Scenario_Seizure_BodyInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Un atacante con acceso completo a la base de datos obtiene datos cifrados que no puede leer. Tickets, mensajes, notas de caso y detalles de voluntarios permanecen bloqueados. Descifrar requiere la contrasena del voluntario mas ambos servidores de verificacion en dos paises distintos. Una confiscacion en un pais no es suficiente.`)
+	return /** @type {LocalizedString} */ (`Un atacante con acceso completo a la base de datos obtiene datos cifrados que no puede leer. Tickets, mensajes, notas de caso y detalles de voluntarios permanecen bloqueados. Descifrar requiere la contraseña del voluntario más ambos servidores de verificación en dos paises distintos. Una confiscación en un país no es suficiente.`)
 };
 
 /**

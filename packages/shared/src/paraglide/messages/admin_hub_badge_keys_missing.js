@@ -10,7 +10,7 @@ const en_admin_hub_badge_keys_missing = /** @type {(inputs: Admin_Hub_Badge_Keys
 };
 
 const es_admin_hub_badge_keys_missing = /** @type {(inputs: Admin_Hub_Badge_Keys_MissingInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Accion necesaria`)
+	return /** @type {LocalizedString} */ (`Acción necesaria`)
 };
 
 /**

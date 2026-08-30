@@ -10,7 +10,7 @@ const en_admin_retention_title = /** @type {(inputs: Admin_Retention_TitleInputs
 };
 
 const es_admin_retention_title = /** @type {(inputs: Admin_Retention_TitleInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Retencion de informacion personal identificable`)
+	return /** @type {LocalizedString} */ (`Retención de información personal identificable`)
 };
 
 /**

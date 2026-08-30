@@ -10,7 +10,7 @@ const en_error_consultant_not_verified = /** @type {(inputs: Error_Consultant_No
 };
 
 const es_error_consultant_not_verified = /** @type {(inputs: Error_Consultant_Not_VerifiedInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Tu numero de telefono no ha sido verificado.`)
+	return /** @type {LocalizedString} */ (`Tu número de teléfono no ha sido verificado.`)
 };
 
 /**

@@ -10,7 +10,7 @@ const en_onboarding_branding_text_placeholder = /** @type {(inputs: Onboarding_B
 };
 
 const es_onboarding_branding_text_placeholder = /** @type {(inputs: Onboarding_Branding_Text_PlaceholderInputs) => LocalizedString} */ (i) => {
-	return /** @type {LocalizedString} */ (`Mensaje de bienvenida que se muestra a los ${i?.clients} en la pagina de admision.`)
+	return /** @type {LocalizedString} */ (`Mensaje de bienvenida que se muestra a los ${i?.clients} en la página de admisión.`)
 };
 
 /**

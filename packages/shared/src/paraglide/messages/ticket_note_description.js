@@ -10,7 +10,7 @@ const en_ticket_note_description = /** @type {(inputs: Ticket_Note_DescriptionIn
 };
 
 const es_ticket_note_description = /** @type {(inputs: Ticket_Note_DescriptionInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Solo visible para otros miembros de tu organizacion.`)
+	return /** @type {LocalizedString} */ (`Solo visible para otros miembros de tu organización.`)
 };
 
 /**

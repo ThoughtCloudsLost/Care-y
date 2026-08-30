@@ -10,7 +10,7 @@ const en_onboarding_setup_go_to_setup = /** @type {(inputs: Onboarding_Setup_Go_
 };
 
 const es_onboarding_setup_go_to_setup = /** @type {(inputs: Onboarding_Setup_Go_To_SetupInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Ir a configuracion`)
+	return /** @type {LocalizedString} */ (`Ir a configuración`)
 };
 
 /**

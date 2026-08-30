@@ -10,7 +10,7 @@ const en_admin_escrow_step_education_heading = /** @type {(inputs: Admin_Escrow_
 };
 
 const es_admin_escrow_step_education_heading = /** @type {(inputs: Admin_Escrow_Step_Education_HeadingInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Que es un archivo de custodia?`)
+	return /** @type {LocalizedString} */ (`¿Qué es un archivo de custodia?`)
 };
 
 /**

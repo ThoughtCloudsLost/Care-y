@@ -10,7 +10,7 @@ const en_getting_started_invite_desc = /** @type {(inputs: Getting_Started_Invit
 };
 
 const es_getting_started_invite_desc = /** @type {(inputs: Getting_Started_Invite_DescInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Comparte enlaces de invitacion para que tu equipo pueda crear cuentas.`)
+	return /** @type {LocalizedString} */ (`Comparte enlaces de invitación para que tu equipo pueda crear cuentas.`)
 };
 
 /**

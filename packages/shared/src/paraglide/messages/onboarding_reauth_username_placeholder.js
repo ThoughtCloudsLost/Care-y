@@ -10,7 +10,7 @@ const en_onboarding_reauth_username_placeholder = /** @type {(inputs: Onboarding
 };
 
 const es_onboarding_reauth_username_placeholder = /** @type {(inputs: Onboarding_Reauth_Username_PlaceholderInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Su usuario de inicio de sesion`)
+	return /** @type {LocalizedString} */ (`Su usuario de inicio de sesión`)
 };
 
 /**

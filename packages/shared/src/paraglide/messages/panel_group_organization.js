@@ -10,7 +10,7 @@ const en_panel_group_organization = /** @type {(inputs: Panel_Group_Organization
 };
 
 const es_panel_group_organization = /** @type {(inputs: Panel_Group_OrganizationInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Organizacion`)
+	return /** @type {LocalizedString} */ (`Organización`)
 };
 
 /**

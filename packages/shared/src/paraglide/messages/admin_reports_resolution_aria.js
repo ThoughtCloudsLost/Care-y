@@ -10,7 +10,7 @@ const en_admin_reports_resolution_aria = /** @type {(inputs: Admin_Reports_Resol
 };
 
 const es_admin_reports_resolution_aria = /** @type {(inputs: Admin_Reports_Resolution_AriaInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Tiempo promedio de resolucion en dias en los ultimos 12 meses`)
+	return /** @type {LocalizedString} */ (`Tiempo promedio de resolución en días en los ultimos 12 meses`)
 };
 
 /**

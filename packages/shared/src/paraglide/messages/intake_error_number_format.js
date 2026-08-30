@@ -10,7 +10,7 @@ const en_intake_error_number_format = /** @type {(inputs: Intake_Error_Number_Fo
 };
 
 const es_intake_error_number_format = /** @type {(inputs: Intake_Error_Number_FormatInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Ingrese un numero valido.`)
+	return /** @type {LocalizedString} */ (`Ingrese un número válido.`)
 };
 
 /**

@@ -10,7 +10,7 @@ const en_intake_protected_encrypted_what = /** @type {(inputs: Intake_Protected_
 };
 
 const es_intake_protected_encrypted_what = /** @type {(inputs: Intake_Protected_Encrypted_WhatInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Tu informacion se cifra en tu navegador antes de enviarse. El servidor solo recibe datos codificados que no puede leer.`)
+	return /** @type {LocalizedString} */ (`Tu información se cifra en tu navegador antes de enviarse. El servidor solo recibe datos codificados que no puede leer.`)
 };
 
 /**

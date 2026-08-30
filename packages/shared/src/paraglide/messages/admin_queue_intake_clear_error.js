@@ -10,7 +10,7 @@ const en_admin_queue_intake_clear_error = /** @type {(inputs: Admin_Queue_Intake
 };
 
 const es_admin_queue_intake_clear_error = /** @type {(inputs: Admin_Queue_Intake_Clear_ErrorInputs) => LocalizedString} */ (i) => {
-	return /** @type {LocalizedString} */ (`No se pudo eliminar la designacion de ${i?.queue} de recepcion`)
+	return /** @type {LocalizedString} */ (`No se pudo eliminar la designación de ${i?.queue} de recepción`)
 };
 
 /**

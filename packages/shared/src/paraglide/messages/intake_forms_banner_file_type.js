@@ -10,7 +10,7 @@ const en_intake_forms_banner_file_type = /** @type {(inputs: Intake_Forms_Banner
 };
 
 const es_intake_forms_banner_file_type = /** @type {(inputs: Intake_Forms_Banner_File_TypeInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Solo se permiten imagenes PNG, JPEG y WebP.`)
+	return /** @type {LocalizedString} */ (`Solo se permiten imágenes PNG, JPEG y WebP.`)
 };
 
 /**

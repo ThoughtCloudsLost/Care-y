@@ -10,7 +10,7 @@ const en_intake_forms_description_hint = /** @type {(inputs: Intake_Forms_Descri
 };
 
 const es_intake_forms_description_hint = /** @type {(inputs: Intake_Forms_Description_HintInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Se muestra en la pagina publica del formulario.`)
+	return /** @type {LocalizedString} */ (`Se muestra en la página pública del formulario.`)
 };
 
 /**

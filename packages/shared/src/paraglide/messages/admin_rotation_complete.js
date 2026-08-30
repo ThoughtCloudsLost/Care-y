@@ -10,7 +10,7 @@ const en_admin_rotation_complete = /** @type {(inputs: Admin_Rotation_CompleteIn
 };
 
 const es_admin_rotation_complete = /** @type {(inputs: Admin_Rotation_CompleteInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Rotacion de clave completada`)
+	return /** @type {LocalizedString} */ (`Rotación de clave completada`)
 };
 
 /**

@@ -10,7 +10,7 @@ const en_consultant_phone_error_provider = /** @type {(inputs: Consultant_Phone_
 };
 
 const es_consultant_phone_error_provider = /** @type {(inputs: Consultant_Phone_Error_ProviderInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`No se pudo enviar el codigo. Intenta mas tarde.`)
+	return /** @type {LocalizedString} */ (`No se pudo enviar el código. Intenta más tarde.`)
 };
 
 /**

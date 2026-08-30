@@ -10,7 +10,7 @@ const en_settings_password_retry = /** @type {(inputs: Settings_Password_RetryIn
 };
 
 const es_settings_password_retry = /** @type {(inputs: Settings_Password_RetryInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Reintentar rotacion de claves`)
+	return /** @type {LocalizedString} */ (`Reintentar rotación de claves`)
 };
 
 /**

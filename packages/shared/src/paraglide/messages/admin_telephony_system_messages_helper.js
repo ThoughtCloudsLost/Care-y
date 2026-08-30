@@ -10,7 +10,7 @@ const en_admin_telephony_system_messages_helper = /** @type {(inputs: Admin_Tele
 };
 
 const es_admin_telephony_system_messages_helper = /** @type {(inputs: Admin_Telephony_System_Messages_HelperInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`El numero usado para recordatorios de citas y actualizaciones de estado`)
+	return /** @type {LocalizedString} */ (`El número usado para recordatorios de citas y actualizaciones de estado`)
 };
 
 /**

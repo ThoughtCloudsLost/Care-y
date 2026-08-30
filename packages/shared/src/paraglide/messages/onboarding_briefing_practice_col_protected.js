@@ -10,7 +10,7 @@ const en_onboarding_briefing_practice_col_protected = /** @type {(inputs: Onboar
 };
 
 const es_onboarding_briefing_practice_col_protected = /** @type {(inputs: Onboarding_Briefing_Practice_Col_ProtectedInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Que esta protegido`)
+	return /** @type {LocalizedString} */ (`Que está protegido`)
 };
 
 /**

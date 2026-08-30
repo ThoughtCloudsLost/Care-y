@@ -10,7 +10,7 @@ const en_intake_protected_volunteers_what = /** @type {(inputs: Intake_Protected
 };
 
 const es_intake_protected_volunteers_what = /** @type {(inputs: Intake_Protected_Volunteers_WhatInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Solo los voluntarios asignados a tu caso pueden leer tu informacion.`)
+	return /** @type {LocalizedString} */ (`Solo los voluntarios asignados a tu caso pueden leer tu información.`)
 };
 
 /**

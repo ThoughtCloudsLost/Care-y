@@ -10,7 +10,7 @@ const en_intake_forms_submit_message_label = /** @type {(inputs: Intake_Forms_Su
 };
 
 const es_intake_forms_submit_message_label = /** @type {(inputs: Intake_Forms_Submit_Message_LabelInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Mensaje de confirmacion`)
+	return /** @type {LocalizedString} */ (`Mensaje de confirmación`)
 };
 
 /**

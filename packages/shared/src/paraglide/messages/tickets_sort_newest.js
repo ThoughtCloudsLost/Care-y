@@ -10,7 +10,7 @@ const en_tickets_sort_newest = /** @type {(inputs: Tickets_Sort_NewestInputs) =>
 };
 
 const es_tickets_sort_newest = /** @type {(inputs: Tickets_Sort_NewestInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Mas recientes`)
+	return /** @type {LocalizedString} */ (`Más recientes`)
 };
 
 /**

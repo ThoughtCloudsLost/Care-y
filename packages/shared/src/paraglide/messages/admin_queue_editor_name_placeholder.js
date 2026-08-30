@@ -10,7 +10,7 @@ const en_admin_queue_editor_name_placeholder = /** @type {(inputs: Admin_Queue_E
 };
 
 const es_admin_queue_editor_name_placeholder = /** @type {(inputs: Admin_Queue_Editor_Name_PlaceholderInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`ej. Recepcion General`)
+	return /** @type {LocalizedString} */ (`ej. Recepción General`)
 };
 
 /**

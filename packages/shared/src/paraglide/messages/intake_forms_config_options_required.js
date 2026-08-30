@@ -10,7 +10,7 @@ const en_intake_forms_config_options_required = /** @type {(inputs: Intake_Forms
 };
 
 const es_intake_forms_config_options_required = /** @type {(inputs: Intake_Forms_Config_Options_RequiredInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Agrega al menos una opcion`)
+	return /** @type {LocalizedString} */ (`Agrega al menos una opción`)
 };
 
 /**

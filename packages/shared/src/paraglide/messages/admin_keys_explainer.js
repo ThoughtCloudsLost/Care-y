@@ -10,7 +10,7 @@ const en_admin_keys_explainer = /** @type {(inputs: Admin_Keys_ExplainerInputs) 
 };
 
 const es_admin_keys_explainer = /** @type {(inputs: Admin_Keys_ExplainerInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`La clave de tu organizacion cifra los datos compartidos: nombres de voluntarios, articulos de la base de conocimiento, nombres de colas y marca. Las conversaciones de tickets y la informacion de clientes usan claves separadas por ticket.`)
+	return /** @type {LocalizedString} */ (`La clave de tu organización cifra los datos compartidos: nombres de voluntarios, artículos de la base de conocimiento, nombres de colas y marca. Las conversaciones de tickets y la información de clientes usan claves separadas por ticket.`)
 };
 
 /**

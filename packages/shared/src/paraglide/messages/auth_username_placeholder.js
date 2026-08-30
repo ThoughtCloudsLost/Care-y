@@ -10,7 +10,7 @@ const en_auth_username_placeholder = /** @type {(inputs: Auth_Username_Placehold
 };
 
 const es_auth_username_placeholder = /** @type {(inputs: Auth_Username_PlaceholderInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`tu.usuario.de.sesion`)
+	return /** @type {LocalizedString} */ (`tu.usuario.de.sesión`)
 };
 
 /**

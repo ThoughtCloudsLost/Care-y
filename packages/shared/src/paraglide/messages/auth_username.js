@@ -10,7 +10,7 @@ const en_auth_username = /** @type {(inputs: Auth_UsernameInputs) => LocalizedSt
 };
 
 const es_auth_username = /** @type {(inputs: Auth_UsernameInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Usuario de inicio de sesion`)
+	return /** @type {LocalizedString} */ (`Usuario de inicio de sesión`)
 };
 
 /**

@@ -10,7 +10,7 @@ const en_intake_forms_page_break_title_placeholder = /** @type {(inputs: Intake_
 };
 
 const es_intake_forms_page_break_title_placeholder = /** @type {(inputs: Intake_Forms_Page_Break_Title_PlaceholderInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`ej. Informacion de contacto`)
+	return /** @type {LocalizedString} */ (`ej. Información de contacto`)
 };
 
 /**

@@ -10,7 +10,7 @@ const en_onboarding_setup_already_done = /** @type {(inputs: Onboarding_Setup_Al
 };
 
 const es_onboarding_setup_already_done = /** @type {(inputs: Onboarding_Setup_Already_DoneInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Esta organizacion ya ha sido configurada.`)
+	return /** @type {LocalizedString} */ (`Esta organización ya ha sido configurada.`)
 };
 
 /**

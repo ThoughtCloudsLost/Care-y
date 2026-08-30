@@ -10,7 +10,7 @@ const en_admin_rotation_error = /** @type {(inputs: Admin_Rotation_ErrorInputs) 
 };
 
 const es_admin_rotation_error = /** @type {(inputs: Admin_Rotation_ErrorInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`La rotacion de clave fallo. Tu clave anterior sigue activa.`)
+	return /** @type {LocalizedString} */ (`La rotación de clave fallo. Tu clave anterior sigue activa.`)
 };
 
 /**

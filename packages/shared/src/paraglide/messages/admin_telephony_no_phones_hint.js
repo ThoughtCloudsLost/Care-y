@@ -10,7 +10,7 @@ const en_admin_telephony_no_phones_hint = /** @type {(inputs: Admin_Telephony_No
 };
 
 const es_admin_telephony_no_phones_hint = /** @type {(inputs: Admin_Telephony_No_Phones_HintInputs) => LocalizedString} */ (i) => {
-	return /** @type {LocalizedString} */ (`Toque Actualizar numeros arriba para sincronizar desde ${i?.provider}.`)
+	return /** @type {LocalizedString} */ (`Toque Actualizar números arriba para sincronizar desde ${i?.provider}.`)
 };
 
 /**

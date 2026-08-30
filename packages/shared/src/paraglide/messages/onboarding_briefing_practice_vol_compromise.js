@@ -10,7 +10,7 @@ const en_onboarding_briefing_practice_vol_compromise = /** @type {(inputs: Onboa
 };
 
 const es_onboarding_briefing_practice_vol_compromise = /** @type {(inputs: Onboarding_Briefing_Practice_Vol_CompromiseInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Nada utilizable. Cifrado con la clave de tu organizacion.`)
+	return /** @type {LocalizedString} */ (`Nada utilizable. Cifrado con la clave de tu organización.`)
 };
 
 /**

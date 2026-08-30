@@ -10,7 +10,7 @@ const en_admin_escrow_confirm_label = /** @type {(inputs: Admin_Escrow_Confirm_L
 };
 
 const es_admin_escrow_confirm_label = /** @type {(inputs: Admin_Escrow_Confirm_LabelInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Confirmar frase de contrasena`)
+	return /** @type {LocalizedString} */ (`Confirmar frase de contraseña`)
 };
 
 /**

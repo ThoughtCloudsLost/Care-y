@@ -10,7 +10,7 @@ const en_admin_reports_no_data = /** @type {(inputs: Admin_Reports_No_DataInputs
 };
 
 const es_admin_reports_no_data = /** @type {(inputs: Admin_Reports_No_DataInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Aun no hay datos de reportes`)
+	return /** @type {LocalizedString} */ (`Aún no hay datos de reportes`)
 };
 
 /**

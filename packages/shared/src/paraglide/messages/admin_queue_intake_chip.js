@@ -10,7 +10,7 @@ const en_admin_queue_intake_chip = /** @type {(inputs: Admin_Queue_Intake_ChipIn
 };
 
 const es_admin_queue_intake_chip = /** @type {(inputs: Admin_Queue_Intake_ChipInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Recepcion`)
+	return /** @type {LocalizedString} */ (`Recepción`)
 };
 
 /**

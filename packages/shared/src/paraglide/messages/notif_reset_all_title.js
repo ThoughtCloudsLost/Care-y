@@ -10,7 +10,7 @@ const en_notif_reset_all_title = /** @type {(inputs: Notif_Reset_All_TitleInputs
 };
 
 const es_notif_reset_all_title = /** @type {(inputs: Notif_Reset_All_TitleInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Restablecer preferencias de notificacion?`)
+	return /** @type {LocalizedString} */ (`¿Restablecer preferencias de notificación?`)
 };
 
 /**

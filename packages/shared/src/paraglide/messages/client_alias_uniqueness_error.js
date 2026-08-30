@@ -10,7 +10,7 @@ const en_client_alias_uniqueness_error = /** @type {(inputs: Client_Alias_Unique
 };
 
 const es_client_alias_uniqueness_error = /** @type {(inputs: Client_Alias_Uniqueness_ErrorInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Este alias ya esta en uso`)
+	return /** @type {LocalizedString} */ (`Este alias ya está en uso`)
 };
 
 /**

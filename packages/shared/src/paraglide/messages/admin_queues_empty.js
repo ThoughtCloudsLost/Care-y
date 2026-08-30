@@ -10,7 +10,7 @@ const en_admin_queues_empty = /** @type {(inputs: Admin_Queues_EmptyInputs) => L
 };
 
 const es_admin_queues_empty = /** @type {(inputs: Admin_Queues_EmptyInputs) => LocalizedString} */ (i) => {
-	return /** @type {LocalizedString} */ (`Sin ${i?.queues} aun. Crea una para empezar a enrutar ${i?.tickets}.`)
+	return /** @type {LocalizedString} */ (`Sin ${i?.queues} aún. Crea una para empezar a enrutar ${i?.tickets}.`)
 };
 
 /**

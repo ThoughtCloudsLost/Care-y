@@ -10,7 +10,7 @@ const en_admin_greetings_phone_number_label = /** @type {(inputs: Admin_Greeting
 };
 
 const es_admin_greetings_phone_number_label = /** @type {(inputs: Admin_Greetings_Phone_Number_LabelInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Numero de telefono`)
+	return /** @type {LocalizedString} */ (`Número de teléfono`)
 };
 
 /**

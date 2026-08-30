@@ -10,7 +10,7 @@ const en_panel_terminology = /** @type {(inputs: Panel_TerminologyInputs) => Loc
 };
 
 const es_panel_terminology = /** @type {(inputs: Panel_TerminologyInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Terminologia`)
+	return /** @type {LocalizedString} */ (`Terminología`)
 };
 
 /**

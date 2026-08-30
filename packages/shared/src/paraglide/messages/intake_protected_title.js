@@ -10,7 +10,7 @@ const en_intake_protected_title = /** @type {(inputs: Intake_Protected_TitleInpu
 };
 
 const es_intake_protected_title = /** @type {(inputs: Intake_Protected_TitleInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Como te protegemos`)
+	return /** @type {LocalizedString} */ (`Cómo te protegemos`)
 };
 
 /**

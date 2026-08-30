@@ -10,7 +10,7 @@ const en_admin_invite_link_error = /** @type {(inputs: Admin_Invite_Link_ErrorIn
 };
 
 const es_admin_invite_link_error = /** @type {(inputs: Admin_Invite_Link_ErrorInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Error al generar el enlace de invitacion`)
+	return /** @type {LocalizedString} */ (`Error al generar el enlace de invitación`)
 };
 
 /**

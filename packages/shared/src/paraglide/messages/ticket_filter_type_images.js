@@ -10,7 +10,7 @@ const en_ticket_filter_type_images = /** @type {(inputs: Ticket_Filter_Type_Imag
 };
 
 const es_ticket_filter_type_images = /** @type {(inputs: Ticket_Filter_Type_ImagesInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Imagenes`)
+	return /** @type {LocalizedString} */ (`Imágenes`)
 };
 
 /**

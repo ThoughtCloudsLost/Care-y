@@ -10,7 +10,7 @@ const en_admin_note_types_description_placeholder = /** @type {(inputs: Admin_No
 };
 
 const es_admin_note_types_description_placeholder = /** @type {(inputs: Admin_Note_Types_Description_PlaceholderInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Para que se usa este tipo de nota?`)
+	return /** @type {LocalizedString} */ (`¿Para qué se usa este tipo de nota?`)
 };
 
 /**

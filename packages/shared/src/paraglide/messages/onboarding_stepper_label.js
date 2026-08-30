@@ -10,7 +10,7 @@ const en_onboarding_stepper_label = /** @type {(inputs: Onboarding_Stepper_Label
 };
 
 const es_onboarding_stepper_label = /** @type {(inputs: Onboarding_Stepper_LabelInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Progreso de configuracion`)
+	return /** @type {LocalizedString} */ (`Progreso de configuración`)
 };
 
 /**

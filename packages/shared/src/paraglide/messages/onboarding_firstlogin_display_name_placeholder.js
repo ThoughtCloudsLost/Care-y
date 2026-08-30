@@ -10,7 +10,7 @@ const en_onboarding_firstlogin_display_name_placeholder = /** @type {(inputs: On
 };
 
 const es_onboarding_firstlogin_display_name_placeholder = /** @type {(inputs: Onboarding_Firstlogin_Display_Name_PlaceholderInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Como te veran los demas`)
+	return /** @type {LocalizedString} */ (`Cómo te verán los demas`)
 };
 
 /**

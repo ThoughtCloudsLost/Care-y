@@ -10,7 +10,7 @@ const en_onboarding_briefing_practice_org_access = /** @type {(inputs: Onboardin
 };
 
 const es_onboarding_briefing_practice_org_access = /** @type {(inputs: Onboarding_Briefing_Practice_Org_AccessInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Cualquier voluntario autenticado en tu organizacion`)
+	return /** @type {LocalizedString} */ (`Cualquier voluntario autenticado en tu organización`)
 };
 
 /**

@@ -10,7 +10,7 @@ const en_admin_queues_placeholder = /** @type {(inputs: Admin_Queues_Placeholder
 };
 
 const es_admin_queues_placeholder = /** @type {(inputs: Admin_Queues_PlaceholderInputs) => LocalizedString} */ (i) => {
-	return /** @type {LocalizedString} */ (`Cargando gestion de ${i?.queues}...`)
+	return /** @type {LocalizedString} */ (`Cargando gestión de ${i?.queues}...`)
 };
 
 /**

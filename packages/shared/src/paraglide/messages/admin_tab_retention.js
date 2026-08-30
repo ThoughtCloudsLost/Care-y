@@ -10,7 +10,7 @@ const en_admin_tab_retention = /** @type {(inputs: Admin_Tab_RetentionInputs) =>
 };
 
 const es_admin_tab_retention = /** @type {(inputs: Admin_Tab_RetentionInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Retencion`)
+	return /** @type {LocalizedString} */ (`Retención`)
 };
 
 /**

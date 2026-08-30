@@ -10,7 +10,7 @@ const en_intake_forms_locale_optional_hint = /** @type {(inputs: Intake_Forms_Lo
 };
 
 const es_intake_forms_locale_optional_hint = /** @type {(inputs: Intake_Forms_Locale_Optional_HintInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Las traducciones son opcionales. Los campos sin traduccion muestran el texto en ingles.`)
+	return /** @type {LocalizedString} */ (`Las traducciones son opcionales. Los campos sin traducción muestran el texto en ingles.`)
 };
 
 /**

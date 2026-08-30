@@ -10,7 +10,7 @@ const en_intake_responses_export_confirm_body = /** @type {(inputs: Intake_Respo
 };
 
 const es_intake_responses_export_confirm_body = /** @type {(inputs: Intake_Responses_Export_Confirm_BodyInputs) => LocalizedString} */ (i) => {
-	return /** @type {LocalizedString} */ (`Se descargara un archivo CSV con datos de clientes en texto plano. El archivo no esta cifrado. Se exportaran ${i?.exportedCount} respuestas.`)
+	return /** @type {LocalizedString} */ (`Se descargara un archivo CSV con datos de clientes en texto plano. El archivo no está cifrado. Se exportaran ${i?.exportedCount} respuestas.`)
 };
 
 /**

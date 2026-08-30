@@ -10,7 +10,7 @@ const en_intake_avail_add_specific = /** @type {(inputs: Intake_Avail_Add_Specif
 };
 
 const es_intake_avail_add_specific = /** @type {(inputs: Intake_Avail_Add_SpecificInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Agregar fecha especifica`)
+	return /** @type {LocalizedString} */ (`Agregar fecha específica`)
 };
 
 /**

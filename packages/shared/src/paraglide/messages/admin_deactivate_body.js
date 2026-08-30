@@ -10,7 +10,7 @@ const en_admin_deactivate_body = /** @type {(inputs: Admin_Deactivate_BodyInputs
 };
 
 const es_admin_deactivate_body = /** @type {(inputs: Admin_Deactivate_BodyInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Se cerrara su sesion inmediatamente y perdera acceso a los datos de la organizacion. Para restaurar el acceso, debera reactivar su cuenta y compartir la clave de organizacion nuevamente.`)
+	return /** @type {LocalizedString} */ (`Se cerrará su sesión inmediatamente y perdera acceso a los datos de la organización. Para restaurar el acceso, deberá reactivar su cuenta y compartir la clave de organización nuevamente.`)
 };
 
 /**

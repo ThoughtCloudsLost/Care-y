@@ -10,7 +10,7 @@ const en_admin_greetings_type_staff_menu_help = /** @type {(inputs: Admin_Greeti
 };
 
 const es_admin_greetings_type_staff_menu_help = /** @type {(inputs: Admin_Greetings_Type_Staff_Menu_HelpInputs) => LocalizedString} */ (i) => {
-	return /** @type {LocalizedString} */ (`Se reproduce cuando un ${i?.volunteer} accede al menu telefonico.`)
+	return /** @type {LocalizedString} */ (`Se reproduce cuando un ${i?.volunteer} accede al menu telefónico.`)
 };
 
 /**

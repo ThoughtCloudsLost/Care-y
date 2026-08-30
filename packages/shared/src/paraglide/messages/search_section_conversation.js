@@ -10,7 +10,7 @@ const en_search_section_conversation = /** @type {(inputs: Search_Section_Conver
 };
 
 const es_search_section_conversation = /** @type {(inputs: Search_Section_ConversationInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`En esta conversacion`)
+	return /** @type {LocalizedString} */ (`En esta conversación`)
 };
 
 /**

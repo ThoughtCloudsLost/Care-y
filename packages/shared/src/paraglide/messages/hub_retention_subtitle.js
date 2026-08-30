@@ -10,7 +10,7 @@ const en_hub_retention_subtitle = /** @type {(inputs: Hub_Retention_SubtitleInpu
 };
 
 const es_hub_retention_subtitle = /** @type {(inputs: Hub_Retention_SubtitleInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Retencion de informacion personal identificable y ciclo de vida`)
+	return /** @type {LocalizedString} */ (`Retención de información personal identificable y ciclo de vida`)
 };
 
 /**

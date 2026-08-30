@@ -10,7 +10,7 @@ const en_intake_privacy_metadata = /** @type {(inputs: Intake_Privacy_MetadataIn
 };
 
 const es_intake_privacy_metadata = /** @type {(inputs: Intake_Privacy_MetadataInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Su respuesta esta cifrada, pero su seleccion comparte datos de enrutamiento con el servicio.`)
+	return /** @type {LocalizedString} */ (`Su respuesta está cifrada, pero su selección comparte datos de enrutamiento con el servicio.`)
 };
 
 /**

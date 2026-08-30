@@ -10,7 +10,7 @@ const en_admin_queue_editor_escalation_label = /** @type {(inputs: Admin_Queue_E
 };
 
 const es_admin_queue_editor_escalation_label = /** @type {(inputs: Admin_Queue_Editor_Escalation_LabelInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Dias de escalacion`)
+	return /** @type {LocalizedString} */ (`Días de escalación`)
 };
 
 /**

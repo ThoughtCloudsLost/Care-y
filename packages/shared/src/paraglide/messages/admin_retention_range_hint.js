@@ -10,7 +10,7 @@ const en_admin_retention_range_hint = /** @type {(inputs: Admin_Retention_Range_
 };
 
 const es_admin_retention_range_hint = /** @type {(inputs: Admin_Retention_Range_HintInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Entre 1 y 3,650 dias (10 anos)`)
+	return /** @type {LocalizedString} */ (`Entre 1 y 3,650 días (10 años)`)
 };
 
 /**

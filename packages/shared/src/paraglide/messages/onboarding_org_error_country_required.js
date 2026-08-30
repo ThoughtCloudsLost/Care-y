@@ -10,7 +10,7 @@ const en_onboarding_org_error_country_required = /** @type {(inputs: Onboarding_
 };
 
 const es_onboarding_org_error_country_required = /** @type {(inputs: Onboarding_Org_Error_Country_RequiredInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Seleccione un codigo de pais.`)
+	return /** @type {LocalizedString} */ (`Seleccione un código de país.`)
 };
 
 /**

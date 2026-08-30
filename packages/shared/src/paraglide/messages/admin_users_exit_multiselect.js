@@ -10,7 +10,7 @@ const en_admin_users_exit_multiselect = /** @type {(inputs: Admin_Users_Exit_Mul
 };
 
 const es_admin_users_exit_multiselect = /** @type {(inputs: Admin_Users_Exit_MultiselectInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Cancelar seleccion`)
+	return /** @type {LocalizedString} */ (`Cancelar selección`)
 };
 
 /**

@@ -10,7 +10,7 @@ const en_ticket_new_field_phone = /** @type {(inputs: Ticket_New_Field_PhoneInpu
 };
 
 const es_ticket_new_field_phone = /** @type {(inputs: Ticket_New_Field_PhoneInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Numero de telefono`)
+	return /** @type {LocalizedString} */ (`Número de teléfono`)
 };
 
 /**

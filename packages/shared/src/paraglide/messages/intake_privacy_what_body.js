@@ -10,7 +10,7 @@ const en_intake_privacy_what_body = /** @type {(inputs: Intake_Privacy_What_Body
 };
 
 const es_intake_privacy_what_body = /** @type {(inputs: Intake_Privacy_What_BodyInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Recopilamos la informacion que proporcionas en este formulario (tu nombre si lo das, datos de contacto y tu mensaje) para conectarte con un voluntario que pueda ayudarte. Toda la informacion se cifra antes de salir de tu dispositivo.`)
+	return /** @type {LocalizedString} */ (`Recopilamos la información que proporcionas en este formulario (tu nombre si lo das, datos de contacto y tu mensaje) para conectarte con un voluntario que pueda ayudarte. Toda la información se cifra antes de salir de tu dispositivo.`)
 };
 
 /**

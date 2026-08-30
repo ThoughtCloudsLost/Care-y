@@ -10,7 +10,7 @@ const en_admin_retention_clear_body = /** @type {(inputs: Admin_Retention_Clear_
 };
 
 const es_admin_retention_clear_body = /** @type {(inputs: Admin_Retention_Clear_BodyInputs) => LocalizedString} */ (i) => {
-	return /** @type {LocalizedString} */ (`Los ${i?.tickets}, mensajes e informacion personal de los llamantes se conservaran indefinidamente hasta que se eliminen manualmente.`)
+	return /** @type {LocalizedString} */ (`Los ${i?.tickets}, mensajes e información personal de los llamantes se conservaran indefinidamente hasta que se eliminen manualmente.`)
 };
 
 /**

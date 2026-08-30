@@ -10,7 +10,7 @@ const en_consultant_phone_sms_pings_aria = /** @type {(inputs: Consultant_Phone_
 };
 
 const es_consultant_phone_sms_pings_aria = /** @type {(inputs: Consultant_Phone_Sms_Pings_AriaInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Almacenar mi numero para notificaciones SMS`)
+	return /** @type {LocalizedString} */ (`Almacenar mi número para notificaciones SMS`)
 };
 
 /**

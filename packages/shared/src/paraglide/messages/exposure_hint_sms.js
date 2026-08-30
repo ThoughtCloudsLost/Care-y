@@ -10,7 +10,7 @@ const en_exposure_hint_sms = /** @type {(inputs: Exposure_Hint_SmsInputs) => Loc
 };
 
 const es_exposure_hint_sms = /** @type {(inputs: Exposure_Hint_SmsInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Los SMS no estan cifrados. Tu proveedor de telefonia puede leerlos. Mantiene los detalles sensibles en el chat cifrado.`)
+	return /** @type {LocalizedString} */ (`Los SMS no estan cifrados. Tu proveedor de telefonía puede leerlos. Mantiene los detalles sensibles en el chat cifrado.`)
 };
 
 /**

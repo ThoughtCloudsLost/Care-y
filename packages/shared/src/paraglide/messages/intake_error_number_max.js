@@ -10,7 +10,7 @@ const en_intake_error_number_max = /** @type {(inputs: Intake_Error_Number_MaxIn
 };
 
 const es_intake_error_number_max = /** @type {(inputs: Intake_Error_Number_MaxInputs) => LocalizedString} */ (i) => {
-	return /** @type {LocalizedString} */ (`El valor debe ser como maximo ${i?.max}.`)
+	return /** @type {LocalizedString} */ (`El valor debe ser como máximo ${i?.max}.`)
 };
 
 /**

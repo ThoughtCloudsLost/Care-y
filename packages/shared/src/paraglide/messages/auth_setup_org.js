@@ -10,7 +10,7 @@ const en_auth_setup_org = /** @type {(inputs: Auth_Setup_OrgInputs) => Localized
 };
 
 const es_auth_setup_org = /** @type {(inputs: Auth_Setup_OrgInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Configura tu organizacion`)
+	return /** @type {LocalizedString} */ (`Configura tu organización`)
 };
 
 /**

@@ -10,7 +10,7 @@ const en_onboarding_telephony_saved = /** @type {(inputs: Onboarding_Telephony_S
 };
 
 const es_onboarding_telephony_saved = /** @type {(inputs: Onboarding_Telephony_SavedInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Configuracion de telefonia guardada.`)
+	return /** @type {LocalizedString} */ (`Configuración de telefonía guardada.`)
 };
 
 /**

@@ -10,7 +10,7 @@ const en_intake_page_back = /** @type {(inputs: Intake_Page_BackInputs) => Local
 };
 
 const es_intake_page_back = /** @type {(inputs: Intake_Page_BackInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Atras`)
+	return /** @type {LocalizedString} */ (`Atrás`)
 };
 
 /**

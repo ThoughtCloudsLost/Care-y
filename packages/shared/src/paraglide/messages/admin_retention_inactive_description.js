@@ -10,7 +10,7 @@ const en_admin_retention_inactive_description = /** @type {(inputs: Admin_Retent
 };
 
 const es_admin_retention_inactive_description = /** @type {(inputs: Admin_Retention_Inactive_DescriptionInputs) => LocalizedString} */ (i) => {
-	return /** @type {LocalizedString} */ (`La eliminacion automatica esta desactivada. Los ${i?.tickets}, mensajes e informacion personal de los llamantes se conservan hasta que se eliminen manualmente.`)
+	return /** @type {LocalizedString} */ (`La eliminación automática está desactivada. Los ${i?.tickets}, mensajes e información personal de los llamantes se conservan hasta que se eliminen manualmente.`)
 };
 
 /**

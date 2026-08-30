@@ -10,7 +10,7 @@ const en_admin_branding_card_name_label = /** @type {(inputs: Admin_Branding_Car
 };
 
 const es_admin_branding_card_name_label = /** @type {(inputs: Admin_Branding_Card_Name_LabelInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Nombre de la organizacion`)
+	return /** @type {LocalizedString} */ (`Nombre de la organización`)
 };
 
 /**

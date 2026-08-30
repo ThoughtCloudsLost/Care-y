@@ -10,7 +10,7 @@ const en_admin_invite_credential_password = /** @type {(inputs: Admin_Invite_Cre
 };
 
 const es_admin_invite_credential_password = /** @type {(inputs: Admin_Invite_Credential_PasswordInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Contrasena`)
+	return /** @type {LocalizedString} */ (`Contraseña`)
 };
 
 /**

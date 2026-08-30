@@ -10,7 +10,7 @@ const en_admin_hub_badge_retention_days = /** @type {(inputs: Admin_Hub_Badge_Re
 };
 
 const es_admin_hub_badge_retention_days = /** @type {(inputs: Admin_Hub_Badge_Retention_DaysInputs) => LocalizedString} */ (i) => {
-	return /** @type {LocalizedString} */ (`${i?.count} dias`)
+	return /** @type {LocalizedString} */ (`${i?.count} días`)
 };
 
 /**

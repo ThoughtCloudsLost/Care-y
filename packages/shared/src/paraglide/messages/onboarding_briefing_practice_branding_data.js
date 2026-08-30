@@ -10,7 +10,7 @@ const en_onboarding_briefing_practice_branding_data = /** @type {(inputs: Onboar
 };
 
 const es_onboarding_briefing_practice_branding_data = /** @type {(inputs: Onboarding_Briefing_Practice_Branding_DataInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Marca publica (logo, nombre, color en paginas de contacto)`)
+	return /** @type {LocalizedString} */ (`Marca pública (logo, nombre, color en páginas de contacto)`)
 };
 
 /**

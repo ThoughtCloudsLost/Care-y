@@ -10,7 +10,7 @@ const en_intake_forms_field_type_multiselect = /** @type {(inputs: Intake_Forms_
 };
 
 const es_intake_forms_field_type_multiselect = /** @type {(inputs: Intake_Forms_Field_Type_MultiselectInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Casillas de verificacion`)
+	return /** @type {LocalizedString} */ (`Casillas de verificación`)
 };
 
 /**

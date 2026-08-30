@@ -10,7 +10,7 @@ const en_admin_retention_set_body = /** @type {(inputs: Admin_Retention_Set_Body
 };
 
 const es_admin_retention_set_body = /** @type {(inputs: Admin_Retention_Set_BodyInputs) => LocalizedString} */ (i) => {
-	return /** @type {LocalizedString} */ (`Los ${i?.tickets}, mensajes e informacion personal de los llamantes con mas de ${i?.days} dias se eliminaran permanente y automaticamente. Esto no se puede deshacer. Los datos eliminados no se pueden recuperar, ni siquiera con el archivo de custodia.`)
+	return /** @type {LocalizedString} */ (`Los ${i?.tickets}, mensajes e información personal de los llamantes con más de ${i?.days} días se eliminaran permanente y automáticamente. Esto no se puede deshacer. Los datos eliminados no se pueden recuperar, ni siquiera con el archivo de custodia.`)
 };
 
 /**

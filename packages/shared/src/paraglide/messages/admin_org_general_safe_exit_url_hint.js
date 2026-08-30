@@ -10,7 +10,7 @@ const en_admin_org_general_safe_exit_url_hint = /** @type {(inputs: Admin_Org_Ge
 };
 
 const es_admin_org_general_safe_exit_url_hint = /** @type {(inputs: Admin_Org_General_Safe_Exit_Url_HintInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Adonde el boton de salida rapida envia a los visitantes del portal. Deje en blanco para una pagina de clima predeterminada.`)
+	return /** @type {LocalizedString} */ (`Adónde el boton de salida rápida envia a los visitantes del portal. Deje en blanco para una página de clima predeterminada.`)
 };
 
 /**

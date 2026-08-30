@@ -10,7 +10,7 @@ const en_ticket_zoom_summary = /** @type {(inputs: Ticket_Zoom_SummaryInputs) =>
 };
 
 const es_ticket_zoom_summary = /** @type {(inputs: Ticket_Zoom_SummaryInputs) => LocalizedString} */ (i) => {
-	return /** @type {LocalizedString} */ (`${i?.count} mensajes en ${i?.days} dias, mas reciente ${i?.recency}`)
+	return /** @type {LocalizedString} */ (`${i?.count} mensajes en ${i?.days} días, más reciente ${i?.recency}`)
 };
 
 /**

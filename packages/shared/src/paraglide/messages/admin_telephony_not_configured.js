@@ -10,7 +10,7 @@ const en_admin_telephony_not_configured = /** @type {(inputs: Admin_Telephony_No
 };
 
 const es_admin_telephony_not_configured = /** @type {(inputs: Admin_Telephony_Not_ConfiguredInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Servicio telefonico no configurado`)
+	return /** @type {LocalizedString} */ (`Servicio telefónico no configurado`)
 };
 
 /**

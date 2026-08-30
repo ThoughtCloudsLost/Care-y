@@ -10,7 +10,7 @@ const en_onboarding_briefing_scenario_network_title = /** @type {(inputs: Onboar
 };
 
 const es_onboarding_briefing_scenario_network_title = /** @type {(inputs: Onboarding_Briefing_Scenario_Network_TitleInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Vigilancia de red (monitoreo de ISP, analisis de trafico)`)
+	return /** @type {LocalizedString} */ (`Vigilancia de red (monitoreo de ISP, analisis de tráfico)`)
 };
 
 /**

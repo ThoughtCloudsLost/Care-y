@@ -10,7 +10,7 @@ const en_onboarding_invite_subtext = /** @type {(inputs: Onboarding_Invite_Subte
 };
 
 const es_onboarding_invite_subtext = /** @type {(inputs: Onboarding_Invite_SubtextInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Comparta enlaces de invitacion con su equipo o cree cuentas directamente. Cada enlace de invitacion es de un solo uso y expira en 72 horas.`)
+	return /** @type {LocalizedString} */ (`Comparta enlaces de invitación con su equipo o cree cuentas directamente. Cada enlace de invitación es de un solo uso y expira en 72 horas.`)
 };
 
 /**

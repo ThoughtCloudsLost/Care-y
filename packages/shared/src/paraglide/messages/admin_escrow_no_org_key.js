@@ -10,7 +10,7 @@ const en_admin_escrow_no_org_key = /** @type {(inputs: Admin_Escrow_No_Org_KeyIn
 };
 
 const es_admin_escrow_no_org_key = /** @type {(inputs: Admin_Escrow_No_Org_KeyInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Clave de la organizacion no cargada. Inicie sesion nuevamente para exportar.`)
+	return /** @type {LocalizedString} */ (`Clave de la organización no cargada. Inicie sesión nuevamente para exportar.`)
 };
 
 /**

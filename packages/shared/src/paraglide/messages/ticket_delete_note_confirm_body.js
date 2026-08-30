@@ -10,7 +10,7 @@ const en_ticket_delete_note_confirm_body = /** @type {(inputs: Ticket_Delete_Not
 };
 
 const es_ticket_delete_note_confirm_body = /** @type {(inputs: Ticket_Delete_Note_Confirm_BodyInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Esta nota se eliminara de la conversacion. No se puede deshacer.`)
+	return /** @type {LocalizedString} */ (`Esta nota se eliminará de la conversación. No se puede deshacer.`)
 };
 
 /**

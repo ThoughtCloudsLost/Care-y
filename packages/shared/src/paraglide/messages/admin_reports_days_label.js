@@ -10,7 +10,7 @@ const en_admin_reports_days_label = /** @type {(inputs: Admin_Reports_Days_Label
 };
 
 const es_admin_reports_days_label = /** @type {(inputs: Admin_Reports_Days_LabelInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Dias`)
+	return /** @type {LocalizedString} */ (`Días`)
 };
 
 /**

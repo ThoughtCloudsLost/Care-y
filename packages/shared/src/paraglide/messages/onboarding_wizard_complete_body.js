@@ -10,7 +10,7 @@ const en_onboarding_wizard_complete_body = /** @type {(inputs: Onboarding_Wizard
 };
 
 const es_onboarding_wizard_complete_body = /** @type {(inputs: Onboarding_Wizard_Complete_BodyInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Tu organizacion esta lista. Aqui hay algunas cosas que puedes configurar a continuacion.`)
+	return /** @type {LocalizedString} */ (`Tu organización está lista. Aquí hay algunas cosas que puedes configurar a continuación.`)
 };
 
 /**

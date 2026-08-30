@@ -10,7 +10,7 @@ const en_crypto_org_key_waiting_title = /** @type {(inputs: Crypto_Org_Key_Waiti
 };
 
 const es_crypto_org_key_waiting_title = /** @type {(inputs: Crypto_Org_Key_Waiting_TitleInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Esperando distribucion de claves`)
+	return /** @type {LocalizedString} */ (`Esperando distribución de claves`)
 };
 
 /**

@@ -10,7 +10,7 @@ const en_hub_terminology_subtitle = /** @type {(inputs: Hub_Terminology_Subtitle
 };
 
 const es_hub_terminology_subtitle = /** @type {(inputs: Hub_Terminology_SubtitleInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Personalizar nombres de roles y elementos en la aplicacion`)
+	return /** @type {LocalizedString} */ (`Personalizar nombres de roles y elementos en la aplicación`)
 };
 
 /**

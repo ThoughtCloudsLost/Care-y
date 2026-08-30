@@ -10,7 +10,7 @@ const en_admin_username_label = /** @type {(inputs: Admin_Username_LabelInputs) 
 };
 
 const es_admin_username_label = /** @type {(inputs: Admin_Username_LabelInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Usuario de inicio de sesion`)
+	return /** @type {LocalizedString} */ (`Usuario de inicio de sesión`)
 };
 
 /**

@@ -10,7 +10,7 @@ const en_onboarding_account_password_info = /** @type {(inputs: Onboarding_Accou
 };
 
 const es_onboarding_account_password_info = /** @type {(inputs: Onboarding_Account_Password_InfoInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Minimo 16 caracteres. Esta contrasena genera tus claves de cifrado.`)
+	return /** @type {LocalizedString} */ (`Minimo 16 caracteres. Esta contraseña genera tus claves de cifrado.`)
 };
 
 /**

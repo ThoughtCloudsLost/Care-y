@@ -10,7 +10,7 @@ const en_admin_telephony_connected_numbers = /** @type {(inputs: Admin_Telephony
 };
 
 const es_admin_telephony_connected_numbers = /** @type {(inputs: Admin_Telephony_Connected_NumbersInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Numeros conectados`)
+	return /** @type {LocalizedString} */ (`Números conectados`)
 };
 
 /**

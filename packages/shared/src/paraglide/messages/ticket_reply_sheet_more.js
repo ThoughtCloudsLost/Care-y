@@ -10,7 +10,7 @@ const en_ticket_reply_sheet_more = /** @type {(inputs: Ticket_Reply_Sheet_MoreIn
 };
 
 const es_ticket_reply_sheet_more = /** @type {(inputs: Ticket_Reply_Sheet_MoreInputs) => LocalizedString} */ (i) => {
-	return /** @type {LocalizedString} */ (`y ${i?.count} mas`)
+	return /** @type {LocalizedString} */ (`y ${i?.count} más`)
 };
 
 /**

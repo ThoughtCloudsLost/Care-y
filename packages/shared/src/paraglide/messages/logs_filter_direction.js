@@ -10,7 +10,7 @@ const en_logs_filter_direction = /** @type {(inputs: Logs_Filter_DirectionInputs
 };
 
 const es_logs_filter_direction = /** @type {(inputs: Logs_Filter_DirectionInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Direccion`)
+	return /** @type {LocalizedString} */ (`Dirección`)
 };
 
 /**

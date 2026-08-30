@@ -10,7 +10,7 @@ const en_common_back = /** @type {(inputs: Common_BackInputs) => LocalizedString
 };
 
 const es_common_back = /** @type {(inputs: Common_BackInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Atras`)
+	return /** @type {LocalizedString} */ (`Atrás`)
 };
 
 /**

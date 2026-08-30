@@ -10,7 +10,7 @@ const en_admin_org_general_safe_exit_url_label = /** @type {(inputs: Admin_Org_G
 };
 
 const es_admin_org_general_safe_exit_url_label = /** @type {(inputs: Admin_Org_General_Safe_Exit_Url_LabelInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`URL de salida rapida`)
+	return /** @type {LocalizedString} */ (`URL de salida rápida`)
 };
 
 /**

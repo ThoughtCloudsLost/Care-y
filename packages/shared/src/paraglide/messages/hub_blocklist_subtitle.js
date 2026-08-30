@@ -10,7 +10,7 @@ const en_hub_blocklist_subtitle = /** @type {(inputs: Hub_Blocklist_SubtitleInpu
 };
 
 const es_hub_blocklist_subtitle = /** @type {(inputs: Hub_Blocklist_SubtitleInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Numeros bloqueados`)
+	return /** @type {LocalizedString} */ (`Números bloqueados`)
 };
 
 /**

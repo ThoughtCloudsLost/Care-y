@@ -10,7 +10,7 @@ const en_notif_clear_queue_title = /** @type {(inputs: Notif_Clear_Queue_TitleIn
 };
 
 const es_notif_clear_queue_title = /** @type {(inputs: Notif_Clear_Queue_TitleInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Borrar excepciones de cola?`)
+	return /** @type {LocalizedString} */ (`¿Borrar excepciones de cola?`)
 };
 
 /**

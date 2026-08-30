@@ -10,7 +10,7 @@ const en_admin_greetings_delete_confirm = /** @type {(inputs: Admin_Greetings_De
 };
 
 const es_admin_greetings_delete_confirm = /** @type {(inputs: Admin_Greetings_Delete_ConfirmInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Esta seguro de que desea eliminar este saludo?`)
+	return /** @type {LocalizedString} */ (`¿Está seguro de que desea eliminar este saludo?`)
 };
 
 /**

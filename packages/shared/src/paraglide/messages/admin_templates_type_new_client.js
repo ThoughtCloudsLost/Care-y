@@ -10,7 +10,7 @@ const en_admin_templates_type_new_client = /** @type {(inputs: Admin_Templates_T
 };
 
 const es_admin_templates_type_new_client = /** @type {(inputs: Admin_Templates_Type_New_ClientInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Respuesta automatica`)
+	return /** @type {LocalizedString} */ (`Respuesta automática`)
 };
 
 /**

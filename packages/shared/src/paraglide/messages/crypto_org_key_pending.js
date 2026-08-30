@@ -10,7 +10,7 @@ const en_crypto_org_key_pending = /** @type {(inputs: Crypto_Org_Key_PendingInpu
 };
 
 const es_crypto_org_key_pending = /** @type {(inputs: Crypto_Org_Key_PendingInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Un administrador esta configurando tus claves de cifrado. Es posible que parte del contenido aun no sea visible.`)
+	return /** @type {LocalizedString} */ (`Un administrador esta configurando tus claves de cifrado. Es posible que parte del contenido aún no sea visible.`)
 };
 
 /**

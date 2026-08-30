@@ -10,7 +10,7 @@ const en_admin_telephony_number_roles_description = /** @type {(inputs: Admin_Te
 };
 
 const es_admin_telephony_number_roles_description = /** @type {(inputs: Admin_Telephony_Number_Roles_DescriptionInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Elija que numero usar para cada tipo de comunicacion.`)
+	return /** @type {LocalizedString} */ (`Elija que número usar para cada tipo de comunicación.`)
 };
 
 /**

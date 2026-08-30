@@ -10,7 +10,7 @@ const en_admin_escrow_step_education_body = /** @type {(inputs: Admin_Escrow_Ste
 };
 
 const es_admin_escrow_step_education_body = /** @type {(inputs: Admin_Escrow_Step_Education_BodyInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Los datos de su organizacion estan cifrados con una clave a la que solo su equipo tiene acceso. Si todos los administradores pierden el acceso a sus cuentas, este archivo es la unica forma de recuperar esa clave.`)
+	return /** @type {LocalizedString} */ (`Los datos de su organización estan cifrados con una clave a la que solo su equipo tiene acceso. Si todos los administradores pierden el acceso a sus cuentas, este archivo es la única forma de recuperar esa clave.`)
 };
 
 /**

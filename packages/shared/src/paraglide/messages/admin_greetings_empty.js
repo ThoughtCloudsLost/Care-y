@@ -10,7 +10,7 @@ const en_admin_greetings_empty = /** @type {(inputs: Admin_Greetings_EmptyInputs
 };
 
 const es_admin_greetings_empty = /** @type {(inputs: Admin_Greetings_EmptyInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Aun no hay saludos.`)
+	return /** @type {LocalizedString} */ (`Aún no hay saludos.`)
 };
 
 /**

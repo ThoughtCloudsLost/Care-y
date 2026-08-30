@@ -10,7 +10,7 @@ const en_settings_password_wrong = /** @type {(inputs: Settings_Password_WrongIn
 };
 
 const es_settings_password_wrong = /** @type {(inputs: Settings_Password_WrongInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`La contrasena actual es incorrecta`)
+	return /** @type {LocalizedString} */ (`La contraseña actual es incorrecta`)
 };
 
 /**

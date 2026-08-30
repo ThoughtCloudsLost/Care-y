@@ -10,7 +10,7 @@ const en_vol_section_clients = /** @type {(inputs: Vol_Section_ClientsInputs) =>
 };
 
 const es_vol_section_clients = /** @type {(inputs: Vol_Section_ClientsInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Como Estan Protegidos los Clientes`)
+	return /** @type {LocalizedString} */ (`Cómo Están Protegidos los Clientes`)
 };
 
 /**

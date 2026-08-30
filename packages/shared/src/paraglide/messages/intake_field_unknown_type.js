@@ -10,7 +10,7 @@ const en_intake_field_unknown_type = /** @type {(inputs: Intake_Field_Unknown_Ty
 };
 
 const es_intake_field_unknown_type = /** @type {(inputs: Intake_Field_Unknown_TypeInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Este tipo de campo no es compatible con su version del formulario.`)
+	return /** @type {LocalizedString} */ (`Este tipo de campo no es compatible con su versión del formulario.`)
 };
 
 /**

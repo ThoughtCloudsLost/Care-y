@@ -10,7 +10,7 @@ const en_intake_forms_config_subtype_number = /** @type {(inputs: Intake_Forms_C
 };
 
 const es_intake_forms_config_subtype_number = /** @type {(inputs: Intake_Forms_Config_Subtype_NumberInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Numero`)
+	return /** @type {LocalizedString} */ (`Número`)
 };
 
 /**

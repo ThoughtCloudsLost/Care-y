@@ -10,7 +10,7 @@ const en_onboarding_org_error = /** @type {(inputs: Onboarding_Org_ErrorInputs) 
 };
 
 const es_onboarding_org_error = /** @type {(inputs: Onboarding_Org_ErrorInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`No se pudieron guardar los detalles de la organizacion.`)
+	return /** @type {LocalizedString} */ (`No se pudieron guardar los detalles de la organización.`)
 };
 
 /**

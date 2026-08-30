@@ -10,7 +10,7 @@ const en_intake_forms_config_number_max = /** @type {(inputs: Intake_Forms_Confi
 };
 
 const es_intake_forms_config_number_max = /** @type {(inputs: Intake_Forms_Config_Number_MaxInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Valor maximo`)
+	return /** @type {LocalizedString} */ (`Valor máximo`)
 };
 
 /**

@@ -14,7 +14,7 @@ const en_demo_narrative_dashboard_unassigned_body = /** @type {(inputs: Demo_Nar
 
 const es_demo_narrative_dashboard_unassigned_body = /** @type {(inputs: Demo_Narrative_Dashboard_Unassigned_BodyInputs) => LocalizedString} */ () => {
 	return /** @type {LocalizedString} */ (`Tickets abiertos que no han sido asignados a ningún voluntario. Están esperando a ser tomados.
-**Tomar un ticket.** Los voluntarios pueden asignarse un ticket sin asignar directamente desde esta lista usando una acción rápida, o desde la vista detallada del ticket. Una vez asignado, el ticket pasa de esta sección a la sección de mis tickets del asignado.
+**Tomar un ticket.** Los voluntarios pueden asignarse un ticket sin asignar directamente desde está lista usando una acción rápida, o desde la vista detallada del ticket. Una vez asignado, el ticket pasa de esta sección a la sección de mis tickets del asignado.
 **Conteo.** El conteo mostrado puede diferir del número de tickets visibles en la lista porque el servidor devuelve un total que incluye tickets que el voluntario aún no ha descifrado. La lista visible muestra solo los tickets cuyos títulos el navegador ya ha desbloqueado.
 **Colapsado por defecto.** Esta sección comienza colapsada para mantener el resumen enfocado en el trabajo asignado, y la fila de botones de sección o el encabezado de sección la expande.`)
 };

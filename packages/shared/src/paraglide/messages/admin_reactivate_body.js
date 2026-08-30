@@ -10,7 +10,7 @@ const en_admin_reactivate_body = /** @type {(inputs: Admin_Reactivate_BodyInputs
 };
 
 const es_admin_reactivate_body = /** @type {(inputs: Admin_Reactivate_BodyInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Su cuenta sera restaurada, pero necesitara una nueva copia de la clave de organizacion para acceder a los datos cifrados.`)
+	return /** @type {LocalizedString} */ (`Su cuenta será restaurada, pero necesitará una nueva copia de la clave de organización para acceder a los datos cifrados.`)
 };
 
 /**

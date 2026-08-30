@@ -10,7 +10,7 @@ const en_admin_org_general_edit_button = /** @type {(inputs: Admin_Org_General_E
 };
 
 const es_admin_org_general_edit_button = /** @type {(inputs: Admin_Org_General_Edit_ButtonInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Editar configuracion general`)
+	return /** @type {LocalizedString} */ (`Editar configuración general`)
 };
 
 /**

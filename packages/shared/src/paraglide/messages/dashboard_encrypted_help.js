@@ -10,7 +10,7 @@ const en_dashboard_encrypted_help = /** @type {(inputs: Dashboard_Encrypted_Help
 };
 
 const es_dashboard_encrypted_help = /** @type {(inputs: Dashboard_Encrypted_HelpInputs) => LocalizedString} */ (i) => {
-	return /** @type {LocalizedString} */ (`Tienes acceso a la ${i?.queue} pero no la clave de descifrado para este ${i?.ticket}. Un companero que pueda leerlo compartira el acceso automaticamente cuando lo abra.`)
+	return /** @type {LocalizedString} */ (`Tienes acceso a la ${i?.queue} pero no la clave de descifrado para este ${i?.ticket}. Un compañero que pueda leerlo compartirá el acceso automáticamente cuando lo abra.`)
 };
 
 /**

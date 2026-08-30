@@ -10,7 +10,7 @@ const en_admin_blocklist_removed = /** @type {(inputs: Admin_Blocklist_RemovedIn
 };
 
 const es_admin_blocklist_removed = /** @type {(inputs: Admin_Blocklist_RemovedInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Numero desbloqueado`)
+	return /** @type {LocalizedString} */ (`Número desbloqueado`)
 };
 
 /**

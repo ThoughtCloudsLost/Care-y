@@ -10,7 +10,7 @@ const en_admin_retention_error = /** @type {(inputs: Admin_Retention_ErrorInputs
 };
 
 const es_admin_retention_error = /** @type {(inputs: Admin_Retention_ErrorInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Error al actualizar la configuracion de retencion`)
+	return /** @type {LocalizedString} */ (`Error al actualizar la configuración de retención`)
 };
 
 /**

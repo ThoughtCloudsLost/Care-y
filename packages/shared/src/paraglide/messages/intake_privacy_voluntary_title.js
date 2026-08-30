@@ -10,7 +10,7 @@ const en_intake_privacy_voluntary_title = /** @type {(inputs: Intake_Privacy_Vol
 };
 
 const es_intake_privacy_voluntary_title = /** @type {(inputs: Intake_Privacy_Voluntary_TitleInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Es obligatorio dar tus datos?`)
+	return /** @type {LocalizedString} */ (`¿Es obligatorio dar tus datos?`)
 };
 
 /**

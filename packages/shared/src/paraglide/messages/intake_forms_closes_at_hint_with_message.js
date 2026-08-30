@@ -10,7 +10,7 @@ const en_intake_forms_closes_at_hint_with_message = /** @type {(inputs: Intake_F
 };
 
 const es_intake_forms_closes_at_hint_with_message = /** @type {(inputs: Intake_Forms_Closes_At_Hint_With_MessageInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Tras esta fecha, el formulario muestra el mensaje de cierre en vez de aceptar envios.`)
+	return /** @type {LocalizedString} */ (`Tras esta fecha, el formulario muestra el mensaje de cierre en vez de aceptar envíos.`)
 };
 
 /**

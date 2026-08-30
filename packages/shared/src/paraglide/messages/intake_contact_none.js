@@ -10,7 +10,7 @@ const en_intake_contact_none = /** @type {(inputs: Intake_Contact_NoneInputs) =>
 };
 
 const es_intake_contact_none = /** @type {(inputs: Intake_Contact_NoneInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Volvere a consultar por mi cuenta`)
+	return /** @type {LocalizedString} */ (`Volveré a consultar por mi cuenta`)
 };
 
 /**

@@ -10,7 +10,7 @@ const en_intake_forms_field_type_checkbox = /** @type {(inputs: Intake_Forms_Fie
 };
 
 const es_intake_forms_field_type_checkbox = /** @type {(inputs: Intake_Forms_Field_Type_CheckboxInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Casilla de verificacion`)
+	return /** @type {LocalizedString} */ (`Casilla de verificación`)
 };
 
 /**

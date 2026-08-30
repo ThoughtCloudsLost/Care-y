@@ -10,7 +10,7 @@ const en_onboarding_step_telephony = /** @type {(inputs: Onboarding_Step_Telepho
 };
 
 const es_onboarding_step_telephony = /** @type {(inputs: Onboarding_Step_TelephonyInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Telefonia`)
+	return /** @type {LocalizedString} */ (`Telefonía`)
 };
 
 /**

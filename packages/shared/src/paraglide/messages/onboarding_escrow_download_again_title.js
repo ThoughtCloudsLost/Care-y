@@ -10,7 +10,7 @@ const en_onboarding_escrow_download_again_title = /** @type {(inputs: Onboarding
 };
 
 const es_onboarding_escrow_download_again_title = /** @type {(inputs: Onboarding_Escrow_Download_Again_TitleInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Generar un nuevo archivo de custodia?`)
+	return /** @type {LocalizedString} */ (`¿Generar un nuevo archivo de custodia?`)
 };
 
 /**

@@ -10,7 +10,7 @@ const en_logs_calls_empty_subtitle = /** @type {(inputs: Logs_Calls_Empty_Subtit
 };
 
 const es_logs_calls_empty_subtitle = /** @type {(inputs: Logs_Calls_Empty_SubtitleInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Los registros de llamadas y mensajes de voz apareceran aqui a medida que se registren.`)
+	return /** @type {LocalizedString} */ (`Los registros de llamadas y mensajes de voz apareceran aquí a medida que se registren.`)
 };
 
 /**

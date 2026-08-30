@@ -10,7 +10,7 @@ const en_intake_forms_config_remove_option = /** @type {(inputs: Intake_Forms_Co
 };
 
 const es_intake_forms_config_remove_option = /** @type {(inputs: Intake_Forms_Config_Remove_OptionInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Eliminar opcion`)
+	return /** @type {LocalizedString} */ (`Eliminar opción`)
 };
 
 /**

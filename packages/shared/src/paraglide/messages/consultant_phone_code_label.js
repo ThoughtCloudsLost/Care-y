@@ -10,7 +10,7 @@ const en_consultant_phone_code_label = /** @type {(inputs: Consultant_Phone_Code
 };
 
 const es_consultant_phone_code_label = /** @type {(inputs: Consultant_Phone_Code_LabelInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Codigo de verificacion`)
+	return /** @type {LocalizedString} */ (`Código de verificación`)
 };
 
 /**

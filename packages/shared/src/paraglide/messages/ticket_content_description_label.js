@@ -10,7 +10,7 @@ const en_ticket_content_description_label = /** @type {(inputs: Ticket_Content_D
 };
 
 const es_ticket_content_description_label = /** @type {(inputs: Ticket_Content_Description_LabelInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Descripcion`)
+	return /** @type {LocalizedString} */ (`Descripción`)
 };
 
 /**

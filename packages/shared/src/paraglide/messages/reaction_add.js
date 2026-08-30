@@ -10,7 +10,7 @@ const en_reaction_add = /** @type {(inputs: Reaction_AddInputs) => LocalizedStri
 };
 
 const es_reaction_add = /** @type {(inputs: Reaction_AddInputs) => LocalizedString} */ () => {
-	return /** @type {LocalizedString} */ (`Agregar reaccion`)
+	return /** @type {LocalizedString} */ (`Agregar reacción`)
 };
 
 /**
