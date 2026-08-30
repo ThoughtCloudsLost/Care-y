@@ -44,21 +44,45 @@
     bindScrollEl?.(scrollEl);
   });
 
+  // The navbar element can be replaced while this shell lives: ClientShell
+  // keys ShellNavbar on the locale, so an in-place language switch swaps
+  // the .k-navbar node. A ResizeObserver bound to the old node reports a
+  // final 0 on detach and then goes silent, zeroing --navbar-h for good.
+  // The MutationObserver re-finds and re-observes the navbar whenever the
+  // Page's children change.
   $effect(() => {
     if (!scrollEl) return;
     const pageEl = scrollEl.closest(".k-page");
-    const navbarEl = pageEl?.querySelector<HTMLElement>(":scope > .k-navbar");
-    if (!navbarEl) return;
-    const ro = new ResizeObserver((entries) => {
-      const entry = entries[0];
-      if (entry != null) {
-        const h = entry.borderBoxSize[0]?.blockSize ?? navbarEl.offsetHeight;
-        navbarHeight = h;
-        onNavbarHeight?.(h);
-      }
-    });
-    ro.observe(navbarEl, { box: "border-box" });
-    return () => ro.disconnect();
+    if (!pageEl) return;
+
+    let ro: ResizeObserver | undefined;
+    let observed: HTMLElement | null = null;
+
+    const observeNavbar = (): void => {
+      const navbarEl = pageEl.querySelector<HTMLElement>(":scope > .k-navbar");
+      if (navbarEl === observed) return;
+      ro?.disconnect();
+      ro = undefined;
+      observed = navbarEl;
+      if (!navbarEl) return;
+      ro = new ResizeObserver((entries) => {
+        const entry = entries[0];
+        if (entry != null) {
+          const h = entry.borderBoxSize[0]?.blockSize ?? navbarEl.offsetHeight;
+          navbarHeight = h;
+          onNavbarHeight?.(h);
+        }
+      });
+      ro.observe(navbarEl, { box: "border-box" });
+    };
+
+    observeNavbar();
+    const mo = new MutationObserver(observeNavbar);
+    mo.observe(pageEl, { childList: true });
+    return () => {
+      mo.disconnect();
+      ro?.disconnect();
+    };
   });
 </script>
 
