@@ -100,6 +100,7 @@ import {
   type PendingClient,
 } from "./tickets/ticket-service.js";
 import { createFollowUpService } from "./tickets/followup-service.js";
+import { portalReplyChannelKey } from "./routes/client-portal.js";
 import { createReadCursorService } from "./tickets/read-cursor-service.js";
 import { createMergeService } from "./tickets/merge-service.js";
 import { createPresetService } from "./tickets/preset-service.js";
@@ -315,10 +316,20 @@ const RATE_BOOTSTRAP_MAX = getEnv().NODE_ENV === "production" ? 2 : 20;
 // CGNAT-shared IPs where multiple clients behind the same NAT share
 // one public IP.
 const RATE_PORTAL_READ_MAX = 60;
-// Portal reply: 30 req/hour per IP. Reply writes 3 DB rows per call
-// (follow-up + portal wrap + portal message), so a lower cap limits
-// storage DoS from a single source.
+// Portal reply: 30 replies/hour per CHANNEL. Reply writes 3 DB rows per
+// call (follow-up + portal wrap + portal message), so a cap bounds
+// storage DoS. Channel keying makes the limit mean "messages on this
+// conversation", and an org reply resets the window (onPortalOrgReply
+// below), so an active two-sided conversation is never cut off.
 const RATE_PORTAL_REPLY_MAX = 30;
+// Portal reply IP layer: 60/hour per IP counting only writes to channels
+// with no org reply in the last hour. Double the channel cap, so two
+// not-yet-answered conversations from one IP still fit; spraying many
+// dormant channels trips it. Engaged conversations bypass it entirely,
+// keeping every reply limit liftable by org engagement. The same
+// limiter instance also carries the "authgate:" failed-auth flood
+// namespace and the "upgrade:" one-shot account-upgrade cap.
+const RATE_PORTAL_REPLY_IP_MAX = 60;
 
 // Share open: 10 req/min per IP. Defense in depth on the public consume
 // endpoint. UUIDv4 ids (122 random bits) make enumeration infeasible;
@@ -546,6 +557,17 @@ const pendingClients = new Map<string, PendingClient>();
 // accepted on either path is burned for both (RFC 6238 Section 5.2).
 const totpReplayCache = createTotpReplayCache();
 
+// Named outside the deps literal: the ticket router's org-reply hook
+// resets the same instance the client-portal reply paths consume.
+const portalReplyLimiter = createInMemoryRateLimiter({
+  windowMs: RATE_WINDOW_1H,
+  maxRequests: RATE_PORTAL_REPLY_MAX,
+});
+const portalReplyIpLimiter = createInMemoryRateLimiter({
+  windowMs: RATE_WINDOW_1H,
+  maxRequests: RATE_PORTAL_REPLY_IP_MAX,
+});
+
 const appRouter = createAppRouter({
   authDeps: {
     hasher,
@@ -607,6 +629,13 @@ const appRouter = createAppRouter({
     createTicketAccess: createTicketAccessChecker,
     createTicketSvc: createTicketService,
     createFollowUpSvc: createFollowUpService,
+    followUpServiceDeps: {
+      // An org reply on a channel clears that channel's portal reply
+      // window, so a volunteer answering always unblocks the client.
+      onPortalOrgReply: (channelRowId) => {
+        portalReplyLimiter.reset(portalReplyChannelKey(channelRowId));
+      },
+    },
     createReadCursorSvc: createReadCursorService,
     createMergeSvc: createMergeService,
     createPresetSvc: createPresetService,
@@ -684,15 +713,14 @@ const appRouter = createAppRouter({
       bootstrap: portalMessageService.bootstrap,
       clientReply: portalMessageService.clientReply,
       listMessages: portalMessageService.listMessages,
+      hasRecentOrgReply: portalMessageService.hasRecentOrgReply,
     },
     portalReadLimiter: createInMemoryRateLimiter({
       windowMs: RATE_WINDOW_1H,
       maxRequests: RATE_PORTAL_READ_MAX,
     }),
-    portalReplyLimiter: createInMemoryRateLimiter({
-      windowMs: RATE_WINDOW_1H,
-      maxRequests: RATE_PORTAL_REPLY_MAX,
-    }),
+    portalReplyLimiter,
+    portalReplyIpLimiter,
     portalGetProvider: async (orgId: OrgId) =>
       providerFactory.getProvider(orgId),
     portalResolveCallerId: phoneResolver,

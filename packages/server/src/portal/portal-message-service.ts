@@ -419,6 +419,37 @@ export async function storeClientCopy(
     .execute();
 }
 
+/**
+ * How long an org reply counts as active engagement on a channel.
+ * Matches the reply limiter window: an engaged conversation is exempt
+ * from the per-IP reply cap for as long as one limiter window.
+ */
+export const ORG_ENGAGEMENT_WINDOW_MS = 60 * 60 * 1000;
+
+/**
+ * True when the org has replied on this channel within the window.
+ *
+ * Drives the per-IP reply cap exemption: a two-sided conversation is
+ * the signal that the traffic is not abuse, and this check reads only
+ * channel-side thread state, so the server never has to link an IP to
+ * a channel to grant the exemption.
+ */
+export async function hasRecentOrgReply(
+  db: Kysely<TenantDatabase> | Transaction<TenantDatabase>,
+  channelRowId: ChannelRowId,
+  windowMs: number = ORG_ENGAGEMENT_WINDOW_MS,
+): Promise<boolean> {
+  const row = await db
+    .selectFrom("portal_messages")
+    .select("id")
+    .where("channel_id", "=", channelRowId)
+    .where("direction", "=", "to_client")
+    .where("created_at", ">", new Date(Date.now() - windowMs))
+    .limit(1)
+    .executeTakeFirst();
+  return row !== undefined;
+}
+
 // ---------------------------------------------------------------------------
 // listMessages
 // ---------------------------------------------------------------------------

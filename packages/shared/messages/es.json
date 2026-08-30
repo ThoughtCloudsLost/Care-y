@@ -2783,6 +2783,7 @@
   "portal_link_sms_body": "Aquí está tu enlace privado de mensajes: {link}",
   "portal_nudge_sms_body": "Tienes un nuevo mensaje esperándote.",
   "portal_send_failed": "Tu mensaje no se envió. Tus palabras están de vuelta en el campo de texto. Toca enviar para intentarlo de nuevo.",
+  "portal_send_rate_limited": "Tu mensaje no se envió. Tus palabras están de vuelta en el campo de texto. Se enviaron demasiados mensajes en poco tiempo; esperar un poco, o una respuesta de tu equipo de apoyo, quita la pausa.",
   "account_title": "Iniciar sesión",
   "account_login_username": "Nombre de usuario",
   "account_login_password": "Contraseña",

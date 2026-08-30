@@ -40,6 +40,7 @@ import type {
   ClientAccountId,
   PortalMessageId,
   AttachmentId,
+  ChannelRowId,
 } from "@care-y/shared";
 import { ticketIdSchema } from "@care-y/shared";
 import type { ChannelSecret } from "@care-y/shared";
@@ -149,13 +150,29 @@ export interface ClientPortalRouterDeps {
         direction: "older" | "newer";
       },
     ) => Promise<PortalMessageListResult>;
+    /** True when the org replied on the channel within the engagement
+     *  window. Grants the per-IP reply cap exemption. */
+    readonly hasRecentOrgReply: (
+      db: Kysely<TenantDatabase>,
+      channelRowId: ChannelRowId,
+    ) => Promise<boolean>;
   } | null;
   /** 60 req/hour per IP. Budget: 5-minute polling interval (12/hr) plus
    *  refetchOnWindowFocus headroom, leaving margin for CGNAT-shared IPs
    *  where multiple clients behind the same NAT share one public IP. */
   readonly portalReadLimiter: RateLimiter | null;
-  /** 30 req/hour per IP. Reply is a heavier operation (3 DB rows per call). */
+  /** 30 replies/hour per CHANNEL (see portalReplyChannelKey). An org
+   *  reply resets the channel's window (followup-service hook), so an
+   *  active two-sided conversation is never cut off. Reply writes 3 DB
+   *  rows per call, which is why a cap exists at all. */
   readonly portalReplyLimiter: RateLimiter | null;
+  /** Per-IP layer on top of the channel cap. Two key namespaces on one
+   *  instance: "ip:" counts writes to channels WITHOUT recent org
+   *  engagement (anti-spray; engaged conversations are exempt, keeping
+   *  every limit liftable by org replies), and "authgate:" bounds
+   *  unauthenticated reply floods (consumed before channel auth, reset
+   *  on success, so it only ever accumulates for failing callers). */
+  readonly portalReplyIpLimiter: RateLimiter | null;
   /** Provider factory for portal nudge SMS (fire-and-forget after reply). */
   readonly portalGetProvider:
     ((orgId: OrgId) => Promise<TelephonyProvider | null>) | null;
@@ -578,28 +595,16 @@ export function createClientPortalRouter(deps: ClientPortalRouterDeps) {
 
     portalReply: orgProcedure.input(portalReplyInputSchema).mutation(
       withErrorWrapping(async ({ ctx, input }) => {
-        const ip = extractClientIp(ctx.req);
-
-        if (deps.portalReplyLimiter !== null) {
-          const limitResult = deps.portalReplyLimiter.check(ip);
-          if (!limitResult.allowed) {
-            console.warn("Portal reply rate limited", {
-              orgSlug: ctx.org.orgSlug,
-              ip,
-              reason: "rate_limit",
-            });
-            throw new TRPCError({
-              code: "TOO_MANY_REQUESTS",
-              message: `Rate limited. Retry after ${String(Math.ceil(limitResult.retryAfterMs / 1000))}s`,
-            });
-          }
-        }
+        checkReplyAuthGate(deps, ctx, "Portal reply");
 
         const { channel, portalMessageService } = await requirePortalChannel(
           deps,
           ctx,
           input,
         );
+
+        resetReplyAuthGate(deps, ctx.req);
+        await enforceReplyLimits(deps, ctx, channel, "Portal reply");
 
         const serviceInput = decodeReplyInput(input);
         const msgDeps = buildPortalMessageDeps(deps, ctx);
@@ -804,24 +809,12 @@ export function createClientPortalRouter(deps: ClientPortalRouterDeps) {
 
     accountReply: orgProcedure.input(accountReplyInputSchema).mutation(
       withErrorWrapping(async ({ ctx, input }) => {
-        const ip = extractClientIp(ctx.req);
-
-        if (deps.portalReplyLimiter !== null) {
-          const limitResult = deps.portalReplyLimiter.check(ip);
-          if (!limitResult.allowed) {
-            console.warn("Account reply rate limited", {
-              orgSlug: ctx.org.orgSlug,
-              ip,
-              reason: "rate_limit",
-            });
-            throw new TRPCError({
-              code: "TOO_MANY_REQUESTS",
-              message: `Rate limited. Retry after ${String(Math.ceil(limitResult.retryAfterMs / 1000))}s`,
-            });
-          }
-        }
+        checkReplyAuthGate(deps, ctx, "Account reply");
 
         const session = await requireAccountSession(ctx);
+
+        resetReplyAuthGate(deps, ctx.req);
+        await enforceReplyLimits(deps, ctx, session.channel, "Account reply");
 
         const serviceInput = decodeReplyInput(input);
         const msgDeps = buildPortalMessageDeps(deps, ctx);
@@ -840,20 +833,25 @@ export function createClientPortalRouter(deps: ClientPortalRouterDeps) {
 
     accountUpgrade: orgProcedure.input(accountUpgradeInputSchema).mutation(
       withErrorWrapping(async ({ ctx, input }) => {
-        const ip = extractClientIp(ctx.req);
-
-        if (deps.portalReplyLimiter !== null) {
-          const limitResult = deps.portalReplyLimiter.check(ip);
+        // Upgrade is a one-shot heavy operation, not a conversation, so
+        // it keeps a plain per-IP cap on the IP-layer limiter ("upgrade:"
+        // namespace) rather than the channel-keyed conversation limits.
+        if (deps.portalReplyIpLimiter !== null) {
+          const ip = extractClientIp(ctx.req);
+          const limitResult = deps.portalReplyIpLimiter.check(`upgrade:${ip}`);
           if (!limitResult.allowed) {
             console.warn("Account upgrade rate limited", {
               orgSlug: ctx.org.orgSlug,
               ip,
               reason: "rate_limit",
             });
-            throw new TRPCError({
-              code: "TOO_MANY_REQUESTS",
-              message: `Rate limited. Retry after ${String(Math.ceil(limitResult.retryAfterMs / 1000))}s`,
-            });
+            const retryAfterSeconds = Math.ceil(
+              limitResult.retryAfterMs / 1000,
+            );
+            throw new RateLimitError(
+              `Rate limited. Retry after ${String(retryAfterSeconds)}s`,
+              retryAfterSeconds,
+            );
           }
         }
 
@@ -1143,6 +1141,120 @@ async function requireAccountSession(ctx: {
  *
  * Logs only { orgSlug, ip, reason }, never channelId or auth.
  */
+/**
+ * Limiter key for a channel's reply window. Exported so the org-side
+ * reset hook (index.ts wiring of onPortalOrgReply) clears exactly the
+ * key the reply paths consume. Keyed by the channel ROW id: a UUID, so
+ * no cross-tenant collision, and not the URL-visible channel secret.
+ */
+export function portalReplyChannelKey(channelRowId: ChannelRowId): string {
+  return `channel:${channelRowId}`;
+}
+
+/**
+ * Two-layer reply limit, both liftable by org engagement.
+ *
+ * Layer 1 (channel): N replies per rolling hour per conversation; an
+ * org reply resets the window via onPortalOrgReply. Layer 2 (IP):
+ * anti-spray baseline that only counts writes to channels without a
+ * recent org reply, so an engaged conversation is exempt and the
+ * server never links an IP to a channel to decide that. Runs after
+ * channel auth; the pre-auth flood gate lives at the call sites.
+ */
+async function enforceReplyLimits(
+  deps: ClientPortalRouterDeps,
+  ctx: {
+    org: { tenantDb: Kysely<TenantDatabase>; orgSlug: string };
+    req: IncomingMessage;
+  },
+  channel: PortalChannelRow,
+  surface: string,
+): Promise<void> {
+  if (deps.portalReplyLimiter !== null) {
+    const limitResult = deps.portalReplyLimiter.check(
+      portalReplyChannelKey(channel.id),
+    );
+    if (!limitResult.allowed) {
+      console.warn("Portal write rate limited", {
+        surface,
+        orgSlug: ctx.org.orgSlug,
+        reason: "channel_rate_limit",
+      });
+      const retryAfterSeconds = Math.ceil(limitResult.retryAfterMs / 1000);
+      throw new RateLimitError(
+        `Rate limited. Retry after ${String(retryAfterSeconds)}s`,
+        retryAfterSeconds,
+      );
+    }
+  }
+
+  if (
+    deps.portalReplyIpLimiter !== null &&
+    deps.portalMessageService !== null
+  ) {
+    const engaged = await deps.portalMessageService.hasRecentOrgReply(
+      ctx.org.tenantDb,
+      channel.id,
+    );
+    if (!engaged) {
+      const ip = extractClientIp(ctx.req);
+      const limitResult = deps.portalReplyIpLimiter.check(`ip:${ip}`);
+      if (!limitResult.allowed) {
+        console.warn("Portal write rate limited", {
+          surface,
+          orgSlug: ctx.org.orgSlug,
+          ip,
+          reason: "ip_rate_limit",
+        });
+        const retryAfterSeconds = Math.ceil(limitResult.retryAfterMs / 1000);
+        throw new RateLimitError(
+          `Rate limited. Retry after ${String(retryAfterSeconds)}s`,
+          retryAfterSeconds,
+        );
+      }
+    }
+  }
+}
+
+/**
+ * Pre-auth flood gate for the reply paths. Consumes an "authgate:" slot
+ * before the channel/session lookup; the caller resets it after auth
+ * succeeds, so only callers that keep failing accumulate. Bounds the
+ * DB work an unauthenticated flood can force without capping any
+ * client who can actually authenticate.
+ */
+function checkReplyAuthGate(
+  deps: ClientPortalRouterDeps,
+  ctx: { org: { orgSlug: string }; req: IncomingMessage },
+  surface: string,
+): void {
+  if (deps.portalReplyIpLimiter === null) return;
+  const ip = extractClientIp(ctx.req);
+  const limitResult = deps.portalReplyIpLimiter.check(`authgate:${ip}`);
+  if (!limitResult.allowed) {
+    console.warn("Portal write rate limited", {
+      surface,
+      orgSlug: ctx.org.orgSlug,
+      ip,
+      reason: "auth_gate_rate_limit",
+    });
+    const retryAfterSeconds = Math.ceil(limitResult.retryAfterMs / 1000);
+    throw new RateLimitError(
+      `Rate limited. Retry after ${String(retryAfterSeconds)}s`,
+      retryAfterSeconds,
+    );
+  }
+}
+
+/** Clears the caller's auth-gate slots after successful auth. */
+function resetReplyAuthGate(
+  deps: ClientPortalRouterDeps,
+  req: IncomingMessage,
+): void {
+  if (deps.portalReplyIpLimiter === null) return;
+  deps.portalReplyIpLimiter.reset(`authgate:${extractClientIp(req)}`);
+}
+
 async function requirePortalChannel(
   deps: ClientPortalRouterDeps,
   ctx: {

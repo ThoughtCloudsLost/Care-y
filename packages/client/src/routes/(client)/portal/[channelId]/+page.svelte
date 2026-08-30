@@ -459,13 +459,18 @@
       });
       announceToLiveRegion("polite", m.portal_send());
     },
-    onError: (_err, variables) => {
+    onError: (err, variables) => {
       optimisticMessages = optimisticMessages.filter(
         (msg) => msg.id !== variables.followUpId,
       );
       composerRef?.restoreDraft(lastSentText);
-      sendError = m.portal_send_failed();
-      announceToLiveRegion("polite", m.portal_send_failed());
+      // A rate-limited send names the fix (waiting, or a support reply,
+      // clears the pause) instead of the generic try-again copy.
+      sendError =
+        readRateLimitError(err) !== null
+          ? m.portal_send_rate_limited()
+          : m.portal_send_failed();
+      announceToLiveRegion("polite", sendError);
     },
   }));
 

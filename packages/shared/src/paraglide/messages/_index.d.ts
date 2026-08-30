@@ -2782,6 +2782,7 @@ export * from "./portal_hint_dismiss.js";
 export * from "./portal_link_sms_body.js";
 export * from "./portal_nudge_sms_body.js";
 export * from "./portal_send_failed.js";
+export * from "./portal_send_rate_limited.js";
 export * from "./account_title.js";
 export * from "./account_login_username.js";
 export * from "./account_login_password.js";

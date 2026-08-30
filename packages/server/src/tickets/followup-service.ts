@@ -27,6 +27,7 @@ import type {
   KeyGeneration,
   CallSid,
   AttachmentId,
+  ChannelRowId,
 } from "@care-y/shared";
 import { encode } from "@care-y/crypto";
 import {
@@ -431,6 +432,14 @@ function hasActiveFilters(opts: FollowUpListOpts): boolean {
 
 export interface FollowUpServiceDeps {
   readonly portalMessageDeps?: PortalMessageServiceDeps;
+  /**
+   * Fires after a follow-up commits with a client copy on an active
+   * channel. An org reply is the signal that the conversation is
+   * legitimate, so the portal reply limiter clears that channel's
+   * window here. Startup-scoped (needs no org context), unlike
+   * portalMessageDeps.
+   */
+  readonly onPortalOrgReply?: (channelRowId: ChannelRowId) => void;
 }
 
 export function createFollowUpService(
@@ -543,6 +552,13 @@ export function createFollowUpService(
       // After commit: fire-and-forget nudge when a channel was resolved
       if (resolvedChannel !== null && deps?.portalMessageDeps) {
         void nudgeClient(db, deps.portalMessageDeps, resolvedChannel);
+      }
+
+      // After commit: an org reply landed on the channel, so the client's
+      // reply window clears. Independent of portalMessageDeps: the reset
+      // must fire even where nudge deps are not wired.
+      if (resolvedChannel !== null) {
+        deps?.onPortalOrgReply?.(resolvedChannel.id);
       }
 
       return toRecord(row);

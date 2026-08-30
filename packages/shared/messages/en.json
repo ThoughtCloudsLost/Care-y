@@ -2783,6 +2783,7 @@
   "portal_link_sms_body": "Here is your private message link: {link}",
   "portal_nudge_sms_body": "You have a new message waiting for you.",
   "portal_send_failed": "Your message did not send. Your words are back in the box. Tap send to try again.",
+  "portal_send_rate_limited": "Your message did not send. Your words are back in the box. Too many messages went out in a short time; waiting a little, or a reply from your support team, clears the pause.",
   "account_title": "Sign in",
   "account_login_username": "Username",
   "account_login_password": "Password",

@@ -33,6 +33,7 @@ import {
   storeClientCopy,
   nudgeClient,
   listMessages,
+  hasRecentOrgReply,
   type PortalMessageServiceDeps,
   type PortalReplyServiceInput,
   type EciesTripleBuffers,
@@ -52,6 +53,7 @@ import type {
   PortalMessageId,
   OrgSchema,
   BlobKey,
+  TicketId,
 } from "@care-y/shared";
 import type { BlobStore } from "../storage/store.js";
 
@@ -334,6 +336,81 @@ describe.skipIf(!process.env.DATABASE_URL)(
 
         const result = await bootstrap(testDb.db, channel);
         expect(result.accountOffer).toBe(false);
+      });
+    });
+
+    // -----------------------------------------------------------------------
+    // hasRecentOrgReply
+    // -----------------------------------------------------------------------
+
+    describe("hasRecentOrgReply", () => {
+      /** Inserts a followup + client copy so the FK constraint holds. */
+      async function insertCopy(
+        ticketId: TicketId,
+        channelRowId: PortalChannelRow["id"],
+        direction: "to_client" | "from_client",
+      ): Promise<void> {
+        const fuId = newFollowupId();
+        await testDb.db
+          .insertInto("followups")
+          .values({
+            id: fuId,
+            ticket_id: ticketId,
+            source: direction === "to_client" ? "volunteer" : "client",
+            type: "message",
+            encrypted_content: Buffer.from("ct-engage"),
+            ...(direction === "from_client"
+              ? { key_generation: newKeyGeneration() }
+              : {}),
+          })
+          .execute();
+        await storeClientCopy(
+          testDb.db,
+          channelRowId,
+          fuId,
+          fakeTriple(),
+          direction,
+        );
+      }
+
+      it("returns true when an org reply exists inside the window", async () => {
+        const fixture = await createTestTicketFixture(testDb.db);
+        const channel = await insertChannel(testDb.db, fixture.clientId);
+        await insertCopy(fixture.ticketId, channel.id, "to_client");
+
+        expect(await hasRecentOrgReply(testDb.db, channel.id)).toBe(true);
+      });
+
+      it("returns false when only client messages exist", async () => {
+        const fixture = await createTestTicketFixture(testDb.db);
+        const channel = await insertChannel(testDb.db, fixture.clientId);
+        await insertCopy(fixture.ticketId, channel.id, "from_client");
+
+        expect(await hasRecentOrgReply(testDb.db, channel.id)).toBe(false);
+      });
+
+      it("returns false when the org reply is older than the window", async () => {
+        const fixture = await createTestTicketFixture(testDb.db);
+        const channel = await insertChannel(testDb.db, fixture.clientId);
+        await insertCopy(fixture.ticketId, channel.id, "to_client");
+        await testDb.db
+          .updateTable("portal_messages")
+          .set({ created_at: new Date(Date.now() - 2 * 60 * 60 * 1000) })
+          .where("channel_id", "=", channel.id)
+          .execute();
+
+        expect(await hasRecentOrgReply(testDb.db, channel.id)).toBe(false);
+      });
+
+      it("does not see another channel's org replies", async () => {
+        const fixture = await createTestTicketFixture(testDb.db);
+        const engaged = await insertChannel(testDb.db, fixture.clientId, {
+          status: "revoked",
+        });
+        const quiet = await insertChannel(testDb.db, fixture.clientId);
+        await insertCopy(fixture.ticketId, engaged.id, "to_client");
+
+        expect(await hasRecentOrgReply(testDb.db, quiet.id)).toBe(false);
       });
     });
 
