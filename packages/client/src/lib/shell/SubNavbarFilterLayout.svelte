@@ -44,6 +44,10 @@
      */
     selectLabel?: string;
     onselect?: () => void;
+    /** Render the select button in the filter pill row (beside search)
+     *  instead of the stats row. Detail pages use this so the stats row
+     *  keeps only the view toggle. */
+    selectInFilterRow?: boolean;
     savedFilters?: SavedFiltersConfig;
     filterPills: FilterPillsConfig;
     manage?: ManageConfig;
@@ -67,6 +71,7 @@
     sort,
     selectLabel,
     onselect,
+    selectInFilterRow = false,
     savedFilters,
     filterPills,
     manage,
@@ -164,7 +169,7 @@
             </Button>
           </span>
         {/if}
-        {#if onselect}
+        {#if onselect && !selectInFilterRow}
           <Button
             tonal
             rounded
@@ -193,7 +198,7 @@
         {/if}
       </div>
     </div>
-  {:else if onselect}
+  {:else if onselect && !selectInFilterRow}
     <div class="view-controls standalone-controls">
       <Button
         tonal
@@ -229,6 +234,19 @@
         onclick={onsearch}
       >
         <Search size={16} aria-hidden="true" />
+      </Button>
+    {/if}
+    {#if onselect && selectInFilterRow}
+      <Button
+        tonal
+        rounded
+        small
+        inline
+        class="select-btn filter-select-btn"
+        aria-label={selectLabel}
+        onclick={onselect}
+      >
+        <SquareCheckBig size={16} aria-hidden="true" />
       </Button>
     {/if}
     <FilterPillBar
@@ -418,6 +436,10 @@
   :global(.select-btn svg),
   :global(.manage-btn svg) {
     color: var(--ink) !important;
+  }
+
+  :global(.filter-select-btn) {
+    flex-shrink: 0;
   }
 
   :global(.filter-search-btn) {

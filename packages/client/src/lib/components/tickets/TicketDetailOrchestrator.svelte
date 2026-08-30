@@ -904,6 +904,7 @@
     onselect={selectMode.active
       ? () => selectMode.exit()
       : () => selectMode.enter()}
+    selectInFilterRow
     filterPills={detailFilters.pills}
     searchNavigator={overlay.active ? searchNavigatorRow : undefined}
     bulkActions={selectMode.active ? selectActionsRow : undefined}
@@ -1056,6 +1057,7 @@
     onselect={selectMode.active
       ? () => selectMode.exit()
       : () => selectMode.enter()}
+    selectInFilterRow
     filterPills={detailFilters.pills}
     searchNavigator={overlay.active ? searchNavigatorRow : undefined}
     bulkActions={selectMode.active ? selectActionsRow : undefined}
