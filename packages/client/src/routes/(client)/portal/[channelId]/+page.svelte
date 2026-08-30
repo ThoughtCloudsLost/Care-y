@@ -41,7 +41,7 @@
   import PortalHint from "$lib/shell/PortalHint.svelte";
   import { createPublicBrandingQuery } from "$lib/branding/public-branding.js";
   import PageLayout from "$lib/shell/PageLayout.svelte";
-  import { KeyRound } from "@lucide/svelte";
+  import { KeyRound, UserPen } from "@lucide/svelte";
   import {
     getClientShellCtx,
     DEFAULT_SAFE_URL,
@@ -63,6 +63,7 @@
   import { createPortalSessionState } from "$lib/composables/portal/create-portal-session.svelte.js";
   // care-y-ignore-next-line route-no-db-import -- client composable, no database access; validator heuristic misreads the module
   import { createPortalUpgrade } from "$lib/composables/portal/create-portal-upgrade.svelte.js";
+  import { uiLocaleStore } from "$lib/stores/ui-locale.svelte.js";
 
   // Route param; the fragment-derived channel id is the crypto authority,
   // this one only keys the queries.
@@ -517,6 +518,15 @@
   }
 
   // ---------------------------------------------------------------------------
+  // Locale-reactive title (the read establishes a $derived dependency)
+  // ---------------------------------------------------------------------------
+
+  const pageTitle = $derived.by((): string => {
+    void uiLocaleStore.locale;
+    return m.portal_title();
+  });
+
+  // ---------------------------------------------------------------------------
   // Client shell registration
   // ---------------------------------------------------------------------------
 
@@ -533,17 +543,33 @@
   );
 
   // The in-thread card can be dismissed; the drawer entry cannot, which is
-  // the point. Both drive the same upgrade composable.
+  // the point. Both drive the same upgrade composable. Contact correction
+  // lives here rather than under the composer: nothing renders below the
+  // reply bar on a thread page, so the drawer is the entry point and the
+  // indicator's cancel button is the way back out.
   const drawerActions = $derived.by((): readonly ClientDrawerAction[] => {
-    if (!showAccountOffer) return [];
-    return [
-      {
+    // Reading the locale establishes a dependency so labels recompute on switch
+    void uiLocaleStore.locale;
+    const actions: ClientDrawerAction[] = [];
+    if (showAccountOffer) {
+      actions.push({
         id: "upgrade",
         label: m.account_upgrade_card_title(),
         icon: KeyRound,
         onclick: () => upgrade.expand(),
-      },
-    ];
+      });
+    }
+    if (threadShowing) {
+      actions.push({
+        id: "correct-contact",
+        label: m.portal_correction_mode_button(),
+        icon: UserPen,
+        onclick: () => {
+          composerRef?.enterCorrectionMode();
+        },
+      });
+    }
+    return actions;
   });
 
   // --- Attachments ---
@@ -658,12 +684,16 @@
 </script>
 
 <svelte:head>
-  <title>{m.portal_title()}</title>
+  <title>{pageTitle}</title>
 </svelte:head>
 
 <!-- The shell owns the navbar, so the row lands there through the context
      rather than being rendered by this page. Same components, same slot,
-     and the same position the org app puts them in. -->
+     and the same position the org app puts them in. Both snippets stay
+     outside the locale key block: the script's shell-context effect
+     references threadSubnavbar, and a snippet declared inside a block is
+     scoped to it. Locale re-render still reaches them because the shell
+     keys the navbar that renders the subnavbar. -->
 {#snippet searchNavigatorRow()}
   <SearchNavigator
     term={overlay.term ?? ""}
@@ -694,156 +724,156 @@
   />
 {/snippet}
 
-{#if !fragment.fragmentResolved}
-  <!-- Sodium initializing with a fragment present; show the loading state -->
-  <Block>
-    <div class="portal-loading" role="status">
-      <span
-        class="portal-spinner"
-        role="progressbar"
-        aria-label={m.portal_unlocking()}
-      ></span>
-    </div>
-  </Block>
-{:else if !fragment.hasValidFragment}
-  <!-- State 1: No/bad fragment -->
-  <BlockTitle>{m.portal_incomplete_link()}</BlockTitle>
-  <Block>
-    <p class="portal-body-text">{m.portal_incomplete_link()}</p>
-  </Block>
-{:else if bootstrapQuery.isLoading}
-  <!-- Loading bootstrap -->
-  <Block>
-    <div class="portal-loading" role="status">
-      <span
-        class="portal-spinner"
-        role="progressbar"
-        aria-label={m.portal_unlocking()}
-      ></span>
-    </div>
-  </Block>
-{:else if isDeadLink}
-  <!-- State 2 error: Dead link -->
-  <BlockTitle>{m.portal_dead_link()}</BlockTitle>
-  <Block>
-    <p class="portal-body-text">{m.portal_dead_link()}</p>
-  </Block>
-{:else if needsPassphrase}
-  <!-- State 3: Passphrase gate -->
-  <PortalPassphraseGate
-    onsubmit={handlePassphraseSubmit}
-    pending={portalSession.passphraseDerivePending}
-    error={portalSession.passphraseError}
-  />
-{:else if upgrade.success}
-  <!-- Upgrade success state -->
-  <Block>
-    <BlockTitle>{m.account_upgrade_success_title()}</BlockTitle>
-    <p class="portal-body-text">{m.account_upgrade_success_body()}</p>
-    <p class="portal-body-text upgrade-username">
-      {m.account_login_username()}: {upgrade.username}
-    </p>
-    <button
-      type="button"
-      class="upgrade-go-link"
-      data-testid="upgrade-go-to-login"
-      onclick={() => void goto(resolve("/account"))}
-    >
-      {m.account_login_submit()}
-    </button>
-  </Block>
-{:else if portalSession.keyCheckPassed && portalSession.session}
-  {@const activeSession = portalSession.session}
-  <!-- State 4 + 5: Thread scrolls, composer pins to the bottom -->
-  <PageLayout lockScroll bind:scrollEl={threadScrollEl}>
-    {#snippet bottomBar()}
-      <JumpToLatest
-        visible={!scroll.isNearBottom && allMessages.length > 0}
-        onclick={jumpToLatest}
-      />
-      <PortalComposer
-        bind:this={composerRef}
-        onsend={handleSend}
-        pending={replyMutation.isPending}
-        onfirstfocus={handleFirstFocus}
-        errorMessage={sendError || undefined}
-        draftKey={routeChannelId}
-      />
-    {/snippet}
+{#key uiLocaleStore.locale}
+  {#if !fragment.fragmentResolved}
+    <!-- Sodium initializing with a fragment present; show the loading state -->
+    <Block>
+      <div class="portal-loading" role="status">
+        <span
+          class="portal-spinner"
+          role="progressbar"
+          aria-label={m.portal_unlocking()}
+        ></span>
+      </div>
+    </Block>
+  {:else if !fragment.hasValidFragment}
+    <!-- State 1: No/bad fragment -->
+    <BlockTitle>{m.portal_incomplete_link_title()}</BlockTitle>
+    <Block>
+      <p class="portal-body-text">{m.portal_incomplete_link()}</p>
+    </Block>
+  {:else if bootstrapQuery.isLoading}
+    <!-- Loading bootstrap -->
+    <Block>
+      <div class="portal-loading" role="status">
+        <span
+          class="portal-spinner"
+          role="progressbar"
+          aria-label={m.portal_unlocking()}
+        ></span>
+      </div>
+    </Block>
+  {:else if isDeadLink}
+    <!-- State 2 error: Dead link -->
+    <BlockTitle>{m.portal_dead_link_title()}</BlockTitle>
+    <Block>
+      <p class="portal-body-text">{m.portal_dead_link()}</p>
+    </Block>
+  {:else if needsPassphrase}
+    <!-- State 3: Passphrase gate -->
+    <PortalPassphraseGate
+      onsubmit={handlePassphraseSubmit}
+      pending={portalSession.passphraseDerivePending}
+      error={portalSession.passphraseError}
+    />
+  {:else if upgrade.success}
+    <!-- Upgrade success state -->
+    <Block>
+      <BlockTitle>{m.account_upgrade_success_title()}</BlockTitle>
+      <p class="portal-body-text">{m.account_upgrade_success_body()}</p>
+      <p class="portal-body-text upgrade-username">
+        {m.account_login_username()}: {upgrade.username}
+      </p>
+      <button
+        type="button"
+        class="upgrade-go-link"
+        data-testid="upgrade-go-to-login"
+        onclick={() => void goto(resolve("/account"))}
+      >
+        {m.account_login_submit()}
+      </button>
+    </Block>
+  {:else if portalSession.keyCheckPassed && portalSession.session}
+    {@const activeSession = portalSession.session}
+    <!-- State 4 + 5: Thread scrolls, composer pins to the bottom -->
+    <PageLayout lockScroll overlayBottomBar bind:scrollEl={threadScrollEl}>
+      {#snippet bottomBar()}
+        <JumpToLatest
+          visible={!scroll.isNearBottom && allMessages.length > 0}
+          onclick={jumpToLatest}
+        />
+        <PortalComposer
+          bind:this={composerRef}
+          onsend={handleSend}
+          pending={replyMutation.isPending}
+          onfirstfocus={handleFirstFocus}
+          errorMessage={sendError || undefined}
+          draftKey={routeChannelId}
+        />
+      {/snippet}
 
-    <!-- Upgrade offer card (above thread when offered, dismissible).
+      <!-- Upgrade offer card (above thread when offered, dismissible).
          Dismissing it does not remove the offer: the drawer keeps a
          permanent entry to the same flow. -->
-    {#if showAccountOffer && !upgrade.dismissed}
-      {#if !upgrade.expanded}
-        <Card data-testid="upgrade-card" class="upgrade-card">
-          <div class="upgrade-card-header">
-            <p class="upgrade-card-title">{m.account_upgrade_card_title()}</p>
+      {#if showAccountOffer && !upgrade.dismissed}
+        {#if !upgrade.expanded}
+          <Card data-testid="upgrade-card" class="upgrade-card">
+            <div class="upgrade-card-header">
+              <p class="upgrade-card-title">{m.account_upgrade_card_title()}</p>
+              <button
+                type="button"
+                class="upgrade-card-dismiss"
+                aria-label={m.account_upgrade_card_dismiss()}
+                onclick={() => upgrade.dismiss()}
+                data-testid="upgrade-card-dismiss"
+              >
+                <X size={16} aria-hidden="true" />
+              </button>
+            </div>
+            <p class="upgrade-card-body">{m.account_upgrade_card_body()}</p>
             <button
               type="button"
-              class="upgrade-card-dismiss"
-              aria-label={m.account_upgrade_card_dismiss()}
-              onclick={() => upgrade.dismiss()}
-              data-testid="upgrade-card-dismiss"
+              class="upgrade-card-action"
+              onclick={() => upgrade.expand()}
+              data-testid="upgrade-card-setup"
             >
-              <X size={16} aria-hidden="true" />
+              {m.account_upgrade_setup()}
             </button>
-          </div>
-          <p class="upgrade-card-body">{m.account_upgrade_card_body()}</p>
-          <button
-            type="button"
-            class="upgrade-card-action"
-            onclick={() => upgrade.expand()}
-            data-testid="upgrade-card-setup"
-          >
-            {m.account_upgrade_setup()}
-          </button>
-        </Card>
-      {:else}
-        <AccountCreateForm
-          onsubmit={handleUpgradeSubmit}
-          pending={upgrade.pending}
-          errorMessage={upgrade.error || undefined}
-          showLinkNote={true}
-          submitLabel={m.account_upgrade_setup()}
-        />
+          </Card>
+        {:else}
+          <AccountCreateForm
+            onsubmit={handleUpgradeSubmit}
+            pending={upgrade.pending}
+            errorMessage={upgrade.error || undefined}
+            showLinkNote={true}
+            submitLabel={m.account_upgrade_setup()}
+          />
+        {/if}
       {/if}
-    {/if}
 
-    <PortalThread
-      messages={filteredMessages}
-      decryptMessage={async (ep: string, n: string, ct: string) =>
-        activeSession.decryptMessage(ep, n, ct)}
-      decryptAttachmentKey={async (ep: string, n: string, ct: string) =>
-        activeSession.decryptAttachmentKey(ep, n, ct)}
-      decryptAttachmentBlob={async (
-        ct: ArrayBuffer,
-        fk: string,
-        tid: string,
-        aid: string,
-      ) => activeSession.decryptAttachmentBlob(ct, fk, tid, aid)}
-      loading={messagesQuery.isLoading}
-      attachments={portalAttachments}
-      channelId={fragment.fragmentData?.channelId}
-      channelAuth={channelAuthHeader}
-      ticketId={bootstrapQuery.data?.ticketId ?? undefined}
-      {supportLabel}
-      searchTerm={overlay.term ?? undefined}
-      activeMatchId={overlay.activeId ?? undefined}
-      onmatches={(ids: readonly string[]) => {
-        matchIds = ids;
-      }}
+      <PortalThread
+        messages={filteredMessages}
+        decryptMessage={async (ep: string, n: string, ct: string) =>
+          activeSession.decryptMessage(ep, n, ct)}
+        decryptAttachmentKey={async (ep: string, n: string, ct: string) =>
+          activeSession.decryptAttachmentKey(ep, n, ct)}
+        decryptAttachmentBlob={async (
+          ct: ArrayBuffer,
+          fk: string,
+          tid: string,
+          aid: string,
+        ) => activeSession.decryptAttachmentBlob(ct, fk, tid, aid)}
+        loading={messagesQuery.isLoading}
+        attachments={portalAttachments}
+        channelId={fragment.fragmentData?.channelId}
+        channelAuth={channelAuthHeader}
+        ticketId={bootstrapQuery.data?.ticketId ?? undefined}
+        {supportLabel}
+        searchTerm={overlay.term ?? undefined}
+        activeMatchId={overlay.activeId ?? undefined}
+        onmatches={(ids: readonly string[]) => {
+          matchIds = ids;
+        }}
+      />
+    </PageLayout>
+
+    <PortalHint
+      opened={hintShown}
+      ondismiss={dismissHint}
+      message={m.portal_web_chat_hint()}
     />
-  </PageLayout>
-
-  <PortalHint
-    opened={hintShown}
-    ondismiss={dismissHint}
-    message={m.portal_web_chat_hint()}
-    dismissLabel={m.portal_hint_dismiss()}
-    dismissTestid="web-chat-hint-dismiss"
-  />
-{/if}
+  {/if}
+{/key}
 
 <style>
   .portal-body-text {

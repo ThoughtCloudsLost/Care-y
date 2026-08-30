@@ -65,6 +65,7 @@
     DEFAULT_SAFE_URL,
     type ClientDrawerAction,
   } from "$lib/client-shell/context.js";
+  import { uiLocaleStore } from "$lib/stores/ui-locale.svelte.js";
 
   // ---------------------------------------------------------------------------
   // Account session handle (ADR-091: bridge-backed, key material in the worker)
@@ -675,7 +676,15 @@
 
   let settingsOpen = $state(false);
 
+  // Locale-reactive title (the read establishes a $derived dependency)
+  const pageTitle = $derived.by((): string => {
+    void uiLocaleStore.locale;
+    return m.account_title();
+  });
+
   const drawerActions = $derived.by((): readonly ClientDrawerAction[] => {
+    // Reading the locale establishes a dependency so labels recompute on switch
+    void uiLocaleStore.locale;
     if (!session) return [];
     return [
       {
@@ -859,11 +868,13 @@
 </script>
 
 <svelte:head>
-  <title>{m.account_title()}</title>
+  <title>{pageTitle}</title>
 </svelte:head>
 
 <!-- The shell owns the navbar, so the row reaches it through the context
-     rather than being rendered here. -->
+     rather than being rendered here. Snippets stay outside the locale key
+     block: the script's shell-context effect references threadSubnavbar,
+     and a snippet declared inside a block is scoped to it. -->
 {#snippet searchNavigatorRow()}
   <SearchNavigator
     term={overlay.term ?? ""}
@@ -894,91 +905,91 @@
   />
 {/snippet}
 
-{#if !session}
-  <!-- State 1: Login -->
-  <AccountLoginForm
-    onsubmit={handleLogin}
-    pending={loginPending}
-    error={loginError}
-    phase={loginPhase}
-    {signedOutMessage}
-  />
-{:else if bootstrapQuery.isLoading || messagesQuery.isLoading}
-  <!-- Loading -->
-  <Block>
-    <div class="account-loading" role="status">
-      <span
-        class="account-spinner"
-        role="progressbar"
-        aria-label={m.account_unlocking()}
-      ></span>
-    </div>
-  </Block>
-{:else if session}
-  {@const activeSession = session}
-  <!-- State 2: Thread scrolls, composer pins to the bottom -->
-  <PageLayout lockScroll bind:scrollEl={threadScrollEl}>
-    {#snippet bottomBar()}
-      <JumpToLatest
-        visible={!scroll.isNearBottom && allMessages.length > 0}
-        onclick={jumpToLatest}
-      />
-      <PortalComposer
-        bind:this={composerRef}
-        onsend={handleSend}
-        pending={replyMutation.isPending}
-        onfirstfocus={handleFirstFocus}
-        errorMessage={sendError || undefined}
-        draftKey={ACCOUNT_DRAFT_KEY}
-      />
-    {/snippet}
-
-    <PortalThread
-      messages={filteredMessages}
-      decryptMessage={async (ep: string, n: string, ct: string) =>
-        activeSession.decryptMessage(ep, n, ct)}
-      decryptAttachmentKey={async (ep: string, n: string, ct: string) =>
-        activeSession.decryptAttachmentKey(ep, n, ct)}
-      decryptAttachmentBlob={async (
-        ct: ArrayBuffer,
-        fk: string,
-        tid: string,
-        aid: string,
-      ) => activeSession.decryptAttachmentBlob(ct, fk, tid, aid)}
-      loading={messagesQuery.isLoading}
-      attachments={accountAttachments}
-      ticketId={bootstrapQuery.data?.ticketId ?? undefined}
-      {supportLabel}
-      searchTerm={overlay.term ?? undefined}
-      activeMatchId={overlay.activeId ?? undefined}
-      onmatches={(ids: readonly string[]) => {
-        matchIds = ids;
-      }}
+{#key uiLocaleStore.locale}
+  {#if !session}
+    <!-- State 1: Login -->
+    <AccountLoginForm
+      onsubmit={handleLogin}
+      pending={loginPending}
+      error={loginError}
+      phase={loginPhase}
+      {signedOutMessage}
     />
-  </PageLayout>
+  {:else if bootstrapQuery.isLoading || messagesQuery.isLoading}
+    <!-- Loading -->
+    <Block>
+      <div class="account-loading" role="status">
+        <span
+          class="account-spinner"
+          role="progressbar"
+          aria-label={m.account_unlocking()}
+        ></span>
+      </div>
+    </Block>
+  {:else if session}
+    {@const activeSession = session}
+    <!-- State 2: Thread scrolls, composer pins to the bottom -->
+    <PageLayout lockScroll overlayBottomBar bind:scrollEl={threadScrollEl}>
+      {#snippet bottomBar()}
+        <JumpToLatest
+          visible={!scroll.isNearBottom && allMessages.length > 0}
+          onclick={jumpToLatest}
+        />
+        <PortalComposer
+          bind:this={composerRef}
+          onsend={handleSend}
+          pending={replyMutation.isPending}
+          onfirstfocus={handleFirstFocus}
+          errorMessage={sendError || undefined}
+          draftKey={ACCOUNT_DRAFT_KEY}
+        />
+      {/snippet}
 
-  <PortalHint
-    opened={hintShown}
-    ondismiss={dismissHint}
-    message={m.portal_web_chat_hint()}
-    dismissLabel={m.portal_hint_dismiss()}
-    dismissTestid="web-chat-hint-dismiss"
-  />
+      <PortalThread
+        messages={filteredMessages}
+        decryptMessage={async (ep: string, n: string, ct: string) =>
+          activeSession.decryptMessage(ep, n, ct)}
+        decryptAttachmentKey={async (ep: string, n: string, ct: string) =>
+          activeSession.decryptAttachmentKey(ep, n, ct)}
+        decryptAttachmentBlob={async (
+          ct: ArrayBuffer,
+          fk: string,
+          tid: string,
+          aid: string,
+        ) => activeSession.decryptAttachmentBlob(ct, fk, tid, aid)}
+        loading={messagesQuery.isLoading}
+        attachments={accountAttachments}
+        ticketId={bootstrapQuery.data?.ticketId ?? undefined}
+        {supportLabel}
+        searchTerm={overlay.term ?? undefined}
+        activeMatchId={overlay.activeId ?? undefined}
+        onmatches={(ids: readonly string[]) => {
+          matchIds = ids;
+        }}
+      />
+    </PageLayout>
 
-  <!-- State 3: Settings, opened from the drawer -->
-  <ShellSheet
-    opened={settingsOpen}
-    ondismiss={() => (settingsOpen = false)}
-    title={m.account_settings_title()}
-  >
-    <AccountSettings
-      onchangepassword={(current: string, newPw: string) =>
-        void handleChangePassword(current, newPw)}
-      pending={changePasswordPending}
-      errorMessage={changePasswordError || undefined}
+    <PortalHint
+      opened={hintShown}
+      ondismiss={dismissHint}
+      message={m.portal_web_chat_hint()}
     />
-  </ShellSheet>
-{/if}
+
+    <!-- State 3: Settings, opened from the drawer -->
+    <ShellSheet
+      opened={settingsOpen}
+      ondismiss={() => (settingsOpen = false)}
+      title={m.account_settings_title()}
+    >
+      <AccountSettings
+        onchangepassword={(current: string, newPw: string) =>
+          void handleChangePassword(current, newPw)}
+        pending={changePasswordPending}
+        errorMessage={changePasswordError || undefined}
+      />
+    </ShellSheet>
+  {/if}
+{/key}
 
 <style>
   .account-loading {

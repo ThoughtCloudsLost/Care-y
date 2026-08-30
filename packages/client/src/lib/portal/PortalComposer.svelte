@@ -69,9 +69,14 @@
     setDraftForMode(draftKey, "reply", text);
   });
 
-  /** Toggle correction mode on/off. */
-  export function toggleCorrectionMode(): void {
-    correctionMode = !correctionMode;
+  /**
+   * Enter contact-correction mode. Driven from the drawer entry the page
+   * publishes; the indicator's cancel button is the way back out. Nothing
+   * renders below the reply bar, so the composer itself carries no entry
+   * point for this.
+   */
+  export function enterCorrectionMode(): void {
+    correctionMode = true;
   }
 
   const CHAR_LIMIT = 5_000;
@@ -152,20 +157,6 @@
       {/if}
     {/snippet}
   </ShellMessagebar>
-  {#if !correctionMode}
-    <div class="correction-toggle-row">
-      <button
-        type="button"
-        class="correction-toggle-btn"
-        onclick={() => {
-          correctionMode = true;
-        }}
-        data-testid="correction-mode-toggle"
-      >
-        {m.portal_correction_mode_button()}
-      </button>
-    </div>
-  {/if}
 </div>
 
 <style>
@@ -178,6 +169,13 @@
     .portal-composer .k-messagebar .k-toolbar > :nth-child(2) > :first-child
   ) {
     display: none;
+  }
+
+  /* Strip opaque backgrounds from the Konsta Toolbar's bg element so
+     the glass backdrop from PageLayout's overlay bar reads through.
+     The first child of .k-toolbar is the bg div (Konsta convention). */
+  :global(.portal-composer .k-messagebar .k-toolbar > :first-child) {
+    background: transparent !important;
   }
 
   .char-counter {
@@ -231,22 +229,5 @@
     min-height: 44px;
     display: flex;
     align-items: center;
-  }
-
-  .correction-toggle-row {
-    display: flex;
-    justify-content: center;
-    padding: 4px 16px 8px;
-  }
-
-  .correction-toggle-btn {
-    appearance: none;
-    border: none;
-    background: none;
-    font-size: var(--text-xs);
-    color: var(--muted);
-    cursor: pointer;
-    padding: 4px 8px;
-    min-height: 44px;
   }
 </style>

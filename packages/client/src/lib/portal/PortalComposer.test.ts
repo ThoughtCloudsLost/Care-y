@@ -2,8 +2,9 @@
 /**
  * PortalComposer tests for correction mode.
  *
- * Covers: correction toggle visibility, correction indicator rendering,
- * cancel button, and kind passthrough on send.
+ * Covers: no entry point below the reply bar, entering correction mode
+ * through the exported enterCorrectionMode (the drawer entry's path),
+ * indicator rendering, and the cancel button.
  *
  * Page-harness tests for the full portal page are skipped (known to be
  * prohibitively mock-heavy with the crypto init, fragment parsing, and
@@ -11,6 +12,7 @@
  */
 
 import { describe, it, expect, vi, afterEach } from "vitest";
+import { tick } from "svelte";
 import { render, cleanup, fireEvent } from "@testing-library/svelte";
 import PortalComposer from "./PortalComposer.svelte";
 import type * as MessagesMod from "$lib/paraglide/messages.js";
@@ -63,21 +65,30 @@ describe("PortalComposer correction mode", () => {
     pending: false,
   };
 
-  it("shows the correction toggle button by default", () => {
+  /** Narrows testing-library's untyped component handle to the export
+   *  under test (the drawer entry's path into correction mode). */
+  function composerExports(component: unknown): {
+    enterCorrectionMode: () => void;
+  } {
+    return component as { enterCorrectionMode: () => void };
+  }
+
+  it("renders nothing below the reply bar (no in-composer entry point)", () => {
     const { container } = render(PortalComposer, { props: baseProps });
-    const btn = container.querySelector(
-      "[data-testid='correction-mode-toggle']",
-    );
-    expect(btn).toBeTruthy();
-    expect(btn!.textContent!.trim()).toBe("Correct my contact info");
+    expect(
+      container.querySelector("[data-testid='correction-mode-toggle']"),
+    ).toBeNull();
+    expect(
+      container.querySelector("[data-testid='correction-mode-indicator']"),
+    ).toBeNull();
   });
 
-  it("shows correction indicator when toggle is clicked", async () => {
-    const { container } = render(PortalComposer, { props: baseProps });
-    const toggleBtn = container.querySelector(
-      "[data-testid='correction-mode-toggle']",
-    ) as HTMLElement;
-    await fireEvent.click(toggleBtn);
+  it("shows correction indicator after enterCorrectionMode()", async () => {
+    const { container, component } = render(PortalComposer, {
+      props: baseProps,
+    });
+    composerExports(component).enterCorrectionMode();
+    await tick();
 
     const indicator = container.querySelector(
       "[data-testid='correction-mode-indicator']",
@@ -86,24 +97,26 @@ describe("PortalComposer correction mode", () => {
     expect(indicator?.textContent).toContain("Correcting contact info");
   });
 
-  it("hides correction toggle when in correction mode", async () => {
-    const { container } = render(PortalComposer, { props: baseProps });
-    const toggleBtn = container.querySelector(
-      "[data-testid='correction-mode-toggle']",
-    ) as HTMLElement;
-    await fireEvent.click(toggleBtn);
+  it("is idempotent: entering twice stays in correction mode", async () => {
+    const { container, component } = render(PortalComposer, {
+      props: baseProps,
+    });
+    const exports = composerExports(component);
+    exports.enterCorrectionMode();
+    exports.enterCorrectionMode();
+    await tick();
 
     expect(
-      container.querySelector("[data-testid='correction-mode-toggle']"),
-    ).toBeNull();
+      container.querySelector("[data-testid='correction-mode-indicator']"),
+    ).toBeTruthy();
   });
 
   it("returns to normal mode on cancel click", async () => {
-    const { container } = render(PortalComposer, { props: baseProps });
-    const toggleBtn = container.querySelector(
-      "[data-testid='correction-mode-toggle']",
-    ) as HTMLElement;
-    await fireEvent.click(toggleBtn);
+    const { container, component } = render(PortalComposer, {
+      props: baseProps,
+    });
+    composerExports(component).enterCorrectionMode();
+    await tick();
 
     const cancelBtn = container.querySelector(
       "[data-testid='correction-mode-cancel']",
@@ -113,8 +126,5 @@ describe("PortalComposer correction mode", () => {
     expect(
       container.querySelector("[data-testid='correction-mode-indicator']"),
     ).toBeNull();
-    expect(
-      container.querySelector("[data-testid='correction-mode-toggle']"),
-    ).toBeTruthy();
   });
 });

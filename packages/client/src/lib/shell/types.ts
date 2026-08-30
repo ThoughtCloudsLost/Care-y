@@ -72,6 +72,15 @@ export interface PageLayoutProps {
   lockScroll?: boolean;
   /** Snippet rendered as a sticky bar at the bottom (Messagebar, action bar). */
   bottomBar?: Snippet;
+  /**
+   * Render the bottom bar as a glass overlay instead of a flex sibling.
+   *
+   * When true (requires lockScroll), the bar is position:absolute at the
+   * bottom of the layout with a translucent glass backdrop. The scroll
+   * region gets matching padding-bottom via a ResizeObserver-measured CSS
+   * variable so content can scroll beneath the bar without being clipped.
+   */
+  overlayBottomBar?: boolean;
   /** CSS touch-action value for the scroll container. Default: 'auto'. */
   touchAction?: string;
   /**
@@ -228,6 +237,10 @@ export interface ShellMessagebarProps {
   /** Snippet rendered below the Messagebar inside the anchor div. Used by
    *  consumers for character counters, hints, etc. */
   footer?: Snippet;
+  /** Snippet rendered inside the anchor div regardless of collapsed state.
+   *  Used for absolutely positioned floating content (e.g., the
+   *  jump-to-latest pill) that needs the anchor as its positioned ancestor. */
+  floating?: Snippet;
 }
 
 // ── Navbar override ─────────────────────────────────────────────────

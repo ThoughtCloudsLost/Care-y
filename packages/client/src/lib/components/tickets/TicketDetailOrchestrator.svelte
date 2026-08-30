@@ -723,9 +723,8 @@
     closeCallSheet();
     if (action === "cancel" || callInProgress) return;
 
-    exposureHint.show("call", () => {
-      void callDispatch.executeCall();
-    });
+    exposureHint.show("call");
+    void callDispatch.executeCall();
   }
 
   // --- Delete confirm + note edit (composables) ---
@@ -899,7 +898,7 @@
     title={decryptedTitle}
     smallTitle
     hideTitle
-    headerRight={detailViewToggle}
+    statsRight={detailViewToggle}
     stats={detailStats}
     selectLabel={m.ticket_select_mode()}
     onselect={selectMode.active
@@ -988,12 +987,15 @@
   />
 {/snippet}
 
+{#snippet jumpPill()}
+  <JumpToLatest
+    visible={!chatNearBottom && !selectMode.active}
+    onclick={jumpToLatest}
+  />
+{/snippet}
+
 {#snippet ticketCompose()}
   <div class="detail-compose">
-    <JumpToLatest
-      visible={!chatNearBottom && !selectMode.active}
-      onclick={jumpToLatest}
-    />
     {#if attachmentUpload.pending.length > 0}
       <div
         class="pending-attachments"
@@ -1035,6 +1037,7 @@
       hidden={selectMode.active}
       sending={messenger.sending || sms.sending || attachmentUpload.busy}
       hasUnacknowledgedCorrection={correctionPending}
+      floatingPill={jumpPill}
       onsendreply={() => void messenger.handleSend()}
       onsendsms={(text: string) => void sms.handleSmsSend(text)}
       onplus={openComposeActions}
@@ -1047,7 +1050,7 @@
     title={decryptedTitle}
     smallTitle
     hideTitle
-    headerRight={detailViewToggle}
+    statsRight={detailViewToggle}
     stats={detailStats}
     selectLabel={m.ticket_select_mode()}
     onselect={selectMode.active
@@ -1220,7 +1223,10 @@
     ? () => compose?.activateReply()
     : undefined}
   ontextclient={ticket?.hasPhone === true
-    ? () => exposureHint.show("sms", () => compose?.activateSms())
+    ? () => {
+        exposureHint.show("sms");
+        compose?.activateSms();
+      }
     : undefined}
   onattach={(file: File) => {
     // Activate reply mode so the volunteer sees the compose bar with

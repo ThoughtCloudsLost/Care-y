@@ -21,6 +21,7 @@
   from components/tickets; this component inherits that exception.
 -->
 <script lang="ts">
+  import type { Snippet } from "svelte";
   import { X, UserPen } from "@lucide/svelte";
   import * as m from "$lib/paraglide/messages.js";
   import { withTerms } from "$lib/terminology/with-terms.js";
@@ -48,6 +49,11 @@
     /** When true, a contact correction is pending and the SMS compose
      *  header shows a warning. */
     hasUnacknowledgedCorrection?: boolean;
+    /** Floating content rendered inside the ShellMessagebar anchor.
+     *  The anchor is position:fixed (or relative in inline mode), so
+     *  absolutely positioned children (like the jump-to-latest pill)
+     *  position relative to the compose bar. */
+    floatingPill?: Snippet;
     onsendreply: (text: string) => void;
     onsendsms: (text: string) => void;
     onplus: (anchorEl: HTMLElement) => void;
@@ -59,6 +65,7 @@
     sending = false,
     hidden = false,
     hasUnacknowledgedCorrection: correctionPending = false,
+    floatingPill,
     onsendreply,
     onsendsms,
     onplus,
@@ -211,6 +218,7 @@
     collapsed={activeComposeMode === null}
     {inline}
     header={activeComposeMode !== null ? composeHeader : undefined}
+    floating={floatingPill}
     onsend={handleSend}
     {onplus}
     oninput={handleInput}

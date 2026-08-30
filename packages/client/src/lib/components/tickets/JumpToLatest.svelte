@@ -6,8 +6,11 @@
   describing the same control in the same place, which is the whole reason
   these two surfaces share components rather than resembling each other.
 
-  It sits directly above the compose bar rather than floating over the
-  conversation, so it never covers the message being read.
+  Renders as a floating pill positioned above the compose bar. Requires
+  a positioned ancestor that represents the composer block (the overlay
+  bottom bar on client threads, or the fixed ShellMessagebar anchor on
+  the org thread). The pill uses position:absolute with
+  bottom:calc(100% + 8px) to sit just above that ancestor.
 -->
 <script lang="ts">
   import { ArrowDown } from "@lucide/svelte";
@@ -37,12 +40,15 @@
 <style>
   .jump-latest {
     appearance: none;
+    position: absolute;
+    bottom: calc(100% + 8px);
+    left: 50%;
+    transform: translateX(-50%);
     display: flex;
     align-items: center;
     justify-content: center;
     gap: 0.375rem;
     width: fit-content;
-    margin: 0 auto 0.5rem;
     padding: 0.375rem 0.875rem;
     min-height: 44px;
     border: 1px solid var(--hair);
@@ -52,5 +58,7 @@
     font-size: var(--text-xs);
     font-weight: 600;
     cursor: pointer;
+    z-index: 1;
+    pointer-events: auto;
   }
 </style>

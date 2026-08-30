@@ -32,6 +32,9 @@
     view?: ViewToggleConfig;
     headerRight?: Snippet;
     stats?: Snippet;
+    /** Optional snippet rendered on the right side of the stats row,
+     *  beside the select/sort controls (e.g. a view toggle on detail pages). */
+    statsRight?: Snippet;
     sort?: SortConfig;
     /**
      * Multi-select entry. Both are optional together: a surface with a
@@ -60,6 +63,7 @@
     view,
     headerRight,
     stats,
+    statsRight,
     sort,
     selectLabel,
     onselect,
@@ -71,6 +75,9 @@
     onsearch,
     searchLabel,
   }: Props = $props();
+
+  /** True when the header row has visible content and should render. */
+  const showHeader = $derived(!hideTitle || !!view || !!headerRight);
 
   // Compose a sort button label that includes the current direction so
   // screen readers announce state changes (e.g. "Sort clients, ascending").
@@ -105,25 +112,28 @@
 </script>
 
 <section class="subnavbar-filter-content" aria-label={title}>
-  <div class="page-header">
-    {#if hideTitle}
-      <span class="page-title-spacer" aria-hidden="true"></span>
-    {:else if smallTitle}
-      <span class="page-title-small">{title}</span>
-    {:else}
-      <BlockTitle large class="page-title heading-compact">{title}</BlockTitle>
-    {/if}
-    {#if view}
-      <ViewSwitcher
-        mode={view.mode}
-        onchange={view.onchange}
-        label={view.label}
-      />
-    {:else if headerRight}
-      {@render headerRight()}
-    {/if}
-  </div>
-  {#if stats ?? sort}
+  {#if showHeader}
+    <div class="page-header">
+      {#if hideTitle}
+        <span class="page-title-spacer" aria-hidden="true"></span>
+      {:else if smallTitle}
+        <span class="page-title-small">{title}</span>
+      {:else}
+        <BlockTitle large class="page-title heading-compact">{title}</BlockTitle
+        >
+      {/if}
+      {#if view}
+        <ViewSwitcher
+          mode={view.mode}
+          onchange={view.onchange}
+          label={view.label}
+        />
+      {:else if headerRight}
+        {@render headerRight()}
+      {/if}
+    </div>
+  {/if}
+  {#if stats ?? sort ?? statsRight}
     <div class="stats-row">
       <div class="stats-counts">
         {#if stats}
@@ -131,6 +141,9 @@
         {/if}
       </div>
       <div class="view-controls">
+        {#if statsRight}
+          {@render statsRight()}
+        {/if}
         {#if sort}
           <span bind:this={sortAnchorEl} class="sort-anchor">
             <Button

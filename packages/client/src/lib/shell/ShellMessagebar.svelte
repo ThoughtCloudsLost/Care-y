@@ -30,6 +30,7 @@
     collapsed = false,
     header,
     footer,
+    floating,
   }: ShellMessagebarProps = $props();
 
   const placeholder = $derived(
@@ -160,6 +161,7 @@
   class:shell-messagebar-inline={inline}
   class:shell-messagebar-collapsed={collapsed}
 >
+  {#if floating}{@render floating()}{/if}
   {#if !collapsed && header}{@render header()}{/if}
   <Messagebar
     bind:value
@@ -244,8 +246,12 @@
 
   /* Blur layer behind the messagebar, fading upward into content.
      Mirrors the Navbar's bgBlur pattern but anchored at the bottom.
-     Hidden when collapsed (only the + button floats, no chrome). */
-  .shell-messagebar-anchor:not(.shell-messagebar-collapsed)::before {
+     Hidden when collapsed (only the + button floats, no chrome) and
+     skipped in inline mode (the host provides its own glass layer). */
+  .shell-messagebar-anchor:not(
+      .shell-messagebar-collapsed,
+      .shell-messagebar-inline
+    )::before {
     content: "";
     position: absolute;
     bottom: 0;
@@ -254,10 +260,42 @@
     height: calc(100% + 70px);
     backdrop-filter: saturate(180%) blur(20px);
     -webkit-backdrop-filter: saturate(180%) blur(20px);
+    background: linear-gradient(
+      to top,
+      color-mix(in srgb, var(--paper) 85%, transparent) 60%,
+      transparent
+    );
     mask-image: linear-gradient(to top, black 60%, transparent);
     -webkit-mask-image: linear-gradient(to top, black 60%, transparent);
     pointer-events: none;
     z-index: -1;
+  }
+
+  @media (prefers-contrast: more) {
+    .shell-messagebar-anchor:not(
+        .shell-messagebar-collapsed,
+        .shell-messagebar-inline
+      )::before {
+      backdrop-filter: none !important;
+      -webkit-backdrop-filter: none !important;
+      background: Canvas !important;
+      mask-image: none !important;
+      -webkit-mask-image: none !important;
+      height: 100%;
+    }
+  }
+
+  /* Strip the Konsta Toolbar bg div so the ::before glass layer reads
+     through. The bg div is the first child of .k-toolbar (Konsta
+     convention) and carries an opaque surface color on Material and
+     a surface-to-transparent gradient on iOS. Both compete with the
+     glass treatment above. */
+  :global(
+    .shell-messagebar-anchor:not(.shell-messagebar-inline)
+      .k-toolbar
+      > :first-child
+  ) {
+    background: transparent !important;
   }
 
   /* Collapsed: hide the entire messagebar but preserve its layout so the
