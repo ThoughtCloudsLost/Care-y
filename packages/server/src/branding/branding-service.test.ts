@@ -164,6 +164,29 @@ describe.skipIf(!process.env.DATABASE_URL)("createBrandingService", () => {
     });
   });
 
+  describe("iconBlobKey", () => {
+    it("returns the stored key for each size and null for unset sizes", async () => {
+      await db
+        .updateTable("org_config")
+        .set({
+          icon_192_blob_key: "key-192" as BlobKey,
+          icon_maskable_blob_key: "key-mask" as BlobKey,
+        })
+        .execute();
+
+      const svc = createBrandingService(db);
+      expect(await svc.iconBlobKey("192")).toBe("key-192");
+      expect(await svc.iconBlobKey("maskable")).toBe("key-mask");
+      expect(await svc.iconBlobKey("512")).toBeNull();
+
+      await db
+        .updateTable("org_config")
+        .set({ icon_192_blob_key: null, icon_maskable_blob_key: null })
+        .execute();
+      await resetOrgConfig(db);
+    });
+  });
+
   describe("getPublicBranding", () => {
     it("returns plaintext branding fields and org public key", async () => {
       const svc = createBrandingService(db);

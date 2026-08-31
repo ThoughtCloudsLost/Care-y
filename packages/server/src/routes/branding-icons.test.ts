@@ -2,9 +2,8 @@
  * Tests for the branding icon serving handler.
  *
  * The first suite covers URL parsing, 404 cases, and handler wiring with no
- * DB. The second covers the serving path, which needs a real schema: the
- * handler reaches for tenantDb(org.schemaName) itself rather than taking a
- * DB dependency, so its org_config reads cannot be mocked out.
+ * DB. The second covers the serving path against a real schema through the
+ * injected branding service factory, the same wiring index.ts uses.
  *
  * Icons are stored as plain PNG bytes (ADR-094). No decryption in the
  * serving path.
@@ -26,6 +25,8 @@ import {
 } from "./branding-icons.js";
 import type { BlobStore } from "../storage/store.js";
 import type { OrgId, OrgSlug, OrgSchema, BlobKey } from "@care-y/shared";
+import { createBrandingService } from "../branding/branding-service.js";
+import { tenantDb } from "../db/db.js";
 import { createTestDb, seedOrgPublicKey, type TestDb } from "../test-utils.js";
 
 function mockReq(
@@ -83,6 +84,9 @@ function buildDeps(
       consumeSetupToken: vi.fn(async () => undefined),
     },
     corsHeaders: { "Access-Control-Allow-Origin": "*" },
+    createBrandingSvc: vi.fn(() => ({
+      iconBlobKey: vi.fn(async () => null),
+    })),
     ...overrides,
   };
 }
@@ -271,6 +275,8 @@ describe.skipIf(!process.env.DATABASE_URL)(
           consumeSetupToken: vi.fn(async () => undefined),
         },
         corsHeaders: { "Access-Control-Allow-Origin": "*" },
+        createBrandingSvc: (orgSchema) =>
+          createBrandingService(tenantDb(orgSchema)),
       });
     }, 30_000);
 

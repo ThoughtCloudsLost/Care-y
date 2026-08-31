@@ -9,23 +9,31 @@
  *
  * ETag (blob key) + must-revalidate keeps clients current while allowing 304
  * responses that skip the blob read entirely.
+ *
+ * The handler owns HTTP concerns only; tenant reads go through the injected
+ * branding service factory.
  */
 
 import type { IncomingMessage, ServerResponse } from "node:http";
+import type { OrgSchema } from "@care-y/shared";
 import type { BlobStore } from "../storage/store.js";
 import type { OrgService } from "../org/service.js";
-import { tenantDb } from "../db/db.js";
+import type {
+  BrandingService,
+  IconSize,
+} from "../branding/branding-service.js";
 
 export interface BrandingIconHandlerDeps {
   readonly blobStore: BlobStore;
   readonly orgService: OrgService;
   readonly corsHeaders: Readonly<Record<string, string>>;
+  readonly createBrandingSvc: (
+    orgSchema: OrgSchema,
+  ) => Pick<BrandingService, "iconBlobKey">;
 }
 
 const CACHE_CONTROL = "public, max-age=300, must-revalidate";
 const PATH_PREFIX = "/api/branding/";
-
-type IconSize = "192" | "512" | "maskable";
 
 function parseIconSize(filename: string): IconSize | null {
   if (filename === "icon-192.png") return "192";
@@ -37,7 +45,7 @@ function parseIconSize(filename: string): IconSize | null {
 export function createBrandingIconHandler(
   deps: BrandingIconHandlerDeps,
 ): (req: IncomingMessage, res: ServerResponse) => Promise<void> {
-  const { blobStore, orgService, corsHeaders } = deps;
+  const { blobStore, orgService, corsHeaders, createBrandingSvc } = deps;
 
   return async (req: IncomingMessage, res: ServerResponse): Promise<void> => {
     if (req.method !== "GET") {
@@ -82,29 +90,9 @@ export function createBrandingIconHandler(
         return;
       }
 
-      const tDb = tenantDb(org.schemaName);
-      const config = await tDb
-        .selectFrom("org_config")
-        .select([
-          "icon_192_blob_key",
-          "icon_512_blob_key",
-          "icon_maskable_blob_key",
-        ])
-        .executeTakeFirst();
-
-      if (!config) {
-        res.writeHead(404);
-        res.end();
-        return;
-      }
-
-      const blobKey =
-        iconSize === "192"
-          ? config.icon_192_blob_key
-          : iconSize === "512"
-            ? config.icon_512_blob_key
-            : config.icon_maskable_blob_key;
-
+      const blobKey = await createBrandingSvc(org.schemaName).iconBlobKey(
+        iconSize,
+      );
       if (blobKey === null) {
         res.writeHead(404);
         res.end();

@@ -2,6 +2,7 @@ import type { Kysely } from "kysely";
 import type { OrgConfigTable, TenantDatabase } from "../db/types.js";
 import type { BlobStore } from "../storage/store.js";
 import type {
+  BlobKey,
   BrandingData,
   PublicBrandingData,
   SaveBrandingFieldInput,
@@ -36,9 +37,13 @@ export function readSafeExitUrl(stored: string | null): string | null {
   return safeExitUrlSchema.safeParse(stored).success ? stored : null;
 }
 
+/** Icon size variants served by the public icon route. */
+export type IconSize = "192" | "512" | "maskable";
+
 export interface BrandingService {
   getBranding(): Promise<BrandingData>;
   getPublicBranding(): Promise<PublicBrandingData>;
+  iconBlobKey(size: IconSize): Promise<BlobKey | null>;
   saveBrandingField(input: SaveBrandingFieldInput): Promise<void>;
   uploadIcons(
     store: BlobStore,
@@ -112,6 +117,22 @@ export function createBrandingService(
         iconVersion: config?.icon_192_blob_key?.slice(0, 8) ?? null,
         safeExitUrl: readSafeExitUrl(config?.portal_safe_exit_url ?? null),
       };
+    },
+
+    async iconBlobKey(size: IconSize): Promise<BlobKey | null> {
+      const config = await tenantDb
+        .selectFrom("org_config")
+        .select([
+          "icon_192_blob_key",
+          "icon_512_blob_key",
+          "icon_maskable_blob_key",
+        ])
+        .executeTakeFirst();
+
+      if (config === undefined) return null;
+      if (size === "192") return config.icon_192_blob_key;
+      if (size === "512") return config.icon_512_blob_key;
+      return config.icon_maskable_blob_key;
     },
 
     async saveBrandingField(input: SaveBrandingFieldInput): Promise<void> {
