@@ -5,19 +5,13 @@
  * client sees the org's name, colours and icon without anything being written
  * to their device.
  *
- * The client branding blob is public by construction: its key derives from
- * the org public key, which is served on every unauthenticated page.
- * Decrypting it here is a deliberate, bounded exception to the project's
- * client-side-only crypto rule, confined to this file.
+ * Branding fields are plaintext (ADR-094). Safety rests on per-context
+ * escaping and validation at the injection point, not on encryption. Each
+ * injected value is escaped for the position it lands in, and substitution
+ * runs in a single pass so injected content cannot be re-substituted.
  */
 
 import { orgSlugSchema, safeExitUrlSchema } from "@care-y/shared";
-import {
-  getSodium,
-  decode,
-  decryptClientBranding,
-  type Ciphertext,
-} from "@care-y/crypto";
 import { brandingIconUrl, sanitizeOrgName } from "$lib/branding/index.js";
 import { isValidHexColor } from "$lib/branding/color-utils.js";
 
@@ -41,21 +35,15 @@ export interface LoadBrandingOptions {
   readonly now?: () => number;
 }
 
-/** The `getPublicBranding` fields this module consumes. */
+/** The `getPublicBranding` fields this module consumes (plaintext). */
 export interface PublicBrandingResponse {
-  readonly orgPublicKey: string | null;
-  readonly clientEncryptedBranding: string | null;
+  readonly name: string | null;
+  readonly primaryColor: string | null;
+  readonly accentColor: string | null;
+  readonly supportLabel: string | null;
   readonly hasIcons: boolean;
   readonly iconVersion: string | null;
   readonly safeExitUrl: string | null;
-}
-
-/** The decrypted blob. Every field is optional: an org may set none. */
-export interface ClientBrandingPayload {
-  name?: string;
-  primaryColor?: string;
-  accentColor?: string;
-  supportLabel?: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -208,10 +196,10 @@ export function parseBrandingEnvelope(
   if (typeof hasIcons !== "boolean") return null;
 
   return {
-    orgPublicKey: asString(readProp(data, "orgPublicKey")),
-    clientEncryptedBranding: asString(
-      readProp(data, "clientEncryptedBranding"),
-    ),
+    name: asString(readProp(data, "name")),
+    primaryColor: asString(readProp(data, "primaryColor")),
+    accentColor: asString(readProp(data, "accentColor")),
+    supportLabel: asString(readProp(data, "supportLabel")),
     hasIcons,
     iconVersion: asString(readProp(data, "iconVersion")),
     safeExitUrl: asString(readProp(data, "safeExitUrl")),
@@ -219,82 +207,29 @@ export function parseBrandingEnvelope(
 }
 
 // ---------------------------------------------------------------------------
-// Decrypt
-// ---------------------------------------------------------------------------
-
-/**
- * Decrypt the client branding blob using the org public key.
- *
- * Returns null when either base64url field is missing, or when decrypt or
- * JSON.parse throws. A malformed blob must degrade to no injection, never
- * to a thrown error: a branding failure must not block a client from
- * reaching the intake form.
- */
-export function decryptBrandingPayload(
-  response: PublicBrandingResponse,
-  slug?: string,
-): ClientBrandingPayload | null {
-  if (
-    response.orgPublicKey === null ||
-    response.clientEncryptedBranding === null
-  ) {
-    return null;
-  }
-
-  try {
-    const orgPubKey = decode(response.orgPublicKey);
-    const blob = decode(response.clientEncryptedBranding);
-
-    /* eslint-disable @typescript-eslint/no-unsafe-type-assertion -- Ciphertext is a branded Uint8Array; blob bytes are client-produced XChaCha20-Poly1305 AEAD ciphertext (ADR-053) */
-    const plaintext = decryptClientBranding(blob as Ciphertext, orgPubKey);
-    /* eslint-enable @typescript-eslint/no-unsafe-type-assertion */
-
-    const parsed: unknown = JSON.parse(new TextDecoder().decode(plaintext));
-    if (typeof parsed !== "object" || parsed === null) return null;
-
-    // Read each field rather than asserting the whole shape. An admin can
-    // write anything into the blob, and a number where a string belongs
-    // would otherwise reach sanitizeOrgName and throw on `.replace`.
-    return {
-      name: asString(readProp(parsed, "name")) ?? undefined,
-      primaryColor: asString(readProp(parsed, "primaryColor")) ?? undefined,
-      accentColor: asString(readProp(parsed, "accentColor")) ?? undefined,
-      supportLabel: asString(readProp(parsed, "supportLabel")) ?? undefined,
-    };
-  } catch (err: unknown) {
-    const ctor = err instanceof Error ? err.constructor.name : "unknown";
-    console.warn(
-      `[branding-inject] decrypt failed for ${slug ?? "unknown"}: ${ctor}`,
-    );
-    return null;
-  }
-}
-
-// ---------------------------------------------------------------------------
 // Assemble
 // ---------------------------------------------------------------------------
 
 /**
- * Combine the server response, decrypted payload, and resolved slug into
- * the final injection values. Each field is independently validated so a
- * single bad value does not collapse the entire injection.
+ * Combine the server response and resolved slug into the final injection
+ * values. Each field is independently validated so a single bad value does
+ * not collapse the entire injection.
  */
 export function buildInjectedBranding(
   response: PublicBrandingResponse,
-  payload: ClientBrandingPayload | null,
   slug: string,
 ): InjectedBranding {
-  const sanitized = sanitizeOrgName(payload?.name ?? "");
+  const sanitized = sanitizeOrgName(response.name ?? "");
   const orgName = sanitized.length > 0 ? sanitized : null;
 
   const primaryColor =
-    payload?.primaryColor !== undefined && isValidHexColor(payload.primaryColor)
-      ? payload.primaryColor
+    response.primaryColor !== null && isValidHexColor(response.primaryColor)
+      ? response.primaryColor
       : null;
 
   const accentColor =
-    payload?.accentColor !== undefined && isValidHexColor(payload.accentColor)
-      ? payload.accentColor
+    response.accentColor !== null && isValidHexColor(response.accentColor)
+      ? response.accentColor
       : null;
 
   const iconUrl = response.hasIcons
@@ -413,10 +348,7 @@ async function fetchBranding(
     // against a server that is going to keep saying the same thing.
     if (envelope === null) return { ok: true, value: NO_BRANDING };
 
-    await getSodium();
-
-    const payload = decryptBrandingPayload(envelope, slug);
-    return { ok: true, value: buildInjectedBranding(envelope, payload, slug) };
+    return { ok: true, value: buildInjectedBranding(envelope, slug) };
   } catch {
     console.warn("[branding-inject] fetch failed");
     return { ok: false };
