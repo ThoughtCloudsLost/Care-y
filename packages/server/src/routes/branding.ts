@@ -3,7 +3,11 @@
  *
  * getPublicBranding: org-scoped, no auth. Returns plaintext branding fields
  * plus the org public key (still needed by intake form crypto, ADR-026).
- * All other endpoints require admin-level permissions (MANAGE_ROLES).
+ * getBranding: every authenticated org member. Each volunteer's session
+ * hydrates branding and terminology from it, and nothing in the payload is
+ * admin-only (the public fields are served unauthenticated anyway, and the
+ * terminology ciphertext is org-key tier every volunteer holds the key for).
+ * Write endpoints require admin-level permissions (MANAGE_ROLES).
  * Business logic is delegated to BrandingService.
  *
  * Branding is stored and served as plaintext (ADR-094). XSS defense for
@@ -13,6 +17,7 @@
 import {
   router,
   orgProcedure,
+  volunteerProcedure,
   adminProcedure,
   withErrorWrapping,
 } from "../trpc/trpc.js";
@@ -44,7 +49,7 @@ export function createBrandingRouter(deps: BrandingRouterDeps) {
       }),
     ),
 
-    getBranding: adminProcedure.query(
+    getBranding: volunteerProcedure.query(
       withErrorWrapping(async ({ ctx }) => {
         const svc = createBrandingService(ctx.org.tenantDb);
         return svc.getBranding();

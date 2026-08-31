@@ -44,6 +44,7 @@ vi.mock("../branding/branding-service.js", async (importOriginal) => ({
   createBrandingService: () => ({
     getBranding: mockGetBranding,
     getPublicBranding: mockGetPublicBranding,
+    iconBlobKey: vi.fn(async () => null),
     saveBrandingField: mockSaveBrandingField,
     uploadIcons: mockUploadIcons,
   }),
@@ -160,18 +161,16 @@ describe("branding router", () => {
   // --- Permission enforcement ---
 
   describe("permission enforcement", () => {
-    it("getBranding rejects volunteer with FORBIDDEN", async () => {
+    it("getBranding allows volunteer (session branding hydration)", async () => {
       const caller = buildVolunteerCaller();
-      await expect(caller.getBranding()).rejects.toThrow(
-        "INSUFFICIENT_PERMISSIONS",
-      );
+      const result = await caller.getBranding();
+      expect(result.name).toBe("Test Org");
     });
 
-    it("getBranding rejects manager with FORBIDDEN", async () => {
+    it("getBranding allows manager", async () => {
       const caller = buildManagerCaller();
-      await expect(caller.getBranding()).rejects.toThrow(
-        "INSUFFICIENT_PERMISSIONS",
-      );
+      const result = await caller.getBranding();
+      expect(result.name).toBe("Test Org");
     });
 
     it("getBranding allows admin", async () => {
