@@ -63,6 +63,25 @@ vi.mock("$lib/branding/title.svelte.js", async (importOriginal) => ({
   getBrandingTitle: () => "Test Org",
 }));
 
+// The privacy page resolves the org name through the branding query with
+// the injected-attribute fallback; the mock resolves immediately so the
+// who-collects section renders the name instead of the pending skeleton.
+vi.mock("$lib/branding/public-branding.js", async (importOriginal) => ({
+  ...(await importOriginal()),
+  createPublicBrandingQuery: () => ({
+    data: { orgName: "Test Org" },
+    isLoading: false,
+    isError: false,
+    isSuccess: true,
+    error: null,
+  }),
+}));
+
+vi.mock("$lib/branding/injected-branding.js", async (importOriginal) => ({
+  ...(await importOriginal()),
+  readInjectedOrgName: () => null,
+}));
+
 // --- Shell mock (jsdom cannot render Konsta internals) ---
 
 vi.mock("$lib/shell/context.js", async (importOriginal) => ({
