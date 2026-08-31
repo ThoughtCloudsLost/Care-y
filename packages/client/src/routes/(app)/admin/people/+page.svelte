@@ -748,8 +748,6 @@
     title={m.admin_clients_title(withTerms())}
     headerRight={tabSegmented}
     sort={clientSortConfig}
-    selectLabel=""
-    onselect={noop}
     savedFilters={clientSavedFiltersConfig}
     filterPills={clientFilterPillsConfig}
     searchNavigator={clientSearchActive ? clientSearchRow : undefined}
@@ -766,8 +764,6 @@
   <SubNavbarFilterLayout
     title={m.roles_title()}
     headerRight={tabSegmented}
-    selectLabel=""
-    onselect={noop}
     filterPills={{
       pills: [],
       activeCount: 0,
