@@ -171,9 +171,14 @@ describe("trpc stub", () => {
     it("delegates branding.getPublicBranding to the engine", async () => {
       const brandingResult = {
         orgPublicKey: "abc",
-        clientEncryptedBranding: null,
+        name: "Demo Org",
+        primaryColor: null,
+        accentColor: null,
+        clientText: null,
+        supportLabel: null,
         hasIcons: false,
         iconVersion: null,
+        safeExitUrl: null,
         orgSlug: "demo",
       };
       const fakeEngine = {

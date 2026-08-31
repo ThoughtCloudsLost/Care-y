@@ -79,12 +79,8 @@ export const serverHealthAliases: readonly HealthAlias[] = [
     replacement: resolve(`${shimDir}/branding-crypto-shim.ts`),
   },
 
-  // M6b: branding/branding-service.ts - replaces sodium_memzero
-  // WHY: original does `import sodium from "sodium-native"` for memzero
-  {
-    find: `${serverSrc}/branding/branding-service`,
-    replacement: resolve(`${shimDir}/branding-service-shim.ts`),
-  },
+  // branding-service needs no shim since ADR-094: plaintext branding
+  // removed its sodium-native import, so the real module runs in-browser.
 
   // sodium-native (the package itself) - libsodium-wrappers-sumo bridge
   // WHY: migration 014 (and other reachable files) import sodium-native
