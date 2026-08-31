@@ -142,7 +142,7 @@ describe("safeExitUrlSchema", () => {
 describe("updateOrgGeneralAdminInputSchema", () => {
   // countryCode is an E.164 dialing code, not an ISO country code.
   const base = {
-    encryptedOrgName: "ciphertext",
+    orgName: "Harbor Support",
     defaultLanguage: "en",
     countryCode: "+1",
   };

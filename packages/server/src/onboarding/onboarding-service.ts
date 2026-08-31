@@ -63,7 +63,7 @@ export interface RegisterFromInviteInput {
 }
 
 export interface UpdateOrgGeneralInput {
-  readonly encryptedOrgName: string;
+  readonly orgName: string;
   readonly countryCode: string;
   readonly defaultLanguage: string;
   readonly encryptedTerminology?: string;
@@ -256,8 +256,9 @@ export function createOnboardingService(
     },
 
     async updateOrgGeneral(input: UpdateOrgGeneralInput): Promise<void> {
+      // care-y-ignore-next-line ast-pii-in-db-write -- org name is public branding, not PII (ADR-094)
       const updates: Record<string, unknown> = {
-        encrypted_name: Buffer.from(input.encryptedOrgName, "base64"),
+        name: input.orgName,
         default_country_code: input.countryCode,
         default_language: input.defaultLanguage,
       };

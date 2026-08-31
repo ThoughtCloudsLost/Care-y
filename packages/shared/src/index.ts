@@ -494,10 +494,15 @@ export {
 export {
   saveBrandingFieldInputSchema,
   uploadIconsInputSchema,
+  hexColorSchema,
+  BRANDING_NAME_MAX,
+  BRANDING_CLIENT_TEXT_MAX,
+  BRANDING_SUPPORT_LABEL_MAX,
   type BrandingField,
   type SaveBrandingFieldInput,
   type UploadIconsInput,
   type BrandingData,
+  type PublicBrandingData,
 } from "./schemas/branding.js";
 
 // --- Onboarding schemas ---

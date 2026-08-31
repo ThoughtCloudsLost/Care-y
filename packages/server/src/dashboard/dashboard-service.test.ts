@@ -124,7 +124,7 @@ describe.skipIf(!HAS_DB)("DashboardService (DB)", () => {
     await tenantDb
       .updateTable("org_config")
       .set({
-        encrypted_logo: null,
+        logo: null,
         pii_retention_days: null,
       })
       .execute();

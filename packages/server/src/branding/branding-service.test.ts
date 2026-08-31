@@ -1,3 +1,13 @@
+/**
+ * DB integration tests for the branding service.
+ *
+ * Verifies plaintext round trips for every branding field, logo magic-byte
+ * and size validation, terminology ciphertext storage (opaque base64-to-Buffer
+ * round trip), icon upload with PNG-only enforcement, and readSafeExitUrl
+ * re-validation. Branding is stored as plaintext (ADR-094) except
+ * encrypted_terminology which remains org-key ciphertext.
+ */
+
 import { describe, it, expect, vi, beforeAll, afterAll } from "vitest";
 import { createBrandingService, readSafeExitUrl } from "./branding-service.js";
 import type { BlobStore } from "../storage/store.js";
@@ -8,34 +18,40 @@ import {
 } from "../test-utils.js";
 import type { Kysely } from "kysely";
 import type { TenantDatabase } from "../db/types.js";
-import type * as BrandingCrypto from "./branding-crypto.js";
-import type * as AttachmentValidator from "../telephony/attachment-validator.js";
 import type { BlobKey, OrgSchema } from "@care-y/shared";
+import { ValidationError, AttachmentValidationError } from "../errors.js";
 
-// Spread the original so exports this file does not stub (BRANDING_AAD,
-// which test-utils imports) stay real instead of becoming undefined.
-vi.mock("./branding-crypto.js", async (importOriginal) => ({
-  ...(await importOriginal<typeof BrandingCrypto>()),
-  deriveBrandingKey: () => Buffer.alloc(32),
-  decryptBrandingBlob: (_buf: Buffer) => _buf,
-}));
+// --- Magic byte prefixes for test buffers ---
 
-vi.mock("../telephony/attachment-validator.js", async (importOriginal) => ({
-  ...(await importOriginal<typeof AttachmentValidator>()),
-  validateMagicBytes: vi.fn(),
-}));
+/** PNG magic bytes (8 bytes). */
+const PNG_MAGIC = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+/** JPEG magic bytes (SOI marker). */
+const JPEG_MAGIC = Buffer.from([0xff, 0xd8, 0xff]);
+/** WebP magic bytes: RIFF + 4 size bytes + WEBP. */
+const WEBP_MAGIC = Buffer.from("RIFF\x00\x00\x00\x00WEBP");
+
+function pngBuffer(extra = "icon-bytes"): Buffer {
+  return Buffer.concat([PNG_MAGIC, Buffer.from(extra)]);
+}
+
+function jpegBuffer(extra = "jpeg-data"): Buffer {
+  return Buffer.concat([JPEG_MAGIC, Buffer.from(extra)]);
+}
+
+function webpBuffer(extra = "webp-data"): Buffer {
+  return Buffer.concat([WEBP_MAGIC, Buffer.from(extra)]);
+}
 
 // --- Seed data ---
 
 const SEED = {
-  encryptedName: Buffer.from("enc-name"),
-  encryptedLogo: Buffer.from("enc-logo"),
-  encryptedPrimaryColor: Buffer.from("enc-color"),
-  encryptedAccentColor: Buffer.from("enc-accent"),
-  encryptedClientText: Buffer.from("enc-text"),
-  encryptedClientSupportLabel: Buffer.from("enc-support-label"),
-  clientEncryptedBranding: Buffer.from("enc-client-blob"),
-  encryptedTerminology: Buffer.from("enc-terminology"),
+  name: "Test Org",
+  logo: pngBuffer("seed-logo"),
+  primaryColor: "#4A90D9",
+  accentColor: "#FF6B35",
+  clientText: "Welcome to our service",
+  clientSupportLabel: "Support Team",
+  encryptedTerminology: Buffer.from("enc-terminology-bytes"),
 };
 
 async function seedOrgConfig(db: Kysely<TenantDatabase>): Promise<void> {
@@ -43,13 +59,13 @@ async function seedOrgConfig(db: Kysely<TenantDatabase>): Promise<void> {
     .insertInto("org_config")
     .values({
       org_public_key: TEST_ORG_PUBLIC_KEY,
-      encrypted_name: SEED.encryptedName,
-      encrypted_logo: SEED.encryptedLogo,
-      encrypted_primary_color: SEED.encryptedPrimaryColor,
-      encrypted_accent_color: SEED.encryptedAccentColor,
-      encrypted_client_text: SEED.encryptedClientText,
-      encrypted_client_support_label: SEED.encryptedClientSupportLabel,
-      client_encrypted_branding: SEED.clientEncryptedBranding,
+      // care-y-ignore-next-line ast-pii-in-db-write -- test seed for plaintext branding columns (ADR-094)
+      name: SEED.name,
+      logo: SEED.logo,
+      primary_color: SEED.primaryColor,
+      accent_color: SEED.accentColor,
+      client_text: SEED.clientText,
+      client_support_label: SEED.clientSupportLabel,
       encrypted_terminology: SEED.encryptedTerminology,
     })
     .execute();
@@ -59,13 +75,13 @@ async function resetOrgConfig(db: Kysely<TenantDatabase>): Promise<void> {
   await db
     .updateTable("org_config")
     .set({
-      encrypted_name: SEED.encryptedName,
-      encrypted_logo: SEED.encryptedLogo,
-      encrypted_primary_color: SEED.encryptedPrimaryColor,
-      encrypted_accent_color: SEED.encryptedAccentColor,
-      encrypted_client_text: SEED.encryptedClientText,
-      encrypted_client_support_label: SEED.encryptedClientSupportLabel,
-      client_encrypted_branding: SEED.clientEncryptedBranding,
+      // care-y-ignore-next-line ast-pii-in-db-write -- test reset for plaintext branding columns (ADR-094)
+      name: SEED.name,
+      logo: SEED.logo,
+      primary_color: SEED.primaryColor,
+      accent_color: SEED.accentColor,
+      client_text: SEED.clientText,
+      client_support_label: SEED.clientSupportLabel,
       encrypted_terminology: SEED.encryptedTerminology,
       icon_192_blob_key: null,
       icon_512_blob_key: null,
@@ -99,20 +115,17 @@ describe.skipIf(!process.env.DATABASE_URL)("createBrandingService", () => {
   });
 
   describe("getBranding", () => {
-    it("returns all fields as base64 strings (wire format)", async () => {
+    it("returns plaintext fields and logo as base64url", async () => {
       const svc = createBrandingService(db);
       const result = await svc.getBranding();
 
       expect(result).toEqual({
-        encryptedName: SEED.encryptedName.toString("base64url"),
-        encryptedLogo: SEED.encryptedLogo.toString("base64url"),
-        encryptedPrimaryColor: SEED.encryptedPrimaryColor.toString("base64url"),
-        encryptedAccentColor: SEED.encryptedAccentColor.toString("base64url"),
-        encryptedClientText: SEED.encryptedClientText.toString("base64url"),
-        encryptedClientSupportLabel:
-          SEED.encryptedClientSupportLabel.toString("base64url"),
-        clientEncryptedBranding:
-          SEED.clientEncryptedBranding.toString("base64url"),
+        name: SEED.name,
+        logo: SEED.logo.toString("base64url"),
+        primaryColor: SEED.primaryColor,
+        accentColor: SEED.accentColor,
+        clientText: SEED.clientText,
+        clientSupportLabel: SEED.clientSupportLabel,
         encryptedTerminology: SEED.encryptedTerminology.toString("base64url"),
         hasIcons: false,
         iconVersion: null,
@@ -122,14 +135,15 @@ describe.skipIf(!process.env.DATABASE_URL)("createBrandingService", () => {
     it("returns null for unset fields", async () => {
       await db
         .updateTable("org_config")
-        .set({ encrypted_name: null, encrypted_logo: null })
+        // care-y-ignore-next-line ast-pii-in-db-write -- test clears plaintext branding columns (ADR-094)
+        .set({ name: null, logo: null })
         .execute();
 
       const svc = createBrandingService(db);
       const result = await svc.getBranding();
 
-      expect(result.encryptedName).toBeNull();
-      expect(result.encryptedLogo).toBeNull();
+      expect(result.name).toBeNull();
+      expect(result.logo).toBeNull();
 
       await resetOrgConfig(db);
     });
@@ -151,16 +165,18 @@ describe.skipIf(!process.env.DATABASE_URL)("createBrandingService", () => {
   });
 
   describe("getPublicBranding", () => {
-    it("returns org public key and client branding as base64", async () => {
+    it("returns plaintext branding fields and org public key", async () => {
       const svc = createBrandingService(db);
       const result = await svc.getPublicBranding();
 
       expect(result.orgPublicKey).toBe(
         TEST_ORG_PUBLIC_KEY.toString("base64url"),
       );
-      expect(result.clientEncryptedBranding).toBe(
-        SEED.clientEncryptedBranding.toString("base64url"),
-      );
+      expect(result.name).toBe(SEED.name);
+      expect(result.primaryColor).toBe(SEED.primaryColor);
+      expect(result.accentColor).toBe(SEED.accentColor);
+      expect(result.clientText).toBe(SEED.clientText);
+      expect(result.supportLabel).toBe(SEED.clientSupportLabel);
       expect(result.hasIcons).toBe(false);
       expect(result.iconVersion).toBeNull();
     });
@@ -171,8 +187,6 @@ describe.skipIf(!process.env.DATABASE_URL)("createBrandingService", () => {
       expect(result.safeExitUrl).toBeNull();
     });
 
-    // Intake and share links reach no portal bootstrap, so this payload is
-    // the only way the org's configured URL gets to them.
     it("returns the org's configured exit URL", async () => {
       await db
         .updateTable("org_config")
@@ -189,9 +203,6 @@ describe.skipIf(!process.env.DATABASE_URL)("createBrandingService", () => {
         .execute();
     });
 
-    // The write boundary rejects these, so a stored one predates the rule
-    // or arrived by a path that skipped it. Either way it must not reach
-    // location.replace().
     it("drops a stored exit URL that is no longer valid", async () => {
       await db
         .updateTable("org_config")
@@ -236,128 +247,179 @@ describe.skipIf(!process.env.DATABASE_URL)("createBrandingService", () => {
   });
 
   describe("saveBrandingField", () => {
-    it("saves name field and reads it back", async () => {
+    it("saves name field as plaintext and reads it back", async () => {
       const svc = createBrandingService(db);
-      const newValue = Buffer.from("new-name").toString("base64");
-      await svc.saveBrandingField({ field: "name", encryptedValue: newValue });
+      await svc.saveBrandingField({ field: "name", value: "New Org Name" });
 
       const row = await db
         .selectFrom("org_config")
-        .select("encrypted_name")
+        .select("name")
         .executeTakeFirstOrThrow();
 
-      expect(row.encrypted_name).toEqual(Buffer.from("new-name"));
+      expect(row.name).toBe("New Org Name");
 
       await resetOrgConfig(db);
     });
 
     it("saves support_label field to correct column", async () => {
       const svc = createBrandingService(db);
-      const newValue = Buffer.from("the-night-team").toString("base64");
       await svc.saveBrandingField({
         field: "support_label",
-        encryptedValue: newValue,
+        value: "The Night Team",
       });
 
       const row = await db
         .selectFrom("org_config")
-        .select(["encrypted_client_support_label", "encrypted_client_text"])
+        .select(["client_support_label", "client_text"])
         .executeTakeFirstOrThrow();
 
-      expect(row.encrypted_client_support_label).toEqual(
-        Buffer.from("the-night-team"),
-      );
+      expect(row.client_support_label).toBe("The Night Team");
       // The neighbouring client-text column must not be collateral.
-      expect(row.encrypted_client_text).toEqual(SEED.encryptedClientText);
+      expect(row.client_text).toBe(SEED.clientText);
 
       await resetOrgConfig(db);
     });
 
-    it("saves logo field to correct column", async () => {
+    it("saves PNG logo field and reads it back", async () => {
       const svc = createBrandingService(db);
-      const newValue = Buffer.from("logo-data").toString("base64");
-      await svc.saveBrandingField({ field: "logo", encryptedValue: newValue });
+      const logoBuf = pngBuffer("new-logo");
+      await svc.saveBrandingField({
+        field: "logo",
+        value: logoBuf.toString("base64"),
+      });
 
       const row = await db
         .selectFrom("org_config")
-        .select("encrypted_logo")
+        .select("logo")
         .executeTakeFirstOrThrow();
 
-      expect(row.encrypted_logo).toEqual(Buffer.from("logo-data"));
+      expect(row.logo).toEqual(logoBuf);
 
       await resetOrgConfig(db);
+    });
+
+    it("accepts JPEG logo", async () => {
+      const svc = createBrandingService(db);
+      const logoBuf = jpegBuffer();
+      await svc.saveBrandingField({
+        field: "logo",
+        value: logoBuf.toString("base64"),
+      });
+
+      const row = await db
+        .selectFrom("org_config")
+        .select("logo")
+        .executeTakeFirstOrThrow();
+
+      expect(row.logo).toEqual(logoBuf);
+      await resetOrgConfig(db);
+    });
+
+    it("accepts WebP logo", async () => {
+      const svc = createBrandingService(db);
+      const logoBuf = webpBuffer();
+      await svc.saveBrandingField({
+        field: "logo",
+        value: logoBuf.toString("base64"),
+      });
+
+      const row = await db
+        .selectFrom("org_config")
+        .select("logo")
+        .executeTakeFirstOrThrow();
+
+      expect(row.logo).toEqual(logoBuf);
+      await resetOrgConfig(db);
+    });
+
+    it("rejects logo with invalid magic bytes", async () => {
+      const svc = createBrandingService(db);
+      const badLogo = Buffer.from("not-an-image-at-all");
+      await expect(
+        svc.saveBrandingField({
+          field: "logo",
+          value: badLogo.toString("base64"),
+        }),
+      ).rejects.toThrow(ValidationError);
+    });
+
+    it("rejects logo exceeding the 2 MB size cap", async () => {
+      const svc = createBrandingService(db);
+      const oversized = Buffer.alloc(2 * 1024 * 1024 + 1);
+      // Write PNG magic so it passes format check before size
+      PNG_MAGIC.copy(oversized);
+      await expect(
+        svc.saveBrandingField({
+          field: "logo",
+          value: oversized.toString("base64"),
+        }),
+      ).rejects.toThrow(ValidationError);
     });
 
     it("saves primary_color field to correct column", async () => {
       const svc = createBrandingService(db);
-      const newValue = Buffer.from("#ff0000").toString("base64");
       await svc.saveBrandingField({
         field: "primary_color",
-        encryptedValue: newValue,
+        value: "#FF0000",
       });
 
       const row = await db
         .selectFrom("org_config")
-        .select("encrypted_primary_color")
+        .select("primary_color")
         .executeTakeFirstOrThrow();
 
-      expect(row.encrypted_primary_color).toEqual(Buffer.from("#ff0000"));
+      expect(row.primary_color).toBe("#FF0000");
 
+      await resetOrgConfig(db);
+    });
+
+    it("saves accent_color field to correct column", async () => {
+      const svc = createBrandingService(db);
+      await svc.saveBrandingField({
+        field: "accent_color",
+        value: "#00FF00",
+      });
+
+      const row = await db
+        .selectFrom("org_config")
+        .select("accent_color")
+        .executeTakeFirstOrThrow();
+
+      expect(row.accent_color).toBe("#00FF00");
       await resetOrgConfig(db);
     });
 
     it("saves client_text field to correct column", async () => {
       const svc = createBrandingService(db);
-      const newValue = Buffer.from("welcome text").toString("base64");
       await svc.saveBrandingField({
         field: "client_text",
-        encryptedValue: newValue,
+        value: "Updated welcome text",
       });
 
       const row = await db
         .selectFrom("org_config")
-        .select("encrypted_client_text")
+        .select("client_text")
         .executeTakeFirstOrThrow();
 
-      expect(row.encrypted_client_text).toEqual(Buffer.from("welcome text"));
+      expect(row.client_text).toBe("Updated welcome text");
 
       await resetOrgConfig(db);
     });
 
-    it("includes clientEncryptedBranding when provided (dual-blob save)", async () => {
+    it("saves terminology as base64-decoded Buffer into encrypted_terminology", async () => {
       const svc = createBrandingService(db);
+      const terminologyBytes = Buffer.from("opaque-ciphertext-blob");
       await svc.saveBrandingField({
-        field: "name",
-        encryptedValue: Buffer.from("new-name").toString("base64"),
-        clientEncryptedBranding: Buffer.from("client-blob").toString("base64"),
+        field: "terminology",
+        value: terminologyBytes.toString("base64"),
       });
 
       const row = await db
         .selectFrom("org_config")
-        .select(["encrypted_name", "client_encrypted_branding"])
+        .select("encrypted_terminology")
         .executeTakeFirstOrThrow();
 
-      expect(row.encrypted_name).toEqual(Buffer.from("new-name"));
-      expect(row.client_encrypted_branding).toEqual(Buffer.from("client-blob"));
-
-      await resetOrgConfig(db);
-    });
-
-    it("does not overwrite clientEncryptedBranding when not provided", async () => {
-      const svc = createBrandingService(db);
-      await svc.saveBrandingField({
-        field: "name",
-        encryptedValue: Buffer.from("just-name").toString("base64"),
-      });
-
-      const row = await db
-        .selectFrom("org_config")
-        .select("client_encrypted_branding")
-        .executeTakeFirstOrThrow();
-
-      expect(row.client_encrypted_branding).toEqual(
-        SEED.clientEncryptedBranding,
-      );
+      expect(row.encrypted_terminology).toEqual(terminologyBytes);
 
       await resetOrgConfig(db);
     });
@@ -369,9 +431,9 @@ describe.skipIf(!process.env.DATABASE_URL)("createBrandingService", () => {
       const svc = createBrandingService(db);
 
       await svc.uploadIcons(store, testDb.schemaName as OrgSchema, {
-        icon192: Buffer.from("192").toString("base64"),
-        icon512: Buffer.from("512").toString("base64"),
-        iconMaskable: Buffer.from("mask").toString("base64"),
+        icon192: pngBuffer("192").toString("base64"),
+        icon512: pngBuffer("512").toString("base64"),
+        iconMaskable: pngBuffer("mask").toString("base64"),
       });
 
       expect(store.put).toHaveBeenCalledTimes(3);
@@ -392,6 +454,34 @@ describe.skipIf(!process.env.DATABASE_URL)("createBrandingService", () => {
       await resetOrgConfig(db);
     });
 
+    it("rejects non-PNG icons", async () => {
+      const store = createMockBlobStore();
+      const svc = createBrandingService(db);
+
+      await expect(
+        svc.uploadIcons(store, testDb.schemaName as OrgSchema, {
+          icon192: jpegBuffer().toString("base64"),
+          icon512: pngBuffer("512").toString("base64"),
+          iconMaskable: pngBuffer("mask").toString("base64"),
+        }),
+      ).rejects.toThrow(AttachmentValidationError);
+    });
+
+    it("rejects icons exceeding the size cap", async () => {
+      const store = createMockBlobStore();
+      const svc = createBrandingService(db);
+      const oversized = Buffer.alloc(2 * 1024 * 1024 + 1);
+      PNG_MAGIC.copy(oversized);
+
+      await expect(
+        svc.uploadIcons(store, testDb.schemaName as OrgSchema, {
+          icon192: oversized.toString("base64"),
+          icon512: pngBuffer("512").toString("base64"),
+          iconMaskable: pngBuffer("mask").toString("base64"),
+        }),
+      ).rejects.toThrow(ValidationError);
+    });
+
     it("cleans up old icon blobs when replacing", async () => {
       await db
         .updateTable("org_config")
@@ -406,9 +496,9 @@ describe.skipIf(!process.env.DATABASE_URL)("createBrandingService", () => {
       const svc = createBrandingService(db);
 
       await svc.uploadIcons(store, testDb.schemaName as OrgSchema, {
-        icon192: Buffer.from("192").toString("base64"),
-        icon512: Buffer.from("512").toString("base64"),
-        iconMaskable: Buffer.from("mask").toString("base64"),
+        icon192: pngBuffer("192").toString("base64"),
+        icon512: pngBuffer("512").toString("base64"),
+        iconMaskable: pngBuffer("mask").toString("base64"),
       });
 
       expect(store.delete).toHaveBeenCalledWith("old-key-1");
@@ -423,9 +513,9 @@ describe.skipIf(!process.env.DATABASE_URL)("createBrandingService", () => {
       const svc = createBrandingService(db);
 
       await svc.uploadIcons(store, testDb.schemaName as OrgSchema, {
-        icon192: Buffer.from("192").toString("base64"),
-        icon512: Buffer.from("512").toString("base64"),
-        iconMaskable: Buffer.from("mask").toString("base64"),
+        icon192: pngBuffer("192").toString("base64"),
+        icon512: pngBuffer("512").toString("base64"),
+        iconMaskable: pngBuffer("mask").toString("base64"),
       });
 
       expect(store.delete).not.toHaveBeenCalled();

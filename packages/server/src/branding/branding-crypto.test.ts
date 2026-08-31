@@ -1,16 +1,19 @@
 /**
- * Unit tests for server-side branding crypto.
+ * Unit tests for branding key derivation and blob decryption.
  *
- * deriveBrandingKey produces the AEAD key that protects branding blobs
- * (PWA icons, client branding payload) at rest. decryptBrandingBlob opens
+ * Org branding no longer uses this module (ADR-094 moved it to plaintext).
+ * These tests verify the derivation and decrypt functions that intake form
+ * assets still depend on (routes/form-assets.ts, portal/form-asset-service.ts).
+ *
+ * deriveBrandingKey produces the AEAD key. decryptBrandingBlob opens
  * nonce-prefixed XChaCha20-Poly1305 blobs. The module exposes no encrypt
  * counterpart, so these tests seal blobs with sealBrandingBlob, which
  * mirrors the layout the decryptor documents: nonce (24) || ciphertext
  * (plaintext + 16-byte tag), AAD "care-y-client-branding-aad-v1".
  *
- * A helper that mirrors the decryptor can agree with a bug, so the
- * cross-package interop suite at the bottom is the real correctness
+ * The cross-package interop suite at the bottom is the real correctness
  * check: it encrypts with the browser's own code path and decrypts here.
+ * Form asset byte compatibility depends on this agreement.
  *
  * No DB access; runs on host and in Docker.
  */

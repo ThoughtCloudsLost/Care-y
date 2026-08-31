@@ -3,23 +3,15 @@
  *
  * Path: /manifest.webmanifest
  *
- * Unauthenticated. Decrypts the client branding blob (same branding_key
- * derivation as icon serving) to populate name and theme_color. Falls back
- * to defaults when branding is not configured.
- *
- * The branding_key is deterministically derivable from the org public key
- * (which is publicly available), so this does not weaken the security model.
+ * Unauthenticated. Reads the org's plaintext name and primary_color columns
+ * to populate the manifest name and theme_color. Falls back to defaults when
+ * branding is not configured.
  */
 
 import type { IncomingMessage, ServerResponse } from "node:http";
-import sodium from "sodium-native";
 import type { OrgService } from "../org/service.js";
 import { tenantDb } from "../db/db.js";
 import { extractOrgSlug } from "../org/slug-resolver.js";
-import {
-  deriveBrandingKey,
-  decryptBrandingBlob,
-} from "../branding/branding-crypto.js";
 
 export interface ManifestHandlerDeps {
   readonly orgService: OrgService;
@@ -28,11 +20,6 @@ export interface ManifestHandlerDeps {
 const DEFAULT_NAME = "CARE-Y";
 const DEFAULT_THEME = "#000000";
 const DEFAULT_BG = "#0C0C0C";
-
-interface BrandingPayload {
-  name?: string;
-  primaryColor?: string;
-}
 
 export function createManifestHandler(
   deps: ManifestHandlerDeps,
@@ -61,36 +48,17 @@ export function createManifestHandler(
           const tDb = tenantDb(org.schemaName);
           const config = await tDb
             .selectFrom("org_config")
-            .select([
-              "org_public_key",
-              "client_encrypted_branding",
-              "icon_192_blob_key",
-            ])
+            .select(["name", "primary_color", "icon_192_blob_key"])
             .executeTakeFirst();
 
-          if (config?.org_public_key && config.client_encrypted_branding) {
-            const key = deriveBrandingKey(config.org_public_key);
-            try {
-              const plaintext = decryptBrandingBlob(
-                config.client_encrypted_branding,
-                key,
-              );
-              if (plaintext !== null) {
-                const parsed: unknown = JSON.parse(plaintext.toString("utf-8"));
-                if (typeof parsed === "object" && parsed !== null) {
-                  const p = parsed as BrandingPayload;
-                  if (typeof p.name === "string" && p.name.length > 0)
-                    name = p.name;
-                  if (
-                    typeof p.primaryColor === "string" &&
-                    p.primaryColor.length > 0
-                  )
-                    themeColor = p.primaryColor;
-                }
-              }
-            } finally {
-              sodium.sodium_memzero(key);
-            }
+          if (config?.name != null && config.name.length > 0) {
+            name = config.name;
+          }
+          if (
+            config?.primary_color != null &&
+            config.primary_color.length > 0
+          ) {
+            themeColor = config.primary_color;
           }
 
           hasIcons =

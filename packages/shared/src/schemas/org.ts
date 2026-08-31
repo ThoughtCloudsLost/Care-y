@@ -80,7 +80,7 @@ export const safeExitUrlSchema = z
   .max(2048);
 
 export const updateOrgGeneralAdminInputSchema = z.object({
-  encryptedOrgName: z.string().min(1),
+  orgName: z.string().min(1).max(120),
   defaultLanguage: z.string().min(2).max(10),
   countryCode: z
     .string()

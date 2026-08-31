@@ -5,6 +5,9 @@
  * DB. The second covers the serving path, which needs a real schema: the
  * handler reaches for tenantDb(org.schemaName) itself rather than taking a
  * DB dependency, so its org_config reads cannot be mocked out.
+ *
+ * Icons are stored as plain PNG bytes (ADR-094). No decryption in the
+ * serving path.
  */
 
 import {
@@ -17,21 +20,13 @@ import {
   afterAll,
 } from "vitest";
 import type { IncomingMessage, ServerResponse } from "node:http";
-import sodium from "sodium-native";
 import {
   createBrandingIconHandler,
   type BrandingIconHandlerDeps,
 } from "./branding-icons.js";
-import { deriveBrandingKey } from "../branding/branding-crypto.js";
 import type { BlobStore } from "../storage/store.js";
 import type { OrgId, OrgSlug, OrgSchema, BlobKey } from "@care-y/shared";
-import {
-  createTestDb,
-  seedOrgPublicKey,
-  sealBrandingBlob,
-  TEST_ORG_PUBLIC_KEY,
-  type TestDb,
-} from "../test-utils.js";
+import { createTestDb, seedOrgPublicKey, type TestDb } from "../test-utils.js";
 
 function mockReq(
   method: string,
@@ -167,8 +162,6 @@ describe("createBrandingIconHandler", () => {
   });
 
   it("parses all three valid icon filenames", () => {
-    // Tested implicitly via handler routing. Verify the expected filenames
-    // are recognized by making requests that would succeed if org existed.
     const validPaths = [
       "/api/branding/test/icon-192.png",
       "/api/branding/test/icon-512.png",
@@ -178,7 +171,6 @@ describe("createBrandingIconHandler", () => {
       const req = mockReq("GET", path);
       const res = mockRes();
       void handler(req, res);
-      // findBySlug is called, meaning path parsing succeeded
     }
     expect(deps.orgService.findBySlug).toHaveBeenCalledTimes(3);
   });
@@ -188,42 +180,6 @@ describe("createBrandingIconHandler", () => {
     const res = mockRes();
     void handler(req, res);
     expect(deps.orgService.findBySlug).toHaveBeenCalledWith("test");
-  });
-
-  // --- Uncovered branches (lines 92-110, 118-164) ---
-
-  it("returns 404 when org_config has no org_public_key or blob_key", async () => {
-    // Mock an active org that returns org_config with null keys
-    const depsWithOrg = buildDeps({
-      orgService: {
-        findBySlug: vi.fn(async () => ({
-          id: "id" as OrgId,
-          slug: "test" as OrgSlug,
-          schemaName: "org_test" as OrgSchema,
-          isActive: true,
-        })),
-        findById: vi.fn(async () => null),
-        createOrg: vi.fn(async () => ({
-          id: "id" as OrgId,
-          slug: "test" as OrgSlug,
-          schemaName: "org_test" as OrgSchema,
-          isActive: true,
-          setupToken: "test-token",
-        })),
-        validateSetupToken: vi.fn(async () => false),
-        consumeSetupToken: vi.fn(async () => undefined),
-      },
-    });
-    // The handler calls tenantDb() which hits the real DB. Since these tests
-    // are unit tests without DB, we need to test paths that we can mock.
-    // The handler imports tenantDb from db.ts directly, making DB-dependent
-    // paths integration-test territory. Test what we can from the mock surface.
-    handler = createBrandingIconHandler(depsWithOrg);
-    const req = mockReq("GET", "/api/branding/test/icon-192.png");
-    const res = mockRes();
-    await handler(req, res);
-    // Will get 500 because tenantDb() cannot resolve without a real DB
-    expect(res.statusCode).toBe(500);
   });
 
   it("returns 500 when orgService.findBySlug throws", async () => {
@@ -266,7 +222,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
     let handler: ReturnType<typeof createBrandingIconHandler>;
     const blobs = new Map<string, Buffer>();
 
-    /** PNG magic bytes plus filler. No PII, matching production icon shape. */
+    /** PNG magic bytes plus filler. */
     const ICON = Buffer.concat([
       Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
       Buffer.from("icon-bytes"),
@@ -324,15 +280,11 @@ describe.skipIf(!process.env.DATABASE_URL)(
 
     beforeEach(() => {
       blobs.clear();
-      const key = deriveBrandingKey(TEST_ORG_PUBLIC_KEY);
-      try {
-        blobs.set(BLOB_KEY, sealBrandingBlob(ICON, key));
-      } finally {
-        sodium.sodium_memzero(key);
-      }
+      // Store the icon as plain PNG bytes (no encryption)
+      blobs.set(BLOB_KEY, ICON);
     });
 
-    it("serves the decrypted icon with PNG headers and an ETag", async () => {
+    it("serves the stored icon bytes with PNG headers and an ETag", async () => {
       const res = mockRes();
       await handler(mockReq("GET", "/api/branding/test/icon-192.png"), res);
 
@@ -362,20 +314,6 @@ describe.skipIf(!process.env.DATABASE_URL)(
       await handler(mockReq("GET", "/api/branding/test/icon-192.png"), res);
 
       expect(res.statusCode).toBe(404);
-    });
-
-    it("returns 500 without a body when the blob fails to decrypt", async () => {
-      // Corrupt ciphertext must fail closed. Serving undecryptable bytes as
-      // image/png would hand the caller raw stored data.
-      const corrupt = Buffer.alloc(64);
-      sodium.randombytes_buf(corrupt);
-      blobs.set(BLOB_KEY, corrupt);
-
-      const res = mockRes();
-      await handler(mockReq("GET", "/api/branding/test/icon-192.png"), res);
-
-      expect(res.statusCode).toBe(500);
-      expect(res.body).toBeNull();
     });
 
     it("returns 404 for a size whose blob key is not set", async () => {

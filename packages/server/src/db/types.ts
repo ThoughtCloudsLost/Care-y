@@ -190,14 +190,13 @@ export interface SessionsTable {
 
 export interface OrgConfigTable {
   id: Generated<OrgConfigId>;
-  encrypted_name: Buffer | null;
-  encrypted_logo: Buffer | null;
-  encrypted_primary_color: Buffer | null;
-  encrypted_accent_color: Buffer | null;
-  encrypted_client_text: Buffer | null;
-  // Name clients see above messages from the org. Ciphertext to the server.
-  encrypted_client_support_label: Buffer | null;
-  client_encrypted_branding: Buffer | null;
+  name: string | null;
+  logo: Buffer | null;
+  primary_color: string | null;
+  accent_color: string | null;
+  client_text: string | null;
+  // Name clients see above messages from the org. Plaintext (ADR-094).
+  client_support_label: string | null;
   pii_retention_days: number | null;
   org_public_key: Buffer | null; // Curve25519 (32 bytes), null until first admin onboarding
   default_country_code: ColumnType<string, string | undefined, string>;

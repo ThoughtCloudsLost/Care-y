@@ -167,7 +167,7 @@ describe("createOrgRouter", () => {
       const caller = buildCaller(createUnauthenticatedContext());
       await expectTrpcError(
         caller.org.updateOrgGeneral({
-          encryptedOrgName: "Y2lwaGVydGV4dA==",
+          orgName: "Test Org",
           defaultLanguage: "en",
           countryCode: "US",
         }),
@@ -180,7 +180,7 @@ describe("createOrgRouter", () => {
       const caller = buildCaller(createNo2faContext());
       await expectTrpcError(
         caller.org.updateOrgGeneral({
-          encryptedOrgName: "Y2lwaGVydGV4dA==",
+          orgName: "Test Org",
           defaultLanguage: "en",
           countryCode: "US",
         }),
@@ -193,7 +193,7 @@ describe("createOrgRouter", () => {
       const caller = buildCaller(createVolunteerContext());
       await expectTrpcError(
         caller.org.updateOrgGeneral({
-          encryptedOrgName: "Y2lwaGVydGV4dA==",
+          orgName: "Test Org",
           defaultLanguage: "en",
           countryCode: "US",
         }),
@@ -311,10 +311,10 @@ describe.skipIf(!process.env.DATABASE_URL)(
       const caller = buildDbCaller();
       const result = await caller.org.getOrgGeneral();
 
-      // Fresh org_config row: encrypted_name is null, defaults from migrations
+      // Fresh org_config row: name is null, defaults from migrations
       // (default_country_code defaults to "+1" per tenant migration 015)
       expect(result).toEqual({
-        encryptedName: null,
+        name: null,
         defaultLanguage: "en",
         countryCode: "+1",
         portalSafeExitUrl: null,
@@ -324,13 +324,8 @@ describe.skipIf(!process.env.DATABASE_URL)(
     it("updateOrgGeneral persists changes reflected by subsequent getOrgGeneral", async () => {
       const caller = buildDbCaller();
 
-      // Obviously fake base64 ciphertext (org name is always ciphertext server-side)
-      const fakeCiphertext = Buffer.from("fake-org-ciphertext-blob").toString(
-        "base64",
-      );
-
       const updateResult = await caller.org.updateOrgGeneral({
-        encryptedOrgName: fakeCiphertext,
+        orgName: "Updated Org Name",
         defaultLanguage: "es",
         countryCode: "+52",
       });
@@ -339,7 +334,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
 
       // Verify the update persisted
       const fetched = await caller.org.getOrgGeneral();
-      expect(fetched.encryptedName).toBe(fakeCiphertext);
+      expect(fetched.name).toBe("Updated Org Name");
       expect(fetched.defaultLanguage).toBe("es");
       expect(fetched.countryCode).toBe("+52");
     }, 30_000);

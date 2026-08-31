@@ -288,14 +288,12 @@ describe.skipIf(!HAS_DB)("OnboardingService (DB)", () => {
   // ── updateOrgGeneral ────────────────────────────────────────────
 
   describe("updateOrgGeneral", () => {
-    it("updates org metadata with base64-encoded encrypted values", async () => {
-      const encryptedName =
-        Buffer.from("Encrypted Org Name").toString("base64");
+    it("updates org metadata with plaintext name and encrypted terminology", async () => {
       const encryptedTerminology =
         Buffer.from("Custom Terms").toString("base64");
 
       await svc.updateOrgGeneral({
-        encryptedOrgName: encryptedName,
+        orgName: "My Organization",
         countryCode: "US",
         defaultLanguage: "en",
         encryptedTerminology,
@@ -304,7 +302,7 @@ describe.skipIf(!HAS_DB)("OnboardingService (DB)", () => {
       const config = await tenantDb
         .selectFrom("org_config")
         .select([
-          "encrypted_name",
+          "name",
           "default_country_code",
           "default_language",
           "encrypted_terminology",
@@ -313,9 +311,9 @@ describe.skipIf(!HAS_DB)("OnboardingService (DB)", () => {
 
       expect(config.default_country_code).toBe("US");
       expect(config.default_language).toBe("en");
-      // base64 input should be stored as a Buffer
-      expect(Buffer.isBuffer(config.encrypted_name)).toBe(true);
-      expect(config.encrypted_name!.toString()).toBe("Encrypted Org Name");
+      // Org name is stored as plaintext (ADR-094)
+      expect(config.name).toBe("My Organization");
+      // Terminology remains encrypted (base64 decoded to Buffer)
       expect(Buffer.isBuffer(config.encrypted_terminology)).toBe(true);
     });
   });

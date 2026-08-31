@@ -20,7 +20,7 @@ export const bootstrapAdminInputSchema = z.object({
 
 /** Update org general settings during setup (step 2). */
 export const updateOrgGeneralInputSchema = z.object({
-  encryptedOrgName: base64String("encryptedOrgName"),
+  orgName: z.string().min(1).max(120),
   defaultLanguage: z.string().min(2).max(10),
   countryCode: z
     .string()

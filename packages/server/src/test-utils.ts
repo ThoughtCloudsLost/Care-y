@@ -170,6 +170,10 @@ export function testUnseal(ciphertext: Buffer | string): string {
  * nonce (24 bytes) || XChaCha20-Poly1305 AEAD ciphertext (plaintext + tag),
  * authenticated under the fixed branding AAD.
  *
+ * Used by branding-crypto.test.ts (form asset byte compatibility tests).
+ * Org branding itself is plaintext (ADR-094), but intake form assets still
+ * use the same key derivation and cipher (ADR-026).
+ *
  * This must stay byte-compatible with `encryptClientBranding` in
  * @care-y/crypto. The interop test in branding-crypto.test.ts is what
  * proves it; this helper alone cannot.

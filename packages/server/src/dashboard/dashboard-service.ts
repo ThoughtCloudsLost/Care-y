@@ -44,11 +44,7 @@ export function createDashboardService(
     async getSetupChecklist(): Promise<SetupChecklistResult> {
       const config = await db
         .selectFrom("org_config")
-        .select([
-          "getting_started_dismissed_at",
-          "encrypted_logo",
-          "pii_retention_days",
-        ])
+        .select(["getting_started_dismissed_at", "logo", "pii_retention_days"])
         .executeTakeFirst();
 
       if (config?.getting_started_dismissed_at != null) {
@@ -71,7 +67,7 @@ export function createDashboardService(
         countRows(db, "queues"),
       ]);
 
-      const hasLogo = config?.encrypted_logo != null;
+      const hasLogo = config?.logo != null;
       const hasRetention = config?.pii_retention_days != null;
 
       return {
