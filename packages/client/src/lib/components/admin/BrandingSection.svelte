@@ -13,14 +13,12 @@
   import { haptic } from "$lib/utils/haptic.js";
   import { toastStore } from "$lib/stores/toast.svelte.js";
   import { announceToLiveRegion } from "$lib/utils/announce.js";
-  import { getOrgDecryptCache, getOrgKeyManager } from "$lib/crypto/context.js";
   import { isValidHexColor } from "$lib/branding/color-utils.js";
   import {
     applyKonstaPalette,
     checkBrandProximity,
     type BrandProximity,
   } from "$lib/branding/konsta-palette.js";
-  import { decode } from "@care-y/crypto";
   import Register from "$lib/components/Register.svelte";
   import {
     updateBrandingCache,
@@ -29,16 +27,11 @@
   } from "$lib/branding/index.js";
   import { setBrandingTitle } from "$lib/branding/title.svelte.js";
   import { rasterizeSvg, rasterizeImage } from "$lib/branding/rasterize.js";
-  import {
-    encryptLogoFile,
-    buildClientBrandingBlob,
-  } from "$lib/branding/encrypt.js";
   import { uploadPwaIcons } from "$lib/branding/icon-upload.js";
   import { getOrgSlug } from "$lib/utils/org-slug.js";
   import { requireRouter } from "$lib/errors.js";
   import type { BrandingField } from "@care-y/shared";
   import QueryError from "$lib/components/QueryError.svelte";
-  import DecryptPlaceholder from "$lib/components/DecryptPlaceholder.svelte";
   import SoftButton from "$lib/components/inputs/SoftButton.svelte";
   import ShellSheet from "$lib/shell/ShellSheet.svelte";
 
@@ -56,62 +49,9 @@
     await handleSave();
   }
 
-  export async function rebuildBlob(): Promise<void> {
-    orgCache.delete("branding:name");
-    orgCache.delete("branding:color");
-    orgCache.delete("branding:accent");
-    orgCache.delete("branding:text");
-    orgCache.delete("branding:support_label");
-    await queryClient.invalidateQueries({ queryKey: adminKeys.branding() });
-    await brandingQuery.refetch();
-
-    // Trigger decryption by reading the deriveds (fire-and-forget cache),
-    // then wait for all pending decrypts to resolve.
-    void decryptedName;
-    void decryptedColor;
-    void decryptedAccent;
-    void decryptedText;
-    void decryptedSupportLabel;
-    await orgCache.whenSettled();
-
-    const name = decryptedName ?? "";
-    const color = currentColor();
-    const accent = currentAccent();
-    const text = decryptedText ?? "";
-    const supportLabel = decryptedSupportLabel ?? "";
-
-    let clientBlob: string;
-    try {
-      clientBlob = buildClientBrandingBlob(
-        {
-          name,
-          primaryColor: color,
-          accentColor: accent,
-          clientText: text,
-          supportLabel,
-        },
-        orgKeyManager,
-      );
-    } catch {
-      return;
-    }
-
-    const encryptedValue = await orgKeyManager.encryptText(name);
-    await brandingRouter.saveBrandingField.mutate({
-      field: "name",
-      encryptedValue,
-      clientEncryptedBranding: clientBlob,
-    });
-
-    orgCache.delete("branding:name");
-    void queryClient.invalidateQueries({ queryKey: adminKeys.branding() });
-  }
-
   const brandingRouter = requireRouter(trpc.branding, "branding");
 
   const queryClient = useQueryClient();
-  const orgCache = getOrgDecryptCache();
-  const orgKeyManager = getOrgKeyManager();
 
   const MAX_LOGO_SIZE = 512 * 1024;
   const ACCEPTED_TYPES = new Set(["image/png", "image/jpeg", "image/svg+xml"]);
@@ -123,78 +63,18 @@
     queryFn: async () => brandingRouter.getBranding.query(),
   }));
 
-  // ── Decrypted values (main-thread org-key tier, not PII) ──
+  // ── Plaintext values straight off the query ──
 
-  const decryptedName = $derived(
-    orgCache.decrypt(
-      "branding:name",
-      brandingQuery.data?.encryptedName ?? null,
-    ),
-  );
+  const serverName = $derived(brandingQuery.data?.name ?? null);
+  const serverColor = $derived(brandingQuery.data?.primaryColor ?? null);
+  const serverAccent = $derived(brandingQuery.data?.accentColor ?? null);
+  const serverText = $derived(brandingQuery.data?.clientText ?? null);
 
-  const decryptedColor = $derived(
-    orgCache.decrypt(
-      "branding:color",
-      brandingQuery.data?.encryptedPrimaryColor ?? null,
-    ),
-  );
-
-  const decryptedAccent = $derived(
-    orgCache.decrypt(
-      "branding:accent",
-      brandingQuery.data?.encryptedAccentColor ?? null,
-    ),
-  );
-
-  const decryptedText = $derived(
-    orgCache.decrypt(
-      "branding:text",
-      brandingQuery.data?.encryptedClientText ?? null,
-    ),
-  );
-
-  const decryptedSupportLabel = $derived(
-    orgCache.decrypt(
-      "branding:support_label",
-      brandingQuery.data?.encryptedClientSupportLabel ?? null,
-    ),
-  );
-
-  // Logo decrypted as binary, displayed via blob URL
-  let logoBlobUrl = $state<string | null>(null);
-
-  $effect(() => {
-    if (
-      brandingQuery.data?.encryptedLogo === null ||
-      brandingQuery.data?.encryptedLogo === undefined ||
-      !orgKeyManager.isLoaded
-    ) {
-      logoBlobUrl = null;
-      return;
-    }
-    const raw = brandingQuery.data.encryptedLogo;
-    const ciphertext =
-      typeof raw === "string"
-        ? decode(raw)
-        : new Uint8Array((raw as { data: number[] }).data);
-
-    void (async () => {
-      try {
-        const plainBytes = await orgKeyManager.decrypt(ciphertext);
-        const url = URL.createObjectURL(
-          new Blob([new Uint8Array(plainBytes).buffer]),
-        );
-        // Revoke previous URL before setting new one
-        if (logoBlobUrl !== null) URL.revokeObjectURL(logoBlobUrl);
-        logoBlobUrl = url;
-      } catch {
-        logoBlobUrl = null;
-      }
-    })();
-
-    return () => {
-      if (logoBlobUrl !== null) URL.revokeObjectURL(logoBlobUrl);
-    };
+  // Logo: base64 from server, displayed via data URL
+  const logoBlobUrl = $derived.by((): string | null => {
+    const logo = brandingQuery.data?.logo;
+    if (logo === null || logo === undefined) return null;
+    return `data:image/png;base64,${logo}`;
   });
 
   // ── Sheet state ──
@@ -209,25 +89,25 @@
   let logoError = $state<string | null>(null);
 
   function currentColor(): string {
-    return decryptedColor !== null &&
-      decryptedColor !== "" &&
-      isValidHexColor(decryptedColor)
-      ? decryptedColor
+    return serverColor !== null &&
+      serverColor !== "" &&
+      isValidHexColor(serverColor)
+      ? serverColor
       : DEFAULT_PRIMARY;
   }
 
   function currentAccent(): string {
-    return decryptedAccent !== null &&
-      decryptedAccent !== "" &&
-      isValidHexColor(decryptedAccent)
-      ? decryptedAccent
+    return serverAccent !== null &&
+      serverAccent !== "" &&
+      isValidHexColor(serverAccent)
+      ? serverAccent
       : DEFAULT_ACCENT;
   }
 
   function openSheet(): void {
     editColor = currentColor();
     editAccent = currentAccent();
-    editText = decryptedText ?? "";
+    editText = serverText ?? "";
     editLogoFile = null;
     editLogoPreviewUrl = null;
     logoError = null;
@@ -253,7 +133,7 @@
 
   const colorChanged = $derived(editColor !== currentColor());
   const accentChanged = $derived(editAccent !== currentAccent());
-  const textChanged = $derived(editText !== (decryptedText ?? ""));
+  const textChanged = $derived(editText !== (serverText ?? ""));
   const logoChanged = $derived(editLogoFile !== null);
   const hasChanges = $derived(
     colorChanged || accentChanged || textChanged || logoChanged,
@@ -361,31 +241,36 @@
     }
   }
 
+  /** Base64url-encode raw bytes for the logo field wire format. */
+  async function fileToBase64(file: File): Promise<string> {
+    const buf = await file.arrayBuffer();
+    const bytes = new Uint8Array(buf);
+    let binary = "";
+    for (const b of bytes) binary += String.fromCharCode(b);
+    return btoa(binary)
+      .replace(/\+/g, "-")
+      .replace(/\//g, "_")
+      .replace(/=+$/, "");
+  }
+
   // ── Mutations ──
 
   const saveMutation = createMutation(() => ({
     mutationFn: async (
       fields: {
         field: BrandingField;
-        encryptedValue: string;
-        clientEncryptedBranding: string;
+        value: string;
       }[],
     ) => {
       for (const f of fields) {
         await brandingRouter.saveBrandingField.mutate({
           field: f.field,
-          encryptedValue: f.encryptedValue,
-          clientEncryptedBranding: f.clientEncryptedBranding,
+          value: f.value,
         });
       }
     },
     onSuccess: () => {
       haptic();
-      orgCache.delete("branding:name");
-      orgCache.delete("branding:color");
-      orgCache.delete("branding:accent");
-      orgCache.delete("branding:text");
-      orgCache.delete("branding:support_label");
       toastStore.show(m.admin_branding_saved());
       announceToLiveRegion("polite", m.admin_branding_saved());
       closeSheet(false);
@@ -401,80 +286,45 @@
   async function handleSave(): Promise<void> {
     if (!hasChanges) return;
 
-    // The blob rebuild below is a whole-value rewrite, so every field it
-    // carries through must have finished decrypting first. Saving a color
-    // before the name's fire-and-forget decrypt settled republished the
-    // blob with an empty name and silently erased the client-facing org
-    // name. Same settlement contract as rebuildBlob and OrgGeneralSection.
-    void decryptedName;
-    void decryptedText;
-    void decryptedSupportLabel;
-    await orgCache.whenSettled();
-
-    const finalName = decryptedName ?? "";
     const finalColor =
       colorChanged && isValidHexColor(editColor) ? editColor : currentColor();
     const finalAccent =
       accentChanged && isValidHexColor(editAccent)
         ? editAccent
         : currentAccent();
-    const finalText = textChanged ? editText : (decryptedText ?? "");
-    const finalSupportLabel = decryptedSupportLabel ?? "";
-
-    // Build the client branding blob with all current values
-    let clientBlob: string;
-    try {
-      clientBlob = buildClientBrandingBlob(
-        {
-          name: finalName,
-          primaryColor: finalColor,
-          accentColor: finalAccent,
-          clientText: finalText,
-          supportLabel: finalSupportLabel,
-        },
-        orgKeyManager,
-      );
-    } catch {
-      toastStore.show(m.admin_branding_error(), 3000);
-      return;
-    }
+    const finalName = serverName ?? "";
 
     const fields: {
       field: BrandingField;
-      encryptedValue: string;
-      clientEncryptedBranding: string;
+      value: string;
     }[] = [];
 
     if (colorChanged && isValidHexColor(editColor)) {
       fields.push({
         field: "primary_color",
-        encryptedValue: await orgKeyManager.encryptText(editColor),
-        clientEncryptedBranding: clientBlob,
+        value: editColor,
       });
     }
 
     if (accentChanged && isValidHexColor(editAccent)) {
       fields.push({
         field: "accent_color",
-        encryptedValue: await orgKeyManager.encryptText(editAccent),
-        clientEncryptedBranding: clientBlob,
+        value: editAccent,
       });
     }
 
     if (textChanged) {
       fields.push({
         field: "client_text",
-        encryptedValue: await orgKeyManager.encryptText(editText),
-        clientEncryptedBranding: clientBlob,
+        value: editText,
       });
     }
 
     if (logoChanged && editLogoFile) {
-      const encryptedLogo = await encryptLogoFile(editLogoFile, orgKeyManager);
+      const logoBase64 = await fileToBase64(editLogoFile);
       fields.push({
         field: "logo",
-        encryptedValue: encryptedLogo,
-        clientEncryptedBranding: clientBlob,
+        value: logoBase64,
       });
     }
 
@@ -503,7 +353,7 @@
 
         if (logoFileForIcons !== null && !iconUploadInFlight) {
           iconUploadInFlight = true;
-          void uploadPwaIcons(logoFileForIcons, orgKeyManager, brandingRouter)
+          void uploadPwaIcons(logoFileForIcons, brandingRouter)
             .catch(() => {
               toastStore.show(m.admin_branding_icons_error(), 3000);
             })
@@ -526,10 +376,7 @@
         </div>
         <div class="logo-row">
           <div class="logo-placeholder">
-            <DecryptPlaceholder mode="media" />
-          </div>
-          <div class="logo-meta">
-            <DecryptPlaceholder length={18} />
+            <Preloader />
           </div>
         </div>
         <div class="section-divider"></div>
@@ -537,13 +384,13 @@
           {m.admin_branding_card_color_label()}
         </div>
         <div class="color-row">
-          <DecryptPlaceholder length={7} />
+          <Preloader class="w-4 h-4" />
         </div>
         <div class="section-divider"></div>
         <div class="card-section-label">
           {m.admin_branding_card_text_label(withTerms())}
         </div>
-        <DecryptPlaceholder length={40} />
+        <Preloader class="w-4 h-4" />
       </div>
     </Card>
   {:else if brandingQuery.isError}
@@ -567,7 +414,7 @@
           {#if logoBlobUrl}
             <img
               src={logoBlobUrl}
-              alt={decryptedName ?? "Organization logo"}
+              alt={serverName ?? "Organization logo"}
               class="logo-preview"
             />
           {:else}
@@ -590,10 +437,8 @@
         <div class="card-section-label">
           {m.admin_branding_card_text_label(withTerms())}
         </div>
-        {#if brandingQuery.data?.encryptedClientText}
-          <DecryptPlaceholder content={decryptedText}>
-            <span class="field-value text-truncate">{decryptedText}</span>
-          </DecryptPlaceholder>
+        {#if serverText}
+          <span class="field-value text-truncate">{serverText}</span>
         {:else}
           <span class="text-[--muted] text-sm">
             {m.admin_branding_card_no_text()}
@@ -607,32 +452,30 @@
           {m.admin_branding_card_color_label()}
         </div>
         <div class="color-row">
-          {#if brandingQuery.data?.encryptedPrimaryColor !== null && brandingQuery.data?.encryptedPrimaryColor !== undefined && decryptedColor !== null && decryptedColor !== "" && isValidHexColor(decryptedColor)}
+          {#if serverColor !== null && serverColor !== "" && isValidHexColor(serverColor)}
             <span
               class="color-swatch"
               role="img"
               aria-label={m.admin_branding_color_swatch_label({
-                color: decryptedColor,
+                color: serverColor,
               })}
-              style="background: {decryptedColor}"
+              style="background: {serverColor}"
             ></span>
-            <span class="color-hex">{decryptedColor}</span>
-          {:else if brandingQuery.data?.encryptedPrimaryColor !== null && brandingQuery.data?.encryptedPrimaryColor !== undefined}
-            <DecryptPlaceholder length={7} />
+            <span class="color-hex">{serverColor}</span>
           {:else}
             <span class="text-[--muted] text-sm">-</span>
           {/if}
-          {#if decryptedAccent !== null && decryptedAccent !== "" && isValidHexColor(decryptedAccent)}
+          {#if serverAccent !== null && serverAccent !== "" && isValidHexColor(serverAccent)}
             <span class="color-dot"></span>
             <span
               class="color-swatch"
               role="img"
               aria-label={m.admin_branding_accent_swatch_label({
-                color: decryptedAccent,
+                color: serverAccent,
               })}
-              style="background: {decryptedAccent}"
+              style="background: {serverAccent}"
             ></span>
-            <span class="color-hex">{decryptedAccent}</span>
+            <span class="color-hex">{serverAccent}</span>
           {/if}
         </div>
 
@@ -683,7 +526,7 @@
         {:else if logoBlobUrl}
           <img
             src={logoBlobUrl}
-            alt={decryptedName ?? "Current logo"}
+            alt={serverName ?? "Current logo"}
             class="logo-preview"
           />
         {:else}

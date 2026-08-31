@@ -1,46 +1,11 @@
 import { describe, it, expect, vi, beforeEach, type Mock } from "vitest";
 import { uploadPwaIcons, type IconUploadRouter } from "./icon-upload.js";
-import {
-  OrgKeyNotLoadedError,
-  type OrgKeyManager,
-} from "$lib/crypto/org-key.js";
 import { getCachedBranding } from "./index.js";
 import {
   getAppleTouchIconHref,
   setAppleTouchIconHref,
 } from "./icon-link.svelte.js";
 import { getOrgSlug } from "$lib/utils/org-slug.js";
-
-const { fakeEncrypt } = vi.hoisted(() => ({
-  /**
-   * Deterministic stand-in for encryptClientBranding: prefixes the payload
-   * with the first public key byte so assertions can verify that both the
-   * variant bytes and the org public key reached the encrypt call.
-   */
-  fakeEncrypt: (data: Uint8Array, orgPublicKey: Uint8Array): Uint8Array => {
-    const sealed = new Uint8Array(data.length + 1);
-    sealed[0] = orgPublicKey[0] ?? 0;
-    sealed.set(data, 1);
-    return sealed;
-  },
-}));
-
-// vi.mock required: the @care-y/crypto barrel initializes libsodium WASM
-// via the getSodium() singleton at import time, which the Node/jsdom test
-// environment cannot load without the slow JS fallback (testing-reference
-// section 4, constraint 2).
-vi.mock("@care-y/crypto", () => ({
-  encryptClientBranding: fakeEncrypt,
-  decode: vi.fn(),
-  encode: (bytes: Uint8Array): string => {
-    let binary = "";
-    for (const b of bytes) binary += String.fromCharCode(b);
-    return btoa(binary)
-      .replace(/\+/g, "-")
-      .replace(/\//g, "_")
-      .replace(/=+$/, "");
-  },
-}));
 
 // OffscreenCanvas and createImageBitmap do not exist in the test
 // environment. Stubbed at the platform boundary, following the approach
@@ -109,17 +74,7 @@ vi.stubGlobal("caches", {
   delete: () => Promise.resolve(true),
 });
 
-const ORG_PUB_KEY = new Uint8Array(32).fill(7);
 const encoder = new TextEncoder();
-
-/**
- * uploadPwaIcons only reads getPublicKey(); cast per the project's mock
- * construction convention (see org-decrypt-cache.test.ts) instead of
- * wiring a Worker-backed OrgKeyManager.
- */
-function stubKeyManager(key: Uint8Array | null): OrgKeyManager {
-  return { getPublicKey: () => key } as unknown as OrgKeyManager;
-}
 
 interface UploadInput {
   icon192: string;
@@ -137,9 +92,9 @@ function createRouter(): {
   return { router: { uploadIcons: { mutate } }, mutate };
 }
 
-/** Base64url ciphertext expected on the wire for a variant blob label. */
-function expectedPayload(label: string): string {
-  const bytes = fakeEncrypt(encoder.encode(label), ORG_PUB_KEY);
+/** Base64url-encode raw bytes (mirrors the production helper). */
+function toBase64url(label: string): string {
+  const bytes = encoder.encode(label);
   let binary = "";
   for (const b of bytes) binary += String.fromCharCode(b);
   return btoa(binary)
@@ -164,42 +119,22 @@ beforeEach(() => {
 });
 
 describe("uploadPwaIcons", () => {
-  it("encrypts each generated variant and uploads it in its matching field", async () => {
+  it("base64-encodes each generated variant and uploads it in its matching field", async () => {
     const { router, mutate } = createRouter();
 
-    const result = await uploadPwaIcons(
-      sourceBlob(),
-      stubKeyManager(ORG_PUB_KEY),
-      router,
-    );
+    const result = await uploadPwaIcons(sourceBlob(), router);
 
-    // The mutate input is the tRPC wire format: one base64 ciphertext
-    // string per variant, stored server-side and served back on the
-    // public branding icon routes.
+    // The mutate input carries one base64url string per variant (plain PNG
+    // bytes, no encryption).
     expect(mutate).toHaveBeenCalledTimes(1);
     expect(mutate).toHaveBeenCalledWith({
-      icon192: expectedPayload("192x192"),
-      icon512: expectedPayload("512x512"),
-      iconMaskable: expectedPayload("512x512-maskable"),
+      icon192: toBase64url("192x192"),
+      icon512: toBase64url("512x512"),
+      iconMaskable: toBase64url("512x512-maskable"),
     });
 
     // Version is the cache-busting token embedded in served icon URLs.
     expect(result.version).toMatch(/^\d+$/);
-
-    // The uploaded strings are ciphertext, never the plaintext icon bytes.
-    const input = mutate.mock.calls[0]?.[0];
-    const plainB64 = btoa(String.fromCharCode(...encoder.encode("192x192")));
-    expect(input?.icon192).not.toBe(plainB64);
-  });
-
-  it("throws OrgKeyNotLoadedError and skips the upload when the org key is absent", async () => {
-    const { router, mutate } = createRouter();
-
-    await expect(
-      uploadPwaIcons(sourceBlob(), stubKeyManager(null), router),
-    ).rejects.toThrow(OrgKeyNotLoadedError);
-
-    expect(mutate).not.toHaveBeenCalled();
   });
 
   it("propagates an unreadable source image and never uploads", async () => {
@@ -207,9 +142,9 @@ describe("uploadPwaIcons", () => {
     const decodeFailure = new TypeError("unreadable image data");
     mockCreateImageBitmap.mockRejectedValueOnce(decodeFailure);
 
-    await expect(
-      uploadPwaIcons(sourceBlob(), stubKeyManager(ORG_PUB_KEY), router),
-    ).rejects.toBe(decodeFailure);
+    await expect(uploadPwaIcons(sourceBlob(), router)).rejects.toBe(
+      decodeFailure,
+    );
 
     expect(mutate).not.toHaveBeenCalled();
   });
@@ -219,9 +154,9 @@ describe("uploadPwaIcons", () => {
     const uploadFailure = new Error("relay unavailable");
     mutate.mockRejectedValueOnce(uploadFailure);
 
-    await expect(
-      uploadPwaIcons(sourceBlob(), stubKeyManager(ORG_PUB_KEY), router),
-    ).rejects.toBe(uploadFailure);
+    await expect(uploadPwaIcons(sourceBlob(), router)).rejects.toBe(
+      uploadFailure,
+    );
 
     expect(getAppleTouchIconHref()).toBeNull();
     await expect(getCachedBranding()).resolves.toBeNull();
@@ -230,11 +165,7 @@ describe("uploadPwaIcons", () => {
   it("records the new icon state in the branding cache after a successful upload", async () => {
     const { router } = createRouter();
 
-    const result = await uploadPwaIcons(
-      sourceBlob(),
-      stubKeyManager(ORG_PUB_KEY),
-      router,
-    );
+    const result = await uploadPwaIcons(sourceBlob(), router);
 
     // The cache update is fire-and-forget, so poll the public read path.
     await vi.waitFor(async () => {
@@ -250,11 +181,7 @@ describe("uploadPwaIcons", () => {
     // The unit test environment resolves the dev-mode org slug.
     expect(slug).not.toBeNull();
 
-    const result = await uploadPwaIcons(
-      sourceBlob(),
-      stubKeyManager(ORG_PUB_KEY),
-      router,
-    );
+    const result = await uploadPwaIcons(sourceBlob(), router);
 
     // URL shape is the server branding route contract (the same format
     // brandingIconUrl() produces for the 192 "any" variant).

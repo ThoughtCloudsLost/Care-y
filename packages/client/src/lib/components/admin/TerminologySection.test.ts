@@ -216,12 +216,6 @@ vi.mock("$lib/branding/color-utils.js", async (importOriginal) => ({
   isValidHexColor: (c: string) => /^#[0-9a-fA-F]{6}$/.test(c),
 }));
 
-// care-y-ignore-next-line mock-factory-unguarded -- importOriginal would trigger libsodium WASM init via @care-y/crypto import
-vi.mock("$lib/branding/encrypt.js", () => ({
-  encryptLogoFile: vi.fn().mockResolvedValue("encrypted-logo-b64"),
-  buildClientBrandingBlob: vi.fn(() => "client-branding-blob"),
-}));
-
 // care-y-ignore-next-line mock-factory-unguarded -- component stub: single default export, passthrough cannot satisfy the component prop types
 vi.mock("$lib/shell/ShellSheet.svelte", async () => ({
   default: (
@@ -272,17 +266,14 @@ vi.stubGlobal(
 );
 
 import TerminologySection from "./TerminologySection.svelte";
-import { DEFAULT_PRIMARY, DEFAULT_ACCENT } from "$lib/branding/index.js";
-import { buildClientBrandingBlob } from "$lib/branding/encrypt.js";
 
 const LOADED_DATA: BrandingData = {
-  encryptedName: btoa("Safe Harbor Hotline"),
-  encryptedLogo: null,
-  encryptedPrimaryColor: btoa(DEFAULT_PRIMARY),
-  encryptedAccentColor: btoa(DEFAULT_ACCENT),
-  encryptedClientText: btoa("We provide confidential support."),
-  encryptedClientSupportLabel: null,
-  clientEncryptedBranding: null,
+  name: "Safe Harbor Hotline",
+  logo: null,
+  primaryColor: "#636366",
+  accentColor: "#8e8e93",
+  clientText: "We provide confidential support.",
+  clientSupportLabel: null,
   encryptedTerminology: null,
   hasIcons: false,
   iconVersion: null,
@@ -320,13 +311,13 @@ describe("TerminologySection", () => {
   });
 
   it("shows default support label when none is set", () => {
-    renderWithData({ encryptedClientSupportLabel: null });
+    renderWithData({ clientSupportLabel: null });
     expect(screen.getByText("Support team")).toBeTruthy();
   });
 
-  it("shows decrypted support label when set", () => {
+  it("shows support label when set", () => {
     renderWithData({
-      encryptedClientSupportLabel: btoa("The night team"),
+      clientSupportLabel: "The night team",
     });
     expect(screen.getByText("The night team")).toBeTruthy();
   });
@@ -340,8 +331,8 @@ describe("TerminologySection", () => {
     expect(input).toBeTruthy();
   });
 
-  it("saves support label change with clientEncryptedBranding", async () => {
-    renderWithData({ encryptedClientSupportLabel: null });
+  it("saves support label change with plaintext {field, value}", async () => {
+    renderWithData({ clientSupportLabel: null });
     await openEditSheet();
 
     const input = document.querySelector(
@@ -357,23 +348,15 @@ describe("TerminologySection", () => {
       expect(mockSaveBrandingField).toHaveBeenCalled();
     });
     const calls = mockSaveBrandingField.mock.calls as Array<
-      [
-        {
-          field: string;
-          encryptedValue: string;
-          clientEncryptedBranding?: string;
-        },
-      ]
+      [{ field: string; value: string }]
     >;
     const supportLabelCall = calls.find((c) => c[0].field === "support_label");
     expect(supportLabelCall).toBeTruthy();
-    expect(supportLabelCall![0].clientEncryptedBranding).toBe(
-      "client-branding-blob",
-    );
+    expect(supportLabelCall![0].value).toBe("Our care team");
   });
 
   it("shows toast and haptic on successful save", async () => {
-    renderWithData({ encryptedClientSupportLabel: null });
+    renderWithData({ clientSupportLabel: null });
     await openEditSheet();
 
     const input = document.querySelector(
@@ -393,7 +376,7 @@ describe("TerminologySection", () => {
 
   it("shows toast on save error", async () => {
     mockSaveBrandingField.mockRejectedValue(new Error("save-failed"));
-    renderWithData({ encryptedClientSupportLabel: null });
+    renderWithData({ clientSupportLabel: null });
     await openEditSheet();
 
     const input = document.querySelector(
@@ -432,19 +415,11 @@ describe("TerminologySection", () => {
     ).toBeNull();
   });
 
-  it("preserves the settled org name and client text when saving a support label change", async () => {
-    // Regression: before the fix, saving a support label while name/text
-    // decrypts were still in flight rebuilt the client blob with name: ""
-    // and clientText: "", silently erasing carried-through fields.
-
-    // Render with name and text encrypted but decrypt gate blocked so
-    // the deriveds return null (simulating pending fire-and-forget decrypts).
-    decryptGate.blocked = true;
-    renderWithData({
-      encryptedName: btoa("Safe Harbor Hotline"),
-      encryptedClientText: btoa("We provide confidential support."),
-      encryptedClientSupportLabel: null,
-    });
+  it("sends plaintext support label without needing to read other branding fields", async () => {
+    // With plaintext branding (ADR-094), saving a support label no longer
+    // needs to rebuild a blob carrying every branding field. Each field is
+    // an independent save.
+    renderWithData({ clientSupportLabel: null });
 
     await openEditSheet();
 
@@ -454,12 +429,6 @@ describe("TerminologySection", () => {
     expect(input).toBeTruthy();
     await fireEvent.input(input, { target: { value: "Night crew" } });
 
-    // Wire whenSettled so it unblocks the gate and resolves, letting the
-    // deriveds re-read the settled plaintext on the next access.
-    mockWhenSettled.mockImplementation(async () => {
-      decryptGate.blocked = false;
-    });
-
     const saveBtn = screen.getByRole("button", { name: /save changes/i });
     await fireEvent.click(saveBtn);
 
@@ -467,22 +436,11 @@ describe("TerminologySection", () => {
       expect(mockSaveBrandingField).toHaveBeenCalled();
     });
 
-    // The blob builder must have received the settled name and text, not "".
-    const blobSpy = vi.mocked(buildClientBrandingBlob);
-    expect(blobSpy).toHaveBeenCalled();
-    const blobArgs = blobSpy.mock.calls as Array<
-      [
-        {
-          name: string;
-          clientText: string;
-          supportLabel: string;
-        },
-        unknown,
-      ]
+    const calls = mockSaveBrandingField.mock.calls as Array<
+      [{ field: string; value: string }]
     >;
-    const blobCall = blobArgs.find((c) => c[0].supportLabel === "Night crew");
-    expect(blobCall).toBeTruthy();
-    expect(blobCall![0].name).toBe("Safe Harbor Hotline");
-    expect(blobCall![0].clientText).toBe("We provide confidential support.");
+    const supportCall = calls.find((c) => c[0].field === "support_label");
+    expect(supportCall).toBeTruthy();
+    expect(supportCall![0].value).toBe("Night crew");
   });
 });

@@ -6,7 +6,6 @@
     useQueryClient,
   } from "@tanstack/svelte-query";
   import { Building2, Save } from "@lucide/svelte";
-  import { dev } from "$app/environment";
   import { E164_COUNTRY_CODE_OPTIONS } from "@care-y/shared";
   import * as m from "$lib/paraglide/messages.js";
   import { trpc } from "$lib/trpc/index.js";
@@ -14,11 +13,7 @@
   import { haptic } from "$lib/utils/haptic.js";
   import { toastStore } from "$lib/stores/toast.svelte.js";
   import { announceToLiveRegion } from "$lib/utils/announce.js";
-  import { getOrgDecryptCache, getOrgKeyManager } from "$lib/crypto/context.js";
-  import { buildClientBrandingBlob } from "$lib/branding/encrypt.js";
-  import { requireRouter } from "$lib/errors.js";
   import QueryError from "$lib/components/QueryError.svelte";
-  import DecryptPlaceholder from "$lib/components/DecryptPlaceholder.svelte";
   import SoftButton from "$lib/components/inputs/SoftButton.svelte";
   import ShellSheet from "$lib/shell/ShellSheet.svelte";
 
@@ -38,13 +33,11 @@
   }
 
   export function hasOrgName(): boolean {
-    return (decryptedName ?? "").trim().length > 0;
+    return (serverName ?? "").trim().length > 0;
   }
 
   const orgRouter = trpc.org;
   const queryClient = useQueryClient();
-  const orgCache = getOrgDecryptCache();
-  const orgKeyManager = getOrgKeyManager();
 
   const LANGUAGE_OPTIONS = [
     { tag: "en", label: m.onboarding_org_language_en() },
@@ -56,9 +49,7 @@
     queryFn: async () => orgRouter.getOrgGeneral.query(),
   }));
 
-  const decryptedName = $derived(
-    orgCache.decrypt("org:name", generalQuery.data?.encryptedName ?? null),
-  );
+  const serverName = $derived(generalQuery.data?.name ?? null);
 
   const serverLanguage = $derived(generalQuery.data?.defaultLanguage ?? "en");
   const serverCountry = $derived(generalQuery.data?.countryCode ?? "");
@@ -73,7 +64,7 @@
   let editSafeExitUrl = $state("");
 
   function openSheet(): void {
-    editName = decryptedName ?? "";
+    editName = serverName ?? "";
     editLanguage = serverLanguage;
     editCountry = serverCountry;
     editSafeExitUrl = serverSafeExitUrl;
@@ -84,7 +75,7 @@
     sheetOpened = false;
   }
 
-  const nameChanged = $derived(editName !== (decryptedName ?? ""));
+  const nameChanged = $derived(editName !== (serverName ?? ""));
   const languageChanged = $derived(editLanguage !== serverLanguage);
   const countryChanged = $derived(editCountry !== serverCountry);
   const safeExitUrlChanged = $derived(editSafeExitUrl !== serverSafeExitUrl);
@@ -92,90 +83,21 @@
     nameChanged || languageChanged || countryChanged || safeExitUrlChanged,
   );
 
-  const brandingRouter = trpc.branding
-    ? requireRouter(trpc.branding, "branding")
-    : null;
-
-  // The public-page blob is rebuilt client-side by design: it is derived
-  // from org-key material the server never holds, so the server cannot
-  // rebuild it after a rename. A failure leaves the public login page
-  // showing the old name until branding is saved again.
-  async function rebuildClientBlob(newName: string): Promise<void> {
-    if (brandingRouter === null) return;
-    const branding = await brandingRouter.getBranding.query();
-
-    // Trigger cache population, then wait for all pending decrypts.
-    orgCache.decrypt("branding:color", branding.encryptedPrimaryColor);
-    orgCache.decrypt("branding:accent", branding.encryptedAccentColor);
-    orgCache.decrypt("branding:text", branding.encryptedClientText ?? null);
-    orgCache.decrypt(
-      "branding:support_label",
-      branding.encryptedClientSupportLabel ?? null,
-    );
-    await orgCache.whenSettled();
-
-    // Re-read after settlement.
-    const color =
-      orgCache.decrypt("branding:color", branding.encryptedPrimaryColor) ??
-      "#636366";
-    const accent =
-      orgCache.decrypt("branding:accent", branding.encryptedAccentColor) ?? "";
-    const text =
-      orgCache.decrypt("branding:text", branding.encryptedClientText ?? null) ??
-      "";
-    // Carried through unchanged: a rename must not silently clear the name
-    // clients see above messages from the org.
-    const supportLabel =
-      orgCache.decrypt(
-        "branding:support_label",
-        branding.encryptedClientSupportLabel ?? null,
-      ) ?? "";
-
-    const clientBlob = buildClientBrandingBlob(
-      {
-        name: newName,
-        primaryColor: color,
-        accentColor: accent,
-        clientText: text,
-        supportLabel,
-      },
-      orgKeyManager,
-    );
-
-    const encryptedValue = await orgKeyManager.encryptText(newName);
-    await brandingRouter.saveBrandingField.mutate({
-      field: "name",
-      encryptedValue,
-      clientEncryptedBranding: clientBlob,
-    });
-  }
-
   const saveMutation = createMutation(() => ({
     mutationFn: async (input: {
-      encryptedOrgName: string;
+      orgName: string;
       defaultLanguage: string;
       countryCode: string;
       portalSafeExitUrl?: string | null;
     }) => orgRouter.updateOrgGeneral.mutate(input),
     onSuccess: () => {
       haptic();
-      orgCache.delete("org:name");
       toastStore.show(m.admin_org_general_saved());
       announceToLiveRegion("polite", m.admin_org_general_saved());
       closeSheet();
       void queryClient.invalidateQueries({ queryKey: adminKeys.orgGeneral() });
       if (nameChanged) {
-        orgCache.delete("branding:name");
         void queryClient.invalidateQueries({ queryKey: adminKeys.branding() });
-        rebuildClientBlob(editName.trim()).catch((err: unknown) => {
-          // Longer than the success toast: this failure needs reading time.
-          toastStore.show(m.admin_org_general_client_blob_error(), 6000);
-          announceToLiveRegion(
-            "polite",
-            m.admin_org_general_client_blob_error(),
-          );
-          if (dev) console.error(err);
-        });
         onnamechange?.();
       }
     },
@@ -187,15 +109,13 @@
   async function handleSave(): Promise<void> {
     if (!hasChanges) return;
 
-    const encryptedOrgName = await orgKeyManager.encryptText(editName.trim());
-
     const payload: {
-      encryptedOrgName: string;
+      orgName: string;
       defaultLanguage: string;
       countryCode: string;
       portalSafeExitUrl?: string | null;
     } = {
-      encryptedOrgName,
+      orgName: editName.trim(),
       defaultLanguage: editLanguage,
       countryCode: editCountry,
     };
@@ -205,7 +125,12 @@
         editSafeExitUrl.trim() === "" ? null : editSafeExitUrl.trim();
     }
 
-    saveMutation.mutate(payload);
+    try {
+      await saveMutation.mutateAsync(payload);
+    } catch {
+      // The mutation's onError handler surfaced the failure toast; callers
+      // (sheet button, onboarding save) treat a failed save as handled.
+    }
   }
 
   function countryLabel(code: string): string {
@@ -226,21 +151,21 @@
         <p class="section-desc">{m.admin_org_general_description()}</p>
         <div class="field-row">
           <span class="field-label">{m.onboarding_org_name_label()}</span>
-          <DecryptPlaceholder length={18} />
+          <Preloader class="w-4 h-4" />
         </div>
         <div class="field-row">
           <span class="field-label">{m.onboarding_org_language_label()}</span>
-          <DecryptPlaceholder length={8} />
+          <Preloader class="w-4 h-4" />
         </div>
         <div class="field-row">
           <span class="field-label">{m.onboarding_org_country_label()}</span>
-          <DecryptPlaceholder length={12} />
+          <Preloader class="w-4 h-4" />
         </div>
         <div class="field-row">
           <span class="field-label"
             >{m.admin_org_general_safe_exit_url_label()}</span
           >
-          <DecryptPlaceholder length={20} />
+          <Preloader class="w-4 h-4" />
         </div>
       </div>
     </Card>
@@ -260,10 +185,8 @@
 
         <div class="field-row">
           <span class="field-label">{m.onboarding_org_name_label()}</span>
-          {#if generalQuery.data?.encryptedName}
-            <DecryptPlaceholder content={decryptedName}>
-              <span class="field-value">{decryptedName}</span>
-            </DecryptPlaceholder>
+          {#if serverName}
+            <span class="field-value">{serverName}</span>
           {:else}
             <span class="text-[--muted] text-sm">-</span>
           {/if}
