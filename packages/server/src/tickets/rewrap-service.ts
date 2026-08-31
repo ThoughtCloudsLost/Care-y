@@ -8,6 +8,7 @@ import type {
   BlobKey,
   OrgSchema,
   AttachmentId,
+  RecordingId,
 } from "@care-y/shared";
 
 export interface RewrapInput {
@@ -34,6 +35,15 @@ export interface RewrapInput {
      * would become unreadable once the temp wraps are deleted.
      */
     readonly encryptedFilename?: Buffer;
+  }[];
+  /**
+   * Recordings encrypted under a file key (ADR-092). Mirrors
+   * fileKeyUpdates but for the recordings table. Recordings carry no
+   * encrypted filename, so only the wrap column is updated.
+   */
+  readonly recordingFileKeyUpdates?: readonly {
+    readonly recordingId: RecordingId;
+    readonly fileKeyWrap: Buffer;
   }[];
 }
 
@@ -130,6 +140,17 @@ export async function rewrapFollowUp(
             : {}),
         })
         .where("id", "=", update.attachmentId)
+        .where("followup_id", "=", input.followUpId)
+        .execute();
+    }
+
+    // Converge recording file keys (ADR-092). Same shape as attachment
+    // convergence but recordings carry no encrypted filename.
+    for (const update of input.recordingFileKeyUpdates ?? []) {
+      await trx
+        .updateTable("recordings")
+        .set({ file_key_wrap: update.fileKeyWrap })
+        .where("id", "=", update.recordingId)
         .where("followup_id", "=", input.followUpId)
         .execute();
     }

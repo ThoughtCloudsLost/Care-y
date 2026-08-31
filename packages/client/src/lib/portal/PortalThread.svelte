@@ -8,6 +8,11 @@
   passes decrypt/attachment callbacks rather than a private key. Plaintext
   rendering behavior is unchanged.
 
+  ADR-092: the thread merges three entry kinds by createdAt:
+  - Sealed messages (existing, with decrypt + highlight + search)
+  - Voicemail recordings (ECIES-wrapped blob, played via VoicemailPlayer)
+  - Plaintext call entries (rendered via CallEntry, no decryption)
+
   Attachments: each message may carry zero or more attachments, grouped
   by followupId. Images render as thumbnails via MmsImage (injected-decrypt
   mode); non-images render as BaseAttachmentChip with an ondownload that
@@ -22,6 +27,8 @@
   import DecryptPlaceholder from "$lib/components/DecryptPlaceholder.svelte";
   import MmsImage from "$lib/components/tickets/MmsImage.svelte";
   import BaseAttachmentChip from "$lib/components/shared/BaseAttachmentChip.svelte";
+  import VoicemailPlayer from "$lib/components/tickets/VoicemailPlayer.svelte";
+  import CallEntry from "$lib/components/tickets/CallEntry.svelte";
   import { triggerBlobDownload } from "$lib/components/shared/attachment-download.js";
   import { fetchBlob } from "$lib/utils/fetch-blob.js";
   import { needsDateSeparator, formatDateSeparator } from "$lib/utils/time.js";
@@ -30,7 +37,11 @@
   import { formatRelativeTime } from "$lib/utils/format-time.js";
   import { SvelteMap, SvelteSet } from "svelte/reactivity";
   import { splitByTerm, isHighlightable } from "$lib/search/highlight.js";
-  import type { PortalAttachmentWire } from "$lib/portal/portal-attachment-types.js";
+  import type {
+    PortalAttachmentWire,
+    PortalRecordingWire,
+    PortalCallEntry,
+  } from "$lib/portal/portal-attachment-types.js";
 
   interface PortalMessageWire {
     readonly id: string;
@@ -92,6 +103,10 @@
     loadError?: "rate_limited" | "generic" | null;
     /** Flat list of attachments from the bootstrap response. */
     attachments?: readonly PortalAttachmentWire[];
+    /** Voicemail recordings from the bootstrap response (ADR-092). */
+    recordings?: readonly PortalRecordingWire[];
+    /** Plaintext call log entries from the bootstrap response (ADR-092). */
+    callEntries?: readonly PortalCallEntry[];
     /** Channel credential for portal blob downloads. */
     channelId?: string;
     /** Channel auth token (raw bytes, base64url-encoded for the header). */
@@ -136,6 +151,8 @@
     loading = false,
     loadError = null,
     attachments = [],
+    recordings = [],
+    callEntries = [],
     channelId,
     channelAuth,
     ticketId,
@@ -156,7 +173,10 @@
     supportLabel.trim() !== "" ? supportLabel : m.portal_support_team(),
   );
 
-  interface DecryptedMessage {
+  // ── Discriminated union for merged timeline entries ──
+
+  interface MessageEntry {
+    readonly kind: "message";
     readonly id: string;
     readonly followupId: string | undefined;
     readonly direction: string;
@@ -164,6 +184,29 @@
     readonly createdAt: string;
     readonly editedAt: string | null;
   }
+
+  interface VoicemailEntry {
+    readonly kind: "voicemail";
+    readonly id: string;
+    readonly recordingId: string;
+    readonly direction: string;
+    readonly durationSeconds: number | null;
+    readonly ephemeralPoint: string;
+    readonly nonce: string;
+    readonly ciphertext: string;
+    readonly createdAt: string;
+  }
+
+  interface CallEntryItem {
+    readonly kind: "call_entry";
+    readonly id: string;
+    readonly source: string;
+    readonly callStatus: string | null;
+    readonly callDurationSeconds: number | null;
+    readonly createdAt: string;
+  }
+
+  type TimelineEntry = MessageEntry | VoicemailEntry | CallEntryItem;
 
   // Async decrypt cache: messages are decrypted via the worker bridge.
   // The SvelteMap holds results that update reactively as decryption
@@ -192,9 +235,10 @@
     }
   });
 
-  const decryptedMessages = $derived.by((): readonly DecryptedMessage[] => {
+  const decryptedMessages = $derived.by((): readonly MessageEntry[] => {
     if (loading) return [];
-    return messages.map((msg): DecryptedMessage => ({
+    return messages.map((msg): MessageEntry => ({
+      kind: "message",
       id: msg.id,
       followupId: msg.followupId,
       direction: msg.direction,
@@ -203,6 +247,38 @@
       editedAt: msg.editedAt,
     }));
   });
+
+  const voicemailEntries = $derived.by((): readonly VoicemailEntry[] => {
+    return recordings.map((rec): VoicemailEntry => ({
+      kind: "voicemail",
+      id: `recording-${rec.recordingId}`,
+      recordingId: rec.recordingId,
+      direction: rec.direction,
+      durationSeconds: rec.durationSeconds,
+      ephemeralPoint: rec.ephemeralPoint,
+      nonce: rec.nonce,
+      ciphertext: rec.ciphertext,
+      createdAt: rec.createdAt,
+    }));
+  });
+
+  const callEntryItems = $derived.by((): readonly CallEntryItem[] => {
+    return callEntries.map((ce): CallEntryItem => ({
+      kind: "call_entry",
+      id: `call-${ce.id}`,
+      source: ce.source,
+      callStatus: ce.callStatus,
+      callDurationSeconds: ce.callDurationSeconds,
+      createdAt: ce.createdAt,
+    }));
+  });
+
+  /** True when the thread has any content at all (messages, recordings, or call entries). */
+  const hasAnyContent = $derived(
+    decryptedMessages.length > 0 ||
+      voicemailEntries.length > 0 ||
+      callEntryItems.length > 0,
+  );
 
   // ── Filtering ──
 
@@ -235,36 +311,71 @@
       filterDateTo !== null,
   );
 
-  /** Apply type, author, and date filters to decrypted messages. */
-  const filteredMessages = $derived.by((): readonly DecryptedMessage[] => {
-    if (!hasActiveFilters) return decryptedMessages;
-
-    return decryptedMessages.filter((msg): boolean => {
-      // Author filter
-      if (filterAuthors.length > 0) {
-        const authorKey =
-          msg.direction === "from_client" ? "__client__" : "__support__";
-        if (!filterAuthors.includes(authorKey)) return false;
+  /** Apply author and date filters to any entry kind. */
+  function passesAuthorDateFilter(entry: TimelineEntry): boolean {
+    // Author filter
+    if (filterAuthors.length > 0) {
+      let authorKey: string;
+      if (entry.kind === "call_entry") {
+        authorKey = entry.source === "client" ? "__client__" : "__support__";
+      } else {
+        authorKey =
+          entry.direction === "from_client" ? "__client__" : "__support__";
       }
+      if (!filterAuthors.includes(authorKey)) return false;
+    }
 
-      // Date filter
-      if (filterDateFrom !== null || filterDateTo !== null) {
-        const msgDate = new Date(msg.createdAt);
-        if (filterDateFrom !== null && msgDate < filterDateFrom) return false;
-        if (filterDateTo !== null) {
-          // Exclusive next-midnight bound instead of a mutated 23:59:59
-          // Date (svelte/prefer-svelte-reactivity forbids Date mutation).
-          const nextMidnight = new Date(
-            filterDateTo.getFullYear(),
-            filterDateTo.getMonth(),
-            filterDateTo.getDate() + 1,
-          );
-          if (msgDate >= nextMidnight) return false;
-        }
+    // Date filter
+    if (filterDateFrom !== null || filterDateTo !== null) {
+      const entryDate = new Date(entry.createdAt);
+      if (filterDateFrom !== null && entryDate < filterDateFrom) return false;
+      if (filterDateTo !== null) {
+        const nextMidnight = new Date(
+          filterDateTo.getFullYear(),
+          filterDateTo.getMonth(),
+          filterDateTo.getDate() + 1,
+        );
+        if (entryDate >= nextMidnight) return false;
       }
+    }
+
+    return true;
+  }
+
+  /** Merged and sorted timeline of all three entry kinds, post-filter. */
+  const filteredEntries = $derived.by((): readonly TimelineEntry[] => {
+    // Build the merged list from all three sources
+    const merged: TimelineEntry[] = [
+      ...decryptedMessages,
+      ...voicemailEntries,
+      ...callEntryItems,
+    ];
+
+    // Sort by createdAt ascending (oldest first)
+    merged.sort(
+      (a, b) =>
+        new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime(),
+    );
+
+    if (!hasActiveFilters) return merged;
+
+    return merged.filter((entry): boolean => {
+      if (!passesAuthorDateFilter(entry)) return false;
 
       // Type filter
       if (filterTypes.length > 0) {
+        if (entry.kind === "call_entry") {
+          // Call entries only show when no type filter is active
+          return false;
+        }
+
+        if (entry.kind === "voicemail") {
+          // Voicemail entries match "__files__"
+          return filterTypes.includes("__files__");
+        }
+
+        // Message entries use the existing attachment-aware type matching
+        const msg = entry;
         const hasImage =
           msg.followupId !== undefined && imageFollowupIds.has(msg.followupId);
         const hasFile =
@@ -342,6 +453,31 @@
   }
 
   /**
+   * Build a decrypt callback for a portal voicemail recording (ADR-092).
+   * Same ECIES unwrap as attachments: the recording's portal wrap
+   * decodes through decryptAttachmentKey (yields { fileKey, filename: "" })
+   * and the blob through decryptAttachmentBlob with the recording id
+   * in the attachmentId position for AAD binding.
+   */
+  function makeRecordingDecrypt(
+    rec: VoicemailEntry,
+  ): (ciphertext: ArrayBuffer) => Promise<ArrayBuffer> {
+    return async (ciphertext: ArrayBuffer): Promise<ArrayBuffer> => {
+      const { fileKey } = await decryptAttachmentKey(
+        rec.ephemeralPoint,
+        rec.nonce,
+        rec.ciphertext,
+      );
+      return decryptAttachmentBlob(
+        ciphertext,
+        fileKey,
+        ticketId ?? "",
+        rec.recordingId,
+      );
+    };
+  }
+
+  /**
    * Download handler for non-image attachments. Fetches the blob,
    * unwraps the file key via the bridge, decrypts via the bridge,
    * and triggers a browser save.
@@ -368,6 +504,8 @@
     triggerBlobDownload(new Uint8Array(plaintext), filename);
   }
 
+  // Search matches only consider message entries (voicemail and call entries
+  // have no plaintext body to search).
   const matchIds = $derived.by((): readonly string[] => {
     if (!highlighting) return [];
     const term = (searchTerm ?? "").toLowerCase();
@@ -388,10 +526,23 @@
     return dir === "from_client" ? "sent" : "received";
   }
 
-  function bubbleAriaLabel(msg: DecryptedMessage): string {
-    const isSent = msg.direction === "from_client";
+  /** Call entries side by source, not direction. */
+  function callEntryDirection(source: string): "sent" | "received" {
+    return source === "client" ? "sent" : "received";
+  }
+
+  function entryAriaLabel(entry: TimelineEntry): string {
+    const time = formatRelativeTime(new Date(entry.createdAt));
+    if (entry.kind === "call_entry") {
+      const isSent = entry.source === "client";
+      const label = isSent ? m.portal_you() : speakerName;
+      return `${label}, ${time}`;
+    }
+    if (entry.kind === "voicemail") {
+      return `${m.ticket_panel_voicemail_item()}, ${time}`;
+    }
+    const isSent = entry.direction === "from_client";
     const label = isSent ? m.portal_you() : speakerName;
-    const time = formatRelativeTime(new Date(msg.createdAt));
     return `${label}, ${time}`;
   }
 
@@ -467,7 +618,7 @@
         </ConversationBubble>
       {/each}
     </div>
-  {:else if loadError !== null && decryptedMessages.length === 0}
+  {:else if loadError !== null && !hasAnyContent}
     <!-- Failed load with nothing cached: never fall through to the empty
          state, which would read as "no messages yet" for a full thread. -->
     <div class="empty-state" data-testid="portal-load-error" role="status">
@@ -477,11 +628,11 @@
           : m.portal_thread_load_error()}
       </p>
     </div>
-  {:else if decryptedMessages.length === 0}
+  {:else if !hasAnyContent}
     <div class="empty-state" data-testid="portal-empty-state">
       <p>{m.portal_empty_thread()}</p>
     </div>
-  {:else if hasActiveFilters && filteredMessages.length === 0}
+  {:else if hasActiveFilters && filteredEntries.length === 0}
     <div class="empty-state" data-testid="portal-filter-empty">
       <p>{m.portal_filter_empty()}</p>
       {#if onclearfilters}
@@ -498,85 +649,130 @@
   {:else}
     <p class="expiry-note">{m.portal_expiry_note()}</p>
     <div class="portal-messages">
-      <!-- Keyed by id, not index: prepending an older page renumbers every
-           index, which would re-render the whole thread and lose the scroll
-           anchor the paginator just measured. -->
-      {#each filteredMessages as msg, idx (msg.id)}
-        {@const isSent = msg.direction === "from_client"}
+      {#each filteredEntries as entry, idx (entry.id)}
         {@const prevAt =
-          idx > 0 ? filteredMessages[idx - 1]?.createdAt : undefined}
-        {@const msgAttachments =
-          msg.followupId !== undefined
-            ? (attachmentsByFollowup.get(msg.followupId) ?? [])
-            : []}
-        {#if needsDateSeparator(msg.createdAt, prevAt)}
-          <DateSeparator label={formatDateSeparator(msg.createdAt)} />
+          idx > 0 ? filteredEntries[idx - 1]?.createdAt : undefined}
+        {#if needsDateSeparator(entry.createdAt, prevAt)}
+          <DateSeparator label={formatDateSeparator(entry.createdAt)} />
         {/if}
-        <div
-          id={portalMessageElementId(msg.id)}
-          class="portal-bubble-wrapper"
-          class:portal-bubble-active={msg.id === activeMatchId}
-          role="article"
-          aria-label={bubbleAriaLabel(msg)}
-        >
-          <ConversationBubble
-            direction={bubbleDirection(msg.direction)}
-            speaker={isSent ? undefined : speakerName}
-            timestamp={msg.createdAt}
-            editedAt={msg.editedAt}
-          >
-            {#if msg.result.status === "ready"}
-              {#if highlighting}
-                {#each splitByTerm(msg.result.value, searchTerm ?? "") as seg, i (i)}
-                  {#if seg.highlight}<mark>{seg.text}</mark
-                    >{:else}{seg.text}{/if}
-                {/each}
-              {:else}
-                {msg.result.value}
-              {/if}
-            {:else}
-              <DecryptPlaceholder result={msg.result} length={30} />
-            {/if}
 
-            <!-- Attachments grouped onto this message -->
-            {#if msgAttachments.length > 0}
-              <div class="portal-attachments" data-testid="portal-attachments">
-                {#each msgAttachments as att (att.attachmentId)}
-                  {#if att.contentType?.startsWith("image/")}
-                    <MmsImage
-                      attachmentId={att.attachmentId}
-                      ticketId={ticketId ?? ""}
-                      alt={m.portal_attachment_image()}
-                      onopen={() => {
-                        /* lightbox not yet wired on the portal side */
-                      }}
-                      decrypt={makeImageDecrypt(att)}
-                      blobUrl={`/api/blobs/portal-attachments/${att.attachmentId}`}
-                      contentType={att.contentType}
-                      fetchHeaders={portalHeaders}
-                    />
-                  {:else}
-                    {@const chipState = getAttachmentName(att.attachmentId)}
-                    {#if chipState.error}
-                      <div class="att-error" role="status">
-                        <span class="att-error-text"
-                          >{m.error_decryption_failed()}</span
-                        >
-                      </div>
-                    {:else}
-                      <BaseAttachmentChip
+        {#if entry.kind === "message"}
+          {@const isSent = entry.direction === "from_client"}
+          {@const msgAttachments =
+            entry.followupId !== undefined
+              ? (attachmentsByFollowup.get(entry.followupId) ?? [])
+              : []}
+          <div
+            id={portalMessageElementId(entry.id)}
+            class="portal-bubble-wrapper"
+            class:portal-bubble-active={entry.id === activeMatchId}
+            role="article"
+            aria-label={entryAriaLabel(entry)}
+          >
+            <ConversationBubble
+              direction={bubbleDirection(entry.direction)}
+              speaker={isSent ? undefined : speakerName}
+              timestamp={entry.createdAt}
+              editedAt={entry.editedAt}
+            >
+              {#if entry.result.status === "ready"}
+                {#if highlighting}
+                  {#each splitByTerm(entry.result.value, searchTerm ?? "") as seg, i (i)}
+                    {#if seg.highlight}<mark>{seg.text}</mark
+                      >{:else}{seg.text}{/if}
+                  {/each}
+                {:else}
+                  {entry.result.value}
+                {/if}
+              {:else}
+                <DecryptPlaceholder result={entry.result} length={30} />
+              {/if}
+
+              <!-- Attachments grouped onto this message -->
+              {#if msgAttachments.length > 0}
+                <div
+                  class="portal-attachments"
+                  data-testid="portal-attachments"
+                >
+                  {#each msgAttachments as att (att.attachmentId)}
+                    {#if att.contentType?.startsWith("image/")}
+                      <MmsImage
                         attachmentId={att.attachmentId}
-                        filename={chipState.filename}
-                        sizeBytes={att.sizeBytes}
-                        ondownload={async () => handleAttachmentDownload(att)}
+                        ticketId={ticketId ?? ""}
+                        alt={m.portal_attachment_image()}
+                        onopen={() => {
+                          /* lightbox not yet wired on the portal side */
+                        }}
+                        decrypt={makeImageDecrypt(att)}
+                        blobUrl={`/api/blobs/portal-attachments/${att.attachmentId}`}
+                        contentType={att.contentType}
+                        fetchHeaders={portalHeaders}
                       />
+                    {:else}
+                      {@const chipState = getAttachmentName(att.attachmentId)}
+                      {#if chipState.error}
+                        <div class="att-error" role="status">
+                          <span class="att-error-text"
+                            >{m.error_decryption_failed()}</span
+                          >
+                        </div>
+                      {:else}
+                        <BaseAttachmentChip
+                          attachmentId={att.attachmentId}
+                          filename={chipState.filename}
+                          sizeBytes={att.sizeBytes}
+                          ondownload={async () => handleAttachmentDownload(att)}
+                        />
+                      {/if}
                     {/if}
-                  {/if}
-                {/each}
-              </div>
-            {/if}
-          </ConversationBubble>
-        </div>
+                  {/each}
+                </div>
+              {/if}
+            </ConversationBubble>
+          </div>
+        {:else if entry.kind === "voicemail"}
+          <div
+            id={portalMessageElementId(entry.id)}
+            class="portal-bubble-wrapper"
+            role="article"
+            aria-label={entryAriaLabel(entry)}
+            data-testid="portal-voicemail-entry"
+          >
+            <ConversationBubble
+              direction={bubbleDirection(entry.direction)}
+              speaker={entry.direction === "from_client"
+                ? undefined
+                : speakerName}
+              timestamp={entry.createdAt}
+            >
+              <VoicemailPlayer
+                blobUrl={`/api/blobs/portal-recordings/${entry.recordingId}`}
+                fetchHeaders={portalHeaders}
+                decrypt={makeRecordingDecrypt(entry)}
+                durationSeconds={entry.durationSeconds}
+              />
+            </ConversationBubble>
+          </div>
+        {:else if entry.kind === "call_entry"}
+          <div
+            id={portalMessageElementId(entry.id)}
+            class="portal-bubble-wrapper"
+            role="article"
+            aria-label={entryAriaLabel(entry)}
+            data-testid="portal-call-entry"
+          >
+            <ConversationBubble
+              direction={callEntryDirection(entry.source)}
+              timestamp={entry.createdAt}
+            >
+              <CallEntry
+                source={entry.source}
+                callStatus={entry.callStatus}
+                callDurationSeconds={entry.callDurationSeconds}
+              />
+            </ConversationBubble>
+          </div>
+        {/if}
       {/each}
     </div>
   {/if}

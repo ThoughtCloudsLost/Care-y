@@ -650,9 +650,11 @@
     return actions;
   });
 
-  // --- Attachments ---
+  // --- Attachments, recordings, and call entries ---
 
   const portalAttachments = $derived(bootstrapQuery.data?.attachments ?? []);
+  const portalRecordings = $derived(bootstrapQuery.data?.recordings ?? []);
+  const portalCallEntries = $derived(bootstrapQuery.data?.callEntries ?? []);
 
   /** Channel auth encoded for request headers. */
   const channelAuthHeader = $derived.by((): string | undefined => {
@@ -894,6 +896,8 @@
         loading={messagesQuery.isLoading}
         loadError={messagesLoadError}
         attachments={portalAttachments}
+        recordings={portalRecordings}
+        callEntries={portalCallEntries}
         channelId={fragment.fragmentData?.channelId}
         channelAuth={channelAuthHeader}
         ticketId={bootstrapQuery.data?.ticketId ?? undefined}

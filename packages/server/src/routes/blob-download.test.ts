@@ -53,11 +53,23 @@ vi.mock("../portal/portal-attachment-service.js", async (importOriginal) => {
   };
 });
 
+import * as PortalRecordings from "../portal/portal-recording-service.js";
+
+vi.mock("../portal/portal-recording-service.js", async (importOriginal) => {
+  const orig = await importOriginal<typeof PortalRecordings>();
+  return {
+    ...orig,
+    resolveChannelRecordingBlobKey: vi.fn(),
+  };
+});
+
 const mockAuth = RelayUtils.authenticateRelay as ReturnType<typeof vi.fn>;
 const mockResolveChannel =
   PortalBlobAuth.resolvePortalBlobChannel as ReturnType<typeof vi.fn>;
 const mockResolveBlobKey =
   PortalAttachments.resolveChannelBlobKey as ReturnType<typeof vi.fn>;
+const mockResolveRecBlobKey =
+  PortalRecordings.resolveChannelRecordingBlobKey as ReturnType<typeof vi.fn>;
 const mockHasPermForOrg = Roles.hasPermissionForOrg as ReturnType<typeof vi.fn>;
 
 const TEST_UUID = "00000000-0000-4000-8000-000000000001";
@@ -482,6 +494,76 @@ describe("portal attachment downloads", () => {
     await createBlobDownloadHandler(
       buildDeps({ orgResolver: vi.fn(async () => null) }),
     )(portalReq(), res);
+
+    expect(res.statusCode).toBe(401);
+    expect(mockResolveChannel).not.toHaveBeenCalled();
+  });
+});
+
+describe("portal recording downloads", () => {
+  const REC_ID = "00000000-0000-4000-8000-0000000000bb";
+
+  beforeEach(() => {
+    mockResolveChannel.mockReset();
+    mockResolveRecBlobKey.mockReset();
+    mockAuth.mockReset();
+  });
+
+  function portalRecReq(): IncomingMessage {
+    return mockReq("GET", `/api/blobs/portal-recordings/${REC_ID}`, {
+      "x-portal-channel": "a".repeat(48),
+      "x-portal-auth": "dGVzdA==",
+    });
+  }
+
+  it("serves a recording the channel holds a wrap for", async () => {
+    mockResolveChannel.mockResolvedValue({ id: "chan-1" });
+    mockResolveRecBlobKey.mockResolvedValue("blob-key-rec");
+
+    const deps = buildDeps({
+      blobStore: {
+        put: vi.fn(),
+        get: vi.fn(async () => Buffer.from("rec-ciphertext")),
+        delete: vi.fn(),
+        exists: vi.fn(),
+      },
+    });
+    const res = mockRes();
+    await createBlobDownloadHandler(deps)(portalRecReq(), res);
+
+    expect(res.statusCode).toBe(200);
+    expect(res.headers["Content-Type"]).toBe("application/octet-stream");
+    // A volunteer session is never consulted on this path.
+    expect(mockAuth).not.toHaveBeenCalled();
+  });
+
+  it("refuses a request carrying no portal credential", async () => {
+    mockResolveChannel.mockResolvedValue(null);
+
+    const res = mockRes();
+    await createBlobDownloadHandler(buildDeps())(portalRecReq(), res);
+
+    expect(res.statusCode).toBe(401);
+    expect(mockResolveRecBlobKey).not.toHaveBeenCalled();
+  });
+
+  it("refuses a recording no wrap ties to this channel (404)", async () => {
+    mockResolveChannel.mockResolvedValue({ id: "chan-1" });
+    mockResolveRecBlobKey.mockResolvedValue(null);
+
+    const deps = buildDeps();
+    const res = mockRes();
+    await createBlobDownloadHandler(deps)(portalRecReq(), res);
+
+    expect(res.statusCode).toBe(404);
+    expect(deps.blobStore.get).not.toHaveBeenCalled();
+  });
+
+  it("refuses when the org cannot be resolved from the request", async () => {
+    const res = mockRes();
+    await createBlobDownloadHandler(
+      buildDeps({ orgResolver: vi.fn(async () => null) }),
+    )(portalRecReq(), res);
 
     expect(res.statusCode).toBe(401);
     expect(mockResolveChannel).not.toHaveBeenCalled();

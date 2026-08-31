@@ -1,32 +1,36 @@
 <!--
   Inline voicemail audio player for the chat timeline.
 
-  Fetches encrypted recording blob via tRPC, decrypts via CryptoBridge,
-  decodes to AudioBuffer, then delegates playback rendering to AudioPlayer.
+  Crypto-agnostic: the caller injects a `decrypt` callback so the same
+  component renders on both org and portal surfaces without importing
+  CryptoBridge or ticket-key types. Mirrors the MmsImage injected-decrypt
+  pattern (ADR-092).
+
+  Fetches the encrypted recording blob from `blobUrl`, decrypts via the
+  caller's callback, decodes to AudioBuffer, then delegates playback
+  rendering to AudioPlayer.
 
   iOS Safari: AudioContext singleton created on first user interaction.
   Audio decoded eagerly on mount so AudioPlayer can start playback
   synchronously from the pre-decoded buffer.
 -->
 <script lang="ts">
-  import { blobSlot } from "@care-y/crypto";
   import * as m from "$lib/paraglide/messages.js";
   import DecryptPlaceholder from "$lib/components/DecryptPlaceholder.svelte";
   import AudioPlayer from "$lib/components/AudioPlayer.svelte";
-  import { getCryptoBridge } from "$lib/crypto/context.js";
   import { fetchBlob } from "$lib/utils/fetch-blob.js";
-  import type { TicketKeyWrap } from "$lib/crypto/ticket-decrypt-cache.js";
 
   interface Props {
-    recordingId: string;
-    ticketId: string;
-    keyWrap: TicketKeyWrap | null;
+    /** URL to fetch the encrypted recording blob from. */
+    blobUrl: string;
+    /** Extra headers to send with the blob fetch (portal credentials). */
+    fetchHeaders?: Record<string, string>;
+    /** Decrypt callback injected by the caller (org bridge or portal main-thread). */
+    decrypt: (ciphertext: ArrayBuffer) => Promise<ArrayBuffer>;
     durationSeconds: number | null;
   }
 
-  let { recordingId, ticketId, keyWrap, durationSeconds }: Props = $props();
-
-  const bridge = getCryptoBridge();
+  let { blobUrl, fetchHeaders, decrypt, durationSeconds }: Props = $props();
 
   const getAudioContext = (() => {
     let ctx: AudioContext | null = null;
@@ -41,30 +45,15 @@
   const isLoading = $derived(!fetchError && audioBuffer === null);
 
   $effect(() => {
-    if (keyWrap === null) {
-      fetchError = true;
-      return;
-    }
-
     const ac = new AbortController();
     const aborted = (): boolean => ac.signal.aborted;
 
     void (async () => {
       try {
-        const ciphertext = await fetchBlob(
-          `/api/blobs/recordings/${recordingId}`,
-          ac.signal,
-        );
+        const ciphertext = await fetchBlob(blobUrl, ac.signal, fetchHeaders);
         if (aborted()) return;
 
-        const decryptedBuf = await bridge.decryptBlob(
-          ticketId,
-          blobSlot(recordingId),
-          keyWrap.ephemeralPoint,
-          keyWrap.nonce,
-          keyWrap.wrappedKey,
-          ciphertext,
-        );
+        const decryptedBuf = await decrypt(ciphertext);
         if (aborted()) return;
 
         const ctx = getAudioContext();

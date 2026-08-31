@@ -34,6 +34,12 @@ export interface RecordingRecord {
   readonly durationSeconds: number | null;
   readonly createdAt: Date;
   readonly deletedAt: Date | null;
+  /**
+   * The file key wrapped under the follow-up's key, or null when the blob
+   * is encrypted directly under that key (ADR-089, ADR-092). Readers branch
+   * on this to know which envelope they are holding.
+   */
+  readonly fileKeyWrap: Buffer | null;
 }
 
 export interface AttachmentRecord {
@@ -120,6 +126,7 @@ function toRecordingRecord(row: {
   duration_seconds: number | null;
   created_at: Date;
   deleted_at: Date | null;
+  file_key_wrap: Buffer | null;
 }): RecordingRecord {
   return {
     id: row.id,
@@ -130,6 +137,7 @@ function toRecordingRecord(row: {
     durationSeconds: row.duration_seconds,
     createdAt: row.created_at,
     deletedAt: row.deleted_at,
+    fileKeyWrap: row.file_key_wrap,
   };
 }
 

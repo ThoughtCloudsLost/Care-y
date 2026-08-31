@@ -5,9 +5,10 @@
   via TanStack key deduplication). The first instance triggers the fetch;
   all others get instant cache hits. Filters to this follow-up client-side.
 
-  Branches on fileKeyWrap to select the decryption envelope (ADR-089):
-  null means the blob is encrypted directly under the ticket key (MMS
-  ingest), non-null means a file key that must be unwrapped first.
+  Branches on fileKeyWrap to select the decryption envelope (ADR-089,
+  ADR-092): null means the blob is encrypted directly under the ticket
+  key (MMS ingest / legacy voicemail), non-null means a file key that
+  must be unwrapped first.
 -->
 <script lang="ts">
   import { createQuery } from "@tanstack/svelte-query";
@@ -16,6 +17,7 @@
   import { trpc } from "$lib/trpc/index.js";
   import { requireRouter } from "$lib/errors.js";
   import { filenameSlot } from "@care-y/crypto";
+  import { buildRecordingDecrypt } from "$lib/tickets/recording-decrypt.js";
   import {
     getCryptoBridge,
     getFollowUpDecryptCache,
@@ -79,9 +81,14 @@
 
 {#each recordings as rec (rec.id)}
   <VoicemailPlayer
-    recordingId={rec.id}
-    {ticketId}
-    {keyWrap}
+    blobUrl={`/api/blobs/recordings/${rec.id}`}
+    decrypt={buildRecordingDecrypt(
+      bridge,
+      ticketId,
+      keyWrap,
+      rec.id,
+      rec.fileKeyWrap,
+    )}
     durationSeconds={rec.durationSeconds}
   />
 {/each}

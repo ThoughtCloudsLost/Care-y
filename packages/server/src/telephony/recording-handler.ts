@@ -36,6 +36,8 @@ import type {
   QueueId,
   TicketId,
   FollowupId,
+  ClientId,
+  ChannelRowId,
 } from "@care-y/shared";
 import {
   type RecordingSid,
@@ -43,6 +45,7 @@ import {
   recordingSidSchema,
   callSidSchema,
 } from "@care-y/shared";
+import { findActiveChannel } from "../portal/channel-service.js";
 
 export interface RecordingHandlerDeps {
   readonly provider: TelephonyProvider;
@@ -206,6 +209,36 @@ export async function handleRecordingComplete(
     return { ticketId: null, followUpId: null };
   }
 
+  // Best-effort: resolve the client's active portal channel so voicemail
+  // can use the file-key envelope and write a portal carrier row (ADR-092).
+  // The clientId comes from the tracked call or, when that is null, from
+  // the ticket row. Failure must not affect the forward path.
+  let portalSeal:
+    | { readonly channelRowId: ChannelRowId; readonly clientPublic: Buffer }
+    | undefined;
+  try {
+    let resolvedClientId: ClientId | null = tracked.clientId;
+    if (resolvedClientId === null) {
+      const ticketRow = await tDb
+        .selectFrom("tickets")
+        .select("client_id")
+        .where("id", "=", ticketId)
+        .executeTakeFirst();
+      resolvedClientId = ticketRow?.client_id ?? null;
+    }
+    if (resolvedClientId !== null) {
+      const activeChannel = await findActiveChannel(tDb, resolvedClientId);
+      if (activeChannel) {
+        portalSeal = {
+          channelRowId: activeChannel.id,
+          clientPublic: activeChannel.client_public,
+        };
+      }
+    }
+  } catch {
+    console.warn("Portal seal skipped: channel lookup failed for recording");
+  }
+
   // Fetch raw audio from the provider
   const rawAudio = await provider.getRecording(recordingSid);
 
@@ -220,6 +253,7 @@ export async function handleRecordingComplete(
       recording: { data: rawAudio, durationSeconds },
       blobStore,
       orgSchema,
+      ...(portalSeal !== undefined ? { portalSeal } : {}),
     },
   );
 

@@ -378,6 +378,14 @@ export type PortalMessageId = z.infer<typeof portalMessageIdSchema>;
 export const portalAttachmentIdSchema = z.uuid().brand<"PortalAttachmentId">();
 export type PortalAttachmentId = z.infer<typeof portalAttachmentIdSchema>;
 
+/**
+ * `portal_recordings.id`. Distinct from `portal_recordings.recording_id`,
+ * which is a RecordingId referencing the shared blob row: one recording has
+ * one RecordingId and one client-copy row per channel that can read it.
+ */
+export const portalRecordingIdSchema = z.uuid().brand<"PortalRecordingId">();
+export type PortalRecordingId = z.infer<typeof portalRecordingIdSchema>;
+
 /** `client_accounts.id`, `client_account_sessions.account_id`. */
 export const clientAccountIdSchema = z.uuid().brand<"ClientAccountId">();
 export type ClientAccountId = z.infer<typeof clientAccountIdSchema>;

@@ -8,8 +8,20 @@ import {
   afterAll,
 } from "vitest";
 
+vi.mock("./inbound-mms.js", async (importOriginal) => {
+  const original = await importOriginal<typeof InboundMmsModule>();
+  return {
+    ...original,
+    processAttachments: vi.fn().mockResolvedValue({
+      accepted: [],
+      rejected: [],
+    }),
+  };
+});
+
 import { handleInboundSms } from "./inbound-sms.js";
 import type { InboundSmsDeps } from "./inbound-sms.js";
+import type * as InboundMmsModule from "./inbound-mms.js";
 import type { TelephonyProvider, IncomingSmsData } from "./provider.js";
 import type { SealedBoxEncryptor } from "../crypto/sealed-box.js";
 import type { BlindIndexer } from "../crypto/field-encryptor.js";
@@ -506,6 +518,101 @@ describe.skipIf(!process.env.DATABASE_URL)(
 
       insertSpy.mockRestore();
       warnSpy.mockRestore();
+    }, 30_000);
+
+    // --- MMS portal carrier tests (ADR-092) ---
+
+    it("writes portal_attachments carrier rows when channel exists and MMS attachments are present", async () => {
+      const { deps, fixture } = await buildDbDeps();
+      const kp = generateTestKeypair();
+      const channelRowId = await seedPortalChannel(
+        tDb,
+        fixture.clientId,
+        kp.pub,
+      );
+
+      const smsData = makeSmsData({
+        body: "mms with image",
+        numMedia: 1,
+        mediaUrls: ["https://example.com/image.jpg"],
+        mediaContentTypes: ["image/jpeg"],
+      });
+
+      // Mock processAttachments to return a fake attachment buffer
+      const mms = await import("./inbound-mms.js");
+      vi.mocked(mms.processAttachments).mockResolvedValueOnce({
+        accepted: [
+          {
+            data: Buffer.from("fake-image-data"),
+            contentType: "image/jpeg",
+            sizeBytes: 15,
+          },
+        ],
+        rejected: [],
+      });
+
+      const result = await handleInboundSms(smsData, deps);
+      expect(result).not.toBeNull();
+
+      // Verify portal_attachments carrier row exists
+      const paRows = await tDb
+        .selectFrom("portal_attachments")
+        .selectAll()
+        .where("channel_id", "=", channelRowId)
+        .where("followup_id", "=", result!.followUpId)
+        .execute();
+
+      expect(paRows).toHaveLength(1);
+      expect(paRows[0]!.direction).toBe("from_client");
+
+      // Verify the attachment row has non-null file_key_wrap
+      const attRow = await tDb
+        .selectFrom("attachments")
+        .select("file_key_wrap")
+        .where("followup_id", "=", result!.followUpId)
+        .executeTakeFirstOrThrow();
+      expect(attRow.file_key_wrap).not.toBeNull();
+    }, 30_000);
+
+    it("writes old envelope (null file_key_wrap) when no channel exists and MMS is present", async () => {
+      const { deps } = await buildDbDeps();
+
+      const smsData = makeSmsData({
+        body: "mms no channel",
+        numMedia: 1,
+        mediaUrls: ["https://example.com/doc.pdf"],
+        mediaContentTypes: ["application/pdf"],
+      });
+
+      const mms = await import("./inbound-mms.js");
+      vi.mocked(mms.processAttachments).mockResolvedValueOnce({
+        accepted: [
+          {
+            data: Buffer.from("fake-pdf"),
+            contentType: "application/pdf",
+            sizeBytes: 8,
+          },
+        ],
+        rejected: [],
+      });
+
+      const result = await handleInboundSms(smsData, deps);
+      expect(result).not.toBeNull();
+
+      const attRow = await tDb
+        .selectFrom("attachments")
+        .select("file_key_wrap")
+        .where("followup_id", "=", result!.followUpId)
+        .executeTakeFirstOrThrow();
+      expect(attRow.file_key_wrap).toBeNull();
+
+      // No portal carrier rows
+      const paRows = await tDb
+        .selectFrom("portal_attachments")
+        .selectAll()
+        .where("followup_id", "=", result!.followUpId)
+        .execute();
+      expect(paRows).toHaveLength(0);
     }, 30_000);
   },
 );

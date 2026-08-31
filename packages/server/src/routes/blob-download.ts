@@ -2,7 +2,8 @@
  * HTTP handler for downloading encrypted blobs as application/octet-stream.
  *
  * Path: /api/blobs/<category>/<uuid>
- * Categories: recordings, attachments, kb-attachments, portal-attachments
+ * Categories: recordings, attachments, kb-attachments, portal-attachments,
+ *             portal-recordings
  *
  * Authenticated, by one of two credentials. A volunteer presents a session
  * cookie and must hold VIEW_TICKETS; the handler delegates to a media
@@ -15,7 +16,7 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
 import type { Kysely } from "kysely";
 import { Permission } from "@care-y/shared";
-import type { OrgSchema, UserId, BlobKey } from "@care-y/shared";
+import type { OrgSchema, UserId, BlobKey, ChannelRowId } from "@care-y/shared";
 import {
   recordingIdSchema,
   attachmentIdSchema,
@@ -35,9 +36,14 @@ import {
 import type { SessionRepository } from "../auth/session-repository.js";
 import { resolvePortalBlobChannel } from "../portal/portal-blob-auth.js";
 import { resolveChannelBlobKey } from "../portal/portal-attachment-service.js";
+import { resolveChannelRecordingBlobKey } from "../portal/portal-recording-service.js";
 
 type BlobCategory =
-  "recordings" | "attachments" | "kb-attachments" | "portal-attachments";
+  | "recordings"
+  | "attachments"
+  | "kb-attachments"
+  | "portal-attachments"
+  | "portal-recordings";
 
 const PATH_PREFIX = "/api/blobs/";
 
@@ -49,6 +55,7 @@ const VALID_CATEGORIES: ReadonlySet<string> = new Set<BlobCategory>([
   "attachments",
   "kb-attachments",
   "portal-attachments",
+  "portal-recordings",
 ]);
 
 export interface BlobDownloadHandlerDeps {
@@ -120,12 +127,36 @@ export function createBlobDownloadHandler(
     // authorization question, so it answers before the volunteer path
     // rather than borrowing a session it will never have.
     if (category === "portal-attachments") {
-      await servePortalAttachment(req, res, id, {
-        orgResolver,
-        createTenantDb,
-        blobStore,
-        corsHeaders,
-      });
+      await servePortalBlob(
+        req,
+        res,
+        id,
+        attachmentIdSchema,
+        resolveChannelBlobKey,
+        {
+          orgResolver,
+          createTenantDb,
+          blobStore,
+          corsHeaders,
+        },
+      );
+      return;
+    }
+
+    if (category === "portal-recordings") {
+      await servePortalBlob(
+        req,
+        res,
+        id,
+        recordingIdSchema,
+        resolveChannelRecordingBlobKey,
+        {
+          orgResolver,
+          createTenantDb,
+          blobStore,
+          corsHeaders,
+        },
+      );
       return;
     }
 
@@ -208,22 +239,31 @@ async function streamBlob(
   res.end(blob);
 }
 
+/** A function that resolves a blob key given a channel and a parsed id. */
+type PortalBlobResolver<TId> = (
+  db: Kysely<TenantDatabase>,
+  channelRowId: ChannelRowId,
+  id: TId,
+) => Promise<BlobKey | null>;
+
 /**
- * Serve one attachment to the portal channel that asked for it.
+ * Serve one blob to the portal channel that asked for it.
  *
  * Two checks, and both are needed. The credential says which channel is
- * asking. The wrap lookup says whether that channel may read this file:
- * an attachment id is a uuid a client could hold from another context, so
- * it authorizes nothing on its own (ADR-089).
+ * asking. The resolver says whether that channel may read this file:
+ * an id is a uuid a client could hold from another context, so it
+ * authorizes nothing on its own (ADR-089).
  *
  * Every failure answers 401 or 404 with no detail. A response that
  * distinguished "no such file" from "not yours" would let anyone holding
  * a channel enumerate what other files exist.
  */
-async function servePortalAttachment(
+async function servePortalBlob<TId>(
   req: IncomingMessage,
   res: ServerResponse,
   id: string,
+  idSchema: { parse: (v: string) => TId },
+  resolver: PortalBlobResolver<TId>,
   deps: {
     orgResolver: OrgResolver;
     createTenantDb: (orgSchema: OrgSchema) => Kysely<TenantDatabase>;
@@ -246,8 +286,8 @@ async function servePortalAttachment(
       return;
     }
 
-    const attachmentId = attachmentIdSchema.parse(id);
-    const blobKey = await resolveChannelBlobKey(tDb, channel.id, attachmentId);
+    const parsedId = idSchema.parse(id);
+    const blobKey = await resolver(tDb, channel.id, parsedId);
     if (blobKey === null) {
       sendJsonResponse(res, 404, { error: "not_found" });
       return;

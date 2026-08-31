@@ -17,12 +17,18 @@ import {
   registerPortalExpiryHandler,
   PORTAL_EXPIRY_QUEUE,
 } from "./portal-message-expiry.js";
-import { channelSecretSchema, newFollowupId } from "@care-y/shared";
+import {
+  channelSecretSchema,
+  newFollowupId,
+  newAttachmentId,
+  newRecordingId,
+} from "@care-y/shared";
 import type {
   ClientId,
   ChannelRowId,
   TicketId,
   PortalMessageId,
+  BlobKey,
 } from "@care-y/shared";
 
 // ---------------------------------------------------------------------------
@@ -158,6 +164,262 @@ describe.skipIf(!process.env.DATABASE_URL)(
         .where("id", "=", msgId)
         .executeTakeFirst();
       expect(remaining).toBeDefined();
+    });
+
+    it("deletes portal_attachments for expired channels", async () => {
+      const fixture = await createTestTicketFixture(testDb.db);
+      const oldDate = new Date(Date.now() - 31 * 24 * 60 * 60 * 1000);
+      const expiredChannelId = await insertChannel(
+        testDb.db,
+        fixture.clientId,
+        oldDate,
+      );
+
+      // Seed a follow-up, attachment, and portal_attachments wrap
+      const fuId = newFollowupId();
+      await testDb.db
+        .insertInto("followups")
+        .values({
+          id: fuId,
+          ticket_id: fixture.ticketId,
+          source: "client",
+          type: "message",
+          encrypted_content: Buffer.from("ct"),
+        })
+        .execute();
+
+      const attId = newAttachmentId();
+      await testDb.db
+        .insertInto("attachments")
+        .values({
+          id: attId,
+          ticket_id: fixture.ticketId,
+          followup_id: fuId,
+          blob_key: "test/attachment/exp-att" as BlobKey,
+          size_bytes: 100,
+          content_type: "image/png",
+          encrypted_filename: Buffer.from("enc"),
+          file_key_wrap: Buffer.alloc(72, 0xab),
+        })
+        .execute();
+
+      await testDb.db
+        .insertInto("portal_attachments")
+        .values({
+          attachment_id: attId,
+          channel_id: expiredChannelId,
+          followup_id: fuId,
+          direction: "from_client",
+          ephemeral_point: Buffer.alloc(32, 0x01),
+          nonce: Buffer.alloc(24, 0x02),
+          ciphertext: Buffer.from("wrap-ct"),
+        })
+        .execute();
+
+      await expirePortalMessages(testDb.db);
+
+      const remaining = await testDb.db
+        .selectFrom("portal_attachments")
+        .select("id")
+        .where("channel_id", "=", expiredChannelId)
+        .executeTakeFirst();
+      expect(remaining).toBeUndefined();
+
+      // Attachment row itself stays (only the portal wrap is deleted)
+      const attRow = await testDb.db
+        .selectFrom("attachments")
+        .select("id")
+        .where("id", "=", attId)
+        .executeTakeFirst();
+      expect(attRow).toBeDefined();
+    });
+
+    it("deletes portal_recordings for expired channels", async () => {
+      const fixture = await createTestTicketFixture(testDb.db);
+      const oldDate = new Date(Date.now() - 31 * 24 * 60 * 60 * 1000);
+      const expiredChannelId = await insertChannel(
+        testDb.db,
+        fixture.clientId,
+        oldDate,
+      );
+
+      const fuId = newFollowupId();
+      await testDb.db
+        .insertInto("followups")
+        .values({
+          id: fuId,
+          ticket_id: fixture.ticketId,
+          source: "system",
+          type: "phone_call",
+          encrypted_content: Buffer.from("ct"),
+        })
+        .execute();
+
+      const recId = newRecordingId();
+      await testDb.db
+        .insertInto("recordings")
+        .values({
+          id: recId,
+          ticket_id: fixture.ticketId,
+          followup_id: fuId,
+          blob_key: "test/recording/exp-rec" as BlobKey,
+          size_bytes: 256,
+          duration_seconds: 30,
+          file_key_wrap: Buffer.alloc(72, 0xab),
+        })
+        .execute();
+
+      await testDb.db
+        .insertInto("portal_recordings")
+        .values({
+          recording_id: recId,
+          channel_id: expiredChannelId,
+          followup_id: fuId,
+          direction: "to_client",
+          ephemeral_point: Buffer.alloc(32, 0x01),
+          nonce: Buffer.alloc(24, 0x02),
+          ciphertext: Buffer.from("wrap-ct"),
+        })
+        .execute();
+
+      await expirePortalMessages(testDb.db);
+
+      const remaining = await testDb.db
+        .selectFrom("portal_recordings")
+        .select("id")
+        .where("channel_id", "=", expiredChannelId)
+        .executeTakeFirst();
+      expect(remaining).toBeUndefined();
+
+      // Recording row itself stays
+      const recRow = await testDb.db
+        .selectFrom("recordings")
+        .select("id")
+        .where("id", "=", recId)
+        .executeTakeFirst();
+      expect(recRow).toBeDefined();
+    });
+
+    it("leaves all three tables' rows for fresh channels", async () => {
+      const fixture = await createTestTicketFixture(testDb.db);
+      const recentDate = new Date(Date.now() - 1 * 24 * 60 * 60 * 1000);
+      const freshChannelId = await insertChannel(
+        testDb.db,
+        fixture.clientId,
+        recentDate,
+      );
+
+      // Message
+      const msgId = await insertPortalMessage(
+        testDb.db,
+        freshChannelId,
+        fixture.ticketId,
+      );
+
+      // Attachment
+      const fuIdAtt = newFollowupId();
+      await testDb.db
+        .insertInto("followups")
+        .values({
+          id: fuIdAtt,
+          ticket_id: fixture.ticketId,
+          source: "client",
+          type: "message",
+          encrypted_content: Buffer.from("ct"),
+        })
+        .execute();
+
+      const attId = newAttachmentId();
+      await testDb.db
+        .insertInto("attachments")
+        .values({
+          id: attId,
+          ticket_id: fixture.ticketId,
+          followup_id: fuIdAtt,
+          blob_key: "test/attachment/fresh-att" as BlobKey,
+          size_bytes: 100,
+          content_type: "image/png",
+          encrypted_filename: Buffer.from("enc"),
+          file_key_wrap: Buffer.alloc(72, 0xab),
+        })
+        .execute();
+
+      await testDb.db
+        .insertInto("portal_attachments")
+        .values({
+          attachment_id: attId,
+          channel_id: freshChannelId,
+          followup_id: fuIdAtt,
+          direction: "from_client",
+          ephemeral_point: Buffer.alloc(32, 0x01),
+          nonce: Buffer.alloc(24, 0x02),
+          ciphertext: Buffer.from("ct"),
+        })
+        .execute();
+
+      // Recording
+      const fuIdRec = newFollowupId();
+      await testDb.db
+        .insertInto("followups")
+        .values({
+          id: fuIdRec,
+          ticket_id: fixture.ticketId,
+          source: "system",
+          type: "phone_call",
+          encrypted_content: Buffer.from("ct"),
+        })
+        .execute();
+
+      const recId = newRecordingId();
+      await testDb.db
+        .insertInto("recordings")
+        .values({
+          id: recId,
+          ticket_id: fixture.ticketId,
+          followup_id: fuIdRec,
+          blob_key: "test/recording/fresh-rec" as BlobKey,
+          size_bytes: 256,
+          duration_seconds: 30,
+          file_key_wrap: Buffer.alloc(72, 0xab),
+        })
+        .execute();
+
+      await testDb.db
+        .insertInto("portal_recordings")
+        .values({
+          recording_id: recId,
+          channel_id: freshChannelId,
+          followup_id: fuIdRec,
+          direction: "to_client",
+          ephemeral_point: Buffer.alloc(32, 0x01),
+          nonce: Buffer.alloc(24, 0x02),
+          ciphertext: Buffer.from("ct"),
+        })
+        .execute();
+
+      await expirePortalMessages(testDb.db);
+
+      // All three should still be there
+      const msg = await testDb.db
+        .selectFrom("portal_messages")
+        .select("id")
+        .where("id", "=", msgId)
+        .executeTakeFirst();
+      expect(msg).toBeDefined();
+
+      const att = await testDb.db
+        .selectFrom("portal_attachments")
+        .select("id")
+        .where("channel_id", "=", freshChannelId)
+        .executeTakeFirst();
+      expect(att).toBeDefined();
+
+      const rec = await testDb.db
+        .selectFrom("portal_recordings")
+        .select("id")
+        .where("channel_id", "=", freshChannelId)
+        .executeTakeFirst();
+      expect(rec).toBeDefined();
     });
 
     it("uses created_at when last_seen_at is null (channel never visited)", async () => {

@@ -50,6 +50,11 @@ import {
   type PortalAttachmentWire,
   type PreparedAttachment,
 } from "./portal-attachment-service.js";
+import {
+  listChannelRecordings,
+  purgeChannelRecordings,
+  type PortalRecordingWire,
+} from "./portal-recording-service.js";
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -104,6 +109,21 @@ export interface PortalMessageWire {
   readonly editedAt: string | null;
 }
 
+/**
+ * A phone call follow-up entry surfaced on the portal thread.
+ *
+ * Plaintext by design (ADR-092): the columns are already plaintext in
+ * the database, and sealing a copy of values a database attacker can
+ * read directly would add ceremony, not confidentiality.
+ */
+export interface PortalCallEntry {
+  readonly id: string;
+  readonly source: string;
+  readonly callStatus: string | null;
+  readonly callDurationSeconds: number | null;
+  readonly createdAt: string;
+}
+
 export interface PortalBootstrapResult {
   readonly hasPassphrase: boolean;
   readonly keyCheck: {
@@ -114,6 +134,8 @@ export interface PortalBootstrapResult {
   readonly ticketId: TicketId | null;
   readonly messages: readonly PortalMessageWire[];
   readonly attachments: readonly PortalAttachmentWire[];
+  readonly recordings: readonly PortalRecordingWire[];
+  readonly callEntries: readonly PortalCallEntry[];
   readonly messagesExpireDays: number;
   /** Org-configured quick-exit target; null falls back to the client default. */
   readonly safeExitUrl: string | null;
@@ -193,14 +215,16 @@ async function touchChannel(
   const lastActivity = channel.last_seen_at ?? channel.created_at;
   const boundaryMs = EXPIRY_DAYS * 24 * 60 * 60 * 1000;
   if (Date.now() - lastActivity.getTime() > boundaryMs) {
-    // Drop both message copies and attachment wraps in one transaction
-    // so the expired thread's files stop opening for the client atomically.
+    // Drop message copies, attachment wraps, and recording wraps in one
+    // transaction so the expired thread's files stop opening for the
+    // client atomically.
     await db.transaction().execute(async (trx) => {
       await trx
         .deleteFrom("portal_messages")
         .where("channel_id", "=", channel.id)
         .execute();
       await purgeChannelAttachments(trx, channel.id);
+      await purgeChannelRecordings(trx, channel.id);
     });
   }
 }
@@ -242,6 +266,37 @@ export async function bootstrap(
 
   const messages: PortalMessageWire[] = rows.map(rowToWire);
   const attachments = await listChannelAttachments(db, channel.id);
+  const recordings = await listChannelRecordings(db, channel.id);
+
+  // Call entries: phone_call follow-ups for this client's tickets.
+  // Scoped to the client, not one ticket, because channels belong to
+  // clients and a merged client owns tickets from both former records
+  // (ADR-092). Plaintext by design: these columns are already
+  // plaintext in the database.
+  const callEntryRows = await db
+    .selectFrom("followups as f")
+    .innerJoin("tickets as t", "t.id", "f.ticket_id")
+    .select([
+      "f.id",
+      "f.source",
+      "f.call_status",
+      "f.call_duration_seconds",
+      "f.created_at",
+    ])
+    .where("t.client_id", "=", channel.client_id)
+    .where("f.type", "=", "phone_call")
+    .where("f.is_private", "=", false)
+    .where("f.deleted_at", "is", null)
+    .orderBy("f.created_at", "asc")
+    .execute();
+
+  const callEntries: PortalCallEntry[] = callEntryRows.map((r) => ({
+    id: r.id,
+    source: r.source,
+    callStatus: r.call_status,
+    callDurationSeconds: r.call_duration_seconds,
+    createdAt: r.created_at.toISOString(),
+  }));
 
   const orgConfig = await db
     .selectFrom("org_config")
@@ -258,6 +313,8 @@ export async function bootstrap(
     ticketId: ticket?.id ?? null,
     messages,
     attachments,
+    recordings,
+    callEntries,
     messagesExpireDays: EXPIRY_DAYS,
     safeExitUrl: orgConfig?.portal_safe_exit_url ?? null,
     accountOffer:

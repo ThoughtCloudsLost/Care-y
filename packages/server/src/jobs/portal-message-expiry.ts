@@ -1,12 +1,14 @@
 /**
- * Portal message expiry job.
+ * Portal expiry job.
  *
- * Recurring daily job that deletes portal_messages ciphertext for
- * channels whose last activity (COALESCE(last_seen_at, created_at))
- * exceeds the 30-day boundary. Iterates all active tenant schemas
- * via the same pattern as the escalation rules checker.
+ * Recurring daily job that deletes portal_messages, portal_attachments,
+ * and portal_recordings for channels whose last activity
+ * (COALESCE(last_seen_at, created_at)) exceeds the 30-day boundary.
+ * Iterates all active tenant schemas via the same pattern as the
+ * escalation rules checker.
  *
- * Deletes ciphertext only. Logs row counts per org schema and
+ * Deletes portal copies only (wraps and message ciphertext). The
+ * org-side rows and blobs stay. Logs row counts per org schema and
  * nothing else (no channel ids, no PII).
  */
 
@@ -27,30 +29,45 @@ export const DEFAULT_PORTAL_EXPIRY_INTERVAL_MS = 24 * 60 * 60 * 1000; // daily
 // ---------------------------------------------------------------------------
 
 /**
- * Delete portal_messages for channels inactive longer than 30 days.
- * Returns the number of rows deleted.
+ * Delete portal_messages, portal_attachments, and portal_recordings for
+ * channels inactive longer than 30 days. Returns the number of
+ * portal_messages rows deleted (the primary metric the registered
+ * handler uses).
  */
 export async function expirePortalMessages(
   db: Kysely<TenantDatabase>,
 ): Promise<number> {
-  // Kind-agnostic: expiry applies to all channel kinds uniformly
-  const result = await db
-    .deleteFrom("portal_messages")
+  // Kind-agnostic: expiry applies to all channel kinds uniformly.
+  // The expired channel subquery is shared across all three deletes.
+  const expiredChannels = db
+    .selectFrom("portal_channels")
+    .select("id")
     .where(
-      "channel_id",
-      "in",
-      db
-        .selectFrom("portal_channels")
-        .select("id")
-        .where(
-          sql`COALESCE(last_seen_at, created_at)`,
-          "<",
-          sql`now() - interval '30 days'`,
-        ),
-    )
-    .executeTakeFirst();
+      sql`COALESCE(last_seen_at, created_at)`,
+      "<",
+      sql`now() - interval '30 days'`,
+    );
 
-  return Number(result.numDeletedRows);
+  return await db.transaction().execute(async (trx) => {
+    // Delete attachment wraps and recording wraps first (no FK to
+    // portal_messages, but the same expired channel set).
+    await trx
+      .deleteFrom("portal_attachments")
+      .where("channel_id", "in", expiredChannels)
+      .execute();
+
+    await trx
+      .deleteFrom("portal_recordings")
+      .where("channel_id", "in", expiredChannels)
+      .execute();
+
+    const result = await trx
+      .deleteFrom("portal_messages")
+      .where("channel_id", "in", expiredChannels)
+      .executeTakeFirst();
+
+    return Number(result.numDeletedRows);
+  });
 }
 
 // ---------------------------------------------------------------------------

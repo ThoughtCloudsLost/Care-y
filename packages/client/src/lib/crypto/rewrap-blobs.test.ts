@@ -172,7 +172,12 @@ describe("rewrapBlobsForFollowUp", () => {
     ]);
 
     router.listRecordings.query.mockResolvedValue([
-      { id: "rec-1", blobKey: "blob-rec-1", followupId: FOLLOW_UP_ID },
+      {
+        id: "rec-1",
+        blobKey: "blob-rec-1",
+        followupId: FOLLOW_UP_ID,
+        fileKeyWrap: null,
+      },
     ]);
 
     const recBuffer = new ArrayBuffer(8);
@@ -261,7 +266,12 @@ describe("rewrapBlobsForFollowUp", () => {
     ]);
 
     router.listRecordings.query.mockResolvedValue([
-      { id: "rec-fail", blobKey: "blob-fail", followupId: FOLLOW_UP_ID },
+      {
+        id: "rec-fail",
+        blobKey: "blob-fail",
+        followupId: FOLLOW_UP_ID,
+        fileKeyWrap: null,
+      },
     ]);
     mockFetchBlob.mockRejectedValue(new Error("Network error"));
 
@@ -310,7 +320,12 @@ describe("rewrapBlobsForFollowUp", () => {
     ]);
 
     router.listRecordings.query.mockResolvedValue([
-      { id: "rec-1", blobKey: "blob-rec-1", followupId: FOLLOW_UP_ID },
+      {
+        id: "rec-1",
+        blobKey: "blob-rec-1",
+        followupId: FOLLOW_UP_ID,
+        fileKeyWrap: null,
+      },
     ]);
     router.listAttachments.query.mockResolvedValue([
       {
@@ -468,8 +483,18 @@ describe("rewrapBlobsForFollowUp", () => {
     ]);
 
     router.listRecordings.query.mockResolvedValue([
-      { id: "rec-a", blobKey: "blob-rec-a", followupId: FOLLOW_UP_ID },
-      { id: "rec-b", blobKey: "blob-rec-b", followupId: FOLLOW_UP_ID },
+      {
+        id: "rec-a",
+        blobKey: "blob-rec-a",
+        followupId: FOLLOW_UP_ID,
+        fileKeyWrap: null,
+      },
+      {
+        id: "rec-b",
+        blobKey: "blob-rec-b",
+        followupId: FOLLOW_UP_ID,
+        fileKeyWrap: null,
+      },
     ]);
     router.listAttachments.query.mockResolvedValue([
       {
@@ -533,9 +558,24 @@ describe("rewrapBlobsForFollowUp", () => {
     ]);
 
     router.listRecordings.query.mockResolvedValue([
-      { id: "rec-ok", blobKey: "blob-ok", followupId: FOLLOW_UP_ID },
-      { id: "rec-bad", blobKey: "blob-bad", followupId: FOLLOW_UP_ID },
-      { id: "rec-skip", blobKey: "blob-skip", followupId: FOLLOW_UP_ID },
+      {
+        id: "rec-ok",
+        blobKey: "blob-ok",
+        followupId: FOLLOW_UP_ID,
+        fileKeyWrap: null,
+      },
+      {
+        id: "rec-bad",
+        blobKey: "blob-bad",
+        followupId: FOLLOW_UP_ID,
+        fileKeyWrap: null,
+      },
+      {
+        id: "rec-skip",
+        blobKey: "blob-skip",
+        followupId: FOLLOW_UP_ID,
+        fileKeyWrap: null,
+      },
     ]);
 
     mockFetchBlob.mockResolvedValue(new ArrayBuffer(4));
@@ -569,7 +609,12 @@ describe("rewrapBlobsForFollowUp", () => {
     ]);
 
     router.listRecordings.query.mockResolvedValue([
-      { id: "rec-fail", blobKey: "blob-fail", followupId: FOLLOW_UP_ID },
+      {
+        id: "rec-fail",
+        blobKey: "blob-fail",
+        followupId: FOLLOW_UP_ID,
+        fileKeyWrap: null,
+      },
     ]);
     router.listAttachments.query.mockResolvedValue([
       {
@@ -728,6 +773,114 @@ describe("rewrapBlobsForFollowUp with file key attachments", () => {
     expect(mockFetchBlob).toHaveBeenCalledTimes(1);
     expect(mockFetchBlob).toHaveBeenCalledWith(
       "/api/blobs/attachments/att-mms",
+    );
+  });
+});
+
+describe("rewrapBlobsForFollowUp with file key recordings (ADR-092)", () => {
+  let bridge: CryptoBridge;
+  let router: ReturnType<typeof createMockTicketRouter>;
+
+  beforeEach(() => {
+    bridge = createMockBridge();
+    router = createMockTicketRouter();
+    mockFetchBlob.mockReset();
+  });
+
+  it("re-wraps the recording key and never downloads the blob", async () => {
+    const qc = createMockQueryClient([
+      { id: FOLLOW_UP_ID, hasRecording: true },
+    ]);
+
+    router.listRecordings.query.mockResolvedValue([
+      {
+        id: "rec-wrapped",
+        blobKey: "blob-wrapped",
+        followupId: FOLLOW_UP_ID,
+        fileKeyWrap: "rec-wrap-under-tk-temp",
+      },
+    ]);
+    router.listAttachments.query.mockResolvedValue([]);
+
+    (bridge.rewrapFileKey as ReturnType<typeof vi.fn>).mockResolvedValue({
+      attachmentId: "rec-wrapped",
+      fileKeyWrap: "rec-re-wrapped-key",
+    });
+
+    const result = await rewrapBlobsForFollowUp(
+      TICKET_ID,
+      FOLLOW_UP_ID,
+      bridge,
+      router as never,
+      qc,
+    );
+
+    expect(result.recordingFileKeyUpdates).toEqual([
+      { recordingId: "rec-wrapped", fileKeyWrap: "rec-re-wrapped-key" },
+    ]);
+    expect(result.blobUpdates).toEqual([]);
+    expect(result.fileKeyUpdates).toEqual([]);
+    // No encryptedFilename arg (recordings have no stored filename)
+    expect(bridge.rewrapFileKey).toHaveBeenCalledWith(
+      FOLLOW_UP_ID,
+      TICKET_ID,
+      "rec-wrapped",
+      "rec-wrap-under-tk-temp",
+    );
+    expect(mockFetchBlob).not.toHaveBeenCalled();
+    expect(bridge.rewrapBlob).not.toHaveBeenCalled();
+  });
+
+  it("sends each recording down the path its own envelope needs", async () => {
+    const qc = createMockQueryClient([
+      { id: FOLLOW_UP_ID, hasRecording: true },
+    ]);
+
+    router.listRecordings.query.mockResolvedValue([
+      {
+        id: "rec-wrapped",
+        blobKey: "blob-wrapped",
+        followupId: FOLLOW_UP_ID,
+        fileKeyWrap: "wrap-under-tk-temp",
+      },
+      {
+        id: "rec-direct",
+        blobKey: "blob-direct",
+        followupId: FOLLOW_UP_ID,
+        fileKeyWrap: null,
+      },
+    ]);
+    router.listAttachments.query.mockResolvedValue([]);
+
+    (bridge.rewrapFileKey as ReturnType<typeof vi.fn>).mockResolvedValue({
+      attachmentId: "rec-wrapped",
+      fileKeyWrap: "re-wrapped-key",
+    });
+
+    mockFetchBlob.mockResolvedValue(new ArrayBuffer(8));
+    (bridge.rewrapBlob as ReturnType<typeof vi.fn>).mockResolvedValue({
+      encryptedData: "re-encrypted-direct",
+      blobKey: "blob-direct",
+      category: "recording" as const,
+    });
+
+    const result = await rewrapBlobsForFollowUp(
+      TICKET_ID,
+      FOLLOW_UP_ID,
+      bridge,
+      router as never,
+      qc,
+    );
+
+    // Wrapped recording goes through rewrapFileKey
+    expect(result.recordingFileKeyUpdates).toHaveLength(1);
+    // Direct recording goes through download + rewrapBlob
+    expect(result.blobUpdates).toHaveLength(1);
+    expect(result.blobUpdates[0]!.category).toBe("recording");
+    // Only the direct recording is downloaded
+    expect(mockFetchBlob).toHaveBeenCalledTimes(1);
+    expect(mockFetchBlob).toHaveBeenCalledWith(
+      "/api/blobs/recordings/rec-direct",
     );
   });
 });

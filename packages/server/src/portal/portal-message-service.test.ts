@@ -45,6 +45,7 @@ import {
   orgSlugIdSchema,
   newFollowupId,
   newAttachmentId,
+  newRecordingId,
   newKeyGeneration,
   channelSecretSchema,
 } from "@care-y/shared";
@@ -56,6 +57,7 @@ import type {
   TicketId,
 } from "@care-y/shared";
 import type { BlobStore } from "../storage/store.js";
+import { insertClientRecordingWrap } from "./portal-recording-service.js";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -1082,6 +1084,267 @@ describe.skipIf(!process.env.DATABASE_URL)(
         expect(result.attachments[0]!.attachmentId).toBe(attId);
         expect(result.attachments[0]!.sizeBytes).toBe(256);
         expect(result.attachments[0]!.direction).toBe("from_client");
+      });
+    });
+
+    // -----------------------------------------------------------------------
+    // bootstrap recordings
+    // -----------------------------------------------------------------------
+
+    describe("bootstrap recordings", () => {
+      it("includes recordings for the channel in the bootstrap result", async () => {
+        const fixture = await createTestTicketFixture(testDb.db);
+        const channel = await insertChannel(testDb.db, fixture.clientId);
+
+        const fuId = newFollowupId();
+        await testDb.db
+          .insertInto("followups")
+          .values({
+            id: fuId,
+            ticket_id: fixture.ticketId,
+            source: "system",
+            type: "phone_call",
+            encrypted_content: Buffer.from("ct-rec"),
+          })
+          .execute();
+
+        const recId = newRecordingId();
+        await testDb.db
+          .insertInto("recordings")
+          .values({
+            id: recId,
+            ticket_id: fixture.ticketId,
+            followup_id: fuId,
+            blob_key: "test/recording/boot-1" as BlobKey,
+            size_bytes: 512,
+            duration_seconds: 60,
+            file_key_wrap: Buffer.alloc(72, 0xab),
+          })
+          .execute();
+
+        const triple = fakeTriple();
+        await insertClientRecordingWrap(testDb.db, {
+          recordingId: recId,
+          channelRowId: channel.id,
+          followupId: fuId,
+          direction: "to_client",
+          copy: triple,
+        });
+
+        const result = await bootstrap(testDb.db, channel);
+
+        expect(result.recordings.length).toBe(1);
+        expect(result.recordings[0]!.recordingId).toBe(recId);
+        expect(result.recordings[0]!.durationSeconds).toBe(60);
+        expect(result.recordings[0]!.direction).toBe("to_client");
+      });
+    });
+
+    // -----------------------------------------------------------------------
+    // bootstrap callEntries
+    // -----------------------------------------------------------------------
+
+    describe("bootstrap callEntries", () => {
+      it("returns phone_call follow-ups as callEntries", async () => {
+        const fixture = await createTestTicketFixture(testDb.db);
+        const channel = await insertChannel(testDb.db, fixture.clientId);
+
+        const fuId = newFollowupId();
+        await testDb.db
+          .insertInto("followups")
+          .values({
+            id: fuId,
+            ticket_id: fixture.ticketId,
+            source: "system",
+            type: "phone_call",
+            encrypted_content: Buffer.from("system"),
+            call_status: "completed",
+            call_duration_seconds: 120,
+          })
+          .execute();
+
+        const result = await bootstrap(testDb.db, channel);
+
+        expect(result.callEntries.length).toBeGreaterThanOrEqual(1);
+        const entry = result.callEntries.find((e) => e.id === fuId);
+        expect(entry).toBeDefined();
+        expect(entry!.source).toBe("system");
+        expect(entry!.callStatus).toBe("completed");
+        expect(entry!.callDurationSeconds).toBe(120);
+        expect(typeof entry!.createdAt).toBe("string");
+      });
+
+      it("excludes is_private=true follow-ups", async () => {
+        const fixture = await createTestTicketFixture(testDb.db);
+        const channel = await insertChannel(testDb.db, fixture.clientId);
+
+        const fuId = newFollowupId();
+        await testDb.db
+          .insertInto("followups")
+          .values({
+            id: fuId,
+            ticket_id: fixture.ticketId,
+            source: "system",
+            type: "phone_call",
+            is_private: true,
+            encrypted_content: Buffer.from("system"),
+            call_status: "completed",
+            call_duration_seconds: 30,
+          })
+          .execute();
+
+        const result = await bootstrap(testDb.db, channel);
+
+        const entry = result.callEntries.find((e) => e.id === fuId);
+        expect(entry).toBeUndefined();
+      });
+
+      it("excludes deleted follow-ups", async () => {
+        const fixture = await createTestTicketFixture(testDb.db);
+        const channel = await insertChannel(testDb.db, fixture.clientId);
+
+        const fuId = newFollowupId();
+        await testDb.db
+          .insertInto("followups")
+          .values({
+            id: fuId,
+            ticket_id: fixture.ticketId,
+            source: "system",
+            type: "phone_call",
+            encrypted_content: Buffer.from("system"),
+            call_status: "completed",
+            call_duration_seconds: 45,
+            deleted_at: new Date(),
+          })
+          .execute();
+
+        const result = await bootstrap(testDb.db, channel);
+
+        const entry = result.callEntries.find((e) => e.id === fuId);
+        expect(entry).toBeUndefined();
+      });
+
+      it("does not return calls from another client", async () => {
+        const fixture1 = await createTestTicketFixture(testDb.db);
+        const fixture2 = await createTestTicketFixture(testDb.db);
+        const channel1 = await insertChannel(testDb.db, fixture1.clientId);
+
+        // Insert a phone_call follow-up on fixture2's ticket
+        const fuId = newFollowupId();
+        await testDb.db
+          .insertInto("followups")
+          .values({
+            id: fuId,
+            ticket_id: fixture2.ticketId,
+            source: "system",
+            type: "phone_call",
+            encrypted_content: Buffer.from("system"),
+            call_status: "completed",
+            call_duration_seconds: 90,
+          })
+          .execute();
+
+        const result = await bootstrap(testDb.db, channel1);
+
+        const entry = result.callEntries.find((e) => e.id === fuId);
+        expect(entry).toBeUndefined();
+      });
+
+      it("excludes non-phone_call follow-ups", async () => {
+        const fixture = await createTestTicketFixture(testDb.db);
+        const channel = await insertChannel(testDb.db, fixture.clientId);
+
+        const fuId = newFollowupId();
+        await testDb.db
+          .insertInto("followups")
+          .values({
+            id: fuId,
+            ticket_id: fixture.ticketId,
+            source: "volunteer",
+            type: "message",
+            encrypted_content: Buffer.from("ct"),
+          })
+          .execute();
+
+        const result = await bootstrap(testDb.db, channel);
+
+        const entry = result.callEntries.find((e) => e.id === fuId);
+        expect(entry).toBeUndefined();
+      });
+    });
+
+    // -----------------------------------------------------------------------
+    // channel expiry drops recording wraps
+    // -----------------------------------------------------------------------
+
+    describe("channel expiry drops recording wraps", () => {
+      it("lazily deletes recording wraps on an expired channel", async () => {
+        const fixture = await createTestTicketFixture(testDb.db);
+        const oldDate = new Date(Date.now() - 31 * 24 * 60 * 60 * 1000);
+        const channel = await insertChannel(testDb.db, fixture.clientId, {
+          last_seen_at: oldDate,
+        });
+
+        const fuId = newFollowupId();
+        await testDb.db
+          .insertInto("followups")
+          .values({
+            id: fuId,
+            ticket_id: fixture.ticketId,
+            source: "system",
+            type: "phone_call",
+            encrypted_content: Buffer.from("ct"),
+          })
+          .execute();
+
+        const recId = newRecordingId();
+        await testDb.db
+          .insertInto("recordings")
+          .values({
+            id: recId,
+            ticket_id: fixture.ticketId,
+            followup_id: fuId,
+            blob_key: "test/recording/exp-key" as BlobKey,
+            size_bytes: 100,
+            duration_seconds: 10,
+            file_key_wrap: Buffer.alloc(72, 0xab),
+          })
+          .execute();
+
+        await insertClientRecordingWrap(testDb.db, {
+          recordingId: recId,
+          channelRowId: channel.id,
+          followupId: fuId,
+          direction: "to_client",
+          copy: fakeTriple(),
+        });
+
+        // Verify wrap exists
+        const before = await testDb.db
+          .selectFrom("portal_recordings")
+          .select("id")
+          .where("channel_id", "=", channel.id)
+          .execute();
+        expect(before.length).toBe(1);
+
+        // Bootstrap triggers touchChannel, which purges for expired channels
+        await bootstrap(testDb.db, channel);
+
+        // Wraps gone
+        const after = await testDb.db
+          .selectFrom("portal_recordings")
+          .select("id")
+          .where("channel_id", "=", channel.id)
+          .execute();
+        expect(after.length).toBe(0);
+
+        // Recording row itself stays
+        const recRow = await testDb.db
+          .selectFrom("recordings")
+          .select("id")
+          .where("id", "=", recId)
+          .executeTakeFirst();
+        expect(recRow).toBeDefined();
       });
     });
 

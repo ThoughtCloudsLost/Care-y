@@ -18,6 +18,7 @@ import {
   newFollowupId,
   newAttachmentId,
   newKeyGeneration,
+  newRecordingId,
   type KeyGeneration,
   type BlobKey,
   type OrgSchema,
@@ -300,6 +301,43 @@ describe.skipIf(!process.env.DATABASE_URL)("rewrapFollowUp (DB)", () => {
       .executeTakeFirstOrThrow();
     expect(nameless.file_key_wrap?.toString()).toBe("wrap-under-tk-2");
     expect(nameless.encrypted_filename?.toString()).toBe("untouched-name");
+  });
+
+  it("converges recording file key wraps in place (ADR-092)", async () => {
+    const { userId, followUpId, ticketId } = await createFixtureWithFollowUp();
+
+    const recId = newRecordingId();
+    await testDb.db
+      .insertInto("recordings")
+      .values({
+        id: recId,
+        ticket_id: ticketId,
+        followup_id: followUpId,
+        blob_key: "fk-rec-blob-1" as BlobKey,
+        size_bytes: 128,
+        duration_seconds: 5,
+        file_key_wrap: Buffer.from("wrap-under-tk-temp"),
+      })
+      .execute();
+
+    const result = await rewrapFollowUp(testDb.db, access, userId, {
+      followUpId,
+      encryptedContent: Buffer.from("canonical"),
+      recordingFileKeyUpdates: [
+        {
+          recordingId: recId,
+          fileKeyWrap: Buffer.from("wrap-under-tk"),
+        },
+      ],
+    });
+    expect(result.rewrapped).toBe(true);
+
+    const rec = await testDb.db
+      .selectFrom("recordings")
+      .select("file_key_wrap")
+      .where("id", "=", recId)
+      .executeTakeFirstOrThrow();
+    expect(rec.file_key_wrap?.toString()).toBe("wrap-under-tk");
   });
 
   it("skips blob processing when no blobUpdates provided", async () => {

@@ -37,18 +37,25 @@ interface FileKeyUpdate {
   encryptedFilename?: string;
 }
 
+interface RecordingFileKeyUpdate {
+  recordingId: string;
+  fileKeyWrap: string;
+}
+
 /**
  * What the follow-up's media needs from the convergence pass.
  *
- * Two shapes, because there are two envelopes. An attachment carrying a
- * file key wrap is re-wrapped in place: nothing is downloaded and nothing
- * is re-uploaded (ADR-089). Everything else, MMS images and voicemail
- * recordings among them, still travels through the browser to be
- * re-encrypted whole.
+ * Three shapes, because there are two envelopes applied to two media
+ * classes. An attachment or recording carrying a file key wrap is
+ * re-wrapped in place: nothing is downloaded and nothing is re-uploaded
+ * (ADR-089, ADR-092). Everything else (MMS images and legacy voicemail
+ * recordings without a file key) still travels through the browser to
+ * be re-encrypted whole.
  */
 export interface RewrapMediaUpdates {
   readonly blobUpdates: readonly BlobUpdate[];
   readonly fileKeyUpdates: readonly FileKeyUpdate[];
+  readonly recordingFileKeyUpdates: readonly RecordingFileKeyUpdate[];
 }
 
 interface FollowUpCacheEntry {
@@ -93,7 +100,7 @@ export async function rewrapBlobsForFollowUp(
   queryClient: QueryClient,
 ): Promise<RewrapMediaUpdates> {
   if (!followUpHasBlobs(ticketId, followUpId, queryClient)) {
-    return { blobUpdates: [], fileKeyUpdates: [] };
+    return { blobUpdates: [], fileKeyUpdates: [], recordingFileKeyUpdates: [] };
   }
 
   const [recordings, attachments] = await Promise.all([
@@ -111,6 +118,7 @@ export async function rewrapBlobsForFollowUp(
 
   const blobUpdates: BlobUpdate[] = [];
   const fileKeyUpdates: FileKeyUpdate[] = [];
+  const recordingFileKeyUpdates: RecordingFileKeyUpdate[] = [];
 
   async function rewrapItems(
     items: readonly { id: string; blobKey: string }[],
@@ -135,8 +143,31 @@ export async function rewrapBlobsForFollowUp(
     }
   }
 
+  // Recordings: split on fileKeyWrap (ADR-092). Wrapped recordings
+  // re-wrap the 32-byte key only, matching the attachment file-key path.
+  // Direct (null wrap) recordings still download and re-encrypt whole.
+  const wrappedRecordings = recordings.filter((r) => r.fileKeyWrap !== null);
+  const directRecordings = recordings.filter((r) => r.fileKeyWrap === null);
+
+  for (const rec of wrappedRecordings) {
+    // Non-null by construction of `wrappedRecordings`, and narrowing
+    // does not survive the filter callback.
+    const wrap = rec.fileKeyWrap ?? "";
+    // Recordings have no stored filename, so no encryptedFilename arg.
+    const result = await bridge.rewrapFileKey(
+      followUpId,
+      ticketId,
+      rec.id,
+      wrap,
+    );
+    recordingFileKeyUpdates.push({
+      recordingId: result.attachmentId,
+      fileKeyWrap: result.fileKeyWrap,
+    });
+  }
+
   await rewrapItems(
-    recordings,
+    directRecordings,
     async (id) => fetchBlob(`/api/blobs/recordings/${id}`),
     "recording",
   );
@@ -172,5 +203,5 @@ export async function rewrapBlobsForFollowUp(
     "attachment",
   );
 
-  return { blobUpdates, fileKeyUpdates };
+  return { blobUpdates, fileKeyUpdates, recordingFileKeyUpdates };
 }

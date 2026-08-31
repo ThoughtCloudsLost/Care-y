@@ -75,6 +75,7 @@ import type {
   ChannelSecret,
   PortalMessageId,
   PortalAttachmentId,
+  PortalRecordingId,
   ShareId,
   ClientAccountId,
   ClientAccountSessionId,
@@ -461,6 +462,13 @@ export interface RecordingsTable {
   duration_seconds: number | null;
   created_at: Generated<Date>;
   deleted_at: Date | null;
+  /**
+   * The file key encrypted under the follow-up's key. Null means the blob
+   * is encrypted directly under that key instead, the envelope voicemail
+   * ingest writes (ADR-089, ADR-092). Readers branch on this rather than
+   * on origin.
+   */
+  file_key_wrap: Buffer | null;
 }
 
 export interface AttachmentsTable {
@@ -881,6 +889,26 @@ export interface PortalAttachmentsTable {
   created_at: Generated<Date>;
 }
 
+/**
+ * The client's wrap of a recording file key, sealed to
+ * portal_channels.client_public.
+ *
+ * Mirrors portal_attachments but references recordings instead. The
+ * recording itself is stored once in the blob store; this row carries
+ * only the wrapped key that lets the channel's session open it.
+ */
+export interface PortalRecordingsTable {
+  id: Generated<PortalRecordingId>;
+  recording_id: RecordingId;
+  channel_id: ChannelRowId;
+  followup_id: FollowupId;
+  direction: string;
+  ephemeral_point: Buffer;
+  nonce: Buffer;
+  ciphertext: Buffer;
+  created_at: Generated<Date>;
+}
+
 // --- Client accounts (encrypted account portal) ---
 
 export interface ClientAccountsTable {
@@ -999,6 +1027,7 @@ export interface TenantDatabase {
   portal_channels: PortalChannelsTable;
   portal_messages: PortalMessagesTable;
   portal_attachments: PortalAttachmentsTable;
+  portal_recordings: PortalRecordingsTable;
   portal_reply_key_wraps: PortalReplyKeyWrapsTable;
   // Client portal (share links)
   share_links: ShareLinksTable;

@@ -761,9 +761,11 @@
     searchActive = false;
   }
 
-  // --- Attachments ---
+  // --- Attachments, recordings, and call entries ---
 
   const accountAttachments = $derived(bootstrapQuery.data?.attachments ?? []);
+  const accountRecordings = $derived(bootstrapQuery.data?.recordings ?? []);
+  const accountCallEntries = $derived(bootstrapQuery.data?.callEntries ?? []);
 
   // --- Filter pills (images / files) ---
 
@@ -959,6 +961,8 @@
         ) => activeSession.decryptAttachmentBlob(ct, fk, tid, aid)}
         loading={messagesQuery.isLoading}
         attachments={accountAttachments}
+        recordings={accountRecordings}
+        callEntries={accountCallEntries}
         ticketId={bootstrapQuery.data?.ticketId ?? undefined}
         {supportLabel}
         searchTerm={overlay.term ?? undefined}

@@ -1287,7 +1287,11 @@ export function createTicketRouter(deps: TicketRouterDeps) {
       .query(
         withErrorWrapping(async ({ ctx, input }) => {
           const svc = mediaSvc(ctx.org.tenantDb);
-          return svc.getRecording(ctx.user.id, input.recordingId);
+          const rec = await svc.getRecording(ctx.user.id, input.recordingId);
+          return {
+            ...rec,
+            fileKeyWrap: b64n(rec.fileKeyWrap),
+          };
         }),
       ),
 
@@ -1308,12 +1312,16 @@ export function createTicketRouter(deps: TicketRouterDeps) {
     listRecordings: volunteerProcedure.input(recordingListInputSchema).query(
       withErrorWrapping(async ({ ctx, input }) => {
         const svc = mediaSvc(ctx.org.tenantDb);
-        return svc.listRecordings(ctx.user.id, input.ticketId, {
+        const recs = await svc.listRecordings(ctx.user.id, input.ticketId, {
           limit: input.limit,
           cursor: input.cursor,
           direction: input.direction,
           followupId: input.followupId,
         });
+        return recs.map((r) => ({
+          ...r,
+          fileKeyWrap: b64n(r.fileKeyWrap),
+        }));
       }),
     ),
 
@@ -1777,6 +1785,16 @@ export function createTicketRouter(deps: TicketRouterDeps) {
               }),
             )
             .optional(),
+          // Recordings encrypted under a file key (ADR-092): same shape
+          // as fileKeyUpdates minus filename (recordings have none).
+          recordingFileKeyUpdates: z
+            .array(
+              z.object({
+                recordingId: recordingIdSchema,
+                fileKeyWrap: z.string().min(1),
+              }),
+            )
+            .optional(),
         }),
       )
       .mutation(
@@ -1802,6 +1820,12 @@ export function createTicketRouter(deps: TicketRouterDeps) {
                     ? Buffer.from(f.encryptedFilename, "base64")
                     : undefined,
               })),
+              recordingFileKeyUpdates: input.recordingFileKeyUpdates?.map(
+                (r) => ({
+                  recordingId: r.recordingId,
+                  fileKeyWrap: Buffer.from(r.fileKeyWrap, "base64"),
+                }),
+              ),
             },
             deps.blobStore,
             ctx.org.orgSchema,

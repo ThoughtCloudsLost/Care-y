@@ -120,6 +120,7 @@ export async function handleInboundSms(
   // 5. Resolve the client's active portal channel (best-effort).
   // Failure here must not block the forward path (ADR-090).
   let portalChannelId: ChannelRowId | null = null;
+  let portalClientPublic: Buffer | null = null;
   let portalCopy: EciesTripleBuffers | null = null;
 
   // 6. Create encrypted follow-up with SMS body
@@ -141,6 +142,7 @@ export async function handleInboundSms(
     const activeChannel = await findActiveChannel(tDb, client.id);
     if (activeChannel) {
       portalChannelId = activeChannel.id;
+      portalClientPublic = activeChannel.client_public;
       // Seal bodyBuf to the channel's client_public BEFORE the follow-up
       // creation calls below, which zero bodyBuf in their finally blocks.
       // bodyBuf is passed uncopied: a copy could not be zeroed by the
@@ -161,6 +163,25 @@ export async function handleInboundSms(
     console.warn("Portal copy dropped: channel lookup failed for client");
   }
 
+  // Build media opts. When the channel resolved and MMS attachments
+  // are present, pass portalSeal so media uses the file-key envelope
+  // and portal carrier rows are written (ADR-092).
+  const mediaOpts = mmsAttachments
+    ? {
+        attachments: mmsAttachments,
+        blobStore,
+        orgSchema,
+        ...(portalChannelId !== null && portalClientPublic !== null
+          ? {
+              portalSeal: {
+                channelRowId: portalChannelId,
+                clientPublic: portalClientPublic,
+              },
+            }
+          : {}),
+      }
+    : undefined;
+
   let followUpId: FollowupId;
 
   if (ticketResult.isNew && ticketResult.tk) {
@@ -174,9 +195,7 @@ export async function handleInboundSms(
         bodyBuf,
         "sms_inbound",
         "client",
-        mmsAttachments
-          ? { attachments: mmsAttachments, blobStore, orgSchema }
-          : undefined,
+        mediaOpts,
       );
     } finally {
       sodium.memzero(ticketResult.tk);
@@ -189,9 +208,7 @@ export async function handleInboundSms(
       bodyBuf,
       "sms_inbound",
       "client",
-      mmsAttachments
-        ? { attachments: mmsAttachments, blobStore, orgSchema }
-        : undefined,
+      mediaOpts,
     );
     followUpId = result.followUpId;
   }
