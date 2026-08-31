@@ -4,8 +4,10 @@
  *
  * Covers determinism of the OPRF scalar and the full derivation
  * pipeline, plus round-trip correctness of the demo OPRF service
- * (blind via @care-y/crypto, evaluate via the service, finalize,
- * derive keys, and verify the result matches direct-pipeline output).
+ * (blind via @care-y/crypto, evaluate via the per-tag service,
+ * finalize, derive keys). The per-tag service derives a working share
+ * from the master scalar via deriveTaggedShare, matching production
+ * (ADR-091).
  *
  * Runs in Node (not jsdom) because libsodium's WASM input validation
  * uses `instanceof Uint8Array`, which fails in jsdom when TextEncoder
@@ -24,15 +26,21 @@ import {
   getSodium,
   oprfBlind,
   oprfFinalize,
+  deriveTaggedShare,
   deriveAccountKey,
   deriveMasterKey,
   deriveVolunteerPrivateKey,
   deriveVolunteerPublicKey,
+  toRistrettoPoint,
+  decode,
   encode,
   type Salt,
-  type RistrettoPoint,
 } from "@care-y/crypto";
-import type { UserId } from "@care-y/shared";
+import type { UserId, OrgId, ChannelSecret } from "@care-y/shared";
+import {
+  volunteerTag,
+  channelTag,
+} from "../../../../../server/src/crypto/oprf-tags.js";
 
 beforeAll(async () => {
   await _sodium.ready;
@@ -57,10 +65,12 @@ describe("deriveDemoOprfScalar", () => {
 });
 
 describe("deriveDemoVolPublic", () => {
+  const userId = "seed-admin" as UserId;
+
   it("returns a 32-byte ristretto255 point", () => {
     const salt = _sodium.randombytes_buf(16);
     const k = deriveDemoOprfScalar();
-    const result = deriveDemoVolPublic("TestPassword1234", salt, k);
+    const result = deriveDemoVolPublic("TestPassword1234", salt, k, userId);
     expect(result.volPublic).toBeInstanceOf(Uint8Array);
     expect(result.volPublic.length).toBe(32);
   });
@@ -68,39 +78,79 @@ describe("deriveDemoVolPublic", () => {
   it("is deterministic for the same password, salt, and scalar", () => {
     const salt = _sodium.randombytes_buf(16);
     const k = deriveDemoOprfScalar();
-    const r1 = deriveDemoVolPublic("TestPassword1234", salt, k);
-    const r2 = deriveDemoVolPublic("TestPassword1234", salt, k);
+    const r1 = deriveDemoVolPublic("TestPassword1234", salt, k, userId);
+    const r2 = deriveDemoVolPublic("TestPassword1234", salt, k, userId);
     expect(encode(r1.volPublic)).toBe(encode(r2.volPublic));
   });
 
   it("produces different results for different passwords", () => {
     const salt = _sodium.randombytes_buf(16);
     const k = deriveDemoOprfScalar();
-    const r1 = deriveDemoVolPublic("TestPassword1234", salt, k);
-    const r2 = deriveDemoVolPublic("DifferentPass123", salt, k);
+    const r1 = deriveDemoVolPublic("TestPassword1234", salt, k, userId);
+    const r2 = deriveDemoVolPublic("DifferentPass123", salt, k, userId);
     expect(encode(r1.volPublic)).not.toBe(encode(r2.volPublic));
+  });
+
+  it("produces different keys for different volunteers", () => {
+    const salt = _sodium.randombytes_buf(16);
+    const k = deriveDemoOprfScalar();
+    const r1 = deriveDemoVolPublic("TestPassword1234", salt, k, userId);
+    const r2 = deriveDemoVolPublic(
+      "TestPassword1234",
+      salt,
+      k,
+      "other-admin" as UserId,
+    );
+    expect(encode(r1.volPublic)).not.toBe(encode(r2.volPublic));
+  });
+
+  // The seeded volPublic must be the key login reproduces. Seeding derives
+  // locally while login evaluates through the service, so the two agree only
+  // while both use the same per-tag share. This is the guard for that.
+  it("matches the key derived through the evaluate service", async () => {
+    const salt = _sodium.randombytes_buf(16);
+    const k = deriveDemoOprfScalar();
+    const seeded = deriveDemoVolPublic("TestPassword1234", salt, k, userId);
+
+    const service = createDemoOprfService(k);
+    const stretched = deriveAccountKey(
+      new TextEncoder().encode("TestPassword1234"),
+      salt as Salt,
+    );
+    const { blindedElement, blindState } = oprfBlind(stretched);
+    const { evaluated } = await service.evaluate({
+      kind: "volunteer" as const,
+      userId,
+      blindedElement: encode(blindedElement),
+      ip: "127.0.0.1",
+      sessionUserId: null,
+      powChallenge: undefined,
+      powSolution: undefined,
+    });
+    const oprfOutput = oprfFinalize(
+      blindState,
+      toRistrettoPoint(decode(evaluated)),
+      stretched,
+    );
+    const volPublic = deriveVolunteerPublicKey(
+      deriveVolunteerPrivateKey(deriveMasterKey(oprfOutput)),
+    );
+
+    expect(encode(volPublic)).toBe(encode(seeded.volPublic));
   });
 });
 
 describe("createDemoOprfService", () => {
-  it("round-trips with oprfBlind/oprfFinalize to produce the same keys as the direct pipeline", async () => {
+  it("evaluate uses per-tag derivation and produces a valid ristretto255 point", async () => {
     const k = deriveDemoOprfScalar();
     const service = createDemoOprfService(k);
-    const password = "DemoPassword2026";
-    const salt = _sodium.randombytes_buf(16);
-    const encoder = new TextEncoder();
+    const userId = "test-user" as UserId;
 
-    // Direct pipeline (standing in for the server-side seed derivation)
-    const directResult = deriveDemoVolPublic(password, salt, k);
+    const stretched = _sodium.randombytes_buf(32);
+    const { blindedElement } = oprfBlind(stretched);
 
-    // Service pipeline (mimics the client worker path)
-    const passwordBytes = encoder.encode(password);
-    const stretched = deriveAccountKey(passwordBytes, salt as Salt);
-    const { blindedElement, blindState } = oprfBlind(stretched);
-
-    // Evaluate via the service (base64url round-trip)
     const evalResponse = await service.evaluate({
-      userId: "test-user" as UserId,
+      userId,
       blindedElement: encode(blindedElement),
       ip: "127.0.0.1",
       kind: "volunteer" as const,
@@ -109,32 +159,51 @@ describe("createDemoOprfService", () => {
       powSolution: undefined,
     });
 
-    // Decode the evaluated element back from STANDARD base64 (the
-    // service mirrors the real oprf-evaluate-service's Buffer encoding,
-    // which the client reads with decodeStandardBase64)
-    const evaluatedBytes = new Uint8Array(
-      Buffer.from(evalResponse.evaluated, "base64"),
+    // Response is base64url (matching real service)
+    const evaluatedBytes = decode(evalResponse.evaluated);
+    expect(evaluatedBytes.length).toBe(_sodium.crypto_core_ristretto255_BYTES);
+
+    // Verify it matches a manual per-tag evaluation
+    const tag = volunteerTag(userId);
+    const tagScalar = deriveTaggedShare(k, tag);
+    const expectedBytes = _sodium.crypto_scalarmult_ristretto255(
+      tagScalar,
+      blindedElement,
     );
-
-    // Finalize and derive keys
-    const oprfOutput = oprfFinalize(
-      blindState,
-      evaluatedBytes as RistrettoPoint,
-      stretched,
-    );
-    const masterKey = deriveMasterKey(oprfOutput);
-    const volPrivate = deriveVolunteerPrivateKey(masterKey);
-    const volPublic = deriveVolunteerPublicKey(volPrivate);
-
-    // The service path must produce the same volPublic as the direct pipeline
-    expect(encode(volPublic)).toBe(encode(directResult.volPublic));
-
-    // Cleanup
+    expect(encode(evaluatedBytes)).toBe(encode(expectedBytes));
+    _sodium.memzero(tagScalar);
     _sodium.memzero(stretched);
-    _sodium.memzero(oprfOutput);
-    _sodium.memzero(masterKey);
-    _sodium.memzero(volPrivate);
-    _sodium.memzero(passwordBytes);
+  });
+
+  it("different tags produce different evaluations for the same blinded element", async () => {
+    const k = deriveDemoOprfScalar();
+    const service = createDemoOprfService(k);
+
+    const stretched = _sodium.randombytes_buf(32);
+    const { blindedElement } = oprfBlind(stretched);
+    const b64Blinded = encode(blindedElement);
+
+    const volResult = await service.evaluate({
+      userId: "user-a" as UserId,
+      blindedElement: b64Blinded,
+      ip: "127.0.0.1",
+      kind: "volunteer" as const,
+      sessionUserId: null,
+      powChallenge: undefined,
+      powSolution: undefined,
+    });
+    const acctResult = await service.evaluate({
+      userId: "user-a" as UserId,
+      blindedElement: b64Blinded,
+      ip: "127.0.0.1",
+      kind: "account" as const,
+      sessionUserId: null,
+      powChallenge: undefined,
+      powSolution: undefined,
+    });
+
+    expect(volResult.evaluated).not.toBe(acctResult.evaluated);
+    _sodium.memzero(stretched);
   });
 
   it("adminEvaluate behaves identically to evaluate", async () => {
@@ -165,5 +234,40 @@ describe("createDemoOprfService", () => {
     });
 
     expect(evalResult.evaluated).toBe(adminResult.evaluated);
+    _sodium.memzero(stretched);
+  });
+
+  it("evaluateChannel derives from the channel tag", async () => {
+    const k = deriveDemoOprfScalar();
+    const service = createDemoOprfService(k);
+
+    const stretched = _sodium.randombytes_buf(32);
+    const { blindedElement } = oprfBlind(stretched);
+    const b64Blinded = encode(blindedElement);
+
+    const orgUuid = "00000000-0000-0000-0000-000000000001" as OrgId;
+    const channelId = "aabbccdd" as ChannelSecret;
+
+    // Provide a null db since the demo service does not read from it
+    const channelResult = await service.evaluateChannel(
+      null as unknown as Parameters<typeof service.evaluateChannel>[0],
+      {
+        channelId,
+        blindedElement: b64Blinded,
+        ip: "127.0.0.1",
+        orgUuid,
+      },
+    );
+
+    // Verify it matches a manual per-tag evaluation
+    const tag = channelTag(orgUuid, channelId);
+    const tagScalar = deriveTaggedShare(k, tag);
+    const expectedBytes = _sodium.crypto_scalarmult_ristretto255(
+      tagScalar,
+      blindedElement,
+    );
+    expect(channelResult.evaluated).toBe(encode(expectedBytes));
+    _sodium.memzero(tagScalar);
+    _sodium.memzero(stretched);
   });
 });

@@ -212,7 +212,8 @@ export async function bootDemoEngine(
   const t0 = timeMs();
   await _sodium.ready;
   markSodiumReady();
-  const { getSodium } = await import("@care-y/crypto");
+  const { getSodium, deriveTaggedShare: deriveTaggedShareFn } =
+    await import("@care-y/crypto");
   await getSodium();
   timings.push({ label: "sodium-ready", ms: timeMs() - t0 });
 
@@ -339,6 +340,7 @@ export async function bootDemoEngine(
     DEMO_ADMIN_PASSWORD,
     demoSalt,
     demoVolScalar,
+    seedResult.adminUserId,
   );
   timings.push({ label: "demo-key-derivation", ms: timeMs() - tKeys });
 
@@ -482,6 +484,7 @@ export async function bootDemoEngine(
     sealedBox,
     orgPublicKey,
     fieldEncryptor: encryptor,
+    blobStore,
     intakeFormService,
     notificationService,
     accountServiceDeps,
@@ -493,8 +496,19 @@ export async function bootDemoEngine(
     anchorTicketKey,
     // Same scalar the demo OPRF service evaluates under, so the published
     // password re-derives these keys when the visitor signs in for real.
-    evaluateOprf: (blindedElement: Uint8Array): Uint8Array =>
-      _sodium.crypto_scalarmult_ristretto255(demoVolScalar, blindedElement),
+    // The tag selects a per-identity working share (ADR-091), matching how
+    // the real service derives per-tag scalars from the master share.
+    evaluateOprf: (blindedElement: Uint8Array, tag: string): Uint8Array => {
+      const taggedScalar = deriveTaggedShareFn(demoVolScalar, tag);
+      try {
+        return _sodium.crypto_scalarmult_ristretto255(
+          taggedScalar,
+          blindedElement,
+        );
+      } finally {
+        _sodium.memzero(taggedScalar);
+      }
+    },
     accountUsername: DEMO_CLIENT_USERNAME,
     accountPassword: DEMO_CLIENT_PASSWORD,
   });
@@ -703,17 +717,21 @@ export async function bootDemoEngine(
     // Demo is single-user with all-fictional data; no auth/role checks.
     resolveBlob: {
       async resolveBlob(category, id): Promise<Uint8Array | null> {
+        // Portal categories share the underlying attachments/recordings
+        // tables. The server resolves them through the portal join tables
+        // with channel-scoped auth; the demo skips auth and queries the
+        // org-side table directly.
         const tableName =
-          category === "recordings"
+          category === "recordings" || category === "portal-recordings"
             ? ("recordings" as const)
-            : category === "attachments"
+            : category === "attachments" || category === "portal-attachments"
               ? ("attachments" as const)
               : ("kb_attachments" as const);
 
         // The id parameter is a plain string from the DemoBlobResolver
-        // interface, but the three tables have distinct branded id columns.
+        // interface, but the tables have distinct branded id columns.
         // A single cast to the union's common shape is the cleanest fix
-        // for this generic lookup across recordings/attachments/kb_attachments.
+        // for this generic lookup across the five categories.
         const brandedId = id as RecordingId & AttachmentId & KbAttachmentId;
         const row = await tDb
           .selectFrom(tableName)

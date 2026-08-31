@@ -19,7 +19,12 @@ import { BlobFetchError } from "$lib/errors.js";
 // Resolver interface + engine slot
 // -----------------------------------------------------------------------
 
-export type BlobCategory = "recordings" | "attachments" | "kb-attachments";
+export type BlobCategory =
+  | "recordings"
+  | "attachments"
+  | "kb-attachments"
+  | "portal-attachments"
+  | "portal-recordings";
 
 export interface DemoBlobResolver {
   resolveBlob(category: BlobCategory, id: string): Promise<Uint8Array | null>;
@@ -76,6 +81,8 @@ const VALID_CATEGORIES: ReadonlySet<string> = new Set<BlobCategory>([
   "recordings",
   "attachments",
   "kb-attachments",
+  "portal-attachments",
+  "portal-recordings",
 ]);
 
 interface ParsedBlobPath {
@@ -115,6 +122,7 @@ function parseBlobPath(path: string): ParsedBlobPath {
 export async function fetchBlob(
   path: string,
   signal?: AbortSignal,
+  _headers?: Record<string, string>,
 ): Promise<ArrayBuffer> {
   // Read through a call, not `signal.aborted` directly: TypeScript
   // narrows the flag after the first guard and cannot see that an

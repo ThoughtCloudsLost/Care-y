@@ -429,6 +429,13 @@ export async function buildServiceStubs(
       createTicketAccess: createTicketAccessChecker,
       createTicketSvc: createTicketService,
       createFollowUpSvc: createFollowUpService,
+      // Portal copy on org follow-ups. Without this, org-authored media
+      // never appears on the portal thread (media parity).
+      followUpServiceDeps: {
+        onPortalOrgReply: (_channelRowId) => {
+          // No per-channel reply limiter in the demo, so this is a no-op.
+        },
+      },
       createReadCursorSvc: createReadCursorService,
       createMergeSvc: createMergeService,
       createPresetSvc: createPresetService,
@@ -491,10 +498,12 @@ export async function buildServiceStubs(
       uploadLimiter: noopLimiter,
     },
     clientPortalDeps: {
+      blobStore,
       submissionLimiter: noopLimiter,
       challengeLimiter: noopLimiter,
       portalReadLimiter: noopLimiter,
       portalReplyLimiter: noopLimiter,
+      portalReplyIpLimiter: noopLimiter,
       shareLimiter: noopLimiter,
       accountSaltLimiter: noopLimiter,
       accountLoginLimiter: noopLimiter,
@@ -515,6 +524,8 @@ export async function buildServiceStubs(
       portalMessageService: {
         bootstrap: portalMessages.bootstrap,
         clientReply: portalMessages.clientReply,
+        listMessages: portalMessages.listMessages,
+        hasRecentOrgReply: portalMessages.hasRecentOrgReply,
       },
 
       // The nudge SMS after a client reply, routed to the outbox by the
@@ -527,16 +538,19 @@ export async function buildServiceStubs(
       // Brand at the boundary, the way the structural seed does.
       portalGetProvider: async (orgId: OrgId) =>
         smsCapableProviderFactory.getProvider(orgId),
-      portalResolveCallerId: async (): Promise<E164 | null> =>
-        (await phoneResolverStub()) as E164 | null,
+      portalResolveCallerId: phoneResolverStub,
 
       // Account tier. orgUuid is resolved per request by the router.
       accountServiceDeps: { indexer, fakeSaltKey },
+
+      // Channel OPRF (ADR-091)
+      oprfService,
     },
     clientDeps: null,
     escalationDeps: null,
-    // HARD CONSTRAINT: devDeps is undefined (NODE_ENV=production)
-    devDeps: undefined,
+    // HARD CONSTRAINT: no dev router (NODE_ENV=production). The router
+    // gates on `!== null`, so undefined would mount it with no deps.
+    devDeps: null,
   });
 
   return {

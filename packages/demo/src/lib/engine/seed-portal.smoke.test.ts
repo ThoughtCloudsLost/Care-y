@@ -22,10 +22,11 @@ import {
   deriveChannelAuth,
   deriveChannelId,
   deriveClientAccountKeys,
-  derivePortalKeypair,
+  derivePortalKeypairFromOprf,
   encode,
   oprfBlind,
   oprfFinalize,
+  portalOprfInput,
   toRistrettoPoint,
   toSalt,
 } from "@care-y/crypto";
@@ -72,6 +73,11 @@ interface PortalCaller {
     }>;
     accountLogout(): Promise<unknown>;
     openShare(input: { shareId: string }): Promise<{ status: string }>;
+    evaluateChannelOprf(input: {
+      channelId: string;
+      blindedElement: string;
+      auth?: string;
+    }): Promise<{ evaluated: string }>;
   };
   intakeForms: {
     list(): Promise<readonly { id: string; slug: string | null }[]>;
@@ -88,6 +94,7 @@ interface PortalCaller {
   };
   oprf: {
     evaluate(input: {
+      kind: "volunteer" | "account";
       userId: string;
       blindedElement: string;
     }): Promise<{ evaluated: string }>;
@@ -171,10 +178,25 @@ describe("client portal seed", () => {
     expect(result.messages).toHaveLength(2);
     expect(result.ticketId).not.toBeNull();
 
-    // The key check opens under the keypair the fragment derives, which is
-    // what the page uses to decide the passphrase gate can be skipped.
-    const keypair = derivePortalKeypair(seed);
+    // The key check opens under the OPRF-derived keypair: blind the seed,
+    // evaluate through the channel OPRF procedure, finalize, derive.
+    const oprfInput = portalOprfInput(seed);
+    const { blindedElement, blindState } = oprfBlind(oprfInput);
+    const channelEvalResult = await caller.clientPortal.evaluateChannelOprf({
+      channelId: engine.portal.portalChannelId,
+      blindedElement: encode(blindedElement),
+      auth: encode(auth),
+    });
+    const channelOprfOutput = oprfFinalize(
+      blindState,
+      toRistrettoPoint(decode(channelEvalResult.evaluated)),
+      oprfInput,
+    );
+    const keypair = derivePortalKeypairFromOprf(channelOprfOutput);
     expect(keypair.clientPublic).toHaveLength(32);
+    _sodium.memzero(oprfInput);
+    _sodium.memzero(channelOprfOutput);
+    _sodium.memzero(keypair.clientPrivate);
   }, 60_000);
 
   it("signs in to the seeded account and reads the thread back", async () => {
@@ -268,12 +290,13 @@ async function deriveSeededAccountAuthToken(
   );
   const { blindedElement, blindState } = oprfBlind(stretched);
   const { evaluated } = await caller.oprf.evaluate({
+    kind: "account",
     userId: accountId,
     blindedElement: encode(blindedElement),
   });
   const oprfOutput = oprfFinalize(
     blindState,
-    toRistrettoPoint(Buffer.from(evaluated, "base64")),
+    toRistrettoPoint(decode(evaluated)),
     stretched,
   );
   return deriveClientAccountKeys(oprfOutput).authToken;
