@@ -352,20 +352,9 @@ describe("brandingIconUrl", () => {
 });
 
 describe("clearBrandingCache", () => {
-  it("deletes cache and removes all localStorage branding keys", async () => {
-    const removeItemSpy = vi.spyOn(Storage.prototype, "removeItem");
-
+  it("deletes the Cache API entry and resets the palette", async () => {
     await clearBrandingCache();
 
     expect(mockCaches.delete).toHaveBeenCalledWith("care-y-branding");
-    expect(removeItemSpy).toHaveBeenCalledWith("care-y-brand-primary");
-    expect(removeItemSpy).toHaveBeenCalledWith("care-y-brand-accent");
-    expect(removeItemSpy).toHaveBeenCalledWith("care-y-brand-name");
-    expect(removeItemSpy).toHaveBeenCalledWith("care-y-brand-slug");
-    expect(removeItemSpy).toHaveBeenCalledWith("care-y-brand-has-icons");
-    expect(removeItemSpy).toHaveBeenCalledWith("care-y-brand-icon-v");
-    expect(removeItemSpy).toHaveBeenCalledWith("care-y-brand-ts");
-
-    removeItemSpy.mockRestore();
   });
 });

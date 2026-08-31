@@ -121,10 +121,13 @@
         class="dev-pill"
         onclick={() => {
           themeStore.toggleColorScheme();
+          const style = document.documentElement.style;
           const primary =
-            localStorage.getItem("care-y-brand-primary") ?? DEFAULT_PRIMARY;
-          const accent =
-            localStorage.getItem("care-y-brand-accent") ?? undefined;
+            style.getPropertyValue("--brand-primary").trim() || DEFAULT_PRIMARY;
+          const injectedAccent = style
+            .getPropertyValue("--brand-accent")
+            .trim();
+          const accent = injectedAccent || undefined;
           queueMicrotask(() => void applyKonstaPalette({ primary, accent }));
         }}
       >

@@ -177,11 +177,11 @@ describe("toggleSchemeWithPalette", () => {
     expect(themeStore.resolvedScheme).toBe("light");
   });
 
-  it("re-derives the Konsta palette from the persisted brand colors", async () => {
-    // Keys shared with the branding cache fast path and the app.html
-    // boot script (cross-module persistence contract).
-    localStorage.setItem("care-y-brand-primary", "#1a237e");
-    localStorage.setItem("care-y-brand-accent", "#00695c");
+  it("re-derives the Konsta palette from the document style brand colors", async () => {
+    // The injected style attribute on <html> carries the brand colors.
+    // scheme-toggle reads them from document.documentElement.style.
+    document.documentElement.style.setProperty("--brand-primary", "#1a237e");
+    document.documentElement.style.setProperty("--brand-accent", "#00695c");
 
     toggleSchemeWithPalette();
 
@@ -194,13 +194,13 @@ describe("toggleSchemeWithPalette", () => {
     });
   });
 
-  it("falls back to the default brand color when none is persisted", async () => {
+  it("falls back to the default brand color when no injected style is present", async () => {
     toggleSchemeWithPalette();
 
     await vi.waitFor(() => {
       expect(getProp("--brand-primary")).toBe(DEFAULT_PRIMARY);
     });
-    // No accent stored, so no accent token is applied.
+    // No accent on the element, so no accent token is applied.
     expect(getProp("--brand-accent")).toBe("");
   });
 });

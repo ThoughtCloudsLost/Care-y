@@ -17,7 +17,7 @@ export interface OrgContext {
   readonly iconVersion: string | null;
 }
 
-/** Fetch encrypted branding from server, decrypt with org key, cache in SW. */
+/** Fetch plaintext branding from the server and cache it in the SW cache. */
 export async function loadBranding(
   fetchDecrypted: () => Promise<BrandingData>,
   orgContext: OrgContext,
@@ -105,47 +105,14 @@ export async function applyBranding(branding: CachedBranding): Promise<void> {
 /** Clear branding cache and reset palette (called on logout). */
 export async function clearBrandingCache(): Promise<void> {
   await caches.delete(BRANDING_CACHE_KEY);
-  try {
-    localStorage.removeItem("care-y-brand-primary");
-    localStorage.removeItem("care-y-brand-accent");
-    localStorage.removeItem("care-y-brand-name");
-    localStorage.removeItem("care-y-brand-slug");
-    localStorage.removeItem("care-y-brand-has-icons");
-    localStorage.removeItem("care-y-brand-icon-v");
-    localStorage.removeItem("care-y-brand-ts");
-  } catch {
-    // localStorage unavailable in some contexts
-  }
   resetKonstaPalette();
 }
 
 async function cacheBranding(data: CachedBranding): Promise<void> {
-  // Fast-path: write colors to localStorage for instant hydration on next page load.
-  // The blocking script in app.html reads these before any rendering.
-  try {
-    localStorage.setItem("care-y-brand-primary", data.primaryColor);
-    localStorage.setItem("care-y-brand-name", data.orgName);
-    if (data.accentColor !== null) {
-      localStorage.setItem("care-y-brand-accent", data.accentColor);
-    }
-    if (data.orgSlug !== null) {
-      localStorage.setItem("care-y-brand-slug", data.orgSlug);
-    }
-    if (data.hasIcons) {
-      localStorage.setItem("care-y-brand-has-icons", "1");
-    } else {
-      localStorage.removeItem("care-y-brand-has-icons");
-    }
-    if (data.iconVersion !== null) {
-      localStorage.setItem("care-y-brand-icon-v", data.iconVersion);
-    } else {
-      localStorage.removeItem("care-y-brand-icon-v");
-    }
-    localStorage.setItem("care-y-brand-ts", String(Date.now()));
-  } catch {
-    // localStorage unavailable in some contexts
-  }
-
+  // The service worker's dynamic manifest reads from this Cache API entry.
+  // No localStorage writes: a client device must not record which org was
+  // contacted (ADR-094). Injected values from the server are the only
+  // pre-paint branding source.
   const cache = await caches.open(BRANDING_CACHE_KEY);
   const json = JSON.stringify({
     orgName: data.orgName,
