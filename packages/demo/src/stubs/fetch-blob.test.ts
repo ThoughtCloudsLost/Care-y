@@ -61,6 +61,36 @@ describe("fetch-blob stub", () => {
         VALID_UUID,
       );
     });
+
+    it("resolves bytes for portal-attachments category", async () => {
+      const data = new Uint8Array([55, 66]);
+      const resolver = fakeResolver(() => Promise.resolve(data));
+      setEngineBlobResolver(resolver);
+
+      const result = await fetchBlob(
+        `/api/blobs/portal-attachments/${VALID_UUID}`,
+      );
+      expect(new Uint8Array(result)).toEqual(data);
+      expect(resolver.resolveBlob).toHaveBeenCalledWith(
+        "portal-attachments",
+        VALID_UUID,
+      );
+    });
+
+    it("resolves bytes for portal-recordings category", async () => {
+      const data = new Uint8Array([77, 88]);
+      const resolver = fakeResolver(() => Promise.resolve(data));
+      setEngineBlobResolver(resolver);
+
+      const result = await fetchBlob(
+        `/api/blobs/portal-recordings/${VALID_UUID}`,
+      );
+      expect(new Uint8Array(result)).toEqual(data);
+      expect(resolver.resolveBlob).toHaveBeenCalledWith(
+        "portal-recordings",
+        VALID_UUID,
+      );
+    });
   });
 
   describe("path validation", () => {
@@ -168,6 +198,21 @@ describe("fetch-blob stub", () => {
       await expect(
         fetchBlob(`/api/blobs/recordings/${VALID_UUID}`, controller.signal),
       ).rejects.toBe(reason);
+    });
+  });
+
+  describe("headers argument", () => {
+    it("accepts an optional headers argument without error", async () => {
+      const data = new Uint8Array([1, 2, 3]);
+      const resolver = fakeResolver(() => Promise.resolve(data));
+      setEngineBlobResolver(resolver);
+
+      const result = await fetchBlob(
+        `/api/blobs/portal-attachments/${VALID_UUID}`,
+        undefined,
+        { "x-portal-channel": "abc", "x-portal-auth": "def" },
+      );
+      expect(new Uint8Array(result)).toEqual(data);
     });
   });
 

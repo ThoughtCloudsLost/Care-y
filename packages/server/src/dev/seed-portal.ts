@@ -24,7 +24,7 @@ import {
   deriveChannelAuth,
   deriveChannelId,
   deriveClientAccountKeys,
-  derivePortalKeypair,
+  derivePortalKeypairFromOprf,
   eciesEncrypt,
   encode,
   encryptContent,
@@ -36,6 +36,7 @@ import {
   hashChannelAuth,
   oprfBlind,
   oprfFinalize,
+  portalOprfInput,
   PORTAL_KEY_CHECK,
   requireSodium,
   sealForOrgKey,
@@ -81,7 +82,9 @@ import { InternalError } from "../errors.js";
 import type { TenantDatabase } from "../db/types.js";
 import type { FieldEncryptor } from "../crypto/field-encryptor.js";
 import type { SealedBoxEncryptor } from "../crypto/sealed-box.js";
+import { channelTag, accountTag } from "../crypto/oprf-tags.js";
 import type { NotificationService } from "../notifications/service.js";
+import type { BlobStore } from "../storage/store.js";
 import type { AccountServiceDeps } from "../portal/account-service.js";
 import * as accountService from "../portal/account-service.js";
 import { createChannel } from "../portal/channel-service.js";
@@ -114,6 +117,7 @@ export interface SeedPortalDeps {
   /** The org's Curve25519 public key. Seals ticket keys and derives the public-branding key. */
   readonly orgPublicKey: Uint8Array;
   readonly fieldEncryptor: FieldEncryptor;
+  readonly blobStore: BlobStore;
   readonly intakeFormService: IntakeFormService;
   readonly notificationService: NotificationService;
   /** Account service deps minus orgUuid, which this module fills from orgId. */
@@ -140,10 +144,14 @@ export interface SeedPortalDeps {
   /**
    * Evaluate a blinded ristretto255 point through the org's OPRF, standing
    * in for the two-server hop the browser makes. Returns the evaluated
-   * point. The account's keys are only reproducible at login if this
-   * evaluates under the same scalar the running server uses.
+   * point. The tag selects the per-identity working share (ADR-091); the
+   * account's keys are only reproducible at login if this evaluates under
+   * the same tagged scalar the running server uses.
    */
-  readonly evaluateOprf: (blindedElement: Uint8Array) => Uint8Array;
+  readonly evaluateOprf: (
+    blindedElement: Uint8Array,
+    tag: string,
+  ) => Uint8Array;
   /** Credentials the demo publishes for the seeded account. */
   readonly accountUsername: string;
   readonly accountPassword: string;
@@ -510,10 +518,27 @@ async function seedSecureLink(
 ): Promise<{ channelId: string; fragment: string; channel: PortalChannelRow }> {
   const { tDb, orgPublicKey, adminUserId, anchorTicketId } = deps;
 
+  const sodium = requireSodium();
   const seed = generatePortalSeed();
   const channelId = deriveChannelId(seed);
   const auth = deriveChannelAuth(seed);
-  const keypair = derivePortalKeypair(seed);
+
+  // ADR-091: derive the keypair through the same OPRF round the browser
+  // performs. The channel tag is available because deriveChannelId runs
+  // before the round.
+  const oprfInput = portalOprfInput(seed);
+  const { blindedElement, blindState } = oprfBlind(oprfInput);
+  const tag = channelTag(deps.orgId, channelSecretSchema.parse(channelId));
+  const evaluated = deps.evaluateOprf(blindedElement, tag);
+  const oprfOutput = oprfFinalize(
+    blindState,
+    toRistrettoPoint(evaluated),
+    oprfInput,
+  );
+  const keypair = derivePortalKeypairFromOprf(oprfOutput);
+  sodium.memzero(oprfInput);
+  sodium.memzero(oprfOutput);
+
   const keyCheck = eciesEncrypt(
     textEncoder.encode(PORTAL_KEY_CHECK),
     keypair.clientPublic,
@@ -564,6 +589,7 @@ async function seedSecureLink(
     ),
   });
 
+  sodium.memzero(keypair.clientPrivate);
   return { channelId, fragment: encode(seed), channel };
 }
 
@@ -683,7 +709,7 @@ async function seedAccount(
     salt,
   );
   const { blindedElement, blindState } = oprfBlind(stretched);
-  const evaluated = deps.evaluateOprf(blindedElement);
+  const evaluated = deps.evaluateOprf(blindedElement, accountTag(accountId));
   const oprfOutput = oprfFinalize(
     blindState,
     toRistrettoPoint(evaluated),
@@ -980,6 +1006,7 @@ function portalMessageDeps(deps: SeedPortalDeps): PortalMessageServiceDeps {
     getProvider: async () => Promise.resolve(null),
     resolveCallerIdByPurpose: async () => Promise.resolve(null),
     fieldEncryptor: deps.fieldEncryptor,
+    blobStore: deps.blobStore,
     notificationService: deps.notificationService,
     orgId: deps.orgId,
     orgSchema: deps.orgSchema,

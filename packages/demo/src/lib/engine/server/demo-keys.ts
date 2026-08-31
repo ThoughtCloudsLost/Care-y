@@ -4,11 +4,11 @@
  * Provides a deterministic OPRF scalar k for the demo, a function to
  * run the full client key derivation pipeline locally (Argon2id,
  * blind, evaluate via k, finalize, derive master/vol keys), and a
- * demo OprfEvaluateService whose evaluate/adminEvaluate simply
- * multiplies the blinded element by k and returns the result in the
- * encoding the real service emits (STANDARD base64 via Buffer, see
- * oprf-evaluate-service.ts:251; the client decodes the evaluated
- * element with decodeStandardBase64, not the URL-safe decode).
+ * demo OprfEvaluateService whose evaluate/adminEvaluate derive a
+ * per-tag working share from k via deriveTaggedShare and multiply the
+ * blinded element by that share, matching production's per-identity
+ * key derivation (ADR-091). The result is encoded as base64url, the
+ * same encoding the real service emits (oprf-evaluate-service.ts:290).
  *
  * The OPRF scalar is derived deterministically at runtime via
  * scalar_reduce(SHA-512("care-y-demo-oprf-scalar-v1")) so no
@@ -19,6 +19,8 @@ import _sodium from "libsodium-wrappers-sumo";
 import {
   decode,
   deriveAccountKey,
+  deriveTaggedShare,
+  encode,
   oprfBlind,
   oprfFinalize,
   deriveMasterKey,
@@ -30,7 +32,20 @@ import {
   type EciesOutput,
 } from "@care-y/crypto";
 
-import type { OprfEvaluateService } from "../../../../../server/src/crypto/oprf-evaluate-service.js";
+import type {
+  OprfEvaluateService,
+  OprfEvaluateRequest,
+  ChannelEvaluateRequest,
+  OprfEvaluateResult,
+} from "../../../../../server/src/crypto/oprf-evaluate-service.js";
+import {
+  volunteerTag,
+  accountTag,
+  channelTag,
+} from "../../../../../server/src/crypto/oprf-tags.js";
+import type { Kysely } from "kysely";
+import type { UserId } from "@care-y/shared";
+import type { TenantDatabase } from "../../../../../server/src/db/types.js";
 import { DemoEngineError } from "../errors.js";
 import {
   traceFlowLocal,
@@ -70,14 +85,21 @@ export interface DemoKeyDerivationResult {
  * matching the crypto v2 rule that no client private keys exist
  * server-side.
  *
+ * The evaluate step must use the same per-tag share the evaluate service
+ * uses (ADR-091), not the master scalar. Login goes through the service
+ * under volunteerTag(userId); if this derived under k directly, the
+ * seeded volPublic would not be the key the visitor's login produces.
+ *
  * @param password  - The demo admin password (plaintext string)
  * @param salt      - 16-byte Argon2id salt
- * @param oprfScalar - The demo OPRF scalar k
+ * @param oprfScalar - The demo OPRF master scalar k
+ * @param userId - The volunteer whose tag scopes the evaluation
  */
 export function deriveDemoVolPublic(
   password: string,
   salt: Uint8Array,
   oprfScalar: Uint8Array,
+  userId: UserId,
 ): DemoKeyDerivationResult {
   const encoder = new TextEncoder();
   const passwordBytes = encoder.encode(password);
@@ -88,11 +110,13 @@ export function deriveDemoVolPublic(
   // 2. OPRF blind
   const { blindedElement, blindState } = oprfBlind(stretched);
 
-  // 3. Local evaluate: evaluated = k * blindedElement
+  // 3. Local evaluate under the volunteer tag, mirroring the service
+  const taggedScalar = deriveTaggedShare(oprfScalar, volunteerTag(userId));
   const evaluated = _sodium.crypto_scalarmult_ristretto255(
-    oprfScalar,
+    taggedScalar,
     blindedElement,
   );
+  _sodium.memzero(taggedScalar);
 
   // 4. Finalize
   const oprfOutput = oprfFinalize(
@@ -134,20 +158,70 @@ export function wrapOrgKeyForVolunteer(
 // ── Demo OprfEvaluateService ───────────────────────────────────────
 
 /**
- * Create a demo-only OprfEvaluateService that evaluates the blinded
- * element by multiplying with the fixed demo scalar k. No rate
- * limiting, no PoW gating.
+ * Evaluate a blinded element under a per-tag working share derived from
+ * the master scalar. Mirrors production, where each share process derives
+ * its per-tag share via deriveTaggedShare and the combined evaluation is
+ * what the client finalizes.
  *
- * The blindedElement arrives as URL-safe base64 (the client worker
- * calls encode() from @care-y/crypto). The response returns
- * evaluated in the same encoding.
+ * Returns the base64url-encoded evaluated point, matching the real
+ * service's encoding (oprf-evaluate-service.ts:290). The decode() call
+ * at the top tolerates both base64url and standard base64 input (the
+ * client sends base64url via encode()).
+ */
+function evaluateUnderTag(
+  masterScalar: Uint8Array,
+  blindedElement: string,
+  tag: string,
+): OprfEvaluateResult {
+  const blindedBytes = decode(blindedElement);
+
+  if (blindedBytes.length !== _sodium.crypto_core_ristretto255_BYTES) {
+    throw new DemoEngineError(
+      `Invalid blinded element length: expected ${String(_sodium.crypto_core_ristretto255_BYTES)}, got ${String(blindedBytes.length)}`,
+    );
+  }
+
+  const taggedScalar = deriveTaggedShare(masterScalar, tag);
+  try {
+    const evaluatedBytes = _sodium.crypto_scalarmult_ristretto255(
+      taggedScalar,
+      blindedBytes,
+    );
+    // base64url, matching the real service (oprf-evaluate-service.ts:290).
+    return { evaluated: encode(evaluatedBytes) };
+  } finally {
+    _sodium.memzero(taggedScalar);
+  }
+}
+
+/**
+ * Build the tag string for a volunteer or account evaluate request,
+ * mirroring tagForEvaluateRequest in oprf-evaluate-service.ts.
+ */
+function tagForRequest(req: OprfEvaluateRequest): string {
+  switch (req.kind) {
+    case "volunteer":
+      return volunteerTag(req.userId);
+    case "account":
+      return accountTag(req.userId);
+  }
+}
+
+/**
+ * Create a demo-only OprfEvaluateService that derives per-tag working
+ * shares from the master scalar k and evaluates the blinded element
+ * under that share. No rate limiting, no PoW gating.
+ *
+ * The blindedElement arrives as base64url (the client worker calls
+ * encode() from @care-y/crypto). The response returns evaluated in
+ * base64url, the same encoding the real service uses.
  */
 export function createDemoOprfService(
   oprfScalar: Uint8Array,
 ): OprfEvaluateService {
-  async function evaluate(request: {
-    readonly blindedElement: string;
-  }): Promise<{ evaluated: string }> {
+  async function evaluate(
+    request: OprfEvaluateRequest,
+  ): Promise<OprfEvaluateResult> {
     // Badged as a seam: production splits this evaluation across two
     // OPRF servers in separate jurisdictions.
     return traceFlowLocal(
@@ -179,31 +253,19 @@ export function createDemoOprfService(
       },
       async () => {
         await Promise.resolve();
-        const blindedBytes = decode(request.blindedElement);
-
-        if (blindedBytes.length !== _sodium.crypto_core_ristretto255_BYTES) {
-          throw new DemoEngineError(
-            `Invalid blinded element length: expected ${String(_sodium.crypto_core_ristretto255_BYTES)}, got ${String(blindedBytes.length)}`,
-          );
-        }
-
-        const evaluatedBytes = _sodium.crypto_scalarmult_ristretto255(
-          oprfScalar,
-          blindedBytes,
-        );
-
-        // Standard base64 to match the real service's Buffer encoding
-        // (login-crypto decodes this field with decodeStandardBase64).
-        return { evaluated: Buffer.from(evaluatedBytes).toString("base64") };
+        const tag = tagForRequest(request);
+        return evaluateUnderTag(oprfScalar, request.blindedElement, tag);
       },
     );
   }
 
-  async function evaluateChannel(): Promise<{ evaluated: string }> {
+  async function evaluateChannel(
+    _db: Kysely<TenantDatabase>,
+    request: ChannelEvaluateRequest,
+  ): Promise<OprfEvaluateResult> {
     await Promise.resolve();
-    throw new DemoEngineError(
-      "Channel OPRF evaluation is not part of the demo surface",
-    );
+    const tag = channelTag(request.orgUuid, request.channelId);
+    return evaluateUnderTag(oprfScalar, request.blindedElement, tag);
   }
 
   return {
