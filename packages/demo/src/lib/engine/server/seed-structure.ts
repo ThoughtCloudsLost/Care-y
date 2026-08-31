@@ -633,9 +633,16 @@ export async function seedStructure(
   }
 
   for (const g of greetings) {
+    // phone_greetings.phone_number is the org's own inbound line (migration
+    // 054), operational config rather than client PII, and plaintext by
+    // design. The demo value is a fixture number.
+    // care-y-ignore-next-line no-plaintext-db-write -- org line number, not client PII
     await tenantDb
+      // care-y-ignore-next-line no-plaintext-db-write -- org line number, not client PII
       .insertInto("phone_greetings")
+      // care-y-ignore-next-line no-plaintext-db-write -- org line number, not client PII
       .values({
+        // care-y-ignore-next-line ast-pii-in-db-write -- org line number, not client PII
         phone_number: g.phone_number as E164,
         greeting_type: g.greeting_type,
         locale: g.locale,
