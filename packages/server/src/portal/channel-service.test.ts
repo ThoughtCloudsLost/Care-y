@@ -15,8 +15,13 @@ import type {
   TicketId,
   ChannelRowId,
   FollowupId,
+  BlobKey,
 } from "@care-y/shared";
-import { channelSecretSchema } from "@care-y/shared";
+import {
+  channelSecretSchema,
+  newAttachmentId,
+  newRecordingId,
+} from "@care-y/shared";
 import {
   createTestDb,
   createTestClientFixture,
@@ -110,6 +115,96 @@ async function insertPortalMessage(
     .returning("id")
     .executeTakeFirstOrThrow();
   return row.id;
+}
+
+/** ECIES triple with deterministic filler bytes, matching the portal-recording-service test pattern. */
+function fakeTriple(): {
+  ephemeralPoint: Buffer;
+  nonce: Buffer;
+  ciphertext: Buffer;
+} {
+  return {
+    ephemeralPoint: Buffer.alloc(32, 0x01),
+    nonce: Buffer.alloc(24, 0x02),
+    ciphertext: Buffer.from("test-ciphertext"),
+  };
+}
+
+/**
+ * Insert a parent attachment row plus a portal_attachments carrier row
+ * for the given channel and followup.
+ */
+async function insertPortalAttachment(
+  db: Kysely<TenantDatabase>,
+  channelRowId: ChannelRowId,
+  followupId: FollowupId,
+  ticketId: TicketId,
+): Promise<void> {
+  const attId = newAttachmentId();
+  await db
+    .insertInto("attachments")
+    .values({
+      id: attId,
+      ticket_id: ticketId,
+      followup_id: followupId,
+      blob_key: `test/att/${attId}` as BlobKey,
+      size_bytes: 512,
+      file_key_wrap: Buffer.alloc(72, 0xab),
+    })
+    .execute();
+
+  const triple = fakeTriple();
+  await db
+    .insertInto("portal_attachments")
+    .values({
+      attachment_id: attId,
+      channel_id: channelRowId,
+      followup_id: followupId,
+      direction: "to_client",
+      ephemeral_point: triple.ephemeralPoint,
+      nonce: triple.nonce,
+      ciphertext: triple.ciphertext,
+    })
+    .execute();
+}
+
+/**
+ * Insert a parent recording row plus a portal_recordings carrier row
+ * for the given channel and followup.
+ */
+async function insertPortalRecording(
+  db: Kysely<TenantDatabase>,
+  channelRowId: ChannelRowId,
+  followupId: FollowupId,
+  ticketId: TicketId,
+): Promise<void> {
+  const recId = newRecordingId();
+  await db
+    .insertInto("recordings")
+    .values({
+      id: recId,
+      ticket_id: ticketId,
+      followup_id: followupId,
+      blob_key: `test/rec/${recId}` as BlobKey,
+      size_bytes: 1024,
+      duration_seconds: 10,
+      file_key_wrap: Buffer.alloc(72, 0xab),
+    })
+    .execute();
+
+  const triple = fakeTriple();
+  await db
+    .insertInto("portal_recordings")
+    .values({
+      recording_id: recId,
+      channel_id: channelRowId,
+      followup_id: followupId,
+      direction: "to_client",
+      ephemeral_point: triple.ephemeralPoint,
+      nonce: triple.nonce,
+      ciphertext: triple.ciphertext,
+    })
+    .execute();
 }
 
 // ---------------------------------------------------------------------------
@@ -726,6 +821,155 @@ describe.skipIf(!process.env.DATABASE_URL)("PortalChannelService", () => {
       const summary = await getActiveChannelSummary(db, clientId);
       expect(summary).not.toBeNull();
       expect(summary!.kind).toBe("intake_continuation");
+    });
+  });
+
+  // -----------------------------------------------------------------------
+  // Carrier purge on regeneration and revocation
+  // -----------------------------------------------------------------------
+
+  describe("regenerateChannel purges portal carriers", () => {
+    it("deletes portal_attachments and portal_recordings for the old channel", async () => {
+      const clientId = await insertClient(db);
+      const reg1 = makeRegistration();
+      await createChannel(db, clientId, reg1);
+
+      const oldChannel = await db
+        .selectFrom("portal_channels")
+        .select("id")
+        .where("client_id", "=", clientId)
+        .where("status", "=", "active")
+        .executeTakeFirstOrThrow();
+
+      const fixture = await createTestTicketFixture(db);
+      const followupId = await insertFollowup(db, fixture.ticketId);
+      await insertPortalMessage(db, oldChannel.id, followupId);
+      await insertPortalAttachment(
+        db,
+        oldChannel.id,
+        followupId,
+        fixture.ticketId,
+      );
+      await insertPortalRecording(
+        db,
+        oldChannel.id,
+        followupId,
+        fixture.ticketId,
+      );
+
+      // Verify carriers exist before regeneration
+      const attBefore = await db
+        .selectFrom("portal_attachments")
+        .select("id")
+        .where("channel_id", "=", oldChannel.id)
+        .execute();
+      expect(attBefore).toHaveLength(1);
+
+      const recBefore = await db
+        .selectFrom("portal_recordings")
+        .select("id")
+        .where("channel_id", "=", oldChannel.id)
+        .execute();
+      expect(recBefore).toHaveLength(1);
+
+      // Regenerate
+      const reg2 = makeRegistration();
+      await regenerateChannel(db, clientId, reg2);
+
+      // Old channel's portal_attachments purged
+      const attAfter = await db
+        .selectFrom("portal_attachments")
+        .select("id")
+        .where("channel_id", "=", oldChannel.id)
+        .execute();
+      expect(attAfter).toHaveLength(0);
+
+      // Old channel's portal_recordings purged
+      const recAfter = await db
+        .selectFrom("portal_recordings")
+        .select("id")
+        .where("channel_id", "=", oldChannel.id)
+        .execute();
+      expect(recAfter).toHaveLength(0);
+    });
+  });
+
+  describe("revokeChannel purges portal carriers", () => {
+    it("deletes portal_attachments and portal_recordings for the revoked channel", async () => {
+      const clientId = await insertClient(db);
+      const reg = makeRegistration();
+      await createChannel(db, clientId, reg);
+
+      const activeChannel = await db
+        .selectFrom("portal_channels")
+        .select("id")
+        .where("client_id", "=", clientId)
+        .where("status", "=", "active")
+        .executeTakeFirstOrThrow();
+
+      const fixture = await createTestTicketFixture(db);
+      const followupId = await insertFollowup(db, fixture.ticketId);
+      await insertPortalMessage(db, activeChannel.id, followupId);
+      await insertPortalAttachment(
+        db,
+        activeChannel.id,
+        followupId,
+        fixture.ticketId,
+      );
+      await insertPortalRecording(
+        db,
+        activeChannel.id,
+        followupId,
+        fixture.ticketId,
+      );
+
+      await revokeChannel(db, clientId);
+
+      // portal_attachments purged
+      const attAfter = await db
+        .selectFrom("portal_attachments")
+        .select("id")
+        .where("channel_id", "=", activeChannel.id)
+        .execute();
+      expect(attAfter).toHaveLength(0);
+
+      // portal_recordings purged
+      const recAfter = await db
+        .selectFrom("portal_recordings")
+        .select("id")
+        .where("channel_id", "=", activeChannel.id)
+        .execute();
+      expect(recAfter).toHaveLength(0);
+    });
+  });
+
+  // -----------------------------------------------------------------------
+  // Unique index from migration 106
+  // -----------------------------------------------------------------------
+
+  describe("portal_messages unique index", () => {
+    it("rejects a second portal_messages row with the same (channel_id, followup_id)", async () => {
+      const clientId = await insertClient(db);
+      const reg = makeRegistration();
+      await createChannel(db, clientId, reg);
+
+      const activeChannel = await db
+        .selectFrom("portal_channels")
+        .select("id")
+        .where("client_id", "=", clientId)
+        .where("status", "=", "active")
+        .executeTakeFirstOrThrow();
+
+      const fixture = await createTestTicketFixture(db);
+      const followupId = await insertFollowup(db, fixture.ticketId);
+
+      // First insert succeeds
+      await insertPortalMessage(db, activeChannel.id, followupId);
+
+      // Second insert with the same (channel_id, followup_id) violates the unique index
+      await expect(
+        insertPortalMessage(db, activeChannel.id, followupId),
+      ).rejects.toThrow();
     });
   });
 });

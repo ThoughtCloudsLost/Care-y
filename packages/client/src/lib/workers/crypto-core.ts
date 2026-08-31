@@ -92,6 +92,9 @@ import type {
   PhoneMatchHashRequest,
   DetectMergeCandidatesRequest,
   MergeCandidate,
+  SealFollowUpsToPublicRequest,
+  SealFileKeysToPublicRequest,
+  ConvertBlobForPortalRequest,
   WorkerRequest,
   WorkerRequestType,
   RewrapEvent,
@@ -2137,6 +2140,328 @@ function handleMintBackfillWraps(
   }
 }
 
+// ── Portal thread reseed batch handlers ────────────────────────────
+
+function handleSealFollowUpsToPublic(
+  req: SealFollowUpsToPublicRequest,
+  sink: Sink,
+): void {
+  if (!requireKeyed(sink, req.id, "sealFollowUpsToPublic")) return;
+
+  const sodium = requireSodium();
+  const clientPub = decode(req.clientPublic) as RistrettoPoint;
+  const succeeded: {
+    followUpId: string;
+    copy: { ephemeralPoint: string; nonce: string; ciphertext: string };
+  }[] = [];
+  const failed: string[] = [];
+
+  for (const item of req.items) {
+    let plaintext: Uint8Array | null = null;
+    let tkTemp: Uint8Array | null = null;
+    try {
+      // Resolve the content key. keyWrap items use the canonical tk
+      // (cached per ticket); portalWrap items carry a per-follow-up
+      // tk_temp sealed to the org key, which must never enter tkCache.
+      let contentKey: Uint8Array | null = null;
+
+      if (item.keyWrap) {
+        const cached = tkCache.get(req.ticketId);
+        if (cached) {
+          contentKey = cached;
+        } else {
+          const ephemeralPoint = decode(item.keyWrap.ephemeralPoint);
+          const nonce = decode(item.keyWrap.nonce);
+          const wrappedKey = decode(item.keyWrap.wrappedKey);
+          const tk = eciesDecrypt(
+            ephemeralPoint as RistrettoPoint,
+            nonce as Nonce,
+            wrappedKey,
+            assertPresent(volPrivate, "volPrivate"),
+          );
+          tkCache.set(req.ticketId, tk);
+          contentKey = tk;
+        }
+      } else if (item.portalWrap !== undefined && item.portalWrap !== "") {
+        const pk = assertPresent(orgPublicKey, "orgPublicKey");
+        const sk = assertPresent(orgSecret, "orgSecret");
+        const sealedWrap = decode(item.portalWrap);
+        tkTemp = sodium.crypto_box_seal_open(sealedWrap, pk, sk);
+        contentKey = tkTemp;
+      }
+
+      if (!contentKey) {
+        failed.push(item.followUpId);
+        continue;
+      }
+
+      // Decrypt content at followupSlot AAD
+      const ciphertextBuf = decode(item.ciphertext);
+      const aad = buildContentAad(req.ticketId, followupSlot(item.followUpId));
+      plaintext = decryptContent(
+        ciphertextBuf as Ciphertext,
+        contentKey as SymmetricKey,
+        aad,
+      );
+
+      // ECIES-seal plaintext bytes to clientPublic (no AAD on ECIES)
+      const wrap = eciesEncrypt(plaintext, clientPub);
+      succeeded.push({
+        followUpId: item.followUpId,
+        copy: {
+          ephemeralPoint: encode(wrap.ephemeralPoint),
+          nonce: encode(wrap.nonce),
+          ciphertext: encode(wrap.ciphertext),
+        },
+      });
+    } catch {
+      failed.push(item.followUpId);
+    } finally {
+      if (plaintext) sodium.memzero(plaintext);
+      if (tkTemp) sodium.memzero(tkTemp);
+    }
+  }
+
+  const msg: WorkerResponse = {
+    id: req.id,
+    ok: true,
+    type: "sealFollowUpsToPublic",
+    items: succeeded,
+    failed,
+  };
+  sink(msg);
+}
+
+function handleSealFileKeysToPublic(
+  req: SealFileKeysToPublicRequest,
+  sink: Sink,
+): void {
+  if (!requireKeyed(sink, req.id, "sealFileKeysToPublic")) return;
+
+  const sodium = requireSodium();
+
+  // Optional tk warm-up via keyWrap
+  if (req.keyWrap) {
+    const cached = tkCache.get(req.ticketId);
+    if (!cached) {
+      try {
+        const ephemeralPoint = decode(req.keyWrap.ephemeralPoint);
+        const nonce = decode(req.keyWrap.nonce);
+        const wrappedKey = decode(req.keyWrap.wrappedKey);
+        const tk = eciesDecrypt(
+          ephemeralPoint as RistrettoPoint,
+          nonce as Nonce,
+          wrappedKey,
+          assertPresent(volPrivate, "volPrivate"),
+        );
+        tkCache.set(req.ticketId, tk);
+      } catch (err: unknown) {
+        postError(
+          sink,
+          req.id,
+          "sealFileKeysToPublic",
+          err instanceof Error ? err.message : String(err),
+          "DECRYPT_FAILED",
+        );
+        return;
+      }
+    }
+  }
+
+  const tk = tkCache.get(req.ticketId);
+  if (!tk) {
+    postError(
+      sink,
+      req.id,
+      "sealFileKeysToPublic",
+      `No cached tk for ticket ${req.ticketId}`,
+      "TK_NOT_CACHED",
+    );
+    return;
+  }
+
+  const clientPub = decode(req.clientPublic) as RistrettoPoint;
+  const succeeded: {
+    rowId: string;
+    copy: { ephemeralPoint: string; nonce: string; ciphertext: string };
+  }[] = [];
+  const failed: string[] = [];
+
+  for (const item of req.items) {
+    let fileKey: Uint8Array | null = null;
+    try {
+      // Unwrap file key under tk at fileKeySlot(rowId)
+      const fileKeyWrapBuf = decode(item.fileKeyWrap);
+      fileKey = decryptContent(
+        fileKeyWrapBuf as Ciphertext,
+        tk as SymmetricKey,
+        buildContentAad(req.ticketId, fileKeySlot(item.rowId)),
+      );
+
+      // Decrypt filename when present (recordings have none)
+      let filename = "";
+      if (
+        item.encryptedFilename !== undefined &&
+        item.encryptedFilename !== ""
+      ) {
+        const filenameAad = buildContentAad(
+          req.ticketId,
+          filenameSlot(item.rowId),
+        );
+        const filenameBuf = decryptContent(
+          decode(item.encryptedFilename) as Ciphertext,
+          tk as SymmetricKey,
+          filenameAad,
+        );
+        try {
+          filename = textDecoder.decode(filenameBuf);
+        } finally {
+          sodium.memzero(filenameBuf);
+        }
+      }
+
+      // Seal file key + filename to clientPublic
+      const payload = encodeFileKeyPayload(fileKey as SymmetricKey, filename);
+      try {
+        const wrap = eciesEncrypt(payload, clientPub);
+        succeeded.push({
+          rowId: item.rowId,
+          copy: {
+            ephemeralPoint: encode(wrap.ephemeralPoint),
+            nonce: encode(wrap.nonce),
+            ciphertext: encode(wrap.ciphertext),
+          },
+        });
+      } finally {
+        sodium.memzero(payload);
+      }
+    } catch {
+      failed.push(item.rowId);
+    } finally {
+      if (fileKey) sodium.memzero(fileKey);
+    }
+  }
+
+  const msg: WorkerResponse = {
+    id: req.id,
+    ok: true,
+    type: "sealFileKeysToPublic",
+    items: succeeded,
+    failed,
+  };
+  sink(msg);
+}
+
+function handleConvertBlobForPortal(
+  req: ConvertBlobForPortalRequest,
+  sink: Sink,
+): void {
+  if (!requireKeyed(sink, req.id, "convertBlobForPortal")) return;
+
+  const sodium = requireSodium();
+  const tk = tkCache.get(req.ticketId);
+  if (!tk) {
+    postError(
+      sink,
+      req.id,
+      "convertBlobForPortal",
+      `No cached tk for ticket ${req.ticketId}`,
+      "TK_NOT_CACHED",
+    );
+    return;
+  }
+
+  const clientPub = decode(req.clientPublic) as RistrettoPoint;
+  const ciphertextBuf = new Uint8Array(req.ciphertext);
+  let blobPlaintext: Uint8Array | null = null;
+  let fileKey: Uint8Array | null = null;
+
+  try {
+    // Decrypt blob under tk at blobSlot(rowId)
+    blobPlaintext = decryptContent(
+      ciphertextBuf as Ciphertext,
+      tk as SymmetricKey,
+      buildContentAad(req.ticketId, blobSlot(req.rowId)),
+    );
+
+    // Mint a fresh file key
+    fileKey = generateContentKey();
+
+    // Re-encrypt blob under the file key at the SAME blobSlot AAD
+    const reEncrypted = encryptContent(
+      blobPlaintext,
+      fileKey as SymmetricKey,
+      buildContentAad(req.ticketId, blobSlot(req.rowId)),
+    );
+
+    // Wrap file key under tk at fileKeySlot(rowId)
+    const fileKeyWrapCt = encryptContent(
+      fileKey,
+      tk as SymmetricKey,
+      buildContentAad(req.ticketId, fileKeySlot(req.rowId)),
+    );
+
+    // Decrypt filename when present
+    let filename = "";
+    if (req.encryptedFilename !== undefined && req.encryptedFilename !== "") {
+      const filenameAad = buildContentAad(
+        req.ticketId,
+        filenameSlot(req.rowId),
+      );
+      const filenameBuf = decryptContent(
+        decode(req.encryptedFilename) as Ciphertext,
+        tk as SymmetricKey,
+        filenameAad,
+      );
+      try {
+        filename = textDecoder.decode(filenameBuf);
+      } finally {
+        sodium.memzero(filenameBuf);
+      }
+    }
+
+    // Seal file key + filename to clientPublic
+    const payload = encodeFileKeyPayload(fileKey as SymmetricKey, filename);
+    let copy: { ephemeralPoint: string; nonce: string; ciphertext: string };
+    try {
+      const wrap = eciesEncrypt(payload, clientPub);
+      copy = {
+        ephemeralPoint: encode(wrap.ephemeralPoint),
+        nonce: encode(wrap.nonce),
+        ciphertext: encode(wrap.ciphertext),
+      };
+    } finally {
+      sodium.memzero(payload);
+    }
+
+    // Build transferable buffer for re-encrypted blob
+    const encryptedAb = new ArrayBuffer(reEncrypted.byteLength);
+    new Uint8Array(encryptedAb).set(reEncrypted);
+
+    const msg: WorkerResponse = {
+      id: req.id,
+      ok: true,
+      type: "convertBlobForPortal",
+      encryptedData: encryptedAb,
+      fileKeyWrap: encode(fileKeyWrapCt),
+      copy,
+    };
+    sink(msg, [encryptedAb]);
+  } catch (err: unknown) {
+    postError(
+      sink,
+      req.id,
+      "convertBlobForPortal",
+      err instanceof Error ? err.message : String(err),
+      "DECRYPT_FAILED",
+    );
+  } finally {
+    if (blobPlaintext) sodium.memzero(blobPlaintext);
+    if (fileKey) sodium.memzero(fileKey);
+    sodium.memzero(ciphertextBuf);
+  }
+}
+
 // ── Dispatcher factory ──────────────────────────────────────────────
 
 export function createDispatcher(
@@ -2254,6 +2579,15 @@ export function createDispatcher(
           break;
         case "detectMergeCandidates":
           handleDetectMergeCandidates(req, sink);
+          break;
+        case "sealFollowUpsToPublic":
+          handleSealFollowUpsToPublic(req, sink);
+          break;
+        case "sealFileKeysToPublic":
+          handleSealFileKeysToPublic(req, sink);
+          break;
+        case "convertBlobForPortal":
+          handleConvertBlobForPortal(req, sink);
           break;
         case "connect":
         case "disconnect":

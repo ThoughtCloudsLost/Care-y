@@ -633,3 +633,94 @@ export const portalChannelMetaSchema = z.object({
   accountOffer: z.boolean(),
 });
 export type PortalChannelMetaWire = z.infer<typeof portalChannelMetaSchema>;
+
+// --- Portal thread reseed schemas ---
+
+/** List tickets belonging to a client (volunteer-side). */
+export const listTicketsForClientInputSchema = z.object({
+  clientId: clientIdSchema,
+});
+export type ListTicketsForClientInput = z.infer<
+  typeof listTicketsForClientInputSchema
+>;
+
+/**
+ * Reseed portal history: volunteer re-seals conversation copies under
+ * a freshly generated portal channel. The server validates structure
+ * and stamps ordering/authorship from the canonical followup rows.
+ */
+export const reseedPortalHistoryInputSchema = z
+  .object({
+    clientId: clientIdSchema,
+    channelId: z.string().regex(/^[0-9a-f]{48}$/),
+    messages: z
+      .array(
+        z.object({
+          followupId: followupIdSchema,
+          copy: eciesTripleSchema,
+        }),
+      )
+      .max(200)
+      .default([]),
+    attachmentWraps: z
+      .array(
+        z.object({
+          attachmentId: attachmentIdSchema,
+          followupId: followupIdSchema,
+          copy: eciesTripleSchema,
+        }),
+      )
+      .max(100)
+      .default([]),
+    recordingWraps: z
+      .array(
+        z.object({
+          recordingId: recordingIdSchema,
+          followupId: followupIdSchema,
+          copy: eciesTripleSchema,
+        }),
+      )
+      .max(100)
+      .default([]),
+  })
+  .refine(
+    (d) =>
+      d.messages.length + d.attachmentWraps.length + d.recordingWraps.length >
+      0,
+    {
+      message:
+        "At least one message, attachment wrap, or recording wrap required",
+    },
+  );
+export type ReseedPortalHistoryInput = z.infer<
+  typeof reseedPortalHistoryInputSchema
+>;
+
+/**
+ * Convert an attachment or recording blob for reseed: re-store the
+ * ciphertext under a fresh blob key and insert the portal carrier row.
+ */
+export const convertBlobForReseedInputSchema = z
+  .object({
+    clientId: clientIdSchema,
+    channelId: z.string().regex(/^[0-9a-f]{48}$/),
+    kind: z.enum(["attachment", "recording"]),
+    rowId: z.string().min(1),
+    followupId: followupIdSchema,
+    encryptedData: z.string().min(1),
+    fileKeyWrap: z.string().min(1),
+    copy: eciesTripleSchema,
+  })
+  .superRefine((d, ctx) => {
+    const schema =
+      d.kind === "attachment" ? attachmentIdSchema : recordingIdSchema;
+    const result = schema.safeParse(d.rowId);
+    if (!result.success) {
+      for (const issue of result.error.issues) {
+        ctx.addIssue({ ...issue, path: ["rowId"] });
+      }
+    }
+  });
+export type ConvertBlobForReseedInput = z.infer<
+  typeof convertBlobForReseedInputSchema
+>;

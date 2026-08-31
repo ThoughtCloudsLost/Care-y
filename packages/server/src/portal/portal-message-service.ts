@@ -456,24 +456,38 @@ export async function clientReply(
  * clientReply) can include it in its atomic write. The account portal
  * reuses this for account-session channels.
  */
+export interface StoreClientCopyOpts {
+  /** Stamp the row's created_at explicitly (reseed uses the followup's timestamp). */
+  readonly createdAt?: Date;
+  /** Add ON CONFLICT DO NOTHING on the per-channel unique index columns. */
+  readonly onConflictIgnore?: boolean;
+}
+
 export async function storeClientCopy(
   trx: Kysely<TenantDatabase> | Transaction<TenantDatabase>,
   channelRowId: ChannelRowId,
   followupId: FollowupId,
   copy: EciesTripleBuffers,
   direction: "to_client" | "from_client" = "to_client",
+  opts?: StoreClientCopyOpts,
 ): Promise<void> {
-  await trx
-    .insertInto("portal_messages")
-    .values({
-      channel_id: channelRowId,
-      followup_id: followupId,
-      direction,
-      ephemeral_point: copy.ephemeralPoint,
-      nonce: copy.nonce,
-      ciphertext: copy.ciphertext,
-    })
-    .execute();
+  let query = trx.insertInto("portal_messages").values({
+    channel_id: channelRowId,
+    followup_id: followupId,
+    direction,
+    ephemeral_point: copy.ephemeralPoint,
+    nonce: copy.nonce,
+    ciphertext: copy.ciphertext,
+    ...(opts?.createdAt !== undefined ? { created_at: opts.createdAt } : {}),
+  });
+
+  if (opts?.onConflictIgnore === true) {
+    query = query.onConflict((oc) =>
+      oc.columns(["channel_id", "followup_id"]).doNothing(),
+    );
+  }
+
+  await query.execute();
 }
 
 /**

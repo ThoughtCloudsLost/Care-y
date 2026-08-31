@@ -71,8 +71,12 @@ import {
   updateOutboundMessageInputSchema,
   setAccountOfferInputSchema,
   resetClientAccountInputSchema,
+  listTicketsForClientInputSchema,
+  reseedPortalHistoryInputSchema,
+  convertBlobForReseedInputSchema,
 } from "@care-y/shared";
-import { ForbiddenError, NotFoundError } from "../errors.js";
+import { ForbiddenError, NotFoundError, RateLimitError } from "../errors.js";
+import type { RateLimiter } from "../ratelimit/rate-limiter.js";
 import {
   createChannel,
   regenerateChannel,
@@ -80,7 +84,18 @@ import {
   getActiveChannelSummary,
   type ChannelRegistration,
 } from "../portal/channel-service.js";
-import { ChannelAlreadyActiveError } from "../portal/portal-errors.js";
+import {
+  ChannelAlreadyActiveError,
+  PortalChannelMismatchError,
+  ReseedValidationError,
+  ReseedAlreadyConvertedError,
+  ReseedRowNotFoundError,
+} from "../portal/portal-errors.js";
+import {
+  reseedPortalHistory,
+  convertBlobForReseed,
+  listTicketsForClient,
+} from "../portal/reseed-service.js";
 import {
   enqueueNotificationDurable,
   encryptMentionedPseudonyms,
@@ -262,6 +277,9 @@ export interface TicketRouterDeps {
   readonly pendingClients?: Map<string, PendingClient>;
   // OPS-tier field encryptor for phone number masking (client search)
   readonly fieldEncryptor?: FieldEncryptor;
+  // Portal reseed rate limiters (per-user, authenticated)
+  readonly reseedLimiter?: RateLimiter;
+  readonly reseedBlobLimiter?: RateLimiter;
 }
 
 function buildSearchRoutes(
@@ -2087,6 +2105,185 @@ export function createTicketRouter(deps: TicketRouterDeps) {
             actorId: ctx.user.id,
             metadata: { operation: "reset" },
           });
+        }),
+      ),
+
+    // --- Portal thread reseed (volunteer re-seals history to new channel) ---
+
+    listForClient: volunteerProcedure
+      .input(listTicketsForClientInputSchema)
+      .query(
+        withErrorWrapping(async ({ ctx, input }) => {
+          const access = deps.createTicketAccess(ctx.org.tenantDb);
+          return listTicketsForClient(
+            ctx.org.tenantDb,
+            access,
+            ctx.user.id,
+            input.clientId,
+          );
+        }),
+      ),
+
+    reseedPortalHistory: volunteerProcedure
+      .input(reseedPortalHistoryInputSchema)
+      .mutation(
+        withErrorWrapping(async ({ ctx, input }) => {
+          // In-resolver rate limit
+          if (deps.reseedLimiter) {
+            const limitResult = deps.reseedLimiter.check(ctx.user.id);
+            if (!limitResult.allowed) {
+              const retryAfterSeconds = Math.ceil(
+                limitResult.retryAfterMs / 1000,
+              );
+              throw new RateLimitError(
+                `Rate limited. Retry after ${String(retryAfterSeconds)}s`,
+                retryAfterSeconds,
+              );
+            }
+          }
+
+          const access = deps.createTicketAccess(ctx.org.tenantDb);
+
+          // Decode base64 triples to Buffers at the router
+          const decodedMessages = input.messages.map((m) => ({
+            followupId: m.followupId,
+            copy: {
+              ephemeralPoint: Buffer.from(m.copy.ephemeralPoint, "base64"),
+              nonce: Buffer.from(m.copy.nonce, "base64"),
+              ciphertext: Buffer.from(m.copy.ciphertext, "base64"),
+            },
+          }));
+
+          const decodedAttachmentWraps = input.attachmentWraps.map((a) => ({
+            attachmentId: a.attachmentId,
+            followupId: a.followupId,
+            copy: {
+              ephemeralPoint: Buffer.from(a.copy.ephemeralPoint, "base64"),
+              nonce: Buffer.from(a.copy.nonce, "base64"),
+              ciphertext: Buffer.from(a.copy.ciphertext, "base64"),
+            },
+          }));
+
+          const decodedRecordingWraps = input.recordingWraps.map((r) => ({
+            recordingId: r.recordingId,
+            followupId: r.followupId,
+            copy: {
+              ephemeralPoint: Buffer.from(r.copy.ephemeralPoint, "base64"),
+              nonce: Buffer.from(r.copy.nonce, "base64"),
+              ciphertext: Buffer.from(r.copy.ciphertext, "base64"),
+            },
+          }));
+
+          try {
+            const result = await reseedPortalHistory(
+              ctx.org.tenantDb,
+              access,
+              ctx.user.id,
+              {
+                clientId: input.clientId,
+                channelId: input.channelId,
+                messages: decodedMessages,
+                attachmentWraps: decodedAttachmentWraps,
+                recordingWraps: decodedRecordingWraps,
+              },
+            );
+
+            audit(ctx.org.tenantDb, {
+              eventType: "portal_history_reseed_chunk",
+              actorId: ctx.user.id,
+              metadata: {
+                operation: "portal_history_reseed_chunk",
+                inserted: result.inserted,
+                skipped: result.skipped,
+              },
+            });
+
+            return result;
+          } catch (err: unknown) {
+            if (err instanceof PortalChannelMismatchError) {
+              throw new NotFoundError(ErrorCode.PORTAL_CHANNEL_MISMATCH);
+            }
+            if (err instanceof ReseedValidationError) {
+              throw new NotFoundError(ErrorCode.PORTAL_RESEED_VALIDATION);
+            }
+            throw err;
+          }
+        }),
+      ),
+
+    convertBlobForReseed: volunteerProcedure
+      .input(convertBlobForReseedInputSchema)
+      .mutation(
+        withErrorWrapping(async ({ ctx, input }) => {
+          // In-resolver rate limit
+          if (deps.reseedBlobLimiter) {
+            const limitResult = deps.reseedBlobLimiter.check(ctx.user.id);
+            if (!limitResult.allowed) {
+              const retryAfterSeconds = Math.ceil(
+                limitResult.retryAfterMs / 1000,
+              );
+              throw new RateLimitError(
+                `Rate limited. Retry after ${String(retryAfterSeconds)}s`,
+                retryAfterSeconds,
+              );
+            }
+          }
+
+          const access = deps.createTicketAccess(ctx.org.tenantDb);
+
+          try {
+            const result = await convertBlobForReseed(
+              ctx.org.tenantDb,
+              access,
+              ctx.user.id,
+              {
+                clientId: input.clientId,
+                channelId: input.channelId,
+                kind: input.kind,
+                rowId: input.rowId,
+                followupId: input.followupId,
+                encryptedData: Buffer.from(input.encryptedData, "base64"),
+                fileKeyWrap: Buffer.from(input.fileKeyWrap, "base64"),
+                copy: {
+                  ephemeralPoint: Buffer.from(
+                    input.copy.ephemeralPoint,
+                    "base64",
+                  ),
+                  nonce: Buffer.from(input.copy.nonce, "base64"),
+                  ciphertext: Buffer.from(input.copy.ciphertext, "base64"),
+                },
+              },
+              deps.blobStore,
+              ctx.org.orgSchema,
+            );
+
+            audit(ctx.org.tenantDb, {
+              eventType: "portal_reseed_blob_converted",
+              actorId: ctx.user.id,
+              metadata: {
+                operation: "portal_reseed_blob_converted",
+                kind: input.kind,
+              },
+            });
+
+            return result;
+          } catch (err: unknown) {
+            if (err instanceof PortalChannelMismatchError) {
+              throw new NotFoundError(ErrorCode.PORTAL_CHANNEL_MISMATCH);
+            }
+            if (err instanceof ReseedValidationError) {
+              throw new NotFoundError(ErrorCode.PORTAL_RESEED_VALIDATION);
+            }
+            if (err instanceof ReseedAlreadyConvertedError) {
+              throw new NotFoundError(
+                ErrorCode.PORTAL_RESEED_ALREADY_CONVERTED,
+              );
+            }
+            if (err instanceof ReseedRowNotFoundError) {
+              throw new NotFoundError(ErrorCode.PORTAL_CHANNEL_NOT_FOUND);
+            }
+            throw err;
+          }
         }),
       ),
 

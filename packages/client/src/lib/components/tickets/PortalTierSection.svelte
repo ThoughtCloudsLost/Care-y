@@ -34,6 +34,7 @@
 
   interface PortalTierSectionProps {
     ticketId: string;
+    clientId: string;
     clientTier: string | undefined;
     portalChannel: PortalChannelWire | null | undefined;
     clientPhone: string | null | undefined;
@@ -42,6 +43,7 @@
 
   let {
     ticketId,
+    clientId,
     clientTier,
     portalChannel,
     clientPhone,
@@ -283,6 +285,7 @@
 <SecureLinkSheet
   opened={secureLinkSheetOpen}
   {ticketId}
+  {clientId}
   mode={secureLinkMode}
   hasPhone={clientPhone != null && clientPhone !== ""}
   ondismiss={handleSheetDismiss}

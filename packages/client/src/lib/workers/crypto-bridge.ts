@@ -35,6 +35,8 @@ import type {
   StateChangeEvent,
   MergeScanClient,
   MergeCandidate,
+  PortalCopyTriple,
+  KeyWrapTriple,
 } from "./crypto-protocol.js";
 
 export type BridgeState = "LOADING" | "READY" | "KEYED" | "DESTROYED";
@@ -950,6 +952,111 @@ export class CryptoBridge {
       "mintBackfillWraps",
     );
     return resp.wraps;
+  }
+
+  /**
+   * Batch re-seal follow-up content to a new portal channel's public key.
+   * Each item is decrypted inside the Worker (tk via keyWrap or portalWrap)
+   * and ECIES-sealed to clientPublic. Failed items land in `failed`.
+   */
+  async sealFollowUpsToPublic(
+    ticketId: string,
+    clientPublic: string,
+    items: readonly {
+      followUpId: string;
+      ciphertext: string;
+      keyWrap?: KeyWrapTriple;
+      portalWrap?: string;
+    }[],
+  ): Promise<{
+    items: readonly { followUpId: string; copy: PortalCopyTriple }[];
+    failed: readonly string[];
+  }> {
+    const resp = expectResponse(
+      await this.sendRequest({
+        type: "sealFollowUpsToPublic",
+        ticketId,
+        clientPublic,
+        items,
+      }),
+      "sealFollowUpsToPublic",
+    );
+    return { items: resp.items, failed: resp.failed };
+  }
+
+  /**
+   * Batch re-seal file keys to a new portal channel's public key. Each
+   * item's file key is unwrapped under the cached tk and sealed to
+   * clientPublic as an encodeFileKeyPayload envelope. Failed items land
+   * in `failed`.
+   */
+  async sealFileKeysToPublic(
+    ticketId: string,
+    clientPublic: string,
+    items: readonly {
+      kind: "attachment" | "recording";
+      rowId: string;
+      fileKeyWrap: string;
+      encryptedFilename?: string;
+    }[],
+    keyWrap?: KeyWrapTriple,
+  ): Promise<{
+    items: readonly { rowId: string; copy: PortalCopyTriple }[];
+    failed: readonly string[];
+  }> {
+    const resp = expectResponse(
+      await this.sendRequest({
+        type: "sealFileKeysToPublic",
+        ticketId,
+        clientPublic,
+        keyWrap,
+        items,
+      }),
+      "sealFileKeysToPublic",
+    );
+    return { items: resp.items, failed: resp.failed };
+  }
+
+  /**
+   * Decrypt a blob encrypted under tk, re-encrypt under a fresh file key,
+   * wrap the file key under tk, and seal the file key + filename to
+   * clientPublic for portal delivery.
+   *
+   * The ciphertext ArrayBuffer is transferred and neutered on the main
+   * thread. The returned encryptedData is also transferred back.
+   */
+  async convertBlobForPortal(
+    ticketId: string,
+    clientPublic: string,
+    kind: "attachment" | "recording",
+    rowId: string,
+    ciphertext: ArrayBuffer,
+    encryptedFilename?: string,
+  ): Promise<{
+    encryptedData: ArrayBuffer;
+    fileKeyWrap: string;
+    copy: PortalCopyTriple;
+  }> {
+    const resp = expectResponse(
+      await this.sendRequest(
+        {
+          type: "convertBlobForPortal",
+          ticketId,
+          clientPublic,
+          category: kind,
+          rowId,
+          ciphertext,
+          encryptedFilename,
+        },
+        [ciphertext],
+      ),
+      "convertBlobForPortal",
+    );
+    return {
+      encryptedData: resp.encryptedData,
+      fileKeyWrap: resp.fileKeyWrap,
+      copy: resp.copy,
+    };
   }
 
   /** Get the org public key (base64) from the Worker. */

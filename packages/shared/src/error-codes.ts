@@ -130,6 +130,12 @@ export const ErrorCode = {
   PORTAL_CHANNEL_EXISTS: "PORTAL_CHANNEL_EXISTS",
   /** Generic portal error: unknown, revoked, or bad-auth (indistinguishable). */
   PORTAL_CHANNEL_NOT_FOUND: "PORTAL_CHANNEL_NOT_FOUND",
+  /** Reseed: presented channelId does not match the client's active channel. */
+  PORTAL_CHANNEL_MISMATCH: "PORTAL_CHANNEL_MISMATCH",
+  /** Reseed: followup data violates server-side invariants (missing, wrong client, private, deleted). */
+  PORTAL_RESEED_VALIDATION: "PORTAL_RESEED_VALIDATION",
+  /** Reseed blob convert: the row already has a file_key_wrap (already converted). */
+  PORTAL_RESEED_ALREADY_CONVERTED: "PORTAL_RESEED_ALREADY_CONVERTED",
 
   // --- Client accounts ---
   ACCOUNT_USERNAME_TAKEN: "ACCOUNT_USERNAME_TAKEN",

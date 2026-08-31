@@ -128,6 +128,8 @@ export const auditEventTypeSchema = z.enum([
   "client_tier_changed",
   "portal_channel_regenerated",
   "portal_channel_revoked",
+  "portal_history_reseed_chunk",
+  "portal_reseed_blob_converted",
   "client_account_created",
   "client_account_password_changed",
   "client_account_reset",

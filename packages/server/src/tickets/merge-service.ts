@@ -80,15 +80,28 @@ function tierForKind(kind: string): string {
 }
 
 /**
- * Revoke a channel inside a transaction: delete its portal_messages,
- * set status='revoked' and revoked_at. Mirrors the steps in
- * channel-service.ts revokeChannel but operates on a single channel id
- * within an existing transaction.
+ * Revoke a channel inside a transaction: purge its portal carriers
+ * (attachments, recordings, messages), set status='revoked' and
+ * revoked_at. Mirrors the steps in channel-service.ts revokeChannel
+ * but operates on a single channel id within an existing transaction.
  */
 async function revokeChannelInTrx(
   trx: Transaction<TenantDatabase>,
   channelRowId: ChannelRowId,
 ): Promise<void> {
+  // Purge portal carriers for the channel. The expiry-bounded copy
+  // lifetime (ADR-092) means no carrier row should outlive the
+  // channel it was sealed to.
+  await trx
+    .deleteFrom("portal_attachments")
+    .where("channel_id", "=", channelRowId)
+    .execute();
+
+  await trx
+    .deleteFrom("portal_recordings")
+    .where("channel_id", "=", channelRowId)
+    .execute();
+
   await trx
     .deleteFrom("portal_messages")
     .where("channel_id", "=", channelRowId)

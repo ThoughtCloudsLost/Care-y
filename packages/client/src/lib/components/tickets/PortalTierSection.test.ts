@@ -164,6 +164,7 @@ describe("PortalTierSection", () => {
     render(PortalTierSection, {
       props: {
         ticketId: "t-1",
+        clientId: "c-1",
         clientTier: "sms_email",
         portalChannel: null,
         clientPhone: null,
@@ -179,6 +180,7 @@ describe("PortalTierSection", () => {
     render(PortalTierSection, {
       props: {
         ticketId: "t-1",
+        clientId: "c-1",
         clientTier: "secure_link",
         portalChannel: { ...baseSecureLinkChannel },
         clientPhone: null,
@@ -195,6 +197,7 @@ describe("PortalTierSection", () => {
     render(PortalTierSection, {
       props: {
         ticketId: "t-1",
+        clientId: "c-1",
         clientTier: "secure_link",
         portalChannel: { ...baseSecureLinkChannel, hasPassphrase: true },
         clientPhone: null,
@@ -209,6 +212,7 @@ describe("PortalTierSection", () => {
     const { container } = render(PortalTierSection, {
       props: {
         ticketId: "t-1",
+        clientId: "c-1",
         clientTier: undefined,
         portalChannel: null,
         clientPhone: null,
@@ -224,6 +228,7 @@ describe("PortalTierSection", () => {
     const { container } = render(PortalTierSection, {
       props: {
         ticketId: "t-1",
+        clientId: "c-1",
         clientTier: "sms_email",
         portalChannel: null,
         clientPhone: null,
@@ -243,6 +248,7 @@ describe("PortalTierSection", () => {
     const { container: slContainer } = render(PortalTierSection, {
       props: {
         ticketId: "t-1",
+        clientId: "c-1",
         clientTier: "secure_link",
         portalChannel: { ...baseSecureLinkChannel },
         clientPhone: null,
@@ -257,6 +263,7 @@ describe("PortalTierSection", () => {
     const { container: smsContainer } = render(PortalTierSection, {
       props: {
         ticketId: "t-2",
+        clientId: "c-1",
         clientTier: "sms_email",
         portalChannel: null,
         clientPhone: null,
@@ -271,6 +278,7 @@ describe("PortalTierSection", () => {
     render(PortalTierSection, {
       props: {
         ticketId: "t-1",
+        clientId: "c-1",
         clientTier: "secure_link",
         portalChannel: { ...baseSecureLinkChannel, accountOffer: false },
         clientPhone: null,
@@ -303,6 +311,7 @@ describe("PortalTierSection", () => {
     render(PortalTierSection, {
       props: {
         ticketId: "t-1",
+        clientId: "c-1",
         clientTier: "secure_link",
         portalChannel: { ...baseSecureLinkChannel, accountOffer: false },
         clientPhone: null,
@@ -328,6 +337,7 @@ describe("PortalTierSection", () => {
     render(PortalTierSection, {
       props: {
         ticketId: "t-1",
+        clientId: "c-1",
         clientTier: "account",
         portalChannel: { ...baseAccountChannel },
         clientPhone: null,
@@ -345,6 +355,7 @@ describe("PortalTierSection", () => {
     render(PortalTierSection, {
       props: {
         ticketId: "t-1",
+        clientId: "c-1",
         clientTier: "account",
         portalChannel: { ...baseAccountChannel },
         clientPhone: null,
@@ -361,6 +372,7 @@ describe("PortalTierSection", () => {
     const { container } = render(PortalTierSection, {
       props: {
         ticketId: "t-1",
+        clientId: "c-1",
         clientTier: "account",
         portalChannel: { ...baseAccountChannel },
         clientPhone: null,
@@ -377,6 +389,7 @@ describe("PortalTierSection", () => {
     render(PortalTierSection, {
       props: {
         ticketId: "t-1",
+        clientId: "c-1",
         clientTier: "account",
         portalChannel: { ...baseAccountChannel },
         clientPhone: null,
@@ -398,6 +411,7 @@ describe("PortalTierSection", () => {
     render(PortalTierSection, {
       props: {
         ticketId: "t-1",
+        clientId: "c-1",
         clientTier: "account",
         portalChannel: { ...baseAccountChannel },
         clientPhone: null,
@@ -431,6 +445,7 @@ describe("PortalTierSection", () => {
     render(PortalTierSection, {
       props: {
         ticketId: "t-1",
+        clientId: "c-1",
         clientTier: "account",
         portalChannel: { ...baseAccountChannel },
         clientPhone: null,
@@ -459,6 +474,7 @@ describe("PortalTierSection", () => {
     render(PortalTierSection, {
       props: {
         ticketId: "t-1",
+        clientId: "c-1",
         clientTier: "account",
         portalChannel: { ...baseAccountChannel },
         clientPhone: null,
@@ -488,6 +504,7 @@ describe("PortalTierSection", () => {
     render(PortalTierSection, {
       props: {
         ticketId: "t-1",
+        clientId: "c-1",
         clientTier: "secure_link",
         portalChannel: { ...baseContinuationChannel },
         clientPhone: null,
@@ -505,6 +522,7 @@ describe("PortalTierSection", () => {
     const { container } = render(PortalTierSection, {
       props: {
         ticketId: "t-1",
+        clientId: "c-1",
         clientTier: "secure_link",
         portalChannel: { ...baseContinuationChannel },
         clientPhone: null,
@@ -519,6 +537,7 @@ describe("PortalTierSection", () => {
     render(PortalTierSection, {
       props: {
         ticketId: "t-1",
+        clientId: "c-1",
         clientTier: "secure_link",
         portalChannel: { ...baseContinuationChannel },
         clientPhone: null,
@@ -534,6 +553,7 @@ describe("PortalTierSection", () => {
     const { container } = render(PortalTierSection, {
       props: {
         ticketId: "t-1",
+        clientId: "c-1",
         clientTier: undefined,
         portalChannel: null,
         clientPhone: null,

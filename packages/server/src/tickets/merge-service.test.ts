@@ -16,8 +16,14 @@ import type {
   TicketId,
   UserId,
   ChannelRowId,
+  BlobKey,
 } from "@care-y/shared";
-import { channelSecretSchema } from "@care-y/shared";
+import {
+  channelSecretSchema,
+  newAttachmentId,
+  newRecordingId,
+  newFollowupId,
+} from "@care-y/shared";
 
 describe.skipIf(!process.env.DATABASE_URL)("MergeService (DB)", () => {
   let testDb: TestDb;
@@ -318,6 +324,19 @@ describe.skipIf(!process.env.DATABASE_URL)("MergeService (DB)", () => {
     return row.id;
   }
 
+  /** ECIES triple with deterministic filler bytes. */
+  function fakeTriple(): {
+    ephemeralPoint: Buffer;
+    nonce: Buffer;
+    ciphertext: Buffer;
+  } {
+    return {
+      ephemeralPoint: Buffer.alloc(32, 0x01),
+      nonce: Buffer.alloc(24, 0x02),
+      ciphertext: Buffer.from("test-ciphertext"),
+    };
+  }
+
   /** Insert a portal_messages row for a channel (requires a followup FK). */
   async function insertPortalMessage(
     channelRowId: ChannelRowId,
@@ -347,6 +366,103 @@ describe.skipIf(!process.env.DATABASE_URL)("MergeService (DB)", () => {
       .returning("id")
       .executeTakeFirstOrThrow();
     return msg.id;
+  }
+
+  /**
+   * Insert a parent attachment row plus a portal_attachments carrier row
+   * for the given channel.
+   */
+  async function insertPortalAttachment(
+    channelRowId: ChannelRowId,
+    ticketId: TicketId,
+  ): Promise<void> {
+    const fuId = newFollowupId();
+    await testDb.db
+      .insertInto("followups")
+      .values({
+        id: fuId,
+        ticket_id: ticketId,
+        source: "volunteer",
+        type: "message",
+        encrypted_content: Buffer.from("att-content"),
+      })
+      .execute();
+
+    const attId = newAttachmentId();
+    await testDb.db
+      .insertInto("attachments")
+      .values({
+        id: attId,
+        ticket_id: ticketId,
+        followup_id: fuId,
+        blob_key: `test/att/${attId}` as BlobKey,
+        size_bytes: 512,
+        file_key_wrap: Buffer.alloc(72, 0xab),
+      })
+      .execute();
+
+    const triple = fakeTriple();
+    await testDb.db
+      .insertInto("portal_attachments")
+      .values({
+        attachment_id: attId,
+        channel_id: channelRowId,
+        followup_id: fuId,
+        direction: "to_client",
+        ephemeral_point: triple.ephemeralPoint,
+        nonce: triple.nonce,
+        ciphertext: triple.ciphertext,
+      })
+      .execute();
+  }
+
+  /**
+   * Insert a parent recording row plus a portal_recordings carrier row
+   * for the given channel.
+   */
+  async function insertPortalRecording(
+    channelRowId: ChannelRowId,
+    ticketId: TicketId,
+  ): Promise<void> {
+    const fuId = newFollowupId();
+    await testDb.db
+      .insertInto("followups")
+      .values({
+        id: fuId,
+        ticket_id: ticketId,
+        source: "system",
+        type: "phone_call",
+        encrypted_content: Buffer.from("rec-content"),
+      })
+      .execute();
+
+    const recId = newRecordingId();
+    await testDb.db
+      .insertInto("recordings")
+      .values({
+        id: recId,
+        ticket_id: ticketId,
+        followup_id: fuId,
+        blob_key: `test/rec/${recId}` as BlobKey,
+        size_bytes: 1024,
+        duration_seconds: 10,
+        file_key_wrap: Buffer.alloc(72, 0xab),
+      })
+      .execute();
+
+    const triple = fakeTriple();
+    await testDb.db
+      .insertInto("portal_recordings")
+      .values({
+        recording_id: recId,
+        channel_id: channelRowId,
+        followup_id: fuId,
+        direction: "to_client",
+        ephemeral_point: triple.ephemeralPoint,
+        nonce: triple.nonce,
+        ciphertext: triple.ciphertext,
+      })
+      .execute();
   }
 
   it("merge with only secondary holding a channel re-points it to primary", async () => {
@@ -531,5 +647,58 @@ describe.skipIf(!process.env.DATABASE_URL)("MergeService (DB)", () => {
       .where("id", "=", a.clientId)
       .executeTakeFirstOrThrow();
     expect(client.communication_tier).toBe("account");
+  });
+
+  it("revoked loser's portal_attachments and portal_recordings are purged during merge", async () => {
+    const a = await createClientWithTicket();
+    const b = await createClientWithTicket();
+
+    const primaryChannelId = await insertActiveChannel(a.clientId, {
+      created_at: new Date(Date.now() - 86_400_000),
+    });
+    const secondaryChannelId = await insertActiveChannel(b.clientId);
+
+    // Insert carrier rows for both channels
+    await insertPortalAttachment(primaryChannelId, a.ticketId);
+    await insertPortalRecording(primaryChannelId, a.ticketId);
+    await insertPortalAttachment(secondaryChannelId, b.ticketId);
+    await insertPortalRecording(secondaryChannelId, b.ticketId);
+
+    await svc.merge({
+      primaryClientId: a.clientId,
+      secondaryClientId: b.clientId,
+      encryptedSnapshot: Buffer.from("snap"),
+      keepChannelOf: "primary",
+    });
+
+    // Winner's carriers remain
+    const winnerAtt = await testDb.db
+      .selectFrom("portal_attachments")
+      .select("id")
+      .where("channel_id", "=", primaryChannelId)
+      .execute();
+    expect(winnerAtt).toHaveLength(1);
+
+    const winnerRec = await testDb.db
+      .selectFrom("portal_recordings")
+      .select("id")
+      .where("channel_id", "=", primaryChannelId)
+      .execute();
+    expect(winnerRec).toHaveLength(1);
+
+    // Loser's carriers are deleted
+    const loserAtt = await testDb.db
+      .selectFrom("portal_attachments")
+      .select("id")
+      .where("channel_id", "=", secondaryChannelId)
+      .execute();
+    expect(loserAtt).toHaveLength(0);
+
+    const loserRec = await testDb.db
+      .selectFrom("portal_recordings")
+      .select("id")
+      .where("channel_id", "=", secondaryChannelId)
+      .execute();
+    expect(loserRec).toHaveLength(0);
   });
 });

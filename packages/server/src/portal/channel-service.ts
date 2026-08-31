@@ -113,9 +113,10 @@ export async function createChannel(
 }
 
 /**
- * Regenerate a channel: revoke the old active channel (if any), delete
- * its portal_messages, and insert a new registration. All in one
- * transaction. No-op-safe when no active channel exists (plain create).
+ * Regenerate a channel: revoke the old active channel (if any), purge
+ * its portal carriers (messages, attachments, recordings), and insert
+ * a new registration. All in one transaction. No-op-safe when no
+ * active channel exists (plain create).
  */
 export async function regenerateChannel(
   db: Kysely<TenantDatabase>,
@@ -132,7 +133,19 @@ export async function regenerateChannel(
       .executeTakeFirst();
 
     if (active) {
-      // Delete portal_messages for the old channel before revoking.
+      // Purge portal carriers for the old channel. The expiry-bounded
+      // copy lifetime (ADR-092) means no carrier row should outlive
+      // the channel it was sealed to.
+      await trx
+        .deleteFrom("portal_attachments")
+        .where("channel_id", "=", active.id)
+        .execute();
+
+      await trx
+        .deleteFrom("portal_recordings")
+        .where("channel_id", "=", active.id)
+        .execute();
+
       await trx
         .deleteFrom("portal_messages")
         .where("channel_id", "=", active.id)
@@ -158,8 +171,9 @@ export async function regenerateChannel(
 }
 
 /**
- * Revoke the active channel, delete its portal_messages, and reset the
- * client's tier back to sms_email. No-op if no active channel exists.
+ * Revoke the active channel, purge its portal carriers (messages,
+ * attachments, recordings), and reset the client's tier back to
+ * sms_email. No-op if no active channel exists.
  */
 export async function revokeChannel(
   db: Kysely<TenantDatabase>,
@@ -175,6 +189,19 @@ export async function revokeChannel(
       .executeTakeFirst();
 
     if (active) {
+      // Purge portal carriers for the old channel. The expiry-bounded
+      // copy lifetime (ADR-092) means no carrier row should outlive
+      // the channel it was sealed to.
+      await trx
+        .deleteFrom("portal_attachments")
+        .where("channel_id", "=", active.id)
+        .execute();
+
+      await trx
+        .deleteFrom("portal_recordings")
+        .where("channel_id", "=", active.id)
+        .execute();
+
       await trx
         .deleteFrom("portal_messages")
         .where("channel_id", "=", active.id)

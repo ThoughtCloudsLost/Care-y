@@ -349,6 +349,12 @@ const RATE_ACCOUNT_LOGIN_MAX = getEnv().NODE_ENV === "production" ? 10 : 200;
 // the same shared-IP reason (each intake submission fetches a challenge).
 const RATE_INTAKE_CHALLENGE_MAX = getEnv().NODE_ENV === "production" ? 10 : 200;
 
+// Portal reseed: authenticated volunteer operation. 120 chunks/min bounds
+// throughput without blocking a large thread from finishing promptly.
+const RATE_RESEED_MAX = 120;
+// Blob conversion: heavier (re-stores full blobs). 30/min per user.
+const RATE_RESEED_BLOB_MAX = 30;
+
 // --- Rate limiters ---
 
 const noopLimiter: RateLimiter = {
@@ -655,6 +661,14 @@ const appRouter = createAppRouter({
     notificationService,
     fieldEncryptor: encryptor,
     pendingClients,
+    reseedLimiter: createInMemoryRateLimiter({
+      windowMs: RATE_WINDOW_1M,
+      maxRequests: RATE_RESEED_MAX,
+    }),
+    reseedBlobLimiter: createInMemoryRateLimiter({
+      windowMs: RATE_WINDOW_1M,
+      maxRequests: RATE_RESEED_BLOB_MAX,
+    }),
   },
   kbDeps: {
     createCategorySvc: createKBCategoryService,

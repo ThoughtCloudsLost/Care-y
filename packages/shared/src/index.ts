@@ -345,11 +345,17 @@ export {
   setAccountOfferInputSchema,
   resetClientAccountInputSchema,
   portalChannelMetaSchema,
+  listTicketsForClientInputSchema,
+  reseedPortalHistoryInputSchema,
+  convertBlobForReseedInputSchema,
   type UpgradeToSecureLinkInput,
   type UpdateOutboundMessageInput,
   type SetAccountOfferInput,
   type ResetClientAccountInput,
   type PortalChannelMetaWire,
+  type ListTicketsForClientInput,
+  type ReseedPortalHistoryInput,
+  type ConvertBlobForReseedInput,
 } from "./schemas/tickets.js";
 
 // --- Client management ---

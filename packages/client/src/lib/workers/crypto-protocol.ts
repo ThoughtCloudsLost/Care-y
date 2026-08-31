@@ -383,6 +383,101 @@ export interface CreateTicketKeyRequest {
   readonly fields: readonly { name: string; plaintext: string }[];
 }
 
+// ── Portal thread reseed batch operations ─────────────────────────
+
+/** ECIES triple in base64url wire form, used by portal copy outputs. */
+export interface PortalCopyTriple {
+  readonly ephemeralPoint: string;
+  readonly nonce: string;
+  readonly ciphertext: string;
+}
+
+/**
+ * Key wrap triple for resolving a ticket key via ECIES with volPrivate.
+ * Extracted from DecryptContentRequest for reuse in batch items.
+ */
+export interface KeyWrapTriple {
+  readonly ephemeralPoint: string;
+  readonly nonce: string;
+  readonly wrappedKey: string;
+}
+
+/**
+ * Re-seal follow-up content to a new portal channel's public key.
+ *
+ * Per item: resolve tk via keyWrap (ECIES) or portalWrap (org-key unseal),
+ * decrypt content at followupSlot AAD, then ECIES-encrypt the plaintext
+ * bytes to clientPublic (no AAD on the ECIES triple).
+ *
+ * Items whose decrypt fails land in `failed`. The batch never aborts.
+ */
+export interface SealFollowUpsToPublicRequest {
+  readonly type: "sealFollowUpsToPublic";
+  readonly id: number;
+  readonly ticketId: string;
+  /** Base64url ristretto255 point of the new portal channel. */
+  readonly clientPublic: string;
+  readonly items: readonly {
+    readonly followUpId: string;
+    /** Encrypted content (nonce || ciphertext), base64. */
+    readonly ciphertext: string;
+    /** ECIES key wrap, when the follow-up was written by a volunteer. */
+    readonly keyWrap?: KeyWrapTriple;
+    /** Org-sealed tk_temp, when the follow-up was a portal reply (crypto_box_seal). */
+    readonly portalWrap?: string;
+  }[];
+}
+
+/**
+ * Re-seal file keys (attachment or recording) to a new portal channel.
+ *
+ * Per item: unwrap file key under tk at fileKeySlot(rowId), optionally
+ * decrypt the filename under filenameSlot(rowId), then ECIES-encrypt
+ * encodeFileKeyPayload(fileKey, filename) to clientPublic.
+ */
+export interface SealFileKeysToPublicRequest {
+  readonly type: "sealFileKeysToPublic";
+  readonly id: number;
+  readonly ticketId: string;
+  /** Base64url ristretto255 point. */
+  readonly clientPublic: string;
+  /** Optional key wrap to warm the tk cache when no prior decrypt primed it. */
+  readonly keyWrap?: KeyWrapTriple;
+  readonly items: readonly {
+    readonly kind: "attachment" | "recording";
+    readonly rowId: string;
+    /** File key wrapped under tk at fileKeySlot, base64. */
+    readonly fileKeyWrap: string;
+    /** Filename encrypted under tk at filenameSlot, base64. Absent for recordings. */
+    readonly encryptedFilename?: string;
+  }[];
+}
+
+/**
+ * Decrypt a blob, mint a fresh file key, re-encrypt under it, wrap the
+ * file key under tk, and seal the file key + filename to clientPublic.
+ *
+ * Used for media that was encrypted directly under tk (MMS ingest) and
+ * must be converted to the file-key envelope before portal delivery.
+ */
+export interface ConvertBlobForPortalRequest {
+  readonly type: "convertBlobForPortal";
+  readonly id: number;
+  readonly ticketId: string;
+  /** Base64url ristretto255 point. */
+  readonly clientPublic: string;
+  /**
+   * Named category, not "kind": a top-level "kind" field would defeat
+   * the dispatcher's `"kind" in req` event-vs-request discrimination.
+   */
+  readonly category: "attachment" | "recording";
+  readonly rowId: string;
+  /** Encrypted filename under tk at filenameSlot, base64. Absent for recordings. */
+  readonly encryptedFilename?: string;
+  /** Encrypted blob (nonce || ciphertext), raw bytes. Transferable. */
+  readonly ciphertext: ArrayBuffer;
+}
+
 // ── Merge candidate detection ──────────────────────────────────────
 
 /**
@@ -572,6 +667,9 @@ export type WorkerRequest =
   | AliasHashRequest
   | PhoneMatchHashRequest
   | DetectMergeCandidatesRequest
+  | SealFollowUpsToPublicRequest
+  | SealFileKeysToPublicRequest
+  | ConvertBlobForPortalRequest
   | ConnectRequest
   | DisconnectRequest;
 
@@ -850,6 +948,36 @@ export interface MintBackfillWrapsResponse extends SuccessBase {
   }[];
 }
 
+// ── Portal reseed batch responses ──────────────────────────────────
+
+export interface SealFollowUpsToPublicResponse extends SuccessBase {
+  readonly type: "sealFollowUpsToPublic";
+  readonly items: readonly {
+    readonly followUpId: string;
+    readonly copy: PortalCopyTriple;
+  }[];
+  readonly failed: readonly string[];
+}
+
+export interface SealFileKeysToPublicResponse extends SuccessBase {
+  readonly type: "sealFileKeysToPublic";
+  readonly items: readonly {
+    readonly rowId: string;
+    readonly copy: PortalCopyTriple;
+  }[];
+  readonly failed: readonly string[];
+}
+
+export interface ConvertBlobForPortalResponse extends SuccessBase {
+  readonly type: "convertBlobForPortal";
+  /** Re-encrypted blob under the fresh file key. Transferable. */
+  readonly encryptedData: ArrayBuffer;
+  /** File key wrapped under tk at fileKeySlot. */
+  readonly fileKeyWrap: string;
+  /** File key + filename sealed to clientPublic. */
+  readonly copy: PortalCopyTriple;
+}
+
 // ── SharedWorker lifecycle responses ────────────────────────────────
 
 export type SharedWorkerState = "READY" | "KEYED";
@@ -888,6 +1016,9 @@ export type WorkerSuccessResponse =
   | DecryptIntakeResponseResponse
   | MintBackfillWrapsResponse
   | DetectMergeCandidatesResponse
+  | SealFollowUpsToPublicResponse
+  | SealFileKeysToPublicResponse
+  | ConvertBlobForPortalResponse
   | WrapWithVolPublicResponse
   | SealSelfBlobResponse
   | OpenSelfBlobResponse

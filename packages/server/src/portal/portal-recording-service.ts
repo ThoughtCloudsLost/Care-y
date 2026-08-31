@@ -49,7 +49,18 @@ export interface PortalRecordingWire {
 // insertClientRecordingWrap
 // ---------------------------------------------------------------------------
 
-/** Write the client's wrap of the recording file key for one channel. */
+export interface InsertClientRecordingWrapOpts {
+  /** Stamp the row's created_at explicitly (reseed uses the followup's timestamp). */
+  readonly createdAt?: Date;
+  /** Add ON CONFLICT DO NOTHING on the per-channel unique index columns. */
+  readonly onConflictIgnore?: boolean;
+}
+
+/**
+ * Write the client's wrap of the recording file key for one channel.
+ * Returns whether a row was written; false only when onConflictIgnore
+ * suppressed a duplicate.
+ */
 export async function insertClientRecordingWrap(
   trx: Kysely<TenantDatabase> | Transaction<TenantDatabase>,
   args: {
@@ -59,19 +70,27 @@ export async function insertClientRecordingWrap(
     direction: "to_client" | "from_client";
     copy: EciesTripleBuffers;
   },
-): Promise<void> {
-  await trx
-    .insertInto("portal_recordings")
-    .values({
-      recording_id: args.recordingId,
-      channel_id: args.channelRowId,
-      followup_id: args.followupId,
-      direction: args.direction,
-      ephemeral_point: args.copy.ephemeralPoint,
-      nonce: args.copy.nonce,
-      ciphertext: args.copy.ciphertext,
-    })
-    .execute();
+  opts?: InsertClientRecordingWrapOpts,
+): Promise<boolean> {
+  let query = trx.insertInto("portal_recordings").values({
+    recording_id: args.recordingId,
+    channel_id: args.channelRowId,
+    followup_id: args.followupId,
+    direction: args.direction,
+    ephemeral_point: args.copy.ephemeralPoint,
+    nonce: args.copy.nonce,
+    ciphertext: args.copy.ciphertext,
+    ...(opts?.createdAt !== undefined ? { created_at: opts.createdAt } : {}),
+  });
+
+  if (opts?.onConflictIgnore === true) {
+    query = query.onConflict((oc) =>
+      oc.columns(["channel_id", "recording_id"]).doNothing(),
+    );
+  }
+
+  const result = await query.executeTakeFirst();
+  return Number(result.numInsertedOrUpdatedRows ?? 0n) > 0;
 }
 
 // ---------------------------------------------------------------------------

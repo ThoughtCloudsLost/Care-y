@@ -1,4 +1,4 @@
-import { ConflictError, ValidationError } from "../errors.js";
+import { ConflictError, ValidationError, NotFoundError } from "../errors.js";
 
 /**
  * Typed error for the key rotation guard: rotation cannot proceed while
@@ -43,5 +43,45 @@ export class UsernameTakenError extends ConflictError {
 export class StaleThreadError extends ConflictError {
   constructor() {
     super("Thread state changed during re-encryption; retry after refetch");
+  }
+}
+
+/**
+ * Reseed: the presented channelId does not match the client's active
+ * channel. The route maps this to PORTAL_CHANNEL_MISMATCH.
+ */
+export class PortalChannelMismatchError extends ConflictError {
+  constructor() {
+    super(
+      "Presented channel does not match the client's active portal channel",
+    );
+  }
+}
+
+/**
+ * Reseed: a followup referenced in the payload fails server-side
+ * validation (missing, wrong client, private, deleted, wrong type).
+ * A compliant client never sends such rows.
+ */
+export class ReseedValidationError extends ValidationError {}
+
+/**
+ * Reseed blob convert: the attachment or recording row already has a
+ * file_key_wrap, meaning it was already converted by a prior chunk.
+ * The wrap path handles it on rerun; no blob conversion needed.
+ */
+export class ReseedAlreadyConvertedError extends ConflictError {
+  constructor() {
+    super("Row already has a file_key_wrap; use the wrap path instead");
+  }
+}
+
+/**
+ * Reseed blob convert: the attachment or recording row was not found
+ * (soft-deleted or nonexistent). The route maps this to NOT_FOUND.
+ */
+export class ReseedRowNotFoundError extends NotFoundError {
+  constructor(kind: "attachment" | "recording") {
+    super(`${kind} not found or deleted`);
   }
 }
