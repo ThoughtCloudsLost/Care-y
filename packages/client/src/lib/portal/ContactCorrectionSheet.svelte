@@ -1,21 +1,23 @@
 <!--
-  Contact correction sheet. Collects a new phone number from the client
-  and passes it to the page for submission as a contact_correction follow-up.
+  Contact correction sheet. Collects a new phone number and/or email
+  from the client and passes a structured payload to the page for
+  submission as a contact_correction follow-up.
 
   Security constraint: never displays the on-file contact info. Bare-link
-  sessions must not receive existing PII; the field starts blank and the
-  server-side number is never fetched or shown.
+  sessions must not receive existing PII; the fields start blank and the
+  server-side values are never fetched or shown.
 -->
 <script lang="ts">
   import { List, ListInput } from "konsta/svelte";
   import * as m from "$lib/paraglide/messages.js";
   import ShellSheet from "$lib/shell/ShellSheet.svelte";
   import SoftButton from "$lib/components/inputs/SoftButton.svelte";
+  import type { ContactCorrectionPayload } from "@care-y/shared";
 
   interface ContactCorrectionSheetProps {
     opened: boolean;
     ondismiss: () => void;
-    onsubmit: (phone: string) => void;
+    onsubmit: (payload: ContactCorrectionPayload) => void;
     pending?: boolean;
   }
 
@@ -27,22 +29,41 @@
   }: ContactCorrectionSheetProps = $props();
 
   let phone = $state("");
+  let email = $state("");
 
-  const trimmed = $derived(phone.trim());
-  const canSubmit = $derived(trimmed.length > 0 && !pending);
+  const trimmedPhone = $derived(phone.trim());
+  const trimmedEmail = $derived(email.trim());
 
-  // Clear the field when the sheet closes so a reopened sheet starts blank.
+  // Basic client-side plausibility check for email (not a full validation;
+  // the shared schema validates on serialize).
+  const emailPlausible = $derived(
+    trimmedEmail.length === 0 ||
+      /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(trimmedEmail),
+  );
+
+  const hasValue = $derived(trimmedPhone.length > 0 || trimmedEmail.length > 0);
+  const canSubmit = $derived(hasValue && emailPlausible && !pending);
+
+  // Clear the fields when the sheet closes so a reopened sheet starts blank.
   let wasOpen = $state(false);
   $effect(() => {
     if (!opened && wasOpen) {
       phone = "";
+      email = "";
     }
     wasOpen = opened;
   });
 
   function handleSubmit(): void {
     if (!canSubmit) return;
-    onsubmit(trimmed);
+    const payload: ContactCorrectionPayload = { v: 1 };
+    if (trimmedPhone.length > 0) {
+      payload.phone = trimmedPhone;
+    }
+    if (trimmedEmail.length > 0) {
+      payload.email = trimmedEmail;
+    }
+    onsubmit(payload);
   }
 </script>
 
@@ -77,6 +98,20 @@
         }}
         disabled={pending}
         data-testid="correction-phone-input"
+      />
+      <ListInput
+        type="email"
+        label={m.portal_correction_email_label()}
+        autocomplete="email"
+        value={email}
+        onInput={(e: Event) => {
+          const target = e.target;
+          if (target instanceof HTMLInputElement) {
+            email = target.value;
+          }
+        }}
+        disabled={pending}
+        data-testid="correction-email-input"
       />
     </List>
   </div>

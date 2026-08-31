@@ -4,7 +4,8 @@ import type { FollowUpSource, FollowUpType } from "./tickets.js";
 import { ticketPrioritySchema } from "./tickets.js";
 import { userIdSchema } from "../ids.js";
 
-export type ContentCategory = "message" | "system" | "note" | "article";
+export type ContentCategory =
+  "message" | "system" | "note" | "article" | "correction";
 
 export type RenderVariant = "call" | "share" | "correction";
 
@@ -153,7 +154,7 @@ export const CONTENT_TYPE_REGISTRY: Record<FollowUpType, ContentTypeMeta> = {
     renderVariant: "share",
   },
   contact_correction: {
-    category: "message",
+    category: "correction",
     allowedSources: ["client"],
     encryption: "ticket-key",
     hasEncryptedContent: true,

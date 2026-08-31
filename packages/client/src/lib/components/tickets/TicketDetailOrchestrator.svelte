@@ -370,6 +370,7 @@
   let composeActionsAnchor = $state<HTMLElement | undefined>();
   let phonePopoverOpen = $state(false);
   let phoneEditSheetOpen = $state(false);
+  let phoneEditInitialPhone = $state<string | undefined>(undefined);
   let mergeSheetOpen = $state(false);
   let mergeConflictClientId = $state<string | null>(null);
   let mergeConflictAlias = $state<string | null>(null);
@@ -804,6 +805,12 @@
 
   function handleOpenPhoneEdit(): void {
     phonePopoverOpen = false;
+    phoneEditInitialPhone = undefined;
+    phoneEditSheetOpen = true;
+  }
+
+  function handleApplyPhone(phone: string): void {
+    phoneEditInitialPhone = phone;
     phoneEditSheetOpen = true;
   }
 
@@ -988,6 +995,7 @@
     bind:loadOlderPage
     bind:loadedFollowUpCount
     bind:correctionPending
+    onapplyphone={handleApplyPhone}
   />
 {/snippet}
 
@@ -1162,6 +1170,7 @@
   {composeActionsAnchor}
   {phonePopoverOpen}
   {phoneEditSheetOpen}
+  {phoneEditInitialPhone}
   {canCopyPhone}
   onphonepopoverdismiss={() => {
     phonePopoverOpen = false;
@@ -1170,6 +1179,7 @@
   onphoneedit={handleOpenPhoneEdit}
   onphoneeditdismiss={() => {
     phoneEditSheetOpen = false;
+    phoneEditInitialPhone = undefined;
   }}
   onphonemerge={(conflictingClientId: string, conflictingAlias: string) => {
     openMergeFromConflict(conflictingClientId, conflictingAlias);

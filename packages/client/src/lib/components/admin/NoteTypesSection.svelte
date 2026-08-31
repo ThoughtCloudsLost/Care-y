@@ -18,6 +18,7 @@
     CirclePause,
     Replace,
     Phone,
+    UserPen,
     Plus,
     Pencil,
     type LucideIcon,
@@ -105,6 +106,11 @@
       icon: Phone,
       label: m.followup_type_phone_call,
       description: m.followup_type_phone_call_desc,
+    },
+    {
+      icon: UserPen,
+      label: m.followup_type_contact_correction,
+      description: m.followup_type_contact_correction_desc,
     },
   ];
 

@@ -388,6 +388,14 @@ export {
   type PriorityEventParams,
 } from "./schemas/follow-up-registry.js";
 
+// --- Contact correction payload ---
+export {
+  contactCorrectionPayloadSchema,
+  serializeContactCorrection,
+  parseContactCorrection,
+  type ContactCorrectionPayload,
+} from "./schemas/contact-correction-payload.js";
+
 // --- Knowledge Base schemas ---
 export {
   createKbCategoryInputSchema,

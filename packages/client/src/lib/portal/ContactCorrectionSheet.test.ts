@@ -3,8 +3,9 @@
  * ContactCorrectionSheet tests.
  *
  * Covers: title and body render when opened, submit disabled with empty
- * input, typing enables submit, submit calls onsubmit with trimmed value,
- * pending disables submit.
+ * inputs, phone only enables submit, email only enables submit, both
+ * fields submit, invalid email disables submit, onsubmit receives a
+ * payload object, pending disables submit.
  */
 
 import { describe, it, expect, vi, afterEach } from "vitest";
@@ -17,8 +18,9 @@ import type * as ShellSheetMod from "$lib/shell/ShellSheet.svelte";
 vi.mock("$lib/paraglide/messages.js", async (importOriginal) => ({
   ...(await importOriginal<typeof MessagesMod>()),
   portal_correction_sheet_title: () => "Correct my contact info",
-  portal_correction_sheet_body: () => "Enter the phone number",
+  portal_correction_sheet_body: () => "Enter your updated information",
   portal_correction_phone_label: () => "New phone number",
+  portal_correction_email_label: () => "New email",
   portal_correction_sheet_submit: () => "Send correction",
 }));
 
@@ -66,7 +68,7 @@ describe("ContactCorrectionSheet", () => {
       props: baseProps,
     });
     expect(container.textContent).toContain("Correct my contact info");
-    expect(container.textContent).toContain("Enter the phone number");
+    expect(container.textContent).toContain("Enter your updated information");
   });
 
   it("does not render content when closed", () => {
@@ -74,10 +76,12 @@ describe("ContactCorrectionSheet", () => {
       props: { ...baseProps, opened: false },
     });
     // PassthroughShell hides children when opened=false
-    expect(container.textContent).not.toContain("Enter the phone number");
+    expect(container.textContent).not.toContain(
+      "Enter your updated information",
+    );
   });
 
-  it("submit button is disabled with empty input", () => {
+  it("submit button is disabled with empty inputs", () => {
     const { container } = render(ContactCorrectionSheet, {
       props: baseProps,
     });
@@ -86,7 +90,7 @@ describe("ContactCorrectionSheet", () => {
     expect(btn.disabled).toBe(true);
   });
 
-  it("typing a value enables the submit button", async () => {
+  it("typing a phone value enables the submit button", async () => {
     const { container } = render(ContactCorrectionSheet, {
       props: baseProps,
     });
@@ -100,7 +104,35 @@ describe("ContactCorrectionSheet", () => {
     expect(btn.disabled).toBe(false);
   });
 
-  it("submit calls onsubmit with the trimmed value", async () => {
+  it("typing an email value enables the submit button", async () => {
+    const { container } = render(ContactCorrectionSheet, {
+      props: baseProps,
+    });
+    const input = container.querySelector(
+      "input[type='email']",
+    ) as HTMLInputElement;
+    await fireEvent.input(input, { target: { value: "user@example.com" } });
+    await tick();
+
+    const btn = container.querySelector("button.soft-btn") as HTMLButtonElement;
+    expect(btn.disabled).toBe(false);
+  });
+
+  it("invalid email disables the submit button", async () => {
+    const { container } = render(ContactCorrectionSheet, {
+      props: baseProps,
+    });
+    const input = container.querySelector(
+      "input[type='email']",
+    ) as HTMLInputElement;
+    await fireEvent.input(input, { target: { value: "not-an-email" } });
+    await tick();
+
+    const btn = container.querySelector("button.soft-btn") as HTMLButtonElement;
+    expect(btn.disabled).toBe(true);
+  });
+
+  it("submit calls onsubmit with phone-only payload", async () => {
     const onsubmit = vi.fn();
     const { container } = render(ContactCorrectionSheet, {
       props: { ...baseProps, onsubmit },
@@ -115,7 +147,61 @@ describe("ContactCorrectionSheet", () => {
     const btn = container.querySelector("button.soft-btn") as HTMLButtonElement;
     await fireEvent.click(btn);
 
-    expect(onsubmit).toHaveBeenCalledWith("+1 555-1234");
+    expect(onsubmit).toHaveBeenCalledWith({
+      v: 1,
+      phone: "+1 555-1234",
+    });
+  });
+
+  it("submit calls onsubmit with email-only payload", async () => {
+    const onsubmit = vi.fn();
+    const { container } = render(ContactCorrectionSheet, {
+      props: { ...baseProps, onsubmit },
+    });
+
+    const input = container.querySelector(
+      "input[type='email']",
+    ) as HTMLInputElement;
+    await fireEvent.input(input, {
+      target: { value: "user@example.com" },
+    });
+    await tick();
+
+    const btn = container.querySelector("button.soft-btn") as HTMLButtonElement;
+    await fireEvent.click(btn);
+
+    expect(onsubmit).toHaveBeenCalledWith({
+      v: 1,
+      email: "user@example.com",
+    });
+  });
+
+  it("submit calls onsubmit with both fields", async () => {
+    const onsubmit = vi.fn();
+    const { container } = render(ContactCorrectionSheet, {
+      props: { ...baseProps, onsubmit },
+    });
+
+    const phoneInput = container.querySelector(
+      "input[type='tel']",
+    ) as HTMLInputElement;
+    const emailInput = container.querySelector(
+      "input[type='email']",
+    ) as HTMLInputElement;
+    await fireEvent.input(phoneInput, { target: { value: "+15551234567" } });
+    await fireEvent.input(emailInput, {
+      target: { value: "user@example.com" },
+    });
+    await tick();
+
+    const btn = container.querySelector("button.soft-btn") as HTMLButtonElement;
+    await fireEvent.click(btn);
+
+    expect(onsubmit).toHaveBeenCalledWith({
+      v: 1,
+      phone: "+15551234567",
+      email: "user@example.com",
+    });
   });
 
   it("pending disables the submit button", async () => {

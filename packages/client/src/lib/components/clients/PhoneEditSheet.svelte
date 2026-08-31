@@ -32,6 +32,8 @@
       conflictingClientId: string,
       conflictingAlias: string,
     ) => void;
+    /** Optional initial phone number to prefill step 1 (e.g. from a correction). */
+    readonly initialPhone?: string;
   }
 
   let {
@@ -40,6 +42,7 @@
     clientAlias,
     ondismiss,
     onmerge,
+    initialPhone,
   }: PhoneEditSheetProps = $props();
 
   // ---------------------------------------------------------------------------
@@ -80,12 +83,19 @@
     step === "conflict" ? "conflict" : "confirm",
   );
 
-  // Reset state when the sheet opens or closes
+  // Reset state when the sheet opens or closes. When opening with an
+  // initialPhone (e.g. from a correction apply action), prefill step 1.
   $effect(() => {
     if (!opened) {
       step = "input";
       phoneNumber = "";
       conflict = null;
+    } else if (
+      initialPhone !== undefined &&
+      initialPhone !== "" &&
+      phoneNumber === ""
+    ) {
+      phoneNumber = initialPhone;
     }
   });
 

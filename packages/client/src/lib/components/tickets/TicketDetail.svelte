@@ -81,6 +81,8 @@
   import GapIndicator from "$lib/components/GapIndicator.svelte";
   import ShareStatusLine from "$lib/components/tickets/ShareStatusLine.svelte";
   import CorrectionStatusLine from "$lib/components/tickets/CorrectionStatusLine.svelte";
+  import CorrectionBody from "$lib/components/tickets/CorrectionBody.svelte";
+  import { parseContactCorrection } from "@care-y/shared";
   import {
     followUpKind,
     followUpRenderVariant,
@@ -181,6 +183,8 @@
     /** Two-way bindable: true when any contact_correction follow-up
      *  has no acknowledge reaction. Drives outbound-surface warnings. */
     correctionPending?: boolean;
+    /** Called when the volunteer taps Apply on a structured correction phone row. */
+    onapplyphone?: (phone: string) => void;
   }
 
   let {
@@ -213,6 +217,7 @@
     loadedFollowUpCount = $bindable(0),
     loadOlderPage: loadOlderPageProp = $bindable(undefined),
     correctionPending = $bindable(false),
+    onapplyphone,
   }: TicketDetailProps = $props();
 
   const ticketCache = getTicketDecryptCache();
@@ -1330,6 +1335,16 @@
                   />
                 {/if}
                 {#if variant === "correction"}
+                  {@const correctionPayloadCluster =
+                    recResult.status === "ready"
+                      ? parseContactCorrection(recResult.value)
+                      : null}
+                  {#if correctionPayloadCluster !== null}
+                    <CorrectionBody
+                      payload={correctionPayloadCluster}
+                      {onapplyphone}
+                    />
+                  {/if}
                   <CorrectionStatusLine
                     reactions={getReactions(rec.id)}
                     ontoggleacknowledge={() =>
@@ -1566,6 +1581,16 @@
                         />
                       {/if}
                       {#if variant === "correction"}
+                        {@const correctionPayload =
+                          contentResult.status === "ready"
+                            ? parseContactCorrection(contentResult.value)
+                            : null}
+                        {#if correctionPayload !== null}
+                          <CorrectionBody
+                            payload={correctionPayload}
+                            {onapplyphone}
+                          />
+                        {/if}
                         <CorrectionStatusLine
                           reactions={getReactions(fu.id)}
                           ontoggleacknowledge={() =>
