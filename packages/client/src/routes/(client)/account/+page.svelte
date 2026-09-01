@@ -32,7 +32,7 @@
   import { trpc } from "$lib/trpc/index.js";
   import { portalKeys } from "$lib/query/keys.js";
   import { announceToLiveRegion } from "$lib/utils/announce.js";
-  import { encode } from "@care-y/crypto";
+  import { decode, encode } from "@care-y/crypto";
   import { newFollowupId, newKeyGeneration } from "@care-y/shared";
   import { requireRouter } from "$lib/errors.js";
   import {
@@ -59,7 +59,8 @@
   import AccountSettings from "$lib/portal/AccountSettings.svelte";
   import PageLayout from "$lib/shell/PageLayout.svelte";
   import ShellSheet from "$lib/shell/ShellSheet.svelte";
-  import { Settings as Cog, LogOut } from "@lucide/svelte";
+  import { Settings as Cog, LogOut, IdCard } from "@lucide/svelte";
+  import ContactInfoCard from "$lib/portal/ContactInfoCard.svelte";
   import {
     getClientShellCtx,
     DEFAULT_SAFE_URL,
@@ -338,8 +339,8 @@
       if (!trpc.branding) return null;
       const data = await trpc.branding.getPublicBranding.query();
       if (data.orgPublicKey === null) return null;
-      const { decode } = await import("@care-y/crypto");
-      return decode(data.orgPublicKey);
+      const { decode: decodeKey } = await import("@care-y/crypto");
+      return decodeKey(data.orgPublicKey);
     },
     staleTime: 5 * 60 * 1000,
     retry: false,
@@ -675,6 +676,45 @@
   const shellContainer = getClientShellCtx();
 
   let settingsOpen = $state(false);
+  let contactCardOpen = $state(false);
+
+  /**
+   * Fetch the sealed contact envelope from the account session endpoint.
+   * Called on card open, never eagerly.
+   */
+  async function fetchSealedAccountContact(): Promise<string> {
+    const portalRouter = requireRouter(trpc.clientPortal, "clientPortal");
+    const result = await portalRouter.accountContactInfo.query();
+    return result.sealed;
+  }
+
+  /**
+   * Open a sealed contact envelope using the account session's bridge.
+   * The envelope is ephemeralPoint(32) | nonce(24) | ciphertext(N) as
+   * a single base64url string.
+   */
+  async function openAccountContactEnvelope(
+    sealed: string,
+  ): Promise<{ phone?: string; email?: string }> {
+    if (!session) throw new Error("No session");
+    const raw = decode(sealed);
+    const ep = encode(raw.subarray(0, 32));
+    const nonce = encode(raw.subarray(32, 56));
+    const ct = encode(raw.subarray(56));
+    const json = await session.decryptMessage(ep, nonce, ct);
+    const parsed: unknown = JSON.parse(json);
+    if (typeof parsed !== "object" || parsed === null) {
+      return {};
+    }
+    const result: { phone?: string; email?: string } = {};
+    if ("phone" in parsed && typeof parsed.phone === "string") {
+      result.phone = parsed.phone;
+    }
+    if ("email" in parsed && typeof parsed.email === "string") {
+      result.email = parsed.email;
+    }
+    return result;
+  }
 
   // Locale-reactive title (the read establishes a $derived dependency)
   const pageTitle = $derived.by((): string => {
@@ -687,6 +727,14 @@
     void uiLocaleStore.locale;
     if (!session) return [];
     return [
+      {
+        id: "contact-info",
+        label: m.portal_contact_title(),
+        icon: IdCard,
+        onclick: () => {
+          contactCardOpen = true;
+        },
+      },
       {
         id: "settings",
         label: m.account_settings_title(),
@@ -992,6 +1040,16 @@
         errorMessage={changePasswordError || undefined}
       />
     </ShellSheet>
+
+    <ContactInfoCard
+      open={contactCardOpen}
+      onclose={() => {
+        contactCardOpen = false;
+      }}
+      fetchSealed={fetchSealedAccountContact}
+      openEnvelope={openAccountContactEnvelope}
+      orgName={supportLabel}
+    />
   {/if}
 {/key}
 

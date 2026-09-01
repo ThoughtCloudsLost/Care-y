@@ -1,4 +1,9 @@
-import { ConflictError, ValidationError, NotFoundError } from "../errors.js";
+import {
+  ConflictError,
+  ForbiddenError,
+  ValidationError,
+  NotFoundError,
+} from "../errors.js";
 
 /**
  * Typed error for the key rotation guard: rotation cannot proceed while
@@ -83,5 +88,38 @@ export class ReseedAlreadyConvertedError extends ConflictError {
 export class ReseedRowNotFoundError extends NotFoundError {
   constructor(kind: "attachment" | "recording") {
     super(`${kind} not found or deleted`);
+  }
+}
+
+/**
+ * Thrown when a bare-link channel (has_passphrase = false) requests
+ * contact info. The route maps this to PORTAL_CONTACT_LOCKED.
+ * Sealing to a seed-derived key would hand the info to anyone with
+ * the link, so bare links are refused before any decryption happens.
+ */
+export class PortalContactLockedError extends ForbiddenError {
+  constructor() {
+    super("Contact info requires a passphrase or account session");
+  }
+}
+
+/**
+ * Thrown when addPassphrase is called on a channel that already has a
+ * passphrase. The route maps this to PORTAL_PASSPHRASE_ALREADY_SET.
+ */
+export class PassphraseAlreadySetError extends ConflictError {
+  constructor() {
+    super("This channel already has a passphrase");
+  }
+}
+
+/**
+ * Thrown when the count of resealedMessages does not match the channel's
+ * portal_messages count at transaction time. A concurrent inbound copy
+ * landed; the client refetches and retries.
+ */
+export class PassphraseCountMismatchError extends ConflictError {
+  constructor() {
+    super("Message count mismatch; refetch and retry");
   }
 }

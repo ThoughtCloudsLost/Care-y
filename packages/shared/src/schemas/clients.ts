@@ -13,6 +13,7 @@ import {
   aliasHashSchema,
   clientIdSchema,
   phoneMatchHashSchema,
+  emailMatchHashSchema,
 } from "../ids.js";
 
 // --- Client list (paginated, sortable, searchable) ---
@@ -102,3 +103,18 @@ export const suggestDuplicatesInputSchema = z.object({
 export type SuggestDuplicatesInput = z.infer<
   typeof suggestDuplicatesInputSchema
 >;
+
+// --- Email update (plaintext address, server encrypts and hashes) ---
+
+export const updateEmailInputSchema = z.object({
+  clientId: clientIdSchema,
+  emailAddress: z.string().trim().toLowerCase().pipe(z.email().max(254)),
+  /** Browser-computed HMAC-SHA512 blind index (128 hex chars), nullable. */
+  emailMatchHash: z
+    .string()
+    .regex(/^[0-9a-f]{128}$/)
+    .pipe(emailMatchHashSchema)
+    .nullable()
+    .optional(),
+});
+export type UpdateEmailInput = z.infer<typeof updateEmailInputSchema>;

@@ -162,4 +162,12 @@ export const CONTENT_TYPE_REGISTRY: Record<FollowUpType, ContentTypeMeta> = {
     groupable: false,
     renderVariant: "correction",
   },
+  email_outbound: {
+    category: "message",
+    allowedSources: ["volunteer"],
+    encryption: "ticket-key",
+    hasEncryptedContent: true,
+    hasEventParams: false,
+    groupable: false,
+  },
 } as const;

@@ -123,7 +123,10 @@ import {
 } from "./tickets/escalation.js";
 import { loadOrCreateVapidKeys } from "./notifications/vapid.js";
 import { createSseService } from "./notifications/sse.js";
-import { createNotificationEmailSender } from "./notifications/email.js";
+import {
+  createNotificationEmailSender,
+  loadOrgEmailBranding,
+} from "./notifications/email.js";
 import { createPushNotificationSender } from "./notifications/push.js";
 import { createPushSubscriptionService } from "./notifications/push-subscriptions.js";
 import {
@@ -141,6 +144,7 @@ import {
 } from "./kb/service.js";
 import { createKBMediaService } from "./kb/kb-media-service.js";
 import { createClientService } from "./clients/client-service.js";
+import { createEmailService } from "./clients/email-service.js";
 import { createIntakeFormService } from "./portal/intake-form-service.js";
 import { createIntakeResponseService } from "./portal/intake-response-service.js";
 import * as portalChannelService from "./portal/channel-service.js";
@@ -793,6 +797,14 @@ const appRouter = createAppRouter({
         mergeService: createMergeService(tDb),
         orgId,
       }),
+    createEmailSvc: (tDb, orgId) =>
+      createEmailService({
+        db: tDb,
+        audit: createAuditService(tDb),
+        encryptor,
+        indexer,
+        orgId,
+      }),
     fieldEncryptor: encryptor,
     async isAssignedToClientTicket(tDb, clientId, userId) {
       const row = await tDb
@@ -1145,6 +1157,8 @@ const relayHandler = createRelayHandler({
   consultantPhoneIndexer,
   getSealedBoxEncryptor: getOrgSealedBoxEncryptor,
   createConsultantService,
+  emailSender,
+  loadOrgEmailBranding,
 });
 
 // --- HTTP server ---

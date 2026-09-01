@@ -828,6 +828,19 @@ export class CryptoBridge {
   }
 
   /**
+   * Compute the email match blind index hash inside the Worker.
+   * The index key never leaves the Worker. Returns lowercase hex, or null
+   * when the email is empty after normalization.
+   */
+  async emailMatchHash(email: string): Promise<string | null> {
+    const resp = expectResponse(
+      await this.sendRequest({ type: "emailMatchHash", email }),
+      "emailMatchHash",
+    );
+    return resp.hash;
+  }
+
+  /**
    * Unseal an intake wrap (crypto_box_seal_open with orgSecret) and cache
    * the recovered tk. When targets are provided, also produce ECIES wraps
    * for the conversion mutation.

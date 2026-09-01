@@ -560,3 +560,41 @@ export const portalMessagePageInputSchema = z.object({
 export type PortalMessagePageInput = z.infer<
   typeof portalMessagePageInputSchema
 >;
+
+// ---------------------------------------------------------------------------
+// Contact-info exposure schemas (ADR-098)
+// ---------------------------------------------------------------------------
+
+/**
+ * Input for the contactInfo procedure (secure_link channels).
+ * Account channels omit channelId/auth (session cookie is the credential).
+ */
+export const contactInfoInputSchema = z.object({
+  channelId: portalChannelIdSchema,
+  auth: portalAuthSchema,
+});
+export type ContactInfoInput = z.infer<typeof contactInfoInputSchema>;
+
+/**
+ * Sealed contact envelope. The base64url string is the concatenation of
+ * ephemeralPoint(32) | nonce(24) | ciphertext(N), opened client-side
+ * with the channel private key via eciesDecrypt.
+ */
+export const contactInfoOutputSchema = z.object({
+  sealed: z.string().min(1),
+});
+export type ContactInfoOutput = z.infer<typeof contactInfoOutputSchema>;
+
+// ---------------------------------------------------------------------------
+// Add-passphrase schemas
+// ---------------------------------------------------------------------------
+
+/** Input for the addPassphrase procedure (bare-link channels only). */
+export const addPassphraseInputSchema = z.object({
+  channelId: portalChannelIdSchema,
+  auth: portalAuthSchema,
+  clientPublic: base64Bytes(32, "clientPublic"),
+  keyCheck: eciesTripleSchema,
+  resealedMessages: rewrappedMessagesSchema,
+});
+export type AddPassphraseInput = z.infer<typeof addPassphraseInputSchema>;

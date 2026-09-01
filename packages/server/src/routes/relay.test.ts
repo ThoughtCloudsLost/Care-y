@@ -2953,4 +2953,288 @@ describe("createRelayHandler", () => {
       );
     });
   });
+
+  // -----------------------------------------------------------------------
+  // Email relay
+  // -----------------------------------------------------------------------
+
+  describe("POST /relay/email", () => {
+    const TEST_TICKET_ID = "aaaa0000-0000-4000-8000-000000000001";
+    const VALID_EMAIL_BODY = JSON.stringify({
+      ticketId: TEST_TICKET_ID,
+      subject: "Test Subject",
+      html: "<p>Hello</p>",
+      text: "Hello",
+    });
+
+    function makeEmailDeps(
+      overrides?: Partial<RelayHandlerDeps>,
+    ): RelayHandlerDeps {
+      const mockEmailSender = {
+        send: vi.fn().mockResolvedValue(undefined),
+      };
+      return makeDeps({
+        emailSender: mockEmailSender,
+        loadOrgEmailBranding: vi.fn().mockResolvedValue({
+          fromName: "Test Org",
+          fromAddress: "help@example.org",
+        }),
+        resolveClientEmail: vi
+          .fn()
+          .mockResolvedValue(Buffer.from("client@example.com")),
+        ...overrides,
+      });
+    }
+
+    it("sends email and returns sent:true on success", async () => {
+      const mockSender = { send: vi.fn().mockResolvedValue(undefined) };
+      const deps = makeEmailDeps({ emailSender: mockSender });
+      const handler = createRelayHandler(deps);
+      const req = createMockReq("POST", "/relay/email", VALID_EMAIL_BODY);
+      const res = createMockRes();
+
+      await handler(req, res as unknown as ServerResponse);
+
+      expect(res.statusCode).toBe(200);
+      expect(JSON.parse(res.body)).toEqual({ sent: true });
+      expect(mockSender.send).toHaveBeenCalledWith({
+        to: "client@example.com",
+        subject: "Test Subject",
+        text: "Hello",
+        html: "<p>Hello</p>",
+        from: '"Test Org" <help@example.org>',
+      });
+    });
+
+    it("returns 400 MISSING_FIELDS when subject is missing", async () => {
+      const deps = makeEmailDeps();
+      const handler = createRelayHandler(deps);
+      const body = JSON.stringify({
+        ticketId: TEST_TICKET_ID,
+        html: "<p>Hi</p>",
+        text: "Hi",
+      });
+      const req = createMockReq("POST", "/relay/email", body);
+      const res = createMockRes();
+
+      await handler(req, res as unknown as ServerResponse);
+
+      expect(res.statusCode).toBe(400);
+      expect(JSON.parse(res.body)).toEqual({ error: "MISSING_FIELDS" });
+    });
+
+    it("returns 400 MISSING_FIELDS when ticketId is missing", async () => {
+      const deps = makeEmailDeps();
+      const handler = createRelayHandler(deps);
+      const body = JSON.stringify({
+        subject: "Hi",
+        html: "<p>Hi</p>",
+        text: "Hi",
+      });
+      const req = createMockReq("POST", "/relay/email", body);
+      const res = createMockRes();
+
+      await handler(req, res as unknown as ServerResponse);
+
+      expect(res.statusCode).toBe(400);
+      expect(JSON.parse(res.body)).toEqual({ error: "MISSING_FIELDS" });
+    });
+
+    it("returns 400 BODY_TOO_LONG when html exceeds 100KB", async () => {
+      const deps = makeEmailDeps();
+      const handler = createRelayHandler(deps);
+      const body = JSON.stringify({
+        ticketId: TEST_TICKET_ID,
+        subject: "Hi",
+        html: "x".repeat(100_001),
+        text: "Hi",
+      });
+      const req = createMockReq("POST", "/relay/email", body);
+      const res = createMockRes();
+
+      await handler(req, res as unknown as ServerResponse);
+
+      expect(res.statusCode).toBe(400);
+      expect(JSON.parse(res.body)).toEqual({ error: "BODY_TOO_LONG" });
+    });
+
+    it("returns 400 BODY_TOO_LONG when subject exceeds 512 bytes", async () => {
+      const deps = makeEmailDeps();
+      const handler = createRelayHandler(deps);
+      const body = JSON.stringify({
+        ticketId: TEST_TICKET_ID,
+        subject: "x".repeat(513),
+        html: "<p>Hi</p>",
+        text: "Hi",
+      });
+      const req = createMockReq("POST", "/relay/email", body);
+      const res = createMockRes();
+
+      await handler(req, res as unknown as ServerResponse);
+
+      expect(res.statusCode).toBe(400);
+      expect(JSON.parse(res.body)).toEqual({ error: "BODY_TOO_LONG" });
+    });
+
+    it("returns 400 BODY_TOO_LONG when text exceeds 20KB", async () => {
+      const deps = makeEmailDeps();
+      const handler = createRelayHandler(deps);
+      const body = JSON.stringify({
+        ticketId: TEST_TICKET_ID,
+        subject: "Hi",
+        html: "<p>Hi</p>",
+        text: "x".repeat(20_001),
+      });
+      const req = createMockReq("POST", "/relay/email", body);
+      const res = createMockRes();
+
+      await handler(req, res as unknown as ServerResponse);
+
+      expect(res.statusCode).toBe(400);
+      expect(JSON.parse(res.body)).toEqual({ error: "BODY_TOO_LONG" });
+    });
+
+    it("returns 404 CLIENT_EMAIL_NOT_FOUND when client has no email", async () => {
+      const deps = makeEmailDeps({
+        resolveClientEmail: vi.fn().mockResolvedValue(null),
+      });
+      const handler = createRelayHandler(deps);
+      const req = createMockReq("POST", "/relay/email", VALID_EMAIL_BODY);
+      const res = createMockRes();
+
+      await handler(req, res as unknown as ServerResponse);
+
+      expect(res.statusCode).toBe(404);
+      expect(JSON.parse(res.body)).toEqual({
+        error: "CLIENT_EMAIL_NOT_FOUND",
+      });
+    });
+
+    it("returns 502 EMAIL_SEND_FAILED when sender throws", async () => {
+      const mockSender = {
+        send: vi.fn().mockRejectedValue(new Error("SMTP timeout")),
+      };
+      const deps = makeEmailDeps({ emailSender: mockSender });
+      const handler = createRelayHandler(deps);
+      const req = createMockReq("POST", "/relay/email", VALID_EMAIL_BODY);
+      const res = createMockRes();
+
+      await handler(req, res as unknown as ServerResponse);
+
+      expect(res.statusCode).toBe(502);
+      expect(JSON.parse(res.body)).toEqual({ error: "EMAIL_SEND_FAILED" });
+    });
+
+    it("502 response does not contain the email address (PII contract)", async () => {
+      const mockSender = {
+        send: vi.fn().mockRejectedValue(new Error("SMTP timeout")),
+      };
+      const deps = makeEmailDeps({ emailSender: mockSender });
+      const handler = createRelayHandler(deps);
+      const req = createMockReq("POST", "/relay/email", VALID_EMAIL_BODY);
+      const res = createMockRes();
+
+      await handler(req, res as unknown as ServerResponse);
+
+      expect(res.body).not.toContain("client@example.com");
+      expect(res.body).not.toContain("Test Subject");
+      expect(res.body).not.toContain("Hello");
+    });
+
+    it("200 response does not echo inputs (PII contract)", async () => {
+      const deps = makeEmailDeps();
+      const handler = createRelayHandler(deps);
+      const req = createMockReq("POST", "/relay/email", VALID_EMAIL_BODY);
+      const res = createMockRes();
+
+      await handler(req, res as unknown as ServerResponse);
+
+      expect(res.statusCode).toBe(200);
+      expect(res.body).not.toContain("client@example.com");
+      expect(res.body).not.toContain("Test Subject");
+    });
+
+    it("returns 500 EMAIL_NOT_CONFIGURED when emailSender is absent", async () => {
+      const deps = makeDeps(); // no emailSender
+      const handler = createRelayHandler(deps);
+      const req = createMockReq("POST", "/relay/email", VALID_EMAIL_BODY);
+      const res = createMockRes();
+
+      await handler(req, res as unknown as ServerResponse);
+
+      expect(res.statusCode).toBe(500);
+      expect(JSON.parse(res.body)).toEqual({
+        error: "EMAIL_NOT_CONFIGURED",
+      });
+    });
+
+    it("uses branded from-address from loadOrgEmailBranding", async () => {
+      const mockSender = { send: vi.fn().mockResolvedValue(undefined) };
+      const deps = makeEmailDeps({
+        emailSender: mockSender,
+        loadOrgEmailBranding: vi.fn().mockResolvedValue({
+          fromName: "Harbor Hotline",
+          fromAddress: "hotline@harbor.org",
+        }),
+      });
+      const handler = createRelayHandler(deps);
+      const req = createMockReq("POST", "/relay/email", VALID_EMAIL_BODY);
+      const res = createMockRes();
+
+      await handler(req, res as unknown as ServerResponse);
+
+      expect(res.statusCode).toBe(200);
+      expect(mockSender.send).toHaveBeenCalledWith(
+        expect.objectContaining({
+          from: '"Harbor Hotline" <hotline@harbor.org>',
+        }),
+      );
+    });
+
+    it("zeros raw body buffer after successful email send", async () => {
+      const spy = spyOnReadRawBody();
+      const deps = makeEmailDeps();
+      const handler = createRelayHandler(deps);
+      const req = createMockReq("POST", "/relay/email", VALID_EMAIL_BODY);
+      const res = createMockRes();
+
+      await handler(req, res as unknown as ServerResponse);
+
+      expect(res.statusCode).toBe(200);
+      expectZeroed(spy.getCapturedBuffer(), "rawBody after email send");
+      spy.restore();
+    });
+
+    it("zeros raw body buffer when sender throws", async () => {
+      const spy = spyOnReadRawBody();
+      const mockSender = {
+        send: vi.fn().mockRejectedValue(new Error("SMTP fail")),
+      };
+      const deps = makeEmailDeps({ emailSender: mockSender });
+      const handler = createRelayHandler(deps);
+      const req = createMockReq("POST", "/relay/email", VALID_EMAIL_BODY);
+      const res = createMockRes();
+
+      await handler(req, res as unknown as ServerResponse);
+
+      expect(res.statusCode).toBe(502);
+      expectZeroed(spy.getCapturedBuffer(), "rawBody after EMAIL_SEND_FAILED");
+      spy.restore();
+    });
+
+    it("zeros resolved email buffer after successful send", async () => {
+      const emailBuf = Buffer.from("client@example.com");
+      const deps = makeEmailDeps({
+        resolveClientEmail: vi.fn().mockResolvedValue(emailBuf),
+      });
+      const handler = createRelayHandler(deps);
+      const req = createMockReq("POST", "/relay/email", VALID_EMAIL_BODY);
+      const res = createMockRes();
+
+      await handler(req, res as unknown as ServerResponse);
+
+      expect(res.statusCode).toBe(200);
+      expectZeroed(emailBuf, "emailBuf after successful email send");
+    });
+  });
 });

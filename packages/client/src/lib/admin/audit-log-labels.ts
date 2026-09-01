@@ -90,7 +90,6 @@ const EVENT_LABELS = new Map<string, (terms: Terms) => string>([
     (t) => m.audit_event_client_account_password_changed(t),
   ],
   ["client_account_reset", (t) => m.audit_event_client_account_reset(t)],
-  ["account_offer_changed", () => m.audit_event_account_offer_changed()],
 ]);
 
 /**

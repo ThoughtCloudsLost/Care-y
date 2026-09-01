@@ -2683,7 +2683,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
      */
     async function seedSecureLinkChannel(
       clientId: ClientId,
-      overrides?: { kind?: string; accountOffer?: boolean },
+      overrides?: { kind?: string },
     ): Promise<ChannelSecret> {
       const channelId = (randomUUID().replace(/-/g, "") +
         randomUUID().replace(/-/g, "").slice(0, 16)) as ChannelSecret;
@@ -2697,7 +2697,6 @@ describe.skipIf(!process.env.DATABASE_URL)(
           has_passphrase: false,
           status: "active",
           kind: overrides?.kind ?? "secure_link",
-          account_offer: overrides?.accountOffer ?? false,
           key_check_ephemeral_point: Buffer.alloc(32, 0x01),
           key_check_nonce: Buffer.alloc(24, 0x02),
           key_check_ciphertext: Buffer.alloc(64, 0x03),
@@ -2724,114 +2723,6 @@ describe.skipIf(!process.env.DATABASE_URL)(
         .execute();
       return accountId;
     }
-
-    describe("setAccountOffer", () => {
-      it("flips the flag on an active secure_link channel", async () => {
-        const { user, ...fixture } = await setupUserWithTicket();
-        const caller = createAuthedCaller(user);
-        await seedSecureLinkChannel(fixture.clientId);
-
-        await caller.tickets.setAccountOffer({
-          ticketId: fixture.ticketId,
-          enabled: true,
-        });
-
-        const channel = await tenantDb
-          .selectFrom("portal_channels")
-          .select("account_offer")
-          .where("client_id", "=", fixture.clientId)
-          .where("status", "=", "active")
-          .executeTakeFirstOrThrow();
-        expect(channel.account_offer).toBe(true);
-
-        // Flip it back
-        await caller.tickets.setAccountOffer({
-          ticketId: fixture.ticketId,
-          enabled: false,
-        });
-        const after = await tenantDb
-          .selectFrom("portal_channels")
-          .select("account_offer")
-          .where("client_id", "=", fixture.clientId)
-          .where("status", "=", "active")
-          .executeTakeFirstOrThrow();
-        expect(after.account_offer).toBe(false);
-      });
-
-      it("404s when no active channel exists", async () => {
-        const { user, ...fixture } = await setupUserWithTicket();
-        const caller = createAuthedCaller(user);
-
-        await expectTrpcError(
-          caller.tickets.setAccountOffer({
-            ticketId: fixture.ticketId,
-            enabled: true,
-          }),
-          "NOT_FOUND",
-        );
-      });
-
-      it("404s on an account-kind channel", async () => {
-        const { user, ...fixture } = await setupUserWithTicket();
-        const caller = createAuthedCaller(user);
-        await seedSecureLinkChannel(fixture.clientId, { kind: "account" });
-
-        await expectTrpcError(
-          caller.tickets.setAccountOffer({
-            ticketId: fixture.ticketId,
-            enabled: true,
-          }),
-          "NOT_FOUND",
-        );
-      });
-
-      it("denies a volunteer without ticket access", async () => {
-        const { user: _user, ...fixture } = await setupUserWithTicket();
-        // Create a second user with no queue membership
-        const otherUser = await createTestUser(tenantDb);
-        const otherCaller = createAuthedCaller(otherUser);
-
-        await seedSecureLinkChannel(fixture.clientId);
-
-        await expectTrpcError(
-          otherCaller.tickets.setAccountOffer({
-            ticketId: fixture.ticketId,
-            enabled: true,
-          }),
-          "FORBIDDEN",
-        );
-      });
-
-      it("emits account_offer_changed audit event with pseudonym only", async () => {
-        const { user, ...fixture } = await setupUserWithTicket();
-        const caller = createAuthedCaller(user);
-        await seedSecureLinkChannel(fixture.clientId);
-
-        await caller.tickets.setAccountOffer({
-          ticketId: fixture.ticketId,
-          enabled: true,
-        });
-
-        const auditRow = await vi.waitFor(async () => {
-          const row = await tenantDb
-            .selectFrom("audit_log")
-            .select(["event_type", "actor_id", "metadata"])
-            .where("event_type", "=", "account_offer_changed")
-            .where("actor_id", "=", user.id)
-            .orderBy("created_at", "desc")
-            .executeTakeFirst();
-          expect(row).toBeDefined();
-          return row!;
-        });
-        expect(auditRow.event_type).toBe("account_offer_changed");
-        // Metadata carries only the operation, no username, account id, or channel id
-        const meta = auditRow.metadata as Record<string, unknown>;
-        expect(meta).toEqual({ operation: "enabled" });
-        expect(meta).not.toHaveProperty("username");
-        expect(meta).not.toHaveProperty("accountId");
-        expect(meta).not.toHaveProperty("channelId");
-      });
-    });
 
     describe("resetClientAccount", () => {
       it("removes account and sessions, revokes channel, resets tier", async () => {
@@ -2967,15 +2858,13 @@ describe.skipIf(!process.env.DATABASE_URL)(
     });
 
     describe("ticket detail portal fields (account)", () => {
-      it("carries kind and accountOffer for a secure_link channel", async () => {
+      it("carries kind for a secure_link channel", async () => {
         const { user, ...fixture } = await setupUserWithTicket();
         const caller = createAuthedCaller(user);
         await seedSecureLinkChannel(fixture.clientId, {
           kind: "secure_link",
-          accountOffer: true,
         });
 
-        // Update the tier so the fixture is consistent
         await tenantDb
           .updateTable("clients")
           .set({ communication_tier: "secure_link" })
@@ -2988,10 +2877,9 @@ describe.skipIf(!process.env.DATABASE_URL)(
         expect(detail.portalCapable).toBe(true);
         expect(detail.portalChannel).not.toBeNull();
         expect(detail.portalChannel!.kind).toBe("secure_link");
-        expect(detail.portalChannel!.accountOffer).toBe(true);
       });
 
-      it("carries kind and accountOffer for an account channel", async () => {
+      it("carries kind for an account channel", async () => {
         const { user, ...fixture } = await setupUserWithTicket();
         const caller = createAuthedCaller(user);
         await seedSecureLinkChannel(fixture.clientId, { kind: "account" });
@@ -3008,7 +2896,6 @@ describe.skipIf(!process.env.DATABASE_URL)(
         expect(detail.portalCapable).toBe(true);
         expect(detail.portalChannel).not.toBeNull();
         expect(detail.portalChannel!.kind).toBe("account");
-        expect(detail.portalChannel!.accountOffer).toBe(false);
       });
 
       it("portalCapable is true for account clients", async () => {

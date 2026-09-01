@@ -7,7 +7,7 @@
   while the query loads, never DecryptPlaceholder.
 -->
 <script lang="ts">
-  import { Block, BlockTitle, Button, Chip, Toggle } from "konsta/svelte";
+  import { Block, BlockTitle, Button, Chip } from "konsta/svelte";
   import * as m from "$lib/paraglide/messages.js";
   import { withTerms } from "$lib/terminology/with-terms.js";
   import InlineSkeleton from "$lib/components/InlineSkeleton.svelte";
@@ -29,7 +29,6 @@
     createdAt: string;
     lastSeenAt: string | null;
     kind: string;
-    accountOffer: boolean;
   }
 
   interface PortalTierSectionProps {
@@ -116,31 +115,6 @@
     });
   }
 
-  // --- Account offer toggle ---
-
-  let offerUpdating = $state(false);
-
-  async function handleOfferToggle(): Promise<void> {
-    if (offerUpdating || !portalChannel) return;
-    offerUpdating = true;
-    try {
-      await ticketRouter.setAccountOffer.mutate({
-        ticketId,
-        enabled: !portalChannel.accountOffer,
-      });
-      haptic();
-      toastStore.show(m.ticket_toast_offer_updated());
-      void queryClient.invalidateQueries({
-        queryKey: ticketKeys.detail(ticketId),
-      });
-    } catch (_err: unknown) {
-      // Intentional discard: mutation error only, no decrypted content.
-      toastStore.show(m.error_generic(), 3000);
-    } finally {
-      offerUpdating = false;
-    }
-  }
-
   // --- Account reset ---
 
   let resetDialogOpen = $state(false);
@@ -194,16 +168,6 @@
         <span>{formatRelativeTime(new Date(portalChannel.lastSeenAt))}</span>
       {/if}
     </p>
-    <div class="offer-row">
-      <span class="offer-label">{m.ticket_tier_offer_toggle()}</span>
-      <Toggle
-        checked={portalChannel.accountOffer}
-        disabled={offerUpdating}
-        onchange={() => void handleOfferToggle()}
-        aria-label={m.ticket_tier_offer_toggle()}
-      />
-    </div>
-    <p class="offer-hint">{m.ticket_tier_offer_hint(withTerms())}</p>
     <div class="tier-actions">
       <Button small outline onclick={openRegenerate}>
         {m.ticket_tier_regenerate()}
@@ -233,16 +197,6 @@
         <span>{formatRelativeTime(new Date(portalChannel.lastSeenAt))}</span>
       {/if}
     </p>
-    <div class="offer-row">
-      <span class="offer-label">{m.ticket_tier_offer_toggle()}</span>
-      <Toggle
-        checked={portalChannel.accountOffer}
-        disabled={offerUpdating}
-        onchange={() => void handleOfferToggle()}
-        aria-label={m.ticket_tier_offer_toggle()}
-      />
-    </div>
-    <p class="offer-hint">{m.ticket_tier_offer_hint(withTerms())}</p>
     <div class="tier-actions">
       <Button small outline onclick={openRegenerate}>
         {m.ticket_tier_regenerate()}
@@ -391,27 +345,6 @@
     gap: 0.5rem;
     margin-top: 0.75rem;
     flex-wrap: wrap;
-  }
-
-  .offer-row {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 0.5rem;
-    margin-top: 0.75rem;
-    min-height: 44px;
-  }
-
-  .offer-label {
-    color: var(--ink);
-    font-size: var(--text-sm);
-  }
-
-  .offer-hint {
-    color: var(--muted);
-    font-size: var(--text-xs);
-    margin: 0.25rem 0 0;
-    line-height: 1.4;
   }
 
   :global(.tier-reset-btn) {

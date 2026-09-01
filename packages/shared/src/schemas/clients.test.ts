@@ -5,6 +5,7 @@ import {
   updateAliasInputSchema,
   updatePhoneInputSchema,
   suggestDuplicatesInputSchema,
+  updateEmailInputSchema,
 } from "./clients.js";
 
 const VALID_UUID = "550e8400-e29b-41d4-a716-446655440000";
@@ -283,5 +284,85 @@ describe("suggestDuplicatesInputSchema", () => {
         excludeClientId: "not-a-uuid",
       }).success,
     ).toBe(false);
+  });
+});
+
+describe("updateEmailInputSchema", () => {
+  it("accepts a valid email address", () => {
+    const result = updateEmailInputSchema.safeParse({
+      clientId: VALID_UUID,
+      emailAddress: "user@example.com",
+    });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.emailAddress).toBe("user@example.com");
+    }
+  });
+
+  it("normalizes case and whitespace", () => {
+    const result = updateEmailInputSchema.safeParse({
+      clientId: VALID_UUID,
+      emailAddress: "  User@Example.COM  ",
+    });
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.emailAddress).toBe("user@example.com");
+    }
+  });
+
+  it("rejects a non-email string", () => {
+    expect(
+      updateEmailInputSchema.safeParse({
+        clientId: VALID_UUID,
+        emailAddress: "not-an-email",
+      }).success,
+    ).toBe(false);
+  });
+
+  it("rejects an empty string", () => {
+    expect(
+      updateEmailInputSchema.safeParse({
+        clientId: VALID_UUID,
+        emailAddress: "",
+      }).success,
+    ).toBe(false);
+  });
+
+  it("rejects a non-UUID clientId", () => {
+    expect(
+      updateEmailInputSchema.safeParse({
+        clientId: "not-a-uuid",
+        emailAddress: "user@example.com",
+      }).success,
+    ).toBe(false);
+  });
+
+  it("accepts a valid emailMatchHash", () => {
+    const hex128 = "a".repeat(128);
+    const result = updateEmailInputSchema.safeParse({
+      clientId: VALID_UUID,
+      emailAddress: "user@example.com",
+      emailMatchHash: hex128,
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("rejects an emailMatchHash that is not 128 hex chars", () => {
+    expect(
+      updateEmailInputSchema.safeParse({
+        clientId: VALID_UUID,
+        emailAddress: "user@example.com",
+        emailMatchHash: "tooshort",
+      }).success,
+    ).toBe(false);
+  });
+
+  it("accepts null emailMatchHash", () => {
+    const result = updateEmailInputSchema.safeParse({
+      clientId: VALID_UUID,
+      emailAddress: "user@example.com",
+      emailMatchHash: null,
+    });
+    expect(result.success).toBe(true);
   });
 });

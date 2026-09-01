@@ -241,4 +241,7 @@ export const portalKeys = {
     [...portalKeys.all, "messagePage", channelId, cursor] as const,
   accountBootstrap: () => [...portalKeys.all, "accountBootstrap"] as const,
   accountMessages: () => [...portalKeys.all, "accountMessages"] as const,
+  contactInfo: (channelId: string) =>
+    [...portalKeys.all, "contactInfo", channelId] as const,
+  accountContactInfo: () => [...portalKeys.all, "accountContactInfo"] as const,
 };

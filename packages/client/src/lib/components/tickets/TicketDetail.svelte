@@ -185,6 +185,8 @@
     correctionPending?: boolean;
     /** Called when the volunteer taps Apply on a structured correction phone row. */
     onapplyphone?: (phone: string) => void;
+    /** Called when the volunteer taps Apply on a structured correction email row. */
+    onapplyemail?: (email: string) => void;
   }
 
   let {
@@ -218,6 +220,7 @@
     loadOlderPage: loadOlderPageProp = $bindable(undefined),
     correctionPending = $bindable(false),
     onapplyphone,
+    onapplyemail,
   }: TicketDetailProps = $props();
 
   const ticketCache = getTicketDecryptCache();
@@ -1343,6 +1346,7 @@
                     <CorrectionBody
                       payload={correctionPayloadCluster}
                       {onapplyphone}
+                      {onapplyemail}
                     />
                   {/if}
                   <CorrectionStatusLine
@@ -1589,6 +1593,7 @@
                           <CorrectionBody
                             payload={correctionPayload}
                             {onapplyphone}
+                            {onapplyemail}
                           />
                         {/if}
                         <CorrectionStatusLine

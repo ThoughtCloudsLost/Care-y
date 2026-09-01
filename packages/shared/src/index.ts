@@ -342,7 +342,6 @@ export {
   type UpdateTicketContentInput,
   upgradeToSecureLinkInputSchema,
   updateOutboundMessageInputSchema,
-  setAccountOfferInputSchema,
   resetClientAccountInputSchema,
   portalChannelMetaSchema,
   listTicketsForClientInputSchema,
@@ -350,12 +349,14 @@ export {
   convertBlobForReseedInputSchema,
   type UpgradeToSecureLinkInput,
   type UpdateOutboundMessageInput,
-  type SetAccountOfferInput,
   type ResetClientAccountInput,
   type PortalChannelMetaWire,
   type ListTicketsForClientInput,
   type ReseedPortalHistoryInput,
   type ConvertBlobForReseedInput,
+  emailSendInputSchema,
+  EMAIL_RELAY_LIMITS,
+  type EmailSendInput,
 } from "./schemas/tickets.js";
 
 // --- Client management ---
@@ -374,6 +375,8 @@ export {
   type BackfillPhoneMatchHashInput,
   suggestDuplicatesInputSchema,
   type SuggestDuplicatesInput,
+  updateEmailInputSchema,
+  type UpdateEmailInput,
 } from "./schemas/clients.js";
 
 // --- Follow-up content-type registry ---
@@ -669,6 +672,12 @@ export {
   type AttachmentLink,
   uploadTicketAttachmentInputSchema,
   type UploadTicketAttachmentInput,
+  contactInfoInputSchema,
+  contactInfoOutputSchema,
+  type ContactInfoInput,
+  type ContactInfoOutput,
+  addPassphraseInputSchema,
+  type AddPassphraseInput,
 } from "./schemas/client-portal.js";
 
 // --- Intake form schemas ---
@@ -821,6 +830,8 @@ export {
   auditLogIdSchema,
   type ClientId,
   type PhoneId,
+  emailIdSchema,
+  type EmailId,
   type QueueId,
   type TicketId,
   type FollowupId,
@@ -910,6 +921,8 @@ export {
   usernameHashSchema,
   phoneHashSchema,
   phoneMatchHashSchema,
+  emailHashSchema,
+  emailMatchHashSchema,
   aliasHashSchema,
   opsPhoneHashSchema,
   passwordHashSchema,
@@ -921,6 +934,8 @@ export {
   type UsernameHash,
   type PhoneHash,
   type PhoneMatchHash,
+  type EmailHash,
+  type EmailMatchHash,
   type AliasHash,
   type OpsPhoneHash,
   type PasswordHash,

@@ -28,6 +28,8 @@ import {
   accountLoginInputSchema,
   accountUpgradeInputSchema,
   accountChangePasswordInputSchema,
+  contactInfoInputSchema,
+  addPassphraseInputSchema,
   ErrorCode,
 } from "@care-y/shared";
 import type {
@@ -74,7 +76,11 @@ import * as accountService from "../portal/account-service.js";
 import {
   UsernameTakenError,
   StaleThreadError,
+  PortalContactLockedError,
+  PassphraseAlreadySetError,
+  PassphraseCountMismatchError,
 } from "../portal/portal-errors.js";
+import { addPassphrase } from "../portal/channel-service.js";
 import { RateLimitError } from "../errors.js";
 import { hashChannelAuth } from "@care-y/crypto";
 import {
@@ -98,6 +104,7 @@ import {
   openShare,
   listSharesByTicket,
 } from "../portal/share-service.js";
+import { getSealedContactInfo } from "../portal/contact-exposure-service.js";
 import type { OprfEvaluateService } from "../crypto/oprf-evaluate-service.js";
 
 /**
@@ -1003,6 +1010,150 @@ export function createClientPortalRouter(deps: ClientPortalRouterDeps) {
           });
         }),
       ),
+
+    // -----------------------------------------------------------------
+    // Contact-info exposure (ADR-098)
+    // -----------------------------------------------------------------
+
+    contactInfo: orgProcedure.input(contactInfoInputSchema).query(
+      withErrorWrapping(async ({ ctx, input }) => {
+        const ip = extractClientIp(ctx.req);
+
+        if (deps.portalReadLimiter !== null) {
+          const limitResult = deps.portalReadLimiter.check(ip);
+          if (!limitResult.allowed) {
+            console.warn("Portal contact info rate limited", {
+              orgSlug: ctx.org.orgSlug,
+              ip,
+              reason: "rate_limit",
+            });
+            const retryAfterSeconds = Math.ceil(
+              limitResult.retryAfterMs / 1000,
+            );
+            throw new RateLimitError(
+              `Rate limited. Retry after ${String(retryAfterSeconds)}s`,
+              retryAfterSeconds,
+            );
+          }
+        }
+
+        const fieldEncryptor = deps.fieldEncryptor;
+        if (fieldEncryptor === null) {
+          throw new TRPCError({
+            code: "NOT_FOUND",
+            message: PORTAL_NOT_FOUND_MSG,
+          });
+        }
+
+        const { channel } = await requirePortalChannel(deps, ctx, input);
+
+        try {
+          return await getSealedContactInfo(
+            channel,
+            ctx.org.tenantDb,
+            fieldEncryptor,
+          );
+        } catch (err: unknown) {
+          if (err instanceof PortalContactLockedError) {
+            throw new TRPCError({
+              code: "FORBIDDEN",
+              message: ErrorCode.PORTAL_CONTACT_LOCKED,
+            });
+          }
+          throw err;
+        }
+      }),
+    ),
+
+    accountContactInfo: orgProcedure.query(
+      withErrorWrapping(async ({ ctx }) => {
+        const session = await requireAccountSession(ctx);
+
+        const fieldEncryptor = deps.fieldEncryptor;
+        if (fieldEncryptor === null) {
+          throw new TRPCError({
+            code: "NOT_FOUND",
+            message: PORTAL_NOT_FOUND_MSG,
+          });
+        }
+
+        return getSealedContactInfo(
+          session.channel,
+          ctx.org.tenantDb,
+          fieldEncryptor,
+        );
+      }),
+    ),
+
+    // -----------------------------------------------------------------
+    // Add passphrase to bare-link channel
+    // -----------------------------------------------------------------
+
+    addPassphrase: orgProcedure.input(addPassphraseInputSchema).mutation(
+      withErrorWrapping(async ({ ctx, input }) => {
+        // Rate-limit: reuse the upgrade namespace on the IP limiter
+        if (deps.portalReplyIpLimiter !== null) {
+          const ip = extractClientIp(ctx.req);
+          const limitResult = deps.portalReplyIpLimiter.check(`upgrade:${ip}`);
+          if (!limitResult.allowed) {
+            console.warn("Add passphrase rate limited", {
+              orgSlug: ctx.org.orgSlug,
+              ip,
+              reason: "rate_limit",
+            });
+            const retryAfterSeconds = Math.ceil(
+              limitResult.retryAfterMs / 1000,
+            );
+            throw new RateLimitError(
+              `Rate limited. Retry after ${String(retryAfterSeconds)}s`,
+              retryAfterSeconds,
+            );
+          }
+        }
+
+        const { channel } = await requirePortalChannel(deps, ctx, input);
+
+        const resealedMessages = input.resealedMessages.map((msg) => ({
+          id: msg.id,
+          copy: {
+            ephemeralPoint: Buffer.from(msg.copy.ephemeralPoint, "base64"),
+            nonce: Buffer.from(msg.copy.nonce, "base64"),
+            ciphertext: Buffer.from(msg.copy.ciphertext, "base64"),
+          },
+        }));
+
+        try {
+          await addPassphrase(ctx.org.tenantDb, channel, {
+            clientPublic: Buffer.from(input.clientPublic, "base64"),
+            keyCheck: {
+              ephemeralPoint: Buffer.from(
+                input.keyCheck.ephemeralPoint,
+                "base64",
+              ),
+              nonce: Buffer.from(input.keyCheck.nonce, "base64"),
+              ciphertext: Buffer.from(input.keyCheck.ciphertext, "base64"),
+            },
+            resealedMessages,
+          });
+        } catch (err: unknown) {
+          if (err instanceof PassphraseAlreadySetError) {
+            throw new TRPCError({
+              code: "CONFLICT",
+              message: ErrorCode.PORTAL_PASSPHRASE_ALREADY_SET,
+            });
+          }
+          if (err instanceof PassphraseCountMismatchError) {
+            throw new TRPCError({
+              code: "CONFLICT",
+              message: ErrorCode.PORTAL_PASSPHRASE_COUNT_MISMATCH,
+            });
+          }
+          throw err;
+        }
+
+        return {};
+      }),
+    ),
   });
 }
 

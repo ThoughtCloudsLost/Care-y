@@ -20,6 +20,7 @@
   import ShellPopover from "$lib/shell/ShellPopover.svelte";
   import PhoneActionContent from "$lib/components/clients/PhoneActionContent.svelte";
   import PhoneEditSheet from "$lib/components/clients/PhoneEditSheet.svelte";
+  import EmailEditSheet from "$lib/components/clients/EmailEditSheet.svelte";
   import MergeSheet from "$lib/components/clients/MergeSheet.svelte";
   import ExposureHint from "$lib/components/tickets/ExposureHint.svelte";
   import type { TicketAction } from "$lib/tickets/types.js";
@@ -47,11 +48,18 @@
     phonePopoverOpen: boolean;
     phoneEditSheetOpen: boolean;
     phoneEditInitialPhone?: string;
+    emailEditSheetOpen: boolean;
+    emailEditInitialEmail?: string;
     canCopyPhone: boolean;
     onphonepopoverdismiss: () => void;
     onphonecopy: () => void;
     onphoneedit: () => void;
     onphoneeditdismiss: () => void;
+    onemailedidismiss: () => void;
+    onemailmerge: (
+      conflictingClientId: string,
+      conflictingAlias: string,
+    ) => void;
     onphonemerge: (
       conflictingClientId: string,
       conflictingAlias: string,
@@ -86,6 +94,7 @@
     onreply?: () => void;
     ontextclient?: () => void;
     onattach?: (file: File) => void;
+    onemailclient?: () => void;
     ondraftset: (body: string) => void;
   }
 
@@ -101,11 +110,15 @@
     phonePopoverOpen,
     phoneEditSheetOpen,
     phoneEditInitialPhone,
+    emailEditSheetOpen,
+    emailEditInitialEmail,
     canCopyPhone,
     onphonepopoverdismiss,
     onphonecopy,
     onphoneedit,
     onphoneeditdismiss,
+    onemailedidismiss,
+    onemailmerge,
     onphonemerge,
     mergeSheetOpen,
     mergeClientA,
@@ -137,6 +150,7 @@
     onreply,
     ontextclient,
     onattach,
+    onemailclient,
     ondraftset,
   }: Props = $props();
 </script>
@@ -179,6 +193,7 @@
   {onreply}
   {ontextclient}
   {onattach}
+  {onemailclient}
 />
 
 <ShellPopover
@@ -200,6 +215,15 @@
   {clientAlias}
   ondismiss={onphoneeditdismiss}
   onmerge={onphonemerge}
+/>
+
+<EmailEditSheet
+  opened={emailEditSheetOpen}
+  initialEmail={emailEditInitialEmail}
+  {clientId}
+  {clientAlias}
+  ondismiss={onemailedidismiss}
+  onmerge={onemailmerge}
 />
 
 <MergeSheet

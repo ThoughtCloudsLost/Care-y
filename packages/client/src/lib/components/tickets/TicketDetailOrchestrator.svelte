@@ -68,8 +68,10 @@
   import JumpToLatest from "$lib/components/tickets/JumpToLatest.svelte";
   import type { TicketComposeHandle } from "$lib/components/tickets/ticket-compose-types.js";
   import type { TicketAction } from "$lib/tickets/types.js";
+  import type { ProseMirrorDocJSON } from "@care-y/shared";
   import type { CallAction } from "$lib/components/tickets/CallOptionsContent.svelte";
   import TicketDetailOverlays from "$lib/components/tickets/TicketDetailOverlays.svelte";
+  import EmailComposeSheet from "$lib/components/tickets/EmailComposeSheet.svelte";
   import OutboundMessageEditSheet from "$lib/components/tickets/OutboundMessageEditSheet.svelte";
   import { createQuery, useQueryClient } from "@tanstack/svelte-query";
   import { ticketKeys, ticketsKeys, consultantKeys } from "$lib/query/keys";
@@ -96,6 +98,7 @@
   import { createSendMessage } from "$lib/composables/ticket-detail/create-send-message.svelte.js";
   import { createAttachmentUpload } from "$lib/composables/ticket-detail/create-attachment-upload.svelte.js";
   import { createSmsSend } from "$lib/composables/ticket-detail/create-sms-send.svelte.js";
+  import { createEmailSend } from "$lib/composables/ticket-detail/create-email-send.svelte.js";
   import { createCallDispatch } from "$lib/composables/ticket-detail/create-call-dispatch.svelte.js";
   import { haptic } from "$lib/utils/haptic.js";
   import { gestureMount } from "$lib/utils/gesture-focus.js";
@@ -371,6 +374,8 @@
   let phonePopoverOpen = $state(false);
   let phoneEditSheetOpen = $state(false);
   let phoneEditInitialPhone = $state<string | undefined>(undefined);
+  let emailEditSheetOpen = $state(false);
+  let emailEditInitialEmail = $state<string | undefined>(undefined);
   let mergeSheetOpen = $state(false);
   let mergeConflictClientId = $state<string | null>(null);
   let mergeConflictAlias = $state<string | null>(null);
@@ -391,6 +396,7 @@
     conflictingAlias: string,
   ): void {
     phoneEditSheetOpen = false;
+    emailEditSheetOpen = false;
     mergeConflictClientId = conflictingClientId;
     mergeConflictAlias = conflictingAlias;
     mergeSheetOpen = true;
@@ -520,6 +526,24 @@
     onSuccess: () => {
       clearDraftForMode(ticketId, "sms");
       compose?.reset();
+    },
+  });
+
+  // --- Email send (composable) ---
+
+  let emailComposeOpen = $state(false);
+
+  const emailSend = createEmailSend({
+    getTicketId: () => ticketId,
+    cryptoBridge,
+    queryClient,
+    getClientPublic: () => ticket?.portalChannel?.clientPublic ?? null,
+    createFollowUpMutate: async (args) =>
+      ticketRouter.createFollowUp.mutate(args),
+    onSuccess: () => {
+      emailComposeOpen = false;
+      haptic();
+      toastStore.show(m.ticket_toast_message_sent());
     },
   });
 
@@ -814,6 +838,11 @@
     phoneEditSheetOpen = true;
   }
 
+  function handleApplyEmail(email: string): void {
+    emailEditInitialEmail = email;
+    emailEditSheetOpen = true;
+  }
+
   function openCallSheet(): void {
     callSheetOpen = true;
   }
@@ -996,6 +1025,7 @@
     bind:loadedFollowUpCount
     bind:correctionPending
     onapplyphone={handleApplyPhone}
+    onapplyemail={handleApplyEmail}
   />
 {/snippet}
 
@@ -1171,6 +1201,8 @@
   {phonePopoverOpen}
   {phoneEditSheetOpen}
   {phoneEditInitialPhone}
+  {emailEditSheetOpen}
+  {emailEditInitialEmail}
   {canCopyPhone}
   onphonepopoverdismiss={() => {
     phonePopoverOpen = false;
@@ -1180,6 +1212,13 @@
   onphoneeditdismiss={() => {
     phoneEditSheetOpen = false;
     phoneEditInitialPhone = undefined;
+  }}
+  onemailedidismiss={() => {
+    emailEditSheetOpen = false;
+    emailEditInitialEmail = undefined;
+  }}
+  onemailmerge={(conflictingClientId: string, conflictingAlias: string) => {
+    openMergeFromConflict(conflictingClientId, conflictingAlias);
   }}
   onphonemerge={(conflictingClientId: string, conflictingAlias: string) => {
     openMergeFromConflict(conflictingClientId, conflictingAlias);
@@ -1243,6 +1282,11 @@
         compose?.activateSms();
       }
     : undefined}
+  onemailclient={ticket?.hasEmail === true
+    ? () => {
+        emailComposeOpen = true;
+      }
+    : undefined}
   onattach={(file: File) => {
     // Activate reply mode so the volunteer sees the compose bar with
     // the pending attachment chip.
@@ -1253,6 +1297,20 @@
     setDraftForMode(ticketId, "reply", body);
     compose?.activateReply();
   }}
+/>
+
+<EmailComposeSheet
+  opened={emailComposeOpen}
+  ondismiss={() => {
+    emailComposeOpen = false;
+  }}
+  sending={emailSend.sending}
+  onsend={(
+    subject: string,
+    html: string,
+    text: string,
+    doc: ProseMirrorDocJSON,
+  ) => void emailSend.handleEmailSend(subject, html, text, doc)}
 />
 
 <OutboundMessageEditSheet

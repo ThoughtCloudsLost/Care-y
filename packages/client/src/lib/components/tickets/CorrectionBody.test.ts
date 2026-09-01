@@ -16,7 +16,8 @@ vi.mock("$lib/paraglide/messages.js", async (importOriginal) => ({
   ...(await importOriginal<typeof MessagesMod>()),
   correction_body_new_phone: () => "New phone",
   correction_body_new_email: () => "New email",
-  correction_body_apply_phone: () => "Apply",
+  correction_body_apply_phone: () => "Apply phone",
+  correction_body_apply_email: () => "Apply email",
 }));
 
 afterEach(cleanup);
@@ -88,5 +89,57 @@ describe("CorrectionBody", () => {
     await fireEvent.click(getByTestId("correction-apply-phone"));
     await tick();
     expect(onapplyphone).toHaveBeenCalledWith("+15551234567");
+  });
+
+  it("shows email apply button when email and onapplyemail are present", () => {
+    const { getByTestId } = render(CorrectionBody, {
+      props: {
+        payload: { v: 1, email: "user@example.com" },
+        onapplyemail: vi.fn(),
+      },
+    });
+    expect(getByTestId("correction-apply-email")).toBeTruthy();
+  });
+
+  it("does not show email apply button when onapplyemail is absent", () => {
+    const { queryByTestId } = render(CorrectionBody, {
+      props: { payload: { v: 1, email: "user@example.com" } },
+    });
+    expect(queryByTestId("correction-apply-email")).toBeNull();
+  });
+
+  it("does not show email apply button when payload has no email", () => {
+    const { queryByTestId } = render(CorrectionBody, {
+      props: {
+        payload: { v: 1, phone: "+15551234567" },
+        onapplyemail: vi.fn(),
+      },
+    });
+    expect(queryByTestId("correction-apply-email")).toBeNull();
+  });
+
+  it("calls onapplyemail with the email value on click", async () => {
+    const onapplyemail = vi.fn();
+    const { getByTestId } = render(CorrectionBody, {
+      props: {
+        payload: { v: 1, email: "user@example.com" },
+        onapplyemail,
+      },
+    });
+    await fireEvent.click(getByTestId("correction-apply-email"));
+    await tick();
+    expect(onapplyemail).toHaveBeenCalledWith("user@example.com");
+  });
+
+  it("shows both apply buttons when both callbacks and fields exist", () => {
+    const { getByTestId } = render(CorrectionBody, {
+      props: {
+        payload: { v: 1, phone: "+15551234567", email: "user@example.com" },
+        onapplyphone: vi.fn(),
+        onapplyemail: vi.fn(),
+      },
+    });
+    expect(getByTestId("correction-apply-phone")).toBeTruthy();
+    expect(getByTestId("correction-apply-email")).toBeTruthy();
   });
 });

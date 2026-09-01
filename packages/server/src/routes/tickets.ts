@@ -34,10 +34,7 @@ import type {
   FollowUpPreview,
   PendingClient,
 } from "../tickets/ticket-service.js";
-import {
-  setAccountOfferForClient,
-  clientHasAccount,
-} from "../tickets/ticket-service.js";
+import { clientHasAccount } from "../tickets/ticket-service.js";
 import type {
   FollowUpService,
   FollowUpServiceDeps,
@@ -69,7 +66,6 @@ import {
   meetsRoleThreshold,
   upgradeToSecureLinkInputSchema,
   updateOutboundMessageInputSchema,
-  setAccountOfferInputSchema,
   resetClientAccountInputSchema,
   listTicketsForClientInputSchema,
   reseedPortalHistoryInputSchema,
@@ -187,6 +183,7 @@ export interface TicketWireRecord {
   readonly createdAt: Date;
   readonly encryptedClientAlias: string;
   readonly hasPhone: boolean;
+  readonly hasEmail: boolean;
   readonly clientPhoneId: string | null;
   readonly encryptedQueueName: string;
   readonly queueSortOrder: number;
@@ -204,7 +201,6 @@ export interface TicketWireRecord {
     readonly createdAt: string;
     readonly lastSeenAt: string | null;
     readonly kind: string;
-    readonly accountOffer: boolean;
   } | null;
 }
 
@@ -2056,31 +2052,7 @@ export function createTicketRouter(deps: TicketRouterDeps) {
         }),
       ),
 
-    // --- Encrypted Account: volunteer-side offer toggle and reset ---
-
-    setAccountOffer: volunteerProcedure
-      .input(setAccountOfferInputSchema)
-      .mutation(
-        withErrorWrapping(async ({ ctx, input }) => {
-          const { svc } = ticketSvc(ctx.org.tenantDb);
-          const ticket = await svc.findById(input.ticketId, ctx.user.id);
-
-          const updated = await setAccountOfferForClient(
-            ctx.org.tenantDb,
-            ticket.clientId,
-            input.enabled,
-          );
-          if (!updated) {
-            throw new NotFoundError(ErrorCode.PORTAL_CHANNEL_NOT_FOUND);
-          }
-
-          audit(ctx.org.tenantDb, {
-            eventType: "account_offer_changed",
-            actorId: ctx.user.id,
-            metadata: { operation: input.enabled ? "enabled" : "disabled" },
-          });
-        }),
-      ),
+    // --- Encrypted Account: volunteer-side reset ---
 
     resetClientAccount: volunteerProcedure
       .input(resetClientAccountInputSchema)

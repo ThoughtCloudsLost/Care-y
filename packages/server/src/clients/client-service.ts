@@ -30,6 +30,9 @@ import type {
   OrgId,
   PhoneHash,
   PhoneMatchHash,
+  EmailHash,
+  EmailMatchHash,
+  EmailId,
   AliasHash,
   KeyGeneration,
   PhoneId,
@@ -46,6 +49,8 @@ export interface ClientListRecord {
   readonly aliasHash: AliasHash | null;
   readonly encryptedNumber: Buffer | null;
   readonly phoneMatchHash: PhoneMatchHash | null;
+  readonly encryptedAddress: Buffer | null;
+  readonly emailMatchHash: EmailMatchHash | null;
   readonly ticketCount: number;
   readonly createdAt: Date;
   readonly mergedInto: ClientId | null;
@@ -66,6 +71,8 @@ export interface ClientTicketRecord {
 export interface ClientDetailRecord extends ClientListRecord {
   readonly phoneId: PhoneId | null;
   readonly phoneHash: PhoneHash | null;
+  readonly emailId: EmailId | null;
+  readonly emailHash: EmailHash | null;
   readonly tickets: readonly ClientTicketRecord[];
   readonly mergeHistory: readonly MergeEventRecord[];
 }
@@ -164,6 +171,7 @@ export function createClientService(deps: ClientServiceDeps): ClientService {
       let query = db
         .selectFrom("clients as c")
         .leftJoin("phones as p", "p.id", "c.phone_id")
+        .leftJoin("emails as em", "em.id", "c.email_id")
         .select([
           "c.id",
           "c.encrypted_alias",
@@ -172,6 +180,8 @@ export function createClientService(deps: ClientServiceDeps): ClientService {
           "c.merged_into",
           "p.encrypted_number",
           "p.phone_match_hash",
+          "em.encrypted_address",
+          "em.email_match_hash",
         ])
         .select((eb) =>
           eb
@@ -270,6 +280,8 @@ export function createClientService(deps: ClientServiceDeps): ClientService {
         aliasHash: r.alias_hash,
         encryptedNumber: r.encrypted_number ?? null,
         phoneMatchHash: r.phone_match_hash ?? null,
+        encryptedAddress: r.encrypted_address ?? null,
+        emailMatchHash: r.email_match_hash ?? null,
         ticketCount: r.ticketCount ?? 0,
         createdAt: r.created_at,
         mergedInto: r.merged_into,
@@ -280,6 +292,7 @@ export function createClientService(deps: ClientServiceDeps): ClientService {
       const row = await db
         .selectFrom("clients as c")
         .leftJoin("phones as p", "p.id", "c.phone_id")
+        .leftJoin("emails as em", "em.id", "c.email_id")
         .select([
           "c.id",
           "c.encrypted_alias",
@@ -287,9 +300,13 @@ export function createClientService(deps: ClientServiceDeps): ClientService {
           "c.created_at",
           "c.merged_into",
           "c.phone_id",
+          "c.email_id",
           "p.encrypted_number",
           "p.phone_hash",
           "p.phone_match_hash",
+          "em.encrypted_address",
+          "em.email_hash",
+          "em.email_match_hash",
         ])
         .select((eb) =>
           eb
@@ -343,6 +360,10 @@ export function createClientService(deps: ClientServiceDeps): ClientService {
         phoneId: row.phone_id ?? null,
         phoneHash: row.phone_hash ?? null,
         phoneMatchHash: row.phone_match_hash ?? null,
+        encryptedAddress: row.encrypted_address ?? null,
+        emailMatchHash: row.email_match_hash ?? null,
+        emailId: row.email_id ?? null,
+        emailHash: row.email_hash ?? null,
         tickets: tickets.map((t) => ({
           id: t.id,
           encryptedTitle: t.encrypted_title,

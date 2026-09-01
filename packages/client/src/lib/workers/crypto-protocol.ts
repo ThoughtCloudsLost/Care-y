@@ -250,6 +250,13 @@ export interface PhoneMatchHashRequest {
   readonly phone: string;
 }
 
+export interface EmailMatchHashRequest {
+  readonly type: "emailMatchHash";
+  readonly id: number;
+  /** Raw email string. The Worker normalizes via normalizeContactEmail before HMAC. */
+  readonly email: string;
+}
+
 export interface DecryptBlobRequest {
   readonly type: "decryptBlob";
   readonly id: number;
@@ -507,6 +514,13 @@ export interface MergeScanClient {
    * form answers inside the Worker.
    */
   readonly phoneMatchHash: string | null;
+  /**
+   * Browser-computed email match hash (HMAC-SHA512, org-derived key).
+   * Null for clients whose email is unknown or missing.
+   * Used for cross-channel matching against hashes computed from intake
+   * form answers inside the Worker.
+   */
+  readonly emailMatchHash: string | null;
   /** Per-ticket intake response blobs for this client. */
   readonly intakeResponses: readonly MergeScanIntakeResponse[];
 }
@@ -666,6 +680,7 @@ export type WorkerRequest =
   | GetOrgPublicKeyRequest
   | AliasHashRequest
   | PhoneMatchHashRequest
+  | EmailMatchHashRequest
   | DetectMergeCandidatesRequest
   | SealFollowUpsToPublicRequest
   | SealFileKeysToPublicRequest
@@ -902,6 +917,15 @@ export interface PhoneMatchHashResponse extends SuccessBase {
   readonly hash: string | null;
 }
 
+export interface EmailMatchHashResponse extends SuccessBase {
+  readonly type: "emailMatchHash";
+  /**
+   * Lowercase hex HMAC-SHA512 of the normalized email, or null when the
+   * email is empty after trimming.
+   */
+  readonly hash: string | null;
+}
+
 export interface UnwrapIntakeTkResponse extends SuccessBase {
   readonly type: "unwrapIntakeTk";
   /** ECIES wraps for conversion, present only when targets were provided. */
@@ -1033,6 +1057,7 @@ export type WorkerSuccessResponse =
   | GetOrgPublicKeyResponse
   | AliasHashResponse
   | PhoneMatchHashResponse
+  | EmailMatchHashResponse
   | ConnectResponse
   | DisconnectResponse;
 

@@ -45,6 +45,7 @@ import { createClientRouter, type ClientRouterDeps } from "./clients.js";
 import { router, createCallerFactory } from "../trpc/trpc.js";
 import type { Context, OrgContext } from "../trpc/context.js";
 import { createClientService } from "../clients/client-service.js";
+import { createEmailService } from "../clients/email-service.js";
 import { createAuditService } from "../tickets/audit.js";
 import { createMergeService } from "../tickets/merge-service.js";
 import { createDismissalService } from "../clients/dismissal-service.js";
@@ -128,6 +129,14 @@ describe.skipIf(!process.env.DATABASE_URL)(
             encryptor: noopEncryptor,
             indexer: testNoopIndexer,
             mergeService: createMergeService(db),
+            orgId,
+          }),
+        createEmailSvc: (db, orgId) =>
+          createEmailService({
+            db,
+            audit: createAuditService(db),
+            encryptor: noopEncryptor,
+            indexer: testNoopIndexer,
             orgId,
           }),
         fieldEncryptor: noopEncryptor,
