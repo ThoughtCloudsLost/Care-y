@@ -42,6 +42,7 @@ import type { SessionTokenizer } from "../../../../../server/src/crypto/session-
 import type { BlobStore } from "../../../../../server/src/storage/store.js";
 import { createSealedBoxEncryptor } from "./sealed-box-shim.js";
 import { randomInt } from "./node-crypto-shim.js";
+import { DEMO_ORG_NAME } from "./org-identity.js";
 
 export const DEMO_ORG_SLUG = "demo-org" as OrgSlug;
 export const DEMO_ORG_SCHEMA = "demo_org" as OrgSchema;
@@ -200,7 +201,7 @@ export async function seedStructure(
     .updateTable("org_config")
     .set({
       // care-y-ignore-next-line ast-pii-in-db-write -- plaintext branding column (ADR-094)
-      name: "Handbook Example Org",
+      name: DEMO_ORG_NAME,
       default_language: "en",
       default_country_code: "US",
       primary_color: "#4A6FA5",
