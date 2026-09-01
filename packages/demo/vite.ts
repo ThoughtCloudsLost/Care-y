@@ -12,6 +12,7 @@ import { readFileSync, readdirSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import type { Alias, Plugin } from "vite";
+import { DEMO_ORG_NAME } from "./src/lib/engine/server/org-identity.js";
 
 function resolve(relative: string): string {
   return fileURLToPath(new URL(relative, import.meta.url));
@@ -267,6 +268,52 @@ export function demoAliases(): Alias[] {
  * hand-copying) keeps the demo from drifting when the splash changes.
  * DemoSplash.svelte still owns dismissal via the body.hydrated class.
  */
+export function injectDemoSplash(html: string, appHtml: string): string {
+  // Extract the blocking scheme script that reads localStorage
+  // "care-y-color-scheme" and applies theme classes before first
+  // paint. Strip the nonce attribute (the demo has no CSP).
+  const schemeScriptMatch =
+    /<script[^>]*>[\s\S]*?care-y-color-scheme[\s\S]*?<\/script>/.exec(appHtml);
+  const schemeScript =
+    schemeScriptMatch !== null
+      ? schemeScriptMatch[0]
+          .replace(/ nonce="[^"]*"/, "")
+          .replace(/ nonce='[^']*'/, "")
+      : "";
+
+  // Every style block that targets #splash, with the SvelteKit
+  // nonce template attribute stripped (the demo has no CSP nonce).
+  const styles = [...appHtml.matchAll(/<style[^>]*>[\s\S]*?<\/style>/g)]
+    .map((match) => match[0])
+    .filter((block) => block.includes("#splash"))
+    .map((block) => block.replace(/<style[^>]*>/, "<style>"))
+    .join("\n");
+
+  // The splash div is flat (img + span), so a non-greedy match
+  // ends at the correct closing tag.
+  const rawMarkup = /<div id="splash"[\s\S]*?<\/div>/.exec(appHtml)?.[0];
+  if (rawMarkup === undefined) return html;
+
+  // Production substitutes the %carey.*% placeholders per request
+  // (branding-inject.ts). The demo has no server hook, so the two
+  // tokens the splash carries are substituted here with the seeded
+  // org's branding: the name is a build-time constant needing no
+  // escaping, and the logo placeholder collapses to no attribute
+  // because the seed uploads no org icon, matching what production
+  // emits for an icon-less org. Any future token is deliberately
+  // left in place so it paints literally and gets noticed.
+  const markup = rawMarkup
+    .replace("%carey.splashName%", DEMO_ORG_NAME)
+    .replace("%carey.splashLogoSrc%", "");
+
+  // Inject scheme script before splash markup so first paint
+  // follows the stored scheme (set by outer page via localStorage).
+  return html.replace(
+    "<body>",
+    `<body>\n${schemeScript}\n${styles}\n${markup}`,
+  );
+}
+
 export function demoSplashPlugin(): Plugin {
   const appHtmlPath = resolve("../client/src/app.html");
 
@@ -280,39 +327,7 @@ export function demoSplashPlugin(): Plugin {
         // eslint-disable-next-line security/detect-non-literal-fs-filename -- build-time constant derived from import.meta.url, no user input
         const appHtml = readFileSync(appHtmlPath, "utf8");
 
-        // Extract the blocking scheme script that reads localStorage
-        // "care-y-color-scheme" and applies theme classes before first
-        // paint. Strip the nonce attribute (the demo has no CSP).
-        const schemeScriptMatch =
-          /<script[^>]*>[\s\S]*?care-y-color-scheme[\s\S]*?<\/script>/.exec(
-            appHtml,
-          );
-        const schemeScript =
-          schemeScriptMatch !== null
-            ? schemeScriptMatch[0]
-                .replace(/ nonce="[^"]*"/, "")
-                .replace(/ nonce='[^']*'/, "")
-            : "";
-
-        // Every style block that targets #splash, with the SvelteKit
-        // nonce template attribute stripped (the demo has no CSP nonce).
-        const styles = [...appHtml.matchAll(/<style[^>]*>[\s\S]*?<\/style>/g)]
-          .map((match) => match[0])
-          .filter((block) => block.includes("#splash"))
-          .map((block) => block.replace(/<style[^>]*>/, "<style>"))
-          .join("\n");
-
-        // The splash div is flat (img + span), so a non-greedy match
-        // ends at the correct closing tag.
-        const markup = /<div id="splash"[\s\S]*?<\/div>/.exec(appHtml)?.[0];
-        if (markup === undefined) return html;
-
-        // Inject scheme script before splash markup so first paint
-        // follows the stored scheme (set by outer page via localStorage).
-        return html.replace(
-          "<body>",
-          `<body>\n${schemeScript}\n${styles}\n${markup}`,
-        );
+        return injectDemoSplash(html, appHtml);
       },
     },
   };
