@@ -942,6 +942,106 @@ async function sealAnchorTicketMedia(
   }
 }
 
+/**
+ * Eligible followup types for portal message copies, matching the
+ * production rule in reseed-service.ts (MESSAGE_COPY_TYPES).
+ */
+const MESSAGE_COPY_TYPES = new Set(["message", "sms_outbound", "sms_inbound"]);
+
+/**
+ * Mirror the anchor ticket's text-bearing follow-ups as portal messages.
+ *
+ * The Secure Link seeder already writes two purpose-made messages. The
+ * anchor ticket's thread has many more, and the standing parity rule
+ * (ADR-087) says both surfaces show the same conversation. This function
+ * reads every eligible follow-up on the anchor ticket, decrypts under
+ * the ticket key, seals to the channel's client_public, and inserts via
+ * storeClientCopy.
+ *
+ * Eligibility mirrors the production reseed-service: only types in
+ * MESSAGE_COPY_TYPES, excluding private and deleted rows.
+ *
+ * Rows the channel already carries are excluded rather than left to
+ * onConflictIgnore, because the skip has to happen before the decrypt, not
+ * at the insert. The client's own reply is the case that forces this: its
+ * content is sealed under the per-reply tk_temp held in
+ * portal_reply_key_wraps until convergence, so decrypting it under the
+ * ticket key throws, and it already has its own portal_messages row from
+ * clientReply. Mirroring only what is not already mirrored avoids both.
+ */
+async function sealAnchorTicketMessages(
+  deps: SeedPortalDeps,
+  channel: PortalChannelRow,
+): Promise<void> {
+  const { tDb, anchorTicketId, anchorTicketKey } = deps;
+  const sodium = requireSodium();
+  const clientPublic = toRistrettoPoint(new Uint8Array(channel.client_public));
+
+  const followups = await tDb
+    .selectFrom("followups")
+    .select(["id", "source", "type", "encrypted_content", "created_at"])
+    .where("ticket_id", "=", anchorTicketId)
+    .where("is_private", "=", false)
+    .where("deleted_at", "is", null)
+    .where("type", "in", [...MESSAGE_COPY_TYPES])
+    // System events carry no encrypted content under the Proton model
+    // (seed-tickets writes a zero-length buffer), and an absent type
+    // defaults to "message", so they reach the eligible set with nothing
+    // to decrypt. They are org chrome rather than conversation either way.
+    .where("source", "!=", "system")
+    .where((eb) =>
+      eb.not(
+        eb.exists(
+          eb
+            .selectFrom("portal_messages")
+            .select("portal_messages.id")
+            .where("portal_messages.channel_id", "=", channel.id)
+            .whereRef("portal_messages.followup_id", "=", "followups.id"),
+        ),
+      ),
+    )
+    .orderBy("created_at", "asc")
+    .execute();
+
+  for (const fu of followups) {
+    // Belt and braces: any other zero-length row is skipped rather than
+    // failing the whole seed on one undecryptable follow-up.
+    if (fu.encrypted_content.length === 0) continue;
+
+    const aad = buildContentAad(anchorTicketId, followupSlot(fu.id));
+    const plaintext = Buffer.from(
+      decryptContent(
+        toCiphertext(new Uint8Array(fu.encrypted_content)),
+        anchorTicketKey,
+        aad,
+      ),
+    );
+    try {
+      const sealed = eciesEncrypt(plaintext, clientPublic);
+      const direction: "from_client" | "to_client" =
+        fu.source === "client" ? "from_client" : "to_client";
+
+      await storeClientCopy(
+        tDb,
+        channel.id,
+        fu.id,
+        {
+          ephemeralPoint: Buffer.from(sealed.ephemeralPoint),
+          nonce: Buffer.from(sealed.nonce),
+          ciphertext: Buffer.from(sealed.ciphertext),
+        },
+        direction,
+        {
+          createdAt: fu.created_at,
+          onConflictIgnore: true,
+        },
+      );
+    } finally {
+      sodium.memzero(plaintext);
+    }
+  }
+}
+
 /** Save both intake forms and return their ids. */
 async function seedForms(
   deps: SeedPortalDeps,
@@ -1194,6 +1294,13 @@ export async function seedPortal(
   // (org side); this completes the envelope by writing portal carrier
   // rows (client side).
   await sealAnchorTicketMedia(deps, secureLink.channel);
+
+  // Mirror every text-bearing follow-up on the anchor ticket to the
+  // portal channel. seedSecureLink wrote two purpose-made messages;
+  // this adds the rest of the conversation so the client thread matches
+  // the org thread (ADR-087 parity rule). Runs after seedSecureLink so
+  // the two existing rows hit the onConflictIgnore path harmlessly.
+  await sealAnchorTicketMessages(deps, secureLink.channel);
 
   const share = await seedShareLink(deps);
 

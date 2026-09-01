@@ -60,7 +60,12 @@ interface PortalCaller {
       intakeDisabled: boolean;
     }>;
     portalBootstrap(input: { channelId: string; auth: string }): Promise<{
-      messages: readonly unknown[];
+      messages: readonly {
+        direction: string;
+        ephemeralPoint: string;
+        nonce: string;
+        ciphertext: string;
+      }[];
       // Only the ECIES triple is spelled out: it is what the client has to
       // unseal, so it is the part this suite actually exercises.
       attachments: readonly {
@@ -195,8 +200,16 @@ describe("client portal seed", () => {
       auth: encode(auth),
     });
 
-    // One message each way.
-    expect(result.messages).toHaveLength(2);
+    // The full text-bearing conversation from the anchor ticket thread,
+    // plus the two messages seedSecureLink wrote. Mirrors every eligible
+    // follow-up (message, sms_outbound, sms_inbound) excluding private
+    // and system rows.
+    // The anchor ticket's eligible follow-ups plus the two seedSecureLink
+    // wrote. Eligible is wider than the explicitly-typed rows suggest:
+    // seed-tickets defaults a missing type to "message", so the untyped
+    // entries count too. An exact number is the cheapest leak guard we
+    // have, since over-mirroring shows up here as a larger thread.
+    expect(result.messages.length).toBe(31);
     expect(result.ticketId).not.toBeNull();
 
     // The key check opens under the OPRF-derived keypair: blind the seed,
@@ -295,6 +308,75 @@ describe("client portal seed", () => {
       // end also covers the encrypted_filename decrypt the seed does under tk.
       const filenames = result.attachments.map((a) => unseal(a).filename);
       expect(filenames).toContain("housing-checklist.txt");
+    } finally {
+      _sodium.memzero(oprfInput);
+      _sodium.memzero(oprfOutput);
+      _sodium.memzero(keypair.clientPrivate);
+    }
+  }, 60_000);
+
+  it("mirrors the full text-bearing conversation without leaking org-internal material", async () => {
+    const seed = decode(engine.portal.portalFragment);
+    const auth = deriveChannelAuth(seed);
+    const result = await caller.clientPortal.portalBootstrap({
+      channelId: engine.portal.portalChannelId,
+      auth: encode(auth),
+    });
+
+    // No count assertion here on purpose: the thread length is pinned in
+    // the test above, and duplicating it would let a seed change fail this
+    // test before the leak checks below ever run. Those are the point.
+
+    // Derive the channel keypair so we can decrypt every message.
+    const oprfInput = portalOprfInput(seed);
+    const { blindedElement, blindState } = oprfBlind(oprfInput);
+    const evaluated = await caller.clientPortal.evaluateChannelOprf({
+      channelId: engine.portal.portalChannelId,
+      blindedElement: encode(blindedElement),
+      auth: encode(auth),
+    });
+    const oprfOutput = oprfFinalize(
+      blindState,
+      toRistrettoPoint(decode(evaluated.evaluated)),
+      oprfInput,
+    );
+    const keypair = derivePortalKeypairFromOprf(oprfOutput);
+
+    try {
+      // Decrypt every portal message under the channel private key.
+      const plaintexts = result.messages.map((m) => {
+        const bytes = eciesDecrypt(
+          toRistrettoPoint(decode(m.ephemeralPoint)),
+          toNonce(decode(m.nonce)),
+          decode(m.ciphertext),
+          keypair.clientPrivate,
+        );
+        return new TextDecoder().decode(bytes);
+      });
+
+      // The thread includes messages from both sides.
+      const directions = result.messages.map((m) => m.direction);
+      expect(directions).toContain("to_client");
+      expect(directions).toContain("from_client");
+
+      // Org-internal material must never appear. The anchor ticket has
+      // two private internal notes with recognizable text; if either
+      // leaks into the portal thread, the parity implementation has a
+      // confidentiality bug.
+      const internalNoteFragments = [
+        "client is safe through the weekend",
+        "Client sounds stressed but steadier",
+      ];
+      for (const fragment of internalNoteFragments) {
+        const leaked = plaintexts.some((p) => p.includes(fragment));
+        expect(leaked).toBe(false);
+      }
+
+      // Spot-check that real conversation content did make it through.
+      expect(plaintexts).toContain("I need help finding a place to stay");
+      expect(plaintexts).toContain(
+        "Checked in a few minutes ago. Thank you for staying on this",
+      );
     } finally {
       _sodium.memzero(oprfInput);
       _sodium.memzero(oprfOutput);
