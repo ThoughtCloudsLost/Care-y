@@ -1059,3 +1059,75 @@ html.glass-dark.light
   margin-top: calc(-1 * (var(--navbar-h, 0px) + var(--subnavbar-h, 0px)));
   padding-top: calc(var(--navbar-h, 0px) + var(--subnavbar-h, 0px));
 }
+
+/* Editor toolbar anatomy, shared by the knowledge base editor
+   (EditorToolbar) and the email compose body editor (EmailBodyEditor).
+
+   These rules live here rather than in either component because a
+   component's <style> block, :global() or not, only reaches the page
+   while that component is loaded. Held in EditorToolbar they applied to
+   the email toolbar only on pages where the KB editor happened to load,
+   which is no page the email sheet appears on, so its buttons collapsed
+   to their 18px icon and fell below the WCAG 2.2 target-size minimum
+   (SC 2.5.8, 24px). Any component using these class names now gets the
+   same anatomy and the same 2.25rem hit area. */
+.ed-toolbar-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-md);
+}
+
+.ed-toolbar-group {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-xs);
+  border-radius: var(--card-radius, 0.75rem);
+  padding: 3px;
+  flex-shrink: 0;
+  transition: opacity 0.15s ease;
+}
+
+/* iOS: handled by .glass above. Material: solid tonal surface. */
+.k-material .ed-toolbar-group {
+  background: var(--raised, var(--surface-1));
+}
+
+.ed-toolbar-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 2.25rem;
+  min-height: 2.25rem;
+  border: none;
+  border-radius: calc(var(--card-radius, 0.75rem) - 3px);
+  background: transparent;
+  color: var(--glass-text, var(--ink));
+  cursor: pointer;
+  flex-shrink: 0;
+  transition:
+    background-color 0.15s ease,
+    color 0.15s ease;
+}
+
+.ed-toolbar-btn:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--glass-text, var(--ink)) 8%, transparent);
+}
+
+.ed-toolbar-btn:active:not(:disabled) {
+  background: color-mix(
+    in srgb,
+    var(--glass-text, var(--ink)) 12%,
+    transparent
+  );
+}
+
+.ed-toolbar-btn[aria-pressed="true"] {
+  background: color-mix(in srgb, var(--brand-accent) 20%, transparent);
+  color: var(--brand-text);
+}
+
+.ed-toolbar-btn:disabled,
+.ed-toolbar-btn--off {
+  opacity: 0.3;
+  cursor: default;
+}
