@@ -19,7 +19,7 @@ if (typeof Element.prototype.animate !== "function") {
 
 function renderCard(
   overrides: Record<string, unknown> = {},
-): RenderResult<ContactInfoCard> {
+): RenderResult<typeof ContactInfoCard> {
   return render(ContactInfoCard, {
     props: {
       open: true,

@@ -208,7 +208,7 @@
   {#snippet headerRight()}
     <SoftButton onclick={handleSend} disabled={!canSend}>
       {#if sending}
-        <Preloader size={16} />
+        <Preloader class="w-4 h-4" />
         {m.ticket_email_sending()}
       {:else}
         {m.ticket_email_send()}

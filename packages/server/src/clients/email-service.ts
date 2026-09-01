@@ -22,7 +22,6 @@ import type {
   ClientId,
   UserId,
   OrgId,
-  EmailHash,
   EmailMatchHash,
   EmailId,
 } from "@care-y/shared";

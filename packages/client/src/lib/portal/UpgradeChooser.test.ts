@@ -19,7 +19,7 @@ if (typeof Element.prototype.animate !== "function") {
 
 function renderChooser(
   overrides: Record<string, unknown> = {},
-): RenderResult<UpgradeChooser> {
+): RenderResult<typeof UpgradeChooser> {
   return render(UpgradeChooser, {
     props: {
       open: true,

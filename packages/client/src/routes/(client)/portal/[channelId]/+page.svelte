@@ -515,6 +515,9 @@
             // written yet, and the thread groups files by follow-up, so it
             // carries the same id the reply was minted with.
             followupId: followUpId,
+            // Matches what the server will write for this reply, so the
+            // optimistic bubble renders the same as the row that replaces it.
+            type: "message",
             direction: "from_client",
             ephemeralPoint: payload.selfCopy.ephemeralPoint,
             nonce: payload.selfCopy.nonce,
@@ -580,27 +583,6 @@
   const upgrade = createPortalUpgrade();
 
   const upgradeOptions = $derived(bootstrapQuery.data?.upgradeOptions ?? []);
-
-  function handleUpgradeSubmit(username: string, password: string): void {
-    const sess = portalSession.session;
-    const frag = fragment.fragmentData;
-    if (!sess || !frag) return;
-    if (!trpc.clientPortal) return;
-
-    upgrade.submit(
-      username,
-      password,
-      sess,
-      frag.channelId,
-      frag.auth,
-      messagesQuery.data?.messages ?? [],
-      trpc.clientPortal,
-      queryClient,
-      portalKeys.messages(routeChannelId),
-      m.account_stale_thread(),
-      m.account_login_failed(),
-    );
-  }
 
   // ---------------------------------------------------------------------------
   // Contact info + upgrade chooser sheets (drawer-driven)
@@ -712,7 +694,9 @@
           auth: encode(frag.auth),
           clientPublic: payload.clientPublic,
           keyCheck: payload.keyCheck,
-          resealedMessages: payload.resealedMessages,
+          // Zod-derived input types are mutable; the payload is readonly,
+          // so this copies rather than casting the readonly away.
+          resealedMessages: [...payload.resealedMessages],
         });
 
         passphraseSuccess = true;
