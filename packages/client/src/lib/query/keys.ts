@@ -45,6 +45,13 @@ export const ticketsKeys = {
 };
 
 export const ticketKeys = {
+  /**
+   * Prefix matching every open detail view. The split above keeps list
+   * invalidation from thrashing details, but a contact change rewrites the
+   * value on every ticket belonging to that client, so those details are
+   * genuinely stale and the caller has no single ticket id to name.
+   */
+  everyDetail: ["ticket"] as const,
   all: (ticketId: string) => ["ticket", ticketId] as const,
   detail: (ticketId: string): readonly ["ticket", string] =>
     ticketKeys.all(ticketId),
