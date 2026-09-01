@@ -2,6 +2,7 @@ import { describe, it, expect, vi } from "vitest";
 import { createDemoLocationStore } from "./demo-location.svelte.js";
 import type { PhoneScreenState } from "./demo-location.svelte.js";
 import type { PhoneCommand } from "./scroll-sections.js";
+import { DEFAULT_CLIENT_DETAIL_IDS } from "./scroll-sections.js";
 import type { DemoFeature, DemoDetail, LoginStage } from "./bridge.js";
 
 /** Mutable phone screen state the fake driver can move. */
@@ -52,6 +53,7 @@ function createHarness(initial?: Partial<FakePhone>) {
     ensureScreen,
     getTicketDetailId: () => "tk-0001",
     getArticleDetailId: () => "kb-0001",
+    getClientDetailIds: () => DEFAULT_CLIENT_DETAIL_IDS,
     isBootSettled: () => boot.settled,
   });
 
@@ -486,6 +488,139 @@ describe("DemoLocationStore", () => {
       store.notePhoneChange();
 
       expect(store.location.sectionId).toBe("tickets");
+    });
+  });
+
+  describe("client detail IDs (intake form, portal, share)", () => {
+    it("threads real client detail IDs into resolvePhoneCommand", () => {
+      const realIds = {
+        intakeFormId: "real-form-uuid",
+        intakeFormSlug: "ask-for-help",
+        portalChannelPath: "portal/real-channel",
+        sharePath: "share/real-share",
+      };
+
+      const phone: FakePhone = {
+        feature: "login",
+        detail: null,
+        searchOpen: false,
+        loginStage: "form",
+        routeId: null,
+      };
+
+      const commands: PhoneCommand[] = [];
+      const chainResolvers: Array<() => void> = [];
+
+      const store = createDemoLocationStore({
+        getPhone: (): PhoneScreenState => ({
+          feature: phone.feature,
+          detail: phone.detail,
+          searchOpen: phone.searchOpen,
+          loginStage: phone.loginStage,
+          routeId: phone.routeId,
+        }),
+        ensureScreen: vi.fn((cmd: PhoneCommand): Promise<void> => {
+          commands.push(cmd);
+          return new Promise<void>((resolve) => {
+            chainResolvers.push(resolve);
+          });
+        }),
+        getTicketDetailId: () => "tk-0001",
+        getArticleDetailId: () => "kb-0001",
+        getClientDetailIds: () => realIds,
+        isBootSettled: () => true,
+      });
+
+      // admin-forms carries the form id in a query string
+      store.setLocation("admin-forms", null, "page-click");
+      expect(commands.at(0)?.detail).toBe("forms?id=real-form-uuid");
+    });
+
+    it("uses the form slug for the client intake fields sub", () => {
+      const realIds = {
+        intakeFormId: "real-form-uuid",
+        intakeFormSlug: "ask-for-help",
+        portalChannelPath: "portal/real-channel",
+        sharePath: "share/real-share",
+      };
+
+      const phone: FakePhone = {
+        feature: "login",
+        detail: null,
+        searchOpen: false,
+        loginStage: "form",
+        routeId: null,
+      };
+
+      const commands: PhoneCommand[] = [];
+      const chainResolvers: Array<() => void> = [];
+
+      const store = createDemoLocationStore({
+        getPhone: (): PhoneScreenState => ({
+          feature: phone.feature,
+          detail: phone.detail,
+          searchOpen: phone.searchOpen,
+          loginStage: phone.loginStage,
+          routeId: phone.routeId,
+        }),
+        ensureScreen: vi.fn((cmd: PhoneCommand): Promise<void> => {
+          commands.push(cmd);
+          return new Promise<void>((resolve) => {
+            chainResolvers.push(resolve);
+          });
+        }),
+        getTicketDetailId: () => "tk-0001",
+        getArticleDetailId: () => "kb-0001",
+        getClientDetailIds: () => realIds,
+        isBootSettled: () => true,
+      });
+
+      // client-intake with "fields" sub uses intake/[slug]
+      store.setLocation("client-intake", "fields", "page-click");
+      expect(commands.at(0)?.detail).toBe("intake/ask-for-help");
+    });
+
+    it("uses the portal channel path for client-portal sections", () => {
+      const realIds = {
+        intakeFormId: "real-form-uuid",
+        intakeFormSlug: "ask-for-help",
+        portalChannelPath: "portal/real-channel",
+        sharePath: "share/real-share",
+      };
+
+      const phone: FakePhone = {
+        feature: "login",
+        detail: null,
+        searchOpen: false,
+        loginStage: "form",
+        routeId: null,
+      };
+
+      const commands: PhoneCommand[] = [];
+      const chainResolvers: Array<() => void> = [];
+
+      const store = createDemoLocationStore({
+        getPhone: (): PhoneScreenState => ({
+          feature: phone.feature,
+          detail: phone.detail,
+          searchOpen: phone.searchOpen,
+          loginStage: phone.loginStage,
+          routeId: phone.routeId,
+        }),
+        ensureScreen: vi.fn((cmd: PhoneCommand): Promise<void> => {
+          commands.push(cmd);
+          return new Promise<void>((resolve) => {
+            chainResolvers.push(resolve);
+          });
+        }),
+        getTicketDetailId: () => "tk-0001",
+        getArticleDetailId: () => "kb-0001",
+        getClientDetailIds: () => realIds,
+        isBootSettled: () => true,
+      });
+
+      store.setLocation("client-portal", null, "page-click");
+      expect(commands.at(0)?.detail).toBe("portal/real-channel");
     });
   });
 });
