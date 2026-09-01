@@ -84,3 +84,21 @@ export function resetCommunicationTiers(): void {
     ].join("\n"),
   );
 }
+
+/**
+ * Detach every client from their email address and drop the rows.
+ *
+ * Kept separate from the tier reset because only the email spec needs it.
+ * A spec that adds an email through the UI must clear it again, or the
+ * next run starts from a client that already has one and takes the edit
+ * path instead of the add path. `clients.email_id` is the only reference
+ * to `emails`, so nulling it first leaves nothing to cascade.
+ */
+export function clearClientEmails(): void {
+  queryDb(
+    [
+      "UPDATE clients SET email_id = NULL WHERE email_id IS NOT NULL;",
+      "DELETE FROM emails;",
+    ].join("\n"),
+  );
+}

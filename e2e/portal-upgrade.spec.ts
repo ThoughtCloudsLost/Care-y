@@ -9,7 +9,7 @@ import {
   openTicketByTitle,
   openTicketInfoPanel,
 } from "./helpers";
-import { resetCommunicationTiers } from "./db-probe";
+import { clearClientEmails, resetCommunicationTiers } from "./db-probe";
 
 /**
  * Portal upgrade and email compose E2E.
@@ -53,8 +53,11 @@ test.describe.serial("Portal Upgrade + Email", () => {
   test.beforeAll(async ({ browser }, testInfo) => {
     testInfo.setTimeout(CRYPTO_TIMEOUT * 4);
     // All browser projects share one org: reset tiers so the spec starts
-    // from a fresh SMS/Email client.
+    // from a fresh SMS/Email client. Clearing emails matters for rerunning,
+    // since the first test below adds one and the panel then offers edit
+    // rather than add.
     resetCommunicationTiers();
+    clearClientEmails();
     volunteerPage = await browser.newPage();
     await startCoverage(volunteerPage);
     await login(volunteerPage);
@@ -85,7 +88,11 @@ test.describe.serial("Portal Upgrade + Email", () => {
     await expect(emailBtn).toBeVisible({ timeout: CRYPTO_TIMEOUT });
     await emailBtn.dispatchEvent("click");
 
-    const sheet = volunteerPage.getByRole("dialog").last();
+    // Name the sheet rather than taking the last dialog. The info panel is
+    // itself a dialog and stays open underneath, so `.last()` re-resolves
+    // to the panel the moment the sheet closes, and the dismissal assertion
+    // below would then be waiting on the wrong element.
+    const sheet = volunteerPage.getByRole("dialog", { name: /edit email/i });
     await expect(sheet).toBeVisible({ timeout: 5_000 });
 
     // Fill in the email address.
@@ -93,12 +100,20 @@ test.describe.serial("Portal Upgrade + Email", () => {
     await expect(emailInput).toBeVisible({ timeout: 5_000 });
     await emailInput.fill(`testclient-${suffix}@example.com`);
 
-    // Confirm/save the email (the sheet has a confirm step or a save button).
+    // Submitting the address does not save it. The sheet advances to a
+    // confirm step first, because the new address replaces the old one on
+    // every ticket belonging to this client, so the flow takes two clicks.
     const saveBtn = sheet
       .getByRole("button", { name: /save|confirm|update|set/i })
       .first();
     await expect(saveBtn).toBeVisible({ timeout: 5_000 });
     await saveBtn.click();
+
+    const confirmBtn = sheet.getByRole("button", {
+      name: /confirm email change/i,
+    });
+    await expect(confirmBtn).toBeVisible({ timeout: 5_000 });
+    await confirmBtn.click();
 
     // Wait for the sheet to dismiss (mutation success).
     await expect(sheet).not.toBeVisible({ timeout: CRYPTO_TIMEOUT });
