@@ -2967,6 +2967,7 @@ export * from "./error_client_email_not_found.js";
 export * from "./error_email_send_failed.js";
 export * from "./client_email_label.js";
 export * from "./client_email_edit.js";
+export * from "./email_copy_clipboard.js";
 export * from "./client_email_placeholder.js";
 export * from "./client_email_invalid_error.js";
 export * from "./client_email_changed_toast.js";

@@ -2968,6 +2968,7 @@
   "error_email_send_failed": "No se pudo entregar el correo. Inténtalo de nuevo.",
   "client_email_label": "Correo electrónico",
   "client_email_edit": "Editar correo",
+  "email_copy_clipboard": "Copiar dirección de correo",
   "client_email_placeholder": "nombre@ejemplo.com",
   "client_email_invalid_error": "Introduce una dirección de correo válida",
   "client_email_changed_toast": "Dirección de correo actualizada",

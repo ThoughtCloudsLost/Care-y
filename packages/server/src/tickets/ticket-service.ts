@@ -73,6 +73,8 @@ export interface TicketListRecord extends TicketRecord {
   readonly clientPhoneEncrypted: Buffer | null;
   /** Phone record id, or null when the client has no phone. */
   readonly clientPhoneId: PhoneId | null;
+  /** OPS-encrypted email address buffer, or null when the client has no email. */
+  readonly clientEmailEncrypted: Buffer | null;
   readonly encryptedQueueName: Buffer;
   readonly queueSortOrder: number;
   readonly lastActivityAt: Date | null;
@@ -309,6 +311,7 @@ interface EnrichedTicketRow extends BaseTicketRow {
   has_email: boolean | 0 | 1;
   client_phone_encrypted: Buffer | null;
   client_phone_id: PhoneId | null;
+  client_email_encrypted: Buffer | null;
   encrypted_queue_name: Buffer;
   queue_sort_order: number;
   last_activity_at: Date | null;
@@ -340,6 +343,7 @@ function toListRecord(row: EnrichedTicketRow): TicketListRecord {
     hasEmail: Boolean(row.has_email),
     clientPhoneEncrypted: row.client_phone_encrypted ?? null,
     clientPhoneId: row.client_phone_id ?? null,
+    clientEmailEncrypted: row.client_email_encrypted ?? null,
     encryptedQueueName: row.encrypted_queue_name,
     queueSortOrder: row.queue_sort_order,
     lastActivityAt: row.last_activity_at,
@@ -632,6 +636,7 @@ export function createTicketService(
         .leftJoin("intake_key_wraps as ikw", "ikw.ticket_id", "t.id")
         .innerJoin("clients as c", "c.id", "t.client_id")
         .leftJoin("phones as ph", "ph.id", "c.phone_id")
+        .leftJoin("emails as em", "em.id", "c.email_id")
         .innerJoin("queues as q", "q.id", "t.queue_id")
         .leftJoin("users as u", (join) =>
           join.on((eb) =>
@@ -653,6 +658,7 @@ export function createTicketService(
         .select((eb) => eb("c.email_id", "is not", null).as("has_email"))
         .select("ph.encrypted_number as client_phone_encrypted")
         .select("ph.id as client_phone_id")
+        .select("em.encrypted_address as client_email_encrypted")
         .select("q.encrypted_name as encrypted_queue_name")
         .select("q.sort_order as queue_sort_order")
         .select("u.encrypted_display_name as assigned_display_name")
@@ -711,6 +717,7 @@ export function createTicketService(
         .leftJoin("intake_key_wraps as ikw", "ikw.ticket_id", "t.id")
         .innerJoin("clients as c", "c.id", "t.client_id")
         .leftJoin("phones as ph", "ph.id", "c.phone_id")
+        .leftJoin("emails as em", "em.id", "c.email_id")
         .innerJoin("queues as q", "q.id", "t.queue_id")
         .leftJoin("users as u", (join) =>
           join.on((eb) =>
@@ -725,6 +732,7 @@ export function createTicketService(
         .select((eb) => eb("c.email_id", "is not", null).as("has_email"))
         .select("ph.encrypted_number as client_phone_encrypted")
         .select("ph.id as client_phone_id")
+        .select("em.encrypted_address as client_email_encrypted")
         .select("q.encrypted_name as encrypted_queue_name")
         .select("q.sort_order as queue_sort_order")
         .select("u.encrypted_display_name as assigned_display_name")

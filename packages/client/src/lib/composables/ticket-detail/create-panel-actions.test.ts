@@ -28,6 +28,7 @@ describe("createPanelActions", () => {
   let oncall: Mock;
   let onassign: Mock;
   let onphone: Mock;
+  let onemail: Mock;
   let oneditcontent: Mock;
   let onnotifications: Mock;
   let onsharelink: Mock;
@@ -44,6 +45,7 @@ describe("createPanelActions", () => {
     oncall = vi.fn();
     onassign = vi.fn();
     onphone = vi.fn();
+    onemail = vi.fn();
     oneditcontent = vi.fn();
     onnotifications = vi.fn();
     onsharelink = vi.fn();
@@ -64,6 +66,7 @@ describe("createPanelActions", () => {
       oncall,
       onassign,
       onphone,
+      onemail,
       oneditcontent,
       onnotifications,
       onsharelink,
@@ -78,6 +81,11 @@ describe("createPanelActions", () => {
   it("dispatches phone to onphone callback", () => {
     make().dispatch("phone");
     expect(onphone).toHaveBeenCalledOnce();
+  });
+
+  it("dispatches email to onemail callback", () => {
+    make().dispatch("email");
+    expect(onemail).toHaveBeenCalledOnce();
   });
 
   it("dispatches editContent to oneditcontent callback", () => {

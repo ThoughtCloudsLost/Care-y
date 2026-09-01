@@ -21,6 +21,7 @@
   import PhoneActionContent from "$lib/components/clients/PhoneActionContent.svelte";
   import PhoneEditSheet from "$lib/components/clients/PhoneEditSheet.svelte";
   import EmailEditSheet from "$lib/components/clients/EmailEditSheet.svelte";
+  import EmailActionContent from "$lib/components/clients/EmailActionContent.svelte";
   import MergeSheet from "$lib/components/clients/MergeSheet.svelte";
   import ExposureHint from "$lib/components/tickets/ExposureHint.svelte";
   import type { TicketAction } from "$lib/tickets/types.js";
@@ -48,13 +49,18 @@
     phonePopoverOpen: boolean;
     phoneEditSheetOpen: boolean;
     phoneEditInitialPhone?: string;
+    emailPopoverOpen: boolean;
     emailEditSheetOpen: boolean;
     emailEditInitialEmail?: string;
     canCopyPhone: boolean;
+    canCopyEmail: boolean;
     onphonepopoverdismiss: () => void;
     onphonecopy: () => void;
     onphoneedit: () => void;
     onphoneeditdismiss: () => void;
+    onemailpopoverdismiss: () => void;
+    onemailcopy: () => void;
+    onemailedit: () => void;
     onemailedidismiss: () => void;
     onemailmerge: (
       conflictingClientId: string,
@@ -110,13 +116,18 @@
     phonePopoverOpen,
     phoneEditSheetOpen,
     phoneEditInitialPhone,
+    emailPopoverOpen,
     emailEditSheetOpen,
     emailEditInitialEmail,
     canCopyPhone,
+    canCopyEmail,
     onphonepopoverdismiss,
     onphonecopy,
     onphoneedit,
     onphoneeditdismiss,
+    onemailpopoverdismiss,
+    onemailcopy,
+    onemailedit,
     onemailedidismiss,
     onemailmerge,
     onphonemerge,
@@ -216,6 +227,18 @@
   ondismiss={onphoneeditdismiss}
   onmerge={onphonemerge}
 />
+
+<ShellPopover
+  opened={emailPopoverOpen}
+  ondismiss={onemailpopoverdismiss}
+  ariaLabel={m.client_email_label()}
+>
+  <EmailActionContent
+    canCopy={canCopyEmail}
+    oncopy={onemailcopy}
+    onedit={onemailedit}
+  />
+</ShellPopover>
 
 <EmailEditSheet
   opened={emailEditSheetOpen}

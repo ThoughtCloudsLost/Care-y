@@ -2968,6 +2968,7 @@
   "error_email_send_failed": "Email could not be delivered. Please try again.",
   "client_email_label": "Email",
   "client_email_edit": "Edit email",
+  "email_copy_clipboard": "Copy email address",
   "client_email_placeholder": "name@example.com",
   "client_email_invalid_error": "Enter a valid email address",
   "client_email_changed_toast": "Email address updated",

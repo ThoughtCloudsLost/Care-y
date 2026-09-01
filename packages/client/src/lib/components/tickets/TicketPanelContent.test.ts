@@ -60,6 +60,7 @@ vi.mock("@tanstack/svelte-query", async (importOriginal) => ({
 vi.mock("$lib/paraglide/messages.js", async (importOriginal) => ({
   ...(await importOriginal<typeof Messages>()),
   client_phone_label: () => "Phone",
+  client_email_label: () => "Email",
   ticket_panel_status: () => "Status",
   ticket_panel_opened: () => "Opened",
   ticket_panel_call: () => "Call",
@@ -164,6 +165,7 @@ const baseTicket = {
   clientAlias: "calm-river-42",
   clientPhone: null as string | null,
   clientPhoneId: null as string | null,
+  clientEmail: null as string | null,
   status: "open",
   priority: "normal",
   onHold: false,
@@ -307,6 +309,117 @@ describe("TicketPanelContent phone row", () => {
     expect(phoneRow).toBeDefined();
     expect(phoneRow?.getAttribute("tabindex")).toBe("0");
     expect(phoneRow?.getAttribute("role")).toBe("button");
+  });
+});
+
+describe("TicketPanelContent email row", () => {
+  it("renders the email row when clientEmail is present", () => {
+    ticketQueryState = {
+      isLoading: false,
+      isError: false,
+      error: null,
+      data: { ...baseTicket, clientEmail: "a***@example.org" },
+    };
+
+    const { container } = render(TicketPanelContent, {
+      props: {
+        ticketId: "ticket-001",
+        onaction: vi.fn(),
+      },
+    });
+
+    expect(container.textContent).toContain("Email");
+    expect(container.textContent).toContain("a***@example.org");
+  });
+
+  it("renders a full address for admin", () => {
+    ticketQueryState = {
+      isLoading: false,
+      isError: false,
+      error: null,
+      data: { ...baseTicket, clientEmail: "alice@example.org" },
+    };
+
+    const { container } = render(TicketPanelContent, {
+      props: {
+        ticketId: "ticket-001",
+        onaction: vi.fn(),
+      },
+    });
+
+    expect(container.textContent).toContain("alice@example.org");
+  });
+
+  it("does not render the email row when clientEmail is null", () => {
+    ticketQueryState = {
+      isLoading: false,
+      isError: false,
+      error: null,
+      data: { ...baseTicket, clientEmail: null },
+    };
+
+    const { container } = render(TicketPanelContent, {
+      props: {
+        ticketId: "ticket-001",
+        onaction: vi.fn(),
+      },
+    });
+
+    const emailItem = Array.from(container.querySelectorAll("li")).find((li) =>
+      li.textContent.includes("Email"),
+    );
+    expect(emailItem).toBeUndefined();
+  });
+
+  it('emits the "email" action when the email row is tapped', async () => {
+    const onaction = vi.fn();
+    ticketQueryState = {
+      isLoading: false,
+      isError: false,
+      error: null,
+      data: { ...baseTicket, clientEmail: "a***@example.org" },
+    };
+
+    const { container } = render(TicketPanelContent, {
+      props: {
+        ticketId: "ticket-001",
+        onaction,
+      },
+    });
+
+    const emailRow = Array.from(
+      container.querySelectorAll('[role="button"]'),
+    ).find((el) => el.textContent.includes("a***@example.org"));
+
+    expect(emailRow).toBeDefined();
+    if (emailRow) {
+      await fireEvent.click(emailRow);
+      expect(onaction).toHaveBeenCalledWith("email");
+    }
+  });
+
+  it("email row has keyboard accessibility attributes", () => {
+    ticketQueryState = {
+      isLoading: false,
+      isError: false,
+      error: null,
+      data: { ...baseTicket, clientEmail: "b***@example.org" },
+    };
+
+    const { container } = render(TicketPanelContent, {
+      props: {
+        ticketId: "ticket-001",
+        onaction: vi.fn(),
+      },
+    });
+
+    const emailRow = Array.from(
+      container.querySelectorAll('[role="button"]'),
+    ).find((el) => el.textContent.includes("b***@example.org"));
+
+    expect(emailRow).toBeDefined();
+    expect(emailRow?.getAttribute("tabindex")).toBe("0");
+    expect(emailRow?.getAttribute("role")).toBe("button");
   });
 });
 

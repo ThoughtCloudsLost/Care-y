@@ -197,6 +197,13 @@
   // sends the full number only to admin, so this is admin-only in effect
   // without needing a client-side role check.
   const canCopyPhone = $derived(clientPhone?.startsWith("+") ?? false);
+  const clientEmail = $derived(ticket?.clientEmail ?? null);
+  // Same reasoning as canCopyPhone: the server masks the local part for
+  // everyone below admin, and a masked address ("a***@example.org") is not
+  // worth copying. Presence of the mask marker is the signal.
+  const canCopyEmail = $derived(
+    clientEmail !== null && !clientEmail.includes("***"),
+  );
   const ticketDecryptCache = getTicketDecryptCache();
 
   const decryptedTitle = $derived.by((): string => {
@@ -374,6 +381,7 @@
   let phonePopoverOpen = $state(false);
   let phoneEditSheetOpen = $state(false);
   let phoneEditInitialPhone = $state<string | undefined>(undefined);
+  let emailPopoverOpen = $state(false);
   let emailEditSheetOpen = $state(false);
   let emailEditInitialEmail = $state<string | undefined>(undefined);
   let mergeSheetOpen = $state(false);
@@ -733,6 +741,9 @@
     onphone: () => {
       phonePopoverOpen = true;
     },
+    onemail: () => {
+      emailPopoverOpen = true;
+    },
     oneditcontent: () => {
       closePanel();
       contentEdit.open();
@@ -836,6 +847,20 @@
   function handleApplyPhone(phone: string): void {
     phoneEditInitialPhone = phone;
     phoneEditSheetOpen = true;
+  }
+
+  function handleCopyEmail(): void {
+    emailPopoverOpen = false;
+    void copyToClipboard(clientEmail ?? undefined, toastStore, {
+      success: m.email_copy_clipboard(),
+      failure: m.common_copy_failed(),
+    });
+  }
+
+  function handleOpenEmailEdit(): void {
+    emailPopoverOpen = false;
+    emailEditInitialEmail = undefined;
+    emailEditSheetOpen = true;
   }
 
   function handleApplyEmail(email: string): void {
@@ -1201,9 +1226,11 @@
   {phonePopoverOpen}
   {phoneEditSheetOpen}
   {phoneEditInitialPhone}
+  {emailPopoverOpen}
   {emailEditSheetOpen}
   {emailEditInitialEmail}
   {canCopyPhone}
+  {canCopyEmail}
   onphonepopoverdismiss={() => {
     phonePopoverOpen = false;
   }}
@@ -1213,6 +1240,11 @@
     phoneEditSheetOpen = false;
     phoneEditInitialPhone = undefined;
   }}
+  onemailpopoverdismiss={() => {
+    emailPopoverOpen = false;
+  }}
+  onemailcopy={handleCopyEmail}
+  onemailedit={handleOpenEmailEdit}
   onemailedidismiss={() => {
     emailEditSheetOpen = false;
     emailEditInitialEmail = undefined;

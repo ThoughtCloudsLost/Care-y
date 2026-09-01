@@ -22,7 +22,7 @@
     ListItem,
     Toggle,
   } from "konsta/svelte";
-  import { Phone, Pencil, BellRing, Link2 } from "@lucide/svelte";
+  import { Phone, Mail, Pencil, BellRing, Link2 } from "@lucide/svelte";
   import * as m from "$lib/paraglide/messages.js";
   import { withTerms } from "$lib/terminology/with-terms.js";
   import StatusMark from "$lib/components/StatusMark.svelte";
@@ -226,6 +226,23 @@
         {/snippet}
       </ListItem>
     {/if}
+    {#if ticket?.clientEmail}
+      <ListItem
+        title={m.client_email_label()}
+        onclick={() => onaction("email")}
+        onkeydown={onKeyActivate(() => onaction("email"))}
+        role="button"
+        tabindex={0}
+        class="touch-feedback"
+      >
+        {#snippet media()}
+          <Mail class="w-5 h-5 text-[var(--ink-2)]" aria-hidden="true" />
+        {/snippet}
+        {#snippet after()}
+          <span class="email-value">{ticket.clientEmail}</span>
+        {/snippet}
+      </ListItem>
+    {/if}
     {#if !compact}
       <ListItem title={m.ticket_panel_opened()}>
         {#snippet after()}
@@ -399,6 +416,18 @@
   .phone-value {
     font-size: var(--text-sm);
     color: var(--ink);
+  }
+
+  /* Addresses run far longer than phone numbers, so this one truncates
+     rather than pushing the row title out of the panel. The full value
+     is reachable through the popover's copy action. */
+  .email-value {
+    font-size: var(--text-sm);
+    color: var(--ink);
+    max-width: 18ch;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   .destructive-text {
