@@ -20,6 +20,7 @@ import type { Kysely } from "kysely";
 
 import {
   buildContentAad,
+  decryptContent,
   deriveAccountKey,
   deriveChannelAuth,
   deriveChannelId,
@@ -27,9 +28,12 @@ import {
   derivePortalKeypairFromOprf,
   eciesEncrypt,
   encode,
+  encodeFileKeyPayload,
   encryptContent,
   encryptFieldContent,
   encryptFormMeta,
+  fileKeySlot,
+  filenameSlot,
   followupSlot,
   generateContentKey,
   generatePortalSeed,
@@ -40,8 +44,10 @@ import {
   PORTAL_KEY_CHECK,
   requireSodium,
   sealForOrgKey,
+  toCiphertext,
   toRistrettoPoint,
   toSalt,
+  toSymmetricKey,
   type EciesOutput,
   type EncryptedFieldContent,
   type RistrettoPoint,
@@ -91,6 +97,8 @@ import { createChannel } from "../portal/channel-service.js";
 import { createShare } from "../portal/share-service.js";
 import { createIntakeTicket } from "../portal/intake-service.js";
 import type { IntakeFormService } from "../portal/intake-form-service.js";
+import { insertClientWrap } from "../portal/portal-attachment-service.js";
+import { insertClientRecordingWrap } from "../portal/portal-recording-service.js";
 import {
   clientReply,
   storeClientCopy,
@@ -801,6 +809,139 @@ async function seedShareLink(
   return { shareId, fragment };
 }
 
+/**
+ * Seal the anchor ticket's media to the portal channel.
+ *
+ * seedTestTickets writes recordings and attachments with the file-key
+ * envelope on the anchor ticket: each blob is encrypted under a random
+ * file key, and that key is wrapped under the ticket key in
+ * `file_key_wrap`. No channel existed at that point, so the client
+ * half was deferred.
+ *
+ * This function closes the loop: for every recording and attachment on
+ * the anchor ticket that carries a file_key_wrap, it unwraps the file
+ * key using the ticket key, seals it to the channel's client_public,
+ * and inserts the portal carrier row (portal_recordings /
+ * portal_attachments). Call entries (phone_call follow-ups) need
+ * nothing: the portal-message-service joins them from the followups
+ * table, scoped to the channel's client_id.
+ */
+async function sealAnchorTicketMedia(
+  deps: SeedPortalDeps,
+  channel: PortalChannelRow,
+): Promise<void> {
+  const { tDb, anchorTicketId, anchorTicketKey } = deps;
+  const sodium = requireSodium();
+  const clientPublic = toRistrettoPoint(new Uint8Array(channel.client_public));
+
+  // Recordings with file_key_wrap on the anchor ticket
+  const recordings = await tDb
+    .selectFrom("recordings")
+    .select(["id", "followup_id", "file_key_wrap"])
+    .where("ticket_id", "=", anchorTicketId)
+    .where("file_key_wrap", "is not", null)
+    .where("deleted_at", "is", null)
+    .execute();
+
+  for (const rec of recordings) {
+    if (rec.file_key_wrap === null || rec.followup_id === null) continue;
+
+    const fileKey = toSymmetricKey(
+      decryptContent(
+        toCiphertext(new Uint8Array(rec.file_key_wrap)),
+        anchorTicketKey,
+        buildContentAad(anchorTicketId, fileKeySlot(rec.id)),
+      ),
+    );
+    try {
+      const payload = encodeFileKeyPayload(fileKey, "");
+      const sealed = eciesEncrypt(payload, clientPublic);
+
+      const fu = await tDb
+        .selectFrom("followups")
+        .select(["source", "created_at"])
+        .where("id", "=", rec.followup_id)
+        .executeTakeFirstOrThrow();
+      const direction: "from_client" | "to_client" =
+        fu.source === "client" ? "from_client" : "to_client";
+
+      await insertClientRecordingWrap(tDb, {
+        recordingId: rec.id,
+        channelRowId: channel.id,
+        followupId: rec.followup_id,
+        direction,
+        copy: {
+          ephemeralPoint: Buffer.from(sealed.ephemeralPoint),
+          nonce: Buffer.from(sealed.nonce),
+          ciphertext: Buffer.from(sealed.ciphertext),
+        },
+      });
+    } finally {
+      sodium.memzero(fileKey);
+    }
+  }
+
+  // Attachments with file_key_wrap on the anchor ticket
+  const attachments = await tDb
+    .selectFrom("attachments")
+    .select(["id", "followup_id", "file_key_wrap", "encrypted_filename"])
+    .where("ticket_id", "=", anchorTicketId)
+    .where("file_key_wrap", "is not", null)
+    .where("deleted_at", "is", null)
+    .execute();
+
+  for (const att of attachments) {
+    if (att.file_key_wrap === null || att.followup_id === null) continue;
+
+    const fileKey = toSymmetricKey(
+      decryptContent(
+        toCiphertext(new Uint8Array(att.file_key_wrap)),
+        anchorTicketKey,
+        buildContentAad(anchorTicketId, fileKeySlot(att.id)),
+      ),
+    );
+    try {
+      // Recover the plaintext filename from the encrypted_filename column
+      // so the client copy carries it. When null (client MMS), the payload
+      // carries an empty string, matching the production ingest path.
+      let filename = "";
+      if (att.encrypted_filename !== null) {
+        const fnBytes = decryptContent(
+          toCiphertext(new Uint8Array(att.encrypted_filename)),
+          anchorTicketKey,
+          buildContentAad(anchorTicketId, filenameSlot(att.id)),
+        );
+        filename = new TextDecoder().decode(fnBytes);
+      }
+
+      const payload = encodeFileKeyPayload(fileKey, filename);
+      const sealed = eciesEncrypt(payload, clientPublic);
+
+      const fu = await tDb
+        .selectFrom("followups")
+        .select(["source", "created_at"])
+        .where("id", "=", att.followup_id)
+        .executeTakeFirstOrThrow();
+      const direction: "from_client" | "to_client" =
+        fu.source === "client" ? "from_client" : "to_client";
+
+      await insertClientWrap(tDb, {
+        attachmentId: att.id,
+        channelRowId: channel.id,
+        followupId: att.followup_id,
+        direction,
+        copy: {
+          ephemeralPoint: Buffer.from(sealed.ephemeralPoint),
+          nonce: Buffer.from(sealed.nonce),
+          ciphertext: Buffer.from(sealed.ciphertext),
+        },
+      });
+    } finally {
+      sodium.memzero(fileKey);
+    }
+  }
+}
+
 /** Save both intake forms and return their ids. */
 async function seedForms(
   deps: SeedPortalDeps,
@@ -1047,6 +1188,13 @@ export async function seedPortal(
   // (the partial unique index rejects two active channels), so the account
   // attaches to its own client, created by its own intake submission.
   const secureLink = await seedSecureLink(deps, anchorClientId);
+
+  // Seal the anchor ticket's media (recordings, attachments) to the
+  // channel's client_public. The ticket seeder wrote the file_key_wrap
+  // (org side); this completes the envelope by writing portal carrier
+  // rows (client side).
+  await sealAnchorTicketMedia(deps, secureLink.channel);
+
   const share = await seedShareLink(deps);
 
   const forms = await seedForms(deps, routingQueueIds);

@@ -18,15 +18,18 @@ import { Buffer } from "buffer";
 
 import {
   decode,
+  decodeFileKeyPayload,
   deriveAccountKey,
   deriveChannelAuth,
   deriveChannelId,
   deriveClientAccountKeys,
   derivePortalKeypairFromOprf,
+  eciesDecrypt,
   encode,
   oprfBlind,
   oprfFinalize,
   portalOprfInput,
+  toNonce,
   toRistrettoPoint,
   toSalt,
 } from "@care-y/crypto";
@@ -56,10 +59,28 @@ interface PortalCaller {
       formClosed: boolean;
       intakeDisabled: boolean;
     }>;
-    portalBootstrap(input: {
-      channelId: string;
-      auth: string;
-    }): Promise<{ messages: readonly unknown[]; ticketId: string | null }>;
+    portalBootstrap(input: { channelId: string; auth: string }): Promise<{
+      messages: readonly unknown[];
+      // Only the ECIES triple is spelled out: it is what the client has to
+      // unseal, so it is the part this suite actually exercises.
+      attachments: readonly {
+        ephemeralPoint: string;
+        nonce: string;
+        ciphertext: string;
+      }[];
+      recordings: readonly {
+        ephemeralPoint: string;
+        nonce: string;
+        ciphertext: string;
+      }[];
+      callEntries: readonly {
+        id: string;
+        source: string;
+        callStatus: string | null;
+        callDurationSeconds: number | null;
+      }[];
+      ticketId: string | null;
+    }>;
     getAccountSalt(input: {
       username: string;
     }): Promise<{ salt: string; accountId: string }>;
@@ -197,6 +218,88 @@ describe("client portal seed", () => {
     _sodium.memzero(oprfInput);
     _sodium.memzero(channelOprfOutput);
     _sodium.memzero(keypair.clientPrivate);
+  }, 60_000);
+
+  it("portal bootstrap returns recordings, attachments, and call entries for the anchor ticket", async () => {
+    const seed = decode(engine.portal.portalFragment);
+    const auth = deriveChannelAuth(seed);
+    const result = await caller.clientPortal.portalBootstrap({
+      channelId: engine.portal.portalChannelId,
+      auth: encode(auth),
+    });
+
+    // The anchor ticket has one voicemail recording sealed to the channel.
+    expect(result.recordings.length).toBeGreaterThanOrEqual(1);
+
+    // Two file attachments on the anchor ticket: the referral letter image
+    // and the housing checklist.
+    expect(result.attachments.length).toBeGreaterThanOrEqual(2);
+
+    // Two phone_call follow-ups: a no_answer and a completed call.
+    expect(result.callEntries).toHaveLength(2);
+    const statuses = result.callEntries.map((c) => c.callStatus);
+    expect(statuses).toContain("no_answer");
+    expect(statuses).toContain("completed");
+  }, 60_000);
+
+  // The tests above prove the carrier rows exist and are shaped right. They
+  // would still pass if the seed sealed under the wrong slot or AAD, because
+  // nothing there opens what it wrote. This one does: the seed builds the
+  // file-key envelope in two phases (org wrap at ticket-seed time, client
+  // seal at portal-seed time) rather than through the production ingest
+  // helper, so the two implementations agreeing is an assertion, not a given.
+  it("seals anchor ticket media so the channel keypair opens it", async () => {
+    const seed = decode(engine.portal.portalFragment);
+    const auth = deriveChannelAuth(seed);
+    const result = await caller.clientPortal.portalBootstrap({
+      channelId: engine.portal.portalChannelId,
+      auth: encode(auth),
+    });
+
+    const oprfInput = portalOprfInput(seed);
+    const { blindedElement, blindState } = oprfBlind(oprfInput);
+    const evaluated = await caller.clientPortal.evaluateChannelOprf({
+      channelId: engine.portal.portalChannelId,
+      blindedElement: encode(blindedElement),
+      auth: encode(auth),
+    });
+    const oprfOutput = oprfFinalize(
+      blindState,
+      toRistrettoPoint(decode(evaluated.evaluated)),
+      oprfInput,
+    );
+    const keypair = derivePortalKeypairFromOprf(oprfOutput);
+
+    try {
+      const unseal = (wire: {
+        ephemeralPoint: string;
+        nonce: string;
+        ciphertext: string;
+      }): { fileKey: Uint8Array; filename: string } =>
+        decodeFileKeyPayload(
+          eciesDecrypt(
+            toRistrettoPoint(decode(wire.ephemeralPoint)),
+            toNonce(decode(wire.nonce)),
+            decode(wire.ciphertext),
+            keypair.clientPrivate,
+          ),
+        );
+
+      const recording = result.recordings[0];
+      expect(recording).toBeDefined();
+      if (recording !== undefined) {
+        expect(unseal(recording).fileKey).toHaveLength(32);
+      }
+
+      // The filename rides inside the sealed payload, so recovering it end to
+      // end also covers the encrypted_filename decrypt the seed does under tk.
+      const filenames = result.attachments.map((a) => unseal(a).filename);
+      expect(filenames).toContain("housing-checklist.txt");
+    } finally {
+      _sodium.memzero(oprfInput);
+      _sodium.memzero(oprfOutput);
+      _sodium.memzero(keypair.clientPrivate);
+    }
   }, 60_000);
 
   it("signs in to the seeded account and reads the thread back", async () => {

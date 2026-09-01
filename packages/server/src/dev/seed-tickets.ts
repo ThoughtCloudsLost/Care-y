@@ -23,8 +23,10 @@ import {
   cursorSlot,
   blobSlot,
   filenameSlot,
+  fileKeySlot,
   eciesEncrypt,
   toRistrettoPoint,
+  requireSodium,
   type SymmetricKey,
 } from "@care-y/crypto";
 
@@ -1535,6 +1537,14 @@ export async function seedTestTickets(
       }
 
       // Create media records (encrypted blobs stored in BlobStore)
+      //
+      // The anchor ticket (i === 0) uses the file-key envelope (ADR-089):
+      // a random file key encrypts the blob, the key is wrapped under the
+      // ticket key and stored in file_key_wrap. The portal seeder later
+      // unwraps the file key and seals it to the channel's client_public.
+      // All other tickets use the direct envelope (blob encrypted directly
+      // under the ticket key, no file_key_wrap).
+      const useFileKeyEnvelope = i === 0;
       if (fu.media && def.withKeyWrap) {
         let imageAssetIdx = 0;
         for (const media of fu.media) {
@@ -1548,11 +1558,36 @@ export async function seedTestTickets(
                 ? assets.voicemailAudio.durationSeconds
                 : (media.durationSeconds ?? null);
             const recordingId = newRecordingId();
-            const encrypted = encryptContent(
-              raw,
-              tk,
-              buildContentAad(ticket.id, blobSlot(recordingId)),
-            );
+
+            let encrypted: Uint8Array;
+            let fileKeyWrapBuf: Buffer | null = null;
+            if (useFileKeyEnvelope) {
+              const sodium = requireSodium();
+              const fileKey = generateContentKey();
+              try {
+                encrypted = encryptContent(
+                  raw,
+                  fileKey,
+                  buildContentAad(ticket.id, blobSlot(recordingId)),
+                );
+                fileKeyWrapBuf = Buffer.from(
+                  encryptContent(
+                    fileKey,
+                    tk,
+                    buildContentAad(ticket.id, fileKeySlot(recordingId)),
+                  ),
+                );
+              } finally {
+                sodium.memzero(fileKey);
+              }
+            } else {
+              encrypted = encryptContent(
+                raw,
+                tk,
+                buildContentAad(ticket.id, blobSlot(recordingId)),
+              );
+            }
+
             const blobKey = await blobStore.put(
               orgSchema,
               "recording",
@@ -1568,6 +1603,9 @@ export async function seedTestTickets(
                 size_bytes: encrypted.byteLength,
                 duration_seconds: effectiveDuration,
                 created_at: minutesAgo(fu.agoMinutes),
+                ...(fileKeyWrapBuf !== null
+                  ? { file_key_wrap: fileKeyWrapBuf }
+                  : {}),
               })
               .execute();
           } else {
@@ -1592,11 +1630,36 @@ export async function seedTestTickets(
               raw = media.kind === "image" ? generatePng() : generateTextFile();
             }
             const attachmentId = newAttachmentId();
-            const encrypted = encryptContent(
-              raw,
-              tk,
-              buildContentAad(ticket.id, blobSlot(attachmentId)),
-            );
+
+            let encrypted: Uint8Array;
+            let fileKeyWrapBuf: Buffer | null = null;
+            if (useFileKeyEnvelope) {
+              const sodium = requireSodium();
+              const fileKey = generateContentKey();
+              try {
+                encrypted = encryptContent(
+                  raw,
+                  fileKey,
+                  buildContentAad(ticket.id, blobSlot(attachmentId)),
+                );
+                fileKeyWrapBuf = Buffer.from(
+                  encryptContent(
+                    fileKey,
+                    tk,
+                    buildContentAad(ticket.id, fileKeySlot(attachmentId)),
+                  ),
+                );
+              } finally {
+                sodium.memzero(fileKey);
+              }
+            } else {
+              encrypted = encryptContent(
+                raw,
+                tk,
+                buildContentAad(ticket.id, blobSlot(attachmentId)),
+              );
+            }
+
             const category = "attachment" as const;
             const blobKey = await blobStore.put(
               orgSchema,
@@ -1624,6 +1687,9 @@ export async function seedTestTickets(
                 encrypted_filename: encFilename,
                 content_type: media.contentType ?? null,
                 created_at: minutesAgo(fu.agoMinutes),
+                ...(fileKeyWrapBuf !== null
+                  ? { file_key_wrap: fileKeyWrapBuf }
+                  : {}),
               })
               .execute();
           }

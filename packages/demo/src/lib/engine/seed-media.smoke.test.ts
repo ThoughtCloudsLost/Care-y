@@ -95,6 +95,61 @@ describe("seedTestTickets media assets", () => {
       expect(completed!.call_duration_seconds).toBe(340);
     }, 30_000);
 
+    it("anchor ticket recordings carry file_key_wrap for portal envelope", async () => {
+      const storyTicketId = engine.ticketIds[0];
+      expect(storyTicketId).toBeDefined();
+
+      const recordings = await engine.tDb
+        .selectFrom("recordings")
+        .select(["id", "file_key_wrap"])
+        .where("ticket_id", "=", storyTicketId as TicketId)
+        .execute();
+
+      expect(recordings.length).toBeGreaterThan(0);
+      for (const rec of recordings) {
+        expect(rec.file_key_wrap).not.toBeNull();
+      }
+    }, 30_000);
+
+    it("anchor ticket attachments carry file_key_wrap for portal envelope", async () => {
+      const storyTicketId = engine.ticketIds[0];
+      expect(storyTicketId).toBeDefined();
+
+      const attachments = await engine.tDb
+        .selectFrom("attachments")
+        .select(["id", "file_key_wrap"])
+        .where("ticket_id", "=", storyTicketId as TicketId)
+        .execute();
+
+      expect(attachments.length).toBeGreaterThan(0);
+      for (const att of attachments) {
+        expect(att.file_key_wrap).not.toBeNull();
+      }
+    }, 30_000);
+
+    it("portal carrier rows exist for anchor ticket media", async () => {
+      const storyTicketId = engine.ticketIds[0];
+      expect(storyTicketId).toBeDefined();
+
+      // Portal recordings joined through the recording's ticket
+      const portalRecordings = await engine.tDb
+        .selectFrom("portal_recordings as pr")
+        .innerJoin("recordings as r", "r.id", "pr.recording_id")
+        .select("pr.recording_id")
+        .where("r.ticket_id", "=", storyTicketId as TicketId)
+        .execute();
+      expect(portalRecordings.length).toBeGreaterThan(0);
+
+      // Portal attachments joined through the attachment's ticket
+      const portalAttachments = await engine.tDb
+        .selectFrom("portal_attachments as pa")
+        .innerJoin("attachments as a", "a.id", "pa.attachment_id")
+        .select("pa.attachment_id")
+        .where("a.ticket_id", "=", storyTicketId as TicketId)
+        .execute();
+      expect(portalAttachments.length).toBeGreaterThan(0);
+    }, 30_000);
+
     it("story ticket has enriched system event types", async () => {
       const storyTicketId = engine.ticketIds[0];
       expect(storyTicketId).toBeDefined();
