@@ -27,6 +27,7 @@ import {
   sectionMatchesPhone,
   loginTopicMatchesStage,
   getSubByTopic,
+  type ClientDetailIds,
   type PhoneCommand,
 } from "./scroll-sections.js";
 import type {
@@ -72,6 +73,13 @@ export interface LocationStoreDeps {
    * to. Same getter pattern as getTicketDetailId.
    */
   readonly getArticleDetailId: () => string;
+  /**
+   * Resolve the client-arc detail IDs (intake form, portal channel,
+   * share). Returns the real seeded values when the engine is ready,
+   * or the sentinel defaults before boot completes. Same getter
+   * pattern as getTicketDetailId.
+   */
+  readonly getClientDetailIds: () => ClientDetailIds;
   /**
    * Whether the background login has settled (success or failure).
    * While false, the phone rests hidden behind the boot splash, so a
@@ -138,6 +146,7 @@ export class DemoLocationStore {
       subSlug,
       this.deps.getTicketDetailId(),
       this.deps.getArticleDetailId(),
+      this.deps.getClientDetailIds(),
     );
     // A scroll intent must not yank the visitor off a detail screen
     // that already satisfies the section (e.g. a manually opened

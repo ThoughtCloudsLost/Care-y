@@ -171,6 +171,8 @@ export interface SeedPortalResult {
   readonly accountPassword: string;
   /** Custom form exercising the builder feature set. */
   readonly customFormId: IntakeFormId;
+  /** Public slug of the custom form, for /(client)/intake/[slug]. */
+  readonly customFormSlug: string;
   /** Sibling form whose closes_at has passed. */
   readonly closedFormId: IntakeFormId;
   /** Tickets created by the seeded intake submissions, newest last. */
@@ -805,19 +807,21 @@ async function seedForms(
   routingQueueIds: readonly QueueId[],
 ): Promise<{
   customFormId: IntakeFormId;
+  customFormSlug: string;
   closedFormId: IntakeFormId;
   fields: readonly SeedField[];
   queueOptionKeys: readonly string[];
 }> {
   const { fields, queueOptionKeys } = buildCustomFormFields(routingQueueIds);
 
+  const customSlug = "ask-for-help";
   const custom = await deps.intakeFormService.saveForm(
     deps.tDb,
     deps.adminUserId,
     {
       formId: null,
       name: "Ask for help",
-      slug: "ask-for-help",
+      slug: customSlug,
       isDefault: false,
       destinationQueueId: routingQueueIds[0] ?? null,
       encryptedFormMeta: encryptFormMeta(
@@ -894,7 +898,13 @@ async function seedForms(
   await deps.intakeFormService.setActive(deps.tDb, customFormId, true);
   await deps.intakeFormService.setActive(deps.tDb, closedFormId, true);
 
-  return { customFormId, closedFormId, fields, queueOptionKeys };
+  return {
+    customFormId,
+    customFormSlug: customSlug,
+    closedFormId,
+    fields,
+    queueOptionKeys,
+  };
 }
 
 /** One submission through the real intake path. */
@@ -1174,6 +1184,7 @@ export async function seedPortal(
     accountUsername: deps.accountUsername,
     accountPassword: deps.accountPassword,
     customFormId: forms.customFormId,
+    customFormSlug: forms.customFormSlug,
     closedFormId: forms.closedFormId,
     responseTicketIds,
     keyNotHeldTicketId,

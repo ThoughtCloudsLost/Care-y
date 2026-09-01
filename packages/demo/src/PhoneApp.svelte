@@ -42,7 +42,11 @@
   import { createDemoQueryClient } from "$demo/demo-query-client.js";
   import { createDemoLocationStore } from "$demo/demo-location.svelte.js";
   import type { PhoneCommand } from "$demo/scroll-sections.js";
-  import { routeForSlug, pathnameForRouteId } from "$demo/scroll-sections.js";
+  import {
+    routeForSlug,
+    pathnameForRouteId,
+    DEFAULT_CLIENT_DETAIL_IDS,
+  } from "$demo/scroll-sections.js";
   import { evaluateAdvance } from "$demo/login-advance-guard.js";
   import { splashCovers } from "$demo/boot-landing.js";
   import { listRouteIds } from "$demo/engine/route-manifest.js";
@@ -108,6 +112,8 @@
     DEMO_DETAIL_ARTICLE_ID,
     DEMO_PORTAL_CHANNEL_ID,
     DEMO_SHARE_ID,
+    DEMO_INTAKE_FORM_ID,
+    DEMO_INTAKE_FORM_SLUG,
   } from "$demo/bridge.js";
   import {
     activateSettingsDriver,
@@ -218,6 +224,22 @@
     if (detail === DEMO_SHARE_ID) {
       const portal = resolvedEngine?.portal;
       if (portal !== undefined) return `share/${portal.shareId}`;
+      return unresolved === "null" ? null : detail;
+    }
+    // Intake-form sentinels travel as substrings: the form ID appears
+    // in query strings (forms?id=<sentinel>) and the slug appears in
+    // path segments (intake/<sentinel>). Both bridge constants share the
+    // same string value, so a single includes() check covers both; the
+    // startsWith("intake/") test distinguishes the slug (resolved from
+    // customFormSlug) from the id (resolved from customFormId).
+    if (detail?.includes(DEMO_INTAKE_FORM_ID) === true) {
+      const portal = resolvedEngine?.portal;
+      if (portal !== undefined) {
+        if (detail.startsWith("intake/")) {
+          return detail.replace(DEMO_INTAKE_FORM_SLUG, portal.customFormSlug);
+        }
+        return detail.replace(DEMO_INTAKE_FORM_ID, portal.customFormId);
+      }
       return unresolved === "null" ? null : detail;
     }
     return detail;
@@ -466,6 +488,16 @@
     ensureScreen,
     getTicketDetailId: () => resolvedDetailId ?? DEMO_DETAIL_TICKET_ID,
     getArticleDetailId: () => resolvedArticleId ?? DEMO_DETAIL_ARTICLE_ID,
+    getClientDetailIds: () => {
+      const portal = resolvedEngine?.portal;
+      if (portal === undefined) return DEFAULT_CLIENT_DETAIL_IDS;
+      return {
+        intakeFormId: portal.customFormId,
+        intakeFormSlug: portal.customFormSlug,
+        portalChannelPath: `portal/${portal.portalChannelId}`,
+        sharePath: `share/${portal.shareId}`,
+      };
+    },
     isBootSettled: () => keyedDone,
   });
 
