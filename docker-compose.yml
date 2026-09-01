@@ -42,6 +42,12 @@ services:
       # run. Production keeps the schema default of 3 per hour; this
       # compose file is development and E2E only.
       - INTAKE_SUBMISSION_LIMIT=${INTAKE_SUBMISSION_LIMIT:-500}
+      # Mailpit runs as its own service, so inside this container localhost
+      # is the app itself and nothing listens on the SMTP port. The .env
+      # value stays correct for processes run on the host, where Mailpit
+      # publishes on loopback; on the compose network the app has to
+      # address the service by name.
+      - SMTP_HOST=mailpit
       - OPRF_SOCKET_A=/run/oprf/oprf-a.sock
       - OPRF_SOCKET_B=/run/oprf/oprf-b.sock
       - TOTP_REPLAY_BYPASS=1
