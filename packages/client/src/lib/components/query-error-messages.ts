@@ -186,11 +186,11 @@ export const errorCodeMap: Record<ErrorCodeType, () => string> = {
     m.error_portal_reseed_already_converted(),
 
   // Portal contact / passphrase
-  [ErrorCode.PORTAL_CONTACT_LOCKED]: () => m.portal_contact_error(),
+  [ErrorCode.PORTAL_CONTACT_LOCKED]: () => m.error_portal_contact_locked(),
   [ErrorCode.PORTAL_PASSPHRASE_ALREADY_SET]: () =>
-    m.portal_passphrase_error_already_set(),
+    m.error_portal_passphrase_already_set(),
   [ErrorCode.PORTAL_PASSPHRASE_COUNT_MISMATCH]: () =>
-    m.portal_passphrase_error_stale(),
+    m.error_portal_passphrase_count_mismatch(),
 
   // Client accounts
   [ErrorCode.ACCOUNT_USERNAME_TAKEN]: () => m.error_account_username_taken(),

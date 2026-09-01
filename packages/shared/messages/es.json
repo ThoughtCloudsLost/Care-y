@@ -3018,5 +3018,8 @@
   "portal_passphrase_success_close": "Listo",
   "portal_passphrase_error_generic": "Algo salió mal. Intenta de nuevo.",
   "portal_passphrase_error_already_set": "Ya se ha agregado una contraseña a este enlace.",
-  "portal_passphrase_error_stale": "Llegaron mensajes nuevos mientras se agregaba la contraseña. Actualizando, intenta de nuevo."
+  "portal_passphrase_error_stale": "Llegaron mensajes nuevos mientras se agregaba la contraseña. Actualizando, intenta de nuevo.",
+  "error_portal_contact_locked": "Agrega una contraseña o crea una cuenta para ver la información de contacto registrada.",
+  "error_portal_passphrase_already_set": "Este enlace ya tiene una contraseña.",
+  "error_portal_passphrase_count_mismatch": "Tus mensajes cambiaron mientras se agregaba la contraseña. Inténtalo de nuevo."
 }

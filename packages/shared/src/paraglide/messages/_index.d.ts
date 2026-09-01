@@ -3018,4 +3018,7 @@ export * from "./portal_passphrase_success_close.js";
 export * from "./portal_passphrase_error_generic.js";
 export * from "./portal_passphrase_error_already_set.js";
 export * from "./portal_passphrase_error_stale.js";
+export * from "./error_portal_contact_locked.js";
+export * from "./error_portal_passphrase_already_set.js";
+export * from "./error_portal_passphrase_count_mismatch.js";
 export type LocalizedString = import("../runtime.js").LocalizedString;

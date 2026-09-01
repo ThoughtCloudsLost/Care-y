@@ -1008,6 +1008,15 @@ export async function resolveClientPhone(
 // ---------------------------------------------------------------------------
 
 /**
+ * Raw-body ceiling for the email relay only. The shared MAX_RELAY_BODY
+ * (64 KiB) sits below the html field cap (EMAIL_RELAY_LIMITS.html,
+ * 100 KB), which would destroy over-cap requests at the socket read and
+ * never reach the per-field 400. 128 KiB covers every field at its cap
+ * plus JSON overhead, so oversized fields get the typed BODY_TOO_LONG.
+ */
+const MAX_EMAIL_RELAY_BODY = 128 * 1024;
+
+/**
  * Receives { ticketId, subject, html, text }. Resolves client email
  * server-side via OPS decryption, forwards through EmailSender, zeros Buffers.
  */
@@ -1030,7 +1039,7 @@ async function handleEmailRelay(
       return;
     }
 
-    rawBody = await readRawBody(req, MAX_RELAY_BODY);
+    rawBody = await readRawBody(req, MAX_EMAIL_RELAY_BODY);
 
     ticketIdBuf = extractBufferField(rawBody, "ticketId");
     subjectBuf = extractBufferField(rawBody, "subject");

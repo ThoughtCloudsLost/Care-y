@@ -1021,20 +1021,18 @@ describe("PortalThread", () => {
         },
       });
 
+      // Wait for the decrypt to resolve, not just for the bubble shell:
+      // bubbles render immediately with a placeholder before the async
+      // decrypt lands.
       await vi.waitFor(() => {
-        const bubbles = container.querySelectorAll(
+        const bubble = container.querySelector(
           "[data-testid='conversation-bubble']",
         );
-        expect(bubbles.length).toBe(1);
+        expect(bubble).toBeTruthy();
+        expect(bubble!.textContent).toContain(
+          "This is not valid JSON email payload",
+        );
       });
-
-      // Should render as plain text, not blank
-      const bubble = container.querySelector(
-        "[data-testid='conversation-bubble']",
-      );
-      expect(bubble!.textContent).toContain(
-        "This is not valid JSON email payload",
-      );
 
       // No email-specific elements
       expect(
@@ -1070,24 +1068,21 @@ describe("PortalThread", () => {
         },
       });
 
+      // Wait for both decrypts to resolve: the bubble shells render
+      // before the async decrypt lands, so waiting on count alone races.
       await vi.waitFor(() => {
-        const bubbles = container.querySelectorAll(
-          "[data-testid='conversation-bubble']",
+        // Only one email subject element (from the email message)
+        const subjects = container.querySelectorAll(
+          "[data-testid='portal-email-subject']",
         );
-        expect(bubbles.length).toBe(2);
+        expect(subjects.length).toBe(1);
+
+        // The regular message renders its text directly
+        const firstBubble = container.querySelectorAll(
+          "[data-testid='conversation-bubble']",
+        )[0];
+        expect(firstBubble!.textContent).toContain("Regular message");
       });
-
-      // Only one email subject element (from the email message)
-      const subjects = container.querySelectorAll(
-        "[data-testid='portal-email-subject']",
-      );
-      expect(subjects.length).toBe(1);
-
-      // The regular message renders its text directly
-      const firstBubble = container.querySelectorAll(
-        "[data-testid='conversation-bubble']",
-      )[0];
-      expect(firstBubble!.textContent).toContain("Regular message");
     });
   });
 });

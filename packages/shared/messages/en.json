@@ -3018,5 +3018,8 @@
   "portal_passphrase_success_close": "Done",
   "portal_passphrase_error_generic": "Something went wrong. Try again.",
   "portal_passphrase_error_already_set": "A password has already been added to this link.",
-  "portal_passphrase_error_stale": "New messages arrived while adding the password. Refreshing, please try again."
+  "portal_passphrase_error_stale": "New messages arrived while adding the password. Refreshing, please try again.",
+  "error_portal_contact_locked": "Add a password or create an account to see the contact info on file.",
+  "error_portal_passphrase_already_set": "This link already has a password.",
+  "error_portal_passphrase_count_mismatch": "Your messages changed while adding the password. Try again."
 }

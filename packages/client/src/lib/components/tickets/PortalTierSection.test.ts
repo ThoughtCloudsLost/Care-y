@@ -420,7 +420,7 @@ describe("PortalTierSection", () => {
     expect(screen.getByText(m.ticket_tier_revoke())).toBeTruthy();
   });
 
-  it("shows offer toggle for continuation tier", () => {
+  it("renders no offer toggle for continuation tier", () => {
     const { container } = render(PortalTierSection, {
       props: {
         ticketId: "t-1",
@@ -432,7 +432,7 @@ describe("PortalTierSection", () => {
       },
     });
 
-    expect(container.querySelector(".offer-row")).toBeTruthy();
+    expect(container.querySelector(".offer-row")).toBeNull();
   });
 
   it("renders created/last-seen times for continuation channel", () => {
