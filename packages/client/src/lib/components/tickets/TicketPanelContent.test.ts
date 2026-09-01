@@ -61,6 +61,8 @@ vi.mock("$lib/paraglide/messages.js", async (importOriginal) => ({
   ...(await importOriginal<typeof Messages>()),
   client_phone_label: () => "Phone",
   client_email_label: () => "Email",
+  client_email_add: () => "Add email",
+  client_phone_add: () => "Add phone",
   ticket_panel_status: () => "Status",
   ticket_panel_opened: () => "Opened",
   ticket_panel_call: () => "Call",
@@ -166,6 +168,7 @@ const baseTicket = {
   clientPhone: null as string | null,
   clientPhoneId: null as string | null,
   clientEmail: null as string | null,
+  contactWithheld: false,
   status: "open",
   priority: "normal",
   onHold: false,
@@ -233,12 +236,12 @@ describe("TicketPanelContent phone row", () => {
     expect(container.textContent).toContain("+1 (555) 000-1234");
   });
 
-  it("does not render the phone row when clientPhone is null", () => {
+  it("offers to add a phone when the client has none on file", () => {
     ticketQueryState = {
       isLoading: false,
       isError: false,
       error: null,
-      data: { ...baseTicket, clientPhone: null },
+      data: { ...baseTicket, clientPhone: null, contactWithheld: false },
     };
 
     const { container } = render(TicketPanelContent, {
@@ -248,11 +251,28 @@ describe("TicketPanelContent phone row", () => {
       },
     });
 
-    // The "Phone" label should not appear in the metadata section.
-    // "Call" appears in the call button, so we check for "Phone"
-    // which is the metadata row label.
-    const listItems = container.querySelectorAll("li");
-    const phoneItem = Array.from(listItems).find(
+    expect(container.textContent).toContain("Add phone");
+  });
+
+  it("hides the phone row entirely when contact details are withheld", () => {
+    ticketQueryState = {
+      isLoading: false,
+      isError: false,
+      error: null,
+      data: { ...baseTicket, clientPhone: null, contactWithheld: true },
+    };
+
+    const { container } = render(TicketPanelContent, {
+      props: {
+        ticketId: "ticket-001",
+        onaction: vi.fn(),
+      },
+    });
+
+    expect(container.textContent).not.toContain("Add phone");
+    // "Call" appears in the call button, so the metadata row is the one
+    // carrying "Phone" without it.
+    const phoneItem = Array.from(container.querySelectorAll("li")).find(
       (li) =>
         li.textContent.includes("Phone") && !li.textContent.includes("Call"),
     );
@@ -350,12 +370,12 @@ describe("TicketPanelContent email row", () => {
     expect(container.textContent).toContain("alice@example.org");
   });
 
-  it("does not render the email row when clientEmail is null", () => {
+  it("offers to add an email when the client has none on file", () => {
     ticketQueryState = {
       isLoading: false,
       isError: false,
       error: null,
-      data: { ...baseTicket, clientEmail: null },
+      data: { ...baseTicket, clientEmail: null, contactWithheld: false },
     };
 
     const { container } = render(TicketPanelContent, {
@@ -365,10 +385,56 @@ describe("TicketPanelContent email row", () => {
       },
     });
 
+    expect(container.textContent).toContain("Add email");
+  });
+
+  it("hides the email row entirely when contact details are withheld", () => {
+    ticketQueryState = {
+      isLoading: false,
+      isError: false,
+      error: null,
+      data: { ...baseTicket, clientEmail: null, contactWithheld: true },
+    };
+
+    const { container } = render(TicketPanelContent, {
+      props: {
+        ticketId: "ticket-001",
+        onaction: vi.fn(),
+      },
+    });
+
+    expect(container.textContent).not.toContain("Add email");
     const emailItem = Array.from(container.querySelectorAll("li")).find((li) =>
       li.textContent.includes("Email"),
     );
     expect(emailItem).toBeUndefined();
+  });
+
+  it("emits the email action from the add row", async () => {
+    const onaction = vi.fn();
+    ticketQueryState = {
+      isLoading: false,
+      isError: false,
+      error: null,
+      data: { ...baseTicket, clientEmail: null, contactWithheld: false },
+    };
+
+    const { container } = render(TicketPanelContent, {
+      props: {
+        ticketId: "ticket-001",
+        onaction,
+      },
+    });
+
+    const addRow = Array.from(
+      container.querySelectorAll('[role="button"]'),
+    ).find((el) => el.textContent.includes("Add email"));
+
+    expect(addRow).toBeDefined();
+    if (addRow) {
+      await fireEvent.click(addRow);
+      expect(onaction).toHaveBeenCalledWith("email");
+    }
   });
 
   it('emits the "email" action when the email row is tapped', async () => {

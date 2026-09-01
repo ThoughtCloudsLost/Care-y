@@ -199,6 +199,13 @@ export interface TicketWireRecord {
   readonly intakeWrap: string | null;
   readonly clientPhone: string | null;
   readonly clientEmail: string | null;
+  /**
+   * True when contact details were withheld from this caller rather than
+   * absent from the client. Without it a null clientPhone/clientEmail is
+   * ambiguous, and the UI cannot tell "no email on file, offer to add
+   * one" from "not your ticket, show nothing".
+   */
+  readonly contactWithheld: boolean;
   readonly clientTier: string;
   readonly portalCapable: boolean;
   readonly portalChannel: {
@@ -560,6 +567,9 @@ export function createTicketRouter(deps: TicketRouterDeps) {
    * a new object with `clientPhone` and `clientEmail` (string | null)
    * replacing the raw `clientPhoneEncrypted` and `clientEmailEncrypted`
    * buffers, which are stripped from the output.
+   *
+   * `contactWithheld` reports which kind of null the caller received, so
+   * the UI never has to infer a permission from an absent value.
    */
   function applyContactFormatting(
     ticket: TicketWithKeyWrap,
@@ -600,7 +610,7 @@ export function createTicketRouter(deps: TicketRouterDeps) {
       clientEmail = isAdmin ? formatEmail(buf) : maskEmail(buf);
     }
 
-    return { ...base, clientPhone, clientEmail };
+    return { ...base, clientPhone, clientEmail, contactWithheld: hidden };
   }
 
   return router({

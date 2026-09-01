@@ -739,9 +739,20 @@
       assignSheetOpen = true;
     },
     onphone: () => {
+      // Same reasoning as email: nothing on file, nothing to copy.
+      if (clientPhone === null) {
+        handleOpenPhoneEdit();
+        return;
+      }
       phonePopoverOpen = true;
     },
     onemail: () => {
+      // Nothing on file means nothing to copy, so the popover would offer
+      // a single action. Go straight to the edit sheet instead.
+      if (clientEmail === null) {
+        handleOpenEmailEdit();
+        return;
+      }
       emailPopoverOpen = true;
     },
     oneditcontent: () => {

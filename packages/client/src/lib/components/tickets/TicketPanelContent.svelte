@@ -209,7 +209,10 @@
         {/if}
       {/snippet}
     </ListItem>
-    {#if ticket?.clientPhone}
+    <!-- Phone and email share the three-state shape below. A client can
+         reach the org without either one now, so both rows offer to add
+         a value rather than vanishing when none is on file. -->
+    {#if ticket && !ticket.contactWithheld}
       <ListItem
         title={m.client_phone_label()}
         onclick={() => onaction("phone")}
@@ -222,11 +225,19 @@
           <Phone class="w-5 h-5 text-[var(--ink-2)]" aria-hidden="true" />
         {/snippet}
         {#snippet after()}
-          <span class="phone-value">{ticket.clientPhone}</span>
+          {#if ticket.clientPhone}
+            <span class="phone-value">{ticket.clientPhone}</span>
+          {:else}
+            <span class="contact-add">{m.client_phone_add()}</span>
+          {/if}
         {/snippet}
       </ListItem>
     {/if}
-    {#if ticket?.clientEmail}
+    <!-- Three states, not two: an address to show, no address on file
+         (offer to add one), or details withheld from this caller. Only
+         the server knows which null it sent, so contactWithheld decides
+         rather than the absence of a value. -->
+    {#if ticket && !ticket.contactWithheld}
       <ListItem
         title={m.client_email_label()}
         onclick={() => onaction("email")}
@@ -239,7 +250,11 @@
           <Mail class="w-5 h-5 text-[var(--ink-2)]" aria-hidden="true" />
         {/snippet}
         {#snippet after()}
-          <span class="email-value">{ticket.clientEmail}</span>
+          {#if ticket.clientEmail}
+            <span class="email-value">{ticket.clientEmail}</span>
+          {:else}
+            <span class="contact-add">{m.client_email_add()}</span>
+          {/if}
         {/snippet}
       </ListItem>
     {/if}
@@ -428,6 +443,12 @@
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+  }
+
+  /* Shared by the phone and email rows so the two cannot drift apart. */
+  .contact-add {
+    font-size: var(--text-sm);
+    color: var(--ink-2);
   }
 
   .destructive-text {
