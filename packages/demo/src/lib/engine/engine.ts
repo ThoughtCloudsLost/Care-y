@@ -721,12 +721,28 @@ export async function bootDemoEngine(
         // tables. The server resolves them through the portal join tables
         // with channel-scoped auth; the demo skips auth and queries the
         // org-side table directly.
-        const tableName =
-          category === "recordings" || category === "portal-recordings"
-            ? ("recordings" as const)
-            : category === "attachments" || category === "portal-attachments"
-              ? ("attachments" as const)
-              : ("kb_attachments" as const);
+        // Exhaustive rather than a trailing else: a sixth category added to
+        // BlobCategory would otherwise land in kb_attachments silently and
+        // return the wrong org's bytes rather than failing.
+        const tableName = (():
+          "recordings" | "attachments" | "kb_attachments" => {
+          switch (category) {
+            case "recordings":
+            case "portal-recordings":
+              return "recordings";
+            case "attachments":
+            case "portal-attachments":
+              return "attachments";
+            case "kb-attachments":
+              return "kb_attachments";
+            default: {
+              const unreachable: never = category;
+              throw new DemoEngineError(
+                `Unknown blob category: ${String(unreachable)}`,
+              );
+            }
+          }
+        })();
 
         // The id parameter is a plain string from the DemoBlobResolver
         // interface, but the tables have distinct branded id columns.
