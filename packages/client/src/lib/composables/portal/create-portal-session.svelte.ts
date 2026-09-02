@@ -1,7 +1,7 @@
 /**
  * Composable: portal session lifecycle backed by the portal Worker (ADR-091).
  *
- * Constructs one PortalBridge per page life and drives
+ * Creates one PortalBridge per page life (via injected factory) and drives
  * channelSessionStart / channelSessionFinish through the existing tRPC
  * evaluate callback and PoW solver, which stay on the main thread. The seed
  * is posted into the worker as a transferred ArrayBuffer on the first
@@ -19,7 +19,8 @@
  * small.
  */
 
-import { PortalBridge } from "$lib/workers/portal-bridge.js";
+import type { PortalBridge } from "$lib/workers/portal-bridge.js";
+import type { PortalBridgeFactory } from "$lib/portal/context.js";
 import type {
   EciesTripleWireResponse,
   PortalAttachmentPayloadResponse,
@@ -159,7 +160,9 @@ async function evaluateChannelWithPowRetry(
   }
 }
 
-export function createPortalSessionState(): PortalSessionState {
+export function createPortalSessionState(
+  createBridge: PortalBridgeFactory,
+): PortalSessionState {
   let session = $state<PortalSessionHandle | null>(null);
   let keyCheckPassed = $state(false);
   let passphraseError = $state(false);
@@ -208,7 +211,7 @@ export function createPortalSessionState(): PortalSessionState {
         // First attempt: copy the seed into an ArrayBuffer for transfer
         // (neutered after the call), then zero the fragment's copy. From
         // here the Worker owns the seed.
-        const fresh = new PortalBridge();
+        const fresh = createBridge();
         try {
           await fresh.waitReady();
 

@@ -10,6 +10,7 @@
 <script lang="ts">
   import { TERMINOLOGY_DEFAULTS_EN } from "@care-y/shared";
   import ClientShell from "$lib/shell/ClientShell.svelte";
+  import PortalBridgeProvider from "$lib/providers/PortalBridgeProvider.svelte";
   import { setTerminology } from "$lib/terminology/context.js";
 
   let { children } = $props();
@@ -21,6 +22,8 @@
   setTerminology(() => TERMINOLOGY_DEFAULTS_EN);
 </script>
 
-<ClientShell>
-  {@render children()}
-</ClientShell>
+<PortalBridgeProvider>
+  <ClientShell>
+    {@render children()}
+  </ClientShell>
+</PortalBridgeProvider>

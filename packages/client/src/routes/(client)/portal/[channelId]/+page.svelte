@@ -72,6 +72,7 @@
   import JumpToLatest from "$lib/components/tickets/JumpToLatest.svelte";
   import { createPortalFragment } from "$lib/composables/portal/create-portal-fragment.svelte.js";
   import { createPortalSessionState } from "$lib/composables/portal/create-portal-session.svelte.js";
+  import { getPortalBridgeFactory } from "$lib/portal/context.js";
   // care-y-ignore-next-line route-no-db-import -- client composable, no database access; validator heuristic misreads the module
   import { createPortalUpgrade } from "$lib/composables/portal/create-portal-upgrade.svelte.js";
   import { createPortalFilters } from "$lib/composables/portal/create-portal-filters.svelte.js";
@@ -111,7 +112,7 @@
   // Session state (composable scope, zeroed on exit)
   // ---------------------------------------------------------------------------
 
-  const portalSession = createPortalSessionState();
+  const portalSession = createPortalSessionState(getPortalBridgeFactory());
 
   /** Channel OPRF evaluate wired to the clientPortal tRPC mutation. */
   const channelEvaluate: ChannelEvaluateCallback = async (

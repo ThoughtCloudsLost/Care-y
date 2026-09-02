@@ -41,7 +41,8 @@
   } from "$lib/portal/account-crypto.js";
   import { buildLoginCallbacks } from "$lib/auth/crypto-callbacks.js";
   import type { LoginPhaseId } from "$lib/components/onboarding/login-phase.js";
-  import { PortalBridge } from "$lib/workers/portal-bridge.js";
+  import { getPortalBridgeFactory } from "$lib/portal/context.js";
+  import type { PortalBridge } from "$lib/workers/portal-bridge.js";
   import type { DerivationPhase } from "$lib/workers/portal-protocol.js";
   import { evaluateWithPowRetry } from "$lib/auth/crypto-helpers.js";
   import { IdleTimer } from "$lib/auth/idle-timer.js";
@@ -67,6 +68,8 @@
     type ClientDrawerAction,
   } from "$lib/client-shell/context.js";
   import { uiLocaleStore } from "$lib/stores/ui-locale.svelte.js";
+
+  const createPortalBridge = getPortalBridgeFactory();
 
   // ---------------------------------------------------------------------------
   // Account session handle (ADR-091: bridge-backed, key material in the worker)
@@ -229,7 +232,7 @@
     loginPhase = "auth";
 
     void (async () => {
-      const bridge = new PortalBridge();
+      const bridge = createPortalBridge();
       try {
         await bridge.waitReady();
 
@@ -491,7 +494,7 @@
     const callbacks = buildLoginCallbacks(() => undefined);
 
     // Proof bridge: a temporary worker for the current-password proof
-    const proofBridge = new PortalBridge();
+    const proofBridge = createPortalBridge();
 
     try {
       await proofBridge.waitReady();
@@ -566,7 +569,7 @@
 
       // The new session is established by re-logging in (the cookie is
       // still valid from the change-password mutation). Build a new bridge.
-      const newBridge = new PortalBridge();
+      const newBridge = createPortalBridge();
       await newBridge.waitReady();
 
       const newPwBuf = new TextEncoder().encode(newPassword).buffer;

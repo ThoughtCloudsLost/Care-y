@@ -25,6 +25,15 @@ vi.mock("$lib/shell/ClientShell.svelte", async () => {
   } satisfies typeof _usedExports;
 });
 
+vi.mock("$lib/providers/PortalBridgeProvider.svelte", async () => {
+  const _usedExports = null! as { default: unknown };
+  return {
+    default: (
+      await import("$lib/components/tickets/test-helpers/PassthroughShell.svelte")
+    ).default,
+  } satisfies typeof _usedExports;
+});
+
 const { default: Layout } = await import("./+layout.svelte");
 
 const childSnippet = createRawSnippet(() => ({

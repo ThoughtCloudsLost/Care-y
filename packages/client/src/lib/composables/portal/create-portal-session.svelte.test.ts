@@ -49,6 +49,7 @@ vi.mock("@care-y/crypto", async (importOriginal) => ({
 }));
 
 import { createPortalSessionState } from "./create-portal-session.svelte.js";
+import { PortalBridge } from "$lib/workers/portal-bridge.js";
 import type { FragmentData } from "./create-portal-fragment.svelte.js";
 import type { ChannelEvaluateCallback } from "./create-portal-session.svelte.js";
 
@@ -163,7 +164,7 @@ describe("createPortalSessionState (bridge-backed)", () => {
 
   describe("tryNoPassphraseDerive", () => {
     it("succeeds and produces a session handle", async () => {
-      const state = createPortalSessionState();
+      const state = createPortalSessionState(() => new PortalBridge());
       const fragData = buildFragmentData();
 
       // Start the derive; the PortalBridge constructor fires immediately
@@ -196,7 +197,7 @@ describe("createPortalSessionState (bridge-backed)", () => {
     });
 
     it("returns false when key check fails", async () => {
-      const state = createPortalSessionState();
+      const state = createPortalSessionState(() => new PortalBridge());
       const fragData = buildFragmentData();
 
       const promise = state.tryNoPassphraseDerive(
@@ -225,7 +226,7 @@ describe("createPortalSessionState (bridge-backed)", () => {
 
   describe("destroySession", () => {
     it("destroys the bridge and clears the session", async () => {
-      const state = createPortalSessionState();
+      const state = createPortalSessionState(() => new PortalBridge());
       const fragData = buildFragmentData();
 
       const promise = state.tryNoPassphraseDerive(
@@ -254,7 +255,7 @@ describe("createPortalSessionState (bridge-backed)", () => {
 
   describe("submitPassphrase", () => {
     it("succeeds with correct passphrase", async () => {
-      const state = createPortalSessionState();
+      const state = createPortalSessionState(() => new PortalBridge());
       const fragData = buildFragmentData();
 
       const promise = state.submitPassphrase(
@@ -285,7 +286,7 @@ describe("createPortalSessionState (bridge-backed)", () => {
       // channelSessionStart, so a second attempt must reuse the
       // Worker-held seed instead of constructing a fresh bridge from
       // the zeroed main-thread copy.
-      const state = createPortalSessionState();
+      const state = createPortalSessionState(() => new PortalBridge());
       const fragData = buildFragmentData();
       const keyCheckWire = {
         ephemeralPoint: "ep",
@@ -347,7 +348,7 @@ describe("createPortalSessionState (bridge-backed)", () => {
     });
 
     it("sets passphraseError when key check fails", async () => {
-      const state = createPortalSessionState();
+      const state = createPortalSessionState(() => new PortalBridge());
       const fragData = buildFragmentData();
 
       const promise = state.submitPassphrase(
