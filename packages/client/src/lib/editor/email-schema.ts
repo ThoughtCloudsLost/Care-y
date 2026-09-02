@@ -19,6 +19,7 @@ import {
 } from "prosemirror-model";
 import { nodes, marks } from "./prosemirror-schema.js";
 import { sanitizeArticleHtml } from "$lib/utils/render-article.js";
+import { proseMirrorDocSchema } from "@care-y/shared";
 import type { ProseMirrorDocJSON } from "@care-y/shared";
 
 // ---------------------------------------------------------------------------
@@ -79,6 +80,41 @@ export function emailDocToHtml(doc: ProseMirrorDocJSON): string {
   const div = document.createElement("div");
   div.appendChild(fragment);
   return sanitizeArticleHtml(div.innerHTML);
+}
+
+// ---------------------------------------------------------------------------
+// Stored email_outbound payload -> subject + sanitized body HTML
+// ---------------------------------------------------------------------------
+
+/** Parsed form of a stored email_outbound follow-up payload. */
+export interface ParsedEmailOutbound {
+  readonly subject: string;
+  readonly bodyHtml: string;
+}
+
+/**
+ * Parse a decrypted email_outbound payload (`{ subject, doc }` JSON) into a
+ * subject and sanitized body HTML. Returns null for anything malformed so
+ * callers can fall back to plain-text rendering.
+ */
+export function parseEmailOutbound(raw: string): ParsedEmailOutbound | null {
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    if (
+      typeof parsed !== "object" ||
+      parsed === null ||
+      !("subject" in parsed) ||
+      !("doc" in parsed)
+    )
+      return null;
+    const subject = typeof parsed.subject === "string" ? parsed.subject : "";
+    const doc = proseMirrorDocSchema.safeParse(parsed.doc);
+    if (!doc.success) return null;
+    const bodyHtml = emailDocToHtml(doc.data);
+    return { subject, bodyHtml };
+  } catch {
+    return null;
+  }
 }
 
 // ---------------------------------------------------------------------------

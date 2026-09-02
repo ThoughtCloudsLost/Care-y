@@ -82,13 +82,16 @@
   import ShareStatusLine from "$lib/components/tickets/ShareStatusLine.svelte";
   import CorrectionStatusLine from "$lib/components/tickets/CorrectionStatusLine.svelte";
   import CorrectionBody from "$lib/components/tickets/CorrectionBody.svelte";
+  import EmailBubbleContent from "$lib/components/tickets/EmailBubbleContent.svelte";
   import { parseContactCorrection } from "@care-y/shared";
+  import { parseEmailOutbound } from "$lib/editor/email-schema.js";
   import {
     followUpKind,
     followUpRenderVariant,
     groupConsecutive,
     isFollowUpGroup,
     followUpGroupKey,
+    isEmailOutbound,
     type GroupedFollowUp,
   } from "$lib/tickets/follow-up-utils.js";
   import { resolveNoteTypeIcon as resolveNoteTypeIconComponent } from "$lib/utils/note-type-icons.js";
@@ -878,7 +881,15 @@
     const time = formatRelativeTime(new Date(fu.createdAt));
     const preview = matchDecryptResult(fuResult, {
       loading: () => "",
-      ready: (v) => v.slice(0, 80),
+      ready: (v) => {
+        // Email payloads are stored as JSON; announce the subject, not
+        // the raw serialization.
+        if (isEmailOutbound(fu)) {
+          const parsed = parseEmailOutbound(v);
+          if (parsed !== null) return parsed.subject;
+        }
+        return v.slice(0, 80);
+      },
       denied: () => m.decrypt_placeholder_denied(),
       error: () => m.error_decryption_failed(),
     });
@@ -1298,6 +1309,17 @@
                   callDurationSeconds={rec.callDurationSeconds}
                 />
               </ConversationBubble>
+            {:else if isEmailOutbound(rec)}
+              <ConversationBubble
+                direction="sent"
+                source="volunteer"
+                timestamp={rec.createdAt}
+              >
+                <EmailBubbleContent
+                  result={recResult}
+                  encryptedContent={rec.encryptedContent}
+                />
+              </ConversationBubble>
             {:else}
               <ConversationBubble
                 direction={rec.source === "client" ? "received" : "sent"}
@@ -1541,6 +1563,17 @@
                         source={fu.source}
                         callStatus={fu.callStatus ?? null}
                         callDurationSeconds={fu.callDurationSeconds ?? null}
+                      />
+                    </ConversationBubble>
+                  {:else if isEmailOutbound(fu)}
+                    <ConversationBubble
+                      direction="sent"
+                      source="volunteer"
+                      timestamp={fu.createdAt}
+                    >
+                      <EmailBubbleContent
+                        result={contentResult}
+                        encryptedContent={fu.encryptedContent}
                       />
                     </ConversationBubble>
                   {:else}

@@ -8,7 +8,12 @@
 
 import { describe, it, expect } from "vitest";
 import type { ProseMirrorDocJSON } from "@care-y/shared";
-import { emailDocToHtml, emailDocToText, emailSchema } from "./email-schema.js";
+import {
+  emailDocToHtml,
+  emailDocToText,
+  emailSchema,
+  parseEmailOutbound,
+} from "./email-schema.js";
 
 // ---------------------------------------------------------------------------
 // Schema structure
@@ -343,5 +348,77 @@ describe("emailDocToText", () => {
     };
     const text = emailDocToText(doc);
     expect(text).toBe("line one\nline two");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// parseEmailOutbound
+// ---------------------------------------------------------------------------
+
+describe("parseEmailOutbound", () => {
+  const validPayload = JSON.stringify({
+    subject: "Follow-up 749124",
+    doc: {
+      type: "doc",
+      content: [
+        {
+          type: "paragraph",
+          content: [
+            { type: "text", text: "Here is an" },
+            { type: "text", marks: [{ type: "strong" }], text: " update" },
+          ],
+        },
+      ],
+    },
+  });
+
+  it("parses a stored payload into subject and sanitized body HTML", () => {
+    const parsed = parseEmailOutbound(validPayload);
+    expect(parsed).not.toBeNull();
+    expect(parsed?.subject).toBe("Follow-up 749124");
+    expect(parsed?.bodyHtml).toContain("<strong> update</strong>");
+  });
+
+  it("returns null for a plain text message (not JSON)", () => {
+    expect(parseEmailOutbound("just a normal message")).toBeNull();
+  });
+
+  it("returns null when subject or doc keys are missing", () => {
+    expect(parseEmailOutbound(JSON.stringify({ subject: "x" }))).toBeNull();
+    expect(parseEmailOutbound(JSON.stringify({ doc: {} }))).toBeNull();
+    expect(parseEmailOutbound(JSON.stringify(null))).toBeNull();
+    expect(parseEmailOutbound(JSON.stringify("string"))).toBeNull();
+  });
+
+  it("returns null when the doc contains nodes outside the email schema", () => {
+    const payload = JSON.stringify({
+      subject: "x",
+      doc: {
+        type: "doc",
+        content: [
+          {
+            type: "heading",
+            attrs: { level: 1 },
+            content: [{ type: "text", text: "not allowed" }],
+          },
+        ],
+      },
+    });
+    expect(parseEmailOutbound(payload)).toBeNull();
+  });
+
+  it("coerces a non-string subject to an empty string", () => {
+    const payload = JSON.stringify({
+      subject: 42,
+      doc: {
+        type: "doc",
+        content: [
+          { type: "paragraph", content: [{ type: "text", text: "body" }] },
+        ],
+      },
+    });
+    const parsed = parseEmailOutbound(payload);
+    expect(parsed?.subject).toBe("");
+    expect(parsed?.bodyHtml).toContain("body");
   });
 });
