@@ -234,7 +234,7 @@ describe.skipIf(!HAS_DB)("onboarding router (DB integration)", () => {
       freshSetupToken = org.setupToken;
       createdOrgIds.push(org.id);
       createdSchemas.push(org.schemaName);
-    });
+    }, 30_000);
 
     afterEach(async () => {
       await freshTestDb.cleanup();
@@ -365,7 +365,7 @@ describe.skipIf(!HAS_DB)("onboarding router (DB integration)", () => {
       freshSetupToken = org.setupToken;
       createdOrgIds.push(org.id);
       createdSchemas.push(org.schemaName);
-    });
+    }, 30_000);
 
     afterEach(async () => {
       await freshTestDb.cleanup();
