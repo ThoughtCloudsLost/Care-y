@@ -252,6 +252,13 @@ select {
   color: var(--brand-text);
 }
 
+/* Konsta clear and outline Buttons label themselves with the same
+   fill-safe text-primary as Link. Filled buttons are unaffected: they
+   use bg-primary with white text and never carry text-primary. */
+.k-button.text-primary {
+  color: var(--brand-text);
+}
+
 /* Accent color overrides for Konsta components.
    Uses --brand-accent-fill so any org accent color propagates automatically.
    Components: filled filter chips, segmented-strong highlight. */
