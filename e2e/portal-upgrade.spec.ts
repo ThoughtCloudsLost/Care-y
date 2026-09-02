@@ -401,7 +401,11 @@ test.describe.serial("Portal Upgrade + Email", () => {
     }
 
     // On a passphrase-tier session, the contact info entry should be visible.
-    const contactEntry = pp.getByText(/contact info|your info/i).first();
+    // Target the drawer entry by id: a text match also catches the
+    // "Correct my contact info" correction entry, which exists on every tier.
+    const contactEntry = pp.locator(
+      '[data-testid="drawer-action-contact-info"]',
+    );
     await expect(contactEntry).toBeVisible({ timeout: CRYPTO_TIMEOUT });
     await contactEntry.click();
 
@@ -493,8 +497,12 @@ test.describe.serial("Portal Upgrade + Email", () => {
     const upgradeEntry = barePage.getByText(/more secure/i).first();
     await expect(upgradeEntry).toBeVisible({ timeout: CRYPTO_TIMEOUT });
 
-    // The contact info entry should NOT be present on a bare link.
-    const contactEntry = barePage.getByText(/contact info|your info/i).first();
+    // The contact info entry should NOT be present on a bare link. The
+    // correction entry ("Correct my contact info") IS expected on every
+    // tier, so match the drawer entry id rather than text.
+    const contactEntry = barePage.locator(
+      '[data-testid="drawer-action-contact-info"]',
+    );
     await expect(contactEntry).not.toBeVisible({ timeout: 3_000 });
 
     // Verify at the API level: a direct contactInfo query should return

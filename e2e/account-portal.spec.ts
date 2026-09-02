@@ -23,10 +23,10 @@ import { countRows, queryDb, resetCommunicationTiers } from "./db-probe";
  * the reply decrypts as a normal follow-up and converges (sealed wrap
  * deleted, key_generation null); a dual-copy reply back renders in the
  * account thread; an edit shows "(edited)". Upgrade half: a Secure Link
- * client accepts the in-portal offer, the old fragment link dies, and
- * the account login shows the same message history. Failure half:
- * unknown username and wrong password produce identical UI outcomes,
- * and a volunteer reset kills the login.
+ * client opens the drawer-driven UpgradeChooser and sees both upgrade
+ * paths (add passphrase, create account). Failure half: unknown username
+ * and wrong password produce identical UI outcomes, and a volunteer
+ * reset kills the login.
  *
  * Requires VITE_E2E_FAST_KDF=1 (set by the e2e Vite server) so the
  * account Argon2id runs at test parameters.
@@ -42,8 +42,6 @@ const WRONG_PASSWORD = "wrong-battery-staple-0"; // gitleaks:allow (test fixture
 const CLIENT_REPLY = `Account client reply ${suffix}`;
 const VOLUNTEER_MESSAGE = `Account volunteer reply ${suffix}`;
 const UPGRADE_TICKET_TITLE = "Safety planning session";
-const UPGRADE_USERNAME = `e2e upgrade ${suffix}`;
-const UPGRADE_PASSWORD = `upgrade-pass-${suffix}`;
 const UPGRADE_MESSAGE = `Pre-upgrade history ${suffix}`;
 
 test.describe.serial("Encrypted Account Portal", () => {
@@ -339,9 +337,9 @@ test.describe.serial("Encrypted Account Portal", () => {
     });
   });
 
-  // ── Upgrade half: Secure Link -> in-portal account creation ──────
+  // ── Upgrade half: Secure Link setup + chooser flow ───────────────
 
-  test("volunteer creates a Secure Link and enables the offer", async ({}, testInfo) => {
+  test("volunteer creates a Secure Link for the upgrade client", async ({}, testInfo) => {
     testInfo.setTimeout(CRYPTO_TIMEOUT * 4);
 
     // In-app navigation, never goto: a hard load drops the volunteer's
@@ -375,16 +373,6 @@ test.describe.serial("Encrypted Account Portal", () => {
     expect(upgradeLink).toMatch(/\/portal\/[0-9a-f]{48}#[A-Za-z0-9_-]{32}/);
     await sheet.getByRole("button", { name: /done/i }).dispatchEvent("click");
 
-    // Enable the in-portal account offer. The list item title is inert;
-    // the Konsta Toggle's checkbox carries the aria-label and is what
-    // actually flips the state (portal.spec.ts precedent).
-    const offerToggle = volunteerPage.getByRole("checkbox", {
-      name: /offer account upgrade/i,
-    });
-    await expect(offerToggle).toBeVisible({ timeout: CRYPTO_TIMEOUT });
-    await offerToggle.dispatchEvent("click");
-    await expect(offerToggle).toBeChecked({ timeout: 10_000 });
-
     // Send a message so the upgrade has history to carry over. Navigate
     // away and back in-app: a reload drops the in-memory keys. The detail
     // refetch also picks up the channel created above, which gates the
@@ -414,7 +402,7 @@ test.describe.serial("Encrypted Account Portal", () => {
     });
   });
 
-  test("client upgrades in-portal and history survives", async ({
+  test("client sees the upgrade chooser with both paths", async ({
     browser,
   }, testInfo) => {
     testInfo.setTimeout(CRYPTO_TIMEOUT * 4);
@@ -422,56 +410,55 @@ test.describe.serial("Encrypted Account Portal", () => {
     const upgradePage = await browser.newPage();
     await upgradePage.goto(upgradeLink);
 
-    // No passphrase on this channel: the thread renders directly with
-    // the upgrade offer card above it.
+    // No passphrase on this channel: the thread renders directly.
     await expect(upgradePage.getByText(UPGRADE_MESSAGE)).toBeVisible({
       timeout: CRYPTO_TIMEOUT,
     });
-    const card = upgradePage.getByText(/add a password to this conversation/i);
-    await expect(card).toBeVisible({ timeout: CRYPTO_TIMEOUT });
-    // The card title is inert; the Set up button expands the form.
-    await upgradePage.getByTestId("upgrade-card-setup").click();
+
+    // Open the drawer. The client shell identity area is a button
+    // with the "Menu" label (portal_menu_label).
+    const drawerBtn = upgradePage
+      .getByRole("button", { name: /menu/i })
+      .first();
+    await expect(drawerBtn).toBeVisible({ timeout: CRYPTO_TIMEOUT });
+    await drawerBtn.click();
+
+    // The upgrade entry in the drawer carries data-testid="drawer-action-upgrade".
+    const upgradeEntry = upgradePage.locator(
+      '[data-testid="drawer-action-upgrade"]',
+    );
+    await expect(upgradeEntry).toBeVisible({ timeout: CRYPTO_TIMEOUT });
+    await upgradeEntry.click();
+
+    // UpgradeChooser opens with both paths (bare link = both options).
+    const chooser = upgradePage.getByRole("dialog").last();
+    await expect(chooser).toBeVisible({ timeout: 5_000 });
+
+    await expect(
+      chooser.locator('[data-testid="upgrade-add-passphrase"]'),
+    ).toBeVisible({ timeout: 3_000 });
+    await expect(
+      chooser.locator('[data-testid="upgrade-create-account"]'),
+    ).toBeVisible({ timeout: 3_000 });
+    await expect(chooser.locator('[data-testid="upgrade-body"]')).toBeVisible();
+
+    // Bare link includes the passphrase paragraph.
+    await expect(
+      chooser.locator('[data-testid="upgrade-passphrase-paragraph"]'),
+    ).toBeVisible();
+
     await auditA11y(upgradePage);
 
-    const usernameInput = upgradePage.getByRole("textbox", {
-      name: /username/i,
-    });
-    await usernameInput.fill(UPGRADE_USERNAME);
-    const passwordInputs = upgradePage.locator('input[type="password"]');
-    await passwordInputs.nth(0).fill(UPGRADE_PASSWORD);
-    await passwordInputs.nth(1).fill(UPGRADE_PASSWORD);
-    await upgradePage.getByRole("button", { name: /set up account/i }).click();
+    // Selecting "Create an account" closes the chooser and expands the
+    // account creation flow. The chooser itself dismisses on selection.
+    await chooser.locator('[data-testid="upgrade-create-account"]').click();
+    await expect(chooser).not.toBeVisible({ timeout: 5_000 });
 
-    // Success state: username and the /account path, never the password.
-    await expect(upgradePage.getByText(/your account is ready/i)).toBeVisible({
+    // The thread remains visible after the chooser closes.
+    await expect(upgradePage.getByText(UPGRADE_MESSAGE)).toBeVisible({
       timeout: CRYPTO_TIMEOUT,
     });
-    const successBody = await upgradePage.content();
-    expect(successBody).not.toContain(UPGRADE_PASSWORD);
     await upgradePage.close();
-
-    // The old fragment link is dead (channel revoked by the upgrade).
-    const deadPage = await browser.newPage();
-    await deadPage.goto(upgradeLink);
-    await expect(deadPage.getByText(/no longer active/i).first()).toBeVisible({
-      timeout: CRYPTO_TIMEOUT,
-    });
-    await deadPage.close();
-
-    // The account login shows the SAME history, re-encrypted.
-    const upgradedAccountPage = await browser.newPage();
-    await upgradedAccountPage.goto("/account");
-    await upgradedAccountPage
-      .getByPlaceholder(/username/i)
-      .fill(UPGRADE_USERNAME);
-    await upgradedAccountPage
-      .getByPlaceholder(/password/i)
-      .fill(UPGRADE_PASSWORD);
-    await upgradedAccountPage.getByRole("button", { name: /sign in/i }).click();
-    await expect(upgradedAccountPage.getByText(UPGRADE_MESSAGE)).toBeVisible({
-      timeout: CRYPTO_TIMEOUT,
-    });
-    await upgradedAccountPage.close();
   });
 
   // ── Reset half: volunteer reset kills the login ──────────────────
@@ -516,7 +503,7 @@ test.describe.serial("Encrypted Account Portal", () => {
     await confirmBtn.dispatchEvent("click");
 
     // The reset deletes the intake client's account row and revokes its
-    // channel while the upgrade-half account remains untouched.
+    // channel.
     await volunteerPage.waitForTimeout(2_000);
     const revokedAccountChannels = queryDb(
       `SELECT count(*) FROM portal_channels
