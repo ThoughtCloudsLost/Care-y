@@ -111,6 +111,19 @@ export interface PortalSessionHandle {
     ticketId: string,
     attachmentId: string,
   ): Promise<ArrayBuffer>;
+  /**
+   * Start a passphrase-derive round from the Worker-held seed.
+   * Returns channelId, auth, and blindedElement for the evaluate hop.
+   * Does not disturb the active session's key material.
+   */
+  channelPassphraseDerive(
+    passphrase: string,
+  ): Promise<{ channelId: string; auth: string; blindedElement: string }>;
+  /**
+   * Finalize the passphrase-derive OPRF round. Returns only the new
+   * client public key (base64url).
+   */
+  channelPassphraseFinish(evaluated: string): Promise<{ clientPublic: string }>;
 }
 
 /**
@@ -280,6 +293,10 @@ export function createPortalSessionState(
           activeBridge.decryptAttachmentKey(ep, n, ct),
         decryptAttachmentBlob: async (ct, fk, tid, aid) =>
           activeBridge.decryptAttachmentBlob(ct, fk, tid, aid),
+        channelPassphraseDerive: async (newPassphrase) =>
+          activeBridge.channelPassphraseDerive(newPassphrase),
+        channelPassphraseFinish: async (evaluatedElement) =>
+          activeBridge.channelPassphraseFinish(evaluatedElement),
       };
 
       return handle;

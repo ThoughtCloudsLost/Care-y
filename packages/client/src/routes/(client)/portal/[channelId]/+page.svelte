@@ -128,6 +128,42 @@
     });
   };
 
+  /**
+   * Evaluate with PoW retry for the passphrase-derive OPRF round.
+   * Same pattern as evaluateChannelWithPowRetry in the session composable.
+   */
+  async function evaluatePassphraseWithPowRetry(
+    channelId: string,
+    blindedElementB64: string,
+    auth: string | undefined,
+    evaluate: ChannelEvaluateCallback,
+    onPowRequired: (challenge: string, difficulty: number) => Promise<string>,
+  ): Promise<string> {
+    try {
+      const result = await evaluate(channelId, blindedElementB64, auth);
+      return result.evaluated;
+    } catch (err: unknown) {
+      if (
+        typeof err !== "object" ||
+        err === null ||
+        !("data" in err) ||
+        typeof err.data !== "object" ||
+        err.data === null ||
+        !("code" in err.data) ||
+        err.data.code !== "POW_REQUIRED" ||
+        !("challenge" in err.data) ||
+        typeof err.data.challenge !== "string" ||
+        !("difficulty" in err.data) ||
+        typeof err.data.difficulty !== "number"
+      ) {
+        throw err;
+      }
+      await onPowRequired(err.data.challenge, err.data.difficulty);
+      const result = await evaluate(channelId, blindedElementB64, auth);
+      return result.evaluated;
+    }
+  }
+
   let hintShown = $state(false);
   let hintDismissed = $state(false);
 
@@ -658,9 +694,15 @@
   }
 
   /**
-   * Handle passphrase form submission: run the OPRF re-derivation,
-   * re-seal all portal messages, and call addPassphrase on the server.
-   * On success, refresh bootstrap so upgradeOptions recomputes.
+   * Handle passphrase form submission: derive the new keypair in the
+   * Worker (seed stays Worker-held), re-seal messages on the main thread,
+   * and call addPassphrase on the server. On success, refresh bootstrap
+   * so upgradeOptions recomputes.
+   *
+   * The two-phase Worker ops (channelPassphraseDerive, evaluate,
+   * channelPassphraseFinish) mirror the session-start path in
+   * create-portal-session.svelte.ts. The Worker derives the keypair and
+   * zeroes the private key internally; only the public key crosses back.
    */
   function handlePassphraseFormSubmit(passphrase: string): void {
     if (passphrasePending) return;
@@ -675,17 +717,26 @@
           throw new Error("Portal session not available");
         }
 
+        // Worker blinds seed+passphrase, returns blindedElement
+        const deriveResult = await sess.channelPassphraseDerive(passphrase);
+
+        // Evaluate via tRPC (main thread), with PoW retry
+        const evaluated = await evaluatePassphraseWithPowRetry(
+          deriveResult.channelId,
+          deriveResult.blindedElement,
+          deriveResult.auth,
+          channelEvaluate,
+          solveProofOfWork,
+        );
+
+        // Worker finalizes OPRF, returns only the new public key
+        const finishResult = await sess.channelPassphraseFinish(evaluated);
+
+        // Main-thread steps: seal key check and re-seal messages
         const portalMessages = bootstrapQuery.data?.messages ?? [];
 
         const payload = await buildAddPassphrasePayload(
-          frag.seed,
-          frag.channelId,
-          passphrase,
-          {
-            evaluate: channelEvaluate,
-            auth: encode(frag.auth),
-            onPowRequired: solveProofOfWork,
-          },
+          finishResult.clientPublic,
           portalMessages,
           sess,
         );

@@ -27,6 +27,11 @@
  * keypair. verifyKeyCheck is channel-only: it backs the passphrase gate,
  * which account sessions do not have.
  *
+ * channelPassphraseDerive / channelPassphraseFinish run in CHANNEL_KEYED
+ * without altering the active session's state or key material. They hold
+ * blind state in separate module variables (ppDerive*) and zero the
+ * derived private key before returning. Only the public key crosses back.
+ *
  * ADR-091: channel keypairs derive through a threshold OPRF round under
  * a per-channel tag; the main thread drives the tRPC evaluate call
  * between the start and finish operations.
@@ -88,6 +93,8 @@ import type {
   ChannelSessionStartRequest,
   ChannelSessionRestartRequest,
   ChannelSessionFinishRequest,
+  ChannelPassphraseDeriveRequest,
+  ChannelPassphraseFinishRequest,
   VerifyKeyCheckRequest,
   DecryptMessageRequest,
   EncryptReplyRequest,
@@ -117,6 +124,13 @@ let channelSeed: Uint8Array | null = null;
 let channelBlindState: Scalar | null = null;
 let channelBlindInput: Uint8Array | null = null;
 let channelKeypair: PortalKeypair | null = null;
+
+// Pending passphrase-derive state (separate from the active channel session).
+// Holds the blind round material for a new keypair derivation that runs
+// alongside the live session without touching its key material.
+let ppDeriveBlindState: Scalar | null = null;
+let ppDeriveBlindInput: Uint8Array | null = null;
+let ppDerivePending = false;
 
 // Account session state
 let accountStretched: Uint8Array | null = null;
@@ -669,6 +683,130 @@ function handleDecryptAttachmentBlob(
   }
 }
 
+// -- Passphrase-derive handlers -----------------------------------------------
+//
+// Two-phase op pair for the add-a-password flow. Runs from CHANNEL_KEYED
+// using the Worker-held seed plus a caller-supplied passphrase. Holds its
+// blind state separately so the active session's key material is untouched.
+// The finish op derives the new keypair, returns only the public key, and
+// zeroes the private key and all intermediates inside the Worker.
+
+function handleChannelPassphraseDerive(
+  req: ChannelPassphraseDeriveRequest,
+  sink: PortalSink,
+): void {
+  if (!requireChannelKeyed(sink, req.id, "channelPassphraseDerive")) return;
+
+  if (ppDerivePending) {
+    postError(
+      sink,
+      req.id,
+      "channelPassphraseDerive",
+      "A passphrase derivation is already in progress",
+      "INVALID_STATE",
+    );
+    return;
+  }
+
+  const sodium = requireSodium();
+
+  try {
+    const seed = assertPresent(channelSeed, "channelSeed");
+
+    const input = portalOprfInput(seed, req.passphrase);
+    const { blindedElement, blindState } = oprfBlind(input);
+
+    const derivedChannelId = deriveChannelId(seed);
+    const auth = deriveChannelAuth(seed);
+
+    ppDeriveBlindState = blindState;
+    ppDeriveBlindInput = input;
+    ppDerivePending = true;
+
+    const msg: PortalWorkerResponse = {
+      id: req.id,
+      ok: true,
+      type: "channelPassphraseDerive",
+      channelId: derivedChannelId,
+      auth: encode(auth),
+      blindedElement: encode(blindedElement),
+    };
+    sink(msg);
+  } catch (err: unknown) {
+    // Zero partial state on failure
+    ppDeriveBlindInput = zeroAndClear(sodium, ppDeriveBlindInput);
+    ppDeriveBlindState = zeroAndClear(sodium, ppDeriveBlindState);
+    ppDerivePending = false;
+    postError(
+      sink,
+      req.id,
+      "channelPassphraseDerive",
+      err instanceof Error ? err.message : String(err),
+      "WORKER_ERROR",
+    );
+  }
+}
+
+function handleChannelPassphraseFinish(
+  req: ChannelPassphraseFinishRequest,
+  sink: PortalSink,
+): void {
+  if (!requireChannelKeyed(sink, req.id, "channelPassphraseFinish")) return;
+
+  if (!ppDerivePending) {
+    postError(
+      sink,
+      req.id,
+      "channelPassphraseFinish",
+      "No passphrase derivation in progress",
+      "INVALID_STATE",
+    );
+    return;
+  }
+
+  const sodium = requireSodium();
+  let oprfOutput: Uint8Array | null = null;
+  let newKeypair: PortalKeypair | null = null;
+
+  try {
+    const evaluatedBytes = decode(req.evaluated);
+    oprfOutput = oprfFinalize(
+      assertPresent(ppDeriveBlindState, "ppDeriveBlindState"),
+      toRistrettoPoint(evaluatedBytes),
+      assertPresent(ppDeriveBlindInput, "ppDeriveBlindInput"),
+    );
+
+    newKeypair = derivePortalKeypairFromOprf(oprfOutput);
+
+    const msg: PortalWorkerResponse = {
+      id: req.id,
+      ok: true,
+      type: "channelPassphraseFinish",
+      clientPublic: encode(newKeypair.clientPublic),
+    };
+    sink(msg);
+  } catch (err: unknown) {
+    postError(
+      sink,
+      req.id,
+      "channelPassphraseFinish",
+      err instanceof Error ? err.message : String(err),
+      "WORKER_ERROR",
+    );
+  } finally {
+    // The OPRF output, the blind intermediates, and the new private key
+    // are all zeroed here. Only the public key crossed back through the sink.
+    zeroAll(oprfOutput);
+    ppDeriveBlindInput = zeroAndClear(sodium, ppDeriveBlindInput);
+    ppDeriveBlindState = zeroAndClear(sodium, ppDeriveBlindState);
+    if (newKeypair) {
+      sodium.memzero(newKeypair.clientPrivate);
+      newKeypair = null;
+    }
+    ppDerivePending = false;
+  }
+}
+
 // -- Account session handlers -------------------------------------------------
 
 function handleAccountSessionStart(
@@ -798,6 +936,11 @@ export function handleZeroAll(id: number, sink: PortalSink): void {
     channelKeypair = null;
   }
 
+  // Zero pending passphrase-derive state
+  ppDeriveBlindInput = zeroAndClear(sodium, ppDeriveBlindInput);
+  ppDeriveBlindState = zeroAndClear(sodium, ppDeriveBlindState);
+  ppDerivePending = false;
+
   // Zero account state
   accountStretched = zeroAndClear(sodium, accountStretched);
   accountBlindState = zeroAndClear(sodium, accountBlindState);
@@ -848,6 +991,12 @@ export function createPortalDispatcher(
           break;
         case "decryptAttachmentBlob":
           handleDecryptAttachmentBlob(req, sink);
+          break;
+        case "channelPassphraseDerive":
+          handleChannelPassphraseDerive(req, sink);
+          break;
+        case "channelPassphraseFinish":
+          handleChannelPassphraseFinish(req, sink);
           break;
         case "accountSessionStart":
           handleAccountSessionStart(req, sink);

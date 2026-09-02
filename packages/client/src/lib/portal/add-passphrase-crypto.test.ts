@@ -1,22 +1,12 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import type * as CryptoPkg from "@care-y/crypto";
 
-// Mock portal-crypto to control the OPRF round
-const { fakeKeypairWithPass, fakeEciesOutput } = vi.hoisted(() => ({
-  fakeKeypairWithPass: {
-    clientPrivate: new Uint8Array(32).fill(3),
-    clientPublic: new Uint8Array(32).fill(4),
-  },
+const { fakeEciesOutput } = vi.hoisted(() => ({
   fakeEciesOutput: {
     ephemeralPoint: new Uint8Array(32).fill(9),
     nonce: new Uint8Array(24).fill(10),
     ciphertext: new Uint8Array(50).fill(11),
   },
-}));
-
-vi.mock("$lib/portal/portal-crypto.js", async (importOriginal) => ({
-  ...(await importOriginal()),
-  performChannelOprf: vi.fn(),
 }));
 
 vi.mock("@care-y/crypto", async (importOriginal) => ({
@@ -28,7 +18,10 @@ vi.mock("@care-y/crypto", async (importOriginal) => ({
     .mockImplementation((buf: Uint8Array) =>
       Buffer.from(buf).toString("base64url"),
     ),
-  zeroAll: vi.fn(),
+  decode: vi
+    .fn()
+    .mockImplementation((s: string) => Buffer.from(s, "base64url")),
+  toRistrettoPoint: vi.fn().mockImplementation((buf: Uint8Array) => buf),
 }));
 
 import {
@@ -36,13 +29,7 @@ import {
   type DecryptHandle,
   type PortalMessageWire,
 } from "./add-passphrase-crypto.js";
-import { performChannelOprf } from "$lib/portal/portal-crypto.js";
-import { eciesEncrypt, zeroAll } from "@care-y/crypto";
-import type { PortalKeypair } from "@care-y/crypto";
-
-function makeSeed(): Uint8Array {
-  return new Uint8Array(24).fill(0xab);
-}
+import { eciesEncrypt } from "@care-y/crypto";
 
 function makeSession(_messages: readonly PortalMessageWire[]): DecryptHandle {
   return {
@@ -66,93 +53,51 @@ function makeMessages(count: number): PortalMessageWire[] {
   }));
 }
 
-const oprfOpts = {
-  evaluate: vi.fn(),
-  auth: "auth-b64",
-  onPowRequired: vi.fn(),
-};
+// A fake base64url client public key (32 bytes)
+const fakeClientPublicB64 = Buffer.from(new Uint8Array(32).fill(4)).toString(
+  "base64url",
+);
 
 describe("buildAddPassphrasePayload", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    vi.mocked(performChannelOprf).mockResolvedValue(
-      fakeKeypairWithPass as unknown as PortalKeypair,
-    );
-  });
-
-  it("calls performChannelOprf with the passphrase", async () => {
-    const seed = makeSeed();
-    const messages = makeMessages(0);
-    const session = makeSession(messages);
-
-    await buildAddPassphrasePayload(
-      seed,
-      "channel-id",
-      "my passphrase",
-      oprfOpts,
-      messages,
-      session,
-    );
-
-    expect(performChannelOprf).toHaveBeenCalledWith(seed, "channel-id", {
-      passphrase: "my passphrase",
-      evaluate: oprfOpts.evaluate,
-      auth: oprfOpts.auth,
-      onPowRequired: oprfOpts.onPowRequired,
-    });
   });
 
   it("returns a payload with clientPublic and keyCheck", async () => {
-    const seed = makeSeed();
     const messages = makeMessages(0);
     const session = makeSession(messages);
 
     const payload = await buildAddPassphrasePayload(
-      seed,
-      "channel-id",
-      "my passphrase",
-      oprfOpts,
+      fakeClientPublicB64,
       messages,
       session,
     );
 
-    expect(payload.clientPublic).toBeDefined();
+    expect(payload.clientPublic).toBe(fakeClientPublicB64);
     expect(payload.keyCheck).toBeDefined();
     expect(payload.keyCheck.ephemeralPoint).toBeDefined();
     expect(payload.keyCheck.nonce).toBeDefined();
     expect(payload.keyCheck.ciphertext).toBeDefined();
   });
 
-  it("seals the key check to the new public key", async () => {
-    const seed = makeSeed();
+  it("seals the key check to the decoded new public key", async () => {
     const messages = makeMessages(0);
     const session = makeSession(messages);
 
-    await buildAddPassphrasePayload(
-      seed,
-      "channel-id",
-      "my passphrase",
-      oprfOpts,
-      messages,
-      session,
-    );
+    await buildAddPassphrasePayload(fakeClientPublicB64, messages, session);
 
     expect(eciesEncrypt).toHaveBeenCalledWith(
       expect.any(Uint8Array),
-      fakeKeypairWithPass.clientPublic,
+      expect.any(Uint8Array),
     );
   });
 
   it("re-seals all portal messages regardless of direction", async () => {
-    const seed = makeSeed();
     const messages = makeMessages(4);
     const session = makeSession(messages);
 
     const payload = await buildAddPassphrasePayload(
-      seed,
-      "channel-id",
-      "my passphrase",
-      oprfOpts,
+      fakeClientPublicB64,
       messages,
       session,
     );
@@ -166,7 +111,6 @@ describe("buildAddPassphrasePayload", () => {
   });
 
   it("skips messages that fail to decrypt", async () => {
-    const seed = makeSeed();
     const messages = makeMessages(3);
     const session: DecryptHandle = {
       decryptMessage: vi
@@ -177,10 +121,7 @@ describe("buildAddPassphrasePayload", () => {
     };
 
     const payload = await buildAddPassphrasePayload(
-      seed,
-      "channel-id",
-      "my passphrase",
-      oprfOpts,
+      fakeClientPublicB64,
       messages,
       session,
     );
@@ -191,85 +132,29 @@ describe("buildAddPassphrasePayload", () => {
     expect(payload.resealedMessages[1]?.id).toBe("msg-2");
   });
 
-  it("zeros the private key in finally", async () => {
-    const seed = makeSeed();
-    const messages = makeMessages(0);
-    const session = makeSession(messages);
-
-    await buildAddPassphrasePayload(
-      seed,
-      "channel-id",
-      "my passphrase",
-      oprfOpts,
-      messages,
-      session,
-    );
-
-    expect(zeroAll).toHaveBeenCalledWith(fakeKeypairWithPass.clientPrivate);
-  });
-
-  it("zeros the private key even when an error occurs", async () => {
-    vi.mocked(performChannelOprf).mockResolvedValue(
-      fakeKeypairWithPass as unknown as PortalKeypair,
-    );
-    // Force eciesEncrypt to throw
-    vi.mocked(eciesEncrypt).mockImplementationOnce(() => {
-      throw new Error("ecies fail");
-    });
-
-    const seed = makeSeed();
-    const messages = makeMessages(0);
-    const session = makeSession(messages);
-
-    await expect(
-      buildAddPassphrasePayload(
-        seed,
-        "channel-id",
-        "my passphrase",
-        oprfOpts,
-        messages,
-        session,
-      ),
-    ).rejects.toThrow("ecies fail");
-
-    expect(zeroAll).toHaveBeenCalledWith(fakeKeypairWithPass.clientPrivate);
-  });
-
-  it("derivation with passphrase differs from seed-only", async () => {
-    // The OPRF round with passphrase produces a different keypair
-    // than without. We verify that performChannelOprf receives
-    // the passphrase parameter, which folds the Argon2id stretch.
-    const seed = makeSeed();
-    const messages = makeMessages(0);
-    const session = makeSession(messages);
-
-    await buildAddPassphrasePayload(
-      seed,
-      "channel-id",
-      "my passphrase",
-      oprfOpts,
-      messages,
-      session,
-    );
-
-    const call = vi.mocked(performChannelOprf).mock.calls[0];
-    expect(call?.[2]).toHaveProperty("passphrase", "my passphrase");
-  });
-
   it("returns empty resealedMessages when no messages exist", async () => {
-    const seed = makeSeed();
     const messages: PortalMessageWire[] = [];
     const session = makeSession(messages);
 
     const payload = await buildAddPassphrasePayload(
-      seed,
-      "channel-id",
-      "my passphrase",
-      oprfOpts,
+      fakeClientPublicB64,
       messages,
       session,
     );
 
     expect(payload.resealedMessages).toHaveLength(0);
+  });
+
+  it("passes the base64url public key through as clientPublic", async () => {
+    const messages = makeMessages(0);
+    const session = makeSession(messages);
+
+    const payload = await buildAddPassphrasePayload(
+      fakeClientPublicB64,
+      messages,
+      session,
+    );
+
+    expect(payload.clientPublic).toBe(fakeClientPublicB64);
   });
 });
