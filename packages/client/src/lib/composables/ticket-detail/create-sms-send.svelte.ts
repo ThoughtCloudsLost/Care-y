@@ -1,16 +1,14 @@
 import type { QueryClient } from "@tanstack/svelte-query";
 import type { CryptoBridge } from "$lib/workers/crypto-bridge.js";
-import { RateLimitError, RelayError } from "$lib/errors.js";
-import { followupSlot } from "@care-y/crypto";
-import {
-  sealPortalCopy,
-  type PortalCopy,
-} from "$lib/crypto/seal-portal-copy.js";
-import { newFollowupId } from "@care-y/shared";
-import { ticketKeys } from "$lib/query/keys.js";
-import { invalidateReadState } from "$lib/query/invalidate-read-state.js";
+import { RateLimitError } from "$lib/errors.js";
+import type { PortalCopy } from "$lib/crypto/seal-portal-copy.js";
 import { toastStore } from "$lib/stores/toast.svelte.js";
 import * as m from "$lib/paraglide/messages.js";
+import {
+  relayThenRecord,
+  retryRecord,
+  type PendingRecord,
+} from "./relay-then-record.js";
 
 export interface SmsSendConfig {
   readonly getTicketId: () => string;
@@ -51,54 +49,48 @@ export function createSmsSend(config: SmsSendConfig): SmsSend {
   } = config;
 
   let sending = $state(false);
+  let pendingRecord = $state<PendingRecord<"sms_outbound"> | null>(null);
 
   async function handleSmsSend(body: string): Promise<void> {
     if (sending || !body.trim()) return;
 
     sending = true;
     const ticketId = getTicketId();
+    const trimmed = body.trim();
 
     try {
-      const resp = await fetch("/relay/sms", {
-        method: "POST",
-        credentials: "include",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ticketId, body: body.trim() }),
-      });
-
-      if (resp.status === 429) {
-        const retryAfter = resp.headers.get("Retry-After");
-        const seconds = retryAfter !== null ? parseInt(retryAfter, 10) : 30;
-        throw new RateLimitError(seconds);
+      // When a previous relay succeeded but the follow-up write failed,
+      // retry only the mutation. The message already reached the client.
+      if (pendingRecord !== null) {
+        const landed = await retryRecord(pendingRecord, {
+          queryClient,
+          createFollowUpMutate,
+          onSuccess,
+          errorRecordMessage: m.ticket_sms_error_record(),
+        });
+        if (landed) {
+          pendingRecord = null;
+        }
+        return;
       }
-      if (!resp.ok) throw new RelayError("SMS_FAILED", resp.status);
 
-      const followUpId = newFollowupId();
-      const trimmed = body.trim();
-      const encryptedContent = await cryptoBridge.encrypt(
+      const result = await relayThenRecord({
         ticketId,
-        followupSlot(followUpId),
-        trimmed,
-      );
-
-      const portalCopy = sealPortalCopy(getClientPublic(), trimmed);
-
-      await createFollowUpMutate({
-        id: followUpId,
-        ticketId,
-        encryptedContent,
-        source: "volunteer",
-        type: "sms_outbound",
-        isPrivate: false,
-        mentionedPseudonyms: [],
-        portalCopy,
+        cryptoBridge,
+        queryClient,
+        getClientPublic,
+        createFollowUpMutate,
+        onSuccess,
+        relayUrl: "/relay/sms",
+        relayBody: { ticketId, body: trimmed },
+        followUpType: "sms_outbound",
+        plaintext: trimmed,
+        errorRecordMessage: m.ticket_sms_error_record(),
       });
 
-      onSuccess();
-      void queryClient.invalidateQueries({
-        queryKey: ticketKeys.followUps(ticketId),
-      });
-      invalidateReadState(queryClient);
+      if (result.status === "record_pending") {
+        pendingRecord = result.pending;
+      }
     } catch (err: unknown) {
       if (err instanceof RateLimitError) {
         toastStore.show(

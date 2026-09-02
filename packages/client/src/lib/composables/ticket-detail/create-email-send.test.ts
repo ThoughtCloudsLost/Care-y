@@ -41,6 +41,7 @@ vi.mock("$lib/paraglide/messages.js", async (importOriginal) => ({
   ticket_email_rate_limited: ({ seconds }: { seconds: string }) =>
     `rate-limited-${seconds}`,
   ticket_email_error_send: () => "email-error",
+  ticket_email_error_record: () => "email-record-error",
   ticket_email_too_long: () => "too-long",
 }));
 
@@ -84,6 +85,9 @@ function makeConfig(overrides?: Partial<EmailSendConfig>): EmailSendConfig {
 describe("createEmailSend", () => {
   beforeEach(() => {
     vi.restoreAllMocks();
+    // restoreAllMocks does not clear vi.fn() mocks from vi.mock factories
+    // (toastStore.show), and the retry tests assert absolute call counts.
+    vi.clearAllMocks();
     mockSealPortalCopy.mockClear();
   });
 
@@ -297,7 +301,7 @@ describe("createEmailSend", () => {
     await first;
   });
 
-  it("shows error toast when createFollowUpMutate rejects (post-relay retry branch)", async () => {
+  it("shows record-error toast when createFollowUpMutate rejects after relay 200", async () => {
     vi.stubGlobal(
       "fetch",
       vi.fn().mockResolvedValue({ ok: true, status: 200 }),
@@ -310,10 +314,107 @@ describe("createEmailSend", () => {
     const email = createEmailSend(config);
     await email.handleEmailSend("Sub", "<p>Hi</p>", "Hi", sampleDoc);
 
-    // Post-relay failure shows the error toast but does NOT re-POST.
-    expect(toastStore.show).toHaveBeenCalledWith("email-error", 3000);
+    // Post-relay failure shows the record-error toast, not the send-error.
+    expect(toastStore.show).toHaveBeenCalledWith("email-record-error", 3000);
     expect(config.onSuccess).not.toHaveBeenCalled();
     // Only one fetch call (the relay), not a retry.
     expect(fetch).toHaveBeenCalledTimes(1);
+  });
+
+  // ── Retry-after-relay-success ──
+
+  it("does not re-POST the relay when retrying after a mutation failure", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({ ok: true, status: 200 }),
+    );
+
+    const mutateFn = vi
+      .fn()
+      .mockRejectedValueOnce(new Error("mutation fail"))
+      .mockResolvedValueOnce(undefined);
+
+    const config = makeConfig({ createFollowUpMutate: mutateFn });
+    const email = createEmailSend(config);
+
+    // First attempt: relay succeeds, mutation fails.
+    await email.handleEmailSend("Sub", "<p>Hi</p>", "Hi", sampleDoc);
+    expect(fetch).toHaveBeenCalledTimes(1);
+    expect(config.onSuccess).not.toHaveBeenCalled();
+
+    // Second attempt (retry): skips relay, retries mutation only.
+    await email.handleEmailSend("Sub", "<p>Hi</p>", "Hi", sampleDoc);
+    expect(fetch).toHaveBeenCalledTimes(1); // still just 1
+    expect(mutateFn).toHaveBeenCalledTimes(2);
+    expect(config.onSuccess).toHaveBeenCalledOnce();
+  });
+
+  it("clears pending state after successful retry", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({ ok: true, status: 200 }),
+    );
+
+    const mutateFn = vi
+      .fn()
+      .mockRejectedValueOnce(new Error("fail"))
+      .mockResolvedValueOnce(undefined)
+      .mockResolvedValueOnce(undefined);
+
+    const config = makeConfig({ createFollowUpMutate: mutateFn });
+    const email = createEmailSend(config);
+
+    // Fail then succeed the retry.
+    await email.handleEmailSend("Sub", "<p>Hi</p>", "Hi", sampleDoc);
+    await email.handleEmailSend("Sub", "<p>Hi</p>", "Hi", sampleDoc);
+
+    // Third call should go through the full relay path again (new message).
+    await email.handleEmailSend("Sub2", "<p>Hi2</p>", "Hi2", sampleDoc);
+    expect(fetch).toHaveBeenCalledTimes(2); // original + new
+  });
+
+  it("keeps pending state when retry also fails", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({ ok: true, status: 200 }),
+    );
+    const { toastStore } = await import("$lib/stores/toast.svelte.js");
+
+    const mutateFn = vi
+      .fn()
+      .mockRejectedValueOnce(new Error("fail 1"))
+      .mockRejectedValueOnce(new Error("fail 2"))
+      .mockResolvedValueOnce(undefined);
+
+    const config = makeConfig({ createFollowUpMutate: mutateFn });
+    const email = createEmailSend(config);
+
+    await email.handleEmailSend("Sub", "<p>Hi</p>", "Hi", sampleDoc);
+    await email.handleEmailSend("Sub", "<p>Hi</p>", "Hi", sampleDoc);
+    // Two record-error toasts (one from relayThenRecord, one from retryRecord).
+    expect(toastStore.show).toHaveBeenCalledTimes(2);
+    expect(fetch).toHaveBeenCalledTimes(1);
+
+    // Third retry finally succeeds.
+    await email.handleEmailSend("Sub", "<p>Hi</p>", "Hi", sampleDoc);
+    expect(fetch).toHaveBeenCalledTimes(1);
+    expect(config.onSuccess).toHaveBeenCalledOnce();
+  });
+
+  it("uses the record-specific toast message, not the send-error message, for post-relay failures", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({ ok: true, status: 200 }),
+    );
+    const { toastStore } = await import("$lib/stores/toast.svelte.js");
+
+    const config = makeConfig({
+      createFollowUpMutate: vi.fn().mockRejectedValue(new Error("mutation")),
+    });
+    const email = createEmailSend(config);
+    await email.handleEmailSend("Sub", "<p>Hi</p>", "Hi", sampleDoc);
+
+    expect(toastStore.show).toHaveBeenCalledWith("email-record-error", 3000);
+    expect(toastStore.show).not.toHaveBeenCalledWith("email-error", 3000);
   });
 });

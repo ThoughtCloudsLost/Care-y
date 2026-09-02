@@ -6,25 +6,25 @@
  * 2. POST /relay/email { ticketId, subject, html, text }.
  * 3. On relay success: encrypt the follow-up content, seal a portal
  *    copy when a client public key exists, then create the follow-up.
- * 4. If the follow-up mutation fails after a 200 relay, the retry
- *    toast fires but does NOT re-POST the relay (mail already left).
+ * 4. If the follow-up mutation fails after a 200 relay, the composable
+ *    stores the pending record. Retrying skips the relay entirely and
+ *    re-attempts only the mutation.
  * 5. Rate-limit and error toasts mirror the SMS family.
  */
 
 import type { QueryClient } from "@tanstack/svelte-query";
 import type { CryptoBridge } from "$lib/workers/crypto-bridge.js";
-import { RateLimitError, RelayError } from "$lib/errors.js";
-import { followupSlot } from "@care-y/crypto";
-import {
-  sealPortalCopy,
-  type PortalCopy,
-} from "$lib/crypto/seal-portal-copy.js";
-import { newFollowupId, EMAIL_RELAY_LIMITS } from "@care-y/shared";
-import { ticketKeys } from "$lib/query/keys.js";
-import { invalidateReadState } from "$lib/query/invalidate-read-state.js";
+import { RateLimitError } from "$lib/errors.js";
+import type { PortalCopy } from "$lib/crypto/seal-portal-copy.js";
+import { EMAIL_RELAY_LIMITS } from "@care-y/shared";
 import { toastStore } from "$lib/stores/toast.svelte.js";
 import * as m from "$lib/paraglide/messages.js";
 import type { ProseMirrorDocJSON } from "@care-y/shared";
+import {
+  relayThenRecord,
+  retryRecord,
+  type PendingRecord,
+} from "./relay-then-record.js";
 
 export interface EmailSendConfig {
   readonly getTicketId: () => string;
@@ -69,6 +69,7 @@ export function createEmailSend(config: EmailSendConfig): EmailSend {
   } = config;
 
   let sending = $state(false);
+  let pendingRecord = $state<PendingRecord<"email_outbound"> | null>(null);
 
   async function handleEmailSend(
     subject: string,
@@ -96,62 +97,45 @@ export function createEmailSend(config: EmailSendConfig): EmailSend {
     const ticketId = getTicketId();
 
     try {
-      // Step 1: relay the email.
-      const resp = await fetch("/relay/email", {
-        method: "POST",
-        credentials: "include",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
+      // When a previous relay succeeded but the follow-up write failed,
+      // retry only the mutation. The email already left.
+      if (pendingRecord !== null) {
+        const landed = await retryRecord(pendingRecord, {
+          queryClient,
+          createFollowUpMutate,
+          onSuccess,
+          errorRecordMessage: m.ticket_email_error_record(),
+        });
+        if (landed) {
+          pendingRecord = null;
+        }
+        return;
+      }
+
+      const payload = JSON.stringify({ subject, doc });
+
+      const result = await relayThenRecord({
+        ticketId,
+        cryptoBridge,
+        queryClient,
+        getClientPublic,
+        createFollowUpMutate,
+        onSuccess,
+        relayUrl: "/relay/email",
+        relayBody: {
           ticketId,
           subject: subject.trim(),
           html,
           text: text.trim(),
-        }),
+        },
+        followUpType: "email_outbound",
+        plaintext: payload,
+        errorRecordMessage: m.ticket_email_error_record(),
       });
 
-      if (resp.status === 429) {
-        const retryAfter = resp.headers.get("Retry-After");
-        const seconds = retryAfter !== null ? parseInt(retryAfter, 10) : 30;
-        throw new RateLimitError(seconds);
+      if (result.status === "record_pending") {
+        pendingRecord = result.pending;
       }
-      if (!resp.ok) throw new RelayError("EMAIL_FAILED", resp.status);
-
-      // Step 2: encrypt the follow-up content for the org thread.
-      const followUpId = newFollowupId();
-      const payload = JSON.stringify({ subject, doc });
-      const encryptedContent = await cryptoBridge.encrypt(
-        ticketId,
-        followupSlot(followUpId),
-        payload,
-      );
-
-      // Step 3: seal the portal copy when a client public key exists.
-      const portalCopy = sealPortalCopy(getClientPublic(), payload);
-
-      // Step 4: create the follow-up record.
-      try {
-        await createFollowUpMutate({
-          id: followUpId,
-          ticketId,
-          encryptedContent,
-          source: "volunteer",
-          type: "email_outbound",
-          isPrivate: false,
-          mentionedPseudonyms: [],
-          portalCopy,
-        });
-      } catch {
-        // Follow-up write failed AFTER the relay succeeded (mail already
-        // left). Show the retry toast but do NOT re-POST /relay/email.
-        toastStore.show(m.ticket_email_error_send(), 3000);
-        return;
-      }
-
-      onSuccess();
-      void queryClient.invalidateQueries({
-        queryKey: ticketKeys.followUps(ticketId),
-      });
-      invalidateReadState(queryClient);
     } catch (err: unknown) {
       if (err instanceof RateLimitError) {
         toastStore.show(

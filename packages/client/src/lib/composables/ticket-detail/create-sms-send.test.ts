@@ -40,6 +40,7 @@ vi.mock("$lib/paraglide/messages.js", async (importOriginal) => ({
   ticket_sms_rate_limited: ({ seconds }: { seconds: string }) =>
     `rate-limited-${seconds}`,
   ticket_sms_error_send: () => "sms-error",
+  ticket_sms_error_record: () => "sms-record-error",
 }));
 vi.mock("$lib/query/keys.js", async (importOriginal) => ({
   ...(await importOriginal<typeof QueryKeys>()),
@@ -72,6 +73,9 @@ function makeConfig(overrides?: Partial<SmsSendConfig>): SmsSendConfig {
 describe("createSmsSend", () => {
   beforeEach(() => {
     vi.restoreAllMocks();
+    // restoreAllMocks does not clear vi.fn() mocks from vi.mock factories
+    // (toastStore.show), and the retry tests assert absolute call counts.
+    vi.clearAllMocks();
     mockSealPortalCopy.mockClear();
   });
 
@@ -275,7 +279,7 @@ describe("createSmsSend", () => {
     );
   });
 
-  it("shows generic error toast when createFollowUpMutate rejects", async () => {
+  it("shows record-error toast when createFollowUpMutate rejects after relay 200", async () => {
     vi.stubGlobal(
       "fetch",
       vi.fn().mockResolvedValue({ ok: true, status: 200 }),
@@ -288,7 +292,7 @@ describe("createSmsSend", () => {
     const sms = createSmsSend(config);
     await sms.handleSmsSend("hello");
 
-    expect(toastStore.show).toHaveBeenCalledWith("sms-error", 3000);
+    expect(toastStore.show).toHaveBeenCalledWith("sms-record-error", 3000);
     expect(config.onSuccess).not.toHaveBeenCalled();
   });
 
@@ -354,5 +358,103 @@ describe("createSmsSend", () => {
 
     expect(config.createFollowUpMutate).not.toHaveBeenCalled();
     expect(mockSealPortalCopy).not.toHaveBeenCalled();
+  });
+
+  // ── Retry-after-relay-success ──
+
+  it("does not re-POST the relay when retrying after a mutation failure", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({ ok: true, status: 200 }),
+    );
+
+    const mutateFn = vi
+      .fn()
+      .mockRejectedValueOnce(new Error("mutation fail"))
+      .mockResolvedValueOnce(undefined);
+
+    const config = makeConfig({ createFollowUpMutate: mutateFn });
+    const sms = createSmsSend(config);
+
+    // First attempt: relay succeeds, mutation fails.
+    await sms.handleSmsSend("hello");
+    expect(fetch).toHaveBeenCalledTimes(1);
+    expect(config.onSuccess).not.toHaveBeenCalled();
+
+    // Second attempt (retry): skips relay, retries mutation only.
+    await sms.handleSmsSend("hello");
+    expect(fetch).toHaveBeenCalledTimes(1); // still just 1
+    expect(mutateFn).toHaveBeenCalledTimes(2);
+    expect(config.onSuccess).toHaveBeenCalledOnce();
+  });
+
+  it("clears pending state after successful retry", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({ ok: true, status: 200 }),
+    );
+
+    const mutateFn = vi
+      .fn()
+      .mockRejectedValueOnce(new Error("fail"))
+      .mockResolvedValueOnce(undefined)
+      .mockResolvedValueOnce(undefined);
+
+    const config = makeConfig({ createFollowUpMutate: mutateFn });
+    const sms = createSmsSend(config);
+
+    // Fail then succeed the retry.
+    await sms.handleSmsSend("msg1");
+    await sms.handleSmsSend("msg1");
+
+    // Third call should go through the full relay path again (new message).
+    await sms.handleSmsSend("msg2");
+    expect(fetch).toHaveBeenCalledTimes(2); // original + new
+  });
+
+  it("keeps pending state when retry also fails", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({ ok: true, status: 200 }),
+    );
+    const { toastStore } = await import("$lib/stores/toast.svelte.js");
+
+    const mutateFn = vi
+      .fn()
+      .mockRejectedValueOnce(new Error("fail 1"))
+      .mockRejectedValueOnce(new Error("fail 2"))
+      .mockResolvedValueOnce(undefined);
+
+    const config = makeConfig({ createFollowUpMutate: mutateFn });
+    const sms = createSmsSend(config);
+
+    await sms.handleSmsSend("hello");
+    await sms.handleSmsSend("hello");
+    // Two record-error toasts (one from relayThenRecord, one from retryRecord).
+    expect(toastStore.show).toHaveBeenCalledTimes(2);
+    expect(fetch).toHaveBeenCalledTimes(1);
+
+    // Third retry finally succeeds.
+    await sms.handleSmsSend("hello");
+    expect(fetch).toHaveBeenCalledTimes(1);
+    expect(config.onSuccess).toHaveBeenCalledOnce();
+  });
+
+  it("uses the record-specific toast message, not the send-error message, for post-relay failures", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({ ok: true, status: 200 }),
+    );
+    const { toastStore } = await import("$lib/stores/toast.svelte.js");
+
+    const config = makeConfig({
+      createFollowUpMutate: vi.fn().mockRejectedValue(new Error("mutation")),
+    });
+    const sms = createSmsSend(config);
+    await sms.handleSmsSend("hello");
+
+    // The toast says "record-error", not "sms-error".
+    expect(toastStore.show).toHaveBeenCalledWith("sms-record-error", 3000);
+    expect(toastStore.show).not.toHaveBeenCalledWith("sms-error", 3000);
   });
 });
