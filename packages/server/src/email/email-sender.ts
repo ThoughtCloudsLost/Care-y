@@ -1,6 +1,10 @@
 import { createTransport, type Transporter } from "nodemailer";
 import type SMTPTransport from "nodemailer/lib/smtp-transport/index.js";
-import { EmailDeliveryError, extractErrorMessage } from "../errors.js";
+import {
+  ConfigError,
+  EmailDeliveryError,
+  extractErrorMessage,
+} from "../errors.js";
 
 export interface EmailMessage {
   readonly to: string;
@@ -84,13 +88,15 @@ export function createConsoleEmailSender(): EmailSender {
     async send(message: EmailMessage): Promise<void> {
       await Promise.resolve();
       console.log(
-        `[email] to=<redacted> subject="${message.subject}" length=${String(message.text.length)}`,
+        `[email] to=<redacted> length=${String(message.text.length)}`,
       );
     },
   };
 }
 
-/** Creates the appropriate sender based on environment config. */
+/** Creates the appropriate sender based on environment config.
+ *  In production, missing SMTP host/port is a startup error.
+ *  In development/test, falls back to the console sender. */
 export function createEmailSender(opts: {
   host?: string;
   port?: number;
@@ -98,6 +104,7 @@ export function createEmailSender(opts: {
   secure?: boolean;
   user?: string;
   password?: string;
+  nodeEnv: string;
 }): EmailSender {
   if (opts.host !== undefined && opts.host !== "" && opts.port !== undefined) {
     return createSmtpEmailSender({
@@ -109,5 +116,10 @@ export function createEmailSender(opts: {
       password: opts.password,
     });
   }
+
+  if (opts.nodeEnv === "production") {
+    throw new ConfigError("SMTP_HOST and SMTP_PORT are required in production");
+  }
+
   return createConsoleEmailSender();
 }

@@ -495,6 +495,7 @@ const emailSender = createEmailSender({
   secure: env.SMTP_SECURE,
   user: env.SMTP_USER,
   password: env.SMTP_PASSWORD,
+  nodeEnv: env.NODE_ENV,
 });
 const oprfService = createOprfInfrastructure(env);
 
