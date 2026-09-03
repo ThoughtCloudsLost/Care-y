@@ -63,6 +63,8 @@
   // care-y-ignore-next-line route-no-db-import -- UI component, no database access; validator heuristic false positive
   import UpgradeChooser from "$lib/portal/UpgradeChooser.svelte";
   import AddPassphraseForm from "$lib/portal/AddPassphraseForm.svelte";
+  import AccountCreateForm from "$lib/portal/AccountCreateForm.svelte";
+  import ShellSheet from "$lib/shell/ShellSheet.svelte";
   import { buildAddPassphrasePayload } from "$lib/portal/add-passphrase-crypto.js";
   import { createChatPaginator } from "$lib/tickets/chat-paginator.svelte.js";
   import { createScrollManager } from "$lib/tickets/scroll-manager.svelte.js";
@@ -679,9 +681,9 @@
   }
 
   /**
-   * Handle upgrade chooser selection. "account" expands the existing
-   * createPortalUpgrade flow. "passphrase" is wired to the AddPassphraseForm
-   * in the next task; for now it is a no-op placeholder.
+   * Handle upgrade chooser selection. "account" opens the AccountCreateForm
+   * sheet via the createPortalUpgrade flow; "passphrase" opens the
+   * AddPassphraseForm sheet.
    */
   function handleUpgradeChoice(path: "passphrase" | "account"): void {
     upgradeChooserOpen = false;
@@ -691,6 +693,33 @@
     if (path === "passphrase") {
       passphraseFormOpen = true;
     }
+  }
+
+  /**
+   * Handle account-creation form submission: build the registration
+   * payload, re-encrypt the thread to the new account key, and submit.
+   * On success the session is destroyed (the channel is revoked
+   * server-side) and the success state replaces the thread.
+   */
+  function handleUpgradeSubmit(username: string, password: string): void {
+    const sess = portalSession.session;
+    const frag = fragment.fragmentData;
+    if (!sess || !frag) return;
+    if (!trpc.clientPortal) return;
+
+    upgrade.submit(
+      username,
+      password,
+      sess,
+      frag.channelId,
+      frag.auth,
+      messagesQuery.data?.messages ?? [],
+      trpc.clientPortal,
+      queryClient,
+      portalKeys.messages(routeChannelId),
+      m.account_stale_thread(),
+      m.account_login_failed(),
+    );
   }
 
   /**
@@ -1142,6 +1171,22 @@
       success={passphraseSuccess}
       onsubmit={handlePassphraseFormSubmit}
     />
+
+    <ShellSheet
+      opened={upgrade.expanded}
+      ondismiss={() => {
+        if (!upgrade.pending) upgrade.collapse();
+      }}
+      title={m.portal_upgrade_create_account()}
+    >
+      <AccountCreateForm
+        onsubmit={handleUpgradeSubmit}
+        pending={upgrade.pending}
+        errorMessage={upgrade.error || undefined}
+        showLinkNote={true}
+        submitLabel={m.account_upgrade_setup()}
+      />
+    </ShellSheet>
   {/if}
 {/key}
 

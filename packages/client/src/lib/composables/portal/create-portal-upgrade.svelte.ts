@@ -32,6 +32,7 @@ export interface PortalUpgradeState {
   readonly username: string;
   dismiss(): void;
   expand(): void;
+  collapse(): void;
   submit(
     username: string,
     password: string,
@@ -68,6 +69,12 @@ export function createPortalUpgrade(): PortalUpgradeState {
     // reaching it there has to work after the in-thread card was dismissed.
     dismissed = false;
     expanded = true;
+  }
+
+  function collapse(): void {
+    // Closes the create-account sheet without marking the flow dismissed:
+    // the drawer entry reopens it at any time.
+    expanded = false;
   }
 
   function submit(
@@ -166,6 +173,7 @@ export function createPortalUpgrade(): PortalUpgradeState {
     },
     dismiss,
     expand,
+    collapse,
     submit,
   };
 }
