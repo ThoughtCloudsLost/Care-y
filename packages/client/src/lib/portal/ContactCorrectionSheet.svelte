@@ -84,9 +84,18 @@
       {m.portal_correction_sheet_body()}
     </p>
 
+    <!-- Accessible labels outside List to avoid axe list-child violation -->
+    <label for="correction-phone" class="sr-only">
+      {m.portal_correction_phone_label()}
+    </label>
+    <label for="correction-email" class="sr-only">
+      {m.portal_correction_email_label()}
+    </label>
+
     <List nested class="correction-input-list">
       <ListInput
         type="tel"
+        inputId="correction-phone"
         label={m.portal_correction_phone_label()}
         autocomplete="tel"
         value={phone}
@@ -101,6 +110,7 @@
       />
       <ListInput
         type="email"
+        inputId="correction-email"
         label={m.portal_correction_email_label()}
         autocomplete="email"
         value={email}
@@ -134,5 +144,17 @@
 
   :global(.correction-input-list) {
     margin: 0 !important;
+  }
+
+  .sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
   }
 </style>

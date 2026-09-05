@@ -160,4 +160,27 @@ describe("ContactInfoCard", () => {
       expect(getByTestId("contact-none")).toBeTruthy();
     });
   });
+
+  it("formats a US E.164 phone number for display", async () => {
+    const openEnvelope = vi.fn().mockResolvedValue({ phone: "+15550001234" });
+    const { getByTestId } = renderCard({ openEnvelope });
+
+    await waitFor(() => {
+      expect(getByTestId("contact-phone")).toBeTruthy();
+    });
+    expect(getByTestId("contact-phone").textContent).toBe("+1 (555) 000-1234");
+  });
+
+  it("renders a generic footer when orgName is empty", async () => {
+    const { getByTestId } = renderCard({ orgName: "" });
+
+    await waitFor(() => {
+      expect(getByTestId("contact-footer")).toBeTruthy();
+    });
+    const footerText = getByTestId("contact-footer").textContent;
+    // The generic message should not contain the {org} interpolation placeholder
+    expect(footerText).not.toContain("{org}");
+    // It should contain non-empty text (the fallback message)
+    expect(footerText.trim().length).toBeGreaterThan(0);
+  });
 });

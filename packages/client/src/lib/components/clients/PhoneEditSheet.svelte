@@ -34,6 +34,8 @@
     ) => void;
     /** Optional initial phone number to prefill step 1 (e.g. from a correction). */
     readonly initialPhone?: string;
+    /** Fired after a successful phone update (before ondismiss). */
+    readonly onsuccess?: () => void;
   }
 
   let {
@@ -43,6 +45,7 @@
     ondismiss,
     onmerge,
     initialPhone,
+    onsuccess,
   }: PhoneEditSheetProps = $props();
 
   // ---------------------------------------------------------------------------
@@ -135,6 +138,7 @@
         void queryClient.invalidateQueries({
           queryKey: ticketKeys.everyDetail,
         });
+        onsuccess?.();
         ondismiss();
       }
     },

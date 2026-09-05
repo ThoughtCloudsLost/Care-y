@@ -35,6 +35,8 @@
     ) => void;
     /** Optional initial email to prefill step 1 (e.g. from a correction). */
     readonly initialEmail?: string;
+    /** Fired after a successful email update (before ondismiss). */
+    readonly onsuccess?: () => void;
   }
 
   let {
@@ -44,6 +46,7 @@
     ondismiss,
     onmerge,
     initialEmail,
+    onsuccess,
   }: EmailEditSheetProps = $props();
 
   // ---------------------------------------------------------------------------
@@ -141,6 +144,7 @@
         void queryClient.invalidateQueries({
           queryKey: ticketKeys.everyDetail,
         });
+        onsuccess?.();
         ondismiss();
       }
     },

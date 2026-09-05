@@ -28,9 +28,17 @@
       text: string,
       doc: ProseMirrorDocJSON,
     ) => void;
+    /** Recipient address as delivered by the server (masked per role). */
+    recipientEmail?: string | null;
   }
 
-  let { opened, ondismiss, sending, onsend }: EmailComposeSheetProps = $props();
+  let {
+    opened,
+    ondismiss,
+    sending,
+    onsend,
+    recipientEmail = null,
+  }: EmailComposeSheetProps = $props();
 
   let subject = $state("");
   let wasOpen = $state(false);
@@ -43,6 +51,12 @@
 
   const canSend = $derived(
     subject.trim().length > 0 && bodyHasContent && !sending,
+  );
+
+  const sheetLabel = $derived(
+    recipientEmail !== null && recipientEmail !== ""
+      ? m.ticket_email_title({ client: recipientEmail })
+      : m.ticket_email_sheet_title(),
   );
 
   // Reset subject when the sheet opens.
@@ -64,12 +78,7 @@
   }
 </script>
 
-<ShellSheet
-  {opened}
-  {ondismiss}
-  ariaLabel={m.ticket_email_title({ client: "" })}
-  title={m.ticket_email_title({ client: "" })}
->
+<ShellSheet {opened} {ondismiss} ariaLabel={sheetLabel} title={sheetLabel}>
   {#snippet headerRight()}
     <SoftButton onclick={handleSend} disabled={!canSend}>
       {#if sending}
@@ -87,6 +96,12 @@
         {m.ticket_email_plaintext_warning()}
       </p>
     </Register>
+
+    {#if recipientEmail}
+      <p class="email-recipient" data-testid="email-recipient">
+        {m.ticket_email_recipient({ email: recipientEmail })}
+      </p>
+    {/if}
 
     <List nested class="email-subject-list">
       <ListInput
@@ -125,6 +140,13 @@
     margin: 0;
     font-size: 0.75rem;
     color: var(--muted);
+  }
+
+  .email-recipient {
+    margin: 0;
+    font-size: var(--text-sm);
+    color: var(--ink-2);
+    word-break: break-all;
   }
 
   :global(.email-subject-list) {

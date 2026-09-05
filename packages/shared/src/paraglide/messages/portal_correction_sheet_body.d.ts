@@ -1,7 +1,7 @@
 /**
 * | output |
 * | --- |
-* | "Enter the phone number or email you want the support team to use. A volunteer will review it before anything changes. For your safety this page never shows t..." |
+* | "Enter the phone number or email you want the support team to use. A volunteer will review the correction before anything changes." |
 *
 * @param {Portal_Correction_Sheet_BodyInputs} inputs
 * @param {{ locale?: "en" | "es" }} options

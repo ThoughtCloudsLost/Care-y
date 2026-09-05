@@ -28,12 +28,16 @@
     useQueryClient,
   } from "@tanstack/svelte-query";
   import * as m from "$lib/paraglide/messages.js";
-  import { SvelteSet } from "svelte/reactivity";
   import { trpc } from "$lib/trpc/index.js";
   import { portalKeys } from "$lib/query/keys.js";
   import { announceToLiveRegion } from "$lib/utils/announce.js";
   import { decode, encode } from "@care-y/crypto";
-  import { newFollowupId, newKeyGeneration } from "@care-y/shared";
+  import {
+    newFollowupId,
+    newKeyGeneration,
+    serializeContactCorrection,
+    type ContactCorrectionPayload,
+  } from "@care-y/shared";
   import { requireRouter } from "$lib/errors.js";
   import {
     buildAccountRegistration,
@@ -60,13 +64,15 @@
   import AccountSettings from "$lib/portal/AccountSettings.svelte";
   import PageLayout from "$lib/shell/PageLayout.svelte";
   import ShellSheet from "$lib/shell/ShellSheet.svelte";
-  import { Settings as Cog, LogOut, IdCard } from "@lucide/svelte";
+  import { Settings as Cog, LogOut, IdCard, UserPen } from "@lucide/svelte";
   import ContactInfoCard from "$lib/portal/ContactInfoCard.svelte";
+  import ContactCorrectionSheet from "$lib/portal/ContactCorrectionSheet.svelte";
   import {
     getClientShellCtx,
     DEFAULT_SAFE_URL,
     type ClientDrawerAction,
   } from "$lib/client-shell/context.js";
+  import { createPortalFilters } from "$lib/composables/portal/create-portal-filters.svelte.js";
   import { uiLocaleStore } from "$lib/stores/ui-locale.svelte.js";
 
   const createPortalBridge = getPortalBridgeFactory();
@@ -474,6 +480,11 @@
       });
   }
 
+  function handleCorrectionSubmit(payload: ContactCorrectionPayload): void {
+    handleSend(serializeContactCorrection(payload), "contact_correction");
+    correctionSheetOpen = false;
+  }
+
   // ---------------------------------------------------------------------------
   // Change password handler
   // ---------------------------------------------------------------------------
@@ -680,6 +691,7 @@
 
   let settingsOpen = $state(false);
   let contactCardOpen = $state(false);
+  let correctionSheetOpen = $state(false);
 
   /**
    * Fetch the sealed contact envelope from the account session endpoint.
@@ -736,6 +748,14 @@
         icon: IdCard,
         onclick: () => {
           contactCardOpen = true;
+        },
+      },
+      {
+        id: "correct-contact",
+        label: m.portal_correction_mode_button(),
+        icon: UserPen,
+        onclick: () => {
+          correctionSheetOpen = true;
         },
       },
       {
@@ -818,92 +838,24 @@
   const accountRecordings = $derived(bootstrapQuery.data?.recordings ?? []);
   const accountCallEntries = $derived(bootstrapQuery.data?.callEntries ?? []);
 
-  // --- Filter pills (images / files) ---
+  // --- Filter composable (Type / Author / Date) ---
+  // Same composable as the portal page so both surfaces show the same chips.
 
-  type AttachmentFilter = "images" | "files" | null;
-  let activeFilter = $state<AttachmentFilter>(null);
-
-  const imageFollowupIds = $derived.by((): ReadonlySet<string> => {
-    const ids = new SvelteSet<string>();
-    for (const att of accountAttachments) {
-      if (att.contentType?.startsWith("image/") === true) {
-        ids.add(att.followupId);
-      }
-    }
-    return ids;
+  const portalFilters = createPortalFilters({
+    get labels() {
+      void uiLocaleStore.locale;
+      return {
+        filterType: m.ticket_filter_type(),
+        filterAuthor: m.ticket_filter_author(),
+        filterDate: m.ticket_filter_date(),
+        typeMessages: m.ticket_filter_type_messages(),
+        typeImages: m.ticket_filter_type_images(),
+        typeFiles: m.ticket_filter_type_files(),
+        authorYou: m.portal_you(),
+        authorSupport: m.portal_support_team(),
+      };
+    },
   });
-
-  const fileFollowupIds = $derived.by((): ReadonlySet<string> => {
-    const ids = new SvelteSet<string>();
-    for (const att of accountAttachments) {
-      if (att.contentType !== null && !att.contentType.startsWith("image/")) {
-        ids.add(att.followupId);
-      }
-    }
-    return ids;
-  });
-
-  const filteredMessages = $derived.by(() => {
-    if (activeFilter === null) return allMessages;
-    const targetIds =
-      activeFilter === "images" ? imageFollowupIds : fileFollowupIds;
-    return allMessages.filter(
-      (msg) =>
-        "followupId" in msg &&
-        typeof msg.followupId === "string" &&
-        targetIds.has(msg.followupId),
-    );
-  });
-
-  function handleFilterToggle(pillId: string): void {
-    // The layout hands back the id of a pill this page defined, so anything
-    // else is a wiring mistake rather than a filter nobody selected.
-    const next: AttachmentFilter =
-      pillId === "images" || pillId === "files" ? pillId : null;
-    activeFilter = activeFilter === next ? null : next;
-  }
-
-  const filterPillDefs = $derived.by(() => {
-    if (accountAttachments.length === 0) return [];
-
-    const pills: {
-      id: string;
-      label: string;
-      mode: "multi" | "single" | "date";
-      options: { value: string; label: string }[];
-      selected: ReadonlySet<string> | string | null;
-    }[] = [];
-
-    if (imageFollowupIds.size > 0) {
-      pills.push({
-        id: "images",
-        label: m.portal_filter_images(),
-        mode: "single",
-        options: [{ value: "images", label: m.portal_filter_images() }],
-        selected: activeFilter === "images" ? "images" : null,
-      });
-    }
-
-    if (fileFollowupIds.size > 0) {
-      pills.push({
-        id: "files",
-        label: m.portal_filter_files(),
-        mode: "single",
-        options: [{ value: "files", label: m.portal_filter_files() }],
-        selected: activeFilter === "files" ? "files" : null,
-      });
-    }
-
-    return pills;
-  });
-
-  const filterActiveCount = $derived(activeFilter !== null ? 1 : 0);
-
-  function clearFilters(): void {
-    activeFilter = null;
-  }
-
-  const noop = (): void => undefined;
 
   $effect(() => {
     shellContainer.current = {
@@ -940,18 +892,24 @@
   />
 {/snippet}
 
+{#snippet accountStats()}
+  {#if allMessages.length > 0}
+    <span>
+      {allMessages.length === 1
+        ? m.ticket_detail_one_message_stat()
+        : m.ticket_detail_messages_stat({
+            count: String(allMessages.length),
+          })}
+    </span>
+  {/if}
+{/snippet}
+
 {#snippet threadSubnavbar()}
   <SubNavbarFilterLayout
     title={m.account_title()}
     hideTitle
-    filterPills={{
-      pills: filterPillDefs,
-      activeCount: filterActiveCount,
-      ontoggle: handleFilterToggle,
-      onselect: handleFilterToggle,
-      ondatechange: noop,
-      onclearall: clearFilters,
-    }}
+    stats={accountStats}
+    filterPills={portalFilters.pills}
     searchNavigator={overlay.active ? searchNavigatorRow : undefined}
     onsearch={searchActive ? undefined : openSearch}
     searchLabel={m.portal_search_label()}
@@ -999,7 +957,7 @@
       {/snippet}
 
       <PortalThread
-        messages={filteredMessages}
+        messages={allMessages}
         decryptMessage={async (ep: string, n: string, ct: string) =>
           activeSession.decryptMessage(ep, n, ct)}
         decryptAttachmentKey={async (ep: string, n: string, ct: string) =>
@@ -1021,6 +979,11 @@
         onmatches={(ids: readonly string[]) => {
           matchIds = ids;
         }}
+        filterTypes={portalFilters.filterTypesArr}
+        filterAuthors={portalFilters.filterAuthorsArr}
+        filterDateFrom={portalFilters.filterDateFrom}
+        filterDateTo={portalFilters.filterDateTo}
+        onclearfilters={() => portalFilters.clearAll()}
       />
     </PageLayout>
 
@@ -1052,6 +1015,13 @@
       fetchSealed={fetchSealedAccountContact}
       openEnvelope={openAccountContactEnvelope}
       orgName={supportLabel}
+    />
+
+    <ContactCorrectionSheet
+      opened={correctionSheetOpen}
+      ondismiss={() => (correctionSheetOpen = false)}
+      pending={replyMutation.isPending}
+      onsubmit={handleCorrectionSubmit}
     />
   {/if}
 {/key}

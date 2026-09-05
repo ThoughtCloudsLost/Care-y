@@ -162,10 +162,18 @@
       {/if}
     </p>
     <p class="tier-meta">
-      <span>{formatRelativeTime(new Date(portalChannel.createdAt))}</span>
+      <span
+        >{m.ticket_tier_created_at({
+          time: formatRelativeTime(new Date(portalChannel.createdAt)),
+        })}</span
+      >
       {#if portalChannel.lastSeenAt}
         <span class="meta-sep" aria-hidden="true"></span>
-        <span>{formatRelativeTime(new Date(portalChannel.lastSeenAt))}</span>
+        <span
+          >{m.ticket_tier_last_seen_at({
+            time: formatRelativeTime(new Date(portalChannel.lastSeenAt)),
+          })}</span
+        >
       {/if}
     </p>
     <div class="tier-actions">
@@ -191,10 +199,18 @@
       {m.ticket_tier_continuation_provenance()}
     </p>
     <p class="tier-meta">
-      <span>{formatRelativeTime(new Date(portalChannel.createdAt))}</span>
+      <span
+        >{m.ticket_tier_created_at({
+          time: formatRelativeTime(new Date(portalChannel.createdAt)),
+        })}</span
+      >
       {#if portalChannel.lastSeenAt}
         <span class="meta-sep" aria-hidden="true"></span>
-        <span>{formatRelativeTime(new Date(portalChannel.lastSeenAt))}</span>
+        <span
+          >{m.ticket_tier_last_seen_at({
+            time: formatRelativeTime(new Date(portalChannel.lastSeenAt)),
+          })}</span
+        >
       {/if}
     </p>
     <div class="tier-actions">
@@ -210,10 +226,18 @@
   <Block class="!my-3">
     <p class="tier-name">{m.ticket_tier_account()}</p>
     <p class="tier-meta">
-      <span>{formatRelativeTime(new Date(portalChannel.createdAt))}</span>
+      <span
+        >{m.ticket_tier_created_at({
+          time: formatRelativeTime(new Date(portalChannel.createdAt)),
+        })}</span
+      >
       {#if portalChannel.lastSeenAt}
         <span class="meta-sep" aria-hidden="true"></span>
-        <span>{formatRelativeTime(new Date(portalChannel.lastSeenAt))}</span>
+        <span
+          >{m.ticket_tier_last_seen_at({
+            time: formatRelativeTime(new Date(portalChannel.lastSeenAt)),
+          })}</span
+        >
       {/if}
     </p>
     <div class="tier-actions">

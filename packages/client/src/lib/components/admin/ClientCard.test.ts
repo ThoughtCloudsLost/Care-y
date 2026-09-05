@@ -20,7 +20,8 @@ interface ClientCardTestProps {
   viewMode: "list" | "grid";
   clientId: string;
   alias: string;
-  phone: string;
+  phone: string | null;
+  email: string | null;
   ticketCount: number;
   createdAt: string;
   mergedInto: string | null;
@@ -35,6 +36,7 @@ function makeProps(
     clientId: "c-1",
     alias: "quiet-harbor",
     phone: "***1234",
+    email: null,
     ticketCount: 2,
     createdAt: "2026-01-15T00:00:00.000Z",
     mergedInto: null,
@@ -60,6 +62,27 @@ describe("ClientCard", () => {
     it("renders a masked phone string unchanged", () => {
       render(ClientCard, { props: makeProps({ phone: "***1234" }) });
       expect(screen.getByText("***1234")).toBeTruthy();
+    });
+
+    it("renders the email address when provided (F-038)", () => {
+      render(ClientCard, {
+        props: makeProps({ email: "user@example.com" }),
+      });
+      expect(screen.getByText("user@example.com")).toBeTruthy();
+    });
+
+    it("renders a masked email address unchanged", () => {
+      render(ClientCard, {
+        props: makeProps({ email: "u***@example.com" }),
+      });
+      expect(screen.getByText("u***@example.com")).toBeTruthy();
+    });
+
+    it("does not render email when it is null", () => {
+      const { container } = render(ClientCard, {
+        props: makeProps({ email: null }),
+      });
+      expect(container.querySelector(".contact-email")).toBeNull();
     });
 
     it("renders the created date", () => {

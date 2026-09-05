@@ -855,7 +855,12 @@
     phoneEditSheetOpen = true;
   }
 
-  function handleApplyPhone(phone: string): void {
+  // Track which correction follow-up triggered the apply flow so the
+  // acknowledge reaction fires after the edit sheet succeeds.
+  let correctionApplyFollowUpId = $state<string | null>(null);
+
+  function handleApplyPhone(phone: string, followUpId: string): void {
+    correctionApplyFollowUpId = followUpId;
     phoneEditInitialPhone = phone;
     phoneEditSheetOpen = true;
   }
@@ -874,7 +879,8 @@
     emailEditSheetOpen = true;
   }
 
-  function handleApplyEmail(email: string): void {
+  function handleApplyEmail(email: string, followUpId: string): void {
+    correctionApplyFollowUpId = followUpId;
     emailEditInitialEmail = email;
     emailEditSheetOpen = true;
   }
@@ -1250,6 +1256,20 @@
   onphoneeditdismiss={() => {
     phoneEditSheetOpen = false;
     phoneEditInitialPhone = undefined;
+    correctionApplyFollowUpId = null;
+  }}
+  onphoneeditsuccess={() => {
+    if (correctionApplyFollowUpId !== null) {
+      void ticketRouter.toggleReaction
+        .mutate({
+          followUpId: correctionApplyFollowUpId,
+          reaction: "acknowledge",
+        })
+        .catch(() => {
+          // Reaction toggle failure is non-critical; the edit succeeded.
+        });
+      correctionApplyFollowUpId = null;
+    }
   }}
   onemailpopoverdismiss={() => {
     emailPopoverOpen = false;
@@ -1259,6 +1279,20 @@
   onemailedidismiss={() => {
     emailEditSheetOpen = false;
     emailEditInitialEmail = undefined;
+    correctionApplyFollowUpId = null;
+  }}
+  onemaileditsuccess={() => {
+    if (correctionApplyFollowUpId !== null) {
+      void ticketRouter.toggleReaction
+        .mutate({
+          followUpId: correctionApplyFollowUpId,
+          reaction: "acknowledge",
+        })
+        .catch(() => {
+          // Reaction toggle failure is non-critical; the edit succeeded.
+        });
+      correctionApplyFollowUpId = null;
+    }
   }}
   onemailmerge={(conflictingClientId: string, conflictingAlias: string) => {
     openMergeFromConflict(conflictingClientId, conflictingAlias);
@@ -1348,6 +1382,7 @@
     emailComposeOpen = false;
   }}
   sending={emailSend.sending}
+  recipientEmail={clientEmail}
   onsend={(
     subject: string,
     html: string,

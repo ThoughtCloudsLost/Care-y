@@ -58,10 +58,12 @@
     onphonecopy: () => void;
     onphoneedit: () => void;
     onphoneeditdismiss: () => void;
+    onphoneeditsuccess?: () => void;
     onemailpopoverdismiss: () => void;
     onemailcopy: () => void;
     onemailedit: () => void;
     onemailedidismiss: () => void;
+    onemaileditsuccess?: () => void;
     onemailmerge: (
       conflictingClientId: string,
       conflictingAlias: string,
@@ -125,10 +127,12 @@
     onphonecopy,
     onphoneedit,
     onphoneeditdismiss,
+    onphoneeditsuccess,
     onemailpopoverdismiss,
     onemailcopy,
     onemailedit,
     onemailedidismiss,
+    onemaileditsuccess,
     onemailmerge,
     onphonemerge,
     mergeSheetOpen,
@@ -225,6 +229,7 @@
   {clientId}
   {clientAlias}
   ondismiss={onphoneeditdismiss}
+  onsuccess={onphoneeditsuccess}
   onmerge={onphonemerge}
 />
 
@@ -246,6 +251,7 @@
   {clientId}
   {clientAlias}
   ondismiss={onemailedidismiss}
+  onsuccess={onemaileditsuccess}
   onmerge={onemailmerge}
 />
 

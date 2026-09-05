@@ -37,7 +37,7 @@
   });
 </script>
 
-<BlockTitle>{m.portal_passphrase_hint()}</BlockTitle>
+<BlockTitle>{m.portal_passphrase_heading()}</BlockTitle>
 
 <Block>
   <p class="gate-hint">{m.portal_passphrase_hint()}</p>
@@ -91,7 +91,7 @@
         ></span>
         {m.portal_unlocking()}
       {:else}
-        {m.portal_send()}
+        {m.portal_passphrase_submit()}
       {/if}
     </Button>
   </div>

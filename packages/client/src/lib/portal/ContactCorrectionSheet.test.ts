@@ -218,4 +218,28 @@ describe("ContactCorrectionSheet", () => {
     const btn = container.querySelector("button.soft-btn") as HTMLButtonElement;
     expect(btn.disabled).toBe(true);
   });
+
+  it("inputs have accessible names via label[for] association", () => {
+    const { container } = render(ContactCorrectionSheet, {
+      props: baseProps,
+    });
+
+    const phoneInput = container.querySelector(
+      "#correction-phone",
+    ) as HTMLInputElement;
+    const emailInput = container.querySelector(
+      "#correction-email",
+    ) as HTMLInputElement;
+
+    expect(phoneInput).toBeTruthy();
+    expect(emailInput).toBeTruthy();
+
+    // Verify each input has a matching label with a for attribute
+    const phoneLabel = container.querySelector("label[for='correction-phone']");
+    const emailLabel = container.querySelector("label[for='correction-email']");
+    expect(phoneLabel).toBeTruthy();
+    expect(emailLabel).toBeTruthy();
+    expect(phoneLabel?.textContent.trim()).toBe("New phone number");
+    expect(emailLabel?.textContent.trim()).toBe("New email");
+  });
 });

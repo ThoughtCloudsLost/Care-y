@@ -22,6 +22,7 @@ export {
   looksLikePhone,
   looksLikeEmail,
 } from "./utils/normalize-contact.js";
+export { formatPhoneDisplay } from "./utils/format-phone.js";
 
 export {
   emailSchema,

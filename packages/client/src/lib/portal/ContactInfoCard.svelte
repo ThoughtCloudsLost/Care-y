@@ -11,6 +11,7 @@
 <script lang="ts">
   import { Block } from "konsta/svelte";
   import * as m from "$lib/paraglide/messages.js";
+  import { formatPhoneDisplay } from "@care-y/shared";
   import ShellSheet from "$lib/shell/ShellSheet.svelte";
 
   interface ContactInfoCardProps {
@@ -99,7 +100,9 @@
         {#if phone !== undefined}
           <div class="contact-row">
             <dt class="contact-label">{m.portal_contact_phone_label()}</dt>
-            <dd class="contact-value" data-testid="contact-phone">{phone}</dd>
+            <dd class="contact-value" data-testid="contact-phone">
+              {formatPhoneDisplay(phone)}
+            </dd>
           </div>
         {/if}
         {#if email !== undefined}
@@ -110,7 +113,9 @@
         {/if}
       </dl>
       <p class="contact-footer" data-testid="contact-footer">
-        {m.portal_contact_footer({ org: orgName })}
+        {orgName !== ""
+          ? m.portal_contact_footer({ org: orgName })
+          : m.portal_contact_footer_generic()}
       </p>
     {/if}
   </Block>

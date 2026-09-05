@@ -641,6 +641,7 @@
           clientId={client.id}
           alias={decryptAlias(client) ?? "..."}
           phone={client.phone}
+          email={client.email}
           ticketCount={client.ticketCount}
           createdAt={client.createdAt}
           mergedInto={client.mergedInto}

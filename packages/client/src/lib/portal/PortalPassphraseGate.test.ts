@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { render, fireEvent, cleanup } from "@testing-library/svelte";
+import * as m from "$lib/paraglide/messages.js";
 import PortalPassphraseGate from "./PortalPassphraseGate.svelte";
 
 describe("PortalPassphraseGate", () => {
@@ -73,5 +74,28 @@ describe("PortalPassphraseGate", () => {
     const btn = getByTestId("passphrase-submit");
     const progress = btn.querySelector("[role='progressbar']");
     expect(progress).toBeTruthy();
+  });
+
+  it("heading and subtitle are distinct texts", () => {
+    const { container } = render(PortalPassphraseGate, {
+      props: { onsubmit: vi.fn(), pending: false, error: false },
+    });
+    // BlockTitle renders the heading, .gate-hint renders the subtitle.
+    // Konsta components carry no stable classes, so assert through the
+    // message catalog: both texts render and they are different strings.
+    const text = container.textContent;
+    expect(text).toContain(m.portal_passphrase_heading());
+    expect(text).toContain(m.portal_passphrase_hint());
+    expect(m.portal_passphrase_heading()).not.toBe(m.portal_passphrase_hint());
+  });
+
+  it("submit button does not say Send", () => {
+    const { getByTestId } = render(PortalPassphraseGate, {
+      props: { onsubmit: vi.fn(), pending: false, error: false },
+    });
+    const btn = getByTestId("passphrase-submit");
+    const label = btn.textContent.trim();
+    expect(label).not.toBe("");
+    expect(label.toLowerCase()).not.toBe("send");
   });
 });

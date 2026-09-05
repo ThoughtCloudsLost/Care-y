@@ -1049,22 +1049,24 @@
       error={portalSession.passphraseError}
     />
   {:else if upgrade.success}
-    <!-- Upgrade success state -->
-    <Block>
-      <BlockTitle>{m.account_upgrade_success_title()}</BlockTitle>
-      <p class="portal-body-text">{m.account_upgrade_success_body()}</p>
-      <p class="portal-body-text upgrade-username">
-        {m.account_login_username()}: {upgrade.username}
-      </p>
-      <button
-        type="button"
-        class="upgrade-go-link"
-        data-testid="upgrade-go-to-login"
-        onclick={() => void goto(resolve("/account"))}
-      >
-        {m.account_login_submit()}
-      </button>
-    </Block>
+    <!-- Upgrade success state, centred to match sibling portal steps -->
+    <div class="upgrade-success-wrapper">
+      <Block>
+        <BlockTitle>{m.account_upgrade_success_title()}</BlockTitle>
+        <p class="portal-body-text">{m.account_upgrade_success_body()}</p>
+        <p class="portal-body-text upgrade-username">
+          {m.account_login_username()}: {upgrade.username}
+        </p>
+        <button
+          type="button"
+          class="upgrade-go-link"
+          data-testid="upgrade-go-to-login"
+          onclick={() => void goto(resolve("/account"))}
+        >
+          {m.account_login_submit()}
+        </button>
+      </Block>
+    </div>
   {:else if portalSession.keyCheckPassed && portalSession.session}
     {@const activeSession = portalSession.session}
     <!-- State 4 + 5: Thread scrolls, composer pins to the bottom -->
@@ -1224,6 +1226,16 @@
       animation: none;
       opacity: 0.5;
     }
+  }
+
+  .upgrade-success-wrapper {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 60vh;
+    padding: var(--space-lg);
+    text-align: center;
   }
 
   .upgrade-username {

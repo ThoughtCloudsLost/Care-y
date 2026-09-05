@@ -264,8 +264,17 @@ describe("PortalTierSection", () => {
 
     expect(screen.getByText(m.ticket_tier_account())).toBeTruthy();
     expect(screen.getByText(m.ticket_tier_account_reset())).toBeTruthy();
-    expect(screen.getByText("2026-05-01T10:00:00.000Z")).toBeTruthy();
-    expect(screen.getByText("2026-05-10T14:30:00.000Z")).toBeTruthy();
+    // Timestamps are now wrapped in i18n labels.
+    expect(
+      screen.getByText(
+        m.ticket_tier_created_at({ time: "2026-05-01T10:00:00.000Z" }),
+      ),
+    ).toBeTruthy();
+    expect(
+      screen.getByText(
+        m.ticket_tier_last_seen_at({ time: "2026-05-10T14:30:00.000Z" }),
+      ),
+    ).toBeTruthy();
   });
 
   it("hides regenerate, revoke, and link actions for account tier", () => {
@@ -435,7 +444,7 @@ describe("PortalTierSection", () => {
     expect(container.querySelector(".offer-row")).toBeNull();
   });
 
-  it("renders created/last-seen times for continuation channel", () => {
+  it("renders labeled created/last-seen times for continuation channel (F-034)", () => {
     render(PortalTierSection, {
       props: {
         ticketId: "t-1",
@@ -447,8 +456,16 @@ describe("PortalTierSection", () => {
       },
     });
 
-    expect(screen.getByText("2026-03-15T08:00:00.000Z")).toBeTruthy();
-    expect(screen.getByText("2026-03-20T12:00:00.000Z")).toBeTruthy();
+    expect(
+      screen.getByText(
+        m.ticket_tier_created_at({ time: "2026-03-15T08:00:00.000Z" }),
+      ),
+    ).toBeTruthy();
+    expect(
+      screen.getByText(
+        m.ticket_tier_last_seen_at({ time: "2026-03-20T12:00:00.000Z" }),
+      ),
+    ).toBeTruthy();
   });
 
   it("uses InlineSkeleton for account tier meta while loading", () => {
