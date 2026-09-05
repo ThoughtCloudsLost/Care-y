@@ -266,6 +266,7 @@
   const ticketQuery = createQuery(() => ({
     queryKey: ticketKeys.detail(ticketId),
     queryFn: async () => ticketRouter.get.query({ ticketId }),
+    enabled: ticketId !== "",
   }));
 
   // Initial query: most recent PAGE_SIZE follow-ups (direction='older', no cursor).
@@ -277,6 +278,7 @@
         limit: PAGE_SIZE,
         direction: "older",
       }),
+    enabled: ticketId !== "",
   }));
 
   // Share status query: resolves waiting/opened/expired for share_link bubbles.

@@ -81,6 +81,7 @@
   const ticketQuery = createQuery(() => ({
     queryKey: ticketKeys.detail(ticketId),
     queryFn: async () => ticketRouter.get.query({ ticketId }),
+    enabled: ticketId !== "",
   }));
 
   const watchingQuery = createQuery(() => ({
