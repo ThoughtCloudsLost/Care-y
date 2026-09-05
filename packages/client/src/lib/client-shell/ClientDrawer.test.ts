@@ -137,6 +137,24 @@ describe("ClientDrawer", () => {
         "Harbor Line",
       );
     });
+
+    it("falls back to initials when the logo image fails to load", async () => {
+      const { container } = renderDrawer({
+        logoUrl: "/api/branding/test/icon-192.png",
+        orgName: "Safe Harbor",
+      });
+
+      const logo = container.querySelector(
+        ".panel-avatar-logo",
+      ) as HTMLImageElement;
+      expect(logo).toBeTruthy();
+
+      await fireEvent.error(logo);
+
+      expect(container.querySelector(".panel-avatar-logo")).toBeNull();
+      const avatar = container.querySelector(".panel-avatar");
+      expect(avatar?.textContent.trim()).toBe("SH");
+    });
   });
 
   it("gives a destructive action the danger treatment", () => {

@@ -54,6 +54,19 @@
     orgNamePending = false,
   }: ClientDrawerProps = $props();
 
+  // Hide the logo when the icon fails to load so the drawer falls through
+  // to the org-initial or building-icon fallback.
+  let logoFailed = $state(false);
+
+  $effect(() => {
+    void logoUrl;
+    logoFailed = false;
+  });
+
+  function handleLogoError(): void {
+    logoFailed = true;
+  }
+
   // The identity here is the org, not a person, so the fallback initials
   // come from the org name. A client has no user identity to show.
   const initials = $derived(
@@ -88,12 +101,13 @@
     <div class="drawer-scroll">
       <div class="panel-profile">
         <span class="panel-avatar" aria-hidden="true">
-          {#if logoUrl}
+          {#if logoUrl !== null && !logoFailed}
             <img
               src={logoUrl}
               alt=""
               class="panel-avatar-logo"
               loading="eager"
+              onerror={handleLogoError}
             />
           {:else if initials}
             {initials}

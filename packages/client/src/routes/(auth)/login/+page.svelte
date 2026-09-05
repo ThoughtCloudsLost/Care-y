@@ -133,6 +133,22 @@
       : (readInjectedOrgName() ?? getBrandingTitle()),
   );
 
+  // Hide the logo when the icon image fails to load. A broken-image icon
+  // on the login page reads as a phishing tell, so rendering nothing is
+  // safer than rendering browser-default broken-image chrome.
+  let iconFailed = $state(false);
+
+  // Reset when the URL changes (e.g., branding query resolves with a new
+  // version or the org slug changes).
+  $effect(() => {
+    void branding?.iconUrl;
+    iconFailed = false;
+  });
+
+  function handleIconError(): void {
+    iconFailed = true;
+  }
+
   $effect(() => {
     if (!browser || branding === null) return;
     void applyKonstaPalette({
@@ -289,13 +305,14 @@
   <!-- Inline 2FA verification (crypto runs after success) -->
   {#key uiLocale}
     <div class="text-center mb-6">
-      {#if branding?.iconUrl}
+      {#if branding?.iconUrl != null && !iconFailed}
         <img
           src={branding.iconUrl}
           alt=""
           class="login-logo"
           width="48"
           height="48"
+          onerror={handleIconError}
         />
       {/if}
       <h1 class="text-2xl font-bold heading-display">{orgName}</h1>
@@ -323,13 +340,14 @@
   {/key}
 {:else if phase !== "idle" && phase !== "error"}
   <div class="text-center mb-6">
-    {#if branding?.iconUrl}
+    {#if branding?.iconUrl != null && !iconFailed}
       <img
         src={branding.iconUrl}
         alt=""
         class="login-logo"
         width="48"
         height="48"
+        onerror={handleIconError}
       />
     {/if}
     <h1 class="text-2xl font-bold heading-display">{orgName}</h1>
@@ -338,13 +356,14 @@
 {:else}
   {#key uiLocale}
     <div class="text-center mb-6">
-      {#if branding?.iconUrl}
+      {#if branding?.iconUrl != null && !iconFailed}
         <img
           src={branding.iconUrl}
           alt=""
           class="login-logo"
           width="48"
           height="48"
+          onerror={handleIconError}
         />
       {/if}
       <h1 class="text-2xl font-bold heading-display">{orgName}</h1>

@@ -271,6 +271,24 @@ describe("AppShell navbar", () => {
       expect(avatar?.querySelector("svg")).toBeTruthy();
     });
 
+    it("falls back to initials when the logo image fails to load", async () => {
+      mockLogoUrl = "/api/branding/test/icon-192.png";
+      mockDisplayName = "Jane Doe";
+
+      const { container } = renderShell();
+
+      const logo = navbar(container).querySelector<HTMLImageElement>(
+        ".navbar-avatar-logo",
+      );
+      expect(logo).toBeTruthy();
+
+      await fireEvent.error(logo!);
+
+      expect(navbar(container).querySelector(".navbar-avatar-logo")).toBeNull();
+      const avatar = navbar(container).querySelector(".navbar-avatar");
+      expect(avatar?.textContent.trim()).toBe("JD");
+    });
+
     it("opens the account panel when the identity control is tapped", async () => {
       const { container } = renderShell();
 

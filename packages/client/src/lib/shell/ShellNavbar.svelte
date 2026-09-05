@@ -54,6 +54,24 @@
     ontrailingheight,
   }: ShellNavbarProps = $props();
 
+  // Fall back to the identity snippet (initials or menu icon) when the
+  // logo image fails to load. A broken-image placeholder inside the
+  // navbar avatar circle looks worse than no logo.
+  let logoFailed = $state(false);
+
+  $effect(() => {
+    void identity.logoUrl;
+    logoFailed = false;
+  });
+
+  function handleLogoError(): void {
+    logoFailed = true;
+  }
+
+  const showLogo = $derived(
+    identity.logoUrl !== null && identity.logoUrl !== "" && !logoFailed,
+  );
+
   // Konsta spreads its rest props onto the Navbar root, so an attachment
   // passed here lands on the .k-navbar element itself. That is the whole
   // reason this component can own the glass effects without a wrapper
@@ -318,12 +336,13 @@
         data-testid="shell-identity"
       >
         <span class="navbar-avatar" aria-hidden="true">
-          {#if identity.logoUrl}
+          {#if showLogo}
             <img
               src={identity.logoUrl}
               alt=""
               class="navbar-avatar-logo"
               loading="eager"
+              onerror={handleLogoError}
             />
           {:else}
             {@render identityFallback()}

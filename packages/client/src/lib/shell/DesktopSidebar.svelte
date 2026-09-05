@@ -54,6 +54,18 @@
   const navLogoUrl = $derived(getOrgLogoUrl());
   const roleInfo = $derived(getRoleInfo(roleId));
 
+  // Fall back to initials when the logo image fails to load.
+  let logoFailed = $state(false);
+
+  $effect(() => {
+    void navLogoUrl;
+    logoFailed = false;
+  });
+
+  function handleLogoError(): void {
+    logoFailed = true;
+  }
+
   // ── Expand/collapse ────────────────────────────────────────────────
   let hoverExpanded = $state(false);
   let hoverTimer = $state<ReturnType<typeof setTimeout> | undefined>(undefined);
@@ -276,8 +288,14 @@
   <!-- Org branding -->
   <div class="sidebar-header">
     <span class="sidebar-logo" aria-hidden="true">
-      {#if navLogoUrl}
-        <img src={navLogoUrl} alt="" class="sidebar-logo-img" loading="eager" />
+      {#if navLogoUrl !== null && !logoFailed}
+        <img
+          src={navLogoUrl}
+          alt=""
+          class="sidebar-logo-img"
+          loading="eager"
+          onerror={handleLogoError}
+        />
       {:else if userInitials}
         {userInitials}
       {/if}
