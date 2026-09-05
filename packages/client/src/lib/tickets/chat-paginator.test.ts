@@ -91,6 +91,173 @@ describe("createChatPaginator", () => {
     });
   });
 
+  describe("syncInitialPage", () => {
+    it("replaces the page when only a single page exists", () => {
+      const p = makePaginator({ pageSize: 3 });
+      p.seed([
+        makeRecord("1", "2026-01-01T12:00:00Z"),
+        makeRecord("2", "2026-01-02T12:00:00Z"),
+        makeRecord("3", "2026-01-03T12:00:00Z"),
+      ]);
+
+      const updated = [
+        makeRecord("2", "2026-01-02T12:00:00Z"),
+        makeRecord("3", "2026-01-03T12:00:00Z"),
+        makeRecord("4", "2026-01-04T12:00:00Z"),
+      ];
+      p.syncInitialPage(updated);
+
+      expect(p.items).toEqual(updated);
+    });
+
+    it("no-ops when ids and order match", () => {
+      const p = makePaginator({ pageSize: 3 });
+      const data = [
+        makeRecord("1", "2026-01-01T12:00:00Z"),
+        makeRecord("2", "2026-01-02T12:00:00Z"),
+        makeRecord("3", "2026-01-03T12:00:00Z"),
+      ];
+      p.seed(data);
+      const before = p.items;
+      p.syncInitialPage([...data]);
+      expect(p.items).toBe(before);
+    });
+
+    it("appends new items when multiple pages exist", async () => {
+      const p = makePaginator({ pageSize: 2 });
+      p.seed([
+        makeRecord("3", "2026-01-03T12:00:00Z"),
+        makeRecord("4", "2026-01-04T12:00:00Z"),
+      ]);
+
+      const older = [
+        makeRecord("1", "2026-01-01T12:00:00Z"),
+        makeRecord("2", "2026-01-02T12:00:00Z"),
+      ];
+      (
+        queryClient.fetchQuery as ReturnType<typeof vi.fn>
+      ).mockResolvedValueOnce(older);
+      await p.loadOlderPage();
+
+      expect(p.items).toHaveLength(4);
+
+      // Refetch: initial query now returns records 4 and 5 (server shifted
+      // the window). Record 3 was the oldest in the initial page but is
+      // now covered by the older page. Record 5 is new.
+      p.syncInitialPage([
+        makeRecord("4", "2026-01-04T12:00:00Z"),
+        makeRecord("5", "2026-01-05T12:00:00Z"),
+      ]);
+
+      // Records 1-4 stay, 5 is appended, no gap or duplicate.
+      expect(p.items.map((r) => r.id)).toEqual(["1", "2", "3", "4", "5"]);
+    });
+
+    it("removes pending entries when multiple pages exist", async () => {
+      const p = makePaginator({ pageSize: 2 });
+      p.seed([
+        makeRecord("3", "2026-01-03T12:00:00Z"),
+        makeRecord("4", "2026-01-04T12:00:00Z"),
+      ]);
+
+      const older = [
+        makeRecord("1", "2026-01-01T12:00:00Z"),
+        makeRecord("2", "2026-01-02T12:00:00Z"),
+      ];
+      (
+        queryClient.fetchQuery as ReturnType<typeof vi.fn>
+      ).mockResolvedValueOnce(older);
+      await p.loadOlderPage();
+
+      // Simulate optimistic add via syncInitialPage with a pending entry.
+      p.syncInitialPage([
+        makeRecord("3", "2026-01-03T12:00:00Z"),
+        makeRecord("4", "2026-01-04T12:00:00Z"),
+        makeRecord("pending-abc", "2026-01-05T12:00:00Z"),
+      ]);
+      expect(p.items.map((r) => r.id)).toEqual([
+        "1",
+        "2",
+        "3",
+        "4",
+        "pending-abc",
+      ]);
+
+      // Server confirms: real record 5 arrived, pending-abc is gone.
+      p.syncInitialPage([
+        makeRecord("4", "2026-01-04T12:00:00Z"),
+        makeRecord("5", "2026-01-05T12:00:00Z"),
+      ]);
+      expect(p.items.map((r) => r.id)).toEqual(["1", "2", "3", "4", "5"]);
+    });
+
+    it("preserves boundary with older page when refetch shifts the window", async () => {
+      const p = makePaginator({ pageSize: 3 });
+      p.seed([
+        makeRecord("4", "2026-01-04T12:00:00Z"),
+        makeRecord("5", "2026-01-05T12:00:00Z"),
+        makeRecord("6", "2026-01-06T12:00:00Z"),
+      ]);
+
+      const older = [
+        makeRecord("1", "2026-01-01T12:00:00Z"),
+        makeRecord("2", "2026-01-02T12:00:00Z"),
+        makeRecord("3", "2026-01-03T12:00:00Z"),
+      ];
+      (
+        queryClient.fetchQuery as ReturnType<typeof vi.fn>
+      ).mockResolvedValueOnce(older);
+      await p.loadOlderPage();
+
+      expect(p.items).toHaveLength(6);
+
+      // Refetch after two new messages: window shifts to [6, 7, 8].
+      // Records 4-5 drop out of the server window. They must not
+      // disappear from the paginator because they live in the older page.
+      p.syncInitialPage([
+        makeRecord("6", "2026-01-06T12:00:00Z"),
+        makeRecord("7", "2026-01-07T12:00:00Z"),
+        makeRecord("8", "2026-01-08T12:00:00Z"),
+      ]);
+
+      expect(p.items.map((r) => r.id)).toEqual([
+        "1",
+        "2",
+        "3",
+        "4",
+        "5",
+        "6",
+        "7",
+        "8",
+      ]);
+    });
+
+    it("no-ops when multi-page data has no new items and no pending entries", async () => {
+      const p = makePaginator({ pageSize: 2 });
+      p.seed([
+        makeRecord("3", "2026-01-03T12:00:00Z"),
+        makeRecord("4", "2026-01-04T12:00:00Z"),
+      ]);
+
+      const older = [
+        makeRecord("1", "2026-01-01T12:00:00Z"),
+        makeRecord("2", "2026-01-02T12:00:00Z"),
+      ];
+      (
+        queryClient.fetchQuery as ReturnType<typeof vi.fn>
+      ).mockResolvedValueOnce(older);
+      await p.loadOlderPage();
+
+      const before = p.items;
+      // Same data, nothing new.
+      p.syncInitialPage([
+        makeRecord("3", "2026-01-03T12:00:00Z"),
+        makeRecord("4", "2026-01-04T12:00:00Z"),
+      ]);
+      expect(p.items).toBe(before);
+    });
+  });
+
   describe("loadOlderPage", () => {
     it("prepends older records", async () => {
       const p = makePaginator({ pageSize: 2 });

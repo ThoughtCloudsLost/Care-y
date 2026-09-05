@@ -86,7 +86,52 @@ export function createChatPaginator<T extends PaginatedRecord>(
       current.every((r, i) => r.id === data.at(i)?.id)
     )
       return;
-    olderPages.splice(-1, 1, data);
+
+    // When the paginator has only a single page, the refetch data is the
+    // complete window and a wholesale replace is safe. When multiple pages
+    // exist, the refetch covers the newest PAGE_SIZE messages, whose lower
+    // boundary can shift relative to the adjacent older page. A wholesale
+    // replace would create a gap or overlap at that seam. Instead, keep
+    // the existing page entries stable and merge changes at the tail.
+    if (olderPages.length === 1) {
+      olderPages.splice(-1, 1, data);
+      return;
+    }
+
+    // Build a set of IDs already present across all pages.
+    // eslint-disable-next-line svelte/prefer-svelte-reactivity -- ephemeral lookup used only within this sync function
+    const existingIds = new Set<string>();
+    for (const page of olderPages) {
+      for (const r of page) {
+        existingIds.add(r.id);
+      }
+    }
+
+    // Collect genuinely new items from the refetch (not already loaded).
+    const added: T[] = [];
+    for (const r of data) {
+      if (!existingIds.has(r.id)) {
+        added.push(r);
+      }
+    }
+
+    // Build a set of IDs present in the server response so we can
+    // identify stale pending entries that the server has replaced.
+    // eslint-disable-next-line svelte/prefer-svelte-reactivity -- ephemeral lookup used only within this sync function
+    const serverIds = new Set<string>();
+    for (const r of data) {
+      serverIds.add(r.id);
+    }
+
+    // Remove pending/optimistic entries from the newest page. Pending
+    // IDs start with "pending-" and will not appear in server data.
+    const cleaned = current.filter(
+      (r) => !r.id.startsWith("pending-") || serverIds.has(r.id),
+    );
+
+    if (added.length === 0 && cleaned.length === current.length) return;
+
+    olderPages.splice(-1, 1, [...cleaned, ...added]);
   }
 
   async function loadOlderPage(): Promise<void> {
