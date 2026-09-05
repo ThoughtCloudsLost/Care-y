@@ -107,7 +107,12 @@
   }
 </script>
 
-<ShellSheet {opened} {ondismiss}>
+<ShellSheet
+  {opened}
+  {ondismiss}
+  ariaLabel={m.ticket_assign_sheet_title()}
+  title={m.ticket_assign_sheet_title()}
+>
   <BlockTitle>{m.ticket_assign_sheet_title()}</BlockTitle>
 
   <div class="assign-search-wrapper">
