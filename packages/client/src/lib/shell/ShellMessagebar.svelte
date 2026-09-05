@@ -153,6 +153,44 @@
       textareaEl.style.overflowY = "";
     }
   });
+
+  // Enter-sends: Enter submits (when send is enabled), Shift+Enter inserts
+  // a newline. Attached via $effect because Konsta owns the textarea element
+  // and does not expose an onkeydown prop.
+  const HINT_ID = "messagebar-enter-hint";
+
+  $effect(() => {
+    const el = textareaEl;
+    if (!el) return;
+
+    el.setAttribute("aria-describedby", HINT_ID);
+    el.setAttribute("aria-keyshortcuts", "Enter");
+
+    function onKeydown(e: KeyboardEvent): void {
+      if (e.key !== "Enter") return;
+      if (e.shiftKey) return; // allow newline
+
+      // IME compose sessions (CJK input): let the composition finish.
+      if (e.isComposing) return;
+
+      // When the software keyboard is open (mobile touch typing), Enter
+      // inserts a newline per platform convention. Enter-sends applies
+      // to hardware keyboards and desktop only.
+      if (document.documentElement.classList.contains("keyboard-open")) return;
+
+      e.preventDefault();
+      if (!sendDisabled) {
+        onsend();
+      }
+    }
+
+    el.addEventListener("keydown", onKeydown);
+    return () => {
+      el.removeEventListener("keydown", onKeydown);
+      el.removeAttribute("aria-describedby");
+      el.removeAttribute("aria-keyshortcuts");
+    };
+  });
 </script>
 
 <div
@@ -195,6 +233,9 @@
       </Link>
     {/snippet}
   </Messagebar>
+  {#if !collapsed}
+    <p id={HINT_ID} class="enter-hint">{m.ticket_compose_enter_hint()}</p>
+  {/if}
   {#if !collapsed && footer}{@render footer()}{/if}
 </div>
 
@@ -329,5 +370,13 @@
   :global(.shell-messagebar textarea) {
     resize: none;
     touch-action: pan-y !important;
+  }
+
+  .enter-hint {
+    font-size: var(--text-xs, 0.75rem);
+    color: var(--muted);
+    text-align: right;
+    padding: 2px 16px 4px;
+    margin: 0;
   }
 </style>
