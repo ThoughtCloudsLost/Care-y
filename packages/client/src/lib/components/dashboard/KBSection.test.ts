@@ -31,7 +31,8 @@ afterEach(cleanup);
 interface KBOverrides {
   id?: string;
   updatedAt?: Date | string;
-  rating?: number;
+  voteUpCount?: number;
+  voteDownCount?: number;
   decryptedTitle?: string;
 }
 
@@ -43,7 +44,8 @@ function makeKBItem(overrides: KBOverrides = {}) {
     id: `kb-${String(seq)}`,
     encryptedTitle: "AQID",
     updatedAt: new Date().toISOString(),
-    rating: 0,
+    voteUpCount: 0,
+    voteDownCount: 0,
     decryptedTitle: "Escalation protocol",
     ...overrides,
   };
@@ -81,11 +83,31 @@ describe("KBSection", () => {
     expect(screen.getByText("Updated article")).toBeTruthy();
   });
 
-  it("labels the rating with its vote count", () => {
-    const { container } = renderKB([makeKBItem({ rating: 3 })]);
+  it("shows the total vote count as an integer", () => {
+    const { container } = renderKB([
+      makeKBItem({ voteUpCount: 2, voteDownCount: 1 }),
+    ]);
     const rating = container.querySelector(".kb-rating");
     expect(rating?.getAttribute("aria-label")).toBe("3 votes");
     expect(rating?.textContent).toContain("3");
+  });
+
+  it("shows singular label for exactly one vote", () => {
+    const { container } = renderKB([
+      makeKBItem({ voteUpCount: 1, voteDownCount: 0 }),
+    ]);
+    const rating = container.querySelector(".kb-rating");
+    expect(rating?.getAttribute("aria-label")).toBe("1 vote");
+    expect(rating?.textContent).toContain("1");
+  });
+
+  it("shows zero-vote label when no votes exist", () => {
+    const { container } = renderKB([
+      makeKBItem({ voteUpCount: 0, voteDownCount: 0 }),
+    ]);
+    const rating = container.querySelector(".kb-rating");
+    expect(rating?.getAttribute("aria-label")).toBe("no votes");
+    expect(rating?.textContent).toContain("0");
   });
 
   it("fires ontap with the article id when a row is tapped", async () => {

@@ -12,7 +12,8 @@
     id: string;
     encryptedTitle: string;
     updatedAt: Date | string;
-    rating: number;
+    voteUpCount: number;
+    voteDownCount: number;
     decryptedTitle?: string;
   }
 
@@ -31,6 +32,12 @@
     ontoggle,
     ontap,
   }: KBSectionProps = $props();
+
+  function voteCountLabel(count: number): string {
+    if (count === 0) return m.dashboard_kb_vote_count_zero();
+    if (count === 1) return m.dashboard_kb_vote_count_one({ count });
+    return m.dashboard_kb_vote_count_other({ count });
+  }
 </script>
 
 <CollapsibleSection
@@ -85,10 +92,10 @@
             </span>
             <span
               class="kb-rating"
-              aria-label={m.dashboard_kb_rating({ count: item.rating })}
+              aria-label={voteCountLabel(item.voteUpCount + item.voteDownCount)}
             >
               <ThumbsUp size={10} aria-hidden="true" />
-              {item.rating}
+              {item.voteUpCount + item.voteDownCount}
             </span>
             <span class="kb-time">
               {formatRelativeTime(
