@@ -605,6 +605,20 @@ describe("SecureLinkSheet", () => {
       });
     });
 
+    it("shows the none-eligible message, not success, when done with zero items", async () => {
+      await generateWithReseed({
+        phase: "done",
+        itemsDone: 0,
+        itemsTotal: 0,
+        skippedCount: 0,
+      });
+
+      await waitFor(() => {
+        expect(screen.getByText(m.reseed_none_eligible())).toBeTruthy();
+      });
+      expect(screen.queryByText(m.reseed_done())).toBeNull();
+    });
+
     it("shows partial message and retry when done with skips", async () => {
       await generateWithReseed({
         phase: "done",

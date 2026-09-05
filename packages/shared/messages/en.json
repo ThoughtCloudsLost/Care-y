@@ -2857,6 +2857,7 @@
   "ticket_tier_reseed_explain": "Past conversations will become visible in the client's new secure link.",
   "reseed_progress": "Recovering messages: {done} of {total}",
   "reseed_done": "Message history recovered.",
+  "reseed_none_eligible": "No messages were eligible to recover.",
   "reseed_partial": "{count} items could not be recovered.",
   "reseed_retry": "Retry",
   "reseed_cancel": "Cancel recovery",

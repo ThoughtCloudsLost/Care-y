@@ -2857,6 +2857,7 @@
   "ticket_tier_reseed_explain": "Las conversaciones anteriores se harán visibles en el nuevo enlace seguro del cliente.",
   "reseed_progress": "Recuperando mensajes: {done} de {total}",
   "reseed_done": "Historial de mensajes recuperado.",
+  "reseed_none_eligible": "Ningún mensaje era elegible para recuperar.",
   "reseed_partial": "{count} elementos no se pudieron recuperar.",
   "reseed_retry": "Reintentar",
   "reseed_cancel": "Cancelar recuperación",

@@ -86,8 +86,10 @@
     if (opened) {
       slotA = clientA;
       slotB = clientB;
-      // Default primary to client A when both are pre-populated
-      primaryId = clientA?.id ?? null;
+      // No preselection: defaulting the edited client to "survives" once
+      // picked a zero-ticket client over one holding a long history. The
+      // volunteer chooses explicitly, informed by the ticket counts.
+      primaryId = null;
       step = "select";
       searchQuery = "";
       searchDebounced = "";
@@ -140,6 +142,26 @@
   const orgCache = getOrgDecryptCache();
 
   const needsSearch = $derived(slotA !== null && slotB === null);
+
+  // Ticket counts for the two candidates, so the role choice is informed.
+  // The callers hand over bare {id, alias} stubs, so fetch the counts here.
+  const slotACountQuery = createQuery(() => ({
+    queryKey: clientKeys.detail(slotA?.id ?? ""),
+    queryFn: async () => clientsRouter.get.query({ clientId: slotA?.id ?? "" }),
+    enabled: opened && slotA !== null,
+  }));
+  const slotBCountQuery = createQuery(() => ({
+    queryKey: clientKeys.detail(slotB?.id ?? ""),
+    queryFn: async () => clientsRouter.get.query({ clientId: slotB?.id ?? "" }),
+    enabled: opened && slotB !== null,
+  }));
+
+  function ticketCountLabel(count: number | undefined): string | undefined {
+    if (count === undefined) return undefined;
+    return count === 1
+      ? m.clients_ticket_count_one(withTerms({ count }))
+      : m.clients_ticket_count_other(withTerms({ count }));
+  }
 
   const searchResultsQuery = createInfiniteQuery(() => ({
     queryKey: clientKeys.list({
@@ -395,7 +417,11 @@
         {@const first = slotA}
         {@const second = slotB}
         <List nested>
-          <ListItem label title={first.alias}>
+          <ListItem
+            label
+            title={first.alias}
+            subtitle={ticketCountLabel(slotACountQuery.data?.ticketCount)}
+          >
             {#snippet media()}
               <Radio
                 component="div"
@@ -408,14 +434,20 @@
               />
             {/snippet}
             {#snippet after()}
-              <span class="role-label">
-                {primaryId === first.id
-                  ? m.client_merge_primary_label()
-                  : m.client_merge_secondary_label()}
-              </span>
+              {#if primaryId !== null}
+                <span class="role-label">
+                  {primaryId === first.id
+                    ? m.client_merge_primary_label()
+                    : m.client_merge_secondary_label()}
+                </span>
+              {/if}
             {/snippet}
           </ListItem>
-          <ListItem label title={second.alias}>
+          <ListItem
+            label
+            title={second.alias}
+            subtitle={ticketCountLabel(slotBCountQuery.data?.ticketCount)}
+          >
             {#snippet media()}
               <Radio
                 component="div"
@@ -428,11 +460,13 @@
               />
             {/snippet}
             {#snippet after()}
-              <span class="role-label">
-                {primaryId === second.id
-                  ? m.client_merge_primary_label()
-                  : m.client_merge_secondary_label()}
-              </span>
+              {#if primaryId !== null}
+                <span class="role-label">
+                  {primaryId === second.id
+                    ? m.client_merge_primary_label()
+                    : m.client_merge_secondary_label()}
+                </span>
+              {/if}
             {/snippet}
           </ListItem>
         </List>

@@ -43,8 +43,19 @@ const FOLLOWUP_PAGE_SIZE = 500;
 /** Media page size for listAttachments/listRecordings pagination. */
 const MEDIA_PAGE_SIZE = 200;
 
-/** Follow-up types eligible for portal message copies. */
-const ELIGIBLE_TYPES = new Set(["message", "sms_outbound", "sms_inbound"]);
+/**
+ * Follow-up types eligible for portal message copies. Must stay in step
+ * with MESSAGE_COPY_TYPES in the server's reseed service, which rejects
+ * anything outside its set. email_outbound is included because the live
+ * send path already stores a portal copy for every org email; recovered
+ * history should match the live thread.
+ */
+const ELIGIBLE_TYPES = new Set([
+  "message",
+  "sms_outbound",
+  "sms_inbound",
+  "email_outbound",
+]);
 
 // ── Public types ───────────────────────────────────────────────────────
 
@@ -101,7 +112,13 @@ interface WireRecording {
 interface TrpcSurface {
   tickets: {
     listForClient: {
-      query: (input: { clientId: string }) => Promise<{ ticketId: string }[]>;
+      query: (input: { clientId: string }) => Promise<
+        {
+          ticketId: string;
+          /** Caller's wrap for the ticket's current key generation. */
+          keyWrap: KeyWrapTriple | null;
+        }[]
+      >;
     };
     listFollowUps: {
       query: (input: {
@@ -323,7 +340,7 @@ export function createPortalReseed(deps: PortalReseedDeps): PortalReseed {
     ticketsTotal = tickets.length;
 
     // Step 2-4: process each ticket sequentially
-    for (const { ticketId } of tickets) {
+    for (const { ticketId, keyWrap: ticketKeyWrap } of tickets) {
       if (isCancelled()) return;
 
       const blockedParents = await processTicketMessages(
@@ -331,6 +348,7 @@ export function createPortalReseed(deps: PortalReseedDeps): PortalReseed {
         clientId,
         channelId,
         clientPublic,
+        ticketKeyWrap,
       );
       if (isCancelled()) return;
 
@@ -340,6 +358,7 @@ export function createPortalReseed(deps: PortalReseedDeps): PortalReseed {
         channelId,
         clientPublic,
         blockedParents,
+        ticketKeyWrap,
       );
       if (isCancelled()) return;
 
@@ -354,6 +373,7 @@ export function createPortalReseed(deps: PortalReseedDeps): PortalReseed {
     clientId: string,
     channelId: string,
     clientPublic: string,
+    ticketKeyWrap: KeyWrapTriple | null,
   ): Promise<SvelteSet<string>> {
     // Collect all eligible follow-ups across pages. Also record the
     // follow-ups whose media must never reach the portal (private or
@@ -393,19 +413,21 @@ export function createPortalReseed(deps: PortalReseedDeps): PortalReseed {
         // Filter: eligible types only get message copies
         if (!ELIGIBLE_TYPES.has(fu.type)) continue;
 
-        // Must have either keyWrap or portalWrap
-        if (
-          fu.keyWrap === null &&
-          (fu.portalWrap === undefined || fu.portalWrap === null)
-        ) {
+        // Key resolution: a per-follow-up keyWrap only exists for rows
+        // written under a rotated key generation. Ordinary follow-ups
+        // (key_generation null) decrypt under the ticket's current key,
+        // so fall back to the ticket-level wrap from listForClient.
+        const resolvedKeyWrap = fu.keyWrap ?? ticketKeyWrap ?? undefined;
+        const portalWrap = fu.portalWrap ?? undefined;
+        if (resolvedKeyWrap === undefined && portalWrap === undefined) {
           continue;
         }
 
         eligible.push({
           followUpId: fu.id,
           ciphertext: fu.encryptedContent,
-          keyWrap: fu.keyWrap ?? undefined,
-          portalWrap: fu.portalWrap ?? undefined,
+          keyWrap: resolvedKeyWrap,
+          portalWrap,
         });
       }
 
@@ -479,6 +501,7 @@ export function createPortalReseed(deps: PortalReseedDeps): PortalReseed {
     channelId: string,
     clientPublic: string,
     blockedParents: ReadonlySet<string>,
+    ticketKeyWrap: KeyWrapTriple | null,
   ): Promise<void> {
     // Collect attachments and recordings
     const attachments = await paginateMedia<WireAttachment>(
@@ -545,11 +568,14 @@ export function createPortalReseed(deps: PortalReseedDeps): PortalReseed {
       directRecordings.length;
     itemsTotal += mediaCount;
 
-    // Find any known keyWrap from this ticket's follow-ups for warm-up.
-    // We already enumerated follow-ups above, but we do not persist them.
-    // Instead, fetch one page and pick the first available keyWrap.
-    let warmUpKeyWrap: KeyWrapTriple | undefined;
-    if (wrappedAttachments.length > 0 || wrappedRecordings.length > 0) {
+    // Warm-up key for file-key unwrapping: prefer the ticket-level wrap
+    // (present for any ticket the caller can open), else fall back to a
+    // per-follow-up wrap from the first page (rotated-generation rows).
+    let warmUpKeyWrap: KeyWrapTriple | undefined = ticketKeyWrap ?? undefined;
+    if (
+      warmUpKeyWrap === undefined &&
+      (wrappedAttachments.length > 0 || wrappedRecordings.length > 0)
+    ) {
       const firstPage = await withRetry(async () =>
         trpcClient.tickets.listFollowUps.query({
           ticketId,

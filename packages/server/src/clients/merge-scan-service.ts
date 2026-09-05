@@ -5,6 +5,11 @@
  * detection: per-client intake form response blobs, key wraps, and
  * field-to-role mappings. The server returns ciphertext only; all
  * decryption and comparison happens browser-side in the Worker.
+ *
+ * This scan is the discovery surface for duplicates no volunteer typed
+ * (intake-originated contact matches and stored phone-hash collisions).
+ * Volunteer-entered duplicates are caught at write time by the inline
+ * conflict checks in email-service.ts and client-service.ts instead.
  */
 
 import type { Kysely } from "kysely";

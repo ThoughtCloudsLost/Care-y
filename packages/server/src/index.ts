@@ -145,6 +145,8 @@ import {
 import { createKBMediaService } from "./kb/kb-media-service.js";
 import { createClientService } from "./clients/client-service.js";
 import { createEmailService } from "./clients/email-service.js";
+import { createDismissalService } from "./clients/dismissal-service.js";
+import { createMergeScanService } from "./clients/merge-scan-service.js";
 import { createIntakeFormService } from "./portal/intake-form-service.js";
 import { createIntakeResponseService } from "./portal/intake-response-service.js";
 import * as portalChannelService from "./portal/channel-service.js";
@@ -816,6 +818,8 @@ const appRouter = createAppRouter({
         .executeTakeFirst();
       return (row?.cnt ?? 0) > 0;
     },
+    createDismissalSvc: (tDb) => createDismissalService(tDb),
+    createMergeScanSvc: (tDb) => createMergeScanService(tDb),
   },
   devDeps: env.NODE_ENV !== "production" ? { blobStore } : null,
 });

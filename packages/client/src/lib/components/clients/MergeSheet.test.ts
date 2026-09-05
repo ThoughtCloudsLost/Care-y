@@ -281,14 +281,48 @@ describe("MergeSheet", () => {
     expect(searchInput).toBeNull();
   });
 
-  it("renders radio buttons for role selection with both clients", () => {
+  /** Select the primary radio for the client at the given row index. */
+  async function selectPrimary(
+    container: HTMLElement,
+    index = 0,
+  ): Promise<void> {
+    const radios = container.querySelectorAll('input[type="radio"]');
+    const radio = radios[index];
+    expect(radio).toBeTruthy();
+    if (radio) await fireEvent.click(radio);
+  }
+
+  it("renders radio buttons for role selection with both clients", async () => {
     const { container } = render(MergeSheet, { props: bothClientsProps });
+    expect(
+      container.querySelectorAll('input[type="radio"]').length,
+    ).toBeGreaterThanOrEqual(2);
+
+    // Role labels appear only after an explicit choice.
+    await selectPrimary(container, 0);
     expect(container.textContent).toContain("Primary (survives)");
     expect(container.textContent).toContain("Secondary (merged in)");
   });
 
-  it("shows Next button when both clients selected and different", () => {
+  it("does not preselect a primary and disables Next until a role is chosen", async () => {
     const { container } = render(MergeSheet, { props: bothClientsProps });
+
+    expect(container.textContent).not.toContain("Primary (survives)");
+    let nextBtn = Array.from(container.querySelectorAll("button")).find((b) =>
+      b.textContent.includes("Next"),
+    );
+    expect(nextBtn?.disabled).toBe(true);
+
+    await selectPrimary(container, 0);
+    nextBtn = Array.from(container.querySelectorAll("button")).find((b) =>
+      b.textContent.includes("Next"),
+    );
+    expect(nextBtn?.disabled).toBe(false);
+  });
+
+  it("shows Next button when both clients selected and different", async () => {
+    const { container } = render(MergeSheet, { props: bothClientsProps });
+    await selectPrimary(container, 0);
     const buttons = container.querySelectorAll("button");
     const nextBtn = Array.from(buttons).find((b) =>
       b.textContent.includes("Next"),
@@ -300,6 +334,7 @@ describe("MergeSheet", () => {
   it("advances to confirm step when Next is clicked", async () => {
     const { container } = render(MergeSheet, { props: bothClientsProps });
 
+    await selectPrimary(container, 0);
     const buttons = container.querySelectorAll("button");
     const nextBtn = Array.from(buttons).find((b) =>
       b.textContent.includes("Next"),
@@ -318,6 +353,7 @@ describe("MergeSheet", () => {
     const { container } = render(MergeSheet, { props: bothClientsProps });
 
     // Advance to confirm
+    await selectPrimary(container, 0);
     const buttons = container.querySelectorAll("button");
     const nextBtn = Array.from(buttons).find((b) =>
       b.textContent.includes("Next"),
@@ -345,6 +381,7 @@ describe("MergeSheet", () => {
     const { container } = render(MergeSheet, { props: bothClientsProps });
 
     // Advance to confirm
+    await selectPrimary(container, 0);
     let buttons = container.querySelectorAll("button");
     const nextBtn = Array.from(buttons).find((b) =>
       b.textContent.includes("Next"),
@@ -407,6 +444,7 @@ describe("MergeSheet", () => {
   it("does not show channel choice when query returns no channels", async () => {
     const { container } = render(MergeSheet, { props: bothClientsProps });
 
+    await selectPrimary(container, 0);
     const buttons = container.querySelectorAll("button");
     const nextBtn = Array.from(buttons).find((b) =>
       b.textContent.includes("Next"),

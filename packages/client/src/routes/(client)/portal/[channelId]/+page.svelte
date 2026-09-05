@@ -719,6 +719,7 @@
       portalKeys.messages(routeChannelId),
       m.account_stale_thread(),
       m.account_login_failed(),
+      m.account_username_taken(),
     );
   }
 

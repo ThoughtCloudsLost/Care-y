@@ -77,12 +77,17 @@ export interface ClientRouterDeps {
     clientId: ClientId,
     userId: UserId,
   ) => Promise<boolean>;
-  readonly createDismissalSvc?: (
-    db: Kysely<TenantDatabase>,
-  ) => DismissalService;
-  readonly createMergeScanSvc?: (
-    db: Kysely<TenantDatabase>,
-  ) => MergeScanService;
+  /**
+   * Required nullable (ADR-086 pattern): pass `null` to decline
+   * the merge-scan surface explicitly. When these were optional keys, the
+   * app wiring omitted them by accident and mergeScanData silently served
+   * its empty stub on every request; a required key makes omission a type
+   * error.
+   */
+  readonly createDismissalSvc:
+    ((db: Kysely<TenantDatabase>) => DismissalService) | null;
+  readonly createMergeScanSvc:
+    ((db: Kysely<TenantDatabase>) => MergeScanService) | null;
 }
 
 // ---------------------------------------------------------------------------
@@ -411,6 +416,16 @@ export function createClientRouter(deps: ClientRouterDeps) {
      * browser-side. Gated on VIEW_CLIENTS (merging itself requires that
      * access level, so candidates shown to sessions that cannot act are
      * dead UI).
+     *
+     * Division of labor with the inline conflict card: updateEmail and
+     * updatePhone block a duplicate write and suggest a merge at entry
+     * time, so volunteer-typed duplicates never reach this scan. The
+     * dashboard section this feeds exists for duplicates nobody typed:
+     * a client whose intake form answers carry the same phone or email
+     * as a client created earlier (by call or by another intake), and
+     * stored phone-hash collisions. Stored email hashes cannot collide
+     * with each other (the updateEmail guard rejects them); the email
+     * hash list is here to be matched against intake-extracted emails.
      */
     mergeScanData: viewClientsProcedure.query(
       withErrorWrapping(async ({ ctx }) => {

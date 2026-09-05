@@ -26,6 +26,7 @@ import {
   type RecordingId,
   type OrgSchema,
 } from "@care-y/shared";
+import { encode } from "@care-y/crypto";
 import { findActiveChannel } from "./channel-service.js";
 import {
   PortalChannelMismatchError,
@@ -90,8 +91,18 @@ export interface ConvertBlobForReseedResult {
 // Followup types eligible for message copies
 // ---------------------------------------------------------------------------
 
-/** Only text-bearing followup types get portal message copies. */
-const MESSAGE_COPY_TYPES = new Set(["message", "sms_outbound", "sms_inbound"]);
+/**
+ * Only text-bearing followup types get portal message copies. Must stay
+ * in step with ELIGIBLE_TYPES in the client reseed composable.
+ * email_outbound is included because the live send path stores a portal
+ * copy for every org email; recovered history should match.
+ */
+const MESSAGE_COPY_TYPES = new Set([
+  "message",
+  "sms_outbound",
+  "sms_inbound",
+  "email_outbound",
+]);
 
 // ---------------------------------------------------------------------------
 // reseedPortalHistory
@@ -580,25 +591,54 @@ export async function convertBlobForReseed(
 // listTicketsForClient
 // ---------------------------------------------------------------------------
 
+export interface ClientTicketRef {
+  readonly ticketId: TicketId;
+  /**
+   * The caller's key wrap for the ticket's current key generation,
+   * base64url-encoded. This is the same wrap tickets.get returns; the
+   * reseed needs it because ordinary follow-ups (key_generation null)
+   * carry no per-row wrap and decrypt under the current ticket key.
+   * Null when the caller holds no wrap for the current generation.
+   */
+  readonly keyWrap: {
+    readonly ephemeralPoint: string;
+    readonly nonce: string;
+    readonly wrappedKey: string;
+  } | null;
+}
+
 export async function listTicketsForClient(
   db: Kysely<TenantDatabase>,
   access: TicketAccessChecker,
   userId: UserId,
   clientId: ClientId,
-): Promise<{ ticketId: TicketId }[]> {
+): Promise<ClientTicketRef[]> {
   const rows = await db
-    .selectFrom("tickets")
-    .select("id")
-    .where("client_id", "=", clientId)
-    .orderBy("created_at", "asc")
+    .selectFrom("tickets as t")
+    .leftJoin("ticket_key_wraps as tkw", (join) =>
+      join
+        .onRef("tkw.ticket_id", "=", "t.id")
+        .on("tkw.volunteer_id", "=", userId)
+        .onRef("tkw.key_generation", "=", "t.key_generation"),
+    )
+    .select(["t.id", "tkw.ephemeral_point", "tkw.nonce", "tkw.wrapped_key"])
+    .where("t.client_id", "=", clientId)
+    .orderBy("t.created_at", "asc")
     .execute();
 
-  const accessible: { ticketId: TicketId }[] = [];
+  const accessible: ClientTicketRef[] = [];
   for (const row of rows) {
     const canView = await access.canAccess(userId, row.id);
-    if (canView) {
-      accessible.push({ ticketId: row.id });
-    }
+    if (!canView) continue;
+    const keyWrap =
+      row.ephemeral_point && row.nonce && row.wrapped_key
+        ? {
+            ephemeralPoint: encode(new Uint8Array(row.ephemeral_point)),
+            nonce: encode(new Uint8Array(row.nonce)),
+            wrappedKey: encode(new Uint8Array(row.wrapped_key)),
+          }
+        : null;
+    accessible.push({ ticketId: row.id, keyWrap });
   }
 
   return accessible;
