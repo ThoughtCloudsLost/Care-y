@@ -379,4 +379,12 @@
     padding: 2px 16px 4px;
     margin: 0;
   }
+
+  /* While the software keyboard is up, Enter inserts a newline (the
+     keydown handler defers to platform convention), so the hint would
+     be wrong. display: none also drops it from the accessibility tree,
+     keeping aria-describedby consistent with actual behaviour. */
+  :global(html.keyboard-open) .enter-hint {
+    display: none;
+  }
 </style>
