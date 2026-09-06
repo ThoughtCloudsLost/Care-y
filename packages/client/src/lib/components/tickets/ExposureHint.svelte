@@ -3,7 +3,7 @@
   import * as m from "$lib/paraglide/messages.js";
   import { Button } from "konsta/svelte";
 
-  type HintType = "sms" | "call";
+  type HintType = "sms" | "call" | "email";
 
   const AUTO_DISMISS_MS = 6_000;
 
@@ -21,6 +21,7 @@
 
   function getMessage(hint: HintType): string {
     if (hint === "sms") return m.exposure_hint_sms();
+    if (hint === "email") return m.exposure_hint_email();
     return m.exposure_hint_call();
   }
 

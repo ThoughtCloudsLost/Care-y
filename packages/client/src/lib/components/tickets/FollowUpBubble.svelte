@@ -7,12 +7,14 @@
   import {
     followUpKind,
     isEmailOutbound,
+    isEmailInbound,
   } from "$lib/tickets/follow-up-utils.js";
   import type { DecryptResult } from "$lib/crypto/decrypt-result.js";
   import type { ReactionSummary, ReactionType } from "@care-y/shared";
   import DecryptPlaceholder from "$lib/components/DecryptPlaceholder.svelte";
   import ConversationBubble from "$lib/components/tickets/ConversationBubble.svelte";
   import EmailBubbleContent from "$lib/components/tickets/EmailBubbleContent.svelte";
+  import EmailInboundBubbleContent from "$lib/components/tickets/EmailInboundBubbleContent.svelte";
   import SystemEvent from "$lib/components/tickets/SystemEvent.svelte";
   import PrivateNote from "$lib/components/tickets/PrivateNote.svelte";
 
@@ -82,6 +84,18 @@
     timestamp={followUp.createdAt}
   >
     <EmailBubbleContent {result} encryptedContent={followUp.encryptedContent} />
+  </ConversationBubble>
+{:else if isEmailInbound(followUp)}
+  <ConversationBubble
+    direction="received"
+    speaker={clientAlias ?? undefined}
+    source="client"
+    timestamp={followUp.createdAt}
+  >
+    <EmailInboundBubbleContent
+      {result}
+      encryptedContent={followUp.encryptedContent}
+    />
   </ConversationBubble>
 {:else}
   <ConversationBubble

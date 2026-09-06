@@ -477,6 +477,32 @@ describe("createPortalReseed", () => {
     expect(items[0]!.followUpId).toBe("fu-email");
   });
 
+  it("includes email_inbound follow-ups in the message copies", async () => {
+    const deps = makeDeps();
+    const trpc = deps.trpc as MockTrpc;
+
+    trpc.tickets.listForClient.query.mockResolvedValue([
+      { ticketId: "t-1", keyWrap: KEY_WRAP },
+    ]);
+
+    trpc.tickets.listFollowUps.query.mockResolvedValue({
+      followUps: [makeFollowUp("fu-inbound", { type: "email_inbound" })],
+      reactions: {},
+    });
+
+    trpc.tickets.reseedPortalHistory.mutate.mockResolvedValue({
+      inserted: 1,
+      skipped: 0,
+    });
+
+    const r = await reseed(deps);
+
+    expect(r.state.itemsTotal).toBe(1);
+    const sealCalls = vi.mocked(deps.bridge.sealFollowUpsToPublic).mock.calls;
+    const items = sealCalls[0]![2] as readonly { followUpId: string }[];
+    expect(items[0]!.followUpId).toBe("fu-inbound");
+  });
+
   it("falls back to the ticket-level wrap for follow-ups with no per-row wrap", async () => {
     const deps = makeDeps();
     const trpc = deps.trpc as MockTrpc;

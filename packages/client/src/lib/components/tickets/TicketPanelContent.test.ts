@@ -77,6 +77,7 @@ vi.mock("$lib/paraglide/messages.js", async (importOriginal) => ({
   ticket_action_edit_case: () => "Edit case",
   ticket_recent_history: () => "Recent History",
   ticket_panel_recent_coming_soon: () => "Coming soon",
+  revoke_reply_token_label: () => "Revoke email reply token",
 }));
 
 vi.mock("$lib/terminology/with-terms.js", async (importOriginal) => ({
@@ -517,6 +518,71 @@ describe("TicketPanelContent edit case action", () => {
     if (editRow) {
       await fireEvent.click(editRow);
       expect(onaction).toHaveBeenCalledWith("editContent");
+    }
+  });
+});
+
+describe("TicketPanelContent revoke reply token", () => {
+  it("shows revoke row when email is present", () => {
+    ticketQueryState = {
+      isLoading: false,
+      isError: false,
+      error: null,
+      data: { ...baseTicket, clientEmail: "a***@example.org" },
+    };
+
+    const { container } = render(TicketPanelContent, {
+      props: {
+        ticketId: "ticket-001",
+        onaction: vi.fn(),
+      },
+    });
+
+    expect(container.textContent).toContain("Revoke email reply token");
+  });
+
+  it("hides revoke row when no email is present", () => {
+    ticketQueryState = {
+      isLoading: false,
+      isError: false,
+      error: null,
+      data: { ...baseTicket, clientEmail: null, contactWithheld: false },
+    };
+
+    const { container } = render(TicketPanelContent, {
+      props: {
+        ticketId: "ticket-001",
+        onaction: vi.fn(),
+      },
+    });
+
+    expect(container.textContent).not.toContain("Revoke email reply token");
+  });
+
+  it('emits "revokeReplyToken" when the revoke row is tapped', async () => {
+    const onaction = vi.fn();
+    ticketQueryState = {
+      isLoading: false,
+      isError: false,
+      error: null,
+      data: { ...baseTicket, clientEmail: "a***@example.org" },
+    };
+
+    const { container } = render(TicketPanelContent, {
+      props: {
+        ticketId: "ticket-001",
+        onaction,
+      },
+    });
+
+    const revokeRow = Array.from(container.querySelectorAll("li")).find((li) =>
+      li.textContent.includes("Revoke email reply token"),
+    );
+
+    expect(revokeRow).toBeDefined();
+    if (revokeRow) {
+      await fireEvent.click(revokeRow);
+      expect(onaction).toHaveBeenCalledWith("revokeReplyToken");
     }
   });
 });

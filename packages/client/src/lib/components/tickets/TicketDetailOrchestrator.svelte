@@ -16,7 +16,8 @@
     setDraftForMode,
     clearDraftForMode,
   } from "$lib/tickets/draft-store.svelte.js";
-  import { Link, Button, Chip } from "konsta/svelte";
+  import { Link, Button, Chip, DialogButton } from "konsta/svelte";
+  import { DIALOG_DESTRUCTIVE_CLASS } from "$lib/components/shared/konsta-classes.js";
   import {
     ChevronLeft,
     MessageSquareText,
@@ -36,6 +37,7 @@
   } from "$lib/shell/context.js";
   import { useThreadChrome } from "$lib/shell/use-thread-chrome.svelte.js";
   import { layoutMode } from "$lib/stores/layout-mode.svelte";
+  import ShellDialog from "$lib/shell/ShellDialog.svelte";
   import SplitView from "$lib/shell/SplitView.svelte";
   import SubNavbarFilterLayout from "$lib/shell/SubNavbarFilterLayout.svelte";
   import IconTabToggle from "$lib/components/shared/IconTabToggle.svelte";
@@ -389,6 +391,21 @@
   let mergeConflictClientId = $state<string | null>(null);
   let mergeConflictAlias = $state<string | null>(null);
   let timelineActive = $state(false);
+  let revokeTokenDialogOpen = $state(false);
+  let revokeTokenPending = $state(false);
+
+  async function handleRevokeReplyToken(): Promise<void> {
+    revokeTokenPending = true;
+    try {
+      await ticketRouter.revokeReplyToken.mutate({ ticketId });
+      revokeTokenDialogOpen = false;
+      toastStore.show(m.revoke_reply_token_success(), 3000);
+    } catch {
+      toastStore.show(m.error_generic(), 3000);
+    } finally {
+      revokeTokenPending = false;
+    }
+  }
 
   const mergeClientA = $derived.by((): { id: string; alias: string } | null => {
     if (!ticket) return null;
@@ -767,6 +784,9 @@
     onsharelink: () => {
       closePanel();
       shareSheet.open();
+    },
+    onrevokeReplyToken: () => {
+      revokeTokenDialogOpen = true;
     },
   });
 
@@ -1402,6 +1422,33 @@
     editMessageSheetOpen = false;
   }}
 />
+
+<ShellDialog
+  opened={revokeTokenDialogOpen}
+  ondismiss={() => (revokeTokenDialogOpen = false)}
+  title={m.revoke_reply_token_confirm_title()}
+>
+  {#snippet content()}
+    <p>{m.revoke_reply_token_confirm_body()}</p>
+  {/snippet}
+  {#snippet buttons()}
+    <DialogButton
+      onclick={() => (revokeTokenDialogOpen = false)}
+      disabled={revokeTokenPending}
+    >
+      {m.common_cancel()}
+    </DialogButton>
+    <DialogButton
+      onclick={() => void handleRevokeReplyToken()}
+      class={DIALOG_DESTRUCTIVE_CLASS}
+      disabled={revokeTokenPending}
+    >
+      {revokeTokenPending
+        ? m.common_loading()
+        : m.revoke_reply_token_confirm_action()}
+    </DialogButton>
+  {/snippet}
+</ShellDialog>
 
 <style>
   .ticket-detail-page {

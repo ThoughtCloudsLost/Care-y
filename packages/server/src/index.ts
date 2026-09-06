@@ -40,8 +40,11 @@ import {
   createFieldEncryptor,
   createBlindIndexer,
   deriveConsultantPhoneIndexKey,
+  createReplyTokenHasher,
+  deriveReplyTokenIndexKey,
   type FieldEncryptor,
   type BlindIndexer,
+  type ReplyTokenHasher,
 } from "./crypto/field-encryptor.js";
 import { deriveFakeSaltKey } from "./auth/salt-defense.js";
 import {
@@ -206,6 +209,7 @@ interface CryptoServices {
   readonly fakeSaltKey: Buffer;
   readonly tokenizer: SessionTokenizer;
   readonly pushChallengeHmacKey: Buffer;
+  readonly replyTokenHasher: ReplyTokenHasher;
 }
 
 const PUSH_CHALLENGE_HMAC_INFO = "care-y-push-challenge-v1";
@@ -232,6 +236,9 @@ async function deriveCryptoServices(
   const fakeSaltKey = await deriveFakeSaltKey(opsSecretsKeyHex);
   const tokenizer = createSessionTokenizer(deriveSessionHmacKey(opsKey));
   const pushChallengeHmacKey = derivePushChallengeHmacKey(opsKey);
+  const replyTokenHasher = createReplyTokenHasher(
+    deriveReplyTokenIndexKey(opsKey),
+  );
   return {
     encryptor,
     indexer,
@@ -239,6 +246,7 @@ async function deriveCryptoServices(
     fakeSaltKey,
     tokenizer,
     pushChallengeHmacKey,
+    replyTokenHasher,
   };
 }
 
@@ -452,6 +460,7 @@ const {
   fakeSaltKey,
   tokenizer,
   pushChallengeHmacKey,
+  replyTokenHasher,
 } = await deriveCryptoServices(env.OPS_SECRETS_KEY);
 
 // --- Telephony provider factory ---
@@ -1164,6 +1173,11 @@ const relayHandler = createRelayHandler({
   createConsultantService,
   emailSender,
   loadOrgEmailBranding,
+  platformDb: db,
+  replyTokenHasher,
+  // Per-process plaintext token cache (see reply-token-service.ts JSDoc:
+  // a restart re-mints because the plaintext is never persisted).
+  replyTokenCache: new Map<string, string>(),
 });
 
 // --- HTTP server ---

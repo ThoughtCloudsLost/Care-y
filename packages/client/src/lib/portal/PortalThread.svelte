@@ -30,7 +30,9 @@
   import VoicemailPlayer from "$lib/components/tickets/VoicemailPlayer.svelte";
   import CallEntry from "$lib/components/tickets/CallEntry.svelte";
   import CorrectionBody from "$lib/components/tickets/CorrectionBody.svelte";
+  import EmailInboundCaution from "$lib/components/tickets/EmailInboundCaution.svelte";
   import { parseContactCorrection } from "@care-y/shared";
+  import type { EmailInboundPayload } from "@care-y/shared";
   import { triggerBlobDownload } from "$lib/components/shared/attachment-download.js";
   import { fetchBlob } from "$lib/utils/fetch-blob.js";
   import { needsDateSeparator, formatDateSeparator } from "$lib/utils/time.js";
@@ -639,6 +641,36 @@
       return null;
     }
   }
+
+  /**
+   * Parse an email_inbound JSON payload into a typed inbound payload.
+   * Returns null when the payload is not valid (triggers the plain-text
+   * fallback). Mirrors the parsing logic in EmailInboundBubbleContent.
+   */
+  function parseEmailInboundPayload(raw: string): EmailInboundPayload | null {
+    try {
+      const parsed: unknown = JSON.parse(raw);
+      if (
+        typeof parsed !== "object" ||
+        parsed === null ||
+        !("text" in parsed) ||
+        !("from" in parsed)
+      )
+        return null;
+      const obj = parsed as Record<string, unknown>;
+      return {
+        subject: typeof obj.subject === "string" ? obj.subject : "",
+        text: typeof obj.text === "string" ? obj.text : "",
+        from: typeof obj.from === "string" ? obj.from : "",
+        droppedAttachments:
+          typeof obj.droppedAttachments === "number"
+            ? obj.droppedAttachments
+            : 0,
+      };
+    } catch {
+      return null;
+    }
+  }
 </script>
 
 <div
@@ -723,6 +755,10 @@
                   entry.type === "email_outbound"
                     ? parseEmailPayload(entry.result.value)
                     : null}
+                {@const emailInboundContent =
+                  entry.type === "email_inbound"
+                    ? parseEmailInboundPayload(entry.result.value)
+                    : null}
                 {#if portalCorrectionPayload !== null}
                   <CorrectionBody payload={portalCorrectionPayload} />
                 {:else if entry.type === "email_outbound" && emailContent !== null}
@@ -744,6 +780,49 @@
                   </span>
                 {:else if entry.type === "email_outbound"}
                   <!-- Malformed email JSON fallback: render as plain text -->
+                  <span class="bubble-text">{entry.result.value}</span>
+                {:else if entry.type === "email_inbound" && emailInboundContent !== null}
+                  {#if emailInboundContent.subject !== ""}
+                    <span
+                      class="email-inbound-subject"
+                      data-testid="portal-email-inbound-subject"
+                    >
+                      {m.ticket_email_subject_label({
+                        subject: emailInboundContent.subject,
+                      })}
+                    </span>
+                  {/if}
+                  <span
+                    class="email-inbound-body"
+                    data-testid="portal-email-inbound-body"
+                  >
+                    {emailInboundContent.text}
+                  </span>
+                  <span
+                    class="email-inbound-from"
+                    data-testid="portal-email-inbound-from"
+                  >
+                    {m.ticket_email_inbound_from_label({
+                      from: emailInboundContent.from,
+                    })}
+                  </span>
+                  {#if emailInboundContent.droppedAttachments > 0}
+                    <span
+                      class="email-inbound-dropped"
+                      data-testid="portal-email-inbound-dropped"
+                    >
+                      {emailInboundContent.droppedAttachments === 1
+                        ? m.ticket_email_inbound_dropped_attachments_one({
+                            count: 1,
+                          })
+                        : m.ticket_email_inbound_dropped_attachments_other({
+                            count: emailInboundContent.droppedAttachments,
+                          })}
+                    </span>
+                  {/if}
+                  <EmailInboundCaution />
+                {:else if entry.type === "email_inbound"}
+                  <!-- Malformed inbound email JSON fallback -->
                   <span class="bubble-text">{entry.result.value}</span>
                 {:else if highlighting}
                   {#each splitByTerm(entry.result.value, searchTerm ?? "") as seg, i (i)}
@@ -977,5 +1056,37 @@
   .email-bubble-body :global(a) {
     color: var(--brand-accent, var(--ink));
     text-decoration: underline;
+  }
+
+  /* Email inbound entry styles (parity with EmailInboundBubbleContent) */
+
+  .email-inbound-subject {
+    display: block;
+    font-weight: 600;
+    color: var(--ink);
+    margin-bottom: 0.25em;
+    font-size: 0.8125rem;
+  }
+
+  .email-inbound-body {
+    display: block;
+    color: var(--ink);
+    white-space: pre-wrap;
+    word-break: break-word;
+  }
+
+  .email-inbound-from {
+    display: block;
+    color: var(--muted);
+    font-size: 0.75rem;
+    margin-top: 0.375em;
+    font-style: italic;
+  }
+
+  .email-inbound-dropped {
+    display: block;
+    color: var(--muted);
+    font-size: 0.75rem;
+    margin-top: 0.25em;
   }
 </style>

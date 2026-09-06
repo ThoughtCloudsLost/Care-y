@@ -210,7 +210,22 @@ function mockConsultantService(
 }
 
 function makeDeps(overrides?: Partial<RelayHandlerDeps>): RelayHandlerDeps {
+  // Default platform DB resolves no inbound domain row, which keeps every
+  // test that does not opt in on the byte-identical no-domain send path.
+  const noDomainPlatformDb = {
+    selectFrom: vi.fn().mockReturnValue({
+      select: vi.fn().mockReturnValue({
+        where: vi.fn().mockReturnValue({
+          executeTakeFirst: vi.fn().mockResolvedValue(undefined),
+        }),
+      }),
+    }),
+  } as unknown as RelayHandlerDeps["platformDb"];
+
   return {
+    platformDb: noDomainPlatformDb,
+    replyTokenHasher: { hash: vi.fn().mockReturnValue("default-hash") },
+    replyTokenCache: new Map<string, string>(),
     getProvider: vi.fn().mockResolvedValue(mockProvider()),
     getTenantDb: vi.fn().mockReturnValue({} as Kysely<TenantDatabase>),
     createConsultantRepo: vi.fn().mockReturnValue(
@@ -3235,6 +3250,222 @@ describe("createRelayHandler", () => {
 
       expect(res.statusCode).toBe(200);
       expectZeroed(emailBuf, "emailBuf after successful email send");
+    });
+
+    describe("Reply-To and footer (inbound email routing)", () => {
+      function makePlatformDb(domainRow: { domain: string } | null): unknown {
+        return {
+          selectFrom: () => ({
+            select: () => ({
+              where: () => ({
+                executeTakeFirst: vi.fn().mockResolvedValue(domainRow),
+              }),
+            }),
+          }),
+        };
+      }
+
+      function makeTenantDbWithConfig(
+        footer: string | null = null,
+        language = "en",
+      ): Kysely<TenantDatabase> {
+        // The handler calls getTenantDb which returns this mock.
+        // It must support:
+        // 1. selectFrom("org_config").select(...).executeTakeFirst() for footer
+        // 2. insertInto("email_reply_tokens")... for mintToken
+        // 3. updateTable("email_reply_tokens")... for revoking prior tokens
+        const orgConfigResult = {
+          email_reply_footer: footer,
+          default_language: language,
+        };
+        const insertReturning = {
+          returning: vi.fn().mockReturnValue({
+            executeTakeFirstOrThrow: vi
+              .fn()
+              .mockResolvedValue({ id: "tok-id-1" }),
+          }),
+        };
+        return {
+          selectFrom: vi.fn().mockImplementation((table: string) => {
+            if (table === "org_config") {
+              return {
+                select: () => ({
+                  executeTakeFirst: vi.fn().mockResolvedValue(orgConfigResult),
+                }),
+              };
+            }
+            // tickets/clients/emails joins for resolveClientEmail
+            return {
+              innerJoin: vi.fn().mockReturnValue({
+                innerJoin: vi.fn().mockReturnValue({
+                  select: () => ({
+                    where: () => ({
+                      executeTakeFirst: vi.fn().mockResolvedValue(null),
+                    }),
+                  }),
+                }),
+                select: () => ({
+                  where: () => ({
+                    executeTakeFirst: vi.fn().mockResolvedValue(null),
+                  }),
+                }),
+              }),
+              select: () => ({
+                where: () => ({
+                  executeTakeFirst: vi.fn().mockResolvedValue(null),
+                }),
+              }),
+            };
+          }),
+          updateTable: vi.fn().mockReturnValue({
+            set: vi.fn().mockReturnValue({
+              where: vi.fn().mockReturnValue({
+                where: vi.fn().mockReturnValue({
+                  execute: vi.fn().mockResolvedValue([{ numUpdatedRows: 0n }]),
+                }),
+              }),
+            }),
+          }),
+          insertInto: vi.fn().mockReturnValue({
+            values: vi.fn().mockReturnValue(insertReturning),
+          }),
+        } as unknown as Kysely<TenantDatabase>;
+      }
+
+      const tokenHasher = { hash: vi.fn().mockReturnValue("hashed-tok") };
+
+      it("sets Reply-To and appends footer when domain row exists", async () => {
+        const mockSender = { send: vi.fn().mockResolvedValue(undefined) };
+        const tDb = makeTenantDbWithConfig(null, "en");
+        const deps = makeEmailDeps({
+          emailSender: mockSender,
+          getTenantDb: vi.fn().mockReturnValue(tDb),
+          platformDb: makePlatformDb({
+            domain: "reply.example.org",
+          }) as never,
+          replyTokenHasher: tokenHasher,
+          replyTokenCache: new Map<string, string>(),
+        });
+        const handler = createRelayHandler(deps);
+        const req = createMockReq("POST", "/relay/email", VALID_EMAIL_BODY);
+        const res = createMockRes();
+
+        await handler(req, res as unknown as ServerResponse);
+
+        expect(res.statusCode).toBe(200);
+        const call = mockSender.send.mock.calls[0]?.[0] as {
+          replyTo?: string;
+          text: string;
+          html: string;
+        };
+        expect(call.replyTo).toMatch(
+          /^reply-[a-z2-7]{26}@reply\.example\.org$/,
+        );
+        expect(call.text).toContain("---");
+        expect(call.text).toContain("do not share");
+        expect(call.html).toContain("<hr");
+        expect(call.html).toContain("do not share");
+      });
+
+      it("uses org-configured footer when set", async () => {
+        const mockSender = { send: vi.fn().mockResolvedValue(undefined) };
+        const tDb = makeTenantDbWithConfig("Custom footer text.");
+        const deps = makeEmailDeps({
+          emailSender: mockSender,
+          getTenantDb: vi.fn().mockReturnValue(tDb),
+          platformDb: makePlatformDb({
+            domain: "reply.example.org",
+          }) as never,
+          replyTokenHasher: tokenHasher,
+          replyTokenCache: new Map<string, string>(),
+        });
+        const handler = createRelayHandler(deps);
+        const req = createMockReq("POST", "/relay/email", VALID_EMAIL_BODY);
+        const res = createMockRes();
+
+        await handler(req, res as unknown as ServerResponse);
+
+        expect(res.statusCode).toBe(200);
+        const call = mockSender.send.mock.calls[0]?.[0] as {
+          text: string;
+          html: string;
+        };
+        expect(call.text).toContain("Custom footer text.");
+        expect(call.html).toContain("Custom footer text.");
+      });
+
+      it("sends without Reply-To or footer when no domain row exists", async () => {
+        const mockSender = { send: vi.fn().mockResolvedValue(undefined) };
+        const deps = makeEmailDeps({
+          emailSender: mockSender,
+          platformDb: makePlatformDb(null) as never,
+          replyTokenHasher: tokenHasher,
+          replyTokenCache: new Map<string, string>(),
+        });
+        const handler = createRelayHandler(deps);
+        const req = createMockReq("POST", "/relay/email", VALID_EMAIL_BODY);
+        const res = createMockRes();
+
+        await handler(req, res as unknown as ServerResponse);
+
+        expect(res.statusCode).toBe(200);
+        const call = mockSender.send.mock.calls[0]?.[0] as {
+          replyTo?: string;
+          text: string;
+          html: string;
+        };
+        expect(call.replyTo).toBeUndefined();
+        expect(call.text).toBe("Hello");
+        expect(call.html).toBe("<p>Hello</p>");
+      });
+
+      it("sends without Reply-To through the default deps (no domain row resolved)", async () => {
+        const mockSender = { send: vi.fn().mockResolvedValue(undefined) };
+        const deps = makeEmailDeps({ emailSender: mockSender });
+        const handler = createRelayHandler(deps);
+        const req = createMockReq("POST", "/relay/email", VALID_EMAIL_BODY);
+        const res = createMockRes();
+
+        await handler(req, res as unknown as ServerResponse);
+
+        expect(res.statusCode).toBe(200);
+        const call = mockSender.send.mock.calls[0]?.[0] as {
+          replyTo?: string;
+          text: string;
+        };
+        expect(call.replyTo).toBeUndefined();
+        expect(call.text).toBe("Hello");
+      });
+
+      it("reuses cached token on second send for the same ticket", async () => {
+        const mockSender = { send: vi.fn().mockResolvedValue(undefined) };
+        const cache = new Map<string, string>();
+        cache.set(TEST_TICKET_ID, "cachedtokenvalue26charslng");
+        const deps = makeEmailDeps({
+          emailSender: mockSender,
+          getTenantDb: vi
+            .fn()
+            .mockReturnValue(makeTenantDbWithConfig(null, "en")),
+          platformDb: makePlatformDb({
+            domain: "reply.example.org",
+          }) as never,
+          replyTokenHasher: tokenHasher,
+          replyTokenCache: cache,
+        });
+        const handler = createRelayHandler(deps);
+        const req = createMockReq("POST", "/relay/email", VALID_EMAIL_BODY);
+        const res = createMockRes();
+
+        await handler(req, res as unknown as ServerResponse);
+
+        expect(res.statusCode).toBe(200);
+        const call = mockSender.send.mock.calls[0]?.[0] as {
+          replyTo?: string;
+        };
+        expect(call.replyTo).toBe(
+          "reply-cachedtokenvalue26charslng@reply.example.org",
+        );
+      });
     });
   });
 });

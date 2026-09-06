@@ -1085,4 +1085,212 @@ describe("PortalThread", () => {
       });
     });
   });
+
+  // ── Inbound email entry rendering (portal parity) ─────────────────
+
+  /** Build an email_inbound portal message with { subject, text, from, droppedAttachments } payload. */
+  function makeEmailInboundMessage(
+    subject: string,
+    text: string,
+    from: string,
+    direction: PortalMessageWire["direction"],
+    keypairPublic: Uint8Array,
+    droppedAttachments = 0,
+    createdAt: string = new Date().toISOString(),
+  ): PortalMessageWire {
+    const payload = JSON.stringify({
+      subject,
+      text,
+      from,
+      droppedAttachments,
+    });
+    return makeMessage(
+      payload,
+      direction,
+      keypairPublic,
+      null,
+      createdAt,
+      "email_inbound",
+    );
+  }
+
+  describe("email_inbound entries", () => {
+    it("renders subject, body, unverified From, and caution affordance", async () => {
+      const ctx = buildDecryptContext();
+
+      const msg = makeEmailInboundMessage(
+        "Re: your appointment",
+        "I will be there at 3 PM.",
+        "ana@example.org",
+        "from_client",
+        ctx.keypairPublic,
+      );
+
+      const { container } = render(PortalThread, {
+        props: {
+          messages: [msg],
+          decryptMessage: ctx.decryptMessage,
+          decryptAttachmentKey: ctx.decryptAttachmentKey,
+          decryptAttachmentBlob: ctx.decryptAttachmentBlob,
+          loading: false,
+        },
+      });
+
+      await vi.waitFor(() => {
+        const subject = container.querySelector(
+          "[data-testid='portal-email-inbound-subject']",
+        );
+        expect(subject).toBeTruthy();
+        expect(subject!.textContent).toContain("Re: your appointment");
+      });
+
+      const body = container.querySelector(
+        "[data-testid='portal-email-inbound-body']",
+      );
+      expect(body).toBeTruthy();
+      expect(body!.textContent).toContain("I will be there at 3 PM.");
+
+      const from = container.querySelector(
+        "[data-testid='portal-email-inbound-from']",
+      );
+      expect(from).toBeTruthy();
+      expect(from!.textContent).toContain("ana@example.org");
+      expect(from!.textContent).toContain("unverified");
+
+      const caution = container.querySelector(
+        "[data-testid='email-inbound-caution-trigger']",
+      );
+      expect(caution).toBeTruthy();
+    });
+
+    it("shows dropped attachments note when nonzero", async () => {
+      const ctx = buildDecryptContext();
+
+      const msg = makeEmailInboundMessage(
+        "Docs",
+        "See attached.",
+        "client@example.com",
+        "from_client",
+        ctx.keypairPublic,
+        3,
+      );
+
+      const { container } = render(PortalThread, {
+        props: {
+          messages: [msg],
+          decryptMessage: ctx.decryptMessage,
+          decryptAttachmentKey: ctx.decryptAttachmentKey,
+          decryptAttachmentBlob: ctx.decryptAttachmentBlob,
+          loading: false,
+        },
+      });
+
+      await vi.waitFor(() => {
+        const dropped = container.querySelector(
+          "[data-testid='portal-email-inbound-dropped']",
+        );
+        expect(dropped).toBeTruthy();
+        expect(dropped!.textContent).toContain("3");
+      });
+    });
+
+    it("falls back to plain text when inbound email JSON is malformed", async () => {
+      const ctx = buildDecryptContext();
+
+      const malformed = makeMessage(
+        "This is not valid email_inbound JSON",
+        "from_client",
+        ctx.keypairPublic,
+        null,
+        new Date().toISOString(),
+        "email_inbound",
+      );
+
+      const { container } = render(PortalThread, {
+        props: {
+          messages: [malformed],
+          decryptMessage: ctx.decryptMessage,
+          decryptAttachmentKey: ctx.decryptAttachmentKey,
+          decryptAttachmentBlob: ctx.decryptAttachmentBlob,
+          loading: false,
+        },
+      });
+
+      await vi.waitFor(() => {
+        const bubble = container.querySelector(
+          "[data-testid='conversation-bubble']",
+        );
+        expect(bubble).toBeTruthy();
+        expect(bubble!.textContent).toContain(
+          "This is not valid email_inbound JSON",
+        );
+      });
+
+      // No structured inbound email elements
+      expect(
+        container.querySelector("[data-testid='portal-email-inbound-subject']"),
+      ).toBeNull();
+      expect(
+        container.querySelector("[data-testid='portal-email-inbound-from']"),
+      ).toBeNull();
+    });
+
+    it("renders on the sent (right, from_client) side", async () => {
+      const ctx = buildDecryptContext();
+
+      const msg = makeEmailInboundMessage(
+        "Hello",
+        "Hi there.",
+        "client@example.com",
+        "from_client",
+        ctx.keypairPublic,
+      );
+
+      const { container } = render(PortalThread, {
+        props: {
+          messages: [msg],
+          decryptMessage: ctx.decryptMessage,
+          decryptAttachmentKey: ctx.decryptAttachmentKey,
+          decryptAttachmentBlob: ctx.decryptAttachmentBlob,
+          loading: false,
+        },
+      });
+
+      await vi.waitFor(() => {
+        const sent = container.querySelector('[data-direction="sent"]');
+        expect(sent).toBeTruthy();
+      });
+    });
+
+    it("caution affordance has keyboard reachability", async () => {
+      const ctx = buildDecryptContext();
+
+      const msg = makeEmailInboundMessage(
+        "Subject",
+        "Body text.",
+        "test@example.com",
+        "from_client",
+        ctx.keypairPublic,
+      );
+
+      const { container } = render(PortalThread, {
+        props: {
+          messages: [msg],
+          decryptMessage: ctx.decryptMessage,
+          decryptAttachmentKey: ctx.decryptAttachmentKey,
+          decryptAttachmentBlob: ctx.decryptAttachmentBlob,
+          loading: false,
+        },
+      });
+
+      await vi.waitFor(() => {
+        const trigger = container.querySelector(
+          "[data-testid='email-inbound-caution-trigger']",
+        );
+        expect(trigger).toBeTruthy();
+        expect(trigger!.getAttribute("aria-label")).toBeTruthy();
+        expect(trigger!.getAttribute("aria-expanded")).toBe("false");
+      });
+    });
+  });
 });

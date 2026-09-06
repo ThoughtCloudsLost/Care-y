@@ -528,6 +528,19 @@ export async function seedTestTickets(
           source: "volunteer",
           agoMinutes: 235,
         },
+        // email_inbound: client replied by email instead of SMS (seeds the
+        // bubble renderer and caution affordance for dev and e2e).
+        {
+          content: JSON.stringify({
+            subject: "Re: your appointment",
+            text: "Thank you, I have the letter and my ID ready. Do I need anything else for tonight?",
+            from: "client@example.org",
+            droppedAttachments: 0,
+          }),
+          source: "client",
+          type: "email_inbound",
+          agoMinutes: 220,
+        },
         {
           content:
             "Attached the housing checklist we went over. Bring your ID and the letter",

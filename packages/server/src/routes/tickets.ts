@@ -101,6 +101,7 @@ import type { ShiftProvider } from "../tickets/shift-provider.js";
 import { createStubShiftProvider } from "../tickets/shift-provider.js";
 import { createUserService } from "../users/user-service.js";
 import { rewrapFollowUp } from "../tickets/rewrap-service.js";
+import { revokeTokensForTicket } from "../email/reply-token-service.js";
 import {
   maskPhone,
   formatPhone,
@@ -2279,6 +2280,29 @@ export function createTicketRouter(deps: TicketRouterDeps) {
             }
             throw err;
           }
+        }),
+      ),
+
+    // --- Reply token revocation ---
+
+    revokeReplyToken: volunteerProcedure
+      .input(z.object({ ticketId: ticketIdSchema }))
+      .mutation(
+        withErrorWrapping(async ({ ctx, input }) => {
+          const { svc } = ticketSvc(ctx.org.tenantDb);
+          // Assert the caller can access this ticket
+          await svc.findById(input.ticketId, ctx.user.id);
+          const revoked = await revokeTokensForTicket(
+            ctx.org.tenantDb,
+            input.ticketId,
+          );
+          audit(ctx.org.tenantDb, {
+            eventType: "reply_token_revoked",
+            actorId: ctx.user.id,
+            ticketId: input.ticketId,
+            metadata: { revokedCount: revoked },
+          });
+          return { revokedCount: revoked };
         }),
       ),
 

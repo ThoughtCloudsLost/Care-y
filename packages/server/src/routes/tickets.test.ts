@@ -53,6 +53,7 @@ import type {
   ChannelSecret,
   AliasHash,
   BlobKey,
+  ReplyTokenHash,
 } from "@care-y/shared";
 import { createTicketRouter, type TicketRouterDeps } from "./tickets.js";
 import { router, createCallerFactory } from "../trpc/trpc.js";
@@ -2854,6 +2855,73 @@ describe.skipIf(!process.env.DATABASE_URL)(
         expect(meta).not.toHaveProperty("username");
         expect(meta).not.toHaveProperty("accountId");
         expect(meta).not.toHaveProperty("channelId");
+      });
+    });
+
+    describe("revokeReplyToken", () => {
+      it("revokes live tokens and writes an audit row", async () => {
+        const { user, ...fixture } = await setupUserWithTicket();
+        const caller = createAuthedCaller(user);
+
+        // Insert an unrevoked reply token for the ticket.
+        await tenantDb
+          .insertInto("email_reply_tokens")
+          .values({
+            ticket_id: fixture.ticketId,
+            token_hash: "test-hash-live" as ReplyTokenHash,
+          })
+          .execute();
+
+        const result = await caller.tickets.revokeReplyToken({
+          ticketId: fixture.ticketId,
+        });
+
+        expect(result.revokedCount).toBe(1);
+
+        // Verify the row has revoked_at set.
+        const row = await tenantDb
+          .selectFrom("email_reply_tokens")
+          .select(["revoked_at"])
+          .where("token_hash", "=", "test-hash-live" as ReplyTokenHash)
+          .executeTakeFirstOrThrow();
+
+        expect(row.revoked_at).not.toBeNull();
+
+        // The route's audit() helper is fire-and-forget (void svc.log),
+        // so the row lands after the mutation resolves. Poll for it.
+        await vi.waitFor(async () => {
+          const auditRow = await tenantDb
+            .selectFrom("audit_log")
+            .select(["event_type", "actor_id", "ticket_id"])
+            .where("event_type", "=", "reply_token_revoked")
+            .executeTakeFirst();
+
+          expect(auditRow).toBeDefined();
+          expect(auditRow!.actor_id).toBe(user.id);
+          expect(auditRow!.ticket_id).toBe(fixture.ticketId);
+        });
+      });
+
+      it("returns zero when no live tokens exist", async () => {
+        const { user, ...fixture } = await setupUserWithTicket();
+        const caller = createAuthedCaller(user);
+
+        const result = await caller.tickets.revokeReplyToken({
+          ticketId: fixture.ticketId,
+        });
+
+        expect(result.revokedCount).toBe(0);
+      });
+
+      it("rejects unauthenticated callers", async () => {
+        const unauthCaller = createUnauthCaller();
+
+        await expectTrpcError(
+          unauthCaller.tickets.revokeReplyToken({
+            ticketId: randomUUID() as TicketId,
+          }),
+          "UNAUTHORIZED",
+        );
       });
     });
 

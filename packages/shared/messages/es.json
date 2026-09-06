@@ -1412,6 +1412,7 @@
   "ticket_call_error_no_phone": "No hay número de teléfono registrado para este {client}.",
   "exposure_hint_sms": "Los SMS no estan cifrados. Tu proveedor de telefonía puede leerlos. Mantiene los detalles sensibles en el chat cifrado.",
   "exposure_hint_call": "Esta llamada pasa por tu proveedor de telefonía. Pueden escuchar la llamada. Mantiene los detalles sensibles en el chat cifrado.",
+  "exposure_hint_email": "El correo electrónico es el canal más fácil de falsificar. Cualquier persona que controle el buzón del remitente, o finja hacerlo, puede enviar mensajes que parezcan reales. Verifica lo importante por otro canal.",
   "exposure_hint_dismiss": "Entendido",
   "call_indicator_label": "Llamada en curso",
   "onboarding_step_account": "Cuenta",
@@ -3003,6 +3004,11 @@
   "correction_body_apply_email": "Aplicar dirección de correo",
   "ticket_email_recipient": "Para: {email}",
   "ticket_email_sheet_title": "Correo electrónico",
+  "ticket_email_inbound_from_label": "De: {from} (no verificado)",
+  "ticket_email_inbound_dropped_attachments_one": "Se descartó {count} archivo adjunto",
+  "ticket_email_inbound_dropped_attachments_other": "Se descartaron {count} archivos adjuntos",
+  "ticket_email_inbound_caution": "Este mensaje llegó por correo electrónico. El correo electrónico es el canal más fácil de falsificar. Verifica cualquier dato importante antes de actuar.",
+  "ticket_email_inbound_caution_label": "Aviso sobre correo electrónico",
   "ticket_tier_created_at": "Creado {time}",
   "ticket_tier_last_seen_at": "Abierto por última vez {time}",
   "portal_upgrade_title": "Haz tus mensajes más seguros",
@@ -3039,5 +3045,10 @@
   "portal_passphrase_error_stale": "Llegaron mensajes nuevos mientras se agregaba la contraseña. Actualizando, intenta de nuevo.",
   "error_portal_contact_locked": "Agrega una contraseña o crea una cuenta para ver la información de contacto registrada.",
   "error_portal_passphrase_already_set": "Este enlace ya tiene una contraseña.",
-  "error_portal_passphrase_count_mismatch": "Tus mensajes cambiaron mientras se agregaba la contraseña. Inténtalo de nuevo."
+  "error_portal_passphrase_count_mismatch": "Tus mensajes cambiaron mientras se agregaba la contraseña. Inténtalo de nuevo.",
+  "revoke_reply_token_label": "Revocar token de respuesta por correo",
+  "revoke_reply_token_confirm_title": "¿Revocar token de respuesta?",
+  "revoke_reply_token_confirm_body": "El cliente ya no podrá responder a los correos de este caso. Se creará un token nuevo en el próximo correo saliente.",
+  "revoke_reply_token_confirm_action": "Revocar",
+  "revoke_reply_token_success": "Token de respuesta revocado"
 }

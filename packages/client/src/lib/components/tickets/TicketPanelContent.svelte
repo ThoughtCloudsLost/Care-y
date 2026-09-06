@@ -22,7 +22,14 @@
     ListItem,
     Toggle,
   } from "konsta/svelte";
-  import { Phone, Mail, Pencil, BellRing, Link2 } from "@lucide/svelte";
+  import {
+    Phone,
+    Mail,
+    Pencil,
+    BellRing,
+    Link2,
+    KeyRound,
+  } from "@lucide/svelte";
   import * as m from "$lib/paraglide/messages.js";
   import { withTerms } from "$lib/terminology/with-terms.js";
   import StatusMark from "$lib/components/StatusMark.svelte";
@@ -258,6 +265,19 @@
           {/if}
         {/snippet}
       </ListItem>
+      {#if ticket.clientEmail}
+        <ListItem
+          link
+          title={m.revoke_reply_token_label()}
+          onclick={() => onaction("revokeReplyToken")}
+          onkeydown={onKeyActivate(() => onaction("revokeReplyToken"))}
+          class="touch-feedback"
+        >
+          {#snippet media()}
+            <KeyRound class="w-5 h-5 text-[var(--ink-2)]" aria-hidden="true" />
+          {/snippet}
+        </ListItem>
+      {/if}
     {/if}
     {#if !compact}
       <ListItem title={m.ticket_panel_opened()}>

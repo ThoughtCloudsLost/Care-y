@@ -1412,6 +1412,7 @@
   "ticket_call_error_no_phone": "No phone number on file for this {client}.",
   "exposure_hint_sms": "SMS is not encrypted. Your phone provider can read it. Keep sensitive details in the encrypted chat.",
   "exposure_hint_call": "This call routes through your phone provider. They can hear the call. Keep sensitive details in the encrypted chat.",
+  "exposure_hint_email": "Email is the easiest channel to fake. Anyone who controls the sender's mailbox, or pretends to, can send messages that look real. Verify anything important through another channel.",
   "exposure_hint_dismiss": "Got it",
   "call_indicator_label": "Call in progress",
   "onboarding_step_account": "Account",
@@ -3003,6 +3004,11 @@
   "correction_body_apply_email": "Apply email address",
   "ticket_email_recipient": "To: {email}",
   "ticket_email_sheet_title": "Email",
+  "ticket_email_inbound_from_label": "From: {from} (unverified)",
+  "ticket_email_inbound_dropped_attachments_one": "{count} attachment was dropped",
+  "ticket_email_inbound_dropped_attachments_other": "{count} attachments were dropped",
+  "ticket_email_inbound_caution": "This message arrived by email. Email is the easiest channel to fake. Check anything important in it before acting on it.",
+  "ticket_email_inbound_caution_label": "Email caution",
   "ticket_tier_created_at": "Created {time}",
   "ticket_tier_last_seen_at": "Last opened {time}",
   "portal_upgrade_title": "Make your messages more secure",
@@ -3039,5 +3045,10 @@
   "portal_passphrase_error_stale": "New messages arrived while adding the password. Refreshing, please try again.",
   "error_portal_contact_locked": "Add a password or create an account to see the contact info on file.",
   "error_portal_passphrase_already_set": "This link already has a password.",
-  "error_portal_passphrase_count_mismatch": "Your messages changed while adding the password. Try again."
+  "error_portal_passphrase_count_mismatch": "Your messages changed while adding the password. Try again.",
+  "revoke_reply_token_label": "Revoke email reply token",
+  "revoke_reply_token_confirm_title": "Revoke reply token?",
+  "revoke_reply_token_confirm_body": "The client will no longer be able to reply to emails for this ticket. A new token will be created on the next outbound email.",
+  "revoke_reply_token_confirm_action": "Revoke",
+  "revoke_reply_token_success": "Reply token revoked"
 }

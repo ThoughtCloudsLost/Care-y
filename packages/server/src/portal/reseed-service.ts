@@ -94,14 +94,16 @@ export interface ConvertBlobForReseedResult {
 /**
  * Only text-bearing followup types get portal message copies. Must stay
  * in step with ELIGIBLE_TYPES in the client reseed composable.
- * email_outbound is included because the live send path stores a portal
- * copy for every org email; recovered history should match.
+ * email_outbound and email_inbound are included because the live paths
+ * store portal copies for outbound org emails and inbound client replies;
+ * recovered history should match.
  */
 const MESSAGE_COPY_TYPES = new Set([
   "message",
   "sms_outbound",
   "sms_inbound",
   "email_outbound",
+  "email_inbound",
 ]);
 
 // ---------------------------------------------------------------------------

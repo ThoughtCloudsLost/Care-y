@@ -61,4 +61,39 @@ describe("CONTENT_TYPE_REGISTRY", () => {
       }
     });
   });
+
+  describe("email_inbound entry", () => {
+    it("has an entry for email_inbound", () => {
+      expect(CONTENT_TYPE_REGISTRY.email_inbound).toBeDefined();
+    });
+
+    it("has category 'message'", () => {
+      expect(CONTENT_TYPE_REGISTRY.email_inbound.category).toBe("message");
+    });
+
+    it("allows only client source", () => {
+      expect(CONTENT_TYPE_REGISTRY.email_inbound.allowedSources).toEqual([
+        "client",
+      ]);
+    });
+
+    it("uses ticket-key encryption", () => {
+      expect(CONTENT_TYPE_REGISTRY.email_inbound.encryption).toBe("ticket-key");
+    });
+
+    it("has encrypted content and no event params", () => {
+      expect(CONTENT_TYPE_REGISTRY.email_inbound.hasEncryptedContent).toBe(
+        true,
+      );
+      expect(CONTENT_TYPE_REGISTRY.email_inbound.hasEventParams).toBe(false);
+    });
+
+    it("is not groupable", () => {
+      expect(CONTENT_TYPE_REGISTRY.email_inbound.groupable).toBe(false);
+    });
+
+    it("has no renderVariant", () => {
+      expect(CONTENT_TYPE_REGISTRY.email_inbound.renderVariant).toBeUndefined();
+    });
+  });
 });

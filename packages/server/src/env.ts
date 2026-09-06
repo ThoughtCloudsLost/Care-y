@@ -96,6 +96,19 @@ const envSchema = z.object({
   // whole suite submits from one address and would otherwise exhaust the
   // budget partway through a single run.
   INTAKE_SUBMISSION_LIMIT: z.coerce.number().int().positive().default(3),
+
+  // Inbound SMTP receiver (runs as its own process via inbound-entry.ts,
+  // never inside the API process). Disabled by default: orgs without an
+  // inbound email domain see no receiver at all.
+  INBOUND_SMTP_ENABLED: z
+    .enum(["true", "false"])
+    .default("false")
+    .transform((v) => v === "true"),
+  INBOUND_SMTP_PORT: z.coerce.number().int().positive().default(25),
+  // STARTTLS is offered only when both paths are set; without them the
+  // receiver stays plaintext SMTP (port 25 opportunistic-TLS reality).
+  INBOUND_SMTP_TLS_KEY_PATH: z.string().optional(),
+  INBOUND_SMTP_TLS_CERT_PATH: z.string().optional(),
 });
 
 export type EnvVars = z.infer<typeof envSchema>;

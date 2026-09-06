@@ -161,6 +161,61 @@ test.describe.serial("Ticket Detail (Chat View)", () => {
     expect(count).toBeGreaterThanOrEqual(1);
   });
 
+  // ── 6b. Seeded email_inbound bubble renders correctly ───────────
+
+  test("email_inbound bubble shows subject, unverified From, and caution affordance", async () => {
+    // The seeded email_inbound follow-up ("Re: your appointment") is in
+    // the recent part of the story ticket thread. Scroll the chat log
+    // down to make it visible (the VirtualList may not have painted it
+    // at the current scroll offset).
+    const chatLog = page.locator('[role="log"]');
+    await chatLog.evaluate((el) => {
+      el.scrollTo(0, el.scrollHeight);
+    });
+    await page.waitForTimeout(300);
+
+    // Subject line (rendered via the ticket_email_subject_label i18n key).
+    const subject = page.locator('[data-testid="email-inbound-subject"]');
+    await expect(subject).toBeVisible({ timeout: CRYPTO_TIMEOUT });
+    await expect(subject).toContainText("Re: your appointment");
+
+    // Unverified From line (rendered via ticket_email_inbound_from_label).
+    const fromLine = page.locator('[data-testid="email-inbound-from"]');
+    await expect(fromLine).toBeVisible();
+    await expect(fromLine).toContainText("client@example.org");
+    await expect(fromLine).toContainText("unverified");
+
+    // Caution affordance trigger button is visible.
+    const cautionTrigger = page.locator(
+      '[data-testid="email-inbound-caution-trigger"]',
+    );
+    await expect(cautionTrigger).toBeVisible();
+  });
+
+  test("email_inbound caution affordance opens on keyboard focus+Enter and dismisses with Escape", async () => {
+    // WCAG 1.4.13 (SEC-237): the affordance must be keyboard-reachable,
+    // dismissable with Escape, and persistent until dismissed.
+    const cautionTrigger = page.locator(
+      '[data-testid="email-inbound-caution-trigger"]',
+    );
+    await expect(cautionTrigger).toBeVisible({ timeout: 5_000 });
+
+    // Focus the trigger and activate with Enter.
+    await cautionTrigger.focus();
+    await page.keyboard.press("Enter");
+
+    // The caution panel should appear with the warning text.
+    const cautionPanel = page.locator(
+      '[data-testid="email-inbound-caution-panel"]',
+    );
+    await expect(cautionPanel).toBeVisible({ timeout: 3_000 });
+    await expect(cautionPanel).toContainText("easiest channel to fake");
+
+    // Dismiss with Escape (WCAG 1.4.13 dismissable requirement).
+    await page.keyboard.press("Escape");
+    await expect(cautionPanel).not.toBeVisible({ timeout: 3_000 });
+  });
+
   // ── 7. Long-press on client message shows Copy (Checkpoint 19) ──
 
   test("long-press on client message shows Copy action", async () => {

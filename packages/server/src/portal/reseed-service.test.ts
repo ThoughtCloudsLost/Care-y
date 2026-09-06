@@ -257,6 +257,47 @@ describe.skipIf(!process.env.DATABASE_URL)(
         expect(rows[0]!.direction).toBe("to_client");
       });
 
+      it("accepts email_inbound message copies", async () => {
+        const fixture = await createTestTicketFixture(testDb.db, {
+          createUser: true,
+        });
+        const channel = await insertChannel(testDb.db, fixture.clientId);
+        const access = createTicketAccessChecker(testDb.db);
+
+        const fuId = newFollowupId();
+        await testDb.db
+          .insertInto("followups")
+          .values({
+            id: fuId,
+            ticket_id: fixture.ticketId,
+            source: "client",
+            type: "email_inbound",
+            encrypted_content: Buffer.from("ct"),
+          })
+          .execute();
+
+        const result = await reseedPortalHistory(
+          testDb.db,
+          access,
+          fixture.userId!,
+          {
+            clientId: fixture.clientId,
+            channelId: channel.channel_id,
+            messages: [{ followupId: fuId, copy: fakeTriple() }],
+            attachmentWraps: [],
+            recordingWraps: [],
+          },
+        );
+
+        expect(result.inserted).toBe(1);
+        const rows = await testDb.db
+          .selectFrom("portal_messages")
+          .selectAll()
+          .where("channel_id", "=", channel.id)
+          .execute();
+        expect(rows[0]!.direction).toBe("from_client");
+      });
+
       it("rejects voicemail text copies", async () => {
         const fixture = await createTestTicketFixture(testDb.db, {
           createUser: true,

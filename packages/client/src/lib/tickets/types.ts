@@ -15,4 +15,5 @@ export type TicketAction =
   | "editContent"
   | "notifications"
   | "shareLink"
+  | "revokeReplyToken"
   | "cancel";

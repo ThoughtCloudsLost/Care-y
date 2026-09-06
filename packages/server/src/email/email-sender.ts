@@ -12,6 +12,7 @@ export interface EmailMessage {
   readonly text: string;
   readonly html?: string;
   readonly from?: string; // Per-message override. When absent, uses factory default.
+  readonly replyTo?: string; // Reply-To header. Only set by the email relay for inbound routing.
 }
 
 export interface EmailSender {
@@ -61,6 +62,9 @@ export function createSmtpEmailSender(opts: SmtpOptions): EmailSender {
           subject: message.subject,
           text: message.text,
           html: message.html,
+          ...(message.replyTo !== undefined
+            ? { replyTo: message.replyTo }
+            : {}),
         });
       } catch (err: unknown) {
         const msg = extractErrorMessage(err);
@@ -87,9 +91,10 @@ export function createConsoleEmailSender(): EmailSender {
   return {
     async send(message: EmailMessage): Promise<void> {
       await Promise.resolve();
-      console.log(
-        `[email] to=<redacted> length=${String(message.text.length)}`,
-      );
+      // Only the body length leaves this function; the message object
+      // itself never reaches the logger.
+      const textLength = message.text.length;
+      console.log(`[email] to=<redacted> length=${String(textLength)}`);
     },
   };
 }

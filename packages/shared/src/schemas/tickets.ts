@@ -62,6 +62,7 @@ export const followUpTypeSchema = z.enum([
   "share_link",
   "contact_correction",
   "email_outbound",
+  "email_inbound",
 ]);
 export type FollowUpType = z.infer<typeof followUpTypeSchema>;
 
@@ -745,3 +746,16 @@ export const emailSendInputSchema = z.object({
   text: z.string().min(1).max(EMAIL_RELAY_LIMITS.text),
 });
 export type EmailSendInput = z.infer<typeof emailSendInputSchema>;
+
+/**
+ * Payload shape for an inbound email follow-up (stored encrypted).
+ * Text-only in v1; no HTML stored or rendered. The `from` field is the
+ * claimed From header, used for display only, never for routing.
+ */
+export const emailInboundPayloadSchema = z.object({
+  subject: z.string().max(EMAIL_RELAY_LIMITS.subject),
+  text: z.string().min(1).max(EMAIL_RELAY_LIMITS.text),
+  from: z.string().max(320),
+  droppedAttachments: z.number().int().min(0),
+});
+export type EmailInboundPayload = z.infer<typeof emailInboundPayloadSchema>;

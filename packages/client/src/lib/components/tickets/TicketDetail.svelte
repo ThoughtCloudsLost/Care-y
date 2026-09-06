@@ -83,6 +83,7 @@
   import CorrectionStatusLine from "$lib/components/tickets/CorrectionStatusLine.svelte";
   import CorrectionBody from "$lib/components/tickets/CorrectionBody.svelte";
   import EmailBubbleContent from "$lib/components/tickets/EmailBubbleContent.svelte";
+  import EmailInboundBubbleContent from "$lib/components/tickets/EmailInboundBubbleContent.svelte";
   import { parseContactCorrection } from "@care-y/shared";
   import { parseEmailOutbound } from "$lib/editor/email-schema.js";
   import {
@@ -92,6 +93,7 @@
     isFollowUpGroup,
     followUpGroupKey,
     isEmailOutbound,
+    isEmailInbound,
     type GroupedFollowUp,
   } from "$lib/tickets/follow-up-utils.js";
   import { resolveNoteTypeIcon as resolveNoteTypeIconComponent } from "$lib/utils/note-type-icons.js";
@@ -890,6 +892,22 @@
           const parsed = parseEmailOutbound(v);
           if (parsed !== null) return parsed.subject;
         }
+        if (isEmailInbound(fu)) {
+          try {
+            const parsed: unknown = JSON.parse(v);
+            if (
+              typeof parsed === "object" &&
+              parsed !== null &&
+              "subject" in parsed &&
+              typeof parsed.subject === "string" &&
+              parsed.subject !== ""
+            ) {
+              return parsed.subject;
+            }
+          } catch {
+            // Malformed payload; fall through to sliced preview
+          }
+        }
         return v.slice(0, 80);
       },
       denied: () => m.decrypt_placeholder_denied(),
@@ -1318,6 +1336,18 @@
                 timestamp={rec.createdAt}
               >
                 <EmailBubbleContent
+                  result={recResult}
+                  encryptedContent={rec.encryptedContent}
+                />
+              </ConversationBubble>
+            {:else if isEmailInbound(rec)}
+              <ConversationBubble
+                direction="received"
+                speaker={clientAlias}
+                source="client"
+                timestamp={rec.createdAt}
+              >
+                <EmailInboundBubbleContent
                   result={recResult}
                   encryptedContent={rec.encryptedContent}
                 />

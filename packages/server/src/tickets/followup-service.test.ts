@@ -200,6 +200,29 @@ describe.skipIf(!process.env.DATABASE_URL)("FollowUpService (DB)", () => {
     ).rejects.toBeInstanceOf(NotFoundError);
   });
 
+  it("listByTicket returns email_inbound alongside sms_inbound with identical visibility", async () => {
+    const { userId, ticketId } = await createTicketFixture();
+
+    // Server-ingested rows (raw insert: the read path is under test, and
+    // both types are written by server helpers, not svc.create).
+    for (const type of ["sms_inbound", "email_inbound"] as const) {
+      await testDb.db
+        .insertInto("followups")
+        .values({
+          ticket_id: ticketId,
+          source: "client",
+          type,
+          encrypted_content: Buffer.from(`${type}-blob`),
+        })
+        .execute();
+    }
+
+    const rows = await svc.listByTicket(userId, ticketId, { limit: 10 });
+    const types = rows.map((r) => r.type);
+    expect(types).toContain("sms_inbound");
+    expect(types).toContain("email_inbound");
+  });
+
   it("listByTicket returns follow-ups in creation order with pagination", async () => {
     const { userId, ticketId } = await createTicketFixture();
 

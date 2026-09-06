@@ -47,6 +47,9 @@ import { readFormBody } from "./webhooks.js";
 import { randomUUID, timingSafeEqual } from "node:crypto";
 import type { EmailSender } from "../email/email-sender.js";
 import type { OrgEmailBranding } from "../notifications/email.js";
+import type { ReplyTokenHasher } from "../crypto/field-encryptor.js";
+import type { PlatformDatabase } from "../db/types.js";
+import { mintToken } from "../email/reply-token-service.js";
 import type {
   OrgId,
   OrgSchema,
@@ -130,6 +133,17 @@ export interface RelayHandlerDeps {
   readonly loadOrgEmailBranding?: (
     tDb: Kysely<TenantDatabase>,
   ) => Promise<OrgEmailBranding>;
+  /** Platform DB for inbound email domain lookups. Required (not
+   *  optional) per the ADR-086 pattern: an omitted dep must be a type
+   *  error, never a silently inert feature. The runtime gate is the
+   *  org's inbound_email_domains row, not dep presence. */
+  readonly platformDb: Kysely<PlatformDatabase>;
+  /** Reply token hasher (HKDF-derived from OPS key). */
+  readonly replyTokenHasher: ReplyTokenHasher;
+  /** Per-process cache of ticket -> plaintext reply token. Owned by the
+   *  relay layer, not by the token service. On miss with a live DB row,
+   *  re-mint and revoke (see reply-token-service.ts JSDoc). */
+  readonly replyTokenCache: Map<string, string>;
 }
 
 export interface PendingCall {
@@ -1095,8 +1109,60 @@ async function handleEmailRelay(
     // Exposure window is short (emailSender.send awaits a single SMTP call).
     const toStr = emailBuf.toString("utf-8");
     const subjectStr = subjectBuf.toString("utf-8");
-    const textStr = textBuf.toString("utf-8");
-    const htmlStr = htmlBuf.toString("utf-8");
+    let textStr = textBuf.toString("utf-8");
+    let htmlStr = htmlBuf.toString("utf-8");
+
+    // --- Inbound reply routing: Reply-To header + address-secrecy footer ---
+    // When the org has an inbound email domain, outbound client emails carry
+    // a Reply-To with a per-ticket token so replies route back to the ticket.
+    // When no domain row exists, send is byte-identical to the 8f baseline.
+    let replyTo: string | undefined;
+
+    const domainRow = await deps.platformDb
+      .selectFrom("inbound_email_domains")
+      .select("domain")
+      .where("org_id", "=", session.orgId)
+      .executeTakeFirst();
+
+    if (domainRow) {
+      // Check the per-process cache first; on miss, mint a fresh token.
+      const cached = deps.replyTokenCache.get(ticketId);
+      let token: string;
+      if (cached !== undefined) {
+        token = cached;
+      } else {
+        const result = await mintToken(
+          tenantDb,
+          ticketId,
+          deps.replyTokenHasher,
+        );
+        token = result.token;
+        deps.replyTokenCache.set(ticketId, token);
+      }
+
+      replyTo = `reply-${token}@${domainRow.domain}`;
+
+      // Append footer: org-configured text or the localized default.
+      const orgConfig = await tenantDb
+        .selectFrom("org_config")
+        .select(["email_reply_footer", "default_language"])
+        .executeTakeFirst();
+
+      const footer =
+        orgConfig?.email_reply_footer ??
+        getStrings(orgConfig?.default_language ?? "en").emailReplyFooter;
+
+      textStr = textStr + "\n\n---\n" + footer;
+      htmlStr =
+        htmlStr +
+        '<hr style="margin-top:2em">' +
+        '<p style="font-size:0.85em;color:#666">' +
+        footer
+          .replace(/&/g, "&amp;")
+          .replace(/</g, "&lt;")
+          .replace(/>/g, "&gt;") +
+        "</p>";
+    }
 
     try {
       await deps.emailSender.send({
@@ -1105,6 +1171,7 @@ async function handleEmailRelay(
         text: textStr,
         html: htmlStr,
         from: fromHeader,
+        ...(replyTo !== undefined ? { replyTo } : {}),
       });
     } catch {
       sendRelayError(res, 502, "EMAIL_SEND_FAILED");

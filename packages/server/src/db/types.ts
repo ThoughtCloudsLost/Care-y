@@ -95,6 +95,9 @@ import type {
   HashedIp,
   KeyGeneration,
   BlobKey,
+  ReplyTokenId,
+  ReplyTokenHash,
+  InboundEmailDomainId,
 } from "@care-y/shared";
 
 export interface OrgsTable {
@@ -155,6 +158,17 @@ export interface TelephonyConfigTable {
   updated_at: ColumnType<Date, Date | undefined, Date>;
 }
 
+// --- Inbound email domain-to-org mapping ---
+
+export interface InboundEmailDomainsTable {
+  id: Generated<InboundEmailDomainId>;
+  /** Lowercase email domain (e.g. "reply.example.org"). Unique. */
+  domain: string;
+  org_id: OrgId;
+  created_at: ColumnType<Date, Date | undefined, Date>;
+  updated_at: ColumnType<Date, Date | undefined, Date>;
+}
+
 export interface PlatformDatabase {
   orgs: OrgsTable;
   oprf_config: OprfConfigTable;
@@ -162,6 +176,7 @@ export interface PlatformDatabase {
   pending_jobs: PendingJobsTable;
   telephony_config: TelephonyConfigTable;
   vapid_config: VapidConfigTable;
+  inbound_email_domains: InboundEmailDomainsTable;
   // Production (deletion_requests)
 }
 
@@ -229,6 +244,8 @@ export interface OrgConfigTable {
   portal_safe_exit_url: string | null;
   builtin_default_enabled: ColumnType<boolean, boolean | undefined, boolean>;
   next_alias_suffix: ColumnType<number, number | undefined, number>;
+  // Inbound email reply footer (org-defined language, null = localized default)
+  email_reply_footer: string | null;
 }
 
 // --- User keys (full interface, replaces UserKeysStubTable) ---
@@ -942,6 +959,16 @@ export interface ClientAccountSessionsTable {
   created_at: Generated<Date>;
 }
 
+// --- Email reply tokens (inbound email attribution) ---
+
+export interface EmailReplyTokensTable {
+  id: Generated<ReplyTokenId>;
+  ticket_id: TicketId;
+  token_hash: ReplyTokenHash;
+  created_at: Generated<Date>;
+  revoked_at: Date | null;
+}
+
 // --- Notification outbox (transactional outbox for durable dispatch) ---
 
 export interface NotificationOutboxTable {
@@ -1050,4 +1077,6 @@ export interface TenantDatabase {
   client_account_sessions: ClientAccountSessionsTable;
   // Notification outbox (transactional outbox for durable dispatch)
   notification_outbox: NotificationOutboxTable;
+  // Email reply tokens (inbound email attribution)
+  email_reply_tokens: EmailReplyTokensTable;
 }

@@ -30,6 +30,7 @@ import {
   resetClientAccountInputSchema,
   portalChannelMetaSchema,
   emailSendInputSchema,
+  emailInboundPayloadSchema,
   EMAIL_RELAY_LIMITS,
 } from "./tickets.js";
 
@@ -1105,8 +1106,8 @@ describe("followUpTypeSchema (email_outbound)", () => {
     expect(followUpTypeSchema.safeParse("email_outbound").success).toBe(true);
   });
 
-  it("rejects email_inbound (not in scope)", () => {
-    expect(followUpTypeSchema.safeParse("email_inbound").success).toBe(false);
+  it("accepts email_inbound", () => {
+    expect(followUpTypeSchema.safeParse("email_inbound").success).toBe(true);
   });
 });
 
@@ -1205,6 +1206,96 @@ describe("emailSendInputSchema", () => {
         subject: "ok",
         html: "<p>ok</p>",
         text: "ok",
+      }).success,
+    ).toBe(false);
+  });
+});
+
+// --- Email inbound payload (8g) ---
+
+describe("emailInboundPayloadSchema", () => {
+  it("accepts a valid inbound email payload", () => {
+    const result = emailInboundPayloadSchema.safeParse({
+      subject: "Re: your appointment",
+      text: "I will be there.",
+      from: "ana@example.org",
+      droppedAttachments: 0,
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("accepts an empty subject", () => {
+    const result = emailInboundPayloadSchema.safeParse({
+      subject: "",
+      text: "body",
+      from: "a@b.c",
+      droppedAttachments: 0,
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("rejects an empty text body", () => {
+    expect(
+      emailInboundPayloadSchema.safeParse({
+        subject: "Re",
+        text: "",
+        from: "a@b.c",
+        droppedAttachments: 0,
+      }).success,
+    ).toBe(false);
+  });
+
+  it("rejects a subject exceeding the subject limit", () => {
+    expect(
+      emailInboundPayloadSchema.safeParse({
+        subject: "x".repeat(EMAIL_RELAY_LIMITS.subject + 1),
+        text: "body",
+        from: "a@b.c",
+        droppedAttachments: 0,
+      }).success,
+    ).toBe(false);
+  });
+
+  it("rejects a text body exceeding the text limit", () => {
+    expect(
+      emailInboundPayloadSchema.safeParse({
+        subject: "Re",
+        text: "x".repeat(EMAIL_RELAY_LIMITS.text + 1),
+        from: "a@b.c",
+        droppedAttachments: 0,
+      }).success,
+    ).toBe(false);
+  });
+
+  it("rejects a from address exceeding 320 characters", () => {
+    expect(
+      emailInboundPayloadSchema.safeParse({
+        subject: "Re",
+        text: "body",
+        from: "x".repeat(321),
+        droppedAttachments: 0,
+      }).success,
+    ).toBe(false);
+  });
+
+  it("rejects a negative droppedAttachments count", () => {
+    expect(
+      emailInboundPayloadSchema.safeParse({
+        subject: "Re",
+        text: "body",
+        from: "a@b.c",
+        droppedAttachments: -1,
+      }).success,
+    ).toBe(false);
+  });
+
+  it("rejects a non-integer droppedAttachments count", () => {
+    expect(
+      emailInboundPayloadSchema.safeParse({
+        subject: "Re",
+        text: "body",
+        from: "a@b.c",
+        droppedAttachments: 1.5,
       }).success,
     ).toBe(false);
   });

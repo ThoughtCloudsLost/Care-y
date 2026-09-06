@@ -28,6 +28,7 @@ export interface PanelActionsDeps {
   readonly oneditcontent: () => void;
   readonly onnotifications: () => void;
   readonly onsharelink: () => void;
+  readonly onrevokeReplyToken: () => void;
 }
 
 export interface PanelActions {
@@ -93,6 +94,9 @@ export function createPanelActions(deps: PanelActionsDeps): PanelActions {
         break;
       case "shareLink":
         deps.onsharelink();
+        break;
+      case "revokeReplyToken":
+        deps.onrevokeReplyToken();
         break;
       case "cancel":
         break;

@@ -1,6 +1,6 @@
 import { shouldShowHint } from "$lib/tickets/ticket-detail-utils.js";
 
-export type ExposureHintType = "sms" | "call";
+export type ExposureHintType = "sms" | "call" | "email";
 
 export interface ExposureHintState {
   readonly type: ExposureHintType | null;
