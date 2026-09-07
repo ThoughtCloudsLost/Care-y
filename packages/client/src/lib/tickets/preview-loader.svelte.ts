@@ -32,10 +32,13 @@ export interface RawFollowUpPreview {
   readonly eventParams: Record<string, unknown> | null;
 }
 
+export interface PreviewQueryResult {
+  readonly previews: Record<string, RawFollowUpPreview[]>;
+  readonly latestClientType: Record<string, string | null>;
+}
+
 interface PreviewLoaderOptions {
-  queryFn: (
-    ticketIds: string[],
-  ) => Promise<Record<string, RawFollowUpPreview[]>>;
+  queryFn: (ticketIds: string[]) => Promise<PreviewQueryResult>;
   batchDelayMs?: number;
 }
 
@@ -44,6 +47,7 @@ export interface PreviewLoader {
   observe(ticketId: string): void;
   eagerLoad(ticketIds: string[]): Promise<void>;
   get(ticketId: string): RawFollowUpPreview[] | undefined;
+  getLatestClientType(ticketId: string): string | null;
 }
 
 export function createPreviewLoader(
@@ -54,6 +58,9 @@ export function createPreviewLoader(
   // Raw encrypted follow-up data, registered with cache registry.
   const rawPreviews = cacheRegistry.createMap<string, RawFollowUpPreview[]>(
     "PreviewLoader:raw",
+  );
+  const latestClientTypeMap = cacheRegistry.createMap<string, string | null>(
+    "PreviewLoader:latestClientType",
   );
   const loaded = new SvelteSet<string>();
   const inflight = new SvelteSet<string>();
@@ -88,12 +95,15 @@ export function createPreviewLoader(
     for (const id of batch) inflight.add(id);
 
     try {
-      const results = await queryFn(batch);
+      const result = await queryFn(batch);
       // Ephemeral lookup, discarded after the loop. Not reactive state.
       // eslint-disable-next-line svelte/prefer-svelte-reactivity
-      const resultsMap = new Map(Object.entries(results));
+      const resultsMap = new Map(Object.entries(result.previews));
+      // eslint-disable-next-line svelte/prefer-svelte-reactivity
+      const typesMap = new Map(Object.entries(result.latestClientType));
       for (const ticketId of batch) {
         rawPreviews.set(ticketId, resultsMap.get(ticketId) ?? []);
+        latestClientTypeMap.set(ticketId, typesMap.get(ticketId) ?? null);
         loaded.add(ticketId);
       }
     } catch {
@@ -132,12 +142,15 @@ export function createPreviewLoader(
       if (toLoad.length === 0) return;
       for (const id of toLoad) inflight.add(id);
       try {
-        const results = await queryFn(toLoad);
+        const result = await queryFn(toLoad);
         // Ephemeral lookup, discarded after the loop. Not reactive state.
         // eslint-disable-next-line svelte/prefer-svelte-reactivity
-        const resultsMap = new Map(Object.entries(results));
+        const resultsMap = new Map(Object.entries(result.previews));
+        // eslint-disable-next-line svelte/prefer-svelte-reactivity
+        const typesMap = new Map(Object.entries(result.latestClientType));
         for (const ticketId of toLoad) {
           rawPreviews.set(ticketId, resultsMap.get(ticketId) ?? []);
+          latestClientTypeMap.set(ticketId, typesMap.get(ticketId) ?? null);
           loaded.add(ticketId);
         }
       } finally {
@@ -148,6 +161,11 @@ export function createPreviewLoader(
     /** Get raw encrypted preview data for a ticket. undefined = not loaded. */
     get(ticketId: string): RawFollowUpPreview[] | undefined {
       return rawPreviews.get(ticketId);
+    },
+
+    /** Latest client-sourced follow-up type for a ticket, or null when none. */
+    getLatestClientType(ticketId: string): string | null {
+      return latestClientTypeMap.get(ticketId) ?? null;
     },
   };
 }

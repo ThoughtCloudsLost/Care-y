@@ -22,7 +22,7 @@
 -->
 <script lang="ts">
   import type { Snippet } from "svelte";
-  import { X, UserPen } from "@lucide/svelte";
+  import { X, UserPen, Mail } from "@lucide/svelte";
   import * as m from "$lib/paraglide/messages.js";
   import { withTerms } from "$lib/terminology/with-terms.js";
   import ShellMessagebar from "$lib/shell/ShellMessagebar.svelte";
@@ -33,6 +33,10 @@
     clearDraftForMode,
   } from "$lib/tickets/draft-store.svelte.js";
   import { insertMentionAtCursor } from "$lib/tickets/ticket-detail-utils.js";
+  import {
+    isEmailExpectedDismissed,
+    dismissEmailExpected,
+  } from "$lib/tickets/email-expected.svelte.js";
 
   // The bind:this surface (activateReply, activateSms, reset) is typed
   // for hosts by TicketComposeHandle in ticket-compose-types.ts.
@@ -49,6 +53,9 @@
     /** When true, a contact correction is pending and the SMS compose
      *  header shows a warning. */
     hasUnacknowledgedCorrection?: boolean;
+    /** When true, the latest client follow-up was an inbound email and
+     *  the caution should show in SMS/reply compose modes. */
+    emailExpected?: boolean;
     /** Floating content rendered inside the ShellMessagebar anchor.
      *  The anchor is position:fixed (or relative in inline mode), so
      *  absolutely positioned children (like the jump-to-latest pill)
@@ -65,6 +72,7 @@
     sending = false,
     hidden = false,
     hasUnacknowledgedCorrection: correctionPending = false,
+    emailExpected = false,
     floatingPill,
     onsendreply,
     onsendsms,
@@ -73,6 +81,22 @@
 
   // Compose mode: null = collapsed (no messagebar), "reply" or "sms" = expanded.
   let activeComposeMode = $state<"reply" | "sms" | null>(null);
+
+  // Bumped on email-expected dismiss to force re-evaluation; the module-level
+  // Set is not reactive, so this counter triggers the derived recalculation.
+  let emailDismissVersion = $state(0);
+  const showEmailCaution = $derived(
+    emailExpected &&
+      (activeComposeMode === "sms" || activeComposeMode === "reply") &&
+      // Read emailDismissVersion to subscribe to dismiss events.
+      emailDismissVersion >= 0 &&
+      !isEmailExpectedDismissed(ticketId),
+  );
+
+  function handleDismissEmailCaution(): void {
+    dismissEmailExpected(ticketId);
+    emailDismissVersion += 1;
+  }
 
   // Draft compose state keyed by ticketId + mode. Survives SPA navigations
   // in-memory. No disk persistence to avoid plaintext PII on disk.
@@ -180,6 +204,27 @@
       <span>{m.contact_correction_pending_warning()}</span>
     </div>
   {/if}
+  {#if showEmailCaution}
+    <div
+      class="email-expected-caution"
+      role="status"
+      aria-live="polite"
+      data-testid="compose-email-expected-caution"
+    >
+      <Mail size={14} aria-hidden="true" />
+      <span class="email-expected-text"
+        >{m.ticket_compose_email_expected_caution()}</span
+      >
+      <button
+        type="button"
+        class="email-expected-dismiss"
+        onclick={handleDismissEmailCaution}
+        aria-label={m.ticket_compose_email_expected_dismiss()}
+      >
+        <X size={14} aria-hidden="true" />
+      </button>
+    </div>
+  {/if}
   <div class="compose-mode-indicator">
     <span class="compose-mode-label">
       {activeComposeMode === "sms"
@@ -266,6 +311,37 @@
     font-weight: 600;
     color: var(--care);
     background: var(--care-soft);
+  }
+
+  .email-expected-caution {
+    display: flex;
+    align-items: center;
+    gap: 0.375rem;
+    padding: 6px 16px;
+    font-size: var(--text-xs);
+    font-weight: 600;
+    color: var(--care);
+    background: var(--care-soft);
+  }
+
+  .email-expected-text {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .email-expected-dismiss {
+    appearance: none;
+    border: none;
+    background: none;
+    padding: 4px;
+    margin: -4px;
+    color: var(--care);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 44px;
+    min-height: 44px;
   }
 
   .compose-mode-indicator {

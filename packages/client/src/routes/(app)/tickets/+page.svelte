@@ -178,6 +178,7 @@
         ),
       })),
     getPreviewFollowUps: (id) => previewLoader.get(id),
+    getLatestClientType: (id) => previewLoader.getLatestClientType(id),
     eagerLoadPreviews: async (ids) => previewLoader.eagerLoad(ids),
   });
 
@@ -1548,6 +1549,7 @@
   replyClientPublic={replyFlow.clientPublic}
   replyPreviewFollowUps={replyFlow.previewFollowUps}
   replyFollowUpCount={replyFlow.followUpCount}
+  replyLatestClientType={replyFlow.latestClientType}
   onreplydismiss={() => replyFlow.dismiss()}
   onreplysent={(tid: string) => replyFlow.handleReplySent(tid)}
   {callSheetOpen}

@@ -17,6 +17,7 @@
   import { createQuery, useQueryClient } from "@tanstack/svelte-query";
   import { ticketKeys } from "$lib/query/keys";
   import { hasUnacknowledgedCorrection as computeUnackedCorrection } from "$lib/tickets/correction-status.js";
+  import { latestClientFollowUpIsEmail } from "$lib/tickets/email-expected.svelte.js";
   import { Checkbox, Button } from "konsta/svelte";
   import * as m from "$lib/paraglide/messages.js";
   import { trpc } from "$lib/trpc/index.js";
@@ -188,6 +189,9 @@
     /** Two-way bindable: true when any contact_correction follow-up
      *  has no acknowledge reaction. Drives outbound-surface warnings. */
     correctionPending?: boolean;
+    /** Two-way bindable: true when the newest client-sourced follow-up
+     *  is an inbound email. Drives the "email expected" caution. */
+    emailExpected?: boolean;
     /** Called when the volunteer taps Apply on a structured correction phone row. */
     onapplyphone?: (phone: string, followUpId: string) => void;
     /** Called when the volunteer taps Apply on a structured correction email row. */
@@ -224,6 +228,7 @@
     loadedFollowUpCount = $bindable(0),
     loadOlderPage: loadOlderPageProp = $bindable(undefined),
     correctionPending = $bindable(false),
+    emailExpected = $bindable(false),
     onapplyphone,
     onapplyemail,
   }: TicketDetailProps = $props();
@@ -550,6 +555,13 @@
   // so a filter can't suppress the warning.
   $effect(() => {
     correctionPending = computeUnackedCorrection(followUps, getReactions);
+  });
+
+  // Reactively compute whether the newest client-sourced follow-up is an
+  // inbound email. Uses the unfiltered followUps so a filter can't suppress
+  // the caution.
+  $effect(() => {
+    emailExpected = latestClientFollowUpIsEmail(followUps);
   });
 
   // Expose the broadest available follow-up list for search matching.

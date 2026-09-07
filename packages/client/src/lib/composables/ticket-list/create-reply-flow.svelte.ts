@@ -15,6 +15,7 @@ export interface ReplyFlowDeps {
   readonly getPreviewFollowUps: (
     ticketId: string,
   ) => RawFollowUpPreview[] | undefined;
+  readonly getLatestClientType: (ticketId: string) => string | null;
   readonly eagerLoadPreviews: (ticketIds: string[]) => Promise<void>;
 }
 
@@ -26,6 +27,7 @@ export interface ReplyFlowState {
   readonly clientPublic: string | null;
   readonly previewFollowUps: RawFollowUpPreview[] | undefined;
   readonly followUpCount: number;
+  readonly latestClientType: string | null;
   open(ticketId: string): void;
   handleReplySent(ticketId: string): void;
   dismiss(): void;
@@ -39,6 +41,7 @@ export function createReplyFlow(deps: ReplyFlowDeps): ReplyFlowState {
   let clientPublic = $state<string | null>(null);
   let previewFollowUps = $state<RawFollowUpPreview[] | undefined>(undefined);
   let followUpCount = $state(0);
+  let latestClientType = $state<string | null>(null);
 
   function open(ticketId: string): void {
     const ticket = deps.getTickets().find((t) => t.id === ticketId);
@@ -48,6 +51,7 @@ export function createReplyFlow(deps: ReplyFlowDeps): ReplyFlowState {
     hasPhone = ticket.hasPhone;
     clientPublic = ticket.portalChannel?.clientPublic ?? null;
     previewFollowUps = deps.getPreviewFollowUps(ticketId);
+    latestClientType = deps.getLatestClientType(ticketId);
     followUpCount = ticket.followUpCount;
     sheetOpen = true;
   }
@@ -69,6 +73,7 @@ export function createReplyFlow(deps: ReplyFlowDeps): ReplyFlowState {
     clientPublic = null;
     previewFollowUps = undefined;
     followUpCount = 0;
+    latestClientType = null;
   }
 
   return {
@@ -92,6 +97,9 @@ export function createReplyFlow(deps: ReplyFlowDeps): ReplyFlowState {
     },
     get followUpCount(): number {
       return followUpCount;
+    },
+    get latestClientType(): string | null {
+      return latestClientType;
     },
     open,
     handleReplySent,

@@ -2051,14 +2051,14 @@ describe.skipIf(!process.env.DATABASE_URL)(
         await createMessage(caller, ticketId, 0x48);
         await createMessage(caller, ticketId, 0x49);
 
-        const previews = await caller.tickets.recentFollowUps({
+        const result = await caller.tickets.recentFollowUps({
           ticketIds: [ticketId],
           perTicket: 1,
         });
 
-        expect(previews[ticketId]).toBeDefined();
-        expect(previews[ticketId]).toHaveLength(1);
-        expect(previews[ticketId]![0]!.ticketId).toBe(ticketId);
+        expect(result.previews[ticketId]).toBeDefined();
+        expect(result.previews[ticketId]).toHaveLength(1);
+        expect(result.previews[ticketId]![0]!.ticketId).toBe(ticketId);
       });
     });
 

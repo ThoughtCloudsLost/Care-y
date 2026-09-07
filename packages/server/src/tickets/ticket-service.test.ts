@@ -819,12 +819,14 @@ describe.skipIf(!process.env.DATABASE_URL)("TicketService (DB)", () => {
       perTicket: 3,
     });
 
-    expect(result[ticketId]).toBeDefined();
-    expect(result[ticketId]).toHaveLength(3);
+    expect(result.previews[ticketId]).toBeDefined();
+    expect(result.previews[ticketId]).toHaveLength(3);
     // Should be ordered by created_at DESC (most recent first)
-    for (let i = 0; i < result[ticketId]!.length - 1; i++) {
-      expect(result[ticketId]![i]!.createdAt.getTime()).toBeGreaterThanOrEqual(
-        result[ticketId]![i + 1]!.createdAt.getTime(),
+    for (let i = 0; i < result.previews[ticketId]!.length - 1; i++) {
+      expect(
+        result.previews[ticketId]![i]!.createdAt.getTime(),
+      ).toBeGreaterThanOrEqual(
+        result.previews[ticketId]![i + 1]!.createdAt.getTime(),
       );
     }
   });
@@ -848,7 +850,7 @@ describe.skipIf(!process.env.DATABASE_URL)("TicketService (DB)", () => {
       ticketIds: [ticketId],
       perTicket: 2,
     });
-    expect(result[ticketId]).toHaveLength(2);
+    expect(result.previews[ticketId]).toHaveLength(2);
   });
 
   it("recentFollowUps returns empty for tickets outside user queues", async () => {
@@ -859,7 +861,7 @@ describe.skipIf(!process.env.DATABASE_URL)("TicketService (DB)", () => {
       ticketIds: [ticketId],
       perTicket: 3,
     });
-    expect(result).toEqual({});
+    expect(result.previews).toEqual({});
   });
 
   it("recentFollowUps includes key wraps for requesting user", async () => {
@@ -894,7 +896,7 @@ describe.skipIf(!process.env.DATABASE_URL)("TicketService (DB)", () => {
       perTicket: 3,
     });
 
-    const followUps = result[ticketId];
+    const followUps = result.previews[ticketId];
     expect(followUps).toBeDefined();
     expect(followUps!.length).toBeGreaterThanOrEqual(1);
     // At least one should have a key wrap (the one with our wrap row)
@@ -943,7 +945,7 @@ describe.skipIf(!process.env.DATABASE_URL)("TicketService (DB)", () => {
       perTicket: 5,
     });
 
-    const followUps = result[ticketId]!;
+    const followUps = result.previews[ticketId]!;
     const pending = followUps.find((f) => f.source === "client");
     const converged = followUps.find((f) => f.source === "volunteer");
     // The pending row must never carry the ticket wrap: its content is
@@ -951,6 +953,101 @@ describe.skipIf(!process.env.DATABASE_URL)("TicketService (DB)", () => {
     expect(pending).toBeDefined();
     expect(pending!.keyWrap).toBeNull();
     expect(converged!.keyWrap).not.toBeNull();
+  });
+
+  // --- recentFollowUps: latestClientType ---
+
+  it("recentFollowUps returns latestClientType = email_inbound when last client follow-up is email", async () => {
+    const { userId, ticketId } = await createTicketFixture();
+
+    // Insert an email_inbound from the client, then volunteer/system follow-ups.
+    await testDb.db
+      // care-y-ignore-next-line no-plaintext-db-write -- fixture bytes standing in for ciphertext, not PII
+      .insertInto("followups")
+      .values({
+        ticket_id: ticketId,
+        source: "client",
+        type: "email_inbound",
+        encrypted_content: Buffer.from("client-email"),
+      })
+      .execute();
+    await testDb.db
+      .insertInto("followups")
+      .values({
+        ticket_id: ticketId,
+        source: "volunteer",
+        type: "message",
+        encrypted_content: Buffer.from("vol-reply"),
+      })
+      .execute();
+    await testDb.db
+      .insertInto("followups")
+      .values({
+        ticket_id: ticketId,
+        source: "system",
+        type: "status_opened",
+        encrypted_content: Buffer.alloc(0),
+      })
+      .execute();
+
+    const result = await svc.recentFollowUps(userId, {
+      ticketIds: [ticketId],
+      perTicket: 5,
+    });
+
+    expect(result.latestClientType[ticketId]).toBe("email_inbound");
+  });
+
+  it("recentFollowUps returns latestClientType = sms_inbound when a later client SMS exists", async () => {
+    const { userId, ticketId } = await createTicketFixture();
+
+    // email_inbound first, then sms_inbound from client (latest).
+    await testDb.db
+      .insertInto("followups")
+      .values({
+        ticket_id: ticketId,
+        source: "client",
+        type: "email_inbound",
+        encrypted_content: Buffer.from("client-email"),
+      })
+      .execute();
+    await testDb.db
+      .insertInto("followups")
+      .values({
+        ticket_id: ticketId,
+        source: "client",
+        type: "sms_inbound",
+        encrypted_content: Buffer.from("client-sms"),
+      })
+      .execute();
+
+    const result = await svc.recentFollowUps(userId, {
+      ticketIds: [ticketId],
+      perTicket: 5,
+    });
+
+    expect(result.latestClientType[ticketId]).toBe("sms_inbound");
+  });
+
+  it("recentFollowUps returns latestClientType = null when ticket has no client follow-ups", async () => {
+    const { userId, ticketId } = await createTicketFixture();
+
+    await testDb.db
+      .insertInto("followups")
+      .values({
+        ticket_id: ticketId,
+        source: "volunteer",
+        type: "message",
+        encrypted_content: Buffer.from("vol-only"),
+      })
+      .execute();
+
+    const result = await svc.recentFollowUps(userId, {
+      ticketIds: [ticketId],
+      perTicket: 5,
+    });
+
+    expect(result.latestClientType[ticketId]).toBeNull();
   });
 
   // --- listReadState ---

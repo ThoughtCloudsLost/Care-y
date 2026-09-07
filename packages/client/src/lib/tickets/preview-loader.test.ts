@@ -10,6 +10,7 @@ import {
   createPreviewLoader,
   type RawFollowUpPreview,
   type PreviewLoader,
+  type PreviewQueryResult,
 } from "./preview-loader.svelte.js";
 import { cacheRegistry } from "$lib/crypto/cache-registry.js";
 
@@ -36,17 +37,18 @@ function makePreview(id: string): RawFollowUpPreview {
 }
 
 function createMockQueryFn(): {
-  queryFn: (ids: string[]) => Promise<Record<string, RawFollowUpPreview[]>>;
+  queryFn: (ids: string[]) => Promise<PreviewQueryResult>;
   mock: ReturnType<typeof vi.fn>;
 } {
-  const mock =
-    vi.fn<(ids: string[]) => Promise<Record<string, RawFollowUpPreview[]>>>();
+  const mock = vi.fn<(ids: string[]) => Promise<PreviewQueryResult>>();
   mock.mockImplementation(async (ids: string[]) => {
-    const result: Record<string, RawFollowUpPreview[]> = {};
+    const previews: Record<string, RawFollowUpPreview[]> = {};
+    const latestClientType: Record<string, string | null> = {};
     for (const id of ids) {
-      result[id] = [makePreview(`fu-${id}`)];
+      previews[id] = [makePreview(`fu-${id}`)];
+      latestClientType[id] = null;
     }
-    return result;
+    return { previews, latestClientType };
   });
   return { queryFn: mock, mock };
 }
@@ -172,12 +174,41 @@ describe("createPreviewLoader", () => {
     });
 
     it("handles missing ticket IDs in response (sets empty array)", async () => {
-      queryMock.mockResolvedValueOnce({ "t-1": [makePreview("fu-t-1")] });
+      queryMock.mockResolvedValueOnce({
+        previews: { "t-1": [makePreview("fu-t-1")] },
+        latestClientType: { "t-1": null },
+      });
 
       await loader.eagerLoad(["t-1", "t-2"]);
 
       expect(loader.get("t-1")).toHaveLength(1);
       expect(loader.get("t-2")).toEqual([]);
+    });
+  });
+
+  describe("getLatestClientType", () => {
+    it("returns null for unloaded ticket", () => {
+      expect(loader.getLatestClientType("unknown")).toBeNull();
+    });
+
+    it("returns the latest client type after load", async () => {
+      queryMock.mockResolvedValueOnce({
+        previews: { "t-1": [makePreview("fu-t-1")] },
+        latestClientType: { "t-1": "email_inbound" },
+      });
+
+      await loader.eagerLoad(["t-1"]);
+      expect(loader.getLatestClientType("t-1")).toBe("email_inbound");
+    });
+
+    it("returns null when server reports no client follow-ups", async () => {
+      await loader.eagerLoad(["t-1"]);
+      expect(loader.getLatestClientType("t-1")).toBeNull();
+    });
+
+    it("registers latestClientType map with cache registry", () => {
+      const names = cacheRegistry.registered;
+      expect(names).toContain("PreviewLoader:latestClientType");
     });
   });
 });

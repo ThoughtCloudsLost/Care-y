@@ -36,6 +36,7 @@ import type * as CreateReactionsQuery from "$lib/tickets/create-reactions-query.
 import type * as TicketQueries from "$lib/tickets/queries.js";
 import type * as CareYCrypto from "@care-y/crypto";
 import type * as TicketComposeMod from "$lib/components/tickets/TicketCompose.svelte";
+import type * as ChannelPolicyMod from "$lib/query/channel-policy.svelte.js";
 
 // jsdom has no ResizeObserver; ShellMessagebar and Konsta may observe.
 vi.stubGlobal(
@@ -274,6 +275,24 @@ vi.mock(
 vi.mock("$lib/tickets/queries.js", async (importOriginal) => ({
   ...(await importOriginal<typeof TicketQueries>()),
   createNoteTypesQuery: () => ({ data: undefined }),
+}));
+
+// vi.mock required: createChannelPolicyQuery uses createQuery + trpc.org
+// at module scope. Stub to return emailEnabled: true (default).
+// care-y-ignore-next-line mock-factory-unguarded -- importOriginal triggers createQuery() outside component tree; return type `: typeof ChannelPolicyMod` guards against drift
+vi.mock("$lib/query/channel-policy.svelte.js", (): typeof ChannelPolicyMod => ({
+  createChannelPolicyQuery: () => ({
+    query: {
+      isLoading: false,
+      isError: false,
+      data: undefined,
+    } as never,
+    smsEnabled: true,
+    emailEnabled: true,
+    secureLinkEnabled: true,
+    voiceEnabled: true,
+    shareLinkEnabled: true,
+  }),
 }));
 
 // vi.mock required: $lib/shell/context.js calls createContext at module
@@ -733,5 +752,43 @@ describe("ReplySheet", () => {
     >;
     expect(callArg.portalCopy).toBeUndefined();
     expect(mockEciesEncrypt).not.toHaveBeenCalled();
+  });
+
+  // ── Email-expected caution ──
+
+  it("passes emailExpected=true when latestClientType is email_inbound", () => {
+    render(ReplySheet, {
+      props: {
+        ...baseProps,
+        latestClientType: "email_inbound",
+      },
+    });
+
+    const stub = document.querySelector("[data-testid='compose-stub']");
+    expect(stub?.getAttribute("data-email-expected")).toBe("true");
+  });
+
+  it("passes emailExpected=false when latestClientType is null", () => {
+    render(ReplySheet, {
+      props: {
+        ...baseProps,
+        latestClientType: null,
+      },
+    });
+
+    const stub = document.querySelector("[data-testid='compose-stub']");
+    expect(stub?.getAttribute("data-email-expected")).toBe("false");
+  });
+
+  it("passes emailExpected=false when latestClientType is sms_inbound", () => {
+    render(ReplySheet, {
+      props: {
+        ...baseProps,
+        latestClientType: "sms_inbound",
+      },
+    });
+
+    const stub = document.querySelector("[data-testid='compose-stub']");
+    expect(stub?.getAttribute("data-email-expected")).toBe("false");
   });
 });

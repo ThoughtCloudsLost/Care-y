@@ -129,6 +129,12 @@ export interface FollowUpPreview {
   readonly eventParams: Record<string, unknown> | null;
 }
 
+export interface RecentFollowUpsResult {
+  readonly previews: Record<string, FollowUpPreview[]>;
+  /** Per-ticket type of the newest client-sourced follow-up, or null when none. */
+  readonly latestClientType: Record<string, string | null>;
+}
+
 /**
  * Read state for one ticket in a list window: the user's opaque cursor
  * ciphertext (null when the detail view never created a row) plus recent
@@ -241,7 +247,7 @@ export interface TicketService {
   recentFollowUps(
     userId: UserId,
     input: RecentFollowUpsInput,
-  ): Promise<Record<string, FollowUpPreview[]>>;
+  ): Promise<RecentFollowUpsResult>;
   listReadState(
     userId: UserId,
     input: ListReadStateInput,
@@ -1309,9 +1315,11 @@ export function createTicketService(
     async recentFollowUps(
       userId: UserId,
       input: RecentFollowUpsInput,
-    ): Promise<Record<string, FollowUpPreview[]>> {
+    ): Promise<RecentFollowUpsResult> {
       const accessibleQueues = await getAccessibleQueueIds(userId);
-      if (accessibleQueues.length === 0) return {};
+      if (accessibleQueues.length === 0) {
+        return { previews: {}, latestClientType: {} };
+      }
 
       // Derived table: rank follow-ups per ticket by recency.
       // Uses eb.fn.agg("row_number") with .over() for typesafe window function
@@ -1414,7 +1422,7 @@ export function createTicketService(
         .orderBy("ranked_f.created_at", "desc")
         .execute();
 
-      const result: Record<string, FollowUpPreview[]> = {};
+      const previews: Record<string, FollowUpPreview[]> = {};
       for (const row of rows) {
         const preview: FollowUpPreview = {
           id: row.id,
@@ -1439,14 +1447,56 @@ export function createTicketService(
           noteTypeId: row.note_type_id ?? null,
           eventParams: row.event_params ?? null,
         };
-        const list = result[row.ticket_id];
+        const list = previews[row.ticket_id];
         if (list) {
           list.push(preview);
         } else {
-          result[row.ticket_id] = [preview];
+          previews[row.ticket_id] = [preview];
         }
       }
-      return result;
+
+      // Latest client-sourced follow-up type per requested ticket.
+      // Uses the same ROW_NUMBER pattern filtered to source = 'client'.
+      const clientRanked = db
+        .selectFrom("followups as f")
+        .select((eb) => [
+          eb.ref("f.ticket_id").as("ticket_id"),
+          eb.ref("f.type").as("type"),
+          eb.fn
+            .agg<number>("row_number")
+            .over((ob) =>
+              ob.partitionBy("f.ticket_id").orderBy("f.created_at", "desc"),
+            )
+            .as("rn"),
+        ])
+        .where("f.ticket_id", "in", input.ticketIds)
+        .where("f.source", "=", "client")
+        .as("client_ranked");
+
+      const clientRows = await db
+        .selectFrom("tickets as t")
+        .innerJoin(clientRanked, (join) =>
+          join
+            .onRef("client_ranked.ticket_id", "=", "t.id")
+            .on("client_ranked.rn", "<=", 1),
+        )
+        .select(["client_ranked.ticket_id", "client_ranked.type"])
+        .where("t.id", "in", input.ticketIds)
+        .where("t.queue_id", "in", [...accessibleQueues])
+        .execute();
+
+      const latestByTicket = new Map<string, string | null>();
+      for (const tid of input.ticketIds) {
+        latestByTicket.set(tid, null);
+      }
+      for (const cr of clientRows) {
+        latestByTicket.set(cr.ticket_id, cr.type);
+      }
+
+      return {
+        previews,
+        latestClientType: Object.fromEntries(latestByTicket),
+      };
     },
 
     async listReadState(

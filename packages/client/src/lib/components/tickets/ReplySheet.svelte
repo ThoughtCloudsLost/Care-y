@@ -56,6 +56,7 @@
     followUpGroupKey,
   } from "$lib/tickets/follow-up-utils.js";
   import SystemEvent from "$lib/components/tickets/SystemEvent.svelte";
+  import { createChannelPolicyQuery } from "$lib/query/channel-policy.svelte.js";
 
   interface ReplySheetProps {
     opened: boolean;
@@ -70,6 +71,8 @@
     followUpCount: number;
     /** When true, a contact correction is pending for this ticket. */
     hasUnacknowledgedCorrection?: boolean;
+    /** Type of the latest client-sourced follow-up from the preview query. */
+    latestClientType?: string | null;
     ondismiss: () => void;
     onsent: (ticketId: string) => void;
   }
@@ -84,6 +87,7 @@
     previewFollowUps,
     followUpCount,
     hasUnacknowledgedCorrection: correctionPending = false,
+    latestClientType = null,
     ondismiss,
     onsent,
   }: ReplySheetProps = $props();
@@ -95,6 +99,13 @@
   const currentUserIdGetter = getCurrentUserId();
   const currentUserId = $derived(currentUserIdGetter());
   const queryClient = useQueryClient();
+
+  // ── Channel policy (cached, deduped by TanStack Query) ──
+
+  const channelPolicy = createChannelPolicyQuery();
+  const replyEmailExpected = $derived(
+    latestClientType === "email_inbound" && channelPolicy.emailEnabled,
+  );
 
   // ── Compose (shared TicketCompose owns mode, drafts, and mentions) ──
 
@@ -425,6 +436,7 @@
     inline
     sending={messenger.sending || sms.sending || attachmentUpload.busy}
     hasUnacknowledgedCorrection={correctionPending}
+    emailExpected={replyEmailExpected}
     onsendreply={() => void messenger.handleSend()}
     onsendsms={(text: string) => void sms.handleSmsSend(text)}
     onplus={handlePlus}

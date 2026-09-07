@@ -14,13 +14,19 @@
     ticketId: string;
     inline?: boolean;
     sending?: boolean;
+    emailExpected?: boolean;
     onsendreply: (text: string) => void;
     onsendsms?: (text: string) => void;
     onplus?: (anchor: HTMLElement) => void;
     [key: string]: unknown;
   }
 
-  let { ticketId, onsendreply, ..._rest }: Props = $props();
+  let {
+    ticketId,
+    onsendreply,
+    emailExpected = false,
+    ..._rest
+  }: Props = $props();
 
   let text = $state("");
 
@@ -32,7 +38,7 @@
   }
 </script>
 
-<div data-testid="compose-stub">
+<div data-testid="compose-stub" data-email-expected={String(emailExpected)}>
   <textarea data-testid="compose-textarea" value={text} oninput={handleInput}
   ></textarea>
   <button

@@ -78,6 +78,7 @@
   import { createQuery, useQueryClient } from "@tanstack/svelte-query";
   import { ticketKeys, ticketsKeys, consultantKeys } from "$lib/query/keys";
   import { invalidateReadState } from "$lib/query/invalidate-read-state.js";
+  import { createChannelPolicyQuery } from "$lib/query/channel-policy.svelte.js";
   import { trpc } from "$lib/trpc/index.js";
   import {
     getCryptoBridge,
@@ -134,6 +135,7 @@
   const ticketRouter = requireRouter(trpc.tickets, "tickets");
   const cryptoBridge = getCryptoBridge();
   const queryClient = useQueryClient();
+  const channelPolicy = createChannelPolicyQuery();
 
   type FollowUpList = Awaited<
     ReturnType<typeof ticketRouter.listFollowUps.query>
@@ -155,8 +157,8 @@
     if (!ticket || !compose || autoActivatedForTicket === ticketId) return;
     autoActivatedForTicket = ticketId;
 
-    const hasReply = ticket.portalCapable;
-    const hasSms = ticket.hasPhone;
+    const hasReply = ticket.portalCapable && channelPolicy.secureLinkEnabled;
+    const hasSms = ticket.hasPhone && channelPolicy.smsEnabled;
 
     // Auto-activate when exactly one client-reply method exists.
     if (hasReply && !hasSms) {
@@ -631,6 +633,7 @@
   let loadOlderPage = $state<(() => Promise<void>) | undefined>(undefined);
   let loadedFollowUpCount = $state(0);
   let correctionPending = $state(false);
+  let emailExpected = $state(false);
 
   const deepSearch = createDeepSearch({
     getOverlayTerm: () => overlay.term,
@@ -785,6 +788,7 @@
       notificationSheet.open();
     },
     onsharelink: () => {
+      if (!channelPolicy.shareLinkEnabled) return;
       closePanel();
       shareSheet.open();
     },
@@ -1091,6 +1095,7 @@
     bind:loadOlderPage
     bind:loadedFollowUpCount
     bind:correctionPending
+    bind:emailExpected
     onapplyphone={handleApplyPhone}
     onapplyemail={handleApplyEmail}
   />
@@ -1146,6 +1151,7 @@
       hidden={selectMode.active}
       sending={messenger.sending || sms.sending || attachmentUpload.busy}
       hasUnacknowledgedCorrection={correctionPending}
+      emailExpected={emailExpected && channelPolicy.emailEnabled}
       floatingPill={jumpPill}
       onsendreply={() => void messenger.handleSend()}
       onsendsms={(text: string) => void sms.handleSmsSend(text)}
@@ -1187,6 +1193,10 @@
           onaction={(action: TicketAction) => panelActions.dispatch(action)}
           onnotetap={handleNoteTap}
           onlightbox={handlePanelLightbox}
+          voiceEnabled={channelPolicy.voiceEnabled}
+          shareLinkEnabled={channelPolicy.shareLinkEnabled}
+          secureLinkEnabled={channelPolicy.secureLinkEnabled}
+          smsEnabled={channelPolicy.smsEnabled}
         />
       </aside>
     {/snippet}
@@ -1375,16 +1385,16 @@
   oncallaction={handleCallAction}
   oncalldismiss={closeCallSheet}
   oncomposedismiss={closeComposeActions}
-  onreply={ticket?.portalCapable === true
+  onreply={ticket?.portalCapable === true && channelPolicy.secureLinkEnabled
     ? () => compose?.activateReply()
     : undefined}
-  ontextclient={ticket?.hasPhone === true
+  ontextclient={ticket?.hasPhone === true && channelPolicy.smsEnabled
     ? () => {
         exposureHint.show("sms");
         compose?.activateSms();
       }
     : undefined}
-  onemailclient={ticket?.hasEmail === true
+  onemailclient={ticket?.hasEmail === true && channelPolicy.emailEnabled
     ? () => {
         emailComposeOpen = true;
       }
@@ -1399,6 +1409,10 @@
     setDraftForMode(ticketId, "reply", body);
     compose?.activateReply();
   }}
+  voiceEnabled={channelPolicy.voiceEnabled}
+  shareLinkEnabled={channelPolicy.shareLinkEnabled}
+  secureLinkEnabled={channelPolicy.secureLinkEnabled}
+  smsEnabled={channelPolicy.smsEnabled}
 />
 
 <EmailComposeSheet
