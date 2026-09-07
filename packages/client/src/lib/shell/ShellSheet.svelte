@@ -20,6 +20,7 @@
     OVERLAY_OUTRO_MS,
   } from "./use-deferred-unmount.svelte";
   import { portal } from "./portal";
+  import { pushOverlay } from "./overlay-stack";
   import { layoutMode } from "$lib/stores/layout-mode.svelte";
   import ShellPopup from "./ShellPopup.svelte";
   import ShellBackdrop from "./ShellBackdrop.svelte";
@@ -66,19 +67,12 @@
     },
   });
 
-  // When trapFocus is false the focus-trap never activates, so Escape has
-  // no handler. Add a standalone keydown listener for that case.
+  // When trapFocus is false the focus-trap never activates, so the
+  // overlay stack has no registration. Register directly for that case.
   $effect(() => {
     if (trapFocus || !opened) return;
     const dismiss = ondismiss;
-    function onKey(e: KeyboardEvent): void {
-      if (e.key === "Escape") {
-        e.preventDefault();
-        dismiss();
-      }
-    }
-    document.addEventListener("keydown", onKey);
-    return () => document.removeEventListener("keydown", onKey);
+    return pushOverlay(() => dismiss());
   });
 
   const sheetClass = $derived(

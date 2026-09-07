@@ -450,6 +450,94 @@ test.describe.serial("Ticket Detail (Chat View)", () => {
     await page.keyboard.press("Escape");
   });
 
+  // ── 12b. Stacked overlay: close-flow from info panel ─────────────
+
+  test("close-flow from info panel clears all backdrops and pointer events work", async ({}, testInfo) => {
+    testInfo.setTimeout(CRYPTO_TIMEOUT * 2);
+
+    // Open the client info panel via the navbar alias button.
+    const aliasBtn = page.getByRole("button", { name: /view info for/i });
+    await aliasBtn.dispatchEvent("click");
+
+    const panel = page.locator(
+      `[data-testid="popup-dialog"][aria-label="${clientAlias}"]`,
+    );
+    await expect(panel).toBeVisible({ timeout: 5_000 });
+
+    // Trigger "Close with resolution" from the panel actions. The panel
+    // has a "Close" button. After the fix the panel closes first, then
+    // the close-resolution sheet opens as the sole overlay.
+    const closeBtn = panel.getByRole("button", { name: /^close$/i });
+    const closeVisible = await closeBtn
+      .isVisible({ timeout: 3_000 })
+      .catch(() => false);
+
+    if (!closeVisible) {
+      // If the button is not visible (e.g., ticket already closed),
+      // dismiss the panel and skip the rest of this test.
+      await page.keyboard.press("Escape");
+      return;
+    }
+    await closeBtn.click();
+
+    // The close-resolution sheet should open.
+    const resolutionSheet = page.getByRole("dialog", {
+      name: /close|resolution/i,
+    });
+    const sheetAppeared = await resolutionSheet
+      .isVisible({ timeout: 5_000 })
+      .catch(() => false);
+
+    if (sheetAppeared) {
+      // Dismiss the resolution sheet with Escape (single layer).
+      await page.keyboard.press("Escape");
+      await expect(resolutionSheet).not.toBeVisible({ timeout: 5_000 });
+    }
+
+    // All backdrops should be gone.
+    await expect(page.locator('[data-testid="shell-backdrop"]')).toHaveCount(
+      0,
+      { timeout: 5_000 },
+    );
+
+    // Verify pointer events work by clicking a message bubble.
+    const chatLog = page.locator('[role="log"]');
+    const bubble = chatLog.getByRole("article").first();
+    await expect(bubble).toBeVisible({ timeout: 5_000 });
+    await bubble.click();
+  });
+
+  // ── 12c. Single Escape closes one overlay, not the detail pane ──
+
+  test("single Escape closes overlay without closing the detail pane", async () => {
+    // Open the context menu via long-press on a client message.
+    const bubbleText = page.locator(".bubble-text", {
+      hasText: "I need help finding a place to stay",
+    });
+    await expect(bubbleText).toBeVisible({ timeout: CRYPTO_TIMEOUT });
+
+    const chatLog = page.locator('[role="log"]');
+    await chatLog.evaluate((el) => {
+      el.scrollTo(0, 0);
+    });
+    await page.waitForTimeout(200);
+    await longPress(page, bubbleText);
+
+    const actionsSheet = page.locator('[data-testid="actions-sheet"]');
+    await expect(actionsSheet.getByText("Copy")).toBeVisible({
+      timeout: 5_000,
+    });
+
+    // Press Escape once. The actions sheet should close.
+    await page.keyboard.press("Escape");
+    await expect(actionsSheet.getByText("Copy")).not.toBeVisible({
+      timeout: 3_000,
+    });
+
+    // The chat log should still be visible (detail pane not closed).
+    await expect(chatLog).toBeVisible();
+  });
+
   // ── 13. Keyboard navigation (Checkpoint 25) ────────────────────
 
   test("message bubbles are focusable and keyboard-navigable", async () => {

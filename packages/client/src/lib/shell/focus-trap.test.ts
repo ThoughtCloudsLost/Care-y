@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, afterEach } from "vitest";
-import { activateFocusTrap, addEscapeHandler } from "./focus-trap";
+import { activateFocusTrap } from "./focus-trap";
 
 function createContainer(focusableCount: number): HTMLDivElement {
   const container = document.createElement("div");
@@ -116,53 +116,5 @@ describe("activateFocusTrap", () => {
     const prevented = !container.dispatchEvent(event);
 
     expect(prevented).toBe(false);
-  });
-});
-
-describe("addEscapeHandler", () => {
-  it("calls onEscape when Escape is pressed on document", () => {
-    const onEscape = vi.fn();
-
-    addEscapeHandler(onEscape);
-
-    const event = new KeyboardEvent("keydown", {
-      key: "Escape",
-      bubbles: true,
-      cancelable: true,
-    });
-    document.dispatchEvent(event);
-
-    expect(onEscape).toHaveBeenCalledOnce();
-  });
-
-  it("removes the listener on cleanup", () => {
-    const onEscape = vi.fn();
-
-    const cleanup = addEscapeHandler(onEscape);
-    cleanup();
-
-    const event = new KeyboardEvent("keydown", {
-      key: "Escape",
-      bubbles: true,
-      cancelable: true,
-    });
-    document.dispatchEvent(event);
-
-    expect(onEscape).not.toHaveBeenCalled();
-  });
-
-  it("does not fire for non-Escape keys", () => {
-    const onEscape = vi.fn();
-
-    addEscapeHandler(onEscape);
-
-    const event = new KeyboardEvent("keydown", {
-      key: "Enter",
-      bubbles: true,
-      cancelable: true,
-    });
-    document.dispatchEvent(event);
-
-    expect(onEscape).not.toHaveBeenCalled();
   });
 });

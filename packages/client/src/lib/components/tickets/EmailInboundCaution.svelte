@@ -56,6 +56,7 @@
 
   function handleKeydown(e: KeyboardEvent): void {
     if (e.key === "Escape" && open) {
+      e.preventDefault();
       e.stopPropagation();
       dismiss();
     }

@@ -747,7 +747,10 @@
       ticketRouter.watchTicket.mutate({ ticketId: tid }),
     unwatchMutate: async (tid) =>
       ticketRouter.unwatchTicket.mutate({ ticketId: tid }),
-    onclose: () => closeFlow.start(),
+    onclose: () => {
+      closePanel();
+      closeFlow.start();
+    },
     oncall: () => {
       closePanel();
       openCallSheet();
@@ -786,6 +789,7 @@
       shareSheet.open();
     },
     onrevokeReplyToken: () => {
+      closePanel();
       revokeTokenDialogOpen = true;
     },
   });
