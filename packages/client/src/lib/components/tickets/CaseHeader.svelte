@@ -60,7 +60,7 @@
   const ticketQuery = createQuery(() => ({
     queryKey: ticketKeys.detail(ticketId),
     queryFn: async () => ticketRouter.get.query({ ticketId }),
-    enabled: ticketId !== "",
+    enabled: typeof ticketId === "string" && ticketId !== "",
   }));
 
   const ticket = $derived(ticketQuery.data);

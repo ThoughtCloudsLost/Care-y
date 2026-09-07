@@ -88,13 +88,13 @@
   const ticketQuery = createQuery(() => ({
     queryKey: ticketKeys.detail(ticketId),
     queryFn: async () => ticketRouter.get.query({ ticketId }),
-    enabled: ticketId !== "",
+    enabled: typeof ticketId === "string" && ticketId !== "",
   }));
 
   const watchingQuery = createQuery(() => ({
     queryKey: ticketKeys.isWatching(ticketId),
     queryFn: async () => ticketRouter.isWatching.query({ ticketId }),
-    enabled: ticketId !== "",
+    enabled: typeof ticketId === "string" && ticketId !== "",
   }));
 
   // --- Derived ticket state ---

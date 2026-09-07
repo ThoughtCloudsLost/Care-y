@@ -55,14 +55,16 @@
     queryKey: ticketKeys.attachments(ticketId),
     queryFn: async () =>
       ticketRouter.listAttachments.query({ ticketId, limit: 50 }),
-    enabled: ticketId !== "" && keyWrap !== null,
+    enabled:
+      typeof ticketId === "string" && ticketId !== "" && keyWrap !== null,
   }));
 
   const recordingsQuery = createQuery(() => ({
     queryKey: ticketKeys.recordings(ticketId),
     queryFn: async () =>
       ticketRouter.listRecordings.query({ ticketId, limit: 50 }),
-    enabled: ticketId !== "" && keyWrap !== null,
+    enabled:
+      typeof ticketId === "string" && ticketId !== "" && keyWrap !== null,
   }));
 
   // --- Paginated wrappers ---

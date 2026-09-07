@@ -268,7 +268,7 @@
   const ticketQuery = createQuery(() => ({
     queryKey: ticketKeys.detail(ticketId),
     queryFn: async () => ticketRouter.get.query({ ticketId }),
-    enabled: ticketId !== "",
+    enabled: typeof ticketId === "string" && ticketId !== "",
   }));
 
   // Initial query: most recent PAGE_SIZE follow-ups (direction='older', no cursor).
@@ -280,7 +280,7 @@
         limit: PAGE_SIZE,
         direction: "older",
       }),
-    enabled: ticketId !== "",
+    enabled: typeof ticketId === "string" && ticketId !== "",
   }));
 
   // Share status query: resolves waiting/opened/expired for share_link bubbles.
@@ -931,6 +931,7 @@
     createdBy: string | null;
     encryptedContent: string | null;
     noteTypeId: string | null;
+    keyWrap?: ClusterRecord["keyWrap"];
     portalWrap?: string | null;
   }
 
@@ -978,7 +979,7 @@
     const result = decrypt.followUp(
       fu.id,
       fu.encryptedContent,
-      undefined,
+      fu.keyWrap,
       fu.portalWrap,
     );
     const plaintext = result.status === "ready" ? result.value : undefined;
@@ -1166,12 +1167,13 @@
       if (fu.source === "system") continue;
       if (decrypt == null) return false;
       // Same arguments as the bubble render below: omitting portalWrap
-      // here would decrypt a pending portal reply with the ticket key,
-      // fail AEAD, and poison the shared cache for the bubble path.
+      // or the follow-up's own key wrap here would decrypt a pending
+      // tk_temp row with the ticket key, fail AEAD, and poison the
+      // shared cache for the bubble path.
       const result = decrypt.followUp(
         fu.id,
         fu.encryptedContent,
-        undefined,
+        fu.keyWrap,
         fu.portalWrap,
       );
       if (result.status === "loading") return false;
@@ -1489,7 +1491,7 @@
                     ? decrypt.followUp(
                         fu.id,
                         fu.encryptedContent,
-                        undefined,
+                        fu.keyWrap,
                         fu.portalWrap,
                       )
                     : resolveAsyncDecrypt(undefined, false)}
