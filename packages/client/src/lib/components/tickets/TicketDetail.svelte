@@ -1629,6 +1629,18 @@
                         encryptedContent={fu.encryptedContent}
                       />
                     </ConversationBubble>
+                  {:else if isEmailInbound(fu)}
+                    <ConversationBubble
+                      direction="received"
+                      speaker={clientAlias}
+                      source="client"
+                      timestamp={fu.createdAt}
+                    >
+                      <EmailInboundBubbleContent
+                        result={contentResult}
+                        encryptedContent={fu.encryptedContent}
+                      />
+                    </ConversationBubble>
                   {:else}
                     <ConversationBubble
                       direction={messageType(fu)}

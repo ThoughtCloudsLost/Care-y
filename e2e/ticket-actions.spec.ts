@@ -53,13 +53,13 @@ test.describe.serial("Ticket Actions (Call + SMS)", () => {
   });
 
   test("exposure hint has dismiss button", async () => {
-    const dismissBtn = page.locator('[data-testid="exposure-dismiss"]');
+    const dismissBtn = page.locator('[data-testid="exposure-hint-ok"]');
     await expect(dismissBtn).toBeVisible();
     await expect(dismissBtn).toHaveText(/got it/i);
   });
 
   test("dismissing exposure hint opens SMS compose sheet", async () => {
-    const dismissBtn = page.locator('[data-testid="exposure-dismiss"]');
+    const dismissBtn = page.locator('[data-testid="exposure-hint-ok"]');
     await dismissBtn.click();
 
     // SMS compose mode indicator visible in the messagebar header.
@@ -107,7 +107,7 @@ test.describe.serial("Ticket Actions (Call + SMS)", () => {
 
     // Verify the exposure hint is NOT showing.
     await expect(
-      page.locator('[data-testid="exposure-dismiss"]'),
+      page.locator('[data-testid="exposure-hint-ok"]'),
     ).not.toBeVisible({ timeout: 1000 });
 
     // Dismiss the inline SMS compose mode.

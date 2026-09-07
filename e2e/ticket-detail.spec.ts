@@ -332,7 +332,7 @@ test.describe.serial("Ticket Detail (Chat View)", () => {
     // First SMS activation in a page session shows the exposure hint;
     // compose activates on dismissal (same flow ticket-actions.spec
     // walks step by step).
-    const exposureDismiss = page.locator('[data-testid="exposure-dismiss"]');
+    const exposureDismiss = page.locator('[data-testid="exposure-hint-ok"]');
     await expect(exposureDismiss).toBeVisible({ timeout: 3_000 });
     await exposureDismiss.click();
 
@@ -527,7 +527,7 @@ test.describe.serial("Ticket Detail (Chat View)", () => {
     // this session; clear it defensively if it reappears.
     const dialog = await openComposeActions(page);
     await clickComposeAction(dialog, /text client/i);
-    const hintDismiss = page.locator('[data-testid="exposure-dismiss"]');
+    const hintDismiss = page.locator('[data-testid="exposure-hint-ok"]');
     if (await hintDismiss.isVisible({ timeout: 1_000 }).catch(() => false)) {
       await hintDismiss.click();
     }

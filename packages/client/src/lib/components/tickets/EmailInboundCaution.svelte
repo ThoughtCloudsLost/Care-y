@@ -21,11 +21,6 @@
   let hoverIntent = $state(false);
   let triggerEl = $state<HTMLButtonElement | null>(null);
 
-  // Returning focus to the trigger on dismiss fires its focus handler,
-  // which would reopen the panel in the same breath. Suppress the
-  // focus-opens behavior for the synchronous focus() call only.
-  let suppressFocusOpen = false;
-
   function toggle(): void {
     open = !open;
   }
@@ -33,9 +28,7 @@
   function dismiss(): void {
     open = false;
     hoverIntent = false;
-    suppressFocusOpen = true;
     triggerEl?.focus();
-    suppressFocusOpen = false;
   }
 
   function handleKeydown(e: KeyboardEvent): void {
@@ -92,11 +85,6 @@
     onclick={toggle}
     onmouseenter={handleMouseEnter}
     onmouseleave={handleMouseLeave}
-    onfocus={() => {
-      if (!suppressFocusOpen) {
-        open = true;
-      }
-    }}
     data-testid="email-inbound-caution-trigger"
   >
     <svg
