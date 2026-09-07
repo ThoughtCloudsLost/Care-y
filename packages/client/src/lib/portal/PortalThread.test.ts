@@ -996,6 +996,12 @@ describe("PortalThread", () => {
       expect(body!.textContent).toContain("Please confirm your visit.");
       // Body renders through the sanitized HTML pipeline (contains <p>)
       expect(body!.querySelector("p")).toBeTruthy();
+
+      // Channel chip is present above the email content
+      const chip = container.querySelector(
+        "[data-testid='email-channel-chip']",
+      );
+      expect(chip).toBeTruthy();
     });
 
     it("falls back to plain text when email JSON is malformed", async () => {
@@ -1161,6 +1167,12 @@ describe("PortalThread", () => {
         "[data-testid='email-inbound-caution-trigger']",
       );
       expect(caution).toBeTruthy();
+
+      // Channel chip is present above the inbound email content
+      const chip = container.querySelector(
+        "[data-testid='email-channel-chip']",
+      );
+      expect(chip).toBeTruthy();
     });
 
     it("shows dropped attachments note when nonzero", async () => {

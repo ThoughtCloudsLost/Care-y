@@ -64,13 +64,15 @@ const payloadWithDroppedAttachments = JSON.stringify({
 });
 
 describe("FollowUpBubble (email_inbound)", () => {
-  it("renders subject, body, unverified From, and caution affordance", () => {
-    const { container } = render(FollowUpBubble, {
+  it("renders subject, body, unverified From, caution affordance, and channel chip", () => {
+    const { container, getByTestId } = render(FollowUpBubble, {
       props: {
         followUp: makeFollowUp("email_inbound"),
         result: ready(validInboundPayload),
       },
     });
+
+    expect(getByTestId("email-channel-chip")).toBeTruthy();
 
     const subject = container.querySelector(
       "[data-testid='email-inbound-subject']",
@@ -239,5 +241,34 @@ describe("FollowUpBubble (email_inbound)", () => {
     expect(
       container.querySelector("[data-testid='email-inbound-caution-trigger']"),
     ).toBeNull();
+    expect(
+      container.querySelector("[data-testid='email-channel-chip']"),
+    ).toBeNull();
+  });
+});
+
+const validOutboundPayload = JSON.stringify({
+  subject: "Your appointment",
+  doc: {
+    type: "doc",
+    content: [
+      {
+        type: "paragraph",
+        content: [{ type: "text", text: "Please confirm." }],
+      },
+    ],
+  },
+});
+
+describe("FollowUpBubble (email_outbound)", () => {
+  it("renders the channel chip for email_outbound", () => {
+    const { getByTestId } = render(FollowUpBubble, {
+      props: {
+        followUp: makeFollowUp("email_outbound", "volunteer"),
+        result: ready(validOutboundPayload),
+      },
+    });
+
+    expect(getByTestId("email-channel-chip")).toBeTruthy();
   });
 });

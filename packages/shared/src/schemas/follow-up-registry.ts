@@ -7,7 +7,7 @@ import { userIdSchema } from "../ids.js";
 export type ContentCategory =
   "message" | "system" | "note" | "article" | "correction";
 
-export type RenderVariant = "call" | "share" | "correction";
+export type RenderVariant = "call" | "share" | "correction" | "email";
 
 export interface ContentTypeMeta {
   readonly category: ContentCategory;
@@ -169,6 +169,7 @@ export const CONTENT_TYPE_REGISTRY: Record<FollowUpType, ContentTypeMeta> = {
     hasEncryptedContent: true,
     hasEventParams: false,
     groupable: false,
+    renderVariant: "email",
   },
   email_inbound: {
     category: "message",
@@ -177,5 +178,6 @@ export const CONTENT_TYPE_REGISTRY: Record<FollowUpType, ContentTypeMeta> = {
     hasEncryptedContent: true,
     hasEventParams: false,
     groupable: false,
+    renderVariant: "email",
   },
 } as const;

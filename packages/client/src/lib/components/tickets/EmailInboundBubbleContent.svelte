@@ -14,6 +14,7 @@
   import * as m from "$lib/paraglide/messages.js";
   import DecryptPlaceholder from "$lib/components/DecryptPlaceholder.svelte";
   import EmailInboundCaution from "$lib/components/tickets/EmailInboundCaution.svelte";
+  import EmailChannelChip from "$lib/components/tickets/EmailChannelChip.svelte";
 
   interface EmailInboundBubbleContentProps {
     result: DecryptResult;
@@ -56,6 +57,7 @@
   );
 </script>
 
+<EmailChannelChip />
 {#if result.status !== "ready"}
   <span class="bubble-text">
     <DecryptPlaceholder

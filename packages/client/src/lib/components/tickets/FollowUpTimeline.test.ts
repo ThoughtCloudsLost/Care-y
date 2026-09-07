@@ -61,6 +61,13 @@ vi.mock("$lib/paraglide/messages.js", () => ({
   ticket_new_priority_urgent: () => "Urgent",
   ticket_system_merge_note: () => "Tickets merged",
   ticket_system_event: () => "Event",
+  ticket_email_channel_label: () => "Email",
+  ticket_timeline_email_received: ({ subject }: { subject: string }) =>
+    `Email received: ${subject}`,
+  ticket_timeline_email_received_plain: () => "Email received",
+  ticket_timeline_email_sent: ({ subject }: { subject: string }) =>
+    `Email sent: ${subject}`,
+  ticket_timeline_email_sent_plain: () => "Email sent",
   dashboard_time_just_now: () => "just now",
   dashboard_time_minutes_ago: ({ count }: { count: number }) =>
     `${String(count)}m ago`,
@@ -504,6 +511,135 @@ describe("FollowUpTimeline component (timeline mode)", () => {
       ).toBeTruthy();
       expect(
         screen.getByRole("button", { name: /^Jump to: A volunteer assigned,/ }),
+      ).toBeTruthy();
+    });
+  });
+
+  describe("email landmarks", () => {
+    it("renders an email_inbound item as a landmark row with subject", () => {
+      const emailPayload = JSON.stringify({
+        subject: "Re: hello",
+        text: "body text",
+        from: "a@b.c",
+        droppedAttachments: 0,
+      });
+
+      render(FollowUpTimelineHarness, {
+        props: {
+          timelineActive: true,
+          resolveDecrypted: (id: string) =>
+            id === "ei-1" ? emailPayload : undefined,
+          items: [
+            makeItem("ei-1", {
+              source: "client",
+              type: "email_inbound",
+              createdAt: isoAt(0, 9, 0),
+            }),
+          ],
+        },
+      });
+
+      expect(
+        screen.getByRole("button", {
+          name: /^Jump to: Email received: Re: hello,/,
+        }),
+      ).toBeTruthy();
+    });
+
+    it("renders an email_outbound item as a landmark row with subject", () => {
+      const emailPayload = JSON.stringify({
+        subject: "Appointment details",
+        doc: { type: "doc", content: [] },
+      });
+
+      render(FollowUpTimelineHarness, {
+        props: {
+          timelineActive: true,
+          resolveDecrypted: (id: string) =>
+            id === "eo-1" ? emailPayload : undefined,
+          items: [
+            makeItem("eo-1", {
+              source: "volunteer",
+              type: "email_outbound",
+              createdAt: isoAt(0, 9, 0),
+            }),
+          ],
+        },
+      });
+
+      expect(
+        screen.getByRole("button", {
+          name: /^Jump to: Email sent: Appointment details,/,
+        }),
+      ).toBeTruthy();
+    });
+
+    it("does not fold email items into a message cluster", () => {
+      const emailPayload = JSON.stringify({
+        subject: "Re: hello",
+        text: "body",
+        from: "a@b.c",
+        droppedAttachments: 0,
+      });
+
+      render(FollowUpTimelineHarness, {
+        props: {
+          timelineActive: true,
+          resolveDecrypted: (id: string) =>
+            id === "ei-mid" ? emailPayload : undefined,
+          items: [
+            makeItem("msg-1", {
+              source: "client",
+              type: "message",
+              createdAt: isoAt(0, 9, 0),
+            }),
+            makeItem("ei-mid", {
+              source: "client",
+              type: "email_inbound",
+              createdAt: isoAt(0, 9, 5),
+            }),
+            makeItem("msg-2", {
+              source: "client",
+              type: "message",
+              createdAt: isoAt(0, 9, 10),
+            }),
+          ],
+        },
+      });
+
+      // The email landmark splits the run into two single-message clusters.
+      const clusters = screen.getAllByRole("button", {
+        name: "Expand 1 incoming",
+      });
+      expect(clusters).toHaveLength(2);
+
+      // The email itself is a landmark, not inside a cluster.
+      expect(
+        screen.getByRole("button", {
+          name: /^Jump to: Email received: Re: hello,/,
+        }),
+      ).toBeTruthy();
+    });
+
+    it("falls back to plain label when email payload has no subject", () => {
+      render(FollowUpTimelineHarness, {
+        props: {
+          timelineActive: true,
+          resolveDecrypted: () => "not valid json",
+          items: [
+            makeItem("eo-bad", {
+              source: "volunteer",
+              type: "email_outbound",
+              createdAt: isoAt(0, 9, 0),
+            }),
+          ],
+        },
+      });
+
+      expect(
+        screen.getByRole("button", {
+          name: /^Jump to: Email sent,/,
+        }),
       ).toBeTruthy();
     });
   });

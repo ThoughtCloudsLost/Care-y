@@ -31,6 +31,7 @@
   import CallEntry from "$lib/components/tickets/CallEntry.svelte";
   import CorrectionBody from "$lib/components/tickets/CorrectionBody.svelte";
   import EmailInboundCaution from "$lib/components/tickets/EmailInboundCaution.svelte";
+  import EmailChannelChip from "$lib/components/tickets/EmailChannelChip.svelte";
   import { parseContactCorrection } from "@care-y/shared";
   import type { EmailInboundPayload } from "@care-y/shared";
   import { triggerBlobDownload } from "$lib/components/shared/attachment-download.js";
@@ -762,6 +763,7 @@
                 {#if portalCorrectionPayload !== null}
                   <CorrectionBody payload={portalCorrectionPayload} />
                 {:else if entry.type === "email_outbound" && emailContent !== null}
+                  <EmailChannelChip />
                   <span
                     class="email-bubble-subject"
                     data-testid="portal-email-subject"
@@ -780,8 +782,10 @@
                   </span>
                 {:else if entry.type === "email_outbound"}
                   <!-- Malformed email JSON fallback: render as plain text -->
+                  <EmailChannelChip />
                   <span class="bubble-text">{entry.result.value}</span>
                 {:else if entry.type === "email_inbound" && emailInboundContent !== null}
+                  <EmailChannelChip />
                   {#if emailInboundContent.subject !== ""}
                     <span
                       class="email-inbound-subject"
@@ -823,6 +827,7 @@
                   <EmailInboundCaution />
                 {:else if entry.type === "email_inbound"}
                   <!-- Malformed inbound email JSON fallback -->
+                  <EmailChannelChip />
                   <span class="bubble-text">{entry.result.value}</span>
                 {:else if highlighting}
                   {#each splitByTerm(entry.result.value, searchTerm ?? "") as seg, i (i)}
