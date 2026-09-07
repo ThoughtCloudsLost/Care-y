@@ -7,7 +7,7 @@ export async function up(db: Kysely<unknown>): Promise<void> {
       col.primaryKey().defaultTo(db.fn("gen_random_uuid")),
     )
     .addColumn("ticket_id", "uuid", (col) =>
-      col.notNull().references("tickets.id"),
+      col.notNull().references("tickets.id").onDelete("cascade"),
     )
     .addColumn("token_hash", "text", (col) => col.notNull())
     .addColumn("created_at", "timestamptz", (col) =>

@@ -95,6 +95,31 @@ describe.skipIf(!process.env.DATABASE_URL)(
       expect(row?.email_reply_footer).toBeNull();
     });
 
+    it("deletes tokens when their ticket is deleted (cascade)", async () => {
+      // The e2e harness and the dev reset both DELETE FROM tickets and
+      // rely on every ticket-rooted table cascading.
+      const second = await createTestTicketFixture(db);
+      await db
+        .insertInto("email_reply_tokens")
+        .values({
+          ticket_id: second.ticketId,
+          token_hash: "hash-ccc" as ReplyTokenHash,
+        })
+        .execute();
+
+      await db
+        .deleteFrom("tickets")
+        .where("id", "=", second.ticketId)
+        .execute();
+
+      const rows = await db
+        .selectFrom("email_reply_tokens")
+        .selectAll()
+        .where("token_hash", "=", "hash-ccc" as ReplyTokenHash)
+        .execute();
+      expect(rows).toHaveLength(0);
+    });
+
     it("down removes the table and column, up re-applies cleanly", async () => {
       // Migration signatures take Kysely<unknown> (the Migrator's view);
       // Kysely's type parameter is invariant, so the tenant-typed test

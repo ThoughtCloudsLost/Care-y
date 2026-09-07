@@ -25,6 +25,7 @@ const SEED_TABLES_DELETE_ORDER: readonly (keyof TenantDatabase)[] = [
   "ticket_watchers",
   "ticket_dependencies",
   "ticket_key_wraps",
+  "email_reply_tokens",
   "kb_votes",
   "kb_attachments",
   "audit_log",
