@@ -120,9 +120,9 @@ const SEED_TICKET_COUNT = 120;
 const FOLLOWUP_TICKET_COUNT = 35;
 
 const QUEUES = [
-  { name: "Intake", escalateDays: 3 },
-  { name: "Crisis", escalateDays: 1 },
-  { name: "Housing", escalateDays: 5 },
+  { name: "Intake", escalateDays: 3, color: "blue", icon: "phone" },
+  { name: "Crisis", escalateDays: 1, color: "red", icon: "triangle-alert" },
+  { name: "Housing", escalateDays: 5, color: "green", icon: "house" },
 ] as const;
 
 const KB_CATEGORIES = ["Procedures", "Resources", "Safety"] as const;
@@ -1174,6 +1174,8 @@ export async function devSeedData(
   for (const q of QUEUES) {
     await ticketRouter.createQueue.mutate({
       encryptedName: seal(q.name, orgPublicKey),
+      encryptedColor: seal(q.color, orgPublicKey),
+      encryptedIcon: seal(q.icon, orgPublicKey),
       escalateDays: q.escalateDays,
     });
     console.log(`[dev-seed] Created queue: ${q.name}`);
@@ -1396,6 +1398,58 @@ export async function devSeedData(
         mentionedPseudonyms: [],
         ...(noteTypeId !== undefined ? { noteTypeId } : {}),
       });
+    }
+
+    // Email exchange on the first ticket: an outbound volunteer email and
+    // the client's emailed reply. Seeds the email bubble renderers and the
+    // inbound caution affordance without a live SMTP round trip.
+    if (ti === 0) {
+      const emailPair = [
+        {
+          source: "volunteer",
+          type: "email_outbound",
+          content: JSON.stringify({
+            subject: "Your appointment",
+            doc: {
+              type: "doc",
+              content: [
+                p(
+                  t(
+                    "Your intake appointment is confirmed for Thursday at 2pm. Bring the referral letter and your ID.",
+                  ),
+                ),
+              ],
+            },
+          }),
+        },
+        {
+          source: "client",
+          type: "email_inbound",
+          content: JSON.stringify({
+            subject: "Re: Your appointment",
+            text: "Thank you, I have the letter and my ID ready. Do I need anything else?",
+            from: "client@example.org",
+            droppedAttachments: 0,
+          }),
+        },
+      ];
+      for (const fu of emailPair) {
+        const emailFollowUpId = newFollowupId();
+        const encrypted = await bridge.encrypt(
+          ticketId,
+          followupSlot(emailFollowUpId),
+          fu.content,
+        );
+        await ticketRouter.createFollowUp.mutate({
+          id: emailFollowUpId,
+          ticketId,
+          encryptedContent: encrypted,
+          source: fu.source,
+          type: fu.type,
+          isPrivate: false,
+          mentionedPseudonyms: [],
+        });
+      }
     }
   }
   console.log(

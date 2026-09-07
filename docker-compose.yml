@@ -24,6 +24,10 @@ services:
       # Bound to loopback by default. Set BIND_ADDR to expose on another
       # interface (e.g. a VPN address) when testing from another device.
       - "${BIND_ADDR:-127.0.0.1}:3000:3000"
+      # Inbound SMTP receiver (pnpm dev:inbound runs it inside this
+      # container via exec, which shares the network namespace). Nothing
+      # listens here until that script is started.
+      - "${BIND_ADDR:-127.0.0.1}:2525:2525"
     networks: [internal]
     volumes:
       - oprf_sockets:/run/oprf
