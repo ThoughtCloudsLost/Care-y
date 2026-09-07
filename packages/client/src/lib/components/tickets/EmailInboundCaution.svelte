@@ -17,16 +17,39 @@
   import { on } from "svelte/events";
   import * as m from "$lib/paraglide/messages.js";
 
-  let open = $state(false);
+  // Two open sources: hover shows the panel transiently, click/Enter
+  // pins it. Kept separate because pointer taps synthesize mouseenter
+  // right before click; a single toggled flag would open on the hover
+  // and close again on the click, so a tap would only flash the panel.
+  let sticky = $state(false);
+  let hovering = $state(false);
   let hoverIntent = $state(false);
   let triggerEl = $state<HTMLButtonElement | null>(null);
+  let panelEl = $state<HTMLSpanElement | null>(null);
+  let flipUp = $state(false);
+
+  const open = $derived(sticky || hovering);
+
+  // Flip the panel above the trigger when it would clip at the bottom
+  // of the viewport. Measured after render, before paint.
+  $effect(() => {
+    if (!open || panelEl == null) {
+      flipUp = false;
+      return;
+    }
+    const rect = panelEl.getBoundingClientRect();
+    if (rect.bottom > window.innerHeight) {
+      flipUp = true;
+    }
+  });
 
   function toggle(): void {
-    open = !open;
+    sticky = !sticky;
   }
 
   function dismiss(): void {
-    open = false;
+    sticky = false;
+    hovering = false;
     hoverIntent = false;
     triggerEl?.focus();
   }
@@ -41,14 +64,17 @@
   // SC 1.4.13 dismissable: Escape must close the panel without moving
   // pointer or focus. That covers hover-opened panels while focus sits
   // elsewhere, so the listener is window-level and exists only while open.
+  // Capture phase: the shell binds a bubble-phase window keydown that
+  // closes the ticket detail on Escape, and it registered first. Escape
+  // with the panel open must dismiss only the panel.
   $effect(() => {
     if (!open) return;
-    return on(window, "keydown", handleKeydown);
+    return on(window, "keydown", handleKeydown, { capture: true });
   });
 
   function handleMouseEnter(): void {
     hoverIntent = true;
-    open = true;
+    hovering = true;
   }
 
   function handleMouseLeave(): void {
@@ -56,7 +82,7 @@
     // Delay close slightly to allow moving from trigger to panel
     setTimeout(() => {
       if (!hoverIntent) {
-        open = false;
+        hovering = false;
       }
     }, 150);
   }
@@ -69,7 +95,7 @@
     hoverIntent = false;
     setTimeout(() => {
       if (!hoverIntent) {
-        open = false;
+        hovering = false;
       }
     }, 150);
   }
@@ -110,7 +136,9 @@
   </button>
   {#if open}
     <span
+      bind:this={panelEl}
       class="caution-panel"
+      class:caution-panel-above={flipUp}
       role="status"
       data-testid="email-inbound-caution-panel"
       onmouseenter={handlePanelMouseEnter}
@@ -161,6 +189,9 @@
     left: 0;
     top: 100%;
     z-index: 10;
+    /* Shrink-to-fit for an absolute box resolves against the 44px
+       trigger; max-content lets the text use the real max-width. */
+    width: max-content;
     max-width: 280px;
     padding: 8px 12px;
     margin-top: 4px;
@@ -171,6 +202,13 @@
     border: 1px solid var(--hair);
     border-radius: 8px;
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  }
+
+  .caution-panel-above {
+    top: auto;
+    bottom: 100%;
+    margin-top: 0;
+    margin-bottom: 4px;
   }
 
   @media (prefers-reduced-motion: reduce) {
