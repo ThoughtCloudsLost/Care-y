@@ -11,6 +11,7 @@
  * hasher, the receiver, and graceful shutdown. No HTTP, no tRPC.
  */
 
+import { getSodium } from "@care-y/crypto";
 import { validateEnv } from "./env.js";
 import { db, tenantDb } from "./db/db.js";
 import {
@@ -26,6 +27,10 @@ async function main(): Promise<void> {
     console.log("Inbound SMTP receiver disabled (INBOUND_SMTP_ENABLED)");
     return;
   }
+
+  // Ingest seals portal copies and tk_temp wraps with libsodium; the
+  // API entrypoint initializes it at boot and this process must too.
+  await getSodium();
 
   const opsKey = Buffer.from(env.OPS_SECRETS_KEY, "hex");
   let hasher;
