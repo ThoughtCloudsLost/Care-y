@@ -18,11 +18,25 @@ const REPLY_TEXT = `E2E reply ${REPLY_SUFFIX}`;
  * portal channel exists). Give the ticket's client an active channel so
  * the compose option renders. The channel row carries placeholder key
  * material: these tests exercise the volunteer send path, not the portal.
+ *
+ * client_public must be a valid ristretto255 encoding, not random bytes:
+ * the reply path seals a dual copy to it (sealPortalCopy), and libsodium
+ * rejects invalid points, which fails the whole send. The ristretto255
+ * generator from RFC 9496 section 4 is a structurally valid stand-in;
+ * nothing here ever decrypts the portal copy. The row is replaced on
+ * every run so a bad key from an older seed cannot persist.
  */
+const RISTRETTO_GENERATOR_HEX =
+  "e2f2ae0a6abc4e71a884a961c500515f58e30b6aa582dd8db6a65945e08d2d76";
+
 function makeClientPortalCapable(ticketId: string): void {
   queryDb(
     `UPDATE clients SET communication_tier = 'secure_link'
      WHERE id = (SELECT client_id FROM tickets WHERE id = '${ticketId}');`,
+  );
+  queryDb(
+    `DELETE FROM portal_channels
+     WHERE client_id = (SELECT client_id FROM tickets WHERE id = '${ticketId}');`,
   );
   queryDb(
     `INSERT INTO portal_channels
@@ -31,12 +45,11 @@ function makeClientPortalCapable(ticketId: string): void {
      SELECT client_id,
        substr(md5(random()::text) || md5(random()::text), 1, 48),
        decode(md5(random()::text) || md5(random()::text), 'hex'),
-       decode(md5(random()::text) || md5(random()::text), 'hex'),
+       decode('${RISTRETTO_GENERATOR_HEX}', 'hex'),
        decode(md5(random()::text) || md5(random()::text), 'hex'),
        decode(substr(md5(random()::text) || md5(random()::text), 1, 48), 'hex'),
        decode(md5(random()::text) || md5(random()::text), 'hex')
-     FROM tickets WHERE id = '${ticketId}'
-     ON CONFLICT DO NOTHING;`,
+     FROM tickets WHERE id = '${ticketId}';`,
   );
 }
 

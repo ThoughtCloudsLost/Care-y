@@ -361,7 +361,7 @@ test.describe.serial("Portal Upgrade + Email", () => {
     // Wrong passphrase fails.
     await gateInput.fill("wrong words entirely nope zero");
     const unlockBtn = pp.getByRole("button", {
-      name: /send|unlock/i,
+      name: /continue|unlock/i,
     });
     await unlockBtn.click();
     await expect(

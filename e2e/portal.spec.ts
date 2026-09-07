@@ -208,7 +208,9 @@ test.describe.serial("Secure Link Portal", () => {
 
     // Wrong passphrase fails the key check client-side.
     await gateInput.fill("wrong words entirely nope zero");
-    const submitBtn = portalPage.getByRole("button", { name: /send|unlock/i });
+    const submitBtn = portalPage.getByRole("button", {
+      name: /continue|unlock/i,
+    });
     await submitBtn.click();
     await expect(
       portalPage.getByText(/doesn't match|no funciono|check the words/i),
@@ -220,7 +222,9 @@ test.describe.serial("Secure Link Portal", () => {
 
     const gateInput = portalPage.getByLabel(/passphrase/i);
     await gateInput.fill(passphrase);
-    const submitBtn = portalPage.getByRole("button", { name: /send|unlock/i });
+    const submitBtn = portalPage.getByRole("button", {
+      name: /continue|unlock/i,
+    });
     await submitBtn.click();
 
     // The volunteer's dual-encrypted message decrypts in the thread.
@@ -339,7 +343,7 @@ test.describe.serial("Secure Link Portal", () => {
     const gateInput = portalPage.getByLabel(/passphrase/i);
     await expect(gateInput).toBeVisible({ timeout: CRYPTO_TIMEOUT });
     await gateInput.fill(passphrase);
-    await portalPage.getByRole("button", { name: /send|unlock/i }).click();
+    await portalPage.getByRole("button", { name: /continue|unlock/i }).click();
 
     await expect(portalPage.getByText(VOLUNTEER_MESSAGE)).toBeVisible({
       timeout: CRYPTO_TIMEOUT,
