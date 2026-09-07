@@ -64,6 +64,14 @@
     onlightbox?: (imageUrl: string) => void;
     /** Skip title, description, and opened date (already shown by CaseHeader). */
     compact?: boolean;
+    /** Channel policy: hide call button when voice is disabled. */
+    voiceEnabled?: boolean;
+    /** Channel policy: hide share link action when disabled. */
+    shareLinkEnabled?: boolean;
+    /** Channel policy: hide portal setup offer when secure links are disabled. */
+    secureLinkEnabled?: boolean;
+    /** Channel policy: hide SMS delivery in the secure link sheet. */
+    smsEnabled?: boolean;
   }
 
   let {
@@ -72,6 +80,10 @@
     onnotetap,
     onlightbox,
     compact = false,
+    voiceEnabled = true,
+    shareLinkEnabled = true,
+    secureLinkEnabled = true,
+    smsEnabled = true,
   }: TicketPanelContentProps = $props();
 
   // --- Context + caches ---
@@ -192,12 +204,14 @@
   {/if}
 
   <!-- Call button -->
-  <Block class="!my-3">
-    <Button large onclick={() => onaction("call")}>
-      <Phone size={18} aria-hidden="true" class="call-icon" />
-      {m.ticket_panel_call()}
-    </Button>
-  </Block>
+  {#if voiceEnabled}
+    <Block class="!my-3">
+      <Button large onclick={() => onaction("call")}>
+        <Phone size={18} aria-hidden="true" class="call-icon" />
+        {m.ticket_panel_call()}
+      </Button>
+    </Block>
+  {/if}
 
   <!-- Ticket metadata -->
   <List class="!my-3">
@@ -301,6 +315,8 @@
     portalChannel={ticket?.portalChannel}
     clientPhone={ticket?.clientPhone}
     isLoading={ticketQuery.isLoading}
+    {secureLinkEnabled}
+    {smsEnabled}
   />
 
   <!-- Ticket actions -->
@@ -333,16 +349,18 @@
       title={m.ticket_action_assign()}
       onclick={() => onaction("assign")}
     />
-    <ListItem
-      link
-      chevron
-      title={m.share_sheet_title()}
-      onclick={() => onaction("shareLink")}
-    >
-      {#snippet media()}
-        <Link2 class="w-5 h-5 text-[var(--ink-2)]" aria-hidden="true" />
-      {/snippet}
-    </ListItem>
+    {#if shareLinkEnabled}
+      <ListItem
+        link
+        chevron
+        title={m.share_sheet_title()}
+        onclick={() => onaction("shareLink")}
+      >
+        {#snippet media()}
+          <Link2 class="w-5 h-5 text-[var(--ink-2)]" aria-hidden="true" />
+        {/snippet}
+      </ListItem>
+    {/if}
     <ListItem title={m.ticket_action_hold()}>
       {#snippet after()}
         <span use:labelToggleInput={m.ticket_action_hold()}>

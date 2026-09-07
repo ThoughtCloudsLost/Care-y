@@ -246,6 +246,16 @@ export interface OrgConfigTable {
   next_alias_suffix: ColumnType<number, number | undefined, number>;
   // Inbound email reply footer (org-defined language, null = localized default)
   email_reply_footer: string | null;
+  // Channel policy toggles (per-org, default true)
+  channel_sms_enabled: ColumnType<boolean, boolean | undefined, boolean>;
+  channel_email_enabled: ColumnType<boolean, boolean | undefined, boolean>;
+  channel_secure_link_enabled: ColumnType<
+    boolean,
+    boolean | undefined,
+    boolean
+  >;
+  channel_voice_enabled: ColumnType<boolean, boolean | undefined, boolean>;
+  channel_share_link_enabled: ColumnType<boolean, boolean | undefined, boolean>;
 }
 
 // --- User keys (full interface, replaces UserKeysStubTable) ---

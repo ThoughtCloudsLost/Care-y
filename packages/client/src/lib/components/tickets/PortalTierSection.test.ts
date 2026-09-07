@@ -485,4 +485,42 @@ describe("PortalTierSection", () => {
     expect(screen.queryByText(m.ticket_tier_account())).toBeNull();
     expect(screen.queryByText(m.ticket_tier_secure_link())).toBeNull();
   });
+
+  // --- Channel policy: secureLinkEnabled ---
+
+  it("hides setup button when secureLinkEnabled is false", () => {
+    render(PortalTierSection, {
+      props: {
+        ticketId: "t-1",
+        clientId: "c-1",
+        clientTier: "sms_email",
+        portalChannel: null,
+        clientPhone: null,
+        isLoading: false,
+        secureLinkEnabled: false,
+      },
+    });
+
+    // The tier name and explanation should still be visible
+    expect(screen.getByText(m.ticket_tier_sms_email())).toBeTruthy();
+    expect(screen.getByText(m.ticket_tier_sms_explain())).toBeTruthy();
+    // But the setup button should be hidden
+    expect(screen.queryByText(m.ticket_tier_setup())).toBeNull();
+  });
+
+  it("shows setup button when secureLinkEnabled is true (default)", () => {
+    render(PortalTierSection, {
+      props: {
+        ticketId: "t-1",
+        clientId: "c-1",
+        clientTier: "sms_email",
+        portalChannel: null,
+        clientPhone: null,
+        isLoading: false,
+        secureLinkEnabled: true,
+      },
+    });
+
+    expect(screen.getByText(m.ticket_tier_setup())).toBeTruthy();
+  });
 });

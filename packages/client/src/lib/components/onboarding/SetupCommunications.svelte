@@ -10,7 +10,7 @@
 <script lang="ts">
   import { SvelteSet } from "svelte/reactivity";
   import { Block, BlockTitle } from "konsta/svelte";
-  import { Phone, Mic, MessageSquare, Ban } from "@lucide/svelte";
+  import { Phone, Mic, MessageSquare, Ban, ToggleRight } from "@lucide/svelte";
   import { createQuery } from "@tanstack/svelte-query";
   import * as m from "$lib/paraglide/messages.js";
   import { trpc } from "$lib/trpc/index.js";
@@ -19,6 +19,7 @@
   import { requireRouter } from "$lib/errors.js";
   import CollapsibleSection from "$lib/components/dashboard/CollapsibleSection.svelte";
   import OnboardingCryptoBridge from "$lib/providers/OnboardingCryptoBridge.svelte";
+  import ChannelPolicySection from "$lib/components/admin/ChannelPolicySection.svelte";
   import TelephonyConfigSection from "$lib/components/admin/TelephonyConfigSection.svelte";
   import GreetingsSection from "$lib/components/admin/GreetingsSection.svelte";
   import SmsTemplatesSection from "$lib/components/admin/SmsTemplatesSection.svelte";
@@ -89,6 +90,16 @@
 </Block>
 
 <OnboardingCryptoBridge {adminUserId}>
+  <CollapsibleSection
+    heading={m.admin_tab_channel_policy()}
+    icon={ToggleRight}
+    iconColor="var(--brand-accent)"
+    expanded={!collapsedSections.has("channel-policy")}
+    ontoggle={() => toggleSection("channel-policy")}
+  >
+    <ChannelPolicySection />
+  </CollapsibleSection>
+
   <CollapsibleSection
     heading={m.admin_tab_telephony()}
     icon={Phone}

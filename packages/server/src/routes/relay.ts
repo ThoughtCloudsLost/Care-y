@@ -237,6 +237,37 @@ export function createRelayHandler(deps: RelayHandlerDeps): RelayHandler {
 }
 
 // ---------------------------------------------------------------------------
+// Channel policy helper
+// ---------------------------------------------------------------------------
+
+/**
+ * Reads a single channel-policy boolean from org_config.
+ * Returns true when the row is missing or the column is null (defensive default).
+ */
+async function isChannelEnabled(
+  tenantDb: Kysely<TenantDatabase>,
+  column:
+    "channel_sms_enabled" | "channel_email_enabled" | "channel_voice_enabled",
+): Promise<boolean> {
+  const row = await tenantDb
+    .selectFrom("org_config")
+    .select([
+      "channel_sms_enabled",
+      "channel_email_enabled",
+      "channel_voice_enabled",
+    ])
+    .executeTakeFirst();
+  switch (column) {
+    case "channel_sms_enabled":
+      return row?.channel_sms_enabled !== false;
+    case "channel_email_enabled":
+      return row?.channel_email_enabled !== false;
+    case "channel_voice_enabled":
+      return row?.channel_voice_enabled !== false;
+  }
+}
+
+// ---------------------------------------------------------------------------
 // SMS Relay (POST /relay/sms)
 // ---------------------------------------------------------------------------
 
@@ -277,6 +308,12 @@ async function handleSmsRelay(
     }
 
     const tenantDb = deps.getTenantDb(session.orgSchema);
+
+    if (!(await isChannelEnabled(tenantDb, "channel_sms_enabled"))) {
+      sendRelayError(res, 403, "SMS_DISABLED");
+      return;
+    }
+
     const ticketIdRaw = ticketIdBuf.toString("utf-8");
     const ticketIdResult = ticketIdSchema.safeParse(ticketIdRaw);
     if (!ticketIdResult.success) {
@@ -365,6 +402,12 @@ async function resolveCallContext(
   const ticketId = ticketIdResult.data;
 
   const tenantDb = deps.getTenantDb(session.orgSchema);
+
+  if (!(await isChannelEnabled(tenantDb, "channel_voice_enabled"))) {
+    sendRelayError(res, 403, "VOICE_DISABLED");
+    return { ok: false };
+  }
+
   const consultantRepo = deps.createConsultantRepo(tenantDb);
   const consultant = await consultantRepo.findByUserId(session.userId);
 
@@ -1084,6 +1127,23 @@ async function handleEmailRelay(
     }
 
     const tenantDb = deps.getTenantDb(session.orgSchema);
+
+    // Read org_config once for both the channel policy guard and the
+    // reply footer logic (avoids a second query later in the domain path).
+    const orgConfig = await tenantDb
+      .selectFrom("org_config")
+      .select([
+        "channel_email_enabled",
+        "email_reply_footer",
+        "default_language",
+      ])
+      .executeTakeFirst();
+
+    if (orgConfig?.channel_email_enabled === false) {
+      sendRelayError(res, 403, "EMAIL_DISABLED");
+      return;
+    }
+
     const ticketIdRaw = ticketIdBuf.toString("utf-8");
     const ticketIdResult = ticketIdSchema.safeParse(ticketIdRaw);
     if (!ticketIdResult.success) {
@@ -1142,12 +1202,7 @@ async function handleEmailRelay(
 
       replyTo = `reply-${token}@${domainRow.domain}`;
 
-      // Append footer: org-configured text or the localized default.
-      const orgConfig = await tenantDb
-        .selectFrom("org_config")
-        .select(["email_reply_footer", "default_language"])
-        .executeTakeFirst();
-
+      // Append footer: reuse the org_config row read above.
       const footer =
         orgConfig?.email_reply_footer ??
         getStrings(orgConfig?.default_language ?? "en").emailReplyFooter;

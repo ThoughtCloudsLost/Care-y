@@ -240,6 +240,18 @@ export function createInboundReceiver(
         }
 
         const tDb = deps.getTenantDb(domainRow.schema_name);
+
+        // Channel policy: disabled orgs are indistinguishable from
+        // nonexistent mailboxes (same 550 response).
+        const policyRow = await tDb
+          .selectFrom("org_config")
+          .select("channel_email_enabled")
+          .executeTakeFirst();
+        if (policyRow?.channel_email_enabled === false) {
+          callback(smtpError(550, "Mailbox not found"));
+          return;
+        }
+
         const ticketId = await resolveToken(
           parsed.token,
           tDb,

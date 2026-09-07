@@ -209,6 +209,41 @@ function mockConsultantService(
   };
 }
 
+/**
+ * Returns a minimal tenant DB mock whose selectFrom("org_config") chain
+ * resolves with all channel-policy columns enabled. Tests that need a
+ * disabled channel pass their own override via getTenantDb.
+ */
+function mockTenantDbWithChannelPolicy(
+  policyOverrides?: Partial<
+    Record<
+      | "channel_sms_enabled"
+      | "channel_email_enabled"
+      | "channel_voice_enabled"
+      | "channel_secure_link_enabled"
+      | "channel_share_link_enabled",
+      boolean
+    >
+  >,
+): Kysely<TenantDatabase> {
+  const policyRow = {
+    channel_sms_enabled: true,
+    channel_email_enabled: true,
+    channel_voice_enabled: true,
+    channel_secure_link_enabled: true,
+    channel_share_link_enabled: true,
+    ...policyOverrides,
+  };
+  const chain = {
+    select: vi.fn().mockReturnValue({
+      executeTakeFirst: vi.fn().mockResolvedValue(policyRow),
+    }),
+  };
+  return {
+    selectFrom: vi.fn().mockReturnValue(chain),
+  } as unknown as Kysely<TenantDatabase>;
+}
+
 function makeDeps(overrides?: Partial<RelayHandlerDeps>): RelayHandlerDeps {
   // Default platform DB resolves no inbound domain row, which keeps every
   // test that does not opt in on the byte-identical no-domain send path.
@@ -227,7 +262,7 @@ function makeDeps(overrides?: Partial<RelayHandlerDeps>): RelayHandlerDeps {
     replyTokenHasher: { hash: vi.fn().mockReturnValue("default-hash") },
     replyTokenCache: new Map<string, string>(),
     getProvider: vi.fn().mockResolvedValue(mockProvider()),
-    getTenantDb: vi.fn().mockReturnValue({} as Kysely<TenantDatabase>),
+    getTenantDb: vi.fn().mockReturnValue(mockTenantDbWithChannelPolicy()),
     createConsultantRepo: vi.fn().mockReturnValue(
       mockConsultantRepo({
         isVerified: true,
@@ -2342,7 +2377,9 @@ describe("createRelayHandler", () => {
       // tickets JOIN clients JOIN phones -> encrypted_number
       // Then calls fieldEncryptor.decryptToBuffer
       const mockDb = createChainableTenantDb([
-        // Single joined query result
+        // First selectFrom is the channel policy guard's org_config read
+        { channel_sms_enabled: true },
+        // Joined phone-lookup query result
         { encrypted_number: Buffer.from("enc-phone-data") },
       ]);
 
@@ -2767,7 +2804,9 @@ describe("createRelayHandler", () => {
       const resolveCallerIdByPurpose = vi
         .fn()
         .mockResolvedValue("+15559999999" as E164);
-      const getTenantDb = vi.fn().mockReturnValue({} as Kysely<TenantDatabase>);
+      const getTenantDb = vi
+        .fn()
+        .mockReturnValue(mockTenantDbWithChannelPolicy());
       const deps = makeDeps({
         getProvider,
         resolveCallerIdByPurpose,
@@ -2800,7 +2839,9 @@ describe("createRelayHandler", () => {
       const resolveCallerIdByPurpose = vi
         .fn()
         .mockResolvedValue("+15559999999" as E164);
-      const getTenantDb = vi.fn().mockReturnValue({} as Kysely<TenantDatabase>);
+      const getTenantDb = vi
+        .fn()
+        .mockReturnValue(mockTenantDbWithChannelPolicy());
       const deps = makeDeps({
         getProvider,
         resolveCallerIdByPurpose,

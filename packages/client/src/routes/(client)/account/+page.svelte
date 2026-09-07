@@ -75,6 +75,24 @@
   import { createPortalFilters } from "$lib/composables/portal/create-portal-filters.svelte.js";
   import { uiLocaleStore } from "$lib/stores/ui-locale.svelte.js";
 
+  /** Shape-probe for a PORTAL_CHANNEL_DISABLED tRPC error. */
+  function isPortalChannelDisabledError(err: unknown): boolean {
+    if (typeof err !== "object" || err === null) return false;
+    if ("message" in err && err.message === "PORTAL_CHANNEL_DISABLED") {
+      return true;
+    }
+    if (
+      "data" in err &&
+      typeof err.data === "object" &&
+      err.data !== null &&
+      "code" in err.data &&
+      err.data.code === "PORTAL_CHANNEL_DISABLED"
+    ) {
+      return true;
+    }
+    return false;
+  }
+
   const createPortalBridge = getPortalBridgeFactory();
 
   // ---------------------------------------------------------------------------
@@ -411,12 +429,14 @@
       });
       announceToLiveRegion("polite", m.portal_send());
     },
-    onError: (_err, variables) => {
+    onError: (err, variables) => {
       optimisticMessages = optimisticMessages.filter(
         (msg) => msg.id !== variables.followUpId,
       );
       composerRef?.restoreDraft(lastSentText);
-      sendError = m.portal_send_failed();
+      sendError = isPortalChannelDisabledError(err)
+        ? m.portal_messaging_disabled()
+        : m.portal_send_failed();
       announceToLiveRegion("polite", m.portal_send_failed());
     },
   }));
@@ -953,6 +973,8 @@
           onfirstfocus={handleFirstFocus}
           errorMessage={sendError || undefined}
           draftKey={ACCOUNT_DRAFT_KEY}
+          messagingDisabled={bootstrapQuery.data?.portalMessagingEnabled ===
+            false}
         />
       {/snippet}
 

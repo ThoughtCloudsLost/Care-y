@@ -81,6 +81,26 @@
   import { uiLocaleStore } from "$lib/stores/ui-locale.svelte.js";
   import { useThreadChrome } from "$lib/shell/use-thread-chrome.svelte.js";
 
+  /** Shape-probe for a PORTAL_CHANNEL_DISABLED tRPC error. */
+  function isPortalChannelDisabledError(err: unknown): boolean {
+    if (typeof err !== "object" || err === null) return false;
+    // tRPC client errors carry the app error code in message (via
+    // the server's errorFormatter). Check both message and data.code.
+    if ("message" in err && err.message === "PORTAL_CHANNEL_DISABLED") {
+      return true;
+    }
+    if (
+      "data" in err &&
+      typeof err.data === "object" &&
+      err.data !== null &&
+      "code" in err.data &&
+      err.data.code === "PORTAL_CHANNEL_DISABLED"
+    ) {
+      return true;
+    }
+    return false;
+  }
+
   // Route param; the fragment-derived channel id is the crypto authority,
   // this one only keys the queries.
   const routeChannelId = $derived(page.params.channelId ?? "");
@@ -512,12 +532,13 @@
         (msg) => msg.id !== variables.followUpId,
       );
       composerRef?.restoreDraft(lastSentText);
-      // A rate-limited send names the fix (waiting, or a support reply,
-      // clears the pause) instead of the generic try-again copy.
-      sendError =
-        readRateLimitError(err) !== null
-          ? m.portal_send_rate_limited()
-          : m.portal_send_failed();
+      if (isPortalChannelDisabledError(err)) {
+        sendError = m.portal_messaging_disabled();
+      } else if (readRateLimitError(err) !== null) {
+        sendError = m.portal_send_rate_limited();
+      } else {
+        sendError = m.portal_send_failed();
+      }
       announceToLiveRegion("polite", sendError);
     },
   }));
@@ -1088,6 +1109,8 @@
           pending={replyMutation.isPending}
           errorMessage={sendError || undefined}
           draftKey={routeChannelId}
+          messagingDisabled={bootstrapQuery.data?.portalMessagingEnabled ===
+            false}
         />
       {/snippet}
 

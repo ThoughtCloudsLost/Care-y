@@ -11,6 +11,10 @@ export {
   createOrgInputSchema,
   updateOrgGeneralAdminInputSchema,
   safeExitUrlSchema,
+  channelPolicySchema,
+  updateChannelPolicyInputSchema,
+  type ChannelPolicy,
+  type UpdateChannelPolicyInput,
 } from "./schemas/org.js";
 
 // --- Utilities ---

@@ -96,6 +96,13 @@ export async function handleInboundSms(
   const isBlocked = await blocklistRepo.exists(phoneHash);
   if (isBlocked) return null;
 
+  // 1b. Channel policy: silently drop when SMS is disabled (same as blocked)
+  const policyRow = await tDb
+    .selectFrom("org_config")
+    .select("channel_sms_enabled")
+    .executeTakeFirst();
+  if (policyRow?.channel_sms_enabled === false) return null;
+
   // 2. Encrypt caller phone (sealed-box for ops-tier phone storage)
   const encryptedPhone = sealString(sealedBox, smsData.from);
 

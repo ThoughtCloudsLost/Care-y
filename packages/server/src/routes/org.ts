@@ -13,12 +13,14 @@
 import {
   createOrgInputSchema,
   updateOrgGeneralAdminInputSchema,
+  updateChannelPolicyInputSchema,
   setIntakeQueueInputSchema,
 } from "@care-y/shared";
 import {
   router,
   publicProcedure,
   adminProcedure,
+  volunteerProcedure,
   throwAsTrpc,
   withErrorWrapping,
 } from "../trpc/trpc.js";
@@ -77,5 +79,22 @@ export function createOrgRouter(orgService: OrgService) {
         return { success: true as const };
       }),
     ),
+
+    getChannelPolicy: volunteerProcedure.query(
+      withErrorWrapping(async ({ ctx }) => {
+        const svc = createOrgConfigService(ctx.org.tenantDb);
+        return svc.getChannelPolicy();
+      }),
+    ),
+
+    updateChannelPolicy: adminProcedure
+      .input(updateChannelPolicyInputSchema)
+      .mutation(
+        withErrorWrapping(async ({ ctx, input }) => {
+          const svc = createOrgConfigService(ctx.org.tenantDb);
+          await svc.updateChannelPolicy(input);
+          return { success: true as const };
+        }),
+      ),
   });
 }

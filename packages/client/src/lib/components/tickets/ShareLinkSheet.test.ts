@@ -530,4 +530,30 @@ describe("ShareLinkSheet", () => {
       expect(actionButton().disabled).toBe(false);
     });
   });
+
+  describe("channel policy: smsEnabled", () => {
+    it("falls back to copy mode when smsEnabled is false even with a phone", () => {
+      render(ShareLinkSheet, {
+        props: {
+          ...baseProps,
+          clientPhone: "+15551234567",
+          smsEnabled: false,
+        },
+      });
+      const btn = actionButton();
+      expect(btn.textContent).toContain("Copy link");
+    });
+
+    it("uses SMS mode when smsEnabled is true (default) and phone present", () => {
+      render(ShareLinkSheet, {
+        props: {
+          ...baseProps,
+          clientPhone: "+15551234567",
+          smsEnabled: true,
+        },
+      });
+      const btn = actionButton();
+      expect(btn.textContent).toContain("Send by text message");
+    });
+  });
 });

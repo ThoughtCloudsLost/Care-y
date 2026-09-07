@@ -154,6 +154,13 @@ export const ErrorCode = {
   PORTAL_PASSPHRASE_ALREADY_SET: "PORTAL_PASSPHRASE_ALREADY_SET",
   /** addPassphrase rejected: resealed message count does not match the channel's current count. */
   PORTAL_PASSPHRASE_COUNT_MISMATCH: "PORTAL_PASSPHRASE_COUNT_MISMATCH",
+
+  // --- Channel policy ---
+  SMS_DISABLED: "SMS_DISABLED",
+  EMAIL_DISABLED: "EMAIL_DISABLED",
+  VOICE_DISABLED: "VOICE_DISABLED",
+  SHARE_LINKS_DISABLED: "SHARE_LINKS_DISABLED",
+  PORTAL_CHANNEL_DISABLED: "PORTAL_CHANNEL_DISABLED",
 } as const;
 
 export type ErrorCodeType = (typeof ErrorCode)[keyof typeof ErrorCode];

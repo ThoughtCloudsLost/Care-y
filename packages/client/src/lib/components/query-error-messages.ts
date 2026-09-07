@@ -194,6 +194,13 @@ export const errorCodeMap: Record<ErrorCodeType, () => string> = {
 
   // Client accounts
   [ErrorCode.ACCOUNT_USERNAME_TAKEN]: () => m.error_account_username_taken(),
+
+  // Channel policy
+  [ErrorCode.SMS_DISABLED]: () => m.error_sms_disabled(),
+  [ErrorCode.EMAIL_DISABLED]: () => m.error_email_disabled(),
+  [ErrorCode.VOICE_DISABLED]: () => m.error_voice_disabled(),
+  [ErrorCode.SHARE_LINKS_DISABLED]: () => m.error_share_links_disabled(),
+  [ErrorCode.PORTAL_CHANNEL_DISABLED]: () => m.error_portal_channel_disabled(),
 };
 
 /** Type guard: returns true when the string is a recognized ErrorCode value. */

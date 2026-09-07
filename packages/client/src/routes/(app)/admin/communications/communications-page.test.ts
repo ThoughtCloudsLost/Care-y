@@ -41,6 +41,7 @@ vi.mock("$lib/paraglide/messages.js", () => ({
   admin_tab_greetings: () => "Greetings",
   admin_tab_sms_templates: () => "SMS Templates",
   admin_tab_quarantine: () => "Quarantine",
+  admin_tab_channel_policy: () => "Channels",
   admin_comms_title: () => "Communications",
 }));
 
@@ -86,6 +87,13 @@ vi.mock("$lib/components/admin/SmsTemplatesSection.svelte", async () => ({
 
 // care-y-ignore-next-line mock-factory-unguarded -- component stub: single default export, passthrough cannot satisfy the component prop types
 vi.mock("$lib/components/admin/QuarantineSection.svelte", async () => ({
+  default: (
+    await import("$lib/components/tickets/test-helpers/PassthroughShell.svelte")
+  ).default,
+}));
+
+// care-y-ignore-next-line mock-factory-unguarded -- component stub: single default export, passthrough cannot satisfy the component prop types
+vi.mock("$lib/components/admin/ChannelPolicySection.svelte", async () => ({
   default: (
     await import("$lib/components/tickets/test-helpers/PassthroughShell.svelte")
   ).default,
@@ -142,7 +150,7 @@ describe("Communications page", () => {
   });
 
   describe("section rendering", () => {
-    it("renders all 5 section anchors with MANAGE_INFRASTRUCTURE", () => {
+    it("renders all 5 infrastructure section anchors with MANAGE_INFRASTRUCTURE", () => {
       const { container } = renderPage();
 
       expect(container.querySelector("#section-telephony")).toBeTruthy();
@@ -150,6 +158,16 @@ describe("Communications page", () => {
       expect(container.querySelector("#section-greetings")).toBeTruthy();
       expect(container.querySelector("#section-templates")).toBeTruthy();
       expect(container.querySelector("#section-quarantine")).toBeTruthy();
+      // Channel policy is gated on MANAGE_ORG_CONFIG, not infrastructure.
+      expect(container.querySelector("#section-channel-policy")).toBeNull();
+    });
+
+    it("renders the channel policy anchor with MANAGE_ORG_CONFIG", () => {
+      setPermissions("manage_org_config");
+      const { container } = renderPage();
+
+      expect(container.querySelector("#section-channel-policy")).toBeTruthy();
+      expect(container.querySelector("#section-telephony")).toBeNull();
     });
 
     it("renders no sections when user lacks MANAGE_INFRASTRUCTURE", () => {

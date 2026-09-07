@@ -383,4 +383,53 @@ describe.skipIf(!process.env.DATABASE_URL)("inbound SMTP receiver", () => {
       await failing.close();
     }
   });
+
+  // --- Channel policy ---
+
+  it("rejects RCPT with 550 when channel_email_enabled is false", async () => {
+    // Disable email channel. The test schema has no org_config row until
+    // something seeds it, and an UPDATE on an empty singleton is a no-op,
+    // so insert the row when missing.
+    const existing = await db
+      .selectFrom("org_config")
+      .select("id")
+      .executeTakeFirst();
+    if (existing) {
+      await db
+        .updateTable("org_config")
+        .set({ channel_email_enabled: false })
+        .execute();
+    } else {
+      await db
+        .insertInto("org_config")
+        .values({ channel_email_enabled: false })
+        .execute();
+    }
+
+    try {
+      const { token } = await mintToken(db, fixture.ticketId, hasher);
+      const probe = await session();
+      const mailReply = await probe.cmd("MAIL FROM:<client@example.org>");
+      expect(mailReply).toContain("250");
+      const rcptReply = await probe.cmd(`RCPT TO:<reply-${token}@${domain}>`);
+      // Disabled orgs get the same 550 as nonexistent mailboxes
+      expect(rcptReply).toMatch(/^550 /);
+      probe.close();
+    } finally {
+      // Restore
+      await db
+        .updateTable("org_config")
+        .set({ channel_email_enabled: true })
+        .execute();
+    }
+  });
+
+  it("accepts RCPT when channel_email_enabled is true", async () => {
+    const { token } = await mintToken(db, fixture.ticketId, hasher);
+    const probe = await session();
+    await probe.cmd("MAIL FROM:<client@example.org>");
+    const rcptReply = await probe.cmd(`RCPT TO:<reply-${token}@${domain}>`);
+    expect(rcptReply).toContain("250");
+    probe.close();
+  });
 });

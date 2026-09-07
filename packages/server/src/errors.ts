@@ -234,6 +234,16 @@ export class InboundEmailError extends AppError {
   readonly httpStatus = 500;
 }
 
+/** A communication channel (SMS, email, voice, portal, share link) is disabled by org policy. */
+export class ChannelDisabledError extends ForbiddenError {
+  readonly channel: string;
+
+  constructor(channel: string) {
+    super(channel);
+    this.channel = channel;
+  }
+}
+
 export function isAppError(err: unknown): err is AppError {
   return err instanceof AppError;
 }

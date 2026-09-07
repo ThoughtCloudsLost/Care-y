@@ -104,6 +104,10 @@
     onattach?: (file: File) => void;
     onemailclient?: () => void;
     ondraftset: (body: string) => void;
+    voiceEnabled?: boolean;
+    shareLinkEnabled?: boolean;
+    secureLinkEnabled?: boolean;
+    smsEnabled?: boolean;
   }
 
   let {
@@ -167,6 +171,10 @@
     onattach,
     onemailclient,
     ondraftset,
+    voiceEnabled = true,
+    shareLinkEnabled = true,
+    secureLinkEnabled = true,
+    smsEnabled = true,
   }: Props = $props();
 </script>
 
@@ -176,6 +184,10 @@
     onaction={onpanelaction}
     {onnotetap}
     onlightbox={onpanellightbox}
+    {voiceEnabled}
+    {shareLinkEnabled}
+    {secureLinkEnabled}
+    {smsEnabled}
   />
 </ShellPopup>
 
@@ -332,6 +344,7 @@
   ondismiss={() => shareSheet.dismiss()}
   {ticketId}
   {clientPhone}
+  {smsEnabled}
 />
 
 <TicketContentEditSheet

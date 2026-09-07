@@ -163,6 +163,17 @@ vi.mock("$lib/trpc/index.js", () => ({
     kb: {
       recentItems: { query: vi.fn() },
     },
+    org: {
+      getChannelPolicy: {
+        query: vi.fn().mockResolvedValue({
+          smsEnabled: true,
+          emailEnabled: true,
+          secureLinkEnabled: true,
+          voiceEnabled: true,
+          shareLinkEnabled: true,
+        }),
+      },
+    },
   },
 }));
 

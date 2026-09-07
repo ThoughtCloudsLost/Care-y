@@ -7,12 +7,14 @@
  * for storage. Plaintext is zeroed immediately after encryption (via crypto-helpers).
  */
 
+import type { Kysely } from "kysely";
 import type { IncomingCallData, VoiceInstruction } from "./provider.js";
 import type { SealedBoxEncryptor } from "../crypto/sealed-box.js";
 import type { BlindIndexer } from "../crypto/field-encryptor.js";
 import type { PhoneRepository } from "./models/phone-repo.js";
 import type { ClientRepository } from "./models/client-repo.js";
 import type { GreetingRepository } from "./models/greeting-repo.js";
+import type { TenantDatabase } from "../db/types.js";
 import type { BlocklistRepository } from "./models/blocklist-repo.js";
 import {
   buildLanguageSelectionIvr,
@@ -33,6 +35,7 @@ export interface InboundCallDeps {
   readonly clientRepo: ClientRepository;
   readonly greetingRepo: GreetingRepository;
   readonly blocklistRepo: BlocklistRepository;
+  readonly tDb: Kysely<TenantDatabase>;
   readonly orgId: OrgId;
   readonly orgSchema: OrgSchema;
   readonly webhookBaseUrl: string;
@@ -95,6 +98,15 @@ export async function handleInboundCall(
 
   const isBlocked = await blocklistRepo.exists(phoneHash);
   if (isBlocked) return [{ type: "reject", attributes: { reason: "busy" } }];
+
+  // Channel policy: reject when voice is disabled (same shape as blocked)
+  const policyRow = await deps.tDb
+    .selectFrom("org_config")
+    .select("channel_voice_enabled")
+    .executeTakeFirst();
+  if (policyRow?.channel_voice_enabled === false) {
+    return [{ type: "reject", attributes: { reason: "busy" } }];
+  }
 
   // Single voice webhook URL handles DTMF, recording, and status callbacks
   const voiceWebhookUrl = `${webhookBaseUrl}/webhooks/${deps.providerId}/${orgId}/voice`;

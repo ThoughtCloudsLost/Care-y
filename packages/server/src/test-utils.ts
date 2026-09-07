@@ -1188,7 +1188,9 @@ export const NO_OPTIONAL_ROUTERS: OptionalRouterDeps = {
  * Tenant DB stub for route contract tests that never touch the DB directly
  * but whose procedures pass through requireRole, which reads the
  * role_permission_overrides table on cache miss. Returns no override rows,
- * so the hardcoded default role permissions apply.
+ * so the hardcoded default role permissions apply. org_config reads (the
+ * channel policy guards) get the missing-row answer, so every channel
+ * falls back to its enabled default.
  *
  * Any other query against this stub throws, keeping the "contract tests
  * never hit a DB" property intact.
@@ -1196,6 +1198,13 @@ export const NO_OPTIONAL_ROUTERS: OptionalRouterDeps = {
 export function stubTenantDbDefaultRoles(): Kysely<TenantDatabase> {
   const stub = {
     selectFrom: (table: string) => {
+      if (table === "org_config") {
+        return {
+          select: () => ({
+            executeTakeFirst: async (): Promise<unknown> => undefined,
+          }),
+        };
+      }
       if (table !== "role_permission_overrides") {
         throw new TestSetupError(
           `stubTenantDbDefaultRoles: unexpected query on ${table}`,

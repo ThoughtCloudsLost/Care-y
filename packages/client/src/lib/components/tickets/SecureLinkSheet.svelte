@@ -57,6 +57,8 @@
     hasPhone: boolean;
     ondismiss: () => void;
     onsuccess: () => void;
+    /** Channel policy: hide SMS delivery when SMS is disabled org-wide. */
+    smsEnabled?: boolean;
   }
 
   let {
@@ -67,6 +69,7 @@
     hasPhone,
     ondismiss,
     onsuccess,
+    smsEnabled = true,
   }: SecureLinkSheetProps = $props();
 
   const ticketRouter = requireRouter(trpc.tickets, "tickets");
@@ -432,7 +435,7 @@
       <Button outline onclick={() => void handleCopyLink()}>
         {m.ticket_tier_copy_link()}
       </Button>
-      {#if hasPhone}
+      {#if hasPhone && smsEnabled}
         <Button onclick={() => void handleSendSms()} disabled={smsSending}>
           {m.ticket_tier_send_sms()}
         </Button>

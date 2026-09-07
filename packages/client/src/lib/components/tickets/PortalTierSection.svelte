@@ -38,6 +38,10 @@
     portalChannel: PortalChannelWire | null | undefined;
     clientPhone: string | null | undefined;
     isLoading: boolean;
+    /** Channel policy: hide the setup offer when secure links are disabled. */
+    secureLinkEnabled?: boolean;
+    /** Channel policy: hide SMS delivery in the secure link sheet. */
+    smsEnabled?: boolean;
   }
 
   let {
@@ -47,6 +51,8 @@
     portalChannel,
     clientPhone,
     isLoading,
+    secureLinkEnabled = true,
+    smsEnabled = true,
   }: PortalTierSectionProps = $props();
 
   const ticketRouter = requireRouter(trpc.tickets, "tickets");
@@ -252,11 +258,13 @@
     <p class="tier-meta tier-explainer">
       {m.ticket_tier_sms_explain()}
     </p>
-    <div class="tier-actions">
-      <Button small outline onclick={openSetup}>
-        {m.ticket_tier_setup()}
-      </Button>
-    </div>
+    {#if secureLinkEnabled}
+      <div class="tier-actions">
+        <Button small outline onclick={openSetup}>
+          {m.ticket_tier_setup()}
+        </Button>
+      </div>
+    {/if}
   </Block>
 {/if}
 
@@ -268,6 +276,7 @@
   hasPhone={clientPhone != null && clientPhone !== ""}
   ondismiss={handleSheetDismiss}
   onsuccess={handleUpgradeSuccess}
+  {smsEnabled}
 />
 
 <ShellDialog

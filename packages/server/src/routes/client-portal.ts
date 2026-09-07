@@ -106,6 +106,11 @@ import {
 } from "../portal/share-service.js";
 import { getSealedContactInfo } from "../portal/contact-exposure-service.js";
 import type { OprfEvaluateService } from "../crypto/oprf-evaluate-service.js";
+import {
+  assertSecureLinkEnabled,
+  assertShareLinksEnabled,
+  isSecureLinkEnabled,
+} from "../org/org-config-service.js";
 
 /**
  * Deps for the client-facing portal.
@@ -508,7 +513,11 @@ export function createClientPortalRouter(deps: ClientPortalRouterDeps) {
           input,
         );
 
-        return portalMessageService.bootstrap(ctx.org.tenantDb, channel);
+        const [bootstrapResult, messagingEnabled] = await Promise.all([
+          portalMessageService.bootstrap(ctx.org.tenantDb, channel),
+          isSecureLinkEnabled(ctx.org.tenantDb),
+        ]);
+        return { ...bootstrapResult, portalMessagingEnabled: messagingEnabled };
       }),
     ),
 
@@ -602,6 +611,7 @@ export function createClientPortalRouter(deps: ClientPortalRouterDeps) {
 
     portalReply: orgProcedure.input(portalReplyInputSchema).mutation(
       withErrorWrapping(async ({ ctx, input }) => {
+        await assertSecureLinkEnabled(ctx.org.tenantDb);
         checkReplyAuthGate(deps, ctx, "Portal reply");
 
         const { channel, portalMessageService } = await requirePortalChannel(
@@ -633,6 +643,7 @@ export function createClientPortalRouter(deps: ClientPortalRouterDeps) {
 
     createShare: volunteerProcedure.input(createShareInputSchema).mutation(
       withErrorWrapping(async ({ ctx, input }) => {
+        await assertShareLinksEnabled(ctx.org.tenantDb);
         const result = await createShare(ctx.org.tenantDb, {
           shareId: input.shareId,
           ticketId: input.ticketId,
@@ -784,14 +795,15 @@ export function createClientPortalRouter(deps: ClientPortalRouterDeps) {
         const session = await requireAccountSession(ctx);
 
         const msgService = requirePortalMessageService(deps);
-        const result = await msgService.bootstrap(
-          ctx.org.tenantDb,
-          session.channel,
-        );
+        const [result, messagingEnabled] = await Promise.all([
+          msgService.bootstrap(ctx.org.tenantDb, session.channel),
+          isSecureLinkEnabled(ctx.org.tenantDb),
+        ]);
 
         return {
           ...result,
           accountCreatedAt: session.account.created_at.toISOString(),
+          portalMessagingEnabled: messagingEnabled,
         };
       }),
     ),
@@ -816,6 +828,7 @@ export function createClientPortalRouter(deps: ClientPortalRouterDeps) {
 
     accountReply: orgProcedure.input(accountReplyInputSchema).mutation(
       withErrorWrapping(async ({ ctx, input }) => {
+        await assertSecureLinkEnabled(ctx.org.tenantDb);
         checkReplyAuthGate(deps, ctx, "Account reply");
 
         const session = await requireAccountSession(ctx);
@@ -840,6 +853,10 @@ export function createClientPortalRouter(deps: ClientPortalRouterDeps) {
 
     accountUpgrade: orgProcedure.input(accountUpgradeInputSchema).mutation(
       withErrorWrapping(async ({ ctx, input }) => {
+        // Org-level channel policy gate (distinct from per-channel offer
+        // governance that ADR-097 removed).
+        await assertSecureLinkEnabled(ctx.org.tenantDb);
+
         // Upgrade is a one-shot heavy operation, not a conversation, so
         // it keeps a plain per-IP cap on the IP-layer limiter ("upgrade:"
         // namespace) rather than the channel-keyed conversation limits.

@@ -30,6 +30,13 @@
      * composer keeps nothing across navigation.
      */
     draftKey?: string;
+    /**
+     * When true, the composer is rendered but input and send are blocked.
+     * A visible explanation is shown instead.
+     */
+    messagingDisabled?: boolean;
+    /** Explanation shown when messagingDisabled is true. */
+    messagingDisabledMessage?: string;
   }
 
   let {
@@ -38,6 +45,8 @@
     onfirstfocus,
     errorMessage,
     draftKey,
+    messagingDisabled = false,
+    messagingDisabledMessage,
   }: PortalComposerProps = $props();
 
   /** Refill the composer with unsent text, only when it is currently empty. */
@@ -74,7 +83,9 @@
   const charCount = $derived(text.length);
   const overLimit = $derived(charCount > CHAR_LIMIT);
   const showCounter = $derived(charCount >= COUNTER_THRESHOLD);
-  const canSend = $derived(text.trim().length > 0 && !overLimit && !pending);
+  const canSend = $derived(
+    text.trim().length > 0 && !overLimit && !pending && !messagingDisabled,
+  );
 
   function handleSend(): void {
     if (!canSend) return;
@@ -97,35 +108,48 @@
 </script>
 
 <div class="portal-composer" data-testid="portal-composer">
-  <ShellMessagebar
-    bind:value={text}
-    mode="reply"
-    onsend={handleSend}
-    onplus={handlePlus}
-    oninput={handleInput}
-    sendDisabled={!canSend}
-    inline
-  >
-    {#snippet footer()}
-      {#if errorMessage}
-        <p class="send-error" role="alert" data-testid="send-error">
-          {errorMessage}
-        </p>
-      {/if}
-      {#if overLimit}
-        <p class="char-over" aria-live="polite" data-testid="char-over">
-          {m.portal_composer_too_long()}
-        </p>
-      {:else if showCounter}
-        <p class="char-counter" data-testid="char-counter">
-          {m.portal_composer_counter({
-            count: String(charCount),
-            max: String(CHAR_LIMIT),
-          })}
-        </p>
-      {/if}
-    {/snippet}
-  </ShellMessagebar>
+  {#if messagingDisabled}
+    <div
+      class="messaging-disabled"
+      role="status"
+      aria-label={m.portal_messaging_disabled_aria()}
+      data-testid="portal-messaging-disabled"
+    >
+      <p class="messaging-disabled-text">
+        {messagingDisabledMessage ?? m.portal_messaging_disabled()}
+      </p>
+    </div>
+  {:else}
+    <ShellMessagebar
+      bind:value={text}
+      mode="reply"
+      onsend={handleSend}
+      onplus={handlePlus}
+      oninput={handleInput}
+      sendDisabled={!canSend}
+      inline
+    >
+      {#snippet footer()}
+        {#if errorMessage}
+          <p class="send-error" role="alert" data-testid="send-error">
+            {errorMessage}
+          </p>
+        {/if}
+        {#if overLimit}
+          <p class="char-over" aria-live="polite" data-testid="char-over">
+            {m.portal_composer_too_long()}
+          </p>
+        {:else if showCounter}
+          <p class="char-counter" data-testid="char-counter">
+            {m.portal_composer_counter({
+              count: String(charCount),
+              max: String(CHAR_LIMIT),
+            })}
+          </p>
+        {/if}
+      {/snippet}
+    </ShellMessagebar>
+  {/if}
 </div>
 
 <style>
@@ -168,5 +192,17 @@
     color: var(--danger);
     padding: 2px 16px 4px;
     margin: 0;
+  }
+
+  .messaging-disabled {
+    padding: 12px 16px;
+    text-align: center;
+  }
+
+  .messaging-disabled-text {
+    font-size: var(--text-sm, 0.875rem);
+    color: var(--muted);
+    margin: 0;
+    line-height: 1.4;
   }
 </style>
