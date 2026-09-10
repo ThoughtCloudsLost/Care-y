@@ -46,6 +46,10 @@ services:
       # run. Production keeps the schema default of 3 per hour; this
       # compose file is development and E2E only.
       - INTAKE_SUBMISSION_LIMIT=${INTAKE_SUBMISSION_LIMIT:-500}
+      # Same reasoning for portal page loads: the E2E portal specs open
+      # portal links many times per run, and the hourly budget does not
+      # reset between runs. Production keeps the schema default of 60.
+      - PORTAL_READ_LIMIT=${PORTAL_READ_LIMIT:-2000}
       # Mailpit runs as its own service, so inside this container localhost
       # is the app itself and nothing listens on the SMTP port. The .env
       # value stays correct for processes run on the host, where Mailpit

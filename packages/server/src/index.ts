@@ -326,11 +326,9 @@ const RATE_BRANDING_UPLOAD_MAX = 3;
 const RATE_FORM_ASSET_UPLOAD_MAX = 5;
 const RATE_BOOTSTRAP_MAX = getEnv().NODE_ENV === "production" ? 2 : 20;
 
-// Portal read: 60 req/hour per IP. A 5-minute polling interval uses 12/hr.
-// refetchOnWindowFocus adds ~5-10/hr. The remaining headroom covers
-// CGNAT-shared IPs where multiple clients behind the same NAT share
-// one public IP.
-const RATE_PORTAL_READ_MAX = 60;
+// Portal read limit lives in env.ts (PORTAL_READ_LIMIT) so development
+// and E2E can raise it; the production default and its rationale are
+// documented there.
 // Portal reply: 30 replies/hour per CHANNEL. Reply writes 3 DB rows per
 // call (follow-up + portal wrap + portal message), so a cap bounds
 // storage DoS. Channel keying makes the limit mean "messages on this
@@ -748,7 +746,7 @@ const appRouter = createAppRouter({
     },
     portalReadLimiter: createInMemoryRateLimiter({
       windowMs: RATE_WINDOW_1H,
-      maxRequests: RATE_PORTAL_READ_MAX,
+      maxRequests: env.PORTAL_READ_LIMIT,
     }),
     portalReplyLimiter,
     portalReplyIpLimiter,
