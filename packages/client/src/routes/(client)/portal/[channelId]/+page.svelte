@@ -525,6 +525,11 @@
       void queryClient.invalidateQueries({
         queryKey: portalKeys.messages(routeChannelId),
       });
+      // Bootstrap is deliberately NOT invalidated here. Its message set
+      // goes stale, but only the add-password re-seal depends on that
+      // being current, and it refetches for itself. Invalidating on every
+      // send would double portal reads against the read limiter for
+      // clients on constrained connections.
       announceToLiveRegion("polite", m.portal_send());
     },
     onError: (err, variables) => {
@@ -783,8 +788,20 @@
         // Worker finalizes OPRF, returns only the new public key
         const finishResult = await sess.channelPassphraseFinish(evaluated);
 
-        // Main-thread steps: seal key check and re-seal messages
-        const portalMessages = bootstrapQuery.data?.messages ?? [];
+        // Main-thread steps: seal key check and re-seal messages.
+        // Refetch rather than reading the cached bootstrap: the server
+        // compares the re-sealed count against portal_messages inside
+        // the transaction, and the cached snapshot (5 min staleTime) can
+        // predate the client's own last message. Submitting it fails the
+        // guard and reports "new messages arrived" when none did.
+        const refreshed = await bootstrapQuery.refetch();
+        const portalMessages = refreshed.data?.messages;
+        // A failed refetch keeps the previous data, so checking for
+        // undefined alone would fall back to the stale snapshot this
+        // refetch exists to avoid.
+        if (refreshed.isError || portalMessages === undefined) {
+          throw new Error("Portal bootstrap unavailable");
+        }
 
         const payload = await buildAddPassphrasePayload(
           finishResult.clientPublic,
