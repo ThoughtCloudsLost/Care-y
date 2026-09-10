@@ -5,6 +5,7 @@ import {
   auditA11y,
   clickComposeAction,
   CRYPTO_TIMEOUT,
+  expectPortalReady,
   openTicketInfoPanel,
   login,
   openComposeActions,
@@ -200,7 +201,7 @@ test.describe.serial("Secure Link Portal", () => {
 
     // Passphrase gate renders (the channel was created with a passphrase).
     const gateInput = portalPage.getByLabel(/passphrase/i);
-    await expect(gateInput).toBeVisible({ timeout: CRYPTO_TIMEOUT });
+    await expectPortalReady(portalPage, gateInput);
 
     await auditA11y(portalPage);
 
@@ -336,7 +337,7 @@ test.describe.serial("Secure Link Portal", () => {
     await portalPage.goto("/intake");
     await portalPage.goto(portalLink);
     const gateInput = portalPage.getByLabel(/passphrase/i);
-    await expect(gateInput).toBeVisible({ timeout: CRYPTO_TIMEOUT });
+    await expectPortalReady(portalPage, gateInput);
     await gateInput.fill(passphrase);
     await portalPage.getByRole("button", { name: /continue|unlock/i }).click();
 
@@ -360,9 +361,10 @@ test.describe.serial("Secure Link Portal", () => {
 
     const deadPage = await browser.newPage();
     await deadPage.goto(portalLink);
-    await expect(deadPage.getByText(/no longer active/i).first()).toBeVisible({
-      timeout: CRYPTO_TIMEOUT,
-    });
+    await expectPortalReady(
+      deadPage,
+      deadPage.getByText(/no longer active/i).first(),
+    );
     await auditA11y(deadPage);
     await deadPage.close();
   });

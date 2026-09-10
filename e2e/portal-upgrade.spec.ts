@@ -4,6 +4,7 @@ import type { Page, Request } from "@playwright/test";
 import {
   auditA11y,
   CRYPTO_TIMEOUT,
+  expectPortalReady,
   login,
   openComposeActions,
   openTicketByTitle,
@@ -276,7 +277,7 @@ test.describe.serial("Portal Upgrade + Email", () => {
     // pipeline re-seals it to the new key, and the post-unlock assertion
     // in the next test uses it to prove decryption actually worked.
     const composer = portalPage.getByRole("textbox").first();
-    await expect(composer).toBeVisible({ timeout: CRYPTO_TIMEOUT });
+    await expectPortalReady(portalPage, composer);
     await composer.click();
     await composer.pressSequentially(CLIENT_SEED_MESSAGE, { delay: 20 });
     await portalPage.getByRole("button", { name: /send/i }).last().click();
@@ -397,7 +398,7 @@ test.describe.serial("Portal Upgrade + Email", () => {
     await pp.goto(portalLink);
 
     const gateInput = pp.getByLabel(/passphrase/i);
-    await expect(gateInput).toBeVisible({ timeout: CRYPTO_TIMEOUT });
+    await expectPortalReady(pp, gateInput);
 
     // Wrong passphrase fails.
     await gateInput.fill("wrong words entirely nope zero");

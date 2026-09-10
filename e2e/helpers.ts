@@ -382,6 +382,35 @@ export async function waitForKeysUnlocked(page: Page): Promise<void> {
 }
 
 /**
+ * Wait for a portal page element while watching for the read-limiter
+ * pause state ("Taking a short pause").
+ *
+ * When the portal read limiter trips, the page swaps its content for the
+ * pause state, so every content locator times out after its full budget
+ * with no hint of the cause. Racing the expected element against the
+ * pause state turns that 30s silent timeout into an immediate failure
+ * that names the limiter. Use this for the first content wait after
+ * navigating to a portal link.
+ */
+export async function expectPortalReady(
+  page: Page,
+  target: Locator,
+  options: { timeout?: number } = {},
+): Promise<void> {
+  const timeout = options.timeout ?? CRYPTO_TIMEOUT;
+  const pause = page.getByTestId("portal-rate-limited");
+  await expect(target.or(pause).first()).toBeVisible({ timeout });
+  if (await pause.isVisible()) {
+    throw new E2eError(
+      "Portal read limiter tripped: the page shows 'Taking a short pause' " +
+        "instead of content. The hourly budget does not reset between " +
+        "runs; check PORTAL_READ_LIMIT (docker-compose.yml raises it to " +
+        "2000 for dev/E2E) or wait for the window to pass.",
+    );
+  }
+}
+
+/**
  * Dismiss the backup-codes sheet shown after the first TOTP enrollment.
  *
  * While codes are on screen the sheet routes every dismissal (Escape,
