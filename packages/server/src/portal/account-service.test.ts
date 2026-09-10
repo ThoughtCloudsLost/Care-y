@@ -424,7 +424,9 @@ describe.skipIf(!process.env.DATABASE_URL)("AccountService", () => {
       expect(result!.expiresAt).toBeInstanceOf(Date);
       expect(result!.expiresAt.getTime()).toBeGreaterThan(Date.now());
 
-      // Verify the token hash is in the table
+      // Contract: no plaintext token at rest. The session row is only
+      // findable via hashChannelAuth(token); if this lookup matches, the
+      // stored column holds the hash, not the raw token the client got.
       const tokenBuf = Buffer.from(result!.sessionToken, "base64url");
       const tokenHash = Buffer.from(hashChannelAuth(tokenBuf));
       const session = await db

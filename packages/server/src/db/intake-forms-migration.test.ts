@@ -747,13 +747,16 @@ describe.skipIf(!process.env.DATABASE_URL)("089_intake_forms migration", () => {
   });
 
   it("has index on intake_form_responses.form_id", async () => {
-    const result = await sql<{ indexname: string }>`
-        SELECT indexname FROM pg_indexes
+    // Any index on the column qualifies; the index name is not the contract.
+    const result = await sql<{ indexdef: string }>`
+        SELECT indexdef FROM pg_indexes
         WHERE schemaname = ${testDb.schemaName}
           AND tablename = 'intake_form_responses'
-          AND indexname = 'idx_intake_form_responses_form_id'
       `.execute(testDb.platformDb);
 
-    expect(result.rows).toHaveLength(1);
+    const onFormId = result.rows.filter((r) =>
+      r.indexdef.includes("(form_id)"),
+    );
+    expect(onFormId.length).toBeGreaterThan(0);
   });
 });

@@ -172,6 +172,8 @@ describe("portal key derivation", () => {
       expect(hashChannelAuth(auth1)).not.toEqual(hashChannelAuth(auth2));
     });
 
+    // Contract: server rows store crypto_generichash(32, auth) of channel
+    // auth; changing the hash construction orphans every stored hash.
     it("matches independent crypto_generichash call", () => {
       const seed = generatePortalSeed();
       const auth = deriveChannelAuth(seed);

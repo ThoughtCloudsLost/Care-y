@@ -52,36 +52,50 @@ type ReseedPhase = "idle" | "running" | "done" | "cancelled" | "error";
 
 const {
   mockMutate,
+  mockUpgradeMutate,
+  mockRegenerateMutate,
   mockShow,
   mockHaptic,
   mockReseedStart,
   mockReseedCancel,
   mockReseedState,
-} = vi.hoisted(() => ({
-  mockMutate: vi
+} = vi.hoisted(() => {
+  // Shared payload/rejection surface; the two per-method wrappers make
+  // mode routing observable (setup must hit upgrade, regenerate must hit
+  // regenerate) while payload assertions keep reading mockMutate.
+  const sharedMutate = vi
     .fn<(input: UpgradeMutationPayload) => Promise<unknown>>()
-    .mockResolvedValue(undefined),
-  mockShow: vi.fn<(msg: string, duration?: number) => void>(),
-  mockHaptic: vi.fn<(ms?: number) => void>(),
-  mockReseedStart: vi
-    .fn<
-      (args: {
-        clientId: string;
-        channelId: string;
-        clientPublic: string;
-      }) => Promise<void>
-    >()
-    .mockResolvedValue(undefined),
-  mockReseedCancel: vi.fn<() => void>(),
-  mockReseedState: {
-    phase: "idle" as ReseedPhase,
-    ticketsTotal: 0,
-    ticketsDone: 0,
-    itemsDone: 0,
-    itemsTotal: 0,
-    skippedCount: 0,
-  },
-}));
+    .mockResolvedValue(undefined);
+  return {
+    mockMutate: sharedMutate,
+    mockUpgradeMutate: vi.fn((input: UpgradeMutationPayload) =>
+      sharedMutate(input),
+    ),
+    mockRegenerateMutate: vi.fn((input: UpgradeMutationPayload) =>
+      sharedMutate(input),
+    ),
+    mockShow: vi.fn<(msg: string, duration?: number) => void>(),
+    mockHaptic: vi.fn<(ms?: number) => void>(),
+    mockReseedStart: vi
+      .fn<
+        (args: {
+          clientId: string;
+          channelId: string;
+          clientPublic: string;
+        }) => Promise<void>
+      >()
+      .mockResolvedValue(undefined),
+    mockReseedCancel: vi.fn<() => void>(),
+    mockReseedState: {
+      phase: "idle" as ReseedPhase,
+      ticketsTotal: 0,
+      ticketsDone: 0,
+      itemsDone: 0,
+      itemsTotal: 0,
+      skippedCount: 0,
+    },
+  };
+});
 
 // ---- Mock crypto barrel ----
 
@@ -193,10 +207,10 @@ vi.mock("$lib/trpc/index.js", async (importOriginal) => ({
   trpc: {
     tickets: {
       upgradeToSecureLink: {
-        mutate: (input: UpgradeMutationPayload) => mockMutate(input),
+        mutate: (input: UpgradeMutationPayload) => mockUpgradeMutate(input),
       },
       regenerateSecureLink: {
-        mutate: (input: UpgradeMutationPayload) => mockMutate(input),
+        mutate: (input: UpgradeMutationPayload) => mockRegenerateMutate(input),
       },
     },
     clientPortal: {
@@ -355,7 +369,22 @@ describe("SecureLinkSheet", () => {
     });
   });
 
-  it("uses regenerateSecureLink mutation in regenerate mode", async () => {
+  it("uses upgradeToSecureLink (not regenerate) in setup mode", async () => {
+    render(SecureLinkSheet, { props: baseProps });
+
+    await fireEvent.click(
+      screen.getByRole("button", { name: /set up secure link/i }),
+    );
+
+    await waitFor(() => {
+      expect(mockUpgradeMutate).toHaveBeenCalledTimes(1);
+    });
+
+    expect(mockRegenerateMutate).not.toHaveBeenCalled();
+    expect(mockUpgradeMutate.mock.calls[0]?.[0]?.ticketId).toBe("ticket-001");
+  });
+
+  it("uses regenerateSecureLink (not upgrade) in regenerate mode", async () => {
     render(SecureLinkSheet, {
       props: { ...baseProps, mode: "regenerate" as const },
     });
@@ -365,13 +394,13 @@ describe("SecureLinkSheet", () => {
     );
 
     await waitFor(() => {
-      expect(mockMutate).toHaveBeenCalledTimes(1);
+      expect(mockRegenerateMutate).toHaveBeenCalledTimes(1);
     });
 
-    // Both modes route through the same mockMutate. The component picks
-    // the correct tRPC method based on mode. Verifying the call arrived
-    // is sufficient since both methods share the mock.
-    expect(mockMutate.mock.calls[0]?.[0]?.ticketId).toBe("ticket-001");
+    expect(mockUpgradeMutate).not.toHaveBeenCalled();
+    expect(mockRegenerateMutate.mock.calls[0]?.[0]?.ticketId).toBe(
+      "ticket-001",
+    );
   });
 
   it("shows error toast and returns to setup on mutation failure", async () => {

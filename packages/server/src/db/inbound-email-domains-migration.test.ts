@@ -56,13 +56,17 @@ describe.skipIf(!process.env.DATABASE_URL)(
       `.execute(testDb.platformDb);
 
       const columns = result.rows.map((r) => r.column_name);
-      expect(columns).toEqual([
-        "id",
-        "domain",
-        "org_id",
-        "created_at",
-        "updated_at",
-      ]);
+      // Containment, not an exact ordered list: an additive migration must
+      // not break this test.
+      expect(columns).toEqual(
+        expect.arrayContaining([
+          "id",
+          "domain",
+          "org_id",
+          "created_at",
+          "updated_at",
+        ]),
+      );
     });
 
     it("inserts a domain row and reads it back", async () => {

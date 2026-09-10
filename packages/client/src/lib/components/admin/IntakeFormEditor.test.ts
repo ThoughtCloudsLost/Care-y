@@ -896,7 +896,9 @@ describe("IntakeFormEditor", () => {
     expect(previewBanner?.alt).toBe("Preview banner");
   });
 
-  it("marks dirty when bannerBlobKey changes from initial", () => {
+  // Banner CHANGES go through the upload flow (E2E territory); this only
+  // pins that an existing banner does not start the editor dirty.
+  it("reports not dirty on initial render with an existing bannerBlobKey", () => {
     const ondirtychange = vi.fn();
     render(IntakeFormEditor, {
       props: {

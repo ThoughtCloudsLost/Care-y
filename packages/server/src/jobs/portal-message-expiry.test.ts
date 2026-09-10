@@ -9,6 +9,7 @@ import { describe, it, expect, beforeAll, afterAll, vi } from "vitest";
 import type { TestDb } from "../test-utils.js";
 import {
   createTestDb,
+  createMockJobQueue,
   seedOrgPublicKey,
   createTestTicketFixture,
 } from "../test-utils.js";
@@ -451,23 +452,41 @@ describe.skipIf(!process.env.DATABASE_URL)(
 );
 
 describe("registerPortalExpiryHandler", () => {
-  it("registers a handler on the correct queue name", () => {
-    const processFn = vi.fn();
-    const fakeQueue = {
-      process: processFn,
-      enqueue: vi.fn().mockResolvedValue(undefined),
-      start: vi.fn(),
-      stop: vi.fn().mockResolvedValue(undefined),
-    };
+  it("runs the tenant sweep and re-enqueues with the interval on success", async () => {
+    const { jobQueue, handlers } = createMockJobQueue();
+    const runForAllTenants = vi.fn().mockResolvedValue(undefined);
 
-    registerPortalExpiryHandler(
-      fakeQueue,
-      vi.fn().mockResolvedValue(undefined),
-    );
+    registerPortalExpiryHandler(jobQueue, runForAllTenants, 12_345);
 
-    expect(processFn).toHaveBeenCalledWith(
+    const handler = handlers.get(PORTAL_EXPIRY_QUEUE);
+    expect(handler).toBeDefined();
+    await handler!({});
+
+    expect(runForAllTenants).toHaveBeenCalledOnce();
+    expect(jobQueue.enqueue).toHaveBeenCalledWith(
       PORTAL_EXPIRY_QUEUE,
-      expect.any(Function),
+      {},
+      { delay: 12_345 },
+    );
+  });
+
+  it("re-enqueues even when the tenant sweep throws", async () => {
+    const { jobQueue, handlers } = createMockJobQueue();
+    const runForAllTenants = vi
+      .fn()
+      .mockRejectedValue(new Error("tenant sweep failed"));
+
+    registerPortalExpiryHandler(jobQueue, runForAllTenants, 12_345);
+
+    const handler = handlers.get(PORTAL_EXPIRY_QUEUE);
+    expect(handler).toBeDefined();
+
+    await expect(handler!({})).rejects.toThrow("tenant sweep failed");
+
+    expect(jobQueue.enqueue).toHaveBeenCalledWith(
+      PORTAL_EXPIRY_QUEUE,
+      {},
+      { delay: 12_345 },
     );
   });
 });

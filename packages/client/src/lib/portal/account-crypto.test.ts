@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeAll, beforeEach } from "vitest";
 import type * as CryptoPkg from "@care-y/crypto";
 
 vi.mock("$lib/auth/crypto-helpers.js", async (importOriginal) => ({
@@ -6,79 +6,55 @@ vi.mock("$lib/auth/crypto-helpers.js", async (importOriginal) => ({
   evaluateWithPowRetry: vi.fn(),
 }));
 
-// Mock the crypto module with controlled return values. vi.mock factories
-// are hoisted above module-scope consts, so the fixtures must be hoisted too.
-const {
-  fakeKeypair,
-  fakeAuthToken,
-  fakeAuthHash,
-  fakeStretched,
-  fakeOprfOutput,
-  fakeBlindedElement,
-  fakeBlindState,
-  fakeSalt,
-  fakeEciesOutput,
-} = vi.hoisted(() => ({
-  fakeKeypair: {
-    clientPrivate: new Uint8Array(32).fill(1),
-    clientPublic: new Uint8Array(32).fill(2),
-  },
-  fakeAuthToken: new Uint8Array(32).fill(3),
-  fakeAuthHash: new Uint8Array(32).fill(4),
-  fakeStretched: new Uint8Array(64).fill(5),
-  fakeOprfOutput: new Uint8Array(64).fill(6),
-  fakeBlindedElement: new Uint8Array(32).fill(7),
-  fakeBlindState: { state: "blind" },
-  fakeSalt: new Uint8Array(16).fill(8),
-  fakeEciesOutput: {
-    ephemeralPoint: new Uint8Array(32).fill(9),
-    nonce: new Uint8Array(24).fill(10),
-    ciphertext: new Uint8Array(50).fill(11),
-  },
-}));
-
+// vi.mock required: deriveAccountKey is the Argon2id stretch (memory-hard,
+// seconds per call in the node test environment). Only the stretch is
+// stubbed; OPRF, HKDF, ECIES, and hashing run real, matching the
+// deriveViaLocalOprf pattern in portal-crypto.test.ts.
 vi.mock("@care-y/crypto", async (importOriginal) => ({
   ...(await importOriginal<typeof CryptoPkg>()),
-  deriveAccountKey: vi.fn().mockReturnValue(fakeStretched),
-  oprfBlind: vi.fn().mockReturnValue({
-    blindedElement: fakeBlindedElement,
-    blindState: fakeBlindState,
-  }),
-  oprfFinalize: vi.fn().mockReturnValue(fakeOprfOutput),
-  deriveClientAccountKeys: vi.fn().mockReturnValue({
-    keypair: fakeKeypair,
-    authToken: fakeAuthToken,
-  }),
-  hashChannelAuth: vi.fn().mockReturnValue(fakeAuthHash),
-  eciesEncrypt: vi.fn().mockReturnValue(fakeEciesOutput),
-  PORTAL_KEY_CHECK: "care-y-portal-check-v1",
-  encode: vi
-    .fn()
-    .mockImplementation((buf: Uint8Array) =>
-      Buffer.from(buf).toString("base64url"),
-    ),
-  decode: vi
-    .fn()
-    .mockImplementation(
-      (s: string) => new Uint8Array(Buffer.from(s, "base64url")),
-    ),
-  requireSodium: vi.fn().mockReturnValue({
-    memzero: vi.fn(),
-  }),
-  zeroAll: vi.fn(),
-  generateSalt: vi.fn().mockReturnValue(fakeSalt),
-  toSalt: vi.fn().mockImplementation((b: Uint8Array) => b),
+  deriveAccountKey: vi.fn(),
 }));
 
+import {
+  getSodium,
+  deriveAccountKey,
+  oprfBlind,
+  oprfFinalize,
+  deriveClientAccountKeys,
+  hashChannelAuth,
+  encode,
+  decode,
+  toRistrettoPoint,
+  PORTAL_KEY_CHECK,
+} from "@care-y/crypto";
+import {
+  makeRistrettoKeypair,
+  localOprfEvaluate,
+  decryptTripleB64,
+} from "./test-helpers/crypto.js";
 import { buildAccountRegistration, rewrapMessages } from "./account-crypto.js";
-import type { RistrettoPoint, Salt } from "@care-y/crypto";
 import { evaluateWithPowRetry } from "$lib/auth/crypto-helpers.js";
 import type { LoginCryptoCallbacks } from "$lib/auth/login-crypto.js";
 
-// 32 bytes once decoded; toRistrettoPoint is real and validates length
-const fakeEvaluatedB64 = Buffer.from(new Uint8Array(32).fill(12)).toString(
-  "base64url",
-);
+/** Deterministic stand-in for the Argon2id stretch; fresh per call because
+ * production zeroes it in a finally block. */
+function stretchedBytes(): Uint8Array {
+  return new Uint8Array(64).fill(5);
+}
+
+/** Reproduce the production derivation from the same stretched input,
+ * through the shared local OPRF simulation (fixed server key). */
+function deriveExpectedKeys(): ReturnType<typeof deriveClientAccountKeys> {
+  const input = stretchedBytes();
+  const { blindedElement, blindState } = oprfBlind(input);
+  const evaluatedBytes = decode(localOprfEvaluate(encode(blindedElement)));
+  const oprfOutput = oprfFinalize(
+    blindState,
+    toRistrettoPoint(evaluatedBytes),
+    input,
+  );
+  return deriveClientAccountKeys(oprfOutput);
+}
 
 function makeCallbacks(): LoginCryptoCallbacks {
   return {
@@ -92,20 +68,20 @@ function makeCallbacks(): LoginCryptoCallbacks {
   };
 }
 
+beforeAll(async () => {
+  await getSodium();
+});
+
+beforeEach(() => {
+  vi.clearAllMocks();
+  vi.mocked(deriveAccountKey).mockImplementation(() => stretchedBytes());
+  vi.mocked(evaluateWithPowRetry).mockImplementation((_kind, _id, blindedB64) =>
+    Promise.resolve(localOprfEvaluate(blindedB64)),
+  );
+});
+
 describe("buildAccountRegistration", () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-  });
-
   it("produces a fresh salt each call", async () => {
-    const { generateSalt } = await import("@care-y/crypto");
-    const salt1 = new Uint8Array(16).fill(0xaa) as Salt;
-    const salt2 = new Uint8Array(16).fill(0xbb) as Salt;
-    vi.mocked(generateSalt)
-      .mockReturnValueOnce(salt1)
-      .mockReturnValueOnce(salt2);
-    vi.mocked(evaluateWithPowRetry).mockResolvedValue(fakeEvaluatedB64);
-
     const callbacks = makeCallbacks();
     const r1 = await buildAccountRegistration(
       "user1",
@@ -124,8 +100,6 @@ describe("buildAccountRegistration", () => {
   });
 
   it("keeps accountId when provided", async () => {
-    vi.mocked(evaluateWithPowRetry).mockResolvedValue(fakeEvaluatedB64);
-
     const callbacks = makeCallbacks();
     const result = await buildAccountRegistration(
       "user",
@@ -138,8 +112,6 @@ describe("buildAccountRegistration", () => {
   });
 
   it("mints a new accountId when null", async () => {
-    vi.mocked(evaluateWithPowRetry).mockResolvedValue(fakeEvaluatedB64);
-
     const callbacks = makeCallbacks();
     const result = await buildAccountRegistration(
       "user",
@@ -153,9 +125,8 @@ describe("buildAccountRegistration", () => {
     expect(result.payload.accountId.length).toBeGreaterThan(0);
   });
 
-  it("returns payload with authHash (not raw authToken)", async () => {
-    vi.mocked(evaluateWithPowRetry).mockResolvedValue(fakeEvaluatedB64);
-
+  it("sends authHash = hash(authToken), never the raw authToken", async () => {
+    const expected = deriveExpectedKeys();
     const callbacks = makeCallbacks();
     const result = await buildAccountRegistration(
       "user",
@@ -164,13 +135,15 @@ describe("buildAccountRegistration", () => {
       callbacks,
     );
 
-    expect(result.payload.authHash).toBeDefined();
+    expect(result.payload.authHash).toBe(
+      encode(hashChannelAuth(expected.authToken)),
+    );
     expect(result.payload).not.toHaveProperty("authToken");
+    expect(result.payload.authHash).not.toBe(encode(expected.authToken));
   });
 
-  it("returns the keypair for re-encryption", async () => {
-    vi.mocked(evaluateWithPowRetry).mockResolvedValue(fakeEvaluatedB64);
-
+  it("seals a keyCheck the derived private key can decrypt", async () => {
+    const expected = deriveExpectedKeys();
     const callbacks = makeCallbacks();
     const result = await buildAccountRegistration(
       "user",
@@ -179,35 +152,53 @@ describe("buildAccountRegistration", () => {
       callbacks,
     );
 
-    expect(result.keypair.clientPublic).toBeDefined();
-    expect(result.keypair.clientPrivate).toBeDefined();
+    expect(result.payload.publicKey).toBe(
+      encode(expected.keypair.clientPublic),
+    );
+
+    expect(
+      decryptTripleB64(result.payload.keyCheck, expected.keypair.clientPrivate),
+    ).toBe(PORTAL_KEY_CHECK);
+  });
+
+  it("returns the derived keypair for re-encryption", async () => {
+    const expected = deriveExpectedKeys();
+    const callbacks = makeCallbacks();
+    const result = await buildAccountRegistration(
+      "user",
+      "pass",
+      null,
+      callbacks,
+    );
+
+    expect(result.keypair.clientPublic).toEqual(expected.keypair.clientPublic);
+    expect(result.keypair.clientPrivate).toEqual(
+      expected.keypair.clientPrivate,
+    );
   });
 });
 
 describe("rewrapMessages", () => {
-  it("produces output that has id and copy for each message", () => {
+  it("rewraps each message so the new private key can decrypt it", () => {
+    const { publicPoint, privateScalar } = makeRistrettoKeypair();
     const decrypted = [
       { id: "msg-1", text: "Hello" },
       { id: "msg-2", text: "World" },
     ];
-    const newPublic = new Uint8Array(32).fill(99);
 
-    const result = rewrapMessages(
-      decrypted,
-      newPublic as unknown as RistrettoPoint,
-    );
+    const result = rewrapMessages(decrypted, publicPoint);
 
     expect(result).toHaveLength(2);
-    expect(result[0]?.id).toBe("msg-1");
-    expect(result[0]?.copy).toHaveProperty("ephemeralPoint");
-    expect(result[0]?.copy).toHaveProperty("nonce");
-    expect(result[0]?.copy).toHaveProperty("ciphertext");
-    expect(result[1]?.id).toBe("msg-2");
+    for (const [i, msg] of decrypted.entries()) {
+      const wire = result[i];
+      expect(wire?.id).toBe(msg.id);
+      expect(decryptTripleB64(wire!.copy, privateScalar)).toBe(msg.text);
+    }
   });
 
   it("returns empty array for empty input", () => {
-    const newPublic = new Uint8Array(32).fill(99);
-    const result = rewrapMessages([], newPublic as unknown as RistrettoPoint);
+    const { publicPoint } = makeRistrettoKeypair();
+    const result = rewrapMessages([], publicPoint);
     expect(result).toHaveLength(0);
   });
 });

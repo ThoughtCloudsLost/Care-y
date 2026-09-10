@@ -296,6 +296,9 @@ describe("createPortalReseed", () => {
     expect(msgIdx).toBeLessThan(attIdx);
   });
 
+  // Contract: RESEED_MESSAGE_CHUNK (200) mirrors the server-side cap in
+  // reseedPortalHistoryInputSchema (messages .max(200)); a larger client
+  // chunk would be rejected wholesale by input validation.
   it("chunks 201 messages into two reseedPortalHistory calls", async () => {
     const deps = makeDeps();
     const trpc = deps.trpc as MockTrpc;

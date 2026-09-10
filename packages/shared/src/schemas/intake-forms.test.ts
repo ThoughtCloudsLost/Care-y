@@ -397,6 +397,9 @@ describe("localized field config", () => {
 // =========================================================================
 
 describe("encrypted config size cap", () => {
+  // Contract test: this cap is shared client/server (client sizes payloads
+  // against it, the server schema rejects past it). A unilateral change on
+  // either side silently breaks the other, so the value is pinned here.
   it("ENCRYPTED_CONFIG_CAP is 28000", () => {
     expect(ENCRYPTED_CONFIG_CAP).toBe(28_000);
   });
@@ -2133,6 +2136,8 @@ describe("intakeFormMetaSchema rich text fields", () => {
 });
 
 describe("ENCRYPTED_FORM_META_CAP", () => {
+  // Contract test: shared client/server cap, pinned for the same reason
+  // as ENCRYPTED_CONFIG_CAP above.
   it("is 400,000", () => {
     expect(ENCRYPTED_FORM_META_CAP).toBe(400_000);
   });
