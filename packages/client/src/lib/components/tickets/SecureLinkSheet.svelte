@@ -396,7 +396,9 @@
     {#if passphraseEnabled && words.length > 0}
       <Block class="!my-2">
         <Register kind="note">
-          <p class="words-display">{words.join("  ")}</p>
+          <p class="words-display" data-testid="secure-link-words">
+            {words.join("  ")}
+          </p>
           <div class="words-refresh">
             <Button
               small
@@ -428,7 +430,9 @@
     </Block>
   {:else if step === "ready"}
     <Block class="!my-3">
-      <code class="link-block">{generatedLink}</code>
+      <code class="link-block" data-testid="secure-link-url"
+        >{generatedLink}</code
+      >
     </Block>
 
     <Block class="!my-3 link-actions">

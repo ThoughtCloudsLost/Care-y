@@ -7,6 +7,7 @@ import {
   login,
   openComposeActions,
   openTicketByTitle,
+  reopenTicketByTitle,
   openTicketInfoPanel,
 } from "./helpers";
 import { clearClientEmails, resetCommunicationTiers } from "./db-probe";
@@ -36,6 +37,7 @@ const TICKET_TITLE = "Benefits application help";
 const suffix = String(Date.now()).slice(-6);
 const EMAIL_SUBJECT = `Follow-up ${suffix}`;
 const EMAIL_BOLD_TEXT = `important update`;
+const CLIENT_SEED_MESSAGE = `Client message before password ${suffix}`;
 
 test.describe.serial("Portal Upgrade + Email", () => {
   let volunteerPage: Page;
@@ -80,10 +82,11 @@ test.describe.serial("Portal Upgrade + Email", () => {
 
     await openTicketInfoPanel(volunteerPage, "Communication");
 
-    // The client info panel has an "Edit email" or "Add email" button.
-    // On a fresh client the button text is "Add email" or similar.
+    // The client info panel has an "Add email" button (fresh client after
+    // clearClientEmails) or "Edit email" on reruns. No bare /email/
+    // fallback: it could match unrelated buttons.
     const emailBtn = volunteerPage
-      .getByRole("button", { name: /add email|edit email|email/i })
+      .getByRole("button", { name: /add email|edit email/i })
       .first();
     await expect(emailBtn).toBeVisible({ timeout: CRYPTO_TIMEOUT });
     await emailBtn.dispatchEvent("click");
@@ -103,9 +106,9 @@ test.describe.serial("Portal Upgrade + Email", () => {
     // Submitting the address does not save it. The sheet advances to a
     // confirm step first, because the new address replaces the old one on
     // every ticket belonging to this client, so the flow takes two clicks.
-    const saveBtn = sheet
-      .getByRole("button", { name: /save|confirm|update|set/i })
-      .first();
+    // Exact label (admin_user_save_changes): a broad /save|confirm|.../
+    // could match the confirm-step button and skip a step silently.
+    const saveBtn = sheet.getByRole("button", { name: /save changes/i });
     await expect(saveBtn).toBeVisible({ timeout: 5_000 });
     await saveBtn.click();
 
@@ -118,6 +121,12 @@ test.describe.serial("Portal Upgrade + Email", () => {
     // Wait for the sheet to dismiss (mutation success).
     await expect(sheet).not.toBeVisible({ timeout: CRYPTO_TIMEOUT });
 
+    // The saved address must render in the info panel: sheet dismissal
+    // alone would also pass on a mutation that silently failed.
+    await expect(
+      volunteerPage.getByText(`testclient-${suffix}@example.com`),
+    ).toBeVisible({ timeout: CRYPTO_TIMEOUT });
+
     // Close the info panel overlay.
     await volunteerPage.keyboard.press("Escape");
     await volunteerPage.waitForTimeout(300);
@@ -129,15 +138,8 @@ test.describe.serial("Portal Upgrade + Email", () => {
     testInfo.setTimeout(CRYPTO_TIMEOUT * 3);
 
     // Navigate away and back in-app so the ticket detail refetches the
-    // hasEmail flag (a full reload drops in-memory keys).
-    await volunteerPage.keyboard.press("Escape");
-    await volunteerPage.getByRole("tab", { name: "Overview" }).click();
-    await expect(volunteerPage).toHaveURL("/");
-    await volunteerPage.getByRole("tab", { name: "Tickets" }).click();
-    await openTicketByTitle(volunteerPage, TICKET_TITLE);
-    await expect(volunteerPage.locator('[role="log"]')).toBeVisible({
-      timeout: CRYPTO_TIMEOUT,
-    });
+    // hasEmail flag.
+    await reopenTicketByTitle(volunteerPage, TICKET_TITLE);
 
     const dialog = await openComposeActions(volunteerPage);
     // "Email client" action should be visible now that the client has an email.
@@ -145,8 +147,12 @@ test.describe.serial("Portal Upgrade + Email", () => {
     await expect(emailAction).toBeVisible({ timeout: 3_000 });
     await emailAction.dispatchEvent("click");
 
-    // EmailComposeSheet opens as a dialog.
-    const composeSheet = volunteerPage.getByRole("dialog").last();
+    // EmailComposeSheet opens as a dialog. Scope by contained testid, not
+    // `.last()`: the info panel is also a dialog and `.last()` re-resolves
+    // as sheets open and close.
+    const composeSheet = volunteerPage.getByRole("dialog").filter({
+      has: volunteerPage.locator('[data-testid="email-recipient"]'),
+    });
     await expect(composeSheet).toBeVisible({ timeout: 5_000 });
     await auditA11y(volunteerPage);
   });
@@ -163,7 +169,9 @@ test.describe.serial("Portal Upgrade + Email", () => {
       }
     });
 
-    const composeSheet = volunteerPage.getByRole("dialog").last();
+    const composeSheet = volunteerPage.getByRole("dialog").filter({
+      has: volunteerPage.locator('[data-testid="email-recipient"]'),
+    });
 
     // Fill subject via the ListInput.
     const subjectInput = composeSheet.locator("input").first();
@@ -199,20 +207,23 @@ test.describe.serial("Portal Upgrade + Email", () => {
     // The relay request should have fired (to Mailpit via Docker SMTP).
     expect(relayEmailRequest).not.toBeNull();
 
-    // The email_outbound bubble should render with the subject.
-    const subjectBubble = volunteerPage.locator(
-      '[data-testid="email-bubble-subject"]',
-    );
-    await expect(subjectBubble).toBeVisible({ timeout: CRYPTO_TIMEOUT });
-    await expect(subjectBubble).toContainText(EMAIL_SUBJECT);
+    // Scope to THIS run's bubble via the suffixed subject: earlier
+    // browser projects leave their own email bubbles on the shared
+    // ticket, and the bold text is a shared constant that matches all of
+    // them. Asserting both parts inside one article also proves the
+    // subject and body belong to the same message.
+    const bubble = volunteerPage
+      .getByRole("article")
+      .filter({ hasText: EMAIL_SUBJECT });
+    await expect(bubble).toBeVisible({ timeout: CRYPTO_TIMEOUT });
+    await expect(
+      bubble.locator('[data-testid="email-bubble-subject"]'),
+    ).toContainText(EMAIL_SUBJECT);
 
-    // The body should render with the bold text (not raw JSON).
-    const bodyBubble = volunteerPage.locator(
-      '[data-testid="email-bubble-body"]',
-    );
-    await expect(bodyBubble).toBeVisible({ timeout: CRYPTO_TIMEOUT });
-    // The bold text should be inside a <strong> element.
-    await expect(bodyBubble.locator("strong")).toContainText(EMAIL_BOLD_TEXT);
+    // The body renders the bold text inside a <strong>, not raw JSON.
+    await expect(
+      bubble.locator('[data-testid="email-bubble-body"]').locator("strong"),
+    ).toContainText(EMAIL_BOLD_TEXT);
   });
 
   // ── 3. Bare-link portal: upgrade + add password ───────────────
@@ -228,7 +239,10 @@ test.describe.serial("Portal Upgrade + Email", () => {
     await expect(setupBtn).toBeVisible({ timeout: CRYPTO_TIMEOUT });
     await setupBtn.dispatchEvent("click");
 
-    const sheet = volunteerPage.getByRole("dialog").last();
+    // Name the sheet (both step titles), never `.last()` over the panel.
+    const sheet = volunteerPage.getByRole("dialog", {
+      name: /set up secure link|link ready/i,
+    });
     await expect(sheet).toBeVisible({ timeout: 5_000 });
 
     // Generate the link (no passphrase toggle: bare link).
@@ -254,28 +268,46 @@ test.describe.serial("Portal Upgrade + Email", () => {
 
     await portalPage.goto(portalLink);
 
-    // No passphrase on this channel: the thread renders directly.
-    // Wait for the thread container to appear (the portal may need to
-    // derive keys from the fragment seed).
-    await portalPage.waitForTimeout(3_000);
+    // No passphrase on this channel: the thread renders directly once
+    // the portal derives keys from the fragment seed; the composer
+    // visibility wait below covers that.
 
-    // Open the drawer. The client shell drawer button is typically a
-    // hamburger or menu icon. The portal layout uses the drawer button.
+    // Send a message before the password is added. The add-password
+    // pipeline re-seals it to the new key, and the post-unlock assertion
+    // in the next test uses it to prove decryption actually worked.
+    const composer = portalPage.getByRole("textbox").first();
+    await expect(composer).toBeVisible({ timeout: CRYPTO_TIMEOUT });
+    await composer.click();
+    await composer.pressSequentially(CLIENT_SEED_MESSAGE, { delay: 20 });
+    await portalPage.getByRole("button", { name: /send/i }).last().click();
+    await expect(portalPage.getByText(CLIENT_SEED_MESSAGE)).toBeVisible({
+      timeout: CRYPTO_TIMEOUT,
+    });
+
+    // No reload here on purpose: the add-password handler refetches
+    // bootstrap itself, so a stale snapshot no longer breaks the re-seal
+    // count, and an extra portal load would spend read-limiter budget
+    // this spec needs. The post-unlock assertion below still proves the
+    // message round-trips from ciphertext.
+
+    // Open the drawer. Unconditional: if the menu button stops rendering,
+    // this must fail rather than silently exercising a different path.
     const drawerBtn = portalPage
       .getByRole("button", { name: /menu|drawer|open drawer/i })
       .first();
-    // If no explicit drawer button, try the Konsta Panel/Drawer toggle.
-    if (await drawerBtn.isVisible({ timeout: 3_000 }).catch(() => false)) {
-      await drawerBtn.click();
-    }
+    await expect(drawerBtn).toBeVisible({ timeout: CRYPTO_TIMEOUT });
+    await drawerBtn.click();
 
     // The upgrade entry in the drawer should be visible.
     const upgradeEntry = portalPage.getByText(/more secure/i).first();
     await expect(upgradeEntry).toBeVisible({ timeout: CRYPTO_TIMEOUT });
     await upgradeEntry.click();
 
-    // UpgradeChooser sheet opens with both paths.
-    const chooser = portalPage.getByRole("dialog").last();
+    // UpgradeChooser sheet opens with both paths. Scope by contained
+    // testid, not `.last()` (re-resolves as sheets open and close).
+    const chooser = portalPage
+      .getByRole("dialog")
+      .filter({ has: portalPage.locator('[data-testid="upgrade-body"]') });
     await expect(chooser).toBeVisible({ timeout: 5_000 });
 
     // Both buttons should be present on a bare link.
@@ -298,21 +330,28 @@ test.describe.serial("Portal Upgrade + Email", () => {
   });
 
   test("add password flow completes and reloads with passphrase gate", async ({}, testInfo) => {
-    testInfo.setTimeout(CRYPTO_TIMEOUT * 6);
+    // Budget covers the longest chain in this spec: OPRF + Argon2id, the
+    // full message re-seal, a reload through the gate, a wrong-passphrase
+    // rejection, and the unlock. Firefox runs it near the old 6x cap.
+    testInfo.setTimeout(CRYPTO_TIMEOUT * 8);
     const pp = portal();
 
     // Click "Add a password" in the chooser.
     const addPassBtn = pp.locator('[data-testid="upgrade-add-passphrase"]');
     await addPassBtn.click();
 
-    // AddPassphraseForm sheet opens.
-    const form = pp.getByRole("dialog").last();
+    // AddPassphraseForm sheet opens. Scope by contained testids (present
+    // in every step: form, progress, and success), not `.last()`.
+    const form = pp
+      .getByRole("dialog")
+      .filter({ has: pp.locator('[data-testid^="passphrase-"]') });
     await expect(form).toBeVisible({ timeout: 5_000 });
 
     // A diceware suggestion should be shown.
     const suggestion = form.locator('[data-testid="passphrase-suggestion"]');
     await expect(suggestion).toBeVisible({ timeout: 5_000 });
     const suggestedWords = ((await suggestion.textContent()) ?? "").trim();
+    // Security parameter: 5 diceware words from the EFF list (~64 bits).
     expect(suggestedWords.split(/\s+/).length).toBe(5);
 
     // Enter the suggested passphrase in both fields.
@@ -337,10 +376,8 @@ test.describe.serial("Portal Upgrade + Email", () => {
     await expect(submitBtn).toBeEnabled({ timeout: 3_000 });
     await submitBtn.click();
 
-    // Progress indicator should appear during the OPRF + re-seal pipeline.
-    await expect(
-      form.locator('[data-testid="passphrase-progress"]'),
-    ).toBeVisible({ timeout: CRYPTO_TIMEOUT });
+    // No progress-indicator assertion: with VITE_E2E_FAST_KDF the re-seal
+    // can finish before it paints. The success state below is the outcome.
 
     // Wait for the success state.
     await expect(
@@ -351,8 +388,12 @@ test.describe.serial("Portal Upgrade + Email", () => {
     const closeBtn = form.locator('[data-testid="passphrase-success-close"]');
     await closeBtn.click();
 
-    // Reload the same link: the passphrase gate should now block.
-    await pp.goto("about:blank");
+    // Reload the same link: the passphrase gate should now block. Step
+    // through another path so this is a cross-document navigation (the
+    // app strips the hash after parsing, so the current URL differs only
+    // by fragment). Not about:blank: firefox fails that hop with
+    // "interrupted by another navigation to about:blank".
+    await pp.goto("/intake");
     await pp.goto(portalLink);
 
     const gateInput = pp.getByLabel(/passphrase/i);
@@ -372,18 +413,14 @@ test.describe.serial("Portal Upgrade + Email", () => {
     await gateInput.fill(suggestedWords);
     await unlockBtn.click();
 
-    // The thread should render after unlocking (the email bubble from
-    // the volunteer's earlier send may or may not be present depending
-    // on whether a dual-copy was written, but the thread container
-    // should be visible).
-    await pp.waitForTimeout(3_000);
-
-    // Verify the portal session loaded by checking for any thread content
-    // or the composer.
-    const threadOrComposer = pp
-      .locator('[role="log"], [role="textbox"]')
-      .first();
-    await expect(threadOrComposer).toBeVisible({ timeout: CRYPTO_TIMEOUT });
+    // The message sent before the password was added must decrypt in the
+    // thread: it was re-sealed to the new key by the add-password
+    // pipeline, so its rendered plaintext proves the session actually
+    // decrypted content (a composer-visible check would pass even with
+    // decryption broken).
+    await expect(pp.getByText(CLIENT_SEED_MESSAGE)).toBeVisible({
+      timeout: CRYPTO_TIMEOUT,
+    });
   });
 
   // ── 4. Passphrase-link drawer: contact card ───────────────────
@@ -392,13 +429,12 @@ test.describe.serial("Portal Upgrade + Email", () => {
     testInfo.setTimeout(CRYPTO_TIMEOUT * 3);
     const pp = portal();
 
-    // Open the drawer.
+    // Open the drawer (unconditional; see the bare-link drawer test).
     const drawerBtn = pp
       .getByRole("button", { name: /menu|drawer|open drawer/i })
       .first();
-    if (await drawerBtn.isVisible({ timeout: 3_000 }).catch(() => false)) {
-      await drawerBtn.click();
-    }
+    await expect(drawerBtn).toBeVisible({ timeout: CRYPTO_TIMEOUT });
+    await drawerBtn.click();
 
     // On a passphrase-tier session, the contact info entry should be visible.
     // Target the drawer entry by id: a text match also catches the
@@ -409,16 +445,15 @@ test.describe.serial("Portal Upgrade + Email", () => {
     await expect(contactEntry).toBeVisible({ timeout: CRYPTO_TIMEOUT });
     await contactEntry.click();
 
-    // ContactInfoCard sheet opens.
-    const contactSheet = pp.getByRole("dialog").last();
+    // ContactInfoCard sheet opens. Scope by contained testids (present in
+    // loading, error, empty, and list states), not `.last()`.
+    const contactSheet = pp
+      .getByRole("dialog")
+      .filter({ has: pp.locator('[data-testid^="contact-"]') });
     await expect(contactSheet).toBeVisible({ timeout: 5_000 });
 
-    // Loading state should appear first.
-    await expect(contactSheet.locator('[data-testid="contact-loading"]'))
-      .toBeVisible({ timeout: 3_000 })
-      .catch(() => {
-        // Loading may be too fast with test KDF; this is acceptable.
-      });
+    // No loading-state assertion: with the test KDF it can settle before
+    // painting, and an expect whose rejection is caught asserts nothing.
 
     // Wait for the contact list to appear (the sealed payload decrypts).
     await expect(
@@ -452,10 +487,7 @@ test.describe.serial("Portal Upgrade + Email", () => {
     // separate bare link on the "Safety planning session" ticket.
     // account-portal.spec resets tiers in its own beforeAll, so no
     // cross-spec conflict.
-    await volunteerPage.keyboard.press("Escape");
-    await volunteerPage.getByRole("tab", { name: "Overview" }).click();
-    await expect(volunteerPage).toHaveURL("/");
-    await openTicketByTitle(volunteerPage, "Safety planning session");
+    await reopenTicketByTitle(volunteerPage, "Safety planning session");
 
     await openTicketInfoPanel(volunteerPage, "Communication");
 
@@ -465,7 +497,9 @@ test.describe.serial("Portal Upgrade + Email", () => {
     await expect(setupBtn).toBeVisible({ timeout: CRYPTO_TIMEOUT });
     await setupBtn.dispatchEvent("click");
 
-    const sheet = volunteerPage.getByRole("dialog").last();
+    const sheet = volunteerPage.getByRole("dialog", {
+      name: /set up secure link|link ready/i,
+    });
     await expect(sheet).toBeVisible({ timeout: 5_000 });
     const generateBtn = sheet.getByRole("button", {
       name: /set up secure link/i,
@@ -482,16 +516,13 @@ test.describe.serial("Portal Upgrade + Email", () => {
     const barePage = await browser.newPage();
     await barePage.goto(bareLink);
 
-    // Bare link (no passphrase): thread renders directly.
-    await barePage.waitForTimeout(3_000);
-
-    // Open the drawer.
+    // Open the drawer (unconditional; see the bare-link drawer test).
+    // The visibility wait covers the fragment-seed key derivation.
     const drawerBtn = barePage
       .getByRole("button", { name: /menu|drawer|open drawer/i })
       .first();
-    if (await drawerBtn.isVisible({ timeout: 3_000 }).catch(() => false)) {
-      await drawerBtn.click();
-    }
+    await expect(drawerBtn).toBeVisible({ timeout: CRYPTO_TIMEOUT });
+    await drawerBtn.click();
 
     // The upgrade entry should be present (bare link has both paths).
     const upgradeEntry = barePage.getByText(/more secure/i).first();
@@ -505,30 +536,37 @@ test.describe.serial("Portal Upgrade + Email", () => {
     );
     await expect(contactEntry).not.toBeVisible({ timeout: 3_000 });
 
-    // Verify at the API level: a direct contactInfo query should return
-    // the typed PORTAL_CONTACT_LOCKED error. We check this by evaluating
-    // a fetch in the bare-link page context.
-    const apiResult = await barePage.evaluate(async (channelId: string) => {
-      // Extract the channel ID from the current URL path.
-      try {
-        const res = await fetch(
-          `/trpc/clientPortal.contactInfo?input=${encodeURIComponent(JSON.stringify({ channelId, auth: "" }))}`,
-          { credentials: "include" },
-        );
-        const body = await res.text();
-        return { status: res.status, body };
-      } catch (err: unknown) {
-        return { status: 0, body: String(err) };
-      }
-    }, bareLink.split("/portal/")[1]!.split("#")[0]!);
+    // Verify at the API level: an AUTHENTICATED contactInfo query on a
+    // bare-tier channel must fail with the typed PORTAL_CONTACT_LOCKED
+    // error specifically. Auth is derived from the fragment seed in the
+    // page context (same /@id/ Vite resolution as intake.spec.ts) so the
+    // request passes channel auth and reaches the tier check; an empty
+    // auth would short-circuit as UNAUTHORIZED and never test the lock.
+    const apiResult = await barePage.evaluate(async (link: string) => {
+      const channelId = link.split("/portal/")[1]!.split("#")[0]!;
+      const seedB64 = link.split("#")[1]!;
+      const cryptoBarrelUrl = "/@id/@care-y/crypto";
+      const { getSodium, decode, encode, deriveChannelAuth } = (await import(
+        cryptoBarrelUrl
+      )) as {
+        getSodium: () => Promise<unknown>;
+        decode: (b64: string) => Uint8Array;
+        encode: (b: Uint8Array) => string;
+        deriveChannelAuth: (seed: Uint8Array) => Uint8Array;
+      };
+      await getSodium();
+      const auth = encode(deriveChannelAuth(decode(seedB64)));
+      const res = await fetch(
+        `/trpc/clientPortal.contactInfo?input=${encodeURIComponent(JSON.stringify({ channelId, auth }))}`,
+        { credentials: "include" },
+      );
+      const body = await res.text();
+      return { status: res.status, body };
+    }, bareLink);
 
-    // The server should reject with the typed error (4xx status or the
-    // error message contains PORTAL_CONTACT_LOCKED).
-    expect(
-      apiResult.status >= 400 ||
-        apiResult.body.includes("PORTAL_CONTACT_LOCKED") ||
-        apiResult.body.includes("UNAUTHORIZED"),
-    ).toBe(true);
+    // Only the typed lock error passes: a 404 from a renamed route, a
+    // validator rejection, or an auth failure must all fail this test.
+    expect(apiResult.body).toContain("PORTAL_CONTACT_LOCKED");
 
     await barePage.close();
   });

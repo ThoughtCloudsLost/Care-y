@@ -517,6 +517,23 @@ export async function openTicketByTitle(
 }
 
 /**
+ * Refetch a ticket detail by navigating away and back inside the app.
+ *
+ * A full reload would drop the volunteer's in-memory keys and land on
+ * the blocked state, so the round trip goes Overview -> ticket instead.
+ * openTicketByTitle handles the Tickets tab and waits for the chat log.
+ */
+export async function reopenTicketByTitle(
+  page: Page,
+  title: string,
+): Promise<void> {
+  await page.keyboard.press("Escape");
+  await page.getByRole("tab", { name: "Overview" }).click();
+  await expect(page).toHaveURL("/");
+  await openTicketByTitle(page, title);
+}
+
+/**
  * Locate the compose-actions (+) button in the active ticket detail pane.
  *
  * On desktop split-view, two compose buttons exist in the accessibility

@@ -91,3 +91,19 @@ export async function stopAndWriteCoverage(
   const coverage = await page.coverage.stopJSCoverage();
   await writeCoverage(coverage, label);
 }
+
+/**
+ * Teardown for a page a mid-suite test creates: when an earlier test in a
+ * serial suite fails, the assigning test never runs and the variable is
+ * still undefined by afterAll, even though its declared type says
+ * otherwise. Takes the undefined case so callers need no guard.
+ */
+export async function stopCoverageAndClose(
+  page: Page | undefined,
+  label: string,
+): Promise<void> {
+  await stopAndWriteCoverage(page, label);
+  if (page !== undefined && !page.isClosed()) {
+    await page.close();
+  }
+}

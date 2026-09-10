@@ -1,5 +1,9 @@
 import { test, expect } from "./coverage-fixture";
-import { startCoverage, stopAndWriteCoverage } from "./coverage-fixture";
+import {
+  startCoverage,
+  stopAndWriteCoverage,
+  stopCoverageAndClose,
+} from "./coverage-fixture";
 import type { Page, Request } from "@playwright/test";
 import {
   auditA11y,
@@ -33,7 +37,6 @@ const INTAKE_MESSAGE = `I need help with a housing situation ${suffix}, please c
 test.describe.serial("Public Intake Form", () => {
   let intakePage: Page;
   let volunteerPage: Page;
-  let submittedReference: string;
 
   // ── Client-side: intake form submission ──────────────────────────
 
@@ -46,14 +49,21 @@ test.describe.serial("Public Intake Form", () => {
   test.afterAll(async () => {
     await stopAndWriteCoverage(intakePage, "intake-client");
     await intakePage.close();
+    // volunteerPage is created mid-suite; clean it up here (lifecycle,
+    // not a test) so a close failure reports as teardown, not test red.
+    await stopCoverageAndClose(volunteerPage, "intake-volunteer");
   });
 
   test("intake page loads and shows org branding", async () => {
     await intakePage.goto("/intake");
-    // The branded layout renders the org name in the navbar.
-    // The e2e-org seed sets the org name; verify the navbar has content.
+    // The branded layout renders the org name (org_config.name, set by
+    // global-setup) in the navbar. A bare banner-role check would pass
+    // with branding entirely broken.
     const navbar = intakePage.getByRole("banner");
     await expect(navbar).toBeVisible({ timeout: CRYPTO_TIMEOUT });
+    await expect(navbar.getByText("E2E Test Org")).toBeVisible({
+      timeout: CRYPTO_TIMEOUT,
+    });
   });
 
   test("a11y: empty intake form passes axe audit", async () => {
@@ -109,10 +119,9 @@ test.describe.serial("Public Intake Form", () => {
     const referenceEl = intakePage.locator("code").first();
     await expect(referenceEl).toBeVisible({ timeout: CRYPTO_TIMEOUT });
 
-    // Capture the reference code for the volunteer-side assertions
+    // The reference code must be non-empty
     const reference = await referenceEl.textContent();
     expect(reference).toBeTruthy();
-    submittedReference = reference ?? "";
 
     // Assert the intercepted request payload contains only base64 fields
     expect(capturedRequest).not.toBeNull();
@@ -123,40 +132,32 @@ test.describe.serial("Public Intake Form", () => {
     expect(postBody).not.toContain(INTAKE_NAME);
     expect(postBody).not.toContain(INTAKE_MESSAGE);
 
-    // Verify the payload has the expected base64 field shape. The batch
-    // entry holds the input directly; there is no superjson "json"
-    // wrapper on this route.
-    const parsed: unknown = JSON.parse(postBody!);
-    expect(parsed).toHaveProperty("0.encryptedTitle");
-    expect(parsed).toHaveProperty("0.encryptedDescription");
-    expect(parsed).toHaveProperty("0.wrappedTk");
-    expect(parsed).toHaveProperty("0.ticketId");
+    // Verify the payload has the expected base64 field shape. The field
+    // names are API contract; the batch envelope is not. Read the entry
+    // defensively so switching httpBatchLink to a non-batched link (same
+    // observable behavior) does not break this. There is no superjson
+    // "json" wrapper on this route.
+    const parsed = JSON.parse(postBody!) as Record<
+      string,
+      Record<string, unknown> | undefined
+    >;
+    const json = parsed["0"] ?? (parsed as Record<string, unknown>);
+    expect(json).toHaveProperty("encryptedTitle");
+    expect(json).toHaveProperty("encryptedDescription");
+    expect(json).toHaveProperty("wrappedTk");
+    expect(json).toHaveProperty("ticketId");
 
     // Each encrypted field should be a non-empty base64-like string
-    const json = (
-      parsed as Record<string, Record<string, unknown> | undefined>
-    )["0"];
-    expect(json).toBeDefined();
-    expect(typeof json?.encryptedTitle).toBe("string");
-    expect(typeof json?.encryptedDescription).toBe("string");
-    expect(typeof json?.wrappedTk).toBe("string");
-    expect((json?.encryptedTitle as string).length).toBeGreaterThan(10);
-    expect((json?.wrappedTk as string).length).toBeGreaterThan(10);
+    expect(typeof json.encryptedTitle).toBe("string");
+    expect(typeof json.encryptedDescription).toBe("string");
+    expect(typeof json.wrappedTk).toBe("string");
+    expect((json.encryptedTitle as string).length).toBeGreaterThan(10);
+    expect((json.wrappedTk as string).length).toBeGreaterThan(10);
   });
 
-  test("success state shows reference code", async () => {
-    // Already verified in the submit test, but this is the explicit assertion.
-    const successHeading = intakePage
-      .getByRole("heading", { level: 2 })
-      .or(intakePage.getByText(/submitted|received|thank/i));
-    await expect(successHeading).toBeVisible();
-
-    // The reference code should be displayed
-    const codeEl = intakePage.locator("code").first();
-    await expect(codeEl).toBeVisible();
-    expect(submittedReference.length).toBeGreaterThan(0);
-  });
-
+  // No separate "success state shows reference code" test: the submit
+  // test already asserts the reference code is visible and non-empty,
+  // and the a11y audit below runs against the same success state.
   test("a11y: success state passes axe audit", async () => {
     await auditA11y(intakePage);
   });
@@ -213,21 +214,26 @@ test.describe.serial("Public Intake Form", () => {
     const intakeWrapCount = countRows("intake_key_wraps");
     expect(intakeWrapCount).toBe(intakeWrapCountBeforeOpen - 1);
 
-    // ticket_key_wraps should have rows for the queue volunteers.
-    // The e2e org seed assigns at least one volunteer to the intake queue,
-    // so at least one wrap row should exist for the intake ticket.
-    const ticketWrapCount = countRows("ticket_key_wraps");
+    // ticket_key_wraps must gain rows for THIS ticket's queue volunteers.
+    // Scoped to the intake ticket (the newest tickets row; safe under the
+    // suite's workers:1 and this file's sequential order): the seed already
+    // guarantees tenant-wide wrap rows exist, so an unscoped count(*) > 0
+    // could never fail.
+    const ticketWrapCount = countRows(
+      "ticket_key_wraps",
+      "ticket_id = (SELECT id FROM tickets ORDER BY created_at DESC LIMIT 1)",
+    );
     expect(ticketWrapCount).toBeGreaterThan(0);
-  });
-
-  test("cleanup volunteer page", async () => {
-    await stopAndWriteCoverage(volunteerPage, "intake-volunteer");
-    await volunteerPage.close();
   });
 
   // ── Error state a11y ─────────────────────────────────────────────
 
-  test("a11y: rate-limited error state passes axe audit", async ({
+  // Named for what it verifies: the dev/e2e stack runs with
+  // INTAKE_SUBMISSION_LIMIT=500 (docker-compose.yml), so the 3/IP/hour
+  // production limit cannot trip here and the rate-limited error state
+  // is unreachable in this environment. Auditing the limited state
+  // would need a stack with a low limit configured.
+  test("a11y: intake form after repeated submissions passes axe audit", async ({
     browser,
   }, testInfo) => {
     testInfo.setTimeout(CRYPTO_TIMEOUT * 2);
@@ -271,8 +277,6 @@ test.describe.serial("Public Intake Form", () => {
       }
     }
 
-    // At this point the page may show an error. Run the a11y audit regardless
-    // of what state we reached (the audit should pass on any page state).
     await auditA11y(errorPage);
     await errorPage.close();
   });

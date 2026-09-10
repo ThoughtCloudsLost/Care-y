@@ -9,6 +9,7 @@ import {
   login,
   openComposeActions,
   openTicketByTitle,
+  reopenTicketByTitle,
 } from "./helpers";
 import { countRows, queryDb, resetCommunicationTiers } from "./db-probe";
 
@@ -62,12 +63,14 @@ test.describe.serial("Secure Link Portal", () => {
   // ── Volunteer half: upgrade + link generation ────────────────────
 
   test("tier section shows SMS/Email for a fresh client", async () => {
-    // PortalTierSection renders the tier heading inside the info panel,
+    // PortalTierSection renders the tier name inside the info panel,
     // which sits behind "More actions" in the detail overlay at every
-    // width.
+    // width. Assert the tier NAME, not the panel heading: the helper
+    // returns early when the heading is already visible, so a heading
+    // assertion would only restate the helper's precondition.
     await openTicketInfoPanel(volunteerPage, "Communication");
     await expect(
-      volunteerPage.getByText("Communication", { exact: true }).first(),
+      volunteerPage.getByText("SMS / Email", { exact: true }).first(),
     ).toBeVisible({ timeout: CRYPTO_TIMEOUT });
   });
 
@@ -106,9 +109,11 @@ test.describe.serial("Secure Link Portal", () => {
     await expect(passphraseToggle).toBeVisible({ timeout: 5_000 });
     await passphraseToggle.dispatchEvent("click");
 
-    const wordsEl = sheet.locator(".words-display");
+    const wordsEl = sheet.locator('[data-testid="secure-link-words"]');
     await expect(wordsEl).toBeVisible({ timeout: 5_000 });
     passphrase = ((await wordsEl.textContent()) ?? "").trim();
+    // Security parameter: 5 diceware words from the EFF list (~64 bits).
+    // A silent drop in word count weakens every generated passphrase.
     expect(passphrase.split(/\s+/).length).toBe(5);
 
     // Generate. With the fast KDF this completes quickly; the link then
@@ -118,9 +123,12 @@ test.describe.serial("Secure Link Portal", () => {
     });
     await generateBtn.dispatchEvent("click");
 
-    const linkEl = sheet.locator("code.link-block");
+    const linkEl = sheet.locator('[data-testid="secure-link-url"]');
     await expect(linkEl).toBeVisible({ timeout: CRYPTO_TIMEOUT });
     portalLink = ((await linkEl.textContent()) ?? "").trim();
+    // Link-format contract: 48 hex chars = the 24-byte channel id,
+    // 32 base64url chars = the 192-bit fragment seed that never leaves
+    // the URL fragment (servers never see fragments).
     expect(portalLink).toMatch(/\/portal\/[0-9a-f]{48}#[A-Za-z0-9_-]{32}/);
 
     // The registration payload carries the auth HASH and public key,
@@ -150,18 +158,8 @@ test.describe.serial("Secure Link Portal", () => {
     // "Reply to ..." is available because the client is now
     // portal-capable, and the detail payload has to be refetched to
     // carry the flag; without it the volunteer sends an ordinary reply
-    // and no client copy is written. Navigate away and back inside the
-    // app rather than reloading the page: the volunteer's keys live
-    // only in memory for the session, so a reload discards them and the
-    // app returns to a blocked state with nothing decrypted.
-    await volunteerPage.keyboard.press("Escape");
-    await volunteerPage.getByRole("tab", { name: "Overview" }).click();
-    await expect(volunteerPage).toHaveURL("/");
-    await volunteerPage.getByRole("tab", { name: "Tickets" }).click();
-    await openTicketByTitle(volunteerPage, TICKET_TITLE);
-    await expect(volunteerPage.locator('[role="log"]')).toBeVisible({
-      timeout: CRYPTO_TIMEOUT,
-    });
+    // and no client copy is written.
+    await reopenTicketByTitle(volunteerPage, TICKET_TITLE);
 
     const dialog = await openComposeActions(volunteerPage);
     await clickComposeAction(dialog, /reply to/i);
@@ -290,14 +288,7 @@ test.describe.serial("Secure Link Portal", () => {
     // Navigate away and back inside the app instead of reloading: a
     // reload drops the volunteer's in-memory keys and bricks the session
     // (same repair as the dual-copy test above).
-    await volunteerPage.keyboard.press("Escape");
-    await volunteerPage.getByRole("tab", { name: "Overview" }).click();
-    await expect(volunteerPage).toHaveURL("/");
-    await volunteerPage.getByRole("tab", { name: "Tickets" }).click();
-    await openTicketByTitle(volunteerPage, TICKET_TITLE);
-    await expect(volunteerPage.locator('[role="log"]')).toBeVisible({
-      timeout: CRYPTO_TIMEOUT,
-    });
+    await reopenTicketByTitle(volunteerPage, TICKET_TITLE);
 
     // The reply decrypts in the volunteer timeline (sealed-wrap path).
     await expect(volunteerPage.getByText(CLIENT_REPLY)).toBeVisible({
@@ -305,9 +296,11 @@ test.describe.serial("Secure Link Portal", () => {
     });
 
     // Convergence: the background rewrap clears key_generation and
-    // deletes the sealed wrap row.
-    await volunteerPage.waitForTimeout(3_000);
-    expect(countRows("portal_reply_key_wraps")).toBe(0);
+    // deletes the sealed wrap row. Poll instead of a fixed sleep (a
+    // flake source under CI load).
+    await expect
+      .poll(() => countRows("portal_reply_key_wraps"), { timeout: 15_000 })
+      .toBe(0);
     const pendingGenerations = queryDb(
       `SELECT count(*) FROM followups
        WHERE source = 'client' AND key_generation IS NOT NULL;`,
@@ -333,12 +326,14 @@ test.describe.serial("Secure Link Portal", () => {
 
     // Re-open the saved link rather than reloading: fragment custody
     // strips location.hash after parsing, so a bare reload lands on the
-    // missing-fragment state. Step through about:blank first, because
+    // missing-fragment state. Step through another path first, because
     // navigating from /portal/<id> to /portal/<id>#fragment differs only
     // in the hash and the browser treats it as a same-document
     // navigation, leaving the old session (and its stale message cache)
-    // alive.
-    await portalPage.goto("about:blank");
+    // alive. The intermediate is a real page rather than about:blank:
+    // firefox fails the about:blank hop with "interrupted by another
+    // navigation to about:blank".
+    await portalPage.goto("/intake");
     await portalPage.goto(portalLink);
     const gateInput = portalPage.getByLabel(/passphrase/i);
     await expect(gateInput).toBeVisible({ timeout: CRYPTO_TIMEOUT });

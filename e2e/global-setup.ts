@@ -62,6 +62,27 @@ export default async function globalSetup(): Promise<void> {
     `${SERVER_EXEC} tsx src/db/migrate.ts --all-schemas`,
   );
 
+  // Give the e2e org a client-facing name (org_config.name, plaintext per
+  // ADR-094) so branding assertions can verify the real data flow:
+  // org_config -> getPublicBranding -> client shell navbar. Idempotent.
+  console.log("[e2e] Setting e2e org display name...");
+  try {
+    const sql = [
+      "DO $fn$ DECLARE s TEXT; BEGIN",
+      `SELECT schema_name INTO s FROM orgs WHERE slug = '${E2E_ORG_SLUG}';`,
+      "IF s IS NOT NULL THEN",
+      "EXECUTE format('UPDATE %I.org_config SET name = ''E2E Test Org''', s);",
+      "END IF; END $fn$;",
+    ].join("\n");
+    execSync(`${COMPOSE} exec -T db psql -U care_y -d care_y`, {
+      input: sql,
+      stdio: ["pipe", "inherit", "inherit"],
+      cwd: process.cwd(),
+    });
+  } catch {
+    console.warn("[e2e] Could not set org display name (non-fatal)");
+  }
+
   // Delete ALL tickets. Same reasoning as the KB wipe below: tickets
   // created by specs (lifecycle, create, intake) accumulate across runs
   // because a surgical "non-seed ticket" discriminator cannot keep up
