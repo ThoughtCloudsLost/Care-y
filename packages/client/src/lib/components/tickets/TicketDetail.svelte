@@ -289,6 +289,10 @@
   }));
 
   // Share status query: resolves waiting/opened/expired for share_link bubbles.
+  // staleTime 0 (overriding the app's 30s default): the status flips when
+  // the client consumes the link, and a remount serving a cached "Waiting"
+  // shows the volunteer stale consumption state with nothing left to
+  // trigger a refetch.
   const portalRouter = trpc.clientPortal;
   const sharesQuery = createQuery(() => ({
     queryKey: ticketKeys.shares(ticketId),
@@ -297,6 +301,7 @@
       return portalRouter.listShares.query({ ticketId });
     },
     enabled: portalRouter !== undefined,
+    staleTime: 0,
   }));
 
   interface ShareRow {
