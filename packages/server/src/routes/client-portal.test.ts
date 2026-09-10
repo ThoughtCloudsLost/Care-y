@@ -2049,6 +2049,7 @@ describe("client-portal router", () => {
         };
       };
       rewrappedMessages: never[];
+      skippedMessageIds: never[];
     } {
       return {
         channelId: VALID_CHANNEL_ID,
@@ -2066,6 +2067,7 @@ describe("client-portal router", () => {
           },
         },
         rewrappedMessages: [],
+        skippedMessageIds: [],
       };
     }
 
@@ -2148,6 +2150,7 @@ describe("client-portal router", () => {
         };
       };
       rewrappedMessages: never[];
+      skippedMessageIds: never[];
     } {
       return {
         currentAuthToken: Buffer.alloc(32, 0xaa).toString("base64"),
@@ -2162,6 +2165,7 @@ describe("client-portal router", () => {
           },
         },
         rewrappedMessages: [],
+        skippedMessageIds: [],
       };
     }
 

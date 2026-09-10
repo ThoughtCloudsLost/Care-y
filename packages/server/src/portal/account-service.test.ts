@@ -42,7 +42,7 @@ import {
   type AccountServiceDeps,
   type RewrappedMessageInput,
 } from "./account-service.js";
-import { UsernameTakenError } from "./portal-errors.js";
+import { UsernameTakenError, StaleThreadError } from "./portal-errors.js";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -296,17 +296,9 @@ describe.skipIf(!process.env.DATABASE_URL)("AccountService", () => {
       const msgId1 = await insertPortalMessage(db, oldChannel.id, followup1);
       const msgId2 = await insertPortalMessage(db, oldChannel.id, followup2);
 
-      // Age the message the client will NOT re-encrypt: the stale guard
-      // aborts only when a non-re-encrypted row is NEWER than the newest
-      // re-encrypted one (a volunteer reply racing the upgrade). An older
-      // skipped row is the normal delete-the-rest path.
-      await db
-        .updateTable("portal_messages")
-        .set({ created_at: new Date(Date.now() - 60_000) })
-        .where("id", "=", msgId2)
-        .execute();
-
-      // Re-encrypt only the first message
+      // Re-encrypt only the first message; the second is declared as
+      // skipped (undecryptable on the client) and gets deleted with the
+      // old channel.
       const newCopy = {
         ephemeralPoint: crypto.randomBytes(32),
         nonce: crypto.randomBytes(24),
@@ -318,7 +310,9 @@ describe.skipIf(!process.env.DATABASE_URL)("AccountService", () => {
 
       const accountReg = makeAccountReg();
 
-      await upgradeFromSecureLink(db, deps, oldChannel, accountReg, rewrapped);
+      await upgradeFromSecureLink(db, deps, oldChannel, accountReg, rewrapped, [
+        msgId2,
+      ]);
 
       // Old channel is revoked
       const oldRow = await db
@@ -375,6 +369,50 @@ describe.skipIf(!process.env.DATABASE_URL)("AccountService", () => {
       expect(client.communication_tier).toBe("account");
     });
 
+    it("rejects with StaleThreadError when a row is in neither set", async () => {
+      // A message that arrived after the client snapshotted its thread
+      // (volunteer dual-copy racing the upgrade) appears in neither the
+      // rewrapped nor the skipped list; the coverage guard must abort
+      // instead of deleting it.
+      const fixture = await createTestTicketFixture(db);
+      const clientId = fixture.clientId;
+      const rawAuth = crypto.randomBytes(32);
+      const authHash = Buffer.from(hashChannelAuth(rawAuth));
+      const channelReg = makeChannelReg({ authHash });
+      await createChannel(db, clientId, channelReg);
+
+      const oldChannel = await db
+        .selectFrom("portal_channels")
+        .selectAll()
+        .where("client_id", "=", clientId)
+        .where("status", "=", "active")
+        .executeTakeFirstOrThrow();
+
+      const followup = await insertFollowup(db, fixture.ticketId);
+      await insertPortalMessage(db, oldChannel.id, followup);
+
+      const accountReg = makeAccountReg();
+
+      await expect(
+        upgradeFromSecureLink(db, deps, oldChannel, accountReg, [], []),
+      ).rejects.toThrow(StaleThreadError);
+
+      // Nothing changed: channel still active, message still present
+      const stillActive = await db
+        .selectFrom("portal_channels")
+        .select("status")
+        .where("id", "=", oldChannel.id)
+        .executeTakeFirstOrThrow();
+      expect(stillActive.status).toBe("active");
+
+      const remaining = await db
+        .selectFrom("portal_messages")
+        .select("id")
+        .where("channel_id", "=", oldChannel.id)
+        .execute();
+      expect(remaining).toHaveLength(1);
+    });
+
     it("fragment-auth resolve of old channel fails after upgrade", async () => {
       const clientId = await insertClient(db);
       const rawAuth = crypto.randomBytes(32);
@@ -390,7 +428,7 @@ describe.skipIf(!process.env.DATABASE_URL)("AccountService", () => {
         .executeTakeFirstOrThrow();
 
       const accountReg = makeAccountReg();
-      await upgradeFromSecureLink(db, deps, oldChannel, accountReg, []);
+      await upgradeFromSecureLink(db, deps, oldChannel, accountReg, [], []);
 
       // Import resolveAuthedChannel to verify the old channel is inaccessible
       const { resolveAuthedChannel } = await import("./channel-service.js");
@@ -603,6 +641,7 @@ describe.skipIf(!process.env.DATABASE_URL)("AccountService", () => {
           authHash: newAuthHash,
           keyCheck: newKeyCheck,
           rewrappedMessages: [],
+          skippedMessageIds: [],
         },
       );
       expect(changed).toBe(true);
@@ -678,6 +717,7 @@ describe.skipIf(!process.env.DATABASE_URL)("AccountService", () => {
             ciphertext: crypto.randomBytes(48),
           },
           rewrappedMessages: [],
+          skippedMessageIds: [],
         },
       );
       expect(changed).toBe(false);
@@ -689,6 +729,82 @@ describe.skipIf(!process.env.DATABASE_URL)("AccountService", () => {
         .where("id", "=", reg.accountId)
         .executeTakeFirstOrThrow();
       expect(Buffer.compare(account.salt, reg.salt)).toBe(0);
+    });
+
+    it("enforces coverage: undeclared row rejects, declared skip succeeds untouched", async () => {
+      const fixture = await createTestTicketFixture(db);
+      const rawAuthToken = crypto.randomBytes(32);
+      const authHash = Buffer.from(hashChannelAuth(rawAuthToken));
+      const reg = makeAccountReg({ authHash });
+
+      await db.transaction().execute(async (trx) => {
+        await createAccount(trx, deps, fixture.clientId, reg);
+      });
+
+      const loginResult = await login(db, reg.accountId, rawAuthToken);
+      const resolved = await resolveAccountSession(
+        db,
+        loginResult!.sessionToken,
+      );
+      const currentAuthTokenHash = Buffer.from(hashChannelAuth(rawAuthToken));
+
+      const followup = await insertFollowup(db, fixture.ticketId);
+      const msgId = await insertPortalMessage(
+        db,
+        resolved!.channel.id,
+        followup,
+      );
+
+      const newInput = () => ({
+        salt: crypto.randomBytes(16),
+        publicKey: crypto.randomBytes(32),
+        authHash: crypto.randomBytes(32),
+        keyCheck: {
+          ephemeralPoint: crypto.randomBytes(32),
+          nonce: crypto.randomBytes(24),
+          ciphertext: crypto.randomBytes(48),
+        },
+      });
+
+      // Row in neither set: the coverage guard aborts
+      await expect(
+        changePassword(
+          db,
+          resolved!.account,
+          resolved!.channel,
+          currentAuthTokenHash,
+          resolved!.tokenHash,
+          { ...newInput(), rewrappedMessages: [], skippedMessageIds: [] },
+        ),
+      ).rejects.toThrow(StaleThreadError);
+
+      const before = await db
+        .selectFrom("portal_messages")
+        .select(["ephemeral_point", "nonce", "ciphertext"])
+        .where("id", "=", msgId)
+        .executeTakeFirstOrThrow();
+
+      // Declared as skipped: succeeds, row stays sealed to the old key
+      const changed = await changePassword(
+        db,
+        resolved!.account,
+        resolved!.channel,
+        currentAuthTokenHash,
+        resolved!.tokenHash,
+        { ...newInput(), rewrappedMessages: [], skippedMessageIds: [msgId] },
+      );
+      expect(changed).toBe(true);
+
+      const after = await db
+        .selectFrom("portal_messages")
+        .select(["ephemeral_point", "nonce", "ciphertext"])
+        .where("id", "=", msgId)
+        .executeTakeFirstOrThrow();
+      expect(
+        Buffer.compare(after.ephemeral_point, before.ephemeral_point),
+      ).toBe(0);
+      expect(Buffer.compare(after.nonce, before.nonce)).toBe(0);
+      expect(Buffer.compare(after.ciphertext, before.ciphertext)).toBe(0);
     });
   });
 

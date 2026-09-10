@@ -3046,6 +3046,7 @@
   "portal_passphrase_success_title": "Contraseña agregada",
   "portal_passphrase_success_body": "Tu enlace ahora también necesita la contraseña que acabas de establecer. Cualquier persona que solo tenga el enlace no podrá leer tus mensajes.",
   "portal_passphrase_success_note": "Si pierdes la contraseña, pide a tu contacto de apoyo un nuevo enlace.",
+  "portal_reseal_skipped_note": "Algunos mensajes anteriores no se pudieron abrir en este dispositivo, así que quedaron fuera de este cambio. Todo lo que puedes leer aquí sigue igual.",
   "portal_passphrase_success_close": "Listo",
   "portal_passphrase_error_generic": "Algo salió mal. Intenta de nuevo.",
   "portal_passphrase_error_already_set": "Ya se ha agregado una contraseña a este enlace.",

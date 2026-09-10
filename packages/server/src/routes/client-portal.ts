@@ -892,6 +892,7 @@ export function createClientPortalRouter(deps: ClientPortalRouterDeps) {
             channel,
             reg,
             rewrapped,
+            input.skippedMessageIds,
           );
         } catch (err: unknown) {
           if (err instanceof UsernameTakenError) {
@@ -943,6 +944,7 @@ export function createClientPortalRouter(deps: ClientPortalRouterDeps) {
               ),
             },
             rewrappedMessages: decodeRewrappedMessages(input.rewrappedMessages),
+            skippedMessageIds: input.skippedMessageIds,
           };
 
           let changed: boolean;
@@ -1151,6 +1153,7 @@ export function createClientPortalRouter(deps: ClientPortalRouterDeps) {
               ciphertext: Buffer.from(input.keyCheck.ciphertext, "base64"),
             },
             resealedMessages,
+            skippedMessageIds: input.skippedMessageIds,
           });
         } catch (err: unknown) {
           if (err instanceof PassphraseAlreadySetError) {

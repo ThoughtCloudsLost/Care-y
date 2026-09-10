@@ -41,7 +41,10 @@
   import { requireRouter } from "$lib/errors.js";
   import {
     buildAccountRegistration,
+    collectDecryptedMessages,
     rewrapMessages,
+    type CollectedMessages,
+    type SealedMessageWire,
   } from "$lib/portal/account-crypto.js";
   import { buildLoginCallbacks } from "$lib/auth/crypto-callbacks.js";
   import type { LoginPhaseId } from "$lib/components/onboarding/login-phase.js";
@@ -572,9 +575,11 @@
 
       // 3. Re-encrypt existing messages to the new key. Decrypt each
       //    message through the current session's bridge, then re-encrypt
-      //    to the new public key using rewrapMessages (main-thread, mint path).
-      const decryptedMsgs = await collectDecryptedMessages();
-      const rewrapped = rewrapMessages(decryptedMsgs, newKeypair.clientPublic);
+      //    to the new public key using rewrapMessages (main-thread, mint
+      //    path). Undecryptable messages are declared as skipped for the
+      //    server's coverage guard.
+      const { decrypted, skippedIds } = await collectThreadMessages();
+      const rewrapped = rewrapMessages(decrypted, newKeypair.clientPublic);
 
       // 4. Submit change-password mutation
       await portalRouter.accountChangePassword.mutate({
@@ -586,6 +591,7 @@
           keyCheck: newPayload.keyCheck,
         },
         rewrappedMessages: rewrapped,
+        skippedMessageIds: [...skippedIds],
       });
 
       // Zero the old session, install a new bridge-backed session
@@ -639,6 +645,9 @@
       });
 
       announceToLiveRegion("polite", m.account_change_success());
+      if (skippedIds.length > 0) {
+        announceToLiveRegion("polite", m.portal_reseal_skipped_note());
+      }
     } catch {
       changePasswordError = m.account_login_failed();
     } finally {
@@ -649,30 +658,20 @@
 
   /**
    * Collect decrypted messages from the thread for re-encryption.
-   * Decrypts each message through the current session's bridge.
-   * Operates on ciphertext from the server, never re-fetches.
+   * Adapts the messages query rows (which include id-less system rows)
+   * to the shared collector; decrypts through the session's bridge and
+   * operates on ciphertext from the server, never re-fetches.
    */
-  async function collectDecryptedMessages(): Promise<
-    readonly { id: string; text: string }[]
-  > {
-    const msgs = messagesQuery.data?.messages ?? [];
-    if (!session) return [];
+  async function collectThreadMessages(): Promise<CollectedMessages> {
+    const currentSession = session;
+    if (!currentSession) return { decrypted: [], skippedIds: [] };
 
-    const result: { id: string; text: string }[] = [];
-    for (const msg of msgs) {
-      if (!("id" in msg) || typeof msg.id !== "string") continue;
-      try {
-        const text = await session.decryptMessage(
-          msg.ephemeralPoint,
-          msg.nonce,
-          msg.ciphertext,
-        );
-        result.push({ id: msg.id, text });
-      } catch {
-        // Skip messages that fail to decrypt
-      }
-    }
-    return result;
+    const allRows = messagesQuery.data?.messages ?? [];
+    const msgs = allRows.filter(
+      (msg): msg is (typeof allRows)[number] & SealedMessageWire =>
+        "id" in msg && typeof msg.id === "string",
+    );
+    return collectDecryptedMessages(msgs, currentSession);
   }
 
   // ---------------------------------------------------------------------------

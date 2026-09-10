@@ -1032,6 +1032,7 @@ describe.skipIf(!process.env.DATABASE_URL)("PortalChannelService", () => {
         clientPublic: newPublic,
         keyCheck: newKeyCheck,
         resealedMessages,
+        skippedMessageIds: [],
       });
 
       // Verify channel columns swapped
@@ -1101,6 +1102,7 @@ describe.skipIf(!process.env.DATABASE_URL)("PortalChannelService", () => {
             ciphertext: crypto.randomBytes(48),
           },
           resealedMessages: [],
+          skippedMessageIds: [],
         }),
       ).rejects.toThrow(PassphraseAlreadySetError);
     });
@@ -1131,6 +1133,7 @@ describe.skipIf(!process.env.DATABASE_URL)("PortalChannelService", () => {
             ciphertext: crypto.randomBytes(48),
           },
           resealedMessages: [], // mismatch: 0 vs 1
+          skippedMessageIds: [],
         }),
       ).rejects.toThrow(PassphraseCountMismatchError);
 
@@ -1143,6 +1146,165 @@ describe.skipIf(!process.env.DATABASE_URL)("PortalChannelService", () => {
 
       expect(unchanged.has_passphrase).toBe(false);
       expect(Buffer.compare(unchanged.client_public, reg.clientPublic)).toBe(0);
+    });
+
+    it("succeeds when an undecryptable message is declared skipped, leaving its triple untouched", async () => {
+      const clientId = await insertClient(db);
+      const reg = makeRegistration({ hasPassphrase: false });
+      await createChannel(db, clientId, reg);
+
+      const channel = await db
+        .selectFrom("portal_channels")
+        .selectAll()
+        .where("client_id", "=", clientId)
+        .where("status", "=", "active")
+        .executeTakeFirstOrThrow();
+
+      const fixture = await createTestTicketFixture(db);
+      const fid1 = await insertFollowup(db, fixture.ticketId);
+      const fid2 = await insertFollowup(db, fixture.ticketId);
+      const resealedId = await insertPortalMessage(db, channel.id, fid1);
+      const skippedId = await insertPortalMessage(db, channel.id, fid2);
+
+      const before = await db
+        .selectFrom("portal_messages")
+        .select(["ephemeral_point", "nonce", "ciphertext"])
+        .where("id", "=", skippedId)
+        .executeTakeFirstOrThrow();
+
+      await addPassphrase(db, channel, {
+        clientPublic: crypto.randomBytes(32),
+        keyCheck: {
+          ephemeralPoint: crypto.randomBytes(32),
+          nonce: crypto.randomBytes(24),
+          ciphertext: crypto.randomBytes(48),
+        },
+        resealedMessages: [
+          {
+            id: resealedId,
+            copy: {
+              ephemeralPoint: Buffer.alloc(32, 0xaa),
+              nonce: Buffer.alloc(24, 0xbb),
+              ciphertext: Buffer.alloc(48, 0xcc),
+            },
+          },
+        ],
+        skippedMessageIds: [skippedId],
+      });
+
+      const updated = await db
+        .selectFrom("portal_channels")
+        .select("has_passphrase")
+        .where("id", "=", channel.id)
+        .executeTakeFirstOrThrow();
+      expect(updated.has_passphrase).toBe(true);
+
+      // Resealed row swapped
+      const resealed = await db
+        .selectFrom("portal_messages")
+        .select(["ephemeral_point"])
+        .where("id", "=", resealedId)
+        .executeTakeFirstOrThrow();
+      expect(
+        Buffer.compare(resealed.ephemeral_point, Buffer.alloc(32, 0xaa)),
+      ).toBe(0);
+
+      // Skipped row untouched (still sealed to the superseded key)
+      const skipped = await db
+        .selectFrom("portal_messages")
+        .select(["ephemeral_point", "nonce", "ciphertext"])
+        .where("id", "=", skippedId)
+        .executeTakeFirstOrThrow();
+      expect(
+        Buffer.compare(skipped.ephemeral_point, before.ephemeral_point),
+      ).toBe(0);
+      expect(Buffer.compare(skipped.nonce, before.nonce)).toBe(0);
+      expect(Buffer.compare(skipped.ciphertext, before.ciphertext)).toBe(0);
+    });
+
+    it("rejects when a message appears in both the resealed and skipped sets", async () => {
+      const clientId = await insertClient(db);
+      const reg = makeRegistration({ hasPassphrase: false });
+      await createChannel(db, clientId, reg);
+
+      const channel = await db
+        .selectFrom("portal_channels")
+        .selectAll()
+        .where("client_id", "=", clientId)
+        .where("status", "=", "active")
+        .executeTakeFirstOrThrow();
+
+      const fixture = await createTestTicketFixture(db);
+      const fid1 = await insertFollowup(db, fixture.ticketId);
+      const fid2 = await insertFollowup(db, fixture.ticketId);
+      const msgId1 = await insertPortalMessage(db, channel.id, fid1);
+      // Second row exists so the size check alone cannot catch the overlap
+      await insertPortalMessage(db, channel.id, fid2);
+
+      await expect(
+        addPassphrase(db, channel, {
+          clientPublic: crypto.randomBytes(32),
+          keyCheck: {
+            ephemeralPoint: crypto.randomBytes(32),
+            nonce: crypto.randomBytes(24),
+            ciphertext: crypto.randomBytes(48),
+          },
+          resealedMessages: [
+            {
+              id: msgId1,
+              copy: {
+                ephemeralPoint: Buffer.alloc(32, 0xaa),
+                nonce: Buffer.alloc(24, 0xbb),
+                ciphertext: Buffer.alloc(48, 0xcc),
+              },
+            },
+          ],
+          skippedMessageIds: [msgId1],
+        }),
+      ).rejects.toThrow(PassphraseCountMismatchError);
+    });
+
+    it("rejects when a skipped ID belongs to no row of the channel", async () => {
+      const clientId = await insertClient(db);
+      const reg = makeRegistration({ hasPassphrase: false });
+      await createChannel(db, clientId, reg);
+
+      const channel = await db
+        .selectFrom("portal_channels")
+        .selectAll()
+        .where("client_id", "=", clientId)
+        .where("status", "=", "active")
+        .executeTakeFirstOrThrow();
+
+      // One real row, declared resealed; the skip is a stray UUID, so a
+      // bare count comparison (1 + 1 = 2 vs 1) fails and a coverage walk
+      // never sees the stray. Either way the guard must reject.
+      const fixture = await createTestTicketFixture(db);
+      const fid = await insertFollowup(db, fixture.ticketId);
+      const msgId = await insertPortalMessage(db, channel.id, fid);
+      const strayId = crypto.randomUUID() as PortalMessageId;
+
+      await expect(
+        addPassphrase(db, channel, {
+          clientPublic: crypto.randomBytes(32),
+          keyCheck: {
+            ephemeralPoint: crypto.randomBytes(32),
+            nonce: crypto.randomBytes(24),
+            ciphertext: crypto.randomBytes(48),
+          },
+          resealedMessages: [
+            {
+              id: msgId,
+              copy: {
+                ephemeralPoint: Buffer.alloc(32, 0xaa),
+                nonce: Buffer.alloc(24, 0xbb),
+                ciphertext: Buffer.alloc(48, 0xcc),
+              },
+            },
+          ],
+          skippedMessageIds: [strayId],
+        }),
+      ).rejects.toThrow(PassphraseCountMismatchError);
     });
 
     it("second call rejects with PassphraseAlreadySetError", async () => {
@@ -1166,6 +1328,7 @@ describe.skipIf(!process.env.DATABASE_URL)("PortalChannelService", () => {
           ciphertext: crypto.randomBytes(48),
         },
         resealedMessages: [],
+        skippedMessageIds: [],
       });
 
       // Second call rejects (has_passphrase is now true on the DB row,
@@ -1180,6 +1343,7 @@ describe.skipIf(!process.env.DATABASE_URL)("PortalChannelService", () => {
             ciphertext: crypto.randomBytes(48),
           },
           resealedMessages: [],
+          skippedMessageIds: [],
         }),
       ).rejects.toThrow(PassphraseAlreadySetError);
     });
@@ -1260,6 +1424,7 @@ describe.skipIf(!process.env.DATABASE_URL)("PortalChannelService", () => {
           ciphertext: Buffer.from(newKeyCheck.ciphertext),
         },
         resealedMessages: [],
+        skippedMessageIds: [],
       });
 
       // Read the stored key check

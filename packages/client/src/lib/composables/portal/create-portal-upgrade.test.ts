@@ -14,6 +14,7 @@ describe("createPortalUpgrade", () => {
     expect(upgrade.pending).toBe(false);
     expect(upgrade.error).toBe("");
     expect(upgrade.success).toBe(false);
+    expect(upgrade.skippedMessages).toBe(false);
     expect(upgrade.username).toBe("");
   });
 

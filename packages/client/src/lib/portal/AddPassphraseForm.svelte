@@ -20,6 +20,9 @@
     pending: boolean;
     error: string;
     success: boolean;
+    /** Some messages could not be decrypted and were left out of the
+     *  re-seal; the success state mentions it. */
+    skippedNotice?: boolean;
     onsubmit: (passphrase: string) => void;
   }
 
@@ -29,6 +32,7 @@
     pending,
     error,
     success,
+    skippedNotice = false,
     onsubmit,
   }: AddPassphraseFormProps = $props();
 
@@ -102,6 +106,14 @@
       >
         {m.portal_passphrase_success_note()}
       </p>
+      {#if skippedNotice}
+        <p
+          class="form-body form-body-secondary"
+          data-testid="passphrase-success-skipped"
+        >
+          {m.portal_reseal_skipped_note()}
+        </p>
+      {/if}
       <div class="form-actions">
         <Button large onclick={onclose} data-testid="passphrase-success-close">
           {m.portal_passphrase_success_close()}

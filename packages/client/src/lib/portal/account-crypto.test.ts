@@ -32,7 +32,12 @@ import {
   localOprfEvaluate,
   decryptTripleB64,
 } from "./test-helpers/crypto.js";
-import { buildAccountRegistration, rewrapMessages } from "./account-crypto.js";
+import {
+  buildAccountRegistration,
+  collectDecryptedMessages,
+  rewrapMessages,
+  type DecryptHandle,
+} from "./account-crypto.js";
 import { evaluateWithPowRetry } from "$lib/auth/crypto-helpers.js";
 import type { LoginCryptoCallbacks } from "$lib/auth/login-crypto.js";
 
@@ -200,5 +205,45 @@ describe("rewrapMessages", () => {
     const { publicPoint } = makeRistrettoKeypair();
     const result = rewrapMessages([], publicPoint);
     expect(result).toHaveLength(0);
+  });
+});
+
+describe("collectDecryptedMessages", () => {
+  const wire = (
+    id: string,
+  ): {
+    id: string;
+    ephemeralPoint: string;
+    nonce: string;
+    ciphertext: string;
+  } => ({ id, ephemeralPoint: "ep", nonce: "nn", ciphertext: "ct" });
+
+  it("splits messages into decrypted texts and skipped IDs", async () => {
+    const session: DecryptHandle = {
+      decryptMessage: vi
+        .fn()
+        .mockResolvedValueOnce("text a")
+        .mockRejectedValueOnce(new Error("decrypt fail"))
+        .mockResolvedValueOnce("text c"),
+    };
+
+    const result = await collectDecryptedMessages(
+      [wire("a"), wire("b"), wire("c")],
+      session,
+    );
+
+    expect(result.decrypted).toEqual([
+      { id: "a", text: "text a" },
+      { id: "c", text: "text c" },
+    ]);
+    expect(result.skippedIds).toEqual(["b"]);
+  });
+
+  it("returns empty sets for an empty thread", async () => {
+    const session: DecryptHandle = { decryptMessage: vi.fn() };
+    const result = await collectDecryptedMessages([], session);
+    expect(result.decrypted).toHaveLength(0);
+    expect(result.skippedIds).toHaveLength(0);
+    expect(session.decryptMessage).not.toHaveBeenCalled();
   });
 });

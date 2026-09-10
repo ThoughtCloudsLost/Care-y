@@ -19,6 +19,7 @@ import {
   PassphraseAlreadySetError,
   PassphraseCountMismatchError,
 } from "./portal-errors.js";
+import { hasExactMessageCoverage } from "./message-coverage.js";
 import { PORTAL_SURFACE_KINDS } from "@care-y/shared";
 import type { ClientId, ChannelSecret, PortalMessageId } from "@care-y/shared";
 
@@ -404,6 +405,11 @@ export interface AddPassphraseInput {
   readonly clientPublic: Buffer;
   readonly keyCheck: EciesTripleBuffers;
   readonly resealedMessages: readonly ResealedMessageInput[];
+  /** Messages the client could not decrypt and declares as left out of
+   *  the re-seal. They stay sealed to the superseded key (they were
+   *  already unreadable to the client), but declaring them keeps the
+   *  coverage check exact. */
+  readonly skippedMessageIds: readonly PortalMessageId[];
 }
 
 /**
@@ -414,9 +420,11 @@ export interface AddPassphraseInput {
  *
  * Rejects when:
  *   - has_passphrase is already true (PassphraseAlreadySetError)
- *   - resealedMessages count does not match the channel's portal_messages
- *     count at transaction time (PassphraseCountMismatchError, meaning a
- *     concurrent inbound copy landed; the client refetches and retries)
+ *   - resealedMessages + skippedMessageIds do not exactly cover the
+ *     channel's portal_messages rows at transaction time
+ *     (PassphraseCountMismatchError: a concurrent inbound copy landed
+ *     in neither list, or the ID sets overlap or contain strays; the
+ *     client refetches and retries)
  */
 export async function addPassphrase(
   db: Kysely<TenantDatabase>,
@@ -440,14 +448,21 @@ export async function addPassphrase(
       throw new PassphraseAlreadySetError();
     }
 
-    // Count portal_messages for this channel inside the transaction
-    const countResult = await trx
+    // Coverage check inside the transaction: resealed + skipped must
+    // exactly partition the channel's current rows, so a concurrent
+    // inbound copy (in neither set) aborts rather than being orphaned.
+    const rows = await trx
       .selectFrom("portal_messages")
-      .select((eb) => eb.fn.countAll<number>().as("cnt"))
+      .select("id")
       .where("channel_id", "=", channel.id)
-      .executeTakeFirstOrThrow();
+      .execute();
 
-    if (countResult.cnt !== input.resealedMessages.length) {
+    const covered = hasExactMessageCoverage(
+      rows.map((row) => row.id),
+      input.resealedMessages.map((msg) => msg.id),
+      input.skippedMessageIds,
+    );
+    if (!covered) {
       throw new PassphraseCountMismatchError();
     }
 

@@ -442,11 +442,22 @@ export type RewrappedMessage = z.infer<typeof rewrappedMessageSchema>;
 export const rewrappedMessagesSchema = z.array(rewrappedMessageSchema).max(500);
 export type RewrappedMessages = z.infer<typeof rewrappedMessagesSchema>;
 
+/**
+ * Messages the client could not decrypt and therefore could not re-seal.
+ * Declared explicitly on every re-keying procedure so the server can
+ * verify that rewrapped + skipped exactly covers the channel's rows: a
+ * message arriving mid-operation lands in neither list and trips the
+ * coverage guard instead of being silently orphaned or deleted.
+ */
+export const skippedMessageIdsSchema = z.array(portalMessageIdSchema).max(500);
+export type SkippedMessageIds = z.infer<typeof skippedMessageIdsSchema>;
+
 export const accountUpgradeInputSchema = z.object({
   channelId: portalChannelIdSchema,
   auth: portalAuthSchema,
   account: accountRegistrationSchema,
   rewrappedMessages: rewrappedMessagesSchema,
+  skippedMessageIds: skippedMessageIdsSchema,
 });
 export type AccountUpgradeInput = z.infer<typeof accountUpgradeInputSchema>;
 export type AccountUpgradeWireInput = z.input<typeof accountUpgradeInputSchema>;
@@ -455,6 +466,7 @@ export const accountChangePasswordInputSchema = z.object({
   currentAuthToken: base64Bytes(32, "currentAuthToken"),
   account: accountRegistrationSchema.omit({ accountId: true, username: true }),
   rewrappedMessages: rewrappedMessagesSchema,
+  skippedMessageIds: skippedMessageIdsSchema,
 });
 export type AccountChangePasswordInput = z.infer<
   typeof accountChangePasswordInputSchema
@@ -596,5 +608,6 @@ export const addPassphraseInputSchema = z.object({
   clientPublic: base64Bytes(32, "clientPublic"),
   keyCheck: eciesTripleSchema,
   resealedMessages: rewrappedMessagesSchema,
+  skippedMessageIds: skippedMessageIdsSchema,
 });
 export type AddPassphraseInput = z.infer<typeof addPassphraseInputSchema>;

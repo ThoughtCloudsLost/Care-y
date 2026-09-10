@@ -77,6 +77,7 @@ describe("buildAddPassphrasePayload", () => {
     // and each copy must open under the new private key.
     const ids = payload.resealedMessages.map((m) => m.id);
     expect(ids).toEqual(["msg-0", "msg-1", "msg-2", "msg-3"]);
+    expect(payload.skippedMessageIds).toEqual([]);
     for (const resealed of payload.resealedMessages) {
       expect(decryptTripleB64(resealed.copy, keypair.privateScalar)).toBe(
         "decrypted text",
@@ -84,7 +85,7 @@ describe("buildAddPassphrasePayload", () => {
     }
   });
 
-  it("skips messages that fail to decrypt", async () => {
+  it("declares messages that fail to decrypt as skipped IDs", async () => {
     const messages = makeMessages(3);
     const session: DecryptHandle = {
       decryptMessage: vi
@@ -100,10 +101,13 @@ describe("buildAddPassphrasePayload", () => {
       session,
     );
 
-    // Only 2 out of 3 successfully decrypted
+    // Only 2 out of 3 successfully decrypted; the failed one is
+    // declared rather than silently dropped, so the server's coverage
+    // check still accounts for every row.
     expect(payload.resealedMessages).toHaveLength(2);
     expect(payload.resealedMessages[0]?.id).toBe("msg-0");
     expect(payload.resealedMessages[1]?.id).toBe("msg-2");
+    expect(payload.skippedMessageIds).toEqual(["msg-1"]);
   });
 
   it("returns empty resealedMessages when no messages exist", async () => {
@@ -117,5 +121,6 @@ describe("buildAddPassphrasePayload", () => {
     );
 
     expect(payload.resealedMessages).toHaveLength(0);
+    expect(payload.skippedMessageIds).toHaveLength(0);
   });
 });

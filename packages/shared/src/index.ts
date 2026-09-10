@@ -628,6 +628,8 @@ export {
   accountLoginInputSchema,
   rewrappedMessageSchema,
   rewrappedMessagesSchema,
+  skippedMessageIdsSchema,
+  type SkippedMessageIds,
   accountUpgradeInputSchema,
   accountChangePasswordInputSchema,
   type CreateShareInput,

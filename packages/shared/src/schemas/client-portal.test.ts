@@ -991,6 +991,7 @@ describe("accountUpgradeInputSchema", () => {
         },
       },
       rewrappedMessages: [],
+      skippedMessageIds: [],
     };
   }
 
@@ -1009,6 +1010,20 @@ describe("accountUpgradeInputSchema", () => {
     delete input2.auth;
     expect(accountUpgradeInputSchema.safeParse(input2).success).toBe(false);
   });
+
+  it("requires skippedMessageIds and rejects non-UUID entries", () => {
+    const missing = validUpgrade();
+    delete missing.skippedMessageIds;
+    expect(accountUpgradeInputSchema.safeParse(missing).success).toBe(false);
+
+    const bad = validUpgrade();
+    bad.skippedMessageIds = ["not-a-uuid"];
+    expect(accountUpgradeInputSchema.safeParse(bad).success).toBe(false);
+
+    const good = validUpgrade();
+    good.skippedMessageIds = [crypto.randomUUID()];
+    expect(accountUpgradeInputSchema.safeParse(good).success).toBe(true);
+  });
 });
 
 describe("accountChangePasswordInputSchema", () => {
@@ -1026,6 +1041,7 @@ describe("accountChangePasswordInputSchema", () => {
         },
       },
       rewrappedMessages: [],
+      skippedMessageIds: [],
     };
   }
 

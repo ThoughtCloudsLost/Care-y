@@ -69,6 +69,29 @@ export interface RewrappedMessageWire {
   };
 }
 
+/** Minimal sealed-message wire shape every re-keying flow decrypts. */
+export interface SealedMessageWire {
+  readonly id: string;
+  readonly ephemeralPoint: string;
+  readonly nonce: string;
+  readonly ciphertext: string;
+}
+
+/** Session handle for decrypting existing portal messages. */
+export interface DecryptHandle {
+  decryptMessage(
+    ephemeralPoint: string,
+    nonce: string,
+    ciphertext: string,
+  ): Promise<string>;
+}
+
+/** Result of collectDecryptedMessages: plaintexts plus declared skips. */
+export interface CollectedMessages {
+  readonly decrypted: readonly { id: string; text: string }[];
+  readonly skippedIds: readonly string[];
+}
+
 // ---------------------------------------------------------------------------
 // buildAccountRegistration
 // ---------------------------------------------------------------------------
@@ -164,6 +187,40 @@ export async function buildAccountRegistration(
   } finally {
     zeroAll(stretched, oprfOutput, authToken);
   }
+}
+
+// ---------------------------------------------------------------------------
+// collectDecryptedMessages
+// ---------------------------------------------------------------------------
+
+/**
+ * Decrypt all portal messages through the session, shared by every
+ * re-keying flow (add-a-password, account upgrade, change password).
+ *
+ * Messages that fail to decrypt (corrupt, or sealed to a key this
+ * session does not hold) are returned as skipped IDs rather than
+ * silently dropped, so callers can declare them to the server's
+ * coverage guard and surface a notice to the client.
+ */
+export async function collectDecryptedMessages(
+  serverMessages: readonly SealedMessageWire[],
+  session: DecryptHandle,
+): Promise<CollectedMessages> {
+  const decrypted: { id: string; text: string }[] = [];
+  const skippedIds: string[] = [];
+  for (const msg of serverMessages) {
+    try {
+      const text = await session.decryptMessage(
+        msg.ephemeralPoint,
+        msg.nonce,
+        msg.ciphertext,
+      );
+      decrypted.push({ id: msg.id, text });
+    } catch {
+      skippedIds.push(msg.id);
+    }
+  }
+  return { decrypted, skippedIds };
 }
 
 // ---------------------------------------------------------------------------

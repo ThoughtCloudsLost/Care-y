@@ -659,6 +659,7 @@
   let passphrasePending = $state(false);
   let passphraseError = $state("");
   let passphraseSuccess = $state(false);
+  let passphraseSkippedMessages = $state(false);
 
   /**
    * Fetch the sealed contact envelope from the server. Called on card open.
@@ -817,9 +818,11 @@
           // Zod-derived input types are mutable; the payload is readonly,
           // so this copies rather than casting the readonly away.
           resealedMessages: [...payload.resealedMessages],
+          skippedMessageIds: [...payload.skippedMessageIds],
         });
 
         passphraseSuccess = true;
+        passphraseSkippedMessages = payload.skippedMessageIds.length > 0;
 
         // Refresh bootstrap so upgradeOptions recomputes and the drawer
         // no longer shows the add-passphrase entry.
@@ -1093,6 +1096,11 @@
       <Block>
         <BlockTitle>{m.account_upgrade_success_title()}</BlockTitle>
         <p class="portal-body-text">{m.account_upgrade_success_body()}</p>
+        {#if upgrade.skippedMessages}
+          <p class="portal-body-text" data-testid="upgrade-skipped-note">
+            {m.portal_reseal_skipped_note()}
+          </p>
+        {/if}
         <p class="portal-body-text upgrade-username">
           {m.account_login_username()}: {upgrade.username}
         </p>
@@ -1205,6 +1213,7 @@
           passphraseFormOpen = false;
           if (passphraseSuccess) {
             passphraseSuccess = false;
+            passphraseSkippedMessages = false;
             passphraseError = "";
           }
         }
@@ -1212,6 +1221,7 @@
       pending={passphrasePending}
       error={passphraseError}
       success={passphraseSuccess}
+      skippedNotice={passphraseSkippedMessages}
       onsubmit={handlePassphraseFormSubmit}
     />
 

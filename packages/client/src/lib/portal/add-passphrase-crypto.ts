@@ -22,7 +22,14 @@ import {
   toRistrettoPoint,
   type EciesOutput,
 } from "@care-y/crypto";
-import { rewrapMessages, type RewrappedMessageWire } from "./account-crypto.js";
+import {
+  collectDecryptedMessages,
+  rewrapMessages,
+  type DecryptHandle,
+  type RewrappedMessageWire,
+} from "./account-crypto.js";
+
+export type { DecryptHandle } from "./account-crypto.js";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -37,6 +44,9 @@ export interface AddPassphrasePayload {
     readonly ciphertext: string;
   };
   readonly resealedMessages: readonly RewrappedMessageWire[];
+  /** IDs of messages that failed to decrypt and were left out of the
+   *  re-seal. Sent to the server so coverage stays verifiable. */
+  readonly skippedMessageIds: readonly string[];
 }
 
 /** Wire shape of a portal message from the bootstrap/messages query. */
@@ -46,15 +56,6 @@ export interface PortalMessageWire {
   readonly ephemeralPoint: string;
   readonly nonce: string;
   readonly ciphertext: string;
-}
-
-/** Session handle for decrypting existing portal messages. */
-export interface DecryptHandle {
-  decryptMessage(
-    ephemeralPoint: string,
-    nonce: string,
-    ciphertext: string,
-  ): Promise<string>;
 }
 
 // ---------------------------------------------------------------------------
@@ -92,8 +93,14 @@ export async function buildAddPassphrasePayload(
 
   // Step 2: Collect decrypted messages and re-seal to new key.
   // All portal_messages rows for the channel are sealed to client_public,
-  // regardless of direction. Re-seal all of them.
-  const decrypted = await collectDecryptedMessages(serverMessages, session);
+  // regardless of direction. Re-seal all of them. Messages that fail to
+  // decrypt were already unreadable on this device; they are declared
+  // in skippedMessageIds instead of silently dropped, so the server can
+  // still verify full coverage of the channel's rows.
+  const { decrypted, skippedIds } = await collectDecryptedMessages(
+    serverMessages,
+    session,
+  );
   const resealedMessages = rewrapMessages(decrypted, clientPubBytes);
 
   const payload: AddPassphrasePayload = {
@@ -104,31 +111,8 @@ export async function buildAddPassphrasePayload(
       ciphertext: encode(keyCheckTriple.ciphertext),
     },
     resealedMessages,
+    skippedMessageIds: skippedIds,
   };
 
   return payload;
-}
-
-/**
- * Decrypt all portal messages from the session. Messages that fail
- * to decrypt are skipped (they may be corrupt or from a prior key).
- */
-async function collectDecryptedMessages(
-  serverMessages: readonly PortalMessageWire[],
-  session: DecryptHandle,
-): Promise<readonly { id: string; text: string }[]> {
-  const result: { id: string; text: string }[] = [];
-  for (const msg of serverMessages) {
-    try {
-      const text = await session.decryptMessage(
-        msg.ephemeralPoint,
-        msg.nonce,
-        msg.ciphertext,
-      );
-      result.push({ id: msg.id, text });
-    } catch {
-      // Skip messages that fail to decrypt (same pattern as account upgrade)
-    }
-  }
-  return result;
 }
