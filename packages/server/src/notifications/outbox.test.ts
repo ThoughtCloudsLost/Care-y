@@ -41,6 +41,7 @@ import {
   escalationRuleIdSchema,
 } from "@care-y/shared";
 import type { QueueId, TicketId, UserId, OrgSchema } from "@care-y/shared";
+import { RoleId } from "@care-y/shared";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -761,6 +762,911 @@ describe.skipIf(!process.env.DATABASE_URL)(
         .where("ticket_id", "=", ticketId)
         .where("user_id", "=", watcher.id)
         .execute();
+    });
+
+    // -----------------------------------------------------------------
+    // Rule-based escalation recipient resolution (L416, L576-607)
+    // Exercises resolveRuleEscalationRecipients through drainOutbox.
+    // Covers cold branches: L416 if[0], binary-expr[1]; L587 if both;
+    // L590 binary-expr[0],[1]; L591-594 cond-exprs; L597 cond-expr both.
+    // -----------------------------------------------------------------
+
+    describe("resolveRuleEscalationRecipients", () => {
+      it("returns empty recipients when the escalation rule does not exist", async () => {
+        const ticketId = await createTicketRow();
+        const nonexistentRuleId = escalationRuleIdSchema.parse(
+          crypto.randomUUID(),
+        );
+
+        await testDb.db
+          .insertInto("notification_outbox")
+          .values({
+            event_type: "ticket_escalated",
+            ticket_id: ticketId,
+            queue_id: queueId,
+            escalation_rule_id: nonexistentRuleId,
+            max_attempts: 5,
+          })
+          .execute();
+
+        const dispatch = vi.fn().mockResolvedValue(undefined);
+        const deps: OutboxDrainDeps = {
+          ...makeDrainDeps({ dispatch }),
+          orgSchema: testDb.schemaName as OrgSchema,
+        };
+
+        await drainOutbox(testDb.db, deps);
+
+        // Empty recipients means dispatch is skipped, but the row is
+        // marked completed (not an error).
+        expect(dispatch).not.toHaveBeenCalled();
+
+        const row = await testDb.db
+          .selectFrom("notification_outbox")
+          .selectAll()
+          .where("ticket_id", "=", ticketId)
+          .executeTakeFirst();
+
+        expect(row?.status).toBe("completed");
+      });
+
+      it("resolves manager IDs with note_escalation source for notify_managers action", async () => {
+        const ticketId = await createTicketRow();
+        const manager1 = await createTestUser(testDb.db);
+        const manager2 = await createTestUser(testDb.db);
+
+        // Insert an escalation rule with notify_managers action
+        const rule = await testDb.db
+          .insertInto("escalation_rules")
+          .values({
+            queue_id: queueId,
+            rule_type: "unassigned_duration",
+            threshold_minutes: 10,
+            action: "notify_managers",
+            is_active: true,
+          })
+          .returning("id")
+          .executeTakeFirstOrThrow();
+
+        const ruleId = escalationRuleIdSchema.parse(rule.id);
+
+        await testDb.db
+          .insertInto("notification_outbox")
+          .values({
+            event_type: "ticket_escalated",
+            ticket_id: ticketId,
+            queue_id: queueId,
+            escalation_rule_id: ruleId,
+            max_attempts: 5,
+          })
+          .execute();
+
+        const dispatch = vi.fn().mockResolvedValue(undefined);
+        const deps: OutboxDrainDeps = {
+          ...makeDrainDeps({ dispatch }),
+          orgSchema: testDb.schemaName as OrgSchema,
+          getManagerIds: vi.fn().mockResolvedValue([manager1.id, manager2.id]),
+        };
+
+        await drainOutbox(testDb.db, deps);
+
+        expect(dispatch).toHaveBeenCalledOnce();
+        const recipientList = (dispatch.mock.calls[0] as unknown[])[7] as {
+          recipients: readonly { userId: UserId; source: string }[];
+        };
+
+        expect(recipientList.recipients).toHaveLength(2);
+        expect(recipientList.recipients).toEqual(
+          expect.arrayContaining([
+            expect.objectContaining({
+              userId: manager1.id,
+              source: "note_escalation",
+            }),
+            expect.objectContaining({
+              userId: manager2.id,
+              source: "note_escalation",
+            }),
+          ]),
+        );
+      });
+
+      it("resolves queue watcher IDs with queue_watcher source for notify_queue_watchers action", async () => {
+        const ticketId = await createTicketRow();
+        const watcher1 = await createTestUser(testDb.db);
+        const watcher2 = await createTestUser(testDb.db);
+
+        const rule = await testDb.db
+          .insertInto("escalation_rules")
+          .values({
+            queue_id: queueId,
+            rule_type: "inactive_duration",
+            threshold_minutes: 15,
+            action: "notify_queue_watchers",
+            is_active: true,
+          })
+          .returning("id")
+          .executeTakeFirstOrThrow();
+
+        const ruleId = escalationRuleIdSchema.parse(rule.id);
+
+        await testDb.db
+          .insertInto("notification_outbox")
+          .values({
+            event_type: "ticket_escalated",
+            ticket_id: ticketId,
+            queue_id: queueId,
+            escalation_rule_id: ruleId,
+            max_attempts: 5,
+          })
+          .execute();
+
+        const dispatch = vi.fn().mockResolvedValue(undefined);
+        const deps: OutboxDrainDeps = {
+          ...makeDrainDeps({ dispatch }),
+          orgSchema: testDb.schemaName as OrgSchema,
+          getQueueWatcherIds: vi
+            .fn()
+            .mockResolvedValue([watcher1.id, watcher2.id]),
+        };
+
+        await drainOutbox(testDb.db, deps);
+
+        expect(dispatch).toHaveBeenCalledOnce();
+        const recipientList = (dispatch.mock.calls[0] as unknown[])[7] as {
+          recipients: readonly { userId: UserId; source: string }[];
+        };
+
+        expect(recipientList.recipients).toHaveLength(2);
+        expect(recipientList.recipients).toEqual(
+          expect.arrayContaining([
+            expect.objectContaining({
+              userId: watcher1.id,
+              source: "queue_watcher",
+            }),
+            expect.objectContaining({
+              userId: watcher2.id,
+              source: "queue_watcher",
+            }),
+          ]),
+        );
+      });
+
+      it("returns empty recipients when getManagerIds and getQueueWatcherIds deps are both absent", async () => {
+        const ticketId = await createTicketRow();
+
+        const rule = await testDb.db
+          .insertInto("escalation_rules")
+          .values({
+            queue_id: queueId,
+            rule_type: "unassigned_duration",
+            threshold_minutes: 10,
+            action: "notify_managers",
+            is_active: true,
+          })
+          .returning("id")
+          .executeTakeFirstOrThrow();
+
+        const ruleId = escalationRuleIdSchema.parse(rule.id);
+
+        await testDb.db
+          .insertInto("notification_outbox")
+          .values({
+            event_type: "ticket_escalated",
+            ticket_id: ticketId,
+            queue_id: queueId,
+            escalation_rule_id: ruleId,
+            max_attempts: 5,
+          })
+          .execute();
+
+        const dispatch = vi.fn().mockResolvedValue(undefined);
+        // No getManagerIds or getQueueWatcherIds in deps
+        const deps: OutboxDrainDeps = {
+          ...makeDrainDeps({ dispatch }),
+          orgSchema: testDb.schemaName as OrgSchema,
+        };
+
+        await drainOutbox(testDb.db, deps);
+
+        // Empty recipients, dispatch skipped, row still completed
+        expect(dispatch).not.toHaveBeenCalled();
+        const row = await testDb.db
+          .selectFrom("notification_outbox")
+          .selectAll()
+          .where("ticket_id", "=", ticketId)
+          .where("escalation_rule_id", "=", ruleId)
+          .executeTakeFirst();
+        expect(row?.status).toBe("completed");
+      });
+
+      it("falls back to getQueueWatcherIds when action is notify_managers but getManagerIds dep is absent", async () => {
+        const ticketId = await createTicketRow();
+        const watcherUser = await createTestUser(testDb.db);
+
+        const rule = await testDb.db
+          .insertInto("escalation_rules")
+          .values({
+            queue_id: queueId,
+            rule_type: "unassigned_duration",
+            threshold_minutes: 10,
+            action: "notify_managers",
+            is_active: true,
+          })
+          .returning("id")
+          .executeTakeFirstOrThrow();
+
+        const ruleId = escalationRuleIdSchema.parse(rule.id);
+
+        await testDb.db
+          .insertInto("notification_outbox")
+          .values({
+            event_type: "ticket_escalated",
+            ticket_id: ticketId,
+            queue_id: queueId,
+            escalation_rule_id: ruleId,
+            max_attempts: 5,
+          })
+          .execute();
+
+        const dispatch = vi.fn().mockResolvedValue(undefined);
+        const deps: OutboxDrainDeps = {
+          ...makeDrainDeps({ dispatch }),
+          orgSchema: testDb.schemaName as OrgSchema,
+          // No getManagerIds, but getQueueWatcherIds is present
+          getQueueWatcherIds: vi.fn().mockResolvedValue([watcherUser.id]),
+        };
+
+        await drainOutbox(testDb.db, deps);
+
+        expect(dispatch).toHaveBeenCalledOnce();
+        const recipientList = (dispatch.mock.calls[0] as unknown[])[7] as {
+          recipients: readonly { userId: UserId; source: string }[];
+        };
+
+        // The recipient ternary at L590 falls to getQueueWatcherIds
+        // because getManagerIds is absent. The source ternary at L596
+        // checks only the action string (still "notify_managers"), so
+        // the source is "note_escalation" even though the IDs came from
+        // the queue watcher dep.
+        expect(recipientList.recipients).toHaveLength(1);
+        expect(recipientList.recipients[0]).toEqual(
+          expect.objectContaining({
+            userId: watcherUser.id,
+            source: "note_escalation",
+          }),
+        );
+      });
+    });
+
+    // -----------------------------------------------------------------
+    // Queue watcher recipient resolution (L421-426, L612-631)
+    // Exercises resolveQueueWatcherRecipients through drainOutbox via
+    // two entry points: intake ticket_created (L426 passes null actor)
+    // and intake escalation fallback (L683 passes actual actor).
+    // Covers cold branches: L421 if[0]; L624-625 callbacks.
+    // -----------------------------------------------------------------
+
+    describe("resolveQueueWatcherRecipients", () => {
+      it("includes all queue watchers for an intake-originated ticket_created", async () => {
+        const ticketId = await createTicketRow();
+        const w1 = await createTestUser(testDb.db);
+        const w2 = await createTestUser(testDb.db);
+
+        // Seed watchers on the queue
+        for (const w of [w1, w2]) {
+          await testDb.db
+            .insertInto("queue_watchers")
+            .values({ queue_id: queueId, user_id: w.id })
+            .onConflict((oc) => oc.columns(["queue_id", "user_id"]).doNothing())
+            .execute();
+        }
+
+        // Create a form so the intake ticket_created path (L421) is taken
+        const form = await testDb.db
+          .insertInto("intake_forms")
+          .values({
+            // care-y-ignore-next-line ast-pii-in-db-write -- admin label, not PII
+            name: "QW Test Form",
+            is_active: true,
+          })
+          .returning("id")
+          .executeTakeFirstOrThrow();
+
+        // Enqueue intake ticket_created: actor null, form_id set
+        await testDb.db
+          .insertInto("notification_outbox")
+          .values({
+            event_type: "ticket_created",
+            ticket_id: ticketId,
+            queue_id: queueId,
+            form_id: form.id,
+            actor_user_id: null,
+            max_attempts: 5,
+          })
+          .execute();
+
+        const dispatch = vi.fn().mockResolvedValue(undefined);
+        const deps: OutboxDrainDeps = {
+          ...makeDrainDeps({ dispatch }),
+          orgSchema: testDb.schemaName as OrgSchema,
+        };
+
+        await drainOutbox(testDb.db, deps);
+
+        expect(dispatch).toHaveBeenCalledOnce();
+        const recipientList = (dispatch.mock.calls[0] as unknown[])[7] as {
+          recipients: readonly { userId: UserId; source: string }[];
+        };
+
+        // Both watchers included; no actor exclusion (actor is null)
+        const recipientIds = recipientList.recipients.map((r) => r.userId);
+        expect(recipientIds).toEqual(expect.arrayContaining([w1.id, w2.id]));
+        expect(recipientIds.length).toBeGreaterThanOrEqual(2);
+        for (const r of recipientList.recipients) {
+          if (r.userId === w1.id || r.userId === w2.id) {
+            expect(r.source).toBe("queue_watcher");
+          }
+        }
+
+        // Cleanup
+        for (const w of [w1, w2]) {
+          await testDb.db
+            .deleteFrom("queue_watchers")
+            .where("queue_id", "=", queueId)
+            .where("user_id", "=", w.id)
+            .execute();
+        }
+      });
+
+      it("returns empty recipients when no watchers exist on the queue", async () => {
+        // Use a fresh queue with no watchers
+        const emptyQ = await createTestQueue(testDb.db, {
+          label: "No Watchers Q",
+        });
+        const ticketId = await createTicketRow();
+
+        const form = await testDb.db
+          .insertInto("intake_forms")
+          .values({
+            // care-y-ignore-next-line ast-pii-in-db-write -- admin label, not PII
+            name: "Empty QW Form",
+            is_active: true,
+          })
+          .returning("id")
+          .executeTakeFirstOrThrow();
+
+        await testDb.db
+          .insertInto("notification_outbox")
+          .values({
+            event_type: "ticket_created",
+            ticket_id: ticketId,
+            queue_id: emptyQ.id,
+            form_id: form.id,
+            actor_user_id: null,
+            max_attempts: 5,
+          })
+          .execute();
+
+        const dispatch = vi.fn().mockResolvedValue(undefined);
+        const deps: OutboxDrainDeps = {
+          ...makeDrainDeps({ dispatch }),
+          orgSchema: testDb.schemaName as OrgSchema,
+        };
+
+        await drainOutbox(testDb.db, deps);
+
+        expect(dispatch).not.toHaveBeenCalled();
+        const row = await testDb.db
+          .selectFrom("notification_outbox")
+          .selectAll()
+          .where("ticket_id", "=", ticketId)
+          .executeTakeFirst();
+        expect(row?.status).toBe("completed");
+      });
+
+      it("excludes the acting user from queue watcher results on intake escalation fallback", async () => {
+        const ticketId = await createTicketRow();
+        const actorUser = await createTestUser(testDb.db);
+        const otherWatcher = await createTestUser(testDb.db);
+
+        // Both users are queue watchers
+        for (const u of [actorUser, otherWatcher]) {
+          await testDb.db
+            .insertInto("queue_watchers")
+            .values({ queue_id: queueId, user_id: u.id })
+            .onConflict((oc) => oc.columns(["queue_id", "user_id"]).doNothing())
+            .execute();
+        }
+
+        // Create a form with NO escalation fields so the intake
+        // escalation path falls back to resolveQueueWatcherRecipients
+        // at L683, which passes the actorUserId for exclusion.
+        const form = await testDb.db
+          .insertInto("intake_forms")
+          .values({
+            // care-y-ignore-next-line ast-pii-in-db-write -- admin label, not PII
+            name: "Fallback QW Form",
+            is_active: true,
+          })
+          .returning("id")
+          .executeTakeFirstOrThrow();
+
+        await testDb.db
+          .insertInto("notification_outbox")
+          .values({
+            event_type: "ticket_escalated",
+            ticket_id: ticketId,
+            queue_id: queueId,
+            form_id: form.id,
+            actor_user_id: actorUser.id,
+            escalation_rule_id: null,
+            max_attempts: 5,
+          })
+          .execute();
+
+        const dispatch = vi.fn().mockResolvedValue(undefined);
+        const deps: OutboxDrainDeps = {
+          ...makeDrainDeps({ dispatch }),
+          orgSchema: testDb.schemaName as OrgSchema,
+        };
+
+        await drainOutbox(testDb.db, deps);
+
+        expect(dispatch).toHaveBeenCalledOnce();
+        const recipientList = (dispatch.mock.calls[0] as unknown[])[7] as {
+          recipients: readonly { userId: UserId; source: string }[];
+        };
+
+        // Actor is excluded from the watcher list
+        const recipientIds = recipientList.recipients.map((r) => r.userId);
+        expect(recipientIds).toContain(otherWatcher.id);
+        expect(recipientIds).not.toContain(actorUser.id);
+
+        // Cleanup
+        for (const u of [actorUser, otherWatcher]) {
+          await testDb.db
+            .deleteFrom("queue_watchers")
+            .where("queue_id", "=", queueId)
+            .where("user_id", "=", u.id)
+            .execute();
+        }
+      });
+    });
+
+    // -----------------------------------------------------------------
+    // Note-type escalation resolution (L525-569)
+    // Exercises resolveNoteTypeEscalationForDrain through drainOutbox
+    // via lifecycle events (followup_added) with a note_type_id.
+    // Covers cold branches: L536 if both; L538 if both, binary-expr
+    // [0],[1]; L547 cond-expr both; L560 if both; L562 if both;
+    // L569 cond-expr both.
+    // Cold statements: 534-543, 547-548, 551-553, 560-564, 569.
+    // -----------------------------------------------------------------
+
+    describe("resolveNoteTypeEscalationForDrain", () => {
+      it("skips escalation when createNoteTypeSvc returns no context for the note type", async () => {
+        const ticketId = await createTicketRow();
+        const watcher = await createTestUser(testDb.db);
+
+        await testDb.db
+          .insertInto("ticket_watchers")
+          .values({ ticket_id: ticketId, user_id: watcher.id })
+          .onConflict((oc) => oc.columns(["ticket_id", "user_id"]).doNothing())
+          .execute();
+
+        const noteTypeId = noteTypeIdSchema.parse(crypto.randomUUID());
+
+        await enqueueNotificationDurable(testDb.db, {
+          eventType: "followup_added",
+          ticketId,
+          queueId,
+          formId: null,
+          actorUserId: null,
+          noteTypeId,
+        });
+
+        const dispatch = vi.fn().mockResolvedValue(undefined);
+        const deps: OutboxDrainDeps = {
+          ...makeDrainDeps({ dispatch }),
+          orgSchema: testDb.schemaName as OrgSchema,
+          createNoteTypeSvc: () => ({
+            list: vi.fn(),
+            listActive: vi.fn(),
+            create: vi.fn(),
+            update: vi.fn(),
+            getDefaultTypeId: vi.fn(),
+            getEscalationTargets: vi.fn(),
+            // No context for this note type
+            getEscalationContext: vi.fn().mockResolvedValue(null),
+            getMinCreateRole: vi.fn(),
+          }),
+        };
+
+        await drainOutbox(testDb.db, deps);
+
+        // Dispatch still called with ticket watcher (the escalation path
+        // returned undefined, so buildRecipientList ran without escalation IDs)
+        expect(dispatch).toHaveBeenCalled();
+
+        // Cleanup
+        await testDb.db
+          .deleteFrom("ticket_watchers")
+          .where("ticket_id", "=", ticketId)
+          .where("user_id", "=", watcher.id)
+          .execute();
+      });
+
+      it("skips escalation when queue permissions or user service deps are absent", async () => {
+        const ticketId = await createTicketRow();
+        const watcher = await createTestUser(testDb.db);
+
+        await testDb.db
+          .insertInto("ticket_watchers")
+          .values({ ticket_id: ticketId, user_id: watcher.id })
+          .onConflict((oc) => oc.columns(["ticket_id", "user_id"]).doNothing())
+          .execute();
+
+        const noteTypeId = noteTypeIdSchema.parse(crypto.randomUUID());
+
+        await enqueueNotificationDurable(testDb.db, {
+          eventType: "followup_added",
+          ticketId,
+          queueId,
+          formId: null,
+          actorUserId: null,
+          noteTypeId,
+        });
+
+        const dispatch = vi.fn().mockResolvedValue(undefined);
+        const deps: OutboxDrainDeps = {
+          ...makeDrainDeps({ dispatch }),
+          orgSchema: testDb.schemaName as OrgSchema,
+          createNoteTypeSvc: () => ({
+            list: vi.fn(),
+            listActive: vi.fn(),
+            create: vi.fn(),
+            update: vi.fn(),
+            getDefaultTypeId: vi.fn(),
+            getEscalationTargets: vi.fn(),
+            getEscalationContext: vi.fn().mockResolvedValue({
+              targets: [{ type: "role" as const, value: "admin" as const }],
+              minViewRole: RoleId.VOLUNTEER,
+            }),
+            getMinCreateRole: vi.fn(),
+          }),
+          // createQueuePermissionsSvc and createUserSvc intentionally absent
+        };
+
+        await drainOutbox(testDb.db, deps);
+
+        // Escalation path returns undefined at L538, buildRecipientList
+        // still runs with ticket watcher
+        expect(dispatch).toHaveBeenCalled();
+
+        // Cleanup
+        await testDb.db
+          .deleteFrom("ticket_watchers")
+          .where("ticket_id", "=", ticketId)
+          .where("user_id", "=", watcher.id)
+          .execute();
+      });
+
+      it("returns unfiltered escalation targets when minViewRole is VOLUNTEER", async () => {
+        const ticketId = await createTicketRow();
+        const escalationUser = await createTestUser(testDb.db);
+        const noteTypeId = noteTypeIdSchema.parse(crypto.randomUUID());
+
+        await enqueueNotificationDurable(testDb.db, {
+          eventType: "followup_added",
+          ticketId,
+          queueId,
+          formId: null,
+          actorUserId: null,
+          noteTypeId,
+        });
+
+        const dispatch = vi.fn().mockResolvedValue(undefined);
+        const deps: OutboxDrainDeps = {
+          ...makeDrainDeps({ dispatch }),
+          orgSchema: testDb.schemaName as OrgSchema,
+          createNoteTypeSvc: () => ({
+            list: vi.fn(),
+            listActive: vi.fn(),
+            create: vi.fn(),
+            update: vi.fn(),
+            getDefaultTypeId: vi.fn(),
+            getEscalationTargets: vi.fn(),
+            getEscalationContext: vi.fn().mockResolvedValue({
+              targets: [{ type: "role" as const, value: "admin" as const }],
+              minViewRole: RoleId.VOLUNTEER,
+            }),
+            getMinCreateRole: vi.fn(),
+          }),
+          createQueuePermissionsSvc: () => ({
+            getQueueMembers: vi.fn().mockResolvedValue([]),
+          }),
+          createUserSvc: () => ({
+            listActiveIdsByRoleId: vi
+              .fn()
+              .mockResolvedValue(new Set([escalationUser.id])),
+            listActiveKeyWrapHolderIds: vi.fn().mockResolvedValue(new Set()),
+            filterByRoleThreshold: vi.fn().mockResolvedValue([]),
+          }),
+        };
+
+        await drainOutbox(testDb.db, deps);
+
+        expect(dispatch).toHaveBeenCalled();
+        const recipientList = (dispatch.mock.calls[0] as unknown[])[7] as {
+          recipients: readonly { userId: UserId; source: string }[];
+        };
+
+        // The escalation user should appear as a recipient (minViewRole
+        // is VOLUNTEER so targets returned unfiltered at L562)
+        const escalationRecipient = recipientList.recipients.find(
+          (r) => r.userId === escalationUser.id,
+        );
+        expect(escalationRecipient).toBeDefined();
+      });
+
+      it("filters escalation targets by role threshold when minViewRole is above VOLUNTEER", async () => {
+        const ticketId = await createTicketRow();
+        const adminUser = await createTestUser(testDb.db);
+        const filteredOutUser = await createTestUser(testDb.db);
+        const noteTypeId = noteTypeIdSchema.parse(crypto.randomUUID());
+
+        await enqueueNotificationDurable(testDb.db, {
+          eventType: "followup_added",
+          ticketId,
+          queueId,
+          formId: null,
+          actorUserId: null,
+          noteTypeId,
+        });
+
+        const dispatch = vi.fn().mockResolvedValue(undefined);
+        const deps: OutboxDrainDeps = {
+          ...makeDrainDeps({ dispatch }),
+          orgSchema: testDb.schemaName as OrgSchema,
+          createNoteTypeSvc: () => ({
+            list: vi.fn(),
+            listActive: vi.fn(),
+            create: vi.fn(),
+            update: vi.fn(),
+            getDefaultTypeId: vi.fn(),
+            getEscalationTargets: vi.fn(),
+            getEscalationContext: vi.fn().mockResolvedValue({
+              targets: [{ type: "role" as const, value: "admin" as const }],
+              minViewRole: RoleId.MANAGER,
+            }),
+            getMinCreateRole: vi.fn(),
+          }),
+          createQueuePermissionsSvc: () => ({
+            getQueueMembers: vi.fn().mockResolvedValue([]),
+          }),
+          createUserSvc: () => ({
+            listActiveIdsByRoleId: vi
+              .fn()
+              .mockResolvedValue(new Set([adminUser.id, filteredOutUser.id])),
+            listActiveKeyWrapHolderIds: vi.fn().mockResolvedValue(new Set()),
+            // Only adminUser passes the role threshold filter
+            filterByRoleThreshold: vi.fn().mockResolvedValue([adminUser.id]),
+          }),
+        };
+
+        await drainOutbox(testDb.db, deps);
+
+        expect(dispatch).toHaveBeenCalled();
+        const recipientList = (dispatch.mock.calls[0] as unknown[])[7] as {
+          recipients: readonly { userId: UserId; source: string }[];
+        };
+
+        const recipientIds = recipientList.recipients.map((r) => r.userId);
+        expect(recipientIds).toContain(adminUser.id);
+        // filteredOutUser was resolved by listActiveIdsByRoleId but
+        // removed by filterByRoleThreshold
+        expect(recipientIds).not.toContain(filteredOutUser.id);
+      });
+
+      it("returns undefined for escalation when all targets are filtered out by role threshold", async () => {
+        const ticketId = await createTicketRow();
+        const noteTypeId = noteTypeIdSchema.parse(crypto.randomUUID());
+
+        await enqueueNotificationDurable(testDb.db, {
+          eventType: "followup_added",
+          ticketId,
+          queueId,
+          formId: null,
+          actorUserId: null,
+          noteTypeId,
+        });
+
+        const dispatch = vi.fn().mockResolvedValue(undefined);
+        const deps: OutboxDrainDeps = {
+          ...makeDrainDeps({ dispatch }),
+          orgSchema: testDb.schemaName as OrgSchema,
+          createNoteTypeSvc: () => ({
+            list: vi.fn(),
+            listActive: vi.fn(),
+            create: vi.fn(),
+            update: vi.fn(),
+            getDefaultTypeId: vi.fn(),
+            getEscalationTargets: vi.fn(),
+            getEscalationContext: vi.fn().mockResolvedValue({
+              targets: [{ type: "role" as const, value: "admin" as const }],
+              minViewRole: RoleId.ADMIN,
+            }),
+            getMinCreateRole: vi.fn(),
+          }),
+          createQueuePermissionsSvc: () => ({
+            getQueueMembers: vi.fn().mockResolvedValue([]),
+          }),
+          createUserSvc: () => ({
+            listActiveIdsByRoleId: vi
+              .fn()
+              .mockResolvedValue(
+                new Set([userIdSchema.parse(crypto.randomUUID())]),
+              ),
+            listActiveKeyWrapHolderIds: vi.fn().mockResolvedValue(new Set()),
+            // No users pass the filter
+            filterByRoleThreshold: vi.fn().mockResolvedValue([]),
+          }),
+        };
+
+        await drainOutbox(testDb.db, deps);
+
+        // No escalation recipients (all filtered out, returns undefined
+        // at L569). buildRecipientList runs without escalation IDs.
+        // No ticket/queue watchers seeded, so recipients are empty.
+        expect(dispatch).not.toHaveBeenCalled();
+      });
+
+      it("returns undefined for escalation when resolveEscalationTargets yields no user IDs", async () => {
+        const ticketId = await createTicketRow();
+        const noteTypeId = noteTypeIdSchema.parse(crypto.randomUUID());
+
+        await enqueueNotificationDurable(testDb.db, {
+          eventType: "followup_added",
+          ticketId,
+          queueId,
+          formId: null,
+          actorUserId: null,
+          noteTypeId,
+        });
+
+        const dispatch = vi.fn().mockResolvedValue(undefined);
+        const deps: OutboxDrainDeps = {
+          ...makeDrainDeps({ dispatch }),
+          orgSchema: testDb.schemaName as OrgSchema,
+          createNoteTypeSvc: () => ({
+            list: vi.fn(),
+            listActive: vi.fn(),
+            create: vi.fn(),
+            update: vi.fn(),
+            getDefaultTypeId: vi.fn(),
+            getEscalationTargets: vi.fn(),
+            getEscalationContext: vi.fn().mockResolvedValue({
+              targets: [{ type: "role" as const, value: "manager" as const }],
+              minViewRole: RoleId.VOLUNTEER,
+            }),
+            getMinCreateRole: vi.fn(),
+          }),
+          createQueuePermissionsSvc: () => ({
+            getQueueMembers: vi.fn().mockResolvedValue([]),
+          }),
+          createUserSvc: () => ({
+            // No users with the target role
+            listActiveIdsByRoleId: vi.fn().mockResolvedValue(new Set()),
+            listActiveKeyWrapHolderIds: vi.fn().mockResolvedValue(new Set()),
+            filterByRoleThreshold: vi.fn().mockResolvedValue([]),
+          }),
+        };
+
+        await drainOutbox(testDb.db, deps);
+
+        // Empty escalation targets -> undefined at L560, no escalation
+        // recipients. No ticket/queue watchers seeded, so dispatch skipped.
+        expect(dispatch).not.toHaveBeenCalled();
+      });
+    });
+
+    // -----------------------------------------------------------------
+    // Additional cold branch coverage
+    // -----------------------------------------------------------------
+
+    it("stores String(err) in last_error when dispatch throws a non-Error value", async () => {
+      // Covers L306 cond-expr[1]: the String(err) fallback path
+      const ticketId = await createTicketRow();
+      const watcher = await createTestUser(testDb.db);
+
+      await testDb.db
+        .insertInto("queue_watchers")
+        .values({ queue_id: queueId, user_id: watcher.id })
+        .onConflict((oc) => oc.columns(["queue_id", "user_id"]).doNothing())
+        .execute();
+
+      await testDb.db
+        .insertInto("notification_outbox")
+        .values({
+          event_type: "ticket_created",
+          ticket_id: ticketId,
+          queue_id: queueId,
+          max_attempts: 5,
+        })
+        .execute();
+
+      // Dispatch throws a string, not an Error instance
+      const dispatch = vi.fn().mockRejectedValue("dispatch-string-error");
+      const deps: OutboxDrainDeps = {
+        ...makeDrainDeps({ dispatch }),
+        orgSchema: testDb.schemaName as OrgSchema,
+      };
+
+      await drainOutbox(testDb.db, deps);
+
+      const row = await testDb.db
+        .selectFrom("notification_outbox")
+        .selectAll()
+        .where("ticket_id", "=", ticketId)
+        .executeTakeFirst();
+
+      // String() coercion of the thrown value
+      expect(row?.last_error).toBe("dispatch-string-error");
+      expect(row?.status).toBe("pending");
+      expect(row?.attempt_count).toBe(1);
+
+      // Cleanup
+      await testDb.db
+        .deleteFrom("queue_watchers")
+        .where("queue_id", "=", queueId)
+        .where("user_id", "=", watcher.id)
+        .execute();
+    });
+
+    it("resolves lifecycle recipients with decrypted mentioned pseudonyms", async () => {
+      // Covers L459 if[0]: encrypted_mentioned_pseudonyms present with fieldEncryptor
+      const ticketId = await createTicketRow();
+      const mentionedUser = await createTestUser(testDb.db);
+      const actor = await createTestUser(testDb.db);
+
+      const encrypted = encryptMentionedPseudonyms(
+        [mentionedUser.id],
+        noopEncryptor,
+      );
+
+      await enqueueNotificationDurable(testDb.db, {
+        eventType: "followup_added",
+        ticketId,
+        queueId,
+        formId: null,
+        actorUserId: actor.id,
+        encryptedMentionedPseudonyms: encrypted,
+      });
+
+      const dispatch = vi.fn().mockResolvedValue(undefined);
+      const deps: OutboxDrainDeps = {
+        ...makeDrainDeps({ dispatch, encryptor: noopEncryptor }),
+        orgSchema: testDb.schemaName as OrgSchema,
+      };
+
+      await drainOutbox(testDb.db, deps);
+
+      expect(dispatch).toHaveBeenCalled();
+      const recipientList = (dispatch.mock.calls[0] as unknown[])[7] as {
+        recipients: readonly { userId: UserId; source: string }[];
+      };
+
+      // The mentioned user should appear as a "mention" recipient
+      const mentionRecipient = recipientList.recipients.find(
+        (r) => r.userId === mentionedUser.id && r.source === "mention",
+      );
+      expect(mentionRecipient).toBeDefined();
+
+      // The actor should be excluded from recipients
+      const actorRecipient = recipientList.recipients.find(
+        (r) => r.userId === actor.id,
+      );
+      expect(actorRecipient).toBeUndefined();
     });
   },
 );

@@ -25,6 +25,7 @@ import {
   accountUpgradeInputSchema,
   accountChangePasswordInputSchema,
   attachmentUploadSchema,
+  backfillWrapInputSchema,
   PORTAL_ATTACHMENT_MAX_BYTES,
   PORTAL_ATTACHMENTS_PER_MESSAGE,
 } from "./client-portal.js";
@@ -1416,5 +1417,45 @@ describe("portalReplyInputSchema attachments", () => {
       attachments: tooMany,
     });
     expect(result.success).toBe(false);
+  });
+});
+
+// --- backfillWrapInputSchema wrappedKey length refinement ---
+
+describe("backfillWrapInputSchema wrappedKey refinement", () => {
+  function validWrap(): Record<string, unknown> {
+    return {
+      volunteerId: crypto.randomUUID(),
+      ephemeralPoint: base64OfBytes(32),
+      nonce: base64OfBytes(24),
+      wrappedKey: base64OfBytes(32),
+    };
+  }
+
+  it("accepts a wrappedKey within the 256-char limit", () => {
+    const result = backfillWrapInputSchema.safeParse(validWrap());
+    expect(result.success).toBe(true);
+  });
+
+  it("accepts a wrappedKey at exactly 256 chars", () => {
+    const result = backfillWrapInputSchema.safeParse({
+      ...validWrap(),
+      wrappedKey: "A".repeat(256),
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("rejects a wrappedKey exceeding 256 chars", () => {
+    const result = backfillWrapInputSchema.safeParse({
+      ...validWrap(),
+      wrappedKey: "A".repeat(257),
+    });
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      const wrappedKeyIssues = result.error.issues.filter((i) =>
+        i.path.includes("wrappedKey"),
+      );
+      expect(wrappedKeyIssues.length).toBeGreaterThan(0);
+    }
   });
 });

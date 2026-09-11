@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeAll, afterAll } from "vitest";
+import { describe, it, expect, beforeAll, afterAll, vi } from "vitest";
 import {
   createTestDb,
   createTestUser,
@@ -20,6 +20,7 @@ import {
   newFollowupId,
   newTicketId,
   newKeyGeneration,
+  newAttachmentId,
   channelSecretSchema,
   type FollowupId,
   type NoteTypeId,
@@ -27,6 +28,10 @@ import {
   type BlobKey,
   type CallSid,
   type RoleIdValue,
+  type AttachmentId,
+  type OrgId,
+  type OrgSchema,
+  type OrgSlug,
 } from "@care-y/shared";
 
 describe.skipIf(!process.env.DATABASE_URL)("FollowUpService (DB)", () => {
@@ -2133,5 +2138,621 @@ describe.skipIf(!process.env.DATABASE_URL)("FollowUpService (DB)", () => {
     await expect(
       svc.updateOutboundMessage(userId, fuId, Buffer.from("x")),
     ).rejects.toThrow(ForbiddenError);
+  });
+
+  // ── Portal copy dropped when no active channel (L518 else) ──
+
+  describe("create with portalCopy but no active channel", () => {
+    it("commits the org follow-up and logs a warning when the channel is revoked", async () => {
+      const { userId, ticketId } = await createTicketFixture();
+
+      const warnSpy = vi
+        .spyOn(console, "warn")
+        .mockImplementation(() => undefined);
+
+      const fu = await svc.create(userId, {
+        id: newFollowupId(),
+        ticketId,
+        encryptedContent: Buffer.from("ct-org-reply-no-channel"),
+        source: "volunteer",
+        type: "message",
+        isPrivate: false,
+        mentionedPseudonyms: [],
+        portalCopy: {
+          ephemeralPoint: Buffer.alloc(32, 0x01),
+          nonce: Buffer.alloc(24, 0x02),
+          ciphertext: Buffer.from("ct-portal-body"),
+        },
+      });
+
+      // The org copy still lands
+      expect(fu.id).toBeTruthy();
+      expect(fu.encryptedContent.toString()).toBe("ct-org-reply-no-channel");
+
+      // The dropped-copy warning fired
+      expect(warnSpy).toHaveBeenCalledWith(
+        expect.stringContaining("no active channel"),
+      );
+
+      // No portal_messages row was created (the copy was dropped)
+      const pmCount = await testDb.db
+        .selectFrom("portal_messages")
+        .select(testDb.db.fn.countAll().as("cnt"))
+        .where("followup_id", "=", fu.id)
+        .executeTakeFirstOrThrow();
+      expect(Number(pmCount.cnt)).toBe(0);
+
+      warnSpy.mockRestore();
+    });
+  });
+
+  // ── Attachment linking failure (L535) ──
+
+  describe("create with invalid attachment id", () => {
+    it("rejects when an attachment id does not match a pending upload on the ticket", async () => {
+      const { userId, ticketId } = await createTicketFixture();
+
+      const bogusAttId: AttachmentId = newAttachmentId();
+
+      await expect(
+        svc.create(userId, {
+          id: newFollowupId(),
+          ticketId,
+          encryptedContent: Buffer.from("ct-msg-with-file"),
+          source: "volunteer",
+          type: "message",
+          isPrivate: false,
+          mentionedPseudonyms: [],
+          attachments: [{ attachmentId: bogusAttId }],
+        }),
+      ).rejects.toBeInstanceOf(NotFoundError);
+    });
+  });
+
+  // ── Nudge fires when portalMessageDeps is wired (L553) ──
+
+  describe("create with portalCopy and portalMessageDeps", () => {
+    it("fires nudgeClient when an active channel exists and deps are wired", async () => {
+      const { userId, ticketId, clientId } = await createTicketFixture();
+
+      // Seed an active portal channel for the ticket's client
+      await testDb.db
+        .insertInto("portal_channels")
+        .values({
+          client_id: clientId,
+          channel_id: channelSecretSchema.parse(
+            crypto.randomBytes(24).toString("hex"),
+          ),
+          auth_hash: Buffer.alloc(32, 0xaa),
+          client_public: Buffer.alloc(32, 0xbb),
+          has_passphrase: false,
+          key_check_ephemeral_point: Buffer.alloc(32, 0xcc),
+          key_check_nonce: Buffer.alloc(24, 0xdd),
+          key_check_ciphertext: Buffer.from("ct-key-check"),
+          status: "active",
+        })
+        .execute();
+
+      // Wire portalMessageDeps with a throwing getProvider so nudge
+      // fires but does not reach Twilio. The production code calls
+      // nudgeClient with `void`, so the throw is swallowed.
+      const nudgeFired: string[] = [];
+      const depsWithNudge = {
+        portalMessageDeps: {
+          getProvider: vi.fn(async (): Promise<null> => null),
+          resolveCallerIdByPurpose: vi.fn(),
+          fieldEncryptor: {
+            encrypt: vi.fn((v: string): Buffer => Buffer.from(v)),
+            decrypt: vi.fn((v: Buffer): string => v.toString()),
+            encryptBuffer: vi.fn((v: Buffer): Buffer => Buffer.from(v)),
+            decryptToBuffer: vi.fn((v: Buffer): Buffer => Buffer.from(v)),
+          },
+          notificationService: {
+            notify: vi.fn(),
+            dispatch: vi.fn(),
+            dispatchTicketless: vi.fn(),
+          },
+          blobStore: {
+            put: vi.fn(),
+            get: vi.fn(),
+            delete: vi.fn(),
+            exists: vi.fn(),
+          },
+          orgId: "00000000-0000-4000-8000-000000000001" as OrgId,
+          orgSchema: "org_test" as OrgSchema,
+          orgSlug: "test-org" as OrgSlug,
+        },
+        onPortalOrgReply: (channelRowId: string) =>
+          nudgeFired.push(channelRowId),
+      };
+
+      // The concrete dep types are wide; the service only passes them
+      // through to nudgeClient. Casting keeps this test focused on
+      // whether the branch fires, not on the nudge implementation.
+      const nudgeSvc = createFollowUpService(
+        testDb.db,
+        access,
+        depsWithNudge as Parameters<typeof createFollowUpService>[2],
+      );
+
+      await nudgeSvc.create(userId, {
+        id: newFollowupId(),
+        ticketId,
+        encryptedContent: Buffer.from("ct-nudge-reply"),
+        source: "volunteer",
+        type: "message",
+        isPrivate: false,
+        mentionedPseudonyms: [],
+        portalCopy: {
+          ephemeralPoint: Buffer.alloc(32, 0x03),
+          nonce: Buffer.alloc(24, 0x04),
+          ciphertext: Buffer.from("ct-portal-nudge"),
+        },
+      });
+
+      // onPortalOrgReply callback fired
+      expect(nudgeFired).toHaveLength(1);
+    });
+  });
+
+  // ── listSummary cursor with direction=newer (L743-744) ──
+
+  describe("listSummary cursor with direction=newer", () => {
+    it("pages forward from cursor in ascending order", async () => {
+      const { userId, ticketId } = await createTicketFixture();
+
+      for (let i = 0; i < 5; i++) {
+        await svc.create(userId, {
+          id: newFollowupId(),
+          ticketId,
+          encryptedContent: Buffer.from(`ct-sum-newer-${String(i)}`),
+          source: "volunteer",
+          type: "message",
+          isPrivate: false,
+          mentionedPseudonyms: [],
+        });
+      }
+
+      const all = await svc.listSummary(userId, ticketId, { limit: 100 });
+      const first = all[0]!;
+
+      const newer = await svc.listSummary(userId, ticketId, {
+        limit: 3,
+        cursor: first.id,
+        direction: "newer",
+      });
+
+      // All results are newer than the cursor
+      for (const s of newer) {
+        expect(s.createdAt.getTime()).toBeGreaterThanOrEqual(
+          first.createdAt.getTime(),
+        );
+      }
+      expect(newer.map((s) => s.id)).not.toContain(first.id);
+    });
+  });
+
+  // ── listSummary with no follow-ups returns empty (L786 fallback) ──
+
+  describe("listSummary on ticket with no follow-ups", () => {
+    it("returns an empty array and skips batch media queries", async () => {
+      const { userId, ticketId } = await createTicketFixture();
+
+      // No follow-ups created; the fuIds array is empty, triggering
+      // the [[], []] fallback at L786.
+      const summaries = await svc.listSummary(userId, ticketId, { limit: 100 });
+      expect(summaries).toEqual([]);
+    });
+  });
+
+  // ── listByIds returns keyWrap for rows with key_generation (L889) ──
+
+  describe("listByIds with key_generation", () => {
+    it("returns keyWrap for follow-ups with non-null key_generation", async () => {
+      const { userId, ticketId } = await createTicketFixture();
+      const keyGen: KeyGeneration = newKeyGeneration();
+
+      const fu = await svc.create(userId, {
+        id: newFollowupId(),
+        ticketId,
+        encryptedContent: Buffer.from("ct-keyed-byid"),
+        source: "client",
+        type: "sms_inbound",
+        isPrivate: false,
+        mentionedPseudonyms: [],
+      });
+
+      await testDb.db
+        .updateTable("followups")
+        .set({ key_generation: keyGen })
+        .where("id", "=", fu.id)
+        .execute();
+
+      const ep = crypto.randomBytes(32);
+      const nonce = crypto.randomBytes(24);
+      const wk = crypto.randomBytes(48);
+
+      await testDb.db
+        .insertInto("ticket_key_wraps")
+        .values({
+          ticket_id: ticketId,
+          volunteer_id: userId,
+          key_generation: keyGen,
+          ephemeral_point: ep,
+          nonce,
+          wrapped_key: wk,
+          algorithm: "ecies-ristretto255-v1",
+        })
+        .execute();
+
+      const result = await svc.listByIds(userId, ticketId, [fu.id]);
+      expect(result).toHaveLength(1);
+      expect(result[0]!.keyGeneration).toBe(keyGen);
+      expect(result[0]!.keyWrap).not.toBeNull();
+      // Wire format: key wraps are Buffers the client decrypts with its vol private key
+      // Dependency: client crypto bridge uses ephemeralPoint/nonce/wrappedKey to derive tk_temp
+      expect(result[0]!.keyWrap!.ephemeralPoint).toEqual(ep);
+      expect(result[0]!.keyWrap!.nonce).toEqual(nonce);
+      expect(result[0]!.keyWrap!.wrappedKey).toEqual(wk);
+    });
+  });
+
+  // ── updateInternalNote: author-check after access passes (L931) ──
+
+  describe("updateInternalNote author guard with ticket access", () => {
+    it("rejects a queue member who is not the note author", async () => {
+      const { userId, ticketId, queueId } = await createTicketFixture();
+      const queueMate = await createTestUser(testDb.db);
+
+      // Grant queue access so assertAccess passes
+      await testDb.db
+        .insertInto("queue_assignments")
+        .values({ queue_id: queueId, user_id: queueMate.id })
+        .onConflict((oc) => oc.columns(["queue_id", "user_id"]).doNothing())
+        .execute();
+
+      const fu = await svc.create(userId, {
+        id: newFollowupId(),
+        ticketId,
+        encryptedContent: Buffer.from("ct-author-guard"),
+        source: "volunteer",
+        type: "internal_note",
+        isPrivate: true,
+        mentionedPseudonyms: [],
+      });
+
+      // queueMate has ticket access but is not the author; the WHERE
+      // created_by clause returns 0 rows, throwing ForbiddenError
+      await expect(
+        svc.updateInternalNote(queueMate.id, fu.id, Buffer.from("ct-edited")),
+      ).rejects.toBeInstanceOf(ForbiddenError);
+    });
+  });
+
+  // ── softDeleteInternalNote: non-author with access, not admin (L957) ──
+
+  describe("softDeleteInternalNote non-author with access but not admin", () => {
+    it("rejects a queue member who is not the author and not admin", async () => {
+      const { userId, ticketId, queueId } = await createTicketFixture();
+      const queueMate = await createTestUser(testDb.db);
+
+      await testDb.db
+        .insertInto("queue_assignments")
+        .values({ queue_id: queueId, user_id: queueMate.id })
+        .onConflict((oc) => oc.columns(["queue_id", "user_id"]).doNothing())
+        .execute();
+
+      const fu = await svc.create(userId, {
+        id: newFollowupId(),
+        ticketId,
+        encryptedContent: Buffer.from("ct-delete-guard"),
+        source: "volunteer",
+        type: "internal_note",
+        isPrivate: true,
+        mentionedPseudonyms: [],
+      });
+
+      // isAdmin=false and created_by !== queueMate.id
+      await expect(
+        svc.softDeleteInternalNote(queueMate.id, fu.id, false),
+      ).rejects.toBeInstanceOf(ForbiddenError);
+    });
+  });
+
+  // ── listParticipants: null created_by excluded (L989) ──
+
+  describe("listParticipants null created_by filtering", () => {
+    it("excludes follow-ups with null created_by from participant list", async () => {
+      const { userId, ticketId } = await createTicketFixture();
+
+      // Volunteer-sourced follow-up with a real author
+      await svc.create(userId, {
+        id: newFollowupId(),
+        ticketId,
+        encryptedContent: Buffer.from("ct-vol-msg"),
+        source: "volunteer",
+        type: "message",
+        isPrivate: false,
+        mentionedPseudonyms: [],
+      });
+
+      // Raw-insert a volunteer-sourced follow-up with null created_by.
+      // This is a defense-in-depth path: in production, volunteer follow-ups
+      // always have created_by, but the INNER JOIN + flatMap null guard
+      // prevent a crash if the invariant is violated.
+      await testDb.db
+        .insertInto("followups")
+        .values({
+          ticket_id: ticketId,
+          source: "volunteer",
+          type: "message",
+          encrypted_content: Buffer.from("ct-orphan-msg"),
+          created_by: null,
+        })
+        .execute();
+
+      const participants = await svc.listParticipants(userId, ticketId);
+
+      // The null-created_by follow-up joins on users.id via INNER JOIN,
+      // so it produces no row. The flatMap guard at L989 drops any
+      // survivors. Only the real author appears.
+      expect(participants).toHaveLength(1);
+      expect(participants[0]!.volunteerId).toBe(userId);
+    });
+  });
+
+  // ── updateOutboundMessage with portalCopy (L1140) ──
+
+  describe("updateOutboundMessage with portalCopy", () => {
+    it("updates both follow-up content and portal_messages client copy", async () => {
+      const { userId, ticketId, clientId } = await createTicketFixture();
+
+      // Seed an active channel for the client
+      await testDb.db
+        .insertInto("portal_channels")
+        .values({
+          client_id: clientId,
+          channel_id: channelSecretSchema.parse(
+            crypto.randomBytes(24).toString("hex"),
+          ),
+          auth_hash: Buffer.alloc(32, 0xaa),
+          client_public: Buffer.alloc(32, 0xbb),
+          has_passphrase: false,
+          key_check_ephemeral_point: Buffer.alloc(32, 0xcc),
+          key_check_nonce: Buffer.alloc(24, 0xdd),
+          key_check_ciphertext: Buffer.from("ct-kc-edit"),
+          status: "active",
+        })
+        .execute();
+
+      // Create the original message with a portal copy
+      const hookedSvc = createFollowUpService(testDb.db, access);
+      const fu = await hookedSvc.create(userId, {
+        id: newFollowupId(),
+        ticketId,
+        encryptedContent: Buffer.from("ct-original-edit"),
+        source: "volunteer",
+        type: "message",
+        isPrivate: false,
+        mentionedPseudonyms: [],
+        portalCopy: {
+          ephemeralPoint: Buffer.alloc(32, 0x10),
+          nonce: Buffer.alloc(24, 0x11),
+          ciphertext: Buffer.from("ct-portal-original"),
+        },
+      });
+
+      // Now edit with a new portal copy
+      const newEp = Buffer.alloc(32, 0x20);
+      const newNonce = Buffer.alloc(24, 0x21);
+      const newCt = Buffer.from("ct-portal-edited");
+
+      const updated = await svc.updateOutboundMessage(
+        userId,
+        fu.id,
+        Buffer.from("ct-edited-content"),
+        {
+          ephemeralPoint: newEp,
+          nonce: newNonce,
+          ciphertext: newCt,
+        },
+      );
+
+      expect(updated.encryptedContent.toString()).toBe("ct-edited-content");
+      expect(updated.editedAt).not.toBeNull();
+
+      // Verify the portal_messages row was updated
+      // Dependency: the client portal reads portal_messages to show edited text
+      const pmRow = await testDb.db
+        .selectFrom("portal_messages")
+        .selectAll()
+        .where("followup_id", "=", fu.id)
+        .executeTakeFirstOrThrow();
+
+      expect(pmRow.ephemeral_point).toEqual(newEp);
+      expect(pmRow.nonce).toEqual(newNonce);
+      expect(pmRow.ciphertext).toEqual(newCt);
+      expect(pmRow.edited_at).not.toBeNull();
+
+      // No-plaintext-leak: the original and edited content never appear
+      // in the stored portal_messages ciphertext
+      const storedCt = pmRow.ciphertext.toString();
+      expect(storedCt).not.toContain("ct-original-edit");
+      expect(storedCt).not.toContain("ct-edited-content");
+    });
+  });
+
+  // ── listSummary role-gated note filtering (view gating in summary path) ──
+
+  describe("listSummary role-gated note filtering", () => {
+    it("filters notes by min_view_role in summary path", async () => {
+      const { userId, ticketId, queueId } = await createTicketFixture();
+
+      const otherUser = await createTestUser(testDb.db);
+      await testDb.db
+        .insertInto("queue_assignments")
+        .values({ queue_id: queueId, user_id: otherUser.id })
+        .onConflict((oc) => oc.columns(["queue_id", "user_id"]).doNothing())
+        .execute();
+
+      const noteTypeId = await createNoteTypeWithViewRole(
+        testDb.db,
+        "POFKWG7erXEJ",
+      );
+
+      await svc.create(userId, {
+        id: newFollowupId(),
+        ticketId,
+        encryptedContent: Buffer.from("ct-visible-summary"),
+        source: "volunteer",
+        type: "internal_note",
+        isPrivate: true,
+        mentionedPseudonyms: [],
+      });
+      await svc.create(otherUser.id, {
+        id: newFollowupId(),
+        ticketId,
+        encryptedContent: Buffer.from("ct-restricted-summary"),
+        source: "volunteer",
+        type: "internal_note",
+        isPrivate: true,
+        mentionedPseudonyms: [],
+        noteTypeId,
+      });
+
+      const asVolunteer = await svc.listSummary(userId, ticketId, {
+        limit: 50,
+        userRoleId: "dXwG0zR9BtJp",
+      });
+      const volunteerTypes = asVolunteer
+        .filter((r) => r.type === "internal_note")
+        .map((r) => r.encryptedContent?.toString());
+
+      expect(volunteerTypes).toContain("ct-visible-summary");
+      expect(volunteerTypes).not.toContain("ct-restricted-summary");
+
+      const asAdmin = await svc.listSummary(userId, ticketId, {
+        limit: 50,
+        userRoleId: "POFKWG7erXEJ",
+      });
+      const adminTypes = asAdmin
+        .filter((r) => r.type === "internal_note")
+        .map((r) => r.encryptedContent?.toString());
+
+      expect(adminTypes).toContain("ct-visible-summary");
+      expect(adminTypes).toContain("ct-restricted-summary");
+    });
+  });
+
+  // ── listSummary with active filters includes position/count ──
+
+  describe("listSummary with createdBy filter", () => {
+    it("applies createdBy filter without includeClientSource", async () => {
+      const { userId, ticketId, queueId } = await createTicketFixture();
+      const otherUser = await createTestUser(testDb.db);
+
+      await testDb.db
+        .insertInto("queue_assignments")
+        .values({ queue_id: queueId, user_id: otherUser.id })
+        .onConflict((oc) => oc.columns(["queue_id", "user_id"]).doNothing())
+        .execute();
+
+      await svc.create(userId, {
+        id: newFollowupId(),
+        ticketId,
+        encryptedContent: Buffer.from("ct-by-me"),
+        source: "volunteer",
+        type: "message",
+        isPrivate: false,
+        mentionedPseudonyms: [],
+      });
+      await svc.create(otherUser.id, {
+        id: newFollowupId(),
+        ticketId,
+        encryptedContent: Buffer.from("ct-by-other"),
+        source: "volunteer",
+        type: "message",
+        isPrivate: false,
+        mentionedPseudonyms: [],
+      });
+
+      // createdBy alone (without includeClientSource) should filter
+      const filtered = await svc.listSummary(userId, ticketId, {
+        limit: 100,
+        createdBy: [userId],
+      });
+      expect(filtered.every((f) => f.createdBy === userId)).toBe(true);
+      expect(filtered.length).toBeGreaterThanOrEqual(1);
+    });
+  });
+
+  // ── listSummary phone_call keeps encryptedContent ──
+
+  describe("listSummary phone_call content retention", () => {
+    it("retains encryptedContent for phone_call follow-ups", async () => {
+      const { userId, ticketId } = await createTicketFixture();
+
+      await svc.create(userId, {
+        id: newFollowupId(),
+        ticketId,
+        encryptedContent: Buffer.from("ct-call-summary"),
+        source: "system",
+        type: "phone_call",
+        isPrivate: false,
+        mentionedPseudonyms: [],
+        callSid: "CA_sum_001" as CallSid,
+        callStatus: "completed",
+        callDurationSeconds: 60,
+      });
+
+      const summaries = await svc.listSummary(userId, ticketId, { limit: 100 });
+      const call = summaries.find((s) => s.type === "phone_call");
+      expect(call).toBeDefined();
+      // phone_call is not a "plain message", so encryptedContent is kept
+      expect(call!.encryptedContent).not.toBeNull();
+    });
+  });
+
+  // ── listByTicket with includeClientSource alone ──
+
+  describe("listByTicket includeClientSource without createdBy", () => {
+    it("returns client-sourced follow-ups when includeClientSource is true without createdBy", async () => {
+      const { userId, ticketId } = await createTicketFixture();
+
+      await svc.create(userId, {
+        id: newFollowupId(),
+        ticketId,
+        encryptedContent: Buffer.from("ct-vol-only"),
+        source: "volunteer",
+        type: "message",
+        isPrivate: false,
+        mentionedPseudonyms: [],
+      });
+
+      // Raw insert a client-sourced follow-up
+      await testDb.db
+        .insertInto("followups")
+        .values({
+          ticket_id: ticketId,
+          source: "client",
+          type: "sms_inbound",
+          encrypted_content: Buffer.from("ct-client-sms"),
+          created_by: null,
+        })
+        .execute();
+
+      // includeClientSource=true without createdBy hits the
+      // hasCreatedBy=false branch of L399, only the includeClientSource
+      // condition is pushed
+      const filtered = await svc.listByTicket(userId, ticketId, {
+        limit: 100,
+        includeClientSource: true,
+      });
+
+      const sources = filtered.map((f) => f.source);
+      expect(sources).toContain("client");
+      // Volunteer follow-ups are excluded when includeClientSource is
+      // the only filter (the OR clause only includes source='client')
+    });
   });
 });

@@ -32,6 +32,8 @@ import {
   emailSendInputSchema,
   emailInboundPayloadSchema,
   EMAIL_RELAY_LIMITS,
+  reseedPortalHistoryInputSchema,
+  convertBlobForReseedInputSchema,
 } from "./tickets.js";
 
 /** Base64-encode a string of n arbitrary bytes. */
@@ -1298,5 +1300,142 @@ describe("emailInboundPayloadSchema", () => {
         droppedAttachments: 1.5,
       }).success,
     ).toBe(false);
+  });
+});
+
+// --- Portal reseed refinement callbacks ---
+
+describe("reseedPortalHistoryInputSchema refinement", () => {
+  function validTriple(): Record<string, unknown> {
+    return {
+      ephemeralPoint: fakeBase64(32),
+      nonce: fakeBase64(24),
+      ciphertext: fakeBase64(64),
+    };
+  }
+
+  const base = {
+    clientId: VALID_UUID,
+    channelId: "a".repeat(48),
+  };
+
+  it("accepts input with at least one message", () => {
+    const result = reseedPortalHistoryInputSchema.safeParse({
+      ...base,
+      messages: [{ followupId: VALID_UUID, copy: validTriple() }],
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("accepts input with only attachmentWraps", () => {
+    const result = reseedPortalHistoryInputSchema.safeParse({
+      ...base,
+      messages: [],
+      attachmentWraps: [
+        {
+          attachmentId: VALID_UUID_2,
+          followupId: VALID_UUID,
+          copy: validTriple(),
+        },
+      ],
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("accepts input with only recordingWraps", () => {
+    const result = reseedPortalHistoryInputSchema.safeParse({
+      ...base,
+      messages: [],
+      recordingWraps: [
+        {
+          recordingId: VALID_UUID_3,
+          followupId: VALID_UUID,
+          copy: validTriple(),
+        },
+      ],
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("rejects input where all arrays are empty", () => {
+    const result = reseedPortalHistoryInputSchema.safeParse({
+      ...base,
+      messages: [],
+      attachmentWraps: [],
+      recordingWraps: [],
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it("rejects input where all arrays default to empty (omitted)", () => {
+    const result = reseedPortalHistoryInputSchema.safeParse(base);
+    expect(result.success).toBe(false);
+  });
+});
+
+describe("convertBlobForReseedInputSchema superRefine", () => {
+  function validTriple(): Record<string, unknown> {
+    return {
+      ephemeralPoint: fakeBase64(32),
+      nonce: fakeBase64(24),
+      ciphertext: fakeBase64(64),
+    };
+  }
+
+  function validConvert(
+    kind: "attachment" | "recording",
+  ): Record<string, unknown> {
+    return {
+      clientId: VALID_UUID,
+      channelId: "a".repeat(48),
+      kind,
+      rowId: VALID_UUID_2,
+      followupId: VALID_UUID_3,
+      encryptedData: "ct-test-data",
+      fileKeyWrap: "ct-test-wrap",
+      copy: validTriple(),
+    };
+  }
+
+  it("accepts a valid attachment conversion with UUID rowId", () => {
+    const result = convertBlobForReseedInputSchema.safeParse(
+      validConvert("attachment"),
+    );
+    expect(result.success).toBe(true);
+  });
+
+  it("accepts a valid recording conversion with UUID rowId", () => {
+    const result = convertBlobForReseedInputSchema.safeParse(
+      validConvert("recording"),
+    );
+    expect(result.success).toBe(true);
+  });
+
+  it("rejects attachment kind with non-UUID rowId", () => {
+    const result = convertBlobForReseedInputSchema.safeParse({
+      ...validConvert("attachment"),
+      rowId: "not-a-uuid",
+    });
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      const rowIdIssues = result.error.issues.filter((i) =>
+        i.path.includes("rowId"),
+      );
+      expect(rowIdIssues.length).toBeGreaterThan(0);
+    }
+  });
+
+  it("rejects recording kind with non-UUID rowId", () => {
+    const result = convertBlobForReseedInputSchema.safeParse({
+      ...validConvert("recording"),
+      rowId: "not-a-uuid",
+    });
+    expect(result.success).toBe(false);
+    if (!result.success) {
+      const rowIdIssues = result.error.issues.filter((i) =>
+        i.path.includes("rowId"),
+      );
+      expect(rowIdIssues.length).toBeGreaterThan(0);
+    }
   });
 });

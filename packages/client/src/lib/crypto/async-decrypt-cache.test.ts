@@ -64,6 +64,23 @@ class TestDecryptCache extends AsyncDecryptCache {
       ciphertext,
     );
   }
+
+  /** Expose the protected decryptPortalReply() for testing. */
+  testDecryptPortalReply(
+    cacheKey: string,
+    followUpId: string,
+    ticketId: string,
+    sealedWrap: string,
+    ciphertext: string,
+  ): string | undefined {
+    return this.decryptPortalReply(
+      cacheKey,
+      followUpId,
+      ticketId,
+      sealedWrap,
+      ciphertext,
+    );
+  }
 }
 
 const CACHE_KEY = "item-001";
@@ -76,6 +93,7 @@ function createMockBridge(): {
   bridge: CryptoBridge;
   mockDecrypt: ReturnType<typeof vi.fn>;
   mockDecryptAndRewrap: ReturnType<typeof vi.fn>;
+  mockDecryptPortalReply: ReturnType<typeof vi.fn>;
 } {
   const mockDecrypt =
     vi.fn<
@@ -102,14 +120,27 @@ function createMockBridge(): {
     >();
   mockDecryptAndRewrap.mockResolvedValue("rewrap-decrypted-text");
 
+  const mockDecryptPortalReply =
+    vi.fn<
+      (
+        followUpId: string,
+        ticketId: string,
+        sealedWrap: string,
+        ct: string,
+      ) => Promise<string>
+    >();
+  mockDecryptPortalReply.mockResolvedValue("portal-reply-text");
+
   return {
     bridge: {
       decrypt: mockDecrypt,
       decryptAndRewrap: mockDecryptAndRewrap,
+      decryptPortalReply: mockDecryptPortalReply,
       getState: () => "KEYED",
     } as unknown as CryptoBridge,
     mockDecrypt,
     mockDecryptAndRewrap,
+    mockDecryptPortalReply,
   };
 }
 
@@ -351,6 +382,171 @@ describe("AsyncDecryptCache", () => {
       cache.testDecrypt("k2", EP, NONCE, WK, CT);
       await cache.whenSettled();
       expect(cache.size).toBe(2);
+    });
+  });
+
+  describe("decryptAndRewrap edge cases", () => {
+    it("de-duplicates concurrent calls for the same key", () => {
+      const { bridge, mockDecryptAndRewrap } = createMockBridge();
+      const c = new TestDecryptCache(bridge, `RewrapDedup-${Date.now()}`);
+
+      c.testDecryptAndRewrap(CACHE_KEY, "fu-1", "ticket-1", EP, NONCE, WK, CT);
+      c.testDecryptAndRewrap(CACHE_KEY, "fu-1", "ticket-1", EP, NONCE, WK, CT);
+      c.testDecryptAndRewrap(CACHE_KEY, "fu-1", "ticket-1", EP, NONCE, WK, CT);
+      expect(mockDecryptAndRewrap).toHaveBeenCalledOnce();
+    });
+
+    it("does not fire the bridge when DESTROYED", () => {
+      const mockDecryptAndRewrap = vi.fn();
+      const destroyedBridge = {
+        decrypt: vi.fn(),
+        decryptAndRewrap: mockDecryptAndRewrap,
+        decryptPortalReply: vi.fn(),
+        getState: () => "DESTROYED",
+      } as unknown as CryptoBridge;
+      const c = new TestDecryptCache(
+        destroyedBridge,
+        `RewrapDestroyed-${Date.now()}`,
+      );
+
+      const result = c.testDecryptAndRewrap(
+        CACHE_KEY,
+        "fu-1",
+        "ticket-1",
+        EP,
+        NONCE,
+        WK,
+        CT,
+      );
+      expect(result).toBeUndefined();
+      expect(mockDecryptAndRewrap).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("decryptPortalReply", () => {
+    const SEALED_WRAP = "sealed-wrap-fake-b64";
+
+    it("returns undefined on first call and triggers bridge.decryptPortalReply()", () => {
+      const { bridge, mockDecryptPortalReply } = createMockBridge();
+      const c = new TestDecryptCache(bridge, `PortalReply-${Date.now()}`);
+
+      const result = c.testDecryptPortalReply(
+        CACHE_KEY,
+        "fu-portal-1",
+        "ticket-1",
+        SEALED_WRAP,
+        CT,
+      );
+      expect(result).toBeUndefined();
+      expect(mockDecryptPortalReply).toHaveBeenCalledOnce();
+      expect(mockDecryptPortalReply).toHaveBeenCalledWith(
+        "fu-portal-1",
+        "ticket-1",
+        SEALED_WRAP,
+        CT,
+      );
+    });
+
+    it("returns cached plaintext after async resolve", async () => {
+      const { bridge, mockDecryptPortalReply } = createMockBridge();
+      const c = new TestDecryptCache(bridge, `PortalReplyHit-${Date.now()}`);
+
+      c.testDecryptPortalReply(
+        CACHE_KEY,
+        "fu-portal-1",
+        "ticket-1",
+        SEALED_WRAP,
+        CT,
+      );
+
+      await vi.waitFor(() => {
+        expect(c.has(CACHE_KEY)).toBe(true);
+      });
+
+      const result = c.testDecryptPortalReply(
+        CACHE_KEY,
+        "fu-portal-1",
+        "ticket-1",
+        SEALED_WRAP,
+        CT,
+      );
+      expect(result).toBe("portal-reply-text");
+      expect(mockDecryptPortalReply).toHaveBeenCalledOnce();
+    });
+
+    it("de-duplicates concurrent calls for the same key", () => {
+      const { bridge, mockDecryptPortalReply } = createMockBridge();
+      const c = new TestDecryptCache(bridge, `PortalReplyDedup-${Date.now()}`);
+
+      c.testDecryptPortalReply(CACHE_KEY, "fu-1", "t-1", SEALED_WRAP, CT);
+      c.testDecryptPortalReply(CACHE_KEY, "fu-1", "t-1", SEALED_WRAP, CT);
+      expect(mockDecryptPortalReply).toHaveBeenCalledOnce();
+    });
+
+    it("stores error sentinel on failure", async () => {
+      const { bridge, mockDecryptPortalReply } = createMockBridge();
+      mockDecryptPortalReply.mockRejectedValueOnce(
+        new Error("portal reply decrypt failed"),
+      );
+      const c = new TestDecryptCache(bridge, `PortalReplyErr-${Date.now()}`);
+      const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {
+        // silenced
+      });
+
+      c.testDecryptPortalReply(CACHE_KEY, "fu-1", "t-1", SEALED_WRAP, CT);
+
+      await vi.waitFor(() => {
+        expect(c.has(CACHE_KEY)).toBe(true);
+      });
+
+      expect(c.get(CACHE_KEY)).toBe(DECRYPT_ERROR_SENTINEL);
+      warnSpy.mockRestore();
+    });
+
+    it("does not fire the bridge when DESTROYED", () => {
+      const mockDecryptPortalReply = vi.fn();
+      const destroyedBridge = {
+        decrypt: vi.fn(),
+        decryptAndRewrap: vi.fn(),
+        decryptPortalReply: mockDecryptPortalReply,
+        getState: () => "DESTROYED",
+      } as unknown as CryptoBridge;
+      const c = new TestDecryptCache(
+        destroyedBridge,
+        `PortalReplyDestroyed-${Date.now()}`,
+      );
+
+      const result = c.testDecryptPortalReply(
+        CACHE_KEY,
+        "fu-1",
+        "t-1",
+        SEALED_WRAP,
+        CT,
+      );
+      expect(result).toBeUndefined();
+      expect(mockDecryptPortalReply).not.toHaveBeenCalled();
+    });
+
+    it("swallows BRIDGE_DESTROYED without sentinel or warning", async () => {
+      const { bridge, mockDecryptPortalReply } = createMockBridge();
+      mockDecryptPortalReply.mockRejectedValueOnce(
+        new CryptoWorkerError("Bridge is destroyed", "BRIDGE_DESTROYED"),
+      );
+      const c = new TestDecryptCache(
+        bridge,
+        `PortalReplyTeardown-${Date.now()}`,
+      );
+      const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {
+        // silenced
+      });
+
+      c.testDecryptPortalReply(CACHE_KEY, "fu-1", "t-1", SEALED_WRAP, CT);
+
+      await vi.waitFor(() => {
+        expect(c.size).toBe(0);
+      });
+      expect(warnSpy).not.toHaveBeenCalled();
+      warnSpy.mockRestore();
     });
   });
 

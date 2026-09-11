@@ -6,7 +6,14 @@
  */
 
 import { describe, it, expect, beforeAll } from "vitest";
-import { encryptFieldContent, decryptFieldContent } from "./intake-form.js";
+import fc from "fast-check";
+import { FC_MEDIUM } from "./fc-config.js";
+import {
+  encryptFieldContent,
+  decryptFieldContent,
+  encryptFormMeta,
+  decryptFormMeta,
+} from "./intake-form.js";
 import { deriveClientBrandingKey } from "./branding.js";
 import { encryptContent } from "./content.js";
 import { encode, decode } from "./serialize.js";
@@ -16,8 +23,10 @@ import {
   type SodiumBackend,
 } from "./sodium.js";
 import { DecryptionError } from "./errors.js";
+import type { SymmetricKey } from "./types.js";
 import type {
   IntakeFieldConfig,
+  IntakeFormMeta,
   LocalizedText,
   VisibleWhenV1,
   VisibleWhenV2,
@@ -611,6 +620,531 @@ describe("intake-form", () => {
       } finally {
         sodium.memzero(key);
       }
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // decryptFieldContent error branches (label schema mismatch, label non-JSON,
+  // config schema mismatch, config non-JSON, and the instanceof rethrow guards)
+  // -------------------------------------------------------------------------
+
+  describe("decryptFieldContent error branches", () => {
+    // AAD literal must match the production constant. The value is the
+    // domain-separation label defined in ADR-053 and consumed by the
+    // XChaCha20-Poly1305 AEAD construction; changing it breaks all
+    // stored intake-form ciphertext.
+    const aad = new TextEncoder().encode("care-y-intake-form-aad-v1");
+
+    function validLabelBlob(key: SymmetricKey): Uint8Array {
+      return encryptContent(
+        new TextEncoder().encode(JSON.stringify({ en: "ct-test-label" })),
+        key,
+        aad,
+      );
+    }
+
+    function validConfigBlob(key: SymmetricKey): Uint8Array {
+      return encryptContent(
+        new TextEncoder().encode(JSON.stringify({ type: "text" })),
+        key,
+        aad,
+      );
+    }
+
+    it("throws DecryptionError when label is valid JSON but fails LocalizedText schema", () => {
+      const pk = orgPubKey();
+      const key = deriveClientBrandingKey(pk);
+      try {
+        // Array is valid JSON but not a LocalizedText record
+        const badLabel = encryptContent(
+          new TextEncoder().encode(JSON.stringify([1, 2, 3])),
+          key,
+          aad,
+        );
+        const enc = {
+          encryptedLabel: encode(badLabel),
+          encryptedConfig: encode(validConfigBlob(key)),
+        };
+        expect(() => decryptFieldContent(enc, pk)).toThrow(DecryptionError);
+      } finally {
+        sodium.memzero(key);
+      }
+    });
+
+    it("throws DecryptionError when label ciphertext decrypts to non-JSON bytes", () => {
+      const pk = orgPubKey();
+      const key = deriveClientBrandingKey(pk);
+      try {
+        const notJson = encryptContent(
+          new TextEncoder().encode("<<<not json>>>"),
+          key,
+          aad,
+        );
+        const enc = {
+          encryptedLabel: encode(notJson),
+          encryptedConfig: encode(validConfigBlob(key)),
+        };
+        expect(() => decryptFieldContent(enc, pk)).toThrow(DecryptionError);
+      } finally {
+        sodium.memzero(key);
+      }
+    });
+
+    it("throws DecryptionError when config is valid JSON but fails intakeFieldConfig schema", () => {
+      const pk = orgPubKey();
+      const key = deriveClientBrandingKey(pk);
+      try {
+        // Object with no "type" discriminator
+        const badConfig = encryptContent(
+          new TextEncoder().encode(JSON.stringify({ unknown: true })),
+          key,
+          aad,
+        );
+        const enc = {
+          encryptedLabel: encode(validLabelBlob(key)),
+          encryptedConfig: encode(badConfig),
+        };
+        expect(() => decryptFieldContent(enc, pk)).toThrow(DecryptionError);
+      } finally {
+        sodium.memzero(key);
+      }
+    });
+
+    it("throws DecryptionError when config ciphertext decrypts to non-JSON bytes", () => {
+      const pk = orgPubKey();
+      const key = deriveClientBrandingKey(pk);
+      try {
+        const notJson = encryptContent(
+          new TextEncoder().encode("<<<not json>>>"),
+          key,
+          aad,
+        );
+        const enc = {
+          encryptedLabel: encode(validLabelBlob(key)),
+          encryptedConfig: encode(notJson),
+        };
+        expect(() => decryptFieldContent(enc, pk)).toThrow(DecryptionError);
+      } finally {
+        sodium.memzero(key);
+      }
+    });
+
+    it("label schema-mismatch error message does not leak seeded plaintext", () => {
+      const pk = orgPubKey();
+      const key = deriveClientBrandingKey(pk);
+      const seeded = "ct-secret-label-payload-42";
+      try {
+        const badLabel = encryptContent(
+          new TextEncoder().encode(JSON.stringify({ en: 99999 })),
+          key,
+          aad,
+        );
+        const enc = {
+          encryptedLabel: encode(badLabel),
+          encryptedConfig: encode(validConfigBlob(key)),
+        };
+        let msg = "";
+        try {
+          decryptFieldContent(enc, pk);
+        } catch (err: unknown) {
+          expect(err).toBeInstanceOf(DecryptionError);
+          msg = (err as DecryptionError).message;
+        }
+        expect(msg).not.toContain(seeded);
+        expect(msg).not.toContain("99999");
+      } finally {
+        sodium.memzero(key);
+      }
+    });
+
+    it("label non-JSON error message does not leak seeded plaintext", () => {
+      const pk = orgPubKey();
+      const key = deriveClientBrandingKey(pk);
+      const seeded = "ct-garbage-payload-77";
+      try {
+        const notJson = encryptContent(
+          new TextEncoder().encode(seeded),
+          key,
+          aad,
+        );
+        const enc = {
+          encryptedLabel: encode(notJson),
+          encryptedConfig: encode(validConfigBlob(key)),
+        };
+        let msg = "";
+        try {
+          decryptFieldContent(enc, pk);
+        } catch (err: unknown) {
+          expect(err).toBeInstanceOf(DecryptionError);
+          msg = (err as DecryptionError).message;
+        }
+        expect(msg).not.toContain(seeded);
+      } finally {
+        sodium.memzero(key);
+      }
+    });
+
+    it("config schema-mismatch error message does not leak seeded plaintext", () => {
+      const pk = orgPubKey();
+      const key = deriveClientBrandingKey(pk);
+      const seeded = "ct-config-secret-88";
+      try {
+        const badConfig = encryptContent(
+          new TextEncoder().encode(JSON.stringify({ noType: seeded })),
+          key,
+          aad,
+        );
+        const enc = {
+          encryptedLabel: encode(validLabelBlob(key)),
+          encryptedConfig: encode(badConfig),
+        };
+        let msg = "";
+        try {
+          decryptFieldContent(enc, pk);
+        } catch (err: unknown) {
+          expect(err).toBeInstanceOf(DecryptionError);
+          msg = (err as DecryptionError).message;
+        }
+        expect(msg).not.toContain(seeded);
+      } finally {
+        sodium.memzero(key);
+      }
+    });
+
+    it("config non-JSON error message does not leak seeded plaintext", () => {
+      const pk = orgPubKey();
+      const key = deriveClientBrandingKey(pk);
+      const seeded = "ct-config-garbage-99";
+      try {
+        const notJson = encryptContent(
+          new TextEncoder().encode(seeded),
+          key,
+          aad,
+        );
+        const enc = {
+          encryptedLabel: encode(validLabelBlob(key)),
+          encryptedConfig: encode(notJson),
+        };
+        let msg = "";
+        try {
+          decryptFieldContent(enc, pk);
+        } catch (err: unknown) {
+          expect(err).toBeInstanceOf(DecryptionError);
+          msg = (err as DecryptionError).message;
+        }
+        expect(msg).not.toContain(seeded);
+      } finally {
+        sodium.memzero(key);
+      }
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // encryptFormMeta / decryptFormMeta
+  // -------------------------------------------------------------------------
+
+  describe("encryptFormMeta / decryptFormMeta roundtrip", () => {
+    it("roundtrips a full meta with all fields populated", () => {
+      const pk = orgPubKey();
+      const meta: IntakeFormMeta = {
+        description: { en: "ct-form-desc" },
+        submitMessage: { en: "ct-submit-msg" },
+        closedMessage: { en: "ct-closed-msg" },
+        bannerBlobKey: "ct-banner-key-abc",
+        bannerAlt: "ct-banner-alt-text",
+      };
+
+      const encrypted = encryptFormMeta(meta, pk);
+      expect(encrypted).toBeDefined();
+      expect(typeof encrypted).toBe("string");
+
+      const decrypted = decryptFormMeta(encrypted!, pk);
+      expect(decrypted).toEqual(meta);
+    });
+
+    it("roundtrips meta with only description", () => {
+      const pk = orgPubKey();
+      const meta: IntakeFormMeta = {
+        description: { en: "ct-only-desc" },
+      };
+
+      const encrypted = encryptFormMeta(meta, pk);
+      expect(encrypted).toBeDefined();
+      const decrypted = decryptFormMeta(encrypted!, pk);
+      expect(decrypted).toEqual(meta);
+    });
+
+    it("roundtrips meta with ProseMirror doc JSON in description", () => {
+      const pk = orgPubKey();
+      const meta: IntakeFormMeta = {
+        description: {
+          en: {
+            type: "doc",
+            content: [
+              {
+                type: "paragraph",
+                content: [{ type: "text", text: "ct-prosemirror" }],
+              },
+            ],
+          },
+        },
+      };
+
+      const encrypted = encryptFormMeta(meta, pk);
+      expect(encrypted).toBeDefined();
+      const decrypted = decryptFormMeta(encrypted!, pk);
+      expect(decrypted).toEqual(meta);
+    });
+
+    it("roundtrips meta with bannerAlt but no bannerBlobKey", () => {
+      const pk = orgPubKey();
+      // bannerAlt alone does not trigger hasContent (bannerBlobKey is the
+      // content-bearing field); this meta has a description to carry content.
+      const meta: IntakeFormMeta = {
+        description: { en: "ct-desc-with-alt" },
+        bannerAlt: "ct-alt-only",
+      };
+
+      const encrypted = encryptFormMeta(meta, pk);
+      expect(encrypted).toBeDefined();
+      const decrypted = decryptFormMeta(encrypted!, pk);
+      expect(decrypted).toEqual(meta);
+    });
+
+    it("produces different ciphertext on each call (random nonce)", () => {
+      const pk = orgPubKey();
+      const meta: IntakeFormMeta = {
+        description: { en: "ct-nonce-test" },
+      };
+
+      const a = encryptFormMeta(meta, pk);
+      const b = encryptFormMeta(meta, pk);
+      expect(a).not.toBe(b);
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // hasContent paths in encryptFormMeta (lines 226-231)
+  // -------------------------------------------------------------------------
+
+  describe("encryptFormMeta hasContent paths", () => {
+    it("returns undefined when all meta fields are empty or absent", () => {
+      const pk = orgPubKey();
+      const meta: IntakeFormMeta = {};
+      expect(encryptFormMeta(meta, pk)).toBe(undefined);
+    });
+
+    it("returns undefined when fields are present but contain only whitespace", () => {
+      const pk = orgPubKey();
+      const meta: IntakeFormMeta = {
+        description: { en: "   " },
+        submitMessage: { en: "  \t  " },
+        closedMessage: { en: "\n" },
+        bannerBlobKey: "",
+      };
+      expect(encryptFormMeta(meta, pk)).toBe(undefined);
+    });
+
+    it("returns undefined when rich text fields have empty content arrays", () => {
+      const pk = orgPubKey();
+      const meta: IntakeFormMeta = {
+        description: { en: { type: "doc", content: [] } },
+      };
+      expect(encryptFormMeta(meta, pk)).toBe(undefined);
+    });
+
+    it("encrypts when only description has content", () => {
+      const pk = orgPubKey();
+      const meta: IntakeFormMeta = { description: { en: "ct-desc-only" } };
+      const encrypted = encryptFormMeta(meta, pk);
+      expect(encrypted).toBeDefined();
+      expect(decryptFormMeta(encrypted!, pk)).toEqual(meta);
+    });
+
+    it("encrypts when only submitMessage has content", () => {
+      const pk = orgPubKey();
+      const meta: IntakeFormMeta = { submitMessage: { en: "ct-submit-only" } };
+      const encrypted = encryptFormMeta(meta, pk);
+      expect(encrypted).toBeDefined();
+      expect(decryptFormMeta(encrypted!, pk)).toEqual(meta);
+    });
+
+    it("encrypts when only closedMessage has content", () => {
+      const pk = orgPubKey();
+      const meta: IntakeFormMeta = { closedMessage: { en: "ct-closed-only" } };
+      const encrypted = encryptFormMeta(meta, pk);
+      expect(encrypted).toBeDefined();
+      expect(decryptFormMeta(encrypted!, pk)).toEqual(meta);
+    });
+
+    it("encrypts when only bannerBlobKey has content", () => {
+      const pk = orgPubKey();
+      const meta: IntakeFormMeta = { bannerBlobKey: "ct-banner-key-xyz" };
+      const encrypted = encryptFormMeta(meta, pk);
+      expect(encrypted).toBeDefined();
+      expect(decryptFormMeta(encrypted!, pk)).toEqual(meta);
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // decryptFormMeta error branches (wrong key, truncated, tampered,
+  // schema mismatch, non-JSON)
+  // -------------------------------------------------------------------------
+
+  describe("decryptFormMeta error branches", () => {
+    // AAD literal must match the production constant (ADR-053 domain
+    // separation label). Stored form-meta ciphertext depends on this value.
+    const aad = new TextEncoder().encode("care-y-intake-form-aad-v1");
+
+    it("throws DecryptionError with wrong org public key", () => {
+      const pk = orgPubKey();
+      const meta: IntakeFormMeta = { description: { en: "ct-wrong-key" } };
+      const encrypted = encryptFormMeta(meta, pk)!;
+
+      const otherPk = orgPubKey();
+      expect(() => decryptFormMeta(encrypted, otherPk)).toThrow(
+        DecryptionError,
+      );
+    });
+
+    it("throws DecryptionError on truncated ciphertext", () => {
+      const pk = orgPubKey();
+      const meta: IntakeFormMeta = { description: { en: "ct-truncated" } };
+      const encrypted = encryptFormMeta(meta, pk)!;
+
+      const blob = decode(encrypted);
+      const truncated = encode(blob.subarray(0, 10));
+      expect(() => decryptFormMeta(truncated, pk)).toThrow(DecryptionError);
+    });
+
+    it("throws DecryptionError on flipped-bit ciphertext", () => {
+      const pk = orgPubKey();
+      const meta: IntakeFormMeta = { description: { en: "ct-flipped" } };
+      const encrypted = encryptFormMeta(meta, pk)!;
+
+      const blob = decode(encrypted);
+      blob[blob.length - 1] = (blob[blob.length - 1] ?? 0) ^ 0xff;
+      const tampered = encode(blob);
+      expect(() => decryptFormMeta(tampered, pk)).toThrow(DecryptionError);
+    });
+
+    it("throws DecryptionError when decrypted blob is valid JSON but fails intakeFormMeta schema", () => {
+      const pk = orgPubKey();
+      const key = deriveClientBrandingKey(pk);
+      try {
+        // Valid JSON, wrong shape (array instead of object)
+        const badMeta = encryptContent(
+          new TextEncoder().encode(JSON.stringify([1, 2, 3])),
+          key,
+          aad,
+        );
+        const encrypted = encode(badMeta);
+        expect(() => decryptFormMeta(encrypted, pk)).toThrow(DecryptionError);
+      } finally {
+        sodium.memzero(key);
+      }
+    });
+
+    it("throws DecryptionError when decrypted blob is not valid JSON", () => {
+      const pk = orgPubKey();
+      const key = deriveClientBrandingKey(pk);
+      try {
+        const notJson = encryptContent(
+          new TextEncoder().encode("<<<not-json-meta>>>"),
+          key,
+          aad,
+        );
+        const encrypted = encode(notJson);
+        expect(() => decryptFormMeta(encrypted, pk)).toThrow(DecryptionError);
+      } finally {
+        sodium.memzero(key);
+      }
+    });
+
+    it("schema-mismatch error message does not leak seeded plaintext", () => {
+      const pk = orgPubKey();
+      const key = deriveClientBrandingKey(pk);
+      const seeded = "ct-meta-secret-55";
+      try {
+        const badMeta = encryptContent(
+          new TextEncoder().encode(JSON.stringify({ badField: seeded })),
+          key,
+          aad,
+        );
+        const encrypted = encode(badMeta);
+        let msg = "";
+        try {
+          decryptFormMeta(encrypted, pk);
+        } catch (err: unknown) {
+          expect(err).toBeInstanceOf(DecryptionError);
+          msg = (err as DecryptionError).message;
+        }
+        expect(msg).not.toContain(seeded);
+      } finally {
+        sodium.memzero(key);
+      }
+    });
+
+    it("non-JSON error message does not leak seeded plaintext", () => {
+      const pk = orgPubKey();
+      const key = deriveClientBrandingKey(pk);
+      const seeded = "ct-meta-garbage-66";
+      try {
+        const notJson = encryptContent(
+          new TextEncoder().encode(seeded),
+          key,
+          aad,
+        );
+        const encrypted = encode(notJson);
+        let msg = "";
+        try {
+          decryptFormMeta(encrypted, pk);
+        } catch (err: unknown) {
+          expect(err).toBeInstanceOf(DecryptionError);
+          msg = (err as DecryptionError).message;
+        }
+        expect(msg).not.toContain(seeded);
+      } finally {
+        sodium.memzero(key);
+      }
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // Property-based roundtrip: arbitrary non-empty form meta strings survive
+  // encrypt -> decrypt without data loss.
+  // -------------------------------------------------------------------------
+
+  describe("property-based", () => {
+    it("roundtrip recovers arbitrary form meta with non-empty fields", () => {
+      const pk = orgPubKey();
+      fc.assert(
+        fc.property(
+          fc.record({
+            description: fc.record({
+              en: fc.string({ minLength: 1, maxLength: 200 }),
+            }),
+            submitMessage: fc.record({
+              en: fc.string({ minLength: 1, maxLength: 200 }),
+            }),
+            closedMessage: fc.record({
+              en: fc.string({ minLength: 1, maxLength: 200 }),
+            }),
+            bannerBlobKey: fc.string({ minLength: 1, maxLength: 100 }),
+          }),
+          (meta) => {
+            // All fields carry content, so encryptFormMeta always returns
+            // a string (never undefined). The constrained arbitraries
+            // guarantee non-empty values; the all-empty case is covered
+            // by the hasContent tests above.
+            const encrypted = encryptFormMeta(meta, pk);
+            expect(encrypted).toBeDefined();
+            const decrypted = decryptFormMeta(encrypted!, pk);
+            expect(decrypted).toEqual(meta);
+          },
+        ),
+        { numRuns: FC_MEDIUM },
+      );
     });
   });
 });

@@ -1064,4 +1064,234 @@ describe("portal-core", () => {
       expect(resp.ok).toBe(true);
     });
   });
+
+  describe("encryptReply error guard paths", () => {
+    it("rejects encryptReply when not keyed (READY state)", async () => {
+      handleZeroAll(-1, testSink);
+      sinkMessages = [];
+      await dispatchAndWait({ type: "init", id: 300 });
+
+      const resp = await dispatchAndWait({
+        type: "encryptReply",
+        id: 301,
+        text: "fail",
+        orgPublicKey: encode(new Uint8Array(32)),
+        ticketId: "t-fail",
+        followUpId: "fu-fail",
+        keyGeneration: "gen-fail",
+        attachments: [],
+      });
+
+      expect(resp.ok).toBe(false);
+      expect((resp as PortalErrorResponse).code).toBe("NOT_READY");
+    });
+  });
+
+  describe("decryptAttachmentKey error guard paths", () => {
+    it("rejects decryptAttachmentKey when not keyed", async () => {
+      handleZeroAll(-1, testSink);
+      sinkMessages = [];
+      await dispatchAndWait({ type: "init", id: 310 });
+
+      const resp = await dispatchAndWait({
+        type: "decryptAttachmentKey",
+        id: 311,
+        ephemeralPoint: encode(new Uint8Array(32)),
+        nonce: encode(new Uint8Array(24)),
+        ciphertext: encode(new Uint8Array(48)),
+      });
+
+      expect(resp.ok).toBe(false);
+      expect((resp as PortalErrorResponse).code).toBe("NOT_READY");
+    });
+
+    it("returns DECRYPT_FAILED for a corrupt ECIES attachment key envelope", async () => {
+      // Worker must be keyed first
+      handleZeroAll(-1, testSink);
+      sinkMessages = [];
+      const sodium = requireSodium();
+      const seed = generatePortalSeed();
+      const oprfKey = sodium.crypto_core_ristretto255_scalar_random();
+      await fullChannelSessionFlow(seed, oprfKey);
+
+      const resp = await dispatchAndWait({
+        type: "decryptAttachmentKey",
+        id: 312,
+        ephemeralPoint: encode(sodium.randombytes_buf(32)),
+        nonce: encode(sodium.randombytes_buf(24)),
+        ciphertext: encode(sodium.randombytes_buf(64)),
+      });
+
+      expect(resp.ok).toBe(false);
+      expect((resp as PortalErrorResponse).code).toBe("DECRYPT_FAILED");
+
+      sodium.memzero(oprfKey);
+    });
+  });
+
+  describe("decryptAttachmentBlob error guard paths", () => {
+    it("rejects decryptAttachmentBlob when not keyed", async () => {
+      handleZeroAll(-1, testSink);
+      sinkMessages = [];
+      await dispatchAndWait({ type: "init", id: 320 });
+
+      const resp = await dispatchAndWait({
+        type: "decryptAttachmentBlob",
+        id: 321,
+        ciphertext: new ArrayBuffer(64),
+        fileKey: encode(new Uint8Array(32)),
+        ticketId: "t-fail",
+        attachmentId: "att-fail",
+      });
+
+      expect(resp.ok).toBe(false);
+      expect((resp as PortalErrorResponse).code).toBe("NOT_READY");
+    });
+
+    it("returns DECRYPT_FAILED for tampered blob ciphertext", async () => {
+      handleZeroAll(-1, testSink);
+      sinkMessages = [];
+      const sodium = requireSodium();
+      const seed = generatePortalSeed();
+      const oprfKey = sodium.crypto_core_ristretto255_scalar_random();
+      await fullChannelSessionFlow(seed, oprfKey);
+
+      const resp = await dispatchAndWait({
+        type: "decryptAttachmentBlob",
+        id: 322,
+        ciphertext: new ArrayBuffer(64),
+        fileKey: encode(sodium.randombytes_buf(32)),
+        ticketId: "t-bad-blob",
+        attachmentId: "att-bad",
+      });
+
+      expect(resp.ok).toBe(false);
+      expect((resp as PortalErrorResponse).code).toBe("DECRYPT_FAILED");
+
+      sodium.memzero(oprfKey);
+    });
+  });
+
+  describe("decryptMessage error guard paths", () => {
+    it("rejects decryptMessage when not keyed", async () => {
+      handleZeroAll(-1, testSink);
+      sinkMessages = [];
+      await dispatchAndWait({ type: "init", id: 330 });
+
+      const resp = await dispatchAndWait({
+        type: "decryptMessage",
+        id: 331,
+        ephemeralPoint: encode(new Uint8Array(32)),
+        nonce: encode(new Uint8Array(24)),
+        ciphertext: encode(new Uint8Array(48)),
+      });
+
+      expect(resp.ok).toBe(false);
+      expect((resp as PortalErrorResponse).code).toBe("NOT_READY");
+    });
+
+    it("returns DECRYPT_FAILED for corrupt ECIES envelope", async () => {
+      handleZeroAll(-1, testSink);
+      sinkMessages = [];
+      const sodium = requireSodium();
+      const seed = generatePortalSeed();
+      const oprfKey = sodium.crypto_core_ristretto255_scalar_random();
+      await fullChannelSessionFlow(seed, oprfKey);
+
+      const resp = await dispatchAndWait({
+        type: "decryptMessage",
+        id: 332,
+        ephemeralPoint: encode(sodium.randombytes_buf(32)),
+        nonce: encode(sodium.randombytes_buf(24)),
+        ciphertext: encode(sodium.randombytes_buf(64)),
+      });
+
+      expect(resp.ok).toBe(false);
+      expect((resp as PortalErrorResponse).code).toBe("DECRYPT_FAILED");
+
+      sodium.memzero(oprfKey);
+    });
+  });
+
+  describe("accountSessionFinish state guard", () => {
+    it("rejects accountSessionFinish when not in ACCOUNT_BLINDED state", async () => {
+      handleZeroAll(-1, testSink);
+      sinkMessages = [];
+      await dispatchAndWait({ type: "init", id: 340 });
+
+      const resp = await dispatchAndWait({
+        type: "accountSessionFinish",
+        id: 341,
+        evaluated: encode(new Uint8Array(32)),
+      });
+
+      expect(resp.ok).toBe(false);
+      expect((resp as PortalErrorResponse).code).toBe("INVALID_STATE");
+    });
+  });
+
+  describe("channelPassphraseFinish state guard", () => {
+    it("rejects channelPassphraseFinish when not CHANNEL_KEYED", async () => {
+      handleZeroAll(-1, testSink);
+      sinkMessages = [];
+      await dispatchAndWait({ type: "init", id: 350 });
+
+      const resp = await dispatchAndWait({
+        type: "channelPassphraseFinish",
+        id: 351,
+        evaluated: encode(new Uint8Array(32)),
+      });
+
+      expect(resp.ok).toBe(false);
+      expect((resp as PortalErrorResponse).code).toBe("NOT_READY");
+    });
+  });
+
+  describe("channelSessionStart error catch", () => {
+    it("propagates WORKER_ERROR for corrupt seed (triggers channelSessionStart catch)", async () => {
+      handleZeroAll(-1, testSink);
+      sinkMessages = [];
+      await dispatchAndWait({ type: "init", id: 360 });
+
+      // Pass an empty seed (0 bytes), which will cause deriveChannelId
+      // to fail inside handleChannelSessionStart's try block.
+      const resp = await dispatchAndWait({
+        type: "channelSessionStart",
+        id: 361,
+        seed: new ArrayBuffer(0),
+      });
+
+      expect(resp.ok).toBe(false);
+      expect((resp as PortalErrorResponse).code).toBe("WORKER_ERROR");
+    });
+  });
+
+  describe("encryptReply error catch", () => {
+    it("propagates ENCRYPT_FAILED for a corrupt org public key", async () => {
+      handleZeroAll(-1, testSink);
+      sinkMessages = [];
+      const sodium = requireSodium();
+      const seed = generatePortalSeed();
+      const oprfKey = sodium.crypto_core_ristretto255_scalar_random();
+      await fullChannelSessionFlow(seed, oprfKey);
+
+      // Use a valid-looking but wrong-length org public key that
+      // causes sealForOrgKey (crypto_box_seal) to throw.
+      const resp = await dispatchAndWait({
+        type: "encryptReply",
+        id: 370,
+        text: "trigger error",
+        orgPublicKey: encode(new Uint8Array(5)),
+        ticketId: "t-enc-err",
+        followUpId: "fu-enc-err",
+        keyGeneration: "gen-enc-err",
+        attachments: [],
+      });
+
+      expect(resp.ok).toBe(false);
+      expect((resp as PortalErrorResponse).code).toBe("ENCRYPT_FAILED");
+
+      sodium.memzero(oprfKey);
+    });
+  });
 });

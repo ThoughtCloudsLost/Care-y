@@ -13,6 +13,7 @@ import {
   seedOrgPublicKey,
   createTestTicketFixture,
 } from "../test-utils.js";
+import { ForbiddenError } from "../errors.js";
 import type { PortalChannelRow } from "./channel-service.js";
 import { createTicketAccessChecker } from "../tickets/access.js";
 import {
@@ -24,6 +25,7 @@ import {
   PortalChannelMismatchError,
   ReseedValidationError,
   ReseedAlreadyConvertedError,
+  ReseedRowNotFoundError,
 } from "./portal-errors.js";
 import {
   channelSecretSchema,
@@ -911,6 +913,1280 @@ describe.skipIf(!process.env.DATABASE_URL)(
     // -----------------------------------------------------------------------
     // listTicketsForClient
     // -----------------------------------------------------------------------
+
+    // -----------------------------------------------------------------------
+    // reseedPortalHistory: channel and followup denial guards
+    // -----------------------------------------------------------------------
+
+    describe("reseedPortalHistory - channel and followup guards", () => {
+      it("throws PortalChannelMismatchError when the client has no active channel", async () => {
+        const fixture = await createTestTicketFixture(testDb.db, {
+          createUser: true,
+        });
+        // No channel inserted for this client
+        const access = createTicketAccessChecker(testDb.db);
+
+        const fuId = newFollowupId();
+        await testDb.db
+          .insertInto("followups")
+          .values({
+            id: fuId,
+            ticket_id: fixture.ticketId,
+            source: "volunteer",
+            type: "message",
+            encrypted_content: Buffer.from("ct-noact"),
+          })
+          .execute();
+
+        await expect(
+          reseedPortalHistory(testDb.db, access, fixture.userId!, {
+            clientId: fixture.clientId,
+            channelId: crypto.randomBytes(24).toString("hex"),
+            messages: [{ followupId: fuId, copy: fakeTriple() }],
+            attachmentWraps: [],
+            recordingWraps: [],
+          }),
+        ).rejects.toThrow(PortalChannelMismatchError);
+      });
+
+      it("throws ReseedValidationError when all arrays are empty (no followup IDs)", async () => {
+        const fixture = await createTestTicketFixture(testDb.db, {
+          createUser: true,
+        });
+        const channel = await insertChannel(testDb.db, fixture.clientId);
+        const access = createTicketAccessChecker(testDb.db);
+
+        await expect(
+          reseedPortalHistory(testDb.db, access, fixture.userId!, {
+            clientId: fixture.clientId,
+            channelId: channel.channel_id,
+            messages: [],
+            attachmentWraps: [],
+            recordingWraps: [],
+          }),
+        ).rejects.toThrow(ReseedValidationError);
+      });
+
+      it("throws ReseedValidationError when a referenced followup does not exist", async () => {
+        const fixture = await createTestTicketFixture(testDb.db, {
+          createUser: true,
+        });
+        const channel = await insertChannel(testDb.db, fixture.clientId);
+        const access = createTicketAccessChecker(testDb.db);
+
+        const bogusFollowupId = newFollowupId();
+
+        await expect(
+          reseedPortalHistory(testDb.db, access, fixture.userId!, {
+            clientId: fixture.clientId,
+            channelId: channel.channel_id,
+            messages: [{ followupId: bogusFollowupId, copy: fakeTriple() }],
+            attachmentWraps: [],
+            recordingWraps: [],
+          }),
+        ).rejects.toThrow(ReseedValidationError);
+      });
+    });
+
+    // -----------------------------------------------------------------------
+    // reseedPortalHistory: internal_note guard on recording wraps
+    // -----------------------------------------------------------------------
+
+    describe("reseedPortalHistory - recording internal_note guard", () => {
+      it("rejects internal_note recording wraps", async () => {
+        const fixture = await createTestTicketFixture(testDb.db, {
+          createUser: true,
+        });
+        const channel = await insertChannel(testDb.db, fixture.clientId);
+        const access = createTicketAccessChecker(testDb.db);
+
+        const fuId = newFollowupId();
+        await testDb.db
+          .insertInto("followups")
+          .values({
+            id: fuId,
+            ticket_id: fixture.ticketId,
+            source: "volunteer",
+            type: "internal_note",
+            is_private: false,
+            encrypted_content: Buffer.from("ct-intnote"),
+          })
+          .execute();
+
+        const recId = newRecordingId();
+        await testDb.db
+          .insertInto("recordings")
+          .values({
+            id: recId,
+            ticket_id: fixture.ticketId,
+            followup_id: fuId,
+            blob_key: "test/rec/intern-1" as BlobKey,
+            size_bytes: 512,
+            duration_seconds: 10,
+            file_key_wrap: Buffer.alloc(72, 0xab),
+          })
+          .execute();
+
+        await expect(
+          reseedPortalHistory(testDb.db, access, fixture.userId!, {
+            clientId: fixture.clientId,
+            channelId: channel.channel_id,
+            messages: [],
+            attachmentWraps: [],
+            recordingWraps: [
+              {
+                recordingId: recId,
+                followupId: fuId,
+                copy: fakeTriple(),
+              },
+            ],
+          }),
+        ).rejects.toThrow(ReseedValidationError);
+      });
+    });
+
+    // -----------------------------------------------------------------------
+    // reseedPortalHistory: attachment row validation guards
+    // -----------------------------------------------------------------------
+
+    describe("reseedPortalHistory - attachment row validation", () => {
+      it("rejects when the attachment row does not exist", async () => {
+        const fixture = await createTestTicketFixture(testDb.db, {
+          createUser: true,
+        });
+        const channel = await insertChannel(testDb.db, fixture.clientId);
+        const access = createTicketAccessChecker(testDb.db);
+
+        const fuId = newFollowupId();
+        await testDb.db
+          .insertInto("followups")
+          .values({
+            id: fuId,
+            ticket_id: fixture.ticketId,
+            source: "volunteer",
+            type: "message",
+            encrypted_content: Buffer.from("ct-att-nf"),
+          })
+          .execute();
+
+        const bogusAttId = newAttachmentId();
+
+        await expect(
+          reseedPortalHistory(testDb.db, access, fixture.userId!, {
+            clientId: fixture.clientId,
+            channelId: channel.channel_id,
+            messages: [],
+            attachmentWraps: [
+              {
+                attachmentId: bogusAttId,
+                followupId: fuId,
+                copy: fakeTriple(),
+              },
+            ],
+            recordingWraps: [],
+          }),
+        ).rejects.toThrow(ReseedValidationError);
+      });
+
+      it("rejects when the attachment is soft-deleted", async () => {
+        const fixture = await createTestTicketFixture(testDb.db, {
+          createUser: true,
+        });
+        const channel = await insertChannel(testDb.db, fixture.clientId);
+        const access = createTicketAccessChecker(testDb.db);
+
+        const fuId = newFollowupId();
+        await testDb.db
+          .insertInto("followups")
+          .values({
+            id: fuId,
+            ticket_id: fixture.ticketId,
+            source: "volunteer",
+            type: "message",
+            encrypted_content: Buffer.from("ct-att-del"),
+          })
+          .execute();
+
+        const attId = newAttachmentId();
+        await testDb.db
+          .insertInto("attachments")
+          .values({
+            id: attId,
+            ticket_id: fixture.ticketId,
+            followup_id: fuId,
+            blob_key: "test/att/del-1" as BlobKey,
+            size_bytes: 100,
+            content_type: "image/png",
+            encrypted_filename: Buffer.from("ct-fn-del"),
+            file_key_wrap: Buffer.alloc(72, 0xab),
+            deleted_at: new Date(),
+          })
+          .execute();
+
+        await expect(
+          reseedPortalHistory(testDb.db, access, fixture.userId!, {
+            clientId: fixture.clientId,
+            channelId: channel.channel_id,
+            messages: [],
+            attachmentWraps: [
+              {
+                attachmentId: attId,
+                followupId: fuId,
+                copy: fakeTriple(),
+              },
+            ],
+            recordingWraps: [],
+          }),
+        ).rejects.toThrow(ReseedValidationError);
+      });
+
+      it("rejects when attachment followup_id does not match", async () => {
+        const fixture = await createTestTicketFixture(testDb.db, {
+          createUser: true,
+        });
+        const channel = await insertChannel(testDb.db, fixture.clientId);
+        const access = createTicketAccessChecker(testDb.db);
+
+        const fuId1 = newFollowupId();
+        const fuId2 = newFollowupId();
+        await testDb.db
+          .insertInto("followups")
+          .values([
+            {
+              id: fuId1,
+              ticket_id: fixture.ticketId,
+              source: "volunteer",
+              type: "message",
+              encrypted_content: Buffer.from("ct-att-mm1"),
+            },
+            {
+              id: fuId2,
+              ticket_id: fixture.ticketId,
+              source: "volunteer",
+              type: "message",
+              encrypted_content: Buffer.from("ct-att-mm2"),
+            },
+          ])
+          .execute();
+
+        const attId = newAttachmentId();
+        await testDb.db
+          .insertInto("attachments")
+          .values({
+            id: attId,
+            ticket_id: fixture.ticketId,
+            followup_id: fuId1,
+            blob_key: "test/att/mm-1" as BlobKey,
+            size_bytes: 100,
+            content_type: "image/png",
+            encrypted_filename: Buffer.from("ct-fn-mm"),
+            file_key_wrap: Buffer.alloc(72, 0xab),
+          })
+          .execute();
+
+        // Claim the attachment belongs to fuId2, but it actually belongs to fuId1
+        await expect(
+          reseedPortalHistory(testDb.db, access, fixture.userId!, {
+            clientId: fixture.clientId,
+            channelId: channel.channel_id,
+            messages: [],
+            attachmentWraps: [
+              {
+                attachmentId: attId,
+                followupId: fuId2,
+                copy: fakeTriple(),
+              },
+            ],
+            recordingWraps: [],
+          }),
+        ).rejects.toThrow(ReseedValidationError);
+      });
+    });
+
+    // -----------------------------------------------------------------------
+    // reseedPortalHistory: recording row validation guards
+    // -----------------------------------------------------------------------
+
+    describe("reseedPortalHistory - recording row validation", () => {
+      it("rejects when the recording row does not exist", async () => {
+        const fixture = await createTestTicketFixture(testDb.db, {
+          createUser: true,
+        });
+        const channel = await insertChannel(testDb.db, fixture.clientId);
+        const access = createTicketAccessChecker(testDb.db);
+
+        const fuId = newFollowupId();
+        await testDb.db
+          .insertInto("followups")
+          .values({
+            id: fuId,
+            ticket_id: fixture.ticketId,
+            source: "system",
+            type: "phone_call",
+            encrypted_content: Buffer.from("ct-rec-nf"),
+          })
+          .execute();
+
+        const bogusRecId = newRecordingId();
+
+        await expect(
+          reseedPortalHistory(testDb.db, access, fixture.userId!, {
+            clientId: fixture.clientId,
+            channelId: channel.channel_id,
+            messages: [],
+            attachmentWraps: [],
+            recordingWraps: [
+              {
+                recordingId: bogusRecId,
+                followupId: fuId,
+                copy: fakeTriple(),
+              },
+            ],
+          }),
+        ).rejects.toThrow(ReseedValidationError);
+      });
+
+      it("rejects when the recording is soft-deleted", async () => {
+        const fixture = await createTestTicketFixture(testDb.db, {
+          createUser: true,
+        });
+        const channel = await insertChannel(testDb.db, fixture.clientId);
+        const access = createTicketAccessChecker(testDb.db);
+
+        const fuId = newFollowupId();
+        await testDb.db
+          .insertInto("followups")
+          .values({
+            id: fuId,
+            ticket_id: fixture.ticketId,
+            source: "system",
+            type: "phone_call",
+            encrypted_content: Buffer.from("ct-rec-del"),
+          })
+          .execute();
+
+        const recId = newRecordingId();
+        await testDb.db
+          .insertInto("recordings")
+          .values({
+            id: recId,
+            ticket_id: fixture.ticketId,
+            followup_id: fuId,
+            blob_key: "test/rec/del-1" as BlobKey,
+            size_bytes: 512,
+            duration_seconds: 5,
+            file_key_wrap: Buffer.alloc(72, 0xab),
+            deleted_at: new Date(),
+          })
+          .execute();
+
+        await expect(
+          reseedPortalHistory(testDb.db, access, fixture.userId!, {
+            clientId: fixture.clientId,
+            channelId: channel.channel_id,
+            messages: [],
+            attachmentWraps: [],
+            recordingWraps: [
+              {
+                recordingId: recId,
+                followupId: fuId,
+                copy: fakeTriple(),
+              },
+            ],
+          }),
+        ).rejects.toThrow(ReseedValidationError);
+      });
+
+      it("rejects when recording followup_id does not match", async () => {
+        const fixture = await createTestTicketFixture(testDb.db, {
+          createUser: true,
+        });
+        const channel = await insertChannel(testDb.db, fixture.clientId);
+        const access = createTicketAccessChecker(testDb.db);
+
+        const fuId1 = newFollowupId();
+        const fuId2 = newFollowupId();
+        await testDb.db
+          .insertInto("followups")
+          .values([
+            {
+              id: fuId1,
+              ticket_id: fixture.ticketId,
+              source: "system",
+              type: "phone_call",
+              encrypted_content: Buffer.from("ct-rec-mm1"),
+            },
+            {
+              id: fuId2,
+              ticket_id: fixture.ticketId,
+              source: "system",
+              type: "phone_call",
+              encrypted_content: Buffer.from("ct-rec-mm2"),
+            },
+          ])
+          .execute();
+
+        const recId = newRecordingId();
+        await testDb.db
+          .insertInto("recordings")
+          .values({
+            id: recId,
+            ticket_id: fixture.ticketId,
+            followup_id: fuId1,
+            blob_key: "test/rec/mm-1" as BlobKey,
+            size_bytes: 512,
+            duration_seconds: 5,
+            file_key_wrap: Buffer.alloc(72, 0xab),
+          })
+          .execute();
+
+        await expect(
+          reseedPortalHistory(testDb.db, access, fixture.userId!, {
+            clientId: fixture.clientId,
+            channelId: channel.channel_id,
+            messages: [],
+            attachmentWraps: [],
+            recordingWraps: [
+              {
+                recordingId: recId,
+                followupId: fuId2,
+                copy: fakeTriple(),
+              },
+            ],
+          }),
+        ).rejects.toThrow(ReseedValidationError);
+      });
+    });
+
+    // -----------------------------------------------------------------------
+    // reseedPortalHistory: ticket access denial
+    // -----------------------------------------------------------------------
+
+    describe("reseedPortalHistory - ticket access enforcement", () => {
+      it("throws ForbiddenError when the caller lacks access to the followup's ticket", async () => {
+        // Create a fixture without a user to ensure no access
+        const fixture = await createTestTicketFixture(testDb.db);
+        const channel = await insertChannel(testDb.db, fixture.clientId);
+
+        // Create a second fixture with a user who has no queue membership for the first fixture's ticket
+        const otherFixture = await createTestTicketFixture(testDb.db, {
+          createUser: true,
+        });
+
+        const access = createTicketAccessChecker(testDb.db);
+
+        const fuId = newFollowupId();
+        await testDb.db
+          .insertInto("followups")
+          .values({
+            id: fuId,
+            ticket_id: fixture.ticketId,
+            source: "volunteer",
+            type: "message",
+            encrypted_content: Buffer.from("ct-noacc"),
+          })
+          .execute();
+
+        await expect(
+          reseedPortalHistory(testDb.db, access, otherFixture.userId!, {
+            clientId: fixture.clientId,
+            channelId: channel.channel_id,
+            messages: [{ followupId: fuId, copy: fakeTriple() }],
+            attachmentWraps: [],
+            recordingWraps: [],
+          }),
+        ).rejects.toThrow(ForbiddenError);
+      });
+    });
+
+    // -----------------------------------------------------------------------
+    // convertBlobForReseed: channel denial guards
+    // -----------------------------------------------------------------------
+
+    describe("convertBlobForReseed - channel guards", () => {
+      it("throws PortalChannelMismatchError when no active channel exists", async () => {
+        const fixture = await createTestTicketFixture(testDb.db, {
+          createUser: true,
+        });
+        const access = createTicketAccessChecker(testDb.db);
+        const blobStore = createMemoryBlobStore();
+
+        const fuId = newFollowupId();
+        await testDb.db
+          .insertInto("followups")
+          .values({
+            id: fuId,
+            ticket_id: fixture.ticketId,
+            source: "volunteer",
+            type: "message",
+            encrypted_content: Buffer.from("ct-conv-noact"),
+          })
+          .execute();
+
+        const attId = newAttachmentId();
+        await testDb.db
+          .insertInto("attachments")
+          .values({
+            id: attId,
+            ticket_id: fixture.ticketId,
+            followup_id: fuId,
+            blob_key: "test/att/conv-noact" as BlobKey,
+            size_bytes: 100,
+            content_type: "image/png",
+            encrypted_filename: Buffer.from("ct-fn-conv-noact"),
+            file_key_wrap: null,
+          })
+          .execute();
+
+        await expect(
+          convertBlobForReseed(
+            testDb.db,
+            access,
+            fixture.userId!,
+            {
+              clientId: fixture.clientId,
+              channelId: crypto.randomBytes(24).toString("hex"),
+              kind: "attachment",
+              rowId: attId,
+              followupId: fuId,
+              encryptedData: Buffer.from("ct-blob-noact"),
+              fileKeyWrap: Buffer.alloc(72, 0xcc),
+              copy: fakeTriple(),
+            },
+            blobStore,
+            TEST_ORG_SCHEMA,
+          ),
+        ).rejects.toThrow(PortalChannelMismatchError);
+      });
+
+      it("throws PortalChannelMismatchError when channel ID does not match active channel", async () => {
+        const fixture = await createTestTicketFixture(testDb.db, {
+          createUser: true,
+        });
+        await insertChannel(testDb.db, fixture.clientId);
+        const access = createTicketAccessChecker(testDb.db);
+        const blobStore = createMemoryBlobStore();
+
+        const fuId = newFollowupId();
+        await testDb.db
+          .insertInto("followups")
+          .values({
+            id: fuId,
+            ticket_id: fixture.ticketId,
+            source: "volunteer",
+            type: "message",
+            encrypted_content: Buffer.from("ct-conv-wrongch"),
+          })
+          .execute();
+
+        const attId = newAttachmentId();
+        await testDb.db
+          .insertInto("attachments")
+          .values({
+            id: attId,
+            ticket_id: fixture.ticketId,
+            followup_id: fuId,
+            blob_key: "test/att/conv-wrongch" as BlobKey,
+            size_bytes: 100,
+            content_type: "image/png",
+            encrypted_filename: Buffer.from("ct-fn-conv-wrongch"),
+            file_key_wrap: null,
+          })
+          .execute();
+
+        const wrongChannelId = crypto.randomBytes(24).toString("hex");
+
+        await expect(
+          convertBlobForReseed(
+            testDb.db,
+            access,
+            fixture.userId!,
+            {
+              clientId: fixture.clientId,
+              channelId: wrongChannelId,
+              kind: "attachment",
+              rowId: attId,
+              followupId: fuId,
+              encryptedData: Buffer.from("ct-blob-wrongch"),
+              fileKeyWrap: Buffer.alloc(72, 0xcc),
+              copy: fakeTriple(),
+            },
+            blobStore,
+            TEST_ORG_SCHEMA,
+          ),
+        ).rejects.toThrow(PortalChannelMismatchError);
+      });
+    });
+
+    // -----------------------------------------------------------------------
+    // convertBlobForReseed: attachment denial guards
+    // -----------------------------------------------------------------------
+
+    describe("convertBlobForReseed - attachment denial guards", () => {
+      it("throws ReseedRowNotFoundError when the attachment does not exist", async () => {
+        const fixture = await createTestTicketFixture(testDb.db, {
+          createUser: true,
+        });
+        const channel = await insertChannel(testDb.db, fixture.clientId);
+        const access = createTicketAccessChecker(testDb.db);
+        const blobStore = createMemoryBlobStore();
+
+        const fuId = newFollowupId();
+        await testDb.db
+          .insertInto("followups")
+          .values({
+            id: fuId,
+            ticket_id: fixture.ticketId,
+            source: "volunteer",
+            type: "message",
+            encrypted_content: Buffer.from("ct-attconv-nf"),
+          })
+          .execute();
+
+        const bogusAttId = newAttachmentId();
+
+        await expect(
+          convertBlobForReseed(
+            testDb.db,
+            access,
+            fixture.userId!,
+            {
+              clientId: fixture.clientId,
+              channelId: channel.channel_id,
+              kind: "attachment",
+              rowId: bogusAttId,
+              followupId: fuId,
+              encryptedData: Buffer.from("ct-blob-att-nf"),
+              fileKeyWrap: Buffer.alloc(72, 0xcc),
+              copy: fakeTriple(),
+            },
+            blobStore,
+            TEST_ORG_SCHEMA,
+          ),
+        ).rejects.toThrow(ReseedRowNotFoundError);
+      });
+
+      it("throws ReseedRowNotFoundError when the attachment is soft-deleted", async () => {
+        const fixture = await createTestTicketFixture(testDb.db, {
+          createUser: true,
+        });
+        const channel = await insertChannel(testDb.db, fixture.clientId);
+        const access = createTicketAccessChecker(testDb.db);
+        const blobStore = createMemoryBlobStore();
+
+        const fuId = newFollowupId();
+        await testDb.db
+          .insertInto("followups")
+          .values({
+            id: fuId,
+            ticket_id: fixture.ticketId,
+            source: "volunteer",
+            type: "message",
+            encrypted_content: Buffer.from("ct-attconv-del"),
+          })
+          .execute();
+
+        const attId = newAttachmentId();
+        await testDb.db
+          .insertInto("attachments")
+          .values({
+            id: attId,
+            ticket_id: fixture.ticketId,
+            followup_id: fuId,
+            blob_key: "test/att/conv-del" as BlobKey,
+            size_bytes: 100,
+            content_type: "image/png",
+            encrypted_filename: Buffer.from("ct-fn-conv-del"),
+            file_key_wrap: null,
+            deleted_at: new Date(),
+          })
+          .execute();
+
+        await expect(
+          convertBlobForReseed(
+            testDb.db,
+            access,
+            fixture.userId!,
+            {
+              clientId: fixture.clientId,
+              channelId: channel.channel_id,
+              kind: "attachment",
+              rowId: attId,
+              followupId: fuId,
+              encryptedData: Buffer.from("ct-blob-att-del"),
+              fileKeyWrap: Buffer.alloc(72, 0xcc),
+              copy: fakeTriple(),
+            },
+            blobStore,
+            TEST_ORG_SCHEMA,
+          ),
+        ).rejects.toThrow(ReseedRowNotFoundError);
+      });
+
+      it("throws ReseedValidationError when attachment followup_id does not match", async () => {
+        const fixture = await createTestTicketFixture(testDb.db, {
+          createUser: true,
+        });
+        const channel = await insertChannel(testDb.db, fixture.clientId);
+        const access = createTicketAccessChecker(testDb.db);
+        const blobStore = createMemoryBlobStore();
+
+        const fuId1 = newFollowupId();
+        const fuId2 = newFollowupId();
+        await testDb.db
+          .insertInto("followups")
+          .values([
+            {
+              id: fuId1,
+              ticket_id: fixture.ticketId,
+              source: "volunteer",
+              type: "message",
+              encrypted_content: Buffer.from("ct-attconv-mm1"),
+            },
+            {
+              id: fuId2,
+              ticket_id: fixture.ticketId,
+              source: "volunteer",
+              type: "message",
+              encrypted_content: Buffer.from("ct-attconv-mm2"),
+            },
+          ])
+          .execute();
+
+        const attId = newAttachmentId();
+        await testDb.db
+          .insertInto("attachments")
+          .values({
+            id: attId,
+            ticket_id: fixture.ticketId,
+            followup_id: fuId1,
+            blob_key: "test/att/conv-mm" as BlobKey,
+            size_bytes: 100,
+            content_type: "image/png",
+            encrypted_filename: Buffer.from("ct-fn-conv-mm"),
+            file_key_wrap: null,
+          })
+          .execute();
+
+        await expect(
+          convertBlobForReseed(
+            testDb.db,
+            access,
+            fixture.userId!,
+            {
+              clientId: fixture.clientId,
+              channelId: channel.channel_id,
+              kind: "attachment",
+              rowId: attId,
+              followupId: fuId2,
+              encryptedData: Buffer.from("ct-blob-att-mm"),
+              fileKeyWrap: Buffer.alloc(72, 0xcc),
+              copy: fakeTriple(),
+            },
+            blobStore,
+            TEST_ORG_SCHEMA,
+          ),
+        ).rejects.toThrow(ReseedValidationError);
+      });
+
+      // The followup-not-found side of the guard (fu === undefined) is not
+      // testable: reaching it requires the attachment's followup_id to equal
+      // the input followupId while that followup row is absent, and the
+      // attachments FK forbids that state. The wrong-client side of the same
+      // throw site is covered below.
+
+      it("throws ReseedValidationError when the parent followup belongs to a different client", async () => {
+        const fixture = await createTestTicketFixture(testDb.db, {
+          createUser: true,
+        });
+        const channel = await insertChannel(testDb.db, fixture.clientId);
+        const access = createTicketAccessChecker(testDb.db);
+        const blobStore = createMemoryBlobStore();
+
+        // Create a second client/ticket in a different queue
+        const otherFixture = await createTestTicketFixture(testDb.db);
+
+        const fuId = newFollowupId();
+        // Followup on the OTHER client's ticket
+        await testDb.db
+          .insertInto("followups")
+          .values({
+            id: fuId,
+            ticket_id: otherFixture.ticketId,
+            source: "volunteer",
+            type: "message",
+            encrypted_content: Buffer.from("ct-attconv-wrcl"),
+          })
+          .execute();
+
+        // Attachment must also reference this followup for the FK match
+        const attId = newAttachmentId();
+        await testDb.db
+          .insertInto("attachments")
+          .values({
+            id: attId,
+            ticket_id: otherFixture.ticketId,
+            followup_id: fuId,
+            blob_key: "test/att/conv-wrcl" as BlobKey,
+            size_bytes: 100,
+            content_type: "image/png",
+            encrypted_filename: Buffer.from("ct-fn-conv-wrcl"),
+            file_key_wrap: null,
+          })
+          .execute();
+
+        await expect(
+          convertBlobForReseed(
+            testDb.db,
+            access,
+            fixture.userId!,
+            {
+              clientId: fixture.clientId,
+              channelId: channel.channel_id,
+              kind: "attachment",
+              rowId: attId,
+              followupId: fuId,
+              encryptedData: Buffer.from("ct-blob-att-wrcl"),
+              fileKeyWrap: Buffer.alloc(72, 0xcc),
+              copy: fakeTriple(),
+            },
+            blobStore,
+            TEST_ORG_SCHEMA,
+          ),
+        ).rejects.toThrow(ReseedValidationError);
+      });
+
+      it("sets direction to from_client for client-sourced attachment conversions", async () => {
+        const fixture = await createTestTicketFixture(testDb.db, {
+          createUser: true,
+        });
+        const channel = await insertChannel(testDb.db, fixture.clientId);
+        const access = createTicketAccessChecker(testDb.db);
+        const blobStore = createMemoryBlobStore();
+
+        const fuId = newFollowupId();
+        await testDb.db
+          .insertInto("followups")
+          .values({
+            id: fuId,
+            ticket_id: fixture.ticketId,
+            source: "client",
+            type: "message",
+            encrypted_content: Buffer.from("ct-attconv-dir"),
+          })
+          .execute();
+
+        const oldBlobKey = await blobStore.put(
+          TEST_ORG_SCHEMA,
+          "attachment",
+          Buffer.from("ct-old-att-blob-dir"),
+        );
+
+        const attId = newAttachmentId();
+        await testDb.db
+          .insertInto("attachments")
+          .values({
+            id: attId,
+            ticket_id: fixture.ticketId,
+            followup_id: fuId,
+            blob_key: oldBlobKey,
+            size_bytes: 100,
+            content_type: "image/png",
+            encrypted_filename: Buffer.from("ct-fn-dir"),
+            file_key_wrap: null,
+          })
+          .execute();
+
+        const result = await convertBlobForReseed(
+          testDb.db,
+          access,
+          fixture.userId!,
+          {
+            clientId: fixture.clientId,
+            channelId: channel.channel_id,
+            kind: "attachment",
+            rowId: attId,
+            followupId: fuId,
+            encryptedData: Buffer.from("ct-new-att-blob-dir"),
+            fileKeyWrap: Buffer.alloc(72, 0xcc),
+            copy: fakeTriple(),
+          },
+          blobStore,
+          TEST_ORG_SCHEMA,
+        );
+
+        expect(result.inserted).toBe(true);
+
+        // portal_attachments direction should be from_client
+        // (serves the portal message rendering layer's direction filter)
+        const portalRows = await testDb.db
+          .selectFrom("portal_attachments")
+          .selectAll()
+          .where("channel_id", "=", channel.id)
+          .where("attachment_id", "=", attId)
+          .execute();
+        expect(portalRows.length).toBe(1);
+        expect(portalRows[0]!.direction).toBe("from_client");
+      });
+    });
+
+    // -----------------------------------------------------------------------
+    // convertBlobForReseed: recording denial guards
+    // -----------------------------------------------------------------------
+
+    describe("convertBlobForReseed - recording denial guards", () => {
+      it("throws ReseedRowNotFoundError when the recording does not exist", async () => {
+        const fixture = await createTestTicketFixture(testDb.db, {
+          createUser: true,
+        });
+        const channel = await insertChannel(testDb.db, fixture.clientId);
+        const access = createTicketAccessChecker(testDb.db);
+        const blobStore = createMemoryBlobStore();
+
+        const fuId = newFollowupId();
+        await testDb.db
+          .insertInto("followups")
+          .values({
+            id: fuId,
+            ticket_id: fixture.ticketId,
+            source: "system",
+            type: "phone_call",
+            encrypted_content: Buffer.from("ct-recconv-nf"),
+          })
+          .execute();
+
+        const bogusRecId = newRecordingId();
+
+        await expect(
+          convertBlobForReseed(
+            testDb.db,
+            access,
+            fixture.userId!,
+            {
+              clientId: fixture.clientId,
+              channelId: channel.channel_id,
+              kind: "recording",
+              rowId: bogusRecId,
+              followupId: fuId,
+              encryptedData: Buffer.from("ct-blob-rec-nf"),
+              fileKeyWrap: Buffer.alloc(72, 0xcc),
+              copy: fakeTriple(),
+            },
+            blobStore,
+            TEST_ORG_SCHEMA,
+          ),
+        ).rejects.toThrow(ReseedRowNotFoundError);
+      });
+
+      it("throws ReseedRowNotFoundError when the recording is soft-deleted", async () => {
+        const fixture = await createTestTicketFixture(testDb.db, {
+          createUser: true,
+        });
+        const channel = await insertChannel(testDb.db, fixture.clientId);
+        const access = createTicketAccessChecker(testDb.db);
+        const blobStore = createMemoryBlobStore();
+
+        const fuId = newFollowupId();
+        await testDb.db
+          .insertInto("followups")
+          .values({
+            id: fuId,
+            ticket_id: fixture.ticketId,
+            source: "system",
+            type: "phone_call",
+            encrypted_content: Buffer.from("ct-recconv-del"),
+          })
+          .execute();
+
+        const recId = newRecordingId();
+        await testDb.db
+          .insertInto("recordings")
+          .values({
+            id: recId,
+            ticket_id: fixture.ticketId,
+            followup_id: fuId,
+            blob_key: "test/rec/conv-del" as BlobKey,
+            size_bytes: 512,
+            duration_seconds: 5,
+            file_key_wrap: null,
+            deleted_at: new Date(),
+          })
+          .execute();
+
+        await expect(
+          convertBlobForReseed(
+            testDb.db,
+            access,
+            fixture.userId!,
+            {
+              clientId: fixture.clientId,
+              channelId: channel.channel_id,
+              kind: "recording",
+              rowId: recId,
+              followupId: fuId,
+              encryptedData: Buffer.from("ct-blob-rec-del"),
+              fileKeyWrap: Buffer.alloc(72, 0xcc),
+              copy: fakeTriple(),
+            },
+            blobStore,
+            TEST_ORG_SCHEMA,
+          ),
+        ).rejects.toThrow(ReseedRowNotFoundError);
+      });
+
+      it("throws ReseedValidationError when recording followup_id does not match", async () => {
+        const fixture = await createTestTicketFixture(testDb.db, {
+          createUser: true,
+        });
+        const channel = await insertChannel(testDb.db, fixture.clientId);
+        const access = createTicketAccessChecker(testDb.db);
+        const blobStore = createMemoryBlobStore();
+
+        const fuId1 = newFollowupId();
+        const fuId2 = newFollowupId();
+        await testDb.db
+          .insertInto("followups")
+          .values([
+            {
+              id: fuId1,
+              ticket_id: fixture.ticketId,
+              source: "system",
+              type: "phone_call",
+              encrypted_content: Buffer.from("ct-recconv-mm1"),
+            },
+            {
+              id: fuId2,
+              ticket_id: fixture.ticketId,
+              source: "system",
+              type: "phone_call",
+              encrypted_content: Buffer.from("ct-recconv-mm2"),
+            },
+          ])
+          .execute();
+
+        const recId = newRecordingId();
+        await testDb.db
+          .insertInto("recordings")
+          .values({
+            id: recId,
+            ticket_id: fixture.ticketId,
+            followup_id: fuId1,
+            blob_key: "test/rec/conv-mm" as BlobKey,
+            size_bytes: 512,
+            duration_seconds: 5,
+            file_key_wrap: null,
+          })
+          .execute();
+
+        await expect(
+          convertBlobForReseed(
+            testDb.db,
+            access,
+            fixture.userId!,
+            {
+              clientId: fixture.clientId,
+              channelId: channel.channel_id,
+              kind: "recording",
+              rowId: recId,
+              followupId: fuId2,
+              encryptedData: Buffer.from("ct-blob-rec-mm"),
+              fileKeyWrap: Buffer.alloc(72, 0xcc),
+              copy: fakeTriple(),
+            },
+            blobStore,
+            TEST_ORG_SCHEMA,
+          ),
+        ).rejects.toThrow(ReseedValidationError);
+      });
+
+      it("throws ReseedAlreadyConvertedError when recording file_key_wrap is already set", async () => {
+        const fixture = await createTestTicketFixture(testDb.db, {
+          createUser: true,
+        });
+        const channel = await insertChannel(testDb.db, fixture.clientId);
+        const access = createTicketAccessChecker(testDb.db);
+        const blobStore = createMemoryBlobStore();
+
+        const fuId = newFollowupId();
+        await testDb.db
+          .insertInto("followups")
+          .values({
+            id: fuId,
+            ticket_id: fixture.ticketId,
+            source: "system",
+            type: "phone_call",
+            encrypted_content: Buffer.from("ct-recconv-dup"),
+          })
+          .execute();
+
+        const recId = newRecordingId();
+        await testDb.db
+          .insertInto("recordings")
+          .values({
+            id: recId,
+            ticket_id: fixture.ticketId,
+            followup_id: fuId,
+            blob_key: "test/rec/conv-dup" as BlobKey,
+            size_bytes: 512,
+            duration_seconds: 5,
+            file_key_wrap: Buffer.alloc(72, 0xab),
+          })
+          .execute();
+
+        await expect(
+          convertBlobForReseed(
+            testDb.db,
+            access,
+            fixture.userId!,
+            {
+              clientId: fixture.clientId,
+              channelId: channel.channel_id,
+              kind: "recording",
+              rowId: recId,
+              followupId: fuId,
+              encryptedData: Buffer.from("ct-blob-rec-dup"),
+              fileKeyWrap: Buffer.alloc(72, 0xcc),
+              copy: fakeTriple(),
+            },
+            blobStore,
+            TEST_ORG_SCHEMA,
+          ),
+        ).rejects.toThrow(ReseedAlreadyConvertedError);
+      });
+
+      // The recording followup-not-found side is likewise untestable: the
+      // recordings FK forbids a followup_id that matches the input while the
+      // followup row is absent. The wrong-client side is covered below.
+
+      it("throws ReseedValidationError when recording parent followup belongs to a different client", async () => {
+        const fixture = await createTestTicketFixture(testDb.db, {
+          createUser: true,
+        });
+        const channel = await insertChannel(testDb.db, fixture.clientId);
+        const access = createTicketAccessChecker(testDb.db);
+        const blobStore = createMemoryBlobStore();
+
+        const otherFixture = await createTestTicketFixture(testDb.db);
+
+        const fuId = newFollowupId();
+        await testDb.db
+          .insertInto("followups")
+          .values({
+            id: fuId,
+            ticket_id: otherFixture.ticketId,
+            source: "system",
+            type: "phone_call",
+            encrypted_content: Buffer.from("ct-recconv-wrcl"),
+          })
+          .execute();
+
+        const recId = newRecordingId();
+        await testDb.db
+          .insertInto("recordings")
+          .values({
+            id: recId,
+            ticket_id: otherFixture.ticketId,
+            followup_id: fuId,
+            blob_key: "test/rec/conv-wrcl" as BlobKey,
+            size_bytes: 512,
+            duration_seconds: 5,
+            file_key_wrap: null,
+          })
+          .execute();
+
+        await expect(
+          convertBlobForReseed(
+            testDb.db,
+            access,
+            fixture.userId!,
+            {
+              clientId: fixture.clientId,
+              channelId: channel.channel_id,
+              kind: "recording",
+              rowId: recId,
+              followupId: fuId,
+              encryptedData: Buffer.from("ct-blob-rec-wrcl"),
+              fileKeyWrap: Buffer.alloc(72, 0xcc),
+              copy: fakeTriple(),
+            },
+            blobStore,
+            TEST_ORG_SCHEMA,
+          ),
+        ).rejects.toThrow(ReseedValidationError);
+      });
+
+      it("sets direction to from_client for client-sourced recording conversions", async () => {
+        const fixture = await createTestTicketFixture(testDb.db, {
+          createUser: true,
+        });
+        const channel = await insertChannel(testDb.db, fixture.clientId);
+        const access = createTicketAccessChecker(testDb.db);
+        const blobStore = createMemoryBlobStore();
+
+        const fuId = newFollowupId();
+        await testDb.db
+          .insertInto("followups")
+          .values({
+            id: fuId,
+            ticket_id: fixture.ticketId,
+            source: "client",
+            type: "sms_inbound",
+            encrypted_content: Buffer.from("ct-recconv-dir"),
+          })
+          .execute();
+
+        const oldBlobKey = await blobStore.put(
+          TEST_ORG_SCHEMA,
+          "recording",
+          Buffer.from("ct-old-rec-blob-dir"),
+        );
+
+        const recId = newRecordingId();
+        await testDb.db
+          .insertInto("recordings")
+          .values({
+            id: recId,
+            ticket_id: fixture.ticketId,
+            followup_id: fuId,
+            blob_key: oldBlobKey,
+            size_bytes: 512,
+            duration_seconds: 10,
+            file_key_wrap: null,
+          })
+          .execute();
+
+        const result = await convertBlobForReseed(
+          testDb.db,
+          access,
+          fixture.userId!,
+          {
+            clientId: fixture.clientId,
+            channelId: channel.channel_id,
+            kind: "recording",
+            rowId: recId,
+            followupId: fuId,
+            encryptedData: Buffer.from("ct-new-rec-blob-dir"),
+            fileKeyWrap: Buffer.alloc(72, 0xcc),
+            copy: fakeTriple(),
+          },
+          blobStore,
+          TEST_ORG_SCHEMA,
+        );
+
+        expect(result.inserted).toBe(true);
+
+        // portal_recordings direction should be from_client
+        // (serves the portal message rendering layer's direction filter)
+        const portalRows = await testDb.db
+          .selectFrom("portal_recordings")
+          .selectAll()
+          .where("channel_id", "=", channel.id)
+          .where("recording_id", "=", recId)
+          .execute();
+        expect(portalRows.length).toBe(1);
+        expect(portalRows[0]!.direction).toBe("from_client");
+      });
+    });
 
     describe("listTicketsForClient", () => {
       it("returns tickets accessible to the calling volunteer", async () => {

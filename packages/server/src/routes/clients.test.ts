@@ -40,6 +40,7 @@ import type {
   PhoneHash,
   OpsPhoneHash,
   PhoneMatchHash,
+  EmailHash,
 } from "@care-y/shared";
 import { createClientRouter, type ClientRouterDeps } from "./clients.js";
 import { router, createCallerFactory } from "../trpc/trpc.js";
@@ -1089,6 +1090,408 @@ describe.skipIf(!process.env.DATABASE_URL)(
 
         const result = await caller.clients.getDismissals();
         expect(result).not.toBeNull();
+      });
+    });
+
+    // -----------------------------------------------------------------------
+    // clients.list (email masking)
+    // -----------------------------------------------------------------------
+
+    describe("list email masking", () => {
+      // care-y-ignore no-plaintext-db-write -- all PII columns use noopEncryptor/testSealedBox; raw inserts needed to seed email rows for masking tests
+      async function seedClientWithEmail(
+        opsEncrypted: string,
+      ): Promise<{ clientId: ClientId }> {
+        const uid = crypto.randomUUID().slice(0, 8);
+        const emailHash = `em-hash-${uid}` as EmailHash;
+        const sealedAlias = testSealedBox.sealBuffer(
+          Buffer.from(`cl-email-${uid}`),
+        );
+        const encBuf = noopEncryptor.encrypt(opsEncrypted);
+
+        const emailRow = await tenantDb
+          .insertInto("emails")
+          .values({
+            email_hash: emailHash,
+            encrypted_address: encBuf,
+            locale: "en-US",
+            email_match_hash: null,
+          })
+          .returning("id")
+          .executeTakeFirstOrThrow();
+
+        const clientRow = await tenantDb
+          .insertInto("clients")
+          .values({
+            encrypted_alias: sealedAlias,
+            alias_hash: null,
+            phone_id: null,
+            email_id: emailRow.id,
+          })
+          .returning("id")
+          .executeTakeFirstOrThrow();
+
+        return { clientId: clientRow.id };
+      }
+
+      it("returns full email for admin", async () => {
+        const seededAddress = `rt-admin-${crypto.randomUUID().slice(0, 8)}@test.example`;
+        const { clientId } = await seedClientWithEmail(seededAddress);
+        const admin = await createTestUser(tenantDb, {
+          overrides: { role_id: RoleId.ADMIN },
+        });
+        const caller = createAuthedCaller(admin);
+
+        const result = await caller.clients.list({});
+        const match = result.find((c) => c.id === clientId);
+        expect(match).toBeDefined();
+        // Wire format: email is a plain string, not base64 (OPS decrypted server-side)
+        expect(match?.email).toBe(seededAddress);
+      });
+
+      it("returns masked email for manager (first char + *** + @domain)", async () => {
+        const seededAddress = `rt-mgr-${crypto.randomUUID().slice(0, 8)}@test.example`;
+        const { clientId } = await seedClientWithEmail(seededAddress);
+        const manager = await createTestUser(tenantDb, {
+          overrides: { role_id: RoleId.MANAGER },
+        });
+        const caller = createAuthedCaller(manager);
+
+        const result = await caller.clients.list({});
+        const match = result.find((c) => c.id === clientId);
+        expect(match).toBeDefined();
+        expect(match?.email).toMatch(/^.{1}\*\*\*@/);
+        // No-plaintext-leak: the seeded local part must not appear in the masked output
+        const localPart = seededAddress.split("@")[0]!;
+        expect(match?.email).not.toContain(localPart);
+      });
+
+      it("returns null email for clients without an email row", async () => {
+        const fixture = await createTestClientFixture(tenantDb);
+        const admin = await createTestUser(tenantDb, {
+          overrides: { role_id: RoleId.ADMIN },
+        });
+        const caller = createAuthedCaller(admin);
+
+        const result = await caller.clients.list({});
+        const match = result.find((c) => c.id === fixture.clientId);
+        expect(match).toBeDefined();
+        expect(match?.email).toBeNull();
+      });
+
+      it("returns '***' for email with no @ sign", async () => {
+        const noAtAddress = "invalid-no-at-sign";
+        const { clientId } = await seedClientWithEmail(noAtAddress);
+        const manager = await createTestUser(tenantDb, {
+          overrides: { role_id: RoleId.MANAGER },
+        });
+        const caller = createAuthedCaller(manager);
+
+        const result = await caller.clients.list({});
+        const match = result.find((c) => c.id === clientId);
+        expect(match).toBeDefined();
+        expect(match?.email).toBe("***");
+      });
+
+      it("returns '***' for email starting with @", async () => {
+        const atStartAddress = "@domain.example";
+        const { clientId } = await seedClientWithEmail(atStartAddress);
+        const manager = await createTestUser(tenantDb, {
+          overrides: { role_id: RoleId.MANAGER },
+        });
+        const caller = createAuthedCaller(manager);
+
+        const result = await caller.clients.list({});
+        const match = result.find((c) => c.id === clientId);
+        expect(match).toBeDefined();
+        // atIndex === 0, so atIndex <= 0 returns "***"
+        expect(match?.email).toBe("***");
+      });
+    });
+
+    // -----------------------------------------------------------------------
+    // clients.get (email masking)
+    // -----------------------------------------------------------------------
+
+    describe("get email masking", () => {
+      // care-y-ignore no-plaintext-db-write -- all PII columns use noopEncryptor/testSealedBox; raw inserts needed to seed email rows for masking tests
+      async function seedClientWithEmailForGet(
+        opsEncrypted: string,
+      ): Promise<{ clientId: ClientId }> {
+        const uid = crypto.randomUUID().slice(0, 8);
+        const emailHash = `em-hash-get-${uid}` as EmailHash;
+        const sealedAlias = testSealedBox.sealBuffer(
+          Buffer.from(`cl-gemail-${uid}`),
+        );
+        const encBuf = noopEncryptor.encrypt(opsEncrypted);
+
+        const emailRow = await tenantDb
+          .insertInto("emails")
+          .values({
+            email_hash: emailHash,
+            encrypted_address: encBuf,
+            locale: "en-US",
+            email_match_hash: null,
+          })
+          .returning("id")
+          .executeTakeFirstOrThrow();
+
+        const clientRow = await tenantDb
+          .insertInto("clients")
+          .values({
+            encrypted_alias: sealedAlias,
+            alias_hash: null,
+            phone_id: null,
+            email_id: emailRow.id,
+          })
+          .returning("id")
+          .executeTakeFirstOrThrow();
+
+        return { clientId: clientRow.id };
+      }
+
+      it("returns full email for admin via get", async () => {
+        const seededAddress = `rt-getadm-${crypto.randomUUID().slice(0, 8)}@test.example`;
+        const { clientId } = await seedClientWithEmailForGet(seededAddress);
+        const admin = await createTestUser(tenantDb, {
+          overrides: { role_id: RoleId.ADMIN },
+        });
+        const caller = createAuthedCaller(admin);
+
+        const result = await caller.clients.get({ clientId });
+        expect(result.email).toBe(seededAddress);
+      });
+
+      it("returns masked email for manager via get", async () => {
+        const seededAddress = `rt-getmgr-${crypto.randomUUID().slice(0, 8)}@test.example`;
+        const { clientId } = await seedClientWithEmailForGet(seededAddress);
+        const manager = await createTestUser(tenantDb, {
+          overrides: { role_id: RoleId.MANAGER },
+        });
+        const caller = createAuthedCaller(manager);
+
+        const result = await caller.clients.get({ clientId });
+        expect(result.email).toMatch(/^.{1}\*\*\*@/);
+        // No-plaintext-leak: seeded local part absent from masked output
+        const localPart = seededAddress.split("@")[0]!;
+        expect(result.email).not.toContain(localPart);
+      });
+    });
+
+    // -----------------------------------------------------------------------
+    // clients.putDismissals (null dep early return)
+    // -----------------------------------------------------------------------
+
+    describe("putDismissals null dep", () => {
+      it("returns early without error when createDismissalSvc is null", async () => {
+        const manager = await createTestUser(tenantDb, {
+          overrides: { role_id: RoleId.MANAGER },
+        });
+        const caller = createAuthedCaller(manager, {
+          deps: { createDismissalSvc: null },
+        });
+
+        // Must not throw; the null dep path returns void silently
+        await caller.clients.putDismissals({
+          encryptedDismissals:
+            Buffer.from("ct-blob-null-dep").toString("base64"),
+        });
+      });
+    });
+
+    // -----------------------------------------------------------------------
+    // clients.updateEmail
+    // -----------------------------------------------------------------------
+
+    describe("updateEmail", () => {
+      async function createTicketForClient(
+        clientId: ClientId,
+        queueId: QueueId,
+        assignedTo: UserId | null,
+      ): Promise<string> {
+        const keyGen = crypto.randomUUID() as KeyGeneration;
+        // care-y-ignore-next-line no-plaintext-db-write -- test fixture: encrypted_title and encrypted_description are dummy ciphertext blobs, not real PII
+        const ticket = await tenantDb
+          .insertInto("tickets")
+          .values({
+            client_id: clientId,
+            queue_id: queueId,
+            encrypted_title: Buffer.alloc(64, 0xaa),
+            encrypted_description: Buffer.alloc(64, 0xbb),
+            status: "open",
+            priority: "normal",
+            key_generation: keyGen,
+            assigned_to: assignedTo,
+          })
+          .returning("id")
+          .executeTakeFirstOrThrow();
+        return ticket.id;
+      }
+
+      it("succeeds for admin", async () => {
+        const fixture = await createTestClientFixture(tenantDb);
+        const admin = await createTestUser(tenantDb, {
+          overrides: { role_id: RoleId.ADMIN },
+        });
+        const caller = createAuthedCaller(admin);
+
+        const result = await caller.clients.updateEmail({
+          clientId: fixture.clientId,
+          emailAddress: `rt-adm-${crypto.randomUUID().slice(0, 8)}@test.example`,
+        });
+        expect(result.success).toBe(true);
+        expect(result.conflict).toBeNull();
+      });
+
+      it("succeeds for manager", async () => {
+        const fixture = await createTestClientFixture(tenantDb);
+        const manager = await createTestUser(tenantDb, {
+          overrides: { role_id: RoleId.MANAGER },
+        });
+        const caller = createAuthedCaller(manager);
+
+        const result = await caller.clients.updateEmail({
+          clientId: fixture.clientId,
+          emailAddress: `rt-mgr-${crypto.randomUUID().slice(0, 8)}@test.example`,
+        });
+        expect(result.success).toBe(true);
+        expect(result.conflict).toBeNull();
+      });
+
+      it("succeeds for volunteer assigned to a client ticket", async () => {
+        const fixture = await createTestClientFixture(tenantDb);
+        const volunteer = await createTestUser(tenantDb, {
+          overrides: { role_id: RoleId.VOLUNTEER },
+        });
+
+        await createTicketForClient(
+          fixture.clientId,
+          fixture.queueId,
+          volunteer.id,
+        );
+
+        const caller = createAuthedCaller(volunteer);
+        const result = await caller.clients.updateEmail({
+          clientId: fixture.clientId,
+          emailAddress: `rt-vol-${crypto.randomUUID().slice(0, 8)}@test.example`,
+        });
+        expect(result.success).toBe(true);
+        expect(result.conflict).toBeNull();
+      });
+
+      it("rejects unassigned volunteer (FORBIDDEN)", async () => {
+        const fixture = await createTestClientFixture(tenantDb);
+        const volunteer = await createTestUser(tenantDb, {
+          overrides: { role_id: RoleId.VOLUNTEER },
+        });
+        const caller = createAuthedCaller(volunteer);
+
+        await expectTrpcError(
+          caller.clients.updateEmail({
+            clientId: fixture.clientId,
+            emailAddress: `rt-deny-${crypto.randomUUID().slice(0, 8)}@test.example`,
+          }),
+          "FORBIDDEN",
+        );
+      });
+
+      it("rejects unauthenticated requests", async () => {
+        const caller = createUnauthCaller();
+        await expectTrpcError(
+          caller.clients.updateEmail({
+            clientId: crypto.randomUUID() as ClientId,
+            emailAddress: "rt-unauth@test.example",
+          }),
+          "UNAUTHORIZED",
+        );
+      });
+
+      it("returns conflict when email hash collides with another client", async () => {
+        const fixture1 = await createTestClientFixture(tenantDb);
+        const fixture2 = await createTestClientFixture(tenantDb);
+        const collisionAddress = `rt-collision-${crypto.randomUUID().slice(0, 8)}@test.example`;
+
+        const admin = await createTestUser(tenantDb, {
+          overrides: { role_id: RoleId.ADMIN },
+        });
+        const caller = createAuthedCaller(admin);
+
+        // Set fixture1's email to the collision address
+        const first = await caller.clients.updateEmail({
+          clientId: fixture1.clientId,
+          emailAddress: collisionAddress,
+        });
+        expect(first.success).toBe(true);
+
+        // Try to set fixture2's email to the same address
+        const result = await caller.clients.updateEmail({
+          clientId: fixture2.clientId,
+          emailAddress: collisionAddress,
+        });
+        expect(result.success).toBe(false);
+        expect(result.conflict).not.toBeNull();
+        expect(result.conflict?.conflictingClientId).toBe(fixture1.clientId);
+        // Wire format: conflicting alias is base64 ciphertext string, not a Buffer
+        expect(typeof result.conflict?.conflictingClientEncryptedAlias).toBe(
+          "string",
+        );
+      });
+
+      it("threads emailMatchHash through to the email row", async () => {
+        const fixture = await createTestClientFixture(tenantDb);
+        const admin = await createTestUser(tenantDb, {
+          overrides: { role_id: RoleId.ADMIN },
+        });
+        const caller = createAuthedCaller(admin);
+        const hashVal = "a".repeat(128);
+
+        await caller.clients.updateEmail({
+          clientId: fixture.clientId,
+          emailAddress: `rt-hash-${crypto.randomUUID().slice(0, 8)}@test.example`,
+          emailMatchHash: hashVal,
+        });
+
+        // Verify the hash landed on the email row
+        const client = await tenantDb
+          .selectFrom("clients")
+          .select("email_id")
+          .where("id", "=", fixture.clientId)
+          .executeTakeFirstOrThrow();
+
+        const email = await tenantDb
+          .selectFrom("emails")
+          .select("email_match_hash")
+          .where("id", "=", client.email_id!)
+          .executeTakeFirstOrThrow();
+
+        expect(email.email_match_hash).toBe(hashVal);
+      });
+
+      it("passes null emailMatchHash when field is omitted", async () => {
+        const fixture = await createTestClientFixture(tenantDb);
+        const admin = await createTestUser(tenantDb, {
+          overrides: { role_id: RoleId.ADMIN },
+        });
+        const caller = createAuthedCaller(admin);
+
+        await caller.clients.updateEmail({
+          clientId: fixture.clientId,
+          emailAddress: `rt-nohash-${crypto.randomUUID().slice(0, 8)}@test.example`,
+        });
+
+        const client = await tenantDb
+          .selectFrom("clients")
+          .select("email_id")
+          .where("id", "=", fixture.clientId)
+          .executeTakeFirstOrThrow();
+
+        const email = await tenantDb
+          .selectFrom("emails")
+          .select("email_match_hash")
+          .where("id", "=", client.email_id!)
+          .executeTakeFirstOrThrow();
+
+        expect(email.email_match_hash).toBeNull();
       });
     });
   },
