@@ -108,6 +108,7 @@
   import { createReplyFlow } from "$lib/composables/ticket-list/create-reply-flow.svelte.js";
   import {
     filterByDisplayStatus,
+    matchesServerFilters,
     matchTitles,
     type TitleEntry,
     mergeSearchMatches,
@@ -333,10 +334,23 @@
     enabled: unloadedUnreadIds.length > 0,
   }));
 
+  // Pinned rows arrive from outside the filtered list query, so they
+  // must pass the same narrowing the loaded window went through: the
+  // server-param mirror first, then the new/active display post-filter.
+  // Without this, an unread ticket the active filter excludes pins
+  // itself above the filtered list.
   const pinnedRecords = $derived.by(() => {
     if (unloadedUnreadIds.length === 0) return [];
     const loaded = new Set(loadedTicketIds);
-    return (pinnedQuery.data ?? []).filter((t) => !loaded.has(t.id));
+    const unloaded = (pinnedQuery.data ?? []).filter(
+      (t) =>
+        !loaded.has(t.id) && matchesServerFilters(t, filterStore.serverParams),
+    );
+    return filterByDisplayStatus(
+      unloaded,
+      filterStore.needsDisplayStatusPostFilter,
+      filterStore.statuses.has("new"),
+    );
   });
 
   const pinnedLoading = $derived(
