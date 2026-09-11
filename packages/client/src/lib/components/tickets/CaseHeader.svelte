@@ -389,20 +389,20 @@
     display: flex;
     flex-direction: column;
     align-items: center;
+    justify-content: center;
     gap: 4px;
     padding: 6px 0 10px;
+    /* The 44px hit area (SEC-127; SEC-128 requires 24px) must be the
+       element's own box: an ::after overlay extends real taps but not
+       getBoundingClientRect, which is what axe target-size measures.
+       The visible handle (label + bar) is unchanged; the extra height
+       is centered whitespace. */
+    min-height: 44px;
     cursor: pointer;
     touch-action: none;
     user-select: none;
     -webkit-user-select: none;
     -webkit-tap-highlight-color: transparent;
-  }
-
-  /* Tops the ~39px handle up to a 44px touch hit area. */
-  .case-handle::after {
-    content: "";
-    position: absolute;
-    inset: -3px 0;
   }
 
   .case-handle:focus-visible {

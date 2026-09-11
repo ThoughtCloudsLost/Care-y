@@ -174,15 +174,17 @@
         {/if}
       </div>
 
-      <!-- Role stamp: a role is who someone is (identity slot, brand ink) -->
+      <!-- Role stamp: a role is who someone is (identity slot, brand ink).
+           No dim on your own row: 60% opacity put the 10px stamp at
+           2.87:1 (SEC-126 requires 4.5:1), and the missing edit button
+           already marks the row as yours. -->
       <div class="role-area">
-        <span class="stamp-chip role-stamp" class:opacity-60={isSelf}>
+        <span class="stamp-chip role-stamp">
           {roleLabel}
         </span>
       </div>
 
-      <!-- Edit button (your own row carries no control; active state is
-           unmarked and inactive already speaks through the word + dim) -->
+      <!-- Edit button (your own row carries no control) -->
       {#if !isSelf}
         <button
           class="edit-btn"

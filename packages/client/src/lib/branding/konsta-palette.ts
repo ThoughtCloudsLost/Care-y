@@ -168,13 +168,25 @@ const WORST_LIGHT: [number, number, number] = [229, 225, 218]; // #e5e1da
 const WHITE_RGB: [number, number, number] = [255, 255, 255];
 
 /**
+ * Text derivation target. AA is 4.5:1 (SEC-126), but ensureContrast stops
+ * at the first lightness step that clears the target, so a 4.5 target
+ * lands the derived color epsilon-above 4.5 against the reference
+ * constant. Overlay surfaces are glass blends the constants cannot pin
+ * exactly: an axe audit measured the portal drawer blend at #2c2b2a
+ * (luminance 0.0243 vs WORST_DARK's 0.0237), where an epsilon pass
+ * became 4.49:1. The 4.6 target keeps the landed color above 4.5 on
+ * blends slightly lighter than the reference.
+ */
+const TEXT_CONTRAST_TARGET = 4.6;
+
+/**
  * Derive --brand-text: the brand color adjusted for text-on-surface.
  * Lightened in dark mode, darkened in light mode, to meet WCAG AA 4.5:1
- * against the worst-case surface.
+ * against the worst-case surface with margin (TEXT_CONTRAST_TARGET).
  */
 function deriveBrandText(brandHex: string, isDark: boolean): string {
   const worstSurface = isDark ? WORST_DARK : WORST_LIGHT;
-  return ensureContrast(brandHex, worstSurface, 4.5);
+  return ensureContrast(brandHex, worstSurface, TEXT_CONTRAST_TARGET);
 }
 
 /**

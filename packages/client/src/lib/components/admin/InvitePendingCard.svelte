@@ -196,17 +196,19 @@
     text-overflow: ellipsis;
   }
 
+  /* No opacity dims on this small text: --muted is already the
+     de-emphasis token, tuned to clear WCAG AA 4.5:1 (SEC-126) on the
+     theme surfaces. Multiplying it by 0.6-0.7 put it far below AA, the
+     same defect the UserCard self stamp failed an axe audit for. */
   .expiry-label {
     font-size: var(--text-xs);
     color: var(--muted);
-    opacity: 0.7;
   }
 
   .invite-url {
     font-family: var(--theme-font-mono);
     font-size: var(--text-xs);
     color: var(--muted);
-    opacity: 0.6;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;

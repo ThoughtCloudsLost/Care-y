@@ -79,6 +79,19 @@ describe("applyKonstaPalette", () => {
       expect(ratio).toBeGreaterThanOrEqual(4.5);
     });
 
+    it("keeps --brand-text above 4.5:1 on overlay glass blends lighter than WORST_DARK", async () => {
+      document.documentElement.classList.add("dark");
+      // Neutral gray primary reproducing the axe finding on the portal
+      // drawer: derived to a hair above 4.5 against the #2c2a2c reference
+      // constant, it measured 4.49:1 on the drawer's real glass blend
+      // (#2c2b2a). The derivation margin must absorb that blend drift.
+      await applyKonstaPalette("#636366");
+      const brandText = getProp("--brand-text");
+      expect(brandText).toBeTruthy();
+      const ratio = contrast(brandText, "#2c2b2a");
+      expect(ratio).toBeGreaterThanOrEqual(4.5);
+    });
+
     it("sets --brand-text with WCAG AA 4.5:1 contrast against light surfaces", async () => {
       document.documentElement.classList.add("light");
       // Dark color that might need lightening... actually dark colors
