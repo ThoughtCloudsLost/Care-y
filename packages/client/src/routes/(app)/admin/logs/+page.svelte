@@ -402,10 +402,6 @@
   function handleTicketOpen(ticketId: string): void {
     void goto(resolve(`/tickets/${ticketId}`));
   }
-
-  function noop(): void {
-    // Intentionally empty: logs page has no saved filters or select mode
-  }
 </script>
 
 {#snippet tabSegmented()}
@@ -430,8 +426,6 @@
   <SubNavbarFilterLayout
     title={m.panel_call_log()}
     headerRight={tabSegmented}
-    selectLabel=""
-    onselect={noop}
     filterPills={callFilterPillsConfig}
   />
 {/snippet}
@@ -440,8 +434,6 @@
   <SubNavbarFilterLayout
     title={m.panel_audit_log()}
     headerRight={tabSegmented}
-    selectLabel=""
-    onselect={noop}
     filterPills={auditFilterPillsConfig}
   />
 {/snippet}

@@ -296,10 +296,9 @@ describe("TicketPanelContent phone row", () => {
       },
     });
 
-    // Find the phone row by its role="button" and text content
-    const phoneRow = Array.from(
-      container.querySelectorAll('[role="button"]'),
-    ).find((el) => el.textContent.includes("***1234"));
+    const phoneRow = Array.from(container.querySelectorAll("button")).find(
+      (el) => el.textContent.includes("***1234"),
+    );
 
     expect(phoneRow).toBeDefined();
     if (phoneRow) {
@@ -308,7 +307,7 @@ describe("TicketPanelContent phone row", () => {
     }
   });
 
-  it("phone row has keyboard accessibility attributes", () => {
+  it("phone row is a native button inside its list item", () => {
     ticketQueryState = {
       isLoading: false,
       isError: false,
@@ -323,13 +322,17 @@ describe("TicketPanelContent phone row", () => {
       },
     });
 
-    const phoneRow = Array.from(
-      container.querySelectorAll('[role="button"]'),
-    ).find((el) => el.textContent.includes("***5678"));
+    const phoneRow = Array.from(container.querySelectorAll("button")).find(
+      (el) => el.textContent.includes("***5678"),
+    );
 
+    // A real button carries the role and keyboard activation natively,
+    // and it sits inside the <li> so the list keeps its semantic. An
+    // interactive role on the <li> itself would replace its listitem
+    // role and break the parent list.
     expect(phoneRow).toBeDefined();
-    expect(phoneRow?.getAttribute("tabindex")).toBe("0");
-    expect(phoneRow?.getAttribute("role")).toBe("button");
+    expect(phoneRow?.closest("li")).not.toBeNull();
+    expect(phoneRow?.getAttribute("role")).toBeNull();
   });
 });
 
@@ -427,9 +430,9 @@ describe("TicketPanelContent email row", () => {
       },
     });
 
-    const addRow = Array.from(
-      container.querySelectorAll('[role="button"]'),
-    ).find((el) => el.textContent.includes("Add email"));
+    const addRow = Array.from(container.querySelectorAll("button")).find((el) =>
+      el.textContent.includes("Add email"),
+    );
 
     expect(addRow).toBeDefined();
     if (addRow) {
@@ -454,9 +457,9 @@ describe("TicketPanelContent email row", () => {
       },
     });
 
-    const emailRow = Array.from(
-      container.querySelectorAll('[role="button"]'),
-    ).find((el) => el.textContent.includes("a***@example.org"));
+    const emailRow = Array.from(container.querySelectorAll("button")).find(
+      (el) => el.textContent.includes("a***@example.org"),
+    );
 
     expect(emailRow).toBeDefined();
     if (emailRow) {
@@ -465,7 +468,7 @@ describe("TicketPanelContent email row", () => {
     }
   });
 
-  it("email row has keyboard accessibility attributes", () => {
+  it("email row is a native button inside its list item", () => {
     ticketQueryState = {
       isLoading: false,
       isError: false,
@@ -480,13 +483,15 @@ describe("TicketPanelContent email row", () => {
       },
     });
 
-    const emailRow = Array.from(
-      container.querySelectorAll('[role="button"]'),
-    ).find((el) => el.textContent.includes("b***@example.org"));
+    const emailRow = Array.from(container.querySelectorAll("button")).find(
+      (el) => el.textContent.includes("b***@example.org"),
+    );
 
+    // Same contract as the phone row: the button carries the role and
+    // keyboard activation, the <li> keeps its listitem semantic.
     expect(emailRow).toBeDefined();
-    expect(emailRow?.getAttribute("tabindex")).toBe("0");
-    expect(emailRow?.getAttribute("role")).toBe("button");
+    expect(emailRow?.closest("li")).not.toBeNull();
+    expect(emailRow?.getAttribute("role")).toBeNull();
   });
 });
 

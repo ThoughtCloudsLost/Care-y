@@ -236,11 +236,11 @@
          a value rather than vanishing when none is on file. -->
     {#if ticket && !ticket.contactWithheld}
       <ListItem
+        link
+        linkComponent="button"
+        chevron={false}
         title={m.client_phone_label()}
         onclick={() => onaction("phone")}
-        onkeydown={onKeyActivate(() => onaction("phone"))}
-        role="button"
-        tabindex={0}
         class="touch-feedback"
       >
         {#snippet media()}
@@ -261,11 +261,11 @@
          rather than the absence of a value. -->
     {#if ticket && !ticket.contactWithheld}
       <ListItem
+        link
+        linkComponent="button"
+        chevron={false}
         title={m.client_email_label()}
         onclick={() => onaction("email")}
-        onkeydown={onKeyActivate(() => onaction("email"))}
-        role="button"
-        tabindex={0}
         class="touch-feedback"
       >
         {#snippet media()}

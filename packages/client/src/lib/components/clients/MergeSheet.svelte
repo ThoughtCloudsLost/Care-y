@@ -33,7 +33,6 @@
   import { haptic } from "$lib/utils/haptic.js";
   import { toastStore } from "$lib/stores/toast.svelte.js";
   import { announceToLiveRegion } from "$lib/utils/announce.js";
-  import { onKeyActivate } from "$lib/utils/a11y.js";
   import { requireRouter } from "$lib/errors.js";
   import { encode } from "@care-y/crypto";
   import { getOrgKeyManager, getOrgDecryptCache } from "$lib/crypto/context.js";
@@ -390,6 +389,9 @@
                     result.encryptedAlias,
                   ) ?? "..."}
                 <ListItem
+                  link
+                  linkComponent="button"
+                  chevron={false}
                   title={resultAlias}
                   after={result.ticketCount === 1
                     ? m.clients_ticket_count_one(
@@ -399,9 +401,6 @@
                         withTerms({ count: result.ticketCount }),
                       )}
                   onclick={() => selectSearchResult(result)}
-                  onkeydown={onKeyActivate(() => selectSearchResult(result))}
-                  role="button"
-                  tabindex={0}
                   class="touch-feedback"
                 />
               {/each}
