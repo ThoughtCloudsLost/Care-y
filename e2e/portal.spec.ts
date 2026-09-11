@@ -58,6 +58,10 @@ test.describe.serial("Secure Link Portal", () => {
   test.afterAll(async () => {
     await stopAndWriteCoverage(volunteerPage, "portal-volunteer");
     await volunteerPage.close();
+    // The client-context page carries the portal route's only coverage;
+    // closing it without collecting drops the whole (client) portal page
+    // from the merge.
+    await stopAndWriteCoverage(portalPage, "portal-client");
     await portalPage.close();
   });
 

@@ -486,3 +486,88 @@ test.describe.serial("Ticket List (Tickets Tab)", () => {
     }
   });
 });
+
+/**
+ * Table view mode and bulk actions.
+ *
+ * The table mode (sortable data-table layout) and the bulk action bar's
+ * assign path are the list page's cold interaction clusters; the base
+ * suite covers rows/cards/grid and multi-select entry only.
+ */
+test.describe.serial("Ticket List (Table, Bulk Actions)", () => {
+  let page: Page;
+
+  test.beforeAll(async ({ browser }, testInfo) => {
+    testInfo.setTimeout(CRYPTO_TIMEOUT * 2);
+    page = await browser.newPage();
+    await startCoverage(page);
+    await login(page);
+    await page.getByRole("tab", { name: "Tickets" }).click();
+    await expect(page).toHaveURL(/\/tickets/);
+    await expect(
+      page.locator('[data-testid="ticket-card-wrap"]').first(),
+    ).toBeVisible({ timeout: CRYPTO_TIMEOUT });
+  });
+
+  test.afterAll(async () => {
+    await stopAndWriteCoverage(page, "ticket-list-table");
+    await page.close();
+  });
+
+  test("table view renders and sorts by column", async () => {
+    await page.getByRole("main").evaluate((el) => {
+      el.scrollTo({ top: 0, behavior: "instant" });
+    });
+    await page.waitForTimeout(400);
+
+    await page.getByRole("button", { name: "Table" }).click();
+    await expect(page.getByRole("button", { name: "Table" })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+
+    // The table renders decrypted rows with sortable headers.
+    const table = page.getByRole("table");
+    await expect(table).toBeVisible({ timeout: CRYPTO_TIMEOUT });
+    const sortableHeader = table.locator("th[aria-sort]").first();
+    await expect(sortableHeader).toBeVisible({ timeout: CRYPTO_TIMEOUT });
+
+    // Toggling the first sortable column flips its aria-sort state
+    // (ascending <-> descending or none -> ascending).
+    const before = await sortableHeader.getAttribute("aria-sort");
+    await sortableHeader.getByRole("button").click();
+    await expect
+      .poll(async () => sortableHeader.getAttribute("aria-sort"), {
+        timeout: 5_000,
+      })
+      .not.toBe(before);
+
+    // Restore the default mode for any later suites.
+    await page.getByRole("button", { name: "Compact rows" }).click();
+  });
+
+  test("bulk assign opens the assign sheet from the action bar", async () => {
+    // Enter select mode via the explicit button (same entry the base
+    // suite verifies), select one ticket, and open the assign sheet.
+    await page.getByRole("button", { name: "Select" }).click();
+    await expect(page.locator(".checkbox-wrap").first()).toBeVisible({
+      timeout: 5_000,
+    });
+    await page.locator('[data-testid="ticket-card-wrap"]').first().click();
+    await expect(page.getByText(/1 selected/)).toBeVisible({
+      timeout: 10_000,
+    });
+
+    await page.getByRole("button", { name: "Assign", exact: true }).click();
+    // The bulk assign sheet lists assignable volunteers.
+    const sheet = page.getByRole("dialog").last();
+    await expect(sheet).toBeVisible({ timeout: 5_000 });
+
+    // Escape closes the sheet (org-app overlay contract), then exit
+    // selection mode to leave the page clean.
+    await page.keyboard.press("Escape");
+    await expect(sheet).not.toBeVisible({ timeout: 5_000 });
+    await page.getByRole("button", { name: "Exit selection mode" }).click();
+    await expect(page.locator(".checkbox-wrap")).toHaveCount(0);
+  });
+});

@@ -111,6 +111,43 @@ test.describe.serial("Accessibility sweep", () => {
     await audit();
   });
 
+  test("admin intake forms editor passes the axe audit", async () => {
+    if (isMobileProject()) {
+      await panelNavigate("Intake Forms", /\/admin\/organization/);
+    } else {
+      await page.goBack();
+      await expect(page).toHaveURL("/admin", { timeout: 10_000 });
+      await page.getByText("Intake Forms", { exact: true }).first().click();
+      await expect(page).toHaveURL(/\/admin\/organization/, {
+        timeout: 10_000,
+      });
+    }
+    // Audit the editor itself, not just the section listing: the form
+    // builder is the surface with the field rows and dialogs.
+    await page.getByRole("button", { name: /create new form/i }).click();
+    await expect(page).toHaveURL(/\/admin\/forms/, { timeout: 10_000 });
+    await expect(page.getByPlaceholder("e.g. Main Intake")).toBeVisible({
+      timeout: CRYPTO_TIMEOUT,
+    });
+    await audit();
+  });
+
+  test("admin call log passes the axe audit", async () => {
+    if (isMobileProject()) {
+      await panelNavigate("Call Log", /\/admin\/logs/);
+    } else {
+      const adminTab = page.locator('[data-sidebar-id="admin"]');
+      await adminTab.click();
+      await expect(page).toHaveURL("/admin", { timeout: 10_000 });
+      await page.getByText("Call Log", { exact: true }).first().click();
+      await expect(page).toHaveURL(/\/admin\/logs/, { timeout: 10_000 });
+    }
+    await expect(page.getByRole("tablist", { name: "Logs" })).toBeVisible({
+      timeout: CRYPTO_TIMEOUT,
+    });
+    await audit();
+  });
+
   test("admin hub passes the axe audit via sidebar", async () => {
     test.skip(isMobileProject(), "the /admin hub has no mobile nav entry");
     const adminTab = page.locator('[data-sidebar-id="admin"]');

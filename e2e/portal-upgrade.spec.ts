@@ -471,10 +471,10 @@ test.describe.serial("Portal Upgrade + Email", () => {
     await expect(phoneEl).toBeVisible({ timeout: 3_000 });
 
     await auditA11y(pp);
-
-    // Close the contact sheet.
-    await pp.keyboard.press("Escape");
-    await pp.waitForTimeout(300);
+    // No close step: on client pages Escape is quick exit (QuickExit
+    // binds it window-wide in the capture phase), not sheet dismissal.
+    // The exit contract test at the end of this suite is the page's
+    // last act, so the open sheet is harmless here.
   });
 
   // ── 5. Bare-link portal: no contact entry ─────────────────────
@@ -570,5 +570,28 @@ test.describe.serial("Portal Upgrade + Email", () => {
     expect(apiResult.body).toContain("PORTAL_CONTACT_LOCKED");
 
     await barePage.close();
+  });
+
+  // ── 6. Escape quick-exits the portal page ─────────────────────
+
+  test("Escape anywhere quick-exits the portal to the safe URL", async ({}, testInfo) => {
+    testInfo.setTimeout(CRYPTO_TIMEOUT * 2);
+    const pp = portal();
+
+    // Collect this page's coverage BEFORE the exit: quick exit navigates
+    // cross-origin, the renderer process swaps, and the app-origin V8
+    // coverage dies with it. This ordering is what kept the whole portal
+    // page out of the coverage merge until now.
+    await stopAndWriteCoverage(pp, "portal-upgrade-portal");
+
+    // QuickExit binds Escape window-wide in the capture phase, so it
+    // exits even with the contact sheet still open; that precedence is
+    // the safety contract (leaving beats closing a panel).
+    await pp.keyboard.press("Escape");
+    await pp.waitForURL(/^(?!.*portal).*$/, { timeout: 15_000 });
+    expect(pp.url()).not.toContain("/portal/");
+
+    await pp.close();
+    portalPage = undefined;
   });
 });

@@ -179,3 +179,56 @@ test.describe("2a-auth: login page", () => {
     await auditA11y(page);
   });
 });
+
+/**
+ * Two-factor challenge error handling.
+ *
+ * The challenge's WebAuthn, push, SMS, and email branches need real
+ * authenticators or delivery channels, so they stay out of e2e. The TOTP
+ * rejection path is reachable and carries the surface's error handling:
+ * a wrong code must not advance the session, must announce assertively,
+ * and must leave the challenge usable for a retry with a valid code.
+ */
+test.describe.serial("2a-auth: two-factor challenge", () => {
+  test("wrong TOTP code shows an error and a retry succeeds", async ({
+    page,
+  }, testInfo) => {
+    testInfo.setTimeout(CRYPTO_TIMEOUT * 4);
+
+    await page.goto("/login");
+    await page
+      .getByRole("button", { name: /sign in/i })
+      .waitFor({ state: "visible", timeout: 15_000 });
+
+    await page.locator('input[autocomplete="username"]').fill(DEV_USER);
+    await page
+      .locator('input[autocomplete="current-password"]')
+      .fill(DEV_PASSWORD);
+    await page.getByRole("button", { name: /sign in/i }).click();
+
+    await page
+      .getByText(/verify your identity/i)
+      .waitFor({ state: "visible", timeout: CRYPTO_TIMEOUT });
+
+    // A code the authenticator would never produce. The server rejects
+    // it and the component surfaces the generic message: the wording is
+    // deliberately non-specific so it cannot confirm which factor failed.
+    const codeInput = page.getByPlaceholder("000000");
+    await codeInput.fill("000000");
+    await page.getByRole("button", { name: /verify/i }).click();
+
+    const alert = page.locator('[role="alert"]');
+    await expect(alert).toBeVisible({ timeout: CRYPTO_TIMEOUT });
+    await expect(alert).toContainText("Invalid code");
+
+    // The rejection must not have advanced the session.
+    await expect(page).toHaveURL(/\/login/);
+
+    // The challenge stays usable: a valid code still completes the login.
+    const secret = loadTotpSecret();
+    if (!secret) throw new Error("No TOTP secret found");
+    await codeInput.fill(generateTotpCode(secret));
+    await page.getByRole("button", { name: /verify/i }).click();
+    await page.waitForURL(/\/(complete)?$/, { timeout: CRYPTO_TIMEOUT });
+  });
+});

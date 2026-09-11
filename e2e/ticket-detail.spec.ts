@@ -721,3 +721,202 @@ test.describe.serial("Ticket Detail (Chat View)", () => {
     });
   });
 });
+
+/**
+ * Timeline view, thread filters, and note reactions.
+ *
+ * These target the detail surface's cold interaction clusters: the
+ * chat/timeline view switch with cluster expansion and landmark jumps,
+ * the thread filter pills (type pseudo-filters, media flags, clear-all),
+ * and the internal-note reaction picker roundtrip.
+ */
+test.describe.serial("Ticket Detail (Timeline, Filters, Reactions)", () => {
+  let page: Page;
+
+  test.beforeAll(async ({ browser }, testInfo) => {
+    testInfo.setTimeout(CRYPTO_TIMEOUT * 2);
+    page = await browser.newPage();
+    await startCoverage(page);
+    await login(page);
+    await openTicketByTitle(page, "Help with housing");
+    if (await isDesktopLayout(page)) {
+      const expandBtn = page.getByRole("button", { name: /open full view/i });
+      await expect(expandBtn).toBeVisible({ timeout: 10_000 });
+      await expandBtn.click();
+      await expect(page).toHaveURL(/\/tickets\/[0-9a-f-]{36}/, {
+        timeout: 5_000,
+      });
+    }
+    // Thread decrypted once the seeded client message renders.
+    await expect(
+      page.getByText("I need help finding a place to stay").first(),
+    ).toBeVisible({ timeout: CRYPTO_TIMEOUT });
+  });
+
+  test.afterAll(async () => {
+    await stopAndWriteCoverage(page, "ticket-detail-timeline");
+    await page.close();
+  });
+
+  test("timeline view renders clusters and landmarks", async () => {
+    // The view switch renders as a tab on desktop and a button-shaped
+    // control elsewhere; accept either role.
+    const timelineTab = page
+      .getByRole("tab", { name: /view timeline/i })
+      .or(page.getByRole("button", { name: /view timeline/i }))
+      .first();
+    await expect(timelineTab).toBeVisible({ timeout: 10_000 });
+    await timelineTab.click();
+
+    const nav = page.getByRole("navigation", {
+      name: /conversation timeline/i,
+    });
+    await expect(nav).toBeVisible({ timeout: CRYPTO_TIMEOUT });
+
+    // The seeded thread has two consecutive client messages (a cluster)
+    // and a volunteer-assigned system event (a landmark).
+    await expect(
+      nav.getByRole("button", { name: /^expand /i }).first(),
+    ).toBeVisible({ timeout: CRYPTO_TIMEOUT });
+    await expect(
+      nav.getByRole("button", { name: /^jump to:/i }).first(),
+    ).toBeVisible({ timeout: 5_000 });
+  });
+
+  test("expanding a cluster reveals its message bubbles", async () => {
+    const nav = page.getByRole("navigation", {
+      name: /conversation timeline/i,
+    });
+    await nav
+      .getByRole("button", { name: /^expand /i })
+      .first()
+      .click();
+    // The expanded cluster decrypts and shows the seeded client message.
+    // Scope to the nav: the chat view keeps a hidden copy of the same
+    // text, and an unscoped first() resolves to that one.
+    await expect(
+      nav.getByText("I need help finding a place to stay").first(),
+    ).toBeVisible({ timeout: CRYPTO_TIMEOUT });
+  });
+
+  test("landmark jump returns to the chat view", async () => {
+    const nav = page.getByRole("navigation", {
+      name: /conversation timeline/i,
+    });
+    await nav
+      .getByRole("button", { name: /^jump to:/i })
+      .first()
+      .click();
+    // The jump lands in the chat log anchored at the event.
+    await expect(page.getByRole("log")).toBeVisible({
+      timeout: CRYPTO_TIMEOUT,
+    });
+  });
+
+  test("type filters narrow the thread and clear-all restores it", async () => {
+    // Open the Type pill and select the real "Messages" type plus the
+    // "__images__" media pseudo-type; together they exercise both the
+    // server type filter and the media-flag translation.
+    await page
+      .getByRole("button", { name: /^type$/i })
+      .first()
+      .click();
+    const popover = page.getByRole("group", { name: /^type$/i });
+    await expect(popover).toBeVisible({ timeout: 5_000 });
+    await popover.getByText("Messages", { exact: true }).click();
+    await popover.getByText("Images", { exact: true }).click();
+    // Escape is the org app's overlay dismissal (safe here, unlike on
+    // client pages where it quick-exits); the open popover intercepts
+    // pointer events, so clicking the pill would never be actionable.
+    await page.keyboard.press("Escape");
+    await expect(popover).not.toBeVisible({ timeout: 5_000 });
+
+    // Filters active: the clear affordance appears, and the thread shows
+    // hidden-gap separators ("N filtered messages"). The media flag
+    // conjoins with the type filter, so plain text messages are among
+    // the filtered-out rows; the gap markers are the filtered-mode
+    // contract, not any specific message.
+    const clearBtn = page.getByRole("button", { name: /clear all/i });
+    await expect(clearBtn).toBeVisible({ timeout: CRYPTO_TIMEOUT });
+    await expect(
+      page
+        .getByRole("separator")
+        .filter({ hasText: /filtered message/ })
+        .first(),
+    ).toBeVisible({ timeout: CRYPTO_TIMEOUT });
+
+    // Clearing restores the unfiltered thread and its messages. Dispatch
+    // rather than click: the popover portal's teardown can briefly
+    // intercept pointer events over the pill bar (same idiom as the
+    // sheet buttons elsewhere in this file).
+    await clearBtn.dispatchEvent("click");
+    await expect(clearBtn).not.toBeVisible({ timeout: 5_000 });
+    // The filtered-mode gap markers disappearing IS the restoration
+    // contract. Asserting a specific message is not reliable here: the
+    // VirtualList keeps offscreen bubbles mounted-but-hidden and manages
+    // its own scroll restoration, so no fixed row is guaranteed to be in
+    // the render window after the clear.
+    await expect(
+      page.getByRole("separator").filter({ hasText: /filtered message/ }),
+    ).toHaveCount(0, { timeout: CRYPTO_TIMEOUT });
+  });
+});
+
+/**
+ * Reaction roundtrip in isolation. The timeline/filter suite above leaves
+ * behind duplicated hidden DOM and scroll state that made this flow
+ * unreliable inside it; a fresh page at the default scroll position finds
+ * the seeded note directly (same precondition as the chat-view suite).
+ */
+test.describe.serial("Ticket Detail (Note Reactions)", () => {
+  let page: Page;
+
+  test.beforeAll(async ({ browser }, testInfo) => {
+    testInfo.setTimeout(CRYPTO_TIMEOUT * 2);
+    page = await browser.newPage();
+    await startCoverage(page);
+    await login(page);
+    await openTicketByTitle(page, "Help with housing");
+    if (await isDesktopLayout(page)) {
+      const expandBtn = page.getByRole("button", { name: /open full view/i });
+      await expect(expandBtn).toBeVisible({ timeout: 10_000 });
+      await expandBtn.click();
+      await expect(page).toHaveURL(/\/tickets\/[0-9a-f-]{36}/, {
+        timeout: 5_000,
+      });
+    }
+    // The seeded internal note renders at the default scroll position.
+    await expect(
+      page.getByRole("article", { name: /private note/i }).first(),
+    ).toBeVisible({ timeout: CRYPTO_TIMEOUT });
+  });
+
+  test.afterAll(async () => {
+    await stopAndWriteCoverage(page, "ticket-detail-reactions");
+    await page.close();
+  });
+
+  test("internal note reaction adds and removes via the picker", async () => {
+    // Page-level locators are unambiguous on this fresh page (no
+    // timeline copies). The tray is a DOM sibling of the note article
+    // (absolute-positioned overhang), so article-scoped lookups cannot
+    // reach it even though the a11y tree nests them.
+    const addBtn = page.getByRole("button", { name: /add reaction/i }).first();
+    await expect(addBtn).toBeVisible({ timeout: CRYPTO_TIMEOUT });
+    await addBtn.click();
+
+    const picker = page.getByRole("dialog", { name: /reactions/i });
+    await expect(picker).toBeVisible({ timeout: 5_000 });
+    await picker.getByText("Approve", { exact: true }).click();
+
+    // The optimistic pill renders in the tray with the reaction count.
+    const pill = page.locator(".reaction-pill").first();
+    await expect(pill).toBeVisible({ timeout: CRYPTO_TIMEOUT });
+
+    // Toggling the same option again removes the reaction.
+    await addBtn.click();
+    await expect(picker).toBeVisible({ timeout: 5_000 });
+    await picker.getByText("Approve", { exact: true }).click();
+    await expect(picker).not.toBeVisible({ timeout: 5_000 });
+  });
+});
