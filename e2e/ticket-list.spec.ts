@@ -95,10 +95,21 @@ test.describe.serial("Ticket List (Tickets Tab)", () => {
 
     // On-hold tickets should be visible (seeded: "Waiting for callback from shelter",
     // "Pending court date documentation").
-    await expect(page.getByText("Waiting for callback")).toBeVisible();
+    //
+    // Applying a filter triggers a server refetch plus decrypt of the
+    // filtered list, which can outlast the 5s default expect timeout on a
+    // loaded machine. Hand-driving the popover under a delayed counts
+    // response showed the tap itself always registers (the handler lives
+    // on the keyed <li>, which a count-label re-render never replaces), so
+    // slow-list-update is the only failure mode left to absorb here.
+    await expect(page.getByText("Waiting for callback")).toBeVisible({
+      timeout: CRYPTO_TIMEOUT,
+    });
 
     // Non-hold tickets should be hidden.
-    await expect(page.getByText("Help with housing")).not.toBeVisible();
+    await expect(page.getByText("Help with housing")).not.toBeVisible({
+      timeout: CRYPTO_TIMEOUT,
+    });
 
     // Pill should show the selected label.
     await expect(filterToolbar().getByText("On Hold")).toBeVisible();
@@ -333,9 +344,10 @@ test.describe.serial("Ticket List (Tickets Tab)", () => {
     await page.keyboard.press("Escape");
     await page.waitForTimeout(300);
 
-    // Empty state message should appear.
+    // Empty state message should appear. Same slow-refetch allowance as the
+    // status filter test above; the tap is not the flaky part.
     await expect(page.getByText("No tickets match this filter.")).toBeVisible({
-      timeout: 5_000,
+      timeout: CRYPTO_TIMEOUT,
     });
 
     // Clear filter.

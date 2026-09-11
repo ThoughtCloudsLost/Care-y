@@ -130,19 +130,63 @@ export interface LoginOptions {
   readonly allowOrgKeyWait?: boolean;
 }
 
+/** First-attempt bound on the credential leg. Timed full runs put healthy
+ *  logins at 2.5-15s end to end; the failure mode is a hang where auth.login
+ *  never responds at all, not a slow tail. 20s cleanly separates the two and
+ *  leaves room for a full-length second attempt inside the common
+ *  CRYPTO_TIMEOUT * 2 hook budgets. */
+const FIRST_LOGIN_ATTEMPT_TIMEOUT = 20_000;
+
+/** A stalled credential leg (timeout) or the login page's catch-all error
+ *  alert. Both are environmental under full-run load; genuinely bad
+ *  credentials just fail identically on the second attempt. */
+function isRetryableLoginFailure(error: unknown): boolean {
+  if (!(error instanceof Error)) return false;
+  return (
+    error.name === "TimeoutError" || error.message.startsWith("Login failed:")
+  );
+}
+
 export async function login(
   page: Page,
   username = DEV_USER,
   password = DEV_PASSWORD,
   options: LoginOptions = {},
 ): Promise<void> {
+  try {
+    await loginAttempt(
+      page,
+      username,
+      password,
+      options,
+      FIRST_LOGIN_ATTEMPT_TIMEOUT,
+    );
+  } catch (error) {
+    if (!isRetryableLoginFailure(error)) throw error;
+    const firstLine = String(error).split("\n")[0] ?? "";
+    console.log(`[login] attempt stalled (${firstLine}), retrying once`);
+    await loginAttempt(page, username, password, options, CRYPTO_TIMEOUT);
+  }
+}
+
+async function loginAttempt(
+  page: Page,
+  username: string,
+  password: string,
+  options: LoginOptions,
+  credentialTimeout: number,
+): Promise<void> {
   // reauth=1 bypasses the session check that redirects to / if already logged in.
   // Without it, pages sharing a browser context reuse the previous session.
+  const t0 = Date.now();
+  const elapsed = (): string => `+${String(Date.now() - t0)}ms`;
   await page.goto("/login?reauth=1");
+  console.log(`[login] /login loaded ${elapsed()}`);
 
   // Capture login response for diagnostics
   const loginResponsePromise = page.waitForResponse(
     (r) => r.url().includes("auth.login") && r.status() === 200,
+    { timeout: credentialTimeout },
   );
 
   const submitBtn = page.getByRole("button", { name: /sign in/i });
@@ -151,13 +195,20 @@ export async function login(
   await page.locator('input[autocomplete="current-password"]').fill(password);
   await submitBtn.click();
 
-  const loginResponse = await loginResponsePromise.catch(() => null);
-  if (loginResponse) {
-    // Body content stays out of logs (PII rule); size is enough for flake
-    // debugging.
-    const responseBytes = (await loginResponse.text().catch(() => "")).length;
-    console.log(`[login] response received (${String(responseBytes)} bytes)`);
-  }
+  // Diagnostics only, so it must not gate the outcome race below: awaiting
+  // it here would let a stalled response burn credentialTimeout twice per
+  // attempt. Body content stays out of logs (PII rule); size is enough for
+  // flake debugging.
+  void loginResponsePromise
+    .then(async (loginResponse) => {
+      const responseBytes = (await loginResponse.text().catch(() => "")).length;
+      console.log(
+        `[login] response received (${String(responseBytes)} bytes) ${elapsed()}`,
+      );
+    })
+    .catch(() => {
+      console.log(`[login] no auth.login response ${elapsed()}`);
+    });
 
   // After credential submission, three outcomes:
   // 1. Redirect to /complete (first login, needs onboarding + 2FA enrollment)
@@ -167,25 +218,27 @@ export async function login(
 
   const result = await Promise.race([
     page
-      .waitForURL(/\/complete$/, { timeout: CRYPTO_TIMEOUT })
+      .waitForURL(/\/complete$/, { timeout: credentialTimeout })
       .then(() => "onboarding" as const),
     page
-      .waitForURL(/:\d+\/$/, { timeout: CRYPTO_TIMEOUT })
+      .waitForURL(/:\d+\/$/, { timeout: credentialTimeout })
       .then(() => "done" as const),
     page
       .getByText(/verify your identity/i)
-      .waitFor({ state: "visible", timeout: CRYPTO_TIMEOUT })
+      .waitFor({ state: "visible", timeout: credentialTimeout })
       .then(() => "2fa-challenge" as const),
     page
       .locator('[role="alert"]')
-      .waitFor({ state: "visible", timeout: CRYPTO_TIMEOUT })
+      .waitFor({ state: "visible", timeout: credentialTimeout })
       .then(async () => {
         const text = await page.locator('[role="alert"]').textContent();
         throw new E2eError(`Login failed: ${text ?? "(no text)"}`);
       }),
   ]);
 
-  console.log(`[login] race resolved: ${result}, url: ${page.url()}`);
+  console.log(
+    `[login] race resolved: ${result}, url: ${page.url()} ${elapsed()}`,
+  );
 
   if (result === "onboarding") {
     await completeOnboarding(page);
@@ -202,7 +255,7 @@ export async function login(
   // sufficient: the (app) layout gates AppShell behind isAuthenticated
   // (meQuery must resolve) and safety-net effects can briefly redirect
   // back to /login during the first render cycle.
-  console.log(`[login] waiting for tablist. URL: ${page.url()}`);
+  console.log(`[login] waiting for tablist. URL: ${page.url()} ${elapsed()}`);
   const shellWaits: Promise<"shell" | "org-key-wait">[] = [
     page
       .locator('[role="tablist"]')
@@ -222,7 +275,7 @@ export async function login(
     );
   }
   const shellState = await Promise.race(shellWaits);
-  console.log(`[login] shell wait resolved: ${shellState}`);
+  console.log(`[login] shell wait resolved: ${shellState} ${elapsed()}`);
 }
 
 /**
@@ -1191,6 +1244,22 @@ export async function auditA11y(
   for (const selector of opts.exclude ?? []) {
     builder = builder.exclude(selector);
   }
+  // Animations mid-flight skew axe geometry and color sampling: a fold
+  // or sheet transition caught mid-frame reports scaled target sizes and
+  // blended colors. Wait for finite animations to settle before
+  // analyzing; infinite ones (spinners, skeleton pulse) are steady-state
+  // and excluded. Timeboxed so a stuck animation cannot hang the audit.
+  await page
+    .waitForFunction(
+      () =>
+        document
+          .getAnimations()
+          .filter((a) => a.effect?.getComputedTiming().iterations !== Infinity)
+          .length === 0,
+      undefined,
+      { timeout: 5_000 },
+    )
+    .catch(() => undefined);
   const results = await builder.analyze();
   expect(results.violations).toEqual([]);
 }
