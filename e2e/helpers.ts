@@ -147,12 +147,81 @@ function isRetryableLoginFailure(error: unknown): boolean {
   );
 }
 
+/** Pages that already have diagnostic listeners attached. */
+const diagnosedPages = new WeakSet<Page>();
+
+/**
+ * Page-lifetime diagnostics for triaging full-run failures. Logs the
+ * signals that past triage sessions had to reconstruct after the fact:
+ * tRPC response statuses (procedure + status + error code, never bodies),
+ * failed requests, Vite dev-server client messages (a dep re-optimization
+ * announces "[vite] optimized dependencies changed, reloading" right
+ * before it force-reloads the page), page errors, and full document
+ * loads (a "load:" line mid-suite means the page reloaded).
+ */
+export function attachPageDiagnostics(page: Page, label: string): void {
+  if (diagnosedPages.has(page)) return;
+  diagnosedPages.add(page);
+  const t0 = Date.now();
+  const log = (msg: string): void => {
+    console.log(`[diag:${label}] +${String(Date.now() - t0)}ms ${msg}`);
+  };
+
+  page.on("response", (response) => {
+    const url = new URL(response.url());
+    if (!url.pathname.startsWith("/trpc/")) {
+      if (response.status() >= 400) {
+        log(`http ${String(response.status())} ${url.pathname}`);
+      }
+      return;
+    }
+    const procedures = url.pathname.replace("/trpc/", "");
+    if (response.status() < 400) {
+      log(`trpc ${procedures} status=${String(response.status())}`);
+      return;
+    }
+    void response
+      .text()
+      .then((body) => {
+        // tRPC error envelope: log codes only, never payloads.
+        const codes = [...body.matchAll(/"code":\s*(-?\d+|"[A-Z_]+")/g)]
+          .map((m) => m[1])
+          .join(",");
+        log(
+          `trpc ${procedures} status=${String(response.status())} codes=[${codes}]`,
+        );
+      })
+      .catch(() => {
+        log(`trpc ${procedures} status=${String(response.status())} (no body)`);
+      });
+  });
+  page.on("requestfailed", (request) => {
+    const url = new URL(request.url());
+    log(
+      `requestfailed ${url.pathname} (${request.failure()?.errorText ?? "unknown"})`,
+    );
+  });
+  page.on("console", (msg) => {
+    const text = msg.text();
+    if (text.startsWith("[vite]") || msg.type() === "error") {
+      log(`console.${msg.type()} ${text.slice(0, 300)}`);
+    }
+  });
+  page.on("pageerror", (error) => {
+    log(`pageerror ${error.message.slice(0, 300)}`);
+  });
+  page.on("load", () => {
+    log(`load: ${new URL(page.url()).pathname}`);
+  });
+}
+
 export async function login(
   page: Page,
   username = DEV_USER,
   password = DEV_PASSWORD,
   options: LoginOptions = {},
 ): Promise<void> {
+  attachPageDiagnostics(page, username);
   try {
     await loginAttempt(
       page,
@@ -165,6 +234,12 @@ export async function login(
     if (!isRetryableLoginFailure(error)) throw error;
     const firstLine = String(error).split("\n")[0] ?? "";
     console.log(`[login] attempt stalled (${firstLine}), retrying once`);
+    // The error-alert failure mode persists for a few seconds (a firefox
+    // full run had back-to-back alert failures when the retry was
+    // immediate), so give the condition time to clear. Bounded small:
+    // the worst-case hang path (20s + backoff + 30s) must stay inside
+    // the common CRYPTO_TIMEOUT * 2 hook budgets.
+    await page.waitForTimeout(2_500);
     await loginAttempt(page, username, password, options, CRYPTO_TIMEOUT);
   }
 }
@@ -975,7 +1050,10 @@ async function closeSplitDetail(page: Page): Promise<void> {
  */
 async function scrollToTicket(page: Page, title: string): Promise<void> {
   const target = page.getByText(title).first();
-  const scrollContainer = page.locator('[role="main"]');
+  // getByRole, not a [role="main"] CSS selector: the shell's <main> has an
+  // implicit landmark role, so the attribute selector never matches and
+  // evaluate() waits out the whole test timeout on the first scroll.
+  const scrollContainer = page.getByRole("main");
   for (let attempt = 0; attempt < 10; attempt++) {
     if (await target.isVisible({ timeout: 500 }).catch(() => false)) return;
     await scrollContainer.evaluate((el) => {

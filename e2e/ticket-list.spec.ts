@@ -177,6 +177,19 @@ test.describe.serial("Ticket List (Tickets Tab)", () => {
   // ── 4. View toggle (list <-> grid) ──────────────────────────────
 
   test("view toggle switches between list and grid layouts", async () => {
+    // The toggle lives in the scroll-collapsing subnavbar. The search
+    // test before this one can leave the list scrolled, and a collapsed
+    // subnavbar is transform-hidden, which scrollIntoView cannot undo
+    // (a webkit-mobile run burned 90s on "element is outside of the
+    // viewport" here). Scroll the list to the top to reveal it.
+    // getByRole, not a [role="main"] CSS selector: the shell renders a
+    // <main> element whose landmark role is implicit, so the attribute
+    // selector never matches and waits out the full test timeout.
+    await page.getByRole("main").evaluate((el) => {
+      el.scrollTo({ top: 0, behavior: "instant" });
+    });
+    await page.waitForTimeout(400);
+
     // Default is list (compact rows) mode.
     const listBtn = page.getByRole("button", { name: "Compact rows" });
     const gridBtn = page.getByRole("button", { name: "Grid" });
