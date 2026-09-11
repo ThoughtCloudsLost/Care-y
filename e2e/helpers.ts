@@ -514,10 +514,20 @@ export async function openTicketByTitle(
 ): Promise<void> {
   const currentUrl = page.url();
   if (!currentUrl.endsWith("/tickets")) {
+    // Mobile ticket detail (/tickets/{uuid}) hides the tab bar; leave
+    // via the navbar Back button before reaching for the Tickets tab.
+    const ticketsTab = page.getByRole("tab", { name: "Tickets" });
+    if (!(await ticketsTab.isVisible().catch(() => false))) {
+      const back = page.getByRole("button", { name: "Back" });
+      if (await back.isVisible().catch(() => false)) {
+        await back.click();
+        await expect(ticketsTab).toBeVisible({ timeout: 10_000 });
+      }
+    }
     // A click during the post-login key unlock is swallowed; retry the
     // click until the route actually changes instead of clicking once.
     await expect(async () => {
-      await page.getByRole("tab", { name: "Tickets" }).click();
+      await ticketsTab.click();
       await expect(page).toHaveURL("/tickets", { timeout: 2_000 });
     }).toPass({ timeout: CRYPTO_TIMEOUT });
   }
@@ -557,7 +567,15 @@ export async function reopenTicketByTitle(
   title: string,
 ): Promise<void> {
   await page.keyboard.press("Escape");
-  await page.getByRole("tab", { name: "Overview" }).click();
+  // Mobile ticket detail (/tickets/{uuid}) hides the tab bar, so the
+  // Overview tab is unreachable until the navbar Back button returns to
+  // the list. Desktop split view keeps the tabs mounted throughout.
+  const overviewTab = page.getByRole("tab", { name: "Overview" });
+  if (!(await overviewTab.isVisible().catch(() => false))) {
+    await page.getByRole("button", { name: "Back" }).click();
+    await expect(overviewTab).toBeVisible({ timeout: 10_000 });
+  }
+  await overviewTab.click();
   await expect(page).toHaveURL("/");
   await openTicketByTitle(page, title);
 }
@@ -1059,10 +1077,39 @@ export async function longPress(
   locator: ReturnType<Page["locator"]>,
 ): Promise<void> {
   await locator.scrollIntoViewIfNeeded();
-  const box = await locator.boundingBox();
-  if (!box) throw new E2eError("Element not found for long-press");
-  const cx = box.x + box.width / 2;
-  const cy = box.y + box.height / 2;
+  // Find a point where the element is actually the hit target. The raw
+  // box center is not good enough on mobile: a tall article in a
+  // scrolled chat log can extend past the viewport, and fixed chrome
+  // (the case header's glass layer) overlaps its top, so a press there
+  // lands on chrome or on nothing and never reaches the element.
+  const point = await locator.evaluate(
+    (el, vp) => {
+      const rect = el.getBoundingClientRect();
+      const left = Math.max(rect.left, 0);
+      const top = Math.max(rect.top, 0);
+      const right = Math.min(rect.right, vp.width);
+      const bottom = Math.min(rect.bottom, vp.height);
+      if (right <= left || bottom <= top) return null;
+      const x = (left + right) / 2;
+      for (const f of [0.5, 0.65, 0.8, 0.9, 0.35, 0.2, 0.1]) {
+        const y = top + (bottom - top) * f;
+        const hit = document.elementFromPoint(x, y);
+        if (hit !== null && (hit === el || el.contains(hit))) {
+          return { x, y };
+        }
+      }
+      return null;
+    },
+    {
+      width: page.viewportSize()?.width ?? Number.MAX_SAFE_INTEGER,
+      height: page.viewportSize()?.height ?? Number.MAX_SAFE_INTEGER,
+    },
+  );
+  if (!point) {
+    throw new E2eError("No hittable point on element for long-press");
+  }
+  const cx = point.x;
+  const cy = point.y;
   await page.mouse.move(cx, cy);
   await page.mouse.down();
   await page.waitForTimeout(600);

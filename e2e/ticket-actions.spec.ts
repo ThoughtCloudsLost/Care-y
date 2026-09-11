@@ -125,14 +125,18 @@ test.describe.serial("Ticket Actions (Call + SMS)", () => {
     });
 
     // Open the client info panel via the header button.
-    // On desktop split-view, the alias button is replaced by "More actions".
+    // On desktop split-view, the alias button is replaced by "More
+    // actions"; on mobile both buttons exist, so a combined regex trips
+    // strict mode. Prefer the alias button and fall back to the other.
     const panel = page.locator('[role="dialog"]').filter({
       hasText: "Help with housing",
     });
     if (!(await panel.isVisible().catch(() => false))) {
-      const clientInfoBtn = page.getByRole("button", {
-        name: /view info|more actions/i,
-      });
+      const viewInfo = page.getByRole("button", { name: /view info/i });
+      const clientInfoBtn =
+        (await viewInfo.count()) > 0
+          ? viewInfo
+          : page.getByRole("button", { name: /more actions/i });
       await expect(clientInfoBtn).toBeVisible({ timeout: 5_000 });
       await clientInfoBtn.click();
     }
