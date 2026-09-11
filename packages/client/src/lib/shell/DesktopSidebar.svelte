@@ -545,13 +545,15 @@
 
   /* The hover-rail-anchor is a sibling of the nav in the flex layout.
      It does not consume flex space (width: 0, overflow: visible) and
-     simply positions the HoverRail next to the sidebar edge. */
+     simply positions the HoverRail next to the sidebar edge. Its z-index
+     must stay above the page column's stacking context (z-index: 20 in
+     AppShell) so the HoverRail renders over page content. */
   .hover-rail-anchor {
     width: 0;
     flex-shrink: 0;
     position: relative;
     overflow: visible;
-    z-index: 11;
+    z-index: 21;
     height: 100%;
   }
 
