@@ -49,6 +49,11 @@ export interface MergeScanPhoneHashRecord {
   readonly phoneMatchHash: PhoneMatchHash;
 }
 
+/** A distinct phone_match_hash drawn from the phones table. */
+export interface PhoneMatchHashEntry {
+  readonly phoneMatchHash: PhoneMatchHash;
+}
+
 export interface MergeScanEmailHashRecord {
   readonly clientId: ClientId;
   readonly emailMatchHash: EmailMatchHash;
@@ -89,6 +94,37 @@ export interface MergeScanService {
    * clients whose email row has a non-null email_match_hash.
    */
   getEmailHashes(): Promise<readonly MergeScanEmailHashRecord[]>;
+
+  /**
+   * Returns distinct non-null phone_match_hash values from phones
+   * where is_shared_line is true.
+   */
+  getSharedPhoneMatchHashes(): Promise<readonly PhoneMatchHashEntry[]>;
+
+  /**
+   * Updates is_shared_line on every phone row bearing the given
+   * phone_match_hash. Returns the number of rows updated.
+   */
+  setSharedLineByMatchHash(
+    matchHash: PhoneMatchHash,
+    shared: boolean,
+  ): Promise<number>;
+
+  /**
+   * Resolves the client's phone_id and sets is_shared_line on that
+   * phone row. Returns false when the client has no phone row,
+   * true when a row was updated.
+   */
+  setSharedLineByClientId(
+    clientId: ClientId,
+    shared: boolean,
+  ): Promise<boolean>;
+
+  /**
+   * Returns the is_shared_line flag for the client's phone row,
+   * or null when the client has no phone row.
+   */
+  getSharedLineByClientId(clientId: ClientId): Promise<boolean | null>;
 }
 
 // ---------------------------------------------------------------------------
@@ -173,6 +209,7 @@ export function createMergeScanService(
         .select(["c.id as clientId", "p.phone_match_hash as phoneMatchHash"])
         .where("c.merged_into", "is", null)
         .where("p.phone_match_hash", "is not", null)
+        .where("p.is_shared_line", "=", false)
         .execute();
 
       // phone_match_hash is guaranteed non-null by the WHERE clause, but
@@ -198,6 +235,68 @@ export function createMergeScanService(
         // eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- filtered by WHERE email_match_hash IS NOT NULL
         emailMatchHash: r.emailMatchHash!,
       }));
+    },
+
+    async getSharedPhoneMatchHashes(): Promise<readonly PhoneMatchHashEntry[]> {
+      const rows = await db
+        .selectFrom("phones")
+        .select("phone_match_hash as phoneMatchHash")
+        .where("is_shared_line", "=", true)
+        .where("phone_match_hash", "is not", null)
+        .distinct()
+        .execute();
+
+      return rows.map((r) => ({
+        // eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- filtered by WHERE phone_match_hash IS NOT NULL
+        phoneMatchHash: r.phoneMatchHash!,
+      }));
+    },
+
+    async setSharedLineByMatchHash(
+      matchHash: PhoneMatchHash,
+      shared: boolean,
+    ): Promise<number> {
+      const result = await db
+        .updateTable("phones")
+        .set({ is_shared_line: shared, updated_at: new Date() })
+        .where("phone_match_hash", "=", matchHash)
+        .executeTakeFirst();
+
+      return Number(result.numUpdatedRows);
+    },
+
+    async setSharedLineByClientId(
+      clientId: ClientId,
+      shared: boolean,
+    ): Promise<boolean> {
+      const client = await db
+        .selectFrom("clients")
+        .select("phone_id")
+        .where("id", "=", clientId)
+        .executeTakeFirst();
+
+      const phoneId = client?.phone_id ?? null;
+      if (phoneId === null) return false;
+
+      const result = await db
+        .updateTable("phones")
+        .set({ is_shared_line: shared, updated_at: new Date() })
+        .where("id", "=", phoneId)
+        .executeTakeFirst();
+
+      return Number(result.numUpdatedRows) > 0;
+    },
+
+    async getSharedLineByClientId(clientId: ClientId): Promise<boolean | null> {
+      const row = await db
+        .selectFrom("clients as c")
+        .innerJoin("phones as p", "p.id", "c.phone_id")
+        .select("p.is_shared_line as isSharedLine")
+        .where("c.id", "=", clientId)
+        .executeTakeFirst();
+
+      if (!row) return null;
+      return row.isSharedLine;
     },
   };
 }

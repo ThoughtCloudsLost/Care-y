@@ -4473,14 +4473,185 @@ describe("crypto-core detectMergeCandidates", () => {
 
     expect(resp.ok).toBe(true);
     const responseKeys = Object.keys(resp).toSorted();
-    expect(responseKeys).toEqual(["candidates", "id", "ok", "type"]);
+    expect(responseKeys).toEqual([
+      "candidates",
+      "id",
+      "ok",
+      "truncated",
+      "type",
+    ]);
     for (const c of resp.candidates) {
       expect(Object.keys(c).toSorted()).toEqual([
         "clientIdA",
         "clientIdB",
+        "matchHash",
         "matchKind",
       ]);
     }
+  });
+
+  it("candidates include the matching hash", async () => {
+    await loadOrgKey();
+
+    const sharedHash = await phoneMatchHashVia("+12125550001", 8110);
+
+    const resp = (await dispatchAndWait({
+      type: "detectMergeCandidates",
+      id: 8111,
+      clients: [
+        {
+          clientId: "client-a",
+          phoneMatchHash: sharedHash,
+          emailMatchHash: null,
+          intakeResponses: [],
+        },
+        {
+          clientId: "client-b",
+          phoneMatchHash: sharedHash,
+          emailMatchHash: null,
+          intakeResponses: [],
+        },
+      ],
+    })) as DetectMergeCandidatesResponse;
+
+    expect(resp.ok).toBe(true);
+    expect(resp.candidates).toHaveLength(1);
+    expect(resp.candidates[0]!.matchHash).toBe(sharedHash);
+  });
+
+  it("suppressedPhoneHashes removes phone matches for stored-hash clients", async () => {
+    await loadOrgKey();
+
+    const sharedHash = await phoneMatchHashVia("+12125550099", 8120);
+
+    const resp = (await dispatchAndWait({
+      type: "detectMergeCandidates",
+      id: 8121,
+      suppressedPhoneHashes: [sharedHash],
+      clients: [
+        {
+          clientId: "client-a",
+          phoneMatchHash: sharedHash,
+          emailMatchHash: null,
+          intakeResponses: [],
+        },
+        {
+          clientId: "client-b",
+          phoneMatchHash: sharedHash,
+          emailMatchHash: null,
+          intakeResponses: [],
+        },
+      ],
+    })) as DetectMergeCandidatesResponse;
+
+    expect(resp.ok).toBe(true);
+    expect(resp.candidates).toHaveLength(0);
+  });
+
+  it("suppressedPhoneHashes removes phone matches from intake-extracted hashes", async () => {
+    const sodium = requireSodium();
+    await loadOrgKey();
+    const volPub = decode(volPublicStr) as RistrettoPoint;
+
+    const tk = generateContentKey();
+    const wrapTk = eciesEncrypt(tk, volPub);
+    const ticketId = "t-suppress-intake";
+    const responseJson = JSON.stringify({
+      answers: [{ fieldKey: "default:phone", value: "+12125550077" }],
+    });
+    const aad = buildContentAad(ticketId, "intake-response");
+    const ct = encryptContent(new TextEncoder().encode(responseJson), tk, aad);
+
+    const phoneHash = await phoneMatchHashVia("+12125550077", 8130);
+
+    const resp = (await dispatchAndWait({
+      type: "detectMergeCandidates",
+      id: 8131,
+      suppressedPhoneHashes: [phoneHash],
+      clients: [
+        {
+          clientId: "client-intake-s1",
+          phoneMatchHash: null,
+          emailMatchHash: null,
+          intakeResponses: [
+            {
+              ticketId,
+              ephemeralPoint: encode(wrapTk.ephemeralPoint),
+              nonce: encode(wrapTk.nonce),
+              wrappedKey: encode(wrapTk.ciphertext),
+              intakeWrap: null,
+              encryptedResponse: encode(ct),
+              fieldRoles: new Map(),
+            },
+          ],
+        },
+        {
+          clientId: "client-intake-s2",
+          phoneMatchHash: phoneHash,
+          emailMatchHash: null,
+          intakeResponses: [],
+        },
+      ],
+    })) as DetectMergeCandidatesResponse;
+
+    expect(resp.ok).toBe(true);
+    expect(resp.candidates).toHaveLength(0);
+
+    sodium.memzero(tk);
+  });
+
+  it("generation stops at 200 candidates and reports truncated", async () => {
+    await loadOrgKey();
+
+    const sharedHash = await phoneMatchHashVia("+12125550333", 8140);
+
+    // 21 clients sharing one phone hash yields 21*20/2 = 210 pairs.
+    // The cap at 200 means we get exactly 200 and truncated = true.
+    const clients = Array.from({ length: 21 }, (_, i) => ({
+      clientId: `client-bulk-${String(i).padStart(3, "0")}`,
+      phoneMatchHash: sharedHash,
+      emailMatchHash: null,
+      intakeResponses: [] as never[],
+    }));
+
+    const resp = (await dispatchAndWait({
+      type: "detectMergeCandidates",
+      id: 8141,
+      clients,
+    })) as DetectMergeCandidatesResponse;
+
+    expect(resp.ok).toBe(true);
+    expect(resp.candidates).toHaveLength(200);
+    expect(resp.truncated).toBe(true);
+  });
+
+  it("truncated is false when under the cap", async () => {
+    await loadOrgKey();
+
+    const sharedHash = await phoneMatchHashVia("+12125550444", 8150);
+
+    const resp = (await dispatchAndWait({
+      type: "detectMergeCandidates",
+      id: 8151,
+      clients: [
+        {
+          clientId: "client-cap-a",
+          phoneMatchHash: sharedHash,
+          emailMatchHash: null,
+          intakeResponses: [],
+        },
+        {
+          clientId: "client-cap-b",
+          phoneMatchHash: sharedHash,
+          emailMatchHash: null,
+          intakeResponses: [],
+        },
+      ],
+    })) as DetectMergeCandidatesResponse;
+
+    expect(resp.ok).toBe(true);
+    expect(resp.candidates).toHaveLength(1);
+    expect(resp.truncated).toBe(false);
   });
 });
 

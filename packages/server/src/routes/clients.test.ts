@@ -899,6 +899,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
           fieldRoles: [],
           phoneHashes: [],
           emailHashes: [],
+          sharedPhoneHashes: [],
         });
       });
 
@@ -1492,6 +1493,114 @@ describe.skipIf(!process.env.DATABASE_URL)(
           .executeTakeFirstOrThrow();
 
         expect(email.email_match_hash).toBeNull();
+      });
+    });
+
+    // -----------------------------------------------------------------------
+    // clients.setPhoneSharedLine / getPhoneSharedLine
+    // -----------------------------------------------------------------------
+
+    describe("setPhoneSharedLine", () => {
+      it("rejects sessions without VIEW_CLIENTS", async () => {
+        const volunteer = await createTestUser(tenantDb, {
+          overrides: { role_id: RoleId.VOLUNTEER },
+        });
+        const caller = createAuthedCaller(volunteer, {
+          deps: {
+            createMergeScanSvc: (db) => createMergeScanService(db),
+          },
+        });
+
+        await expectTrpcError(
+          caller.clients.setPhoneSharedLine({
+            clientId: crypto.randomUUID() as ClientId,
+            shared: true,
+          }),
+          "FORBIDDEN",
+        );
+      });
+
+      it("flags a phone by matchHash and excludes it from mergeScanData phoneHashes", async () => {
+        const fixture = await createTestClientFixture(tenantDb);
+        const hashVal = "11".repeat(64) as PhoneMatchHash;
+
+        await tenantDb
+          .updateTable("phones")
+          // care-y-ignore-next-line no-plaintext-db-write -- phone_match_hash is a browser-computed HMAC blind index
+          .set({ phone_match_hash: hashVal })
+          .where("id", "=", fixture.phoneId)
+          .execute();
+
+        const manager = await createTestUser(tenantDb, {
+          overrides: { role_id: RoleId.MANAGER },
+        });
+        const caller = createAuthedCaller(manager, {
+          deps: {
+            createDismissalSvc: (db) => createDismissalService(db),
+            createMergeScanSvc: (db) => createMergeScanService(db),
+          },
+        });
+
+        const setResult = await caller.clients.setPhoneSharedLine({
+          matchHash: hashVal,
+          shared: true,
+        });
+        expect(setResult.updated).toBeGreaterThanOrEqual(1);
+
+        const scan = await caller.clients.mergeScanData();
+        expect(scan.sharedPhoneHashes).toContain(String(hashVal));
+
+        const stillInPhoneHashes = scan.phoneHashes.find(
+          (ph) => ph.clientId === fixture.clientId,
+        );
+        expect(stillInPhoneHashes).toBeUndefined();
+      });
+    });
+
+    describe("getPhoneSharedLine", () => {
+      it("rejects sessions without VIEW_CLIENTS", async () => {
+        const volunteer = await createTestUser(tenantDb, {
+          overrides: { role_id: RoleId.VOLUNTEER },
+        });
+        const caller = createAuthedCaller(volunteer, {
+          deps: {
+            createMergeScanSvc: (db) => createMergeScanService(db),
+          },
+        });
+
+        await expectTrpcError(
+          caller.clients.getPhoneSharedLine({
+            clientId: crypto.randomUUID() as ClientId,
+          }),
+          "FORBIDDEN",
+        );
+      });
+
+      it("round-trips the shared flag by clientId", async () => {
+        const fixture = await createTestClientFixture(tenantDb);
+        const manager = await createTestUser(tenantDb, {
+          overrides: { role_id: RoleId.MANAGER },
+        });
+        const caller = createAuthedCaller(manager, {
+          deps: {
+            createMergeScanSvc: (db) => createMergeScanService(db),
+          },
+        });
+
+        const before = await caller.clients.getPhoneSharedLine({
+          clientId: fixture.clientId,
+        });
+        expect(before.shared).toBe(false);
+
+        await caller.clients.setPhoneSharedLine({
+          clientId: fixture.clientId,
+          shared: true,
+        });
+
+        const after = await caller.clients.getPhoneSharedLine({
+          clientId: fixture.clientId,
+        });
+        expect(after.shared).toBe(true);
       });
     });
   },

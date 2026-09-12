@@ -363,6 +363,7 @@ export interface PhonesTable {
   location_city: string | null;
   location_region: string | null;
   is_active: ColumnType<boolean, boolean | undefined, boolean>;
+  is_shared_line: ColumnType<boolean, boolean | undefined, boolean>;
   created_at: Generated<Date>;
   updated_at: Generated<Date>;
 }

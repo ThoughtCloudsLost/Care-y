@@ -214,6 +214,8 @@ export const clientKeys = {
     [...clientKeys.all, "detail", clientId] as const,
   mergeCandidates: () => [...clientKeys.all, "mergeCandidates"] as const,
   dismissals: () => [...clientKeys.all, "dismissals"] as const,
+  phoneSharedLine: (clientId: string) =>
+    [...clientKeys.all, "phoneSharedLine", clientId] as const,
 };
 
 // Reaction summaries for internal notes, fetched by follow-up id set.

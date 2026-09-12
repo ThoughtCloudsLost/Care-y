@@ -5,6 +5,8 @@
   import type { MergeCandidate } from "$lib/workers/crypto-protocol.js";
   import * as m from "$lib/paraglide/messages.js";
 
+  const MAX_VISIBLE = 5;
+
   interface MergeCandidatesSectionProps {
     candidates: readonly MergeCandidate[];
     expanded: boolean;
@@ -13,6 +15,8 @@
     resolveAlias: (clientId: string) => string | null;
     ondismiss: (clientIdA: string, clientIdB: string) => void;
     onreview: (clientIdA: string, clientIdB: string) => void;
+    truncated: boolean;
+    onsharedline: (matchHash: string) => void;
   }
 
   let {
@@ -22,7 +26,11 @@
     resolveAlias,
     ondismiss,
     onreview,
+    truncated,
+    onsharedline,
   }: MergeCandidatesSectionProps = $props();
+
+  const visibleCandidates = $derived(candidates.slice(0, MAX_VISIBLE));
 
   function matchLabel(kind: "phone" | "email"): string {
     return kind === "phone"
@@ -43,8 +51,13 @@
   <Block class="merge-candidates-notice">
     <p class="notice-text">{m.mergeCandidates_coverage_notice()}</p>
   </Block>
+  {#if truncated}
+    <Block class="merge-candidates-notice">
+      <p class="notice-text">{m.mergeCandidates_truncated_notice()}</p>
+    </Block>
+  {/if}
   <List strong inset>
-    {#each candidates as candidate (candidate.clientIdA + ":" + candidate.clientIdB)}
+    {#each visibleCandidates as candidate (candidate.clientIdA + ":" + candidate.clientIdB)}
       {@const aliasA = resolveAlias(candidate.clientIdA) ?? "..."}
       {@const aliasB = resolveAlias(candidate.clientIdB) ?? "..."}
       <ListItem title={m.mergeCandidates_pair({ aliasA, aliasB })}>
@@ -70,6 +83,15 @@
             >
               {m.mergeCandidates_dismiss()}
             </Button>
+            {#if candidate.matchKind === "phone"}
+              <Button
+                small
+                clear
+                onclick={() => onsharedline(candidate.matchHash)}
+              >
+                {m.mergeCandidates_shared_line()}
+              </Button>
+            {/if}
           </span>
         {/snippet}
       </ListItem>
@@ -94,6 +116,7 @@
     display: flex;
     gap: 0.25rem;
     flex-shrink: 0;
+    flex-wrap: wrap;
   }
 
   :global(.match-chip) {

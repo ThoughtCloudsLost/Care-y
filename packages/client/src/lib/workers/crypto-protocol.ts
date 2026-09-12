@@ -502,6 +502,11 @@ export interface DetectMergeCandidatesRequest {
   readonly type: "detectMergeCandidates";
   readonly id: number;
   readonly clients: readonly MergeScanClient[];
+  /**
+   * Match hashes of org-marked shared lines. The Worker skips them so
+   * intake-extracted phones of a shared number produce no candidates.
+   */
+  readonly suppressedPhoneHashes?: readonly string[];
 }
 
 /** Per-client data needed by the merge scan Worker op. */
@@ -544,6 +549,8 @@ export interface MergeCandidate {
   readonly clientIdA: string;
   readonly clientIdB: string;
   readonly matchKind: "phone" | "email";
+  /** The blind-index hash that produced the match, used to target the shared-line mutation. */
+  readonly matchHash: string;
 }
 
 // ── Intake response viewer operations ──────────────────────────────
@@ -947,6 +954,8 @@ export interface DetectMergeCandidatesResponse extends SuccessBase {
   readonly type: "detectMergeCandidates";
   /** Candidate pairs. Contains only client ids and match kind, never contact values. */
   readonly candidates: readonly MergeCandidate[];
+  /** True when candidate generation hit the cap and more pairs exist. */
+  readonly truncated: boolean;
 }
 
 /** A single answer in the decrypted response, keyed by fieldKey. */

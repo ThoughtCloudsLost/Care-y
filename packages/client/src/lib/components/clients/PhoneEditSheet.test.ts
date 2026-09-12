@@ -2,10 +2,11 @@
 /**
  * Tests for PhoneEditSheet: validates the three-step phone edit flow
  * (input, confirm, conflict) including E.164 validation, mutation
- * firing, conflict handling, and merge callback wiring.
+ * firing, conflict handling, merge callback wiring, and shared-line toggle.
  */
 
 import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
+import { Permission } from "@care-y/shared";
 import { render, cleanup, fireEvent, waitFor } from "@testing-library/svelte";
 import PhoneEditSheet from "./PhoneEditSheet.svelte";
 import type * as Messages from "$lib/paraglide/messages.js";
@@ -26,6 +27,7 @@ vi.mock("$lib/paraglide/messages.js", async (importOriginal) => ({
   ...(await importOriginal<typeof Messages>()),
   phone_edit: () => "Edit phone number",
   client_phone_label: () => "Phone",
+  client_phone_placeholder: () => "+1 555 000 1234",
   admin_user_save_changes: () => "Save",
   client_phone_confirm_title: () => "Confirm phone change",
   client_phone_confirm_body: (params: { alias: string; tickets: string }) =>
@@ -38,6 +40,8 @@ vi.mock("$lib/paraglide/messages.js", async (importOriginal) => ({
   client_phone_edit: () => "Try Different Number",
   common_cancel: () => "Cancel",
   error_generic: () => "Something went wrong.",
+  phone_shared_line_label: () => "Shared line",
+  phone_shared_line_hint: () => "Many people use this number.",
 }));
 
 vi.mock("$lib/terminology/with-terms.js", async (importOriginal) => {
@@ -81,15 +85,54 @@ let mutationCallbacks: {
   onError?: (err: Error) => void;
 } = {};
 
+// Track all mutations in order (updatePhone first, then sharedLine)
+const allMutationConfigs: {
+  mutationFn?: (arg: unknown) => Promise<unknown>;
+  onSuccess?: (result: unknown) => void;
+  onError?: (err: Error) => void;
+  mutate: ReturnType<typeof vi.fn>;
+}[] = [];
+
+// Shared line query result, controllable per test
+let sharedLineQueryData: { shared: boolean | null } | undefined = undefined;
+
 vi.mock("@tanstack/svelte-query", async (importOriginal) => {
   const original = await importOriginal<typeof SvelteQuery>();
   return {
     ...original,
+    createQuery: vi.fn((_optsFn: () => Record<string, unknown>) => {
+      return {
+        get data() {
+          return sharedLineQueryData;
+        },
+        get isLoading() {
+          return false;
+        },
+      };
+    }),
     createMutation: (fn: () => Record<string, unknown>) => {
       const config = fn();
+      const entry = {
+        mutationFn: config.mutationFn as
+          ((arg: unknown) => Promise<unknown>) | undefined,
+        onSuccess: config.onSuccess as ((result: unknown) => void) | undefined,
+        onError: config.onError as ((err: Error) => void) | undefined,
+        mutate: vi.fn(),
+      };
+      allMutationConfigs.push(entry);
+      // First mutation is sharedLine (declared first in component)
+      if (allMutationConfigs.length === 1) {
+        return {
+          mutate: entry.mutate,
+          get isPending() {
+            return false;
+          },
+        };
+      }
+      // Second mutation is updatePhone
       mutationCallbacks = {
-        onSuccess: config.onSuccess as (result: unknown) => void,
-        onError: config.onError as (err: Error) => void,
+        onSuccess: entry.onSuccess,
+        onError: entry.onError,
       };
       return {
         mutate: mockMutate,
@@ -104,6 +147,14 @@ vi.mock("@tanstack/svelte-query", async (importOriginal) => {
   };
 });
 
+// Hoisted because the trpc mock factory reads it while building its
+// return object, which happens before top-level consts initialize.
+const { mockSetPhoneSharedLine } = vi.hoisted(() => ({
+  mockSetPhoneSharedLine: vi.fn(
+    async () => ({ updated: 1 }) as { updated: number },
+  ),
+}));
+
 vi.mock("$lib/trpc/index.js", async (importOriginal) => {
   const original = await importOriginal<typeof TrpcModule>();
   return {
@@ -113,6 +164,12 @@ vi.mock("$lib/trpc/index.js", async (importOriginal) => {
         updatePhone: {
           mutate: vi.fn(),
         },
+        getPhoneSharedLine: {
+          query: vi.fn(
+            async () => ({ shared: false }) as { shared: boolean | null },
+          ),
+        },
+        setPhoneSharedLine: { mutate: mockSetPhoneSharedLine },
       },
     },
   };
@@ -154,12 +211,21 @@ vi.mock("$lib/query/keys.js", async (importOriginal) => {
       all: ["clients"],
       list: () => ["clients", "list"],
       detail: (id: string) => ["clients", "detail", id],
+      mergeCandidates: () => ["clients", "mergeCandidates"],
+      phoneSharedLine: (clientId: string) => [
+        "clients",
+        "phoneSharedLine",
+        clientId,
+      ],
     },
     ticketsKeys: {
       all: ["tickets"],
     },
   };
 });
+
+// Permissions control per test
+let mockHasViewClients = true;
 
 // vi.mock required: createContext from Svelte 5 throws "missing_context"
 // outside a live component tree.
@@ -180,6 +246,14 @@ vi.mock("$lib/crypto/context.js", async (importOriginal) => {
     getOrgKeyManager: () => ({
       phoneMatchHash: vi.fn().mockResolvedValue("ab".repeat(64)),
     }),
+    getCurrentPermissions: () => () => ({
+      has: (perm: string) => {
+        if (perm === (Permission.VIEW_CLIENTS as string)) {
+          return mockHasViewClients;
+        }
+        return false;
+      },
+    }),
   };
 });
 
@@ -197,6 +271,9 @@ afterEach(cleanup);
 beforeEach(() => {
   vi.clearAllMocks();
   mutationCallbacks = {};
+  allMutationConfigs.length = 0;
+  sharedLineQueryData = undefined;
+  mockHasViewClients = true;
 });
 
 // ---------------------------------------------------------------------------
@@ -496,5 +573,62 @@ describe("PhoneEditSheet", () => {
       b.textContent.includes("Save"),
     );
     expect(saveBtn?.disabled).toBe(true);
+  });
+
+  // ── Shared line toggle tests ──
+
+  it("renders toggle when user has VIEW_CLIENTS and query returns shared: false", () => {
+    mockHasViewClients = true;
+    sharedLineQueryData = { shared: false };
+
+    const { container } = render(PhoneEditSheet, { props: baseProps });
+
+    expect(container.textContent).toContain("Shared line");
+    expect(container.textContent).toContain("Many people use this number");
+  });
+
+  it("hides toggle when user lacks VIEW_CLIENTS", () => {
+    mockHasViewClients = false;
+    sharedLineQueryData = { shared: false };
+
+    const { container } = render(PhoneEditSheet, { props: baseProps });
+
+    expect(container.textContent).not.toContain("Shared line");
+  });
+
+  it("hides toggle when shared is null (no phone on record)", () => {
+    mockHasViewClients = true;
+    sharedLineQueryData = { shared: null };
+
+    const { container } = render(PhoneEditSheet, { props: baseProps });
+
+    expect(container.textContent).not.toContain("Shared line");
+  });
+
+  it("calls setPhoneSharedLine mutation when toggle is flipped", async () => {
+    mockHasViewClients = true;
+    sharedLineQueryData = { shared: false };
+
+    const { container } = render(PhoneEditSheet, { props: baseProps });
+
+    // The toggle input is inside the ListItem
+    const toggle = container.querySelector("input[type='checkbox']");
+    expect(toggle).toBeTruthy();
+
+    if (toggle) {
+      await fireEvent.change(toggle, { target: { checked: true } });
+    }
+
+    // The sharedLine mutation is the first one registered
+    const sharedMutationEntry = allMutationConfigs[0];
+    expect(sharedMutationEntry).toBeDefined();
+    if (sharedMutationEntry) {
+      // The mutation takes a boolean (shared), wraps it with clientId internally.
+      await sharedMutationEntry.mutationFn?.(true);
+      expect(mockSetPhoneSharedLine).toHaveBeenCalledWith({
+        clientId: "client-123",
+        shared: true,
+      });
+    }
   });
 });

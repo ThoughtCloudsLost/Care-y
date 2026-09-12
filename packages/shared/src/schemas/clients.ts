@@ -118,3 +118,29 @@ export const updateEmailInputSchema = z.object({
     .optional(),
 });
 export type UpdateEmailInput = z.infer<typeof updateEmailInputSchema>;
+
+// --- Phone shared line queries ---
+
+export const getPhoneSharedLineInputSchema = z.object({
+  clientId: clientIdSchema,
+});
+export type GetPhoneSharedLineInput = z.infer<
+  typeof getPhoneSharedLineInputSchema
+>;
+
+export const setPhoneSharedLineInputSchema = z.union([
+  z.object({
+    clientId: clientIdSchema,
+    shared: z.boolean(),
+  }),
+  z.object({
+    matchHash: z
+      .string()
+      .regex(/^[0-9a-f]{128}$/)
+      .pipe(phoneMatchHashSchema),
+    shared: z.boolean(),
+  }),
+]);
+export type SetPhoneSharedLineInput = z.infer<
+  typeof setPhoneSharedLineInputSchema
+>;

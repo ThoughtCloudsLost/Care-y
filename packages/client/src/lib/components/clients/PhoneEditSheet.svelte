@@ -7,15 +7,32 @@
   Rendered inside a ShellSheet. Follows the ReplySheet pattern for imports.
 -->
 <script lang="ts">
-  import { Block, Button, List, ListInput, Preloader } from "konsta/svelte";
-  import { createMutation, useQueryClient } from "@tanstack/svelte-query";
+  import {
+    Block,
+    Button,
+    List,
+    ListInput,
+    ListItem,
+    Preloader,
+    Toggle,
+  } from "konsta/svelte";
+  import {
+    createMutation,
+    createQuery,
+    useQueryClient,
+  } from "@tanstack/svelte-query";
+  import { Permission } from "@care-y/shared";
   import * as m from "$lib/paraglide/messages.js";
   import { trpc } from "$lib/trpc/index.js";
   import { clientKeys, ticketKeys, ticketsKeys } from "$lib/query/keys.js";
   import { haptic } from "$lib/utils/haptic.js";
   import { toastStore } from "$lib/stores/toast.svelte.js";
   import { requireRouter } from "$lib/errors.js";
-  import { getOrgDecryptCache, getOrgKeyManager } from "$lib/crypto/context.js";
+  import {
+    getOrgDecryptCache,
+    getOrgKeyManager,
+    getCurrentPermissions,
+  } from "$lib/crypto/context.js";
   import ShellSheet from "$lib/shell/ShellSheet.svelte";
   import PhoneChangeSteps from "./PhoneChangeSteps.svelte";
 
@@ -58,6 +75,10 @@
   const orgCache = getOrgDecryptCache();
   const orgKeyManager = getOrgKeyManager();
   const queryClient = useQueryClient();
+  const permissionsGetter = getCurrentPermissions();
+  const canMarkShared = $derived(
+    permissionsGetter().has(Permission.VIEW_CLIENTS),
+  );
 
   let step = $state<Step>("input");
   let phoneNumber = $state("");
@@ -101,6 +122,44 @@
       phoneNumber = initialPhone;
     }
   });
+
+  // ---------------------------------------------------------------------------
+  // Phone shared line query + mutation
+  // ---------------------------------------------------------------------------
+
+  const sharedLineQuery = createQuery(() => ({
+    queryKey: clientKeys.phoneSharedLine(clientId),
+    queryFn: async () => {
+      return clientsRouter.getPhoneSharedLine.query({ clientId });
+    },
+    enabled: opened && canMarkShared,
+    staleTime: Infinity,
+  }));
+
+  const sharedLineMutation = createMutation(() => ({
+    mutationFn: async (shared: boolean) => {
+      return clientsRouter.setPhoneSharedLine.mutate({ clientId, shared });
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({
+        queryKey: clientKeys.phoneSharedLine(clientId),
+      });
+      void queryClient.invalidateQueries({
+        queryKey: clientKeys.mergeCandidates(),
+      });
+    },
+    onError: () => {
+      toastStore.show(m.error_generic(), 3000);
+    },
+  }));
+
+  const sharedLineValue = $derived(sharedLineQuery.data?.shared ?? null);
+
+  function handleSharedLineToggle(e: Event): void {
+    if (e.target instanceof HTMLInputElement) {
+      sharedLineMutation.mutate(e.target.checked);
+    }
+  }
 
   // ---------------------------------------------------------------------------
   // Mutation
@@ -202,6 +261,22 @@
           }}
         />
       </List>
+      {#if canMarkShared && sharedLineValue != null}
+        <List nested>
+          <ListItem label title={m.phone_shared_line_label()}>
+            {#snippet after()}
+              <Toggle
+                checked={sharedLineValue}
+                disabled={sharedLineMutation.isPending}
+                onchange={handleSharedLineToggle}
+              />
+            {/snippet}
+          </ListItem>
+        </List>
+        <Block>
+          <p class="shared-line-hint">{m.phone_shared_line_hint()}</p>
+        </Block>
+      {/if}
       <Block>
         <Button
           large
@@ -242,5 +317,12 @@
     font-weight: 600;
     color: var(--ink);
     margin: 0 0 var(--space-sm) 0;
+  }
+
+  .shared-line-hint {
+    font-size: 0.75rem;
+    color: var(--muted);
+    line-height: 1.4;
+    margin: 0;
   }
 </style>
