@@ -217,5 +217,54 @@ export default async function globalSetup(): Promise<void> {
     console.warn("[e2e] Could not reset client tiers (non-fatal)");
   }
 
+  // Clear per-run activity records. Every block above deletes an entity
+  // specs create directly; these are the byproducts of running them at
+  // all. A full suite writes an audit row per mutation, a session per
+  // login (thirty-odd), and a recent-view per ticket opened, and nothing
+  // anywhere removes them, so they are the part of the org that grows
+  // without bound. An org left to accumulate reached the point where the
+  // ticket list took tens of seconds to mount, which reads as a hung
+  // navigation rather than as slow data: the URL simply never changes and
+  // the assertion times out. Rebuilding the org fixed it, which also means
+  // the specific table responsible was never isolated; the bound matters
+  // more than the culprit.
+  //
+  // Nothing here is seed data or a fixture any spec expects to find
+  // already present; each run recreates whatever it needs. Emails are
+  // filtered rather than truncated because clients.email_id references
+  // them without a cascade. Ticket-rooted activity (notification_outbox,
+  // ticket_read_cursors, followup_reactions, intake_key_wraps) already
+  // cascades from the ticket wipe above and is not repeated here.
+  console.log("[e2e] Clearing per-run activity records...");
+  try {
+    const activitySql = [
+      "DO $fn$ DECLARE s TEXT; BEGIN",
+      `SELECT schema_name INTO s FROM orgs WHERE slug = '${E2E_ORG_SLUG}';`,
+      "IF s IS NOT NULL THEN",
+      "EXECUTE format('DELETE FROM %I.audit_log', s);",
+      "EXECUTE format('DELETE FROM %I.sessions', s);",
+      "EXECUTE format('DELETE FROM %I.user_recent_views', s);",
+      "EXECUTE format('DELETE FROM %I.merge_candidate_dismissals', s);",
+      "EXECUTE format('DELETE FROM %I.client_merge_events', s);",
+      "EXECUTE format('DELETE FROM %I.tracked_calls', s);",
+      "EXECUTE format('DELETE FROM %I.voicemail_quarantine', s);",
+      "EXECUTE format('DELETE FROM %I.push_subscriptions', s);",
+      "EXECUTE format('DELETE FROM %I.push_challenges', s);",
+      "EXECUTE format('DELETE FROM %I.invite_tokens', s);",
+      "EXECUTE format('DELETE FROM %I.emails AS e WHERE NOT EXISTS (SELECT 1 FROM %I.clients c WHERE c.email_id = e.id)', s, s);",
+      "END IF; END $fn$;",
+    ].join("\n");
+    execSync(
+      `${COMPOSE} exec -T db psql -U care_y -d care_y -v ON_ERROR_STOP=1`,
+      {
+        input: activitySql,
+        stdio: ["pipe", "inherit", "inherit"],
+        cwd: process.cwd(),
+      },
+    );
+  } catch {
+    console.warn("[e2e] Could not clear activity records (non-fatal)");
+  }
+
   console.log("[e2e] E2E org ready");
 }
