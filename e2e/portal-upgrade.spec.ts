@@ -1,5 +1,9 @@
 import { test, expect } from "./coverage-fixture";
-import { startCoverage, stopAndWriteCoverage } from "./coverage-fixture";
+import {
+  startCoverage,
+  stopAndWriteCoverage,
+  stopCoverageAndClose,
+} from "./coverage-fixture";
 import type { Page, Request } from "@playwright/test";
 import {
   auditA11y,
@@ -515,6 +519,7 @@ test.describe.serial("Portal Upgrade + Email", () => {
 
     // Open the bare link in a fresh browser context.
     const barePage = await browser.newPage();
+    await startCoverage(barePage);
     await barePage.goto(bareLink);
 
     // Open the drawer (unconditional; see the bare-link drawer test).
@@ -569,7 +574,7 @@ test.describe.serial("Portal Upgrade + Email", () => {
     // validator rejection, or an auth failure must all fail this test.
     expect(apiResult.body).toContain("PORTAL_CONTACT_LOCKED");
 
-    await barePage.close();
+    await stopCoverageAndClose(barePage, "portal-upgrade-bare-link");
   });
 
   // ── 6. Escape quick-exits the portal page ─────────────────────

@@ -418,6 +418,7 @@ test.describe.serial("Encrypted Account Portal", () => {
     testInfo.setTimeout(CRYPTO_TIMEOUT * 6);
 
     const upgradePage = await browser.newPage();
+    await startCoverage(upgradePage);
     await upgradePage.goto(upgradeLink);
 
     // No passphrase on this channel: the thread renders directly.
@@ -490,18 +491,20 @@ test.describe.serial("Encrypted Account Portal", () => {
     });
     const successBody = await upgradePage.content();
     expect(successBody).not.toContain(UPGRADE_PASSWORD);
-    await upgradePage.close();
+    await stopCoverageAndClose(upgradePage, "account-upgrade-chooser");
 
     // The old fragment link is dead (channel revoked by the upgrade).
     const deadPage = await browser.newPage();
+    await startCoverage(deadPage);
     await deadPage.goto(upgradeLink);
     await expect(deadPage.getByText(/no longer active/i).first()).toBeVisible({
       timeout: CRYPTO_TIMEOUT,
     });
-    await deadPage.close();
+    await stopCoverageAndClose(deadPage, "account-upgrade-dead-link");
 
     // The account login shows the SAME history, re-encrypted.
     const upgradedAccountPage = await browser.newPage();
+    await startCoverage(upgradedAccountPage);
     await upgradedAccountPage.goto("/account");
     await upgradedAccountPage
       .getByPlaceholder(/username/i)
@@ -513,7 +516,7 @@ test.describe.serial("Encrypted Account Portal", () => {
     await expect(upgradedAccountPage.getByText(UPGRADE_MESSAGE)).toBeVisible({
       timeout: CRYPTO_TIMEOUT,
     });
-    await upgradedAccountPage.close();
+    await stopCoverageAndClose(upgradedAccountPage, "account-upgraded-login");
   });
 
   // ── Reset half: volunteer reset kills the login ──────────────────
@@ -585,11 +588,17 @@ test.describe.serial("Encrypted Account Portal", () => {
   }, testInfo) => {
     testInfo.setTimeout(CRYPTO_TIMEOUT * 3);
     const exitPage = await browser.newPage();
+    await startCoverage(exitPage);
     await exitPage.goto("/account");
     const quickExit = exitPage.getByRole("button", {
       name: /leave this page/i,
     });
     await expect(quickExit).toBeVisible({ timeout: CRYPTO_TIMEOUT });
+
+    // Collect before the click, never after: quick exit leaves the origin,
+    // and the renderer's V8 coverage dies with the page it was recorded on.
+    await stopAndWriteCoverage(exitPage, "account-quick-exit");
+
     await quickExit.click();
     await exitPage.waitForURL(/^(?!.*account).*$/, { timeout: 15_000 });
     expect(exitPage.url()).not.toContain("/account");

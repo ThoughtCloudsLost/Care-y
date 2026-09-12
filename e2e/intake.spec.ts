@@ -241,6 +241,7 @@ test.describe.serial("Public Intake Form", () => {
     // The first submission already used one slot. Fire three more to hit the
     // 3/IP/hour limit (the first test already consumed one).
     const errorPage = await browser.newPage();
+    await startCoverage(errorPage);
     await errorPage.goto("/intake");
     await expect(errorPage.getByRole("banner")).toBeVisible({
       timeout: CRYPTO_TIMEOUT,
@@ -278,7 +279,7 @@ test.describe.serial("Public Intake Form", () => {
     }
 
     await auditA11y(errorPage);
-    await errorPage.close();
+    await stopCoverageAndClose(errorPage, "intake-rate-limited");
   });
 });
 
@@ -342,6 +343,7 @@ test.describe.serial("Multi-form Intake Routing", () => {
     // Create both forms from a logged-in browser page so the field
     // labels and configs are encrypted with the real branding key.
     const setupPage = await browser.newPage();
+    await startCoverage(setupPage);
     await login(setupPage);
 
     const formResults = await setupPage.evaluate(
@@ -490,7 +492,7 @@ test.describe.serial("Multi-form Intake Routing", () => {
       { slugA: SLUG_A, slugB: SLUG_B, queueA: queueAId, queueB: queueBId },
     );
 
-    await setupPage.close();
+    await stopCoverageAndClose(setupPage, "intake-multiform-setup");
 
     if (!formResults.ok) {
       throw new E2eError(
@@ -507,13 +509,14 @@ test.describe.serial("Multi-form Intake Routing", () => {
   }, testInfo) => {
     testInfo.setTimeout(CRYPTO_TIMEOUT * 2);
     const page = await browser.newPage();
+    await startCoverage(page);
     await page.goto("/intake/nonexistent-slug-xyz");
     // The not-available state renders a role="status" element with the message
     const statusEl = page.locator("[role='status']:not(#toast-container)");
     await expect(statusEl).toBeVisible({ timeout: CRYPTO_TIMEOUT });
     const text = await statusEl.textContent();
     expect(text).toContain("not available");
-    await page.close();
+    await stopCoverageAndClose(page, "intake-unknown-slug");
   });
 
   test("not-available state when web_intake_enabled is false", async ({
@@ -525,6 +528,7 @@ test.describe.serial("Multi-form Intake Routing", () => {
     queryDb("UPDATE org_config SET web_intake_enabled = false WHERE true;");
 
     const page = await browser.newPage();
+    await startCoverage(page);
     await page.goto("/intake");
     const statusEl = page.locator("[role='status']:not(#toast-container)");
     await expect(statusEl).toBeVisible({ timeout: CRYPTO_TIMEOUT });
@@ -533,7 +537,7 @@ test.describe.serial("Multi-form Intake Routing", () => {
 
     // Re-enable for subsequent tests
     queryDb("UPDATE org_config SET web_intake_enabled = true WHERE true;");
-    await page.close();
+    await stopCoverageAndClose(page, "intake-web-disabled");
   });
 
   test("submit to slug-A routes ticket to queue A", async ({
@@ -541,6 +545,7 @@ test.describe.serial("Multi-form Intake Routing", () => {
   }, testInfo) => {
     testInfo.setTimeout(CRYPTO_TIMEOUT * 3);
     const page = await browser.newPage();
+    await startCoverage(page);
     await page.goto(`/intake/${SLUG_A}`);
 
     // Wait for the form to render. The branding-key decrypt decodes the
@@ -565,7 +570,7 @@ test.describe.serial("Multi-form Intake Routing", () => {
     ).trim();
     expect(latestQueueId).toBe(queueAId);
 
-    await page.close();
+    await stopCoverageAndClose(page, "intake-route-slug-a");
   });
 
   test("submit to slug-B routes ticket to queue B", async ({
@@ -573,6 +578,7 @@ test.describe.serial("Multi-form Intake Routing", () => {
   }, testInfo) => {
     testInfo.setTimeout(CRYPTO_TIMEOUT * 3);
     const page = await browser.newPage();
+    await startCoverage(page);
     await page.goto(`/intake/${SLUG_B}`);
 
     const textarea = page.locator("textarea").first();
@@ -594,7 +600,7 @@ test.describe.serial("Multi-form Intake Routing", () => {
     ).trim();
     expect(latestQueueId).toBe(queueBId);
 
-    await page.close();
+    await stopCoverageAndClose(page, "intake-route-slug-b");
   });
 
   test.afterAll(() => {
@@ -643,6 +649,7 @@ test.describe.serial("Intake validation matrix", () => {
     testInfo.setTimeout(CRYPTO_TIMEOUT * 4);
 
     const setupPage = await browser.newPage();
+    await startCoverage(setupPage);
     await login(setupPage);
 
     const result = await setupPage.evaluate(
@@ -821,7 +828,7 @@ test.describe.serial("Intake validation matrix", () => {
       },
       { slug: SLUG_V, labels: LABELS },
     );
-    await setupPage.close();
+    await stopCoverageAndClose(setupPage, "intake-validation-setup");
 
     if (!result.ok) {
       throw new E2eError(`Validation form fixture failed: ${result.error}`);

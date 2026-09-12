@@ -1,5 +1,9 @@
 import { test, expect } from "./coverage-fixture";
-import { startCoverage, stopAndWriteCoverage } from "./coverage-fixture";
+import {
+  startCoverage,
+  stopAndWriteCoverage,
+  stopCoverageAndClose,
+} from "./coverage-fixture";
 import type { Page, Request } from "@playwright/test";
 import {
   auditA11y,
@@ -272,11 +276,16 @@ test.describe.serial("Secure Link Portal", () => {
     testInfo.setTimeout(CRYPTO_TIMEOUT * 3);
     // Use a separate page so the main portalPage keeps its state.
     const exitPage = await browser.newPage();
+    await startCoverage(exitPage);
     await exitPage.goto(portalLink);
     const quickExit = exitPage.getByRole("button", {
       name: /leave this page/i,
     });
     await expect(quickExit).toBeVisible({ timeout: CRYPTO_TIMEOUT });
+
+    // Collect before the click, never after: quick exit leaves the origin,
+    // and the renderer's V8 coverage dies with the page it was recorded on.
+    await stopAndWriteCoverage(exitPage, "portal-quick-exit");
 
     await quickExit.click();
     // location.replace navigates away from the app origin entirely.
@@ -364,12 +373,13 @@ test.describe.serial("Secure Link Portal", () => {
     );
 
     const deadPage = await browser.newPage();
+    await startCoverage(deadPage);
     await deadPage.goto(portalLink);
     await expectPortalReady(
       deadPage,
       deadPage.getByText(/no longer active/i).first(),
     );
     await auditA11y(deadPage);
-    await deadPage.close();
+    await stopCoverageAndClose(deadPage, "portal-revoked-link");
   });
 });
