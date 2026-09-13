@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { List, ListItem, Preloader } from "konsta/svelte";
+  import { List, ListItem } from "konsta/svelte";
   import {
     PhoneIncoming,
     PhoneOutgoing,
@@ -11,11 +11,8 @@
   import { resolveOrgDecrypt } from "$lib/crypto/decrypt-result.js";
   import { formatRelativeTime } from "$lib/utils/format-time.js";
   import { formatDuration } from "$lib/utils/time.js";
-  import QueryError from "$lib/components/QueryError.svelte";
-  import EmptyState from "$lib/components/EmptyState.svelte";
-  import InlineSkeleton from "$lib/components/InlineSkeleton.svelte";
   import DecryptPlaceholder from "$lib/components/DecryptPlaceholder.svelte";
-  import SoftButton from "$lib/components/inputs/SoftButton.svelte";
+  import LogListSection from "./LogListSection.svelte";
 
   // ---------------------------------------------------------------------------
   // Props
@@ -99,102 +96,72 @@
   }
 </script>
 
-<div class="call-log-section pb-20">
-  {#if isLoading}
-    <List>
-      {#each { length: 3 } as _, i (i)}
-        <ListItem>
-          {#snippet title()}
-            <InlineSkeleton width="14ch" />
-          {/snippet}
-          {#snippet after()}
-            <InlineSkeleton width="8ch" />
-          {/snippet}
-          {#snippet subtitle()}
-            <InlineSkeleton width="20ch" />
-          {/snippet}
-        </ListItem>
-      {/each}
-    </List>
-  {:else if isError}
-    <QueryError {error} {onretry} />
-  {:else if rows.length === 0}
-    <EmptyState
-      icon={PhoneCall}
-      title={m.logs_calls_empty_title()}
-      subtitle={m.logs_calls_empty_subtitle()}
-    />
-  {:else}
-    <List>
-      {#each rows as row (row.id)}
-        <ListItem
-          link
-          linkComponent="button"
-          chevron={false}
-          class="touch-feedback"
-          onclick={() => onticketopen(row.ticketId)}
-        >
-          {#snippet media()}
-            <span class="row-glyph" aria-hidden="true">
-              {#if row.type === "voicemail"}
-                <Voicemail size={18} />
-              {:else if row.source === "client"}
-                <PhoneIncoming size={18} />
-              {:else}
-                <PhoneOutgoing size={18} />
-              {/if}
-            </span>
-          {/snippet}
-          {#snippet title()}
-            <DecryptPlaceholder
-              result={aliasResult(row)}
-              ciphertext={row.encryptedClientAlias}
-            />
-          {/snippet}
-          {#snippet after()}
-            <span class="row-time">
-              {formatRelativeTime(new Date(row.createdAt))}
-            </span>
-          {/snippet}
-          {#snippet subtitle()}
-            <span class="row-meta">
-              {directionLabel(row)}
-              {#if statusLabel(row.callStatus) !== null}
-                <span class="meta-sep" aria-hidden="true">·</span>{statusLabel(
-                  row.callStatus,
-                )}
-              {/if}
-              {#if row.callDurationSeconds !== null}
-                <span class="meta-sep" aria-hidden="true">·</span
-                >{formatDuration(row.callDurationSeconds)}
-              {/if}
-            </span>
-          {/snippet}
-        </ListItem>
-      {/each}
-    </List>
-    {#if hasNextPage}
-      <div class="load-more">
-        <SoftButton onclick={onfetchnext} disabled={isFetchingNextPage}>
-          {#if isFetchingNextPage}
-            <Preloader class="w-4 h-4" />
-          {:else}
-            {m.logs_load_more()}
-          {/if}
-        </SoftButton>
-      </div>
-    {/if}
-  {/if}
-</div>
+<LogListSection
+  {isLoading}
+  {isError}
+  {error}
+  hasData={rows.length > 0}
+  {hasNextPage}
+  {isFetchingNextPage}
+  {onfetchnext}
+  {onretry}
+  emptyIcon={PhoneCall}
+  emptyTitle={m.logs_calls_empty_title()}
+  emptySubtitle={m.logs_calls_empty_subtitle()}
+  wrapperClass="call-log-section"
+>
+  <List>
+    {#each rows as row (row.id)}
+      <ListItem
+        link
+        linkComponent="button"
+        chevron={false}
+        class="touch-feedback"
+        onclick={() => onticketopen(row.ticketId)}
+      >
+        {#snippet media()}
+          <span class="row-glyph" aria-hidden="true">
+            {#if row.type === "voicemail"}
+              <Voicemail size={18} />
+            {:else if row.source === "client"}
+              <PhoneIncoming size={18} />
+            {:else}
+              <PhoneOutgoing size={18} />
+            {/if}
+          </span>
+        {/snippet}
+        {#snippet title()}
+          <DecryptPlaceholder
+            result={aliasResult(row)}
+            ciphertext={row.encryptedClientAlias}
+          />
+        {/snippet}
+        {#snippet after()}
+          <span class="row-time">
+            {formatRelativeTime(new Date(row.createdAt))}
+          </span>
+        {/snippet}
+        {#snippet subtitle()}
+          <span class="row-meta">
+            {directionLabel(row)}
+            {#if statusLabel(row.callStatus) !== null}
+              <span class="meta-sep" aria-hidden="true">·</span>{statusLabel(
+                row.callStatus,
+              )}
+            {/if}
+            {#if row.callDurationSeconds !== null}
+              <span class="meta-sep" aria-hidden="true">·</span>{formatDuration(
+                row.callDurationSeconds,
+              )}
+            {/if}
+          </span>
+        {/snippet}
+      </ListItem>
+    {/each}
+  </List>
+</LogListSection>
 
 <style>
-  .call-log-section {
-    padding: 0.25rem var(--page-pad-x) 0;
-    display: flex;
-    flex-direction: column;
-    gap: var(--space-lg);
-  }
-
   .row-glyph {
     color: var(--muted);
     display: flex;
@@ -214,11 +181,5 @@
 
   .meta-sep {
     margin: 0 0.25em;
-  }
-
-  .load-more {
-    display: flex;
-    justify-content: center;
-    padding: var(--space-md) 0;
   }
 </style>

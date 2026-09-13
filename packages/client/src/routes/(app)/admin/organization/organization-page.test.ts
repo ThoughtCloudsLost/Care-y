@@ -2,6 +2,12 @@
 
 import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
 import { render, cleanup } from "@testing-library/svelte";
+import type * as UseSectionScrollNS from "$lib/components/useSectionScroll.svelte.js";
+import type * as MessagesNS from "$lib/paraglide/messages.js";
+import type * as ContextNS from "$lib/shell/context.js";
+import type * as ContextNS2 from "$lib/crypto/context.js";
+import type * as PathsNS from "$app/paths";
+import type * as NavigationNS from "$app/navigation";
 
 // --- Controllable mock state ---
 
@@ -12,27 +18,27 @@ const mockGoto = vi.fn();
 // --- Mocks ---
 
 vi.mock("$app/navigation", async (importOriginal) => ({
-  ...(await importOriginal<Record<string, unknown>>()),
+  ...(await importOriginal<typeof NavigationNS>()),
   goto: mockGoto,
   afterNavigate: vi.fn(),
 }));
 
 vi.mock("$app/paths", async (importOriginal) => ({
-  ...(await importOriginal<Record<string, unknown>>()),
+  ...(await importOriginal<typeof PathsNS>()),
   resolve: (path: string) => path,
   base: "",
   assets: "",
 }));
 
 vi.mock("$lib/crypto/context.js", async (importOriginal) => ({
-  ...(await importOriginal<Record<string, unknown>>()),
+  ...(await importOriginal<typeof ContextNS2>()),
   getCurrentPermissions: () => () => mockPermissions,
 }));
 
 const mockNavbarCtx = { current: undefined as unknown };
 
 vi.mock("$lib/shell/context.js", async (importOriginal) => ({
-  ...(await importOriginal<Record<string, unknown>>()),
+  ...(await importOriginal<typeof ContextNS>()),
   getSectionRailCtx: () => ({ current: undefined }),
   getNavbarOverrideCtx: () => mockNavbarCtx,
   getScrollContainer: () => () => null,
@@ -40,7 +46,7 @@ vi.mock("$lib/shell/context.js", async (importOriginal) => ({
 }));
 
 vi.mock("$lib/paraglide/messages.js", async (importOriginal) => ({
-  ...(await importOriginal<Record<string, unknown>>()),
+  ...(await importOriginal<typeof MessagesNS>()),
   admin_tab_org_general: () => "General",
   admin_tab_branding: () => "Branding",
   admin_tab_keys: () => "Keys",
@@ -68,7 +74,7 @@ vi.mock("$lib/components/SectionScrollNav.svelte", async () => {
 vi.mock(
   "$lib/components/useSectionScroll.svelte.js",
   async (importOriginal) => ({
-    ...(await importOriginal<Record<string, unknown>>()),
+    ...(await importOriginal<typeof UseSectionScrollNS>()),
     createSectionScroll: () => ({ active: "branding", scrollTo: vi.fn() }),
   }),
 );

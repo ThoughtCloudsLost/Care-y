@@ -446,7 +446,6 @@ describe.skipIf(!process.env.DATABASE_URL)(
         testDb.db,
         {
           sealedBox: testSealedBox,
-          fieldEncryptor: noopEncryptor,
           orgId: TEST_ORG_ID,
           orgSchema: testDb.schemaName as OrgSchema,
           orgSlug: orgSlugIdSchema.parse("test-org"),

@@ -5,70 +5,29 @@
  * gets an isolated test schema created in beforeAll, dropped in afterAll.
  */
 
-import crypto from "node:crypto";
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import type { TestDb } from "../test-utils.js";
 import {
   createTestDb,
   seedOrgPublicKey,
   createTestTicketFixture,
+  fakeTriple,
+  insertTestChannel,
 } from "../test-utils.js";
-import type { PortalChannelRow } from "./channel-service.js";
 import {
   insertClientRecordingWrap,
   listChannelRecordings,
   resolveChannelRecordingBlobKey,
   purgeChannelRecordings,
 } from "./portal-recording-service.js";
-import {
-  channelSecretSchema,
-  newFollowupId,
-  newRecordingId,
-} from "@care-y/shared";
-import type { ClientId, BlobKey } from "@care-y/shared";
+import { newFollowupId, newRecordingId } from "@care-y/shared";
+import type { BlobKey } from "@care-y/shared";
 
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
 
-function fakeTriple(): {
-  ephemeralPoint: Buffer;
-  nonce: Buffer;
-  ciphertext: Buffer;
-} {
-  return {
-    ephemeralPoint: Buffer.alloc(32, 0x01),
-    nonce: Buffer.alloc(24, 0x02),
-    ciphertext: Buffer.from("test-ciphertext"),
-  };
-}
-
-async function insertChannel(
-  db: TestDb["db"],
-  clientId: ClientId,
-  overrides?: Partial<Record<string, unknown>>,
-): Promise<PortalChannelRow> {
-  const channelId = channelSecretSchema.parse(
-    crypto.randomBytes(24).toString("hex"),
-  );
-  const row = await db
-    .insertInto("portal_channels")
-    .values({
-      client_id: clientId,
-      channel_id: channelId,
-      auth_hash: Buffer.alloc(32, 0xaa),
-      client_public: Buffer.alloc(32, 0xbb),
-      has_passphrase: false,
-      key_check_ephemeral_point: Buffer.alloc(32, 0xcc),
-      key_check_nonce: Buffer.alloc(24, 0xdd),
-      key_check_ciphertext: Buffer.from("key-check-ct"),
-      status: "active",
-      ...overrides,
-    })
-    .returningAll()
-    .executeTakeFirstOrThrow();
-  return row;
-}
+// fakeTriple and insertTestChannel imported from test-utils.ts
 
 // ---------------------------------------------------------------------------
 // DB integration tests
@@ -95,7 +54,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
     describe("insert and list roundtrip", () => {
       it("inserts a wrap and lists it back with duration from the recording", async () => {
         const fixture = await createTestTicketFixture(testDb.db);
-        const channel = await insertChannel(testDb.db, fixture.clientId);
+        const channel = await insertTestChannel(testDb.db, fixture.clientId);
 
         const fuId = newFollowupId();
         await testDb.db
@@ -147,7 +106,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
 
       it("excludes soft-deleted recordings from the listing", async () => {
         const fixture = await createTestTicketFixture(testDb.db);
-        const channel = await insertChannel(testDb.db, fixture.clientId);
+        const channel = await insertTestChannel(testDb.db, fixture.clientId);
 
         const fuId = newFollowupId();
         await testDb.db
@@ -190,7 +149,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
 
       it("orders results by created_at asc then id asc", async () => {
         const fixture = await createTestTicketFixture(testDb.db);
-        const channel = await insertChannel(testDb.db, fixture.clientId);
+        const channel = await insertTestChannel(testDb.db, fixture.clientId);
 
         const fuId1 = newFollowupId();
         await testDb.db
@@ -274,7 +233,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
     describe("resolveChannelRecordingBlobKey", () => {
       it("returns the blob key when a wrap ties the recording to the channel", async () => {
         const fixture = await createTestTicketFixture(testDb.db);
-        const channel = await insertChannel(testDb.db, fixture.clientId);
+        const channel = await insertTestChannel(testDb.db, fixture.clientId);
 
         const fuId = newFollowupId();
         await testDb.db
@@ -321,7 +280,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
 
       it("returns null when no wrap exists for the channel", async () => {
         const fixture = await createTestTicketFixture(testDb.db);
-        const channel = await insertChannel(testDb.db, fixture.clientId);
+        const channel = await insertTestChannel(testDb.db, fixture.clientId);
 
         const fuId = newFollowupId();
         await testDb.db
@@ -360,7 +319,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
 
       it("returns null when the recording is soft-deleted", async () => {
         const fixture = await createTestTicketFixture(testDb.db);
-        const channel = await insertChannel(testDb.db, fixture.clientId);
+        const channel = await insertTestChannel(testDb.db, fixture.clientId);
 
         const fuId = newFollowupId();
         await testDb.db
@@ -411,8 +370,11 @@ describe.skipIf(!process.env.DATABASE_URL)(
         // to clients, so "a different channel" means a different client.
         const fixture = await createTestTicketFixture(testDb.db);
         const otherFixture = await createTestTicketFixture(testDb.db);
-        const channel1 = await insertChannel(testDb.db, fixture.clientId);
-        const channel2 = await insertChannel(testDb.db, otherFixture.clientId);
+        const channel1 = await insertTestChannel(testDb.db, fixture.clientId);
+        const channel2 = await insertTestChannel(
+          testDb.db,
+          otherFixture.clientId,
+        );
 
         const fuId = newFollowupId();
         await testDb.db
@@ -466,7 +428,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
     describe("purgeChannelRecordings", () => {
       it("removes all wraps for the channel, leaving recordings intact", async () => {
         const fixture = await createTestTicketFixture(testDb.db);
-        const channel = await insertChannel(testDb.db, fixture.clientId);
+        const channel = await insertTestChannel(testDb.db, fixture.clientId);
 
         const fuId = newFollowupId();
         await testDb.db

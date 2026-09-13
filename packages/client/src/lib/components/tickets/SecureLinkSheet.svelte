@@ -27,7 +27,7 @@
   import ShellDialog from "$lib/shell/ShellDialog.svelte";
   import Register from "$lib/components/Register.svelte";
   import { trpc } from "$lib/trpc/index.js";
-  import { requireRouter } from "$lib/errors.js";
+  import { requireRouter, RelayError, RateLimitError } from "$lib/errors.js";
   import { toastStore } from "$lib/stores/toast.svelte.js";
   import { haptic } from "$lib/utils/haptic.js";
   import {
@@ -46,6 +46,7 @@
   import { ErrorCode } from "@care-y/shared";
   import { EFF_WORDLIST } from "$lib/portal/eff-wordlist.js";
   import { getCryptoBridge } from "$lib/crypto/context.js";
+  import { labelToggleInput } from "$lib/utils/a11y.js";
   import { createPortalReseed } from "$lib/composables/tickets/create-portal-reseed.svelte.js";
   import type { PortalReseedStartArgs } from "$lib/composables/tickets/create-portal-reseed.svelte.js";
 
@@ -143,12 +144,16 @@
     chanId: string,
     blindedElementB64: string,
     chanAuth?: string,
+    pow?: { challenge: string; solution: string },
   ): Promise<{ evaluated: string }> {
     const portalRouter = requireRouter(trpc.clientPortal, "clientPortal");
     return portalRouter.evaluateChannelOprf.mutate({
       channelId: chanId,
       blindedElement: blindedElementB64,
       ...(chanAuth !== undefined ? { auth: chanAuth } : {}),
+      ...(pow != null
+        ? { powChallenge: pow.challenge, powSolution: pow.solution }
+        : {}),
     });
   }
 
@@ -254,14 +259,30 @@
         }),
       });
 
-      if (!resp.ok) throw new Error("SMS send failed");
+      if (resp.status === 429) {
+        const retryAfter = resp.headers.get("Retry-After");
+        const seconds = retryAfter !== null ? parseInt(retryAfter, 10) : 30;
+        throw new RateLimitError(seconds);
+      }
+      if (!resp.ok) throw new RelayError("SMS_FAILED", resp.status);
 
       haptic();
       toastStore.show(m.ticket_toast_link_sent());
-    } catch (_err: unknown) {
-      // Intentional discard: the SMS body contains the portal link,
-      // so the error context is not safe to log.
-      toastStore.show(m.error_generic(), 3000);
+    } catch (err: unknown) {
+      // The SMS body contains the portal link, so the error context is
+      // not safe to log beyond the typed error fields.
+      if (err instanceof RateLimitError) {
+        toastStore.show(
+          m.ticket_sms_rate_limited({
+            seconds: String(err.retryAfterSeconds),
+          }),
+          5000,
+        );
+      } else if (err instanceof RelayError) {
+        toastStore.show(m.ticket_sms_error_send(), 3000);
+      } else {
+        toastStore.show(m.error_generic(), 3000);
+      }
     } finally {
       smsSending = false;
     }
@@ -344,13 +365,6 @@
       resetState();
     }
   });
-
-  function labelToggleInput(node: HTMLElement, label: string): void {
-    const input = node.querySelector<HTMLInputElement>(
-      'input[type="checkbox"]',
-    );
-    if (input) input.setAttribute("aria-label", label);
-  }
 </script>
 
 <ShellSheet
@@ -419,11 +433,7 @@
     <Block class="!my-3">
       <Button large onclick={() => void handleGenerate()} disabled={generating}>
         {#if generating}
-          <span
-            class="inline-progress"
-            role="progressbar"
-            aria-label={m.ticket_tier_link_ready()}
-          ></span>
+          <Preloader class="w-4 h-4" />
         {/if}
         {m.ticket_tier_setup()}
       </Button>
@@ -614,30 +624,5 @@
     color: var(--danger);
     font-size: var(--text-sm);
     margin: 0 0 0.5rem;
-  }
-
-  .inline-progress {
-    display: inline-block;
-    width: 16px;
-    height: 16px;
-    border: 2px solid currentColor;
-    border-top-color: transparent;
-    border-radius: 50%;
-    animation: spin 0.8s linear infinite;
-    margin-right: 0.5rem;
-    vertical-align: middle;
-  }
-
-  @media (prefers-reduced-motion: reduce) {
-    .inline-progress {
-      animation: none;
-      opacity: 0.5;
-    }
-  }
-
-  @keyframes spin {
-    to {
-      transform: rotate(360deg);
-    }
   }
 </style>

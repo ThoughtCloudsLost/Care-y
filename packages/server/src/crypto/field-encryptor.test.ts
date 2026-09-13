@@ -293,6 +293,59 @@ describe("createFieldEncryptor.decryptToBuffer", () => {
   });
 });
 
+describe("createBlindIndexer.hashBuffer", () => {
+  const keys = deriveKeys(TEST_KEY);
+  const indexer = createBlindIndexer(keys.blindIndexKey);
+  const ORG_A = "org-a" as OrgId;
+
+  it("produces output identical to the string path for E.164 inputs", () => {
+    // For the E.164 domain (digits + plus sign), byte-level normalization
+    // must produce the same HMAC as the old string-based path.
+    const inputs = [
+      "+15550001234",
+      " +15550001234 ",
+      "+15550001234",
+      "+447911123456",
+    ];
+
+    for (const input of inputs) {
+      const stringResult = indexer.hash(input, ORG_A);
+      const bufferResult = indexer.hashBuffer(
+        Buffer.from(input, "utf-8"),
+        ORG_A,
+      );
+      expect(bufferResult).toBe(stringResult);
+    }
+  });
+
+  it("lowercases ASCII letters at the byte level", () => {
+    // Hex-ish letters in phone metadata should lowercase identically
+    const upper = Buffer.from("ABC123", "utf-8");
+    const lower = Buffer.from("abc123", "utf-8");
+    expect(indexer.hashBuffer(upper, ORG_A)).toBe(
+      indexer.hashBuffer(lower, ORG_A),
+    );
+  });
+
+  it("trims leading and trailing whitespace at the byte level", () => {
+    const padded = Buffer.from("  +1555  ", "utf-8");
+    const trimmed = Buffer.from("+1555", "utf-8");
+    expect(indexer.hashBuffer(padded, ORG_A)).toBe(
+      indexer.hashBuffer(trimmed, ORG_A),
+    );
+  });
+
+  it("is deterministic", () => {
+    const buf = Buffer.from("+15550001234", "utf-8");
+    expect(indexer.hashBuffer(buf, ORG_A)).toBe(indexer.hashBuffer(buf, ORG_A));
+  });
+
+  it("produces a 64-char hex string", () => {
+    const buf = Buffer.from("+15550001234", "utf-8");
+    expect(indexer.hashBuffer(buf, ORG_A)).toMatch(/^[0-9a-f]{64}$/);
+  });
+});
+
 describe("createNoopFieldEncryptor", () => {
   const noop = createNoopFieldEncryptor();
 

@@ -47,6 +47,7 @@ const CONTENT_AAD_DOMAIN = encodeLabel("care-y-content-aad-v1");
  *   `filekey:<attachmentId>`    wrap of a per-file key (row id)
  *   `cursor:<userId>`           per-user read cursor payload
  *   `field:<name>`              any other named ticket field
+ *   `intake-form-response`     structured intake form response blob
  *
  * Encoding: domain label || ticketId byte length (uint32 LE) || ticketId
  * bytes || slot bytes. The fixed-width length field delimits the ticket

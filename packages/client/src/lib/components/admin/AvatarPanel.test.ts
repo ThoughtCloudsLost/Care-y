@@ -19,8 +19,7 @@ vi.stubGlobal(
 );
 
 // --- Hoisted mock fns ---
-const { mockToastShow, mockOrgDecrypt } = vi.hoisted(() => ({
-  mockToastShow: vi.fn(),
+const { mockOrgDecrypt } = vi.hoisted(() => ({
   mockOrgDecrypt: vi.fn().mockReturnValue("Jane Doe"),
 }));
 
@@ -77,7 +76,8 @@ vi.mock("$lib/paraglide/messages.js", async (importOriginal) => ({
 }));
 
 // --- Mock crypto context ---
-vi.mock("$lib/crypto/context.js", () => ({
+vi.mock("$lib/crypto/context.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof ContextNS2>()),
   getOrgDecryptCache: () => ({
     decrypt: mockOrgDecrypt,
     get: vi.fn().mockReturnValue(undefined),
@@ -88,27 +88,34 @@ vi.mock("$lib/crypto/context.js", () => ({
 }));
 
 // --- Mock buffer encoding ---
-vi.mock("$lib/utils/buffer-encoding.js", () => ({
+vi.mock("$lib/utils/buffer-encoding.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof BufferEncodingNS>()),
   base64ToUint8Array: vi.fn(
     (s: string) => new Uint8Array([...s].map((c) => c.charCodeAt(0))),
   ),
 }));
 
 // --- Mock toast store ---
-vi.mock("$lib/stores/toast.svelte.js", () => ({
-  toastStore: { show: mockToastShow },
-}));
+vi.mock(
+  "$lib/stores/toast.svelte.js",
+  async () =>
+    (await import("$mocks/toast.js")).toastMock() satisfies typeof ToastNS,
+);
 
 // --- Mock shell context ---
-vi.mock("$lib/shell/context.js", () => ({
-  getSectionRailCtx: () => ({ current: undefined }),
-  getScrollContainer: () => () => undefined,
-  getTabbarOverrideCtx: () => ({ current: undefined }),
-  getTabbarHiddenCtx: () => ({ current: false }),
-  getNavbarOverrideCtx: () => ({ current: undefined }),
-}));
+vi.mock(
+  "$lib/shell/context.js",
+  async () =>
+    (
+      await import("$mocks/shell-context.js")
+    ).shellContextMock() satisfies typeof ContextNS,
+);
 
 import AvatarPanel from "./AvatarPanel.svelte";
+import type * as ContextNS from "$lib/shell/context.js";
+import type * as ToastNS from "$lib/stores/toast.svelte.js";
+import type * as BufferEncodingNS from "$lib/utils/buffer-encoding.js";
+import type * as ContextNS2 from "$lib/crypto/context.js";
 
 afterEach(() => {
   cleanup();

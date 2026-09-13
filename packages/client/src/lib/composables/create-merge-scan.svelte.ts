@@ -22,6 +22,7 @@ import { clientKeys } from "$lib/query/keys.js";
 import { trpc } from "$lib/trpc/index.js";
 import { getCryptoBridge } from "$lib/crypto/context.js";
 import { requireRouter } from "$lib/errors.js";
+import { pairKey } from "$lib/tickets/pair-key.js";
 import type {
   MergeCandidate,
   MergeScanClient,
@@ -60,14 +61,9 @@ export interface MergeScanResult {
   readonly invalidate: () => void;
 }
 
-/**
- * Computes a stable pair key from two client ids. Sorted so (A,B)==(B,A).
- */
-export function pairKey(clientIdA: string, clientIdB: string): string {
-  return clientIdA < clientIdB
-    ? `${clientIdA}:${clientIdB}`
-    : `${clientIdB}:${clientIdA}`;
-}
+// Re-export so existing consumers that import pairKey from this module
+// continue to compile without changes.
+export { pairKey } from "$lib/tickets/pair-key.js";
 
 /**
  * Creates the merge scan composable. Call from the dashboard route file.
@@ -92,17 +88,11 @@ export function createMergeScan(getDeps: () => MergeScanDeps): MergeScanResult {
     };
   });
 
-  // Extract shared phone hashes from server data (same defensive pattern as phoneHashes)
+  // Extract shared phone hashes from server data
   const sharedPhoneHashes = $derived.by((): readonly string[] => {
     const serverData = mergeScanDataQuery.data;
     if (!serverData) return [];
-    if (
-      "sharedPhoneHashes" in serverData &&
-      Array.isArray(serverData.sharedPhoneHashes)
-    ) {
-      return serverData.sharedPhoneHashes as readonly string[];
-    }
-    return [];
+    return serverData.sharedPhoneHashes;
   });
 
   // Build MergeScanClient[] from server data + dashboard ticket refs.
@@ -150,24 +140,14 @@ export function createMergeScan(getDeps: () => MergeScanDeps): MergeScanResult {
 
     // Index phone hashes from server payload
     const phoneHashMap = new SvelteMap<string, string>();
-    if ("phoneHashes" in serverData && Array.isArray(serverData.phoneHashes)) {
-      for (const ph of serverData.phoneHashes as readonly {
-        clientId: string;
-        phoneMatchHash: string;
-      }[]) {
-        phoneHashMap.set(ph.clientId, ph.phoneMatchHash);
-      }
+    for (const ph of serverData.phoneHashes) {
+      phoneHashMap.set(ph.clientId, ph.phoneMatchHash);
     }
 
     // Index email hashes from server payload
     const emailHashMap = new SvelteMap<string, string>();
-    if ("emailHashes" in serverData && Array.isArray(serverData.emailHashes)) {
-      for (const eh of serverData.emailHashes as readonly {
-        clientId: string;
-        emailMatchHash: string;
-      }[]) {
-        emailHashMap.set(eh.clientId, eh.emailMatchHash);
-      }
+    for (const eh of serverData.emailHashes) {
+      emailHashMap.set(eh.clientId, eh.emailMatchHash);
     }
 
     // Merge server intake data with dashboard key wraps

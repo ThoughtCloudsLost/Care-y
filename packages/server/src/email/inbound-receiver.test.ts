@@ -399,6 +399,39 @@ describe.skipIf(!process.env.DATABASE_URL)("inbound SMTP receiver", () => {
     }
   });
 
+  it("answers 451 on domain lookup failure instead of permanent 550", async () => {
+    // A DB outage during domain resolution is transient: the sender MTA
+    // should retry rather than bouncing permanently. Only ReplyTokenError
+    // (unknown/revoked token) warrants a permanent 550.
+    const brokenPlatformDb = {
+      selectFrom: () => {
+        throw new Error("simulated DB connection failure");
+      },
+    } as unknown as typeof testDb.platformDb;
+
+    const failing = createInboundReceiver(
+      {
+        platformDb: brokenPlatformDb,
+        getTenantDb: () => db,
+        replyTokenHasher: hasher,
+        now,
+      },
+      { port: 0 },
+    );
+    const failPort = await failing.listen();
+
+    try {
+      const token = "a".repeat(26);
+      const probe = await session(failPort);
+      await probe.cmd("MAIL FROM:<client@example.org>");
+      const rcpt = await probe.cmd(`RCPT TO:<reply-${token}@${domain}>`);
+      expect(rcpt).toMatch(/^451 /);
+      probe.close();
+    } finally {
+      await failing.close();
+    }
+  });
+
   // --- Channel policy ---
 
   it("rejects RCPT with 550 when channel_email_enabled is false", async () => {

@@ -9,9 +9,11 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { render, cleanup, fireEvent } from "@testing-library/svelte";
 import CallOptionsContent from "./CallOptionsContent.svelte";
+import type * as MessagesNS from "$lib/paraglide/messages.js";
 
 // --- Mock i18n ---
-vi.mock("$lib/paraglide/messages.js", () => ({
+vi.mock("$lib/paraglide/messages.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof MessagesNS>()),
   ticket_call_browser: () => "Call via browser",
   ticket_call_phone: () => "Call to my phone",
   common_cancel: () => "Cancel",

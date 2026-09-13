@@ -30,6 +30,7 @@ import type { CallerIdResolver } from "../telephony/phone-resolver.js";
 import { createPhoneRepository } from "../telephony/models/phone-repo.js";
 import { isE164Buffer } from "../telephony/phone-utils.js";
 import { getStrings } from "../notifications/i18n.js";
+import { createOrgConfigService } from "../org/org-config-service.js";
 import { RateLimitError } from "../errors.js";
 import {
   readRawBody,
@@ -49,7 +50,6 @@ import type { EmailSender } from "../email/email-sender.js";
 import type { OrgEmailBranding } from "../notifications/email.js";
 import type { ReplyTokenHasher } from "../crypto/field-encryptor.js";
 import type { PlatformDatabase } from "../db/types.js";
-import { mintToken } from "../email/reply-token-service.js";
 import type {
   OrgId,
   OrgSchema,
@@ -66,6 +66,11 @@ import {
   callSidSchema,
   ticketIdSchema,
 } from "@care-y/shared";
+import {
+  resolveClientPhone,
+  resolveClientEmail,
+} from "../clients/contact-resolution.js";
+import { buildEmailEnvelope } from "../email/email-relay-service.js";
 
 // ---------------------------------------------------------------------------
 // Dependencies
@@ -237,37 +242,6 @@ export function createRelayHandler(deps: RelayHandlerDeps): RelayHandler {
 }
 
 // ---------------------------------------------------------------------------
-// Channel policy helper
-// ---------------------------------------------------------------------------
-
-/**
- * Reads a single channel-policy boolean from org_config.
- * Returns true when the row is missing or the column is null (defensive default).
- */
-async function isChannelEnabled(
-  tenantDb: Kysely<TenantDatabase>,
-  column:
-    "channel_sms_enabled" | "channel_email_enabled" | "channel_voice_enabled",
-): Promise<boolean> {
-  const row = await tenantDb
-    .selectFrom("org_config")
-    .select([
-      "channel_sms_enabled",
-      "channel_email_enabled",
-      "channel_voice_enabled",
-    ])
-    .executeTakeFirst();
-  switch (column) {
-    case "channel_sms_enabled":
-      return row?.channel_sms_enabled !== false;
-    case "channel_email_enabled":
-      return row?.channel_email_enabled !== false;
-    case "channel_voice_enabled":
-      return row?.channel_voice_enabled !== false;
-  }
-}
-
-// ---------------------------------------------------------------------------
 // SMS Relay (POST /relay/sms)
 // ---------------------------------------------------------------------------
 
@@ -309,7 +283,9 @@ async function handleSmsRelay(
 
     const tenantDb = deps.getTenantDb(session.orgSchema);
 
-    if (!(await isChannelEnabled(tenantDb, "channel_sms_enabled"))) {
+    const channelPolicy =
+      await createOrgConfigService(tenantDb).getChannelPolicy();
+    if (!channelPolicy.smsEnabled) {
       sendRelayError(res, 403, "SMS_DISABLED");
       return;
     }
@@ -403,7 +379,9 @@ async function resolveCallContext(
 
   const tenantDb = deps.getTenantDb(session.orgSchema);
 
-  if (!(await isChannelEnabled(tenantDb, "channel_voice_enabled"))) {
+  const channelPolicy =
+    await createOrgConfigService(tenantDb).getChannelPolicy();
+  if (!channelPolicy.voiceEnabled) {
     sendRelayError(res, 403, "VOICE_DISABLED");
     return { ok: false };
   }
@@ -1040,27 +1018,6 @@ async function handleConsultantVerifyRelay(
 }
 
 // ---------------------------------------------------------------------------
-// Client phone resolution (ticket -> client -> phone -> OPS decrypt)
-// ---------------------------------------------------------------------------
-
-export async function resolveClientPhone(
-  ticketId: TicketId,
-  tenantDb: Kysely<TenantDatabase>,
-  fieldEncryptor: FieldEncryptor,
-): Promise<Buffer | null> {
-  const row = await tenantDb
-    .selectFrom("tickets as t")
-    .innerJoin("clients as c", "c.id", "t.client_id")
-    .innerJoin("phones as p", "p.id", "c.phone_id")
-    .select("p.encrypted_number")
-    .where("t.id", "=", ticketId)
-    .executeTakeFirst();
-
-  if (!row) return null;
-  return fieldEncryptor.decryptToBuffer(row.encrypted_number);
-}
-
-// ---------------------------------------------------------------------------
 // Email Relay (POST /relay/email)
 // ---------------------------------------------------------------------------
 
@@ -1169,65 +1126,35 @@ async function handleEmailRelay(
     // Exposure window is short (emailSender.send awaits a single SMTP call).
     const toStr = emailBuf.toString("utf-8");
     const subjectStr = subjectBuf.toString("utf-8");
-    let textStr = textBuf.toString("utf-8");
-    let htmlStr = htmlBuf.toString("utf-8");
+    const textStr = textBuf.toString("utf-8");
+    const htmlStr = htmlBuf.toString("utf-8");
 
-    // --- Inbound reply routing: Reply-To header + address-secrecy footer ---
-    // When the org has an inbound email domain, outbound client emails carry
-    // a Reply-To with a per-ticket token so replies route back to the ticket.
-    // When no domain row exists, send is byte-identical to the 8f baseline.
-    let replyTo: string | undefined;
-
-    const domainRow = await deps.platformDb
-      .selectFrom("inbound_email_domains")
-      .select("domain")
-      .where("org_id", "=", session.orgId)
-      .executeTakeFirst();
-
-    if (domainRow) {
-      // Check the per-process cache first; on miss, mint a fresh token.
-      const cached = deps.replyTokenCache.get(ticketId);
-      let token: string;
-      if (cached !== undefined) {
-        token = cached;
-      } else {
-        const result = await mintToken(
-          tenantDb,
-          ticketId,
-          deps.replyTokenHasher,
-        );
-        token = result.token;
-        deps.replyTokenCache.set(ticketId, token);
-      }
-
-      replyTo = `reply-${token}@${domainRow.domain}`;
-
-      // Append footer: reuse the org_config row read above.
-      const footer =
-        orgConfig?.email_reply_footer ??
-        getStrings(orgConfig?.default_language ?? "en").emailReplyFooter;
-
-      textStr = textStr + "\n\n---\n" + footer;
-      htmlStr =
-        htmlStr +
-        '<hr style="margin-top:2em">' +
-        '<p style="font-size:0.85em;color:#666">' +
-        footer
-          .replace(/&/g, "&amp;")
-          .replace(/</g, "&lt;")
-          .replace(/>/g, "&gt;") +
-        "</p>";
-    }
-
-    try {
-      await deps.emailSender.send({
+    // Reply-To construction, footer, and token minting are in the
+    // email-relay-service. The handler keeps Buffer extraction and zeroing.
+    const envelope = await buildEmailEnvelope(
+      tenantDb,
+      {
+        platformDb: deps.platformDb,
+        replyTokenHasher: deps.replyTokenHasher,
+        replyTokenCache: deps.replyTokenCache,
+      },
+      session.orgId,
+      ticketId,
+      {
+        emailReplyFooter: orgConfig?.email_reply_footer ?? null,
+        defaultLanguage: orgConfig?.default_language ?? null,
+      },
+      {
         to: toStr,
         subject: subjectStr,
         text: textStr,
         html: htmlStr,
         from: fromHeader,
-        ...(replyTo !== undefined ? { replyTo } : {}),
-      });
+      },
+    );
+
+    try {
+      await deps.emailSender.send(envelope);
     } catch {
       sendRelayError(res, 502, "EMAIL_SEND_FAILED");
       return;
@@ -1242,27 +1169,6 @@ async function handleEmailRelay(
     textBuf?.fill(0);
     emailBuf?.fill(0);
   }
-}
-
-// ---------------------------------------------------------------------------
-// Client email resolution (ticket -> client -> email -> OPS decrypt)
-// ---------------------------------------------------------------------------
-
-export async function resolveClientEmail(
-  ticketId: TicketId,
-  tenantDb: Kysely<TenantDatabase>,
-  fieldEncryptor: FieldEncryptor,
-): Promise<Buffer | null> {
-  const row = await tenantDb
-    .selectFrom("tickets as t")
-    .innerJoin("clients as c", "c.id", "t.client_id")
-    .innerJoin("emails as e", "e.id", "c.email_id")
-    .select("e.encrypted_address")
-    .where("t.id", "=", ticketId)
-    .executeTakeFirst();
-
-  if (!row) return null;
-  return fieldEncryptor.decryptToBuffer(row.encrypted_address);
 }
 
 // ---------------------------------------------------------------------------

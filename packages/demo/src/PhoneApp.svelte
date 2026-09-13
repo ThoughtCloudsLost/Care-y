@@ -460,7 +460,7 @@
     pendingModeExit = null;
     // Past the pulse's own 150ms click schedule, so a fast sub change
     // cannot close the mode before it opened.
-    setTimeout(() => {
+    const timer = setTimeout(() => {
       if (exit.topic === "reply") {
         // Collapse the compose bar the demo opened by clicking the
         // dismiss control (TicketCompose.svelte:151-157). dismissCompose
@@ -472,6 +472,12 @@
         closeModeToggle(exit.topic, exit.control);
       }
     }, 250);
+    // Without this, a sub change or an unmount inside the 250ms window
+    // leaves the timer to fire against a phone that is no longer mounted,
+    // where it walks the document and clicks a detached control.
+    return () => {
+      clearTimeout(timer);
+    };
   });
 
   /** Click the compose dismiss button to collapse the reply bar. */

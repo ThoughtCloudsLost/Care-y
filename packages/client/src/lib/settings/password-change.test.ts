@@ -13,6 +13,8 @@ import type {
   PasswordChangeCallbacks,
   changePassword as ChangePasswordFn,
 } from "./password-change.js";
+import type * as TrpcNS from "$lib/trpc/index.js";
+import type * as CryptoNS from "@care-y/crypto";
 
 // ── Mocks ────────────────────────────────────────────────────────────
 
@@ -21,8 +23,8 @@ const mockGetWrappedOrgKey = vi.fn();
 const mockChangePassword = vi.fn();
 const mockOprfEvaluate = vi.fn();
 
-// care-y-ignore-next-line mock-factory-unguarded -- tRPC client init is lazy and context-dependent; test stubs the procedure shape directly
-vi.mock("$lib/trpc/index.js", () => ({
+vi.mock("$lib/trpc/index.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof TrpcNS>()),
   trpc: {
     profile: {
       myTicketKeyWraps: { query: mockMyTicketKeyWraps },
@@ -37,8 +39,8 @@ vi.mock("$lib/trpc/index.js", () => ({
   },
 }));
 
-// care-y-ignore-next-line mock-factory-unguarded -- importOriginal triggers libsodium WASM init
-vi.mock("@care-y/crypto", () => ({
+vi.mock("@care-y/crypto", async (importOriginal) => ({
+  ...(await importOriginal<typeof CryptoNS>()),
   encode: (bytes: Uint8Array): string =>
     Buffer.from(bytes).toString("base64url"),
   decode: (s: string): Uint8Array =>

@@ -18,8 +18,8 @@ import type { TenantDatabase } from "../db/types.js";
 import { ForbiddenError, NotFoundError, ValidationError } from "../errors.js";
 import { ErrorCode } from "@care-y/shared";
 import type { IntakeFormId, TicketId, UserId } from "@care-y/shared";
-import { Permission, ROLE_ID_VALUES, type RoleIdValue } from "@care-y/shared";
-import { getEffectivePermissions } from "../auth/roles.js";
+import { Permission } from "@care-y/shared";
+import { getUsersWithPermission } from "../auth/roles.js";
 import type { OrgSchema } from "@care-y/shared";
 
 // ---------------------------------------------------------------------------
@@ -119,52 +119,29 @@ export interface IntakeResponseService {
 // ---------------------------------------------------------------------------
 
 /**
- * Computes the set of user IDs who hold VIEW_INTAKE_RESPONSES
- * across all roles, accounting for per-org overrides. Returns
- * only users with published vol_public (they can receive wraps).
+ * Returns active user IDs with vol_public who hold VIEW_INTAKE_RESPONSES,
+ * delegating to the shared getUsersWithPermission helper in auth/roles.
  */
 async function getPermissionHolders(
   db: Kysely<TenantDatabase>,
   orgSchema: OrgSchema,
 ): Promise<Map<UserId, Buffer>> {
-  // Compute which roles currently have the permission
-  const rolesWithPerm: RoleIdValue[] = [];
-  for (const roleId of ROLE_ID_VALUES) {
-    const perms = await getEffectivePermissions(db, orgSchema, roleId);
-    if (perms.has(Permission.VIEW_INTAKE_RESPONSES)) {
-      rolesWithPerm.push(roleId);
-    }
-  }
-
-  if (rolesWithPerm.length === 0) return new Map();
-
-  // Find active users with those roles who have vol_public
-  const users = await db
-    .selectFrom("users")
-    .innerJoin("user_keys", "user_keys.user_id", "users.id")
-    .select(["users.id", "user_keys.vol_public"])
-    .where("users.role_id", "in", rolesWithPerm)
-    .where("users.is_active", "=", true)
-    .where("user_keys.vol_public", "is not", null)
-    .execute();
-
-  const result = new Map<UserId, Buffer>();
-  for (const u of users) {
-    if (u.vol_public !== null) {
-      result.set(u.id, u.vol_public);
-    }
-  }
-  return result;
+  return getUsersWithPermission(
+    db,
+    orgSchema,
+    Permission.VIEW_INTAKE_RESPONSES,
+  );
 }
 
 /**
  * For a given ticket, computes which principals (permission holders +
- * queue members) lack ticket_key_wraps rows.
+ * queue members) lack ticket_key_wraps rows. Accepts a pre-computed
+ * permission holder map so callers in a loop pay for that query once.
  */
 async function computeMissingPrincipals(
   db: Kysely<TenantDatabase>,
-  orgSchema: OrgSchema,
   ticketId: TicketId,
+  permHolders: Map<UserId, Buffer>,
 ): Promise<MissingPrincipal[]> {
   // Get the ticket's queue
   const ticket = await db
@@ -174,9 +151,6 @@ async function computeMissingPrincipals(
     .executeTakeFirst();
 
   if (!ticket) return [];
-
-  // Build the full target set: permission holders + queue members
-  const permHolders = await getPermissionHolders(db, orgSchema);
 
   const queueMembers = await db
     .selectFrom("queue_assignments")
@@ -296,6 +270,11 @@ export function createIntakeResponseService(): IntakeResponseService {
 
       const dbRows = await query.execute();
 
+      // Compute the permission-holder set once per request rather than
+      // per row. The set is request-scoped (same org, same override
+      // state), so repeating the query per row was pure waste.
+      const permHolders = await getPermissionHolders(db, orgSchema);
+
       // Compute missing principals per row (only for rows where the caller
       // holds a wrap, since only key holders can mint backfill wraps)
       const rows: IntakeResponseRow[] = [];
@@ -306,7 +285,7 @@ export function createIntakeResponseService(): IntakeResponseService {
         // Only compute missing principals when the caller can act on them
         const missingPrincipals =
           callerHasWrap || hasOrgSeal
-            ? await computeMissingPrincipals(db, orgSchema, r.ticket_id)
+            ? await computeMissingPrincipals(db, r.ticket_id, permHolders)
             : [];
 
         rows.push({

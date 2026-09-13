@@ -28,6 +28,7 @@ import {
   createTestClientFixture,
   createTestTicketFixture,
   noopEncryptor,
+  fakeTriple,
   type TestDb,
 } from "../test-utils.js";
 import {
@@ -123,18 +124,7 @@ async function insertPortalMessage(
   return row.id;
 }
 
-/** ECIES triple with deterministic filler bytes, matching the portal-recording-service test pattern. */
-function fakeTriple(): {
-  ephemeralPoint: Buffer;
-  nonce: Buffer;
-  ciphertext: Buffer;
-} {
-  return {
-    ephemeralPoint: Buffer.alloc(32, 0x01),
-    nonce: Buffer.alloc(24, 0x02),
-    ciphertext: Buffer.from("test-ciphertext"),
-  };
-}
+// fakeTriple imported from test-utils.ts
 
 /**
  * Insert a parent attachment row plus a portal_attachments carrier row

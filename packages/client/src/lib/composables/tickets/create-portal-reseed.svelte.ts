@@ -812,16 +812,19 @@ export function createPortalReseed(deps: PortalReseedDeps): PortalReseed {
 
       if (isCancelled()) return;
 
-      const converted = await withRetry(async () =>
-        bridge.convertBlobForPortal(
+      const converted = await withRetry(async () => {
+        // Clone per attempt: convertBlobForPortal transfers the ArrayBuffer,
+        // which detaches it. A retry with a detached buffer would fail.
+        const attemptBuf = ciphertext.slice(0);
+        return bridge.convertBlobForPortal(
           ticketId,
           clientPublic,
           kind,
           rowId,
-          ciphertext,
+          attemptBuf,
           encryptedFilename,
-        ),
-      );
+        );
+      });
 
       if (isCancelled()) return;
 

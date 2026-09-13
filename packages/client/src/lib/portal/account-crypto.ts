@@ -118,11 +118,12 @@ export async function buildAccountRegistration(
   callbacks: LoginCryptoCallbacks,
 ): Promise<{
   payload: AccountRegistrationWire;
-  keypair: { clientPublic: RistrettoPoint; clientPrivate: Uint8Array };
+  clientPublic: RistrettoPoint;
 }> {
   let stretched: Uint8Array | null = null;
   let oprfOutput: Uint8Array | null = null;
   let authToken: Uint8Array | null = null;
+  let clientPrivate: Uint8Array | null = null;
 
   const resolvedAccountId = accountId ?? crypto.randomUUID();
   const salt = generateSalt();
@@ -157,6 +158,7 @@ export async function buildAccountRegistration(
     );
     const keys = deriveClientAccountKeys(oprfOutput);
     authToken = keys.authToken;
+    clientPrivate = keys.keypair.clientPrivate;
 
     // 5. Hash the auth token (server stores the hash, not the raw token)
     const authHash = hashChannelAuth(authToken);
@@ -183,9 +185,11 @@ export async function buildAccountRegistration(
       },
     };
 
-    return { payload, keypair: keys.keypair };
+    // clientPrivate is zeroed in the finally block; callers receive only
+    // the public key. No caller needs the private key on the main thread.
+    return { payload, clientPublic: keys.keypair.clientPublic };
   } finally {
-    zeroAll(stretched, oprfOutput, authToken);
+    zeroAll(stretched, oprfOutput, authToken, clientPrivate);
   }
 }
 

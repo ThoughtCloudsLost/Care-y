@@ -32,6 +32,9 @@ import type * as EFFWordlistMod from "$lib/portal/eff-wordlist.js";
 import type * as CryptoContextMod from "$lib/crypto/context.js";
 import * as m from "$lib/paraglide/messages.js";
 import { ErrorCode } from "@care-y/shared";
+import type * as CreatePortalReseedNS from "$lib/composables/tickets/create-portal-reseed.svelte.js";
+import type * as PowSolverNS from "$lib/auth/pow-solver.js";
+import type * as PortalCryptoNS from "$lib/portal/portal-crypto.js";
 
 // ---- Hoisted spy fns ----
 
@@ -145,7 +148,7 @@ vi.mock("@care-y/crypto", async (importOriginal) => ({
 
 // Mock performChannelOprf (async OPRF round replaces derivePortalKeypair)
 vi.mock("$lib/portal/portal-crypto.js", async (importOriginal) => ({
-  ...(await importOriginal()),
+  ...(await importOriginal<typeof PortalCryptoNS>()),
   performChannelOprf: vi.fn().mockResolvedValue({
     clientPublic: mockKeypair.clientPublic,
     clientPrivate: mockKeypair.clientPrivate,
@@ -154,7 +157,7 @@ vi.mock("$lib/portal/portal-crypto.js", async (importOriginal) => ({
 
 // Mock solveProofOfWork (imported by SecureLinkSheet for the PoW callback)
 vi.mock("$lib/auth/pow-solver.js", async (importOriginal) => ({
-  ...(await importOriginal()),
+  ...(await importOriginal<typeof PowSolverNS>()),
   solveProofOfWork: vi.fn().mockResolvedValue("test-solution"),
 }));
 
@@ -183,7 +186,7 @@ vi.mock(
     // placeholder to satisfy the mock-factory-unguarded lint rule.
     let real = {};
     try {
-      real = await importOriginal();
+      real = await importOriginal<typeof CreatePortalReseedNS>();
     } catch {
       // Module not yet authored; full replacement is intentional.
     }
@@ -505,6 +508,79 @@ describe("SecureLinkSheet", () => {
 
     // Mutation payload records hasPassphrase = true.
     expect(mockMutate.mock.calls[0]?.[0]?.hasPassphrase).toBe(true);
+  });
+
+  // ---- SMS relay error handling ----
+
+  describe("SMS relay error handling", () => {
+    it("shows rate-limit toast with seconds on relay 429", async () => {
+      const fetchSpy =
+        vi.fn<(url: string, init?: RequestInit) => Promise<Response>>();
+      fetchSpy.mockResolvedValue({
+        ok: false,
+        status: 429,
+        headers: new Headers({ "Retry-After": "42" }),
+      } as unknown as Response);
+      global.fetch = fetchSpy as unknown as typeof fetch;
+
+      render(SecureLinkSheet, {
+        props: { ...baseProps, hasPhone: true },
+      });
+
+      // Generate the link first
+      await fireEvent.click(
+        screen.getByRole("button", { name: /set up secure link/i }),
+      );
+
+      await waitFor(() => {
+        expect(mockMutate).toHaveBeenCalledTimes(1);
+      });
+
+      // Now click the SMS send button
+      const smsBtn = screen.getByRole("button", {
+        name: m.ticket_tier_send_sms(),
+      });
+      await fireEvent.click(smsBtn);
+
+      await waitFor(() => {
+        expect(mockShow).toHaveBeenCalledWith(
+          m.ticket_sms_rate_limited({ seconds: "42" }),
+          5000,
+        );
+      });
+    });
+
+    it("shows relay error toast on non-429 failure", async () => {
+      const fetchSpy =
+        vi.fn<(url: string, init?: RequestInit) => Promise<Response>>();
+      fetchSpy.mockResolvedValue({
+        ok: false,
+        status: 502,
+        headers: new Headers(),
+      } as unknown as Response);
+      global.fetch = fetchSpy as unknown as typeof fetch;
+
+      render(SecureLinkSheet, {
+        props: { ...baseProps, hasPhone: true },
+      });
+
+      await fireEvent.click(
+        screen.getByRole("button", { name: /set up secure link/i }),
+      );
+
+      await waitFor(() => {
+        expect(mockMutate).toHaveBeenCalledTimes(1);
+      });
+
+      const smsBtn = screen.getByRole("button", {
+        name: m.ticket_tier_send_sms(),
+      });
+      await fireEvent.click(smsBtn);
+
+      await waitFor(() => {
+        expect(mockShow).toHaveBeenCalledWith(m.ticket_sms_error_send(), 3000);
+      });
+    });
   });
 
   // ---- Reseed toggle tests ----

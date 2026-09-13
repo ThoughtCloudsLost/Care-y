@@ -83,6 +83,7 @@
 
     void (async () => {
       try {
+        // care-y-ignore-next-line no-fetch-in-effect -- fetches audio bytes to hand to decodeAudioData. An AudioBuffer is not query-cache material, and the caching, deduplication, and revalidation the rule is asking for do not apply to a one-shot binary decode. The AbortController above already covers cancellation.
         const resp = await fetch(src, { signal: ac.signal });
         if (!resp.ok) throw new ClientError(`HTTP ${String(resp.status)}`);
         if (aborted()) return;

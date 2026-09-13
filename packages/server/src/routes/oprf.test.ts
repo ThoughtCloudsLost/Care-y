@@ -484,6 +484,7 @@ describe("OPRF tRPC route", () => {
         providerFactory: createThrowingProviderFactory(),
         resolveCallerId: vi.fn().mockResolvedValue("+15551234567"),
         totpReplayCache: createInMemoryTotpReplayCache(),
+        createAuditSvc: null,
       },
       profileDeps: {
         hasher: createScryptHasher(),
@@ -607,6 +608,7 @@ describe("OPRF adminEvaluate route", () => {
         providerFactory: createThrowingProviderFactory(),
         resolveCallerId: vi.fn().mockResolvedValue("+15551234567"),
         totpReplayCache: createInMemoryTotpReplayCache(),
+        createAuditSvc: null,
       },
       profileDeps: {
         hasher: createScryptHasher(),
@@ -876,6 +878,7 @@ describe.skipIf(!DOCKER_OPRF_AVAILABLE)(
           providerFactory: createThrowingProviderFactory(),
           resolveCallerId: vi.fn().mockResolvedValue("+15551234567"),
           totpReplayCache: createInMemoryTotpReplayCache(),
+          createAuditSvc: null,
         },
         profileDeps: {
           hasher: createScryptHasher(),

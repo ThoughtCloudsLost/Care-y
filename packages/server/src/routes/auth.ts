@@ -51,7 +51,12 @@ import {
   deleteAllOverrides,
 } from "../auth/roles.js";
 import type { AuditService } from "../tickets/audit.js";
-import { ForbiddenError, NotFoundError, RateLimitError } from "../errors.js";
+import {
+  ForbiddenError,
+  NotFoundError,
+  RateLimitError,
+  InternalError,
+} from "../errors.js";
 import type { RateLimiter } from "../ratelimit/rate-limiter.js";
 import type { UserRecord, AuthService } from "../auth/service.js";
 import { SESSION_MAX_AGE_MS } from "../auth/service.js";
@@ -90,8 +95,14 @@ export interface AuthRouterDeps extends AuthServiceDeps {
    * replay on the other.
    */
   readonly totpReplayCache: TotpReplayCache;
-  /** Factory for audit logging. Optional to avoid breaking existing callers. */
-  readonly createAuditSvc?: (tDb: OrgContext["tenantDb"]) => AuditService;
+  /**
+   * Factory for audit logging. Required nullable (ADR-086 pattern):
+   * pass null to decline audit explicitly. A null service on a
+   * permission-changing procedure throws rather than silently skipping
+   * the audit row.
+   */
+  readonly createAuditSvc:
+    ((tDb: OrgContext["tenantDb"]) => AuditService) | null;
 }
 
 /** Safe response shape: no password_hash, no internal fields. */
@@ -448,18 +459,21 @@ export function createAuthRouter(deps: AuthRouterDeps) {
             );
           }
 
-          if (deps.createAuditSvc) {
-            const audit = deps.createAuditSvc(ctx.org.tenantDb);
-            void audit.log({
-              eventType: "role_permission_changed",
-              actorId: ctx.user.id,
-              metadata: {
-                roleId: input.roleId,
-                permission: input.permission,
-                enabled: input.enabled,
-              },
-            });
+          if (deps.createAuditSvc === null) {
+            throw new InternalError(
+              "Audit service is required for permission changes",
+            );
           }
+          const audit = deps.createAuditSvc(ctx.org.tenantDb);
+          void audit.log({
+            eventType: "role_permission_changed",
+            actorId: ctx.user.id,
+            metadata: {
+              roleId: input.roleId,
+              permission: input.permission,
+              enabled: input.enabled,
+            },
+          });
 
           invalidateRolePermissionCache(ctx.org.orgSchema);
           return { saved: true as const };
@@ -470,13 +484,16 @@ export function createAuthRouter(deps: AuthRouterDeps) {
       withErrorWrapping(async ({ ctx }) => {
         await deleteAllOverrides(ctx.org.tenantDb);
 
-        if (deps.createAuditSvc) {
-          const audit = deps.createAuditSvc(ctx.org.tenantDb);
-          void audit.log({
-            eventType: "role_permissions_reset",
-            actorId: ctx.user.id,
-          });
+        if (deps.createAuditSvc === null) {
+          throw new InternalError(
+            "Audit service is required for permission changes",
+          );
         }
+        const audit = deps.createAuditSvc(ctx.org.tenantDb);
+        void audit.log({
+          eventType: "role_permissions_reset",
+          actorId: ctx.user.id,
+        });
 
         invalidateRolePermissionCache(ctx.org.orgSchema);
         return { reset: true as const };

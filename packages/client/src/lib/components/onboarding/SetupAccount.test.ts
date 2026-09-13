@@ -16,6 +16,9 @@ import type * as AnnounceMod from "$lib/utils/announce.js";
 import type * as HapticMod from "$lib/utils/haptic.js";
 import type * as ToastStore from "$lib/stores/toast.svelte.js";
 import type * as WizardNavContext from "./wizard-nav-context.js";
+import type * as LoginCryptoNS from "$lib/auth/login-crypto.js";
+import type * as RegisterCryptoNS from "$lib/auth/register-crypto.js";
+import type * as CryptoNS from "@care-y/crypto";
 
 // jsdom doesn't implement scrollIntoView
 Element.prototype.scrollIntoView = vi.fn();
@@ -48,8 +51,8 @@ const {
 
 // vi.mock required: @care-y/crypto barrel triggers libsodium WASM
 // initialization via getSodium() singleton.
-// care-y-ignore-next-line mock-factory-unguarded -- importOriginal would trigger libsodium WASM init; a partial stub cannot satisfy the full crypto export surface
-vi.mock("@care-y/crypto", () => ({
+vi.mock("@care-y/crypto", async (importOriginal) => ({
+  ...(await importOriginal<typeof CryptoNS>()),
   getSodium: vi.fn().mockResolvedValue(undefined),
   generateOrgKeypair: vi.fn(() => ({
     publicKey: new Uint8Array([1, 2, 3]),
@@ -108,15 +111,15 @@ vi.mock("$lib/auth/cleanup.js", async (importOriginal) => ({
 
 // vi.mock required: register-crypto imports from @care-y/crypto barrel,
 // which triggers libsodium WASM init on import.
-// care-y-ignore-next-line mock-factory-unguarded -- importOriginal would trigger libsodium WASM init via @care-y/crypto import
-vi.mock("$lib/auth/register-crypto.js", () => ({
+vi.mock("$lib/auth/register-crypto.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof RegisterCryptoNS>()),
   registerCrypto: mockRegisterCrypto,
 }));
 
 // vi.mock required: login-crypto imports decode from @care-y/crypto,
 // which triggers libsodium WASM init on import.
-// care-y-ignore-next-line mock-factory-unguarded -- importOriginal would trigger libsodium WASM init via @care-y/crypto import
-vi.mock("$lib/auth/login-crypto.js", () => ({
+vi.mock("$lib/auth/login-crypto.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof LoginCryptoNS>()),
   loginCrypto: mockLoginCrypto,
 }));
 

@@ -2,22 +2,16 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, screen, cleanup, fireEvent } from "@testing-library/svelte";
 
-const {
-  mockListForms,
-  mockSetActive,
-  mockToastShow,
-  mockGetForm,
-  mockPermissions,
-} = vi.hoisted(() => ({
-  mockListForms: vi.fn(),
-  mockSetActive: vi.fn().mockResolvedValue({ ok: true }),
-  mockToastShow: vi.fn(),
-  mockGetForm: vi.fn(),
-  mockPermissions: new Set<string>(),
-}));
+const { mockListForms, mockSetActive, mockGetForm, mockPermissions } =
+  vi.hoisted(() => ({
+    mockListForms: vi.fn(),
+    mockSetActive: vi.fn().mockResolvedValue({ ok: true }),
+    mockGetForm: vi.fn(),
+    mockPermissions: new Set<string>(),
+  }));
 
 vi.mock("$lib/paraglide/messages.js", async (importOriginal) => ({
-  ...(await importOriginal<Record<string, unknown>>()),
+  ...(await importOriginal<typeof MessagesNS>()),
   intake_forms_title: () => "Intake Forms",
   intake_forms_empty: () => "No forms yet.",
   intake_forms_create: () => "Create new form",
@@ -31,13 +25,14 @@ vi.mock("$lib/paraglide/messages.js", async (importOriginal) => ({
   error_generic: () => "Something went wrong",
 }));
 
-vi.mock("$lib/terminology/with-terms.js", async (importOriginal) => ({
-  ...(await importOriginal<Record<string, unknown>>()),
-  withTerms: () => ({}),
-}));
+vi.mock("$lib/terminology/with-terms.js", async (importOriginal) =>
+  (await import("$mocks/with-terms.js")).withTermsMock(
+    await importOriginal<typeof WithTermsNS>(),
+  ),
+);
 
 vi.mock("$lib/trpc/index.js", async (importOriginal) => ({
-  ...(await importOriginal<Record<string, unknown>>()),
+  ...(await importOriginal<typeof TrpcNS>()),
   trpc: {
     intakeForms: {
       list: { query: mockListForms },
@@ -55,28 +50,32 @@ vi.mock("$lib/trpc/index.js", async (importOriginal) => ({
   },
 }));
 
-vi.mock("$lib/errors.js", async (importOriginal) => ({
-  ...(await importOriginal<Record<string, unknown>>()),
-  requireRouter: (router: unknown) => router,
-}));
+vi.mock("$lib/errors.js", async (importOriginal) =>
+  (await import("$mocks/errors.js")).errorsMock(
+    await importOriginal<typeof ErrorsNS>(),
+  ),
+);
 
-vi.mock("$lib/stores/toast.svelte.js", async (importOriginal) => ({
-  ...(await importOriginal<Record<string, unknown>>()),
-  toastStore: { show: mockToastShow },
-}));
+vi.mock(
+  "$lib/stores/toast.svelte.js",
+  async () =>
+    (await import("$mocks/toast.js")).toastMock() satisfies typeof ToastNS,
+);
 
-vi.mock("$lib/utils/announce.js", async (importOriginal) => ({
-  ...(await importOriginal<Record<string, unknown>>()),
-  announceToLiveRegion: vi.fn(),
-}));
+vi.mock("$lib/utils/announce.js", async (importOriginal) =>
+  (await import("$mocks/announce.js")).announceMock(
+    await importOriginal<typeof AnnounceNS>(),
+  ),
+);
 
-vi.mock("$lib/utils/haptic.js", async (importOriginal) => ({
-  ...(await importOriginal<Record<string, unknown>>()),
-  haptic: vi.fn(),
-}));
+vi.mock("$lib/utils/haptic.js", async (importOriginal) =>
+  (await import("$mocks/haptic.js")).hapticMock(
+    await importOriginal<typeof HapticNS>(),
+  ),
+);
 
 vi.mock("$lib/crypto/context.js", async (importOriginal) => ({
-  ...(await importOriginal<Record<string, unknown>>()),
+  ...(await importOriginal<typeof ContextNS>()),
   getOrgKeyManager: () => ({
     getPublicKey: () => new Uint8Array(32),
     isLoaded: true,
@@ -88,7 +87,7 @@ vi.mock("$lib/crypto/context.js", async (importOriginal) => ({
 }));
 
 vi.mock("$lib/portal/intake-form-crypto.js", async (importOriginal) => ({
-  ...(await importOriginal<Record<string, unknown>>()),
+  ...(await importOriginal<typeof IntakeFormCryptoNS>()),
   decryptFieldContent: () => ({
     label: { en: "Field" },
     config: { type: "text" },
@@ -102,7 +101,7 @@ vi.mock("$lib/portal/intake-form-crypto.js", async (importOriginal) => ({
 }));
 
 vi.mock("@tanstack/svelte-query", async (importOriginal) => ({
-  ...(await importOriginal<Record<string, unknown>>()),
+  ...(await importOriginal<typeof SvelteQueryNS>()),
   createQuery: () => ({
     isLoading: false,
     isError: false,
@@ -151,6 +150,16 @@ vi.mock("@tanstack/svelte-query", async (importOriginal) => ({
 }));
 
 import IntakeFormsSection from "./IntakeFormsSection.svelte";
+import type * as HapticNS from "$lib/utils/haptic.js";
+import type * as AnnounceNS from "$lib/utils/announce.js";
+import type * as ToastNS from "$lib/stores/toast.svelte.js";
+import type * as ErrorsNS from "$lib/errors.js";
+import type * as WithTermsNS from "$lib/terminology/with-terms.js";
+import type * as SvelteQueryNS from "@tanstack/svelte-query";
+import type * as IntakeFormCryptoNS from "$lib/portal/intake-form-crypto.js";
+import type * as ContextNS from "$lib/crypto/context.js";
+import type * as TrpcNS from "$lib/trpc/index.js";
+import type * as MessagesNS from "$lib/paraglide/messages.js";
 
 // The section requests navigation through callback props; the route owns the
 // goto. Spying on the props is the whole navigation contract for this file.

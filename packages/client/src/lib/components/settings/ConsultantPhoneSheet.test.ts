@@ -10,6 +10,15 @@
 import { describe, it, expect, afterEach, beforeEach, vi } from "vitest";
 import { render, screen, cleanup, fireEvent } from "@testing-library/svelte";
 import { tick } from "svelte";
+import type * as HapticNS from "$lib/utils/haptic.js";
+import type * as AnnounceNS from "$lib/utils/announce.js";
+import type * as ToastNS from "$lib/stores/toast.svelte.js";
+import { mockAnnounce } from "$mocks/announce.js";
+import type * as QueryErrorMessagesNS from "$lib/components/query-error-messages.js";
+import type * as SvelteQueryNS from "@tanstack/svelte-query";
+import type * as ContextNS from "$lib/crypto/context.js";
+import type * as TrpcNS from "$lib/trpc/index.js";
+import type * as MessagesNS from "$lib/paraglide/messages.js";
 
 // ---- Hoisted mocks ----
 
@@ -20,9 +29,6 @@ const {
   mockUpdatePreference,
   mockDelete,
   mockGet,
-  mockToastShow,
-  mockAnnounce,
-  mockHaptic,
   mockInvalidate,
   mockOrgDecrypt,
 } = vi.hoisted(() => ({
@@ -32,15 +38,12 @@ const {
   mockUpdatePreference: vi.fn().mockResolvedValue({ success: true }),
   mockDelete: vi.fn().mockResolvedValue({ success: true }),
   mockGet: vi.fn().mockResolvedValue(null),
-  mockToastShow: vi.fn(),
-  mockAnnounce: vi.fn(),
-  mockHaptic: vi.fn(),
   mockInvalidate: vi.fn().mockResolvedValue(undefined),
   mockOrgDecrypt: vi.fn().mockResolvedValue("+491234567890"),
 }));
 
 vi.mock("$lib/paraglide/messages.js", async (importOriginal) => ({
-  ...(await importOriginal<Record<string, unknown>>()),
+  ...(await importOriginal<typeof MessagesNS>()),
   register_note: () => "Note",
   register_careful: () => "Careful",
   register_warning: () => "Warning",
@@ -95,7 +98,7 @@ vi.mock("$lib/paraglide/messages.js", async (importOriginal) => ({
 }));
 
 vi.mock("$lib/trpc/index.js", async (importOriginal) => ({
-  ...(await importOriginal<Record<string, unknown>>()),
+  ...(await importOriginal<typeof TrpcNS>()),
   trpc: {
     consultant: {
       get: { query: mockGet },
@@ -108,23 +111,26 @@ vi.mock("$lib/trpc/index.js", async (importOriginal) => ({
   },
 }));
 
-vi.mock("$lib/stores/toast.svelte.js", async (importOriginal) => ({
-  ...(await importOriginal<Record<string, unknown>>()),
-  toastStore: { show: mockToastShow },
-}));
+vi.mock(
+  "$lib/stores/toast.svelte.js",
+  async () =>
+    (await import("$mocks/toast.js")).toastMock() satisfies typeof ToastNS,
+);
 
-vi.mock("$lib/utils/announce.js", async (importOriginal) => ({
-  ...(await importOriginal<Record<string, unknown>>()),
-  announceToLiveRegion: mockAnnounce,
-}));
+vi.mock("$lib/utils/announce.js", async (importOriginal) =>
+  (await import("$mocks/announce.js")).announceMock(
+    await importOriginal<typeof AnnounceNS>(),
+  ),
+);
 
-vi.mock("$lib/utils/haptic.js", async (importOriginal) => ({
-  ...(await importOriginal<Record<string, unknown>>()),
-  haptic: mockHaptic,
-}));
+vi.mock("$lib/utils/haptic.js", async (importOriginal) =>
+  (await import("$mocks/haptic.js")).hapticMock(
+    await importOriginal<typeof HapticNS>(),
+  ),
+);
 
 vi.mock("$lib/crypto/context.js", async (importOriginal) => ({
-  ...(await importOriginal<Record<string, unknown>>()),
+  ...(await importOriginal<typeof ContextNS>()),
   getCryptoBridge: () => ({
     orgDecrypt: mockOrgDecrypt,
   }),
@@ -135,7 +141,7 @@ vi.mock("$lib/crypto/context.js", async (importOriginal) => ({
 // Full replacement: the real module requires a provider context, so
 // spreading importOriginal would fail at runtime.
 vi.mock("@tanstack/svelte-query", async (importOriginal) => {
-  const original = await importOriginal<Record<string, unknown>>();
+  const original = await importOriginal<typeof SvelteQueryNS>();
   return {
     ...original,
     createQuery: (optsFn: () => Record<string, unknown>) => {
@@ -196,7 +202,7 @@ vi.mock("@tanstack/svelte-query", async (importOriginal) => {
 });
 
 vi.mock("$lib/components/query-error-messages.js", async (importOriginal) => ({
-  ...(await importOriginal<Record<string, unknown>>()),
+  ...(await importOriginal<typeof QueryErrorMessagesNS>()),
   getErrorMessage: (err: unknown) =>
     err instanceof Error ? err.message : "Something went wrong",
   isErrorCode: () => false,

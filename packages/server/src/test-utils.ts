@@ -768,7 +768,8 @@ import type { EmailSender, EmailMessage } from "./email/email-sender.js";
 import type { JobQueue } from "./jobs/queue.js";
 import { generateTotpCode, base32Decode } from "./auth/totp.js";
 import type { TwoFactorService } from "./auth/two-factor-service.js";
-import { TwoFactorMethod, RoleId } from "@care-y/shared";
+import { TwoFactorMethod, RoleId, channelSecretSchema } from "@care-y/shared";
+import type { PortalChannelRow } from "./portal/channel-service.js";
 
 /**
  * Asserts that a promise rejects with a TRPCError having the expected code.
@@ -1340,4 +1341,60 @@ export async function seedPortalChannel(
     .returning("id")
     .executeTakeFirstOrThrow();
   return row.id;
+}
+
+/**
+ * ECIES triple with deterministic filler bytes.
+ *
+ * Shared across portal, merge, and recording tests so each suite
+ * builds the same placeholder ciphertext shape.
+ */
+export function fakeTriple(): {
+  ephemeralPoint: Buffer;
+  nonce: Buffer;
+  ciphertext: Buffer;
+} {
+  return {
+    ephemeralPoint: Buffer.alloc(32, 0x01),
+    nonce: Buffer.alloc(24, 0x02),
+    ciphertext: Buffer.from("test-ciphertext"),
+  };
+}
+
+/**
+ * Inserts a portal_channels row with dummy key material and
+ * deterministic filler bytes. Unlike {@link seedPortalChannel},
+ * this version does NOT require a real ristretto public key,
+ * making it suitable for tests that only need the row to exist
+ * without performing encrypt/decrypt roundtrips.
+ *
+ * Superset of the per-file helpers that previously lived in
+ * portal-message, portal-recording, portal-attachment, reseed,
+ * and portal-message-expiry test files.
+ */
+export async function insertTestChannel(
+  db: TestDb["db"],
+  clientId: ClientId,
+  overrides?: Partial<Record<string, unknown>>,
+): Promise<PortalChannelRow> {
+  const channelId = channelSecretSchema.parse(
+    crypto.randomBytes(24).toString("hex"),
+  );
+  const row = await db
+    .insertInto("portal_channels")
+    .values({
+      client_id: clientId,
+      channel_id: channelId,
+      auth_hash: Buffer.alloc(32, 0xaa),
+      client_public: Buffer.alloc(32, 0xbb),
+      has_passphrase: false,
+      key_check_ephemeral_point: Buffer.alloc(32, 0xcc),
+      key_check_nonce: Buffer.alloc(24, 0xdd),
+      key_check_ciphertext: Buffer.from("key-check-ct"),
+      status: "active",
+      ...overrides,
+    })
+    .returningAll()
+    .executeTakeFirstOrThrow();
+  return row;
 }

@@ -36,6 +36,13 @@ function isChallengeStatus(value: string): value is ChallengeStatus {
 }
 
 export interface SendChallengeResult {
+  /**
+   * The challenge row ID when a push was sent successfully. Empty string
+   * when the user has no push subscriptions (sent will be false).
+   * The empty string sentinel follows the same pattern as
+   * call-tracker's callSid field. Callers must check `sent` before
+   * using challengeId for polling.
+   */
   readonly challengeId: PushChallengeId | "";
   readonly sent: boolean;
 }

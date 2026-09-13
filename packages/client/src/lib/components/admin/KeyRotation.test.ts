@@ -2,11 +2,10 @@
 import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
 import { render, screen, cleanup, fireEvent } from "@testing-library/svelte";
 
-const { mockRotateOrgKey, mockInvalidateQueries, mockToastShow, mockUsers } =
-  vi.hoisted(() => ({
+const { mockRotateOrgKey, mockInvalidateQueries, mockUsers } = vi.hoisted(
+  () => ({
     mockRotateOrgKey: vi.fn().mockResolvedValue({ success: true }),
     mockInvalidateQueries: vi.fn(),
-    mockToastShow: vi.fn(),
     mockUsers: [
       {
         id: "u1",
@@ -36,9 +35,11 @@ const { mockRotateOrgKey, mockInvalidateQueries, mockToastShow, mockUsers } =
         hasOrgKeyWrap: true,
       },
     ],
-  }));
+  }),
+);
 
-vi.mock("$lib/paraglide/messages.js", () => ({
+vi.mock("$lib/paraglide/messages.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof MessagesNS>()),
   admin_rotation_dialog_title: () => "Rotate organization key",
   admin_rotation_dialog_why: () => "Rotate your key if a team member leaves.",
   admin_rotation_dialog_body: ({ count }: { count: string }) =>
@@ -56,7 +57,8 @@ vi.mock("$lib/paraglide/messages.js", () => ({
   common_cancel: () => "Cancel",
 }));
 
-vi.mock("$lib/crypto/context.js", () => ({
+vi.mock("$lib/crypto/context.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof ContextNS>()),
   getOrgKeyManager: () => ({
     isLoaded: true,
     load: vi.fn(),
@@ -67,11 +69,13 @@ vi.mock("$lib/crypto/context.js", () => ({
   }),
 }));
 
-vi.mock("$lib/auth/crypto-helpers.js", () => ({
+vi.mock("$lib/auth/crypto-helpers.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof CryptoHelpersNS>()),
   fetchAndUnwrapOrgKey: vi.fn().mockResolvedValue("org-public-key-b64"),
 }));
 
-vi.mock("@tanstack/svelte-query", () => ({
+vi.mock("@tanstack/svelte-query", async (importOriginal) => ({
+  ...(await importOriginal<typeof SvelteQueryNS>()),
   createQuery: (optsFn: () => Record<string, unknown>) => {
     const opts = optsFn();
     void opts;
@@ -89,7 +93,8 @@ vi.mock("@tanstack/svelte-query", () => ({
   }),
 }));
 
-vi.mock("$lib/trpc/index.js", () => ({
+vi.mock("$lib/trpc/index.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof TrpcNS>()),
   trpc: {
     auth: {
       listUsers: { query: vi.fn().mockResolvedValue(mockUsers) },
@@ -100,28 +105,40 @@ vi.mock("$lib/trpc/index.js", () => ({
   },
 }));
 
-vi.mock("$lib/stores/toast.svelte.js", () => ({
-  toastStore: { show: mockToastShow },
-}));
+vi.mock(
+  "$lib/stores/toast.svelte.js",
+  async () =>
+    (await import("$mocks/toast.js")).toastMock() satisfies typeof ToastNS,
+);
 
-vi.mock("$lib/utils/haptic.js", () => ({
-  haptic: vi.fn(),
-}));
+vi.mock("$lib/utils/haptic.js", async (importOriginal) =>
+  (await import("$mocks/haptic.js")).hapticMock(
+    await importOriginal<typeof HapticNS>(),
+  ),
+);
 
-vi.mock("$lib/utils/announce.js", () => ({
-  announceToLiveRegion: vi.fn(),
-}));
+vi.mock("$lib/utils/announce.js", async (importOriginal) =>
+  (await import("$mocks/announce.js")).announceMock(
+    await importOriginal<typeof AnnounceNS>(),
+  ),
+);
 
-vi.mock("$lib/shell/ShellDialog.svelte", async () => ({
-  default: (await import("./test-helpers/StubShellDialog.svelte")).default,
-}));
+vi.mock(
+  "$lib/shell/ShellDialog.svelte",
+  async () =>
+    ({
+      default: (await import("./test-helpers/StubShellDialog.svelte"))
+        .default as unknown as (typeof ShellDialogNS)["default"],
+    }) satisfies typeof ShellDialogNS,
+);
 
 const fakeKeypair = {
   publicKey: new Uint8Array(32).fill(1),
   secretKey: new Uint8Array(32).fill(2),
 };
 
-vi.mock("@care-y/crypto", () => ({
+vi.mock("@care-y/crypto", async (importOriginal) => ({
+  ...(await importOriginal<typeof CryptoNS>()),
   generateOrgKeypair: () => fakeKeypair,
   wrapKey: () => ({
     ephemeralPoint: new Uint8Array(32),
@@ -136,6 +153,16 @@ vi.mock("@care-y/crypto", () => ({
 }));
 
 import KeyRotation from "./KeyRotation.svelte";
+import type * as AnnounceNS from "$lib/utils/announce.js";
+import type * as HapticNS from "$lib/utils/haptic.js";
+import type * as ToastNS from "$lib/stores/toast.svelte.js";
+import type * as TrpcNS from "$lib/trpc/index.js";
+import type * as SvelteQueryNS from "@tanstack/svelte-query";
+import type * as CryptoHelpersNS from "$lib/auth/crypto-helpers.js";
+import type * as ContextNS from "$lib/crypto/context.js";
+import type * as MessagesNS from "$lib/paraglide/messages.js";
+import type * as CryptoNS from "@care-y/crypto";
+import type * as ShellDialogNS from "$lib/shell/ShellDialog.svelte";
 
 describe("KeyRotation", () => {
   beforeEach(() => {

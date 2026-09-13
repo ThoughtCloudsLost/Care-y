@@ -136,6 +136,9 @@ export interface SodiumBackend {
   // --- Memory zeroing ---
   memzero(buf: Uint8Array): void;
 
+  // --- Hex encoding (for channel id derivation) ---
+  to_hex(buf: Uint8Array): string;
+
   // --- Base64 (for serialize.ts) ---
   to_base64(buf: Uint8Array, variant: number): string;
   from_base64(str: string, variant: number): Uint8Array;

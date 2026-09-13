@@ -2,35 +2,28 @@
 import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
 import { render, screen, cleanup, fireEvent } from "@testing-library/svelte";
 
-const {
-  mockCreateGreeting,
-  mockUpdateGreeting,
-  mockDeleteGreeting,
-  mockToastShow,
-  mockHaptic,
-} = vi.hoisted(() => ({
-  mockCreateGreeting: vi.fn().mockResolvedValue({
-    id: "g-new",
-    phoneNumber: "+15551234567",
-    greetingType: "answer",
-    locale: "en",
-    text: "Welcome!",
-    isAudio: false,
-    audioBlobKey: null,
-  }),
-  mockUpdateGreeting: vi.fn().mockResolvedValue({
-    id: "g-1",
-    phoneNumber: "+15551234567",
-    greetingType: "answer",
-    locale: "en",
-    text: "Updated",
-    isAudio: false,
-    audioBlobKey: null,
-  }),
-  mockDeleteGreeting: vi.fn().mockResolvedValue({ success: true }),
-  mockToastShow: vi.fn(),
-  mockHaptic: vi.fn(),
-}));
+const { mockCreateGreeting, mockUpdateGreeting, mockDeleteGreeting } =
+  vi.hoisted(() => ({
+    mockCreateGreeting: vi.fn().mockResolvedValue({
+      id: "g-new",
+      phoneNumber: "+15551234567",
+      greetingType: "answer",
+      locale: "en",
+      text: "Welcome!",
+      isAudio: false,
+      audioBlobKey: null,
+    }),
+    mockUpdateGreeting: vi.fn().mockResolvedValue({
+      id: "g-1",
+      phoneNumber: "+15551234567",
+      greetingType: "answer",
+      locale: "en",
+      text: "Updated",
+      isAudio: false,
+      audioBlobKey: null,
+    }),
+    mockDeleteGreeting: vi.fn().mockResolvedValue({ success: true }),
+  }));
 
 interface GreetingRecord {
   id: string;
@@ -52,7 +45,8 @@ let mockGreetingsData: GreetingRecord[] | undefined;
 let mockPhonesLoading: boolean;
 let mockGreetingsLoading: boolean;
 
-vi.mock("$lib/paraglide/messages.js", () => ({
+vi.mock("$lib/paraglide/messages.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof MessagesNS>()),
   admin_greetings_phone_label: () => "Phone",
   admin_greetings_phone_number_label: () => "Phone number",
   admin_greetings_filter_all: () => "All phones",
@@ -118,7 +112,8 @@ vi.mock("$lib/paraglide/messages.js", () => ({
   error_generic: () => "Something went wrong",
 }));
 
-vi.mock("$lib/trpc/index.js", () => ({
+vi.mock("$lib/trpc/index.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof TrpcNS>()),
   trpc: {
     telephonyContent: {
       listGreetings: { query: vi.fn() },
@@ -139,7 +134,8 @@ vi.mock("$lib/trpc/index.js", () => ({
   },
 }));
 
-vi.mock("@tanstack/svelte-query", () => ({
+vi.mock("@tanstack/svelte-query", async (importOriginal) => ({
+  ...(await importOriginal<typeof SvelteQueryNS>()),
   createQuery: (optsFn: () => Record<string, unknown>) => {
     const opts = optsFn();
     const key = opts.queryKey as string[];
@@ -178,29 +174,48 @@ vi.mock("@tanstack/svelte-query", () => ({
   useQueryClient: () => ({ invalidateQueries: vi.fn() }),
 }));
 
-vi.mock("$lib/utils/haptic.js", () => ({ haptic: mockHaptic }));
-vi.mock("$lib/stores/toast.svelte.js", () => ({
-  toastStore: { show: mockToastShow },
-}));
-vi.mock("$lib/utils/announce.js", () => ({
-  announceToLiveRegion: vi.fn(),
-}));
-vi.mock("$lib/utils/a11y.js", () => ({
+vi.mock("$lib/utils/haptic.js", async (importOriginal) =>
+  (await import("$mocks/haptic.js")).hapticMock(
+    await importOriginal<typeof HapticNS>(),
+  ),
+);
+vi.mock(
+  "$lib/stores/toast.svelte.js",
+  async () =>
+    (await import("$mocks/toast.js")).toastMock() satisfies typeof ToastNS,
+);
+vi.mock("$lib/utils/announce.js", async (importOriginal) =>
+  (await import("$mocks/announce.js")).announceMock(
+    await importOriginal<typeof AnnounceNS>(),
+  ),
+);
+vi.mock("$lib/utils/a11y.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof A11yNS>()),
   onKeyActivate: (fn: () => void) => (e: KeyboardEvent) => {
     if (e.key === "Enter" || e.key === " ") fn();
   },
 }));
 
 // --- Mock shell context ---
-vi.mock("$lib/shell/context.js", () => ({
-  getSectionRailCtx: () => ({ current: undefined }),
-  getScrollContainer: () => () => undefined,
-  getTabbarOverrideCtx: () => ({ current: undefined }),
-  getTabbarHiddenCtx: () => ({ current: false }),
-  getNavbarOverrideCtx: () => ({ current: undefined }),
-}));
+vi.mock(
+  "$lib/shell/context.js",
+  async () =>
+    (
+      await import("$mocks/shell-context.js")
+    ).shellContextMock() satisfies typeof ContextNS,
+);
 
 import GreetingsSection from "./GreetingsSection.svelte";
+import type * as ContextNS from "$lib/shell/context.js";
+import type * as AnnounceNS from "$lib/utils/announce.js";
+import type * as ToastNS from "$lib/stores/toast.svelte.js";
+import type * as HapticNS from "$lib/utils/haptic.js";
+import { mockToastShow } from "$mocks/toast.js";
+import { mockHaptic } from "$mocks/haptic.js";
+import type * as A11yNS from "$lib/utils/a11y.js";
+import type * as SvelteQueryNS from "@tanstack/svelte-query";
+import type * as TrpcNS from "$lib/trpc/index.js";
+import type * as MessagesNS from "$lib/paraglide/messages.js";
 
 const PHONES: Phone[] = [{ number: "+15551234567", sid: "PN-abc123" }];
 

@@ -1,7 +1,6 @@
 import { createHash, randomBytes } from "node:crypto";
 import { createCleanupInterval } from "../utils/intervals.js";
 import { findTier, type Tier } from "../utils/tiers.js";
-import type { UserId } from "@care-y/shared";
 
 export interface PowConfig {
   /** Number of leading zero bits required (difficulty) */
@@ -31,25 +30,21 @@ const DIFFICULTY_TIERS: readonly Tier<number>[] = [
   { minFailures: 5, value: 20 },
 ];
 
-/** Difficulty scaling based on failure count within the PoW window. */
-export function getDifficulty(failureCount: number): number {
-  return findTier(
-    DIFFICULTY_TIERS,
-    failureCount,
-    DEFAULT_POW_CONFIG.baseDifficulty,
-  );
-}
-
 /**
- * Whoever the proof-of-work is rate-limiting.
+ * Whoever or whatever the proof-of-work is rate-limiting.
  *
- * Not always a user: the volunteer OPRF path passes a `UserId`, but the
- * anonymous client portal has no user yet and passes the client IP instead.
- * Typing this `UserId` claimed something the portal path does not satisfy, so
- * it is its own type. The two never mix in one store because each caller
- * constructs its own verifier.
+ * Callers pass different identifiers depending on context:
+ *   - Volunteer OPRF: `UserId`
+ *   - Account OPRF: `ClientAccountId` (cast through the wire's UserId slot)
+ *   - Intake challenge (anonymous): client IP
+ *   - Channel OPRF: synthetic `channel:${channelId}` key
+ *
+ * Each caller constructs its own verifier, so the subjects never mix
+ * in one store. The type is `string` because the store uses it as
+ * an opaque Map key. Branded types (`UserId`, `ClientAccountId`) are
+ * subtypes of `string` and pass without narrowing.
  */
-export type PowSubject = UserId | string;
+export type PowSubject = string;
 
 export interface PowVerifier {
   /** Creates a new challenge for a subject. Returns nonce + difficulty + expiresAt. */

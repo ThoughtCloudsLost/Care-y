@@ -17,8 +17,7 @@ import type { ClientRepository } from "./models/client-repo.js";
 import type { SmsResponseRepository } from "./models/sms-response-repo.js";
 import type { BlocklistRepository } from "./models/blocklist-repo.js";
 import type { TenantDatabase } from "../db/types.js";
-import { requireSodium, eciesEncrypt, toRistrettoPoint } from "@care-y/crypto";
-import type { ChannelRowId } from "@care-y/shared";
+import { requireSodium } from "@care-y/crypto";
 import type {
   OrgId,
   OrgSchema,
@@ -38,9 +37,10 @@ import {
   createFollowUpWithTk,
 } from "../tickets/server-followup-create.js";
 import { processAttachments } from "./inbound-mms.js";
-import { findActiveChannel } from "../portal/channel-service.js";
-import { storeClientCopy } from "../portal/portal-message-service.js";
-import type { EciesTripleBuffers } from "../portal/portal-message-service.js";
+import {
+  sealInboundClientCopy,
+  writeInboundClientCopy,
+} from "../portal/portal-message-service.js";
 
 export interface InboundSmsResult {
   readonly clientId: ClientId;
@@ -124,14 +124,11 @@ export async function handleInboundSms(
     descBuf,
   );
 
-  // 5. Resolve the client's active portal channel (best-effort).
-  // Failure here must not block the forward path (ADR-090).
-  let portalChannelId: ChannelRowId | null = null;
-  let portalClientPublic: Buffer | null = null;
-  let portalCopy: EciesTripleBuffers | null = null;
-
-  // 6. Create encrypted follow-up with SMS body
+  // 5. Resolve the client's active portal channel and seal body copy
+  // (best-effort, ADR-090). Failure must not block the forward path.
   const bodyBuf = Buffer.from(smsData.body, "utf-8");
+
+  const copyResult = await sealInboundClientCopy(tDb, client.id, bodyBuf);
 
   // Process MMS attachments (inside this scope so tk/tk_temp is alive)
   let mmsAttachments: { data: Buffer; contentType: string }[] | undefined;
@@ -145,31 +142,6 @@ export async function handleInboundSms(
     }
   }
 
-  try {
-    const activeChannel = await findActiveChannel(tDb, client.id);
-    if (activeChannel) {
-      portalChannelId = activeChannel.id;
-      portalClientPublic = activeChannel.client_public;
-      // Seal bodyBuf to the channel's client_public BEFORE the follow-up
-      // creation calls below, which zero bodyBuf in their finally blocks.
-      // bodyBuf is passed uncopied: a copy could not be zeroed by the
-      // follow-up helpers and would outlive the handler (ADR-090).
-      const clientPoint = toRistrettoPoint(
-        new Uint8Array(activeChannel.client_public),
-      );
-      const sealed = eciesEncrypt(bodyBuf, clientPoint);
-      portalCopy = {
-        ephemeralPoint: Buffer.from(sealed.ephemeralPoint),
-        nonce: Buffer.from(sealed.nonce),
-        ciphertext: Buffer.from(sealed.ciphertext),
-      };
-    }
-  } catch {
-    // Channel lookup or seal failure: log without content, continue
-    // to the follow-up creation unchanged (ADR-090 fault isolation).
-    console.warn("Portal copy dropped: channel lookup failed for client");
-  }
-
   // Build media opts. When the channel resolved and MMS attachments
   // are present, pass portalSeal so media uses the file-key envelope
   // and portal carrier rows are written (ADR-092).
@@ -178,11 +150,11 @@ export async function handleInboundSms(
         attachments: mmsAttachments,
         blobStore,
         orgSchema,
-        ...(portalChannelId !== null && portalClientPublic !== null
+        ...(copyResult.channelRowId !== null && copyResult.clientPublic !== null
           ? {
               portalSeal: {
-                channelRowId: portalChannelId,
-                clientPublic: portalClientPublic,
+                channelRowId: copyResult.channelRowId,
+                clientPublic: copyResult.clientPublic,
               },
             }
           : {}),
@@ -222,18 +194,13 @@ export async function handleInboundSms(
 
   // 7. Store portal copy (best-effort, after follow-up id is known).
   // Failure here must not block the auto-reply or log deletion (ADR-090).
-  if (portalChannelId !== null && portalCopy !== null) {
-    try {
-      await storeClientCopy(
-        tDb,
-        portalChannelId,
-        followUpId,
-        portalCopy,
-        "from_client",
-      );
-    } catch {
-      console.warn("Portal copy dropped: copy write failed for client");
-    }
+  if (copyResult.channelRowId !== null && copyResult.portalCopy !== null) {
+    await writeInboundClientCopy(
+      tDb,
+      copyResult.channelRowId,
+      followUpId,
+      copyResult.portalCopy,
+    );
   }
 
   // 8. Send auto-reply

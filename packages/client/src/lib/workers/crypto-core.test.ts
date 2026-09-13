@@ -35,6 +35,7 @@ import {
   fileKeySlot,
   filenameSlot,
   decodeFileKeyPayload,
+  INTAKE_RESPONSE_SLOT,
   type Ciphertext,
   type Nonce,
   type RistrettoPoint,
@@ -4290,7 +4291,7 @@ describe("crypto-core detectMergeCandidates", () => {
     const responseJson = JSON.stringify({
       answers: [{ fieldKey: "default:phone", value: "+12125550099" }],
     });
-    const aad = buildContentAad(ticketId, "intake-response");
+    const aad = buildContentAad(ticketId, INTAKE_RESPONSE_SLOT);
     const ct = encryptContent(new TextEncoder().encode(responseJson), tk, aad);
 
     // Client A has the phone in their intake response
@@ -4345,7 +4346,7 @@ describe("crypto-core detectMergeCandidates", () => {
     const responseJson = JSON.stringify({
       answers: [{ fieldKey: "default:email", value: "sealed@example.com" }],
     });
-    const aad = buildContentAad(ticketId, "intake-response");
+    const aad = buildContentAad(ticketId, INTAKE_RESPONSE_SLOT);
     const ct = encryptContent(new TextEncoder().encode(responseJson), tk, aad);
 
     const emailHash = await emailMatchHashVia("sealed@example.com", 8070);
@@ -4559,7 +4560,7 @@ describe("crypto-core detectMergeCandidates", () => {
     const responseJson = JSON.stringify({
       answers: [{ fieldKey: "default:phone", value: "+12125550077" }],
     });
-    const aad = buildContentAad(ticketId, "intake-response");
+    const aad = buildContentAad(ticketId, INTAKE_RESPONSE_SLOT);
     const ct = encryptContent(new TextEncoder().encode(responseJson), tk, aad);
 
     const phoneHash = await phoneMatchHashVia("+12125550077", 8130);
@@ -4652,6 +4653,65 @@ describe("crypto-core detectMergeCandidates", () => {
     expect(resp.ok).toBe(true);
     expect(resp.candidates).toHaveLength(1);
     expect(resp.truncated).toBe(false);
+  });
+
+  it("skips intake response encrypted under a different slot without throwing", async () => {
+    const sodium = requireSodium();
+    await loadOrgKey();
+    const volPub = decode(volPublicStr) as RistrettoPoint;
+
+    const tk = generateContentKey();
+    const wrapTk = eciesEncrypt(tk, volPub);
+
+    const ticketId = "t-merge-wrong-slot";
+    const responseJson = JSON.stringify({
+      answers: [{ fieldKey: "default:phone", value: "+12125559999" }],
+    });
+    // Encrypt under a DIFFERENT slot so the AAD mismatch causes a decrypt failure.
+    const wrongAad = buildContentAad(ticketId, "some-other-slot");
+    const ct = encryptContent(
+      new TextEncoder().encode(responseJson),
+      tk,
+      wrongAad,
+    );
+
+    const phoneHash = await phoneMatchHashVia("+12125559999", 8160);
+
+    const resp = (await dispatchAndWait({
+      type: "detectMergeCandidates",
+      id: 8161,
+      clients: [
+        {
+          clientId: "client-wrong-slot-a",
+          phoneMatchHash: null,
+          emailMatchHash: null,
+          intakeResponses: [
+            {
+              ticketId,
+              ephemeralPoint: encode(wrapTk.ephemeralPoint),
+              nonce: encode(wrapTk.nonce),
+              wrappedKey: encode(wrapTk.ciphertext),
+              intakeWrap: null,
+              encryptedResponse: encode(ct),
+              fieldRoles: new Map(),
+            },
+          ],
+        },
+        {
+          clientId: "client-wrong-slot-b",
+          phoneMatchHash: phoneHash,
+          emailMatchHash: null,
+          intakeResponses: [],
+        },
+      ],
+    })) as DetectMergeCandidatesResponse;
+
+    // The response blob decryption fails (AAD mismatch), so no contacts
+    // are extracted from the intake data. The scan completes without error.
+    expect(resp.ok).toBe(true);
+    expect(resp.candidates).toHaveLength(0);
+
+    sodium.memzero(tk);
   });
 });
 

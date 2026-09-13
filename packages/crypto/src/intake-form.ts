@@ -1,8 +1,3 @@
-/* eslint-disable @typescript-eslint/no-unsafe-type-assertion --
-   Branded type cast (Uint8Array -> Ciphertext) is the standard pattern
-   for phantom-branded newtypes. The __brand field never exists at runtime;
-   the base64-decoded bytes are XChaCha20-Poly1305 AEAD ciphertext (ADR-053). */
-
 /**
  * Client-side encryption helpers for intake form field definitions and
  * form-level metadata.
@@ -31,7 +26,8 @@ import { encodeLabel } from "./bytes.js";
 import { deriveClientBrandingKey } from "./branding.js";
 import { DecryptionError } from "./errors.js";
 import { encode, decode } from "./serialize.js";
-import type { SymmetricKey, Ciphertext } from "./types.js";
+import { toCiphertext } from "./types.js";
+import type { Ciphertext, SymmetricKey } from "./types.js";
 import {
   intakeFieldConfigSchema,
   intakeFormMetaSchema,
@@ -50,6 +46,9 @@ import {
 // Distinct from BRANDING_AAD ("care-y-client-branding-aad-v1") to prevent
 // cross-context ciphertext acceptance (ADR-053).
 const INTAKE_FORM_AAD = encodeLabel("care-y-intake-form-aad-v1");
+
+/** AAD slot for encrypted intake form responses (buildContentAad). */
+export const INTAKE_RESPONSE_SLOT = "intake-form-response";
 
 export interface EncryptedFieldContent {
   encryptedLabel: string;
@@ -122,6 +121,21 @@ export function encryptFieldContent(
  * @returns Decrypted label string and validated config object
  * @throws DecryptionError if decryption fails or config does not match schema
  */
+/**
+ * Decode a wire-encoded ciphertext and validate its minimum length.
+ * A too-short blob throws DecryptionError so the documented error
+ * contract of the decrypt functions holds regardless of where the
+ * malformed input is detected.
+ */
+function decodeCiphertext(encoded: string): Ciphertext {
+  const buf = decode(encoded);
+  try {
+    return toCiphertext(buf);
+  } catch {
+    throw new DecryptionError("Ciphertext is too short to be valid");
+  }
+}
+
 export function decryptFieldContent(
   enc: { encryptedLabel: string; encryptedConfig: string },
   orgPublicKey: Uint8Array,
@@ -129,12 +143,12 @@ export function decryptFieldContent(
   const key: SymmetricKey = deriveClientBrandingKey(orgPublicKey);
   try {
     const labelPlain = decryptContent(
-      decode(enc.encryptedLabel) as Ciphertext,
+      decodeCiphertext(enc.encryptedLabel),
       key,
       INTAKE_FORM_AAD,
     );
     const configPlain = decryptContent(
-      decode(enc.encryptedConfig) as Ciphertext,
+      decodeCiphertext(enc.encryptedConfig),
       key,
       INTAKE_FORM_AAD,
     );
@@ -183,6 +197,10 @@ export function decryptFieldContent(
         const vwParsed = visibleWhenSchema.safeParse(vw);
         if (vwParsed.success) {
           visibleWhen = normalizeVisibleWhen(vwParsed.data);
+        } else {
+          throw new DecryptionError(
+            "Decrypted visibleWhen does not match expected schema",
+          );
         }
       }
       const parsed = intakeFieldConfigSchema.safeParse(configJson);
@@ -255,7 +273,7 @@ export function decryptFormMeta(
   const key: SymmetricKey = deriveClientBrandingKey(orgPublicKey);
   try {
     const plain = decryptContent(
-      decode(encryptedMeta) as Ciphertext,
+      decodeCiphertext(encryptedMeta),
       key,
       INTAKE_FORM_AAD,
     );

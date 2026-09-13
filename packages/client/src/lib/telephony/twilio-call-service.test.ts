@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import type { BrowserCallService, BrowserCallEvents } from "@care-y/shared";
+import type * as VoiceSdkNS from "@twilio/voice-sdk";
 
 type EventHandler = (...args: unknown[]) => void;
 
@@ -20,35 +21,42 @@ function fireCallEvent(event: string, ...args: unknown[]): void {
   callHandlers.get(event)?.(...args);
 }
 
-vi.mock("@twilio/voice-sdk", () => ({
-  Device: class MockDevice {
-    constructor() {
-      deviceHandlers = new Map();
-    }
-    on(event: string, handler: EventHandler): void {
-      deviceHandlers.set(event, handler);
-    }
-    async register(): Promise<void> {
-      /* noop */
-    }
-    async connect(): Promise<typeof mockCallInstance> {
-      callHandlers = new Map();
-      mockCallInstance = {
-        on: vi.fn((event: string, handler: EventHandler) => {
-          callHandlers.set(event, handler);
-        }),
-        disconnect: vi.fn(),
-        mute: vi.fn(),
-        sendDigits: vi.fn(),
-      };
-      return mockCallInstance;
-    }
-    destroy(): void {
-      /* noop */
-    }
-  },
-  Call: {},
-}));
+// care-y-ignore-next-line mock-factory-unguarded -- browser-only SDK (WebRTC) cannot import in Node, ruling out the importOriginal spread; satisfies Pick<typeof VoiceSdkNS, "Device" | "Call"> guards the two stubbed exports
+vi.mock(
+  "@twilio/voice-sdk",
+  () =>
+    ({
+      Device: class MockDevice {
+        constructor() {
+          deviceHandlers = new Map();
+        }
+        on(event: string, handler: EventHandler): void {
+          deviceHandlers.set(event, handler);
+        }
+        async register(): Promise<void> {
+          /* noop */
+        }
+        async connect(): Promise<typeof mockCallInstance> {
+          callHandlers = new Map();
+          mockCallInstance = {
+            on: vi.fn((event: string, handler: EventHandler) => {
+              callHandlers.set(event, handler);
+            }),
+            disconnect: vi.fn(),
+            mute: vi.fn(),
+            sendDigits: vi.fn(),
+          };
+          return mockCallInstance;
+        }
+        destroy(): void {
+          /* noop */
+        }
+      },
+      Call: {},
+    }) satisfies {
+      [K in keyof Pick<typeof VoiceSdkNS, "Device" | "Call">]: unknown;
+    },
+);
 
 const { createTwilioBrowserCallService } =
   await import("./twilio-call-service.js");

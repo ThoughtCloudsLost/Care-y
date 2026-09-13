@@ -5,6 +5,9 @@ import {
   splitHandoffId,
 } from "$lib/stores/split-handoff.svelte.js";
 import { DemoRouter } from "./router.svelte.js";
+import type * as RouteManifestNS from "$demo/engine/route-manifest.js";
+import type * as NavigationNS from "$app/navigation";
+import type * as AppStateNS from "$app/state";
 
 // The router imports setDemoPage from "$app/state" (aliased to the stub).
 // In the test environment, we mock it. The router only calls setDemoPage
@@ -50,12 +53,18 @@ vi.mock("$app/state", () => {
       get state(): Record<string, unknown> {
         return pageState;
       },
-    },
+    } as unknown as typeof AppStateNS.page,
     navigating: null,
     updated: {
       current: false,
       check: async (): Promise<boolean> => Promise.resolve(false),
     },
+    nextPageCommit: async (): Promise<void> => Promise.resolve(),
+  } satisfies typeof AppStateNS & {
+    _getLastUpdate():
+      { url: URL; params: Record<string, string>; routeId: string } | undefined;
+    _resetLastUpdate(): void;
+    _setPageState(state: Record<string, unknown>): void;
   };
 });
 
@@ -63,7 +72,8 @@ vi.mock("$app/state", () => {
 const beforeCbs: Array<(arg: unknown) => void> = [];
 const afterCbs: Array<(arg: unknown) => void> = [];
 
-vi.mock("$app/navigation", () => ({
+vi.mock("$app/navigation", async (importOriginal) => ({
+  ...(await importOriginal<typeof NavigationNS>()),
   registerDemoNavigationHandler: vi.fn(),
   unregisterDemoNavigationHandler: vi.fn(),
   fireBeforeNavigate(arg: unknown): void {
@@ -82,7 +92,8 @@ vi.mock("$app/navigation", () => ({
 }));
 
 // Mock route-manifest: router uses matchRoute in buildEndpoint
-vi.mock("$demo/engine/route-manifest.js", () => ({
+vi.mock("$demo/engine/route-manifest.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof RouteManifestNS>()),
   matchRoute(pathname: string): {
     params: Record<string, string>;
     routeId: string;

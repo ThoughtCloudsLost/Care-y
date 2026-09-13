@@ -35,3 +35,26 @@ export async function ensureRecurringJob(
     await jobQueue.enqueue(queueName, {});
   }
 }
+
+/**
+ * Register a self-enqueuing recurring handler. The handler runs the
+ * provided callback, then re-enqueues itself with the given delay in a
+ * finally block so the self-chain survives a throwing handler.
+ *
+ * All four recurring jobs (escalation-checker, portal-message-expiry,
+ * notification-outbox-drain, media-service) follow this pattern.
+ */
+export function registerRecurringHandler(
+  jobQueue: JobQueue,
+  queue: string,
+  handler: () => Promise<void>,
+  intervalMs: number,
+): void {
+  jobQueue.process(queue, async () => {
+    try {
+      await handler();
+    } finally {
+      await jobQueue.enqueue(queue, {}, { delay: intervalMs });
+    }
+  });
+}

@@ -2,12 +2,7 @@
 import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
 import { render, screen, cleanup, fireEvent } from "@testing-library/svelte";
 
-const {
-  mockAddToBlocklist,
-  mockRemoveFromBlocklist,
-  mockToastShow,
-  mockHaptic,
-} = vi.hoisted(() => ({
+const { mockAddToBlocklist, mockRemoveFromBlocklist } = vi.hoisted(() => ({
   mockAddToBlocklist: vi.fn().mockResolvedValue({
     id: "new-1",
     phoneHash: "abcd1234",
@@ -15,8 +10,6 @@ const {
     createdAt: new Date(),
   }),
   mockRemoveFromBlocklist: vi.fn().mockResolvedValue(undefined),
-  mockToastShow: vi.fn(),
-  mockHaptic: vi.fn(),
 }));
 
 interface BlocklistEntry {
@@ -29,7 +22,8 @@ interface BlocklistEntry {
 let mockBlocklistData: BlocklistEntry[] | undefined;
 let mockIsLoading: boolean;
 
-vi.mock("$lib/paraglide/messages.js", () => ({
+vi.mock("$lib/paraglide/messages.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof MessagesNS>()),
   admin_blocklist_filter: () => "Filter blocked numbers...",
   admin_blocklist_empty: () => "No blocked numbers yet.",
   admin_blocklist_add_button: () => "Add Number",
@@ -60,7 +54,8 @@ vi.mock("$lib/paraglide/messages.js", () => ({
   error_decryption_failed: () => "Decryption failed",
 }));
 
-vi.mock("$lib/trpc/index.js", () => ({
+vi.mock("$lib/trpc/index.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof TrpcNS>()),
   trpc: {
     telephonyAdmin: {
       listBlocklist: { query: vi.fn() },
@@ -70,7 +65,8 @@ vi.mock("$lib/trpc/index.js", () => ({
   },
 }));
 
-vi.mock("@tanstack/svelte-query", () => ({
+vi.mock("@tanstack/svelte-query", async (importOriginal) => ({
+  ...(await importOriginal<typeof SvelteQueryNS>()),
   createQuery: (optsFn: () => Record<string, unknown>) => {
     optsFn();
     return {
@@ -110,14 +106,23 @@ vi.mock("@tanstack/svelte-query", () => ({
   }),
 }));
 
-vi.mock("$lib/utils/haptic.js", () => ({ haptic: mockHaptic }));
-vi.mock("$lib/stores/toast.svelte.js", () => ({
-  toastStore: { show: mockToastShow },
-}));
-vi.mock("$lib/utils/announce.js", () => ({
-  announceToLiveRegion: vi.fn(),
-}));
-vi.mock("$lib/utils/a11y.js", () => ({
+vi.mock("$lib/utils/haptic.js", async (importOriginal) =>
+  (await import("$mocks/haptic.js")).hapticMock(
+    await importOriginal<typeof HapticNS>(),
+  ),
+);
+vi.mock(
+  "$lib/stores/toast.svelte.js",
+  async () =>
+    (await import("$mocks/toast.js")).toastMock() satisfies typeof ToastNS,
+);
+vi.mock("$lib/utils/announce.js", async (importOriginal) =>
+  (await import("$mocks/announce.js")).announceMock(
+    await importOriginal<typeof AnnounceNS>(),
+  ),
+);
+vi.mock("$lib/utils/a11y.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof A11yNS>()),
   onKeyActivate: (fn: () => void) => (e: KeyboardEvent) => {
     if (e.key === "Enter" || e.key === " ") fn();
   },
@@ -137,7 +142,8 @@ vi.stubGlobal(
   }),
 );
 
-vi.mock("$lib/crypto/context.js", () => ({
+vi.mock("$lib/crypto/context.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof ContextNS>()),
   getOrgDecryptCache: () => ({
     decrypt: (_id: string, encrypted: unknown) =>
       typeof encrypted === "string" ? `+1${encrypted}` : null,
@@ -146,22 +152,38 @@ vi.mock("$lib/crypto/context.js", () => ({
   }),
 }));
 
-vi.mock("$lib/crypto/async-decrypt-cache.js", () => ({
+vi.mock("$lib/crypto/async-decrypt-cache.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof AsyncDecryptCacheNS>()),
   DECRYPT_ERROR_SENTINEL: "\0DECRYPT_FAILED",
   isDecryptError: (v: unknown) => v === "\0DECRYPT_FAILED",
 }));
 
-vi.mock("$lib/crypto/decrypt-result.js", () => ({
+vi.mock("$lib/crypto/decrypt-result.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof DecryptResultNS>()),
   LOADING: Object.freeze({ status: "loading" }),
   ERROR: Object.freeze({ status: "error" }),
   DENIED: Object.freeze({ status: "denied" }),
 }));
 
-vi.mock("$lib/utils/format-time.js", () => ({
+vi.mock("$lib/utils/format-time.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof FormatTimeNS>()),
   formatRelativeTime: () => "2d ago",
 }));
 
 import BlocklistSection from "./BlocklistSection.svelte";
+import type * as AnnounceNS from "$lib/utils/announce.js";
+import type * as ToastNS from "$lib/stores/toast.svelte.js";
+import type * as HapticNS from "$lib/utils/haptic.js";
+import { mockToastShow } from "$mocks/toast.js";
+import { mockHaptic } from "$mocks/haptic.js";
+import type * as FormatTimeNS from "$lib/utils/format-time.js";
+import type * as DecryptResultNS from "$lib/crypto/decrypt-result.js";
+import type * as AsyncDecryptCacheNS from "$lib/crypto/async-decrypt-cache.js";
+import type * as ContextNS from "$lib/crypto/context.js";
+import type * as A11yNS from "$lib/utils/a11y.js";
+import type * as SvelteQueryNS from "@tanstack/svelte-query";
+import type * as TrpcNS from "$lib/trpc/index.js";
+import type * as MessagesNS from "$lib/paraglide/messages.js";
 
 describe("BlocklistSection", () => {
   beforeEach(() => {

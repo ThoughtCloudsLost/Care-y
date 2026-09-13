@@ -1,6 +1,15 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { Permission } from "@care-y/shared";
 import { RoleId } from "@care-y/shared";
+import type * as FollowUpDecryptCacheNS from "$lib/crypto/follow-up-decrypt-cache.js";
+import type * as OrgDecryptCacheNS from "$lib/crypto/org-decrypt-cache.js";
+import type * as CryptoBridgeNS from "$lib/workers/crypto-bridge.js";
+import type * as OrgKeyNS from "$lib/crypto/org-key.js";
+import type * as TicketDecryptCacheNS from "$lib/crypto/ticket-decrypt-cache.js";
+import type * as PreviewLoaderNS from "$lib/tickets/preview-loader.svelte.js";
+import type * as CryptoKeyedNS from "$lib/crypto/crypto-keyed.svelte.js";
+import type * as CryptoSettledNS from "$lib/crypto/crypto-settled.svelte.js";
+import type * as OrgKeyReadyNS from "$lib/crypto/org-key-ready.svelte.js";
 
 // Mock the real CryptoBridge, OrgKeyManager, and decrypt cache classes
 // to prevent actual Worker construction in tests.
@@ -25,8 +34,8 @@ vi.mock("$lib/workers/crypto-bridge.js", () => {
   return {
     CryptoBridge: vi.fn(function CryptoBridge() {
       return mockBridge;
-    }),
-  };
+    }) as unknown as typeof CryptoBridgeNS.CryptoBridge,
+  } satisfies typeof CryptoBridgeNS;
 });
 
 vi.mock("$lib/crypto/org-key.js", () => {
@@ -39,60 +48,97 @@ vi.mock("$lib/crypto/org-key.js", () => {
   return {
     OrgKeyManager: vi.fn(function OrgKeyManager() {
       return mockManager;
-    }),
-  };
+    }) as unknown as typeof OrgKeyNS.OrgKeyManager,
+    OrgKeyNotLoadedError:
+      class OrgKeyNotLoadedError extends Error {} as unknown as typeof OrgKeyNS.OrgKeyNotLoadedError,
+  } satisfies typeof OrgKeyNS;
 });
 
-vi.mock("$lib/crypto/org-decrypt-cache.js", () => ({
-  OrgDecryptCache: vi.fn(function OrgDecryptCache() {
-    return {
-      decrypt: vi.fn(),
-      has: vi.fn(),
-      clear: vi.fn(),
-    };
-  }),
-}));
+// Full replacement: in the demo package importOriginal would re-enter
+// crypto-context.svelte.ts through the $lib alias graph mid-hoist (TDZ on
+// its module state), so spreading the original is not an option here.
+vi.mock(
+  "$lib/crypto/org-decrypt-cache.js",
+  () =>
+    ({
+      OrgDecryptCache: vi.fn(function OrgDecryptCache() {
+        return {
+          decrypt: vi.fn(),
+          has: vi.fn(),
+          clear: vi.fn(),
+        };
+      }) as unknown as typeof OrgDecryptCacheNS.OrgDecryptCache,
+    }) satisfies typeof OrgDecryptCacheNS,
+);
 
-vi.mock("$lib/crypto/ticket-decrypt-cache.js", () => ({
-  TicketDecryptCache: vi.fn(function TicketDecryptCache() {
-    return {
-      decryptTitle: vi.fn(),
-      has: vi.fn(),
-      clear: vi.fn(),
-    };
-  }),
-}));
+vi.mock(
+  "$lib/crypto/ticket-decrypt-cache.js",
+  () =>
+    ({
+      TicketDecryptCache: vi.fn(function TicketDecryptCache() {
+        return {
+          decryptTitle: vi.fn(),
+          has: vi.fn(),
+          clear: vi.fn(),
+        };
+      }) as unknown as typeof TicketDecryptCacheNS.TicketDecryptCache,
+    }) satisfies typeof TicketDecryptCacheNS,
+);
 
-vi.mock("$lib/crypto/follow-up-decrypt-cache.js", () => ({
-  FollowUpDecryptCache: vi.fn(function FollowUpDecryptCache() {
-    return {
-      decryptContent: vi.fn(),
-      has: vi.fn(),
-      clear: vi.fn(),
-    };
-  }),
-}));
+// Full replacement for the same TDZ-cycle reason as org-decrypt-cache above.
+vi.mock(
+  "$lib/crypto/follow-up-decrypt-cache.js",
+  () =>
+    ({
+      FollowUpDecryptCache: vi.fn(function FollowUpDecryptCache() {
+        return {
+          decryptContent: vi.fn(),
+          has: vi.fn(),
+          clear: vi.fn(),
+        };
+      }) as unknown as typeof FollowUpDecryptCacheNS.FollowUpDecryptCache,
+    }) satisfies typeof FollowUpDecryptCacheNS,
+);
 
-vi.mock("$lib/tickets/preview-loader.svelte.js", () => ({
-  createPreviewLoader: vi.fn(() => ({
-    rawPreviews: new Map(),
-    observe: vi.fn(),
-    eagerLoad: vi.fn(),
-    get: vi.fn(),
-  })),
-}));
+vi.mock(
+  "$lib/tickets/preview-loader.svelte.js",
+  () =>
+    ({
+      createPreviewLoader: vi.fn(() => ({
+        rawPreviews: new Map(),
+        observe: vi.fn(),
+        eagerLoad: vi.fn(),
+        get: vi.fn(),
+      })) as unknown as typeof PreviewLoaderNS.createPreviewLoader,
+    }) satisfies typeof PreviewLoaderNS,
+);
 
-vi.mock("$lib/crypto/crypto-keyed.svelte.js", () => ({
-  setCryptoKeyed: vi.fn(),
-}));
+vi.mock(
+  "$lib/crypto/crypto-keyed.svelte.js",
+  () =>
+    ({
+      setCryptoKeyed: vi.fn(),
+      isCryptoKeyed: vi.fn(() => true),
+    }) satisfies typeof CryptoKeyedNS,
+);
 
-vi.mock("$lib/crypto/crypto-settled.svelte.js", () => ({
-  setCryptoSettled: vi.fn(),
-}));
+vi.mock(
+  "$lib/crypto/crypto-settled.svelte.js",
+  () =>
+    ({
+      setCryptoSettled: vi.fn(),
+      isCryptoSettled: vi.fn(() => true),
+    }) satisfies typeof CryptoSettledNS,
+);
 
-vi.mock("$lib/crypto/org-key-ready.svelte.js", () => ({
-  setOrgKeyReady: vi.fn(),
-}));
+vi.mock(
+  "$lib/crypto/org-key-ready.svelte.js",
+  () =>
+    ({
+      setOrgKeyReady: vi.fn(),
+      isOrgKeyReady: vi.fn(() => false),
+    }) satisfies typeof OrgKeyReadyNS,
+);
 
 // Import after mocks are established
 const {

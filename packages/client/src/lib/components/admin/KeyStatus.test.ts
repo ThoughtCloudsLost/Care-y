@@ -11,7 +11,8 @@ let mockWrappedKeyData: unknown = {
 const mockOnrotate = vi.fn();
 const mockOnexport = vi.fn();
 
-vi.mock("$lib/paraglide/messages.js", () => ({
+vi.mock("$lib/paraglide/messages.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof MessagesNS>()),
   admin_keys_org_key_loaded: () => "Organization key loaded",
   admin_keys_org_key_missing: () => "Organization key not configured",
   admin_keys_explainer: () => "Your organization key encrypts shared data.",
@@ -20,7 +21,8 @@ vi.mock("$lib/paraglide/messages.js", () => ({
   admin_rotation_dialog_why: () => "Rotate your key if a team member leaves.",
 }));
 
-vi.mock("$lib/crypto/context.js", () => ({
+vi.mock("$lib/crypto/context.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof ContextNS>()),
   getOrgKeyManager: () => ({
     get isLoaded() {
       return mockOrgKeyLoaded;
@@ -28,7 +30,8 @@ vi.mock("$lib/crypto/context.js", () => ({
   }),
 }));
 
-vi.mock("@tanstack/svelte-query", () => ({
+vi.mock("@tanstack/svelte-query", async (importOriginal) => ({
+  ...(await importOriginal<typeof SvelteQueryNS>()),
   createQuery: (optsFn: () => Record<string, unknown>) => {
     const opts = optsFn();
     void opts;
@@ -46,7 +49,8 @@ vi.mock("@tanstack/svelte-query", () => ({
   },
 }));
 
-vi.mock("$lib/trpc/index.js", () => ({
+vi.mock("$lib/trpc/index.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof TrpcNS>()),
   trpc: {
     keys: {
       getWrappedOrgKey: {
@@ -57,6 +61,10 @@ vi.mock("$lib/trpc/index.js", () => ({
 }));
 
 import KeyStatus from "./KeyStatus.svelte";
+import type * as TrpcNS from "$lib/trpc/index.js";
+import type * as SvelteQueryNS from "@tanstack/svelte-query";
+import type * as ContextNS from "$lib/crypto/context.js";
+import type * as MessagesNS from "$lib/paraglide/messages.js";
 
 describe("KeyStatus", () => {
   beforeEach(() => {

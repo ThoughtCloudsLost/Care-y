@@ -169,6 +169,11 @@ import {
 import type { UserId, QueueId, TicketId } from "@care-y/shared";
 
 import { b64, b64n, b64KeyWrap } from "../utils/ciphertext-wire.js";
+import {
+  getConversionTargets,
+  convertIntakeKeyWrap,
+} from "../portal/intake-conversion-service.js";
+import { resetAccount } from "../portal/account-service.js";
 
 /**
  * Ticket record shape after Buffer ciphertext is converted to base64url
@@ -1881,8 +1886,6 @@ export function createTicketRouter(deps: TicketRouterDeps) {
       .input(z.object({ ticketId: ticketIdSchema }))
       .query(
         withErrorWrapping(async ({ ctx, input }) => {
-          const { getConversionTargets } =
-            await import("../portal/intake-conversion-service.js");
           const access = deps.createTicketAccess(ctx.org.tenantDb);
           return getConversionTargets(
             ctx.org.tenantDb,
@@ -1910,8 +1913,6 @@ export function createTicketRouter(deps: TicketRouterDeps) {
       )
       .mutation(
         withErrorWrapping(async ({ ctx, input }) => {
-          const { convertIntakeKeyWrap } =
-            await import("../portal/intake-conversion-service.js");
           const access = deps.createTicketAccess(ctx.org.tenantDb);
           return convertIntakeKeyWrap(
             ctx.org.tenantDb,
@@ -1979,7 +1980,7 @@ export function createTicketRouter(deps: TicketRouterDeps) {
       .input(
         z.object({
           ticketId: ticketIdSchema,
-          channelId: z.string().regex(/^[0-9a-f]{48}$/),
+          channelId: channelSecretSchema,
           authHash: z.string().min(1),
           clientPublic: z.string().min(1),
           hasPassphrase: z.boolean(),
@@ -2002,7 +2003,7 @@ export function createTicketRouter(deps: TicketRouterDeps) {
           }
 
           const reg: ChannelRegistration = {
-            channelId: channelSecretSchema.parse(input.channelId),
+            channelId: input.channelId,
             authHash: Buffer.from(input.authHash, "base64"),
             clientPublic: Buffer.from(input.clientPublic, "base64"),
             hasPassphrase: input.hasPassphrase,
@@ -2096,10 +2097,9 @@ export function createTicketRouter(deps: TicketRouterDeps) {
             ticket.clientId,
           );
           if (!hasAccount) {
-            throw new NotFoundError(ErrorCode.ACCOUNT_ALREADY_EXISTS);
+            throw new NotFoundError(ErrorCode.ACCOUNT_NOT_FOUND);
           }
 
-          const { resetAccount } = await import("../portal/account-service.js");
           await resetAccount(ctx.org.tenantDb, ticket.clientId);
 
           audit(ctx.org.tenantDb, {

@@ -13,22 +13,22 @@ const { mockGoto } = vi.hoisted(() => ({ mockGoto: vi.fn() }));
 // vi.mock required: $app/navigation is a SvelteKit virtual module with
 // no on-disk source.
 vi.mock("$app/navigation", async (importOriginal) => ({
-  ...(await importOriginal<Record<string, unknown>>()),
+  ...(await importOriginal<typeof NavigationNS>()),
   goto: mockGoto,
 }));
 
 vi.mock("$app/paths", async (importOriginal) => ({
-  ...(await importOriginal<Record<string, unknown>>()),
+  ...(await importOriginal<typeof PathsNS>()),
   resolve: (path: string) => path,
 }));
 
 vi.mock("$app/state", async (importOriginal) => ({
-  ...(await importOriginal<Record<string, unknown>>()),
+  ...(await importOriginal<typeof StateNS>()),
   page: { params: { channelId: "test-channel" } },
 }));
 
 vi.mock("$lib/paraglide/messages.js", async (importOriginal) => ({
-  ...(await importOriginal<Record<string, unknown>>()),
+  ...(await importOriginal<typeof MessagesNS>()),
   portal_title: () => "Portal",
   portal_unlocking: () => "Unlocking",
   portal_incomplete_link: () => "Invalid link",
@@ -49,23 +49,24 @@ vi.mock("$lib/paraglide/messages.js", async (importOriginal) => ({
   account_login_failed: () => "Failed",
 }));
 
-vi.mock("$lib/terminology/with-terms.js", async (importOriginal) => ({
-  ...(await importOriginal<Record<string, unknown>>()),
-  withTerms: () => ({}),
-}));
+vi.mock("$lib/terminology/with-terms.js", async (importOriginal) =>
+  (await import("$mocks/with-terms.js")).withTermsMock(
+    await importOriginal<typeof WithTermsNS>(),
+  ),
+);
 
 // vi.mock required: Svelte 5 createContext throws missing_context when the
 // consumer renders without its provider, and this spec renders the page on
 // its own rather than inside the (client) layout that sets the container.
 vi.mock("$lib/client-shell/context.js", async (importOriginal) => ({
-  ...(await importOriginal<Record<string, unknown>>()),
+  ...(await importOriginal<typeof ContextNS>()),
   getClientShellCtx: () => ({ current: undefined }),
 }));
 
 // vi.mock required: $lib/trpc/index.js creates a live HTTP client at
 // import time.
 vi.mock("$lib/trpc/index.js", async (importOriginal) => ({
-  ...(await importOriginal<Record<string, unknown>>()),
+  ...(await importOriginal<typeof TrpcNS>()),
   trpc: {
     clientPortal: null,
     branding: null,
@@ -75,7 +76,7 @@ vi.mock("$lib/trpc/index.js", async (importOriginal) => ({
 // vi.mock required: @care-y/crypto barrel triggers libsodium WASM
 // initialization via getSodium() singleton.
 vi.mock("@care-y/crypto", async (importOriginal) => ({
-  ...(await importOriginal<Record<string, unknown>>()),
+  ...(await importOriginal<typeof CryptoNS>()),
   decode: (s: string) => new Uint8Array(Buffer.from(s, "base64")),
   encode: (b: Uint8Array) => Buffer.from(b).toString("base64"),
 }));
@@ -84,7 +85,7 @@ vi.mock("@care-y/crypto", async (importOriginal) => ({
 vi.mock(
   "$lib/composables/portal/create-portal-fragment.svelte.js",
   async (importOriginal) => ({
-    ...(await importOriginal<Record<string, unknown>>()),
+    ...(await importOriginal<typeof CreatePortalFragmentNS>()),
     createPortalFragment: () => ({
       fragmentResolved: true,
       hasValidFragment: true,
@@ -99,7 +100,7 @@ vi.mock(
 vi.mock(
   "$lib/composables/portal/create-portal-session.svelte.js",
   async (importOriginal) => ({
-    ...(await importOriginal<Record<string, unknown>>()),
+    ...(await importOriginal<typeof CreatePortalSessionNS>()),
     createPortalSessionState: () => ({
       session: null,
       keyCheckPassed: false,
@@ -116,7 +117,7 @@ vi.mock(
 vi.mock(
   "$lib/composables/portal/create-portal-upgrade.svelte.js",
   async (importOriginal) => ({
-    ...(await importOriginal<Record<string, unknown>>()),
+    ...(await importOriginal<typeof CreatePortalUpgradeNS>()),
     createPortalUpgrade: () => ({
       dismissed: false,
       expanded: false,
@@ -132,7 +133,7 @@ vi.mock(
 );
 
 vi.mock("@tanstack/svelte-query", async (importOriginal) => ({
-  ...(await importOriginal<Record<string, unknown>>()),
+  ...(await importOriginal<typeof SvelteQueryNS>()),
   createQuery: () => ({
     isLoading: false,
     isError: false,
@@ -159,7 +160,7 @@ vi.mock("@tanstack/svelte-query", async (importOriginal) => ({
 }));
 
 vi.mock("$lib/query/keys.js", async (importOriginal) => ({
-  ...(await importOriginal<Record<string, unknown>>()),
+  ...(await importOriginal<typeof KeysNS>()),
   portalKeys: {
     bootstrap: (id: string) => ["portal", "bootstrap", id],
     messages: (id: string) => ["portal", "messages", id],
@@ -167,12 +168,27 @@ vi.mock("$lib/query/keys.js", async (importOriginal) => ({
   },
 }));
 
-vi.mock("$lib/utils/announce.js", async (importOriginal) => ({
-  ...(await importOriginal<Record<string, unknown>>()),
-  announceToLiveRegion: vi.fn(),
-}));
+vi.mock("$lib/utils/announce.js", async (importOriginal) =>
+  (await import("$mocks/announce.js")).announceMock(
+    await importOriginal<typeof AnnounceNS>(),
+  ),
+);
 
 import PortalPage from "./+page.svelte";
+import type * as AnnounceNS from "$lib/utils/announce.js";
+import type * as WithTermsNS from "$lib/terminology/with-terms.js";
+import type * as KeysNS from "$lib/query/keys.js";
+import type * as SvelteQueryNS from "@tanstack/svelte-query";
+import type * as CreatePortalUpgradeNS from "$lib/composables/portal/create-portal-upgrade.svelte.js";
+import type * as CreatePortalSessionNS from "$lib/composables/portal/create-portal-session.svelte.js";
+import type * as CreatePortalFragmentNS from "$lib/composables/portal/create-portal-fragment.svelte.js";
+import type * as CryptoNS from "@care-y/crypto";
+import type * as TrpcNS from "$lib/trpc/index.js";
+import type * as ContextNS from "$lib/client-shell/context.js";
+import type * as MessagesNS from "$lib/paraglide/messages.js";
+import type * as StateNS from "$app/state";
+import type * as PathsNS from "$app/paths";
+import type * as NavigationNS from "$app/navigation";
 
 describe("portal upgrade navigation", () => {
   afterEach(() => {

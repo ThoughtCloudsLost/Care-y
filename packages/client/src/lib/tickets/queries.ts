@@ -30,6 +30,15 @@ type NoteTypesData = Awaited<
 >;
 type AllNoteTypesData = Awaited<ReturnType<NoteTypesRouter["list"]["query"]>>;
 
+/**
+ * Returns true when the ticketId is a non-empty string.
+ * Use as the `enabled` guard on per-ticket queries so
+ * the guard is consistent across all call sites.
+ */
+export function enabledTicketId(ticketId: string): boolean {
+  return typeof ticketId === "string" && ticketId !== "";
+}
+
 export function createVolunteersQuery(
   ticketRouter: TicketRouter,
 ): CreateQueryResult<VolunteersData> {

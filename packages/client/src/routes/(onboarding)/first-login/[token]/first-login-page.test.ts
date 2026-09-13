@@ -3,6 +3,18 @@ import { describe, it, expect, afterEach, vi, beforeEach } from "vitest";
 import { render, screen, cleanup } from "@testing-library/svelte";
 import * as m from "$lib/paraglide/messages.js";
 import type { WizardNavContainer } from "$lib/components/onboarding/wizard-nav-context.js";
+import type * as ToastNS from "$lib/stores/toast.svelte.js";
+import type * as HapticNS from "$lib/utils/haptic.js";
+import type * as AnnounceNS from "$lib/utils/announce.js";
+import type * as WizardNavContextNS from "$lib/components/onboarding/wizard-nav-context.js";
+import type * as TrpcNS from "$lib/trpc/index.js";
+import type * as SvelteQueryNS from "@tanstack/svelte-query";
+import type * as PathsNS from "$app/paths";
+import type * as NavigationNS from "$app/navigation";
+import type * as StateNS from "$app/state";
+import type * as OrgKeyReadyNS from "$lib/crypto/org-key-ready.svelte.js";
+import type * as AppEnvironmentNS from "$app/environment";
+import type * as SvelteNS from "svelte";
 
 // Mock query state: controls which branch the component renders.
 let inviteQueryState: {
@@ -12,30 +24,42 @@ let inviteQueryState: {
   data: { valid: boolean; expiresAt?: string } | undefined;
 } = { isLoading: true, isSuccess: false, isError: false, data: undefined };
 
-vi.mock("$app/state", () => ({
+vi.mock("$app/state", async (importOriginal) => ({
+  ...(await importOriginal<typeof StateNS>()),
   page: {
     params: { token: "test-invite-token-abc123" },
     url: new URL("http://localhost/first-login/test-invite-token-abc123"),
   },
 }));
 
-vi.mock("$app/environment", () => ({
-  browser: true,
-}));
+vi.mock(
+  "$app/environment",
+  () =>
+    ({
+      browser: true,
+      dev: false,
+      building: false,
+      version: "test",
+    }) satisfies typeof AppEnvironmentNS,
+);
 
-vi.mock("$app/navigation", () => ({
+vi.mock("$app/navigation", async (importOriginal) => ({
+  ...(await importOriginal<typeof NavigationNS>()),
   goto: vi.fn(),
 }));
 
-vi.mock("$app/paths", () => ({
+vi.mock("$app/paths", async (importOriginal) => ({
+  ...(await importOriginal<typeof PathsNS>()),
   resolve: (path: string) => path,
 }));
 
-vi.mock("@tanstack/svelte-query", () => ({
+vi.mock("@tanstack/svelte-query", async (importOriginal) => ({
+  ...(await importOriginal<typeof SvelteQueryNS>()),
   createQuery: () => inviteQueryState,
 }));
 
-vi.mock("$lib/trpc/index.js", () => ({
+vi.mock("$lib/trpc/index.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof TrpcNS>()),
   trpc: {
     onboarding: {
       validateInvite: { query: vi.fn() },
@@ -49,27 +73,38 @@ vi.mock("$lib/trpc/index.js", () => ({
   },
 }));
 
-vi.mock("$lib/crypto/org-key-ready.svelte.js", () => ({
-  isOrgKeyReady: vi.fn(() => true),
-}));
+vi.mock(
+  "$lib/crypto/org-key-ready.svelte.js",
+  () =>
+    ({
+      isOrgKeyReady: vi.fn(() => true),
+      setOrgKeyReady: vi.fn(),
+    }) satisfies typeof OrgKeyReadyNS,
+);
 
-vi.mock("$lib/utils/announce.js", () => ({
-  announceToLiveRegion: vi.fn(),
-}));
+vi.mock("$lib/utils/announce.js", async (importOriginal) =>
+  (await import("$mocks/announce.js")).announceMock(
+    await importOriginal<typeof AnnounceNS>(),
+  ),
+);
 
-vi.mock("$lib/utils/haptic.js", () => ({
-  haptic: vi.fn(),
-}));
+vi.mock("$lib/utils/haptic.js", async (importOriginal) =>
+  (await import("$mocks/haptic.js")).hapticMock(
+    await importOriginal<typeof HapticNS>(),
+  ),
+);
 
-vi.mock("$lib/stores/toast.svelte.js", () => ({
-  toastStore: { show: vi.fn() },
-}));
+vi.mock(
+  "$lib/stores/toast.svelte.js",
+  async () =>
+    (await import("$mocks/toast.js")).toastMock() satisfies typeof ToastNS,
+);
 
 const wizardNavContainer: WizardNavContainer = { current: undefined };
 const mockUpdateStep = vi.fn();
 
-vi.mock("svelte", async () => {
-  const actual = await vi.importActual("svelte");
+vi.mock("svelte", async (importOriginal) => {
+  const actual = await importOriginal<typeof SvelteNS>();
   return {
     ...actual,
     getContext: (key: string) => {
@@ -79,9 +114,13 @@ vi.mock("svelte", async () => {
   };
 });
 
-vi.mock("$lib/components/onboarding/wizard-nav-context.js", () => ({
-  getWizardNavCtx: () => wizardNavContainer,
-}));
+vi.mock(
+  "$lib/components/onboarding/wizard-nav-context.js",
+  async (importOriginal) => ({
+    ...(await importOriginal<typeof WizardNavContextNS>()),
+    getWizardNavCtx: () => wizardNavContainer,
+  }),
+);
 
 // Mock sessionStorage
 const storageMap = new Map<string, string>();

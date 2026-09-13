@@ -39,8 +39,6 @@ export interface EscalationRule {
 }
 
 export interface EscalationServiceDeps {
-  /** @deprecated Unused since outbox conversion. Retained for wiring compatibility. */
-  readonly notificationService?: unknown;
   readonly getManagerIds: (tDb: Kysely<TenantDatabase>) => Promise<UserId[]>;
   readonly getQueueWatcherIds: (
     tDb: Kysely<TenantDatabase>,
@@ -142,19 +140,11 @@ async function findInactiveCandidates(
 /**
  * Evaluate all active rules for one tenant and execute matching actions.
  *
- * orgId, orgSchema, and orgSlug are retained in the signature for
- * caller compatibility but are no longer read here. The outbox drainer
- * resolves org context at dispatch time.
+ * The outbox drainer resolves org context at dispatch time, so this
+ * function needs only the tenant DB handle.
  */
 export async function runEscalationCheck(
   tDb: Kysely<TenantDatabase>,
-  _orgId: unknown,
-  _orgSchema: unknown,
-  _orgSlug: unknown,
-  // Unused since dispatch moved to the outbox, kept so callers do not all
-  // have to change at once. The whole vestigial tail of this signature
-  // (_orgId, _orgSchema, _orgSlug, _deps) should go in one pass.
-  _deps: EscalationServiceDeps,
 ): Promise<EscalationCheckResult> {
   const rules = await tDb
     .selectFrom("escalation_rules")

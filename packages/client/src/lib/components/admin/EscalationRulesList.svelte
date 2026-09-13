@@ -21,6 +21,7 @@
   import { requireRouter } from "$lib/errors.js";
   import QueryError from "$lib/components/QueryError.svelte";
   import InlineSkeleton from "$lib/components/InlineSkeleton.svelte";
+  import SoftButton from "$lib/components/inputs/SoftButton.svelte";
 
   interface EscalationRulesListProps {
     readonly queueId: string;
@@ -327,14 +328,9 @@
 
 {#if !showAddForm && rulesQuery.isSuccess}
   <div class="add-rule-action">
-    <button
-      type="button"
-      class="add-rule-btn"
-      disabled={isPending}
-      onclick={() => (showAddForm = true)}
-    >
+    <SoftButton full disabled={isPending} onclick={() => (showAddForm = true)}>
       {m.escalation_add_rule()}
-    </button>
+    </SoftButton>
   </div>
 {/if}
 
@@ -370,7 +366,7 @@
   .delete-rule-btn {
     border: none;
     background: none;
-    color: var(--danger, var(--color-red-500));
+    color: var(--danger);
     font-size: var(--text-xs);
     font-weight: 600;
     cursor: pointer;
@@ -402,29 +398,5 @@
 
   .add-rule-action {
     padding: var(--space-sm) var(--k-block-padding-horizontal);
-  }
-
-  .add-rule-btn {
-    display: block;
-    width: 100%;
-    padding: 0.625rem;
-    border: none;
-    background: none;
-    color: var(--brand-text);
-    font-size: var(--text-sm);
-    font-weight: 600;
-    text-align: center;
-    cursor: pointer;
-  }
-
-  .add-rule-btn:disabled {
-    opacity: 0.4;
-    cursor: default;
-  }
-
-  .add-rule-btn:focus-visible {
-    outline: 2px solid var(--brand-text);
-    outline-offset: 2px;
-    border-radius: 4px;
   }
 </style>

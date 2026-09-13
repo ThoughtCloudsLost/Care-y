@@ -2,6 +2,9 @@
 import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
 import { render, cleanup, fireEvent } from "@testing-library/svelte";
 import TicketCard from "./TicketCard.svelte";
+import type * as ContextNS from "$lib/shell/context.js";
+import type * as SvelteQueryNS from "@tanstack/svelte-query";
+import type * as ContextNS2 from "$lib/crypto/context.js";
 
 // IntersectionObserver stub for DecryptPlaceholder
 vi.stubGlobal(
@@ -34,7 +37,8 @@ vi.stubGlobal(
 
 // --- Mocks ---
 
-vi.mock("$lib/crypto/context.js", () => ({
+vi.mock("$lib/crypto/context.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof ContextNS2>()),
   getPreviewLoader: () => ({
     observe: vi.fn(),
     eagerLoad: vi.fn(),
@@ -58,7 +62,8 @@ vi.mock("$lib/crypto/context.js", () => ({
   }),
 }));
 
-vi.mock("@tanstack/svelte-query", () => ({
+vi.mock("@tanstack/svelte-query", async (importOriginal) => ({
+  ...(await importOriginal<typeof SvelteQueryNS>()),
   useQueryClient: () => ({
     invalidateQueries: vi.fn(),
     getQueriesData: vi.fn().mockReturnValue([]),
@@ -74,13 +79,13 @@ vi.mock("@tanstack/svelte-query", () => ({
 }));
 
 // --- Mock shell context ---
-vi.mock("$lib/shell/context.js", () => ({
-  getSectionRailCtx: () => ({ current: undefined }),
-  getScrollContainer: () => () => undefined,
-  getTabbarOverrideCtx: () => ({ current: undefined }),
-  getTabbarHiddenCtx: () => ({ current: false }),
-  getNavbarOverrideCtx: () => ({ current: undefined }),
-}));
+vi.mock(
+  "$lib/shell/context.js",
+  async () =>
+    (
+      await import("$mocks/shell-context.js")
+    ).shellContextMock() satisfies typeof ContextNS,
+);
 
 afterEach(cleanup);
 

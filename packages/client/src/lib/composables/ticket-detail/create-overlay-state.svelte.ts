@@ -129,15 +129,21 @@ export function createNoteEdit(): NoteEditState {
   };
 }
 
-// ── Content edit sheet ──
+// ── Generic boolean sheet state ──
 
-export interface ContentEditState {
+/** Reactive open/dismiss toggle for a sheet overlay. */
+export interface SheetState {
   readonly sheetOpen: boolean;
   open(): void;
   dismiss(): void;
 }
 
-export function createContentEdit(): ContentEditState {
+/**
+ * One boolean sheet-state factory. Replaces the three verbatim copies
+ * (ContentEdit, NotificationSheet, ShareSheet) that differed only in
+ * type name.
+ */
+export function createSheetState(): SheetState {
   let sheetOpen = $state(false);
 
   return {
@@ -153,50 +159,12 @@ export function createContentEdit(): ContentEditState {
   };
 }
 
-// ── Notification channel sheet ──
+// ── Backwards-compatible aliases ──
 
-export interface NotificationSheetState {
-  readonly sheetOpen: boolean;
-  open(): void;
-  dismiss(): void;
-}
+export type ContentEditState = SheetState;
+export type NotificationSheetState = SheetState;
+export type ShareSheetState = SheetState;
 
-export function createNotificationSheet(): NotificationSheetState {
-  let sheetOpen = $state(false);
-
-  return {
-    get sheetOpen(): boolean {
-      return sheetOpen;
-    },
-    open(): void {
-      sheetOpen = true;
-    },
-    dismiss(): void {
-      sheetOpen = false;
-    },
-  };
-}
-
-// ── Share link sheet ──
-
-export interface ShareSheetState {
-  readonly sheetOpen: boolean;
-  open(): void;
-  dismiss(): void;
-}
-
-export function createShareSheet(): ShareSheetState {
-  let sheetOpen = $state(false);
-
-  return {
-    get sheetOpen(): boolean {
-      return sheetOpen;
-    },
-    open(): void {
-      sheetOpen = true;
-    },
-    dismiss(): void {
-      sheetOpen = false;
-    },
-  };
-}
+export const createContentEdit: () => SheetState = createSheetState;
+export const createNotificationSheet: () => SheetState = createSheetState;
+export const createShareSheet: () => SheetState = createSheetState;

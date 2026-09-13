@@ -636,7 +636,6 @@ export async function seedStructure(
     // phone_greetings.phone_number is the org's own inbound line (migration
     // 054), operational config rather than client PII, and plaintext by
     // design. The demo value is a fixture number.
-    // care-y-ignore-next-line no-plaintext-db-write -- org line number, not client PII
     await tenantDb
       // care-y-ignore-next-line no-plaintext-db-write -- org line number, not client PII
       .insertInto("phone_greetings")

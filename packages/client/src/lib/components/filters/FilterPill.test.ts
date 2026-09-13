@@ -15,8 +15,10 @@ import { describe, it, expect, vi, afterEach } from "vitest";
 import { render, cleanup, fireEvent } from "@testing-library/svelte";
 import { SvelteSet } from "svelte/reactivity";
 import FilterPill from "./FilterPill.svelte";
+import type * as MessagesNS from "$lib/paraglide/messages.js";
 
-vi.mock("$lib/paraglide/messages.js", () => ({
+vi.mock("$lib/paraglide/messages.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof MessagesNS>()),
   tickets_filter_all: () => "All",
 }));
 

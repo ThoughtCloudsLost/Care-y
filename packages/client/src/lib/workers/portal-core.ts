@@ -826,6 +826,8 @@ function handleAccountSessionStart(
     };
 
     progressEvent("argon2id-start");
+    // Zero any previous stretched buffer before overwriting (re-entry safety).
+    accountStretched = zeroAndClear(sodium, accountStretched);
     accountStretched = deriveAccountKey(passwordBytes, toSalt(saltBytes));
     progressEvent("argon2id-done");
 
@@ -845,6 +847,9 @@ function handleAccountSessionStart(
     };
     sink(msg);
   } catch (err: unknown) {
+    // Zero stretched key on failure so it does not persist past
+    // a failed OPRF blind or any other post-Argon2id step.
+    accountStretched = zeroAndClear(sodium, accountStretched);
     postError(
       sink,
       req.id,

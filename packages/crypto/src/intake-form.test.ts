@@ -514,7 +514,7 @@ describe("intake-form", () => {
   });
 
   describe("malformed visibleWhen in config blob", () => {
-    it("omits visibleWhen when it fails schema validation (does not crash)", () => {
+    it("throws DecryptionError when visibleWhen fails schema validation", () => {
       const pk = orgPubKey();
       // Hand-craft an encrypted config blob with a valid field config but
       // a malformed visibleWhen (missing required "rules" array).
@@ -542,16 +542,13 @@ describe("intake-form", () => {
           encryptedConfig: encode(configBlob),
         };
 
-        // Should not throw; the config is valid, only visibleWhen is bad
-        const decrypted = decryptFieldContent(enc, pk);
-        expect(decrypted.config.type).toBe("text");
-        expect(decrypted.visibleWhen).toBeUndefined();
+        expect(() => decryptFieldContent(enc, pk)).toThrow(DecryptionError);
       } finally {
         sodium.memzero(key);
       }
     });
 
-    it("omits visibleWhen when rules have an invalid operator", () => {
+    it("throws DecryptionError when rules have an invalid operator", () => {
       const pk = orgPubKey();
       const key = deriveClientBrandingKey(pk);
       const aad = new TextEncoder().encode("care-y-intake-form-aad-v1");
@@ -580,15 +577,13 @@ describe("intake-form", () => {
           encryptedConfig: encode(configBlob),
         };
 
-        const decrypted = decryptFieldContent(enc, pk);
-        expect(decrypted.config.type).toBe("checkbox");
-        expect(decrypted.visibleWhen).toBeUndefined();
+        expect(() => decryptFieldContent(enc, pk)).toThrow(DecryptionError);
       } finally {
         sodium.memzero(key);
       }
     });
 
-    it("omits visibleWhen when the value is not an object", () => {
+    it("throws DecryptionError when visibleWhen value is not an object", () => {
       const pk = orgPubKey();
       const key = deriveClientBrandingKey(pk);
       const aad = new TextEncoder().encode("care-y-intake-form-aad-v1");
@@ -614,9 +609,7 @@ describe("intake-form", () => {
           encryptedConfig: encode(configBlob),
         };
 
-        const decrypted = decryptFieldContent(enc, pk);
-        expect(decrypted.config.type).toBe("text");
-        expect(decrypted.visibleWhen).toBeUndefined();
+        expect(() => decryptFieldContent(enc, pk)).toThrow(DecryptionError);
       } finally {
         sodium.memzero(key);
       }

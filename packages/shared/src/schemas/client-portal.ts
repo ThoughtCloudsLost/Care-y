@@ -37,6 +37,7 @@ import {
   intakeFormFieldIdSchema,
   portalMessageIdSchema,
   userIdSchema,
+  channelSecretSchema,
 } from "../ids.js";
 
 /** crypto_box_seal(32-byte tk) = 32 + 48 = 80 bytes (variant-agnostic exact-byte check). */
@@ -52,6 +53,25 @@ export const eciesTripleSchema = z.object({
   ),
 });
 export type EciesTriple = z.infer<typeof eciesTripleSchema>;
+
+// ---------------------------------------------------------------------------
+// Encrypted Account primitives (hoisted above intake so the account branch
+// can reference accountRegistrationSchema.extend without forward reference)
+// ---------------------------------------------------------------------------
+
+/** Normalized client-side before hashing server-side; length limits on the RAW input. */
+export const accountUsernameSchema = z.string().min(3).max(64);
+
+/** Payload registering a new account (intake branch, in-portal upgrade, password change). */
+export const accountRegistrationSchema = z.object({
+  accountId: clientAccountIdSchema,
+  username: accountUsernameSchema,
+  salt: base64Bytes(16, "argon2Salt"),
+  publicKey: base64Bytes(32, "accountPublicKey"),
+  authHash: base64Bytes(32, "authHash"),
+  keyCheck: eciesTripleSchema,
+});
+export type AccountRegistration = z.infer<typeof accountRegistrationSchema>;
 
 /**
  * Intake form submission from the anonymous client browser.
@@ -95,24 +115,13 @@ export const intakeSubmissionInputSchema = z
     resolvedPriority: z.enum(["low", "normal", "high", "urgent"]).optional(),
     resolvedEscalationLevel: z.string().min(1).max(50).optional(),
     /** Optional account registration branch (client opts into Encrypted Account at intake). */
-    account: z
-      .object({
-        accountId: clientAccountIdSchema,
-        username: z.string().min(3).max(64),
-        salt: base64Bytes(16, "argon2Salt"),
-        publicKey: base64Bytes(32, "accountPublicKey"),
-        authHash: base64Bytes(32, "authHash"),
-        keyCheck: eciesTripleSchema,
-        selfCopy: eciesTripleSchema.optional(),
-      })
+    account: accountRegistrationSchema
+      .extend({ selfCopy: eciesTripleSchema.optional() })
       .optional(),
     /** Optional continuation link branch (client opts into a portal channel for resubmission). */
     continuation: z
       .object({
-        channelId: z
-          .string()
-          .regex(/^[0-9a-f]{48}$/)
-          .brand<"ChannelSecret">(),
+        channelId: channelSecretSchema,
         authHash: base64Bytes(32, "authHash"),
         clientPublic: base64Bytes(32, "clientPublic"),
         keyCheck: eciesTripleSchema,
@@ -217,15 +226,8 @@ export const PORTAL_SURFACE_KINDS: readonly Exclude<
   "account"
 >[] = portalChannelKindSchema.exclude(["account"]).options;
 
-/** 48 lowercase hex chars: hex(sha512(seed)[0:24]). */
-// The brand makes this the bearer secret rather than a row key. The codebase
-// already knew the difference and encoded it as this regex; branding moves that
-// knowledge somewhere the compiler can enforce it, so a `ChannelRowId` can no
-// longer be passed where the URL-visible secret belongs.
-export const portalChannelIdSchema = z
-  .string()
-  .regex(/^[0-9a-f]{48}$/)
-  .brand<"ChannelSecret">();
+/** 48 lowercase hex chars: hex(sha512(seed)[0:24]). Reuses channelSecretSchema from ids.ts. */
+export const portalChannelIdSchema = channelSecretSchema;
 
 /** 32-byte bearer auth token, base64-encoded. */
 export const portalAuthSchema = base64Bytes(32, "channelAuth");
@@ -406,20 +408,6 @@ export type ShareStatus = z.infer<typeof shareStatusSchema>;
 // ---------------------------------------------------------------------------
 // Encrypted Account schemas (8c)
 // ---------------------------------------------------------------------------
-
-/** Normalized client-side before hashing server-side; length limits on the RAW input. */
-export const accountUsernameSchema = z.string().min(3).max(64);
-
-/** Payload registering a new account (intake branch, in-portal upgrade, password change). */
-export const accountRegistrationSchema = z.object({
-  accountId: clientAccountIdSchema,
-  username: accountUsernameSchema,
-  salt: base64Bytes(16, "argon2Salt"),
-  publicKey: base64Bytes(32, "accountPublicKey"),
-  authHash: base64Bytes(32, "authHash"),
-  keyCheck: eciesTripleSchema,
-});
-export type AccountRegistration = z.infer<typeof accountRegistrationSchema>;
 
 export const getAccountSaltInputSchema = z.object({
   username: accountUsernameSchema,

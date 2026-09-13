@@ -6,9 +6,11 @@ import type {
   TimelineItem,
   ClusterRecord,
 } from "./follow-up-timeline-types.js";
+import type * as MessagesNS from "$lib/paraglide/messages.js";
 
 // Mock i18n (FollowUpTimeline uses several message functions).
-vi.mock("$lib/paraglide/messages.js", () => ({
+vi.mock("$lib/paraglide/messages.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof MessagesNS>()),
   ticket_zoom_summary: ({
     count,
     days,

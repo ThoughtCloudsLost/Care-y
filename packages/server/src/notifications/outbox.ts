@@ -37,6 +37,7 @@ import type {
   NotificationRecipientList,
 } from "../tickets/notification-recipients.js";
 import { buildRecipientList } from "../tickets/notification-recipients.js";
+import { resolveValidMentionIds as resolveMentions } from "../tickets/mentions.js";
 import type { TicketAccessChecker } from "../tickets/access.js";
 import type { WatchersService } from "../tickets/watchers.js";
 import type { NoteTypeService } from "../tickets/note-type-service.js";
@@ -111,39 +112,18 @@ export interface OutboxEnqueueInput {
 }
 
 /**
- * Insert a notification intent into the outbox inside the caller's
- * transaction. The row becomes visible to the drainer only when the
- * transaction commits, guaranteeing atomicity with the ticket mutation.
+ * Insert a notification intent into the outbox. Accepts both a
+ * Transaction (for atomic enqueue inside the caller's transaction)
+ * and a bare Kysely instance (for durable-but-not-atomic enqueue
+ * after the mutation has already committed).
+ *
+ * When called with a Transaction the row becomes visible to the
+ * drainer only when the transaction commits, guaranteeing atomicity
+ * with the ticket mutation. When called with a Kysely instance the
+ * row is written immediately.
  */
 export async function enqueueNotification(
-  trx: Transaction<TenantDatabase>,
-  input: OutboxEnqueueInput,
-): Promise<void> {
-  await trx
-    .insertInto("notification_outbox")
-    .values({
-      event_type: input.eventType,
-      ticket_id: input.ticketId,
-      queue_id: input.queueId,
-      form_id: input.formId,
-      actor_user_id: input.actorUserId,
-      note_type_id: input.noteTypeId ?? null,
-      encrypted_mentioned_pseudonyms:
-        input.encryptedMentionedPseudonyms ?? null,
-      escalation_rule_id: input.escalationRuleId ?? null,
-      max_attempts: DEFAULT_MAX_ATTEMPTS,
-    })
-    .execute();
-}
-
-/**
- * Durable (non-atomic) enqueue for call sites where no transaction is
- * available. The row is written immediately after the mutation commits
- * on the same request path. This is retried on failure but there is a
- * residual window where the mutation commits and the enqueue does not.
- */
-export async function enqueueNotificationDurable(
-  db: Kysely<TenantDatabase>,
+  db: Kysely<TenantDatabase> | Transaction<TenantDatabase>,
   input: OutboxEnqueueInput,
 ): Promise<void> {
   await db
@@ -162,6 +142,15 @@ export async function enqueueNotificationDurable(
     })
     .execute();
 }
+
+/**
+ * Durable (non-atomic) enqueue alias. Kept for call-site readability
+ * at sites where the intent is explicitly non-transactional.
+ */
+export const enqueueNotificationDurable: (
+  db: Kysely<TenantDatabase>,
+  input: OutboxEnqueueInput,
+) => Promise<void> = enqueueNotification;
 
 /**
  * Encrypt an array of mentioned pseudonyms (user IDs) using the
@@ -249,28 +238,27 @@ export async function drainOutbox(
   db: Kysely<TenantDatabase>,
   deps: OutboxDrainDeps,
 ): Promise<number> {
-  // Claim pending rows whose next_attempt has passed
+  // One statement = one transaction: locks hold through the status flip.
   const rows = await db
-    .selectFrom("notification_outbox")
-    .selectAll()
-    .where("status", "=", "pending")
-    .where("next_attempt_at", "<=", new Date())
-    .orderBy("next_attempt_at", "asc")
-    .limit(DRAIN_BATCH_SIZE)
-    .forUpdate()
-    .skipLocked()
+    .updateTable("notification_outbox")
+    .set({ status: "active" })
+    .where("id", "in", (eb) =>
+      eb
+        .selectFrom("notification_outbox")
+        .select("id")
+        .where("status", "=", "pending")
+        .where("next_attempt_at", "<=", new Date())
+        .orderBy("next_attempt_at", "asc")
+        .limit(DRAIN_BATCH_SIZE)
+        .forUpdate()
+        .skipLocked(),
+    )
+    .returningAll()
     .execute();
 
   let processed = 0;
 
   for (const row of rows) {
-    // Mark active
-    await db
-      .updateTable("notification_outbox")
-      .set({ status: "active" })
-      .where("id", "=", row.id)
-      .execute();
-
     try {
       // Parsed rather than asserted: the column is text, and a row written
       // by an older or newer deploy could carry a value outside the union.
@@ -302,9 +290,7 @@ export async function drainOutbox(
         .execute();
     } catch (err: unknown) {
       const nextAttempt = row.attempt_count + 1;
-      const errorMsg = truncateError(
-        err instanceof Error ? err.message : String(err),
-      );
+      const errorMsg = classifyOutboxError(err);
 
       if (nextAttempt >= row.max_attempts) {
         // Exhausted retries, mark dead
@@ -485,7 +471,8 @@ async function resolveLifecycleRecipients(
       getTicketWatchers: async (ticketId) =>
         watchers.getTicketWatchers(ticketId),
       getQueueWatchers: async (queueId) => watchers.getQueueWatchers(queueId),
-      resolveValidMentions: async (ids) => resolveValidMentionIds(db, ids),
+      resolveValidMentions: async (ids) =>
+        resolveAndValidateMentionIds(db, ids),
     },
     {
       assignedTo: ticket.assigned_to,
@@ -498,29 +485,22 @@ async function resolveLifecycleRecipients(
   );
 }
 
-/**
- * Validate mentioned user IDs against the users table.
- * Same logic as the MentionsService but standalone for the drain path.
- */
-async function resolveValidMentionIds(
+// Mention validation delegates to the shared resolveValidMentionIds from
+// tickets/mentions.ts. The outbox drain path parses the raw string IDs
+// through recipientIdsSchema first (the shared function takes UserId[]).
+async function resolveAndValidateMentionIds(
   db: Kysely<TenantDatabase>,
   userIds: string[],
 ): Promise<UserId[]> {
   if (userIds.length === 0) return [];
-  // Two checks, both required: the id schema rejects anything malformed,
-  // then the users table confirms the id actually exists in this org.
   const parsed = recipientIdsSchema.parse(userIds);
-  const rows = await db
-    .selectFrom("users")
-    .select("id")
-    .where("id", "in", parsed)
-    .execute();
-  return rows.map((r) => r.id);
+  return resolveMentions(db, parsed);
 }
 
 /**
- * Resolve note-type escalation targets at drain time.
- * Mirrors the resolveNoteTypeEscalation helper in tickets.ts.
+ * Resolve note-type escalation targets at drain time. This is the only
+ * resolution site; the router enqueues the outbox row and never
+ * resolves targets itself.
  */
 async function resolveNoteTypeEscalationForDrain(
   db: Kysely<TenantDatabase>,
@@ -687,8 +667,16 @@ async function resolveIntakeEscalationRecipients(
 // Helpers
 // ---------------------------------------------------------------------------
 
-/** Truncate error message to avoid storing long stack traces or PII. */
-function truncateError(msg: string): string {
-  if (msg.length <= MAX_ERROR_LENGTH) return msg;
-  return msg.slice(0, MAX_ERROR_LENGTH);
+/**
+ * Build a content-free classification for the last_error column. Raw
+ * messages never persist because driver and provider errors can echo
+ * column values or phone numbers; the error name plus the Postgres
+ * error code keeps the retry diagnostics without carrying content.
+ */
+function classifyOutboxError(err: unknown): string {
+  if (!(err instanceof Error)) return "unknown";
+  const maybeCode: unknown = "code" in err ? err.code : undefined;
+  const classified =
+    typeof maybeCode === "string" ? `${err.name}:${maybeCode}` : err.name;
+  return classified.slice(0, MAX_ERROR_LENGTH);
 }

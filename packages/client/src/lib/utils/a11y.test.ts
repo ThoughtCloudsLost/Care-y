@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, afterEach } from "vitest";
-import { onKeyActivate } from "./a11y.js";
+import { onKeyActivate, labelToggleInput } from "./a11y.js";
 
 describe("onKeyActivate", () => {
   afterEach(() => {
@@ -67,5 +67,28 @@ describe("onKeyActivate", () => {
     keyHandler(event);
 
     expect(preventSpy).not.toHaveBeenCalled();
+  });
+});
+
+describe("labelToggleInput", () => {
+  it("sets aria-label on a nested checkbox input", () => {
+    const wrapper = document.createElement("span");
+    const input = document.createElement("input");
+    input.type = "checkbox";
+    wrapper.appendChild(input);
+
+    labelToggleInput(wrapper, "Enable notifications");
+
+    expect(input.getAttribute("aria-label")).toBe("Enable notifications");
+  });
+
+  it("does nothing when no checkbox input exists inside the node", () => {
+    const wrapper = document.createElement("span");
+    const span = document.createElement("span");
+    wrapper.appendChild(span);
+
+    // Should not throw
+    labelToggleInput(wrapper, "Some label");
+    expect(span.hasAttribute("aria-label")).toBe(false);
   });
 });

@@ -30,7 +30,16 @@
        glyph). Themed via --call-active; the fallback keeps the current
        hue on themes that do not define it. */
     color: var(--call-active);
-    animation: pulse-call 1.5s ease-in-out infinite;
+  }
+
+  /* The indicator still reads as active without the pulse: the glyph only
+     renders while a call is live, and it keeps its signal hue either way.
+     An indefinite pulse is the motion a reduced-motion preference exists
+     to stop, so it is opt-in rather than opt-out. */
+  @media (prefers-reduced-motion: no-preference) {
+    :global(.call-pulse) {
+      animation: pulse-call 1.5s ease-in-out infinite;
+    }
   }
 
   @keyframes pulse-call {

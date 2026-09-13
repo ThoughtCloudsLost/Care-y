@@ -39,6 +39,8 @@ import type {
   PortalWorkerResponse,
   PortalWorkerEvent,
 } from "$lib/workers/portal-protocol.js";
+import type * as ContextNS from "$lib/client-shell/context.js";
+import type * as CryptoNS from "@care-y/crypto";
 
 // -- Mock Worker (same pattern as portal-bridge.test.ts) ----------------------
 
@@ -215,7 +217,7 @@ let messagesEnabled = false;
 // -- Mocks --------------------------------------------------------------------
 
 vi.mock("@care-y/crypto", async (importOriginal) => ({
-  ...(await importOriginal()),
+  ...(await importOriginal<typeof CryptoNS>()),
   encode: (buf: Uint8Array): string => Buffer.from(buf).toString("base64url"),
   decode: (s: string): Uint8Array =>
     new Uint8Array(Buffer.from(s, "base64url")),
@@ -238,7 +240,7 @@ vi.mock("$lib/portal/context.js", () => {
 });
 
 vi.mock("$lib/client-shell/context.js", async (importOriginal) => ({
-  ...(await importOriginal<Record<string, unknown>>()),
+  ...(await importOriginal<typeof ContextNS>()),
   getClientShellCtx: () => ({
     get current(): unknown {
       return undefined;
@@ -254,7 +256,7 @@ vi.mock("$lib/client-shell/context.js", async (importOriginal) => ({
 // does not exist in jsdom. We return controlled state objects instead.
 vi.mock("@tanstack/svelte-query", async (importOriginal) => {
   return {
-    ...(await importOriginal<Record<string, unknown>>()),
+    ...(await importOriginal<typeof TanstackQuery>()),
     useQueryClient: (() => ({
       getQueryData: vi.fn(),
       setQueryData: vi.fn(),

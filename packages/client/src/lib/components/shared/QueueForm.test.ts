@@ -1,11 +1,17 @@
 // @vitest-environment jsdom
 import { describe, it, expect, afterEach, vi, beforeEach } from "vitest";
 import { render, screen, cleanup, fireEvent } from "@testing-library/svelte";
+import type * as WithTermsNS from "$lib/terminology/with-terms.js";
+import type * as SharedNS from "@care-y/shared";
+import type * as ContextNS from "$lib/crypto/context.js";
+import type * as MessagesNS from "$lib/paraglide/messages.js";
+import type * as OrgKeyReadyNS from "$lib/crypto/org-key-ready.svelte.js";
 
 const mockEncryptText = vi.fn().mockResolvedValue("encrypted-text");
 let mockOrgKeyReady = true;
 
-vi.mock("$lib/paraglide/messages.js", () => ({
+vi.mock("$lib/paraglide/messages.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof MessagesNS>()),
   register_note: () => "Note",
   register_careful: () => "Careful",
   register_warning: () => "Warning",
@@ -26,22 +32,31 @@ vi.mock("$lib/paraglide/messages.js", () => ({
   error_generic: () => "Something went wrong",
 }));
 
-vi.mock("$lib/terminology/with-terms.js", () => ({
-  withTerms: () => ({}),
-}));
+vi.mock("$lib/terminology/with-terms.js", async (importOriginal) =>
+  (await import("$mocks/with-terms.js")).withTermsMock(
+    await importOriginal<typeof WithTermsNS>(),
+  ),
+);
 
-vi.mock("$lib/crypto/context.js", () => ({
+vi.mock("$lib/crypto/context.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof ContextNS>()),
   getOrgKeyManager: () => ({
     encryptText: mockEncryptText,
     isLoaded: true,
   }),
 }));
 
-vi.mock("$lib/crypto/org-key-ready.svelte.js", () => ({
-  isOrgKeyReady: () => mockOrgKeyReady,
-}));
+vi.mock(
+  "$lib/crypto/org-key-ready.svelte.js",
+  () =>
+    ({
+      isOrgKeyReady: () => mockOrgKeyReady,
+      setOrgKeyReady: vi.fn(),
+    }) satisfies typeof OrgKeyReadyNS,
+);
 
-vi.mock("@care-y/shared", () => ({
+vi.mock("@care-y/shared", async (importOriginal) => ({
+  ...(await importOriginal<typeof SharedNS>()),
   MAX_ESCALATION_DAYS: 365,
 }));
 

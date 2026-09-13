@@ -1,8 +1,10 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import type * as NavigationNS from "$app/navigation";
 
 const mockPushState = vi.fn();
 
-vi.mock("$app/navigation", () => ({
+vi.mock("$app/navigation", async (importOriginal) => ({
+  ...(await importOriginal<typeof NavigationNS>()),
   pushState: mockPushState,
 }));
 

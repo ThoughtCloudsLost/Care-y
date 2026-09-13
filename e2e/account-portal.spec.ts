@@ -8,6 +8,7 @@ import type { Page, Request } from "@playwright/test";
 import {
   auditA11y,
   clickComposeAction,
+  createSecureLink,
   CRYPTO_TIMEOUT,
   login,
   openComposeActions,
@@ -15,7 +16,12 @@ import {
   reopenTicketByTitle,
   openTicketInfoPanel,
 } from "./helpers";
-import { countRows, queryDb, resetCommunicationTiers } from "./db-probe";
+import {
+  countRows,
+  markVolunteerMessagesEdited,
+  queryDb,
+  resetCommunicationTiers,
+} from "./db-probe";
 
 /**
  * Encrypted Account portal E2E roundtrip.
@@ -334,16 +340,7 @@ test.describe.serial("Encrypted Account Portal", () => {
     // Mark the volunteer message edited via the server-visible effect the
     // edit flow produces (edited_at on both rows); the interactive sheet
     // is covered by component tests.
-    queryDb(
-      `UPDATE followups SET edited_at = now()
-       WHERE source = 'volunteer' AND type = 'message'
-         AND id IN (SELECT followup_id FROM portal_messages
-                    WHERE direction = 'to_client');`,
-    );
-    queryDb(
-      `UPDATE portal_messages SET edited_at = now()
-       WHERE direction = 'to_client';`,
-    );
+    markVolunteerMessagesEdited();
 
     await accountPage.reload();
     await accountPage.getByPlaceholder(/username/i).fill(USERNAME);
@@ -371,24 +368,8 @@ test.describe.serial("Encrypted Account Portal", () => {
     // at every width (portal.spec.ts precedent), not just on mobile.
     await openTicketInfoPanel(volunteerPage, "Communication");
 
-    const setupBtn = volunteerPage
-      .getByRole("button", { name: /set up secure link/i })
-      .first();
-    await expect(setupBtn).toBeVisible({ timeout: CRYPTO_TIMEOUT });
-    await setupBtn.dispatchEvent("click");
-
-    const sheet = volunteerPage.getByRole("dialog").last();
-    await expect(sheet).toBeVisible({ timeout: 5_000 });
-    const generateBtn = sheet.getByRole("button", {
-      name: /set up secure link/i,
-    });
-    await generateBtn.dispatchEvent("click");
-
-    const linkEl = sheet.locator("code.link-block");
-    await expect(linkEl).toBeVisible({ timeout: CRYPTO_TIMEOUT });
-    upgradeLink = ((await linkEl.textContent()) ?? "").trim();
-    expect(upgradeLink).toMatch(/\/portal\/[0-9a-f]{48}#[A-Za-z0-9_-]{32}/);
-    await sheet.getByRole("button", { name: /done/i }).dispatchEvent("click");
+    const linkResult = await createSecureLink(volunteerPage);
+    upgradeLink = linkResult.link;
 
     // Send a message so the upgrade has history to carry over. Navigate
     // away and back in-app: a reload drops the in-memory keys. The detail

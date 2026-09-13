@@ -186,37 +186,41 @@ vi.stubGlobal(
 // vi.mock required: createContext from Svelte 5 throws "missing_context"
 // outside a live component tree. Crypto contexts are set by CryptoProvider
 // in the (app) layout, but component tests don't mount the full layout.
-// care-y-ignore-next-line mock-factory-unguarded -- importOriginal triggers createContext() outside component tree; return type `: typeof CryptoContext` guards against drift
-vi.mock("$lib/crypto/context.js", (): typeof CryptoContext => ({
-  getOrgDecryptCache: () =>
+vi.mock(
+  "$lib/crypto/context.js",
+  async (importOriginal) =>
     ({
-      decrypt: (_id: string, encrypted: unknown) =>
-        encrypted instanceof Uint8Array ? "+15551234567" : null,
-      get: vi.fn().mockReturnValue(undefined),
-      has: vi.fn().mockReturnValue(false),
-    }) as never,
-  getOrgKeyManager: () =>
-    ({
-      decrypt: mockOrgDecrypt,
-      isLoaded: true,
-    }) as never,
-  getCryptoBridge: () => ({ encrypt: vi.fn(), decrypt: vi.fn() }) as never,
-  getTicketDecryptCache: () => ({ decrypt: vi.fn() }) as never,
-  getCurrentUserId: () => () => undefined,
-  getCurrentUserRoleId: () => () => undefined,
-  getCurrentPermissions: () => () => new Set(),
-  getFollowUpDecryptCache: () => ({ decryptContent: vi.fn() }) as never,
-  getPreviewLoader: () => ({ load: vi.fn() }) as never,
-  setCryptoBridge: (v) => v,
-  setOrgKeyManager: (v) => v,
-  setOrgDecryptCache: (v) => v,
-  setTicketDecryptCache: (v) => v,
-  setCurrentUserId: (v) => v,
-  setCurrentUserRoleId: (v) => v,
-  setCurrentPermissions: (v) => v,
-  setFollowUpDecryptCache: (v) => v,
-  setPreviewLoader: (v) => v,
-}));
+      ...(await importOriginal<typeof CryptoContext>()),
+      getOrgDecryptCache: () =>
+        ({
+          decrypt: (_id: string, encrypted: unknown) =>
+            encrypted instanceof Uint8Array ? "+15551234567" : null,
+          get: vi.fn().mockReturnValue(undefined),
+          has: vi.fn().mockReturnValue(false),
+        }) as never,
+      getOrgKeyManager: () =>
+        ({
+          decrypt: mockOrgDecrypt,
+          isLoaded: true,
+        }) as never,
+      getCryptoBridge: () => ({ encrypt: vi.fn(), decrypt: vi.fn() }) as never,
+      getTicketDecryptCache: () => ({ decrypt: vi.fn() }) as never,
+      getCurrentUserId: () => () => undefined,
+      getCurrentUserRoleId: () => () => undefined,
+      getCurrentPermissions: () => () => new Set(),
+      getFollowUpDecryptCache: () => ({ decryptContent: vi.fn() }) as never,
+      getPreviewLoader: () => ({ load: vi.fn() }) as never,
+      setCryptoBridge: (v) => v,
+      setOrgKeyManager: (v) => v,
+      setOrgDecryptCache: (v) => v,
+      setTicketDecryptCache: (v) => v,
+      setCurrentUserId: (v) => v,
+      setCurrentUserRoleId: (v) => v,
+      setCurrentPermissions: (v) => v,
+      setFollowUpDecryptCache: (v) => v,
+      setPreviewLoader: (v) => v,
+    }) satisfies typeof CryptoContext,
+);
 
 vi.mock("$lib/crypto/async-decrypt-cache.js", async (importOriginal) => ({
   ...(await importOriginal<typeof AsyncDecryptCache>()),
@@ -244,24 +248,34 @@ vi.mock("$lib/utils/buffer-encoding.js", async (importOriginal) => ({
 // vi.mock required: QuarantinePlayer and QuarantineRouteSheet import
 // browser-only APIs (AudioContext, fetch) and Konsta/Bits UI components
 // that cannot render in jsdom without the full Konsta/Bits setup.
-// care-y-ignore-next-line mock-factory-unguarded -- component stub: single default export, passthrough cannot satisfy the component prop types
-vi.mock("./QuarantinePlayer.svelte", async () => ({
-  default: (
-    await import("$lib/components/tickets/test-helpers/PassthroughShell.svelte")
-  ).default,
-}));
+vi.mock(
+  "./QuarantinePlayer.svelte",
+  async () =>
+    ({
+      default: (
+        await import("$lib/components/tickets/test-helpers/PassthroughShell.svelte")
+      ).default as unknown as (typeof QuarantinePlayerNS)["default"],
+    }) satisfies typeof QuarantinePlayerNS,
+);
 
-// care-y-ignore-next-line mock-factory-unguarded -- component stub: single default export, passthrough cannot satisfy the component prop types
-vi.mock("./QuarantineRouteSheet.svelte", async () => ({
-  default: (
-    await import("$lib/components/tickets/test-helpers/PassthroughShell.svelte")
-  ).default,
-}));
+vi.mock(
+  "./QuarantineRouteSheet.svelte",
+  async () =>
+    ({
+      default: (
+        await import("$lib/components/tickets/test-helpers/PassthroughShell.svelte")
+      ).default as unknown as (typeof QuarantineRouteSheetNS)["default"],
+    }) satisfies typeof QuarantineRouteSheetNS,
+);
 
-// care-y-ignore-next-line mock-factory-unguarded -- component stub: single default export, dialog stub cannot satisfy the component prop types
-vi.mock("$lib/shell/ShellDialog.svelte", async () => ({
-  default: (await import("./test-helpers/StubShellDialog.svelte")).default,
-}));
+vi.mock(
+  "$lib/shell/ShellDialog.svelte",
+  async () =>
+    ({
+      default: (await import("./test-helpers/StubShellDialog.svelte"))
+        .default as unknown as (typeof ShellDialogNS)["default"],
+    }) satisfies typeof ShellDialogNS,
+);
 
 // jsdom lacks Web Animations API (used by Konsta transitions).
 if (typeof Element.prototype.animate !== "function") {
@@ -273,6 +287,9 @@ if (typeof Element.prototype.animate !== "function") {
 }
 
 import QuarantineSection from "./QuarantineSection.svelte";
+import type * as ShellDialogNS from "$lib/shell/ShellDialog.svelte";
+import type * as QuarantineRouteSheetNS from "./QuarantineRouteSheet.svelte";
+import type * as QuarantinePlayerNS from "./QuarantinePlayer.svelte";
 
 function makeEntry(overrides: Partial<QuarantineEntry> = {}): QuarantineEntry {
   return {

@@ -20,6 +20,7 @@ import { hashChannelAuth } from "@care-y/crypto";
 import { normalizeUsername } from "@care-y/shared";
 import { computeFakeSalt, computeFakeUuid } from "../auth/salt-defense.js";
 import { UsernameTakenError, StaleThreadError } from "./portal-errors.js";
+import { ValidationError } from "../errors.js";
 import { hasExactMessageCoverage } from "./message-coverage.js";
 import type {
   ClientId,
@@ -111,6 +112,11 @@ function isUsernameUniqueViolation(err: unknown): boolean {
  */
 function toHash32(value: Buffer | Uint8Array): Buffer {
   const buf = Buffer.isBuffer(value) ? value : Buffer.from(value);
+  if (buf.length !== 32) {
+    throw new ValidationError(
+      `Expected 32-byte hash, got ${String(buf.length)} bytes`,
+    );
+  }
   return buf;
 }
 
@@ -358,11 +364,7 @@ export async function login(
   const presentedHash = toHash32(Buffer.from(hashChannelAuth(authToken)));
   const storedHash = account ? toHash32(account.auth_hash) : TIMING_PAD_HASH;
 
-  // Constant-time comparison. Both are exactly 32 bytes.
-  if (presentedHash.length !== 32 || storedHash.length !== 32) {
-    return null;
-  }
-
+  // Constant-time comparison. Both are exactly 32 bytes (validated by toHash32).
   if (!timingSafeEqual(presentedHash, storedHash)) {
     return null;
   }
@@ -502,10 +504,7 @@ export async function changePassword(
   const storedHash = toHash32(account.auth_hash);
   const presentedHash = toHash32(currentAuthTokenHash);
 
-  if (presentedHash.length !== 32 || storedHash.length !== 32) {
-    return false;
-  }
-
+  // Both are exactly 32 bytes (validated by toHash32).
   if (!timingSafeEqual(presentedHash, storedHash)) {
     return false;
   }

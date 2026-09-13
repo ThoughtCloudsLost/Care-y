@@ -17,7 +17,9 @@ import {
   getEffectivePermissions,
   hasPermissionForOrg,
   invalidateRolePermissionCache,
+  assertSingleInstancePermissionCache,
 } from "./roles.js";
+import { ConfigError } from "../errors.js";
 
 /** Shorthand cast for test org schema names. */
 const schema = (s: string): OrgSchema => s as OrgSchema;
@@ -500,5 +502,19 @@ describe("hasPermissionForOrg", () => {
       Permission.MANAGE_KEYS,
     );
     expect(result).toBe(true);
+  });
+});
+
+describe("assertSingleInstancePermissionCache", () => {
+  it("allows boot for a single-instance deployment", () => {
+    expect(() => {
+      assertSingleInstancePermissionCache(false);
+    }).not.toThrow();
+  });
+
+  it("refuses boot when a multi-instance deployment is declared", () => {
+    expect(() => {
+      assertSingleInstancePermissionCache(true);
+    }).toThrow(ConfigError);
   });
 });

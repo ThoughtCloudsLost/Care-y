@@ -15,7 +15,7 @@ import { SvelteSet } from "svelte/reactivity";
 // that may not resolve correctly in the vitest Vite alias chain. Spread
 // importOriginal so unstubbed message functions track the real module surface.
 vi.mock("$lib/paraglide/messages.js", async (importOriginal) => ({
-  ...(await importOriginal<Record<string, unknown>>()),
+  ...(await importOriginal<typeof MessagesNS>()),
   tickets_filter: () => "Filter",
   tickets_filter_all: () => "All",
   tickets_clear_filters: () => "Clear all",
@@ -27,6 +27,7 @@ vi.mock("$lib/paraglide/messages.js", async (importOriginal) => ({
 
 import FilterPillBar from "./FilterPillBar.svelte";
 import type { PillDefinition } from "./filter-types.js";
+import type * as MessagesNS from "$lib/paraglide/messages.js";
 
 afterEach(cleanup);
 

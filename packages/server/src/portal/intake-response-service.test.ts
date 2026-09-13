@@ -6,7 +6,7 @@
  */
 
 import crypto from "node:crypto";
-import { describe, it, expect, beforeAll, afterAll } from "vitest";
+import { describe, it, expect, beforeAll, afterAll, vi } from "vitest";
 import type { TestDb } from "../test-utils.js";
 import {
   createTestDb,
@@ -16,6 +16,7 @@ import {
 } from "../test-utils.js";
 import { createIntakeResponseService } from "./intake-response-service.js";
 import { ForbiddenError, NotFoundError } from "../errors.js";
+import * as rolesModule from "../auth/roles.js";
 import { RoleId, newTicketId, newKeyGeneration } from "@care-y/shared";
 import type {
   QueueId,
@@ -365,6 +366,34 @@ describe.skipIf(!process.env.DATABASE_URL)(
         );
         expect(volunteerMissing).toBeDefined();
         expect(typeof volunteerMissing!.volPublic).toBe("string");
+      });
+
+      it("resolves permission holders once per request, not per row", async () => {
+        // Seed a dedicated form with multiple responses that all have wraps
+        // so computeMissingPrincipals runs for each row.
+        const batchForm = await seedForm(testDb.db);
+        for (let i = 0; i < 3; i++) {
+          const { ticketId, keyGeneration } = await seedTicketWithResponse(
+            testDb.db,
+            queueId,
+            clientId,
+            batchForm,
+          );
+          await seedKeyWrap(testDb.db, ticketId, adminUser.id, keyGeneration);
+        }
+
+        const spy = vi.spyOn(rolesModule, "getUsersWithPermission");
+
+        await svc.listResponses(testDb.db, orgSchema, adminUser.id, batchForm, {
+          cursor: null,
+          pageSize: 25,
+        });
+
+        // The permission-holder set is request-scoped. Before the
+        // optimization it was called once per row (3+ times). Now it
+        // must be called exactly once regardless of row count.
+        expect(spy).toHaveBeenCalledTimes(1);
+        spy.mockRestore();
       });
     });
 

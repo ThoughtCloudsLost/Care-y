@@ -115,6 +115,7 @@ export {
 
 // --- Intake Form ---
 export {
+  INTAKE_RESPONSE_SLOT,
   encryptFieldContent,
   decryptFieldContent,
   encryptFormMeta,

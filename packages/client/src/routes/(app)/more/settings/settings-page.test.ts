@@ -97,14 +97,15 @@ vi.mock("$lib/shell/navigation.js", async (importOriginal) => ({
   shellBack: vi.fn(),
 }));
 
-// care-y-ignore-next-line mock-factory-unguarded -- component stub: single default export, passthrough cannot satisfy the component prop types
 vi.mock(
   "$lib/components/settings/NotificationPreferencesSection.svelte",
-  async () => ({
-    default: (
-      await import("./test-helpers/StubNotificationPreferencesSection.svelte")
-    ).default,
-  }),
+  async () =>
+    ({
+      default: (
+        await import("./test-helpers/StubNotificationPreferencesSection.svelte")
+      )
+        .default as unknown as (typeof NotificationPreferencesSectionNS)["default"],
+    }) satisfies typeof NotificationPreferencesSectionNS,
 );
 
 // vi.mock required: $state rune module needs Svelte compiler pipeline
@@ -255,40 +256,55 @@ vi.mock("$lib/paraglide/messages.js", async (importOriginal) => ({
 }));
 
 // vi.mock required: prevent deep rendering of child component trees
-// care-y-ignore-next-line mock-factory-unguarded -- component stub: single default export, passthrough cannot satisfy the component prop types
-vi.mock("$lib/components/settings/DisplayNameSheet.svelte", async () => ({
-  default: (
-    await import("$lib/components/tickets/test-helpers/PassthroughShell.svelte")
-  ).default,
-}));
+vi.mock(
+  "$lib/components/settings/DisplayNameSheet.svelte",
+  async () =>
+    ({
+      default: (
+        await import("$lib/components/tickets/test-helpers/PassthroughShell.svelte")
+      ).default as unknown as (typeof DisplayNameSheetNS)["default"],
+    }) satisfies typeof DisplayNameSheetNS,
+);
 
-// care-y-ignore-next-line mock-factory-unguarded -- component stub: single default export, passthrough cannot satisfy the component prop types
-vi.mock("$lib/components/settings/UsernameSheet.svelte", async () => ({
-  default: (
-    await import("$lib/components/tickets/test-helpers/PassthroughShell.svelte")
-  ).default,
-}));
+vi.mock(
+  "$lib/components/settings/UsernameSheet.svelte",
+  async () =>
+    ({
+      default: (
+        await import("$lib/components/tickets/test-helpers/PassthroughShell.svelte")
+      ).default as unknown as (typeof UsernameSheetNS)["default"],
+    }) satisfies typeof UsernameSheetNS,
+);
 
-// care-y-ignore-next-line mock-factory-unguarded -- component stub: single default export, passthrough cannot satisfy the component prop types
-vi.mock("$lib/components/settings/PasswordSheet.svelte", async () => ({
-  default: (
-    await import("$lib/components/tickets/test-helpers/PassthroughShell.svelte")
-  ).default,
-}));
+vi.mock(
+  "$lib/components/settings/PasswordSheet.svelte",
+  async () =>
+    ({
+      default: (
+        await import("$lib/components/tickets/test-helpers/PassthroughShell.svelte")
+      ).default as unknown as (typeof PasswordSheetNS)["default"],
+    }) satisfies typeof PasswordSheetNS,
+);
 
-// care-y-ignore-next-line mock-factory-unguarded -- component stub: single default export, passthrough cannot satisfy the component prop types
-vi.mock("$lib/components/settings/TwoFactorSheet.svelte", async () => ({
-  default: (
-    await import("$lib/components/tickets/test-helpers/PassthroughShell.svelte")
-  ).default,
-}));
+vi.mock(
+  "$lib/components/settings/TwoFactorSheet.svelte",
+  async () =>
+    ({
+      default: (
+        await import("$lib/components/tickets/test-helpers/PassthroughShell.svelte")
+      ).default as unknown as (typeof TwoFactorSheetNS)["default"],
+    }) satisfies typeof TwoFactorSheetNS,
+);
 
-// care-y-ignore-next-line mock-factory-unguarded -- component stub: single default export, passthrough cannot satisfy the component prop types
-vi.mock("$lib/components/settings/SecurityBriefingPopup.svelte", async () => ({
-  default: (
-    await import("$lib/components/tickets/test-helpers/PassthroughShell.svelte")
-  ).default,
-}));
+vi.mock(
+  "$lib/components/settings/SecurityBriefingPopup.svelte",
+  async () =>
+    ({
+      default: (
+        await import("$lib/components/tickets/test-helpers/PassthroughShell.svelte")
+      ).default as unknown as (typeof SecurityBriefingPopupNS)["default"],
+    }) satisfies typeof SecurityBriefingPopupNS,
+);
 
 vi.mock("$lib/utils/haptic.js", async (importOriginal) => ({
   ...(await importOriginal<typeof HapticMod>()),
@@ -298,6 +314,12 @@ vi.mock("$lib/utils/haptic.js", async (importOriginal) => ({
 // --- Import after mocks ---
 
 import SettingsPage from "./+page.svelte";
+import type * as SecurityBriefingPopupNS from "$lib/components/settings/SecurityBriefingPopup.svelte";
+import type * as TwoFactorSheetNS from "$lib/components/settings/TwoFactorSheet.svelte";
+import type * as PasswordSheetNS from "$lib/components/settings/PasswordSheet.svelte";
+import type * as UsernameSheetNS from "$lib/components/settings/UsernameSheet.svelte";
+import type * as DisplayNameSheetNS from "$lib/components/settings/DisplayNameSheet.svelte";
+import type * as NotificationPreferencesSectionNS from "$lib/components/settings/NotificationPreferencesSection.svelte";
 
 // --- Tests ---
 

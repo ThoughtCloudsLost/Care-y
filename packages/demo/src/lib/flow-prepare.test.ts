@@ -1,5 +1,7 @@
 import { describe, it, expect, vi } from "vitest";
 import type { FlowBlock, LineCursor } from "./flow-layout.js";
+import type * as RichInlineNS from "@chenglou/pretext/rich-inline";
+import type * as PretextNS from "@chenglou/pretext";
 
 // pretext measures through a Canvas 2D context, which jsdom does not
 // provide, so the two pretext entry points are stubbed. What is under
@@ -15,8 +17,8 @@ interface FakePrepared {
   readonly items?: readonly { text: string; font: string }[];
 }
 
-vi.mock("@chenglou/pretext", () => ({
-  // story-blocks' applyPretextLocale reaches through to this.
+vi.mock("@chenglou/pretext", async (importOriginal) => ({
+  ...(await importOriginal<typeof PretextNS>()),
   setLocale: vi.fn(),
   prepareWithSegments: vi.fn((text: string, font: string): FakePrepared => ({
     kind: "plain",
@@ -30,7 +32,8 @@ vi.mock("@chenglou/pretext", () => ({
   materializeLineRange: vi.fn(() => ({ text: "plain line", width: 42 })),
 }));
 
-vi.mock("@chenglou/pretext/rich-inline", () => ({
+vi.mock("@chenglou/pretext/rich-inline", async (importOriginal) => ({
+  ...(await importOriginal<typeof RichInlineNS>()),
   prepareRichInline: vi.fn(
     (items: readonly { text: string; font: string }[]): FakePrepared => ({
       kind: "rich",

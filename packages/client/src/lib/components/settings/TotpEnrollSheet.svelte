@@ -131,6 +131,7 @@
 
       <!-- eslint-disable svelte/no-at-html-tags -- encodeQR returns deterministic SVG from the otpauth URI, no user input -->
       <div class="qr-container" aria-hidden="true">
+        <!-- care-y-ignore-next-line no-at-html-dynamic -- svgMarkup is encodeQR() output over the server-issued otpauth URI; no user-controlled text reaches it. Same justification as the eslint suppression above. -->
         {@html svgMarkup}
       </div>
       <!-- eslint-enable svelte/no-at-html-tags -->

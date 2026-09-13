@@ -17,6 +17,7 @@ import type {
   BlindIndexer,
 } from "../crypto/field-encryptor.js";
 import { NotFoundError, ConflictError } from "../errors.js";
+import { isPgUniqueViolation } from "../db/pg-errors.js";
 import { ErrorCode, emailHashSchema } from "@care-y/shared";
 import type {
   ClientId,
@@ -38,19 +39,6 @@ export interface EmailConflict {
 export interface UpdateEmailResult {
   readonly success: boolean;
   readonly conflict: EmailConflict | null;
-}
-
-// ---------------------------------------------------------------------------
-// Unique constraint detection
-// ---------------------------------------------------------------------------
-
-function isUniqueViolation(err: unknown): boolean {
-  return (
-    typeof err === "object" &&
-    err !== null &&
-    "code" in err &&
-    err.code === "23505"
-  );
 }
 
 // ---------------------------------------------------------------------------
@@ -159,7 +147,7 @@ export function createEmailService(deps: EmailServiceDeps): EmailService {
         } catch (err: unknown) {
           // Race: another transaction inserted the same hash between our
           // pre-check and this insert. Surface as conflict.
-          if (isUniqueViolation(err)) {
+          if (isPgUniqueViolation(err)) {
             throw new ConflictError(ErrorCode.EMAIL_HASH_CONFLICT);
           }
           throw err;

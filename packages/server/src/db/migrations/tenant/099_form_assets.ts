@@ -3,6 +3,7 @@
 // key, used as the path parameter in the public serving URL.
 
 import type { Kysely } from "kysely";
+import { sql } from "kysely";
 
 export async function up(db: Kysely<unknown>): Promise<void> {
   await db.schema
@@ -11,7 +12,7 @@ export async function up(db: Kysely<unknown>): Promise<void> {
     .addColumn("blob_key", "text", (col) => col.notNull())
     .addColumn("content_type", "text", (col) => col.notNull())
     .addColumn("created_at", "timestamptz", (col) =>
-      col.notNull().defaultTo("now()"),
+      col.notNull().defaultTo(sql`now()`),
     )
     .execute();
 }

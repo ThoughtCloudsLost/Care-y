@@ -24,6 +24,7 @@
   import { isDecryptReady } from "$lib/crypto/decrypt-result.js";
   import type { DecryptResult } from "$lib/crypto/decrypt-result.js";
   import { requireRouter } from "$lib/errors.js";
+  import { enabledTicketId } from "$lib/tickets/queries.js";
   import { toastStore } from "$lib/stores/toast.svelte.js";
   import { haptic } from "$lib/utils/haptic.js";
   import { announceToLiveRegion } from "$lib/utils/announce.js";
@@ -52,7 +53,7 @@
   const ticketQuery = createQuery(() => ({
     queryKey: ticketKeys.detail(ticketId),
     queryFn: async () => ticketRouter.get.query({ ticketId }),
-    enabled: typeof ticketId === "string" && ticketId !== "",
+    enabled: enabledTicketId(ticketId),
   }));
 
   const ticket = $derived(ticketQuery.data);

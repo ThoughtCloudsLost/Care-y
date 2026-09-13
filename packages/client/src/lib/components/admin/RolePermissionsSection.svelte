@@ -6,7 +6,6 @@
     createMutation,
     useQueryClient,
   } from "@tanstack/svelte-query";
-  import { Lock } from "@lucide/svelte";
   import { SvelteMap } from "svelte/reactivity";
   import { Permission, ROLE_ID_VALUES } from "@care-y/shared";
   import type { RoleIdValue } from "@care-y/shared";
@@ -20,6 +19,7 @@
   import QueryError from "$lib/components/QueryError.svelte";
   import InlineSkeleton from "$lib/components/InlineSkeleton.svelte";
   import Register from "$lib/components/Register.svelte";
+  import ToggleMatrix from "$lib/components/ToggleMatrix.svelte";
   import ShellDialog from "$lib/shell/ShellDialog.svelte";
 
   // ── Permission grouping ──
@@ -275,50 +275,59 @@
 
   const isLoading = $derived(permissionsQuery.isLoading);
   const isMutating = $derived(setPermissionMutation.isPending);
-</script>
 
-{#snippet permissionGroup(group: PermissionGroup)}
-  <BlockTitle>{group.title()}</BlockTitle>
-  <Block strong inset>
-    <div class="matrix">
-      <div class="matrix-header">
-        {#each ROLE_ID_VALUES as colRole (colRole)}
-          <span class="role-label">{roleLabel(colRole)}</span>
-        {/each}
-      </div>
-      {#each group.permissions as perm (perm)}
-        {@const locked = isLocked(perm)}
-        {@const pLabel = permissionLabel(perm)}
-        <div class="matrix-row">
-          <span class="perm-label" title={pLabel}>
-            {#if locked}
-              <Lock size={12} aria-hidden="true" class="lock-glyph" />
-            {/if}
-            <span class="perm-label-text">{pLabel}</span>
-          </span>
-          {#each ROLE_ID_VALUES as colRole (colRole)}
-            {@const checked = hasPermission(colRole, perm)}
-            {@const overridden = isOverridden(colRole, perm)}
-            {@const cellDisabled = locked || isMutating || isLoading}
-            <span class="toggle-cell">
-              <Toggle
-                {checked}
-                disabled={cellDisabled}
-                onchange={() => {
-                  if (!locked) handleToggle(colRole, perm, checked);
-                }}
-                aria-label={cellAriaLabel(perm, colRole)}
-              />
-              {#if overridden && !locked}
-                <span class="override-marker">{m.roles_override_edited()}</span>
-              {/if}
-            </span>
-          {/each}
-        </div>
-      {/each}
-    </div>
-  </Block>
-{/snippet}
+  // ── ToggleMatrix column/row mapping ──
+
+  const roleColumns = $derived(
+    ROLE_ID_VALUES.map((id) => ({ id, label: roleLabel(id) })),
+  );
+
+  function buildGroupRows(group: PermissionGroup): readonly {
+    id: string;
+    label: string;
+    locked?: boolean;
+    cells: readonly {
+      columnId: string;
+      checked: boolean;
+      overridden?: boolean;
+      disabled?: boolean;
+      ariaLabel?: string;
+    }[];
+  }[] {
+    return group.permissions.map((perm) => {
+      const locked = isLocked(perm);
+      return {
+        id: perm,
+        label: permissionLabel(perm),
+        locked,
+        cells: ROLE_ID_VALUES.map((colRole) => ({
+          columnId: colRole,
+          checked: hasPermission(colRole, perm),
+          overridden: isOverridden(colRole, perm) && !locked,
+          disabled: locked || isMutating || isLoading,
+          ariaLabel: cellAriaLabel(perm, colRole),
+        })),
+      };
+    });
+  }
+
+  function isPermissionValue(value: string): value is Permission {
+    const values: readonly string[] = Object.values(Permission);
+    return values.includes(value);
+  }
+
+  function handleMatrixToggle(
+    rowId: string,
+    columnId: string,
+    next: boolean,
+  ): void {
+    if (!isPermissionValue(rowId)) return;
+    const colRole = ROLE_ID_VALUES.find((r) => r === columnId);
+    if (colRole === undefined) return;
+    if (isLocked(rowId)) return;
+    handleToggle(colRole, rowId, !next);
+  }
+</script>
 
 {#if isLoading}
   <BlockTitle>{m.roles_group_volunteer()}</BlockTitle>
@@ -350,7 +359,16 @@
   />
 {:else}
   {#each PERMISSION_GROUPS as group (group.key)}
-    {@render permissionGroup(group)}
+    <BlockTitle>{group.title()}</BlockTitle>
+    <Block strong inset>
+      <ToggleMatrix
+        columns={roleColumns}
+        rows={buildGroupRows(group)}
+        onToggle={handleMatrixToggle}
+        ariaLabel={group.title()}
+        overrideText={m.roles_override_edited()}
+      />
+    </Block>
   {/each}
 
   <div class="protected-register-wrapper">
@@ -399,6 +417,7 @@
 </ShellDialog>
 
 <style>
+  /* Loading skeleton grid (the live grid uses ToggleMatrix). */
   .matrix {
     display: grid;
     grid-template-columns: 1fr repeat(3, 52px);
@@ -438,17 +457,6 @@
     border-top: 1px solid var(--hair);
   }
 
-  .perm-label-text {
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
-  .perm-label :global(.lock-glyph) {
-    flex-shrink: 0;
-    color: var(--muted);
-  }
-
   .toggle-cell {
     display: flex;
     flex-direction: column;
@@ -457,12 +465,6 @@
     padding: var(--space-sm) 0;
     border-top: 1px solid var(--hair);
     min-height: 44px;
-  }
-
-  .override-marker {
-    font-size: 0.625rem;
-    color: var(--muted);
-    margin-top: 2px;
   }
 
   .protected-register-wrapper {

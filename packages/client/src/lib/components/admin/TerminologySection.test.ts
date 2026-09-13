@@ -216,19 +216,25 @@ vi.mock("$lib/branding/color-utils.js", async (importOriginal) => ({
   isValidHexColor: (c: string) => /^#[0-9a-fA-F]{6}$/.test(c),
 }));
 
-// care-y-ignore-next-line mock-factory-unguarded -- component stub: single default export, passthrough cannot satisfy the component prop types
-vi.mock("$lib/shell/ShellSheet.svelte", async () => ({
-  default: (
-    await import("$lib/components/tickets/test-helpers/PassthroughShell.svelte")
-  ).default,
-}));
+vi.mock(
+  "$lib/shell/ShellSheet.svelte",
+  async () =>
+    ({
+      default: (
+        await import("$lib/components/tickets/test-helpers/PassthroughShell.svelte")
+      ).default as unknown as (typeof ShellSheetNS)["default"],
+    }) satisfies typeof ShellSheetNS,
+);
 
-// care-y-ignore-next-line mock-factory-unguarded -- component stub: single default export, passthrough cannot satisfy the component prop types
-vi.mock("$lib/components/QueryError.svelte", async () => ({
-  default: (
-    await import("$lib/components/tickets/test-helpers/PassthroughShell.svelte")
-  ).default,
-}));
+vi.mock(
+  "$lib/components/QueryError.svelte",
+  async () =>
+    ({
+      default: (
+        await import("$lib/components/tickets/test-helpers/PassthroughShell.svelte")
+      ).default as unknown as (typeof QueryErrorNS)["default"],
+    }) satisfies typeof QueryErrorNS,
+);
 
 vi.mock("$lib/crypto/async-decrypt-cache.js", async (importOriginal) => ({
   ...(await importOriginal<typeof AsyncDecryptCache>()),
@@ -266,6 +272,8 @@ vi.stubGlobal(
 );
 
 import TerminologySection from "./TerminologySection.svelte";
+import type * as QueryErrorNS from "$lib/components/QueryError.svelte";
+import type * as ShellSheetNS from "$lib/shell/ShellSheet.svelte";
 
 const LOADED_DATA: BrandingData = {
   name: "Safe Harbor Hotline",

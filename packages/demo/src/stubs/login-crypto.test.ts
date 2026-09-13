@@ -2,6 +2,12 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import type { LoginCryptoCallbacks } from "./login-crypto.js";
 import { resetFlowEvents, subscribeFlowEvents } from "../lib/flow-events.js";
 import type { DemoFlowEvent } from "../lib/bridge.js";
+import type { RecordedFlowEvent } from "../lib/flow-events.js";
+import type * as CryptoContextNS from "./crypto-context.svelte.js";
+type CtxPick = Pick<
+  typeof CryptoContextNS,
+  "ensureKeyed" | "getEnsureKeyedResult" | "getDerivationRecording"
+>;
 
 /** Collect flow events via subscription into a local array. */
 function collectFlowEvents(): DemoFlowEvent[] {
@@ -16,7 +22,8 @@ function collectFlowEvents(): DemoFlowEvent[] {
 // The specifier must match the stub's own import exactly
 // ("./crypto-context.svelte.js"); a mismatched path lets the real
 // module load and die on its circular trpc registration.
-vi.mock("./crypto-context.svelte.js", () => {
+// care-y-ignore-start mock-factory-unguarded -- importOriginal re-enters the stub's circular trpc registration (see specifier note above); the factory return is typed by CtxPick below so the three stubbed exports track the module
+vi.mock("./crypto-context.svelte.js", (): CtxPick => {
   let keyedResolved = false;
   const cachedResult = {
     volPublic: "real-vol-public-b64",
@@ -31,13 +38,14 @@ vi.mock("./crypto-context.svelte.js", () => {
       if (!keyedResolved) return null;
       return cachedResult;
     }),
-    getDerivationRecording: vi.fn(() => [
+    getDerivationRecording: vi.fn((): RecordedFlowEvent[] => [
       {
         lane: "server",
         direction: "up",
         label: "route auth.getSalt",
         seamKey: null,
         payloadPreview: null,
+        detail: null,
         durationMs: null,
       },
       {
@@ -46,6 +54,7 @@ vi.mock("./crypto-context.svelte.js", () => {
         label: "route auth.getSalt",
         seamKey: null,
         payloadPreview: null,
+        detail: null,
         durationMs: 28,
       },
       {
@@ -54,6 +63,7 @@ vi.mock("./crypto-context.svelte.js", () => {
         label: "route auth.oprfEvaluate",
         seamKey: null,
         payloadPreview: null,
+        detail: null,
         durationMs: null,
       },
       {
@@ -62,6 +72,7 @@ vi.mock("./crypto-context.svelte.js", () => {
         label: "route auth.oprfEvaluate",
         seamKey: null,
         payloadPreview: null,
+        detail: null,
         durationMs: 137,
       },
       {
@@ -70,6 +81,7 @@ vi.mock("./crypto-context.svelte.js", () => {
         label: "route keys.orgKey.get",
         seamKey: null,
         payloadPreview: null,
+        detail: null,
         durationMs: null,
       },
       {
@@ -78,11 +90,13 @@ vi.mock("./crypto-context.svelte.js", () => {
         label: "route keys.orgKey.get",
         seamKey: null,
         payloadPreview: null,
+        detail: null,
         durationMs: 15,
       },
     ]),
   };
 });
+// care-y-ignore-end mock-factory-unguarded
 
 const { loginCrypto, setLoginCryptoStageListener, isPacedLoginInFlight } =
   await import("./login-crypto.js");

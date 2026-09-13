@@ -5,10 +5,12 @@ import { flushSync } from "svelte";
 import * as m from "$lib/paraglide/messages.js";
 import SecurityBriefing from "./SecurityBriefing.svelte";
 import type { WizardNavContainer } from "./wizard-nav-context.js";
+import type * as WizardNavContextNS from "./wizard-nav-context.js";
 
 const wizardNavContainer: WizardNavContainer = { current: undefined };
 
-vi.mock("./wizard-nav-context.js", () => ({
+vi.mock("./wizard-nav-context.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof WizardNavContextNS>()),
   getWizardNavCtx: () => wizardNavContainer,
 }));
 

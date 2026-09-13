@@ -4,8 +4,7 @@
  * Recurring daily job that deletes portal_messages, portal_attachments,
  * and portal_recordings for channels whose last activity
  * (COALESCE(last_seen_at, created_at)) exceeds the 30-day boundary.
- * Iterates all active tenant schemas via the same pattern as the
- * escalation rules checker.
+ * Iterates all active tenant schemas via the shared recurring handler.
  *
  * Deletes portal copies only (wraps and message ciphertext). The
  * org-side rows and blobs stay. Logs row counts per org schema and
@@ -16,6 +15,7 @@ import { sql } from "kysely";
 import type { Kysely } from "kysely";
 import type { TenantDatabase } from "../db/types.js";
 import type { JobQueue } from "./queue.js";
+import { registerRecurringHandler } from "./ensure-recurring.js";
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -79,18 +79,17 @@ export async function expirePortalMessages(
  *
  * The runForAllTenants callback iterates active org schemas and calls
  * expirePortalMessages for each. The handler re-enqueues itself with
- * the configured delay in a finally block so the chain never breaks.
+ * the configured delay so the chain never breaks.
  */
 export function registerPortalExpiryHandler(
   jobQueue: JobQueue,
   runForAllTenants: () => Promise<void>,
   intervalMs: number = DEFAULT_PORTAL_EXPIRY_INTERVAL_MS,
 ): void {
-  jobQueue.process(PORTAL_EXPIRY_QUEUE, async () => {
-    try {
-      await runForAllTenants();
-    } finally {
-      await jobQueue.enqueue(PORTAL_EXPIRY_QUEUE, {}, { delay: intervalMs });
-    }
-  });
+  registerRecurringHandler(
+    jobQueue,
+    PORTAL_EXPIRY_QUEUE,
+    runForAllTenants,
+    intervalMs,
+  );
 }

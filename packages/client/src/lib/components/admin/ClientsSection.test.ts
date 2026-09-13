@@ -38,6 +38,7 @@ type ClientDetail = Awaited<ReturnType<ClientsRouter["get"]["query"]>>;
 const {
   mockUpdateAlias,
   mockUpdatePhone,
+  mockUpdateEmail,
   mockUndoMerge,
   mockLockMerge,
   mockToastShow,
@@ -47,6 +48,7 @@ const {
 } = vi.hoisted(() => ({
   mockUpdateAlias: vi.fn().mockResolvedValue(undefined),
   mockUpdatePhone: vi.fn().mockResolvedValue({ success: true, conflict: null }),
+  mockUpdateEmail: vi.fn().mockResolvedValue({ success: true, conflict: null }),
   mockUndoMerge: vi.fn().mockResolvedValue({}),
   mockLockMerge: vi.fn().mockResolvedValue({}),
   mockToastShow: vi.fn(),
@@ -83,6 +85,7 @@ vi.mock("$lib/paraglide/messages.js", async (importOriginal) => ({
   client_alias_changed_toast: () => "Alias updated",
   client_phone_label: () => "Phone",
   client_phone_edit: () => "Edit phone",
+  client_email_edit: () => "Edit email",
   client_phone_placeholder: () => "+1 555 000 1234",
   client_phone_invalid_error: () => "Enter a number like +1 555 000 1234",
   client_phone_changed_toast: () => "Phone number updated",
@@ -120,14 +123,15 @@ vi.mock("$lib/paraglide/messages.js", async (importOriginal) => ({
 }));
 
 // vi.mock required: tRPC client creates a live HTTP connection on import.
-// care-y-ignore-next-line mock-factory-unguarded -- importOriginal would open the live tRPC HTTP client; a hand stub cannot satisfy the generated router proxy type
-vi.mock("$lib/trpc/index.js", () => ({
+vi.mock("$lib/trpc/index.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof TrpcNS>()),
   trpc: {
     clients: {
       list: { query: vi.fn().mockResolvedValue([]) },
       get: { query: mockClientGet },
       updateAlias: { mutate: mockUpdateAlias },
       updatePhone: { mutate: mockUpdatePhone },
+      updateEmail: { mutate: mockUpdateEmail },
       backfillAliasHash: { mutate: vi.fn().mockResolvedValue(undefined) },
       backfillPhoneMatchHash: { mutate: mockBackfillPhoneMatchHash },
     },
@@ -218,6 +222,7 @@ vi.mock("$lib/crypto/context.js", async (importOriginal) => ({
     encryptText: vi.fn().mockResolvedValue("encrypted-base64"),
     aliasHash: vi.fn().mockResolvedValue("deadbeef"),
     phoneMatchHash: mockPhoneMatchHash,
+    emailMatchHash: vi.fn().mockResolvedValue("emailhash" + "00".repeat(56)),
   }),
 }));
 
@@ -257,26 +262,35 @@ vi.mock("$lib/shell/context.js", async (importOriginal) => ({
   getNavbarOverrideCtx: () => ({ current: undefined }),
 }));
 
-// care-y-ignore-next-line mock-factory-unguarded -- component stub: single default export
-vi.mock("$lib/components/QueryError.svelte", async () => ({
-  default: (
-    await import("$lib/components/tickets/test-helpers/PassthroughShell.svelte")
-  ).default,
-}));
+vi.mock(
+  "$lib/components/QueryError.svelte",
+  async () =>
+    ({
+      default: (
+        await import("$lib/components/tickets/test-helpers/PassthroughShell.svelte")
+      ).default as unknown as (typeof QueryErrorNS)["default"],
+    }) satisfies typeof QueryErrorNS,
+);
 
-// care-y-ignore-next-line mock-factory-unguarded -- component stub: single default export
-vi.mock("$lib/shell/ShellSheet.svelte", async () => ({
-  default: (
-    await import("$lib/components/tickets/test-helpers/PassthroughShell.svelte")
-  ).default,
-}));
+vi.mock(
+  "$lib/shell/ShellSheet.svelte",
+  async () =>
+    ({
+      default: (
+        await import("$lib/components/tickets/test-helpers/PassthroughShell.svelte")
+      ).default as unknown as (typeof ShellSheetNS)["default"],
+    }) satisfies typeof ShellSheetNS,
+);
 
-// care-y-ignore-next-line mock-factory-unguarded -- component stub: single default export
-vi.mock("$lib/components/EmptyState.svelte", async () => ({
-  default: (
-    await import("$lib/components/tickets/test-helpers/PassthroughShell.svelte")
-  ).default,
-}));
+vi.mock(
+  "$lib/components/EmptyState.svelte",
+  async () =>
+    ({
+      default: (
+        await import("$lib/components/tickets/test-helpers/PassthroughShell.svelte")
+      ).default as unknown as (typeof EmptyStateNS)["default"],
+    }) satisfies typeof EmptyStateNS,
+);
 
 // DecryptPlaceholder observes the viewport before it decrypts, and jsdom has
 // no IntersectionObserver. Without this stub every render that reaches the
@@ -353,6 +367,10 @@ function makeDetail(
 }
 
 import ClientsSection from "./ClientsSection.svelte";
+import type * as TrpcNS from "$lib/trpc/index.js";
+import type * as EmptyStateNS from "$lib/components/EmptyState.svelte";
+import type * as ShellSheetNS from "$lib/shell/ShellSheet.svelte";
+import type * as QueryErrorNS from "$lib/components/QueryError.svelte";
 
 async function findDetailSheet(): Promise<HTMLElement> {
   return waitFor(() => {
@@ -897,6 +915,42 @@ describe("ClientsSection", () => {
       });
 
       expect(screen.getAllByTestId("passthrough-shell")).toHaveLength(before);
+    });
+  });
+
+  describe("email editing (delegated to EmailEditSheet)", () => {
+    it("opens the email sheet and handles the conflict branch via EmailEditSheet", async () => {
+      // Simulate a conflict response: the server returns a conflicting
+      // client, and EmailEditSheet renders the conflict step internally.
+      mockUpdateEmail.mockResolvedValueOnce({
+        success: true,
+        conflict: {
+          conflictingClientId: "c-2",
+          conflictingClientEncryptedAlias: "enc-seaward-lamp",
+        },
+      });
+
+      mockDetailData = makeDetail("c-1", { email: "old@example.com" });
+      const clients = [makeClient("c-1")];
+      const { component } = render(ClientsSection, { props: { clients } });
+
+      component.openClientDetail("c-1");
+      const sheet = await findDetailSheet();
+
+      // The edit email button lives in the detail sheet.
+      const editEmailBtn = within(sheet).getByRole("button", {
+        name: /Edit email/,
+      });
+      await fireEvent.click(editEmailBtn);
+
+      // The EmailEditSheet is now open (rendered as a PassthroughShell).
+      await waitFor(() => {
+        const shells = screen.getAllByTestId("passthrough-shell");
+        const emailSheet = shells.find(
+          (el) => el.getAttribute("data-title") === "Edit email",
+        );
+        expect(emailSheet).toBeTruthy();
+      });
     });
   });
 

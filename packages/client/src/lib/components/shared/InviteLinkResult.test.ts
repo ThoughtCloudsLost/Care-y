@@ -1,8 +1,10 @@
 // @vitest-environment jsdom
 import { describe, it, expect, afterEach, vi, beforeEach } from "vitest";
 import { render, screen, cleanup, fireEvent } from "@testing-library/svelte";
+import type * as MessagesNS from "$lib/paraglide/messages.js";
 
-vi.mock("$lib/paraglide/messages.js", () => ({
+vi.mock("$lib/paraglide/messages.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof MessagesNS>()),
   admin_invite_link_url_label: () => "Invite link",
   admin_invite_link_copy: () => "Copy Link",
   admin_invite_link_expires: ({ expiresAt }: { expiresAt: string }) =>

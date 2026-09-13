@@ -8,12 +8,13 @@
 
 import { describe, it, expect, vi } from "vitest";
 import type * as RecordModeModule from "$demo/record-mode.js";
+import type * as MessagesNS from "$lib/paraglide/messages.js";
 
 // Mock paraglide messages so the test runs without i18n compilation.
 // Only the four bucket messages are needed; spreading the full module
 // would require i18n compilation output.
 vi.mock("$lib/paraglide/messages.js", async (importOriginal) => ({
-  ...(await importOriginal<Record<string, unknown>>()),
+  ...(await importOriginal<typeof MessagesNS>()),
   dashboard_time_just_now: () => "Just now",
   dashboard_time_minutes_ago: ({ count }: { count: number }) => `${count}m ago`,
   dashboard_time_hours_ago: ({ count }: { count: number }) => `${count}h ago`,
@@ -30,7 +31,7 @@ vi.mock(
       isRecordMode: () => true,
       FROZEN_NOW: FIXED_NOW,
       forwardRecordParam: (url: string) => url,
-    }) satisfies { [K in keyof typeof RecordModeModule]: unknown },
+    }) satisfies typeof RecordModeModule,
 );
 
 const { formatRelativeTime } = await import("./format-time.js");

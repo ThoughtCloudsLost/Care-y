@@ -103,3 +103,31 @@ export class BlobFetchError extends ClientError {
     this.status = status;
   }
 }
+
+/**
+ * Channel session derivation failed for reasons other than wrong passphrase
+ * (network outage, server error, etc.). Allows callers to distinguish
+ * connectivity issues from authentication failures.
+ */
+export class ChannelSessionError extends ClientError {
+  constructor(message: string) {
+    super(message);
+    this.name = "ChannelSessionError";
+  }
+}
+
+/** Portal infrastructure unavailable (router, fragment, session, or bootstrap). */
+export class PortalUnavailableError extends ClientError {
+  constructor(message: string) {
+    super(message);
+    this.name = "PortalUnavailableError";
+  }
+}
+
+/** Org key not available when a crypto operation requires it. */
+export class OrgKeyNotLoadedError extends ClientError {
+  constructor() {
+    super("Org key not loaded");
+    this.name = "OrgKeyNotLoadedError";
+  }
+}

@@ -2,6 +2,21 @@
 
 import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
 import { render, cleanup } from "@testing-library/svelte";
+import type * as ContextNS from "$lib/shell/context.js";
+import { mockNavbarCtx } from "$mocks/shell-context.js";
+import type * as MessagesNS from "$lib/paraglide/messages.js";
+import type * as ContextNS2 from "$lib/crypto/context.js";
+import type * as ChannelPolicySectionNS from "$lib/components/admin/ChannelPolicySection.svelte";
+import type * as QuarantineSectionNS from "$lib/components/admin/QuarantineSection.svelte";
+import type * as SmsTemplatesSectionNS from "$lib/components/admin/SmsTemplatesSection.svelte";
+import type * as GreetingsSectionNS from "$lib/components/admin/GreetingsSection.svelte";
+import type * as BlocklistSectionNS from "$lib/components/admin/BlocklistSection.svelte";
+import type * as TelephonyConfigSectionNS from "$lib/components/admin/TelephonyConfigSection.svelte";
+import type * as CollapsibleSectionNS from "$lib/components/dashboard/CollapsibleSection.svelte";
+import type * as SectionScrollNavNS from "$lib/components/SectionScrollNav.svelte";
+import type * as PathsNS from "$app/paths";
+import type * as NavigationNS from "$app/navigation";
+import type * as UseSectionScrollNS from "$lib/components/useSectionScroll.svelte.js";
 
 // --- Controllable mock state ---
 
@@ -11,31 +26,33 @@ const mockGoto = vi.fn();
 
 // --- Mocks ---
 
-vi.mock("$app/navigation", () => ({
+vi.mock("$app/navigation", async (importOriginal) => ({
+  ...(await importOriginal<typeof NavigationNS>()),
   goto: mockGoto,
   afterNavigate: vi.fn(),
 }));
 
-vi.mock("$app/paths", () => ({
+vi.mock("$app/paths", async (importOriginal) => ({
+  ...(await importOriginal<typeof PathsNS>()),
   resolve: (path: string) => path,
   base: "",
   assets: "",
 }));
 
-vi.mock("$lib/crypto/context.js", () => ({
+vi.mock("$lib/crypto/context.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof ContextNS2>()),
   getCurrentPermissions: () => () => mockPermissions,
 }));
+vi.mock(
+  "$lib/shell/context.js",
+  async () =>
+    (
+      await import("$mocks/shell-context.js")
+    ).shellContextMock() satisfies typeof ContextNS,
+);
 
-const mockNavbarCtx = { current: undefined as unknown };
-
-vi.mock("$lib/shell/context.js", () => ({
-  getSectionRailCtx: () => ({ current: undefined }),
-  getNavbarOverrideCtx: () => mockNavbarCtx,
-  getScrollContainer: () => () => null,
-  getTabbarOverrideCtx: () => ({ current: undefined }),
-}));
-
-vi.mock("$lib/paraglide/messages.js", () => ({
+vi.mock("$lib/paraglide/messages.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof MessagesNS>()),
   admin_tab_telephony: () => "Telephony",
   admin_tab_blocklist: () => "Blocklist",
   admin_tab_greetings: () => "Greetings",
@@ -45,59 +62,96 @@ vi.mock("$lib/paraglide/messages.js", () => ({
   admin_comms_title: () => "Communications",
 }));
 
-vi.mock("$lib/components/SectionScrollNav.svelte", async () => ({
-  default: (
-    await import("$lib/components/tickets/test-helpers/PassthroughShell.svelte")
-  ).default,
-}));
+vi.mock(
+  "$lib/components/SectionScrollNav.svelte",
+  async () =>
+    ({
+      default: (
+        await import("$lib/components/tickets/test-helpers/PassthroughShell.svelte")
+      ).default as unknown as (typeof SectionScrollNavNS)["default"],
+    }) satisfies typeof SectionScrollNavNS,
+);
 
-vi.mock("$lib/components/useSectionScroll.svelte.js", () => ({
-  createSectionScroll: () => ({ active: "telephony", scrollTo: vi.fn() }),
-}));
+vi.mock(
+  "$lib/components/useSectionScroll.svelte.js",
+  () =>
+    ({
+      createSectionScroll: (() => ({
+        active: "telephony",
+        scrollTo: vi.fn(),
+      })) as unknown as typeof UseSectionScrollNS.createSectionScroll,
+    }) satisfies typeof UseSectionScrollNS,
+);
 
-vi.mock("$lib/components/dashboard/CollapsibleSection.svelte", async () => ({
-  default: (
-    await import("$lib/components/tickets/test-helpers/PassthroughShell.svelte")
-  ).default,
-}));
+vi.mock(
+  "$lib/components/dashboard/CollapsibleSection.svelte",
+  async () =>
+    ({
+      default: (
+        await import("$lib/components/tickets/test-helpers/PassthroughShell.svelte")
+      ).default as unknown as (typeof CollapsibleSectionNS)["default"],
+    }) satisfies typeof CollapsibleSectionNS,
+);
 
-vi.mock("$lib/components/admin/TelephonyConfigSection.svelte", async () => ({
-  default: (
-    await import("$lib/components/tickets/test-helpers/PassthroughShell.svelte")
-  ).default,
-}));
+vi.mock(
+  "$lib/components/admin/TelephonyConfigSection.svelte",
+  async () =>
+    ({
+      default: (
+        await import("$lib/components/tickets/test-helpers/PassthroughShell.svelte")
+      ).default as unknown as (typeof TelephonyConfigSectionNS)["default"],
+    }) satisfies typeof TelephonyConfigSectionNS,
+);
 
-vi.mock("$lib/components/admin/BlocklistSection.svelte", async () => ({
-  default: (
-    await import("$lib/components/tickets/test-helpers/PassthroughShell.svelte")
-  ).default,
-}));
+vi.mock(
+  "$lib/components/admin/BlocklistSection.svelte",
+  async () =>
+    ({
+      default: (
+        await import("$lib/components/tickets/test-helpers/PassthroughShell.svelte")
+      ).default as unknown as (typeof BlocklistSectionNS)["default"],
+    }) satisfies typeof BlocklistSectionNS,
+);
 
-vi.mock("$lib/components/admin/GreetingsSection.svelte", async () => ({
-  default: (
-    await import("$lib/components/tickets/test-helpers/PassthroughShell.svelte")
-  ).default,
-}));
+vi.mock(
+  "$lib/components/admin/GreetingsSection.svelte",
+  async () =>
+    ({
+      default: (
+        await import("$lib/components/tickets/test-helpers/PassthroughShell.svelte")
+      ).default as unknown as (typeof GreetingsSectionNS)["default"],
+    }) satisfies typeof GreetingsSectionNS,
+);
 
-vi.mock("$lib/components/admin/SmsTemplatesSection.svelte", async () => ({
-  default: (
-    await import("$lib/components/tickets/test-helpers/PassthroughShell.svelte")
-  ).default,
-}));
+vi.mock(
+  "$lib/components/admin/SmsTemplatesSection.svelte",
+  async () =>
+    ({
+      default: (
+        await import("$lib/components/tickets/test-helpers/PassthroughShell.svelte")
+      ).default as unknown as (typeof SmsTemplatesSectionNS)["default"],
+    }) satisfies typeof SmsTemplatesSectionNS,
+);
 
-// care-y-ignore-next-line mock-factory-unguarded -- component stub: single default export, passthrough cannot satisfy the component prop types
-vi.mock("$lib/components/admin/QuarantineSection.svelte", async () => ({
-  default: (
-    await import("$lib/components/tickets/test-helpers/PassthroughShell.svelte")
-  ).default,
-}));
+vi.mock(
+  "$lib/components/admin/QuarantineSection.svelte",
+  async () =>
+    ({
+      default: (
+        await import("$lib/components/tickets/test-helpers/PassthroughShell.svelte")
+      ).default as unknown as (typeof QuarantineSectionNS)["default"],
+    }) satisfies typeof QuarantineSectionNS,
+);
 
-// care-y-ignore-next-line mock-factory-unguarded -- component stub: single default export, passthrough cannot satisfy the component prop types
-vi.mock("$lib/components/admin/ChannelPolicySection.svelte", async () => ({
-  default: (
-    await import("$lib/components/tickets/test-helpers/PassthroughShell.svelte")
-  ).default,
-}));
+vi.mock(
+  "$lib/components/admin/ChannelPolicySection.svelte",
+  async () =>
+    ({
+      default: (
+        await import("$lib/components/tickets/test-helpers/PassthroughShell.svelte")
+      ).default as unknown as (typeof ChannelPolicySectionNS)["default"],
+    }) satisfies typeof ChannelPolicySectionNS,
+);
 
 // jsdom lacks Web Animations API (used by Konsta transitions).
 if (typeof Element.prototype.animate !== "function") {

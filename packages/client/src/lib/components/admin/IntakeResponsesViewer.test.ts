@@ -8,7 +8,6 @@ const {
   mockGetForm,
   mockDecryptIntakeResponse,
   mockMintBackfillWraps,
-  mockToastShow,
   mockLogExport,
   mockTriggerBlobDownload,
 } = vi.hoisted(() => ({
@@ -17,13 +16,12 @@ const {
   mockGetForm: vi.fn(),
   mockDecryptIntakeResponse: vi.fn(),
   mockMintBackfillWraps: vi.fn(),
-  mockToastShow: vi.fn(),
   mockLogExport: vi.fn().mockResolvedValue({ ok: true }),
   mockTriggerBlobDownload: vi.fn(),
 }));
 
 vi.mock("$lib/paraglide/messages.js", async (importOriginal) => ({
-  ...(await importOriginal<Record<string, unknown>>()),
+  ...(await importOriginal<typeof MessagesNS>()),
   intake_responses_title: () => "Responses",
   intake_responses_empty: () => "No responses",
   intake_responses_default_form_note: () => "Custom forms only.",
@@ -58,13 +56,14 @@ vi.mock("$lib/paraglide/messages.js", async (importOriginal) => ({
   error_generic: () => "Something went wrong",
 }));
 
-vi.mock("$lib/terminology/with-terms.js", async (importOriginal) => ({
-  ...(await importOriginal<Record<string, unknown>>()),
-  withTerms: () => ({}),
-}));
+vi.mock("$lib/terminology/with-terms.js", async (importOriginal) =>
+  (await import("$mocks/with-terms.js")).withTermsMock(
+    await importOriginal<typeof WithTermsNS>(),
+  ),
+);
 
 vi.mock("$lib/trpc/index.js", async (importOriginal) => ({
-  ...(await importOriginal<Record<string, unknown>>()),
+  ...(await importOriginal<typeof TrpcNS>()),
   trpc: {
     intakeForms: {
       get: { query: mockGetForm },
@@ -76,35 +75,37 @@ vi.mock("$lib/trpc/index.js", async (importOriginal) => ({
 }));
 
 vi.mock("$lib/paraglide/runtime.js", async (importOriginal) => ({
-  ...(await importOriginal<Record<string, unknown>>()),
+  ...(await importOriginal<typeof RuntimeNS>()),
   getLocale: () => "en",
 }));
 
 vi.mock(
   "$lib/components/shared/attachment-download.js",
   async (importOriginal) => ({
-    ...(await importOriginal<Record<string, unknown>>()),
+    ...(await importOriginal<typeof AttachmentDownloadNS>()),
     triggerBlobDownload: mockTriggerBlobDownload,
   }),
 );
 
 vi.mock("$lib/shell/ShellDialog.svelte", async (importOriginal) => ({
-  ...(await importOriginal<Record<string, unknown>>()),
+  ...(await importOriginal<typeof ShellDialogNS>()),
   default: (await import("./test-helpers/StubShellDialog.svelte")).default,
 }));
 
-vi.mock("$lib/errors.js", async (importOriginal) => ({
-  ...(await importOriginal<Record<string, unknown>>()),
-  requireRouter: (router: unknown) => router,
-}));
+vi.mock("$lib/errors.js", async (importOriginal) =>
+  (await import("$mocks/errors.js")).errorsMock(
+    await importOriginal<typeof ErrorsNS>(),
+  ),
+);
 
-vi.mock("$lib/stores/toast.svelte.js", async (importOriginal) => ({
-  ...(await importOriginal<Record<string, unknown>>()),
-  toastStore: { show: mockToastShow },
-}));
+vi.mock(
+  "$lib/stores/toast.svelte.js",
+  async () =>
+    (await import("$mocks/toast.js")).toastMock() satisfies typeof ToastNS,
+);
 
 vi.mock("$lib/crypto/context.js", async (importOriginal) => ({
-  ...(await importOriginal<Record<string, unknown>>()),
+  ...(await importOriginal<typeof ContextNS>()),
   getOrgKeyManager: () => ({
     getPublicKey: () => new Uint8Array(32),
     isLoaded: true,
@@ -116,7 +117,7 @@ vi.mock("$lib/crypto/context.js", async (importOriginal) => ({
 }));
 
 vi.mock("$lib/portal/intake-form-crypto.js", async (importOriginal) => ({
-  ...(await importOriginal<Record<string, unknown>>()),
+  ...(await importOriginal<typeof IntakeFormCryptoNS>()),
   decryptFieldContent: () => ({
     label: { en: "Field Label" },
     config: { type: "text" },
@@ -143,7 +144,7 @@ let responsesData: {
 } | null = null;
 
 vi.mock("@tanstack/svelte-query", async (importOriginal) => ({
-  ...(await importOriginal<Record<string, unknown>>()),
+  ...(await importOriginal<typeof SvelteQueryNS>()),
   createQuery: (optsFn: () => { queryKey: readonly unknown[] }) => {
     const opts = optsFn();
     const key = opts.queryKey;
@@ -199,6 +200,17 @@ vi.mock("@tanstack/svelte-query", async (importOriginal) => ({
 }));
 
 import IntakeResponsesViewer from "./IntakeResponsesViewer.svelte";
+import type * as ToastNS from "$lib/stores/toast.svelte.js";
+import type * as ErrorsNS from "$lib/errors.js";
+import type * as WithTermsNS from "$lib/terminology/with-terms.js";
+import type * as SvelteQueryNS from "@tanstack/svelte-query";
+import type * as IntakeFormCryptoNS from "$lib/portal/intake-form-crypto.js";
+import type * as ContextNS from "$lib/crypto/context.js";
+import type * as ShellDialogNS from "$lib/shell/ShellDialog.svelte";
+import type * as AttachmentDownloadNS from "$lib/components/shared/attachment-download.js";
+import type * as RuntimeNS from "$lib/paraglide/runtime.js";
+import type * as TrpcNS from "$lib/trpc/index.js";
+import type * as MessagesNS from "$lib/paraglide/messages.js";
 
 describe("IntakeResponsesViewer", () => {
   beforeEach(() => {

@@ -324,6 +324,7 @@
 
 <!-- svelte-ignore a11y_click_events_have_key_events -->
 <!-- svelte-ignore a11y_no_static_element_interactions -->
+<!-- care-y-ignore-start no-click-without-keyboard -- this div is a pointer hit-test surface over canvas-rendered prose, not the interactive element. The keyboard path is the per-block overlays below, which carry role="button", tabindex={0}, and onkeydown. Adding them here would put a second, redundant tab stop around the whole canvas. -->
 <div
   class="flow-story"
   class:flow-story--entering={entrance}
@@ -333,6 +334,7 @@
     ? layoutResult.totalHeight
     : 0}px; position: relative; --enter-dur: {ENTRANCE_DUR_MS}ms; --enter-last: {lastGroupDelay}ms; {fontVarsStyle}"
 >
+  <!-- care-y-ignore-end no-click-without-keyboard -->
   {#if layoutResult !== null}
     <!-- Header tint, first so every line paints over it -->
     {#if headerPanel !== null}

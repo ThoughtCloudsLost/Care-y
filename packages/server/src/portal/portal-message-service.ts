@@ -21,19 +21,21 @@ import type { CallerIdResolver } from "../telephony/phone-resolver.js";
 import type { FieldEncryptor } from "../crypto/field-encryptor.js";
 import type { NotificationService } from "../notifications/service.js";
 import type { BlobStore } from "../storage/store.js";
+import { eciesEncrypt, toRistrettoPoint, encode } from "@care-y/crypto";
 import { enqueueNotification } from "../notifications/outbox.js";
 import { reopenClosedTicket } from "../tickets/ticket-reopen.js";
+import { findActiveChannel } from "./channel-service.js";
 import { portal_nudge_sms_body } from "@care-y/shared/paraglide/messages.js";
 import type { Locale } from "@care-y/shared/paraglide/runtime.js";
-import { resolveClientPhone } from "../routes/relay.js";
+import { resolveClientPhone } from "../clients/contact-resolution.js";
 import { NotFoundError } from "../errors.js";
 import { ErrorCode } from "@care-y/shared";
-import { encode } from "@care-y/crypto";
 import type {
   TicketId,
   FollowupId,
   KeyGeneration,
   ChannelRowId,
+  ClientId,
   OrgId,
   OrgSchema,
   OrgSlug,
@@ -501,6 +503,87 @@ export async function storeClientCopy(
   await query.execute();
 }
 
+// ---------------------------------------------------------------------------
+// storeInboundClientCopy (shared between email and SMS ingest)
+// ---------------------------------------------------------------------------
+
+/**
+ * Result of attempting to seal and stash a portal copy for an inbound
+ * message (email or SMS). The forward path never depends on this
+ * succeeding; both callers log a static warning on failure and move on.
+ */
+export interface InboundClientCopyResult {
+  readonly channelRowId: ChannelRowId | null;
+  readonly portalCopy: EciesTripleBuffers | null;
+  /** Buffer for the channel's client_public key (needed by MMS media opts). */
+  readonly clientPublic: Buffer | null;
+}
+
+/**
+ * Resolve the client's active portal channel and seal a copy of the
+ * payload buffer under the channel's client public key. Returns the
+ * sealed triple and channel row id so the caller can write the copy
+ * after the follow-up id exists.
+ *
+ * Best-effort: on failure, returns nulls and logs a static string.
+ * The forward path (follow-up creation) must not depend on this.
+ *
+ * Both inbound-email and inbound-sms call this with the same
+ * sequence: resolve channel, toRistrettoPoint, eciesEncrypt, wrap
+ * into EciesTripleBuffers.
+ */
+export async function sealInboundClientCopy(
+  db: Kysely<TenantDatabase>,
+  clientId: ClientId,
+  bodyBuf: Buffer,
+): Promise<InboundClientCopyResult> {
+  try {
+    const activeChannel = await findActiveChannel(db, clientId);
+    if (!activeChannel) {
+      return { channelRowId: null, portalCopy: null, clientPublic: null };
+    }
+    const clientPoint = toRistrettoPoint(
+      new Uint8Array(activeChannel.client_public),
+    );
+    const sealed = eciesEncrypt(bodyBuf, clientPoint);
+    return {
+      channelRowId: activeChannel.id,
+      portalCopy: {
+        ephemeralPoint: Buffer.from(sealed.ephemeralPoint),
+        nonce: Buffer.from(sealed.nonce),
+        ciphertext: Buffer.from(sealed.ciphertext),
+      },
+      clientPublic: activeChannel.client_public,
+    };
+  } catch {
+    console.warn("Portal copy dropped: channel lookup failed for client");
+    return { channelRowId: null, portalCopy: null, clientPublic: null };
+  }
+}
+
+/**
+ * Write the sealed portal copy row (best-effort). On failure, logs a
+ * static warning. Never throws.
+ */
+export async function writeInboundClientCopy(
+  db: Kysely<TenantDatabase>,
+  channelRowId: ChannelRowId,
+  followupId: FollowupId,
+  portalCopy: EciesTripleBuffers,
+): Promise<void> {
+  try {
+    await storeClientCopy(
+      db,
+      channelRowId,
+      followupId,
+      portalCopy,
+      "from_client",
+    );
+  } catch {
+    console.warn("Portal copy dropped: copy write failed for client");
+  }
+}
+
 /**
  * How long an org reply counts as active engagement on a channel.
  * Matches the reply limiter window: an engaged conversation is exempt
@@ -717,12 +800,12 @@ export async function nudgeClient(
       .set({ last_notified_at: new Date() })
       .where("id", "=", channel.id)
       .execute();
-  } catch (err: unknown) {
+  } catch {
     console.error(
       "Portal nudge failed:",
       JSON.stringify({
         orgSlug: deps.orgSlug,
-        reason: err instanceof Error ? err.message : String(err),
+        reason: "nudge_setup_failed",
       }),
     );
   } finally {

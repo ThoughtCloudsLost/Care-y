@@ -1,7 +1,6 @@
 import { describe, it, expect, afterEach } from "vitest";
 import { createHash, randomBytes } from "node:crypto";
 import {
-  getDifficulty,
   hasLeadingZeroBits,
   createPowVerifier,
   type PowConfig,
@@ -25,24 +24,6 @@ function solvePow(challenge: string, difficulty: number): string {
   }
   throw new Error("Failed to solve PoW in 1M attempts");
 }
-
-describe("getDifficulty", () => {
-  it("returns 16 for low failure counts (0-4)", () => {
-    expect(getDifficulty(0)).toBe(16);
-    expect(getDifficulty(3)).toBe(16);
-    expect(getDifficulty(4)).toBe(16);
-  });
-
-  it("returns 20 for moderate failure counts (5-7)", () => {
-    expect(getDifficulty(5)).toBe(20);
-    expect(getDifficulty(7)).toBe(20);
-  });
-
-  it("returns 22 for high failure counts (8+)", () => {
-    expect(getDifficulty(8)).toBe(22);
-    expect(getDifficulty(100)).toBe(22);
-  });
-});
 
 describe("hasLeadingZeroBits", () => {
   it("accepts all-zero buffer for any difficulty", () => {

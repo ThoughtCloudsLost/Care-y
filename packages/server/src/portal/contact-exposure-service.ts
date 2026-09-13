@@ -99,7 +99,10 @@ export async function getSealedContactInfo(
       }
     }
 
-    // Assemble JSON in a Buffer (no JS string for the combined payload)
+    // phoneStr and emailStr are JS strings (immutable, persist until GC).
+    // JSON.stringify also produces a JS string. All are GC-scoped residual
+    // risk. The plaintext Buffers are zeroed in the finally block below;
+    // sealing happens immediately after assembly.
     const contactObj: Record<string, string> = {};
     if (phoneStr !== undefined) contactObj.phone = phoneStr;
     if (emailStr !== undefined) contactObj.email = emailStr;

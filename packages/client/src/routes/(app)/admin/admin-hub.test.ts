@@ -3,6 +3,18 @@
 import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
 import { render, screen, cleanup } from "@testing-library/svelte";
 import type * as ParaglideMessages from "$lib/paraglide/messages.js";
+import type * as ToastNS from "$lib/stores/toast.svelte.js";
+import type * as ContextNS from "$lib/shell/context.js";
+import { mockToastShow } from "$mocks/toast.js";
+import { mockNavbarCtx } from "$mocks/shell-context.js";
+import type * as ErrorsNS from "$lib/errors.js";
+import type * as TrpcNS from "$lib/trpc/index.js";
+import type * as SvelteQueryNS from "@tanstack/svelte-query";
+import type * as ContextNS2 from "$lib/crypto/context.js";
+import type * as SectionScrollNavNS from "$lib/components/SectionScrollNav.svelte";
+import type * as PathsNS from "$app/paths";
+import type * as NavigationNS from "$app/navigation";
+import type * as UseSectionScrollNS from "$lib/components/useSectionScroll.svelte.js";
 
 // --- Controllable mock state ---
 
@@ -12,38 +24,40 @@ let mockProvisionedPhones:
   readonly { number: string; sid: string }[] | undefined;
 
 const mockGoto = vi.fn();
-const mockToastShow = vi.fn();
-
 // --- Mocks ---
 
-vi.mock("$app/navigation", () => ({
+vi.mock("$app/navigation", async (importOriginal) => ({
+  ...(await importOriginal<typeof NavigationNS>()),
   goto: mockGoto,
 }));
 
-vi.mock("$app/paths", () => ({
+vi.mock("$app/paths", async (importOriginal) => ({
+  ...(await importOriginal<typeof PathsNS>()),
   resolve: (path: string) => path,
   base: "",
   assets: "",
 }));
 
-vi.mock("$lib/crypto/context.js", () => ({
+vi.mock("$lib/crypto/context.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof ContextNS2>()),
   getCurrentPermissions: () => () => mockPermissions,
 }));
+vi.mock(
+  "$lib/shell/context.js",
+  async () =>
+    (
+      await import("$mocks/shell-context.js")
+    ).shellContextMock() satisfies typeof ContextNS,
+);
 
-const mockNavbarCtx = { current: undefined as unknown };
+vi.mock(
+  "$lib/stores/toast.svelte.js",
+  async () =>
+    (await import("$mocks/toast.js")).toastMock() satisfies typeof ToastNS,
+);
 
-vi.mock("$lib/shell/context.js", () => ({
-  getSectionRailCtx: () => ({ current: undefined }),
-  getNavbarOverrideCtx: () => mockNavbarCtx,
-  getScrollContainer: () => () => null,
-  getTabbarOverrideCtx: () => ({ current: undefined }),
-}));
-
-vi.mock("$lib/stores/toast.svelte.js", () => ({
-  toastStore: { show: mockToastShow, current: null, dismiss: vi.fn() },
-}));
-
-vi.mock("@tanstack/svelte-query", () => ({
+vi.mock("@tanstack/svelte-query", async (importOriginal) => ({
+  ...(await importOriginal<typeof SvelteQueryNS>()),
   useQueryClient: () => ({
     getQueryData: vi.fn(),
     setQueryData: vi.fn(),
@@ -67,7 +81,8 @@ vi.mock("@tanstack/svelte-query", () => ({
   },
 }));
 
-vi.mock("$lib/trpc/index.js", () => ({
+vi.mock("$lib/trpc/index.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof TrpcNS>()),
   trpc: {
     auth: {
       hubStatus: { query: vi.fn().mockResolvedValue({}) },
@@ -79,7 +94,7 @@ vi.mock("$lib/trpc/index.js", () => ({
 }));
 
 vi.mock("$lib/errors.js", async (importOriginal) => ({
-  ...(await importOriginal()),
+  ...(await importOriginal<typeof ErrorsNS>()),
   requireRouter: <T>(router: T) => router,
 }));
 
@@ -146,15 +161,26 @@ vi.mock("$lib/paraglide/messages.js", async (importOriginal) => ({
   hub_audit_log_subtitle: () => "Review system activity and change history",
 }));
 
-vi.mock("$lib/components/SectionScrollNav.svelte", async () => ({
-  default: (
-    await import("$lib/components/tickets/test-helpers/PassthroughShell.svelte")
-  ).default,
-}));
+vi.mock(
+  "$lib/components/SectionScrollNav.svelte",
+  async () =>
+    ({
+      default: (
+        await import("$lib/components/tickets/test-helpers/PassthroughShell.svelte")
+      ).default as unknown as (typeof SectionScrollNavNS)["default"],
+    }) satisfies typeof SectionScrollNavNS,
+);
 
-vi.mock("$lib/components/useSectionScroll.svelte.js", () => ({
-  createSectionScroll: () => ({ active: "people", scrollTo: vi.fn() }),
-}));
+vi.mock(
+  "$lib/components/useSectionScroll.svelte.js",
+  () =>
+    ({
+      createSectionScroll: (() => ({
+        active: "people",
+        scrollTo: vi.fn(),
+      })) as unknown as typeof UseSectionScrollNS.createSectionScroll,
+    }) satisfies typeof UseSectionScrollNS,
+);
 
 // jsdom lacks Web Animations API (used by Konsta transitions).
 if (typeof Element.prototype.animate !== "function") {

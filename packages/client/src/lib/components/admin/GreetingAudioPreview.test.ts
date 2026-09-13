@@ -3,7 +3,6 @@ import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
 import { render, screen, cleanup } from "@testing-library/svelte";
 
 import type * as ParaglideMessages from "$lib/paraglide/messages.js";
-import type * as BufferEncoding from "$lib/utils/buffer-encoding.js";
 
 // vi.hoisted so the mock exists when the hoisted vi.mock factory below
 // runs; a plain top-level const is still in its temporal dead zone then.
@@ -24,7 +23,8 @@ vi.mock("$lib/paraglide/messages.js", async (importOriginal) => ({
     `${p.current} / ${p.total}`,
 }));
 
-vi.mock("$lib/trpc/index.js", () => ({
+vi.mock("$lib/trpc/index.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof TrpcNS>()),
   trpc: {
     telephonyContent: {
       getGreetingAudio: { query: mockGetGreetingAudio },
@@ -32,18 +32,17 @@ vi.mock("$lib/trpc/index.js", () => ({
   },
 }));
 
-vi.mock("$lib/errors.js", () => ({
+vi.mock("$lib/errors.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof ErrorsNS>()),
   requireRouter: (router: unknown) => router,
   ClientError: class extends Error {
     override name = "ClientError" as const;
   },
 }));
 
-vi.mock("$lib/utils/buffer-encoding.js", async (importOriginal) => ({
-  ...(await importOriginal<typeof BufferEncoding>()),
-  base64ToUint8Array: (s: string) =>
-    Uint8Array.from(atob(s), (c) => c.charCodeAt(0)),
-}));
+// No crypto mock: the component decodes with @care-y/crypto's decode(),
+// which is pure string work over native btoa/atob and needs no sodium
+// initialization, so the real implementation runs here.
 
 // Stub AudioContext (jsdom does not provide Web Audio API)
 const mockDecodeAudioData = vi.fn().mockResolvedValue({
@@ -75,12 +74,15 @@ vi.stubGlobal(
 
 // vi.mock required: AudioPlayer imports Konsta Button which requires
 // the full Konsta provider context that jsdom cannot provide.
-// care-y-ignore-next-line mock-factory-unguarded -- component stub: single default export
-vi.mock("$lib/components/AudioPlayer.svelte", async () => ({
-  default: (
-    await import("$lib/components/tickets/test-helpers/PassthroughShell.svelte")
-  ).default,
-}));
+vi.mock(
+  "$lib/components/AudioPlayer.svelte",
+  async () =>
+    ({
+      default: (
+        await import("$lib/components/tickets/test-helpers/PassthroughShell.svelte")
+      ).default as unknown as (typeof AudioPlayerNS)["default"],
+    }) satisfies typeof AudioPlayerNS,
+);
 
 // jsdom lacks Web Animations API
 if (typeof Element.prototype.animate !== "function") {
@@ -92,6 +94,9 @@ if (typeof Element.prototype.animate !== "function") {
 }
 
 import GreetingAudioPreview from "./GreetingAudioPreview.svelte";
+import type * as ErrorsNS from "$lib/errors.js";
+import type * as TrpcNS from "$lib/trpc/index.js";
+import type * as AudioPlayerNS from "$lib/components/AudioPlayer.svelte";
 
 const GREETING_ID = "00000000-0000-4000-8000-000000000010";
 
@@ -132,7 +137,7 @@ describe("GreetingAudioPreview", () => {
   it("renders AudioPlayer after successful fetch and decode", async () => {
     // Base64 of 4 zero bytes
     mockGetGreetingAudio.mockResolvedValue({
-      audioBase64: "AAAAAA==",
+      audioBase64: "AAAAAA",
       contentType: "audio/wav",
     });
 
@@ -152,7 +157,7 @@ describe("GreetingAudioPreview", () => {
 
   it("shows error when audio decode fails", async () => {
     mockGetGreetingAudio.mockResolvedValue({
-      audioBase64: "AAAAAA==",
+      audioBase64: "AAAAAA",
       contentType: "audio/wav",
     });
     mockDecodeAudioData.mockRejectedValueOnce(new DOMException("decode error"));

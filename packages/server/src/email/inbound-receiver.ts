@@ -32,6 +32,7 @@ import type { OrgSchema, TicketId } from "@care-y/shared";
 import type { PlatformDatabase, TenantDatabase } from "../db/types.js";
 import type { ReplyTokenHasher } from "../crypto/field-encryptor.js";
 import { resolveToken } from "./reply-token-service.js";
+import { ReplyTokenError } from "../errors.js";
 import { htmlStrip } from "./html-strip.js";
 import type { InboundEmailData, InboundEmailResult } from "./inbound-email.js";
 import { handleInboundEmail } from "./inbound-email.js";
@@ -277,10 +278,14 @@ export function createInboundReceiver(
           tokenHash,
         });
         callback(null);
-      })().catch(() => {
-        // Unknown/revoked token and lookup failures are indistinguishable
-        // to the sender by design: one rejected RCPT, no detail.
-        callback(smtpError(550, "Mailbox not found"));
+      })().catch((err: unknown) => {
+        // Unknown/revoked tokens stay indistinguishable (one 550, no detail).
+        // Anything else is a transient: 451 so the sender MTA retries (RFC 5321).
+        if (err instanceof ReplyTokenError) {
+          callback(smtpError(550, "Mailbox not found"));
+          return;
+        }
+        callback(smtpError(451, "Temporary processing failure"));
       });
     },
 

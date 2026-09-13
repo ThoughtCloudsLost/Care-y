@@ -233,6 +233,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
 
     async function createClient(): Promise<ClientId> {
       const uid = crypto.randomUUID().slice(0, 8);
+      // care-y-ignore-start no-plaintext-db-write -- test fixture: phone_hash is a blind index, encrypted_number passes through noopEncryptor, encrypted_alias is a dummy sealed blob, and the number is synthetic. Block form because the proximity heuristic reports four lines of the formatted chain.
       const phone = await db
         .insertInto("phones")
         .values({
@@ -242,7 +243,6 @@ describe.skipIf(!process.env.DATABASE_URL)(
         })
         .returning("id")
         .executeTakeFirstOrThrow();
-      // care-y-ignore-next-line no-plaintext-db-write -- test fixture: encrypted_alias is a dummy sealed blob, not real PII
       const client = await db
         .insertInto("clients")
         .values({
@@ -252,6 +252,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
         })
         .returning("id")
         .executeTakeFirstOrThrow();
+      // care-y-ignore-end no-plaintext-db-write
       return client.id;
     }
 

@@ -1,8 +1,3 @@
-/* eslint-disable @typescript-eslint/no-unsafe-type-assertion --
-   Branded type casts (Uint8Array -> Scalar, RistrettoPoint) are the
-   standard pattern for phantom-branded newtypes. The __brand field never
-   exists at runtime; length is validated at each function boundary. */
-
 /**
  * Client-account key derivation for Encrypted Account channels.
  *
@@ -27,13 +22,11 @@
  *   SEC-054  libsodium memory management (memzero for intermediates)
  */
 
-import { requireSodium } from "./sodium.js";
 import { hkdf } from "./hkdf.js";
 import { encodeLabel } from "./bytes.js";
 import { zeroAll } from "./mem.js";
-import { InvalidKeyError } from "./errors.js";
-import { type Scalar, type RistrettoPoint, HKDF_LABELS } from "./types.js";
-import type { PortalKeypair } from "./portal.js";
+import { HKDF_LABELS } from "./types.js";
+import { keypairFromOprfOutput, type PortalKeypair } from "./portal.js";
 
 /** Derived keys for a client account: a ristretto255 keypair and a bearer auth token. */
 export interface ClientAccountKeys {
@@ -41,63 +34,48 @@ export interface ClientAccountKeys {
   readonly authToken: Uint8Array;
 }
 
-const OPRF_OUTPUT_BYTES = 64;
-
 /**
  * Derive a client account keypair and auth token from an OPRF output.
  *
  * The OPRF output must be exactly 64 bytes (SHA-512 finalize output per
- * RFC 9497). The scalar is derived via the HashToScalar construction:
- * expand to 64 bytes via HKDF, then reduce modulo the group order. The
- * 64-byte expansion prevents modular reduction bias.
+ * RFC 9497). The keypair is derived via keypairFromOprfOutput under the
+ * client-account ECIES label. The auth token is an independent 32-byte
+ * HKDF derivation under a separate label so neither reveals the other.
  *
- * The 64-byte HKDF expansion is zeroed in a finally block. The CALLER
- * zeroes oprfOutput, clientPrivate, and authToken when done.
+ * clientPrivate is zeroed in the finally block if the auth token
+ * derivation throws. The CALLER zeroes oprfOutput, clientPrivate, and
+ * authToken when done.
  *
  * @param oprfOutput - 64-byte OPRF finalize output
  * @returns Account keypair and 32-byte bearer auth token
- * @throws InvalidKeyError if oprfOutput is not exactly 64 bytes
+ * @throws InvalidInputError if oprfOutput is not exactly 64 bytes
  */
 export function deriveClientAccountKeys(
   oprfOutput: Uint8Array,
 ): ClientAccountKeys {
-  if (oprfOutput.length !== OPRF_OUTPUT_BYTES) {
-    throw new InvalidKeyError(
-      `OPRF output must be ${String(OPRF_OUTPUT_BYTES)} bytes, got ${String(oprfOutput.length)}`,
-    );
-  }
-
-  const sodium = requireSodium();
-  let expanded: Uint8Array | null = null;
+  // keypairFromOprfOutput validates the 64-byte length and zeroes its
+  // own HKDF expansion internally. clientPrivate must be zeroed here
+  // if the subsequent auth token derivation throws.
+  let clientPrivate: Uint8Array | null = null;
 
   try {
-    // Keypair: 64-byte HKDF expansion + scalar reduce (deriveUniformScalar
-    // construction under a client-specific label).
-    expanded = hkdf(
+    const keypair = keypairFromOprfOutput(
       oprfOutput,
-      encodeLabel(HKDF_LABELS.CLIENT_ACCOUNT_ECIES),
-      64,
+      HKDF_LABELS.CLIENT_ACCOUNT_ECIES,
     );
-    const clientPrivate = sodium.crypto_core_ristretto255_scalar_reduce(
-      expanded,
-    ) as Scalar;
-    const clientPublic = sodium.crypto_scalarmult_ristretto255_base(
-      clientPrivate,
-    ) as RistrettoPoint;
+    clientPrivate = keypair.clientPrivate;
 
-    // Auth token: independent 32-byte HKDF derivation. Neither output
-    // reveals the other because they use distinct labels.
     const authToken = hkdf(
       oprfOutput,
       encodeLabel(HKDF_LABELS.CLIENT_ACCOUNT_AUTH),
       32,
     );
 
-    return {
-      keypair: { clientPrivate, clientPublic },
-      authToken,
-    };
+    // Success: caller takes ownership of clientPrivate, clear our ref
+    clientPrivate = null;
+
+    return { keypair, authToken };
   } finally {
-    zeroAll(expanded);
+    zeroAll(clientPrivate);
   }
 }

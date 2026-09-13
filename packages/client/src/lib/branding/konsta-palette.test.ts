@@ -555,36 +555,69 @@ describe("edge case: oklchToHexClamped gamut iteration (line 360-368)", () => {
     // We test deep reds that force aggressive clamping.
     const result = checkBrandProximity("#a33224");
     expect(result.collides).toBe(true);
-    if (result.nudgedHex) {
-      expect(result.nudgedHex).toMatch(/^#[0-9a-f]{6}$/);
-    }
+    expect(result.nudgedHex).toBeDefined();
+    expect(result.nudgedHex).toMatch(/^#[0-9a-f]{6}$/);
   });
 });
 
 describe("edge case: hueDelta wrap-around (lines 371-376)", () => {
-  it("handles hue delta across the 0/360 boundary", () => {
-    // Colors at hue ~350 (close to 360) tested against anchors at hue ~20
-    // exercise the wrap-around correction in hueDelta.
-    const result = checkBrandProximity("#cc2233");
-    // Regardless of collision result, the function should not throw
-    expect(typeof result.collides).toBe("boolean");
+  it("does not collide across the 0/360 hue boundary", () => {
+    // #ad3366 sits at OKLCH hue ~359 with anchor-class chroma (~0.16);
+    // the urgent anchors sit at hue ~30-32. The shortest arc wraps
+    // through 0, but deltaEOK 0.06 at this chroma caps collisions at
+    // roughly 25 degrees of hue, so no far-side brand can collide.
+    // hueDelta's wrap handling matters in the nudge path instead (next
+    // describe). This is also the calibration nudge output for #b3362b,
+    // which must itself read as clear.
+    const result = checkBrandProximity("#ad3366");
+    expect(result.collides).toBe(false);
   });
 
-  it("handles hue delta with negative wrap", () => {
+  it("detects collision on a small negative hue delta", () => {
+    // #e06655 (OKLCH hue ~29.9) sits just below the light urgent anchor
+    // #e06a55 (hue ~31.7): a small negative delta with no boundary
+    // crossing, well inside deltaEOK 0.06.
     const result = checkBrandProximity("#e06655");
-    expect(typeof result.collides).toBe("boolean");
+    expect(result.collides).toBe(true);
+    expect(result.conflict).toBe("urgent");
+  });
+
+  it("reports no collision for hues far from any semantic anchor", () => {
+    // #336699 sits at OKLCH hue ~250 (blue), nowhere near the urgent
+    // (~30) or care (~85) anchors. Wrap-around arithmetic must not
+    // false-positive.
+    const result = checkBrandProximity("#336699");
+    expect(result.collides).toBe(false);
   });
 });
 
 describe("edge case: checkBrandProximity nudge direction flip (line 457)", () => {
-  it("flips nudge direction when preferred side runs into another semantic hue", () => {
-    // Colors between the urgent-red and care-ochre anchors must try both
-    // rotation directions. The first direction might run into the other anchor.
-    const result = checkBrandProximity("#b85530");
-    expect(typeof result.collides).toBe("boolean");
-    if (result.collides && result.nudgedHex) {
-      expect(checkBrandProximity(result.nudgedHex).collides).toBe(false);
-    }
+  it("flips nudge direction and wraps past 0 when the preferred side never clears", () => {
+    // #964128 (OKLCH hue ~37.1) collides with the urgent anchor (~30.4)
+    // and leans positive, so the preferred rotation runs upward into the
+    // care anchors (~84-87) and never clears. The algorithm flips
+    // negative and lands near hue 355: every successful flip crosses the
+    // 0/360 boundary, because clearing the urgent anchor from below
+    // takes about 41 degrees. This exercises the flip and the mod-360
+    // wrap in one path.
+    const result = checkBrandProximity("#964128");
+    expect(result.collides).toBe(true);
+    expect(result.conflict).toBe("urgent");
+    expect(result.nudgedHex).toBeDefined();
+    expect(result.nudgedHex).toMatch(/^#[0-9a-f]{6}$/);
+    expect(checkBrandProximity(result.nudgedHex ?? "").collides).toBe(false);
+  });
+
+  it("keeps the preferred direction when it clears without a flip", () => {
+    // #963c0a (OKLCH hue ~43.6) also collides with urgent and leans
+    // positive, but from here the positive rotation clears both anchor
+    // pairs (nudge lands near hue 125), so no flip happens. Contrast
+    // fixture for the flip case above.
+    const result = checkBrandProximity("#963c0a");
+    expect(result.collides).toBe(true);
+    expect(result.conflict).toBe("urgent");
+    expect(result.nudgedHex).toBeDefined();
+    expect(checkBrandProximity(result.nudgedHex ?? "").collides).toBe(false);
   });
 });
 

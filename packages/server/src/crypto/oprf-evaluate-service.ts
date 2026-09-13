@@ -34,6 +34,7 @@ import type { RateLimiter } from "../ratelimit/rate-limiter.js";
 import type { PowVerifier } from "./pow.js";
 import type { OprfAuditLogger } from "./oprf-audit.js";
 import type { UserId, OrgId, ChannelSecret } from "@care-y/shared";
+import { clientAccountIdSchema } from "@care-y/shared";
 import { volunteerTag, accountTag, channelTag } from "./oprf-tags.js";
 import { hashChannelAuth } from "@care-y/crypto";
 import type { Kysely } from "kysely";
@@ -159,6 +160,8 @@ export interface ChannelEvaluateRequest {
   readonly channelId: ChannelSecret;
   readonly blindedElement: string;
   readonly auth?: string;
+  readonly powChallenge?: string;
+  readonly powSolution?: string;
   readonly ip: string;
   readonly orgUuid: OrgId;
 }
@@ -189,7 +192,11 @@ function tagForEvaluateRequest(req: OprfEvaluateRequest): string {
     case "volunteer":
       return volunteerTag(req.userId);
     case "account":
-      return accountTag(req.userId);
+      // The evaluate wire reuses the UserId-branded slot for account ids.
+      // This branch only fires for kind "account", where the caller
+      // populated userId from a client account id, so re-parsing mints
+      // the correct brand without a cast.
+      return accountTag(clientAccountIdSchema.parse(req.userId));
   }
 }
 
@@ -376,7 +383,13 @@ export function createOprfEvaluateService(
 
       // PoW gate keyed on channelId
       const attemptCount = attemptTracker.increment(channelKey);
-      await enforcePowGate(channelKey, ip, attemptCount, undefined, undefined);
+      await enforcePowGate(
+        channelKey,
+        ip,
+        attemptCount,
+        req.powChallenge,
+        req.powSolution,
+      );
 
       // Channel gating rules (ADR-091):
       // - No row (unknown channelId): allow (mint path)
@@ -415,8 +428,13 @@ export function createOprfEvaluateService(
       const tag = channelTag(orgUuid, channelId);
       const blindedBuf = Buffer.from(blindedElement, "base64");
 
-      const evaluated = await deps.evaluator.evaluate(blindedBuf, tag);
-      return { evaluated: Buffer.from(evaluated).toString("base64url") };
+      try {
+        const evaluated = await deps.evaluator.evaluate(blindedBuf, tag);
+        return { evaluated: Buffer.from(evaluated).toString("base64url") };
+      } catch (err: unknown) {
+        await deps.auditLogger.logFailure(channelKey, ip, "oprf_failed");
+        throw err;
+      }
     },
   };
 }

@@ -1,8 +1,10 @@
 // @vitest-environment jsdom
 import { describe, it, expect, afterEach, vi } from "vitest";
 import { render, screen, cleanup, fireEvent } from "@testing-library/svelte";
+import type * as MessagesNS from "$lib/paraglide/messages.js";
 
-vi.mock("$lib/paraglide/messages.js", () => ({
+vi.mock("$lib/paraglide/messages.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof MessagesNS>()),
   register_note: () => "Note",
   register_careful: () => "Careful",
   register_warning: () => "Warning",

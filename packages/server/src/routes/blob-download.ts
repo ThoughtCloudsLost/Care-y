@@ -286,7 +286,16 @@ async function servePortalBlob<TId>(
       return;
     }
 
-    const parsedId = idSchema.parse(id);
+    let parsedId: TId;
+    try {
+      parsedId = idSchema.parse(id);
+    } catch {
+      // Malformed ids are indistinguishable from missing ones
+      // (enumeration resistance).
+      sendJsonResponse(res, 404, { error: "not_found" });
+      return;
+    }
+
     const blobKey = await resolver(tDb, channel.id, parsedId);
     if (blobKey === null) {
       sendJsonResponse(res, 404, { error: "not_found" });

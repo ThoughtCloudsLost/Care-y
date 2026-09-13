@@ -1,15 +1,18 @@
 // @vitest-environment jsdom
 import { describe, it, expect, afterEach, beforeEach, vi } from "vitest";
 import { render, screen, cleanup } from "@testing-library/svelte";
+import type * as ToastNS from "$lib/stores/toast.svelte.js";
+import type * as TrpcNS from "$lib/trpc/index.js";
+import type * as MessagesNS from "$lib/paraglide/messages.js";
 
-const { mockBackupCodes, mockToastShow } = vi.hoisted(() => ({
+const { mockBackupCodes } = vi.hoisted(() => ({
   mockBackupCodes: vi
     .fn()
     .mockResolvedValue({ codes: ["AAAA-1111", "BBBB-2222"] }),
-  mockToastShow: vi.fn(),
 }));
 
-vi.mock("$lib/paraglide/messages.js", () => ({
+vi.mock("$lib/paraglide/messages.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof MessagesNS>()),
   register_note: () => "Note",
   register_careful: () => "Careful",
   register_warning: () => "Warning",
@@ -29,7 +32,8 @@ vi.mock("$lib/paraglide/messages.js", () => ({
 
 // $lib/trpc/index.js creates a live HTTP client at import time
 // (vi.mock exception 2: $lib alias with import side effects).
-vi.mock("$lib/trpc/index.js", () => ({
+vi.mock("$lib/trpc/index.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof TrpcNS>()),
   trpc: {
     twoFactor: {
       enroll: {
@@ -39,9 +43,11 @@ vi.mock("$lib/trpc/index.js", () => ({
   },
 }));
 
-vi.mock("$lib/stores/toast.svelte.js", () => ({
-  toastStore: { show: mockToastShow },
-}));
+vi.mock(
+  "$lib/stores/toast.svelte.js",
+  async () =>
+    (await import("$mocks/toast.js")).toastMock() satisfies typeof ToastNS,
+);
 
 const { default: BackupCodesSheet } = await import("./BackupCodesSheet.svelte");
 

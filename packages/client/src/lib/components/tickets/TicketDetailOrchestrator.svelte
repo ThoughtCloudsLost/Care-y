@@ -16,7 +16,7 @@
     setDraftForMode,
     clearDraftForMode,
   } from "$lib/tickets/draft-store.svelte.js";
-  import { Link, Button, Chip, DialogButton } from "konsta/svelte";
+  import { Link, Button, DialogButton } from "konsta/svelte";
   import { DIALOG_DESTRUCTIVE_CLASS } from "$lib/components/shared/konsta-classes.js";
   import {
     ChevronLeft,
@@ -67,10 +67,11 @@
     lookupCachedFollowUpCount,
   } from "$lib/tickets/ticket-detail-utils.js";
   import TicketCompose from "$lib/components/tickets/TicketCompose.svelte";
+  import PendingAttachmentStrip from "$lib/components/tickets/PendingAttachmentStrip.svelte";
   import JumpToLatest from "$lib/components/tickets/JumpToLatest.svelte";
   import type { TicketComposeHandle } from "$lib/components/tickets/ticket-compose-types.js";
   import type { TicketAction } from "$lib/tickets/types.js";
-  import type { ProseMirrorDocJSON } from "@care-y/shared";
+  import type { ProseMirrorDocJSON, AttachmentId } from "@care-y/shared";
   import type { CallAction } from "$lib/components/tickets/CallOptionsContent.svelte";
   import TicketDetailOverlays from "$lib/components/tickets/TicketDetailOverlays.svelte";
   import EmailComposeSheet from "$lib/components/tickets/EmailComposeSheet.svelte";
@@ -91,6 +92,7 @@
     createVolunteersQuery,
     createParticipantsQuery,
     createNoteTypesQuery,
+    enabledTicketId,
   } from "$lib/tickets/queries.js";
   import {
     buildVolunteerMap,
@@ -183,7 +185,7 @@
   const ticketQuery = createQuery(() => ({
     queryKey: ticketKeys.detail(ticketId),
     queryFn: async () => ticketRouter.get.query({ ticketId }),
-    enabled: typeof ticketId === "string" && ticketId !== "",
+    enabled: enabledTicketId(ticketId),
   }));
 
   const ticket = $derived(ticketQuery.data);
@@ -285,7 +287,7 @@
   const readCursorQuery = createQuery(() => ({
     queryKey: ticketKeys.readCursor(ticketId),
     queryFn: async () => ticketRouter.getReadCursor.query({ ticketId }),
-    enabled: typeof ticketId === "string" && ticketId !== "",
+    enabled: enabledTicketId(ticketId),
   }));
 
   const currentUserIdGetter = getCurrentUserId();
@@ -1110,40 +1112,10 @@
 
 {#snippet ticketCompose()}
   <div class="detail-compose">
-    {#if attachmentUpload.pending.length > 0}
-      <div
-        class="pending-attachments"
-        role="list"
-        aria-label={m.attachment_pending_list()}
-      >
-        {#each attachmentUpload.pending as entry (entry.attachmentId)}
-          <Chip
-            class="attachment-chip"
-            outline={entry.status === "failed"}
-            role="listitem"
-          >
-            <span class="attachment-chip-name">{entry.filename}</span>
-            {#if entry.status === "encrypting" || entry.status === "uploading"}
-              <span class="attachment-chip-status">
-                {m.attachment_uploading()}
-              </span>
-            {:else if entry.status === "failed"}
-              <span class="attachment-chip-status attachment-chip-failed">
-                {m.attachment_failed()}
-              </span>
-            {/if}
-          </Chip>
-          <button
-            type="button"
-            class="attachment-remove-btn"
-            onclick={() => attachmentUpload.remove(entry.attachmentId)}
-            aria-label={m.attachment_remove({ name: entry.filename })}
-          >
-            <X size={14} aria-hidden="true" />
-          </button>
-        {/each}
-      </div>
-    {/if}
+    <PendingAttachmentStrip
+      entries={attachmentUpload.pending}
+      onremove={(id: AttachmentId) => attachmentUpload.remove(id)}
+    />
     <TicketCompose
       bind:this={compose}
       {ticketId}
@@ -1509,45 +1481,5 @@
       -webkit-backdrop-filter: none !important;
       background: Canvas !important;
     }
-  }
-
-  .pending-attachments {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 6px;
-    padding: 6px 16px;
-    align-items: center;
-  }
-
-  .attachment-chip-name {
-    max-width: 120px;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
-  .attachment-chip-status {
-    font-size: var(--text-xs);
-    color: var(--muted);
-    margin-left: 4px;
-  }
-
-  .attachment-chip-failed {
-    color: var(--danger);
-  }
-
-  .attachment-remove-btn {
-    appearance: none;
-    border: none;
-    background: none;
-    padding: 6px;
-    margin: -6px 0 -6px -2px;
-    color: var(--muted);
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    min-width: 44px;
-    min-height: 44px;
   }
 </style>

@@ -20,6 +20,7 @@ import {
 } from "./sodium.js";
 import { InvalidInputError, DecryptionError } from "./errors.js";
 import { HKDF_LABELS } from "./types.js";
+import { normalizeAlias } from "@care-y/shared";
 
 describe("portal key derivation", () => {
   let sodium: SodiumBackend;
@@ -221,6 +222,25 @@ describe("portal key derivation", () => {
       const b = portalOprfInput(seed, "polish naming tilt wrinkle");
       expect(a).toEqual(b);
     }, 120_000);
+  });
+
+  describe("normalizePassphrase parity with normalizeAlias", () => {
+    it("inline chain matches normalizeAlias for arbitrary unicode strings", () => {
+      fc.assert(
+        fc.property(fc.string({ unit: "binary" }), (s) => {
+          // The old inline chain that normalizePassphrase used to implement
+          const oldResult = s
+            .normalize("NFKC")
+            .toLowerCase()
+            .trim()
+            .replace(/\s+/g, " ");
+          // The shared normalizeAlias that normalizePassphrase now delegates to
+          const newResult = normalizeAlias(s);
+          expect(newResult).toBe(oldResult);
+        }),
+        { numRuns: FC_MEDIUM },
+      );
+    });
   });
 
   describe("all outputs are distinct per seed", () => {

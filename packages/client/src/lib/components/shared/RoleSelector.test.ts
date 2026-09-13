@@ -2,18 +2,23 @@
 import { describe, it, expect, afterEach, vi, beforeEach } from "vitest";
 import { render, screen, cleanup, fireEvent } from "@testing-library/svelte";
 
-vi.mock("$lib/paraglide/messages.js", () => ({
+vi.mock("$lib/paraglide/messages.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof MessagesNS>()),
   admin_invite_role_label: () => "Role",
   admin_role_volunteer: () => "Volunteer",
   admin_role_manager: () => "Manager",
   admin_role_admin: () => "Admin",
 }));
 
-vi.mock("$lib/terminology/with-terms.js", () => ({
-  withTerms: () => ({}),
-}));
+vi.mock("$lib/terminology/with-terms.js", async (importOriginal) =>
+  (await import("$mocks/with-terms.js")).withTermsMock(
+    await importOriginal<typeof WithTermsNS>(),
+  ),
+);
 
 import { RoleId } from "@care-y/shared";
+import type * as WithTermsNS from "$lib/terminology/with-terms.js";
+import type * as MessagesNS from "$lib/paraglide/messages.js";
 
 const { default: RoleSelector } = await import("./RoleSelector.svelte");
 

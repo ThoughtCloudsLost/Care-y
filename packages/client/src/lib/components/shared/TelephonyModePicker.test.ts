@@ -1,8 +1,10 @@
 // @vitest-environment jsdom
 import { describe, it, expect, afterEach, vi, beforeEach } from "vitest";
 import { render, screen, cleanup, fireEvent } from "@testing-library/svelte";
+import type * as MessagesNS from "$lib/paraglide/messages.js";
 
-vi.mock("$lib/paraglide/messages.js", () => ({
+vi.mock("$lib/paraglide/messages.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof MessagesNS>()),
   onboarding_telephony_byot_label: () => "I have a Twilio account",
   onboarding_telephony_byot_description: () => "Bring your own credentials.",
   onboarding_telephony_managed_label: () => "Set up telephony for me",

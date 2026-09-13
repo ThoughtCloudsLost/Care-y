@@ -49,6 +49,7 @@ import {
   decode,
   hkdfDerive32,
   HKDF_LABELS,
+  INTAKE_RESPONSE_SLOT,
   type Scalar,
   type RistrettoPoint,
   type SymmetricKey,
@@ -111,6 +112,7 @@ import {
   newKeyGeneration,
 } from "@care-y/shared";
 import { TkCache } from "./tk-cache.js";
+import { pairKey } from "../tickets/pair-key.js";
 
 // ── Sink type ──────────────────────────────────────────────────────
 
@@ -1862,8 +1864,13 @@ function handleDetectMergeCandidates(
             const sealedWrap = decode(resp.intakeWrap);
             tk = sodium.crypto_box_seal_open(sealedWrap, pk, sk);
             tkCache.set(resp.ticketId, tk);
-          } catch {
-            // Intake wrap unseal failed; skip this response
+          } catch (err: unknown) {
+            if (import.meta.env.DEV) {
+              console.warn(
+                "merge scan: intake wrap unseal skipped",
+                err instanceof Error ? err.message : String(err),
+              );
+            }
             continue;
           }
         }
@@ -1888,7 +1895,13 @@ function handleDetectMergeCandidates(
               vp,
             );
             tkCache.set(resp.ticketId, tk);
-          } catch {
+          } catch (err: unknown) {
+            if (import.meta.env.DEV) {
+              console.warn(
+                "merge scan: vol-wrap decrypt skipped",
+                err instanceof Error ? err.message : String(err),
+              );
+            }
             continue;
           }
         }
@@ -1897,7 +1910,7 @@ function handleDetectMergeCandidates(
       // Decrypt the response blob
       try {
         const ciphertextBuf = decode(resp.encryptedResponse);
-        const aad = buildContentAad(resp.ticketId, "intake-response");
+        const aad = buildContentAad(resp.ticketId, INTAKE_RESPONSE_SLOT);
         const plaintext = decryptContent(
           ciphertextBuf as Ciphertext,
           tk as SymmetricKey,
@@ -1939,8 +1952,13 @@ function handleDetectMergeCandidates(
         } finally {
           sodium.memzero(plaintext);
         }
-      } catch {
-        // Decrypt failed for this response; continue with others
+      } catch (err: unknown) {
+        if (import.meta.env.DEV) {
+          console.warn(
+            "merge scan: intake response skipped",
+            err instanceof Error ? err.message : String(err),
+          );
+        }
       }
     }
 
@@ -1972,11 +1990,8 @@ function handleDetectMergeCandidates(
       const b = fingerprints[j];
       if (!b) continue;
 
-      const pairKey =
-        a.clientId < b.clientId
-          ? `${a.clientId}:${b.clientId}`
-          : `${b.clientId}:${a.clientId}`;
-      if (seen.has(pairKey)) continue;
+      const pk = pairKey(a.clientId, b.clientId);
+      if (seen.has(pk)) continue;
 
       // Check phone hash match
       for (const phoneHash of a.phones) {
@@ -1987,11 +2002,11 @@ function handleDetectMergeCandidates(
             matchKind: "phone",
             matchHash: phoneHash,
           });
-          seen.add(pairKey);
+          seen.add(pk);
           break;
         }
       }
-      if (seen.has(pairKey)) continue;
+      if (seen.has(pk)) continue;
 
       // Check email hash match
       for (const emailHash of a.emails) {
@@ -2002,7 +2017,7 @@ function handleDetectMergeCandidates(
             matchKind: "email",
             matchHash: emailHash,
           });
-          seen.add(pairKey);
+          seen.add(pk);
           break;
         }
       }
@@ -2021,11 +2036,8 @@ function handleDetectMergeCandidates(
 
 // ── Intake response viewer handlers ───────────────────────────────
 
-/**
- * AAD slot for the structured form response blob. Must match the slot
- * used by submitIntake in intake-crypto.ts on the public form page.
- */
-const INTAKE_RESPONSE_SLOT = "intake-form-response";
+// AAD slot imported from @care-y/crypto (INTAKE_RESPONSE_SLOT).
+// Must match the slot used by submitIntake in intake-crypto.ts.
 
 function handleDecryptIntakeResponse(
   req: DecryptIntakeResponseRequest,

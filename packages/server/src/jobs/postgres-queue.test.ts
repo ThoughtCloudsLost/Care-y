@@ -298,5 +298,48 @@ describe.skipIf(!process.env.DATABASE_URL)(
     `.execute(testDb.db);
       expect(result.rows[0]?.status).toBe("pending");
     });
+
+    it("concurrent pollers never process the same job twice", async () => {
+      const processedA: string[] = [];
+      const processedB: string[] = [];
+
+      const queueA = createPostgresJobQueue(testDb.db);
+      const queueB = createPostgresJobQueue(testDb.db);
+      queueA.process("conc-queue", async (payload) => {
+        processedA.push(String(payload.jobTag));
+      });
+      queueB.process("conc-queue", async (payload) => {
+        processedB.push(String(payload.jobTag));
+      });
+
+      const ids: string[] = [];
+      for (let i = 0; i < 5; i++) {
+        ids.push(
+          await queueA.enqueue("conc-queue", { jobTag: `job-${String(i)}` }),
+        );
+      }
+
+      queueA.start(50);
+      queueB.start(50);
+
+      await vi.waitFor(
+        async () => {
+          const rows = await sql<{ status: string }>`
+            SELECT status FROM pending_jobs WHERE id = ANY(${ids}::uuid[])
+          `.execute(testDb.db);
+          expect(rows.rows.every((r) => r.status === "completed")).toBe(true);
+        },
+        { timeout: 5000, interval: 100 },
+      );
+
+      await queueA.stop();
+      await queueB.stop();
+
+      // Every job ran exactly once across both pollers
+      const all = [...processedA, ...processedB].sort();
+      expect(all).toEqual(
+        Array.from({ length: 5 }, (_, i) => `job-${String(i)}`),
+      );
+    });
   },
 );

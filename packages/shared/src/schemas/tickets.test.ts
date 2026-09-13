@@ -724,9 +724,15 @@ describe("searchClientsInputSchema", () => {
     }
   });
 
+  it("accepts a full 128-hex alias hash as the query", () => {
+    expect(
+      searchClientsInputSchema.safeParse({ query: "ab".repeat(64) }).success,
+    ).toBe(true);
+  });
+
   it("rejects query exceeding max length", () => {
     expect(
-      searchClientsInputSchema.safeParse({ query: "a".repeat(101) }).success,
+      searchClientsInputSchema.safeParse({ query: "a".repeat(129) }).success,
     ).toBe(false);
   });
 

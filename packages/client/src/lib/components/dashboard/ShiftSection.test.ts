@@ -2,12 +2,15 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { render, screen, cleanup, fireEvent } from "@testing-library/svelte";
 import ShiftSection from "./ShiftSection.svelte";
+import type * as ToastNS from "$lib/stores/toast.svelte.js";
 
 // The band shows a coming-soon toast for End shift (no shift backend yet);
 // spy on the store to prove it never fakes a mutation.
-vi.mock("$lib/stores/toast.svelte.js", () => ({
-  toastStore: { show: vi.fn() },
-}));
+vi.mock(
+  "$lib/stores/toast.svelte.js",
+  async () =>
+    (await import("$mocks/toast.js")).toastMock() satisfies typeof ToastNS,
+);
 
 vi.stubGlobal(
   "IntersectionObserver",

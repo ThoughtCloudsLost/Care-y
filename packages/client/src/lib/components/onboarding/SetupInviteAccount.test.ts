@@ -2,11 +2,24 @@
 import { describe, it, expect, afterEach, vi, beforeEach } from "vitest";
 import { render, screen, cleanup, fireEvent } from "@testing-library/svelte";
 import * as m from "$lib/paraglide/messages.js";
+import type * as ToastNS from "$lib/stores/toast.svelte.js";
+import type * as HapticNS from "$lib/utils/haptic.js";
+import type * as AnnounceNS from "$lib/utils/announce.js";
+import type * as WizardNavContextNS from "./wizard-nav-context.js";
+import type * as PowSolverNS from "$lib/auth/pow-solver.js";
+import type * as CryptoHelpersNS from "$lib/auth/crypto-helpers.js";
+import type * as CleanupNS from "$lib/auth/cleanup.js";
+import type * as ContextNS from "$lib/crypto/context.js";
+import type * as TrpcNS from "$lib/trpc/index.js";
+import type * as LoginCryptoNS from "$lib/auth/login-crypto.js";
+import type * as RegisterCryptoNS from "$lib/auth/register-crypto.js";
+import type * as OrgKeyReadyNS from "$lib/crypto/org-key-ready.svelte.js";
 
 // jsdom doesn't implement scrollIntoView
 Element.prototype.scrollIntoView = vi.fn();
 
-vi.mock("$lib/trpc/index.js", () => ({
+vi.mock("$lib/trpc/index.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof TrpcNS>()),
   trpc: {
     onboarding: {
       registerFromInvite: { mutate: vi.fn() },
@@ -14,7 +27,8 @@ vi.mock("$lib/trpc/index.js", () => ({
   },
 }));
 
-vi.mock("$lib/crypto/context.js", () => ({
+vi.mock("$lib/crypto/context.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof ContextNS>()),
   getCryptoBridge: vi.fn(() => ({
     argon2id: vi.fn(),
     oprfBlind: vi.fn(),
@@ -27,43 +41,60 @@ vi.mock("$lib/crypto/context.js", () => ({
   })),
 }));
 
-vi.mock("$lib/crypto/org-key-ready.svelte.js", () => ({
-  setOrgKeyReady: vi.fn(),
-}));
+vi.mock(
+  "$lib/crypto/org-key-ready.svelte.js",
+  () =>
+    ({
+      setOrgKeyReady: vi.fn(),
+      isOrgKeyReady: () => false,
+    }) satisfies typeof OrgKeyReadyNS,
+);
 
-vi.mock("$lib/auth/cleanup.js", () => ({
+vi.mock("$lib/auth/cleanup.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof CleanupNS>()),
   installCleanupHandler: vi.fn(),
 }));
 
-vi.mock("$lib/auth/register-crypto.js", () => ({
+vi.mock("$lib/auth/register-crypto.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof RegisterCryptoNS>()),
   registerCrypto: vi.fn(),
 }));
 
-vi.mock("$lib/auth/login-crypto.js", () => ({
+vi.mock("$lib/auth/login-crypto.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof LoginCryptoNS>()),
   loginCrypto: vi.fn(),
 }));
 
-vi.mock("$lib/auth/crypto-helpers.js", () => ({
+vi.mock("$lib/auth/crypto-helpers.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof CryptoHelpersNS>()),
   fetchAndUnwrapOrgKey: vi.fn(),
 }));
 
-vi.mock("$lib/auth/pow-solver.js", () => ({
+vi.mock("$lib/auth/pow-solver.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof PowSolverNS>()),
   solveProofOfWork: vi.fn(),
 }));
 
-vi.mock("$lib/utils/announce.js", () => ({
-  announceToLiveRegion: vi.fn(),
-}));
+vi.mock("$lib/utils/announce.js", async (importOriginal) =>
+  (await import("$mocks/announce.js")).announceMock(
+    await importOriginal<typeof AnnounceNS>(),
+  ),
+);
 
-vi.mock("$lib/utils/haptic.js", () => ({
-  haptic: vi.fn(),
-}));
+vi.mock("$lib/utils/haptic.js", async (importOriginal) =>
+  (await import("$mocks/haptic.js")).hapticMock(
+    await importOriginal<typeof HapticNS>(),
+  ),
+);
 
-vi.mock("$lib/stores/toast.svelte.js", () => ({
-  toastStore: { show: vi.fn() },
-}));
+vi.mock(
+  "$lib/stores/toast.svelte.js",
+  async () =>
+    (await import("$mocks/toast.js")).toastMock() satisfies typeof ToastNS,
+);
 
-vi.mock("./wizard-nav-context.js", () => ({
+vi.mock("./wizard-nav-context.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof WizardNavContextNS>()),
   getWizardNavCtx: () => ({ current: undefined }),
 }));
 

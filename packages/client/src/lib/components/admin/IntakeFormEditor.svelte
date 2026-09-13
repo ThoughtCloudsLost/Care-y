@@ -56,7 +56,7 @@
   import { encryptClientBranding, encode } from "@care-y/crypto";
   import * as m from "$lib/paraglide/messages.js";
   import { trpc } from "$lib/trpc/index.js";
-  import { requireRouter } from "$lib/errors.js";
+  import { requireRouter, OrgKeyNotLoadedError } from "$lib/errors.js";
   import {
     intakeFormKeys,
     queueKeys,
@@ -450,7 +450,7 @@
     }) => {
       const orgPub = orgKeyManager.getPublicKey();
       if (!orgPub) {
-        throw new Error("Org key not loaded");
+        throw new OrgKeyNotLoadedError();
       }
 
       const encryptedFields = input.fields.map((f) => {
@@ -1395,7 +1395,46 @@
     {/if}
   </Block>
 
-  <!-- Field list (F-009: enriched rows, per-page numbering, page break separators) -->
+  {#snippet fieldActions(index: number)}
+    <div class="field-actions">
+      <button
+        type="button"
+        class="field-action-btn"
+        disabled={index === 0}
+        onclick={() => moveField(index, -1)}
+        aria-label={m.intake_forms_move_up()}
+      >
+        <ArrowUp size={18} />
+      </button>
+      <button
+        type="button"
+        class="field-action-btn"
+        disabled={index === fields.length - 1}
+        onclick={() => moveField(index, 1)}
+        aria-label={m.intake_forms_move_down()}
+      >
+        <ArrowDown size={18} />
+      </button>
+      <button
+        type="button"
+        class="field-action-btn"
+        onclick={() => openConfigSheet(index)}
+        aria-label={m.intake_forms_configure()}
+      >
+        <Settings size={18} />
+      </button>
+      <button
+        type="button"
+        class="field-action-btn field-action-btn-remove"
+        onclick={() => removeField(index)}
+        aria-label={m.intake_forms_remove_field()}
+      >
+        <X size={18} />
+      </button>
+    </div>
+  {/snippet}
+
+  <!-- Field list (enriched rows, per-page numbering, page break separators) -->
   <BlockTitle>
     {m.intake_forms_fields_heading({ count: String(fields.length) })}
   </BlockTitle>
@@ -1403,7 +1442,6 @@
     {#each fields as field, index (field.fieldKey)}
       {@const numbering = fieldNumbering.at(index)}
       {#if field.fieldType === "pageBreak"}
-        <!-- Page break rendered as a separator row, not a numbered field -->
         <ListItem
           title={fieldDisplayLabel(field) ||
             m.intake_forms_field_type_page_break()}
@@ -1418,88 +1456,17 @@
             {/if}
           {/snippet}
           {#snippet after()}
-            <div class="field-actions">
-              <button
-                type="button"
-                class="field-action-btn"
-                disabled={index === 0}
-                onclick={() => moveField(index, -1)}
-                aria-label={m.intake_forms_move_up()}
-              >
-                <ArrowUp size={18} />
-              </button>
-              <button
-                type="button"
-                class="field-action-btn"
-                disabled={index === fields.length - 1}
-                onclick={() => moveField(index, 1)}
-                aria-label={m.intake_forms_move_down()}
-              >
-                <ArrowDown size={18} />
-              </button>
-              <button
-                type="button"
-                class="field-action-btn"
-                onclick={() => openConfigSheet(index)}
-                aria-label={m.intake_forms_configure()}
-              >
-                <Settings size={18} />
-              </button>
-              <button
-                type="button"
-                class="field-action-btn field-action-btn-remove"
-                onclick={() => removeField(index)}
-                aria-label={m.intake_forms_remove_field()}
-              >
-                <X size={18} />
-              </button>
-            </div>
+            {@render fieldActions(index)}
           {/snippet}
         </ListItem>
       {:else if field.fieldType === "richText"}
-        <!-- Rich text block rendered as a structural row with content preview -->
         {@const bodyCapError = fieldBodyCapErrors.get(field.fieldKey)}
         <ListItem
           title={m.intake_forms_field_type_rich_text()}
           subtitle={richTextBodyPreview(field)}
         >
           {#snippet after()}
-            <div class="field-actions">
-              <button
-                type="button"
-                class="field-action-btn"
-                disabled={index === 0}
-                onclick={() => moveField(index, -1)}
-                aria-label={m.intake_forms_move_up()}
-              >
-                <ArrowUp size={18} />
-              </button>
-              <button
-                type="button"
-                class="field-action-btn"
-                disabled={index === fields.length - 1}
-                onclick={() => moveField(index, 1)}
-                aria-label={m.intake_forms_move_down()}
-              >
-                <ArrowDown size={18} />
-              </button>
-              <button
-                type="button"
-                class="field-action-btn"
-                onclick={() => openConfigSheet(index)}
-                aria-label={m.intake_forms_configure()}
-              >
-                <Settings size={18} />
-              </button>
-              <button
-                type="button"
-                class="field-action-btn field-action-btn-remove"
-                onclick={() => removeField(index)}
-                aria-label={m.intake_forms_remove_field()}
-              >
-                <X size={18} />
-              </button>
-            </div>
+            {@render fieldActions(index)}
           {/snippet}
         </ListItem>
         {#if bodyCapError}
@@ -1516,42 +1483,7 @@
             (field.isRequired ? `, ${m.intake_forms_field_required()}` : "")}
         >
           {#snippet after()}
-            <div class="field-actions">
-              <button
-                type="button"
-                class="field-action-btn"
-                disabled={index === 0}
-                onclick={() => moveField(index, -1)}
-                aria-label={m.intake_forms_move_up()}
-              >
-                <ArrowUp size={18} />
-              </button>
-              <button
-                type="button"
-                class="field-action-btn"
-                disabled={index === fields.length - 1}
-                onclick={() => moveField(index, 1)}
-                aria-label={m.intake_forms_move_down()}
-              >
-                <ArrowDown size={18} />
-              </button>
-              <button
-                type="button"
-                class="field-action-btn"
-                onclick={() => openConfigSheet(index)}
-                aria-label={m.intake_forms_configure()}
-              >
-                <Settings size={18} />
-              </button>
-              <button
-                type="button"
-                class="field-action-btn field-action-btn-remove"
-                onclick={() => removeField(index)}
-                aria-label={m.intake_forms_remove_field()}
-              >
-                <X size={18} />
-              </button>
-            </div>
+            {@render fieldActions(index)}
           {/snippet}
         </ListItem>
       {/if}
@@ -2070,7 +2002,7 @@
   /* Content cap validation error */
   .content-cap-error {
     font-size: var(--text-xs);
-    color: var(--k-ios-red, #ff3b30);
+    color: var(--danger);
     padding: var(--space-xs) var(--space-md);
     margin: 0;
   }

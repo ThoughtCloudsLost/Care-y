@@ -2,19 +2,13 @@
 import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
 import { render, screen, cleanup, fireEvent } from "@testing-library/svelte";
 
-const { mockToastShow, mockAnnounce, mockHaptic } = vi.hoisted(() => ({
-  mockToastShow: vi.fn(),
-  mockAnnounce: vi.fn(),
-  mockHaptic: vi.fn(),
-}));
-
 let mockOrgKeyLoaded = true;
 const mockGetSecretKey = vi.fn(
   () => new Uint8Array(32).fill(0xab) as Uint8Array | null,
 );
 
-// care-y-ignore-next-line mock-factory-unguarded -- paraglide output is compiled; test replaces all message fns with deterministic strings
-vi.mock("$lib/paraglide/messages.js", () => ({
+vi.mock("$lib/paraglide/messages.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof MessagesNS>()),
   admin_escrow_title: () => "Export Escrow File",
   admin_escrow_step_education_heading: () => "What is an escrow file?",
   admin_escrow_step_education_body: () =>
@@ -57,8 +51,6 @@ vi.mock("$lib/paraglide/messages.js", () => ({
   common_back: () => "Back",
   common_cancel: () => "Cancel",
   common_next: () => "Next",
-  // Register builds its eyebrow map from all four keys at init, so the
-  // mock needs the full set even though EscrowFlow renders two kinds.
   register_note: () => "Note",
   register_careful: () => "Careful",
   register_warning: () => "Warning",
@@ -73,13 +65,14 @@ vi.mock("$lib/paraglide/messages.js", () => ({
   onboarding_escrow_download_again_confirm: () => "Download",
 }));
 
-// care-y-ignore-next-line mock-factory-unguarded -- Svelte context accessor; calling outside component init throws
-vi.mock("$lib/terminology/with-terms.js", () => ({
-  withTerms: () => ({}),
-}));
+vi.mock("$lib/terminology/with-terms.js", async (importOriginal) =>
+  (await import("$mocks/with-terms.js")).withTermsMock(
+    await importOriginal<typeof WithTermsNS>(),
+  ),
+);
 
-// care-y-ignore-next-line mock-factory-unguarded -- Svelte context accessor; calling outside component init throws
-vi.mock("$lib/crypto/context.js", () => ({
+vi.mock("$lib/crypto/context.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof ContextNS>()),
   getOrgKeyManager: () => ({
     get isLoaded() {
       return mockOrgKeyLoaded;
@@ -88,30 +81,36 @@ vi.mock("$lib/crypto/context.js", () => ({
   }),
 }));
 
-// care-y-ignore-next-line mock-factory-unguarded -- .svelte.js rune store; importing triggers $state rune compilation outside Svelte context
-vi.mock("$lib/stores/toast.svelte.js", () => ({
-  toastStore: { show: mockToastShow },
-}));
+vi.mock(
+  "$lib/stores/toast.svelte.js",
+  async () =>
+    (await import("$mocks/toast.js")).toastMock() satisfies typeof ToastNS,
+);
 
-// care-y-ignore-next-line mock-factory-unguarded -- full-replacement stub; single-export module with no additional surface to drift
-vi.mock("$lib/utils/haptic.js", () => ({
-  haptic: mockHaptic,
-}));
+vi.mock("$lib/utils/haptic.js", async (importOriginal) =>
+  (await import("$mocks/haptic.js")).hapticMock(
+    await importOriginal<typeof HapticNS>(),
+  ),
+);
 
-// care-y-ignore-next-line mock-factory-unguarded -- full-replacement stub; single-export module with no additional surface to drift
-vi.mock("$lib/utils/announce.js", () => ({
-  announceToLiveRegion: mockAnnounce,
-}));
+vi.mock("$lib/utils/announce.js", async (importOriginal) =>
+  (await import("$mocks/announce.js")).announceMock(
+    await importOriginal<typeof AnnounceNS>(),
+  ),
+);
 
-// care-y-ignore-next-line mock-factory-unguarded -- component default-export stub swapped with PassthroughShell
-vi.mock("$lib/shell/ShellPopup.svelte", async () => ({
-  default: (await import("../tickets/test-helpers/PassthroughShell.svelte"))
-    .default,
-}));
+vi.mock(
+  "$lib/shell/ShellPopup.svelte",
+  async () =>
+    ({
+      default: (await import("../tickets/test-helpers/PassthroughShell.svelte"))
+        .default as unknown as (typeof ShellPopupNS)["default"],
+    }) satisfies typeof ShellPopupNS,
+);
 
 const mockMemzero = vi.fn();
-// care-y-ignore-next-line mock-factory-unguarded -- @care-y/crypto barrel triggers libsodium WASM init via getSodium()
-vi.mock("@care-y/crypto", () => ({
+vi.mock("@care-y/crypto", async (importOriginal) => ({
+  ...(await importOriginal<typeof CryptoNS>()),
   encryptWithPassphrase: () => ({
     salt: new Uint8Array(16),
     nonce: new Uint8Array(24),
@@ -124,8 +123,8 @@ vi.mock("@care-y/crypto", () => ({
   requireSodium: () => ({ memzero: mockMemzero }),
 }));
 
-// care-y-ignore-next-line mock-factory-unguarded -- full-replacement stub; test needs deterministic base64 encoding without real impl
-vi.mock("$lib/utils/buffer-encoding.js", () => ({
+vi.mock("$lib/utils/buffer-encoding.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof BufferEncodingNS>()),
   uint8ArrayToBase64: (bytes: Uint8Array) => {
     let binary = "";
     for (const byte of bytes) {
@@ -135,8 +134,8 @@ vi.mock("$lib/utils/buffer-encoding.js", () => ({
   },
 }));
 
-// care-y-ignore-next-line mock-factory-unguarded -- full-replacement stub; test needs deterministic strength assessment
-vi.mock("$lib/utils/passphrase-strength.js", () => ({
+vi.mock("$lib/utils/passphrase-strength.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof PassphraseStrengthNS>()),
   assessPassphraseStrength: (p: string) => {
     if (p.length < 20) return "too-short";
     if (p.length < 30) return "acceptable";
@@ -151,6 +150,18 @@ vi.mock("$lib/utils/passphrase-strength.js", () => ({
 }));
 
 import EscrowExport from "./EscrowExport.svelte";
+import type * as AnnounceNS from "$lib/utils/announce.js";
+import type * as HapticNS from "$lib/utils/haptic.js";
+import type * as ToastNS from "$lib/stores/toast.svelte.js";
+import type * as WithTermsNS from "$lib/terminology/with-terms.js";
+import { mockToastShow } from "$mocks/toast.js";
+import { mockHaptic } from "$mocks/haptic.js";
+import type * as PassphraseStrengthNS from "$lib/utils/passphrase-strength.js";
+import type * as BufferEncodingNS from "$lib/utils/buffer-encoding.js";
+import type * as ContextNS from "$lib/crypto/context.js";
+import type * as MessagesNS from "$lib/paraglide/messages.js";
+import type * as CryptoNS from "@care-y/crypto";
+import type * as ShellPopupNS from "$lib/shell/ShellPopup.svelte";
 
 /**
  * Render EscrowExport, call its exported open() method, and wait for the

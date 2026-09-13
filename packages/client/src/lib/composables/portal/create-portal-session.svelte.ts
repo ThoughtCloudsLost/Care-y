@@ -20,24 +20,29 @@
  */
 
 import type { PortalBridge } from "$lib/workers/portal-bridge.js";
+import { PortalWorkerError } from "$lib/workers/portal-bridge-errors.js";
 import type { PortalBridgeFactory } from "$lib/portal/context.js";
+import { ChannelSessionError } from "$lib/errors.js";
 import type {
   EciesTripleWireResponse,
   PortalAttachmentPayloadResponse,
   PortalAttachmentInput,
 } from "$lib/workers/portal-protocol.js";
 import type { FragmentData } from "./create-portal-fragment.svelte.js";
+import { evaluateChannelWithPowRetry } from "$lib/portal/portal-crypto.js";
 
 export type ChannelEvaluateCallback = (
   channelId: string,
   blindedElementB64: string,
   auth?: string,
+  pow?: { challenge: string; solution: string },
 ) => Promise<{ evaluated: string }>;
 
 export interface PortalSessionState {
   readonly session: PortalSessionHandle | null;
   readonly keyCheckPassed: boolean;
   readonly passphraseError: boolean;
+  readonly connectionError: boolean;
   readonly passphraseDerivePending: boolean;
   destroySession(): void;
   /** Attempt derive with no passphrase. Returns true on success. */
@@ -126,59 +131,13 @@ export interface PortalSessionHandle {
   channelPassphraseFinish(evaluated: string): Promise<{ clientPublic: string }>;
 }
 
-/**
- * Type guard for tRPC errors carrying a PoW challenge. Mirrors the guard
- * in portal-crypto.ts for the channel evaluate path.
- */
-function isChannelPowRequired(
-  err: unknown,
-): err is { data: { code: string; challenge: string; difficulty: number } } {
-  if (typeof err !== "object" || err === null || !("data" in err)) {
-    return false;
-  }
-  const { data } = err;
-  if (typeof data !== "object" || data === null) {
-    return false;
-  }
-  return (
-    "code" in data &&
-    data.code === "POW_REQUIRED" &&
-    "challenge" in data &&
-    typeof data.challenge === "string" &&
-    "difficulty" in data &&
-    typeof data.difficulty === "number"
-  );
-}
-
-/**
- * Channel evaluate with PoW retry. The bridge returns the blinded element;
- * the main thread sends it to the server through tRPC, then posts the
- * evaluated result back to the worker for finalization.
- */
-async function evaluateChannelWithPowRetry(
-  channelId: string,
-  blindedElementB64: string,
-  auth: string | undefined,
-  evaluate: ChannelEvaluateCallback,
-  onPowRequired: (challenge: string, difficulty: number) => Promise<string>,
-): Promise<string> {
-  try {
-    const result = await evaluate(channelId, blindedElementB64, auth);
-    return result.evaluated;
-  } catch (err: unknown) {
-    if (!isChannelPowRequired(err)) throw err;
-    await onPowRequired(err.data.challenge, err.data.difficulty);
-    const result = await evaluate(channelId, blindedElementB64, auth);
-    return result.evaluated;
-  }
-}
-
 export function createPortalSessionState(
   createBridge: PortalBridgeFactory,
 ): PortalSessionState {
   let session = $state<PortalSessionHandle | null>(null);
   let keyCheckPassed = $state(false);
   let passphraseError = $state(false);
+  let connectionError = $state(false);
   let passphraseDerivePending = $state(false);
 
   // One bridge per page life, kept across failed gate attempts. After the
@@ -300,11 +259,18 @@ export function createPortalSessionState(
       };
 
       return handle;
-    } catch {
-      // Evaluate or finish failed mid-round. When the bridge survived to
-      // this point the Worker still holds the seed in a restartable
-      // state; keep it for the next attempt.
-      return null;
+    } catch (err: unknown) {
+      // Worker-originated errors (decrypt/finalize failures) indicate
+      // wrong passphrase; return null so the caller shows the passphrase
+      // error state. Non-worker errors (network outage, tRPC transport)
+      // are rethrown as ChannelSessionError so the caller can distinguish
+      // connectivity problems from authentication failures.
+      if (err instanceof PortalWorkerError) {
+        return null;
+      }
+      throw new ChannelSessionError(
+        err instanceof Error ? err.message : String(err),
+      );
     }
   }
 
@@ -345,6 +311,7 @@ export function createPortalSessionState(
   ): Promise<void> {
     passphraseDerivePending = true;
     passphraseError = false;
+    connectionError = false;
 
     try {
       const handle = await deriveChannelSession(
@@ -361,8 +328,12 @@ export function createPortalSessionState(
       } else {
         passphraseError = true;
       }
-    } catch {
-      passphraseError = true;
+    } catch (err: unknown) {
+      if (err instanceof ChannelSessionError) {
+        connectionError = true;
+      } else {
+        passphraseError = true;
+      }
     } finally {
       passphraseDerivePending = false;
     }
@@ -377,6 +348,9 @@ export function createPortalSessionState(
     },
     get passphraseError(): boolean {
       return passphraseError;
+    },
+    get connectionError(): boolean {
+      return connectionError;
     },
     get passphraseDerivePending(): boolean {
       return passphraseDerivePending;

@@ -2,7 +2,8 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
 // Stub Lucide icons (Svelte components need browser rendering context)
-vi.mock("@lucide/svelte", () => ({
+vi.mock("@lucide/svelte", async (importOriginal) => ({
+  ...(await importOriginal<typeof SvelteNS>()),
   Paperclip: "Paperclip",
   FileText: "FileText",
   FileArchive: "FileArchive",
@@ -17,6 +18,7 @@ import {
   fileIcon,
   fileTypeLabel,
 } from "./attachment-download.js";
+import type * as SvelteNS from "@lucide/svelte";
 
 describe("triggerBlobDownload", () => {
   let mockClick: ReturnType<typeof vi.fn>;

@@ -874,22 +874,15 @@ describe("client-portal router", () => {
       };
     }
 
-    it("returns messages without keyCheck or hasPassphrase", async () => {
+    it("delegates to listMessages and returns its result directly", async () => {
       const channel = fakeChannelRow();
-      const bootstrapResult: PortalBootstrapResult = {
-        hasPassphrase: true,
-        keyCheck: {
-          ephemeralPoint: "ep",
-          nonce: "n",
-          ciphertext: "ct",
-        },
-        ticketId: crypto.randomUUID() as TicketId,
+      const listResult = {
         messages: [
           {
             id: crypto.randomUUID(),
             followupId: crypto.randomUUID(),
-            direction: "to_client",
-            type: "message",
+            direction: "to_client" as const,
+            type: "message" as const,
             ephemeralPoint: "ep1",
             nonce: "n1",
             ciphertext: "ct1",
@@ -897,12 +890,7 @@ describe("client-portal router", () => {
             editedAt: null,
           },
         ],
-        attachments: [],
-        recordings: [],
-        callEntries: [],
-        messagesExpireDays: 30,
-        safeExitUrl: null,
-        upgradeOptions: [],
+        totalCount: 1,
       };
 
       const portalDeps = buildDeps({
@@ -910,11 +898,9 @@ describe("client-portal router", () => {
           resolveAuthedChannel: vi.fn().mockResolvedValue(channel),
         },
         portalMessageService: {
-          bootstrap: vi.fn().mockResolvedValue(bootstrapResult),
+          bootstrap: vi.fn(),
           clientReply: vi.fn(),
-          listMessages: vi
-            .fn()
-            .mockResolvedValue({ messages: [], totalCount: 0 }),
+          listMessages: vi.fn().mockResolvedValue(listResult),
           hasRecentOrgReply: vi.fn().mockResolvedValue(false),
         },
         portalReadLimiter: allowLimiter(),
@@ -928,13 +914,12 @@ describe("client-portal router", () => {
       const caller = buildCaller(portalDeps);
       const result = await caller.portalMessages(makeMessagesInput());
 
-      // Should NOT include keyCheck or hasPassphrase
+      // Should NOT include keyCheck or hasPassphrase (bootstrap fields)
       expect(result).not.toHaveProperty("keyCheck");
       expect(result).not.toHaveProperty("hasPassphrase");
-      // Should include messages, ticketId, messagesExpireDays
+      // Should return the listMessages shape
       expect(result.messages).toHaveLength(1);
-      expect(result.ticketId).toBe(bootstrapResult.ticketId);
-      expect(result.messagesExpireDays).toBe(30);
+      expect(result.totalCount).toBe(1);
     });
   });
 
@@ -3258,23 +3243,24 @@ describe("client-portal router (account session procedures)", () => {
   // -- accountMessages --
 
   describe("accountMessages", () => {
-    it("returns messages list for a valid account session", async () => {
+    it("delegates to listMessages for a valid account session", async () => {
       const deps = buildAccountSessionDeps();
       const ctx = makeContextWithCookie(SESSION_TOKEN);
       const caller = buildCaller(deps, ctx);
       const result = await caller.accountMessages();
       expect(result.messages).toBeDefined();
-      expect(result.ticketId).toBeDefined();
-      expect(result.messagesExpireDays).toBe(14);
+      expect(result.totalCount).toBe(0);
     });
 
-    it("strips keyCheck and hasPassphrase from the response", async () => {
+    it("does not include bootstrap-only fields", async () => {
       const deps = buildAccountSessionDeps();
       const ctx = makeContextWithCookie(SESSION_TOKEN);
       const caller = buildCaller(deps, ctx);
       const result = await caller.accountMessages();
       expect(result).not.toHaveProperty("keyCheck");
       expect(result).not.toHaveProperty("hasPassphrase");
+      expect(result).not.toHaveProperty("ticketId");
+      expect(result).not.toHaveProperty("messagesExpireDays");
     });
 
     it("fails with UNAUTHORIZED without a session cookie", async () => {
@@ -4887,7 +4873,7 @@ describe("client-portal router (portalMessages null read limiter)", () => {
       auth: VALID_AUTH,
     });
     expect(result.messages).toBeDefined();
-    expect(result.messagesExpireDays).toBe(30);
+    expect(result.totalCount).toBe(0);
   });
 });
 

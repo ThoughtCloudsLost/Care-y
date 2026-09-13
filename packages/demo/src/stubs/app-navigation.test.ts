@@ -18,6 +18,8 @@ let mockPageUrl = new URL("http://demo.local/tickets");
 let mockPageState: Record<string, unknown> = {};
 let shallowCalls: Array<{ url: URL; state: Record<string, unknown> }> = [];
 
+import type * as AppStateStubNS from "./app-state.svelte.js";
+
 // Commit control for nextPageCommit: null means auto-resolve (the
 // common case for tests that only care that goto returns); an array
 // collects resolvers for tests that assert goto waits for the commit.
@@ -29,36 +31,48 @@ function releaseCommits(): void {
   for (const resolve of resolvers) resolve();
 }
 
-vi.mock("./app-state.svelte.js", () => ({
-  nextPageCommit(): Promise<void> {
-    if (pendingCommits === null) return Promise.resolve();
-    return new Promise((resolve) => {
-      pendingCommits?.push(resolve);
-    });
-  },
-  page: {
-    get url(): URL {
-      return mockPageUrl;
-    },
-    get state(): Record<string, unknown> {
-      return mockPageState;
-    },
-    params: {},
-    route: { id: "" },
-    status: 200,
-    error: null,
-    data: {},
-    form: null,
-  },
-  setDemoPage(): void {
-    // no-op in navigation tests
-  },
-  setDemoPageShallow(url: URL, state: Record<string, unknown>): void {
-    shallowCalls.push({ url, state });
-    mockPageUrl = url;
-    mockPageState = state;
-  },
-}));
+vi.mock(
+  "./app-state.svelte.js",
+  () =>
+    ({
+      nextPageCommit(): Promise<void> {
+        if (pendingCommits === null) return Promise.resolve();
+        return new Promise((resolve) => {
+          pendingCommits?.push(resolve);
+        });
+      },
+      page: {
+        get url(): URL {
+          return mockPageUrl;
+        },
+        get state(): Record<string, unknown> {
+          return mockPageState;
+        },
+        params: {},
+        route: { id: "" },
+        status: 200,
+        error: null,
+        data: {},
+        form: null,
+      } as unknown as typeof AppStateStubNS.page,
+      setDemoPage(): void {
+        // no-op in navigation tests
+      },
+      setDemoPageShallow(url: URL, state: Record<string, unknown>): void {
+        shallowCalls.push({ url, state });
+        mockPageUrl = url;
+        mockPageState = state;
+      },
+      clearDemoPageState(): void {
+        mockPageState = {};
+      },
+      navigating: null,
+      updated: {
+        current: false,
+        check: async (): Promise<boolean> => Promise.resolve(false),
+      },
+    }) satisfies typeof AppStateStubNS,
+);
 
 describe("app-navigation stub", () => {
   const noopHandler: DemoNavigationHandler = () => {

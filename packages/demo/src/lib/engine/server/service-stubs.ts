@@ -356,6 +356,7 @@ export async function buildServiceStubs(
       providerFactory: rejectingProviderFactory,
       resolveCallerId: phoneResolverStub,
       totpReplayCache: totpReplayCacheStub,
+      createAuditSvc: createAuditService,
     },
     profileDeps: {
       hasher: passwordHasher,

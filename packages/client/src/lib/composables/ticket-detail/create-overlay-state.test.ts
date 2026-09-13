@@ -5,10 +5,13 @@ import {
   createDeleteConfirm,
   createNoteEdit,
 } from "./create-overlay-state.svelte.js";
+import type * as ToastNS from "$lib/stores/toast.svelte.js";
 
-vi.mock("$lib/stores/toast.svelte.js", () => ({
-  toastStore: { show: vi.fn() },
-}));
+vi.mock(
+  "$lib/stores/toast.svelte.js",
+  async () =>
+    (await import("$mocks/toast.js")).toastMock() satisfies typeof ToastNS,
+);
 
 function makeQueryClient(): QueryClient {
   return new QueryClient({

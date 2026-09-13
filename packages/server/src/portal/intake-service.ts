@@ -23,7 +23,6 @@ import { sealString } from "../telephony/crypto-helpers.js";
 import type { SealedBoxEncryptor } from "../crypto/sealed-box.js";
 import { ValidationError } from "../errors.js";
 import { ErrorCode } from "@care-y/shared";
-import type { FieldEncryptor } from "../crypto/field-encryptor.js";
 import type {
   AccountRegistrationInput,
   AccountServiceDeps,
@@ -174,7 +173,6 @@ export async function createIntakeTicket(
   db: Kysely<TenantDatabase>,
   deps: {
     readonly sealedBox: SealedBoxEncryptor;
-    readonly fieldEncryptor?: FieldEncryptor;
     readonly orgId: OrgId;
     readonly orgSchema: OrgSchema;
     readonly orgSlug: OrgSlug;

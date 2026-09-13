@@ -6,6 +6,10 @@ import {
   newVoicemailQuarantineId,
   newClientAccountId,
   newFormAssetId,
+  channelSecretSchema,
+  phoneMatchHashSchema,
+  emailMatchHashSchema,
+  aliasHashSchema,
 } from "./ids.js";
 import type { OrgId } from "./ids.js";
 
@@ -78,5 +82,105 @@ describe("newFormAssetId", () => {
 
   it("produces distinct values on consecutive calls", () => {
     expect(newFormAssetId()).not.toBe(newFormAssetId());
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Branded hash schema validation (A1#17)
+// ---------------------------------------------------------------------------
+
+const VALID_HEX_128 = "a".repeat(128);
+
+describe("phoneMatchHashSchema", () => {
+  it("accepts 128 lowercase hex characters", () => {
+    expect(phoneMatchHashSchema.safeParse(VALID_HEX_128).success).toBe(true);
+  });
+
+  it("rejects 127 characters", () => {
+    expect(phoneMatchHashSchema.safeParse("a".repeat(127)).success).toBe(false);
+  });
+
+  it("rejects 129 characters", () => {
+    expect(phoneMatchHashSchema.safeParse("a".repeat(129)).success).toBe(false);
+  });
+
+  it("rejects uppercase hex", () => {
+    expect(phoneMatchHashSchema.safeParse("A".repeat(128)).success).toBe(false);
+  });
+
+  it("rejects non-hex characters", () => {
+    expect(phoneMatchHashSchema.safeParse("g" + "a".repeat(127)).success).toBe(
+      false,
+    );
+  });
+});
+
+describe("emailMatchHashSchema", () => {
+  it("accepts 128 lowercase hex characters", () => {
+    expect(emailMatchHashSchema.safeParse(VALID_HEX_128).success).toBe(true);
+  });
+
+  it("rejects 127 characters", () => {
+    expect(emailMatchHashSchema.safeParse("a".repeat(127)).success).toBe(false);
+  });
+
+  it("rejects 129 characters", () => {
+    expect(emailMatchHashSchema.safeParse("a".repeat(129)).success).toBe(false);
+  });
+
+  it("rejects uppercase hex", () => {
+    expect(emailMatchHashSchema.safeParse("A".repeat(128)).success).toBe(false);
+  });
+
+  it("rejects non-hex characters", () => {
+    expect(emailMatchHashSchema.safeParse("z" + "a".repeat(127)).success).toBe(
+      false,
+    );
+  });
+});
+
+describe("aliasHashSchema", () => {
+  it("accepts 128 lowercase hex characters", () => {
+    expect(aliasHashSchema.safeParse(VALID_HEX_128).success).toBe(true);
+  });
+
+  it("rejects 127 characters", () => {
+    expect(aliasHashSchema.safeParse("a".repeat(127)).success).toBe(false);
+  });
+
+  it("rejects 129 characters", () => {
+    expect(aliasHashSchema.safeParse("a".repeat(129)).success).toBe(false);
+  });
+
+  it("rejects uppercase hex", () => {
+    expect(aliasHashSchema.safeParse("A".repeat(128)).success).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// channelSecretSchema validation (A1#4)
+// ---------------------------------------------------------------------------
+
+describe("channelSecretSchema", () => {
+  it("accepts 48 lowercase hex characters", () => {
+    expect(channelSecretSchema.safeParse("a".repeat(48)).success).toBe(true);
+  });
+
+  it("rejects 47 characters", () => {
+    expect(channelSecretSchema.safeParse("a".repeat(47)).success).toBe(false);
+  });
+
+  it("rejects 49 characters", () => {
+    expect(channelSecretSchema.safeParse("a".repeat(49)).success).toBe(false);
+  });
+
+  it("rejects uppercase hex", () => {
+    expect(channelSecretSchema.safeParse("A".repeat(48)).success).toBe(false);
+  });
+
+  it("rejects non-hex characters", () => {
+    expect(channelSecretSchema.safeParse("g" + "a".repeat(47)).success).toBe(
+      false,
+    );
   });
 });

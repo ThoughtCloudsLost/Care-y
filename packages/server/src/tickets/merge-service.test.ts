@@ -4,6 +4,7 @@ import {
   seedOrgPublicKey,
   createTestQueue,
   createTestTicketFixture,
+  fakeTriple,
   type TestDb,
 } from "../test-utils.js";
 import { createMergeService, type MergeService } from "./merge-service.js";
@@ -324,18 +325,7 @@ describe.skipIf(!process.env.DATABASE_URL)("MergeService (DB)", () => {
     return row.id;
   }
 
-  /** ECIES triple with deterministic filler bytes. */
-  function fakeTriple(): {
-    ephemeralPoint: Buffer;
-    nonce: Buffer;
-    ciphertext: Buffer;
-  } {
-    return {
-      ephemeralPoint: Buffer.alloc(32, 0x01),
-      nonce: Buffer.alloc(24, 0x02),
-      ciphertext: Buffer.from("test-ciphertext"),
-    };
-  }
+  // fakeTriple imported from test-utils.ts
 
   /** Insert a portal_messages row for a channel (requires a followup FK). */
   async function insertPortalMessage(

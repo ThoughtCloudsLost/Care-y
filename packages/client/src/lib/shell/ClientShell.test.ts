@@ -20,6 +20,8 @@ import { render, cleanup, fireEvent, screen } from "@testing-library/svelte";
 import type * as KonstaPalette from "$lib/branding/konsta-palette.js";
 import type * as BrandingTitle from "$lib/branding/title.svelte.js";
 import type * as PublicBranding from "$lib/branding/public-branding.js";
+import type * as NavigationNS from "$app/navigation";
+import type * as PathsNS from "$app/paths";
 
 // --- Controllable mock state ---
 
@@ -60,12 +62,12 @@ function inject(attrs: { orgName?: string; safeExitUrl?: string }): void {
 // --- Mocks ---
 
 vi.mock("$app/paths", async (importOriginal) => ({
-  ...(await importOriginal()),
+  ...(await importOriginal<typeof PathsNS>()),
   resolve: (path: string) => path,
 }));
 
 vi.mock("$app/navigation", async (importOriginal) => ({
-  ...(await importOriginal()),
+  ...(await importOriginal<typeof NavigationNS>()),
   goto: vi.fn(),
 }));
 

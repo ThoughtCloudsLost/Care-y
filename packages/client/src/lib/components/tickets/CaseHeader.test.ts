@@ -18,6 +18,11 @@ import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
 import { render, cleanup } from "@testing-library/svelte";
 import CaseHeader from "./CaseHeader.svelte";
 import { setCaseFolded } from "$lib/tickets/case-fold-store.svelte.js";
+import type * as ErrorsNS from "$lib/errors.js";
+import type * as WithTermsNS from "$lib/terminology/with-terms.js";
+import type * as ContextNS from "$lib/crypto/context.js";
+import type * as TrpcNS from "$lib/trpc/index.js";
+import type * as SvelteQueryNS from "@tanstack/svelte-query";
 
 let ticketQueryState: Record<string, unknown> = {};
 
@@ -32,7 +37,8 @@ const queuesQueryState: Record<string, unknown> = {
   data: [],
 };
 
-vi.mock("@tanstack/svelte-query", () => ({
+vi.mock("@tanstack/svelte-query", async (importOriginal) => ({
+  ...(await importOriginal<typeof SvelteQueryNS>()),
   createQuery: (optsFn: () => { queryKey: unknown[] }) => {
     const opts = optsFn();
     if (Array.isArray(opts.queryKey) && opts.queryKey[0] === "queues") {
@@ -42,7 +48,8 @@ vi.mock("@tanstack/svelte-query", () => ({
   },
 }));
 
-vi.mock("$lib/trpc/index.js", () => ({
+vi.mock("$lib/trpc/index.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof TrpcNS>()),
   trpc: {
     tickets: {
       get: { query: vi.fn() },
@@ -52,7 +59,8 @@ vi.mock("$lib/trpc/index.js", () => ({
 
 // Decrypt mocks: title/description resolve synchronously; the org cache
 // resolves queue/assignee names by key prefix.
-vi.mock("$lib/crypto/context.js", () => ({
+vi.mock("$lib/crypto/context.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof ContextNS>()),
   getTicketDecryptCache: () => ({
     decryptTitle: vi.fn().mockReturnValue("Employment program referral"),
     decryptDescription: vi.fn(() => mocks.description),
@@ -72,14 +80,16 @@ vi.mock("$lib/crypto/context.js", () => ({
   getCurrentUserId: () => () => "user-001",
 }));
 
-vi.mock("$lib/terminology/with-terms.js", () => ({
+vi.mock("$lib/terminology/with-terms.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof WithTermsNS>()),
   withTerms: (o?: Record<string, string>) => ({ Queue: "Queue", ...o }),
 }));
 
-vi.mock("$lib/errors.js", () => ({
-  RouterNotAvailableError: class extends Error {},
-  requireRouter: <T>(r: T) => r,
-}));
+vi.mock("$lib/errors.js", async (importOriginal) =>
+  (await import("$mocks/errors.js")).errorsMock(
+    await importOriginal<typeof ErrorsNS>(),
+  ),
+);
 
 // jsdom lacks IntersectionObserver (DecryptPlaceholder scramble).
 if (typeof globalThis.IntersectionObserver === "undefined") {

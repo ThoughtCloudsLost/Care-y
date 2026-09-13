@@ -2,12 +2,17 @@
 import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
 import { render, cleanup, fireEvent } from "@testing-library/svelte";
 import MoveCategorySheet from "./MoveCategorySheet.svelte";
+import type * as ShellActionSheetNS from "$lib/shell/ShellActionSheet.svelte";
 
 // Mock ShellActionSheet with a pass-through that renders children
-vi.mock("$lib/shell/ShellActionSheet.svelte", async () => ({
-  default: (await import("../tickets/test-helpers/PassthroughShell.svelte"))
-    .default,
-}));
+vi.mock(
+  "$lib/shell/ShellActionSheet.svelte",
+  async () =>
+    ({
+      default: (await import("../tickets/test-helpers/PassthroughShell.svelte"))
+        .default as unknown as (typeof ShellActionSheetNS)["default"],
+    }) satisfies typeof ShellActionSheetNS,
+);
 
 afterEach(cleanup);
 

@@ -395,9 +395,9 @@ vi.mock("./QueueEditor.svelte", async (importOriginal) => ({
   default: (await import("./test-helpers/StubQueueEditor.svelte")).default,
 }));
 
-// care-y-ignore-next-line mock-factory-unguarded -- full replacement required;
 // bits-ui Tooltip triggers jsdom "navigation to another Document" on import
-vi.mock("bits-ui", () => ({
+vi.mock("bits-ui", async (importOriginal) => ({
+  ...(await importOriginal<typeof BitsUiNS>()),
   Tooltip: {
     Provider: {},
     Root: {},
@@ -442,6 +442,7 @@ function makeQueue(
 }
 
 import QueuesSection from "./QueuesSection.svelte";
+import type * as BitsUiNS from "bits-ui";
 
 describe("QueuesSection", () => {
   beforeEach(() => {

@@ -27,6 +27,7 @@
   import ShellSheet from "$lib/shell/ShellSheet.svelte";
   import ShellDialog from "$lib/shell/ShellDialog.svelte";
   import SoftButton from "$lib/components/inputs/SoftButton.svelte";
+  import Register from "$lib/components/Register.svelte";
   import FieldError from "$lib/components/FieldError.svelte";
   import type { PreferredCallMethod } from "@care-y/shared";
 
@@ -243,13 +244,7 @@
 
     try {
       const data = consultantQuery.data;
-      // Re-verify needs a phone; we no longer have the plaintext.
-      // The relay endpoint supports re-request if we still have state from the
-      // original submit. But since we cleared phone, prompt re-entry would be
-      // needed. However, per the plan, the server handles code regeneration by
-      // re-request. The resend triggers a new relay call. Since the phone was
-      // cleared, we need it from the encrypted copy.
-      // For resend, we decrypt the stored phone, post it again.
+      // Resend decrypts the stored phone and resubmits it.
       if (data?.encryptedPhone == null) {
         error = m.consultant_phone_error_provider();
         return;
@@ -446,8 +441,12 @@
       </List>
 
       {#if wantsPings}
-        <div class="careful-register" data-register="careful" role="note">
-          <p class="careful-text">{m.consultant_phone_sms_pings_explainer()}</p>
+        <div class="register-wrapper">
+          <Register kind="careful">
+            <p class="careful-text">
+              {m.consultant_phone_sms_pings_explainer()}
+            </p>
+          </Register>
         </div>
       {/if}
 
@@ -626,11 +625,8 @@
     font-weight: 600;
   }
 
-  .careful-register {
+  .register-wrapper {
     margin: var(--space-sm) 0;
-    padding: var(--space-sm) var(--space-md);
-    border-radius: 0.5rem;
-    background: color-mix(in srgb, var(--ink) 4%, transparent);
   }
 
   .careful-text {
@@ -655,7 +651,7 @@
   .resend-btn {
     background: none;
     border: none;
-    color: var(--brand-text, var(--brand-primary, #007aff));
+    color: var(--brand-text);
     font-size: 0.85rem;
     cursor: pointer;
     padding: var(--space-xs);

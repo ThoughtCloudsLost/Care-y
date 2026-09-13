@@ -2,21 +2,14 @@
 import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
 import { render, screen, cleanup } from "@testing-library/svelte";
 
-const {
-  mockSaveConfig,
-  mockProvisionWebhooks,
-  mockSetPhonePurpose,
-  mockToastShow,
-  mockHaptic,
-} = vi.hoisted(() => ({
-  mockSaveConfig: vi.fn().mockResolvedValue({ success: true }),
-  mockProvisionWebhooks: vi
-    .fn()
-    .mockResolvedValue({ success: true, phoneNumberCount: 2 }),
-  mockSetPhonePurpose: vi.fn().mockResolvedValue(undefined),
-  mockToastShow: vi.fn(),
-  mockHaptic: vi.fn(),
-}));
+const { mockSaveConfig, mockProvisionWebhooks, mockSetPhonePurpose } =
+  vi.hoisted(() => ({
+    mockSaveConfig: vi.fn().mockResolvedValue({ success: true }),
+    mockProvisionWebhooks: vi
+      .fn()
+      .mockResolvedValue({ success: true, phoneNumberCount: 2 }),
+    mockSetPhonePurpose: vi.fn().mockResolvedValue(undefined),
+  }));
 
 interface MaskedConfig {
   provider: string;
@@ -69,7 +62,8 @@ const PROVISIONED_PHONES = [
   { number: "+15559876543", sid: "PN002" },
 ];
 
-vi.mock("$lib/paraglide/messages.js", () => ({
+vi.mock("$lib/paraglide/messages.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof MessagesNS>()),
   register_note: () => "Note",
   register_careful: () => "Careful",
   register_warning: () => "Warning",
@@ -144,7 +138,8 @@ vi.mock("$lib/paraglide/messages.js", () => ({
   onboarding_telephony_token_placeholder: () => "Enter auth token",
 }));
 
-vi.mock("$lib/trpc/index.js", () => ({
+vi.mock("$lib/trpc/index.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof TrpcNS>()),
   trpc: {
     telephonyAdmin: {
       getConfig: { query: vi.fn() },
@@ -157,7 +152,8 @@ vi.mock("$lib/trpc/index.js", () => ({
   },
 }));
 
-vi.mock("@tanstack/svelte-query", () => ({
+vi.mock("@tanstack/svelte-query", async (importOriginal) => ({
+  ...(await importOriginal<typeof SvelteQueryNS>()),
   createQuery: (optsFn: () => Record<string, unknown>) => {
     const opts = optsFn();
     const key = opts.queryKey as string[];
@@ -236,15 +232,31 @@ vi.mock("@tanstack/svelte-query", () => ({
   useQueryClient: () => ({ invalidateQueries: vi.fn() }),
 }));
 
-vi.mock("$lib/utils/haptic.js", () => ({ haptic: mockHaptic }));
-vi.mock("$lib/stores/toast.svelte.js", () => ({
-  toastStore: { show: mockToastShow },
-}));
-vi.mock("$lib/utils/announce.js", () => ({
-  announceToLiveRegion: vi.fn(),
-}));
+vi.mock("$lib/utils/haptic.js", async (importOriginal) =>
+  (await import("$mocks/haptic.js")).hapticMock(
+    await importOriginal<typeof HapticNS>(),
+  ),
+);
+vi.mock(
+  "$lib/stores/toast.svelte.js",
+  async () =>
+    (await import("$mocks/toast.js")).toastMock() satisfies typeof ToastNS,
+);
+vi.mock("$lib/utils/announce.js", async (importOriginal) =>
+  (await import("$mocks/announce.js")).announceMock(
+    await importOriginal<typeof AnnounceNS>(),
+  ),
+);
 
 import TelephonyConfigSection from "./TelephonyConfigSection.svelte";
+import type * as AnnounceNS from "$lib/utils/announce.js";
+import type * as ToastNS from "$lib/stores/toast.svelte.js";
+import type * as HapticNS from "$lib/utils/haptic.js";
+import { mockToastShow } from "$mocks/toast.js";
+import { mockHaptic } from "$mocks/haptic.js";
+import type * as SvelteQueryNS from "@tanstack/svelte-query";
+import type * as TrpcNS from "$lib/trpc/index.js";
+import type * as MessagesNS from "$lib/paraglide/messages.js";
 
 describe("TelephonyConfigSection", () => {
   beforeEach(() => {

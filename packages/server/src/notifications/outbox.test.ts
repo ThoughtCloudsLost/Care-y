@@ -385,7 +385,8 @@ describe.skipIf(!process.env.DATABASE_URL)(
       expect(row).toBeDefined();
       expect(row!.status).toBe("pending");
       expect(row!.attempt_count).toBe(1);
-      expect(row!.last_error).toBe("transient failure");
+      // Only the classification persists, never the raw message
+      expect(row!.last_error).toBe("Error");
       // next_attempt_at should be in the future
       expect(row!.next_attempt_at.getTime()).toBeGreaterThan(Date.now());
 
@@ -435,7 +436,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
       expect(row).toBeDefined();
       expect(row!.status).toBe("dead");
       expect(row!.failed_at).not.toBeNull();
-      expect(row!.last_error).toBe("permanent");
+      expect(row!.last_error).toBe("Error");
 
       // Cleanup
       await testDb.db
@@ -558,7 +559,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
       expect(row!.status).toBe("completed");
     });
 
-    it("drain truncates long error messages in last_error", async () => {
+    it("drain never persists error message content in last_error", async () => {
       const ticketId = await createTicketRow();
       const watcher = await createTestUser(testDb.db);
 
@@ -578,8 +579,11 @@ describe.skipIf(!process.env.DATABASE_URL)(
         });
       });
 
-      const longError = "x".repeat(500);
-      const dispatch = vi.fn().mockRejectedValue(new Error(longError));
+      // A provider-shaped message echoing a phone number must never
+      // reach the row; only the error classification persists.
+      const dispatch = vi
+        .fn()
+        .mockRejectedValue(new Error("delivery to +15550001234 failed"));
       const deps: OutboxDrainDeps = {
         ...makeDrainDeps({ dispatch }),
         orgSchema: testDb.schemaName as OrgSchema,
@@ -593,9 +597,8 @@ describe.skipIf(!process.env.DATABASE_URL)(
         .where("ticket_id", "=", ticketId)
         .executeTakeFirst();
 
-      expect(row!.last_error).toBeDefined();
-      // Should be truncated to MAX_ERROR_LENGTH (200)
-      expect(row!.last_error!.length).toBeLessThanOrEqual(200);
+      expect(row!.last_error).toBe("Error");
+      expect(row!.last_error).not.toMatch(/\d/);
 
       // Cleanup
       await testDb.db
@@ -1574,8 +1577,47 @@ describe.skipIf(!process.env.DATABASE_URL)(
     // Additional cold branch coverage
     // -----------------------------------------------------------------
 
-    it("stores String(err) in last_error when dispatch throws a non-Error value", async () => {
-      // Covers L306 cond-expr[1]: the String(err) fallback path
+    it("appends the driver code to the classification when present", async () => {
+      const ticketId = await createTicketRow();
+      const watcher = await createTestUser(testDb.db);
+
+      await testDb.db
+        .insertInto("queue_watchers")
+        .values({ queue_id: queueId, user_id: watcher.id })
+        .onConflict((oc) => oc.columns(["queue_id", "user_id"]).doNothing())
+        .execute();
+
+      await testDb.db
+        .insertInto("notification_outbox")
+        .values({
+          event_type: "ticket_created",
+          ticket_id: ticketId,
+          queue_id: queueId,
+          max_attempts: 5,
+        })
+        .execute();
+
+      const codedError = Object.assign(new Error("duplicate key value"), {
+        code: "23505",
+      });
+      const dispatch = vi.fn().mockRejectedValue(codedError);
+      const deps: OutboxDrainDeps = {
+        ...makeDrainDeps({ dispatch }),
+        orgSchema: testDb.schemaName as OrgSchema,
+      };
+
+      await drainOutbox(testDb.db, deps);
+
+      const row = await testDb.db
+        .selectFrom("notification_outbox")
+        .selectAll()
+        .where("ticket_id", "=", ticketId)
+        .executeTakeFirst();
+
+      expect(row?.last_error).toBe("Error:23505");
+    });
+
+    it("stores the unknown classification when dispatch throws a non-Error value", async () => {
       const ticketId = await createTicketRow();
       const watcher = await createTestUser(testDb.db);
 
@@ -1610,8 +1652,8 @@ describe.skipIf(!process.env.DATABASE_URL)(
         .where("ticket_id", "=", ticketId)
         .executeTakeFirst();
 
-      // String() coercion of the thrown value
-      expect(row?.last_error).toBe("dispatch-string-error");
+      // Non-Error throws carry no name; the static fallback persists
+      expect(row?.last_error).toBe("unknown");
       expect(row?.status).toBe("pending");
       expect(row?.attempt_count).toBe(1);
 
@@ -1667,6 +1709,118 @@ describe.skipIf(!process.env.DATABASE_URL)(
         (r) => r.userId === actor.id,
       );
       expect(actorRecipient).toBeUndefined();
+    });
+
+    it("concurrent drainOutbox calls never dispatch the same row", async () => {
+      const dispatchedIds: string[][] = [[], []];
+
+      // A watcher so recipient resolution is non-empty and dispatch fires
+      const watcher = await createTestUser(testDb.db);
+      await testDb.db
+        .insertInto("queue_watchers")
+        .values({ queue_id: queueId, user_id: watcher.id })
+        .onConflict((oc) => oc.columns(["queue_id", "user_id"]).doNothing())
+        .execute();
+
+      // Insert 5 pending rows
+      const ticketIds: TicketId[] = [];
+      for (let i = 0; i < 5; i++) {
+        const tid = await createTicketRow();
+        ticketIds.push(tid);
+        await enqueueNotificationDurable(testDb.db, {
+          eventType: "ticket_created",
+          ticketId: tid,
+          queueId,
+          formId: null,
+          actorUserId: null,
+        });
+      }
+
+      // Run two concurrent drain calls, each recording which ticket_ids they dispatch
+      const dispatch0 = vi.fn(
+        async (
+          _db: unknown,
+          _orgId: unknown,
+          _orgSchema: unknown,
+          _orgSlug: unknown,
+          _eventType: unknown,
+          ticketId: TicketId,
+        ) => {
+          dispatchedIds[0]!.push(ticketId);
+        },
+      );
+      const dispatch1 = vi.fn(
+        async (
+          _db: unknown,
+          _orgId: unknown,
+          _orgSchema: unknown,
+          _orgSlug: unknown,
+          _eventType: unknown,
+          ticketId: TicketId,
+        ) => {
+          dispatchedIds[1]!.push(ticketId);
+        },
+      );
+
+      const deps0: OutboxDrainDeps = {
+        ...makeDrainDeps({ dispatch: dispatch0 }),
+        orgSchema: testDb.schemaName as OrgSchema,
+      };
+      const deps1: OutboxDrainDeps = {
+        ...makeDrainDeps({ dispatch: dispatch1 }),
+        orgSchema: testDb.schemaName as OrgSchema,
+      };
+
+      await Promise.all([
+        drainOutbox(testDb.db, deps0),
+        drainOutbox(testDb.db, deps1),
+      ]);
+
+      // Both sets combined should contain all 5 ticket IDs
+      const all = [...dispatchedIds[0]!, ...dispatchedIds[1]!];
+      expect(all.sort()).toEqual([...ticketIds].sort());
+
+      // No ticket ID should appear in both sets (disjoint)
+      const set0 = new Set(dispatchedIds[0]!);
+      const set1 = new Set(dispatchedIds[1]!);
+      for (const id of set0) {
+        expect(set1.has(id)).toBe(false);
+      }
+
+      // Cleanup
+      await testDb.db
+        .deleteFrom("queue_watchers")
+        .where("queue_id", "=", queueId)
+        .where("user_id", "=", watcher.id)
+        .execute();
+    });
+
+    it("created_at defaults to now() at insert time (not migration time)", async () => {
+      const before = new Date();
+      const ticketId = await createTicketRow();
+      await enqueueNotificationDurable(testDb.db, {
+        eventType: "ticket_created",
+        ticketId,
+        queueId,
+        formId: null,
+        actorUserId: null,
+      });
+      const after = new Date();
+
+      const row = await testDb.db
+        .selectFrom("notification_outbox")
+        .select("created_at")
+        .where("ticket_id", "=", ticketId)
+        .executeTakeFirstOrThrow();
+
+      // The timestamp should be between the before and after snapshots,
+      // confirming the default is evaluated at insert time, not frozen.
+      expect(row.created_at.getTime()).toBeGreaterThanOrEqual(
+        before.getTime() - 1000,
+      );
+      expect(row.created_at.getTime()).toBeLessThanOrEqual(
+        after.getTime() + 1000,
+      );
     });
   },
 );

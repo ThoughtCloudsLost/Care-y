@@ -5,7 +5,6 @@
  * gets an isolated test schema created in beforeAll, dropped in afterAll.
  */
 
-import crypto from "node:crypto";
 import {
   describe,
   it,
@@ -23,6 +22,9 @@ import {
   createTestTicketFixture,
   noopEncryptor,
   testSealedBox,
+  fakeTriple,
+  insertTestChannel,
+  createMemoryBlobStore,
 } from "../test-utils.js";
 import type { NotificationService } from "../notifications/service.js";
 import type { TelephonyProvider } from "../telephony/provider.js";
@@ -36,7 +38,6 @@ import {
   hasRecentOrgReply,
   type PortalMessageServiceDeps,
   type PortalReplyServiceInput,
-  type EciesTripleBuffers,
 } from "./portal-message-service.js";
 import { NotFoundError } from "../errors.js";
 import {
@@ -47,16 +48,8 @@ import {
   newAttachmentId,
   newRecordingId,
   newKeyGeneration,
-  channelSecretSchema,
 } from "@care-y/shared";
-import type {
-  ClientId,
-  PortalMessageId,
-  OrgSchema,
-  BlobKey,
-  TicketId,
-} from "@care-y/shared";
-import type { BlobStore } from "../storage/store.js";
+import type { PortalMessageId, BlobKey, TicketId } from "@care-y/shared";
 import { insertClientRecordingWrap } from "./portal-recording-service.js";
 
 // ---------------------------------------------------------------------------
@@ -88,30 +81,6 @@ const TEST_ORG_SCHEMA = orgSchemaNameSchema.parse(
 );
 const TEST_ORG_SLUG = orgSlugIdSchema.parse("test-org");
 
-/** Map-backed in-memory BlobStore for tests. */
-function createMapBlobStore(): BlobStore & {
-  readonly blobs: Map<string, Buffer>;
-} {
-  const blobs = new Map<string, Buffer>();
-  return {
-    blobs,
-    async put(orgSchema: OrgSchema, category: string, blob: Buffer) {
-      const key = `${orgSchema}/${category}/${crypto.randomUUID()}` as BlobKey;
-      blobs.set(key, Buffer.from(blob));
-      return key;
-    },
-    async get(key: string) {
-      return blobs.get(key) ?? null;
-    },
-    async delete(key: string) {
-      blobs.delete(key);
-    },
-    async exists(key: string) {
-      return blobs.has(key);
-    },
-  };
-}
-
 function makeDeps(
   overrides?: Partial<PortalMessageServiceDeps>,
 ): PortalMessageServiceDeps {
@@ -121,7 +90,7 @@ function makeDeps(
     resolveCallerIdByPurpose: vi.fn().mockResolvedValue("+15550001234"),
     fieldEncryptor: noopEncryptor,
     notificationService: createMockNotificationService(),
-    blobStore: createMapBlobStore(),
+    blobStore: createMemoryBlobStore(),
     orgId: TEST_ORG_ID,
     orgSchema: TEST_ORG_SCHEMA,
     orgSlug: TEST_ORG_SLUG,
@@ -129,40 +98,7 @@ function makeDeps(
   };
 }
 
-function fakeTriple(): EciesTripleBuffers {
-  return {
-    ephemeralPoint: Buffer.alloc(32, 0x01),
-    nonce: Buffer.alloc(24, 0x02),
-    ciphertext: Buffer.from("test-ciphertext"),
-  };
-}
-
-async function insertChannel(
-  db: TestDb["db"],
-  clientId: ClientId,
-  overrides?: Partial<Record<string, unknown>>,
-): Promise<PortalChannelRow> {
-  const channelId = channelSecretSchema.parse(
-    crypto.randomBytes(24).toString("hex"),
-  );
-  const row = await db
-    .insertInto("portal_channels")
-    .values({
-      client_id: clientId,
-      channel_id: channelId,
-      auth_hash: Buffer.alloc(32, 0xaa),
-      client_public: Buffer.alloc(32, 0xbb),
-      has_passphrase: false,
-      key_check_ephemeral_point: Buffer.alloc(32, 0xcc),
-      key_check_nonce: Buffer.alloc(24, 0xdd),
-      key_check_ciphertext: Buffer.from("key-check-ct"),
-      status: "active",
-      ...overrides,
-    })
-    .returningAll()
-    .executeTakeFirstOrThrow();
-  return row;
-}
+// fakeTriple and insertTestChannel imported from test-utils.ts
 
 // ---------------------------------------------------------------------------
 // DB integration tests
@@ -189,7 +125,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
     describe("bootstrap", () => {
       it("stamps last_seen_at and returns ordered messages", async () => {
         const fixture = await createTestTicketFixture(testDb.db);
-        const channel = await insertChannel(testDb.db, fixture.clientId);
+        const channel = await insertTestChannel(testDb.db, fixture.clientId);
 
         // Create follow-ups that portal_messages can reference (FK constraint)
         const fuId1 = newFollowupId();
@@ -259,7 +195,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
         const fixture = await createTestTicketFixture(testDb.db);
         // Create channel with old last_seen_at (> 30 days ago)
         const oldDate = new Date(Date.now() - 31 * 24 * 60 * 60 * 1000);
-        const channel = await insertChannel(testDb.db, fixture.clientId, {
+        const channel = await insertTestChannel(testDb.db, fixture.clientId, {
           last_seen_at: oldDate,
         });
 
@@ -312,7 +248,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
           .returning("id")
           .executeTakeFirstOrThrow();
 
-        const channel = await insertChannel(testDb.db, client.id);
+        const channel = await insertTestChannel(testDb.db, client.id);
         const result = await bootstrap(testDb.db, channel);
 
         expect(result.ticketId).toBeNull();
@@ -320,7 +256,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
 
       it("returns upgradeOptions ['passphrase','account'] for a bare secure_link channel", async () => {
         const fixture = await createTestTicketFixture(testDb.db);
-        const channel = await insertChannel(testDb.db, fixture.clientId, {
+        const channel = await insertTestChannel(testDb.db, fixture.clientId, {
           kind: "secure_link",
         });
 
@@ -330,7 +266,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
 
       it("returns upgradeOptions ['account'] for a passphrase channel", async () => {
         const fixture = await createTestTicketFixture(testDb.db);
-        const channel = await insertChannel(testDb.db, fixture.clientId, {
+        const channel = await insertTestChannel(testDb.db, fixture.clientId, {
           kind: "secure_link",
           has_passphrase: true,
         });
@@ -341,7 +277,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
 
       it("returns upgradeOptions [] for an account channel", async () => {
         const fixture = await createTestTicketFixture(testDb.db);
-        const channel = await insertChannel(testDb.db, fixture.clientId, {
+        const channel = await insertTestChannel(testDb.db, fixture.clientId, {
           kind: "account",
         });
 
@@ -357,7 +293,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
     describe("bootstrap message type field", () => {
       it("carries the originating follow-up type on each message wire entry", async () => {
         const fixture = await createTestTicketFixture(testDb.db);
-        const channel = await insertChannel(testDb.db, fixture.clientId);
+        const channel = await insertTestChannel(testDb.db, fixture.clientId);
 
         // Insert a regular message follow-up
         const fuMsg = newFollowupId();
@@ -450,7 +386,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
 
       it("returns true when an org reply exists inside the window", async () => {
         const fixture = await createTestTicketFixture(testDb.db);
-        const channel = await insertChannel(testDb.db, fixture.clientId);
+        const channel = await insertTestChannel(testDb.db, fixture.clientId);
         await insertCopy(fixture.ticketId, channel.id, "to_client");
 
         expect(await hasRecentOrgReply(testDb.db, channel.id)).toBe(true);
@@ -458,7 +394,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
 
       it("returns false when only client messages exist", async () => {
         const fixture = await createTestTicketFixture(testDb.db);
-        const channel = await insertChannel(testDb.db, fixture.clientId);
+        const channel = await insertTestChannel(testDb.db, fixture.clientId);
         await insertCopy(fixture.ticketId, channel.id, "from_client");
 
         expect(await hasRecentOrgReply(testDb.db, channel.id)).toBe(false);
@@ -466,7 +402,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
 
       it("returns false when the org reply is older than the window", async () => {
         const fixture = await createTestTicketFixture(testDb.db);
-        const channel = await insertChannel(testDb.db, fixture.clientId);
+        const channel = await insertTestChannel(testDb.db, fixture.clientId);
         await insertCopy(fixture.ticketId, channel.id, "to_client");
         await testDb.db
           .updateTable("portal_messages")
@@ -479,10 +415,10 @@ describe.skipIf(!process.env.DATABASE_URL)(
 
       it("does not see another channel's org replies", async () => {
         const fixture = await createTestTicketFixture(testDb.db);
-        const engaged = await insertChannel(testDb.db, fixture.clientId, {
+        const engaged = await insertTestChannel(testDb.db, fixture.clientId, {
           status: "revoked",
         });
-        const quiet = await insertChannel(testDb.db, fixture.clientId);
+        const quiet = await insertTestChannel(testDb.db, fixture.clientId);
         await insertCopy(fixture.ticketId, engaged.id, "to_client");
 
         expect(await hasRecentOrgReply(testDb.db, quiet.id)).toBe(false);
@@ -496,7 +432,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
     describe("clientReply", () => {
       it("creates follow-up + wrap + self copy atomically", async () => {
         const fixture = await createTestTicketFixture(testDb.db);
-        const channel = await insertChannel(testDb.db, fixture.clientId);
+        const channel = await insertTestChannel(testDb.db, fixture.clientId);
         const deps = makeDeps();
 
         const followUpId = newFollowupId();
@@ -549,7 +485,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
           .where("id", "=", fixture.ticketId)
           .execute();
 
-        const channel = await insertChannel(testDb.db, fixture.clientId);
+        const channel = await insertTestChannel(testDb.db, fixture.clientId);
         const deps = makeDeps();
 
         const input: PortalReplyServiceInput = {
@@ -587,7 +523,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
         const fixture2 = await createTestTicketFixture(testDb.db);
 
         // Channel belongs to client 1, but reply targets client 2's ticket
-        const channel = await insertChannel(testDb.db, fixture1.clientId);
+        const channel = await insertTestChannel(testDb.db, fixture1.clientId);
         const deps = makeDeps();
 
         const input: PortalReplyServiceInput = {
@@ -614,7 +550,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
 
       it("inserts a contact_correction followup when kind is contact_correction", async () => {
         const fixture = await createTestTicketFixture(testDb.db);
-        const channel = await insertChannel(testDb.db, fixture.clientId);
+        const channel = await insertTestChannel(testDb.db, fixture.clientId);
         const deps = makeDeps();
 
         const followUpId = newFollowupId();
@@ -641,7 +577,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
 
       it("defaults followup type to message when kind is omitted", async () => {
         const fixture = await createTestTicketFixture(testDb.db);
-        const channel = await insertChannel(testDb.db, fixture.clientId);
+        const channel = await insertTestChannel(testDb.db, fixture.clientId);
         const deps = makeDeps();
 
         const followUpId = newFollowupId();
@@ -667,7 +603,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
 
       it("rolls back on wrap-insert failure (no orphan follow-up)", async () => {
         const fixture = await createTestTicketFixture(testDb.db);
-        const channel = await insertChannel(testDb.db, fixture.clientId);
+        const channel = await insertTestChannel(testDb.db, fixture.clientId);
         const deps = makeDeps();
 
         const followUpId = newFollowupId();
@@ -708,7 +644,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
 
       it("enqueues a followup_added notification into the outbox after client reply", async () => {
         const fixture = await createTestTicketFixture(testDb.db);
-        const channel = await insertChannel(testDb.db, fixture.clientId);
+        const channel = await insertTestChannel(testDb.db, fixture.clientId);
         const deps = makeDeps();
 
         const input: PortalReplyServiceInput = {
@@ -745,7 +681,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
     describe("nudgeClient", () => {
       it("sends SMS once via the provider when due", async () => {
         const fixture = await createTestTicketFixture(testDb.db);
-        const channel = await insertChannel(testDb.db, fixture.clientId, {
+        const channel = await insertTestChannel(testDb.db, fixture.clientId, {
           last_seen_at: new Date(Date.now() - 60_000), // visited 1 min ago
           last_notified_at: null,
         });
@@ -771,7 +707,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
       it("skips when already nudged since last visit", async () => {
         const fixture = await createTestTicketFixture(testDb.db);
         const now = Date.now();
-        const channel = await insertChannel(testDb.db, fixture.clientId, {
+        const channel = await insertTestChannel(testDb.db, fixture.clientId, {
           last_seen_at: new Date(now - 60_000),
           last_notified_at: new Date(now - 30_000), // notified AFTER last visit
         });
@@ -810,7 +746,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
           })
           .execute();
 
-        const channel = await insertChannel(testDb.db, client.id);
+        const channel = await insertTestChannel(testDb.db, client.id);
         const mockProvider = createMockProvider();
         const deps = makeDeps({
           getProvider: vi.fn().mockResolvedValue(mockProvider),
@@ -822,7 +758,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
 
       it("does not throw when provider fails", async () => {
         const fixture = await createTestTicketFixture(testDb.db);
-        const channel = await insertChannel(testDb.db, fixture.clientId, {
+        const channel = await insertTestChannel(testDb.db, fixture.clientId, {
           last_seen_at: new Date(Date.now() - 60_000),
           last_notified_at: null,
         });
@@ -839,9 +775,41 @@ describe.skipIf(!process.env.DATABASE_URL)(
         ).resolves.toBeUndefined();
       });
 
+      it("logs a static reason string with no phone digits on outer failure", async () => {
+        const fixture = await createTestTicketFixture(testDb.db);
+        const channel = await insertTestChannel(testDb.db, fixture.clientId, {
+          last_seen_at: new Date(Date.now() - 60_000),
+          last_notified_at: null,
+        });
+
+        // Make getProvider throw to trigger the outer catch
+        const deps = makeDeps({
+          getProvider: vi
+            .fn()
+            .mockRejectedValue(new Error("+15550009999 failure")),
+        });
+
+        const spy = vi
+          .spyOn(console, "error")
+          .mockImplementation(() => undefined);
+        try {
+          await nudgeClient(testDb.db, deps, channel);
+
+          expect(spy).toHaveBeenCalledOnce();
+          const args = spy.mock.calls[0]!;
+          // The log must contain only the static reason string
+          const fullLog = args.join(" ");
+          expect(fullLog).toContain("nudge_setup_failed");
+          // No phone digits should appear anywhere in the log output
+          expect(fullLog).not.toMatch(/\+?\d{7,}/);
+        } finally {
+          spy.mockRestore();
+        }
+      });
+
       it("passes the org UUID to getProvider and OrgIdentifiers to the resolver", async () => {
         const fixture = await createTestTicketFixture(testDb.db);
-        const channel = await insertChannel(testDb.db, fixture.clientId, {
+        const channel = await insertTestChannel(testDb.db, fixture.clientId, {
           last_seen_at: new Date(Date.now() - 60_000),
           last_notified_at: null,
         });
@@ -915,7 +883,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
 
       it("returns oldest-first for both directions", async () => {
         const fixture = await createTestTicketFixture(testDb.db);
-        const channel = await insertChannel(testDb.db, fixture.clientId);
+        const channel = await insertTestChannel(testDb.db, fixture.clientId);
 
         const fu1 = await insertFollowup(testDb.db, fixture.ticketId);
         const id1 = await insertMessage(testDb.db, channel.id, fu1);
@@ -943,7 +911,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
 
       it("cursor excludes the cursor row and returns the adjacent page", async () => {
         const fixture = await createTestTicketFixture(testDb.db);
-        const channel = await insertChannel(testDb.db, fixture.clientId);
+        const channel = await insertTestChannel(testDb.db, fixture.clientId);
 
         const fu1 = await insertFollowup(testDb.db, fixture.ticketId);
         const id1 = await insertMessage(testDb.db, channel.id, fu1);
@@ -975,7 +943,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
 
       it("handles two rows with identical created_at without duplication or loss", async () => {
         const fixture = await createTestTicketFixture(testDb.db);
-        const channel = await insertChannel(testDb.db, fixture.clientId);
+        const channel = await insertTestChannel(testDb.db, fixture.clientId);
 
         const fu1 = await insertFollowup(testDb.db, fixture.ticketId);
         const id1 = await insertMessage(testDb.db, channel.id, fu1);
@@ -1019,7 +987,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
 
       it("totalCount reflects the whole channel regardless of limit or cursor", async () => {
         const fixture = await createTestTicketFixture(testDb.db);
-        const channel = await insertChannel(testDb.db, fixture.clientId);
+        const channel = await insertTestChannel(testDb.db, fixture.clientId);
 
         const fu1 = await insertFollowup(testDb.db, fixture.ticketId);
         await insertMessage(testDb.db, channel.id, fu1);
@@ -1047,10 +1015,10 @@ describe.skipIf(!process.env.DATABASE_URL)(
 
       it("cursor from a different channel returns nothing from that channel", async () => {
         const fixture1 = await createTestTicketFixture(testDb.db);
-        const channel1 = await insertChannel(testDb.db, fixture1.clientId);
+        const channel1 = await insertTestChannel(testDb.db, fixture1.clientId);
 
         const fixture2 = await createTestTicketFixture(testDb.db);
-        const channel2 = await insertChannel(testDb.db, fixture2.clientId);
+        const channel2 = await insertTestChannel(testDb.db, fixture2.clientId);
 
         // Insert messages in both channels
         const fu1 = await insertFollowup(testDb.db, fixture1.ticketId);
@@ -1082,7 +1050,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
 
       it("respects the limit", async () => {
         const fixture = await createTestTicketFixture(testDb.db);
-        const channel = await insertChannel(testDb.db, fixture.clientId);
+        const channel = await insertTestChannel(testDb.db, fixture.clientId);
 
         // Insert 5 messages
         for (let i = 0; i < 5; i++) {
@@ -1106,7 +1074,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
     describe("bootstrap attachments", () => {
       it("includes attachments for the channel in the bootstrap result", async () => {
         const fixture = await createTestTicketFixture(testDb.db);
-        const channel = await insertChannel(testDb.db, fixture.clientId);
+        const channel = await insertTestChannel(testDb.db, fixture.clientId);
 
         // Create a follow-up and an attachment with a client wrap
         const fuId = newFollowupId();
@@ -1167,7 +1135,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
     describe("bootstrap recordings", () => {
       it("includes recordings for the channel in the bootstrap result", async () => {
         const fixture = await createTestTicketFixture(testDb.db);
-        const channel = await insertChannel(testDb.db, fixture.clientId);
+        const channel = await insertTestChannel(testDb.db, fixture.clientId);
 
         const fuId = newFollowupId();
         await testDb.db
@@ -1220,7 +1188,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
     describe("bootstrap callEntries", () => {
       it("returns phone_call follow-ups as callEntries", async () => {
         const fixture = await createTestTicketFixture(testDb.db);
-        const channel = await insertChannel(testDb.db, fixture.clientId);
+        const channel = await insertTestChannel(testDb.db, fixture.clientId);
 
         const fuId = newFollowupId();
         await testDb.db
@@ -1249,7 +1217,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
 
       it("excludes is_private=true follow-ups", async () => {
         const fixture = await createTestTicketFixture(testDb.db);
-        const channel = await insertChannel(testDb.db, fixture.clientId);
+        const channel = await insertTestChannel(testDb.db, fixture.clientId);
 
         const fuId = newFollowupId();
         await testDb.db
@@ -1274,7 +1242,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
 
       it("excludes deleted follow-ups", async () => {
         const fixture = await createTestTicketFixture(testDb.db);
-        const channel = await insertChannel(testDb.db, fixture.clientId);
+        const channel = await insertTestChannel(testDb.db, fixture.clientId);
 
         const fuId = newFollowupId();
         await testDb.db
@@ -1300,7 +1268,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
       it("does not return calls from another client", async () => {
         const fixture1 = await createTestTicketFixture(testDb.db);
         const fixture2 = await createTestTicketFixture(testDb.db);
-        const channel1 = await insertChannel(testDb.db, fixture1.clientId);
+        const channel1 = await insertTestChannel(testDb.db, fixture1.clientId);
 
         // Insert a phone_call follow-up on fixture2's ticket
         const fuId = newFollowupId();
@@ -1325,7 +1293,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
 
       it("excludes non-phone_call follow-ups", async () => {
         const fixture = await createTestTicketFixture(testDb.db);
-        const channel = await insertChannel(testDb.db, fixture.clientId);
+        const channel = await insertTestChannel(testDb.db, fixture.clientId);
 
         const fuId = newFollowupId();
         await testDb.db
@@ -1354,7 +1322,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
       it("lazily deletes recording wraps on an expired channel", async () => {
         const fixture = await createTestTicketFixture(testDb.db);
         const oldDate = new Date(Date.now() - 31 * 24 * 60 * 60 * 1000);
-        const channel = await insertChannel(testDb.db, fixture.clientId, {
+        const channel = await insertTestChannel(testDb.db, fixture.clientId, {
           last_seen_at: oldDate,
         });
 
@@ -1428,8 +1396,8 @@ describe.skipIf(!process.env.DATABASE_URL)(
     describe("clientReply with attachments", () => {
       it("writes attachment rows and client wraps in one transaction", async () => {
         const fixture = await createTestTicketFixture(testDb.db);
-        const channel = await insertChannel(testDb.db, fixture.clientId);
-        const blobStore = createMapBlobStore();
+        const channel = await insertTestChannel(testDb.db, fixture.clientId);
+        const blobStore = createMemoryBlobStore();
         const deps = makeDeps({ blobStore });
 
         const followUpId = newFollowupId();
@@ -1484,8 +1452,8 @@ describe.skipIf(!process.env.DATABASE_URL)(
 
       it("cleans up blobs when the transaction fails", async () => {
         const fixture = await createTestTicketFixture(testDb.db);
-        const channel = await insertChannel(testDb.db, fixture.clientId);
-        const blobStore = createMapBlobStore();
+        const channel = await insertTestChannel(testDb.db, fixture.clientId);
+        const blobStore = createMemoryBlobStore();
         const deps = makeDeps({ blobStore });
 
         // First reply consumes the followUpId
@@ -1541,7 +1509,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
       it("lazily deletes attachment wraps on an expired channel", async () => {
         const fixture = await createTestTicketFixture(testDb.db);
         const oldDate = new Date(Date.now() - 31 * 24 * 60 * 60 * 1000);
-        const channel = await insertChannel(testDb.db, fixture.clientId, {
+        const channel = await insertTestChannel(testDb.db, fixture.clientId, {
           last_seen_at: oldDate,
         });
 

@@ -10,7 +10,7 @@
  * escalation_rule_id) rather than notification dispatch calls.
  */
 
-import { describe, it, expect, beforeAll, afterAll, vi } from "vitest";
+import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { sql } from "kysely";
 import type { Kysely } from "kysely";
 import type { TenantDatabase } from "../db/types.js";
@@ -22,37 +22,18 @@ import {
   noopEncryptor,
   type TestDb,
 } from "../test-utils.js";
-import {
-  RoleId,
-  type OrgId,
-  type OrgSchema,
-  type OrgSlug,
-  type TicketId,
-  type UserId,
-  type EscalationRuleId,
-} from "@care-y/shared";
+import { RoleId, type TicketId, type EscalationRuleId } from "@care-y/shared";
 import {
   runEscalationCheck,
   listRules,
   createRule,
   updateRule,
   deleteRule,
-  type EscalationServiceDeps,
 } from "./escalation-service.js";
 
 // ---------------------------------------------------------------------------
 // Test helpers
 // ---------------------------------------------------------------------------
-
-function createDeps(overrides?: {
-  managerIds?: UserId[];
-  watcherIds?: UserId[];
-}): EscalationServiceDeps {
-  return {
-    getManagerIds: vi.fn(async () => overrides?.managerIds ?? []),
-    getQueueWatcherIds: vi.fn(async () => overrides?.watcherIds ?? []),
-  };
-}
 
 /**
  * Backdates a ticket's created_at to make it appear old enough to
@@ -116,10 +97,6 @@ async function getOutboxRows(
 describe.skipIf(!process.env.DATABASE_URL)("EscalationService", () => {
   let testDb: TestDb;
   let db: Kysely<TenantDatabase>;
-  const orgId = "a1b2c3d4-e5f6-7890-abcd-000000000002" as OrgId;
-  const orgSchema = "test_esc" as OrgSchema;
-  const orgSlug = "test-org" as OrgSlug;
-
   beforeAll(async () => {
     testDb = await createTestDb();
     db = testDb.db;
@@ -252,20 +229,11 @@ describe.skipIf(!process.env.DATABASE_URL)("EscalationService", () => {
         action: "notify_managers",
       });
 
-      const managerId = (
-        await createTestUser(db, {
-          overrides: { role_id: RoleId.MANAGER },
-        })
-      ).id;
-      const deps = createDeps({ managerIds: [managerId] });
+      await createTestUser(db, {
+        overrides: { role_id: RoleId.MANAGER },
+      });
 
-      const result = await runEscalationCheck(
-        db,
-        orgId,
-        orgSchema,
-        orgSlug,
-        deps,
-      );
+      const result = await runEscalationCheck(db);
 
       expect(result.firings).toBe(1);
 
@@ -299,14 +267,7 @@ describe.skipIf(!process.env.DATABASE_URL)("EscalationService", () => {
         action: "notify_managers",
       });
 
-      const deps = createDeps({ managerIds: [user.id] });
-      const result = await runEscalationCheck(
-        db,
-        orgId,
-        orgSchema,
-        orgSlug,
-        deps,
-      );
+      const result = await runEscalationCheck(db);
 
       expect(result.firings).toBe(0);
     });
@@ -329,14 +290,7 @@ describe.skipIf(!process.env.DATABASE_URL)("EscalationService", () => {
         action: "notify_managers",
       });
 
-      const deps = createDeps({ managerIds: ["some-id" as UserId] });
-      const result = await runEscalationCheck(
-        db,
-        orgId,
-        orgSchema,
-        orgSlug,
-        deps,
-      );
+      const result = await runEscalationCheck(db);
 
       expect(result.firings).toBe(0);
     });
@@ -359,14 +313,7 @@ describe.skipIf(!process.env.DATABASE_URL)("EscalationService", () => {
         action: "notify_managers",
       });
 
-      const deps = createDeps({ managerIds: ["some-id" as UserId] });
-      const result = await runEscalationCheck(
-        db,
-        orgId,
-        orgSchema,
-        orgSlug,
-        deps,
-      );
+      const result = await runEscalationCheck(db);
 
       expect(result.firings).toBe(0);
     });
@@ -383,14 +330,7 @@ describe.skipIf(!process.env.DATABASE_URL)("EscalationService", () => {
         action: "notify_managers",
       });
 
-      const deps = createDeps({ managerIds: ["some-id" as UserId] });
-      const result = await runEscalationCheck(
-        db,
-        orgId,
-        orgSchema,
-        orgSlug,
-        deps,
-      );
+      const result = await runEscalationCheck(db);
 
       expect(result.firings).toBe(0);
     });
@@ -415,16 +355,9 @@ describe.skipIf(!process.env.DATABASE_URL)("EscalationService", () => {
         action: "notify_queue_watchers",
       });
 
-      const watcherId = (await createTestUser(db)).id;
-      const deps = createDeps({ watcherIds: [watcherId] });
+      await createTestUser(db);
 
-      const result = await runEscalationCheck(
-        db,
-        orgId,
-        orgSchema,
-        orgSlug,
-        deps,
-      );
+      const result = await runEscalationCheck(db);
 
       expect(result.firings).toBe(1);
       const rows = await getOutboxRows(db, fixture.ticketId);
@@ -449,14 +382,7 @@ describe.skipIf(!process.env.DATABASE_URL)("EscalationService", () => {
         action: "notify_queue_watchers",
       });
 
-      const deps = createDeps({ watcherIds: ["some-id" as UserId] });
-      const result = await runEscalationCheck(
-        db,
-        orgId,
-        orgSchema,
-        orgSlug,
-        deps,
-      );
+      const result = await runEscalationCheck(db);
 
       expect(result.firings).toBe(0);
     });
@@ -474,14 +400,7 @@ describe.skipIf(!process.env.DATABASE_URL)("EscalationService", () => {
         action: "notify_managers",
       });
 
-      const deps = createDeps({ managerIds: ["mgr-1" as UserId] });
-      const result = await runEscalationCheck(
-        db,
-        orgId,
-        orgSchema,
-        orgSlug,
-        deps,
-      );
+      const result = await runEscalationCheck(db);
 
       expect(result.firings).toBe(1);
     });
@@ -504,24 +423,10 @@ describe.skipIf(!process.env.DATABASE_URL)("EscalationService", () => {
         action: "notify_managers",
       });
 
-      const deps = createDeps({ managerIds: ["mgr-1" as UserId] });
-
-      const first = await runEscalationCheck(
-        db,
-        orgId,
-        orgSchema,
-        orgSlug,
-        deps,
-      );
+      const first = await runEscalationCheck(db);
       expect(first.firings).toBe(1);
 
-      const second = await runEscalationCheck(
-        db,
-        orgId,
-        orgSchema,
-        orgSlug,
-        deps,
-      );
+      const second = await runEscalationCheck(db);
       expect(second.firings).toBe(0);
 
       // Only the first run produced an outbox row
@@ -550,14 +455,7 @@ describe.skipIf(!process.env.DATABASE_URL)("EscalationService", () => {
         .values({ rule_id: rule.id, ticket_id: fixture.ticketId })
         .execute();
 
-      const deps = createDeps({ managerIds: ["mgr-1" as UserId] });
-      const result = await runEscalationCheck(
-        db,
-        orgId,
-        orgSchema,
-        orgSlug,
-        deps,
-      );
+      const result = await runEscalationCheck(db);
 
       expect(result.firings).toBe(0);
     });
@@ -580,8 +478,7 @@ describe.skipIf(!process.env.DATABASE_URL)("EscalationService", () => {
         action: "notify_managers",
       });
 
-      const deps = createDeps({ managerIds: ["mgr-1" as UserId] });
-      await runEscalationCheck(db, orgId, orgSchema, orgSlug, deps);
+      await runEscalationCheck(db);
 
       const rows = await getOutboxRows(db, fixture.ticketId);
       const escalationRow = rows.find(
@@ -615,14 +512,7 @@ describe.skipIf(!process.env.DATABASE_URL)("EscalationService", () => {
       });
       await updateRule(db, rule.id, { isActive: false });
 
-      const deps = createDeps({ managerIds: ["mgr-1" as UserId] });
-      const result = await runEscalationCheck(
-        db,
-        orgId,
-        orgSchema,
-        orgSlug,
-        deps,
-      );
+      const result = await runEscalationCheck(db);
 
       expect(result.rulesEvaluated).toBe(0);
       expect(result.firings).toBe(0);
@@ -640,14 +530,7 @@ describe.skipIf(!process.env.DATABASE_URL)("EscalationService", () => {
       const queue = await createTestQueue(db);
       await createTestTicketFixture(db, { queueId: queue.id });
 
-      const deps = createDeps();
-      const result = await runEscalationCheck(
-        db,
-        orgId,
-        orgSchema,
-        orgSlug,
-        deps,
-      );
+      const result = await runEscalationCheck(db);
 
       expect(result.rulesEvaluated).toBe(0);
       expect(result.firings).toBe(0);

@@ -19,7 +19,7 @@
   import * as m from "$lib/paraglide/messages.js";
   import { getLocale } from "$lib/paraglide/runtime.js";
   import { trpc } from "$lib/trpc/index.js";
-  import { requireRouter } from "$lib/errors.js";
+  import { requireRouter, PortalUnavailableError } from "$lib/errors.js";
   import { portalKeys } from "$lib/query/keys.js";
   import { decode } from "@care-y/crypto";
   import {
@@ -48,24 +48,27 @@
     intakeFieldTypeSchema,
     intakeFieldRoleSchema,
     resolveLocalized,
-    evaluateVisibility,
     isDataFieldType,
     BASE_LOCALE,
     FORM_LOCALES,
     newTicketId,
     newFollowupId,
-    type IntakeFieldConfig,
-    type IntakeFieldType,
-    type IntakeFieldRole,
     type LocalizedText,
     type FormLocale,
     type IntakeFormMeta,
     type AvailabilityData,
     type TicketPriority,
-    type VisibleWhen,
     type ProseMirrorDocJSON,
     ErrorCode,
   } from "@care-y/shared";
+  import {
+    isFieldVisible as isFieldVisiblePure,
+    splitIntoPages,
+    visiblePageIndices as computeVisiblePageIndices,
+    validateFields,
+    type PlaintextField,
+    type ValidationMessages,
+  } from "./intake-form-logic.js";
   import { readRichLocale } from "$lib/utils/localized-text.js";
   import {
     renderFormRichText,
@@ -82,18 +85,6 @@
   }
 
   let { slug = null }: IntakeFormBodyProps = $props();
-
-  // ---- Types ----
-
-  interface PlaintextField {
-    readonly fieldKey: string;
-    readonly fieldType: IntakeFieldType;
-    readonly role: IntakeFieldRole | null;
-    readonly label: LocalizedText;
-    readonly config: IntakeFieldConfig;
-    readonly isRequired: boolean;
-    readonly visibleWhen?: VisibleWhen;
-  }
 
   type ContactMethod = "phone" | "email" | "none";
 
@@ -168,6 +159,10 @@
 
   // ---- Org public key query (dedicated, not from branding cache) ----
 
+  // These three queries retry transient failures: this is the public front
+  // door, visitors arrive on bad connections, and every not-available
+  // condition arrives as a data flag rather than a thrown error, so a
+  // throw here is transport-shaped.
   const orgKeyQuery = createQuery(() => ({
     queryKey: portalKeys.orgPublicKey(),
     queryFn: async (): Promise<Uint8Array | null> => {
@@ -177,7 +172,7 @@
       return decode(data.orgPublicKey);
     },
     staleTime: 5 * 60 * 1000,
-    retry: false,
+    retry: 2,
   }));
 
   const orgPublicKey = $derived(orgKeyQuery.data ?? null);
@@ -194,7 +189,7 @@
       return trpc.clientPortal.getIntakeConfig.query();
     },
     staleTime: 5 * 60 * 1000,
-    retry: false,
+    retry: 2,
   }));
 
   const powRequired = $derived(configQuery.data?.powRequired === true);
@@ -219,7 +214,7 @@
       return trpc.clientPortal.getIntakeForm.query(input);
     },
     staleTime: 5 * 60 * 1000,
-    retry: false,
+    retry: 2,
   }));
 
   // Disabled intake, an unknown slug, and a disabled builtin form all
@@ -231,13 +226,27 @@
   );
   const slugNotFound = $derived(
     slug != null &&
-      formQuery.data?.formId == null &&
+      formQuery.data != null &&
+      formQuery.data.formId == null &&
       !intakeDisabled &&
       !formClosed,
   );
   const notAvailable = $derived(
     intakeDisabled || slugNotFound || builtinFormDisabled,
   );
+
+  // A failed load is a distinct state from "not available": without the
+  // data-arrived guard above, an errored query's undefined data would
+  // read as an unknown slug and tell the visitor the form does not exist.
+  const loadFailed = $derived(formQuery.isError || orgKeyQuery.isError);
+
+  // Refetch both unconditionally: a field-decrypt failure reports both
+  // queries as successful while one of the cached responses is bad, and
+  // fresh data reruns the derivation.
+  function retryLoad(): void {
+    void orgKeyQuery.refetch();
+    void formQuery.refetch();
+  }
 
   // Decrypt form fields when a custom form is returned
   interface ResolvedForm {
@@ -407,63 +416,19 @@
    * excluded from validation, the response blob, and ticket text.
    */
   function isFieldVisible(field: PlaintextField): boolean {
-    return evaluateVisibility(field.visibleWhen, fieldValues);
+    return isFieldVisiblePure(field, fieldValues);
   }
 
   // ---- Page break pagination ----
 
-  /**
-   * Split form fields into pages. A page break element starts a new page.
-   * The first page starts at the first field. Page breaks carry an optional
-   * localized title.
-   */
-  interface FormPage {
-    /** Localized page title from the page break, undefined for the first page. */
-    readonly title?: LocalizedText;
-    /** Fields belonging to this page (data fields only, no page breaks). */
-    readonly fields: readonly PlaintextField[];
-  }
-
-  const formPages = $derived.by((): readonly FormPage[] => {
-    const pages: FormPage[] = [];
-    let currentFields: PlaintextField[] = [];
-    let currentTitle: LocalizedText | undefined = undefined;
-
-    for (const field of formFields) {
-      if (field.fieldType === "pageBreak") {
-        // Push current page (even if empty, it may have visible fields from a visibility change)
-        pages.push({ title: currentTitle, fields: currentFields });
-        currentFields = [];
-        currentTitle = field.label;
-      } else {
-        currentFields.push(field);
-      }
-    }
-    // Push the last page
-    pages.push({ title: currentTitle, fields: currentFields });
-    return pages;
-  });
+  const formPages = $derived(splitIntoPages(formFields));
 
   const hasPages = $derived(formPages.length > 1);
   let currentPageIndex = $state(0);
 
-  /**
-   * Visible pages: pages where at least one field is visible.
-   * Returns indices into formPages.
-   */
-  const visiblePageIndices = $derived.by((): readonly number[] => {
-    const indices: number[] = [];
-    for (let i = 0; i < formPages.length; i++) {
-      const page = formPages.at(i);
-      if (page === undefined) continue;
-      const hasVisibleField = page.fields.some((f) => isFieldVisible(f));
-      // Always include the first page (it has the intro content)
-      if (i === 0 || hasVisibleField) {
-        indices.push(i);
-      }
-    }
-    return indices;
-  });
+  const visiblePageIndices = $derived(
+    computeVisiblePageIndices(formPages, fieldValues),
+  );
 
   /** The page currently being displayed (when multi-page). */
   const currentPage = $derived(formPages.at(currentPageIndex));
@@ -623,7 +588,7 @@
       continuation?: IntakeContinuationPayload;
     }) => {
       if (!trpc.clientPortal) {
-        throw new Error("Client portal not available");
+        throw new PortalUnavailableError("Client portal router not available");
       }
       return trpc.clientPortal.submitIntake.mutate(payload);
     },
@@ -633,15 +598,18 @@
 
   // ---- Validation ----
 
-  /** Loose email check for client-side validation (not a full RFC 5322 check). */
-  function isValidEmail(s: string): boolean {
-    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(s);
-  }
-
-  /** Loose phone check: at least 7 digits, optional leading +, spaces/dashes allowed. */
-  function isValidPhone(s: string): boolean {
-    const digits = s.replace(/[\s\-().+]/g, "");
-    return /^\d{7,15}$/.test(digits);
+  /** Build the localized messages bag that validateFields needs. */
+  function validationMessages(): ValidationMessages {
+    return {
+      fieldRequired: m.intake_error_field_required(),
+      messageRequired: m.intake_error_message_required(),
+      emailFormat: m.intake_error_email_format(),
+      phoneFormat: m.intake_error_phone_format(),
+      numberFormat: m.intake_error_number_format(),
+      numberMin: (min: string) => m.intake_error_number_min({ min }),
+      numberMax: (max: string) => m.intake_error_number_max({ max }),
+      dateFormat: m.intake_error_date_format(),
+    };
   }
 
   /**
@@ -649,159 +617,22 @@
    * those fields are checked. Otherwise all visible form fields are checked.
    */
   function validate(fieldsToValidate?: readonly PlaintextField[]): boolean {
-    const errors: Record<string, string | undefined> = {};
-    let valid = true;
+    const result = validateFields({
+      fields: formFields,
+      fieldValues,
+      messages: validationMessages(),
+      isDefaultForm,
+      contactMethod,
+      contactDetail,
+      accountExpanded,
+      accountPassword,
+      accountConfirmPassword,
+      fieldsToValidate,
+    });
 
-    const fieldsToCheck = fieldsToValidate ?? formFields;
-
-    // Validate dynamic fields
-    for (const field of fieldsToCheck) {
-      // Skip page breaks (structural, not data)
-      if (!isDataFieldType(field.fieldType)) continue;
-
-      // Skip hidden fields (conditional visibility)
-      if (!isFieldVisible(field)) continue;
-
-      const val = fieldValues[field.fieldKey];
-
-      // Required check per field type
-      if (field.isRequired) {
-        if (field.fieldType === "text" || field.fieldType === "textarea") {
-          if (typeof val !== "string" || val.trim() === "") {
-            errors[field.fieldKey] =
-              field.fieldType === "textarea"
-                ? m.intake_error_message_required()
-                : m.intake_error_field_required();
-            valid = false;
-            continue;
-          }
-        } else if (field.fieldType === "select") {
-          if (typeof val !== "string" || val === "") {
-            errors[field.fieldKey] = m.intake_error_field_required();
-            valid = false;
-            continue;
-          }
-        } else if (field.fieldType === "multiselect") {
-          if (!Array.isArray(val) || val.length === 0) {
-            errors[field.fieldKey] = m.intake_error_field_required();
-            valid = false;
-            continue;
-          }
-        } else if (field.fieldType === "checkbox") {
-          if (
-            field.config.type === "checkbox" &&
-            field.config.requiredTrue === true &&
-            val !== true
-          ) {
-            errors[field.fieldKey] = m.intake_error_field_required();
-            valid = false;
-            continue;
-          }
-        } else if (field.fieldType === "date") {
-          if (typeof val !== "string" || val === "") {
-            errors[field.fieldKey] = m.intake_error_field_required();
-            valid = false;
-            continue;
-          }
-        } else {
-          // field.fieldType === "availability" (only remaining type)
-          if (
-            val === undefined ||
-            typeof val !== "object" ||
-            Array.isArray(val) ||
-            typeof val === "boolean"
-          ) {
-            errors[field.fieldKey] = m.intake_error_field_required();
-            valid = false;
-            continue;
-          } else if (val.recurring.length === 0 && val.specific.length === 0) {
-            errors[field.fieldKey] = m.intake_error_field_required();
-            valid = false;
-            continue;
-          }
-        }
-      }
-
-      // Subtype format validation for text fields (runs even on optional fields when a value is present)
-      if (
-        field.fieldType === "text" &&
-        field.config.type === "text" &&
-        typeof val === "string" &&
-        val.trim() !== ""
-      ) {
-        const sub = field.config.subtype;
-        if (sub === "email" && !isValidEmail(val)) {
-          errors[field.fieldKey] = m.intake_error_email_format();
-          valid = false;
-          continue;
-        }
-        if (sub === "phone" && !isValidPhone(val)) {
-          errors[field.fieldKey] = m.intake_error_phone_format();
-          valid = false;
-          continue;
-        }
-        if (sub === "number") {
-          const num = Number(val);
-          if (Number.isNaN(num)) {
-            errors[field.fieldKey] = m.intake_error_number_format();
-            valid = false;
-            continue;
-          }
-          const range = field.config.numberRange;
-          if (range?.min !== undefined && num < range.min) {
-            errors[field.fieldKey] = m.intake_error_number_min({
-              min: String(range.min),
-            });
-            valid = false;
-            continue;
-          }
-          if (range?.max !== undefined && num > range.max) {
-            errors[field.fieldKey] = m.intake_error_number_max({
-              max: String(range.max),
-            });
-            valid = false;
-            continue;
-          }
-        }
-      }
-
-      // Date format validation (YYYY-MM-DD)
-      if (
-        field.fieldType === "date" &&
-        typeof val === "string" &&
-        val !== "" &&
-        !/^\d{4}-\d{2}-\d{2}$/.test(val)
-      ) {
-        errors[field.fieldKey] = m.intake_error_date_format();
-        valid = false;
-      }
-    }
-
-    // Validate default form contact detail
-    if (isDefaultForm) {
-      if (contactMethod === "phone" && contactDetail.trim() === "") {
-        contactDetailError = m.intake_error_field_required();
-        valid = false;
-      } else if (contactMethod === "email" && contactDetail.trim() === "") {
-        contactDetailError = m.intake_error_field_required();
-        valid = false;
-      } else {
-        contactDetailError = undefined;
-      }
-    }
-
-    // Validate account opt-in fields when the section is expanded
-    if (accountExpanded) {
-      if (
-        accountPassword.length > 0 &&
-        accountPassword !== accountConfirmPassword
-      ) {
-        valid = false;
-      }
-    }
-
-    fieldErrors = errors;
-    return valid;
+    fieldErrors = result.errors;
+    contactDetailError = result.contactDetailError;
+    return result.valid;
   }
 
   function focusFirstError(): void {
@@ -1062,12 +893,16 @@
           chanId: string,
           blindedB64: string,
           chanAuth?: string,
+          pow?: { challenge: string; solution: string },
         ): Promise<{ evaluated: string }> => {
           const portalRouter = requireRouter(trpc.clientPortal, "clientPortal");
           return portalRouter.evaluateChannelOprf.mutate({
             channelId: chanId,
             blindedElement: blindedB64,
             ...(chanAuth !== undefined ? { auth: chanAuth } : {}),
+            ...(pow != null
+              ? { powChallenge: pow.challenge, powSolution: pow.solution }
+              : {}),
           });
         };
 
@@ -1223,6 +1058,7 @@
       accountPending ||
       submitted ||
       orgKeyUnavailable ||
+      loadFailed ||
       resolvedForm.error ||
       (powRequired && powSolving && powSolution === null),
   );
@@ -1401,11 +1237,17 @@
 
   <HowProtected />
 
-  {#if resolvedForm.error}
+  {#if loadFailed || resolvedForm.error}
+    <!-- Load-stage failure (fetch or field decrypt): nothing the visitor
+         wrote is involved, so this copy talks about loading, not sending.
+         Retry refetches, which also replaces a bad cached response. -->
     <Block>
       <p class="intake-error" role="alert">
-        {m.intake_error_generic()}
+        {m.intake_error_load()}
       </p>
+      <Button outline onclick={retryLoad} data-testid="intake-load-retry">
+        {m.app_retry()}
+      </Button>
     </Block>
   {:else if orgKeyUnavailable}
     <Block>

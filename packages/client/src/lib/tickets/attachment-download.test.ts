@@ -3,7 +3,8 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 
 // vi.mock required: @lucide/svelte exports Svelte components that
 // need a browser rendering context. Stubs preserve identity for assertions.
-vi.mock("@lucide/svelte", () => ({
+vi.mock("@lucide/svelte", async (importOriginal) => ({
+  ...(await importOriginal<typeof SvelteNS>()),
   Paperclip: "Paperclip",
   FileText: "FileText",
   FileArchive: "FileArchive",
@@ -109,6 +110,7 @@ describe("fileTypeLabel", () => {
 });
 
 import * as FetchBlobMod from "$lib/utils/fetch-blob.js";
+import type * as SvelteNS from "@lucide/svelte";
 
 vi.mock("$lib/utils/fetch-blob.js", async (importOriginal) => ({
   ...(await importOriginal<typeof FetchBlobMod>()),

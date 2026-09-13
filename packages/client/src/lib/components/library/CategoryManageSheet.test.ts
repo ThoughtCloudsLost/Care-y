@@ -3,7 +3,8 @@ import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
 import { render, cleanup, fireEvent, screen } from "@testing-library/svelte";
 
 // --- Mock i18n ---
-vi.mock("$lib/paraglide/messages.js", () => ({
+vi.mock("$lib/paraglide/messages.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof MessagesNS>()),
   library_category_sheet_title: () => "Manage Categories",
   library_category_name: () => "Name",
   library_category_description: () => "Description",
@@ -32,7 +33,6 @@ const {
   mockUpdateCategory,
   mockDeleteCategory,
   mockInvalidateQueries,
-  mockToastShow,
   mockOrgCacheDelete,
 } = vi.hoisted(() => ({
   mockEncrypt: vi.fn().mockResolvedValue(new Uint8Array([1, 2, 3, 4])),
@@ -41,11 +41,11 @@ const {
   mockUpdateCategory: vi.fn().mockResolvedValue({}),
   mockDeleteCategory: vi.fn().mockResolvedValue({}),
   mockInvalidateQueries: vi.fn(),
-  mockToastShow: vi.fn(),
   mockOrgCacheDelete: vi.fn(),
 }));
 
-vi.mock("$lib/crypto/context.js", () => ({
+vi.mock("$lib/crypto/context.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof ContextNS>()),
   getOrgKeyManager: () => ({
     encrypt: mockEncrypt,
     encryptText: mockEncryptText,
@@ -63,12 +63,14 @@ vi.mock("$lib/crypto/context.js", () => ({
 }));
 
 // --- Mock buffer encoding ---
-vi.mock("$lib/utils/buffer-encoding.js", () => ({
+vi.mock("$lib/utils/buffer-encoding.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof BufferEncodingNS>()),
   uint8ArrayToBase64: vi.fn().mockReturnValue("AQIDBA=="),
 }));
 
 // --- Mock TanStack Query ---
-vi.mock("@tanstack/svelte-query", () => ({
+vi.mock("@tanstack/svelte-query", async (importOriginal) => ({
+  ...(await importOriginal<typeof SvelteQueryNS>()),
   useQueryClient: () => ({
     invalidateQueries: mockInvalidateQueries,
     getQueriesData: vi.fn().mockReturnValue([]),
@@ -76,7 +78,8 @@ vi.mock("@tanstack/svelte-query", () => ({
 }));
 
 // --- Mock tRPC ---
-vi.mock("$lib/trpc/index.js", () => ({
+vi.mock("$lib/trpc/index.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof TrpcNS>()),
   trpc: {
     kb: {
       createCategory: { mutate: mockCreateCategory },
@@ -87,28 +90,47 @@ vi.mock("$lib/trpc/index.js", () => ({
 }));
 
 // --- Mock errors ---
-vi.mock("$lib/errors.js", () => ({
-  RouterNotAvailableError: class extends Error {},
-  requireRouter: <T>(r: T) => r,
-}));
+vi.mock("$lib/errors.js", async (importOriginal) =>
+  (await import("$mocks/errors.js")).errorsMock(
+    await importOriginal<typeof ErrorsNS>(),
+  ),
+);
 
 // --- Mock toast store ---
-vi.mock("$lib/stores/toast.svelte.js", () => ({
-  toastStore: { show: mockToastShow },
-}));
+vi.mock(
+  "$lib/stores/toast.svelte.js",
+  async () =>
+    (await import("$mocks/toast.js")).toastMock() satisfies typeof ToastNS,
+);
 
 // --- Mock haptic ---
-vi.mock("$lib/utils/haptic.js", () => ({
-  haptic: vi.fn(),
-}));
+vi.mock("$lib/utils/haptic.js", async (importOriginal) =>
+  (await import("$mocks/haptic.js")).hapticMock(
+    await importOriginal<typeof HapticNS>(),
+  ),
+);
 
 // --- Mock ShellSheet: pass-through ---
-vi.mock("$lib/shell/ShellSheet.svelte", async () => ({
-  default: (await import("../tickets/test-helpers/PassthroughShell.svelte"))
-    .default,
-}));
+vi.mock(
+  "$lib/shell/ShellSheet.svelte",
+  async () =>
+    ({
+      default: (await import("../tickets/test-helpers/PassthroughShell.svelte"))
+        .default as unknown as (typeof ShellSheetNS)["default"],
+    }) satisfies typeof ShellSheetNS,
+);
 
 import CategoryManageSheet from "./CategoryManageSheet.svelte";
+import type * as HapticNS from "$lib/utils/haptic.js";
+import type * as ToastNS from "$lib/stores/toast.svelte.js";
+import type * as ErrorsNS from "$lib/errors.js";
+import { mockToastShow } from "$mocks/toast.js";
+import type * as TrpcNS from "$lib/trpc/index.js";
+import type * as SvelteQueryNS from "@tanstack/svelte-query";
+import type * as BufferEncodingNS from "$lib/utils/buffer-encoding.js";
+import type * as ContextNS from "$lib/crypto/context.js";
+import type * as MessagesNS from "$lib/paraglide/messages.js";
+import type * as ShellSheetNS from "$lib/shell/ShellSheet.svelte";
 
 describe("CategoryManageSheet", () => {
   const ondismiss = vi.fn();

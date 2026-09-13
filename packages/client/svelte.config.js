@@ -6,6 +6,12 @@ const isDev = process.env.NODE_ENV !== "production";
 const config = {
   kit: {
     adapter: adapter(),
+    alias: {
+      // Shared test mock factories. Lives here (not only in vitest.config)
+      // so svelte-check and tsc resolve the same specifier via the
+      // generated tsconfig paths.
+      $mocks: "src/test-mocks",
+    },
     csp: {
       mode: "auto",
       directives: {

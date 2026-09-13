@@ -1,6 +1,7 @@
 import { router, adminProcedure, withErrorWrapping } from "../trpc/trpc.js";
 import { createDashboardService } from "../dashboard/dashboard-service.js";
 
+// care-y-ignore-next-line missing-return-type -- tRPC router() returns a deeply generic type that cannot be written explicitly
 // eslint-disable-next-line @typescript-eslint/explicit-module-boundary-types -- tRPC router() returns a deeply generic type
 export function createDashboardRouter() {
   return router({
