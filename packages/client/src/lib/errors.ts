@@ -115,3 +115,19 @@ export class ChannelSessionError extends ClientError {
     this.name = "ChannelSessionError";
   }
 }
+
+/** Portal infrastructure unavailable (router, fragment, session, or bootstrap). */
+export class PortalUnavailableError extends ClientError {
+  constructor(message: string) {
+    super(message);
+    this.name = "PortalUnavailableError";
+  }
+}
+
+/** Org key not available when a crypto operation requires it. */
+export class OrgKeyNotLoadedError extends ClientError {
+  constructor() {
+    super("Org key not loaded");
+    this.name = "OrgKeyNotLoadedError";
+  }
+}

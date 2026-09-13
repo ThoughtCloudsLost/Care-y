@@ -6,7 +6,7 @@
  */
 
 import { describe, it, expect } from "vitest";
-import { pairKey } from "./create-merge-scan.svelte.js";
+import { pairKey, type TicketRef } from "./create-merge-scan.svelte.js";
 
 describe("pairKey", () => {
   it("produces identical keys regardless of argument order", () => {
@@ -35,5 +35,36 @@ describe("pairKey", () => {
     const key = pairKey("alpha", "beta");
     expect(key).toBe("alpha:beta");
     expect(key.split(":")).toHaveLength(2);
+  });
+});
+
+describe("TicketRef type inference", () => {
+  it("accepts the TicketRef shape without casts", () => {
+    // Type-level verification: TicketRef fields compile without
+    // runtime "in" probes or "as" casts. If the server output type
+    // drifts, this assignment will fail at compile time.
+    const ref: TicketRef = {
+      id: "t-1",
+      clientId: "c-1",
+      keyWrap: {
+        ephemeralPoint: "ep",
+        nonce: "n",
+        wrappedKey: "wk",
+      },
+      intakeWrap: "iw",
+    };
+    expect(ref.keyWrap).not.toBeNull();
+    expect(ref.intakeWrap).toBe("iw");
+  });
+
+  it("accepts null keyWrap and intakeWrap", () => {
+    const ref: TicketRef = {
+      id: "t-2",
+      clientId: "c-2",
+      keyWrap: null,
+      intakeWrap: null,
+    };
+    expect(ref.keyWrap).toBeNull();
+    expect(ref.intakeWrap).toBeNull();
   });
 });

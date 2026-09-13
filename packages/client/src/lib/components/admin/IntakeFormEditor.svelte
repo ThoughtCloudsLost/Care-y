@@ -56,7 +56,7 @@
   import { encryptClientBranding, encode } from "@care-y/crypto";
   import * as m from "$lib/paraglide/messages.js";
   import { trpc } from "$lib/trpc/index.js";
-  import { requireRouter } from "$lib/errors.js";
+  import { requireRouter, OrgKeyNotLoadedError } from "$lib/errors.js";
   import {
     intakeFormKeys,
     queueKeys,
@@ -450,7 +450,7 @@
     }) => {
       const orgPub = orgKeyManager.getPublicKey();
       if (!orgPub) {
-        throw new Error("Org key not loaded");
+        throw new OrgKeyNotLoadedError();
       }
 
       const encryptedFields = input.fields.map((f) => {

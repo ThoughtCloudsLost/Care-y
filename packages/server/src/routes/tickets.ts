@@ -169,6 +169,11 @@ import {
 import type { UserId, QueueId, TicketId } from "@care-y/shared";
 
 import { b64, b64n, b64KeyWrap } from "../utils/ciphertext-wire.js";
+import {
+  getConversionTargets,
+  convertIntakeKeyWrap,
+} from "../portal/intake-conversion-service.js";
+import { resetAccount } from "../portal/account-service.js";
 
 /**
  * Ticket record shape after Buffer ciphertext is converted to base64url
@@ -1881,8 +1886,6 @@ export function createTicketRouter(deps: TicketRouterDeps) {
       .input(z.object({ ticketId: ticketIdSchema }))
       .query(
         withErrorWrapping(async ({ ctx, input }) => {
-          const { getConversionTargets } =
-            await import("../portal/intake-conversion-service.js");
           const access = deps.createTicketAccess(ctx.org.tenantDb);
           return getConversionTargets(
             ctx.org.tenantDb,
@@ -1910,8 +1913,6 @@ export function createTicketRouter(deps: TicketRouterDeps) {
       )
       .mutation(
         withErrorWrapping(async ({ ctx, input }) => {
-          const { convertIntakeKeyWrap } =
-            await import("../portal/intake-conversion-service.js");
           const access = deps.createTicketAccess(ctx.org.tenantDb);
           return convertIntakeKeyWrap(
             ctx.org.tenantDb,
@@ -2099,7 +2100,6 @@ export function createTicketRouter(deps: TicketRouterDeps) {
             throw new NotFoundError(ErrorCode.ACCOUNT_NOT_FOUND);
           }
 
-          const { resetAccount } = await import("../portal/account-service.js");
           await resetAccount(ctx.org.tenantDb, ticket.clientId);
 
           audit(ctx.org.tenantDb, {

@@ -396,9 +396,6 @@ export function createClientPortalRouter(deps: ClientPortalRouterDeps) {
             ctx.org.tenantDb,
             {
               sealedBox: ctx.org.sealedBox,
-              // createIntakeTicket declares this optional, so a declined
-              // encryptor crosses the boundary as undefined, not null.
-              fieldEncryptor: deps.fieldEncryptor ?? undefined,
               orgId: ctx.org.orgId,
               orgSchema: ctx.org.orgSchema,
               orgSlug: ctx.org.orgSlug,

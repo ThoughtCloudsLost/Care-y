@@ -35,12 +35,7 @@ export function volunteerTag(userId: UserId): string {
   return `volunteer:${userId}`;
 }
 
-/**
- * The evaluate wire reuses the branded userId slot for account ids
- * (the schema validates shape; the tag is a label), so this accepts
- * any validated id string rather than forcing a cross-brand cast.
- */
-export function accountTag(accountId: ClientAccountId | string): string {
+export function accountTag(accountId: ClientAccountId): string {
   return `account:${accountId}`;
 }
 

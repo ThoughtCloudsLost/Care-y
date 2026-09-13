@@ -11,7 +11,7 @@ import {
   _resetSodiumForTesting,
   type SodiumBackend,
 } from "./sodium.js";
-import { InvalidKeyError } from "./errors.js";
+import { InvalidInputError } from "./errors.js";
 import { HKDF_LABELS } from "./types.js";
 
 describe("client-account key derivation", () => {
@@ -103,27 +103,27 @@ describe("client-account key derivation", () => {
   });
 
   describe("wrong-length oprfOutput", () => {
-    it("throws InvalidKeyError for 32-byte input", () => {
+    it("throws InvalidInputError for 32-byte input", () => {
       expect(() => deriveClientAccountKeys(new Uint8Array(32))).toThrow(
-        InvalidKeyError,
+        InvalidInputError,
       );
     });
 
-    it("throws InvalidKeyError for 63-byte input", () => {
+    it("throws InvalidInputError for 63-byte input", () => {
       expect(() => deriveClientAccountKeys(new Uint8Array(63))).toThrow(
-        InvalidKeyError,
+        InvalidInputError,
       );
     });
 
-    it("throws InvalidKeyError for 65-byte input", () => {
+    it("throws InvalidInputError for 65-byte input", () => {
       expect(() => deriveClientAccountKeys(new Uint8Array(65))).toThrow(
-        InvalidKeyError,
+        InvalidInputError,
       );
     });
 
-    it("throws InvalidKeyError for empty input", () => {
+    it("throws InvalidInputError for empty input", () => {
       expect(() => deriveClientAccountKeys(new Uint8Array(0))).toThrow(
-        InvalidKeyError,
+        InvalidInputError,
       );
     });
   });

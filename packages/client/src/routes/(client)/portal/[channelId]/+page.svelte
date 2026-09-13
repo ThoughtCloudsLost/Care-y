@@ -40,7 +40,7 @@
     type ContactCorrectionPayload,
   } from "@care-y/shared";
   import { solveProofOfWork } from "$lib/auth/pow-solver.js";
-  import { requireRouter } from "$lib/errors.js";
+  import { requireRouter, PortalUnavailableError } from "$lib/errors.js";
   import type { ChannelEvaluateCallback } from "$lib/composables/portal/create-portal-session.svelte.js";
   import PortalHint from "$lib/shell/PortalHint.svelte";
   import { createPublicBrandingQuery } from "$lib/branding/public-branding.js";
@@ -226,7 +226,9 @@
     queryKey: portalKeys.bootstrap(routeChannelId),
     queryFn: async () => {
       if (!trpc.clientPortal || !fragment.fragmentData) {
-        throw new Error("Portal not available");
+        throw new PortalUnavailableError(
+          "Portal router or fragment not available",
+        );
       }
       return trpc.clientPortal.portalBootstrap.query({
         channelId: fragment.fragmentData.channelId,
@@ -268,7 +270,9 @@
     cursor?: string,
   ): Promise<{ messages: PortalMessageWire[]; totalCount: number }> {
     if (!trpc.clientPortal || !fragment.fragmentData) {
-      throw new Error("Portal not available");
+      throw new PortalUnavailableError(
+        "Portal router or fragment not available",
+      );
     }
     return trpc.clientPortal.portalMessagePage.query({
       channelId: fragment.fragmentData.channelId,
@@ -528,7 +532,10 @@
       };
       kind?: "message" | "contact_correction";
     }) => {
-      if (!trpc.clientPortal) throw new Error("Portal not available");
+      if (!trpc.clientPortal)
+        throw new PortalUnavailableError(
+          "Portal router or fragment not available",
+        );
       return trpc.clientPortal.portalReply.mutate(input);
     },
     onSuccess: () => {
@@ -677,7 +684,9 @@
    */
   async function fetchSealedContact(): Promise<string> {
     if (!trpc.clientPortal || !fragment.fragmentData) {
-      throw new Error("Portal not available");
+      throw new PortalUnavailableError(
+        "Portal router or fragment not available",
+      );
     }
     const result = await trpc.clientPortal.contactInfo.query({
       channelId: fragment.fragmentData.channelId,
@@ -696,7 +705,7 @@
     sealed: string,
   ): Promise<{ phone?: string; email?: string }> {
     const sess = portalSession.session;
-    if (!sess) throw new Error("No session");
+    if (!sess) throw new PortalUnavailableError("No active portal session");
     const raw = decode(sealed);
     // Split: ephemeralPoint = bytes 0..31, nonce = 32..55, ciphertext = 56+
     const ep = encode(raw.subarray(0, 32));
@@ -781,7 +790,7 @@
         const frag = fragment.fragmentData;
         const sess = portalSession.session;
         if (!frag || !sess || !trpc.clientPortal) {
-          throw new Error("Portal session not available");
+          throw new PortalUnavailableError("Portal session not available");
         }
 
         // Worker blinds seed+passphrase, returns blindedElement
@@ -811,7 +820,7 @@
         // undefined alone would fall back to the stale snapshot this
         // refetch exists to avoid.
         if (refreshed.isError || portalMessages === undefined) {
-          throw new Error("Portal bootstrap unavailable");
+          throw new PortalUnavailableError("Portal bootstrap unavailable");
         }
 
         const payload = await buildAddPassphrasePayload(

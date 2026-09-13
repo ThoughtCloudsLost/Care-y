@@ -37,6 +37,7 @@ import { concatBytes, encodeLabel } from "./bytes.js";
 import { deriveAccountKey } from "./derive.js";
 import { zeroAll } from "./mem.js";
 import { InvalidInputError } from "./errors.js";
+import { normalizeAlias } from "@care-y/shared";
 import {
   type Scalar,
   type RistrettoPoint,
@@ -54,20 +55,16 @@ export const PORTAL_KEY_CHECK = "care-y-portal-check-v1";
 const MIN_SEED_BYTES = 18;
 
 /**
- * NFKC-normalize, lowercase, trim, and collapse whitespace in a
- * passphrase string. Mirrors the full normalization in
- * shared/src/utils/normalize-alias.ts so a spoken passphrase retyped
- * with different casing, unicode form, or word spacing still derives
- * the same keypair. Whitespace carries no entropy in a diceware
- * phrase; word identity and order are untouched.
+ * Normalize a passphrase string and encode it to bytes.
+ *
+ * Delegates to the shared normalizeAlias pipeline (NFKC, casefold,
+ * trim, collapse whitespace) so a spoken passphrase retyped with
+ * different casing, unicode form, or word spacing derives the same
+ * keypair. Whitespace carries no entropy in a diceware phrase; word
+ * identity and order are untouched.
  */
 function normalizePassphrase(passphrase: string): Uint8Array {
-  const normalized = passphrase
-    .normalize("NFKC")
-    .toLowerCase()
-    .trim()
-    .replace(/\s+/g, " ");
-  return encodeLabel(normalized);
+  return encodeLabel(normalizeAlias(passphrase));
 }
 
 /**
@@ -108,9 +105,7 @@ export function deriveChannelId(seed: Uint8Array): string {
   const sodium = requireSodium();
   const hash = sodium.crypto_hash_sha512(seed);
   const prefix = hash.subarray(0, 24);
-  const hex = Array.from(prefix, (b) => b.toString(16).padStart(2, "0")).join(
-    "",
-  );
+  const hex = sodium.to_hex(prefix);
   sodium.memzero(hash);
   return hex;
 }
@@ -163,10 +158,17 @@ export interface PortalKeypair {
  * @returns Argon2id output (32 bytes). Caller must zero when done.
  */
 function stretchPassphrase(seed: Uint8Array, passphrase: string): Uint8Array {
-  const passphraseBytes = normalizePassphrase(passphrase);
-  const saltRaw = hkdf(seed, encodeLabel(HKDF_LABELS.PORTAL_SALT), 16);
-  const salt = toSalt(saltRaw);
-  return deriveAccountKey(passphraseBytes, salt);
+  let passphraseBytes: Uint8Array | null = null;
+  let saltRaw: Uint8Array | null = null;
+
+  try {
+    passphraseBytes = normalizePassphrase(passphrase);
+    saltRaw = hkdf(seed, encodeLabel(HKDF_LABELS.PORTAL_SALT), 16);
+    const salt = toSalt(saltRaw);
+    return deriveAccountKey(passphraseBytes, salt);
+  } finally {
+    zeroAll(passphraseBytes, saltRaw);
+  }
 }
 
 // --- ADR-091: OPRF-routed portal derivation ---
@@ -210,24 +212,25 @@ export function portalOprfInput(
 }
 
 /**
- * Derive a ristretto255 keypair from a 64-byte OPRF finalize output.
+ * Derive a ristretto255 keypair from a 64-byte OPRF finalize output
+ * under the given HKDF label.
  *
- * Mirrors deriveClientAccountKeys in client-account.ts: requires exactly
- * 64 bytes, expands via HKDF under the portal ECIES label, reduces to a
- * scalar, and derives the public point. The same "care-y-portal-ecies-v1"
- * label is reused so that the OPRF pipeline and the legacy offline path
- * produce the same keypair when given the same 64-byte IKM (which they
- * will not in practice, since the OPRF output differs from the raw seed).
+ * Shared implementation behind derivePortalKeypairFromOprf and
+ * deriveClientAccountKeys. The label provides HKDF domain separation
+ * so identical OPRF outputs under different labels produce independent
+ * keypairs.
  *
  * The 64-byte HKDF expansion is zeroed in a finally block. The CALLER
  * zeroes oprfOutput and clientPrivate when done.
  *
  * @param oprfOutput - 64-byte OPRF finalize output (SHA-512 per RFC 9497)
+ * @param label - HKDF info label for domain separation
  * @returns ristretto255 keypair (clientPrivate, clientPublic)
  * @throws InvalidInputError if oprfOutput is not exactly 64 bytes
  */
-export function derivePortalKeypairFromOprf(
+export function keypairFromOprfOutput(
   oprfOutput: Uint8Array,
+  label: string,
 ): PortalKeypair {
   if (oprfOutput.length !== OPRF_OUTPUT_BYTES) {
     throw new InvalidInputError(
@@ -239,7 +242,7 @@ export function derivePortalKeypairFromOprf(
   let expanded: Uint8Array | null = null;
 
   try {
-    expanded = hkdf(oprfOutput, encodeLabel(HKDF_LABELS.PORTAL_ECIES), 64);
+    expanded = hkdf(oprfOutput, encodeLabel(label), 64);
     const clientPrivate = sodium.crypto_core_ristretto255_scalar_reduce(
       expanded,
     ) as Scalar;
@@ -251,4 +254,23 @@ export function derivePortalKeypairFromOprf(
   } finally {
     zeroAll(expanded);
   }
+}
+
+/**
+ * Derive a ristretto255 keypair from a 64-byte OPRF finalize output
+ * under the portal ECIES label.
+ *
+ * The HKDF label "care-y-portal-ecies-v1" provides domain separation
+ * from the client-account derivation, which uses a distinct label for
+ * the same construction. Changing the label invalidates all previously
+ * derived portal keypairs.
+ *
+ * @param oprfOutput - 64-byte OPRF finalize output (SHA-512 per RFC 9497)
+ * @returns ristretto255 keypair (clientPrivate, clientPublic)
+ * @throws InvalidInputError if oprfOutput is not exactly 64 bytes
+ */
+export function derivePortalKeypairFromOprf(
+  oprfOutput: Uint8Array,
+): PortalKeypair {
+  return keypairFromOprfOutput(oprfOutput, HKDF_LABELS.PORTAL_ECIES);
 }

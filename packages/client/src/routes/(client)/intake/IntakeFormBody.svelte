@@ -19,7 +19,7 @@
   import * as m from "$lib/paraglide/messages.js";
   import { getLocale } from "$lib/paraglide/runtime.js";
   import { trpc } from "$lib/trpc/index.js";
-  import { requireRouter } from "$lib/errors.js";
+  import { requireRouter, PortalUnavailableError } from "$lib/errors.js";
   import { portalKeys } from "$lib/query/keys.js";
   import { decode } from "@care-y/crypto";
   import {
@@ -623,7 +623,7 @@
       continuation?: IntakeContinuationPayload;
     }) => {
       if (!trpc.clientPortal) {
-        throw new Error("Client portal not available");
+        throw new PortalUnavailableError("Client portal router not available");
       }
       return trpc.clientPortal.submitIntake.mutate(payload);
     },

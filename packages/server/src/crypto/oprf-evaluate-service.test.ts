@@ -12,7 +12,6 @@
  * verify every gating branch without a live database.
  */
 
-import { createHash } from "node:crypto";
 import {
   describe,
   it,
@@ -22,7 +21,6 @@ import {
   afterEach,
   vi,
 } from "vitest";
-import { hasLeadingZeroBits } from "./pow.js";
 import {
   createOprfEvaluateService,
   resolveDelayTiers,
@@ -417,7 +415,34 @@ describe("evaluateChannel gating", () => {
     _resetEnvCache();
 
     try {
-      const deps = makeDeps();
+      // Fake verifier so the test never computes a real hash chain. The
+      // service contract under test is the threading of the two fields
+      // into the gate, not the hash arithmetic (pow.test.ts owns that).
+      const FAKE_CHALLENGE = "fake-challenge";
+      const FAKE_SOLUTION = "fake-solution";
+      const deps = {
+        ...makeDeps(),
+        powVerifier: {
+          createChallenge: (): {
+            challenge: string;
+            difficulty: number;
+            expiresAt: string;
+          } => ({
+            challenge: FAKE_CHALLENGE,
+            difficulty: 16,
+            expiresAt: new Date(Date.now() + 60_000).toISOString(),
+          }),
+          verify: (
+            _subject: string,
+            challenge: string,
+            solution: string,
+          ): boolean =>
+            challenge === FAKE_CHALLENGE && solution === FAKE_SOLUTION,
+          dispose: (): void => {
+            /* noop */
+          },
+        },
+      };
       const auditSpy = vi
         .spyOn(deps.auditLogger, "logFailure")
         .mockResolvedValue(undefined);
@@ -429,38 +454,21 @@ describe("evaluateChannel gating", () => {
         await service.evaluateChannel(db, makeRequest());
       }
 
-      // 5th triggers PowRequiredError
+      // 5th triggers PowRequiredError carrying the challenge
       let challenge: string | undefined;
-      let difficulty: number | undefined;
       try {
         await service.evaluateChannel(db, makeRequest());
       } catch (err: unknown) {
         expect(err).toBeInstanceOf(PowRequiredError);
-        const powErr = err as PowRequiredError;
-        challenge = powErr.challenge;
-        difficulty = powErr.difficulty;
+        challenge = (err as PowRequiredError).challenge;
       }
-      expect(challenge).toBeDefined();
-      expect(difficulty).toBeDefined();
+      expect(challenge).toBe(FAKE_CHALLENGE);
 
-      // Brute-force solve the challenge (difficulty 16 = ~65k tries, fast)
-      let solution = "";
-      for (let i = 0; ; i++) {
-        const candidate = String(i);
-        const hash = createHash("sha256")
-          .update(challenge!)
-          .update(candidate)
-          .digest();
-        if (hasLeadingZeroBits(hash, difficulty!)) {
-          solution = candidate;
-          break;
-        }
-      }
       const result = await service.evaluateChannel(
         db,
         makeRequest({
           powChallenge: challenge,
-          powSolution: solution,
+          powSolution: FAKE_SOLUTION,
         }),
       );
       expect(result.evaluated).toBeDefined();

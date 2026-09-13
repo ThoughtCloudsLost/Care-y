@@ -21,6 +21,11 @@ import {
   type BlobKey,
 } from "@care-y/shared";
 import { ValidationError, AttachmentValidationError } from "../errors.js";
+import sodium from "sodium-native";
+import {
+  deriveBrandingKey,
+  decryptBrandingBlob,
+} from "../branding/branding-crypto.js";
 
 /** Content types accepted for form asset images. */
 const ALLOWED_CONTENT_TYPES: ReadonlySet<string> = new Set<string>(
@@ -82,6 +87,23 @@ export async function resolveFormAsset(
     contentType: asset.content_type,
     orgPublicKey: config.org_public_key,
   };
+}
+
+/**
+ * Decrypts an encrypted form asset blob using the org's branding key.
+ * Returns null when decryption fails (corrupted blob). The branding key
+ * is derived from the org's public key and zeroed after use.
+ */
+export function decryptFormAssetBlob(
+  encryptedBlob: Buffer,
+  orgPublicKey: Buffer,
+): Buffer | null {
+  const key = deriveBrandingKey(orgPublicKey);
+  try {
+    return decryptBrandingBlob(encryptedBlob, key);
+  } finally {
+    sodium.sodium_memzero(key);
+  }
 }
 
 // ---------------------------------------------------------------------------

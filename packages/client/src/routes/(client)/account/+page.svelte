@@ -38,7 +38,7 @@
     serializeContactCorrection,
     type ContactCorrectionPayload,
   } from "@care-y/shared";
-  import { requireRouter } from "$lib/errors.js";
+  import { requireRouter, PortalUnavailableError } from "$lib/errors.js";
   import {
     buildAccountRegistration,
     collectDecryptedMessages,
@@ -727,7 +727,7 @@
   async function openAccountContactEnvelope(
     sealed: string,
   ): Promise<{ phone?: string; email?: string }> {
-    if (!session) throw new Error("No session");
+    if (!session) throw new PortalUnavailableError("No active account session");
     const raw = decode(sealed);
     const ep = encode(raw.subarray(0, 32));
     const nonce = encode(raw.subarray(32, 56));

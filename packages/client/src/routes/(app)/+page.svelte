@@ -367,15 +367,8 @@
     tickets: allTickets.map((t) => ({
       id: t.id,
       clientId: t.clientId,
-      keyWrap:
-        "keyWrap" in t && t.keyWrap
-          ? (t.keyWrap as {
-              ephemeralPoint: string;
-              nonce: string;
-              wrappedKey: string;
-            })
-          : null,
-      intakeWrap: "intakeWrap" in t ? t.intakeWrap : null,
+      keyWrap: t.keyWrap ?? null,
+      intakeWrap: t.intakeWrap ?? null,
     })),
     canViewClients: permissions.has(Permission.VIEW_CLIENTS),
   }));

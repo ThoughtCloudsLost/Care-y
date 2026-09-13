@@ -153,6 +153,7 @@ describe.skipIf(!process.env.DATABASE_URL)(
           providerFactory: createThrowingProviderFactory(),
           resolveCallerId: vi.fn().mockResolvedValue("+15551234567"),
           totpReplayCache,
+          createAuditSvc: null,
         },
         profileDeps: {
           hasher,

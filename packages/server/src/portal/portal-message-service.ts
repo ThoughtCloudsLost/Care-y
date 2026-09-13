@@ -25,7 +25,7 @@ import { enqueueNotification } from "../notifications/outbox.js";
 import { reopenClosedTicket } from "../tickets/ticket-reopen.js";
 import { portal_nudge_sms_body } from "@care-y/shared/paraglide/messages.js";
 import type { Locale } from "@care-y/shared/paraglide/runtime.js";
-import { resolveClientPhone } from "../routes/relay.js";
+import { resolveClientPhone } from "../clients/contact-resolution.js";
 import { NotFoundError } from "../errors.js";
 import { ErrorCode } from "@care-y/shared";
 import { encode } from "@care-y/crypto";

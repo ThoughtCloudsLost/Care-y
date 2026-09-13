@@ -174,11 +174,7 @@ import {
   registerOutboxDrainHandler,
   OUTBOX_DRAIN_QUEUE,
 } from "./jobs/notification-outbox-drain.js";
-import {
-  runEscalationCheck,
-  type EscalationServiceDeps,
-} from "./tickets/escalation-service.js";
-import { RoleId } from "@care-y/shared";
+import { runEscalationCheck } from "./tickets/escalation-service.js";
 import type {
   OrgId,
   OrgSchema,
@@ -605,6 +601,7 @@ const appRouter = createAppRouter({
     providerFactory,
     resolveCallerId: phoneResolver,
     totpReplayCache,
+    createAuditSvc: (tDb) => createAuditService(tDb),
   },
   profileDeps: {
     hasher,
@@ -915,41 +912,13 @@ registerEscalationHandler(jobQueue, async () => {
   }
 });
 
-// Escalation rules checker: evaluates time-based rules across all tenants
-const escalationRulesDeps: EscalationServiceDeps = {
-  notificationService,
-  async getManagerIds(tDb) {
-    const managerRows = await tDb
-      .selectFrom("users")
-      .select("id")
-      .where("is_active", "=", true)
-      .where("role_id", "in", [RoleId.MANAGER, RoleId.ADMIN])
-      .execute();
-    return managerRows.map((r) => r.id);
-  },
-  async getQueueWatcherIds(tDb, queueId) {
-    const watcherRows = await tDb
-      .selectFrom("queue_watchers")
-      .select("user_id")
-      .where("queue_id", "=", queueId)
-      .execute();
-    return watcherRows.map((r) => r.user_id);
-  },
-};
-
 registerEscalationRulesHandler(
   jobQueue,
   async () => {
     const orgs = await listActiveOrgSchemasWithSlugs();
     for (const org of orgs) {
       try {
-        await runEscalationCheck(
-          tenantDb(org.schema),
-          org.id,
-          org.schema,
-          org.slug,
-          escalationRulesDeps,
-        );
+        await runEscalationCheck(tenantDb(org.schema));
       } catch (err: unknown) {
         console.error(
           `Escalation rules check failed for schema ${org.schema}:`,

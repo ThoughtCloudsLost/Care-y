@@ -147,6 +147,8 @@ function instrument(real: SodiumBackend): {
       real.memzero(buf);
     },
 
+    to_hex: (buf) => real.to_hex(buf),
+
     to_base64: (buf, variant) => real.to_base64(buf, variant),
     from_base64: (str, variant) => real.from_base64(str, variant),
     base64_variants: real.base64_variants,
@@ -317,6 +319,19 @@ describe("portal security invariants", () => {
         portalOprfInput(seed, "zeroing test passphrase words five");
 
         // Argon2id output must be zeroed (the stretched passphrase)
+        expectAllZeroed(log.pwhashKeys);
+      });
+    }, 60_000);
+
+    it("zeroes HKDF intermediates from salt derivation in stretchPassphrase", () => {
+      withInstrumented((log) => {
+        const seed = generatePortalSeed();
+        portalOprfInput(seed, "salt zeroing test words five");
+
+        // stretchPassphrase derives a salt via HKDF, producing HMAC
+        // finals. The passphraseBytes and saltRaw intermediates are
+        // zeroed in the finally block alongside the HKDF internals.
+        expectAllZeroed(log.hmacFinals);
         expectAllZeroed(log.pwhashKeys);
       });
     }, 60_000);

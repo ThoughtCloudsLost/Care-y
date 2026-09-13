@@ -27,7 +27,7 @@
   import ShellDialog from "$lib/shell/ShellDialog.svelte";
   import Register from "$lib/components/Register.svelte";
   import { trpc } from "$lib/trpc/index.js";
-  import { requireRouter } from "$lib/errors.js";
+  import { requireRouter, RelayError, RateLimitError } from "$lib/errors.js";
   import { toastStore } from "$lib/stores/toast.svelte.js";
   import { haptic } from "$lib/utils/haptic.js";
   import {
@@ -258,14 +258,30 @@
         }),
       });
 
-      if (!resp.ok) throw new Error("SMS send failed");
+      if (resp.status === 429) {
+        const retryAfter = resp.headers.get("Retry-After");
+        const seconds = retryAfter !== null ? parseInt(retryAfter, 10) : 30;
+        throw new RateLimitError(seconds);
+      }
+      if (!resp.ok) throw new RelayError("SMS_FAILED", resp.status);
 
       haptic();
       toastStore.show(m.ticket_toast_link_sent());
-    } catch (_err: unknown) {
-      // Intentional discard: the SMS body contains the portal link,
-      // so the error context is not safe to log.
-      toastStore.show(m.error_generic(), 3000);
+    } catch (err: unknown) {
+      // The SMS body contains the portal link, so the error context is
+      // not safe to log beyond the typed error fields.
+      if (err instanceof RateLimitError) {
+        toastStore.show(
+          m.ticket_sms_rate_limited({
+            seconds: String(err.retryAfterSeconds),
+          }),
+          5000,
+        );
+      } else if (err instanceof RelayError) {
+        toastStore.show(m.ticket_sms_error_send(), 3000);
+      } else {
+        toastStore.show(m.error_generic(), 3000);
+      }
     } finally {
       smsSending = false;
     }

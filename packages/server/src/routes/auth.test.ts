@@ -166,6 +166,11 @@ describe.skipIf(!HAS_DB)("auth + org routers (DB integration)", () => {
         providerFactory: createThrowingProviderFactory(),
         resolveCallerId: vi.fn().mockResolvedValue("+15551234567"),
         totpReplayCache,
+        createAuditSvc: () => ({
+          log: vi.fn().mockResolvedValue(undefined),
+          query: vi.fn().mockResolvedValue({ entries: [], nextCursor: null }),
+          listRecentForQueues: vi.fn().mockResolvedValue([]),
+        }),
       },
       profileDeps: {
         hasher,
@@ -715,6 +720,7 @@ describe.skipIf(!HAS_DB)("auth + org routers (DB integration)", () => {
           providerFactory: createThrowingProviderFactory(),
           resolveCallerId: vi.fn().mockResolvedValue("+15551234567"),
           totpReplayCache,
+          createAuditSvc: null,
         },
         profileDeps: {
           hasher,

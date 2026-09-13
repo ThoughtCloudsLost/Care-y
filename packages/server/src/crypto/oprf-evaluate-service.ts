@@ -34,6 +34,7 @@ import type { RateLimiter } from "../ratelimit/rate-limiter.js";
 import type { PowVerifier } from "./pow.js";
 import type { OprfAuditLogger } from "./oprf-audit.js";
 import type { UserId, OrgId, ChannelSecret } from "@care-y/shared";
+import { clientAccountIdSchema } from "@care-y/shared";
 import { volunteerTag, accountTag, channelTag } from "./oprf-tags.js";
 import { hashChannelAuth } from "@care-y/crypto";
 import type { Kysely } from "kysely";
@@ -191,7 +192,11 @@ function tagForEvaluateRequest(req: OprfEvaluateRequest): string {
     case "volunteer":
       return volunteerTag(req.userId);
     case "account":
-      return accountTag(req.userId);
+      // The evaluate wire reuses the UserId-branded slot for account ids.
+      // This branch only fires for kind "account", where the caller
+      // populated userId from a client account id, so re-parsing mints
+      // the correct brand without a cast.
+      return accountTag(clientAccountIdSchema.parse(req.userId));
   }
 }
 

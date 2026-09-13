@@ -18,18 +18,14 @@
  */
 
 import type { IncomingMessage, ServerResponse } from "node:http";
-import sodium from "sodium-native";
 import type { BlobStore } from "../storage/store.js";
 import type { OrgService } from "../org/service.js";
 import type { Kysely } from "kysely";
 import type { TenantDatabase } from "../db/types.js";
 import type { OrgSchema } from "@care-y/shared";
 import {
-  deriveBrandingKey,
-  decryptBrandingBlob,
-} from "../branding/branding-crypto.js";
-import {
   resolveFormAsset,
+  decryptFormAssetBlob,
   type FormAssetMeta,
 } from "../portal/form-asset-service.js";
 
@@ -115,13 +111,7 @@ export function createFormAssetHandler(
         return;
       }
 
-      const key = deriveBrandingKey(asset.orgPublicKey);
-      let plaintext: Buffer | null;
-      try {
-        plaintext = decryptBrandingBlob(encryptedBlob, key);
-      } finally {
-        sodium.sodium_memzero(key);
-      }
+      const plaintext = decryptFormAssetBlob(encryptedBlob, asset.orgPublicKey);
 
       if (plaintext === null) {
         res.writeHead(500);

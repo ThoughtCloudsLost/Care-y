@@ -50,7 +50,7 @@ import type { DismissalService } from "../clients/dismissal-service.js";
 import type { MergeScanService } from "../clients/merge-scan-service.js";
 import type { FieldEncryptor } from "../crypto/field-encryptor.js";
 import { maskPhone, formatPhone } from "../utils/sql.js";
-import { ForbiddenError } from "../errors.js";
+import { ForbiddenError, InternalError } from "../errors.js";
 import type { Kysely } from "kysely";
 import type { TenantDatabase } from "../db/types.js";
 import { z } from "zod";
@@ -379,7 +379,7 @@ export function createClientRouter(deps: ClientRouterDeps) {
      */
     getDismissals: viewClientsProcedure.query(
       withErrorWrapping(async ({ ctx }) => {
-        if (!deps.createDismissalSvc) return null;
+        if (deps.createDismissalSvc === null) return null;
         const svc = deps.createDismissalSvc(ctx.org.tenantDb);
         const record = await svc.get();
         if (!record) return null;
@@ -404,7 +404,7 @@ export function createClientRouter(deps: ClientRouterDeps) {
       )
       .mutation(
         withErrorWrapping(async ({ ctx, input }) => {
-          if (!deps.createDismissalSvc) return;
+          if (deps.createDismissalSvc === null) return;
           const svc = deps.createDismissalSvc(ctx.org.tenantDb);
           const buf = Buffer.from(input.encryptedDismissals, "base64");
           await svc.put(buf);
@@ -431,31 +431,8 @@ export function createClientRouter(deps: ClientRouterDeps) {
      */
     mergeScanData: viewClientsProcedure.query(
       withErrorWrapping(async ({ ctx }) => {
-        if (!deps.createMergeScanSvc) {
-          return {
-            clients: [] as readonly {
-              clientId: string;
-              responses: readonly {
-                ticketId: string;
-                formId: string;
-                encryptedResponse: string;
-              }[];
-            }[],
-            fieldRoles: [] as readonly {
-              formId: string;
-              fieldKey: string;
-              role: string;
-            }[],
-            phoneHashes: [] as readonly {
-              clientId: string;
-              phoneMatchHash: string;
-            }[],
-            emailHashes: [] as readonly {
-              clientId: string;
-              emailMatchHash: string;
-            }[],
-            sharedPhoneHashes: [] as readonly string[],
-          };
+        if (deps.createMergeScanSvc === null) {
+          throw new InternalError("Merge scan service is not configured");
         }
         const svc = deps.createMergeScanSvc(ctx.org.tenantDb);
         const [clients, fieldRoles, phoneHashes, emailHashes, sharedHashes] =
@@ -489,9 +466,7 @@ export function createClientRouter(deps: ClientRouterDeps) {
             clientId: eh.clientId,
             emailMatchHash: eh.emailMatchHash,
           })),
-          sharedPhoneHashes: sharedHashes.map((sh) =>
-            String(sh.phoneMatchHash),
-          ),
+          sharedPhoneHashes: sharedHashes.map((sh) => sh.phoneMatchHash),
         };
       }),
     ),
@@ -504,8 +479,8 @@ export function createClientRouter(deps: ClientRouterDeps) {
       .input(getPhoneSharedLineInputSchema)
       .query(
         withErrorWrapping(async ({ ctx, input }) => {
-          if (!deps.createMergeScanSvc) {
-            return { shared: null as boolean | null };
+          if (deps.createMergeScanSvc === null) {
+            throw new InternalError("Merge scan service is not configured");
           }
           const svc = deps.createMergeScanSvc(ctx.org.tenantDb);
           const shared = await svc.getSharedLineByClientId(input.clientId);
@@ -525,8 +500,8 @@ export function createClientRouter(deps: ClientRouterDeps) {
       .input(setPhoneSharedLineInputSchema)
       .mutation(
         withErrorWrapping(async ({ ctx, input }) => {
-          if (!deps.createMergeScanSvc) {
-            return { updated: 0 };
+          if (deps.createMergeScanSvc === null) {
+            throw new InternalError("Merge scan service is not configured");
           }
           const svc = deps.createMergeScanSvc(ctx.org.tenantDb);
 

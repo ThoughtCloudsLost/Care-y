@@ -126,6 +126,8 @@ function instrument(real: SodiumBackend): {
       real.memzero(buf);
     },
 
+    to_hex: (buf) => real.to_hex(buf),
+
     to_base64: (buf, variant) => real.to_base64(buf, variant),
     from_base64: (str, variant) => real.from_base64(str, variant),
     base64_variants: real.base64_variants,

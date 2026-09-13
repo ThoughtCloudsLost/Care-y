@@ -287,7 +287,7 @@ async function resolveAllowListsSafe(
   } catch (err: unknown) {
     console.error(
       "Notification preference resolution failed, falling back to all-allowed:",
-      JSON.stringify(err),
+      err instanceof Error ? err.message : String(err),
     );
     return {
       pushAllowed: [...userIds],
